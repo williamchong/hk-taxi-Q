@@ -9,7 +9,7 @@ Last updated: 2026-07-30
 
 ## Current status
 
-**Phase 0 complete enough to proceed. Phase 1 is open and is now the critical path.**
+**Phase 0 complete enough to proceed. Phase 1 is under way and is the critical path.**
 
 The Godot project is scaffolded and exports to macOS, web and Android; the grey-box circuit is
 drivable and the handling is accepted; the ETL package exists with the coordinate conversion under
@@ -17,7 +17,12 @@ test. **`P0-1` closed on 2026-07-30, taking `Q2`, `Q3` and `Q5` with it** — bu
 out to be fully scriptable, which retires the top data risk. Only `P0-3b` remains open, and it
 needs hardware rather than work.
 
-**`P1-1` is the next task and has no blockers.**
+**`P1-1` closed on 2026-07-30.** `fetch.py` derives the region's six map sheets from the published
+index and downloads them; re-running is a no-op. The six sheets it derives match the six `P0-1`
+recorded by hand, which is the first end-to-end confirmation that the bounds, the datum and the
+index agree.
+
+**`P1-2` (building meshes) is next and has no blockers.**
 
 **`P0-5` passed conditionally, not cleanly** — the user drove it, found the handling acceptable, and
 judged that *fun* cannot be assessed from a grey box at all. See the decision log. The consequence
@@ -38,7 +43,9 @@ is deferred rather than closed.
 | `P0-5b` | └ Grey-box Gloucester block | ✅ **Done** | Circuit built from JSON; widen_factor is data |
 | `P0-5c` | └ Minimal chase camera | ✅ **Done** | Spring arm, speed FOV, look-back |
 | `P0-5d` | └ The drive test | ⚠️ **Passed, conditional** | Driven and verified. No blocking feel problem; no fun verdict possible yet. |
-| `P1-*` | ETL vertical slice | 🟢 **Unblocked** | All deps met: `P0-1`, `P0-2`, `P0-4` done and the `P0-5` gate released. `P1-1` is next. |
+| `P1-1` | Source fetching | ✅ **Done** | `fetch.py`; sheets derived from the index, not listed. 67 tests, `ruff` clean. |
+| `P1-2` | Building meshes | 🟢 **Unblocked** | Next. Terrain: keep it and evaluate in place (user call, see log). |
+| `P1-3`…`P1-7` | Rest of the ETL slice | 🟢 **Unblocked** | Deps met. |
 | `P2-*` | Driving the real city | ⬜ Blocked | Gated on `P1-7` |
 | `P3-*` | Playable slice | ⬜ Blocked | |
 
@@ -58,6 +65,21 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ❌ blocked
 | Q6 | Does the region need Central for the circuit to feel complete? | Scope | after `P3-9` | 🟡 Deferred |
 | Q7 | Does game-space Z run negative northward, or should the origin move to the NW corner? | Data contract — tile IDs and every position in `city.json` | `P1-6` | 🔴 Open |
 | Q8 | What is the cheapest build that lets the user judge "is this fun?" | **Now the top project risk** — `P0-5` did not answer it | user | 🔴 Open |
+| Q9 | Does `P1-3` read the 17 MB FGDB or the 539 MB per-layer GML? | 522 MB of download and disk per clone | `P1-3` | 🔴 Open |
+
+### Q9 — the road sources are redundant, and one is 31× larger
+
+Measured 2026-07-30 while building `fetch.py`. `RdNet_IRNP.gdb.zip` is **17.4 MB** and contains
+every layer. The per-layer GML conversions of the *same* content total **539 MB** — `CENTERLINE.gml`
+alone is 486 MB, because GML spends most of its bytes on XML tags.
+
+`hong_kong.yaml` currently lists both, so a clean fetch pulls 556 MB of roads where 17 MB would do.
+That is deliberate for now: `P1-3` has not chosen a reader, `P0-2` did its Z-value spike against the
+GML, and the `.gfs` schema file is genuinely useful documentation. But once `P1-3` picks, **drop the
+losing format from config** — `fetch.py --only` makes it easy to test either without committing.
+
+GDAL/OGR reads FGDB directly and is already the planned dependency, so the FGDB is the likely
+winner. The GML's one advantage is that it streams without GDAL.
 
 ### Q7 — the data contract contradicts itself on the sign of Z
 
@@ -122,6 +144,68 @@ below.
 ---
 
 ## Decision log
+
+### 2026-07-30 — `P1-2`: **keep the textured terrain mesh** and evaluate it in place
+
+User call, resolving the question `P0-1` left open. Each sheet ships one terrain mesh with a JPEG
+texture, and the alternative was discarding it unseen on the grounds that `P1-4` generates the road
+surface from the road graph anyway.
+
+**Keeping it is the cheaper way to find out.** The terrain is already downloaded — it is inside the
+sheet zip either way — so the only cost is import time and a decision later. What it might buy is
+the ground *between* the roads: pavements, the harbourfront, Victoria Park. What it might cost is
+80 MB of texture against a <128 MB budget, plus 250,911 vertices per sheet, plus a visual clash
+with flat-shaded buildings.
+
+**Judge it against three things when `P1-2` lands:** whether it z-fights or gaps against the `P1-4`
+road ribbon, what it costs in texture memory across six sheets, and whether photographic ground
+reads as wrong next to untextured massing. Discarding it later is a one-line change in the importer;
+this is a reversible decision taken in the cheap direction.
+
+### 2026-07-30 — `P1-1`: the fetcher derives its own tile list
+
+`fetch.py` handles two source shapes — fixed-URL (roads) and index-derived (buildings) — because
+that is what the publishers offer, and the second shape is what keeps hard rule 3 intact. The
+pipeline knows "some feature property holds a download URL"; that it is called `Format_glTF` is
+config.
+
+**The six sheets are derived, and they match.** Intersecting the region bounds with the 3,456-feature
+index selects exactly the six `P0-1` recorded by hand — `11-SW-9D/10C/10D/14B/15A/15B`. Nothing in
+config names them. That agreement is the real result: the bounds, the datum and the index all line
+up, and a bounds change now re-derives the set rather than needing a doc edit.
+
+**The index endpoint is stable and public**, which `P0-1` did not establish — it had only a manual
+portal download. `https://portal.csdi.gov.hk/csdi-webpage/file-api?dataset_id=…&format=geojson&layer_name=…`
+returns bytes **identical by SHA-256** to the portal's download, and it is parameterised by dataset
+rather than baked per-dataset, so it generalises. Found in the portal's own ISO 19139 metadata
+record. `P1-1`'s "fresh clone can fetch from scratch" criterion depends on this.
+
+**Decisions worth knowing:**
+
+- **Caching is fetch-once, not fetch-if-changed.** CLAUDE.md fixes the snapshot, so re-running must
+  not quietly adopt upstream's new month of road data. `--force` takes a new snapshot; because the
+  index is itself a cached artefact, revisions stay pinned until you ask for them.
+- **`REVISIONDATE` is per sheet**, so a re-snapshot only re-downloads sheets that actually moved.
+- **Downloads are atomic** — write to `.part`, then `os.replace`. Without it an interrupted 44 MB
+  sheet leaves a truncated file that every later run treats as complete. The manifest's size check
+  is the second line of defence and is regression-tested.
+- **The API key is never written down.** URLs are read from the fetched index at run time, and
+  everything recorded in the manifest passes through `redact()`, which strips the query string.
+  Tested. `etl/sources/` is gitignored too, but a credential that is never recorded cannot leak from
+  a pasted build log.
+- **Bounds are reprojected before comparison, never compared across datums.** `test_fetch.py` pins
+  this with a sheet that only the HK1980 misreading selects — the ~304 m error made observable as a
+  wrong download rather than as a wrong number.
+- **Edge contact counts as overlap.** Sheets tile the territory edge to edge, so a region boundary
+  landing exactly on a shared edge must pull both neighbours rather than fall down the crack.
+- **A malformed index feature only fails the build if the region needs it.** The index is
+  territory-wide; one broken sheet in a district we never visit is not our problem, and one we do
+  visit must not be skipped silently.
+- **`--dry-run` still fetches the index**, and it is the one thing that does. Without it a dry run on
+  a cold cache cannot name a single tile, which is the only question it is asked.
+
+**Surfaced, not fixed:** the two road formats in config are redundant and differ 31× in size. See
+`Q9`.
 
 ### 2026-07-30 — `P0-1`: building data is **fully scriptable**; the top data risk is retired
 
@@ -490,6 +574,69 @@ Record measured values here, not estimates.
 ---
 
 ## Session log
+
+### 2026-07-30 — `P1-1` Source fetching
+
+`pipeline/fetch.py` plus `TiledSource` in the config layer and two new primitives in `crs.py`
+(`reproject_bounds`, `GeodeticBounds.intersects`). **67 tests pass, `ruff check` and
+`ruff format --check` clean.** Run end-to-end against the live endpoints.
+
+The headline is that the derived sheet list matches `P0-1`'s hand-derived one exactly. The
+supporting find is a stable, parameterised CSDI endpoint for the index — byte-identical to the
+portal download — which is what actually makes "a fresh clone can fetch from scratch" true rather
+than aspirational.
+
+**Fetched and verified:** all six sheets (299 MB) plus the small road files (23 MB). `11-SW-10C`
+came down **byte-identical by SHA-256** to the sheet downloaded by hand during `P0-1`, and a second
+run re-downloaded nothing. `CENTERLINE.gml` and `INTERSECTION.gml` (535 MB) were deliberately left
+unfetched pending `Q9` — same code path, no new coverage, and they are duplicates of the FGDB.
+
+**Hardened against the index being untrusted input.** Tile URLs and filenames come out of a remote
+document, so `download()` refuses non-HTTP(S) schemes (urllib will open `file://` quite happily) and
+filenames are constrained to a single path segment. Low likelihood, but the cost of the guard is
+twelve lines.
+
+Deliberately **not** built: `--jobs` parallel downloading, and HTTP range resumption. Six sheets on
+a good link do not need either, and both add failure modes; the retry comment in `download()` says
+where resumption would go if the 486 MB road GML proves flaky.
+
+**Corrected while here:** `DATA_SOURCES.md` gave `11-SW-10C`'s `REVISIONDATE` as `20250929`. That is
+`1-SE-19D`'s date; `11-SW-10C` reads `20260424`. The field really is per sheet, which is what makes
+it usable as a cache key.
+
+**Review pass found four defects the end-to-end run could not have surfaced**, all reproduced
+before fixing and all now regression-tested (the two most serious were mutation-checked — the fix
+was backed out and the test confirmed to fail):
+
+1. **A short HTTP response was committed as complete, then cached forever.** `read(amt)` returns
+   `b''` on a premature close rather than raising — CPython declines to raise `IncompleteRead`
+   there for compatibility — so a server dropping mid-transfer produced a truncated file that
+   `os.replace` committed and the manifest then recorded *at its short size*, making the truncation
+   a permanent cache hit. Reproduced against a real socket: 5,000 bytes accepted against a declared
+   1,000,000. The atomic-rename machinery only ever protected against interruption of *our* write.
+   Now the declared length is enforced and a mismatch retries.
+2. **A failure partway through discarded the whole manifest.** It was written only on the happy
+   path, so one dropped connection on the sixth sheet cost the record of the five that landed —
+   ~283 MB re-pulled after one transient error, on exactly the link most likely to drop. Now
+   written in a `finally`.
+3. **`--force` re-downloaded everything, contradicting its own documentation.** Both this file and
+   the README promised revision-aware re-snapshotting; the code short-circuited the version check.
+   The docs described the better tool, so the code changed to match: `--force` now overrides
+   fetch-once but still respects each sheet's `REVISIONDATE`. Measured: a forced re-snapshot costs
+   **3.2 MB instead of 265 MB**.
+4. **A poisoned index would have cached as "zero buildings" silently.** A portal answering an
+   outage with HTTP 200 and a JSON error body parsed fine, selected zero sheets, and exited 0 —
+   and every later run was a clean cache hit on it. The index is now validated as a non-empty
+   `FeatureCollection` before use, and evicted if it fails so a retry can recover.
+
+Also tightened: tiles are named after their id rather than their URL basename (two sheets differing
+only by query string would have overwritten each other); the retry loop no longer treats `ENOSPC`
+as a network error worth three attempts; `redact()` strips `userinfo` as well as the query string;
+and selecting **zero** tiles is now an error, since a silent no-op is the failure mode this module
+refuses everywhere else.
+
+**Decided this session:** `P1-2` keeps the textured terrain (user call). **Still open:** `Q7`
+origin placement, `Q8` the fun question, and the new `Q9` on redundant road formats.
 
 ### 2026-07-30 — `P0-1` Source data granularity
 

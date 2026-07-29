@@ -49,8 +49,12 @@ regions:
     tile_size_m: 150.0
 
 # Direct static URLs, discovered via the data.gov.hk CKAN API. Verified to
-# resolve on 2026-07-29. Buildings are absent on purpose: those datasets expose
-# no download endpoint at all, only an interactive portal (open question Q3).
+# resolve on 2026-07-29; sizes re-checked 2026-07-30.
+#
+# Note the redundancy: RdNet_IRNP.gdb.zip is 17 MB and contains every layer,
+# while the per-layer GML conversions of the same content total 539 MB
+# (CENTERLINE.gml alone is 486 MB). Both are listed because P1-3 has not yet
+# chosen a reader; drop whichever it does not use. See PROGRESS.md, Q9.
 sources:
   road_network_gdb: https://static.data.gov.hk/td/road-network-v2/RdNet_IRNP.gdb.zip
   road_centrelines: https://static.data.gov.hk/td/road-network-v2/CENTERLINE.gml
@@ -60,3 +64,22 @@ sources:
   road_roundabouts: https://static.data.gov.hk/td/road-network-v2/ROUNDABOUT.gml
   road_prohibitions: https://static.data.gov.hk/td/road-network-v2/PROHIBITION.gml
   road_data_dictionary: https://static.data.gov.hk/td/road-network-v2/dataspec/rdnet_dataspec.zip
+
+# Buildings ship as one ~44 MB glTF zip per 1:1000 map sheet, 3,456 sheets for
+# the territory, with no single bulk URL. The CSDI portal's `file-api` serves
+# the *sheet index* — a polygon per sheet carrying that sheet's download URLs —
+# and that index is what makes the dataset scriptable. Verified 2026-07-30: the
+# endpoint returns bytes identical (SHA-256) to the portal's manual download.
+#
+# The `Format_*` URLs in the index embed a shared public API key. It is never
+# copied here: fetch.py reads it from the index at run time, so a rotated key
+# costs nothing and no key ever reaches the repo. See DATA_SOURCES.md.
+tiled_sources:
+  buildings:
+    index_url: https://portal.csdi.gov.hk/csdi-webpage/file-api?dataset_id=landsd_rcd_1742809441342_98380&format=geojson&layer_name=Nontextured_models
+    # GeoJSON with `crs: null` is CRS84 per RFC 7946 — WGS84 lon/lat. Confirmed
+    # against real building positions, not assumed; see DATA_SOURCES.md.
+    index_crs: EPSG:4326
+    id_property: SHEETNO
+    url_property: Format_glTF
+    revision_property: REVISIONDATE

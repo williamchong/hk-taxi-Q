@@ -10,6 +10,7 @@ rule 3). See `docs/ARCHITECTURE.md` for the conversion and the data contract.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import cache
 
@@ -42,6 +43,32 @@ class GeodeticBounds:
             raise ValueError(f"west {self.west} must be less than east {self.east}")
         if self.south >= self.north:
             raise ValueError(f"south {self.south} must be less than north {self.north}")
+
+    def intersects(self, other: GeodeticBounds) -> bool:
+        """Whether two rectangles share any area, edge contact included.
+
+        Touching counts as intersecting on purpose. Published map sheets tile
+        their territory edge to edge, so a boundary landing exactly on a shared
+        edge should select both neighbours rather than silently drop the one it
+        grazes.
+
+        Both rectangles must already be on the same datum — see
+        `reproject_bounds`. Comparing degrees across datums is the ~304 m
+        mistake documented in the class docstring.
+        """
+        return (
+            self.west <= other.east
+            and other.west <= self.east
+            and self.south <= other.north
+            and other.south <= self.north
+        )
+
+    @classmethod
+    def around(cls, lons: Sequence[float], lats: Sequence[float]) -> GeodeticBounds:
+        """Envelope of a set of points."""
+        if not lons or not lats:
+            raise ValueError("cannot build bounds around no points")
+        return cls(west=min(lons), east=max(lons), south=min(lats), north=max(lats))
 
 
 @dataclass(frozen=True)
@@ -78,20 +105,43 @@ def transformer(from_crs: str, to_crs: str) -> Transformer:
     return Transformer.from_crs(from_crs, to_crs, always_xy=True)
 
 
-def project_bounds(
-    bounds: GeodeticBounds, *, geodetic_crs: str, projected_crs: str
-) -> ProjectedBounds:
-    """Convert a lon/lat rectangle to source-CRS metres."""
-    min_easting, min_northing, max_easting, max_northing = transformer(
-        geodetic_crs, projected_crs
-    ).transform_bounds(
+def _transform_bounds(
+    bounds: GeodeticBounds, from_crs: str, to_crs: str
+) -> tuple[float, float, float, float]:
+    """Envelope of `bounds` in `to_crs`, as (min x, min y, max x, max y).
+
+    Shared by the two public conversions so the densification setting and the
+    argument order — both load-bearing, neither obvious — exist once.
+    """
+    return transformer(from_crs, to_crs).transform_bounds(
         bounds.west,
         bounds.south,
         bounds.east,
         bounds.north,
         densify_pts=_BOUNDS_DENSIFY_PTS,
     )
-    return ProjectedBounds(min_easting, min_northing, max_easting, max_northing)
+
+
+def reproject_bounds(bounds: GeodeticBounds, *, from_crs: str, to_crs: str) -> GeodeticBounds:
+    """Move a lon/lat rectangle onto another geodetic datum.
+
+    Needed because a published index and a region definition need not share a
+    datum, and comparing their degrees directly is the ~304 m error. Densified
+    like `project_bounds`, so the result is a superset: a filter built on it
+    over-selects at worst, which costs a spare download rather than a hole in
+    the map.
+    """
+    if from_crs == to_crs:
+        return bounds
+    west, south, east, north = _transform_bounds(bounds, from_crs, to_crs)
+    return GeodeticBounds(west=west, east=east, south=south, north=north)
+
+
+def project_bounds(
+    bounds: GeodeticBounds, *, geodetic_crs: str, projected_crs: str
+) -> ProjectedBounds:
+    """Convert a lon/lat rectangle to source-CRS metres."""
+    return ProjectedBounds(*_transform_bounds(bounds, geodetic_crs, projected_crs))
 
 
 @dataclass(frozen=True)

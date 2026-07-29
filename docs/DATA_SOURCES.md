@@ -269,6 +269,22 @@ Natural map edges: Victoria Harbour (north), the escarpment toward Kennedy Road 
 Direct static URLs (see table above), enumerable via the data.gov.hk CKAN API. No key, no portal,
 no account. This half of the pipeline is solved.
 
+⚠️ **The two formats are redundant, and one is 31× larger.** Measured 2026-07-30:
+
+| File | Size | |
+|---|---|---|
+| `RdNet_IRNP.gdb.zip` | **17.4 MB** | FGDB — **every layer** |
+| `CENTERLINE.gml` | 485.9 MB | one layer |
+| `INTERSECTION.gml` | 49.0 MB | one layer |
+| `PROHIBITION.gml` | 3.2 MB | |
+| `ROUNDABOUT.gml` | 0.7 MB | |
+| `BUS_ONLY_LANE.gml` | 0.4 MB | |
+| `CENTERLINE.gfs` | 2.6 KB | schema for the above |
+| `dataspec/rdnet_dataspec.zip` | 1.3 MB | data dictionary |
+
+Same content; GML spends its bytes on XML tags. `hong_kong.yaml` lists both because `P1-3` has not
+chosen a reader yet — see `PROGRESS.md`, `Q9`. Drop the loser once it has.
+
 ### Buildings — fully scriptable ✅
 
 > **Correction, 2026-07-30.** This section previously stated that the building datasets expose
@@ -288,7 +304,7 @@ as ordinary GIS vector formats, not as 3D models. What you get is a **territory-
 | `Format_glTF` | `https://download.map.gov.hk/api/3d-zip/GLTF0/11-SW-10C.zip?key=…` |
 | `Format_FBX` | `…/api/3d-zip/FBX0/11-SW-10C.zip?key=…` |
 | `Format_MAX` | `…/api/3d-zip/MAX0/11-SW-10C.zip?key=…` |
-| `REVISIONDATE` | `20250929` |
+| `REVISIONDATE` | `20260424` (for `11-SW-10C`; it is genuinely per sheet — `1-SE-19D` reads `20250929`) |
 
 - **One public key is shared by all 3,456 sheets** — not per-user, not per-session. It is baked
   into an index anyone can download.
@@ -298,6 +314,26 @@ as ordinary GIS vector formats, not as 3D models. What you get is a **territory-
 - `REVISIONDATE` is per sheet — use it as the cache key so re-runs are idempotent.
 - Index CRS is **WGS84** (GeoJSON with `crs: null`, i.e. CRS84 per RFC 7946). Confirmed against
   real geometry, not assumed — see "Region of interest" below.
+
+**The index itself has a direct URL** — confirmed 2026-07-30 by `P1-1`, and it is what makes a
+fresh clone able to fetch without anyone visiting the portal:
+
+```
+https://portal.csdi.gov.hk/csdi-webpage/file-api
+    ?dataset_id=landsd_rcd_1742809441342_98380
+    &format=geojson
+    &layer_name=Nontextured_models
+```
+
+Verified to return bytes **identical by SHA-256** to the portal's own download button (3,167,143 B,
+`38e270f8…`). No key, no session, no account. The endpoint is parameterised by dataset, format and
+layer rather than being one-off, so it generalises to any CSDI dataset — including 3D-BIT00.
+
+It is published in the portal's ISO 19139 metadata record, which is the thing to re-read if the URL
+ever stops working:
+`https://portal.csdi.gov.hk/geoportal/rest/metadata/item/<datasetId>`. That record also advertises
+WFS, WMS and an ArcGIS `FeatureServer` for the same layer — server-side bbox queries are available
+if the 3.2 MB whole-index download ever becomes inconvenient. It has not.
 
 **Portal entry points** (for a human re-checking the index):
 

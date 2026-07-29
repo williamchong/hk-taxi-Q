@@ -17,6 +17,7 @@ from pipeline.crs import (
     GeodeticBounds,
     ProjectedBounds,
     project_bounds,
+    reproject_bounds,
     transformer,
 )
 
@@ -149,6 +150,66 @@ class TestGeodeticBounds:
     def test_rejects_degenerate_latitude(self) -> None:
         with pytest.raises(ValueError, match="south"):
             GeodeticBounds(west=114.172, east=114.188, south=22.276, north=22.276)
+
+    def test_around_takes_the_envelope_of_scattered_points(self) -> None:
+        bounds = GeodeticBounds.around([114.18, 114.172, 114.176], [22.28, 22.276, 22.284])
+        assert (bounds.west, bounds.east) == (114.172, 114.18)
+        assert (bounds.south, bounds.north) == (22.276, 22.284)
+
+    def test_around_rejects_no_points(self) -> None:
+        with pytest.raises(ValueError, match="no points"):
+            GeodeticBounds.around([], [])
+
+    def test_overlapping_rectangles_intersect(self) -> None:
+        assert WAN_CHAI.intersects(
+            GeodeticBounds(west=114.180, east=114.200, south=22.280, north=22.300)
+        )
+
+    def test_disjoint_rectangles_do_not(self) -> None:
+        assert not WAN_CHAI.intersects(
+            GeodeticBounds(west=114.200, east=114.220, south=22.276, north=22.284)
+        )
+
+    def test_shared_edge_counts_as_intersecting(self) -> None:
+        """Map sheets tile edge to edge; a boundary on a shared edge must select
+        both neighbours rather than fall down the crack between them."""
+        assert WAN_CHAI.intersects(
+            GeodeticBounds(west=WAN_CHAI.east, east=114.200, south=22.276, north=22.284)
+        )
+
+    def test_separation_in_only_one_axis_is_enough_to_miss(self) -> None:
+        """Guards the classic overlap-test bug of testing X and Y with `or`."""
+        assert not WAN_CHAI.intersects(
+            GeodeticBounds(west=114.176, east=114.180, south=22.300, north=22.310)
+        )
+
+
+class TestReprojectBounds:
+    def test_same_crs_returns_the_input_untouched(self) -> None:
+        """An identity round-trip through PROJ would still perturb the last
+        decimal place, which would be a needless source of drift."""
+        assert reproject_bounds(WAN_CHAI, from_crs=WGS84, to_crs=WGS84) is WAN_CHAI
+
+    def test_hk1980_to_wgs84_moves_the_region_hundreds_of_metres(self) -> None:
+        """The same shift `test_reading_wgs84_coordinates_as_hk1980...` measures,
+        seen from the other side — this is the conversion that stops a published
+        index and a region definition being compared across datums."""
+        moved = reproject_bounds(WAN_CHAI, from_crs=HK1980_GEODETIC, to_crs=WGS84)
+        as_metres = math.dist(
+            transformer(WGS84, HK1980_GRID).transform(WAN_CHAI.west, WAN_CHAI.south),
+            transformer(WGS84, HK1980_GRID).transform(moved.west, moved.south),
+        )
+        assert as_metres > 250.0
+
+    def test_result_is_a_superset_not_a_crop(self) -> None:
+        """Densified, so a filter built on it over-selects at worst — a spare
+        download rather than a hole in the map."""
+        there = reproject_bounds(WAN_CHAI, from_crs=WGS84, to_crs=HK1980_GEODETIC)
+        back = reproject_bounds(there, from_crs=HK1980_GEODETIC, to_crs=WGS84)
+        assert back.west <= WAN_CHAI.west + 1e-9
+        assert back.east >= WAN_CHAI.east - 1e-9
+        assert back.south <= WAN_CHAI.south + 1e-9
+        assert back.north >= WAN_CHAI.north - 1e-9
 
 
 def test_projected_bounds_report_their_extent() -> None:

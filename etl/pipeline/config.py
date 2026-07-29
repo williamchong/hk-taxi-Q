@@ -38,6 +38,31 @@ class RegionConfig:
 
 
 @dataclass(frozen=True)
+class TiledSource:
+    """A dataset published per map sheet, reachable only through an index.
+
+    The index is a vector layer whose features carry both a footprint and the
+    download URL for that footprint's models, so which sheets a region needs is
+    derived rather than listed. The property names below are what keeps this
+    city-agnostic: the pipeline knows "some property holds the URL", never that
+    Hong Kong happens to call it `Format_glTF`.
+
+    Those URLs may embed a publisher's API key, which is why they are read from
+    the fetched index at run time and never written into config or the manifest.
+    """
+
+    id: str
+    index_url: str
+    # Datum of the index geometry, which need not match the region's.
+    index_crs: str
+    id_property: str
+    url_property: str
+    # Per-tile version stamp used as the cache key. Optional: a publisher that
+    # offers none simply gets fetch-once semantics.
+    revision_property: str | None = None
+
+
+@dataclass(frozen=True)
 class CityConfig:
     id: str
     name: str
@@ -50,7 +75,15 @@ class CityConfig:
     # Network v2 carries no Z; ELEVATION is a layer index, not a measurement.
     elevation_levels: dict[int, float]
     regions: dict[str, RegionConfig]
+    # Datasets available at a single fixed URL.
     sources: dict[str, str]
+    # Datasets that must be selected per region via an index.
+    tiled_sources: dict[str, TiledSource]
+
+    @property
+    def source_ids(self) -> set[str]:
+        """Every fetchable source name, of either kind."""
+        return set(self.sources) | set(self.tiled_sources)
 
     def region(self, region_id: str) -> RegionConfig:
         if region_id not in self.regions:
@@ -110,6 +143,23 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
         elevation_levels=_elevation_levels(_require(document, "elevation_levels", path), path),
         regions={region_id: _region(region_id, body, path) for region_id, body in regions.items()},
         sources={str(k): str(v) for k, v in (document.get("sources") or {}).items()},
+        tiled_sources={
+            str(source_id): _tiled_source(str(source_id), body, path)
+            for source_id, body in (document.get("tiled_sources") or {}).items()
+        },
+    )
+
+
+def _tiled_source(source_id: str, body: dict[str, Any], path: Path) -> TiledSource:
+    where = f"{path}:tiled_sources.{source_id}"
+    revision = body.get("revision_property")
+    return TiledSource(
+        id=source_id,
+        index_url=str(_require(body, "index_url", where)),
+        index_crs=str(_require(body, "index_crs", where)),
+        id_property=str(_require(body, "id_property", where)),
+        url_property=str(_require(body, "url_property", where)),
+        revision_property=None if revision is None else str(revision),
     )
 
 
