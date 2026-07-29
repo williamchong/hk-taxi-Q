@@ -1,0 +1,62 @@
+# Hong Kong — every city specific the pipeline is allowed to know.
+#
+# Nothing in etl/pipeline/ may hardcode any value from this file (CLAUDE.md hard
+# rule 3). Facts here are verified in docs/DATA_SOURCES.md; correct them there
+# first if one turns out to be wrong.
+schema_version: 1
+id: hong_kong
+name: Hong Kong
+
+crs:
+  # Every source dataset is published in the HK1980 Grid System — a Transverse
+  # Mercator projection in metres. All pipeline geometry stays in it until the
+  # final conversion to game space.
+  projected: EPSG:2326
+
+  # The datum the region bounds below are expressed in. This MUST be stated,
+  # never assumed.
+  #
+  # HK1980 and WGS84 differ by ~304 m on the ground in Hong Kong — measurably,
+  # not theoretically: the grid's own natural origin sits at 114-10-42.80 E,
+  # 22-18-43.68 N *on HK1980*, and feeding those same digits in as WGS84 lands
+  # 304 m away. That is a fifth of the width of the Wan Chai region.
+  #
+  # The bounds below were read off a consumer web map, which serves WGS84.
+  geodetic: EPSG:4326
+
+# Road Network v2 carries no Z ordinate. Its ELEVATION attribute is an ordinal
+# grade-separation level — the GIS equivalent of OSM's `layer` tag — so deck
+# heights are ours to author. Verified present: 0 (86.5%), 1 (2.0%), 2 (11.5%).
+# Negative levels are plausible for tunnels but were not observed; -1 is mapped
+# so that hitting one is a routing question rather than a crash.
+elevation_levels:
+  -1: -8.0
+  0: 0.0
+  1: 6.0
+  2: 12.0
+
+regions:
+  wan_chai:
+    name: Wan Chai to Causeway Bay
+    # North-shore corridor. Natural map edges on all four sides: Victoria
+    # Harbour north, the Mid-Levels escarpment south, Admiralty west,
+    # Victoria Park east. Roughly 1.65 km x 0.9 km.
+    bounds:
+      west: 114.172
+      east: 114.188
+      south: 22.276
+      north: 22.284
+    tile_size_m: 150.0
+
+# Direct static URLs, discovered via the data.gov.hk CKAN API. Verified to
+# resolve on 2026-07-29. Buildings are absent on purpose: those datasets expose
+# no download endpoint at all, only an interactive portal (open question Q3).
+sources:
+  road_network_gdb: https://static.data.gov.hk/td/road-network-v2/RdNet_IRNP.gdb.zip
+  road_centrelines: https://static.data.gov.hk/td/road-network-v2/CENTERLINE.gml
+  road_centrelines_schema: https://static.data.gov.hk/td/road-network-v2/CENTERLINE.gfs
+  road_intersections: https://static.data.gov.hk/td/road-network-v2/INTERSECTION.gml
+  road_bus_only_lanes: https://static.data.gov.hk/td/road-network-v2/BUS_ONLY_LANE.gml
+  road_roundabouts: https://static.data.gov.hk/td/road-network-v2/ROUNDABOUT.gml
+  road_prohibitions: https://static.data.gov.hk/td/road-network-v2/PROHIBITION.gml
+  road_data_dictionary: https://static.data.gov.hk/td/road-network-v2/dataspec/rdnet_dataspec.zip
