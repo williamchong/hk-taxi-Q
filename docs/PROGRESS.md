@@ -66,7 +66,7 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ❌ blocked
 | Q7 | Does game-space Z run negative northward, or should the origin move to the NW corner? | Data contract — tile IDs and every position in `city.json` | `P1-6` | ✅ **Resolved 2026-07-30** — NW corner |
 | Q8 | What is the cheapest build that lets the user judge "is this fun?" | **Now the top project risk** — `P0-5` did not answer it | user | 🔴 Open |
 | Q9 | Does `P1-3` read the 17 MB FGDB or the 539 MB per-layer GML? | 522 MB of download and disk per clone | `P1-3` | 🔴 Open |
-| Q10 | Is the game-space origin per region, or shared per city? | Whether two regions can stitch into one continuous map | `P1-6` | 🔴 Open |
+| Q10 | Is the game-space origin per region, or shared per city? | Whether two regions can stitch into one continuous map | `P1-6` | ✅ **Resolved 2026-07-30** — both: local origin plus a recorded `city_offset` |
 
 ### Q9 — the road sources are redundant, and one is 31× larger
 
@@ -125,38 +125,49 @@ rather than an optimisation. Recorded in `ARCHITECTURE.md`.
 into one continuous map unless they share one. Not urgent, same `city.json` schema, and settling it
 before `P1-6` is much cheaper than after.
 
-### Q10 — is the origin per region, or per city?
+### Q10 — resolved: **both**, a local origin plus a recorded `city_offset`
 
-Opened by `Q7`'s resolution. `GameTransform` is built from a *region's* bounds, so Wan Chai's origin
-is Wan Chai's north-west corner. If a second region is ever meant to abut it — Central to the west
-is the obvious candidate, and `Q6` already contemplates it — the two would sit in unrelated
-coordinate frames and could not be loaded together without a fix-up at runtime.
+Opened by `Q7`'s resolution, settled on the user's call the same day and implemented in
+`config.py`. The answer was not either/or.
 
-**A per-city origin costs nothing extra today.** It is the same one number in `city.json`; it just
-comes from the city's overall bounds rather than the region's. The cost of *not* deciding is that
-after `P1-6` it becomes a `schema_version` bump plus regenerating every asset that embeds a
-position.
+**The problem.** `GameTransform` is built from a *region's* bounds, so Wan Chai's origin is Wan
+Chai's north-west corner — and Central's would be Central's. Both regions would start at zero, so
+`(100, 0, 100)` would name a place in each and the two could not be loaded together.
 
-Against it: a city-wide origin puts a small region at large offsets — Hong Kong's full extent is
-~50 km, so a far-east region would sit at X ≈ 50,000. **Float32 spacing exceeds 1 mm above
-2¹⁴ = 16,384 m.** Measured exactly:
+**Why a single city-wide origin was not the answer.** Hong Kong spans **62.9 km × 45.4 km**, which
+would put Wan Chai ~38 km out. Float32 spacing exceeds 1 mm above 2¹⁴ = 16,384 m:
 
 | Distance from origin | float32 spacing |
 |---|---|
 | 8 km | 0.49 mm |
 | 16 km | 0.98 mm |
 | 32 km | 1.95 mm |
-| **50 km** | **3.91 mm** |
+| **38 km (Wan Chai)** | **3.91 mm** |
 
-So a city-wide origin costs roughly 4 mm of vertex quantisation at the far end of the territory —
-not fatal for buildings, but it is the same precision argument that motivated a local origin in the
-first place, and 4 mm is where physics contact points and z-fighting start to be arguable rather
-than obviously fine.
+Invisible on a building; awkward on a vehicle. Godot stores `Transform3D` as float32, so the car's
+own position would quantise to ~4 mm against a measured suspension sag of 50.6 mm — about 8% of it.
+That is the classic large-world jitter problem, and it would have been self-inflicted.
 
-**Middle option worth considering:** keep the origin per region, but write the region's *offset
-within the city* into `city.json` too. Regions stay near their own origin, and anything that wants
-to stitch them has the number it needs. Not actioned — the user's call, and nothing before `P1-6`
-depends on it.
+**What was done instead.** Regions keep their local origins, and `city.json` carries a
+`city_offset` — the translation into a city-wide frame anchored on the city's declared bounds:
+
+```
+city_space = region_local + city_offset      # Wan Chai: (38379.0, 0.0, 32826.0)
+```
+
+A region loaded alone ignores it. A build that streams neighbours applies it as a translation. This
+is the floating-origin approach: local precision where the player is, global placement when needed.
+
+**The constraint that makes it work, and the one worth guarding:** the city's `bounds` are
+**declared in config, never derived from the regions that exist**. A frame computed from "the
+regions so far" would move every time one was added, silently relocating every region already
+published against the old value. `hong_kong.yaml` therefore declares deliberately generous
+territory bounds with a do-not-change warning, `config.py` rejects any region falling outside them,
+and a test asserts the city frame is unchanged by adding a region. Mutation-tested: switching
+`city_transform` to derive from region bounds fails that test.
+
+Shipping in `schema_version: 1` rather than arriving later as a migration, which is the whole
+reason for settling it before `P1-6`.
 
 ### Q8 — `P0-5` did not retire the risk it existed to retire
 
@@ -201,6 +212,24 @@ below.
 ---
 
 ## Decision log
+
+### 2026-07-30 — Region placement: local origin **plus** a recorded `city_offset`
+
+User call, resolving `Q10`. Regions keep their own local frames; `city.json` gains a `city_offset`
+that translates a region-local position into a city-wide frame. Full reasoning under *Open
+questions*; the short version is that a single city-wide origin would put Wan Chai ~38 km out,
+where float32 quantises to ~3.9 mm — about 8% of the vehicle's 50.6 mm suspension sag, on a
+`Transform3D` Godot stores as float32.
+
+**The load-bearing constraint is that a city's declared `bounds` never change.** Every region's
+offset is measured from them. They are declared in config rather than derived from the regions that
+exist, because a derived frame would move each time a region was added and silently relocate
+everything already published. Enforced three ways: a do-not-change warning in `hong_kong.yaml`,
+a loader check that every region lies inside the city bounds, and a test asserting the city frame
+is unchanged by adding a region.
+
+Ships in `schema_version: 1`, which is the point of settling it before `P1-6` writes the first real
+`city.json`.
 
 ### 2026-07-30 — Game-space origin: the region's **north-west** corner
 

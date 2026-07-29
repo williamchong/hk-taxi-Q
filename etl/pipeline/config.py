@@ -74,6 +74,10 @@ class CityConfig:
     # Ordinal grade-separation level to authored deck height in metres. Road
     # Network v2 carries no Z; ELEVATION is a layer index, not a measurement.
     elevation_levels: dict[int, float]
+    # Whole-city extent. Only ever used to anchor the city-space frame that
+    # regions are positioned in, so it must be *declared and stable* rather
+    # than derived from the regions that happen to exist — see `city_transform`.
+    bounds: GeodeticBounds
     regions: dict[str, RegionConfig]
     # Datasets available at a single fixed URL.
     sources: dict[str, str]
@@ -99,7 +103,50 @@ class CityConfig:
         )
 
     def game_transform(self, region_id: str) -> GameTransform:
+        """The region's own frame — what its geometry is authored in.
+
+        Region-local rather than city-wide on purpose. Everything the player
+        drives through sits within ~2 km of this origin, where float32 resolves
+        to a fraction of a millimetre. A city-wide frame would put Wan Chai
+        35 km out, quantising every position — the car's included — to ~4 mm.
+        See `city_offset` for how regions are then placed relative to each other.
+        """
         return GameTransform.from_bounds(self.projected_bounds(region_id))
+
+    def city_transform(self) -> GameTransform:
+        """The shared frame all regions are positioned in (`Q10`).
+
+        Anchored on the city's *declared* bounds, never on the union of the
+        regions defined so far. Deriving it would make the frame move every time
+        a region is added, silently invalidating every offset already written
+        into a published `city.json`. Declared bounds are allowed to be generous;
+        they are not allowed to change.
+        """
+        return GameTransform.from_bounds(
+            project_bounds(
+                self.bounds,
+                geodetic_crs=self.geodetic_crs,
+                projected_crs=self.projected_crs,
+            )
+        )
+
+    def city_offset(self, region_id: str) -> tuple[float, float, float]:
+        """Add this to a region-local position to get a city-space one.
+
+        The number that lets two regions abut without either giving up its local
+        precision. A region loaded alone can ignore it entirely; a build that
+        streams neighbours applies it as a translation.
+
+        Non-negative in X and Z whenever the city bounds actually contain the
+        region, which `load_city` checks.
+        """
+        region = self.game_transform(region_id)
+        city = self.city_transform()
+        return (
+            region.origin_easting - city.origin_easting,
+            region.origin_elevation - city.origin_elevation,
+            city.origin_northing - region.origin_northing,
+        )
 
     def deck_height_m(self, elevation_level: int) -> float:
         """Authored height for a road-graph ELEVATION value.
@@ -135,12 +182,13 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
     if not regions:
         raise ValueError(f"{path} defines no regions")
 
-    return CityConfig(
+    city = CityConfig(
         id=city_id,
         name=str(_require(document, "name", path)),
         projected_crs=str(_require(crs, "projected", f"{path}:crs")),
         geodetic_crs=str(_require(crs, "geodetic", f"{path}:crs")),
         elevation_levels=_elevation_levels(_require(document, "elevation_levels", path), path),
+        bounds=_bounds(_require(document, "bounds", path), f"{path}:bounds"),
         regions={region_id: _region(region_id, body, path) for region_id, body in regions.items()},
         sources={str(k): str(v) for k, v in (document.get("sources") or {}).items()},
         tiled_sources={
@@ -148,6 +196,33 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
             for source_id, body in (document.get("tiled_sources") or {}).items()
         },
     )
+    _check_regions_lie_within_the_city(city, path)
+    return city
+
+
+def _check_regions_lie_within_the_city(city: CityConfig, path: Path) -> None:
+    """A region outside the declared city bounds is a config error, not a shift.
+
+    It would still produce coordinates, just with a negative `city_offset` —
+    i.e. a region placed north or west of the frame everything else is measured
+    from. Caught here because the symptom otherwise appears in `P1-6` output as
+    a region that loads fine alone and lands in the wrong place beside another.
+    """
+    city_bounds = city.bounds
+    for region in city.regions.values():
+        r = region.bounds
+        if (
+            r.west < city_bounds.west
+            or r.east > city_bounds.east
+            or r.south < city_bounds.south
+            or r.north > city_bounds.north
+        ):
+            raise ValueError(
+                f"{path}:regions.{region.id} lies outside the city bounds. "
+                f"Region ({r.west}, {r.south})-({r.east}, {r.north}) is not inside "
+                f"({city_bounds.west}, {city_bounds.south})-"
+                f"({city_bounds.east}, {city_bounds.north})."
+            )
 
 
 def _tiled_source(source_id: str, body: dict[str, Any], path: Path) -> TiledSource:
@@ -192,17 +267,20 @@ def _elevation_levels(raw: dict[Any, Any], path: Path) -> dict[int, float]:
     return levels
 
 
+def _bounds(body: dict[str, Any], where: str) -> GeodeticBounds:
+    return GeodeticBounds(
+        west=float(_require(body, "west", where)),
+        east=float(_require(body, "east", where)),
+        south=float(_require(body, "south", where)),
+        north=float(_require(body, "north", where)),
+    )
+
+
 def _region(region_id: str, body: dict[str, Any], path: Path) -> RegionConfig:
     where = f"{path}:regions.{region_id}"
-    bounds = _require(body, "bounds", where)
     return RegionConfig(
         id=region_id,
         name=str(_require(body, "name", where)),
-        bounds=GeodeticBounds(
-            west=float(_require(bounds, "west", f"{where}.bounds")),
-            east=float(_require(bounds, "east", f"{where}.bounds")),
-            south=float(_require(bounds, "south", f"{where}.bounds")),
-            north=float(_require(bounds, "north", f"{where}.bounds")),
-        ),
+        bounds=_bounds(_require(body, "bounds", where), f"{where}.bounds"),
         tile_size_m=float(_require(body, "tile_size_m", where)),
     )

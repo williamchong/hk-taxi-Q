@@ -119,6 +119,7 @@ The interface between ETL and game. **Versioned — change both sides together a
   "region_id": "wan_chai",
   "source_crs": "EPSG:2326",
   "origin": { "easting": 835765.0, "northing": 816125.0, "elevation": 0.0 },
+  "city_offset": [38379.0, 0.0, 32826.0],
   "bounds_game": { "min": [0, -20, 0], "max": [1650, 220, 900] },
   "tile_size_m": 150,
   "tiles": [
@@ -254,9 +255,31 @@ edges. Any vertex north or west of the region still yields a negative coordinate
 tile index, and the outward rounding buys less than a metre of slack. Whatever consumes the sheets
 must clip before indexing.
 
-⚠️ The origin is currently **per region**. If two regions must ever stitch into one continuous
-map, they need a shared per-city origin instead — a `schema_version` change, not a tuning change.
-Unresolved; see `PROGRESS.md`, `Q10`.
+### Two frames, and why (`Q10`, resolved 2026-07-30)
+
+Each region's geometry is authored in its **own** local frame, origin at its own NW corner. That is
+what keeps the numbers the player interacts with small: Wan Chai spans 0–1650 m, where float32
+resolves to well under a millimetre.
+
+`city_offset` is the translation from a region's local frame into a **city-wide** frame shared by
+every region — anchored on the city's declared `bounds`, not on any region. Add it to a
+region-local position to get a city-space one:
+
+```
+city_space = region_local + city_offset
+```
+
+**A region loaded on its own can ignore `city_offset` entirely.** It exists so two regions can be
+placed correctly relative to each other without either giving up its local precision — the
+floating-origin approach. Anchoring everything in city space instead would put Wan Chai ~38 km from
+the origin, where float32 spacing is ~3.9 mm; that is invisible on a building and awkward on a
+vehicle whose suspension sag is 50 mm.
+
+⚠️ **A city's `bounds` must not change once a `city.json` has shipped.** Every region's
+`city_offset` is measured from them, so moving them silently relocates every region already
+published. They are declared rather than derived from the regions that exist, for the same reason:
+a frame computed from "the regions so far" would move each time one was added. `config.py` checks
+every region lies inside them.
 
 ---
 

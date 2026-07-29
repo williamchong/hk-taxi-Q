@@ -35,6 +35,25 @@ elevation_levels:
   1: 6.0
   2: 12.0
 
+# Whole-territory extent, and the anchor for the shared city-space frame that
+# regions are positioned in (Q10). Regions keep their own local origins so the
+# geometry the player drives through stays near zero; `city_offset` is what
+# places one region relative to another.
+#
+# ⚠️ THESE FOUR NUMBERS MUST NOT CHANGE once a city.json has shipped. Every
+# region's offset is measured from them, so moving them silently relocates every
+# region that was published against the old value. They are deliberately
+# generous — Hong Kong spans roughly 113.835-114.441 E, 22.153-22.562 N, and the
+# padding here is free — precisely so a later region never forces a change.
+#
+# Declared, not derived from the regions below, for the same reason: a frame
+# computed from "the regions that exist so far" moves every time one is added.
+bounds:
+  west: 113.80
+  east: 114.45
+  south: 22.13
+  north: 22.58
+
 regions:
   wan_chai:
     name: Wan Chai to Causeway Bay

@@ -65,6 +65,88 @@ def test_game_transform_puts_the_region_next_to_the_origin(hong_kong) -> None:
     assert 0.0 < z < 1000.0
 
 
+class TestCityOffset:
+    """Q10: regions keep local origins, and carry their offset in a shared frame."""
+
+    def test_offset_reconciles_the_region_and_city_frames_exactly(self, hong_kong) -> None:
+        """The property the whole scheme rests on: a region-local position plus
+        its offset is the city-space position, for every point.
+
+        Exact rather than approximate — both legs are pure translation, so any
+        drift here would mean an arithmetic error, not float noise.
+        """
+        region = hong_kong.game_transform("wan_chai")
+        city = hong_kong.city_transform()
+        offset = hong_kong.city_offset("wan_chai")
+        bounds = hong_kong.projected_bounds("wan_chai")
+
+        corners = [
+            (bounds.min_easting, bounds.max_northing),
+            (bounds.max_easting, bounds.min_northing),
+            (836000.0, 815900.0),
+        ]
+        for easting, northing in corners:
+            local = region.to_game(easting, northing, 12.5)
+            in_city = city.to_game(easting, northing, 12.5)
+            assert tuple(local[i] + offset[i] for i in range(3)) == pytest.approx(in_city)
+
+    def test_offset_is_non_negative(self, hong_kong) -> None:
+        """City origin is the city's NW corner, so every region lies east and
+        south of it. A negative component means a region outside the city."""
+        x, _, z = hong_kong.city_offset("wan_chai")
+        assert x >= 0.0
+        assert z >= 0.0
+
+    def test_region_frame_stays_local(self, hong_kong) -> None:
+        """The reason for keeping a per-region origin at all: the geometry the
+        player drives through must stay near zero, where float32 is precise.
+
+        Wan Chai sits ~38 km out in city space, where float32 resolves to ~4 mm.
+        """
+        bounds = hong_kong.projected_bounds("wan_chai")
+        region = hong_kong.game_transform("wan_chai")
+        far_corner = region.to_game(bounds.max_easting, bounds.min_northing)
+        assert max(abs(v) for v in far_corner) < 2000.0
+
+        city = hong_kong.city_transform()
+        assert city.to_game(bounds.max_easting, bounds.min_northing)[0] > 30_000.0
+
+    def test_city_origin_does_not_move_when_a_region_is_added(self, rewrite) -> None:
+        """The stability requirement, stated as a test.
+
+        A frame derived from the regions defined so far would shift each time one
+        was added, silently relocating every region already published against the
+        old value. Anchoring on declared city bounds is what prevents that.
+        """
+        before = load_city("hong_kong").city_transform()
+
+        def add_region(doc: dict[str, Any]) -> None:
+            doc["regions"]["kowloon_tsim_sha_tsui"] = {
+                "name": "Tsim Sha Tsui",
+                "bounds": {"west": 114.168, "east": 114.180, "south": 22.294, "north": 22.302},
+                "tile_size_m": 150.0,
+            }
+
+        after = load_city("hong_kong", cities_root=rewrite(add_region)).city_transform()
+        assert after == before
+
+    def test_region_outside_the_city_bounds_is_rejected(self, rewrite) -> None:
+        """It would still produce coordinates — just with a negative offset,
+        placing the region north or west of the frame everything else uses."""
+
+        def move_region_out(doc: dict[str, Any]) -> None:
+            doc["regions"]["wan_chai"]["bounds"]["east"] = 120.0
+
+        with pytest.raises(ValueError, match="outside the city bounds"):
+            load_city("hong_kong", cities_root=rewrite(move_region_out))
+
+
+def test_missing_city_bounds_is_rejected(rewrite) -> None:
+    root = rewrite(lambda doc: doc.pop("bounds"))
+    with pytest.raises(ValueError, match="bounds"):
+        load_city("hong_kong", cities_root=root)
+
+
 def test_elevation_levels_map_grade_separation_to_deck_heights(hong_kong) -> None:
     assert hong_kong.deck_height_m(0) == 0.0
     assert hong_kong.deck_height_m(2) > hong_kong.deck_height_m(1) > hong_kong.deck_height_m(0)
