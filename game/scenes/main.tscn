@@ -1,7 +1,7 @@
 [gd_scene load_steps=2 format=3]
 
-[ext_resource type="PackedScene" path="res://scenes/dev/cube_test.tscn" id="1_boot"]
+[ext_resource type="PackedScene" path="res://scenes/dev/greybox.tscn" id="1_boot"]
 
 [node name="Main" type="Node"]
 
-[node name="CubeTest" parent="." instance=ExtResource("1_boot")]
+[node name="Greybox" parent="." instance=ExtResource("1_boot")]

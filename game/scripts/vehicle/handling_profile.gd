@@ -38,13 +38,24 @@ extends Resource
 @export_range(0.0, 5.0, 0.05) var grip_longitudinal: float
 
 @export_group("Drift")
-## Lateral grip multiplier applied while the drift button is held.
+## Lateral grip multiplier applied to the REAR axle while drift is held.
+## Low: the tail must actually step out.
 @export_range(0.0, 1.0, 0.01) var drift_grip_scale: float
+## Lateral grip multiplier applied to the FRONT axle while drift is held.
+## Deliberately much higher than the rear. Scaling both equally can only make
+## a four-wheel slide — the car ploughs wide instead of rotating, which reads
+## as "the road got icy" rather than "I am drifting". The front has to keep
+## enough grip to still point the car.
+@export_range(0.0, 1.0, 0.01) var drift_front_grip_scale: float
 ## Slip angle above which the drift scores style points.
 @export_range(0.0, 90.0, 1.0, "suffix:°") var drift_slip_threshold_deg: float
 ## Fraction of speed lost per second while drifting. Deliberately small —
 ## drifting must not feel like a penalty.
 @export_range(0.0, 1.0, 0.01) var drift_speed_scrub_per_s: float
+
+## Fraction of rolling speed shed per second when coasting — engine braking.
+## Small values glide, large values stop the car the moment you lift off.
+@export_range(0.0, 1.0, 0.01) var coast_drag_per_s: float
 
 @export_group("Collision and recovery")
 ## 0 = head-on stop, 1 = full glancing deflection. Glancing hits deflect;

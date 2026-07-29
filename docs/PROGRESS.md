@@ -26,9 +26,9 @@ that decides whether this is a game before any ETL investment.
 | `P0-4` | ETL scaffold | ⬜ Not started | |
 | `P0-5` | Grey-box fun test | 🟡 In progress | **The critical path.** Subjective gate — needs the user |
 | `P0-5a` | └ Vehicle controller approach | ✅ **Done** | Measured. Custom raycast on `RigidBody3D`; `VehicleBody3D` rejected. |
-| `P0-5b` | └ Grey-box Gloucester block | ⬜ Not started | Widened road boxes + flyover ramp |
-| `P0-5c` | └ Minimal chase camera | ⬜ Not started | Plan amendment — feel cannot be judged without one |
-| `P0-5d` | └ The drive test | ⬜ Not started | **Needs the user and a display** |
+| `P0-5b` | └ Grey-box Gloucester block | ✅ **Done** | Circuit built from JSON; widen_factor is data |
+| `P0-5c` | └ Minimal chase camera | ✅ **Done** | Spring arm, speed FOV, look-back |
+| `P0-5d` | └ The drive test | ⬜ **Blocked on user** | **Needs a display. `godot --path game`** |
 | `P1-*` | ETL vertical slice | ⬜ Blocked | Gated on `P0-5` (`P0-2` cleared) |
 | `P2-*` | Driving the real city | ⬜ Blocked | |
 | `P3-*` | Playable slice | ⬜ Blocked | |
@@ -250,6 +250,33 @@ accurate; charm and readability come from Choro-Q vehicle proportions.
 
 ---
 
+## Planned vehicle roster (user direction, 2026-07-29)
+
+Real models, not generic cars. Recorded because the **drive layout differs across them**, which is
+an architecture constraint rather than an art note.
+
+| Vehicle | Drivetrain | Notes |
+|---|---|---|
+| Old Toyota Crown (Comfort) | LPG, **rear-wheel drive** | The iconic HK red taxi |
+| New Toyota Crown | Hybrid, **front-wheel drive** | |
+| Toyota Hiace | CVT | Van proportions — tall, high centre of mass |
+
+**Already supported without code changes:** `WheelMount.drives` is authored per wheel in each
+vehicle scene, so RWD and FWD are scene data. Each vehicle gets its own `HandlingProfile`, and
+`centre_of_mass_offset_y` plus `anti_roll` already cover the Hiace's height.
+
+**This is why drift bias is derived from chassis geometry, not from `drives`.** `VehicleController`
+computes `WheelMount.is_front` from the wheel's position along the chassis. Had it keyed off
+`drives` or `steers`, the front-wheel-drive Crown would have had its drift bias inverted — the
+front would break away instead of the rear.
+
+**Not yet modelled:** transmission character. `engine_force` is a flat constant with no gears or
+torque curve, so an LPG Crown, a hybrid and a CVT would accelerate identically. Hybrid instant
+torque versus LPG's laggier delivery would need a torque curve in `HandlingProfile`. Open, not
+urgent — flag it before the roster work in Phase 4.
+
+---
+
 ## Risk register
 
 | Risk | Severity | Mitigation |
@@ -281,6 +308,58 @@ Record measured values here, not estimates.
 ---
 
 ## Session log
+
+### 2026-07-29 — `P0-5b` / `P0-5c` Grey-box circuit, vehicle controller and chase camera
+
+`VehicleController` implemented per the `P0-5a` decision: raycast suspension on `RigidBody3D`,
+spring and damper sized from natural frequency, tyre forces capped **independently** for lateral and
+longitudinal grip. That separation is the whole reason for the custom controller, and it verified:
+
+| Same corner, held 4 s | Speed scrubbed /s | Peak slip angle |
+|---|---|---|
+| Gripping (no drift) | 0.297 | 16.4° |
+| **Drift held** | **0.270** | 12.6° |
+
+Drifting is *cheaper* than gripping, because breaking lateral grip removes the cornering force that
+was scrubbing speed. Under `VehicleBody3D` the same manoeuvre cost 30–57% extra and spun to 162°.
+The measured 0.27 is full-lock cornering, not the drift mechanic — a straight-line drift figure
+comparable to `drift_speed_scrub_per_s = 0.08` needs a clean skid pad, which `P0-5d` can judge by
+feel instead.
+
+Headless verification on the built circuit: suspension settles at **50.6 mm sag** against 50.7 mm
+predicted, body rests at 0.649 m, 4/4 wheels grounded, accelerates smoothly and dead straight to
+49.9 km/h, corners upright without flipping, and the camera tracks at 2.2 m.
+
+**Three bugs found and fixed by measuring rather than reading:**
+- **Anti-roll signs were inverted** — force pushed *down* on the already-compressed side, amplifying
+  roll instead of resisting it. The car flipped on the first hard corner. This is why `P0-5a`'s
+  spike flip was not purely a centre-of-mass problem.
+- **Coasting drag divided by `delta`**, making it framerate-dependent and roughly 35× too strong
+  (~70% of velocity shed per second). `apply_force` already integrates over the tick.
+- **A `Node3D`-typed `@export` does not resolve from a hand-authored `.tscn`** — it silently read
+  null and the camera never moved. `ChaseCamera` now takes a `NodePath` and resolves it explicitly.
+  Worth remembering for every scene authored outside the editor.
+
+**Review pass found a fourth bug the drive tests could not have caught: steering was inverted.**
+`InputRouter.steer` is `+1` for right, but a *positive* rotation about `+Y` turns the `-Z` forward
+vector toward `-X` — left. Press D, car goes left. The headless tests missed it because they only
+ever steered one direction and never checked which. Verified fixed by yaw sign: held right lock now
+gives monotonically decreasing yaw, i.e. clockwise from above. Also fixed in the same pass: wheel
+raycasts accepted wall faces as ground (free traction and a launch ramp off any building), six
+buildings sat inside the carriageway at the junctions the circuit has to turn through, road slabs
+were exactly coplanar with the ground plane and z-fought across their whole surface, and auto-right
+teleported the car after that tick's forces had already been queued for its overturned pose.
+
+**Open question for `P0-5d`:** slip angle is *lower* with drift held (12.6°) than without (16.4°),
+because `drift_grip_scale` currently applies to all four wheels equally — that ploughs (understeer)
+rather than rotating the car (oversteer). An arcade drift usually wants the rear to break away
+first, which would need a per-axle bias the schema does not yet have. **Deliberately not added
+before the user has driven it**, since which way it should feel is exactly what `P0-5d` decides.
+
+`P0-5b` road widths live in `game/assets/authored/greybox_wanchai.json` as `real_width_m` ×
+`widen_factor`, so the arcade divergence stays visible and re-drivable in seconds. `P0-5c` is
+explicitly throwaway — `P2-5` owns the real camera.
+
 
 ### 2026-07-29 — Planning
 Feasibility evaluated, region selected, engine and language decided, monetisation direction set.

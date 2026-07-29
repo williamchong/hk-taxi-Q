@@ -1,0 +1,38 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/city/greybox_builder.gd" id="1_builder"]
+[ext_resource type="PackedScene" path="res://scenes/vehicle/taxi.tscn" id="2_taxi"]
+[ext_resource type="Script" path="res://scripts/camera/chase_camera.gd" id="3_camera"]
+
+[sub_resource type="Environment" id="Environment_greybox"]
+background_mode = 1
+background_color = Color(0.55, 0.63, 0.72, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.62, 0.67, 0.76, 1)
+ambient_light_energy = 0.75
+
+[node name="Greybox" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_greybox")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.86, -0.35, 0.37, 0, 0.73, 0.68, -0.51, -0.59, 0.63, 0, 60, 0)
+light_energy = 1.1
+shadow_enabled = true
+
+[node name="City" type="Node3D" parent="."]
+script = ExtResource("1_builder")
+
+[node name="Taxi" parent="." instance=ExtResource("2_taxi")]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, -250, 1, -150)
+
+[node name="CameraRig" type="SpringArm3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -250, 3, -150)
+margin = 0.3
+script = ExtResource("3_camera")
+target_path = NodePath("../Taxi")
+camera_path = NodePath("Camera3D")
+
+[node name="Camera3D" type="Camera3D" parent="CameraRig"]
+far = 2000.0
