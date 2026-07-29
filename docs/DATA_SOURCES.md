@@ -367,15 +367,38 @@ Three findings that shape `P1-2`:
    `ARCHITECTURE.md`. `GameTransform` reduces to subtracting the region origin; there is no axis
    work to do.
 2. **Vertices are unwelded — exactly 3.0 per triangle.** Flat shading is baked in, which is the
-   art direction's native form. Do not weld; do not generate normals.
-3. **"Non-textured" describes the buildings, not the terrain.** Terrain ships with a JPEG. **Decided
-   2026-07-30: keep it and evaluate it in place** (user call, superseding this section's earlier
-   expectation that it would be discarded). `P1-4` still generates the road surface from the road
-   graph; the terrain is being kept for the ground *between* the roads. Judge it in `P1-2` against
-   z-fighting with the road ribbon, texture memory across six sheets, and whether photographic
-   ground reads as wrong beside untextured massing. See `PROGRESS.md`.
+   art direction's native form. Never weld on position alone and never regenerate normals; `P1-2`
+   welds on *position and facing together*, which is lossless and removes the repetition.
+3. **"Non-textured" describes the buildings, not the terrain.** Terrain ships with a JPEG — one
+   **7531 × 6031** texture per sheet, 45 megapixels. See the terrain verdict below.
 
-⚠️ **Triangle budget pressure.** 92,457 triangles across 151 buildings — **612 per building**,
-far more than an LOD1 extrusion needs. Extrapolated over six sheets that is ~555k triangles against
-a **<300k visible** budget. Not fatal (visible ≠ total, and HK street canyons occlude heavily) but
-it makes `P1-2`'s decimation and LOD tiers load-bearing rather than optional.
+### Measured across all six sheets (`P1-2`, 2026-07-30)
+
+The one sheet downloaded by hand turned out to be among the sparsest, so extrapolating from it was
+low by 2.4×.
+
+| | `11-SW-10C` | All six sheets |
+|---|---|---|
+| Buildings | 151 | **2,200** — `11-SW-14B` alone has 720 |
+| Infrastructure items | 12 | 74 |
+| Terrain meshes | 1 | 6 |
+| Terrain texture | 39.1 MB | **224 MB** |
+
+⚠️ **Triangle budget pressure — confirmed, then mitigated.** 612 triangles per building. Clipped to
+the region, `P1-2` emits **989k triangles at LOD0**, 400k at LOD1 and 184k at LOD2, against a
+**<300k visible** budget. Vertex-clustering LOD tiers are what make that fit, so the risk now sits
+with `P2-1`'s switch distances rather than with the ETL.
+
+⚠️ **Infrastructure meshes are enormous and unbounded.** `INFRASTRUCTURE/` holds elevated road
+structures, and one of them is **1,984 m long in a single mesh** with 208k triangles. Anything that
+buckets source meshes spatially has to handle a mesh larger than its own bucket — see `P1-2`'s
+tile assignment.
+
+❌ **Terrain does not fit any budget as it ships.** Clipped to the region it is still 404,669
+triangles and **267 MB** of JPEG — over on triangles, texture memory and bundle size at once, by
+roughly 2× each. The source is ~10 px/m, which is survey resolution for ground seen at 60 km/h;
+resampling to ~2 px/m (~6 MB as ASTC) and decimating to ~88k triangles would bring it into range,
+but that work is not scheduled. It is still parsed and still worth keeping, because it is a
+**height field** and `Q11` needs one: Road Network v2 carries no Z, and ground level in Wan Chai is
+~4 m above the datum rather than 0. `python -m pipeline.buildings --terrain` emits it separately
+for evaluation; the tile output contains no textures at all. See `PROGRESS.md`.

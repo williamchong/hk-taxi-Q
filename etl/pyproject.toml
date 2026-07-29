@@ -4,12 +4,16 @@ version = "0.1.0"
 description = "Build-time pipeline turning HK government open geodata into game-ready assets"
 requires-python = ">=3.11"
 dependencies = [
+    "numpy>=1.26",
     "pyproj>=3.6",
     "pyyaml>=6.0",
 ]
 
-# GDAL/OGR, geopandas and the glTF writers arrive with P1-1. They are heavy and
-# platform-awkward, so they stay out until something actually imports them.
+# GDAL/OGR and geopandas arrive with P1-3. They are heavy and platform-awkward,
+# so they stay out until something actually imports them.
+#
+# No glTF library: P1-2 reads and writes the format directly (`pipeline/gltf.py`
+# explains why a dependency would have saved no work).
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",

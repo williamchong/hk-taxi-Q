@@ -29,6 +29,17 @@ window/size/viewport_height=1080
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 
+[importer_defaults]
+
+; Godot 4.7 imports glTF COLOR_0 into the mesh but leaves
+; vertex_color_use_as_albedo off, so every generated tile arrives white. The
+; post-import script turns it on. Set as an importer default rather than per
+; file because generated assets are gitignored — their .import files do not
+; survive a fresh clone.
+scene={
+"import_script/path": "res://tools/generated_scene_import.gd"
+}
+
 [input]
 
 steer_left={

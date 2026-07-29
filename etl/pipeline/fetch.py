@@ -45,6 +45,7 @@ log = logging.getLogger(__name__)
 
 SOURCES_ROOT = Path(__file__).resolve().parent.parent / "sources"
 MANIFEST_NAME = "manifest.json"
+INDEX_NAME = "index.geojson"
 
 # Some government hosts reject the default `Python-urllib/3.x` agent outright,
 # and the failure reads as a 403 rather than anything about the agent.
@@ -241,6 +242,34 @@ def select_tiles(
 
     # Stable order so logs and manifests diff cleanly between runs.
     return sorted(selected, key=lambda artefact: artefact.key)
+
+
+def source_dir(city_id: str, source_id: str, *, root: Path | None = None) -> Path:
+    """Where a source's fetched artefacts live."""
+    return (root or SOURCES_ROOT) / city_id / source_id
+
+
+def cached_tiles(
+    city: CityConfig,
+    region: RegionConfig,
+    source: TiledSource,
+    *,
+    root: Path | None = None,
+) -> list[Artefact]:
+    """The region's tiles, selected from the index an earlier fetch left on disk.
+
+    Exists so a later stage can discover which sheets it must read without
+    either re-deriving the selection rule or hardcoding sheet numbers — the
+    thing `P0-1` explicitly warned against. Offline: the index is already local.
+    """
+    index_path = source_dir(city.id, source.id, root=root) / INDEX_NAME
+    if not index_path.exists():
+        raise FileNotFoundError(
+            f"no index for '{source.id}' at {index_path}. "
+            f"Run: python -m pipeline.fetch --city {city.id} --region {region.id}"
+        )
+    index = _read_index(index_path, source)
+    return select_tiles(index, source, region_bounds=region.bounds, region_crs=city.geodetic_crs)
 
 
 def _tile_filename(tile_id: str, url: str, source: TiledSource) -> str:
@@ -461,7 +490,7 @@ def _tiles_for(
     index_artefact = Artefact(
         key=f"{source.id}/index",
         url=source.index_url,
-        path=Path(source.id) / "index.geojson",
+        path=Path(source.id) / INDEX_NAME,
         kind=ArtefactKind.INDEX,
     )
     # The index is fetched even under --dry-run, and it is the one thing that

@@ -46,16 +46,44 @@ Sources with no version stamp — the roads, and the index itself — always re-
 Which building sheets a region needs is **derived**, never listed — the fetcher intersects the
 region bounds with the publisher's sheet index. Move the bounds and the sheet set follows.
 
+## Building tiles
+
+```sh
+../.venv/bin/python -m pipeline.buildings --city hong_kong --region wan_chai
+```
+
+Reads the cached sheets — no network — and writes `out/hong_kong/wan_chai/tiles/*.glb`, one merged,
+vertex-coloured mesh per 150 m tile per LOD tier, plus a `buildings.json` intermediate. Wan Chai is
+65 tiles × 3 tiers in about six seconds.
+
+The palette, the sheet sub-directories to read, and the LOD cell sizes are all city config
+(`buildings:` in the YAML). Nothing about Hong Kong is in the code.
+
+Add `--terrain` to also emit each sheet's textured ground mesh. That output is **evaluation only**
+and is not part of the tile set: it is 267 MB of JPEG for the region, against a <128 MB texture
+budget. See `PROGRESS.md`.
+
+Verify the result in the engine, which is the only place the acceptance criteria can be checked:
+
+```sh
+cp out/hong_kong/wan_chai/tiles/*.glb ../game/assets/generated/tiles/
+godot --headless --path ../game --import
+godot --headless --path ../game --script res://tools/verify_tiles.gd
+```
+
 ## Layout
 
 | Path | Contains |
 |---|---|
-| `config/cities/*.yaml` | **Every** city specific — CRS, bounds, deck heights, source URLs |
-| `pipeline/crs.py` | The only module that converts projected coordinates to game space |
+| `config/cities/*.yaml` | **Every** city specific — CRS, bounds, deck heights, palette, source URLs |
 | `pipeline/config.py` | Loads and validates city config; nothing else reads the YAML |
+| `pipeline/crs.py` | The only module that converts projected coordinates to game space |
 | `pipeline/fetch.py` | Downloads and caches sources; derives tile sets from published indexes |
-| `sources/` | Raw downloads and `manifest.json` — gitignored |
-| `out/` | Pipeline output — gitignored |
+| `pipeline/gltf.py` | glTF reading and GLB writing — no library, see the module docstring |
+| `pipeline/mesh.py` | Merge, partition and LOD-collapse meshes. Geometry only, no policy |
+| `pipeline/buildings.py` | Sheets → vertex-coloured tiles. Where the policy lives |
+| `sources/<city>/<source>/` | Raw downloads and `manifest.json` — gitignored |
+| `out/<city>/<region>/` | Pipeline output — gitignored |
 
 ## Credentials
 

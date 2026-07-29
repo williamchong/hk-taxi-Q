@@ -147,6 +147,77 @@ def test_missing_city_bounds_is_rejected(rewrite) -> None:
         load_city("hong_kong", cities_root=root)
 
 
+class TestBuildingStyle:
+    """P1-2's palette and LOD tiers are tuning data, so they are validated here
+    rather than trusted at the point of use."""
+
+    def test_it_loads(self, hong_kong) -> None:
+        style = hong_kong.buildings
+        assert "BUILDING" in style.classes
+        assert style.height_bands[-1].up_to_m == float("inf")
+        assert style.lod_cell_sizes_m[0] == 0.0
+
+    def test_terrain_is_not_a_building_class(self, hong_kong) -> None:
+        """The tile output is specified to contain no textures, and the LandsD
+        terrain ships a 45-megapixel JPEG per sheet."""
+        assert not any("TERRAIN" in name for name in hong_kong.buildings.classes)
+
+    def test_unordered_height_bands_are_rejected(self, rewrite) -> None:
+        """`colour_for` returns the first band a height fits, so an out-of-order
+        table silently paints towers with the shophouse colour."""
+
+        def shuffle(doc: dict[str, Any]) -> None:
+            doc["buildings"]["height_bands"].reverse()
+
+        with pytest.raises(ValueError, match="ascending"):
+            load_city("hong_kong", cities_root=rewrite(shuffle))
+
+    def test_a_closed_last_band_is_rejected(self, rewrite) -> None:
+        """Without an open-ended band there is no colour for a building taller
+        than the table — and those are what a Hong Kong skyline is read by."""
+
+        def close_it(doc: dict[str, Any]) -> None:
+            doc["buildings"]["height_bands"][-1]["up_to_m"] = 500.0
+
+        with pytest.raises(ValueError, match=r"\.inf"):
+            load_city("hong_kong", cities_root=rewrite(close_it))
+
+    def test_a_malformed_colour_is_rejected(self, rewrite) -> None:
+        def break_colour(doc: dict[str, Any]) -> None:
+            doc["buildings"]["height_bands"][0]["colour"] = "beige"
+
+        with pytest.raises(ValueError, match="#rrggbb"):
+            load_city("hong_kong", cities_root=rewrite(break_colour))
+
+    def test_lod_cell_sizes_must_coarsen(self, rewrite) -> None:
+        def invert(doc: dict[str, Any]) -> None:
+            doc["buildings"]["lod_cell_sizes_m"] = [4.0, 1.5, 0.0]
+
+        with pytest.raises(ValueError, match="coarsest last"):
+            load_city("hong_kong", cities_root=rewrite(invert))
+
+    def test_jitter_outside_zero_to_one_is_rejected(self, rewrite) -> None:
+        def overdo_it(doc: dict[str, Any]) -> None:
+            doc["buildings"]["colour_jitter"] = 1.5
+
+        with pytest.raises(ValueError, match="colour_jitter"):
+            load_city("hong_kong", cities_root=rewrite(overdo_it))
+
+    def test_missing_buildings_block_is_rejected(self, rewrite) -> None:
+        with pytest.raises(ValueError, match="buildings"):
+            load_city("hong_kong", cities_root=rewrite(lambda doc: doc.pop("buildings")))
+
+    def test_colour_comes_from_the_band_a_height_falls_in(self, hong_kong) -> None:
+        style = hong_kong.buildings
+        assert style.colour_for("BUILDING", 5.0) == style.height_bands[0].colour
+        assert style.colour_for("BUILDING", 1_000.0) == style.height_bands[-1].colour
+
+    def test_a_class_colour_wins_over_the_bands(self, hong_kong) -> None:
+        style = hong_kong.buildings
+        assert style.colour_for("INFRASTRUCTURE", 5.0) == style.class_colours["INFRASTRUCTURE"]
+        assert style.colour_for("INFRASTRUCTURE", 200.0) == style.class_colours["INFRASTRUCTURE"]
+
+
 def test_elevation_levels_map_grade_separation_to_deck_heights(hong_kong) -> None:
     assert hong_kong.deck_height_m(0) == 0.0
     assert hong_kong.deck_height_m(2) > hong_kong.deck_height_m(1) > hong_kong.deck_height_m(0)

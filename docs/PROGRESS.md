@@ -22,7 +22,14 @@ index and downloads them; re-running is a no-op. The six sheets it derives match
 recorded by hand, which is the first end-to-end confirmation that the bounds, the datum and the
 index agree.
 
-**`P1-2` (building meshes) is next and has no blockers.**
+**`P1-2` closed on 2026-07-30.** `buildings.py` turns the six sheets into **65 vertex-coloured
+tiles at three LOD tiers** in six seconds, and all 195 GLBs pass an automated check inside Godot
+4.7.1 — one draw call each, vertex colours live, no textures. Real Wan Chai massing now exists as
+game-ready assets. Two findings came out of it that change later tasks: the **terrain is not
+affordable as shipped** (267 MB of JPEG, 405k triangles), and **ground level in Wan Chai is ~4 m
+above the datum**, which `P1-3`'s deck heights currently assume is zero. See `Q11`.
+
+**`P1-3` (road graph) is next.** It should resolve `Q9` on the way in.
 
 **`P0-5` passed conditionally, not cleanly** — the user drove it, found the handling acceptable, and
 judged that *fun* cannot be assessed from a grey box at all. See the decision log. The consequence
@@ -44,8 +51,10 @@ is deferred rather than closed.
 | `P0-5c` | └ Minimal chase camera | ✅ **Done** | Spring arm, speed FOV, look-back |
 | `P0-5d` | └ The drive test | ⚠️ **Passed, conditional** | Driven and verified. No blocking feel problem; no fun verdict possible yet. |
 | `P1-1` | Source fetching | ✅ **Done** | `fetch.py`; sheets derived from the index, not listed. 67 tests, `ruff` clean. |
-| `P1-2` | Building meshes | 🟢 **Unblocked** | Next. Terrain: keep it and evaluate in place (user call, see log). |
-| `P1-3`…`P1-7` | Rest of the ETL slice | 🟢 **Unblocked** | Deps met. |
+| `P1-2` | Building meshes | ✅ **Done** | 65 tiles × 3 LODs; 989k → 184k triangles. Verified in Godot by `game/tools/verify_tiles.gd`. 153 tests, `ruff` clean. |
+| `P1-2t` | └ Terrain evaluation | ⚠️ **Measured — not viable as shipped** | 267 MB JPEG, 405k tris. See the decision log; needs a resampling pass to survive. |
+| `P1-3` | Road graph | 🟢 **Unblocked** | Next. Resolve `Q9` and `Q11` here. |
+| `P1-4`…`P1-7` | Rest of the ETL slice | 🟢 **Unblocked** | Deps met. |
 | `P2-*` | Driving the real city | ⬜ Blocked | Gated on `P1-7` |
 | `P3-*` | Playable slice | ⬜ Blocked | |
 
@@ -67,6 +76,36 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ❌ blocked
 | Q8 | What is the cheapest build that lets the user judge "is this fun?" | **Now the top project risk** — `P0-5` did not answer it | user | 🔴 Open |
 | Q9 | Does `P1-3` read the 17 MB FGDB or the 539 MB per-layer GML? | 522 MB of download and disk per clone | `P1-3` | 🔴 Open |
 | Q10 | Is the game-space origin per region, or shared per city? | Whether two regions can stitch into one continuous map | `P1-6` | ✅ **Resolved 2026-07-30** — both: local origin plus a recorded `city_offset` |
+| Q11 | Where is ground level? `elevation_levels[0] = 0.0` puts at-grade roads at y=0, but 99.9% of Wan Chai's buildings have their base **above 2 m** (median 4.29 m) | Roads would run ~4 m below every front door, and under the terrain | `P1-3` / `P1-4` | 🔴 **Open** — found by `P1-2` |
+
+### Q11 — "ground level" is not zero, and the road graph does not know that
+
+Measured 2026-07-30 across the 1,351 buildings `P1-2` places in the region.
+
+| | Height above Hong Kong Principal Datum |
+|---|---|
+| Building bases | min 0.00 m, **median 4.29 m**, mean 7.38 m, max 75.92 m |
+| Buildings with a base above 2 m | **99.9%** |
+| Terrain surface | −4.24 m to 50.63 m |
+
+`hong_kong.yaml` maps `elevation_levels: {0: 0.0}`, which `P1-4` will use as the deck height for
+every at-grade road. Taken literally that puts Hennessy Road four metres below the doorways of the
+buildings on it, and below the terrain surface as well. The grade-separation *levels* from `P0-2`
+are still right — what is missing is the datum they are relative to.
+
+Three candidates, in rough order of appeal:
+
+1. **Sample the terrain mesh under each road node.** The LandsD terrain is a real height field
+   covering the whole sheet, we already parse it, and it costs nothing at runtime because the
+   sampling happens in the ETL. This is the strongest argument yet for keeping the terrain in the
+   pipeline even if it is never rendered — see the `P1-2` terrain decision.
+2. **Sample the base of the nearest buildings.** Available without the terrain, but noisy: podium
+   bases sit above the pavement, and the max above is 75.92 m.
+3. **One authored offset per region.** Cheapest, and wrong the moment the road climbs toward
+   Kennedy Road — the region spans 55 m of relief.
+
+Whichever wins, `elevation_levels` stays as it is: it is an *offset* per grade-separation level,
+and this question is about what it is an offset *from*.
 
 ### Q9 — the road sources are redundant, and one is 31× larger
 
@@ -230,6 +269,72 @@ is unchanged by adding a region.
 
 Ships in `schema_version: 1`, which is the point of settling it before `P1-6` writes the first real
 `city.json`.
+
+### 2026-07-30 — `P1-2` terrain: **measured, and not affordable as it ships**
+
+Answers the three questions the "keep it and evaluate in place" decision below set. Measured on the
+real six sheets, after clipping to the region.
+
+| | Whole region | Budget |
+|---|---|---|
+| Terrain triangles | **404,669** | <300k *visible*, everything included |
+| Terrain texture | **267 MB** of JPEG, 6 × 7531 × 6031 px | <128 MB texture memory |
+| As ASTC 4×4 | ~272 MB VRAM | — |
+| Bundle contribution | 267 MB on its own | <200 MB total (iOS cellular) |
+
+So it fails on all three counts at once, by roughly 2×. That is not a close call and no amount of
+LOD tiering fixes a texture budget.
+
+**It is not hopeless, though, and the failure is entirely in the resampling that was never done.**
+The source is ~10 px/m — survey resolution, for ground seen at 60 km/h. At 2 px/m the whole region
+is ~5.9 MPix, about 6 MB as ASTC, which is affordable. Geometry decimates the same way: running the
+existing `mesh.collapse` over it gives 196,721 triangles at 2 m cells and **88,081 at 4 m**, though
+clustering moves UVs and a photographic texture will smear where it does.
+
+**Two things keep the terrain in the pipeline regardless of whether it is ever rendered:**
+
+1. It is a **height field**, and `Q11` — opened by this same task — needs one. Road Network v2 has
+   no Z, and ground level in Wan Chai is ~4 m above the datum, not 0. Sampling the terrain under
+   each road node is the best answer to that, and it costs nothing at runtime.
+2. Judging "does photographic ground read wrong next to flat-shaded massing?" still needs eyes on
+   it. `--terrain` emits it as a separate, textured, evaluation-only output for exactly that.
+
+**Not decided here:** whether to ship it at all. That needs the visual judgement, and now also a
+resampling pass, which is Pillow-shaped work that does not belong inside `P1-2`. The tile output
+deliberately contains **no textures at all**, per the task's acceptance criteria, so nothing about
+the buildings depends on the answer.
+
+### 2026-07-30 — `P1-2`: vertex clustering for LODs, and whole-mesh tiling with one exception
+
+Three choices worth recording, all validated on the real data.
+
+**Vertex clustering, not quadric decimation.** The source is extruded footprints, so clustering
+keeps silhouettes blocky and axis-aligned — which *is* the art direction, where quadric decimation
+would smooth the corners and fight it. It is also robust on triangle soup, which this is: unwelded,
+non-manifold in places, no shared topology between buildings. And its aggressiveness is one number
+in metres, so the tiers stay tuning data in city config (hard rule 4). Measured over the region:
+**989,212 → 400,139 → 183,773 triangles** at 0.0 / 1.5 / 4.0 m cells.
+
+**The cluster key includes the facing, not just the cell.** Merging on position alone averages a
+wall normal into the roof normal above it and rounds off the faceting the whole style rests on.
+With facing in the key, LOD0 is an *exact* weld — lossless, and still worth doing because the
+source repeats every vertex per triangle.
+
+**Meshes are assigned to tiles whole, except those too big for a tile.** Splitting a building at a
+tile boundary leaves an open shell and makes half of it pop as the streamer loads one tile and not
+its neighbour. But the source contains elevated road structures **up to 1,984 m long in a single
+mesh**, and whole-mesh assignment handles those two ways, both wrong: one whose centre falls outside
+the region vanishes entirely — taking a viaduct that crosses the whole map with it — and one whose
+centre falls inside gives a 150 m tile a 2 km bounding box, defeating distance-based streaming.
+Oversized meshes are partitioned by triangle instead. Nothing is cut, so the pieces abut exactly.
+
+**Godot needed a fix the ETL could not make.** Godot 4.7's glTF importer reads `COLOR_0` into the
+mesh but leaves `vertex_color_use_as_albedo` off, so every tile imports as a white block — with or
+without a material in the file. Nothing in the glTF can express it, because there `COLOR_0` always
+multiplies base colour. Corrected by a post-import script wired up as a project-wide importer
+default; per-file would not survive a fresh clone, since generated assets are gitignored. Separately
+measured: the `"normalized": true` flag on the colour accessor is load-bearing — drop it and Godot
+reads every colour as 1.0 and the whole city renders white, silently.
 
 ### 2026-07-30 — Game-space origin: the region's **north-west** corner
 
@@ -661,7 +766,8 @@ urgent — flag it before the roster work in Phase 4.
 | Doesn't read as HK to locals | **High** | `P3-9` authenticity test with ≥3 real drivers; run again every phase after. |
 | Perf misses 60fps on device floor | Medium | Budget defined up front; untextured merged tiles are the main lever; `P2-6` is a dedicated pass. |
 | Source data quirks (dual carriageways, doubled junctions) | Medium | Known and documented; budget extra time on `P1-3`. |
-| Building meshes blow the triangle budget | Medium | **New 2026-07-30.** Measured 612 tris/building, ~555k over six sheets against a <300k *visible* budget. `P1-2` decimation and LOD tiers are load-bearing, not optional. Occlusion in street canyons is the free lever. |
+| Building meshes blow the triangle budget | Medium → **Low** | **Mitigated 2026-07-30 by `P1-2`.** The estimate was low: 2,200 buildings across the six sheets, not the ~900 extrapolated from one. Real region totals are **989k / 400k / 184k** triangles at LOD0/1/2, averaging 15.2k per tile at LOD0. Against a <300k *visible* budget that leaves room, but not much — a viewpoint holding LOD0 on the nearest ring plus LOD1 behind it lands in the low 300k range before occlusion. `P2-1`'s switch distances now decide this, not the ETL. |
+| Terrain does not fit any budget | Medium | **New 2026-07-30.** Measured 267 MB of texture and 405k triangles for the ground alone — roughly 2× over on texture memory, triangles *and* bundle size simultaneously. Resampling to ~2 px/m and decimating to ~88k triangles brings it into range, but that work is not done and is not scheduled. Nothing in the tile output depends on it. |
 | GDScript learning curve | Low | Small codebase; complexity lives in Python. |
 | Landmark depiction IP | Low | Untextured massing; legal sight-check before launch (Phase 6). |
 | TAM too small to be commercial | Medium | City-agnostic ETL is the scaling answer — city packs, not one city. |
@@ -684,6 +790,65 @@ Record measured values here, not estimates.
 ---
 
 ## Session log
+
+### 2026-07-30 — `P1-2` Building meshes
+
+Three new pipeline modules — `gltf.py` (format), `mesh.py` (geometry ops), `buildings.py` (policy)
+— plus the palette and LOD tiers as city config, and a Godot-side verifier.
+
+**Result:** `python -m pipeline.buildings --city hong_kong --region wan_chai` turns the six cached
+sheets into **65 tiles × 3 LOD tiers in 6 seconds**. 2,274 source meshes read, 881 clipped away,
+1,393 placed.
+
+| Tier | Cell | Triangles | Size |
+|---|---|---|---|
+| LOD0 | exact weld | 989,212 | 74.7 MB |
+| LOD1 | 1.5 m | 400,139 | 17.9 MB |
+| LOD2 | 4.0 m | 183,773 | 7.8 MB |
+
+**Acceptance, checked rather than asserted.** `game/tools/verify_tiles.gd` loads every tile inside
+Godot 4.7.1 headless and checks the four criteria the task states. All **195 tiles pass**: one
+surface each (so one draw call, against a budget of three), `ARRAY_FORMAT_COLOR` present,
+`vertex_color_use_as_albedo` on, and no texture in any slot.
+
+**The geometry is verifiably really Wan Chai**, which matters because a coordinate bug here
+produces a plausible-looking city in the wrong place — the failure this whole pipeline is most
+exposed to. Taking the tallest building the region produces and converting its centre back out to
+WGS84:
+
+| | |
+|---|---|
+| Source id | `B359321570101063C0` |
+| Height | **374.5 m**, roof at game y = 378.5 |
+| Position | 22.28011 N, 114.17358 E |
+| Central Plaza (published) | 374 m; 22.28028 N, 114.17361 E |
+| Offset | **19 m** — within its own 78 m footprint |
+
+Right building, right height, right place, through the whole chain: node matrix → HK1980 →
+region origin → tile. Footprints also land inside the region with only the expected overhang
+(x −11.3…1656.9, z −18.8…923.3 against a 1649.6 × 886.9 m region).
+
+**No glTF library.** `pipeline/gltf.py` reads and writes the format directly, in ~380 lines. The
+read side would have used a few percent of trimesh or pygltflib, and the write side has to lay out
+accessors and buffer views by hand under either, since neither merges a vertex-coloured tile mesh
+for you. `numpy` is the one dependency added.
+
+**Bugs found and fixed while building it:**
+
+- **Flyovers deleted.** Whole-mesh tile assignment by centre dropped a 1,984 m elevated road
+  structure whose centre lay outside the region, though it crosses the whole map. Oversized meshes
+  are now partitioned by triangle. See the decision log.
+- **White city.** Godot 4.7 does not set `vertex_color_use_as_albedo` on import; separately,
+  omitting `"normalized": true` on the colour accessor makes Godot read every colour as 1.0. Both
+  fail silently and look identical. Fixed by a post-import script and covered by tests.
+- **Reader could not read what the writer wrote.** `read_scene` deliberately skipped `COLOR_0`,
+  since the LandsD source is a uniform 0.8 grey the pipeline replaces anyway — which meant no test
+  could check the colours in an emitted tile without hand-parsing GLB. Now decoded to RGBA bytes.
+
+**Deliberately not done:** terrain resampling (see the decision log), and hooking the tiles up to a
+scene — `P1-7` owns that and needs `city.json` from `P1-6`.
+
+153 tests, `ruff` clean.
 
 ### 2026-07-30 — `Q7` Game-space origin moved to the NW corner
 

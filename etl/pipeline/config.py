@@ -63,6 +63,42 @@ class TiledSource:
 
 
 @dataclass(frozen=True)
+class HeightBand:
+    """A colour for buildings up to a given height above their own base."""
+
+    up_to_m: float
+    colour: tuple[int, int, int]
+
+
+@dataclass(frozen=True)
+class BuildingStyle:
+    """How `P1-2` turns source massing into vertex-coloured tiles.
+
+    All of it is tuning data rather than constants in code (CLAUDE.md hard
+    rule 4), and all of it is city-shaped: the sub-directory names come from the
+    publisher's zip layout, and the palette is Hong Kong's, not a generic city's.
+    """
+
+    # Sheet sub-directories to read. Anything absent — terrain, in the LandsD
+    # zips — belongs to another stage.
+    classes: tuple[str, ...]
+    # Flat colour for a class, overriding the height bands.
+    class_colours: dict[str, tuple[int, int, int]]
+    height_bands: tuple[HeightBand, ...]
+    # Fraction of brightness a building's colour may be varied by, seeded from
+    # its own id so the result is stable across runs.
+    colour_jitter: float
+    # One clustering cell size per LOD tier, in metres, coarsest last. The first
+    # is normally 0.0 — an exact weld, losing nothing.
+    lod_cell_sizes_m: tuple[float, ...]
+
+    def colour_for(self, class_id: str, height_m: float) -> tuple[int, int, int]:
+        if class_id in self.class_colours:
+            return self.class_colours[class_id]
+        return next(band.colour for band in self.height_bands if height_m <= band.up_to_m)
+
+
+@dataclass(frozen=True)
 class CityConfig:
     id: str
     name: str
@@ -83,6 +119,7 @@ class CityConfig:
     sources: dict[str, str]
     # Datasets that must be selected per region via an index.
     tiled_sources: dict[str, TiledSource]
+    buildings: BuildingStyle
 
     @property
     def source_ids(self) -> set[str]:
@@ -195,6 +232,7 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
             str(source_id): _tiled_source(str(source_id), body, path)
             for source_id, body in (document.get("tiled_sources") or {}).items()
         },
+        buildings=_building_style(_require(document, "buildings", path), f"{path}:buildings"),
     )
     _check_regions_lie_within_the_city(city, path)
     return city
@@ -236,6 +274,62 @@ def _tiled_source(source_id: str, body: dict[str, Any], path: Path) -> TiledSour
         url_property=str(_require(body, "url_property", where)),
         revision_property=None if revision is None else str(revision),
     )
+
+
+def _building_style(body: dict[str, Any], where: str) -> BuildingStyle:
+    bands = tuple(
+        HeightBand(up_to_m=float(_require(band, "up_to_m", where)), colour=_colour(band, where))
+        for band in _require(body, "height_bands", where)
+    )
+    if not bands:
+        raise ValueError(f"{where}:height_bands is empty")
+    heights = [band.up_to_m for band in bands]
+    if heights != sorted(heights):
+        raise ValueError(f"{where}:height_bands must be ordered by ascending up_to_m")
+    if heights[-1] != float("inf"):
+        # Without an open-ended last band, `colour_for` has nothing to return for
+        # a building taller than the table — and the tallest buildings are the
+        # ones a Hong Kong skyline is read by.
+        raise ValueError(f"{where}:height_bands must end with `up_to_m: .inf`")
+
+    cells = tuple(float(size) for size in _require(body, "lod_cell_sizes_m", where))
+    if not cells:
+        raise ValueError(f"{where}:lod_cell_sizes_m is empty")
+    if list(cells) != sorted(cells):
+        raise ValueError(f"{where}:lod_cell_sizes_m must be ordered coarsest last")
+
+    classes = tuple(str(name) for name in _require(body, "classes", where))
+    if not classes:
+        raise ValueError(f"{where}:classes is empty")
+
+    jitter = float(_require(body, "colour_jitter", where))
+    if not 0.0 <= jitter < 1.0:
+        raise ValueError(f"{where}:colour_jitter must be in [0, 1), got {jitter}")
+
+    return BuildingStyle(
+        classes=classes,
+        class_colours={
+            str(name): _parse_hex(str(value), f"{where}:class_colours.{name}")
+            for name, value in (body.get("class_colours") or {}).items()
+        },
+        height_bands=bands,
+        colour_jitter=jitter,
+        lod_cell_sizes_m=cells,
+    )
+
+
+def _colour(band: dict[str, Any], where: str) -> tuple[int, int, int]:
+    return _parse_hex(str(_require(band, "colour", where)), f"{where}:colour")
+
+
+def _parse_hex(value: str, where: str) -> tuple[int, int, int]:
+    text = value.lstrip("#")
+    if len(text) != 6:
+        raise ValueError(f"{where} is not a #rrggbb colour: {value!r}")
+    try:
+        return (int(text[0:2], 16), int(text[2:4], 16), int(text[4:6], 16))
+    except ValueError as error:
+        raise ValueError(f"{where} is not a #rrggbb colour: {value!r}") from error
 
 
 def _require(mapping: dict[str, Any], key: str, where: Path | str) -> Any:

@@ -47,6 +47,7 @@ file after anyone touches the editor's settings dialog.
 | `physics/3d/physics_engine` | `Jolt Physics` | Locked decision. It is the default since 4.4, but stated explicitly so the project does not silently follow a changed engine default. |
 | `application/run/max_fps.mobile` | `60` | Rendering uncapped on a 90/120 Hz phone panel buys nothing above the 60fps target and throttles the device — the most likely way to lose the frame-rate floor in a sustained session. Desktop stays uncapped. |
 | `display/window/stretch/mode` | `canvas_items` | Resolution-independent UI; desktop is a target alongside phones. |
+| `[importer_defaults] scene.import_script/path` | `res://tools/generated_scene_import.gd` | Godot 4.7's glTF importer reads `COLOR_0` into the mesh but leaves `vertex_color_use_as_albedo` **off**, so every generated tile imports as a white block — with or without a material in the file. Nothing in the glTF can express it, because there `COLOR_0` always multiplies base colour. Set as an importer *default* rather than per file: generated assets are gitignored, so their `.import` files do not survive a fresh clone. |
 
 **Deliberately not set:** `rendering/lights_and_shadows/directional_shadow/soft_shadow_filter_quality`.
 Godot already ships a `.mobile` override of `0` for it, and feature overrides beat an explicitly-set
@@ -69,15 +70,17 @@ hk-taxi-Q/
 │   │   └── cities/
 │   │       └── hong_kong.yaml   # CRS, bounds, source URLs, tiling — ALL city specifics
 │   ├── pipeline/
-│   │   ├── fetch.py             # download from CSDI / data.gov.hk, cache to sources/
+│   │   ├── config.py            # loads cities/*.yaml — the only route city facts take in
 │   │   ├── crs.py               # ONLY module that knows about EPSG:2326
-│   │   ├── buildings.py         # non-textured glTF / 3D-BIT00 → merged tile meshes
+│   │   ├── fetch.py             # download from CSDI / data.gov.hk, cache to sources/
+│   │   ├── gltf.py              # glTF read + GLB write; no dependency, see its docstring
+│   │   ├── mesh.py              # merge, partition, LOD collapse — geometry, no policy
+│   │   ├── buildings.py         # sheets → vertex-coloured tiles + LOD tiers
 │   │   ├── roads.py             # Road Network FGDB/GML → road graph + ribbon meshes
 │   │   ├── fares.py             # taxi stands + PUDO + POIs → fare nodes
-│   │   ├── tiles.py             # spatial partition, LOD generation
-│   │   └── export.py            # → glTF + JSON, writes manifest
-│   ├── sources/                 # raw downloads — GITIGNORED
-│   ├── out/                     # pipeline output — GITIGNORED
+│   │   └── export.py            # → city.json, assembles the tile/road/fare outputs
+│   ├── sources/<city>/<source>/ # raw downloads — GITIGNORED
+│   ├── out/<city>/<region>/     # pipeline output — GITIGNORED
 │   └── tests/
 ├── game/                        # Godot project
 │   ├── project.godot
@@ -95,7 +98,8 @@ hk-taxi-Q/
 │   │   ├── generated/           # ETL output — GITIGNORED, build artefact
 │   │   ├── authored/            # hero buildings, vehicles, UI — COMMITTED
 │   │   └── shaders/
-│   └── tuning/                  # .tres resources: handling, fares, scoring
+│   ├── tuning/                  # .tres resources: handling, fares, scoring
+│   └── tools/                   # editor/headless scripts — import fixups, asset checks
 └── tools/                       # dev scripts, export automation
 ```
 
@@ -123,7 +127,11 @@ The interface between ETL and game. **Versioned — change both sides together a
   "bounds_game": { "min": [0, -20, 0], "max": [1650, 220, 900] },
   "tile_size_m": 150,
   "tiles": [
-    { "id": "t_00_00", "mesh": "tiles/t_00_00.glb", "aabb": [[0,0,0],[150,120,150]] }
+    {
+      "id": "t_00_00",
+      "lods": ["tiles/t_00_00_lod0.glb", "tiles/t_00_00_lod1.glb", "tiles/t_00_00_lod2.glb"],
+      "aabb": [[0,0,0],[150,120,150]]
+    }
   ],
   "etl_version": "0.1.0",
   "generated_utc": "2026-07-29T00:00:00Z"
@@ -133,6 +141,25 @@ The interface between ETL and game. **Versioned — change both sides together a
 `origin` is computed by the ETL from the region bounds, never authored. The values above are the
 real ones for Wan Chai — `floor(min_easting)` and `ceil(max_northing)`, i.e. the region's
 **north-west** corner. Anything reading `city.json` should treat them as data, not as constants.
+
+`lods` is ordered nearest-first, one file per tier, matching `lod_cell_sizes_m` in city config.
+Separate files rather than one GLB with three meshes, because the streamer loads a tier at a time.
+
+**A tile's `aabb` can be larger than the tile.** Buildings are assigned to a tile whole, by their
+centre, so one may overhang its neighbour by half a footprint — measured at up to 222 m across a
+150 m tile in Wan Chai. Use the `aabb` for culling and streaming distance, never the tile's grid
+position.
+
+**Tile output carries no textures.** One material, one primitive, colour in `COLOR_0` — that is
+what makes a tile one draw call, and it is checked in-engine by
+`game/tools/verify_tiles.gd`.
+
+### `buildings.json` — an ETL intermediate, *not* part of this contract
+
+`buildings.py` writes one of these next to its tiles, recording the grid, the LOD cell sizes, and
+each tile's paths, AABB and triangle counts. It exists so the building stage and `export.py` stay
+independently runnable; `city.json` is the versioned interface and `export.py` is what writes it.
+Nothing in the game should read `buildings.json`.
 
 ### `roadgraph.json` — drivable network
 
@@ -359,13 +386,28 @@ Key techniques:
 
 ```
 etl/  →  python -m pipeline --city hong_kong --region wan_chai
-      →  etl/out/{city.json, roadgraph.json, fares.json, tiles/*.glb}
+      →  etl/out/<city>/<region>/{city.json, roadgraph.json, fares.json, tiles/*.glb}
       →  copied to game/assets/generated/
       →  Godot export presets → iOS / Android / desktop / web-demo
 ```
 
+Each stage also runs on its own against the same arguments, which is how they are developed and
+how a partial rebuild is done:
+
+```
+python -m pipeline.fetch     --city hong_kong --region wan_chai
+python -m pipeline.buildings --city hong_kong --region wan_chai
+```
+
+`fetch` is the only stage that touches the network; everything after it reads `etl/sources/`.
+
 The ETL is **not** run by CI on every commit — it is run when source data or pipeline logic
 changes, and its output is treated as a versioned build artefact.
+
+**Generated assets are checked in-engine, not by eye.** `godot --headless --path game --script
+res://tools/verify_tiles.gd` loads every tile and asserts the draw-call, vertex-colour and
+no-texture properties this contract states. Run it after a rebuild; the ETL cannot assert
+engine-side facts about its own output.
 
 ---
 
