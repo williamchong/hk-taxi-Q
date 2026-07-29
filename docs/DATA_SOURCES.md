@@ -192,7 +192,7 @@ The CKAN API itself is the reliable way to enumerate all 61 resources:
 | Source CRS | **HK1980 Grid System, EPSG:2326** (Transverse Mercator) |
 | Vertical datum | Hong Kong Principal Datum (HKPD) |
 | Tile-based model quirk | Drawn in **HK80 coordinates minus 800,000** (rejected dataset, recorded for completeness) |
-| Game space | Local ENU metres, origin at map SW corner |
+| Game space | Local ENU metres, **origin at region NW corner** (`Q7`) |
 
 **Godot axis convention** (Y-up, right-handed):
 
@@ -201,6 +201,9 @@ game_x =  (easting  - origin_easting)
 game_y =  (elevation - origin_elevation)
 game_z = -(northing - origin_northing)
 ```
+
+The `-Z` is forced by handedness; the *origin corner* was the free choice, and it is north-west so
+the region lands in the positive quadrant. Reasoning in `ARCHITECTURE.md`, "Coordinates".
 
 Keep this conversion in `etl/pipeline/crs.py` only. Nothing else in the pipeline may assume
 EPSG:2326.
@@ -365,9 +368,12 @@ Three findings that shape `P1-2`:
    work to do.
 2. **Vertices are unwelded — exactly 3.0 per triangle.** Flat shading is baked in, which is the
    art direction's native form. Do not weld; do not generate normals.
-3. **"Non-textured" describes the buildings, not the terrain.** Terrain ships with a JPEG. We
-   generate the road surface from the road graph (`P1-4`), so terrain is expected to be discarded
-   — decide explicitly in `P1-2` rather than importing it by accident.
+3. **"Non-textured" describes the buildings, not the terrain.** Terrain ships with a JPEG. **Decided
+   2026-07-30: keep it and evaluate it in place** (user call, superseding this section's earlier
+   expectation that it would be discarded). `P1-4` still generates the road surface from the road
+   graph; the terrain is being kept for the ground *between* the roads. Judge it in `P1-2` against
+   z-fighting with the road ribbon, texture memory across six sheets, and whether photographic
+   ground reads as wrong beside untextured massing. See `PROGRESS.md`.
 
 ⚠️ **Triangle budget pressure.** 92,457 triangles across 151 buildings — **612 per building**,
 far more than an LOD1 extrusion needs. Extrapolated over six sheets that is ~555k triangles against

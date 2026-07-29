@@ -63,9 +63,10 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ❌ blocked
 | Q4 | Confirm the device floor | Sets the whole perf budget and gates `P0-3b` | user | ✅ **Resolved 2026-07-29** |
 | Q5 | Actual file sizes of the region's building data | Affects fetch time and disk planning | `P0-1` | ✅ **Resolved 2026-07-30** — ~44 MB/sheet, ~280 MB for the region. Roads: `CENTERLINE.gml` is 486 MB territory-wide |
 | Q6 | Does the region need Central for the circuit to feel complete? | Scope | after `P3-9` | 🟡 Deferred |
-| Q7 | Does game-space Z run negative northward, or should the origin move to the NW corner? | Data contract — tile IDs and every position in `city.json` | `P1-6` | 🔴 Open |
+| Q7 | Does game-space Z run negative northward, or should the origin move to the NW corner? | Data contract — tile IDs and every position in `city.json` | `P1-6` | ✅ **Resolved 2026-07-30** — NW corner |
 | Q8 | What is the cheapest build that lets the user judge "is this fun?" | **Now the top project risk** — `P0-5` did not answer it | user | 🔴 Open |
 | Q9 | Does `P1-3` read the 17 MB FGDB or the 539 MB per-layer GML? | 522 MB of download and disk per clone | `P1-3` | 🔴 Open |
+| Q10 | Is the game-space origin per region, or shared per city? | Whether two regions can stitch into one continuous map | `P1-6` | 🔴 Open |
 
 ### Q9 — the road sources are redundant, and one is 31× larger
 
@@ -81,25 +82,81 @@ losing format from config** — `fetch.py --only` makes it easy to test either w
 GDAL/OGR reads FGDB directly and is already the planned dependency, so the FGDB is the likely
 winner. The GML's one advantage is that it streams without GDAL.
 
-### Q7 — the data contract contradicts itself on the sign of Z
+### Q7 — resolved: the origin sits at the **north-west** corner
 
-Surfaced by `P0-4`. `ARCHITECTURE.md` states the conversion as `game_z = -(northing - origin_northing)`
-with the origin at the region's **south-west corner** — which puts the whole region at Z ≤ 0. Two
-sections later the same document's `city.json` example shows `bounds_game` running from `[0, -20, 0]`
-to `[1650, 220, 900]`, i.e. **positive** Z. Both cannot be true.
+Surfaced by `P0-4`, resolved on the user's call 2026-07-30 and implemented.
 
-`crs.py` implements the stated formula, because it appears in two documents (`ARCHITECTURE.md` and
-`DATA_SOURCES.md`) while the positive-Z bounds appear once, in an example whose sibling `origin`
-field is explicitly labelled a placeholder. `test_crs.py` pins the resulting sign so the choice
-cannot drift silently.
+`ARCHITECTURE.md` stated the conversion as `game_z = -(northing - origin_northing)` with the origin
+at the region's **south-west** corner — putting the whole region at Z ≤ 0 — then two sections later
+showed a `bounds_game` example running to `[1650, 220, 900]`, i.e. **positive** Z. Both could not be
+true.
 
-**Recommendation: move the origin to the north-west corner** and leave the formula otherwise
-untouched. Z then runs 0…+886 southward, the whole region sits in the positive quadrant, tile
-indices become a plain raster with row 0 at the north, and the existing `bounds_game` example
-becomes correct. The cost is a one-line change in `GameTransform.from_bounds` plus a docs edit —
-but only until `P1-6` writes a real `city.json`, after which it is a `schema_version` bump.
-**Cheap now, not later.** Not actioned: it contradicts a documented decision, so it is the user's
-call.
+**The two halves were never equally free, which is what made the decision easy.** The sign of Z is
+forced by handedness: Godot is right-handed and Y-up, so rotating `+X` by 90° counter-clockwise
+about `+Y` lands on `−Z`. If east is `+X`, north **must** be `−Z` or the city comes out mirrored.
+Only *where zero sits* was ever a choice, and it is a pure translation — nothing about the geometry,
+the import, or the precision changes with it.
+
+**North-west chosen** because the Z sign being forced means anchoring at the northern edge is the
+only way to keep the region in the positive quadrant. Measured after the change:
+
+| Corner | game X | game Z |
+|---|---|---|
+| NW (origin) | 0.64 | 0.97 |
+| SE (far) | 1649.62 | 886.88 |
+
+Tile indices at 150 m now run `(0,0)` to `(10,5)` instead of `(0,0)` to `(10,-5)` — natural numbers,
+row 0 at the north, as in a raster or a map sheet. The rejected alternative, a south-west origin, is
+the GIS bbox convention and is defensible; it loses on the fact that negative tile indices are a
+papercut paid every time anyone writes a filename, a `Vector2i`, or a debug print. The tie-breaker
+was that the `bounds_game` example already showed positive Z, which reads as the formula section
+having drifted rather than two deliberate choices colliding.
+
+Origin northing is now **ceiled** where easting is floored — rounding outward, so every offset
+inside the region stays non-negative.
+
+**Caveat worth carrying into `P1-2`:** non-negativity is a property of the *region*, not of the
+source data. `fetch.py` downloads every sheet that intersects the region, so the geometry on disk
+runs past all four edges, and anything north or west of the region still produces a negative
+coordinate. Clipping to the region bbox before indexing is therefore part of the data contract
+rather than an optimisation. Recorded in `ARCHITECTURE.md`.
+
+**Exposed a second question, `Q10`:** the origin is per *region*. Two regions cannot be stitched
+into one continuous map unless they share one. Not urgent, same `city.json` schema, and settling it
+before `P1-6` is much cheaper than after.
+
+### Q10 — is the origin per region, or per city?
+
+Opened by `Q7`'s resolution. `GameTransform` is built from a *region's* bounds, so Wan Chai's origin
+is Wan Chai's north-west corner. If a second region is ever meant to abut it — Central to the west
+is the obvious candidate, and `Q6` already contemplates it — the two would sit in unrelated
+coordinate frames and could not be loaded together without a fix-up at runtime.
+
+**A per-city origin costs nothing extra today.** It is the same one number in `city.json`; it just
+comes from the city's overall bounds rather than the region's. The cost of *not* deciding is that
+after `P1-6` it becomes a `schema_version` bump plus regenerating every asset that embeds a
+position.
+
+Against it: a city-wide origin puts a small region at large offsets — Hong Kong's full extent is
+~50 km, so a far-east region would sit at X ≈ 50,000. **Float32 spacing exceeds 1 mm above
+2¹⁴ = 16,384 m.** Measured exactly:
+
+| Distance from origin | float32 spacing |
+|---|---|
+| 8 km | 0.49 mm |
+| 16 km | 0.98 mm |
+| 32 km | 1.95 mm |
+| **50 km** | **3.91 mm** |
+
+So a city-wide origin costs roughly 4 mm of vertex quantisation at the far end of the territory —
+not fatal for buildings, but it is the same precision argument that motivated a local origin in the
+first place, and 4 mm is where physics contact points and z-fighting start to be arguable rather
+than obviously fine.
+
+**Middle option worth considering:** keep the origin per region, but write the region's *offset
+within the city* into `city.json` too. Regions stay near their own origin, and anything that wants
+to stitch them has the number it needs. Not actioned — the user's call, and nothing before `P1-6`
+depends on it.
 
 ### Q8 — `P0-5` did not retire the risk it existed to retire
 
@@ -144,6 +201,29 @@ below.
 ---
 
 ## Decision log
+
+### 2026-07-30 — Game-space origin: the region's **north-west** corner
+
+User call, resolving `Q7`. Recorded here as a locked decision; the full reasoning and the measured
+corner positions are in the `Q7` section under *Open questions*.
+
+**The sign of Z was never the free part.** Godot is right-handed and Y-up, so rotating `+X` by 90°
+counter-clockwise about `+Y` lands on `−Z`: if east is `+X` then north must be `−Z`, or the city is
+mirrored. Only *where zero sits* was a choice, and it is a pure translation.
+
+**North-west, because the forced Z sign means anchoring north is the only way to keep the region in
+the positive quadrant.** Tile indices then run `(0,0)`…`(10,5)` rather than `(0,0)`…`(10,−5)` —
+natural numbers, row 0 at the north, as in a raster or a map sheet. The rejected south-west origin
+is the GIS bbox convention and was defensible; it lost on negative tile indices being a papercut
+paid every time anyone writes a filename, a `Vector2i`, or a debug print.
+
+One line in `GameTransform.from_bounds` — origin northing now **ceils** `max_northing` where
+easting floors `min_easting`, rounding outward so offsets inside the region stay non-negative.
+`ARCHITECTURE.md`'s `bounds_game` example turned out to be correct already, which is what suggests
+the formula section had drifted rather than two deliberate choices colliding.
+
+Opened `Q10` (per-region vs per-city origin) and surfaced a data-contract requirement: clipping to
+the region bbox before indexing, since fetched sheets extend past all four edges.
 
 ### 2026-07-30 — `P1-2`: **keep the textured terrain mesh** and evaluate it in place
 
@@ -314,9 +394,10 @@ a documented ~66.
 - `GameTransform` is **pyproj-free** and pure arithmetic. The source CRS is already projected and
   metric, so the per-vertex hot path never re-enters PROJ, and the transform serialises into
   `city.json` as three numbers.
-- The origin is **floored to whole metres**. Every tile boundary is measured from it, so inheriting
+- The origin is **rounded to whole metres**. Every tile boundary is measured from it, so inheriting
   the sixth decimal place of whatever PROJ release generated it would renumber every tile on a
-  library upgrade.
+  library upgrade. *(Floored on both axes as written here; `Q7` later made it floor east and ceil
+  north, so the rounding is outward from the origin corner.)*
 - `deck_height_m()` raises on an unmapped `ELEVATION` rather than defaulting to 0.0 — a defaulted
   tunnel would be dragged to street level and invent a junction with the road above it.
 - **Elevation-level keys reject `bool`, not just non-`int`.** Caught in review, reproduced, and now
@@ -574,6 +655,34 @@ Record measured values here, not estimates.
 ---
 
 ## Session log
+
+### 2026-07-30 — `Q7` Game-space origin moved to the NW corner
+
+One line in `GameTransform.from_bounds`, plus tests and the three docs that state the coordinate
+contract. **67 tests pass, `ruff` clean.** Measured after the change: origin `(835765, 816125)`,
+region spanning X `0.64 → 1649.62` and Z `0.97 → 886.88`, tiles `(0,0)` → `(10,5)` — 66 at 150 m,
+matching the count `DATA_SOURCES.md` already recorded.
+
+Mutation-tested rather than assumed: reverting to the SW origin fails two tests, and the subtler
+floor-instead-of-ceil off-by-one (which puts the NW corner at Z = −0.03) fails one. Three
+overlapping tests were consolidated into one that names the invariant, and the class fixture's
+origin — which still carried the old SW northing — was corrected.
+
+**Two errors of my own, caught in review:**
+
+- I wrote that float32 holds millimetre precision to ~65 km. It is **~16 km** (2¹⁴ = 16,384 m).
+  That number was the sole quantitative input to `Q10`, and being 4× optimistic made a city-wide
+  origin look comfortably safe when it costs ~4 mm of quantisation at 50 km. Then, correcting it,
+  I quoted spacings sampled at powers of two while labelling them decimal kilometres — which made
+  the correction contradict its own headline. Now a measured table.
+- The claim "tile indices are natural numbers" was stated unconditionally. It holds for the
+  *region*, not for the data on disk: `fetch.py` fetches every sheet that intersects the region, so
+  geometry runs past all four edges and anything north or west of it still indexes negative.
+  Clipping is therefore part of the data contract, not an optimisation — now recorded in
+  `ARCHITECTURE.md` and flagged for `P1-2`.
+
+**Still open:** `Q10`, whether the origin is per region or per city. Cheap now, a `schema_version`
+bump plus asset regeneration after `P1-6`.
 
 ### 2026-07-30 — `P1-1` Source fetching
 

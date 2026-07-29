@@ -118,7 +118,7 @@ The interface between ETL and game. **Versioned — change both sides together a
   "city_id": "hong_kong",
   "region_id": "wan_chai",
   "source_crs": "EPSG:2326",
-  "origin": { "easting": 0.0, "northing": 0.0, "elevation": 0.0 },
+  "origin": { "easting": 835765.0, "northing": 816125.0, "elevation": 0.0 },
   "bounds_game": { "min": [0, -20, 0], "max": [1650, 220, 900] },
   "tile_size_m": 150,
   "tiles": [
@@ -129,7 +129,9 @@ The interface between ETL and game. **Versioned — change both sides together a
 }
 ```
 
-`origin` values are computed by the ETL from the region bounds — the zeros above are placeholders.
+`origin` is computed by the ETL from the region bounds, never authored. The values above are the
+real ones for Wan Chai — `floor(min_easting)` and `ceil(max_northing)`, i.e. the region's
+**north-west** corner. Anything reading `city.json` should treat them as data, not as constants.
 
 ### `roadgraph.json` — drivable network
 
@@ -219,7 +221,7 @@ the hand-made model doesn't z-fight with the extruded one.
 |---|---|
 | Source CRS | HK1980 Grid, **EPSG:2326** |
 | Vertical datum | Hong Kong Principal Datum |
-| Game space | Local ENU metres, Y-up, origin at region SW corner |
+| Game space | Local ENU metres, Y-up, **origin at region NW corner** |
 
 ```
 game_x =  (easting   - origin_easting)
@@ -231,7 +233,30 @@ game_z = -(northing  - origin_northing)
 reads the CRS from city config. This is what makes the second city cheap.
 
 Godot uses a right-handed, Y-up coordinate system with **−Z as forward**. The negation on `z`
-above preserves handedness when converting from easting/northing.
+above is **forced, not chosen**: rotating `+X` by 90° counter-clockwise about `+Y` lands on `−Z`,
+so if east is `+X` then north must be `−Z`. Flip it and the city is mirrored — a plausible-looking
+map no local recognises.
+
+**The origin sits at the north-west corner** (`Q7`, resolved 2026-07-30). Because the Z sign is
+forced, anchoring at the *northern* edge is the only way to keep the region in the positive
+quadrant: X runs east from 0 and Z runs south from 0, so tile indices are natural numbers with
+row 0 at the north, as in a raster or a map sheet. A south-west origin — the GIS bbox convention —
+would have put every Z at or below zero and every tile index at `0, -1, -2 …`.
+
+Origin easting is floored and origin northing is **ceiled**: rounding outward keeps every offset
+inside the region non-negative, and rounding at all stops a sixth-decimal difference between PROJ
+releases renumbering every tile.
+
+⚠️ **Non-negativity is a property of the region, not of the source data — so clipping to the region
+bbox is a requirement of this contract, not an optimisation.** `fetch.py` deliberately downloads
+every map sheet that *intersects* the region, so the building data on disk extends past all four
+edges. Any vertex north or west of the region still yields a negative coordinate and a negative
+tile index, and the outward rounding buys less than a metre of slack. Whatever consumes the sheets
+must clip before indexing.
+
+⚠️ The origin is currently **per region**. If two regions must ever stitch into one continuous
+map, they need a shared per-city origin instead — a `schema_version` change, not a tuning change.
+Unresolved; see `PROGRESS.md`, `Q10`.
 
 ---
 

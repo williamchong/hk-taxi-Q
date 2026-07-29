@@ -53,12 +53,16 @@ def test_wan_chai_region_matches_the_documented_corridor(hong_kong) -> None:
 
 def test_game_transform_puts_the_region_next_to_the_origin(hong_kong) -> None:
     """Large absolute coordinates cost float precision in the engine, which is
-    the reason for a local origin at all."""
+    the reason for a local origin at all.
+
+    Checks the corner furthest from the origin — the south-east one, since the
+    origin sits north-west (Q7) — because that is where any drift shows up.
+    """
     transform = hong_kong.game_transform("wan_chai")
     bounds = hong_kong.projected_bounds("wan_chai")
-    x, _, z = transform.to_game(bounds.max_easting, bounds.max_northing)
+    x, _, z = transform.to_game(bounds.max_easting, bounds.min_northing)
     assert 0.0 < x < 2000.0
-    assert -1000.0 < z < 0.0
+    assert 0.0 < z < 1000.0
 
 
 def test_elevation_levels_map_grade_separation_to_deck_heights(hong_kong) -> None:

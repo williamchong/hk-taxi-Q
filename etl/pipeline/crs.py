@@ -153,8 +153,10 @@ class GameTransform:
     hot path never re-enters PROJ, and the transform can be serialised into
     `city.json` as three numbers the game could reproduce itself.
 
-    Godot is right-handed and Y-up with -Z forward, hence the negation on
-    northing: without it the conversion would mirror the city.
+    The negation on northing is forced, not chosen. Godot is right-handed and
+    Y-up, so rotating +X by 90° counter-clockwise about +Y lands on -Z; if east
+    is +X then north must be -Z, or the city comes out mirrored. Only *where
+    zero sits* was ever a free choice — see `from_bounds`.
     """
 
     origin_easting: float
@@ -167,23 +169,24 @@ class GameTransform:
     def from_bounds(
         cls, bounds: ProjectedBounds, *, origin_elevation: float = 0.0
     ) -> GameTransform:
-        """Place the origin at the region's south-west corner.
+        """Place the origin at the region's north-west corner.
 
-        Floored to whole metres rather than used raw. The origin is written into
-        `city.json` and every tile boundary is measured from it, so a projected
-        value that differs in its sixth decimal between PROJ releases would
-        otherwise renumber every tile. Flooring rather than rounding keeps every
-        offset within the region non-negative before the Z flip.
+        North-west, not south-west, so the whole region sits in the positive
+        quadrant: X runs east from 0, and because the Z flip below is forced by
+        handedness rather than chosen, anchoring at the *northern* edge is what
+        makes Z run 0 southward instead of 0 northward. Tile indices are then
+        natural numbers — row 0 at the north, like a raster or a map sheet —
+        rather than the 0, -1, -2 a southern anchor produces. Resolves Q7.
 
-        Note what the flip then does: with the origin at the south-west corner,
-        the region runs +X eastward but **-Z northward**, so its game-space Z is
-        zero-or-negative throughout. The `bounds_game` example in
-        docs/ARCHITECTURE.md shows a positive Z extent and cannot be reconciled
-        with the conversion stated two sections below it. See PROGRESS.md, Q7.
+        Rounded outward to whole metres rather than used raw: the origin is
+        written into `city.json` and every tile boundary is measured from it, so
+        a projected value differing in its sixth decimal between PROJ releases
+        would otherwise renumber every tile. Outward — floor west, ceil north —
+        so every offset inside the region stays non-negative.
         """
         return cls(
             origin_easting=float(math.floor(bounds.min_easting)),
-            origin_northing=float(math.floor(bounds.min_northing)),
+            origin_northing=float(math.ceil(bounds.max_northing)),
             origin_elevation=origin_elevation,
         )
 

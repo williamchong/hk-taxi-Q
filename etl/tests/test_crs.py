@@ -95,10 +95,17 @@ def test_wan_chai_projects_to_its_documented_size() -> None:
     assert bounds.height_m == pytest.approx(900.0, abs=50.0)
 
 
+@pytest.fixture
+def wan_chai_bounds() -> ProjectedBounds:
+    return project_bounds(WAN_CHAI, geodetic_crs=WGS84, projected_crs=HK1980_GRID)
+
+
 class TestGameTransform:
     """The projected-to-Godot leg. Pure arithmetic, so these are exact."""
 
-    transform = GameTransform(origin_easting=835765.0, origin_northing=815238.0)
+    # The origin `from_bounds` produces for Wan Chai: floor(min easting), and
+    # ceil(max northing) because the origin sits at the *north*-west corner.
+    transform = GameTransform(origin_easting=835765.0, origin_northing=816125.0)
 
     def test_round_trip_is_exact(self) -> None:
         source = (836000.0, 815900.0, 12.5)
@@ -114,32 +121,47 @@ class TestGameTransform:
 
         assert east[0] - origin[0] == pytest.approx(100.0)
         assert up[1] - origin[1] == pytest.approx(10.0)
-        # Godot is right-handed and Y-up. Without the negation the city would be
-        # mirrored, which reads as a plausible map that no local recognises.
+        # Godot is right-handed and Y-up, so rotating +X by 90 degrees
+        # counter-clockwise about +Y lands on -Z: if east is +X then north must
+        # be -Z, or the city is mirrored — a plausible map no local recognises.
+        # This sign is forced, and moving the origin (Q7) must not change it:
+        # the assertion is a difference, so it holds for any origin.
         assert north[2] - origin[2] == pytest.approx(-100.0)
 
-    def test_origin_lands_on_whole_metres(self) -> None:
+    def test_origin_lands_on_whole_metres(self, wan_chai_bounds) -> None:
         """Tile boundaries are measured from the origin, so it must not inherit
-        the last decimal place of whatever PROJ release generated it."""
-        bounds = project_bounds(WAN_CHAI, geodetic_crs=WGS84, projected_crs=HK1980_GRID)
-        transform = GameTransform.from_bounds(bounds)
-        assert transform.origin_easting == math.floor(transform.origin_easting)
-        assert transform.origin_northing == math.floor(transform.origin_northing)
+        the last decimal place of whatever PROJ release generated it.
 
-    def test_region_sits_north_west_of_the_origin(self) -> None:
-        """Origin at the south-west corner plus a negated northing means the
-        region runs +X east and -Z north. Documented here because the sign of Z
-        is the thing every consumer of city.json gets wrong once."""
-        bounds = project_bounds(WAN_CHAI, geodetic_crs=WGS84, projected_crs=HK1980_GRID)
-        transform = GameTransform.from_bounds(bounds)
+        Asserts integrality rather than a rounding direction — the directions
+        differ per axis and are `from_bounds`'s business, not this test's.
+        """
+        transform = GameTransform.from_bounds(wan_chai_bounds)
+        assert float(transform.origin_easting).is_integer()
+        assert float(transform.origin_northing).is_integer()
 
-        south_west = transform.to_game(bounds.min_easting, bounds.min_northing)
-        north_east = transform.to_game(bounds.max_easting, bounds.max_northing)
+    def test_whole_region_sits_in_the_positive_quadrant(self, wan_chai_bounds) -> None:
+        """Q7, resolved: origin at the north-west corner.
 
-        assert 0.0 <= south_west[0] < 1.0
-        assert -1.0 < south_west[2] <= 0.0
-        assert north_east[0] > south_west[0]
-        assert north_east[2] < south_west[2]
+        The Z flip is forced by handedness, so anchoring *north* is what keeps Z
+        non-negative — which is what makes tile indices natural numbers instead
+        of running 0, -1, -2 southward. Pinned because the sign of Z is the thing
+        every consumer of city.json gets wrong once.
+        """
+        transform = GameTransform.from_bounds(wan_chai_bounds)
+
+        # X depends only on easting and Z only on northing, so the four corners
+        # cover every extreme the region can produce.
+        for easting in (wan_chai_bounds.min_easting, wan_chai_bounds.max_easting):
+            for northing in (wan_chai_bounds.min_northing, wan_chai_bounds.max_northing):
+                x, _, z = transform.to_game(easting, northing)
+                assert x >= 0.0
+                assert z >= 0.0
+
+        # And the origin is the NW corner specifically, not merely somewhere
+        # north-west of the region — up to the sub-metre outward rounding.
+        north_west = transform.to_game(wan_chai_bounds.min_easting, wan_chai_bounds.max_northing)
+        assert 0.0 <= north_west[0] < 1.0
+        assert 0.0 <= north_west[2] < 1.0
 
 
 class TestGeodeticBounds:
