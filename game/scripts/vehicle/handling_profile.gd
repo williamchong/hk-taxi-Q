@@ -8,8 +8,9 @@ extends Resource
 ## never assigned reads as all-zeroes and fails loudly, rather than quietly
 ## driving on values buried in a script.
 ##
-## The model is a Jolt raycast vehicle with arcade overrides, not a physical
-## simulation. See docs/GAME_DESIGN.md "Controls".
+## The model is a custom raycast vehicle on RigidBody3D, not Godot's
+## VehicleBody3D and not a physical simulation. P0-5a measured why: see
+## docs/PROGRESS.md. See also docs/GAME_DESIGN.md "Controls".
 
 @export_group("Speed")
 ## Top speed in forward gear.
@@ -53,6 +54,35 @@ extends Resource
 @export_range(0.0, 1.0, 0.01) var collision_speed_retained: float
 ## Seconds before an upside-down car auto-rights itself.
 @export_range(0.0, 5.0, 0.05, "suffix:s") var auto_right_delay_s: float
+
+@export_group("Suspension")
+## Chassis layout (wheelbase, track, mount points) is deliberately NOT here:
+## that is per-vehicle model data and belongs to the vehicle scene. Wheel radius
+## is the one exception, because the suspension ray length is derived from it.
+@export_range(0.1, 1.0, 0.01, "suffix:m") var wheel_radius_m: float
+## Uncompressed spring length, measured from the mount point down to the hub.
+## It does NOT include the wheel: the ray cast to find the ground is
+## suspension_rest_length_m + wheel_radius_m.
+@export_range(0.05, 1.0, 0.01, "suffix:m") var suspension_rest_length_m: float
+## Maximum compression from rest before the spring bottoms out.
+## Must not exceed suspension_rest_length_m.
+@export_range(0.01, 0.6, 0.01, "suffix:m") var suspension_travel_m: float
+## Spring rate expressed as natural frequency, not a raw N/m constant.
+## Deliberate: frequency is mass-independent, so retuning vehicle mass or
+## swapping in a heavier vehicle does not silently change how the car rides.
+## Road cars sit near 1.5 Hz; arcade wants stiffer and flatter.
+##
+## It is NOT gravity-independent. Static sag is g_eff / (2πf)², so raising
+## gravity_scale deepens sag and eats the bump travel that absorbs kerbs and
+## jump landings. Scale this by √gravity_scale to hold ride height: the seeded
+## 2.8 Hz is 2.2 Hz compensated for gravity_scale 1.6.
+@export_range(0.5, 5.0, 0.05, "suffix:Hz") var suspension_frequency_hz: float
+## 1.0 is critically damped. Below 1.0 allows a little bounce, above is sluggish.
+@export_range(0.0, 2.0, 0.01) var suspension_damping_ratio: float
+## Artificial anti-roll torque, 0 = none, 1 = rigid. A lowered centre of mass
+## alone does not stop the car rolling over; this is the arcade dial that does,
+## without pinning the body flat and killing the sense of weight.
+@export_range(0.0, 1.0, 0.01) var anti_roll: float
 
 @export_group("Body")
 ## Downward offset of the centre of mass from the body origin. Lower = less roll.

@@ -22,9 +22,13 @@ that decides whether this is a game before any ETL investment.
 | `P0-1` | Identify source data granularity | 🟡 Partial | Roads solved. Buildings still portal-only — needs sheet numbers. |
 | `P0-2` | ⚠️ Z-value spike | ✅ **Done** | No Z, but `ELEVATION` encodes level. Region holds. |
 | `P0-3` | Godot project scaffold | ✅ **Done** | Godot 4.7.1. Imports clean; macOS/web/Android export verified. |
-| `P0-3b` | Mobile device build verification | ⬜ Not started | Split out of `P0-3`. Needs `Q4`, a signing identity and hardware. Not on the critical path. |
+| `P0-3b` | Mobile device build verification | ⬜ Not started | Split out of `P0-3`. `Q4` resolved; now needs only a signing identity and the two floor handsets. Not on the critical path. |
 | `P0-4` | ETL scaffold | ⬜ Not started | |
-| `P0-5` | Grey-box fun test | ⬜ Not started | **The critical path.** Unblocked by `P0-3`. Subjective gate — needs the user |
+| `P0-5` | Grey-box fun test | 🟡 In progress | **The critical path.** Subjective gate — needs the user |
+| `P0-5a` | └ Vehicle controller approach | ✅ **Done** | Measured. Custom raycast on `RigidBody3D`; `VehicleBody3D` rejected. |
+| `P0-5b` | └ Grey-box Gloucester block | ⬜ Not started | Widened road boxes + flyover ramp |
+| `P0-5c` | └ Minimal chase camera | ⬜ Not started | Plan amendment — feel cannot be judged without one |
+| `P0-5d` | └ The drive test | ⬜ Not started | **Needs the user and a display** |
 | `P1-*` | ETL vertical slice | ⬜ Blocked | Gated on `P0-5` (`P0-2` cleared) |
 | `P2-*` | Driving the real city | ⬜ Blocked | |
 | `P3-*` | Playable slice | ⬜ Blocked | |
@@ -40,7 +44,7 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ❌ blocked
 | Q1 | Do Road Network v2 centrelines carry Z values? | **Critical** — was the region-choice risk | `P0-2` | ✅ **Resolved 2026-07-29** |
 | Q2 | Which LandsD 1:1000 sheet numbers cover the region? | Blocks automated fetching of building data | `P0-1` | 🔴 Open |
 | Q3 | Can building data be downloaded programmatically at all? | **Now the top risk.** Road data has direct static URLs; building data exposes only interactive portal pages | `P0-1` | 🔴 Open |
-| Q4 | Confirm the device floor | Sets the whole perf budget. **Assumed:** iPhone XR (A12) / Snapdragon 730-class, ~2019–2020. Now also blocks `P0-3b` — we cannot verify on a device floor we have not named. | user | 🟡 Assumed |
+| Q4 | Confirm the device floor | Sets the whole perf budget and gates `P0-3b` | user | ✅ **Resolved 2026-07-29** |
 | Q5 | Actual file sizes of the region's building data | Affects fetch time and disk planning | `P0-1` | 🟡 Partial — `CENTERLINE.gml` is 486 MB territory-wide |
 | Q6 | Does the region need Central for the circuit to feel complete? | Scope | after `P3-9` | 🟡 Deferred |
 
@@ -58,9 +62,109 @@ deck heights in city config; only allow junctions between edges at matching leve
 **Bonus:** bilingual street names (`STREET_ENAME` / `STREET_CNAME`) ship in the source — one less
 thing to hand-author. `-99` and `–９９` are null sentinels.
 
+### Q4 — resolved
+
+**iOS: A13 (iPhone SE 2nd gen / iPhone 11). Android: Adreno 618, Vulkan 1.1, 4 GB RAM.**
+Reference Android handsets: Pixel 4a (SD730G), Redmi Note 9 Pro (SD720G), Galaxy A52 (SD720G).
+
+The two floors are separate decisions and only one sets the budget — see the decision log entry
+below.
+
 ---
 
 ## Decision log
+
+### 2026-07-29 — `P0-5a` Vehicle controller: **custom raycast on `RigidBody3D`**, not `VehicleBody3D`
+
+Measured, not assumed. A throwaway headless spike built a `VehicleBody3D` with four
+`VehicleWheel3D` on a flat plane under Godot 4.7.1 + Jolt and drove it through settle → accelerate →
+steer → drift phases.
+
+**`VehicleBody3D` is not broken under Jolt.** It instantiates, simulates, accelerates, steers and
+brakes. The wheel query API works: `is_in_contact()` reported 4/4 while cornering, with
+`get_skidinfo()` at 0.894 and `get_rpm()` at 269.5. Anyone repeating this spike should not expect a
+crash — the problem is subtler.
+
+**The problem is that the tuning schema is inexpressible.** `ClassDB` introspection shows
+`VehicleBody3D` exposes exactly three tunables — `engine_force`, `brake`, `steering` — with the rest
+on `VehicleWheel3D`. Mapping the 18 `HandlingProfile` fields against that surface:
+
+| Fit | Count | Fields |
+|---|---|---|
+| Direct | 4 | `engine_force`, `brake_force`, `centre_of_mass_offset_y`, `gravity_scale` |
+| Partial / fightable | 4 | `steer_angle_max_deg`, `grip_lateral`, `grip_longitudinal`, `drift_grip_scale` |
+| **Absent** | **10** | both speed caps, three steering-curve fields, two drift fields, all three collision/recovery fields |
+
+**The decisive finding: `wheel_friction_slip` is isotropic.** One friction number covers every
+direction, so `grip_lateral` and `grip_longitudinal` collapse into each other, and a drift cannot
+break lateral grip without destroying traction and braking with it. Measured, holding throttle:
+
+| Drift variant | Speed lost over 2 s | Implied scrub/s (target **0.080**) | Peak slip angle (threshold **14°**) |
+|---|---|---|---|
+| Friction × 0.35, all four wheels | 57% | 0.285 | 162.7° |
+| Friction × 0.35, rear axle only | 30% | 0.151 | 162.6° |
+
+Both violate `GAME_DESIGN.md` on two counts at once: `drift_speed_scrub_per_s` is "deliberately
+small — drifting must not feel like a penalty" (missed by 1.9–3.6×), and grip must be "high,
+forgiving, no spin-outs" (162° is a full spin, not a slide).
+
+**Could it be tuned out? Partly — and that is the argument against it.** Yaw damping, counter-steer
+assist and per-axle friction curves would suppress the spin. But that is an arcade correction layer
+built on top of a physical model actively resisting it, leaving `VehicleBody3D` contributing only
+suspension raycasts — perhaps 100 lines of the eventual controller. Every future tuning change would
+be a negotiation with the engine rather than a dial. `GAME_DESIGN.md:120` expects vehicle feel to be
+iterated on more than anything else in the project, which makes that friction compound.
+
+**Consequences:**
+- `handling_profile.gd` gains a `Suspension` group — the original schema had none, having assumed
+  `VehicleBody3D` would own them. Values seeded in `handling.tres`.
+- Spring rate is specified as **natural frequency in Hz, not a raw N/m constant**, so it stays
+  correct when vehicle mass changes or a heavier vehicle joins the roster. It is *not* gravity-
+  independent, though: static sag is `g_eff / (2πf)²`, so `gravity_scale = 1.6` deepens sag by the
+  same 1.6× and eats the bump travel that absorbs kerbs and jump landings. The seed is therefore
+  **2.8 Hz** — 2.2 Hz scaled by `√1.6`. Anyone retuning `gravity_scale` must rescale this with it.
+- Forward note for `P2-3`: the class docstring promises an unassigned profile "fails loudly", but
+  nothing enforces that yet. `wheel_radius_m = 0.0` divides by zero and `suspension_frequency_hz =
+  0.0` is a dead spring, so the controller should assert both non-zero on assign. It should also
+  cache the derived `k = mω²` and `c = 2ζ√(km)` rather than recomputing transcendentals per wheel
+  per tick on the Adreno 618 floor.
+- New `anti_roll` field: the spike rolled the car over even with `centre_of_mass_offset_y` applied,
+  so roll resistance needs its own dial rather than being a side effect of centre-of-mass placement.
+- Wheel **geometry** (wheelbase, track, mount points) deliberately stays out of `HandlingProfile` —
+  that is per-vehicle model data; the resource describes feel, which is shared across the roster.
+- `P2-3` is now "finish and tune the controller", not "adopt `VehicleBody3D`".
+
+Spike files were deleted after the numbers were recorded here.
+
+### 2026-07-29 — Device floor: **A13 / Adreno 618**, named as two separate floors
+
+Resolves `Q4`, on the user's call. Reverses the earlier assumption of iPhone XR (A12) /
+Snapdragon 730-class.
+
+- **iOS floor: A13** — iPhone SE 2nd gen (2020) or iPhone 11 (2019).
+- **Android floor: Adreno 618 tier** — Vulkan 1.1, 4 GB RAM. Spans Snapdragon 710/712/720G/730/730G.
+
+**These are two decisions, not one, and the old single-device phrasing hid that.** The iOS floor is
+a *support-matrix* question — A12 is off the current iOS train, so an XR would mean testing against
+hardware that can no longer take OS updates. The Android floor is a *performance* question, and it
+is the only one that constrains the budget: A13 is roughly 3–4× the GPU throughput of the Adreno 618
+tier, so anything that holds 60fps on the Android floor is free on iOS.
+
+**The Mobile renderer requires Vulkan**, so the real floor is "Vulkan 1.1 with a maintained driver"
+before it is any particular chip. `project.godot` locks `rendering_method="mobile"`; cheap hardware
+with broken or absent Vulkan drivers is out regardless of the name on the floor.
+
+**Chosen over a more conservative floor because Hong Kong skews high-end** — iPhone share is far
+above global average and the Android side skews Samsung and flagship-adjacent brands rather than
+budget hardware. A global-market floor would cost art fidelity for users this TAM does not have.
+
+**This makes the existing perf budget coherent rather than arbitrary.** <150 draw calls, <300k
+triangles and <128 MB texture are sane Adreno-618 numbers — needlessly tight for a 2022 floor,
+unachievable on a 2017 one.
+
+**Follow-through:** the floor defines **tier 0** of the perf tiers that `P3-3` scales traffic
+density against. Per hard rule 4 that lives in config, not constants — to be authored in `P2-6`.
+Hardware to acquire for `P0-3b`: one A13 iPhone and one Adreno 618 Android, both viable secondhand.
 
 ### 2026-07-29 — Engine version: Godot 4.6 → **4.7.1**
 Reverses the locked "Godot 4.6" decision, on the user's call. Homebrew's cask ships 4.7.1, which is

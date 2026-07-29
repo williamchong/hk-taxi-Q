@@ -241,7 +241,7 @@ above preserves handedness when converting from easting/northing.
 |---|---|
 | `CityStreamer` | Load/unload tile meshes by camera distance; owns the LOD tier |
 | `RoadGraph` | Runtime queries over `roadgraph.json` — nearest edge, routing, lane centre |
-| `VehicleController` | Player car. Jolt raycast vehicle + arcade overrides |
+| `VehicleController` | Player car. Custom raycast vehicle on `RigidBody3D` + arcade overrides |
 | `TrafficSystem` | AI vehicles following road-graph splines; trams as scripted blockers |
 | `FareSystem` | Fare state machine: idle → hailed → carrying → delivered/failed |
 | `ScoreSystem` | Base fare, time bonus, style points, combo chain |

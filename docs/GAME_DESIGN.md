@@ -107,7 +107,8 @@ tight enough that players learn what the game rewards without being told.
 
 See `docs/ARCHITECTURE.md` for the action-set mapping across touch/gamepad/keyboard.
 
-**Handling model:** Jolt raycast vehicle with arcade overrides. Not a physical simulation.
+**Handling model:** custom raycast vehicle on `RigidBody3D` with arcade overrides — not Godot's
+`VehicleBody3D`, and not a physical simulation. `P0-5a` measured why; see `docs/PROGRESS.md`.
 
 | Property | Target feel |
 |---|---|

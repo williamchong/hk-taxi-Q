@@ -62,7 +62,7 @@ Run these **in parallel**; `P0-2` is the one that can force a region change.
 
 ### `P0-5` Grey-box fun test
 - **Deliverable:** a hand-built block of "Gloucester Road" — placeholder boxes, correct road widths
-  — plus a tuned Jolt raycast vehicle.
+  — plus a tuned custom raycast vehicle on `RigidBody3D` (see `P0-5a` in `docs/PROGRESS.md`).
 - **Accept:** **the user drives it and confirms it feels good.** This is a subjective gate and it
   is meant to be.
 - **Deps:** `P0-3`.
@@ -137,7 +137,7 @@ Run these **in parallel**; `P0-2` is the one that can force a region change.
 |---|---|---|---|
 | `P2-1` | `CityStreamer` — tile load/unload by distance, LOD switching | No hitching on tile boundaries; draw calls within budget | `P1-7` |
 | `P2-2` | `RoadGraph` runtime — load JSON, nearest-edge and lane-centre queries | Query correctness unit-tested; sub-millisecond nearest-edge | `P1-3` |
-| `P2-3` | `VehicleController` — Jolt raycast vehicle, arcade tuning in `handling.tres` | Matches the feel agreed in `P0-5`, now on real geometry | `P0-5`, `P1-7` |
+| `P2-3` | `VehicleController` — custom raycast vehicle on `RigidBody3D`, arcade tuning in `handling.tres` | Matches the feel agreed in `P0-5`, now on real geometry | `P0-5`, `P1-7` |
 | `P2-4` | `InputRouter` — touch, gamepad, keyboard → one action set | All three input paths drive the car; no gameplay script reads raw input | `P2-3` |
 | `P2-5` | Chase camera with speed-based FOV and look-back | Readable at speed; no clipping through buildings | `P2-3` |
 | `P2-6` | Performance pass to budget | 60fps on device floor, measured, recorded in `PROGRESS.md` | `P2-1`…`P2-5` |
