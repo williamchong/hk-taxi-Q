@@ -3,7 +3,7 @@
 Living document. **Update this whenever a task changes status, a decision is made, or an open
 question is answered.** Newest entries at the top of each log.
 
-Last updated: 2026-07-29
+Last updated: 2026-07-30
 
 ---
 
@@ -13,7 +13,11 @@ Last updated: 2026-07-29
 
 The Godot project is scaffolded and exports to macOS, web and Android; the grey-box circuit is
 drivable and the handling is accepted; the ETL package exists with the coordinate conversion under
-test. `P0-1` and `P0-3b` remain open but neither gates Phase 1.
+test. **`P0-1` closed on 2026-07-30, taking `Q2`, `Q3` and `Q5` with it** — building data turned
+out to be fully scriptable, which retires the top data risk. Only `P0-3b` remains open, and it
+needs hardware rather than work.
+
+**`P1-1` is the next task and has no blockers.**
 
 **`P0-5` passed conditionally, not cleanly** — the user drove it, found the handling acceptable, and
 judged that *fun* cannot be assessed from a grey box at all. See the decision log. The consequence
@@ -24,17 +28,17 @@ is deferred rather than closed.
 
 | ID | Task | Status | Notes |
 |---|---|---|---|
-| `P0-1` | Identify source data granularity | 🟡 Partial | Roads solved. Buildings still portal-only — needs sheet numbers. |
+| `P0-1` | Identify source data granularity | ✅ **Done** | 6 sheets identified, glTF per sheet, ~44 MB each. Buildings are scriptable after all. |
 | `P0-2` | ⚠️ Z-value spike | ✅ **Done** | No Z, but `ELEVATION` encodes level. Region holds. |
 | `P0-3` | Godot project scaffold | ✅ **Done** | Godot 4.7.1. Imports clean; macOS/web/Android export verified. |
 | `P0-3b` | Mobile device build verification | ⬜ Not started | Split out of `P0-3`. `Q4` resolved; now needs only a signing identity and the two floor handsets. Not on the critical path. |
-| `P0-4` | ETL scaffold | ✅ **Done** | `pipeline/` + `hong_kong.yaml`; 22 tests, `ruff` clean. Datum trap found — see log. |
+| `P0-4` | ETL scaffold | ✅ **Done** | `pipeline/` + `hong_kong.yaml`; 23 tests, `ruff` clean. Datum trap found — see log. |
 | `P0-5` | Grey-box fun test | ⚠️ **Passed, conditional** | Handling accepted. Fun verdict deferred — see decision log. |
 | `P0-5a` | └ Vehicle controller approach | ✅ **Done** | Measured. Custom raycast on `RigidBody3D`; `VehicleBody3D` rejected. |
 | `P0-5b` | └ Grey-box Gloucester block | ✅ **Done** | Circuit built from JSON; widen_factor is data |
 | `P0-5c` | └ Minimal chase camera | ✅ **Done** | Spring arm, speed FOV, look-back |
 | `P0-5d` | └ The drive test | ⚠️ **Passed, conditional** | Driven and verified. No blocking feel problem; no fun verdict possible yet. |
-| `P1-*` | ETL vertical slice | 🟢 **Unblocked** | `P0-4` done, `P0-2` cleared, `P0-5` gate released. `P1-1` needs `P0-1`. |
+| `P1-*` | ETL vertical slice | 🟢 **Unblocked** | All deps met: `P0-1`, `P0-2`, `P0-4` done and the `P0-5` gate released. `P1-1` is next. |
 | `P2-*` | Driving the real city | ⬜ Blocked | Gated on `P1-7` |
 | `P3-*` | Playable slice | ⬜ Blocked | |
 
@@ -47,10 +51,10 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ❌ blocked
 | # | Question | Impact | Owner | Status |
 |---|---|---|---|---|
 | Q1 | Do Road Network v2 centrelines carry Z values? | **Critical** — was the region-choice risk | `P0-2` | ✅ **Resolved 2026-07-29** |
-| Q2 | Which LandsD 1:1000 sheet numbers cover the region? | Blocks automated fetching of building data | `P0-1` | 🔴 Open |
-| Q3 | Can building data be downloaded programmatically at all? | **Now the top risk.** Road data has direct static URLs; building data exposes only interactive portal pages | `P0-1` | 🔴 Open |
+| Q2 | Which LandsD 1:1000 sheet numbers cover the region? | Blocks automated fetching of building data | `P0-1` | ✅ **Resolved 2026-07-30** — 6 sheets, derived not hardcoded |
+| Q3 | Can building data be downloaded programmatically at all? | Was the top risk | `P0-1` | ✅ **Resolved 2026-07-30** — yes, the sheet index carries direct URLs |
 | Q4 | Confirm the device floor | Sets the whole perf budget and gates `P0-3b` | user | ✅ **Resolved 2026-07-29** |
-| Q5 | Actual file sizes of the region's building data | Affects fetch time and disk planning | `P0-1` | 🟡 Partial — `CENTERLINE.gml` is 486 MB territory-wide |
+| Q5 | Actual file sizes of the region's building data | Affects fetch time and disk planning | `P0-1` | ✅ **Resolved 2026-07-30** — ~44 MB/sheet, ~280 MB for the region. Roads: `CENTERLINE.gml` is 486 MB territory-wide |
 | Q6 | Does the region need Central for the circuit to feel complete? | Scope | after `P3-9` | 🟡 Deferred |
 | Q7 | Does game-space Z run negative northward, or should the origin move to the NW corner? | Data contract — tile IDs and every position in `city.json` | `P1-6` | 🔴 Open |
 | Q8 | What is the cheapest build that lets the user judge "is this fun?" | **Now the top project risk** — `P0-5` did not answer it | user | 🔴 Open |
@@ -118,6 +122,58 @@ below.
 ---
 
 ## Decision log
+
+### 2026-07-30 — `P0-1`: building data is **fully scriptable**; the top data risk is retired
+
+Reverses the `P0-2` finding that "the top data risk has moved from roads to buildings." That
+conclusion came from reading the CKAN resource list, which genuinely does only point at interactive
+portals — and stopping there. **Opening the portal's own Downloads panel tells a different story.**
+
+**The CSDI portal serves a sheet index, not the models.** For the non-textured dataset it offers
+FGDB / GeoPackage / GeoJSON / GML / SHP / KML — GIS vector formats, which looked wrong for 3D
+buildings and is what prompted a closer look. The payload is a territory-wide index of **3,456
+sheet polygons**, and every feature carries direct download URLs:
+
+```
+SHEETNO      11-SW-10C
+Format_glTF  https://download.map.gov.hk/api/3d-zip/GLTF0/11-SW-10C.zip?key=…
+REVISIONDATE 20250929
+```
+
+One public key covers all 3,456 sheets — not per-user, not per-session. **It must not be committed
+anywhere.** `P1-1` fetches the index and reads URLs out of it, so a rotated key costs nothing and
+the sheet list is derived rather than hardcoded. `REVISIONDATE` is per sheet and is the natural
+cache key for idempotent re-runs.
+
+**Verified by actually downloading `11-SW-10C`** (44.3 MB, HTTP 200, no auth beyond the public
+key). Contents, and the three things that change `P1-2`:
+
+- Coordinates are **already in Godot's convention** — each node matrix translates to
+  `(easting, elevation, -northing)` in HK1980 metres, exactly the conversion in `ARCHITECTURE.md`.
+  `GameTransform` reduces to subtracting the origin. Note this bears on `Q7` only for the axis
+  *direction*, which both candidate origins preserve; it does not settle where the origin sits.
+- Vertices are **unwelded, exactly 3.0 per triangle** — flat shading is baked in, which is the art
+  direction's native form. Do not weld, do not generate normals.
+- **"Non-textured" describes buildings, not terrain.** Terrain ships with a JPEG. Decide in `P1-2`
+  whether to discard it rather than importing it by accident; `P1-4` generates the road surface
+  from the road graph regardless.
+
+**New risk, registered:** 612 triangles per building is far more than an LOD1 extrusion needs.
+Six sheets extrapolate to ~555k triangles against a **<300k visible** budget. `P1-2` decimation and
+LOD tiers are now load-bearing rather than optional. `DATA_SOURCES.md` previously claimed "no
+decimation needed"; corrected.
+
+### 2026-07-30 — Region bounds confirmed **WGS84**, by measurement
+
+`P0-4` flagged that the region bounds were authored with no datum stated, and that HK1980 vs WGS84
+is a ~304 m question in Hong Kong. That turned out to be load-bearing rather than pedantic: the two
+readings select **different sheets** — WGS84 gives a contiguous `11-SW` block, HK1980 swaps two of
+six for `11-SE-11A` and `11-SE-6C`. A third of the region rode on an unstated assumption.
+
+Settled by comparing sheet `11-SW-10C`'s real building positions against both readings. The WGS84
+projection matches to within metres and the HK1980 one is out by ~250 m; the terrain node sits at
+the WGS84-projected sheet centre exactly. `crs.geodetic: EPSG:4326` in `hong_kong.yaml` is correct
+as authored. Full table in `DATA_SOURCES.md`.
 
 ### 2026-07-29 — `P0-5` gate: **released conditionally**; the fun question moves to Phase 1
 
@@ -314,9 +370,14 @@ GML). No Z ordinates, but `ELEVATION` encodes grade separation as an ordinal lev
 holds. Also surfaced: bilingual street names ship in the source, `-99` is the null sentinel, and
 the file must be streamed and clipped rather than loaded whole.
 
-**Top data risk has moved from roads to buildings.** Roads are fully scriptable via static URLs;
+~~**Top data risk has moved from roads to buildings.** Roads are fully scriptable via static URLs;
 building data is portal-only with no direct download endpoint. Not slice-blocking — the region is
-a handful of 1:1000 sheets and can be fetched by hand — but it must be solved before a second city.
+a handful of 1:1000 sheets and can be fetched by hand — but it must be solved before a second city.~~
+
+> **Superseded 2026-07-30 — this was wrong.** Building data *is* fully scriptable; the sheet index
+> carries direct download URLs. Struck through rather than deleted, because the error is instructive:
+> it came from reading the CKAN resource list, which really does only list portals, and not opening
+> the portal itself. See the `P0-1` entry at the top of this log.
 
 
 Decisions are **settled**. Do not re-litigate without explicit instruction from the user — but do
@@ -406,6 +467,7 @@ urgent — flag it before the roster work in Phase 4.
 | Doesn't read as HK to locals | **High** | `P3-9` authenticity test with ≥3 real drivers; run again every phase after. |
 | Perf misses 60fps on device floor | Medium | Budget defined up front; untextured merged tiles are the main lever; `P2-6` is a dedicated pass. |
 | Source data quirks (dual carriageways, doubled junctions) | Medium | Known and documented; budget extra time on `P1-3`. |
+| Building meshes blow the triangle budget | Medium | **New 2026-07-30.** Measured 612 tris/building, ~555k over six sheets against a <300k *visible* budget. `P1-2` decimation and LOD tiers are load-bearing, not optional. Occlusion in street canyons is the free lever. |
 | GDScript learning curve | Low | Small codebase; complexity lives in Python. |
 | Landmark depiction IP | Low | Untextured massing; legal sight-check before launch (Phase 6). |
 | TAM too small to be commercial | Medium | City-agnostic ETL is the scaling answer — city packs, not one city. |
@@ -428,6 +490,24 @@ Record measured values here, not estimates.
 ---
 
 ## Session log
+
+### 2026-07-30 — `P0-1` Source data granularity
+
+Closed `P0-1` and with it `Q2`, `Q3` and `Q5`. Detail in the decision log; the short version is
+that building data is scriptable, six sheets cover the region, and the datum question `P0-4` raised
+was real and is now settled by measurement.
+
+**`DATA_SOURCES.md` needed correcting, not just extending.** It stated the building datasets expose
+"no direct download URLs" and that the only API required an emailed key for rejected photogrammetry
+tiles. Both false. The correction is marked as such in the doc rather than quietly rewritten,
+because that file's whole premise is "do not re-research these" — a silent edit would leave no
+signal that the earlier verification had been wrong. It also carried a "no decimation needed" claim
+the triangle measurements contradict.
+
+**Not yet decided:** whether to keep or discard the textured terrain mesh (`P1-2`), and `Q7`'s
+origin placement (`P1-6`). Neither blocks `P1-1`.
+
+Raw downloads sit in `etl/sources/` (gitignored): the sheet index plus one sheet, ~113 MB.
 
 ### 2026-07-29 — `P0-4` ETL scaffold
 

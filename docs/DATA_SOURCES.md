@@ -35,10 +35,13 @@ Requirements we must meet:
 
 - **Portal:** https://data.gov.hk/en-data/dataset/hk-landsd-openmap-3d-visualisation-map-non-textured-models
 - **Publisher:** Lands Department (LandsD)
-- **Formats:** MAX, FBX, **glTF**
-- **Content:** Geometry and position only — no textures.
-- **Coverage:** Whole territory of Hong Kong.
-- **Why:** Flat-shaded extruded volumes are exactly the target art style. No decimation needed.
+- **Formats:** MAX, FBX, **glTF** — one zip per 1:1000 sheet.
+- **Content:** Geometry and position only — no textures **on buildings**. Terrain ships textured.
+- **Coverage:** Whole territory of Hong Kong, 3,456 sheets.
+- **Why:** Flat-shaded extruded volumes are exactly the target art style.
+- **Access: fully scriptable** — see "Access notes" below. The CSDI portal serves a *sheet index*
+  in GIS vector formats; the index carries direct download URLs for the models.
+- ⚠️ **Decimation is needed after all** at 612 tris/building — see the triangle-budget note below.
 
 ### ✅ USE — 3D Spatial Data (3D-BIT00), Level 1
 
@@ -215,7 +218,41 @@ EPSG:2326.
 | South | 22.276 N |
 | North | 22.284 N |
 | Approx. size | 1.65 km × 0.9 km ≈ **1.5 km²** |
-| Tiles @ 150 m | ~66 |
+| Tiles @ 150 m | 66 (computed, matches the earlier estimate) |
+| **Datum of the bounds above** | **WGS84 — confirmed against real geometry, 2026-07-30** |
+
+### ⚠️ The datum of these bounds is load-bearing
+
+HK1980 and WGS84 differ by **~304 m on the ground** in Hong Kong — far more than the ~10 m people
+expect. These four numbers were authored without stating a datum, and the two readings select
+**different sheets**: WGS84 gives a contiguous `11-SW` block, HK1980 swaps two of the six for
+`11-SE-11A` and `11-SE-6C`. A third of the region, decided by an unstated assumption.
+
+**Resolved by measurement, not inference.** Sheet `11-SW-10C` was downloaded and its building
+positions compared against both readings:
+
+| | Easting | Northing |
+|---|---|---|
+| **Actual building positions** | 836006–836752 | 815600–816173 |
+| Sheet bbox **if index is WGS84** | 836000–836750 | 815600–816200 |
+| Sheet bbox if index is HK1980 | 836252–837003 | 815431–816031 |
+
+The terrain node sits at exactly (836375, 815900) — the WGS84-projected sheet centre to the metre.
+`etl/config/cities/hong_kong.yaml` therefore declares `crs.geodetic: EPSG:4326`, and the loader
+refuses to run without an explicit datum.
+
+### Covering sheets (`P0-1`, resolved 2026-07-30)
+
+Six 1:1000 sheets cover the region. glTF is delivered **per sheet**, ~44 MB each, so the full
+region is **~280 MB** of source download:
+
+```
+11-SW-9D    11-SW-10C   11-SW-10D
+11-SW-14B   11-SW-15A   11-SW-15B
+```
+
+Do not hardcode this list. `P1-1` derives it by intersecting the region bounds with the fetched
+sheet index, so a bounds change or a second city re-derives it for free.
 
 Key roads: Gloucester Road, Harbour Road, Hennessy Road, Lockhart Road, Jaffe Road, Johnston Road,
 Queen's Road East, Canal Road East/West + flyover, Yee Wo Street, Percival Street.
@@ -232,33 +269,71 @@ Natural map edges: Victoria Harbour (north), the escarpment toward Kennedy Road 
 Direct static URLs (see table above), enumerable via the data.gov.hk CKAN API. No key, no portal,
 no account. This half of the pipeline is solved.
 
-### Buildings — portal-only ⚠️
+### Buildings — fully scriptable ✅
 
-**Verified 2026-07-29 via CKAN:** the non-textured 3D Visualisation Map and 3D-BIT00 datasets
-expose **no direct download URLs**. Every resource points at an interactive portal:
+> **Correction, 2026-07-30.** This section previously stated that the building datasets expose
+> **no direct download URLs** and that the only API served rejected Cesium 3D Tiles behind an
+> emailed key. **Both are wrong**, and that error made "buildings are unautomatable" the project's
+> top data risk for a day. Corrected below against a real download. The mistake was reading the
+> CKAN resource list — which does only point at portals — and stopping there, instead of opening
+> the portal's own download panel.
 
-- `portal.csdi.gov.hk/geoportal/?datasetId=...` — map-based selection UI
-- `hkmapservice.gov.hk/OneStopSystem/map-search?product=OSSCatB&series=3D-BIT00` — likely requires
-  an account
+**The sheet index is the API.** The CSDI portal's Downloads panel serves the non-textured dataset
+as ordinary GIS vector formats, not as 3D models. What you get is a **territory-wide index of
+3,456 sheet polygons**, each carrying direct download URLs for the models themselves:
 
-**The documented 3D Visualisation Map API does not help us.** It serves
-`https://data.map.gov.hk/api/3d-data/3dtiles/{sheet}/tileset.json` — **Cesium 3D Tiles**, i.e. the
-tile-based photogrammetry variant we rejected. It also needs an API key (free on request from
-`3dmap@landsd.gov.hk`, GIS Projects Section, LandsD) and is rate-limited to 5 GB/s and 100
-concurrent users.
+| Property | Example |
+|---|---|
+| `SHEETNO` | `11-SW-10C` |
+| `Format_glTF` | `https://download.map.gov.hk/api/3d-zip/GLTF0/11-SW-10C.zip?key=…` |
+| `Format_FBX` | `…/api/3d-zip/FBX0/11-SW-10C.zip?key=…` |
+| `Format_MAX` | `…/api/3d-zip/MAX0/11-SW-10C.zip?key=…` |
+| `REVISIONDATE` | `20250929` |
 
-**Assessment: this is not a blocker for the vertical slice.** The region is ~1.5 km², which is a
-small number of 1:1000 sheets — a one-off manual download. Automation only matters when adding
-cities, which is a Phase 4+ concern.
+- **One public key is shared by all 3,456 sheets** — not per-user, not per-session. It is baked
+  into an index anyone can download.
+- ⚠️ **Do not hardcode the key into `hong_kong.yaml` or any committed file.** `P1-1` fetches the
+  index and reads URLs out of it. The index is the source of truth, and a rotated key then costs
+  nothing.
+- `REVISIONDATE` is per sheet — use it as the cache key so re-runs are idempotent.
+- Index CRS is **WGS84** (GeoJSON with `crs: null`, i.e. CRS84 per RFC 7946). Confirmed against
+  real geometry, not assumed — see "Region of interest" below.
 
-**Options, in order of preference:**
-1. **Manual download** of the region's sheets via the CSDI portal. Sufficient for the slice.
-   Record exactly which sheets were taken so the step is reproducible.
-2. **Email `3dmap@landsd.gov.hk`** and ask whether a programmatic endpoint exists for the
-   non-textured or 3D-BIT00 products. Costs one email; keys are issued free.
-3. **Reverse-engineer the portal's download URL structure.** A prior integrator did exactly this
-   for the tile-based product and automated ~10,000 downloads. Last resort — brittle, and be a
-   good citizen about request rates.
+**Portal entry points** (for a human re-checking the index):
 
-⚠️ **Still open (`P0-1`):** which 1:1000 sheet numbers cover the region, and whether non-textured
-glTF is delivered per sheet or per tile.
+- Non-textured models: `https://portal.csdi.gov.hk/geoportal/?datasetId=landsd_rcd_1742809441342_98380`
+- 3D-BIT00: `https://portal.csdi.gov.hk/geoportal/?datasetId=landsd_rcd_1637306559892_42396`
+
+**The Cesium 3D Tiles API remains irrelevant**, and that part of the old note stands:
+`https://data.map.gov.hk/api/3d-data/3dtiles/{sheet}/tileset.json` serves the tile-based
+photogrammetry variant we rejected. We do not need it, and we do not need a key from
+`3dmap@landsd.gov.hk`.
+
+### What a sheet actually contains
+
+Measured by downloading `11-SW-10C` in glTF (2026-07-30):
+
+| | |
+|---|---|
+| Download size | **44.3 MB** zipped, ~65 MB unpacked |
+| Sheet extent | ~744 m × 603 m |
+| `BUILDING/` | 151 buildings — one `.gltf` + `.bin` each, `default_material`, **no textures** |
+| `INFRASTRUCTURE/` | 12 items, sitting 2.4–9.3 m up — very likely elevated road structures |
+| `TERRAIN(TB)/` | 1 mesh, 250,911 verts, **one `.jpg` texture** |
+
+Three findings that shape `P1-2`:
+
+1. **Coordinates already match Godot's convention.** Each node's matrix translates to
+   `(easting, elevation, -northing)` in HK1980 grid metres — exactly the conversion in
+   `ARCHITECTURE.md`. `GameTransform` reduces to subtracting the region origin; there is no axis
+   work to do.
+2. **Vertices are unwelded — exactly 3.0 per triangle.** Flat shading is baked in, which is the
+   art direction's native form. Do not weld; do not generate normals.
+3. **"Non-textured" describes the buildings, not the terrain.** Terrain ships with a JPEG. We
+   generate the road surface from the road graph (`P1-4`), so terrain is expected to be discarded
+   — decide explicitly in `P1-2` rather than importing it by accident.
+
+⚠️ **Triangle budget pressure.** 92,457 triangles across 151 buildings — **612 per building**,
+far more than an LOD1 extrusion needs. Extrapolated over six sheets that is ~555k triangles against
+a **<300k visible** budget. Not fatal (visible ≠ total, and HK street canyons occlude heavily) but
+it makes `P1-2`'s decimation and LOD tiers load-bearing rather than optional.
