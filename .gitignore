@@ -1,0 +1,38 @@
+# ETL — raw downloads and build output are artefacts, not source
+etl/sources/
+etl/out/
+etl/.cache/
+
+# Generated game assets are build output; authored assets ARE committed
+game/assets/generated/
+
+# Godot
+.godot/
+game/.godot/
+game/android/build/
+*.translation
+
+# NOTE: export_presets.cfg IS committed (it's a P0-3 deliverable).
+# Never put keystore passwords or signing credentials in it — use environment
+# variables or Godot editor settings, which stay out of the repo.
+
+# Godot export output
+build/
+dist/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
