@@ -4,7 +4,7 @@
 
 | Layer | Choice | Notes |
 |---|---|---|
-| Engine | **Godot 4.6** | MIT, no royalties or seat fees |
+| Engine | **Godot 4.7** | MIT, no royalties or seat fees |
 | Renderer | **Mobile** (primary), Compatibility for web demo | Forward+ only if desktop tier justifies it later |
 | Physics | **Jolt** — Godot's default since 4.4 | Has a wheeled vehicle controller |
 | Engine language | **GDScript**, statically typed | See decision below |
@@ -13,7 +13,7 @@
 
 ### Decision: GDScript, not C#
 
-C# platform support in Godot as of 4.6:
+C# platform support in Godot as of 4.7 (re-verified against the official docs on 2026-07-29):
 
 - Desktop (Windows/macOS/Linux): fully supported
 - Android: supported since 4.2 but **experimental** — requires .NET 7.0+, linux-bionic Mono
@@ -32,6 +32,29 @@ godot-rust). It preserves every export target, including web. Do not reach for C
 > annotate (`var speed: float = 0.0`) — it is both faster and catches errors the untyped form
 > won't. Godot's `signal`/`connect` is its event-emitter equivalent. `.tres` resource files are
 > the idiomatic place for tuning data, roughly equivalent to a typed JSON config.
+
+### Project settings
+
+`game/project.godot` is **regenerated from scratch** by Godot whenever Project Settings is saved in
+the editor, discarding any comments in it. This table is the durable record — check it against the
+file after anyone touches the editor's settings dialog.
+
+| Setting | Value | Why |
+|---|---|---|
+| `rendering/renderer/rendering_method` | `mobile` | Locked decision. Set as the **base** value, not only the `.mobile` override, so the editor and desktop builds preview the renderer the phone will actually run. |
+| `rendering/renderer/rendering_method.web` | `gl_compatibility` | Web export is WebGL2-only. |
+| `rendering/textures/vram_compression/import_etc2_astc` | `true` | Godot refuses to export **any** arm64 target without it — iOS, Android, and Apple Silicon macOS alike. |
+| `physics/3d/physics_engine` | `Jolt Physics` | Locked decision. It is the default since 4.4, but stated explicitly so the project does not silently follow a changed engine default. |
+| `application/run/max_fps.mobile` | `60` | Rendering uncapped on a 90/120 Hz phone panel buys nothing above the 60fps target and throttles the device — the most likely way to lose the frame-rate floor in a sustained session. Desktop stays uncapped. |
+| `display/window/stretch/mode` | `canvas_items` | Resolution-independent UI; desktop is a target alongside phones. |
+
+**Deliberately not set:** `rendering/lights_and_shadows/directional_shadow/soft_shadow_filter_quality`.
+Godot already ships a `.mobile` override of `0` for it, and feature overrides beat an explicitly-set
+base value — so setting the base only degrades the desktop tier, which is specified to get one
+directional shadow cascade.
+
+**Autoloads:** `FpsCounter` (debug builds, or `--fps`) and `InputRouter`. Both run every frame for
+the life of the process, so treat them as hot-path code.
 
 ---
 
@@ -58,6 +81,7 @@ hk-taxi-Q/
 │   └── tests/
 ├── game/                        # Godot project
 │   ├── project.godot
+│   ├── export_presets.cfg       # COMMITTED — never put signing credentials here
 │   ├── scenes/
 │   ├── scripts/
 │   │   ├── core/                # pure logic, minimal engine coupling
@@ -247,6 +271,12 @@ Desktop/Steam is a target, so input is abstracted from day one via a single acti
 genre convention and it keeps mobile input to two thumbs.
 
 `InputRouter` emits the action set; no gameplay script reads raw input events.
+
+It samples in `_physics_process`, not `_process`. Godot runs every physics step before idle
+processing, so a vehicle polling from `_physics_process` would otherwise read a sample one render
+frame stale — a guaranteed extra ~16.7 ms of latency, doubling whenever the render rate falls below
+the physics tick. Autoloads are the first children of `root`, so the router runs before any gameplay
+node in the same tick.
 
 ---
 

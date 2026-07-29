@@ -9,7 +9,7 @@ them without explicit instruction from the user.
 
 | Decision | Value | Why |
 |---|---|---|
-| Engine | **Godot 4.6**, Mobile renderer | Commercial mobile app target; native perf; MIT, no royalties |
+| Engine | **Godot 4.7**, Mobile renderer | Commercial mobile app target; native perf; MIT, no royalties |
 | Physics | **Jolt** (Godot default since 4.4) | Wheeled vehicle controller built in |
 | Language | **GDScript** (not C#) | C# web export is unsupported, and iOS/Android C# export is experimental. See `docs/ARCHITECTURE.md`. |
 | ETL | **Python 3.11+** (GDAL/OGR, geopandas) | Best geodata tooling; runs offline at build time |

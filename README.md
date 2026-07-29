@@ -32,7 +32,7 @@ The design goal is narrow and testable:
 
 | | |
 |---|---|
-| Engine | Godot 4.6, GDScript, Jolt physics |
+| Engine | Godot 4.7, GDScript, Jolt physics |
 | Pipeline | Python 3.11+ — GDAL/OGR, geopandas |
 | Targets | iOS, Android, desktop/Steam; web export for a demo slice |
 | Region | Wan Chai → Causeway Bay, ~1.5 km² |
@@ -56,17 +56,29 @@ The ETL runs **at build time only**. The game ships static assets and makes no n
 
 ## Getting started
 
-Nothing to run yet. First tasks are `P0-2` and `P0-5` in [`docs/PLAN.md`](docs/PLAN.md).
+The Godot project is scaffolded. You need [Godot 4.7](https://godotengine.org/) — on macOS,
+`brew install --cask godot`.
 
-Once the pipeline exists:
+```bash
+# Open the editor
+open -a Godot --args --path "$PWD/game"
+
+# Or run the current scene directly
+/Applications/Godot.app/Contents/MacOS/Godot --path game
+
+# Export (macOS + web; needs export templates installed)
+tools/export.sh
+```
+
+There is no ETL yet — `P0-4`. Once the pipeline exists:
 
 ```bash
 # Build city assets
 cd etl
 python -m pipeline --city hong_kong --region wan_chai
-
-# Then open game/ in Godot 4.6
 ```
+
+Next task is `P0-5`, the grey-box fun test — see [`docs/PLAN.md`](docs/PLAN.md).
 
 ---
 

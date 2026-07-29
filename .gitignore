@@ -3,8 +3,11 @@ etl/sources/
 etl/out/
 etl/.cache/
 
-# Generated game assets are build output; authored assets ARE committed
-game/assets/generated/
+# Generated game assets are build output; authored assets ARE committed.
+# The directory itself must survive a fresh clone or Godot errors on a missing
+# res:// path, so keep the .gitkeep and ignore only the contents.
+game/assets/generated/*
+!game/assets/generated/.gitkeep
 
 # Godot
 .godot/

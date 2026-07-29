@@ -35,11 +35,24 @@ Run these **in parallel**; `P0-2` is the one that can force a region change.
   answer may force a move to Tsim Sha Tsui.
 
 ### `P0-3` Godot project scaffold
-- **Deliverable:** `game/` opens in Godot 4.6; Mobile renderer configured; export presets for iOS,
-  Android, desktop, and web-demo; a scene that renders a cube at 60fps.
-- **Accept:** builds and runs on the device floor (see `PROGRESS.md` open questions); FPS counter
-  visible.
+- **Deliverable:** `game/` opens in Godot 4.7; Mobile renderer configured; export presets for iOS,
+  Android, desktop, and web-demo committed as configuration; a scene that renders a cube at 60fps.
+- **Accept:** project imports with no errors; FPS counter visible; desktop and web presets export
+  successfully.
 - **Deps:** none.
+- **Note:** the original acceptance criterion read "builds and runs on the device floor". That
+  needs the Android SDK, Xcode, a signing identity and a physical 2019-era handset — a separate
+  piece of work, not a scaffold. Split out as `P0-3b`.
+
+### `P0-3b` Mobile device build verification
+- **Deliverable:** a signed development build installed and running on the device floor, on both
+  an iOS and an Android handset. Real reverse-domain bundle identifier replacing the placeholder
+  in `export_presets.cfg`.
+- **Accept:** the cube scene (or whatever `P0-5` has produced by then) runs on-device with the FPS
+  counter visible; measured FPS recorded in `PROGRESS.md`.
+- **Deps:** `P0-3`. Also needs `Q4` (device floor) confirmed and physical hardware on hand.
+- **Note:** not on the critical path — `P0-5` does not depend on it. But it must land before
+  `P2-6` can measure anything meaningful.
 
 ### `P0-4` ETL scaffold
 - **Deliverable:** `etl/` Python package; `hong_kong.yaml` config; `crs.py` with EPSG:2326 →
