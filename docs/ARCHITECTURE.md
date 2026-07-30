@@ -84,6 +84,7 @@ hk-taxi-Q/
 │   │   ├── config.py            # loads cities/*.yaml — the only route city facts take in
 │   │   ├── crs.py               # ONLY module that knows about EPSG:2326
 │   │   ├── fetch.py             # download from CSDI / data.gov.hk, cache to sources/
+│   │   ├── documents.py         # read/write a stage's JSON + its schema check; no policy
 │   │   ├── gltf.py              # glTF read + GLB write; no dependency, see its docstring
 │   │   ├── gdb.py               # geodatabase layers + WKB → numpy; format only, no policy
 │   │   ├── mesh.py              # merge, partition, LOD collapse — geometry, no policy
@@ -536,12 +537,14 @@ than letting the next one read the previous build's output.
 
 `fetch` is the only stage that touches the network; everything after it reads `etl/sources/`.
 
-**`export` also validates.** It re-reads what it just wrote and checks the one class of error no
-single stage can see — whether the documents agree with *each other*: a fare node naming an edge
-the graph no longer has, a tile whose GLB was never written, a document left over from another
-region, geometry outside the declared bounds. Each stage's output is internally valid in all four
-cases. `python -m pipeline.export --city … --region … --check` runs the checks alone and exits
-non-zero on any finding.
+**`export` also validates.** It re-reads what it just wrote and checks what no single stage
+checks: a fare node naming an edge the graph no longer has, a tile whose GLB was never written, a
+document left over from another region, a manifest listing tiles the building stage did not build,
+geometry outside the declared bounds. Each stage's output is internally valid in every one of
+those cases. Everything the manifest asserts is checked against the document it came from, never
+against the manifest itself — a stale `city.json` is perfectly self-consistent, so checking it
+against itself confirms nothing. `python -m pipeline.export --city … --region … --check` runs the
+checks alone and exits non-zero on any finding.
 
 The ETL is **not** run by CI on every commit — it is run when source data or pipeline logic
 changes, and its output is treated as a versioned build artefact.

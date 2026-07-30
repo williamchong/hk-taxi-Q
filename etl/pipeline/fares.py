@@ -36,7 +36,6 @@ spellings and the snap limit all arrive from `config/cities/*.yaml`.
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -47,6 +46,7 @@ import numpy as np
 
 from pipeline.config import TAXI_STAND, CityConfig, FareCategory, FareGroup, load_city
 from pipeline.crs import transformer
+from pipeline.documents import round_position, write_document
 from pipeline.fetch import cached_source, read_feature_collection
 from pipeline.roads import (
     ROADGRAPH_NAME,
@@ -54,7 +54,6 @@ from pipeline.roads import (
     plan_lengths,
     plan_steps,
     read_graph,
-    round_position,
 )
 
 log = logging.getLogger(__name__)
@@ -228,7 +227,7 @@ def build_region(
 ) -> FareReport:
     """Read the region's taxi points and write its `fares.json`."""
     out_dir = city.out_dir(region_id, out_root)
-    graph = read_graph(out_dir / ROADGRAPH_NAME)
+    graph = read_graph(out_dir / ROADGRAPH_NAME, city.id, region_id)
     segments = Segments.of(graph["edges"])
 
     style = city.fares
@@ -331,7 +330,6 @@ def _text(properties: dict[str, Any], name: str, null_values: Sequence[str]) -> 
 
 
 def _write(out_dir: Path, city: CityConfig, region_id: str, report: FareReport) -> int:
-    out_dir.mkdir(parents=True, exist_ok=True)
     document = {
         "schema_version": FARES_SCHEMA,
         "city_id": city.id,
@@ -351,9 +349,7 @@ def _write(out_dir: Path, city: CityConfig, region_id: str, report: FareReport) 
             for node in report.nodes
         ],
     }
-    path = out_dir / FARES_NAME
-    path.write_text(json.dumps(document, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    return path.stat().st_size
+    return write_document(out_dir / FARES_NAME, document)
 
 
 # --------------------------------------------------------------------------

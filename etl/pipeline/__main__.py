@@ -62,7 +62,14 @@ def main(argv: list[str] | None = None) -> int:
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    names = list(STAGES)[list(STAGES).index(args.start) :]
+    order = list(STAGES)
+    names = order[order.index(args.start) :]
+    if args.force and "fetch" not in names:
+        # Refused rather than ignored. `--from roads --force` reads as "rebuild
+        # everything from roads, forcefully" and would silently do nothing of
+        # the kind — the flag belongs to a stage that is not going to run.
+        parser.error(f"--force applies to fetch, which --from {args.start} skips")
+
     started = time.perf_counter()
     for position, name in enumerate(names, start=1):
         stage_argv = ["--city", args.city, "--region", args.region]

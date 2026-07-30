@@ -28,7 +28,6 @@ what lets this stage run in a second without touching the geodatabase.
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 from collections import defaultdict
 from dataclasses import dataclass
@@ -37,6 +36,7 @@ from pathlib import Path
 import numpy as np
 
 from pipeline.config import CityConfig, RoadSurface, load_city
+from pipeline.documents import write_document
 from pipeline.gltf import Bounds, MeshData, normalise, write_glb
 from pipeline.mesh import select_triangles
 from pipeline.roads import ROADGRAPH_NAME, plan_lengths, plan_steps, read_graph
@@ -444,7 +444,7 @@ def build_region(
 ) -> SurfaceReport:
     """Read the region's road graph and write its `roads.glb`."""
     out_dir = city.out_dir(region_id, out_root)
-    graph = read_graph(out_dir / ROADGRAPH_NAME)
+    graph = read_graph(out_dir / ROADGRAPH_NAME, city.id, region_id)
     style = city.roads.surface
 
     edges = [_prepare(edge, style) for edge in graph["edges"]]
@@ -668,24 +668,19 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Sur
     and this records only what the surface stage knows so the two stages stay
     independently runnable.
     """
-    out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / SURFACE_MANIFEST_NAME).write_text(
-        json.dumps(
-            {
-                "schema_version": SURFACE_MANIFEST_SCHEMA,
-                "city_id": city.id,
-                "region_id": region_id,
-                "mesh": SURFACE_NAME,
-                "mesh_name": SURFACE_MESH_NAME,
-                "triangles": report.triangles,
-                "vertices": report.vertices,
-                "bytes": report.bytes,
-                "aabb": report.aabb,
-            },
-            indent=2,
-        )
-        + "\n",
-        encoding="utf-8",
+    write_document(
+        out_dir / SURFACE_MANIFEST_NAME,
+        {
+            "schema_version": SURFACE_MANIFEST_SCHEMA,
+            "city_id": city.id,
+            "region_id": region_id,
+            "mesh": SURFACE_NAME,
+            "mesh_name": SURFACE_MESH_NAME,
+            "triangles": report.triangles,
+            "vertices": report.vertices,
+            "bytes": report.bytes,
+            "aabb": report.aabb,
+        },
     )
 
 

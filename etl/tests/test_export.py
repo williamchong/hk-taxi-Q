@@ -274,14 +274,14 @@ class TestValidation:
         region.documents[FARES_NAME]["nodes"][0]["nearest_edge"] = 999
 
         assert region.check() == [
-            "fare node f_001 names edge 999, which roadgraph.json does not have"
+            "1 fare nodes name an edge roadgraph.json does not have: ['f_001']"
         ]
 
     def test_an_edge_t_off_the_end_of_its_edge(self, region) -> None:
         region.build()
         region.documents[FARES_NAME]["nodes"][0]["edge_t"] = 1.5
 
-        assert region.check() == ["fare node f_001 has edge_t 1.5 outside [0, 1]"]
+        assert region.check() == ["1 fare nodes have an edge_t outside [0, 1]: ['f_001']"]
 
     def test_a_document_left_over_from_another_region(self, region) -> None:
         """Each document is perfectly valid on its own. Only the set is wrong."""
@@ -316,6 +316,28 @@ class TestValidation:
 
         assert len(problems) == 4
         assert all("outside bounds_game" in problem for problem in problems)
+
+    def test_a_tile_the_manifest_forgot(self, region) -> None:
+        """A stale manifest is self-consistent by definition — its tile list and
+        its bounds were written together. Only `buildings.json` can say a tile
+        is missing from it."""
+        region.build()
+        manifest = region.manifest()
+        del manifest["tiles"][1]
+        (region.out_dir / CITY_NAME).write_text(json.dumps(manifest), encoding="utf-8")
+
+        assert region.check() == ["1 tiles in buildings.json are not in city.json: ['t_01_00']"]
+
+    def test_a_tile_the_building_stage_never_built(self, region) -> None:
+        region.build()
+        manifest = region.manifest()
+        manifest["tiles"][1]["id"] = "t_09_09"
+        (region.out_dir / CITY_NAME).write_text(json.dumps(manifest), encoding="utf-8")
+
+        assert region.check() == [
+            "1 tiles in buildings.json are not in city.json: ['t_01_00']",
+            "1 tiles in city.json were not built by buildings.json: ['t_09_09']",
+        ]
 
     def test_two_tiles_with_the_same_id(self, region) -> None:
         region.build()
@@ -379,6 +401,17 @@ class TestOrchestrator:
         orchestrator.main(["--city", "testville", "--region", REGION, "--from", "surface"])
 
         assert [name for name, _ in calls] == ["surface", "fares", "export"]
+
+    def test_force_without_fetch_is_refused_rather_than_ignored(self, monkeypatch) -> None:
+        calls: list[tuple[str, list[str]]] = []
+        self._stub(monkeypatch, calls)
+
+        with pytest.raises(SystemExit):
+            orchestrator.main(
+                ["--city", "testville", "--region", REGION, "--from", "roads", "--force"]
+            )
+
+        assert calls == []
 
     def test_a_failing_stage_stops_the_run(self, monkeypatch) -> None:
         """Every later stage reads what an earlier one writes, so carrying on

@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import argparse
 import itertools
-import json
 import logging
 import re
 import unicodedata
@@ -46,6 +45,7 @@ from pipeline.config import (
     SourceLayer,
     load_city,
 )
+from pipeline.documents import read_document, round_position, write_document
 from pipeline.fetch import cached_source
 from pipeline.terrain import HeightField
 
@@ -700,63 +700,24 @@ def _components(node_count: int, edges: Iterable[Edge]) -> list[int]:
 # --------------------------------------------------------------------------
 
 
-def round_position(point: tuple[float, float, float]) -> list[float]:
-    """A position at millimetre precision, without a negative zero.
-
-    A vertex clipped to the region's western edge lands on -0.0, which is a
-    legal JSON number and a confusing thing to read in a file whose whole point
-    is that the region starts at zero. Adding 0.0 collapses it: IEEE 754 makes
-    -0.0 + 0.0 exactly +0.0, and leaves every other value alone.
-
-    Public because every stage writing a position into the data contract needs
-    the same treatment, and the reason is subtle enough that a second copy
-    would eventually lose it.
-    """
-    return [round(value, 3) + 0.0 for value in point]
-
-
-def read_document(path: Path, schema_version: int, rebuild: str) -> dict:
-    """A stage's JSON output, refusing a schema the reader was not written for.
-
-    Every generated document carries a `schema_version`, and every stage that
-    reads one has to decide what to do about it. Doing that in one place means
-    the answer is the same everywhere: refuse, and say which command rebuilds
-    the file. A stale document that parses is the failure this exists to stop —
-    it produces plausible output from the wrong data.
-
-    `rebuild` is the command to run, not a description of it, so the message can
-    be copied straight into a shell. The counterpart on the game side is
-    `game/scripts/city/generated_document.gd`, which pushes rather than raises
-    because a missing file there is a dev scene with nothing to draw.
-    """
-    try:
-        text = path.read_text(encoding="utf-8")
-    except FileNotFoundError as missing:
-        raise FileNotFoundError(f"{path} does not exist. Run `{rebuild}` first.") from missing
-
-    document = json.loads(text)
-    version = document.get("schema_version")
-    if version != schema_version:
-        raise ValueError(
-            f"{path} declares schema_version {version!r}, this stage reads {schema_version}. "
-            f"Re-run `{rebuild}`."
-        )
-    return document
-
-
-def read_graph(path: Path) -> dict:
+def read_graph(path: Path, city_id: str, region_id: str) -> dict:
     """The road graph, at the version this build understands.
 
     Lives beside the writer below rather than in either consumer: `P1-4` draws
     the graph and `P1-5` snaps to it, and a second copy of this check is a
     second place for the version to be read wrongly.
+
+    Takes the city and region only to name them in the rebuild command. A hint
+    that does not run is worse than no hint — `python -m pipeline.roads` on its
+    own exits on a missing argument, which is a second puzzle to solve while
+    already stuck on the first.
     """
-    return read_document(path, ROADGRAPH_SCHEMA, "python -m pipeline.roads")
+    rebuild = f"python -m pipeline.roads --city {city_id} --region {region_id}"
+    return read_document(path, ROADGRAPH_SCHEMA, rebuild)
 
 
 def _write(out_root: Path | None, city: CityConfig, region_id: str, report: RoadReport) -> int:
     out_dir = city.out_dir(region_id, out_root)
-    out_dir.mkdir(parents=True, exist_ok=True)
     document = {
         "schema_version": ROADGRAPH_SCHEMA,
         "city_id": city.id,
@@ -787,9 +748,7 @@ def _write(out_root: Path | None, city: CityConfig, region_id: str, report: Road
             for turn in report.turn_restrictions
         ],
     }
-    path = out_dir / ROADGRAPH_NAME
-    path.write_text(json.dumps(document, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    return path.stat().st_size
+    return write_document(out_dir / ROADGRAPH_NAME, document)
 
 
 def _ground(

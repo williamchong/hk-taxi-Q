@@ -19,7 +19,6 @@ LOD cell sizes all arrive from `config/cities/*.yaml`.
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import math
 import zipfile
@@ -34,6 +33,7 @@ from numpy.typing import ArrayLike
 
 from pipeline.config import BuildingStyle, CityConfig, RegionConfig, load_city
 from pipeline.crs import GameTransform
+from pipeline.documents import write_document
 from pipeline.fetch import artefact_path, cached_tiles
 from pipeline.gltf import Bounds, MeshData, read_scene, write_glb
 from pipeline.mesh import EmptyMeshError, collapse, merge, select_triangles
@@ -371,22 +371,17 @@ def _write_manifest(
     too. This file records only what the building stage knows, so the two stages
     stay independently runnable.
     """
-    out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / BUILDINGS_MANIFEST_NAME).write_text(
-        json.dumps(
-            {
-                "schema_version": BUILDINGS_MANIFEST_SCHEMA,
-                "city_id": city.id,
-                "region_id": region.id,
-                "tile_size_m": grid.tile_size_m,
-                "grid": {"columns": grid.columns, "rows": grid.rows},
-                "lod_cell_sizes_m": list(city.buildings.lod_cell_sizes_m),
-                "tiles": [asdict(tile) for tile in report.tiles],
-            },
-            indent=2,
-        )
-        + "\n",
-        encoding="utf-8",
+    write_document(
+        out_dir / BUILDINGS_MANIFEST_NAME,
+        {
+            "schema_version": BUILDINGS_MANIFEST_SCHEMA,
+            "city_id": city.id,
+            "region_id": region.id,
+            "tile_size_m": grid.tile_size_m,
+            "grid": {"columns": grid.columns, "rows": grid.rows},
+            "lod_cell_sizes_m": list(city.buildings.lod_cell_sizes_m),
+            "tiles": [asdict(tile) for tile in report.tiles],
+        },
     )
 
 
