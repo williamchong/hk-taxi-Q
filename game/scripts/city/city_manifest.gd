@@ -100,8 +100,10 @@ static func load_manifest() -> CityManifest:
 	return manifest
 
 
-## Every file a build ships, in manifest order: the three documents, then every
-## tier of every tile. What `verify_city.gd` checks and what an export contains.
+## Every file the manifest *names*, in order: the three documents, then every
+## tier of every tile. Not every file a build ships — `city.json` itself is not
+## in the list, because it names the others and not itself. A caller copying a
+## region wants this plus `PATH`, which is what `tools/sync_generated.sh` does.
 func shipped() -> PackedStringArray:
 	var paths: PackedStringArray = [road_graph_path, road_surface_path, fares_path]
 	for tile: Tile in tiles:
@@ -123,6 +125,12 @@ static func _tile(entry: Dictionary) -> Tile:
 	tile.id = str(entry.get("id", ""))
 	for relative: String in entry.get("lods", []):
 		tile.lods.append(_resolve(relative))
+
+	if tile.lods.is_empty():
+		# Reported here rather than left to the caller, which would otherwise
+		# reach `load("")` — a hard "Resource file not found: res://" that names
+		# neither the tile nor the manifest.
+		push_error("tile %s names no LOD files" % tile.id)
 
 	var corners: Array = entry.get("aabb", [])
 	if corners.size() == 2:

@@ -169,13 +169,14 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ❌ blocked
 | Q13 | Nothing ramps between elevation levels. All 36 nodes where two levels meet step by a whole deck height — 6 m at a flyover, 8 m at a tunnel mouth | The elevated and underground networks are topologically connected and geometrically unreachable; a third of the region's road area cannot be driven onto | `P2-2`? | 🔴 **Open — raised 2026-07-30 by `P1-4`** |
 | Q14 | Taxi stands carry **operating-time restrictions** in `Status_EN` — eight territory-wide, one in the region (Russell Street, cross-harbour 1200-0600) — and `P1-5` discards them | A part-time cross-harbour stand is modelled as a full-time one. Small today; it is exactly the kind of detail `P3-9`'s authenticity test would catch | `P3-1` | 🟡 **Open — raised 2026-07-31 by `P1-5`**, deliberately deferred |
 | Q15 | Fare nodes snap to the road graph by **plan distance only**, because the published points are 2D | A stand under a flyover has nothing in it to prefer the street below over the deck above. No node in Wan Chai is affected — every winner is level 0 — but this shares a root cause with `Q13` | `P2-2` | 🟡 **Open — raised 2026-07-31 by `P1-5`**, not reachable with this source |
-| Q16 | One region of buildings ships **102.6 MB** against a 200 MB bundle budget, 74.7 MB of it LOD0 — before any vehicle, audio or UI asset, and before a second region | Half the iOS cellular threshold is spent on the part of the game the player looks at but never touches. Either the tiers do not all ship, or LOD0 gets cheaper, or the budget was wrong | `P2-6` | 🔴 **Open — raised 2026-07-31 by `P1-6`** |
+| Q16 | One region measures **56.4 MB** in the PCK against a 200 MB bundle budget — before any vehicle, audio or UI asset, and before a second region. Unreferenced assets shipped alongside it until `P1-7` measured the export | Half the iOS cellular threshold is spent on the part of the game the player looks at but never touches. Either the tiers do not all ship, or LOD0 gets cheaper, or the budget was wrong | `P2-6` | 🔴 **Open — raised 2026-07-31 by `P1-6`** |
 
-### Q16 — half the bundle is spent, and the game has not started
+### Q16 — how much of the bundle one region costs, measured rather than summed
 
-`export.py` reports what a build ships, because that is the number the manifest defines: the three
-documents it names plus every path in `tiles[].lods`. For Wan Chai that is **199 files and
-102.6 MB**, against `ARCHITECTURE.md`'s 200 MB mobile bundle budget.
+`export.py` reports what the *manifest* names: the three documents plus every path in
+`tiles[].lods` — **199 files and 102.6 MB** of source for Wan Chai, against `ARCHITECTURE.md`'s
+200 MB mobile bundle budget. That was the figure this question opened on, and it is not the
+bundle figure. See the measurement below.
 
 | Part | Size |
 |---|---|
@@ -185,6 +186,39 @@ documents it names plus every path in `tiles[].lods`. For Wan Chai that is **199
 | `roads.glb` | 1.5 MB |
 | `roadgraph.json` | 0.65 MB |
 | `city.json`, `fares.json` | 0.04 MB |
+
+⚠️ **Source bytes are not bundle bytes. `P1-7` measured the real thing, and both numbers above are
+wrong in opposite directions.**
+
+Godot ships what is in `.godot/imported/`, never the source file. A `.glb` becomes a compact binary
+`.scn`; a `.jpg` becomes a `.ctex` whose size depends on the import mode and can be far *larger*
+than the source. Measured on a real `Web Demo` export:
+
+| | Source on disk | In the PCK |
+|---|---|---|
+| 195 tile scenes | 100.4 MB | **48 MB** |
+| `roads.glb` | 1.5 MB | 1.1 MB |
+| **Whole export (`index.pck`)** | — | **56.4 MB** |
+
+So the region costs **56.4 MB, not 102.6 MB** — Godot's `.scn` is roughly half its glTF source.
+
+The other direction was worse. `game/assets/generated/` also held **120 MB of `P1-2t` terrain
+evaluation** referenced by no scene, script, tool or manifest, and `export_presets.cfg` uses
+`export_filter="all_resources"` with an empty `exclude_filter`, so it shipped. Two of those files
+were byte-identical copies of the same aerial JPEG — one of them not even in `terrain/` — and each
+imported at `compress/mode=0` (lossless) to a **79 MB** `.ctex`, *expanding* 39 MB of source into
+79 MB of bundle. The measured PCK was **222.8 MB, over budget on its own**, before the 38.8 MB of
+wasm beside it.
+
+Deleting the two duplicates took the PCK from **222.8 MB to 56.4 MB — 166.3 MB measured**, with the
+city still fully present (195 tile scenes verified in the export). The terrain GLB stays for the
+visual judgement `P1-2t` deferred; it carries its own embedded copy of the texture and imports to
+4.4 MB.
+
+Three lessons. Bundle size must be **measured from a PCK**, never summed from source files. "Nothing
+references it" was a property nothing in the project checked, because every check starts from the
+manifest and the manifest had forgotten these — `tools/sync_generated.sh` now sweeps the whole asset
+tree, not `tiles/` alone. And a lossless-mode texture import is a bundle trap that grows silently.
 
 Raised now rather than at `P2-6` because it is cheap to note and expensive to discover late — but
 deliberately **not** acted on, because the answer depends on decisions that are not made yet. Three
@@ -503,11 +537,16 @@ offset moves a corner by metres.
 It was proven non-vacuous before being believed, the same way `P1-6`'s validator was: nudge one
 tile 0.5 m east, point `fares` at a file that is not there, shrink `bounds_game` by 100 m. Fifteen
 findings, exit 1, nothing spurious, and the offset reported as *0.500 m out*. Two real bugs in the
-tool surfaced on its first run — it grew *both* boxes before an `encloses` test, which restored the
-tie it was meant to break for the tiles that define `bounds_game`; and it read `global_transform`,
-which returns identity outside the tree, and a `--script` run has no tree. Transforms are now
-accumulated by hand, which also means a transformed importer root would be caught rather than
-silently applied.
+tool surfaced on its first run — it grew *both* boxes before an `encloses` test, which cancels out
+and leaves no tolerance at all for the millimetre rounding that separates `bounds_game` from the
+tile AABBs it was summed from; and it read `global_transform`, which returns identity outside the
+tree, and a `--script` run has no tree. Transforms are now accumulated by hand, which also means a
+transformed importer root would be caught rather than silently applied.
+
+> ⚠️ An earlier version of this entry said `encloses` "does not treat a shared face as enclosed".
+> That is false — measured on 4.7.1, an AABB encloses an identical one, and growing both by the
+> same epsilon still returns true. The code was right for a reason the comment got wrong, which is
+> its own kind of latent bug: the next person to touch the tolerance would have reasoned from it.
 
 **What it cannot check is z-fighting**, and that is stated in the tool rather than glossed. There is
 no *headless* assertion for it — `--headless` loads the dummy rasteriser, so `get_texture()` returns

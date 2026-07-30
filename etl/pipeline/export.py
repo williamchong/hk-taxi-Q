@@ -248,15 +248,16 @@ def _size(path: Path) -> int:
         return 0
 
 
-def read_manifest(city: CityConfig, region_id: str, *, out_root: Path | None = None) -> dict:
-    """The region's `city.json`, refusing a stale one by schema version.
+# The manifest read back as an `Input`, which is what it is once written — same
+# version refusal, same rebuild hint, no second copy of the command string. It
+# stays out of `INPUTS` because that tuple is what this stage *reads to write
+# it*; this is for the two callers that read back what it wrote.
+_MANIFEST = Input(CITY_NAME, CITY_SCHEMA, "export")
 
-    Note the manifest is *not* one of `INPUTS`: those are what this stage reads
-    to write it. This is for the two callers that read back what was written —
-    `validate`, and `--list` on behalf of `tools/sync_generated.sh`.
-    """
-    rebuild = f"python -m pipeline.export --city {city.id} --region {region_id}"
-    return read_document(city.out_dir(region_id, out_root) / CITY_NAME, CITY_SCHEMA, rebuild)
+
+def read_manifest(city: CityConfig, region_id: str, *, out_root: Path | None = None) -> dict:
+    """The region's `city.json`, refusing a stale one by schema version."""
+    return _MANIFEST.read(city.out_dir(region_id, out_root), city.id, region_id)
 
 
 def shipped(manifest: dict) -> list[str]:
@@ -521,10 +522,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.list_shipped:
         # stdout, while logging goes to stderr, so `tools/sync_generated.sh` can
-        # read the list without parsing prose. It copies exactly what the
-        # manifest names, which is how the two intermediates in the same
-        # directory stay out of the game.
-        print("\n".join(shipped(read_manifest(city, args.region))))
+        # read the list without parsing prose. The manifest leads, because a
+        # caller copying a region needs it and `shipped` deliberately omits it.
+        names = [CITY_NAME, *shipped(read_manifest(city, args.region))]
+        print("\n".join(names))
         return 0
 
     log.info("%s / %s", city.name, region.name)

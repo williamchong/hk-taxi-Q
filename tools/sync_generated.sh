@@ -29,28 +29,46 @@ if [[ ! -f "$SRC/city.json" ]]; then
 	exit 1
 fi
 
+# Validate before copying a single byte. rsync --files-from aborts on the first
+# name it cannot find and leaves everything after it uncopied, which would put
+# fresh tiles beside a stale manifest — a half-synced directory that every
+# check downstream would then read as authoritative.
+(cd "$ROOT/etl" && "$PYTHON" -m pipeline.export --city "$CITY" --region "$REGION" --check)
+
 LIST="$(mktemp)"
 trap 'rm -f "$LIST"' EXIT
 
 # --list writes the paths to stdout and its logging to stderr, so this reads
-# cleanly. city.json is appended because it names the others but not itself.
+# cleanly. city.json leads the list; it names the others but not itself.
 (cd "$ROOT/etl" && "$PYTHON" -m pipeline.export --city "$CITY" --region "$REGION" --list) >"$LIST"
-echo "city.json" >>"$LIST"
+if [[ ! -s "$LIST" ]]; then
+	echo "the manifest named no files — refusing to treat everything as stale" >&2
+	exit 1
+fi
+# The sweep below deletes whatever is not in this list, so a --list that stopped
+# emitting the manifest would delete the manifest. Pinned here, at the use.
+if ! grep -qxF "city.json" "$LIST"; then
+	echo "--list did not name city.json; the sweep would delete it" >&2
+	exit 1
+fi
 
 mkdir -p "$DST"
 rsync -a --files-from="$LIST" "$SRC/" "$DST/"
 
-# A tile the previous build wrote and this one did not. Left behind it costs
-# bundle size and nothing complains, because every check starts from the
-# manifest and the manifest has forgotten it. The .import sidecar goes with it;
-# an orphaned one makes Godot re-scan on the next editor open.
-if [[ -d "$DST/tiles" ]]; then
-	while IFS= read -r stale; do
-		echo "  removing stale ${stale#"$DST/"}"
-		rm -f "$stale" "$stale.import"
-	done < <(find "$DST/tiles" -name '*.glb' | while IFS= read -r found; do
-		grep -qxF "${found#"$DST/"}" "$LIST" || echo "$found"
-	done)
-fi
+# Anything the manifest does not name. Left behind it costs bundle size and
+# nothing complains, because every check in the project starts from the
+# manifest and the manifest has forgotten it — 120 MB of P1-2t terrain
+# evaluation was shipping this way. The sweep covers the whole tree rather than
+# tiles/ alone, which is where the first version of this stopped.
+#
+# .import sidecars follow their asset rather than being matched themselves, and
+# .gitkeep is committed. grep -vxF -f does the whole comparison in one pass;
+# per-file greps would delete on any grep failure, including an unreadable list.
+while IFS= read -r stale; do
+	echo "  removing stale $stale"
+	rm -f "$DST/$stale" "$DST/$stale.import"
+done < <(cd "$DST" && find . -type f ! -name '*.import' ! -name '.gitkeep' \
+	| sed 's|^\./||' | grep -vxF -f "$LIST" || true)
+find "$DST" -type d -empty -delete
 
 echo "==> $CITY / $REGION -> ${DST#"$ROOT/"} ($(wc -l <"$LIST" | tr -d ' ') files)"

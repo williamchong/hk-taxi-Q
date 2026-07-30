@@ -126,7 +126,9 @@ func _ready() -> void:
 	add_child(instance)
 
 	_report(nodes.size(), counts, tethered, unresolved)
-	built.emit(bounds.position, bounds.end)
+	# Deferred for the reason `tile_preview.gd` spells out: `_ready` runs
+	# children-first, so a direct emit here beats a camera's connect.
+	built.emit.call_deferred(bounds.position, bounds.end)
 
 
 func _report(

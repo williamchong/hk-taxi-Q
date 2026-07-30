@@ -17,13 +17,14 @@ const MAX_SURFACES: int = 2
 
 
 func _init() -> void:
-	# Every tier the manifest names, rather than every GLB in the tile
-	# directory (`P1-7`). The set is the same today, but it is the shipped set
-	# by construction — a file the build no longer names stops being checked
+	# The manifest rather than a directory listing, so this checks the shipped
+	# set by construction — a file the build no longer names stops being checked
 	# instead of failing a check nobody will act on.
+	#
+	# `load_manifest` has already pushed the reason, which for a stale schema is
+	# not the missing-file hint; repeating one here would name the wrong fix.
 	var manifest: CityManifest = CityManifest.load_manifest()
 	if manifest == null:
-		printerr(CityManifest.missing_hint())
 		quit(1)
 		return
 
@@ -42,7 +43,7 @@ func _init() -> void:
 					printerr("  FAIL  ", file.get_file(), ": ", problem)
 
 	if checked == 0:
-		printerr(CityManifest.missing_hint())
+		printerr("  FAIL  %s names no tiles" % CityManifest.PATH)
 		quit(1)
 		return
 

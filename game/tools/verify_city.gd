@@ -19,6 +19,7 @@ extends SceneTree
 const GeneratedFares = preload("res://scripts/city/generated_fares.gd")
 const GeneratedRoadGraph = preload("res://scripts/city/generated_road_graph.gd")
 const GeneratedRoadSurface = preload("res://scripts/city/generated_road_surface.gd")
+const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
 ## How far a corner may move between the ETL's arithmetic and the imported mesh.
 ##
@@ -30,16 +31,23 @@ const TOLERANCE_M: float = 0.01
 
 
 func _init() -> void:
+	# `load_manifest` has already pushed the reason and the command that fixes
+	# it — and for a stale schema that reason is *not* the missing-file hint,
+	# so repeating one here would name the wrong fix half the time.
 	var manifest: CityManifest = CityManifest.load_manifest()
 	if manifest == null:
-		printerr(CityManifest.missing_hint())
+		quit(1)
+		return
+
+	# A manifest that parses but lists nothing would otherwise report "0 tiles,
+	# 0 problems" and exit 0 — the Phase 1 gate passing on an empty city.
+	if manifest.tiles.is_empty():
+		printerr("  FAIL  %s names no tiles" % CityManifest.PATH)
 		quit(1)
 		return
 
 	var problems: PackedStringArray = _check_documents(manifest)
-	var checked: int = 0
 	for tile: CityManifest.Tile in manifest.tiles:
-		checked += 1
 		var found: PackedStringArray = _check_tile(manifest, tile)
 		if found.is_empty():
 			print("  ok    ", tile.id)
@@ -55,7 +63,7 @@ func _init() -> void:
 			% [
 				manifest.city_id,
 				manifest.region_id,
-				checked,
+				manifest.tiles.size(),
 				manifest.shipped().size(),
 				problems.size(),
 			]
@@ -70,18 +78,20 @@ func _init() -> void:
 ## definitions drifting in the meantime.
 func _check_documents(manifest: CityManifest) -> PackedStringArray:
 	var problems: PackedStringArray = []
-	var declared := {
-		"road graph": [manifest.road_graph_path, GeneratedRoadGraph.PATH],
-		"road surface": [manifest.road_surface_path, GeneratedRoadSurface.PATH],
-		"fare nodes": [manifest.fares_path, GeneratedFares.PATH],
-	}
-	for what: String in declared:
-		var pair: Array = declared[what]
-		if not FileAccess.file_exists(pair[0]):
-			problems.append("%s: city.json names %s, which does not exist" % [what, pair[0]])
-		elif pair[0] != pair[1]:
-			problems.append("%s: city.json says %s, the locator says %s" % [what, pair[0], pair[1]])
+	problems.append_array(_check_document("road graph", manifest.road_graph_path, GeneratedRoadGraph.PATH))
+	problems.append_array(
+		_check_document("road surface", manifest.road_surface_path, GeneratedRoadSurface.PATH)
+	)
+	problems.append_array(_check_document("fare nodes", manifest.fares_path, GeneratedFares.PATH))
 	return problems
+
+
+func _check_document(what: String, named: String, locator: String) -> PackedStringArray:
+	if not FileAccess.file_exists(named):
+		return ["%s: city.json names %s, which does not exist" % [what, named]]
+	if named != locator:
+		return ["%s: city.json says %s, the locator says %s" % [what, named, locator]]
+	return []
 
 
 func _check_tile(manifest: CityManifest, tile: CityManifest.Tile) -> PackedStringArray:
@@ -91,15 +101,12 @@ func _check_tile(manifest: CityManifest, tile: CityManifest.Tile) -> PackedStrin
 		problems.append("%s names no LOD files" % tile.id)
 		return problems
 
-	# Only the containing box is grown, never both. `bounds_game` is the union
-	# of these very AABBs, so the extreme tiles touch it exactly on one face —
-	# growing the tile too would restore the tie and `encloses` does not treat
-	# a shared face as enclosed.
+	# Grown on the containing side only, never on both. `encloses` does accept a
+	# shared face, so a tie is not the problem — growing both simply cancels,
+	# leaving no tolerance at all for the millimetre rounding that separates
+	# `bounds_game` from the tile AABBs it was summed from.
+	var envelope: AABB = manifest.bounds.grow(TOLERANCE_M)
 	var declared: AABB = tile.aabb.grow(TOLERANCE_M)
-	if not manifest.bounds.grow(TOLERANCE_M).encloses(tile.aabb):
-		problems.append(
-			"%s: aabb %s is outside bounds_game %s" % [tile.id, tile.aabb, manifest.bounds]
-		)
 
 	for tier: int in tile.lods.size():
 		var path: String = tile.lods[tier]
@@ -109,17 +116,32 @@ func _check_tile(manifest: CityManifest, tile: CityManifest.Tile) -> PackedStrin
 			continue
 
 		var node: Node3D = packed.instantiate()
-		var measured: AABB = _measure(node)
+		var measured: AABB = MeshContract.bounds(node)
 		node.free()
 
 		if measured.size == Vector3.ZERO:
 			problems.append("%s: %s carries no mesh to measure" % [tile.id, path])
-		elif tier == 0:
+			continue
+
+		if tier == 0:
+			# Against the *measured* mesh, not against `tile.aabb`. `bounds_game`
+			# is summed from those declared corners, so comparing the two only
+			# ever confirms the manifest is self-consistent — which it always is,
+			# and which `export.py::_check_bounds` already checks against
+			# `buildings.json`. Geometry outside the region is the fact worth
+			# learning here, and tier 0 is where it would show: the coarser tiers
+			# are checked against `declared` below, which this pins to LOD0.
+			if not envelope.encloses(measured):
+				problems.append(
+					"%s: LOD0 spans %s, outside bounds_game %s"
+					% [tile.id, measured, manifest.bounds]
+				)
+
 			# The manifest's aabb is the full-detail mesh's, so tier 0 must agree
 			# corner for corner. Anything else is a transform, not a rounding.
 			var drift: float = maxf(
-				(measured.position - tile.aabb.position).abs().length(),
-				(measured.end - tile.aabb.end).abs().length()
+				measured.position.distance_to(tile.aabb.position),
+				measured.end.distance_to(tile.aabb.end)
 			)
 			if drift > TOLERANCE_M:
 				problems.append(
@@ -129,44 +151,11 @@ func _check_tile(manifest: CityManifest, tile: CityManifest.Tile) -> PackedStrin
 					)
 				)
 		elif not declared.encloses(measured):
-			# Coarser tiers may shrink — decimation drops vertices — but cannot
-			# reach outside the full-detail extent the streamer culls against.
+			# Coarser tiers may shrink — decimation drops vertices, and cluster
+			# means stay inside the convex hull — but cannot reach outside the
+			# full-detail extent the streamer culls against.
 			problems.append(
 				"%s: LOD%d spans %s, outside the declared %s" % [tile.id, tier, measured, tile.aabb]
 			)
 
 	return problems
-
-
-## The union of every mesh in `node`, in scene space. A zero-size box means
-## nothing was found, which the caller reports rather than passing.
-##
-## Transforms are accumulated by hand rather than read from
-## `Node3D.global_transform`, which returns identity and pushes an error outside
-## the tree — and a headless `--script` run has no tree to add to. The importer
-## is free to put the mesh under a transformed root, and that is exactly the
-## mistake this tool exists to catch, so the parent chain cannot be ignored.
-func _measure(node: Node) -> AABB:
-	var boxes: Array[AABB] = []
-	_collect(node, Transform3D.IDENTITY, boxes)
-	if boxes.is_empty():
-		# Empty rather than seeded: an AABB starts at the origin, and merging
-		# that in would drag the union back there.
-		return AABB()
-
-	var bounds: AABB = boxes[0]
-	for index: int in range(1, boxes.size()):
-		bounds = bounds.merge(boxes[index])
-	return bounds
-
-
-func _collect(node: Node, parent: Transform3D, into: Array[AABB]) -> void:
-	var spatial := node as Node3D
-	var here: Transform3D = parent * spatial.transform if spatial != null else parent
-
-	var instance := node as MeshInstance3D
-	if instance != null and instance.mesh != null:
-		into.append(here * instance.mesh.get_aabb())
-
-	for child: Node in node.get_children():
-		_collect(child, here, into)

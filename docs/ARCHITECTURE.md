@@ -585,9 +585,21 @@ still the acceptance.
 
 ⚠️ Both tools need Godot's global class cache, which lives in the gitignored `game/.godot/`. Open
 the project in the editor once (or `godot --headless --path game --editor --quit`) after a fresh
-clone, or `CityManifest` will not resolve. Note that a headless editor run **rewrites
-`project.godot`**, dropping `renderer/rendering_method.web`; `git checkout game/project.godot`
-afterwards.
+clone, or `CityManifest` will not resolve.
+
+⚠️ **Running Godot rewrites two committed config files**, stripping every comment in them and, in
+`project.godot`, the `renderer/rendering_method.web="gl_compatibility"` line the web export needs.
+Restore both afterwards and *verify*, because the restore command reports nothing useful:
+
+```
+git checkout game/project.godot game/export_presets.cfg
+git diff --exit-code game/project.godot game/export_presets.cfg   # this is the check
+```
+
+`git checkout` prints `Updated 0 paths from the index` whether or not it restored anything, so its
+output is not confirmation. `export_presets.cfg` loses the "never put signing credentials here"
+warning and the `TODO(P0-3b)` placeholder-identifier note; `project.godot` loses the settings
+rationale. Both were caught this way during `P1-7`, one of them twice.
 
 **To look at the result:** open `scenes/dev/city_preview.tscn` and run it (F6).
 It instantiates every tile — no streaming, no LOD switching, so it is *not* a performance
@@ -625,7 +637,7 @@ design.
 | `scripts/city/generated_road_graph.gd` | Same, for `roadgraph.json` |
 | `scripts/city/generated_fares.gd` | Same, for `fares.json`. Also holds the `kind` and `stand_category` spellings — the ETL is authoritative for those |
 | `scripts/city/generated_document.gd` | Parse and version-check a JSON document the ETL wrote. Shared by the locators above and by `CityManifest`, so the stale-copy message exists once |
-| `scripts/city/mesh_contract.gd` | The mesh rules every generated asset is held to; both verify tools read it |
+| `scripts/city/mesh_contract.gd` | The mesh rules every generated asset is held to, plus `triangles` and `bounds`. All three verify tools and both previews read it |
 | `scripts/city/preview_draw.gd` | Flat ribbons and the unshaded vertex-colour material, shared by the dev previews |
 | `scripts/city/tile_preview.gd` | Dev: instantiate every tile the manifest names, report triangles. The shape `CityStreamer` grows from |
 | `scripts/city/road_surface_preview.gd` | Dev: instantiate the road surface, report triangles and colliders |
