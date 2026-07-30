@@ -544,9 +544,15 @@ design.
 |---|---|
 | `scripts/city/generated_tiles.gd` | Where tile output lives and how to list it — one definition, two readers |
 | `scripts/city/generated_road_surface.gd` | Same, for `roads.glb` |
+| `scripts/city/generated_road_graph.gd` | Same, for `roadgraph.json` |
+| `scripts/city/generated_fares.gd` | Same, for `fares.json`. Also holds the `kind` and `stand_category` spellings — the ETL is authoritative for those |
+| `scripts/city/generated_document.gd` | Parse and version-check a JSON document the ETL wrote. Shared by the locators above, so the stale-copy message exists once |
 | `scripts/city/mesh_contract.gd` | The mesh rules every generated asset is held to; both verify tools read it |
+| `scripts/city/preview_draw.gd` | Flat ribbons and the unshaded vertex-colour material, shared by the dev previews |
 | `scripts/city/tile_preview.gd` | Dev: instantiate every tile, report bounds |
 | `scripts/city/road_surface_preview.gd` | Dev: instantiate the road surface, report triangles and colliders |
+| `scripts/city/road_preview.gd` | Dev: draw the road graph flat, with one-way arrows. Answered `Q12` |
+| `scripts/city/fare_preview.gd` | Dev: pin every fare node and tether it to `nearest_edge` at `edge_t` |
 | `scripts/city/drive_harness.gd` | Dev: return the car to its spawn when it leaves the world |
 | `scripts/camera/free_look_camera.gd` | Dev: fly camera. Bypasses `InputRouter` so dev keys stay out of the shipped action map |
 | `scenes/world/golden_hour.tscn` | The one lighting rig, per `ART_DESIGN.md`. Instance it rather than authoring a second Environment |

@@ -10,36 +10,18 @@
 ## before either of those exists.
 extends RefCounted
 
+const GeneratedDocument = preload("res://scripts/city/generated_document.gd")
+
 const PATH: String = "res://assets/generated/roadgraph.json"
 
-## Schema this understands. The data contract is versioned and the ETL bumps it
-## on any change, so a mismatch is a stale copy rather than something to parse
-## optimistically.
+## Schema this understands, matching `ROADGRAPH_SCHEMA` in
+## `etl/pipeline/roads.py`.
 const SCHEMA_VERSION: int = 1
 
 
-## The parsed graph, or null with a pushed error explaining which step failed.
+## The parsed graph, or an empty dictionary with a pushed message.
 static func load_graph() -> Dictionary:
-	if not FileAccess.file_exists(PATH):
-		push_warning(missing_hint())
-		return {}
-
-	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(PATH))
-	if typeof(parsed) != TYPE_DICTIONARY:
-		push_error("%s is not a JSON object" % PATH)
-		return {}
-
-	var graph: Dictionary = parsed
-	var version: int = int(graph.get("schema_version", -1))
-	if version != SCHEMA_VERSION:
-		push_error(
-			(
-				"%s declares schema_version %d, this build reads %d. Re-run the ETL and re-copy."
-				% [PATH, version, SCHEMA_VERSION]
-			)
-		)
-		return {}
-	return graph
+	return GeneratedDocument.load_object(PATH, SCHEMA_VERSION, missing_hint())
 
 
 ## Message for the case that reads as "there are no roads" rather than an error.

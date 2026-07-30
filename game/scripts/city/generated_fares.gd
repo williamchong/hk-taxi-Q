@@ -11,15 +11,19 @@
 ## before either of those exists.
 extends RefCounted
 
+const GeneratedDocument = preload("res://scripts/city/generated_document.gd")
+
 const PATH: String = "res://assets/generated/fares.json"
 
-## Schema this understands. The data contract is versioned and the ETL bumps it
-## on any change, so a mismatch is a stale copy rather than something to parse
-## optimistically.
+## Schema this understands, matching `FARES_SCHEMA` in `etl/pipeline/fares.py`.
 const SCHEMA_VERSION: int = 1
 
 ## `kind` values in the data contract. Spelled here rather than at each
 ## comparison so a rename in `ARCHITECTURE.md` has one place to land.
+##
+## ⚠️ These mirror `FARE_KINDS` in `etl/pipeline/config.py`, and nothing keeps
+## the two in step. The ETL is authoritative — it is what writes the strings —
+## so a change starts there and lands here.
 const TAXI_STAND: String = "taxi_stand"
 const PUDO: String = "pudo"
 const POI: String = "poi"
@@ -31,26 +35,7 @@ const CROSS_HARBOUR: String = "cross_harbour"
 
 ## The parsed fare nodes, or an empty dictionary with a pushed message.
 static func load_fares() -> Dictionary:
-	if not FileAccess.file_exists(PATH):
-		push_warning(missing_hint())
-		return {}
-
-	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(PATH))
-	if typeof(parsed) != TYPE_DICTIONARY:
-		push_error("%s is not a JSON object" % PATH)
-		return {}
-
-	var fares: Dictionary = parsed
-	var version: int = int(fares.get("schema_version", -1))
-	if version != SCHEMA_VERSION:
-		push_error(
-			(
-				"%s declares schema_version %d, this build reads %d. Re-run the ETL and re-copy."
-				% [PATH, version, SCHEMA_VERSION]
-			)
-		)
-		return {}
-	return fares
+	return GeneratedDocument.load_object(PATH, SCHEMA_VERSION, missing_hint())
 
 
 ## Message for the case that reads as "there are no fares" rather than an error.

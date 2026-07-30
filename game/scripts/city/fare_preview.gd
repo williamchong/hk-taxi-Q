@@ -21,27 +21,50 @@ extends Node3D
 
 const GeneratedFares = preload("res://scripts/city/generated_fares.gd")
 const GeneratedRoadGraph = preload("res://scripts/city/generated_road_graph.gd")
+const PreviewDraw = preload("res://scripts/city/preview_draw.gd")
 
-## Height of each pin above the node it marks. Tall by street standards on
-## purpose — the region is 1.65 km across and these have to read from the fly
-## camera without being hunted for.
+## The four cases the colours separate. An enum rather than two parallel
+## if-chains, so a colour can never end up without a matching label in the
+## report — which is the one way a diagnostic can quietly lie.
+enum Case { CROSS_HARBOUR_STAND, STAND, PICKUP_DROPOFF, DROPOFF }
+
+## Height of each pin above the node it marks.
+##
+## Tall by street standards on purpose: the region is 1.65 km across and these
+## have to read from the fly camera without being hunted for.
 @export var pin_height_m: float = 14.0
+
+## Width of the pin's base, where it is widest.
 @export var pin_width_m: float = 3.0
 
 ## Width of the tether laid from the node to its snapped point on the road.
 @export var tether_width_m: float = 0.6
+
+## How far the tether is lifted off the deck, so it does not z-fight the road
+## surface it crosses. The same job `road_preview.gd`'s `lift_m` does.
+@export var tether_lift_m: float = 0.2
 
 ## Emitted once built, with the bounds of the nodes, so a camera can frame them.
 signal built(low: Vector3, high: Vector3)
 
 # Colour is the whole diagnostic, so the four cases are deliberately far apart
 # rather than a ramp: a premium stand and a drop-off-only point must not be
-# distinguishable only by shade on a phone screen in daylight.
-const _CROSS_HARBOUR := Color(0.95, 0.30, 0.28)
-const _STAND := Color(0.98, 0.78, 0.20)
-const _PICKUP_DROPOFF := Color(0.35, 0.75, 0.95)
-## Drop-off only. Deliberately the dullest: no fare is ever hailed here.
-const _DROPOFF := Color(0.45, 0.45, 0.52)
+# distinguishable only by shade on a phone screen in daylight. Drop-off is the
+# dullest because no fare is ever hailed there.
+const _COLOURS: Dictionary[Case, Color] = {
+	Case.CROSS_HARBOUR_STAND: Color(0.95, 0.30, 0.28),
+	Case.STAND: Color(0.98, 0.78, 0.20),
+	Case.PICKUP_DROPOFF: Color(0.35, 0.75, 0.95),
+	Case.DROPOFF: Color(0.45, 0.45, 0.52),
+}
+
+const _LABELS: Dictionary[Case, String] = {
+	Case.CROSS_HARBOUR_STAND: "cross-harbour stands",
+	Case.STAND: "stands",
+	Case.PICKUP_DROPOFF: "pick-up/drop-off",
+	Case.DROPOFF: "drop-off only",
+}
+
 const _TETHER := Color(0.15, 0.90, 0.55)
 
 
@@ -58,56 +81,63 @@ func _ready() -> void:
 	# The graph is optional here: without it the pins still draw and only the
 	# tethers are missing. A preview that refused to show anything because the
 	# second file was stale would hide the thing it exists to show.
+	#
+	# This re-parses `roadgraph.json`, which `road_preview.gd` in the same scene
+	# has already parsed — 5 ms and 6 MB, measured. Deliberately not cached: a
+	# static memo would hold those 6 MB resident for the life of the process to
+	# save 5 ms once, and would serve stale data across an ETL re-run inside the
+	# editor. `P1-6`'s `city.json` merges the two documents and removes the
+	# second read by construction.
 	var edges: Dictionary = _edges_by_id(GeneratedRoadGraph.load_graph())
+	var tethering: bool = not edges.is_empty()
 
 	var surface := SurfaceTool.new()
 	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
 
-	var bounds := AABB()
-	var measured: bool = false
-	var counts := {}
+	var bounds := AABB(_position(nodes[0]), Vector3.ZERO)
+	var counts: Dictionary[Case, int] = {}
 	var tethered: int = 0
 	var unresolved: PackedStringArray = []
 
 	for node: Dictionary in nodes:
 		var at: Vector3 = _position(node)
-		_pin(surface, at, _colour_for(node))
-		counts[_label_for(node)] = int(counts.get(_label_for(node), 0)) + 1
+		var which: Case = _case_for(node)
+		_pin(surface, at, _COLOURS[which])
+		counts[which] = counts.get(which, 0) + 1
+		bounds = bounds.merge(AABB(at, Vector3.ZERO))
 
-		var box := AABB(at, Vector3.ZERO)
-		bounds = box if not measured else bounds.merge(box)
-		measured = true
-
-		if edges.is_empty():
+		if not tethering:
 			continue
-		var edge_id: int = int(node.get("nearest_edge", -1))
-		if not edges.has(edge_id):
+		if not node.has("nearest_edge") or not edges.has(int(node["nearest_edge"])):
 			# Reported rather than skipped silently. `nearest_edge` resolving is
 			# the acceptance criterion for `P1-5`, and the way it would fail in
 			# the game is an id that names no edge.
-			unresolved.append("%s -> edge %d" % [node.get("id", "?"), edge_id])
+			unresolved.append("%s -> %s" % [node.get("id", "?"), node.get("nearest_edge", "none")])
 			continue
-		_tether(surface, at, _along(edges[edge_id], float(node.get("edge_t", 0.0))))
-		tethered += 1
+		var along: Vector3 = _along(edges[int(node["nearest_edge"])], float(node.get("edge_t", 0.0)))
+		if _tether(surface, at, along):
+			tethered += 1
 
 	var instance := MeshInstance3D.new()
 	instance.name = "FareNodes"
 	instance.mesh = surface.commit()
-	instance.material_override = _material()
+	instance.material_override = PreviewDraw.unshaded_material()
 	add_child(instance)
 
 	_report(nodes.size(), counts, tethered, unresolved)
-	if measured:
-		built.emit(bounds.position, bounds.end)
+	built.emit(bounds.position, bounds.end)
 
 
 func _report(
-	total: int, counts: Dictionary, tethered: int, unresolved: PackedStringArray
+	total: int, counts: Dictionary[Case, int], tethered: int, unresolved: PackedStringArray
 ) -> void:
+	# Ordered by case rather than by count, so the line reads the same way every
+	# run. Sorting the formatted strings would order them by their leading
+	# digit, putting 11 before 4.
 	var parts: PackedStringArray = []
-	for label: String in counts:
-		parts.append("%d %s" % [counts[label], label])
-	parts.sort()
+	for which: Case in _LABELS:
+		if counts.has(which):
+			parts.append("%d %s" % [counts[which], _LABELS[which]])
 	print("fare preview: %d nodes — %s" % [total, ", ".join(parts)])
 	print("  %d tethered to their nearest edge" % tethered)
 	if not unresolved.is_empty():
@@ -119,19 +149,23 @@ func _report(
 		)
 
 
-func _edges_by_id(graph: Dictionary) -> Dictionary:
-	## Keyed by the edge's own `id`, never by its position in the array. The two
-	## agree today only because `P1-3` happens to number edges in order, and
-	## `nearest_edge` is defined as an id.
-	var by_id := {}
+## Edge polylines keyed by the edge's own `id`, never by its position in the
+## array. The two agree today only because `P1-3` happens to number edges in
+## order, and `nearest_edge` is defined as an id.
+func _edges_by_id(graph: Dictionary) -> Dictionary[int, Array]:
+	var by_id: Dictionary[int, Array] = {}
 	for edge: Dictionary in graph.get("edges", []):
-		by_id[int(edge.get("id", -1))] = edge.get("polyline", [])
+		if not edge.has("id"):
+			continue
+		var id: int = int(edge["id"])
+		if by_id.has(id):
+			push_warning("Road graph has two edges with id %d; the later one wins" % id)
+		by_id[id] = edge.get("polyline", [])
 	return by_id
 
 
 func _position(node: Dictionary) -> Vector3:
-	var pos: Array = node.get("pos", [0.0, 0.0, 0.0])
-	return Vector3(pos[0], pos[1], pos[2])
+	return _point(node.get("pos", [0.0, 0.0, 0.0]))
 
 
 ## The point `t` of the way along a polyline, measured in **plan**.
@@ -160,6 +194,8 @@ func _along(polyline: Array, t: float) -> Vector3:
 		if walked + span >= target:
 			return from.lerp(to, (target - walked) / span)
 		walked += span
+	# Only reachable when float accumulation leaves `walked` a hair short of
+	# `total` at t=1.
 	return _point(polyline[polyline.size() - 1])
 
 
@@ -176,7 +212,8 @@ func _plan_distance(from: Vector3, to: Vector3) -> float:
 ##
 ## Apex down so the pin points at the position it marks: a marker centred on the
 ## node would hide the very thing being judged, which is exactly where on the
-## kerb it sits.
+## kerb it sits. Four side faces and no base — the material is double-sided, so
+## looking down into the open top shows the inner faces rather than a hole.
 func _pin(surface: SurfaceTool, at: Vector3, colour: Color) -> void:
 	var half: float = pin_width_m * 0.5
 	var top: Vector3 = at + Vector3.UP * pin_height_m
@@ -189,56 +226,22 @@ func _pin(surface: SurfaceTool, at: Vector3, colour: Color) -> void:
 
 	surface.set_color(colour)
 	for index: int in corners.size():
-		# Both windings, because the material is double-sided and a pin seen
-		# from underneath — which is where the driver is — must still be solid.
 		surface.add_vertex(at)
 		surface.add_vertex(corners[index])
 		surface.add_vertex(corners[(index + 1) % corners.size()])
 
 
 ## A flat ribbon from the node to its snapped point on the road.
-func _tether(surface: SurfaceTool, from: Vector3, to: Vector3) -> void:
-	var along := to - from
-	along.y = 0.0
-	if along.length_squared() < 1e-8:
-		# The node is already on the centreline. Nothing to draw, and a zero
-		# length quad would be a degenerate triangle in the mesh.
-		return
-	var side: Vector3 = along.normalized().cross(Vector3.UP) * tether_width_m * 0.5
-	# Lifted clear of the carriageway it crosses, or it z-fights `roads.glb`.
-	var lift := Vector3.UP * 0.2
-
-	surface.set_color(_TETHER)
-	for corner: Vector3 in [
-		from - side + lift,
-		from + side + lift,
-		to + side + lift,
-		from - side + lift,
-		to + side + lift,
-		to - side + lift,
-	]:
-		surface.add_vertex(corner)
+func _tether(surface: SurfaceTool, from: Vector3, to: Vector3) -> bool:
+	var lift := Vector3.UP * tether_lift_m
+	return PreviewDraw.ribbon(
+		surface, from + lift, to + lift, tether_width_m * 0.5, _TETHER
+	)
 
 
-func _colour_for(node: Dictionary) -> Color:
+func _case_for(node: Dictionary) -> Case:
 	if node.get("kind", "") == GeneratedFares.TAXI_STAND:
-		var category: Variant = node.get("stand_category")
-		return _CROSS_HARBOUR if category == GeneratedFares.CROSS_HARBOUR else _STAND
-	return _PICKUP_DROPOFF if bool(node.get("pickup", true)) else _DROPOFF
-
-
-func _label_for(node: Dictionary) -> String:
-	if node.get("kind", "") == GeneratedFares.TAXI_STAND:
-		var category: Variant = node.get("stand_category")
-		return "cross-harbour stands" if category == GeneratedFares.CROSS_HARBOUR else "stands"
-	return "pick-up/drop-off" if bool(node.get("pickup", true)) else "drop-off only"
-
-
-func _material() -> StandardMaterial3D:
-	var material := StandardMaterial3D.new()
-	material.vertex_color_use_as_albedo = true
-	# Unshaded so the colours read as the categories they encode rather than as
-	# whatever the sun is doing to them — the same reason `road_preview.gd` does.
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	return material
+		if node.get("stand_category") == GeneratedFares.CROSS_HARBOUR:
+			return Case.CROSS_HARBOUR_STAND
+		return Case.STAND
+	return Case.PICKUP_DROPOFF if bool(node.get("pickup", true)) else Case.DROPOFF

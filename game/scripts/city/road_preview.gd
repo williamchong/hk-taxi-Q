@@ -15,6 +15,7 @@
 extends Node3D
 
 const GeneratedRoadGraph = preload("res://scripts/city/generated_road_graph.gd")
+const PreviewDraw = preload("res://scripts/city/preview_draw.gd")
 
 ## How to colour each edge.
 enum Colouring {
@@ -74,7 +75,7 @@ func _ready() -> void:
 		var colour: Color = _colour_for(edge)
 
 		for index: int in points.size() - 1:
-			_ribbon_segment(surface, points[index], points[index + 1], half_width, colour)
+			PreviewDraw.ribbon(surface, points[index], points[index + 1], half_width, colour)
 
 		for point: Vector3 in points:
 			# Seeded from the flag rather than the first point: an AABB starting
@@ -91,7 +92,7 @@ func _ready() -> void:
 	var instance := MeshInstance3D.new()
 	instance.name = "RoadRibbon"
 	instance.mesh = surface.commit()
-	instance.material_override = _material()
+	instance.material_override = PreviewDraw.unshaded_material()
 	add_child(instance)
 
 	print(
@@ -124,28 +125,6 @@ func _polyline(edge: Dictionary) -> PackedVector3Array:
 	for point: Array in edge.get("polyline", []):
 		points.append(Vector3(point[0], float(point[1]) + lift_m, point[2]))
 	return points
-
-
-## One flat quad per segment, laid in the XZ plane.
-##
-## Unmitred: consecutive quads overlap slightly on the inside of a bend and leave
-## a wedge on the outside. That is wrong for a road surface and fine for a
-## diagram — `P1-4` is where joints have to close, and doing it here would be
-## building that twice.
-func _ribbon_segment(
-	surface: SurfaceTool, from: Vector3, to: Vector3, half_width: float, colour: Color
-) -> void:
-	var along := to - from
-	along.y = 0.0
-	if along.length_squared() < 1e-8:
-		return
-	var side: Vector3 = along.normalized().cross(Vector3.UP) * half_width
-
-	surface.set_color(colour)
-	for corner: Vector3 in [
-		from - side, from + side, to + side, from - side, to + side, to - side
-	]:
-		surface.add_vertex(corner)
 
 
 ## Chevrons pointing along the edge, at `arrow_spacing_m` intervals.
@@ -205,15 +184,3 @@ func _colour_for(edge: Dictionary) -> Color:
 			return _FAST if int(edge.get("speed_limit_kph", 50)) > 50 else _GROUND
 		_:
 			return _ONE_WAY if edge.get("direction", "both") == "forward" else _TWO_WAY
-
-
-func _material() -> StandardMaterial3D:
-	var material := StandardMaterial3D.new()
-	material.vertex_color_use_as_albedo = true
-	# Unshaded so the colours read as the categories they encode rather than as
-	# whatever the sun is doing to them.
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	# Ribbons are single-sided quads and the arrows sit just above them; without
-	# this, flying under a flyover shows nothing at all.
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	return material
