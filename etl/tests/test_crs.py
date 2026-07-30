@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
 import pytest
 
 from pipeline.crs import (
@@ -112,6 +113,21 @@ class TestGameTransform:
         assert self.transform.to_source(*self.transform.to_game(*source)) == pytest.approx(
             source, abs=1e-9
         )
+
+    def test_it_converts_whole_arrays(self) -> None:
+        """A polyline goes through the same conversion a point does.
+
+        Being pure arithmetic, `to_game` vectorises for free — and a caller who
+        did not know that would write the translation out again, restating a
+        sign convention this module documents as forced rather than chosen.
+        """
+        eastings = np.array([835765.0, 836000.0, 837414.0])
+        northings = np.array([816125.0, 815800.0, 815238.0])
+
+        x, y, z = self.transform.to_game(eastings, northings)
+        for index, (easting, northing) in enumerate(zip(eastings, northings, strict=True)):
+            scalar = self.transform.to_game(float(easting), float(northing))
+            assert (x[index], y, z[index]) == pytest.approx(scalar)
 
     def test_axes_follow_the_godot_convention(self) -> None:
         origin = self.transform.to_game(836000.0, 815900.0, 10.0)

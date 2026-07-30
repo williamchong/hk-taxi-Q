@@ -5,12 +5,16 @@ description = "Build-time pipeline turning HK government open geodata into game-
 requires-python = ">=3.11"
 dependencies = [
     "numpy>=1.26",
+    "pyogrio>=0.10",
     "pyproj>=3.6",
     "pyyaml>=6.0",
 ]
 
-# GDAL/OGR and geopandas arrive with P1-3. They are heavy and platform-awkward,
-# so they stay out until something actually imports them.
+# `pyogrio` is the GDAL/OGR dependency P1-3 said would arrive. It ships GDAL in
+# its own wheels, which is what makes it installable without a system GDAL — the
+# platform-awkwardness that got this deferred out of P0-4 in the first place.
+# geopandas was not needed: `pipeline/gdb.py` wants coordinate arrays, and going
+# via GeoDataFrames would add pandas to reach the same numpy underneath.
 #
 # No glTF library: P1-2 reads and writes the format directly (`pipeline/gltf.py`
 # explains why a dependency would have saved no work).

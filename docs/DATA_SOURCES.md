@@ -124,7 +124,20 @@ heights are smooth and game-friendly; raw survey Z would be noisy and need smoot
 
 **Implementation:** map `ELEVATION` → authored deck height in city config, e.g.
 `{-1: -8.0, 0: 0.0, 1: 6.0, 2: 12.0}` metres, then ramp smoothly between levels at transitions.
-Two edges may only form a junction if their `ELEVATION` values match.
+Those are offsets from **ground level**, not from the vertical datum — see `Q11` and
+`roads.ground` in city config.
+
+> ⚠️ **Corrected by `P1-3` (2026-07-30).** This section previously ended "Two edges may only form
+> a junction if their `ELEVATION` values match." That rule is right about *crossings* and wrong
+> about junctions, and applying it breaks the network. Every one of the 36 endpoints in the Wan
+> Chai region where two levels meet is a **ramp touching down** — `HUNG HING ROAD FLYOVER` at
+> level 1 meeting itself at level 0, `WAN CHAI INTERCHANGE` (1)↔(0), `FLEMING ROAD` (1)↔(0).
+> Keying nodes on the level takes the region from **6 connected components to 24**, drops the
+> largest from 583 nodes to 389, and cuts a 163-node elevated island adrift.
+>
+> The rule was aimed at a real hazard — a flyover crossing *over* a street must not become a
+> junction — but that hazard never arises, because nodes are formed only where centrelines share
+> an **endpoint**, and a flyover crossing a street shares nothing with it.
 
 ### Other verified facts from the same inspection
 
@@ -136,8 +149,47 @@ Two edges may only form a junction if their `ELEVATION` values match.
 - Format is **CityGML 2.0** — features are `gen:GenericCityObject` with geometry under
   `gen:lod4Geometry` → `gml:LineString`. Despite the `lod4` name, the geometry is 2D.
 - **`CENTERLINE.gml` is ~486 MB** for the whole territory. **Stream and clip to the region — never
-  load it whole.** Prefer the FGDB with an OGR spatial filter.
+  load it whole.** Prefer the FGDB with an OGR spatial filter. *(`P1-3` did; `Q9` resolved.)*
 - Data was last modified 2026-07-29 — actively maintained on a monthly cycle.
+
+### ✅ MEASURED (2026-07-30) — what `P1-3` found in the geodatabase
+
+Read with `pyogrio` (GDAL 3.12.4) through `/vsizip/`, clipped to the Wan Chai region by OGR
+spatial filter. **796 centrelines, 529 intersections, 217 turns, 83 speed limits, 14 bus lanes.**
+Everything below is measured on that selection, and the numbers are what `etl/pipeline/roads.py`
+is built around.
+
+**The geodatabase holds all seventeen layers** — `CENTERLINE`, `INTERSECTION`, `TURN`,
+`SPEED_LIMIT`, `BUS_ONLY_LANE`, `ROUNDABOUT`, `PROHIBITION`, `NSR`, `PEDESTRIAN_ZONE`,
+`TRAFFIC_FEATURES`, `VEHICLE_RESTRICTION`, `PERMIT`, `RUN_IN_OUT`, `ONSTREETPARK`,
+`GISP_ON_STREET_PARKING`, `TUN_BRIDGE_TOLL`, `TUN_BRIDGE_TV_TOLL`. There is no reason to fetch
+any per-layer GML.
+
+**Centrelines are `Measured MultiLineString`.** GDAL drops the M ordinate on read and says so in
+a warning; the geometry that arrives is plain 2D, which is what the schema declares. Every
+feature in the region is single-part.
+
+| Finding | Measurement | Consequence |
+|---|---|---|
+| Endpoints coincide **exactly** | 601 distinct at full float precision, 599 at millimetre rounding; nearest *distinct* pair **2.26 m** apart | Nodes by coordinate identity. No snapping tolerance to tune — anything from ~1 mm to ~1 m gives the same graph. It must be at least ~1 mm: two clusters differ in the last bits and merge only once rounded. |
+| Geometry is **wildly over-densified** | one 51.7 m centreline carries **54,330 vertices** (median segment 0.4 mm); five features hold 132k of the region's 176k | Douglas–Peucker at 0.2 m is a correctness measure for `P1-4`, not a size optimisation. 175,610 → 3,553 vertices, worst deviation 0.1997 m. |
+| `ROUTE_ID` is **1:1 with the centreline** | 796 distinct values across 796 features | `SPEED_LIMIT.ROAD_ROUTE_ID` and `BUS_ONLY_LANE.ROAD_ROUTE_ID` join by key. No linear referencing needed, despite both being modelled as route events. |
+| Speed limits cover **under 10%** | 77 of 796 edges, all `70 km/h` or `80 km/h`, as free text with units | Hong Kong signs only exceptions to the 50 km/h urban default, so the default must come from city config. |
+| **Lane counts do not exist** | no lane attribute in any field of any layer | `roadgraph.json`'s `lanes` is authored policy keyed on speed limit, not published data. |
+| `ELEVATION` **negatives are real** | 0 (736), 1 (45), **−1 (15)** — the Cross-Harbour Tunnel and the Central–Wan Chai Bypass | The defensive `-1` mapping added before any negative was seen turns out to be load-bearing. |
+| Dual carriageways are **opposed one-way pairs** | 6 places in the emitted graph where two one-way edges share both endpoints in opposite directions, separated by **1.96–3.85 m** (median 2.9 m); three of them are Lockhart Road, at 2.73 / 3.07 / 3.41 m | Lockhart Road is two-way *modelled as two one-ways*. `P1-4` must expect two ribbons ~3 m apart, not one. This is a **lower bound** on the pattern — carriageways that do not share both endpoints are not counted. |
+| Turn geometry is a **hint, not the truth** | `EDGE1END` names an end that touches the second edge in 213 of 217; in the other 4 the *opposite* end coincides exactly | Take the shared node; use the field only to break ties. All 217 then resolve. |
+| The **null sentinel has four spellings** | `-99`, and three using full-width digits with an en-dash or a full-width hyphen (`–９９`, `－９９`, `-９９`) | Normalise NFKC *and* fold Unicode dashes before comparing. A raw string compare catches one of four. |
+
+**Feature identity is the FGDB `OBJECTID`**, which OGR returns as the feature id. `TURN` points at
+centrelines through `EDGE(1-8)FID` and `INTERSECTION` through `RD_ID_1..10`; both are OBJECTIDs, so
+a reader that renumbers features on a filtered read resolves every restriction onto the wrong roads.
+
+**Attributes `P1-3` reads but does not emit**, recorded so they are not rediscovered: `TURN` carries
+`EXC_VEH_TYPE` / `INC_VEH_TYPE` (vehicle classes the restriction does *not* apply to — `TX` = taxi,
+and one restriction in the region excludes taxis), `PART_TIME_REST`, `EFF_ALL_DAYS` and
+`OTHER_REST_TYPE`. `roadgraph.json`'s `turn_restrictions` has no field for any of them. They matter
+for `P3-3` traffic and `P3-8`, and adding them is a schema change on both sides.
 
 ---
 
@@ -145,6 +197,10 @@ Two edges may only form a junction if their `ELEVATION` values match.
 
 Discovered via the data.gov.hk CKAN API (`package_show?id=hk-td-tis_15-road-network-v2`). These
 save rediscovery — verify they still resolve before relying on them.
+
+> **Only the first two are in `hong_kong.yaml`.** `P1-3` reads the geodatabase, which contains
+> every layer in 17 MB; the per-layer GML below is the same content in 539 MB. The rest are kept
+> here as a record of what the publisher offers, not as things to fetch. Resolves `Q9`.
 
 | Resource | URL |
 |---|---|

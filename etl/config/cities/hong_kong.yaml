@@ -26,9 +26,14 @@ crs:
 
 # Road Network v2 carries no Z ordinate. Its ELEVATION attribute is an ordinal
 # grade-separation level — the GIS equivalent of OSM's `layer` tag — so deck
-# heights are ours to author. Verified present: 0 (86.5%), 1 (2.0%), 2 (11.5%).
-# Negative levels are plausible for tunnels but were not observed; -1 is mapped
-# so that hitting one is a routing question rather than a crash.
+# heights are ours to author.
+#
+# Measured across the Wan Chai region by P1-3: 0 (736 edges), 1 (45), -1 (15).
+# Level -1 is the Cross-Harbour Tunnel and the Central-Wan Chai Bypass, and it
+# confirms the defensive mapping that was added before any negative was seen.
+#
+# These are offsets from ground level, not absolute heights — see `roads.ground`
+# and Q11. Level 0 is 0.0 by definition: the ground *is* the ground.
 elevation_levels:
   -1: -8.0
   0: 0.0
@@ -70,18 +75,15 @@ regions:
 # Direct static URLs, discovered via the data.gov.hk CKAN API. Verified to
 # resolve on 2026-07-29; sizes re-checked 2026-07-30.
 #
-# Note the redundancy: RdNet_IRNP.gdb.zip is 17 MB and contains every layer,
-# while the per-layer GML conversions of the same content total 539 MB
-# (CENTERLINE.gml alone is 486 MB). Both are listed because P1-3 has not yet
-# chosen a reader; drop whichever it does not use. See PROGRESS.md, Q9.
+# The geodatabase is 17 MB and holds all seventeen layers. The publisher also
+# offers each layer as GML, totalling 539 MB for the same content — CENTERLINE
+# alone is 486 MB, because GML spends most of its bytes on XML tags. Those were
+# listed here until P1-3 chose a reader; it reads the geodatabase, so they are
+# gone and a clean fetch is 522 MB lighter. Resolves Q9.
 sources:
   road_network_gdb: https://static.data.gov.hk/td/road-network-v2/RdNet_IRNP.gdb.zip
-  road_centrelines: https://static.data.gov.hk/td/road-network-v2/CENTERLINE.gml
-  road_centrelines_schema: https://static.data.gov.hk/td/road-network-v2/CENTERLINE.gfs
-  road_intersections: https://static.data.gov.hk/td/road-network-v2/INTERSECTION.gml
-  road_bus_only_lanes: https://static.data.gov.hk/td/road-network-v2/BUS_ONLY_LANE.gml
-  road_roundabouts: https://static.data.gov.hk/td/road-network-v2/ROUNDABOUT.gml
-  road_prohibitions: https://static.data.gov.hk/td/road-network-v2/PROHIBITION.gml
+  # Not read by the pipeline. It is the published data specification, and every
+  # field mapping under `roads:` below is verified against it.
   road_data_dictionary: https://static.data.gov.hk/td/road-network-v2/dataspec/rdnet_dataspec.zip
 
 # Buildings ship as one ~44 MB glTF zip per 1:1000 map sheet, 3,456 sheets for
@@ -148,3 +150,107 @@ buildings:
   # lossless, and worth doing because the source repeats every vertex per
   # triangle. See docs/ART_DESIGN.md "LOD policy" for the switch distances.
   lod_cell_sizes_m: [0.0, 1.5, 4.0]
+
+# How P1-3 turns Road Network v2 into a drivable graph.
+#
+# The `fields:` maps below exist because column names are the Transport
+# Department's schema, not a fact about roads (hard rule 3). The pipeline asks
+# for a role — "the travel direction" — and this file says which column holds it.
+# Every value is verified in docs/DATA_SOURCES.md against the published data
+# specification shipped in `road_data_dictionary`.
+roads:
+  source: road_network_gdb
+
+  centrelines:
+    layer: CENTERLINE
+    fields:
+      # Ordinal grade-separation level, not a height. See elevation_levels.
+      elevation: ELEVATION
+      travel_direction: TRAVEL_DIRECTION
+      # Unique per centreline in the published data, which is what lets the
+      # speed-limit and bus-lane layers below join by key rather than by
+      # linear referencing along a route.
+      route: ROUTE_ID
+      name_en: STREET_ENAME
+      name_zh: STREET_CNAME
+
+  turns:
+    layer: TURN
+    fields:
+      first_edge: EDGE1FID
+      first_end: EDGE1END
+      second_edge: EDGE2FID
+
+  speed_limits:
+    layer: SPEED_LIMIT
+    fields:
+      route: ROAD_ROUTE_ID
+      # Text with units, e.g. "70 km/h".
+      speed_limit: SPEED_LIMIT
+
+  bus_lanes:
+    layer: BUS_ONLY_LANE
+    fields:
+      route: ROAD_ROUTE_ID
+
+  # Data specification: 1 = travel permitted in both directions (default),
+  # 3 = permitted only in the digitised direction of the line feature.
+  travel_directions:
+    1: both
+    3: forward
+
+  # EDGE1END: "Y" means the turn passes through the end of the first edge,
+  # "N" through its beginning.
+  turn_at_end_value: "Y"
+
+  # The source's null sentinel for text fields. Compared after Unicode
+  # normalisation and dash folding, so this one entry also catches the
+  # full-width and en-dash spellings the Chinese name field actually uses.
+  null_values: ["-99"]
+
+  # Hong Kong signs speed limits only where they differ from the 50 km/h urban
+  # default, so the SPEED_LIMIT layer covers under 10% of the region's edges —
+  # all of them 70 or 80 km/h expressway. The default belongs here rather than
+  # in code because it is a national road rule, and the second city's differs.
+  default_speed_limit_kph: 50
+
+  # Douglas-Peucker tolerance for centreline geometry. Not cosmetic: one
+  # 51.7 m centreline in the region ships 54,330 vertices — a median segment
+  # length of 0.4 mm — and five edges hold three quarters of the region's
+  # vertices. At 0.2 m the shape is preserved to well under a lane marking.
+  simplify_tolerance_m: 0.2
+
+  # Centrelines are cut at the region boundary, and a feature that merely clips
+  # a corner leaves a stub behind. Two metres is under the shortest real
+  # centreline in the region (2.6 m) and over any stub worth keeping.
+  min_edge_length_m: 2.0
+
+  # ⚠️ Lane counts are NOT published. Verified against every field of every
+  # layer in the data specification: Road Network v2 has no lane attribute.
+  # These are authored defaults, keyed on the one thing that does correlate —
+  # a signed limit above the urban default marks an expressway. P1-4 applies
+  # the playability widening (~1.3-1.8x) on top; see docs/GAME_DESIGN.md.
+  lanes_default: 2
+  lanes_by_min_speed_limit_kph:
+    70: 3
+  lane_width_m: 3.2
+
+  # Hand-authored: no dataset marks tram tracks. These are the streets the
+  # Hong Kong Tramways route uses inside the region, including the Happy
+  # Valley branch. docs/GAME_DESIGN.md treats trams as the highest-leverage
+  # single object in the game, so this list earns its hand-authoring.
+  tram_streets:
+    - JOHNSTON ROAD
+    - HENNESSY ROAD
+    - YEE WO STREET
+    - CAUSEWAY ROAD
+    - PERCIVAL STREET
+    - RUSSELL STREET
+    - WONG NAI CHUNG ROAD
+
+  # Where game y=0 sits for a road deck (Q11). `terrain` samples the LandsD
+  # ground mesh under each vertex, which is the only source that knows Wan
+  # Chai's ground is ~4 m above the datum rather than at it. `datum` puts
+  # every level-0 road at y=0, and is right only for a city whose sources
+  # carry no height field.
+  ground: terrain

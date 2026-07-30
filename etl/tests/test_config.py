@@ -279,3 +279,77 @@ def test_missing_ground_level_is_rejected(rewrite) -> None:
     root = rewrite(lambda doc: doc["elevation_levels"].pop(0))
     with pytest.raises(ValueError, match="level 0"):
         load_city("hong_kong", cities_root=root)
+
+
+class TestRoadNetwork:
+    """The `roads:` block is mostly the publisher's schema rather than tuning,
+    and a wrong column name there produces an attribute that is uniformly null
+    rather than an error — so it is checked at load."""
+
+    def test_the_shipped_mapping_matches_the_published_data_specification(self, hong_kong) -> None:
+        roads = hong_kong.roads
+        assert roads.centrelines.layer == "CENTERLINE"
+        assert roads.centrelines.field("travel_direction") == "TRAVEL_DIRECTION"
+        assert roads.turns.field("first_end") == "EDGE1END"
+        # 1 = both ways, 3 = the digitised direction only, per the spec.
+        assert roads.travel_directions == {1: "both", 3: "forward"}
+        assert roads.source in hong_kong.sources
+
+    def test_columns_are_deduplicated(self, hong_kong) -> None:
+        """Two roles may name one column; reading it twice is an OGR error."""
+        columns = hong_kong.roads.speed_limits.columns
+        assert len(columns) == len(set(columns))
+
+    def test_a_layer_missing_a_role_is_rejected(self, rewrite) -> None:
+        def drop_direction(doc: dict[str, Any]) -> None:
+            doc["roads"]["centrelines"]["fields"].pop("travel_direction")
+
+        with pytest.raises(ValueError, match="travel_direction"):
+            load_city("hong_kong", cities_root=rewrite(drop_direction))
+
+    def test_an_unknown_direction_word_is_rejected(self, rewrite) -> None:
+        """`roadgraph.json` has a closed vocabulary. A typo here would ship a
+        direction the game has no branch for."""
+
+        def misspell(doc: dict[str, Any]) -> None:
+            doc["roads"]["travel_directions"][3] = "one-way"
+
+        with pytest.raises(ValueError, match="expected one of"):
+            load_city("hong_kong", cities_root=rewrite(misspell))
+
+    def test_boolean_travel_direction_keys_are_rejected(self, rewrite) -> None:
+        """The YAML 1.1 trap again: a bare `on:` key resolves to True, and
+        True == 1 as a dict key, so it would silently redefine two-way."""
+
+        def add_bool_key(doc: dict[str, Any]) -> None:
+            codes = {k: v for k, v in doc["roads"]["travel_directions"].items() if k != 1}
+            codes[True] = "forward"
+            doc["roads"]["travel_directions"] = codes
+
+        with pytest.raises(ValueError, match="not an integer"):
+            load_city("hong_kong", cities_root=rewrite(add_bool_key))
+
+    def test_a_source_the_city_does_not_publish_is_rejected(self, rewrite) -> None:
+        def rename(doc: dict[str, Any]) -> None:
+            doc["roads"]["source"] = "not_fetched"
+
+        with pytest.raises(ValueError, match="not in sources"):
+            load_city("hong_kong", cities_root=rewrite(rename))
+
+    def test_a_negative_simplify_tolerance_is_rejected(self, rewrite) -> None:
+        def invert(doc: dict[str, Any]) -> None:
+            doc["roads"]["simplify_tolerance_m"] = -1.0
+
+        with pytest.raises(ValueError, match="simplify_tolerance_m"):
+            load_city("hong_kong", cities_root=rewrite(invert))
+
+    def test_an_unknown_ground_source_is_rejected(self, rewrite) -> None:
+        def mistype(doc: dict[str, Any]) -> None:
+            doc["roads"]["ground"] = "sea level"
+
+        with pytest.raises(ValueError, match="expected one of terrain, datum"):
+            load_city("hong_kong", cities_root=rewrite(mistype))
+
+    def test_a_missing_roads_block_is_rejected(self, rewrite) -> None:
+        with pytest.raises(ValueError, match="'roads'"):
+            load_city("hong_kong", cities_root=rewrite(lambda doc: doc.pop("roads")))

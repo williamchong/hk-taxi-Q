@@ -8,7 +8,7 @@
 | Renderer | **Mobile** (primary), Compatibility for web demo | Forward+ only if desktop tier justifies it later |
 | Physics | **Jolt** — Godot's default since 4.4 | Has a wheeled vehicle controller |
 | Engine language | **GDScript**, statically typed | See decision below |
-| ETL | **Python 3.11+** — GDAL/OGR, geopandas, trimesh/pygltflib | Build-time only |
+| ETL | **Python 3.11+** — numpy, pyproj, pyyaml, pyogrio | Build-time only |
 | Targets | iOS, Android, Windows/macOS/Linux (Steam) | Web export reserved for the free demo slice |
 
 ### Decision: GDScript, not C#
@@ -85,9 +85,11 @@ hk-taxi-Q/
 │   │   ├── crs.py               # ONLY module that knows about EPSG:2326
 │   │   ├── fetch.py             # download from CSDI / data.gov.hk, cache to sources/
 │   │   ├── gltf.py              # glTF read + GLB write; no dependency, see its docstring
+│   │   ├── gdb.py               # geodatabase layers + WKB → numpy; format only, no policy
 │   │   ├── mesh.py              # merge, partition, LOD collapse — geometry, no policy
+│   │   ├── terrain.py           # terrain mesh → sampleable height field (Q11)
 │   │   ├── buildings.py         # sheets → vertex-coloured tiles + LOD tiers
-│   │   ├── roads.py             # Road Network FGDB/GML → road graph + ribbon meshes
+│   │   ├── roads.py             # Road Network geodatabase → roadgraph.json
 │   │   ├── fares.py             # taxi stands + PUDO + POIs → fare nodes
 │   │   └── export.py            # → city.json, assembles the tile/road/fare outputs
 │   ├── sources/<city>/<source>/ # raw downloads — GITIGNORED
@@ -206,13 +208,30 @@ Field provenance:
 
 | Field | Source |
 |---|---|
-| `direction` | `TRAVEL_DIRECTION` (1 = bidirectional → `both`, 3 = one-way → `forward`) |
-| `turn_restrictions` | `TURN_ID` + `EDGE(1-8)FID` |
-| `speed_limit_kph`, `bus_lane` | Road Network v2 attributes |
-| `tram_tracks` | ⚠️ **Hand-authored.** Not present in the source dataset. |
+| `direction` | `TRAVEL_DIRECTION` (1 = bidirectional → `both`, 3 = one-way → `forward`). Closed vocabulary: **only `both` and `forward` are ever written.** A city whose source codes direction against its own digitisation declares `backward` in config, and the ETL normalises it away by reversing the polyline. |
+| `turn_restrictions` | `TURN_ID` + `EDGE(1-8)FID`. Edge references are **indices into `edges`**, not source ids. |
+| `speed_limit_kph` | `SPEED_LIMIT` layer where present, joined on `ROUTE_ID`; otherwise the city's default. Hong Kong signs only exceptions, so **the default covers ~90% of edges.** |
+| `bus_lane` | `BUS_ONLY_LANE` layer, joined on `ROUTE_ID` |
+| `tram_tracks` | ⚠️ **Hand-authored.** Not present in the source dataset. A list of street names in city config. |
+| `lanes` | ⚠️ **Not published.** Road Network v2 carries no lane attribute in any layer. Authored per road class in city config, keyed on speed limit. |
 | `width_m` | Derived from `lanes`, then **hand-tuned upward** for playability (see Game Design) |
-| `elevation_level` | `ELEVATION` integer attribute (verified: 0/1/2 present). Ordinal level, **not** a height — map to deck heights via city config. Two edges may only form a junction if levels match. |
-| `road_name` | `STREET_ENAME` / `STREET_CNAME` — **bilingual names ship in the source.** Treat `-99` and `–９９` as null. |
+| `elevation_level` | `ELEVATION` integer attribute (verified: −1/0/1 in the region). Ordinal level, **not** a height — map to deck heights via city config. Those heights are offsets **from ground level, not from the vertical datum**; see `Q11`. |
+| `road_name` | `STREET_ENAME` / `STREET_CNAME` — **bilingual names ship in the source.** The null sentinel has four spellings; normalise NFKC and fold dashes before comparing. |
+
+**Nodes are formed where centrelines share an endpoint, and nothing else.** Not where they cross:
+two roads crossing in plan at different `ELEVATION` share no endpoint, so no junction is invented.
+Conversely `ELEVATION` is deliberately **not** part of a node's identity — every place two levels
+meet at a shared endpoint is a ramp touching down, and splitting there severs the elevated network
+from the ground one. See `docs/DATA_SOURCES.md`.
+
+**Geometry is clipped to the region, not kept whole.** Unlike a building — which is assigned to a
+tile whole and allowed to overhang — a road feature is cut at the region boundary, because a
+polyline cut in two is two polylines with nothing to seam. Without it, 14% of the region's road
+length is geometry the player cannot reach, including a tunnel running 570 m out into the harbour.
+
+`node.kind` is `junction` where three or more edge ends meet and `endpoint` otherwise. Degree, not
+the source's intersection layer: two centrelines meeting end to end is one road continuing through
+a geometry break, and the source records those as intersections too.
 
 ### `fares.json` — pickup and dropoff nodes
 

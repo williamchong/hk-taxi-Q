@@ -32,15 +32,13 @@ from zlib import crc32
 import numpy as np
 from numpy.typing import ArrayLike
 
-from pipeline.config import BuildingStyle, CityConfig, RegionConfig, load_city
+from pipeline.config import OUT_ROOT, BuildingStyle, CityConfig, RegionConfig, load_city
 from pipeline.crs import GameTransform
 from pipeline.fetch import artefact_path, cached_tiles
 from pipeline.gltf import Bounds, MeshData, read_scene, write_glb
 from pipeline.mesh import EmptyMeshError, collapse, merge, select_triangles
 
 log = logging.getLogger(__name__)
-
-OUT_ROOT = Path(__file__).resolve().parent.parent / "out"
 
 # The config key for the tiled source that carries massing. A stage name rather
 # than a city fact — `fetch.py --only buildings` names the same thing.

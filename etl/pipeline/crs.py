@@ -14,7 +14,13 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import cache
 
+import numpy as np
 from pyproj import Transformer
+
+# `GameTransform` is pure arithmetic, so it works elementwise on arrays exactly
+# as it does on scalars. Spelled out so callers know a whole polyline may go
+# through it rather than reaching for a second, vectorised copy.
+_Coordinate = float | np.ndarray
 
 # pyproj walks each edge of the rectangle before taking the envelope. A
 # geodetic rectangle is not a rectangle once projected, so sampling only the
@@ -191,9 +197,16 @@ class GameTransform:
         )
 
     def to_game(
-        self, easting: float, northing: float, elevation: float = 0.0
-    ) -> tuple[float, float, float]:
-        """Source easting/northing/elevation to game (x, y, z)."""
+        self, easting: _Coordinate, northing: _Coordinate, elevation: _Coordinate = 0.0
+    ) -> tuple[_Coordinate, _Coordinate, _Coordinate]:
+        """Source easting/northing/elevation to game (x, y, z).
+
+        Vectorises: being pure arithmetic, it takes numpy arrays as readily as
+        scalars and returns the same shape. Callers with a whole polyline should
+        use it directly rather than write the translation out again — the sign
+        on Z is a consequence of Godot's handedness, and the moment it is
+        restated somewhere else it can drift.
+        """
         return (
             easting - self.origin_easting,
             elevation - self.origin_elevation,

@@ -269,6 +269,37 @@ def artefact_path(city_id: str, artefact: Artefact, *, root: Path | None = None)
     return (root or SOURCES_ROOT) / city_id / artefact.path
 
 
+def source_artefact(source_id: str, url: str) -> Artefact:
+    """One fixed-URL source as an artefact.
+
+    The single definition of where a plain source lands on disk. `cached_source`
+    resolves the same thing after the fact, and both go through here so a later
+    stage cannot disagree with the fetcher about a filename.
+    """
+    return Artefact(key=source_id, url=url, path=Path(source_id) / _filename_for(url, source_id))
+
+
+def cached_source(city: CityConfig, source_id: str, *, root: Path | None = None) -> Path:
+    """Path to a fixed-URL source an earlier fetch left on disk.
+
+    The counterpart of `cached_tiles` for the un-tiled half of `sources`, and it
+    exists for the same reason: a stage that needs a fetched file should ask
+    where it is rather than rebuild the path from a URL it re-derives itself.
+    """
+    if source_id not in city.sources:
+        known = ", ".join(sorted(city.sources)) or "none"
+        raise KeyError(f"city '{city.id}' has no source '{source_id}'. Known: {known}")
+
+    artefact = source_artefact(source_id, city.sources[source_id])
+    path = artefact_path(city.id, artefact, root=root)
+    if not path.exists():
+        raise FileNotFoundError(
+            f"'{source_id}' has not been fetched to {path}. "
+            f"Run: python -m pipeline.fetch --city {city.id} --region <region> --only {source_id}"
+        )
+    return path
+
+
 def cached_tiles(
     city: CityConfig,
     region: RegionConfig,
@@ -475,7 +506,7 @@ def fetch_city(
 
     try:
         artefacts: list[Artefact] = [
-            Artefact(key=name, url=url, path=Path(name) / _filename_for(url, name))
+            source_artefact(name, url)
             for name, url in sorted(city.sources.items())
             if only is None or name in only
         ]

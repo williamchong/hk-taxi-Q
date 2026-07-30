@@ -27,6 +27,9 @@ from pipeline.crs import (
 
 SUPPORTED_SCHEMA = 1
 CITIES_ROOT = Path(__file__).resolve().parent.parent / "config" / "cities"
+# Where every stage writes its output. One definition, because two stages
+# writing into the same tree from two of them is how they end up disagreeing.
+OUT_ROOT = Path(__file__).resolve().parent.parent / "out"
 
 
 @dataclass(frozen=True)
@@ -102,6 +105,125 @@ class BuildingStyle:
 
 
 @dataclass(frozen=True)
+class SourceLayer:
+    """One layer of a source dataset, and what the pipeline calls its fields.
+
+    `fields` maps a **role** the pipeline asks for onto the publisher's own
+    column name. That indirection is the whole point: `roads.py` may know that
+    a centreline has a travel direction, and may not know that Hong Kong's
+    Transport Department spells it `TRAVEL_DIRECTION` (CLAUDE.md hard rule 3).
+    """
+
+    layer: str
+    fields: dict[str, str]
+
+    def field(self, role: str) -> str:
+        if role not in self.fields:
+            known = ", ".join(sorted(self.fields)) or "none"
+            raise KeyError(
+                f"layer '{self.layer}' declares no field for '{role}'. Declared: {known}"
+            )
+        return self.fields[role]
+
+    @property
+    def columns(self) -> list[str]:
+        """Every source column to read, deduplicated and ordered."""
+        return sorted(set(self.fields.values()))
+
+
+# Directions a city file may declare. `BACKWARD` never reaches
+# `roadgraph.json`: a source that codes direction against its own digitisation
+# is normalised away by reversing the polyline, so the game never has to know
+# the difference. Named here, next to the validation, so the stage that acts
+# on them cannot drift from the set that is accepted.
+BOTH = "both"
+FORWARD = "forward"
+BACKWARD = "backward"
+DIRECTIONS = (BOTH, FORWARD, BACKWARD)
+
+# Where game y=0 sits for a road deck. `TERRAIN` samples the source height
+# field; `DATUM` puts level 0 at zero and is right only for a city whose
+# sources carry no terrain.
+TERRAIN = "terrain"
+DATUM = "datum"
+GROUND_SOURCES = (TERRAIN, DATUM)
+
+# What each road layer must declare. The pipeline states its requirements here,
+# in role names it owns, and the city file supplies the column names.
+_ROAD_LAYER_ROLES: dict[str, tuple[str, ...]] = {
+    "centrelines": ("elevation", "travel_direction", "route", "name_en", "name_zh"),
+    "turns": ("first_edge", "first_end", "second_edge"),
+    "speed_limits": ("route", "speed_limit"),
+    "bus_lanes": ("route",),
+}
+
+
+@dataclass(frozen=True)
+class RoadNetwork:
+    """How `P1-3` turns a published road network into a drivable graph.
+
+    Everything here is either the publisher's schema or a tuning value, and both
+    kinds are barred from the pipeline by CLAUDE.md hard rules 3 and 4.
+    """
+
+    # Which `sources:` entry holds the dataset, and the layers inside it.
+    source: str
+    centrelines: SourceLayer
+    turns: SourceLayer
+    speed_limits: SourceLayer
+    bus_lanes: SourceLayer
+
+    # Source travel-direction code to a direction in the data contract.
+    travel_directions: dict[int, str]
+    # Value of the turn layer's "which end of the first edge" field that means
+    # the turn passes through the end rather than the start.
+    turn_at_end_value: str
+    # Strings that mean "no value" in a text field. Compared after Unicode
+    # normalisation, so one entry covers the full-width spellings too.
+    null_values: tuple[str, ...]
+
+    # Applied where the source signs no limit. Hong Kong signs only exceptions
+    # to the 50 km/h urban default, so this covers 90% of the region's edges.
+    default_speed_limit_kph: int
+    # Douglas-Peucker tolerance for centreline geometry, in metres.
+    simplify_tolerance_m: float
+    # Shortest run of road the region boundary may leave behind. A feature that
+    # only clips a corner contributes a stub no vehicle can occupy.
+    min_edge_length_m: float
+
+    # Lane counts are not published — see `lanes_for`.
+    lanes_default: int
+    lanes_by_min_speed_limit_kph: dict[int, int]
+    lane_width_m: float
+
+    # Streets carrying tram tracks. Hand-authored: no dataset marks them, and
+    # `docs/GAME_DESIGN.md` calls trams the highest-leverage object in the game.
+    tram_streets: frozenset[str]
+
+    # Whether to take ground level from the terrain mesh (`Q11`). A city with no
+    # terrain in its sources leaves this off and gets the vertical datum.
+    ground_from_terrain: bool
+
+    def lanes_for(self, speed_limit_kph: int) -> int:
+        """Lane count for an edge, from the fastest matching rule.
+
+        **Not a published attribute.** Road Network v2 carries no lane count in
+        any layer, so this is authored policy keyed on what the source does
+        carry. `P1-4` widens the result for play on top; see `docs/PLAN.md`.
+
+        The *fastest* rule wins, not the widest. Identical while the table is
+        monotonic, which it need not stay: a city that gave a 90 km/h tunnel two
+        lanes and a 70 km/h arterial three would otherwise get three either way.
+        """
+        matched = [
+            (threshold, lanes)
+            for threshold, lanes in self.lanes_by_min_speed_limit_kph.items()
+            if speed_limit_kph >= threshold
+        ]
+        return max(matched)[1] if matched else self.lanes_default
+
+
+@dataclass(frozen=True)
 class CityConfig:
     id: str
     name: str
@@ -123,6 +245,7 @@ class CityConfig:
     # Datasets that must be selected per region via an index.
     tiled_sources: dict[str, TiledSource]
     buildings: BuildingStyle
+    roads: RoadNetwork
 
     @property
     def source_ids(self) -> set[str]:
@@ -236,8 +359,14 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
             for source_id, body in (document.get("tiled_sources") or {}).items()
         },
         buildings=_building_style(_require(document, "buildings", path), f"{path}:buildings"),
+        roads=_road_network(_require(document, "roads", path), f"{path}:roads"),
     )
     _check_regions_lie_within_the_city(city, path)
+    if city.roads.source not in city.sources:
+        known = ", ".join(sorted(city.sources)) or "none"
+        raise ValueError(
+            f"{path}:roads.source names '{city.roads.source}', which is not in sources ({known})"
+        )
     return city
 
 
@@ -333,6 +462,72 @@ def _building_style(body: dict[str, Any], where: str) -> BuildingStyle:
         colour_jitter=jitter,
         lod_cell_sizes_m=cells,
     )
+
+
+def _road_network(body: dict[str, Any], where: str) -> RoadNetwork:
+    layers = {
+        name: _source_layer(_require(body, name, where), f"{where}:{name}", roles)
+        for name, roles in _ROAD_LAYER_ROLES.items()
+    }
+
+    directions: dict[int, str] = {}
+    for code, direction in _require(body, "travel_directions", where).items():
+        # Same YAML 1.1 boolean trap as `elevation_levels`: a bare `on:` key
+        # resolves to True, and True == 1 as a dict key, so it would quietly
+        # redefine whichever code the city uses for a two-way road.
+        if isinstance(code, bool) or not isinstance(code, int):
+            raise ValueError(f"{where}:travel_directions key {code!r} is not an integer")
+        if direction not in DIRECTIONS:
+            raise ValueError(
+                f"{where}:travel_directions[{code}] is {direction!r}, "
+                f"expected one of {', '.join(DIRECTIONS)}"
+            )
+        directions[code] = str(direction)
+    if not directions:
+        raise ValueError(f"{where}:travel_directions is empty")
+
+    lanes = {
+        int(threshold): int(count)
+        for threshold, count in (body.get("lanes_by_min_speed_limit_kph") or {}).items()
+    }
+    tolerance = float(_require(body, "simplify_tolerance_m", where))
+    if tolerance < 0.0:
+        raise ValueError(f"{where}:simplify_tolerance_m must not be negative, got {tolerance}")
+
+    ground = str(_require(body, "ground", where))
+    if ground not in GROUND_SOURCES:
+        raise ValueError(
+            f"{where}:ground is {ground!r}, expected one of {', '.join(GROUND_SOURCES)}"
+        )
+
+    return RoadNetwork(
+        source=str(_require(body, "source", where)),
+        centrelines=layers["centrelines"],
+        turns=layers["turns"],
+        speed_limits=layers["speed_limits"],
+        bus_lanes=layers["bus_lanes"],
+        travel_directions=directions,
+        turn_at_end_value=str(_require(body, "turn_at_end_value", where)),
+        null_values=tuple(str(value) for value in (body.get("null_values") or ())),
+        default_speed_limit_kph=int(_require(body, "default_speed_limit_kph", where)),
+        simplify_tolerance_m=tolerance,
+        min_edge_length_m=float(_require(body, "min_edge_length_m", where)),
+        lanes_default=int(_require(body, "lanes_default", where)),
+        lanes_by_min_speed_limit_kph=lanes,
+        lane_width_m=float(_require(body, "lane_width_m", where)),
+        tram_streets=frozenset(str(name) for name in (body.get("tram_streets") or ())),
+        ground_from_terrain=ground == TERRAIN,
+    )
+
+
+def _source_layer(body: dict[str, Any], where: str, roles: tuple[str, ...]) -> SourceLayer:
+    fields = {str(role): str(column) for role, column in _require(body, "fields", where).items()}
+    missing = [role for role in roles if role not in fields]
+    if missing:
+        # Checked at load rather than at first use, so a city file that is a
+        # field short fails before the pipeline has read 17 MB of geodatabase.
+        raise ValueError(f"{where}:fields is missing {', '.join(missing)}")
+    return SourceLayer(layer=str(_require(body, "layer", where)), fields=fields)
 
 
 def _parse_hex(value: str, where: str) -> tuple[int, int, int]:

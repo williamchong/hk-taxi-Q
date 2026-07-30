@@ -292,8 +292,8 @@ class TestFetchCity:
         enforced before the file is committed rather than detected afterwards.
         """
         fetch_once(city, tmp_path)
-        (tmp_path / "hong_kong" / "road_roundabouts" / "ROUNDABOUT.gml").write_bytes(b"cut")
-        assert "hong_kong/road_roundabouts" in fetch_once(city, tmp_path).downloaded
+        (tmp_path / "hong_kong" / "road_data_dictionary" / "rdnet_dataspec.zip").write_bytes(b"cut")
+        assert "hong_kong/road_data_dictionary" in fetch_once(city, tmp_path).downloaded
 
     def test_a_failure_partway_through_keeps_what_already_succeeded(
         self, city, monkeypatch, tmp_path
@@ -307,7 +307,7 @@ class TestFetchCity:
         ok: list[str] = []
 
         def _download(url: str, destination: Path) -> tuple[int, str]:
-            if destination.name == "PROHIBITION.gml":
+            if destination.name == "RdNet_IRNP.gdb.zip":
                 raise RuntimeError("connection reset")
             destination.parent.mkdir(parents=True, exist_ok=True)
             payload = (
@@ -326,7 +326,7 @@ class TestFetchCity:
         manifest = json.loads((tmp_path / fetch.MANIFEST_NAME).read_text())
         assert ok, "expected some artefacts to have downloaded before the failure"
         assert len(manifest) == len(ok)
-        assert "hong_kong/road_prohibitions" not in manifest
+        assert "hong_kong/road_network_gdb" not in manifest
 
     def test_new_revision_invalidates_one_sheet(self, city, offline, tmp_path):
         """REVISIONDATE is per sheet, so a republished sheet must not drag its
@@ -341,8 +341,8 @@ class TestFetchCity:
         assert report.downloaded == ["hong_kong/buildings/OVERLAP"]
 
     def test_only_limits_the_fetch(self, city, offline, tmp_path):
-        report = fetch_once(city, tmp_path, only={"road_roundabouts"})
-        assert report.downloaded == ["hong_kong/road_roundabouts"]
+        report = fetch_once(city, tmp_path, only={"road_data_dictionary"})
+        assert report.downloaded == ["hong_kong/road_data_dictionary"]
 
     def test_unknown_only_name_is_rejected(self, city, offline, tmp_path):
         """Silently fetching nothing looks identical to a fully cached run."""

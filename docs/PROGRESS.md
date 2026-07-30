@@ -29,7 +29,15 @@ game-ready assets. Two findings came out of it that change later tasks: the **te
 affordable as shipped** (267 MB of JPEG, 405k triangles), and **ground level in Wan Chai is ~4 m
 above the datum**, which `P1-3`'s deck heights currently assume is zero. See `Q11`.
 
-**`P1-3` (road graph) is next.** It should resolve `Q9` on the way in.
+**`P1-3` closed on 2026-07-30, taking `Q9` and `Q11` with it.** `roads.py` turns the road network
+geodatabase into **797 edges over 615 nodes with 217 turn restrictions** in 1.4 seconds, and the
+graph sits on real ground: sampling the terrain under every vertex puts level-0 roads at a median
+**4.21 m**, against the 4.29 m median building base `P1-2` measured independently. One acceptance
+criterion is **not** met by machine and needs the user — see the open question below.
+
+**`P1-4` (road surface mesh) is next.** It inherits two findings from `P1-3`: dual carriageways
+arrive as opposed one-way pairs ~3 m apart, and `lanes` is authored policy rather than published
+data.
 
 **`P0-5` passed conditionally, not cleanly** — the user drove it, found the handling acceptable, and
 judged that *fun* cannot be assessed from a grey box at all. See the decision log. The consequence
@@ -53,7 +61,7 @@ is deferred rather than closed.
 | `P1-1` | Source fetching | ✅ **Done** | `fetch.py`; sheets derived from the index, not listed. 67 tests, `ruff` clean. |
 | `P1-2` | Building meshes | ✅ **Done** | 65 tiles × 3 LODs; 989k → 184k triangles. Verified in Godot by `game/tools/verify_tiles.gd`. 153 tests, `ruff` clean. |
 | `P1-2t` | └ Terrain evaluation | ⚠️ **Measured — not viable as shipped** | 267 MB JPEG, 405k tris. See the decision log; needs a resampling pass to survive. |
-| `P1-3` | Road graph | 🟢 **Unblocked** | Next. Resolve `Q9` and `Q11` here. |
+| `P1-3` | Road graph | ⚠️ **Done, one criterion pending** | 797 edges, 615 nodes, 217 turn restrictions, 96.3% connected, 0.80 s. `Q9` and `Q11` resolved here. 234 tests, `ruff` clean. The "spot-check against reality" criterion needs the user — see `Q12`. |
 | `P1-4`…`P1-7` | Rest of the ETL slice | 🟢 **Unblocked** | Deps met. |
 | `P2-*` | Driving the real city | ⬜ Blocked | Gated on `P1-7` |
 | `P3-*` | Playable slice | ⬜ Blocked | |
@@ -74,52 +82,82 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ❌ blocked
 | Q6 | Does the region need Central for the circuit to feel complete? | Scope | after `P3-9` | 🟡 Deferred |
 | Q7 | Does game-space Z run negative northward, or should the origin move to the NW corner? | Data contract — tile IDs and every position in `city.json` | `P1-6` | ✅ **Resolved 2026-07-30** — NW corner |
 | Q8 | What is the cheapest build that lets the user judge "is this fun?" | **Now the top project risk** — `P0-5` did not answer it | user | 🔴 Open |
-| Q9 | Does `P1-3` read the 17 MB FGDB or the 539 MB per-layer GML? | 522 MB of download and disk per clone | `P1-3` | 🔴 Open |
+| Q9 | Does `P1-3` read the 17 MB FGDB or the 539 MB per-layer GML? | 522 MB of download and disk per clone | `P1-3` | ✅ **Resolved 2026-07-30** — the geodatabase; every GML dropped from config |
 | Q10 | Is the game-space origin per region, or shared per city? | Whether two regions can stitch into one continuous map | `P1-6` | ✅ **Resolved 2026-07-30** — both: local origin plus a recorded `city_offset` |
-| Q11 | Where is ground level? `elevation_levels[0] = 0.0` puts at-grade roads at y=0, but 99.9% of Wan Chai's buildings have their base **above 2 m** (median 4.29 m) | Roads would run ~4 m below every front door, and under the terrain | `P1-3` / `P1-4` | 🔴 **Open** — found by `P1-2` |
+| Q11 | Where is ground level? `elevation_levels[0] = 0.0` puts at-grade roads at y=0, but 99.9% of Wan Chai's buildings have their base **above 2 m** (median 4.29 m) | Roads would run ~4 m below every front door, and under the terrain | `P1-3` | ✅ **Resolved 2026-07-30** — sample the terrain height field |
+| Q12 | Are the road graph's one-way directions right on the ground? | `P1-3`'s last acceptance criterion, and the thing no test can settle | user | 🔴 **Open** — needs a Hong Kong driver, table below |
 
-### Q11 — "ground level" is not zero, and the road graph does not know that
+### Q12 — the one-way spot check needs a human
 
-Measured 2026-07-30 across the 1,351 buildings `P1-2` places in the region.
+`PLAN.md` asks that `P1-3`'s one-way directions be "spot-checked **against reality** on Lockhart
+and Jaffe Road". Everything else in that task was verified by measurement; this one cannot be,
+because the only authority is the road itself. What the data says, with coordinates so it can be
+checked on the ground or on any map:
 
-| | Height above Hong Kong Principal Datum |
-|---|---|
-| Building bases | min 0.00 m, **median 4.29 m**, mean 7.38 m, max 75.92 m |
-| Buildings with a base above 2 m | **99.9%** |
-| Terrain surface | −4.24 m to 50.63 m |
+| Street | What `roadgraph.json` says | Where |
+|---|---|---|
+| **Jaffe Road** | **One-way eastbound.** 7 of its 9 edges run east; the 2 that run west are at the far eastern end past Paterson Street, and one of those is two-way | 22.27858 N 114.17213 E → 22.28113 N 114.18377 E |
+| **Lockhart Road** | **Two-way**, carried as *opposed one-way carriageways* rather than as two-way edges — three such pairs, **2.73 / 3.07 / 3.41 m** apart. 8 of its 26 edges are marked two-way outright | 22.27812 N 114.17171 E → 22.28069 N 114.18470 E |
+| Gloucester Road | One-way throughout, both carriageways present | — |
 
-`hong_kong.yaml` maps `elevation_levels: {0: 0.0}`, which `P1-4` will use as the deck height for
-every at-grade road. Taken literally that puts Hennessy Road four metres below the doorways of the
-buildings on it, and below the terrain surface as well. The grade-separation *levels* from `P0-2`
-are still right — what is missing is the datum they are relative to.
+The Lockhart finding is the one worth a second look: it is the documented "dual carriageways are
+modelled as separate one-way segments" quirk, but tighter than the phrase suggests — the two
+carriageways are **three metres apart**, which is narrow enough to look like a doubled centreline
+until you measure it. It was measured: **6 opposed pairs** in the emitted graph, separations
+**1.96 m to 3.85 m**. `P1-4` has to decide whether a 3 m pair becomes two ribbons or one. Treat 6
+as a floor — it counts only pairs sharing *both* endpoints, and carriageways that diverge at one
+end are the same pattern uncounted.
 
-Three candidates, in rough order of appeal:
+**If Jaffe or Lockhart is wrong, the likely cause is not the ETL** — direction comes straight from
+`TRAVEL_DIRECTION` and the digitised vertex order, both of which are reproduced faithfully. It
+would mean the source disagrees with the street, which is a much more interesting finding and
+would change how much `P3-3` can trust the network.
 
-1. **Sample the terrain mesh under each road node.** The LandsD terrain is a real height field
-   covering the whole sheet, we already parse it, and it costs nothing at runtime because the
-   sampling happens in the ETL. This is the strongest argument yet for keeping the terrain in the
-   pipeline even if it is never rendered — see the `P1-2` terrain decision.
-2. **Sample the base of the nearest buildings.** Available without the terrain, but noisy: podium
-   bases sit above the pavement, and the max above is 75.92 m.
-3. **One authored offset per region.** Cheapest, and wrong the moment the road climbs toward
-   Kennedy Road — the region spans 55 m of relief.
+### Q11 — resolved: sample the terrain height field under every vertex
 
-Whichever wins, `elevation_levels` stays as it is: it is an *offset* per grade-separation level,
-and this question is about what it is an offset *from*.
+Opened by `P1-2`, closed by `P1-3` on the same day. `elevation_levels` was always an *offset* per
+grade-separation level; what was missing was what it is an offset **from**. The answer is the
+ground, and the ground is in the sheets we already download.
 
-### Q9 — the road sources are redundant, and one is 31× larger
+`pipeline/terrain.py` indexes the region's terrain triangles into a uniform grid and interpolates
+a height barycentrically under each road vertex. Measured on the real region:
 
-Measured 2026-07-30 while building `fetch.py`. `RdNet_IRNP.gdb.zip` is **17.4 MB** and contains
-every layer. The per-layer GML conversions of the *same* content total **539 MB** — `CENTERLINE.gml`
-alone is 486 MB, because GML spends most of its bytes on XML tags.
+| | Before (`elevation_levels` from the datum) | After (from sampled ground) |
+|---|---|---|
+| Level 0 road height, median | 0.00 m | **4.21 m** |
+| Level 1 (flyover), median | 6.00 m | 10.08 m |
+| Level −1 (tunnel), median | −8.00 m | −3.53 m |
+| Vertices with no terrain under them | — | **0** |
 
-`hong_kong.yaml` currently lists both, so a clean fetch pulls 556 MB of roads where 17 MB would do.
-That is deliberate for now: `P1-3` has not chosen a reader, `P0-2` did its Z-value spike against the
-GML, and the `.gfs` schema file is genuinely useful documentation. But once `P1-3` picks, **drop the
-losing format from config** — `fetch.py --only` makes it easy to test either without committing.
+**The cross-check is the point.** `P1-2` measured the region's building bases at a median 4.29 m
+by a completely separate path — glTF node matrices out of the LandsD sheets. Roads now land 8 cm
+below the doorways on them, which is what a kerb is. Nothing was tuned to make those agree.
 
-GDAL/OGR reads FGDB directly and is already the planned dependency, so the FGDB is the likely
-winner. The GML's one advantage is that it streams without GDAL.
+This also settles the standing question about whether the terrain earns its place in the pipeline
+when it is **too expensive to render** (267 MB of texture, see the `P1-2` decision). It does: it is
+the only source that knows where the ground is, and sampling costs nothing at runtime.
+
+Chosen over the two alternatives recorded when `Q11` was opened. Sampling the nearest buildings'
+bases is available without the terrain but noisy — podium bases sit above the pavement and the
+maximum is 75.92 m. One authored offset per region is cheapest and wrong the moment the road climbs
+toward Kennedy Road, since the region spans 55 m of relief.
+
+`roads.ground: terrain | datum` in city config, because a city whose sources carry no height field
+must still be able to build.
+
+### Q9 — resolved: the geodatabase, and every GML dropped
+
+`RdNet_IRNP.gdb.zip` is **17.4 MB and contains all seventeen layers**; the per-layer GML
+conversions of the same content total **539 MB**, `CENTERLINE.gml` alone being 486 MB because GML
+spends most of its bytes on XML tags. `hong_kong.yaml` listed both while `P1-3` had not chosen a
+reader. It has, so **a clean fetch is now 522 MB lighter** and `sources:` holds two entries: the
+geodatabase, and the data specification PDFs that every field mapping is verified against.
+
+The reader is **`pyogrio`**, which is GDAL/OGR shipped inside its own wheels — the thing that makes
+it installable without a system GDAL, which is the platform-awkwardness that got this deferred out
+of `P0-4`. It reads the geodatabase **inside its zip** through OGR's `/vsizip/`, so nothing is
+unpacked. geopandas was not needed: `pipeline/gdb.py` wants coordinate arrays, and a GeoDataFrame
+would add pandas on the way to the same numpy underneath.
 
 ### Q7 — resolved: the origin sits at the **north-west** corner
 
@@ -251,6 +289,59 @@ below.
 ---
 
 ## Decision log
+
+### 2026-07-30 — `P1-3`: `ELEVATION` is **not** part of a node's identity
+
+This reverses an implementation note in `DATA_SOURCES.md` that had survived since `P0-2`: "two
+edges may only form a junction if their `ELEVATION` values match." It sounds obviously right — a
+flyover must not become a junction with the street it passes over — and it breaks the network.
+
+**Measured on the real region.** All 36 endpoints where two levels meet are **ramp touchdowns**:
+`HUNG HING ROAD FLYOVER` at level 1 meeting itself at level 0, `WAN CHAI INTERCHANGE` (1)↔(0),
+`FLEMING ROAD` (1)↔(0), `VICTORIA PARK ROAD` meeting an unnamed level-1 ramp. Applying the rule:
+
+| Node key | Nodes | Components | Largest |
+|---|---|---|---|
+| position | 599 | 6 | 583 |
+| position + `ELEVATION` | 635 | **24** | **389** |
+
+A 163-node elevated island cut adrift, which is most of the Wan Chai Interchange and the Canal Road
+Flyover — the most interesting driving in the region, and the reason the region was chosen.
+
+**The hazard the rule was aimed at does not exist here**, because nodes are formed only where
+centrelines share an *endpoint*. A flyover crossing over a street shares no vertex with it, so no
+junction was ever going to be invented. The rule is correct about crossings and wrong about
+junctions, and the two were conflated.
+
+### 2026-07-30 — `P1-3`: roads are **clipped** to the region, where buildings are not
+
+`P1-2` assigns a building to a tile whole and lets it overhang, because splitting a mesh at a
+boundary leaves an open shell and half a building popping in and out. Roads take the opposite rule
+and it is not an inconsistency: **a polyline cut in two is two polylines**, with nothing to seam
+and no shell to open. The cut point becomes an ordinary endpoint node, which is what a map edge
+should be anyway.
+
+It is also not optional. The geodatabase filters on bounding box, so the Central–Wan Chai Bypass is
+selected because its box grazes the region and then runs **570 m out into the harbour**. Measured
+before clipping: **14.2% of the region's road length — 9.3 km of 65.6 km — was outside the region**,
+and `P1-4` would have built ribbon mesh for all of it. After clipping, polylines span exactly
+0…1649.6 × 0…886.9 m.
+
+**Two consequences worth carrying forward.** One source feature can become several edges, so turn
+restrictions resolve across every combination rather than a single id lookup. And clipping removed
+the last of the terrain-sampling gaps: 46 vertices had no ground under them because they were
+outside the sheets, and now none are.
+
+### 2026-07-30 — `P1-3`: **lane counts are authored, not published**
+
+`ARCHITECTURE.md`'s provenance table implied `lanes` came from "Road Network v2 attributes". It
+does not. Verified against every field of every layer in the published data specification: the
+dataset has **no lane attribute anywhere**. What it does carry is a signed speed limit on the 10%
+of edges that differ from the urban default, which is a decent proxy for expressway versus street.
+
+So `roads.lanes_default`, `roads.lanes_by_min_speed_limit_kph` and `roads.lane_width_m` are city
+config, and the table now says so. `P1-4` applies the playability widening on top; this is the
+number it widens *from*, and it is a guess with a documented basis rather than a measurement.
 
 ### 2026-07-30 — Region placement: local origin **plus** a recorded `city_offset`
 
@@ -775,7 +866,7 @@ urgent — flag it before the roster work in Phase 4.
 | Real geometry isn't fun to drive | **High** | ⚠️ **Mitigation weakened.** `P0-5` was meant to retire this before any ETL investment; the user's verdict is that a grey box cannot answer it (`Q8`). The test did clear the *handling*, so the remaining risk is the city, not the car. Road widening and hand-added ramps are still the designed remedy, and `widen_factor` is already data. Next real check is the Phase 1 gate. |
 | Doesn't read as HK to locals | **High** | `P3-9` authenticity test with ≥3 real drivers; run again every phase after. |
 | Perf misses 60fps on device floor | Medium | Budget defined up front; untextured merged tiles are the main lever; `P2-6` is a dedicated pass. |
-| Source data quirks (dual carriageways, doubled junctions) | Medium | Known and documented; budget extra time on `P1-3`. |
+| Source data quirks (dual carriageways, doubled junctions) | Medium → **Low** | **Mitigated 2026-07-30 by `P1-3`.** Both quirks turned up and both were handled: dual carriageways arrive as 6 opposed one-way pairs 1.96–3.85 m apart (median 2.9 m), and doubled junctions never form because nodes are made only at shared endpoints. The residual risk moves to `P1-4`, which has to decide whether a 3 m pair becomes two ribbons or one. |
 | Building meshes blow the triangle budget | Medium → **Low** | **Mitigated 2026-07-30 by `P1-2`.** The estimate was low: 2,200 buildings across the six sheets, not the ~900 extrapolated from one. Real region totals are **989k / 400k / 184k** triangles at LOD0/1/2, averaging 15.2k per tile at LOD0. Against a <300k *visible* budget that leaves room, but not much — a viewpoint holding LOD0 on the nearest ring plus LOD1 behind it lands in the low 300k range before occlusion. `P2-1`'s switch distances now decide this, not the ETL. |
 | Terrain does not fit any budget | Medium | **New 2026-07-30.** Measured 267 MB of texture and 405k triangles for the ground alone — roughly 2× over on texture memory, triangles *and* bundle size simultaneously. Resampling to ~2 px/m and decimating to ~88k triangles brings it into range, but that work is not done and is not scheduled. Nothing in the tile output depends on it. |
 | GDScript learning curve | Low | Small codebase; complexity lives in Python. |
@@ -800,6 +891,96 @@ Record measured values here, not estimates.
 ---
 
 ## Session log
+
+### 2026-07-30 — `P1-3` Road graph
+
+Three new pipeline modules — `gdb.py` (geodatabase and WKB), `terrain.py` (height field),
+`roads.py` (policy) — mirroring the `gltf.py` / `mesh.py` / `buildings.py` split that `P1-2`
+settled on, plus the whole source schema as city config.
+
+**Result:** `python -m pipeline.roads --city hong_kong --region wan_chai` turns the 17 MB
+geodatabase into **797 edges over 615 nodes with 217 turn restrictions in 1.4 seconds**.
+
+| | |
+|---|---|
+| Centrelines read (region bbox) | 796 |
+| Edges after clipping | 797 — one feature split, none dropped |
+| Vertices | 175,610 → **3,553** (2.0%), worst deviation 0.1997 m against a 0.2 m tolerance |
+| Connectivity | **592 of 615 nodes** in one component (96.3%) |
+| Directions | 679 one-way, 117 two-way |
+| Levels | 736 at grade, 45 elevated, 15 tunnel |
+| Named | 723 of 797 edges, **bilingual, straight from the source** |
+| Output | `roadgraph.json`, 649 KB |
+
+**The 23 nodes outside the main component are correct, not a defect.** Four of the six minor
+components are the **Central–Wan Chai Bypass tunnel**, which passes under the region with no ramp
+inside it — genuinely unreachable from Wan Chai's streets. The other two are two-node stubs on the
+region boundary. There is nothing to fix.
+
+**Three findings that changed the design, all measured before any code was written:**
+
+1. **Endpoints coincide exactly** — 601 distinct at full float precision, and the nearest
+   *distinct* pair is **2.26 m apart**. So node snapping needs no tolerance and has none to tune.
+   It does need to be no finer than a millimetre: two clusters differ in their last bits, and at a
+   tenth of a millimetre they split — which silently disconnected Johnston Road at Fenwick Street
+   and dropped the turn restriction there. Caught by a turn that would not resolve.
+2. **`ELEVATION` must not key nodes.** See the decision log.
+3. **The geometry is over-densified past belief** — one 51.7 m centreline carries **54,330
+   vertices**, a median segment of 0.4 mm, and five features hold three quarters of the region's
+   vertices. Douglas–Peucker is a correctness measure for `P1-4`, not a size optimisation. Written
+   iteratively rather than recursively, because nearly-collinear input is exactly what produces
+   both the vertex count and the stack overflow.
+
+**Two more the source made necessary:**
+
+- **`ROUTE_ID` is 1:1 with the centreline**, so the speed-limit and bus-lane layers — modelled as
+  linear-referenced route events — collapse into a key join with no measuring along the route.
+- **`EDGE1END` is a hint.** It names the end of the first edge a turn passes through, and in 4 of
+  217 it names an end 4–39 m from the second edge while the *opposite* end coincides exactly.
+  Taking the shared node as the truth resolves all 217.
+
+**Q11 is resolved and the answer cross-checks.** Sampling the terrain under every vertex puts
+level-0 roads at a median **4.21 m**, against the **4.29 m** median building base `P1-2` measured
+through an entirely separate path. Roads sit 8 cm below the doorways on them. Nothing was tuned to
+make that happen.
+
+**What is deliberately not in the output:** the turn layer's `EXC_VEH_TYPE` / `INC_VEH_TYPE`,
+`PART_TIME_REST` and `EFF_ALL_DAYS`. One restriction in the region excludes taxis — a turn a real
+red taxi may make and the graph says it may not. `roadgraph.json` has no field for it, and adding
+one is a schema change on both sides (hard rule 5), so it is recorded in `DATA_SOURCES.md` for
+`P3-3` and `P3-8` rather than smuggled in.
+
+**234 tests, `ruff` clean.** The road tests build a whole synthetic city — config, geodatabase and
+all — through pyogrio's writer, so they read their input back through the same GDAL that reads the
+real thing rather than proving the parser agrees with itself.
+
+**Review pass, same day: 1.26 s → 0.80 s and 962 MB → 523 MB peak, output byte-identical.**
+
+| Fix | Effect |
+|---|---|
+| `np.allclose` on 2-vectors, 41,406× in `clip` | **−0.32 s.** Also a latent bug: its default `rtol=1e-5` widened an intended 1 nm join test to **~15 mm** at the far edge of the region, so two runs re-entering within a centimetre would have merged into one segment crossing outside. Now an explicit metre tolerance. |
+| Terrain read 224 MB of JPEG the height field never looks at | **−300 MB.** `_ground` yields a generator and strips `texture`/`uvs`, so six sheets' textures are no longer live at once. |
+| Height field indexed the whole six sheets | **−80 ms, −34 MB.** Sheets overlap a region rather than matching it: 54% of the terrain lies outside Wan Chai and can never be queried, because clipping guarantees every road vertex is inside. |
+
+Four hypotheses were **measured and rejected**, which is the more useful half: vectorising
+`HeightField.sample` gives *no gain* (3,553 query points land in 2,023 distinct cells, so there is
+nothing to amortise), a counting sort is no faster than `argsort`, `_write`'s list building is
+9.4 ms, and the redundant `projected_bounds` calls cost 0.6 ms between them.
+
+Three correctness fixes came out of the same pass. `parse_speed_limit` searched rather than
+matched, so a free-text `"Route 4, 70 km/h"` would have read as **4 km/h**. `clip`'s whole-array
+fast path skipped the minimum-length rule the slow path applied, so one function carried two
+policies. And an empty or single-vertex geometry — legal in a geodatabase — reached
+`polyline[0]` and raised `IndexError` with nothing to say which feature caused it.
+
+**Recorded, not fixed:** `roads.py` reaches into `buildings.py` for `Placement` and `read_sheet`,
+and reads its terrain class out of the *buildings* config section. The layering rule says format
+and policy stay apart, and this crosses it. The right shape — a shared sheet-reading module — is
+easier to see once `P1-4` and `P1-5` have said what they need from the same sheets, so it is
+deliberately left until then rather than guessed at now. Also latent: `_shared_node`'s `EDGE1END`
+hint is stated against the source feature's digitisation, which reversing or splitting an edge
+breaks; the geometric fallback covers it unless a turn's two edges ever meet at *both* ends, which
+no data has produced.
 
 ### 2026-07-30 — `P1-2` Building meshes
 
