@@ -43,6 +43,24 @@ widening comes from city config, and **all 393 single-level junctions in the reg
 under a dense point sample inside the junction radius. It resolved the open decision it inherited
 and opened `Q13`, which is the first thing `P1-3` got wrong rather than merely left out.
 
+**The car is on the real city.** `scenes/dev/city_drive.tscn` spawns the `P0-5` taxi westbound in
+the nearside lane of Hennessy Road and drives on `P1-4`'s collider — verified in-engine: road at
+3.636 m, car at rest at 4.286 m, **all four wheels grounded**, and the 0.649 m between them is the
+suspension holding it up rather than the chassis sitting on the tarmac. That last figure is the
+cross-check worth having: `handling.tres` predicts a 0.65 m static ride height from spring rate and
+corner load, and nothing was tuned to make it agree.
+
+**The car does not start on the centreline, and that was a real bug rather than a preference.**
+Spawned centred it sat at 3 of 4 wheels grounded and crept at 0.8 m/s. The centreline is the worst
+place on the network to put a wheel: it is where opposed carriageway ribbons overlap and where
+junction caps double up, so a suspension raycast finds two coplanar collision triangles a few
+centimetres apart and hunts between them. Moved into the nearside lane, it is 4 of 4 and dead
+still. Worth remembering when `P2-2` picks lane centres — the carriageway centre is a seam.
+
+That makes `Q8` **answerable for the first time**: `P0-5`'s verdict was that a grey box cannot say whether this is fun, and this is the same
+car on real geometry. It is a dev scene, not `P1-7` — nothing reads `city.json`, buildings have no
+collision, there is no ground off the carriageway, and the flyovers are unreachable (`Q13`).
+
 **`P1-5` (fare nodes) is next**, and `P1-6`/`P1-7` behind it. The Phase 1 gate — a screenshot of
 real Wan Chai massing in Godot — is now one task of plumbing away, since the city, its roads and
 their collision all exist as assets.
@@ -90,7 +108,7 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ❌ blocked
 | Q5 | Actual file sizes of the region's building data | Affects fetch time and disk planning | `P0-1` | ✅ **Resolved 2026-07-30** — ~44 MB/sheet, ~280 MB for the region. Roads: `CENTERLINE.gml` is 486 MB territory-wide |
 | Q6 | Does the region need Central for the circuit to feel complete? | Scope | after `P3-9` | 🟡 Deferred |
 | Q7 | Does game-space Z run negative northward, or should the origin move to the NW corner? | Data contract — tile IDs and every position in `city.json` | `P1-6` | ✅ **Resolved 2026-07-30** — NW corner |
-| Q8 | What is the cheapest build that lets the user judge "is this fun?" | **Now the top project risk** — `P0-5` did not answer it | user | 🔴 Open |
+| Q8 | What is the cheapest build that lets the user judge "is this fun?" | **Now the top project risk** — `P0-5` did not answer it | user | 🟡 **Answerable as of 2026-07-30** — `scenes/dev/city_drive.tscn` puts the `P0-5` car on real Wan Chai. Awaiting the user's verdict |
 | Q9 | Does `P1-3` read the 17 MB FGDB or the 539 MB per-layer GML? | 522 MB of download and disk per clone | `P1-3` | ✅ **Resolved 2026-07-30** — the geodatabase; every GML dropped from config |
 | Q10 | Is the game-space origin per region, or shared per city? | Whether two regions can stitch into one continuous map | `P1-6` | ✅ **Resolved 2026-07-30** — both: local origin plus a recorded `city_offset` |
 | Q11 | Where is ground level? `elevation_levels[0] = 0.0` puts at-grade roads at y=0, but 99.9% of Wan Chai's buildings have their base **above 2 m** (median 4.29 m) | Roads would run ~4 m below every front door, and under the terrain | `P1-3` | ✅ **Resolved 2026-07-30** — sample the terrain height field |

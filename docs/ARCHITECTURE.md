@@ -493,10 +493,37 @@ measurement — and frames whatever is on disk. Set the `Tiles` node's `lod` to 
 Tile vertices are in region game space, so tiles need no transform; dropping one at the origin
 puts it where it belongs. That is why `city.json` gives tiles an `aabb` but no position.
 
+**To drive it:** open `scenes/dev/city_drive.tscn` and run it (F6). Same assets, but with the
+`P0-5` taxi on the road surface's collider and the chase camera instead of the fly camera.
+Separate from `city_preview.tscn` because the two answer different questions and want different
+cameras.
+
+The spawn is derived from `roadgraph.json` rather than eyeballed, and this is the place that
+record lives — a `.tscn` is rewritten from scratch the first time the editor saves it, taking its
+comments with it. The car starts on **Hennessy Road**: the longest level-0 straight in the region
+at 280 m, one-way, tram-tracked, and the most recognisable street in Wan Chai. Its heading comes
+from that edge's own direction vector, so the car faces the way the graph says traffic legally
+runs — the same directions `Q12` confirmed against the real street.
+
+It sits in the **nearside lane, 2.56 m left of the centreline**, not on the centreline itself.
+Partly because a car should start in a lane, and partly because the centreline is the worst place
+on the network to put a wheel: it is where opposed carriageway ribbons overlap and where junction
+caps double up, so a raycast can find two coplanar collision triangles a few centimetres apart and
+the wheel picks between them. Three things are knowingly missing, and all three are
+someone else's task: **buildings have no collision** (`P2-1` decides where tile colliders come
+from), **there is no ground** so anything off the carriageway is void (the terrain did not fit any
+budget — see `P1-2`), and **the flyovers cannot be reached** (`Q13`). A dev harness on the root
+catches the car when it falls out of the world, because the kerbs are 0.15 m and mountable by
+design.
+
 | Path | Role |
 |---|---|
 | `scripts/city/generated_tiles.gd` | Where tile output lives and how to list it — one definition, two readers |
+| `scripts/city/generated_road_surface.gd` | Same, for `roads.glb` |
+| `scripts/city/mesh_contract.gd` | The mesh rules every generated asset is held to; both verify tools read it |
 | `scripts/city/tile_preview.gd` | Dev: instantiate every tile, report bounds |
+| `scripts/city/road_surface_preview.gd` | Dev: instantiate the road surface, report triangles and colliders |
+| `scripts/city/drive_harness.gd` | Dev: return the car to its spawn when it leaves the world |
 | `scripts/camera/free_look_camera.gd` | Dev: fly camera. Bypasses `InputRouter` so dev keys stay out of the shipped action map |
 | `scenes/world/golden_hour.tscn` | The one lighting rig, per `ART_DESIGN.md`. Instance it rather than authoring a second Environment |
 | `tools/verify_tiles.gd` | Headless acceptance check for generated tiles |

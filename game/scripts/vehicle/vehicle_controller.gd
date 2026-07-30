@@ -276,15 +276,31 @@ func _apply_auto_right(delta: float) -> bool:
 	_upside_down_for += delta
 	if _upside_down_for < profile.auto_right_delay_s:
 		return false
-	_upside_down_for = 0.0
 	# Keep heading, discard roll and pitch.
 	var heading: float = global_rotation.y
-	global_transform = Transform3D(
-		Basis(Vector3.UP, heading), global_position + Vector3.UP * RIGHTING_LIFT_M
+	place_at(
+		Transform3D(Basis(Vector3.UP, heading), global_position + Vector3.UP * RIGHTING_LIFT_M)
 	)
+	return true
+
+
+## Put the car somewhere and leave it in a state it can be driven from.
+##
+## The transform is the easy half. Momentum has to go with it — a body moved
+## while it still holds the speed of a long fall carries that straight into
+## whatever it lands on — and so does the simulation state this controller
+## caches, which nothing outside it can reach: a car that fell at full steering
+## lock would otherwise be replaced at full lock and veer off immediately, and
+## the wheels would spend a tick loaded against ground they are no longer near.
+func place_at(pose: Transform3D) -> void:
+	global_transform = pose
 	linear_velocity = Vector3.ZERO
 	angular_velocity = Vector3.ZERO
-	return true
+	_steer_angle = 0.0
+	_upside_down_for = 0.0
+	for wheel: WheelMount in _wheels:
+		wheel.compression = 0.0
+		wheel.grounded = false
 
 
 ## Arcade collision response: glancing hits slide, head-on hits cost speed but

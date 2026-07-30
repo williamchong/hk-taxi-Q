@@ -1,0 +1,52 @@
+[gd_scene load_steps=7 format=3]
+
+; The first scene that puts the car on the real city (`P1-4` + `P0-5`).
+;
+; `city_preview.tscn` is for looking at the ETL output; this is for driving it.
+; The two are separate because they answer different questions and want
+; different cameras — and because a free-look camera in a scene with a physics
+; body is a scene where nobody is sure what they just judged.
+;
+; Not the Phase 1 gate and not `P1-7`: nothing here reads `city.json`, the tiles
+; are placed by the dev previews rather than by a streamer, and the buildings
+; carry no collision. It exists to put a real answer under `Q8` — whether real
+; Wan Chai geometry is fun to drive — which a grey box could not.
+
+[ext_resource type="Script" path="res://scripts/city/tile_preview.gd" id="1_tiles"]
+[ext_resource type="Script" path="res://scripts/city/road_surface_preview.gd" id="2_surface"]
+[ext_resource type="PackedScene" path="res://scenes/world/golden_hour.tscn" id="3_light"]
+[ext_resource type="PackedScene" path="res://scenes/vehicle/taxi.tscn" id="4_taxi"]
+[ext_resource type="Script" path="res://scripts/camera/chase_camera.gd" id="5_camera"]
+[ext_resource type="Script" path="res://scripts/city/drive_harness.gd" id="6_harness"]
+
+[node name="CityDrive" type="Node3D"]
+script = ExtResource("6_harness")
+vehicle_path = NodePath("Taxi")
+
+[node name="Tiles" type="Node3D" parent="."]
+script = ExtResource("1_tiles")
+
+[node name="RoadSurface" type="Node3D" parent="."]
+script = ExtResource("2_surface")
+
+[node name="GoldenHour" parent="." instance=ExtResource("3_light")]
+
+; Westbound in the nearside lane of Hennessy Road. Derived, not eyeballed — see
+; docs/ARCHITECTURE.md "To drive it" for where the numbers come from and why the
+; car does not start on the centreline.
+[node name="Taxi" parent="." instance=ExtResource("4_taxi")]
+transform = Transform3D(-0.1131, 0, -0.9936, 0, 1, 0, 0.9936, 0, -0.1131, 243.4152, 4.6815, 697.9361)
+
+[node name="CameraRig" type="SpringArm3D" parent="."]
+margin = 0.3
+script = ExtResource("5_camera")
+target_path = NodePath("../Taxi")
+camera_path = NodePath("Camera3D")
+
+; 400 m, not the fly camera's 2 km. The region is only 1.66 km across, so a 2 km
+; far plane culls nothing at all, and a chase camera 6.5 m behind a car in a Wan
+; Chai street canyon cannot see past a couple of blocks anyway. Measured: 94 draw
+; calls and 2.06 M primitives at 2 km, against 48 and 1.16 M at 400 m, with
+; nothing visible lost at street level.
+[node name="Camera3D" type="Camera3D" parent="CameraRig"]
+far = 400.0
