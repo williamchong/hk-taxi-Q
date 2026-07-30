@@ -1,13 +1,12 @@
 ## Where the ETL's road graph lives, and how to read it.
 ##
-## The counterpart of `generated_tiles.gd`, and separate from it for the same
-## reason: two things will want the graph for different purposes — the preview
-## draws it, `RoadGraph` (`P2-2`) will query it — and a moved path that only one
-## of them learns about fails silently in the other.
+## One definition, because two things want the graph for different purposes —
+## the preview draws it, `RoadGraph` (`P2-2`) will query it — and a moved path
+## that only one of them learns about fails silently in the other.
 ##
-## Dev-only for now. `P1-6` writes `city.json`, which is what a shipped build
-## reads; this reads `P1-3`'s stage output directly so the graph can be looked at
-## before either of those exists.
+## Dev-only. `city.json` is what a shipped build reads and `CityManifest`
+## (`P1-7`) resolves the path from it; this constant is what the preview scene
+## uses, and `verify_city.gd` asserts the two name the same file.
 extends RefCounted
 
 const GeneratedDocument = preload("res://scripts/city/generated_document.gd")

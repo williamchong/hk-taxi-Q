@@ -118,7 +118,7 @@ hk-taxi-Q/
 │   │   └── shaders/
 │   ├── tuning/                  # .tres resources: handling, fares, scoring
 │   └── tools/                   # editor/headless scripts — import fixups, asset checks
-└── tools/                       # dev scripts, export automation
+└── tools/                       # dev scripts: ETL→game sync, export automation
 ```
 
 **Why the ETL is a separate Python project:** it runs rarely, at build time, and needs GDAL —
@@ -172,6 +172,13 @@ wants the tile list.
 Each of the three is separately versioned below, and `export.py` writes the manifest that points
 at them. A build ships exactly what the manifest names: the three documents and every path in
 `tiles[].lods` — 199 files and **102.6 MB** for Wan Chai, of which LOD0 is 74.7 MB.
+
+**The game must read the manifest to find its tiles — there is no fallback.** In the editor
+`res://` is a real directory and `DirAccess.get_files_at` lists it; in an exported build it is a
+PCK archive that Godot's virtual filesystem will not enumerate, so the same call returns nothing
+and the city renders empty. `scripts/city/city_manifest.gd` is the only supported route, and
+`tiles[].aabb` is what lets `CityStreamer` (`P2-1`) reject a tile without loading its ~400 KB of
+geometry first.
 
 ⚠️ **`bounds_game` is the union of the content, not the region rectangle.** Wan Chai's declared
 region is 1650 × 887 m; its geometry spans 1668 × 942 m, because a building is assigned to a tile
@@ -515,7 +522,7 @@ Key techniques:
 ```
 etl/  →  python -m pipeline --city hong_kong --region wan_chai
       →  etl/out/<city>/<region>/{city.json, roadgraph.json, roads.glb, fares.json, tiles/*.glb}
-      →  copied to game/assets/generated/
+      →  tools/sync_generated.sh → game/assets/generated/
       →  Godot export presets → iOS / Android / desktop / web-demo
 ```
 
@@ -549,12 +556,40 @@ checks alone and exits non-zero on any finding.
 The ETL is **not** run by CI on every commit — it is run when source data or pipeline logic
 changes, and its output is treated as a versioned build artefact.
 
-**Generated assets are checked in-engine, not by eye.** `godot --headless --path game --script
-res://tools/verify_tiles.gd` loads every tile and asserts the draw-call, vertex-colour and
-no-texture properties this contract states. Run it after a rebuild; the ETL cannot assert
-engine-side facts about its own output.
+**Getting a build into the game:** `tools/sync_generated.sh [city] [region]`. It copies exactly
+the files `city.json` names — asked of the ETL (`python -m pipeline.export … --list`), never
+inferred from a directory listing. That is what keeps `buildings.json` and `roadsurface.json`, which
+sit in the same output directory and are not part of the contract, out of the bundle. It also
+removes tiles a previous build left behind, because nothing else would ever notice them: every
+check in the project starts from the manifest, and the manifest has forgotten them.
 
-**To look at the result before `P1-7`:** open `scenes/dev/city_preview.tscn` and run it (F6).
+**Generated assets are checked in-engine, not by eye.** Two headless tools, run after a rebuild,
+because the ETL cannot assert engine-side facts about its own output:
+
+```
+godot --headless --path game --script res://tools/verify_tiles.gd   # the mesh contract
+godot --headless --path game --script res://tools/verify_city.gd    # the manifest vs the geometry
+```
+
+`verify_tiles.gd` asserts the draw-call, vertex-colour and no-texture properties this contract
+states, for every tier of every tile the manifest names. `verify_city.gd` closes the other half of
+the round trip: it measures each imported LOD0 mesh and compares it to the `aabb` `export.py`
+recorded, to 1 cm — an axis flip, a unit scale or a dropped offset moves a corner by metres, and
+nothing else in the project would see it. It also checks that coarser tiers stay inside the extent
+the streamer will cull against, that every tile sits inside `bounds_game`, and that the three
+documents the manifest names exist. **Z-fighting it cannot check** — `--headless` loads the dummy
+rasteriser, so there is no frame to inspect. A windowed run can: render, nudge the camera ~2 cm,
+diff. A fighting surface flips wholesale under a sub-pixel move where anti-aliased edges only
+shift. Measured 0.071% on Hennessy Road at `P1-7`; one camera at one place, so flying around is
+still the acceptance.
+
+⚠️ Both tools need Godot's global class cache, which lives in the gitignored `game/.godot/`. Open
+the project in the editor once (or `godot --headless --path game --editor --quit`) after a fresh
+clone, or `CityManifest` will not resolve. Note that a headless editor run **rewrites
+`project.godot`**, dropping `renderer/rendering_method.web`; `git checkout game/project.godot`
+afterwards.
+
+**To look at the result:** open `scenes/dev/city_preview.tscn` and run it (F6).
 It instantiates every tile — no streaming, no LOD switching, so it is *not* a performance
 measurement — and frames whatever is on disk. Set the `Tiles` node's `lod` to see a coarser tier.
 Tile vertices are in region game space, so tiles need no transform; dropping one at the origin
@@ -585,21 +620,23 @@ design.
 
 | Path | Role |
 |---|---|
-| `scripts/city/generated_tiles.gd` | Where tile output lives and how to list it — one definition, two readers |
-| `scripts/city/generated_road_surface.gd` | Same, for `roads.glb` |
+| `scripts/city/city_manifest.gd` | **`city.json`, typed.** The shipping route into the generated city: the tile list, their AABBs, and the resolved paths of the three documents |
+| `scripts/city/generated_road_surface.gd` | Dev locator for `roads.glb` — one definition, two readers |
 | `scripts/city/generated_road_graph.gd` | Same, for `roadgraph.json` |
 | `scripts/city/generated_fares.gd` | Same, for `fares.json`. Also holds the `kind` and `stand_category` spellings — the ETL is authoritative for those |
-| `scripts/city/generated_document.gd` | Parse and version-check a JSON document the ETL wrote. Shared by the locators above, so the stale-copy message exists once |
+| `scripts/city/generated_document.gd` | Parse and version-check a JSON document the ETL wrote. Shared by the locators above and by `CityManifest`, so the stale-copy message exists once |
 | `scripts/city/mesh_contract.gd` | The mesh rules every generated asset is held to; both verify tools read it |
 | `scripts/city/preview_draw.gd` | Flat ribbons and the unshaded vertex-colour material, shared by the dev previews |
-| `scripts/city/tile_preview.gd` | Dev: instantiate every tile, report bounds |
+| `scripts/city/tile_preview.gd` | Dev: instantiate every tile the manifest names, report triangles. The shape `CityStreamer` grows from |
 | `scripts/city/road_surface_preview.gd` | Dev: instantiate the road surface, report triangles and colliders |
 | `scripts/city/road_preview.gd` | Dev: draw the road graph flat, with one-way arrows. Answered `Q12` |
 | `scripts/city/fare_preview.gd` | Dev: pin every fare node and tether it to `nearest_edge` at `edge_t` |
 | `scripts/city/drive_harness.gd` | Dev: return the car to its spawn when it leaves the world |
 | `scripts/camera/free_look_camera.gd` | Dev: fly camera. Bypasses `InputRouter` so dev keys stay out of the shipped action map |
 | `scenes/world/golden_hour.tscn` | The one lighting rig, per `ART_DESIGN.md`. Instance it rather than authoring a second Environment |
-| `tools/verify_tiles.gd` | Headless acceptance check for generated tiles |
+| `tools/verify_tiles.gd` | Headless acceptance check for generated tiles — the mesh contract |
+| `tools/verify_city.gd` | Headless acceptance check for `city.json` — georeferencing, bounds, and the files it names |
+| `tools/verify_road_surface.gd` | Headless acceptance check for `roads.glb` — one draw call, UVs, trimesh collision |
 | `tools/generated_scene_import.gd` | Import fixup — see the `[importer_defaults]` row above |
 
 ---

@@ -58,4 +58,6 @@ func _ready() -> void:
 		)
 	)
 	if measured:
-		built.emit(bounds.position, bounds.end)
+		# Deferred for the reason `tile_preview.gd` spells out: `_ready` runs
+		# children-first, so a direct emit here beats the camera's connect.
+		built.emit.call_deferred(bounds.position, bounds.end)

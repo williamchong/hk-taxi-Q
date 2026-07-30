@@ -124,6 +124,38 @@ That last command is the engine-side half of the acceptance criteria — one dra
 colours, UVs for the markings shader, no texture, and a `ConcavePolygonShape3D` that actually
 imported. None of it is visible from Python.
 
+## The whole region (`P1-6`, `P1-7`)
+
+```sh
+../.venv/bin/python -m pipeline --city hong_kong --region wan_chai
+```
+
+Runs all six stages in dependency order — fetch, buildings, roads, surface, fares, export — in
+**4.4 s** for Wan Chai against a warm cache, and writes `out/hong_kong/wan_chai/city.json`. Each
+stage is invoked through the same entry point its own command uses, so a full build and a partial
+one cannot drift. `--from roads` resumes mid-chain; a stage that exits non-zero stops the run.
+
+The export stage also validates what it wrote, against the documents it was derived from rather
+than against itself:
+
+```sh
+../.venv/bin/python -m pipeline.export --city hong_kong --region wan_chai --check
+```
+
+Then put it in front of the engine. This is the only supported way — it copies exactly the files
+`city.json` names, so the two stage intermediates in the same directory (`buildings.json`,
+`roadsurface.json`) cannot reach the bundle, and it removes tiles a previous build left behind:
+
+```sh
+cd .. && tools/sync_generated.sh hong_kong wan_chai
+godot --headless --path game --script res://tools/verify_city.gd
+```
+
+`verify_city.gd` is the engine-side half of `P1-7`'s acceptance: it measures every imported LOD0
+mesh and compares it to the `aabb` this pipeline recorded, to 1 cm. That round trip cannot be
+checked from Python, which never sees an importer. Then open `game/scenes/dev/city_preview.tscn`
+and press **F6** to look at the result, or `city_drive.tscn` to drive it.
+
 ## Layout
 
 | Path | Contains |
@@ -139,6 +171,10 @@ imported. None of it is visible from Python.
 | `pipeline/terrain.py` | Terrain mesh → a sampleable height field (`Q11`) |
 | `pipeline/roads.py` | Road network → `roadgraph.json`. Where the policy lives |
 | `pipeline/surface.py` | `roadgraph.json` → `roads.glb`. Ribbon, kerbs, junction caps, collision |
+| `pipeline/fares.py` | Taxi stands and pick-up points → `fares.json`, snapped to the graph |
+| `pipeline/export.py` | Stage outputs → `city.json`, plus the cross-document validation |
+| `pipeline/documents.py` | Read and write a versioned JSON document. Its own module because stages consume each other's output in both directions |
+| `pipeline/__main__.py` | `python -m pipeline` — every stage, in dependency order |
 | `sources/<city>/<source>/` | Raw downloads and `manifest.json` — gitignored |
 | `out/<city>/<region>/` | Pipeline output — gitignored |
 

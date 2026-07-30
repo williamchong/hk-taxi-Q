@@ -3,7 +3,7 @@
 Living document. **Update this whenever a task changes status, a decision is made, or an open
 question is answered.** Newest entries at the top of each log.
 
-Last updated: 2026-07-31 (`P1-6` done — one command builds the whole region, and checks it)
+Last updated: 2026-07-31 (`P1-7` done — **Phase 1 gate passed**; Godot builds the city from `city.json`)
 
 ---
 
@@ -58,8 +58,9 @@ centimetres apart and hunts between them. Moved into the nearside lane, it is 4 
 still. Worth remembering when `P2-2` picks lane centres — the carriageway centre is a seam.
 
 That makes `Q8` **answerable for the first time**: `P0-5`'s verdict was that a grey box cannot say whether this is fun, and this is the same
-car on real geometry. It is a dev scene, not `P1-7` — nothing reads `city.json`, buildings have no
-collision, there is no ground off the carriageway, and the flyovers are unreachable (`Q13`).
+car on real geometry. It is still a dev scene: since `P1-7` the tiles come from `city.json`, but
+buildings have no collision, there is no ground off the carriageway, and the flyovers are
+unreachable (`Q13`). Those are `P2-1`'s, `P1-2`'s and `Q13`'s respectively.
 
 **`P1-5` closed on 2026-07-31.** `fares.py` turns two whole-territory taxi datasets — 793 points —
 into **29 fare nodes** for the region: 14 stands, of which **6 are cross-harbour**, and 15
@@ -87,9 +88,27 @@ difference across the whole tree is the `generated_utc` stamp. And **the region 
 102.6 MB of a 200 MB bundle budget** — one region, buildings only, before a single vehicle, sound
 or UI asset. That is `Q16`.
 
-**`P1-7` is next**, and it is the Phase 1 gate. The city, its roads, their collision, its fare
-nodes and now a manifest describing all of them exist as assets; what is left is Godot reading
-`city.json` instead of reading each file by a hardcoded path.
+**`P1-7` closed on 2026-07-31, and with it Phase 1.** Godot builds Wan Chai from `city.json`:
+`CityManifest` reads the manifest, `tile_preview.gd` instantiates the 65 tiles it names —
+**989,212 triangles at LOD0** — and `tools/sync_generated.sh` puts a build in front of the engine
+by copying exactly what the manifest lists and nothing else.
+
+The gate's wording is "correctly georeferenced", and that is a claim about two parties agreeing:
+what `export.py` measured in float64, and where Godot's glTF importer actually put the vertices.
+Neither side could check it before. `tools/verify_city.gd` now does, headless: **all 65 tiles agree
+with their declared `aabb` to within 1 cm**, every coarser tier stays inside the extent the streamer
+will cull against, every tile sits inside `bounds_game`, and the three documents the manifest names
+resolve. The check was proven non-vacuous by nudging one tile 0.5 m east, renaming a document and
+shrinking `bounds_game` — 15 findings, exit 1, nothing spurious, and the offset reported as
+"0.500 m out".
+
+The bug it retires was not cosmetic. Tiles were found by `DirAccess.get_files_at("res://…")`, which
+lists a real directory in the editor and returns **nothing** from a PCK — so the shipped game would
+have rendered an empty city with no error. That code path is deleted rather than deprecated.
+
+**`P2-*` is unblocked.** `P2-1` (`CityStreamer`) and `P2-3` (`VehicleController` on real geometry)
+are the two that matter; `P2-2` (`RoadGraph`) is the one that finally owns the graph parse the
+previews currently duplicate.
 
 **`P0-5` passed conditionally, not cleanly** — the user drove it, found the handling acceptable, and
 judged that *fun* cannot be assessed from a grey box at all. See the decision log. The risk it
@@ -123,9 +142,9 @@ to answer, not Phase 1's.
 | `P1-4` | Road surface mesh | ✅ **Done** | 28,423 triangles, one draw call, kerbs and trimesh collision, 0.43 s. All 393 single-level junctions covered. Opened `Q13`. 259 tests, `ruff` clean. |
 | `P1-5` | Fare nodes | ✅ **Done** | 29 nodes (14 stands, 15 PUDO) from 793 territory-wide points. All four acceptance criteria met and independently corroborated. Opened `Q14`, `Q15`. 297 tests, `ruff` clean. |
 | `P1-6` | Export and manifest | ✅ **Done** | `city.json` + `python -m pipeline`; whole region in 4.4 s, byte-reproducible, 199 files / 102.6 MB. Validation catches what no single stage can. Opened `Q16`. 323 tests, `ruff` clean. |
-| `P1-7` | Godot import | 🟢 **Unblocked** | Deps met. The Phase 1 gate. |
-| `P2-*` | Driving the real city | ⬜ Blocked | Gated on `P1-7` |
-| `P3-*` | Playable slice | ⬜ Blocked | |
+| `P1-7` | Godot import | ✅ **Done** | **Phase 1 gate passed.** 65 tiles from `city.json`, georeferenced to 1 cm and checked in-engine by `verify_city.gd`. `DirAccess` tile listing deleted — it could never have worked in an export. 329 tests, `ruff` clean. |
+| `P2-*` | Driving the real city | 🟢 **Unblocked** | `P2-1`, `P2-2`, `P2-3` all have their deps met |
+| `P3-*` | Playable slice | ⬜ Blocked | Gated on `P2-2`, `P2-3` |
 
 Legend: ⬜ not started · 🟡 in progress · ✅ done · ❌ blocked
 
@@ -460,6 +479,63 @@ below.
 ---
 
 ## Decision log
+
+### 2026-07-31 — `P1-7`: the manifest is the **only** route to the tiles, and the georeference is now checked by the engine
+
+**The listing had to go, and it was not a style preference.** `generated_tiles.gd` found tiles with
+`DirAccess.get_files_at("res://assets/generated/tiles")`. In the editor `res://` is a folder and
+that works; in an exported build it is a PCK archive Godot's virtual filesystem will not enumerate,
+so the call returns an empty array, the loop does nothing, and the game renders an empty city
+**without a single error**. It would have looked like a content problem in the first device build.
+The file is deleted rather than deprecated, so nothing can reach for it again; `CityManifest` is the
+one route, and `verify_tiles.gd` now iterates the manifest too — checking the shipped set by
+construction rather than whatever happens to be on disk.
+
+**The gate's word is "georeferenced", so something had to be able to disagree.** Until now nothing
+could: the ETL measures its own arithmetic and never sees an importer, and `verify_tiles.gd` checks
+the mesh contract — draw calls, vertex colours, textures — which says nothing about *where*. So
+`tools/verify_city.gd` measures each imported LOD0 mesh and compares it to the `aabb` `export.py`
+recorded. **All 65 tiles agree to within 1 cm.** The tolerance is generous against what actually
+causes drift — float64 measurement into float32 storage costs about 0.1 mm at Wan Chai's 1.7 km
+extent — and tight against what it is looking for, since an axis flip, a unit scale or a dropped
+offset moves a corner by metres.
+
+It was proven non-vacuous before being believed, the same way `P1-6`'s validator was: nudge one
+tile 0.5 m east, point `fares` at a file that is not there, shrink `bounds_game` by 100 m. Fifteen
+findings, exit 1, nothing spurious, and the offset reported as *0.500 m out*. Two real bugs in the
+tool surfaced on its first run — it grew *both* boxes before an `encloses` test, which restored the
+tie it was meant to break for the tiles that define `bounds_game`; and it read `global_transform`,
+which returns identity outside the tree, and a `--script` run has no tree. Transforms are now
+accumulated by hand, which also means a transformed importer root would be caught rather than
+silently applied.
+
+**What it cannot check is z-fighting**, and that is stated in the tool rather than glossed. There is
+no *headless* assertion for it — `--headless` loads the dummy rasteriser, so `get_texture()` returns
+nothing at all. A **windowed** run can measure it, though, and did: render Hennessy Road, nudge the
+camera 2 cm, diff the frames. A fighting surface flips wholesale under a sub-pixel move; anti-aliased
+edges change a little. **653 of 921,600 pixels flipped — 0.071%**, and the diff image is sparse
+dotted lines along silhouettes and kerbs, with no flat region flipping. That is evidence, not proof:
+it covers one camera at one place. Flying around is still the acceptance.
+
+**A camera-framing bug surfaced while taking the gate screenshot, and it was mine.** The preview
+scenes opened at the origin looking at the horizon. `_ready` runs children-first, `Tiles` is the
+first child and `Camera3D` the last, so `built` was emitted before the camera connected — reaching
+nobody, with no error to notice: the connection existed, it was made too late. It has been quietly
+false since `P1-4` gave the camera something to frame, and the docs claimed the opposite. Emitting
+deferred fixes it after every `_ready` in the scene, so it survives a node reorder as well.
+
+**The sync is manifest-driven, not a directory copy.** `tools/sync_generated.sh` asks the ETL what
+`city.json` names (`python -m pipeline.export … --list`) and copies that. A `cp -R` of the output
+directory would ship `buildings.json` and `roadsurface.json`, which are stage intermediates and
+explicitly not part of the contract. It also deletes tiles a previous build left behind — nothing
+else in the project would ever notice them, because every check starts from the manifest and the
+manifest has forgotten them, so they would sit in the bundle costing megabytes against `Q16`.
+
+**The three `generated_*.gd` locators keep their constant paths, for now.** They are dev-scene and
+verify-tool plumbing that predates the manifest, and routing them through it today would be churn
+in code `P2-2` and `P3-1` are about to replace. What is not deferred is the drift: `verify_city.gd`
+asserts each locator's constant equals the path `city.json` declares, so the two definitions cannot
+quietly diverge in the meantime.
 
 ### 2026-07-31 — `P1-6`: the manifest **names** the other documents, and the export stage **checks** them
 

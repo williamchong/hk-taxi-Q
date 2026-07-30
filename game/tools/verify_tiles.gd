@@ -10,7 +10,6 @@
 ## Exits non-zero on the first tile that fails.
 extends SceneTree
 
-const GeneratedTiles = preload("res://scripts/city/generated_tiles.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
 ## Draw calls per tile. `P1-2` accepts "under three", so three is a failure.
@@ -18,21 +17,32 @@ const MAX_SURFACES: int = 2
 
 
 func _init() -> void:
+	# Every tier the manifest names, rather than every GLB in the tile
+	# directory (`P1-7`). The set is the same today, but it is the shipped set
+	# by construction — a file the build no longer names stops being checked
+	# instead of failing a check nobody will act on.
+	var manifest: CityManifest = CityManifest.load_manifest()
+	if manifest == null:
+		printerr(CityManifest.missing_hint())
+		quit(1)
+		return
+
 	var failures: int = 0
 	var checked: int = 0
 
-	for file: String in GeneratedTiles.files():
-		checked += 1
-		var problems: PackedStringArray = _check(file)
-		if problems.is_empty():
-			print("  ok    ", file.get_file())
-		else:
-			failures += 1
-			for problem: String in problems:
-				printerr("  FAIL  ", file.get_file(), ": ", problem)
+	for tile: CityManifest.Tile in manifest.tiles:
+		for file: String in tile.lods:
+			checked += 1
+			var problems: PackedStringArray = _check(file)
+			if problems.is_empty():
+				print("  ok    ", file.get_file())
+			else:
+				failures += 1
+				for problem: String in problems:
+					printerr("  FAIL  ", file.get_file(), ": ", problem)
 
 	if checked == 0:
-		printerr(GeneratedTiles.missing_hint())
+		printerr(CityManifest.missing_hint())
 		quit(1)
 		return
 
@@ -43,7 +53,7 @@ func _init() -> void:
 func _check(path: String) -> PackedStringArray:
 	var problems: PackedStringArray = []
 
-	var packed: PackedScene = GeneratedTiles.load_tile(path)
+	var packed := load(path) as PackedScene
 	if packed == null:
 		problems.append("did not load as a scene")
 		return problems

@@ -22,7 +22,14 @@ import pytest
 
 from pipeline import __main__ as orchestrator
 from pipeline.buildings import BUILDINGS_MANIFEST_NAME, BUILDINGS_MANIFEST_SCHEMA
-from pipeline.export import CITY_NAME, CITY_SCHEMA, build_region, shipped, validate
+from pipeline.export import (
+    CITY_NAME,
+    CITY_SCHEMA,
+    build_region,
+    read_manifest,
+    shipped,
+    validate,
+)
 from pipeline.fares import FARES_NAME, FARES_SCHEMA
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
 from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, SURFACE_NAME
@@ -233,6 +240,44 @@ class TestAssembly:
         region.build()
 
         assert (region.out_dir / CITY_NAME).read_bytes() == first
+
+
+class TestShippedList:
+    """`--list`, which `tools/sync_generated.sh` copies from (`P1-7`).
+
+    The sync script exists so the game's asset directory is the manifest's
+    contents and nothing else. What makes that true is that the list comes from
+    here rather than from a directory listing on either side.
+    """
+
+    def test_every_named_file_is_listed_and_exists(self, region) -> None:
+        region.build()
+        names = shipped(read_manifest(region.city, REGION, out_root=region.out_root))
+
+        assert names
+        for name in names:
+            assert (region.out_dir / name).exists(), name
+
+    def test_the_manifest_is_not_in_its_own_list(self, region) -> None:
+        """A caller syncing a region copies this plus `city.json`. Listing the
+        manifest inside itself would also change the shipped-file count the
+        build reports."""
+        region.build()
+
+        assert CITY_NAME not in shipped(
+            read_manifest(region.city, REGION, out_root=region.out_root)
+        )
+
+    def test_a_stale_manifest_is_refused_rather_than_listed(self, region) -> None:
+        """The copy must not be the one thing that reads a mismatched schema
+        happily — it is the step that puts files in front of the engine."""
+        region.build()
+        manifest = region.manifest()
+        manifest["schema_version"] = CITY_SCHEMA + 1
+        (region.out_dir / CITY_NAME).write_text(json.dumps(manifest), encoding="utf-8")
+
+        with pytest.raises(ValueError, match=r"python -m pipeline\.export"):
+            read_manifest(region.city, REGION, out_root=region.out_root)
 
 
 class TestStaleInputs:

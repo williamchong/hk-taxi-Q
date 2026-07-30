@@ -1,14 +1,14 @@
 ## Where the ETL's fare nodes live, and how to read them.
 ##
-## The fourth of these, for the same reason as `generated_tiles.gd`,
-## `generated_road_graph.gd` and `generated_road_surface.gd`: two things will
-## want the fare nodes for different purposes — the preview draws them,
-## `FareSystem` (`P3-1`) will hail from them — and a moved path that only one of
-## them learns about fails silently in the other.
+## The third of these, for the same reason as `generated_road_graph.gd` and
+## `generated_road_surface.gd`: two things will want the fare nodes for
+## different purposes — the preview draws them, `FareSystem` (`P3-1`) will hail
+## from them — and a moved path that only one of them learns about fails
+## silently in the other.
 ##
-## Dev-only for now. `P1-6` writes `city.json`, which is what a shipped build
-## reads; this reads `P1-5`'s stage output directly so the nodes can be looked at
-## before either of those exists.
+## Dev-only. `city.json` is what a shipped build reads and `CityManifest`
+## (`P1-7`) resolves the path from it; this constant is what the preview scene
+## uses, and `verify_city.gd` asserts the two name the same file.
 extends RefCounted
 
 const GeneratedDocument = preload("res://scripts/city/generated_document.gd")

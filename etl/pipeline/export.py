@@ -248,8 +248,22 @@ def _size(path: Path) -> int:
         return 0
 
 
+def read_manifest(city: CityConfig, region_id: str, *, out_root: Path | None = None) -> dict:
+    """The region's `city.json`, refusing a stale one by schema version.
+
+    Note the manifest is *not* one of `INPUTS`: those are what this stage reads
+    to write it. This is for the two callers that read back what was written —
+    `validate`, and `--list` on behalf of `tools/sync_generated.sh`.
+    """
+    rebuild = f"python -m pipeline.export --city {city.id} --region {region_id}"
+    return read_document(city.out_dir(region_id, out_root) / CITY_NAME, CITY_SCHEMA, rebuild)
+
+
 def shipped(manifest: dict) -> list[str]:
     """Every file `city.json` names, relative to the region's out directory.
+
+    `city.json` itself is not in the list — it names the others, not itself —
+    so a caller copying a region wants this plus the manifest.
 
     The definition of "what a build copies into the game", and the reason the
     intermediates can sit in the same directory without being shipped by
@@ -293,8 +307,7 @@ def validate(city: CityConfig, region_id: str, *, out_root: Path | None = None) 
     finding, and the message names the command that fixes it.
     """
     out_dir, documents = _inputs(city, region_id, out_root)
-    rebuild = f"python -m pipeline.export --city {city.id} --region {region_id}"
-    manifest = read_document(out_dir / CITY_NAME, CITY_SCHEMA, rebuild)
+    manifest = read_manifest(city, region_id, out_root=out_root)
 
     missing = [key for key in REQUIRED_KEYS if key not in manifest]
     if missing:
@@ -487,10 +500,17 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     parser.add_argument("--city", required=True)
     parser.add_argument("--region", required=True)
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--check",
         action="store_true",
         help="validate the existing city.json instead of writing a new one",
+    )
+    mode.add_argument(
+        "--list",
+        dest="list_shipped",
+        action="store_true",
+        help="print the files city.json names, one per line, and do nothing else",
     )
     args = parser.parse_args(argv)
 
@@ -498,6 +518,15 @@ def main(argv: list[str] | None = None) -> int:
 
     city = load_city(args.city)
     region = city.region(args.region)
+
+    if args.list_shipped:
+        # stdout, while logging goes to stderr, so `tools/sync_generated.sh` can
+        # read the list without parsing prose. It copies exactly what the
+        # manifest names, which is how the two intermediates in the same
+        # directory stay out of the game.
+        print("\n".join(shipped(read_manifest(city, args.region))))
+        return 0
+
     log.info("%s / %s", city.name, region.name)
 
     if not args.check:
