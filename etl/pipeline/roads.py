@@ -715,21 +715,43 @@ def round_position(point: tuple[float, float, float]) -> list[float]:
     return [round(value, 3) + 0.0 for value in point]
 
 
+def read_document(path: Path, schema_version: int, rebuild: str) -> dict:
+    """A stage's JSON output, refusing a schema the reader was not written for.
+
+    Every generated document carries a `schema_version`, and every stage that
+    reads one has to decide what to do about it. Doing that in one place means
+    the answer is the same everywhere: refuse, and say which command rebuilds
+    the file. A stale document that parses is the failure this exists to stop —
+    it produces plausible output from the wrong data.
+
+    `rebuild` is the command to run, not a description of it, so the message can
+    be copied straight into a shell. The counterpart on the game side is
+    `game/scripts/city/generated_document.gd`, which pushes rather than raises
+    because a missing file there is a dev scene with nothing to draw.
+    """
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError as missing:
+        raise FileNotFoundError(f"{path} does not exist. Run `{rebuild}` first.") from missing
+
+    document = json.loads(text)
+    version = document.get("schema_version")
+    if version != schema_version:
+        raise ValueError(
+            f"{path} declares schema_version {version!r}, this stage reads {schema_version}. "
+            f"Re-run `{rebuild}`."
+        )
+    return document
+
+
 def read_graph(path: Path) -> dict:
-    """The road graph, refusing a schema the reader was not written against.
+    """The road graph, at the version this build understands.
 
     Lives beside the writer below rather than in either consumer: `P1-4` draws
     the graph and `P1-5` snaps to it, and a second copy of this check is a
     second place for the version to be read wrongly.
     """
-    graph = json.loads(path.read_text(encoding="utf-8"))
-    version = graph.get("schema_version")
-    if version != ROADGRAPH_SCHEMA:
-        raise ValueError(
-            f"{path} declares schema_version {version!r}, this stage reads {ROADGRAPH_SCHEMA}. "
-            f"Re-run `python -m pipeline.roads`."
-        )
-    return graph
+    return read_document(path, ROADGRAPH_SCHEMA, "python -m pipeline.roads")
 
 
 def _write(out_root: Path | None, city: CityConfig, region_id: str, report: RoadReport) -> int:

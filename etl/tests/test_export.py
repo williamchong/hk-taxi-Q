@@ -1,0 +1,392 @@
+"""Manifest assembly and cross-document validation (`P1-6`).
+
+The assembly half is small enough to check by reading the output, so most of
+this exercises `validate` — and it does so by building a *good* set first and
+then breaking one thing, because that is how the failures actually happen. Each
+one is a real sequence: re-run the road stage and every `nearest_edge` written
+before it names a different street; build one region over another's output and
+every document is individually fine.
+
+`__main__` is tested with the stage table stubbed out. What is worth pinning
+there is the ordering and the stop-on-failure, not that the stages work — they
+have their own tests, and running them for real would make this the slowest
+file in the suite by three orders of magnitude.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+from pipeline import __main__ as orchestrator
+from pipeline.buildings import BUILDINGS_MANIFEST_NAME, BUILDINGS_MANIFEST_SCHEMA
+from pipeline.export import CITY_NAME, CITY_SCHEMA, build_region, shipped, validate
+from pipeline.fares import FARES_NAME, FARES_SCHEMA
+from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
+from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, SURFACE_NAME
+
+REGION = "middle"
+
+# A fixed stamp, so two builds of the same inputs are byte-identical and a diff
+# between them means something. `generated_utc` is the only field that would
+# otherwise change on every run.
+STAMP = "2026-07-31T00:00:00Z"
+
+_EDGE_ID = 40
+
+
+class _Region:
+    """A complete, valid set of stage outputs, ready to be broken.
+
+    Documents live in memory and are rewritten by `save`, so a test can reach
+    into one, change a single field, and rebuild or revalidate around it.
+    """
+
+    def __init__(self, city, out_root: Path) -> None:
+        self.city = city
+        self.out_root = out_root
+        self.out_dir = city.out_dir(REGION, out_root)
+        (self.out_dir / "tiles").mkdir(parents=True)
+
+        # The second tile deliberately reaches past the region's east edge, the
+        # way a building assigned to a tile whole overhangs it. `bounds_game`
+        # has to cover it — see `test_bounds_cover_content_past_the_region`.
+        self.far_x = city.region_high(REGION)[0] + 40.0
+        self.documents: dict[str, dict] = {
+            BUILDINGS_MANIFEST_NAME: {
+                "schema_version": BUILDINGS_MANIFEST_SCHEMA,
+                "city_id": city.id,
+                "region_id": REGION,
+                "tile_size_m": 150.0,
+                "grid": {"columns": 2, "rows": 1},
+                "lod_cell_sizes_m": [0.0, 1.5],
+                "tiles": [
+                    {
+                        "id": "t_00_00",
+                        "ix": 0,
+                        "iz": 0,
+                        "aabb": [[0.0, 0.0, 0.0], [150.0, 40.0, 150.0]],
+                        "lods": [
+                            {"path": "tiles/t_00_00_lod0.glb", "triangles": 12, "bytes": 3},
+                            {"path": "tiles/t_00_00_lod1.glb", "triangles": 6, "bytes": 3},
+                        ],
+                    },
+                    {
+                        "id": "t_01_00",
+                        "ix": 1,
+                        "iz": 0,
+                        "aabb": [[150.0, 0.0, 0.0], [self.far_x, 90.0, 150.0]],
+                        "lods": [{"path": "tiles/t_01_00_lod0.glb", "triangles": 12, "bytes": 3}],
+                    },
+                ],
+            },
+            SURFACE_MANIFEST_NAME: {
+                "schema_version": SURFACE_MANIFEST_SCHEMA,
+                "city_id": city.id,
+                "region_id": REGION,
+                "mesh": SURFACE_NAME,
+                "mesh_name": "road_surface-col",
+                "triangles": 24,
+                "vertices": 48,
+                "bytes": 3,
+                "aabb": [[-4.0, -1.0, -4.0], [204.0, 2.0, 104.0]],
+            },
+            ROADGRAPH_NAME: {
+                "schema_version": ROADGRAPH_SCHEMA,
+                "city_id": city.id,
+                "region_id": REGION,
+                "nodes": [
+                    {"id": 0, "pos": [0.0, 0.0, 0.0], "kind": "endpoint"},
+                    {"id": 1, "pos": [100.0, 0.0, 0.0], "kind": "junction"},
+                    {"id": 2, "pos": [200.0, 0.0, 100.0], "kind": "endpoint"},
+                ],
+                "edges": [
+                    {
+                        "id": _EDGE_ID,
+                        "from": 0,
+                        "to": 1,
+                        "polyline": [[0.0, 0.0, 0.0], [100.0, 0.0, 0.0]],
+                    },
+                    {
+                        "id": _EDGE_ID + 1,
+                        "from": 1,
+                        "to": 2,
+                        "polyline": [[100.0, 0.0, 0.0], [200.0, 0.0, 100.0]],
+                    },
+                ],
+                "turn_restrictions": [
+                    {"from_edge": _EDGE_ID, "via_node": 1, "to_edge": _EDGE_ID + 1}
+                ],
+            },
+            FARES_NAME: {
+                "schema_version": FARES_SCHEMA,
+                "city_id": city.id,
+                "region_id": REGION,
+                "nodes": [
+                    {
+                        "id": "f_001",
+                        "pos": [50.0, 0.0, 4.0],
+                        "kind": "taxi_stand",
+                        "stand_category": "urban",
+                        "name": {"en": "Middle", "zh": "中"},
+                        "nearest_edge": _EDGE_ID,
+                        "edge_t": 0.5,
+                        "pickup": True,
+                        "dropoff": True,
+                    }
+                ],
+            },
+        }
+
+        (self.out_dir / SURFACE_NAME).write_bytes(b"glb")
+        for tile in self.documents[BUILDINGS_MANIFEST_NAME]["tiles"]:
+            for lod in tile["lods"]:
+                (self.out_dir / lod["path"]).write_bytes(b"glb")
+        self.save()
+
+    def save(self) -> None:
+        for name, document in self.documents.items():
+            (self.out_dir / name).write_text(json.dumps(document), encoding="utf-8")
+
+    def build(self, **kwargs):
+        self.save()
+        kwargs.setdefault("generated_utc", STAMP)
+        return build_region(self.city, REGION, out_root=self.out_root, **kwargs)
+
+    def check(self) -> list[str]:
+        self.save()
+        return validate(self.city, REGION, out_root=self.out_root)
+
+    def manifest(self) -> dict:
+        return json.loads((self.out_dir / CITY_NAME).read_text(encoding="utf-8"))
+
+
+@pytest.fixture
+def region(tmp_path, testville_config):
+    return _Region(testville_config, tmp_path / "out")
+
+
+class TestAssembly:
+    def test_writes_a_manifest_naming_every_shipped_document(self, region) -> None:
+        report = region.build()
+        manifest = region.manifest()
+
+        assert manifest["schema_version"] == CITY_SCHEMA
+        assert manifest["city_id"] == "testville"
+        assert manifest["region_id"] == REGION
+        assert manifest["road_graph"] == ROADGRAPH_NAME
+        assert manifest["road_surface"] == SURFACE_NAME
+        assert manifest["fares"] == FARES_NAME
+        assert report.tiles == 2
+        assert report.lod_files == 3
+
+    def test_tiles_carry_their_lod_paths_in_order(self, region) -> None:
+        region.build()
+        tile = region.manifest()["tiles"][0]
+
+        assert tile["id"] == "t_00_00"
+        assert tile["lods"] == ["tiles/t_00_00_lod0.glb", "tiles/t_00_00_lod1.glb"]
+
+    def test_the_intermediates_are_not_shipped(self, region) -> None:
+        """`buildings.json` and `roadsurface.json` sit in the same directory and
+        are not part of the contract. A build copies what the manifest names."""
+        region.build()
+        names = shipped(region.manifest())
+
+        assert BUILDINGS_MANIFEST_NAME not in names
+        assert SURFACE_MANIFEST_NAME not in names
+        assert set(names) >= {ROADGRAPH_NAME, SURFACE_NAME, FARES_NAME}
+
+    def test_the_origin_is_the_region_transform(self, region) -> None:
+        region.build()
+        transform = region.city.game_transform(REGION)
+
+        assert region.manifest()["origin"] == {
+            "easting": transform.origin_easting,
+            "northing": transform.origin_northing,
+            "elevation": transform.origin_elevation,
+        }
+
+    def test_bounds_cover_content_past_the_region(self, region) -> None:
+        """The reason `bounds_game` is the union of the content rather than the
+        region rectangle: a tile is allowed to overhang, and a consumer sizing
+        anything off the rectangle would clip it."""
+        region.build()
+        bounds = region.manifest()["bounds_game"]
+
+        assert region.far_x > region.city.region_high(REGION)[0]
+        assert bounds["max"][0] == pytest.approx(region.far_x)
+
+    def test_bounds_cover_the_road_surface_outside_the_tiles(self, region) -> None:
+        region.build()
+        bounds = region.manifest()["bounds_game"]
+
+        assert bounds["min"][0] == pytest.approx(-4.0)
+        assert bounds["min"][2] == pytest.approx(-4.0)
+
+    def test_two_builds_of_the_same_inputs_are_identical(self, region) -> None:
+        """With the stamp pinned, a diff between two builds means something."""
+        region.build()
+        first = (region.out_dir / CITY_NAME).read_bytes()
+        region.build()
+
+        assert (region.out_dir / CITY_NAME).read_bytes() == first
+
+
+class TestStaleInputs:
+    def test_a_missing_intermediate_names_the_command_that_writes_it(self, region) -> None:
+        (region.out_dir / SURFACE_MANIFEST_NAME).unlink()
+
+        with pytest.raises(FileNotFoundError, match=r"python -m pipeline\.surface"):
+            build_region(region.city, REGION, out_root=region.out_root)
+
+    def test_a_schema_from_the_future_is_refused(self, region) -> None:
+        region.documents[ROADGRAPH_NAME]["schema_version"] = ROADGRAPH_SCHEMA + 1
+
+        with pytest.raises(ValueError, match=r"python -m pipeline\.roads"):
+            region.build()
+
+
+class TestValidation:
+    def test_a_complete_set_has_no_problems(self, region) -> None:
+        region.build()
+
+        assert region.check() == []
+
+    def test_a_tile_whose_mesh_never_got_written(self, region) -> None:
+        region.build()
+        (region.out_dir / "tiles" / "t_01_00_lod0.glb").unlink()
+
+        assert region.check() == ["city.json names tiles/t_01_00_lod0.glb, which does not exist"]
+
+    def test_an_empty_asset_counts_as_missing(self, region) -> None:
+        region.build()
+        (region.out_dir / SURFACE_NAME).write_bytes(b"")
+
+        assert region.check() == ["roads.glb is empty"]
+
+    def test_a_fare_node_naming_an_edge_the_graph_lost(self, region) -> None:
+        """Re-running the road stage renumbers edges. Every `nearest_edge`
+        written before it then names a different street, or none at all."""
+        region.build()
+        region.documents[FARES_NAME]["nodes"][0]["nearest_edge"] = 999
+
+        assert region.check() == [
+            "fare node f_001 names edge 999, which roadgraph.json does not have"
+        ]
+
+    def test_an_edge_t_off_the_end_of_its_edge(self, region) -> None:
+        region.build()
+        region.documents[FARES_NAME]["nodes"][0]["edge_t"] = 1.5
+
+        assert region.check() == ["fare node f_001 has edge_t 1.5 outside [0, 1]"]
+
+    def test_a_document_left_over_from_another_region(self, region) -> None:
+        """Each document is perfectly valid on its own. Only the set is wrong."""
+        region.build()
+        region.documents[ROADGRAPH_NAME]["region_id"] = "elsewhere"
+
+        assert region.check() == [
+            "roadgraph.json is for testville/elsewhere, city.json for testville/middle"
+        ]
+
+    def test_an_edge_with_no_node_at_its_end(self, region) -> None:
+        region.build()
+        region.documents[ROADGRAPH_NAME]["edges"][0]["to"] = 77
+
+        assert region.check() == [f"1 edges reference a node that does not exist: [{_EDGE_ID}]"]
+
+    def test_a_turn_restriction_pointing_at_nothing(self, region) -> None:
+        region.build()
+        region.documents[ROADGRAPH_NAME]["turn_restrictions"][0]["to_edge"] = 900
+
+        assert region.check() == ["1 turn restrictions reference something that does not exist"]
+
+    def test_a_manifest_left_over_from_a_smaller_build(self, region) -> None:
+        """The failure `bounds_game` has: a manifest from a previous run is
+        still schema-valid and describes a region that no longer exists."""
+        region.build()
+        manifest = region.manifest()
+        manifest["bounds_game"] = {"min": [0.0, 0.0, 0.0], "max": [10.0, 10.0, 10.0]}
+        (region.out_dir / CITY_NAME).write_text(json.dumps(manifest), encoding="utf-8")
+
+        problems = region.check()
+
+        assert len(problems) == 4
+        assert all("outside bounds_game" in problem for problem in problems)
+
+    def test_two_tiles_with_the_same_id(self, region) -> None:
+        region.build()
+        manifest = region.manifest()
+        manifest["tiles"][1]["id"] = manifest["tiles"][0]["id"]
+        (region.out_dir / CITY_NAME).write_text(json.dumps(manifest), encoding="utf-8")
+
+        assert "two tiles share the id t_00_00" in region.check()
+
+
+class TestOrchestrator:
+    """The stage table, with the stages themselves stubbed out."""
+
+    @staticmethod
+    def _stub(monkeypatch, calls: list[tuple[str, list[str]]], failing: str | None = None):
+        for name in list(orchestrator.STAGES):
+
+            def run(argv: list[str], name: str = name) -> int:
+                calls.append((name, argv))
+                return 1 if name == failing else 0
+
+            monkeypatch.setitem(orchestrator.STAGES, name, run)
+
+    def test_every_stage_runs_in_dependency_order(self, monkeypatch) -> None:
+        calls: list[tuple[str, list[str]]] = []
+        self._stub(monkeypatch, calls)
+
+        status = orchestrator.main(["--city", "testville", "--region", REGION])
+
+        assert status == 0
+        assert [name for name, _ in calls] == [
+            "fetch",
+            "buildings",
+            "roads",
+            "surface",
+            "fares",
+            "export",
+        ]
+
+    def test_every_stage_gets_the_city_and_region(self, monkeypatch) -> None:
+        calls: list[tuple[str, list[str]]] = []
+        self._stub(monkeypatch, calls)
+
+        orchestrator.main(["--city", "testville", "--region", REGION])
+
+        assert all(argv == ["--city", "testville", "--region", REGION] for _, argv in calls)
+
+    def test_force_reaches_fetch_and_nothing_else(self, monkeypatch) -> None:
+        calls: list[tuple[str, list[str]]] = []
+        self._stub(monkeypatch, calls)
+
+        orchestrator.main(["--city", "testville", "--region", REGION, "--force"])
+
+        assert calls[0][1][-1] == "--force"
+        assert not any("--force" in argv for _, argv in calls[1:])
+
+    def test_from_skips_the_stages_before_it(self, monkeypatch) -> None:
+        calls: list[tuple[str, list[str]]] = []
+        self._stub(monkeypatch, calls)
+
+        orchestrator.main(["--city", "testville", "--region", REGION, "--from", "surface"])
+
+        assert [name for name, _ in calls] == ["surface", "fares", "export"]
+
+    def test_a_failing_stage_stops_the_run(self, monkeypatch) -> None:
+        """Every later stage reads what an earlier one writes, so carrying on
+        would build the rest of the region from the previous run's output."""
+        calls: list[tuple[str, list[str]]] = []
+        self._stub(monkeypatch, calls, failing="roads")
+
+        status = orchestrator.main(["--city", "testville", "--region", REGION])
+
+        assert status == 1
+        assert [name for name, _ in calls] == ["fetch", "buildings", "roads"]

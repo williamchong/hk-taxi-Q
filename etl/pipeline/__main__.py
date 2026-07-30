@@ -1,0 +1,90 @@
+"""The whole pipeline, in order (`P1-6`).
+
+    python -m pipeline --city hong_kong --region wan_chai
+
+Runs each stage by calling its own `main`, with the same arguments the
+documented per-stage command would pass. That is deliberate rather than
+convenient: composing the stages any other way — importing `build_region`
+directly, say — would create a second code path whose behaviour could drift
+from the one people actually run, and the drift would show up as a full build
+that quietly differs from a partial one.
+
+Ordering is a real dependency chain, not a preference. `surface` reads the
+graph `roads` writes, `fares` snaps to it, and `export` reconciles all four.
+Only `buildings` is independent, and it runs early because it is by far the
+longest stage — a mistake in it is worth hitting before the quick ones.
+
+`fetch` is the only stage that touches the network, and it is a cache hit after
+the first run. `--from` skips ahead when you already have what it would fetch.
+"""
+
+from __future__ import annotations
+
+import argparse
+import logging
+import time
+from collections.abc import Callable
+
+from pipeline import buildings, export, fares, fetch, roads, surface
+
+log = logging.getLogger(__name__)
+
+# Name to entry point. Order is the run order; see the module docstring.
+STAGES: dict[str, Callable[[list[str]], int]] = {
+    "fetch": fetch.main,
+    "buildings": buildings.main,
+    "roads": roads.main,
+    "surface": surface.main,
+    "fares": fares.main,
+    "export": export.main,
+}
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="python -m pipeline", description=(__doc__ or "").splitlines()[0]
+    )
+    parser.add_argument("--city", required=True)
+    parser.add_argument("--region", required=True)
+    parser.add_argument(
+        "--from",
+        dest="start",
+        choices=list(STAGES),
+        default=next(iter(STAGES)),
+        help="start at this stage, skipping the ones before it",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="passed to fetch: take a fresh snapshot rather than reusing the cache",
+    )
+    args = parser.parse_args(argv)
+
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+
+    names = list(STAGES)[list(STAGES).index(args.start) :]
+    started = time.perf_counter()
+    for position, name in enumerate(names, start=1):
+        stage_argv = ["--city", args.city, "--region", args.region]
+        if name == "fetch" and args.force:
+            stage_argv.append("--force")
+
+        log.info("")
+        log.info("== [%d/%d] %s ==", position, len(names), name)
+        began = time.perf_counter()
+        status = STAGES[name](stage_argv)
+        if status != 0:
+            # Stopped rather than carried on: every later stage reads what this
+            # one writes, so continuing would build the rest of the region from
+            # whatever happened to be on disk from the previous run.
+            log.error("%s failed (exit %d); stopping", name, status)
+            return status
+        log.info("   %s took %.1fs", name, time.perf_counter() - began)
+
+    log.info("")
+    log.info("%s / %s complete in %.1fs", args.city, args.region, time.perf_counter() - started)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

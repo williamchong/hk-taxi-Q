@@ -3,7 +3,7 @@
 Living document. **Update this whenever a task changes status, a decision is made, or an open
 question is answered.** Newest entries at the top of each log.
 
-Last updated: 2026-07-31 (`P1-5` done — the fares have somewhere to be)
+Last updated: 2026-07-31 (`P1-6` done — one command builds the whole region, and checks it)
 
 ---
 
@@ -75,9 +75,21 @@ same shape of result as `P1-3`'s node snapping, and for the same reason: the dat
 a defensive implementation would assume. Two things the source *cannot* say are recorded as `Q14`
 and `Q15` rather than guessed at.
 
-**`P1-6` (export and manifest) is next**, then `P1-7`. The Phase 1 gate — a screenshot of real Wan
-Chai massing in Godot — is now one task of plumbing away, since the city, its roads, their
-collision and now its fare nodes all exist as assets.
+**`P1-6` closed on 2026-07-31.** `export.py` reconciles the four stage outputs into `city.json`,
+and `python -m pipeline --city hong_kong --region wan_chai` runs the whole chain — fetch,
+buildings, roads, surface, fares, export — **in 4.4 seconds from an empty `out/`**. Both acceptance
+criteria are met: the set is complete, and it is schema-valid because the stage now says so rather
+than because nobody checked.
+
+Two results are worth more than the plumbing. **The build is reproducible**: rebuilt from a clean
+`out/`, every one of the 199 shipped files is byte-identical to the previous run, and the sole
+difference across the whole tree is the `generated_utc` stamp. And **the region already occupies
+102.6 MB of a 200 MB bundle budget** — one region, buildings only, before a single vehicle, sound
+or UI asset. That is `Q16`.
+
+**`P1-7` is next**, and it is the Phase 1 gate. The city, its roads, their collision, its fare
+nodes and now a manifest describing all of them exist as assets; what is left is Godot reading
+`city.json` instead of reading each file by a hardcoded path.
 
 **`P0-5` passed conditionally, not cleanly** — the user drove it, found the handling acceptable, and
 judged that *fun* cannot be assessed from a grey box at all. See the decision log. The risk it
@@ -110,7 +122,8 @@ to answer, not Phase 1's.
 | `P1-3` | Road graph | ✅ **Done** | 797 edges, 615 nodes, 217 turn restrictions, 96.3% connected, 0.80 s. `Q9`, `Q11` and `Q12` all resolved here. 234 tests, `ruff` clean. All four acceptance criteria met, the last by the user's eye. |
 | `P1-4` | Road surface mesh | ✅ **Done** | 28,423 triangles, one draw call, kerbs and trimesh collision, 0.43 s. All 393 single-level junctions covered. Opened `Q13`. 259 tests, `ruff` clean. |
 | `P1-5` | Fare nodes | ✅ **Done** | 29 nodes (14 stands, 15 PUDO) from 793 territory-wide points. All four acceptance criteria met and independently corroborated. Opened `Q14`, `Q15`. 297 tests, `ruff` clean. |
-| `P1-6`…`P1-7` | Rest of the ETL slice | 🟢 **Unblocked** | Deps met. |
+| `P1-6` | Export and manifest | ✅ **Done** | `city.json` + `python -m pipeline`; whole region in 4.4 s, byte-reproducible, 199 files / 102.6 MB. Validation catches what no single stage can. Opened `Q16`. 323 tests, `ruff` clean. |
+| `P1-7` | Godot import | 🟢 **Unblocked** | Deps met. The Phase 1 gate. |
 | `P2-*` | Driving the real city | ⬜ Blocked | Gated on `P1-7` |
 | `P3-*` | Playable slice | ⬜ Blocked | |
 
@@ -137,6 +150,38 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ❌ blocked
 | Q13 | Nothing ramps between elevation levels. All 36 nodes where two levels meet step by a whole deck height — 6 m at a flyover, 8 m at a tunnel mouth | The elevated and underground networks are topologically connected and geometrically unreachable; a third of the region's road area cannot be driven onto | `P2-2`? | 🔴 **Open — raised 2026-07-30 by `P1-4`** |
 | Q14 | Taxi stands carry **operating-time restrictions** in `Status_EN` — eight territory-wide, one in the region (Russell Street, cross-harbour 1200-0600) — and `P1-5` discards them | A part-time cross-harbour stand is modelled as a full-time one. Small today; it is exactly the kind of detail `P3-9`'s authenticity test would catch | `P3-1` | 🟡 **Open — raised 2026-07-31 by `P1-5`**, deliberately deferred |
 | Q15 | Fare nodes snap to the road graph by **plan distance only**, because the published points are 2D | A stand under a flyover has nothing in it to prefer the street below over the deck above. No node in Wan Chai is affected — every winner is level 0 — but this shares a root cause with `Q13` | `P2-2` | 🟡 **Open — raised 2026-07-31 by `P1-5`**, not reachable with this source |
+| Q16 | One region of buildings ships **102.6 MB** against a 200 MB bundle budget, 74.7 MB of it LOD0 — before any vehicle, audio or UI asset, and before a second region | Half the iOS cellular threshold is spent on the part of the game the player looks at but never touches. Either the tiers do not all ship, or LOD0 gets cheaper, or the budget was wrong | `P2-6` | 🔴 **Open — raised 2026-07-31 by `P1-6`** |
+
+### Q16 — half the bundle is spent, and the game has not started
+
+`export.py` reports what a build ships, because that is the number the manifest defines: the three
+documents it names plus every path in `tiles[].lods`. For Wan Chai that is **199 files and
+102.6 MB**, against `ARCHITECTURE.md`'s 200 MB mobile bundle budget.
+
+| Part | Size |
+|---|---|
+| LOD0 tiles (65) | 74.7 MB |
+| LOD1 tiles (65) | 17.9 MB |
+| LOD2 tiles (65) | 7.8 MB |
+| `roads.glb` | 1.5 MB |
+| `roadgraph.json` | 0.65 MB |
+| `city.json`, `fares.json` | 0.04 MB |
+
+Raised now rather than at `P2-6` because it is cheap to note and expensive to discover late — but
+deliberately **not** acted on, because the answer depends on decisions that are not made yet. Three
+plausible ones, and they are not exclusive:
+
+- **Not every tier ships.** LOD0 is 73% of the bundle and is only ever drawn for the handful of
+  tiles nearest the camera. If `P2-1` finds LOD1 acceptable at the closest range in a street canyon
+  where nothing is visible past a block anyway, the bundle drops to 28 MB and the question closes.
+- **LOD0 gets cheaper.** It is currently an exact weld — 989k triangles across the region, no
+  simplification at all. A 0.5 m cell would sit between the current LOD0 and LOD1.
+- **The budget was for the wrong thing.** 200 MB is the iOS cellular download threshold, not a
+  memory limit, and it applies to the whole app rather than to one region.
+
+What makes this a question rather than a task is that the second region is the business case. One
+region at 102.6 MB means the second cannot ship in the same download, and that is a product
+decision — on-demand resources, a smaller free slice, or fewer tiers — not an ETL one.
 
 ### Q14 and Q15 — both are "the source cannot say", not "we did not look"
 
@@ -415,6 +460,57 @@ below.
 ---
 
 ## Decision log
+
+### 2026-07-31 — `P1-6`: the manifest **names** the other documents, and the export stage **checks** them
+
+Two decisions, and the second is the one with teeth.
+
+**`city.json` references rather than inlines.** The alternative was tempting for exactly one
+reason — the previews parse `roadgraph.json` twice in the same scene — and it was the wrong reason.
+`RoadGraph` wants the graph when it starts; `CityStreamer` wants the tile list at load; `FareSystem`
+wants the fare nodes when a shift begins. Merging them would make every consumer parse all three to
+learn any one, and each is separately versioned in the contract, so a change to fare nodes would
+bump the schema on the document that carries the tiles. The duplicate parse is `P2-2`'s to remove
+by owning the graph, not the manifest's to remove by absorbing it. The comment in `fare_preview.gd`
+that predicted otherwise has been corrected rather than left to be inherited as fact.
+
+**`bounds_game` is the union of the content, not the region rectangle.** These differ by more than
+rounding: the region is 1650 × 887 m and its geometry spans **1668 × 942 m**, because a building is
+assigned to a tile whole and is allowed to overhang, and because the road ribbon is drawn outward
+from centrelines that run to the boundary. The rectangle is a build-time concept — after clipping,
+what exists is the content. A camera framed on the rectangle, or a spatial partition sized to it,
+would silently clip real buildings along every edge.
+
+**The stage validates what it wrote, and that is the actual deliverable.** `P1-6` reads as plumbing;
+the plumbing took an afternoon and the check is what will earn its keep. Four classes of error
+exist that **no individual stage can see, because each document is internally valid in all of
+them**:
+
+| Failure | How it happens |
+|---|---|
+| A fare node names an edge the graph does not have | Re-run `roads` and every `nearest_edge` written before it points at a different street |
+| A tile whose GLB was never written | A build interrupted between the manifest and the mesh |
+| A document from another region | Build a second region over the first one's output directory |
+| Geometry outside the declared bounds | A manifest carried over from a previous, smaller run |
+
+Each is a real sequence rather than a hypothetical, and each is now one line of output naming the
+file and the reason. Verified against the real region by breaking all three of the first kinds at
+once: three findings, exit 1, and nothing else reported.
+
+**Reproducibility was measured, not assumed.** The region was rebuilt from an empty `out/` and
+diffed against the previous build: **every one of the 199 files byte-identical**, the sole
+difference in the entire tree being the `generated_utc` stamp. That makes "did this change
+anything?" answerable by `diff` for every future ETL change, which is the property that made the
+`P1-5` refactors safe to do at all. `build_region` takes the stamp as an argument so a test can pin
+it.
+
+The orchestrator calls each stage's own `main` with the arguments the documented per-stage command
+would pass. Composing them any other way — importing `build_region` directly — would create a
+second code path that could drift from the one people actually run, and the drift would surface as
+a full build quietly differing from a partial one. A non-zero exit stops the chain, because every
+later stage reads what an earlier one wrote.
+
+Opened `Q16`: one region is 102.6 MB of a 200 MB bundle budget, and 73% of that is LOD0.
 
 ### 2026-07-31 — `P1-5`: fare nodes keep the **kerbside** position, and carry three fields the contract did not have
 

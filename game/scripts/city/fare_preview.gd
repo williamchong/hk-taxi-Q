@@ -86,8 +86,9 @@ func _ready() -> void:
 	# has already parsed — 5 ms and 6 MB, measured. Deliberately not cached: a
 	# static memo would hold those 6 MB resident for the life of the process to
 	# save 5 ms once, and would serve stale data across an ETL re-run inside the
-	# editor. `P1-6`'s `city.json` merges the two documents and removes the
-	# second read by construction.
+	# editor. `P1-6` did not remove it either — `city.json` names the graph
+	# rather than containing it, so a shared parse is `RoadGraph`'s to own
+	# (`P2-2`), and these two previews will read it from there.
 	var edges: Dictionary = _edges_by_id(GeneratedRoadGraph.load_graph())
 	var tethering: bool = not edges.is_empty()
 

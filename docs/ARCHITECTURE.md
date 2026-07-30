@@ -92,7 +92,8 @@ hk-taxi-Q/
 │   │   ├── roads.py             # Road Network geodatabase → roadgraph.json
 │   │   ├── surface.py           # roadgraph.json → roads.glb; ribbon, kerbs, junctions
 │   │   ├── fares.py             # taxi stands + PUDO + POIs → fare nodes
-│   │   └── export.py            # → city.json, assembles the tile/road/fare outputs
+│   │   ├── export.py            # → city.json, assembles the tile/road/fare outputs
+│   │   └── __main__.py          # `python -m pipeline` — every stage, in order
 │   ├── sources/<city>/<source>/ # raw downloads — GITIGNORED
 │   ├── out/<city>/<region>/     # pipeline output — GITIGNORED
 │   └── tests/
@@ -140,23 +141,47 @@ The interface between ETL and game. **Versioned — change both sides together a
   "source_crs": "EPSG:2326",
   "origin": { "easting": 835765.0, "northing": 816125.0, "elevation": 0.0 },
   "city_offset": [38379.0, 0.0, 32826.0],
-  "bounds_game": { "min": [0, -20, 0], "max": [1650, 220, 900] },
+  "bounds_game": { "min": [-11.343, -13.049, -18.802], "max": [1656.889, 378.532, 923.32] },
   "tile_size_m": 150,
   "tiles": [
     {
       "id": "t_00_00",
       "lods": ["tiles/t_00_00_lod0.glb", "tiles/t_00_00_lod1.glb", "tiles/t_00_00_lod2.glb"],
-      "aabb": [[0,0,0],[150,120,150]]
+      "aabb": [[8.37,4.935,-16.588],[167.562,70.801,165.268]]
     }
   ],
+  "road_graph": "roadgraph.json",
+  "road_surface": "roads.glb",
+  "fares": "fares.json",
   "etl_version": "0.1.0",
-  "generated_utc": "2026-07-29T00:00:00Z"
+  "generated_utc": "2026-07-30T20:04:03Z"
 }
 ```
 
-`origin` is computed by the ETL from the region bounds, never authored. The values above are the
-real ones for Wan Chai — `floor(min_easting)` and `ceil(max_northing)`, i.e. the region's
-**north-west** corner. Anything reading `city.json` should treat them as data, not as constants.
+Every value above is a real one from the Wan Chai build, not an illustration.
+
+`origin` is computed by the ETL from the region bounds, never authored — `floor(min_easting)` and
+`ceil(max_northing)`, i.e. the region's **north-west** corner. Anything reading `city.json` should
+treat them as data, not as constants. The game itself never needs them; they are what puts a
+game-space position back on the source map.
+
+**`city.json` names the other documents, it does not contain them.** The road graph is 0.65 MB on
+disk and ~6 MB parsed, and `RoadGraph` wants it at a different moment from when `CityStreamer`
+wants the tile list.
+Each of the three is separately versioned below, and `export.py` writes the manifest that points
+at them. A build ships exactly what the manifest names: the three documents and every path in
+`tiles[].lods` — 199 files and **102.6 MB** for Wan Chai, of which LOD0 is 74.7 MB.
+
+⚠️ **`bounds_game` is the union of the content, not the region rectangle.** Wan Chai's declared
+region is 1650 × 887 m; its geometry spans 1668 × 942 m, because a building is assigned to a tile
+whole and may overhang the region's edge — and because the road ribbon is drawn outward from
+centrelines that run right up to it. A consumer sizing a spatial partition, framing a camera, or
+placing diegetic map edges off the rectangle will clip real geometry. The rectangle itself is not
+in the manifest; it is a build-time concept, and after clipping the content is what exists.
+
+`generated_utc` is a build stamp and the **only** field that changes between two builds of
+identical inputs — verified by rebuilding the region from a clean `out/` and diffing: every GLB and
+every JSON byte-identical, this line the sole difference. Strip it before diffing two builds.
 
 `lods` is ordered nearest-first, one file per tier, matching `lod_cell_sizes_m` in city config.
 Separate files rather than one GLB with three meshes, because the streamer loads a tier at a time.
@@ -488,10 +513,13 @@ Key techniques:
 
 ```
 etl/  →  python -m pipeline --city hong_kong --region wan_chai
-      →  etl/out/<city>/<region>/{city.json, roadgraph.json, fares.json, tiles/*.glb}
+      →  etl/out/<city>/<region>/{city.json, roadgraph.json, roads.glb, fares.json, tiles/*.glb}
       →  copied to game/assets/generated/
       →  Godot export presets → iOS / Android / desktop / web-demo
 ```
+
+Six stages in one dependency chain — `fetch`, `buildings`, `roads`, `surface`, `fares`, `export`.
+**4.4 s end to end** for Wan Chai against a warm source cache, of which the buildings stage is 3.2 s.
 
 Each stage also runs on its own against the same arguments, which is how they are developed and
 how a partial rebuild is done:
@@ -499,9 +527,21 @@ how a partial rebuild is done:
 ```
 python -m pipeline.fetch     --city hong_kong --region wan_chai
 python -m pipeline.buildings --city hong_kong --region wan_chai
+python -m pipeline --city hong_kong --region wan_chai --from roads   # resume mid-chain
 ```
 
+`python -m pipeline` invokes each stage through the *same* entry point those commands use, so a
+full build and a partial one cannot drift apart. A stage that exits non-zero stops the run rather
+than letting the next one read the previous build's output.
+
 `fetch` is the only stage that touches the network; everything after it reads `etl/sources/`.
+
+**`export` also validates.** It re-reads what it just wrote and checks the one class of error no
+single stage can see — whether the documents agree with *each other*: a fare node naming an edge
+the graph no longer has, a tile whose GLB was never written, a document left over from another
+region, geometry outside the declared bounds. Each stage's output is internally valid in all four
+cases. `python -m pipeline.export --city … --region … --check` runs the checks alone and exits
+non-zero on any finding.
 
 The ETL is **not** run by CI on every commit — it is run when source data or pipeline logic
 changes, and its output is treated as a versioned build artefact.
