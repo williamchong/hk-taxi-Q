@@ -86,6 +86,14 @@ sources:
   # field mapping under `roads:` below is verified against it.
   road_data_dictionary: https://static.data.gov.hk/td/road-network-v2/dataspec/rdnet_dataspec.zip
 
+  # The two fare-node datasets, both whole-territory point GeoJSON and both
+  # small — 518 and 275 features, 343 KB and 192 KB. data.gov.hk lists only a
+  # portal link for each, so these URLs come from the CSDI file-api the
+  # buildings index also uses. Unlike that one they carry no API key and need
+  # no `layer_name`. Verified to resolve on 2026-07-31.
+  taxi_stands: https://portal.csdi.gov.hk/csdi-webpage/file-api?dataset_id=td_rcd_1697081907714_17556&format=geojson
+  taxi_pudo: https://portal.csdi.gov.hk/csdi-webpage/file-api?dataset_id=td_rcd_1697082382328_14459&format=geojson
+
 # Buildings ship as one ~44 MB glTF zip per 1:1000 map sheet, 3,456 sheets for
 # the territory, with no single bulk URL. The CSDI portal's `file-api` serves
 # the *sheet index* — a polygon per sheet carrying that sheet's download URLs —
@@ -288,3 +296,63 @@ roads:
   # every level-0 road at y=0, and is right only for a city whose sources
   # carry no height field.
   ground: terrain
+
+# How P1-5 turns published taxi points into fare nodes.
+fares:
+  # Furthest a source point may sit from a road centreline and still be
+  # attached to it. These are kerbside positions and the graph is centrelines,
+  # so the true distance is about half a carriageway: measured across the
+  # region's 29 points, 1.18-8.37 m. Thirty metres is far enough to catch a
+  # point in a car park or on a pier without rejecting anything real.
+  max_snap_m: 30.0
+
+  # Same sentinel as `roads.null_values` — the same department publishes both —
+  # but declared separately so the two sections stay independent. Neither taxi
+  # dataset actually uses it today; every name is populated in both languages.
+  null_values: ["-99"]
+
+  groups:
+    - kind: taxi_stand
+      source: taxi_stands
+      # Both datasets are GeoJSON with no `crs` member, which is CRS84 per
+      # RFC 7946 — WGS84 lon/lat, like the buildings sheet index.
+      crs: EPSG:4326
+      fields:
+        name_en: Location_EN
+        name_zh: Location_TC
+        category: Status_EN
+
+      # ⚠️ ORDER IS LOAD-BEARING. Matching is first-hit-wins over substrings,
+      # because `Status_EN` is free text carrying an operating-time note after
+      # a newline — "Cross Harbour Taxi Stand\n(1200-0600 daily)". The city's
+      # sixteen distinct spellings are surveyed in docs/DATA_SOURCES.md; these
+      # five rules cover all of them. The loader refuses a rule an earlier one
+      # would always shadow, so a bad reordering fails rather than mis-files.
+      #
+      # `cross_harbour` is first because it is the one the game cares about —
+      # docs/GAME_DESIGN.md makes it the premium fare — and because two of its
+      # spellings put the word "Urban" in front of it.
+      categories:
+        - {match: "Cross Harbour", id: cross_harbour}
+        - {match: "Lantau", id: lantau}
+        # Catches both "Urban and NT Taxi Stand" and "Both of Urban and NT
+        # Taxi Stand". Must precede the bare "NT Taxi Stand" rule below.
+        - {match: "Urban and NT", id: urban_and_nt}
+        - {match: "NT Taxi Stand", id: nt}
+        - {match: "Urban", id: urban}
+
+    - kind: pudo
+      source: taxi_pudo
+      crs: EPSG:4326
+      fields:
+        name_en: Location_EN
+        name_zh: Location_TC
+        category: Status_EN
+
+      # A quarter of the territory's published points — 66 of 275, and 4 of the
+      # 15 in this region — are drop-off only. Letting a player hail a fare at
+      # one would be wrong in a way a Hong Kong player would notice, so the
+      # distinction is carried rather than flattened.
+      categories:
+        - {match: "PU/DF", id: pickup_dropoff}
+        - {match: "DF", id: dropoff, pickup: false}

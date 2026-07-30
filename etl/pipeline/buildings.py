@@ -32,7 +32,7 @@ from zlib import crc32
 import numpy as np
 from numpy.typing import ArrayLike
 
-from pipeline.config import OUT_ROOT, BuildingStyle, CityConfig, RegionConfig, load_city
+from pipeline.config import BuildingStyle, CityConfig, RegionConfig, load_city
 from pipeline.crs import GameTransform
 from pipeline.fetch import artefact_path, cached_tiles
 from pipeline.gltf import Bounds, MeshData, read_scene, write_glb
@@ -133,15 +133,7 @@ class Grid:
 
     @classmethod
     def for_region(cls, city: CityConfig, region: RegionConfig) -> Grid:
-        bounds = city.projected_bounds(region.id)
-        # Through `GameTransform` rather than subtracting the origin here. The
-        # origin is at the NW corner and the Z flip is forced by handedness, so
-        # writing the far corner out by hand means restating a sign convention
-        # `crs.py` documents as not a free choice — in a second place, where it
-        # can drift.
-        max_x, _, max_z = city.game_transform(region.id).to_game(
-            bounds.max_easting, bounds.min_northing
-        )
+        max_x, max_z = city.region_high(region.id)
         return cls(tile_size_m=region.tile_size_m, max_x=max_x, max_z=max_z)
 
     @property
@@ -276,7 +268,7 @@ class Placement:
             region=region,
             grid=Grid.for_region(city, region),
             offset=game_offset(city.game_transform(region_id)),
-            out_dir=(out_root or OUT_ROOT) / city.id / region_id,
+            out_dir=city.out_dir(region_id, out_root),
             sheets=[
                 (sheet.tile_id, artefact_path(city.id, sheet, root=sources_root)) for sheet in tiles
             ],

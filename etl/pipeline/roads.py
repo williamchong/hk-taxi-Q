@@ -41,7 +41,6 @@ from pipeline.buildings import Placement, read_sheet
 from pipeline.config import (
     BACKWARD,
     FORWARD,
-    OUT_ROOT,
     CityConfig,
     RoadNetwork,
     SourceLayer,
@@ -176,6 +175,25 @@ def simplify(points: np.ndarray, tolerance_m: float) -> np.ndarray:
     return points[keep]
 
 
+def plan_lengths(points: np.ndarray) -> np.ndarray:
+    """Cumulative plan distance along a polyline, starting at zero.
+
+    Plan rather than 3D: road widths, kerbs, junction radii and positions along
+    an edge are all measured on the ground, and a 6 m ramp would otherwise be
+    treated as longer than its own footprint.
+
+    Here rather than in either consumer because both `P1-4` and `P1-5` measure
+    along an edge, and two copies of this convention is two places for it to
+    drift.
+    """
+    return np.concatenate([[0.0], np.cumsum(plan_steps(points))])
+
+
+def plan_steps(points: np.ndarray) -> np.ndarray:
+    """Length of each segment of a polyline, in plan."""
+    return np.hypot(*np.diff(points[:, [0, 2]], axis=0).T)
+
+
 def clip(points: np.ndarray, high: tuple[float, float], *, min_length_m: float) -> list[np.ndarray]:
     """The runs of a polyline that lie inside `(0, 0)`-`high`, in game plan metres.
 
@@ -296,16 +314,28 @@ def clean_text(value: object, null_values: Sequence[str]) -> str | None:
     """A source text field as a string, or None where it means "no value".
 
     The null sentinel arrives in four spellings in this data — `-99`, and three
-    variants using full-width digits and an en-dash. Normalising to NFKC folds
-    the full-width forms; the dash has to be folded by hand, because Unicode
-    quite reasonably does not consider an en-dash a hyphen.
+    variants using full-width digits and an en-dash. NFKC folds the full-width
+    forms; the dash has to be folded by hand, because Unicode quite reasonably
+    does not consider an en-dash a hyphen.
+
+    The value returned is NFC, and only the *comparison* is NFKC. NFKC is a
+    compatibility fold, so it also rewrites the full-width brackets Chinese
+    text sets its parentheticals in as their narrow ASCII equivalents. That is
+    wrong typography in 98 of the fare-node names `P1-5` reads, and those names
+    go on a bilingual HUD; `test_fares.py` pins the case. No road name in the
+    region is affected — all 198 are already NFC.
+
+    Internal whitespace runs collapse to a single space. Not cosmetic either:
+    the taxi datasets wrap long place names across lines, so `Location_EN`
+    arrives with newlines inside it in 31 of the territory's 793 points.
     """
     if value is None:
         return None
-    text = unicodedata.normalize("NFKC", str(value)).strip()
+    text = " ".join(unicodedata.normalize("NFC", str(value)).split())
     if not text:
         return None
-    folded = "".join("-" if unicodedata.category(ch) == "Pd" else ch for ch in text)
+    compatible = unicodedata.normalize("NFKC", text)
+    folded = "".join("-" if unicodedata.category(ch) == "Pd" else ch for ch in compatible)
     return None if folded in null_values else text
 
 
@@ -377,8 +407,7 @@ def build_region(
     centrelines = source.read(style.centrelines)
     owners, parts = gdb.polylines(centrelines)
 
-    far_x, _, far_z = transform.to_game(bounds.max_easting, bounds.min_northing)
-    region_high = (far_x, far_z)
+    region_high = city.region_high(region_id)
 
     ground = (
         _ground(city, region_id, sources_root, region_high) if style.ground_from_terrain else None
@@ -671,33 +700,55 @@ def _components(node_count: int, edges: Iterable[Edge]) -> list[int]:
 # --------------------------------------------------------------------------
 
 
-def _rounded(point: tuple[float, float, float]) -> list[float]:
+def round_position(point: tuple[float, float, float]) -> list[float]:
     """A position at millimetre precision, without a negative zero.
 
     A vertex clipped to the region's western edge lands on -0.0, which is a
     legal JSON number and a confusing thing to read in a file whose whole point
     is that the region starts at zero. Adding 0.0 collapses it: IEEE 754 makes
     -0.0 + 0.0 exactly +0.0, and leaves every other value alone.
+
+    Public because every stage writing a position into the data contract needs
+    the same treatment, and the reason is subtle enough that a second copy
+    would eventually lose it.
     """
     return [round(value, 3) + 0.0 for value in point]
 
 
+def read_graph(path: Path) -> dict:
+    """The road graph, refusing a schema the reader was not written against.
+
+    Lives beside the writer below rather than in either consumer: `P1-4` draws
+    the graph and `P1-5` snaps to it, and a second copy of this check is a
+    second place for the version to be read wrongly.
+    """
+    graph = json.loads(path.read_text(encoding="utf-8"))
+    version = graph.get("schema_version")
+    if version != ROADGRAPH_SCHEMA:
+        raise ValueError(
+            f"{path} declares schema_version {version!r}, this stage reads {ROADGRAPH_SCHEMA}. "
+            f"Re-run `python -m pipeline.roads`."
+        )
+    return graph
+
+
 def _write(out_root: Path | None, city: CityConfig, region_id: str, report: RoadReport) -> int:
-    out_dir = (out_root or OUT_ROOT) / city.id / region_id
+    out_dir = city.out_dir(region_id, out_root)
     out_dir.mkdir(parents=True, exist_ok=True)
     document = {
         "schema_version": ROADGRAPH_SCHEMA,
         "city_id": city.id,
         "region_id": region_id,
         "nodes": [
-            {"id": node.id, "pos": _rounded(node.pos), "kind": node.kind} for node in report.nodes
+            {"id": node.id, "pos": round_position(node.pos), "kind": node.kind}
+            for node in report.nodes
         ],
         "edges": [
             {
                 "id": edge.id,
                 "from": edge.from_node,
                 "to": edge.to_node,
-                "polyline": [_rounded(point) for point in edge.polyline],
+                "polyline": [round_position(point) for point in edge.polyline],
                 "direction": edge.direction,
                 "lanes": edge.lanes,
                 "width_m": edge.width_m,

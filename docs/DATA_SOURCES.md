@@ -222,19 +222,105 @@ The CKAN API itself is the reliable way to enumerate all 61 resources:
 
 ## Fares and points of interest
 
+Both datasets below are read by `P1-5`. Verified 2026-07-31.
+
+**data.gov.hk lists only a portal link for each — no direct file.** The CKAN API returns a single
+resource of format `API` pointing at the CSDI geoportal. The downloadable URL is the CSDI
+`file-api`, the same endpoint the buildings sheet index uses, keyed on the CSDI dataset id:
+
+```
+https://portal.csdi.gov.hk/csdi-webpage/file-api?dataset_id=<id>&format=geojson
+```
+
+Unlike the buildings index these carry **no API key and need no `layer_name`**, so the URLs live
+in `hong_kong.yaml` directly. Both are whole-territory point GeoJSON, and both are small enough
+to fetch and filter in full.
+
+Two properties are shared by both and matter to the pipeline:
+
+- **`crs` is absent**, which is CRS84 per RFC 7946 — WGS84 lon/lat. Declared explicitly in config
+  rather than assumed, like every other datum in this project.
+- **Positions are quantised to whole metres on the HK1980 grid.** Published as lon/lat to ten
+  decimal places, but every point round-trips to an exact metre (e.g. E 835010.0003,
+  N 815587.9997). So a fare node carries about half a metre of its own positional uncertainty.
+
 ### ✅ USE — Taxi Stands
 
 - **Portal:** https://data.gov.hk/en-data/dataset/hk-td-tis_37-taxi-stands
-- Categories include **Urban, NT, Lantau, NT and Urban, and Cross Harbour**.
+- **CSDI dataset id:** `td_rcd_1697081907714_17556` — 518 features, 343 KB.
 - Update frequency: twice per year.
 - **Gameplay use:** pickup hotspots. The *Cross Harbour* category becomes a distinct premium fare
   type that terminates at the tunnel approach — a fare that only makes sense in Hong Kong.
 
+**⚠️ `Status_EN` is free text, not an enum.** It carries the licensing category *and*, in eight
+cases, an operating-time restriction after an embedded newline. All sixteen spellings in the
+territory, with the category `fares.groups[].categories` maps each to:
+
+| Count | `Status_EN` | → |
+|---:|---|---|
+| 312 | `Urban Taxi Stand` | `urban` |
+| 75 | `Both of Urban and NT Taxi Stand` | `urban_and_nt` |
+| 68 | `NT Taxi Stand` | `nt` |
+| 30 | `Cross Harbour Taxi Stand` | `cross_harbour` |
+| 21 | `Lantau Taxi Stand` | `lantau` |
+| 2 | `Cross Harbour Taxi Stand\n(2200-0700 daily)` | `cross_harbour` |
+| 1 | `Cross Harbour Taxi Stand\n(0000-0500 on Sat & Sun)` | `cross_harbour` |
+| 1 | `Cross Harbour Taxi Stand\n(1200-0600 daily)` | `cross_harbour` |
+| 1 | `Urban and Cross Harbour Taxi Stands` | `cross_harbour` |
+| 1 | `Urban and NT Taxi Stand` | `urban_and_nt` |
+| 1 | `NT Taxi Stand\n(2300-0630 daily)` | `nt` |
+| 4 | `Urban Taxi Stand` + a time note (four spellings) | `urban` |
+
+Matching is **first-hit-wins over substrings**, so rule order is load-bearing: `Urban and NT`
+must precede `NT Taxi Stand`, which must precede `Urban`. `load_city` refuses a table where an
+earlier rule would always shadow a later one, and `test_config.py` pins all sixteen spellings —
+the Wan Chai region only ever exercises two of them.
+
+`Q14`: the operating-time restrictions are **discarded**. There is no contract field for them and
+no consumer; a part-time cross-harbour stand is currently modelled as a full-time one.
+
 ### ✅ USE — Taxi Pick-up & Drop-off Points
 
-- **Portal:** https://data.gov.hk/en-data/dataset/hk-td-tis_38-taxi-pick-up-drop-off-points`
+- **Portal:** https://data.gov.hk/en-data/dataset/hk-td-tis_38-taxi-pick-up-drop-off-points
+- **CSDI dataset id:** `td_rcd_1697082382328_14459` — 275 features, 192 KB.
 - Update frequency: twice per year.
 - **Gameplay use:** legal drop-off targets; denser than stands.
+
+`Status_EN` here has only two values, and the distinction is gameplay-relevant: **`Taxi PU/DF`**
+(209) may be hailed at and delivered to, **`Taxi DF`** (66, a quarter of the dataset) is
+**drop-off only**. Carried into `fares.json` as `pickup`/`dropoff` rather than flattened.
+
+### Names, in both datasets
+
+`Location_EN` / `Location_TC` are populated on **every** feature in both datasets — the
+acceptance criterion for bilingual names is satisfied by the source, not by a fallback. Two
+traps:
+
+- **31 of the 793 names contain embedded newlines**, wrapping a long place name across lines.
+  Collapsed to single spaces by `clean_text`; a fare node's name goes on the HUD.
+- **98 names use full-width brackets** (`（1）`). `clean_text` returns **NFC** and folds to NFKC
+  only for the null-sentinel comparison, because NFKC is a *compatibility* fold and would rewrite
+  those as ASCII — wrong typography in Chinese. This changed nothing for `P1-3`: all 198 road
+  names in the region are already NFC, and `roadgraph.json` is byte-identical across the change.
+
+`Location_SC` (simplified) is not read — Hong Kong sets traditional. It is also the only field in
+either dataset with an observed data-entry error: one `Taxi DF` row carries the traditional
+`的士落客點` in the simplified column.
+
+### Snapping fare nodes to the road graph (`P1-5`)
+
+Measured across the region's 29 points, and the reason no tie-breaking rule exists:
+
+- Distance to the nearest centreline: **1.18–8.37 m** (median 3.2 m) — about half a carriageway,
+  which is what a kerbside point against a centreline graph should measure.
+- Margin over the *second* nearest edge: **at least 4.28 m**. Never ambiguous.
+- **28 of the 28** nodes whose snapped edge has an English name land on a street whose name
+  appears in that point's own free-text `Location_EN`. The geometry pipeline never reads that
+  prose, so this is independent corroboration rather than a tautology.
+- Every winner is at **elevation level 0**. One level-1 edge appears as a runner-up, losing by
+  7 m. `Q15`: the sources are 2D, so a stand under a flyover has nothing in it to prefer the
+  street below over the deck above. Plan distance is the only defensible measure; a city with
+  stands under elevated roads would need height in the source to do better.
 
 > **Region note:** Hong Kong Island uses **red urban taxis**. Green (NT) or blue (Lantau) livery in
 > this map would read as wrong to any local player.

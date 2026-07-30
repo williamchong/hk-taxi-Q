@@ -319,7 +319,7 @@ def cached_tiles(
             f"no index for '{source.id}' at {index_path}. "
             f"Run: python -m pipeline.fetch --city {city.id} --region {region.id}"
         )
-    index = _read_index(index_path, source)
+    index = read_feature_collection(index_path, f"tiled source {source.id!r} index")
     return select_tiles(index, source, region_bounds=region.bounds, region_crs=city.geodetic_crs)
 
 
@@ -552,7 +552,7 @@ def _tiles_for(
 
     index_path = artefact_path(city.id, index_artefact, root=root)
     try:
-        index = _read_index(index_path, source)
+        index = read_feature_collection(index_path, f"tiled source {source.id!r} index")
     except ValueError:
         # Evict it, or the bad index is a cache hit that fails identically on
         # every future run and `--force` becomes the only way out.
@@ -580,28 +580,31 @@ def _tiles_for(
     return tiles
 
 
-def _read_index(path: Path, source: TiledSource) -> dict[str, Any]:
-    """Parse a fetched index, rejecting anything that is not a feature collection.
+def read_feature_collection(path: Path, where: str) -> dict[str, Any]:
+    """Parse a fetched GeoJSON file, rejecting anything that is not a feature collection.
 
     A portal that answers a rate limit or an outage with HTTP 200 and a JSON
-    error body would otherwise be cached as a valid index with zero features,
-    and every later run would be a clean cache hit with no buildings at all.
+    error body would otherwise be cached as a valid document with zero
+    features, and every later run would be a clean cache hit that quietly
+    produced nothing — no buildings, or no fare nodes.
+
+    Public because both kinds of GeoJSON the pipeline fetches from the same
+    portal need the same guard: the buildings sheet index and the fare-node
+    point datasets.
     """
     try:
-        index = json.loads(path.read_bytes())
+        document = json.loads(path.read_bytes())
     except json.JSONDecodeError as error:
-        raise ValueError(
-            f"tiled source '{source.id}': index at {path} is not JSON: {error}"
-        ) from error
+        raise ValueError(f"{where}: {path} is not JSON: {error}") from error
 
-    if not isinstance(index, dict) or index.get("type") != "FeatureCollection":
+    if not isinstance(document, dict) or document.get("type") != "FeatureCollection":
         raise ValueError(
-            f"tiled source '{source.id}': index at {path} is not a GeoJSON FeatureCollection. "
-            f"The publisher may have returned an error page with a 200 status."
+            f"{where}: {path} is not a GeoJSON FeatureCollection. The publisher may have "
+            f"returned an error page with a 200 status."
         )
-    if not isinstance(index.get("features"), list) or not index["features"]:
-        raise ValueError(f"tiled source '{source.id}': index at {path} contains no features")
-    return index
+    if not isinstance(document.get("features"), list) or not document["features"]:
+        raise ValueError(f"{where}: {path} contains no features")
+    return document
 
 
 def _check_source_names(city: CityConfig, only: set[str]) -> None:

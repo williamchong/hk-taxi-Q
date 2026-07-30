@@ -284,6 +284,8 @@ independently runnable, while `city.json` remains `export.py`'s to write.
 ```json
 {
   "schema_version": 1,
+  "city_id": "hong_kong",
+  "region_id": "wan_chai",
   "nodes": [
     {
       "id": "f_001",
@@ -291,13 +293,35 @@ independently runnable, while `city.json` remains `export.py`'s to write.
       "kind": "taxi_stand",
       "stand_category": "cross_harbour",
       "name": { "en": "Times Square", "zh": "時代廣場" },
-      "nearest_edge": 42
+      "nearest_edge": 42,
+      "edge_t": 0.6382,
+      "pickup": true,
+      "dropoff": true
     }
   ]
 }
 ```
 
 `kind` ∈ `taxi_stand` | `pudo` | `poi`. `stand_category` is null unless `kind` is `taxi_stand`.
+
+**`pos` is the source position — the kerbside, not the carriageway.** That distinction is not
+cosmetic: 11 of Wan Chai's 29 fare nodes lie outside even the widened road surface, because the
+published points sit on the pavement and `P1-4` draws from centrelines. This is where the
+passenger stands. Where the *taxi* stops is `nearest_edge` at `edge_t`, and that is derivable
+while the kerbside position would not be if it were overwritten. `pos.y` comes off the snapped
+edge rather than the terrain, so a node always sits at the height of the road it belongs to.
+
+**`edge_t`** is the fraction along that edge's plan length, 0 at its `from` node and 1 at its
+`to`. Without it `nearest_edge` names a road that can be 200 m long, and the game would have to
+redo the projection the ETL already did.
+
+**`pickup` and `dropoff`** say what may happen at the node. Both are true at a taxi stand; a
+quarter of Hong Kong's published pick-up/drop-off points are **drop-off only** (66 of 275
+territory-wide, 4 of the region's 15), and letting a player hail a fare at one would be wrong in
+a way a local would notice. `P3-1` should hail only where `pickup`, and deliver only where
+`dropoff`.
+
+Positions are millimetre-rounded like `roadgraph.json`'s, through the same `round_position`.
 
 ### `landmarks.json` — hero building placement
 

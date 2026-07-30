@@ -119,17 +119,24 @@ class SourceLayer:
     fields: dict[str, str]
 
     def field(self, role: str) -> str:
-        if role not in self.fields:
-            known = ", ".join(sorted(self.fields)) or "none"
-            raise KeyError(
-                f"layer '{self.layer}' declares no field for '{role}'. Declared: {known}"
-            )
-        return self.fields[role]
+        return _field(self.fields, role, f"layer '{self.layer}'")
 
     @property
     def columns(self) -> list[str]:
         """Every source column to read, deduplicated and ordered."""
         return sorted(set(self.fields.values()))
+
+
+def _field(fields: Mapping[str, str], role: str, where: str) -> str:
+    """The publisher's column name for a role the pipeline asked for.
+
+    Shared by every configured schema mapping, so the error a missing role
+    produces reads the same wherever it is hit.
+    """
+    if role not in fields:
+        known = ", ".join(sorted(fields)) or "none"
+        raise KeyError(f"{where} declares no field for '{role}'. Declared: {known}")
+    return fields[role]
 
 
 # Directions a city file may declare. `BACKWARD` never reaches
@@ -148,6 +155,18 @@ DIRECTIONS = (BOTH, FORWARD, BACKWARD)
 TERRAIN = "terrain"
 DATUM = "datum"
 GROUND_SOURCES = (TERRAIN, DATUM)
+
+# Fare-node kinds in the data contract. `poi` is listed because the contract
+# lists it; no dataset produces one yet, and a city that adds hotels or malls
+# adds a group rather than a code path.
+TAXI_STAND = "taxi_stand"
+PUDO = "pudo"
+POI = "poi"
+FARE_KINDS = (TAXI_STAND, PUDO, POI)
+
+# What a fare group must name in the publisher's schema, in roles the pipeline
+# owns. Same indirection as `_ROAD_LAYER_ROLES` and for the same reason.
+_FARE_ROLES = ("name_en", "name_zh", "category")
 
 # What each road layer must declare. The pipeline states its requirements here,
 # in role names it owns, and the city file supplies the column names.
@@ -277,6 +296,80 @@ class RoadNetwork:
 
 
 @dataclass(frozen=True)
+class FareCategory:
+    """One rule turning a publisher's category text into a contract slug.
+
+    `match` is a substring rather than an exact value, because the categories
+    are free text with an operating-time note glued on: Hong Kong publishes a
+    stand as `Cross Harbour Taxi Stand\\n(1200-0600 daily)`. Sixteen distinct
+    strings collapse to five categories that way.
+
+    Rules are tried in order and the first hit wins, so a city file orders them
+    most specific first — `load_city` refuses a table where a later rule could
+    never be reached.
+    """
+
+    match: str
+    id: str
+    # Whether a fare may be hailed here, and whether one may be delivered here.
+    # Not every legal drop-off point is a legal pick-up point: a quarter of
+    # Hong Kong's published points are drop-off only, and a game that let a
+    # player hail at one would be wrong in a way a local would notice.
+    pickup: bool
+    dropoff: bool
+
+
+@dataclass(frozen=True)
+class FareGroup:
+    """One published point dataset, and what kind of fare node it produces."""
+
+    # A `kind` in the data contract. The pipeline owns this vocabulary.
+    kind: str
+    # Which `sources:` entry holds the dataset.
+    source: str
+    # Datum the dataset's coordinates are on, which need not be the region's.
+    # GeoJSON with no `crs` member is CRS84 per RFC 7946 — state that here
+    # rather than let a reader assume it.
+    crs: str
+    fields: dict[str, str]
+    categories: tuple[FareCategory, ...]
+
+    def field(self, role: str) -> str:
+        return _field(self.fields, role, f"fare group '{self.kind}'")
+
+    def categorise(self, text: str) -> FareCategory:
+        """The first rule whose `match` appears in `text`.
+
+        An unmatched category raises rather than defaulting. These datasets are
+        republished twice a year, and a new category appearing in one should
+        stop the build — silently filing it under the fallback would ship a
+        premium cross-harbour stand as an ordinary one.
+        """
+        folded = text.casefold()
+        for rule in self.categories:
+            if rule.match.casefold() in folded:
+                return rule
+        known = ", ".join(repr(rule.match) for rule in self.categories)
+        raise KeyError(
+            f"fare group '{self.kind}' has a feature categorised {text!r}, which matches no "
+            f"rule. Rules: {known}"
+        )
+
+
+@dataclass(frozen=True)
+class Fares:
+    """How `P1-5` turns published point datasets into fare nodes."""
+
+    groups: tuple[FareGroup, ...]
+    # Furthest a source point may sit from a road edge and still be attached to
+    # it. Beyond this the node is dropped: a fare node whose `nearest_edge`
+    # names a road it has no relationship with is worse than no fare node.
+    max_snap_m: float
+    # Strings that mean "no value" in a text field, as in `RoadNetwork`.
+    null_values: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class CityConfig:
     id: str
     name: str
@@ -299,6 +392,7 @@ class CityConfig:
     tiled_sources: dict[str, TiledSource]
     buildings: BuildingStyle
     roads: RoadNetwork
+    fares: Fares
 
     @property
     def source_ids(self) -> set[str]:
@@ -328,6 +422,36 @@ class CityConfig:
         See `city_offset` for how regions are then placed relative to each other.
         """
         return GameTransform.from_bounds(self.projected_bounds(region_id))
+
+    def region_high(self, region_id: str) -> tuple[float, float]:
+        """The region's far corner in game plan metres — `(max x, max z)`.
+
+        The near corner is `(0, 0)` by construction: `GameTransform.from_bounds`
+        anchors the origin at the north-west. So this pair *is* the region's
+        extent, and `0 <= x <= high[0] and 0 <= z <= high[1]` is what "inside
+        the region" means for every stage.
+
+        A method rather than three call sites working it out, because getting
+        it by hand means writing `to_game(max_easting, min_northing)` — the
+        corner that is maximal in X is minimal in northing, since Godot's
+        handedness flips Z. Three stages need it and each one is a chance to
+        pair the wrong two bounds.
+        """
+        bounds = self.projected_bounds(region_id)
+        far_x, _, far_z = self.game_transform(region_id).to_game(
+            bounds.max_easting, bounds.min_northing
+        )
+        return (far_x, far_z)
+
+    def out_dir(self, region_id: str, root: Path | None = None) -> Path:
+        """Where a region's build output goes.
+
+        The single definition of the out-tree layout, as `fetch.artefact_path`
+        is for the sources tree. Every stage resolves through this rather than
+        rebuilding `<root>/<city>/<region>`, so the three that write there
+        cannot disagree about it.
+        """
+        return (root or OUT_ROOT) / self.id / region_id
 
     def city_transform(self) -> GameTransform:
         """The shared frame all regions are positioned in (`Q10`).
@@ -413,14 +537,24 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
         },
         buildings=_building_style(_require(document, "buildings", path), f"{path}:buildings"),
         roads=_road_network(_require(document, "roads", path), f"{path}:roads"),
+        fares=_fares(_require(document, "fares", path), f"{path}:fares"),
     )
     _check_regions_lie_within_the_city(city, path)
-    if city.roads.source not in city.sources:
-        known = ", ".join(sorted(city.sources)) or "none"
-        raise ValueError(
-            f"{path}:roads.source names '{city.roads.source}', which is not in sources ({known})"
-        )
+    _check_source_exists(city, city.roads.source, f"{path}:roads.source")
+    for index, group in enumerate(city.fares.groups):
+        _check_source_exists(city, group.source, f"{path}:fares.groups[{index}].source")
     return city
+
+
+def _check_source_exists(city: CityConfig, source_id: str, where: str) -> None:
+    """A stage that names a source it cannot fetch is a config error, not a run.
+
+    Caught at load rather than at first use, so a typo fails before the
+    pipeline has read 17 MB of geodatabase to discover it.
+    """
+    if source_id not in city.sources:
+        known = ", ".join(sorted(city.sources)) or "none"
+        raise ValueError(f"{where} names '{source_id}', which is not in sources ({known})")
 
 
 def _check_regions_lie_within_the_city(city: CityConfig, path: Path) -> None:
@@ -618,13 +752,90 @@ def _road_surface(body: dict[str, Any], where: str) -> RoadSurface:
 
 
 def _source_layer(body: dict[str, Any], where: str, roles: tuple[str, ...]) -> SourceLayer:
+    return SourceLayer(
+        layer=str(_require(body, "layer", where)),
+        fields=_fields(body, where, roles),
+    )
+
+
+def _fields(body: dict[str, Any], where: str, roles: tuple[str, ...]) -> dict[str, str]:
+    """A role-to-column mapping, checked to cover every role the stage needs.
+
+    Checked at load for the reason `_check_source_exists` gives.
+    """
     fields = {str(role): str(column) for role, column in _require(body, "fields", where).items()}
     missing = [role for role in roles if role not in fields]
     if missing:
-        # Checked at load rather than at first use, so a city file that is a
-        # field short fails before the pipeline has read 17 MB of geodatabase.
         raise ValueError(f"{where}:fields is missing {', '.join(missing)}")
-    return SourceLayer(layer=str(_require(body, "layer", where)), fields=fields)
+    return fields
+
+
+def _fares(body: dict[str, Any], where: str) -> Fares:
+    groups = tuple(
+        _fare_group(entry, f"{where}:groups[{index}]")
+        for index, entry in enumerate(_require(body, "groups", where))
+    )
+    if not groups:
+        raise ValueError(f"{where}:groups is empty")
+
+    max_snap_m = float(_require(body, "max_snap_m", where))
+    if max_snap_m <= 0.0:
+        # Zero would require a source point to lie exactly on a centreline.
+        # Every real one is a kerbside position half a carriageway away.
+        raise ValueError(f"{where}:max_snap_m must be positive, got {max_snap_m}")
+
+    return Fares(
+        groups=groups,
+        max_snap_m=max_snap_m,
+        null_values=tuple(str(value) for value in (body.get("null_values") or ())),
+    )
+
+
+def _fare_group(body: dict[str, Any], where: str) -> FareGroup:
+    kind = str(_require(body, "kind", where))
+    if kind not in FARE_KINDS:
+        raise ValueError(f"{where}:kind is {kind!r}, expected one of {', '.join(FARE_KINDS)}")
+
+    categories = tuple(
+        FareCategory(
+            match=str(_require(rule, "match", f"{where}:categories")),
+            id=str(_require(rule, "id", f"{where}:categories")),
+            # A stand is both by default; only a source that distinguishes them
+            # has to say so.
+            pickup=bool(rule.get("pickup", True)),
+            dropoff=bool(rule.get("dropoff", True)),
+        )
+        for rule in _require(body, "categories", where)
+    )
+    if not categories:
+        raise ValueError(f"{where}:categories is empty")
+    _check_categories_are_reachable(categories, where)
+
+    return FareGroup(
+        kind=kind,
+        source=str(_require(body, "source", where)),
+        crs=str(_require(body, "crs", where)),
+        fields=_fields(body, where, _FARE_ROLES),
+        categories=categories,
+    )
+
+
+def _check_categories_are_reachable(categories: tuple[FareCategory, ...], where: str) -> None:
+    """Refuse a rule an earlier one always shadows.
+
+    Matching is first-hit-wins over substrings, so `"DF"` before `"PU/DF"`
+    makes the second rule dead and files every pick-up point as drop-off only.
+    That loads cleanly, produces a full `fares.json`, and is wrong — the
+    failure mode this whole module is written to avoid.
+    """
+    for later, rule in enumerate(categories):
+        for earlier in categories[:later]:
+            if earlier.match.casefold() in rule.match.casefold():
+                raise ValueError(
+                    f"{where}:categories[{later}] matches {rule.match!r}, which contains the "
+                    f"earlier {earlier.match!r} and can therefore never be reached. Order "
+                    f"rules most specific first."
+                )
 
 
 def _parse_hex(value: str, where: str) -> tuple[int, int, int]:

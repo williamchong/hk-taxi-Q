@@ -20,7 +20,7 @@ import numpy as np
 import pytest
 
 from pipeline.gltf import read_glb
-from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
+from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA, plan_lengths
 from pipeline.surface import (
     SURFACE_MANIFEST_NAME,
     SURFACE_MESH_NAME,
@@ -31,7 +31,6 @@ from pipeline.surface import (
     downward_facing,
     hull,
     mitres,
-    plan_lengths,
     trim,
 )
 

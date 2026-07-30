@@ -169,6 +169,8 @@ CITY_YAML = textwrap.dedent(
         tile_size_m: 150.0
     sources:
       roads: https://example.test/roads.gpkg
+      stands: https://example.test/stands.geojson
+      points: https://example.test/points.geojson
     buildings:
       classes: [BUILDING]
       terrain_class: TERRAIN
@@ -221,5 +223,23 @@ CITY_YAML = textwrap.dedent(
         junction_trim_max_fraction: 0.35
         surface_colour: "#3c3a37"
         kerb_colour: "#9a968d"
+    fares:
+      max_snap_m: 30.0
+      null_values: ["-99"]
+      groups:
+        - kind: taxi_stand
+          source: stands
+          crs: EPSG:4326
+          fields: {name_en: NAME_EN, name_zh: NAME_ZH, category: STATUS}
+          categories:
+            - {match: "Cross Harbour", id: cross_harbour}
+            - {match: "Urban", id: urban}
+        - kind: pudo
+          source: points
+          crs: EPSG:4326
+          fields: {name_en: NAME_EN, name_zh: NAME_ZH, category: STATUS}
+          categories:
+            - {match: "PU/DF", id: pickup_dropoff}
+            - {match: "DF", id: dropoff, pickup: false}
     """
 )

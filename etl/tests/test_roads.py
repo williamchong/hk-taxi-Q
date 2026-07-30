@@ -135,6 +135,20 @@ class TestAttributes:
     def test_a_name_that_merely_contains_the_sentinel_is_kept(self) -> None:
         assert clean_text("ROUTE -99A", ("-99",)) == "ROUTE -99A"
 
+    def test_full_width_brackets_are_not_flattened_to_ascii(self) -> None:
+        """NFKC folds the sentinel's full-width digits, and would fold these
+        too — but they are correct typography in Chinese, and `P1-5`'s fare
+        node names go on a bilingual HUD. So the value is NFC and only the
+        sentinel comparison is NFKC."""
+        assert clean_text("金鐘港鐵站（1）", ("-99",)) == "金鐘港鐵站（1）"  # noqa: RUF001
+
+    def test_a_name_wrapped_across_lines_becomes_one_line(self) -> None:
+        """The taxi datasets wrap long place names; 31 of the territory's 793
+        points carry a newline inside the name."""
+        assert clean_text("Hennessy Road \noutside  Ying King", ()) == (
+            "Hennessy Road outside Ying King"
+        )
+
     @pytest.mark.parametrize(
         ("value", "expected"), [("70 km/h", 70), ("80km/h", 80), ("50", 50), (None, 50), ("", 50)]
     )

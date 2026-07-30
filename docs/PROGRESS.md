@@ -3,7 +3,7 @@
 Living document. **Update this whenever a task changes status, a decision is made, or an open
 question is answered.** Newest entries at the top of each log.
 
-Last updated: 2026-07-31 (`Q8` closed — the city is the fun)
+Last updated: 2026-07-31 (`P1-5` done — the fares have somewhere to be)
 
 ---
 
@@ -61,9 +61,23 @@ That makes `Q8` **answerable for the first time**: `P0-5`'s verdict was that a g
 car on real geometry. It is a dev scene, not `P1-7` — nothing reads `city.json`, buildings have no
 collision, there is no ground off the carriageway, and the flyovers are unreachable (`Q13`).
 
-**`P1-5` (fare nodes) is next**, and `P1-6`/`P1-7` behind it. The Phase 1 gate — a screenshot of
-real Wan Chai massing in Godot — is now one task of plumbing away, since the city, its roads and
-their collision all exist as assets.
+**`P1-5` closed on 2026-07-31.** `fares.py` turns two whole-territory taxi datasets — 793 points —
+into **29 fare nodes** for the region: 14 stands, of which **6 are cross-harbour**, and 15
+pick-up/drop-off points, of which 4 are drop-off only. All four acceptance criteria are met, and
+the interesting one is met twice over: every node's `nearest_edge` resolves, and **28 of the 28
+nodes whose road has an English name land on a street named in that point's own free-text
+description**. The geometry pipeline never reads that prose, so the sources agree with each other
+through a route neither was designed to check.
+
+Snapping needed no tolerance to tune. The points are kerbside and the graph is centrelines, so
+every one sits 1.18–8.37 m from its road with at least a 4.28 m margin over the runner-up — the
+same shape of result as `P1-3`'s node snapping, and for the same reason: the data is cleaner than
+a defensive implementation would assume. Two things the source *cannot* say are recorded as `Q14`
+and `Q15` rather than guessed at.
+
+**`P1-6` (export and manifest) is next**, then `P1-7`. The Phase 1 gate — a screenshot of real Wan
+Chai massing in Godot — is now one task of plumbing away, since the city, its roads, their
+collision and now its fare nodes all exist as assets.
 
 **`P0-5` passed conditionally, not cleanly** — the user drove it, found the handling acceptable, and
 judged that *fun* cannot be assessed from a grey box at all. See the decision log. The risk it
@@ -95,7 +109,8 @@ to answer, not Phase 1's.
 | `P1-2t` | └ Terrain evaluation | ⚠️ **Measured — not viable as shipped** | 267 MB JPEG, 405k tris. See the decision log; needs a resampling pass to survive. |
 | `P1-3` | Road graph | ✅ **Done** | 797 edges, 615 nodes, 217 turn restrictions, 96.3% connected, 0.80 s. `Q9`, `Q11` and `Q12` all resolved here. 234 tests, `ruff` clean. All four acceptance criteria met, the last by the user's eye. |
 | `P1-4` | Road surface mesh | ✅ **Done** | 28,423 triangles, one draw call, kerbs and trimesh collision, 0.43 s. All 393 single-level junctions covered. Opened `Q13`. 259 tests, `ruff` clean. |
-| `P1-5`…`P1-7` | Rest of the ETL slice | 🟢 **Unblocked** | Deps met. |
+| `P1-5` | Fare nodes | ✅ **Done** | 29 nodes (14 stands, 15 PUDO) from 793 territory-wide points. All four acceptance criteria met and independently corroborated. Opened `Q14`, `Q15`. 297 tests, `ruff` clean. |
+| `P1-6`…`P1-7` | Rest of the ETL slice | 🟢 **Unblocked** | Deps met. |
 | `P2-*` | Driving the real city | ⬜ Blocked | Gated on `P1-7` |
 | `P3-*` | Playable slice | ⬜ Blocked | |
 
@@ -120,6 +135,25 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ❌ blocked
 | Q11 | Where is ground level? `elevation_levels[0] = 0.0` puts at-grade roads at y=0, but 99.9% of Wan Chai's buildings have their base **above 2 m** (median 4.29 m) | Roads would run ~4 m below every front door, and under the terrain | `P1-3` | ✅ **Resolved 2026-07-30** — sample the terrain height field |
 | Q12 | Are the road graph's one-way directions right on the ground? | `P1-3`'s last acceptance criterion, and the thing no test can settle | user | ✅ **Resolved 2026-07-30** — Jaffe Road confirmed eastbound; the source agrees with the street |
 | Q13 | Nothing ramps between elevation levels. All 36 nodes where two levels meet step by a whole deck height — 6 m at a flyover, 8 m at a tunnel mouth | The elevated and underground networks are topologically connected and geometrically unreachable; a third of the region's road area cannot be driven onto | `P2-2`? | 🔴 **Open — raised 2026-07-30 by `P1-4`** |
+| Q14 | Taxi stands carry **operating-time restrictions** in `Status_EN` — eight territory-wide, one in the region (Russell Street, cross-harbour 1200-0600) — and `P1-5` discards them | A part-time cross-harbour stand is modelled as a full-time one. Small today; it is exactly the kind of detail `P3-9`'s authenticity test would catch | `P3-1` | 🟡 **Open — raised 2026-07-31 by `P1-5`**, deliberately deferred |
+| Q15 | Fare nodes snap to the road graph by **plan distance only**, because the published points are 2D | A stand under a flyover has nothing in it to prefer the street below over the deck above. No node in Wan Chai is affected — every winner is level 0 — but this shares a root cause with `Q13` | `P2-2` | 🟡 **Open — raised 2026-07-31 by `P1-5`**, not reachable with this source |
+
+### Q14 and Q15 — both are "the source cannot say", not "we did not look"
+
+Neither is a bug and neither is currently visible. They are recorded because both will be
+*invisible* right up until something depends on them.
+
+`Q14` is a contract gap: there is no field for opening hours in `fares.json` and no consumer for
+one, so parsing `(1200-0600 daily)` would have been building a feature nothing asked for. The
+information is not lost — it is in the fetched source, and adding it later is a schema bump plus
+a parser, not a re-derivation.
+
+`Q15` is a source limit. The taxi datasets publish lon/lat and nothing else, so there is no height
+to disambiguate with; any level-preference rule would be a guess dressed as logic. The measurement
+that makes this safe to defer is that the runner-up margin is at least 4.28 m and every winner in
+the region is at level 0. It becomes real in a region with stands under an elevated road — and
+`Q13` is the same underlying fact, that this project's vertical information about roads is
+authored rather than surveyed.
 
 ### Q13 — the flyovers are floating slabs
 
@@ -363,6 +397,39 @@ below.
 ---
 
 ## Decision log
+
+### 2026-07-31 — `P1-5`: fare nodes keep the **kerbside** position, and carry three fields the contract did not have
+
+Three decisions, all forced by measurement rather than taste.
+
+**`pos` is the source position, not the snapped one.** 11 of the 29 nodes lie outside even the
+1.6×-widened carriageway, because the published points are on the pavement and `P1-4` draws from
+centrelines. The tempting fix — move each node onto the road so a marker never floats — throws away
+the only thing the source actually surveyed. The kerbside is where the passenger stands; where the
+taxi stops is derivable from `nearest_edge` and `edge_t`, and the reverse is not. Only the height
+comes off the road, because the source has none and the terrain eight metres away might be a podium.
+
+**`edge_t`, `pickup` and `dropoff` were added to the contract.** `nearest_edge` alone names a road
+that can be 200 m long, which would leave `P3-1` redoing the projection this stage just did.
+`pickup`/`dropoff` exist because a quarter of the published points are **drop-off only** — 66 of 275
+territory-wide — and flattening that would let a player hail a fare somewhere no taxi may stop for
+one. Both are free here and expensive later: `P1-6` freezes this shape into `city.json`. No
+`schema_version` bump was needed because no `fares.json` had ever been written.
+
+**The category table lives in config, and its *order* is validated.** `Status_EN` is free text with
+sixteen spellings, several carrying an operating-time note after a newline, so matching is
+first-hit-wins over substrings. That makes rule order load-bearing in a way that fails silently:
+`DF` before `PU/DF` files every pick-up point as drop-off only and still produces a complete,
+plausible `fares.json`. `load_city` now refuses a table where an earlier rule always shadows a
+later one. An *unmatched* category raises rather than defaulting, on the same reasoning as
+`deck_height_m` — these datasets are republished twice a year, and a new category quietly filed
+under `urban` is a premium fare type missing from the game.
+
+**A bug found on the way, in `P1-3`'s code rather than this stage's.** `clean_text` normalised to
+NFKC, which is a *compatibility* fold: it rewrites the full-width brackets Chinese sets its
+parentheticals in as ASCII. Harmless for road names, wrong for 98 of the fare-node names, which go
+on a bilingual HUD. Now NFC, with NFKC used only for the null-sentinel comparison. Verified by
+re-running `P1-3`: `roadgraph.json` is byte-identical.
 
 ### 2026-07-31 — `Q8` closed: **the city itself is the fun**, and that is the whole bet
 

@@ -36,10 +36,10 @@ from pathlib import Path
 
 import numpy as np
 
-from pipeline.config import OUT_ROOT, CityConfig, RoadSurface, load_city
+from pipeline.config import CityConfig, RoadSurface, load_city
 from pipeline.gltf import Bounds, MeshData, normalise, write_glb
 from pipeline.mesh import select_triangles
-from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
+from pipeline.roads import ROADGRAPH_NAME, plan_lengths, plan_steps, read_graph
 
 log = logging.getLogger(__name__)
 
@@ -98,21 +98,6 @@ class SurfaceReport:
 # --------------------------------------------------------------------------
 # Ribbon geometry
 # --------------------------------------------------------------------------
-
-
-def plan_lengths(points: np.ndarray) -> np.ndarray:
-    """Cumulative plan distance along a polyline, starting at zero.
-
-    Plan rather than 3D: widths, kerbs and junction radii are all measured on
-    the ground, and a 6 m ramp would otherwise be offset as though it were
-    longer than its footprint.
-    """
-    return np.concatenate([[0.0], np.cumsum(plan_steps(points))])
-
-
-def plan_steps(points: np.ndarray) -> np.ndarray:
-    """Length of each segment of a polyline, in plan."""
-    return np.hypot(*np.diff(points[:, [0, 2]], axis=0).T)
 
 
 def dedupe(points: np.ndarray) -> np.ndarray:
@@ -458,7 +443,7 @@ def build_region(
     out_root: Path | None = None,
 ) -> SurfaceReport:
     """Read the region's road graph and write its `roads.glb`."""
-    out_dir = (out_root or OUT_ROOT) / city.id / region_id
+    out_dir = city.out_dir(region_id, out_root)
     graph = read_graph(out_dir / ROADGRAPH_NAME)
     style = city.roads.surface
 
@@ -491,18 +476,6 @@ def build_region(
     report.bytes = write_glb(out_dir / SURFACE_NAME, [mesh])
     _write_manifest(out_dir, city, region_id, report)
     return report
-
-
-def read_graph(path: Path) -> dict:
-    """The road graph, refusing a schema this stage was not written against."""
-    graph = json.loads(path.read_text(encoding="utf-8"))
-    version = graph.get("schema_version")
-    if version != ROADGRAPH_SCHEMA:
-        raise ValueError(
-            f"{path} declares schema_version {version!r}, this stage reads {ROADGRAPH_SCHEMA}. "
-            f"Re-run `python -m pipeline.roads`."
-        )
-    return graph
 
 
 def _prepare(published: dict, style: RoadSurface) -> _Edge:

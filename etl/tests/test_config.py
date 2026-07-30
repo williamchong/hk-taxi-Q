@@ -353,3 +353,94 @@ class TestRoadNetwork:
     def test_a_missing_roads_block_is_rejected(self, rewrite) -> None:
         with pytest.raises(ValueError, match="'roads'"):
             load_city("hong_kong", cities_root=rewrite(lambda doc: doc.pop("roads")))
+
+
+class TestFares:
+    """`P1-5`'s config, and the two ways its category table can be wrong."""
+
+    def test_the_shipped_groups_cover_both_published_datasets(self, hong_kong) -> None:
+        groups = {group.kind: group for group in hong_kong.fares.groups}
+
+        assert set(groups) == {"taxi_stand", "pudo"}
+        assert groups["taxi_stand"].source == "taxi_stands"
+        assert groups["pudo"].source == "taxi_pudo"
+        # The property names are the Transport Department's, and this is the
+        # test that notices if a republish renames one.
+        assert groups["taxi_stand"].field("name_zh") == "Location_TC"
+
+    def test_every_published_category_spelling_is_matched(self, hong_kong) -> None:
+        """The sixteen distinct `Status_EN` values in the territory, surveyed
+        in docs/DATA_SOURCES.md. The region only ever exercises two of them, so
+        without this the other fourteen are untested until a build fails."""
+        stands = next(g for g in hong_kong.fares.groups if g.kind == "taxi_stand")
+        expected = {
+            "Urban Taxi Stand": "urban",
+            "Both of Urban and NT Taxi Stand": "urban_and_nt",
+            "NT Taxi Stand": "nt",
+            "Cross Harbour Taxi Stand": "cross_harbour",
+            "Lantau Taxi Stand": "lantau",
+            "Cross Harbour Taxi Stand\n(2200-0700 daily)": "cross_harbour",
+            "Cross Harbour Taxi Stand\n(0000-0500 on Sat & Sun)": "cross_harbour",
+            "Urban Taxi Stand\n(0000-0500 on Sat & Sun)": "urban",
+            "Urban Taxi Stand\n(0700-1000 daily)": "urban",
+            "Urban Taxi Stand\n(0700-1900 daily)": "urban",
+            "Cross Harbour Taxi Stand\n(1200-0600 daily)": "cross_harbour",
+            "Urban Taxi Stand (0700-1000; 1600-1900 daily)": "urban",
+            "Urban and Cross Harbour Taxi Stands": "cross_harbour",
+            "Urban and NT Taxi Stand": "urban_and_nt",
+            "NT Taxi Stand\n(2300-0630 daily)": "nt",
+            "Urban Taxi Stand\n(2300-0630 daily)": "urban",
+        }
+        assert {text: stands.categorise(text).id for text in expected} == expected
+
+    def test_a_drop_off_point_is_not_a_pick_up_point(self, hong_kong) -> None:
+        points = next(g for g in hong_kong.fares.groups if g.kind == "pudo")
+
+        assert (points.categorise("Taxi DF").pickup, points.categorise("Taxi DF").dropoff) == (
+            False,
+            True,
+        )
+        assert points.categorise("Taxi PU/DF").pickup
+
+    def test_a_rule_an_earlier_one_shadows_is_rejected(self, rewrite) -> None:
+        """Ordering is load-bearing and silent when wrong: `DF` before `PU/DF`
+        files every pick-up point as drop-off only, and the output still looks
+        complete."""
+
+        def reverse(doc: dict[str, Any]) -> None:
+            group = next(g for g in doc["fares"]["groups"] if g["kind"] == "pudo")
+            group["categories"] = list(reversed(group["categories"]))
+
+        with pytest.raises(ValueError, match="can therefore never be reached"):
+            load_city("hong_kong", cities_root=rewrite(reverse))
+
+    def test_an_unmatched_category_names_the_rules_it_tried(self, hong_kong) -> None:
+        stands = next(g for g in hong_kong.fares.groups if g.kind == "taxi_stand")
+
+        with pytest.raises(KeyError, match="Cross Harbour"):
+            stands.categorise("Hovercraft Stand")
+
+    def test_an_unknown_kind_is_rejected(self, rewrite) -> None:
+        def mistype(doc: dict[str, Any]) -> None:
+            doc["fares"]["groups"][0]["kind"] = "bus_stop"
+
+        with pytest.raises(ValueError, match="expected one of taxi_stand, pudo, poi"):
+            load_city("hong_kong", cities_root=rewrite(mistype))
+
+    def test_a_source_the_city_does_not_publish_is_rejected(self, rewrite) -> None:
+        def rename(doc: dict[str, Any]) -> None:
+            doc["fares"]["groups"][0]["source"] = "not_fetched"
+
+        with pytest.raises(ValueError, match="not in sources"):
+            load_city("hong_kong", cities_root=rewrite(rename))
+
+    def test_a_non_positive_snap_limit_is_rejected(self, rewrite) -> None:
+        def zero(doc: dict[str, Any]) -> None:
+            doc["fares"]["max_snap_m"] = 0.0
+
+        with pytest.raises(ValueError, match="max_snap_m"):
+            load_city("hong_kong", cities_root=rewrite(zero))
+
+    def test_a_missing_fares_block_is_rejected(self, rewrite) -> None:
+        with pytest.raises(ValueError, match="'fares'"):
+            load_city("hong_kong", cities_root=rewrite(lambda doc: doc.pop("fares")))
