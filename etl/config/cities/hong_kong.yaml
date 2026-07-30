@@ -248,6 +248,40 @@ roads:
     - RUSSELL STREET
     - WONG NAI CHUNG ROAD
 
+  # How P1-4 draws the graph as a ribbon. Art direction and playability, not
+  # anything the source says — see docs/ART_DESIGN.md "Roads".
+  surface:
+    # docs/GAME_DESIGN.md fixes the widening range at ~1.3-1.8x: real Wan Chai
+    # street widths are unforgiving at arcade speeds. Measured consequence, and
+    # the reason 1.6 was picked over 1.3: the region's six opposed carriageway
+    # pairs sit 1.49-6.82 m apart, and at 1.6x every one of them overlaps into a
+    # single continuous surface. At 1.0x the widest pair leaves a 0.42 m slot
+    # down the middle of Lockhart Road.
+    widen_default: 1.6
+    # Expressways are already drawn wide by their three lanes, and widening
+    # them the same amount pushes the deck through the buildings beside it.
+    widen_by_min_speed_limit_kph:
+      70: 1.3
+
+    # Low and mountable by design. The lip also gives the carriageway a visible
+    # edge, which matters more here than usual: the terrain is too expensive to
+    # ship, so beyond the kerb there is nothing at all.
+    kerb_height_m: 0.15
+    kerb_width_m: 0.5
+
+    # Each ribbon stops this many of the widest half-width meeting at a node,
+    # and a cap fills the middle. One half-width clears the junction; the
+    # fraction stops a short link between two wide roads being eaten from both
+    # ends — 104 of the region's 797 edges are shorter than twice their own
+    # junction radius.
+    junction_trim_factor: 1.0
+    junction_trim_max_fraction: 0.35
+
+    # docs/ART_DESIGN.md: HK asphalt reads warm, not blue-grey. The kerb is the
+    # pale concrete that edges every street on the island.
+    surface_colour: "#3c3a37"
+    kerb_colour: "#9a968d"
+
   # Where game y=0 sits for a road deck (Q11). `terrain` samples the LandsD
   # ground mesh under each vertex, which is the only source that knows Wan
   # Chai's ground is ~4 m above the datum rather than at it. `datum` puts

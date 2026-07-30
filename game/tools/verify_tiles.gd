@@ -11,6 +11,7 @@
 extends SceneTree
 
 const GeneratedTiles = preload("res://scripts/city/generated_tiles.gd")
+const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
 ## Draw calls per tile. `P1-2` accepts "under three", so three is a failure.
 const MAX_SURFACES: int = 2
@@ -60,7 +61,13 @@ func _check(path: String) -> PackedStringArray:
 			continue
 		surfaces += mesh.get_surface_count()
 		for surface: int in mesh.get_surface_count():
-			problems.append_array(_check_surface(mesh, surface, instance.name))
+			# Surface indices restart per MeshInstance3D, so the owner's name is
+			# what makes "surface 0" unambiguous once a tile holds more than one.
+			problems.append_array(
+				MeshContract.check_surface(
+					mesh, surface, "%s surface %d" % [instance.name, surface]
+				)
+			)
 
 	# One draw call per surface. The budget is stated in draw calls because that
 	# is what the mobile tier runs out of first.
@@ -68,30 +75,4 @@ func _check(path: String) -> PackedStringArray:
 		problems.append("%d surfaces, over the %d-surface budget" % [surfaces, MAX_SURFACES])
 
 	root.free()
-	return problems
-
-
-func _check_surface(mesh: Mesh, surface: int, owner_name: String) -> PackedStringArray:
-	# Surface indices restart per MeshInstance3D, so the owner's name is what
-	# makes "surface 0" unambiguous once a tile holds more than one.
-	var where: String = "%s surface %d" % [owner_name, surface]
-	var problems: PackedStringArray = []
-
-	if not (mesh.surface_get_format(surface) & Mesh.ARRAY_FORMAT_COLOR):
-		problems.append("%s carries no vertex colours" % where)
-
-	var material: BaseMaterial3D = mesh.surface_get_material(surface) as BaseMaterial3D
-	if material == null:
-		problems.append("%s has no BaseMaterial3D" % where)
-		return problems
-
-	if not material.vertex_color_use_as_albedo:
-		problems.append("%s ignores its vertex colours" % where)
-	for slot: int in [
-		BaseMaterial3D.TEXTURE_ALBEDO,
-		BaseMaterial3D.TEXTURE_NORMAL,
-		BaseMaterial3D.TEXTURE_ORM,
-	]:
-		if material.get_texture(slot) != null:
-			problems.append("%s references a texture in slot %d" % [where, slot])
 	return problems

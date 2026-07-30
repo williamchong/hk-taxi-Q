@@ -3,7 +3,7 @@
 Living document. **Update this whenever a task changes status, a decision is made, or an open
 question is answered.** Newest entries at the top of each log.
 
-Last updated: 2026-07-30
+Last updated: 2026-07-30 (`P1-4` closed)
 
 ---
 
@@ -36,9 +36,16 @@ median **4.21 m**, against the 4.29 m median building base `P1-2` measured indep
 four acceptance criteria are met** — the last of them, the one-way spot check, by the user driving
 the preview rather than by any test.
 
-**`P1-4` (road surface mesh) is next.** It inherits two findings from `P1-3`: dual carriageways
-arrive as opposed one-way pairs ~3 m apart, and `lanes` is authored policy rather than published
-data.
+**`P1-4` closed on 2026-07-30.** `surface.py` turns the graph into **28,423 triangles of drivable
+road** — carriageway, kerbs, junction caps and a trimesh collider — in 0.43 seconds, as one mesh and
+one draw call. Both acceptance criteria are met and both were measured rather than argued: the
+widening comes from city config, and **all 393 single-level junctions in the region are covered**
+under a dense point sample inside the junction radius. It resolved the open decision it inherited
+and opened `Q13`, which is the first thing `P1-3` got wrong rather than merely left out.
+
+**`P1-5` (fare nodes) is next**, and `P1-6`/`P1-7` behind it. The Phase 1 gate — a screenshot of
+real Wan Chai massing in Godot — is now one task of plumbing away, since the city, its roads and
+their collision all exist as assets.
 
 **`P0-5` passed conditionally, not cleanly** — the user drove it, found the handling acceptable, and
 judged that *fun* cannot be assessed from a grey box at all. See the decision log. The consequence
@@ -63,7 +70,8 @@ is deferred rather than closed.
 | `P1-2` | Building meshes | ✅ **Done** | 65 tiles × 3 LODs; 989k → 184k triangles. Verified in Godot by `game/tools/verify_tiles.gd`. 153 tests, `ruff` clean. |
 | `P1-2t` | └ Terrain evaluation | ⚠️ **Measured — not viable as shipped** | 267 MB JPEG, 405k tris. See the decision log; needs a resampling pass to survive. |
 | `P1-3` | Road graph | ✅ **Done** | 797 edges, 615 nodes, 217 turn restrictions, 96.3% connected, 0.80 s. `Q9`, `Q11` and `Q12` all resolved here. 234 tests, `ruff` clean. All four acceptance criteria met, the last by the user's eye. |
-| `P1-4`…`P1-7` | Rest of the ETL slice | 🟢 **Unblocked** | Deps met. |
+| `P1-4` | Road surface mesh | ✅ **Done** | 28,423 triangles, one draw call, kerbs and trimesh collision, 0.43 s. All 393 single-level junctions covered. Opened `Q13`. 259 tests, `ruff` clean. |
+| `P1-5`…`P1-7` | Rest of the ETL slice | 🟢 **Unblocked** | Deps met. |
 | `P2-*` | Driving the real city | ⬜ Blocked | Gated on `P1-7` |
 | `P3-*` | Playable slice | ⬜ Blocked | |
 
@@ -87,6 +95,31 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ❌ blocked
 | Q10 | Is the game-space origin per region, or shared per city? | Whether two regions can stitch into one continuous map | `P1-6` | ✅ **Resolved 2026-07-30** — both: local origin plus a recorded `city_offset` |
 | Q11 | Where is ground level? `elevation_levels[0] = 0.0` puts at-grade roads at y=0, but 99.9% of Wan Chai's buildings have their base **above 2 m** (median 4.29 m) | Roads would run ~4 m below every front door, and under the terrain | `P1-3` | ✅ **Resolved 2026-07-30** — sample the terrain height field |
 | Q12 | Are the road graph's one-way directions right on the ground? | `P1-3`'s last acceptance criterion, and the thing no test can settle | user | ✅ **Resolved 2026-07-30** — Jaffe Road confirmed eastbound; the source agrees with the street |
+| Q13 | Nothing ramps between elevation levels. All 36 nodes where two levels meet step by a whole deck height — 6 m at a flyover, 8 m at a tunnel mouth | The elevated and underground networks are topologically connected and geometrically unreachable; a third of the region's road area cannot be driven onto | `P2-2`? | 🔴 **Open — raised 2026-07-30 by `P1-4`** |
+
+### Q13 — the flyovers are floating slabs
+
+`elevation_levels` maps a grade-separation level to a constant height, so every edge on a level sits
+at that height for its whole length and **no edge ever ramps**. `P1-3` measured this as a 4.21 m
+median for level 0 and cross-checked it against the building bases; what nobody measured until
+`P1-4` had to draw it is what happens *between* levels. Nothing does. The step is exactly the deck
+height, 36 times over.
+
+The surface stage does the only honest thing available to it — it caps junctions per level, so a
+street and the tunnel roof 8 m below it are two separate pieces of tarmac rather than one welded
+through a vertical wall. That is correct output for an incorrect height model.
+
+**Why it is not fixed here.** A ramp is not a mesh problem, it is a graph-height problem, and the
+source carries no Z at all — every height in this pipeline is authored or sampled. Blending each
+off-grade edge to grade over its own length was measured: median gradient 3.9%, but **10 of the 39
+off-grade edge ends exceed 12% and the worst is 29%**, because the ramps are chains of short
+connector edges (`WAN CHAI INTERCHANGE` arrives in 21 m) rather than single features. Doing it
+properly means relaxing heights across the whole graph, which is its own task with its own probes.
+
+**Why it is not urgent.** The player drives Wan Chai's streets. The elevated network being
+unreachable is a missing feature, not a broken one, and arguably the right first slice — but it must
+be decided rather than inherited, and `P2-2`'s nearest-edge queries will hand the car onto a flyover
+if nothing stops them.
 
 ### Q12 — resolved: **the source agrees with the street**
 
@@ -120,10 +153,15 @@ until you measure it. It was measured: **6 opposed pairs** in the emitted graph,
 as a floor — it counts only pairs sharing *both* endpoints, and carriageways that diverge at one
 end are the same pattern uncounted.
 
-**Carried into `P1-4` as an open decision, not a question:** whether a 3 m opposed pair becomes two
-ribbons or one. Two ribbons is what the data describes and would leave a 3 m gap down the middle of
-Lockhart Road; one ribbon is what the street looks like and means detecting the pairs and merging
-them. Neither is obviously right, and it is a road-surface decision rather than a graph one.
+~~**Carried into `P1-4` as an open decision, not a question:** whether a 3 m opposed pair becomes two
+ribbons or one.~~ **Closed 2026-07-30 by `P1-4`, and the decision turned out not to exist.** The
+premise — that two ribbons leave a gap down the middle of Lockhart Road — was never checked against
+the ribbon widths. It is false. At their authored 6.4 m each, five of the six pairs already overlap
+by **2.71 m to 4.91 m**; the sixth (Lockhart, the widest at 6.82 m apart) leaves a 0.42 m slot at
+1.0× and overlaps by **3.42 m** at the 1.6× widening the design already called for. So: two
+ribbons, no merging, no pair detection, and nothing in `surface.py` knows what a dual carriageway
+is. The lesson is the cheap one — the decision was framed from a separation measurement without the
+width measurement that made it moot.
 
 ### Q11 — resolved: sample the terrain height field under every vertex
 
@@ -301,6 +339,55 @@ below.
 ---
 
 ## Decision log
+
+### 2026-07-30 — `P1-4`: the road surface is **one mesh**, capped per level, and never merged
+
+Four decisions came out of this stage, all of them settled by measuring the emitted graph before
+`surface.py` existed rather than by choosing and then discovering.
+
+**One mesh for the region, not tiles.** The buildings are tiled at 150 m because they are 989k
+triangles and the streamer needs them by distance. The whole road network is **28,423 triangles** —
+a fortieth of that — and it is on screen whenever the player is. Tiling it would buy nothing but
+seams and 65 draw calls in place of one.
+
+**Junctions are filled by the convex hull of the arms' corners.** Each ribbon stops one half-width
+short of the node and the hull of the corners it leaves fills the middle. The property that makes
+this right is convexity: the hull's boundary passes through every arm's two end corners, so the
+mouth between them is inside the cap by construction — no gap is possible — and the hull stops at
+the kerb line rather than spilling into the corner between two streets, which is pavement. Measured
+on the region: **393 of 393 single-level junctions covered** under a 60-point sample inside the
+junction radius. Three flagged initially; all three were T-junctions where the sampling disc
+reached into the 175° sector that has no road in it.
+
+**Capped per elevation level, which is the opposite of how `P1-3` keys nodes — and right for the
+opposite reason.** A node exists so a flyover and the ramp under it stay one network. A junction cap
+is a piece of tarmac, and there is none between a street and the tunnel roof 8 m below. This is
+where `Q13` was found.
+
+**Opposed carriageways are drawn twice and left overlapping.** See the Lockhart entry above: the
+inherited decision dissolved on measurement.
+
+The one thing that needed real geometry work was self-intersection. A corner tighter than the road
+is wide has no inner offset curve — the naive one crosses itself, which renders as an inverted
+sliver and is invisible to a one-sided collider. Wan Chai has such corners: a slip road off Hung
+Hing Road loops at a **5 m radius** while the widened carriageway is 10.2 m across. Three repairs
+were measured against each other:
+
+| Repair | Folds left | Cost |
+|---|---|---|
+| Simplify harder before offsetting | 8 of 89 at a 1.02 m tolerance | 43% of the region's segments, and visible on curves |
+| Cap the width to the local turning radius | 1 | **Pinches the carriageway to zero** at 24 places |
+| Hold the inner boundary still where it would reverse | **0** | 93 collapsed quads out of 5,188, dropped at build |
+
+The third is also what the offset of a too-tight corner actually *is*: the inside stops while the
+outside sweeps past. It touches neither the centreline nor the width. Four triangles covering
+0.53 m² still fold at the region's single sharpest hairpin; the stage counts and reports them every
+run, so the number is tracked rather than assumed away.
+
+**Collision ships in the asset.** The mesh is named `road_surface-col`, which Godot's importer reads
+as "build a static trimesh collider from this". `game/tools/verify_road_surface.gd` confirms it
+imported, alongside the draw-call, vertex-colour and no-texture checks — all engine-side facts that
+neither the ETL nor its tests can see, which is the same gap `verify_tiles.gd` was written to close.
 
 ### 2026-07-30 — `Q12` closed: the published road directions **match the street**
 
@@ -894,8 +981,9 @@ urgent — flag it before the roster work in Phase 4.
 | Real geometry isn't fun to drive | **High** | ⚠️ **Mitigation weakened.** `P0-5` was meant to retire this before any ETL investment; the user's verdict is that a grey box cannot answer it (`Q8`). The test did clear the *handling*, so the remaining risk is the city, not the car. Road widening and hand-added ramps are still the designed remedy, and `widen_factor` is already data. Next real check is the Phase 1 gate. |
 | Doesn't read as HK to locals | **High** | `P3-9` authenticity test with ≥3 real drivers; run again every phase after. |
 | Perf misses 60fps on device floor | Medium | Budget defined up front; untextured merged tiles are the main lever; `P2-6` is a dedicated pass. |
-| Source data quirks (dual carriageways, doubled junctions) | Medium → **Low** | **Mitigated 2026-07-30 by `P1-3`, and the directions confirmed against the street (`Q12`).** Both quirks turned up and both were handled: dual carriageways arrive as 6 opposed one-way pairs 1.96–3.85 m apart (median 2.9 m), and doubled junctions never form because nodes are made only at shared endpoints. The residual risk moves to `P1-4`, which has to decide whether a 3 m pair becomes two ribbons or one. |
+| Source data quirks (dual carriageways, doubled junctions) | Medium → **Low** | **Mitigated 2026-07-30 by `P1-3`, and the directions confirmed against the street (`Q12`).** Both quirks turned up and both were handled: dual carriageways arrive as 6 opposed one-way pairs 1.96–3.85 m apart (median 2.9 m), and doubled junctions never form because nodes are made only at shared endpoints. **Closed 2026-07-30 by `P1-4`:** the residual — whether a 3 m pair becomes two ribbons or one — was not a decision. The widened ribbons overlap, so both carriageways draw as one continuous surface and no pair handling exists in the code. |
 | Building meshes blow the triangle budget | Medium → **Low** | **Mitigated 2026-07-30 by `P1-2`.** The estimate was low: 2,200 buildings across the six sheets, not the ~900 extrapolated from one. Real region totals are **989k / 400k / 184k** triangles at LOD0/1/2, averaging 15.2k per tile at LOD0. Against a <300k *visible* budget that leaves room, but not much — a viewpoint holding LOD0 on the nearest ring plus LOD1 behind it lands in the low 300k range before occlusion. `P2-1`'s switch distances now decide this, not the ETL. |
+| Grade separation is unreachable | Medium | **New 2026-07-30, raised by `P1-4` as `Q13`.** Deck heights are a constant per level, so nothing ramps: all 36 nodes joining two levels step by a whole deck height. The flyovers and the tunnels render correctly and cannot be driven onto. Not a blocker for the street-level slice, but `P2-2`'s nearest-edge query will put the car on a flyover unless it is told not to. |
 | Terrain does not fit any budget | Medium | **New 2026-07-30.** Measured 267 MB of texture and 405k triangles for the ground alone — roughly 2× over on texture memory, triangles *and* bundle size simultaneously. Resampling to ~2 px/m and decimating to ~88k triangles brings it into range, but that work is not done and is not scheduled. Nothing in the tile output depends on it. |
 | GDScript learning curve | Low | Small codebase; complexity lives in Python. |
 | Landmark depiction IP | Low | Untextured massing; legal sight-check before launch (Phase 6). |

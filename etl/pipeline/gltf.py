@@ -114,6 +114,15 @@ class MeshData:
         """(m, 3) centre of each triangle — how a mesh is bucketed spatially."""
         return self.positions[self.triangles].mean(axis=1)
 
+    def triangle_cross(self) -> np.ndarray:
+        """(m, 3) cross product of each triangle's two edge vectors.
+
+        One product answers three questions: its direction is the face normal,
+        its sign says which way the winding faces, and its length is twice the
+        face area. Callers that want only one of those still want this.
+        """
+        return triangle_cross(self.positions, self.triangles)
+
 
 # --------------------------------------------------------------------------
 # Reading
@@ -383,6 +392,16 @@ def normalise(vectors: np.ndarray) -> np.ndarray:
     return np.divide(vectors, lengths, out=np.zeros_like(vectors), where=lengths > 0)
 
 
+def triangle_cross(positions: np.ndarray, triangles: np.ndarray) -> np.ndarray:
+    """(m, 3) cross product of each triangle's two edge vectors.
+
+    A free function as well as a `MeshData` method because the read path needs
+    it before there is a mesh to ask.
+    """
+    corners = positions[triangles]
+    return np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
+
+
 def _face_normals(positions: np.ndarray, triangles: np.ndarray) -> np.ndarray:
     """Per-vertex normals from face winding, for sources that ship none.
 
@@ -397,8 +416,7 @@ def _face_normals(positions: np.ndarray, triangles: np.ndarray) -> np.ndarray:
             "cannot derive flat normals for a mesh with shared vertices; "
             "the source must supply NORMAL"
         )
-    corners = positions[triangles]
-    face = np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
+    face = triangle_cross(positions, triangles)
     per_vertex = np.zeros_like(positions)
     per_vertex[triangles.reshape(-1)] = np.repeat(normalise(face), 3, axis=0)
     return per_vertex.astype(np.float32)

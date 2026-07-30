@@ -90,6 +90,7 @@ hk-taxi-Q/
 │   │   ├── terrain.py           # terrain mesh → sampleable height field (Q11)
 │   │   ├── buildings.py         # sheets → vertex-coloured tiles + LOD tiers
 │   │   ├── roads.py             # Road Network geodatabase → roadgraph.json
+│   │   ├── surface.py           # roadgraph.json → roads.glb; ribbon, kerbs, junctions
 │   │   ├── fares.py             # taxi stands + PUDO + POIs → fare nodes
 │   │   └── export.py            # → city.json, assembles the tile/road/fare outputs
 │   ├── sources/<city>/<source>/ # raw downloads — GITIGNORED
@@ -232,6 +233,51 @@ length is geometry the player cannot reach, including a tunnel running 570 m out
 `node.kind` is `junction` where three or more edge ends meet and `endpoint` otherwise. Degree, not
 the source's intersection layer: two centrelines meeting end to end is one road continuing through
 a geometry break, and the source records those as intersections too.
+
+### `roads.glb` — the drivable surface
+
+One vertex-coloured mesh for the whole region, generated from `roadgraph.json` by `surface.py`.
+Not tiled: at 28,423 triangles it is a fortieth of the massing, it is on screen whenever the player
+is, and splitting it would buy nothing but seams and draw calls.
+
+| Property | Value |
+|---|---|
+| Mesh name | `road_surface-col` |
+| Primitives | 1 — one draw call, like a tile |
+| Attributes | `POSITION`, `NORMAL`, `COLOR_0`, `TEXCOORD_0`; no texture |
+| `TEXCOORD_0` | **U is a lane coordinate**, 0 at the **nearside** kerb line and `lanes` at the offside, so an integer U is a lane boundary whatever the widening did to the metres. V is metres along the carriageway. `docs/ART_DESIGN.md` drives lane markings from these rather than from a texture atlas. Junction caps carry `(0, 0)` — a junction is not a length of lane. |
+
+Nearside means left of travel, because Hong Kong drives on the left. The sign is not a free
+convention: flip it and every asymmetric marking — a kerbside bus lane, a nearside double yellow —
+lands on the wrong side of the road, while the geometry still renders perfectly.
+
+**The `-col` suffix is load-bearing.** Godot's glTF importer reads it and builds a static
+`ConcavePolygonShape3D` beside the visible mesh, which is how `P1-4` delivers collision without
+the game building a shape at load. `game/tools/verify_road_surface.gd` checks that it survived,
+because nothing on the Python side can see it.
+
+**Ribbon widths are the graph's `width_m` times a playability factor** from `roads.surface:` in
+city config, never the graph's width raw. Opposed carriageway pairs are drawn as two overlapping
+ribbons and deliberately not merged: measured across the region's six pairs, the widening already
+closes every gap between them.
+
+**Junctions are capped per elevation level.** The cap is the convex hull of the carriageway corners
+each arm presents to the node, which is what makes it meet every arm across its full width. Arms at
+different levels are never joined — see `Q13`.
+
+⚠️ **A cap overlaps its arms rather than abutting them** where they stop at different distances from
+the node, which happens whenever a short edge is held back by `junction_trim_max_fraction` — 210 of
+the region's 1,398 trimmed ends. Measured at 6,051 m² of 52,985 m² of cap area. Invisible today,
+since cap and carriageway are the same colour at the same height in one material; it becomes
+visible when the markings shader lands, because the cap carries no lane coordinate and the ribbon
+beneath it does. The fix is a non-convex cap — the union boundary rather than the hull — which is
+polygon clipping and is deliberately not built yet.
+
+### `roadsurface.json` — an ETL intermediate, *not* part of this contract
+
+The counterpart of `buildings.json`, and there for the same reason: it records what the surface
+stage knows — the mesh path, its triangle and vertex counts, its AABB — so the stage stays
+independently runnable, while `city.json` remains `export.py`'s to write.
 
 ### `fares.json` — pickup and dropoff nodes
 

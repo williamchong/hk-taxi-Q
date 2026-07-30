@@ -1,0 +1,429 @@
+"""Road surface mesh construction (`P1-4`).
+
+The unit tests cover the three things that decide whether the ribbon is
+drivable: the mitre that closes a joint on a bend, the boundary that refuses to
+cross itself on a corner tighter than the road is wide, and the hull that fills
+a junction. The integration test then builds a whole region from a hand-written
+road graph and checks the acceptance criterion directly — that every arm's mouth
+is covered by the cap at its junction.
+
+The graph is the input, so unlike `P1-3` there is no geodatabase to synthesise:
+the fixture below is the contract in `docs/ARCHITECTURE.md`, written out.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+from pipeline.gltf import read_glb
+from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
+from pipeline.surface import (
+    SURFACE_MANIFEST_NAME,
+    SURFACE_MESH_NAME,
+    SURFACE_NAME,
+    boundary,
+    build_region,
+    dedupe,
+    downward_facing,
+    hull,
+    mitres,
+    plan_lengths,
+    trim,
+)
+
+
+def _line(*points: tuple[float, float, float]) -> np.ndarray:
+    return np.array(points, dtype=np.float64)
+
+
+class TestPolyline:
+    def test_plan_length_ignores_height(self) -> None:
+        """A ramp is offset by its footprint, not by its travel: a 3-4-5 climb
+        is three metres of road to lay kerbs along."""
+        line = _line((0.0, 0.0, 0.0), (3.0, 4.0, 0.0))
+        assert plan_lengths(line)[-1] == pytest.approx(3.0)
+
+    def test_repeated_vertices_are_dropped(self) -> None:
+        line = _line((0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (10.0, 0.0, 0.0))
+        assert len(dedupe(line)) == 2
+
+    def test_trimming_cuts_from_both_ends(self) -> None:
+        line = _line((0.0, 0.0, 0.0), (100.0, 0.0, 0.0))
+        cut = trim(line, 10.0, 25.0)
+
+        assert cut[0][0] == pytest.approx(10.0)
+        assert cut[-1][0] == pytest.approx(75.0)
+
+    def test_a_trimmed_ramp_keeps_its_gradient(self) -> None:
+        """The cut point is interpolated in Y as well as in plan, so trimming a
+        junction off a slope does not flatten what is left."""
+        line = _line((0.0, 0.0, 0.0), (100.0, 10.0, 0.0))
+        assert trim(line, 20.0, 0.0)[0][1] == pytest.approx(2.0)
+
+    def test_trims_that_meet_leave_nothing(self) -> None:
+        line = _line((0.0, 0.0, 0.0), (10.0, 0.0, 0.0))
+        assert len(trim(line, 6.0, 6.0)) == 0
+
+
+class TestMitres:
+    def test_a_straight_line_offsets_by_one(self) -> None:
+        offsets = mitres(_line((0.0, 0.0, 0.0), (10.0, 0.0, 0.0), (20.0, 0.0, 0.0)))
+        np.testing.assert_allclose(np.hypot(*offsets.T), 1.0)
+
+    def test_the_offset_points_left_of_travel(self) -> None:
+        """Not a free convention. `TEXCOORD_0` is a lane coordinate measured
+        from the nearside kerb and Hong Kong drives on the left, so a flipped
+        sign here mirrors every asymmetric marking the shader will draw.
+
+        Left of travel in a Y-up right-handed frame is `up x forward`.
+        """
+        forward = np.array([1.0, 0.0, 0.0])
+        expected = np.cross([0.0, 1.0, 0.0], forward)[[0, 2]]
+
+        offsets = mitres(_line((0.0, 0.0, 0.0), (10.0, 0.0, 0.0)))
+        np.testing.assert_allclose(offsets[0], expected)
+
+    def test_a_right_angle_lengthens_the_corner(self) -> None:
+        """The mitre is longer than the half-width by `1 / cos(half the turn)`,
+        which for a square corner is the diagonal of a unit square."""
+        offsets = mitres(_line((0.0, 0.0, 0.0), (10.0, 0.0, 0.0), (10.0, 0.0, 10.0)))
+        assert np.hypot(*offsets[1]) == pytest.approx(np.sqrt(2.0))
+
+    def test_the_joint_closes(self) -> None:
+        """The property the whole mitre exists for: the two quads meeting at a
+        bend share their edge exactly, so the ribbon has no notch outside it."""
+        line = _line((0.0, 0.0, 0.0), (10.0, 0.0, 0.0), (20.0, 0.0, 10.0))
+        offsets = mitres(line)
+        corner = line[1][[0, 2]] + offsets[1] * 4.0
+
+        for start, end in ((line[0], line[1]), (line[1], line[2])):
+            span = (end - start)[[0, 2]]
+            side = np.array([span[1], -span[0]]) / np.hypot(*span)
+            # The corner sits on both segments' offset lines at once.
+            assert np.dot(corner - start[[0, 2]], side) == pytest.approx(4.0)
+
+    def test_a_hairpin_is_clamped_rather_than_sent_to_infinity(self) -> None:
+        line = _line((0.0, 0.0, 0.0), (10.0, 0.0, 0.0), (0.0, 0.0, 0.01))
+        assert np.hypot(*mitres(line)[1]) < 5.0
+
+
+class TestBoundary:
+    def test_a_straight_road_offsets_exactly(self) -> None:
+        """A positive offset is the nearside boundary, so travel along +X puts
+        it at -Z."""
+        line = _line((0.0, 0.0, 0.0), (10.0, 0.0, 0.0), (20.0, 0.0, 0.0))
+        edge = boundary(line, mitres(line), 3.0)
+
+        np.testing.assert_allclose(edge[:, 1], -3.0)
+        np.testing.assert_allclose(edge[:, 0], [0.0, 10.0, 20.0])
+
+    def test_a_corner_tighter_than_the_road_never_runs_backwards(self) -> None:
+        """A slip road off Hung Hing Road loops at a 5 m radius while the
+        widened carriageway is 10.2 m across. The naive inner offset crosses
+        itself there, which renders as an inverted sliver and leaves a notch in
+        the collider."""
+        angles = np.linspace(0.0, np.pi, 24)
+        line = np.column_stack([5.0 * np.cos(angles), np.zeros(24), 5.0 * np.sin(angles)])
+        step = np.diff(line[:, [0, 2]], axis=0)
+
+        for across in (5.12, -5.12):
+            edge = boundary(line, mitres(line), across)
+            assert ((np.diff(edge, axis=0) * step).sum(axis=1) >= 0.0).all()
+
+    def test_the_outer_side_of_that_corner_is_untouched(self) -> None:
+        """Only the inside of a tight bend has no offset curve. Clamping both
+        sides would narrow a road that has done nothing wrong."""
+        angles = np.linspace(0.0, np.pi, 24)
+        line = np.column_stack([5.0 * np.cos(angles), np.zeros(24), 5.0 * np.sin(angles)])
+
+        outer = boundary(line, mitres(line), -4.0)
+        # Every vertex keeps its full offset from the centreline — the mitre
+        # pushes the corners slightly beyond it, and nothing is held back.
+        assert (np.linalg.norm(outer - line[:, [0, 2]], axis=1) >= 4.0 - 1e-9).all()
+        assert (np.linalg.norm(np.diff(outer, axis=0), axis=1) > 0.0).all()
+
+
+class TestHull:
+    def test_a_square_keeps_its_four_corners(self) -> None:
+        points = np.array([[0.0, 0.0, 0.0], [4.0, 0.0, 0.0], [4.0, 0.0, 4.0], [0.0, 0.0, 4.0]])
+        assert len(hull(points)) == 4
+
+    def test_an_interior_point_is_dropped(self) -> None:
+        points = np.array(
+            [[0.0, 0.0, 0.0], [4.0, 0.0, 0.0], [4.0, 0.0, 4.0], [0.0, 0.0, 4.0], [2.0, 0.0, 2.0]]
+        )
+        assert len(hull(points)) == 4
+
+    def test_collinear_points_make_no_polygon(self) -> None:
+        points = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0]])
+        assert len(hull(points)) < 3
+
+    def test_height_comes_along(self) -> None:
+        """A cap on a slope follows it rather than flattening the junction."""
+        points = np.array([[0.0, 1.0, 0.0], [4.0, 2.0, 0.0], [4.0, 3.0, 4.0], [0.0, 4.0, 4.0]])
+        assert set(np.round(hull(points)[:, 1], 3)) == {1.0, 2.0, 3.0, 4.0}
+
+
+# --------------------------------------------------------------------------
+# End to end
+# --------------------------------------------------------------------------
+
+
+def _edge(edge_id: int, from_node: int, to_node: int, polyline, **overrides) -> dict:
+    edge = {
+        "id": edge_id,
+        "from": from_node,
+        "to": to_node,
+        "polyline": polyline,
+        "direction": "both",
+        "lanes": 2,
+        "width_m": 6.4,
+        "speed_limit_kph": 50,
+        "bus_lane": False,
+        "tram_tracks": False,
+        "elevation_level": 0,
+        "road_name": {"en": "MAIN STREET", "zh": "大街"},
+    }
+    return {**edge, **overrides}
+
+
+@pytest.fixture
+def testville(tmp_path, testville_config):
+    """A crossroads, a flyover touching down on it, and a dead end.
+
+    Four arms meet at node 0 so the junction cap has something to fill; the
+    flyover arrives at the same node six metres up, which is the case that must
+    *not* be capped across.
+    """
+    city = testville_config
+
+    out_dir = tmp_path / "out" / "testville" / "middle"
+    out_dir.mkdir(parents=True)
+    (out_dir / ROADGRAPH_NAME).write_text(
+        json.dumps(
+            {
+                "schema_version": ROADGRAPH_SCHEMA,
+                "city_id": "testville",
+                "region_id": "middle",
+                "nodes": [
+                    {"id": 0, "pos": [300.0, 0.0, 300.0], "kind": "junction"},
+                    {"id": 1, "pos": [100.0, 0.0, 300.0], "kind": "endpoint"},
+                    {"id": 2, "pos": [500.0, 0.0, 300.0], "kind": "endpoint"},
+                    {"id": 3, "pos": [300.0, 0.0, 100.0], "kind": "endpoint"},
+                    {"id": 4, "pos": [300.0, 0.0, 500.0], "kind": "endpoint"},
+                    {"id": 5, "pos": [300.0, 6.0, 700.0], "kind": "endpoint"},
+                ],
+                "edges": [
+                    _edge(0, 1, 0, [[100.0, 0.0, 300.0], [300.0, 0.0, 300.0]]),
+                    _edge(1, 0, 2, [[300.0, 0.0, 300.0], [500.0, 0.0, 300.0]]),
+                    _edge(2, 3, 0, [[300.0, 0.0, 100.0], [300.0, 0.0, 300.0]]),
+                    _edge(3, 0, 4, [[300.0, 0.0, 300.0], [300.0, 0.0, 500.0]]),
+                    # Signed above the urban default, so it is the edge that
+                    # proves the widening table is read rather than a constant.
+                    _edge(
+                        4,
+                        1,
+                        3,
+                        [[100.0, 0.0, 300.0], [300.0, 0.0, 100.0]],
+                        lanes=3,
+                        width_m=9.6,
+                        speed_limit_kph=70,
+                    ),
+                    # A flyover deck arriving at the crossroads six metres up.
+                    _edge(
+                        5,
+                        0,
+                        5,
+                        [[300.0, 6.0, 300.0], [300.0, 6.0, 700.0]],
+                        elevation_level=1,
+                    ),
+                ],
+                "turn_restrictions": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return city, tmp_path
+
+
+def _mesh(tmp_path: Path):
+    return read_glb(tmp_path / "out" / "testville" / "middle" / SURFACE_NAME)[0]
+
+
+class TestBuildRegion:
+    def test_it_writes_one_mesh_named_for_its_collider(self, testville, tmp_path) -> None:
+        """One GLB, one primitive, one draw call — and the `-col` suffix Godot's
+        importer reads to build the static trimesh collision at import time."""
+        report = build_region(testville[0], "middle", out_root=tmp_path / "out")
+
+        meshes = read_glb(tmp_path / "out" / "testville" / "middle" / SURFACE_NAME)
+        assert len(meshes) == 1
+        assert meshes[0].name == SURFACE_MESH_NAME
+        assert report.triangles == meshes[0].triangle_count
+
+    def test_the_carriageway_is_the_configured_multiple_of_its_lanes(
+        self, testville, tmp_path
+    ) -> None:
+        """`widen_factor` is data, which is half of `P1-4`'s acceptance. The
+        eastern arm is 6.4 m of graph at the 1.5x default; the diagonal is
+        signed at 70 km/h and takes the 1.2x rule instead."""
+        city, _ = testville
+        build_region(city, "middle", out_root=tmp_path / "out")
+        mesh = _mesh(tmp_path)
+
+        # The eastern arm alone: past the junction, and nothing else runs here.
+        arm = mesh.positions[mesh.positions[:, 0] > 320.0]
+        kerb_to_kerb = arm[:, 2].max() - arm[:, 2].min()
+        assert kerb_to_kerb - 2 * city.roads.surface.kerb_width_m == pytest.approx(
+            6.4 * 1.5, abs=0.01
+        )
+        assert city.roads.surface.widen_for(70) == 1.2
+
+    def test_every_arm_meets_its_junction_with_no_gap(self, testville, tmp_path) -> None:
+        """`P1-4`'s acceptance criterion, checked directly rather than argued.
+
+        Each ribbon stops short of the node, so the mouth it leaves — the
+        segment between its two end corners — has to be inside the cap. It is,
+        because the cap is the convex hull of those very corners.
+        """
+        build_region(testville[0], "middle", out_root=tmp_path / "out")
+        mesh = _mesh(tmp_path)
+
+        # Street level only. The flyover deck runs across the same junction six
+        # metres up, and letting it count would hide a hole in the road below.
+        corners = mesh.positions[mesh.triangles]
+        triangles = corners[(corners[:, :, 1] < 1.0).all(axis=1)][:, :, [0, 2]]
+        grid = np.array(
+            [(x, z) for x in np.arange(295.0, 305.5, 0.5) for z in np.arange(295.0, 305.5, 0.5)]
+        )
+        assert _covered(grid, triangles).all()
+
+    def test_a_flyover_is_not_capped_down_to_the_street(self, testville, tmp_path) -> None:
+        """The 36 places in Wan Chai where two levels share a node all step by a
+        whole deck height. Capping across one would weld a street to the deck
+        above it with a wall no car could climb."""
+        build_region(testville[0], "middle", out_root=tmp_path / "out")
+        mesh = _mesh(tmp_path)
+
+        at_junction = mesh.positions[
+            (np.abs(mesh.positions[:, 0] - 300.0) < 12.0)
+            & (np.abs(mesh.positions[:, 2] - 300.0) < 12.0)
+        ]
+        heights = np.unique(np.round(at_junction[:, 1], 2))
+        # Street, street kerb, deck, deck kerb — and nothing bridging the two.
+        assert heights.min() == pytest.approx(0.0)
+        assert heights.max() == pytest.approx(6.15)
+        assert not ((heights > 0.2) & (heights < 5.9)).any()
+
+    def test_the_report_counts_the_level_change(self, testville, tmp_path) -> None:
+        report = build_region(testville[0], "middle", out_root=tmp_path / "out")
+
+        assert report.level_changes == 1
+        assert report.max_level_step_m == pytest.approx(6.0)
+
+    def test_kerbs_stand_at_their_configured_height(self, testville, tmp_path) -> None:
+        city, _ = testville
+        build_region(city, "middle", out_root=tmp_path / "out")
+        mesh = _mesh(tmp_path)
+
+        street = mesh.positions[mesh.positions[:, 1] < 3.0]
+        assert street[:, 1].max() == pytest.approx(city.roads.surface.kerb_height_m)
+
+    def test_lane_zero_is_the_nearside_kerb(self, testville, tmp_path) -> None:
+        """Hong Kong drives on the left, so U must count lanes from the left of
+        travel. Nothing renders wrong if this flips — the winding is
+        self-consistent either way — but every asymmetric marking the shader
+        draws off U would end up on the wrong side of the road.
+        """
+        build_region(testville[0], "middle", out_root=tmp_path / "out")
+        mesh = _mesh(tmp_path)
+
+        # Edge 1 runs east (+X) from the crossroads, so its nearside is -Z.
+        arm = mesh.positions[:, 0] > 320.0
+        at_kerb_line = arm & (np.abs(mesh.uvs[:, 0]) < 1e-6)
+        assert at_kerb_line.any()
+        assert mesh.positions[at_kerb_line][:, 2].max() < 300.0
+
+    def test_the_kerb_carries_its_u_ramp_on_the_lip(self, testville, tmp_path) -> None:
+        """The riser has no plan width, so both its rails stand at the kerb line
+        and must share its U. Put the ramp there instead and an integer U stops
+        meaning a lane boundary, which is the one promise the contract makes.
+        """
+        city, _ = testville
+        build_region(city, "middle", out_root=tmp_path / "out")
+        mesh = _mesh(tmp_path)
+
+        style = city.roads.surface
+        outside = style.kerb_width_m / city.roads.lane_width_m
+        arm = mesh.positions[:, 0] > 320.0
+        # The eastern arm travels +X, so its nearside lip is the smallest Z on
+        # it and the carriageway edge sits one kerb width inside that.
+        lip_outer_z = mesh.positions[arm][:, 2].min()
+        kerb_line_z = lip_outer_z + style.kerb_width_m
+
+        at_kerb_line = arm & (np.abs(mesh.positions[:, 2] - kerb_line_z) < 1e-4)
+        # Both ends of the riser stand here — road level and kerb height alike.
+        assert set(np.round(mesh.positions[at_kerb_line][:, 1], 3)) == {0.0, style.kerb_height_m}
+        np.testing.assert_allclose(mesh.uvs[at_kerb_line][:, 0], 0.0, atol=1e-6)
+
+        # U reaches its outer value only across the lip, which has plan width.
+        at_lip_outer = arm & (np.abs(mesh.positions[:, 2] - lip_outer_z) < 1e-4)
+        np.testing.assert_allclose(mesh.uvs[at_lip_outer][:, 0], -outside, atol=1e-6)
+
+    def test_no_triangle_faces_downward(self, testville, tmp_path) -> None:
+        """A fold renders as a hole under back-face culling and is invisible to
+        a one-sided collider."""
+        build_region(testville[0], "middle", out_root=tmp_path / "out")
+
+        count, area = downward_facing(_mesh(tmp_path))
+        assert (count, area) == (0, 0.0)
+
+    def test_it_writes_a_manifest_for_the_export_stage(self, testville, tmp_path) -> None:
+        report = build_region(testville[0], "middle", out_root=tmp_path / "out")
+
+        manifest = json.loads(
+            (tmp_path / "out" / "testville" / "middle" / SURFACE_MANIFEST_NAME).read_text()
+        )
+        assert manifest["mesh"] == SURFACE_NAME
+        assert manifest["mesh_name"] == SURFACE_MESH_NAME
+        assert manifest["triangles"] == report.triangles
+        assert len(manifest["aabb"]) == 2
+
+    def test_a_graph_from_another_schema_is_refused(self, testville, tmp_path) -> None:
+        """The contract is versioned, so a mismatch is a stale copy rather than
+        something to parse optimistically."""
+        city, _ = testville
+        graph = tmp_path / "out" / "testville" / "middle" / ROADGRAPH_NAME
+        document = json.loads(graph.read_text())
+        document["schema_version"] = ROADGRAPH_SCHEMA + 1
+        graph.write_text(json.dumps(document), encoding="utf-8")
+
+        with pytest.raises(ValueError, match="schema_version"):
+            build_region(city, "middle", out_root=tmp_path / "out")
+
+
+def _covered(points: np.ndarray, triangles: np.ndarray) -> np.ndarray:
+    """Whether each plan point falls inside some triangle, by edge sign.
+
+    The 2D cross product is written out because `np.cross` dropped support for
+    2-vectors in numpy 2.0 — the same trap `roads.py` documents.
+    """
+
+    def side(start: np.ndarray, end: np.ndarray, point: np.ndarray) -> np.ndarray:
+        span = end - start
+        offset = point - start
+        return span[:, 0] * offset[:, 1] - span[:, 1] * offset[:, 0]
+
+    a, b, c = triangles[:, 0], triangles[:, 1], triangles[:, 2]
+    covered = np.zeros(len(points), dtype=bool)
+    for index, point in enumerate(points):
+        first, second, third = side(a, b, point), side(b, c, point), side(c, a, point)
+        covered[index] = (
+            ((first >= 0) & (second >= 0) & (third >= 0))
+            | ((first <= 0) & (second <= 0) & (third <= 0))
+        ).any()
+    return covered

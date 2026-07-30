@@ -113,8 +113,15 @@ hero props.
 - Ribbon mesh generated from road-graph polylines, vertex-coloured
 - Markings via **shader along the ribbon's UV** (lane lines, yellow boxes, crossings) rather than
   a texture atlas — keeps the untextured pipeline intact
+  - `P1-4` ships the UVs the shader will read: **U is a lane coordinate**, 0 at the left kerb line
+    and `lanes` at the right, so an integer U is a lane boundary regardless of the playability
+    widening. V is metres along the carriageway, so dashes keep a real-world pitch. Junction caps
+    carry `(0, 0)` — a box junction is a mask keyed on the node, not a length of lane.
 - Kerbs modelled but low and mountable — collision is forgiving by design
-- Tram tracks as an inset strip on flagged edges
+  - Built by `P1-4` as a 0.15 m riser and a 0.5 m lip. The lip does double duty: with the terrain
+    too expensive to ship, it is what stops the carriageway ending in mid-air.
+- Tram tracks as an inset strip on flagged edges — **not yet built.** `tram_tracks` reaches the
+  graph but `P1-4` draws no inset; it belongs with the markings shader, not with the ribbon.
 
 ---
 

@@ -10,13 +10,11 @@ the wiring between them is exercised rather than assumed.
 from __future__ import annotations
 
 import json
-import textwrap
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-from pipeline.config import load_city
 from pipeline.roads import (
     Edge,
     build_region,
@@ -156,83 +154,11 @@ class TestLanes:
 # End to end
 # --------------------------------------------------------------------------
 
-# A 1 km square of made-up city, far enough east to be inside the declared
-# bounds and metric throughout, so expected coordinates can be worked out by
-# hand rather than read back off the output.
-_CITY = textwrap.dedent(
-    """
-    schema_version: 1
-    id: testville
-    name: Testville
-    crs:
-      projected: EPSG:2326
-      geodetic: EPSG:4326
-    elevation_levels:
-      -1: -8.0
-      0: 0.0
-      1: 6.0
-    bounds: {west: 114.00, east: 114.30, south: 22.20, north: 22.40}
-    regions:
-      middle:
-        name: Middle
-        bounds: {west: 114.170, east: 114.180, south: 22.276, north: 22.282}
-        tile_size_m: 150.0
-    sources:
-      roads: https://example.test/roads.gpkg
-    buildings:
-      classes: [BUILDING]
-      terrain_class: TERRAIN
-      class_colours: {}
-      height_bands:
-        - {up_to_m: .inf, colour: "#808080"}
-      colour_jitter: 0.0
-      lod_cell_sizes_m: [0.0]
-    roads:
-      source: roads
-      centrelines:
-        layer: CENTERLINE
-        fields:
-          elevation: ELEVATION
-          travel_direction: TRAVEL_DIRECTION
-          route: ROUTE_ID
-          name_en: STREET_ENAME
-          name_zh: STREET_CNAME
-      turns:
-        layer: TURN
-        fields:
-          first_edge: EDGE1FID
-          first_end: EDGE1END
-          second_edge: EDGE2FID
-      speed_limits:
-        layer: SPEED_LIMIT
-        fields: {route: ROAD_ROUTE_ID, speed_limit: SPEED_LIMIT}
-      bus_lanes:
-        layer: BUS_ONLY_LANE
-        fields: {route: ROAD_ROUTE_ID}
-      travel_directions:
-        1: both
-        3: forward
-      turn_at_end_value: "Y"
-      null_values: ["-99"]
-      default_speed_limit_kph: 50
-      simplify_tolerance_m: 0.2
-      min_edge_length_m: 2.0
-      lanes_default: 2
-      lanes_by_min_speed_limit_kph: {70: 3}
-      lane_width_m: 3.2
-      tram_streets: [TRAM STREET]
-      ground: datum
-    """
-)
-
 
 @pytest.fixture
-def testville(tmp_path):
+def testville(tmp_path, testville_config):
     """A whole city — config, geodatabase and all — under `tmp_path`."""
-    cities = tmp_path / "cities"
-    cities.mkdir()
-    (cities / "testville.yaml").write_text(_CITY, encoding="utf-8")
-    city = load_city("testville", cities_root=cities)
+    city = testville_config
 
     transform = city.game_transform("middle")
 

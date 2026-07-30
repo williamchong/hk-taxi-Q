@@ -12,6 +12,7 @@ wrong by hundreds of metres, which is far more expensive than a stack trace.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -159,6 +160,62 @@ _ROAD_LAYER_ROLES: dict[str, tuple[str, ...]] = {
 
 
 @dataclass(frozen=True)
+class RoadSurface:
+    """How `P1-4` turns the road graph into a drivable ribbon mesh.
+
+    Separate from `RoadNetwork` because it tunes a different thing: the graph is
+    a description of the city, this is how wide and how kerbed to draw it. A
+    change here never changes `roadgraph.json`.
+    """
+
+    # Multiplier on the graph's `width_m`, for play rather than accuracy. Real
+    # Hong Kong street widths are unforgiving at arcade speeds; see
+    # `docs/GAME_DESIGN.md`, which fixes the range at roughly 1.3-1.8x.
+    widen_default: float
+    widen_by_min_speed_limit_kph: dict[int, float]
+
+    # Kerbs are modelled but low and mountable — collision is forgiving by
+    # design. The lip is what stops the carriageway ending in mid-air, since
+    # the terrain is not shipped.
+    kerb_height_m: float
+    kerb_width_m: float
+
+    # How far back from a node each ribbon stops so a junction cap can fill the
+    # middle, as a multiple of the widest half-width meeting there.
+    junction_trim_factor: float
+    # Ceiling on that trim as a fraction of the edge's own length, so a short
+    # edge between two wide roads is not consumed from both ends.
+    junction_trim_max_fraction: float
+
+    surface_colour: tuple[int, int, int]
+    kerb_colour: tuple[int, int, int]
+
+    def widen_for(self, speed_limit_kph: int) -> float:
+        """Widening factor for an edge, from the fastest matching rule.
+
+        Expressways are already drawn wide by their lane count and need less
+        help; a two-lane street is where the widening earns its keep.
+        """
+        return float(
+            _by_fastest_rule(self.widen_by_min_speed_limit_kph, speed_limit_kph, self.widen_default)
+        )
+
+
+def _by_fastest_rule(table: Mapping[int, float], speed_limit_kph: int, default: float) -> float:
+    """The value of the highest speed threshold the limit reaches, else `default`.
+
+    The *fastest* matching rule wins, not the largest value. Identical while a
+    table is monotonic, which none of them need stay: a city that gave a 90 km/h
+    tunnel two lanes and a 70 km/h arterial three would otherwise get three
+    either way.
+    """
+    matched = [
+        (threshold, value) for threshold, value in table.items() if speed_limit_kph >= threshold
+    ]
+    return max(matched)[1] if matched else default
+
+
+@dataclass(frozen=True)
 class RoadNetwork:
     """How `P1-3` turns a published road network into a drivable graph.
 
@@ -204,23 +261,19 @@ class RoadNetwork:
     # terrain in its sources leaves this off and gets the vertical datum.
     ground_from_terrain: bool
 
+    # How `P1-4` draws what the graph describes.
+    surface: RoadSurface
+
     def lanes_for(self, speed_limit_kph: int) -> int:
         """Lane count for an edge, from the fastest matching rule.
 
         **Not a published attribute.** Road Network v2 carries no lane count in
         any layer, so this is authored policy keyed on what the source does
         carry. `P1-4` widens the result for play on top; see `docs/PLAN.md`.
-
-        The *fastest* rule wins, not the widest. Identical while the table is
-        monotonic, which it need not stay: a city that gave a 90 km/h tunnel two
-        lanes and a 70 km/h arterial three would otherwise get three either way.
         """
-        matched = [
-            (threshold, lanes)
-            for threshold, lanes in self.lanes_by_min_speed_limit_kph.items()
-            if speed_limit_kph >= threshold
-        ]
-        return max(matched)[1] if matched else self.lanes_default
+        return int(
+            _by_fastest_rule(self.lanes_by_min_speed_limit_kph, speed_limit_kph, self.lanes_default)
+        )
 
 
 @dataclass(frozen=True)
@@ -517,6 +570,50 @@ def _road_network(body: dict[str, Any], where: str) -> RoadNetwork:
         lane_width_m=float(_require(body, "lane_width_m", where)),
         tram_streets=frozenset(str(name) for name in (body.get("tram_streets") or ())),
         ground_from_terrain=ground == TERRAIN,
+        surface=_road_surface(_require(body, "surface", where), f"{where}:surface"),
+    )
+
+
+def _road_surface(body: dict[str, Any], where: str) -> RoadSurface:
+    widen_default = float(_require(body, "widen_default", where))
+    widen = {
+        int(threshold): float(factor)
+        for threshold, factor in (body.get("widen_by_min_speed_limit_kph") or {}).items()
+    }
+    for factor in (widen_default, *widen.values()):
+        # Narrowing a road is not a tuning choice, it is a typo: the graph's
+        # width already comes from an authored lane count, and a sub-1 factor
+        # would put the carriageway inside the buildings beside it.
+        if factor < 1.0:
+            raise ValueError(f"{where} widening factor {factor} is below 1.0")
+
+    fraction = float(_require(body, "junction_trim_max_fraction", where))
+    if not 0.0 < fraction < 0.5:
+        # At a half, an edge trimmed at both ends has nothing left between the
+        # two junctions and the ribbon disappears.
+        raise ValueError(f"{where}:junction_trim_max_fraction must be in (0, 0.5), got {fraction}")
+
+    # A negative kerb turns the lip inside out, which inverts its winding and
+    # renders as a hole; a negative trim pushes the ribbon *past* its junction.
+    # Both produce plausible-looking output, which is why they are refused here
+    # rather than left to be noticed in the engine.
+    measures = {
+        name: float(_require(body, name, where))
+        for name in ("kerb_height_m", "kerb_width_m", "junction_trim_factor")
+    }
+    for name, value in measures.items():
+        if value < 0.0:
+            raise ValueError(f"{where}:{name} must not be negative, got {value}")
+
+    return RoadSurface(
+        widen_default=widen_default,
+        widen_by_min_speed_limit_kph=widen,
+        kerb_height_m=measures["kerb_height_m"],
+        kerb_width_m=measures["kerb_width_m"],
+        junction_trim_factor=measures["junction_trim_factor"],
+        junction_trim_max_fraction=fraction,
+        surface_colour=_parse_hex(str(_require(body, "surface_colour", where)), where),
+        kerb_colour=_parse_hex(str(_require(body, "kerb_colour", where)), where),
     )
 
 

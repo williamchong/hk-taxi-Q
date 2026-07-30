@@ -9,6 +9,7 @@ twice, and only pytest's copy of a fixture is a working fixture.
 from __future__ import annotations
 
 import struct
+import textwrap
 from pathlib import Path
 from typing import Any
 
@@ -139,3 +140,86 @@ def write_layer(
         crs=crs,
         append=path.exists(),
     )
+
+
+# A 1 km square of made-up city, far enough east to be inside the declared
+# bounds and metric throughout, so expected coordinates can be worked out by
+# hand rather than read back off the output.
+#
+# Shared by the road-graph and road-surface tests, which is the point: the
+# two stages are a pipeline, and a fixture city that drifted between them
+# would let the second stage pass against a city the first never built.
+CITY_YAML = textwrap.dedent(
+    """
+    schema_version: 1
+    id: testville
+    name: Testville
+    crs:
+      projected: EPSG:2326
+      geodetic: EPSG:4326
+    elevation_levels:
+      -1: -8.0
+      0: 0.0
+      1: 6.0
+    bounds: {west: 114.00, east: 114.30, south: 22.20, north: 22.40}
+    regions:
+      middle:
+        name: Middle
+        bounds: {west: 114.170, east: 114.180, south: 22.276, north: 22.282}
+        tile_size_m: 150.0
+    sources:
+      roads: https://example.test/roads.gpkg
+    buildings:
+      classes: [BUILDING]
+      terrain_class: TERRAIN
+      class_colours: {}
+      height_bands:
+        - {up_to_m: .inf, colour: "#808080"}
+      colour_jitter: 0.0
+      lod_cell_sizes_m: [0.0]
+    roads:
+      source: roads
+      centrelines:
+        layer: CENTERLINE
+        fields:
+          elevation: ELEVATION
+          travel_direction: TRAVEL_DIRECTION
+          route: ROUTE_ID
+          name_en: STREET_ENAME
+          name_zh: STREET_CNAME
+      turns:
+        layer: TURN
+        fields:
+          first_edge: EDGE1FID
+          first_end: EDGE1END
+          second_edge: EDGE2FID
+      speed_limits:
+        layer: SPEED_LIMIT
+        fields: {route: ROAD_ROUTE_ID, speed_limit: SPEED_LIMIT}
+      bus_lanes:
+        layer: BUS_ONLY_LANE
+        fields: {route: ROAD_ROUTE_ID}
+      travel_directions:
+        1: both
+        3: forward
+      turn_at_end_value: "Y"
+      null_values: ["-99"]
+      default_speed_limit_kph: 50
+      simplify_tolerance_m: 0.2
+      min_edge_length_m: 2.0
+      lanes_default: 2
+      lanes_by_min_speed_limit_kph: {70: 3}
+      lane_width_m: 3.2
+      tram_streets: [TRAM STREET]
+      ground: datum
+      surface:
+        widen_default: 1.5
+        widen_by_min_speed_limit_kph: {70: 1.2}
+        kerb_height_m: 0.15
+        kerb_width_m: 0.5
+        junction_trim_factor: 1.0
+        junction_trim_max_fraction: 0.35
+        surface_colour: "#3c3a37"
+        kerb_colour: "#9a968d"
+    """
+)

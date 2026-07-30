@@ -93,7 +93,36 @@ cp out/hong_kong/wan_chai/roadgraph.json ../game/assets/generated/
 then open `scenes/dev/city_preview.tscn` in Godot and press **F6**. The `Roads` node draws each
 edge as a flat ribbon of its `width_m` with arrows along every one-way, which is what `Q12` — the
 one acceptance criterion no test can settle — is asking you to check. Its `colouring` property
-switches between direction, grade separation and speed limit.
+switches between direction, grade separation and speed limit. It ships hidden, because the road
+*surface* now occupies the same heights; switch it on to read the graph rather than the road.
+
+## Road surface (`P1-4`)
+
+```sh
+../.venv/bin/python -m pipeline.surface --city hong_kong --region wan_chai
+```
+
+Reads `roadgraph.json` — not the geodatabase — and writes `out/hong_kong/wan_chai/roads.glb`:
+28,423 triangles for the whole region, in under half a second. One mesh, one draw call, no
+texture, and the same vertex-coloured treatment as the tiles.
+
+Widening, kerb dimensions and colours are city config (`roads.surface:` in the YAML). The widening
+is not cosmetic — `docs/GAME_DESIGN.md` fixes it at ~1.3–1.8× because real Wan Chai streets are
+unforgiving at arcade speeds, and at 1.6× the region's six opposed carriageway pairs merge into one
+continuous surface instead of leaving a slot down the middle of Lockhart Road.
+
+The mesh is named `road_surface-col`, which is Godot's importer suffix for "build a static trimesh
+collider from this". Collision is therefore part of the asset rather than something built at load.
+
+```sh
+cp out/hong_kong/wan_chai/roads.glb ../game/assets/generated/
+godot --headless --path ../game --import
+godot --headless --path ../game --script res://tools/verify_road_surface.gd
+```
+
+That last command is the engine-side half of the acceptance criteria — one draw call, vertex
+colours, UVs for the markings shader, no texture, and a `ConcavePolygonShape3D` that actually
+imported. None of it is visible from Python.
 
 ## Layout
 
@@ -109,6 +138,7 @@ switches between direction, grade separation and speed limit.
 | `pipeline/gdb.py` | Geodatabase layers and WKB → numpy. Format only, no policy |
 | `pipeline/terrain.py` | Terrain mesh → a sampleable height field (`Q11`) |
 | `pipeline/roads.py` | Road network → `roadgraph.json`. Where the policy lives |
+| `pipeline/surface.py` | `roadgraph.json` → `roads.glb`. Ribbon, kerbs, junction caps, collision |
 | `sources/<city>/<source>/` | Raw downloads and `manifest.json` — gitignored |
 | `out/<city>/<region>/` | Pipeline output — gitignored |
 
