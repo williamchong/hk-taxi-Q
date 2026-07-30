@@ -71,6 +71,30 @@ godot --headless --path ../game --import
 godot --headless --path ../game --script res://tools/verify_tiles.gd
 ```
 
+## Road graph (`P1-3`)
+
+```sh
+../.venv/bin/python -m pipeline.roads --city hong_kong --region wan_chai
+```
+
+Reads the cached geodatabase — no network, nothing unpacked, OGR opens it inside its zip — and
+writes `out/hong_kong/wan_chai/roadgraph.json`. Wan Chai is 797 edges over 615 nodes with 217 turn
+restrictions, in under a second.
+
+Layer and column names are city config (`roads:` in the YAML), because they are the Transport
+Department's schema rather than a fact about roads. The pipeline asks for a *role*.
+
+To look at it beside the buildings:
+
+```sh
+cp out/hong_kong/wan_chai/roadgraph.json ../game/assets/generated/
+```
+
+then open `scenes/dev/city_preview.tscn` in Godot and press **F6**. The `Roads` node draws each
+edge as a flat ribbon of its `width_m` with arrows along every one-way, which is what `Q12` — the
+one acceptance criterion no test can settle — is asking you to check. Its `colouring` property
+switches between direction, grade separation and speed limit.
+
 ## Layout
 
 | Path | Contains |
@@ -82,6 +106,9 @@ godot --headless --path ../game --script res://tools/verify_tiles.gd
 | `pipeline/gltf.py` | glTF reading and GLB writing — no library, see the module docstring |
 | `pipeline/mesh.py` | Merge, partition and LOD-collapse meshes. Geometry only, no policy |
 | `pipeline/buildings.py` | Sheets → vertex-coloured tiles. Where the policy lives |
+| `pipeline/gdb.py` | Geodatabase layers and WKB → numpy. Format only, no policy |
+| `pipeline/terrain.py` | Terrain mesh → a sampleable height field (`Q11`) |
+| `pipeline/roads.py` | Road network → `roadgraph.json`. Where the policy lives |
 | `sources/<city>/<source>/` | Raw downloads and `manifest.json` — gitignored |
 | `out/<city>/<region>/` | Pipeline output — gitignored |
 

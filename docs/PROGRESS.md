@@ -29,11 +29,12 @@ game-ready assets. Two findings came out of it that change later tasks: the **te
 affordable as shipped** (267 MB of JPEG, 405k triangles), and **ground level in Wan Chai is ~4 m
 above the datum**, which `P1-3`'s deck heights currently assume is zero. See `Q11`.
 
-**`P1-3` closed on 2026-07-30, taking `Q9` and `Q11` with it.** `roads.py` turns the road network
-geodatabase into **797 edges over 615 nodes with 217 turn restrictions** in 1.4 seconds, and the
-graph sits on real ground: sampling the terrain under every vertex puts level-0 roads at a median
-**4.21 m**, against the 4.29 m median building base `P1-2` measured independently. One acceptance
-criterion is **not** met by machine and needs the user — see the open question below.
+**`P1-3` closed on 2026-07-30, taking `Q9`, `Q11` and `Q12` with it.** `roads.py` turns the road
+network geodatabase into **797 edges over 615 nodes with 217 turn restrictions** in 0.8 seconds,
+and the graph sits on real ground: sampling the terrain under every vertex puts level-0 roads at a
+median **4.21 m**, against the 4.29 m median building base `P1-2` measured independently. **All
+four acceptance criteria are met** — the last of them, the one-way spot check, by the user driving
+the preview rather than by any test.
 
 **`P1-4` (road surface mesh) is next.** It inherits two findings from `P1-3`: dual carriageways
 arrive as opposed one-way pairs ~3 m apart, and `lanes` is authored policy rather than published
@@ -61,7 +62,7 @@ is deferred rather than closed.
 | `P1-1` | Source fetching | ✅ **Done** | `fetch.py`; sheets derived from the index, not listed. 67 tests, `ruff` clean. |
 | `P1-2` | Building meshes | ✅ **Done** | 65 tiles × 3 LODs; 989k → 184k triangles. Verified in Godot by `game/tools/verify_tiles.gd`. 153 tests, `ruff` clean. |
 | `P1-2t` | └ Terrain evaluation | ⚠️ **Measured — not viable as shipped** | 267 MB JPEG, 405k tris. See the decision log; needs a resampling pass to survive. |
-| `P1-3` | Road graph | ⚠️ **Done, one criterion pending** | 797 edges, 615 nodes, 217 turn restrictions, 96.3% connected, 0.80 s. `Q9` and `Q11` resolved here. 234 tests, `ruff` clean. The "spot-check against reality" criterion needs the user — see `Q12`. |
+| `P1-3` | Road graph | ✅ **Done** | 797 edges, 615 nodes, 217 turn restrictions, 96.3% connected, 0.80 s. `Q9`, `Q11` and `Q12` all resolved here. 234 tests, `ruff` clean. All four acceptance criteria met, the last by the user's eye. |
 | `P1-4`…`P1-7` | Rest of the ETL slice | 🟢 **Unblocked** | Deps met. |
 | `P2-*` | Driving the real city | ⬜ Blocked | Gated on `P1-7` |
 | `P3-*` | Playable slice | ⬜ Blocked | |
@@ -85,14 +86,25 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ❌ blocked
 | Q9 | Does `P1-3` read the 17 MB FGDB or the 539 MB per-layer GML? | 522 MB of download and disk per clone | `P1-3` | ✅ **Resolved 2026-07-30** — the geodatabase; every GML dropped from config |
 | Q10 | Is the game-space origin per region, or shared per city? | Whether two regions can stitch into one continuous map | `P1-6` | ✅ **Resolved 2026-07-30** — both: local origin plus a recorded `city_offset` |
 | Q11 | Where is ground level? `elevation_levels[0] = 0.0` puts at-grade roads at y=0, but 99.9% of Wan Chai's buildings have their base **above 2 m** (median 4.29 m) | Roads would run ~4 m below every front door, and under the terrain | `P1-3` | ✅ **Resolved 2026-07-30** — sample the terrain height field |
-| Q12 | Are the road graph's one-way directions right on the ground? | `P1-3`'s last acceptance criterion, and the thing no test can settle | user | 🔴 **Open** — needs a Hong Kong driver, table below |
+| Q12 | Are the road graph's one-way directions right on the ground? | `P1-3`'s last acceptance criterion, and the thing no test can settle | user | ✅ **Resolved 2026-07-30** — Jaffe Road confirmed eastbound; the source agrees with the street |
 
-### Q12 — the one-way spot check needs a human
+### Q12 — resolved: **the source agrees with the street**
 
-`PLAN.md` asks that `P1-3`'s one-way directions be "spot-checked **against reality** on Lockhart
-and Jaffe Road". Everything else in that task was verified by measurement; this one cannot be,
-because the only authority is the road itself. What the data says, with coordinates so it can be
-checked on the ground or on any map:
+User verdict 2026-07-30, after flying the road-graph preview: **Jaffe Road is eastbound**, exactly
+as `roadgraph.json` says. `P1-3`'s last acceptance criterion is met, and the task is closed.
+
+**The useful part is what this licenses downstream.** Direction reaches the graph through
+`TRAVEL_DIRECTION` and the digitised vertex order, and there was no independent way to know whether
+that chain — or the publisher's own survey — matched the road. It does. So `P3-3` can route traffic
+on the source's directions rather than treating them as a starting guess to be hand-corrected
+street by street, which is a materially different amount of work for Causeway Bay and every city
+after it. A disagreement here would have been the more interesting finding and much the worse one.
+
+Confirmed by eye rather than by test on purpose. `PLAN.md` asked for a check "**against reality**",
+and the only authority on that is the road; `game/scripts/city/road_preview.gd` exists to make it a
+ten-second question rather than a survey.
+
+What the data said, kept for the record and because `P1-4` needs the Lockhart row:
 
 | Street | What `roadgraph.json` says | Where |
 |---|---|---|
@@ -108,10 +120,10 @@ until you measure it. It was measured: **6 opposed pairs** in the emitted graph,
 as a floor — it counts only pairs sharing *both* endpoints, and carriageways that diverge at one
 end are the same pattern uncounted.
 
-**If Jaffe or Lockhart is wrong, the likely cause is not the ETL** — direction comes straight from
-`TRAVEL_DIRECTION` and the digitised vertex order, both of which are reproduced faithfully. It
-would mean the source disagrees with the street, which is a much more interesting finding and
-would change how much `P3-3` can trust the network.
+**Carried into `P1-4` as an open decision, not a question:** whether a 3 m opposed pair becomes two
+ribbons or one. Two ribbons is what the data describes and would leave a 3 m gap down the middle of
+Lockhart Road; one ribbon is what the street looks like and means detecting the pairs and merging
+them. Neither is obviously right, and it is a road-surface decision rather than a graph one.
 
 ### Q11 — resolved: sample the terrain height field under every vertex
 
@@ -289,6 +301,22 @@ below.
 ---
 
 ## Decision log
+
+### 2026-07-30 — `Q12` closed: the published road directions **match the street**
+
+User verdict after flying the road-graph preview: Jaffe Road runs east, as `roadgraph.json` says.
+That clears `P1-3`'s fourth and last acceptance criterion.
+
+**Recorded as a decision rather than just an answer, because of what now rests on it.** Until this
+was checked, nothing established that `TRAVEL_DIRECTION` plus the digitised vertex order actually
+described the road on the ground — only that the ETL reproduced them faithfully. `P3-3` traffic and
+any routing can now take the source's directions as authoritative instead of as a first draft to be
+corrected street by street. That is the difference between a data import and a hand-authored map,
+and it compounds across Causeway Bay and every city after.
+
+Not a blanket warranty: one street was checked, and the source's *geometry* is separately known to
+be quirky (dual carriageways as opposed one-way pairs, one centreline densified to 0.4 mm
+segments). The claim is about direction, on the streets `PLAN.md` named.
 
 ### 2026-07-30 — `P1-3`: `ELEVATION` is **not** part of a node's identity
 
@@ -866,7 +894,7 @@ urgent — flag it before the roster work in Phase 4.
 | Real geometry isn't fun to drive | **High** | ⚠️ **Mitigation weakened.** `P0-5` was meant to retire this before any ETL investment; the user's verdict is that a grey box cannot answer it (`Q8`). The test did clear the *handling*, so the remaining risk is the city, not the car. Road widening and hand-added ramps are still the designed remedy, and `widen_factor` is already data. Next real check is the Phase 1 gate. |
 | Doesn't read as HK to locals | **High** | `P3-9` authenticity test with ≥3 real drivers; run again every phase after. |
 | Perf misses 60fps on device floor | Medium | Budget defined up front; untextured merged tiles are the main lever; `P2-6` is a dedicated pass. |
-| Source data quirks (dual carriageways, doubled junctions) | Medium → **Low** | **Mitigated 2026-07-30 by `P1-3`.** Both quirks turned up and both were handled: dual carriageways arrive as 6 opposed one-way pairs 1.96–3.85 m apart (median 2.9 m), and doubled junctions never form because nodes are made only at shared endpoints. The residual risk moves to `P1-4`, which has to decide whether a 3 m pair becomes two ribbons or one. |
+| Source data quirks (dual carriageways, doubled junctions) | Medium → **Low** | **Mitigated 2026-07-30 by `P1-3`, and the directions confirmed against the street (`Q12`).** Both quirks turned up and both were handled: dual carriageways arrive as 6 opposed one-way pairs 1.96–3.85 m apart (median 2.9 m), and doubled junctions never form because nodes are made only at shared endpoints. The residual risk moves to `P1-4`, which has to decide whether a 3 m pair becomes two ribbons or one. |
 | Building meshes blow the triangle budget | Medium → **Low** | **Mitigated 2026-07-30 by `P1-2`.** The estimate was low: 2,200 buildings across the six sheets, not the ~900 extrapolated from one. Real region totals are **989k / 400k / 184k** triangles at LOD0/1/2, averaging 15.2k per tile at LOD0. Against a <300k *visible* budget that leaves room, but not much — a viewpoint holding LOD0 on the nearest ring plus LOD1 behind it lands in the low 300k range before occlusion. `P2-1`'s switch distances now decide this, not the ETL. |
 | Terrain does not fit any budget | Medium | **New 2026-07-30.** Measured 267 MB of texture and 405k triangles for the ground alone — roughly 2× over on texture memory, triangles *and* bundle size simultaneously. Resampling to ~2 px/m and decimating to ~88k triangles brings it into range, but that work is not done and is not scheduled. Nothing in the tile output depends on it. |
 | GDScript learning curve | Low | Small codebase; complexity lives in Python. |
@@ -972,6 +1000,15 @@ matched, so a free-text `"Route 4, 70 km/h"` would have read as **4 km/h**. `cli
 fast path skipped the minimum-length rule the slow path applied, so one function carried two
 policies. And an empty or single-vertex geometry — legal in a geodatabase — reached
 `polyline[0]` and raised `IndexError` with nothing to say which feature caused it.
+
+**The graph is previewable.** `game/scripts/city/road_preview.gd` draws every edge as a flat
+ribbon of its `width_m` at its real deck height, with arrows along the one-ways, in the same scene
+as the massing. Verified in Godot 4.7.1 headless: 797 edges, 680 one-way, 1,124 arrows, spanning
+**1650 x 887 m** against a 1649.6 x 886.9 m region and y −8.9 to 50.0 m. Those spans are the check
+worth keeping — a sign error or a missed origin puts the graph somewhere plausible and elsewhere.
+
+Built for `Q12` specifically. Arrows over buildings a Hong Kong driver recognises is the cheapest
+way to ask whether Jaffe Road really runs east, and it is not a question any test can answer.
 
 **Recorded, not fixed:** `roads.py` reaches into `buildings.py` for `Placement` and `read_sheet`,
 and reads its terrain class out of the *buildings* config section. The layering rule says format

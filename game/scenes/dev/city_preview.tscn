@@ -1,13 +1,17 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/city/tile_preview.gd" id="1_tiles"]
 [ext_resource type="Script" path="res://scripts/camera/free_look_camera.gd" id="2_camera"]
 [ext_resource type="PackedScene" path="res://scenes/world/golden_hour.tscn" id="3_light"]
+[ext_resource type="Script" path="res://scripts/city/road_preview.gd" id="4_roads"]
 
 [node name="CityPreview" type="Node3D"]
 
 [node name="Tiles" type="Node3D" parent="."]
 script = ExtResource("1_tiles")
+
+[node name="Roads" type="Node3D" parent="."]
+script = ExtResource("4_roads")
 
 [node name="GoldenHour" parent="." instance=ExtResource("3_light")]
 
