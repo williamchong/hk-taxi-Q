@@ -1,10 +1,11 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://scripts/city/tile_preview.gd" id="1_tiles"]
 [ext_resource type="Script" path="res://scripts/camera/free_look_camera.gd" id="2_camera"]
 [ext_resource type="PackedScene" path="res://scenes/world/golden_hour.tscn" id="3_light"]
 [ext_resource type="Script" path="res://scripts/city/road_preview.gd" id="4_roads"]
 [ext_resource type="Script" path="res://scripts/city/road_surface_preview.gd" id="5_surface"]
+[ext_resource type="Script" path="res://scripts/city/fare_preview.gd" id="6_fares"]
 
 [node name="CityPreview" type="Node3D"]
 
@@ -13,6 +14,12 @@ script = ExtResource("1_tiles")
 
 [node name="RoadSurface" type="Node3D" parent="."]
 script = ExtResource("5_surface")
+
+; `P1-5`'s fare nodes. Visible by default, unlike the graph diagnostic below,
+; because nothing else in this scene draws them and they do not z-fight anything
+; — the pins sit in the air and the tethers are lifted clear of the carriageway.
+[node name="Fares" type="Node3D" parent="."]
+script = ExtResource("6_fares")
 
 ; The `P1-3` graph diagnostic, kept and hidden. It draws flat ribbons at the
 ; same heights the surface now occupies, so leaving both on z-fights; switch it

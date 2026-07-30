@@ -179,6 +179,24 @@ unreachable is a missing feature, not a broken one, and arguably the right first
 be decided rather than inherited, and `P2-2`'s nearest-edge queries will hand the car onto a flyover
 if nothing stops them.
 
+**Narrowed 2026-07-31: `Q13` does not block the cross-harbour fare.** The user's objection to `P1-5`
+was the obvious one — the region is Wan Chai, so there is no other side of the harbour to deliver
+anyone to. Checked against the graph, and the design already answers it: `docs/DATA_SOURCES.md`
+specifies a cross-harbour fare that *terminates at the tunnel approach* rather than crossing, and
+that approach is in the region **at street level**. Three `CROSS HARBOUR TUNNEL` edges (`e219`,
+`e344`, `e465`) sit at elevation level 0 and join ordinary streets through `WAN CHAI INTERCHANGE`
+at nodes 90, 240 and 333. You can drive there from Hennessy Road today.
+
+The 8 m step is at nodes 250 and 430 — the portals themselves, where the approach dives to level
+−1, and only 81 m of tunnel is inside the region at all before the harbour boundary clips it. So
+`Q13` costs the ability to drive *into* the tunnel, which the fare design never asked for. Straight-
+line distance from the six cross-harbour stands to the portal runs **191 m to 1,044 m**, which is a
+usable spread of fare lengths — though 191 m (Jaffe Road) is barely a trip, and `P3-1` will need
+either a minimum length or a different destination for the near ones.
+
+What this does **not** settle is whether stopping at a portal *feels* like completing a cross-
+harbour fare. That is a `P3-9` question, not a geometry one.
+
 ### Q12 — resolved: **the source agrees with the street**
 
 User verdict 2026-07-30, after flying the road-graph preview: **Jaffe Road is eastbound**, exactly
