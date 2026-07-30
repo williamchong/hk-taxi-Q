@@ -3,7 +3,7 @@
 Living document. **Update this whenever a task changes status, a decision is made, or an open
 question is answered.** Newest entries at the top of each log.
 
-Last updated: 2026-07-30 (`P1-4` closed)
+Last updated: 2026-07-31 (`Q8` closed — the city is the fun)
 
 ---
 
@@ -66,9 +66,15 @@ real Wan Chai massing in Godot — is now one task of plumbing away, since the c
 their collision all exist as assets.
 
 **`P0-5` passed conditionally, not cleanly** — the user drove it, found the handling acceptable, and
-judged that *fun* cannot be assessed from a grey box at all. See the decision log. The consequence
-is that the "is this a game?" question is **not** answered yet, and the risk `P0-5` existed to retire
-is deferred rather than closed.
+judged that *fun* cannot be assessed from a grey box at all. See the decision log. The risk it
+existed to retire stayed open through the entire ETL slice.
+
+**`Q8` closed on 2026-07-31, and with it that risk.** Driving the real city, the user's verdict is
+that an HK-like map is a fun enough gimmick already. The premise the whole project rests on —
+recognition is the product — is now measured rather than assumed, and the expensive half of the art
+direction is justified by it. Read narrowly, though: a gimmick carries a first session. The
+register now tracks "novelty does not survive the first session" in its place, and that is `P3-*`'s
+to answer, not Phase 1's.
 
 ### Task board
 
@@ -108,7 +114,7 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ❌ blocked
 | Q5 | Actual file sizes of the region's building data | Affects fetch time and disk planning | `P0-1` | ✅ **Resolved 2026-07-30** — ~44 MB/sheet, ~280 MB for the region. Roads: `CENTERLINE.gml` is 486 MB territory-wide |
 | Q6 | Does the region need Central for the circuit to feel complete? | Scope | after `P3-9` | 🟡 Deferred |
 | Q7 | Does game-space Z run negative northward, or should the origin move to the NW corner? | Data contract — tile IDs and every position in `city.json` | `P1-6` | ✅ **Resolved 2026-07-30** — NW corner |
-| Q8 | What is the cheapest build that lets the user judge "is this fun?" | **Now the top project risk** — `P0-5` did not answer it | user | 🟡 **Answerable as of 2026-07-30** — `scenes/dev/city_drive.tscn` puts the `P0-5` car on real Wan Chai. Awaiting the user's verdict |
+| Q8 | What is the cheapest build that lets the user judge "is this fun?" | Was the top project risk — `P0-5` did not answer it | user | ✅ **Resolved 2026-07-31** — the car on real Wan Chai. Verdict: driving an HK-like map is a fun enough gimmick already |
 | Q9 | Does `P1-3` read the 17 MB FGDB or the 539 MB per-layer GML? | 522 MB of download and disk per clone | `P1-3` | ✅ **Resolved 2026-07-30** — the geodatabase; every GML dropped from config |
 | Q10 | Is the game-space origin per region, or shared per city? | Whether two regions can stitch into one continuous map | `P1-6` | ✅ **Resolved 2026-07-30** — both: local origin plus a recorded `city_offset` |
 | Q11 | Where is ground level? `elevation_levels[0] = 0.0` puts at-grade roads at y=0, but 99.9% of Wan Chai's buildings have their base **above 2 m** (median 4.29 m) | Roads would run ~4 m below every front door, and under the terrain | `P1-3` | ✅ **Resolved 2026-07-30** — sample the terrain height field |
@@ -357,6 +363,38 @@ below.
 ---
 
 ## Decision log
+
+### 2026-07-31 — `Q8` closed: **the city itself is the fun**, and that is the whole bet
+
+The user drove `scenes/dev/city_drive.tscn` and returned the verdict that driving an HK-like map is
+a fun enough gimmick already.
+
+**This is the question the project has been carrying since `P0-5`.** That test cleared the handling
+and explicitly could not clear the premise — a grey box can tell you whether a car feels good, and
+nothing about whether *this city* is worth driving. The whole ETL slice, `P1-1` through `P1-4`, was
+built on an unvalidated bet: that accurate Hong Kong massing is itself the product. It is answered
+now, and it is answered the right way round — by driving the real thing rather than by arguing
+about it.
+
+**What it licenses.** The core direction needs no revisiting. `docs/ART_DESIGN.md`'s first line —
+"accurate city, toy vehicles", recognition is the product — is now a measured position rather than
+an assumption, which is what makes the expensive half of that trade (accurate massing, real street
+widths, real one-way directions) worth what it cost. It also strengthens the commercial argument
+already in the risk register: if recognition is the product, the city-agnostic ETL is the scaling
+answer, because a second city is a YAML file and a fun-enough gimmick again.
+
+**What it does not license, and the word matters.** *Gimmick* is the user's own, and it is accurate
+rather than dismissive — a gimmick carries a first session. It says nothing about the tenth. So the
+`Q8` risk is retired and replaced rather than deleted: the register now carries "novelty does not
+survive the first session" in its place. The mitigations do not change, because they were already
+the plan — `P3-*` is where the fare loop has to earn a second session, and `P3-9` is where real
+Hong Kong drivers say whether the recognition holds up to people who know the streets. The failure
+mode to avoid is reading this verdict as covering those.
+
+One process note worth keeping: the verdict cost one dev scene assembled from parts that already
+existed — `P0-5`'s car and camera, `P1-2`'s tiles, `P1-4`'s collider. `Q8` asked for "the cheapest
+build that lets the user judge", and the answer turned out to be *no new build at all*, only
+wiring. It was worth asking in that form.
 
 ### 2026-07-30 — `P1-4`: the road surface is **one mesh**, capped per level, and never merged
 
@@ -996,7 +1034,8 @@ urgent — flag it before the roster work in Phase 4.
 | Risk | Severity | Mitigation |
 |---|---|---|
 | Road data lacks Z values | **High** | `P0-2` first. Fallbacks documented in `DATA_SOURCES.md`. Worst case: switch region to TST. |
-| Real geometry isn't fun to drive | **High** | ⚠️ **Mitigation weakened.** `P0-5` was meant to retire this before any ETL investment; the user's verdict is that a grey box cannot answer it (`Q8`). The test did clear the *handling*, so the remaining risk is the city, not the car. Road widening and hand-added ramps are still the designed remedy, and `widen_factor` is already data. Next real check is the Phase 1 gate. |
+| Real geometry isn't fun to drive | High → **Retired** | **Closed 2026-07-31.** `P0-5` could not answer this from a grey box, which is why it sat open through the whole ETL build. Answered by driving the real thing: the user's verdict on `scenes/dev/city_drive.tscn` is that an HK-like map is a fun enough gimmick on its own. The premise the project is built on holds. What replaces it is a *different* risk — see "Novelty does not survive the first session" below. |
+| Novelty does not survive the first session | **Medium** | **New 2026-07-31, and it is the honest reading of the `Q8` verdict.** "Gimmick" was the user's own word, and a gimmick reliably carries one session. Recognition is doing the work, which is a strong start and not yet a loop. The mitigations were already scheduled and are now the ones that matter: `P3-*` for whether the fare loop sustains, and `P3-9`'s authenticity test with real HK drivers for whether recognition holds up to people who know the streets. Nothing to do differently today; the point is not to read `Q8` as more than it says. |
 | Doesn't read as HK to locals | **High** | `P3-9` authenticity test with ≥3 real drivers; run again every phase after. |
 | Perf misses 60fps on device floor | Medium | Budget defined up front; untextured merged tiles are the main lever; `P2-6` is a dedicated pass. |
 | Source data quirks (dual carriageways, doubled junctions) | Medium → **Low** | **Mitigated 2026-07-30 by `P1-3`, and the directions confirmed against the street (`Q12`).** Both quirks turned up and both were handled: dual carriageways arrive as 6 opposed one-way pairs 1.96–3.85 m apart (median 2.9 m), and doubled junctions never form because nodes are made only at shared endpoints. **Closed 2026-07-30 by `P1-4`:** the residual — whether a 3 m pair becomes two ribbons or one — was not a decision. The widened ribbons overlap, so both carriageways draw as one continuous surface and no pair handling exists in the code. |
