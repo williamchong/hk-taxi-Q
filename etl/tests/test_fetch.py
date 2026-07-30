@@ -429,27 +429,23 @@ def fetch_once(city, root: Path, **kwargs):
 
 
 @pytest.mark.skipif(
-    not (fetch.SOURCES_ROOT / "hong_kong" / "buildings" / "index.geojson").exists(),
+    not (fetch.source_dir("hong_kong", "buildings") / fetch.INDEX_NAME).exists(),
     reason="requires a fetched sheet index",
 )
-def test_real_index_selects_the_six_documented_sheets() -> None:
+def test_real_index_selects_the_six_documented_sheets(hong_kong) -> None:
     """Against the live index, not a fixture.
 
     docs/DATA_SOURCES.md names these six as covering the region. They are not
     configured anywhere — the point is that intersecting the bounds with the
     published index re-derives exactly that list.
+
+    Through `cached_tiles` because that is what `buildings.py` calls, so this
+    exercises the real path rather than an equivalent one assembled here.
     """
-    city = load_city("hong_kong")
-    index = json.loads(
-        (fetch.SOURCES_ROOT / "hong_kong" / "buildings" / "index.geojson").read_text()
+    tiles = fetch.cached_tiles(
+        hong_kong, hong_kong.region("wan_chai"), hong_kong.tiled_sources["buildings"]
     )
-    tiles = fetch.select_tiles(
-        index,
-        city.tiled_sources["buildings"],
-        region_bounds=city.region("wan_chai").bounds,
-        region_crs=city.geodetic_crs,
-    )
-    assert sorted(tile.key.split("/")[-1] for tile in tiles) == [
+    assert sorted(tile.tile_id for tile in tiles) == [
         "11-SW-10C",
         "11-SW-10D",
         "11-SW-14B",

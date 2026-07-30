@@ -12,12 +12,13 @@ from __future__ import annotations
 import json
 import zipfile
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 import pytest
 
 from pipeline.buildings import (
-    MANIFEST_NAME,
+    BUILDINGS_MANIFEST_NAME,
     SOURCE_ID,
     Grid,
     assign,
@@ -25,24 +26,9 @@ from pipeline.buildings import (
     colour_for,
     game_offset,
 )
-from pipeline.config import BuildingStyle, HeightBand, load_city
+from pipeline.config import BuildingStyle, HeightBand
 from pipeline.gltf import MeshData, read_glb
-
-# Faces of an axis-aligned box over corners ordered x-outer, y-middle, z-inner.
-_FACES = [
-    ((0, 1, 3, 2), (-1, 0, 0)),
-    ((4, 6, 7, 5), (1, 0, 0)),
-    ((0, 4, 5, 1), (0, -1, 0)),
-    ((2, 3, 7, 6), (0, 1, 0)),
-    ((0, 2, 6, 4), (0, 0, -1)),
-    ((1, 5, 7, 3), (0, 0, 1)),
-]
-
-
-@pytest.fixture
-def hong_kong():
-    return load_city("hong_kong")
-
+from tests.helpers import BOX_FACES, box_corners, box_soup
 
 # --------------------------------------------------------------------------
 # Fixture construction — a sheet zip shaped like the real ones
@@ -54,15 +40,7 @@ def landsd_box(
 ) -> tuple[bytes, bytes]:
     """One building in the exact shape LandsD ships: Z-up local, Y-up node."""
     half_x, half_y = width / 2, depth / 2
-    corners = [
-        (x, y, z) for x in (-half_x, half_x) for y in (-half_y, half_y) for z in (0.0, height)
-    ]
-
-    positions, normals = [], []
-    for (a, b, c, d), normal in _FACES:
-        for index in (a, b, c, a, c, d):
-            positions.append(corners[index])
-            normals.append(normal)
+    positions, normals = box_soup(box_corners((-half_x, -half_y, 0.0), (half_x, half_y, height)))
 
     position_bytes = np.array(positions, dtype="<f4").tobytes()
     normal_bytes = np.array(normals, dtype="<f4").tobytes()
@@ -104,6 +82,21 @@ def landsd_box(
     return json.dumps(document).encode(), binary
 
 
+class Fixture(NamedTuple):
+    """One synthetic building, placed in game space rather than source metres.
+
+    `footprint` defaults to something comfortably larger than the coarsest LOD
+    cell; it only matters for objects small enough to vanish into one.
+    """
+
+    name: str
+    class_id: str
+    x: float
+    z: float
+    height: float
+    footprint: float = 20.0
+
+
 @pytest.fixture
 def sources(tmp_path: Path, hong_kong):
     """A sources tree holding one synthetic sheet and an index that selects it."""
@@ -143,15 +136,21 @@ def sources(tmp_path: Path, hong_kong):
         encoding="utf-8",
     )
 
-    def _write(buildings: list[tuple[str, str, float, float, float]]) -> Path:
+    def _write(buildings: list[Fixture]) -> Path:
         with zipfile.ZipFile(directory / "TEST-1.zip", "w") as archive:
-            for name, class_id, x, z, height in buildings:
-                easting, northing, _ = _to_source(hong_kong, x, z)
+            for spec in buildings:
+                easting, northing, _ = _to_source(hong_kong, spec.x, spec.z)
                 document, binary = landsd_box(
-                    name, easting, northing, width=20.0, depth=20.0, height=height
+                    spec.name,
+                    easting,
+                    northing,
+                    width=spec.footprint,
+                    depth=spec.footprint,
+                    height=spec.height,
                 )
-                archive.writestr(f"{class_id}/{name}/{name}.gltf", document)
-                archive.writestr(f"{class_id}/{name}/{name}.bin", binary)
+                member = f"{spec.class_id}/{spec.name}/{spec.name}"
+                archive.writestr(f"{member}.gltf", document)
+                archive.writestr(f"{member}.bin", binary)
         return root
 
     return _write
@@ -214,17 +213,9 @@ class TestAssign:
         return Grid(tile_size_m=150.0, max_x=1650.0, max_z=900.0)
 
     def mesh(self, low: tuple[float, float, float], high: tuple[float, float, float]) -> MeshData:
-        corners = np.array(
-            [
-                [x, y, z]
-                for x in (low[0], high[0])
-                for y in (low[1], high[1])
-                for z in (low[2], high[2])
-            ],
-            dtype=np.float64,
-        )
+        corners = box_corners(low, high)
         positions, normals, triangles = [], [], []
-        for (a, b, c, d), normal in _FACES:
+        for (a, b, c, d), normal in BOX_FACES:
             base = len(positions)
             positions.extend(corners[index] for index in (a, b, c, d))
             normals.extend([normal] * 4)
@@ -290,6 +281,7 @@ def flat_mesh(name: str, height: float) -> MeshData:
 def style(jitter: float = 0.0) -> BuildingStyle:
     return BuildingStyle(
         classes=("BUILDING", "INFRASTRUCTURE"),
+        terrain_class="TERRAIN",
         class_colours={"INFRASTRUCTURE": (100, 100, 100)},
         height_bands=(
             HeightBand(up_to_m=12.0, colour=(200, 180, 150)),
@@ -351,13 +343,13 @@ class TestColour:
 
 
 class TestBuildRegion:
-    def buildings(self) -> list[tuple[str, str, float, float, float]]:
+    def buildings(self) -> list[Fixture]:
         return [
-            ("B0001", "BUILDING", 75.0, 75.0, 10.0),  # tile 0,0 — low band
-            ("B0002", "BUILDING", 90.0, 90.0, 90.0),  # tile 0,0 — tall band
-            ("B0003", "BUILDING", 400.0, 300.0, 40.0),  # tile 2,2
-            ("I0001", "INFRASTRUCTURE", 410.0, 310.0, 8.0),  # tile 2,2
-            ("B0009", "BUILDING", -900.0, 300.0, 40.0),  # outside the region
+            Fixture("B0001", "BUILDING", 75.0, 75.0, 10.0),  # tile 0,0 — low band
+            Fixture("B0002", "BUILDING", 90.0, 90.0, 90.0),  # tile 0,0 — tall band
+            Fixture("B0003", "BUILDING", 400.0, 300.0, 40.0),  # tile 2,2
+            Fixture("I0001", "INFRASTRUCTURE", 410.0, 310.0, 8.0),  # tile 2,2
+            Fixture("B0009", "BUILDING", -900.0, 300.0, 40.0),  # outside the region
         ]
 
     def build(self, hong_kong, sources, tmp_path: Path):
@@ -378,7 +370,9 @@ class TestBuildRegion:
         report = self.build(hong_kong, sources, tmp_path)
         out = tmp_path / "out" / "hong_kong" / "wan_chai"
         for tile in report.tiles:
-            assert [lod.level for lod in tile.lods] == [0, 1, 2]
+            assert [Path(lod.path).name for lod in tile.lods] == [
+                f"{tile.id}_lod{level}.glb" for level in range(3)
+            ]
             for lod in tile.lods:
                 assert (out / lod.path).exists()
 
@@ -420,10 +414,34 @@ class TestBuildRegion:
             counts = [lod.triangles for lod in tile.lods]
             assert counts == sorted(counts, reverse=True)
 
+    def test_a_tile_of_only_tiny_objects_does_not_kill_the_run(
+        self, hong_kong, sources, tmp_path
+    ) -> None:
+        """A 1.5 m cube alone in a tile vanishes at 4 m cells. Correct for a sign
+        gantry seen from 400 m; taking the whole region's build down with it,
+        after 100 GLBs are already on disk, is not.
+
+        Placed to sit *wholly inside* one 4 m cell, because that is the condition
+        — a sub-cell object straddling a boundary keeps two clusters per axis and
+        survives. Which makes this a latent failure that depends on absolute
+        position, and so can appear the next time the region bounds move.
+        """
+        gantry = Fixture("B0100", "BUILDING", 1402.0, 802.0, height=1.5, footprint=1.5)
+        report = build_region(
+            hong_kong,
+            "wan_chai",
+            sources_root=sources([*self.buildings(), gantry]),
+            out_root=tmp_path / "out",
+        )
+
+        by_id = {tile.id: tile for tile in report.tiles}
+        assert len(by_id["t_09_05"].lods) < 3
+        assert len(by_id["t_00_00"].lods) == 3
+
     def test_the_manifest_describes_the_grid(self, hong_kong, sources, tmp_path) -> None:
         self.build(hong_kong, sources, tmp_path)
         manifest = json.loads(
-            (tmp_path / "out" / "hong_kong" / "wan_chai" / MANIFEST_NAME).read_text()
+            (tmp_path / "out" / "hong_kong" / "wan_chai" / BUILDINGS_MANIFEST_NAME).read_text()
         )
         assert manifest["grid"] == {"columns": 11, "rows": 6}
         assert manifest["tile_size_m"] == 150.0
@@ -445,7 +463,7 @@ class TestBuildRegion:
     def test_a_region_with_nothing_in_it_is_an_error(self, hong_kong, sources, tmp_path) -> None:
         """Exiting 0 with no buildings is the failure this pipeline is most
         exposed to — wrong bounds and a wrong datum both land here."""
-        root = sources([("B0009", "BUILDING", -900.0, 300.0, 40.0)])
+        root = sources([Fixture("B0009", "BUILDING", -900.0, 300.0, 40.0)])
         with pytest.raises(ValueError, match="no tiles"):
             build_region(hong_kong, "wan_chai", sources_root=root, out_root=tmp_path / "out")
 

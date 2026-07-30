@@ -107,11 +107,15 @@ tiled_sources:
 # here is art direction, not pipeline logic — see docs/ART_DESIGN.md, which is
 # the document to change first if a colour looks wrong.
 buildings:
-  # Sub-directories inside a sheet zip to read. TERRAIN(TB) is deliberately
-  # absent: it is textured, and the building stage emits no textures.
+  # Sub-directories inside a sheet zip holding massing to tile.
   classes:
     - BUILDING
     - INFRASTRUCTURE
+
+  # The textured ground, read only by `--terrain` and never tiled — the tile
+  # output carries no textures. Named here rather than in the pipeline because
+  # the parenthesis is a LandsD spelling, not a fact about terrain.
+  terrain_class: TERRAIN(TB)
 
   # Flat colour for a class, overriding the height bands. Elevated road
   # structures are concrete whatever their height, and banding a flyover deck by

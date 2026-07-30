@@ -84,12 +84,22 @@ class Artefact:
 
     key: str
     url: str
-    # Relative to `<root>/<city id>/`.
+    # Relative to `<root>/<city id>/` — resolve with `artefact_path`, never by
+    # rebuilding that layout at the call site.
     path: Path
     # Publisher's version stamp. None means the artefact has no version and is
     # therefore fetched exactly once.
     version: str | None = None
     kind: ArtefactKind = ArtefactKind.SOURCE
+
+    @property
+    def tile_id(self) -> str:
+        """The publisher's id for this tile — the sheet number, for buildings.
+
+        A property because `key`'s `<source>/<id>` shape is this module's
+        business; a caller splitting the string would be depending on it.
+        """
+        return self.key.rsplit("/", 1)[-1]
 
 
 @dataclass
@@ -247,6 +257,16 @@ def select_tiles(
 def source_dir(city_id: str, source_id: str, *, root: Path | None = None) -> Path:
     """Where a source's fetched artefacts live."""
     return (root or SOURCES_ROOT) / city_id / source_id
+
+
+def artefact_path(city_id: str, artefact: Artefact, *, root: Path | None = None) -> Path:
+    """Where one fetched artefact lives.
+
+    The single definition of the sources-tree layout. Later stages resolve
+    through this rather than rebuilding `<root>/<city>/<path>` themselves, so
+    moving the tree is one edit.
+    """
+    return (root or SOURCES_ROOT) / city_id / artefact.path
 
 
 def cached_tiles(
@@ -499,7 +519,7 @@ def _tiles_for(
     # is metadata about the download rather than the payload.
     _process(index_artefact, city, root, manifest, report, force=force, dry_run=False)
 
-    index_path = root / city.id / index_artefact.path
+    index_path = artefact_path(city.id, index_artefact, root=root)
     try:
         index = _read_index(index_path, source)
     except ValueError:
@@ -579,7 +599,7 @@ def _process(
     dry_run: bool,
 ) -> None:
     manifest_key = f"{city.id}/{artefact.key}"
-    destination = root / city.id / artefact.path
+    destination = artefact_path(city.id, artefact, root=root)
 
     # `--force` overrides fetch-once, not the publisher's own version stamp.
     # A versioned artefact still consults its stamp, so re-snapshotting six

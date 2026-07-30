@@ -395,9 +395,11 @@ buckets source meshes spatially has to handle a mesh larger than its own bucket 
 tile assignment.
 
 ❌ **Terrain does not fit any budget as it ships.** Clipped to the region it is still 404,669
-triangles and **267 MB** of JPEG — over on triangles, texture memory and bundle size at once, by
-roughly 2× each. The source is ~10 px/m, which is survey resolution for ground seen at 60 km/h;
-resampling to ~2 px/m (~6 MB as ASTC) and decimating to ~88k triangles would bring it into range,
+triangles, and its six GLBs total **267 MB** — of which **224 MB is the JPEGs**, carried through
+untouched, and 43 MB is geometry. Clipping removes triangles, not texture. Over on triangles,
+texture memory and bundle size at once, by roughly 2× each. The source is ~10 px/m, which is
+survey resolution for ground seen at 60 km/h; resampling to ~2 px/m (~6 MB as ASTC) and
+decimating to ~88k triangles would bring it into range,
 but that work is not scheduled. It is still parsed and still worth keeping, because it is a
 **height field** and `Q11` needs one: Road Network v2 carries no Z, and ground level in Wan Chai is
 ~4 m above the datum rather than 0. `python -m pipeline.buildings --terrain` emits it separately

@@ -34,9 +34,9 @@ from numpy.typing import ArrayLike
 
 from pipeline.config import BuildingStyle, CityConfig, RegionConfig, load_city
 from pipeline.crs import GameTransform
-from pipeline.fetch import SOURCES_ROOT, cached_tiles
-from pipeline.gltf import MeshData, read_scene, write_glb
-from pipeline.mesh import collapse, merge, select_triangles
+from pipeline.fetch import artefact_path, cached_tiles
+from pipeline.gltf import Bounds, MeshData, read_scene, write_glb
+from pipeline.mesh import EmptyMeshError, collapse, merge, select_triangles
 
 log = logging.getLogger(__name__)
 
@@ -46,17 +46,21 @@ OUT_ROOT = Path(__file__).resolve().parent.parent / "out"
 # than a city fact — `fetch.py --only buildings` names the same thing.
 SOURCE_ID = "buildings"
 
-# Sheet sub-directory holding the textured ground mesh. Only read under
-# `--terrain`, which exists to measure the thing rather than to ship it.
-TERRAIN_CLASS = "TERRAIN(TB)"
-
-MANIFEST_NAME = "buildings.json"
-MANIFEST_SCHEMA = 1
+# Named for what it holds, not for `fetch.py`'s `manifest.json`, which is a
+# different file with a different job.
+BUILDINGS_MANIFEST_NAME = "buildings.json"
+BUILDINGS_MANIFEST_SCHEMA = 2
 
 
 @dataclass(frozen=True)
 class LodOutput:
-    level: int
+    """One tier of one tile. Its position in `TileOutput.lods` is its level.
+
+    A tile can have fewer tiers than there are configured cell sizes: once
+    everything in it is smaller than the cell, no coarser tier has anything to
+    draw. Consumers must read the list, not index it.
+    """
+
     path: str
     triangles: int
     vertices: int
@@ -69,7 +73,7 @@ class TileOutput:
     ix: int
     iz: int
     meshes: int
-    aabb: tuple[tuple[float, float, float], tuple[float, float, float]]
+    aabb: Bounds
     lods: list[LodOutput]
 
 
@@ -132,12 +136,15 @@ class Grid:
     @classmethod
     def for_region(cls, city: CityConfig, region: RegionConfig) -> Grid:
         bounds = city.projected_bounds(region.id)
-        transform = city.game_transform(region.id)
-        return cls(
-            tile_size_m=region.tile_size_m,
-            max_x=bounds.max_easting - transform.origin_easting,
-            max_z=transform.origin_northing - bounds.min_northing,
+        # Through `GameTransform` rather than subtracting the origin here. The
+        # origin is at the NW corner and the Z flip is forced by handedness, so
+        # writing the far corner out by hand means restating a sign convention
+        # `crs.py` documents as not a free choice — in a second place, where it
+        # can drift.
+        max_x, _, max_z = city.game_transform(region.id).to_game(
+            bounds.max_easting, bounds.min_northing
         )
+        return cls(tile_size_m=region.tile_size_m, max_x=max_x, max_z=max_z)
 
     @property
     def columns(self) -> int:
@@ -165,8 +172,13 @@ class Grid:
         )
 
 
-def assign(mesh: MeshData, grid: Grid) -> Iterator[tuple[tuple[int, int], MeshData]]:
+def assign(
+    mesh: MeshData, grid: Grid, bounds: Bounds | None = None
+) -> Iterator[tuple[tuple[int, int], MeshData]]:
     """Place a mesh into the tiles it belongs to, dropping what falls outside.
+
+    `bounds` is the mesh's AABB when the caller already has it, purely to avoid
+    a second full pass over the positions.
 
     Buildings are assigned **whole**, by their centre, and so may overhang their
     tile by half a footprint. That is deliberate: split at the boundary they
@@ -181,7 +193,7 @@ def assign(mesh: MeshData, grid: Grid) -> Iterator[tuple[tuple[int, int], MeshDa
     that defeats distance-based streaming. So those are partitioned by triangle
     instead. Nothing is cut, so the pieces abut exactly.
     """
-    low, high = mesh.aabb()
+    low, high = bounds if bounds is not None else mesh.aabb()
     if high[0] - low[0] <= grid.tile_size_m and high[2] - low[2] <= grid.tile_size_m:
         centre_x, centre_z = (low[0] + high[0]) / 2, (low[2] + high[2]) / 2
         if grid.contains(centre_x, centre_z):
@@ -189,7 +201,7 @@ def assign(mesh: MeshData, grid: Grid) -> Iterator[tuple[tuple[int, int], MeshDa
             yield (int(ix), int(iz)), mesh
         return
 
-    centroids = mesh.positions[mesh.triangles].mean(axis=1)
+    centroids = mesh.triangle_centroids()
     inside = grid.contains(centroids[:, 0], centroids[:, 2])
     columns, rows = grid.index(centroids[:, 0], centroids[:, 2])
     for ix, iz in {(int(c), int(r)) for c, r in zip(columns[inside], rows[inside], strict=True)}:
@@ -210,28 +222,67 @@ def game_offset(transform: GameTransform) -> np.ndarray:
     return np.asarray(transform.to_game(0.0, 0.0, 0.0), dtype=np.float64)
 
 
-def colour_for(style: BuildingStyle, class_id: str, mesh: MeshData) -> np.ndarray:
+def colour_for(
+    style: BuildingStyle, class_id: str, mesh: MeshData, bounds: Bounds | None = None
+) -> np.ndarray:
     """One RGBA row per vertex: the class or height-band colour, jittered.
 
     Jitter is seeded from the mesh name — the LandsD building id — via `crc32`
     rather than `hash`, which is salted per process and would repaint the city
     on every run.
     """
-    low, high = mesh.aabb()
+    low, high = bounds if bounds is not None else mesh.aabb()
     red, green, blue = style.colour_for(class_id, high[1] - low[1])
 
     if style.colour_jitter > 0.0:
         unit = crc32(mesh.name.encode("utf-8")) / 0x1_0000_0000
         factor = 1.0 + style.colour_jitter * (2.0 * unit - 1.0)
-        channels = (min(255, max(0, round(channel * factor))) for channel in (red, green, blue))
-        red, green, blue = channels
+        red, green, blue = (
+            min(255, max(0, round(channel * factor))) for channel in (red, green, blue)
+        )
 
-    return np.tile(np.array([red, green, blue, 255], dtype=np.uint8), (len(mesh.positions), 1))
+    # A read-only broadcast view, not 4 bytes repeated a million times. `merge`
+    # and `select_triangles` materialise it where it is actually needed.
+    return np.broadcast_to(
+        np.array([red, green, blue, 255], dtype=np.uint8), (len(mesh.positions), 4)
+    )
 
 
 # --------------------------------------------------------------------------
 # Orchestration
 # --------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Placement:
+    """Everything both stages need to put a sheet's geometry in the region.
+
+    Both `build_region` and `build_terrain` start by resolving the same
+    things from the same two arguments; sharing that is what stops the two
+    stages disagreeing about where the region is.
+    """
+
+    region: RegionConfig
+    grid: Grid
+    offset: np.ndarray
+    out_dir: Path
+    sheets: list[tuple[str, Path]]
+
+    @classmethod
+    def resolve(
+        cls, city: CityConfig, region_id: str, sources_root: Path | None, out_root: Path | None
+    ) -> Placement:
+        region = city.region(region_id)
+        tiles = cached_tiles(city, region, city.tiled_sources[SOURCE_ID], root=sources_root)
+        return cls(
+            region=region,
+            grid=Grid.for_region(city, region),
+            offset=game_offset(city.game_transform(region_id)),
+            out_dir=(out_root or OUT_ROOT) / city.id / region_id,
+            sheets=[
+                (sheet.tile_id, artefact_path(city.id, sheet, root=sources_root)) for sheet in tiles
+            ],
+        )
 
 
 def build_region(
@@ -242,32 +293,29 @@ def build_region(
     out_root: Path | None = None,
 ) -> BuildReport:
     """Write every tile of the region, at every LOD tier, and report on them."""
-    region = city.region(region_id)
     style = city.buildings
-    grid = Grid.for_region(city, region)
-    offset = game_offset(city.game_transform(region_id))
-    out_dir = (out_root or OUT_ROOT) / city.id / region_id
+    place = Placement.resolve(city, region_id, sources_root, out_root)
 
     report = BuildReport()
     buckets: dict[tuple[int, int], list[MeshData]] = {}
 
-    for sheet in cached_tiles(city, region, city.tiled_sources[SOURCE_ID], root=sources_root):
-        sheet_path = (sources_root or SOURCES_ROOT) / city.id / sheet.path
+    for sheet_id, sheet_path in place.sheets:
         kept = 0
         for class_id, mesh in read_sheet(sheet_path, style.classes):
             report.read += 1
-            placed = mesh.translated(offset)
+            placed = mesh.translated(place.offset)
+            bounds = placed.aabb()
             # Colour comes from the whole mesh's height, before any splitting,
             # so a viaduct partitioned across four tiles stays one colour.
-            coloured = replace(placed, colours=colour_for(style, class_id, placed))
-            placements = list(assign(coloured, grid))
+            coloured = replace(placed, colours=colour_for(style, class_id, placed, bounds))
+            placements = list(assign(coloured, place.grid, bounds))
             for tile, piece in placements:
                 buckets.setdefault(tile, []).append(piece)
             if placements:
                 kept += 1
             else:
                 report.clipped += 1
-        log.info("  %-12s %4d kept", sheet.key.split("/")[-1], kept)
+        log.info("  %-12s %4d kept", sheet_id, kept)
 
     if not buckets:
         raise ValueError(
@@ -275,27 +323,38 @@ def build_region(
             f"region bounds — check that the sheets on disk are the ones the bounds select."
         )
 
-    for (ix, iz), meshes in sorted(buckets.items()):
-        report.tiles.append(_write_tile(out_dir, ix, iz, meshes, style))
+    # Popped as they are written so the bucket payload — 133 MB for Wan Chai —
+    # decays across the write stage instead of all staying live to the end.
+    for tile in sorted(buckets):
+        report.tiles.append(_write_tile(place.out_dir, tile, buckets.pop(tile), style))
 
-    _write_manifest(out_dir, city, region, grid, report)
+    _write_manifest(place.out_dir, city, place.region, place.grid, report)
     return report
 
 
 def _write_tile(
-    out_dir: Path, ix: int, iz: int, meshes: list[MeshData], style: BuildingStyle
+    out_dir: Path, tile: tuple[int, int], meshes: list[MeshData], style: BuildingStyle
 ) -> TileOutput:
+    ix, iz = tile
     tile_id = f"t_{ix:02d}_{iz:02d}"
     merged = merge(meshes, name=tile_id)
 
     lods: list[LodOutput] = []
     for level, cell_m in enumerate(style.lod_cell_sizes_m):
-        tier = collapse(merged, cell_m=cell_m)
+        try:
+            tier = collapse(merged, cell_m=cell_m)
+        except EmptyMeshError:
+            # Everything in this tile is smaller than the cell. Correct at LOD2
+            # for a tile holding one sign gantry — but the tiers coarsen, so
+            # every later one vanishes too, and a tile with nothing left to draw
+            # at 400 m must not take the whole region's build down with it.
+            log.info("  %s: nothing survives LOD%d (%.1f m cells)", tile_id, level, cell_m)
+            break
+
         relative = Path("tiles") / f"{tile_id}_lod{level}.glb"
         size = write_glb(out_dir / relative, [tier])
         lods.append(
             LodOutput(
-                level=level,
                 path=relative.as_posix(),
                 triangles=tier.triangle_count,
                 vertices=len(tier.positions),
@@ -323,10 +382,10 @@ def _write_manifest(
     stay independently runnable.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / MANIFEST_NAME).write_text(
+    (out_dir / BUILDINGS_MANIFEST_NAME).write_text(
         json.dumps(
             {
-                "schema_version": MANIFEST_SCHEMA,
+                "schema_version": BUILDINGS_MANIFEST_SCHEMA,
                 "city_id": city.id,
                 "region_id": region.id,
                 "tile_size_m": grid.tile_size_m,
@@ -364,19 +423,15 @@ def build_terrain(
 
     Returns `(sheet, triangles, bytes)` per sheet.
     """
-    region = city.region(region_id)
-    grid = Grid.for_region(city, region)
-    offset = game_offset(city.game_transform(region_id))
-    out_dir = (out_root or OUT_ROOT) / city.id / region_id / "terrain"
+    place = Placement.resolve(city, region_id, sources_root, out_root)
+    out_dir = place.out_dir / "terrain"
 
     results: list[tuple[str, int, int]] = []
-    for sheet in cached_tiles(city, region, city.tiled_sources[SOURCE_ID], root=sources_root):
-        sheet_id = sheet.key.split("/")[-1]
-        sheet_path = (sources_root or SOURCES_ROOT) / city.id / sheet.path
+    for sheet_id, sheet_path in place.sheets:
         meshes = [
             clipped
-            for _, mesh in read_sheet(sheet_path, (TERRAIN_CLASS,))
-            if (clipped := _clip_triangles(mesh.translated(offset), grid)) is not None
+            for _, mesh in read_sheet(sheet_path, (city.buildings.terrain_class,))
+            if (clipped := _clip_triangles(mesh.translated(place.offset), place.grid)) is not None
         ]
         if not meshes:
             log.info("  %-12s no terrain inside the region", sheet_id)
@@ -396,7 +451,7 @@ def _clip_triangles(mesh: MeshData, grid: Grid) -> MeshData | None:
     alone, so UVs stay valid against the sheet's own texture and the cut edge
     can overhang the region by up to a triangle.
     """
-    centroids = mesh.positions[mesh.triangles].mean(axis=1)
+    centroids = mesh.triangle_centroids()
     return select_triangles(mesh, grid.contains(centroids[:, 0], centroids[:, 2]))
 
 
@@ -430,14 +485,15 @@ def main(argv: list[str] | None = None) -> int:
         len(report.tiles),
     )
     for level, cell_m in enumerate(city.buildings.lod_cell_sizes_m):
-        triangles = sum(tile.lods[level].triangles for tile in report.tiles)
-        megabytes = sum(tile.lods[level].bytes for tile in report.tiles) / 1e6
+        # Not every tile reaches every tier — see `LodOutput`.
+        tiers = [tile.lods[level] for tile in report.tiles if level < len(tile.lods)]
         log.info(
-            "  LOD%d (%.1f m cells): %8d triangles, %6.1f MB",
+            "  LOD%d (%.1f m cells): %8d triangles, %6.1f MB, %d tiles",
             level,
             cell_m,
-            triangles,
-            megabytes,
+            sum(tier.triangles for tier in tiers),
+            sum(tier.bytes for tier in tiers) / 1e6,
+            len(tiers),
         )
 
     if args.terrain:

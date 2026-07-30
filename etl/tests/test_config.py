@@ -17,11 +17,6 @@ from pipeline.config import CITIES_ROOT, SUPPORTED_SCHEMA, load_city
 
 
 @pytest.fixture
-def hong_kong():
-    return load_city("hong_kong")
-
-
-@pytest.fixture
 def rewrite(tmp_path: Path):
     """Load the real config, mutate it, and write it somewhere disposable.
 

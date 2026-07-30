@@ -278,9 +278,13 @@ real six sheets, after clipping to the region.
 | | Whole region | Budget |
 |---|---|---|
 | Terrain triangles | **404,669** | <300k *visible*, everything included |
-| Terrain texture | **267 MB** of JPEG, 6 × 7531 × 6031 px | <128 MB texture memory |
-| As ASTC 4×4 | ~272 MB VRAM | — |
+| Terrain texture | **224 MB** of JPEG, 6 × 7531 × 6031 px | <128 MB texture memory |
+| As ASTC 4×4 | ~272 MB VRAM (272 megapixels) | — |
+| Emitted GLBs | **267 MB** — 224 MB texture + 43 MB geometry | — |
 | Bundle contribution | 267 MB on its own | <200 MB total (iOS cellular) |
+
+Clipping to the region removes triangles but not texture: each sheet's JPEG is carried through
+whole so its UVs stay valid, which is why the texture figure is the full 224 MB either way.
 
 So it fails on all three counts at once, by roughly 2×. That is not a close call and no amount of
 LOD tiering fixes a texture budget.
@@ -317,8 +321,14 @@ in metres, so the tiers stay tuning data in city config (hard rule 4). Measured 
 
 **The cluster key includes the facing, not just the cell.** Merging on position alone averages a
 wall normal into the roof normal above it and rounds off the faceting the whole style rests on.
-With facing in the key, LOD0 is an *exact* weld — lossless, and still worth doing because the
-source repeats every vertex per triangle.
+With facing in the key, LOD0 is an *exact* weld — every surviving vertex is a source vertex, and
+still worth doing because the source repeats every vertex per triangle.
+
+⚠️ "Lossless" is precise about **positions**, which are reproduced bit for bit. It was first
+implemented as a cluster mean, which is not the same thing: summing k equal doubles and dividing
+by k need not reproduce them. Taking a representative instead fixed that, and moved LOD0 normals
+by up to one float32 ulp (1.5e-08) in 60 of 65 tiles — invisible, but a real change of bytes, so
+recorded rather than described as neutral.
 
 **Meshes are assigned to tiles whole, except those too big for a tile.** Splitting a building at a
 tile boundary leaves an open shell and makes half of it pop as the streamer loads one tile and not
@@ -845,8 +855,33 @@ for you. `numpy` is the one dependency added.
   since the LandsD source is a uniform 0.8 grey the pipeline replaces anyway — which meant no test
   could check the colours in an emitted tile without hand-parsing GLB. Now decoded to RGBA bytes.
 
-**Deliberately not done:** terrain resampling (see the decision log), and hooking the tiles up to a
-scene — `P1-7` owns that and needs `city.json` from `P1-6`.
+**A preview scene, so the city can be looked at before `P1-7`.**
+`scenes/dev/city_preview.tscn` instantiates every tile and frames whatever is on disk; a fly
+camera moves through it. It reports **65 tiles, 989,212 triangles** — matching the ETL exactly,
+which is a second confirmation that every triangle survives the trip into the engine. It is a dev
+tool, not the streamer: no distance culling, no LOD switching, so it measures nothing. `P1-7` still
+owns the real path, and still needs `city.json` from `P1-6`.
+
+Lighting moved to one shared rig, `scenes/world/golden_hour.tscn`, with the Environment as a
+`.tres` in `tuning/`. The grey-box scene had been carrying its own — flat background, white sun —
+so the two dev scenes lit the city differently and neither matched `ART_DESIGN.md`.
+
+**Deliberately not done:** terrain resampling (see the decision log).
+
+**Correction, same day.** This section first recorded the cluster-key optimisation as skipped
+because it "changes every output byte". Measured, that was wrong twice over, so it was implemented:
+
+- Packing the key into a 1-D **void** view — what I had assumed the win was — saves **nothing**.
+  That is exactly what `np.unique(axis=0)` already does internally.
+- Packing the **binned** tiers' key into a mixed-radix **int64** is 8.2× on that stage, because
+  small integers sort without memcmp. Most-significant digit first reproduces the lexicographic
+  order the row-wise sort produced, so the clusters and their ordering are unchanged — verified
+  **byte-identical across all 195 tiles**. Whole build **5.95 s → 3.24 s (−46%)**.
+- The exact tier keys on raw float64 and cannot be packed at all. Its share is irreducible, which
+  is why LOD0 still pays for the row-wise unique.
+
+Guarded: it falls back to the row-wise path if the grid cannot be encoded, which needs a region
+~3,500 km across at 1.5 m cells.
 
 153 tests, `ruff` clean.
 

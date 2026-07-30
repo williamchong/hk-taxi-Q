@@ -59,6 +59,10 @@ _COMPONENTS_PER_ELEMENT = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4, "MAT4":
 _UINT16_LIMIT = 65_535
 
 
+# A mesh's axis-aligned bounds: (low xyz, high xyz).
+Bounds = tuple[tuple[float, float, float], tuple[float, float, float]]
+
+
 @dataclass(frozen=True)
 class Texture:
     data: bytes
@@ -101,10 +105,14 @@ class MeshData:
     def translated(self, offset: Sequence[float]) -> MeshData:
         return replace(self, positions=self.positions + np.asarray(offset, dtype=np.float64))
 
-    def aabb(self) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+    def aabb(self) -> Bounds:
         low = self.positions.min(axis=0)
         high = self.positions.max(axis=0)
         return (tuple(low.tolist()), tuple(high.tolist()))
+
+    def triangle_centroids(self) -> np.ndarray:
+        """(m, 3) centre of each triangle — how a mesh is bucketed spatially."""
+        return self.positions[self.triangles].mean(axis=1)
 
 
 # --------------------------------------------------------------------------
@@ -135,26 +143,52 @@ def read_scene(document: bytes | str, resolve: Callable[[str], bytes]) -> list[M
 class _BufferCache:
     """Decoded buffers and images for one document.
 
-    A sheet's meshes each live in their own file, but a document's accessors all
-    read the same `.bin`; decoding it once per accessor would re-read the zip
-    member four times per building.
+    A document's accessors all read the same `.bin`, so resolving once per URI
+    rather than per accessor saves three or four zip reads per building — the
+    one measured saving here.
+
+    Images go through the same cache, and `texture` hands out one object per
+    image, so two primitives sharing a 39 MB terrain JPEG neither decompress it
+    twice nor embed it twice. No LandsD document is shaped that way, so that
+    part is a guard against a document shape this data does not have, not a
+    saving on it.
     """
 
     def __init__(self, gltf: dict[str, Any], resolve: Callable[[str], bytes]) -> None:
         self._gltf = gltf
         self._resolve = resolve
-        self._buffers: dict[int, bytes] = {}
+        self._resolved: dict[str, bytes] = {}
+        self._textures: dict[int, Texture] = {}
 
     def resolve(self, uri: str) -> bytes:
-        return self._resolve(uri)
+        if uri not in self._resolved:
+            self._resolved[uri] = self._resolve(uri)
+        return self._resolved[uri]
 
     def buffer(self, index: int) -> bytes:
-        if index not in self._buffers:
-            uri = self._gltf["buffers"][index].get("uri")
-            if uri is None:
-                raise ValueError("GLB-embedded buffers are not supported by this reader")
-            self._buffers[index] = self._resolve(uri)
-        return self._buffers[index]
+        uri = self._gltf["buffers"][index].get("uri")
+        if uri is None:
+            raise ValueError("GLB-embedded buffers are not supported by this reader")
+        return self.resolve(uri)
+
+    def texture(self, image: int) -> Texture:
+        """The image as a `Texture`, one object per image per document.
+
+        One *object*, not merely one copy of the bytes: `write_glb` decides
+        whether two primitives share an image by identity, so handing out a
+        fresh wrapper per primitive would silently defeat it and embed a 39 MB
+        JPEG twice.
+        """
+        if image not in self._textures:
+            entry = self._gltf["images"][image]
+            if "bufferView" in entry:
+                self._textures[image] = Texture(
+                    data=self.view_bytes(entry["bufferView"]), mime_type=entry["mimeType"]
+                )
+            else:
+                uri = str(entry["uri"])
+                self._textures[image] = Texture(data=self.resolve(uri), mime_type=_mime_type(uri))
+        return self._textures[image]
 
     def view_bytes(self, index: int) -> bytes:
         view = self._gltf["bufferViews"][index]
@@ -270,7 +304,7 @@ def _primitive(
         # Rotation only: the LandsD node matrices are orthonormal, so the
         # inverse transpose reduces to the rotation itself.
         normals = buffers.accessor(attributes["NORMAL"]).astype(np.float64)
-        normals = _normalise(normals @ transform[:3, :3].T).astype(np.float32)
+        normals = normalise(normals @ transform[:3, :3].T).astype(np.float32)
     else:
         normals = _face_normals(positions, triangles)
 
@@ -331,11 +365,7 @@ def _texture(
     if "baseColorTexture" not in pbr:
         return None
 
-    image = gltf["images"][gltf["textures"][pbr["baseColorTexture"]["index"]]["source"]]
-    if "bufferView" in image:
-        return Texture(data=buffers.view_bytes(image["bufferView"]), mime_type=image["mimeType"])
-    uri = str(image["uri"])
-    return Texture(data=buffers.resolve(uri), mime_type=_mime_type(uri))
+    return buffers.texture(gltf["textures"][pbr["baseColorTexture"]["index"]]["source"])
 
 
 def _mime_type(uri: str) -> str:
@@ -347,21 +377,30 @@ def _mime_type(uri: str) -> str:
     raise ValueError(f"unsupported texture format {suffix!r} for {uri}")
 
 
-def _normalise(vectors: np.ndarray) -> np.ndarray:
+def normalise(vectors: np.ndarray) -> np.ndarray:
+    """Scale rows to unit length, leaving zero-length rows at zero."""
     lengths = np.linalg.norm(vectors, axis=1, keepdims=True)
     return np.divide(vectors, lengths, out=np.zeros_like(vectors), where=lengths > 0)
 
 
 def _face_normals(positions: np.ndarray, triangles: np.ndarray) -> np.ndarray:
-    """Per-vertex normals from face winding, with vertices left unshared.
+    """Per-vertex normals from face winding, for sources that ship none.
 
-    Only used for sources that ship none. Flat by construction, which is the
-    art direction's native form — see `mesh.collapse`.
+    Requires unshared vertices, and checks rather than assuming: the assignment
+    below is last-write-wins, so on an indexed mesh a shared vertex would
+    silently take whichever face happened to be written last. That is a wrong
+    normal with no error attached — the failure mode this module exists to
+    avoid.
     """
+    if len(np.unique(triangles)) != triangles.size:
+        raise ValueError(
+            "cannot derive flat normals for a mesh with shared vertices; "
+            "the source must supply NORMAL"
+        )
     corners = positions[triangles]
     face = np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
     per_vertex = np.zeros_like(positions)
-    per_vertex[triangles.reshape(-1)] = np.repeat(_normalise(face), 3, axis=0)
+    per_vertex[triangles.reshape(-1)] = np.repeat(normalise(face), 3, axis=0)
     return per_vertex.astype(np.float32)
 
 
@@ -391,6 +430,7 @@ def write_glb(path: Path, meshes: Sequence[MeshData]) -> int:
         "bufferViews": [],
     }
     binary = bytearray()
+    textures: dict[int, int] = {}
 
     for mesh in meshes:
         attributes = {
@@ -435,7 +475,7 @@ def write_glb(path: Path, meshes: Sequence[MeshData]) -> int:
                     {
                         "attributes": attributes,
                         "indices": indices,
-                        "material": _material(gltf, binary, mesh),
+                        "material": _material(gltf, binary, mesh, textures),
                         "mode": _MODE_TRIANGLES,
                     }
                 ],
@@ -447,7 +487,9 @@ def write_glb(path: Path, meshes: Sequence[MeshData]) -> int:
     return _write_container(path, gltf, binary)
 
 
-def _material(gltf: dict[str, Any], binary: bytearray, mesh: MeshData) -> int:
+def _material(
+    gltf: dict[str, Any], binary: bytearray, mesh: MeshData, textures: dict[int, int]
+) -> int:
     material: dict[str, Any] = {
         "name": f"{mesh.name}_material",
         "pbrMetallicRoughness": {
@@ -459,18 +501,38 @@ def _material(gltf: dict[str, Any], binary: bytearray, mesh: MeshData) -> int:
         },
     }
     if mesh.texture is not None:
-        gltf.setdefault("samplers", [{"wrapS": 33071, "wrapT": 33071}])
-        gltf.setdefault("images", []).append(
-            {
-                "bufferView": _buffer_view(gltf, binary, mesh.texture.data, target=None),
-                "mimeType": mesh.texture.mime_type,
-            }
-        )
-        gltf.setdefault("textures", []).append({"source": len(gltf["images"]) - 1, "sampler": 0})
-        material["pbrMetallicRoughness"]["baseColorTexture"] = {"index": len(gltf["textures"]) - 1}
+        material["pbrMetallicRoughness"]["baseColorTexture"] = {
+            "index": _texture_index(gltf, binary, mesh.texture, textures)
+        }
 
     gltf["materials"].append(material)
     return len(gltf["materials"]) - 1
+
+
+def _texture_index(
+    gltf: dict[str, Any], binary: bytearray, texture: Texture, seen: dict[int, int]
+) -> int:
+    """Embed an image once however many meshes share it.
+
+    Keyed on identity rather than content: hashing a 39 MB terrain JPEG to
+    discover it equals itself costs more than the duplicate would. Identity is
+    meaningful because `_BufferCache.texture` hands out one `Texture` per image
+    per document — sharing the bytes alone would not be enough.
+    """
+    key = id(texture)
+    if key in seen:
+        return seen[key]
+
+    gltf.setdefault("samplers", [{"wrapS": 33071, "wrapT": 33071}])
+    gltf.setdefault("images", []).append(
+        {
+            "bufferView": _buffer_view(gltf, binary, texture.data, target=None),
+            "mimeType": texture.mime_type,
+        }
+    )
+    gltf.setdefault("textures", []).append({"source": len(gltf["images"]) - 1, "sampler": 0})
+    seen[key] = len(gltf["textures"]) - 1
+    return seen[key]
 
 
 def _buffer_view(
@@ -525,17 +587,22 @@ def _write_container(path: Path, gltf: dict[str, Any], binary: bytes) -> int:
     # Trailing space, not NUL: the spec requires the JSON chunk be padded with
     # 0x20 so it stays parseable text, and 0x00 makes strict readers reject it.
     _pad(json_chunk, fill=0x20)
-    bin_chunk = bytearray(binary)
-    _pad(bin_chunk)
 
-    total = _GLB_HEADER_BYTES + 2 * _CHUNK_HEADER_BYTES + len(json_chunk) + len(bin_chunk)
+    # Padded on the way out rather than into a copy. A terrain sheet's buffer
+    # holds a 39 MB JPEG, and copying it to append at most three zero bytes put
+    # three of them in memory at once.
+    bin_padding = -len(binary) % 4
+    bin_length = len(binary) + bin_padding
+
+    total = _GLB_HEADER_BYTES + 2 * _CHUNK_HEADER_BYTES + len(json_chunk) + bin_length
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("wb") as handle:
         handle.write(struct.pack("<III", _GLB_MAGIC, _GLB_VERSION, total))
         handle.write(struct.pack("<II", len(json_chunk), _CHUNK_JSON))
         handle.write(json_chunk)
-        handle.write(struct.pack("<II", len(bin_chunk), _CHUNK_BIN))
-        handle.write(bin_chunk)
+        handle.write(struct.pack("<II", bin_length, _CHUNK_BIN))
+        handle.write(binary)
+        handle.write(bytes(bin_padding))
     return total
 
 

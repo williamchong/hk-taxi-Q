@@ -11,44 +11,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from pipeline.gltf import MeshData
+from pipeline.gltf import MeshData, Texture
 from pipeline.mesh import collapse, merge, select_triangles
-
-
-def box(origin: tuple[float, float, float] = (0, 0, 0), size: float = 10.0) -> MeshData:
-    """An axis-aligned box, unwelded and flat-shaded, as LandsD ships them.
-
-    36 vertices for 12 triangles: every vertex is repeated per face so each
-    carries its own face normal. That repetition is what LOD0's exact weld is
-    there to remove.
-    """
-    low = np.asarray(origin, dtype=np.float64)
-    high = low + size
-    corners = np.array(
-        [[x, y, z] for x in (low[0], high[0]) for y in (low[1], high[1]) for z in (low[2], high[2])]
-    )
-    quads = [
-        ((0, 1, 3, 2), (-1, 0, 0)),
-        ((4, 6, 7, 5), (1, 0, 0)),
-        ((0, 4, 5, 1), (0, -1, 0)),
-        ((2, 3, 7, 6), (0, 1, 0)),
-        ((0, 2, 6, 4), (0, 0, -1)),
-        ((1, 5, 7, 3), (0, 0, 1)),
-    ]
-
-    positions, normals = [], []
-    for (a, b, c, d), normal in quads:
-        for index in (a, b, c, a, c, d):
-            positions.append(corners[index])
-            normals.append(normal)
-
-    return MeshData(
-        name="box",
-        positions=np.array(positions, dtype=np.float64),
-        normals=np.array(normals, dtype=np.float32),
-        triangles=np.arange(36, dtype=np.uint32).reshape(-1, 3),
-        colours=np.tile(np.array([200, 190, 180, 255], np.uint8), (36, 1)),
-    )
+from tests.helpers import box
 
 
 class TestMerge:
@@ -76,6 +41,27 @@ class TestMerge:
         with pytest.raises(ValueError, match="zero meshes"):
             merge([], name="tile")
 
+    def test_textured_meshes_are_rejected(self) -> None:
+        """Two textures cannot share one primitive without a UV atlas. Keeping
+        one and dropping the other would render the second mesh in a single
+        wrong colour with no error — the terrain trap waiting for P1-2t."""
+        plain = box()
+        textured = MeshData(
+            "ground",
+            plain.positions,
+            plain.normals,
+            plain.triangles,
+            uvs=np.zeros((36, 2), dtype=np.float32),
+            texture=Texture(data=b"jpeg", mime_type="image/jpeg"),
+        )
+        with pytest.raises(ValueError, match="UV atlas"):
+            merge([textured], name="tile")
+
+    def test_indices_do_not_widen_to_int64(self) -> None:
+        """A Python-list cumsum offsets in int64, which would silently promote
+        every merged tile's index array and double the index buffer."""
+        assert merge([box(), box(origin=(50, 0, 0))], name="tile").triangles.dtype == np.uint32
+
 
 class TestCollapseExact:
     def test_lod0_welds_without_losing_a_triangle(self) -> None:
@@ -87,6 +73,16 @@ class TestCollapseExact:
         assert len(welded.positions) == 24  # 4 per face, not 8 — normals differ
         assert welded.positions.min() == 0.0
         assert welded.positions.max() == 10.0
+
+    def test_the_weld_reproduces_source_positions_bit_for_bit(self) -> None:
+        """ "Lossless" is a claim this tier makes, so it is checked exactly.
+
+        Averaging a cluster of identical doubles is not guaranteed to reproduce
+        them once k >= 3, so the exact tier takes a representative instead.
+        """
+        source = box()
+        welded = collapse(source, cell_m=0.0)
+        assert set(map(tuple, welded.positions)) <= set(map(tuple, source.positions))
 
     def test_the_weld_keeps_hard_normals(self) -> None:
         """Welding on position alone would average a wall normal with the roof
@@ -147,7 +143,7 @@ class TestSelectTriangles:
         """This is what lets an oversized mesh be split across tiles without a
         seam: triangles are moved, never cut."""
         source = merge([box(), box(origin=(100, 0, 0))], name="pair")
-        left = source.positions[source.triangles].mean(axis=1)[:, 0] < 50.0
+        left = source.triangle_centroids()[:, 0] < 50.0
 
         west = select_triangles(source, left)
         east = select_triangles(source, ~left)
@@ -156,7 +152,7 @@ class TestSelectTriangles:
 
     def test_unused_vertices_are_dropped(self) -> None:
         source = merge([box(), box(origin=(100, 0, 0))], name="pair")
-        left = source.positions[source.triangles].mean(axis=1)[:, 0] < 50.0
+        left = source.triangle_centroids()[:, 0] < 50.0
         assert len(select_triangles(source, left).positions) == 36
 
     def test_selecting_nothing_returns_nothing(self) -> None:

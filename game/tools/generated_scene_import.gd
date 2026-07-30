@@ -11,25 +11,27 @@
 ## gitignored — their `.import` files do not survive a fresh clone, and a
 ## per-file setting would silently stop applying.
 ##
-## Safe on scenes that carry no vertex colours: Godot defaults those to white,
-## and the flag then multiplies by white.
+## ⚠️ Being an importer *default* means this runs on **every** imported scene,
+## including hand-authored assets under `assets/authored/`, not only generated
+## tiles — the name says "generated" because that is what needs it, not because
+## the scope is limited. It only touches surfaces that actually carry
+## `ARRAY_FORMAT_COLOR`, so scenes without vertex colours are untouched. An
+## authored asset that used `COLOR_0` as a shader mask rather than as albedo
+## would need excluding here.
 extends EditorScenePostImport
 
 
 func _post_import(scene: Node) -> Object:
-	_apply(scene)
+	for instance: MeshInstance3D in scene.find_children("*", "MeshInstance3D", true, false):
+		if instance.mesh != null:
+			_enable_vertex_colours(instance.mesh)
 	return scene
 
 
-func _apply(node: Node) -> void:
-	var instance := node as MeshInstance3D
-	if instance != null and instance.mesh != null:
-		for surface: int in instance.mesh.get_surface_count():
-			if not (instance.mesh.surface_get_format(surface) & Mesh.ARRAY_FORMAT_COLOR):
-				continue
-			var material := instance.mesh.surface_get_material(surface) as BaseMaterial3D
-			if material != null:
-				material.vertex_color_use_as_albedo = true
-
-	for child: Node in node.get_children():
-		_apply(child)
+func _enable_vertex_colours(mesh: Mesh) -> void:
+	for surface: int in mesh.get_surface_count():
+		if not (mesh.surface_get_format(surface) & Mesh.ARRAY_FORMAT_COLOR):
+			continue
+		var material := mesh.surface_get_material(surface) as BaseMaterial3D
+		if material != null:
+			material.vertex_color_use_as_albedo = true

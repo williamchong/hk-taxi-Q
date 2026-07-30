@@ -39,6 +39,17 @@ godot-rust). It preserves every export target, including web. Do not reach for C
 the editor, discarding any comments in it. This table is the durable record — check it against the
 file after anyone touches the editor's settings dialog.
 
+⚠️ **It also drops hand-written feature overrides** — settings with a `.web` / `.mobile` suffix.
+Observed three times in one session: `renderer/rendering_method.web` disappeared on every editor
+save, which silently breaks web export because WebGL2 cannot run the mobile renderer. Editing the
+file by hand is what makes them fragile; the editor only persists an override it created itself.
+**Set them through Project Settings → right-click the property → "Override For…"** and Godot will
+keep them. Until that is done for a given key, re-check this table after opening the editor:
+
+```sh
+grep -c 'rendering_method.web' game/project.godot   # must be 1
+```
+
 | Setting | Value | Why |
 |---|---|---|
 | `rendering/renderer/rendering_method` | `mobile` | Locked decision. Set as the **base** value, not only the `.mobile` override, so the editor and desktop builds preview the renderer the phone will actually run. |
@@ -86,6 +97,8 @@ hk-taxi-Q/
 │   ├── project.godot
 │   ├── export_presets.cfg       # COMMITTED — never put signing credentials here
 │   ├── scenes/
+│   │   ├── dev/                 # grey-box circuit, city preview — not shipped
+│   │   └── world/               # shared rigs: lighting, sky
 │   ├── scripts/
 │   │   ├── core/                # pure logic, minimal engine coupling
 │   │   ├── city/                # tile streaming, road graph runtime
@@ -408,6 +421,21 @@ changes, and its output is treated as a versioned build artefact.
 res://tools/verify_tiles.gd` loads every tile and asserts the draw-call, vertex-colour and
 no-texture properties this contract states. Run it after a rebuild; the ETL cannot assert
 engine-side facts about its own output.
+
+**To look at the result before `P1-7`:** open `scenes/dev/city_preview.tscn` and run it (F6).
+It instantiates every tile — no streaming, no LOD switching, so it is *not* a performance
+measurement — and frames whatever is on disk. Set the `Tiles` node's `lod` to see a coarser tier.
+Tile vertices are in region game space, so tiles need no transform; dropping one at the origin
+puts it where it belongs. That is why `city.json` gives tiles an `aabb` but no position.
+
+| Path | Role |
+|---|---|
+| `scripts/city/generated_tiles.gd` | Where tile output lives and how to list it — one definition, two readers |
+| `scripts/city/tile_preview.gd` | Dev: instantiate every tile, report bounds |
+| `scripts/camera/free_look_camera.gd` | Dev: fly camera. Bypasses `InputRouter` so dev keys stay out of the shipped action map |
+| `scenes/world/golden_hour.tscn` | The one lighting rig, per `ART_DESIGN.md`. Instance it rather than authoring a second Environment |
+| `tools/verify_tiles.gd` | Headless acceptance check for generated tiles |
+| `tools/generated_scene_import.gd` | Import fixup — see the `[importer_defaults]` row above |
 
 ---
 

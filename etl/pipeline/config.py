@@ -79,9 +79,12 @@ class BuildingStyle:
     publisher's zip layout, and the palette is Hong Kong's, not a generic city's.
     """
 
-    # Sheet sub-directories to read. Anything absent — terrain, in the LandsD
-    # zips — belongs to another stage.
+    # Sheet sub-directories holding massing to tile.
     classes: tuple[str, ...]
+    # Sheet sub-directory holding the textured ground, which is read only by the
+    # evaluation path and never tiled. Named here rather than in the pipeline
+    # because "TERRAIN(TB)" is a LandsD spelling, not a fact about terrain.
+    terrain_class: str
     # Flat colour for a class, overriding the height bands.
     class_colours: dict[str, tuple[int, int, int]]
     height_bands: tuple[HeightBand, ...]
@@ -278,7 +281,10 @@ def _tiled_source(source_id: str, body: dict[str, Any], path: Path) -> TiledSour
 
 def _building_style(body: dict[str, Any], where: str) -> BuildingStyle:
     bands = tuple(
-        HeightBand(up_to_m=float(_require(band, "up_to_m", where)), colour=_colour(band, where))
+        HeightBand(
+            up_to_m=float(_require(band, "up_to_m", where)),
+            colour=_parse_hex(str(_require(band, "colour", where)), f"{where}:height_bands"),
+        )
         for band in _require(body, "height_bands", where)
     )
     if not bands:
@@ -302,24 +308,31 @@ def _building_style(body: dict[str, Any], where: str) -> BuildingStyle:
     if not classes:
         raise ValueError(f"{where}:classes is empty")
 
+    class_colours = {
+        str(name): _parse_hex(str(value), f"{where}:class_colours.{name}")
+        for name, value in (body.get("class_colours") or {}).items()
+    }
+    unknown = set(class_colours) - set(classes)
+    if unknown:
+        # A misspelled key parses, loads, and silently colours nothing — the one
+        # way this table can be wrong without saying so.
+        raise ValueError(
+            f"{where}:class_colours names {', '.join(sorted(unknown))}, "
+            f"which is not in classes ({', '.join(classes)})"
+        )
+
     jitter = float(_require(body, "colour_jitter", where))
     if not 0.0 <= jitter < 1.0:
         raise ValueError(f"{where}:colour_jitter must be in [0, 1), got {jitter}")
 
     return BuildingStyle(
         classes=classes,
-        class_colours={
-            str(name): _parse_hex(str(value), f"{where}:class_colours.{name}")
-            for name, value in (body.get("class_colours") or {}).items()
-        },
+        terrain_class=str(_require(body, "terrain_class", where)),
+        class_colours=class_colours,
         height_bands=bands,
         colour_jitter=jitter,
         lod_cell_sizes_m=cells,
     )
-
-
-def _colour(band: dict[str, Any], where: str) -> tuple[int, int, int]:
-    return _parse_hex(str(_require(band, "colour", where)), f"{where}:colour")
 
 
 def _parse_hex(value: str, where: str) -> tuple[int, int, int]:
