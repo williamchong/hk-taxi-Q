@@ -34,12 +34,11 @@ project's rules to every Python file in the repo, including `tools/*.py`, which 
 ../.venv/bin/python -m pipeline.fetch --city hong_kong --region wan_chai
 ```
 
-Wan Chai pulls **~820 MB**: six 44 MB building sheets, plus roads — of which 539 MB is GML that
-duplicates the 17 MB FGDB (see `PROGRESS.md`, `Q9`). Scope it while that is unresolved:
-
-```sh
---only buildings road_network_gdb road_centrelines_schema   # ~283 MB
-```
+Wan Chai pulls **~320 MB** across 11 artefacts, of which 299 MB is the six building sheets
+(41.7–55.9 MB each). Nothing needs scoping: `Q9` resolved on 2026-07-30 by dropping every GML
+source from config — they duplicated the 17 MB FGDB at 539 MB — so the plain command is already
+the cheap one. `--only` still exists for rebuilding a single source, and errors on an unknown name
+rather than silently fetching nothing.
 
 Re-running downloads nothing. That is deliberate: the snapshot is fixed, so upstream publishing a
 new month of road data must not silently change the map underfoot.

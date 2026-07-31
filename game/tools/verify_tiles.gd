@@ -10,6 +10,7 @@
 ## Exits non-zero on the first tile that fails.
 extends SceneTree
 
+const Manifest = preload("res://scripts/city/city_manifest.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
 ## Draw calls per tile. `P1-2` accepts "under three", so three is a failure.
@@ -23,7 +24,7 @@ func _init() -> void:
 	#
 	# `load_manifest` has already pushed the reason, which for a stale schema is
 	# not the missing-file hint; repeating one here would name the wrong fix.
-	var manifest: CityManifest = CityManifest.load_manifest()
+	var manifest: Manifest = Manifest.load_manifest()
 	if manifest == null:
 		quit(1)
 		return
@@ -31,7 +32,7 @@ func _init() -> void:
 	var failures: int = 0
 	var checked: int = 0
 
-	for tile: CityManifest.Tile in manifest.tiles:
+	for tile: Manifest.Tile in manifest.tiles:
 		for file: String in tile.lods:
 			checked += 1
 			var problems: PackedStringArray = _check(file)
@@ -43,7 +44,7 @@ func _init() -> void:
 					printerr("  FAIL  ", file.get_file(), ": ", problem)
 
 	if checked == 0:
-		printerr("  FAIL  %s names no tiles" % CityManifest.PATH)
+		printerr("  FAIL  %s names no tiles" % Manifest.PATH)
 		quit(1)
 		return
 

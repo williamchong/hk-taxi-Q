@@ -572,13 +572,23 @@ sit in the same output directory and are not part of the contract, out of the bu
 removes tiles a previous build left behind, because nothing else would ever notice them: every
 check in the project starts from the manifest, and the manifest has forgotten them.
 
-**Generated assets are checked in-engine, not by eye.** Two headless tools, run after a rebuild,
-because the ETL cannot assert engine-side facts about its own output:
+**Generated assets are checked in-engine, not by eye.** Three headless tools, run after a rebuild,
+because the ETL cannot assert engine-side facts about its own output. `--import` first, because a
+fresh sync writes GLBs with no import sidecars:
 
 ```
-godot --headless --path game --script res://tools/verify_tiles.gd   # the mesh contract
-godot --headless --path game --script res://tools/verify_city.gd    # the manifest vs the geometry
+godot --headless --path game --import                                    # ~8 s cold
+godot --headless --path game --script res://tools/verify_tiles.gd        # the mesh contract
+godot --headless --path game --script res://tools/verify_city.gd         # the manifest vs the geometry
+godot --headless --path game --script res://tools/verify_road_surface.gd # collision and UVs
 ```
+
+⚠️ These tools **`preload` every dependency rather than naming a `class_name` global**, and that is
+load-bearing. Global classes resolve through `game/.godot/global_script_class_cache.cfg`, which is
+gitignored — so on a fresh clone a tool referencing one fails to *parse*, `_init` never runs, and
+`quit(1)` is never reached. The SceneTree then exits **0**: the check reports success having
+checked nothing. Reproduced on `verify_city.gd` and `verify_tiles.gd` at `P1-7` and fixed by
+preloading. Never reference a `class_name` global from a `--script` tool.
 
 `verify_tiles.gd` asserts the draw-call, vertex-colour and no-texture properties this contract
 states, for every tier of every tile the manifest names. `verify_city.gd` closes the other half of

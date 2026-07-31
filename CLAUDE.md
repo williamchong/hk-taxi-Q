@@ -10,7 +10,7 @@ them without explicit instruction from the user.
 | Decision | Value | Why |
 |---|---|---|
 | Engine | **Godot 4.7**, Mobile renderer | Commercial mobile app target; native perf; MIT, no royalties |
-| Physics | **Jolt** (Godot default since 4.4) | Wheeled vehicle controller built in |
+| Physics | **Jolt** (Godot default since 4.4) | Stable trimesh collision and raycasts under the custom vehicle controller. ⚠️ *Not* for its built-in `VehicleBody3D` — `P0-5a` measured that and rejected it; `VehicleWheel3D` friction is isotropic, so it cannot express a drift that breaks lateral grip while keeping traction |
 | Language | **GDScript** (not C#) | C# web export is unsupported, and iOS/Android C# export is experimental. See `docs/ARCHITECTURE.md`. |
 | ETL | **Python 3.11+** (`pyogrio`, `pyproj`, `numpy`) | Best geodata tooling; runs offline at build time. `pyogrio` ships its own GDAL, so no system install. **No geopandas** — `gdb.py` wants coordinate arrays, and GeoDataFrames would add pandas to reach the same numpy underneath |
 | Building source | **3D Visualisation Map (non-textured)** + **3D-BIT00 Level 1** | Already flat-shaded extruded volumes — the low-poly look is native to this data |
@@ -39,8 +39,7 @@ them without explicit instruction from the user.
 
 ## Commits — gitmoji
 
-Format: `<emoji> <task-id> <imperative summary>` — **no brackets**, matching all 24 commits so far
-and the examples below.
+Format: `<emoji> <task-id> <imperative summary>` — **no brackets**, as in the examples below.
 
 The task ID is **required** when the work maps to a task in `docs/PLAN.md`, omitted otherwise.
 
@@ -71,6 +70,9 @@ Common emoji for this project:
 - Python: `ruff` for lint/format, type hints on public functions, `pytest` for tests.
 - GDScript: `snake_case` files and functions, `PascalCase` classes, static typing (`var x: int`).
 - Generated assets go to `game/assets/generated/` and are **gitignored** — they are build output.
+- ⚠️ Opening the Godot editor or running an export rewrites `game/project.godot` and
+  `game/export_presets.cfg`, stripping their comments. Never commit either as a side effect; see
+  `docs/ARCHITECTURE.md` for how to restore and verify. Headless `--import`/`--script` are safe.
 - Hand-authored assets go to `game/assets/authored/` and **are** committed.
 - This is not a Node project. Do not run npm/npx/node commands.
 
@@ -82,11 +84,6 @@ Common emoji for this project:
 - ETL changes: the pipeline runs end-to-end on the Wan Chai config without errors.
 - Godot changes: the project opens without script errors, the target scene runs, and the three
   headless checks pass — `verify_city.gd`, `verify_tiles.gd`, `verify_road_surface.gd`.
-- ⚠️ **Running Godot at all rewrites `game/project.godot` and `game/export_presets.cfg`**, stripping
-  every comment and `renderer/rendering_method.web`. Restore both and verify with
-  `git diff --exit-code -- game/project.godot game/export_presets.cfg`. `git checkout` prints
-  `Updated 0 paths from the index` whether or not it restored anything, so its output proves
-  nothing. Never commit either file as a side effect of a Godot run.
 - Update `docs/PROGRESS.md` — task status, plus any new decision or open question.
 
 ## Where to look

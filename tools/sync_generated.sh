@@ -11,6 +11,9 @@
 #
 # game/assets/generated/ is gitignored build output. Nothing here is committed,
 # and a fresh clone has an empty directory until this runs.
+#
+# Expects the repo-root venv the README creates. Override with
+# PYTHON=$(which python) tools/sync_generated.sh if yours lives elsewhere.
 
 set -euo pipefail
 

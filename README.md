@@ -8,8 +8,9 @@ Hong Kong driver can navigate it from memory — then widened, ramped, and tuned
 drive badly.
 
 > **Status:** Phase 1 complete — the real city builds from open data and renders in Godot. Wan Chai
-> is 65 building tiles, 797 road edges with turn restrictions, a drivable road surface and 29 taxi
-> stands, assembled by one command in 4.4 s. It is drivable in a browser. Next is Phase 2: tile
+> is 65 building tiles, 797 road edges with turn restrictions, a drivable road surface and 29 fare
+> nodes (14 taxi stands, 15 pick-up/drop-off points), assembled by one command in 4.4 s. It is
+> drivable in a browser. Next is Phase 2: tile
 > streaming, a road-graph runtime, and the car on real geometry. See
 > [`docs/PROGRESS.md`](docs/PROGRESS.md).
 
@@ -63,7 +64,7 @@ The ETL runs **at build time only**. The game ships static assets and makes no n
 You need [Godot 4.7](https://godotengine.org/) — on macOS, `brew install --cask godot` — and
 Python 3.11+.
 
-**Build the city.** The first run downloads ~283 MB of source data and caches it; after that the
+**Build the city.** The first run downloads ~320 MB of source data and caches it; after that the
 whole region rebuilds in about 4.4 seconds. Output is gitignored build artefact, not source, so a
 fresh clone has none of it until you do this:
 
@@ -78,18 +79,15 @@ tools/sync_generated.sh          # copies exactly what city.json names
 `scenes/dev/city_preview.tscn` to fly around the city, or `scenes/dev/city_drive.tscn` to drive it.
 
 **Check it.** The ETL cannot assert engine-side facts about its own output, so three headless tools
-do — draw calls and vertex colours, road collision, and whether the imported geometry actually
-lands where `city.json` says:
+do. The import step is required, not optional — it builds the gitignored `game/.godot/`, without
+which the freshly synced `.glb` files have no import sidecars:
 
 ```bash
+godot --headless --path game --import        # ~8 s cold, 196 assets
 godot --headless --path game --script res://tools/verify_city.gd
 godot --headless --path game --script res://tools/verify_tiles.gd
 godot --headless --path game --script res://tools/verify_road_surface.gd
 ```
-
-⚠️ Running Godot rewrites `game/project.godot` and `game/export_presets.cfg`, stripping their
-comments. Restore them afterwards and verify with `git diff --exit-code` — `git checkout` reports
-nothing useful either way.
 
 **Export and play it in a browser.**
 
@@ -101,15 +99,13 @@ tools/serve_web.py           # then open http://127.0.0.1:8060
 Not `python -m http.server`: the build needs `SharedArrayBuffer`, which browsers gate behind
 COOP/COEP headers that it does not send.
 
-**Checks**, from the repo root:
-
-```bash
-.venv/bin/python -m ruff check . && .venv/bin/python -m ruff format --check .
-cd etl && ../.venv/bin/python -m pytest
-```
+⚠️ **Opening the editor or running an export rewrites `game/project.godot` and
+`game/export_presets.cfg`**, stripping their comments and the web renderer setting. See
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for how to restore and verify. Headless `--import`
+and `--script` runs do not.
 
 Next up is Phase 2 — tile streaming, the road-graph runtime, and the car on real geometry. See
-[`docs/PLAN.md`](docs/PLAN.md).
+[`docs/PLAN.md`](docs/PLAN.md) and [`CLAUDE.md`](CLAUDE.md) for the contributor checks.
 
 ---
 
@@ -134,9 +130,12 @@ oblique-photogrammetry model. It has ground gaps, level discontinuities, and car
 terrain — a prior public attempt concluded it suited flight simulation, not driving. Use the
 **non-textured** models and **3D-BIT00 Level 1** instead.
 
-**Check for Z values before trusting the road graph.** Hong Kong drives on three levels in places.
-A 2D centreline turns every flyover into a junction that doesn't exist. This is open question `Q1`
-and the first task in the plan.
+**The road centrelines are 2D — grade separation is an attribute, not a Z value.** Hong Kong drives
+on three levels in places, and a naive 2D graph turns every flyover into a junction that doesn't
+exist. Road Network v2 carries no Z, but it does carry an integer `ELEVATION` (0 / 1 / 2 across
+86.5 / 2.0 / 11.5% of Wan Chai's edges), which the pipeline maps to authored deck heights from city
+config. **Only ever join edges at matching levels.** Resolved as `Q1` on 2026-07-29 — the trap is
+still there for anyone writing new graph code.
 
 ---
 

@@ -19,6 +19,7 @@ extends SceneTree
 const GeneratedFares = preload("res://scripts/city/generated_fares.gd")
 const GeneratedRoadGraph = preload("res://scripts/city/generated_road_graph.gd")
 const GeneratedRoadSurface = preload("res://scripts/city/generated_road_surface.gd")
+const Manifest = preload("res://scripts/city/city_manifest.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
 ## How far a corner may move between the ETL's arithmetic and the imported mesh.
@@ -34,7 +35,7 @@ func _init() -> void:
 	# `load_manifest` has already pushed the reason and the command that fixes
 	# it — and for a stale schema that reason is *not* the missing-file hint,
 	# so repeating one here would name the wrong fix half the time.
-	var manifest: CityManifest = CityManifest.load_manifest()
+	var manifest: Manifest = Manifest.load_manifest()
 	if manifest == null:
 		quit(1)
 		return
@@ -42,12 +43,12 @@ func _init() -> void:
 	# A manifest that parses but lists nothing would otherwise report "0 tiles,
 	# 0 problems" and exit 0 — the Phase 1 gate passing on an empty city.
 	if manifest.tiles.is_empty():
-		printerr("  FAIL  %s names no tiles" % CityManifest.PATH)
+		printerr("  FAIL  %s names no tiles" % Manifest.PATH)
 		quit(1)
 		return
 
 	var problems: PackedStringArray = _check_documents(manifest)
-	for tile: CityManifest.Tile in manifest.tiles:
+	for tile: Manifest.Tile in manifest.tiles:
 		var found: PackedStringArray = _check_tile(manifest, tile)
 		if found.is_empty():
 			print("  ok    ", tile.id)
@@ -76,7 +77,7 @@ func _init() -> void:
 ## file the dev locators point at — they carry their own constant until `P2-2`
 ## and `P3-1` take the path from the manifest, and this is what stops the two
 ## definitions drifting in the meantime.
-func _check_documents(manifest: CityManifest) -> PackedStringArray:
+func _check_documents(manifest: Manifest) -> PackedStringArray:
 	var problems: PackedStringArray = []
 	problems.append_array(_check_document("road graph", manifest.road_graph_path, GeneratedRoadGraph.PATH))
 	problems.append_array(
@@ -94,7 +95,7 @@ func _check_document(what: String, named: String, locator: String) -> PackedStri
 	return []
 
 
-func _check_tile(manifest: CityManifest, tile: CityManifest.Tile) -> PackedStringArray:
+func _check_tile(manifest: Manifest, tile: Manifest.Tile) -> PackedStringArray:
 	var problems: PackedStringArray = []
 
 	if tile.lods.is_empty():
