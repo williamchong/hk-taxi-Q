@@ -361,7 +361,7 @@ Field provenance:
 | `tram_tracks` | ⚠️ **Hand-authored.** Not present in the source dataset. A list of street names in city config. |
 | `lanes` | ⚠️ **Not published.** Road Network v2 carries no lane attribute in any layer. Authored per road class in city config, keyed on speed limit. |
 | `width_m` | Derived from `lanes`, then **hand-tuned upward** for playability (see Game Design) |
-| `elevation_level` | `ELEVATION` integer attribute (verified: −1/0/1 in the region). Ordinal level, **not** a height — map to deck heights via city config. Those heights are offsets **from ground level, not from the vertical datum**; see `Q11`. |
+| `elevation_level` | `ELEVATION` integer attribute (verified: −1/0/1 in the region). Ordinal level, **not** a height — map to deck heights via city config. Those heights are offsets **from ground level, not from the vertical datum**; see `Q11`. ⚠️ The mapping is a **constant per level**, so no edge ever ramps. The map sheets' `INFRASTRUCTURE` class carries the real deck profile and samples at a 3.01% median grade, but it cannot repair the junctions — see `Q13`. |
 | `road_name` | `STREET_ENAME` / `STREET_CNAME` — **bilingual names ship in the source.** The null sentinel has four spellings; normalise NFKC and fold dashes before comparing. |
 
 **Nodes are formed where centrelines share an endpoint, and nothing else.** Not where they cross:

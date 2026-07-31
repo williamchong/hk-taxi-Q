@@ -3,7 +3,7 @@
 Living document. **Update this whenever a task changes status, a decision is made, or an open
 question is answered.** Newest entries at the top of each log.
 
-Last updated: 2026-07-31 (CI on GitHub Actions — runs `tools/check.sh`, minus the generated-asset contracts)
+Last updated: 2026-07-31 (`Q13` narrowed — the ramps are in `INFRASTRUCTURE`, and sampling them beats inventing them)
 
 ---
 
@@ -177,7 +177,7 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ❌ blocked
 | Q10 | Is the game-space origin per region, or shared per city? | Whether two regions can stitch into one continuous map | `P1-6` | ✅ **Resolved 2026-07-30** — both: local origin plus a recorded `city_offset` |
 | Q11 | Where is ground level? `elevation_levels[0] = 0.0` puts at-grade roads at y=0, but 99.9% of Wan Chai's buildings have their base **above 2 m** (median 4.29 m) | Roads would run ~4 m below every front door, and under the terrain | `P1-3` | ✅ **Resolved 2026-07-30** — sample the terrain height field |
 | Q12 | Are the road graph's one-way directions right on the ground? | `P1-3`'s last acceptance criterion, and the thing no test can settle | user | ✅ **Resolved 2026-07-30** — Jaffe Road confirmed eastbound; the source agrees with the street |
-| Q13 | Nothing ramps between elevation levels. All 36 nodes where two levels meet step by a whole deck height — 6 m at a flyover, 8 m at a tunnel mouth | The elevated and underground networks are topologically connected and geometrically unreachable; a third of the region's road area cannot be driven onto | `P2-2`? | 🔴 **Open — raised 2026-07-30 by `P1-4`** |
+| Q13 | Nothing ramps between elevation levels. All 36 nodes where two levels meet step by a whole deck height — 6 m at a flyover, 8 m at a tunnel mouth | The elevated and underground networks are topologically connected and geometrically unreachable; **23.3% of the region's carriageway area** cannot be driven onto | `P2-2` | 🔴 **Open — raised 2026-07-30 by `P1-4`; narrowed 2026-07-31.** The ramps exist in `INFRASTRUCTURE` and sampling them beats the blend, but it does not close the step. `P2-2` takes the street-level slice — see the decision log |
 | Q14 | Taxi stands carry **operating-time restrictions** in `Status_EN` — eight territory-wide, one in the region (Russell Street, cross-harbour 1200-0600) — and `P1-5` discards them | A part-time cross-harbour stand is modelled as a full-time one. Small today; it is exactly the kind of detail `P3-9`'s authenticity test would catch | `P3-1` | 🟡 **Open — raised 2026-07-31 by `P1-5`**, deliberately deferred |
 | Q15 | Fare nodes snap to the road graph by **plan distance only**, because the published points are 2D | A stand under a flyover has nothing in it to prefer the street below over the deck above. No node in Wan Chai is affected — every winner is level 0 — but this shares a root cause with `Q13` | `P2-2` | 🟡 **Open — raised 2026-07-31 by `P1-5`**, not reachable with this source |
 | Q17 | No CI. Every check is a local convention, and `tools/check.sh` runs only when someone remembers — on a repo where two verify tools shipped broken-and-green inside one commit | The checks exist and are now capable of failing; nothing makes them run. The Python half (`ruff`, `pytest`, `gdformat`) needs no engine and is nearly free to automate; the Godot half needs the binary plus export templates in a runner | — | ✅ **Resolved 2026-07-31** — GitHub Actions runs both halves. Export templates turned out not to be needed: only exports want them, and CI does not export. **Three of the six checks; the generated-asset contracts are not covered** — see the decision log |
@@ -297,6 +297,15 @@ properly means relaxing heights across the whole graph, which is its own task wi
 unreachable is a missing feature, not a broken one, and arguably the right first slice — but it must
 be decided rather than inherited, and `P2-2`'s nearest-edge queries will hand the car onto a flyover
 if nothing stops them.
+
+⚠️ **Narrowed 2026-07-31: "the source carries no Z" is true of the road network and false of the map
+sheets.** `INFRASTRUCTURE` holds the elevated structures *including their ramps*, it is already
+parsed and already rendered, and sampling it with `terrain.HeightField` covers **45/45 elevated
+edges at a 3.01% median grade** — better than the blend measured above on every count. It does not
+close the step: 15 of 22 resolvable flyover junctions still exceed 0.5 m, and the 5 tunnel nodes
+have no structure to sample because a tunnel is a void. So `P2-2` takes the street-level slice, and
+the full fix keeps a measured starting point instead of an open question. Numbers, artefacts and
+the reasoning are in the decision log.
 
 **Narrowed 2026-07-31: `Q13` does not block the cross-harbour fare.** The user's objection to `P1-5`
 was the obvious one — the region is Wan Chai, so there is no other side of the harbour to deliver
@@ -534,6 +543,80 @@ below.
 ---
 
 ## Decision log
+
+### 2026-07-31 — `Q13` narrowed: the ramps **are** in the source, and sampling them beats inventing them
+
+`Q13` was written as though the height model had no better input available — "the source carries no
+Z at all — every height in this pipeline is authored or sampled". That is true of *Road Network v2*.
+It is not true of the map sheets. The user asked whether the original data contains the actual ramp
+geometry, and it does.
+
+**`INFRASTRUCTURE` is a third mesh class, and it holds the elevated road structures.** It has been
+in `hong_kong.yaml`'s mesh list since `P1-2` and is already rendered into the tiles with its own
+colour — the flyovers are on screen today. `DATA_SOURCES.md` mentions the class only as a *tiling
+hazard* ("one of them is 1,984 m long in a single mesh"), never as a height source, which is why
+nobody had looked. In the one sheet extracted to disk its 12 meshes each span **continuously from
+about 3 m up to 13–32 m**. A flat deck would occupy a narrow band; a 29 m span is the ramp.
+
+**So there are two representations of the same flyover and they disagree.** The graph puts decks at
+`terrain + 6.0 m` — 9.23 to 13.56 m across the region — while the structure the player can see is
+somewhere else. That is the half of `Q13` nobody had noticed: not merely that the graph has no
+ramps, but that the geometry beside it does.
+
+**A spike sampled the structures with `terrain.HeightField`** — the same class, the same query
+shape, pointed at `INFRASTRUCTURE` instead of `TERRAIN(TB)`; 266,092 usable triangles across the
+region's six sheets. Results against every level-1 edge in the graph:
+
+| | `P1-4`'s blend | Sampled from the structure |
+|---|---|---|
+| Coverage | — | **45/45 edges, 410/430 vertices (95.3%)** |
+| Median grade | 3.9% | **3.01%** |
+| p90 grade | — | 7.45% |
+| Segments over 12% | **10 of 39 edge ends** | **2 of 365 segments** |
+| Worst | 29% | 224%, and both outliers are artefacts |
+
+**Both outliers are the sampler, not the road.** They sit on `CANAL ROAD FLYOVER`, and a dense
+21-point re-sample of one shows a **7.00 m jump inside a 2.91 m run** — a stacked deck, where
+`HeightField.sample` returns the *highest* hit and so reads the upper deck while the graph edge is
+on the lower one. The same mechanism biases every sampled height by a median **+1.22 m**, which is
+about parapet height. Both are fixed the same way: window the sample around the expected deck rather
+than taking the global maximum.
+
+**What it does not fix, and this is why `Q13` stays open.** The step at level-change nodes improves
+but does not close, and it splits by cause:
+
+| Nodes | Count | Step today | Sampled | Resolved |
+|---|---|---|---|---|
+| Flyover `(0, 1)` | 31 | 6.00 m | **2.56 m** median, 4.02 m max | 22, of which only **7 under 0.5 m** |
+| Tunnel `(−1, 0)` | 5 | 8.00 m | — | **0** |
+
+Tunnels get nothing and always will: a tunnel is a void, so there is no structure mesh under it.
+Nine of the 31 flyover nodes have no structure at one end either. Sampling therefore lands the
+elevated network at *geometrically honest but not reliably connected*, and 15 of 22 flyover
+junctions still step more than half a metre.
+
+**And the residual step is topological, not a height error.** Walking each level-1 edge outward from
+a mixed-level node: **20 of 28 start already elevated**, at a gentle 0.2–1.6% grade, which is a deck
+run rather than a ramp. Only 8 begin near street level and climb. The graph simply has no edge
+spanning the climb at those junctions, so there is no horizontal run to distribute a rise over and
+**no height source can repair it** — the fix would have to add geometry the source never published.
+Where the graph *does* carry the ramp the result is excellent: `CANAL ROAD FLYOVER` samples 4.62 m →
+11.55 m over 254 m at **2.7%**, and 4.66 m → 11.87 m over 218 m at **3.3%**. Across all 28, no
+junction edge exceeds **6.2%**. So the ceiling on this approach is set by the road network's
+topology, not by the map sheet's geometry.
+
+**The decision.** `P2-2` still takes the street-level slice — `nearest_edge` refuses off-grade
+edges — because "honest but disconnected" is worse for a driving game than "clearly not part of the
+map". What changes is the price of the full fix. Relaxing heights across the graph was the
+open-ended option; it now has a measured starting point that needs no new dependency, no new
+download and no new parser. Three things it will still have to do: window the sample to kill the
+Canal Road artefacts and the parapet bias, handle tunnels by some other means, and tie the ramp ends
+to street height at the junctions as its own step.
+
+**A correction while measuring.** `Q13` claimed "a third of the region's road area cannot be driven
+onto". Measured from `roadgraph.json`: **60 of 797 edges are off-grade (7.5%), 11.02 km of 56.15 km
+by length (19.6%), and 93,208 m² of 400,146 m² by carriageway area (23.3%)**. The register row is
+corrected below.
 
 ### 2026-07-31 — CI runs `tools/check.sh`, and **cannot** check the generated assets — closes `Q17`
 

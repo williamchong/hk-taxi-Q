@@ -631,7 +631,7 @@ Measured by downloading `11-SW-10C` in glTF (2026-07-30):
 | Download size | **44.3 MB** zipped, ~65 MB unpacked |
 | Sheet extent | ~744 m × 603 m |
 | `BUILDING/` | 151 buildings — one `.gltf` + `.bin` each, `default_material`, **no textures** |
-| `INFRASTRUCTURE/` | 12 items, sitting 2.4–9.3 m up — very likely elevated road structures |
+| `INFRASTRUCTURE/` | 12 items — **confirmed** elevated road structures, each spanning continuously from ~3 m ground to 13–32 m. That span is the ramp; see the height-source finding below |
 | `TERRAIN(TB)/` | 1 mesh, 250,911 verts, **one `.jpg` texture** |
 
 Three findings that shape `P1-2`:
@@ -667,6 +667,38 @@ with `P2-1`'s switch distances rather than with the ETL.
 structures, and one of them is **1,984 m long in a single mesh** with 208k triangles. Anything that
 buckets source meshes spatially has to handle a mesh larger than its own bucket — see `P1-2`'s
 tile assignment.
+
+💡 **`INFRASTRUCTURE` is also a height source for off-grade roads, and it is the only one — `Q13`.**
+Road Network v2 carries no Z, so `roads.py` puts every elevated edge at a constant `terrain + 6.0 m`
+and nothing ramps. The map sheets do carry the missing information: the structures include their
+approach ramps as continuous geometry, which is what the 3 m → 32 m spans in the table above are.
+
+Measured by sampling `terrain.HeightField` against `INFRASTRUCTURE` instead of `TERRAIN(TB)` —
+**266,092 usable triangles** across the region's six sheets:
+
+| | Result |
+|---|---|
+| Elevated edges with structure beneath | **45 / 45** |
+| Vertices returning a deck height | 410 / 430 (**95.3%**) |
+| Along-edge grade | median **3.01%**, p90 7.45% |
+| Segments over 12% | 2 of 365, and both are sampler artefacts |
+
+Two traps, both from `sample()` returning the *highest* hit:
+
+- **Stacked decks.** `CANAL ROAD FLYOVER` is double-decked, so the sampler reads the upper deck
+  while the graph edge is on the lower one — a dense re-sample shows a **7.00 m jump inside a
+  2.91 m run**. Both of the over-12% segments are this.
+- **Parapets.** Sampled heights sit a median **+1.22 m** above the graph deck, which is about
+  railing height. A constant offset, so it does not disturb the gradients.
+
+Both are fixed the same way: window the sample around the expected deck rather than taking the
+global maximum.
+
+❌ **It cannot fix tunnels, and it cannot fix the junctions on its own.** A tunnel is a void, so the
+five `(−1, 0)` nodes have no structure to sample and never will. And of the 28 level-1 edges leaving
+a mixed-level node, **20 start already elevated** — the graph has no edge spanning the climb, so
+the discontinuity there is topological rather than a wrong height. What sampling gives is a correct
+*profile* along the deck, not a connected network. See `Q13` in `PROGRESS.md`.
 
 ❌ **Terrain does not fit any budget as it ships.** Clipped to the region it is still 404,669
 triangles, and its six GLBs total **267 MB** — of which **224 MB is the JPEGs**, carried through

@@ -202,7 +202,8 @@ Run these **in parallel**; `P0-2` is the one that can force a region change.
   overlay** drawing the resolved edge, the lane centre and the legal travel direction under the
   moving car.
 - **Accept:** query correctness unit-tested; sub-millisecond nearest-edge; exactly one parse of the
-  graph in the running game.
+  graph in the running game; **nearest-edge never returns an off-grade edge** — 60 of the region's
+  797 edges, per `Q13`'s decision — and a test proves it at the 36 mixed-level nodes.
 - **Review:** the overlay while driving — the named exception to the web-build route, because the
   overlay wants frame-by-frame inspection | driver run | **Does the graph agree with where the car
   actually is** — at the centreline seam, and at the nodes `Q13` names?
@@ -211,9 +212,10 @@ Run these **in parallel**; `P0-2` is the one that can force a region change.
   functions, with nothing whatsoever to look at — the only task in the project in that position. It
   is also the task that will hand the car onto an unreachable flyover if `Q13` is not settled first.
 
-> ⚠️ **Review point 1 — the city streams and the graph is trustworthy.** `Q13` must be *decided*
-> here rather than inherited: either the elevated network ramps, or nearest-edge refuses to return
-> an off-grade edge. Record which in `PROGRESS.md`.
+> ⚠️ **Review point 1 — the city streams and the graph is trustworthy.** `Q13` was decided ahead of
+> this task on 2026-07-31: **nearest-edge refuses off-grade edges**, and the elevated network is out
+> of the slice. A spike measured the alternative first — the map sheets do carry the ramps — but the
+> residual step is topological, so no height source repairs it. See the decision log.
 
 ### `P2-3` `VehicleController` on real geometry
 - **Deliverable:** the custom raycast vehicle on `RigidBody3D`, arcade tuning in `handling.tres`,
