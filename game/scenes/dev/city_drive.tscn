@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=9 format=3]
 
 ; The first scene that puts the car on the real city (`P1-4` + `P0-5`).
 ;
@@ -7,12 +7,16 @@
 ; different cameras — and because a free-look camera in a scene with a physics
 ; body is a scene where nobody is sure what they just judged.
 ;
-; Not the Phase 1 gate and not `P1-7`: nothing here reads `city.json`, the tiles
-; are placed by the dev previews rather than by a streamer, and the buildings
-; carry no collision. It exists to put a real answer under `Q8` — whether real
-; Wan Chai geometry is fun to drive — which a grey box could not.
+; It exists to put a real answer under `Q8` — whether real Wan Chai geometry is
+; fun to drive — which a grey box could not.
+;
+; Since `P2-1` the tiles stream from `city.json` rather than being instantiated
+; wholesale by a dev preview, so this is no longer only a dev scene: it is what
+; `run/main_scene` boots and the closest thing to a build the project has. The
+; buildings still carry no collision — that is an ETL product, see PROGRESS.md.
 
-[ext_resource type="Script" path="res://scripts/city/tile_preview.gd" id="1_tiles"]
+[ext_resource type="Script" path="res://scripts/city/city_streamer.gd" id="1_tiles"]
+[ext_resource type="Resource" path="res://tuning/streaming.tres" id="8_streaming"]
 [ext_resource type="Script" path="res://scripts/city/road_surface_preview.gd" id="2_surface"]
 [ext_resource type="PackedScene" path="res://scenes/world/golden_hour.tscn" id="3_light"]
 [ext_resource type="PackedScene" path="res://scenes/vehicle/taxi.tscn" id="4_taxi"]
@@ -24,8 +28,13 @@
 script = ExtResource("6_harness")
 vehicle_path = NodePath("Taxi")
 
+; `camera_path` points at the Camera3D inside the rig, not at the rig and not
+; at the Taxi — the far plane is on the camera, and it is the camera a look-back
+; swings away from the car. See city_streamer.gd for the rest.
 [node name="Tiles" type="Node3D" parent="."]
 script = ExtResource("1_tiles")
+profile = ExtResource("8_streaming")
+camera_path = NodePath("../CameraRig/Camera3D")
 
 [node name="RoadSurface" type="Node3D" parent="."]
 script = ExtResource("2_surface")

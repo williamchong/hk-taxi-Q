@@ -162,9 +162,9 @@ rather than repeating its steps in YAML,
 for the reason the script exists: reimplemented in YAML, the Godot steps would pass on failure.
 
 **CI cannot check the generated-asset contracts.** `game/assets/generated/` is gitignored build
-output, so a fresh checkout has no city and the three verify tools exit `1` on the missing
+output, so a fresh checkout has no city and every verify tool that reads it exits `1` on the missing
 manifest. The workflow sets `VERIFY_GENERATED=0`, which skips them and *prints that it skipped
-them* — an unannounced skip would be the same silence the script was written to break. Those three
+them* — an unannounced skip would be the same silence the script was written to break. Those
 stay a local check, run after a pipeline build.
 
 Giving CI a city means running the ETL there, whose first act is downloading ~320 MB from a
@@ -226,12 +226,18 @@ hk-taxi-Q/
 
 ⚠️ **`scenes/dev/` is not shipped — except that `main.tscn` currently boots one.** Since the web
 demo, `run/main_scene` reaches `scenes/dev/city_drive.tscn`, so every export starts in a dev scene.
-That is a knowing Phase-1 placeholder with two consequences worth stating: `city_drive.tscn` puts
+
+~~That is a knowing Phase-1 placeholder with two consequences worth stating: `city_drive.tscn` puts
 `tile_preview.gd` — which its own docstring calls "a dev tool, not the streamer… **not** a
-performance measurement" — on the boot path at **1.16 M primitives against a 300k mobile budget**;
-and it needs the gitignored `assets/generated/`, so a fresh clone boots to an empty world with only
-a `push_warning`. Both close when `CityStreamer` (`P2-1`) gives the export something to boot that
-streams. Until then, treat any export as a demo, not a build.
+performance measurement" — on the boot path at **1.16 M primitives against a 300k mobile budget**.~~
+**Closed 2026-08-01 by `P2-1`.** `CityStreamer` is on the boot path in its place, and the same
+measurement now reads **268,709 primitives at the spawn and a worst measured 240,598 visible
+triangles** across the region — inside the budget rather than four times over it. The 1.16 M figure
+was reproduced first and then replaced; see PROGRESS.md for the five-point before/after.
+
+The other consequence stands: the scene needs the gitignored `assets/generated/`, so a fresh clone
+boots to an empty world with only a `push_warning`. An export is still a demo rather than a build
+until there is a real main scene, but it is no longer a demo that blows the frame budget.
 
 **Why the ETL is a separate Python project:** it runs rarely, at build time, and needs GDAL —
 which has no good Godot equivalent. Keeping it out of the engine also keeps it reusable for the
@@ -801,15 +807,19 @@ design.
 | Path | Role |
 |---|---|
 | `scripts/city/city_manifest.gd` | **`city.json`, typed.** The shipping route into the generated city: the tile list, their AABBs, the per-edge carriageway widths, and the resolved paths of the three documents |
+| `scripts/city/city_streamer.gd` | **`CityStreamer` (`P2-1`).** Loads and frees tiles by distance to their published `aabb`, off the main thread, and owns the LOD tier. On the boot path in place of `tile_preview.gd` |
+| `scripts/core/tile_streaming.gd` | The streaming **policy**, pure — distance to an `AABB` in, tier out. No `Node`, no `load()`, so the whole decision table is testable headlessly and a tile cannot be rejected *after* being loaded |
+| `scripts/core/plan_lattice.gd` | An even grid of plan positions over a region's bounds. Both region-sweeping verify tools take their sample points from it — counted, not float-accumulated, so the far row and column cannot be dropped |
+| `scripts/city/streaming_profile.gd` | Schema for the distance bands, hysteresis and per-frame budgets. Numbers live only in `tuning/streaming.tres` |
 | `scripts/city/road_graph.gd` | **`RoadGraph` (`P2-2`).** One parse per scene, nearest-edge and lane-centre queries over a plan grid. Refuses off-grade edges — see `Q13` |
 | `scripts/city/road_graph_overlay.gd` | Dev: draws the resolved edge, lane centre and legal travel direction under the moving car |
 | `scripts/city/generated_road_surface.gd` | Dev locator for `roads.glb` — one definition, two readers |
 | `scripts/city/generated_road_graph.gd` | Same, for `roadgraph.json` |
 | `scripts/city/generated_fares.gd` | Same, for `fares.json`. Also holds the `kind` and `stand_category` spellings — the ETL is authoritative for those |
 | `scripts/city/generated_document.gd` | Parse and version-check a JSON document the ETL wrote. Shared by the locators above and by `CityManifest`, so the stale-copy message exists once |
-| `scripts/city/mesh_contract.gd` | The mesh rules every generated asset is held to, plus `triangles` and `bounds`. All three verify tools and both previews read it |
+| `scripts/city/mesh_contract.gd` | The mesh rules every generated asset is held to, plus `triangles` and `bounds`. Every verify tool that touches geometry reads it, as do the previews and `CityStreamer` |
 | `scripts/city/preview_draw.gd` | Flat ribbons and the unshaded vertex-colour material, shared by the dev previews |
-| `scripts/city/tile_preview.gd` | Dev: instantiate every tile the manifest names, report triangles. The shape `CityStreamer` grows from |
+| `scripts/city/tile_preview.gd` | Dev: instantiate every tile the manifest names at one tier, report triangles. Still used by `city_preview.tscn`, where looking at the whole region is the point — **not** a performance measurement, and no longer on the boot path |
 | `scripts/city/road_surface_preview.gd` | Dev: instantiate the road surface, report triangles and colliders |
 | `scripts/city/road_preview.gd` | Dev: draw the road graph flat, with one-way arrows. Answered `Q12` |
 | `scripts/city/fare_preview.gd` | Dev: pin every fare node and tether it to `nearest_edge` at `edge_t` |
@@ -820,6 +830,7 @@ design.
 | `tools/verify_city.gd` | Headless acceptance check for `city.json` — georeferencing, bounds, and the files it names |
 | `tools/verify_road_graph.gd` | Headless acceptance check for `RoadGraph`'s queries — the `Q13` refusal, edge resolution, lane placement against the published carriageway width, and query time against a 1 ms budget over a region-wide probe lattice |
 | `tools/verify_road_surface.gd` | Headless acceptance check for `roads.glb` — one draw call, UVs, trimesh collision |
+| `tools/verify_city_streamer.gd` | Headless acceptance check for the streaming policy — band edges, hysteresis in both directions, and a region-wide residency sweep against the draw-call budget. Reports resident triangles as a ceiling rather than gating on them |
 | `tools/generated_scene_import.gd` | Import fixup — see the `[importer_defaults]` row above |
 
 ---

@@ -86,7 +86,7 @@ which the freshly synced `.glb` files have no import sidecars:
 tools/check.sh
 ```
 
-That runs `gdformat`, the import (~8 s cold, 196 assets), a GDScript warnings sweep and the three
+That runs `gdformat`, the import (~8 s cold, 196 assets), a GDScript warnings sweep and the
 verify tools, and is the **only** route that fails on error. Godot exits `0` whatever happens —
 including when a script fails to parse — so the script reads its output and supplies the exit code
 the engine will not. Running the steps by hand and eyeballing them is how a broken check passes.
@@ -96,7 +96,7 @@ The warnings sweep is the GDScript linter: 21 engine warnings are set to *error*
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the list and what was left out.
 
 GitHub Actions runs the same script on every push and pull request, alongside `ruff` and `pytest`.
-It **skips the three verify tools** — a fresh checkout has no generated assets to check, and
+It **skips the verify tools** — a fresh checkout has no generated assets to check, and
 building them in CI would mean re-downloading the source data every push. So the asset contracts
 are yours to run locally after a pipeline build; everything else CI catches for you.
 

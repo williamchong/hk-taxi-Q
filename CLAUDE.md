@@ -85,7 +85,7 @@ Common emoji for this project:
   `pytest` from `etl/`.
 - ETL changes: the pipeline runs end-to-end on the Wan Chai config without errors.
 - Godot changes: `tools/check.sh` passes, and the target scene runs. The script covers formatting,
-  the import, the GDScript warnings sweep and the three verify tools. **Do not run those by hand
+  the import, the GDScript warnings sweep and the verify tools. **Do not run those by hand
   and read the output** — Godot exits `0` even when a script fails to parse, so only the script's
   exit code means anything. See `docs/ARCHITECTURE.md` "Checks".
 - Update `docs/PROGRESS.md` — task status, plus any new decision or open question.

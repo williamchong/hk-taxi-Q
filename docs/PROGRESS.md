@@ -3,7 +3,7 @@
 Living document. **Update this whenever a task changes status, a decision is made, or an open
 question is answered.** Newest entries at the top of each log.
 
-Last updated: 2026-08-01 (`P2-2`'s last acceptance criterion measured — nearest-edge is 45 µs at p99, against a 1 ms budget)
+Last updated: 2026-08-01 (`P2-1` — the city streams, and visible triangles are inside budget for the first time)
 
 ---
 
@@ -155,7 +155,8 @@ to answer, not Phase 1's.
 | `P1-6` | Export and manifest | ✅ **Done** | `city.json` + `python -m pipeline`; whole region in 4.4 s, byte-reproducible, 199 files / 102.6 MB. Validation catches what no single stage can. Opened `Q16`. 323 tests, `ruff` clean. |
 | `P1-7` | Godot import | ✅ **Done** | **Phase 1 gate passed.** 65 tiles from `city.json`, georeferenced to 1 cm and checked in-engine by `verify_city.gd`. `DirAccess` tile listing deleted — it could never have worked in an export. 329 tests, `ruff` clean. |
 | `P2-2` | `RoadGraph` runtime and debug overlay | ✅ **Done — all four criteria met** | One parse per scene, nearest-edge over a 25 m plan grid, lane centres from the **drawn** carriageway. Refuses all 60 off-grade edges (`Q13`), proven over 505 probes. Query time closed 2026-08-01: **p99 45 µs against a 1 ms budget**, timed over 15,865 region-wide probes. `verify_road_graph.gd` is the fourth verify tool. 331 tests, `ruff` clean. |
-| `P2-1`, `P2-3` | Streamer, vehicle on real geometry | 🟢 **Unblocked** | `P2-3` now has `P2-2`'s lane-centre query to spawn against |
+| `P2-1` | `CityStreamer` | ✅ **Done — pending the review verdict** | Threaded load/unload by distance to the published `aabb`, tiers at 100/250 m, 400 m unload, 15 m hysteresis, all in `streaming.tres`. Draw calls 70 → 53 against a 150 budget; **visible triangles 398,574 → 240,598 against 300k**, in budget for the first time. `verify_city_streamer.gd` is the fifth verify tool. Opened the shadow-cascade and LOD1-vs-thin-structure findings. |
+| `P2-3` | Vehicle on real geometry | 🟢 **Unblocked** | `P2-3` now has `P2-2`'s lane-centre query to spawn against |
 | `P3-*` | Playable slice | ⬜ Blocked | Gated on `P2-3`; `P2-2` cleared |
 
 Legend: ⬜ not started · 🟡 in progress · ✅ done · ❌ blocked
@@ -249,6 +250,18 @@ plausible ones, and they are not exclusive:
 - **Not every tier ships.** LOD0 is 73% of the bundle and is only ever drawn for the handful of
   tiles nearest the camera. If `P2-1` finds LOD1 acceptable at the closest range in a street canyon
   where nothing is visible past a block anyway, the bundle drops to 28 MB and the question closes.
+
+  ⚠️ **Narrowed 2026-08-01 by `P2-1`, and it does not close cleanly — it splits by mesh class.**
+  Matched pairs at Hennessy Road and at the Gloucester Road flyover, same camera, one variable. In
+  the canyon LOD1 is very nearly indistinguishable from LOD0: the facades read the same, the street
+  reads the same, and it costs 478,076 primitives against 629,975. **For buildings the answer is
+  yes.** But the elevated road structures and the footbridge canopies come apart — crisp thin slabs
+  at LOD0 become warped dark slivers at LOD1, because `INFRASTRUCTURE` geometry is long and thin and
+  does not survive vertex-cell decimation the way an extruded building block does. So dropping LOD0
+  wholesale would cost the flyovers their silhouette, and the flyovers are the most recognisable
+  thing in the region after the harbour. What this points at is a **per-mesh-class tier policy in
+  `buildings.py`** rather than a per-tile one, which is a `P1-2` change and not a streaming decision.
+  Shots are in `build/lod-review/`; the user's verdict at the `P2-1` review is what settles it.
 - **LOD0 gets cheaper.** It is currently an exact weld — 989k triangles across the region, no
   simplification at all. A 0.5 m cell would sit between the current LOD0 and LOD1.
 - **The budget was for the wrong thing.** 200 MB is the iOS cellular download threshold, not a
@@ -544,6 +557,112 @@ below.
 ---
 
 ## Decision log
+
+### 2026-08-01 — `P2-1`: the city streams, and **visible triangles come inside budget for the first time**
+
+`CityStreamer` replaces `tile_preview.gd` on the boot path. Measured in-engine at five places, the
+same five before and after — because quoting one spot's "before" against another's "after" is how
+every bundle figure in this project drifted:
+
+| Place | Draw calls | Visible triangles (main pass) | With the shadow pass |
+|---|---|---|---|
+| (172, 27) — the HKCEC spawn | 63 → **32** | 163,384 → **60,758** | 1,164,133 → 268,709 |
+| (1114, 506) — worst residency | 52 → **46** | **398,574 → 240,598** | 1,591,160 → 1,028,399 |
+| (700, 400) | 70 → **53** | 375,574 → **167,914** | 1,772,341 → 696,374 |
+| (400, 300) | 70 → **48** | 211,236 → **106,180** | 1,353,530 → 447,561 |
+| (1400, 700) | 29 → 29 | 134,971 → **119,570** | 586,893 → 530,584 |
+
+**Both acceptance criteria that can be checked are met.** Draw calls peak at 53 against a 150
+budget. And the number that was never in budget now is: worst-case *visible* triangles went
+**398,574 → 240,598** against 300k. The baseline was over; the streamed city is under.
+
+The method is corroborated rather than trusted: the baseline at the spawn measured **1,164,133**
+primitives against the **1.16 M** `ARCHITECTURE.md` recorded independently for the same setup.
+
+**Bands are 100 m / 250 m with a 400 m unload and 15 m of hysteresis**, all in
+`game/tuning/streaming.tres` per hard rule 4. The unload distance is paired with the chase camera's
+400 m far plane rather than tuned alone — nearer and buildings visibly vanish at the horizon,
+further and it holds memory nothing draws.
+
+**The design is split in two, and that is what makes the third criterion structural.** `P2-1` asks
+that "a distant tile is rejected by its `aabb` **before** its mesh is loaded". `TileStreaming` lives
+in `scripts/core/`, is pure, and takes an `AABB` and returns an int — there is no code path from it
+to a file, so the rejection cannot happen after a load rather than before one. It also means the
+whole decision table is testable headlessly, which is what `verify_city_streamer.gd` does.
+
+**Resident triangles are reported, never gated, and the measurement says that was right.** The
+sweep's worst case is 405,210 resident against a 300k budget, and gating on it would have failed.
+But the budget is 300k *visible*, and the streamer culls to a **disc** while the renderer
+frustum-culls to a **cone**: at that same point, 402k resident draws as **240k visible**. Failing a
+disc figure against a cone budget would have tightened the bands by ~40% to satisfy an arithmetic
+mismatch, buying LOD popping for a cost frustum culling was already paying. The tool prints the
+number and names it a ceiling.
+
+**A review pass over the finished code found four defects, and two of them were in the check
+rather than the thing checked.** Recorded because "the check was wrong" is this repo's recurring
+failure and it does not get less likely once the check exists.
+
+- **The draw-call gate read the wrong sample.** The sweep tracked the resident-tile count *at the
+  worst-triangle sample* rather than its own maximum. The two peak in different places and by a
+  real margin — 31 tiles where the triangles peak, **37 tiles at (1114, 381)** where the tiles do —
+  so `P2-1`'s only failing assertion was gating on a number that was not the worst case. Tracked
+  separately now, and both places are printed.
+- **The residency sweep measured a smaller city than the streamer holds.** It culled on
+  `unload_distance_m`, but a tile already resident keeps its band for another `hysteresis_m`, so the
+  real disc is 415 m and not 400. `TileStreaming.residency_radius_m` now says so once and both
+  callers use it. Worst-case residency was 402,169 under the old sweep and is **405,210** under the
+  honest one.
+- **A failed tile load leaked and then repeated forever.** `load_threaded_get` is the only call that
+  releases a `ResourceLoader` task — `load_threaded_get_status` does not — so a failure that skipped
+  collection pinned the request for the life of the process. Worse, `_clear_pending` left the tile
+  wanting its tier, so `_collect` re-requested it the next frame: one missing tile meant a
+  `push_warning` and an in-flight slot burned at 60 Hz forever. Failures are now collected, and a
+  `failed_tier` on the resident stops the re-request.
+- **A superseded tier was instantiated rather than discarded.** The comment claimed the in-flight
+  load was "discarded on arrival"; it was not — the arrival check tested only for `UNLOADED`, so a
+  stale tier was instantiated, added, and then thrown away next frame, spending one of the two
+  per-frame instantiation slots exactly when they are scarcest. It is dropped on arrival now unless
+  nothing is drawn there yet, because a stale tier still beats a hole.
+
+**Proven able to fail — and the first attempt at proving it was itself a false green.** Inverting
+the distance bands gives a named failure and exit 1. Breaking `plan_distance_to` to measure to the
+AABB *centre* instead of its nearest point reported **exit 0 and no failures** — because the edit
+orphaned a local, `unused_variable` is promoted to error, the script never parsed, and `quit(1)`
+never ran. This is `dea1f36` and `Q17` all over again, caught only because the result looked too
+good. Re-run with the local still used, the check fails correctly: *"a camera 10 m off a tile's edge
+measured 85.000 m"*. The lesson is the one already written down and worth writing again: **never
+read raw `godot` output and call it a pass** — `tools/check.sh` is the only thing that can fail.
+
+**Two findings this opened, neither of them `P2-1`'s to fix.**
+
+⚠️ **The directional shadow costs 4.3× the main pass** — 1,028,399 primitives against 240,598 at the
+worst point. `golden_hour.tscn` enables `shadow_enabled` on a `DirectionalLight3D`, which takes
+Godot's default **4 PSSM cascades**, and its `directional_shadow_max_distance` is **600 m** against
+the streamer's 400 m unload, so every resident tile is re-rendered in every cascade. The budget
+table already says mobile is "vehicle blob shadow only" and desktop is "one cascade directional", so
+the rig is off-spec at both tiers. It is `P2-6`'s, but it is now a measured number rather than a
+suspicion — and it is the single largest lever left on the frame cost.
+
+⚠️ **LOD1 is fine for buildings at closest range and destroys the thin structures.** Matched pairs
+at Hennessy Road and at the Gloucester Road flyover — `build/lod-review/`, same camera, one
+variable. In the canyon LOD1 is very nearly indistinguishable — the facades read the
+same and the street reads the same, at 478,076 primitives against 629,975 and 120 fps against 92.
+But the elevated road structure and the footbridge canopy come apart: crisp thin slabs at LOD0
+become warped dark slivers at LOD1, because `INFRASTRUCTURE` geometry is long and thin and does not
+survive vertex-cell decimation the way an extruded building block does. So `Q16`'s "drop LOD0 and
+the bundle falls to 28 MB" is **live for buildings and not for infrastructure**, which makes it a
+per-mesh-class decision in `buildings.py` rather than a per-tile one. That is a `P1-2`/`P2-6`
+follow-up and the user's call at the review point.
+
+**Where tile colliders come from — the decision `P2-1` was assigned.** Not from the streamer.
+Building collision is an ETL product, not a runtime one: `create_trimesh_collision()` on a streamed
+tile would build a `ConcavePolygonShape3D` from a 9.5k-triangle mesh on the main thread, which is
+exactly the hitch the instantiation budget exists to prevent, and it would do it again on every tier
+swap. The tiers are also the wrong shape for it — LOD2 silhouettes are visibly wrong up close, and
+LOD0 is far more detail than a collision hull needs. The right answer is a fourth per-tile product
+from `buildings.py`: one coarse collision mesh per tile, tier-independent, loaded once and never
+swapped. That is a data-contract change and its own task. Until then buildings have no collision and
+the road surface is what keeps the car honest.
 
 ### 2026-08-01 — `P2-2`'s last acceptance criterion, measured: **p99 45 µs against a 1 ms budget**
 

@@ -209,7 +209,7 @@ func _check(graph: RoadGraph, document: Dictionary, bounds: AABB) -> PackedStrin
 func _check_query_time(graph: RoadGraph, bounds: AABB, edges: Array) -> PackedStringArray:
 	var problems: PackedStringArray = []
 
-	var lattice: PackedVector3Array = _lattice(bounds)
+	var lattice: PackedVector3Array = PlanLattice.over(bounds, PROBE_SPACING_M)
 	var on_road: PackedVector3Array = _midpoints(edges)
 	if lattice.size() < WARMUP_PROBES or on_road.is_empty():
 		problems.append(
@@ -269,30 +269,6 @@ func _time_queries(
 			)
 		)
 	return problems
-
-
-## A plan lattice over the region — every place in it a car could be asked about.
-##
-## `bounds` is the manifest's, so it is the union of everything the region
-## contains rather than the declared rectangle. Height is irrelevant: every
-## distance in `RoadGraph` is plan-measured.
-func _lattice(bounds: AABB) -> PackedVector3Array:
-	var points := PackedVector3Array()
-	var columns: int = maxi(1, int(bounds.size.x / PROBE_SPACING_M))
-	var rows: int = maxi(1, int(bounds.size.z / PROBE_SPACING_M))
-	for row: int in rows + 1:
-		for column: int in columns + 1:
-			(
-				points
-				. append(
-					Vector3(
-						bounds.position.x + float(column) * PROBE_SPACING_M,
-						0.0,
-						bounds.position.z + float(row) * PROBE_SPACING_M,
-					)
-				)
-			)
-	return points
 
 
 ## Midpoint of every drivable edge — where the car actually asks from.
