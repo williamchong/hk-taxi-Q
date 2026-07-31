@@ -15,10 +15,16 @@ python3 -m venv ../.venv          # repo-root venv; .gitignore already covers it
 ## Checks
 
 ```sh
-cd etl
-../.venv/bin/python -m pytest        # tests
-../.venv/bin/python -m ruff check .  # lint
-../.venv/bin/python -m ruff format . # format
+cd etl && ../.venv/bin/python -m pytest   # tests — testpaths is etl/tests
+```
+
+Lint and format from the **repo root**, not from here — the root `ruff.toml` extends this
+project's rules to every Python file in the repo, including `tools/*.py`, which running ruff from
+`etl/` silently skips:
+
+```sh
+.venv/bin/python -m ruff check .
+.venv/bin/python -m ruff format .
 ```
 
 ## Fetching sources

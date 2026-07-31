@@ -102,7 +102,7 @@ hk-taxi-Q/
 │   ├── project.godot
 │   ├── export_presets.cfg       # COMMITTED — never put signing credentials here
 │   ├── scenes/
-│   │   ├── dev/                 # grey-box circuit, city preview — not shipped
+│   │   ├── dev/                 # grey-box circuit, city preview — see the ⚠️ below
 │   │   └── world/               # shared rigs: lighting, sky
 │   ├── scripts/
 │   │   ├── core/                # pure logic, minimal engine coupling
@@ -120,6 +120,15 @@ hk-taxi-Q/
 │   └── tools/                   # editor/headless scripts — import fixups, asset checks
 └── tools/                       # dev scripts: ETL→game sync, export automation
 ```
+
+⚠️ **`scenes/dev/` is not shipped — except that `main.tscn` currently boots one.** Since the web
+demo, `run/main_scene` reaches `scenes/dev/city_drive.tscn`, so every export starts in a dev scene.
+That is a knowing Phase-1 placeholder with two consequences worth stating: `city_drive.tscn` puts
+`tile_preview.gd` — which its own docstring calls "a dev tool, not the streamer… **not** a
+performance measurement" — on the boot path at **1.16 M primitives against a 300k mobile budget**;
+and it needs the gitignored `assets/generated/`, so a fresh clone boots to an empty world with only
+a `push_warning`. Both close when `CityStreamer` (`P2-1`) gives the export something to boot that
+streams. Until then, treat any export as a demo, not a build.
 
 **Why the ETL is a separate Python project:** it runs rarely, at build time, and needs GDAL —
 which has no good Godot equivalent. Keeping it out of the engine also keeps it reusable for the
@@ -612,14 +621,42 @@ puts it where it belongs. That is why `city.json` gives tiles an `aabb` but no p
 Separate from `city_preview.tscn` because the two answer different questions and want different
 cameras.
 
-The spawn is derived from `roadgraph.json` rather than eyeballed, and this is the place that
-record lives — a `.tscn` is rewritten from scratch the first time the editor saves it, taking its
-comments with it. The car starts on **Hennessy Road**: the longest level-0 straight in the region
-at 280 m, one-way, tram-tracked, and the most recognisable street in Wan Chai. Its heading comes
-from that edge's own direction vector, so the car faces the way the graph says traffic legally
-runs — the same directions `Q12` confirmed against the real street.
+The spawn is derived from published data rather than eyeballed, and this is the place that record
+lives — a `.tscn` is rewritten from scratch the first time the editor saves it, taking its comments
+with it. The car starts at **fare node `f_004`, "Expo Drive eastbound underneath HKCEC Phase II"**:
+a real taxi stand in the Transport Department's data, so the car begins where a Hong Kong taxi
+would actually be waiting. **No projection is needed to reproduce it**: `fares.py` publishes
+`nearest_edge` and `edge_t` on every node precisely so a consumer does not redo the projection that
+stage already did, and `f_004` carries edge `651` at `edge_t` `0.598491`. Walk that edge's polyline
+in plan to `edge_t`, offset into the lane, and you land on the literal. The heading is the
+direction of **the polyline segment `edge_t` falls on** — not the end-to-end chord, which differs
+by 0.7° — so the car faces the way the graph says traffic legally runs, the same directions `Q12`
+confirmed against the real street.
 
-It sits in the **nearside lane, 2.56 m left of the centreline**, not on the centreline itself.
+Its **Y is the one number not derived from published data**: road surface + **1.0 m**, a drop
+height. The wheel ray is `suspension_rest_length_m + wheel_radius_m` = 0.70 m, so the car starts
+0.30 m clear of the ground and settles onto its suspension. It is also load-bearing beyond the
+spawn — `drive_harness.gd` sets `_floor_m` from `spawn.origin.y - fall_margin_m`, so moving the
+spawn moves the fall-detection floor with it.
+
+⚠️ **The transform literal is row-major; the axis you reason about is a column.** `Transform3D`'s
+12-float constructor fills `Basis` rows, while "forward" is `-basis.z` — and in GDScript `basis.z`
+*is* the column (`get_column` is C++-only). Building the literal as columns therefore transposes
+the basis. **A transpose is not a 180° flip.** Transposing a yaw-only basis gives `yaw(-θ)`, which
+mirrors the heading about world −Z: 172° wrong for this spawn, 180° for a due east-west street, and
+**0° — a silent no-op — for a north-south one**. So the error is invisible on exactly the streets
+where you would trust an eyeball check. Given a travel direction `d`, the row-major floats are
+`(-d.z, 0, -d.x, 0, 1, 0, d.x, 0, -d.z)`; verify with
+`assert((-basis.z).is_equal_approx(d))` in-engine — not `==`, which fails on the 4-dp rounding in
+the literal.
+
+There is also a check needing no tooling at all, and it is the one that caught this: **the harbour
+is north**, so from a car facing east, a left turn heads for the water. Getting that wrong is
+visible from the driver's seat.
+
+It sits in the **nearside lane, 2.56 m left of the centreline** — `width_m × widen_for(speed_limit_kph) / 4`,
+which is 1.6 below 70 kph and 1.3 at or above it, so the figure is not a constant — not on the
+centreline itself.
 Partly because a car should start in a lane, and partly because the centreline is the worst place
 on the network to put a wheel: it is where opposed carriageway ribbons overlap and where junction
 caps double up, so a raycast can find two coplanar collision triangles a few centimetres apart and

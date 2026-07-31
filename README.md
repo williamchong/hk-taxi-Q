@@ -68,6 +68,10 @@ open -a Godot --args --path "$PWD/game"
 
 # Export (macOS + web; needs export templates installed)
 tools/export.sh
+
+# Play the web export. Not `python -m http.server` — the build needs
+# SharedArrayBuffer, which browsers gate behind COOP/COEP headers.
+tools/export.sh web && tools/serve_web.py
 ```
 
 There is no ETL yet — `P0-4`. Once the pipeline exists:

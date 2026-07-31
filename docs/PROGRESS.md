@@ -43,12 +43,23 @@ widening comes from city config, and **all 393 single-level junctions in the reg
 under a dense point sample inside the junction radius. It resolved the open decision it inherited
 and opened `Q13`, which is the first thing `P1-3` got wrong rather than merely left out.
 
-**The car is on the real city.** `scenes/dev/city_drive.tscn` spawns the `P0-5` taxi westbound in
-the nearside lane of Hennessy Road and drives on `P1-4`'s collider — verified in-engine: road at
-3.636 m, car at rest at 4.286 m, **all four wheels grounded**, and the 0.649 m between them is the
-suspension holding it up rather than the chassis sitting on the tarmac. That last figure is the
-cross-check worth having: `handling.tres` predicts a 0.65 m static ride height from spring rate and
-corner load, and nothing was tuned to make it agree.
+**The car is on the real city.** `scenes/dev/city_drive.tscn` spawns the `P0-5` taxi in the
+nearside lane and drives on `P1-4`'s collider — verified in-engine at the original Hennessy Road
+spawn: road at 3.636 m, car at rest at 4.286 m, **all four wheels grounded**, and the 0.649 m
+between them is the suspension holding it up rather than the chassis sitting on the tarmac. That
+last figure is the cross-check worth having: `handling.tres` predicts a 0.65 m static ride height
+from spring rate and corner load, and nothing was tuned to make it agree.
+
+> ⚠️ That spawn was described here and in `ARCHITECTURE.md` as **westbound**, and it never was. The
+> transform's basis was hand-written transposed, so the car faced **east — 96.5°** — while sitting
+> 2.01 m from the centreline of the *westbound* carriageway (edge 745, travel 263.9°), whose
+> widened half-width is 5.12 m. The eastbound carriageway's centreline was 9.34 m away, further
+> than its own half-width, so the car was never on it. Right road, right lane for westbound travel,
+> facing the wrong way. `Q8`'s drive test was therefore conducted against the legal flow; with no
+> traffic and symmetric geometry that does not invalidate the verdict, but it should be on the
+> record. The user caught it from the driver's seat before any tool did — *the harbour is north, and
+> reaching it meant turning left, so the car was facing east.* The spawn moved to HKCEC on
+> 2026-07-31 and is now asserted against its edge vector in-engine.
 
 **The car does not start on the centreline, and that was a real bug rather than a preference.**
 Spawned centred it sat at 3 of 4 wheels grounded and crept at 0.8 m/s. The centreline is the worst
@@ -211,9 +222,18 @@ imported at `compress/mode=0` (lossless) to a **79 MB** `.ctex`, *expanding* 39 
 wasm beside it.
 
 Deleting the two duplicates took the PCK from **222.8 MB to 56.4 MB — 166.3 MB measured**, with the
-city still fully present (195 tile scenes verified in the export). The terrain GLB stays for the
-visual judgement `P1-2t` deferred; it carries its own embedded copy of the texture and imports to
-4.4 MB.
+city still fully present (195 tile scenes verified in the export).
+
+The terrain GLB then moved to `etl/out/<city>/<region>/terrain/`, where `build_terrain` writes it,
+taking the PCK to **51.8 MB**. An `export_presets.cfg` exclusion was considered and rejected:
+`assets/generated/` is contractually what the manifest names and `sync_generated.sh` now enforces
+that, so the file would be swept regardless — the exclusion would have been a second rule losing a
+fight with the first. Copy it back temporarily when the visual judgement is finally made.
+
+> ⚠️ That last move saved **4.6 MB, not the ~48 MB its 47.9 MB source suggests** — the embedded
+> texture does not survive glTF import, so the mesh lands as a 4.4 MB `.scn`. The estimate was made
+> by summing source bytes *in the same session that wrote the rule against doing so*. The rule is
+> not a slogan: measure the PCK.
 
 Three lessons. Bundle size must be **measured from a PCK**, never summed from source files. "Nothing
 references it" was a property nothing in the project checked, because every check starts from the
@@ -1350,12 +1370,21 @@ Record measured values here, not estimates.
 
 | Metric | Target (mobile) | Latest | Date |
 |---|---|---|---|
-| FPS on device floor | 60 | — | — |
-| Draw calls | < 150 | — | — |
-| Visible triangles | < 300k | — | — |
-| Texture memory | < 128 MB | — | — |
-| Bundle size | < 200 MB | — | — |
-| ETL full-run time | — | — | — |
+| FPS on device floor | 60 | — (no device yet — `P0-3b`) | — |
+| FPS, Chrome on macOS, 2880×1450 | — | **119** (worst frame 9.7 ms) | 2026-07-31 |
+| Draw calls | < 150 | **48** ✅ | 2026-07-31 |
+| Visible triangles | < 300k | **1.16 M** ❌ — 3.9× over | 2026-07-31 |
+| Texture memory | < 128 MB | 0 — no textures ship | 2026-07-31 |
+| Bundle size | < 200 MB | **51.8 MB** PCK (+38.8 MB wasm) | 2026-07-31 |
+| Boot to drivable (web, warm) | — | 830 ms, of which 260 ms is tile instantiation | 2026-07-31 |
+| Tab memory (web) | — | 307 MB | 2026-07-31 |
+| ETL full-run time | — | 4.4 s, whole region from empty | 2026-07-31 |
+
+⚠️ **The triangle count is over budget by design, not by accident.** These are `city_drive.tscn`
+numbers, and that scene loads all 65 tiles at LOD0 with no culling and no LOD switching, because it
+is a dev scene. `CityStreamer` (`P2-1`) is what makes this measurable as a real figure; until then
+the draw-call number is encouraging and the triangle number is not a verdict. The chase camera's
+400 m far plane is doing all the culling there is.
 
 ---
 

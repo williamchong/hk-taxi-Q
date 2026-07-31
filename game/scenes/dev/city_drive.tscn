@@ -31,11 +31,25 @@ script = ExtResource("2_surface")
 
 [node name="GoldenHour" parent="." instance=ExtResource("3_light")]
 
-; Westbound in the nearside lane of Hennessy Road. Derived, not eyeballed — see
-; docs/ARCHITECTURE.md "To drive it" for where the numbers come from and why the
-; car does not start on the centreline.
+; Eastbound in the nearside lane of Expo Drive, underneath HKCEC Phase II.
+;
+; Derived, not eyeballed, and from a published fact rather than from taste: it is
+; fare node f_004, "Expo Drive eastbound underneath HKCEC Phase II", a real taxi
+; stand in the Transport Department's data. The car starts where a Hong Kong taxi
+; would be waiting. Reproduce it from fares.json alone — f_004 publishes
+; nearest_edge 651 and edge_t 0.598491, so no projection is needed — by walking
+; that polyline in plan to edge_t and offsetting 2.56 m into the nearside lane.
+;
+; Y is road surface + 1.0 m. That is a drop height, not a measurement: the wheel
+; ray is 0.70 m, so the car starts 0.30 m clear and settles onto its suspension.
+; drive_harness.gd derives its fall floor from this, so moving the spawn moves
+; the floor.
+;
+; See docs/ARCHITECTURE.md "To drive it" for why the car must not start on the
+; centreline, and for the row-major trap in this literal — a transposed basis is
+; a silent no-op on a north-south street.
 [node name="Taxi" parent="." instance=ExtResource("4_taxi")]
-transform = Transform3D(-0.1131, 0, -0.9936, 0, 1, 0, 0.9936, 0, -0.1131, 243.4152, 4.6815, 697.9361)
+transform = Transform3D(0.0704, 0, -0.9975, 0, 1, 0, 0.9975, 0, 0.0704, 172.3485, 6.5796, 26.9396)
 
 [node name="CameraRig" type="SpringArm3D" parent="."]
 margin = 0.3

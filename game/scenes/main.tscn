@@ -1,7 +1,7 @@
 [gd_scene load_steps=2 format=3]
 
-[ext_resource type="PackedScene" path="res://scenes/dev/greybox.tscn" id="1_boot"]
+[ext_resource type="PackedScene" path="res://scenes/dev/city_drive.tscn" id="1_boot"]
 
 [node name="Main" type="Node"]
 
-[node name="Greybox" parent="." instance=ExtResource("1_boot")]
+[node name="CityDrive" parent="." instance=ExtResource("1_boot")]

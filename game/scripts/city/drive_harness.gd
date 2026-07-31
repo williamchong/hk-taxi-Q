@@ -24,10 +24,12 @@ const GeneratedRoadSurface = preload("res://scripts/city/generated_road_surface.
 ##
 ## Measured from the spawn rather than stated as a height, so this stays free of
 ## any particular city (CLAUDE.md hard rule 3). The margin has to clear the
-## deepest road below the start line: in Wan Chai that is the Cross Harbour
-## Tunnel, whose surface bottoms out at −9.1 m against a 4.7 m spawn, so 25 m is
-## about eleven metres of headroom. It also sets how long you spend watching
-## nothing — at this profile's 1.6 gravity scale, 25 m is 1.8 seconds.
+## deepest road below the start line: in Wan Chai that is the Central–Wan Chai
+## Bypass Tunnel, bottoming out at −9.08 m against the 6.58 m HKCEC spawn, so
+## 25 m leaves about **9.3 m** of headroom. ⚠️ That figure moves whenever the
+## spawn does, because the floor is derived from it — re-check it rather than
+## trusting this line. It also sets how long you spend watching nothing: at this
+## profile's 1.6 gravity scale, 25 m is 1.8 seconds.
 @export var fall_margin_m: float = 25.0
 
 var _vehicle: VehicleController

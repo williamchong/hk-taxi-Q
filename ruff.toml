@@ -1,0 +1,9 @@
+# Lint every Python file in the repo, not just the ETL package.
+#
+# `etl/pyproject.toml` owns the rules; this only widens where they apply. The
+# documented check used to be `cd etl && ruff check .`, which matches nothing
+# under `tools/` — so `tools/serve_web.py`, the first script to land there, was
+# unlinted by default and shipped a RUF012 violation nobody would have seen.
+#
+# Run `ruff check .` and `ruff format --check .` from the repo root.
+extend = "etl/pyproject.toml"
