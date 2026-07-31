@@ -265,20 +265,26 @@ func _release_everything() -> void:
 		Input.action_release(hold[0])
 
 
-## What the renderer drew this frame, as ` prims=N draws=N`.
+## What the renderer drew in the last frame it completed, as `  prims=N draws=N`.
 ##
 ## Reported every second because every performance number this project has
 ## written down came from a throwaway probe that was then deleted — so nobody
-## could reproduce one without rewriting the probe. These two are what the
-## budget in docs/ARCHITECTURE.md is stated in, and a driver run is already the
+## could reproduce one without rewriting the probe. A driver run is already the
 ## reproducible thing.
 ##
 ## ⚠️ Both read **0 under `--headless`**: the dummy rasteriser draws nothing.
 ## Printed anyway rather than hidden, because a zero that is explained is worth
 ## more than a missing field someone later assumes was non-zero.
 ##
-## `prims` counts every pass, shadow included — it is not the visible triangle
-## count. A directional shadow multiplies it by roughly the cascade count.
+## ⚠️ `draws` is a budget metric from docs/ARCHITECTURE.md directly. `prims` is
+## **not** — that budget is stated in *visible* triangles, and this counts every
+## pass including shadows. Measured on this scene the directional shadow adds
+## roughly +1x the main pass per two cascades, so treat it as a proxy that moves
+## with the budget rather than the budget itself.
+##
+## The reading is one frame stale and unsynchronised — the project runs the
+## multi-threaded render model, so this is whatever the render thread last
+## wrote. Fine for a per-second harness line; not a frame-accurate sample.
 func _rendering() -> String:
 	return (
 		"  prims=%d draws=%d"

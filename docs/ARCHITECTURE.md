@@ -66,12 +66,20 @@ base value — so setting the base only degrades the desktop tier, which is spec
 directional shadow cascade.
 
 **Also deliberately not set:** `rendering/lights_and_shadows/directional_shadow/size`. The engine
-default is already 4096 (`.mobile` 2048), which is what the shadow texel figures in
-`scenes/world/golden_hour.tscn` assume, and writing a base value equal to the default is noise. The
-next step up, 8192², is ~268 MB of shadow map against a 512 MB desktop texture budget. There are no
-`rendering/lights_and_shadows/*` keys in `project.godot` at all, and the shadow work in `P2-1` added
-none — the cascade count and distance are node properties on the one shared sun, which is where the
-editor renders them.
+default is already 4096 (`.mobile` 2048), and writing a base value equal to the default is noise.
+The next step up, 8192², is **~134 MB** of shadow map against a 512 MB desktop texture budget —
+`directional_shadow/16_bits` defaults to `true`, so it is `D16_UNORM` at 8192² × 2, not the 268 MB
+the 32-bit figure would suggest. Measured rather than quoted: raising the atlas to 8192 moved
+texture memory by exactly 134,217,728 B.
+
+**Cascade count costs no VRAM.** Godot allocates one `size × size` depth texture whatever the split
+mode and subdivides the rect per cascade, so four 2048² quadrants and one 4096² are the same
+allocation — measured identical at 79,592,192 B under both. Cascades buy geometry submission, not
+memory, and the shadow-map fill is unchanged either way.
+
+There are no `rendering/lights_and_shadows/*` keys in `project.godot` at all, and the shadow work
+added none — cascade count and distance are node properties on the one shared sun, which is where
+the editor renders them.
 
 **Autoloads:** `FpsCounter` (debug builds, or `--fps`) and `InputRouter`. Both run every frame for
 the life of the process, so treat them as hot-path code.

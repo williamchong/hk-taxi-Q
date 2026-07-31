@@ -148,7 +148,13 @@ double-decker bus, green minibus, tram.
 - One directional light (sun), warm, low angle
 - Ambient from a simple gradient sky — no HDRI, no reflection probes
 - **Mobile tier:** vehicle blob shadows only, no realtime shadow maps
-- **Desktop tier:** one directional shadow cascade
+- **Desktop tier:** two directional shadow cascades at 400 m — the camera's far plane
+
+⚠️ **This said "one cascade" until it was measured.** One is cheaper — 55% off the frame's
+primitives against 35% for two — and unusable: it has a distinct artefact at every distance, a
+visible shadow cutoff mid-street at 150 m, banding on large soft shadows at 250 m, and off-screen
+casters dropping out entirely at 400 m. Two gives a fine near split and a coarse far one and shows
+none of them. The table and the shots are in `docs/PROGRESS.md`.
 - No global illumination, no SSAO on mobile
 
 Flat shading plus a single strong key light is what makes low-poly read as intentional rather than

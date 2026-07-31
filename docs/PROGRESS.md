@@ -3,7 +3,7 @@
 Living document. **Update this whenever a task changes status, a decision is made, or an open
 question is answered.** Newest entries at the top of each log.
 
-Last updated: 2026-08-01 (one shadow cascade instead of four — 55% off the frame's primitives, and the rig finally matches `ART_DESIGN.md`)
+Last updated: 2026-08-01 (two shadow cascades instead of four — 35% off the frame's primitives; one cascade was tried first and withdrawn)
 
 ---
 
@@ -155,7 +155,7 @@ to answer, not Phase 1's.
 | `P1-6` | Export and manifest | ✅ **Done** | `city.json` + `python -m pipeline`; whole region in 4.4 s, byte-reproducible, 199 files / 102.6 MB. Validation catches what no single stage can. Opened `Q16`. 323 tests, `ruff` clean. |
 | `P1-7` | Godot import | ✅ **Done** | **Phase 1 gate passed.** 65 tiles from `city.json`, georeferenced to 1 cm and checked in-engine by `verify_city.gd`. `DirAccess` tile listing deleted — it could never have worked in an export. 329 tests, `ruff` clean. |
 | `P2-2` | `RoadGraph` runtime and debug overlay | ✅ **Done — all four criteria met** | One parse per scene, nearest-edge over a 25 m plan grid, lane centres from the **drawn** carriageway. Refuses all 60 off-grade edges (`Q13`), proven over 505 probes. Query time closed 2026-08-01: **p99 45 µs against a 1 ms budget**, timed over 15,865 region-wide probes. `verify_road_graph.gd` is the fourth verify tool. 331 tests, `ruff` clean. |
-| `P2-1` | `CityStreamer` | ✅ **Done — review passed 2026-08-01** | Threaded load/unload by distance to the published `aabb`. Draw calls 70 → 53 against a 150 budget. The review verdict dropped LOD0: worst-case **visible triangles 398,574 → 150,374** against 300k, and the **PCK 51.6 → 21.1 MB**. Bands are now a single 250 m edge, 400 m unload, 15 m hysteresis, in `streaming.tres`. `verify_city_streamer.gd` is the fifth verify tool. Opened the shadow-cascade finding. |
+| `P2-1` | `CityStreamer` | ✅ **Done — review passed 2026-08-01** | Threaded load/unload by distance to the published `aabb`. Draw calls 70 → 53 against a 150 budget. The review verdict dropped LOD0: worst-case **visible triangles 249,210 → 150,374** against 300k, and the **PCK 51.6 → 21.1 MB**. Bands are now a single 250 m edge, 400 m unload, 15 m hysteresis, in `streaming.tres`. `verify_city_streamer.gd` is the fifth verify tool. Opened the shadow-cascade finding. |
 | `P2-3` | Vehicle on real geometry | 🟢 **Unblocked** | `P2-3` now has `P2-2`'s lane-centre query to spawn against |
 | `P3-*` | Playable slice | ⬜ Blocked | Gated on `P2-3`; `P2-2` cleared |
 
@@ -563,77 +563,92 @@ below.
 
 ## Decision log
 
-### 2026-08-01 — One shadow cascade, not four: **55% off the frame's primitives**
+### 2026-08-01 — **Two** shadow cascades, not four: 35% off the frame's primitives
 
-`ART_DESIGN.md` has specified "Desktop tier: one directional shadow cascade" since it was written.
-`golden_hour.tscn` never set `directional_shadow_mode`, so it took Godot's default of **four PSSM
-cascades**, at a `directional_shadow_max_distance` of 600 m — beyond both the chase camera's 400 m
-far plane and the streamer's 400 m unload. The rig was off-spec and nobody had looked.
+`ART_DESIGN.md` specifies "Desktop tier: one directional shadow cascade". `golden_hour.tscn` never
+set `directional_shadow_mode`, so it took Godot's default of **four PSSM cascades** at a
+`directional_shadow_max_distance` of 600 m — past both the chase camera's 400 m far plane and the
+streamer's 400 m unload. `P2-1`'s review had already measured and named this as "the single largest
+lever left on the frame cost" and left it to `P2-6`; it turned out cheap enough to take now.
 
-Measured at the worst-residency point against a 150,374-primitive main pass:
+Per-second primitives, from a `drive.sh` run out of the HKCEC spawn — reproducible, since `ee0ebea`
+put the counters in the harness:
 
-| Config | Primitives | × main pass |
-|---|---|---|
-| Shadows off | 150,374 | 1.00× |
-| 1 cascade @ 400 m | 299,976 | 2.00× |
-| 2 cascades @ 400 m | 389,522 | 2.59× |
-| **4 cascades @ 600 m (was)** | **617,087** | **4.10×** |
+| Config | t=1 | t=3 | t=6 | vs default |
+|---|---|---|---|---|
+| 4 cascades @ 600 m (was) | 244,888 | 215,071 | 263,077 | — |
+| **2 cascades @ 400 m (shipped)** | **159,739** | **132,845** | **155,032** | **−35%** |
+| 1 cascade @ any distance | 110,644 | 93,206 | 112,142 | −55% |
 
-On a driver run from the HKCEC spawn, **4 cascades → 1 cascade takes the frame from 244,888 to
-110,644 primitives at t=1 — 55%** — and 215,071 → 93,206 at t=3, 263,077 → 112,142 at t=6. Draw
-calls move 32 → 39, which is the shadow atlas being submitted differently and is nowhere near the
-150 budget.
+⚠️ **One cascade is what the spec asks for, was shipped first, and had to be withdrawn.** It has a
+distinct artefact at every distance tried, and they are all visible on screen:
 
-**Distance turned out not to be a cost lever at all.** 150, 250 and 400 m measured *identically* on
-the same run — bit-identical primitive counts. So it was chosen purely for sharpness: one cascade
-spreads the whole shadow map over `max_distance`, giving ~0.055 m per texel at 150 m against
-0.092 m at 250 m and 0.147 m at 400 m.
+| Distance | What breaks |
+|---|---|
+| 150 m | Shadows fade out over 120–150 m while the camera draws to 400 m, so the far half of a long street is flatly lit behind a visible cutoff |
+| 250 m | The HKCEC shadow across Expo Drive East comes out **banded** — the shadow map's own texels showing through the filter, at 0.092 m each |
+| 400 m | The HKCEC shadow **disappears**; the caster is behind the camera and falls outside the ortho volume's near plane |
 
-⚠️ **250 m was the plan, and looking at it rejected it.** The reasoning for 250 was elegant — it is
-exactly `streaming.tres`'s tier boundary, so past it every caster is a silhouette block and finer
-texels would resolve decimated geometry. On screen the HKCEC shadow across Expo Drive East came out
-**visibly banded** at 250 m: the shadow map's own texels showing through the filter on a large soft
-shadow. At 150 m it is smooth and matches the four-cascade baseline, which is what the texel figures
-predict, since 0.055 m is near parity with the old cascade 0's 0.044 m. The arithmetic was right and
-the argument built on it was wrong. Shots in `build/driver/shadow-150/`, `-250/`, `-before/`.
+**The first two are one artefact, not two, and that is what caught me out.**
+`directional_shadow_fade_start` is a *fraction* of `max_distance` (0.8), so shortening the distance
+to sharpen the near field silently drags the fade band in with it — 480–600 m became 120–150 m.
+The plan named this risk; I then checked the two artefacts I expected, peter-panning and acne, on a
+**near-field crop** and never looked down a long street. The user did, and asked why the road went
+flat. Two cascades removes all three at once: a fine near split and a coarse far one.
 
-**Peter-panning was the artefact to expect and it did not appear.** Godot scales directional
-`shadow_bias` by cascade extent, so one 150 m cascade carries a larger world-space bias than the old
-~60 m cascade 0 — contact shadows detaching was the likely failure, more likely than acne. A matched
-pair with the car in open sun (`build/driver/sun-4cascade/` vs `sun-150/`) shows its shadow still
-attached, same shape, same softness. So `shadow_bias`, `shadow_normal_bias`,
-`directional_shadow_pancake_size`, `shadow_blur` and `fade_start` all stay at engine defaults.
+**400 m rather than 600** because it is exactly the chase camera's far plane and the streamer's
+unload distance, so shadow reach and draw distance now end together. Distance is free either way —
+150, 250, 400 and 600 measure **bit-identically** for a given cascade count, verified across all
+four.
+
+**`ART_DESIGN.md` amended, deliberately.** Its one-cascade line was written before anyone measured
+it. The desktop tier is now two cascades, with the artefact table above as the reason.
+
+**Peter-panning did not appear.** Godot scales directional `shadow_bias` by cascade extent, so a
+longer cascade carries a larger world-space bias and contact shadows detaching was the likely
+failure. A matched pair with the car in open sun shows its shadow still attached, same shape and
+softness. `shadow_bias`, `shadow_normal_bias`, `directional_shadow_pancake_size`, `shadow_blur` and
+`fade_start` all stay at engine defaults.
+
+**Cascade count costs draw calls, which the headline hides.** 32 → 35 at t=1, monotonic with fewer
+cascades (4 → 32, 2 → 35, 1 → 39, off → 26). Against a 400 desktop budget it is a non-issue, but it
+moves in the opposite direction to the primitive count and is not noise.
+
+⚠️ **"55% off the frame" is a primitive count, not a frame time.** Every configuration pinned to
+8.3 ms on this machine — the display refresh — so the real GPU saving is **unmeasured**, and
+shadow-map fill is unchanged either way since the atlas is one texture at any cascade count. The
+change is justified as headroom for the unbuilt mobile tier and as spec conformance, not as a
+measured speed-up.
 
 **No `LightingProfile` resource, deliberately.** Hard rule 4 says tuning values are data rather than
 constants in code, and a `.tscn` *is* data — `city_drive.tscn` already carries `far = 400.0` the same
 way. A profile plus an apply script would move values out of a scene the editor renders correctly and
 into a script that writes them in `_ready()`: two sources of truth whose disagreement would be
-invisible in the editor. It is also the shape of the `stats()` API deleted three commits ago —
-machinery with no consumer, whose schema would be guessed against a mobile tier `P0-3b` cannot yet
-measure.
+invisible in the editor. It is also the shape of the `stats()` API deleted three commits ago.
 
 **Three things this does not do, named so they are not mistaken for oversights.**
 
 - **The mobile tier is still unbuilt.** `ARCHITECTURE.md` claimed two tiers "selected at runtime by
   platform"; nothing in `game/scripts/` reads `OS.has_feature` or any quality setting, so that line
-  was false and is corrected. ⚠️ And the budget's "vehicle blob shadow only" deserves re-examination
-  before it is implemented: shots with shadows *off* looked markedly worse than the line implies —
-  flat and blown out, the canyon losing its depth entirely. A real mobile tier needs the ambient and
-  tonemap re-tuned around a blob shadow, not the shadow switched off. `P2-6` inherits that.
+  was false and is corrected. ⚠️ And "vehicle blob shadow only" deserves re-examination before anyone
+  implements it: shots with shadows *off* looked markedly worse than the line implies — flat and
+  blown out, the canyon losing its depth entirely. A real mobile tier needs the ambient and tonemap
+  re-tuned around a blob shadow, not the shadow switched off. `P2-6` inherits that.
 - **`greybox.tscn` keeps its own `Sun`**, a second light outside the shared rig. Deliberately neutral
   grey-box lighting, off the boot path, in a nearly empty scene where four cascades cost nothing.
 - **Nothing asserts the rig stays on spec.** An editor save could restore the four-cascade default
   silently, exactly as it strips comments from `project.godot`. Not worth a `verify_lighting.gd`
-  today — the original defect was a value never set, not a value regressed — but when the second tier
-  lands the check worth writing is "each tier's `max_distance` ≤ its camera's far plane".
+  today, but when the second tier lands the check worth writing is "each tier's `max_distance` ≤ its
+  camera's far plane".
 
-**Unrelated finding, recorded while looking at the shots.** The dark patch in the middle of the
-roundabout east of HKCEC is **not a shadow — it is a hole**. `roads.glb` draws carriageway ribbons
-and junction caps only, so a roundabout's interior has no geometry and shows the sky material's
-`ground_bottom_color` straight through. Same for the expanse beyond the kerbs. This is the known
-"no terrain" state from `Q11` — the height field is sampled but too expensive to render — and it
-reads badly enough at street level to be worth a cheap flat ground plane at the sampled terrain
-height, which is a small ETL addition rather than the 267 MB textured terrain that was rejected.
+**Unrelated finding, recorded while looking at the shots.** The dark wedges at junctions — the thing
+that prompted the user to ask about shadows in the first place — are **not shadows and not the
+missing terrain**. They are gaps in the road mesh: `surface.py` trims each edge end back from a node
+and fills the middle with a cap built as a ring fanned from its centroid, so where roads meet at an
+angle the cap's straight chord cuts inside the corner and leaves a wedge no ribbon reaches. The
+roundabout island east of HKCEC is a genuine hole for the same reason. They read as shadows because
+the sky's ground gradient shows through, tinting blue-grey at grazing angles and tan at steeper ones.
+A `P1-4` surface-coverage question, and worth taking before `P3-9`'s authenticity test.
 
 ### 2026-08-01 — `P2-1` review **passed**, and it closes `Q16`: **LOD0 does not ship**
 
