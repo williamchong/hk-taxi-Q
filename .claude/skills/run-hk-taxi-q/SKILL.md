@@ -1,0 +1,190 @@
+---
+name: run-hk-taxi-q
+description: Build, launch, drive and screenshot the hk-taxi-Q Godot game. Use when asked to run the game, start it, drive it, take a screenshot of Wan Chai or the taxi, see a change working on real geometry, export the web build, or check that the city still renders.
+---
+
+# Running hk-taxi-Q
+
+A Godot 4.7 arcade taxi game. The city is **build output**, not source — a fresh clone renders
+nothing until the Python ETL has run. There is no menu and no main loop to click through: the game
+boots straight into `city_drive.tscn` with the taxi on Expo Drive under HKCEC.
+
+Drive it with **`.claude/skills/run-hk-taxi-q/drive.sh`**, which launches a scene, feeds it
+scripted input, prints per-second telemetry, and writes PNGs. All paths below are relative to the
+repo root.
+
+## Prerequisites
+
+Verified on macOS 15 (arm64), Godot 4.7.1, Python 3.13.
+
+```bash
+godot --version                  # 4.7.1.stable.official — brew install --cask godot
+ls .venv/bin/gdformat            # from the venv below; check.sh will not run without it
+```
+
+## Build
+
+The venv is the repo root's, not `etl/`'s. The first pipeline run downloads ~320 MB from
+government servers and caches it in `etl/sources/`; after that the whole region is ~5 s.
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install -e "etl/[dev]"
+
+cd etl && ../.venv/bin/python -m pipeline --city hong_kong --region wan_chai && cd ..
+tools/sync_generated.sh
+```
+
+Ends by reporting the file count copied into `game/assets/generated/` (199 for Wan Chai today). No
+Godot import step is needed first — `drive.sh` builds `game/.godot/` on its first run, which is
+slow the first time and instant afterwards.
+
+## Run — agent path
+
+```bash
+.claude/skills/run-hk-taxi-q/drive.sh
+```
+
+Six seconds of full throttle from the start line, three screenshots into `build/driver/`
+(gitignored). Output streams as it runs, a line a second:
+
+```
+vehicle: Taxi at (172.3485, 6.45805, 26.9396)
+t= 0.00  pos=(  172.35,    6.46,    26.94)  speed=   0.00 kph
+shot:    /Users/william/hk-taxi-Q/build/driver/t00.50.png  1920x1080  29 distinct colours
+t= 3.00  pos=(  187.94,    6.20,    25.84)  speed=  42.61 kph
+DRIVER OK
+```
+
+**Look at the PNGs.** `DRIVER OK` means nothing crashed and no frame was flat — not that the game
+looked right.
+
+### Arguments
+
+Everything after `drive.sh` goes to `driver.gd`.
+
+| Argument | Meaning |
+|---|---|
+| `--scene=res://…` | default `res://scenes/dev/city_drive.tscn`; also `city_preview.tscn` |
+| `--seconds=6` | how long to simulate |
+| `--shots=0.5,3,6` | sim times to capture |
+| `--out=dir` | default `build/driver/`; relative paths anchor to the repo root, not to `game/` |
+| `--hold=action@start+duration` | press an action; repeatable |
+| `--camera=x,y,z` / `--look=x,y,z` | teleport the camera (preview scenes only) |
+
+Actions are the `[input]` names in `game/project.godot`: `accelerate`, `brake_reverse`,
+`steer_left`, `steer_right`, `drift`, `look_back`. An unknown one fails rather than doing nothing.
+
+A drift through the junction east of HKCEC — the taxi ends up facing back the way it came:
+
+```bash
+.claude/skills/run-hk-taxi-q/drive.sh --seconds=6 --shots=4.2 \
+  --hold=accelerate@0.3+5.7 --hold=steer_right@3.0+1.5 --hold=drift@3.0+1.5 \
+  --out=build/driver/drift
+```
+
+The whole region from the air, no car involved:
+
+```bash
+.claude/skills/run-hk-taxi-q/drive.sh --scene=res://scenes/dev/city_preview.tscn \
+  --seconds=1 --shots=0.8 --camera=100,220,520 --look=250,0,50 --out=build/driver/preview
+```
+
+Runs are **deterministic**. The clock reads the engine's physics-frame counter rather than
+accumulating per iteration, so nothing that parks the driver for more than a tick — a screenshot, a
+slow frame, a batch of catch-up steps — shifts the timeline. Two runs either side of a full asset
+rebuild matched to the centimetre. You can diff telemetry between runs and trust the difference.
+
+Bad input is refused rather than absorbed: a non-numeric `--seconds`, a flag with no value, a shot
+past the end of the run, an unknown action name. Requested shot times closer than 0.01 s would
+write the same filename, so they are merged and the surviving list is printed as `shots:`.
+
+### Telemetry without a window
+
+Faster, and works over SSH. Screenshots are refused in this mode, not attempted — see Gotchas.
+
+```bash
+godot --headless --path game --script "$PWD/.claude/skills/run-hk-taxi-q/driver.gd" -- \
+  --seconds=3 --hold=accelerate@0+3
+```
+
+## Check
+
+```bash
+tools/check.sh                 # gdformat, import, GDScript warnings, 3 asset verifiers — ~90 s
+.venv/bin/ruff check . && .venv/bin/ruff format --check .
+cd etl && ../.venv/bin/pytest -q
+```
+
+`tools/check.sh` is the only Godot route that fails on error — read its exit code, never its
+output. `VERIFY_GENERATED=0` skips the three asset verifiers for a clone with no city built.
+
+## Run — in a browser
+
+Verified end to end: exported, served, loaded in Chrome, taxi rendered on the road.
+
+```bash
+tools/export.sh web            # ~1 min, writes build/web/ (51 MB .pck)
+tools/serve_web.py             # then http://127.0.0.1:8060
+```
+
+`tools/serve_web.py` exists because the build needs `SharedArrayBuffer`, which browsers gate behind
+`Cross-Origin-Opener-Policy` / `Cross-Origin-Embedder-Policy` headers that `python -m http.server`
+does not send. It boots into the drive scene with no console errors.
+
+The editor path (`open -a Godot --args --path "$PWD/game"`, then F6) is in the README. Prefer not
+to — see Gotchas.
+
+## Gotchas
+
+- **`--script` resolves relative paths against `res://`, not your shell.** `--script
+  .claude/skills/…/driver.gd` fails with `File not found` because Godot looks for it inside
+  `game/`. An absolute path works from anywhere; `drive.sh` builds one.
+- **`--headless` hangs on screenshots, it does not error.** The dummy renderer never draws, so
+  `RenderingServer.frame_post_draw` never fires and the first capture waits forever with no output.
+  `driver.gd` refuses the combination up front, and bounds every capture at 600 physics ticks so
+  any other stalled renderer fails with a message instead of hanging. If you write your own Godot
+  tool, never `await` that signal unbounded.
+- **GDScript lambdas capture locals by value.** A lambda connected to a signal cannot report back
+  by assigning to a local in the enclosing function — the write lands on its own copy. It cost a
+  screenshot that was written and then reported as a renderer failure. Use a field, or a bound
+  method.
+- **GDScript's `%` format has no `%g`,** and an unknown specifier is not an error: the string comes
+  out verbatim, so a failure message prints `%g` where the number should be. Stick to `%s`, `%d`,
+  `%f`.
+- **Godot exits `0` when a script fails to parse.** `quit(1)` never runs, so a broken tool reports
+  success. `drive.sh` greps its own output for compile failures and supplies the exit code, the
+  same trick `tools/check.sh` uses and for the same reason. Never read raw `godot` output and call
+  it a pass.
+- **Autoloads do not exist in `_init`.** Under `--script`, `root.has_node("InputRouter")` is false
+  until after the first `process_frame`. Anything touching the action map has to wait a frame.
+- **`--camera` is ignored in `city_drive.tscn`.** The chase camera rewrites the transform every
+  frame. It only bites in the preview scenes.
+- **`--hold` cannot fly the preview camera.** `free_look_camera.gd` reads
+  `Input.is_physical_key_pressed` directly rather than the action map, so `Input.action_press` —
+  how everything else here is driven — moves it not at all. Use `--camera` / `--look`.
+- **Six seconds of full throttle leaves the carriageway.** The default run tops 56 kph and clips
+  something at ~5 s. There is no terrain: everything that is not road is void, and the kerbs are
+  0.15 m and mountable by design. `drive_harness.gd` respawns the car after a 25 m fall and says so
+  on stdout.
+- **The window steals focus** for the length of the run. Nothing to be done about it on macOS.
+- **A headless export left `game/project.godot` and `game/export_presets.cfg` untouched** in this
+  session, contrary to the blanket warning in `CLAUDE.md` — but that warning is about the *editor*,
+  which definitely rewrites them and strips their comments. Run `git status` after either, and
+  restore per `docs/ARCHITECTURE.md` if they moved. Driver runs never touch them.
+- **`build/` is gitignored**, so screenshots and web builds never dirty the tree.
+
+## Troubleshooting
+
+| Symptom | Cause and fix |
+|---|---|
+| `FAIL no usable city at …/city.json` | Fresh clone, or a `city.json` older than the current schema. The warning printed just above it names the fix. |
+| `FAIL vehicle fell N m below its spawn` | No collider under the start line, or it drove off the map. The message carries the rebuild command. |
+| `FAIL … wants a number` / `needs a value` | A malformed flag. Nothing ran; fix and re-invoke. |
+| `FAIL no frame drawn in N ticks` | The renderer stopped producing frames. Not headless (that is refused earlier) — suspect the GPU or an occluded window. |
+| `FAIL … is flat (N colours)` | The frame rendered nothing. Usually a missing city; check `game/assets/generated/` is populated. |
+| `FAIL --shots=8 is past the end of a 6 s run` | Raise `--seconds` or lower `--shots`. |
+| `FAIL no such input action 'turbo'` | Use the six action names above. |
+| Run hangs with no output after `scene:` | You invoked `godot` directly with `--headless` and `--shots`, bypassing the guard. Drop one. |
+| `godot not found as 'godot'` | Not on PATH. `brew install --cask godot`, or set `GODOT=`. |
+| `cannot serve on port 8060: Address already in use` | A `serve_web.py` is already running. It will not pick another port; kill the old one or just use it. |
+| `ERROR: Attempt to open script 'res://.claude/…' … File not found` | Relative `--script` path. Make it absolute. |
