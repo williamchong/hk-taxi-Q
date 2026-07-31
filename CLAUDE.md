@@ -68,7 +68,9 @@ Common emoji for this project:
 ## Conventions
 
 - Python: `ruff` for lint/format, type hints on public functions, `pytest` for tests.
-- GDScript: `snake_case` files and functions, `PascalCase` classes, static typing (`var x: int`).
+- GDScript: `snake_case` files and functions, `PascalCase` classes, static typing (`var x: int`;
+  `:=` counts). `gdformat` owns layout — do not hand-format around it. Untyped declarations fail
+  the build, so this is enforced, not advisory.
 - Generated assets go to `game/assets/generated/` and are **gitignored** — they are build output.
 - ⚠️ Opening the Godot editor or running an export rewrites `game/project.godot` and
   `game/export_presets.cfg`, stripping their comments. Never commit either as a side effect; see
@@ -82,8 +84,9 @@ Common emoji for this project:
   `ruff.toml` extends the ETL rules to `tools/*.py`; running ruff from `etl/` skips them), and
   `pytest` from `etl/`.
 - ETL changes: the pipeline runs end-to-end on the Wan Chai config without errors.
-- Godot changes: the project opens without script errors, the target scene runs, and the three
-  headless checks pass — `verify_city.gd`, `verify_tiles.gd`, `verify_road_surface.gd`.
+- Godot changes: `gdformat --check` passes over `game/**/*.gd`, the project imports without script
+  errors (GDScript warnings are errors — see `docs/ARCHITECTURE.md`), the target scene runs, and
+  the three headless checks pass — `verify_city.gd`, `verify_tiles.gd`, `verify_road_surface.gd`.
 - Update `docs/PROGRESS.md` — task status, plus any new decision or open question.
 
 ## Where to look

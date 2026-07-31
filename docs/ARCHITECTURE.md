@@ -68,6 +68,61 @@ directional shadow cascade.
 **Autoloads:** `FpsCounter` (debug builds, or `--fps`) and `InputRouter`. Both run every frame for
 the life of the process, so treat them as hot-path code.
 
+### GDScript warnings
+
+The `[debug]` block promotes twenty GDScript warnings to errors, which makes
+`godot --headless --path game --import` fail the build on any of them. This is the engine's own
+type-aware checker, and the only one available that resolves types at all: a grammar-level linter
+sees `basis.z` as an identifier and a dot, where the engine sees a `Vector3` on a `Basis`.
+
+**It is not a bug-catcher, and should not be trusted as one.** None of the four defects recorded
+under `P0-5b` / `P0-5c` — inverted steering sign, framerate-dependent drag, an `@export`ed
+`Node3D` silently null from a hand-authored `.tscn`, wheel raycasts accepting wall faces — would
+have been caught by this or by any other linter. They were sign errors and wrong assumptions, and
+the thing that caught them was a review pass and a measurement. The warnings are worth enforcing
+because they are free and type-aware, not because they cover that class of risk.
+
+**Level 1 is invisible.** Warnings only reach stdout at level `2`. A warning left at `1` shows up
+in the editor's script panel and nowhere else — and the contributor workflow is deliberately
+headless, so a `1` here would be decorative. Every warning is therefore either enforced at `2` or
+absent from the file, and the list below is exhaustive as to intent.
+
+**Enforced (`=2`).** All twenty passed on the codebase as it stood when they were switched on, so
+adopting them cost no code changes:
+
+| Group | Warnings |
+|---|---|
+| Typing | `untyped_declaration` — the one hard convention in `CLAUDE.md` that no third-party tool can check |
+| Shadowing | `shadowed_variable`, `shadowed_variable_base_class`, `confusable_identifier`, `confusable_local_declaration` |
+| Numerics | `integer_division`, `narrowing_conversion` — the arithmetic that silently truncates under a physics tick |
+| Dead code | `unused_variable`, `unused_parameter`, `unused_local_constant`, `unused_private_class_variable`, `unused_signal` |
+| No-ops | `standalone_expression`, `standalone_ternary`, `incompatible_ternary`, `redundant_await` |
+| Node wiring | `get_node_default_without_onready`, `onready_with_export` — neighbours of the `P0-5c` null-node bug, though neither would have caught it |
+| Overrides | `native_method_override`, `int_as_enum_without_cast`, `int_as_enum_without_match` |
+
+**Deliberately not enforced**, with counts measured at the time:
+
+- `inferred_declaration` (~25 hits). It flags `:=`, which *is* static typing — just inferred. The
+  `CLAUDE.md` rule asks for static types, not for spelling every one of them out, and rewriting
+  `const _ONE_WAY := Color(...)` to name its type buys no safety.
+- `unsafe_method_access`, `unsafe_property_access`, `unsafe_cast`, `unsafe_call_argument`
+  (~21 hits between them) and `return_value_discarded` (~8). Both trace to a boundary the design
+  chose: generated JSON arrives as `Variant`, and `Packed*Array.append()` returns a `bool` nobody
+  reads. Enforcing them would mean threading typed locals through every loader for no defect
+  caught. Revisit if the data contract ever gains a typed loading layer.
+
+### GDScript formatting
+
+`gdformat` (from `gdtoolkit`, in the `dev` extra) is the GDScript counterpart to `ruff format`, and
+is run the same way — `--check` in the contributor checklist. Its default line length is 100,
+matching `ruff`, so it needs no config file.
+
+**`gdlint` is installed but deliberately not wired into the checks.** Run against the codebase it
+reported 17 problems, 16 of them the single cosmetic rule `class-definitions-order` — acting on
+them would mean reordering six commented preview scripts for no behavioural gain. It also cannot
+check static typing, which is the convention that actually matters here. `gdparse` is redundant
+outright: `--import` already parses every script with the engine's own authoritative parser.
+
 ---
 
 ## Repo layout

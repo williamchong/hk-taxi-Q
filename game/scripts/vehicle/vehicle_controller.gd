@@ -60,7 +60,9 @@ func _ready() -> void:
 	# as all-zeroes. These two would fail as a divide-by-zero and a dead spring
 	# respectively, which is worth catching here rather than in the physics.
 	assert(profile.wheel_radius_m > 0.0, "HandlingProfile.wheel_radius_m is zero.")
-	assert(profile.suspension_frequency_hz > 0.0, "HandlingProfile.suspension_frequency_hz is zero.")
+	assert(
+		profile.suspension_frequency_hz > 0.0, "HandlingProfile.suspension_frequency_hz is zero."
+	)
 
 	for child: Node in find_children("*", "WheelMount", true, false):
 		_wheels.append(child as WheelMount)

@@ -83,11 +83,17 @@ do. The import step is required, not optional — it builds the gitignored `game
 which the freshly synced `.glb` files have no import sidecars:
 
 ```bash
+gdformat --check game                        # layout, the GDScript ruff format
 godot --headless --path game --import        # ~8 s cold, 196 assets
 godot --headless --path game --script res://tools/verify_city.gd
 godot --headless --path game --script res://tools/verify_tiles.gd
 godot --headless --path game --script res://tools/verify_road_surface.gd
 ```
+
+The import step doubles as the GDScript linter: twenty engine warnings are set to *error* in
+`project.godot`, including untyped declarations, so a type slip fails the build rather than
+scrolling past. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the list and for what was
+deliberately left out.
 
 **Export and play it in a browser.**
 

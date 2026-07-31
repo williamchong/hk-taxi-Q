@@ -37,8 +37,10 @@ func _ready() -> void:
 		var road_class: Variant = classes.get(segment["class"])
 		if road_class == null:
 			push_error(
-				'Segment "%s" names undefined road class "%s".'
-				% [segment["name"], segment["class"]]
+				(
+					'Segment "%s" names undefined road class "%s".'
+					% [segment["name"], segment["class"]]
+				)
 			)
 			continue
 		_build_segment(segment, road_class, layout["kerb"])
@@ -58,9 +60,7 @@ func _load_layout() -> Dictionary:
 	# Declaring a schema_version and never checking it is worse than omitting it.
 	var version: int = int(layout.get("schema_version", -1))
 	if version != SUPPORTED_SCHEMA:
-		push_error(
-			"Grey-box layout schema_version %d, expected %d." % [version, SUPPORTED_SCHEMA]
-		)
+		push_error("Grey-box layout schema_version %d, expected %d." % [version, SUPPORTED_SCHEMA])
 		return {}
 	return layout
 
@@ -112,8 +112,7 @@ func _build_segment(segment: Dictionary, road_class: Dictionary, kerb: Dictionar
 		for side: float in SIDES:
 			_add_box(
 				Transform3D(
-					basis,
-					mid + basis.x * side * (width + kerb_w) * 0.5 + basis.y * kerb_h * 0.5
+					basis, mid + basis.x * side * (width + kerb_w) * 0.5 + basis.y * kerb_h * 0.5
 				),
 				Vector3(kerb_w, kerb_h, length),
 				kerb_material,
@@ -139,9 +138,7 @@ func _footprint(centre: Vector3, basis: Basis, width: float, length: float) -> R
 	var half_z: Vector3 = basis.z * length * 0.5
 	var extent_x: float = absf(half_x.x) + absf(half_z.x)
 	var extent_z: float = absf(half_x.z) + absf(half_z.z)
-	return Rect2(
-		centre.x - extent_x, centre.z - extent_z, extent_x * 2.0, extent_z * 2.0
-	)
+	return Rect2(centre.x - extent_x, centre.z - extent_z, extent_x * 2.0, extent_z * 2.0)
 
 
 func _build_buildings(layout: Dictionary) -> void:

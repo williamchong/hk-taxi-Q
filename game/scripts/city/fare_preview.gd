@@ -115,7 +115,9 @@ func _ready() -> void:
 			# the game is an id that names no edge.
 			unresolved.append("%s -> %s" % [node.get("id", "?"), node.get("nearest_edge", "none")])
 			continue
-		var along: Vector3 = _along(edges[int(node["nearest_edge"])], float(node.get("edge_t", 0.0)))
+		var along: Vector3 = _along(
+			edges[int(node["nearest_edge"])], float(node.get("edge_t", 0.0))
+		)
 		if _tether(surface, at, along):
 			tethered += 1
 
@@ -237,9 +239,7 @@ func _pin(surface: SurfaceTool, at: Vector3, colour: Color) -> void:
 ## A flat ribbon from the node to its snapped point on the road.
 func _tether(surface: SurfaceTool, from: Vector3, to: Vector3) -> bool:
 	var lift := Vector3.UP * tether_lift_m
-	return PreviewDraw.ribbon(
-		surface, from + lift, to + lift, tether_width_m * 0.5, _TETHER
-	)
+	return PreviewDraw.ribbon(surface, from + lift, to + lift, tether_width_m * 0.5, _TETHER)
 
 
 func _case_for(node: Dictionary) -> Case:

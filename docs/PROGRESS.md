@@ -3,7 +3,7 @@
 Living document. **Update this whenever a task changes status, a decision is made, or an open
 question is answered.** Newest entries at the top of each log.
 
-Last updated: 2026-07-31 (`P1-7` done — **Phase 1 gate passed**; Godot builds the city from `city.json`)
+Last updated: 2026-07-31 (GDScript warnings promoted to errors; `gdformat` adopted, `gdlint` declined)
 
 ---
 
@@ -533,6 +533,50 @@ below.
 ---
 
 ## Decision log
+
+### 2026-07-31 — GDScript linting: **the engine's own warnings**, plus `gdformat`, and no `gdlint`
+
+Evaluated `gdtoolkit` (Scony) as a GDScript lint/format toolchain. **Adopted `gdformat` only, and
+found something better than the linter along the way.**
+
+`gdlint` reported 17 problems over the 24 scripts, **16 of them the single rule
+`class-definitions-order`** — consts and signals declared after `@export` vars in six preview
+scripts. Acting on that means reordering heavily-commented files for no behavioural gain, which is
+the sort of out-of-scope churn `CLAUDE.md` prohibits. The 17th was one long line, and `gdformat`
+fixes that anyway. `gdparse` is redundant outright: `--import` already parses every script with the
+engine's authoritative parser, which is exactly the check `dea1f36` was about.
+
+**The real find: `game/project.godot` had no `[debug]` section at all**, so Godot's own GDScript
+warnings had been sitting at defaults the whole time — including `untyped_declaration`, *off*.
+Static typing is a hard `CLAUDE.md` convention that `gdlint` has no rule for and, being a
+grammar-level tool with no type resolution, could never have one. Twenty warnings are now errors.
+**All twenty passed on the codebase as it stood**, so the whole gate cost zero code changes — the
+convention was already being followed by hand, it just wasn't enforced.
+
+**Measured, not assumed: warning level 1 is invisible headlessly.** Only level `2` reaches stdout;
+a `1` shows up in the editor script panel and nowhere else. Since the contributor workflow is
+deliberately headless — `CLAUDE.md` actively discourages opening the editor — a warning left at `1`
+would be pure decoration. Everything is therefore at `2` or absent. Verified by planting an untyped
+variable and watching `--import`, `--script` and `--export-debug` all fail on it.
+
+**Left unenforced on purpose:** `inferred_declaration` (~25 hits) flags `:=`, which is static
+typing already; and the `unsafe_*` family plus `return_value_discarded` (~29 between them) trace to
+the JSON data contract handing back `Variant`. Both are recorded in `docs/ARCHITECTURE.md` with the
+condition for revisiting.
+
+**Honest limit, worth stating so the gate is not over-trusted:** none of the four `P0-5b`/`P0-5c`
+bugs — inverted steering sign, framerate-dependent drag, the null `@export`ed node, wheel raycasts
+hitting walls — would have been caught by any of this. Those were sign errors and wrong
+assumptions; a review pass caught them. This gate is cheap insurance, not a safety net.
+
+`gdtoolkit` is pinned `>=4.5,<5` in the `dev` extra. It is a single-maintainer reimplementation of
+the GDScript grammar released two to four times a year, and 4.5.0 predates both Godot 4.6 and 4.7 —
+it parsed all 24 files without complaint today, but it trails the engine and a future syntax
+feature could block the build on a *formatter*. That is the standing risk of the dependency, and
+the reason nothing beyond `gdformat` depends on it.
+
+**Open question:** there is still no CI. Every check here is a local convention in `CLAUDE.md` and
+`README.md`, enforced by whoever remembers to run it.
 
 ### 2026-07-31 — `P1-7`: the manifest is the **only** route to the tiles, and the georeference is now checked by the engine
 

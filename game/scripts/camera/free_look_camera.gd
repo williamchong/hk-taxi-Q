@@ -86,8 +86,9 @@ func _axis(positive: Key, negative: Key) -> float:
 	# Physical keycodes, matching how `project.godot` binds the game's own
 	# actions. Layout-dependent `is_key_pressed` would turn WASD into ZQSD on an
 	# AZERTY keyboard while the car kept its original keys.
-	return float(Input.is_physical_key_pressed(positive)) - float(
-		Input.is_physical_key_pressed(negative)
+	return (
+		float(Input.is_physical_key_pressed(positive))
+		- float(Input.is_physical_key_pressed(negative))
 	)
 
 

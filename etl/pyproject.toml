@@ -19,7 +19,15 @@ dependencies = [
 # No glTF library: P1-2 reads and writes the format directly (`pipeline/gltf.py`
 # explains why a dependency would have saved no work).
 [project.optional-dependencies]
+# gdtoolkit formats GDScript, which has nothing to do with the ETL. It lives
+# here because this is the repo's only Python manifest, the same reason the
+# root ruff.toml extends this file. Pinned below 5 deliberately: it is a
+# third-party reimplementation of the GDScript grammar by a single maintainer,
+# released two to four times a year, so it trails the engine — 4.5.0 predates
+# both Godot 4.6 and 4.7. Only `gdformat` is wired into the checks; see
+# docs/ARCHITECTURE.md "GDScript warnings" for what was left out and why.
 dev = [
+    "gdtoolkit>=4.5,<5",
     "pytest>=8.0",
     "ruff>=0.6",
 ]

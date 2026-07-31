@@ -43,8 +43,10 @@ func _ready() -> void:
 	_vehicle = get_node_or_null(vehicle_path) as VehicleController
 	if _vehicle == null:
 		push_warning(
-			"Drive harness found no VehicleController at '%s'; nothing will be caught."
-			% vehicle_path
+			(
+				"Drive harness found no VehicleController at '%s'; nothing will be caught."
+				% vehicle_path
+			)
 		)
 		set_physics_process(false)
 		return

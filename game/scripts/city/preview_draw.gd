@@ -29,9 +29,7 @@ static func ribbon(
 	var side: Vector3 = along.normalized().cross(Vector3.UP) * half_width
 
 	surface.set_color(colour)
-	for corner: Vector3 in [
-		from - side, from + side, to + side, from - side, to + side, to - side
-	]:
+	for corner: Vector3 in [from - side, from + side, to + side, from - side, to + side, to - side]:
 		surface.add_vertex(corner)
 	return true
 

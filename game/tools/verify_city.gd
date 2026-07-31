@@ -79,7 +79,9 @@ func _init() -> void:
 ## definitions drifting in the meantime.
 func _check_documents(manifest: Manifest) -> PackedStringArray:
 	var problems: PackedStringArray = []
-	problems.append_array(_check_document("road graph", manifest.road_graph_path, GeneratedRoadGraph.PATH))
+	problems.append_array(
+		_check_document("road graph", manifest.road_graph_path, GeneratedRoadGraph.PATH)
+	)
 	problems.append_array(
 		_check_document("road surface", manifest.road_surface_path, GeneratedRoadSurface.PATH)
 	)
@@ -134,8 +136,10 @@ func _check_tile(manifest: Manifest, tile: Manifest.Tile) -> PackedStringArray:
 			# are checked against `declared` below, which this pins to LOD0.
 			if not envelope.encloses(measured):
 				problems.append(
-					"%s: LOD0 spans %s, outside bounds_game %s"
-					% [tile.id, measured, manifest.bounds]
+					(
+						"%s: LOD0 spans %s, outside bounds_game %s"
+						% [tile.id, measured, manifest.bounds]
+					)
 				)
 
 			# The manifest's aabb is the full-detail mesh's, so tier 0 must agree

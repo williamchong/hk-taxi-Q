@@ -130,9 +130,7 @@ func _polyline(edge: Dictionary) -> PackedVector3Array:
 
 
 ## Chevrons pointing along the edge, at `arrow_spacing_m` intervals.
-func _arrows_along(
-	surface: SurfaceTool, points: PackedVector3Array, half_width: float
-) -> int:
+func _arrows_along(surface: SurfaceTool, points: PackedVector3Array, half_width: float) -> int:
 	var length: float = 0.0
 	for index: int in points.size() - 1:
 		length += points[index].distance_to(points[index + 1])
