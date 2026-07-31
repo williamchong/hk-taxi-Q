@@ -17,9 +17,43 @@
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = ExtResource("1_env")
 
+; `directional_shadow_mode = 0` is SHADOW_ORTHOGONAL — one cascade, the desktop
+; tier ART_DESIGN.md "Lighting" has always specified. A .tscn stores the enum as
+; a bare integer, so the name has to live here or the value is unreadable.
+;
+; It was unset, and Godot's default is 2 (four PSSM cascades). Measured at the
+; worst-residency point, against a 150,374-primitive main pass:
+;
+;   shadows off        150,374   1.00x
+;   1 cascade @ 400 m  299,976   2.00x
+;   2 cascades @ 400 m 389,522   2.59x
+;   4 cascades @ 600 m 617,087   4.10x   <- what this replaces
+;
+; Cascade count is the lever. Distance is not: 150, 250 and 400 m measured
+; *identically* on a driver run, so max_distance is chosen purely for sharpness.
+; One cascade spreads the whole shadow map over it, so nearer is crisper —
+; roughly 0.055 m per texel here against 0.092 m at 250 m and 0.147 m at 400 m.
+;
+; 150 m rather than the 250 m that was tried first, and the reason is on screen
+; rather than in the arithmetic: at 250 m the HKCEC shadow across Expo Drive
+; East came out visibly banded, the shadow map's own texels showing through the
+; filter on a large soft shadow. At 150 m it is smooth and matches the four-
+; cascade baseline, which is what the texel figures predict — 0.055 m is near
+; parity with the old cascade 0's 0.044 m. Shots in build/driver/shadow-*.
+;
+; 600 m also exceeded both the chase camera's 400 m far plane and the streamer's
+; 400 m unload, so part of that pass drew shadows for geometry no frame could
+; contain.
+;
+; shadow_bias, shadow_normal_bias, directional_shadow_pancake_size, shadow_blur
+; and fade_start are left at engine defaults. Peter-panning was the artefact to
+; expect — Godot scales directional bias by cascade extent, so one 150 m cascade
+; carries a larger world-space bias than the old ~60 m cascade 0 — and a matched
+; pair with the car in open sun shows its shadow still attached. See PROGRESS.md.
 [node name="Sun" type="DirectionalLight3D" parent="."]
 transform = Transform3D(0.866025, -0.25, 0.433013, 0, 0.866025, 0.5, -0.5, -0.433013, 0.75, 0, 300, 0)
 light_color = Color(1, 0.92, 0.79, 1)
 light_energy = 1.4
 shadow_enabled = true
-directional_shadow_max_distance = 600.0
+directional_shadow_mode = 0
+directional_shadow_max_distance = 150.0

@@ -65,6 +65,14 @@ Godot already ships a `.mobile` override of `0` for it, and feature overrides be
 base value — so setting the base only degrades the desktop tier, which is specified to get one
 directional shadow cascade.
 
+**Also deliberately not set:** `rendering/lights_and_shadows/directional_shadow/size`. The engine
+default is already 4096 (`.mobile` 2048), which is what the shadow texel figures in
+`scenes/world/golden_hour.tscn` assume, and writing a base value equal to the default is noise. The
+next step up, 8192², is ~268 MB of shadow map against a 512 MB desktop texture budget. There are no
+`rendering/lights_and_shadows/*` keys in `project.godot` at all, and the shadow work in `P2-1` added
+none — the cascade count and distance are node properties on the one shared sun, which is where the
+editor renders them.
+
 **Autoloads:** `FpsCounter` (debug builds, or `--fps`) and `InputRouter`. Both run every frame for
 the life of the process, so treat them as hot-path code.
 
@@ -643,7 +651,14 @@ node in the same tick.
 
 ## Performance budget
 
-Two tiers, selected at runtime by platform.
+Two tiers.
+
+⚠️ **"Selected at runtime by platform" is what this said, and it is not true.** Nothing in
+`game/scripts/` reads `OS.has_feature`, `OS.get_name` or any quality setting — the only platform
+branching in the project is the `.mobile` / `.web` suffixes in `project.godot`. **One tier ships
+today**, the desktop one. The mobile tier is unbuilt and blocked on `P0-3b`, which needs a signing
+identity and the two floor handsets. Corrected here rather than left as an aspiration written in the
+present tense.
 
 | Metric | Mobile tier | Desktop tier |
 |---|---|---|
