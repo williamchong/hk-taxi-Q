@@ -28,7 +28,7 @@ const GeneratedDocument = preload("res://scripts/city/generated_document.gd")
 const PATH: String = "res://assets/generated/city.json"
 
 ## Schema this understands, matching `CITY_SCHEMA` in `etl/pipeline/export.py`.
-const SCHEMA_VERSION: int = 1
+const SCHEMA_VERSION: int = 2
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -77,6 +77,16 @@ var road_graph_path: String
 var road_surface_path: String
 var fares_path: String
 
+## Drawn half-width of the carriageway, in metres, keyed by road-graph edge id.
+##
+## Not derivable from `roadgraph.json`: that publishes the **authored** street
+## width, and `P1-4` draws the ribbon at `width_m x widen_for(speed_limit_kph)`.
+## The widening lives on the ETL's surface style, which `config.py` deliberately
+## keeps out of the graph — so the drawn width reaches the game through the
+## manifest or not at all. `RoadGraph` (`P2-2`) needs it to put a car in the
+## nearside lane rather than on the seam where opposed ribbons overlap.
+var carriageway_half_width_m: Dictionary[int, float] = {}
+
 
 ## The manifest, or null with a pushed message.
 static func load_manifest() -> CityManifest:
@@ -91,6 +101,10 @@ static func load_manifest() -> CityManifest:
 	manifest.road_graph_path = _resolve(document.get("road_graph", ""))
 	manifest.road_surface_path = _resolve(document.get("road_surface", ""))
 	manifest.fares_path = _resolve(document.get("fares", ""))
+	for entry: Dictionary in document.get("carriageway", []):
+		manifest.carriageway_half_width_m[int(entry.get("edge", -1))] = float(
+			entry.get("half_width_m", 0.0)
+		)
 
 	var extent: Dictionary = document.get("bounds_game", {})
 	manifest.bounds = _box(_point(extent.get("min")), _point(extent.get("max")))

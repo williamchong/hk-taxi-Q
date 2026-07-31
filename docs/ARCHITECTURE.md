@@ -248,7 +248,7 @@ The interface between ETL and game. **Versioned — change both sides together a
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "city_id": "hong_kong",
   "region_id": "wan_chai",
   "source_crs": "EPSG:2326",
@@ -265,6 +265,7 @@ The interface between ETL and game. **Versioned — change both sides together a
   ],
   "road_graph": "roadgraph.json",
   "road_surface": "roads.glb",
+  "carriageway": [{ "edge": 651, "half_width_m": 5.12 }],
   "fares": "fares.json",
   "etl_version": "0.1.0",
   "generated_utc": "2026-07-30T20:04:03Z"
@@ -284,6 +285,23 @@ wants the tile list.
 Each of the three is separately versioned below, and `export.py` writes the manifest that points
 at them. A build ships exactly what the manifest names: the three documents and every path in
 `tiles[].lods` — 199 files and **102.6 MB** for Wan Chai, of which LOD0 is 74.7 MB.
+
+⚠️ **`carriageway` is the drawn half-width per edge, and the game cannot derive it** (schema 2,
+`P2-2`). `roadgraph.json` publishes the **authored** street — `lanes × lane_width_m` — while `P1-4`
+draws the ribbon at `width_m × widen_for(speed_limit_kph)`, 1.6× by default. The widening lives on
+the ETL's surface style, and `etl/pipeline/config.py` keeps it there deliberately: *"the graph is a
+description of the city, this is how wide and how kerbed to draw it. A change here never changes
+`roadgraph.json`."* So the drawn width reaches the runtime through the manifest or not at all.
+
+`surface.py` records it — the one place the widening is applied — and `export.py` carries it here
+without recomputing, because a second evaluation of `widen_for` is a second thing to keep in step
+with the config. It is the same category as `tiles[].aabb`: geometry the runtime cannot work out
+for itself, measured once by the stage that drew it.
+
+Without it a lane centre falls short by a quarter of the widening — **0.96 m on a two-lane street**,
+putting a car that much nearer the seam where opposed ribbons overlap and a suspension ray hunts
+between two coplanar triangles. `RoadGraph` warns and falls back to the authored width rather than
+failing, and `verify_road_graph.gd` treats the table's absence as an error.
 
 **The game must read the manifest to find its tiles — there is no fallback.** In the editor
 `res://` is a real directory and `DirAccess.get_files_at` lists it; in an exported build it is a
@@ -782,7 +800,9 @@ design.
 
 | Path | Role |
 |---|---|
-| `scripts/city/city_manifest.gd` | **`city.json`, typed.** The shipping route into the generated city: the tile list, their AABBs, and the resolved paths of the three documents |
+| `scripts/city/city_manifest.gd` | **`city.json`, typed.** The shipping route into the generated city: the tile list, their AABBs, the per-edge carriageway widths, and the resolved paths of the three documents |
+| `scripts/city/road_graph.gd` | **`RoadGraph` (`P2-2`).** One parse per scene, nearest-edge and lane-centre queries over a plan grid. Refuses off-grade edges — see `Q13` |
+| `scripts/city/road_graph_overlay.gd` | Dev: draws the resolved edge, lane centre and legal travel direction under the moving car |
 | `scripts/city/generated_road_surface.gd` | Dev locator for `roads.glb` — one definition, two readers |
 | `scripts/city/generated_road_graph.gd` | Same, for `roadgraph.json` |
 | `scripts/city/generated_fares.gd` | Same, for `fares.json`. Also holds the `kind` and `stand_category` spellings — the ETL is authoritative for those |
@@ -798,6 +818,7 @@ design.
 | `scenes/world/golden_hour.tscn` | The one lighting rig, per `ART_DESIGN.md`. Instance it rather than authoring a second Environment |
 | `tools/verify_tiles.gd` | Headless acceptance check for generated tiles — the mesh contract |
 | `tools/verify_city.gd` | Headless acceptance check for `city.json` — georeferencing, bounds, and the files it names |
+| `tools/verify_road_graph.gd` | Headless acceptance check for `RoadGraph`'s queries — the `Q13` refusal, edge resolution, lane placement against the published carriageway width, and query time against a 1 ms budget over a region-wide probe lattice |
 | `tools/verify_road_surface.gd` | Headless acceptance check for `roads.glb` — one draw call, UVs, trimesh collision |
 | `tools/generated_scene_import.gd` | Import fixup — see the `[importer_defaults]` row above |
 

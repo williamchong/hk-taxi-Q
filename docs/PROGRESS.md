@@ -3,7 +3,7 @@
 Living document. **Update this whenever a task changes status, a decision is made, or an open
 question is answered.** Newest entries at the top of each log.
 
-Last updated: 2026-07-31 (`Q13` narrowed — the ramps are in `INFRASTRUCTURE`, and sampling them beats inventing them)
+Last updated: 2026-08-01 (`P2-2`'s last acceptance criterion measured — nearest-edge is 45 µs at p99, against a 1 ms budget)
 
 ---
 
@@ -154,8 +154,9 @@ to answer, not Phase 1's.
 | `P1-5` | Fare nodes | ✅ **Done** | 29 nodes (14 stands, 15 PUDO) from 793 territory-wide points. All four acceptance criteria met and independently corroborated. Opened `Q14`, `Q15`. 297 tests, `ruff` clean. |
 | `P1-6` | Export and manifest | ✅ **Done** | `city.json` + `python -m pipeline`; whole region in 4.4 s, byte-reproducible, 199 files / 102.6 MB. Validation catches what no single stage can. Opened `Q16`. 323 tests, `ruff` clean. |
 | `P1-7` | Godot import | ✅ **Done** | **Phase 1 gate passed.** 65 tiles from `city.json`, georeferenced to 1 cm and checked in-engine by `verify_city.gd`. `DirAccess` tile listing deleted — it could never have worked in an export. 329 tests, `ruff` clean. |
-| `P2-*` | Driving the real city | 🟢 **Unblocked** | `P2-1`, `P2-2`, `P2-3` all have their deps met |
-| `P3-*` | Playable slice | ⬜ Blocked | Gated on `P2-2`, `P2-3` |
+| `P2-2` | `RoadGraph` runtime and debug overlay | ✅ **Done — all four criteria met** | One parse per scene, nearest-edge over a 25 m plan grid, lane centres from the **drawn** carriageway. Refuses all 60 off-grade edges (`Q13`), proven over 505 probes. Query time closed 2026-08-01: **p99 45 µs against a 1 ms budget**, timed over 15,865 region-wide probes. `verify_road_graph.gd` is the fourth verify tool. 331 tests, `ruff` clean. |
+| `P2-1`, `P2-3` | Streamer, vehicle on real geometry | 🟢 **Unblocked** | `P2-3` now has `P2-2`'s lane-centre query to spawn against |
+| `P3-*` | Playable slice | ⬜ Blocked | Gated on `P2-3`; `P2-2` cleared |
 
 Legend: ⬜ not started · 🟡 in progress · ✅ done · ❌ blocked
 
@@ -543,6 +544,146 @@ below.
 ---
 
 ## Decision log
+
+### 2026-08-01 — `P2-2`'s last acceptance criterion, measured: **p99 45 µs against a 1 ms budget**
+
+The criterion said sub-millisecond nearest-edge; the task shipped with it unmeasured and the gap
+recorded rather than closed. It is closed now, inside `verify_road_graph.gd` — so it is a check that
+runs on every `tools/check.sh` rather than a number someone wrote down once.
+
+| Population | n | p50 | p99 | max |
+|---|---|---|---|---|
+| Whole region — 10 m lattice, 14,107 hit / 1,758 miss | 15,865 | 14 µs | **45 µs** | 191–229 µs |
+| On the road — every drivable edge midpoint | 737 | 4–5 µs | 9–10 µs | 44–101 µs |
+
+**22× headroom on p99, and the criterion is met.** Two ranges are given because they are what varied
+across runs, which turns out to be the interesting part.
+
+**Probing the whole region rather than the road is the whole design, and the numbers say so.** A
+query on a centreline is won in the first ring; a query in the middle of a block finds nothing near
+it and expands rings until the 60 m radius bound stops it. So the misses are the expensive
+population — 1,758 of 15,865 lattice probes, 11%, which is more than the top 1% and therefore
+exactly what p99 lands in. A road-only probe would have reported **9 µs and called it the answer**,
+understating the real worst case by five times. Both populations are timed and both are printed.
+
+**The gate is p99, not max, and that was not a judgement call in the end — it was measured.** Across
+runs the maximum ranged **44 µs to 229 µs** while p99 moved by a single microsecond. The maximum is
+a fact about what else the machine was doing; the p99 over thousands of probes is a fact about the
+code. Max is printed anyway, because a pathological one is worth seeing, but gating on it would buy
+a flaky check for no information.
+
+**Proven capable of failing, twice, because in this repo that is not optional.** Tightening the
+budget to 20 µs produced a named failure and exit 1. Then a genuine regression: disabling
+`nearest_edge`'s ring early-exit — the optimisation whose comment claims a query would otherwise
+"scan every cell it is allowed to" — moved on-road p50 from **5 µs to 56 µs** and p99 from **10 µs
+to 117 µs**. That comment is now measured rather than asserted.
+
+⚠️ **And that second test found the limit of this check: the 11× regression stayed under budget.**
+117 µs is still comfortably sub-millisecond, so the gate would have passed a change that cost an
+order of magnitude. This is an acceptance criterion, not a regression alarm, and the distinction is
+recorded in the tool. Catching that drift means comparing the printed distribution against the table
+above — which is why the numbers are printed on success rather than only on failure. Tightening the
+budget until the regression fails was considered and rejected: it would invent a requirement `P2-2`
+never set, and the honest place for a performance-regression gate is `P2-6`, with the device floor
+in hand.
+
+**One incidental finding worth keeping for `P2-6`.** With the early-exit disabled, on-road queries
+became *slower* than region-wide ones — p50 56 µs against 48 µs — which inverts the normal
+relationship. The reason is that a cell on a road holds many segments while a cell inside a block
+holds none, so scanning all 49 cells unconditionally costs most where the roads are densest. The
+early-exit is worth the most exactly where the car actually drives.
+
+### 2026-07-31 — `P2-2`: the drawn carriageway width is a **contract gap**, and the overlay is what found it
+
+`RoadGraph` lands the queries the previews were faking: one parse per scene held through a
+`WeakRef` — so a scene means a parse, without pinning 6 MB for the life of the process the way
+`fare_preview.gd` warned against — nearest-edge over a 25 m plan grid, lane centres, and typed
+accessors. `road_preview.gd` and `fare_preview.gd` now read it instead of parsing `roadgraph.json`
+twice in one scene, which is the note `P1-6` left for this task.
+
+⚠️ **That last sentence was false when first written, and review caught it.** Both previews took
+`RoadGraph.shared()` into a **local**. `RoadGraph` is `RefCounted` and the cache is weak, so the
+only strong reference died when `_ready` returned and the next sibling re-parsed — `city_preview.tscn`
+still read the document twice, which is exactly the cost the class exists to remove. A weak cache
+only works if consumers hold a member; both previews and the overlay now do. Worth remembering for
+`P3-1`, which will take the same accessor.
+
+**`Q13` is enforced rather than described.** Only level-0 segments enter the index, so
+`nearest_edge` cannot return one of the 60 off-grade edges, while `polyline_of` still serves all
+797 because `P3-3`'s traffic will need them. `verify_road_graph.gd` probes **every vertex of every
+off-grade edge** — 505 of them, the exact places a flyover centreline is nearest in plan to a car
+underneath it. Proven non-vacuous by indexing off-grade segments on purpose: 482 of 505 probes
+resolved to a flyover and the tool named edge 62.
+
+**Three more defects came out of review, and the overlay found a fourth from the driver's seat.**
+74 of the 797 edges publish `{"en": null}` for their road name, and `str(null)` in Godot is the
+literal string `"<null>"` — so the `is_empty()` guard meant to substitute "(unnamed)" never fired
+for 9% of the network. `has_carriageway_widths()` documented "every" and implemented "any", which
+would have let a one-entry table pass the gate that exists to catch a missing one. And `_fill`
+re-walked the polyline twice to re-derive the segment `nearest_edge` had already won — 14% of a
+typical query and 31% on a long edge, but the real cost was that the second walk could pick a
+*different* segment on a tie, leaving `t` and `forward` describing somewhere other than `point`.
+
+**The fourth is a naming problem, not a bug, and it is worth recording.** Driving a multi-lane
+street, the user observed that the green marker stays on the outermost lane whatever lane the car
+is in. It does, and it should: `lane_centre` is the **placement target** — where `P2-3` spawns and
+where `P3-3` will route traffic — not a tracker of the player's lane. **There is no runtime lane
+concept to track.** `lanes` is authored config keyed on speed limit, not published by Road Network
+v2, and nothing routes by it. The overlay called it "lane centre", which implied otherwise; it now
+says what it is and reports the car's own signed offset from the centreline beside it. Building
+lane tracking would have been inventing a mechanic ahead of any need for one.
+
+**The overlay is a deliverable, and it earned that on its first run.** It draws the resolved
+centreline, the nearside lane centre and the legal travel direction under the moving car, with the
+same facts as text so a screenshot carries them. At the HKCEC spawn it read `edge 651 EXPO DRIVE,
+t=0.599` — against `fares.json`'s published `nearest_edge 651, edge_t 0.598491` for stand `f_004`.
+Two derivations that share no code agreeing to three decimals.
+
+Then it disagreed. It reported the lane centre **1.60 m** off the centreline where
+`ARCHITECTURE.md` puts the spawn at **2.56 m**, and the car 0.96 m adrift.
+
+**The cause was a hole in the data contract, not a bug in the arithmetic.** `roadgraph.json`
+publishes `width_m` as the *authored* street — `lanes × lane_width_m` — while `P1-4` draws the
+ribbon at `width_m × widen_for(speed_limit_kph)`, 1.6× by default. The widening lives on the
+surface style, and `config.py` keeps it there on purpose: *"the graph is a description of the city,
+this is how wide and how kerbed to draw it. A change here never changes `roadgraph.json`."* So the
+game had no route to the width of the tarmac it was driving on, and a lane centre taken from the
+graph sat a quarter of the widening short — 0.96 m nearer the seam where opposed ribbons overlap
+and a suspension ray hunts between two coplanar triangles.
+
+**Three ways out were weighed and two rejected.**
+
+- **Publish the widening rules in `city.json`** — rejected. GDScript would have to reimplement
+  `widen_for` and `_by_fastest_rule`'s "fastest matching rule" semantics: two implementations of
+  one rule across a versioned interface, which is what the contract exists to prevent.
+- **Read lane geometry from the surface mesh UVs** — rejected *for this*, and worth keeping for
+  `P3-8`. `TEXCOORD_0` is built for lane questions, but it answers "which lane am I in?" — a
+  lookup — where `P2-2` needs "where is the lane centre?", which is the inverse and a search. It is
+  also undefined exactly where it would matter most: junction caps carry `(0, 0)`.
+- **Mirror the factor in a `.tres`** — rejected. Satisfies the tuning-as-data rule literally while
+  creating the drift this repo keeps paying for.
+
+**What shipped: publish the derived result, not the rule.** `surface.py` records the half-width it
+already computes in `_prepare` — the one place the widening is applied — as `carriageway` in
+`roadsurface.json` (schema 2). `export.py` carries it into `city.json` (schema 2) without
+recomputing, because a second `widen_for` call is a second thing to keep in step with the config.
+It is the same category as `tiles[].aabb`: geometry the runtime cannot derive, measured once by the
+stage that produced it. The graph/surface boundary is untouched.
+
+The result is a cross-check nothing was tuned to produce. `city_drive.tscn`'s spawn was derived by
+hand in `P1-7` from `width_m × widen / 4`; `RoadGraph` now computes the nearside lane centre from
+the published half-width and the overlay reports the car **0.00 m** from it.
+
+Absence of the table is an error in `verify_road_graph.gd` rather than a fallback, because
+`RoadGraph` degrades to the authored width — a wrong answer that looks like a right one. It warns
+and names the rebuild command.
+
+~~⚠️ **Not done here:** `P2-2`'s acceptance criterion says sub-millisecond nearest-edge and that is
+**not yet measured**. The index exists — 2311 segments over a 25 m grid, ring search that stops as
+soon as a ring cannot beat the incumbent — but no timing was taken. It belongs with `P2-6`'s
+measurement pass or a probe of its own.~~ **Measured 2026-08-01 and it belonged here after all** —
+p99 **45 µs** against the 1 ms budget, timed inside `verify_road_graph.gd` rather than deferred to
+`P2-6`. See the entry above.
 
 ### 2026-07-31 — `Q13` narrowed: the ramps **are** in the source, and sampling them beats inventing them
 

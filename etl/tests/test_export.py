@@ -99,6 +99,12 @@ class _Region:
                 "vertices": 48,
                 "bytes": 3,
                 "aabb": [[-4.0, -1.0, -4.0], [204.0, 2.0, 104.0]],
+                # The drawn half-width per edge, which `export.py` carries into
+                # `city.json` so the game can place a car in the nearside lane.
+                "carriageway": [
+                    {"edge": _EDGE_ID, "half_width_m": 5.12},
+                    {"edge": _EDGE_ID + 1, "half_width_m": 5.12},
+                ],
             },
             ROADGRAPH_NAME: {
                 "schema_version": ROADGRAPH_SCHEMA,
@@ -205,6 +211,16 @@ class TestAssembly:
         assert BUILDINGS_MANIFEST_NAME not in names
         assert SURFACE_MANIFEST_NAME not in names
         assert set(names) >= {ROADGRAPH_NAME, SURFACE_NAME, FARES_NAME}
+
+    def test_the_carriageway_widths_reach_the_manifest(self, region) -> None:
+        """Carried, not recomputed. A second evaluation of `widen_for` in
+        `export.py` would be a second thing to keep in step with the config."""
+        region.build()
+        surface = region.documents[SURFACE_MANIFEST_NAME]
+        assert region.manifest()["carriageway"] == surface["carriageway"]
+        assert {entry["edge"] for entry in region.manifest()["carriageway"]} == {
+            edge["id"] for edge in region.documents[ROADGRAPH_NAME]["edges"]
+        }
 
     def test_the_origin_is_the_region_transform(self, region) -> None:
         region.build()

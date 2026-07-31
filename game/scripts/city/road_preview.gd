@@ -14,7 +14,6 @@
 ## with the tiles.
 extends Node3D
 
-const GeneratedRoadGraph = preload("res://scripts/city/generated_road_graph.gd")
 const PreviewDraw = preload("res://scripts/city/preview_draw.gd")
 
 ## How to colour each edge.
@@ -48,16 +47,18 @@ const _TUNNEL := Color(0.35, 0.30, 0.55)
 const _FAST := Color(0.95, 0.35, 0.30)
 const _ARROW := Color(0.10, 0.10, 0.12)
 
+# A member, not a local. `RoadGraph` is `RefCounted` and `shared()` holds it
+# weakly, so a local would drop the last reference when `_ready` returns and the
+# next consumer in the same scene would parse the document all over again —
+# which is the cost this preview stopped paying.
+var _graph: RoadGraph = null
+
 
 func _ready() -> void:
-	var graph: Dictionary = GeneratedRoadGraph.load_graph()
-	if graph.is_empty():
+	_graph = RoadGraph.shared()
+	if _graph.is_empty():
 		return
-
-	var edges: Array = graph.get("edges", [])
-	if edges.is_empty():
-		push_warning("Road graph at %s has no edges" % GeneratedRoadGraph.PATH)
-		return
+	var graph: RoadGraph = _graph
 
 	var surface := SurfaceTool.new()
 	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -67,12 +68,12 @@ func _ready() -> void:
 	var arrows: int = 0
 	var one_way: int = 0
 
-	for edge: Dictionary in edges:
-		var points: PackedVector3Array = _polyline(edge)
+	for edge_id: int in graph.edge_ids():
+		var points: PackedVector3Array = _polyline(graph.polyline_of(edge_id))
 		if points.size() < 2:
 			continue
-		var half_width: float = maxf(float(edge.get("width_m", 6.0)), 0.5) * 0.5
-		var colour: Color = _colour_for(edge)
+		var half_width: float = maxf(graph.width_of(edge_id), 0.5) * 0.5
+		var colour: Color = _colour_for(graph, edge_id)
 
 		for index: int in points.size() - 1:
 			PreviewDraw.ribbon(surface, points[index], points[index + 1], half_width, colour)
@@ -84,7 +85,7 @@ func _ready() -> void:
 			bounds = box if not measured else bounds.merge(box)
 			measured = true
 
-		if edge.get("direction", "both") == "forward":
+		if graph.is_one_way(edge_id):
 			one_way += 1
 			if draw_arrows:
 				arrows += _arrows_along(surface, points, half_width)
@@ -99,11 +100,11 @@ func _ready() -> void:
 		(
 			"road preview: %d edges (%d one-way), %d nodes, %d arrows, %d turn restrictions"
 			% [
-				edges.size(),
+				graph.edge_count(),
 				one_way,
-				(graph.get("nodes", []) as Array).size(),
+				graph.node_count(),
 				arrows,
-				(graph.get("turn_restrictions", []) as Array).size(),
+				graph.turn_restriction_count(),
 			]
 		)
 	)
@@ -122,10 +123,10 @@ func _ready() -> void:
 		built.emit.call_deferred(bounds.position, bounds.end)
 
 
-func _polyline(edge: Dictionary) -> PackedVector3Array:
+func _polyline(centreline: PackedVector3Array) -> PackedVector3Array:
 	var points: PackedVector3Array = []
-	for point: Array in edge.get("polyline", []):
-		points.append(Vector3(point[0], float(point[1]) + lift_m, point[2]))
+	for point: Vector3 in centreline:
+		points.append(Vector3(point.x, point.y + lift_m, point.z))
 	return points
 
 
@@ -173,14 +174,14 @@ func _arrow_at(
 	return false
 
 
-func _colour_for(edge: Dictionary) -> Color:
+func _colour_for(graph: RoadGraph, edge_id: int) -> Color:
 	match colouring:
 		Colouring.ELEVATION:
-			var level: int = int(edge.get("elevation_level", 0))
+			var level: int = graph.level_of(edge_id)
 			if level > 0:
 				return _ELEVATED
 			return _TUNNEL if level < 0 else _GROUND
 		Colouring.SPEED:
-			return _FAST if int(edge.get("speed_limit_kph", 50)) > 50 else _GROUND
+			return _FAST if graph.speed_limit_of(edge_id) > 50 else _GROUND
 		_:
-			return _ONE_WAY if edge.get("direction", "both") == "forward" else _TWO_WAY
+			return _ONE_WAY if graph.is_one_way(edge_id) else _TWO_WAY

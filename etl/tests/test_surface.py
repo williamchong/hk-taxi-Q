@@ -392,6 +392,30 @@ class TestBuildRegion:
         assert manifest["triangles"] == report.triangles
         assert len(manifest["aabb"]) == 2
 
+    def test_the_manifest_carries_the_drawn_half_width_of_every_edge(
+        self, testville, tmp_path
+    ) -> None:
+        """The game cannot derive it. `roadgraph.json` publishes the authored
+        street width and the widening lives on the surface style, so this is the
+        only route by which the drawn width reaches a runtime — `P2-2` puts a car
+        in the nearside lane with it."""
+        city, _ = testville
+        build_region(city, "middle", out_root=tmp_path / "out")
+
+        out = tmp_path / "out" / "testville" / "middle"
+        manifest = json.loads((out / SURFACE_MANIFEST_NAME).read_text())
+        graph = json.loads((out / ROADGRAPH_NAME).read_text())
+        published = {entry["edge"]: entry["half_width_m"] for entry in manifest["carriageway"]}
+
+        assert set(published) == {edge["id"] for edge in graph["edges"]}
+        style = city.roads.surface
+        for edge in graph["edges"]:
+            widened = edge["width_m"] * style.widen_for(edge["speed_limit_kph"]) / 2.0
+            assert published[edge["id"]] == pytest.approx(widened, abs=0.001)
+            # The point of publishing it: it is wider than the authored street,
+            # so a lane centre taken from the graph alone would sit short.
+            assert published[edge["id"]] > edge["width_m"] / 2.0
+
     def test_a_graph_from_another_schema_is_refused(self, testville, tmp_path) -> None:
         """The contract is versioned, so a mismatch is a stale copy rather than
         something to parse optimistically."""

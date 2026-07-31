@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 ; The first scene that puts the car on the real city (`P1-4` + `P0-5`).
 ;
@@ -18,6 +18,7 @@
 [ext_resource type="PackedScene" path="res://scenes/vehicle/taxi.tscn" id="4_taxi"]
 [ext_resource type="Script" path="res://scripts/camera/chase_camera.gd" id="5_camera"]
 [ext_resource type="Script" path="res://scripts/city/drive_harness.gd" id="6_harness"]
+[ext_resource type="Script" path="res://scripts/city/road_graph_overlay.gd" id="7_graph"]
 
 [node name="CityDrive" type="Node3D"]
 script = ExtResource("6_harness")
@@ -50,6 +51,13 @@ script = ExtResource("2_surface")
 ; a silent no-op on a north-south street.
 [node name="Taxi" parent="." instance=ExtResource("4_taxi")]
 transform = Transform3D(0.0704, 0, -0.9975, 0, 1, 0, 0.9975, 0, 0.0704, 172.3485, 6.5796, 26.9396)
+
+; `P2-2`'s debug overlay: what `RoadGraph` believes is under the car, drawn on
+; the road and written out as text. Dev-only, and after the Taxi so the node it
+; follows already exists when it looks for it.
+[node name="GraphOverlay" type="Node3D" parent="."]
+script = ExtResource("7_graph")
+vehicle_path = NodePath("../Taxi")
 
 [node name="CameraRig" type="SpringArm3D" parent="."]
 margin = 0.3

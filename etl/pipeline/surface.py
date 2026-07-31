@@ -30,7 +30,7 @@ from __future__ import annotations
 import argparse
 import logging
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -45,7 +45,7 @@ log = logging.getLogger(__name__)
 
 SURFACE_NAME = "roads.glb"
 SURFACE_MANIFEST_NAME = "roadsurface.json"
-SURFACE_MANIFEST_SCHEMA = 1
+SURFACE_MANIFEST_SCHEMA = 2
 
 # Godot's glTF importer reads node-name suffixes: `-col` gives the mesh a static
 # trimesh collider at import time and leaves it visible. Naming it here rather
@@ -72,6 +72,11 @@ _MIN_TWICE_AREA_M2 = 1e-6
 @dataclass
 class SurfaceReport:
     edges: int = 0
+    # Drawn half-width per graph edge id, in metres. Recorded rather than
+    # recomputed downstream: `_prepare` is the one place the widening is
+    # applied, and a second evaluation of `widen_for` is a second thing to keep
+    # in step with the config.
+    carriageway: dict[int, float] = field(default_factory=dict)
     junctions: int = 0
     triangles: int = 0
     vertices: int = 0
@@ -449,6 +454,12 @@ def build_region(
 
     edges = [_prepare(edge, style) for edge in graph["edges"]]
     report = SurfaceReport()
+    # Zipped rather than looked up: `_prepare` maps the published edges one for
+    # one and in order, so the pairing is the list's own construction.
+    report.carriageway = {
+        int(published["id"]): round(prepared.half_width_m, 3)
+        for published, prepared in zip(graph["edges"], edges, strict=True)
+    }
     ends = _ends_by_node_and_level(graph["edges"], edges)
     _assign_trims(ends, edges, style, report)
     _count_level_changes(ends, edges, report)
@@ -667,6 +678,14 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Sur
     Same reasoning as `buildings.json`: `city.json` is `export.py`'s to write,
     and this records only what the surface stage knows so the two stages stay
     independently runnable.
+
+    `carriageway` is the exception worth naming: it is the only thing here the
+    *game* needs rather than the next stage. `roadgraph.json` publishes the
+    authored street width, `lanes x lane_width_m`, while the ribbon is drawn at
+    `width_m x widen_for(speed_limit_kph)` — so a runtime asking "where is the
+    nearside lane?" from the graph alone lands short of the lane by a quarter of
+    the widening. The factor stays on the surface style, where `config.py` says
+    it belongs; the *result* travels, through `export.py`, into `city.json`.
     """
     write_document(
         out_dir / SURFACE_MANIFEST_NAME,
@@ -680,6 +699,10 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Sur
             "vertices": report.vertices,
             "bytes": report.bytes,
             "aabb": report.aabb,
+            "carriageway": [
+                {"edge": edge_id, "half_width_m": half}
+                for edge_id, half in sorted(report.carriageway.items())
+            ],
         },
     )
 

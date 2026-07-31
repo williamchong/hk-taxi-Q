@@ -55,7 +55,7 @@ from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, SUR
 log = logging.getLogger(__name__)
 
 CITY_NAME = "city.json"
-CITY_SCHEMA = 1
+CITY_SCHEMA = 2
 
 # Manifest keys naming a document that ships. One tuple rather than a literal
 # at each use, because `shipped` reads them and `REQUIRED_KEYS` guards them:
@@ -206,6 +206,16 @@ def build_region(
         "tiles": tiles,
         "road_graph": ROADGRAPH_NAME,
         "road_surface": SURFACE_NAME,
+        # Drawn half-width per edge, carried from the surface stage rather than
+        # recomputed. `roadgraph.json` publishes the *authored* street width and
+        # `config.py` keeps the playability widening on the surface style on
+        # purpose — "a change here never changes `roadgraph.json`" — so this is
+        # the only route by which the game can know how wide the tarmac it is
+        # driving on actually is. `P2-2` needs it to place a car in the nearside
+        # lane instead of on the ribbon seam. Same category as `tiles[].aabb`:
+        # geometry the runtime cannot derive, measured once by the stage that
+        # drew it.
+        "carriageway": surface["carriageway"],
         "fares": FARES_NAME,
         "etl_version": __version__,
         "generated_utc": generated_utc or datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),

@@ -20,7 +20,6 @@
 extends Node3D
 
 const GeneratedFares = preload("res://scripts/city/generated_fares.gd")
-const GeneratedRoadGraph = preload("res://scripts/city/generated_road_graph.gd")
 const PreviewDraw = preload("res://scripts/city/preview_draw.gd")
 
 ## The four cases the colours separate. An enum rather than two parallel
@@ -67,6 +66,9 @@ const _LABELS: Dictionary[Case, String] = {
 
 const _TETHER := Color(0.15, 0.90, 0.55)
 
+# A member, not a local — see `_ready`.
+var _graph: RoadGraph = null
+
 
 func _ready() -> void:
 	var fares: Dictionary = GeneratedFares.load_fares()
@@ -82,15 +84,12 @@ func _ready() -> void:
 	# tethers are missing. A preview that refused to show anything because the
 	# second file was stale would hide the thing it exists to show.
 	#
-	# This re-parses `roadgraph.json`, which `road_preview.gd` in the same scene
-	# has already parsed — 5 ms and 6 MB, measured. Deliberately not cached: a
-	# static memo would hold those 6 MB resident for the life of the process to
-	# save 5 ms once, and would serve stale data across an ETL re-run inside the
-	# editor. `P1-6` did not remove it either — `city.json` names the graph
-	# rather than containing it, so a shared parse is `RoadGraph`'s to own
-	# (`P2-2`), and these two previews will read it from there.
-	var edges: Dictionary = _edges_by_id(GeneratedRoadGraph.load_graph())
-	var tethering: bool = not edges.is_empty()
+	# Kept in a member so the shared parse survives this function. `RoadGraph`
+	# is `RefCounted` and `shared()` holds it weakly, so a local here would drop
+	# it before `road_preview.gd` in the same scene ever asked.
+	_graph = RoadGraph.shared()
+	var graph: RoadGraph = _graph
+	var tethering: bool = not graph.is_empty()
 
 	var surface := SurfaceTool.new()
 	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -109,15 +108,14 @@ func _ready() -> void:
 
 		if not tethering:
 			continue
-		if not node.has("nearest_edge") or not edges.has(int(node["nearest_edge"])):
+		var edge_id: int = int(node.get("nearest_edge", -1))
+		if not node.has("nearest_edge") or graph.polyline_of(edge_id).is_empty():
 			# Reported rather than skipped silently. `nearest_edge` resolving is
 			# the acceptance criterion for `P1-5`, and the way it would fail in
 			# the game is an id that names no edge.
 			unresolved.append("%s -> %s" % [node.get("id", "?"), node.get("nearest_edge", "none")])
 			continue
-		var along: Vector3 = _along(
-			edges[int(node["nearest_edge"])], float(node.get("edge_t", 0.0))
-		)
+		var along: Vector3 = _along(graph.polyline_of(edge_id), float(node.get("edge_t", 0.0)))
 		if _tether(surface, at, along):
 			tethered += 1
 
@@ -154,21 +152,6 @@ func _report(
 		)
 
 
-## Edge polylines keyed by the edge's own `id`, never by its position in the
-## array. The two agree today only because `P1-3` happens to number edges in
-## order, and `nearest_edge` is defined as an id.
-func _edges_by_id(graph: Dictionary) -> Dictionary[int, Array]:
-	var by_id: Dictionary[int, Array] = {}
-	for edge: Dictionary in graph.get("edges", []):
-		if not edge.has("id"):
-			continue
-		var id: int = int(edge["id"])
-		if by_id.has(id):
-			push_warning("Road graph has two edges with id %d; the later one wins" % id)
-		by_id[id] = edge.get("polyline", [])
-	return by_id
-
-
 func _position(node: Dictionary) -> Vector3:
 	return _point(node.get("pos", [0.0, 0.0, 0.0]))
 
@@ -178,21 +161,21 @@ func _position(node: Dictionary) -> Vector3:
 ## Plan rather than 3D because that is what `edge_t` means — `fares.py` divides
 ## by `plan_lengths`, so measuring the walk in 3D here would land short on any
 ## edge that climbs.
-func _along(polyline: Array, t: float) -> Vector3:
+func _along(polyline: PackedVector3Array, t: float) -> Vector3:
 	if polyline.size() < 2:
-		return _point(polyline[0]) if polyline.size() == 1 else Vector3.ZERO
+		return polyline[0] if polyline.size() == 1 else Vector3.ZERO
 
 	var total: float = 0.0
 	for index: int in polyline.size() - 1:
-		total += _plan_distance(_point(polyline[index]), _point(polyline[index + 1]))
+		total += _plan_distance(polyline[index], polyline[index + 1])
 	if total <= 0.0:
-		return _point(polyline[0])
+		return polyline[0]
 
 	var target: float = clampf(t, 0.0, 1.0) * total
 	var walked: float = 0.0
 	for index: int in polyline.size() - 1:
-		var from: Vector3 = _point(polyline[index])
-		var to: Vector3 = _point(polyline[index + 1])
+		var from: Vector3 = polyline[index]
+		var to: Vector3 = polyline[index + 1]
 		var span: float = _plan_distance(from, to)
 		if span <= 0.0:
 			continue
@@ -201,7 +184,7 @@ func _along(polyline: Array, t: float) -> Vector3:
 		walked += span
 	# Only reachable when float accumulation leaves `walked` a hair short of
 	# `total` at t=1.
-	return _point(polyline[polyline.size() - 1])
+	return polyline[polyline.size() - 1]
 
 
 func _point(entry: Variant) -> Vector3:
