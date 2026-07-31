@@ -3,7 +3,7 @@
 Living document. **Update this whenever a task changes status, a decision is made, or an open
 question is answered.** Newest entries at the top of each log.
 
-Last updated: 2026-07-31 (GDScript warnings promoted to errors; `gdformat` adopted, `gdlint` declined)
+Last updated: 2026-07-31 (`tools/check.sh` — the Godot checks can now fail; GDScript warnings are errors)
 
 ---
 
@@ -180,6 +180,7 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ❌ blocked
 | Q13 | Nothing ramps between elevation levels. All 36 nodes where two levels meet step by a whole deck height — 6 m at a flyover, 8 m at a tunnel mouth | The elevated and underground networks are topologically connected and geometrically unreachable; a third of the region's road area cannot be driven onto | `P2-2`? | 🔴 **Open — raised 2026-07-30 by `P1-4`** |
 | Q14 | Taxi stands carry **operating-time restrictions** in `Status_EN` — eight territory-wide, one in the region (Russell Street, cross-harbour 1200-0600) — and `P1-5` discards them | A part-time cross-harbour stand is modelled as a full-time one. Small today; it is exactly the kind of detail `P3-9`'s authenticity test would catch | `P3-1` | 🟡 **Open — raised 2026-07-31 by `P1-5`**, deliberately deferred |
 | Q15 | Fare nodes snap to the road graph by **plan distance only**, because the published points are 2D | A stand under a flyover has nothing in it to prefer the street below over the deck above. No node in Wan Chai is affected — every winner is level 0 — but this shares a root cause with `Q13` | `P2-2` | 🟡 **Open — raised 2026-07-31 by `P1-5`**, not reachable with this source |
+| Q17 | No CI. Every check is a local convention, and `tools/check.sh` runs only when someone remembers — on a repo where two verify tools shipped broken-and-green inside one commit | The checks exist and are now capable of failing; nothing makes them run. The Python half (`ruff`, `pytest`, `gdformat`) needs no engine and is nearly free to automate; the Godot half needs the binary plus export templates in a runner | — | 🔴 **Open — raised 2026-07-31** |
 | Q16 | One region measures **56.4 MB** in the PCK against a 200 MB bundle budget — before any vehicle, audio or UI asset, and before a second region. Unreferenced assets shipped alongside it until `P1-7` measured the export | Half the iOS cellular threshold is spent on the part of the game the player looks at but never touches. Either the tiers do not all ship, or LOD0 gets cheaper, or the budget was wrong | `P2-6` | 🔴 **Open — raised 2026-07-31 by `P1-6`** |
 
 ### Q16 — how much of the bundle one region costs, measured rather than summed
@@ -534,49 +535,68 @@ below.
 
 ## Decision log
 
-### 2026-07-31 — GDScript linting: **the engine's own warnings**, plus `gdformat`, and no `gdlint`
+### 2026-07-31 — GDScript linting: the engine's own warnings, `gdformat`, no `gdlint` — and **the checks never had exit codes**
 
-Evaluated `gdtoolkit` (Scony) as a GDScript lint/format toolchain. **Adopted `gdformat` only, and
-found something better than the linter along the way.**
+Evaluated `gdtoolkit` (Scony). Adopted `gdformat`, declined `gdlint`, and turned on Godot's own
+warnings instead. The configuration and what was left out live in `docs/ARCHITECTURE.md`
+"GDScript warnings" and "GDScript formatting"; this records how it went, because it went badly
+before it went well.
 
-`gdlint` reported 17 problems over the 24 scripts, **16 of them the single rule
-`class-definitions-order`** — consts and signals declared after `@export` vars in six preview
-scripts. Acting on that means reordering heavily-commented files for no behavioural gain, which is
-the sort of out-of-scope churn `CLAUDE.md` prohibits. The 17th was one long line, and `gdformat`
-fixes that anyway. `gdparse` is redundant outright: `--import` already parses every script with the
-engine's authoritative parser, which is exactly the check `dea1f36` was about.
+**`gdlint` declined on its numbers:** 17 problems over 24 scripts, 16 of them
+`class-definitions-order` across four preview scripts — reordering commented files for no
+behavioural gain, the churn `CLAUDE.md` prohibits.
 
-**The real find: `game/project.godot` had no `[debug]` section at all**, so Godot's own GDScript
-warnings had been sitting at defaults the whole time — including `untyped_declaration`, *off*.
-Static typing is a hard `CLAUDE.md` convention that `gdlint` has no rule for and, being a
-grammar-level tool with no type resolution, could never have one. Twenty warnings are now errors.
-**All twenty passed on the codebase as it stood**, so the whole gate cost zero code changes — the
-convention was already being followed by hand, it just wasn't enforced.
+**The find was that `game/project.godot` had no `[debug]` section at all**, so Godot's own GDScript
+warnings had sat at defaults since `P0-3` — `untyped_declaration` among them, off. Static typing is
+a hard `CLAUDE.md` convention that `gdlint` has no rule for and, being a grammar-level tool with no
+type resolution, could never have one.
 
-**Measured, not assumed: warning level 1 is invisible headlessly.** Only level `2` reaches stdout;
-a `1` shows up in the editor script panel and nowhere else. Since the contributor workflow is
-deliberately headless — `CLAUDE.md` actively discourages opening the editor — a warning left at `1`
-would be pure decoration. Everything is therefore at `2` or absent. Verified by planting an untyped
-variable and watching `--import`, `--script` and `--export-debug` all fail on it.
+**Two things were wrong with the first version of this, and both are the same mistake.**
 
-**Left unenforced on purpose:** `inferred_declaration` (~25 hits) flags `:=`, which is static
-typing already; and the `unsafe_*` family plus `return_value_discarded` (~29 between them) trace to
-the JSON data contract handing back `Variant`. Both are recorded in `docs/ARCHITECTURE.md` with the
-condition for revisiting.
+*The gate broke two of the three verify tools, and the breakage reported success.*
+`shadowed_variable_base_class` fires on `root` in `verify_tiles.gd` and `verify_road_surface.gd` —
+both `extends SceneTree` — and on `basis`/`transform` in `greybox_builder.gd`. Those scripts then
+failed to *parse*, so `_init` never ran, so `quit(1)` was never reached, and the SceneTree exited
+`0`. Eight violations across three files, all shipped green. The claim "all twenty passed, the gate
+cost zero code changes" was false, and it was published in five places. Renamed to `scene_root`,
+`frame` and `placement` — the warning was right: in a file whose own comments warn about `Basis`
+conventions, a local `basis` shadowing `self.basis` is worth forbidding.
 
-**Honest limit, worth stating so the gate is not over-trusted:** none of the four `P0-5b`/`P0-5c`
-bugs — inverted steering sign, framerate-dependent drag, the null `@export`ed node, wheel raycasts
-hitting walls — would have been caught by any of this. Those were sign errors and wrong
-assumptions; a review pass caught them. This gate is cheap insurance, not a safety net.
+*It was verified with `godot … && echo PASS`.* Godot exits `0` when a script fails to parse, when a
+warning is promoted to an error, when a dependency will not compile. The verification could not
+have failed. This is `dea1f36` — "wrong in the safe-looking direction is the one failure mode a
+check must never have" — reintroduced by the commit that came directly after it, through a door
+that commit did not close.
 
-`gdtoolkit` is pinned `>=4.5,<5` in the `dev` extra. It is a single-maintainer reimplementation of
-the GDScript grammar released two to four times a year, and 4.5.0 predates both Godot 4.6 and 4.7 —
-it parsed all 24 files without complaint today, but it trails the engine and a future syntax
-feature could block the build on a *formatter*. That is the standing risk of the dependency, and
-the reason nothing beyond `gdformat` depends on it.
+**So `tools/check.sh` now exists**, and is the only thing in the repo that can fail. It greps
+Godot's output for compile failures and supplies the exit code the engine will not, checks the
+process status too, and runs `gdformat`, the import, a per-script warnings sweep and the three
+verify tools. Tested against five planted defects — untyped variable in an autoload, in a
+scene-only script, and in an autoload-referencing script; a shadowing regression; bad formatting —
+all exit `1`, clean tree exits `0`.
 
-**Open question:** there is still no CI. Every check here is a local convention in `CLAUDE.md` and
-`README.md`, enforced by whoever remembers to run it.
+**The sweep is separate from `--import` because `--import` does not do the job.** Measured: an
+untyped variable planted in `greybox_builder.gd` went unreported, because the import step compiles
+autoloads and what they reach, and that script is only reachable through a dev scene. Per-script
+`--check-only` covers the rest — but only when run with `game/` as the project directory. Run from
+the repo root, `res://` does not resolve, every script analyses clean, and the sweep passes having
+checked nothing. That trap cost a wrong measurement on the way here.
+
+**Level 1 is invisible headlessly**, which shaped the config: only level `2` reaches stdout, so a
+warning left at `1` is decoration in a workflow that never opens the editor. Everything is `2` or
+at its engine default.
+
+**A tool was written and thrown away.** `verify_scripts.gd` walked `res://` and `load()`ed every
+script to force full compilation. Autoload identifiers do not resolve under `--script`, so it
+needed a deferral list; the list needed a transitive closure over `preload`; and then
+`drive_harness.gd` turned out to reference `VehicleController` by `class_name` rather than by path,
+which would have needed class-name resolution too. Deleted at that point. The `--check-only` sweep
+gets the same coverage for four lines of shell.
+
+**Not a bug-catcher**, and `docs/ARCHITECTURE.md` says so: none of the four `P0-5b`/`P0-5c` bugs
+would have been caught by any of this.
+
+**Open question — `Q17`:** still no CI, so `tools/check.sh` runs only when someone remembers.
 
 ### 2026-07-31 — `P1-7`: the manifest is the **only** route to the tiles, and the georeference is now checked by the engine
 

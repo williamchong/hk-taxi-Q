@@ -84,9 +84,10 @@ Common emoji for this project:
   `ruff.toml` extends the ETL rules to `tools/*.py`; running ruff from `etl/` skips them), and
   `pytest` from `etl/`.
 - ETL changes: the pipeline runs end-to-end on the Wan Chai config without errors.
-- Godot changes: `gdformat --check` passes over `game/**/*.gd`, the project imports without script
-  errors (GDScript warnings are errors — see `docs/ARCHITECTURE.md`), the target scene runs, and
-  the three headless checks pass — `verify_city.gd`, `verify_tiles.gd`, `verify_road_surface.gd`.
+- Godot changes: `tools/check.sh` passes, and the target scene runs. The script covers formatting,
+  the import, the GDScript warnings sweep and the three verify tools. **Do not run those by hand
+  and read the output** — Godot exits `0` even when a script fails to parse, so only the script's
+  exit code means anything. See `docs/ARCHITECTURE.md` "Checks".
 - Update `docs/PROGRESS.md` — task status, plus any new decision or open question.
 
 ## Where to look

@@ -94,15 +94,15 @@ func _build_segment(segment: Dictionary, road_class: Dictionary, kerb: Dictionar
 		var b: Vector3 = _to_vec3(points[i + 1])
 		if a.is_equal_approx(b):
 			continue
-		var basis: Basis = _segment_basis(a, b)
+		var frame: Basis = _segment_basis(a, b)
 		# Lifted clear of the ground plane; exactly coplanar slabs z-fight across
 		# their whole surface rather than at a seam.
 		var mid: Vector3 = (a + b) * 0.5 + Vector3.UP * _road_lift
 		var length: float = a.distance_to(b)
-		_road_rects.append(_footprint(mid, basis, width, length))
+		_road_rects.append(_footprint(mid, frame, width, length))
 
 		_add_box(
-			Transform3D(basis, mid - basis.y * _slab_thickness * 0.5),
+			Transform3D(frame, mid - frame.y * _slab_thickness * 0.5),
 			Vector3(width, _slab_thickness, length),
 			material,
 			"%s_%d" % [segment["name"], i]
@@ -112,7 +112,7 @@ func _build_segment(segment: Dictionary, road_class: Dictionary, kerb: Dictionar
 		for side: float in SIDES:
 			_add_box(
 				Transform3D(
-					basis, mid + basis.x * side * (width + kerb_w) * 0.5 + basis.y * kerb_h * 0.5
+					frame, mid + frame.x * side * (width + kerb_w) * 0.5 + frame.y * kerb_h * 0.5
 				),
 				Vector3(kerb_w, kerb_h, length),
 				kerb_material,
@@ -133,9 +133,9 @@ func _segment_basis(a: Vector3, b: Vector3) -> Basis:
 ## Axis-aligned XZ footprint of an oriented box. Conservative by design: near a
 ## junction it errs toward classing ground as carriageway, which removes a
 ## building rather than leaving one in the road.
-func _footprint(centre: Vector3, basis: Basis, width: float, length: float) -> Rect2:
-	var half_x: Vector3 = basis.x * width * 0.5
-	var half_z: Vector3 = basis.z * length * 0.5
+func _footprint(centre: Vector3, frame: Basis, width: float, length: float) -> Rect2:
+	var half_x: Vector3 = frame.x * width * 0.5
+	var half_z: Vector3 = frame.z * length * 0.5
 	var extent_x: float = absf(half_x.x) + absf(half_z.x)
 	var extent_z: float = absf(half_x.z) + absf(half_z.z)
 	return Rect2(centre.x - extent_x, centre.z - extent_z, extent_x * 2.0, extent_z * 2.0)
@@ -171,7 +171,7 @@ func _build_buildings(layout: Dictionary) -> void:
 			var length: float = a.distance_to(b)
 			if length < spacing:
 				continue
-			var basis: Basis = _segment_basis(a, b)
+			var frame: Basis = _segment_basis(a, b)
 			for n: int in range(int(length / spacing)):
 				var along: float = (float(n) + 0.5) * spacing
 				for side: float in SIDES:
@@ -179,23 +179,23 @@ func _build_buildings(layout: Dictionary) -> void:
 						float(cfg["height_min_m"]), float(cfg["height_max_m"])
 					)
 					var centre: Vector3 = (
-						a + basis.z * along + basis.x * side * offset + Vector3.UP * height * 0.5
+						a + frame.z * along + frame.x * side * offset + Vector3.UP * height * 0.5
 					)
 					# Every junction is a T, so one road's flanking massing lands
 					# in the crossing road's carriageway — at the four corners
 					# the circuit has to turn through.
-					if _blocks_a_road(centre, basis, footprint):
+					if _blocks_a_road(centre, frame, footprint):
 						continue
 					_add_box(
-						Transform3D(basis, centre),
+						Transform3D(frame, centre),
 						Vector3(footprint, height, footprint),
 						material,
 						"bldg_%s_%d_%d_%d" % [segment["name"], i, n, int(side)]
 					)
 
 
-func _blocks_a_road(centre: Vector3, basis: Basis, footprint: float) -> bool:
-	var rect: Rect2 = _footprint(centre, basis, footprint, footprint)
+func _blocks_a_road(centre: Vector3, frame: Basis, footprint: float) -> bool:
+	var rect: Rect2 = _footprint(centre, frame, footprint, footprint)
 	for road: Rect2 in _road_rects:
 		if road.intersects(rect):
 			return true
@@ -203,11 +203,11 @@ func _blocks_a_road(centre: Vector3, basis: Basis, footprint: float) -> bool:
 
 
 func _add_box(
-	transform: Transform3D, size: Vector3, material: StandardMaterial3D, node_name: String
+	placement: Transform3D, size: Vector3, material: StandardMaterial3D, node_name: String
 ) -> void:
 	var body := StaticBody3D.new()
 	body.name = node_name
-	body.transform = transform
+	body.transform = placement
 
 	var mesh_instance := MeshInstance3D.new()
 	var mesh := BoxMesh.new()

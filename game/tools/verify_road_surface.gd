@@ -25,11 +25,11 @@ func _init() -> void:
 		quit(1)
 		return
 
-	var root: Node3D = packed.instantiate()
-	var problems: PackedStringArray = _check(root)
+	var scene_root: Node3D = packed.instantiate()
+	var problems: PackedStringArray = _check(scene_root)
 	# Instantiated outside the tree, so nothing else will free it — and a
 	# headless run that leaks buries its own result under exit warnings.
-	root.free()
+	scene_root.free()
 	for problem: String in problems:
 		printerr("  FAIL  ", problem)
 	if problems.is_empty():
@@ -37,10 +37,10 @@ func _init() -> void:
 	quit(1 if not problems.is_empty() else 0)
 
 
-func _check(root: Node3D) -> PackedStringArray:
+func _check(scene_root: Node3D) -> PackedStringArray:
 	var problems: PackedStringArray = []
 
-	var instances: Array[Node] = root.find_children("*", "MeshInstance3D", true, false)
+	var instances: Array[Node] = scene_root.find_children("*", "MeshInstance3D", true, false)
 	if instances.size() != 1:
 		problems.append("expected one MeshInstance3D, found %d" % instances.size())
 		return problems
@@ -64,7 +64,7 @@ func _check(root: Node3D) -> PackedStringArray:
 
 	# The `-col` suffix should have left a static body with trimesh collision
 	# beside the mesh, and taken the suffix off the node name on the way.
-	var bodies: Array[Node] = root.find_children("*", "StaticBody3D", true, false)
+	var bodies: Array[Node] = scene_root.find_children("*", "StaticBody3D", true, false)
 	if bodies.is_empty():
 		problems.append("no StaticBody3D — the `-col` name suffix did not import as collision")
 	else:

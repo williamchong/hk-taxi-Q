@@ -60,8 +60,8 @@ func _check(path: String) -> PackedStringArray:
 		problems.append("did not load as a scene")
 		return problems
 
-	var root: Node = packed.instantiate()
-	var instances: Array[Node] = root.find_children("*", "MeshInstance3D", true, false)
+	var scene_root: Node = packed.instantiate()
+	var instances: Array[Node] = scene_root.find_children("*", "MeshInstance3D", true, false)
 	if instances.is_empty():
 		problems.append("contains no MeshInstance3D")
 
@@ -86,5 +86,5 @@ func _check(path: String) -> PackedStringArray:
 	if surfaces > MAX_SURFACES:
 		problems.append("%d surfaces, over the %d-surface budget" % [surfaces, MAX_SURFACES])
 
-	root.free()
+	scene_root.free()
 	return problems

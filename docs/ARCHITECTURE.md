@@ -70,35 +70,40 @@ the life of the process, so treat them as hot-path code.
 
 ### GDScript warnings
 
-The `[debug]` block promotes twenty GDScript warnings to errors, which makes
-`godot --headless --path game --import` fail the build on any of them. This is the engine's own
-type-aware checker, and the only one available that resolves types at all: a grammar-level linter
-sees `basis.z` as an identifier and a dot, where the engine sees a `Vector3` on a `Basis`.
+The `[debug]` block promotes 21 GDScript warnings to errors. This is the engine's own type-aware
+checker, and the only one available that resolves types at all: a grammar-level linter sees
+`basis.z` as an identifier and a dot, where the engine sees a `Vector3` on a `Basis`.
 
-**It is not a bug-catcher, and should not be trusted as one.** None of the four defects recorded
-under `P0-5b` / `P0-5c` — inverted steering sign, framerate-dependent drag, an `@export`ed
-`Node3D` silently null from a hand-authored `.tscn`, wheel raycasts accepting wall faces — would
-have been caught by this or by any other linter. They were sign errors and wrong assumptions, and
-the thing that caught them was a review pass and a measurement. The warnings are worth enforcing
-because they are free and type-aware, not because they cover that class of risk.
+**Godot never signals any of this through its exit code.** A script that fails to parse, a warning
+promoted to an error, a dependency that will not compile — all of them print and exit `0`.
+`tools/check.sh` exists to turn that output into an exit code, and is the only thing that does; see
+"Checks" below. Running `--import` by hand tells you nothing unless you read the output.
 
-**Level 1 is invisible.** Warnings only reach stdout at level `2`. A warning left at `1` shows up
-in the editor's script panel and nowhere else — and the contributor workflow is deliberately
-headless, so a `1` here would be decorative. Every warning is therefore either enforced at `2` or
-absent from the file, and the list below is exhaustive as to intent.
+**Level 1 is invisible.** Warnings only reach stdout at level `2`. A warning left at `1` shows up in
+the editor's script panel and nowhere else, and the contributor workflow is deliberately headless,
+so a `1` here would be decorative. Every warning is therefore at `2` or left at its engine default.
+The list below covers the ones that were considered, not all 51 the engine offers.
 
-**Enforced (`=2`).** All twenty passed on the codebase as it stood when they were switched on, so
-adopting them cost no code changes:
+**Enforced (`=2`):**
 
 | Group | Warnings |
 |---|---|
 | Typing | `untyped_declaration` — the one hard convention in `CLAUDE.md` that no third-party tool can check |
-| Shadowing | `shadowed_variable`, `shadowed_variable_base_class`, `confusable_identifier`, `confusable_local_declaration` |
+| Shadowing | `shadowed_variable`, `shadowed_variable_base_class` |
+| Confusables | `confusable_identifier`, `confusable_local_declaration` |
 | Numerics | `integer_division`, `narrowing_conversion` — the arithmetic that silently truncates under a physics tick |
 | Dead code | `unused_variable`, `unused_parameter`, `unused_local_constant`, `unused_private_class_variable`, `unused_signal` |
-| No-ops | `standalone_expression`, `standalone_ternary`, `incompatible_ternary`, `redundant_await` |
-| Node wiring | `get_node_default_without_onready`, `onready_with_export` — neighbours of the `P0-5c` null-node bug, though neither would have caught it |
-| Overrides | `native_method_override`, `int_as_enum_without_cast`, `int_as_enum_without_match` |
+| No-ops | `standalone_expression`, `standalone_ternary`, `redundant_await` |
+| Typing traps | `incompatible_ternary` (result degrades to `Variant`), `int_as_enum_without_cast`, `int_as_enum_without_match` |
+| Node wiring | `get_node_default_without_onready`, `onready_with_export` |
+| Overrides | `native_method_override` |
+
+**Adopting them was not free**, contrary to the first version of this note. `shadowed_variable_base_class`
+caught eight real violations across three files: `root` in `verify_tiles.gd` and
+`verify_road_surface.gd` (both `extends SceneTree`, so shadowing `SceneTree.root`), and `basis` ×4
+plus `transform` in `greybox_builder.gd` (`extends Node3D`). Renamed to `scene_root`, `frame` and
+`placement`. In a file whose own comments warn about `Basis` conventions, a local `basis` shadowing
+`self.basis` is exactly the confusion worth forbidding.
 
 **Deliberately not enforced**, with counts measured at the time:
 
@@ -110,18 +115,42 @@ adopting them cost no code changes:
   chose: generated JSON arrives as `Variant`, and `Packed*Array.append()` returns a `bool` nobody
   reads. Enforcing them would mean threading typed locals through every loader for no defect
   caught. Revisit if the data contract ever gains a typed loading layer.
+- The remaining ~22 sit at their engine defaults and have not been assessed. `unassigned_variable`,
+  `unreachable_code` and `assert_always_false` look worth promoting and were measured as costing
+  nothing; they are left for a pass that can give them attention rather than being swept in here.
+
+**This is not a bug-catcher.** None of the four defects recorded under `P0-5b` / `P0-5c` — inverted
+steering sign, framerate-dependent drag, an `@export`ed `Node3D` silently null from a hand-authored
+`.tscn`, wheel raycasts accepting wall faces — would have been caught by any linter. A review pass
+caught them.
 
 ### GDScript formatting
 
-`gdformat` (from `gdtoolkit`, in the `dev` extra) is the GDScript counterpart to `ruff format`, and
-is run the same way — `--check` in the contributor checklist. Its default line length is 100,
-matching `ruff`, so it needs no config file.
+`gdformat` (from `gdtoolkit`, in the `dev` extra) is the GDScript counterpart to `ruff format`. Its
+default line length is 100, matching `ruff`, so it needs no config file.
 
 **`gdlint` is installed but deliberately not wired into the checks.** Run against the codebase it
-reported 17 problems, 16 of them the single cosmetic rule `class-definitions-order` — acting on
-them would mean reordering six commented preview scripts for no behavioural gain. It also cannot
-check static typing, which is the convention that actually matters here. `gdparse` is redundant
-outright: `--import` already parses every script with the engine's own authoritative parser.
+reported 17 problems, 16 of them the single cosmetic rule `class-definitions-order` across four
+preview scripts; acting on them would mean reordering commented files for no behavioural gain. The
+17th was one long line, which `gdformat` then fixed — so it now reports 16. It also cannot check
+static typing, which is the convention that actually matters here. `gdparse` is redundant outright:
+the checks already parse every script with the engine's own parser.
+
+### Checks
+
+`tools/check.sh` runs the whole Godot-side suite and is the only route that fails on error, because
+Godot itself always exits `0`:
+
+| Step | Covers |
+|---|---|
+| `gdformat --check` | Layout across all of `game/` |
+| `--import` | Autoloads and what they reach; also builds `game/.godot/` |
+| warnings sweep | `--check-only` per script, grepping for `treated as error`. This is what makes the 21 warnings bind on every file — `--import` alone reaches only autoload-connected scripts, measured by planting an untyped variable in `greybox_builder.gd` and seeing it go unreported |
+| `verify_city`, `verify_tiles`, `verify_road_surface` | The generated-asset contracts |
+
+The sweep must run with `game/` as the project directory. Run from elsewhere, `res://` does not
+resolve, every script silently analyses clean, and the check passes having checked nothing — the
+`dea1f36` failure mode, one directory over.
 
 ---
 
