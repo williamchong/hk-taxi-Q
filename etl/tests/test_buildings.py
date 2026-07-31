@@ -354,11 +354,14 @@ class TestBuildRegion:
             Fixture("B0009", "BUILDING", -900.0, 300.0, 40.0),  # outside the region
         ]
 
-    def build(self, hong_kong, sources, tmp_path: Path):
+    def build(self, hong_kong, sources, tmp_path: Path, fixtures: list[Fixture] | None = None):
+        """One end-to-end run. `fixtures` overrides the default set, and
+        `hong_kong` takes any city — a test that varies the config passes its
+        own."""
         return build_region(
             hong_kong,
             "wan_chai",
-            sources_root=sources(self.buildings()),
+            sources_root=sources(self.buildings() if fixtures is None else fixtures),
             out_root=tmp_path / "out",
         )
 
@@ -429,12 +432,7 @@ class TestBuildRegion:
         position, and so can appear the next time the region bounds move.
         """
         gantry = Fixture("B0100", "BUILDING", 1402.0, 802.0, height=1.5, footprint=1.5)
-        report = build_region(
-            hong_kong,
-            "wan_chai",
-            sources_root=sources([*self.buildings(), gantry]),
-            out_root=tmp_path / "out",
-        )
+        report = self.build(hong_kong, sources, tmp_path, [*self.buildings(), gantry])
 
         by_id = {tile.id: tile for tile in report.tiles}
         assert len(by_id["t_09_05"].lods) < 3
@@ -457,15 +455,18 @@ class TestBuildRegion:
         self, hong_kong, sources, tmp_path
     ) -> None:
         """LOD1 decimates buildings at 1.5 m and infrastructure at 0.5 m, so the
-        deck keeps its depth while the tile still coarsens overall."""
-        report = build_region(
-            hong_kong,
-            "wan_chai",
-            sources_root=sources(self.thin_deck()),
-            out_root=tmp_path / "out",
-        )
-        [tile] = [tile for tile in report.tiles if tile.id == "t_00_00"]
-        assert tile.lods[1].triangles == tile.lods[0].triangles
+        deck keeps its depth while the tile still coarsens overall.
+
+        Collapsing per class must also not cost the tile its single primitive —
+        `game/tools/verify_tiles.gd` enforces that from the engine side.
+        """
+        report = self.build(hong_kong, sources, tmp_path, self.thin_deck())
+
+        by_id = {tile.id: tile for tile in report.tiles}
+        assert by_id["t_00_00"].lods[1].triangles == by_id["t_00_00"].lods[0].triangles
+        out = tmp_path / "out" / "hong_kong" / "wan_chai"
+        for lod in by_id["t_00_00"].lods:
+            assert len(read_glb(out / lod.path)) == 1
 
     def test_without_the_override_the_thin_structure_is_flattened(
         self, hong_kong, sources, tmp_path
@@ -474,36 +475,15 @@ class TestBuildRegion:
         classes the deck collapses, which is what the override exists to stop.
 
         Written out because a test that only asserts survival passes just as
-        well when the cell sizes have quietly become equal."""
+        well when the two cell sizes have quietly become equal."""
         flattened = replace(
             hong_kong,
             buildings=replace(hong_kong.buildings, class_lod_cell_sizes_m={}),
         )
-        report = build_region(
-            flattened,
-            "wan_chai",
-            sources_root=sources(self.thin_deck()),
-            out_root=tmp_path / "out",
-        )
-        [tile] = [tile for tile in report.tiles if tile.id == "t_00_00"]
-        assert tile.lods[1].triangles < tile.lods[0].triangles
+        report = self.build(flattened, sources, tmp_path, self.thin_deck())
 
-    def test_a_mixed_class_tile_is_still_one_mesh_at_every_tier(
-        self, hong_kong, sources, tmp_path
-    ) -> None:
-        """Collapsing per class and merging afterwards must not cost the tile
-        its single primitive — `game/tools/verify_tiles.gd` enforces the same
-        thing from the engine side."""
-        report = build_region(
-            hong_kong,
-            "wan_chai",
-            sources_root=sources(self.thin_deck()),
-            out_root=tmp_path / "out",
-        )
-        out = tmp_path / "out" / "hong_kong" / "wan_chai"
-        [tile] = [tile for tile in report.tiles if tile.id == "t_00_00"]
-        for lod in tile.lods:
-            assert len(read_glb(out / lod.path)) == 1
+        by_id = {tile.id: tile for tile in report.tiles}
+        assert by_id["t_00_00"].lods[1].triangles < by_id["t_00_00"].lods[0].triangles
 
     def test_the_manifest_describes_the_grid(self, hong_kong, sources, tmp_path) -> None:
         self.build(hong_kong, sources, tmp_path)

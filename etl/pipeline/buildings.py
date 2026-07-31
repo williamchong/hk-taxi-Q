@@ -28,7 +28,7 @@ import argparse
 import logging
 import math
 import zipfile
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path, PurePosixPath
 from urllib.parse import unquote
@@ -340,7 +340,6 @@ def _write_tile(
     # order, and a dict's insertion order follows whichever sheet happened to be
     # read first.
     per_class = {name: merge(by_class[name], name=tile_id) for name in sorted(by_class)}
-    merged = merge(list(per_class.values()), name=tile_id)
 
     lods: list[LodOutput] = []
     for level in range(len(style.lod_cell_sizes_m)):
@@ -349,21 +348,21 @@ def _write_tile(
         # cluster grid and force one cell size on both, which is the thing this
         # exists to stop. Merging after keeps the tile **one mesh and one draw
         # call**, which is the contract `game/tools/verify_tiles.gd` enforces.
-        tiers = []
+        pieces: list[MeshData] = []
         for class_id, mesh in per_class.items():
             try:
-                tiers.append(collapse(mesh, cell_m=style.cell_size_m(class_id, level)))
+                pieces.append(collapse(mesh, cell_m=style.cell_size_m(class_id, level)))
             except EmptyMeshError:
                 # This class has nothing left at this cell size; another may.
                 continue
-        if not tiers:
+        if not pieces:
             # Everything in this tile is smaller than the cell. Correct at LOD2
             # for a tile holding one sign gantry — but the tiers coarsen, so
             # every later one vanishes too, and a tile with nothing left to draw
             # at 400 m must not take the whole region's build down with it.
             log.info("  %s: nothing survives LOD%d", tile_id, level)
             break
-        tier = merge(tiers, name=tile_id)
+        tier = merge(pieces, name=tile_id)
 
         relative = Path("tiles") / f"{tile_id}_lod{level}.glb"
         size = write_glb(out_dir / relative, [tier])
@@ -381,8 +380,21 @@ def _write_tile(
         ix=ix,
         iz=iz,
         meshes=sum(len(group) for group in by_class.values()),
-        aabb=merged.aabb(),
+        # Composed from the per-class boxes rather than from a merge of them.
+        # Once the collapse moved after the merge, a whole-tile merge existed
+        # only to take this min/max — the single largest array the stage builds,
+        # held live across the tier loop, for six numbers. Exact either way:
+        # min-of-mins over the same positions, no float drift.
+        aabb=_union(mesh.aabb() for mesh in per_class.values()),
         lods=lods,
+    )
+
+
+def _union(boxes: Iterable[Bounds]) -> Bounds:
+    lows, highs = zip(*boxes, strict=True)
+    return (
+        (min(c[0] for c in lows), min(c[1] for c in lows), min(c[2] for c in lows)),
+        (max(c[0] for c in highs), max(c[1] for c in highs), max(c[2] for c in highs)),
     )
 
 
@@ -404,6 +416,14 @@ def _write_manifest(
             "tile_size_m": grid.tile_size_m,
             "grid": {"columns": grid.columns, "rows": grid.rows},
             "lod_cell_sizes_m": list(city.buildings.lod_cell_sizes_m),
+            # Recorded beside the default table because on its own that table no
+            # longer describes the build: a tier is not one cell size once a
+            # class is held back from it, and this file exists to diagnose what
+            # was actually produced.
+            "class_lod_cell_sizes_m": {
+                name: list(sizes)
+                for name, sizes in sorted(city.buildings.class_lod_cell_sizes_m.items())
+            },
             "tiles": [asdict(tile) for tile in report.tiles],
         },
     )
@@ -499,7 +519,7 @@ def main(argv: list[str] | None = None) -> int:
         # false summary the moment one class is held back from that cell — and
         # the whole point of the override is that the tier is not uniform.
         overrides = ", ".join(
-            f"{name} {sizes[level]:.1f}"
+            f"{name} {sizes[level]:.1f} m"
             for name, sizes in sorted(style.class_lod_cell_sizes_m.items())
             if sizes[level] != cell_m
         )

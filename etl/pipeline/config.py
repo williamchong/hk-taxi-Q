@@ -610,6 +610,18 @@ def _tiled_source(source_id: str, body: dict[str, Any], path: Path) -> TiledSour
     )
 
 
+def _cell_sizes(values: Any, field: str) -> tuple[float, ...]:
+    """LOD clustering cells, ascending — the ordering every such table shares.
+
+    Coarsest last because `collapse` only ever removes geometry: a tier finer
+    than the one before it would draw *more* the further away it is.
+    """
+    sizes = tuple(float(size) for size in values)
+    if list(sizes) != sorted(sizes):
+        raise ValueError(f"{field} must be ordered coarsest last")
+    return sizes
+
+
 def _building_style(body: dict[str, Any], where: str) -> BuildingStyle:
     bands = tuple(
         HeightBand(
@@ -629,11 +641,9 @@ def _building_style(body: dict[str, Any], where: str) -> BuildingStyle:
         # ones a Hong Kong skyline is read by.
         raise ValueError(f"{where}:height_bands must end with `up_to_m: .inf`")
 
-    cells = tuple(float(size) for size in _require(body, "lod_cell_sizes_m", where))
+    cells = _cell_sizes(_require(body, "lod_cell_sizes_m", where), f"{where}:lod_cell_sizes_m")
     if not cells:
         raise ValueError(f"{where}:lod_cell_sizes_m is empty")
-    if list(cells) != sorted(cells):
-        raise ValueError(f"{where}:lod_cell_sizes_m must be ordered coarsest last")
 
     classes = tuple(str(name) for name in _require(body, "classes", where))
     if not classes:
@@ -654,20 +664,18 @@ def _building_style(body: dict[str, Any], where: str) -> BuildingStyle:
 
     class_cells: dict[str, tuple[float, ...]] = {}
     for name, sizes in (body.get("class_lod_cell_sizes_m") or {}).items():
-        override = tuple(float(size) for size in sizes)
         field = f"{where}:class_lod_cell_sizes_m.{name}"
         if str(name) not in classes:
             # Same trap as `class_colours`: a misspelled key parses, loads, and
             # silently overrides nothing.
             raise ValueError(f"{field} is not in classes ({', '.join(classes)})")
+        override = _cell_sizes(sizes, field)
         if len(override) != len(cells):
             # A short table would index-error partway through a build, after the
             # expensive read; a long one would describe tiers that never exist.
             raise ValueError(
                 f"{field} has {len(override)} tiers, but lod_cell_sizes_m has {len(cells)}"
             )
-        if list(override) != sorted(override):
-            raise ValueError(f"{field} must be ordered coarsest last")
         class_cells[str(name)] = override
 
     jitter = float(_require(body, "colour_jitter", where))

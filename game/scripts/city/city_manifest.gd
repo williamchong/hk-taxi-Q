@@ -46,9 +46,10 @@ class Tile:
 	## The file for `tier`, clamped to what this tile actually has.
 	##
 	## Clamped rather than checked by the caller because tier count is city
-	## config (`lod_cell_sizes_m`) and a tile may have fewer — a tile whose
-	## geometry survives decimation intact stops emitting new tiers. Asking for
-	## LOD2 of a one-tier tile should draw the tile, not nothing.
+	## config (`lod_cell_sizes_m`) and a tile may have fewer — a tile stops
+	## emitting tiers once everything in it is *smaller than the cell*, because
+	## from there nothing survives any coarser one either. Asking for LOD2 of a
+	## one-tier tile should draw the tile, not nothing.
 	func lod(tier: int) -> String:
 		if lods.is_empty():
 			return ""
