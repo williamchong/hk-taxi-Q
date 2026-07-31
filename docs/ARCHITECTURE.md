@@ -141,16 +141,35 @@ the checks already parse every script with the engine's own parser.
 `tools/check.sh` runs the whole Godot-side suite and is the only route that fails on error, because
 Godot itself always exits `0`:
 
-| Step | Covers |
-|---|---|
-| `gdformat --check` | Layout across all of `game/` |
-| `--import` | Autoloads and what they reach; also builds `game/.godot/` |
-| warnings sweep | `--check-only` per script, grepping for `treated as error`. This is what makes the 21 warnings bind on every file — `--import` alone reaches only autoload-connected scripts, measured by planting an untyped variable in `greybox_builder.gd` and seeing it go unreported |
-| `verify_city`, `verify_tiles`, `verify_road_surface` | The generated-asset contracts |
+| Step | Covers | In CI |
+|---|---|---|
+| `gdformat --check` | Layout across all of `game/` | yes |
+| `--import` | Autoloads and what they reach; also builds `game/.godot/` | yes |
+| warnings sweep | `--check-only` per script, grepping for `treated as error`. This is what makes the 21 warnings bind on every file — `--import` alone reaches only autoload-connected scripts, measured by planting an untyped variable in `greybox_builder.gd` and seeing it go unreported | yes |
+| `verify_city`, `verify_tiles`, `verify_road_surface` | The generated-asset contracts | **no** |
 
 The sweep must run with `game/` as the project directory. Run from elsewhere, `res://` does not
 resolve, every script silently analyses clean, and the check passes having checked nothing — the
 `dea1f36` failure mode, one directory over.
+
+### CI
+
+`.github/workflows/ci.yml` runs on every push to `main` and every pull request, in two jobs:
+`ruff check` / `ruff format --check` / `pytest` on Python 3.11 and 3.13, and `tools/check.sh`
+against the Godot version pinned in the workflow — `game/project.godot` records only the minor, and
+the editor rewrites that file, so the workflow is where the patch version lives. It runs the script
+rather than repeating its steps in YAML,
+for the reason the script exists: reimplemented in YAML, the Godot steps would pass on failure.
+
+**CI cannot check the generated-asset contracts.** `game/assets/generated/` is gitignored build
+output, so a fresh checkout has no city and the three verify tools exit `1` on the missing
+manifest. The workflow sets `VERIFY_GENERATED=0`, which skips them and *prints that it skipped
+them* — an unannounced skip would be the same silence the script was written to break. Those three
+stay a local check, run after a pipeline build.
+
+Giving CI a city means running the ETL there, whose first act is downloading ~320 MB from a
+government server. That is a deliberate non-goal on every push; if the contracts ever need
+CI coverage, the shape is a scheduled job with the source cache restored, not a per-push one.
 
 ---
 

@@ -12,13 +12,31 @@
 # is the only thing that turns it into an exit code.
 #
 # Expects the repo-root venv the README creates, and godot on PATH. Override
-# with GODOT= / GDFORMAT= if yours live elsewhere.
+# with GODOT= / GDFORMAT= if yours live elsewhere, and VERIFY_GENERATED=0 if
+# there is no built city to check.
 
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GODOT="${GODOT:-godot}"
 GDFORMAT="${GDFORMAT:-$ROOT/.venv/bin/gdformat}"
+
+# The verify tools assert facts about generated assets, which are build output —
+# absent from a fresh clone until the ETL has run and been synced. Set
+# VERIFY_GENERATED=0 where there is no city to check; CI does, because building
+# one there means downloading 320 MB from a government server on every push. The
+# skip is announced, never silent: a check that reported nothing because it had
+# nothing to look at is the exact failure this script exists to turn into an
+# exit code.
+#
+# Compared as a string, and only an exact 0 skips. `((VERIFY_GENERATED))` was
+# the obvious form and is a trapdoor: under `set -u`, VERIFY_GENERATED=true dies
+# mid-run with `unbound variable` and still exits 0, while =1x reports "value
+# too great for base", takes the skip branch, and prints "All checks passed".
+# Both are the false green this whole script exists to prevent. Anything
+# unrecognised therefore runs the checks.
+VERIFY_GENERATED="${VERIFY_GENERATED:-1}"
+VERIFY_TOOLS=(verify_city verify_tiles verify_road_surface)
 
 # Godot reports a compile failure with any of these and still exits 0.
 FATAL='Parse Error|SCRIPT ERROR|Failed to load script|Failed to compile'
@@ -82,10 +100,16 @@ else
 	echo "  ok    warnings"
 fi
 
-for tool in verify_city verify_tiles verify_road_surface; do
-	echo "==> $tool"
-	run_godot "$tool" --headless --path "$ROOT/game" --script "res://tools/$tool.gd"
-done
+if [[ "$VERIFY_GENERATED" != 0 ]]; then
+	for tool in "${VERIFY_TOOLS[@]}"; do
+		echo "==> $tool"
+		run_godot "$tool" --headless --path "$ROOT/game" --script "res://tools/$tool.gd"
+	done
+else
+	echo "==> verify tools"
+	echo "  SKIP  ${VERIFY_TOOLS[*]} — VERIFY_GENERATED=0."
+	echo "        The generated-asset contracts were NOT checked."
+fi
 
 if ((failed)); then
 	echo >&2

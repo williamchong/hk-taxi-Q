@@ -95,6 +95,11 @@ The warnings sweep is the GDScript linter: 21 engine warnings are set to *error*
 `project.godot`, including untyped declarations. See
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the list and what was left out.
 
+GitHub Actions runs the same script on every push and pull request, alongside `ruff` and `pytest`.
+It **skips the three verify tools** — a fresh checkout has no generated assets to check, and
+building them in CI would mean re-downloading the source data every push. So the asset contracts
+are yours to run locally after a pipeline build; everything else CI catches for you.
+
 **Export and play it in a browser.**
 
 ```bash

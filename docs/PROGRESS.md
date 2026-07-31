@@ -3,7 +3,7 @@
 Living document. **Update this whenever a task changes status, a decision is made, or an open
 question is answered.** Newest entries at the top of each log.
 
-Last updated: 2026-07-31 (`tools/check.sh` — the Godot checks can now fail; GDScript warnings are errors)
+Last updated: 2026-07-31 (CI on GitHub Actions — runs `tools/check.sh`, minus the generated-asset contracts)
 
 ---
 
@@ -180,7 +180,7 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ❌ blocked
 | Q13 | Nothing ramps between elevation levels. All 36 nodes where two levels meet step by a whole deck height — 6 m at a flyover, 8 m at a tunnel mouth | The elevated and underground networks are topologically connected and geometrically unreachable; a third of the region's road area cannot be driven onto | `P2-2`? | 🔴 **Open — raised 2026-07-30 by `P1-4`** |
 | Q14 | Taxi stands carry **operating-time restrictions** in `Status_EN` — eight territory-wide, one in the region (Russell Street, cross-harbour 1200-0600) — and `P1-5` discards them | A part-time cross-harbour stand is modelled as a full-time one. Small today; it is exactly the kind of detail `P3-9`'s authenticity test would catch | `P3-1` | 🟡 **Open — raised 2026-07-31 by `P1-5`**, deliberately deferred |
 | Q15 | Fare nodes snap to the road graph by **plan distance only**, because the published points are 2D | A stand under a flyover has nothing in it to prefer the street below over the deck above. No node in Wan Chai is affected — every winner is level 0 — but this shares a root cause with `Q13` | `P2-2` | 🟡 **Open — raised 2026-07-31 by `P1-5`**, not reachable with this source |
-| Q17 | No CI. Every check is a local convention, and `tools/check.sh` runs only when someone remembers — on a repo where two verify tools shipped broken-and-green inside one commit | The checks exist and are now capable of failing; nothing makes them run. The Python half (`ruff`, `pytest`, `gdformat`) needs no engine and is nearly free to automate; the Godot half needs the binary plus export templates in a runner | — | 🔴 **Open — raised 2026-07-31** |
+| Q17 | No CI. Every check is a local convention, and `tools/check.sh` runs only when someone remembers — on a repo where two verify tools shipped broken-and-green inside one commit | The checks exist and are now capable of failing; nothing makes them run. The Python half (`ruff`, `pytest`, `gdformat`) needs no engine and is nearly free to automate; the Godot half needs the binary plus export templates in a runner | — | ✅ **Resolved 2026-07-31** — GitHub Actions runs both halves. Export templates turned out not to be needed: only exports want them, and CI does not export. **Three of the six checks; the generated-asset contracts are not covered** — see the decision log |
 | Q16 | One region measures **56.4 MB** in the PCK against a 200 MB bundle budget — before any vehicle, audio or UI asset, and before a second region. Unreferenced assets shipped alongside it until `P1-7` measured the export | Half the iOS cellular threshold is spent on the part of the game the player looks at but never touches. Either the tiers do not all ship, or LOD0 gets cheaper, or the budget was wrong | `P2-6` | 🔴 **Open — raised 2026-07-31 by `P1-6`** |
 
 ### Q16 — how much of the bundle one region costs, measured rather than summed
@@ -535,6 +535,52 @@ below.
 
 ## Decision log
 
+### 2026-07-31 — CI runs `tools/check.sh`, and **cannot** check the generated assets — closes `Q17`
+
+`.github/workflows/ci.yml`, on every push to `main` and every pull request. Two jobs: `ruff check`,
+`ruff format --check` and `pytest` on Python 3.11 and 3.13; and `tools/check.sh` against a pinned
+Godot `4.7.1-stable`.
+
+**CI runs the script, not its steps.** Repeating `--import` and the warnings sweep as YAML steps
+would have been the obvious shape and would have been wrong for the reason the script exists —
+Godot exits `0` through a parse failure, so YAML steps would go green on a broken build. The two
+env overrides the script already had (`GODOT=`, `GDFORMAT=`) turned out to be exactly the seam CI
+needed, since the default `gdformat` path points at the README's repo-root venv.
+
+**Three of the six checks cannot run there.** `game/assets/generated/` is gitignored build
+output; a fresh checkout has no city, and `verify_city` exits `1` on the missing manifest —
+confirmed by cloning the repo to a scratch directory and running each step. So the workflow sets a
+new `VERIFY_GENERATED=0`, and the script prints a `SKIP` line naming all three tools and stating
+that the contracts were not checked. Silence was the alternative and is not available here: a check
+that reported nothing because it had nothing to look at is the `dea1f36` failure, and this script
+is the thing that exists to stop it.
+
+Formatting, the import and the warnings sweep all cover the whole tree without a built city, so the
+loss is bounded and named. Giving CI a city means running the ETL there — 320 MB from a government
+server, per push. Declined. If the contracts ever need CI coverage, it is a scheduled job with the
+source cache restored, not a per-push one.
+
+**The skip's own guard was a false green, which is the joke this repo keeps not getting to make
+once.** `if ((VERIFY_GENERATED))` is the obvious bash and is a trapdoor under `set -u`, measured:
+`VERIFY_GENERATED=true` evaluates the string as an arithmetic expression, looks up a variable named
+`true`, dies with `unbound variable` **and exits 0**; `=1x` reports "value too great for base",
+returns non-zero, falls into the skip branch, and prints `All checks passed`. So a typo in the one
+knob that turns checks off would have turned them all off, silently, green. Now compared as a
+string with only an exact `0` skipping, so anything unrecognised runs the checks. `((failed))` six
+lines down is untouched and fine — its operand is script-controlled, never environment.
+
+**The `godot` job does not install the ETL.** `pip install -e "etl/[dev]"` is the obvious way to
+get `gdformat` and drags in pyogrio's bundled GDAL, numpy and pyproj: ~70 MB of geodata stack to
+format GDScript. It reads the `gdtoolkit` pin out of `etl/pyproject.toml` with `tomllib` instead —
+one source of truth for the version, without the payload. That change also forced dropping the pip
+cache from that job: `setup-python` keys its cache on OS + Python version + dependency-file hash
+with **no job component**, so the two jobs shared a key while installing different things, and
+whichever finished last would poison the other.
+
+**Python is a matrix of 3.11 and 3.13** — the floor `etl/pyproject.toml` declares and the version
+in use locally. Both ends, or neither is checked. `ruff` runs from the repo root, never `etl/`, for
+the reason the root `ruff.toml` exists at all.
+
 ### 2026-07-31 — GDScript linting: the engine's own warnings, `gdformat`, no `gdlint` — and **the checks never had exit codes**
 
 Evaluated `gdtoolkit` (Scony). Adopted `gdformat`, declined `gdlint`, and turned on Godot's own
@@ -597,6 +643,7 @@ gets the same coverage for four lines of shell.
 would have been caught by any of this.
 
 **Open question — `Q17`:** still no CI, so `tools/check.sh` runs only when someone remembers.
+*(Closed the same day by the CI entry above.)*
 
 ### 2026-07-31 — `P1-7`: the manifest is the **only** route to the tiles, and the georeference is now checked by the engine
 

@@ -1,0 +1,124 @@
+# The checks CLAUDE.md asks for before marking work done, run on every push.
+#
+# Two jobs, because they need different things installed and one is ten times
+# slower than the other. Neither runs the ETL: the pipeline's first act is to
+# download ~320 MB from a government server, and putting that on every push
+# would be both slow and impolite. The consequence is that CI cannot check the
+# generated-asset contracts — see the `godot` job.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Nothing here writes to the repo, and the checks run code from pull requests.
+permissions:
+  contents: read
+
+# A second push supersedes the first; nothing is learned from finishing a run
+# against a commit that is already history.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python (${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        # The floor `etl/pyproject.toml` declares, and the version actually in
+        # use locally. Anything that works on one end and not the other is a
+        # bug either way round.
+        python-version: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: etl/pyproject.toml
+
+      - name: Install
+        run: pip install -e "etl/[dev]"
+
+      # From the repo root, deliberately. The root `ruff.toml` exists only to
+      # widen the ETL rules over `tools/*.py`; a `cd etl` here would lint the
+      # package and silently skip everything else, which is how the RUF012 in
+      # `tools/serve_web.py` got in.
+      - name: ruff check
+        run: ruff check .
+
+      - name: ruff format
+        run: ruff format --check .
+
+      - name: pytest
+        run: pytest
+        working-directory: etl
+
+  godot:
+    name: Godot
+    runs-on: ubuntu-latest
+    # Godot can hang rather than fail — an import lock, or a verify tool that
+    # never reaches quit(). Without this the default is six hours of runner.
+    timeout-minutes: 15
+    env:
+      # Pinned, not floating. The engine is a locked decision, and a silent
+      # minor bump would change what the warnings sweep and the importer do.
+      GODOT_VERSION: 4.7.1-stable
+    steps:
+      - uses: actions/checkout@v5
+
+      # No pip cache here, deliberately. setup-python keys its cache on the OS,
+      # the Python version and the hash of the dependency file — with no job
+      # component — so this job and the 3.11 leg of the matrix above would share
+      # one key while installing very different things, and whichever finished
+      # last would poison the other.
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      # gdformat comes from gdtoolkit, which lives in the ETL's dev extra
+      # because that is the repo's only Python manifest. Installing that extra
+      # would also fetch pyogrio's bundled GDAL, numpy and pyproj — ~70 MB of
+      # geodata stack for a job that only formats GDScript. So take the pin from
+      # the manifest and install just that: still one source of truth for the
+      # version, without the payload.
+      - name: Install gdformat
+        run: |
+          set -euo pipefail
+          pin="$(python -c 'import tomllib, pathlib; print(next(d for d in tomllib.loads(pathlib.Path("etl/pyproject.toml").read_text())["project"]["optional-dependencies"]["dev"] if d.startswith("gdtoolkit")))')"
+          echo "installing $pin"
+          pip install "$pin"
+
+      - name: Install Godot ${{ env.GODOT_VERSION }}
+        run: |
+          set -euo pipefail
+          BUILD="Godot_v${GODOT_VERSION}_linux.x86_64"
+          # The one unavoidable network fetch in the workflow, and 76 MB of it.
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 --max-time 300 \
+            -o godot.zip \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/${BUILD}.zip"
+          unzip -q godot.zip
+          sudo install "$BUILD" /usr/local/bin/godot
+          godot --version
+
+      # `tools/check.sh` is the only thing that turns Godot's unconditional
+      # exit 0 into a real status, so CI runs the script rather than
+      # reimplementing its steps in YAML where they would pass on failure.
+      #
+      # GDFORMAT: the default points at the README's repo-root venv, which does
+      # not exist here — pip put gdformat on PATH instead.
+      #
+      # VERIFY_GENERATED=0: a fresh checkout has no generated assets, so the
+      # verify tools would fail on the missing manifest. Rationale and what it
+      # costs are recorded once, in `tools/check.sh`.
+      - name: tools/check.sh
+        env:
+          GDFORMAT: gdformat
+          VERIFY_GENERATED: "0"
+        run: tools/check.sh
