@@ -290,7 +290,9 @@ disk and ~6 MB parsed, and `RoadGraph` wants it at a different moment from when 
 wants the tile list.
 Each of the three is separately versioned below, and `export.py` writes the manifest that points
 at them. A build ships exactly what the manifest names: the three documents and every path in
-`tiles[].lods` — 199 files and **102.6 MB** for Wan Chai, of which LOD0 is 74.7 MB.
+`tiles[].lods` — **134 files and 30.8 MB** for Wan Chai, exporting to a **21.1 MB** PCK. It was
+199 files and 105.5 MB for a 51.6 MB PCK until `P2-1`'s review dropped the exact-weld tier; see
+`Q16` in `docs/PROGRESS.md`.
 
 ⚠️ **`carriageway` is the drawn half-width per edge, and the game cannot derive it** (schema 2,
 `P2-2`). `roadgraph.json` publishes the **authored** street — `lanes × lane_width_m` — while `P1-4`
@@ -332,6 +334,15 @@ except where `class_lod_cell_sizes_m` holds a mesh class back from it. A tier is
 cell size: a building decimates at 1.5 m and an elevated road deck at 0.5 m, because a deck thinner
 than the cell flattens into it. The tile is still one mesh and one draw call, because each class is
 collapsed separately and merged afterwards. See `ART_DESIGN.md` "LOD policy".
+
+⚠️ **`tiles[].aabb` is the union of the tiers a build actually ships, not of the source geometry.**
+It was the source's until `P2-1`'s review dropped the exact-weld tier — correct only while the
+finest tier lost nothing. Decimation moves corners and drops anything thinner than a cell, so a
+source box can describe geometry no shipped mesh contains: one Wan Chai tile declared a height 19 m
+past its own LOD0. Nor is tier 0's box enough on its own — `collapse` buckets on
+`floor(position / cell_m)` and averages, so a coarser grid can leave an extreme vertex alone in its
+cell and preserve it where a finer grid averaged it inward, measured at 12.03 m on `t_01_02`.
+`game/tools/verify_city.gd` asserts every tier is contained and the union is tight to 1 cm.
 Separate files rather than one GLB with three meshes, because the streamer loads a tier at a time.
 
 **A tile's `aabb` can be larger than the tile.** Buildings are assigned to a tile whole, by their

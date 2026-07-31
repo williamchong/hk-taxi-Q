@@ -3,7 +3,7 @@
 Living document. **Update this whenever a task changes status, a decision is made, or an open
 question is answered.** Newest entries at the top of each log.
 
-Last updated: 2026-08-01 (`P2-1` — the city streams and is inside the visible-triangle budget; LOD is now per mesh class, so the flyovers survive it)
+Last updated: 2026-08-01 (`P2-1` review passed — LOD0 does not ship, closing `Q16`: 51.6 → 21.1 MB PCK and 40% off worst-case visible triangles)
 
 ---
 
@@ -155,7 +155,7 @@ to answer, not Phase 1's.
 | `P1-6` | Export and manifest | ✅ **Done** | `city.json` + `python -m pipeline`; whole region in 4.4 s, byte-reproducible, 199 files / 102.6 MB. Validation catches what no single stage can. Opened `Q16`. 323 tests, `ruff` clean. |
 | `P1-7` | Godot import | ✅ **Done** | **Phase 1 gate passed.** 65 tiles from `city.json`, georeferenced to 1 cm and checked in-engine by `verify_city.gd`. `DirAccess` tile listing deleted — it could never have worked in an export. 329 tests, `ruff` clean. |
 | `P2-2` | `RoadGraph` runtime and debug overlay | ✅ **Done — all four criteria met** | One parse per scene, nearest-edge over a 25 m plan grid, lane centres from the **drawn** carriageway. Refuses all 60 off-grade edges (`Q13`), proven over 505 probes. Query time closed 2026-08-01: **p99 45 µs against a 1 ms budget**, timed over 15,865 region-wide probes. `verify_road_graph.gd` is the fourth verify tool. 331 tests, `ruff` clean. |
-| `P2-1` | `CityStreamer` | ✅ **Done — pending the review verdict** | Threaded load/unload by distance to the published `aabb`, tiers at 100/250 m, 400 m unload, 15 m hysteresis, all in `streaming.tres`. Draw calls 70 → 53 against a 150 budget; **visible triangles 398,574 → 240,598 against 300k**, in budget for the first time. `verify_city_streamer.gd` is the fifth verify tool. Opened the shadow-cascade and LOD1-vs-thin-structure findings. |
+| `P2-1` | `CityStreamer` | ✅ **Done — review passed 2026-08-01** | Threaded load/unload by distance to the published `aabb`. Draw calls 70 → 53 against a 150 budget. The review verdict dropped LOD0: worst-case **visible triangles 398,574 → 150,374** against 300k, and the **PCK 51.6 → 21.1 MB**. Bands are now a single 250 m edge, 400 m unload, 15 m hysteresis, in `streaming.tres`. `verify_city_streamer.gd` is the fifth verify tool. Opened the shadow-cascade finding. |
 | `P2-3` | Vehicle on real geometry | 🟢 **Unblocked** | `P2-3` now has `P2-2`'s lane-centre query to spawn against |
 | `P3-*` | Playable slice | ⬜ Blocked | Gated on `P2-3`; `P2-2` cleared |
 
@@ -183,7 +183,7 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ❌ blocked
 | Q14 | Taxi stands carry **operating-time restrictions** in `Status_EN` — eight territory-wide, one in the region (Russell Street, cross-harbour 1200-0600) — and `P1-5` discards them | A part-time cross-harbour stand is modelled as a full-time one. Small today; it is exactly the kind of detail `P3-9`'s authenticity test would catch | `P3-1` | 🟡 **Open — raised 2026-07-31 by `P1-5`**, deliberately deferred |
 | Q15 | Fare nodes snap to the road graph by **plan distance only**, because the published points are 2D | A stand under a flyover has nothing in it to prefer the street below over the deck above. No node in Wan Chai is affected — every winner is level 0 — but this shares a root cause with `Q13` | `P2-2` | 🟡 **Open — raised 2026-07-31 by `P1-5`**, not reachable with this source |
 | Q17 | No CI. Every check is a local convention, and `tools/check.sh` runs only when someone remembers — on a repo where two verify tools shipped broken-and-green inside one commit | The checks exist and are now capable of failing; nothing makes them run. The Python half (`ruff`, `pytest`, `gdformat`) needs no engine and is nearly free to automate; the Godot half needs the binary plus export templates in a runner | — | ✅ **Resolved 2026-07-31** — GitHub Actions runs both halves. Export templates turned out not to be needed: only exports want them, and CI does not export. **Three of the six checks; the generated-asset contracts are not covered** — see the decision log |
-| Q16 | One region measures **56.4 MB** in the PCK against a 200 MB bundle budget — before any vehicle, audio or UI asset, and before a second region. Unreferenced assets shipped alongside it until `P1-7` measured the export | Half the iOS cellular threshold is spent on the part of the game the player looks at but never touches. Either the tiers do not all ship, or LOD0 gets cheaper, or the budget was wrong | `P2-6` | 🔴 **Open — raised 2026-07-31 by `P1-6`** |
+| Q16 | One region measures **56.4 MB** in the PCK against a 200 MB bundle budget — before any vehicle, audio or UI asset, and before a second region | Half the iOS cellular threshold spent on the part of the game the player looks at but never touches | `P2-1` | ✅ **Resolved 2026-08-01** — the tiers do not all ship. LOD0 dropped after the `P2-1` review found it indistinguishable; **51.6 → 21.1 MB PCK**, measured from real exports |
 
 ### Q16 — how much of the bundle one region costs, measured rather than summed
 
@@ -562,6 +562,62 @@ below.
 ---
 
 ## Decision log
+
+### 2026-08-01 — `P2-1` review **passed**, and it closes `Q16`: **LOD0 does not ship**
+
+Both halves of the gate, answered by driving rather than by argument. The user drove a build with no
+exact-weld tier at all — not a distance-band trick, an actual two-tier build — and the verdict was
+*"they look ok"* on the buildings and *"not much pop"* on the transitions.
+
+| | 3 tiers | 2 tiers | |
+|---|---|---|---|
+| Files shipped | 199 | 134 | −65 |
+| Source bytes | 105.5 MB | 30.8 MB | −74.7 MB |
+| **PCK** | **51.6 MB** | **21.1 MB** | **−30.5 MB (59%)** |
+| Worst-case visible triangles | 249,210 | **150,374** | **−40%** |
+| Worst-case resident triangles | 424,648 | 236,882 | −44% |
+| Draw calls | 53 | 53 | — |
+
+**Both budgets improve, and the second one is the surprise.** Dropping a tier was supposed to be a
+bundle decision; it also took 40% off the frame cost, because the tier it removed was the one drawn
+nearest the camera where the least is culled. Worst-case resident is now *under* the 300k visible
+budget on its own, so the disc-versus-cone caveat `P2-1` recorded no longer even bites.
+
+**`Q16`'s own lesson applied to itself, again.** The source saving is 74.7 MB and the PCK saving is
+30.5 MB, because Godot's `.scn` is roughly half its glTF source. `PROGRESS.md` had estimated "the
+bundle drops to 28 MB"; measured, it is **21.1 MB**. Better than the guess this time, and still 33%
+out — which is the entire reason `Q16` insists on measuring a PCK.
+
+For the business case the question actually turns on: roughly **4–5 regions in a 200 MB download
+instead of 2**.
+
+**The bands were retuned with it.** Two tiers want one edge, not two. Left at `[100, 250]` the
+coarsest band clamps, so everything past 100 m drew at 4.0 m cells — one step coarser than intended.
+`streaming.tres` now carries a single 250 m edge: the 1.5 m mesh across 0–250 m, the 4.0 m mesh from
+250 m to the 400 m unload. Worth noting the user's verdict was given on the *coarser* version, which
+makes it a stronger yes than it needed to be.
+
+⚠️ **Dropping the finest tier broke the `aabb` contract, and `verify_city.gd` caught it — 34 tiles.**
+`tiles[].aabb` was measured from the **uncollapsed source**, which was right only while tier 0 was an
+exact weld and therefore matched it corner for corner. Once the finest shipped tier was decimated,
+the published box described geometry no build contained: one tile declared a height **19 m** past its
+own LOD0, a mast too thin to survive a 1.5 m cell. The ETL now publishes the union of the **shipped
+tiers**.
+
+**And that union is not a formality.** The obvious fix — publish tier 0's box — is wrong, measured on
+`t_01_02`: its **4.0 m tier stands 12.03 m taller than its 1.5 m tier**, and exactly equals the
+source. `collapse` buckets on `floor(position / cell_m)` and averages each bucket, so a *coarser*
+grid can leave an extreme vertex alone in its cell and preserve it exactly where a finer grid
+averaged it inward. Decimation does not only shrink a box.
+
+`verify_city.gd`'s assertion moved with it: from "tier 0 equals the declared box" to "every tier is
+contained by it, and their union is tight to 1 cm". Re-proven non-vacuous by nudging a tile 0.5 m
+east — both halves fire and it reports "0.500 m out", the same way `P1-7` validated the original.
+
+**What is not closed.** LOD0 can come back for one platform: the 200 MB budget is the *iOS cellular*
+threshold and `ARCHITECTURE.md` gives desktop no hard limit, so a desktop-only exact-weld tier is an
+export-filter question rather than a settled no. It is one entry in `lod_cell_sizes_m` and a 3 s
+rebuild.
 
 ### 2026-08-01 — LOD is **per mesh class**: a deck is not a building, and one cell size cannot serve both
 

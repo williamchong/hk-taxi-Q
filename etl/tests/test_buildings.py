@@ -376,7 +376,8 @@ class TestBuildRegion:
         out = tmp_path / "out" / "hong_kong" / "wan_chai"
         for tile in report.tiles:
             assert [Path(lod.path).name for lod in tile.lods] == [
-                f"{tile.id}_lod{level}.glb" for level in range(3)
+                f"{tile.id}_lod{level}.glb"
+                for level in range(len(hong_kong.buildings.lod_cell_sizes_m))
             ]
             for lod in tile.lods:
                 assert (out / lod.path).exists()
@@ -434,9 +435,10 @@ class TestBuildRegion:
         gantry = Fixture("B0100", "BUILDING", 1402.0, 802.0, height=1.5, footprint=1.5)
         report = self.build(hong_kong, sources, tmp_path, [*self.buildings(), gantry])
 
+        tiers = len(hong_kong.buildings.lod_cell_sizes_m)
         by_id = {tile.id: tile for tile in report.tiles}
-        assert len(by_id["t_09_05"].lods) < 3
-        assert len(by_id["t_00_00"].lods) == 3
+        assert len(by_id["t_09_05"].lods) < tiers
+        assert len(by_id["t_00_00"].lods) == tiers
 
     def thin_deck(self) -> list[Fixture]:
         """A building next to an elevated deck, in one tile.
@@ -451,39 +453,43 @@ class TestBuildRegion:
             Fixture("I0100", "INFRASTRUCTURE", 100.0, 100.0, 0.8, footprint=30.0),
         ]
 
-    def test_a_thin_structure_survives_the_tier_that_flattens_a_building(
+    def test_the_override_keeps_a_thin_structure_the_building_cell_would_flatten(
         self, hong_kong, sources, tmp_path
     ) -> None:
-        """LOD1 decimates buildings at 1.5 m and infrastructure at 0.5 m, so the
-        deck keeps its depth while the tile still coarsens overall.
+        """The deck is thinner than the cell that decimates a building, so
+        without a per-class cell its top surface clusters into its bottom one
+        and it collapses to a flat sliver.
 
-        Collapsing per class must also not cost the tile its single primitive —
-        `game/tools/verify_tiles.gd` enforces that from the engine side.
+        Asserted as a *comparison* between two builds of the same geometry
+        rather than between two tiers of one build. Tier meanings move — the
+        finest tier stopped being an exact weld when LOD0 was dropped — but
+        "the override keeps geometry that its absence loses" is the claim, and
+        it holds whatever the table says.
         """
+        kept = self.build(hong_kong, sources, tmp_path, self.thin_deck())
+        lost = self.build(
+            replace(hong_kong, buildings=replace(hong_kong.buildings, class_lod_cell_sizes_m={})),
+            sources,
+            tmp_path,
+            self.thin_deck(),
+        )
+
+        finest = {tile.id: tile for tile in kept.tiles}["t_00_00"].lods[0].triangles
+        without = {tile.id: tile for tile in lost.tiles}["t_00_00"].lods[0].triangles
+        assert finest > without
+
+    def test_a_mixed_class_tile_is_one_mesh_at_every_tier(
+        self, hong_kong, sources, tmp_path
+    ) -> None:
+        """Collapsing per class and merging afterwards must not cost the tile its
+        single primitive — `game/tools/verify_tiles.gd` enforces the same thing
+        from the engine side."""
         report = self.build(hong_kong, sources, tmp_path, self.thin_deck())
 
-        by_id = {tile.id: tile for tile in report.tiles}
-        assert by_id["t_00_00"].lods[1].triangles == by_id["t_00_00"].lods[0].triangles
         out = tmp_path / "out" / "hong_kong" / "wan_chai"
-        for lod in by_id["t_00_00"].lods:
+        [tile] = [tile for tile in report.tiles if tile.id == "t_00_00"]
+        for lod in tile.lods:
             assert len(read_glb(out / lod.path)) == 1
-
-    def test_without_the_override_the_thin_structure_is_flattened(
-        self, hong_kong, sources, tmp_path
-    ) -> None:
-        """The other half of the check above: with one cell size for both
-        classes the deck collapses, which is what the override exists to stop.
-
-        Written out because a test that only asserts survival passes just as
-        well when the two cell sizes have quietly become equal."""
-        flattened = replace(
-            hong_kong,
-            buildings=replace(hong_kong.buildings, class_lod_cell_sizes_m={}),
-        )
-        report = self.build(flattened, sources, tmp_path, self.thin_deck())
-
-        by_id = {tile.id: tile for tile in report.tiles}
-        assert by_id["t_00_00"].lods[1].triangles < by_id["t_00_00"].lods[0].triangles
 
     def test_the_manifest_describes_the_grid(self, hong_kong, sources, tmp_path) -> None:
         self.build(hong_kong, sources, tmp_path)

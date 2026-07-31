@@ -110,6 +110,8 @@ func _check_tile(manifest: Manifest, tile: Manifest.Tile) -> PackedStringArray:
 	# `bounds_game` from the tile AABBs it was summed from.
 	var envelope: AABB = manifest.bounds.grow(TOLERANCE_M)
 	var declared: AABB = tile.aabb.grow(TOLERANCE_M)
+	# Union of every tier actually measured, to compare against the declaration.
+	var spanned: AABB = AABB()
 
 	for tier: int in tile.lods.size():
 		var path: String = tile.lods[tier]
@@ -132,8 +134,7 @@ func _check_tile(manifest: Manifest, tile: Manifest.Tile) -> PackedStringArray:
 			# ever confirms the manifest is self-consistent — which it always is,
 			# and which `export.py::_check_bounds` already checks against
 			# `buildings.json`. Geometry outside the region is the fact worth
-			# learning here, and tier 0 is where it would show: the coarser tiers
-			# are checked against `declared` below, which this pins to LOD0.
+			# learning here, and tier 0 is where it would show.
 			if not envelope.encloses(measured):
 				problems.append(
 					(
@@ -142,25 +143,37 @@ func _check_tile(manifest: Manifest, tile: Manifest.Tile) -> PackedStringArray:
 					)
 				)
 
-			# The manifest's aabb is the full-detail mesh's, so tier 0 must agree
-			# corner for corner. Anything else is a transform, not a rounding.
-			var drift: float = maxf(
-				measured.position.distance_to(tile.aabb.position),
-				measured.end.distance_to(tile.aabb.end)
-			)
-			if drift > TOLERANCE_M:
-				problems.append(
-					(
-						"%s: LOD0 spans %s, city.json says %s (%.3f m out)"
-						% [tile.id, measured, tile.aabb, drift]
-					)
-				)
-		elif not declared.encloses(measured):
-			# Coarser tiers may shrink — decimation drops vertices, and cluster
-			# means stay inside the convex hull — but cannot reach outside the
-			# full-detail extent the streamer culls against.
+		# Every tier must sit inside the box the streamer culls against, or the
+		# streamer drops a tile whose geometry is still on screen.
+		if not declared.encloses(measured):
 			problems.append(
 				"%s: LOD%d spans %s, outside the declared %s" % [tile.id, tier, measured, tile.aabb]
+			)
+		spanned = spanned.merge(measured) if spanned.size != Vector3.ZERO else measured
+
+	# ...and the box must be no *larger* than the tiers it describes.
+	#
+	# ⚠️ Containment alone is not enough, and equality against LOD0 is no longer
+	# the right test. `tiles[].aabb` used to be the full-detail mesh's, so tier 0
+	# matched it corner for corner — but the finest tier stopped being an exact
+	# weld when `P2-1` dropped LOD0, and decimation moves corners. It does not
+	# only shrink them: `collapse` buckets on `floor(position / cell_m)` and
+	# averages each bucket, so a *coarser* grid can leave an extreme vertex alone
+	# in its cell and preserve it exactly where a finer grid averaged it inward.
+	# Measured on `t_01_02`, whose 4.0 m tier stands 12.03 m taller than its
+	# 1.5 m tier. So the ETL publishes the union of the shipped tiers, and this
+	# asserts that union is tight — which still catches a tile whose mesh and
+	# manifest disagree about where it is, the reason this check exists.
+	if not spanned.size.is_zero_approx():
+		var drift: float = maxf(
+			spanned.position.distance_to(tile.aabb.position), spanned.end.distance_to(tile.aabb.end)
+		)
+		if drift > TOLERANCE_M:
+			problems.append(
+				(
+					"%s: tiers span %s, city.json says %s (%.3f m out)"
+					% [tile.id, spanned, tile.aabb, drift]
+				)
 			)
 
 	return problems

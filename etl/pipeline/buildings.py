@@ -342,6 +342,7 @@ def _write_tile(
     per_class = {name: merge(by_class[name], name=tile_id) for name in sorted(by_class)}
 
     lods: list[LodOutput] = []
+    boxes: list[Bounds] = []
     for level in range(len(style.lod_cell_sizes_m)):
         # Collapsed per class, then merged — never the other way round. Merging
         # first would put a thin bridge deck and a building wall in the same
@@ -363,6 +364,7 @@ def _write_tile(
             log.info("  %s: nothing survives LOD%d", tile_id, level)
             break
         tier = merge(pieces, name=tile_id)
+        boxes.append(tier.aabb())
 
         relative = Path("tiles") / f"{tile_id}_lod{level}.glb"
         size = write_glb(out_dir / relative, [tier])
@@ -380,12 +382,22 @@ def _write_tile(
         ix=ix,
         iz=iz,
         meshes=sum(len(group) for group in by_class.values()),
-        # Composed from the per-class boxes rather than from a merge of them.
-        # Once the collapse moved after the merge, a whole-tile merge existed
-        # only to take this min/max — the single largest array the stage builds,
-        # held live across the tier loop, for six numbers. Exact either way:
-        # min-of-mins over the same positions, no float drift.
-        aabb=_union(mesh.aabb() for mesh in per_class.values()),
+        # The union of the **shipped tiers**, not of the source geometry.
+        #
+        # This is what the runtime culls with and what `bounds_game` is summed
+        # from, so it has to describe what a build actually contains. Measuring
+        # it from the uncollapsed source was right only while tier 0 was an exact
+        # weld: decimation pulls vertices to cluster centroids and drops anything
+        # thinner than a cell, so a source box can exceed every mesh that ships.
+        # Measured when the finest tier became 1.5 m — one tile's declared height
+        # ran **19 m** past its own LOD0, a mast too thin to survive the cell.
+        # `verify_city.gd` compares the two in-engine and caught it.
+        #
+        # A union rather than tier 0's box alone, because nothing guarantees a
+        # coarser tier sits inside a finer one — a cluster mean can move a vertex
+        # outward — and a box that fails to contain a tier would cull geometry
+        # that is about to be drawn.
+        aabb=_union(boxes) if boxes else _union(mesh.aabb() for mesh in per_class.values()),
         lods=lods,
     )
 

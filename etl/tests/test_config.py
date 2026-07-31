@@ -150,7 +150,10 @@ class TestBuildingStyle:
         style = hong_kong.buildings
         assert "BUILDING" in style.classes
         assert style.height_bands[-1].up_to_m == float("inf")
-        assert style.lod_cell_sizes_m[0] == 0.0
+        # Finest first. Not "the first is 0.0" — an exact-weld tier is a
+        # shipping decision, and Wan Chai stopped shipping one when `P2-1`'s
+        # review found LOD1 indistinguishable at closest range.
+        assert style.lod_cell_sizes_m[0] == min(style.lod_cell_sizes_m)
 
     def test_terrain_is_not_a_building_class(self, hong_kong) -> None:
         """The tile output is specified to contain no textures, and the LandsD
@@ -218,7 +221,10 @@ class TestBuildingStyle:
         expensive read; a long one describes tiers that never exist."""
 
         def truncate(doc: dict[str, Any]) -> None:
-            doc["buildings"]["class_lod_cell_sizes_m"] = {"INFRASTRUCTURE": [0.0, 0.5]}
+            # One short of whatever the city declares, so the test cannot go
+            # vacuous the next time the tier count changes.
+            short = doc["buildings"]["lod_cell_sizes_m"][:-1]
+            doc["buildings"]["class_lod_cell_sizes_m"] = {"INFRASTRUCTURE": short}
 
         with pytest.raises(ValueError, match="tiers"):
             load_city("hong_kong", cities_root=rewrite(truncate))

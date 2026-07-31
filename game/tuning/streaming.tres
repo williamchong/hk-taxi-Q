@@ -4,7 +4,7 @@
 
 [resource]
 script = ExtResource("1_streaming")
-tier_distances_m = PackedFloat32Array(100, 250)
+tier_distances_m = PackedFloat32Array(250)
 unload_distance_m = 400.0
 hysteresis_m = 15.0
 max_loads_in_flight = 8

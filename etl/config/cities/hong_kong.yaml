@@ -148,7 +148,7 @@ buildings:
   # +8.5% and +21% here, and the deck survives either way — it only has to beat
   # its own thickness.
   class_lod_cell_sizes_m:
-    INFRASTRUCTURE: [0.0, 0.5, 1.0]
+    INFRASTRUCTURE: [0.5, 1.0]
 
   # Otherwise coloured by the building's own height above its base. The ramp
   # runs warm-and-darker for the low pre-war and post-war stock to cool-and-
@@ -174,7 +174,7 @@ buildings:
   # Vertex-clustering cell size per LOD tier, in metres. 0.0 is an exact weld —
   # lossless, and worth doing because the source repeats every vertex per
   # triangle. See docs/ART_DESIGN.md "LOD policy" for the switch distances.
-  lod_cell_sizes_m: [0.0, 1.5, 4.0]
+  lod_cell_sizes_m: [1.5, 4.0]
 
 # How P1-3 turns Road Network v2 into a drivable graph.
 #
