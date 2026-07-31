@@ -7,7 +7,11 @@ Lands Department's 3D Digital Map. Wan Chai and Causeway Bay, reconstructed to t
 Hong Kong driver can navigate it from memory — then widened, ramped, and tuned until it's fun to
 drive badly.
 
-> **Status:** planning complete, no code yet. See [`docs/PROGRESS.md`](docs/PROGRESS.md).
+> **Status:** Phase 1 complete — the real city builds from open data and renders in Godot. Wan Chai
+> is 65 building tiles, 797 road edges with turn restrictions, a drivable road surface and 29 taxi
+> stands, assembled by one command in 4.4 s. It is drivable in a browser. Next is Phase 2: tile
+> streaming, a road-graph runtime, and the car on real geometry. See
+> [`docs/PROGRESS.md`](docs/PROGRESS.md).
 
 ---
 
@@ -33,7 +37,7 @@ The design goal is narrow and testable:
 | | |
 |---|---|
 | Engine | Godot 4.7, GDScript, Jolt physics |
-| Pipeline | Python 3.11+ — GDAL/OGR, geopandas |
+| Pipeline | Python 3.11+ — `pyogrio` (ships its own GDAL), `pyproj`, `numpy` |
 | Targets | iOS, Android, desktop/Steam; web export for a demo slice |
 | Region | Wan Chai → Causeway Bay, ~1.5 km² |
 
@@ -56,33 +60,56 @@ The ETL runs **at build time only**. The game ships static assets and makes no n
 
 ## Getting started
 
-The Godot project is scaffolded. You need [Godot 4.7](https://godotengine.org/) — on macOS,
-`brew install --cask godot`.
+You need [Godot 4.7](https://godotengine.org/) — on macOS, `brew install --cask godot` — and
+Python 3.11+.
+
+**Build the city.** The first run downloads ~283 MB of source data and caches it; after that the
+whole region rebuilds in about 4.4 seconds. Output is gitignored build artefact, not source, so a
+fresh clone has none of it until you do this:
 
 ```bash
-# Open the editor
-open -a Godot --args --path "$PWD/game"
+python3 -m venv .venv && .venv/bin/pip install -e "etl/[dev]"
 
-# Or run the current scene directly
-/Applications/Godot.app/Contents/MacOS/Godot --path game
-
-# Export (macOS + web; needs export templates installed)
-tools/export.sh
-
-# Play the web export. Not `python -m http.server` — the build needs
-# SharedArrayBuffer, which browsers gate behind COOP/COEP headers.
-tools/export.sh web && tools/serve_web.py
+cd etl && ../.venv/bin/python -m pipeline --city hong_kong --region wan_chai && cd ..
+tools/sync_generated.sh          # copies exactly what city.json names
 ```
 
-There is no ETL yet — `P0-4`. Once the pipeline exists:
+**Look at it.** Open the project (`open -a Godot --args --path "$PWD/game"`) and press **F6** on
+`scenes/dev/city_preview.tscn` to fly around the city, or `scenes/dev/city_drive.tscn` to drive it.
+
+**Check it.** The ETL cannot assert engine-side facts about its own output, so three headless tools
+do — draw calls and vertex colours, road collision, and whether the imported geometry actually
+lands where `city.json` says:
 
 ```bash
-# Build city assets
-cd etl
-python -m pipeline --city hong_kong --region wan_chai
+godot --headless --path game --script res://tools/verify_city.gd
+godot --headless --path game --script res://tools/verify_tiles.gd
+godot --headless --path game --script res://tools/verify_road_surface.gd
 ```
 
-Next task is `P0-5`, the grey-box fun test — see [`docs/PLAN.md`](docs/PLAN.md).
+⚠️ Running Godot rewrites `game/project.godot` and `game/export_presets.cfg`, stripping their
+comments. Restore them afterwards and verify with `git diff --exit-code` — `git checkout` reports
+nothing useful either way.
+
+**Export and play it in a browser.**
+
+```bash
+tools/export.sh              # macOS + web; needs export templates installed
+tools/serve_web.py           # then open http://127.0.0.1:8060
+```
+
+Not `python -m http.server`: the build needs `SharedArrayBuffer`, which browsers gate behind
+COOP/COEP headers that it does not send.
+
+**Checks**, from the repo root:
+
+```bash
+.venv/bin/python -m ruff check . && .venv/bin/python -m ruff format --check .
+cd etl && ../.venv/bin/python -m pytest
+```
+
+Next up is Phase 2 — tile streaming, the road-graph runtime, and the car on real geometry. See
+[`docs/PLAN.md`](docs/PLAN.md).
 
 ---
 

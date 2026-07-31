@@ -54,11 +54,128 @@ Requirements we must meet:
 - **Why:** This is a low-poly building by construction. Use as primary massing source or as a
   cross-check against the non-textured models.
 
-### ✅ USE (sparingly) — 3D Visualisation Map (Individualised models)
+### ⚠️ PROBABLY NOT NEEDED — 3D Visualisation Map (Individualised models)
 
 - **Portal:** https://data.gov.hk/en-data/dataset/hk-landsd-openmap-3d-visualisation-map-individualised-models
 - **Formats:** MAX, FBX, glTF. Includes textures.
-- **Use only for the ~5 hero landmarks** whose silhouettes LOD1 extrusion destroys.
+- **Official description (verified 2026-07-31):** "digital data of 3D models featuring geometry
+  models **and texture maps** to represent the geometrical shape, **appearance** and position of
+  different types of ground objects" — building, infrastructure, **vegetation, waterbody**,
+  terrain and **generic (others)**. The non-textured set's description is the same sentence minus
+  the texture maps, minus "appearance", and minus three object classes: it ships building,
+  infrastructure and terrain only.
+- ⚠️ **"Individualised" does not mean "per-object separated."** It distinguishes this set from
+  **tile-based** (one welded photogrammetry mesh per tile), not from non-textured. Both per-building
+  sets are individuated — a non-textured sheet unpacks to one `.gltf` per building (see "What a
+  sheet actually contains") — and the **building count is identical: 59 in both** on `11-SW-9D`.
+  Whole-sheet model counts differ only because individualised ships extra object classes (73 vs 69
+  on `9D`, 769 vs 738 on `14B`). **Textured ≠ individualised** either, since tile-based carries
+  textures too. Between *these two* sets, texture maps and object classes are the discriminators.
+- **Coverage: whole territory, same sheet grid as non-textured** — the index is 3,456 features with
+  the same `SHEETNO` scheme. All six Wan Chai sheets are present: `11-SW-9D`, `10C`, `10D`, `14B`,
+  `15A`, `15B`.
+- **The download discriminator is one character** in the format code — the trailing `0` *is* the
+  non-textured variant. Same host, same sheet number, same shared key:
+
+  ```
+  …/api/3d-zip/GLTF0/11-SW-10C.zip?key=…   → non-textured      44 MB
+  …/api/3d-zip/GLTF/11-SW-10C.zip?key=…    → individualised   753 MB
+  ```
+
+- ⚠️ **This bullet used to read "use only for the ~5 hero landmarks whose silhouettes LOD1
+  extrusion destroys". The measurements below refute it** — the non-textured set carries the
+  identical geometry, so this buys **texture maps and three extra object classes, not shape**. The
+  only reason to reach for it is textures. See the verdict at the end of this section.
+
+#### Measured cost (verified 2026-07-31)
+
+Wan Chai in individualised form is **5.86 GB zipped** — 15–27× the non-textured equivalent:
+
+| Sheet | Individualised | Non-textured |
+|---|---|---|
+| `11-SW-9D` | 588 MB | 40 MB |
+| `11-SW-10C` | 753 MB | 44 MB |
+| `11-SW-10D` | 1,091 MB | — |
+| `11-SW-14B` | 1,329 MB | 49 MB |
+| `11-SW-15A` | 1,094 MB | — |
+| `11-SW-15B` | 1,002 MB | — |
+| **Total** | **5,859 MB** | — |
+
+**93–96% of that is texture**, read from the zip central directory without downloading the payloads:
+
+| | `11-SW-9D` | `11-SW-14B` |
+|---|---|---|
+| Individualised — textures (jpg + png) | **545.9 MB — 93%** | **1,277 MB — 96%** |
+| Individualised — geometry (bin + gltf) | 42.2 MB | 51.3 MB |
+| Non-textured — terrain jpg (1 file) | 32.5 MB | 34.2 MB |
+| Non-textured — geometry (bin + gltf) | 7.2 MB | 14.9 MB |
+
+#### The two sets share their building geometry exactly (verified 2026-07-31)
+
+**The buildings are the same models.** Sheet `11-SW-9D` carries **59 building models in both sets**,
+and the per-building geometry is identical: **12 buildings sampled, 12 matched exactly** on both
+triangle and vertex count, spanning 12 to 12,274 triangles. Both sets are unwelded at exactly 3.0
+verts per triangle. Individualised splits a mesh into 1–4 primitives depending on how many textures
+it takes, but the triangle total is unchanged.
+
+**Building IDs match on a shared stem, with the variant in the suffix:**
+
+```
+BUILDING/B352631575201063C0/…   → non-textured     …C0
+BUILDING/B352631575201063A0/…   → individualised   …A0
+```
+
+That makes the stem a **stable cross-dataset building key** — a landmark can be matched between the
+two sets by ID, with no spatial join.
+
+What actually differs per building is how the surface is described:
+
+| | Non-textured | Individualised |
+|---|---|---|
+| Attributes | `POSITION`, `NORMAL`, **`COLOR_0`** | `POSITION`, `NORMAL`, **`TEXCOORD_0`** |
+| Primitives | 1 | 4 (one per texture) |
+| Materials / images | 1 / 0 | 4 / 4 |
+| `.bin` for all 59 buildings | 14.0 MB | **12.2 MB** |
+
+Individualised buildings are *slightly smaller* on disk — `TEXCOORD_0` costs less than `COLOR_0`.
+
+**The extra ~94 MB of geometry is three object classes the non-textured set does not ship at all**,
+not denser buildings. Uncompressed `.bin` by folder on `11-SW-9D`:
+
+| Folder | Non-textured | Individualised |
+|---|---|---|
+| `BUILDING` (59 models) | 14.0 MB | 12.2 MB |
+| `TERRAIN(TB)` | 8.1 MB | 8.1 MB |
+| `INFRASTRUCTURE` (9 models) | 4.4 MB | 3.9 MB |
+| `GENERIC` | — | **47.1 MB** |
+| `INFRASTRUCTURE(TB)` | — | **36.5 MB** |
+| `VEGETATION(TB)` | — | **12.8 MB** |
+| `WATERBODY` | — | 0.0 MB |
+| **Total** | **26.5 MB** | **120.7 MB** |
+
+Shared classes are equal to within a rounding error. Terrain is byte-identical.
+
+✅ **This confirms `P3-6` rather than reopening it.** The stated reason to reach for individualised
+models is hero landmarks "whose silhouettes LOD1 extrusion destroys" — but that concern belongs to
+**3D-BIT00 Level 1**, which is extruded from footprints by definition. The non-textured 3D
+Visualisation Map is *not* an extrusion: it already carries the individualised set's exact
+silhouette, at the same **612 triangles per building** measured elsewhere in this file (up to
+~12k for the largest of 12 sampled). **Individualised therefore buys textures and three extra
+object classes — not one triangle of extra shape.** `PLAN.md`'s `P3-6` already specifies authored
+geometry with *"source geometry excluded"*; this measurement explains why that was the right call.
+If hero landmarks need to read as landmarks, the lever is textures or hand-authored geometry, not
+this dataset swap.
+
+✅ **`P3-6` never needs the 5.9 GB.** `download.map.gov.hk` returns `Accept-Ranges: bytes`, so the
+zip central directory can be read with a range request on the tail, and the hero building's
+`.gltf`/`.bin` entries then pulled by byte range — leaving the ~700 MB of JPEGs undownloaded. That
+is also how the split above was measured.
+
+💡 **The "non-textured" download is itself 70–81% texture.** Each GLTF0 zip carries one terrain
+JPEG — 32.5 MB of a 40 MB sheet — for the terrain *texture*, rejected under "Terrain does not fit
+any budget". The terrain mesh itself stays in the pipeline regardless: it is the height field `Q11`
+is resolved by sampling.
+Actual building geometry is only ~7–15 MB per sheet.
 
 ### ❌ DO NOT USE — 3D Visualisation Map (Tile-based models)
 
@@ -474,6 +591,20 @@ Verified to return bytes **identical by SHA-256** to the portal's own download b
 `38e270f8…`). No key, no session, no account. The endpoint is parameterised by dataset, format and
 layer rather than being one-off, so it generalises to any CSDI dataset — including 3D-BIT00.
 
+✅ **The generalisation is verified, not assumed** (2026-07-31). Swapping in the individualised
+dataset returned its 3,456-feature index with no key, no session and no account:
+
+```
+https://portal.csdi.gov.hk/csdi-webpage/file-api
+    ?dataset_id=landsd_rcd_1671676915450_88604
+    &format=geojson
+    &layer_name=Individualised_models
+```
+
+Its features carry the same `SHEETNO` / `REVISIONDATE` / `Format_glTF|FBX|MAX` properties as the
+non-textured index, plus `URL_3D_Visualisation_Map` and `Download_API`. Layer names come from the
+ISO 19139 record — grep it for `layer_name=` rather than guessing the capitalisation.
+
 It is published in the portal's ISO 19139 metadata record, which is the thing to re-read if the URL
 ever stops working:
 `https://portal.csdi.gov.hk/geoportal/rest/metadata/item/<datasetId>`. That record also advertises
@@ -483,6 +614,7 @@ if the 3.2 MB whole-index download ever becomes inconvenient. It has not.
 **Portal entry points** (for a human re-checking the index):
 
 - Non-textured models: `https://portal.csdi.gov.hk/geoportal/?datasetId=landsd_rcd_1742809441342_98380`
+- Individualised models: `https://portal.csdi.gov.hk/geoportal/?datasetId=landsd_rcd_1671676915450_88604`
 - 3D-BIT00: `https://portal.csdi.gov.hk/geoportal/?datasetId=landsd_rcd_1637306559892_42396`
 
 **The Cesium 3D Tiles API remains irrelevant**, and that part of the old note stands:

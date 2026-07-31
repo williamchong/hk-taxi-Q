@@ -12,7 +12,7 @@ them without explicit instruction from the user.
 | Engine | **Godot 4.7**, Mobile renderer | Commercial mobile app target; native perf; MIT, no royalties |
 | Physics | **Jolt** (Godot default since 4.4) | Wheeled vehicle controller built in |
 | Language | **GDScript** (not C#) | C# web export is unsupported, and iOS/Android C# export is experimental. See `docs/ARCHITECTURE.md`. |
-| ETL | **Python 3.11+** (GDAL/OGR, geopandas) | Best geodata tooling; runs offline at build time |
+| ETL | **Python 3.11+** (`pyogrio`, `pyproj`, `numpy`) | Best geodata tooling; runs offline at build time. `pyogrio` ships its own GDAL, so no system install. **No geopandas** — `gdb.py` wants coordinate arrays, and GeoDataFrames would add pandas to reach the same numpy underneath |
 | Building source | **3D Visualisation Map (non-textured)** + **3D-BIT00 Level 1** | Already flat-shaded extruded volumes — the low-poly look is native to this data |
 | Region (PoC) | **Wan Chai → Causeway Bay**, ~1.5 km² | Natural circuit, diegetic map edges, moderate Z-complexity |
 | Art direction | Low-poly flat-shaded; **accurate city, toy vehicles** | Recognisability requires accurate massing; charm comes from the cars |
@@ -39,7 +39,8 @@ them without explicit instruction from the user.
 
 ## Commits — gitmoji
 
-Format: `<emoji> [<task-id>] <imperative summary>`
+Format: `<emoji> <task-id> <imperative summary>` — **no brackets**, matching all 24 commits so far
+and the examples below.
 
 The task ID is **required** when the work maps to a task in `docs/PLAN.md`, omitted otherwise.
 
@@ -75,9 +76,17 @@ Common emoji for this project:
 
 ## Before marking work done
 
-- Python changes: `ruff check` and `pytest` pass.
+- Python changes: `ruff check .` and `ruff format --check .` **from the repo root** (the root
+  `ruff.toml` extends the ETL rules to `tools/*.py`; running ruff from `etl/` skips them), and
+  `pytest` from `etl/`.
 - ETL changes: the pipeline runs end-to-end on the Wan Chai config without errors.
-- Godot changes: the project opens without script errors and the target scene runs.
+- Godot changes: the project opens without script errors, the target scene runs, and the three
+  headless checks pass — `verify_city.gd`, `verify_tiles.gd`, `verify_road_surface.gd`.
+- ⚠️ **Running Godot at all rewrites `game/project.godot` and `game/export_presets.cfg`**, stripping
+  every comment and `renderer/rendering_method.web`. Restore both and verify with
+  `git diff --exit-code -- game/project.godot game/export_presets.cfg`. `git checkout` prints
+  `Updated 0 paths from the index` whether or not it restored anything, so its output proves
+  nothing. Never commit either file as a side effect of a Godot run.
 - Update `docs/PROGRESS.md` — task status, plus any new decision or open question.
 
 ## Where to look
