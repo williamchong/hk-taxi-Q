@@ -43,13 +43,23 @@ static func triangles(node: Node) -> int:
 static func bounds(node: Node) -> AABB:
 	var boxes: Array[AABB] = []
 	_collect(node, Transform3D.IDENTITY, boxes)
+	return union(boxes)
+
+
+## The smallest box containing every box given, or a zero-size one for none.
+##
+## Seeded from the first entry rather than from `AABB()`, which is not a neutral
+## element: it is a zero-size box *at the world origin*, and the region starts
+## there, so merging one in silently stretches the result back to (0, 0, 0).
+## Written once here because the same trap is one loop away in `_collect`, and
+## `tools/verify_city.gd` needs it over a tile's tiers.
+static func union(boxes: Array[AABB]) -> AABB:
 	if boxes.is_empty():
 		return AABB()
-
-	var union: AABB = boxes[0]
+	var box: AABB = boxes[0]
 	for index: int in range(1, boxes.size()):
-		union = union.merge(boxes[index])
-	return union
+		box = box.merge(boxes[index])
+	return box
 
 
 static func _collect(node: Node, parent: Transform3D, into: Array[AABB]) -> void:

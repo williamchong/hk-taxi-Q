@@ -325,7 +325,9 @@ def build_region(
     # Popped as they are written so the bucket payload — 133 MB for Wan Chai —
     # decays across the write stage instead of all staying live to the end.
     for tile in sorted(buckets):
-        report.tiles.append(_write_tile(place.out_dir, tile, buckets.pop(tile), style))
+        written = _write_tile(place.out_dir, tile, buckets.pop(tile), style)
+        if written is not None:
+            report.tiles.append(written)
 
     _write_manifest(place.out_dir, city, place.region, place.grid, report)
     return report
@@ -333,7 +335,16 @@ def build_region(
 
 def _write_tile(
     out_dir: Path, tile: tuple[int, int], by_class: dict[str, list[MeshData]], style: BuildingStyle
-) -> TileOutput:
+) -> TileOutput | None:
+    """One tile at every tier it has, or `None` when it has none.
+
+    A tile with no tier ships nothing, so publishing it would put a square in
+    the manifest that names no file — which `export.py` and `verify_city.gd`
+    both reject, and whose AABB would still widen `bounds_game` with geometry
+    no build contains. Dropping it is the only honest option and it only became
+    reachable when the finest tier stopped being an exact weld: anything that
+    fits inside one 1.5 m cell now empties at level 0.
+    """
     ix, iz = tile
     tile_id = f"t_{ix:02d}_{iz:02d}"
     # Sorted so a rerun writes byte-identical tiles: merge order decides vertex
@@ -357,10 +368,10 @@ def _write_tile(
                 # This class has nothing left at this cell size; another may.
                 continue
         if not pieces:
-            # Everything in this tile is smaller than the cell. Correct at LOD2
-            # for a tile holding one sign gantry — but the tiers coarsen, so
-            # every later one vanishes too, and a tile with nothing left to draw
-            # at 400 m must not take the whole region's build down with it.
+            # Everything left in this tile is smaller than the cell. Expected at
+            # the coarsest tier for a square holding one sign gantry — the tiers
+            # coarsen, so every later one vanishes too, and that must not take
+            # the whole region's build down with it.
             log.info("  %s: nothing survives LOD%d", tile_id, level)
             break
         tier = merge(pieces, name=tile_id)
@@ -376,6 +387,13 @@ def _write_tile(
                 bytes=size,
             )
         )
+
+    if not lods:
+        # Nothing survived even the finest tier. Warned rather than logged at
+        # info: a square of the city vanishing is worth noticing, and the cell
+        # size is the thing to look at.
+        log.warning("  %s: nothing survives any tier; the tile is dropped", tile_id)
+        return None
 
     return TileOutput(
         id=tile_id,
@@ -397,7 +415,7 @@ def _write_tile(
         # coarser tier sits inside a finer one — a cluster mean can move a vertex
         # outward — and a box that fails to contain a tier would cull geometry
         # that is about to be drawn.
-        aabb=_union(boxes) if boxes else _union(mesh.aabb() for mesh in per_class.values()),
+        aabb=_union(boxes),
         lods=lods,
     )
 

@@ -144,9 +144,9 @@ buildings:
   # and on the Hennessy Road footbridge; see docs/PROGRESS.md.
   #
   # 0.5 m and 1.0 m rather than an outright exemption. Exempting infrastructure
-  # entirely costs +20% of the region's LOD1 triangles and +57% of LOD2, against
-  # +8.5% and +21% here, and the deck survives either way — it only has to beat
-  # its own thickness.
+  # entirely cost +20% and +57% on the two coarser tiers of the old three-tier
+  # table, against +8.5% and +21% for these, and the deck survives either way —
+  # it only has to beat its own thickness.
   class_lod_cell_sizes_m:
     INFRASTRUCTURE: [0.5, 1.0]
 
@@ -171,9 +171,12 @@ buildings:
   # the block reads as a single object rather than many buildings.
   colour_jitter: 0.06
 
-  # Vertex-clustering cell size per LOD tier, in metres. 0.0 is an exact weld —
-  # lossless, and worth doing because the source repeats every vertex per
-  # triangle. See docs/ART_DESIGN.md "LOD policy" for the switch distances.
+  # Vertex-clustering cell size per LOD tier, in metres, coarsest last.
+  #
+  # No 0.0 entry, and that is the P2-1 review's verdict rather than an
+  # oversight: an exact-weld tier was indistinguishable from 1.5 m at closest
+  # range and cost 30.5 MB of a 51.6 MB bundle. Adding one back is this line
+  # plus a rebuild. See docs/ART_DESIGN.md "LOD policy" and Q16.
   lod_cell_sizes_m: [1.5, 4.0]
 
 # How P1-3 turns Road Network v2 into a drivable graph.

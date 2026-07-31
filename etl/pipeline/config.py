@@ -95,8 +95,9 @@ class BuildingStyle:
     # Fraction of brightness a building's colour may be varied by, seeded from
     # its own id so the result is stable across runs.
     colour_jitter: float
-    # One clustering cell size per LOD tier, in metres, coarsest last. The first
-    # is normally 0.0 — an exact weld, losing nothing.
+    # One clustering cell size per LOD tier, in metres, coarsest last. A 0.0
+    # entry is an exact weld that loses nothing; whether a city ships one is a
+    # bundle decision, not a rule (Q16).
     lod_cell_sizes_m: tuple[float, ...]
     # Cell sizes for a class that must not decimate like the rest, overriding
     # the table above. Same length, same ordering rule.

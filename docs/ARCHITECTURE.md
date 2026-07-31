@@ -343,7 +343,7 @@ past its own LOD0. Nor is tier 0's box enough on its own — `collapse` buckets 
 `floor(position / cell_m)` and averages, so a coarser grid can leave an extreme vertex alone in its
 cell and preserve it where a finer grid averaged it inward, measured at 12.03 m on `t_01_02`.
 `game/tools/verify_city.gd` asserts every tier is contained and the union is tight to 1 cm.
-Separate files rather than one GLB with three meshes, because the streamer loads a tier at a time.
+Separate files rather than one GLB holding every tier, because the streamer loads one at a time.
 
 **A tile's `aabb` can be larger than the tile.** Buildings are assigned to a tile whole, by their
 centre, so one may overhang its neighbour by half a footprint — measured at up to 222 m across a
@@ -734,11 +734,17 @@ preloading. Never reference a `class_name` global from a `--script` tool.
 
 `verify_tiles.gd` asserts the draw-call, vertex-colour and no-texture properties this contract
 states, for every tier of every tile the manifest names. `verify_city.gd` closes the other half of
-the round trip: it measures each imported LOD0 mesh and compares it to the `aabb` `export.py`
-recorded, to 1 cm — an axis flip, a unit scale or a dropped offset moves a corner by metres, and
-nothing else in the project would see it. It also checks that coarser tiers stay inside the extent
-the streamer will cull against, that every tile sits inside `bounds_game`, and that the three
-documents the manifest names exist. **Z-fighting it cannot check** — `--headless` loads the dummy
+the round trip: it measures **every** imported tier and compares their union to the `aabb`
+`export.py` recorded, to 1 cm — an axis flip, a unit scale or a dropped offset moves a corner by
+metres, and nothing else in the project would see it. It also checks that each tier individually
+sits inside the box the streamer culls against, that the tiers together sit inside `bounds_game`,
+and that the three documents the manifest names exist.
+
+It compared tier 0 alone until `P2-1` dropped the exact-weld tier, on the assumption that the finest
+tier contained the rest. It does not: a coarser grid can preserve an extreme vertex a finer one
+averaged inward, measured at 12.03 m. The residual gap is named in the tool — the union being tight
+does not pin any *individual* tier, so a defect confined to one that stays inside the declared box
+now passes, and closing that needs a per-tier `aabb` in the contract. **Z-fighting it cannot check** — `--headless` loads the dummy
 rasteriser, so there is no frame to inspect. A windowed run can: render, nudge the camera ~2 cm,
 diff. A fighting surface flips wholesale under a sub-pixel move where anti-aliased edges only
 shift. Measured 0.071% on Hennessy Road at `P1-7`; one camera at one place, so flying around is

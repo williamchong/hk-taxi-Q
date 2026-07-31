@@ -116,9 +116,10 @@ def collapse(mesh: MeshData, *, cell_m: float) -> MeshData:
     on position alone and a wall vertex averages with the roof vertex above it,
     rounding off the hard normals the source ships and the style depends on.
 
-    `cell_m <= 0` welds exactly: same position, same normal, one vertex. That is
-    LOD0 — lossless, and worth doing because the source repeats every vertex per
-    triangle.
+    `cell_m <= 0` welds exactly: same position, same normal, one vertex —
+    lossless, and worth doing because the source repeats every vertex per
+    triangle. Whether any tier asks for it is the city's choice; Hong Kong
+    stopped shipping one at Q16.
     """
     exact = cell_m <= 0.0
     if exact:

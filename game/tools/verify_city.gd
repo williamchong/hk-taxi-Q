@@ -110,8 +110,7 @@ func _check_tile(manifest: Manifest, tile: Manifest.Tile) -> PackedStringArray:
 	# `bounds_game` from the tile AABBs it was summed from.
 	var envelope: AABB = manifest.bounds.grow(TOLERANCE_M)
 	var declared: AABB = tile.aabb.grow(TOLERANCE_M)
-	# Union of every tier actually measured, to compare against the declaration.
-	var spanned: AABB = AABB()
+	var measured_boxes: Array[AABB] = []
 
 	for tier: int in tile.lods.size():
 		var path: String = tile.lods[tier]
@@ -127,21 +126,7 @@ func _check_tile(manifest: Manifest, tile: Manifest.Tile) -> PackedStringArray:
 		if measured.size == Vector3.ZERO:
 			problems.append("%s: %s carries no mesh to measure" % [tile.id, path])
 			continue
-
-		if tier == 0:
-			# Against the *measured* mesh, not against `tile.aabb`. `bounds_game`
-			# is summed from those declared corners, so comparing the two only
-			# ever confirms the manifest is self-consistent — which it always is,
-			# and which `export.py::_check_bounds` already checks against
-			# `buildings.json`. Geometry outside the region is the fact worth
-			# learning here, and tier 0 is where it would show.
-			if not envelope.encloses(measured):
-				problems.append(
-					(
-						"%s: LOD0 spans %s, outside bounds_game %s"
-						% [tile.id, measured, manifest.bounds]
-					)
-				)
+		measured_boxes.append(measured)
 
 		# Every tier must sit inside the box the streamer culls against, or the
 		# streamer drops a tile whose geometry is still on screen.
@@ -149,9 +134,30 @@ func _check_tile(manifest: Manifest, tile: Manifest.Tile) -> PackedStringArray:
 			problems.append(
 				"%s: LOD%d spans %s, outside the declared %s" % [tile.id, tier, measured, tile.aabb]
 			)
-		spanned = spanned.merge(measured) if spanned.size != Vector3.ZERO else measured
 
-	# ...and the box must be no *larger* than the tiers it describes.
+	# A tier that failed above already has its own problem recorded, and the two
+	# checks below compare against *every* tier — so running them on a partial
+	# set would raise a second, bogus complaint pointing at the wrong thing.
+	if measured_boxes.size() != tile.lods.size():
+		return problems
+
+	var spanned: AABB = MeshContract.union(measured_boxes)
+
+	# Against the *measured* meshes, not against `tile.aabb`. `bounds_game` is
+	# summed from those declared corners, so comparing the two only ever confirms
+	# the manifest is self-consistent — which it always is, and which
+	# `export.py::_check_bounds` already checks against `buildings.json`.
+	# Geometry outside the region is the fact worth learning here.
+	#
+	# Over every tier, not tier 0 alone. That shortcut held while the finest tier
+	# was an exact weld and so contained the rest; `P2-1` disproved it — a
+	# coarser tier can stand *taller*, measured at 12.03 m on `t_01_02`.
+	if not envelope.encloses(spanned):
+		problems.append(
+			"%s: tiers span %s, outside bounds_game %s" % [tile.id, spanned, manifest.bounds]
+		)
+
+	# ...and the declared box must be no *larger* than the tiers it describes.
 	#
 	# ⚠️ Containment alone is not enough, and equality against LOD0 is no longer
 	# the right test. `tiles[].aabb` used to be the full-detail mesh's, so tier 0
@@ -160,20 +166,25 @@ func _check_tile(manifest: Manifest, tile: Manifest.Tile) -> PackedStringArray:
 	# only shrink them: `collapse` buckets on `floor(position / cell_m)` and
 	# averages each bucket, so a *coarser* grid can leave an extreme vertex alone
 	# in its cell and preserve it exactly where a finer grid averaged it inward.
-	# Measured on `t_01_02`, whose 4.0 m tier stands 12.03 m taller than its
-	# 1.5 m tier. So the ETL publishes the union of the shipped tiers, and this
-	# asserts that union is tight — which still catches a tile whose mesh and
-	# manifest disagree about where it is, the reason this check exists.
-	if not spanned.size.is_zero_approx():
-		var drift: float = maxf(
-			spanned.position.distance_to(tile.aabb.position), spanned.end.distance_to(tile.aabb.end)
-		)
-		if drift > TOLERANCE_M:
-			problems.append(
-				(
-					"%s: tiers span %s, city.json says %s (%.3f m out)"
-					% [tile.id, spanned, tile.aabb, drift]
-				)
+	# So the ETL publishes the union of the shipped tiers and this asserts that
+	# union is tight, which still catches a tile whose mesh and manifest disagree
+	# about where it is — the reason this check exists.
+	#
+	# ⚠️ **It is weaker than what it replaced, and the gap is worth naming.** The
+	# old check pinned tier 0's two corners to the manifest. This one pins the
+	# union, so a defect confined to one tier that leaves it *inside* the
+	# declared box — a mis-scaled or inward-shifted LOD0, say — now passes.
+	# Closing that needs a per-tier `aabb` in the data contract, which is a
+	# schema bump rather than a check change; it belongs with `P2-6`.
+	var drift: float = maxf(
+		spanned.position.distance_to(tile.aabb.position), spanned.end.distance_to(tile.aabb.end)
+	)
+	if drift > TOLERANCE_M:
+		problems.append(
+			(
+				"%s: tiers span %s, city.json says %s (%.3f m out)"
+				% [tile.id, spanned, tile.aabb, drift]
 			)
+		)
 
 	return problems

@@ -354,16 +354,28 @@ class TestBuildRegion:
             Fixture("B0009", "BUILDING", -900.0, 300.0, 40.0),  # outside the region
         ]
 
-    def build(self, hong_kong, sources, tmp_path: Path, fixtures: list[Fixture] | None = None):
-        """One end-to-end run. `fixtures` overrides the default set, and
-        `hong_kong` takes any city — a test that varies the config passes its
-        own."""
+    def build(
+        self,
+        hong_kong,
+        sources,
+        tmp_path: Path,
+        fixtures: list[Fixture] | None = None,
+        out: str = "out",
+    ):
+        """One end-to-end run. `fixtures` overrides the default set, `hong_kong`
+        takes any city so a test can vary the config, and `out` separates two
+        runs in one test — without it the second silently overwrites the first's
+        GLBs under the same tmp_path."""
         return build_region(
             hong_kong,
             "wan_chai",
             sources_root=sources(self.buildings() if fixtures is None else fixtures),
-            out_root=tmp_path / "out",
+            out_root=tmp_path / out,
         )
+
+    def tile(self, report, tile_id: str):
+        """One tile of a report, by id."""
+        return {output.id: output for output in report.tiles}[tile_id]
 
     def test_it_writes_a_tile_per_occupied_cell(self, hong_kong, sources, tmp_path) -> None:
         report = self.build(hong_kong, sources, tmp_path)
@@ -436,9 +448,8 @@ class TestBuildRegion:
         report = self.build(hong_kong, sources, tmp_path, [*self.buildings(), gantry])
 
         tiers = len(hong_kong.buildings.lod_cell_sizes_m)
-        by_id = {tile.id: tile for tile in report.tiles}
-        assert len(by_id["t_09_05"].lods) < tiers
-        assert len(by_id["t_00_00"].lods) == tiers
+        assert len(self.tile(report, "t_09_05").lods) < tiers
+        assert len(self.tile(report, "t_00_00").lods) == tiers
 
     def thin_deck(self) -> list[Fixture]:
         """A building next to an elevated deck, in one tile.
@@ -460,23 +471,26 @@ class TestBuildRegion:
         without a per-class cell its top surface clusters into its bottom one
         and it collapses to a flat sliver.
 
-        Asserted as a *comparison* between two builds of the same geometry
-        rather than between two tiers of one build. Tier meanings move — the
-        finest tier stopped being an exact weld when LOD0 was dropped — but
-        "the override keeps geometry that its absence loses" is the claim, and
-        it holds whatever the table says.
+        Asserted as a comparison between two builds of the same geometry rather
+        than between two tiers of one build, and **across all tiers rather than
+        at one index**: which tier shows the difference depends on the table,
+        since a tier whose building cell already matches its override loses
+        nothing either way. The claim is that the override never costs geometry
+        and somewhere gains it, and that holds whatever the table says.
         """
-        kept = self.build(hong_kong, sources, tmp_path, self.thin_deck())
+        kept = self.build(hong_kong, sources, tmp_path, self.thin_deck(), out="kept")
         lost = self.build(
             replace(hong_kong, buildings=replace(hong_kong.buildings, class_lod_cell_sizes_m={})),
             sources,
             tmp_path,
             self.thin_deck(),
+            out="lost",
         )
 
-        finest = {tile.id: tile for tile in kept.tiles}["t_00_00"].lods[0].triangles
-        without = {tile.id: tile for tile in lost.tiles}["t_00_00"].lods[0].triangles
-        assert finest > without
+        with_override = [lod.triangles for lod in self.tile(kept, "t_00_00").lods]
+        without = [lod.triangles for lod in self.tile(lost, "t_00_00").lods]
+        assert all(a >= b for a, b in zip(with_override, without, strict=True))
+        assert any(a > b for a, b in zip(with_override, without, strict=True))
 
     def test_a_mixed_class_tile_is_one_mesh_at_every_tier(
         self, hong_kong, sources, tmp_path
@@ -487,8 +501,7 @@ class TestBuildRegion:
         report = self.build(hong_kong, sources, tmp_path, self.thin_deck())
 
         out = tmp_path / "out" / "hong_kong" / "wan_chai"
-        [tile] = [tile for tile in report.tiles if tile.id == "t_00_00"]
-        for lod in tile.lods:
+        for lod in self.tile(report, "t_00_00").lods:
             assert len(read_glb(out / lod.path)) == 1
 
     def test_the_manifest_describes_the_grid(self, hong_kong, sources, tmp_path) -> None:
