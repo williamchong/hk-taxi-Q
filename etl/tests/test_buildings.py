@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import zipfile
+from dataclasses import replace
 from pathlib import Path
 from typing import NamedTuple
 
@@ -289,6 +290,7 @@ def style(jitter: float = 0.0) -> BuildingStyle:
         ),
         colour_jitter=jitter,
         lod_cell_sizes_m=(0.0,),
+        class_lod_cell_sizes_m={},
     )
 
 
@@ -437,6 +439,71 @@ class TestBuildRegion:
         by_id = {tile.id: tile for tile in report.tiles}
         assert len(by_id["t_09_05"].lods) < 3
         assert len(by_id["t_00_00"].lods) == 3
+
+    def thin_deck(self) -> list[Fixture]:
+        """A building next to an elevated deck, in one tile.
+
+        The deck is 0.8 m thick and 30 m across — thinner than the 1.5 m cell
+        that decimates a building, and that is the whole failure `P2-1` saw on
+        screen: cluster a deck at a cell thicker than itself and its top surface
+        merges into its bottom one, leaving a flat sliver where a flyover was.
+        """
+        return [
+            Fixture("B0100", "BUILDING", 75.0, 75.0, 60.0),
+            Fixture("I0100", "INFRASTRUCTURE", 100.0, 100.0, 0.8, footprint=30.0),
+        ]
+
+    def test_a_thin_structure_survives_the_tier_that_flattens_a_building(
+        self, hong_kong, sources, tmp_path
+    ) -> None:
+        """LOD1 decimates buildings at 1.5 m and infrastructure at 0.5 m, so the
+        deck keeps its depth while the tile still coarsens overall."""
+        report = build_region(
+            hong_kong,
+            "wan_chai",
+            sources_root=sources(self.thin_deck()),
+            out_root=tmp_path / "out",
+        )
+        [tile] = [tile for tile in report.tiles if tile.id == "t_00_00"]
+        assert tile.lods[1].triangles == tile.lods[0].triangles
+
+    def test_without_the_override_the_thin_structure_is_flattened(
+        self, hong_kong, sources, tmp_path
+    ) -> None:
+        """The other half of the check above: with one cell size for both
+        classes the deck collapses, which is what the override exists to stop.
+
+        Written out because a test that only asserts survival passes just as
+        well when the cell sizes have quietly become equal."""
+        flattened = replace(
+            hong_kong,
+            buildings=replace(hong_kong.buildings, class_lod_cell_sizes_m={}),
+        )
+        report = build_region(
+            flattened,
+            "wan_chai",
+            sources_root=sources(self.thin_deck()),
+            out_root=tmp_path / "out",
+        )
+        [tile] = [tile for tile in report.tiles if tile.id == "t_00_00"]
+        assert tile.lods[1].triangles < tile.lods[0].triangles
+
+    def test_a_mixed_class_tile_is_still_one_mesh_at_every_tier(
+        self, hong_kong, sources, tmp_path
+    ) -> None:
+        """Collapsing per class and merging afterwards must not cost the tile
+        its single primitive — `game/tools/verify_tiles.gd` enforces the same
+        thing from the engine side."""
+        report = build_region(
+            hong_kong,
+            "wan_chai",
+            sources_root=sources(self.thin_deck()),
+            out_root=tmp_path / "out",
+        )
+        out = tmp_path / "out" / "hong_kong" / "wan_chai"
+        [tile] = [tile for tile in report.tiles if tile.id == "t_00_00"]
+        for lod in tile.lods:
+            assert len(read_glb(out / lod.path)) == 1
 
     def test_the_manifest_describes_the_grid(self, hong_kong, sources, tmp_path) -> None:
         self.build(hong_kong, sources, tmp_path)

@@ -327,7 +327,11 @@ in the manifest; it is a build-time concept, and after clipping the content is w
 identical inputs — verified by rebuilding the region from a clean `out/` and diffing: every GLB and
 every JSON byte-identical, this line the sole difference. Strip it before diffing two builds.
 
-`lods` is ordered nearest-first, one file per tier, matching `lod_cell_sizes_m` in city config.
+`lods` is ordered nearest-first, one file per tier, matching `lod_cell_sizes_m` in city config —
+except where `class_lod_cell_sizes_m` holds a mesh class back from it. A tier is **not** a single
+cell size: a building decimates at 1.5 m and an elevated road deck at 0.5 m, because a deck thinner
+than the cell flattens into it. The tile is still one mesh and one draw call, because each class is
+collapsed separately and merged afterwards. See `ART_DESIGN.md` "LOD policy".
 Separate files rather than one GLB with three meshes, because the streamer loads a tier at a time.
 
 **A tile's `aabb` can be larger than the tile.** Buildings are assigned to a tile whole, by their

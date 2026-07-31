@@ -98,11 +98,26 @@ class BuildingStyle:
     # One clustering cell size per LOD tier, in metres, coarsest last. The first
     # is normally 0.0 — an exact weld, losing nothing.
     lod_cell_sizes_m: tuple[float, ...]
+    # Cell sizes for a class that must not decimate like the rest, overriding
+    # the table above. Same length, same ordering rule.
+    class_lod_cell_sizes_m: dict[str, tuple[float, ...]]
 
     def colour_for(self, class_id: str, height_m: float) -> tuple[int, int, int]:
         if class_id in self.class_colours:
             return self.class_colours[class_id]
         return next(band.colour for band in self.height_bands if height_m <= band.up_to_m)
+
+    def cell_size_m(self, class_id: str, level: int) -> float:
+        """Clustering cell for one class at one tier.
+
+        Per class because one cell size does not suit two kinds of geometry.
+        A building is a big box: a 1.5 m cell takes half its triangles and
+        leaves the silhouette. An elevated road deck is *thin* — a 1.5 m cell
+        is thicker than the deck, so the top and bottom surfaces cluster into
+        one another and the structure folds into a warped sliver. `P2-1`
+        measured that on screen at Gloucester Road.
+        """
+        return self.class_lod_cell_sizes_m.get(class_id, self.lod_cell_sizes_m)[level]
 
 
 @dataclass(frozen=True)
@@ -637,6 +652,24 @@ def _building_style(body: dict[str, Any], where: str) -> BuildingStyle:
             f"which is not in classes ({', '.join(classes)})"
         )
 
+    class_cells: dict[str, tuple[float, ...]] = {}
+    for name, sizes in (body.get("class_lod_cell_sizes_m") or {}).items():
+        override = tuple(float(size) for size in sizes)
+        field = f"{where}:class_lod_cell_sizes_m.{name}"
+        if str(name) not in classes:
+            # Same trap as `class_colours`: a misspelled key parses, loads, and
+            # silently overrides nothing.
+            raise ValueError(f"{field} is not in classes ({', '.join(classes)})")
+        if len(override) != len(cells):
+            # A short table would index-error partway through a build, after the
+            # expensive read; a long one would describe tiers that never exist.
+            raise ValueError(
+                f"{field} has {len(override)} tiers, but lod_cell_sizes_m has {len(cells)}"
+            )
+        if list(override) != sorted(override):
+            raise ValueError(f"{field} must be ordered coarsest last")
+        class_cells[str(name)] = override
+
     jitter = float(_require(body, "colour_jitter", where))
     if not 0.0 <= jitter < 1.0:
         raise ValueError(f"{where}:colour_jitter must be in [0, 1), got {jitter}")
@@ -648,6 +681,7 @@ def _building_style(body: dict[str, Any], where: str) -> BuildingStyle:
         height_bands=bands,
         colour_jitter=jitter,
         lod_cell_sizes_m=cells,
+        class_lod_cell_sizes_m=class_cells,
     )
 
 

@@ -3,7 +3,7 @@
 Living document. **Update this whenever a task changes status, a decision is made, or an open
 question is answered.** Newest entries at the top of each log.
 
-Last updated: 2026-08-01 (`P2-1` — the city streams, and visible triangles are inside budget for the first time)
+Last updated: 2026-08-01 (`P2-1` — the city streams and is inside the visible-triangle budget; LOD is now per mesh class, so the flyovers survive it)
 
 ---
 
@@ -251,17 +251,22 @@ plausible ones, and they are not exclusive:
   tiles nearest the camera. If `P2-1` finds LOD1 acceptable at the closest range in a street canyon
   where nothing is visible past a block anyway, the bundle drops to 28 MB and the question closes.
 
-  ⚠️ **Narrowed 2026-08-01 by `P2-1`, and it does not close cleanly — it splits by mesh class.**
+  ⚠️ **Narrowed 2026-08-01 by `P2-1`, and then half-answered the same day.**
   Matched pairs at Hennessy Road and at the Gloucester Road flyover, same camera, one variable. In
   the canyon LOD1 is very nearly indistinguishable from LOD0: the facades read the same, the street
   reads the same, and it costs 478,076 primitives against 629,975. **For buildings the answer is
   yes.** But the elevated road structures and the footbridge canopies come apart — crisp thin slabs
   at LOD0 become warped dark slivers at LOD1, because `INFRASTRUCTURE` geometry is long and thin and
   does not survive vertex-cell decimation the way an extruded building block does. So dropping LOD0
-  wholesale would cost the flyovers their silhouette, and the flyovers are the most recognisable
-  thing in the region after the harbour. What this points at is a **per-mesh-class tier policy in
-  `buildings.py`** rather than a per-tile one, which is a `P1-2` change and not a streaming decision.
-  Shots are in `build/lod-review/`; the user's verdict at the `P2-1` review is what settles it.
+  wholesale would have cost the flyovers their silhouette, and the flyovers are the most
+  recognisable thing in the region after the harbour.
+
+  **That half is now fixed** — `class_lod_cell_sizes_m` holds infrastructure at a 0.5 m cell, and
+  the flyover reads correctly at LOD1 for +3.6% of visible triangles. See the decision log entry
+  above and the before/after in `build/lod-review/`. What remains open is the actual `Q16` question:
+  whether LOD0 ships at all. LOD1 is now good enough at closest range for *both* mesh classes, so
+  the bundle case is stronger than it was — 65 tiles of LOD0 are 74.7 MB of the 105.5 MB shipped —
+  but dropping a tier is a product decision and still the user's call at the `P2-1` review.
 - **LOD0 gets cheaper.** It is currently an exact weld — 989k triangles across the region, no
   simplification at all. A 0.5 m cell would sit between the current LOD0 and LOD1.
 - **The budget was for the wrong thing.** 200 MB is the iOS cellular download threshold, not a
@@ -557,6 +562,60 @@ below.
 ---
 
 ## Decision log
+
+### 2026-08-01 — LOD is **per mesh class**: a deck is not a building, and one cell size cannot serve both
+
+`P2-1`'s LOD1 shots showed the flyovers and footbridges coming apart while the buildings beside them
+were near-indistinguishable. The cause is geometric and it is exact: **`collapse` clusters vertices
+by cell, so any structure thinner than the cell has its top surface merged into its bottom one.**
+Measured on two synthetic solids:
+
+| Solid | raw | 0.5 m | 1.0 m | 1.5 m | 4.0 m |
+|---|---|---|---|---|---|
+| Deck, 30 m across and **0.8 m thick** | 12 | 12 | **2** | **2** | **2** |
+| Tower, 20 × 20 × 60 m | 12 | 12 | 12 | 12 | 12 |
+
+A tower is untouched at every cell size the pipeline uses. A deck flattens to two triangles the
+moment the cell exceeds its own thickness. The tier was never too coarse for buildings — it was
+always too coarse for infrastructure, and merging the two into one mesh before collapsing meant one
+cell size had to serve both.
+
+**`class_lod_cell_sizes_m` in city config, and the merge moves after the collapse.** `buildings.py`
+now buckets a tile by class, collapses each class at its own cell, then merges. Ordering is the
+whole fix: merging first puts a deck and a wall in the same cluster grid. Merging *after* keeps the
+tile **one mesh and one draw call**, which `verify_tiles.gd` enforces from the engine side and which
+a new test asserts at every tier.
+
+Hong Kong sets `INFRASTRUCTURE: [0.0, 0.5, 1.0]` against the building default `[0.0, 1.5, 4.0]`.
+The same shape of config as `class_colours`, which exists for the same reason — infrastructure is
+concrete whatever its height, and it is thin whatever the tier.
+
+| | LOD0 | LOD1 | LOD2 |
+|---|---|---|---|
+| Before | 989,212 | 400,154 | 183,792 |
+| **After (0.5 / 1.0)** | 989,212 | **434,149** (+8.5%) | **222,375** (+21%) |
+| Full exemption, rejected | 989,212 | 480,538 (+20%) | 288,275 (+57%) |
+
+**Chosen over an outright exemption because a deck only has to beat its own thickness.** 0.5 m
+clears a 0.8 m deck with room to spare and costs less than half what exempting infrastructure
+entirely would. What it buys, measured in-engine at the same five places `P2-1` used: worst-case
+visible triangles **240,598 → 249,210**, or **+3.6%**, against a 300k budget — so ~50k of headroom
+survives. Draw calls are unchanged at 53.
+
+**The landmark half of the question was declined, and for a better reason than "not implemented".**
+There is no landmark key in the source: the sheets carry `BUILDING` and `INFRASTRUCTURE` and nothing
+else. More usefully, `ART_DESIGN.md` already specifies the ~5 hero buildings as **hand-authored**
+3–8k-triangle models placed via `landmarks.json` — they never pass through `buildings.py`, so their
+source massing is *replaced* rather than decimated and the question is moot for exactly the
+buildings that motivated it.
+
+⚠️ **One correction on the way there.** `P2-1` recorded that tall towers survive LOD1 well because
+they are big boxes. Measured, the opposite is true: towers ≥100 m keep **36%** of their triangles at
+LOD1 against **44%** for everything else. They are hit *harder*, not less. They read as fine in the
+canyon shot because they were distant, where a tower is mostly silhouette. That does not change the
+decision — a height-based exemption would cost roughly +43% of LOD1 building triangles and is a
+blunt proxy for what `landmarks.json` solves properly — but the reasoning in the earlier entry was
+wrong and is corrected here.
 
 ### 2026-08-01 — `P2-1`: the city streams, and **visible triangles come inside budget for the first time**
 

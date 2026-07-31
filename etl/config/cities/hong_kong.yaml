@@ -133,6 +133,23 @@ buildings:
   class_colours:
     INFRASTRUCTURE: "#9d9a93"
 
+  # Cell sizes for a class that must not decimate like the rest, overriding
+  # lod_cell_sizes_m below. Same reasoning as class_colours: infrastructure is
+  # not a building and does not behave like one under either rule.
+  #
+  # A building is a big box, so a 1.5 m cell halves its triangles and leaves the
+  # silhouette intact. An elevated road deck is *thin* — thinner than 1.5 m — so
+  # the same cell clusters its top surface into its bottom one and the structure
+  # folds into a warped sliver. P2-1 caught this on screen at Gloucester Road
+  # and on the Hennessy Road footbridge; see docs/PROGRESS.md.
+  #
+  # 0.5 m and 1.0 m rather than an outright exemption. Exempting infrastructure
+  # entirely costs +20% of the region's LOD1 triangles and +57% of LOD2, against
+  # +8.5% and +21% here, and the deck survives either way — it only has to beat
+  # its own thickness.
+  class_lod_cell_sizes_m:
+    INFRASTRUCTURE: [0.0, 0.5, 1.0]
+
   # Otherwise coloured by the building's own height above its base. The ramp
   # runs warm-and-darker for the low pre-war and post-war stock to cool-and-
   # paler for curtain-walled towers, which is how the Wan Chai skyline actually

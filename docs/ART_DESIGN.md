@@ -177,6 +177,14 @@ direction wants kept. Cell sizes are `lod_cell_sizes_m` in city config.
 ⚠️ Anything smaller than a cell disappears entirely at that tier — intended for street furniture at
 400 m, but it means the cell sizes cannot be raised much further without losing small buildings.
 
+⚠️ **And anything *thinner* than a cell flattens, which is a different failure and a worse-looking
+one.** Clustering merges a structure's top surface into its bottom one, so a 0.8 m deck goes from 12
+triangles to 2 at a 1.0 m cell while a 60 m tower is untouched at every cell the pipeline uses. That
+is why cell size is **per mesh class**: `class_lod_cell_sizes_m` overrides the table above, and Hong
+Kong holds `INFRASTRUCTURE` at `[0.0, 0.5, 1.0]` so flyover decks, ramps and footbridge canopies
+keep their depth. A class is collapsed at its own cell and the tile is merged afterwards, so it is
+still one mesh and one draw call. Seen on screen before it was measured — see `docs/PROGRESS.md`.
+
 ---
 
 ## UI

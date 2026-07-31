@@ -9,6 +9,12 @@ material, so a tile's 300-odd buildings collapse into one primitive and one draw
 call — which is why the untextured dataset was chosen over the photogrammetry
 one (`docs/DATA_SOURCES.md`).
 
+Within a tier the merge happens **after** the collapse, once per class, because
+one cell size does not suit two kinds of geometry: a building is a big box that
+loses half its triangles and keeps its silhouette, while an elevated road deck is
+thinner than the cell that decimates a building and folds into a sliver. The
+merge still runs, so a tile is still one mesh and one draw call.
+
 Sheets are read straight out of their zips. Unpacking six of them costs ~400 MB
 on disk to produce input that is read once.
 
@@ -287,7 +293,10 @@ def build_region(
     place = Placement.resolve(city, region_id, sources_root, out_root)
 
     report = BuildReport()
-    buckets: dict[tuple[int, int], list[MeshData]] = {}
+    # Bucketed by tile *and class*, because the two decimate at different cell
+    # sizes — see `BuildingStyle.cell_size_m`. Merging still happens per tile;
+    # it just happens after the collapse instead of before it.
+    buckets: dict[tuple[int, int], dict[str, list[MeshData]]] = {}
 
     for sheet_id, sheet_path in place.sheets:
         kept = 0
@@ -300,7 +309,7 @@ def build_region(
             coloured = replace(placed, colours=colour_for(style, class_id, placed, bounds))
             placements = list(assign(coloured, place.grid, bounds))
             for tile, piece in placements:
-                buckets.setdefault(tile, []).append(piece)
+                buckets.setdefault(tile, {}).setdefault(class_id, []).append(piece)
             if placements:
                 kept += 1
             else:
@@ -323,23 +332,38 @@ def build_region(
 
 
 def _write_tile(
-    out_dir: Path, tile: tuple[int, int], meshes: list[MeshData], style: BuildingStyle
+    out_dir: Path, tile: tuple[int, int], by_class: dict[str, list[MeshData]], style: BuildingStyle
 ) -> TileOutput:
     ix, iz = tile
     tile_id = f"t_{ix:02d}_{iz:02d}"
-    merged = merge(meshes, name=tile_id)
+    # Sorted so a rerun writes byte-identical tiles: merge order decides vertex
+    # order, and a dict's insertion order follows whichever sheet happened to be
+    # read first.
+    per_class = {name: merge(by_class[name], name=tile_id) for name in sorted(by_class)}
+    merged = merge(list(per_class.values()), name=tile_id)
 
     lods: list[LodOutput] = []
-    for level, cell_m in enumerate(style.lod_cell_sizes_m):
-        try:
-            tier = collapse(merged, cell_m=cell_m)
-        except EmptyMeshError:
+    for level in range(len(style.lod_cell_sizes_m)):
+        # Collapsed per class, then merged — never the other way round. Merging
+        # first would put a thin bridge deck and a building wall in the same
+        # cluster grid and force one cell size on both, which is the thing this
+        # exists to stop. Merging after keeps the tile **one mesh and one draw
+        # call**, which is the contract `game/tools/verify_tiles.gd` enforces.
+        tiers = []
+        for class_id, mesh in per_class.items():
+            try:
+                tiers.append(collapse(mesh, cell_m=style.cell_size_m(class_id, level)))
+            except EmptyMeshError:
+                # This class has nothing left at this cell size; another may.
+                continue
+        if not tiers:
             # Everything in this tile is smaller than the cell. Correct at LOD2
             # for a tile holding one sign gantry — but the tiers coarsen, so
             # every later one vanishes too, and a tile with nothing left to draw
             # at 400 m must not take the whole region's build down with it.
-            log.info("  %s: nothing survives LOD%d (%.1f m cells)", tile_id, level, cell_m)
+            log.info("  %s: nothing survives LOD%d", tile_id, level)
             break
+        tier = merge(tiers, name=tile_id)
 
         relative = Path("tiles") / f"{tile_id}_lod{level}.glb"
         size = write_glb(out_dir / relative, [tier])
@@ -356,7 +380,7 @@ def _write_tile(
         id=tile_id,
         ix=ix,
         iz=iz,
-        meshes=len(meshes),
+        meshes=sum(len(group) for group in by_class.values()),
         aabb=merged.aabb(),
         lods=lods,
     )
@@ -469,13 +493,23 @@ def main(argv: list[str] | None = None) -> int:
         report.clipped,
         len(report.tiles),
     )
-    for level, cell_m in enumerate(city.buildings.lod_cell_sizes_m):
+    style = city.buildings
+    for level, cell_m in enumerate(style.lod_cell_sizes_m):
+        # Named per class where they differ, because "LOD1 (1.5 m cells)" is a
+        # false summary the moment one class is held back from that cell — and
+        # the whole point of the override is that the tier is not uniform.
+        overrides = ", ".join(
+            f"{name} {sizes[level]:.1f}"
+            for name, sizes in sorted(style.class_lod_cell_sizes_m.items())
+            if sizes[level] != cell_m
+        )
+        cells = f"{cell_m:.1f} m cells" + (f"; {overrides}" if overrides else "")
         # Not every tile reaches every tier — see `LodOutput`.
         tiers = [tile.lods[level] for tile in report.tiles if level < len(tile.lods)]
         log.info(
-            "  LOD%d (%.1f m cells): %8d triangles, %6.1f MB, %d tiles",
+            "  LOD%d (%s): %8d triangles, %6.1f MB, %d tiles",
             level,
-            cell_m,
+            cells,
             sum(tier.triangles for tier in tiers),
             sum(tier.bytes for tier in tiers) / 1e6,
             len(tiers),

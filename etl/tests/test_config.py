@@ -191,6 +191,45 @@ class TestBuildingStyle:
         with pytest.raises(ValueError, match="coarsest last"):
             load_city("hong_kong", cities_root=rewrite(invert))
 
+    def test_a_class_may_override_the_lod_cell_sizes(self, hong_kong) -> None:
+        """Infrastructure is thinner than the cell that decimates a building, so
+        one cell size for both folds a flyover deck into a sliver (`P2-1`)."""
+        style = hong_kong.buildings
+        assert style.cell_size_m("INFRASTRUCTURE", 1) < style.cell_size_m("BUILDING", 1)
+        assert style.cell_size_m("BUILDING", 1) == style.lod_cell_sizes_m[1]
+
+    def test_an_unoverridden_class_takes_the_default_table(self, hong_kong) -> None:
+        style = hong_kong.buildings
+        for level in range(len(style.lod_cell_sizes_m)):
+            assert style.cell_size_m("BUILDING", level) == style.lod_cell_sizes_m[level]
+
+    def test_class_lod_override_must_name_a_real_class(self, rewrite) -> None:
+        """The same trap as `class_colours`: a misspelling parses, loads, and
+        silently overrides nothing."""
+
+        def misspell(doc: dict[str, Any]) -> None:
+            doc["buildings"]["class_lod_cell_sizes_m"] = {"INFRASTRUCTUR": [0.0, 0.5, 1.0]}
+
+        with pytest.raises(ValueError, match="not in classes"):
+            load_city("hong_kong", cities_root=rewrite(misspell))
+
+    def test_class_lod_override_must_match_the_tier_count(self, rewrite) -> None:
+        """A short table index-errors partway through a build, after the
+        expensive read; a long one describes tiers that never exist."""
+
+        def truncate(doc: dict[str, Any]) -> None:
+            doc["buildings"]["class_lod_cell_sizes_m"] = {"INFRASTRUCTURE": [0.0, 0.5]}
+
+        with pytest.raises(ValueError, match="tiers"):
+            load_city("hong_kong", cities_root=rewrite(truncate))
+
+    def test_class_lod_override_must_coarsen(self, rewrite) -> None:
+        def invert(doc: dict[str, Any]) -> None:
+            doc["buildings"]["class_lod_cell_sizes_m"] = {"INFRASTRUCTURE": [1.0, 0.5, 0.0]}
+
+        with pytest.raises(ValueError, match="coarsest last"):
+            load_city("hong_kong", cities_root=rewrite(invert))
+
     def test_jitter_outside_zero_to_one_is_rejected(self, rewrite) -> None:
         def overdo_it(doc: dict[str, Any]) -> None:
             doc["buildings"]["colour_jitter"] = 1.5
