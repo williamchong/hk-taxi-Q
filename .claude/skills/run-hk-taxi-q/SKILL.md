@@ -49,14 +49,20 @@ Six seconds of full throttle from the start line, three screenshots into `build/
 
 ```
 vehicle: Taxi at (172.3485, 6.45805, 26.9396)
-t= 0.00  pos=(  172.35,    6.46,    26.94)  speed=   0.00 kph
+t= 0.00  pos=(  172.35,    6.46,    26.94)  speed=   0.00 kph  prims=142223 draws=5
 shot:    /Users/william/hk-taxi-Q/build/driver/t00.50.png  1920x1080  29 distinct colours
-t= 3.00  pos=(  187.94,    6.20,    25.84)  speed=  42.61 kph
+t= 3.00  pos=(  190.17,    6.20,    25.68)  speed=  45.30 kph  prims=215071 draws=31
 DRIVER OK
 ```
 
 **Look at the PNGs.** `DRIVER OK` means nothing crashed and no frame was flat — not that the game
 looked right.
+
+`prims` and `draws` are what the performance budget in `docs/ARCHITECTURE.md` is stated in, reported
+so a measurement is a `drive.sh` run anyone can repeat rather than a throwaway probe. Two things to
+read them correctly: **both are 0 under `--headless`**, since the dummy rasteriser draws nothing;
+and `prims` counts *every* pass including shadows, so it is not the visible triangle count — a
+directional shadow multiplies it by roughly its cascade count.
 
 ### Arguments
 

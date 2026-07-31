@@ -265,14 +265,47 @@ func _release_everything() -> void:
 		Input.action_release(hold[0])
 
 
+## What the renderer drew this frame, as ` prims=N draws=N`.
+##
+## Reported every second because every performance number this project has
+## written down came from a throwaway probe that was then deleted — so nobody
+## could reproduce one without rewriting the probe. These two are what the
+## budget in docs/ARCHITECTURE.md is stated in, and a driver run is already the
+## reproducible thing.
+##
+## ⚠️ Both read **0 under `--headless`**: the dummy rasteriser draws nothing.
+## Printed anyway rather than hidden, because a zero that is explained is worth
+## more than a missing field someone later assumes was non-zero.
+##
+## `prims` counts every pass, shadow included — it is not the visible triangle
+## count. A directional shadow multiplies it by roughly the cascade count.
+func _rendering() -> String:
+	return (
+		"  prims=%d draws=%d"
+		% [
+			RenderingServer.get_rendering_info(
+				RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME
+			),
+			RenderingServer.get_rendering_info(
+				RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME
+			),
+		]
+	)
+
+
 func _report(t: float) -> void:
 	if _vehicle == null:
-		print("t=%5.2f" % t)
+		print("t=%5.2f%s" % [t, _rendering()])
 		return
 
 	var pos: Vector3 = _vehicle.global_position
 	var speed: float = float(_vehicle.call("forward_speed_kph"))
-	print("t=%5.2f  pos=(%8.2f, %7.2f, %8.2f)  speed=%7.2f kph" % [t, pos.x, pos.y, pos.z, speed])
+	print(
+		(
+			"t=%5.2f  pos=(%8.2f, %7.2f, %8.2f)  speed=%7.2f kph%s"
+			% [t, pos.x, pos.y, pos.z, speed, _rendering()]
+		)
+	)
 
 	if not pos.is_finite():
 		_abort("vehicle position went non-finite at t=%.2f — physics blew up" % t)
