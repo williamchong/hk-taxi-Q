@@ -20,7 +20,12 @@ const PATH: String = "res://assets/generated/roadgraph.json"
 ## road is built on rather than sitting at one flat offset per elevation level.
 ## The shape of the document did not change, which is why this had to — a reader
 ## cannot tell a sampled deck from an invented one by looking.
-const SCHEMA_VERSION: int = 2
+##
+## 3 since `Q23`, and this one adds a field: `on_structure`, one flag per vertex
+## of `polyline`. `elevation_level` says which deck an edge belongs to; this says
+## which of its stations are standing on one, because a road becomes a bridge
+## partway along an edge rather than at an edge boundary.
+const SCHEMA_VERSION: int = 3
 
 
 ## The parsed graph, or an empty dictionary with a pushed message.

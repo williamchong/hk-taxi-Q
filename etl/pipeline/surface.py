@@ -49,7 +49,12 @@ log = logging.getLogger(__name__)
 
 SURFACE_NAME = "roads.glb"
 SURFACE_MANIFEST_NAME = "roadsurface.json"
-SURFACE_MANIFEST_SCHEMA = 2
+# 3 since `Q23`: `carriageway[].half_width_m` is a **list**, one value per
+# station of that edge's published polyline, where it used to be one number for
+# the whole edge. A reader that keeps the old interpretation gets a list where
+# it wanted a float, which is the loud half — the quiet half is that a reader
+# taking `[0]` would be right on 769 of 797 edges and 0.96 m out on the rest.
+SURFACE_MANIFEST_SCHEMA = 3
 
 # Godot's glTF importer reads node-name suffixes: `-col` gives the mesh a static
 # trimesh collider at import time and leaves it visible. Naming it here rather
@@ -72,15 +77,28 @@ _MIN_SEGMENT_M = 1e-6
 # a collision shape with holes in it.
 _MIN_TWICE_AREA_M2 = 1e-6
 
+# Column of `_Edge.points` carrying that station's half-width in metres, beside
+# the x/y/z it is measured at.
+#
+# Carried *with* the geometry rather than in an array beside it, because `Q23`
+# makes the width vary along an edge and both `dedupe` and `trim` change which
+# stations exist: one drops them, the other interpolates two new ones at the
+# cuts. A parallel array has to be put through both by hand and stays right
+# until someone adds a third operation. As a column it simply travels — `_at`
+# interpolates every column it is handed, so a trimmed end gets the correct
+# width without this module saying anything about it.
+_WIDTH = 3
+
 
 @dataclass
 class SurfaceReport:
     edges: int = 0
-    # Drawn half-width per graph edge id, in metres. Recorded rather than
-    # recomputed downstream: `_prepare` is the one place the widening is
-    # applied, and a second evaluation of `widen_for` is a second thing to keep
-    # in step with the config.
-    carriageway: dict[int, float] = field(default_factory=dict)
+    # Drawn half-width per graph edge id, in metres, **one value per station of
+    # that edge's published polyline**. Recorded rather than recomputed
+    # downstream: `_prepare` is the one place the widening is applied, and a
+    # second evaluation of `widen_for` is a second thing to keep in step with
+    # the config.
+    carriageway: dict[int, list[float]] = field(default_factory=dict)
     junctions: int = 0
     triangles: int = 0
     vertices: int = 0
@@ -106,6 +124,12 @@ class SurfaceReport:
     # folding somewhere new.
     inverted: int = 0
     inverted_area_m2: float = 0.0
+    # `Q23`'s own number: metres of **level-0** centreline the graph reports as
+    # resting on structure, and which this stage therefore draws at its authored
+    # width instead of widening. 1,070 m of it when the question was raised, all
+    # of it widened. Reported here so the acceptance figure comes off the stage
+    # that acted on it rather than only off `tools/overhang.py`.
+    on_structure_m: float = 0.0
 
     @property
     def level_changes(self) -> int:
@@ -150,8 +174,15 @@ def trim(points: np.ndarray, start_m: float, end_m: float) -> np.ndarray:
 
 
 def _at(points: np.ndarray, along: np.ndarray, distance: float) -> np.ndarray:
-    """The point a given distance along the polyline, as a (1, 3) row."""
-    return np.array([[np.interp(distance, along, points[:, axis]) for axis in range(3)]])
+    """The point a given distance along the polyline, as a (1, N) row.
+
+    Every column, not the first three. The fourth is the station's half-width
+    (`_WIDTH`), and a trim that interpolated x/y/z but carried a neighbour's
+    width would put a step in the carriageway edge exactly where a ribbon meets
+    its junction cap — the one place a step is invisible in a wireframe and
+    obvious from the driver's seat.
+    """
+    return np.array([[np.interp(distance, along, column) for column in points.T]])
 
 
 def mitres(points: np.ndarray) -> np.ndarray:
@@ -185,7 +216,7 @@ def mitres(points: np.ndarray) -> np.ndarray:
     return offsets
 
 
-def boundary(points: np.ndarray, offsets: np.ndarray, across_m: float) -> np.ndarray:
+def boundary(points: np.ndarray, offsets: np.ndarray, across_m: np.ndarray | float) -> np.ndarray:
     """One side of the ribbon in plan, stopped where it would run backwards.
 
     A corner tighter than the road is wide has no offset curve on its inside:
@@ -200,7 +231,7 @@ def boundary(points: np.ndarray, offsets: np.ndarray, across_m: float) -> np.nda
     instead pinches the carriageway to nothing at 24 places in the region, and
     dropping the offending vertices cuts up to 17 m off that same loop.
     """
-    rail = points[:, [0, 2]] + offsets * across_m
+    rail = points[:, [0, 2]] + offsets * np.reshape(across_m, (-1, 1))
     step = np.diff(points[:, [0, 2]], axis=0)
     # Vectorised first because it is almost always clean: 74 of 797 edges have
     # a corner tight enough to need the walk below.
@@ -430,10 +461,17 @@ class _End:
 
 @dataclass
 class _Edge:
-    """One graph edge, and the ribbon geometry derived from it."""
+    """One graph edge, and the ribbon geometry derived from it.
+
+    `points` is `(N, 4)`: x, y, z and the station's half-width — see `_WIDTH`.
+    """
 
     points: np.ndarray
-    half_width_m: float
+    # The same widths against the **published** polyline, before `dedupe` drops
+    # anything. Kept rather than recomputed for the manifest: `_half_widths` is
+    # the one place the widening is applied, and a second evaluation of it is a
+    # second thing to keep in step with the config.
+    published_half_widths: np.ndarray
     lanes: int
     level: int
     length_m: float
@@ -456,6 +494,15 @@ class _Edge:
         row = 0 if at_start else -1
         return np.array([plan[row][0], self.ribbon[row][1], plan[row][1]])
 
+    def end_half_width_m(self, at_start: bool) -> float:
+        """The half-width this edge arrives at a node with.
+
+        Its *own* end, not the widest anywhere along it: since `Q23` those can
+        differ by the whole widening factor, and it is the end that decides how
+        far back the junction cap has to reach to meet this arm.
+        """
+        return float(self.points[0 if at_start else -1, _WIDTH])
+
 
 def build_region(
     city: CityConfig,
@@ -471,11 +518,15 @@ def build_region(
     edges = [_prepare(edge, style) for edge in graph["edges"]]
     report = SurfaceReport()
     # Zipped rather than looked up: `_prepare` maps the published edges one for
-    # one and in order, so the pairing is the list's own construction.
+    # one and in order, so the pairing is the list's own construction. The
+    # *published* widths, not the ribbon's — `dedupe` has already dropped
+    # stations from the latter, and the game indexes this table by
+    # `roadgraph.json`'s own vertex numbering.
     report.carriageway = {
-        int(published["id"]): round(prepared.half_width_m, 3)
+        int(published["id"]): [round(float(half), 3) for half in prepared.published_half_widths]
         for published, prepared in zip(graph["edges"], edges, strict=True)
     }
+    report.on_structure_m = sum(_on_structure_length_m(edge) for edge in graph["edges"])
     ends = _ends_by_node_and_level(graph["edges"], edges)
     _assign_trims(ends, edges, style, report)
     _measure_level_steps(ends, edges, report)
@@ -506,18 +557,82 @@ def build_region(
 
 
 def _prepare(published: dict, style: RoadSurface) -> _Edge:
-    points = dedupe(np.asarray(published["polyline"], dtype=np.float64))
-    level = published["elevation_level"]
-    widened_m = published["width_m"] * style.widen_for(
-        published["speed_limit_kph"], elevation_level=level
-    )
+    """One published edge as a ribbon-in-waiting, half-widths already resolved.
+
+    The widths are computed against the **published** polyline, before `dedupe`
+    drops anything, so `report.carriageway` and `roadgraph.json` index alike —
+    which is the contract the game reads them under.
+    """
+    half_widths = _half_widths(published, style)
+    points = dedupe(np.column_stack([_polyline(published), half_widths]))
     return _Edge(
         points=points,
-        half_width_m=widened_m / 2.0,
+        published_half_widths=half_widths,
         lanes=published["lanes"],
-        level=level,
+        level=published["elevation_level"],
         length_m=float(plan_lengths(points)[-1]) if len(points) > 1 else 0.0,
     )
+
+
+def _half_widths(published: dict, style: RoadSurface) -> np.ndarray:
+    """Half the drawn carriageway at every station of one published edge.
+
+    Closes `Q23`. Two factors and a blend between them: what this edge is drawn
+    at on the street, and what it is drawn at on a deck. Where the two agree —
+    every off-grade edge, and every edge of a city that samples no decks — the
+    blend is arithmetically inert and this is the constant it always was.
+
+    The taper reaches *backwards* from the structure into the approach, so the
+    ribbon is already at its authored width by the time it arrives. Distance is
+    measured to the nearest on-structure station in **plan along the edge**, not
+    in station counts: `roads.py` resamples a lifted edge at 10 m but leaves the
+    source's own vertices in place, so consecutive stations are not evenly
+    spaced and counting them would taper a densely drawn curve over a few metres
+    and a straight over a hundred.
+    """
+    level = published["elevation_level"]
+    limit = published["speed_limit_kph"]
+    at_grade = style.widen_for(limit, elevation_level=level)
+    on_deck = style.widen_for(limit, elevation_level=level, on_structure=True)
+
+    flags = np.asarray(published["on_structure"], dtype=bool)
+    if at_grade == on_deck or not flags.any():
+        return np.full(len(flags), published["width_m"] * at_grade / 2.0)
+
+    along = plan_lengths(_polyline(published))
+    gap = np.abs(along[:, None] - along[flags][None, :]).min(axis=1)
+    # A zero taper is the literal reading — width changes at the boundary and
+    # nowhere else — and it has to stay reachable rather than dividing by zero,
+    # because it is what a city with a hard kerb line beside its viaducts wants.
+    blend = (gap <= 0.0) if style.structure_taper_m <= 0.0 else 1.0 - gap / style.structure_taper_m
+    blend = np.clip(blend, 0.0, 1.0)
+    return published["width_m"] * (at_grade + (on_deck - at_grade) * blend) / 2.0
+
+
+def _on_structure_length_m(published: dict) -> float:
+    """Metres of this edge's centreline resting on structure, if it is level 0.
+
+    `Q23`'s measurement, reproduced by the stage that acts on it. Level 0 only:
+    an off-grade edge is on structure along its whole length by definition and
+    counting it would bury the number this exists to report.
+
+    The trapezoid rule on the flag — a segment counts fully when both its ends
+    are on structure and half when one is. A flag is a property of a station and
+    length is a property of what lies between two of them, so some rule has to
+    bridge the two; this one is symmetric, and it cannot report a length for an
+    edge with no flag set at all.
+    """
+    if published["elevation_level"] != 0:
+        return 0.0
+    flags = np.asarray(published["on_structure"], dtype=float)
+    if len(flags) < 2 or not flags.any():
+        return 0.0
+    steps = plan_steps(_polyline(published))
+    return float((steps * 0.5 * (flags[:-1] + flags[1:])).sum())
+
+
+def _polyline(published: dict) -> np.ndarray:
+    return np.asarray(published["polyline"], dtype=np.float64)
 
 
 def _shape(edge: _Edge) -> None:
@@ -527,8 +642,9 @@ def _shape(edge: _Edge) -> None:
         return
     edge.ribbon = points
     edge.offsets = mitres(points)
-    edge.left = boundary(points, edge.offsets, edge.half_width_m)
-    edge.right = boundary(points, edge.offsets, -edge.half_width_m)
+    half = points[:, _WIDTH]
+    edge.left = boundary(points, edge.offsets, half)
+    edge.right = boundary(points, edge.offsets, -half)
 
 
 def _ends_by_node_and_level(
@@ -562,11 +678,20 @@ def _assign_trims(
     An end alone at its node and level is left long: there is nothing to join
     to, and trimming would leave the carriageway stopping short of the map edge
     or of the ramp it dead-ends against.
+
+    ⚠️ The radius is the widest *end* at the node, not the widest edge. Those
+    stopped being the same thing at `Q23`, and the end is the right one: the cap
+    has to reach the mouth of each arm, and an arm's mouth is as wide as that
+    arm is *there*. Taking the widest anywhere along a touchdown edge would trim
+    every arm at that node back by the at-grade width of a road that arrives
+    narrow.
     """
     for group in ends.values():
         if len(group) < 2:
             continue
-        radius = style.junction_trim_factor * max(edges[end.edge].half_width_m for end in group)
+        radius = style.junction_trim_factor * max(
+            edges[end.edge].end_half_width_m(end.at_start) for end in group
+        )
         for end in group:
             edge = edges[end.edge]
             ceiling = edge.length_m * style.junction_trim_max_fraction
@@ -621,12 +746,13 @@ def _draw_edge(builder: _Builder, edge: _Edge, style: RoadSurface, lane_width_m:
     # carriageway because the two share vertex indices, not positions — so a
     # corner that holds the road edge still and the kerb line moving simply
     # makes the lip wider there, which is what a real kerb does on a tight bend.
+    half = points[:, _WIDTH]
     left = _lift(edge.left, points, 0.0)
     right = _lift(edge.right, points, 0.0)
     left_top = _lift(edge.left, points, rise)
     right_top = _lift(edge.right, points, rise)
-    left_out = _lift(boundary(points, offsets, edge.half_width_m + kerb), points, rise)
-    right_out = _lift(boundary(points, offsets, -(edge.half_width_m + kerb)), points, rise)
+    left_out = _lift(boundary(points, offsets, half + kerb), points, rise)
+    right_out = _lift(boundary(points, offsets, -(half + kerb)), points, rise)
 
     # Rail order is the winding: `strip` faces out of the cross product of its
     # own along and across directions, so the two kerbs — being mirror images —
@@ -697,13 +823,21 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Sur
     `carriageway` is the exception worth naming: it is the only thing here the
     *game* needs rather than the next stage. `roadgraph.json` publishes the
     authored street width, `lanes x lane_width_m`, while the ribbon is drawn at
-    `width_m x widen_for(speed_limit_kph, elevation_level)` — so a runtime asking
-    "where is the nearside lane?" from the graph alone lands short of the lane by
-    a quarter of the widening. The factor stays on the surface style, where
-    `config.py` says it belongs; the *result* travels, through `export.py`, into
-    `city.json`. Off-grade edges are the case where the two coincide, drawn at
-    their authored width so the ribbon stays on its deck; a consumer must read
-    this table rather than assume the drawn width exceeds the authored one.
+    `width_m x widen_for(...)` — so a runtime asking "where is the nearside
+    lane?" from the graph alone lands short of the lane by a quarter of the
+    widening. The factor stays on the surface style, where `config.py` says it
+    belongs; the *result* travels, through `export.py`, into `city.json`.
+    Off-grade edges are the case where the two coincide, drawn at their authored
+    width so the ribbon stays on its deck; a consumer must read this table
+    rather than assume the drawn width exceeds the authored one.
+
+    **One value per station since `Q23`**, indexed by that edge's
+    `roadgraph.json` polyline. A road becomes a bridge partway along an edge, so
+    a single number could not describe 28 of the region's edges without being
+    wrong along part of every one of them — and the widening is exactly the
+    quarter that would put a car 0.96 m off its lane. The taper between the two
+    widths is applied here rather than published as a rule, so the mesh and the
+    lane centre cannot disagree about where it runs.
     """
     write_document(
         out_dir / SURFACE_MANIFEST_NAME,
@@ -718,8 +852,8 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Sur
             "bytes": report.bytes,
             "aabb": report.aabb,
             "carriageway": [
-                {"edge": edge_id, "half_width_m": half}
-                for edge_id, half in sorted(report.carriageway.items())
+                {"edge": edge_id, "half_width_m": halves}
+                for edge_id, halves in sorted(report.carriageway.items())
             ],
         },
     )
@@ -756,6 +890,12 @@ def main(argv: list[str] | None = None) -> int:
         report.trimmed_ends,
         report.clamped_trims,
     )
+    if report.on_structure_m:
+        log.info(
+            "  %.0f m of level-0 carriageway sits on structure and is drawn at its authored "
+            "width — Q23",
+            report.on_structure_m,
+        )
     if report.inverted:
         log.info(
             "  %d triangles still fold inward at a hairpin, covering %.2f m2",

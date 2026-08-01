@@ -267,6 +267,7 @@ class TestBuildRegion:
             "from",
             "to",
             "polyline",
+            "on_structure",
             "direction",
             "lanes",
             "width_m",
@@ -276,6 +277,18 @@ class TestBuildRegion:
             "elevation_level",
             "road_name",
         }
+
+    def test_on_structure_is_parallel_to_the_polyline(self, testville) -> None:
+        """`surface.py` indexes one against the other to pick a per-station
+        width (`Q23`), so a length that drifts is a silently wrong carriageway
+        rather than an error. Nothing else in the document has this property,
+        which is why it is asserted rather than assumed."""
+        city, tmp_path = testville
+        build_region(city, "middle", sources_root=tmp_path / "sources", out_root=tmp_path / "out")
+
+        for edge in _graph(tmp_path)["edges"]:
+            assert len(edge["on_structure"]) == len(edge["polyline"]), edge["id"]
+            assert all(isinstance(flag, bool) for flag in edge["on_structure"])
 
     def test_shared_endpoints_become_one_node(self, testville) -> None:
         """Three centrelines meet at (300, 100). If they did not collapse onto
@@ -431,6 +444,7 @@ class TestEdgeIdentity:
                 from_node=index,
                 to_node=index + 1,
                 polyline=[(0.0, 0.0, 0.0), (1.0, 0.0, 0.0)],
+                on_structure=[False, False],
                 direction="both",
                 lanes=2,
                 width_m=6.4,
@@ -554,6 +568,7 @@ class TestNodeHeights:
             from_node=nodes[0],
             to_node=nodes[1],
             polyline=[(0.0, y, 0.0), (10.0, y, 0.0)],
+            on_structure=[False, False],
             direction="forward",
             lanes=2,
             width_m=6.0,
@@ -654,8 +669,9 @@ class TestDeckHeights:
         terrain = np.zeros(len(plan))
         deck = _deck(*_sheet(-5.0, 45.0, 5.0, 5.0))
 
-        y = _deck_heights(deck, plan, terrain, terrain + 6.0, _Counts())
+        y, on_structure = _deck_heights(deck, plan, terrain, terrain + 6.0, _Counts())
         np.testing.assert_allclose(y, 5.0)
+        assert on_structure.all(), "and every station says so, for `Q23`"
 
     def test_a_hole_in_the_structure_is_bridged_from_either_side(self) -> None:
         """The defect that made the first run look right and measure wrong.
@@ -668,10 +684,14 @@ class TestDeckHeights:
         deck = _deck(*_sheet(-1.0, 10.0, 4.0, 4.0), *_sheet(30.0, 41.0, 4.0, 4.0))
 
         counts = _Counts()
-        y = _deck_heights(deck, plan, terrain, terrain + 6.0, counts)
+        y, on_structure = _deck_heights(deck, plan, terrain, terrain + 6.0, counts)
 
         assert counts.sampled == 4, "the four covered stations"
         np.testing.assert_allclose(y, 4.0), "and the gap holds the deck, not +6"
+        assert on_structure.all(), (
+            "a bridged station is on the deck — that is what the bridging claims, "
+            "and `Q23` must not narrow it back to bare ground"
+        )
 
     def test_an_edge_the_structure_never_covers_keeps_the_flat_offset(self) -> None:
         """`ISLAND EASTERN CORRIDOR`'s stub — the case the offset is right for,
@@ -681,10 +701,11 @@ class TestDeckHeights:
         deck = _deck(*_sheet(500.0, 520.0, 4.0, 4.0))
 
         counts = _Counts()
-        y = _deck_heights(deck, plan, terrain, terrain + 6.0, counts)
+        y, on_structure = _deck_heights(deck, plan, terrain, terrain + 6.0, counts)
 
         assert counts.sampled == 0
         np.testing.assert_allclose(y, 6.0)
+        assert not on_structure.any(), "the flat offset is not a deck"
 
     def test_structure_under_the_terrain_is_refused(self) -> None:
         """A deck cannot sit below the ground under it. `e425` samples 8.2 m
@@ -695,11 +716,12 @@ class TestDeckHeights:
         deck = _deck(*_sheet(-5.0, 25.0, -8.0, -8.0))
 
         counts = _Counts()
-        y = _deck_heights(deck, plan, terrain, terrain + 6.0, counts)
+        y, on_structure = _deck_heights(deck, plan, terrain, terrain + 6.0, counts)
 
         assert counts.gated == len(plan)
         assert counts.sampled == 0
         np.testing.assert_allclose(y, 6.0)
+        assert not on_structure.any()
 
     def test_a_sample_grazing_grade_from_below_is_kept(self) -> None:
         """The other side of that threshold: real ramp ends sample fractionally
@@ -719,19 +741,24 @@ class TestLiftedHeights:
     def _lift(self, deck: _Deck, plan: np.ndarray, ends: tuple[bool, bool]) -> tuple:
         terrain = np.zeros(len(plan))
         counts = _Counts()
-        return _lifted_heights(deck, plan, terrain, terrain.copy(), ends, counts), counts
+        y, on_structure = _lifted_heights(deck, plan, terrain, terrain.copy(), ends, counts)
+        return y, on_structure, counts
 
     def test_an_edge_leaving_a_mixed_node_climbs_onto_its_ramp(self) -> None:
         plan = _straight(40.0)
         # A ramp descending 3 m over the first 30 m, then flat at grade.
         deck = _deck(*_sheet(0.0, 30.0, 3.0, 0.0), *_sheet(30.0, 41.0, 0.0, 0.0))
 
-        y, counts = self._lift(deck, plan, (True, False))
+        y, on_structure, counts = self._lift(deck, plan, (True, False))
 
         assert counts.ends_lifted == 1
         assert y[0] == pytest.approx(3.0)
         assert y[-1] == pytest.approx(0.0)
         assert (np.diff(y) <= 1e-9).all(), "the lift descends to grade and stays there"
+        assert on_structure[0] and not on_structure[-1], (
+            "`Q23`: the lifted end is on the ramp and the far end is not, "
+            "which is the whole reason width cannot be an edge attribute"
+        )
 
     def test_the_walk_stops_where_the_structure_reaches_the_ground(self) -> None:
         """`at_grade_m` is a tolerance, not a boundary — the residual step it
@@ -739,9 +766,12 @@ class TestLiftedHeights:
         plan = _straight(40.0)
         deck = _deck(*_sheet(0.0, 10.0, 2.0, 0.0), *_sheet(10.0, 41.0, 0.0, 0.0))
 
-        y, _ = self._lift(deck, plan, (True, False))
+        y, on_structure, _ = self._lift(deck, plan, (True, False))
         assert y[0] == pytest.approx(2.0)
         np.testing.assert_allclose(y[1:], 0.0)
+        assert list(on_structure) == [True] + [False] * (len(y) - 1), (
+            "the flag stops exactly where the walk does"
+        )
 
     def test_an_edge_meeting_no_mixed_node_is_left_alone(self) -> None:
         """The rule is topological. Structure overhead is not this edge's ramp,
@@ -749,16 +779,17 @@ class TestLiftedHeights:
         plan = _straight(40.0)
         deck = _deck(*_sheet(-1.0, 41.0, 3.0, 3.0))
 
-        y, counts = self._lift(deck, plan, (False, False))
+        y, on_structure, counts = self._lift(deck, plan, (False, False))
 
         assert counts.ends_lifted == 0
         np.testing.assert_allclose(y, 0.0)
+        assert not on_structure.any(), "structure overhead is not structure underfoot"
 
     def test_an_end_already_at_grade_is_not_counted_as_lifted(self) -> None:
         plan = _straight(40.0)
         deck = _deck(*_sheet(-1.0, 41.0, 0.1, 0.1))
 
-        _, counts = self._lift(deck, plan, (True, True))
+        _, _, counts = self._lift(deck, plan, (True, True))
         assert counts.ends_lifted == 0
 
     def test_an_edge_mixed_at_both_ends_is_walked_from_both(self) -> None:
@@ -772,11 +803,12 @@ class TestLiftedHeights:
             *_sheet(35.0, 41.0, 2.0, 2.0),
         )
 
-        y, counts = self._lift(deck, plan, (True, True))
+        y, on_structure, counts = self._lift(deck, plan, (True, True))
 
         assert counts.ends_lifted == 2
         assert y[0] == pytest.approx(2.0)
         assert y[-1] == pytest.approx(2.0)
+        assert on_structure[0] and on_structure[-1] and not on_structure[len(y) // 2]
 
 
 class TestMixedLevelNodes:
@@ -788,6 +820,7 @@ class TestMixedLevelNodes:
                 from_node=0,
                 to_node=1,
                 polyline=[],
+                on_structure=[],
                 direction="forward",
                 lanes=2,
                 width_m=6.0,
@@ -803,6 +836,7 @@ class TestMixedLevelNodes:
                 from_node=1,
                 to_node=2,
                 polyline=[],
+                on_structure=[],
                 direction="forward",
                 lanes=2,
                 width_m=6.0,

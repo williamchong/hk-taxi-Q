@@ -250,6 +250,18 @@ class RoadSurface:
     # at-grade reasons, and they are stated where the values are — see the table
     # in `hong_kong.yaml`. `widen_for` explains only why this rule wins outright.
     widen_by_elevation_level: dict[int, float]
+    # `Q23`: the same claim made per *station* rather than per edge. A road does
+    # not become a bridge at an edge boundary, so a level-0 edge can spend its
+    # first 90 m on a ramp deck and the rest on the street — 1,070 m of the
+    # region's level-0 centreline does exactly that. `roads.py` publishes which
+    # stations those are; this is what they are drawn at.
+    widen_on_structure: float
+    # How far back along the approach the widening is given up, so the ribbon
+    # arrives at the deck already narrow. Zero would be the literal reading of
+    # "stop widening at the structure" and it jogs the carriageway edge and its
+    # kerb sideways by ~1.9 m between two stations, which reads as a defect
+    # rather than as a bridge.
+    structure_taper_m: float
 
     # Kerbs are modelled but low and mountable — collision is forgiving by
     # design. The lip is what stops the carriageway ending in mid-air, since
@@ -267,9 +279,12 @@ class RoadSurface:
     surface_colour: tuple[int, int, int]
     kerb_colour: tuple[int, int, int]
 
-    def widen_for(self, speed_limit_kph: int, *, elevation_level: int) -> float:
-        """Widening factor for an edge, by level if the level has a rule, else
-        from the fastest matching speed rule.
+    def widen_for(
+        self, speed_limit_kph: int, *, elevation_level: int, on_structure: bool = False
+    ) -> float:
+        """Widening factor for one station, by level if the level has a rule,
+        else by whether that station is on structure, else from the fastest
+        matching speed rule.
 
         Expressways are already drawn wide by their lane count and need less
         help; a two-lane street is where the widening earns its keep.
@@ -282,9 +297,20 @@ class RoadSurface:
         is signed at 70 — it ends at a parapet. A widened ribbon there overhangs
         into the air beside the deck, which is both wrong and, with a guardrail
         drawn beyond it, unreadable.
+
+        ⚠️ **The level rule is still checked first, and that ordering is load
+        bearing rather than historical.** `on_structure` is a per-station fact
+        and the level table is a per-edge one, so letting the station win would
+        change what an off-grade edge is drawn at wherever the structure was
+        never found — `ISLAND EASTERN CORRIDOR`'s stub, which takes the flat
+        offset precisely because nothing is under it, would go back to being
+        widened. Checking the level first leaves levels 1 and -1 exactly as
+        `P2-7` measured them, so `Q23` moves level 0 and nothing else.
         """
         if elevation_level in self.widen_by_elevation_level:
             return float(self.widen_by_elevation_level[elevation_level])
+        if on_structure:
+            return float(self.widen_on_structure)
         return float(
             _by_fastest_rule(self.widen_by_min_speed_limit_kph, speed_limit_kph, self.widen_default)
         )
@@ -964,7 +990,8 @@ def _road_surface(body: dict[str, Any], where: str) -> RoadSurface:
         if isinstance(level, bool) or not isinstance(level, int):
             raise ValueError(f"{where}:widen_by_elevation_level key {level!r} is not an integer")
         by_level[level] = float(factor)
-    for factor in (widen_default, *widen.values(), *by_level.values()):
+    on_structure = float(_require(body, "widen_on_structure", where))
+    for factor in (widen_default, on_structure, *widen.values(), *by_level.values()):
         # Narrowing a road is not a tuning choice, it is a typo: the graph's
         # width already comes from an authored lane count, and a sub-1 factor
         # would put the carriageway inside the buildings beside it.
@@ -981,12 +1008,22 @@ def _road_surface(body: dict[str, Any], where: str) -> RoadSurface:
     # renders as a hole; a negative trim pushes the ribbon *past* its junction.
     # Both produce plausible-looking output, which is why they are refused here
     # rather than left to be noticed in the engine.
-    measures = _measures(body, where, ("kerb_height_m", "kerb_width_m", "junction_trim_factor"))
+    #
+    # `structure_taper_m` joins them: a negative taper would run the blend the
+    # wrong way and widen the road *onto* the deck, which is the defect `Q23`
+    # exists to remove arriving through its own fix.
+    measures = _measures(
+        body,
+        where,
+        ("kerb_height_m", "kerb_width_m", "junction_trim_factor", "structure_taper_m"),
+    )
 
     return RoadSurface(
         widen_default=widen_default,
         widen_by_min_speed_limit_kph=widen,
         widen_by_elevation_level=by_level,
+        widen_on_structure=on_structure,
+        structure_taper_m=measures["structure_taper_m"],
         kerb_height_m=measures["kerb_height_m"],
         kerb_width_m=measures["kerb_width_m"],
         junction_trim_factor=measures["junction_trim_factor"],

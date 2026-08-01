@@ -167,6 +167,9 @@ func _check(graph: RoadGraph, document: Dictionary, bounds: AABB) -> PackedStrin
 	# return to the bug `P0-5` hit. Checked on a real edge rather than argued.
 	problems.append_array(_check_lanes(graph, edges))
 
+	# --- Q23: the width follows the structure, part-way along an edge -------
+	problems.append_array(_check_structure_width(graph, edges))
+
 	# --- P2-2: a query fits inside a frame ---------------------------------
 	problems.append_array(_check_query_time(graph, bounds, edges))
 
@@ -177,6 +180,98 @@ func _check(graph: RoadGraph, document: Dictionary, bounds: AABB) -> PackedStrin
 				% [graph.edge_count(), drivable.size(), graph.indexed_segment_count(), probes]
 			)
 		)
+	return problems
+
+
+## `Q23`: a level-0 edge that climbs onto a ramp is narrow there and wide later.
+##
+## The case `_check_lanes` cannot reach. It samples the midpoint of the first 50
+## level-0 edges, and the 16 edges this is about are neither early in the
+## document nor on structure at their middle — so every assertion there would go
+## on passing if the per-station width were quietly collapsed back to one number
+## per edge. This finds an edge that is genuinely mixed and asserts both ends.
+##
+## Refuses to pass vacuously: a build with no mixed edge at all is reported,
+## because "the case never came up" and "the case works" are the same green.
+func _check_structure_width(graph: RoadGraph, edges: Array) -> PackedStringArray:
+	var problems: PackedStringArray = PackedStringArray()
+	var examined: int = 0
+
+	for edge: Dictionary in edges:
+		if int(edge.get("elevation_level", 0)) != 0:
+			continue
+		var flags: Array = edge.get("on_structure", [])
+		var points: Array = edge.get("polyline", [])
+		if flags.size() != points.size() or points.size() < 2:
+			continue
+		# The first flagged station, and the unflagged one **furthest from any**
+		# of them. Not simply the last unflagged one: `surface.py` tapers the
+		# width over ~15 m of the approach, so a station just past the flag is
+		# legitimately mid-taper and neither narrow nor fully widened. Taking the
+		# far end is the only place the at-grade width is certain to have
+		# arrived.
+		var on: int = -1
+		var off: int = -1
+		var furthest: int = -1
+		for station: int in flags.size():
+			if bool(flags[station]):
+				if on < 0:
+					on = station
+				continue
+			var span: int = flags.size()
+			for other: int in flags.size():
+				if bool(flags[other]):
+					span = mini(span, absi(station - other))
+			if span > furthest:
+				furthest = span
+				off = station
+		# Both, or there is nothing mixed here to check.
+		if on < 0 or off < 0:
+			continue
+		examined += 1
+
+		var edge_id: int = int(edge.get("id", -1))
+		var authored_half: float = graph.width_of(edge_id) * 0.5
+		var on_deck: float = graph.drawn_half_width_of(edge_id, on)
+		var on_street: float = graph.drawn_half_width_of(edge_id, off)
+
+		# On the deck the ribbon is drawn at the authored street width — a
+		# viaduct ends at a parapet, and widening it hangs the carriageway over
+		# air. That is the whole of `Q23`.
+		if absf(on_deck - authored_half) > 0.01:
+			problems.append(
+				(
+					(
+						"edge %d is on structure at station %d but drawn %.3f m wide, not its "
+						+ "authored %.3f m — the widening did not stop at the bridge"
+					)
+					% [edge_id, on, on_deck, authored_half]
+				)
+			)
+			break
+		# And off it the playability widening is still there. Without this the
+		# check passes on a build that narrowed the whole network.
+		if on_street <= authored_half + 0.01:
+			problems.append(
+				(
+					(
+						"edge %d is off structure at station %d and still drawn at its authored "
+						+ "%.3f m — the widening was lost rather than tapered"
+					)
+					% [edge_id, off, authored_half]
+				)
+			)
+			break
+
+	if examined == 0:
+		problems.append(
+			(
+				"no level-0 edge is on structure for part of its length, so Q23's per-station "
+				+ "width was never exercised — check roadgraph.json carries on_structure"
+			)
+		)
+	elif problems.is_empty():
+		print("  Q23: %d level-0 edges narrow where they stand on structure" % examined)
 	return problems
 
 
@@ -325,7 +420,11 @@ func _check_lanes(graph: RoadGraph, edges: Array) -> PackedStringArray:
 		var points: Array = edge.get("polyline", [])
 		if points.size() < 2 or int(edge.get("lanes", 2)) < 2:
 			continue
-		var mid: Array = points[floori(points.size() / 2.0)]
+		# The station is sampled as well as the point, because since `Q23` the
+		# drawn width varies along an edge and "the drawn half-width" is not a
+		# question you can ask without saying where.
+		var station: int = floori(points.size() / 2.0)
+		var mid: Array = points[station]
 		var hit: RoadGraph.Hit = graph.nearest_edge(Vector3(mid[0], mid[1], mid[2]))
 		if not hit.hit():
 			continue
@@ -336,27 +435,37 @@ func _check_lanes(graph: RoadGraph, edges: Array) -> PackedStringArray:
 		# differ by a quarter of the widening.
 		var edge_id: int = int(edge.get("id", -1))
 		var lanes: int = int(edge.get("lanes", 2))
-		var expected: float = RoadGraph.lane_offset(graph.drawn_half_width_of(edge_id) * 2.0, lanes)
+		var drawn_half: float = graph.drawn_half_width_of(edge_id, station)
+		var expected: float = RoadGraph.lane_offset(drawn_half * 2.0, lanes)
 		var actual: float = hit.lane_centre.distance_to(hit.point)
 		if absf(actual - expected) > 0.01:
 			problems.append(
 				(
 					(
 						"edge %d's lane centre is %.3f m off the centreline, expected %.3f m "
-						+ "from its drawn half-width of %.3f m"
+						+ "from its drawn half-width of %.3f m at station %d"
 					)
-					% [edge_id, actual, expected, graph.drawn_half_width_of(edge_id)]
+					% [edge_id, actual, expected, drawn_half, station]
 				)
 			)
 			break
-		if graph.drawn_half_width_of(edge_id) <= graph.width_of(edge_id) * 0.5:
+		# ⚠️ Conditional since `Q23`, and the condition is the finding. At grade
+		# the drawn ribbon is always wider than the authored street — that is the
+		# playability widening, and a lane centre taken from the graph alone
+		# would sit short of it. On structure the two are *equal*, because a deck
+		# ends at a parapet and a widened ribbon there hangs over air. So the
+		# claim only holds where the station says it is not on a bridge.
+		var flags: Array = edge.get("on_structure", [])
+		var on_structure: bool = station < flags.size() and bool(flags[station])
+		if not on_structure and drawn_half <= graph.width_of(edge_id) * 0.5:
 			problems.append(
 				(
 					(
 						"edge %d's drawn half-width %.3f m is not wider than half its "
-						+ "authored width %.3f m — the widening did not travel"
+						+ "authored width %.3f m at station %d, which is not on structure — "
+						+ "the widening did not travel"
 					)
-					% [edge_id, graph.drawn_half_width_of(edge_id), graph.width_of(edge_id) * 0.5]
+					% [edge_id, drawn_half, graph.width_of(edge_id) * 0.5, station]
 				)
 			)
 			break

@@ -58,7 +58,14 @@ ROADGRAPH_NAME = "roadgraph.json"
 # road is built on, so it varies along an edge instead of being one flat offset
 # per level. No field was added or removed — what changed is what the numbers
 # mean, which is exactly the change a consumer cannot detect for itself.
-ROADGRAPH_SCHEMA = 2
+#
+# 3 closes `Q23`, and this one *does* add a field: `on_structure`, per vertex.
+# Schema 2 lifted 16 level-0 edge ends onto the ramps they sit on but had no way
+# to say so, and `elevation_level` cannot stand in for it — a road becomes a
+# bridge partway along an edge, not at an edge boundary. Nor can `y`: with
+# `ground: terrain` an at-grade hill road reaches 49 m. Only this stage knows,
+# at the moment it lifts them.
+ROADGRAPH_SCHEMA = 3
 
 # `Node.kind` in the data contract. Degree three or more is somewhere a
 # driver can choose; anything else is a road continuing or stopping.
@@ -103,6 +110,12 @@ class Edge:
     from_node: int
     to_node: int
     polyline: list[tuple[float, float, float]]
+    # One flag per vertex of `polyline`: is this station resting on structure the
+    # deck sampler actually found? `Q23`'s signal, and `surface.py` is the
+    # consumer — it draws a road on a deck at its authored width, and could not
+    # tell which stations those were from the graph alone. False everywhere for a
+    # city that does not sample decks, which is what "no structure known" means.
+    on_structure: list[bool]
     direction: str
     lanes: int
     width_m: float
@@ -157,6 +170,11 @@ class RoadReport:
     vertices_gated: int = 0
     edges_sampled: int = 0
     ends_lifted: int = 0
+    # `Q23`'s counter, and the one `surface.py` narrows against. Not derivable
+    # from `vertices_sampled`: that counts stations the structure answered
+    # *directly*, while this counts stations published as resting on it — which
+    # includes everything an interpolated deck spans.
+    vertices_on_structure: int = 0
     components: list[int] = field(default_factory=list)
 
     @property
@@ -172,6 +190,7 @@ class RoadReport:
         self.vertices_gated += counts.gated
         self.edges_sampled += int(counts.sampled > 0)
         self.ends_lifted += counts.ends_lifted
+        self.vertices_on_structure += counts.on_structure
 
 
 @dataclass
@@ -190,6 +209,7 @@ class _Counts:
     sampled: int = 0
     gated: int = 0
     ends_lifted: int = 0
+    on_structure: int = 0
 
 
 # --------------------------------------------------------------------------
@@ -512,8 +532,9 @@ class _Nodes:
 class _Pending:
     """One clipped, simplified run, held until the graph's levels are known.
 
-    ⚠️ `edge.polyline` is empty until `_shaped` fills it, and it is the only
-    field that is not already final. Empty rather than provisional on purpose:
+    ⚠️ `edge.polyline` and `edge.on_structure` are empty until `_shaped` fills
+    them, and they are the only fields that are not already final. Empty rather
+    than provisional on purpose:
     a placeholder height is a plausible number that would survive a missed
     assignment, whereas an empty list cannot be mistaken for geometry and
     `_node_heights` indexes `polyline[0]` on every edge — so a run that somehow
@@ -638,6 +659,7 @@ def build_region(
                         from_node=nodes.id_for(run[0, 0], run[0, 1]),
                         to_node=nodes.id_for(run[-1, 0], run[-1, 1]),
                         polyline=[],
+                        on_structure=[],
                         direction=direction,
                         lanes=lanes,
                         width_m=round(lanes * style.lane_width_m, 3),
@@ -753,7 +775,7 @@ def _measured(
     # negated again below — and so both fields are narrowed for everything after.
     if deck is None or ground is None or (level <= 0 and not any(ends)):
         y, counts = _heights(ground, item.plan, deck_m)
-        return _shaped(item.edge, item.plan, y), counts
+        return _shaped(item.edge, item.plan, y, np.zeros(len(item.plan), dtype=bool)), counts
 
     plan = resample(item.plan, deck.thresholds.resample_m)
     terrain = ground.sample(plan[:, 0], plan[:, 1])
@@ -761,20 +783,26 @@ def _measured(
     counts = _Counts(off_terrain=off_terrain, added=len(plan) - len(item.plan))
 
     if level > 0:
-        y = _deck_heights(deck, plan, terrain, fallback, counts)
+        y, on_structure = _deck_heights(deck, plan, terrain, fallback, counts)
     else:
-        y = _lifted_heights(deck, plan, terrain, fallback, ends, counts)
-    return _shaped(item.edge, plan, y), counts
+        y, on_structure = _lifted_heights(deck, plan, terrain, fallback, ends, counts)
+    counts.on_structure = int(on_structure.sum())
+    return _shaped(item.edge, plan, y, on_structure), counts
 
 
-def _shaped(edge: Edge, plan: np.ndarray, y: np.ndarray) -> Edge:
-    """The pending edge with its polyline filled in — see `_Pending`."""
+def _shaped(edge: Edge, plan: np.ndarray, y: np.ndarray, on_structure: np.ndarray) -> Edge:
+    """The pending edge with its polyline and `on_structure` filled in.
+
+    See `_Pending`. The two are filled together because they are one answer read
+    twice: a station's height and what that height was measured from.
+    """
     return replace(
         edge,
         polyline=[
             (float(x), float(height), float(z))
             for x, height, z in zip(plan[:, 0], y, plan[:, 1], strict=True)
         ],
+        on_structure=[bool(flag) for flag in on_structure],
     )
 
 
@@ -814,7 +842,7 @@ def _from_terrain(terrain: np.ndarray, deck_m: float) -> tuple[np.ndarray, int]:
 
 def _deck_heights(
     deck: _Deck, plan: np.ndarray, terrain: np.ndarray, fallback: np.ndarray, counts: _Counts
-) -> np.ndarray:
+) -> tuple[np.ndarray, np.ndarray]:
     """An off-grade carriageway's height, taken from the structure it is built on.
 
     Answers `Q20`. `elevation_levels` gives level 1 a flat +6.0 m, and real
@@ -838,6 +866,11 @@ def _deck_heights(
     Only an edge the structure does not cover **anywhere** falls back to the
     flat offset. That is `ISLAND EASTERN CORRIDOR`'s stub, whose every sample
     the terrain gate refuses, and it is the case the offset is still right for.
+
+    `on_structure` is therefore all-or-nothing here, and deliberately so: where
+    the deck is held across a hole by interpolation, those stations *are* on the
+    deck — that is the whole claim the interpolation makes — so reporting them
+    as bare ground would contradict the height published beside them.
     """
     sampled = deck.field.sample_along(plan[:, 0], plan[:, 1], slab_gap_m=deck.thresholds.slab_gap_m)
 
@@ -853,7 +886,7 @@ def _deck_heights(
     counts.gated = int(under.sum())
     counts.sampled = int(usable.sum())
     if not usable.any():
-        return fallback
+        return fallback, np.zeros(len(plan), dtype=bool)
 
     # Along the edge rather than by station index: `resample` inserts stations
     # but never removes the source's own, so the spacing is not uniform and
@@ -862,7 +895,8 @@ def _deck_heights(
     # `clearance_m` on the sampled branch only. It is the road laid *on* the
     # deck, so it belongs wherever the deck is what decides the height — and
     # nowhere near the fallback above, which is not on a deck at all.
-    return np.interp(along, along[usable], sampled[usable]) + deck.thresholds.clearance_m
+    y = np.interp(along, along[usable], sampled[usable]) + deck.thresholds.clearance_m
+    return y, np.ones(len(plan), dtype=bool)
 
 
 def _lifted_heights(
@@ -872,7 +906,7 @@ def _lifted_heights(
     fallback: np.ndarray,
     ends: tuple[bool, bool],
     counts: _Counts,
-) -> np.ndarray:
+) -> tuple[np.ndarray, np.ndarray]:
     """A level-0 edge raised onto the ramp it starts on, where it starts on one.
 
     At 13 of `Q13`'s 36 nodes the source's `ELEVATION` flips partway up a ramp,
@@ -931,7 +965,14 @@ def _lifted_heights(
     # `clearance_m` rides with the lift for the same reason it does off-grade:
     # a lifted end is resting on a ramp deck, and the two surfaces would
     # otherwise interleave exactly as they did on the flyovers.
-    return np.where(raised > 0.0, terrain + raised + deck.thresholds.clearance_m, fallback)
+    # `raised > 0` is `Q23`'s signal as well as this function's own result, and
+    # it is returned rather than recomputed downstream because nothing
+    # downstream can: the walk's stopping rule is the only thing that knows
+    # where the ramp ends, and it is spent by the time this returns.
+    on_structure = raised > 0.0
+    return np.where(on_structure, terrain + raised + deck.thresholds.clearance_m, fallback), (
+        on_structure
+    )
 
 
 def _node_heights(count: int, edges: Iterable[Edge]) -> list[float]:
@@ -1156,6 +1197,7 @@ def _write(out_root: Path | None, city: CityConfig, region_id: str, report: Road
                 "from": edge.from_node,
                 "to": edge.to_node,
                 "polyline": [round_position(point) for point in edge.polyline],
+                "on_structure": edge.on_structure,
                 "direction": edge.direction,
                 "lanes": edge.lanes,
                 "width_m": edge.width_m,
@@ -1300,6 +1342,10 @@ def main(argv: list[str] | None = None) -> int:
             "  %d level-0 ends lifted onto a ramp; resampling added %d stations across both",
             report.ends_lifted,
             report.vertices_added,
+        )
+        log.info(
+            "  %d stations published as resting on structure, drawn at their authored width",
+            report.vertices_on_structure,
         )
     if report.turns_unresolved:
         log.warning("  %d turn restrictions had no shared node", report.turns_unresolved)

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from deck_error import Faces, _nearest, _stations, _wears, measure
+from deck_error import Faces, _wears, measure, nearest, stations
 
 # `INFRASTRUCTURE`'s `class_colours` entry and `colour_jitter` from
 # `config/cities/hong_kong.yaml`. Copied rather than read through the `hong_kong`
@@ -98,7 +98,7 @@ class TestFaces:
 class TestStations:
     def test_a_long_segment_is_broken_up_and_keeps_its_ends(self) -> None:
         line = np.array([[0.0, 5.0, 0.0], [30.0, 5.0, 0.0]])
-        points = list(_stations(line, 10.0))
+        points = list(stations(line, 10.0))
 
         assert points[0] == (0.0, 5.0, 0.0)
         assert points[-1] == (30.0, 5.0, 0.0)
@@ -106,26 +106,26 @@ class TestStations:
 
     def test_height_is_carried_along_so_a_ramp_is_followed(self) -> None:
         line = np.array([[0.0, 0.0, 0.0], [20.0, 4.0, 0.0]])
-        heights = [y for _, y, _ in _stations(line, 10.0)]
+        heights = [y for _, y, _ in stations(line, 10.0)]
         np.testing.assert_allclose(heights, [0.0, 2.0, 4.0])
 
     def test_a_segment_shorter_than_the_spacing_is_left_whole(self) -> None:
         line = np.array([[0.0, 1.0, 0.0], [3.0, 1.0, 0.0]])
-        assert len(list(_stations(line, 10.0))) == 2
+        assert len(list(stations(line, 10.0))) == 2
 
 
 class TestNearest:
     def test_the_window_refuses_rather_than_falling_back_to_a_far_candidate(self) -> None:
         """The attribution rule. Returning the 5.0 here would score a flyover
         against the street beneath it and call the difference an error."""
-        assert _nearest(np.array([5.0, 12.0]), 8.5, 1.0) is None
-        assert _nearest(np.array([5.0, 12.0]), 12.1, 1.0) == pytest.approx(12.0)
+        assert nearest(np.array([5.0, 12.0]), 8.5, 1.0) is None
+        assert nearest(np.array([5.0, 12.0]), 12.1, 1.0) == pytest.approx(12.0)
 
     def test_without_a_window_the_nearest_always_wins(self) -> None:
-        assert _nearest(np.array([5.0, 12.0]), 8.5) == pytest.approx(5.0)
+        assert nearest(np.array([5.0, 12.0]), 8.5) == pytest.approx(5.0)
 
     def test_nothing_to_choose_from_is_none_not_zero(self) -> None:
-        assert _nearest(np.zeros(0), 3.0) is None
+        assert nearest(np.zeros(0), 3.0) is None
 
 
 class TestMeasure:

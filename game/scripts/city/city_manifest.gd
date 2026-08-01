@@ -28,7 +28,10 @@ const GeneratedDocument = preload("res://scripts/city/generated_document.gd")
 const PATH: String = "res://assets/generated/city.json"
 
 ## Schema this understands, matching `CITY_SCHEMA` in `etl/pipeline/export.py`.
-const SCHEMA_VERSION: int = 3
+##
+## 4 since `Q23`: `carriageway[].half_width_m` is an array, one value per station
+## of that edge's polyline, where it was one number for the whole edge.
+const SCHEMA_VERSION: int = 4
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -89,16 +92,23 @@ var road_graph_path: String
 var road_surface_path: String
 var fares_path: String
 
-## Drawn half-width of the carriageway, in metres, keyed by road-graph edge id.
+## Drawn half-width of the carriageway, in metres, keyed by road-graph edge id —
+## **one value per station** of that edge's `roadgraph.json` polyline.
 ##
 ## Not derivable from `roadgraph.json`: that publishes the **authored** street
-## width, and `P1-4` draws the ribbon at
-## `width_m x widen_for(speed_limit_kph, elevation_level)`.
+## width, and `P1-4` draws the ribbon at `width_m x widen_for(...)`.
 ## The widening lives on the ETL's surface style, which `config.py` deliberately
 ## keeps out of the graph — so the drawn width reaches the game through the
 ## manifest or not at all. `RoadGraph` (`P2-2`) needs it to put a car in the
 ## nearside lane rather than on the seam where opposed ribbons overlap.
-var carriageway_half_width_m: Dictionary[int, float] = {}
+##
+## An array rather than a number since `Q23`. `elevation_level` is an attribute
+## of a whole edge but a road becomes a bridge partway along one, so a level-0
+## edge climbing onto a ramp is drawn at its authored width there and widened
+## further along. Reading the first entry as if it covered the edge would put
+## the lane centre 0.96 m out on a two-lane street — the same error the whole
+## table exists to prevent.
+var carriageway_half_width_m: Dictionary[int, PackedFloat32Array] = {}
 
 
 ## The manifest, or null with a pushed message.
@@ -121,9 +131,10 @@ static func load_manifest() -> CityManifest:
 	manifest.road_surface_path = _resolve(document.get("road_surface", ""))
 	manifest.fares_path = _resolve(document.get("fares", ""))
 	for entry: Dictionary in document.get("carriageway", []):
-		manifest.carriageway_half_width_m[int(entry.get("edge", -1))] = float(
-			entry.get("half_width_m", 0.0)
-		)
+		var halves := PackedFloat32Array()
+		for half: float in entry.get("half_width_m", []):
+			halves.append(half)
+		manifest.carriageway_half_width_m[int(entry.get("edge", -1))] = halves
 
 	var extent: Dictionary = document.get("bounds_game", {})
 	manifest.bounds = _box(_point(extent.get("min")), _point(extent.get("max")))

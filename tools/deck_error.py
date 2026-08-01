@@ -20,7 +20,7 @@ So nothing here is shared with the code it grades:
 ⚠️ Two things here are *not* independent, and saying so is the point of a table
 like this. The barycentric test in `Faces.heights_at` is `terrain._hits` with
 different names — a sign or inclusivity error in it would be present in both and
-invisible here. And `_stations` is `plan_steps` plus the body of
+invisible here. And `stations` is `plan_steps` plus the body of
 `roads.resample`, kept as a copy rather than imported because
 `from pipeline.roads import ...` drags in `pipeline.terrain` and GDAL, and
 losing "`HeightField` is unreachable from this module" costs more than three
@@ -220,6 +220,92 @@ def _wears(colours: np.ndarray, base: tuple[int, int, int], jitter: float) -> np
     return low <= high
 
 
+# --------------------------------------------------------------------------
+# Reading the shipped bundle — shared with `overhang.py`
+#
+# Both tools grade the same bundle and must resolve it the same way, down to
+# the message a missing `city.json` prints. Kept here rather than in a third
+# module because this one is the older and the one `P2-7` cites; the split that
+# matters is tool-versus-pipeline, and that is unaffected.
+# --------------------------------------------------------------------------
+
+
+def bundle_arguments() -> argparse.ArgumentParser:
+    """The arguments every bundle-grading tool needs, as an argparse parent."""
+    parent = argparse.ArgumentParser(add_help=False)
+    parent.add_argument("--city", required=True)
+    parent.add_argument(
+        "--generated",
+        type=Path,
+        default=ROOT / "game" / "assets" / "generated",
+        help="the shipped bundle to grade (default: the game's)",
+    )
+    parent.add_argument("--lod", type=int, default=0, help="tier to measure (default: the finest)")
+    parent.add_argument(
+        "--attribute-within-m",
+        type=float,
+        default=0.40,
+        # Sized by what it must *tolerate*, not by caution. The ribbon is
+        # extruded from the polyline this is compared against, so a correctly
+        # attributed surface differs only by mitre and trim interpolation —
+        # centimetres — and 0.40 is still nearly three kerb heights.
+        #
+        # A wider window is not safer, it is wrong: at 1.0 m the Wan Chai
+        # Interchange mis-attributed a level-0 junction cap 0.45 m away to a
+        # level-1 edge, and reported the clearance it does not carry as 0.20 m
+        # of extra error. Tightening to 0.40 removed that and cost no coverage.
+        help="how far the drawn road may sit from the edge it is attributed to, vertically",
+    )
+    return parent
+
+
+def load_bundle(generated: Path, lod: int, city_id: str) -> tuple[dict[str, Any], list[Path]]:
+    """The manifest and the tile paths for one tier, or a named exit."""
+    try:
+        manifest = json.loads((generated / "city.json").read_text())
+    except FileNotFoundError:
+        raise SystemExit(
+            f"no city.json under {generated}. Build the region first:\n"
+            f"  cd etl && python -m pipeline --city {city_id} --region <region>"
+        ) from None
+
+    tiers = min(len(tile["lods"]) for tile in manifest["tiles"])
+    if not 0 <= lod < tiers:
+        raise SystemExit(f"--lod {lod}: this bundle ships tiers 0 to {tiers - 1}")
+    return manifest, [generated / tile["lods"][lod] for tile in manifest["tiles"]]
+
+
+def structure_faces(city: Any, tiles: list[Path]) -> tuple[Faces, str]:
+    """Upward-facing structure across the tiles, and the class name it came from."""
+    structure_class = city.buildings.structure_class
+    if structure_class is None:
+        raise SystemExit(
+            f"city '{city.id}' declares no buildings.structure_class to measure against"
+        )
+    colour = city.buildings.class_colours.get(structure_class)
+    if colour is None:
+        raise SystemExit(
+            f"city '{city.id}' gives '{structure_class}' no entry in class_colours, so it cannot "
+            "be told apart from buildings in a merged tile"
+        )
+    return Faces.from_tiles(tiles, colour, city.buildings.colour_jitter), structure_class
+
+
+def drawn_surface(generated: Path, manifest: dict[str, Any]) -> Faces:
+    """The shipped road mesh, indexed for a point query."""
+    drawing = read_glb(generated / manifest["road_surface"])
+    if len(drawing) != 1:
+        # One primitive is what `surface.py` writes, and the whole carriageway
+        # has to be in it. Taking `[0]` of several would measure part of the
+        # road and report the coverage of all of it.
+        raise SystemExit(
+            f"{manifest['road_surface']} holds {len(drawing)} meshes; this expects the one "
+            "carriageway surface"
+        )
+    mesh = drawing[0]
+    return Faces.of(mesh.positions[mesh.triangles].astype(np.float64), signed=False)
+
+
 @dataclass(frozen=True)
 class _Samples:
     """Stations on the drawn carriageway, and everything that did not become one.
@@ -276,17 +362,7 @@ def elevated_samples(
     if not edges:
         raise SystemExit("the graph has no elevated edges to measure")
 
-    drawing = read_glb(generated / manifest["road_surface"])
-    if len(drawing) != 1:
-        # One primitive is what `surface.py` writes, and the whole carriageway
-        # has to be in it. Taking `[0]` of several would measure part of the
-        # road and report the coverage of all of it.
-        raise SystemExit(
-            f"{manifest['road_surface']} holds {len(drawing)} meshes; this expects the one "
-            "carriageway surface"
-        )
-    mesh = drawing[0]
-    drawn = Faces.of(mesh.positions[mesh.triangles].astype(np.float64), signed=False)
+    drawn = drawn_surface(generated, manifest)
 
     samples: list[tuple[float, float, float]] = []
     asked = 0
@@ -294,9 +370,9 @@ def elevated_samples(
     for edge in edges:
         polyline = np.asarray(edge["polyline"], dtype=np.float64)
         matched = 0
-        for x, expected, z in _stations(polyline, spacing_m):
+        for x, expected, z in stations(polyline, spacing_m):
             asked += 1
-            drawn_here = _nearest(drawn.heights_at(x, z), expected, near_m)
+            drawn_here = nearest(drawn.heights_at(x, z), expected, near_m)
             if drawn_here is not None:
                 matched += 1
                 samples.append((x, drawn_here, z))
@@ -311,7 +387,7 @@ def elevated_samples(
     )
 
 
-def _nearest(candidates: np.ndarray, to: float, within: float | None = None) -> float | None:
+def nearest(candidates: np.ndarray, to: float, within: float | None = None) -> float | None:
     """The candidate height closest to `to`, or None if none is close enough.
 
     The tool's one selection rule, in the two places it is made: which drawn
@@ -328,7 +404,7 @@ def _nearest(candidates: np.ndarray, to: float, within: float | None = None) -> 
     return float(candidates[np.abs(candidates - to).argmin()])
 
 
-def _stations(polyline: np.ndarray, spacing_m: float) -> Iterator[tuple[float, float, float]]:
+def stations(polyline: np.ndarray, spacing_m: float) -> Iterator[tuple[float, float, float]]:
     """Points down a polyline at most `spacing_m` apart, with its own height.
 
     Deliberately a copy of `roads.plan_steps` plus the body of `roads.resample`
@@ -370,7 +446,7 @@ def measure(samples: np.ndarray, deck: Faces, clearance_m: float = 0.0) -> tuple
     errors: list[float] = []
     uncovered = 0
     for x, y, z in samples:
-        below = _nearest(deck.heights_at(float(x), float(z)), y)
+        below = nearest(deck.heights_at(float(x), float(z)), y)
         if below is None:
             uncovered += 1
             continue
@@ -379,15 +455,9 @@ def measure(samples: np.ndarray, deck: Faces, clearance_m: float = 0.0) -> tuple
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    parser.add_argument("--city", required=True)
-    parser.add_argument(
-        "--generated",
-        type=Path,
-        default=ROOT / "game" / "assets" / "generated",
-        help="the shipped bundle to grade (default: the game's)",
+    parser = argparse.ArgumentParser(
+        description=(__doc__ or "").splitlines()[0], parents=[bundle_arguments()]
     )
-    parser.add_argument("--lod", type=int, default=0, help="tier to measure (default: the finest)")
     parser.add_argument(
         "--accept-p90-m",
         type=float,
@@ -395,21 +465,6 @@ def main(argv: list[str] | None = None) -> int:
         help="fail above this |error| p90 (default: P2-7's criterion)",
     )
     parser.add_argument("--spacing-m", type=float, default=2.0, help="centreline station spacing")
-    parser.add_argument(
-        "--attribute-within-m",
-        type=float,
-        default=0.40,
-        # Sized by what it must *tolerate*, not by caution. The ribbon is
-        # extruded from the polyline this is compared against, so a correctly
-        # attributed surface differs only by mitre and trim interpolation —
-        # centimetres — and 0.40 is still nearly three kerb heights.
-        #
-        # A wider window is not safer, it is wrong: at 1.0 m the Wan Chai
-        # Interchange mis-attributed a level-0 junction cap 0.45 m away to a
-        # level-1 edge, and reported the clearance it does not carry as 0.20 m
-        # of extra error. Tightening to 0.40 removed that and cost no coverage.
-        help="how far the drawn road may sit from the edge it is attributed to, vertically",
-    )
     parser.add_argument(
         "--clearance-m",
         type=float,
@@ -446,31 +501,7 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     city = load_city(args.city)
-    structure_class = city.buildings.structure_class
-    if structure_class is None:
-        raise SystemExit(
-            f"city '{city.id}' declares no buildings.structure_class to measure against"
-        )
-    colour = city.buildings.class_colours.get(structure_class)
-    if colour is None:
-        raise SystemExit(
-            f"city '{city.id}' gives '{structure_class}' no entry in class_colours, so it cannot "
-            "be told apart from buildings in a merged tile"
-        )
-
-    try:
-        manifest = json.loads((args.generated / "city.json").read_text())
-    except FileNotFoundError:
-        raise SystemExit(
-            f"no city.json under {args.generated}. Build the region first:\n"
-            f"  cd etl && python -m pipeline --city {args.city} --region <region>"
-        ) from None
-
-    tiers = min(len(tile["lods"]) for tile in manifest["tiles"])
-    if not 0 <= args.lod < tiers:
-        raise SystemExit(f"--lod {args.lod}: this bundle ships tiers 0 to {tiers - 1}")
-
-    tiles = [args.generated / tile["lods"][args.lod] for tile in manifest["tiles"]]
+    manifest, tiles = load_bundle(args.generated, args.lod, args.city)
     # The build stamp, so a run pasted into a report says which build it graded.
     log.info(
         "%s / %s, LOD %d, built %s",
@@ -480,7 +511,7 @@ def main(argv: list[str] | None = None) -> int:
         manifest.get("generated_utc", "unknown"),
     )
 
-    deck = Faces.from_tiles(tiles, colour, city.buildings.colour_jitter)
+    deck, structure_class = structure_faces(city, tiles)
     taken = elevated_samples(args.generated, manifest, args.spacing_m, args.attribute_within_m)
     declared = city.roads.deck.clearance_m if city.roads.deck is not None else 0.0
     clearance = declared if args.clearance_m is None else args.clearance_m

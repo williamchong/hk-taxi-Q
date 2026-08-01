@@ -315,6 +315,25 @@ roads:
     widen_by_elevation_level:
       1: 1.0
 
+    # Q23. The rule above is keyed on the edge, and a road does not become a
+    # bridge at an edge boundary: P2-7 lifted 16 level-0 edge ends onto the
+    # ramps they physically sit on, which left 1,070 m of level-0 centreline
+    # across 28 edges standing on structure at the full 1.6x — worst at the WAN
+    # CHAI INTERCHANGE approaches (94, 94, 78 m) and HUNG HING ROAD FLYOVER
+    # (72 m). Not a tail: every metre of it was widened. Reported from the
+    # driver's seat before it was measured. Same value as the level rule and for
+    # the same reason — a deck ends at a parapet — but applied per station,
+    # where roads.py publishes `on_structure`.
+    widen_on_structure: 1.0
+    # How much of the approach the widening is given up over, so the ribbon is
+    # already narrow when it reaches the deck. 15 m against a 10 m station
+    # spacing (deck.resample_m) puts one or two stations inside the blend. At
+    # 0 the carriageway edge and its kerb jog ~1.9 m sideways in one station on
+    # a two-lane street, which reads as a modelling error rather than as a
+    # bridge; much beyond 20 m and the narrowing starts before anything on the
+    # ground explains it.
+    structure_taper_m: 15.0
+
     # Low and mountable by design. The lip also gives the carriageway a visible
     # edge, which matters more here than usual: the terrain is too expensive to
     # ship, so beyond the kerb there is nothing at all.

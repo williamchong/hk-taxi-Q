@@ -458,6 +458,30 @@ class TestWidening:
         assert -1 not in surface.widen_by_elevation_level
         assert surface.widen_for(70, elevation_level=-1) == 1.3
 
+    def test_a_level_zero_station_on_structure_takes_the_authored_width(self, hong_kong) -> None:
+        """`Q23`. The edge is level 0 and signed at 50, so both at-grade rules
+        match — and the station is still standing on a ramp deck."""
+        surface = hong_kong.roads.surface
+        assert surface.widen_for(50, elevation_level=0, on_structure=True) == 1.0
+        assert surface.widen_for(50, elevation_level=0, on_structure=False) == 1.6
+
+    def test_the_level_rule_still_beats_the_station(self, hong_kong) -> None:
+        """Ordering, and it is load bearing. `ISLAND EASTERN CORRIDOR`'s stub is
+        level 1 with no structure found anywhere under it, so it takes the flat
+        offset and reports every station as *off* structure. If the station won,
+        that edge would go back to 1.3x and hang over a deck that is not there.
+        """
+        surface = hong_kong.roads.surface
+        assert surface.widen_for(70, elevation_level=1, on_structure=False) == 1.0
+
+    def test_a_station_off_structure_is_the_default(self, hong_kong) -> None:
+        """A city with no deck sampling publishes `on_structure` false
+        everywhere, and must be drawn exactly as it was before `Q23`."""
+        surface = hong_kong.roads.surface
+        assert surface.widen_for(50, elevation_level=0) == surface.widen_for(
+            50, elevation_level=0, on_structure=False
+        )
+
     @pytest.mark.parametrize("table", ["widen_by_min_speed_limit_kph", "widen_by_elevation_level"])
     def test_a_factor_below_one_is_rejected_in_either_table(self, rewrite, table: str) -> None:
         """Narrowing below the authored width is a typo, not a tuning choice:
@@ -505,6 +529,27 @@ class TestWidening:
         city = load_city("hong_kong", cities_root=rewrite(drop))
         assert city.roads.surface.widen_by_elevation_level == {}
         assert city.roads.surface.widen_for(70, elevation_level=1) == 1.3
+
+    def test_widen_on_structure_below_one_is_rejected_like_the_tables(self, rewrite) -> None:
+        """It is a widening factor and shares their floor. Checked separately
+        because it is a scalar rather than a table, so the loop that guards the
+        tables would not have reached it."""
+
+        def narrow(doc: dict[str, Any]) -> None:
+            doc["roads"]["surface"]["widen_on_structure"] = 0.9
+
+        with pytest.raises(ValueError, match=r"widening factor 0\.9 is below 1\.0"):
+            load_city("hong_kong", cities_root=rewrite(narrow))
+
+    def test_a_negative_taper_is_rejected(self, rewrite) -> None:
+        """It would run the blend backwards and widen the road onto the deck —
+        the defect being fixed, arriving through its own fix."""
+
+        def backwards(doc: dict[str, Any]) -> None:
+            doc["roads"]["surface"]["structure_taper_m"] = -5.0
+
+        with pytest.raises(ValueError, match="structure_taper_m"):
+            load_city("hong_kong", cities_root=rewrite(backwards))
 
 
 class TestDeckSampling:

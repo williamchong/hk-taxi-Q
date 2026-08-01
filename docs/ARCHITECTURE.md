@@ -197,6 +197,24 @@ The sweep must run with `game/` as the project directory. Run from elsewhere, `r
 resolve, every script silently analyses clean, and the check passes having checked nothing — the
 `dea1f36` failure mode, one directory over.
 
+⚠️ **A verify tool that appears to hang is a parse error, not slow work** — and the two are easy to
+confuse because the symptom is a Godot process that never exits. When a script fails to compile,
+`_init` never runs, so `quit()` is never called and the SceneTree spins forever. Warnings are
+promoted to errors here, so something as small as an unused parameter does it. Observed for real on
+`verify_road_graph`, which normally finishes in seconds despite timing ~16,000 probes. If a step
+sits there, read the log for `Parse Error` / `Compile Error` rather than waiting it out — and when
+scripting a Godot run, give it a watchdog rather than a long timeout.
+
+**Two grading tools sit beside the suite and are run by hand, not by `check.sh`.** Both read only
+the *shipped bundle* and share no code with the pipeline, because a stage cannot mark its own work:
+ask the ETL's own sampler about the ETL's own output and it reads |error| p90 0.02 m, which is the
+sampler agreeing with itself.
+
+| Tool | Answers |
+|---|---|
+| `tools/deck_error.py` | `P2-7`/`Q20` — how far the drawn carriageway sits from the deck beneath it, *vertically*, sampled down centrelines. Gates on \|error\| p90, deepest intrusion, and the share it managed to measure at all |
+| `tools/overhang.py` | `Q22`/`Q23` — whether there is a deck beneath it at all, sampled *across the full drawn width*. A ribbon can pass the first and fail the second |
+
 ### CI
 
 `.github/workflows/ci.yml` runs on every push to `main` and every pull request, in two jobs:
@@ -299,7 +317,7 @@ The interface between ETL and game. **Versioned — change both sides together a
 
 ```json
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "city_id": "hong_kong",
   "region_id": "wan_chai",
   "source_crs": "EPSG:2326",
@@ -316,7 +334,7 @@ The interface between ETL and game. **Versioned — change both sides together a
   ],
   "road_graph": "roadgraph.json",
   "road_surface": "roads.glb",
-  "carriageway": [{ "edge": 651, "half_width_m": 5.12 }],
+  "carriageway": [{ "edge": 651, "half_width_m": [5.12, 5.12, 4.32, 3.2] }],
   "fares": "fares.json",
   "etl_version": "0.1.0",
   "generated_utc": "2026-07-30T20:04:03Z"
@@ -339,15 +357,24 @@ at them. A build ships exactly what the manifest names: the three documents and 
 199 files and 105.5 MB for a 51.6 MB PCK until `P2-1`'s review dropped the exact-weld tier; see
 `Q16` in `docs/PROGRESS.md`.
 
-⚠️ **`carriageway` is the drawn half-width per edge, and the game cannot derive it** (schema 2,
-`P2-2`). `roadgraph.json` publishes the **authored** street — `lanes × lane_width_m` — while `P1-4`
-draws the ribbon at `width_m × widen_for(speed_limit_kph, elevation_level)`, 1.6× by default and
-**1.0× on structure**, where the deck is a fixed width the ribbon must not overhang. So a consumer
-must read this table rather than assume the drawn width exceeds the authored one — off-grade the two
-are equal. The widening lives on the ETL's surface style, and `etl/pipeline/config.py` keeps it there
-deliberately: *"the graph is a description of the city, this is how wide and how kerbed to draw it. A
-change here never changes `roadgraph.json`."* So the drawn width reaches the runtime through the
-manifest or not at all — and `width_m` above is untouched by any of it.
+⚠️ **`carriageway` is the drawn half-width, and the game cannot derive it** (schema 2, `P2-2`).
+`roadgraph.json` publishes the **authored** street — `lanes × lane_width_m` — while `P1-4` draws the
+ribbon at `width_m × widen_for(...)`, 1.6× by default and **1.0× on structure**, where the deck is a
+fixed width the ribbon must not overhang. So a consumer must read this table rather than assume the
+drawn width exceeds the authored one — on structure the two are equal. The widening lives on the
+ETL's surface style, and `etl/pipeline/config.py` keeps it there deliberately: *"the graph is a
+description of the city, this is how wide and how kerbed to draw it. A change here never changes
+`roadgraph.json`."* So the drawn width reaches the runtime through the manifest or not at all — and
+`width_m` above is untouched by any of it.
+
+⚠️ **One value per station since schema 4** (`Q23`), indexed by that edge's `roadgraph.json`
+polyline and the same length as it. `elevation_level` is an attribute of a whole edge, but a road
+becomes a bridge partway along one: `P2-7` lifted 16 level-0 edge ends onto the ramps they sit on,
+and until `Q23` those were drawn at the full at-grade widening while standing on a deck — **1,070 m
+of level-0 centreline across 28 edges**, reported from the driver's seat. The width now tapers to
+the authored one over `roads.surface.structure_taper_m` of the approach and is already narrow when
+it reaches the deck. Reading `[0]` as if it covered the edge is right on 769 of the region's 797
+edges and 0.96 m out on the rest, which is exactly the error this table exists to prevent.
 
 `surface.py` records it — the one place the widening is applied — and `export.py` carries it here
 without recomputing, because a second evaluation of `widen_for` is a second thing to keep in step
@@ -443,7 +470,7 @@ Nothing in the game should read `buildings.json`.
 
 ```json
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "nodes": [
     { "id": 1, "pos": [120.5, 4.0, 300.2], "kind": "junction" }
   ],
@@ -451,6 +478,7 @@ Nothing in the game should read `buildings.json`.
     {
       "id": 1, "from": 1, "to": 2,
       "polyline": [[120.5, 4.0, 300.2], [180.0, 4.1, 305.0]],
+      "on_structure": [false, false],
       "direction": "both",
       "lanes": 3,
       "width_m": 11.0,
@@ -480,6 +508,7 @@ Field provenance:
 | `width_m` | Derived from `lanes`, then **hand-tuned upward** for playability (see Game Design) |
 | `elevation_level` | `ELEVATION` integer attribute (verified: −1/0/1 in the region). Ordinal level, **not** a height, and never a height — it says which deck a road is on, not where that deck is. Since `P2-7` (schema 2) it is also **not** what decides `y`: see `polyline` below. |
 | `polyline` / `pos` | Game-space metres, `y` measured **from ground level, not from the vertical datum** (`Q11`). Since schema 2 an off-grade edge's `y` is **sampled from the map sheets' `INFRASTRUCTURE` structure**, so it follows the real deck and varies along an edge — median grade 2.47%, p90 8.04%. Level-0 edges meeting a node another level also reaches are lifted onto the ramp they sit on. ⚠️ Before schema 2 the mapping was a **constant per level**, so no edge ever ramped; a reader cannot tell the two apart by inspection, which is the whole reason this bumped. Where the structure covers nothing, `elevation_levels` in city config still supplies the flat offset. A node's `y` is the **level nearest grade** among the edges meeting it, and the highest end on that level. |
+| `on_structure` | ⚠️ **Derived, not published by any source.** One flag per vertex of `polyline`, added in schema 3 for `Q23`: true where that station's height came from sampled structure, false where it fell back to the level's flat offset. `elevation_level` says which deck an edge *belongs to*; this says which of its stations are *standing on one*, and the two differ because a road becomes a bridge partway along an edge. Only `roads.py` can produce it — `y` cannot stand in, since `ground: terrain` puts an at-grade hill road at 49 m. All-false for a city that samples no decks. `surface.py` is the consumer: **897 stations** in Wan Chai, **546 m** of it level-0 centreline. |
 | `road_name` | `STREET_ENAME` / `STREET_CNAME` — **bilingual names ship in the source.** The null sentinel has four spellings; normalise NFKC and fold dashes before comparing. |
 
 **Nodes are formed where centrelines share an endpoint, and nothing else.** Not where they cross:
@@ -505,6 +534,16 @@ follows: bump where a consumer would be **wrong** to keep its old interpretation
 bytes change. `roadgraph.json` bumped because `polyline.y` means something new while looking
 identical — which is exactly the case a version number exists for, and exactly the case a diff
 cannot show you.
+
+**`Q23` bumped three of them, and by the same rule read the other way.** `roadgraph.json` → 3 gains
+`on_structure`; `roadsurface.json` → 3 and `city.json` → 4 turn `carriageway[].half_width_m` from a
+number into an array. That is the rarer case — a field changing *shape* rather than meaning — and it
+is louder: a v3 reader asking for a float gets a list. It still earns a bump for the quiet half. A
+reader that took `[0]` would be right on 769 of 797 edges and 0.96 m out on the other 28, which is
+the same silent-wrong-answer failure the collider bump was for. `roads.glb` did not bump: its
+geometry moved, no attribute changed meaning, and `TEXCOORD_0.x` is still a lane coordinate — an
+integer U is a lane boundary whatever the widening did, which is precisely what makes it survive a
+width that now varies along an edge.
 
 ### `roads.glb` — the drivable surface
 
@@ -955,7 +994,7 @@ a `SpringArm3D` has nothing to collide *with* until the buildings do. See the ti
 | `scenes/world/golden_hour.tscn` | The one lighting rig, per `ART_DESIGN.md`. Instance it rather than authoring a second Environment |
 | `tools/verify_tiles.gd` | Headless acceptance check for generated tiles — the mesh contract |
 | `tools/verify_city.gd` | Headless acceptance check for `city.json` — georeferencing, bounds, and the files it names |
-| `tools/verify_road_graph.gd` | Headless acceptance check for `RoadGraph`'s queries — the `Q13` refusal, edge resolution, lane placement against the published carriageway width, and query time against a 1 ms budget over a region-wide probe lattice |
+| `tools/verify_road_graph.gd` | Headless acceptance check for `RoadGraph`'s queries — the `Q13` refusal, edge resolution, lane placement against the published carriageway width, and query time against a 1 ms budget over a region-wide probe lattice. Since `Q23` it also asserts that a level-0 edge on structure is drawn at its authored width *and* widened off it, on an edge that is genuinely both — and **reports a build where no such edge exists**, because the lane check samples edge midpoints and would never reach one |
 | `tools/verify_road_surface.gd` | Headless acceptance check for `roads.glb` — one draw call, UVs, trimesh collision |
 | `tools/verify_city_streamer.gd` | Headless acceptance check for the streaming policy — band edges, hysteresis in both directions, and a region-wide residency sweep against the draw-call budget. Reports resident triangles as a ceiling rather than gating on them |
 | `tools/verify_spawn.gd` | Headless acceptance check for `P2-3`'s start line — the orientation against its edge vector, the nearside-lane placement, the drop height, and that the resolved edge is the one the fare node publishes. **Builds the transposed basis and requires it to fail**, so the check cannot pass vacuously on a street where the bug is invisible |

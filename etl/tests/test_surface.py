@@ -14,6 +14,7 @@ the fixture below is the contract in `docs/ARCHITECTURE.md`, written out.
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -25,6 +26,8 @@ from pipeline.surface import (
     SURFACE_MANIFEST_NAME,
     SURFACE_MESH_NAME,
     SURFACE_NAME,
+    _half_widths,
+    _on_structure_length_m,
     boundary,
     build_region,
     dedupe,
@@ -167,6 +170,101 @@ class TestHull:
         assert set(np.round(hull(points)[:, 1], 3)) == {1.0, 2.0, 3.0, 4.0}
 
 
+class TestHalfWidths:
+    """`Q23`: the width a station is drawn at, and the taper between two of them.
+
+    Unit-level because the interesting cases are shapes the region has once
+    each — a taper that runs off the end of an edge, a hard-step city, an edge
+    the flag never fires on — and building a mesh to see them would test the
+    mesh instead.
+    """
+
+    def _published(self, station_m: float, flags: list[bool], **overrides) -> dict:
+        polyline = [[station_m * step, 0.0, 0.0] for step in range(len(flags))]
+        return _edge(0, 0, 1, polyline, on_structure=flags, **overrides)
+
+    def test_a_station_on_structure_takes_the_authored_half_width(self, testville_config) -> None:
+        style = testville_config.roads.surface
+        published = self._published(10.0, [True, True, False, False, False])
+
+        widths = _half_widths(published, style)
+
+        assert widths[0] == pytest.approx(6.4 / 2.0)
+        assert widths[1] == pytest.approx(6.4 / 2.0)
+
+    def test_the_taper_finishes_before_the_structure_rather_than_across_it(
+        self, testville_config
+    ) -> None:
+        """The decision the user made. Every flagged station is already at the
+        authored width, so the first metre of deck is never over-wide — the
+        blend is spent entirely on the approach."""
+        style = testville_config.roads.surface
+        published = self._published(5.0, [True] + [False] * 6)
+
+        widths = _half_widths(published, style)
+        at_grade, on_deck = 6.4 * 1.5 / 2.0, 6.4 / 2.0
+
+        assert widths[0] == pytest.approx(on_deck)
+        assert on_deck < widths[1] < at_grade, "5 m into a 15 m taper"
+        assert widths[-1] == pytest.approx(at_grade), "30 m out, well past it"
+        assert list(widths) == sorted(widths)
+
+    def test_a_zero_taper_steps_at_the_boundary(self, testville_config) -> None:
+        """The literal reading stays reachable for a city that wants it, and it
+        must not divide by zero on the way."""
+        style = replace(testville_config.roads.surface, structure_taper_m=0.0)
+        published = self._published(5.0, [True, False, False])
+
+        widths = _half_widths(published, style)
+
+        assert widths[0] == pytest.approx(6.4 / 2.0)
+        assert widths[1] == pytest.approx(6.4 * 1.5 / 2.0), "no blend at all"
+
+    def test_an_edge_with_no_flag_set_is_the_constant_it_always_was(self, testville_config) -> None:
+        """769 of the region's 797 edges. The taper has to be arithmetically
+        inert here or `Q23` becomes a change to the whole city."""
+        style = testville_config.roads.surface
+        published = self._published(10.0, [False] * 5)
+
+        widths = _half_widths(published, style)
+        assert list(widths) == pytest.approx([6.4 * 1.5 / 2.0] * 5)
+
+    def test_an_off_grade_edge_is_untouched_by_the_station_rule(self, testville_config) -> None:
+        """Levels 1 and -1 are decided by their own table, which is checked
+        first. `P2-7` measured them and this must not move them."""
+        style = testville_config.roads.surface
+        published = self._published(10.0, [True, True, False], elevation_level=1)
+
+        widths = _half_widths(published, style)
+        assert list(widths) == pytest.approx([6.4 / 2.0] * 3), "authored width along all of it"
+
+
+class TestOnStructureLength:
+    def test_it_measures_only_level_zero(self, testville_config) -> None:
+        """An off-grade edge is on structure along its whole length by
+        definition; counting it would bury the number `Q23` reports."""
+        polyline = [[10.0 * step, 0.0, 0.0] for step in range(4)]
+        flags = [True, True, True, True]
+
+        assert _on_structure_length_m(_edge(0, 0, 1, polyline, on_structure=flags)) == 30.0
+        assert (
+            _on_structure_length_m(_edge(0, 0, 1, polyline, on_structure=flags, elevation_level=1))
+            == 0.0
+        )
+
+    def test_a_run_ending_mid_edge_counts_half_its_last_segment(self) -> None:
+        """The trapezoid rule, stated so a change to it is visible rather than
+        arithmetic drift in a reported figure."""
+        polyline = [[10.0 * step, 0.0, 0.0] for step in range(4)]
+        published = _edge(0, 0, 1, polyline, on_structure=[True, True, False, False])
+
+        assert _on_structure_length_m(published) == pytest.approx(15.0)
+
+    def test_an_edge_never_on_structure_measures_nothing(self) -> None:
+        polyline = [[10.0 * step, 0.0, 0.0] for step in range(4)]
+        assert _on_structure_length_m(_edge(0, 0, 1, polyline)) == 0.0
+
+
 # --------------------------------------------------------------------------
 # End to end
 # --------------------------------------------------------------------------
@@ -178,6 +276,9 @@ def _edge(edge_id: int, from_node: int, to_node: int, polyline, **overrides) -> 
         "from": from_node,
         "to": to_node,
         "polyline": polyline,
+        # Off structure unless a case says otherwise, which is what a city that
+        # samples no decks publishes and what every edge here means.
+        "on_structure": [False] * len(polyline),
         "direction": "both",
         "lanes": 2,
         "width_m": 6.4,
@@ -431,7 +532,13 @@ class TestBuildRegion:
                 edge["speed_limit_kph"], elevation_level=edge["elevation_level"]
             )
             widened = edge["width_m"] * factor / 2.0
-            assert published[edge["id"]] == pytest.approx(widened, abs=0.001)
+            # One value per station since `Q23`, and the game indexes it by the
+            # graph's own vertex numbering — so a length that drifts from the
+            # polyline reads the wrong station's width rather than failing.
+            assert len(published[edge["id"]]) == len(edge["polyline"])
+            assert published[edge["id"]] == pytest.approx(
+                [widened] * len(edge["polyline"]), abs=0.001
+            )
             # Stated against the authored width rather than against `widen_for`,
             # which the line above already uses: an expectation computed by the
             # function under test survives that function being reverted.
@@ -442,14 +549,71 @@ class TestBuildRegion:
             # deriving a width from the graph and a factor.
             if edge["elevation_level"] == 1:
                 off_grade += 1
-                assert published[edge["id"]] == pytest.approx(edge["width_m"] / 2.0, abs=0.001)
+                assert published[edge["id"]] == pytest.approx(
+                    [edge["width_m"] / 2.0] * len(edge["polyline"]), abs=0.001
+                )
             else:
                 # Level -1 has no rule and takes the speed factor, so it belongs
                 # here rather than with the structure.
-                assert published[edge["id"]] > edge["width_m"] / 2.0
+                assert min(published[edge["id"]]) > edge["width_m"] / 2.0
         # The fixture's one flyover. Without this the off-grade branch could stop
         # being reached and every assertion above would still pass.
         assert off_grade == 1
+
+    def test_a_level_zero_edge_narrows_where_it_stands_on_structure(
+        self, testville, tmp_path
+    ) -> None:
+        """`Q23`, measured in the mesh rather than in the manifest.
+
+        The fixture's western arm is rewritten to arrive on a ramp deck: its
+        first three stations are flagged, which is the shape `P2-7` leaves at
+        every touchdown — a level-0 edge whose start is on structure and whose
+        far end is on the street. Before this, the whole edge was drawn 1.5x.
+        """
+        city, _ = testville
+        graph_path = tmp_path / "out" / "testville" / "middle" / ROADGRAPH_NAME
+        document = json.loads(graph_path.read_text())
+        # 60 m of straight running west from the junction, on structure for its
+        # first 20 m — far enough that the taper has finished before the street.
+        document["edges"][0] = _edge(
+            0,
+            1,
+            0,
+            [[240.0 + 10.0 * step, 0.0, 300.0] for step in range(7)],
+            on_structure=[True, True, True, False, False, False, False],
+        )
+        graph_path.write_text(json.dumps(document), encoding="utf-8")
+
+        build_region(city, "middle", out_root=tmp_path / "out")
+        manifest = json.loads(
+            (tmp_path / "out" / "testville" / "middle" / SURFACE_MANIFEST_NAME).read_text()
+        )
+        widths = next(
+            entry["half_width_m"] for entry in manifest["carriageway"] if entry["edge"] == 0
+        )
+
+        assert widths[0] == pytest.approx(6.4 / 2.0, abs=0.001), "on the deck, authored width"
+        assert widths[-1] == pytest.approx(6.4 * 1.5 / 2.0, abs=0.001), "on the street, widened"
+        assert widths == sorted(widths), "and it only ever widens away from the structure"
+
+    def test_the_report_counts_the_metres_it_narrowed(self, testville, tmp_path) -> None:
+        """`Q23`'s acceptance number, off the stage that acted on it."""
+        city, _ = testville
+        graph_path = tmp_path / "out" / "testville" / "middle" / ROADGRAPH_NAME
+        document = json.loads(graph_path.read_text())
+        document["edges"][0] = _edge(
+            0,
+            1,
+            0,
+            [[240.0 + 10.0 * step, 0.0, 300.0] for step in range(7)],
+            on_structure=[True, True, True, False, False, False, False],
+        )
+        graph_path.write_text(json.dumps(document), encoding="utf-8")
+
+        report = build_region(city, "middle", out_root=tmp_path / "out")
+        # Two whole 10 m segments between the three flagged stations, plus half
+        # of the segment that leaves the last one — the trapezoid rule.
+        assert report.on_structure_m == pytest.approx(25.0, abs=0.01)
 
     def test_a_graph_from_another_schema_is_refused(self, testville, tmp_path) -> None:
         """The contract is versioned, so a mismatch is a stale copy rather than

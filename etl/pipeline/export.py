@@ -60,7 +60,12 @@ CITY_NAME = "city.json"
 # would load v3 tiles happily and put a car through a wall, which is a silent
 # wrong answer rather than a missing field. The version gates the whole asset
 # set, not just the JSON.
-CITY_SCHEMA = 3
+# 4 since `Q23`: `carriageway[].half_width_m` is a list, one value per station
+# of that edge's polyline, where it used to be one number for the whole edge.
+# This is the rarer kind of bump — a field that changed *shape* rather than
+# meaning — and it is still the same rule: a v3 reader would take a float and
+# get an array.
+CITY_SCHEMA = 4
 
 # Manifest keys naming a document that ships. One tuple rather than a literal
 # at each use, because `shipped` reads them and `REQUIRED_KEYS` guards them:

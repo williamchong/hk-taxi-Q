@@ -76,12 +76,12 @@ var _names: PackedStringArray = PackedStringArray()
 var _by_id: Dictionary[int, int] = {}
 var _node_count: int = 0
 var _restriction_count: int = 0
-# Drawn half-width per edge, from `city.json`. Empty when the manifest could not
-# be read, which `_build` warns about rather than papering over.
-var _half_widths: Dictionary[int, float] = {}
-# Resolved once per edge at build time, so a query is an array index rather than
-# two dictionary lookups on the hot path.
-var _drawn_half: PackedFloat32Array = PackedFloat32Array()
+# Drawn half-width per station of each edge, from `city.json`, resolved once at
+# build time so a query is an array index rather than a dictionary lookup on the
+# hot path. Parallel to `_polylines[slot]` since `Q23`: the width varies along an
+# edge that climbs onto a bridge. An edge the manifest did not name gets an empty
+# entry, and `_build` warns rather than papering over it.
+var _drawn_half: Array[PackedFloat32Array] = []
 # Cumulative **plan** length to each vertex of an edge. Turns `t` into a prefix
 # lookup instead of a walk, and `t` is plan-parameterised because that is what
 # `fares.py` divides by and so what `edge_t` means.
@@ -117,12 +117,12 @@ static func shared() -> RoadGraph:
 		live = RoadGraph.new()
 		var manifest: CityManifest = CityManifest.load_manifest()
 		# Declared, never written as an inline `{}` in a ternary. `_build` takes a
-		# `Dictionary[int, float]` and a literal `{}` is untyped, so passing one
-		# raises "does not have the same element type" — which aborts this
-		# function and returns the `null` the docstring above promises it never
-		# returns. Only the manifest-is-missing branch can reach it, so the guard
-		# failed exactly when it was needed.
-		var half_widths: Dictionary[int, float] = {}
+		# typed dictionary and a literal `{}` is untyped, so passing one raises
+		# "does not have the same element type" — which aborts this function and
+		# returns the `null` the docstring above promises it never returns. Only
+		# the manifest-is-missing branch can reach it, so the guard failed
+		# exactly when it was needed.
+		var half_widths: Dictionary[int, PackedFloat32Array] = {}
 		if manifest != null:
 			half_widths = manifest.carriageway_half_width_m
 		live._build(GeneratedRoadGraph.load_graph(), half_widths)
@@ -132,7 +132,7 @@ static func shared() -> RoadGraph:
 
 ## Parse a document directly, for tools that hold their own copy.
 static func from_document(
-	document: Dictionary, half_widths: Dictionary[int, float] = {}
+	document: Dictionary, half_widths: Dictionary[int, PackedFloat32Array] = {}
 ) -> RoadGraph:
 	var graph := RoadGraph.new()
 	graph._build(document, half_widths)
@@ -187,15 +187,29 @@ func width_of(edge_id: int) -> float:
 	return _widths[_by_id[edge_id]] if _by_id.has(edge_id) else 0.0
 
 
-## Half-width of the carriageway as `P1-4` actually drew it, from `city.json`.
+## Half-width of the carriageway as `P1-4` actually drew it, from `city.json`,
+## at one station of the edge's polyline.
+##
+## ⚠️ **Per station, not per edge**, since `Q23`. `elevation_level` is an
+## attribute of a whole edge but a road becomes a bridge partway along one, and
+## on a bridge the ribbon is drawn at its authored width — so a level-0 edge
+## climbing onto a ramp is 3.20 m at one end and 5.12 m at the other. Asking
+## without a station is asking which of the two you meant.
+##
+## `station` is a vertex index into `polyline_of(edge_id)`, clamped. It has no
+## default: the whole point of this signature is that "the drawn half-width of
+## edge N" stopped being a question with one answer, and a default would make
+## the ambiguous call legal and quietly return the start of the edge. Between
+## two vertices `_fill` interpolates instead, off the fraction the query already
+## resolved.
 ##
 ## Falls back to half the authored width where the manifest carried no entry, so
 ## a preview opened without a built city still draws something — `_build` has
 ## already warned that the lane centres will be short.
-func drawn_half_width_of(edge_id: int) -> float:
-	if _half_widths.has(edge_id):
-		return _half_widths[edge_id]
-	return width_of(edge_id) * 0.5
+func drawn_half_width_of(edge_id: int, station: int) -> float:
+	if not _by_id.has(edge_id):
+		return 0.0
+	return _half_at(_by_id[edge_id], station, 0.0)
 
 
 ## True when **every** edge has a published carriageway width behind it.
@@ -203,8 +217,8 @@ func drawn_half_width_of(edge_id: int) -> float:
 ## Every, not any: one entry of 797 would otherwise pass the gate while the
 ## other 796 silently took the authored-width fallback.
 func has_carriageway_widths() -> bool:
-	for id: int in _ids:
-		if not _half_widths.has(id):
+	for slot: int in _drawn_half.size():
+		if _drawn_half[slot].is_empty():
 			return false
 	return not _ids.is_empty()
 
@@ -306,8 +320,7 @@ func nearest_edge(point: Vector3, heading: Vector3 = Vector3.ZERO, radius_m: flo
 	return best
 
 
-func _build(document: Dictionary, half_widths: Dictionary[int, float] = {}) -> void:
-	_half_widths = half_widths
+func _build(document: Dictionary, half_widths: Dictionary[int, PackedFloat32Array] = {}) -> void:
 	var edges: Array = document.get("edges", [])
 	if not edges.is_empty() and half_widths.is_empty():
 		# Warned rather than tolerated. Without the table every lane centre is
@@ -328,6 +341,7 @@ func _build(document: Dictionary, half_widths: Dictionary[int, float] = {}) -> v
 		return
 	_node_count = (document.get("nodes", []) as Array).size()
 	_restriction_count = (document.get("turn_restrictions", []) as Array).size()
+	var out_of_step: int = 0
 
 	for edge: Dictionary in edges:
 		var points: PackedVector3Array = PackedVector3Array()
@@ -365,8 +379,39 @@ func _build(document: Dictionary, half_widths: Dictionary[int, float] = {}) -> v
 		for step: int in points.size() - 1:
 			lengths[step + 1] = lengths[step] + plan_distance(points[step], points[step + 1])
 		_prefix.append(lengths)
-		_drawn_half.append(
-			half_widths[id] if half_widths.has(id) else float(edge.get("width_m", 6.0)) * 0.5
+		# Matched to the polyline rather than trusted to match it. The ETL writes
+		# the two from one array and `test_surface.py` pins that they agree — but
+		# a stale `city.json` beside a fresh `roadgraph.json` is the one pairing
+		# `sync_generated.sh` cannot make impossible, and a short array read past
+		# its end is a lane centre off the tarmac rather than an error.
+		#
+		# The matched case takes the published array whole: a `PackedFloat32Array`
+		# is copy-on-write, so the assignment is O(1) and the per-station loop is
+		# only paid by a bundle that is already wrong.
+		var halves: PackedFloat32Array = PackedFloat32Array()
+		if half_widths.has(id):
+			var published: PackedFloat32Array = half_widths[id]
+			if published.size() == points.size():
+				halves = published
+			elif not published.is_empty():
+				out_of_step += 1
+				halves.resize(points.size())
+				for step: int in points.size():
+					halves[step] = published[mini(step, published.size() - 1)]
+		_drawn_half.append(halves)
+
+	if out_of_step > 0:
+		# Once, not per edge. A stale manifest misses on every edge it has, and
+		# 797 identical warnings bury the one line that says what to do.
+		push_warning(
+			(
+				(
+					"%d edges publish a carriageway width array that does not match their "
+					+ "polyline; city.json and roadgraph.json are out of step. Re-run "
+					+ "tools/sync_generated.sh."
+				)
+				% out_of_step
+			)
 		)
 
 	_index()
@@ -487,9 +532,12 @@ func _fill(hit: Hit, index: int, point: Vector3, heading: Vector3) -> void:
 
 	var lengths: PackedFloat32Array = _prefix[slot]
 	var total: float = lengths[lengths.size() - 1]
-	hit.t = (
-		clampf((lengths[step] + plan_distance(a, point)) / total, 0.0, 1.0) if total > 0.0 else 0.0
-	)
+	# `point` is `_closest_on_segment`'s output, so it lies on `[a, b]` and this
+	# one distance answers both `t` and the width fraction below. Projecting
+	# again would be the third copy of a maths `_closest_on_segment` already did
+	# and discarded, on the query path `P2-2` budgets at 1 ms.
+	var offset_m: float = plan_distance(a, point)
+	hit.t = clampf((lengths[step] + offset_m) / total, 0.0, 1.0) if total > 0.0 else 0.0
 
 	var along: Vector3 = _seg_b[index] - a
 	along.y = 0.0
@@ -502,4 +550,30 @@ func _fill(hit: Hit, index: int, point: Vector3, heading: Vector3) -> void:
 		along = -along
 	hit.forward = along
 
-	hit.lane_centre = point + left_of(along) * lane_offset(_drawn_half[slot] * 2.0, _lanes[slot])
+	# The width where the car actually is, not where the edge starts. On the
+	# `WAN CHAI INTERCHANGE` approaches those differ by the whole 1.6x widening
+	# over a single edge, and the lane centre moves 0.96 m with it.
+	#
+	# The segment's own plan length comes off the prefix table rather than being
+	# measured: `step + 1` is always in bounds, since `_index` only ever emits
+	# `step` up to `points.size() - 2`. Zero length cannot occur — `dedupe` and
+	# the two-point guard in `_build` rule it out — but a division by it would
+	# reach a spawn transform as a NaN rather than as an error.
+	var span_m: float = lengths[step + 1] - lengths[step]
+	var half: float = _half_at(slot, step, offset_m / span_m if span_m > 0.0 else 0.0)
+	hit.lane_centre = point + left_of(along) * lane_offset(half * 2.0, _lanes[slot])
+
+
+## Drawn half-width `fraction` of the way from station `step` to the next.
+##
+## Interpolated rather than snapped to the nearer station. `surface.py` tapers
+## the width over ~15 m while `roads.py` resamples a lifted edge at 10 m, so a
+## whole taper can live inside two stations — snapping would put a 1.9 m step in
+## the lane centre exactly where the ribbon under it changes smoothly.
+func _half_at(slot: int, step: int, fraction: float) -> float:
+	var halves: PackedFloat32Array = _drawn_half[slot]
+	if halves.is_empty():
+		return _widths[slot] * 0.5
+	var here: int = clampi(step, 0, halves.size() - 1)
+	var next: int = mini(here + 1, halves.size() - 1)
+	return lerpf(halves[here], halves[next], fraction)
