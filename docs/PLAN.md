@@ -248,6 +248,38 @@ Run these **in parallel**; `P0-2` is the one that can force a region change.
 > ⚠️ **Review point 2 — the car drives the real city.** The first build worth putting in a hand, so
 > `P0-3b` runs here: how the car feels under a thumb is reachable no other way.
 
+### `P2-7` Put the off-grade carriageway on the structure it belongs to
+
+> **Numbered after `P2-6` and sequenced before it**, which is the one place in this plan where ID
+> order and running order disagree. `P2-6` is the phase gate and it measures frame time on the
+> geometry that ships, so it has to run last; this task changes that geometry. The ID is late
+> because the task was found late — task IDs are stable and `P2-6` is already referenced from
+> `P0-3b`, so renumbering would cost more than this note.
+
+- **Deliverable:** deck heights **sampled from the `INFRASTRUCTURE` geometry** instead of the flat
+  `elevation_levels` offset, so a flyover ribbon lies on the flyover and a ramp edge climbs with the
+  ramp. The elevated network stays **closed to driving** — `nearest_edge` keeps refusing off-grade
+  edges, exactly as `P2-2` accepted.
+- **Accept:** ribbon-to-structure vertical error inside ±0.5 m at the 90th percentile, against
+  today's ±4.06/+2.45 m; no ribbon left *below* the deck it should sit on; `schema_version` bumped
+  and `ARCHITECTURE.md` changed in the same commit. **Plus the classification below**, because a
+  sampled height is only meaningful where the node is real.
+- **Review:** the Tonnochy Road approach and the Wan Chai Interchange, before and after |
+  web build | **Does the elevated road now sit where the structure says it does?**
+- **Deps:** `P1-2`, `P1-4`. Independent of `P2-4`/`P2-5`.
+- **Why here and not in Phase 4:** this is a **data-contract** change, and Phase 3 builds on the
+  contract — `P3-3`'s traffic drives the graph and `P3-1`'s fares snap to it. Changing deck heights
+  after traffic exists means redoing traffic. It is also the fix for the only defect the `P2-5`
+  drive reported, and it costs nothing in scope because nothing becomes drivable.
+- ⚠️ **First, classify the 36 mixed-level nodes**, and treat the answer as the task's real finding.
+  `Q13` recorded the elevated network as *topologically connected*, which means the 36 nodes are
+  either genuine ramp junctions — in which case sampling makes them continuous and `Q13` largely
+  dissolves — or plan-coincident crossings where a flyover passes over a street and the source
+  joined them because they share a plan position, in which case sampling cannot help and the
+  connection is spurious data that `RoadGraph` should refuse on its own terms. The `WAN CHAI
+  INTERCHANGE` edges look like the first kind: edge 318 climbs 3.70 m over 39.5 m, which is a ramp
+  gradient. Do not assume it generalises to all 36.
+
 ### `P2-6` Performance pass to budget
 - **Deliverable:** measured and recorded, on the device floor.
 - **Accept:** 60fps on the device floor, measured, recorded in `PROGRESS.md`.
@@ -366,11 +398,40 @@ Why reordered, in one line each:
 
 ---
 
-## After the slice (outline only — refine once Phase 3 lands)
+## After the slice
 
-- **Phase 4 — Content:** Causeway Bay, then Central. Full vehicle roster, audio pass, night mode.
-- **Phase 5 — Production polish:** menus, settings, save/progression, accessibility, localisation QA.
-- **Phase 6 — Ship:** free-slice boundary implemented, one-time unlock IAP, store assets, web demo
+### Phase 4 — The elevated network
+
+**Goal:** the 23.3% of carriageway that `Q13` excluded becomes drivable network rather than scenery.
+
+**Broken down, where the other post-slice phases are not.** Two reasons. It is the only one whose
+assumptions the slice will *not* change — the data is measured and the defects are named in `Q13`,
+`Q15`, `Q19` and `Q20`. And it stopped being hypothetical on 2026-08-01: shipping tile collision
+made the physical ramps climbable, so the network is already half-open by accident, and a plan is
+cheaper than discovering the rest of it from a bug report.
+
+**`P2-7` is the prerequisite and does the geometry.** Everything here is about *driving*.
+
+| ID | Deliverable | Accept |
+|---|---|---|
+| `P4-1` | `RoadGraph` serves off-grade edges — nearest-edge, lane centres and travel direction across all three levels | The `P2-2` criterion "nearest-edge never returns an off-grade edge" is **deliberately reversed**, its test rewritten to assert the new rule, and the reversal recorded against `Q13` |
+| `P4-2` | Level-aware nearest-edge — a query resolves by 3D proximity, not plan distance | A stand under a flyover resolves to the street, not the deck above it. **Closes `Q15`** |
+| `P4-3` | Ramp traversal — the car drives grade → deck → grade without leaving the surface | No step over 0.15 m at any of the 36 nodes, measured; the kerb height is the tolerance because it is what the suspension already survives |
+| `P4-4` | Traffic across levels — extends `P3-3` onto the elevated network | AI obeys direction and turn restrictions on ramps; density scales by tier |
+| `P4-5` | Perf pass — 23.3% more drivable area, and the streamer's bands were tuned without it | 60fps on the device floor with the elevated network resident |
+
+- **Deps:** `P2-7`, `P3-3`. `P4-3` follows `P4-1`.
+- **Review:** drive the Wan Chai Interchange from Gloucester Road onto the deck and back down |
+  web build | **Can you get up there, and does it feel like a road rather than a ramp-shaped bug?**
+- **Note:** `P4-1` reverses an acceptance criterion this project measured and proved over 505
+  probes. That is not a mistake being corrected — `Q13`'s refusal was the right call for a slice
+  with no ramps. Record it as a scope change, not a bug fix, or the history stops making sense.
+
+### Outline only — refine once Phase 3 lands
+
+- **Phase 5 — Content:** Causeway Bay, then Central. Full vehicle roster, audio pass, night mode.
+- **Phase 6 — Production polish:** menus, settings, save/progression, accessibility, localisation QA.
+- **Phase 7 — Ship:** free-slice boundary implemented, one-time unlock IAP, store assets, web demo
   build, HK press outreach, legal sight-check of landmark depiction.
 
 These are deliberately not broken down. Anything planned in detail now would be a guess, and the

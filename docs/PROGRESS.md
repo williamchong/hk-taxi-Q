@@ -3,7 +3,7 @@
 Living document. **Update this whenever a task changes status, a decision is made, or an open
 question is answered.** Newest entries at the top of each log.
 
-Last updated: 2026-08-01 (buildings have collision — `schema_version` 3; the drive passed it and opened `Q19`)
+Last updated: 2026-08-01 (genre direction settled and referenced; near-miss scoring moves into `B3` as `P3-2a`)
 
 ---
 
@@ -184,7 +184,10 @@ threading it pays. See the decision log.
 | `P2-2` | `RoadGraph` runtime and debug overlay | ✅ **Done — all four criteria met** | One parse per scene, nearest-edge over a 25 m plan grid, lane centres from the **drawn** carriageway. Refuses all 60 off-grade edges (`Q13`), proven over 505 probes. Query time closed 2026-08-01: **p99 45 µs against a 1 ms budget**, timed over 15,865 region-wide probes. `verify_road_graph.gd` is the fourth verify tool. 331 tests, `ruff` clean. |
 | `P2-1` | `CityStreamer` | ✅ **Done — review passed 2026-08-01** | Threaded load/unload by distance to the published `aabb`. Draw calls 70 → 53 against a 150 budget. The review verdict dropped LOD0: worst-case **visible triangles 249,210 → 150,374** against 300k, and the **PCK 51.6 → 21.1 MB**. Bands are now a single 250 m edge, 400 m unload, 15 m hysteresis, in `streaming.tres`. `verify_city_streamer.gd` is the fifth verify tool. Opened the shadow-cascade finding. |
 | `P2-3` | Vehicle on real geometry | ✅ **Done — review passed 2026-08-01** | The hand-written spawn transform is gone: `RoadSpawn` resolves fare node `f_004` through `RoadGraph` and `drive_harness.gd` places the car, reproducing the old literal to **4 dp** and reporting `0.00 m` from the lane centre with `+1.00` heading agreement. `verify_spawn.gd` is the sixth verify tool and asserts the orientation against the edge vector. The user's verdict on *is this still the `P0-5` car?* was **"car seems ok"** — a pass, and read no wider than it is said. |
-| `P2-5` | Chase camera | 🟡 **Collision passed; the camera question is unanswered** | Unblocked by shipping building collision — its "no clipping through buildings" criterion was unreachable while the city had none. Speed FOV and look-back already existed and now run on real geometry. **No shape-cast needed**: the 0.3 m spring-arm margin already exceeds the 6 cm near plane, proven by flipping the camera into a wall with look-back. The user's drive returned *"collision seems ok"* and raised no camera complaint, which the protocol says is not a pass on a question nobody put. Opened `Q19`. |
+| `P2-5` | Chase camera | ✅ **Done — review passed 2026-08-01** | Unblocked by shipping building collision — its "no clipping through buildings" criterion was unreachable while the city had none. Speed FOV and look-back already existed and now run on real geometry. **No shape-cast needed**: the 0.3 m spring-arm margin already exceeds the 6 cm near plane, proven by flipping the camera into a wall with look-back. Verdict *"camera work mostly with one exception where a road suddenly appears mid air"* — measured and found to be geometry, not the camera: nothing sits in the car's 0.3–3.0 m band there. Opened `Q19` and `Q20`. |
+| `P2-7` | Off-grade carriageway on its structure | ⬜ Not started | **New 2026-08-01.** Sample deck heights from `INFRASTRUCTURE` instead of the flat `elevation_levels` offset; the network stays closed to driving. Placed in Phase 2 because it is a **data-contract** change and `P3-3`'s traffic will run on that contract. Answers `Q20`, shrinks `Q19`, and its first job is classifying the 36 mixed-level nodes. |
+| `P4-*` | The elevated network | ⬜ Not started | **New 2026-08-01.** Post-slice, and **broken down** where the other post-slice phases are not — the data is measured and shipping collision already half-opened the network by accident. Reverses `P2-2`'s off-grade refusal deliberately and closes `Q15`. |
+| `P3-2a` | Near-miss scoring | ⬜ Not started | **New 2026-08-01.** Build `B3`. Split out of `P3-2` and moved from `B4` into `B3`: that build's review asks whether traffic is *"harder in a good way, or just annoying"*, and it cannot answer honestly while threading traffic pays nothing. See the decision log. |
 | `P3-7` | Window-band shader | ⬜ Not started | Build `B2`. **Acceptance grew 2026-08-01:** the shader's two inputs ship as `TEXCOORD_0` from the ETL, so this is one commit across both sides with a `schema_version` bump. See the decision log. |
 | `P3-10` | Ground surface | ⬜ Not started | **New 2026-08-01.** Build `B2`. There is no ground today. Decimated terrain, vertex-coloured, merged into the tile primitive; no texture ships. Flat colour first, photo-derived land-cover classes only if flat reads dead — that is `Q18`. |
 | `P3-*` | Playable slice | ⬜ Blocked | Gated on `P2-3`; `P2-2` cleared |
@@ -214,10 +217,17 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ❌ blocked
 | Q15 | Fare nodes snap to the road graph by **plan distance only**, because the published points are 2D | A stand under a flyover has nothing in it to prefer the street below over the deck above. No node in Wan Chai is affected — every winner is level 0 — but this shares a root cause with `Q13` | `P2-2` | 🟡 **Open — raised 2026-07-31 by `P1-5`**, not reachable with this source |
 | Q17 | No CI. Every check is a local convention, and `tools/check.sh` runs only when someone remembers — on a repo where two verify tools shipped broken-and-green inside one commit | The checks exist and are now capable of failing; nothing makes them run. The Python half (`ruff`, `pytest`, `gdformat`) needs no engine and is nearly free to automate; the Godot half needs the binary plus export templates in a runner | — | ✅ **Resolved 2026-07-31** — GitHub Actions runs both halves. Export templates turned out not to be needed: only exports want them, and CI does not export. **Three of the six checks; the generated-asset contracts are not covered** — see the decision log |
 | Q16 | One region measures **56.4 MB** in the PCK against a 200 MB bundle budget — before any vehicle, audio or UI asset, and before a second region | Half the iOS cellular threshold spent on the part of the game the player looks at but never touches | `P2-1` | ✅ **Resolved 2026-08-01** — the tiers do not all ship. LOD0 dropped after the `P2-1` review found it indistinguishable; **51.6 → 21.1 MB PCK**, measured from real exports |
-| Q19 | **5.17% of the drivable surface has solid geometry standing in it at bumper height** — `INFRASTRUCTURE` 3.32%, `BUILDING` 1.86%. Cosmetic until 2026-08-01; now every square metre of it is a collider | The car is stopped by invisible walls on legal carriageway, and `P3-3`'s traffic will be too. Two causes, two different fixes | `P2-6` | 🔴 **Open — raised 2026-08-01** by the user's `P2-5` drive, then measured |
+| Q19 | **5.17% of the drawn carriageway has solid geometry standing in it at bumper height.** Split by grade: `BUILDING` at grade 1.72%, `INFRASTRUCTURE` at grade 1.60%, and **1.87% on off-grade ribbon nobody can reach**. The rows do not sum to the headline and are not meant to — 38 cells hold both classes and are counted in each. Cosmetic until 2026-08-01; now every square metre is a collider | The car is stopped by invisible walls on legal carriageway, and `P3-3`'s traffic will route into them. The at-grade half is a real defect; the off-grade half is an artefact of `Q20` and disappears with it | `P2-7` | 🔴 **Open — raised 2026-08-01** by the user's `P2-5` drive, then measured, then re-split |
+| Q20 | **The off-grade carriageway is drawn at an invented height, and collision has made the ramps climbable.** `elevation_levels` gives level 1 a flat **+6.0 m** offset, but the real decks vary: measured against the `INFRASTRUCTURE` structure the ribbon is off by **>1 m in 78%** of samples and **>2 m in 54%**, median **−1.51 m**, p10–p90 spread **6.51 m**, and it sits *below* the structure 72% of the time. So 23.3% of drawn carriageway floats through a flyover instead of lying on it, with no ramps because `Q13`'s ramps are the missing piece | `Q13` deferred this on the grounds that the elevated network was **unreachable**. That premise died on 2026-08-01: tile geometry is now solid, so the physical ramps are drivable and a player who climbs one arrives at a ribbon that is not there. Either close the network properly or open it properly — it is no longer a drawing question | `P2-7` | 🔴 **Open — raised 2026-08-01** by the user's `P2-5` drive |
 | Q18 | Does flat-coloured ground read as ground, or does it need land-cover colour classified from the source aerial texture? And does sinking the terrain ~0.2 m under the road deck actually clear the carriageway on cross-slopes? | Decides whether `P3-10` ends after its cheap half or grows an image-decode stage and a **Pillow** dependency. The z-fighting half is not a preference — get it wrong and the ground fights every road in the region | `P3-10` | 🟡 **Open — raised 2026-08-01** by the ground/colour evaluation |
 
 ### Q18 — deliberately asked in the order that might avoid answering it
+
+**Prior art points at stopping after the first half.** *Art of Rally* ships flat-shaded untextured
+terrain as its **finished** look, not as a placeholder. That is evidence, not proof — it is open
+countryside where large flat colour fields have room to breathe, and Wan Chai is dense urban. What
+it buys is an order of investigation: if the first pass reads dead, tune the palette before reaching
+for the classifier and the Pillow dependency behind it.
 
 `P3-10` ships flat-coloured decimated terrain first and looks at it. The classification pass —
 sample the 45 MPix source JPEG per triangle, snap to a land-cover palette, put the class in
@@ -608,6 +618,150 @@ below.
 ---
 
 ## Decision log
+
+### 2026-08-01 — Genre direction: **three references, three different questions** — and one of them moves a task between builds
+
+**Three references, three layers, and no contest between them.** Crazy Taxi, Midtown Madness 2 and
+Forza Horizon are each strongest at a different layer, and the docs were already leaning each way in
+different places without saying so.
+
+| Reference | Contributes | Landed in |
+|---|---|---|
+| **Crazy Taxi** | The loop — fare combo, session timer, arrow, three-minute sessions | Already the design. Unchanged. |
+| **Midtown Madness 2** | The world — real streets over invented ramps, tone, drivable roster | `GAME_DESIGN.md` divergence table and modes; the risk register |
+| **Forza Horizon** | The reward layer — the losable style chain, scoreable traffic, world challenges | `GAME_DESIGN.md` scoring; `PLAN.md` `B3` and `B4` |
+
+**Neither open-world structure survives a 1.5 km² region, and the reason is size rather than taste.**
+Midtown Madness consumes map area as content — learn a route, beat it, need another — and Forza
+Horizon uses the open world as its menu, which needs traversal distance to be a pleasure rather than
+a formality. The region is **1.5 km²**; a checkpoint race across it is 60–90 seconds, and the slice
+stops there deliberately. The fare loop does the opposite: it re-randomises the route through the
+same 1.5 km² every session, which makes a small map an **asset** rather than a liability. Two
+further things point the same way — multiplayer and licensed-car collection carried
+those games' longevity, and both are unavailable here, one by anti-goal and one by budget and art
+direction.
+
+**The finding is a plan-ordering bug, and it is a shape this project has seen before.** `B3` ships
+traffic, trams and minibuses, and its review question is *"harder in a
+good way, or just annoying?"* `P3-2`'s near-miss scoring sat in `B4`, one build later. Dense traffic
+converts from obstacle to opportunity only when threading it **pays** — so `B3` would have been
+reviewed in the single state where traffic has no upside, and a "just annoying" verdict would have
+been an artifact of the ordering rather than a finding about the traffic. Near-miss detection is
+split out as `P3-2a` and moved into `B3`.
+
+That is the same failure shape as `P2-5`'s missing building collision: **a unit whose acceptance
+depends on a capability scheduled after it.** `PLAN.md` closed that note with *"worth a glance at
+the other acceptance criteria for the same shape"*.
+
+**Refused, and named here so they are not revisited.** Forza Horizon's wheelspins and randomised
+rewards (already an anti-goal in `GAME_DESIGN.md`); its live-service, seasons and always-online
+structure (hard rule 2 — the game makes zero network calls at runtime); licensed-car collection as a
+progression spine (the art direction is 800–2,000-triangle toys, which is the opposite of a
+collection); and Crazy Taxi's absurd-geometry philosophy — ramps and jumps scattered wherever the
+driving goes quiet — which the divergence table licensed in one line and which `P3-9` would have
+charged for in full.
+
+**Three further references, one job each.**
+
+| Reference | Job | Applies to |
+|---|---|---|
+| **Sleeping Dogs** | The nearest commercial precedent for a recognisable HK. The common reading is that **signage density carried it, not street accuracy** — untested here | `P3-9`, and the neon note now in `GAME_DESIGN.md` |
+| **Burnout 3** | The fullest working-out of traffic as reward rather than obstacle — near miss, oncoming lane, risk-fed boost | `P3-2a` |
+| **Art of Rally** | One shipped game whose flat-shaded untextured terrain is the **finished look**, not a placeholder — evidence, not proof | `Q18`, and `P3-10`'s cheap half |
+
+**Neon is named but deliberately not scheduled.** There is none in the game and none in the slice.
+It is on the record because it is the highest-value missing thing if Sleeping Dogs' lesson transfers
+— the note in `GAME_DESIGN.md` carries the argument. First thing to reach for after `P3-9` reports.
+
+**Nothing here is next.** `Q19` and `Q20` are both open and both owned by `P2-7`, and `P0-3b` needs
+hardware before review point 2 can run. Phase 2 closes before any of this is reachable.
+
+### 2026-08-01 — `P2-5` **closed**, and the exception it found is `Q20`: the flyovers are drawn twice
+
+The camera verdict: *"camera work mostly with one exception where a road suddenly appears mid air and
+block everything"*, with a shot from Tonnochy Road of an elevated ribbon sweeping across the view
+and ending abruptly.
+
+**That is not the camera, and `P2-5` passes.** The spring arm is behaving; the world has a road in
+the air. Measured at the car's own position — `t=0.751` along edge 588 — road geometry within 60 m
+is either y 2–4 (the street) or y 8–10 (the deck above it), and **nothing sits in the 0.3–3.0 m band
+the car occupies**. Both halves of the review question hold: the road reads at speed, and the camera
+stays out of the buildings.
+
+#### What the drive actually found
+
+`Q13` decided the elevated network is out of the slice, and `nearest_edge` refuses all 60 off-grade
+edges accordingly. That decision was about **driving**. Nobody made the matching decision about
+**drawing**, so `surface.py` still ribbons every off-grade edge:
+
+| Level | Edges | Carriageway area | y range |
+|---|---|---|---|
+| −1 tunnel | 15 | 11.6% | −9.08 … 1.09 |
+| 0 street | 737 | 76.7% | −2.85 … 49.84 |
+| +1 elevated | 45 | 11.7% | 9.23 … 13.56 |
+
+**23.3% of drawn carriageway is off-grade** — the figure `Q13` opened on, now with a second
+consequence attached. Those ribbons have no ramps, because the ramps are precisely what `Q13` found
+missing, so a deck starts and stops in mid-air. That is what the user drove up to.
+
+**And the deck is already there.** Sampling along every level-1 centreline, `INFRASTRUCTURE` tile
+geometry sits a median **0.51 m** away vertically, 78.4% of samples inside 2 m. The 3D Visualisation
+Map models the flyover as a solid and `class_lod_cell_sizes_m` holds it at a 0.5 m cell precisely so
+it survives decimation — and then `surface.py` draws a second carriageway on top of it. Two
+coincident surfaces half a metre apart, both solid since collision shipped.
+
+#### It also corrects `Q19`, which this session got wrong
+
+Re-splitting the occupancy measurement by deck height:
+
+| | Cells | Share | Reachable |
+|---|---|---|---|
+| `INFRASTRUCTURE` off grade | 8,508 | 1.73% | no |
+| `BUILDING` at grade | 8,472 | 1.72% | yes |
+| `INFRASTRUCTURE` at grade | 7,859 | 1.60% | yes |
+| `BUILDING` off grade | 665 | 0.14% | no |
+
+`Q19` was first written up as "`INFRASTRUCTURE` 3.32%, the larger half". **Over half of that sits on
+ribbon nobody can drive on**, and most of it is the duplicate deck measuring itself against the tile
+beneath it. The real at-grade defect is split roughly evenly between the two classes and is smaller
+than reported. The lesson is one this project keeps relearning: a number is only as good as the
+question it answers, and "blocked carriageway" without "carriageway the player can reach" was the
+wrong question.
+
+#### Then the user drove up a ramp, and `Q13`'s premise turned out to be dead
+
+*"I hit the road going up from a ramp, but the road is not aligned to the ramp at all… there is
+really supposed to be some road up on there near by, but the location is off."*
+
+Both halves of that are right, and together they close the diagnosis.
+
+**The height is invented, not measured.** `roads.py` sets every vertex to `terrain + deck_height_m(level)`,
+and `elevation_levels` makes level 1 a flat **+6.0 m**. Real flyover decks do not sit at a constant
+height above the ground they cross. Measured against the `INFRASTRUCTURE` structure the ribbon is
+supposed to lie on:
+
+| | |
+|---|---|
+| Signed error, ribbon minus deck top | median **−1.51 m**, mean −1.57 m |
+| p10 … p90 | **−4.06 … +2.45 m** — a 6.51 m spread |
+| Ribbon *below* the structure | **72%** of samples |
+| Off by more than 1 m / 2 m | **78%** / **54%** |
+
+So the ribbon is mostly buried inside the flyover it should be lying on, and where the structure
+ramps the ribbon stays flat. That is exactly "there is supposed to be a road up there, but the
+location is off" — and it is `Q13`'s own spike finding, already recorded on 2026-07-31: *the map
+sheets carry the ramps, and sampling them beats inventing them.* It was deferred because sampling
+fixes heights and not topology.
+
+⚠️ **What changed is the reason it was safe to defer.** `Q13` reads "the elevated and underground
+networks are topologically connected and **geometrically unreachable**", and that was true while the
+only solid thing in the world was `roads.glb`. Since collision shipped, the `INFRASTRUCTURE`
+structure is a collider — so **the physical ramps are drivable**, and the player arrives on a deck
+whose carriageway is a metre and a half away in the wrong direction. Nobody decided to open the
+elevated network; a change made for the camera opened it.
+
+This stops being a drawing question. Either the network is closed properly, or it is opened
+properly, and that is a product decision rather than an ETL one.
 
 ### 2026-08-01 — `P2-5` drive: collision passes, and it **promoted a cosmetic overlap into a blocker**
 
@@ -2412,7 +2566,7 @@ front would break away instead of the rear.
 **Not yet modelled:** transmission character. `engine_force` is a flat constant with no gears or
 torque curve, so an LPG Crown, a hybrid and a CVT would accelerate identically. Hybrid instant
 torque versus LPG's laggier delivery would need a torque curve in `HandlingProfile`. Open, not
-urgent — flag it before the roster work in Phase 4.
+urgent — flag it before the roster work in Phase 5.
 
 ---
 
@@ -2422,7 +2576,7 @@ urgent — flag it before the roster work in Phase 4.
 |---|---|---|
 | Road data lacks Z values | **High** | `P0-2` first. Fallbacks documented in `DATA_SOURCES.md`. Worst case: switch region to TST. |
 | Real geometry isn't fun to drive | High → **Retired** | **Closed 2026-07-31.** `P0-5` could not answer this from a grey box, which is why it sat open through the whole ETL build. Answered by driving the real thing: the user's verdict on `scenes/dev/city_drive.tscn` is that an HK-like map is a fun enough gimmick on its own. The premise the project is built on holds. What replaces it is a *different* risk — see "Novelty does not survive the first session" below. |
-| Novelty does not survive the first session | **Medium** | **New 2026-07-31, and it is the honest reading of the `Q8` verdict.** "Gimmick" was the user's own word, and a gimmick reliably carries one session. Recognition is doing the work, which is a strong start and not yet a loop. The mitigations were already scheduled and are now the ones that matter: `P3-*` for whether the fare loop sustains, and `P3-9`'s authenticity test with real HK drivers for whether recognition holds up to people who know the streets. Nothing to do differently today; the point is not to read `Q8` as more than it says. |
+| Novelty does not survive the first session | **Medium** | **New 2026-07-31, and it is the honest reading of the `Q8` verdict.** "Gimmick" was the user's own word, and a gimmick reliably carries one session. Recognition is doing the work, which is a strong start and not yet a loop. The mitigations were already scheduled and are now the ones that matter: `P3-*` for whether the fare loop sustains, and `P3-9`'s authenticity test with real HK drivers for whether recognition holds up to people who know the streets. **Three levers added 2026-08-01** by the genre evaluation, all built from assets already scheduled: the **losable style chain** in `P3-2b`; a **drivable vehicle roster** — the minibus, double-decker and tram are already authored for `B3`'s traffic, so making one or two drivable costs a `HandlingProfile` and a mount point; and **world-embedded challenges** (drift zones, speed traps) pinned game-side to edge IDs, which keeps them out of the data contract. Only the first is in the slice; the other two are named here so **Phase 5** does not reinvent them. |
 | Doesn't read as HK to locals | **High** | `P3-9` authenticity test with ≥3 real drivers; run again every phase after. |
 | Perf misses 60fps on device floor | Medium | Budget defined up front; untextured merged tiles are the main lever; `P2-6` is a dedicated pass. |
 | Source data quirks (dual carriageways, doubled junctions) | Medium → **Low** | **Mitigated 2026-07-30 by `P1-3`, and the directions confirmed against the street (`Q12`).** Both quirks turned up and both were handled: dual carriageways arrive as 6 opposed one-way pairs 1.96–3.85 m apart (median 2.9 m), and doubled junctions never form because nodes are made only at shared endpoints. **Closed 2026-07-30 by `P1-4`:** the residual — whether a 3 m pair becomes two ribbons or one — was not a decision. The widened ribbons overlap, so both carriageways draw as one continuous surface and no pair handling exists in the code. |
@@ -2431,7 +2585,7 @@ urgent — flag it before the roster work in Phase 4.
 | Terrain does not fit any budget | Medium → **Low** | **New 2026-07-30.** Measured 267 MB of texture and 405k triangles for the ground alone — roughly 2× over on texture memory, triangles *and* bundle size simultaneously. Resampling to ~2 px/m and decimating to ~88k triangles brings it into range, but that work is not done and is not scheduled. Nothing in the tile output depends on it. **Reassessed 2026-08-01:** 224 of the 267 MB was the JPEG, and the answer is to read it at build time and ship none of it. Vertex-coloured terrain decimated at 4 m is ~88k triangles and 1.5–2.5 MB against a 21.1 MB PCK, merges into the tile primitive so it costs no extra draw call, and needs no texture budget at all. Scheduled as `P3-10`. |
 | The city has no ground | **Medium** | **New 2026-08-01.** There is no ground surface in the game: between the roads and under the buildings is skybox, the kerb lip is what keeps the carriageway from ending in mid-air, and `drive_harness.gd` carries a fall floor for when the car leaves the ribbon. `B2`'s review asks "does this read as Wan Chai?" and cannot be answered honestly over a void. Mitigated by `P3-10`, which is scheduled into `B2` for exactly that reason. |
 | GDScript learning curve | Low | Small codebase; complexity lives in Python. |
-| Landmark depiction IP | Low | Untextured massing; legal sight-check before launch (Phase 6). |
+| Landmark depiction IP | Low | Untextured massing; legal sight-check before launch (Phase 7). |
 | TAM too small to be commercial | Medium | City-agnostic ETL is the scaling answer — city packs, not one city. |
 
 ---
