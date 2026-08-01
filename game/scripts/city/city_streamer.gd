@@ -25,9 +25,19 @@ extends Node3D
 ## already sits where it belongs. That is also why a tile entry publishes an
 ## `aabb` but no position.
 ##
-## ⚠️ **Tiles carry no collision, and this does not add any.** See
-## docs/PROGRESS.md for the decision and what it measured; the short version is
-## that a building collider is an ETL product, not a runtime one.
+## **Tile collision arrives with the mesh, and this adds none of it.** The ETL
+## names the finest tier `<tile>-col`, Godot's importer builds the static
+## trimesh at import time, and it is already inside the `PackedScene` this
+## instantiates — so the collider cannot fall out of step with the geometry it
+## is drawn from. The coarse tier ships none: it is only ever resident past the
+## near band, where nothing can reach a building.
+##
+## ⚠️ **Off the load thread is not the same as free.** Jolt builds the shape's
+## AABB tree when the body enters the world, and that is `add_child` below — main
+## thread, inside `max_instantiations_per_frame`. Wan Chai's largest tier-0 tile
+## is 17,617 triangles against a 6,952 median, so a two-tile frame can cook ~35k.
+## Invisible at 120 fps on a desktop and unmeasured on the device floor; `P2-6`
+## owns it, and it is the reason that budget is tuning data.
 
 ## Distance bands, hysteresis and the per-frame budgets. Assign in the scene.
 @export var profile: StreamingProfile

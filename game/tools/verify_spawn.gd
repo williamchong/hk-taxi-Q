@@ -49,6 +49,22 @@ func _init() -> void:
 		quit(1)
 		return
 
+	# The lane centre this tool measures against is derived from the published
+	# carriageway widths, and `RoadGraph` degrades to the authored street width
+	# rather than failing when they are absent. That is a wrong answer shaped
+	# like a right one: the spawn reads 1.60 m off the centreline instead of
+	# 2.56 m and every assertion below still passes. `verify_road_graph.gd`
+	# refuses on the same property for the same reason.
+	if not graph.has_carriageway_widths():
+		printerr(
+			(
+				"  FAIL  city.json published no carriageway widths — the lane centre "
+				+ "would fall back to the authored street width"
+			)
+		)
+		quit(1)
+		return
+
 	var profile: HandlingProfile = load(HANDLING_PATH) as HandlingProfile
 	if profile == null:
 		printerr("  FAIL  no HandlingProfile at %s" % HANDLING_PATH)

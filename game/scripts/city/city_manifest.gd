@@ -28,7 +28,7 @@ const GeneratedDocument = preload("res://scripts/city/generated_document.gd")
 const PATH: String = "res://assets/generated/city.json"
 
 ## Schema this understands, matching `CITY_SCHEMA` in `etl/pipeline/export.py`.
-const SCHEMA_VERSION: int = 2
+const SCHEMA_VERSION: int = 3
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.

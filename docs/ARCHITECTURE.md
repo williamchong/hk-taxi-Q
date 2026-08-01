@@ -270,7 +270,7 @@ The interface between ETL and game. **Versioned — change both sides together a
 
 ```json
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "city_id": "hong_kong",
   "region_id": "wan_chai",
   "source_crs": "EPSG:2326",
@@ -369,6 +369,23 @@ position.
 **Tile output carries no textures.** One material, one primitive, colour in `COLOR_0` — that is
 what makes a tile one draw call, and it is checked in-engine by
 `game/tools/verify_tiles.gd`.
+
+**The finest tier ships collision; no other tier does.** The tier-0 mesh is named
+`<tile_id>-col`, and Godot's glTF importer reads that suffix into a `StaticBody3D` carrying a
+`ConcavePolygonShape3D` — the same mechanism `roads.glb` uses for the carriageway, and chosen for
+the same reason: the collider is part of the asset, so `CityStreamer` builds no shape at load and
+the collider cannot drift from the geometry it is drawn from.
+
+Only the finest tier, because a tier is selected by distance and the coarse one is resident only
+*beyond* the 250 m near band, where nothing can touch a building. Suffixing both would pay for a
+shape in the bundle for geometry that exists to be looked at from 300 m away.
+`verify_tiles.gd` asserts it in both directions — present on tier 0, absent on every other — because
+a suffix that spread would be invisible in every screenshot and would show up only as bundle bytes.
+
+⚠️ **The collider costs 5.17 MB of PCK, measured**: 21.10 → 26.27 MB on a `Web Demo` export, one
+variable changed. Not 14.91 MB, which is what tier 0's 434,149 triangles come to as raw
+un-indexed faces — the pack compresses them. Both figures are here because the gap is the point:
+`Q16`'s rule is that bundle size is measured from a PCK and never summed from geometry.
 
 **Two additions to the vertex stream are planned, and both bump `schema_version`.** Neither adds a
 texture or a second primitive, which is the point:
@@ -856,12 +873,17 @@ There is also a check needing no tooling at all, and it is the one that caught t
 is north**, so from a car facing east, a left turn heads for the water. Getting that wrong is
 visible from the driver's seat.
 
-Three things are knowingly missing, and all three are
-someone else's task: **buildings have no collision** (`P2-1` decides where tile colliders come
-from), **there is no ground** so anything off the carriageway is void (the terrain did not fit any
-budget — see `P1-2`), and **the flyovers cannot be reached** (`Q13`). A dev harness on the root
+Two things are knowingly missing, and both are someone else's task: **there is no ground** so
+anything off the carriageway is void (the terrain did not fit any budget — see `P1-2`, now
+scheduled as `P3-10`), and **the flyovers cannot be reached** (`Q13`). A dev harness on the root
 catches the car when it falls out of the world, because the kerbs are 0.15 m and mountable by
 design.
+
+**Buildings had no collision until `P2-5`, and that was the third.** `P2-1` was nominated to decide
+where tile colliders come from and decided they were an ETL product — which was the right answer and
+left nobody holding the work, so the region shipped as a hologram the car drove straight through.
+It surfaced as a blocker on `P2-5`, whose acceptance criterion is "no clipping through buildings":
+a `SpringArm3D` has nothing to collide *with* until the buildings do. See the tile contract above.
 
 | Path | Role |
 |---|---|

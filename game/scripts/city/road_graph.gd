@@ -113,10 +113,16 @@ static func shared() -> RoadGraph:
 	if live == null:
 		live = RoadGraph.new()
 		var manifest: CityManifest = CityManifest.load_manifest()
-		live._build(
-			GeneratedRoadGraph.load_graph(),
-			manifest.carriageway_half_width_m if manifest != null else {}
-		)
+		# Declared, never written as an inline `{}` in a ternary. `_build` takes a
+		# `Dictionary[int, float]` and a literal `{}` is untyped, so passing one
+		# raises "does not have the same element type" — which aborts this
+		# function and returns the `null` the docstring above promises it never
+		# returns. Only the manifest-is-missing branch can reach it, so the guard
+		# failed exactly when it was needed.
+		var half_widths: Dictionary[int, float] = {}
+		if manifest != null:
+			half_widths = manifest.carriageway_half_width_m
+		live._build(GeneratedRoadGraph.load_graph(), half_widths)
 		_shared = weakref(live)
 	return live
 

@@ -55,7 +55,12 @@ from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, SUR
 log = logging.getLogger(__name__)
 
 CITY_NAME = "city.json"
-CITY_SCHEMA = 2
+# 3: the finest tier of every tile ships a `-col` collider. The document's own
+# keys did not change, and the bump is deliberate anyway — a build reading v2
+# would load v3 tiles happily and put a car through a wall, which is a silent
+# wrong answer rather than a missing field. The version gates the whole asset
+# set, not just the JSON.
+CITY_SCHEMA = 3
 
 # Manifest keys naming a document that ships. One tuple rather than a literal
 # at each use, because `shipped` reads them and `REQUIRED_KEYS` guards them:

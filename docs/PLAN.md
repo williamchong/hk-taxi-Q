@@ -236,7 +236,14 @@ Run these **in parallel**; `P0-2` is the one that can force a region change.
 - **Accept:** readable at speed; no clipping through buildings.
 - **Review:** a drive through the junction east of HKCEC and a drift | web build |
   **Can you read the road at speed, and does the camera stay out of the buildings?**
-- **Deps:** `P2-3`.
+- **Deps:** `P2-3`, **and building collision** — which no task owned. `P2-1` was asked to decide
+  where tile colliders come from, decided they were an ETL product, and closed; the second half
+  never got scheduled. The acceptance criterion here is what surfaced it, because a spring arm
+  cannot stay out of buildings that are not there. Shipped 2026-08-01 as a `-col` mesh name on the
+  finest tier, `schema_version` 3. See `docs/PROGRESS.md`.
+- **Note:** a declared dependency graph does not catch this class of gap — `P2-5` depends on a
+  *capability*, not on a task, and the capability's owner had already closed. Worth a glance at the
+  other acceptance criteria for the same shape.
 
 > ⚠️ **Review point 2 — the car drives the real city.** The first build worth putting in a hand, so
 > `P0-3b` runs here: how the car feels under a thumb is reachable no other way.

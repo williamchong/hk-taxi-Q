@@ -76,6 +76,37 @@ static func _collect(node: Node, parent: Transform3D, into: Array[AABB]) -> void
 		_collect(child, here, into)
 
 
+## True where the `-col` name suffix imported as a static body.
+##
+## The suffix is the only thing that carries collision from the ETL into the
+## engine, so "did the importer act on it" is a question both the road surface
+## and the building tiles have to ask.
+static func has_collision(node: Node) -> bool:
+	return not node.find_children("*", "StaticBody3D", true, false).is_empty()
+
+
+## Problems with the collider the `-col` suffix should have built, or an empty
+## array if it conforms.
+##
+## Nothing on the Python side can see any of this: the ETL writes a node *name*,
+## and what Godot's importer made of it is an engine fact. Here rather than in
+## either caller because the road surface asked first and the tiles ask the same
+## question — and a private second copy is what this file exists to stop.
+static func check_collision(node: Node) -> PackedStringArray:
+	var problems: PackedStringArray = []
+	var bodies: Array[Node] = node.find_children("*", "StaticBody3D", true, false)
+	if bodies.is_empty():
+		problems.append("no StaticBody3D — the `-col` name suffix did not import as collision")
+		return problems
+
+	var shapes: Array[Node] = bodies[0].find_children("*", "CollisionShape3D", true, false)
+	if shapes.is_empty():
+		problems.append("the StaticBody3D has no CollisionShape3D")
+	elif ((shapes[0] as CollisionShape3D).shape as ConcavePolygonShape3D) == null:
+		problems.append("collision is not a ConcavePolygonShape3D")
+	return problems
+
+
 ## Problems with one surface of one mesh, or an empty array if it conforms.
 ##
 ## `where` names the surface for the caller's report — surface indices restart

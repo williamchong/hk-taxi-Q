@@ -20,6 +20,7 @@ import pytest
 
 from pipeline.buildings import (
     BUILDINGS_MANIFEST_NAME,
+    COLLISION_TIER,
     SOURCE_ID,
     Grid,
     assign,
@@ -393,6 +394,29 @@ class TestBuildRegion:
             ]
             for lod in tile.lods:
                 assert (out / lod.path).exists()
+
+    def test_only_the_finest_tier_is_named_for_collision(
+        self, hong_kong, sources, tmp_path
+    ) -> None:
+        """The `-col` suffix is what Godot's importer turns into a static
+        trimesh, so the name *is* the collision contract.
+
+        Asserted here as well as in `game/tools/verify_tiles.gd` because the two
+        run in different places: `Q17` records that CI runs `tools/check.sh`
+        without the generated-asset verifiers, so on a pull request this test is
+        the only thing standing between a rename and a city the car drives
+        through. Both directions, because a suffix that spread to every tier
+        would still pass a present-on-tier-0 check while paying for a collider
+        in the bundle for geometry 300 m away.
+        """
+        self.build(hong_kong, sources, tmp_path)
+        tiles = tmp_path / "out" / "hong_kong" / "wan_chai" / "tiles"
+        levels = range(len(hong_kong.buildings.lod_cell_sizes_m))
+
+        for level in levels:
+            meshes = read_glb(tiles / f"t_00_00_lod{level}.glb")
+            expected = "t_00_00-col" if level == COLLISION_TIER else "t_00_00"
+            assert [mesh.name for mesh in meshes] == [expected]
 
     def test_a_tile_is_one_mesh_and_so_one_draw_call(self, hong_kong, sources, tmp_path) -> None:
         """`P1-2` accepts under three draw calls per tile. Merging every

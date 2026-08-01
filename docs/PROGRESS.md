@@ -3,7 +3,7 @@
 Living document. **Update this whenever a task changes status, a decision is made, or an open
 question is answered.** Newest entries at the top of each log.
 
-Last updated: 2026-08-01 (`P2-3` closed — the start line is queried from the road graph, not written down; drive review passed)
+Last updated: 2026-08-01 (buildings have collision — `schema_version` 3; `P2-5` built and awaiting the user's drive)
 
 ---
 
@@ -70,8 +70,9 @@ still. Worth remembering when `P2-2` picks lane centres — the carriageway cent
 
 That makes `Q8` **answerable for the first time**: `P0-5`'s verdict was that a grey box cannot say whether this is fun, and this is the same
 car on real geometry. It is still a dev scene: since `P1-7` the tiles come from `city.json`, but
-buildings have no collision, there is no ground off the carriageway, and the flyovers are
-unreachable (`Q13`). Those are `P2-1`'s, `P1-2`'s and `Q13`'s respectively.
+there is no ground off the carriageway and the flyovers are unreachable (`Q13`) — `P3-10`'s and
+`Q13`'s respectively. **Buildings had no collision until 2026-08-01**, when `P2-5` turned out to be
+blocked on it; see the decision log.
 
 **`P1-5` closed on 2026-07-31.** `fares.py` turns two whole-territory taxi datasets — 793 points —
 into **29 fare nodes** for the region: 14 stands, of which **6 are cross-harbour**, and 15
@@ -175,6 +176,7 @@ See the decision log and `Q18`.
 | `P2-2` | `RoadGraph` runtime and debug overlay | ✅ **Done — all four criteria met** | One parse per scene, nearest-edge over a 25 m plan grid, lane centres from the **drawn** carriageway. Refuses all 60 off-grade edges (`Q13`), proven over 505 probes. Query time closed 2026-08-01: **p99 45 µs against a 1 ms budget**, timed over 15,865 region-wide probes. `verify_road_graph.gd` is the fourth verify tool. 331 tests, `ruff` clean. |
 | `P2-1` | `CityStreamer` | ✅ **Done — review passed 2026-08-01** | Threaded load/unload by distance to the published `aabb`. Draw calls 70 → 53 against a 150 budget. The review verdict dropped LOD0: worst-case **visible triangles 249,210 → 150,374** against 300k, and the **PCK 51.6 → 21.1 MB**. Bands are now a single 250 m edge, 400 m unload, 15 m hysteresis, in `streaming.tres`. `verify_city_streamer.gd` is the fifth verify tool. Opened the shadow-cascade finding. |
 | `P2-3` | Vehicle on real geometry | ✅ **Done — review passed 2026-08-01** | The hand-written spawn transform is gone: `RoadSpawn` resolves fare node `f_004` through `RoadGraph` and `drive_harness.gd` places the car, reproducing the old literal to **4 dp** and reporting `0.00 m` from the lane centre with `+1.00` heading agreement. `verify_spawn.gd` is the sixth verify tool and asserts the orientation against the edge vector. The user's verdict on *is this still the `P0-5` car?* was **"car seems ok"** — a pass, and read no wider than it is said. |
+| `P2-5` | Chase camera | 🟡 **Built and driven; awaiting the user's verdict** | Unblocked by shipping building collision — its "no clipping through buildings" criterion was unreachable while the city had none. Speed FOV and look-back already existed and now run on real geometry. **No shape-cast needed**: the 0.3 m spring-arm margin already exceeds the 6 cm near plane, proven by flipping the camera into a wall with look-back. Review is a web build and a human verdict — see the protocol. |
 | `P3-7` | Window-band shader | ⬜ Not started | Build `B2`. **Acceptance grew 2026-08-01:** the shader's two inputs ship as `TEXCOORD_0` from the ETL, so this is one commit across both sides with a `schema_version` bump. See the decision log. |
 | `P3-10` | Ground surface | ⬜ Not started | **New 2026-08-01.** Build `B2`. There is no ground today. Decimated terrain, vertex-coloured, merged into the tile primitive; no texture ships. Flat colour first, photo-derived land-cover classes only if flat reads dead — that is `Q18`. |
 | `P3-*` | Playable slice | ⬜ Blocked | Gated on `P2-3`; `P2-2` cleared |
@@ -597,6 +599,95 @@ below.
 ---
 
 ## Decision log
+
+### 2026-08-01 — Buildings get collision from a **mesh name**, and the task that owned it had already closed
+
+`P2-5`'s acceptance criterion is *"no clipping through buildings"*. It is not reachable: a
+`SpringArm3D` collides with nothing until the buildings do, and `city_streamer.gd` said in its own
+docstring that tiles carry none. `PLAN.md` gave that decision to `P2-1` — "decides where tile
+colliders come from" — and `P2-1` decided correctly that **a building collider is an ETL product,
+not a runtime one**, then closed. The decision was right and it left nobody holding the work, so the
+region shipped as a hologram: 65 tiles the car drove straight through, and a camera with nothing to
+be stopped by. Neither the streamer review nor the `P2-3` drive would have caught it, because
+neither asked.
+
+**The answer was already in the repo.** `P1-4` gives the carriageway its collider by naming the mesh
+`road_surface-col`: Godot's glTF importer reads the suffix and builds a `StaticBody3D` carrying a
+`ConcavePolygonShape3D` at **import** time. `buildings.py` now names its finest tier
+`<tile_id>-col`, and that is the entire game-side change — the collider arrives inside the
+`PackedScene` the streamer already instantiates, on the load thread it already uses. No shape is
+built at runtime, and the collider cannot drift from the mesh it is drawn from because it *is* the
+mesh.
+
+**Only the finest tier, and that is policy rather than economy.** A tier is chosen by distance, so
+the coarse one is resident only beyond the 250 m band, where nothing can touch a building.
+`verify_tiles.gd` asserts both directions — present on tier 0, absent on every other — because a
+suffix that spread would be invisible in every screenshot and would show up only as bundle bytes,
+which is `Q16`'s failure mode exactly.
+
+| | PCK |
+|---|---|
+| Before | 22,121,216 B — **21.10 MB** |
+| After | 27,546,816 B — **26.27 MB** |
+| Cost of collision | **+5.17 MB, +24.5%** |
+
+Measured from two `Web Demo` exports, one variable changed. Worth stating what it is *not*: tier 0
+is 434,149 triangles region-wide, which as raw un-indexed `ConcavePolygonShape3D` faces would be
+**14.91 MB**. The pack compresses them to a third of that. `Q16`'s rule — measure the PCK, never sum
+the source — earned its keep in both directions in one session.
+
+Against a 200 MB budget, one full region with collision is 26.27 MB. The cheaper alternatives were
+priced and not needed: a `-colonly` third file per tile, or building the shape in GDScript at load.
+Both trade bundle bytes for either mismatched geometry or main-thread time, and neither is worth
+5 MB.
+
+**Driven, not argued.** Full throttle into the HKCEC massing: 42.32 kph at t=4, **0.05 kph at t=5**,
+and pinned at (189.5, 6.16, 42.2) for the remaining three seconds with the throttle still held.
+Before this it would have carried on into the void and been respawned by the harness. Shots in
+`build/driver/wall-right/`.
+
+**`P2-5` needed no shape-cast, and that is a result too.** The spring arm is a plain raycast with a
+0.3 m margin. The margin is larger than the camera's near plane is wide — 6 cm at 70° FOV — so a
+corner cannot slip between the ray and the frustum, and adding a `SphereShape3D` would have been
+complexity bought on a hunch. Tested where it is hardest: with the car pinned nose-first against a
+wall, **holding look-back flips the rig 180° and drives the camera into that building**. The arm
+compresses and the view stays clear. See `build/driver/lookback-wall/` and the drift through the
+junction east of HKCEC in `build/driver/p25-drift/`.
+
+⚠️ **`P2-6` must re-measure hitching.** Instantiating a tile now also registers a trimesh with Jolt
+on the main thread, and `max_instantiations_per_frame` is 2. `P2-1`'s "no hitching on tile
+boundaries" was accepted before that cost existed. It is invisible at 120 fps on an M4 Pro and is
+exactly the kind of thing the device floor finds.
+
+#### Two bugs found on the way, and the second was the dangerous one
+
+Both were in code that had passed every check, and both were reachable only when the manifest was
+stale — which is why nothing had met them.
+
+1. **`RoadGraph.shared()` returned `null` from a guard written to stop it.** The fallback read
+   `manifest.carriageway_half_width_m if manifest != null else {}`, and `_build` takes a
+   `Dictionary[int, float]`. An inline `{}` is **untyped**, so the null branch — the only branch the
+   guard exists for — raised *"does not have the same element type"*, aborted the function, and
+   returned `null` from a call whose docstring promises it never does. The guard had never worked in
+   the one case it was written for.
+2. **`verify_spawn.gd` hung instead of failing.** It called `.is_empty()` on that `null`, the script
+   error left `_init` before any `quit()`, and the `SceneTree` then ran forever. `tools/check.sh`
+   hung with it — twice for over ten minutes each — and in CI that is the whole job timeout spent
+   producing no diagnosis. **A check that hangs is worse than a check that fails**, because a
+   timeout names nothing.
+
+Fixing (1) turned the hang into a **silently wrong pass**: with no manifest the graph builds without
+carriageway widths, and the spawn assertion still reported `ok` — at **1.60 m** off the centreline
+instead of 2.56 m, a number computed from absent data. `verify_spawn.gd` now refuses on
+`RoadGraph.has_carriageway_widths()`, which `verify_road_graph.gd` already used for this exact
+failure. That is stronger than the manifest null-check it replaced, and the difference is not
+academic: a `city.json` that loads cleanly but publishes an **empty** carriageway table passes a
+null-check and fails this one.
+
+That is the third distinct way this project has produced a green check that checked nothing, after
+the two `Q17` records. The pattern is always the same — a fallback that lets a tool carry on with
+less than it needs — and the fix is always to assert the property the tool actually depends on
+rather than the file it came in.
 
 ### 2026-08-01 — `P2-3` review **passed**: "car seems ok"
 

@@ -55,6 +55,19 @@ SOURCE_ID = "buildings"
 BUILDINGS_MANIFEST_NAME = "buildings.json"
 BUILDINGS_MANIFEST_SCHEMA = 2
 
+# Godot's glTF importer reads node-name suffixes: `-col` gives the mesh a static
+# trimesh collider at import time and leaves it visible. `write_glb` writes the
+# mesh name as the node name, which is where the importer looks. The same
+# mechanism `surface.py` uses for the carriageway.
+COLLISION_SUFFIX = "-col"
+
+# Only the finest tier, and that is policy rather than oversight. A tier is
+# chosen by distance to the camera, so the coarser one is resident only *beyond*
+# the near band, where nothing can touch a building — suffixing it would pay for
+# a `ConcavePolygonShape3D` in the bundle to be looked at from 300 m away.
+# Measured at 5.17 MB of PCK for the one tier that ships it; see docs/PROGRESS.md.
+COLLISION_TIER = 0
+
 
 @dataclass(frozen=True)
 class LodOutput:
@@ -374,7 +387,8 @@ def _write_tile(
             # the whole region's build down with it.
             log.info("  %s: nothing survives LOD%d", tile_id, level)
             break
-        tier = merge(pieces, name=tile_id)
+        suffix = COLLISION_SUFFIX if level == COLLISION_TIER else ""
+        tier = merge(pieces, name=f"{tile_id}{suffix}")
         boxes.append(tier.aabb())
 
         relative = Path("tiles") / f"{tile_id}_lod{level}.glb"

@@ -62,16 +62,6 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 		if not (mesh.surface_get_format(surface) & Mesh.ARRAY_FORMAT_TEX_UV):
 			problems.append("surface %d carries no UVs" % surface)
 
-	# The `-col` suffix should have left a static body with trimesh collision
-	# beside the mesh, and taken the suffix off the node name on the way.
-	var bodies: Array[Node] = scene_root.find_children("*", "StaticBody3D", true, false)
-	if bodies.is_empty():
-		problems.append("no StaticBody3D — the `-col` name suffix did not import as collision")
-	else:
-		var shapes: Array[Node] = bodies[0].find_children("*", "CollisionShape3D", true, false)
-		if shapes.is_empty():
-			problems.append("the StaticBody3D has no CollisionShape3D")
-		elif ((shapes[0] as CollisionShape3D).shape as ConcavePolygonShape3D) == null:
-			problems.append("collision is not a ConcavePolygonShape3D")
+	problems.append_array(MeshContract.check_collision(scene_root))
 
 	return problems

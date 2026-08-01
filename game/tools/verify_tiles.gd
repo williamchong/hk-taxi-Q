@@ -16,6 +16,14 @@ const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 ## Draw calls per tile. `P1-2` accepts "under three", so three is a failure.
 const MAX_SURFACES: int = 2
 
+## The one tier that ships a collider, mirroring `COLLISION_TIER` in
+## `etl/pipeline/buildings.py`.
+##
+## Checked in both directions, and the absent-on-coarse-tiers half is the one
+## worth having: a `-col` suffix that spread is invisible in every screenshot and
+## shows up only as bundle bytes, which is `Q16`'s failure mode exactly.
+const COLLISION_TIER: int = 0
+
 
 func _init() -> void:
 	# The manifest rather than a directory listing, so this checks the shipped
@@ -33,9 +41,10 @@ func _init() -> void:
 	var checked: int = 0
 
 	for tile: Manifest.Tile in manifest.tiles:
-		for file: String in tile.lods:
+		for tier: int in tile.lods.size():
+			var file: String = tile.lods[tier]
 			checked += 1
-			var problems: PackedStringArray = _check(file)
+			var problems: PackedStringArray = _check(file, tier)
 			if problems.is_empty():
 				print("  ok    ", file.get_file())
 			else:
@@ -52,7 +61,7 @@ func _init() -> void:
 	quit(1 if failures > 0 else 0)
 
 
-func _check(path: String) -> PackedStringArray:
+func _check(path: String, tier: int) -> PackedStringArray:
 	var problems: PackedStringArray = []
 
 	var packed := load(path) as PackedScene
@@ -86,5 +95,30 @@ func _check(path: String) -> PackedStringArray:
 	if surfaces > MAX_SURFACES:
 		problems.append("%d surfaces, over the %d-surface budget" % [surfaces, MAX_SURFACES])
 
+	problems.append_array(_check_collision(scene_root, tier))
+
 	scene_root.free()
 	return problems
+
+
+## Collision is present on the finest tier and absent everywhere else.
+##
+## The shape of the collider is `MeshContract`'s to judge; the tier it belongs
+## to is this tool's, because only the manifest knows how many tiers a tile has.
+func _check_collision(scene_root: Node, tier: int) -> PackedStringArray:
+	if tier == COLLISION_TIER:
+		return MeshContract.check_collision(scene_root)
+
+	if MeshContract.has_collision(scene_root):
+		return PackedStringArray(
+			[
+				(
+					(
+						"LOD%d carries collision; only LOD%d should. A `-col` suffix has "
+						+ "spread to a tier nothing can touch."
+					)
+					% [tier, COLLISION_TIER]
+				)
+			]
+		)
+	return PackedStringArray()
