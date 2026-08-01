@@ -671,6 +671,29 @@ rule 4: tuning values are *gameplay* values, balanced by someone who should not 
 Nothing about dev chrome is balanced. The position block's 40 px is set by what a vision model can
 still read after a 1920-wide screenshot is downscaled, which is now the most common reader.
 
+### 2026-08-02 — `P2-7` step 8: everything mechanical is verified; the drive is the last gate
+
+Clean rebuild from source, then every check the project has:
+
+| Check | Result |
+|---|---|
+| Full pipeline, `etl/out` deleted first | all six stages, **3.0 s** |
+| `ruff check .` / `ruff format --check .` from root | clean, 42 files |
+| `pytest` from `etl/` | **426 passed** |
+| `tools/check.sh` | **exit 0** — format, import, GDScript warnings, four verify tools |
+| `tools/deck_error.py` | **exit 0** — \|error\| p90 0.095 m, 96.9% measured |
+| Web export | built; `project.godot` and `export_presets.cfg` restored and `git diff --exit-code` **verified** |
+
+`verify_road_graph` still reports **737 drivable edges of 797**, which is the scope note holding:
+nothing became drivable, and `nearest_edge` refuses all 60 off-grade edges exactly as `P2-2`
+accepted.
+
+**What is left is the review drive**, and it is the one gate no measurement replaces — `PLAN.md`
+asks *"does the elevated road now sit where the structure says it does?"*, on a web build, at the
+Tonnochy Road approach and the Wan Chai Interchange. The numbers say yes at 0.095 m; whether it
+*reads* right from the driver's seat is the user's call, and the `P2-5` drive is the precedent for
+why that is asked separately — it found a defect every internal number had passed.
+
 ### 2026-08-02 — `P2-7` step 7: graded against the shipped tiles, and it **passes** — after the tool was wrong three times
 
 `tools/deck_error.py` measures the drawn carriageway against the structure in the **shipped tile
