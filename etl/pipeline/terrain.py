@@ -1,4 +1,4 @@
-"""Ground level, sampled from the source terrain mesh (`Q11`).
+"""Surface level, sampled from the source map sheets (`Q11`, `P2-7`).
 
 Road Network v2 carries no Z ordinate, and `elevation_levels` maps grade
 separation to an *offset* — it never said what that offset is measured from.
@@ -11,14 +11,29 @@ parse it, and sampling happens at build time — so it costs nothing at runtime.
 That is the strongest reason to keep the terrain in the pipeline even if it is
 never rendered; see the `P1-2` terrain decision in `docs/PROGRESS.md`.
 
-Nothing here knows what is being placed on the ground. `roads.py` supplies the
-points and adds the deck height.
+Two queries, because two surfaces:
+
+`sample` answers *how high is the ground here*, one height per point, the
+highest thing found. Terrain is single-valued wherever a vehicle can be, so the
+top face is the answer and the query needs no context.
+
+`sample_along` answers *which deck is this carriageway on*, and cannot work
+per-point: a flyover is a closed volume, so a station under one gets the deck's
+top face, its underside, and any structure stacked above or below it. `P2-7`
+measured picking by height alone — nearest to the level's nominal offset — and
+it scored *worse* than taking the highest, because a slab's two faces are up to
+2.57 m apart and the seed sits between them. The hits are therefore clustered
+into slabs, and the slab chosen is the one continuing the station before it.
+Continuity resolves what height cannot.
+
+Nothing here knows what is being placed on the surface. `roads.py` supplies the
+points and decides what an uncovered one means.
 """
 
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -32,6 +47,13 @@ log = logging.getLogger(__name__)
 # a division by roughly zero. Compared against *twice* the signed plan area —
 # the cross product itself — rather than the area, hence the name.
 _MIN_PLAN_CROSS = 1e-9
+
+# Shared rather than allocated per miss: most stations of a road resample fall
+# outside the structure mesh entirely, and every one of them takes this path.
+# Read-only because it is shared — a caller that wrote to a "no hits" result
+# would be writing to every other one.
+_NO_HITS = np.zeros(0)
+_NO_HITS.flags.writeable = False
 
 
 def _within(corners: np.ndarray, region_high: tuple[float, float] | None) -> np.ndarray:
@@ -148,14 +170,92 @@ class HeightField:
     ) -> np.ndarray:
         """Ground height under each `(x, z)`, or NaN where the terrain has none.
 
+        The highest surface found, because the ground is not single-valued
+        everywhere — the two faces of a retaining wall or a sea wall both
+        project onto the same plan position, and the one a vehicle can be on is
+        the top.
+
         NaN rather than a fallback value, so the caller decides what an
         uncovered point means. Silently substituting zero here would reintroduce
         exactly the bug this module exists to fix, in the few places the terrain
         does not reach.
         """
+        x, z, cells = self._cells(x, z)
+        out = np.full(len(x), np.nan)
+        for index, key in cells:
+            hits = self._hits_at(key, x[index], z[index])
+            if len(hits):
+                out[index] = hits.max()
+        return out
+
+    def sample_along(
+        self,
+        x: Sequence[float] | np.ndarray,
+        z: Sequence[float] | np.ndarray,
+        *,
+        slab_gap_m: float,
+    ) -> np.ndarray:
+        """Height of the surface a path stays on, or NaN where there is none.
+
+        The points are consecutive stations along one path, and that ordering is
+        the whole method: where a station sits over a stack — a deck over its own
+        underside, or a flyover over a ramp — the slab chosen is the one nearest
+        the station before it.
+
+        The walk is anchored on the stations with exactly one slab. Those are
+        unambiguous by construction, so a stacked run is resolved by what it
+        connects to rather than by a seed height — which is the failure this
+        query exists to avoid. `P2-7` measured them at 73% or more of the
+        covered stations on every Wan Chai edge but one, and where an edge has
+        no unambiguous station at all there is nothing to grow from, so it
+        degrades to `sample`. The exception is ISLAND EASTERN CORRIDOR, which
+        crosses the region on two stations and is stacked on both.
+
+        Station spacing deliberately does not enter the choice. Comparing
+        gradients rather than heights would rank the candidates at a station
+        identically, since they all share the same gap to the one before.
+        """
+        x, z, cells = self._cells(x, z)
+        slabs: list[np.ndarray] = [_NO_HITS] * len(x)
+        for index, key in cells:
+            slabs[index] = slab_tops(self._hits_at(key, x[index], z[index]), slab_gap_m)
+
+        chosen = np.full(len(x), np.nan)
+        for index, tops in enumerate(slabs):
+            if len(tops) == 1:
+                chosen[index] = tops[0]
+
+        def walk(order: range, behind: int) -> None:
+            for index in order:
+                tops, settled = slabs[index], chosen[index + behind]
+                if np.isfinite(chosen[index]) or not len(tops) or not np.isfinite(settled):
+                    continue
+                chosen[index] = tops[int(np.abs(tops - settled).argmin())]
+
+        # Every anchor seeds both directions, not just the first one: a station
+        # with no structure under it settles nothing, and continuity cannot
+        # cross it, so a path can hold several independently anchored runs.
+        walk(range(1, len(x)), -1)
+        walk(range(len(x) - 2, -1, -1), +1)
+
+        # Whatever no anchor reached — a run walled off by such a gap, or every
+        # station when the path is ambiguous end to end.
+        for index in np.flatnonzero(np.isnan(chosen)):
+            if len(slabs[index]):
+                chosen[index] = slabs[index].max()
+        return chosen
+
+    def _cells(
+        self, x: Sequence[float] | np.ndarray, z: Sequence[float] | np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray, Iterator[tuple[int, int]]]:
+        """Plan coordinates as flat arrays, and the grid cell of each point on it.
+
+        Points off the grid are *absent* from the iterator rather than flagged in
+        it, which is why both callers fill their result with NaN before looping
+        instead of writing an answer for every point.
+        """
         x = np.asarray(x, dtype=np.float64).reshape(-1)
         z = np.asarray(z, dtype=np.float64).reshape(-1)
-        out = np.full(len(x), np.nan)
 
         cells = np.floor((np.column_stack([x, z]) - self.origin) / self.cell_m).astype(np.int64)
         # Both axes are tested, not just the flattened key: a negative row with
@@ -168,13 +268,15 @@ class HeightField:
             & (cells[:, 1] < self.rows)
         )
         keys = cells[:, 0] + cells[:, 1] * self.columns
+        on_grid = np.flatnonzero(inside)
+        return x, z, zip(on_grid, keys[on_grid], strict=True)
 
-        for index in np.flatnonzero(inside):
-            key = keys[index]
-            candidates = self.cell_triangles[self.cell_starts[key] : self.cell_starts[key + 1]]
-            if len(candidates):
-                out[index] = _highest_hit(self.corners[candidates], x[index], z[index])
-        return out
+    def _hits_at(self, key: int, x: float, z: float) -> np.ndarray:
+        """Every surface height at `(x, z)`, from the triangles binned in `key`."""
+        candidates = self.cell_triangles[self.cell_starts[key] : self.cell_starts[key + 1]]
+        if not len(candidates):
+            return _NO_HITS
+        return _hits(self.corners[candidates], x, z)
 
 
 def _spread(low: np.ndarray, high: np.ndarray, columns: int) -> tuple[np.ndarray, np.ndarray]:
@@ -199,13 +301,34 @@ def _spread(low: np.ndarray, high: np.ndarray, columns: int) -> tuple[np.ndarray
     return keys, triangles
 
 
-def _highest_hit(corners: np.ndarray, x: float, z: float) -> float:
-    """Interpolated height of the upper triangle covering `(x, z)`, or NaN.
+def slab_tops(hits: np.ndarray, gap_m: float) -> np.ndarray:
+    """Top face of each distinct slab among `hits`, ascending.
 
-    Upper, because the ground surface is not single-valued everywhere — the two
-    faces of a retaining wall or a sea wall both project onto the same plan
-    position, and the one a vehicle can be on is the top.
+    A closed volume is hit twice by a downward query — its top face and its
+    underside — and only the top can be driven on. Runs of hits closer together
+    than `gap_m` are taken to be one such structure.
+
+    The two populations are separated, but not by much: across Wan Chai's
+    elevated edges the gaps *within* a deck reach 2.57 m and the gaps *between*
+    stacked structures start at 3.36 m. That 0.79 m is the whole margin a
+    `gap_m` of 3.0 sits in, so it is a tuning value rather than a constant, and
+    a second city should be measured rather than assumed.
+
+    NaN hits are dropped rather than clustered. `np.sort` puts them last and no
+    comparison against one is ever true, so a single NaN would otherwise survive
+    as the top of the highest slab and propagate down the rest of a path.
     """
+    hits = hits[np.isfinite(hits)]
+    if not len(hits):
+        return hits
+    ordered = np.sort(hits)
+    # Keep the last of each run, so the sentinel goes at the end — the mirror of
+    # `surface.dedupe`, which keeps the first and puts it at the front.
+    return ordered[np.concatenate([np.diff(ordered) > gap_m, [True]])]
+
+
+def _hits(corners: np.ndarray, x: float, z: float) -> np.ndarray:
+    """Interpolated height of every triangle covering `(x, z)`, in no order."""
     ax, az = corners[:, 0, 0], corners[:, 0, 2]
     bx, bz = corners[:, 1, 0] - ax, corners[:, 1, 2] - az
     cx, cz = corners[:, 2, 0] - ax, corners[:, 2, 2] - az
@@ -221,12 +344,11 @@ def _highest_hit(corners: np.ndarray, x: float, z: float) -> float:
 
     hit = (beta * scale >= 0.0) & (gamma * scale >= 0.0) & ((beta + gamma) * scale <= magnitude)
     if not hit.any():
-        return float("nan")
+        return _NO_HITS
 
     beta, gamma = beta[hit] / twice_area[hit], gamma[hit] / twice_area[hit]
-    height = (
+    return (
         corners[hit, 0, 1]
         + beta * (corners[hit, 1, 1] - corners[hit, 0, 1])
         + gamma * (corners[hit, 2, 1] - corners[hit, 0, 1])
     )
-    return float(height.max())

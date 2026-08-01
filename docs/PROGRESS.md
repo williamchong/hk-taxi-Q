@@ -185,7 +185,7 @@ threading it pays. See the decision log.
 | `P2-1` | `CityStreamer` | ✅ **Done — review passed 2026-08-01** | Threaded load/unload by distance to the published `aabb`. Draw calls 70 → 53 against a 150 budget. The review verdict dropped LOD0: worst-case **visible triangles 249,210 → 150,374** against 300k, and the **PCK 51.6 → 21.1 MB**. Bands are now a single 250 m edge, 400 m unload, 15 m hysteresis, in `streaming.tres`. `verify_city_streamer.gd` is the fifth verify tool. Opened the shadow-cascade finding. |
 | `P2-3` | Vehicle on real geometry | ✅ **Done — review passed 2026-08-01** | The hand-written spawn transform is gone: `RoadSpawn` resolves fare node `f_004` through `RoadGraph` and `drive_harness.gd` places the car, reproducing the old literal to **4 dp** and reporting `0.00 m` from the lane centre with `+1.00` heading agreement. `verify_spawn.gd` is the sixth verify tool and asserts the orientation against the edge vector. The user's verdict on *is this still the `P0-5` car?* was **"car seems ok"** — a pass, and read no wider than it is said. |
 | `P2-5` | Chase camera | ✅ **Done — review passed 2026-08-01** | Unblocked by shipping building collision — its "no clipping through buildings" criterion was unreachable while the city had none. Speed FOV and look-back already existed and now run on real geometry. **No shape-cast needed**: the 0.3 m spring-arm margin already exceeds the 6 cm near plane, proven by flipping the camera into a wall with look-back. Verdict *"camera work mostly with one exception where a road suddenly appears mid air"* — measured and found to be geometry, not the camera: nothing sits in the car's 0.3–3.0 m band there. Opened `Q19` and `Q20`. |
-| `P2-7` | Off-grade carriageway on its structure | 🟡 **In progress — probes and classification done, nothing implemented** | **New 2026-08-01.** Sample deck heights from `INFRASTRUCTURE` instead of the flat `elevation_levels` offset; the network stays closed to driving. Placed in Phase 2 because it is a **data-contract** change and `P3-3`'s traffic will run on that contract. Answers `Q20`, shrinks `Q19`. **The 36 nodes are classified and they are all ramps — 17 junctions, 13 attribute flips, 5 tunnel portals, 1 stub, and no plan-coincident crossings at all.** Two probe hypotheses were measured and rejected before code, and the fix grew a level-0 half on the user's call. See the decision log. |
+| `P2-7` | Off-grade carriageway on its structure | 🟡 **In progress — the slab query is in `terrain.py`; not yet wired into the pipeline** | **New 2026-08-01.** Sample deck heights from `INFRASTRUCTURE` instead of the flat `elevation_levels` offset; the network stays closed to driving. Placed in Phase 2 because it is a **data-contract** change and `P3-3`'s traffic will run on that contract. Answers `Q20`, shrinks `Q19`. **The 36 nodes are classified and they are all ramps — 17 junctions, 13 attribute flips, 5 tunnel portals, 1 stub, and no plan-coincident crossings at all.** Two probe hypotheses were measured and rejected before code, and the fix grew a level-0 half on the user's call. Step 2 shipped `HeightField.sample_along` with `sample` bit-identical; re-measuring for it corrected two claims in the step 0/1 entry. Next: config keys, then `roads.py`, then the `schema_version` bump. See the decision log. |
 | `P4-*` | The elevated network | ⬜ Not started | **New 2026-08-01.** Post-slice, and **broken down** where the other post-slice phases are not — the data is measured and shipping collision already half-opened the network by accident. Reverses `P2-2`'s off-grade refusal deliberately and closes `Q15`. |
 | `P3-2a` | Near-miss scoring | ⬜ Not started | **New 2026-08-01.** Build `B3`. Split out of `P3-2` and moved from `B4` into `B3`: that build's review asks whether traffic is *"harder in a good way, or just annoying"*, and it cannot answer honestly while threading traffic pays nothing. See the decision log. |
 | `P3-7` | Window-band shader | ⬜ Not started | Build `B2`. **Acceptance grew 2026-08-01:** the shader's two inputs ship as `TEXCOORD_0` from the ETL, so this is one commit across both sides with a `schema_version` bump. See the decision log. |
@@ -620,6 +620,59 @@ below.
 
 ## Decision log
 
+### 2026-08-01 — `P2-7` step 2: the slab query lands in `terrain.py`, and two measured claims were wrong
+
+`HeightField` grew a second query. `sample` is unchanged in behaviour and answers *how high is the
+ground*; `sample_along` answers *which deck is this carriageway on* and needs the path, because a
+station over a flyover gets the deck top, its underside, and anything stacked above. `_highest_hit`
+became `_hits`, returning every hit instead of the maximum, so both queries share one routine —
+which makes the terrain path identical **by construction** rather than by test.
+
+Two regression checks, because a rewrite that merely looks equivalent would silently invalidate
+every number in the step 0/1 entry below:
+
+| Check | Result |
+|---|---|
+| pre-refactor `_highest_hit` vs new `sample`, 40,000 points incl. off-grid | NaN pattern identical, heights **bit-identical** |
+| scratchpad `continuous_profile` vs `sample_along`, 11,392 real L0+L1 stations | **0 disagreements** |
+
+#### Two things the step 0/1 write-up got wrong, found by re-measuring rather than by argument
+
+⚠️ **The slab separation is far tighter than recorded.** The earlier note cited "1.7–2.2 m within a
+deck against 9.2–16.4 m between stacked ones". Those are two *different* metrics — 9.2–16.4 m was
+the total top-to-bottom spread at a stacked station, which includes both slabs' thickness, not the
+gap between them. Measured properly, over 645 covered stations:
+
+| Gap | Range |
+|---|---|
+| within one deck | 0.00 – **2.57** m |
+| between stacked structures | **3.36** – 8.49 m |
+
+So `slab_gap_m` = 3.0 sits in a **0.79 m** margin, not a 7 m one. It stays a tuning value, and a
+second city must be measured rather than assumed.
+
+⚠️ **"Single-slab stations are the majority on every edge" is false.** They are 73.1% or more on
+44 of 45 elevated edges. The exception is `ISLAND EASTERN CORRIDOR`, which crosses the region on two
+stations and is stacked on both — so it has no anchor at all and degrades to `sample`. That is the
+same edge probe 6 flagged for sampling structure at −2 m, and it stays on the list for step 4's
+terrain gate.
+
+#### One latent defect, fixed although Wan Chai does not trigger it
+
+The walk originally grew outward from the *first* anchor only. A station with no structure under it
+settles nothing and continuity cannot cross it, so any run walled off behind such a gap fell back to
+the highest hit — the flyover, which is precisely what the query exists to reject. Now every anchor
+seeds both directions, which is also less code. Wan Chai has **zero** gaps strictly inside an edge's
+covered span, so nothing in the region exercises it; it is guarded because the sampler will meet
+other regions, and it is tested.
+
+Also: NaN hits are now dropped in `slab_tops`. `np.sort` puts NaN last and no comparison against one
+is ever true, so a single NaN would have survived as the top of the highest slab and propagated down
+the rest of a path.
+
+**Not wired in.** `roads.py` still does `sample(x, z) + deck_m`, so pipeline output is byte-identical.
+Config keys are step 3.
+
 ### 2026-08-01 — `P2-7` steps 0 and 1: the 36 nodes are **all ramps**, and the height model is wrong on *both* sides of them
 
 `PLAN.md` makes classifying the 36 mixed-level nodes `P2-7`'s first job and says to treat the answer
@@ -717,7 +770,7 @@ Median grade 2.47%, p90 8.04%, coverage 97.1% — consistent with the `Q13` spik
 95.3%. It fixes both stacked-deck edges (`e105` 124.6% → 6.9%, `e271` 163.1% → 8.1%). The residual
 13.7% on `e521` is not artefact-scale; 12% was an arbitrary threshold inherited from that spike.
 
-⚠️ `HeightField._highest_hit` returns the maximum by design — the top of a sea wall is the drivable
+⚠️ `HeightField.sample` returns the maximum by design — the top of a sea wall is the drivable
 face. Pointed at `INFRASTRUCTURE`, which is closed volumes rather than a surface, the same rule
 reads Canal Road's upper deck while the edge is on the lower one. Same code, opposite correctness.
 The class carries no normals, so "the top" needs a **per-slab** definition; anchoring on unambiguous
