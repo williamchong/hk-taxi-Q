@@ -17,10 +17,12 @@ import pytest
 
 from pipeline.roads import (
     Edge,
+    _node_heights,
     build_region,
     clean_text,
     clip,
     parse_speed_limit,
+    resample,
     simplify,
 )
 from tests.helpers import NULL_SENTINELS, line_wkb, write_layer
@@ -472,3 +474,116 @@ class TestSpeedLimitParsing:
     def test_a_value_that_does_not_start_with_a_number_falls_back(self, value) -> None:
         """Unanchored, `Route 4, 70 km/h` reads as a 4 km/h speed limit."""
         assert parse_speed_limit(value, 50) == 50
+
+
+class TestResample:
+    """Stations added for `P2-7`'s deck sampling, without redrawing the road.
+
+    The property that matters is not the spacing — it is that the line's plan
+    shape is untouched. Restating a polyline at evenly spaced stations is the
+    obvious implementation and it silently cuts every corner `simplify` just
+    decided to keep, which no height measurement would ever reveal.
+    """
+
+    def test_every_original_vertex_survives_exactly(self) -> None:
+        plan = np.array([[0.0, 0.0], [30.0, 0.0], [30.0, 7.0], [61.5, 7.0]])
+        stationed = resample(plan, 10.0)
+
+        for vertex in plan:
+            assert any(np.array_equal(vertex, station) for station in stationed), vertex
+
+    def test_no_station_gap_exceeds_the_spacing(self) -> None:
+        plan = np.array([[0.0, 0.0], [71.5, 0.0], [71.5, 3.0]])
+        steps = np.hypot(*np.diff(resample(plan, 10.0), axis=0).T)
+
+        assert steps.max() <= 10.0 + 1e-9
+
+    def test_a_corner_is_not_cut(self) -> None:
+        """A right angle whose sides are shorter than the spacing. Resampling by
+        arc length alone would return the two endpoints and a straight line
+        between them, moving the road 7 m sideways."""
+        plan = np.array([[0.0, 0.0], [7.0, 0.0], [7.0, 7.0]])
+        np.testing.assert_array_equal(resample(plan, 10.0), plan)
+
+    def test_a_line_already_dense_enough_is_returned_unchanged(self) -> None:
+        plan = np.array([[0.0, 0.0], [4.0, 0.0], [8.0, 0.0]])
+        assert resample(plan, 10.0) is plan
+
+    @pytest.mark.parametrize("spacing", [0.0, -1.0])
+    def test_a_spacing_that_asks_for_nothing_changes_nothing(self, spacing: float) -> None:
+        """Zero would otherwise ask for infinitely many stations. `config.py`
+        refuses it, so this is the second line of that defence rather than the
+        first — but the caller is a loop over every edge in the region."""
+        plan = np.array([[0.0, 0.0], [100.0, 0.0]])
+        assert resample(plan, spacing) is plan
+
+    def test_a_repeated_vertex_does_not_divide_by_zero(self) -> None:
+        plan = np.array([[0.0, 0.0], [0.0, 0.0], [40.0, 0.0]])
+        stationed = resample(plan, 10.0)
+
+        assert np.isfinite(stationed).all()
+        assert len(stationed) == 6
+
+    def test_a_line_too_short_to_have_a_segment_is_left_alone(self) -> None:
+        plan = np.array([[3.0, 4.0]])
+        assert resample(plan, 10.0) is plan
+
+
+class TestNodeHeights:
+    """One height per node, chosen rather than inherited from iteration order.
+
+    Before `P2-7` a node took the height of whichever edge the source listed
+    first. That was invisible while every edge at a level shared one flat
+    offset; it stops being invisible the moment two ends are sampled
+    independently, which is exactly what this task made happen.
+    """
+
+    def _edge(self, edge_id: int, level: int, nodes: tuple[int, int], y: float) -> Edge:
+        return Edge(
+            id=edge_id,
+            source_id=edge_id,
+            from_node=nodes[0],
+            to_node=nodes[1],
+            polyline=[(0.0, y, 0.0), (10.0, y, 0.0)],
+            direction="forward",
+            lanes=2,
+            width_m=6.0,
+            speed_limit_kph=50,
+            bus_lane=False,
+            tram_tracks=False,
+            elevation_level=level,
+            road_name={"en": None, "zh": None},
+        )
+
+    def test_a_flyover_node_takes_the_at_grade_height(self) -> None:
+        """`Q13`'s shape: a ramp touching down, level 1 meeting level 0. The
+        junction belongs on the street, not six metres above it."""
+        edges = [self._edge(0, 1, (0, 1), 10.5), self._edge(1, 0, (1, 2), 4.2)]
+        assert _node_heights(3, edges)[1] == pytest.approx(4.2)
+
+    def test_a_tunnel_portal_takes_the_at_grade_height_too(self) -> None:
+        """The other direction, which a plain minimum would get wrong: level -1
+        is further from grade than level 0, so the portal stays on the street."""
+        edges = [self._edge(0, -1, (0, 1), -3.8), self._edge(1, 0, (1, 2), 4.2)]
+        assert _node_heights(3, edges)[1] == pytest.approx(4.2)
+
+    def test_the_highest_end_at_the_chosen_level_wins(self) -> None:
+        """`HeightField.sample`'s rule, for its reason: where a surface is
+        multi-valued at a point the drivable face is the top, and a node below a
+        ribbon end is a node inside the road."""
+        edges = [self._edge(0, 0, (0, 1), 4.20), self._edge(1, 0, (1, 2), 4.26)]
+        assert _node_heights(3, edges)[1] == pytest.approx(4.26)
+
+    def test_the_answer_does_not_depend_on_the_order_the_edges_arrive_in(self) -> None:
+        edges = [
+            self._edge(0, 1, (0, 1), 10.5),
+            self._edge(1, 0, (1, 2), 4.2),
+            self._edge(2, 0, (1, 3), 4.1),
+        ]
+        assert _node_heights(4, edges) == _node_heights(4, list(reversed(edges)))
+
+    def test_a_node_reached_only_off_grade_keeps_its_own_level(self) -> None:
+        """Nearest to grade among the levels *present*, not a preference for
+        zero — an elevated node with no at-grade edge belongs on the deck."""
+        edges = [self._edge(0, 1, (0, 1), 10.5), self._edge(1, 1, (1, 2), 10.6)]
+        assert _node_heights(3, edges)[1] == pytest.approx(10.6)

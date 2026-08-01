@@ -87,17 +87,29 @@ class SurfaceReport:
     # count means the trim factor is wide for the region's block size.
     trimmed_ends: int = 0
     clamped_trims: int = 0
-    # Nodes where the graph changes elevation level, and the largest vertical
-    # step at one. Reported every run because it is the one thing about this
-    # output that is not drivable, and it is inherited rather than introduced.
-    level_changes: int = 0
-    max_level_step_m: float = 0.0
+    # The vertical step at each node where the graph changes elevation level.
+    # Reported every run because it is the one thing about this output that is
+    # not drivable, and it is inherited rather than introduced.
+    #
+    # Kept as the whole distribution rather than a running maximum since
+    # `P2-7`: the maximum is now the five tunnel portals, which are a void and
+    # will never close, and quoting it alone would report a stage that closed 26
+    # of these 36 as one that closed none.
+    level_steps_m: list[float] = field(default_factory=list)
     # Triangles left facing downward, and the area they cover. Tracked rather
     # than assumed away: `boundary` removes all but a handful at the region's
     # sharpest hairpin, and a jump in either number means a ribbon has started
     # folding somewhere new.
     inverted: int = 0
     inverted_area_m2: float = 0.0
+
+    @property
+    def level_changes(self) -> int:
+        return len(self.level_steps_m)
+
+    @property
+    def max_level_step_m(self) -> float:
+        return max(self.level_steps_m, default=0.0)
 
 
 # --------------------------------------------------------------------------
@@ -574,12 +586,11 @@ def _count_level_changes(
             points = edges[end.edge].points
             by_node[node].append(float(points[0 if end.at_start else -1][1]))
 
-    for node, levels in _levels_by_node(ends).items():
-        if len(levels) > 1:
-            report.level_changes += 1
-            report.max_level_step_m = max(
-                report.max_level_step_m, max(by_node[node]) - min(by_node[node])
-            )
+    report.level_steps_m = sorted(
+        max(by_node[node]) - min(by_node[node])
+        for node, levels in _levels_by_node(ends).items()
+        if len(levels) > 1
+    )
 
 
 def _levels_by_node(ends: dict[tuple[int, int], list[_End]]) -> dict[int, set[int]]:
@@ -745,9 +756,11 @@ def main(argv: list[str] | None = None) -> int:
             report.inverted_area_m2,
         )
     if report.level_changes:
+        steps = report.level_steps_m
         log.warning(
-            "  %d nodes step between elevation levels, by up to %.1f m — see Q13",
+            "  %d nodes step between elevation levels: median %.2f m, up to %.1f m — see Q13",
             report.level_changes,
+            steps[len(steps) // 2],
             report.max_level_step_m,
         )
     return 0

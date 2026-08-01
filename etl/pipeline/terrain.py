@@ -11,7 +11,8 @@ parse it, and sampling happens at build time — so it costs nothing at runtime.
 That is the strongest reason to keep the terrain in the pipeline even if it is
 never rendered; see the `P1-2` terrain decision in `docs/PROGRESS.md`.
 
-Two queries, because two surfaces:
+Three queries. They share their machinery and differ only in how they pick among
+the surfaces found at one point, which is the whole of what separates them:
 
 `sample` answers *how high is the ground here*, one height per point, the
 highest thing found. Terrain is single-valued wherever a vehicle can be, so the
@@ -25,6 +26,13 @@ it scored *worse* than taking the highest, because a slab's two faces are up to
 2.57 m apart and the seed sits between them. The hits are therefore clustered
 into slabs, and the slab chosen is the one continuing the station before it.
 Continuity resolves what height cannot.
+
+`sample_lowest_above` answers *is this at-grade road resting on a ramp*, which
+continuity cannot: the road it is asked about is at level 0, so there is no
+elevated run to stay on, and the structure of interest is whatever the road
+sits directly on rather than whatever passes overhead. `P2-7` uses it from a
+node where two levels meet, walking until the answer comes back down to the
+ground.
 
 Nothing here knows what is being placed on the surface. `roads.py` supplies the
 points and decides what an uncovered one means.
@@ -215,12 +223,9 @@ class HeightField:
         gradients rather than heights would rank the candidates at a station
         identically, since they all share the same gap to the one before.
         """
-        x, z, cells = self._cells(x, z)
-        slabs: list[np.ndarray] = [_NO_HITS] * len(x)
-        for index, key in cells:
-            slabs[index] = slab_tops(self._hits_at(key, x[index], z[index]), slab_gap_m)
+        slabs = self._slabs(x, z, slab_gap_m)
 
-        chosen = np.full(len(x), np.nan)
+        chosen = np.full(len(slabs), np.nan)
         for index, tops in enumerate(slabs):
             if len(tops) == 1:
                 chosen[index] = tops[0]
@@ -235,8 +240,8 @@ class HeightField:
         # Every anchor seeds both directions, not just the first one: a station
         # with no structure under it settles nothing, and continuity cannot
         # cross it, so a path can hold several independently anchored runs.
-        walk(range(1, len(x)), -1)
-        walk(range(len(x) - 2, -1, -1), +1)
+        walk(range(1, len(slabs)), -1)
+        walk(range(len(slabs) - 2, -1, -1), +1)
 
         # Whatever no anchor reached — a run walled off by such a gap, or every
         # station when the path is ambiguous end to end.
@@ -244,6 +249,59 @@ class HeightField:
             if len(slabs[index]):
                 chosen[index] = slabs[index].max()
         return chosen
+
+    def sample_lowest_above(
+        self,
+        x: Sequence[float] | np.ndarray,
+        z: Sequence[float] | np.ndarray,
+        floor: Sequence[float] | np.ndarray,
+        *,
+        slab_gap_m: float,
+    ) -> np.ndarray:
+        """Lowest slab top at or above `floor`, per point, or NaN where none is.
+
+        The floor is per point rather than one value because the caller's is the
+        terrain, which is not level. A NaN floor admits nothing: with no ground
+        to measure against there is no way to tell a ramp from a flyover
+        overhead, and the lowest slab is then as likely to be the wrong one.
+
+        Lowest rather than highest, which is the opposite of `sample` and for the
+        opposite reason. This asks what a road is resting *on*, so anything
+        further up is something the road passes under — Canal Road Flyover over
+        Gloucester Road is the case that decides it. `sample`'s question is what
+        a vehicle could stand on, where the top face is the only candidate.
+        """
+        floor = np.asarray(floor, dtype=np.float64).reshape(-1)
+        slabs = self._slabs(x, z, slab_gap_m)
+        if len(floor) != len(slabs):
+            raise ValueError(f"floor has {len(floor)} values for {len(slabs)} points")
+
+        chosen = np.full(len(slabs), np.nan)
+        for index, tops in enumerate(slabs):
+            above = tops[tops >= floor[index]]
+            if len(above):
+                # `slab_tops` returns them ascending, so the first is the lowest.
+                chosen[index] = above[0]
+        return chosen
+
+    def _slabs(
+        self,
+        x: Sequence[float] | np.ndarray,
+        z: Sequence[float] | np.ndarray,
+        slab_gap_m: float,
+    ) -> list[np.ndarray]:
+        """Slab tops under each point, ascending, empty where nothing is found.
+
+        Shared by the two queries that pick among structures rather than among
+        raw hits. Clustering is the expensive half and it is identical for both;
+        only the choice made afterwards differs, and keeping that difference to
+        one loop each is what makes the two comparable.
+        """
+        x, z, cells = self._cells(x, z)
+        slabs: list[np.ndarray] = [_NO_HITS] * len(x)
+        for index, key in cells:
+            slabs[index] = slab_tops(self._hits_at(key, x[index], z[index]), slab_gap_m)
+        return slabs
 
     def _cells(
         self, x: Sequence[float] | np.ndarray, z: Sequence[float] | np.ndarray

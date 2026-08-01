@@ -185,7 +185,7 @@ threading it pays. See the decision log.
 | `P2-1` | `CityStreamer` | ✅ **Done — review passed 2026-08-01** | Threaded load/unload by distance to the published `aabb`. Draw calls 70 → 53 against a 150 budget. The review verdict dropped LOD0: worst-case **visible triangles 249,210 → 150,374** against 300k, and the **PCK 51.6 → 21.1 MB**. Bands are now a single 250 m edge, 400 m unload, 15 m hysteresis, in `streaming.tres`. `verify_city_streamer.gd` is the fifth verify tool. Opened the shadow-cascade finding. |
 | `P2-3` | Vehicle on real geometry | ✅ **Done — review passed 2026-08-01** | The hand-written spawn transform is gone: `RoadSpawn` resolves fare node `f_004` through `RoadGraph` and `drive_harness.gd` places the car, reproducing the old literal to **4 dp** and reporting `0.00 m` from the lane centre with `+1.00` heading agreement. `verify_spawn.gd` is the sixth verify tool and asserts the orientation against the edge vector. The user's verdict on *is this still the `P0-5` car?* was **"car seems ok"** — a pass, and read no wider than it is said. |
 | `P2-5` | Chase camera | ✅ **Done — review passed 2026-08-01** | Unblocked by shipping building collision — its "no clipping through buildings" criterion was unreachable while the city had none. Speed FOV and look-back already existed and now run on real geometry. **No shape-cast needed**: the 0.3 m spring-arm margin already exceeds the 6 cm near plane, proven by flipping the camera into a wall with look-back. Verdict *"camera work mostly with one exception where a road suddenly appears mid air"* — measured and found to be geometry, not the camera: nothing sits in the car's 0.3–3.0 m band there. Opened `Q19` and `Q20`. |
-| `P2-7` | Off-grade carriageway on its structure | 🟡 **In progress — the slab query and its thresholds are in place; not yet wired into the pipeline** | **New 2026-08-01.** Sample deck heights from `INFRASTRUCTURE` instead of the flat `elevation_levels` offset; the network stays closed to driving. Placed in Phase 2 because it is a **data-contract** change and `P3-3`'s traffic will run on that contract. Answers `Q20`, shrinks `Q19`. **The 36 nodes are classified and they are all ramps — 17 junctions, 13 attribute flips, 5 tunnel portals, 1 stub, and no plan-coincident crossings at all.** Two probe hypotheses were measured and rejected before code, and the fix grew a level-0 half on the user's call. Step 2 shipped `HeightField.sample_along` with `sample` bit-identical; re-measuring for it corrected two claims in the step 0/1 entry. Step 3 landed `roads.deck:` and `buildings.structure_class` as config — and measuring the last two thresholds found the terrain gate is **not** a minimum clearance but a floor on how far *below* terrain a sample may sit. Next: `roads.py`, then the node height policy, then the `schema_version` bump. See the decision log. |
+| `P2-7` | Off-grade carriageway on its structure | 🟡 **In progress — the pipeline samples; the contract bump and the independent measurement are left** | **New 2026-08-01.** Sample deck heights from `INFRASTRUCTURE` instead of the flat `elevation_levels` offset; the network stays closed to driving. Placed in Phase 2 because it is a **data-contract** change and `P3-3`'s traffic will run on that contract. Answers `Q20`, shrinks `Q19`. **The 36 nodes are classified and they are all ramps — 17 junctions, 13 attribute flips, 5 tunnel portals, 1 stub, and no plan-coincident crossings at all.** Steps 4 and 5 landed 2026-08-02: `build_region` split into two passes, 44 of 45 off-grade edges sampled, 16 level-0 ends lifted onto their ramp, and node heights now follow a stated rule instead of source iteration order. **The median step at the 36 nodes went 6.00 m → 0.06 m, and the 6 left over 2 m are exactly the 5 tunnel portals and the stub step 1 predicted.** Three plan answers have now been measured and replaced, the latest being the *fallback*: an uncovered station takes the deck either side of it, because `INFRASTRUCTURE` stops being modelled where a ramp reaches grade. 390 tests, `ruff` clean, `tools/check.sh` green, 737 drivable edges unchanged. Next: the `schema_version` bump with `ARCHITECTURE.md` (step 6), `tools/deck_error.py` against the shipped tiles (step 7), then the drive (step 8). See the decision log. |
 | `P4-*` | The elevated network | ⬜ Not started | **New 2026-08-01.** Post-slice, and **broken down** where the other post-slice phases are not — the data is measured and shipping collision already half-opened the network by accident. Reverses `P2-2`'s off-grade refusal deliberately and closes `Q15`. |
 | `P3-2a` | Near-miss scoring | ⬜ Not started | **New 2026-08-01.** Build `B3`. Split out of `P3-2` and moved from `B4` into `B3`: that build's review asks whether traffic is *"harder in a good way, or just annoying"*, and it cannot answer honestly while threading traffic pays nothing. See the decision log. |
 | `P3-7` | Window-band shader | ⬜ Not started | Build `B2`. **Acceptance grew 2026-08-01:** the shader's two inputs ship as `TEXCOORD_0` from the ETL, so this is one commit across both sides with a `schema_version` bump. See the decision log. |
@@ -670,6 +670,97 @@ Font sizes are constants in the script rather than a `.tres`, which is a deliber
 rule 4: tuning values are *gameplay* values, balanced by someone who should not need a code change.
 Nothing about dev chrome is balanced. The position block's 40 px is set by what a vision model can
 still read after a 1920-wide screenshot is downscaled, which is now the most common reader.
+
+### 2026-08-02 — `P2-7` steps 4 and 5: the carriageway lands on its structure, and the **fallback** turned out to be the interesting half
+
+`roads.py` now samples. The headline numbers, on Wan Chai, measured against the built graph:
+
+| | before | after |
+|---|---|---|
+| Step at the 36 mixed-level nodes, median | 6.00 m | **0.06 m** |
+| …nodes stepping over 0.5 m | 36 | **10** |
+| …nodes stepping over 2 m | 36 | **6** — the 5 tunnel portals and the stub, exactly what step 1 predicted |
+| Off-grade ribbon vs structure, \|error\| p90 | 4.14 m | **0.02 m** |
+| …worst | 6.37 m | **0.68 m** |
+| …ribbon below the deck | 66% | **0%** |
+
+⚠️ **That error column is not the acceptance measurement**, and must not be quoted as one. It
+resamples the written polyline and asks the *same* `HeightField` that produced it, so it can only
+show that the write-out is faithful to the sampler — the internal number, which reads near zero by
+construction. The `before` column reproducing the recorded 4.19 m baseline as 4.14 m is what makes
+it worth keeping: it validates the harness, not the fix. Step 7's `tools/deck_error.py` measures
+against the **shipped tile GLBs** and is the number that decides `P2-7`.
+
+Counters, from the stage's own report: 44 of the 45 off-grade edges took their height from the
+structure over 660 added stations and 794 sampled vertices; 16 level-0 ends were lifted onto a ramp;
+3 structure samples were refused for sitting under the terrain. The 45th edge is `e425`, whose every
+sample the gate refuses — which is the case the gate was measured for.
+
+#### `build_region` had to become two passes, and that is also step 5
+
+Whether a level-0 edge sits on a ramp depends on whether its node is *also* reached by another
+level, and no edge can know that until every edge has been clipped and placed. So the single pass
+splits: read, clip, simplify and name the nodes; then work out the mixed set; then measure.
+
+`_Nodes` keys on plan position and never did carry a height for identity, so the seam was already
+there. What it did carry was a height recorded **on first sight** — whichever edge the source
+happened to list first won. That was invisible while every edge at a level shared one flat offset,
+and stops being invisible the moment two ends are sampled independently. `_node_heights` replaces it
+with a stated rule: **the level nearest grade, and the highest edge end on it.** Nearest grade
+because everything that reads a node position reads it for an at-grade purpose; highest for
+`HeightField.sample`'s own reason, that a node below a ribbon end is a node inside the road.
+
+#### The fallback was the bug, and it was hiding behind a correct-looking result
+
+First run: median step 6.00 → 0.04 m, but **14** nodes still stepped, where step 1 predicted 6. Nine
+of them were flyover nodes stepping the full 6.00 m, unchanged.
+
+The cause is not in the sampler. `INFRASTRUCTURE` **stops being modelled where a ramp reaches
+grade**, so the last stretch of every touchdown is uncovered — and at those 9 nodes that is
+precisely the node itself: the structure query returns *nothing at all* there. Falling back to
+`terrain + 6.0` rebuilt the exact cliff the task exists to remove, at the most visible place in the
+region.
+
+Measured just inside the hole, the structure sits **-0.6 to +1.1 m** of the terrain. The ramp has
+arrived; what is missing is a volume nobody modelled, not a deck. So an uncovered station now takes
+the deck **either side of it**, interpolated along the edge, and only an edge with no usable sample
+*anywhere* falls back to the flat offset — which is `e425`, and the case the offset is still right
+for. That closed 4 of the 9 outright, took the worst of the rest from 6.00 m to 1.63 m, and dropped
+the worst ribbon error from 4.48 m to 0.68 m.
+
+⚠️ **This is the third time in `P2-7` that the plan's answer was measured and replaced.** The first
+was "seed the sample from the existing height", the second was "gate on minimum clearance", and this
+one never appeared in any plan at all — it was found only because the node-step number came back
+worse than step 1 had predicted and the gap was chased instead of rounded off. A per-station
+fallback to the flat offset is the obvious implementation and it is silently wrong in exactly the
+places that matter most.
+
+#### What is left, and what it is not
+
+| Nodes still stepping over 0.5 m | Step | Why |
+|---|---|---|
+| 5 tunnel portals | 8.00 m | A tunnel is a void. No height source repairs this — `Q21` asks whether they should be drawn at all |
+| Node 389, `e425`'s stub | 6.00 m | The only edge with no usable structure sample anywhere |
+| Node 175, `FLEMING ROAD` | **1.63 m** | Both level-1 edges are uncovered for their first 20 m, so the held deck overestimates |
+| Nodes 394, 392, 30 | 0.62-0.67 m | Inside step 1's predicted ≤0.93 m for a ramp junction |
+
+Node 175 is the one that misses step 1's prediction. Chasing it would mean extrapolating the deck's
+*trend* into the hole rather than holding its value — a rule tuned to one node, on two knots, which
+is the kind of unmeasured constant this project's rules exist to refuse. Recorded rather than fixed.
+
+**Two things deliberately did not change.** Nothing became drivable: `verify_road_graph` still
+reports 737 drivable edges of 797, so `nearest_edge` refuses all 60 off-grade edges exactly as
+`P2-2` accepted. And `resample` **adds** stations without moving any existing vertex — restating the
+line at evenly spaced stations is the obvious implementation and it silently cuts every corner
+`simplify` just decided to keep, which no height measurement would ever reveal.
+
+`surface.py` now reports the whole distribution of level steps rather than a running maximum. The
+maximum is the five portals and always will be; quoting it alone would report a stage that closed 26
+of these 36 as one that closed none.
+
+Still open, in order: the `ROADGRAPH_SCHEMA` 1→2 bump with `ARCHITECTURE.md` and the GDScript
+constant in one commit (step 6, hard rule 5), `tools/deck_error.py` (step 7), and the drive at the
+Tonnochy Road approach and the Wan Chai Interchange (step 8).
 
 ### 2026-08-02 — `P2-7` step 3: the thresholds become config, and the gate is not a clearance
 

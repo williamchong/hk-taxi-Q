@@ -257,3 +257,57 @@ class TestSamplingAlongAPath:
 
         np.testing.assert_allclose(_highest(field, stations), [6.0, 20.0, np.nan, 20.0, 6.0])
         np.testing.assert_allclose(_along(field, stations), [6.0, 6.0, np.nan, 6.0, 6.0])
+
+
+class TestSamplingTheLowestStructureAbove:
+    """The third query, and the one whose answer is the *opposite* of `sample`'s.
+
+    It asks what a road is resting on, so anything higher is something the road
+    passes under. Every fixture here therefore stacks a second structure over
+    the first, because a single-slab fixture would agree with `sample` and prove
+    nothing about which of the two rules is running.
+    """
+
+    def _lowest(self, field: HeightField, xs: list[float], floor: list[float]) -> np.ndarray:
+        return field.sample_lowest_above(xs, [15.0] * len(xs), floor, slab_gap_m=GAP_M)
+
+    def test_a_flyover_overhead_is_not_what_the_road_rests_on(self) -> None:
+        """Gloucester Road under Canal Road Flyover, which is the case that
+        decides this. `sample` reads the upper deck; a street is on the lower."""
+        field = HeightField.from_meshes([*_slab(0.0, 20.0, 1.0), *_slab(0.0, 20.0, 12.0)])
+
+        np.testing.assert_allclose(_highest(field, [10.0]), [12.0])
+        np.testing.assert_allclose(self._lowest(field, [10.0], [0.0]), [1.0])
+
+    def test_the_floor_is_read_per_point_because_the_ground_is_not_level(self) -> None:
+        field = HeightField.from_meshes([*_slab(0.0, 40.0, 2.0), *_slab(0.0, 40.0, 9.0)])
+        # The same two slabs, asked with a floor that rises past the lower one.
+        np.testing.assert_allclose(self._lowest(field, [10.0, 30.0], [0.0, 5.0]), [2.0, 9.0])
+
+    def test_a_floor_above_every_slab_finds_nothing(self) -> None:
+        field = HeightField.from_meshes(_slab(0.0, 20.0, 4.0))
+        assert np.isnan(self._lowest(field, [10.0], [20.0])).all()
+
+    def test_a_nan_floor_admits_nothing_rather_than_everything(self) -> None:
+        """With no ground to measure against there is no way to tell a ramp from
+        a flyover overhead, so the lowest slab is as likely to be the wrong one.
+        NaN also makes every comparison False, so this is the behaviour that
+        falls out — pinned because the opposite would be silent and plausible."""
+        field = HeightField.from_meshes([*_slab(0.0, 20.0, 1.0), *_slab(0.0, 20.0, 12.0)])
+        assert np.isnan(self._lowest(field, [10.0], [np.nan])).all()
+
+    def test_a_point_off_the_structure_is_nan_not_the_floor(self) -> None:
+        field = HeightField.from_meshes(_slab(0.0, 20.0, 4.0))
+        assert np.isnan(self._lowest(field, [500.0], [0.0])).all()
+
+    def test_the_two_faces_of_one_deck_do_not_make_the_underside_the_answer(self) -> None:
+        """The point of clustering, restated for this query: taking the lowest
+        *hit* rather than the lowest *slab top* would return the underside, and
+        put the road inside the deck it is driving on."""
+        field = HeightField.from_meshes(_slab(0.0, 20.0, 6.0, depth=1.5))
+        np.testing.assert_allclose(self._lowest(field, [10.0], [0.0]), [6.0])
+
+    def test_a_floor_of_the_wrong_length_is_refused(self) -> None:
+        field = HeightField.from_meshes(_slab(0.0, 20.0, 4.0))
+        with pytest.raises(ValueError, match="floor has 1 values for 2 points"):
+            field.sample_lowest_above([5.0, 10.0], [15.0, 15.0], [0.0], slab_gap_m=GAP_M)
