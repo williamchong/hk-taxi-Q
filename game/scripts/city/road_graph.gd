@@ -228,8 +228,10 @@ func turn_restriction_count() -> int:
 ##
 ## ⚠️ **The width must be the *drawn* carriageway, not `roadgraph.json`'s
 ## `width_m`.** The graph publishes the authored street — `lanes x lane_width_m`
-## — while `P1-4` draws the ribbon at `width_m x widen_for(speed_limit_kph)`,
-## 1.6x by default. `etl/pipeline/config.py` keeps that factor on the surface
+## — while `P1-4` draws the ribbon at
+## `width_m x widen_for(speed_limit_kph, elevation_level)`, 1.6x by default and
+## 1.0x on structure, so it is not always wider than the authored street.
+## `etl/pipeline/config.py` keeps that factor on the surface
 ## style deliberately: "the graph is a description of the city, this is how wide
 ## and how kerbed to draw it. A change here never changes `roadgraph.json`."
 ##

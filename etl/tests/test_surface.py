@@ -280,7 +280,23 @@ class TestBuildRegion:
         assert kerb_to_kerb - 2 * city.roads.surface.kerb_width_m == pytest.approx(
             6.4 * 1.5, abs=0.01
         )
-        assert city.roads.surface.widen_for(70) == 1.2
+        assert city.roads.surface.widen_for(70, elevation_level=0) == 1.2
+
+    def test_the_flyover_is_drawn_at_its_authored_width(self, testville, tmp_path) -> None:
+        """The off-grade half of the same acceptance, measured in the mesh.
+
+        The unit tests in `test_config.py` pin the factor, and the manifest test
+        pins what was published — but only geometry proves the ribbon was
+        actually *extruded* narrower. Before the rule this read 9.6 m across.
+        """
+        city, _ = testville
+        build_region(city, "middle", out_root=tmp_path / "out")
+        mesh = _mesh(tmp_path)
+
+        # The deck alone: six metres up, and north of the junction it lands on.
+        deck = mesh.positions[(mesh.positions[:, 1] > 5.0) & (mesh.positions[:, 2] > 320.0)]
+        kerb_to_kerb = deck[:, 0].max() - deck[:, 0].min()
+        assert kerb_to_kerb - 2 * city.roads.surface.kerb_width_m == pytest.approx(6.4, abs=0.01)
 
     def test_every_arm_meets_its_junction_with_no_gap(self, testville, tmp_path) -> None:
         """`P1-4`'s acceptance criterion, checked directly rather than argued.
@@ -409,12 +425,31 @@ class TestBuildRegion:
 
         assert set(published) == {edge["id"] for edge in graph["edges"]}
         style = city.roads.surface
+        off_grade = 0
         for edge in graph["edges"]:
-            widened = edge["width_m"] * style.widen_for(edge["speed_limit_kph"]) / 2.0
+            factor = style.widen_for(
+                edge["speed_limit_kph"], elevation_level=edge["elevation_level"]
+            )
+            widened = edge["width_m"] * factor / 2.0
             assert published[edge["id"]] == pytest.approx(widened, abs=0.001)
-            # The point of publishing it: it is wider than the authored street,
-            # so a lane centre taken from the graph alone would sit short.
-            assert published[edge["id"]] > edge["width_m"] / 2.0
+            # Stated against the authored width rather than against `widen_for`,
+            # which the line above already uses: an expectation computed by the
+            # function under test survives that function being reverted.
+            #
+            # At grade the drawn ribbon is wider than the authored street, so a
+            # lane centre taken from the graph alone would sit short. Off-grade
+            # it is *equal* — which is why the game reads this table instead of
+            # deriving a width from the graph and a factor.
+            if edge["elevation_level"] == 1:
+                off_grade += 1
+                assert published[edge["id"]] == pytest.approx(edge["width_m"] / 2.0, abs=0.001)
+            else:
+                # Level -1 has no rule and takes the speed factor, so it belongs
+                # here rather than with the structure.
+                assert published[edge["id"]] > edge["width_m"] / 2.0
+        # The fixture's one flyover. Without this the off-grade branch could stop
+        # being reached and every assertion above would still pass.
+        assert off_grade == 1
 
     def test_a_graph_from_another_schema_is_refused(self, testville, tmp_path) -> None:
         """The contract is versioned, so a mismatch is a stale copy rather than

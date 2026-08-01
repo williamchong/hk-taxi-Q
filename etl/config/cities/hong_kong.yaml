@@ -300,6 +300,20 @@ roads:
     # them the same amount pushes the deck through the buildings beside it.
     widen_by_min_speed_limit_kph:
       70: 1.3
+    # Structure is drawn at its authored width, because both arguments above are
+    # at-grade arguments and neither survives the trip onto a deck. The slot
+    # argument: at grade a gap between opposed carriageways shows the void where
+    # unshipped terrain would be, but on a flyover it shows the deck, which P2-7
+    # put under the ribbon and which the tiles do ship. The room-to-drive
+    # argument: a viaduct is a parapet-to-parapet fixed width in the real city,
+    # and a driver reads the guardrail as the edge whatever the asphalt does.
+    # Measured on Wan Chai, sampling the ribbon across its full drawn width on a
+    # 2.0 x 0.5 m grid and counting a cell as supported when INFRASTRUCTURE has
+    # an upward face within +/-1.0 m: 20.1% of off-grade carriageway hung in air
+    # before, 10.2% after, and the drawn area fell 31%. The remainder is a
+    # separate defect and no width rule reaches it — Q22.
+    widen_by_elevation_level:
+      1: 1.0
 
     # Low and mountable by design. The lip also gives the carriageway a visible
     # edge, which matters more here than usual: the terrain is too expensive to

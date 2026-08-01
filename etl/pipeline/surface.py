@@ -507,11 +507,15 @@ def build_region(
 
 def _prepare(published: dict, style: RoadSurface) -> _Edge:
     points = dedupe(np.asarray(published["polyline"], dtype=np.float64))
+    level = published["elevation_level"]
+    widened_m = published["width_m"] * style.widen_for(
+        published["speed_limit_kph"], elevation_level=level
+    )
     return _Edge(
         points=points,
-        half_width_m=published["width_m"] * style.widen_for(published["speed_limit_kph"]) / 2.0,
+        half_width_m=widened_m / 2.0,
         lanes=published["lanes"],
-        level=published["elevation_level"],
+        level=level,
         length_m=float(plan_lengths(points)[-1]) if len(points) > 1 else 0.0,
     )
 
@@ -693,10 +697,13 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Sur
     `carriageway` is the exception worth naming: it is the only thing here the
     *game* needs rather than the next stage. `roadgraph.json` publishes the
     authored street width, `lanes x lane_width_m`, while the ribbon is drawn at
-    `width_m x widen_for(speed_limit_kph)` — so a runtime asking "where is the
-    nearside lane?" from the graph alone lands short of the lane by a quarter of
-    the widening. The factor stays on the surface style, where `config.py` says
-    it belongs; the *result* travels, through `export.py`, into `city.json`.
+    `width_m x widen_for(speed_limit_kph, elevation_level)` — so a runtime asking
+    "where is the nearside lane?" from the graph alone lands short of the lane by
+    a quarter of the widening. The factor stays on the surface style, where
+    `config.py` says it belongs; the *result* travels, through `export.py`, into
+    `city.json`. Off-grade edges are the case where the two coincide, drawn at
+    their authored width so the ribbon stays on its deck; a consumer must read
+    this table rather than assume the drawn width exceeds the authored one.
     """
     write_document(
         out_dir / SURFACE_MANIFEST_NAME,

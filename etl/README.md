@@ -116,6 +116,10 @@ is not cosmetic — `docs/GAME_DESIGN.md` fixes it at ~1.3–1.8× because real 
 unforgiving at arcade speeds, and at 1.6× the region's six opposed carriageway pairs merge into one
 continuous surface instead of leaving a slot down the middle of Lockhart Road.
 
+Both of those are *at-grade* arguments, so `widen_by_elevation_level` holds structure to 1.0×. The
+slot they argue against shows unshipped terrain at grade but the flyover deck up on structure, and
+a viaduct is a fixed parapet-to-parapet width however fast it is signed.
+
 The mesh is named `road_surface-col`, which is Godot's importer suffix for "build a static trimesh
 collider from this". Collision is therefore part of the asset rather than something built at load.
 

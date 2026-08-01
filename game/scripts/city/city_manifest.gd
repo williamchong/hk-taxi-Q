@@ -92,7 +92,8 @@ var fares_path: String
 ## Drawn half-width of the carriageway, in metres, keyed by road-graph edge id.
 ##
 ## Not derivable from `roadgraph.json`: that publishes the **authored** street
-## width, and `P1-4` draws the ribbon at `width_m x widen_for(speed_limit_kph)`.
+## width, and `P1-4` draws the ribbon at
+## `width_m x widen_for(speed_limit_kph, elevation_level)`.
 ## The widening lives on the ETL's surface style, which `config.py` deliberately
 ## keeps out of the graph — so the drawn width reaches the game through the
 ## manifest or not at all. `RoadGraph` (`P2-2`) needs it to put a car in the

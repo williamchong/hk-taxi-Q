@@ -246,6 +246,10 @@ class RoadSurface:
     # `docs/GAME_DESIGN.md`, which fixes the range at roughly 1.3-1.8x.
     widen_default: float
     widen_by_min_speed_limit_kph: dict[int, float]
+    # Off-grade carriageway, by elevation level. Both *reasons* for widening are
+    # at-grade reasons, and they are stated where the values are — see the table
+    # in `hong_kong.yaml`. `widen_for` explains only why this rule wins outright.
+    widen_by_elevation_level: dict[int, float]
 
     # Kerbs are modelled but low and mountable — collision is forgiving by
     # design. The lip is what stops the carriageway ending in mid-air, since
@@ -263,12 +267,24 @@ class RoadSurface:
     surface_colour: tuple[int, int, int]
     kerb_colour: tuple[int, int, int]
 
-    def widen_for(self, speed_limit_kph: int) -> float:
-        """Widening factor for an edge, from the fastest matching rule.
+    def widen_for(self, speed_limit_kph: int, *, elevation_level: int) -> float:
+        """Widening factor for an edge, by level if the level has a rule, else
+        from the fastest matching speed rule.
 
         Expressways are already drawn wide by their lane count and need less
         help; a two-lane street is where the widening earns its keep.
+
+        The level rule wins outright rather than combining, because the two are
+        different kinds of claim. The speed table is a preference about how much
+        room a fast road wants; a level rule is a statement about what the
+        carriageway is sitting on. `P2-7` put the off-grade ribbon on its
+        structure, and a viaduct deck does not get wider because the road on it
+        is signed at 70 — it ends at a parapet. A widened ribbon there overhangs
+        into the air beside the deck, which is both wrong and, with a guardrail
+        drawn beyond it, unreadable.
         """
+        if elevation_level in self.widen_by_elevation_level:
+            return float(self.widen_by_elevation_level[elevation_level])
         return float(
             _by_fastest_rule(self.widen_by_min_speed_limit_kph, speed_limit_kph, self.widen_default)
         )
@@ -635,6 +651,7 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
     )
     _check_regions_lie_within_the_city(city, path)
     _check_deck_sampling_has_a_structure_class(city, path)
+    _check_widening_levels_are_mapped(city, path)
     _check_source_exists(city, city.roads.source, f"{path}:roads.source")
     for index, group in enumerate(city.fares.groups):
         _check_source_exists(city, group.source, f"{path}:fares.groups[{index}].source")
@@ -660,6 +677,29 @@ def _check_deck_sampling_has_a_structure_class(city: CityConfig, path: Path) -> 
         raise ValueError(
             f"{path}:roads.deck samples elevated structure, but "
             "buildings.structure_class names none. Add it, or drop roads.deck."
+        )
+
+
+def _check_widening_levels_are_mapped(city: CityConfig, path: Path) -> None:
+    """A widening rule for a level the city never maps is a rule that never fires.
+
+    The same trap `class_colours` and `class_lod_cell_sizes_m` both refuse: the
+    key is a join, so a level merely absent from `elevation_levels` gives a
+    config that loads, a surface that builds, and a rule that silently overrides
+    nothing. Off-grade ribbon would go on being drawn at its at-grade width,
+    which is the defect the table exists to remove — and the output looks like a
+    city that never asked for the rule.
+
+    Here rather than in `_road_surface` because it is a cross-section check, and
+    `roads:` cannot see `elevation_levels` while it is being parsed.
+    """
+    unknown = set(city.roads.surface.widen_by_elevation_level) - set(city.elevation_levels)
+    if unknown:
+        known = ", ".join(str(level) for level in sorted(city.elevation_levels))
+        raise ValueError(
+            f"{path}:roads.surface.widen_by_elevation_level names level "
+            f"{', '.join(str(level) for level in sorted(unknown))}, "
+            f"which elevation_levels does not map ({known})"
         )
 
 
@@ -915,7 +955,16 @@ def _road_surface(body: dict[str, Any], where: str) -> RoadSurface:
         int(threshold): float(factor)
         for threshold, factor in (body.get("widen_by_min_speed_limit_kph") or {}).items()
     }
-    for factor in (widen_default, *widen.values()):
+    by_level: dict[int, float] = {}
+    for level, factor in (body.get("widen_by_elevation_level") or {}).items():
+        # The YAML 1.1 boolean trap `elevation_levels` documents at length, and
+        # this table is keyed on the same domain: a bare `on:` key resolves to
+        # True, and True == 1 as a dict key, so it lands silently on the level-1
+        # rule — the one rule this table currently carries.
+        if isinstance(level, bool) or not isinstance(level, int):
+            raise ValueError(f"{where}:widen_by_elevation_level key {level!r} is not an integer")
+        by_level[level] = float(factor)
+    for factor in (widen_default, *widen.values(), *by_level.values()):
         # Narrowing a road is not a tuning choice, it is a typo: the graph's
         # width already comes from an authored lane count, and a sub-1 factor
         # would put the carriageway inside the buildings beside it.
@@ -937,6 +986,7 @@ def _road_surface(body: dict[str, Any], where: str) -> RoadSurface:
     return RoadSurface(
         widen_default=widen_default,
         widen_by_min_speed_limit_kph=widen,
+        widen_by_elevation_level=by_level,
         kerb_height_m=measures["kerb_height_m"],
         kerb_width_m=measures["kerb_width_m"],
         junction_trim_factor=measures["junction_trim_factor"],

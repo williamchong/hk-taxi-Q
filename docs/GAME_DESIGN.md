@@ -20,7 +20,7 @@ roads, ramps, shortcuts, and forgiving collision.
 
 | Use the real data for | Deliberately diverge on |
 |---|---|
-| Road topology and connectivity | Road **width** — widen ~1.3–1.8× |
+| Road topology and connectivity | Road **width** — widen ~1.3–1.8× at grade, but **not on structure**: a viaduct is parapet-to-parapet in the real city, and a widened ribbon there hangs over the edge of its own deck |
 | One-way directions and turn restrictions (for **AI traffic**) | Player rule-breaking — always allowed |
 | Building massing and position | Pedestrian railings — omit or make breakable |
 | Landmark placement | Ramps, jumps, shortcuts — hand-added, and sparingly (see below) |

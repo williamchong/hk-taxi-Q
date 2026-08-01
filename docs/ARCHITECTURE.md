@@ -341,10 +341,13 @@ at them. A build ships exactly what the manifest names: the three documents and 
 
 ⚠️ **`carriageway` is the drawn half-width per edge, and the game cannot derive it** (schema 2,
 `P2-2`). `roadgraph.json` publishes the **authored** street — `lanes × lane_width_m` — while `P1-4`
-draws the ribbon at `width_m × widen_for(speed_limit_kph)`, 1.6× by default. The widening lives on
-the ETL's surface style, and `etl/pipeline/config.py` keeps it there deliberately: *"the graph is a
-description of the city, this is how wide and how kerbed to draw it. A change here never changes
-`roadgraph.json`."* So the drawn width reaches the runtime through the manifest or not at all.
+draws the ribbon at `width_m × widen_for(speed_limit_kph, elevation_level)`, 1.6× by default and
+**1.0× on structure**, where the deck is a fixed width the ribbon must not overhang. So a consumer
+must read this table rather than assume the drawn width exceeds the authored one — off-grade the two
+are equal. The widening lives on the ETL's surface style, and `etl/pipeline/config.py` keeps it there
+deliberately: *"the graph is a description of the city, this is how wide and how kerbed to draw it. A
+change here never changes `roadgraph.json`."* So the drawn width reaches the runtime through the
+manifest or not at all — and `width_m` above is untouched by any of it.
 
 `surface.py` records it — the one place the widening is applied — and `export.py` carries it here
 without recomputing, because a second evaluation of `widen_for` is a second thing to keep in step
@@ -885,9 +888,10 @@ car's authored rotation in would let the car decide which way a two-way street r
 backwards.
 
 The car sits in the **nearside lane, 2.56 m left of the centreline** on this edge —
-`width_m × widen_for(speed_limit_kph) / 4`, which is 1.6 below 70 kph and 1.3 at or above it, so
-the figure is not a constant — and never on the centreline. Partly because a car should start in a
-lane, and partly because the centreline is the worst place on the network to put a wheel: it is
+`width_m × widen_for(speed_limit_kph, elevation_level) / 4`, which is 1.6 below 70 kph, 1.3 at or
+above it, and 1.0 on structure, so the figure is not a constant — and never on the centreline. Partly
+because a car should start in a lane, and partly because the centreline is the worst place on the
+network to put a wheel: it is
 where opposed carriageway ribbons overlap and where junction caps double up, so a raycast can find
 two coplanar collision triangles a few centimetres apart and the wheel picks between them.
 

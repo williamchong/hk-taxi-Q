@@ -425,6 +425,88 @@ class TestRoadNetwork:
             load_city("hong_kong", cities_root=rewrite(invert))
 
 
+class TestWidening:
+    """Which factor an edge takes, and which rule wins when two of them match.
+
+    The precedence is the part worth pinning. Nothing downstream would fail
+    loudly if the tables were consulted in the other order — an expressway
+    flyover would simply be drawn 1.3x and hang over its parapet, which is the
+    defect `widen_by_elevation_level` exists to remove and which reads as
+    ordinary road until someone drives it.
+    """
+
+    def test_an_at_grade_road_takes_the_speed_rule(self, hong_kong) -> None:
+        surface = hong_kong.roads.surface
+        assert surface.widen_for(50, elevation_level=0) == 1.6
+        assert surface.widen_for(70, elevation_level=0) == 1.3
+
+    def test_structure_is_drawn_at_its_authored_width(self, hong_kong) -> None:
+        """1.0 is the narrowest the loader permits, and it means "as authored" —
+        the ribbon has to stay on the deck `P2-7` put it on."""
+        assert hong_kong.roads.surface.widen_for(50, elevation_level=1) == 1.0
+
+    def test_the_level_rule_beats_a_speed_rule_that_also_matches(self, hong_kong) -> None:
+        """The Wan Chai Interchange is both: signed at 70 and up on structure.
+        A combined or speed-first reading would draw it 1.3x wide."""
+        assert hong_kong.roads.surface.widen_for(70, elevation_level=1) == 1.0
+
+    def test_a_level_with_no_rule_falls_through_to_the_speed_rule(self, hong_kong) -> None:
+        """Level -1 is deliberately unconfigured. A tunnel has no deck to
+        overhang, so there is no measured defect to fix, and `Q21` asks whether
+        it should be drawn at all — this pins that the fix left it alone."""
+        surface = hong_kong.roads.surface
+        assert -1 not in surface.widen_by_elevation_level
+        assert surface.widen_for(70, elevation_level=-1) == 1.3
+
+    @pytest.mark.parametrize("table", ["widen_by_min_speed_limit_kph", "widen_by_elevation_level"])
+    def test_a_factor_below_one_is_rejected_in_either_table(self, rewrite, table: str) -> None:
+        """Narrowing below the authored width is a typo, not a tuning choice:
+        the graph's width already comes from a lane count, so a sub-1 factor
+        draws a carriageway narrower than its own lanes."""
+
+        def narrow(doc: dict[str, Any]) -> None:
+            doc["roads"]["surface"][table] = {1: 0.9}
+
+        with pytest.raises(ValueError, match=r"widening factor 0\.9 is below 1\.0"):
+            load_city("hong_kong", cities_root=rewrite(narrow))
+
+    @pytest.mark.parametrize("key", [True, False, "1"])
+    def test_a_key_that_is_not_a_plain_integer_is_rejected(self, rewrite, key) -> None:
+        """PyYAML is YAML 1.1, where bare `on`/`off`/`yes`/`no` are booleans, and
+        `bool` subclasses `int` — so `off: 1.0` becomes level **0** and drops
+        every at-grade road in the region to its authored width. The output
+        loads and renders; only the road is wrong. `elevation_levels` refuses
+        the same spellings, and these two tables are keyed on the same domain."""
+
+        def odd_key(doc: dict[str, Any]) -> None:
+            doc["roads"]["surface"]["widen_by_elevation_level"] = {key: 1.0}
+
+        with pytest.raises(ValueError, match="is not an integer"):
+            load_city("hong_kong", cities_root=rewrite(odd_key))
+
+    def test_a_rule_for_a_level_the_city_never_maps_is_rejected(self, rewrite) -> None:
+        """Inert rather than wrong, which is why it needs saying: the rule can
+        never fire, so the ribbon keeps its at-grade width and the output looks
+        like a city that never asked for the rule at all."""
+
+        def unmapped(doc: dict[str, Any]) -> None:
+            doc["roads"]["surface"]["widen_by_elevation_level"] = {7: 1.0}
+
+        with pytest.raises(ValueError, match="elevation_levels does not map"):
+            load_city("hong_kong", cities_root=rewrite(unmapped))
+
+    def test_a_city_that_declares_no_level_table_widens_everything_alike(self, rewrite) -> None:
+        """The pre-fix behaviour stays reachable, and the table stays optional
+        for the second city, which may not have structure at all."""
+
+        def drop(doc: dict[str, Any]) -> None:
+            doc["roads"]["surface"].pop("widen_by_elevation_level")
+
+        city = load_city("hong_kong", cities_root=rewrite(drop))
+        assert city.roads.surface.widen_by_elevation_level == {}
+        assert city.roads.surface.widen_for(70, elevation_level=1) == 1.3
+
+
 class TestDeckSampling:
     """`roads.deck` is optional, and every way it can be present but unusable is
     refused at load rather than ignored.
