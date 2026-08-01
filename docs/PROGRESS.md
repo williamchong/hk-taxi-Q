@@ -3,7 +3,7 @@
 Living document. **Update this whenever a task changes status, a decision is made, or an open
 question is answered.** Newest entries at the top of each log.
 
-Last updated: 2026-08-01 (buildings have collision — `schema_version` 3; `P2-5` built and awaiting the user's drive)
+Last updated: 2026-08-01 (buildings have collision — `schema_version` 3; the drive passed it and opened `Q19`)
 
 ---
 
@@ -176,7 +176,7 @@ See the decision log and `Q18`.
 | `P2-2` | `RoadGraph` runtime and debug overlay | ✅ **Done — all four criteria met** | One parse per scene, nearest-edge over a 25 m plan grid, lane centres from the **drawn** carriageway. Refuses all 60 off-grade edges (`Q13`), proven over 505 probes. Query time closed 2026-08-01: **p99 45 µs against a 1 ms budget**, timed over 15,865 region-wide probes. `verify_road_graph.gd` is the fourth verify tool. 331 tests, `ruff` clean. |
 | `P2-1` | `CityStreamer` | ✅ **Done — review passed 2026-08-01** | Threaded load/unload by distance to the published `aabb`. Draw calls 70 → 53 against a 150 budget. The review verdict dropped LOD0: worst-case **visible triangles 249,210 → 150,374** against 300k, and the **PCK 51.6 → 21.1 MB**. Bands are now a single 250 m edge, 400 m unload, 15 m hysteresis, in `streaming.tres`. `verify_city_streamer.gd` is the fifth verify tool. Opened the shadow-cascade finding. |
 | `P2-3` | Vehicle on real geometry | ✅ **Done — review passed 2026-08-01** | The hand-written spawn transform is gone: `RoadSpawn` resolves fare node `f_004` through `RoadGraph` and `drive_harness.gd` places the car, reproducing the old literal to **4 dp** and reporting `0.00 m` from the lane centre with `+1.00` heading agreement. `verify_spawn.gd` is the sixth verify tool and asserts the orientation against the edge vector. The user's verdict on *is this still the `P0-5` car?* was **"car seems ok"** — a pass, and read no wider than it is said. |
-| `P2-5` | Chase camera | 🟡 **Built and driven; awaiting the user's verdict** | Unblocked by shipping building collision — its "no clipping through buildings" criterion was unreachable while the city had none. Speed FOV and look-back already existed and now run on real geometry. **No shape-cast needed**: the 0.3 m spring-arm margin already exceeds the 6 cm near plane, proven by flipping the camera into a wall with look-back. Review is a web build and a human verdict — see the protocol. |
+| `P2-5` | Chase camera | 🟡 **Collision passed; the camera question is unanswered** | Unblocked by shipping building collision — its "no clipping through buildings" criterion was unreachable while the city had none. Speed FOV and look-back already existed and now run on real geometry. **No shape-cast needed**: the 0.3 m spring-arm margin already exceeds the 6 cm near plane, proven by flipping the camera into a wall with look-back. The user's drive returned *"collision seems ok"* and raised no camera complaint, which the protocol says is not a pass on a question nobody put. Opened `Q19`. |
 | `P3-7` | Window-band shader | ⬜ Not started | Build `B2`. **Acceptance grew 2026-08-01:** the shader's two inputs ship as `TEXCOORD_0` from the ETL, so this is one commit across both sides with a `schema_version` bump. See the decision log. |
 | `P3-10` | Ground surface | ⬜ Not started | **New 2026-08-01.** Build `B2`. There is no ground today. Decimated terrain, vertex-coloured, merged into the tile primitive; no texture ships. Flat colour first, photo-derived land-cover classes only if flat reads dead — that is `Q18`. |
 | `P3-*` | Playable slice | ⬜ Blocked | Gated on `P2-3`; `P2-2` cleared |
@@ -206,6 +206,7 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ❌ blocked
 | Q15 | Fare nodes snap to the road graph by **plan distance only**, because the published points are 2D | A stand under a flyover has nothing in it to prefer the street below over the deck above. No node in Wan Chai is affected — every winner is level 0 — but this shares a root cause with `Q13` | `P2-2` | 🟡 **Open — raised 2026-07-31 by `P1-5`**, not reachable with this source |
 | Q17 | No CI. Every check is a local convention, and `tools/check.sh` runs only when someone remembers — on a repo where two verify tools shipped broken-and-green inside one commit | The checks exist and are now capable of failing; nothing makes them run. The Python half (`ruff`, `pytest`, `gdformat`) needs no engine and is nearly free to automate; the Godot half needs the binary plus export templates in a runner | — | ✅ **Resolved 2026-07-31** — GitHub Actions runs both halves. Export templates turned out not to be needed: only exports want them, and CI does not export. **Three of the six checks; the generated-asset contracts are not covered** — see the decision log |
 | Q16 | One region measures **56.4 MB** in the PCK against a 200 MB bundle budget — before any vehicle, audio or UI asset, and before a second region | Half the iOS cellular threshold spent on the part of the game the player looks at but never touches | `P2-1` | ✅ **Resolved 2026-08-01** — the tiers do not all ship. LOD0 dropped after the `P2-1` review found it indistinguishable; **51.6 → 21.1 MB PCK**, measured from real exports |
+| Q19 | **5.17% of the drivable surface has solid geometry standing in it at bumper height** — `INFRASTRUCTURE` 3.32%, `BUILDING` 1.86%. Cosmetic until 2026-08-01; now every square metre of it is a collider | The car is stopped by invisible walls on legal carriageway, and `P3-3`'s traffic will be too. Two causes, two different fixes | `P2-6` | 🔴 **Open — raised 2026-08-01** by the user's `P2-5` drive, then measured |
 | Q18 | Does flat-coloured ground read as ground, or does it need land-cover colour classified from the source aerial texture? And does sinking the terrain ~0.2 m under the road deck actually clear the carriageway on cross-slopes? | Decides whether `P3-10` ends after its cheap half or grows an image-decode stage and a **Pillow** dependency. The z-fighting half is not a preference — get it wrong and the ground fights every road in the region | `P3-10` | 🟡 **Open — raised 2026-08-01** by the ground/colour evaluation |
 
 ### Q18 — deliberately asked in the order that might avoid answering it
@@ -599,6 +600,64 @@ below.
 ---
 
 ## Decision log
+
+### 2026-08-01 — `P2-5` drive: collision passes, and it **promoted a cosmetic overlap into a blocker**
+
+The user drove the streamed city and returned *"collision seems ok, note that some building actually
+went onto part of road"*, with a shot of a slab standing across the carriageway under a flyover.
+
+**Read the verdict narrowly, as `P2-3`'s was.** It answers the collision question and it does not
+answer the one `PLAN.md` names for `P2-5` — *can you read the road at speed, and does the camera
+stay out of the buildings?* No camera complaint was raised, which is not the same as a pass, and
+this is the project's own lesson: a review finds what its question asks for, and the transposed
+basis survived a full drive because nobody had asked. **`P2-5`'s camera half stays open.**
+
+#### The overlap, measured rather than eyeballed
+
+Geometry was rasterised to a 1 m plan grid: deck height per cell from `roads.glb` taken as the
+*minimum*, so a flyover overhead does not raise the street beneath it, and tile geometry sampled
+over each triangle's surface. A cell counts only when solid geometry sits in the band
+**0.3–2.0 m above the deck** — bumper to roofline. A podium 6 m up overhanging the street is Hong
+Kong working as intended; a slab at bumper height on a legal carriageway is the defect.
+
+| | Cells (1 m) | Share of drivable surface |
+|---|---|---|
+| Drivable surface | 492,320 | — |
+| **Blocked** | **25,466** | **5.17%** |
+| └ `INFRASTRUCTURE` | 16,367 | 3.32% |
+| └ `BUILDING` | 9,137 | 1.86% |
+
+Class comes from the vertex colour, the only place a merged tile still records it —
+`INFRASTRUCTURE` is `#9d9a93` against height bands of 191–211, so the gap is clean. The two rows
+overlap slightly where a cell holds both.
+
+⚠️ **These are two defects wearing one symptom, and they do not share a fix.**
+
+- **`INFRASTRUCTURE`, 3.32% — the larger half, and it belongs to `Q13`.** Flyover piers, deck
+  undersides and ramps that descend toward grade sit in the street because the elevated network's
+  *structure* is modelled at its true height while the level-0 ribbon is drawn straight under it.
+  A first bad measurement put this at 13.71% by marking each triangle's bounding box; sampling the
+  actual surfaces cut it to a third of that, which is worth recording because the bbox number was
+  the one that looked like a crisis.
+- **`BUILDING`, 1.86% — this one the project chose.** `roads.surface.widen_default` is **1.6×**, and
+  `GAME_DESIGN.md` fixes the range at 1.3–1.8× because real Wan Chai streets are unforgiving at
+  arcade speeds. Widening eats the pavement first and then the ground-floor frontage. The config
+  already knew: `widen_by_min_speed_limit_kph` holds expressways to 1.3 with the comment *"widening
+  them the same amount pushes the deck through the buildings beside it"* — the same effect, found
+  once, fixed locally, and never checked across the network.
+
+**Nothing here is new geometry; only the consequence is new.** All of it predates 2026-08-01 and
+none of it mattered while the city was a hologram. Collision is what turned 25,466 m² of overlap
+into 25,466 m² of invisible wall on roads the graph says are legal — and `P3-3`'s traffic will
+route into it too, because `RoadGraph` has no idea any of it is there.
+
+**Not fixed here, and deliberately.** The `BUILDING` half is a tuning value the game design fixes a
+range for, so lowering it is a playability decision rather than a bug fix, and it trades against the
+one thing `P1-4` measured it for — at 1.0× the widest opposed pair leaves a 0.42 m slot down the
+middle of Lockhart Road. The `INFRASTRUCTURE` half is `Q13`'s, which is already open and already
+knows the elevated network is unresolved. Both want the same missing tool first: **a check that
+fails the build when the carriageway is occupied**, which is the only reason this number is known at
+all and is currently a script in a scratchpad rather than a seventh verify tool.
 
 ### 2026-08-01 — Buildings get collision from a **mesh name**, and the task that owned it had already closed
 
