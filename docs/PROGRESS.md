@@ -185,7 +185,7 @@ threading it pays. See the decision log.
 | `P2-1` | `CityStreamer` | ✅ **Done — review passed 2026-08-01** | Threaded load/unload by distance to the published `aabb`. Draw calls 70 → 53 against a 150 budget. The review verdict dropped LOD0: worst-case **visible triangles 249,210 → 150,374** against 300k, and the **PCK 51.6 → 21.1 MB**. Bands are now a single 250 m edge, 400 m unload, 15 m hysteresis, in `streaming.tres`. `verify_city_streamer.gd` is the fifth verify tool. Opened the shadow-cascade finding. |
 | `P2-3` | Vehicle on real geometry | ✅ **Done — review passed 2026-08-01** | The hand-written spawn transform is gone: `RoadSpawn` resolves fare node `f_004` through `RoadGraph` and `drive_harness.gd` places the car, reproducing the old literal to **4 dp** and reporting `0.00 m` from the lane centre with `+1.00` heading agreement. `verify_spawn.gd` is the sixth verify tool and asserts the orientation against the edge vector. The user's verdict on *is this still the `P0-5` car?* was **"car seems ok"** — a pass, and read no wider than it is said. |
 | `P2-5` | Chase camera | ✅ **Done — review passed 2026-08-01** | Unblocked by shipping building collision — its "no clipping through buildings" criterion was unreachable while the city had none. Speed FOV and look-back already existed and now run on real geometry. **No shape-cast needed**: the 0.3 m spring-arm margin already exceeds the 6 cm near plane, proven by flipping the camera into a wall with look-back. Verdict *"camera work mostly with one exception where a road suddenly appears mid air"* — measured and found to be geometry, not the camera: nothing sits in the car's 0.3–3.0 m band there. Opened `Q19` and `Q20`. |
-| `P2-7` | Off-grade carriageway on its structure | 🟡 **In progress — the pipeline samples and the contract is bumped; the independent measurement is left** | **New 2026-08-01.** Sample deck heights from `INFRASTRUCTURE` instead of the flat `elevation_levels` offset; the network stays closed to driving. Placed in Phase 2 because it is a **data-contract** change and `P3-3`'s traffic will run on that contract. Answers `Q20`, shrinks `Q19`. **The 36 nodes are classified and they are all ramps — 17 junctions, 13 attribute flips, 5 tunnel portals, 1 stub, and no plan-coincident crossings at all.** Steps 4 and 5 landed 2026-08-02: `build_region` split into two passes, 44 of 45 off-grade edges sampled, 16 level-0 ends lifted onto their ramp, and node heights now follow a stated rule instead of source iteration order. **The median step at the 36 nodes went 6.00 m → 0.04 m, and the 6 left over 2 m are exactly the 5 tunnel portals and the stub step 1 predicted.** Three plan answers have now been measured and replaced, the latest being the *fallback*: an uncovered station takes the deck either side of it, because `INFRASTRUCTURE` stops being modelled where a ramp reaches grade. 390 tests, `ruff` clean, `tools/check.sh` green, 737 drivable edges unchanged. Step 6 bumped `roadgraph.json` to **schema 2** across both sides. Next: `tools/deck_error.py` against the shipped tiles (step 7), then the drive (step 8). See the decision log. |
+| `P2-7` | Off-grade carriageway on its structure | 🟡 **In progress — measured against the shipped tiles and passing; the review drive is left** | **New 2026-08-01.** Sample deck heights from `INFRASTRUCTURE` instead of the flat `elevation_levels` offset; the network stays closed to driving. Placed in Phase 2 because it is a **data-contract** change and `P3-3`'s traffic will run on that contract. Answers `Q20`, shrinks `Q19`. **The 36 nodes are classified and they are all ramps — 17 junctions, 13 attribute flips, 5 tunnel portals, 1 stub, and no plan-coincident crossings at all.** Steps 4 and 5 landed 2026-08-02: `build_region` split into two passes, 44 of 45 off-grade edges sampled, 16 level-0 ends lifted onto their ramp, and node heights now follow a stated rule instead of source iteration order. **The median step at the 36 nodes went 6.00 m → 0.04 m, and the 6 left over 2 m are exactly the 5 tunnel portals and the stub step 1 predicted.** Three plan answers have now been measured and replaced, the latest being the *fallback*: an uncovered station takes the deck either side of it, because `INFRASTRUCTURE` stops being modelled where a ramp reaches grade. 390 tests, `ruff` clean, `tools/check.sh` green, 737 drivable edges unchanged. Step 6 bumped `roadgraph.json` to **schema 2** across both sides. Step 7 graded it against the **shipped tiles** with `tools/deck_error.py`, which shares no code with the pipeline: **|error| p90 4.131 m to 0.095 m against a 0.50 m criterion**, deepest intrusion 4.67 m to 0.34 m, and the tool reproduces the recorded 4.19 m baseline at 4.13 m. **Acceptance met.** Next: the drive at the Tonnochy Road approach and the Wan Chai Interchange (step 8). See the decision log. |
 | `P4-*` | The elevated network | ⬜ Not started | **New 2026-08-01.** Post-slice, and **broken down** where the other post-slice phases are not — the data is measured and shipping collision already half-opened the network by accident. Reverses `P2-2`'s off-grade refusal deliberately and closes `Q15`. |
 | `P3-2a` | Near-miss scoring | ⬜ Not started | **New 2026-08-01.** Build `B3`. Split out of `P3-2` and moved from `B4` into `B3`: that build's review asks whether traffic is *"harder in a good way, or just annoying"*, and it cannot answer honestly while threading traffic pays nothing. See the decision log. |
 | `P3-7` | Window-band shader | ⬜ Not started | Build `B2`. **Acceptance grew 2026-08-01:** the shader's two inputs ship as `TEXCOORD_0` from the ETL, so this is one commit across both sides with a `schema_version` bump. See the decision log. |
@@ -218,7 +218,7 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ❌ blocked
 | Q17 | No CI. Every check is a local convention, and `tools/check.sh` runs only when someone remembers — on a repo where two verify tools shipped broken-and-green inside one commit | The checks exist and are now capable of failing; nothing makes them run. The Python half (`ruff`, `pytest`, `gdformat`) needs no engine and is nearly free to automate; the Godot half needs the binary plus export templates in a runner | — | ✅ **Resolved 2026-07-31** — GitHub Actions runs both halves. Export templates turned out not to be needed: only exports want them, and CI does not export. **Three of the six checks; the generated-asset contracts are not covered** — see the decision log |
 | Q16 | One region measures **56.4 MB** in the PCK against a 200 MB bundle budget — before any vehicle, audio or UI asset, and before a second region | Half the iOS cellular threshold spent on the part of the game the player looks at but never touches | `P2-1` | ✅ **Resolved 2026-08-01** — the tiers do not all ship. LOD0 dropped after the `P2-1` review found it indistinguishable; **51.6 → 21.1 MB PCK**, measured from real exports |
 | Q19 | **5.17% of the drawn carriageway has solid geometry standing in it at bumper height.** Split by grade: `BUILDING` at grade 1.72%, `INFRASTRUCTURE` at grade 1.60%, and **1.87% on off-grade ribbon nobody can reach**. The rows do not sum to the headline and are not meant to — 38 cells hold both classes and are counted in each. Cosmetic until 2026-08-01; now every square metre is a collider | The car is stopped by invisible walls on legal carriageway, and `P3-3`'s traffic will route into them. The at-grade half is a real defect; the off-grade half is an artefact of `Q20` and disappears with it | `P2-7` | 🔴 **Open — raised 2026-08-01** by the user's `P2-5` drive, then measured, then re-split |
-| Q20 | **The off-grade carriageway is drawn at an invented height, and collision has made the ramps climbable.** `elevation_levels` gives level 1 a flat **+6.0 m** offset, but the real decks vary: measured against the `INFRASTRUCTURE` structure the ribbon is off by **>1 m in 78%** of samples and **>2 m in 54%**, median **−1.51 m**, p10–p90 spread **6.51 m**, and it sits *below* the structure 72% of the time. So 23.3% of drawn carriageway floats through a flyover instead of lying on it, with no ramps because `Q13`'s ramps are the missing piece | `Q13` deferred this on the grounds that the elevated network was **unreachable**. That premise died on 2026-08-01: tile geometry is now solid, so the physical ramps are drivable and a player who climbs one arrives at a ribbon that is not there. Either close the network properly or open it properly — it is no longer a drawing question | `P2-7` | 🟡 **Open — raised 2026-08-01** by the user's `P2-5` drive; **implemented 2026-08-02**, and open only until the acceptance is measured against the shipped tiles rather than against the sampler that produced the heights (step 7). Slab-continuity sampling of `INFRASTRUCTURE`, 10 m resampling, a terrain gate, and a level-0 half nobody had seen: the edges leading into 13 of the 36 nodes are themselves on the ramp. Baseline to beat is \|error\| p90 **4.19 m** against the shipped tiles. See the decision log |
+| Q20 | **The off-grade carriageway is drawn at an invented height, and collision has made the ramps climbable.** `elevation_levels` gives level 1 a flat **+6.0 m** offset, but the real decks vary: measured against the `INFRASTRUCTURE` structure the ribbon is off by **>1 m in 78%** of samples and **>2 m in 54%**, median **−1.51 m**, p10–p90 spread **6.51 m**, and it sits *below* the structure 72% of the time. So 23.3% of drawn carriageway floats through a flyover instead of lying on it, with no ramps because `Q13`'s ramps are the missing piece | `Q13` deferred this on the grounds that the elevated network was **unreachable**. That premise died on 2026-08-01: tile geometry is now solid, so the physical ramps are drivable and a player who climbs one arrives at a ribbon that is not there. Either close the network properly or open it properly — it is no longer a drawing question | `P2-7` | 🟢 **Answered 2026-08-02.** Implemented and then **graded against the shipped tiles** by `tools/deck_error.py`, which shares no code with the pipeline: |error| p90 **4.131 m to 0.095 m** against a 0.50 m criterion, deepest intrusion **4.67 m to 0.34 m**, 92.3% of the carriageway within ±0.10 m of its deck. The tool validates itself by reproducing the recorded 4.19 m baseline at 4.13 m. Closes once the review drive confirms it (step 8). Slab-continuity sampling of `INFRASTRUCTURE`, 10 m resampling, a terrain gate, and a level-0 half nobody had seen: the edges leading into 13 of the 36 nodes are themselves on the ramp. Baseline to beat is \|error\| p90 **4.19 m** against the shipped tiles. See the decision log |
 | Q18 | Does flat-coloured ground read as ground, or does it need land-cover colour classified from the source aerial texture? And does sinking the terrain ~0.2 m under the road deck actually clear the carriageway on cross-slopes? | Decides whether `P3-10` ends after its cheap half or grows an image-decode stage and a **Pillow** dependency. The z-fighting half is not a preference — get it wrong and the ground fights every road in the region | `P3-10` | 🟡 **Open — raised 2026-08-01** by the ground/colour evaluation |
 | Q21 | **Should level −1 carriageway be drawn at all?** 15 edges, 5,010 m, **11.6% of the region's carriageway area**, ribboned under the terrain where nothing can see it and nobody can drive it — and solid since collision shipped. `P2-7` cannot improve their height: they are a void, so there is nothing to sample, and **11 of their 30 ends are clipped at the region boundary**, so the two Cross-Harbour portals have only ~42 m of run for an 8 m descent (19%) | Triangles, collider surface and bundle bytes spent on geometry with no viewer and no driver, plus a permanent unresolvable entry in `Q13`. Against that: `P3-3`'s traffic and any Phase 4 work want the edges to *exist*, and drawing is not the same as existing — `roadgraph.json` would keep all 15 either way | `P2-7` | 🟡 **Open — raised 2026-08-01** by `P2-7`'s classification, then sharpened by the user's guess that the portals sit outside the region |
 
@@ -670,6 +670,72 @@ Font sizes are constants in the script rather than a `.tres`, which is a deliber
 rule 4: tuning values are *gameplay* values, balanced by someone who should not need a code change.
 Nothing about dev chrome is balanced. The position block's 40 px is set by what a vision model can
 still read after a 1920-wide screenshot is downscaled, which is now the most common reader.
+
+### 2026-08-02 — `P2-7` step 7: graded against the shipped tiles, and it **passes** — after the tool was wrong three times
+
+`tools/deck_error.py` measures the drawn carriageway against the structure in the **shipped tile
+GLBs**. Nothing it uses is shared with the code it grades: geometry from the decimated tiles rather
+than the source sheets, deck faces by **winding** rather than slab clustering, structure by **vertex
+colour** rather than sheet sub-directory, and its own point-in-triangle query.
+
+| measured against shipped LOD0 tiles | before | after |
+|---|---|---|
+| median | −1.311 m | **−0.041 m** |
+| p10 / p90 | −2.93 / +3.66 | **−0.09 / +0.00** |
+| **\|error\| p90** | **4.131 m** | **0.095 m** *(accepts 0.50)* |
+| deepest into the structure | 4.67 m | **0.34 m** *(accepts 0.50)* |
+| within ±0.10 m | 1.5% | **92.3%** |
+| coverage | 97.6% | 97.4% |
+
+**`P2-7`'s acceptance is met.** The `before` column is the load-bearing one: it reads **4.131 m**
+where the recorded baseline — measured months of reasoning ago by dense sampling of the *source
+sheets* — is **4.19 m**, and reproduces the 66% below-deck figure exactly. Two methods sharing no
+code agreeing to 1.4% is what makes the `after` column worth believing.
+
+The `before` bundle was built by rerunning roads, surface and export with `roads.deck` set to `None`
+into a scratch tree, so both columns are real pipeline output graded by one tool.
+
+#### The tool was wrong three times, and each error flattered or damned by metres
+
+⚠️ **This is the finding worth keeping.** An acceptance tool is the last thing anyone checks, and
+every one of these produced a *plausible table*.
+
+| Wrong | Read | Why |
+|---|---|---|
+| Matched the structure colour exactly | 428 of 434,149 triangles | `colour_for` **jitters every class**, one factor across all three channels. A class is a *ray* through its base colour, not a value |
+| Kept both face windings | 1.07 m p90 | A deck's underside is as horizontal as its top, so a carriageway sunk into a deck scored against the face 1.5 m below and read as a small positive |
+| Sampled the road mesh's own vertices | 1.31 m p90, 8.4 m on `CANAL ROAD FLYOVER` | `roads.glb` carries vertices **only at the carriageway edges**, and `width_m` is hand-tuned wider than the real road for playability. The drawn edges overhang the deck *by design*; the tool was measuring overhang |
+
+The third was the instructive one. It looked exactly like a real defect — one named flyover, a
+consistent 8 m, the deck separation of a double-decker. Chasing it found the source sheets and the
+shipped tiles agreeing to 0.03 m at those positions, which meant the geometry was right and the
+*question* was wrong. Sampling down the centreline instead took p90 from 1.31 m to 0.095 m with no
+change to the ETL at all. **Overhang is `Q19`'s question; height is `Q20`'s, and conflating them
+manufactures a failure.**
+
+#### The "0.1 m below" half of the criterion was superseded by measurement
+
+`P2-7` restated *"no ribbon below the deck"* as *"no sample more than 0.1 m below"*. That was set
+against the internal check, where the geometry is exact. It is not a threshold the shipped tiles can
+resolve: measured with the carriageway held still, `P2-1`'s 0.5 m decimation of `INFRASTRUCTURE`
+alone moves the deck top by **−0.041 m median** and widens |error| p90 from **0.030 m** (source
+sheets) to **0.095 m** (shipped tiles). A 0.1 m gate sits under the noise floor of the surface being
+measured.
+
+So the gate is now the **deepest single intrusion**, at the same 0.5 m as the p90 criterion — *"how
+far does the road ever sink into the flyover"* is what `Q20` actually asked. It reads **0.34 m**,
+against 4.67 m before.
+
+#### What the tool still reports and does not fail on
+
+`furthest above the deck` is **14.32 m**, unchanged from before, and it is `e425` — the `ISLAND
+EASTERN CORRIDOR` stub whose every sample the terrain gate refuses, leaving it on the flat offset.
+Eight stations of 3,376. Recorded rather than hidden: it is the one edge `P2-7` knowingly does not
+fix, and `Q13`'s remaining answer already names it.
+
+The tool is **not** wired into `tools/check.sh`. It needs a built region under `etl/out`, which
+`check.sh` does not require and should not start requiring. Run it after a build:
+`.venv/bin/python tools/deck_error.py --city hong_kong --generated etl/out/hong_kong/wan_chai`.
 
 ### 2026-08-02 — `P2-7` step 6: `roadgraph.json` goes to schema 2, and only it does
 
