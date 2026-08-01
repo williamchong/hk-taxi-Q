@@ -706,7 +706,18 @@ untouched, and 43 MB is geometry. Clipping removes triangles, not texture. Over 
 texture memory and bundle size at once, by roughly 2× each. The source is ~10 px/m, which is
 survey resolution for ground seen at 60 km/h; resampling to ~2 px/m (~6 MB as ASTC) and
 decimating to ~88k triangles would bring it into range,
-but that work is not scheduled. It is still parsed and still worth keeping, because it is a
+but that work is not scheduled.
+
+✅ **Reassessed 2026-08-01, and the geometry was never the problem: 224 of the 267 MB is the
+JPEG.** `P3-10` ships the terrain **untextured**, reading the JPEG at build time to derive flat
+per-vertex colour and then discarding it. That is ~88k triangles and 1.5–2.5 MB of geometry, zero
+texture memory, and **no extra draw call** — an untextured vertex-coloured surface merges into the
+same tile primitive as the buildings, where a textured one could not. It also removes the objection
+to decimating it, since clustering smears UVs and there are no longer any UVs. Resampling the
+texture was the fix considered here; not shipping it at all is cheaper and better. See
+`docs/ART_DESIGN.md` "Ground" and `Q18` in `PROGRESS.md`.
+
+It is still parsed and still worth keeping, because it is a
 **height field** and `Q11` needs one: Road Network v2 carries no Z, and ground level in Wan Chai is
 ~4 m above the datum rather than 0. `python -m pipeline.buildings --terrain` emits it separately
 for evaluation; the tile output contains no textures at all. See `PROGRESS.md`.

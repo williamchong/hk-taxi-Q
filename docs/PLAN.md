@@ -290,13 +290,24 @@ Why reordered, in one line each:
 
 | ID | Deliverable | Accept |
 |---|---|---|
-| `P3-7` | Window-band shader | Reads as HK density; no windows on roofs or podium faces |
+| `P3-10` | **Ground surface** — decimated terrain, vertex-coloured, merged into the tile primitive | Ground everywhere the region has terrain; **no texture ships**; one draw call per tile still; no z-fighting against the carriageway |
+| `P3-7` | Window-band shader, **and the `TEXCOORD_0` payload it reads** | Reads as HK density; no windows on roofs or podium faces. ETL ships height-above-own-base and a per-building seed in `TEXCOORD_0`; `schema_version` bumped in the same commit |
 | `P3-6` | Hero buildings (5) authored, placed via `landmarks.json` | Source geometry excluded; no z-fighting |
 
-- **Deps:** `P1-2`, `P1-7`, `B1`.
+- **Deps:** `P1-2`, `P1-7`, `B1`. Within the build, `P3-10` comes first — the other two are judged
+  against a city that has a floor.
 - **Review:** drive Hennessy Road and look around; the same viewpoints before and after |
   web build | **Does this read as Wan Chai?** Dress rehearsal for `P3-9`, with the
   project's central bet on the table.
+- **`P3-10` runs in two halves, and may stop after the first.** Flat-coloured decimated terrain
+  ships first, because it is small and it produces the screenshot that answers `Q18` — *does flat
+  ground read as ground?* Only if it reads dead does the second half follow: sample the source
+  aerial JPEG per triangle, classify to a land-cover palette, and put the class in `mesh.collapse`'s
+  cluster key so boundaries stay crisp. That half adds **Pillow** to the ETL and is not written
+  until the first half has been looked at. See `docs/PROGRESS.md`.
+- ⚠️ **`P3-7` is one commit across two sides.** The shader cannot derive height-above-own-base or a
+  per-building seed from a vertex, so the ETL must ship them; buildings carry no UVs today, and
+  `TEXCOORD_0` is where they go. Hard rule 5 — ETL output and game input change together.
 
 ### Build `B3` — "The streets are alive"
 

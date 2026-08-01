@@ -3,7 +3,7 @@
 Living document. **Update this whenever a task changes status, a decision is made, or an open
 question is answered.** Newest entries at the top of each log.
 
-Last updated: 2026-08-01 (two shadow cascades instead of four — 35% off the frame's primitives; one cascade was tried first and withdrawn)
+Last updated: 2026-08-01 (ground and building colour evaluated — the vertex stream carries both, the source texture is read at build time and never shipped; opens `P3-10` and `Q18`)
 
 ---
 
@@ -132,6 +132,15 @@ direction is justified by it. Read narrowly, though: a gimmick carries a first s
 register now tracks "novelty does not survive the first session" in its place, and that is `P3-*`'s
 to answer, not Phase 1's.
 
+**The city has no ground, and that is now scheduled rather than merely known.** An evaluation on
+2026-08-01 put two questions together — colour the terrain from the source aerial texture, and
+colour the buildings without a size or perf cost — and both resolve the same way: **the vertex
+stream carries colour, the source texture is read at build time and never shipped.** Terrain
+decimated at 4 m is ~88k triangles that merge into the existing tile primitive at no extra draw
+call; buildings get their surface detail from two channels already in the bundle carrying nothing.
+Neither is next — `P2-3` is the Phase 2 gate — but both land in `B2`, as `P3-10` and inside `P3-7`.
+See the decision log and `Q18`.
+
 ### Task board
 
 | ID | Task | Status | Notes |
@@ -148,7 +157,7 @@ to answer, not Phase 1's.
 | `P0-5d` | └ The drive test | ⚠️ **Passed, conditional** | Driven and verified. No blocking feel problem; no fun verdict possible yet. |
 | `P1-1` | Source fetching | ✅ **Done** | `fetch.py`; sheets derived from the index, not listed. 67 tests, `ruff` clean. |
 | `P1-2` | Building meshes | ✅ **Done** | 65 tiles × 3 LODs; 989k → 184k triangles. Verified in Godot by `game/tools/verify_tiles.gd`. 153 tests, `ruff` clean. |
-| `P1-2t` | └ Terrain evaluation | ⚠️ **Measured — not viable as shipped** | 267 MB JPEG, 405k tris. See the decision log; needs a resampling pass to survive. |
+| `P1-2t` | └ Terrain evaluation | ⚠️ **Measured — not viable as shipped** | 267 MB JPEG, 405k tris. See the decision log; needs a resampling pass to survive. **Superseded 2026-08-01 by `P3-10`:** 224 of the 267 MB was texture, and the answer is to drop the texture rather than resample it. |
 | `P1-3` | Road graph | ✅ **Done** | 797 edges, 615 nodes, 217 turn restrictions, 96.3% connected, 0.80 s. `Q9`, `Q11` and `Q12` all resolved here. 234 tests, `ruff` clean. All four acceptance criteria met, the last by the user's eye. |
 | `P1-4` | Road surface mesh | ✅ **Done** | 28,423 triangles, one draw call, kerbs and trimesh collision, 0.43 s. All 393 single-level junctions covered. Opened `Q13`. 259 tests, `ruff` clean. |
 | `P1-5` | Fare nodes | ✅ **Done** | 29 nodes (14 stands, 15 PUDO) from 793 territory-wide points. All four acceptance criteria met and independently corroborated. Opened `Q14`, `Q15`. 297 tests, `ruff` clean. |
@@ -157,6 +166,8 @@ to answer, not Phase 1's.
 | `P2-2` | `RoadGraph` runtime and debug overlay | ✅ **Done — all four criteria met** | One parse per scene, nearest-edge over a 25 m plan grid, lane centres from the **drawn** carriageway. Refuses all 60 off-grade edges (`Q13`), proven over 505 probes. Query time closed 2026-08-01: **p99 45 µs against a 1 ms budget**, timed over 15,865 region-wide probes. `verify_road_graph.gd` is the fourth verify tool. 331 tests, `ruff` clean. |
 | `P2-1` | `CityStreamer` | ✅ **Done — review passed 2026-08-01** | Threaded load/unload by distance to the published `aabb`. Draw calls 70 → 53 against a 150 budget. The review verdict dropped LOD0: worst-case **visible triangles 249,210 → 150,374** against 300k, and the **PCK 51.6 → 21.1 MB**. Bands are now a single 250 m edge, 400 m unload, 15 m hysteresis, in `streaming.tres`. `verify_city_streamer.gd` is the fifth verify tool. Opened the shadow-cascade finding. |
 | `P2-3` | Vehicle on real geometry | 🟢 **Unblocked** | `P2-3` now has `P2-2`'s lane-centre query to spawn against |
+| `P3-7` | Window-band shader | ⬜ Not started | Build `B2`. **Acceptance grew 2026-08-01:** the shader's two inputs ship as `TEXCOORD_0` from the ETL, so this is one commit across both sides with a `schema_version` bump. See the decision log. |
+| `P3-10` | Ground surface | ⬜ Not started | **New 2026-08-01.** Build `B2`. There is no ground today. Decimated terrain, vertex-coloured, merged into the tile primitive; no texture ships. Flat colour first, photo-derived land-cover classes only if flat reads dead — that is `Q18`. |
 | `P3-*` | Playable slice | ⬜ Blocked | Gated on `P2-3`; `P2-2` cleared |
 
 Legend: ⬜ not started · 🟡 in progress · ✅ done · ❌ blocked
@@ -184,6 +195,21 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ❌ blocked
 | Q15 | Fare nodes snap to the road graph by **plan distance only**, because the published points are 2D | A stand under a flyover has nothing in it to prefer the street below over the deck above. No node in Wan Chai is affected — every winner is level 0 — but this shares a root cause with `Q13` | `P2-2` | 🟡 **Open — raised 2026-07-31 by `P1-5`**, not reachable with this source |
 | Q17 | No CI. Every check is a local convention, and `tools/check.sh` runs only when someone remembers — on a repo where two verify tools shipped broken-and-green inside one commit | The checks exist and are now capable of failing; nothing makes them run. The Python half (`ruff`, `pytest`, `gdformat`) needs no engine and is nearly free to automate; the Godot half needs the binary plus export templates in a runner | — | ✅ **Resolved 2026-07-31** — GitHub Actions runs both halves. Export templates turned out not to be needed: only exports want them, and CI does not export. **Three of the six checks; the generated-asset contracts are not covered** — see the decision log |
 | Q16 | One region measures **56.4 MB** in the PCK against a 200 MB bundle budget — before any vehicle, audio or UI asset, and before a second region | Half the iOS cellular threshold spent on the part of the game the player looks at but never touches | `P2-1` | ✅ **Resolved 2026-08-01** — the tiers do not all ship. LOD0 dropped after the `P2-1` review found it indistinguishable; **51.6 → 21.1 MB PCK**, measured from real exports |
+| Q18 | Does flat-coloured ground read as ground, or does it need land-cover colour classified from the source aerial texture? And does sinking the terrain ~0.2 m under the road deck actually clear the carriageway on cross-slopes? | Decides whether `P3-10` ends after its cheap half or grows an image-decode stage and a **Pillow** dependency. The z-fighting half is not a preference — get it wrong and the ground fights every road in the region | `P3-10` | 🟡 **Open — raised 2026-08-01** by the ground/colour evaluation |
+
+### Q18 — deliberately asked in the order that might avoid answering it
+
+`P3-10` ships flat-coloured decimated terrain first and looks at it. The classification pass —
+sample the 45 MPix source JPEG per triangle, snap to a land-cover palette, put the class in
+`mesh.collapse`'s cluster key so boundaries stay crisp — is real work with a new dependency behind
+it, and the flat version is the screenshot that says whether it is needed. If flat reads fine, the
+question closes without the code ever being written.
+
+The second half is not optional and not a matter of taste. `roads.py` places the level-0 ribbon at
+`terrain + 0.0`, so ground and carriageway are **coplanar by construction** and will z-fight across
+the whole network. The 0.15 m kerb riser and 0.5 m lip that `P1-4` already draws are what a sunken
+terrain tucks under, and ~0.2 m is a guess until it is driven. Measure it on a cross-sloped street
+before measuring anything else.
 
 ### Q16 — how much of the bundle one region costs, measured rather than summed
 
@@ -562,6 +588,134 @@ below.
 ---
 
 ## Decision log
+
+### 2026-08-01 — Ground and building colour: **the vertex stream carries both**, and the source texture is a build-time colour *source*, never a shipped one
+
+An evaluation, not an implementation. It answers two questions the user put together — "should the
+ground be simply coloured from the huge source texture?" and "how do buildings get colour without a
+size or perf cost?" — and they turn out to be one question: **what channel carries colour.** The
+project already answered it. Colour rides `COLOR_0` on an untextured mesh that merges to one
+primitive per tile, and that single choice is what produces 53 draw calls and a 21.1 MB PCK. Both
+answers below are that rule applied twice.
+
+**There is currently no ground at all.** `ART_DESIGN.md` says it outright — the kerb lip exists
+because "the terrain is too expensive to ship, [so] it is what stops the carriageway ending in
+mid-air" — and `drive_harness.gd` carries a fall floor to catch the car when it leaves the ribbon.
+Between the roads and under the buildings is skybox. `B2`'s verdict question is *"Does this read as
+Wan Chai?"*, and a city floating over a void cannot pass it whatever the window shader does.
+
+#### The terrain budget that terrain failed no longer exists
+
+`P1-2t` measured 267 MB and 405k triangles against a bundle already holding 51.6 MB of tiles. `Q16`
+then dropped LOD0. Re-read against today's numbers, the old verdict says something narrower than
+"unaffordable":
+
+| | `P1-2t`, 2026-07-30 | Today |
+|---|---|---|
+| PCK | 51.6 MB | **21.1 MB** of 200 MB |
+| Draw calls | 70 | **53** of 150 |
+| Worst-case visible triangles | 249,210 | **150,374** of 300k |
+| Terrain texture | **224 MB** — the whole failure | — |
+| Terrain geometry | 43 MB, 88,081 tris at 4 m cells | — |
+
+**224 of the 267 MB was the JPEG. Geometry was never the problem**, and the resampling that would
+have fixed the texture was simply never written.
+
+#### Three shapes it could take, and why the middle one wins
+
+**Rejected — ship the texture, resampled.** 2 px/m over the region is 5.94 MPix ≈ 5.9 MB as ASTC,
+affordable in isolation. It fails on two other counts. A textured surface cannot merge with the
+vertex-coloured building primitive, so it costs **+1 draw call per resident tile** and introduces
+the first texture into a pipeline whose entire economics rest on having none. And an orthophoto has
+the *real* roads baked into it at their real width, while `roads.py` places the generated ribbon at
+`terrain + deck_height` — coplanar, and **widened 1.6×**. The result is photographic asphalt with
+photographic lane markings poking out from under a wider synthetic road, plus parked cars and hard
+shadows baked into the ground. That is the `ART_DESIGN.md` photogrammetry-texture anti-goal.
+
+**Chosen — the texture is read at build time and thrown away.** Sample the full-res JPEG per source
+triangle, **classify** to a small land-cover palette (asphalt / pavement / vegetation / water /
+bare), write the result into `COLOR_0`, ship no texture. Then:
+
+- Zero texture memory, zero texture bytes in the bundle.
+- Terrain is untextured and vertex-coloured, so it **merges into the existing tile primitive** —
+  one draw call per tile, `verify_tiles.gd`'s invariant intact.
+- ~88k triangles region-wide ≈ **1,355 per tile**; a ~30-tile resident set adds ~40k to 150,374.
+- Geometry ≈ 1.5–2.5 MB on a 21.1 MB PCK.
+- **The UV-smearing objection to decimating terrain evaporates** — there are no UVs left to smear,
+  so `mesh.collapse` runs on it for free. `P1-2t` named that smearing as the reason decimation was
+  awkward; deleting the texture deletes the reason.
+
+The implementation idiom already exists. `mesh.collapse` puts *facing* in the cluster key so a wall
+vertex never averages into the roof above it. Put the **land-cover class** in the key the same way
+and cluster boundaries land exactly on the park, pavement and water edges instead of blending
+across them. That is what makes 4 m colour blobs read as deliberate low-poly ground rather than as
+mush.
+
+**Ordered first — geometry only, one flat colour.** Decimate, colour it warm grey, ship it. No image
+decode, no new dependency, and it produces the screenshot that says whether flat ground reads dead
+or fine. If flat is fine, the classification code is never written. That ordering is `P3-10` and
+`Q18`.
+
+Three caveats carried into the task:
+
+1. **Sink the terrain ~0.2 m below the road deck** so it tucks under the kerb lip that already
+   exists rather than z-fighting the carriageway. Whether 0.2 m survives cross-slopes is the one
+   thing that must be measured rather than assumed — it is the likeliest thing to go wrong.
+2. **Visual only, no collider,** in the first pass. The kerb currently defines the drivable world;
+   giving the pavement collision is a gameplay change wearing an art change's clothes.
+3. Classification needs an image decoder. The ETL has none — `gltf.Texture` passes bytes through
+   untouched — so it means adding **Pillow**, and six 45 MPix decodes at ~136 MB of RAM each.
+   That cost belongs to the second phase, not the first.
+
+#### Buildings do not have a colour problem
+
+They have a **surface-detail** problem, and the fix was already designed as `P3-7`. Colour itself is
+solved: `colour_for` assigns a height-band or per-class colour with `crc32`-seeded jitter, stable
+across rebuilds, palette in city config.
+
+Three routes were put and two are rejected:
+
+- ❌ **Low-res texture or atlas.** Any texture needs UVs, and **UVs do not survive vertex
+  clustering** — which is how both shipped LOD tiers are produced. This is paying to break the LOD
+  system.
+- ❌ **Per-building colour sampled from the individualised set's full-res textures.** The
+  non-textured buildings carry no texture at all, so this means the individualised download —
+  **5.86 GB zipped for Wan Chai, 93–96% of it texture** — plus matching ids across two sets that
+  disagree on building count (738 vs 769 on one sheet). The payoff is a median photogrammetric
+  façade colour, which in oblique aerial capture is dominated by shadow, sky bounce and haze: it
+  converges on desaturated grey-beige for everything and flattens exactly the old-below/new-above
+  contrast the height bands exist to express. High cost, plausibly negative result.
+- ✅ **Spend the channels already in the bundle carrying nothing.**
+
+| Channel | Today | Cost to use |
+|---|---|---|
+| `COLOR_0.a` | constant `255` | **zero bytes** |
+| `TEXCOORD_0` | absent — buildings ship no UVs | ~2 bytes/vertex quantised |
+
+The window-band shader needs two things a vertex cannot derive on its own: **height above its own
+building's base** (a vertex knows world Y, not where its building starts) and a **per-building
+seed** (so neighbours do not share a window pattern). Put both in `TEXCOORD_0.xy` at ETL time and
+`P3-7` is a few ALU instructions with no texture, no atlas, and full LOD compatibility — clustering
+carries UVs through the same representative-selection path it already uses for colours. A third
+trick is free on top: **bake a vertical gradient into `COLOR_0`** darkening the bottom couple of
+metres, which grounds buildings where they meet the pavement and costs nothing at runtime.
+
+⚠️ **Use `TEXCOORD_0`, not `COLOR_0.a`, for the mask.** `generated_scene_import.gd` sets
+`vertex_color_use_as_albedo = true` project-wide. Opaque `BaseMaterial3D` ignores albedo alpha, so a
+mask in alpha is safe *today* — and the day anyone enables transparency on a tile the city goes
+see-through with no error. UVs have no such failure mode.
+
+If the palette itself turns out to be wrong, the cheap lever is a **throwaway offline script** over
+one or two individualised sheets: cluster the dominant façade colours and re-author the five
+`height_bands` in YAML from the result. Evidence-based palette, no pipeline change, nothing extra in
+the build path — the whole benefit of the photo data at about 1% of the cost.
+
+#### Sequencing
+
+Neither is next. `P2-3` is the Phase 2 gate. The ground is `P3-10`, landing in `B2` where it is
+judged; the `TEXCOORD_0` payload lands **inside** `P3-7`, in one commit that changes ETL and game
+together and bumps `schema_version` — hard rule 5. Writing them down now is the point: the ETL half
+of `P3-7` is the part that gets discovered late otherwise.
 
 ### 2026-08-01 — **Two** shadow cascades, not four: 35% off the frame's primitives
 
@@ -2013,7 +2167,8 @@ urgent — flag it before the roster work in Phase 4.
 | Source data quirks (dual carriageways, doubled junctions) | Medium → **Low** | **Mitigated 2026-07-30 by `P1-3`, and the directions confirmed against the street (`Q12`).** Both quirks turned up and both were handled: dual carriageways arrive as 6 opposed one-way pairs 1.96–3.85 m apart (median 2.9 m), and doubled junctions never form because nodes are made only at shared endpoints. **Closed 2026-07-30 by `P1-4`:** the residual — whether a 3 m pair becomes two ribbons or one — was not a decision. The widened ribbons overlap, so both carriageways draw as one continuous surface and no pair handling exists in the code. |
 | Building meshes blow the triangle budget | Medium → **Low** | **Mitigated 2026-07-30 by `P1-2`.** The estimate was low: 2,200 buildings across the six sheets, not the ~900 extrapolated from one. Real region totals are **989k / 400k / 184k** triangles at LOD0/1/2, averaging 15.2k per tile at LOD0. Against a <300k *visible* budget that leaves room, but not much — a viewpoint holding LOD0 on the nearest ring plus LOD1 behind it lands in the low 300k range before occlusion. `P2-1`'s switch distances now decide this, not the ETL. |
 | Grade separation is unreachable | Medium | **New 2026-07-30, raised by `P1-4` as `Q13`.** Deck heights are a constant per level, so nothing ramps: all 36 nodes joining two levels step by a whole deck height. The flyovers and the tunnels render correctly and cannot be driven onto. Not a blocker for the street-level slice, but `P2-2`'s nearest-edge query will put the car on a flyover unless it is told not to. |
-| Terrain does not fit any budget | Medium | **New 2026-07-30.** Measured 267 MB of texture and 405k triangles for the ground alone — roughly 2× over on texture memory, triangles *and* bundle size simultaneously. Resampling to ~2 px/m and decimating to ~88k triangles brings it into range, but that work is not done and is not scheduled. Nothing in the tile output depends on it. |
+| Terrain does not fit any budget | Medium → **Low** | **New 2026-07-30.** Measured 267 MB of texture and 405k triangles for the ground alone — roughly 2× over on texture memory, triangles *and* bundle size simultaneously. Resampling to ~2 px/m and decimating to ~88k triangles brings it into range, but that work is not done and is not scheduled. Nothing in the tile output depends on it. **Reassessed 2026-08-01:** 224 of the 267 MB was the JPEG, and the answer is to read it at build time and ship none of it. Vertex-coloured terrain decimated at 4 m is ~88k triangles and 1.5–2.5 MB against a 21.1 MB PCK, merges into the tile primitive so it costs no extra draw call, and needs no texture budget at all. Scheduled as `P3-10`. |
+| The city has no ground | **Medium** | **New 2026-08-01.** There is no ground surface in the game: between the roads and under the buildings is skybox, the kerb lip is what keeps the carriageway from ending in mid-air, and `drive_harness.gd` carries a fall floor for when the car leaves the ribbon. `B2`'s review asks "does this read as Wan Chai?" and cannot be answered honestly over a void. Mitigated by `P3-10`, which is scheduled into `B2` for exactly that reason. |
 | GDScript learning curve | Low | Small codebase; complexity lives in Python. |
 | Landmark depiction IP | Low | Untextured massing; legal sight-check before launch (Phase 6). |
 | TAM too small to be commercial | Medium | City-agnostic ETL is the scaling answer — city packs, not one city. |

@@ -79,13 +79,43 @@ faces — floor lines and window rows, procedurally. Dense repetitive window gri
 visual signature of HK residential towers.
 
 ```
-Inputs:  world Y position, face normal, building height, per-building seed
+Inputs:  face normal, TEXCOORD_0.x = height above the building's own base (0-1),
+                      TEXCOORD_0.y = per-building seed
 Output:  band mask → darkened window rows, occasional lit window (emissive at night)
 Cost:    a few instructions, zero texture memory
 ```
 
+⚠️ **Two of those inputs have to come from the ETL, and they are why `P3-7` is one commit across
+both sides.** A vertex knows its world Y, not where its building starts — a podium vertex and a
+30th-floor vertex are indistinguishable to the shader — and it has no seed at all, so neighbouring
+towers would share a window pattern. Buildings ship **no UVs today**, so `TEXCOORD_0` is free, costs
+about 2 bytes per vertex quantised, and survives vertex clustering through the same
+representative-selection path that already carries colours.
+
+Not `COLOR_0.a`, although it is free and currently a constant `255`: the project-wide import default
+sets `vertex_color_use_as_albedo`, and an opaque material ignores albedo alpha only until somebody
+enables transparency on a tile, at which point the city goes see-through with no error.
+
+A third thing rides the same stream for nothing: **bake a vertical gradient into `COLOR_0`**,
+darkening the bottom couple of metres of every building. Grounding a wall where it meets the
+pavement does more for perceived quality than per-building colour accuracy, and costs zero at
+runtime.
+
 Windows must **not** appear on roofs or ground-level podium faces — mask by normal and by height
 above ground.
+
+### What buildings will *not* get
+
+- **No per-building texture, and no low-res atlas.** Any texture needs UVs, and UVs do not survive
+  the vertex clustering that produces both shipped LOD tiers. It is paying to break the LOD system.
+- **No colour sampled per building from the individualised set.** Getting real façade colour means
+  the 5.86 GB individualised download for one region, 93–96% of it texture, plus matching ids across
+  two sets that disagree on building count. And oblique aerial capture is dominated by shadow, sky
+  bounce and haze, so the median converges on grey-beige for everything — flattening exactly the
+  old-below/new-above contrast the height bands exist to express.
+- **What the photo data may be used for** is a one-off offline read: cluster the dominant façade
+  colours from a sheet or two and re-author the five `height_bands` in city config from the result.
+  Evidence-based palette, nothing added to the build path. Measured in `docs/PROGRESS.md`.
 
 ### Hero buildings (~5)
 
@@ -119,9 +149,58 @@ hero props.
     carry `(0, 0)` — a box junction is a mask keyed on the node, not a length of lane.
 - Kerbs modelled but low and mountable — collision is forgiving by design
   - Built by `P1-4` as a 0.15 m riser and a 0.5 m lip. The lip does double duty: with the terrain
-    too expensive to ship, it is what stops the carriageway ending in mid-air.
+    too expensive to ship, it is what stops the carriageway ending in mid-air. `P3-10` gives it a
+    second job — the ground tucks *under* the lip, which is what hides the seam. See "Ground".
 - Tram tracks as an inset strip on flagged edges — **not yet built.** `tram_tracks` reaches the
   graph but `P1-4` draws no inset; it belongs with the markings shader, not with the ribbon.
+
+---
+
+## Ground
+
+⚠️ **There is no ground in the game today.** Between the roads and under the buildings is skybox.
+`P3-10` is what fixes it, and it lands in `B2` because the build whose verdict question is "does
+this read as Wan Chai?" cannot be judged over a void.
+
+**The source ships one, and it ships it textured.** Each LandsD sheet carries a terrain mesh with a
+7531 × 6031 JPEG — 224 MB across the region's six sheets, against 43 MB of geometry. The texture is
+the whole reason `P1-2t` called the terrain unaffordable.
+
+**So the texture is read at build time and never shipped.** Ground obeys the same rule as buildings:
+untextured, vertex-coloured, merged into the tile's single primitive. That is not a compromise — it
+is what keeps the invariant the whole pipeline rests on.
+
+| | Result |
+|---|---|
+| Triangles, decimated at 4 m cells | **88,081** region-wide ≈ 1,355 per tile |
+| Texture memory | **0** |
+| Bundle | 1.5–2.5 MB against a 21.1 MB PCK |
+| Draw calls | **+0** — it merges with the buildings in the same tile |
+
+Deleting the texture also deletes the reason terrain was awkward to decimate: clustering moves UVs
+and a photographic texture smears where it does, and there are no UVs left to move.
+
+**Colour comes in two steps, and may stop after the first.**
+
+1. **Flat.** One warm ground colour, height- or slope-varied at most. Small, no new dependency, and
+   it is the screenshot that says whether flat ground reads as ground at all — `Q18`.
+2. **Land-cover classes,** only if flat reads dead. Sample the source JPEG per source triangle,
+   snap to a small palette — asphalt, pavement, vegetation, water, bare — and put the class in the
+   cluster key alongside the facing. Cluster boundaries then land *on* the park and harbour edges
+   instead of blending across them, which is what makes 4 m colour blobs read as deliberate low-poly
+   ground rather than as mush.
+
+**What is explicitly not done: shipping the orthophoto, resampled or otherwise.** It would cost a
+draw call per tile, since a textured surface cannot merge with a vertex-coloured one. And an
+orthophoto has the *real* roads baked into it at their real width, while the generated ribbon sits
+coplanar with the terrain and **1.6× wider** — so photographic asphalt and photographic lane
+markings would show from under a wider synthetic road, along with parked cars and baked shadows.
+
+⚠️ **Two things to get right, both cheap to get wrong.** The ground sits coplanar with the level-0
+carriageway by construction, so it must be **sunk under the kerb lip** — roughly 0.2 m, and that
+number is a guess until it is driven on a cross-sloped street. And the first pass is **visual only,
+with no collider**: the kerb currently defines the drivable world, and giving the pavement collision
+is a gameplay change wearing an art change's clothes.
 
 ---
 
@@ -231,7 +310,11 @@ Not art, but it belongs to the same authenticity budget and is cheap:
 ## Anti-goals
 
 - No photorealism, PBR metalness workflow, or reflection probes
-- No photogrammetry textures — a trademark surface as well as an aesthetic mismatch
+- No photogrammetry textures — a trademark surface as well as an aesthetic mismatch. **Reading one
+  at build time to *derive* a flat colour is not the same thing and is allowed**; what must not
+  happen is a photograph reaching the bundle. See "Ground".
 - No per-building unique textures; the window shader replaces them
+- No texture atlas for buildings. UVs do not survive the vertex clustering that builds both LOD
+  tiers, so an atlas costs the LOD system, not just memory
 - No realistic weather or wet-road reflections in the slice
 - No baked lightmaps — flat shading plus one directional light is the look
