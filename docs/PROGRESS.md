@@ -685,12 +685,14 @@ colour** rather than sheet sub-directory, and its own point-in-triangle query.
 | **\|error\| p90** | **4.131 m** | **0.095 m** *(accepts 0.50)* |
 | deepest into the structure | 4.67 m | **0.34 m** *(accepts 0.50)* |
 | within ±0.10 m | 1.5% | **92.3%** |
+| below the deck by over 0.10 m | 66.0% | **7.0%** |
 | coverage | 97.6% | 97.4% |
 
 **`P2-7`'s acceptance is met.** The `before` column is the load-bearing one: it reads **4.131 m**
 where the recorded baseline — measured months of reasoning ago by dense sampling of the *source
-sheets* — is **4.19 m**, and reproduces the 66% below-deck figure exactly. Two methods sharing no
-code agreeing to 1.4% is what makes the `after` column worth believing.
+sheets* — is **4.19 m**, and reproduces its 66% below-deck figure at **66.0%**. Two methods
+sharing no code agreeing to 1.4% and to a tenth of a point is what makes the `after` column
+worth believing.
 
 The `before` bundle was built by rerunning roads, surface and export with `roads.deck` set to `None`
 into a scratch tree, so both columns are real pipeline output graded by one tool.
@@ -708,7 +710,7 @@ every one of these produced a *plausible table*.
 
 The third was the instructive one. It looked exactly like a real defect — one named flyover, a
 consistent 8 m, the deck separation of a double-decker. Chasing it found the source sheets and the
-shipped tiles agreeing to 0.03 m at those positions, which meant the geometry was right and the
+shipped tiles agreeing to within 0.05 m at those positions, which meant the geometry was right and the
 *question* was wrong. Sampling down the centreline instead took p90 from 1.31 m to 0.095 m with no
 change to the ETL at all. **Overhang is `Q19`'s question; height is `Q20`'s, and conflating them
 manufactures a failure.**
@@ -726,11 +728,55 @@ So the gate is now the **deepest single intrusion**, at the same 0.5 m as the p9
 far does the road ever sink into the flyover"* is what `Q20` actually asked. It reads **0.34 m**,
 against 4.67 m before.
 
+#### The review pass found a fourth way to be quietly wrong, and it was the worst one
+
+**The tool could be made to pass by breaking the thing it grades.** A station whose drawn height was
+not within `--attribute-within-m` of the graph left no trace: it was not a station, so it was not in
+any denominator. The review demonstrated it — raise 35% of the elevated carriageway 30 m in the
+graph and leave the mesh alone, and the tool reported |error| p90 **0.09 m**, coverage **97.6%** and
+**"P2-7 acceptance met"**, exit 0. The broken third had simply stopped being measured, and every
+ratio improved because of it.
+
+A total break was already loud (no samples → exit). A *partial* one was silent, which is the
+dangerous shape: a defect that makes geometry unmeasurable flatters every number computed over
+what survives.
+
+Fixed by gating the denominator, not just the ratios above it. Coverage is now **measured against
+what the centrelines asked for** rather than against the survivors, it fails below 90%, and an
+elevated edge that matches no drawn road at all fails outright. Re-running the injected regression
+now gives *"only 58.2% of the carriageway could be measured"* and *"21 elevated edges matched no
+drawn road at all"*, exit 1. The real bundle reads **96.9% measured** — 16 stations of 3,392 lost to
+junction trims, 89 to structure that stops at a ramp foot.
+
+Two more, both latent rather than live. The channel-limit guard on the colour classifier tested
+`>= 255`, but `colour_for` clamps as soon as the *brightest* jittered value would exceed 255 — at a
+jitter of 0.06 that is any channel over about 240, so a city colouring its structure near-white
+would have been silently over-matched. And the module's independence table overclaimed: the
+barycentric kernel in `Faces.heights_at` is `terrain._hits` with different names, so a sign or
+inclusivity error there would be present in both and invisible to this tool. Both corrected — the
+second by narrowing the claim rather than by rewriting the kernel, since the independence that
+matters is the geometry source and the deck classification, not the arithmetic of a point query.
+
+Measured while checking the classifier: the nearest **rejected** colour in the shipped tiles sits
+**0.28 degrees** off the structure's own ray and is refused only for being 39% too bright. An
+angular tolerance loose enough to absorb rounding would have taken it, which is why the test is an
+interval on the scale factor rather than an angle.
+
+#### The claim is bounded to the tier that collides
+
+Everything above is **LOD0**, which is the finest shipped tier since `P2-1` dropped the exact weld —
+what the player meets from 0 to 250 m, and what carries the trimesh collider. Run against **LOD1**
+the same bundle reads a deepest intrusion of **0.54 m** and fails: that tier decimates
+`INFRASTRUCTURE` on a 1.0 m cell instead of 0.5 m, and the extra 0.2 m is the collapse, not the
+carriageway. It is a drawing artefact seen from over 250 m away, where the road is a few pixels
+wide and nothing drives on it. Recorded because "the acceptance passes" is only true of the tier the
+criterion is about, and the tool will say so to anyone who passes `--lod 1`.
+
 #### What the tool still reports and does not fail on
 
 `furthest above the deck` is **14.32 m**, unchanged from before, and it is `e425` — the `ISLAND
 EASTERN CORRIDOR` stub whose every sample the terrain gate refuses, leaving it on the flat offset.
-Eight stations of 3,376. Recorded rather than hidden: it is the one edge `P2-7` knowingly does not
+Eight stations of the 3,287 that had a deck beneath them. Recorded rather than hidden: it is the one edge `P2-7` knowingly does not
 fix, and `Q13`'s remaining answer already names it.
 
 The tool is **not** wired into `tools/check.sh`. It needs a built region under `etl/out`, which

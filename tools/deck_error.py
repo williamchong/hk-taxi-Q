@@ -12,18 +12,32 @@ So nothing here is shared with the code it grades:
 | | the pipeline | this tool |
 |---|---|---|
 | Structure geometry | source sheets, full density | **shipped tiles**, decimated and welded |
-| Which surface is a deck | slab clustering, continuity walk | **upward faces**, by normal |
+| Which surface is a deck | slab clustering, continuity walk | **upward faces**, by winding |
 | Which class is structure | sub-directory in the sheet zip | **vertex colour** |
-| Point query | `pipeline.terrain.HeightField` | its own, below |
+| Which height wins | continuity from the last station | **nearest to the drawn road** |
+| Spatial index | `HeightField`'s fitted grid | its own, keyed from the origin |
+
+⚠️ Two things here are *not* independent, and saying so is the point of a table
+like this. The barycentric test in `Faces.heights_at` is `terrain._hits` with
+different names — a sign or inclusivity error in it would be present in both and
+invisible here. And `_stations` is `plan_steps` plus the body of
+`roads.resample`, kept as a copy rather than imported because
+`from pipeline.roads import ...` drags in `pipeline.terrain` and GDAL, and
+losing "`HeightField` is unreachable from this module" costs more than three
+lines of duplication are worth. Neither is where the value is: the rows above
+are, and station placement decides only *where* a height is compared, never what
+the comparison means.
 
 The tile decimation is the part that matters. `P2-1` collapses `INFRASTRUCTURE`
 on a 0.5 m cell, and a deck is thinner than a building — so the geometry the
 player's wheels actually touch is *not* the geometry the ETL sampled, and the
 difference is exactly what an internal check cannot see.
 
-The carriageway is read from the shipped `roads.glb`. `roadgraph.json` is used
-only to say *where* to look — which edges are off-grade, how wide they are drawn
-and how many lanes they carry — and never for a height.
+The carriageway is read from the shipped `roads.glb`. `roadgraph.json` supplies
+plan positions — which edges are off-grade and where their centrelines run — and
+one height, its own `y`, used *only* to decide which of several overlapping
+drawn surfaces belongs to an edge. It never scores one. `elevated_samples`
+argues that in full, because it is the seam where a defect could hide.
 
 Run:  .venv/bin/python tools/deck_error.py --city hong_kong
 """
@@ -38,6 +52,7 @@ import sys
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -70,15 +85,16 @@ class Faces:
     """
 
     corners: np.ndarray  # (n, 3, 3): triangle, corner, xyz
-    cells: dict[tuple[int, int], list[int]]
+    cells: dict[tuple[int, int], np.ndarray]
 
     @classmethod
     def of(cls, corners: np.ndarray, *, signed: bool) -> Faces:
         """Index the near-horizontal faces among `corners`.
 
         `signed` keeps only faces wound upward, which separates a deck's top
-        from its underside. Off for the road mesh, which is a single surface
-        with no underside to confuse it.
+        from its underside. Off for the road mesh, which has no underside — it
+        does carry junction caps at node height, and those are the likeliest
+        reason a handful of stations fail attribution near a junction.
         """
         edge_a, edge_b = corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0]
         normal = np.cross(edge_a, edge_b)
@@ -87,15 +103,25 @@ class Faces:
         upright = np.divide(rise, length, out=np.zeros(len(normal)), where=length > 0)
         corners = corners[upright > _UPWARD]
 
-        cells: dict[tuple[int, int], list[int]] = {}
+        binned: dict[tuple[int, int], list[int]] = {}
         plan = corners[:, :, [0, 2]]
         low = np.floor(plan.min(axis=1) / _CELL_M).astype(np.int64)
         high = np.floor(plan.max(axis=1) / _CELL_M).astype(np.int64)
         for index in range(len(corners)):
             for column in range(low[index, 0], high[index, 0] + 1):
                 for row in range(low[index, 1], high[index, 1] + 1):
-                    cells.setdefault((column, row), []).append(index)
-        return cls(corners=corners, cells=cells)
+                    binned.setdefault((column, row), []).append(index)
+
+        # Frozen to arrays once, because `corners[list]` re-converts the list on
+        # every one of the ~6,800 queries. A dict of short lists is the trade
+        # `terrain.py` explicitly refused for its own index; it is kept here
+        # because this grid is unbounded — the tool has no `region_high` to size
+        # a dense one against — and 9 MB on a hand-run tool is not worth the
+        # origin-and-extent bookkeeping a flat index would need.
+        return cls(
+            corners=corners,
+            cells={key: np.asarray(value, dtype=np.int64) for key, value in binned.items()},
+        )
 
     @classmethod
     def from_tiles(cls, paths: list[Path], colour: tuple[int, int, int], jitter: float) -> Faces:
@@ -124,7 +150,7 @@ class Faces:
     def heights_at(self, x: float, z: float) -> np.ndarray:
         """Every upward-facing structure height at this plan position."""
         candidates = self.cells.get((int(np.floor(x / _CELL_M)), int(np.floor(z / _CELL_M))))
-        if not candidates:
+        if candidates is None:
             return np.zeros(0)
 
         corners = self.corners[candidates]
@@ -136,12 +162,13 @@ class Faces:
         beta = px * cz - pz * cx
         gamma = pz * bx - px * bz
         sign = np.where(twice_area < 0.0, -1.0, 1.0)
+        magnitude = np.abs(twice_area)
 
         inside = (
             (beta * sign >= 0.0)
             & (gamma * sign >= 0.0)
-            & ((beta + gamma) * sign <= np.abs(twice_area))
-            & (np.abs(twice_area) > 1e-12)
+            & ((beta + gamma) * sign <= magnitude)
+            & (magnitude > 1e-12)
         )
         if not inside.any():
             return np.zeros(0)
@@ -167,12 +194,25 @@ def _wears(colours: np.ndarray, base: tuple[int, int, int], jitter: float) -> np
     channel admits `f` in `[(c - 0.5) / base, (c + 0.5) / base]`, so the class is
     whatever has a non-empty intersection inside the configured jitter. Exact
     rather than an angular tolerance, and it needs no threshold of its own.
+
+    The interval form is not merely tidier than an angle — it is what makes the
+    test work here. Measured on the shipped tiles, the nearest *rejected* colour
+    sits **0.28 degrees** off the structure's own ray and is refused only because
+    it is 39% too bright. An angular tolerance loose enough to absorb rounding
+    would have taken it.
     """
     channels = np.asarray(base, dtype=np.float64)
-    if (channels <= 0.0).any() or (channels >= 255.0).any():
-        # `colour_for` clamps to 0-255, which would truncate the ray and make
-        # the intervals below lie. Grey decks are nowhere near either end.
-        raise SystemExit(f"structure colour {base} is at a channel limit, where jitter clamps")
+    # `colour_for` clamps each channel to 0-255, which truncates the ray and
+    # would make the intervals below lie. The ceiling is not 255: clamping bites
+    # as soon as the *brightest* jittered value would exceed it, which at a
+    # jitter of 0.06 is any channel over about 240. Grey decks are nowhere near
+    # either end, so this has never fired — it is here because a city that
+    # coloured its structure near-white would otherwise be silently over-matched.
+    if (channels <= 0.0).any() or (channels * (1.0 + jitter) > 255.0).any():
+        raise SystemExit(
+            f"structure colour {base} jitters past a channel limit, where `colour_for` clamps "
+            "and this test stops being exact"
+        )
 
     values = colours.astype(np.float64)
     low = np.maximum(((values - 0.5) / channels).max(axis=1), 1.0 - jitter)
@@ -180,7 +220,27 @@ def _wears(colours: np.ndarray, base: tuple[int, int, int], jitter: float) -> np
     return low <= high
 
 
-def elevated_samples(generated: Path, spacing_m: float, near_m: float) -> tuple[np.ndarray, int]:
+@dataclass(frozen=True)
+class _Samples:
+    """Stations on the drawn carriageway, and everything that did not become one.
+
+    ⚠️ `asked` and `unmatched` exist because a station that fails attribution
+    used to leave no trace. Injecting a 30 m error into a third of the elevated
+    carriageway then produced |error| p90 0.09 m, coverage 97.6% and a pass: the
+    broken stations simply stopped being stations, and every ratio was computed
+    over the survivors. A measurement tool must count what it *failed* to
+    measure, or its denominator is chosen by the defect.
+    """
+
+    points: np.ndarray
+    edges: int
+    asked: int
+    unmatched: list[int]
+
+
+def elevated_samples(
+    generated: Path, manifest: dict[str, Any], spacing_m: float, near_m: float
+) -> _Samples:
     """Where the shipped road mesh draws the *middle* of each elevated carriageway.
 
     Heights come from `roads.glb` — the mesh that ships and collides. The graph
@@ -209,36 +269,86 @@ def elevated_samples(generated: Path, spacing_m: float, near_m: float) -> tuple[
     on, so every sample would score against whatever passes overhead. `Q21` asks
     whether it should be drawn at all; it is not what `Q20` measures.
     """
-    graph = json.loads((generated / "roadgraph.json").read_text())
-    manifest = json.loads((generated / "city.json").read_text())
+    # Both filenames come from the manifest, which is the thing that knows them.
+    graph = json.loads((generated / manifest["road_graph"]).read_text())
 
     edges = [edge for edge in graph["edges"] if edge["elevation_level"] > 0]
     if not edges:
         raise SystemExit("the graph has no elevated edges to measure")
 
-    mesh = read_glb(generated / manifest["road_surface"])[0]
+    drawing = read_glb(generated / manifest["road_surface"])
+    if len(drawing) != 1:
+        # One primitive is what `surface.py` writes, and the whole carriageway
+        # has to be in it. Taking `[0]` of several would measure part of the
+        # road and report the coverage of all of it.
+        raise SystemExit(
+            f"{manifest['road_surface']} holds {len(drawing)} meshes; this expects the one "
+            "carriageway surface"
+        )
+    mesh = drawing[0]
     drawn = Faces.of(mesh.positions[mesh.triangles].astype(np.float64), signed=False)
 
     samples: list[tuple[float, float, float]] = []
+    asked = 0
+    unmatched: list[int] = []
     for edge in edges:
         polyline = np.asarray(edge["polyline"], dtype=np.float64)
+        matched = 0
         for x, expected, z in _stations(polyline, spacing_m):
-            found = drawn.heights_at(x, z)
-            near = found[np.abs(found - expected) <= near_m]
-            if len(near):
-                samples.append((x, float(near[np.abs(near - expected).argmin()]), z))
+            asked += 1
+            drawn_here = _nearest(drawn.heights_at(x, z), expected, near_m)
+            if drawn_here is not None:
+                matched += 1
+                samples.append((x, drawn_here, z))
+        if not matched:
+            unmatched.append(int(edge["id"]))
 
-    return np.asarray(samples, dtype=np.float64), len(edges)
+    return _Samples(
+        points=np.asarray(samples, dtype=np.float64),
+        edges=len(edges),
+        asked=asked,
+        unmatched=unmatched,
+    )
+
+
+def _nearest(candidates: np.ndarray, to: float, within: float | None = None) -> float | None:
+    """The candidate height closest to `to`, or None if none is close enough.
+
+    The tool's one selection rule, in the two places it is made: which drawn
+    surface belongs to this edge, and which deck face this sample sits on. Both
+    are "the nearest height to a reference", and writing it twice would let the
+    two drift into different rules for the same decision.
+    """
+    if not len(candidates):
+        return None
+    if within is not None:
+        candidates = candidates[np.abs(candidates - to) <= within]
+        if not len(candidates):
+            return None
+    return float(candidates[np.abs(candidates - to).argmin()])
 
 
 def _stations(polyline: np.ndarray, spacing_m: float) -> Iterator[tuple[float, float, float]]:
-    """Points down a polyline at most `spacing_m` apart, with its own height."""
+    """Points down a polyline at most `spacing_m` apart, with its own height.
+
+    Deliberately a copy of `roads.plan_steps` plus the body of `roads.resample`
+    — see the module docstring for why it is not imported. Interpolating the
+    height as well is the only difference, and `resample` would do that too if
+    handed three columns.
+    """
+    if spacing_m <= 0.0:
+        # Otherwise `ceil(step / 0)` is infinite and `int()` of that raises
+        # `OverflowError` — `roads.resample` guards the same way.
+        raise SystemExit(f"station spacing must be positive, got {spacing_m}")
+
     steps = np.hypot(*np.diff(polyline[:, [0, 2]], axis=0).T)
     for (start, end), step in zip(itertools.pairwise(polyline), steps, strict=True):
-        for piece in range(max(1, int(np.ceil(step / spacing_m)))):
-            point = start + (piece / max(1, int(np.ceil(step / spacing_m)))) * (end - start)
+        pieces = max(1, int(np.ceil(step / spacing_m)))
+        for piece in range(pieces):
+            point = start + (piece / pieces) * (end - start)
             yield float(point[0]), float(point[1]), float(point[2])
-    yield float(polyline[-1][0]), float(polyline[-1][1]), float(polyline[-1][2])
+    last = polyline[-1]
+    yield float(last[0]), float(last[1]), float(last[2])
 
 
 def measure(samples: np.ndarray, deck: Faces) -> tuple[np.ndarray, int]:
@@ -254,11 +364,11 @@ def measure(samples: np.ndarray, deck: Faces) -> tuple[np.ndarray, int]:
     errors: list[float] = []
     uncovered = 0
     for x, y, z in samples:
-        found = deck.heights_at(float(x), float(z))
-        if not len(found):
+        below = _nearest(deck.heights_at(float(x), float(z)), y)
+        if below is None:
             uncovered += 1
             continue
-        errors.append(float(y - found[np.abs(found - y).argmin()]))
+        errors.append(float(y - below))
     return np.asarray(errors), uncovered
 
 
@@ -283,7 +393,13 @@ def main(argv: list[str] | None = None) -> int:
         "--attribute-within-m",
         type=float,
         default=1.0,
-        help="how far a drawn vertex may sit from the edge it is attributed to, vertically",
+        help="how far the drawn road may sit from the edge it is attributed to, vertically",
+    )
+    parser.add_argument(
+        "--accept-measured",
+        type=float,
+        default=0.90,
+        help="fail if less than this share of the asked-for stations could be measured",
     )
     parser.add_argument(
         "--accept-below-m",
@@ -316,20 +432,47 @@ def main(argv: list[str] | None = None) -> int:
             "be told apart from buildings in a merged tile"
         )
 
-    manifest = json.loads((args.generated / "city.json").read_text())
+    try:
+        manifest = json.loads((args.generated / "city.json").read_text())
+    except FileNotFoundError:
+        raise SystemExit(
+            f"no city.json under {args.generated}. Build the region first:\n"
+            f"  cd etl && python -m pipeline --city {args.city} --region <region>"
+        ) from None
+
+    tiers = min(len(tile["lods"]) for tile in manifest["tiles"])
+    if not 0 <= args.lod < tiers:
+        raise SystemExit(f"--lod {args.lod}: this bundle ships tiers 0 to {tiers - 1}")
+
     tiles = [args.generated / tile["lods"][args.lod] for tile in manifest["tiles"]]
-    log.info("%s / %s, LOD %d", manifest["city_id"], manifest["region_id"], args.lod)
+    # The build stamp, so a run pasted into a report says which build it graded.
+    log.info(
+        "%s / %s, LOD %d, built %s",
+        manifest["city_id"],
+        manifest["region_id"],
+        args.lod,
+        manifest.get("generated_utc", "unknown"),
+    )
 
     deck = Faces.from_tiles(tiles, colour, city.buildings.colour_jitter)
-    samples, edges = elevated_samples(args.generated, args.spacing_m, args.attribute_within_m)
-    errors, uncovered = measure(samples, deck)
+    taken = elevated_samples(args.generated, manifest, args.spacing_m, args.attribute_within_m)
+    errors, uncovered = measure(taken.points, deck)
     log.info(
-        "  %d upward faces of '%s' across %d tiles; %d carriageway points on %d elevated edges",
+        "  %d upward faces of '%s' across %d tiles; %d elevated edges",
         len(deck.corners),
         structure_class,
         len(tiles),
-        len(samples),
-        edges,
+        taken.edges,
+    )
+    # Two ways a station leaves the measurement, and both are reported against
+    # the same denominator — everything the centrelines asked for. A station is
+    # lost here when the drawn road has nothing within `--attribute-within-m` of
+    # it, and lost below when no deck lies under it.
+    log.info(
+        "  %d stations asked: %d unmatched by the drawn road, %d with no deck under them",
+        taken.asked,
+        taken.asked - len(taken.points),
+        uncovered,
     )
     if not len(errors):
         raise SystemExit("no carriageway point had structure under it — nothing to measure")
@@ -344,14 +487,22 @@ def main(argv: list[str] | None = None) -> int:
     log.info("    |err|p90 %.3f   (accepts %.2f)", p90, args.accept_p90_m)
     log.info("    deepest below the deck  %.2f   (accepts %.2f)", deepest, args.accept_below_m)
     log.info("    furthest above the deck %.2f", float(errors.max()))
-    # Informational: the figure `Q20` opened on, so a reader can line this up
-    # against the recorded 66% without re-deriving it.
+    # Informational, not gates. Both are the figures `Q20` opened on — it
+    # recorded the ribbon below the deck in 66% of samples — so a reader can
+    # line this run up against that without re-deriving it.
+    #
+    # ⚠️ Reported at 0.10 m rather than "below at all", which reads 84.9% on a
+    # passing run and means nothing: the tiles' own decimation puts the median
+    # 0.04 m under the deck, so most of a correct carriageway is *slightly*
+    # below it. `Q20`'s complaint was a road inside a flyover, not under it by a
+    # tile's rounding.
     log.info("    within +-0.10 m: %.1f%%", 100.0 * float((absolute <= 0.10).mean()))
+    log.info("    below the deck by over 0.10 m: %.1f%%", 100.0 * float((errors < -0.10).mean()))
+    measured = len(errors) / taken.asked
     log.info(
-        "    covered  %.1f%% (%d of %d stations had no deck under them)",
-        100.0 * len(errors) / len(samples),
-        uncovered,
-        len(samples),
+        "    measured %.1f%% of what was asked   (accepts %.2f)",
+        100.0 * measured,
+        args.accept_measured,
     )
 
     problems = []
@@ -359,6 +510,17 @@ def main(argv: list[str] | None = None) -> int:
         problems.append(f"|error| p90 is {p90:.2f} m")
     if deepest > args.accept_below_m:
         problems.append(f"the carriageway sinks {deepest:.2f} m into the structure")
+    # ⚠️ Gating the denominator, not just the ratios above it. Every ratio here
+    # is computed over the stations that survived, so a defect that stops a
+    # station being measurable improves every other number on this page. An edge
+    # contributing nothing is the sharpest form of that and fails outright.
+    if measured < args.accept_measured:
+        problems.append(f"only {100.0 * measured:.1f}% of the carriageway could be measured")
+    if taken.unmatched:
+        problems.append(
+            f"{len(taken.unmatched)} elevated edges matched no drawn road at all: "
+            f"{taken.unmatched[:5]}"
+        )
     if problems:
         log.error("")
         for problem in problems:

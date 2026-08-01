@@ -10,16 +10,15 @@ triangles of 434,149 and read as a working filter.
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import numpy as np
 import pytest
+from deck_error import Faces, _nearest, _stations, _wears, measure
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "tools"))
-
-from deck_error import Faces, _stations, _wears
-
+# `INFRASTRUCTURE`'s `class_colours` entry and `colour_jitter` from
+# `config/cities/hong_kong.yaml`. Copied rather than read through the `hong_kong`
+# fixture on purpose: these test the *arithmetic* of the classifier, and they
+# should not start failing because someone repainted a deck. `test_config.py`
+# is where the shipped values are held to account.
 GREY = (157, 154, 147)
 JITTER = 0.06
 
@@ -48,11 +47,17 @@ class TestClassColour:
         bands = np.array([[194, 177, 149], [200, 189, 170], [204, 186, 157]])
         assert not _wears(bands, GREY, JITTER).any()
 
-    def test_a_base_at_a_channel_limit_is_refused_rather_than_guessed(self) -> None:
+    @pytest.mark.parametrize("base", [(255, 250, 240), (245, 240, 238)])
+    def test_a_base_that_jitters_past_a_channel_is_refused(self, base) -> None:
         """`colour_for` clamps to 0-255, which truncates the ray and would make
-        the interval test quietly wrong instead of loudly unavailable."""
+        the interval test quietly wrong instead of loudly unavailable.
+
+        `(245, 240, 238)` is the case that matters: no channel is at 255, so a
+        guard testing the base alone lets it through — and then 13.5% of its
+        jitter range rounds to colours this function rejects. Clamping bites at
+        `base * (1 + jitter)`, not at 255."""
         with pytest.raises(SystemExit, match="channel limit"):
-            _wears(np.array([[255, 255, 255]]), (255, 250, 240), JITTER)
+            _wears(np.array([[250, 250, 250]]), base, JITTER)
 
 
 class TestFaces:
@@ -107,3 +112,50 @@ class TestStations:
     def test_a_segment_shorter_than_the_spacing_is_left_whole(self) -> None:
         line = np.array([[0.0, 1.0, 0.0], [3.0, 1.0, 0.0]])
         assert len(list(_stations(line, 10.0))) == 2
+
+
+class TestNearest:
+    def test_the_window_refuses_rather_than_falling_back_to_a_far_candidate(self) -> None:
+        """The attribution rule. Returning the 5.0 here would score a flyover
+        against the street beneath it and call the difference an error."""
+        assert _nearest(np.array([5.0, 12.0]), 8.5, 1.0) is None
+        assert _nearest(np.array([5.0, 12.0]), 12.1, 1.0) == pytest.approx(12.0)
+
+    def test_without_a_window_the_nearest_always_wins(self) -> None:
+        assert _nearest(np.array([5.0, 12.0]), 8.5) == pytest.approx(5.0)
+
+    def test_nothing_to_choose_from_is_none_not_zero(self) -> None:
+        assert _nearest(np.zeros(0), 3.0) is None
+
+
+class TestMeasure:
+    """The sign convention, which nothing else pins.
+
+    If `drawn - deck` ever flipped, `deepest below the deck` would measure the
+    wrong tail, the gate would never fire, and every bundle would pass forever.
+    """
+
+    def _deck(self, y: float) -> Faces:
+        a, b, c, d = (0.0, y, 0.0), (20.0, y, 0.0), (0.0, y, 20.0), (20.0, y, 20.0)
+        return Faces.of(np.array([[a, c, b], [b, c, d]], dtype=np.float64), signed=True)
+
+    def test_a_carriageway_above_its_deck_reads_positive(self) -> None:
+        errors, uncovered = measure(np.array([[10.0, 6.5, 10.0]]), self._deck(6.0))
+        assert uncovered == 0
+        np.testing.assert_allclose(errors, [0.5])
+
+    def test_a_carriageway_sunk_into_its_deck_reads_negative(self) -> None:
+        errors, _ = measure(np.array([[10.0, 5.6, 10.0]]), self._deck(6.0))
+        np.testing.assert_allclose(errors, [-0.4])
+
+    def test_a_station_with_no_deck_is_counted_rather_than_scored(self) -> None:
+        errors, uncovered = measure(np.array([[900.0, 6.0, 900.0]]), self._deck(6.0))
+        assert uncovered == 1
+        assert not len(errors)
+
+    def test_the_nearest_of_two_stacked_decks_wins(self) -> None:
+        stacked = Faces.of(
+            np.concatenate([self._deck(2.0).corners, self._deck(10.0).corners]), signed=True
+        )
+        errors, _ = measure(np.array([[10.0, 9.8, 10.0]]), stacked)
+        np.testing.assert_allclose(errors, [-0.2])
