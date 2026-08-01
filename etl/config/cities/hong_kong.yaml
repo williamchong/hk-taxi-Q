@@ -342,7 +342,13 @@ roads:
     # already clears the p90 criterion — so this is justified by the *maximum*,
     # not the p90: one 71.5 m gap on FLEMING ROAD spans structure climbing
     # 4.25 to 5.05 m, which is the defect the P2-5 drive found. Resampling first
-    # takes the worst error from 4.84 m to 0.57 m, for 430 to 667 vertices.
+    # takes the worst error from 4.84 m to under a metre.
+    #
+    # It costs the region's level-1 edges 430 vertices to 825. That is dearer
+    # than the 667 the probe predicted, because the shipped `resample` inserts
+    # stations *between* the source's own vertices rather than replacing them
+    # with an evenly spaced set — the probe's version was cheaper and quietly
+    # cut every corner it landed on.
     resample_m: 10.0
 
     # Two hits further apart than this are different structures rather than the

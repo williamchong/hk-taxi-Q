@@ -15,8 +15,15 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from pipeline.config import DeckSampling
+from pipeline.gltf import MeshData
 from pipeline.roads import (
     Edge,
+    _Counts,
+    _Deck,
+    _deck_heights,
+    _lifted_heights,
+    _mixed_level_nodes,
     _node_heights,
     build_region,
     clean_text,
@@ -25,6 +32,7 @@ from pipeline.roads import (
     resample,
     simplify,
 )
+from pipeline.terrain import HeightField
 from tests.helpers import NULL_SENTINELS, line_wkb, write_layer
 
 
@@ -587,3 +595,219 @@ class TestNodeHeights:
         zero — an elevated node with no at-grade edge belongs on the deck."""
         edges = [self._edge(0, 1, (0, 1), 10.5), self._edge(1, 1, (1, 2), 10.6)]
         assert _node_heights(3, edges)[1] == pytest.approx(10.6)
+
+
+# --------------------------------------------------------------------------
+# Deck sampling
+# --------------------------------------------------------------------------
+
+THRESHOLDS = DeckSampling(resample_m=10.0, slab_gap_m=3.0, max_below_terrain_m=1.0, at_grade_m=0.30)
+
+
+def _mesh(triangles: list[list[tuple[float, float, float]]]) -> MeshData:
+    positions = np.array([c for triangle in triangles for c in triangle], dtype=np.float64)
+    return MeshData(
+        name="fixture",
+        positions=positions,
+        normals=np.tile(np.array([0.0, 1.0, 0.0], np.float32), (len(positions), 1)),
+        triangles=np.arange(len(positions), dtype=np.uint32).reshape(-1, 3),
+    )
+
+
+def _sheet(x0: float, x1: float, y0: float, y1: float) -> list[MeshData]:
+    """A slab spanning `x0`-`x1` across the corridor, climbing `y0` to `y1`.
+
+    Returned as two faces, because a real deck is a closed volume and answering
+    twice is the whole reason `slab_gap_m` exists — a single-surface fixture
+    would pass while testing none of the clustering.
+    """
+    top = _mesh(
+        [
+            [(x0, y0, -20.0), (x1, y1, -20.0), (x0, y0, 20.0)],
+            [(x1, y1, -20.0), (x1, y1, 20.0), (x0, y0, 20.0)],
+        ]
+    )
+    return [top, top.translated((0.0, -1.5, 0.0))]
+
+
+def _deck(*meshes: MeshData) -> _Deck:
+    return _Deck(field=HeightField.from_meshes(list(meshes)), thresholds=THRESHOLDS)
+
+
+def _straight(x_end: float, step: float = 10.0) -> np.ndarray:
+    stations = np.arange(0.0, x_end + step / 2, step)
+    return np.column_stack([stations, np.zeros(len(stations))])
+
+
+class TestDeckHeights:
+    """The off-grade sampler, which carries the task's central decision.
+
+    Callable in isolation only since it stopped writing into a `RoadReport`,
+    which is why it had no direct test until it had one.
+    """
+
+    def test_the_deck_wins_over_the_level_offset(self) -> None:
+        plan = _straight(40.0)
+        terrain = np.zeros(len(plan))
+        deck = _deck(*_sheet(-5.0, 45.0, 5.0, 5.0))
+
+        y = _deck_heights(deck, plan, terrain, terrain + 6.0, _Counts())
+        np.testing.assert_allclose(y, 5.0)
+
+    def test_a_hole_in_the_structure_is_bridged_from_either_side(self) -> None:
+        """The defect that made the first run look right and measure wrong.
+        `INFRASTRUCTURE` stops being modelled where a ramp reaches grade, so at
+        9 of `Q13`'s nodes the query returns nothing *at the node*. Dropping
+        those stations to the flat offset rebuilds the cliff being removed."""
+        plan = _straight(40.0)
+        terrain = np.zeros(len(plan))
+        # Structure over 0-10 and 30-40; nothing at all across the middle.
+        deck = _deck(*_sheet(-1.0, 10.0, 4.0, 4.0), *_sheet(30.0, 41.0, 4.0, 4.0))
+
+        counts = _Counts()
+        y = _deck_heights(deck, plan, terrain, terrain + 6.0, counts)
+
+        assert counts.sampled == 4, "the four covered stations"
+        np.testing.assert_allclose(y, 4.0), "and the gap holds the deck, not +6"
+
+    def test_an_edge_the_structure_never_covers_keeps_the_flat_offset(self) -> None:
+        """`ISLAND EASTERN CORRIDOR`'s stub — the case the offset is right for,
+        and the reason the fallback is not simply deleted."""
+        plan = _straight(40.0)
+        terrain = np.zeros(len(plan))
+        deck = _deck(*_sheet(500.0, 520.0, 4.0, 4.0))
+
+        counts = _Counts()
+        y = _deck_heights(deck, plan, terrain, terrain + 6.0, counts)
+
+        assert counts.sampled == 0
+        np.testing.assert_allclose(y, 6.0)
+
+    def test_structure_under_the_terrain_is_refused(self) -> None:
+        """A deck cannot sit below the ground under it. `e425` samples 8.2 m
+        under; the next lowest in the region is 0.54 m under, so the threshold
+        sits in a 7.6 m gap rather than on a guess."""
+        plan = _straight(20.0)
+        terrain = np.zeros(len(plan))
+        deck = _deck(*_sheet(-5.0, 25.0, -8.0, -8.0))
+
+        counts = _Counts()
+        y = _deck_heights(deck, plan, terrain, terrain + 6.0, counts)
+
+        assert counts.gated == len(plan)
+        assert counts.sampled == 0
+        np.testing.assert_allclose(y, 6.0)
+
+    def test_a_sample_grazing_grade_from_below_is_kept(self) -> None:
+        """The other side of that threshold: real ramp ends sample fractionally
+        under the terrain, and 0.54 m of that is genuine rather than an error."""
+        plan = _straight(20.0)
+        terrain = np.zeros(len(plan))
+        deck = _deck(*_sheet(-5.0, 25.0, -0.54, -0.54))
+
+        counts = _Counts()
+        _deck_heights(deck, plan, terrain, terrain + 6.0, counts)
+        assert counts.gated == 0
+
+
+class TestLiftedHeights:
+    """The level-0 half, which nobody had seen until the nodes were classified."""
+
+    def _lift(self, deck: _Deck, plan: np.ndarray, ends: tuple[bool, bool]) -> tuple:
+        terrain = np.zeros(len(plan))
+        counts = _Counts()
+        return _lifted_heights(deck, plan, terrain, terrain.copy(), ends, counts), counts
+
+    def test_an_edge_leaving_a_mixed_node_climbs_onto_its_ramp(self) -> None:
+        plan = _straight(40.0)
+        # A ramp descending 3 m over the first 30 m, then flat at grade.
+        deck = _deck(*_sheet(0.0, 30.0, 3.0, 0.0), *_sheet(30.0, 41.0, 0.0, 0.0))
+
+        y, counts = self._lift(deck, plan, (True, False))
+
+        assert counts.ends_lifted == 1
+        assert y[0] == pytest.approx(3.0)
+        assert y[-1] == pytest.approx(0.0)
+        assert (np.diff(y) <= 1e-9).all(), "the lift descends to grade and stays there"
+
+    def test_the_walk_stops_where_the_structure_reaches_the_ground(self) -> None:
+        """`at_grade_m` is a tolerance, not a boundary — the residual step it
+        leaves behind is what bounds the value."""
+        plan = _straight(40.0)
+        deck = _deck(*_sheet(0.0, 10.0, 2.0, 0.0), *_sheet(10.0, 41.0, 0.0, 0.0))
+
+        y, _ = self._lift(deck, plan, (True, False))
+        assert y[0] == pytest.approx(2.0)
+        np.testing.assert_allclose(y[1:], 0.0)
+
+    def test_an_edge_meeting_no_mixed_node_is_left_alone(self) -> None:
+        """The rule is topological. Structure overhead is not this edge's ramp,
+        and a height threshold was measured and rejected for saying otherwise."""
+        plan = _straight(40.0)
+        deck = _deck(*_sheet(-1.0, 41.0, 3.0, 3.0))
+
+        y, counts = self._lift(deck, plan, (False, False))
+
+        assert counts.ends_lifted == 0
+        np.testing.assert_allclose(y, 0.0)
+
+    def test_an_end_already_at_grade_is_not_counted_as_lifted(self) -> None:
+        plan = _straight(40.0)
+        deck = _deck(*_sheet(-1.0, 41.0, 0.1, 0.1))
+
+        _, counts = self._lift(deck, plan, (True, True))
+        assert counts.ends_lifted == 0
+
+    def test_an_edge_mixed_at_both_ends_is_walked_from_both(self) -> None:
+        plan = _straight(40.0)
+        # High at both ends, at grade across the middle. The joins sit between
+        # stations rather than on one: where two slabs meet, their four faces
+        # cluster into a single slab and the fixture would test nothing.
+        deck = _deck(
+            *_sheet(0.0, 5.0, 2.0, 2.0),
+            *_sheet(5.0, 35.0, 0.0, 0.0),
+            *_sheet(35.0, 41.0, 2.0, 2.0),
+        )
+
+        y, counts = self._lift(deck, plan, (True, True))
+
+        assert counts.ends_lifted == 2
+        assert y[0] == pytest.approx(2.0)
+        assert y[-1] == pytest.approx(2.0)
+
+
+class TestMixedLevelNodes:
+    def test_a_node_two_levels_reach_is_found(self) -> None:
+        edges = [
+            Edge(
+                id=0,
+                source_id=0,
+                from_node=0,
+                to_node=1,
+                polyline=[],
+                direction="forward",
+                lanes=2,
+                width_m=6.0,
+                speed_limit_kph=50,
+                bus_lane=False,
+                tram_tracks=False,
+                elevation_level=1,
+                road_name={"en": None, "zh": None},
+            ),
+            Edge(
+                id=1,
+                source_id=1,
+                from_node=1,
+                to_node=2,
+                polyline=[],
+                direction="forward",
+                lanes=2,
+                width_m=6.0,
+                speed_limit_kph=50,
+                bus_lane=False,
+                tram_tracks=False,
+                elevation_level=0,
+                road_name={"en": None, "zh": None},
+            ),
+        ]
+        assert _mixed_level_nodes(edges) == {1}

@@ -474,7 +474,7 @@ def build_region(
     }
     ends = _ends_by_node_and_level(graph["edges"], edges)
     _assign_trims(ends, edges, style, report)
-    _count_level_changes(ends, edges, report)
+    _measure_level_steps(ends, edges, report)
     for edge in edges:
         _shape(edge)
 
@@ -571,33 +571,29 @@ def _assign_trims(
                 report.clamped_trims += 1
 
 
-def _count_level_changes(
+def _measure_level_steps(
     ends: dict[tuple[int, int], list[_End]], edges: list[_Edge], report: SurfaceReport
 ) -> None:
     """Measure the vertical steps the graph leaves at grade transitions (`Q13`).
 
-    Read off the level groups rather than off the heights, so this counts the
+    Read off the level groups rather than off the heights, so this finds the
     nodes where the *network* changes level. Two edges meeting at one level
     differ in height only by the millimetre their coordinates were rounded to.
+
+    Assigns rather than accumulates, unlike its sibling counters — there is one
+    call site and a distribution is not a running total.
     """
-    by_node: dict[int, list[float]] = defaultdict(list)
-    for (node, _), group in ends.items():
+    heights: dict[int, list[float]] = defaultdict(list)
+    levels: dict[int, set[int]] = defaultdict(set)
+    for (node, level), group in ends.items():
+        levels[node].add(level)
         for end in group:
             points = edges[end.edge].points
-            by_node[node].append(float(points[0 if end.at_start else -1][1]))
+            heights[node].append(float(points[0 if end.at_start else -1][1]))
 
     report.level_steps_m = sorted(
-        max(by_node[node]) - min(by_node[node])
-        for node, levels in _levels_by_node(ends).items()
-        if len(levels) > 1
+        max(heights[node]) - min(heights[node]) for node, found in levels.items() if len(found) > 1
     )
-
-
-def _levels_by_node(ends: dict[tuple[int, int], list[_End]]) -> dict[int, set[int]]:
-    levels: dict[int, set[int]] = defaultdict(set)
-    for node, level in ends:
-        levels[node].add(level)
-    return levels
 
 
 def _draw_edge(builder: _Builder, edge: _Edge, style: RoadSurface, lane_width_m: float) -> bool:
@@ -758,8 +754,12 @@ def main(argv: list[str] | None = None) -> int:
     if report.level_changes:
         steps = report.level_steps_m
         log.warning(
-            "  %d nodes step between elevation levels: median %.2f m, up to %.1f m — see Q13",
+            # Upper median on an even count, which needs no averaging and cannot
+            # report a step no node actually has.
+            "  %d nodes step between elevation levels: %d inside 0.5 m, median %.2f m, "
+            "up to %.1f m — see Q13",
             report.level_changes,
+            sum(1 for step in steps if step <= 0.5),
             steps[len(steps) // 2],
             report.max_level_step_m,
         )
