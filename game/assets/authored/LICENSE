@@ -1,0 +1,21 @@
+Hand-authored assets in this directory are licensed under the
+Creative Commons Attribution-ShareAlike 4.0 International licence.
+
+    SPDX-License-Identifier: CC-BY-SA-4.0
+
+    Deed:      https://creativecommons.org/licenses/by-sa/4.0/
+    Legalcode: https://creativecommons.org/licenses/by-sa/4.0/legalcode
+
+This directory holds ORIGINAL work — hero building models, vehicles, UI and
+shaders. It does NOT hold anything derived from Hong Kong government open data.
+Generated assets live in game/assets/generated/, are gitignored, and are governed
+by the DATA.GOV.HK Terms and Conditions of Use instead. Do not mix the two.
+
+CC BY-SA 4.0 is one-way compatible with GPL-3.0-or-later, which is what lets
+these assets combine into the GPLv3 game without a licence clash. The rest of the
+repository is GPL-3.0-or-later; see ../../../LICENSE.
+
+A licence is not a depiction right: these models depict real, identifiable Hong
+Kong landmarks, and CC BY-SA governs only our copyright in the model.
+
+See LICENSING.md at the repository root for the full policy and its reasoning.

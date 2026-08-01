@@ -114,6 +114,35 @@ under, and ~0.2 m is a guess until it is driven on a cross-sloped street.
 
 ## Decision log
 
+### 2026-08-02 — Licensing: **GPLv3 out, MIT in, and the generated data is nobody's to relicense**
+
+User's call: **GPL-3.0-or-later** for code. **`LICENSING.md` is the standing policy** — the split, the
+quoted terms and the review items live there, not here. What belongs in the log is why the choice
+constrained two other things, and what re-reading the terms corrected.
+
+**The licence choice decided the contribution policy.** GPLv3 cannot ship through the App Store, so
+store builds need a separate proprietary grant — which works only while one party owns the whole
+copyright. A single GPL-only patch would close the iOS route permanently, as it did for VLC. Hence
+`CONTRIBUTING.md` taking contributions **inbound MIT**: it permits sublicensing, which is the exact
+property that keeps dual licensing available, at far less friction than a signed CLA. No exposure
+today, and **no retrofit** once a contributor declines — so the file lands before the repo is public.
+
+**Reading the terms verbatim corrected `DATA_SOURCES.md` in two places.** The grant is permissive —
+six acts, commercial use explicit, **no usage limit, quota or volume cap of any kind**, so player
+count consumes no government allowance (the game makes no runtime calls anyway). But the attribution
+requirement is **stronger than the credits draft had it**: it demands acknowledging *ownership of the
+intellectual property rights*, not merely naming a source, and **both portals** must be named. The
+draft is corrected and hard rule 6 now says so.
+
+⚠️ **One false alarm, recorded so it is not re-raised.** Neither portal's grant contains "adapt",
+"modify" or "derivative", which looked alarming for a pipeline that does nothing but derive geometry.
+It is expected: **"adaptation" is a term of art** attaching to literary, dramatic and musical works,
+and for artistic works the restricted act is *copying* — which expressly covers 2D↔3D transformation
+and is granted here as **reproduce**. The alarm came from grepping for a word rather than from the
+structure of the right, and the user's objection that an open-data portal forbidding derivation would
+be absurd was better grounded than the keyword search. Landmark depiction, not adaptation, is the top
+item for legal review.
+
 ### 2026-08-02 — `P2-7` closed: the off-grade carriageway lies on its structure
 
 > Collapsed from ten dated entries (steps 0–8a, the two review findings, and `Q23`) once the review
@@ -1504,7 +1533,8 @@ Godot refuses to export **any** arm64 target, including Apple Silicon macOS.
 | Carriageway occupied by solid geometry | Medium | `Q19`, 5.17% at bumper height, real since collision shipped. Wants a verify tool that fails the build |
 | Perf misses 60fps on device floor | Medium | Budget defined up front; untextured merged tiles are the main lever; `P2-6` is a dedicated pass — and it needs `P0-3b`'s hardware |
 | TAM too small to be commercial | Medium | City-agnostic ETL is the scaling answer — city packs, not one city. `Q8` strengthens this: if recognition is the product, a second city is a YAML file |
-| Landmark depiction IP | Low | Untextured massing; legal sight-check before launch (Phase 7) |
+| Landmark depiction IP | Low | Untextured massing; legal sight-check before launch (Phase 7). **Now the top item in that brief** — the government data terms were read verbatim on 2026-08-02 and are permissive, so depiction is the one question left with a plausible adverse answer. See `LICENSING.md` |
+| GPLv3 forecloses the App Store | **Medium** | **New 2026-08-02.** GPLv3 §6 conflicts with App Store terms, so store builds need a separate proprietary grant — available only while one party owns the whole copyright. Mitigated by `CONTRIBUTING.md` taking contributions **inbound MIT**. Zero exposure today (no outside contributors) and **no retrofit** once one declines, so the file must land before the repo goes public |
 | GDScript learning curve | Low | Small codebase; complexity lives in Python |
 
 **Retired:** *Road data lacks Z values* (`Q1` — no Z, but `ELEVATION` encodes the level; region

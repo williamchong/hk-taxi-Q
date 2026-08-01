@@ -5,25 +5,42 @@ turns out wrong, correct it here and note it in `PROGRESS.md`.
 
 ## Licence
 
-All datasets below are published via DATA.GOV.HK and the CSDI Portal, and are available for **free
-re-use for both commercial and non-commercial purposes**, subject to the DATA.GOV.HK Terms and
-Conditions of Use. What we must meet:
+All datasets below are published via DATA.GOV.HK and the CSDI Portal, and both portals grant the same
+six acts — *browse, download, distribute, reproduce, hyperlink to, print* — for **commercial and
+non-commercial use, free of charge**, with **no usage limit, quota or volume cap**. Read verbatim
+2026-08-02.
 
-- **Attribution** — identify the source and acknowledge the Government of the HKSAR and the relevant
-  departments, with proper credit to DATA.GOV.HK.
+What that costs us, and the part an ETL author needs:
+
+- **Attribution is a stronger obligation than naming a source.** The terms require acknowledging the
+  Government's and the relevant organisations' *ownership of the intellectual property rights*, and
+  each portal requires acknowledgement of itself — so both must be named.
+- **The indemnity is real and broad**, not boilerplate.
 - Data is supplied **"AS IS"** with no warranty as to accuracy, completeness or fitness.
-- The terms include an **indemnity** clause in favour of the Government.
+
+ℹ️ "Adapt", "modify" and "derivative" appear in neither portal's terms. That is expected rather than
+alarming — "adaptation" is a term of art that does not attach to artistic works, where the restricted
+act is *copying*, granted here as **reproduce**. Recorded so nobody re-derives an alarm from a
+keyword search.
+
+**`LICENSING.md` is canonical for all of this** — the operative clauses quoted in full, what may and
+may not be relicensed, and the open items for legal review. Do not restate the terms here; this
+section exists so an ETL change can be made without opening that file.
 
 ### Required credits-screen text (draft)
 
 > Contains geospatial data from the Lands Department and the Transport Department of the Government
 > of the Hong Kong Special Administrative Region, obtained via DATA.GOV.HK and the Common Spatial
-> Data Infrastructure Portal. Used under the DATA.GOV.HK Terms and Conditions of Use. The Government
-> of the HKSAR does not endorse this product.
+> Data Infrastructure (CSDI) Portal. **The Government of the HKSAR and the relevant organisations own
+> the intellectual property rights in that data.** Used under the DATA.GOV.HK and CSDI Portal Terms
+> and Conditions of Use. The Government of the HKSAR does not endorse this product.
+
+⚠️ The ownership sentence is not optional padding — see the attribution note above.
 
 > **Legal note:** because this ships as a commercial product, have a Hong Kong IP lawyer sight-check
-> landmark depiction and the credits text before launch. Government geodata licensed for commercial
-> use is about as clean as it gets, but this is cheap insurance.
+> landmark depiction and the credits text before launch. **Landmark depiction is the top item** in
+> that brief: reading the data terms verbatim cleared the licensing question, which leaves building
+> depiction as the one with a plausible adverse answer.
 
 ---
 

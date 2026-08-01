@@ -140,6 +140,8 @@ COOP/COEP headers that it does not send.
 | [`docs/ART_DESIGN.md`](docs/ART_DESIGN.md) | Visual direction, palette, shaders, LOD policy |
 | [`docs/PLAN.md`](docs/PLAN.md) | Phased task breakdown with acceptance criteria |
 | [`docs/PROGRESS.md`](docs/PROGRESS.md) | Live status, decision log, open questions, risks |
+| [`LICENSING.md`](LICENSING.md) | Which licence covers what, and why the generated data is not ours to relicense |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Checks to run, commit style, and the inbound-MIT licensing of contributions |
 
 ---
 
@@ -175,5 +177,20 @@ this product.
 
 ## Licence
 
-Not yet decided. Code and assets are separate questions — hand-authored art and the generated city
-data have different considerations from the pipeline source.
+Three kinds of thing, three answers, because they have three different owners:
+
+| What | Licence |
+|---|---|
+| **Code** — pipeline, engine scripts, tools, config, tuning | **GPL-3.0-or-later** ([`LICENSE`](LICENSE)) |
+| **Hand-authored assets** — hero buildings, vehicles, UI, shaders | **CC BY-SA 4.0** ([`game/assets/authored/LICENSE`](game/assets/authored/LICENSE)) |
+| **Generated city data** — tiles, road surface, road graph, fares | **Not relicensed by us.** Derived from HK government data under the DATA.GOV.HK Terms and Conditions of Use |
+
+**This repository redistributes no government data** — `etl/sources/`, `etl/out/` and
+`game/assets/generated/` are all gitignored. You regenerate them from the government endpoints
+yourself, in about 3 seconds, and accept those terms directly. An exported *game* does ship them, and
+that is what makes the credits screen mandatory rather than nice-to-have.
+
+⚠️ **GPLv3 conflicts with App Store distribution terms**, so store builds need a separate proprietary
+grant — which works only while a single copyright holder owns everything, and therefore needs a CLA
+before the first outside contribution. See [`LICENSING.md`](LICENSING.md), which is where
+the reasoning and the open items live.

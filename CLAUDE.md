@@ -33,9 +33,14 @@ them without explicit instruction from the user.
 5. **Respect the data contract** in `docs/ARCHITECTURE.md`. ETL output and game input are a
    versioned interface; change both sides together and bump `schema_version`. Bump where a consumer
    would be **wrong** to keep its old interpretation — not wherever bytes change.
-6. **Attribution is mandatory.** The credits screen must acknowledge the Government of the HKSAR,
-   the relevant departments, and DATA.GOV.HK. See `docs/DATA_SOURCES.md`.
-7. **Never use the phrase "Crazy Taxi"** in any user-facing text, store listing, marketing copy,
+6. **Attribution is mandatory, and it is stronger than naming a source.** The credits screen must
+   acknowledge the Government of the HKSAR, the relevant organisations, and **both** DATA.GOV.HK and
+   the CSDI Portal — including their **ownership of the intellectual property rights**. Draft text in
+   `docs/DATA_SOURCES.md`; the operative terms are quoted in `LICENSING.md`.
+7. **Three licences, three owners.** Code is GPL-3.0-or-later, hand-authored assets are CC BY-SA 4.0,
+   and the generated city data is **nobody's to relicense** — it stays under the government terms and
+   is never committed. Contributions come in under MIT so store builds stay possible. `LICENSING.md`.
+8. **Never use the phrase "Crazy Taxi"** in any user-facing text, store listing, marketing copy,
    or ASO keyword. It is a SEGA trademark. Use it only in internal docs as a genre shorthand.
 
 ## Commits — gitmoji
@@ -101,6 +106,8 @@ Common emoji for this project:
 | Doc | Contains |
 |---|---|
 | `docs/DATA_SOURCES.md` | Verified datasets, formats, licences, CRS, known issues. **Read before touching ETL.** |
+| `LICENSING.md` | Which licence covers what, and what must never be relicensed |
+| `CONTRIBUTING.md` | Checks to run, commit style, inbound-MIT licensing of contributions |
 | `docs/ARCHITECTURE.md` | Stack, repo layout, data contract, performance budget, runtime systems |
 | `docs/GAME_DESIGN.md` | Core loop, fares, scoring, controls, HK authenticity mechanics |
 | `docs/ART_DESIGN.md` | Visual direction, palette, shaders, LOD policy, hero buildings |

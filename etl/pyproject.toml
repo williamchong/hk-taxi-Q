@@ -3,6 +3,7 @@ name = "hk-taxi-etl"
 version = "0.1.0"
 description = "Build-time pipeline turning HK government open geodata into game-ready assets"
 requires-python = ">=3.11"
+license = "GPL-3.0-or-later"
 dependencies = [
     "numpy>=1.26",
     "pyogrio>=0.10",
