@@ -134,7 +134,7 @@ func _report_spawn(pose: RoadSpawn.Pose, authored: Transform3D) -> void:
 				pose.fare_id,
 				pose.edge_id,
 				pose.road_name_en,
-				rad_to_deg(atan2(pose.forward.x, -pose.forward.z)),
+				CityManifest.bearing_deg(pose.forward),
 				pose.transform.origin
 			]
 		)

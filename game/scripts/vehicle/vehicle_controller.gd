@@ -30,6 +30,10 @@ const SCRAPE_SPIN_RETAINED: float = 0.5
 ## constant while the speed itself remains a profile dial.
 const TOP_SPEED_TAPER: float = 0.15
 
+## Group every controller joins, so a dev tool can find the car without walking
+## the tree. See first_in().
+const GROUP: StringName = &"vehicle"
+
 @export var profile: HandlingProfile
 
 var _wheels: Array[WheelMount] = []
@@ -54,7 +58,18 @@ var _steered_right: Vector3 = Vector3.RIGHT
 var _ray_query := PhysicsRayQueryParameters3D.new()
 
 
+## The car in a scene, or null. For dev tools that are dropped into a scene and
+## have to find it themselves rather than being pointed at it.
+##
+## A group rather than find_children(): two overlays were each walking the whole
+## tree for this, and DebugHud repeats its search for as long as it comes back
+## empty — which in a preview scene, where a car can never appear, is for ever.
+static func first_in(tree: SceneTree) -> VehicleController:
+	return tree.get_first_node_in_group(GROUP) as VehicleController
+
+
 func _ready() -> void:
+	add_to_group(GROUP)
 	assert(profile != null, "VehicleController has no HandlingProfile assigned.")
 	# The profile deliberately ships no defaults, so an unassigned resource reads
 	# as all-zeroes. These two would fail as a divide-by-zero and a dead spring

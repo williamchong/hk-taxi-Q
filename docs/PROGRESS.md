@@ -3,7 +3,7 @@
 Living document. **Update this whenever a task changes status, a decision is made, or an open
 question is answered.** Newest entries at the top of each log.
 
-Last updated: 2026-08-01 (genre direction settled and referenced; near-miss scoring moves into `B3` as `P3-2a`)
+Last updated: 2026-08-01 (debug chrome gathered under one `F3`-toggled autoload, and turned off by default)
 
 ---
 
@@ -619,6 +619,57 @@ below.
 ---
 
 ## Decision log
+
+### 2026-08-01 — One owner for the debug chrome, one key, and **off by default**
+
+`DebugHud` (`scripts/ui/debug_hud.gd`) is a new autoload that owns every dev readout in the project.
+It exists because three scripts were each deciding independently what to draw on the screen — the
+frame counter, `road_graph_overlay.gd`'s text block at a hardcoded `(16, 96)`, and that script's
+chevrons — and a fourth would have been a fourth offset picked by eye. Overlays now register a label
+with the HUD and ask it what to show; `F3` cycles `off → minimal → full`, and `--debug-view=` sets
+where a run starts.
+
+**The default is off, in every build**, which is a change: a debug build previously always had the
+counter, and `city_drive.tscn` always had the graph readout and chevrons. Two reasons, in order.
+First, every screenshot anyone judged Wan Chai from had a five-line text block over it, including the
+ones about how the city looks. Second, measured on the standard driver run at 2.0 s:
+
+| View | Draw calls | Against the <150 budget |
+|---|---|---|
+| off | 19 | — |
+| minimal | 27 | +8 |
+| full | 38 | **+19** |
+
+Debug text was costing half as many draw calls as the entire city — text with an outline does not
+batch the way a flat-shaded mesh does. Affordable, but not something to pay for unasked.
+
+**`drive.sh` defaults to `minimal` instead**, which is the one place the reasoning inverts: a
+scripted run is somebody debugging, and a screenshot that cannot say where it was taken cannot be
+acted on. The position block answers that in two lines — engine metres, **and** the EPSG:2326 grid
+reference via a new `CityManifest.to_grid`, so a suspicious frame is checkable against the ETL's own
+source data rather than only against another frame. It reports the camera when there is no car,
+which is what makes a `--camera=` preview shot self-documenting.
+
+Three smaller calls, recorded because each has a trap behind it:
+
+- **The toggle is a raw key, not an action.** `free_look_camera.gd` set that precedent and the
+  reason holds: `[input]` is the *shipped* map. The cost is that `drive.sh --hold=` cannot press it,
+  so the flag is not a convenience — it is the only route a scripted run has.
+- **`--debug-view` had to be taught to `driver.gd`,** which fails on unknown arguments by design.
+  The autoload reads the command line itself, and reads **both** arg lists: Godot splits at `--`,
+  and `fps_counter.gd`'s old `--fps` check looked only at the engine's half, so it would never have
+  fired from `drive.sh` at all.
+- **Headless parks the HUD whatever the flag says.** Nothing draws there, and every `check.sh` tool
+  runs headless — the overlay would only cost them a tree walk and a second parse of `city.json`.
+- **`VehicleController` now joins a `vehicle` group** and answers `first_in(tree)`. Two dev overlays
+  were each walking the whole tree to find the car, and the HUD repeats its search for as long as it
+  comes back empty — which in a preview scene, where a car can never appear, is for ever. The group
+  makes it O(1). It is the project's first use of a node group.
+
+Font sizes are constants in the script rather than a `.tres`, which is a deliberate reading of hard
+rule 4: tuning values are *gameplay* values, balanced by someone who should not need a code change.
+Nothing about dev chrome is balanced. The position block's 40 px is set by what a vision model can
+still read after a 1920-wide screenshot is downscaled, which is now the most common reader.
 
 ### 2026-08-01 — `P2-7` step 2: the slab query lands in `terrain.py`, and two measured claims were wrong
 

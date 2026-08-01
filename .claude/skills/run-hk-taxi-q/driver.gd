@@ -444,6 +444,17 @@ func _parse_args() -> bool:
 			"--hold":
 				if not _parse_hold(value):
 					return false
+			"--debug-view":
+				# *Applied* by the `DebugHud` autoload, which reads the command
+				# line itself — it is on screen before the driver has parsed
+				# anything. Only validated here, because the autoload's own
+				# fallback is a `push_warning` and a full overlay, and a warning
+				# is not something `drive.sh` fails on: a typo would otherwise
+				# run to completion, report success, and quietly return a
+				# different overlay from the one asked for.
+				if not ["off", "minimal", "full"].has(value):
+					_fail("--debug-view=%s is not off, minimal or full" % value)
+					return false
 			_:
 				_fail("unknown argument: %s" % arg)
 				return false

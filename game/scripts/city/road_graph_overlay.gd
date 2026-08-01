@@ -64,14 +64,11 @@ func _ready() -> void:
 
 	_vehicle = get_node_or_null(vehicle_path) as Node3D
 	if _vehicle == null:
-		var found: Array[Node] = get_tree().get_root().find_children(
-			"*", "VehicleController", true, false
-		)
-		if found.is_empty():
+		_vehicle = VehicleController.first_in(get_tree())
+		if _vehicle == null:
 			push_warning("road graph overlay: no vehicle to follow")
 			set_physics_process(false)
 			return
-		_vehicle = found[0] as Node3D
 
 	var material: StandardMaterial3D = PreviewDraw.unshaded_material()
 	# Depth test off: the whole point is to see the lane centre through the car
@@ -88,15 +85,34 @@ func _ready() -> void:
 	add_child(_mesh)
 
 	if show_readout:
-		var layer := CanvasLayer.new()
-		layer.name = "GraphReadout"
+		# Placed and styled by the HUD rather than here: this used to own a
+		# CanvasLayer and a screen offset picked by eye, which is exactly what
+		# collides when a second readout arrives. Ownership of the *text* stays.
 		_readout = Label.new()
-		_readout.position = Vector2(16.0, 96.0)
-		_readout.add_theme_color_override("font_color", Color(1, 1, 1))
-		_readout.add_theme_color_override("font_outline_color", Color(0, 0, 0))
-		_readout.add_theme_constant_override("outline_size", 6)
-		layer.add_child(_readout)
-		add_child(layer)
+		_readout.name = "GraphReadout"
+		DebugHud.attach_readout(_readout)
+
+	# Connected last, after every early return above: those turn processing off
+	# for good, and a view change must not switch it back on for a scene with no
+	# graph to query.
+	DebugHud.view_changed.connect(_apply_view)
+	_apply_view()
+
+
+## The overlay is two views, not one — the chevrons in the world and the text on
+## the screen — and neither is worth a `nearest_edge` query per physics tick when
+## nothing is drawing them.
+func _apply_view() -> void:
+	var arrows: bool = DebugHud.shows_arrows()
+	_mesh.visible = arrows
+	set_physics_process(arrows or DebugHud.shows_readouts())
+
+
+## A label parented to the HUD outlives the scene that made it, so hand it back.
+func _exit_tree() -> void:
+	if _readout != null:
+		DebugHud.detach_readout(_readout)
+		_readout = null
 
 
 func _physics_process(_delta: float) -> void:

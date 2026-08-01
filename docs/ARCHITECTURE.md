@@ -81,8 +81,37 @@ There are no `rendering/lights_and_shadows/*` keys in `project.godot` at all, an
 added none — cascade count and distance are node properties on the one shared sun, which is where
 the editor renders them.
 
-**Autoloads:** `FpsCounter` (debug builds, or `--fps`) and `InputRouter`. Both run every frame for
-the life of the process, so treat them as hot-path code.
+**Autoloads:** `DebugHud`, `FpsCounter` and `InputRouter`, registered in that order — the counter
+asks the HUD what to show in its `_ready`, and an autoload listed later does not exist yet. All
+three run every frame for the life of the process, so treat them as hot-path code.
+
+### The debug overlay
+
+`DebugHud` (`scripts/ui/debug_hud.gd`) owns every dev readout: the frame counter, a position block,
+the text blocks overlays register with it, and — through `view_changed` — the road graph's chevrons.
+**`F3` cycles off → minimal → full**, and `--debug-view=off|minimal|full` sets where a run starts.
+
+| View | Shows | Draw calls |
+|---|---|---|
+| `off` | nothing. **The default, in every build** | — |
+| `minimal` | position block and frame counter | **+8** |
+| `full` | plus registered readouts and 3D debug geometry | **+19** |
+
+Measured on `city_drive.tscn` at 2.0 s into the standard driver run: 19 draw calls with the overlay
+off, 27 at `minimal`, 38 at `full`. Against the <150 budget that is affordable either way, but it is
+not free, and it was previously *always on* in a debug build — a fifth of the scene's draw calls
+went on debug text in every screenshot anyone judged the city from. That, more than the cost, is why
+the default is off.
+
+`drive.sh` is the exception: it appends `--debug-view=minimal` unless the caller names a view, on
+the grounds that a scripted run is someone debugging and a screenshot that cannot say where it was
+taken cannot be acted on. The position block reports game metres **and** the source-CRS grid
+reference — `CityManifest.to_grid`, the inverse of `crs.py`'s `to_game` — so a frame can be checked
+against the ETL's own data rather than only against another frame.
+
+⚠️ The toggle is a **raw key**, not an action: the `[input]` map is the game's, and dev keys stay
+out of it (`free_look_camera.gd` set that precedent). The consequence is that `drive.sh --hold=`
+cannot press it — scripted runs use the flag.
 
 ### GDScript warnings
 
@@ -907,6 +936,8 @@ a `SpringArm3D` has nothing to collide *with* until the buildings do. See the ti
 | `scripts/city/fare_preview.gd` | Dev: pin every fare node and tether it to `nearest_edge` at `edge_t` |
 | `scripts/city/drive_harness.gd` | Dev: place the car on the resolved start line, and return it there when it leaves the world. On the scene root so its `_ready` runs after the car's |
 | `scripts/camera/free_look_camera.gd` | Dev: fly camera. Bypasses `InputRouter` so dev keys stay out of the shipped action map |
+| `scripts/ui/debug_hud.gd` | **`DebugHud`.** The one owner of dev chrome: the view state behind `F3`, the top-left stack overlays register labels with, the font treatment, and the position block. Off by default — see "The debug overlay" above |
+| `scripts/ui/fps_counter.gd` | Frame rate and frame time, top right. Gated by `DebugHud` since it is one of its views, and it stops counting while hidden |
 | `scenes/world/golden_hour.tscn` | The one lighting rig, per `ART_DESIGN.md`. Instance it rather than authoring a second Environment |
 | `tools/verify_tiles.gd` | Headless acceptance check for generated tiles — the mesh contract |
 | `tools/verify_city.gd` | Headless acceptance check for `city.json` — georeferencing, bounds, and the files it names |

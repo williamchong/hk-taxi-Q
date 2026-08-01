@@ -60,6 +60,17 @@ var city_id: String
 var region_id: String
 var tile_size_m: float
 
+## Where game `(0, 0, 0)` sits in the source CRS — the region's north-west
+## corner, in metres, as `crs.py` anchored it.
+##
+## Kept so a position on screen can be stated in coordinates that mean something
+## outside the engine: `to_grid` turns the car's transform into an easting and a
+## northing you can type into a GIS beside the source data. Without it a readout
+## can only say "172 m east of a corner nothing else knows about".
+var origin_easting: float
+var origin_northing: float
+var origin_elevation: float
+
 ## Union of everything the region contains — tiles, road surface and fare nodes.
 ##
 ## ⚠️ Not the region rectangle. Wan Chai is declared as 1650 x 887 m and its
@@ -99,6 +110,12 @@ static func load_manifest() -> CityManifest:
 	manifest.city_id = str(document.get("city_id", ""))
 	manifest.region_id = str(document.get("region_id", ""))
 	manifest.tile_size_m = float(document.get("tile_size_m", 0.0))
+
+	var anchor: Dictionary = document.get("origin", {})
+	manifest.origin_easting = float(anchor.get("easting", 0.0))
+	manifest.origin_northing = float(anchor.get("northing", 0.0))
+	manifest.origin_elevation = float(anchor.get("elevation", 0.0))
+
 	manifest.road_graph_path = _resolve(document.get("road_graph", ""))
 	manifest.road_surface_path = _resolve(document.get("road_surface", ""))
 	manifest.fares_path = _resolve(document.get("fares", ""))
@@ -113,6 +130,29 @@ static func load_manifest() -> CityManifest:
 	for entry: Dictionary in document.get("tiles", []):
 		manifest.tiles.append(_tile(entry))
 	return manifest
+
+
+## A game position in the source CRS: **easting, northing, elevation** — in that
+## order, which is not the order of the `Vector3` that went in.
+##
+## The inverse of `RegionTransform.to_game` in `etl/pipeline/crs.py`, and it has
+## to stay that way: game `+X` is east, game `+Y` is up, and game `-Z` is north,
+## so the northing is a *subtraction*. Returning a `Vector3` rather than a
+## `Vector2` keeps the elevation, which is the axis that catches a road on the
+## wrong deck.
+func to_grid(point: Vector3) -> Vector3:
+	return Vector3(point.x + origin_easting, origin_northing - point.z, point.y + origin_elevation)
+
+
+## A compass bearing in degrees, `0` at north and rising eastward, from a
+## direction in game space.
+##
+## Static, and here rather than in the two places that wanted it, because it
+## encodes the same fact `to_grid` does — game `-Z` is north — and `crs.py` is
+## explicit that the moment that convention is restated somewhere else it drifts.
+## In Hong Kong `000` faces the harbour.
+static func bearing_deg(forward: Vector3) -> float:
+	return fposmod(rad_to_deg(atan2(forward.x, -forward.z)), 360.0)
 
 
 ## Every file the manifest *names*, in order: the three documents, then every

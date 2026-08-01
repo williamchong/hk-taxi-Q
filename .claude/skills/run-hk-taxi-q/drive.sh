@@ -15,6 +15,7 @@
 #                                    (repeatable; actions are the [input] names
 #                                    in project.godot — steer_left, steer_right,
 #                                    accelerate, brake_reverse, drift, look_back)
+#   --debug-view=off|minimal|full    debug overlay; defaults to minimal here
 #
 # Exists for the same reason tools/check.sh does: Godot exits 0 when a script
 # fails to parse, so quit(1) in the driver never runs and a broken driver
@@ -40,6 +41,22 @@ fi
 if [[ $# -eq 0 ]]; then
 	set -- --seconds=6 --shots=0.5,3,6 --hold=accelerate@0.5+5.5
 fi
+
+# The debug overlay is off by default in the game and on by default here, and
+# the two are not in conflict: a person launching the game is playing it, while
+# everything that comes through this script is a scripted run someone is reading
+# afterwards. A screenshot that does not say where it was taken cannot be acted
+# on — the frame shows a wall, and the position block is what makes it a
+# *located* wall.
+#
+# `minimal` and not `full`: two lines in the top left and +8 draw calls measured,
+# against +19 and a five-line text block over the city for `full`. Pass your own
+# --debug-view= to override — `off` for a frame judged on how it looks, `full`
+# for the road graph's chevrons and readout.
+case " $* " in
+*" --debug-view="*) ;;
+*) set -- "$@" --debug-view=minimal ;;
+esac
 
 # Godot reports a failure with any of these and still exits 0.
 FATAL='Parse Error|SCRIPT ERROR|Failed to load script|Failed to compile'

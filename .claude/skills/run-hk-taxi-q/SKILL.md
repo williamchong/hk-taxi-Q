@@ -82,9 +82,37 @@ Everything after `drive.sh` goes to `driver.gd`.
 | `--out=dir` | default `build/driver/`; relative paths anchor to the repo root, not to `game/` |
 | `--hold=action@start+duration` | press an action; repeatable |
 | `--camera=x,y,z` / `--look=x,y,z` | teleport the camera (preview scenes only) |
+| `--debug-view=off\|minimal\|full` | debug overlay. **`drive.sh` defaults to `minimal`** |
 
 Actions are the `[input]` names in `game/project.godot`: `accelerate`, `brake_reverse`,
 `steer_left`, `steer_right`, `drift`, `look_back`. An unknown one fails rather than doing nothing.
+
+### The debug overlay
+
+The game boots with **no overlay at all**; `F3` cycles it. `drive.sh` is the exception and appends
+`--debug-view=minimal` unless you name a view yourself, because a screenshot that cannot say where
+it was taken cannot be acted on.
+
+| View | On screen | Draw calls |
+|---|---|---|
+| `off` | nothing — use it when the question is how the city *looks* | — |
+| `minimal` | position block (top left) and fps/frame time (top right) | +8 |
+| `full` | plus the road graph readout and its chevrons on the carriageway | +19 |
+
+The position block is two lines, sized to survive a downscale:
+
+```
+taxi  X    184.39  Y     6.21  Z     26.09
+grid 835949.4E 816098.9N   hdg 086   38 kph
+```
+
+`X/Y/Z` are engine metres — the same numbers as the telemetry lines. `grid` is **EPSG:2326**, the
+CRS the ETL sourced the city in, so a suspicious frame can be checked against the source data
+instead of against another screenshot. `hdg` is a compass bearing: `000` faces the harbour.
+`cam` replaces `taxi` in the preview scenes, which is what makes a `--camera=` shot self-documenting.
+
+⚠️ Remember the overlay when reading `draws`: the numbers in the sample output above were taken
+with it off, and the default now adds 8.
 
 A drift through the junction east of HKCEC — the taxi ends up facing back the way it came:
 
@@ -169,6 +197,10 @@ to — see Gotchas.
   it a pass.
 - **Autoloads do not exist in `_init`.** Under `--script`, `root.has_node("InputRouter")` is false
   until after the first `process_frame`. Anything touching the action map has to wait a frame.
+- **`--hold` cannot press `F3`.** The overlay toggle is a raw key, deliberately — the action map is
+  the game's, and dev keys stay out of it — and `--hold` drives the action map and nothing else.
+  Use `--debug-view=`. For the same reason the overlay is invisible to `--headless`, which parks it
+  whatever the flag says: nothing draws there, so it would only cost the verify tools a tree walk.
 - **`--camera` is ignored in `city_drive.tscn`.** The chase camera rewrites the transform every
   frame. It only bites in the preview scenes.
 - **`--hold` cannot fly the preview camera.** `free_look_camera.gd` reads
