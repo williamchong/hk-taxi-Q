@@ -351,8 +351,14 @@ def _stations(polyline: np.ndarray, spacing_m: float) -> Iterator[tuple[float, f
     yield float(last[0]), float(last[1]), float(last[2])
 
 
-def measure(samples: np.ndarray, deck: Faces) -> tuple[np.ndarray, int]:
+def measure(samples: np.ndarray, deck: Faces, clearance_m: float = 0.0) -> tuple[np.ndarray, int]:
     """Signed height of each sample above the nearest deck face, and the misses.
+
+    `clearance_m` is subtracted because the carriageway is *meant* to sit that
+    far above the deck — it is the wearing course, and the layer that stops the
+    two surfaces interleaving once they agree to within the tile decimation.
+    Scoring against the bare deck would read a deliberate 0.20 m as 0.20 m of
+    error and grow with any future change to it.
 
     Nearest rather than highest or lowest: the question is how far the drawn
     road is from *a* deck, and a flyover stacked over another would otherwise be
@@ -368,7 +374,7 @@ def measure(samples: np.ndarray, deck: Faces) -> tuple[np.ndarray, int]:
         if below is None:
             uncovered += 1
             continue
-        errors.append(float(y - below))
+        errors.append(float(y - below - clearance_m))
     return np.asarray(errors), uncovered
 
 
@@ -392,8 +398,28 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--attribute-within-m",
         type=float,
-        default=1.0,
+        default=0.40,
+        # Sized by what it must *tolerate*, not by caution. The ribbon is
+        # extruded from the polyline this is compared against, so a correctly
+        # attributed surface differs only by mitre and trim interpolation —
+        # centimetres — and 0.40 is still nearly three kerb heights.
+        #
+        # A wider window is not safer, it is wrong: at 1.0 m the Wan Chai
+        # Interchange mis-attributed a level-0 junction cap 0.45 m away to a
+        # level-1 edge, and reported the clearance it does not carry as 0.20 m
+        # of extra error. Tightening to 0.40 removed that and cost no coverage.
         help="how far the drawn road may sit from the edge it is attributed to, vertically",
+    )
+    parser.add_argument(
+        "--clearance-m",
+        type=float,
+        default=None,
+        # Defaults to what the city declares, which is right for any bundle
+        # built from that config. The override exists for the one comparison
+        # that is not: grading a bundle built *before* `deck.clearance_m` — the
+        # pre-`P2-7` baseline — where subtracting a layer its geometry never had
+        # shifts every figure by exactly that much.
+        help="override the city's deck clearance; use 0 to grade a bundle built without one",
     )
     parser.add_argument(
         "--accept-measured",
@@ -456,7 +482,9 @@ def main(argv: list[str] | None = None) -> int:
 
     deck = Faces.from_tiles(tiles, colour, city.buildings.colour_jitter)
     taken = elevated_samples(args.generated, manifest, args.spacing_m, args.attribute_within_m)
-    errors, uncovered = measure(taken.points, deck)
+    declared = city.roads.deck.clearance_m if city.roads.deck is not None else 0.0
+    clearance = declared if args.clearance_m is None else args.clearance_m
+    errors, uncovered = measure(taken.points, deck, clearance)
     log.info(
         "  %d upward faces of '%s' across %d tiles; %d elevated edges",
         len(deck.corners),
@@ -481,7 +509,10 @@ def main(argv: list[str] | None = None) -> int:
     p90 = float(np.percentile(absolute, 90))
     deepest = float(-errors.min())
     log.info("")
-    log.info("  drawn carriageway minus the deck beneath it, in metres:")
+    log.info(
+        "  drawn carriageway minus the deck beneath it, less its %.2f m clearance, in metres:",
+        clearance,
+    )
     log.info("    median   %+.3f", float(np.median(errors)))
     log.info("    p10/p90  %+.2f / %+.2f", *np.percentile(errors, [10, 90]))
     log.info("    |err|p90 %.3f   (accepts %.2f)", p90, args.accept_p90_m)

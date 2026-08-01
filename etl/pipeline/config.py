@@ -316,6 +316,11 @@ class DeckSampling:
     # this close to the ground is the ground. Also the residual step that lift
     # is allowed to leave behind, which is what bounds it.
     at_grade_m: float
+    # How far above the sampled structure the carriageway is drawn. Not a fudge
+    # factor: a real road is a wearing course laid *on* a structural deck, and
+    # this is that layer. It also has to absorb the tile decimation, which is
+    # what makes it a measured value rather than a nominal one.
+    clearance_m: float
 
 
 @dataclass(frozen=True)
@@ -886,7 +891,7 @@ def _deck_sampling(body: dict[str, Any], where: str) -> DeckSampling:
     # makes every distinct height its own slab and so defeats the clustering the
     # query is built on. Zero is a coherent, if strict, choice for the other two.
     values = _measures(body, where, ("resample_m", "slab_gap_m"), positive=True)
-    values |= _measures(body, where, ("max_below_terrain_m", "at_grade_m"))
+    values |= _measures(body, where, ("max_below_terrain_m", "at_grade_m", "clearance_m"))
 
     unknown = set(body) - set(values)
     if unknown:
@@ -900,6 +905,7 @@ def _deck_sampling(body: dict[str, Any], where: str) -> DeckSampling:
         slab_gap_m=values["slab_gap_m"],
         max_below_terrain_m=values["max_below_terrain_m"],
         at_grade_m=values["at_grade_m"],
+        clearance_m=values["clearance_m"],
     )
 
 

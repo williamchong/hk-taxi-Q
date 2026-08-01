@@ -859,7 +859,10 @@ def _deck_heights(
     # but never removes the source's own, so the spacing is not uniform and
     # counting stations would weight a densely drawn curve as if it were long.
     along = _lengths(plan)
-    return np.interp(along, along[usable], sampled[usable])
+    # `clearance_m` on the sampled branch only. It is the road laid *on* the
+    # deck, so it belongs wherever the deck is what decides the height — and
+    # nowhere near the fallback above, which is not on a deck at all.
+    return np.interp(along, along[usable], sampled[usable]) + deck.thresholds.clearance_m
 
 
 def _lifted_heights(
@@ -924,7 +927,11 @@ def _lifted_heights(
     # level 0 means where there is no ramp, and it is not an offset to add on
     # top of one — a city that puts level 0 anywhere but zero would otherwise
     # find its ramps that far above the structure they are supposed to lie on.
-    return np.where(raised > 0.0, terrain + raised, fallback)
+    #
+    # `clearance_m` rides with the lift for the same reason it does off-grade:
+    # a lifted end is resting on a ramp deck, and the two surfaces would
+    # otherwise interleave exactly as they did on the flyovers.
+    return np.where(raised > 0.0, terrain + raised + deck.thresholds.clearance_m, fallback)
 
 
 def _node_heights(count: int, edges: Iterable[Edge]) -> list[float]:

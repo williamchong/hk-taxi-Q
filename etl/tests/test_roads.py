@@ -602,7 +602,9 @@ class TestNodeHeights:
 # Deck sampling
 # --------------------------------------------------------------------------
 
-THRESHOLDS = DeckSampling(resample_m=10.0, slab_gap_m=3.0, max_below_terrain_m=1.0, at_grade_m=0.30)
+THRESHOLDS = DeckSampling(
+    resample_m=10.0, slab_gap_m=3.0, max_below_terrain_m=1.0, at_grade_m=0.30, clearance_m=0.0
+)
 
 
 def _mesh(triangles: list[list[tuple[float, float, float]]]) -> MeshData:

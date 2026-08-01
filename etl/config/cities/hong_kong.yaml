@@ -384,6 +384,24 @@ roads:
     # ends; at 0.5 one of them loses its lift entirely, and at 1.0 three do.
     at_grade_m: 0.30
 
+    # How far above the sampled structure the carriageway is drawn, which is the
+    # layer a real road actually is: a wearing course on a structural deck.
+    #
+    # Its size, though, is set by something else. P2-7 landed the ribbon on the
+    # deck to a median of 0.00 m against the *source* sheets — and the user's
+    # review drive then found the shipped ramp visibly sawtoothed, because P2-1
+    # decimates INFRASTRUCTURE on a 0.5 m cell and that collapse lifts the deck
+    # a median 0.04 m, p99 0.16 m and max 0.34 m above where it was sampled.
+    # Two coincident surfaces interleave: white deck through dark carriageway,
+    # and wheels riding whichever collider happens to be higher.
+    #
+    # 0.20 leaves 0.37% of stations still poking through at LOD0 and 5.4% at
+    # LOD1. 0.15 leaves 1.31%, still visible in patches; 0.25 removes it but
+    # reads as a step up onto the deck. Thicker than a real wearing course at
+    # 5-10 cm, and that is the decimation's doing rather than a modelling
+    # choice — a finer LOD0 cell would let this come back down.
+    clearance_m: 0.20
+
 # How P1-5 turns published taxi points into fare nodes.
 fares:
   # Furthest a source point may sit from a road centreline and still be

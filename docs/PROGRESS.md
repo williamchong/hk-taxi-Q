@@ -671,7 +671,73 @@ rule 4: tuning values are *gameplay* values, balanced by someone who should not 
 Nothing about dev chrome is balanced. The position block's 40 px is set by what a vision model can
 still read after a 1920-wide screenshot is downscaled, which is now the most common reader.
 
-### 2026-08-02 — `P2-7` step 8: everything mechanical is verified; the drive is the last gate
+### 2026-08-02 — `P2-7` step 8: the drive found what the measurements could not — two coincident surfaces
+
+**The user drove the ramp and it works** — *"nice ramp"* — **and reported it "a little bumpy where the
+white and grey mix together".** The screenshot shows the white tile deck sawtoothing through the dark
+carriageway along the ramp.
+
+That is a defect `P2-7` **introduced**, and no number in this task could have caught it. Before, the
+ribbon floated a median 1.31 m clear of the deck, so the two surfaces never met. Landing the ribbon
+*on* the deck — the entire point — made them coincident, and coincident surfaces interleave: visually
+as that sawtooth, physically as wheels riding whichever collider happens to be higher.
+
+The cause is not the sampling. Against the **source sheets** the ribbon is exact, median −0.000 m.
+`P2-1` decimates `INFRASTRUCTURE` on a 0.5 m cell, and that collapse lifts the shipped deck a median
+**+0.041 m**, p99 **0.163 m**, max **0.339 m** above where it was sampled. The road is right and the
+deck the player meets moved.
+
+#### `deck.clearance_m: 0.20`, which is a layer rather than a fudge
+
+A real road is a wearing course laid **on** a structural deck, so a clearance is the right shape of
+answer. Its *size* is set by the decimation rather than by paving practice — 5 to 10 cm would be
+realistic, 0.20 m is what the 0.5 m cell forces:
+
+| clearance | still poking through, LOD0 | LOD1 |
+|---|---|---|
+| 0.15 m | 1.31% | 8.0% |
+| **0.20 m** | **0.37%** | **5.4%** |
+| 0.25 m | 0.06% | 2.4% |
+
+User's call, taken 2026-08-02: **0.20 m**. A finer LOD0 cell would let it come back down.
+
+Applied only where the deck is what decides the height — the sampled branch and the lifted level-0
+branch — and never to the flat-offset fallback, which is not on a deck at all. `tools/deck_error.py`
+**subtracts** it, so the acceptance metric still measures error rather than counting a deliberate
+layer as one.
+
+#### Fixing it exposed a measurement bug of its own
+
+`deepest below the deck` jumped 0.34 → 0.54 m, which looked like the clearance had made something
+worse. It had not: at the Wan Chai Interchange the tool was attributing a **level-0 junction cap** —
+which carries no clearance — to a level-1 edge 0.45 m away, inside a 1.0 m attribution window. The
+clearance simply widened a mis-attribution that was already there.
+
+The window was sized by caution rather than by what it must tolerate. A ribbon is extruded from the
+polyline it is compared against, so a correctly attributed surface differs only by mitre and trim
+interpolation — centimetres. **0.40 m** is still nearly three kerb heights, removes the
+mis-attribution, and costs no coverage at all.
+
+#### Where it landed
+
+| measured against shipped LOD0 tiles | before | after |
+|---|---|---|
+| **\|error\| p90** | 4.107 m | **0.095 m** *(accepts 0.50)* |
+| deepest into the structure | 4.67 m | **0.30 m** *(accepts 0.50)* |
+| within ±0.10 m | 1.5% | **92.3%** |
+| below the deck by over 0.10 m | 66.1% | **6.9%** |
+| measured | 96.7% | **96.9%** |
+
+The `before` column is graded with `--clearance-m 0`, because that bundle was built before the key
+existed and subtracting a layer its geometry never had would shift every figure by 0.20 m. That
+override exists for exactly this comparison. It still reproduces the recorded **4.19 m** baseline and
+its 66% below-deck figure, which is what makes the `after` column worth believing.
+
+The median step at the 36 level-change nodes is now **0.19 m** rather than 0.04 m, and 24 of 36 sit
+inside 0.5 m rather than 26 — the clearance raises the off-grade side of every mixed node by 0.20 m,
+which is the cost of the fix and is recorded rather than hidden.
+
+### 2026-08-02 — `P2-7` step 8a: everything mechanical is verified; the drive is the last gate
 
 Clean rebuild from source, then every check the project has:
 
