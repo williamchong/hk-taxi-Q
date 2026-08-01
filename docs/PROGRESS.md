@@ -185,7 +185,7 @@ threading it pays. See the decision log.
 | `P2-1` | `CityStreamer` | ✅ **Done — review passed 2026-08-01** | Threaded load/unload by distance to the published `aabb`. Draw calls 70 → 53 against a 150 budget. The review verdict dropped LOD0: worst-case **visible triangles 249,210 → 150,374** against 300k, and the **PCK 51.6 → 21.1 MB**. Bands are now a single 250 m edge, 400 m unload, 15 m hysteresis, in `streaming.tres`. `verify_city_streamer.gd` is the fifth verify tool. Opened the shadow-cascade finding. |
 | `P2-3` | Vehicle on real geometry | ✅ **Done — review passed 2026-08-01** | The hand-written spawn transform is gone: `RoadSpawn` resolves fare node `f_004` through `RoadGraph` and `drive_harness.gd` places the car, reproducing the old literal to **4 dp** and reporting `0.00 m` from the lane centre with `+1.00` heading agreement. `verify_spawn.gd` is the sixth verify tool and asserts the orientation against the edge vector. The user's verdict on *is this still the `P0-5` car?* was **"car seems ok"** — a pass, and read no wider than it is said. |
 | `P2-5` | Chase camera | ✅ **Done — review passed 2026-08-01** | Unblocked by shipping building collision — its "no clipping through buildings" criterion was unreachable while the city had none. Speed FOV and look-back already existed and now run on real geometry. **No shape-cast needed**: the 0.3 m spring-arm margin already exceeds the 6 cm near plane, proven by flipping the camera into a wall with look-back. Verdict *"camera work mostly with one exception where a road suddenly appears mid air"* — measured and found to be geometry, not the camera: nothing sits in the car's 0.3–3.0 m band there. Opened `Q19` and `Q20`. |
-| `P2-7` | Off-grade carriageway on its structure | ⬜ Not started | **New 2026-08-01.** Sample deck heights from `INFRASTRUCTURE` instead of the flat `elevation_levels` offset; the network stays closed to driving. Placed in Phase 2 because it is a **data-contract** change and `P3-3`'s traffic will run on that contract. Answers `Q20`, shrinks `Q19`, and its first job is classifying the 36 mixed-level nodes. |
+| `P2-7` | Off-grade carriageway on its structure | 🟡 **In progress — probes and classification done, nothing implemented** | **New 2026-08-01.** Sample deck heights from `INFRASTRUCTURE` instead of the flat `elevation_levels` offset; the network stays closed to driving. Placed in Phase 2 because it is a **data-contract** change and `P3-3`'s traffic will run on that contract. Answers `Q20`, shrinks `Q19`. **The 36 nodes are classified and they are all ramps — 17 junctions, 13 attribute flips, 5 tunnel portals, 1 stub, and no plan-coincident crossings at all.** Two probe hypotheses were measured and rejected before code, and the fix grew a level-0 half on the user's call. See the decision log. |
 | `P4-*` | The elevated network | ⬜ Not started | **New 2026-08-01.** Post-slice, and **broken down** where the other post-slice phases are not — the data is measured and shipping collision already half-opened the network by accident. Reverses `P2-2`'s off-grade refusal deliberately and closes `Q15`. |
 | `P3-2a` | Near-miss scoring | ⬜ Not started | **New 2026-08-01.** Build `B3`. Split out of `P3-2` and moved from `B4` into `B3`: that build's review asks whether traffic is *"harder in a good way, or just annoying"*, and it cannot answer honestly while threading traffic pays nothing. See the decision log. |
 | `P3-7` | Window-band shader | ⬜ Not started | Build `B2`. **Acceptance grew 2026-08-01:** the shader's two inputs ship as `TEXCOORD_0` from the ETL, so this is one commit across both sides with a `schema_version` bump. See the decision log. |
@@ -212,14 +212,15 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ❌ blocked
 | Q10 | Is the game-space origin per region, or shared per city? | Whether two regions can stitch into one continuous map | `P1-6` | ✅ **Resolved 2026-07-30** — both: local origin plus a recorded `city_offset` |
 | Q11 | Where is ground level? `elevation_levels[0] = 0.0` puts at-grade roads at y=0, but 99.9% of Wan Chai's buildings have their base **above 2 m** (median 4.29 m) | Roads would run ~4 m below every front door, and under the terrain | `P1-3` | ✅ **Resolved 2026-07-30** — sample the terrain height field |
 | Q12 | Are the road graph's one-way directions right on the ground? | `P1-3`'s last acceptance criterion, and the thing no test can settle | user | ✅ **Resolved 2026-07-30** — Jaffe Road confirmed eastbound; the source agrees with the street |
-| Q13 | Nothing ramps between elevation levels. All 36 nodes where two levels meet step by a whole deck height — 6 m at a flyover, 8 m at a tunnel mouth | The elevated and underground networks are topologically connected and geometrically unreachable; **23.3% of the region's carriageway area** cannot be driven onto | `P2-2` | 🔴 **Open — raised 2026-07-30 by `P1-4`; narrowed 2026-07-31.** The ramps exist in `INFRASTRUCTURE` and sampling them beats the blend, but it does not close the step. `P2-2` takes the street-level slice — see the decision log |
+| Q13 | Nothing ramps between elevation levels. All 36 nodes where two levels meet step by a whole deck height — 6 m at a flyover, 8 m at a tunnel mouth | The elevated and underground networks are topologically connected and geometrically unreachable; **23.3% of the region's carriageway area** cannot be driven onto | `P2-2` | 🔴 **Open — raised 2026-07-30 by `P1-4`; narrowed 2026-07-31, and again 2026-08-01 by `P2-7`.** All 36 are now classified and **every one is a ramp**: 17 junctions where the structure reaches grade (residual ≤0.93 m once sampled), 13 where the source's `ELEVATION` attribute flips partway up, 5 tunnel portals, 1 stub with no structure. Once `P2-7` ships, what is left of this question is **the 5 portals and the stub** — a tunnel is a void and no height source repairs it. See the decision log |
 | Q14 | Taxi stands carry **operating-time restrictions** in `Status_EN` — eight territory-wide, one in the region (Russell Street, cross-harbour 1200-0600) — and `P1-5` discards them | A part-time cross-harbour stand is modelled as a full-time one. Small today; it is exactly the kind of detail `P3-9`'s authenticity test would catch | `P3-1` | 🟡 **Open — raised 2026-07-31 by `P1-5`**, deliberately deferred |
 | Q15 | Fare nodes snap to the road graph by **plan distance only**, because the published points are 2D | A stand under a flyover has nothing in it to prefer the street below over the deck above. No node in Wan Chai is affected — every winner is level 0 — but this shares a root cause with `Q13` | `P2-2` | 🟡 **Open — raised 2026-07-31 by `P1-5`**, not reachable with this source |
 | Q17 | No CI. Every check is a local convention, and `tools/check.sh` runs only when someone remembers — on a repo where two verify tools shipped broken-and-green inside one commit | The checks exist and are now capable of failing; nothing makes them run. The Python half (`ruff`, `pytest`, `gdformat`) needs no engine and is nearly free to automate; the Godot half needs the binary plus export templates in a runner | — | ✅ **Resolved 2026-07-31** — GitHub Actions runs both halves. Export templates turned out not to be needed: only exports want them, and CI does not export. **Three of the six checks; the generated-asset contracts are not covered** — see the decision log |
 | Q16 | One region measures **56.4 MB** in the PCK against a 200 MB bundle budget — before any vehicle, audio or UI asset, and before a second region | Half the iOS cellular threshold spent on the part of the game the player looks at but never touches | `P2-1` | ✅ **Resolved 2026-08-01** — the tiers do not all ship. LOD0 dropped after the `P2-1` review found it indistinguishable; **51.6 → 21.1 MB PCK**, measured from real exports |
 | Q19 | **5.17% of the drawn carriageway has solid geometry standing in it at bumper height.** Split by grade: `BUILDING` at grade 1.72%, `INFRASTRUCTURE` at grade 1.60%, and **1.87% on off-grade ribbon nobody can reach**. The rows do not sum to the headline and are not meant to — 38 cells hold both classes and are counted in each. Cosmetic until 2026-08-01; now every square metre is a collider | The car is stopped by invisible walls on legal carriageway, and `P3-3`'s traffic will route into them. The at-grade half is a real defect; the off-grade half is an artefact of `Q20` and disappears with it | `P2-7` | 🔴 **Open — raised 2026-08-01** by the user's `P2-5` drive, then measured, then re-split |
-| Q20 | **The off-grade carriageway is drawn at an invented height, and collision has made the ramps climbable.** `elevation_levels` gives level 1 a flat **+6.0 m** offset, but the real decks vary: measured against the `INFRASTRUCTURE` structure the ribbon is off by **>1 m in 78%** of samples and **>2 m in 54%**, median **−1.51 m**, p10–p90 spread **6.51 m**, and it sits *below* the structure 72% of the time. So 23.3% of drawn carriageway floats through a flyover instead of lying on it, with no ramps because `Q13`'s ramps are the missing piece | `Q13` deferred this on the grounds that the elevated network was **unreachable**. That premise died on 2026-08-01: tile geometry is now solid, so the physical ramps are drivable and a player who climbs one arrives at a ribbon that is not there. Either close the network properly or open it properly — it is no longer a drawing question | `P2-7` | 🔴 **Open — raised 2026-08-01** by the user's `P2-5` drive |
+| Q20 | **The off-grade carriageway is drawn at an invented height, and collision has made the ramps climbable.** `elevation_levels` gives level 1 a flat **+6.0 m** offset, but the real decks vary: measured against the `INFRASTRUCTURE` structure the ribbon is off by **>1 m in 78%** of samples and **>2 m in 54%**, median **−1.51 m**, p10–p90 spread **6.51 m**, and it sits *below* the structure 72% of the time. So 23.3% of drawn carriageway floats through a flyover instead of lying on it, with no ramps because `Q13`'s ramps are the missing piece | `Q13` deferred this on the grounds that the elevated network was **unreachable**. That premise died on 2026-08-01: tile geometry is now solid, so the physical ramps are drivable and a player who climbs one arrives at a ribbon that is not there. Either close the network properly or open it properly — it is no longer a drawing question | `P2-7` | 🔴 **Open — raised 2026-08-01** by the user's `P2-5` drive; **design settled the same day and measured, not yet implemented.** Slab-continuity sampling of `INFRASTRUCTURE`, 10 m resampling, a terrain gate, and a level-0 half nobody had seen: the edges leading into 13 of the 36 nodes are themselves on the ramp. Baseline to beat is \|error\| p90 **4.19 m** against the shipped tiles. See the decision log |
 | Q18 | Does flat-coloured ground read as ground, or does it need land-cover colour classified from the source aerial texture? And does sinking the terrain ~0.2 m under the road deck actually clear the carriageway on cross-slopes? | Decides whether `P3-10` ends after its cheap half or grows an image-decode stage and a **Pillow** dependency. The z-fighting half is not a preference — get it wrong and the ground fights every road in the region | `P3-10` | 🟡 **Open — raised 2026-08-01** by the ground/colour evaluation |
+| Q21 | **Should level −1 carriageway be drawn at all?** 15 edges, 5,010 m, **11.6% of the region's carriageway area**, ribboned under the terrain where nothing can see it and nobody can drive it — and solid since collision shipped. `P2-7` cannot improve their height: they are a void, so there is nothing to sample, and **11 of their 30 ends are clipped at the region boundary**, so the two Cross-Harbour portals have only ~42 m of run for an 8 m descent (19%) | Triangles, collider surface and bundle bytes spent on geometry with no viewer and no driver, plus a permanent unresolvable entry in `Q13`. Against that: `P3-3`'s traffic and any Phase 4 work want the edges to *exist*, and drawing is not the same as existing — `roadgraph.json` would keep all 15 either way | `P2-7` | 🟡 **Open — raised 2026-08-01** by `P2-7`'s classification, then sharpened by the user's guess that the portals sit outside the region |
 
 ### Q18 — deliberately asked in the order that might avoid answering it
 
@@ -618,6 +619,193 @@ below.
 ---
 
 ## Decision log
+
+### 2026-08-01 — `P2-7` steps 0 and 1: the 36 nodes are **all ramps**, and the height model is wrong on *both* sides of them
+
+`PLAN.md` makes classifying the 36 mixed-level nodes `P2-7`'s first job and says to treat the answer
+as the task's real finding. It is. Probes ran before any production code, in the scratchpad, against
+the built graph and the cached sheets; every number below is measured.
+
+#### The classification — and `PLAN.md`'s second hypothesis has no instances
+
+| Kind | Count | Residual step once the deck is sampled |
+|---|---|---|
+| **Ramp junction** — structure already reaches grade at the node | **17** | median **0.33 m**, max **0.93 m**; 10 under 0.5 m |
+| **Ramp mid-point** — the source's `ELEVATION` attribute flips partway up | **13** | median **3.09 m**, range 2.14–4.02 m |
+| **Tunnel portal** — a void, so no structure and never will be | **5** | unchanged, 8.00 m |
+| **No usable structure** — node 389, `e425`'s 25 m stub at the region corner | **1** | unchanged |
+
+The deck-above-terrain margins are **bimodal with a gap between +0.93 m and +2.14 m**, so the split
+is a property of the data rather than of where a threshold was put.
+
+⚠️ **There are zero plan-coincident crossings.** `PLAN.md` framed the second hypothesis as "a
+flyover passes over a street and the source joined them because they share a plan position", and the
+first pass of this classification duly labelled 13 nodes that way. It was wrong, and what exposed it
+was the clearance: **2.14–4.02 m is too low for a street to pass under.** Checked properly, 12 of
+the 13 are **degree 2 with a level-0 edge ending and a level-1 edge starting** (node 386 is degree
+3, with two level-1 edges leaving it), 11 of the 13 **share a road name across the node**, and the
+structure runs continuously through: climbing +2.1 → +5.1…+7.4 m over the next 40 m on the level-1
+side, and descending to grade on the level-0 side within **3.8–88.3 m**.
+
+That is one road, split where the publisher's attribute changes, at a point **partway up the ramp**.
+`ELEVATION` is an attribute of a feature, not a survey of where the road is, and nothing obliges the
+flip to coincide with the touchdown. It is why those 13 look like a 6 m cliff: **both sides are
+wrong, by about half a deck height each, in opposite directions.**
+
+`_Nodes`' own docstring had this right from `P1-3` — "every one of the 36 endpoints where two levels
+meet is a ramp touching down". It is now measured rather than inferred, and the refinement is that
+13 of them touch down some distance *past* the node.
+
+**A correction to `PLAN.md`'s worked example.** It cites `e318` climbing "3.70 m over 39.5 m, which
+is a ramp gradient". The edge does rise +3.36 m over 39 m, but every level-1 vertex is `terrain +
+6.0`, so that is the **terrain** rising under a flat ribbon, not a ramp. The ramp is real and it is
+in the structure beneath: −0.02 → +5.55 m over the same 39 m. Right conclusion, coincidental
+evidence.
+
+#### The consequence: sampling only off-grade edges would **relocate** the step, not close it
+
+At those 13 nodes the level-0 edge is itself sitting on the ramp — 2.1 to 4.0 m above terrain at the
+node — and it is drawn at `terrain + 0`. Fix only the level-1 side and a 2.1–4.0 m cliff remains at
+the flip point, now **mid-ramp**, where it is more visible rather than less. It is also the
+likeliest literal cause of the `P2-5` drive report: *"I hit the road going up from a ramp, but the
+road is not aligned to the ramp"* — driving up a physical ramp collider while the level-0 ribbon
+stayed at ground level beneath it.
+
+**User's call, taken 2026-08-01: sample level-0 edges too.** This changes at-grade drivable geometry
+on 16 edge ends, in a task whose scope note says nothing becomes drivable. Nothing does — the
+network stays closed, `nearest_edge` keeps refusing off-grade edges — but the surface under the car
+moves, and that was not the ETL's decision to make.
+
+#### Which level-0 rule, measured rather than argued
+
+| Rule | What it touches | Verdict |
+|---|---|---|
+| **Height cap** — lowest slab top within `[terrain, terrain + cap]` | 173 of 737 level-0 edges, 707 stations, ~81 lifting over 1 m | ❌ Ramp and flyover-deck populations separate at **4.95 m vs 5.33 m** — 0.38 m to place a threshold in, and it lifts five times what is broken |
+| **Walk** — only edges meeting a mixed node, from that node until the structure meets the ground | **16 edge ends**, runs 3.8–88.3 m, all fitting inside their own edge | ✅ Monotonic descents to grade, no threshold to tune |
+
+The walk rule answers "is this structure the road's own ramp?" from **topology** — the road is on
+this ramp because it connects to the edge that is on it. That is the third place in this task where
+the naive answer was "pick by height" and the measured answer was "pick by what it connects to".
+
+`TONNOCHY ROAD` is in the 16 (`e520`, +0.89 m over 13.5 m). It is also the approach `PLAN.md` names
+as the review location, which is a useful coincidence rather than a designed one.
+
+#### The sampler itself: two ideas were wrong before they were measured
+
+**1. There is no parapet to subtract.** Transverse profiles across 8 flyovers at 3 stations each:
+the deck centre is a flat plateau, and the raised lips are **+0.11 to +0.92 m sitting off-centre at
+±3 to ±6 m** — a centreline never touches one. `Q13`'s "+1.22 m, about railing height" reproduces
+here as **+1.27 m median deck-above-ribbon**, which is the genuine gap between the invented height
+and the deck. One config knob deleted before it was written, and the acceptance metric measures
+against the deck top directly.
+
+**2. Seeding the sample from the existing height and taking the nearest hit is *worse* than taking
+the highest.** The multi-hit spread is **1.7–2.2 m on most edges** — deck slab thickness. The
+sampler is hitting the top *and the underside of the same slab*, and today's seed sits below the
+deck 66% of the time, so nearest-to-seed flips between the two faces and manufactures 80–96% grades.
+
+What works is slab clustering plus continuity: cluster each station's hits into slabs (a gap over 3
+m is a different structure), take each slab's top, then walk the edge choosing the slab that
+continues the last, **anchored on the stations that have only one slab** rather than on any seed.
+
+| Selector, 1188 segments over 45 level-1 edges | Segments over 12% | Worst grade |
+|---|---|---|
+| highest hit | 6 | **163.1%** |
+| slab continuity | **2** | **13.7%** |
+
+Median grade 2.47%, p90 8.04%, coverage 97.1% — consistent with the `Q13` spike's 3.01% / 7.45% /
+95.3%. It fixes both stacked-deck edges (`e105` 124.6% → 6.9%, `e271` 163.1% → 8.1%). The residual
+13.7% on `e521` is not artefact-scale; 12% was an arbitrary threshold inherited from that spike.
+
+⚠️ `HeightField._highest_hit` returns the maximum by design — the top of a sea wall is the drivable
+face. Pointed at `INFRASTRUCTURE`, which is closed volumes rather than a surface, the same rule
+reads Canal Road's upper deck while the edge is on the lower one. Same code, opposite correctness.
+The class carries no normals, so "the top" needs a **per-slab** definition; anchoring on unambiguous
+stations supplies one without needing normals at all.
+
+#### Densification is needed, for the opposite reason to the one assumed
+
+Off-grade vertex spacing is median 10.8 m but **p90 56.4 m and max 446.2 m**, which looked like it
+would leave a chord across every ramp climb. Measured against dense truth at 2.5 m stations, it
+mostly does not:
+
+| Ribbon | median | p10 | p90 | **\|error\| p90** | max | below deck |
+|---|---|---|---|---|---|---|
+| today, as shipped | −1.27 | −2.87 | +3.74 | **4.19 m** | 14.42 | 66% |
+| sampled at today's vertices | +0.00 | −0.13 | +0.05 | **0.30 m** | 4.84 | 16% |
+| resampled at 10 m first | −0.00 | −0.03 | +0.01 | **0.04 m** | 0.57 | 3% |
+
+Sampling alone already clears ±0.5 m at p90. **Densification is justified by the maximum, not the
+p90:** 4.84 m, all of it on `e118` `FLEMING ROAD`, where a 71.5 m vertex gap spans structure
+climbing 4.25 → 5.05 m. That is precisely the defect the user drove into, and p90 hides it. 10 m
+spacing takes level-1 vertices from 430 to 667 and removes it.
+
+#### A fallback gate, and the edge that proves it is needed
+
+`INFRASTRUCTURE` is not only elevated decks. **`e425` `ISLAND EASTERN CORRIDOR`** — a 25 m stub at
+the region's north-east corner — has no deck at all: 5 of its 11 stations return nothing and the
+rest find structure at −2 m and −11 m. Testing *a deck cannot sit below the ground under it*
+separates cleanly:
+
+- `e425`: **−8.14 to −8.28 m** below terrain
+- next worst: **−0.54 m**, and every other case is a genuine ramp grazing grade (`WAN CHAI
+  INTERCHANGE` `e146`/`e294`/`e318`/`e399`, `MARSH ROAD`)
+
+A 7.6 m gap between the two populations, and those near-zero margins are independent corroboration
+that the interchange edges are real ramps. 18 of 1233 stations (1.5%) sample below terrain.
+
+#### What this leaves of `Q13`
+
+From "36 nodes step by a whole deck height" to **5 tunnel portals and 1 stub**. The 17 ramp
+junctions close to ≤0.93 m and the 13 attribute flips close on both sides. A tunnel is a void, so no
+height source will ever repair those five — that remainder is answered rather than merely left open.
+Whether they should be *drawn* at all is a different question, and it is `Q21`.
+
+#### And the portals are **clipped**, which is a better reason than "a tunnel is a void"
+
+The user's guess on reading the above: *"the tunnel entrances are not in the Wan Chai area and are
+in a wider nearby region not included."* Checked, and it holds — every one of the five has an edge
+cut at the region boundary.
+
+| Node | Road | Level −1 run inside the region | What is clipped |
+|---|---|---|---|
+| 250 | `CROSS HARBOUR TUNNEL` | **42 m** | the tunnel itself, at the harbour edge (z=0) |
+| 430 | `CROSS HARBOUR TUNNEL` | **40 m** | the tunnel itself, at the harbour edge |
+| 540 | `CENTRAL-WAN CHAI BYPASS TUNNEL` | 63 m | the tunnel, at the western edge (x=0) |
+| 399 | `CENTRAL-WAN CHAI BYPASS TUNNEL` | 356 m | the level-0 continuation, heading west |
+| 444 | `CENTRAL-WAN CHAI BYPASS TUNNEL` | 486 m | two level-0 continuations, heading west |
+
+**11 of the 30 level −1 edge ends sit on the region boundary** — the underground network is clipped
+harder than any other part of the graph, which follows from `P1-3` cutting roads at the boundary
+where buildings are kept whole.
+
+For the Cross-Harbour Tunnel this is decisive: **8 m of descent over a 42 m stub is a 19% grade.**
+The descent happens outside Wan Chai, so there is no horizontal run inside the region to distribute
+it over, and no height model — sampled, blended or authored — can put one there. That is a stronger
+statement than "a tunnel is a void": even with perfect information the geometry does not fit in the
+slice. It would resolve itself if the region ever grew east, which is `Q6`'s territory.
+
+The bypass is the opposite shape — 356 m and 486 m of run — so those three *could* be blended
+gently. But they are tunnel: invisible, under the terrain, and carrying colliders no one can reach.
+That points at whether level −1 should be drawn at all rather than at a height fix, which is `Q21`.
+
+#### Two acceptance criteria restated, because they are not literally achievable
+
+- **Error against the structure** is measured against the **shipped tiles**, not against the
+  sampler. An ETL-internal number reads 0.04 m at p90 and is very nearly tautological, since the fix
+  and the measurement would share a selector. Baseline to beat: **4.19 m**.
+- **"No ribbon left below the deck"** becomes *no sample more than 0.1 m below*. A piecewise-linear
+  ribbon on a convex structure dips below it between vertices; at 10 m spacing that is 3% of
+  samples, by centimetres.
+
+#### Settled design, nothing implemented yet
+
+| Edge | Height source |
+|---|---|
+| Level +1 | Resample at 10 m → slab-continuity walk → terrain gate → fall back to `terrain + deck_height_m(level)` where no valid sample |
+| Level 0 **meeting a mixed node** | Walk from that node, lowest slab top at or above terrain, until the lift reaches ≤0.3 m — 16 edge ends |
+| Level 0 elsewhere | Unchanged — `terrain`, exactly as today |
+| Level −1 | Unchanged — `elevation_levels[-1]`; a tunnel is a void |
 
 ### 2026-08-01 — Genre direction: **three references, three different questions** — and one of them moves a task between builds
 
@@ -1631,6 +1819,13 @@ a mixed-level node: **20 of 28 start already elevated**, at a gentle 0.2–1.6% 
 run rather than a ramp. Only 8 begin near street level and climb. The graph simply has no edge
 spanning the climb at those junctions, so there is no horizontal run to distribute a rise over and
 **no height source can repair it** — the fix would have to add geometry the source never published.
+
+> ❌ **Superseded 2026-08-01 by `P2-7`'s classification.** The observation is right and the
+> conclusion drawn from it is wrong. The climb *is* in the graph; it is split across a level-0 edge
+> and a level-1 edge, because the source flips `ELEVATION` partway up the ramp rather than at the
+> touchdown. So a level-1 edge "starting already elevated" is not a deck run with no approach — its
+> approach is the level-0 edge on the other side of the node, which is itself sitting 2.1–4.0 m up on
+> the same structure. Nothing needs inventing; both halves need sampling. See the decision log.
 Where the graph *does* carry the ramp the result is excellent: `CANAL ROAD FLYOVER` samples 4.62 m →
 11.55 m over 254 m at **2.7%**, and 4.66 m → 11.87 m over 218 m at **3.3%**. Across all 28, no
 junction edge exceeds **6.2%**. So the ceiling on this approach is set by the road network's

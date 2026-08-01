@@ -694,11 +694,22 @@ Two traps, both from `sample()` returning the *highest* hit:
 Both are fixed the same way: window the sample around the expected deck rather than taking the
 global maximum.
 
-❌ **It cannot fix tunnels, and it cannot fix the junctions on its own.** A tunnel is a void, so the
-five `(−1, 0)` nodes have no structure to sample and never will. And of the 28 level-1 edges leaving
-a mixed-level node, **20 start already elevated** — the graph has no edge spanning the climb, so
-the discontinuity there is topological rather than a wrong height. What sampling gives is a correct
-*profile* along the deck, not a connected network. See `Q13` in `PROGRESS.md`.
+❌ **It cannot fix tunnels.** A tunnel is a void, so the five `(−1, 0)` nodes have no structure to
+sample and never will.
+
+⚠️ **Corrected 2026-08-01 by `P2-7`: the junctions are not beyond reach.** This section used to
+conclude that the discontinuity at a mixed-level node is topological, on the grounds that 20 of the
+28 level-1 edges leaving one start already elevated. The observation holds and the inference does
+not. The climb **is** in the graph, split across a level-0 edge and a level-1 edge, because the
+source flips `ELEVATION` partway up the ramp rather than at the touchdown. **None of the 36 nodes is
+a plan-coincident crossing** — all are ramps, and at 13 of them the level-0 edge sits 2.1–4.0 m
+above terrain on the same structure. So both sides want sampling, not just the off-grade one. See
+`Q13` and the decision log in `PROGRESS.md`.
+
+⚠️ **`INFRASTRUCTURE` is not only elevated decks**, so a sampler needs a rejection rule.
+`ISLAND EASTERN CORRIDOR`'s 25 m stub at the region corner has no deck at all: half its stations
+return nothing and the rest find structure metres *below* the terrain it should be sitting above.
+See the decision log for the gate that implies.
 
 ❌ **Terrain does not fit any budget as it ships.** Clipped to the region it is still 404,669
 triangles, and its six GLBs total **267 MB** — of which **224 MB is the JPEGs**, carried through

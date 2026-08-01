@@ -9,14 +9,17 @@ extends RefCounted
 ##
 ## ⚠️ `nearest_edge` never returns an off-grade edge, and that is `Q13`'s
 ## decision rather than an optimisation. The elevated and underground networks
-## are topologically connected to the streets and geometrically unreachable: 20
-## of the 28 level-1 edges leaving a mixed-level node begin already elevated,
-## because the source publishes no edge spanning the climb. Sampling the map
-## sheets' `INFRASTRUCTURE` structures gives a correct deck *profile* — 3.01%
-## median grade, measured — but cannot invent the missing ramp, so the slice
-## drives the streets and the flyovers are scenery. Ask for one by id and you
-## still get it: `P3-3`'s traffic and any later ramp work need those 60 edges to
-## exist, they just must never be handed a car.
+## are topologically connected to the streets and geometrically unreachable, so
+## the slice drives the streets and the flyovers are scenery. Ask for one by id
+## and you still get it: `P3-3`'s traffic and any later ramp work need those 60
+## edges to exist, they just must never be handed a car.
+##
+## What is unreachable is what `elevation_levels` *draws* — a flat deck at
+## `terrain + 6.0` with a cliff at each end — rather than anything the source
+## failed to publish. All 36 mixed-level nodes are ramps, and the climb is split
+## across a level-0 and a level-1 edge because `ELEVATION` flips partway up
+## rather than at the touchdown. `P2-7` will sample both sides from the map
+## sheets; this refusal stays regardless, because opening the network is Phase 4.
 
 const GeneratedRoadGraph = preload("res://scripts/city/generated_road_graph.gd")
 
