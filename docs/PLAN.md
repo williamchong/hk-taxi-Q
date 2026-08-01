@@ -266,19 +266,21 @@ Run these **in parallel**; `P0-2` is the one that can force a region change.
 **Goal:** a complete arcade loop that passes the authenticity test.
 
 **Four playable builds, then the test.** All nine original tasks are here and their IDs are
-preserved, with `P3-1` and `P3-5` each split into an `a`/`b` pair. The reorder changes **when** they
-land, not what they are, so that the user plays something after each build rather than after all of
-it. Builds run in order, `B1` → `B4`.
+preserved, with `P3-1`, `P3-2` and `P3-5` each split into an `a`/`b` pair. The reorder changes
+**when** they land, not what they are, so that the user plays something after each build rather than
+after all of it. Builds run in order, `B1` → `B4`.
 
 Why reordered, in one line each:
 
 - **The thin loop comes first** because "is completing a fare worth doing twice?" is cheap to
   answer and expensive to get wrong, and the other eight tasks currently stand between it and being asked.
 - **Art comes second, not sixth.** `P3-9` asks HK drivers to navigate *with the arrow disabled* —
-  that is a test of **recognition**, which `P3-6` and `P3-7` deliver and `P3-2` does not touch at
+  that is a test of **recognition**, which `P3-6` and `P3-7` deliver and `P3-2b` does not touch at
   all. It is also the project's central bet (`Q8`), so it wants the most iteration time.
 - **Scoring comes last** because it answers "does novelty survive the first session," the live
   entry in the risk register, and that question wants every other system in place before it is put.
+  **One exception, added 2026-08-01:** near-miss scoring moves up to `B3` as `P3-2a`, because it is
+  what makes that build's review question answerable at all. See `B3`.
 
 ### Build `B1` — "One fare"
 
@@ -323,16 +325,28 @@ Why reordered, in one line each:
 | `P3-3` | `TrafficSystem` — AI on road-graph splines obeying direction and turn restrictions | Traffic obeys real rules; density scales by perf tier |
 | `P3-4` | Trams on Hennessy/Johnston as scripted moving blockers | Unpassable, correctly routed, tram bell audio |
 | `P3-8` | Bus-lane penalty + red taxi livery + minibus behaviour | Penalty triggers from the `bus_lane` flag |
+| `P3-2a` | **Near-miss scoring only** — detection plus a live on-screen award. Split out of `P3-2` | Passing AI traffic inside the threshold at speed awards points, shown during the drive. No style chain, no banking |
 
-- **Deps:** `P2-2`, `B2`. Within the build, `P3-4` and `P3-8` follow `P3-3`.
+- **Deps:** `P2-2`, `B2`. Within the build, `P3-4` and `P3-8` follow `P3-3`, and `P3-2a` follows all
+  three — it has nothing to detect until there is traffic to pass.
 - **Review:** drive the `B1` fare again, now with traffic | web build | **Harder in a
   good way, or just annoying?**
+- ⚠️ **`P3-2a` is here because the review question is otherwise rigged against the build.** Dense
+  traffic is what converts an obstacle into an opportunity *only if threading it pays*; with scoring
+  wholly in `B4`, this review would judge traffic in the one state where traffic has no upside, and
+  a "just annoying" verdict would be an artifact of the ordering rather than a finding about the
+  traffic. Near-miss detection alone is a small slice — a threshold, a speed gate and a HUD pop —
+  and the rest — `P3-2b` — stays in `B4` where it belongs.
+- **Prior art: Burnout 3.** Near-miss, oncoming-lane driving and a boost meter fed by risk are the
+  fullest working-out of *traffic as the reward rather than the obstacle*, and the threshold, the
+  speed gate and the pop are all tuned quantities there rather than obvious ones. Worth studying
+  before tuning ours.
 
 ### Build `B4` — "It's a game"
 
 | ID | Deliverable | Accept |
 |---|---|---|
-| `P3-2` | `ScoreSystem` — base, time bonus, drift/near-miss/air/speed, combo | Style points award live during driving |
+| `P3-2b` | `ScoreSystem` — base, time bonus, drift/air/speed, **the style chain and its banking**, and the fare combo. Absorbs `P3-2a`'s near miss | Style points award live during driving, and the style chain is **losable** — a hard crash costs it unbanked |
 | `P3-1b` | Remaining fare types — **cross-harbour** and long haul | Cross-harbour fare works |
 | `P3-5b` | Full HUD — bilingual destination callouts, safe areas, one-handed layout | Readable one-handed in daylight |
 

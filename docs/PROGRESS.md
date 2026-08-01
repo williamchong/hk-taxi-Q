@@ -151,6 +151,14 @@ call; buildings get their surface detail from two channels already in the bundle
 Neither is next — `P2-3` is the Phase 2 gate — but both land in `B2`, as `P3-10` and inside `P3-7`.
 See the decision log and `Q18`.
 
+**The genre direction is settled across three references rather than one, and it changed the plan
+once.** Crazy Taxi keeps the loop, Midtown Madness 2 supplies the world philosophy — real shortcuts
+over invented ramps — and Forza Horizon supplies the reward layer, chiefly a **losable style
+chain**. The one scheduling
+consequence: near-miss scoring splits out as **`P3-2a` and moves from `B4` into `B3`**, because that
+build's review asks whether traffic is *harder in a good way* and traffic has no upside until
+threading it pays. See the decision log.
+
 ### Task board
 
 | ID | Task | Status | Notes |

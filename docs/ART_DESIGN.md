@@ -190,6 +190,11 @@ and a photographic texture smears where it does, and there are no UVs left to mo
    instead of blending across them, which is what makes 4 m colour blobs read as deliberate low-poly
    ground rather than as mush.
 
+**Prior art says the first step can be the last one.** *Art of Rally* ships flat-shaded untextured
+terrain as its finished look, not as a placeholder. Wan Chai is far denser than that game's
+countryside, so it settles nothing here — but if the first pass reads dead, suspect the palette
+before the technique. See `Q18`.
+
 **What is explicitly not done: shipping the orthophoto, resampled or otherwise.** It would cost a
 draw call per tile, since a textured surface cannot merge with a vertex-coloured one. And an
 orthophoto has the *real* roads baked into it at their real width, while the generated ribbon sits

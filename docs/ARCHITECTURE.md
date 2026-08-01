@@ -651,7 +651,7 @@ every region lies inside them.
 | `VehicleController` | Player car. Custom raycast vehicle on `RigidBody3D` + arcade overrides |
 | `TrafficSystem` | AI vehicles following road-graph splines; trams as scripted blockers |
 | `FareSystem` | Fare state machine: idle → hailed → carrying → delivered/failed |
-| `ScoreSystem` | Base fare, time bonus, style points, combo chain |
+| `ScoreSystem` | Base fare, time bonus, style points, **style chain** and **fare combo** — two distinct multipliers |
 | `InputRouter` | Abstracts touch / gamepad / keyboard into one action set |
 | `HUD` | Meter, timer, arrow, destination callout (bilingual) |
 | `AudioDirector` | Engine, radio, callouts, ambience buses |

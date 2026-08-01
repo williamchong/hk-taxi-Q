@@ -23,11 +23,26 @@ roads, ramps, shortcuts, and forgiving collision.
 | Road topology and connectivity | Road **width** — widen ~1.3–1.8× |
 | One-way directions and turn restrictions (for **AI traffic**) | Player rule-breaking — always allowed |
 | Building massing and position | Pedestrian railings — omit or make breakable |
-| Landmark placement | Ramps, jumps, plaza shortcuts — hand-added |
+| Landmark placement | Ramps, jumps, shortcuts — hand-added, and sparingly (see below) |
 | Street and place names | Kerb heights — flatten for mountability |
 
 The player may break every traffic rule. The AI obeys them. That asymmetry is what makes the city
 read as real while staying playable.
+
+⚠️ **The divergences are not all equally cheap, and one of them is priced against `P3-9`.** Widened
+carriageways, flattened kerbs and omitted railings are invisible to a driver's memory of a street —
+nobody navigates by kerb height. A hand-added ramp is not. It is new geometry standing somewhere the
+player knows, and every one is a debit against the acceptance test at the bottom of this document.
+
+**So prefer the shortcut that is there over the ramp that is not.** The region already holds the
+vertical beat and the alternate lines in its own geometry — the Canal Road Flyover, the elevated
+Gloucester approach, the plaza gaps, the alley grid. (`Q13` and `Q20` are what stand between the
+flyover and the player, and **neither is a missing ramp** — the ramps are there in `INFRASTRUCTURE`,
+and since tile collision shipped they are climbable. The defect is what waits at the top: the
+carriageway is drawn at a flat per-level height, so it floats where it should climb, and a slab of
+in-air road blocks the camera. `P2-7` samples the structure instead. Inventing a ramp here would add
+to that, not fix it.) Invent a ramp only where a specific stretch is demonstrably dead, and record
+it as a decision when you do.
 
 ---
 
@@ -101,6 +116,24 @@ with the arrow disabled.**
 Style points are awarded **during** the drive and shown immediately — the feedback loop must be
 tight enough that players learn what the game rewards without being told.
 
+⚠️ **They accumulate into a *style chain* rather than popping and clearing, and that is a deliberate
+divergence from the genre's usual per-event bonus.** A bonus that pays instantly teaches the player
+what the game likes; only a multiplier that can be *lost* makes the next corner tense. It is the
+project's bet on what makes a 1.5 km² map worth re-driving, and `B4`'s review is where that bet is
+put.
+
+Two multipliers therefore exist — and **"chain" already means the fare sequence elsewhere in this
+document**, so the style one is always the *style chain*:
+
+| | Scope | Climbs on | Resets on |
+|---|---|---|---|
+| **Style chain** | Seconds of driving | Style components | A hard crash, or going quiet after it banks |
+| **Fare combo** | The session | Consecutive deliveries | A bailed fare |
+
+Sustained speed belongs to Gloucester Road, drift and near miss to tram-pinned Hennessy — so **which
+route pays more becomes a real choice**. Air has no source geometry today and the flyover is not
+drivable (`Q13`); neither is scored until something can be jumped off.
+
 ---
 
 ## Controls
@@ -142,6 +175,16 @@ Ranked by impact-to-effort. The top four are where the "feels like HK" verdict i
 > **Trams are the highest-leverage single object in the game.** They constrain lane choice exactly
 > the way they do in reality, they are instantly recognisable, and they cost far less than
 > modelling another building.
+
+⚠️ **Nothing in the table above is built yet, and neon is the highest-value gap.** **Sleeping Dogs**
+is the nearest commercial precedent for a recognisable Hong Kong, and the common reading of why it
+worked is signage density and overhanging shopfront light rather than street accuracy. Untested here
+— but it names a failure mode `P3-9` should be listened to for, because *"the streets are bare"* and
+*"the streets are wrong"* have completely different fixes.
+
+Cheap when it comes: `ART_DESIGN.md` already reserves the emissive channel for the night variant,
+and the signs are instanced props rather than anything the ETL derives. Not in the slice; first
+thing to reach for once `P3-9` reports.
 
 ---
 
@@ -193,9 +236,14 @@ Admiralty west, Victoria Park east. No invisible walls needed.
 | Mode | Status | Notes |
 |---|---|---|
 | **Arcade** | Vertical slice | The main mode. Chain fares against the clock. |
-| **Free roam** | Vertical slice | No timer. Essential for playtesting and for the authenticity test. |
+| **Free roam** | Vertical slice | No timer. Essential for playtesting and for the authenticity test. The state `Q8` was judged in — no fare, no timer, no arrow. Also where `P3-9` runs. |
 | Time trial | Later | Fixed A→B, leaderboard |
 | Daily challenge | Later | Seeded fare sequence |
+
+**`Q8` was judged in that state, though not in this mode.** The verdict that closed the project's
+top risk came from `scenes/dev/city_drive.tscn` — a dev scene — driving the city with no fare, timer
+or arrow. Free roam is what turns that state into something a player can reach, which is why it is
+in the slice rather than left as a harness.
 
 ---
 
