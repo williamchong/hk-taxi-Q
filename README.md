@@ -7,11 +7,11 @@ Lands Department's 3D Digital Map. Wan Chai and Causeway Bay, reconstructed to t
 Hong Kong driver can navigate it from memory — then widened, ramped, and tuned until it's fun to
 drive badly.
 
-> **Status:** Phase 1 complete — the real city builds from open data and renders in Godot. Wan Chai
-> is 65 building tiles, 797 road edges with turn restrictions, a drivable road surface and 29 fare
-> nodes (14 taxi stands, 15 pick-up/drop-off points), assembled by one command in 4.4 s. It is
-> drivable in a browser. Next is Phase 2: tile
-> streaming, a road-graph runtime, and the car on real geometry. See
+> **Status:** Phase 1 complete, Phase 2 nearly done. One command turns six government map sheets and
+> a road geodatabase into a drivable city in **3 seconds**: 65 building tiles, 797 road edges with
+> turn restrictions, a drivable road surface and 29 fare nodes. Godot streams it, the car drives it,
+> the buildings and the flyovers are solid, and it plays in a browser. Left before the Phase 2 gate:
+> touch input and the on-device performance pass, both of which need a handset. See
 > [`docs/PROGRESS.md`](docs/PROGRESS.md).
 
 ---
@@ -22,9 +22,9 @@ Most city-driving games either hand-build a fictional city or drape photogrammet
 Hong Kong publishes its buildings as **untextured extruded footprints** and its roads as a
 **navigable graph with turn restrictions and one-way directions** — both free for commercial use.
 
-Extruded untextured footprints are, structurally, already low-poly buildings. So the art style
-isn't applied on top of the data; it's the shape the data already has. That's what makes a project
-this size tractable.
+Extruded untextured footprints are, structurally, already low-poly buildings. So the art style isn't
+applied on top of the data; it's the shape the data already has. That's what makes a project this
+size tractable.
 
 The design goal is narrow and testable:
 
@@ -52,7 +52,7 @@ hk-taxi-Q/
 ├── docs/          # architecture, design, plan, progress
 ├── etl/           # Python: HK open geodata → game assets (build time)
 ├── game/          # Godot project
-└── tools/         # dev and export scripts
+└── tools/         # dev, check and export scripts
 ```
 
 The ETL runs **at build time only**. The game ships static assets and makes no network calls.
@@ -65,8 +65,8 @@ You need [Godot 4.7](https://godotengine.org/) — on macOS, `brew install --cas
 Python 3.11+.
 
 **Build the city.** The first run downloads ~320 MB of source data and caches it; after that the
-whole region rebuilds in about 4.4 seconds. Output is gitignored build artefact, not source, so a
-fresh clone has none of it until you do this:
+whole region rebuilds in about 3 seconds. Output is gitignored build artefact, not source, so a fresh
+clone has none of it until you do this:
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -e "etl/[dev]"
@@ -80,27 +80,37 @@ tools/sync_generated.sh          # copies exactly what city.json names
 **F3** cycles the debug overlay — off, then a position and frame-rate block, then the road graph's
 readout and chevrons. It starts off; see `docs/ARCHITECTURE.md` "The debug overlay".
 
-**Check it.** The ETL cannot assert engine-side facts about its own output, so three headless tools
-do. The import step is required, not optional — it builds the gitignored `game/.godot/`, without
-which the freshly synced `.glb` files have no import sidecars:
+**Check it.** The ETL cannot assert engine-side facts about its own output, so six headless tools do.
+The import step is required, not optional — it builds the gitignored `game/.godot/`, without which the
+freshly synced `.glb` files have no import sidecars:
 
 ```bash
 tools/check.sh
 ```
 
-That runs `gdformat`, the import (~8 s cold, 196 assets), a GDScript warnings sweep and the
-verify tools, and is the **only** route that fails on error. Godot exits `0` whatever happens —
-including when a script fails to parse — so the script reads its output and supplies the exit code
-the engine will not. Running the steps by hand and eyeballing them is how a broken check passes.
+That runs `gdformat`, the import (~8 s cold), a GDScript warnings sweep and the verify tools, and is
+the **only** route that fails on error. Godot exits `0` whatever happens — including when a script
+fails to parse — so the script reads its output and supplies the exit code the engine will not.
+Running the steps by hand and eyeballing them is how a broken check passes.
 
-The warnings sweep is the GDScript linter: 21 engine warnings are set to *error* in
-`project.godot`, including untyped declarations. See
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the list and what was left out.
+The warnings sweep is the GDScript linter: 21 engine warnings are set to *error* in `project.godot`,
+including untyped declarations. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the list.
 
-GitHub Actions runs the same script on every push and pull request, alongside `ruff` and `pytest`.
-It **skips the verify tools** — a fresh checkout has no generated assets to check, and
-building them in CI would mean re-downloading the source data every push. So the asset contracts
-are yours to run locally after a pipeline build; everything else CI catches for you.
+GitHub Actions runs the same script on every push and pull request, alongside `ruff` and `pytest`. It
+**skips the verify tools** — a fresh checkout has no generated assets to check, and building them in
+CI would mean re-downloading the source data every push. So the asset contracts are yours to run
+locally after a pipeline build; everything else CI catches for you.
+
+Two grading tools sit beside the suite and are run by hand after a build, because they need a built
+region under `etl/out`:
+
+```bash
+.venv/bin/python tools/deck_error.py --city hong_kong --generated etl/out/hong_kong/wan_chai
+.venv/bin/python tools/overhang.py   --city hong_kong --generated etl/out/hong_kong/wan_chai
+```
+
+They measure the drawn carriageway against the *shipped* tiles and share no code with the pipeline
+that produced them — a stage cannot mark its own work.
 
 **Export and play it in a browser.**
 
@@ -114,11 +124,8 @@ COOP/COEP headers that it does not send.
 
 ⚠️ **Opening the editor or running an export rewrites `game/project.godot` and
 `game/export_presets.cfg`**, stripping their comments and the web renderer setting. See
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for how to restore and verify. Headless `--import`
-and `--script` runs do not.
-
-Next up is Phase 2 — tile streaming, the road-graph runtime, and the car on real geometry. See
-[`docs/PLAN.md`](docs/PLAN.md) and [`CLAUDE.md`](CLAUDE.md) for the contributor checks.
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for how to restore and verify. Headless `--import` and
+`--script` runs do not.
 
 ---
 
@@ -127,8 +134,8 @@ Next up is Phase 2 — tile streaming, the road-graph runtime, and the car on re
 | Doc | What's in it |
 |---|---|
 | [`CLAUDE.md`](CLAUDE.md) | Locked decisions, hard rules, conventions. **Read first.** |
-| [`docs/DATA_SOURCES.md`](docs/DATA_SOURCES.md) | Verified datasets, licences, CRS, known defects. Read before touching the ETL. |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Stack, repo layout, ETL↔game data contract, perf budget |
+| [`docs/DATA_SOURCES.md`](docs/DATA_SOURCES.md) | Verified datasets, licences, CRS, known defects. Read before touching the ETL |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Stack, repo layout, ETL↔game data contract, checks, perf budget |
 | [`docs/GAME_DESIGN.md`](docs/GAME_DESIGN.md) | Core loop, fares, scoring, controls, HK authenticity mechanics |
 | [`docs/ART_DESIGN.md`](docs/ART_DESIGN.md) | Visual direction, palette, shaders, LOD policy |
 | [`docs/PLAN.md`](docs/PLAN.md) | Phased task breakdown with acceptance criteria |
@@ -136,34 +143,37 @@ Next up is Phase 2 — tile streaming, the road-graph runtime, and the car on re
 
 ---
 
-## Two things that will bite you
+## Three things that will bite you
 
 **Don't use the photogrammetry mesh.** The Lands Department also publishes a tile-based
 oblique-photogrammetry model. It has ground gaps, level discontinuities, and cars fused into the
 terrain — a prior public attempt concluded it suited flight simulation, not driving. Use the
 **non-textured** models and **3D-BIT00 Level 1** instead.
 
-**The road centrelines are 2D — grade separation is an attribute, not a Z value.** Hong Kong drives
-on three levels in places, and a naive 2D graph turns every flyover into a junction that doesn't
-exist. Road Network v2 carries no Z, but it does carry an integer `ELEVATION` (0 / 1 / 2 across
-86.5 / 2.0 / 11.5% of Wan Chai's edges), which the pipeline maps to authored deck heights from city
-config. **Only ever join edges at matching levels.** Resolved as `Q1` on 2026-07-29 — the trap is
-still there for anyone writing new graph code.
+**The road centrelines are 2D — grade separation is an attribute, not a Z value.** Hong Kong drives on
+three levels in places, and a naive 2D graph turns every flyover into a junction that doesn't exist.
+Road Network v2 carries no Z, but it does carry an integer `ELEVATION`. **Only ever join edges at
+matching levels — but never key a *node* on the level**, because every place two levels meet at a
+shared endpoint is a ramp touching down, and splitting there severs the elevated network from the
+ground one.
+
+**Where the deck actually *is* comes from the map sheets, not the road data.** The `INFRASTRUCTURE`
+class in the LandsD sheets models the flyovers *including their approach ramps*, and that is the only
+height source there is for off-grade roads. A tunnel is a void, so it has none and never will.
 
 ---
 
 ## Data attribution
 
-Contains geospatial data from the Lands Department and the Transport Department of the Government
-of the Hong Kong Special Administrative Region, obtained via
-[DATA.GOV.HK](https://data.gov.hk) and the
-[Common Spatial Data Infrastructure Portal](https://portal.csdi.gov.hk).
-Used under the DATA.GOV.HK Terms and Conditions of Use. Data is provided "as is". The Government
-of the HKSAR does not endorse this product.
+Contains geospatial data from the Lands Department and the Transport Department of the Government of
+the Hong Kong Special Administrative Region, obtained via [DATA.GOV.HK](https://data.gov.hk) and the
+[Common Spatial Data Infrastructure Portal](https://portal.csdi.gov.hk). Used under the DATA.GOV.HK
+Terms and Conditions of Use. Data is provided "as is". The Government of the HKSAR does not endorse
+this product.
 
 ---
 
 ## Licence
 
-Not yet decided. Code and assets are separate questions — hand-authored art and the generated
-city data have different considerations from the pipeline source.
+Not yet decided. Code and assets are separate questions — hand-authored art and the generated city
+data have different considerations from the pipeline source.

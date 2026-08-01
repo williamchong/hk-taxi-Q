@@ -31,7 +31,8 @@ them without explicit instruction from the user.
 4. **All tuning values are data**, not constants in code. Handling curves, fare timers, road
    widths → Godot `.tres` resources or JSON.
 5. **Respect the data contract** in `docs/ARCHITECTURE.md`. ETL output and game input are a
-   versioned interface; change both sides together and bump `schema_version`.
+   versioned interface; change both sides together and bump `schema_version`. Bump where a consumer
+   would be **wrong** to keep its old interpretation — not wherever bytes change.
 6. **Attribution is mandatory.** The credits screen must acknowledge the Government of the HKSAR,
    the relevant departments, and DATA.GOV.HK. See `docs/DATA_SOURCES.md`.
 7. **Never use the phrase "Crazy Taxi"** in any user-facing text, store listing, marketing copy,
@@ -88,7 +89,12 @@ Common emoji for this project:
   the import, the GDScript warnings sweep and the verify tools. **Do not run those by hand
   and read the output** — Godot exits `0` even when a script fails to parse, so only the script's
   exit code means anything. See `docs/ARCHITECTURE.md` "Checks".
+- Road-surface or deck-height changes: also `tools/deck_error.py` and `tools/overhang.py`, by hand
+  after a build. They grade the *shipped* bundle and share no code with the pipeline — `check.sh`
+  does not require a built region and should not start requiring one.
 - Update `docs/PROGRESS.md` — task status, plus any new decision or open question.
+- **Bundle size is measured from a PCK, never summed from source files.** That rule has been wrong
+  in both directions once each.
 
 ## Where to look
 
