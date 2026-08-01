@@ -185,7 +185,7 @@ threading it pays. See the decision log.
 | `P2-1` | `CityStreamer` | ✅ **Done — review passed 2026-08-01** | Threaded load/unload by distance to the published `aabb`. Draw calls 70 → 53 against a 150 budget. The review verdict dropped LOD0: worst-case **visible triangles 249,210 → 150,374** against 300k, and the **PCK 51.6 → 21.1 MB**. Bands are now a single 250 m edge, 400 m unload, 15 m hysteresis, in `streaming.tres`. `verify_city_streamer.gd` is the fifth verify tool. Opened the shadow-cascade finding. |
 | `P2-3` | Vehicle on real geometry | ✅ **Done — review passed 2026-08-01** | The hand-written spawn transform is gone: `RoadSpawn` resolves fare node `f_004` through `RoadGraph` and `drive_harness.gd` places the car, reproducing the old literal to **4 dp** and reporting `0.00 m` from the lane centre with `+1.00` heading agreement. `verify_spawn.gd` is the sixth verify tool and asserts the orientation against the edge vector. The user's verdict on *is this still the `P0-5` car?* was **"car seems ok"** — a pass, and read no wider than it is said. |
 | `P2-5` | Chase camera | ✅ **Done — review passed 2026-08-01** | Unblocked by shipping building collision — its "no clipping through buildings" criterion was unreachable while the city had none. Speed FOV and look-back already existed and now run on real geometry. **No shape-cast needed**: the 0.3 m spring-arm margin already exceeds the 6 cm near plane, proven by flipping the camera into a wall with look-back. Verdict *"camera work mostly with one exception where a road suddenly appears mid air"* — measured and found to be geometry, not the camera: nothing sits in the car's 0.3–3.0 m band there. Opened `Q19` and `Q20`. |
-| `P2-7` | Off-grade carriageway on its structure | 🟡 **In progress — the pipeline samples; the contract bump and the independent measurement are left** | **New 2026-08-01.** Sample deck heights from `INFRASTRUCTURE` instead of the flat `elevation_levels` offset; the network stays closed to driving. Placed in Phase 2 because it is a **data-contract** change and `P3-3`'s traffic will run on that contract. Answers `Q20`, shrinks `Q19`. **The 36 nodes are classified and they are all ramps — 17 junctions, 13 attribute flips, 5 tunnel portals, 1 stub, and no plan-coincident crossings at all.** Steps 4 and 5 landed 2026-08-02: `build_region` split into two passes, 44 of 45 off-grade edges sampled, 16 level-0 ends lifted onto their ramp, and node heights now follow a stated rule instead of source iteration order. **The median step at the 36 nodes went 6.00 m → 0.04 m, and the 6 left over 2 m are exactly the 5 tunnel portals and the stub step 1 predicted.** Three plan answers have now been measured and replaced, the latest being the *fallback*: an uncovered station takes the deck either side of it, because `INFRASTRUCTURE` stops being modelled where a ramp reaches grade. 390 tests, `ruff` clean, `tools/check.sh` green, 737 drivable edges unchanged. Next: the `schema_version` bump with `ARCHITECTURE.md` (step 6), `tools/deck_error.py` against the shipped tiles (step 7), then the drive (step 8). See the decision log. |
+| `P2-7` | Off-grade carriageway on its structure | 🟡 **In progress — the pipeline samples and the contract is bumped; the independent measurement is left** | **New 2026-08-01.** Sample deck heights from `INFRASTRUCTURE` instead of the flat `elevation_levels` offset; the network stays closed to driving. Placed in Phase 2 because it is a **data-contract** change and `P3-3`'s traffic will run on that contract. Answers `Q20`, shrinks `Q19`. **The 36 nodes are classified and they are all ramps — 17 junctions, 13 attribute flips, 5 tunnel portals, 1 stub, and no plan-coincident crossings at all.** Steps 4 and 5 landed 2026-08-02: `build_region` split into two passes, 44 of 45 off-grade edges sampled, 16 level-0 ends lifted onto their ramp, and node heights now follow a stated rule instead of source iteration order. **The median step at the 36 nodes went 6.00 m → 0.04 m, and the 6 left over 2 m are exactly the 5 tunnel portals and the stub step 1 predicted.** Three plan answers have now been measured and replaced, the latest being the *fallback*: an uncovered station takes the deck either side of it, because `INFRASTRUCTURE` stops being modelled where a ramp reaches grade. 390 tests, `ruff` clean, `tools/check.sh` green, 737 drivable edges unchanged. Step 6 bumped `roadgraph.json` to **schema 2** across both sides. Next: `tools/deck_error.py` against the shipped tiles (step 7), then the drive (step 8). See the decision log. |
 | `P4-*` | The elevated network | ⬜ Not started | **New 2026-08-01.** Post-slice, and **broken down** where the other post-slice phases are not — the data is measured and shipping collision already half-opened the network by accident. Reverses `P2-2`'s off-grade refusal deliberately and closes `Q15`. |
 | `P3-2a` | Near-miss scoring | ⬜ Not started | **New 2026-08-01.** Build `B3`. Split out of `P3-2` and moved from `B4` into `B3`: that build's review asks whether traffic is *"harder in a good way, or just annoying"*, and it cannot answer honestly while threading traffic pays nothing. See the decision log. |
 | `P3-7` | Window-band shader | ⬜ Not started | Build `B2`. **Acceptance grew 2026-08-01:** the shader's two inputs ship as `TEXCOORD_0` from the ETL, so this is one commit across both sides with a `schema_version` bump. See the decision log. |
@@ -670,6 +670,32 @@ Font sizes are constants in the script rather than a `.tres`, which is a deliber
 rule 4: tuning values are *gameplay* values, balanced by someone who should not need a code change.
 Nothing about dev chrome is balanced. The position block's 40 px is set by what a vision model can
 still read after a 1920-wide screenshot is downscaled, which is now the most common reader.
+
+### 2026-08-02 — `P2-7` step 6: `roadgraph.json` goes to schema 2, and only it does
+
+`ROADGRAPH_SCHEMA` 1→2, `GeneratedRoadGraph.SCHEMA_VERSION` 1→2, and
+`ARCHITECTURE.md`'s field provenance, in one commit per hard rule 5.
+
+**The bump exists because nothing visible changed.** No field was added, removed or renamed —
+`polyline.y` simply means something different: sampled from the structure the road is built on
+rather than one flat offset per level. A consumer cannot tell those apart by inspection, and a diff
+of the document shows only numbers moving. That is precisely the case a version number is for.
+
+Verified the gate is live rather than decorative: hand-editing the shipped asset back to
+`schema_version: 1` makes `verify_road_graph` fail with *"declares schema_version 1, this build
+reads 2. Re-run the ETL and re-copy."* There is no cross-language check that the two constants
+agree, and none is needed — a forgotten half fails loudly in `tools/check.sh` on the next run.
+
+**Nothing else bumped, and that is a judgement.** `roads.glb` and `roadsurface.json` are rebuilt
+from the graph so their content moves with it, but neither gains, loses or repurposes a field;
+`city.json` moves only on its AABB. The rule now written into `ARCHITECTURE.md`: **bump where a
+consumer would be wrong to keep its old interpretation, not wherever bytes change.**
+
+`surface.py`'s module docstring had to be corrected too — it opened by asserting that all 36 nodes
+step by a whole deck height "because `elevation_levels` is a constant offset per level and no edge
+ramps between them", which was one of the three measurements its design rests on and is now false
+for 26 of them. Per-level capping survives on the five tunnel portals, which is a narrower reason
+than it had before, and `P4-*` is where the difference will start to matter.
 
 ### 2026-08-02 — `P2-7` steps 4 and 5: the carriageway lands on its structure, and the **fallback** turned out to be the interesting half
 

@@ -54,7 +54,11 @@ from pipeline.terrain import HeightField
 log = logging.getLogger(__name__)
 
 ROADGRAPH_NAME = "roadgraph.json"
-ROADGRAPH_SCHEMA = 1
+# 2 since `P2-7`: an off-grade polyline's `y` is sampled from the structure the
+# road is built on, so it varies along an edge instead of being one flat offset
+# per level. No field was added or removed — what changed is what the numbers
+# mean, which is exactly the change a consumer cannot detect for itself.
+ROADGRAPH_SCHEMA = 2
 
 # `Node.kind` in the data contract. Degree three or more is somewhere a
 # driver can choose; anything else is a road continuing or stopping.

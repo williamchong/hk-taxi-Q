@@ -15,7 +15,12 @@ const PATH: String = "res://assets/generated/roadgraph.json"
 
 ## Schema this understands, matching `ROADGRAPH_SCHEMA` in
 ## `etl/pipeline/roads.py`.
-const SCHEMA_VERSION: int = 1
+##
+## 2 since `P2-7`: an off-grade polyline's `y` now follows the structure the
+## road is built on rather than sitting at one flat offset per elevation level.
+## The shape of the document did not change, which is why this had to — a reader
+## cannot tell a sampled deck from an invented one by looking.
+const SCHEMA_VERSION: int = 2
 
 
 ## The parsed graph, or an empty dictionary with a pushed message.

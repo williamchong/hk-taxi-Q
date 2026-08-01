@@ -11,12 +11,16 @@ Three measurements off the emitted graph decide the shape of this:
   overlap. Applying the playability widening closes the sixth. The gap the
   `P1-3` hand-over worried about does not exist, so there is no pair detection
   here and no merging.
-- **A node may not be capped across elevation levels.** All 36 nodes in the
-  region where two levels meet step by exactly a deck height — 6 m at a flyover,
-  8 m at a tunnel mouth — because `elevation_levels` is a constant offset per
-  level and no edge ramps between them. Capping across that would weld a street
-  to a tunnel roof with a 60-degree wall. Caps are therefore built per level.
-  See `Q13`: the network is topologically connected and geometrically is not.
+- **A node may not be capped across elevation levels.** Capping across a grade
+  separation would weld a street to a tunnel roof with a 60-degree wall, so caps
+  are built per level. The measurement that first showed this was that all 36
+  nodes where two levels meet stepped by exactly a deck height, because
+  `elevation_levels` was a constant offset per level and nothing ramped.
+  ⚠️ `P2-7` closed most of that: 26 of the 36 now step under 0.5 m, and the rule
+  survives on the other six — the five tunnel portals still step 8 m, and a
+  portal is a void no height source repairs. Per-level capping is therefore
+  still right, but it is no longer right *everywhere*, and `P4-*` reopening the
+  elevated network is where that distinction will start to matter. See `Q13`.
 - **Mitred joints are safe.** The sharpest interior turn in the region is 91.8
   degrees, a mitre scale of 1.44. The limit below is a guard for another city,
   not something this data reaches.

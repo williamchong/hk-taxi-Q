@@ -18,6 +18,7 @@ import pytest
 from pipeline.config import DeckSampling
 from pipeline.gltf import MeshData
 from pipeline.roads import (
+    ROADGRAPH_SCHEMA,
     Edge,
     _Counts,
     _Deck,
@@ -259,7 +260,7 @@ class TestBuildRegion:
         )
         document = _graph(tmp_path)
 
-        assert document["schema_version"] == 1
+        assert document["schema_version"] == ROADGRAPH_SCHEMA
         assert len(document["edges"]) == len(report.edges) == 4
         assert {key for edge in document["edges"] for key in edge} == {
             "id",

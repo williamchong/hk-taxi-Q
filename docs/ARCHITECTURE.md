@@ -440,7 +440,7 @@ Nothing in the game should read `buildings.json`.
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "nodes": [
     { "id": 1, "pos": [120.5, 4.0, 300.2], "kind": "junction" }
   ],
@@ -475,7 +475,8 @@ Field provenance:
 | `tram_tracks` | ⚠️ **Hand-authored.** Not present in the source dataset. A list of street names in city config. |
 | `lanes` | ⚠️ **Not published.** Road Network v2 carries no lane attribute in any layer. Authored per road class in city config, keyed on speed limit. |
 | `width_m` | Derived from `lanes`, then **hand-tuned upward** for playability (see Game Design) |
-| `elevation_level` | `ELEVATION` integer attribute (verified: −1/0/1 in the region). Ordinal level, **not** a height — map to deck heights via city config. Those heights are offsets **from ground level, not from the vertical datum**; see `Q11`. ⚠️ The mapping is a **constant per level**, so no edge ever ramps. The map sheets' `INFRASTRUCTURE` class carries the real deck profile and samples at a 3.01% median grade, but it cannot repair the junctions — see `Q13`. |
+| `elevation_level` | `ELEVATION` integer attribute (verified: −1/0/1 in the region). Ordinal level, **not** a height, and never a height — it says which deck a road is on, not where that deck is. Since `P2-7` (schema 2) it is also **not** what decides `y`: see `polyline` below. |
+| `polyline` / `pos` | Game-space metres, `y` measured **from ground level, not from the vertical datum** (`Q11`). Since schema 2 an off-grade edge's `y` is **sampled from the map sheets' `INFRASTRUCTURE` structure**, so it follows the real deck and varies along an edge — median grade 2.47%, p90 8.04%. Level-0 edges meeting a node another level also reaches are lifted onto the ramp they sit on. ⚠️ Before schema 2 the mapping was a **constant per level**, so no edge ever ramped; a reader cannot tell the two apart by inspection, which is the whole reason this bumped. Where the structure covers nothing, `elevation_levels` in city config still supplies the flat offset. A node's `y` is the **level nearest grade** among the edges meeting it, and the highest end on that level. |
 | `road_name` | `STREET_ENAME` / `STREET_CNAME` — **bilingual names ship in the source.** The null sentinel has four spellings; normalise NFKC and fold dashes before comparing. |
 
 **Nodes are formed where centrelines share an endpoint, and nothing else.** Not where they cross:
@@ -492,6 +493,15 @@ length is geometry the player cannot reach, including a tunnel running 570 m out
 `node.kind` is `junction` where three or more edge ends meet and `endpoint` otherwise. Degree, not
 the source's intersection layer: two centrelines meeting end to end is one road continuing through
 a geometry break, and the source records those as intersections too.
+
+**Only `roadgraph.json` bumped for `P2-7`, and that is a judgement rather than an oversight.**
+`roads.glb` and `roadsurface.json` are rebuilt from the graph, so their *content* moves with it —
+but neither gains, loses or repurposes a field, and a consumer that reads them correctly at version
+2 reads them correctly at version 3. `city.json` likewise moves only on its AABB. The rule this
+follows: bump where a consumer would be **wrong** to keep its old interpretation, not wherever
+bytes change. `roadgraph.json` bumped because `polyline.y` means something new while looking
+identical — which is exactly the case a version number exists for, and exactly the case a diff
+cannot show you.
 
 ### `roads.glb` — the drivable surface
 
