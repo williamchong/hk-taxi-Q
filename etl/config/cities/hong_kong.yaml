@@ -127,6 +127,16 @@ buildings:
   # the parenthesis is a LandsD spelling, not a fact about terrain.
   terrain_class: TERRAIN(TB)
 
+  # The class holding elevated road structure, which `roads.deck` below samples
+  # a flyover's height from. Named here for the same reason as terrain_class:
+  # the spelling is the publisher's, not a fact about structure.
+  #
+  # Must be one of `classes` above, and that is the point rather than a
+  # formality — P2-7 measures the ribbon against the *shipped* tiles, so a
+  # carriageway laid on geometry only the sampler can see would be accurate
+  # against nothing the player ever meets.
+  structure_class: INFRASTRUCTURE
+
   # Flat colour for a class, overriding the height bands. Elevated road
   # structures are concrete whatever their height, and banding a flyover deck by
   # height would tint it like the tower it happens to be as tall as.
@@ -316,6 +326,57 @@ roads:
   # every level-0 road at y=0, and is right only for a city whose sources
   # carry no height field.
   ground: terrain
+
+  # How P2-7 takes an off-grade carriageway's height from the structure it is
+  # built on, rather than from the flat `elevation_levels` offset. Q20 measured
+  # what that offset costs: the ribbon misses the real deck by |error| p90
+  # 4.19 m, and sits *below* it — inside the structure — in 66% of samples.
+  #
+  # Optional, and requires `ground: terrain` — both the gate and the fallback
+  # below are measured against the ground mesh. Omit the block and every level
+  # keeps its constant offset, which is all a city with no structure class can
+  # do anyway.
+  deck:
+    # Station spacing along an edge before sampling. Off-grade vertex spacing is
+    # median 10.8 m but max 446.2 m, and sampling at today's vertices alone
+    # already clears the p90 criterion — so this is justified by the *maximum*,
+    # not the p90: one 71.5 m gap on FLEMING ROAD spans structure climbing
+    # 4.25 to 5.05 m, which is the defect the P2-5 drive found. Resampling first
+    # takes the worst error from 4.84 m to 0.57 m, for 430 to 667 vertices.
+    resample_m: 10.0
+
+    # Two hits further apart than this are different structures rather than the
+    # two faces of one deck. Measured across the region's covered level-1
+    # stations: within one deck 0.00-2.57 m, between stacked structures
+    # 3.36-8.49 m. A 0.79 m margin — narrow, so it is a tuning value and not a
+    # constant, and a city whose decks are thicker will have to move it.
+    slab_gap_m: 3.0
+
+    # How far under the ground a sample may sit and still be a deck.
+    #
+    # Deliberately not a *minimum clearance*: level-1 ramps genuinely touch
+    # down, so 33 of the region's 645 covered stations sit within a metre above
+    # terrain and no positive threshold could tell a ramp end from a bad sample.
+    # What separates is the other side. INFRASTRUCTURE is not only elevated
+    # decks — ISLAND EASTERN CORRIDOR (e425, a 25 m stub at the region's
+    # north-east corner) samples structure at -8.31 and -8.18 m below terrain,
+    # and the next-lowest value anywhere in the region is -0.54 m. One metre
+    # sits in that 7.64 m gap and rejects exactly those two stations, which
+    # leaves e425 with no valid sample and so wholly on the fallback.
+    max_below_terrain_m: 1.0
+
+    # Where the lift of a level-0 edge that starts on a ramp stops: a structure
+    # top this close to the ground is the ground.
+    #
+    # A tolerance rather than a boundary, and it is worth saying so — the 143
+    # non-zero lifts across the region's 16 such edge ends run continuously from
+    # 0.004 m up, with no gap to sit in. So it is bounded by consequence
+    # instead: this value *is* the residual step the lift leaves behind, so it
+    # must stay well inside P2-7's 0.5 m acceptance, and it must clear the
+    # 0.1-0.2 m sampling wobble that makes those profiles non-monotone. Across
+    # 0.1-0.3 the run length moves by at most one 5 m station on 13 of the 16
+    # ends; at 0.5 one of them loses its lift entirely, and at 1.0 three do.
+    at_grade_m: 0.30
 
 # How P1-5 turns published taxi points into fare nodes.
 fares:

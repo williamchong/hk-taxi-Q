@@ -160,6 +160,20 @@ class TestBuildingStyle:
         terrain ships a 45-megapixel JPEG per sheet."""
         assert not any("TERRAIN" in name for name in hong_kong.buildings.classes)
 
+    def test_structure_is_a_building_class(self, hong_kong) -> None:
+        """The mirror of the rule above, and for the opposite reason. `P2-7`
+        lays the off-grade carriageway on this class and is accepted against the
+        *shipped* tiles, so structure the ETL alone can see would put the road
+        in the right place relative to nothing the player ever meets."""
+        assert hong_kong.buildings.structure_class in hong_kong.buildings.classes
+
+    def test_a_structure_class_that_is_never_tiled_is_rejected(self, rewrite) -> None:
+        def use_terrain(doc: dict[str, Any]) -> None:
+            doc["buildings"]["structure_class"] = doc["buildings"]["terrain_class"]
+
+        with pytest.raises(ValueError, match="which is not in classes"):
+            load_city("hong_kong", cities_root=rewrite(use_terrain))
+
     def test_unordered_height_bands_are_rejected(self, rewrite) -> None:
         """`colour_for` returns the first band a height fits, so an out-of-order
         table silently paints towers with the shophouse colour."""
@@ -398,6 +412,168 @@ class TestRoadNetwork:
     def test_a_missing_roads_block_is_rejected(self, rewrite) -> None:
         with pytest.raises(ValueError, match="'roads'"):
             load_city("hong_kong", cities_root=rewrite(lambda doc: doc.pop("roads")))
+
+    def test_a_negative_kerb_is_rejected(self, rewrite) -> None:
+        """A negative kerb turns the lip inside out, inverting its winding so it
+        renders as a hole — plausible-looking output, which is why the loader
+        refuses it rather than leaving it to be noticed in the engine."""
+
+        def invert(doc: dict[str, Any]) -> None:
+            doc["roads"]["surface"]["kerb_height_m"] = -0.15
+
+        with pytest.raises(ValueError, match="kerb_height_m must not be negative"):
+            load_city("hong_kong", cities_root=rewrite(invert))
+
+
+class TestDeckSampling:
+    """`roads.deck` is optional, and every way it can be present but unusable is
+    refused at load rather than ignored.
+
+    The failure it guards against is not a crash: a block that parses and is
+    never read leaves the carriageway on the flat `elevation_levels` offset, so
+    the output looks exactly like a city that never asked for deck sampling at
+    all. That is the shape of config error that survives review."""
+
+    def test_the_shipped_thresholds_stay_inside_their_measured_margins(self, hong_kong) -> None:
+        """Bounds rather than the shipped literals, because these are tuning
+        values and `P2-7` may well retune them.
+
+        Each bound is the margin the city file's own comment argues from, so
+        this fails when a retune breaks the reasoning and stays quiet when it
+        does not — which a pinned literal has backwards."""
+        deck = hong_kong.roads.deck
+        assert deck is not None
+
+        # Between the widest gap measured across one deck and the narrowest
+        # between two stacked ones. Outside it, the query either splits a single
+        # deck in two or merges a flyover into the road beneath it.
+        assert 2.57 < deck.slab_gap_m < 3.36
+        # Between the lowest genuine ramp touchdown and the ISLAND EASTERN
+        # CORRIDOR samples the gate exists to reject.
+        assert 0.543 < deck.max_below_terrain_m < 8.181
+        # Above the sampling wobble that makes the lift profiles non-monotone,
+        # and well inside the 0.5 m acceptance it is the residual step for.
+        assert 0.2 <= deck.at_grade_m < 0.5
+        # No margin to state: this one is set by the single 71.5 m vertex gap it
+        # exists to break up, so all that can be said is that it does.
+        assert 0.0 < deck.resample_m < 71.5
+
+    def test_a_city_that_declares_no_block_samples_no_deck(self, rewrite) -> None:
+        """The pre-`P2-7` behaviour has to stay reachable: a city whose sources
+        carry no structure can only use the flat offset."""
+
+        def drop(doc: dict[str, Any]) -> None:
+            doc["roads"].pop("deck")
+
+        city = load_city("hong_kong", cities_root=rewrite(drop))
+        assert city.roads.deck is None
+
+    @pytest.mark.parametrize("key", ["resample_m", "slab_gap_m"])
+    def test_a_non_positive_span_is_rejected(self, rewrite, key: str) -> None:
+        """Zero is degenerate for both: a spacing of zero asks for infinitely
+        many stations, and a slab gap of zero makes every distinct height its
+        own slab, which defeats the clustering the query is built on."""
+
+        def zero(doc: dict[str, Any]) -> None:
+            doc["roads"]["deck"][key] = 0.0
+
+        with pytest.raises(ValueError, match=f"{key} must be positive"):
+            load_city("hong_kong", cities_root=rewrite(zero))
+
+    @pytest.mark.parametrize("key", ["max_below_terrain_m", "at_grade_m"])
+    def test_a_negative_tolerance_is_rejected(self, rewrite, key: str) -> None:
+        """Zero is a coherent if strict choice for these two, so only the sign
+        is checked — a negative one inverts the comparison it feeds."""
+
+        def invert(doc: dict[str, Any]) -> None:
+            doc["roads"]["deck"][key] = -1.0
+
+        with pytest.raises(ValueError, match=f"{key} must not be negative"):
+            load_city("hong_kong", cities_root=rewrite(invert))
+
+    def test_deck_sampling_without_terrain_ground_is_rejected(self, rewrite) -> None:
+        """Both the gate and the fallback are measured against the ground mesh,
+        so under `datum` the block could never run."""
+
+        def to_datum(doc: dict[str, Any]) -> None:
+            doc["roads"]["ground"] = "datum"
+
+        with pytest.raises(ValueError, match="deck needs ground 'terrain'"):
+            load_city("hong_kong", cities_root=rewrite(to_datum))
+
+    def test_deck_sampling_without_a_structure_class_is_rejected(self, rewrite) -> None:
+        """The thresholds live under `roads:` and the geometry they apply to is
+        named under `buildings:`, each following its own precedent. Nothing but
+        this check stops a city declaring one half and not the other."""
+
+        def drop_class(doc: dict[str, Any]) -> None:
+            doc["buildings"].pop("structure_class")
+
+        with pytest.raises(ValueError, match="structure_class names none"):
+            load_city("hong_kong", cities_root=rewrite(drop_class))
+
+    def test_an_empty_block_is_rejected_rather_than_read_as_absent(self, rewrite) -> None:
+        """`deck:` with nothing under it parses as None, and would otherwise be
+        indistinguishable from a city that never asked for deck sampling — the
+        precise failure this class exists to refuse. Omitting the key is already
+        how a city says that, so the empty spelling can only be a mistake."""
+
+        def empty(doc: dict[str, Any]) -> None:
+            doc["roads"]["deck"] = None
+
+        with pytest.raises(ValueError, match="deck is empty"):
+            load_city("hong_kong", cities_root=rewrite(empty))
+
+    def test_a_block_that_is_not_a_mapping_is_rejected(self, rewrite) -> None:
+        def scalar(doc: dict[str, Any]) -> None:
+            doc["roads"]["deck"] = 5
+
+        with pytest.raises(ValueError, match="must be a mapping"):
+            load_city("hong_kong", cities_root=rewrite(scalar))
+
+    @pytest.mark.parametrize("key", ["resample_m", "slab_gap_m", "max_below_terrain_m"])
+    def test_a_non_finite_threshold_is_rejected(self, rewrite, key: str) -> None:
+        """The one bad value that never announces itself. YAML 1.1 resolves
+        `.nan`, it passes every sign check, and downstream it makes each
+        comparison it feeds false without ever raising — so the edge falls back
+        silently and the output looks like a city with no deck sampling."""
+
+        def not_a_number(doc: dict[str, Any]) -> None:
+            doc["roads"]["deck"][key] = float("nan")
+
+        with pytest.raises(ValueError, match=f"{key} must be a finite number"):
+            load_city("hong_kong", cities_root=rewrite(not_a_number))
+
+    def test_an_unbounded_slab_gap_is_rejected(self, rewrite) -> None:
+        """`.inf` merges every stacked structure into one slab, and the measured
+        margin here is only 0.79 m wide to begin with."""
+
+        def unbounded(doc: dict[str, Any]) -> None:
+            doc["roads"]["deck"]["slab_gap_m"] = float("inf")
+
+        with pytest.raises(ValueError, match="slab_gap_m must be a finite number"):
+            load_city("hong_kong", cities_root=rewrite(unbounded))
+
+    def test_a_threshold_that_is_not_a_number_names_where_it_came_from(self, rewrite) -> None:
+        """`float()` on its own reports the bad value and not its key, which in a
+        config of forty-odd numbers is most of the answer."""
+
+        def text(doc: dict[str, Any]) -> None:
+            doc["roads"]["deck"]["resample_m"] = "ten"
+
+        with pytest.raises(ValueError, match="deck:resample_m is 'ten'"):
+            load_city("hong_kong", cities_root=rewrite(text))
+
+    def test_a_key_the_block_does_not_use_is_rejected(self, rewrite) -> None:
+        """Misspelling one of the four is already caught by its absence, but
+        adding a fifth on top of them is not — it would parse, load, and tune
+        nothing. Same trap `class_colours` refuses, on a closed key set."""
+
+        def extra(doc: dict[str, Any]) -> None:
+            doc["roads"]["deck"]["max_above_terrain_m"] = 99.0
+
+        with pytest.raises(ValueError, match="does not use max_above_terrain_m"):
+            load_city("hong_kong", cities_root=rewrite(extra))
 
 
 class TestFares:

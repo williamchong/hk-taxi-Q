@@ -185,7 +185,7 @@ threading it pays. See the decision log.
 | `P2-1` | `CityStreamer` | ✅ **Done — review passed 2026-08-01** | Threaded load/unload by distance to the published `aabb`. Draw calls 70 → 53 against a 150 budget. The review verdict dropped LOD0: worst-case **visible triangles 249,210 → 150,374** against 300k, and the **PCK 51.6 → 21.1 MB**. Bands are now a single 250 m edge, 400 m unload, 15 m hysteresis, in `streaming.tres`. `verify_city_streamer.gd` is the fifth verify tool. Opened the shadow-cascade finding. |
 | `P2-3` | Vehicle on real geometry | ✅ **Done — review passed 2026-08-01** | The hand-written spawn transform is gone: `RoadSpawn` resolves fare node `f_004` through `RoadGraph` and `drive_harness.gd` places the car, reproducing the old literal to **4 dp** and reporting `0.00 m` from the lane centre with `+1.00` heading agreement. `verify_spawn.gd` is the sixth verify tool and asserts the orientation against the edge vector. The user's verdict on *is this still the `P0-5` car?* was **"car seems ok"** — a pass, and read no wider than it is said. |
 | `P2-5` | Chase camera | ✅ **Done — review passed 2026-08-01** | Unblocked by shipping building collision — its "no clipping through buildings" criterion was unreachable while the city had none. Speed FOV and look-back already existed and now run on real geometry. **No shape-cast needed**: the 0.3 m spring-arm margin already exceeds the 6 cm near plane, proven by flipping the camera into a wall with look-back. Verdict *"camera work mostly with one exception where a road suddenly appears mid air"* — measured and found to be geometry, not the camera: nothing sits in the car's 0.3–3.0 m band there. Opened `Q19` and `Q20`. |
-| `P2-7` | Off-grade carriageway on its structure | 🟡 **In progress — the slab query is in `terrain.py`; not yet wired into the pipeline** | **New 2026-08-01.** Sample deck heights from `INFRASTRUCTURE` instead of the flat `elevation_levels` offset; the network stays closed to driving. Placed in Phase 2 because it is a **data-contract** change and `P3-3`'s traffic will run on that contract. Answers `Q20`, shrinks `Q19`. **The 36 nodes are classified and they are all ramps — 17 junctions, 13 attribute flips, 5 tunnel portals, 1 stub, and no plan-coincident crossings at all.** Two probe hypotheses were measured and rejected before code, and the fix grew a level-0 half on the user's call. Step 2 shipped `HeightField.sample_along` with `sample` bit-identical; re-measuring for it corrected two claims in the step 0/1 entry. Next: config keys, then `roads.py`, then the `schema_version` bump. See the decision log. |
+| `P2-7` | Off-grade carriageway on its structure | 🟡 **In progress — the slab query and its thresholds are in place; not yet wired into the pipeline** | **New 2026-08-01.** Sample deck heights from `INFRASTRUCTURE` instead of the flat `elevation_levels` offset; the network stays closed to driving. Placed in Phase 2 because it is a **data-contract** change and `P3-3`'s traffic will run on that contract. Answers `Q20`, shrinks `Q19`. **The 36 nodes are classified and they are all ramps — 17 junctions, 13 attribute flips, 5 tunnel portals, 1 stub, and no plan-coincident crossings at all.** Two probe hypotheses were measured and rejected before code, and the fix grew a level-0 half on the user's call. Step 2 shipped `HeightField.sample_along` with `sample` bit-identical; re-measuring for it corrected two claims in the step 0/1 entry. Step 3 landed `roads.deck:` and `buildings.structure_class` as config — and measuring the last two thresholds found the terrain gate is **not** a minimum clearance but a floor on how far *below* terrain a sample may sit. Next: `roads.py`, then the node height policy, then the `schema_version` bump. See the decision log. |
 | `P4-*` | The elevated network | ⬜ Not started | **New 2026-08-01.** Post-slice, and **broken down** where the other post-slice phases are not — the data is measured and shipping collision already half-opened the network by accident. Reverses `P2-2`'s off-grade refusal deliberately and closes `Q15`. |
 | `P3-2a` | Near-miss scoring | ⬜ Not started | **New 2026-08-01.** Build `B3`. Split out of `P3-2` and moved from `B4` into `B3`: that build's review asks whether traffic is *"harder in a good way, or just annoying"*, and it cannot answer honestly while threading traffic pays nothing. See the decision log. |
 | `P3-7` | Window-band shader | ⬜ Not started | Build `B2`. **Acceptance grew 2026-08-01:** the shader's two inputs ship as `TEXCOORD_0` from the ETL, so this is one commit across both sides with a `schema_version` bump. See the decision log. |
@@ -670,6 +670,103 @@ Font sizes are constants in the script rather than a `.tres`, which is a deliber
 rule 4: tuning values are *gameplay* values, balanced by someone who should not need a code change.
 Nothing about dev chrome is balanced. The position block's 40 px is set by what a vision model can
 still read after a 1920-wide screenshot is downscaled, which is now the most common reader.
+
+### 2026-08-02 — `P2-7` step 3: the thresholds become config, and the gate is not a clearance
+
+Four tuning values and a class name move into `hong_kong.yaml` under `roads.deck:` and
+`buildings.structure_class`, with `DeckSampling` and the validation in `config.py`. **Nothing reads
+them yet** — that is step 4. Deliberately so: it keeps the `roads.py` diff to the behaviour change
+alone, and it costs one commit where the city file has inert keys.
+
+Two of the four had no measured number, and measuring them changed one of them.
+
+#### The terrain gate cannot be a minimum clearance
+
+The plan called for `min_clearance_m`: reject a sample that sits too close to the ground to be a
+deck. **That threshold does not exist.** Level-1 ramps genuinely touch down, so of the 645 covered
+level-1 stations, 33 sit within a metre above terrain and 8 sit *below* it, by 0.54 m at worst — the
+positive range is a continuous ramp-to-flyover spectrum from 0 to 15 m with no gap anywhere to put a
+cut in. Any positive threshold would throw away real ramp ends to catch bad samples.
+
+What separates is the other side, decisively:
+
+| Sampled minus terrain | Edge |
+|---|---|
+| **−8.305 m**, **−8.181 m** | `e425` `ISLAND EASTERN CORRIDOR` |
+| *(7.64 m of nothing)* | |
+| −0.543 m and up | `e365`, `MARSH ROAD`, three `WAN CHAI INTERCHANGE` ramps — all genuine |
+
+So the key is **`max_below_terrain_m: 1.0`** — how far *under* the ground a sample may sit and still
+be a deck. It rejects exactly those two stations region-wide, which leaves `e425` with no valid
+sample and so wholly on the fallback: today's behaviour, for the one edge that has no deck.
+
+The step 0/1 entry below already framed this correctly — *"a deck cannot sit below the ground under
+it"* — and the plan drifted to calling it a clearance in between. Worth recording because the drift
+was silent and only re-measuring caught it.
+
+#### `at_grade_m` is bounded by consequence, not by a gap
+
+The 143 non-zero lift values across the region's 16 lifted level-0 edge ends run **continuously**
+from 0.004 m up. There is no population boundary here either, so this one is a tolerance rather than
+a discriminator, and it is bounded from both sides by what it costs instead:
+
+- **Above:** the value *is* the residual step the lift leaves behind, so it has to stay well inside
+  `P2-7`'s 0.5 m acceptance.
+- **Below:** it has to clear the 0.1–0.2 m sampling wobble that makes profiles like `e401`'s
+  non-monotone (`0.55, 0.44, 0.48, 0.37, 0.28, 0.33`).
+- **Measured:** across 0.1–0.3 the run length moves by at most one 5 m station on 13 of the 16
+  ends, so the band is flat; at 0.5 `e451` loses its lift entirely, and at 1.0 `e168` and `e520`
+  do too.
+
+**0.30 m** confirmed, as the largest value in the stable band — it propagates the lift no further
+into edges that do not need it than it must.
+
+#### Where the keys live, and the two ways they can be inert
+
+`structure_class` sits in `buildings:` beside `terrain_class`, following that key's precedent: sheet
+class names are declared there, and `roads.py` already reaches across for `terrain_class`. Unlike
+`terrain_class` it must be **inside** `buildings.classes`, and that is load-checked — `P2-7` is
+accepted against the *shipped* tiles, so a carriageway laid on geometry only the ETL can see would
+be accurate against nothing the player meets.
+
+That split leaves two ways to write a block that parses and can never run, and both are refused
+rather than ignored, because the symptom of either is *output identical to a city that never asked
+for deck sampling* — a config error shaped to survive review:
+
+- `roads.deck` without `ground: terrain` — the gate and the fallback both measure against terrain.
+- `roads.deck` without `buildings.structure_class` — thresholds with no geometry to apply them to.
+
+Only that direction. A `structure_class` with no `deck:` block is merely unused, and refusing it
+would reject a city whose output is correct.
+
+`roads.deck` is optional throughout, so `testville` and any future city without structure keep
+working untouched, exactly as `ground: datum` is framed.
+
+#### The review pass found four more ways to be silently inert
+
+The first draft argued hard that this block must never load in a state it cannot act on, and then
+left four spellings that did exactly that. Each was reproduced against the real loader, not reasoned
+about:
+
+| Spelling | Was |
+|---|---|
+| `deck:` with nothing under it | Loaded as `deck=None` — indistinguishable from a city that never asked, and the natural state while commenting values out to tune |
+| `resample_m: .nan` | Loaded. NaN passes `<= 0.0` **and** `< 0.0`, then makes every downstream comparison false without ever raising |
+| `at_grade_m: .inf` | Loaded. The lift never stops; an infinite `slab_gap_m` merges every stacked structure into one slab |
+| a fifth key beside the four | Loaded and tuned nothing. *Misspelling* one of the four was already caught by its absence; adding one was not |
+
+All four now refuse, with a test each. `.nan` is the one worth naming: it is the only bad value that
+passes a sign check *and* stays silent downstream, and this file already depends on YAML 1.1
+resolving `.inf` for `height_bands`' open last band — so finiteness has to be asserted per field
+rather than assumed.
+
+The sign-checking and float-coercion the block needed was already written in `_road_surface`, so it
+became a shared `_measures` helper — which also gave that path its first test, and gave both a
+message naming the key and file instead of a bare `could not convert string to float`.
+
+Verified: 370 tests pass (19 new), `ruff` clean, and the pipeline from `roads` onward leaves
+`roadgraph.json` and `roadsurface.json` **byte-identical** — `city.json` moves only on its
+`generated_utc` stamp.
 
 ### 2026-08-01 — `P2-7` step 2: the slab query lands in `terrain.py`, and two measured claims were wrong
 

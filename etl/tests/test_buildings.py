@@ -284,6 +284,7 @@ def style(jitter: float = 0.0) -> BuildingStyle:
     return BuildingStyle(
         classes=("BUILDING", "INFRASTRUCTURE"),
         terrain_class="TERRAIN",
+        structure_class=None,
         class_colours={"INFRASTRUCTURE": (100, 100, 100)},
         height_bands=(
             HeightBand(up_to_m=12.0, colour=(200, 180, 150)),

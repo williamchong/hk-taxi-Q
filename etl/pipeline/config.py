@@ -12,6 +12,7 @@ wrong by hundreds of metres, which is far more expensive than a stack trace.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -89,6 +90,11 @@ class BuildingStyle:
     # evaluation path and never tiled. Named here rather than in the pipeline
     # because "TERRAIN(TB)" is a LandsD spelling, not a fact about terrain.
     terrain_class: str
+    # Class holding elevated road structure, which `RoadNetwork.deck` samples an
+    # off-grade carriageway's height from. Optional: a city that declares no
+    # deck sampling needs none. Always one of `classes`, so the carriageway
+    # lands on geometry that ships rather than on geometry only the ETL sees.
+    structure_class: str | None
     # Flat colour for a class, overriding the height bands.
     class_colours: dict[str, tuple[int, int, int]]
     height_bands: tuple[HeightBand, ...]
@@ -153,6 +159,38 @@ def _field(fields: Mapping[str, str], role: str, where: str) -> str:
         known = ", ".join(sorted(fields)) or "none"
         raise KeyError(f"{where} declares no field for '{role}'. Declared: {known}")
     return fields[role]
+
+
+def _measures(
+    body: dict[str, Any], where: str, names: tuple[str, ...], *, positive: bool = False
+) -> dict[str, float]:
+    """Required float measurements, refused when their value cannot be used.
+
+    Shared so a bad measurement reads the same wherever it is hit, as `_field`
+    is for a missing role.
+
+    Finiteness is checked rather than assumed. YAML 1.1 resolves `.nan` and
+    `.inf` — this file relies on that for `height_bands`' open last band — and a
+    NaN passes every sign test below, then silently makes false every comparison
+    it feeds downstream. That is the one bad value that never announces itself.
+    """
+    values: dict[str, float] = {}
+    for name in names:
+        value = _require(body, name, where)
+        try:
+            values[name] = float(value)
+        except (TypeError, ValueError):
+            # `float()` alone names the bad value but not where it came from,
+            # which in a config of forty-odd numbers is most of the answer.
+            raise ValueError(f"{where}:{name} is {value!r}, which is not a number") from None
+
+    for name, value in values.items():
+        if not math.isfinite(value):
+            raise ValueError(f"{where}:{name} must be a finite number, got {value}")
+        if value < 0.0 or (positive and value == 0.0):
+            limit = "must be positive" if positive else "must not be negative"
+            raise ValueError(f"{where}:{name} {limit}, got {value}")
+    return values
 
 
 # Directions a city file may declare. `BACKWARD` never reaches
@@ -251,6 +289,36 @@ def _by_fastest_rule(table: Mapping[int, float], speed_limit_kph: int, default: 
 
 
 @dataclass(frozen=True)
+class DeckSampling:
+    """How `P2-7` takes an off-grade carriageway's height from its structure.
+
+    `elevation_levels` gives a level one flat offset, which `Q20` measured as
+    |error| p90 4.19 m against the real decks, with the ribbon sitting *below*
+    the deck — inside the structure — in 66% of samples. These four values
+    replace that constant with a measurement of what the road is built on.
+
+    Tuning data rather than constants in code (CLAUDE.md hard rule 4), and none
+    of it is derivable: every value here was measured on Wan Chai, and a city
+    whose flyovers are thicker or whose ramps are shorter will need its own.
+    """
+
+    # Station spacing along an edge before sampling. Justified by the worst
+    # vertex gap rather than the typical one — see the city file.
+    resample_m: float
+    # Two hits further apart than this are separate structures rather than the
+    # top and bottom faces of one deck.
+    slab_gap_m: float
+    # How far below the terrain a sample may sit and still be a deck. The
+    # structure class is not only elevated carriageway, and a sample under the
+    # ground is the sign that something else was hit.
+    max_below_terrain_m: float
+    # Where the lift of a level-0 edge that starts on a ramp stops: a structure top
+    # this close to the ground is the ground. Also the residual step that lift
+    # is allowed to leave behind, which is what bounds it.
+    at_grade_m: float
+
+
+@dataclass(frozen=True)
 class RoadNetwork:
     """How `P1-3` turns a published road network into a drivable graph.
 
@@ -298,6 +366,11 @@ class RoadNetwork:
 
     # How `P1-4` draws what the graph describes.
     surface: RoadSurface
+
+    # How `P2-7` takes an off-grade carriageway's height from the structure it
+    # is built on. `None` leaves every level on its flat `elevation_levels`
+    # offset, which is all a city whose sources carry no structure can do.
+    deck: DeckSampling | None
 
     def lanes_for(self, speed_limit_kph: int) -> int:
         """Lane count for an edge, from the fastest matching rule.
@@ -556,10 +629,33 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
         fares=_fares(_require(document, "fares", path), f"{path}:fares"),
     )
     _check_regions_lie_within_the_city(city, path)
+    _check_deck_sampling_has_a_structure_class(city, path)
     _check_source_exists(city, city.roads.source, f"{path}:roads.source")
     for index, group in enumerate(city.fares.groups):
         _check_source_exists(city, group.source, f"{path}:fares.groups[{index}].source")
     return city
+
+
+def _check_deck_sampling_has_a_structure_class(city: CityConfig, path: Path) -> None:
+    """Deck sampling names its thresholds, but not the geometry to apply them to.
+
+    The two halves sit in different sections because each follows its own
+    precedent — `buildings:` is where sheet class names are declared, `roads:`
+    is where road tuning lives, and `roads.py` already reaches across for
+    `terrain_class`. The asymmetry with that precedent is what needs a check:
+    `terrain_class` is required, so it cannot go missing, while both of these
+    are optional and only make sense together.
+
+    One direction only, deliberately. Thresholds with no geometry to apply them
+    to would put the carriageway somewhere wrong; a `structure_class` with no
+    `deck:` block is merely unused, and refusing it would reject a city whose
+    output is correct.
+    """
+    if city.roads.deck is not None and city.buildings.structure_class is None:
+        raise ValueError(
+            f"{path}:roads.deck samples elevated structure, but "
+            "buildings.structure_class names none. Add it, or drop roads.deck."
+        )
 
 
 def _check_source_exists(city: CityConfig, source_id: str, where: str) -> None:
@@ -679,6 +775,18 @@ def _building_style(body: dict[str, Any], where: str) -> BuildingStyle:
             )
         class_cells[str(name)] = override
 
+    structure = body.get("structure_class")
+    if structure is not None and str(structure) not in classes:
+        # Unlike terrain_class, which is deliberately outside `classes` because
+        # it is never tiled, this one must be inside it: `P2-7` lays the
+        # carriageway on this geometry and is accepted against the *shipped*
+        # tiles, so structure that never ships would be accurate against nothing
+        # the player can meet.
+        raise ValueError(
+            f"{where}:structure_class is {structure!r}, "
+            f"which is not in classes ({', '.join(classes)})"
+        )
+
     jitter = float(_require(body, "colour_jitter", where))
     if not 0.0 <= jitter < 1.0:
         raise ValueError(f"{where}:colour_jitter must be in [0, 1), got {jitter}")
@@ -686,6 +794,7 @@ def _building_style(body: dict[str, Any], where: str) -> BuildingStyle:
     return BuildingStyle(
         classes=classes,
         terrain_class=str(_require(body, "terrain_class", where)),
+        structure_class=str(structure) if structure is not None else None,
         class_colours=class_colours,
         height_bands=bands,
         colour_jitter=jitter,
@@ -730,6 +839,25 @@ def _road_network(body: dict[str, Any], where: str) -> RoadNetwork:
             f"{where}:ground is {ground!r}, expected one of {', '.join(GROUND_SOURCES)}"
         )
 
+    deck = body.get("deck")
+    if "deck" in body and deck is None:
+        # `deck:` with nothing under it — the natural state while commenting the
+        # values out to tune — resolves to None, which would otherwise read as
+        # "this city wants no deck sampling" and skip all three checks below.
+        # Omitting the key is already how a city says that, so this spelling can
+        # be refused outright rather than guessed at.
+        raise ValueError(f"{where}:deck is empty; give it thresholds or remove the key")
+    if deck is not None and not isinstance(deck, dict):
+        # Otherwise `_require` asks a non-mapping for a key and the author gets a
+        # bare TypeError naming neither the file nor the block they just edited.
+        raise ValueError(f"{where}:deck must be a mapping of thresholds, got {deck!r}")
+    if deck is not None and ground != TERRAIN:
+        # Deck sampling gates its result against the terrain and falls back to
+        # it, so under any other ground source the whole block is unreachable.
+        # Refused rather than ignored: a config that cannot do what it says is a
+        # mistake, and a silently inert block is the kind that survives review.
+        raise ValueError(f"{where}:deck needs ground '{TERRAIN}', but ground is {ground!r}")
+
     return RoadNetwork(
         source=str(_require(body, "source", where)),
         centrelines=layers["centrelines"],
@@ -748,6 +876,30 @@ def _road_network(body: dict[str, Any], where: str) -> RoadNetwork:
         tram_streets=frozenset(str(name) for name in (body.get("tram_streets") or ())),
         ground_from_terrain=ground == TERRAIN,
         surface=_road_surface(_require(body, "surface", where), f"{where}:surface"),
+        deck=_deck_sampling(deck, f"{where}:deck") if deck is not None else None,
+    )
+
+
+def _deck_sampling(body: dict[str, Any], where: str) -> DeckSampling:
+    # Split by what zero means, not by tidiness. A spacing or a slab gap of zero
+    # is degenerate — the first asks for infinitely many stations, the second
+    # makes every distinct height its own slab and so defeats the clustering the
+    # query is built on. Zero is a coherent, if strict, choice for the other two.
+    values = _measures(body, where, ("resample_m", "slab_gap_m"), positive=True)
+    values |= _measures(body, where, ("max_below_terrain_m", "at_grade_m"))
+
+    unknown = set(body) - set(values)
+    if unknown:
+        # Refused for the reason `class_colours` refuses them, with more grounds:
+        # this block's key set is closed and known, and it is the one block whose
+        # whole point is not to be silently inert.
+        raise ValueError(f"{where} does not use {', '.join(sorted(unknown))}")
+
+    return DeckSampling(
+        resample_m=values["resample_m"],
+        slab_gap_m=values["slab_gap_m"],
+        max_below_terrain_m=values["max_below_terrain_m"],
+        at_grade_m=values["at_grade_m"],
     )
 
 
@@ -774,13 +926,7 @@ def _road_surface(body: dict[str, Any], where: str) -> RoadSurface:
     # renders as a hole; a negative trim pushes the ribbon *past* its junction.
     # Both produce plausible-looking output, which is why they are refused here
     # rather than left to be noticed in the engine.
-    measures = {
-        name: float(_require(body, name, where))
-        for name in ("kerb_height_m", "kerb_width_m", "junction_trim_factor")
-    }
-    for name, value in measures.items():
-        if value < 0.0:
-            raise ValueError(f"{where}:{name} must not be negative, got {value}")
+    measures = _measures(body, where, ("kerb_height_m", "kerb_width_m", "junction_trim_factor"))
 
     return RoadSurface(
         widen_default=widen_default,
