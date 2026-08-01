@@ -36,7 +36,10 @@ GDFORMAT="${GDFORMAT:-$ROOT/.venv/bin/gdformat}"
 # Both are the false green this whole script exists to prevent. Anything
 # unrecognised therefore runs the checks.
 VERIFY_GENERATED="${VERIFY_GENERATED:-1}"
-VERIFY_TOOLS=(verify_city verify_tiles verify_road_surface verify_road_graph verify_city_streamer)
+VERIFY_TOOLS=(
+	verify_city verify_tiles verify_road_surface verify_road_graph verify_city_streamer
+	verify_spawn
+)
 
 # Godot reports a compile failure with any of these and still exits 0.
 FATAL='Parse Error|SCRIPT ERROR|Failed to load script|Failed to compile'

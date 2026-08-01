@@ -3,7 +3,7 @@
 Living document. **Update this whenever a task changes status, a decision is made, or an open
 question is answered.** Newest entries at the top of each log.
 
-Last updated: 2026-08-01 (ground and building colour evaluated — the vertex stream carries both, the source texture is read at build time and never shipped; opens `P3-10` and `Q18`)
+Last updated: 2026-08-01 (`P2-3` closed — the start line is queried from the road graph, not written down; drive review passed)
 
 ---
 
@@ -121,6 +121,15 @@ have rendered an empty city with no error. That code path is deleted rather than
 are the two that matter; `P2-2` (`RoadGraph`) is the one that finally owns the graph parse the
 previews currently duplicate.
 
+**`P2-3` closed on 2026-08-01.** The car is no longer placed by a hand-written transform:
+`RoadSpawn` resolves fare node `f_004` through `RoadGraph` and reproduces the old literal to 4 dp,
+with the orientation asserted against the edge vector by `verify_spawn.gd` — the sixth verify tool,
+and one that requires a transposed basis to fail so the assertion cannot pass vacuously. The user's
+verdict on *"is this still the `P0-5` car?"* was **"car seems ok"**, which is a pass on the question
+that was asked and nothing more: it says the placement change did not damage the handling `P0-5`
+already accepted. It is not a statement about feel under a thumb, which is review point 2's job and
+still needs `P0-3b`'s hardware. `P2-4` and `P2-5` are what remain before that gate.
+
 **`P0-5` passed conditionally, not cleanly** — the user drove it, found the handling acceptable, and
 judged that *fun* cannot be assessed from a grey box at all. See the decision log. The risk it
 existed to retire stayed open through the entire ETL slice.
@@ -165,7 +174,7 @@ See the decision log and `Q18`.
 | `P1-7` | Godot import | ✅ **Done** | **Phase 1 gate passed.** 65 tiles from `city.json`, georeferenced to 1 cm and checked in-engine by `verify_city.gd`. `DirAccess` tile listing deleted — it could never have worked in an export. 329 tests, `ruff` clean. |
 | `P2-2` | `RoadGraph` runtime and debug overlay | ✅ **Done — all four criteria met** | One parse per scene, nearest-edge over a 25 m plan grid, lane centres from the **drawn** carriageway. Refuses all 60 off-grade edges (`Q13`), proven over 505 probes. Query time closed 2026-08-01: **p99 45 µs against a 1 ms budget**, timed over 15,865 region-wide probes. `verify_road_graph.gd` is the fourth verify tool. 331 tests, `ruff` clean. |
 | `P2-1` | `CityStreamer` | ✅ **Done — review passed 2026-08-01** | Threaded load/unload by distance to the published `aabb`. Draw calls 70 → 53 against a 150 budget. The review verdict dropped LOD0: worst-case **visible triangles 249,210 → 150,374** against 300k, and the **PCK 51.6 → 21.1 MB**. Bands are now a single 250 m edge, 400 m unload, 15 m hysteresis, in `streaming.tres`. `verify_city_streamer.gd` is the fifth verify tool. Opened the shadow-cascade finding. |
-| `P2-3` | Vehicle on real geometry | 🟢 **Unblocked** | `P2-3` now has `P2-2`'s lane-centre query to spawn against |
+| `P2-3` | Vehicle on real geometry | ✅ **Done — review passed 2026-08-01** | The hand-written spawn transform is gone: `RoadSpawn` resolves fare node `f_004` through `RoadGraph` and `drive_harness.gd` places the car, reproducing the old literal to **4 dp** and reporting `0.00 m` from the lane centre with `+1.00` heading agreement. `verify_spawn.gd` is the sixth verify tool and asserts the orientation against the edge vector. The user's verdict on *is this still the `P0-5` car?* was **"car seems ok"** — a pass, and read no wider than it is said. |
 | `P3-7` | Window-band shader | ⬜ Not started | Build `B2`. **Acceptance grew 2026-08-01:** the shader's two inputs ship as `TEXCOORD_0` from the ETL, so this is one commit across both sides with a `schema_version` bump. See the decision log. |
 | `P3-10` | Ground surface | ⬜ Not started | **New 2026-08-01.** Build `B2`. There is no ground today. Decimated terrain, vertex-coloured, merged into the tile primitive; no texture ships. Flat colour first, photo-derived land-cover classes only if flat reads dead — that is `Q18`. |
 | `P3-*` | Playable slice | ⬜ Blocked | Gated on `P2-3`; `P2-2` cleared |
@@ -588,6 +597,100 @@ below.
 ---
 
 ## Decision log
+
+### 2026-08-01 — `P2-3` review **passed**: "car seems ok"
+
+The verdict on *"is this still the `P0-5` car?"*, recorded in the user's own words because the
+wording is the finding. It is a pass, and a narrow one: it says the placement change did not damage
+handling that `P0-5` had already accepted. `handling.tres` was not touched by `P2-3` and did not need
+to be, so that is exactly the claim the review was set up to test.
+
+**What it does not say** is anything about feel in the hand — that is review point 2, it needs
+`P0-3b`'s signing identity and handsets, and it is still open. Recorded this way for the reason
+`Q8`'s entry gives: a verdict read wider than it was given is how a conditional pass turns into an
+assumption nobody remembers making.
+
+### 2026-08-01 — `P2-3`: the start line is **queried, not written down**, and the transpose trap is deleted rather than documented
+
+`P2-3`'s deliverable is the car "placed by `P2-2`'s lane-centre query rather than by a hand-written
+transform", and almost all of it is a deletion. `RoadGraph.Hit` has carried `lane_centre` and a
+resolved `forward` since `P2-2`; `city_drive.tscn` carried a twelve-float `Transform3D` literal and
+`ARCHITECTURE.md` carried forty lines explaining how to not transpose it. `RoadSpawn.at_fare_node`
+connects the two that already existed, and `basis_facing` — `Basis.looking_at` on a direction —
+means there is no literal left to get wrong.
+
+**The query reproduces the literal to 4 dp**, which is the result worth recording: resolved
+`(172.3485, 6.579562, 26.93956)` against an authored `(172.3485, 6.5796, 26.9396)`, and the
+`P2-2` overlay reads `0.00 m` from the nearside lane centre with `heading agrees with travel:
++1.00`. The hand-derivation in `ARCHITECTURE.md` was right; it just should not have had to be done.
+
+**The heading is deliberately not passed to the query.** A zero heading makes `nearest_edge` take
+the edge's own vertex order, and `P1-3` reversed the polyline of every backward edge precisely so
+that order *is* the legal direction. Passing the car's authored rotation in would let the car decide
+which way a two-way street runs, which is the wrong way round: the street decides.
+
+#### The orientation check, and why it proves itself
+
+`verify_spawn.gd` is the sixth verify tool. `P2-3`'s acceptance criterion is "spawn orientation
+asserted against its edge vector", and the assertion on its own is not enough — **a transpose is not
+a 180° flip.** It mirrors the heading about world −Z: 171.9° wrong on Expo Drive, 180° on a due
+east-west street, and **0° on a north-south one**. A tool that only asserted the good case would
+pass on a north-south spawn with the bug present. So the tool builds the transposed basis and
+requires it to *fail*, and floors the discriminating angle at 10°:
+
+```
+facing: 0.0000° off the edge vector; a transposed basis would be 171.9° off
+spawn:  f_004 on edge 651 (EXPO DRIVE), 2.56 m off the centreline, 1.00 m of air
+```
+
+Proven non-vacuous the way `verify_city.gd` was: transposing `basis_facing`'s return makes it exit
+`1` with both halves firing, and pointing it at a fare id that does not exist exits `1` with the
+reason.
+
+#### Two findings that changed the shape
+
+**`ray_length_m` lives on `HandlingProfile`, not on `VehicleController`.** It went on the controller
+first and the check caught it: `vehicle_controller.gd` reads the `InputRouter` autoload, **autoloads
+are not registered under `--script`**, so any headless tool that touches the controller fails to
+compile. Worse, `verify_spawn.gd` then *printed `ok` and exited 0* while erroring — the exact false
+green the repo's checks exist to prevent, caught only because `tools/check.sh` greps stderr for
+compile failures as well as reading the exit code. The number is a fact about the profile anyway,
+which `suspension_rest_length_m`'s own comment already stated in prose.
+
+**The authored transform stays in the scene as a fallback, and says so.** `assets/generated/` is
+gitignored, so a fresh clone has neither graph nor fare nodes — and no road to drive on either. The
+literal keeps the camera somewhere sensible while the "run the ETL" warning gets read. The harness
+prints how far the resolved spawn has drifted from it, because a fallback nobody looks at drifts.
+
+**Resolution lives in `drive_harness.gd` rather than in a node of its own.** The harness is on the
+scene root, so its `_ready` runs after every child's — there is no arrangement of siblings that can
+beat it to the car, and the fall floor it derives is read from the pose it just applied.
+
+#### What the review pass then caught, and it was not style
+
+Two defects in code that had already passed every check:
+
+1. **The nearside-lane assertion was measuring against the wrong street.** It took the centreline
+   from a fresh unconstrained `nearest_edge(lane_centre)`, which can land on a *neighbouring* edge,
+   and compared that vector against `pose.forward`, which belongs to the spawn's edge. Where the two
+   differ the verdict is meaningless. `Pose` now carries `point` from the same `Hit` as `forward`, so
+   the two are correct by construction. The independent query survives for the seam-clearance check,
+   where asking "the nearest centreline *anywhere*" is the stricter question and the right one.
+2. **A keep-alive comment stated the opposite of the truth.** `drive_harness.gd` held the graph in a
+   member "so a local would not drop the 6 MB parse the overlay is using" — but the harness readies
+   *last*, so the overlay is already the strong owner and a local could drop nothing. It is a local
+   now.
+
+Three smaller ones: an unused `clearance_m` parameter that made the drop-height check valid only
+because nobody passed it; a malformed `pos` degrading to `Vector3.ZERO`, which in a region-local
+frame is a real place and would have resolved to a plausible wrong street instead of failing; and
+`spawn_fare_id = "f_004"` duplicated into the scene file, so changing `DEFAULT_FARE_ID` would have
+silently done nothing to the scene that actually boots.
+
+The fares document's shape — the `nodes` array, `id` and `pos` — moved to `generated_fares.gd`,
+which already existed to be the one place that knows it, and `fare_preview.gd`'s own copy went with
+it. `RoadGraph.left_of` names the left-of-travel cross product that four other sites write out by
+hand.
 
 ### 2026-08-01 — Ground and building colour: **the vertex stream carries both**, and the source texture is a build-time colour *source*, never a shipped one
 

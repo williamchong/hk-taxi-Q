@@ -87,7 +87,7 @@ func _cache_derived() -> void:
 	var omega: float = TAU * profile.suspension_frequency_hz
 	_spring_k = _corner_mass * omega * omega
 	_damper_c = 2.0 * profile.suspension_damping_ratio * _corner_mass * omega
-	_ray_length = profile.suspension_rest_length_m + profile.wheel_radius_m
+	_ray_length = profile.ray_length_m()
 
 
 ## Pairs wheels sharing a local z. Done once because the layout is fixed after

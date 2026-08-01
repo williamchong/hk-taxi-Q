@@ -38,6 +38,30 @@ static func load_fares() -> Dictionary:
 	return GeneratedDocument.load_object(PATH, SCHEMA_VERSION, missing_hint())
 
 
+## The node with this id, or an empty dictionary.
+##
+## Here rather than in a consumer because this file is the one place that knows
+## the fares document's shape — the `nodes` array and the `id` and `pos` keys are
+## as much its business as `PATH` and the `kind` spellings above.
+static func node_by_id(fares: Dictionary, fare_id: String) -> Dictionary:
+	for node: Dictionary in fares.get("nodes", []) as Array:
+		if String(node.get("id", "")) == fare_id:
+			return node
+	return {}
+
+
+## A node's published position, or `null` where it has none.
+##
+## Null rather than `Vector3.ZERO`, because the region's own origin is a real
+## place a car could be put: a malformed node would otherwise resolve to a street
+## near the north-west corner and look like a successful lookup.
+static func position_of(node: Dictionary) -> Variant:
+	var values: Array = node.get("pos", []) if node.get("pos") is Array else []
+	if values.size() < 3:
+		return null
+	return Vector3(values[0], values[1], values[2])
+
+
 ## Message for the case that reads as "there are no fares" rather than an error.
 static func missing_hint() -> String:
 	return (

@@ -100,3 +100,17 @@ extends Resource
 @export_range(-2.0, 2.0, 0.01, "suffix:m") var centre_of_mass_offset_y: float
 ## Above 1.0 shortens air time and lands jumps flatter.
 @export_range(0.0, 5.0, 0.05) var gravity_scale: float
+
+
+## How far a suspension ray reaches below its hardpoint — the car's ride height
+## with the springs fully extended.
+##
+## The only function on an otherwise pure schema, and it is here rather than on
+## VehicleController for two reasons. It is a fact about the profile, which
+## suspension_rest_length_m already states in prose. And it has to be reachable
+## from a headless --script tool: VehicleController reads the InputRouter
+## autoload, autoloads are not registered under --script, and so anything that
+## touches it there fails to compile. tools/verify_spawn.gd needs this number to
+## check the drop height and must not drag the controller in to get it.
+func ray_length_m() -> float:
+	return suspension_rest_length_m + wheel_radius_m

@@ -247,6 +247,15 @@ static func lane_offset(width_m: float, lanes: int) -> float:
 	return maxf(width_m, 0.0) * float(count - 1) / (2.0 * float(count))
 
 
+## The kerb side of a travel direction — left, because Hong Kong drives on it.
+##
+## One line, and named anyway: it is the direction a lane centre, a stand and a
+## spawn all get offset along, and every consumer that writes the cross product
+## out has to get the operand order right to mean "left" rather than "right".
+static func left_of(forward: Vector3) -> Vector3:
+	return Vector3.UP.cross(forward).normalized()
+
+
 ## The drivable edge nearest `point` in plan, or a `Hit` with `edge_id == -1`.
 ##
 ## `heading` resolves which way a two-way edge runs for the asker; pass the car's
@@ -482,5 +491,4 @@ func _fill(hit: Hit, index: int, point: Vector3, heading: Vector3) -> void:
 		along = -along
 	hit.forward = along
 
-	var left: Vector3 = Vector3.UP.cross(along).normalized()
-	hit.lane_centre = point + left * lane_offset(_drawn_half[slot] * 2.0, _lanes[slot])
+	hit.lane_centre = point + left_of(along) * lane_offset(_drawn_half[slot] * 2.0, _lanes[slot])

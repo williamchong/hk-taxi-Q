@@ -153,7 +153,8 @@ func _report(
 
 
 func _position(node: Dictionary) -> Vector3:
-	return _point(node.get("pos", [0.0, 0.0, 0.0]))
+	var at: Variant = GeneratedFares.position_of(node)
+	return at if at != null else Vector3.ZERO
 
 
 ## The point `t` of the way along a polyline, measured in **plan**.
@@ -185,11 +186,6 @@ func _along(polyline: PackedVector3Array, t: float) -> Vector3:
 	# Only reachable when float accumulation leaves `walked` a hair short of
 	# `total` at t=1.
 	return polyline[polyline.size() - 1]
-
-
-func _point(entry: Variant) -> Vector3:
-	var values: Array = entry
-	return Vector3(values[0], values[1], values[2])
 
 
 func _plan_distance(from: Vector3, to: Vector3) -> float:

@@ -370,6 +370,19 @@ position.
 what makes a tile one draw call, and it is checked in-engine by
 `game/tools/verify_tiles.gd`.
 
+**Two additions to the vertex stream are planned, and both bump `schema_version`.** Neither adds a
+texture or a second primitive, which is the point:
+
+| Addition | Task | Cost |
+|---|---|---|
+| `TEXCOORD_0.xy` = height above the building's own base, per-building seed | `P3-7` | ~2 bytes/vertex quantised. The window-band shader cannot derive either from a vertex, so the ETL must ship them — one commit across both sides, per hard rule 5 |
+| Terrain merged into the tile primitive, vertex-coloured | `P3-10` | ~1,355 triangles per tile. No texture, and **no extra draw call**, because it merges rather than becoming a second surface |
+
+⚠️ `COLOR_0.a` is a constant `255` today and looks like the cheaper place for a shader mask. It is
+not. `game/tools/generated_scene_import.gd` sets `vertex_color_use_as_albedo` project-wide, and an
+opaque `BaseMaterial3D` ignores albedo alpha only until somebody enables transparency on a tile —
+after which the city renders see-through with no error. `TEXCOORD_0` has no such failure mode.
+
 ### `buildings.json` — an ETL intermediate, *not* part of this contract
 
 `buildings.py` writes one of these next to its tiles, recording the grid, the LOD cell sizes, and
@@ -802,46 +815,48 @@ puts it where it belongs. That is why `city.json` gives tiles an `aabb` but no p
 Separate from `city_preview.tscn` because the two answer different questions and want different
 cameras.
 
-The spawn is derived from published data rather than eyeballed, and this is the place that record
-lives — a `.tscn` is rewritten from scratch the first time the editor saves it, taking its comments
-with it. The car starts at **fare node `f_004`, "Expo Drive eastbound underneath HKCEC Phase II"**:
-a real taxi stand in the Transport Department's data, so the car begins where a Hong Kong taxi
-would actually be waiting. **No projection is needed to reproduce it**: `fares.py` publishes
-`nearest_edge` and `edge_t` on every node precisely so a consumer does not redo the projection that
-stage already did, and `f_004` carries edge `651` at `edge_t` `0.598491`. Walk that edge's polyline
-in plan to `edge_t`, offset into the lane, and you land on the literal. The heading is the
-direction of **the polyline segment `edge_t` falls on** — not the end-to-end chord, which differs
-by 0.7° — so the car faces the way the graph says traffic legally runs, the same directions `Q12`
-confirmed against the real street.
+**The spawn is resolved at runtime, and since `P2-3` it is not written down anywhere.**
+`drive_harness.gd` asks `RoadSpawn.at_fare_node` for **fare node `f_004`, "Expo Drive eastbound
+underneath HKCEC Phase II"** — a real taxi stand in the Transport Department's data, so the car
+begins where a Hong Kong taxi would actually be waiting — and `RoadGraph.nearest_edge` returns the
+edge, the lane centre and the legal travel direction in one query. Change `spawn_fare_id` on the
+scene root to start somewhere else; there is nothing else to edit.
 
-Its **Y is the one number not derived from published data**: road surface + **1.0 m**, a drop
-height. The wheel ray is `suspension_rest_length_m + wheel_radius_m` = 0.70 m, so the car starts
-0.30 m clear of the ground and settles onto its suspension. It is also load-bearing beyond the
-spawn — `drive_harness.gd` sets `_floor_m` from `spawn.origin.y - fall_margin_m`, so moving the
-spawn moves the fall-detection floor with it.
+The heading is **not** supplied to the query. A zero heading makes `nearest_edge` take the edge's
+own vertex order, and `P1-3` reversed the polyline of every backward edge precisely so that order
+*is* the legal direction — the directions `Q12` confirmed against the real street. Passing the
+car's authored rotation in would let the car decide which way a two-way street runs, which is
+backwards.
 
-⚠️ **The transform literal is row-major; the axis you reason about is a column.** `Transform3D`'s
-12-float constructor fills `Basis` rows, while "forward" is `-basis.z` — and in GDScript `basis.z`
-*is* the column (`get_column` is C++-only). Building the literal as columns therefore transposes
-the basis. **A transpose is not a 180° flip.** Transposing a yaw-only basis gives `yaw(-θ)`, which
-mirrors the heading about world −Z: 172° wrong for this spawn, 180° for a due east-west street, and
-**0° — a silent no-op — for a north-south one**. So the error is invisible on exactly the streets
-where you would trust an eyeball check. Given a travel direction `d`, the row-major floats are
-`(-d.z, 0, -d.x, 0, 1, 0, d.x, 0, -d.z)`; verify with
-`assert((-basis.z).is_equal_approx(d))` in-engine — not `==`, which fails on the 4-dp rounding in
-the literal.
+The car sits in the **nearside lane, 2.56 m left of the centreline** on this edge —
+`width_m × widen_for(speed_limit_kph) / 4`, which is 1.6 below 70 kph and 1.3 at or above it, so
+the figure is not a constant — and never on the centreline. Partly because a car should start in a
+lane, and partly because the centreline is the worst place on the network to put a wheel: it is
+where opposed carriageway ribbons overlap and where junction caps double up, so a raycast can find
+two coplanar collision triangles a few centimetres apart and the wheel picks between them.
+
+**Y is the one number not published**: lane centre + `HandlingProfile.ray_length_m()` +
+`RoadSpawn.DROP_CLEARANCE_M`, which is 0.70 + 0.30 today. The car is dropped, not set down, and
+settles onto its suspension. It is load-bearing beyond the spawn — `drive_harness.gd` sets
+`_floor_m` from `spawn.origin.y - fall_margin_m`, so moving the spawn moves the fall-detection
+floor with it.
+
+⚠️ **The trap this replaced, kept because the fallback literal in `city_drive.tscn` still has it.**
+`Transform3D`'s 12-float constructor fills `Basis` rows, while "forward" is `-basis.z` — and in
+GDScript `basis.z` *is* the column (`get_column` is C++-only). Building a literal as columns
+therefore transposes the basis. **A transpose is not a 180° flip.** Transposing a yaw-only basis
+gives `yaw(-θ)`, which mirrors the heading about world −Z: 172° wrong for this spawn, 180° for a
+due east-west street, and **0° — a silent no-op — for a north-south one**. So the error is
+invisible on exactly the streets where you would trust an eyeball check. `RoadSpawn.basis_facing`
+takes a direction and builds the rotation with `Basis.looking_at`, so there is no literal left to
+transpose; `tools/verify_spawn.gd` asserts `(-basis.z).is_equal_approx(forward)` and *also*
+requires the transposed basis to fail, which is what stops the assertion passing vacuously.
 
 There is also a check needing no tooling at all, and it is the one that caught this: **the harbour
 is north**, so from a car facing east, a left turn heads for the water. Getting that wrong is
 visible from the driver's seat.
 
-It sits in the **nearside lane, 2.56 m left of the centreline** — `width_m × widen_for(speed_limit_kph) / 4`,
-which is 1.6 below 70 kph and 1.3 at or above it, so the figure is not a constant — not on the
-centreline itself.
-Partly because a car should start in a lane, and partly because the centreline is the worst place
-on the network to put a wheel: it is where opposed carriageway ribbons overlap and where junction
-caps double up, so a raycast can find two coplanar collision triangles a few centimetres apart and
-the wheel picks between them. Three things are knowingly missing, and all three are
+Three things are knowingly missing, and all three are
 someone else's task: **buildings have no collision** (`P2-1` decides where tile colliders come
 from), **there is no ground** so anything off the carriageway is void (the terrain did not fit any
 budget — see `P1-2`), and **the flyovers cannot be reached** (`Q13`). A dev harness on the root
@@ -856,10 +871,11 @@ design.
 | `scripts/core/plan_lattice.gd` | An even grid of plan positions over a region's bounds. Both region-sweeping verify tools take their sample points from it — counted, not float-accumulated, so the far row and column cannot be dropped |
 | `scripts/city/streaming_profile.gd` | Schema for the distance bands, hysteresis and per-frame budgets. Numbers live only in `tuning/streaming.tres` |
 | `scripts/city/road_graph.gd` | **`RoadGraph` (`P2-2`).** One parse per scene, nearest-edge and lane-centre queries over a plan grid. Refuses off-grade edges — see `Q13` |
+| `scripts/city/road_spawn.gd` | **`RoadSpawn` (`P2-3`).** Where a car starts, resolved from a fare node through `RoadGraph`. `basis_facing` builds the rotation from a direction, which is what deleted the hand-written transform literal and the transpose trap with it |
 | `scripts/city/road_graph_overlay.gd` | Dev: draws the resolved edge, lane centre and legal travel direction under the moving car |
 | `scripts/city/generated_road_surface.gd` | Dev locator for `roads.glb` — one definition, two readers |
 | `scripts/city/generated_road_graph.gd` | Same, for `roadgraph.json` |
-| `scripts/city/generated_fares.gd` | Same, for `fares.json`. Also holds the `kind` and `stand_category` spellings — the ETL is authoritative for those |
+| `scripts/city/generated_fares.gd` | Same, for `fares.json`. The one place that knows that document's shape: the `kind` and `stand_category` spellings — the ETL is authoritative for those — plus `node_by_id` and `position_of` |
 | `scripts/city/generated_document.gd` | Parse and version-check a JSON document the ETL wrote. Shared by the locators above and by `CityManifest`, so the stale-copy message exists once |
 | `scripts/city/mesh_contract.gd` | The mesh rules every generated asset is held to, plus `triangles` and `bounds`. Every verify tool that touches geometry reads it, as do the previews and `CityStreamer` |
 | `scripts/city/preview_draw.gd` | Flat ribbons and the unshaded vertex-colour material, shared by the dev previews |
@@ -867,7 +883,7 @@ design.
 | `scripts/city/road_surface_preview.gd` | Dev: instantiate the road surface, report triangles and colliders |
 | `scripts/city/road_preview.gd` | Dev: draw the road graph flat, with one-way arrows. Answered `Q12` |
 | `scripts/city/fare_preview.gd` | Dev: pin every fare node and tether it to `nearest_edge` at `edge_t` |
-| `scripts/city/drive_harness.gd` | Dev: return the car to its spawn when it leaves the world |
+| `scripts/city/drive_harness.gd` | Dev: place the car on the resolved start line, and return it there when it leaves the world. On the scene root so its `_ready` runs after the car's |
 | `scripts/camera/free_look_camera.gd` | Dev: fly camera. Bypasses `InputRouter` so dev keys stay out of the shipped action map |
 | `scenes/world/golden_hour.tscn` | The one lighting rig, per `ART_DESIGN.md`. Instance it rather than authoring a second Environment |
 | `tools/verify_tiles.gd` | Headless acceptance check for generated tiles — the mesh contract |
@@ -875,6 +891,7 @@ design.
 | `tools/verify_road_graph.gd` | Headless acceptance check for `RoadGraph`'s queries — the `Q13` refusal, edge resolution, lane placement against the published carriageway width, and query time against a 1 ms budget over a region-wide probe lattice |
 | `tools/verify_road_surface.gd` | Headless acceptance check for `roads.glb` — one draw call, UVs, trimesh collision |
 | `tools/verify_city_streamer.gd` | Headless acceptance check for the streaming policy — band edges, hysteresis in both directions, and a region-wide residency sweep against the draw-call budget. Reports resident triangles as a ceiling rather than gating on them |
+| `tools/verify_spawn.gd` | Headless acceptance check for `P2-3`'s start line — the orientation against its edge vector, the nearside-lane placement, the drop height, and that the resolved edge is the one the fare node publishes. **Builds the transposed basis and requires it to fail**, so the check cannot pass vacuously on a street where the bug is invisible |
 | `tools/generated_scene_import.gd` | Import fixup — see the `[importer_defaults]` row above |
 
 ---
