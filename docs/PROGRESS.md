@@ -122,9 +122,140 @@ under, and ~0.2 m is a guess until it is driven on a cross-sloped street.
 
 ## Decision log
 
+### 2026-08-03 — `P3-11` review: **reads as 紅的, does not read as a Crown Comfort**
+
+**Verdict, from the user.** The colour split (red body, pale roof) carries the most basic signature
+of a Hong Kong urban taxi, and the model works **as a placeholder** — a viewer sees "香港紅的" at a
+glance. It does **not** read as a Toyota Crown Comfort, and specifically not as the **4-seat**
+variant. Answering `PLAN.md`'s question *"does it read as a toy in an accurate city, rather than as a
+box?"*: **a toy, yes; the right toy, not yet.**
+
+The findings split into two kinds of work, and the split is the useful part.
+
+**Texture, not geometry — and this is where the recognition actually lives:**
+- ⚠️ **The green semicircular badge.** The user's word is *必定* — a 4-seat taxi always carries it,
+  and it is **the** marker that identifies the variant. Nothing in the project knew it existed.
+  **Corrected from the reference photo: it reads 「TAXI / 4 / SEATS」 in English, not 「4座位」**, on
+  a white-edged green half-ellipse, and it sits on the **bumper** — front and rear, not the boot.
+  That correction mattered technically as well as factually: English is a 7-glyph bitmap font, where
+  Chinese would have meant hand-encoding 24×24 bitmaps per character.
+- **"TAXI" lettering** on the roof sign's long sides.
+- **Registration plates, and they are two different colours.** Hong Kong follows the UK: **white at
+  the front, yellow at the rear**, black characters. Shipping both white would be a detail a local
+  eye catches instantly.
+
+**Geometry:**
+- The whole body is too hard-edged. A real Crown Comfort is a square three-box saloon, but its
+  front, roof and rear *transitions are radiused*, and its bonnet and boot are proportionally longer.
+- The roof reads as a flat pale slab laid on top of the red, rather than silver paint that covers the
+  roof **and continues down the A/B/C pillars**. The glass needs real inset depth against the body.
+- The roof sign is a plain cuboid; the real one is a specific solid — semi-elliptical, or a
+  rectangle with a rake.
+- Tail lamps want the signature upright cluster; the plate wants a recess.
+- Wheels read as dark blobs with no rim.
+
+⚠️ **The mirrors, door handles, shut lines, pillars and silver hubs are already modelled** — the user
+listed them as missing. They are 16–150 mm features seen from ~8 m in a 1080p frame in flyover
+shadow, so they are sub-pixel and contrast-free. **Detail that cannot be seen at review distance is
+not detail, it is triangles.** The fix is to make them read — larger, higher contrast, or moved into
+a texture — not to add them again. Worth remembering before spending the rest of the budget the same
+way.
+
+**This earns the texture half that `Q18`'s pattern deliberately deferred.** The cheap version shipped
+and got looked at, and the answer came back that the highest-value remaining items — 「4座位」 and
+「TAXI」 — are *text and decals*, unreachable in flat triangles at any triangle count. The blocker
+stands: `pipeline/mesh.py`'s `merge` refuses textured meshes, so it needs per-part UVs into an atlas.
+
+### 2026-08-03 — `P3-11b`: the review's notes, answered
+
+**Built in response to the verdict above.** 1,184 triangles in scene — 596 body, 4 × 144 tyres,
+12 decal — against `ART_DESIGN.md`'s 2,000 ceiling.
+
+⚠️ **The loop was broken for most of a session, and every conclusion drawn in it was wrong.**
+`drive.sh` builds `game/.godot/` on its first run and thereafter renders **whatever is already
+imported**. Rewrite a `.glb` and every screenshot afterwards is of the *old* mesh, silently, with
+`DRIVER OK` and an exit code of zero. Three diagnoses in a row were made against hours-stale images:
+geometry was removed, the render did not change, and the removed geometry was cleared of blame for
+something still on screen. **The tell was a probe that came back pixel-identical** — a change that
+produces literally no difference is far likelier to mean "the change never arrived" than "the change
+had no effect". Fixed in the skill's gotchas: run `godot --headless --path game --import` before
+believing any screenshot. The stick artefacts had in fact been gone for four edits.
+
+**Wheel width, third value and the two failures worth keeping.** `half_width_m` went 0.86 → 0.76 →
+**0.90**. At 0.86 the tyres were sealed inside the bodywork and the car rendered with no wheels. At
+0.76 they were visible but stood *outside* the flank on a perched lip — which the user read
+immediately as *"some kind of vintage car"*, because standing fenders are a pre-war arrangement, not
+a 1990s saloon. Only flush bodywork with the wheel in a hole cut through it is neither, and that is
+what `_flank` now builds: solid stretches between the openings, an arc of columns over each tyre, a
+rim turning inward and an inner wall so the well has a back to it.
+
+**Rounded, by chamfer rather than by smoothing.** `_ring` grew a corner cut, so every vertical edge
+is three short facets instead of one 90° turn, and `_loft` became generic over N-gon rings to carry
+it. This was the correction to a caution recorded earlier in this log — that bevels would fight the
+flat-shaded city. **They do not.** The user's own reference art is rounded *and* flat, and the
+distinction that matters is chamfer versus smooth shading: faces stay flat, edges stay crisp, there
+are simply more of them. `corner_cut_m = 0` still yields the cheap square car `B3`'s traffic wants.
+
+**The tail lamp is three lenses, not one.** Amber indicator over white reverse over red tail and
+brake, in that order. An earlier pass had a single cream lens — a *white tail lamp*, which is simply
+wrong — adopted because a red lens on red bodywork vanishes. The real fix was the dark bezel, and
+then the correct colour on top of it. ⚠️ **This took the palette to six**, where `ART_DESIGN.md` says
+3–5: three stacked lenses cannot be expressed in two colours. Flagged rather than quietly taken.
+
+⚠️ **The glTF importer silently reinstated `VehicleWheel3D`, the class `P0-5a` rejected** — through
+nothing but the mesh being named `taxi_wheel`. **The mechanism and the suffix list live in
+`ARCHITECTURE.md`**, under their own heading, because they are a standing property of the importer
+rather than an event. What belongs here is what it cost: the wheels stopped drawing with a clean
+import, a passing `check.sh` and a `DRIVER OK`, and the disappearance was blamed on body width twice
+before anyone inspected the instantiated *tree* rather than the scene *file*. **Everything upstream
+of instantiation was consistent and wrong together**, which is precisely why reading the source
+could not find it.
+
+**`VehicleBody3D` re-asked, and re-refused — 2026-08-03.** The user asked directly whether the
+built-in vehicle would give us anything, which is the explicit instruction hard rule 1 requires to
+reopen a locked decision. It genuinely would: per-wheel angular velocity for wheelspin and lockup,
+`get_skidinfo()` for smoke and tyre marks, and ~340 lines of `vehicle_controller.gd` deleted. It is
+still refused, and the reason is a capability gap rather than a preference — `VehicleWheel3D` exposes
+**one** `friction_slip`, and Godot's implementation derives lateral and longitudinal impulses from
+it, so it cannot break lateral grip while keeping traction. `handling.tres` carries four drift dials
+with no counterpart there, and `GAME_DESIGN.md` builds the style chain on the mechanic they tune.
+"Wheels only" is not available either: `VehicleWheel3D` simulates solely under a `VehicleBody3D`.
+**The two features worth having are cheap to build here instead** — `_apply_tyre_forces` already
+computes the slip both need — and are scheduled into `B4` beside the effects that consume them.
+
+⚠️ **The review round found four defects the build could not, and one had shipped.** Recorded
+because each was invisible to every check that passes:
+
+- **The roof-sign TAXI decal was buried inside the sign** — both quads at `x = 0`, coincident with
+  each other, 13 cm inside opaque geometry. The lettering had never rendered once. Nothing catches a
+  decal *strictly inside* the body, and the cause was that the sign tapered in width, so no flat quad
+  could lie on its side. It rakes across its width now and the lettering faces fore and aft, which is
+  where the real sign carries it **and** the only face the chase camera ever sees.
+- **The flank stood 0.24 m proud of the chamfer** at each lower corner — a flat red fin cancelling
+  the `corner_cut_m` rounding it poked through, because `_flank` ran the full body length while the
+  rings it patches into are chamfered. The bumpers' side faces were also *exactly* coplanar with the
+  flank plane, giving four z-fighting patches.
+- **`corner_cut_m = 0` opened a hole through the boot.** The flank edge indices were pinned to `(2,
+  6)`, correct only for the eight-corner ring; at zero cut a ring has four corners and edge 2 is the
+  *rear face*. Since zero is the setting offered to `B3`'s traffic, this was armed for later.
+- **`_text` had no bounds check**, and negative numpy slice indices wrap: a plate one character too
+  long wrote 162 ink pixels *inside the 4 SEATS badge*, silently.
+
+**The lesson is the same one this task keeps teaching.** Every one of these rendered, imported and
+passed `check.sh`. What found them was reading the *built mesh* — its vertex positions, its coplanar
+faces, its triangle count at a different dial setting — rather than the source that produced it.
+
+**Decals ship as a third mesh, and the `merge` blocker dissolved.** The earlier note here said
+textures needed per-part UVs across all 87 body parts, because `pipeline/mesh.py`'s `merge` refuses
+textured meshes. That was solving the wrong problem: the *body* never needed texturing. Six quads
+carrying a 256² sheet do, and they never touch `merge` — `write_glb` simply takes a third entry.
+`tools/vehicle_decals.py` draws the sheet with `zlib` and `struct` alone, so **Pillow is still not a
+dependency**, and bakes each decal's surroundings into its own patch so no alpha channel is needed
+(the writer sets no blend mode). Cost: a third material, and 12 triangles.
+
 ### 2026-08-03 — `P3-11`: the taxi is generated, and the chassis generates it
 
-**Built and awaiting the review drive.** `tools/make_vehicle.py` → `taxi_body.glb` (484 tris) and
+**Built and reviewed — see the verdict above.** `tools/make_vehicle.py` → `taxi_body.glb` (484 tris) and
 `taxi_wheel.glb` (72), which the scene instances as **484 + 4 x 72 = 772 triangles**, 31 KB and 7 KB
 on disk. Two meshes, so two materials, and five flat colours — inside `ART_DESIGN.md`'s 1–2 and 3–5.
 

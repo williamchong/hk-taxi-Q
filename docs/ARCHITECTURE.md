@@ -11,6 +11,22 @@
 | ETL | **Python 3.11+** — numpy, pyproj, pyyaml, pyogrio | Build-time only |
 | Targets | iOS, Android, Windows/macOS/Linux (Steam) | Web export reserved for the free demo slice |
 
+### ⚠️ The importer can reinstate `VehicleWheel3D` behind your back
+
+Godot's glTF importer converts nodes by **name suffix**. A node whose name ends in `_wheel` is
+imported as a `VehicleWheel3D`, not as the `MeshInstance3D` the file describes — and the same
+applies to `_col`, `_convcol`, `_navmesh`, `_occ`, `_rigid` and `_vehicle`.
+
+`P3-11` shipped its tyre mesh as `taxi_wheel.glb`, so every wheel arrived wrapped in a
+`VehicleWheel3D` with no `VehicleBody3D` above it. The wheels stopped drawing. **Nothing reported an
+error**: the import succeeded, `tools/check.sh` passed, the driver printed `DRIVER OK`, and the only
+symptom was a car that rendered without wheels. The mesh is now `taxi_tyre.glb`.
+
+Worth its own heading because of *what* it reinstated. `P0-5a` measured `VehicleWheel3D` and rejected
+it — its friction is isotropic, so it cannot express a drift — and a filename put it back into the
+scene tree. **A locked decision can be undone by a naming convention.** Check the instantiated tree,
+not the source scene, when geometry goes missing.
+
 ### Why GDScript, not C#
 
 C# platform support in Godot 4.7 (re-verified against the official docs 2026-07-29): desktop fully

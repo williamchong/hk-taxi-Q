@@ -351,6 +351,16 @@ trade.
 
 - **Deps:** `B1`, `B3`. **Review:** play a full session, twice | web build | **Do you want another
   go?** This is the risk register's "novelty does not survive the first session", put directly.
+- ⚠️ **`P3-2b` wants two numbers the controller does not publish yet.** Skid smoke and tyre marks
+  need a **traction-loss signal**, and wheels that spin up under power and lock under braking need
+  **per-wheel angular velocity**. `VehicleWheel3D` gives both free through `get_skidinfo()` — and is
+  still refused, because its single `friction_slip` cannot break lateral grip while keeping
+  longitudinal traction, which is the drift the style chain is built on (`P0-5a`, re-asked and
+  re-answered 2026-08-03). Both are cheap to add here instead: `_apply_tyre_forces` already computes
+  lateral and longitudinal slip per wheel, so publishing them onto `WheelMount` beside `compression`
+  and `steer_angle` costs ~20 lines and changes no physics. **Do it when the effects that consume it
+  are built, not before** — `wheel_visual.gd` currently rolls the wheels from road speed, which is a
+  lie nobody can see until there is smoke to compare it against.
 
 ### `P3-9` Authenticity test round 1
 

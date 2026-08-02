@@ -176,6 +176,14 @@ to — see Gotchas.
 
 ## Gotchas
 
+- ⚠️ **`drive.sh` does NOT re-import changed assets, and says nothing about it.** It builds
+  `game/.godot/` on its first run and thereafter renders whatever is already in
+  `game/.godot/imported/`. Rewrite a `.glb` and every screenshot afterwards is of the **old** mesh,
+  with no warning and an exit code of `DRIVER OK`. This cost a long debugging session: geometry was
+  removed, the render did not change, and the absent geometry was blamed for what was still on
+  screen. **After changing any asset, run `godot --headless --path game --import` (or
+  `tools/check.sh`, which does it) before believing a screenshot.** Check
+  `ls -la game/.godot/imported/` against the asset's mtime when a render looks impossibly unchanged.
 - **`--script` resolves relative paths against `res://`, not your shell.** `--script
   .claude/skills/…/driver.gd` fails with `File not found` because Godot looks for it inside
   `game/`. An absolute path works from anywhere; `drive.sh` builds one.

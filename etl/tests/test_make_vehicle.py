@@ -27,6 +27,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from make_vehicle import (
+    AMBER,
     DARK,
     GLASS,
     LAMP,
@@ -40,6 +41,7 @@ from make_vehicle import (
     build_taxi,
     write_taxi,
 )
+from vehicle_decals import build_sheet
 
 from pipeline.gltf import MeshData
 
@@ -50,7 +52,7 @@ SHIPPED = ROOT / "game" / "assets" / "authored" / "vehicles"
 
 # `ART_DESIGN.md`'s ceiling for one vehicle.
 TRIANGLE_CEILING = 2000
-PALETTE = (RED, SILVER, DARK, GLASS, LAMP)
+PALETTE = (RED, SILVER, DARK, GLASS, LAMP, AMBER)
 
 
 def _tres_float(text: str, field: str) -> float:
@@ -133,6 +135,15 @@ class TestChassisMatchesTheScene:
         radial = np.linalg.norm(wheel.positions[:, 1:], axis=1)
         assert radial.max() == pytest.approx(scene_chassis.wheel_radius_m, abs=1e-6)
 
+    def test_the_body_is_exactly_as_wide_as_the_track(self, scene_chassis: Chassis) -> None:
+        """`half_width_m` is a hand-copied literal of track/2 + tyre width/2,
+        and both failure modes have been shipped: narrower and the tyres stand
+        outside the flank like pre-war fenders, wider and they vanish inside it.
+        Neither raises anything, so the equality is asserted here instead."""
+        shape = Proportions()
+        flush = scene_chassis.track_m / 2.0 + shape.wheel_width_m / 2.0
+        assert shape.half_width_m == pytest.approx(flush, abs=1e-9)
+
     def test_the_wheels_rest_on_the_ground_plane(self, scene_chassis: Chassis) -> None:
         """Stated as the relationship, not as the two numbers it produces —
         pinning the literals would only detect that they changed together."""
@@ -169,6 +180,58 @@ class TestShippedAssets:
             )
 
 
+class TestDecals:
+    """The sheet and the quads that carry it."""
+
+    def test_the_sheet_is_a_valid_png(self) -> None:
+        png, _ = build_sheet(sign_face=LAMP, bumper_face=DARK)
+        assert png.startswith(b"\x89PNG\r\n\x1a\n")
+        assert png.endswith(b"IEND\xaeB`\x82")
+
+    def test_every_patch_is_inside_the_sheet(self) -> None:
+        """An out-of-range rect samples a neighbouring decal, not empty space."""
+        _, patches = build_sheet(sign_face=LAMP, bumper_face=DARK)
+        for key, patch in patches.items():
+            u0, v0, u1, v1 = patch.uv()
+            assert 0.0 <= u0 < u1 <= 1.0, key
+            assert 0.0 <= v0 < v1 <= 1.0, key
+
+    def test_no_two_patches_overlap(self) -> None:
+        """Overlapping rects put one decal's ink inside another's texture."""
+        _, patches = build_sheet(sign_face=LAMP, bumper_face=DARK)
+        items = list(patches.values())
+        for i, a in enumerate(items):
+            for b in items[i + 1 :]:
+                apart = a.x + a.w <= b.x or b.x + b.w <= a.x or a.y + a.h <= b.y or b.y + b.h <= a.y
+                assert apart, f"{a} overlaps {b}"
+
+    def test_text_too_wide_for_its_patch_is_refused(self) -> None:
+        """`_text` writes straight into the sheet array. Without a bound it
+        would silently scribble across whatever patch sits alongside."""
+        with pytest.raises(ValueError, match="does not fit"):
+            build_sheet(sign_face=LAMP, bumper_face=DARK, plate="HK 0521 0521 0521")
+
+    def test_the_roof_sign_decal_stands_proud_of_the_sign(self, meshes: list[MeshData]) -> None:
+        """⚠️ Both roof-sign quads once sat at x = 0 — inside the sign solid and
+        coincident with each other — so the TAXI lettering was invisible. It
+        rendered, imported and passed every check in that state.
+
+        Asserted as "outside the solid" rather than "clear along x", so it still
+        holds whichever face the lettering is moved to. The first version of
+        this test pinned the axis and failed the moment the sign turned to face
+        fore and aft, which is a test describing an implementation rather than
+        the property that matters.
+        """
+        shape = Proportions()
+        decal = meshes[2]
+        on_sign = decal.positions[decal.positions[:, 1] > shape.roof_y_m]
+        assert len(on_sign) > 0, "no decal sits on the roof sign"
+
+        within_x = np.abs(on_sign[:, 0]) <= shape.sign_half_width_m
+        within_z = np.abs(on_sign[:, 2] - shape.sign_z_m) <= shape.sign_half_length_m
+        assert not (within_x & within_z).any(), "a roof-sign decal is buried in the sign"
+
+
 class TestWinding:
     """Every face points out of the solid it belongs to."""
 
@@ -200,26 +263,39 @@ class TestWinding:
 class TestTaxiContract:
     """What `ART_DESIGN.md` asks of a vehicle, and `write_glb` of a mesh."""
 
-    def test_two_meshes_so_two_materials(self, meshes: list[MeshData]) -> None:
-        """`write_glb` writes one material per mesh, and the spec allows 1-2."""
-        assert [mesh.name for mesh in meshes] == ["taxi_body", "taxi_wheel"]
+    def test_the_three_meshes_are_body_wheel_and_decal(self, meshes: list[MeshData]) -> None:
+        """One material each. Two would meet `ART_DESIGN.md`; the third is the
+        decal sheet, taken deliberately because plates and the 4 SEATS badge are
+        text and no triangle count reaches them."""
+        assert [mesh.name for mesh in meshes] == ["taxi_body", "taxi_tyre", "taxi_decal"]
 
     def test_within_the_triangle_ceiling(self, meshes: list[MeshData]) -> None:
-        """Counted as the scene instances it: one body and four wheels."""
-        body, wheel = meshes
-        assert body.triangle_count + 4 * wheel.triangle_count <= TRIANGLE_CEILING
+        """Counted as the scene instances it: one body, four wheels, one decal."""
+        body, wheel, decal = meshes
+        in_scene = body.triangle_count + 4 * wheel.triangle_count + decal.triangle_count
+        assert in_scene <= TRIANGLE_CEILING
 
-    def test_every_vertex_is_coloured(self, meshes: list[MeshData]) -> None:
-        """An uncoloured vertex renders at whatever the attribute defaults to."""
+    def test_every_untextured_vertex_is_coloured(self, meshes: list[MeshData]) -> None:
+        """An uncoloured vertex renders at whatever the attribute defaults to.
+        The decal sheet is the exception: it carries UVs and a texture instead."""
         for mesh in meshes:
+            if mesh.texture is not None:
+                assert mesh.uvs is not None and len(mesh.uvs) == len(mesh.positions)
+                continue
             assert mesh.colours is not None
             assert len(mesh.colours) == len(mesh.positions)
 
-    def test_the_palette_is_the_five_declared_colours(self, meshes: list[MeshData]) -> None:
-        """`ART_DESIGN.md` asks for 3-5 flat colours per vehicle."""
-        used = {tuple(rgb) for mesh in meshes for rgb in np.unique(mesh.colours[:, :3], axis=0)}
-        assert used <= set(PALETTE)
-        assert len(used) <= 5
+    def test_the_palette_is_the_declared_colours(self, meshes: list[MeshData]) -> None:
+        """`ART_DESIGN.md` asks for 3-5; this is six. AMBER is the deliberate
+        extra — the tail cluster stacks three lenses and two colours cannot
+        express three. The assertion is that nothing *else* creeps in."""
+        used = {
+            tuple(rgb)
+            for mesh in meshes
+            if mesh.colours is not None
+            for rgb in np.unique(mesh.colours[:, :3], axis=0)
+        }
+        assert used <= set(PALETTE), f"unexpected colour: {sorted(used - set(PALETTE))}"
 
     def test_the_body_clears_the_ground(self, meshes: list[MeshData]) -> None:
         """A sill below the contact patch would drag through the road surface."""
@@ -227,8 +303,18 @@ class TestTaxiContract:
         assert low[1] > Chassis().ground_y_m
 
     def test_the_taxi_faces_negative_z(self, meshes: list[MeshData]) -> None:
-        """Godot's forward. The roof sign sits ahead of the cabin's midpoint,
-        so an asymmetric bound is the cheap check that nothing got mirrored."""
-        low, high = meshes[0].aabb()
-        assert low[2] < 0 < high[2]
-        assert abs(low[2]) == pytest.approx(abs(high[2]), abs=0.15)
+        """Godot's forward is -Z, and the plates are what prove the car is not
+        mirrored: Hong Kong runs a white plate at the front and a yellow one at
+        the rear, so their z tells the two ends apart. The earlier version of
+        this test asserted the body's bounds were roughly *symmetric*, which is
+        true of any centred box facing either way and caught nothing."""
+        decal = meshes[2]
+        _, patches = build_sheet(sign_face=LAMP, bumper_face=DARK)
+        sheet_v = {key: patch.uv()[1] for key, patch in patches.items()}
+        for key, expected_sign in (("plate_front", -1.0), ("plate_rear", 1.0)):
+            rows = np.isclose(decal.uvs[:, 1], sheet_v[key]) | np.isclose(
+                decal.uvs[:, 1], patches[key].uv()[3]
+            )
+            zs = decal.positions[rows][:, 2]
+            assert len(zs) > 0, f"no {key} decal found"
+            assert np.sign(zs).mean() == expected_sign, f"{key} is on the wrong end"

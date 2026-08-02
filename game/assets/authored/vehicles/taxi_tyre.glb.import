@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://dxfxqnkdxnb5r"
-path="res://.godot/imported/taxi_wheel.glb-d623c2588ef7fa6d272bf42b4bd9d1e7.scn"
+uid="uid://ns6k225pvp4c"
+path="res://.godot/imported/taxi_tyre.glb-959a031ec5d98ee7954bf4b8ef31ddec.scn"
 
 [deps]
 
-source_file="res://assets/authored/vehicles/taxi_wheel.glb"
-dest_files=["res://.godot/imported/taxi_wheel.glb-d623c2588ef7fa6d272bf42b4bd9d1e7.scn"]
+source_file="res://assets/authored/vehicles/taxi_tyre.glb"
+dest_files=["res://.godot/imported/taxi_tyre.glb-959a031ec5d98ee7954bf4b8ef31ddec.scn"]
 
 [params]
 
