@@ -50,7 +50,11 @@ var _steer_angle: float = 0.0
 var _upside_down_for: float = 0.0
 ## Recomputed once per tick rather than per wheel — they are identical across
 ## the four, and the steered pair differs only by the steering rotation.
-var _speed_kph: float = 0.0
+##
+## `speed_kph` is public for the same reason it is cached: everything that wants
+## the car's speed wants the same number in the same tick, and
+## forward_speed_kph() recomputes a dot product each time it is asked.
+var speed_kph: float = 0.0
 var _forward: Vector3 = Vector3.FORWARD
 var _right: Vector3 = Vector3.RIGHT
 var _steered_forward: Vector3 = Vector3.FORWARD
@@ -137,7 +141,7 @@ func _physics_process(delta: float) -> void:
 	if _apply_auto_right(delta):
 		return
 
-	_speed_kph = forward_speed_kph()
+	speed_kph = forward_speed_kph()
 	_update_steering(delta)
 	_forward = -global_basis.z
 	_right = global_basis.x
@@ -146,6 +150,7 @@ func _physics_process(delta: float) -> void:
 
 	var space: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
 	for wheel: WheelMount in _wheels:
+		wheel.steer_angle = _steer_angle if wheel.steers else 0.0
 		_simulate_wheel(wheel, space, delta)
 	_apply_anti_roll()
 
@@ -156,7 +161,7 @@ func forward_speed_kph() -> float:
 
 
 func _update_steering(delta: float) -> void:
-	var speed_ratio: float = clampf(absf(_speed_kph) / profile.max_speed_kph, 0.0, 1.0)
+	var speed_ratio: float = clampf(absf(speed_kph) / profile.max_speed_kph, 0.0, 1.0)
 	var max_angle: float = deg_to_rad(
 		lerpf(profile.steer_angle_max_deg, profile.steer_angle_at_top_deg, speed_ratio)
 	)
@@ -246,10 +251,10 @@ func _longitudinal_force(wheel: WheelMount, rolling_speed: float) -> float:
 		return -rolling_speed * _corner_mass * profile.coast_drag_per_s
 
 	if not is_zero_approx(brake):
-		if _speed_kph > STATIONARY_KPH:
+		if speed_kph > STATIONARY_KPH:
 			# Braking acts on every wheel; drive does not.
 			return -signf(rolling_speed) * profile.brake_force * brake
-		if wheel.drives and _speed_kph > -profile.max_reverse_kph:
+		if wheel.drives and speed_kph > -profile.max_reverse_kph:
 			return -profile.engine_force * brake
 		return 0.0
 
@@ -259,7 +264,7 @@ func _longitudinal_force(wheel: WheelMount, rolling_speed: float) -> float:
 	# full and zero tick to tick, which reads as a judder — and the louder the
 	# more engine force there is.
 	var headroom: float = (
-		(profile.max_speed_kph - _speed_kph) / (profile.max_speed_kph * TOP_SPEED_TAPER)
+		(profile.max_speed_kph - speed_kph) / (profile.max_speed_kph * TOP_SPEED_TAPER)
 	)
 	return profile.engine_force * throttle * clampf(headroom, 0.0, 1.0)
 
@@ -318,6 +323,7 @@ func place_at(pose: Transform3D) -> void:
 	for wheel: WheelMount in _wheels:
 		wheel.compression = 0.0
 		wheel.grounded = false
+		wheel.steer_angle = 0.0
 
 
 ## Arcade collision response: glancing hits slide, head-on hits cost speed but

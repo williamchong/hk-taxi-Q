@@ -13,10 +13,14 @@ extends Marker3D
 
 ## Simulation state, owned and written by VehicleController each tick. Lives on
 ## the mount rather than in the controller so the wheel visual can read it
-## directly once P2-3 adds one; nothing else should write it.
+## directly; nothing else should write it.
 var compression: float = 0.0
 ## False when the raycast found no ground — the wheel is airborne.
 var grounded: bool = false
+## This wheel's steering rotation in radians, zero unless it steers. Published
+## here rather than read off the controller because the visual needs the angle
+## for THIS wheel, and a four-wheel-steer vehicle would not share one.
+var steer_angle: float = 0.0
 ## Set once by VehicleController from the wheel's position along the chassis.
 ## Derived rather than authored so it stays correct for a four-wheel-steer or
 ## front-drive vehicle, where `steers` and `drives` are not proxies for an axle.
