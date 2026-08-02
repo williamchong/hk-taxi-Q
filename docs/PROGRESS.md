@@ -3,8 +3,8 @@
 Living document. **Update this whenever a task changes status, a decision is made, or an open
 question is answered.** Newest entries at the top of each log.
 
-Last updated: 2026-08-02 (`P2-7` review drive passed — `Q23` confirmed from the driver's seat, and
-`P2-7` closes with it)
+Last updated: 2026-08-02 (Phase 3 refocused on the city — `B2` runs before `B1`, `P3-11` adds the
+player taxi, and `P3-9a` takes the scene to test players before any gameplay exists)
 
 ---
 
@@ -22,6 +22,12 @@ the queried start line (`P2-3`), the chase camera and building collision (`P2-5`
 carriageway on its real structure (`P2-7`). **Left:** `P2-4` (`InputRouter` across three input paths)
 and `P2-6` (the perf pass) — both blocked on `P0-3b`, which needs a signing identity and the two
 floor handsets. **Nothing on the critical path is blocked on software.**
+
+**Phase 3 was refocused on 2026-08-02, and the next work is `P3-11`.** User's call: finish the Hong
+Kong driving *experience* before any taxi gameplay element exists, so test players judge the scene on
+its own. Builds now run **`B2` → `B1` → `B3` → `B4`**, `B2` gains a player taxi model (`P3-11`), and
+`P3-9a` then puts that build in front of ≥3 HK drivers over a web link. Order, deps and acceptance
+are in `PLAN.md`; why it was reordered and what it costs are in the decision log below.
 
 **The premise is measured rather than assumed.** `Q8` closed on 2026-07-31 when the user drove the
 real city: an HK-like map is a fun enough gimmick on its own. That retires the project's founding
@@ -62,11 +68,12 @@ And **nothing in the authenticity table is built** — no traffic, no trams, no 
 | `P2-5` | Chase camera | ✅ Done — review passed | Unblocked by shipping building collision. No shape-cast needed. Opened `Q19`, `Q20`. |
 | `P2-7` | Off-grade carriageway on its structure | ✅ Done — review passed | Deck heights sampled from `INFRASTRUCTURE`. \|error\| p90 **4.13 m → 0.095 m** against a 0.50 m criterion, graded against the shipped tiles by a tool sharing no code with the pipeline. Closed `Q20` and `Q23`, largely closed `Q13`, opened `Q21` and `Q22`. Nothing became drivable |
 | `P2-6` | Performance pass to budget | ⬜ Not started | **Phase 2 gate.** Runs last because it measures the geometry that ships. Needs `P0-3b`. |
-| `P3-1a` / `P3-5a` | Build `B1` — "one fare" | ⬜ Not started | Fare state machine + deliberately ugly HUD. |
-| `P3-10` / `P3-7` / `P3-6` | Build `B2` — "it reads as HK" | ⬜ Not started | Ground first (`Q18`), then the window shader, then the hero buildings. |
-| `P3-3` / `P3-4` / `P3-8` / `P3-2a` | Build `B3` — "the streets are alive" | ⬜ Not started | Traffic, trams, bus lanes, and near-miss scoring moved up from `B4`. |
-| `P3-2b` / `P3-1b` / `P3-5b` | Build `B4` — "it's a game" | ⬜ Not started | Style chain, cross-harbour fares, full HUD. |
-| `P3-9` | Authenticity test round 1 | ⬜ Not started | **Phase 3 gate.** ≥3 HK drivers, arrow disabled. |
+| `P3-11` / `P3-10` / `P3-7` / `P3-6` | Build `B2` — "it reads as HK" — **runs 1st** | ⬜ Not started | **Next up.** Taxi model first (it is in every later screenshot), then ground (`Q18`), then the window shader, then the hero buildings. |
+| `P3-9a` | Recognition round 0 — the city, before the game | ⬜ Not started | ≥3 HK drivers on the `B2` web build. No HUD, nothing to do. Asks *do they know where they are*, and *did they keep driving anyway*. |
+| `P3-1a` / `P3-5a` | Build `B1` — "one fare" — **runs 2nd** | ⬜ Not started | Fare state machine + deliberately ugly HUD. |
+| `P3-3` / `P3-4` / `P3-8` / `P3-2a` | Build `B3` — "the streets are alive" — **runs 3rd** | ⬜ Not started | Traffic, trams, bus lanes, and near-miss scoring moved up from `B4`. |
+| `P3-2b` / `P3-1b` / `P3-5b` | Build `B4` — "it's a game" — **runs 4th** | ⬜ Not started | Style chain, cross-harbour fares, full HUD. |
+| `P3-9` | Authenticity test round 1 | ⬜ Not started | **Phase 3 gate.** ≥3 HK drivers on a handset, arrow disabled. Different drivers from `P3-9a` — that cohort has learnt the map. |
 | `P4-*` | The elevated network | ⬜ Not started | Post-slice, but broken down: the data is measured and shipping collision half-opened the network by accident. Reverses `P2-2`'s refusal; closes `Q15`. |
 
 Legend: ⬜ not started · 🟡 in progress · ✅ done · ⚠️ conditional · ❌ blocked
@@ -113,6 +120,44 @@ under, and ~0.2 m is a guess until it is driven on a cross-sloped street.
 ---
 
 ## Decision log
+
+### 2026-08-02 — Phase 3 refocused: **the city gets finished, and tested, before any taxi gameplay**
+
+**User's call.** Build the complete Hong Kong driving experience — and a taxi worth looking at —
+before a fare, a HUD or a score exists, then put it in front of test players. Builds run
+**`B2` → `B1` → `B3` → `B4`**. Scope was considered and deliberately held to `B2`: traffic and trams
+stay in `B3`, so the streets tested will be empty ones. **`PLAN.md` holds the new order, the deps and
+the acceptance criteria**; what belongs here is what the reorder decided elsewhere, what it uncovered,
+and what it costs.
+
+**The build letters were not renumbered, and that was the deliberate part.** `B1`…`B4` name content;
+running order is stated separately wherever the two disagree. This is `P2-7`'s convention — *"the one
+place where ID order and running order disagree"* — extended rather than invented. Renumbering would
+have been tidier for a reader starting today and would have silently falsified a dozen existing
+entries, including this log's own "`P3-10`, build `B2`" and the risk register's "already authored for
+`B3`". **A plan that edits its own history to look consistent stops being usable as a record.**
+
+**The reorder exposed a task that never existed.** `ART_DESIGN.md` specifies a vehicle roster, toy
+proportions and an 800–2,000 triangle budget, and `GAME_DESIGN.md` builds a genre on *"accurate city,
+toy vehicles"* — but no Phase 3 task delivered the player's own car. It is still `taxi.tscn`'s two
+`BoxMesh` primitives, **24 triangles**, from the `P0-5` grey box. Nobody noticed because the docs
+describe the car so thoroughly that it reads as decided, and **a decided thing looks like a done
+thing.**
+
+⚠️ **This is `P2-5`'s gap a second time, and `PLAN.md` predicted it.** `P2-5` was blocked on building
+collision that `P2-1` had correctly declined to own, and the note written then ends *"worth a glance
+at the other acceptance criteria for the same shape."* Nobody took the glance. The rule that would
+have caught both: **a capability named only in a design doc has no owner.** Dependency graphs link
+tasks to tasks, and neither the collision nor the taxi was ever a task to depend on.
+
+⚠️ **What the reorder costs.** `B1` was first because *"is completing a fare worth doing twice?"* is
+cheap to answer and expensive to get wrong; it is now answered on a city already built, so if the
+fare loop turns out to want something different of the world, `B2`'s art is already spent. Against
+that: `Q8` closed on *"the city itself is the fun"* with **one** person's drive behind it, and every
+downstream build rests on it. The user judged the unverified premise the larger risk. **`P3-9a`'s
+second question is where that judgement gets checked** — a city with no fares, traffic or score is
+the harshest form of "does novelty survive the first session", and **how long each driver keeps going
+before stopping is the number to write down.**
 
 ### 2026-08-02 — Licensing: **GPLv3 out, MIT in, and the generated data is nobody's to relicense**
 
@@ -1526,9 +1571,10 @@ Godot refuses to export **any** arm64 target, including Apple Silicon macOS.
 
 | Risk | Severity | Mitigation |
 |---|---|---|
-| Novelty does not survive the first session | **Medium** | The honest reading of the `Q8` verdict — "gimmick" was the user's own word, and a gimmick carries one session. `P3-*` is whether the fare loop sustains; `P3-9` is whether recognition holds up to people who know the streets. Three levers named 2026-08-01, all built from assets already scheduled: the **losable style chain** (`P3-2b`); a **drivable roster** (the minibus, double-decker and tram are already authored for `B3`, so making one drivable costs a `HandlingProfile` and a mount point); and **world-embedded challenges** pinned game-side to edge IDs. Only the first is in the slice; the others are named so **Phase 5** does not reinvent them |
+| Novelty does not survive the first session | **Medium** | The honest reading of the `Q8` verdict — "gimmick" was the user's own word, and a gimmick carries one session. `P3-*` is whether the fare loop sustains; `P3-9` is whether recognition holds up to people who know the streets. Three levers named 2026-08-01, all built from assets already scheduled: the **losable style chain** (`P3-2b`); a **drivable roster** (the minibus, double-decker and tram are already authored for `B3`, so making one drivable costs a `HandlingProfile` and a mount point); and **world-embedded challenges** pinned game-side to edge IDs. Only the first is in the slice; the others are named so **Phase 5** does not reinvent them. **Amended 2026-08-02:** `P3-9a` now asks this risk directly and earliest — a `B2` city with no fares, traffic or score is its harshest form — and `P3-11`'s generator is what makes the drivable-roster lever cheap, since the same script that builds the taxi builds the minibus, double-decker and tram |
 | Doesn't read as HK to locals | **High** | `P3-9` with ≥3 real drivers; run again every phase after |
-| The city has no ground | **Medium** | Between the roads and under the buildings is skybox. `B2` asks "does this read as Wan Chai?" and cannot be answered over a void. Mitigated by `P3-10`, scheduled into `B2` for exactly that reason |
+| The city has no ground | **Medium** | Between the roads and under the buildings is skybox. `B2` asks "does this read as Wan Chai?" and cannot be answered over a void. Mitigated by `P3-10`, scheduled into `B2` for exactly that reason — and `B2` now runs **first**, so this is next up rather than third in line |
+| The player's car is two boxes | **Medium** | 24 triangles against `ART_DESIGN.md`'s 800–2,000, still the `P0-5` grey box. It is in shot for the entire game, and it is what `GAME_DESIGN.md`'s "accurate city, **toy vehicles**" rests on. **Went unnoticed because the docs specify it so fully that it reads as done.** Mitigated by `P3-11`, opened by this refocus |
 | Grade separation is unreachable | Medium | `Q13`. **Largely closed 2026-08-02** by `P2-7`'s sampling — median step 0.04 m — but the network is still *closed to driving* by `P2-2`'s refusal. Opening it is `P4-1` |
 | Carriageway occupied by solid geometry | Medium | `Q19`, 5.17% at bumper height, real since collision shipped. Wants a verify tool that fails the build |
 | Perf misses 60fps on device floor | Medium | Budget defined up front; untextured merged tiles are the main lever; `P2-6` is a dedicated pass — and it needs `P0-3b`'s hardware |

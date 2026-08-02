@@ -234,6 +234,15 @@ behind at speed — that's the only angle most players ever see.
 bus, green minibus, tram. See `PROGRESS.md` for the real models these are based on and the drivetrain
 differences that make it an architecture constraint rather than an art note.
 
+**The vehicles are generated, not modelled — `P3-11`.** `tools/make_vehicle.py` emits each `.glb`
+into `game/assets/authored/vehicles/` from the numbers in this table plus named proportions
+(wheelbase, track, greenhouse height, arch flare, roof taper, colour list). They are committed:
+hand-authored under CC BY-SA 4.0, not build output. The reason is that everything above is a
+*proportion* spec rather than a detail spec, and proportions are worth tuning in a diff rather than
+guessed in a mesh. ⚠️ **The player taxi's arches must line up with the
+wheel mount points in `taxi.tscn`**, which `P0-5` tuned handling against; the physics raycasts never
+read the mesh, so a mismatch looks correct and drives to the old tuning.
+
 ---
 
 ## Lighting
