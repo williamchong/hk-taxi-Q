@@ -291,14 +291,12 @@ def _edge(edge_id: int, from_node: int, to_node: int, polyline, **overrides) -> 
     return {**edge, **overrides}
 
 
-@pytest.fixture
-def pairville(tmp_path, testville_config):
-    """An opposed carriageway pair, centrelines 3 m apart and nothing else.
+def _write_graph(tmp_path: Path, nodes: list[dict], edges: list[dict]) -> None:
+    """One region's `roadgraph.json`, which is all the fixtures below differ in.
 
-    Each is 6.4 m of graph drawn at the 1.5x default, so the two ribbons overlap
-    by 6.6 m and read on screen as one 12.6 m road. Neither shares a node with
-    the other, so there is no junction, no trim and no cap here — whatever
-    happens to the kerbs is the overlap pass and nothing else.
+    Same reasoning as `_edge` above: the envelope is the contract in
+    `docs/ARCHITECTURE.md` and repeating it three times invites the copies to
+    drift, leaving the graph — the only interesting part — buried in it.
     """
     out_dir = tmp_path / "out" / "testville" / "middle"
     out_dir.mkdir(parents=True)
@@ -308,20 +306,36 @@ def pairville(tmp_path, testville_config):
                 "schema_version": ROADGRAPH_SCHEMA,
                 "city_id": "testville",
                 "region_id": "middle",
-                "nodes": [
-                    {"id": 0, "pos": [100.0, 0.0, 300.0], "kind": "endpoint"},
-                    {"id": 1, "pos": [500.0, 0.0, 300.0], "kind": "endpoint"},
-                    {"id": 2, "pos": [100.0, 0.0, 303.0], "kind": "endpoint"},
-                    {"id": 3, "pos": [500.0, 0.0, 303.0], "kind": "endpoint"},
-                ],
-                "edges": [
-                    _edge(0, 0, 1, [[100.0, 0.0, 300.0], [500.0, 0.0, 300.0]]),
-                    _edge(1, 3, 2, [[500.0, 0.0, 303.0], [100.0, 0.0, 303.0]]),
-                ],
+                "nodes": nodes,
+                "edges": edges,
                 "turn_restrictions": [],
             }
         ),
         encoding="utf-8",
+    )
+
+
+@pytest.fixture
+def pairville(tmp_path, testville_config):
+    """An opposed carriageway pair, centrelines 3 m apart and nothing else.
+
+    Each is 6.4 m of graph drawn at the 1.5x default, so the two ribbons overlap
+    by 6.6 m and read on screen as one 12.6 m road. Neither shares a node with
+    the other, so there is no junction, no trim and no cap here — whatever
+    happens to the kerbs is the overlap pass and nothing else.
+    """
+    _write_graph(
+        tmp_path,
+        [
+            {"id": 0, "pos": [100.0, 0.0, 300.0], "kind": "endpoint"},
+            {"id": 1, "pos": [500.0, 0.0, 300.0], "kind": "endpoint"},
+            {"id": 2, "pos": [100.0, 0.0, 303.0], "kind": "endpoint"},
+            {"id": 3, "pos": [500.0, 0.0, 303.0], "kind": "endpoint"},
+        ],
+        [
+            _edge(0, 0, 1, [[100.0, 0.0, 300.0], [500.0, 0.0, 300.0]]),
+            _edge(1, 3, 2, [[500.0, 0.0, 303.0], [100.0, 0.0, 303.0]]),
+        ],
     )
     return testville_config, tmp_path
 
@@ -335,27 +349,17 @@ def bendville(tmp_path, testville_config):
     the node is the cap's doing. This is the shape the junction pinch was
     reported on: BULLOCK LANE into CROSS LANE turns 62 degrees.
     """
-    out_dir = tmp_path / "out" / "testville" / "middle"
-    out_dir.mkdir(parents=True)
-    (out_dir / ROADGRAPH_NAME).write_text(
-        json.dumps(
-            {
-                "schema_version": ROADGRAPH_SCHEMA,
-                "city_id": "testville",
-                "region_id": "middle",
-                "nodes": [
-                    {"id": 0, "pos": [300.0, 0.0, 300.0], "kind": "junction"},
-                    {"id": 1, "pos": [100.0, 0.0, 300.0], "kind": "endpoint"},
-                    {"id": 2, "pos": [400.0, 0.0, 473.205], "kind": "endpoint"},
-                ],
-                "edges": [
-                    _edge(0, 1, 0, [[100.0, 0.0, 300.0], [300.0, 0.0, 300.0]]),
-                    _edge(1, 0, 2, [[300.0, 0.0, 300.0], [400.0, 0.0, 473.205]]),
-                ],
-                "turn_restrictions": [],
-            }
-        ),
-        encoding="utf-8",
+    _write_graph(
+        tmp_path,
+        [
+            {"id": 0, "pos": [300.0, 0.0, 300.0], "kind": "junction"},
+            {"id": 1, "pos": [100.0, 0.0, 300.0], "kind": "endpoint"},
+            {"id": 2, "pos": [400.0, 0.0, 473.205], "kind": "endpoint"},
+        ],
+        [
+            _edge(0, 1, 0, [[100.0, 0.0, 300.0], [300.0, 0.0, 300.0]]),
+            _edge(1, 0, 2, [[300.0, 0.0, 300.0], [400.0, 0.0, 473.205]]),
+        ],
     )
     return testville_config, tmp_path
 
@@ -368,55 +372,37 @@ def testville(tmp_path, testville_config):
     flyover arrives at the same node six metres up, which is the case that must
     *not* be capped across.
     """
-    city = testville_config
-
-    out_dir = tmp_path / "out" / "testville" / "middle"
-    out_dir.mkdir(parents=True)
-    (out_dir / ROADGRAPH_NAME).write_text(
-        json.dumps(
-            {
-                "schema_version": ROADGRAPH_SCHEMA,
-                "city_id": "testville",
-                "region_id": "middle",
-                "nodes": [
-                    {"id": 0, "pos": [300.0, 0.0, 300.0], "kind": "junction"},
-                    {"id": 1, "pos": [100.0, 0.0, 300.0], "kind": "endpoint"},
-                    {"id": 2, "pos": [500.0, 0.0, 300.0], "kind": "endpoint"},
-                    {"id": 3, "pos": [300.0, 0.0, 100.0], "kind": "endpoint"},
-                    {"id": 4, "pos": [300.0, 0.0, 500.0], "kind": "endpoint"},
-                    {"id": 5, "pos": [300.0, 6.0, 700.0], "kind": "endpoint"},
-                ],
-                "edges": [
-                    _edge(0, 1, 0, [[100.0, 0.0, 300.0], [300.0, 0.0, 300.0]]),
-                    _edge(1, 0, 2, [[300.0, 0.0, 300.0], [500.0, 0.0, 300.0]]),
-                    _edge(2, 3, 0, [[300.0, 0.0, 100.0], [300.0, 0.0, 300.0]]),
-                    _edge(3, 0, 4, [[300.0, 0.0, 300.0], [300.0, 0.0, 500.0]]),
-                    # Signed above the urban default, so it is the edge that
-                    # proves the widening table is read rather than a constant.
-                    _edge(
-                        4,
-                        1,
-                        3,
-                        [[100.0, 0.0, 300.0], [300.0, 0.0, 100.0]],
-                        lanes=3,
-                        width_m=9.6,
-                        speed_limit_kph=70,
-                    ),
-                    # A flyover deck arriving at the crossroads six metres up.
-                    _edge(
-                        5,
-                        0,
-                        5,
-                        [[300.0, 6.0, 300.0], [300.0, 6.0, 700.0]],
-                        elevation_level=1,
-                    ),
-                ],
-                "turn_restrictions": [],
-            }
-        ),
-        encoding="utf-8",
+    _write_graph(
+        tmp_path,
+        [
+            {"id": 0, "pos": [300.0, 0.0, 300.0], "kind": "junction"},
+            {"id": 1, "pos": [100.0, 0.0, 300.0], "kind": "endpoint"},
+            {"id": 2, "pos": [500.0, 0.0, 300.0], "kind": "endpoint"},
+            {"id": 3, "pos": [300.0, 0.0, 100.0], "kind": "endpoint"},
+            {"id": 4, "pos": [300.0, 0.0, 500.0], "kind": "endpoint"},
+            {"id": 5, "pos": [300.0, 6.0, 700.0], "kind": "endpoint"},
+        ],
+        [
+            _edge(0, 1, 0, [[100.0, 0.0, 300.0], [300.0, 0.0, 300.0]]),
+            _edge(1, 0, 2, [[300.0, 0.0, 300.0], [500.0, 0.0, 300.0]]),
+            _edge(2, 3, 0, [[300.0, 0.0, 100.0], [300.0, 0.0, 300.0]]),
+            _edge(3, 0, 4, [[300.0, 0.0, 300.0], [300.0, 0.0, 500.0]]),
+            # Signed above the urban default, so it is the edge that proves the
+            # widening table is read rather than a constant.
+            _edge(
+                4,
+                1,
+                3,
+                [[100.0, 0.0, 300.0], [300.0, 0.0, 100.0]],
+                lanes=3,
+                width_m=9.6,
+                speed_limit_kph=70,
+            ),
+            # A flyover deck arriving at the crossroads six metres up.
+            _edge(5, 0, 5, [[300.0, 6.0, 300.0], [300.0, 6.0, 700.0]], elevation_level=1),
+        ],
     )
-    return city, tmp_path
+    return testville_config, tmp_path
 
 
 def _mesh(tmp_path: Path):
@@ -530,7 +516,7 @@ class TestBuildRegion:
 
         corners = mesh.positions[mesh.triangles][:, :, [0, 2]]
         assert _covered(node + across, corners).all()
-        assert report.mitred_throughs == 1
+        assert report.through_movements == 1
 
     def test_a_flyover_is_not_capped_down_to_the_street(self, testville, tmp_path) -> None:
         """The 36 places in Wan Chai where two levels share a node all step by a

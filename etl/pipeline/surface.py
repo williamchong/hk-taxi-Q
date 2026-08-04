@@ -42,6 +42,7 @@ import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 
@@ -119,11 +120,14 @@ class SurfaceReport:
     # the config.
     carriageway: dict[int, list[float]] = field(default_factory=dict)
     junctions: int = 0
-    # Movements mitred through their cap rather than left to the hull's chord.
-    # Reported because it is the count that says whether the rule fired at all:
-    # a region of pure crossroads would legitimately mitre nothing, and that
-    # looks identical to a broken predicate from the outside.
-    mitred_throughs: int = 0
+    # Movements that qualified as running through a node and had their mitre fed
+    # into its cap. Reported so a predicate that stopped matching would show.
+    #
+    # ⚠️ **Not** a count of caps this changed. A straight-through movement
+    # qualifies, and its apex lands on the boundary the hull already had — so a
+    # region of pure crossroads reports a number here and draws exactly what it
+    # drew before. Saying how many caps actually grew would mean hulling twice.
+    through_movements: int = 0
     triangles: int = 0
     vertices: int = 0
     bytes: int = 0
@@ -488,6 +492,24 @@ class _End:
     at_start: bool
 
 
+class _Cap(NamedTuple):
+    """One junction cap: the ring, and the elevation level it fills."""
+
+    level: int
+    ring: np.ndarray
+
+
+class _Arm(NamedTuple):
+    """One ribbon as it presents itself to a node, for the mitre through it."""
+
+    # Unit plan direction pointing *away* from the node, whichever end arrived.
+    away: np.ndarray
+    half_width_m: float
+    # The node, in x/y/z, as this arm reports it. They agree to the millimetre
+    # their coordinates were rounded to, which is why the caller averages them.
+    node: np.ndarray
+
+
 @dataclass
 class _Edge:
     """One graph edge, and the ribbon geometry derived from it.
@@ -514,6 +536,13 @@ class _Edge:
     offsets: np.ndarray | None = None
     left: np.ndarray | None = None
     right: np.ndarray | None = None
+    # The outer edge of each kerb. Stored for the same reason as `left`/`right`
+    # and with more riding on it: the overlap test decides what to hide by this
+    # line and `_draw_edge` draws that very line, so a second expression
+    # re-deriving it could drift and start cutting the kerb somewhere it is
+    # still visible — with nothing failing loudly.
+    lip_left: np.ndarray | None = None
+    lip_right: np.ndarray | None = None
     # Per-segment, per-side: whether this ribbon's kerb is the edge of anything.
     # Filled by `_hide_buried_kerbs` once every ribbon exists, because the answer
     # is a question about the neighbours. `None` until then, and `None` means
@@ -566,25 +595,25 @@ def build_region(
     _assign_trims(ends, edges, style, report)
     _measure_level_steps(ends, edges, report)
     for edge in edges:
-        _shape(edge)
+        _shape(edge, style)
 
     # Capped after every ribbon exists, because a cap is defined by where the
     # ribbons it joins actually ended — including where a trim was clamped. The
     # rings are held rather than drawn straight away: a cap covers kerb too, so
     # `_hide_buried_kerbs` has to see them before any of it is emitted.
     caps = [
-        (level, ring)
+        _Cap(level, ring)
         for (_, level), group in ends.items()
         if (ring := _cap_ring(group, edges, report)) is not None
     ]
-    _hide_buried_kerbs(edges, caps, style, report)
+    _hide_buried_kerbs(edges, caps, report)
 
     builder = _Builder()
     for edge in edges:
         if _draw_edge(builder, edge, style, city.roads.lane_width_m):
             report.edges += 1
-    for _, ring in caps:
-        builder.fan(ring, colour=style.surface_colour)
+    for cap in caps:
+        builder.fan(cap.ring, colour=style.surface_colour)
         report.junctions += 1
 
     mesh = builder.build(SURFACE_MESH_NAME)
@@ -676,7 +705,7 @@ def _polyline(published: dict) -> np.ndarray:
     return np.asarray(published["polyline"], dtype=np.float64)
 
 
-def _shape(edge: _Edge) -> None:
+def _shape(edge: _Edge, style: RoadSurface) -> None:
     """Trim the edge back from its junctions and offset what is left."""
     points = dedupe(trim(edge.points, edge.trim_start_m, edge.trim_end_m))
     if len(points) < 2:
@@ -686,6 +715,8 @@ def _shape(edge: _Edge) -> None:
     half = points[:, _WIDTH]
     edge.left = boundary(points, edge.offsets, half)
     edge.right = boundary(points, edge.offsets, -half)
+    edge.lip_left = boundary(points, edge.offsets, half + style.kerb_width_m)
+    edge.lip_right = boundary(points, edge.offsets, -(half + style.kerb_width_m))
 
 
 def _ends_by_node_and_level(
@@ -745,47 +776,94 @@ def _assign_trims(
                 report.clamped_trims += 1
 
 
-def _within(points: np.ndarray, polygon: np.ndarray) -> np.ndarray:
+def _inside_polygon(points: np.ndarray, polygon: np.ndarray) -> np.ndarray:
     """Which plan points fall inside a plan polygon. Crossing number.
 
     Written out rather than pulled in: the only candidate dependency is shapely,
     and `pyproject.toml` already turned down geopandas for wanting pandas to
     reach the numpy underneath. This is the same trade in miniature.
+
+    Vectorised over the polygon's edges as well as its points, because this is
+    the single most expensive thing the stage does — a Python loop here cost
+    2.2 s of a 2.5 s build. `boundary` earns its scalar walk with a measurement;
+    this never had one.
     """
-    x, z = points[:, 0], points[:, 1]
+    x, z = points[:, 0][:, None], points[:, 1][:, None]
     ax, az = polygon[:, 0], polygon[:, 1]
     bx, bz = np.roll(ax, -1), np.roll(az, -1)
-    inside = np.zeros(len(points), dtype=bool)
-    for start in range(len(polygon)):
-        # A horizontal edge never straddles the ray, so the division it would
-        # zero out is masked before it is read.
-        straddles = (az[start] > z) != (bz[start] > z)
-        with np.errstate(divide="ignore", invalid="ignore"):
-            crossing = ax[start] + (bx[start] - ax[start]) * (z - az[start]) / (
-                bz[start] - az[start]
-            )
-        inside ^= straddles & (x < crossing)
-    return inside
+    rise = bz - az
+    straddles = (az > z) != (bz > z)
+    # `x < ax + (bx - ax) * (z - az) / rise`, cross-multiplied. A horizontal edge
+    # never straddles the ray, so `rise` is non-zero wherever the result is read
+    # and the sign of it is all the division was contributing. Multiplying also
+    # spares the region 476,000 `np.errstate` context managers, which were 15% of
+    # the stage on their own, guarding a quotient that was masked away anyway.
+    side = (x - ax) * rise - (bx - ax) * (z - az)
+    crossings = straddles & np.where(rise > 0.0, side < 0.0, side > 0.0)
+    return crossings.sum(axis=1) % 2 == 1
 
 
-def _cells(polygon: np.ndarray, level: int) -> list[tuple[int, int, int]]:
-    """Grid cells one plan polygon's bounding box touches, keyed by level too.
+def _cells(low: np.ndarray, high: np.ndarray, level: int) -> list[tuple[int, int, int]]:
+    """Grid cells a plan bounding box touches, keyed by elevation level too.
 
     A flyover and the street under it share plan and nothing else, so the level
     belongs in the key: without it every deck would be asked to occlude the
     kerbs of the road it flies over.
     """
-    low = np.floor(polygon.min(axis=0) / _OVERLAP_CELL_M).astype(int)
-    high = np.floor(polygon.max(axis=0) / _OVERLAP_CELL_M).astype(int)
-    return [(level, x, z) for x in range(low[0], high[0] + 1) for z in range(low[1], high[1] + 1)]
+    lo = np.floor(low / _OVERLAP_CELL_M).astype(int)
+    hi = np.floor(high / _OVERLAP_CELL_M).astype(int)
+    return [(level, x, z) for x in range(lo[0], hi[0] + 1) for z in range(lo[1], hi[1] + 1)]
 
 
-def _hide_buried_kerbs(
-    edges: list[_Edge],
-    caps: list[tuple[int, np.ndarray]],
-    style: RoadSurface,
-    report: SurfaceReport,
-) -> None:
+class _Occluders:
+    """Every piece of road that might already cover a kerb, bucketed by plan cell.
+
+    A uniform grid rather than a tree: the ribbons are all of a similar size and
+    the region is small, so bucketing by bounding box is enough to turn an
+    every-pair test into an every-neighbour one. Polygons are held by reference,
+    and a cell holds keys rather than arrays so a candidate found through three
+    shared cells is still only tested once.
+    """
+
+    def __init__(self) -> None:
+        self._plans: list[np.ndarray] = []
+        self._low: list[np.ndarray] = []
+        self._high: list[np.ndarray] = []
+        self._index: dict[tuple[int, int, int], list[int]] = defaultdict(list)
+
+    def add(self, plan: np.ndarray, level: int) -> int:
+        low, high = plan.min(axis=0), plan.max(axis=0)
+        key = len(self._plans)
+        self._plans.append(plan)
+        self._low.append(low)
+        self._high.append(high)
+        for cell in _cells(low, high, level):
+            self._index[cell].append(key)
+        return key
+
+    def cover(self, points: np.ndarray, level: int, *, ignoring: int) -> np.ndarray:
+        """Which of these plan points some polygon other than `ignoring` contains.
+
+        Cells come from the *query's* own box, not from whatever box `ignoring`
+        was added with. The two differ by a kerb width here, and asking the
+        wrong one would silently miss a neighbour lying just past the edge of
+        the ribbon's own extent.
+        """
+        low, high = points.min(axis=0), points.max(axis=0)
+        near = {key for cell in _cells(low, high, level) for key in self._index[cell]}
+        near.discard(ignoring)
+
+        covered = np.zeros(len(points), dtype=bool)
+        for key in near:
+            # Six comparisons, and on Wan Chai they reject 65% of the candidates
+            # before the crossing-number sweep that would otherwise dominate.
+            if (self._low[key] > high).any() or (self._high[key] < low).any():
+                continue
+            covered |= _inside_polygon(points, self._plans[key])
+        return covered
+
+
+def _hide_buried_kerbs(edges: list[_Edge], caps: list[_Cap], report: SurfaceReport) -> None:
     """Drop the kerb wherever another piece of road has already covered it.
 
     Each edge is extruded on its own account, so an opposed carriageway pair
@@ -793,7 +871,7 @@ def _hide_buried_kerbs(
     widening *because* those pairs then overlap "into a single continuous
     surface". The tarmac merges; the kerbs come along uninvited and end up as a
     0.5 m strip of pale concrete standing 0.15 m proud in the middle of a road
-    that looks like one road. 22 km of it in Wan Chai, most of it on GLOUCESTER,
+    that looks like one road. 33 km of it in Wan Chai, most of it on GLOUCESTER,
     VICTORIA PARK, HENNESSY and LOCKHART. It is not cosmetic: the mesh ships as
     one trimesh collider, `handling.tres` allows 0.18 m of suspension travel,
     and the region's own kerb spends 83% of it in a single step.
@@ -806,45 +884,43 @@ def _hide_buried_kerbs(
     Nothing is deleted from the carriageway — only the kerb stops being drawn,
     so the road under it is unchanged and no collider gains a hole.
     """
-    shapes: dict[int, np.ndarray] = {}
-    index: dict[tuple[int, int, int], list[np.ndarray]] = defaultdict(list)
+    occluders = _Occluders()
+    own: dict[int, int] = {}
     for position, edge in enumerate(edges):
         if edge.left is None or edge.right is None:
             continue
-        shapes[position] = np.vstack([edge.left, edge.right[::-1]])
-        for cell in _cells(shapes[position], edge.level):
-            index[cell].append(shapes[position])
-    for level, ring in caps:
-        plan = ring[:, [0, 2]]
-        for cell in _cells(plan, level):
-            index[cell].append(plan)
+        own[position] = occluders.add(np.vstack([edge.left, edge.right[::-1]]), edge.level)
+    for cap in caps:
+        occluders.add(cap.ring[:, [0, 2]], cap.level)
 
     for position, edge in enumerate(edges):
-        if position not in shapes or edge.ribbon is None or edge.offsets is None:
+        if position not in own:
             continue
-        own = shapes[position]
-        # Identity, not equality: a neighbour may be an exact geometric twin of
-        # this ribbon, and comparing by value would let it occlude itself.
-        near = [
-            other for cell in _cells(own, edge.level) for other in index[cell] if other is not own
-        ]
-        reach = edge.ribbon[:, _WIDTH] + style.kerb_width_m
-        steps = plan_steps(edge.ribbon)
-        keep = []
-        for across in (reach, -reach):
-            lip = boundary(edge.ribbon, edge.offsets, across)
-            # The middle of each quad the kerb is drawn as, not its stations. A
-            # station sits exactly on a neighbour's boundary whenever two arms
-            # meet end-on at a junction — every arm of a plain crossroads does —
-            # and a crossing-number test counts a boundary point as inside. One
-            # such touch would take the whole kerb of a two-station edge.
-            middle = 0.5 * (lip[:-1] + lip[1:])
-            buried = np.zeros(len(middle), dtype=bool)
-            for other in near:
-                buried |= _within(middle, other)
-            keep.append(~buried)
-            report.buried_kerb_m += float(steps[buried].sum())
-        edge.kerb_left, edge.kerb_right = keep
+        edge.kerb_left = _surviving_kerb(edge, edge.lip_left, occluders, own[position], report)
+        edge.kerb_right = _surviving_kerb(edge, edge.lip_right, occluders, own[position], report)
+
+
+def _surviving_kerb(
+    edge: _Edge,
+    lip: np.ndarray | None,
+    occluders: _Occluders,
+    key: int,
+    report: SurfaceReport,
+) -> np.ndarray | None:
+    """One side's per-segment mask: whether that quad of kerb is still an edge."""
+    if lip is None:
+        return None
+    # The middle of each quad the kerb is drawn as, not its stations. A station
+    # sits exactly on a neighbour's boundary whenever two arms meet end-on at a
+    # junction — every arm of a plain crossroads does — and a crossing-number
+    # test counts a boundary point as inside. One such touch would take the
+    # whole kerb of a two-station edge.
+    middle = 0.5 * (lip[:-1] + lip[1:])
+    buried = occluders.cover(middle, edge.level, ignoring=key)
+    # Along the kerb, not along the centreline it was offset from: on a bend the
+    # outer lip is the longer of the two, and the field is called kerb metres.
+    report.buried_kerb_m += float(np.linalg.norm(np.diff(lip, axis=0), axis=1)[buried].sum())
+    return ~buried
 
 
 def _runs(keep: np.ndarray) -> list[tuple[int, int]]:
@@ -856,7 +932,7 @@ def _runs(keep: np.ndarray) -> list[tuple[int, int]]:
     invisible and unreachable, since whatever buried the kerb still lies over it.
     """
     changes = np.flatnonzero(np.diff(np.concatenate([[False], keep, [False]]).astype(np.int8)))
-    return [(start, stop + 1) for start, stop in changes.reshape(-1, 2)]
+    return [(int(start), int(stop) + 1) for start, stop in changes.reshape(-1, 2)]
 
 
 def _measure_level_steps(
@@ -901,13 +977,12 @@ def _draw_edge(builder: _Builder, edge: _Edge, style: RoadSurface, lane_width_m:
     # carriageway because the two share vertex indices, not positions — so a
     # corner that holds the road edge still and the kerb line moving simply
     # makes the lip wider there, which is what a real kerb does on a tight bend.
-    half = points[:, _WIDTH]
     left = _lift(edge.left, points, 0.0)
     right = _lift(edge.right, points, 0.0)
     left_top = _lift(edge.left, points, rise)
     right_top = _lift(edge.right, points, rise)
-    left_out = _lift(boundary(points, offsets, half + kerb), points, rise)
-    right_out = _lift(boundary(points, offsets, -(half + kerb)), points, rise)
+    left_out = _lift(edge.lip_left, points, rise)
+    right_out = _lift(edge.lip_right, points, rise)
 
     # Rail order is the winding: `strip` faces out of the cross product of its
     # own along and across directions, so the two kerbs — being mirror images —
@@ -922,29 +997,20 @@ def _draw_edge(builder: _Builder, edge: _Edge, style: RoadSurface, lane_width_m:
     # Drawn in runs, because a kerb another carriageway has already covered is
     # not drawn at all — see `_hide_buried_kerbs`. A side with no mask yet is a
     # side nothing was asked about, and keeps the whole kerb it always had.
-    for keep, sides in (
-        (
-            edge.kerb_left,
-            (((left, left_top), (0.0, 0.0)), ((left_top, left_out), (0.0, -outside))),
-        ),
-        (
-            edge.kerb_right,
-            (
-                ((right_top, right), (lanes, lanes)),
-                ((right_out, right_top), (lanes + outside, lanes)),
-            ),
-        ),
+    for keep, lower, upper, across in (
+        (edge.kerb_left, left, left_top, (0.0, 0.0)),
+        (edge.kerb_left, left_top, left_out, (0.0, -outside)),
+        (edge.kerb_right, right_top, right, (lanes, lanes)),
+        (edge.kerb_right, right_out, right_top, (lanes + outside, lanes)),
     ):
-        spans = _runs(keep) if keep is not None else [(0, len(points))]
-        for start, stop in spans:
-            for (lower, upper), across in sides:
-                builder.strip(
-                    lower[start:stop],
-                    upper[start:stop],
-                    colour=style.kerb_colour,
-                    along=along[start:stop],
-                    across=across,
-                )
+        for start, stop in _runs(keep) if keep is not None else [(0, len(points))]:
+            builder.strip(
+                lower[start:stop],
+                upper[start:stop],
+                colour=style.kerb_colour,
+                along=along[start:stop],
+                across=across,
+            )
     return True
 
 
@@ -966,13 +1032,12 @@ def _through_corners(group: list[_End], edges: list[_Edge]) -> list[list[np.ndar
     filling the corner between two arms of a real junction would pave the
     pavement, which is exactly what `hull` was chosen to avoid.
 
-    Returned one list per mitred movement rather than as one flat list, so the
-    caller can report how many fired without knowing how many points each is.
+    One `(4, 3)` array per mitred movement, so the caller can both count them
+    and `vstack` them without knowing how many points each carries.
     """
-    arms: list[tuple[np.ndarray, float, np.ndarray]] = []
+    arms: list[_Arm] = []
     for end in group:
         points = edges[end.edge].points
-        row = 0 if end.at_start else -1
         step = points[1] - points[0] if end.at_start else points[-1] - points[-2]
         plan = step[[0, 2]]
         length = float(np.hypot(*plan))
@@ -980,41 +1045,43 @@ def _through_corners(group: list[_End], edges: list[_Edge]) -> list[list[np.ndar
             continue
         # Away from the node, whichever end of the polyline arrives on it.
         away = plan / length * (1.0 if end.at_start else -1.0)
-        arms.append((away, edges[end.edge].end_half_width_m(end.at_start), points[row][[0, 1, 2]]))
+        half_width_m = edges[end.edge].end_half_width_m(end.at_start)
+        arms.append(_Arm(away, half_width_m, points[0 if end.at_start else -1, :3]))
     if len(arms) < 2:
         return []
 
-    node = np.mean([arm[2] for arm in arms], axis=0)
+    node = np.mean([arm.node for arm in arms], axis=0)
     limit = _BEND_TURN_DEG if len(arms) == 2 else _THROUGH_TURN_DEG
-    movements: list[list[np.ndarray]] = []
-    for index, (out_a, half_a, _) in enumerate(arms):
-        for out_b, half_b, _ in arms[index + 1 :]:
-            # A car arrives against `out_a` and leaves along `out_b`, so the two
-            # arms read as one street exactly when they point apart.
-            turn = np.degrees(np.arccos(np.clip(-float(out_a @ out_b), -1.0, 1.0)))
+    movements: list[np.ndarray] = []
+    for index, first in enumerate(arms):
+        for second in arms[index + 1 :]:
+            # A car arrives against `first.away` and leaves along `second.away`,
+            # so the two arms read as one street exactly when they point apart.
+            turn = np.degrees(np.arccos(np.clip(-float(first.away @ second.away), -1.0, 1.0)))
             if turn > limit:
                 continue
-            # `mitres` puts the normal one quarter turn left of travel, and the
-            # apex on the bisector of the two. Same construction, except the two
-            # segments belong to different edges rather than to one polyline.
-            incoming, outgoing = -out_a, out_b
-            normal = np.array([incoming[1], -incoming[0]])
-            bisector = normal + np.array([outgoing[1], -outgoing[0]])
-            length = float(np.hypot(*bisector))
-            if length <= _MIN_SEGMENT_M:
-                continue
-            bisector /= length
-            reach = 1.0 / np.clip(float(bisector @ normal), 1.0 / _MITRE_LIMIT, 1.0)
+            # The joint is an interior vertex of a polyline that happens to span
+            # two edges, so `mitres` computes it rather than this function
+            # holding a second opinion about where a mitre goes — and, more to
+            # the point, a second copy of `_MITRE_LIMIT`.
+            apex = mitres(np.array([node + _out(first.away), node, node + _out(second.away)]))[1]
             # Both half-widths, because two arms of a movement may differ in
             # width and the mouth of each has to be reached.
             movements.append(
-                [
-                    np.array([node[0] + side[0], node[1], node[2] + side[1]])
-                    for half in (half_a, half_b)
-                    for side in (bisector * reach * half, -bisector * reach * half)
-                ]
+                np.array(
+                    [
+                        [node[0] + side[0], node[1], node[2] + side[1]]
+                        for half in (first.half_width_m, second.half_width_m)
+                        for side in (apex * half, -apex * half)
+                    ]
+                )
             )
     return movements
+
+
+def _out(plan: np.ndarray) -> np.ndarray:
+    """A plan direction as an x/y/z step, flat, for handing to a 3D routine."""
+    return np.array([plan[0], 0.0, plan[1]])
 
 
 def _cap_ring(group: list[_End], edges: list[_Edge], report: SurfaceReport) -> np.ndarray | None:
@@ -1054,8 +1121,8 @@ def _cap_ring(group: list[_End], edges: list[_Edge], report: SurfaceReport) -> n
     if len(corners) < 3:
         return None
     through = _through_corners(group, edges)
-    report.mitred_throughs += len(through)
-    ring = hull(np.vstack(corners + [point for movement in through for point in movement]))
+    report.through_movements += len(through)
+    ring = hull(np.vstack(corners + through))
     return ring if len(ring) >= 3 else None
 
 
@@ -1141,7 +1208,10 @@ def main(argv: list[str] | None = None) -> int:
         report.trimmed_ends,
         report.clamped_trims,
     )
-    log.info("  %d movements mitred through their cap rather than chorded", report.mitred_throughs)
+    log.info(
+        "  %d movements run through a node and were mitred into its cap",
+        report.through_movements,
+    )
     if report.buried_kerb_m:
         log.info(
             "  %.0f m of kerb dropped where a neighbouring carriageway already covered it",

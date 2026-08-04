@@ -161,9 +161,15 @@ first.
 | Two-arm nodes narrower than their own arms | 8 of 49 | **1 of 49** |
 | Kerb line lying inside another carriageway | 33.0 km | **0** |
 | Movements mitred through their cap | — | 677 |
-| Triangles | 35,039 | **25,031** (−29%) |
+| Triangles | 35,039 | **25,028** (−29%) |
 | `roads.glb` | 1.8 MB | **1.3 MB** |
-| Bundle | 31.3 MB | 30.8 MB |
+| `build_region` | 0.30 s | **0.36 s** (2.49 s as first written — see below) |
+
+⚠️ **No bundle figure here on purpose.** The obvious one to quote is `export.py`'s "MB shipped", and
+it is a **sum of source files** — the number this file's own Metrics rule forbids, and the one that
+cost `Q16` two wrong answers. The PCK was measured instead and is recorded in Metrics; the road
+surface is one asset of 134 in it, and `P3-11` landed a taxi since the last reading, so no part of
+that delta is attributable to this work.
 
 **The mitre apexes go into the same hull as the mouths**, rather than building a second kind of cap.
 A hull can only grow, and a straight through movement puts its apex on the boundary the hull already
@@ -188,9 +194,25 @@ boundary at every arm of every plain crossroads — a crossing-number test calls
 inside, and one such touch would have taken the entire kerb of a two-station edge. `testville` caught
 that within a minute of the first run; the region would have hidden it in the aggregate.
 
+⚠️ **The first cut of the overlap test made the stage 8.3× slower and nobody would have noticed.**
+It ran, the output was right, every check passed — and `build_region` went from 0.30 s to **2.49 s**,
+against a module docstring that sells the graph input as "what lets this stage run in a second". A
+review pass caught it: `_within` was **86% of the whole stage**, from a Python loop over polygon
+vertices that the file's own style forbids (`boundary` earns its scalar walk with a measurement; this
+had none), and from 476,000 `np.errstate` context managers — **15% of the stage on their own** —
+guarding a division whose result was masked away. Vectorising the test, deduplicating candidates
+found through more than one grid cell (29% of them), and rejecting by bounding box first (65% of
+them) brought it to **0.36 s**. Correctness is unchanged: the polygon test agrees with the old one on
+39,048 samples with **zero** disagreements.
+
+The **3 triangles** that moved are the mitre apex now coming from `mitres` — the same construction
+the function had been carrying a private copy of, `_MITRE_LIMIT` included. The two agree to
+**1.0e-13**, which is enough to drop three hull points that were colinear at that scale. Sub-picometre
+drift, and worth it to stop the mitre policy living in two places.
+
 **Still open, deliberately.** The cap carries **no kerb and no lane coordinate** — `fan` writes zero
-UVs. Both were true before and neither is what was reported. The second one comes due when the
-markings shader lands, alongside the cap/ribbon overlap the docstring already flags.
+UVs. Both were true before and neither is what was reported. `ART_DESIGN.md` already has the second
+one written up as the junction defect the markings shader will expose; nothing here changes it.
 
 ### 2026-08-03 — `P3-11` review: **reads as 紅的, does not read as a Crown Comfort**
 
@@ -1873,8 +1895,8 @@ source files** — that rule cost `Q16` two wrong answers in opposite directions
 | Visible triangles, worst measured | < 300k | **150,374** ✅ | 2026-08-01 |
 | Resident triangles, worst measured | — | 236,882 (a ceiling, not a gate) | 2026-08-01 |
 | Texture memory | < 128 MB | **0** — no textures ship | 2026-08-01 |
-| Bundle size | < 200 MB | **26.27 MB** PCK with tile collision (21.10 without), + 38.8 MB wasm | 2026-08-01 |
-| Road surface triangles | — | 35,039 | 2026-08-02 |
+| Bundle size | < 200 MB | **26.45 MB** PCK, + wasm. Was 26.27 with tile collision (21.10 without) on 2026-08-01; `P3-11`'s taxi and `P1-4`'s kerb fix both landed in between, so the +0.18 is not attributable to either | 2026-08-04 |
+| Road surface triangles | — | **25,028** (35,039 before the 2026-08-04 kerb fix) | 2026-08-04 |
 | Boot to drivable (web, warm) | — | 830 ms, of which 260 ms is tile instantiation | 2026-07-31 |
 | Tab memory (web) | — | 307 MB | 2026-07-31 |
 | ETL full-run time | — | **3.0 s**, whole region from an empty `out/` | 2026-08-02 |
