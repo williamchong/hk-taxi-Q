@@ -292,6 +292,41 @@ def _edge(edge_id: int, from_node: int, to_node: int, polyline, **overrides) -> 
 
 
 @pytest.fixture
+def pairville(tmp_path, testville_config):
+    """An opposed carriageway pair, centrelines 3 m apart and nothing else.
+
+    Each is 6.4 m of graph drawn at the 1.5x default, so the two ribbons overlap
+    by 6.6 m and read on screen as one 12.6 m road. Neither shares a node with
+    the other, so there is no junction, no trim and no cap here — whatever
+    happens to the kerbs is the overlap pass and nothing else.
+    """
+    out_dir = tmp_path / "out" / "testville" / "middle"
+    out_dir.mkdir(parents=True)
+    (out_dir / ROADGRAPH_NAME).write_text(
+        json.dumps(
+            {
+                "schema_version": ROADGRAPH_SCHEMA,
+                "city_id": "testville",
+                "region_id": "middle",
+                "nodes": [
+                    {"id": 0, "pos": [100.0, 0.0, 300.0], "kind": "endpoint"},
+                    {"id": 1, "pos": [500.0, 0.0, 300.0], "kind": "endpoint"},
+                    {"id": 2, "pos": [100.0, 0.0, 303.0], "kind": "endpoint"},
+                    {"id": 3, "pos": [500.0, 0.0, 303.0], "kind": "endpoint"},
+                ],
+                "edges": [
+                    _edge(0, 0, 1, [[100.0, 0.0, 300.0], [500.0, 0.0, 300.0]]),
+                    _edge(1, 3, 2, [[500.0, 0.0, 303.0], [100.0, 0.0, 303.0]]),
+                ],
+                "turn_restrictions": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return testville_config, tmp_path
+
+
+@pytest.fixture
 def bendville(tmp_path, testville_config):
     """One street, split into two edges at a 60-degree bend.
 
@@ -451,6 +486,26 @@ class TestBuildRegion:
             [(x, z) for x in np.arange(295.0, 305.5, 0.5) for z in np.arange(295.0, 305.5, 0.5)]
         )
         assert _covered(grid, triangles).all()
+
+    def test_a_kerb_inside_a_neighbours_carriageway_is_not_drawn(self, pairville, tmp_path) -> None:
+        """The white line down the middle of Hennessy Road, reported by a driver.
+
+        Every edge is extruded on its own account, so an opposed pair gets four
+        kerbs — and the widening that merges their tarmac into one surface buries
+        the inner two in it. They are not decoration: the mesh ships as one
+        trimesh collider and 0.15 m is 83% of the car's bump travel.
+        """
+        city, _ = pairville
+        report = build_region(city, "middle", out_root=tmp_path / "out")
+        mesh = _mesh(tmp_path)
+
+        raised = mesh.positions[mesh.positions[:, 1] > city.roads.surface.kerb_height_m / 2.0]
+        assert len(raised) > 0
+        # The union runs from z 295.2 to z 307.8, and only its two outer edges
+        # are a kerb anyone can see. Both inner ones are 3.6 m inside it.
+        assert ((raised[:, 2] < 295.3) | (raised[:, 2] > 307.7)).all()
+        # Both edges are 400 m long and untrimmed, and each loses one side.
+        assert report.buried_kerb_m == pytest.approx(800.0, abs=1.0)
 
     def test_a_bend_keeps_its_full_width_through_the_cap(self, bendville, tmp_path) -> None:
         """The junction pinch, reported from the driver's seat and measured after.

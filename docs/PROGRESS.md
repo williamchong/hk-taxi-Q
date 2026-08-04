@@ -57,7 +57,7 @@ And **nothing in the authenticity table is built** — no traffic, no trams, no 
 | `P1-2` | Building meshes | ✅ Done | 65 tiles; 989k → 434k → 222k triangles. Verified in-engine. |
 | `P1-2t` | └ Terrain evaluation | ⚠️ Superseded | Judged unaffordable at 267 MB — but 224 MB of that was the JPEG. Replaced by `P3-10`, which ships no texture. |
 | `P1-3` | Road graph | ✅ Done | 797 edges, 615 nodes, 217 turns, 96.3% connected. Closed `Q9`, `Q11`, `Q12`. |
-| `P1-4` | Road surface mesh | ✅ Done | One mesh, one draw call, kerbs, trimesh collision. All 393 single-level junctions covered. Opened `Q13`. |
+| `P1-4` | Road surface mesh | ✅ Done | One mesh, one draw call, kerbs, trimesh collision. All 393 single-level junctions covered. Opened `Q13`. Two driver-reported defects fixed 2026-08-04: kerbs buried in a neighbour's carriageway, and the hull pinching the road at a bend. |
 | `P1-5` | Fare nodes | ✅ Done | 29 nodes (14 stands, 6 cross-harbour; 15 PUDO) from 793 territory-wide points. Opened `Q14`, `Q15`. |
 | `P1-6` | Export and manifest | ✅ Done | `city.json` + one-command pipeline; byte-reproducible. Opened `Q16`. |
 | `P1-7` | Godot import | ✅ Done | **Phase 1 gate passed.** Georeferenced to 1 cm, checked in-engine. |
@@ -121,6 +121,76 @@ under, and ~0.2 m is a guess until it is driven on a cross-sloped street.
 ---
 
 ## Decision log
+
+### 2026-08-04 — Two road defects reported from the driver's seat, and both were `P1-4` treating each edge alone
+
+The user reported a **white line down the middle of a road, with collision, that threw the car**, and
+**junctions narrower than the roads meeting them, with straight roads shrinking unexpectedly**. They
+are one root cause: `surface.py` extrudes every graph edge into its own ribbon with its own kerbs and
+never asks what the neighbours did.
+
+**The white line is a kerb.** There are no lane markings yet — `ART_DESIGN.md` defers those to a
+shader. It is `kerb_colour` `#9a968d` against `#3c3a37` asphalt, 0.5 m wide and 0.15 m tall. It lies
+mid-road because a dual carriageway is two edges, each kerbed on both sides, and `hong_kong.yaml`
+chose `widen_default: 1.6` *precisely so* those pairs overlap "into a single continuous surface". The
+tarmac merges; the kerbs come along. **Measured at 33.0 km of 98.6 km of kerb line — 33%** — worst on
+GLOUCESTER, VICTORIA PARK, HENNESSY and LOCKHART.
+
+⚠️ **Not cosmetic, and the reason is two facts that were each recorded correctly and never put
+together.** The mesh ships as `road_surface-col`, so Godot builds one trimesh collider over
+everything including the kerb risers; and `handling.tres` allows `suspension_travel_m = 0.18`. A
+0.15 m step is **83% of the car's total bump travel**, which is why a lane-three kerb launches it.
+`drive_harness.gd` calls the kerbs "mountable by design" and they are — that reasoning just never
+anticipated meeting one in the middle of a road.
+
+**The junction pinch is the convex hull.** `_cap_ring` trimmed each arm back by a full half-width —
+10.2 m of road replaced by a cap at every node on a standard street — and filled the gap with the
+hull of the arm mouths. At a bend the hull's straight chord cuts the outside of the turn off and the
+road narrows to `cos(half the turn)` of its width. BULLOCK LANE into CROSS LANE, 62 degrees, left a
+**7.1 m waist between two 10.2 m arms**; THOMSON ROAD into O'BRIEN ROAD lost 3.2 m on a turn of only
+11.4 degrees, which is the "straight road shrinks" report exactly. 8 of the 49 two-arm nodes were
+narrower at the node than their own thinner arm.
+
+**This was already in this file and had been read as cosmetic.** The 2026-08-01 shadow entry records
+"the dark wedges at junctions … are **not shadows and not the missing terrain**. They are gaps in the
+road mesh", filed as "a `P1-4` coverage question, worth taking before `P3-9`". It reached the driver
+first.
+
+| | before | after |
+|---|---|---|
+| Two-arm nodes narrower than their own arms | 8 of 49 | **1 of 49** |
+| Kerb line lying inside another carriageway | 33.0 km | **0** |
+| Movements mitred through their cap | — | 677 |
+| Triangles | 35,039 | **25,031** (−29%) |
+| `roads.glb` | 1.8 MB | **1.3 MB** |
+| Bundle | 31.3 MB | 30.8 MB |
+
+**The mitre apexes go into the same hull as the mouths**, rather than building a second kind of cap.
+A hull can only grow, and a straight through movement puts its apex on the boundary the hull already
+had — so a crossroads is unchanged and there is still one cap with one construction. What qualifies
+as "through" is the whole question and it is **not** a tuning value: two arms at a node is one street
+bending, so the corner is carriageway and up to 90 degrees is mitred; three or more and a sharp
+corner is the pavement between two streets, so the limit drops to 45. Filling that corner would pave
+the footpath, which is what `hull` was chosen to avoid in the first place.
+
+The one node still pinched is a **172-degree hairpin**, and no mitre should reach it.
+
+**Rejected: merging opposed pairs into one ribbon.** It is the tempting read of the kerb bug, and it
+would reopen a decision this module's docstring closed with measurements — plus it needs polygon
+clipping and would change what `roadsurface.json` indexes. Only the *kerb* asks about its neighbours;
+the carriageway is untouched, so no collider gains a hole and `carriageway[].half_width_m` still
+means what it meant. **No schema bump**: a consumer keeping its old interpretation stays right.
+
+⚠️ **The overlap test is on the outer lip, and per segment rather than per station.** A kerb whose
+far edge is still inside a neighbour is swallowed; one the neighbour merely reaches into is a real
+boundary between two surfaces and keeps its kerb. And a station lands exactly on a neighbour's
+boundary at every arm of every plain crossroads — a crossing-number test calls a boundary point
+inside, and one such touch would have taken the entire kerb of a two-station edge. `testville` caught
+that within a minute of the first run; the region would have hidden it in the aggregate.
+
+**Still open, deliberately.** The cap carries **no kerb and no lane coordinate** — `fan` writes zero
+UVs. Both were true before and neither is what was reported. The second one comes due when the
+markings shader lands, alongside the cap/ribbon overlap the docstring already flags.
 
 ### 2026-08-03 — `P3-11` review: **reads as 紅的, does not read as a Crown Comfort**
 
@@ -943,6 +1013,10 @@ the road mesh: `surface.py` trims each edge end back from a node and fills the m
 fanned from its centroid, so where roads meet at an angle the cap's straight chord cuts inside the
 corner. They read as shadows because the sky's ground gradient shows through. A `P1-4` coverage
 question, worth taking before `P3-9`.
+
+> ✅ **Closed 2026-08-04**, after the user hit the same thing from the driver's seat and reported the
+> road shrinking at junctions. The diagnosis above was right and the "worth taking" was too soft.
+> See the 2026-08-04 entry.
 
 ### 2026-08-01 — `P2-1` review passed, and it closes `Q16`: **LOD0 does not ship**
 

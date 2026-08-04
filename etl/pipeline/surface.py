@@ -11,6 +11,12 @@ Three measurements off the emitted graph decide the shape of this:
   overlap. Applying the playability widening closes the sixth. The gap the
   `P1-3` hand-over worried about does not exist, so there is no pair detection
   here and no merging.
+  ⚠️ True of the *carriageway*, and it was read as true of the whole ribbon for
+  too long. The kerbs overlap as well, and a kerb inside a neighbour's road is a
+  0.15 m concrete strip lying across a lane — 33 km of it, reported from the
+  driver's seat as a white line that threw the car. `_hide_buried_kerbs` stops
+  drawing those. Still no merging: the ribbons are untouched and only the kerb
+  asks what its neighbours are doing.
 - **A node may not be capped across elevation levels.** Capping across a grade
   separation would weld a street to a tunnel roof with a 60-degree wall, so caps
   are built per level. The measurement that first showed this was that all 36
@@ -79,6 +85,11 @@ _MIN_SEGMENT_M = 1e-6
 _BEND_TURN_DEG = 90.0
 _THROUGH_TURN_DEG = 45.0
 
+# Side of the grid cell that narrows the overlap search from every-pair to
+# every-neighbour, in metres. Comfortably wider than the widest carriageway in
+# the region, so a ribbon lands in a handful of cells rather than in one each.
+_OVERLAP_CELL_M = 60.0
+
 # Below this, a triangle has collapsed and is dropped. Compared against *twice*
 # the area, which is what the cross product's length gives — a square millimetre
 # of road is not road, and a collision shape built from degenerate triangles is
@@ -131,6 +142,11 @@ class SurfaceReport:
     # will never close, and quoting it alone would report a stage that closed 26
     # of these 36 as one that closed none.
     level_steps_m: list[float] = field(default_factory=list)
+    # Metres of kerb line dropped because a neighbouring carriageway had already
+    # covered it. Reported every run because it is a *large* number against a
+    # region's total kerb, and a collapse in it would mean the overlap test had
+    # stopped finding anything rather than that the region had tidied itself up.
+    buried_kerb_m: float = 0.0
     # Triangles left facing downward, and the area they cover. Tracked rather
     # than assumed away: `boundary` removes all but a handful at the region's
     # sharpest hairpin, and a jump in either number means a ribbon has started
@@ -498,6 +514,12 @@ class _Edge:
     offsets: np.ndarray | None = None
     left: np.ndarray | None = None
     right: np.ndarray | None = None
+    # Per-segment, per-side: whether this ribbon's kerb is the edge of anything.
+    # Filled by `_hide_buried_kerbs` once every ribbon exists, because the answer
+    # is a question about the neighbours. `None` until then, and `None` means
+    # draw it, so an edge the pass skipped keeps the kerb it always had.
+    kerb_left: np.ndarray | None = None
+    kerb_right: np.ndarray | None = None
 
     def corner(self, at_start: bool, *, on_left: bool) -> np.ndarray | None:
         """One of the two corners this ribbon presents to a junction."""
@@ -546,18 +568,24 @@ def build_region(
     for edge in edges:
         _shape(edge)
 
+    # Capped after every ribbon exists, because a cap is defined by where the
+    # ribbons it joins actually ended — including where a trim was clamped. The
+    # rings are held rather than drawn straight away: a cap covers kerb too, so
+    # `_hide_buried_kerbs` has to see them before any of it is emitted.
+    caps = [
+        (level, ring)
+        for (_, level), group in ends.items()
+        if (ring := _cap_ring(group, edges, report)) is not None
+    ]
+    _hide_buried_kerbs(edges, caps, style, report)
+
     builder = _Builder()
     for edge in edges:
         if _draw_edge(builder, edge, style, city.roads.lane_width_m):
             report.edges += 1
-
-    # Capped after every ribbon exists, because a cap is defined by where the
-    # ribbons it joins actually ended — including where a trim was clamped.
-    for group in ends.values():
-        ring = _cap_ring(group, edges, report)
-        if ring is not None:
-            builder.fan(ring, colour=style.surface_colour)
-            report.junctions += 1
+    for _, ring in caps:
+        builder.fan(ring, colour=style.surface_colour)
+        report.junctions += 1
 
     mesh = builder.build(SURFACE_MESH_NAME)
     report.inverted, report.inverted_area_m2 = downward_facing(mesh)
@@ -717,6 +745,120 @@ def _assign_trims(
                 report.clamped_trims += 1
 
 
+def _within(points: np.ndarray, polygon: np.ndarray) -> np.ndarray:
+    """Which plan points fall inside a plan polygon. Crossing number.
+
+    Written out rather than pulled in: the only candidate dependency is shapely,
+    and `pyproject.toml` already turned down geopandas for wanting pandas to
+    reach the numpy underneath. This is the same trade in miniature.
+    """
+    x, z = points[:, 0], points[:, 1]
+    ax, az = polygon[:, 0], polygon[:, 1]
+    bx, bz = np.roll(ax, -1), np.roll(az, -1)
+    inside = np.zeros(len(points), dtype=bool)
+    for start in range(len(polygon)):
+        # A horizontal edge never straddles the ray, so the division it would
+        # zero out is masked before it is read.
+        straddles = (az[start] > z) != (bz[start] > z)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            crossing = ax[start] + (bx[start] - ax[start]) * (z - az[start]) / (
+                bz[start] - az[start]
+            )
+        inside ^= straddles & (x < crossing)
+    return inside
+
+
+def _cells(polygon: np.ndarray, level: int) -> list[tuple[int, int, int]]:
+    """Grid cells one plan polygon's bounding box touches, keyed by level too.
+
+    A flyover and the street under it share plan and nothing else, so the level
+    belongs in the key: without it every deck would be asked to occlude the
+    kerbs of the road it flies over.
+    """
+    low = np.floor(polygon.min(axis=0) / _OVERLAP_CELL_M).astype(int)
+    high = np.floor(polygon.max(axis=0) / _OVERLAP_CELL_M).astype(int)
+    return [(level, x, z) for x in range(low[0], high[0] + 1) for z in range(low[1], high[1] + 1)]
+
+
+def _hide_buried_kerbs(
+    edges: list[_Edge],
+    caps: list[tuple[int, np.ndarray]],
+    style: RoadSurface,
+    report: SurfaceReport,
+) -> None:
+    """Drop the kerb wherever another piece of road has already covered it.
+
+    Each edge is extruded on its own account, so an opposed carriageway pair
+    gets four kerbs rather than two — and `hong_kong.yaml` picked its 1.6x
+    widening *because* those pairs then overlap "into a single continuous
+    surface". The tarmac merges; the kerbs come along uninvited and end up as a
+    0.5 m strip of pale concrete standing 0.15 m proud in the middle of a road
+    that looks like one road. 22 km of it in Wan Chai, most of it on GLOUCESTER,
+    VICTORIA PARK, HENNESSY and LOCKHART. It is not cosmetic: the mesh ships as
+    one trimesh collider, `handling.tres` allows 0.18 m of suspension travel,
+    and the region's own kerb spends 83% of it in a single step.
+
+    The test is the **outer** lip, not the kerb line: a kerb whose far edge is
+    still inside a neighbour is wholly swallowed, while one the neighbour merely
+    reaches into is a real boundary between two surfaces and stays. That is what
+    keeps this from eating the kerb every time two ribbons touch at a junction.
+
+    Nothing is deleted from the carriageway — only the kerb stops being drawn,
+    so the road under it is unchanged and no collider gains a hole.
+    """
+    shapes: dict[int, np.ndarray] = {}
+    index: dict[tuple[int, int, int], list[np.ndarray]] = defaultdict(list)
+    for position, edge in enumerate(edges):
+        if edge.left is None or edge.right is None:
+            continue
+        shapes[position] = np.vstack([edge.left, edge.right[::-1]])
+        for cell in _cells(shapes[position], edge.level):
+            index[cell].append(shapes[position])
+    for level, ring in caps:
+        plan = ring[:, [0, 2]]
+        for cell in _cells(plan, level):
+            index[cell].append(plan)
+
+    for position, edge in enumerate(edges):
+        if position not in shapes or edge.ribbon is None or edge.offsets is None:
+            continue
+        own = shapes[position]
+        # Identity, not equality: a neighbour may be an exact geometric twin of
+        # this ribbon, and comparing by value would let it occlude itself.
+        near = [
+            other for cell in _cells(own, edge.level) for other in index[cell] if other is not own
+        ]
+        reach = edge.ribbon[:, _WIDTH] + style.kerb_width_m
+        steps = plan_steps(edge.ribbon)
+        keep = []
+        for across in (reach, -reach):
+            lip = boundary(edge.ribbon, edge.offsets, across)
+            # The middle of each quad the kerb is drawn as, not its stations. A
+            # station sits exactly on a neighbour's boundary whenever two arms
+            # meet end-on at a junction — every arm of a plain crossroads does —
+            # and a crossing-number test counts a boundary point as inside. One
+            # such touch would take the whole kerb of a two-station edge.
+            middle = 0.5 * (lip[:-1] + lip[1:])
+            buried = np.zeros(len(middle), dtype=bool)
+            for other in near:
+                buried |= _within(middle, other)
+            keep.append(~buried)
+            report.buried_kerb_m += float(steps[buried].sum())
+        edge.kerb_left, edge.kerb_right = keep
+
+
+def _runs(keep: np.ndarray) -> list[tuple[int, int]]:
+    """Station ranges for each run of consecutive kept segments.
+
+    `keep` carries one flag per quad, so a run of `n` of them is a strip over
+    `n + 1` stations and can never be too short to draw. A kerb that survives in
+    pieces is drawn as pieces: the cut ends leave the riser open, which is
+    invisible and unreachable, since whatever buried the kerb still lies over it.
+    """
+    changes = np.flatnonzero(np.diff(np.concatenate([[False], keep, [False]]).astype(np.int8)))
+    return [(start, stop + 1) for start, stop in changes.reshape(-1, 2)]
+
+
 def _measure_level_steps(
     ends: dict[tuple[int, int], list[_End]], edges: list[_Edge], report: SurfaceReport
 ) -> None:
@@ -776,12 +918,33 @@ def _draw_edge(builder: _Builder, edge: _Edge, style: RoadSurface, lane_width_m:
     # The riser has no plan width, so both its rails sit at the kerb line and
     # share its U. The lip is where U crosses the kerb — putting the ramp on the
     # riser instead would make an integer U stop meaning a lane boundary.
-    builder.strip(left, left_top, colour=style.kerb_colour, along=along, across=(0.0, 0.0))
-    builder.strip(left_top, left_out, colour=style.kerb_colour, along=along, across=(0.0, -outside))
-    builder.strip(right_top, right, colour=style.kerb_colour, along=along, across=(lanes, lanes))
-    builder.strip(
-        right_out, right_top, colour=style.kerb_colour, along=along, across=(lanes + outside, lanes)
-    )
+    #
+    # Drawn in runs, because a kerb another carriageway has already covered is
+    # not drawn at all — see `_hide_buried_kerbs`. A side with no mask yet is a
+    # side nothing was asked about, and keeps the whole kerb it always had.
+    for keep, sides in (
+        (
+            edge.kerb_left,
+            (((left, left_top), (0.0, 0.0)), ((left_top, left_out), (0.0, -outside))),
+        ),
+        (
+            edge.kerb_right,
+            (
+                ((right_top, right), (lanes, lanes)),
+                ((right_out, right_top), (lanes + outside, lanes)),
+            ),
+        ),
+    ):
+        spans = _runs(keep) if keep is not None else [(0, len(points))]
+        for start, stop in spans:
+            for (lower, upper), across in sides:
+                builder.strip(
+                    lower[start:stop],
+                    upper[start:stop],
+                    colour=style.kerb_colour,
+                    along=along[start:stop],
+                    across=across,
+                )
     return True
 
 
@@ -979,6 +1142,11 @@ def main(argv: list[str] | None = None) -> int:
         report.clamped_trims,
     )
     log.info("  %d movements mitred through their cap rather than chorded", report.mitred_throughs)
+    if report.buried_kerb_m:
+        log.info(
+            "  %.0f m of kerb dropped where a neighbouring carriageway already covered it",
+            report.buried_kerb_m,
+        )
     if report.on_structure_m:
         log.info(
             "  %.0f m of level-0 carriageway sits on structure and is drawn at its authored "
