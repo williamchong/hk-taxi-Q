@@ -71,6 +71,14 @@ _MITRE_LIMIT = 4.0
 # segment between them has no direction to offset along.
 _MIN_SEGMENT_M = 1e-6
 
+# How far a movement may deviate from straight and still be mitred through its
+# junction cap, in degrees. Two limits because the corner between two arms means
+# two different things: with only two arms the node is one street bending and the
+# corner is carriageway, while with three or more a sharp corner is the pavement
+# between two streets and filling it would pave the footpath.
+_BEND_TURN_DEG = 90.0
+_THROUGH_TURN_DEG = 45.0
+
 # Below this, a triangle has collapsed and is dropped. Compared against *twice*
 # the area, which is what the cross product's length gives — a square millimetre
 # of road is not road, and a collision shape built from degenerate triangles is
@@ -100,6 +108,11 @@ class SurfaceReport:
     # the config.
     carriageway: dict[int, list[float]] = field(default_factory=dict)
     junctions: int = 0
+    # Movements mitred through their cap rather than left to the hull's chord.
+    # Reported because it is the count that says whether the rule fired at all:
+    # a region of pure crossroads would legitimately mitre nothing, and that
+    # looks identical to a broken predicate from the outside.
+    mitred_throughs: int = 0
     triangles: int = 0
     vertices: int = 0
     bytes: int = 0
@@ -541,7 +554,7 @@ def build_region(
     # Capped after every ribbon exists, because a cap is defined by where the
     # ribbons it joins actually ended — including where a trim was clamped.
     for group in ends.values():
-        ring = _cap_ring(group, edges)
+        ring = _cap_ring(group, edges, report)
         if ring is not None:
             builder.fan(ring, colour=style.surface_colour)
             report.junctions += 1
@@ -772,11 +785,84 @@ def _draw_edge(builder: _Builder, edge: _Edge, style: RoadSurface, lane_width_m:
     return True
 
 
-def _cap_ring(group: list[_End], edges: list[_Edge]) -> np.ndarray | None:
+def _through_corners(group: list[_End], edges: list[_Edge]) -> list[list[np.ndarray]]:
+    """Mitred corners for every movement that runs *through* a node.
+
+    The hull of the arm mouths alone is a chord across the turn, so at a bend it
+    cuts the outside of the corner off and the road pinches to `cos(half the
+    turn)` of its width — in the one place a car is already committed to it. The
+    region's worst is BULLOCK LANE into CROSS LANE, where two 10.2 m arms meet
+    at 62 degrees and leave a 7.1 m waist.
+
+    Feeding the mitre apexes into the same hull repairs that without a second
+    kind of cap. The hull can only grow, and where the two arms are collinear
+    the apex lands on the boundary it already had — so a crossroads, where the
+    through movements are straight, comes out byte for byte unchanged.
+
+    Which movements qualify is the whole question, and it is not a tuning value:
+    filling the corner between two arms of a real junction would pave the
+    pavement, which is exactly what `hull` was chosen to avoid.
+
+    Returned one list per mitred movement rather than as one flat list, so the
+    caller can report how many fired without knowing how many points each is.
+    """
+    arms: list[tuple[np.ndarray, float, np.ndarray]] = []
+    for end in group:
+        points = edges[end.edge].points
+        row = 0 if end.at_start else -1
+        step = points[1] - points[0] if end.at_start else points[-1] - points[-2]
+        plan = step[[0, 2]]
+        length = float(np.hypot(*plan))
+        if length <= _MIN_SEGMENT_M:
+            continue
+        # Away from the node, whichever end of the polyline arrives on it.
+        away = plan / length * (1.0 if end.at_start else -1.0)
+        arms.append((away, edges[end.edge].end_half_width_m(end.at_start), points[row][[0, 1, 2]]))
+    if len(arms) < 2:
+        return []
+
+    node = np.mean([arm[2] for arm in arms], axis=0)
+    limit = _BEND_TURN_DEG if len(arms) == 2 else _THROUGH_TURN_DEG
+    movements: list[list[np.ndarray]] = []
+    for index, (out_a, half_a, _) in enumerate(arms):
+        for out_b, half_b, _ in arms[index + 1 :]:
+            # A car arrives against `out_a` and leaves along `out_b`, so the two
+            # arms read as one street exactly when they point apart.
+            turn = np.degrees(np.arccos(np.clip(-float(out_a @ out_b), -1.0, 1.0)))
+            if turn > limit:
+                continue
+            # `mitres` puts the normal one quarter turn left of travel, and the
+            # apex on the bisector of the two. Same construction, except the two
+            # segments belong to different edges rather than to one polyline.
+            incoming, outgoing = -out_a, out_b
+            normal = np.array([incoming[1], -incoming[0]])
+            bisector = normal + np.array([outgoing[1], -outgoing[0]])
+            length = float(np.hypot(*bisector))
+            if length <= _MIN_SEGMENT_M:
+                continue
+            bisector /= length
+            reach = 1.0 / np.clip(float(bisector @ normal), 1.0 / _MITRE_LIMIT, 1.0)
+            # Both half-widths, because two arms of a movement may differ in
+            # width and the mouth of each has to be reached.
+            movements.append(
+                [
+                    np.array([node[0] + side[0], node[1], node[2] + side[1]])
+                    for half in (half_a, half_b)
+                    for side in (bisector * reach * half, -bisector * reach * half)
+                ]
+            )
+    return movements
+
+
+def _cap_ring(group: list[_End], edges: list[_Edge], report: SurfaceReport) -> np.ndarray | None:
     """The junction polygon closing one node at one level, or None if there is none.
 
     Built from the two carriageway corners each ribbon presents to the node, so
-    the cap meets every arm along that arm's full width.
+    the cap meets every arm along that arm's full width — plus, since the
+    junction pinch was reported from the driver's seat, the mitre apex of every
+    movement that runs through rather than turning off. `_through_corners` has
+    the argument; here it is enough that both kinds of point go into one hull,
+    so there is still exactly one cap and one way of building it.
 
     ⚠️ It **overlaps** those arms rather than abutting them, wherever they stop
     at different distances from the node — which they do whenever
@@ -804,7 +890,9 @@ def _cap_ring(group: list[_End], edges: list[_Edge]) -> np.ndarray | None:
     ]
     if len(corners) < 3:
         return None
-    ring = hull(np.vstack(corners))
+    through = _through_corners(group, edges)
+    report.mitred_throughs += len(through)
+    ring = hull(np.vstack(corners + [point for movement in through for point in movement]))
     return ring if len(ring) >= 3 else None
 
 
@@ -890,6 +978,7 @@ def main(argv: list[str] | None = None) -> int:
         report.trimmed_ends,
         report.clamped_trims,
     )
+    log.info("  %d movements mitred through their cap rather than chorded", report.mitred_throughs)
     if report.on_structure_m:
         log.info(
             "  %.0f m of level-0 carriageway sits on structure and is drawn at its authored "

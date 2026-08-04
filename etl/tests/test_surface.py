@@ -292,6 +292,40 @@ def _edge(edge_id: int, from_node: int, to_node: int, polyline, **overrides) -> 
 
 
 @pytest.fixture
+def bendville(tmp_path, testville_config):
+    """One street, split into two edges at a 60-degree bend.
+
+    Two arms and nothing else, so the corner between them is carriageway rather
+    than the pavement a third street would put there — and every square metre at
+    the node is the cap's doing. This is the shape the junction pinch was
+    reported on: BULLOCK LANE into CROSS LANE turns 62 degrees.
+    """
+    out_dir = tmp_path / "out" / "testville" / "middle"
+    out_dir.mkdir(parents=True)
+    (out_dir / ROADGRAPH_NAME).write_text(
+        json.dumps(
+            {
+                "schema_version": ROADGRAPH_SCHEMA,
+                "city_id": "testville",
+                "region_id": "middle",
+                "nodes": [
+                    {"id": 0, "pos": [300.0, 0.0, 300.0], "kind": "junction"},
+                    {"id": 1, "pos": [100.0, 0.0, 300.0], "kind": "endpoint"},
+                    {"id": 2, "pos": [400.0, 0.0, 473.205], "kind": "endpoint"},
+                ],
+                "edges": [
+                    _edge(0, 1, 0, [[100.0, 0.0, 300.0], [300.0, 0.0, 300.0]]),
+                    _edge(1, 0, 2, [[300.0, 0.0, 300.0], [400.0, 0.0, 473.205]]),
+                ],
+                "turn_restrictions": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return testville_config, tmp_path
+
+
+@pytest.fixture
 def testville(tmp_path, testville_config):
     """A crossroads, a flyover touching down on it, and a dead end.
 
@@ -417,6 +451,31 @@ class TestBuildRegion:
             [(x, z) for x in np.arange(295.0, 305.5, 0.5) for z in np.arange(295.0, 305.5, 0.5)]
         )
         assert _covered(grid, triangles).all()
+
+    def test_a_bend_keeps_its_full_width_through_the_cap(self, bendville, tmp_path) -> None:
+        """The junction pinch, reported from the driver's seat and measured after.
+
+        A hull of the arm mouths alone is a chord across the turn, so the road
+        used to narrow to `cos(half the turn)` of its width at the node — 30% of
+        a 10.2 m street gone at Wan Chai's sharpest two-arm bend, in the one
+        place a car is already committed. The mitre apexes go into the same hull
+        to stop it, so the cross-section here is the mitred one.
+        """
+        city, _ = bendville
+        report = build_region(city, "middle", out_root=tmp_path / "out")
+        mesh = _mesh(tmp_path)
+
+        half = 6.4 * city.roads.surface.widen_for(50, elevation_level=0) / 2.0
+        # Travel turns from +X to 60 degrees right of it, so the joint bisects
+        # at 30 degrees and the mitre reaches `1 / cos(30)` half-widths out.
+        normal = np.array([np.sin(np.radians(30.0)), -np.cos(np.radians(30.0))])
+        reach = half / np.cos(np.radians(30.0))
+        node = np.array([300.0, 300.0])
+        across = np.linspace(-0.95, 0.95, 21)[:, None] * reach * normal
+
+        corners = mesh.positions[mesh.triangles][:, :, [0, 2]]
+        assert _covered(node + across, corners).all()
+        assert report.mitred_throughs == 1
 
     def test_a_flyover_is_not_capped_down_to_the_street(self, testville, tmp_path) -> None:
         """The 36 places in Wan Chai where two levels share a node all step by a
