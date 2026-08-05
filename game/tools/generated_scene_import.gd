@@ -59,3 +59,10 @@ func _apply(mesh: Mesh) -> void:
 		var standard := material as BaseMaterial3D
 		if standard != null:
 			standard.vertex_color_use_as_albedo = true
+			# The ETL writes `COLOR_0` in sRGB, and both flags are off by default,
+			# so this is the `BaseMaterial3D` half of the `Q27` fix — the shader
+			# half is `vertex_srgb_to_linear()`, which the two facade shaders have
+			# to carry by hand because there is no such render mode. Without it
+			# the road surface takes the same hit the facades did: sRGB bytes read
+			# as linear render pale and flatten the difference between colours.
+			standard.vertex_color_is_srgb = true

@@ -3,10 +3,13 @@
 Living document. **Update this whenever a task changes status, a decision is made, or an open
 question is answered.** Newest entries at the top of each log.
 
-Last updated: 2026-08-06 (every building now carries its own photo-measured hue — 2,214 of them,
-100% joined, no schema change — and the survey proved photographic *lightness* unusable on the way.
-`Q26` still asks which look ships, and `Q27` asks why the rig makes albedo barely matter. `P3-10`'s
-ground and `P3-11`'s taxi are still awaiting a verdict; `Q24` and `Q25` are closed)
+Last updated: 2026-08-06 (`Q27` **closed, and not where it was looking**: `COLOR_0` is authored in
+sRGB and was consumed as linear, which cost 57% of a facade pixel to albedo-independent light. Six
+lighting levers were ablated and none of them mattered. Before that, every building gained its own
+photo-measured hue — 2,214 of them, 100% joined, no schema change — and the survey proved photographic
+*lightness* unusable on the way. `Q26` still asks which look ships, and now inherits a rig that was
+tuned against the bug. `P3-10`'s ground and `P3-11`'s taxi are still awaiting a verdict; `Q24` and
+`Q25` are closed)
 
 ---
 
@@ -103,7 +106,7 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ⚠️ conditional ·
 | `Q25` | **The ground tore along every tile boundary.** `collapse` puts a vertex at the *mean of the members present in its mesh*, and terrain was split across tiles before it was collapsed — so the two sides of a boundary averaged differently and the seam opened | 1.76% of the region had ground the source covers and the bundle did not, three quarters of it within 10 m of a tile boundary. Visible as brown bands at grazing angles, and solid-edged since the ground collides | `P1-2`/`P3-10` | 🟢 **Closed 2026-08-05.** `_tile_ground` decimates the region's ground **once per tier** and cuts the result, reversing collapse-then-merge for the one class that is both cut and continuous. Region holes **1.76% → 0.76%**; within 2 m of a boundary **15.65% → 0.42%**, *below* the 0.54% interior rate, so the boundary stopped being special. Triangles unchanged. The 0.76% residual is ordinary sliver loss, not a seam |
 
 | `Q26` | **Which look ships — the measured Hong Kong one or the clean/futuristic one?** `P3-7`'s window bands are accurate and were called dull; `city_facade_clean` is bolder and is *not* what Wan Chai looks like | The whole art direction rests on "accurate city, toy vehicles", and recognition is the product (`Q8`). A white city with amber accent plinths keeps the accurate *massing* and abandons the accurate *surface* — which may be the right trade or may be the one thing that cannot be traded | `P3-9a` | 🔴 Open, and **a verdict rather than a measurement.** Both looks are one `cp` apart and neither needs a rebuild, so this can go to the ≥3 HK drivers as an A/B rather than being decided in advance. Shots in `build/driver/h4` (clean) against `build/driver/clean` (`P3-7`). ⚠️ If the clean look wins, the palette should move from the shader's `base_wash` into `height_bands` in the city config, where CLAUDE.md says palettes live |
-| `Q27` | **Why does albedo barely reach the screen under the clean rig, and what should the light levels be?** Buildings now carry measured per-building hue, and it is nearly invisible | Measured, not suspected: dropping the height bands from `L*` 80 to 62 moved the rendered frame only from `L*` 86.8 to 83.3 — an 18-point albedo change bought 3.5 points of pixel. Every colour decision downstream of this is unreadable until it is answered, including `Q26`'s A/B | `P3-9a` | 🔴 Open. `base_wash` and the palette are both **eliminated by test** — lowering `base_wash` 0.7 → 0.15 raised clipping 20.6% → 26.1% and made it worse. The clipping defect itself is fixed (`tonemap_white` 3.0, `light_energy` 0.9 → 0.1% clipped). What remains is total light energy: `ambient_light_energy` 0.85 → 0.30 lifted frame chroma p90 from 13.9 to 17.3 in a probe, but deepens shadows and is a look change `Q26` owns. Evidence: `build/driver/flat_colour` (elements off, jitter off) against `build/driver/flat_lit` |
+| `Q27` | **Why does albedo barely reach the screen under the clean rig, and what should the light levels be?** Buildings now carry measured per-building hue, and it is nearly invisible | Measured, not suspected: dropping the height bands from `L*` 80 to 62 moved the rendered frame only from `L*` 86.8 to 83.3 — an 18-point albedo change bought 3.5 points of pixel. Every colour decision downstream of this is unreadable until it is answered, including `Q26`'s A/B | `P3-9a` | 🟢 **Closed 2026-08-06. It was not the light at all.** `COLOR_0` is authored in sRGB and was consumed as linear, so **57%** of a lit facade pixel's luminance was albedo-*independent* and an albedo difference reached the screen at a third of its size. Fixed in the two facade shaders and `generated_scene_import.gd`; additive share **57% → 6%** at street level. The whole light-levels half of the question is answered "no": ambient, exposure, glow, fog, tonemap curve and specular were each ablated and **none moved transmission by more than 0.05**. See the decision log below |
 
 **Resolved:** `Q1` (no Z, but `ELEVATION` encodes the level) · `Q2`/`Q3`/`Q5` (building data is fully
 scriptable; 6 sheets, ~44 MB each) · `Q4` (device floor A13 / Adreno 618) · `Q7` (origin at the
@@ -132,6 +135,69 @@ under, and ~0.2 m is a guess until it is driven on a cross-sloped street.
 ---
 
 ## Decision log
+
+### 2026-08-06 — `Q27` closes: the city was pale because `COLOR_0` was read in the wrong colour space
+
+**The premise of the question was wrong, and it was wrong in a way that cost a full sweep of the
+lighting rig to see.** `Q27` asked what the light levels should be. The answer is that the light
+levels were never the problem, and no setting of them could have been.
+
+The ETL authors `COLOR_0` in **sRGB** — it picks colours in CIELAB and writes the sRGB bytes. Every
+colour *uniform* in the facade shaders carries `: source_color`, which Godot converts to linear.
+`COLOR` carried no such marking and arrived unconverted, so the shaders mixed sRGB into linear.
+Godot 4 has no `vertex_color_is_srgb` render mode — it survives only as a `BaseMaterial3D` flag — so
+nothing converted it and nothing complained.
+
+🔴 **Why that reads as "the lights are too bright".** sRGB interpreted as linear is *lighter* than
+intended, and light the albedo did not ask for is light that does not vary *with* albedo. Measured on
+a lit facade pixel, **57% of its luminance was albedo-independent**. So the city was simultaneously
+too pale and unable to show which building was which — one cause, two symptoms that look like two
+problems.
+
+**The ablation, and it is the part worth keeping.** Each row is a matched pair of renders of the same
+camera, one city built 17 `L*` darker than the other, graded by `tools/frame_stats.py`. *Gain* is
+rendered `ΔL*` per unit of albedo `ΔL*`, on the pixels that responded at all:
+
+| Changed | street gain | skyline gain |
+|---|---|---|
+| nothing (as shipped) | 0.38 | 0.33 |
+| `tonemap_exposure` 1.0 → 0.5 | 0.40 | 0.37 |
+| `ambient_light_energy` 0.85 → 0.30 | 0.39 | 0.33 |
+| glow off | 0.35 | 0.31 |
+| fog off | 0.36 | 0.37 |
+| ACES → linear tonemap | 0.38 | 0.36 |
+| `SPECULAR` → 0 | 0.40 | 0.35 |
+| `base_wash`, glass, sky tint, accents **all** off | 0.41 | 0.37 |
+
+**Nothing moves it.** Halving exposure drops the frame 21 `L*` — a drastic change anyone would call a
+re-tune — and buys 0.05 of gain. That invariance is the fingerprint: fog and glow are additive and the
+tonemap is compressive, so all three *should* have moved it. That none did puts the loss upstream of
+the light. With the sRGB conversion in place the albedo-independent share falls **57% → 6%** at street
+level and **61% → 19%** at skyline, and the 19% is fog, which is aerial perspective doing its job.
+
+⚠️ **`Q27`'s own headline number was measured with the wrong statistic, and this is the reusable
+lesson.** "Frame `L*` 86.8 → 83.3" was a whole-frame mean, and a third of that frame is sky, fog and
+glass — pixels that cannot respond to an albedo change and dilute the ones that do. Because
+`drive.sh` is deterministic, two renders are pixel-aligned and can simply be subtracted: a pixel that
+did not move is a pixel the change could not reach, and it identifies itself with no mask or depth
+buffer. That is what `tools/frame_stats.py` does, and re-reading the original evidence with it moved
+the gain from 0.19 to 0.28 before a line of anything was changed.
+
+**Where the fix went, and why not the ETL.** Writing linear `COLOR_0` would have been glTF-conformant
+and materially worse: linear `uint8` spends its codes on highlights the eye cannot separate and
+starves the shadows, which is the problem sRGB encoding exists to solve. It would also have changed
+the data contract and broken the graders, which match shipped vertex colours against `class_colours`.
+So the bytes stay sRGB, the consumers convert, and `ARCHITECTURE.md` now *says so* — the contract
+being silent on colour space is the defect that allowed this.
+
+⚠️ **Two things this leaves open.** The clean rig was tuned *against* the bug — the sky contribution
+was pulled back because the asphalt looked blue, and the asphalt looked blue because it was rendering
+far lighter than `#3c3a37`. With correct albedo the road is genuinely dark and street `L*` p10 falls
+to **3.5**, which is crushing. The rig is now due a pass against inputs that exist; that is `Q26`'s.
+And **`tools/check.sh` exits 0 on a shader that fails to compile** — verified, with 330 shader errors
+in its own log and `All checks passed` on the last line. The city renders a blank fallback material
+and every gate is green. Same failure mode the repo already documents for GDScript parse errors, and
+it wants the same one-line grep.
 
 ### 2026-08-06 — Per-building façade colour ships, and the survey that delivered it also killed half of itself
 

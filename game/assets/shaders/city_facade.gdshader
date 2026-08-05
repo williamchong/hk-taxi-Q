@@ -134,8 +134,18 @@ void vertex() {
 	along_m = span > 1e-4 ? dot(world.xz, tangent / span) : 0.0;
 }
 
+// ⚠️ **`COLOR_0` is authored in sRGB and has to be converted here**, exactly as
+// in `city_facade_clean.gdshader` — see that file for the measurement. Godot 4
+// has no `vertex_color_is_srgb` render mode, so every shader reading `COLOR`
+// converts it or silently renders a pale, low-contrast city. Duplicated rather
+// than shared through a `.gdshaderinc`: two call sites do not earn a third file,
+// and both are named in `docs/ARCHITECTURE.md`'s `COLOR_0` row.
+vec3 vertex_srgb_to_linear(vec3 c) {
+	return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
+}
+
 void fragment() {
-	vec3 albedo = COLOR.rgb;
+	vec3 albedo = vertex_srgb_to_linear(COLOR.rgb);
 	bool is_facade = marker < MARKER_FACADE + 0.5;
 
 	// Grounded before the windows, so a ground-floor pane is darkened with the

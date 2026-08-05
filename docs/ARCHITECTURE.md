@@ -399,6 +399,7 @@ textured mesh outright.
 
 | Attribute | Meaning |
 |---|---|
+| `COLOR_0.rgb` | The surface's albedo, **sRGB-encoded**, as normalised `uint8`. Every consumer must linearise it — see the warning below |
 | `TEXCOORD_0.x` | Metres above **that source object's own base**. A vertex knows its world Y, not where its building starts, and the region's ground moves 40 m — so world Y is not even a proxy. Metres rather than a 0-1 fraction because the floor *count* is the signature the window shader exists to carry |
 | `TEXCOORD_0.y` | `floor()` is a `SurfaceClass` marker — 0 façade, 1 ground, 2 structure. `fract()` is a per-object phase in 1/256 steps, so neighbouring towers do not line their window rows up |
 | Material name | **`city_facade`**, and the name is the contract. glTF cannot say "use this shader", so `tools/generated_scene_import.gd` dispatches on the name and hands the tile `tuning/city_facade.tres`; everything else in the bundle keeps its `BaseMaterial3D` |
@@ -463,6 +464,22 @@ PBR-ish roughness variation, any ground shader — had nothing to select on. `Su
 the payload now and the shader ignores it, which cost one commit instead of a second schema bump. What
 it does **not** buy is a usable height: `TEXCOORD_0.x` measures from each source mesh's own base, and
 the ground's meshes are sheet-shaped, so the value is not comparable across a sheet boundary.
+
+⚠️ **`COLOR_0` is sRGB-encoded, and every consumer has to linearise it itself.** The ETL picks
+colours in CIELAB and writes the sRGB bytes, because sRGB is what 8 bits are *for* — it spends its
+codes where the eye can tell them apart, and a linear `uint8` would starve the shadows to gild
+highlights nobody can separate. The cost is that nothing downstream converts for free. Godot 4 has no
+`vertex_color_is_srgb` **render mode** (it survives only as a `BaseMaterial3D` flag), so the two
+facade shaders each carry a `vertex_srgb_to_linear` of their own, and `generated_scene_import.gd`
+sets the flag for everything else — the road surface included.
+
+This was silent until `Q27`. Skipping the conversion does not merely lighten the city: sRGB read as
+linear is *brighter than it should be*, and brightness the albedo did not ask for is brightness that
+does not vary with albedo. Measured, **57%** of a lit facade pixel's luminance was albedo-independent,
+and a per-building albedo difference reached the screen at **a third** of its size. No lighting change
+touches it, which is why it survived a full sweep of the rig. If a future consumer of `COLOR_0`
+forgets this, the symptom is a pale city whose palette "does not seem to do anything" — reach for
+`tools/frame_stats.py` before reaching for the lights.
 
 ⚠️ `COLOR_0.a` is a constant `255` today and looks like the cheaper place for a shader mask. It is
 not: `generated_scene_import.gd` sets `vertex_color_use_as_albedo` project-wide, and an opaque

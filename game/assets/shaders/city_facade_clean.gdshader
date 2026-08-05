@@ -273,6 +273,26 @@ varying vec3 world_n;
 // boundary, so each line would render as a wide grey smear — an artefact that
 // looks like a lighting bug and is really a sampling one. `fwidth(u)` is smooth
 // across the seam because `u` is.
+// ⚠️ **`COLOR_0` is authored in sRGB and has to be converted here.** The ETL
+// picks facade colours in CIELAB and writes the sRGB bytes, while every colour
+// uniform above carries `: source_color`, which Godot converts to linear for us.
+// `COLOR` gets no such treatment: Godot 4 dropped the `vertex_color_is_srgb`
+// render mode (it survives only as a `BaseMaterial3D` flag, which is how
+// `generated_scene_import.gd` fixes the road), so a shader must do it itself.
+//
+// Skipping it does not merely lighten the city — it destroys albedo *contrast*.
+// Measured under `Q27`: 57% of a lit facade pixel's luminance was coming from
+// albedo-independent light, and a per-building albedo difference reached the
+// screen at a third of its size. That is why the measured facade colour looked
+// invisible, and why no amount of ambient or tonemap tuning moved it — the loss
+// is upstream of the light. The ablation is in `docs/PROGRESS.md`.
+//
+// The exact IEC 61966-2-1 curve rather than `pow(c, 2.2)`: `etl/pipeline/colour.py`
+// uses the exact one, and the two sides disagreeing is what this bug *was*.
+vec3 vertex_srgb_to_linear(vec3 c) {
+	return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
+}
+
 float band(float u, float low, float high) {
 	float w = fwidth(u) * 0.5 + 1e-5;
 	float x = fract(u);
@@ -343,7 +363,7 @@ void fragment() {
 	bool is_facade = marker < MARKER_FACADE + 0.5;
 	float seed = floor(phase * PHASE_STEPS + 0.5);
 
-	vec3 albedo = mix(COLOR.rgb, base_colour, is_facade ? base_wash : 0.0);
+	vec3 albedo = mix(vertex_srgb_to_linear(COLOR.rgb), base_colour, is_facade ? base_wash : 0.0);
 	if (is_facade) {
 		// Put back the per-building variation the wash just flattened, and
 		// ground the wall where it meets the pavement.

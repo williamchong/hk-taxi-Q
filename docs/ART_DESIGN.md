@@ -503,6 +503,21 @@ face from the next, so lowering it fixes the road and flattens the massing at on
 a **cool neutral** `ambient_light_color`: shadow colour without sky saturation. Do not reach for the
 road palette in `hong_kong.yaml` for this; it is a lighting problem and costs a rebuild to get wrong.
 
+🔴 **Everything above was tuned against a colour-space bug, and the numbers in the `.tres` files
+inherit it.** Until `Q27` closed, `COLOR_0` was authored in sRGB and consumed as linear, so every
+albedo in the city rendered lighter than it was asked to be — the asphalt worst of all, which is
+exactly why it looked as though ambient were painting it. The rig was then tuned to compensate: the
+sky contribution came down, `tonemap_white` was pushed around, and the paragraph above was written
+about the symptom. With the conversion in place the asphalt is genuinely dark and the road no longer
+needs ambient held back for it, so **the clean rig is now tuned against inputs that no longer exist**
+and is due a pass — `Q26` owns the look, and the measured starting point is in `PROGRESS.md`.
+
+**The general lesson, and it is the one worth keeping:** a washed-out frame is not evidence about the
+lights. Grade the frame with `tools/frame_stats.py` and ask whether an *albedo change* reaches the
+screen before touching a single light — a rig can only redistribute contrast that arrives, and this
+project spent a sweep of ambient, exposure, glow, fog, tonemap curve and specular discovering that
+none of them could put back what was lost before the light ever hit the surface.
+
 ---
 
 ## LOD policy

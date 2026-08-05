@@ -129,6 +129,25 @@ The whole region from the air, no car involved:
   --seconds=1 --shots=0.8 --camera=100,220,520 --look=250,0,50 --out=build/driver/preview
 ```
 
+**The two colour viewpoints**, fixed by `Q27` so a look change can be judged against earlier shots
+rather than against a fresh camera. Use both: they disagreed sharply about whether the city read
+white, and that disagreement was itself a finding.
+
+```bash
+# street level, Hennessy Road canyon looking WSW — the shipping viewpoint
+.claude/skills/run-hk-taxi-q/drive.sh --scene=res://scenes/dev/city_preview.tscn \
+  --seconds=1 --shots=0.8 --camera=270,5.5,691 --look=30,4.5,719 \
+  --debug-view=off --out=build/driver/street
+
+# skyline, from over the harbour looking south — where "the city reads white" was judged
+.claude/skills/run-hk-taxi-q/drive.sh --scene=res://scenes/dev/city_preview.tscn \
+  --seconds=1 --shots=0.8 --camera=520,130,180 --look=520,45,640 \
+  --debug-view=off --out=build/driver/skyline
+```
+
+`--debug-view=off` is not optional for these: the overlay's opaque text block is several per cent of
+the frame and it lands in any statistic taken from the PNG.
+
 Runs are **deterministic**. The clock reads the engine's physics-frame counter rather than
 accumulating per iteration, so nothing that parks the driver for more than a tick — a screenshot, a
 slow frame, a batch of catch-up steps — shifts the timeline. Two runs either side of a full asset
@@ -199,6 +218,17 @@ to — see Gotchas.
 - **GDScript's `%` format has no `%g`,** and an unknown specifier is not an error: the string comes
   out verbatim, so a failure message prints `%g` where the number should be. Stick to `%s`, `%d`,
   `%f`.
+- ⚠️ **A shader that fails to compile is invisible to `DRIVER OK` *and* to `tools/check.sh`.** Both
+  exit `0`; the city just renders a blank fallback material where the facades were. Verified while
+  closing `Q27`: `check.sh` printed `All checks passed` with 330 `SHADER ERROR` lines in its own log.
+  After touching a `.gdshader`, grep the run for `SHADER ERROR` yourself —
+  `drive.sh … 2>&1 | grep -i "shader error"` — and look at the PNG. Featureless pale buildings with no
+  window grid is what the fallback looks like, not a lighting problem.
+- ⚠️ **Changing `generated_scene_import.gd` does not re-run it.** Godot caches imports on the source
+  file, not on the post-import script, so `--import` — and even `touch`ing the `.glb` — leaves the old
+  result in place, with no warning. This silently produced a "the fix does nothing" result that was
+  really "the fix never ran". Delete the entries and reimport:
+  `rm -f game/.godot/imported/<asset>.glb-*.{scn,md5} && godot --headless --path game --import`.
 - **Godot exits `0` when a script fails to parse.** `quit(1)` never runs, so a broken tool reports
   success. `drive.sh` greps its own output for compile failures and supplies the exit code, the
   same trick `tools/check.sh` uses and for the same reason. Never read raw `godot` output and call
