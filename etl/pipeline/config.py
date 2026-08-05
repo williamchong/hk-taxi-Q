@@ -396,6 +396,39 @@ class DeckSampling:
 
 
 @dataclass(frozen=True)
+class GroundProfile:
+    """How `Q24` follows the ground along an at-grade road.
+
+    `simplify` keeps the vertices a centreline needs *in plan* — 2.0% of the
+    source's on this region — and the terrain is sampled only at those. Between
+    two of them the road is a straight chord over ground that curves, so on a
+    crest the ground rises through a carriageway that never asked about it.
+    Since `P3-10` drew and collided that ground, the chord is solid geometry
+    standing in legal road.
+
+    The sibling of `DeckSampling` in job and in shape: both densify a run before
+    asking a height field about it. What differs is that a deck is *found* and
+    the ground is merely followed, so this needs a tolerance where that needs a
+    slab gap.
+
+    Tuning data rather than constants in code (CLAUDE.md hard rule 4), and both
+    values were measured on Wan Chai rather than chosen.
+    """
+
+    # Station spacing along an edge before sampling, as `DeckSampling`'s and for
+    # the same reason.
+    resample_m: float
+    # Vertical error a station has to beat to be kept after sampling.
+    #
+    # Densifying without thinning doubles the region's level-0 stations to buy
+    # 0.107% of carriageway under proud ground; thinning at this tolerance
+    # reaches 0.110% for **+12%**. Most of Wan Chai is flat and needs no extra
+    # vertex at all — the tolerance is what spends them where the ground bends.
+    # Zero keeps every inserted station, which is the un-thinned behaviour.
+    tolerance_m: float
+
+
+@dataclass(frozen=True)
 class RoadNetwork:
     """How `P1-3` turns a published road network into a drivable graph.
 
@@ -448,6 +481,11 @@ class RoadNetwork:
     # is built on. `None` leaves every level on its flat `elevation_levels`
     # offset, which is all a city whose sources carry no structure can do.
     deck: DeckSampling | None
+
+    # How `Q24` follows the ground along an at-grade road. `None` samples the
+    # terrain only at the vertices `simplify` left, which is what shipped before
+    # the ground was drawn and nothing could be compared against.
+    ground_profile: GroundProfile | None
 
     def lanes_for(self, speed_limit_kph: int) -> int:
         """Lane count for an edge, from the fastest matching rule.
@@ -997,24 +1035,8 @@ def _road_network(body: dict[str, Any], where: str) -> RoadNetwork:
             f"{where}:ground is {ground!r}, expected one of {', '.join(GROUND_SOURCES)}"
         )
 
-    deck = body.get("deck")
-    if "deck" in body and deck is None:
-        # `deck:` with nothing under it — the natural state while commenting the
-        # values out to tune — resolves to None, which would otherwise read as
-        # "this city wants no deck sampling" and skip all three checks below.
-        # Omitting the key is already how a city says that, so this spelling can
-        # be refused outright rather than guessed at.
-        raise ValueError(f"{where}:deck is empty; give it thresholds or remove the key")
-    if deck is not None and not isinstance(deck, dict):
-        # Otherwise `_require` asks a non-mapping for a key and the author gets a
-        # bare TypeError naming neither the file nor the block they just edited.
-        raise ValueError(f"{where}:deck must be a mapping of thresholds, got {deck!r}")
-    if deck is not None and ground != TERRAIN:
-        # Deck sampling gates its result against the terrain and falls back to
-        # it, so under any other ground source the whole block is unreachable.
-        # Refused rather than ignored: a config that cannot do what it says is a
-        # mistake, and a silently inert block is the kind that survives review.
-        raise ValueError(f"{where}:deck needs ground '{TERRAIN}', but ground is {ground!r}")
+    deck = _sampling_block(body, "deck", where, ground)
+    profile = _sampling_block(body, "ground_profile", where, ground)
 
     return RoadNetwork(
         source=str(_require(body, "source", where)),
@@ -1035,24 +1057,86 @@ def _road_network(body: dict[str, Any], where: str) -> RoadNetwork:
         ground_from_terrain=ground == TERRAIN,
         surface=_road_surface(_require(body, "surface", where), f"{where}:surface"),
         deck=_deck_sampling(deck, f"{where}:deck") if deck is not None else None,
+        ground_profile=(
+            _ground_profile(profile, f"{where}:ground_profile") if profile is not None else None
+        ),
     )
 
 
-def _deck_sampling(body: dict[str, Any], where: str) -> DeckSampling:
-    # Split by what zero means, not by tidiness. A spacing or a slab gap of zero
-    # is degenerate — the first asks for infinitely many stations, the second
-    # makes every distinct height its own slab and so defeats the clustering the
-    # query is built on. Zero is a coherent, if strict, choice for the other two.
-    values = _measures(body, where, ("resample_m", "slab_gap_m"), positive=True)
-    values |= _measures(body, where, ("max_below_terrain_m", "at_grade_m", "clearance_m"))
+def _sampling_block(
+    body: dict[str, Any], key: str, where: str, ground: str
+) -> dict[str, Any] | None:
+    """An optional block of height-field thresholds, or `None` if the city has none.
+
+    Shared by `deck:` and `ground_profile:` because both are optional, both ask
+    a height field about a road, and both are therefore unreachable without one.
+    Written once because the copy that drifts is the one that quietly stops
+    catching anything — and every guard below refuses a config that *loads*.
+    """
+    block = body.get(key)
+    if key in body and block is None:
+        # A block with nothing under it — the natural state while commenting the
+        # values out to tune — resolves to None, which would otherwise read as
+        # "this city wants none of this" and skip the checks below. Omitting the
+        # key is already how a city says that, so this spelling can be refused
+        # outright rather than guessed at.
+        raise ValueError(f"{where}:{key} is empty; give it thresholds or remove the key")
+    if block is not None and not isinstance(block, dict):
+        # Otherwise `_require` asks a non-mapping for a key and the author gets a
+        # bare TypeError naming neither the file nor the block they just edited.
+        raise ValueError(f"{where}:{key} must be a mapping of thresholds, got {block!r}")
+    if block is not None and ground != TERRAIN:
+        # Both blocks measure against the terrain — one gates and falls back to
+        # it, the other follows it — so under any other ground source they are
+        # unreachable. Refused rather than ignored: a config that cannot do what
+        # it says is a mistake, and a silently inert block is the kind that
+        # survives review.
+        raise ValueError(f"{where}:{key} needs ground '{TERRAIN}', but ground is {ground!r}")
+    return block
+
+
+def _thresholds(
+    body: dict[str, Any], where: str, *, positive: tuple[str, ...], signed: tuple[str, ...]
+) -> dict[str, float]:
+    """Every measurement of one threshold block, and nothing else.
+
+    `positive` names the values zero is degenerate for and `signed` the ones it
+    is merely strict for — a split by what zero *means*, not by tidiness.
+
+    The closed-key-set check is the reason this is shared rather than written
+    per block. Misspelling one of the names is already caught by its absence;
+    adding a spare on top of them is not, and would parse, load and tune
+    nothing. Refused for the reason `class_colours` refuses the same thing, with
+    more grounds: these key sets are closed and known, and they are the blocks
+    whose whole point is not to be silently inert.
+    """
+    values = _measures(body, where, positive, positive=True)
+    values |= _measures(body, where, signed)
 
     unknown = set(body) - set(values)
     if unknown:
-        # Refused for the reason `class_colours` refuses them, with more grounds:
-        # this block's key set is closed and known, and it is the one block whose
-        # whole point is not to be silently inert.
         raise ValueError(f"{where} does not use {', '.join(sorted(unknown))}")
+    return values
 
+
+def _ground_profile(body: dict[str, Any], where: str) -> GroundProfile:
+    # A spacing of zero asks for infinitely many stations. A tolerance of zero
+    # is coherent if expensive: it keeps every station the resample inserted,
+    # which is the un-thinned behaviour the measurements compare against.
+    values = _thresholds(body, where, positive=("resample_m",), signed=("tolerance_m",))
+    return GroundProfile(resample_m=values["resample_m"], tolerance_m=values["tolerance_m"])
+
+
+def _deck_sampling(body: dict[str, Any], where: str) -> DeckSampling:
+    # A spacing or a slab gap of zero is degenerate — the first asks for
+    # infinitely many stations, the second makes every distinct height its own
+    # slab and so defeats the clustering the query is built on.
+    values = _thresholds(
+        body,
+        where,
+        positive=("resample_m", "slab_gap_m"),
+        signed=("max_below_terrain_m", "at_grade_m", "clearance_m"),
+    )
     return DeckSampling(
         resample_m=values["resample_m"],
         slab_gap_m=values["slab_gap_m"],

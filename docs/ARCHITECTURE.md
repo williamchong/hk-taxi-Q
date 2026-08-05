@@ -836,8 +836,7 @@ eyeball check. There is also a check needing no tooling at all, and it is the on
 **One thing is knowingly missing:** **the flyovers cannot be driven onto** (`Q13`). Off the
 carriageway used to be void; since `P3-10` it is ground, and solid, so mounting a kerb now puts the
 car on the pavement rather than through it. The dev harness that catches a car falling out of the
-world still runs — the region has edges, and `Q24` leaves ground standing in the road on some hill
-streets.
+world still runs — the region has edges, and level -1 runs under the terrain (`Q21`).
 
 ---
 

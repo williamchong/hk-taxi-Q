@@ -9,13 +9,14 @@ the wiring between them is exercised rather than assumed.
 
 from __future__ import annotations
 
+import itertools
 import json
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-from pipeline.config import DeckSampling
+from pipeline.config import DeckSampling, GroundProfile
 from pipeline.gltf import MeshData
 from pipeline.roads import (
     ROADGRAPH_SCHEMA,
@@ -23,6 +24,7 @@ from pipeline.roads import (
     _Counts,
     _Deck,
     _deck_heights,
+    _follow_ground,
     _lifted_heights,
     _mixed_level_nodes,
     _node_heights,
@@ -31,7 +33,9 @@ from pipeline.roads import (
     clip,
     parse_speed_limit,
     resample,
+    resample_anchored,
     simplify,
+    simplify_mask,
 )
 from pipeline.terrain import HeightField
 from tests.helpers import NULL_SENTINELS, line_wkb, write_layer
@@ -551,6 +555,137 @@ class TestResample:
         plan = np.array([[3.0, 4.0]])
         assert resample(plan, 10.0) is plan
 
+    def test_the_anchors_point_at_the_original_vertices(self) -> None:
+        """What `Q24` pins its thinning on. Derived from the same `pieces` the
+        stations are, so the two cannot disagree — and asserted against the
+        vertices themselves rather than against arithmetic, because a mistake
+        here would silently let the thinning drop a source vertex."""
+        plan = np.array([[0.0, 0.0], [30.0, 0.0], [30.0, 7.0], [61.5, 7.0]])
+        stationed, anchors = resample_anchored(plan, 10.0)
+
+        np.testing.assert_array_equal(stationed[anchors], plan)
+
+    @pytest.mark.parametrize(
+        "plan",
+        [
+            np.array([[0.0, 0.0], [4.0, 0.0], [8.0, 0.0]]),  # already dense enough
+            np.array([[3.0, 4.0]]),  # too short to have a segment
+        ],
+    )
+    def test_the_anchors_still_line_up_when_nothing_is_added(self, plan) -> None:
+        """Both early returns have to keep the promise, and neither goes near
+        the arithmetic that makes it true on the main path."""
+        stationed, anchors = resample_anchored(plan, 10.0)
+        np.testing.assert_array_equal(stationed[anchors], plan)
+
+
+class TestSimplifyMask:
+    """The selection `simplify` makes, exposed for `Q24` to apply elsewhere.
+
+    It thins a *height profile* and applies the answer to the plan positions
+    those heights came from, so it needs which vertices survived rather than the
+    survivors themselves.
+    """
+
+    @pytest.mark.parametrize("tolerance", [0.0, 0.25, 1.0])
+    def test_the_mask_selects_what_simplify_returns(self, tolerance: float) -> None:
+        line = np.array([[0.0, 0.0], [5.0, 0.4], [10.0, 0.0], [15.0, 3.0], [20.0, 0.0]])
+        np.testing.assert_array_equal(
+            line[simplify_mask(line, tolerance)], simplify(line, tolerance)
+        )
+
+    def test_a_tolerance_of_zero_keeps_everything(self) -> None:
+        line = np.array([[0.0, 0.0], [5.0, 0.4], [10.0, 0.0]])
+        assert simplify_mask(line, 0.0).all()
+
+
+class TestFollowGround:
+    """`Q24`: at-grade stations dense enough to follow the ground under them.
+
+    `simplify` keeps 2.0% of the source centreline vertices, so the road runs as
+    a straight chord over ground that curves — and since `P3-10` drew and
+    collided that ground, the chord is solid geometry standing in legal road.
+    """
+
+    PROFILE = GroundProfile(resample_m=10.0, tolerance_m=0.10)
+
+    def _ground(self, heights: list[tuple[float, float]]) -> HeightField:
+        """A corridor along +x whose height follows the given `(x, y)` profile."""
+        return HeightField.from_meshes(
+            [_ramp(x0, x1, y0, y1) for (x0, y0), (x1, y1) in itertools.pairwise(heights)]
+        )
+
+    def test_flat_ground_earns_no_new_station(self) -> None:
+        """The whole reason thinning is worth its code: most of Wan Chai is
+        flat, and densifying it would buy nothing but stations."""
+        ground = self._ground([(-10.0, 4.0), (110.0, 4.0)])
+        plan = np.array([[0.0, 0.0], [100.0, 0.0]])
+
+        kept, _, _ = _follow_ground(plan, ground, self.PROFILE)
+        np.testing.assert_array_equal(kept, plan)
+
+    def test_a_crest_between_two_vertices_earns_stations(self) -> None:
+        """The defect itself: the ground rises between the only two places the
+        road asked about it, so the chord passes underneath."""
+        ground = self._ground([(-10.0, 4.0), (50.0, 7.0), (110.0, 4.0)])
+        plan = np.array([[0.0, 0.0], [100.0, 0.0]])
+
+        kept, heights, _ = _follow_ground(plan, ground, self.PROFILE)
+        assert len(kept) > len(plan)
+        # And it followed the crest rather than merely adding stations along it.
+        assert heights.max() > 6.5
+
+    def test_the_original_vertices_always_survive(self) -> None:
+        """`simplify` decided these are load-bearing *in plan*, and thinning a
+        height profile must not overrule that. Guaranteed by construction —
+        they are the endpoints of each thinned span — and asserted because the
+        construction is the whole safety argument."""
+        ground = self._ground([(-10.0, 4.0), (50.0, 4.02), (110.0, 4.0)])
+        plan = np.array([[0.0, 0.0], [40.0, 0.0], [70.0, 0.0], [100.0, 0.0]])
+
+        kept, _, _ = _follow_ground(plan, ground, self.PROFILE)
+        for vertex in plan:
+            assert any(np.array_equal(vertex, station) for station in kept), vertex
+
+    def test_a_coarser_tolerance_keeps_fewer_stations(self) -> None:
+        """A *curved* crest, not a ridge. A ridge is two straight ramps, and
+        Douglas-Peucker describes it exactly with its apex at any tolerance
+        below the rise — so a ridge fixture would pass this while measuring
+        nothing. Real ground curves, which is why the tolerance is a dial."""
+        arc = [(x, 4.0 + 3.0 * (1.0 - ((x - 50.0) / 60.0) ** 2)) for x in range(-10, 111, 5)]
+        ground = self._ground(arc)
+        plan = np.array([[0.0, 0.0], [100.0, 0.0]])
+
+        fine, _, _ = _follow_ground(plan, ground, GroundProfile(resample_m=10.0, tolerance_m=0.02))
+        coarse, _, _ = _follow_ground(plan, ground, GroundProfile(resample_m=10.0, tolerance_m=1.0))
+        assert len(fine) > len(coarse)
+
+    def test_it_reports_what_the_thinning_was_offered(self) -> None:
+        """⚠️ The denominator, and the reason it is returned rather than derived.
+
+        `len(kept) - len(plan)` is what *survived*; the stage's log needs what
+        was *offered*, because that is the number `tolerance_m` moves and the
+        two are the whole point of the thinning. On a flat street they are 0 and
+        several — a report quoting only the first says nothing happened.
+        """
+        flat = self._ground([(-10.0, 4.0), (110.0, 4.0)])
+        plan = np.array([[0.0, 0.0], [100.0, 0.0]])
+
+        kept, _, offered = _follow_ground(plan, flat, self.PROFILE)
+        assert offered > 0
+        assert len(kept) == len(plan)
+
+    def test_ground_with_no_terrain_under_it_keeps_only_its_ends(self) -> None:
+        """A span the terrain does not cover has nothing to follow, and adding
+        stations there would invent detail rather than measure it. The heights
+        come back as NaN so `_from_terrain` can fill and count them."""
+        ground = self._ground([(500.0, 4.0), (600.0, 4.0)])
+        plan = np.array([[0.0, 0.0], [100.0, 0.0]])
+
+        kept, heights, _ = _follow_ground(plan, ground, self.PROFILE)
+        np.testing.assert_array_equal(kept, plan)
+        assert not np.isfinite(heights).any()
+
 
 class TestNodeHeights:
     """One height per node, chosen rather than inherited from iteration order.
@@ -632,6 +767,16 @@ def _mesh(triangles: list[list[tuple[float, float, float]]]) -> MeshData:
     )
 
 
+def _ramp(x0: float, x1: float, y0: float, y1: float) -> MeshData:
+    """One upward face spanning `x0`-`x1` across the corridor, climbing `y0`-`y1`."""
+    return _mesh(
+        [
+            [(x0, y0, -20.0), (x1, y1, -20.0), (x0, y0, 20.0)],
+            [(x1, y1, -20.0), (x1, y1, 20.0), (x0, y0, 20.0)],
+        ]
+    )
+
+
 def _sheet(x0: float, x1: float, y0: float, y1: float) -> list[MeshData]:
     """A slab spanning `x0`-`x1` across the corridor, climbing `y0` to `y1`.
 
@@ -639,12 +784,7 @@ def _sheet(x0: float, x1: float, y0: float, y1: float) -> list[MeshData]:
     twice is the whole reason `slab_gap_m` exists — a single-surface fixture
     would pass while testing none of the clustering.
     """
-    top = _mesh(
-        [
-            [(x0, y0, -20.0), (x1, y1, -20.0), (x0, y0, 20.0)],
-            [(x1, y1, -20.0), (x1, y1, 20.0), (x0, y0, 20.0)],
-        ]
-    )
+    top = _ramp(x0, x1, y0, y1)
     return [top, top.translated((0.0, -1.5, 0.0))]
 
 

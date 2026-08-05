@@ -43,6 +43,7 @@ from pipeline.config import (
     FORWARD,
     CityConfig,
     DeckSampling,
+    GroundProfile,
     RoadNetwork,
     SourceLayer,
     load_city,
@@ -151,7 +152,8 @@ class RoadReport:
     # ⚠️ Since `P2-7` the first two are commensurable with each other but not
     # with the third: `vertices_off_terrain` is counted over the *resampled*
     # stations, so lowering `deck.resample_m` raises it with no regression
-    # behind it. Compare it against `vertices_kept + vertices_added`.
+    # behind it. `Q24` added a third population to it, so the denominator is
+    # `vertices_kept + vertices_added + vertices_followed`.
     vertices_read: int = 0
     vertices_kept: int = 0
     vertices_off_terrain: int = 0
@@ -170,6 +172,19 @@ class RoadReport:
     vertices_gated: int = 0
     edges_sampled: int = 0
     ends_lifted: int = 0
+    # `Q24`'s, on the at-grade edges the two counters above never reach.
+    #
+    # ⚠️ `edges_followed` counts edges that took the path, **not** edges that
+    # gained a station. Those are wildly different populations — 721 against
+    # 217 — because the whole point of the thinning is that a flat street keeps
+    # nothing. Copying `edges_sampled`'s `> 0` idiom to here would report a
+    # third of the region and call it "edges that follow the ground".
+    #
+    # `vertices_offered` is the denominator `tolerance_m` moves, and without it
+    # `vertices_followed` is a number with nothing to compare against.
+    vertices_followed: int = 0
+    vertices_offered: int = 0
+    edges_followed: int = 0
     # `Q23`'s counter, and the one `surface.py` narrows against. Not derivable
     # from `vertices_sampled`: that counts stations the structure answered
     # *directly*, while this counts stations published as resting on it — which
@@ -191,6 +206,9 @@ class RoadReport:
         self.edges_sampled += int(counts.sampled > 0)
         self.ends_lifted += counts.ends_lifted
         self.vertices_on_structure += counts.on_structure
+        self.vertices_followed += counts.followed
+        self.vertices_offered += counts.offered
+        self.edges_followed += counts.edges_followed
 
 
 @dataclass
@@ -210,6 +228,16 @@ class _Counts:
     gated: int = 0
     ends_lifted: int = 0
     on_structure: int = 0
+    # `Q24`'s stations, kept apart from `added` rather than folded into it: the
+    # two are added for different reasons on different edges, and one number
+    # covering both would report the at-grade work as deck sampling.
+    #
+    # `offered` is what the resample inserted before thinning and `followed` is
+    # what survived it; `edges_followed` is 1 for an edge that took the path at
+    # all, which is not the same as one that gained a station.
+    followed: int = 0
+    offered: int = 0
+    edges_followed: int = 0
 
 
 # --------------------------------------------------------------------------
@@ -228,8 +256,20 @@ def simplify(points: np.ndarray, tolerance_m: float) -> np.ndarray:
     54,330 vertices, and the recursion depth that produces is a stack overflow
     on nearly-collinear input, which is precisely the input that produces it.
     """
+    return points[simplify_mask(points, tolerance_m)]
+
+
+def simplify_mask(points: np.ndarray, tolerance_m: float) -> np.ndarray:
+    """Which vertices `simplify` keeps, as a boolean mask.
+
+    Split out because `Q24` thins a *height profile* and then has to apply the
+    answer to the plan positions those heights were sampled at — so it needs the
+    selection, not the selected points. Recovering the mask by matching returned
+    rows back to their sources would be a float comparison standing in for an
+    identity the algorithm already knows.
+    """
     if tolerance_m <= 0.0 or len(points) < 3:
-        return points
+        return np.ones(len(points), dtype=bool)
 
     keep = np.zeros(len(points), dtype=bool)
     keep[0] = keep[-1] = True
@@ -245,7 +285,7 @@ def simplify(points: np.ndarray, tolerance_m: float) -> np.ndarray:
             keep[split] = True
             stack.append((start, split))
             stack.append((split, end))
-    return points[keep]
+    return keep
 
 
 def plan_lengths(points: np.ndarray) -> np.ndarray:
@@ -306,27 +346,50 @@ def resample(plan: np.ndarray, spacing_m: float) -> np.ndarray:
     rather than an error. `config.py` refuses zero and negatives, which bounds
     it in practice; nothing bounds a typed `0.01`.
     """
+    return resample_anchored(plan, spacing_m)[0]
+
+
+def resample_anchored(plan: np.ndarray, spacing_m: float) -> tuple[np.ndarray, np.ndarray]:
+    """`resample`, and where each of the *original* vertices ended up in it.
+
+    ⚠️ **The arithmetic `resample` documents lives here** — both traps it names
+    are properties of this body: only interior stations are added, so a line's
+    plan shape is untouched; and the station count is `edge length / spacing_m`
+    with no ceiling, so a mistyped `resample_m` becomes an allocation rather
+    than an error.
+
+    The anchors are split out because `Q24` thins the stations back down and
+    must not thin away a vertex `simplify` decided was load-bearing in plan.
+    Knowing which they are is the whole of what makes that safe, and the indices
+    are a by-product of the arithmetic below — recovering them afterwards would
+    mean comparing floats for an identity this function already has.
+    """
     if spacing_m <= 0.0 or len(plan) < 2:
-        return plan
+        return plan, np.arange(len(plan))
 
     steps = _steps(plan)
     # At least one piece per segment, so a repeated vertex survives rather than
     # dividing by zero on its way to being dropped.
     pieces = np.maximum(np.ceil(steps / spacing_m).astype(np.int64), 1)
+    # The exclusive prefix sum of `pieces` is where each segment's own start
+    # vertex lands, and the total is where the final vertex does — so `anchors`
+    # is that prefix sum with the end appended, and the two uses below are one
+    # array rather than two spellings of it.
+    anchors = np.concatenate([np.cumsum(pieces) - pieces, [int(pieces.sum())]])
     if not (pieces > 1).any():
-        return plan
+        return plan, anchors
 
     # Each new station's position within its own segment, as a fraction. The
-    # subtracted term is the exclusive prefix sum of `pieces` — the same idiom
-    # `terrain.py` spreads triangles across cells with, and for the same reason:
-    # a Python loop over segments is what this stage cannot afford per edge.
+    # subtracted term is that same prefix sum — the idiom `terrain.py` spreads
+    # triangles across cells with, and for the same reason: a Python loop over
+    # segments is what this stage cannot afford per edge.
     starts = np.repeat(np.arange(len(steps)), pieces)
-    within = np.arange(int(pieces.sum())) - np.repeat(np.cumsum(pieces) - pieces, pieces)
+    within = np.arange(anchors[-1]) - np.repeat(anchors[:-1], pieces)
     fraction = (within / np.repeat(pieces, pieces))[:, None]
     # Fraction zero reproduces the original vertex exactly, which is what makes
     # "every vertex is kept" true rather than approximately true.
     stations = plan[starts] + fraction * (plan[starts + 1] - plan[starts])
-    return np.vstack([stations, plan[-1]])
+    return np.vstack([stations, plan[-1]]), anchors
 
 
 def clip(points: np.ndarray, high: tuple[float, float], *, min_length_m: float) -> list[np.ndarray]:
@@ -572,14 +635,20 @@ class _Deck:
 
 @dataclass(frozen=True)
 class _Surfaces:
-    """What the road stage samples heights from.
+    """What the road stage samples heights from, and how closely.
 
-    Both are optional and independently so: a city may take its heights from the
-    terrain without sampling decks, and `load_city` refuses the reverse.
+    All three are optional and independently so: a city may take its heights
+    from the terrain without sampling decks or following the ground, and
+    `load_city` refuses either of the latter two without the first.
+
+    `profile` is thresholds rather than a field because it has no geometry of
+    its own — it says how finely to ask `ground`, which is why it sits here
+    beside it rather than pairing with a field the way `_Deck` does.
     """
 
     ground: HeightField | None
     deck: _Deck | None
+    profile: GroundProfile | None
 
 
 def build_region(
@@ -751,14 +820,81 @@ def _mixed_level_nodes(edges: Iterable[Edge]) -> set[int]:
     return {node for node, found in levels.items() if len(found) > 1}
 
 
+def _follow_ground(
+    plan: np.ndarray, ground: HeightField, profile: GroundProfile
+) -> tuple[np.ndarray, np.ndarray, int]:
+    """Stations along an at-grade run dense enough to follow the ground, the
+    ground under them, and how many stations the thinning was offered (`Q24`).
+
+    Densify, ask the terrain, then drop the stations the straight line between
+    their neighbours already explains. The thinning is what makes this cheap:
+    densifying alone doubles the region's level-0 stations to take the
+    carriageway sitting under proud ground from 1.797% to 0.107%, and thinning
+    at 0.10 m reaches 0.110% for **+12%**. Wan Chai is mostly flat, and a flat
+    street needs no vertex it does not already have.
+
+    ⚠️ **Thinned between consecutive original vertices, never across them.**
+    `simplify` keeps only its two endpoints, so one pass over the whole profile
+    would drop source vertices that `simplify` has already decided are
+    load-bearing *in plan* — the same trap `resample` records about restating a
+    line at evenly spaced stations, arrived at from the other side. Running it
+    per span, with the originals as the endpoints, makes their survival a
+    property of the construction rather than something to check for.
+
+    The profile is `(distance along the plan, sampled height)`, so `tolerance_m`
+    is a vertical error in metres and means what the city file's table measured.
+
+    A station the terrain does not cover carries no information to follow, so
+    the holes are interpolated across for the *decision* only. The heights
+    handed back are the raw samples, NaNs included, because `_from_terrain` is
+    what fills them and it counts them on the way past. A span the terrain
+    answers for fewer than twice keeps its ends and nothing else: one height
+    describes no shape to follow, and inserting stations would invent detail.
+
+    ⚠️ **The heights come back rather than being sampled again.** 97% of this
+    function's cost is `HeightField.sample`, so asking it a second question
+    about the stations that survived would be a third of the total for an answer
+    already in hand — and two samplings of one point are also two chances to
+    disagree.
+
+    ⚠️ **Sampled before the no-gain test, which is not an oversight.** Where a
+    run is already dense enough, `resample_anchored` hands back `plan` itself,
+    so those are the plan's own stations and their heights are exactly what
+    `_heights` would have had to compute anyway. Testing first would only force
+    a second sample below. Measured: 104 of 692 edges take that path.
+    """
+    dense, anchors = resample_anchored(plan, profile.resample_m)
+    y = ground.sample(dense[:, 0], dense[:, 1])
+    offered = len(dense) - len(plan)
+    if not offered:
+        return plan, y, 0
+
+    along = _lengths(dense)
+    keep = np.zeros(len(dense), dtype=bool)
+    keep[anchors] = True
+    for start, end in itertools.pairwise(anchors):
+        if end - start < 2:
+            continue
+        span = y[start : end + 1]
+        found = np.isfinite(span)
+        if found.sum() < 2:
+            continue
+        span = np.interp(np.arange(len(span)), np.flatnonzero(found), span[found])
+        keep[start : end + 1] |= simplify_mask(
+            np.column_stack([along[start : end + 1], span]), profile.tolerance_m
+        )
+    return dense[keep], y[keep], offered
+
+
 def _measured(
     item: _Pending, surfaces: _Surfaces, deck_m: float, mixed: set[int]
 ) -> tuple[Edge, _Counts]:
     """One pending run with its heights, and a tally of where they came from.
 
-    The three sources are chosen here rather than inside one branching height
-    function, so what decides between them stays visible: the level, and whether
-    the edge meets a node another level also reaches.
+    The four sources are chosen here rather than inside one branching height
+    function, so what decides between them stays visible: the level, whether the
+    edge meets a node another level also reaches, and — since `Q24` — whether
+    the city asked at-grade roads to follow the ground.
     """
     level = item.edge.elevation_level
     ground, deck = surfaces.ground, surfaces.deck
@@ -774,8 +910,25 @@ def _measured(
     # One guard, so "sampling" is decided once rather than derived here and
     # negated again below — and so both fields are narrowed for everything after.
     if deck is None or ground is None or (level <= 0 and not any(ends)):
-        y, counts = _heights(ground, item.plan, deck_m)
-        return _shaped(item.edge, item.plan, y, np.zeros(len(item.plan), dtype=bool)), counts
+        # `Q24` follows the ground where there is ground to follow and the city
+        # asked for it, and **level 0 only**. Every other level rides a flat
+        # offset above or below the terrain, so following its shape would be a
+        # change nothing has measured and nothing can see: a tunnel has no drawn
+        # surface to fight, and an off-grade edge only reaches this branch when
+        # the city declared no deck sampling at all.
+        if ground is not None and surfaces.profile is not None and level == 0:
+            plan, terrain, offered = _follow_ground(item.plan, ground, surfaces.profile)
+            y, off_terrain = _from_terrain(terrain, deck_m)
+            counts = _Counts(
+                off_terrain=off_terrain,
+                followed=len(plan) - len(item.plan),
+                offered=offered,
+                edges_followed=1,
+            )
+        else:
+            y, counts = _heights(ground, item.plan, deck_m)
+            plan = item.plan
+        return _shaped(item.edge, plan, y, np.zeros(len(plan), dtype=bool)), counts
 
     plan = resample(item.plan, deck.thresholds.resample_m)
     terrain = ground.sample(plan[:, 0], plan[:, 1])
@@ -1223,7 +1376,8 @@ def _surfaces(
     sources_root: Path | None,
     region_high: tuple[float, float],
 ) -> _Surfaces:
-    """The height fields this region's roads are measured against.
+    """The height fields this region's roads are measured against, and how
+    closely the at-grade ones follow the first of them.
 
     The terrain resolves `Q11`; the structure resolves `Q20`, and is read only
     when the city asks for deck sampling. `load_city` refuses `roads.deck`
@@ -1237,16 +1391,20 @@ def _surfaces(
     memory note on `_field` is the reason not to.
     """
     if not city.roads.ground_from_terrain:
-        return _Surfaces(ground=None, deck=None)
+        # `load_city` refuses either block without `ground: terrain`, so neither
+        # can survive into a city with no ground to measure against.
+        return _Surfaces(ground=None, deck=None, profile=None)
 
+    profile = city.roads.ground_profile
     place = Placement.resolve(city, region_id, sources_root, None)
     ground = _field(place, region_high, city.buildings.terrain_class, city, region_id)
 
     thresholds, structure_class = city.roads.deck, city.buildings.structure_class
     if thresholds is None or structure_class is None:
-        return _Surfaces(ground=ground, deck=None)
+        return _Surfaces(ground=ground, deck=None, profile=profile)
     return _Surfaces(
         ground=ground,
+        profile=profile,
         deck=_Deck(
             field=_field(place, region_high, structure_class, city, region_id),
             thresholds=thresholds,
@@ -1346,6 +1504,13 @@ def main(argv: list[str] | None = None) -> int:
         log.info(
             "  %d stations published as resting on structure, drawn at their authored width",
             report.vertices_on_structure,
+        )
+    if report.edges_followed:
+        log.info(
+            "  %d at-grade edges follow the ground; thinning kept %d of the %d stations offered",
+            report.edges_followed,
+            report.vertices_followed,
+            report.vertices_offered,
         )
     if report.turns_unresolved:
         log.warning("  %d turn restrictions had no shared node", report.turns_unresolved)

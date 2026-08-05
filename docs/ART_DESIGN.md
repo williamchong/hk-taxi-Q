@@ -248,7 +248,11 @@ is a *plane* and the ground is not: interpolated along its length between the 2.
 vertices `simplify` kept, and flat across a width the playability widening made 1.6× too wide. On a
 crest between two retained vertices the ground rises straight through a road that never sampled it —
 **0.35% of centreline points proud within a metre of a vertex against 5.78% at 15–40 m from one.**
-This is `P2-7`'s densification finding at grade, and it is written up as `Q24`.
+This was `P2-7`'s densification finding at grade, and `roads.ground_profile` closed the along-the-road
+half of it: the area with ground proud fell **3.289% → 1.898%**, and at the centreline 2.274% →
+0.712%. What is left is the across-the-road half — the ribbon is flat over a width the playability
+widening made 1.6× too wide, so it cuts into a cross-slope at the kerb, and the outer rim moved only
+5.393% → 4.360%. That is `Q19`'s trade, not the ground's.
 
 ---
 

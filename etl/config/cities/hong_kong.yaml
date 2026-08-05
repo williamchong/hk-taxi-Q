@@ -411,6 +411,45 @@ roads:
   # carry no height field.
   ground: terrain
 
+  # How Q24 follows the ground along an at-grade road, rather than sampling it
+  # only where `simplify_tolerance_m` happened to leave a vertex.
+  #
+  # The defect this closes: simplify keeps the vertices a centreline needs *in
+  # plan* — 3,553 of 175,610 here, 2.0% — and the terrain was sampled only at
+  # those. Between two of them the road is a straight chord over ground that
+  # curves, so on a crest the ground rises through it. Cosmetic until P3-10 drew
+  # and collided that ground; solid geometry in legal carriageway since.
+  #
+  # Optional, and requires `ground: terrain` for the obvious reason. Omit the
+  # block and the road is sampled at its plan vertices, which is what shipped
+  # while there was no drawn ground to disagree with.
+  ground_profile:
+    # Station spacing before sampling, as deck.resample_m below and for the same
+    # reason: the justification is the worst vertex gap, not the typical one.
+    resample_m: 10.0
+
+    # Vertical error a station must beat to be kept.
+    #
+    # Measured over the 721 level-0 edges wholly at grade, as the share of
+    # carriageway sitting under ground more than the 0.20 m sink proud of it:
+    #
+    #   today (no resample)         3,123 stations   1.797%
+    #   10 m, no thinning           6,222 (1.99x)    0.107%
+    #   10 m, thinned at 0.20       3,244 (1.04x)    0.175%
+    #   10 m, thinned at 0.10       3,506 (1.12x)    0.110%
+    #   10 m, thinned at 0.05       3,851 (1.23x)    0.107%
+    #
+    # So thinning buys what full densification buys for an eighth of the
+    # stations: most of Wan Chai is flat and needs no extra vertex, and the
+    # tolerance is what spends them where the ground actually bends. 0.10 is
+    # half the sink, so a station kept at this tolerance cannot poke through on
+    # its own. Zero keeps every inserted station.
+    #
+    # The residual 0.107% is not reachable from here at any spacing: it is the
+    # tunnel portals, where a level-0 road descends into a void that has no
+    # geometry to sample. See Q21.
+    tolerance_m: 0.10
+
   # How P2-7 takes an off-grade carriageway's height from the structure it is
   # built on, rather than from the flat `elevation_levels` offset. Q20 measured
   # what that offset costs: the ribbon misses the real deck by |error| p90

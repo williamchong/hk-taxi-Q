@@ -793,6 +793,87 @@ class TestDeckSampling:
             load_city("hong_kong", cities_root=rewrite(extra))
 
 
+class TestGroundProfile:
+    """`Q24`'s config: how closely an at-grade road follows the ground.
+
+    The guards are `deck:`'s, through the same helper, and that sharing is
+    exactly what these pin down. A copied set of checks is a set that drifts,
+    and the one that drifts is the one that quietly stops catching anything.
+    """
+
+    def test_it_loads(self, hong_kong) -> None:
+        profile = hong_kong.roads.ground_profile
+        assert profile is not None
+        assert profile.resample_m > 0.0
+        # Half the sink, so a station kept at this tolerance cannot poke through
+        # the carriageway on its own.
+        assert 0.0 < profile.tolerance_m <= hong_kong.buildings.ground_sink_m / 2.0
+
+    def test_a_city_that_omits_it_samples_only_its_plan_vertices(self, rewrite) -> None:
+        """Optional, like `deck:`. Omitting it is how a city asks for what
+        shipped before there was drawn ground to disagree with."""
+
+        def drop(doc: dict[str, Any]) -> None:
+            del doc["roads"]["ground_profile"]
+
+        assert load_city("hong_kong", cities_root=rewrite(drop)).roads.ground_profile is None
+
+    def test_following_the_ground_without_terrain_ground_is_rejected(self, rewrite) -> None:
+        """There is nothing to follow under `datum`, so the block could never
+        run — and a silently inert block is the kind that survives review."""
+
+        def to_datum(doc: dict[str, Any]) -> None:
+            doc["roads"]["ground"] = "datum"
+            del doc["roads"]["deck"]
+
+        with pytest.raises(ValueError, match="ground_profile needs ground 'terrain'"):
+            load_city("hong_kong", cities_root=rewrite(to_datum))
+
+    def test_an_empty_block_is_rejected_rather_than_read_as_absent(self, rewrite) -> None:
+        def empty(doc: dict[str, Any]) -> None:
+            doc["roads"]["ground_profile"] = None
+
+        with pytest.raises(ValueError, match="ground_profile is empty"):
+            load_city("hong_kong", cities_root=rewrite(empty))
+
+    def test_a_block_that_is_not_a_mapping_is_rejected(self, rewrite) -> None:
+        def scalar(doc: dict[str, Any]) -> None:
+            doc["roads"]["ground_profile"] = 10.0
+
+        with pytest.raises(ValueError, match="ground_profile must be a mapping"):
+            load_city("hong_kong", cities_root=rewrite(scalar))
+
+    def test_a_key_the_block_does_not_use_is_rejected(self, rewrite) -> None:
+        def extra(doc: dict[str, Any]) -> None:
+            doc["roads"]["ground_profile"]["tolerance_mm"] = 100.0
+
+        with pytest.raises(ValueError, match="does not use tolerance_mm"):
+            load_city("hong_kong", cities_root=rewrite(extra))
+
+    @pytest.mark.parametrize("value", [0.0, -1.0, float("nan"), float("inf")])
+    def test_an_unusable_spacing_is_rejected(self, rewrite, value: float) -> None:
+        """Zero asks `resample` for infinitely many stations, and `.nan` makes
+        every comparison it feeds false without ever raising."""
+
+        def spoil(doc: dict[str, Any]) -> None:
+            doc["roads"]["ground_profile"]["resample_m"] = value
+
+        with pytest.raises(ValueError, match="resample_m"):
+            load_city("hong_kong", cities_root=rewrite(spoil))
+
+    @pytest.mark.parametrize("value", [-1.0, float("nan"), float("inf")])
+    def test_an_unusable_tolerance_is_rejected(self, rewrite, value: float) -> None:
+        """Zero is allowed here and nowhere in this list: it keeps every station
+        the resample inserted, which is the un-thinned behaviour the measured
+        table compares against."""
+
+        def spoil(doc: dict[str, Any]) -> None:
+            doc["roads"]["ground_profile"]["tolerance_m"] = value
+
+        with pytest.raises(ValueError, match="tolerance_m"):
+            load_city("hong_kong", cities_root=rewrite(spoil))
+
+
 class TestFares:
     """`P1-5`'s config, and the two ways its category table can be wrong."""
 

@@ -92,7 +92,7 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ⚠️ conditional ·
 | `Q14` | Taxi stands carry operating-time restrictions in `Status_EN` that `P1-5` discards | A part-time cross-harbour stand is modelled as full-time. `fares.json` has no field for it | `P3-1` | 🟡 Open — deferred deliberately. The source is fetched, so adding it is a schema bump plus a parser |
 | `Q15` | Fare nodes snap by **plan distance only**, because the published points are 2D | A stand under a flyover cannot prefer the street below over the deck above. No Wan Chai node is affected — every winner is level 0, with a ≥4.28 m margin | `P4-2` | 🟡 Open — not reachable with this source |
 | `Q18` | Does flat-coloured ground read as ground, or does it need land-cover colour classified from the source aerial JPEG? And does sinking terrain ~0.2 m under the road deck clear the carriageway on cross-slopes? | Decides whether `P3-10` stops after its cheap half or grows an image-decode stage and a **Pillow** dependency. Get the z-fighting half wrong and the ground fights every road in the region | `P3-10` | 🟢 **Second half answered 2026-08-05, first half awaiting the user's eye.** The 0.2 m guess measured to 0.2 m — **no z-fighting anywhere**, and the sink is the shallowest value that passes its gate. Whether flat *reads* is on screen in `build/driver/p310*` and is a verdict, not a measurement. What the sink does **not** fix is `Q24` |
-| `Q24` | **The road is a plane and the ground is not**, so on 3.3% of carriageway area the ground stands in the road — up to **2.98 m**, which buries CAROLINE HILL ROAD outright | Cosmetic until 2026-08-05 and not cosmetic since: the ground collides, so this is solid geometry in legal carriageway, on top of `Q19`'s 5.17%. `P3-3`'s traffic will route into it | `P3-10` → decision | 🔴 **Open, and it is a `roads.py` question rather than a ground one.** Two mechanisms, both measured: `simplify` keeps 2.0% of source vertices so the road runs as a chord under curving ground (0.35% of centreline points proud within 1 m of a vertex, **5.78%** at 15–40 m), and the ribbon is flat across a width the 1.6× widening made too wide (2.27% at the centreline, **5.39%** at the outer rim). **`P2-7` already solved the first for off-grade edges** by densifying with `resample`; level-0 edges get it only where they were lifted onto a ramp. The fix moves at-grade drivable geometry, which is the user's call — as it was in `P2-7` |
+| `Q24` | **The road is a plane and the ground is not**, so ground stood in the carriageway — 3.3% of its area, up to 2.98 m | The ground collides, so this is solid geometry in legal road, on top of `Q19`'s 5.17%. `P3-3`'s traffic will route into it | `roads.py` | 🟢 **Half closed 2026-08-05; the other half is `Q19` and was never this question's.** Two mechanisms, both measured. **Along the road — fixed.** `roads.ground_profile` densifies at-grade edges at 10 m and thins by a 0.10 m vertical error, so the road follows the ground instead of chording over it: area proud **3.289% → 1.898%**, and at the centreline **2.274% → 0.712%**. **Across the road — untouched, and `Q19`'s.** The ribbon is drawn flat across a width the 1.6× widening made too wide, so it cuts into a cross-slope at the kerb: the outer rim moved only 5.393% → 4.360%. The residual floor is the tunnel portals (`Q21`), which no station spacing reaches |
 | `Q19` | **5.17% of drawn carriageway has solid geometry standing in it at bumper height.** At grade: `BUILDING` 1.72%, `INFRASTRUCTURE` 1.60%. A further 1.87% is on off-grade ribbon nobody can reach | The car is stopped by invisible walls on legal carriageway, and `P3-3`'s traffic will route into them. Cosmetic until collision shipped on 2026-08-01 | `P3-3` | 🔴 Open. The `BUILDING` half is the 1.6× widening eating the frontage — a playability trade, not a bug. The `INFRASTRUCTURE` half shrinks with `Q20`. **Wants a verify tool that fails the build when the carriageway is occupied** |
 | `Q21` | **Should level −1 carriageway be drawn at all?** 15 edges, 5,010 m, **11.6% of carriageway area**, ribboned under the terrain where nothing can see it and nobody can drive it — and solid since collision shipped | Triangles, collider surface and bundle bytes for geometry with no viewer. Against: `P3-3` and Phase 4 want the *edges* to exist, and `roadgraph.json` would keep all 15 either way | Phase 4 | 🟡 Open. `P2-7` could not improve their height — a tunnel is a void — and **11 of their 30 ends are clipped at the region boundary**, so the Cross-Harbour portals have ~42 m of run for an 8 m descent |
 | `Q22` | **10.2% of off-grade carriageway still hangs past its structure**, after narrowing took it from 20.1% | Cosmetic while nothing off-grade is drivable. It stops being cosmetic in Phase 4: a wheel leaving the deck finds air, not a parapet | Phase 4 | 🟡 Open. No width rule reaches the rest — a single-lane ramp is drawn at the two-lane default, a source centreline is not always centred on its deck, and `P2-1` decimates `INFRASTRUCTURE` on a 0.5 m cell. `tools/overhang.py` is the committed instrument; it reads 10.0% against the 10.2% recorded by hand |
@@ -124,6 +124,70 @@ under, and ~0.2 m is a guess until it is driven on a cross-sloped street.
 ---
 
 ## Decision log
+
+### 2026-08-05 — `Q24`: the at-grade road follows the ground, and the thinning is what makes it cheap
+
+**`P2-7`'s fix, applied where `P2-7` did not reach.** `resample` has densified off-grade edges before
+sampling since `P2-7`; level-0 edges got it only where they were lifted onto a ramp, so between the
+2.0% of source vertices `simplify` keeps, an at-grade road ran as a straight chord over ground that
+curves. `roads.ground_profile` closes that: densify at 10 m, ask the terrain, then **thin**.
+
+⚠️ **Densifying alone is the obvious implementation and it is twice the price for nothing.**
+Measured across the 721 level-0 edges wholly at grade, as the share of carriageway under ground more
+than the 0.20 m sink proud of it:
+
+| | stations | vs today | p90 | p99 | proud |
+|---|---|---|---|---|---|
+| today | 3,123 | 1.00× | 0.124 | 0.403 | **1.797%** |
+| 10 m, no thinning | 6,222 | 1.99× | 0.027 | 0.123 | 0.107% |
+| **10 m, thinned at 0.10 m** | **3,506** | **1.12×** | 0.055 | 0.129 | **0.110%** |
+
+Wan Chai is mostly flat, and a flat street needs no vertex it does not already have: **504 of the 721
+edges gained nothing at all**, and the 383 stations that were kept went where the ground bends. 0.10 m
+is half the sink, so a station kept at that tolerance cannot poke through on its own.
+
+**Shipped effect, measured on the bundle by `ground_clearance.py`:**
+
+| | before | after |
+|---|---|---|
+| carriageway area with ground proud | 3.289% | **1.898%** |
+| p99 | +0.179 m | **+0.085 m** |
+| road surface triangles | 25,028 | 28,170 |
+| indexed graph segments / query p99 | 2,576 / 45 µs | 2,959 / 47 µs *(budget 1 ms)* |
+
+`deck_error` holds |error| p90 **0.094** and `overhang` **10.0%**, both unchanged — moving the level-0
+carriageway did not disturb `Q23`'s per-station widths or the junction radii.
+
+⚠️ **The drive at CAROLINE HILL ROAD looks almost the same, and that is the honest result.** Its
+centreline went from 2.98 m under the ground to **0.32 m** — the road is a road again from the
+driver's seat — but the *same camera* as the `P3-10` shot barely changes, because what is left there
+is the outer metre of a 1.6× widened ribbon cutting into the hillside. The banded measurement is the
+proof and the accounting: 2.274% → **0.712%** at the centreline, 5.393% → **4.360%** at the rim. This
+fix does what it claims and `Q19` owns the rest; a screenshot alone would have suggested it failed.
+
+**Two internals were split out rather than reimplemented.** `simplify_mask` exposes the selection
+`simplify` already computes, because `Q24` thins a *height profile* and applies the answer to the
+plan positions those heights came from — matching returned rows back would be a float comparison
+standing in for an identity the algorithm has. `resample_anchored` returns where the original
+vertices landed, which is what makes "thin between consecutive originals, never across them" a
+property of the construction: `simplify` keeps only its endpoints, so one pass over a whole profile
+would drop vertices `simplify` had just decided were load-bearing in plan.
+
+⚠️ **The first cut sampled the terrain twice and it did not show up as an error.** `_follow_ground`
+sampled the dense run, then `_heights` sampled the survivors again — 97% of the function's cost is
+`HeightField.sample`, so the roads stage went 3.21 s → **4.54 s** for +9% vertices. Returning the
+heights alongside the plan took it to 3.67 s. Two samplings of one point are also two chances to
+disagree.
+
+⚠️ **A 90 ms worst-case query was blamed on this change and was not it.** `verify_road_graph`'s max
+went from 78 µs to 60–90 ms, reproducibly, across three runs — and reproducibly back to ~100 µs when
+the bundle was rebuilt without the block. What settled it was re-measuring *clean*: the "with" runs
+had followed a `check.sh` import and the machine was still busy. p99 is 45 → 47 µs. The tool's own
+docstring says exactly this — *"a lone outlier is a fact about the machine; a p99 over thousands of
+probes is a fact about the code"* — and a reproducible outlier is still an outlier.
+
+**No `schema_version` bump.** `roadgraph.json` polylines gain vertices; nothing is added, removed or
+renamed and no attribute changes meaning.
 
 ### 2026-08-05 — `P3-10`: the ground ships, it collides, and it found a defect in the road
 
@@ -2017,7 +2081,8 @@ source files** — that rule cost `Q16` two wrong answers in opposite directions
 | Texture memory | < 128 MB | **0** — no textures ship, ground included | 2026-08-05 |
 | Bundle size | < 200 MB | **32.30 MB** PCK, + wasm. **27.73 MB immediately before `P3-10`**, measured either side of the same build with one variable changed, so the **+4.56 MB is the ground and its collider** — and only the total was measured, not the split | 2026-08-05 |
 | Tile triangles, LOD0 / LOD1 | — | **521,798 / 253,070** (434,149 / 222,375 before the ground) | 2026-08-05 |
-| Ground standing proud of the carriageway | — | 3.3% of area, **0.36% of sampled points** — the gap between the two is `Q24` | 2026-08-05 |
+| Ground standing proud of the carriageway | — | **1.9% of area** (3.3% before `Q24`), 0.712% at the centreline against 4.360% at the ribbon's rim — the gap between those two is `Q19`'s widening | 2026-08-05 |
+| Road surface triangles | — | **28,170** (25,028 before `Q24`'s stations) | 2026-08-05 |
 | Road surface triangles | — | **25,028** (35,039 before the 2026-08-04 kerb fix) | 2026-08-04 |
 | Boot to drivable (web, warm) | — | 830 ms, of which 260 ms is tile instantiation | 2026-07-31 |
 | Tab memory (web) | — | 307 MB | 2026-07-31 |
