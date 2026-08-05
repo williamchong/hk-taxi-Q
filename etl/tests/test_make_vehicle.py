@@ -1,6 +1,6 @@
 """The `P3-11` vehicle generator (`tools/make_vehicle.py`).
 
-Three kinds of test, and the first is the reason this file exists.
+Four kinds of test, and the first is the reason this file exists.
 
 **The chassis desync guard.** The physics never reads the mesh — `P0-5a` chose a
 custom raycast controller so the wheel hardpoints are authored in the scene, and
@@ -17,31 +17,43 @@ bytes is what catches "edited the generator, forgot to re-run".
 wound inside-out (backface culling renders that as a wheel-shaped hole), and the
 caps were faked as quads with two coincident corners, which makes the face
 normal come out of a zero-length edge. Neither is visible in a triangle count.
+
+**Seating.** The bumper was a flat bar, and everything low on the car was bolted
+to it with one hand-copied z. It is bodywork now, and the panel those fixtures
+fell back onto slopes — so whether a plate is visible along its whole height, or
+hangs off the paint, or sinks into it, is arithmetic no render reliably shows and
+no other check reaches. `TestFixturesSeatedInTheBodywork` is that arithmetic.
 """
 
 from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 import pytest
 from make_vehicle import (
     AMBER,
+    BADGE_GREEN,
     DARK,
+    FIXTURE_PROUD_M,
     GLASS,
     LAMP,
     RED,
     SILVER,
     Chassis,
+    Colour,
     Proportions,
+    _badge,
     _box,
+    _flush_fixture,
+    _plates,
     _polygon,
     _wheel,
     build_taxi,
     write_taxi,
 )
-from vehicle_decals import build_sheet
 
 from pipeline.gltf import MeshData
 
@@ -52,7 +64,20 @@ SHIPPED = ROOT / "game" / "assets" / "authored" / "vehicles"
 
 # `ART_DESIGN.md`'s ceiling for one vehicle.
 TRIANGLE_CEILING = 2000
-PALETTE = (RED, SILVER, DARK, GLASS, LAMP, AMBER)
+PALETTE = (RED, SILVER, DARK, GLASS, LAMP, AMBER, BADGE_GREEN)
+
+
+def _rgbs(mesh: MeshData) -> set[Colour]:
+    """Every distinct colour on a mesh, as plain int tuples.
+
+    `np.unique` returns rows of `np.uint8`, which compare unequal to the plain
+    tuples in `PALETTE` unless converted — and indexing `[0]` to dodge that is
+    what let a two-coloured plate pass an equality check.
+    """
+    assert mesh.colours is not None, f"{mesh.name} carries no colours"
+    return {
+        tuple(int(channel) for channel in rgb) for rgb in np.unique(mesh.colours[:, :3], axis=0)
+    }
 
 
 def _tres_float(text: str, field: str) -> float:
@@ -180,56 +205,117 @@ class TestShippedAssets:
             )
 
 
-class TestDecals:
-    """The sheet and the quads that carry it."""
+class Seated(NamedTuple):
+    """One fixture `_seated_depth` placed, and what is expected of it."""
 
-    def test_the_sheet_is_a_valid_png(self) -> None:
-        png, _ = build_sheet(sign_face=LAMP, bumper_face=DARK)
-        assert png.startswith(b"\x89PNG\r\n\x1a\n")
-        assert png.endswith(b"IEND\xaeB`\x82")
+    mesh: MeshData
+    rear: bool
+    on_bumper: bool
 
-    def test_every_patch_is_inside_the_sheet(self) -> None:
-        """An out-of-range rect samples a neighbouring decal, not empty space."""
-        _, patches = build_sheet(sign_face=LAMP, bumper_face=DARK)
-        for key, patch in patches.items():
-            u0, v0, u1, v1 = patch.uv()
-            assert 0.0 <= u0 < u1 <= 1.0, key
-            assert 0.0 <= v0 < v1 <= 1.0, key
 
-    def test_no_two_patches_overlap(self) -> None:
-        """Overlapping rects put one decal's ink inside another's texture."""
-        _, patches = build_sheet(sign_face=LAMP, bumper_face=DARK)
-        items = list(patches.values())
-        for i, a in enumerate(items):
-            for b in items[i + 1 :]:
-                apart = a.x + a.w <= b.x or b.x + b.w <= a.x or a.y + a.h <= b.y or b.y + b.h <= a.y
-                assert apart, f"{a} overlaps {b}"
+class TestFixturesSeatedInTheBodywork:
+    """Lamps and plates sit *in* the nose and tail, not on a bumper bar.
 
-    def test_text_too_wide_for_its_patch_is_refused(self) -> None:
-        """`_text` writes straight into the sheet array. Without a bound it
-        would silently scribble across whatever patch sits alongside."""
-        with pytest.raises(ValueError, match="does not fit"):
-            build_sheet(sign_face=LAMP, bumper_face=DARK, plate="HK 0521 0521 0521")
+    The bumpers used to be two boxes standing 6 cm proud of each end, and the
+    plate and the fog lamps were mounted on them. With the bar folded back into
+    the bodywork there is nothing flat left to bolt to: the lower body is lofted
+    through rings that draw in towards the sill, so the panel these sit on is at
+    a different z at every height. A hand-copied z floats at one edge and sinks
+    at the other, and neither raises anything.
+    """
 
-    def test_the_roof_sign_decal_stands_proud_of_the_sign(self, meshes: list[MeshData]) -> None:
-        """⚠️ Both roof-sign quads once sat at x = 0 — inside the sign solid and
-        coincident with each other — so the TAXI lettering was invisible. It
-        rendered, imported and passed every check in that state.
+    @staticmethod
+    def _face_z(shape: Proportions, y: float, *, rear: bool) -> float:
+        inset = shape.face_inset_m(y)
+        return shape.rear_z_m - inset if rear else shape.front_z_m + inset
 
-        Asserted as "outside the solid" rather than "clear along x", so it still
-        holds whichever face the lettering is moved to. The first version of
-        this test pinned the axis and failed the moment the sign turned to face
-        fore and aft, which is a test describing an implementation rather than
-        the property that matters.
+    @staticmethod
+    def _fixtures(shape: Proportions) -> list[Seated]:
+        """Every fixture `_seated_depth` places, with what is expected of it.
+
+        The tail lamps are absent because they cannot pass the last assertion by
+        design — they sit on the boot, above the bumper band — and the fog lamps
+        are present because the class docstring names them and they were the
+        other thing bolted to the deleted bar.
         """
-        shape = Proportions()
-        decal = meshes[2]
-        on_sign = decal.positions[decal.positions[:, 1] > shape.roof_y_m]
-        assert len(on_sign) > 0, "no decal sits on the roof sign"
+        front_plate, rear_plate = _plates(shape)
+        fog = [
+            _flush_fixture(
+                shape,
+                centre=(side * 0.66, -0.04),
+                half=(0.105, 0.03),
+                colour=LAMP,
+                rear=False,
+                name=f"foglamp_{tag}",
+            )
+            for tag, side in (("l", -1.0), ("r", 1.0))
+        ]
+        return [
+            Seated(front_plate, rear=False, on_bumper=True),
+            # ⚠️ The one exemption, and it is an expectation rather than a skip.
+            # The rear plate is on the boot, as the real car's is; asserting that
+            # here is what keeps it from silently drifting onto the band.
+            Seated(rear_plate, rear=True, on_bumper=False),
+            Seated(_badge(shape, rear=False), rear=False, on_bumper=True),
+            Seated(_badge(shape, rear=True), rear=True, on_bumper=True),
+            *(Seated(lamp, rear=False, on_bumper=True) for lamp in fog),
+        ]
 
-        within_x = np.abs(on_sign[:, 0]) <= shape.sign_half_width_m
-        within_z = np.abs(on_sign[:, 2] - shape.sign_z_m) <= shape.sign_half_length_m
-        assert not (within_x & within_z).any(), "a roof-sign decal is buried in the sign"
+    def test_each_one_is_proud_of_the_panel_along_its_whole_height(self) -> None:
+        """Visible at the top edge and at the bottom edge, not just the middle.
+
+        ⚠️ And at every profile knot between them. `face_inset_m` is not
+        monotonic — the body is furthest out at `belt_y_m - bevel_m * 1.4`, in
+        the middle of the range — so sampling only the edges passed a top
+        tail-lamp lens that stood 8.5 mm proud where 15 mm was promised."""
+        shape = Proportions()
+        for seat in self._fixtures(shape):
+            low, high = seat.mesh.aabb()
+            outer = high[2] if seat.rear else low[2]
+            knots = [y for _, y, _ in shape.lower_profile if low[1] < y < high[1]]
+            for y in (low[1], high[1], *knots):
+                face = self._face_z(shape, y, rear=seat.rear)
+                clear = (outer - face) if seat.rear else (face - outer)
+                assert clear >= FIXTURE_PROUD_M - 1e-9, (
+                    f"{seat.mesh.name} stands only {clear * 1000:.1f} mm proud at y={y:+.3f}"
+                )
+
+    def test_none_of_them_leaves_a_gap_behind_it(self) -> None:
+        """The other failure: a fixture bridging a slope hangs off the paint."""
+        shape = Proportions()
+        for seat in self._fixtures(shape):
+            low, high = seat.mesh.aabb()
+            inner = low[2] if seat.rear else high[2]
+            for y in (low[1], high[1]):
+                face = self._face_z(shape, y, rear=seat.rear)
+                buried = (face - inner) if seat.rear else (inner - face)
+                # Flush is the intended answer at the deepest edge, so the bound
+                # has to tolerate the rounding that reaches it, not just floats.
+                assert buried >= -1e-9, f"{seat.mesh.name} floats clear at y={y:+.3f}"
+
+    def test_none_of_them_reaches_below_the_sill_tuck(self) -> None:
+        """⚠️ Where the body folds in hard, `_seated_depth` answers correctly
+        and the answer looks wrong: a fixture spanning the fold is made deep
+        enough to bridge it, so it stands 4 cm off the paint at its bottom edge
+        and hangs below the car's own outline. The badge did exactly that. The
+        fix is placement, not depth, and this is what holds the placement."""
+        shape = Proportions()
+        fold = shape.sill_y_m + shape.bevel_m
+        for seat in self._fixtures(shape):
+            low, _ = seat.mesh.aabb()
+            assert low[1] >= fold, f"{seat.mesh.name} reaches into the sill tuck"
+
+    def test_each_one_sits_where_its_backing_colour_is(self) -> None:
+        """A fixture on the bumper is a light shape on DARK; one on the boot is a
+        light shape on RED. Crossing `bumper_top_y_m` puts half of it on each."""
+        shape = Proportions()
+        for seat in self._fixtures(shape):
+            low, high = seat.mesh.aabb()
+            edge = high[1] if seat.on_bumper else low[1]
+            below = edge <= shape.bumper_top_y_m
+            assert below is seat.on_bumper, (
+                f"{seat.mesh.name} straddles the bumper line at y={edge:+.3f}"
+            )
 
 
 class TestWinding:
@@ -263,38 +349,39 @@ class TestWinding:
 class TestTaxiContract:
     """What `ART_DESIGN.md` asks of a vehicle, and `write_glb` of a mesh."""
 
-    def test_the_three_meshes_are_body_wheel_and_decal(self, meshes: list[MeshData]) -> None:
-        """One material each. Two would meet `ART_DESIGN.md`; the third is the
-        decal sheet, taken deliberately because plates and the 4 SEATS badge are
-        text and no triangle count reaches them."""
-        assert [mesh.name for mesh in meshes] == ["taxi_body", "taxi_tyre", "taxi_decal"]
+    def test_the_two_meshes_are_body_and_wheel(self, meshes: list[MeshData]) -> None:
+        """One material each, which is what `ART_DESIGN.md` budgets. There used
+        to be a third — a decal sheet carrying the roof lettering, the plate
+        characters and the 4 SEATS badge — and its own docstring called it a
+        deliberate exception. Nothing on the car is text now, so the exception
+        is closed rather than merely unused."""
+        assert [mesh.name for mesh in meshes] == ["taxi_body", "taxi_tyre"]
+
+    def test_nothing_on_the_taxi_is_textured(self, meshes: list[MeshData]) -> None:
+        """The city is flat-shaded vertex colour throughout, and a textured car
+        driving through it is the one surface that would not belong."""
+        for mesh in meshes:
+            assert mesh.texture is None, f"{mesh.name} carries a texture"
+            assert mesh.uvs is None, f"{mesh.name} carries UVs"
 
     def test_within_the_triangle_ceiling(self, meshes: list[MeshData]) -> None:
-        """Counted as the scene instances it: one body, four wheels, one decal."""
-        body, wheel, decal = meshes
-        in_scene = body.triangle_count + 4 * wheel.triangle_count + decal.triangle_count
-        assert in_scene <= TRIANGLE_CEILING
+        """Counted as the scene instances it: one body, four wheels."""
+        body, wheel = meshes
+        assert body.triangle_count + 4 * wheel.triangle_count <= TRIANGLE_CEILING
 
-    def test_every_untextured_vertex_is_coloured(self, meshes: list[MeshData]) -> None:
-        """An uncoloured vertex renders at whatever the attribute defaults to.
-        The decal sheet is the exception: it carries UVs and a texture instead."""
+    def test_every_vertex_is_coloured(self, meshes: list[MeshData]) -> None:
+        """An uncoloured vertex renders at whatever the attribute defaults to."""
         for mesh in meshes:
-            if mesh.texture is not None:
-                assert mesh.uvs is not None and len(mesh.uvs) == len(mesh.positions)
-                continue
             assert mesh.colours is not None
             assert len(mesh.colours) == len(mesh.positions)
 
     def test_the_palette_is_the_declared_colours(self, meshes: list[MeshData]) -> None:
-        """`ART_DESIGN.md` asks for 3-5; this is six. AMBER is the deliberate
-        extra — the tail cluster stacks three lenses and two colours cannot
-        express three. The assertion is that nothing *else* creeps in."""
-        used = {
-            tuple(rgb)
-            for mesh in meshes
-            if mesh.colours is not None
-            for rgb in np.unique(mesh.colours[:, :3], axis=0)
-        }
+        """`ART_DESIGN.md` asks for 3-5; this is seven. Both extras are
+        deliberate: AMBER because the tail cluster stacks three lenses and two
+        colours cannot express three, BADGE_GREEN because the 4 SEATS badge
+        stopped being a texture and a green dome is the whole of what is left
+        of it. The assertion is that nothing *else* creeps in."""
+        used = set().union(*(_rgbs(mesh) for mesh in meshes))
         assert used <= set(PALETTE), f"unexpected colour: {sorted(used - set(PALETTE))}"
 
     def test_the_body_clears_the_ground(self, meshes: list[MeshData]) -> None:
@@ -302,19 +389,22 @@ class TestTaxiContract:
         low, _ = meshes[0].aabb()
         assert low[1] > Chassis().ground_y_m
 
-    def test_the_taxi_faces_negative_z(self, meshes: list[MeshData]) -> None:
+    def test_the_taxi_faces_negative_z(self) -> None:
         """Godot's forward is -Z, and the plates are what prove the car is not
-        mirrored: Hong Kong runs a white plate at the front and a yellow one at
-        the rear, so their z tells the two ends apart. The earlier version of
-        this test asserted the body's bounds were roughly *symmetric*, which is
-        true of any centred box facing either way and caught nothing."""
-        decal = meshes[2]
-        _, patches = build_sheet(sign_face=LAMP, bumper_face=DARK)
-        sheet_v = {key: patch.uv()[1] for key, patch in patches.items()}
-        for key, expected_sign in (("plate_front", -1.0), ("plate_rear", 1.0)):
-            rows = np.isclose(decal.uvs[:, 1], sheet_v[key]) | np.isclose(
-                decal.uvs[:, 1], patches[key].uv()[3]
+        mirrored: Hong Kong follows the UK and runs a white plate at the front
+        and a yellow one at the rear, so colour and z together tell the two ends
+        apart. The earlier version of this test asserted the body's bounds were
+        roughly *symmetric*, which is true of any centred box facing either way
+        and caught nothing.
+
+        Read off `_plates` rather than off the merged body, because once the
+        plates are flat-coloured boxes their colours are shared with the lamps
+        at both ends and nothing in the merged mesh can pick them out again."""
+        front, rear = _plates(Proportions())
+        for plate, colour, expected_sign in ((front, LAMP, -1.0), (rear, AMBER, 1.0)):
+            # The whole set, not its first row: a plate that picked up a second
+            # colour would still pass if the smaller row happened to match.
+            assert _rgbs(plate) == {colour}, plate.name
+            assert np.sign(plate.positions[:, 2]).mean() == expected_sign, (
+                f"{plate.name} is on the wrong end"
             )
-            zs = decal.positions[rows][:, 2]
-            assert len(zs) > 0, f"no {key} decal found"
-            assert np.sign(zs).mean() == expected_sign, f"{key} is on the wrong end"

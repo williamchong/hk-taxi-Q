@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/vehicle/vehicle_controller.gd" id="1_ctrl"]
 [ext_resource type="Script" path="res://scripts/vehicle/wheel_mount.gd" id="2_wheel"]
@@ -6,7 +6,6 @@
 [ext_resource type="PackedScene" path="res://assets/authored/vehicles/taxi_body.glb" id="4_body"]
 [ext_resource type="PackedScene" path="res://assets/authored/vehicles/taxi_tyre.glb" id="5_wheelmesh"]
 [ext_resource type="Script" path="res://scripts/vehicle/wheel_visual.gd" id="6_wheelvis"]
-[ext_resource type="PackedScene" path="res://assets/authored/vehicles/taxi_decal.glb" id="7_decal"]
 
 ; Not the visual body, deliberately — see docs/PROGRESS.md, P3-11. Godot strips
 ; these comments on any editor resave, so the reasoning lives there, not here.
@@ -23,8 +22,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35, 0)
 shape = SubResource("BoxShape3D_body")
 
 [node name="Mesh" parent="." instance=ExtResource("4_body")]
-
-[node name="Decals" parent="." instance=ExtResource("7_decal")]
 
 [node name="WheelFL" type="Marker3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.8, 0, -1.3)
