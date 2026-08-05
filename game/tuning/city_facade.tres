@@ -1,37 +1,83 @@
-; The window-band shader's tuning, shared by every tile in the city (`P3-7`).
+; The facade look the city actually loads, shared by every tile.
+;
+; `tools/generated_scene_import.gd` maps the ETL's `city_facade` material name to
+; this path and only this path, so this file *is* the switch: it currently names
+; `city_facade_clean.gdshader`, and `city_facade_warm.tres` beside it names the
+; measured `city_facade.gdshader`. Both read the same `TEXCOORD_0` payload, so
+; swapping is a copy and a reimport — never a rebuild.
 ;
 ; Here rather than as shader defaults because CLAUDE.md hard rule 4 makes tuning
 ; data, not constants — and beside `golden_hour.tres` because the sun these are
-; judged under is tuned in the same directory. Loaded by
-; `tools/generated_scene_import.gd` against the `city_facade` material name the
-; ETL writes, as **one** resource for all 66 tiles: retuning the city is this
-; file, and it is not a rebuild.
+; judged under is tuned in the same directory. Loaded as **one** resource for all
+; 66 tiles: retuning the city is this file.
 ;
-; `floor_height_m` and `column_pitch_m` were measured off the real facade
-; textures — 227 walls on 219 buildings of one individualised LandsD sheet, read
-; once offline and never shipped. docs/PROGRESS.md carries the distribution and
-; docs/DATA_SOURCES.md records that the sheet does not enter the build path.
+; `floor_height_m` is still the measured 2.8 m and stays that way whichever
+; shader is loaded — the massing is real and the floor rhythm should be. What the
+; clean look changes is the *scale everything else is drawn at*: glazing spans a
+; group of storeys and a bay is 9 m, because the measured 2.4 m column pitch is
+; about four pixels across from a moving car and reads as noise rather than as
+; architecture. See the shader header.
 [gd_resource type="ShaderMaterial" load_steps=2 format=3]
 
-[ext_resource type="Shader" path="res://assets/shaders/city_facade.gdshader" id="1_facade"]
+[ext_resource type="Shader" path="res://assets/shaders/city_facade_clean.gdshader" id="1_facade"]
 
 [resource]
 resource_name = "city_facade"
 shader = ExtResource("1_facade")
+shader_parameter/base_colour = Color(0.79, 0.805, 0.82, 1)
+shader_parameter/base_wash = 0.7
+shader_parameter/value_jitter = 0.2
+shader_parameter/warm_cool_jitter = 0.07
 shader_parameter/floor_height_m = 2.8
-shader_parameter/window_height_ratio = 0.55
-shader_parameter/column_pitch_m = 2.4
-shader_parameter/window_width_ratio = 0.62
+shader_parameter/band_storeys = 1.0
+shader_parameter/glass_ratio = 0.44
+shader_parameter/bay_width_m = 5.5
+shader_parameter/mullion_ratio = 0.26
+shader_parameter/mullion_darkness = 0.12
 shader_parameter/podium_height_m = 12.0
-shader_parameter/window_colour = Color(0.24, 0.26, 0.3, 1)
-shader_parameter/window_opacity = 0.62
-shader_parameter/floor_line_darkness = 0.12
+shader_parameter/shopfront_base_m = 0.7
+shader_parameter/shopfront_top_m = 4.6
+shader_parameter/shopfront_share = 0.55
+shader_parameter/shopfront_pier_ratio = 0.46
+shader_parameter/cornice_thickness_m = 0.5
+shader_parameter/cornice_darkness = 0.28
+shader_parameter/solid_share = 0.27
+shader_parameter/fin_share = 0.2
+shader_parameter/curtain_share = 0.16
+shader_parameter/punched_share = 0.22
+shader_parameter/fin_pier_ratio = 0.36
+shader_parameter/punched_pier_ratio = 0.52
+shader_parameter/bay_scale_min = 0.72
+shader_parameter/bay_scale_max = 1.45
+shader_parameter/two_storey_share = 0.22
+shader_parameter/accent_share = 0.11
+shader_parameter/accent_course_ratio = 0.0
+shader_parameter/glass_colour = Color(0.21, 0.27, 0.33, 1)
+shader_parameter/glass_tint_b = Color(0.13, 0.22, 0.21, 1)
+shader_parameter/glass_tint_c = Color(0.33, 0.43, 0.51, 1)
+shader_parameter/sky_zenith = Color(0.24, 0.47, 0.78, 1)
+shader_parameter/sky_horizon = Color(0.85, 0.91, 0.96, 1)
+shader_parameter/ground_reflection = Color(0.32, 0.33, 0.35, 1)
+shader_parameter/pane_bow = 0.3
+shader_parameter/pane_jitter = 0.1
+shader_parameter/glass_face_on = 0.18
+shader_parameter/sky_reflection = Color(0.62, 0.78, 0.92, 1)
+shader_parameter/glass_reflect = 0.58
+shader_parameter/fresnel_power = 4.0
+shader_parameter/glass_roughness = 0.12
+shader_parameter/accent_a = Color(0.85, 0.19, 0.16, 1)
+shader_parameter/accent_b = Color(0.11, 0.45, 0.72, 1)
+shader_parameter/accent_c = Color(0.95, 0.62, 0.09, 1)
+shader_parameter/accent_opacity = 0.8
+shader_parameter/wall_sky_tint = 0.18
+shader_parameter/floor_line_darkness = 0.11
 shader_parameter/grounding_height_m = 3.0
-shader_parameter/grounding_darkness = 0.22
-shader_parameter/roughness_value = 0.9
-shader_parameter/wall_normal_max = 0.5
-shader_parameter/fade_start_m = 90.0
-shader_parameter/fade_end_m = 240.0
+shader_parameter/grounding_darkness = 0.26
+shader_parameter/wall_roughness = 0.82
+shader_parameter/wall_normal_max = 0.28
+shader_parameter/roof_darkness = 0.2
+shader_parameter/fade_start_m = 140.0
+shader_parameter/fade_end_m = 244.0
 shader_parameter/lit_window_colour = Color(1, 0.85, 0.55, 1)
 shader_parameter/lit_window_share = 0.0
 shader_parameter/emission_strength = 0.0

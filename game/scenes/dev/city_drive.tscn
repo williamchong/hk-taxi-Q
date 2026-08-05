@@ -18,7 +18,7 @@
 [ext_resource type="Script" path="res://scripts/city/city_streamer.gd" id="1_tiles"]
 [ext_resource type="Resource" path="res://tuning/streaming.tres" id="8_streaming"]
 [ext_resource type="Script" path="res://scripts/city/road_surface_preview.gd" id="2_surface"]
-[ext_resource type="PackedScene" path="res://scenes/world/golden_hour.tscn" id="3_light"]
+[ext_resource type="PackedScene" path="res://scenes/world/clean_daylight.tscn" id="3_light"]
 [ext_resource type="PackedScene" path="res://scenes/vehicle/taxi.tscn" id="4_taxi"]
 [ext_resource type="Script" path="res://scripts/camera/chase_camera.gd" id="5_camera"]
 [ext_resource type="Script" path="res://scripts/city/drive_harness.gd" id="6_harness"]
@@ -39,7 +39,7 @@ camera_path = NodePath("../CameraRig/Camera3D")
 [node name="RoadSurface" type="Node3D" parent="."]
 script = ExtResource("2_surface")
 
-[node name="GoldenHour" parent="." instance=ExtResource("3_light")]
+[node name="Lighting" parent="." instance=ExtResource("3_light")]
 
 ; ⚠️ This transform is a FALLBACK, not the start line. Since P2-3 the spawn is
 ; resolved at runtime: drive_harness.gd asks RoadSpawn for a fare node and calls

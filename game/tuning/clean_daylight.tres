@@ -1,0 +1,82 @@
+; A high-key midday environment, for the clean facade look.
+;
+; The alternative to `golden_hour.tres`, and switched the same way its facade
+; counterpart is: `scenes/world/clean_daylight.tscn` names this one, and
+; `scenes/world/golden_hour.tscn` names the other. **Only one is instanced at a
+; time** — both dev scenes point at the same rig, because the city getting judged
+; under two looks at once is the thing `golden_hour.tscn` was written to prevent.
+;
+; What the clean look needs that golden hour does not, and why:
+;
+; - **A pale horizon and a deep top.** The sky is what a white city is lit by:
+;   `ambient_light_sky_contribution` means every unshadowed surface takes its
+;   colour from this gradient, so the cool shadows are tuned here rather than in
+;   any material. Golden hour's warm cream horizon is what made the road read
+;   dark navy against it.
+; - **Glow.** Bloom on the brightest surfaces is the reference look's signature
+;   and it is not available any other way — there is no emissive on the fabric.
+;   Thresholded at 1.0 so only genuinely over-range pixels bloom: a lower
+;   threshold blooms the whole white city into mush, which is the failure mode to
+;   watch for if these numbers get raised.
+; - **Fog.** Aerial perspective is what separates one white block from the white
+;   block behind it. Density is deliberately low — at the camera's 400 m far
+;   plane it reaches about a quarter, which is haze, and doubling it starts
+;   hiding the city rather than layering it.
+;
+; ⚠️ Volumetric fog is Forward+ only and is **not** used here; this is depth fog,
+; which the Mobile renderer supports. `project.godot` sets `mobile`.
+[gd_resource type="Environment" load_steps=3 format=3]
+
+[sub_resource type="ProceduralSkyMaterial" id="Sky_material"]
+sky_top_color = Color(0.24, 0.47, 0.78, 1)
+sky_horizon_color = Color(0.85, 0.91, 0.96, 1)
+ground_horizon_color = Color(0.85, 0.91, 0.96, 1)
+ground_bottom_color = Color(0.58, 0.61, 0.64, 1)
+sun_angle_max = 20.0
+
+[sub_resource type="Sky" id="Sky"]
+sky_material = SubResource("Sky_material")
+
+[resource]
+background_mode = 2
+sky = SubResource("Sky")
+; ⚠️ **`ambient_light_sky_contribution` is what colours every shadow in the
+; city, and at 0.9 it turned the road cobalt.** Dark albedo takes almost all of
+; its light from ambient, so a saturated blue sky paints the asphalt blue while
+; leaving the white facades — which are mostly lit by the sun — untouched. The
+; blend back toward a neutral `ambient_light_color` is the control for that, and
+; it is the one to reach for if a *surface* looks wrong rather than a *light*.
+ambient_light_source = 3
+;
+; ⚠️ And it is a **balance**, not a floor: at 0.55 with a neutral ambient the
+; road came right and the massing went flat, because the cool shadow is also the
+; only thing separating one white face from the next. The fix was to keep the
+; blend low but make what it blends toward cool rather than neutral — shadow
+; colour without sky saturation.
+ambient_light_color = Color(0.8, 0.84, 0.9, 1)
+ambient_light_sky_contribution = 0.62
+ambient_light_energy = 0.85
+tonemap_mode = 3
+tonemap_white = 3.0
+fog_enabled = true
+fog_light_color = Color(0.83, 0.89, 0.95, 1)
+fog_light_energy = 1.1
+fog_sun_scatter = 0.1
+fog_density = 0.00025
+fog_aerial_perspective = 0.3
+fog_sky_affect = 0.0
+glow_enabled = true
+glow_intensity = 0.55
+glow_strength = 1.0
+glow_bloom = 0.0
+glow_blend_mode = 1
+glow_hdr_threshold = 1.0
+glow_hdr_scale = 2.0
+glow_levels/1 = 0.0
+glow_levels/2 = 0.6
+glow_levels/3 = 1.0
+glow_levels/4 = 0.6
+glow_levels/5 = 0.2
+adjustment_enabled = true
+adjustment_contrast = 1.14
+adjustment_saturation = 1.1

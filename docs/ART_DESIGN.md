@@ -125,6 +125,145 @@ the building's own base. Both are in `assets/shaders/city_facade.gdshader`; the 
 `tuning/city_facade.tres`, because they are tuning data (hard rule 4) and retuning the city must not
 be a rebuild.
 
+### The clean/futuristic variant
+
+**A second look, shipping beside the first and switched by one file.** The window bands above are
+accurate and were called **dull** on sight. The fault is *scale*, not colour: they are drawn at the
+measured 2.8 m × 2.4 m pitch, which from a car at 30 m is about four pixels across — too fine to
+read as architecture and too regular to read as material. `assets/shaders/city_facade_clean.gdshader`
+draws the same city an order of magnitude larger and moves the unit of variation from the **window**
+to the **building**.
+
+Values below are the ones the `.tres` files actually ship, which are **not** the shader's own
+defaults — the defaults are the first pass, and the corrections further down this section are why
+they differ. `tuning/city_facade.tres` is the authority for the clean column and
+`tuning/city_facade_warm.tres` for the warm one.
+
+| | `city_facade` | `city_facade_clean` |
+|---|---|---|
+| Vertical unit | 2.8 m window row | 2.8 m glazing ribbon, doubled on 22% of buildings |
+| Horizontal unit | 2.4 m column | 5.5 m structural bay, hashed ×0.72–1.45 per building |
+| Per building | rows offset by phase | **treatment** — 38% solid mass, 62% glazed, 22% accented |
+| Glass | flat dark mix | fresnel toward a sky colour |
+| Distance fade | 90–240 m | 140–244 m |
+
+Three renderer tricks do the work, and none of them is a texture:
+
+1. **Per-building treatment**, hashed from the `TEXCOORD_0` phase the ETL already ships. Two in five
+   buildings repeat *nothing*, which is what stops a block reading as one wallpapered surface.
+2. **Fresnel sky reflection** — `pow(1 - dot(NORMAL, VIEW), p)` mixed toward a sky colour is a
+   mirrored tower for a few ALU instructions, with no reflection probe. Probes stay an anti-goal.
+3. **Grazing sky bounce** at low strength on solid wall, which is what keeps a white city from
+   reading as grey card.
+
+⚠️ **The podium mask is where this look breaks, and it breaks in exactly the frame the player
+occupies.** `podium_height_m` protects shopfronts from being banded like flats — correct, and it
+left the first build white card from kerb to cornice while every element sat forty storeys above a
+1.5 m eyeline. The podium therefore gets its own elements rather than being a hole in the mask:
+shopfront glazing at 0.7–4.6 m on **every** building, a cornice where the podium stops, and the
+accent colour on the plinth rather than up the tower. Anything added to this shader must be asked
+the same question: *is it visible from a car?*
+
+⚠️ **The phase does not cure repetition, because offsetting one grid still leaves one grid.** Judged
+against a street photograph, the fault was that every building was built in the same *grammar*. A
+Hong Kong frame carries three or four at once — vertical-fin towers with continuous piers and no
+horizontal banding at all, full mirror curtain wall, punched windows in solid stone, and horizontal
+ribbon. So the seed picks a **grammar**, not just an offset, and the four are one grid with different
+ratios rather than four code paths: a fin is the horizontal cut switched off and the piers widened,
+curtain wall is both masks nearly open, punched is both nearly closed. The structural bay and the
+storeys a glazing band spans are hashed per building too; only `floor_height_m` stays a constant of
+the city.
+
+⚠️ **A single reflection colour is why glass read as a swatch rather than a mirror.** Real glazing
+shows the sky *gradient*, so the reflected ray's own elevation has to choose between horizon and
+zenith — and below the horizon it reflects the city, which is darker than either. Two more things
+follow, both nearly free: **curtain-wall panes are never flat**, and bowing the reflected ray per
+pane is what produces the wavy light and dark bands down a real glazed facade; and **mirror glass is
+not transparent when faced squarely**, so a fresnel that falls to nothing head-on leaves every wall
+facing the camera a flat dark colour. ⚠️ Reflectance must not carry the whole surface either — Hong
+Kong's curtain wall is heavily body-tinted and reads **dark while reflecting a bright sky**, so the
+glass colour is what sets the value and the reflection only lifts it. Glass colour is hashed per
+building across three tints; one glass colour across a district is as flat as one wall colour.
+
+⚠️ **The first pass over-corrected, and "too coarse" looks worse than "too fine".** `P3-7` was called
+dull for drawing at 2.8 m; the answer was *not* to move the glazing to a 5.6 m band, because at 52%
+glass that is a 2.9 m black slot and a facade of them reads as a **parking garage deck**. One ribbon
+per storey, glass that is not a hole (it only lifted at grazing angles, so a wall seen head-on went
+to near-black), and a mullion wide enough to be a pier. ⚠️ **A mullion is wall, not a dark line** —
+the pier between two panes is the same pale concrete as the facade, so it cuts glass away and must
+not also darken what it reveals.
+
+⚠️ **`band()` needs analytic antialiasing, not just `fwidth`.** Past about a quarter of a period per
+pixel the smoothstep pair stops meaning anything and the grid turns into diagonal moire on any wall
+seen at a shallow angle — which in a street of towers is most of them. Converge on the band's own
+**duty cycle**, which is what infinite samples inside one pixel would average to. This is why the
+grid does not need the distance fade to hide it — but it is *not* why the fade may be pushed out,
+and the next warning but two is the constraint that actually decides where it ends.
+
+⚠️ **The shopfront must not be on every building, and it cannot be on the *right* ones.** Applying it
+unconditionally — "at street level even a solid mass has shops in it" — draws one dark ribbon along
+an entire street, and it is the most repetitive thing in the frame precisely because it is the part
+a driver is closest to. It is now hashed per building at a varying height, with podium piers much
+heavier than a curtain-wall mullion so a shopfront reads as discrete openings.
+
+⚠️ **But "true to the actual site" is not reachable from this data, and no amount of shader work
+changes that.** The 3D Visualisation Map is geometry: **no land use, no building use, no ground-floor
+attribute**. The shader knows height above its own base, a surface marker and a per-building seed, so
+nothing in the pipeline can tell a shopfront from a plant room from an MTR entrance. Judged against
+Convention Avenue, the fabric can be made *varied and plausible* and not *correct*. The honest routes
+if that ever matters, cheapest first: **face a street** (the road graph is already in the ETL, so a
+frontage test is build-time work and no new source); **land utilisation data** (a new dataset, a
+schema bump, and a per-building attribute); or hand-authored `landmarks.json` entries for the
+buildings that matter, which `P3-6` already provides for.
+
+⚠️ **The distance fade must finish before the LOD switch, and that is a hard constraint rather than a
+taste.** `tuning/streaming.tres` swaps to LOD1 at **250 m**, where buildings are clustered at 4 m
+cells — and `TEXCOORD_0.x` comes from a *cluster representative*, so out there "metres above the
+base" is wrong by up to a storey and a half and neighbouring triangles disagree about it. A grid
+drawn on that shatters into blocky patches. `P3-7`'s 90–240 m fade was safe by being conservative;
+moving it to 260–420 m on the reasoning that a 9 m bay survives to the far plane was true about
+*aliasing* and ignored the tier entirely. The shipped fade is therefore **140–244 m**, finishing
+just inside the switch. **Any change to `fade_end_m` must be checked against `tier_distances_m`.**
+
+⚠️ **The horizontal coordinate must not be derived from the face normal.** The plan-perpendicular of
+the normal gives every triangle of a *curved* facade its own grid origin, so the bays shatter into
+per-triangle strips — chevrons wherever Hong Kong puts a round corner on a mall. It survived in
+`P3-7` only because a 2.4 m column pitch made the seams read as noise. Project onto a world axis
+*chosen* by the normal instead: continuous as the normal turns, at the cost of a little stretch near
+45°.
+
+💡 **And when something looks wrong in a preview scene, check what the preview scene draws before
+blaming the shader.** `city_preview.tscn` instantiates `road_preview.gd`, which renders the road
+graph as coloured lines and **1,125 direction arrows** — it says so in its own run log. Those were
+mistaken for accent courses here. `city_drive.tscn` puts the same overlay behind `--debug-view`,
+which is why it never appears in a drive shot.
+
+⚠️ **What moire is left is very likely not the shader's.** Fine diagonal hatching survives on
+surfaces around the flyovers, and `Q20` already records that **the flyovers are drawn twice**. Two
+coincident surfaces with the same flat colour hide their fight; give each a *different* window phase
+and it shows as a pattern. This is the same latent defect the roads section predicts the markings
+shader will expose at junction caps — identical surfaces conceal an overlap, distinct ones reveal it.
+
+⚠️ **Roofs are excluded from the grid and must not be excluded from the look.** Every element is
+gated on `upness < wall_normal_max`, which left roofs at the full white wash — and a roof takes a 48°
+sun nearly head-on, so it clipped where the wall beside it did not, and every downward view came out
+as a white blob. `roof_darkness` is the whole roof treatment, and it is enough: nothing up there is
+visible from a car.
+
+⚠️ **"Washed out" was four settings each contributing a little**, and worth naming because none of
+them is the obvious one. `tonemap_white` compressed highlights so nothing reached true white;
+`ambient_light_energy` lifted the shadows; `glow_bloom` adds glow *regardless* of the HDR threshold,
+which is a global lift rather than a bloom; and the fog hazed everything past ~100 m. The reference
+look is bright **and high contrast** — blown whites against deep saturated shadow — so the lever is
+always to raise the ceiling, never to raise the floor.
+
+**Switching is data, and never a rebuild.** Both shaders read the same `TEXCOORD_0` payload and the
+same surface markers, and `tools/generated_scene_import.gd` maps the ETL's material name to
+`tuning/city_facade.tres` and only that path. `tuning/city_facade_warm.tres` holds the measured
+values; `cp` it over and reimport. **Which look ships is `Q26`, and it is a verdict for `P3-9a`'s
+drivers rather than something to settle here** — the clean look keeps the accurate massing and
+abandons the accurate surface, and recognition is the product.
+
 ### What buildings will *not* get
 
 - **No per-building texture, and no low-res atlas.** Any texture needs UVs, and UVs do not survive the
@@ -323,6 +462,20 @@ shadow, not the shadow switched off.
 
 Flat shading plus a single strong key light is what makes low-poly read as intentional rather than
 cheap. Resist adding lights.
+
+**The clean/futuristic variant needs a different rig, and it is `scenes/world/clean_daylight.tscn`.**
+A low warm sun is load-bearing for golden hour and actively wrong for a white city — it rakes to two
+values, blown and blue, with the massing lost between them. The clean rig is a 48° sun, a pale
+horizon under a deep blue top, thresholded glow, and light depth fog for aerial perspective. Both dev
+scenes must name **the same** rig; splitting them is what `golden_hour.tscn`'s header warns against.
+
+⚠️ **`ambient_light_sky_contribution` is the colour of every shadow in the city, and it is the
+setting that misleads.** Dark albedo takes almost all of its light from ambient, so a saturated blue
+sky paints the `#3c3a37` asphalt blue while leaving the sunlit white facades alone — the *road* looks
+broken and the road's colour is not what is wrong. It is also the only thing separating one white
+face from the next, so lowering it fixes the road and flattens the massing at once. Blend low toward
+a **cool neutral** `ambient_light_color`: shadow colour without sky saturation. Do not reach for the
+road palette in `hong_kong.yaml` for this; it is a lighting problem and costs a rebuild to get wrong.
 
 ---
 

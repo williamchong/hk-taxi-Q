@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/city/tile_preview.gd" id="1_tiles"]
 [ext_resource type="Script" path="res://scripts/camera/free_look_camera.gd" id="2_camera"]
-[ext_resource type="PackedScene" path="res://scenes/world/golden_hour.tscn" id="3_light"]
+[ext_resource type="PackedScene" path="res://scenes/world/clean_daylight.tscn" id="3_light"]
 [ext_resource type="Script" path="res://scripts/city/road_preview.gd" id="4_roads"]
 [ext_resource type="Script" path="res://scripts/city/road_surface_preview.gd" id="5_surface"]
 [ext_resource type="Script" path="res://scripts/city/fare_preview.gd" id="6_fares"]
@@ -28,7 +28,7 @@ script = ExtResource("6_fares")
 visible = false
 script = ExtResource("4_roads")
 
-[node name="GoldenHour" parent="." instance=ExtResource("3_light")]
+[node name="Lighting" parent="." instance=ExtResource("3_light")]
 
 [node name="Camera3D" type="Camera3D" parent="."]
 far = 6000.0

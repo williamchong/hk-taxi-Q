@@ -3,8 +3,9 @@
 Living document. **Update this whenever a task changes status, a decision is made, or an open
 question is answered.** Newest entries at the top of each log.
 
-Last updated: 2026-08-05 (`P3-7` puts windows on the city, at a storey height measured off the real
-facades. `P3-10`'s ground and `P3-11`'s taxi are still awaiting a verdict; `Q24` and `Q25` are closed)
+Last updated: 2026-08-05 (a second facade look ships beside `P3-7`'s — clean/futuristic, no rebuild,
+one `cp` apart — and `Q26` asks which one the city keeps. `P3-10`'s ground and `P3-11`'s taxi are
+still awaiting a verdict; `Q24` and `Q25` are closed)
 
 ---
 
@@ -100,6 +101,8 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ⚠️ conditional ·
 
 | `Q25` | **The ground tore along every tile boundary.** `collapse` puts a vertex at the *mean of the members present in its mesh*, and terrain was split across tiles before it was collapsed — so the two sides of a boundary averaged differently and the seam opened | 1.76% of the region had ground the source covers and the bundle did not, three quarters of it within 10 m of a tile boundary. Visible as brown bands at grazing angles, and solid-edged since the ground collides | `P1-2`/`P3-10` | 🟢 **Closed 2026-08-05.** `_tile_ground` decimates the region's ground **once per tier** and cuts the result, reversing collapse-then-merge for the one class that is both cut and continuous. Region holes **1.76% → 0.76%**; within 2 m of a boundary **15.65% → 0.42%**, *below* the 0.54% interior rate, so the boundary stopped being special. Triangles unchanged. The 0.76% residual is ordinary sliver loss, not a seam |
 
+| `Q26` | **Which look ships — the measured Hong Kong one or the clean/futuristic one?** `P3-7`'s window bands are accurate and were called dull; `city_facade_clean` is bolder and is *not* what Wan Chai looks like | The whole art direction rests on "accurate city, toy vehicles", and recognition is the product (`Q8`). A white city with amber accent plinths keeps the accurate *massing* and abandons the accurate *surface* — which may be the right trade or may be the one thing that cannot be traded | `P3-9a` | 🔴 Open, and **a verdict rather than a measurement.** Both looks are one `cp` apart and neither needs a rebuild, so this can go to the ≥3 HK drivers as an A/B rather than being decided in advance. Shots in `build/driver/h4` (clean) against `build/driver/clean` (`P3-7`). ⚠️ If the clean look wins, the palette should move from the shader's `base_wash` into `height_bands` in the city config, where CLAUDE.md says palettes live |
+
 **Resolved:** `Q1` (no Z, but `ELEVATION` encodes the level) · `Q2`/`Q3`/`Q5` (building data is fully
 scriptable; 6 sheets, ~44 MB each) · `Q4` (device floor A13 / Adreno 618) · `Q7` (origin at the
 region's NW corner) · `Q8` (the city itself is the fun) · `Q9` (read the 17 MB geodatabase, not the
@@ -127,6 +130,69 @@ under, and ~0.2 m is a guess until it is driven on a cross-sloped street.
 ---
 
 ## Decision log
+
+### 2026-08-05 — A second look ships beside the first: **clean/futuristic, and the fault in the old one was scale**
+
+User's report: *"the repeating window looks dull"*, with a direction — simplistic futuristic urban,
+Mirror's Edge-like, **renderer tricks and simple colouring rather than texture**.
+
+**The diagnosis is scale, not colour, and it is worth recording because the shader was not wrong.**
+`P3-7` draws at the pitch it measured — 2.8 m storeys by 2.4 m columns, both read off real facades.
+From a car at 30 m that grid is about four pixels across: too fine to read as architecture, too
+regular to read as material, so it becomes noise, and the 90 m fade then deletes it. The measurement
+was right and the *drawing distance* was never part of it.
+
+So the second shader draws an order of magnitude larger, and the unit of variation moves from the
+window to the **building**:
+
+| | `city_facade` (`P3-7`) | `city_facade_clean` |
+|---|---|---|
+| Vertical unit | 2.8 m window row | 5.6 m glazing ribbon (2 storeys) |
+| Horizontal unit | 2.4 m column | 9 m structural bay |
+| Per-building variation | window rows offset by phase | **treatment**: 38% solid, 62% glazed, 22% accented |
+| Glass | flat dark mix | fresnel toward a sky colour — a mirrored tower with no probe |
+| Fade | 90–240 m | **260–420 m**, because a 9 m bay is still several pixels at the far plane |
+
+**Nothing was rebuilt, and that is the point.** Both shaders read the same `TEXCOORD_0` payload and
+the same `SurfaceClass` markers, so the whole change is two files in `game/` and a reimport.
+`tuning/city_facade.tres` is the switch — `tools/generated_scene_import.gd` maps the ETL's material
+name to that path and only that path — and `tuning/city_facade_warm.tres` holds `P3-7`'s values, so
+reverting is `cp` and 90 s of `check.sh`. Same shape for lighting:
+`scenes/world/clean_daylight.tscn` beside `scenes/world/golden_hour.tscn`, and **both dev scenes name
+the same one**, which is the constraint `golden_hour.tscn`'s header actually imposes.
+
+**Two things the screenshots found that reasoning did not.**
+
+⚠️ **The podium mask left the only part a driver ever meets blank.** `podium_height_m = 12.0` exists
+so shopfronts do not get banded like flats, and it is right — but a driver's eyeline is 1.5 m, so on
+first render the canyon was white card from kerb to cornice while all the detail sat forty storeys
+up where the camera never looks. The fix was to make the podium an *element* rather than a hole:
+shopfront glazing at 0.7–4.6 m on every building, a cornice where the podium stops, and the accent
+colour moved **down** to the plinth. That is the frame the amber block in `build/driver/h4` fills,
+and it is the single change that took the street view from dull to finished.
+
+⚠️ **`ambient_light_sky_contribution` is the city's shadow colour, and it turned the road cobalt.**
+Dark albedo takes nearly all its light from ambient, so a saturated blue sky paints `#3c3a37`
+asphalt blue while leaving sunlit white facades alone — the road, not the buildings, is what reads
+as broken. **It is also the only thing separating one white face from the next**, so simply lowering
+it to 0.55 fixed the road and flattened the massing in the same frame. The setting that does both is
+a *low blend toward a cool neutral* `ambient_light_color` — shadow colour without sky saturation.
+Recorded because the instinct on seeing a blue road is to change the road's colour, and the road's
+colour is not what is wrong. **No ETL rebuild was needed and none should be reached for here.**
+
+The aerial preview still washes out past ~700 m, which is the fog doing aerial perspective over a
+1.5 km view. Left alone deliberately: the chase camera's far plane is 400 m, where the same fog
+reads as haze, and no player occupies that camera.
+
+**What was *not* done, and why — the user's alternative was to use the real photo texture.** Ruled
+out, and by two separate arguments that both already exist in `ART_DESIGN.md`: UVs do not survive the
+vertex clustering that produces both LOD tiers, so an atlas costs the LOD system rather than only
+memory; and the individualised set is a 5.86 GB download, 93–96% of it texture, whose oblique aerial
+capture is shadow- and haze-dominated so its median converges on grey-beige. It also pulls *against*
+this brief rather than serving it — the reference look is flat saturated colour, which is the
+opposite of photographic. **The sanctioned use is unchanged and still open:** read a sheet or two
+offline, cluster the dominant facade colours, and re-author `height_bands` from the result. That is
+`Q26`'s cheap half if the palette is what turns out to be wrong.
 
 ### 2026-08-05 — `P3-7`: the windows are procedural, and the storey height came from the photographs
 

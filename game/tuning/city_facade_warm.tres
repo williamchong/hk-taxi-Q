@@ -1,0 +1,56 @@
+; The measured Hong Kong facade look, kept as the alternative to whatever
+; `city_facade.tres` currently holds.
+;
+; This is `P3-7` verbatim: window bands at the pitch read off the real facade
+; textures — 227 walls on 219 buildings of one individualised LandsD sheet, read
+; once offline and never shipped. docs/PROGRESS.md carries the distribution and
+; docs/DATA_SOURCES.md records that the sheet does not enter the build path.
+;
+; ⚠️ **Not loaded by anything.** `tools/generated_scene_import.gd` maps the ETL's
+; `city_facade` material name to `res://tuning/city_facade.tres` and only that
+; path, so switching looks is `cp city_facade_warm.tres city_facade.tres` and a
+; reimport — no rebuild, because both shaders read the same `TEXCOORD_0` payload.
+; A file rather than a second entry in that map because which look ships is
+; tuning, and CLAUDE.md hard rule 4 keeps tuning out of code.
+;
+; ⚠️ **"Verbatim" is a promise about the pitch, not a claim that this is the
+; better shader.** `city_facade_clean.gdshader` was forked from this one and then
+; fixed in three places that were never back-ported, because keeping this file a
+; faithful record of what `P3-7` measured is worth more than keeping two large
+; shaders in step. So switching to this look knowingly reintroduces:
+;
+;   · `band()` without the analytic duty-cycle convergence — diagonal moire on
+;     any wall seen at a shallow angle, which in a street of towers is most of them
+;   · `along_m` from the face normal's plan-perpendicular — per-triangle grid
+;     origins, so a curved podium breaks into chevrons
+;   · a 90–240 m fade, safe against the 250 m LOD1 switch by accident rather than
+;     by the reasoning in docs/ART_DESIGN.md
+;
+; The first two are survivable at a 2.4 m column pitch and were, for a whole
+; phase. Anything that makes this the shipping look again should port the three
+; across first — and at that point the two shaders probably do earn a shared
+; `.gdshaderinc`, which two call sites currently do not.
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+[ext_resource type="Shader" path="res://assets/shaders/city_facade.gdshader" id="1_facade"]
+
+[resource]
+resource_name = "city_facade"
+shader = ExtResource("1_facade")
+shader_parameter/floor_height_m = 2.8
+shader_parameter/window_height_ratio = 0.55
+shader_parameter/column_pitch_m = 2.4
+shader_parameter/window_width_ratio = 0.62
+shader_parameter/podium_height_m = 12.0
+shader_parameter/window_colour = Color(0.24, 0.26, 0.3, 1)
+shader_parameter/window_opacity = 0.62
+shader_parameter/floor_line_darkness = 0.12
+shader_parameter/grounding_height_m = 3.0
+shader_parameter/grounding_darkness = 0.22
+shader_parameter/roughness_value = 0.9
+shader_parameter/wall_normal_max = 0.5
+shader_parameter/fade_start_m = 90.0
+shader_parameter/fade_end_m = 240.0
+shader_parameter/lit_window_colour = Color(1, 0.85, 0.55, 1)
+shader_parameter/lit_window_share = 0.0
+shader_parameter/emission_strength = 0.0
