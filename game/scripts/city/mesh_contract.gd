@@ -111,27 +111,65 @@ static func check_collision(node: Node) -> PackedStringArray:
 ##
 ## `where` names the surface for the caller's report — surface indices restart
 ## per `MeshInstance3D`, so "surface 0" is ambiguous without it.
+##
+## Two shapes conform, because `P3-7` gave tiles a shader and left everything
+## else alone. What both must satisfy is the same rule the untextured,
+## vertex-coloured primitive has always had — the colour must reach the pixel,
+## and no texture may be sampled. How that is achieved differs: a
+## `BaseMaterial3D` needs a flag set at import, a `ShaderMaterial` writes
+## `ALBEDO` itself. Checked here rather than at the call sites because the road
+## surface and the tiles both ask, and a private second copy is what this file
+## exists to stop.
 static func check_surface(mesh: Mesh, surface: int, where: String) -> PackedStringArray:
 	var problems: PackedStringArray = []
 
 	if not (mesh.surface_get_format(surface) & Mesh.ARRAY_FORMAT_COLOR):
 		problems.append("%s carries no vertex colours" % where)
 
-	var material: BaseMaterial3D = mesh.surface_get_material(surface) as BaseMaterial3D
+	var material: Material = mesh.surface_get_material(surface)
 	if material == null:
-		problems.append("%s has no BaseMaterial3D" % where)
+		problems.append("%s has no material" % where)
+		return problems
+
+	var shaded := material as ShaderMaterial
+	if shaded != null:
+		return _check_shader_surface(shaded, where, problems)
+
+	var standard := material as BaseMaterial3D
+	if standard == null:
+		problems.append("%s is neither a BaseMaterial3D nor a ShaderMaterial" % where)
 		return problems
 
 	# Set at import by `tools/generated_scene_import.gd`, because glTF has no
 	# such flag — COLOR_0 always multiplies base colour there. Without it the
 	# asset imports white however good its vertex colours are.
-	if not material.vertex_color_use_as_albedo:
+	if not standard.vertex_color_use_as_albedo:
 		problems.append("%s ignores its vertex colours" % where)
 	for slot: int in [
 		BaseMaterial3D.TEXTURE_ALBEDO,
 		BaseMaterial3D.TEXTURE_NORMAL,
 		BaseMaterial3D.TEXTURE_ORM,
 	]:
-		if material.get_texture(slot) != null:
+		if standard.get_texture(slot) != null:
 			problems.append("%s references a texture in slot %d" % [where, slot])
+	return problems
+
+
+## The same two guarantees, asked of a `ShaderMaterial`.
+##
+## A shader can do anything, so this checks what is checkable: that a shader is
+## attached at all, and that no uniform holds a texture. The second is the real
+## one — the tile contract is "no textures", and a sampler bound here would ship
+## an image into a bundle specified to carry none while every other check passed.
+static func _check_shader_surface(
+	material: ShaderMaterial, where: String, problems: PackedStringArray
+) -> PackedStringArray:
+	if material.shader == null:
+		problems.append("%s is a ShaderMaterial with no shader" % where)
+		return problems
+
+	for uniform: Dictionary in material.shader.get_shader_uniform_list():
+		var name: String = uniform.get("name", "")
+		if material.get_shader_parameter(name) is Texture:
+			problems.append("%s binds a texture to shader uniform '%s'" % [where, name])
 	return problems

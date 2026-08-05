@@ -10,6 +10,7 @@ the pipeline was broken.
 from __future__ import annotations
 
 import json
+import math
 import zipfile
 from dataclasses import replace
 from pathlib import Path
@@ -27,9 +28,10 @@ from pipeline.buildings import (
     assign,
     build_region,
     colour_for,
+    facade_uv,
     game_offset,
 )
-from pipeline.config import BuildingStyle, HeightBand
+from pipeline.config import BuildingStyle, HeightBand, SurfaceClass
 from pipeline.gltf import MeshData, read_glb
 from pipeline.mesh import collapse
 from tests.helpers import BOX_FACES, box_corners, box_soup, covered, soup
@@ -369,6 +371,93 @@ class TestColour:
         second = colour_for(style(0.1), "BUILDING", flat_mesh("B12345", 8.0))
         assert (first == second).all()
 
+
+class TestFacadeUv:
+    """`P3-7`'s vertex payload: what the window-band shader cannot derive."""
+
+    def test_u_is_measured_from_the_mesh_s_own_base(self) -> None:
+        """The whole reason this ships. A vertex knows its world Y, and Wan Chai's
+        ground moves 40 m across the region — so world Y says nothing about which
+        floor a wall vertex is on."""
+        on_a_hill = flat_mesh("B1", 30.0).translated((0.0, 120.0, 0.0))
+
+        uvs = facade_uv(style(), "BUILDING", on_a_hill)
+
+        assert uvs[:, 0].min() == pytest.approx(0.0)
+        assert uvs[:, 0].max() == pytest.approx(30.0)
+
+    def test_u_is_metres_rather_than_a_fraction_of_the_building(self) -> None:
+        """The correction to `ART_DESIGN.md`'s original `(0-1)`. Normalised, a
+        shophouse and a tower get the same number of window rows, and the floor
+        *count* is the density signature the effect exists to carry."""
+        shophouse = facade_uv(style(), "BUILDING", flat_mesh("B1", 9.0))
+        tower = facade_uv(style(), "BUILDING", flat_mesh("B2", 120.0))
+
+        assert shophouse[:, 0].max() == pytest.approx(9.0)
+        assert tower[:, 0].max() == pytest.approx(120.0)
+
+    def test_the_marker_separates_the_three_kinds_of_surface(self) -> None:
+        """A tile is one merged primitive, so nothing else tells a façade from a
+        viaduct soffit from the pavement."""
+        markers = {
+            class_id: np.floor(facade_uv(style(), class_id, flat_mesh("m", 8.0))[:, 1])[0]
+            for class_id in ("BUILDING", "INFRASTRUCTURE", "TERRAIN")
+        }
+
+        assert markers == {
+            "BUILDING": float(SurfaceClass.FACADE),
+            "INFRASTRUCTURE": float(SurfaceClass.STRUCTURE),
+            "TERRAIN": float(SurfaceClass.GROUND),
+        }
+
+    def test_the_phase_shares_the_colour_jitter_s_seed(self) -> None:
+        """One seed for both, so a rebuild cannot move a building's window rows
+        while leaving its brightness alone."""
+        first = facade_uv(style(), "BUILDING", flat_mesh("B12345", 8.0))
+        second = facade_uv(style(), "BUILDING", flat_mesh("B12345", 8.0))
+
+        assert (first == second).all()
+        assert facade_uv(style(), "BUILDING", flat_mesh("B99999", 8.0))[0, 1] != first[0, 1]
+
+    def test_a_high_phase_never_rounds_into_the_next_marker(self) -> None:
+        """⚠️ The defect this was written against, and it was a real one. The raw
+        seed reaches 1 - 2^-32; float32 spacing near 2.0 is ~2.4e-7, so
+        `STRUCTURE + 0.9999999998` rounds up to *exactly* 3.0 — an unknown marker
+        and a lost phase, silently, on whichever viaduct drew a high seed.
+
+        Brute-forced over every phase at every marker rather than sampled: the
+        failure was one value at one end of one class, which is exactly what a
+        spot check walks past."""
+        for marker in SurfaceClass:
+            for phase in range(256):
+                packed = np.float32(float(marker) + phase / 256)
+                assert math.floor(packed) == marker
+                assert packed - math.floor(packed) == pytest.approx(phase / 256)
+
+    def test_a_split_mesh_keeps_one_base(self) -> None:
+        """Computed before `assign` cuts a two-kilometre viaduct into tiles, for
+        the same reason the colour is: four pieces measuring from four different
+        lowest corners would band at four different heights."""
+        # Two faces 300 m apart, each spanning the full 40 m height, so the mesh
+        # is far too wide for one tile and `assign` partitions it by triangle.
+        viaduct = soup(
+            [
+                [(0.0, 0.0, 0.0), (10.0, 0.0, 0.0), (0.0, 40.0, 0.0)],
+                [(300.0, 0.0, 0.0), (310.0, 0.0, 0.0), (300.0, 40.0, 0.0)],
+            ],
+            name="v1",
+        )
+        whole = replace(viaduct, uvs=facade_uv(style(), "INFRASTRUCTURE", viaduct))
+
+        pieces = [
+            piece for _, piece in assign(whole, Grid(tile_size_m=150.0, max_x=400.0, max_z=400.0))
+        ]
+
+        assert len(pieces) > 1
+        for piece in pieces:
+            assert piece.uvs[:, 0].min() == pytest.approx(0.0)
+            assert piece.uvs[:, 0].max() == pytest.approx(40.0)
+
     def test_jitter_distinguishes_neighbours(self) -> None:
         """Without it a height band renders as one flat mass and the block reads
         as a single object."""
@@ -586,7 +675,14 @@ class TestBuildRegion:
         Not a formality: `merge` refuses a textured mesh outright, so a
         regression here fails the build rather than shipping a JPEG — which is
         why this asserts the *tile* is clean rather than asserting `_ground` was
-        called."""
+        called.
+
+        ⚠️ **The absent texture is what is asserted, not absent UVs.** This read
+        `uvs is None` until `P3-7`, where the two stopped being the same
+        question: a tile now ships `TEXCOORD_0` deliberately, as a shader payload
+        with no image behind it. Keeping the old assertion would have made the
+        source orthophoto's own UVs indistinguishable from ours — which is the
+        regression this test exists to catch."""
         report = self.build(hong_kong, sources, tmp_path, self.ground())
 
         out = tmp_path / "out" / "hong_kong" / "wan_chai"
@@ -594,8 +690,14 @@ class TestBuildRegion:
             meshes = read_glb(out / lod.path)
             assert len(meshes) == 1
             assert meshes[0].texture is None
-            assert meshes[0].uvs is None
             assert meshes[0].colours is not None
+            # The source's UVs index an orthophoto and run 0-1 across a sheet.
+            # Ours are metres above a base and a surface marker, so the ground's
+            # `v` is exactly `GROUND` — a value the source could not produce.
+            assert meshes[0].uvs is not None
+            markers = set(np.unique(np.floor(meshes[0].uvs[:, 1])).tolist())
+            assert float(SurfaceClass.GROUND) in markers
+            assert markers <= {float(member) for member in SurfaceClass}
 
     def test_a_tile_holding_only_ground_is_still_written(
         self, hong_kong, sources, tmp_path

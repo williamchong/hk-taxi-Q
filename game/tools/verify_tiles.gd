@@ -24,6 +24,17 @@ const MAX_SURFACES: int = 2
 ## shows up only as bundle bytes, which is `Q16`'s failure mode exactly.
 const COLLISION_TIER: int = 0
 
+## The material a tile must end up with, mirroring `SHADERS` in
+## `tools/generated_scene_import.gd` and `FACADE_MATERIAL` in
+## `etl/pipeline/buildings.py`.
+##
+## Checked because the dispatch that produces it has **no failing state**: if the
+## ETL stopped naming the material, or the import script stopped recognising the
+## name, every tile would quietly keep its default `BaseMaterial3D`, pass every
+## other check here, and render in flat vertex colour — which is exactly what the
+## city looked like before `P3-7`. There is nothing to see and nothing to catch.
+const FACADE_MATERIAL: String = "res://tuning/city_facade.tres"
+
 
 func _init() -> void:
 	# The manifest rather than a directory listing, so this checks the shipped
@@ -84,11 +95,9 @@ func _check(path: String, tier: int) -> PackedStringArray:
 		for surface: int in mesh.get_surface_count():
 			# Surface indices restart per MeshInstance3D, so the owner's name is
 			# what makes "surface 0" unambiguous once a tile holds more than one.
-			problems.append_array(
-				MeshContract.check_surface(
-					mesh, surface, "%s surface %d" % [instance.name, surface]
-				)
-			)
+			var where: String = "%s surface %d" % [instance.name, surface]
+			problems.append_array(MeshContract.check_surface(mesh, surface, where))
+			problems.append_array(_check_facade_payload(mesh, surface, where))
 
 	# One draw call per surface. The budget is stated in draw calls because that
 	# is what the mobile tier runs out of first.
@@ -98,6 +107,40 @@ func _check(path: String, tier: int) -> PackedStringArray:
 	problems.append_array(_check_collision(scene_root, tier))
 
 	scene_root.free()
+	return problems
+
+
+## The window-band shader reached the tile, and has something to read (`P3-7`).
+##
+## Both halves are silent failures, which is the only reason they are worth a
+## check. `TEXCOORD_0` is height above the object's own base and a surface
+## marker — the two things a shader cannot derive from a vertex — and the
+## material is how the shader arrives at all. Lose either and the tile renders in
+## flat vertex colour, which is precisely what the city looked like *before*
+## `P3-7`: no error, no missing file, nothing on screen that reads as broken.
+##
+## Every tier is checked, not just the finest. The payload is a property of the
+## geometry, and which tiers actually draw bands is the shader's distance fade to
+## decide rather than the exporter's.
+func _check_facade_payload(mesh: Mesh, surface: int, where: String) -> PackedStringArray:
+	var problems: PackedStringArray = []
+
+	if not (mesh.surface_get_format(surface) & Mesh.ARRAY_FORMAT_TEX_UV):
+		problems.append("%s carries no TEXCOORD_0; the window shader has nothing to read" % where)
+
+	var material := mesh.surface_get_material(surface) as ShaderMaterial
+	if material == null:
+		problems.append(
+			(
+				(
+					"%s did not import with a ShaderMaterial; the ETL's `city_facade` material "
+					+ "name and `tools/generated_scene_import.gd` have stopped agreeing"
+				)
+				% where
+			)
+		)
+	elif material.resource_path != FACADE_MATERIAL:
+		problems.append("%s uses %s, not %s" % [where, material.resource_path, FACADE_MATERIAL])
 	return problems
 
 

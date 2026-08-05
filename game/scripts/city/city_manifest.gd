@@ -31,7 +31,12 @@ const PATH: String = "res://assets/generated/city.json"
 ##
 ## 4 since `Q23`: `carriageway[].half_width_m` is an array, one value per station
 ## of that edge's polyline, where it was one number for the whole edge.
-const SCHEMA_VERSION: int = 4
+##
+## 5 since `P3-7`: every tile ships `TEXCOORD_0` — height above the building's own
+## base, and a surface marker plus phase — and names its material `city_facade`
+## so the importer gives it the window-band shader. A v4 reader would draw a v5
+## tile blank and blame the shader.
+const SCHEMA_VERSION: int = 5
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.

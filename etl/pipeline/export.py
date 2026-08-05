@@ -65,7 +65,12 @@ CITY_NAME = "city.json"
 # This is the rarer kind of bump — a field that changed *shape* rather than
 # meaning — and it is still the same rule: a v3 reader would take a float and
 # get an array.
-CITY_SCHEMA = 4
+# 5 since `P3-7`: every tile ships `TEXCOORD_0` and names its material
+# `city_facade`. Neither is a manifest key, and the bump is the same rule as 3 —
+# a v4 reader would load a v5 tile happily, ignore the payload, and draw a blank
+# city that reads as a shader bug rather than as a version mismatch. The version
+# gates the asset set, not just the JSON.
+CITY_SCHEMA = 5
 
 # Manifest keys naming a document that ships. One tuple rather than a literal
 # at each use, because `shipped` reads them and `REQUIRED_KEYS` guards them:

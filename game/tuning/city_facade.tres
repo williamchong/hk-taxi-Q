@@ -1,0 +1,37 @@
+; The window-band shader's tuning, shared by every tile in the city (`P3-7`).
+;
+; Here rather than as shader defaults because CLAUDE.md hard rule 4 makes tuning
+; data, not constants — and beside `golden_hour.tres` because the sun these are
+; judged under is tuned in the same directory. Loaded by
+; `tools/generated_scene_import.gd` against the `city_facade` material name the
+; ETL writes, as **one** resource for all 66 tiles: retuning the city is this
+; file, and it is not a rebuild.
+;
+; `floor_height_m` and `column_pitch_m` were measured off the real facade
+; textures — 227 walls on 219 buildings of one individualised LandsD sheet, read
+; once offline and never shipped. docs/PROGRESS.md carries the distribution and
+; docs/DATA_SOURCES.md records that the sheet does not enter the build path.
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+[ext_resource type="Shader" path="res://assets/shaders/city_facade.gdshader" id="1_facade"]
+
+[resource]
+resource_name = "city_facade"
+shader = ExtResource("1_facade")
+shader_parameter/floor_height_m = 2.8
+shader_parameter/window_height_ratio = 0.55
+shader_parameter/column_pitch_m = 2.4
+shader_parameter/window_width_ratio = 0.62
+shader_parameter/podium_height_m = 12.0
+shader_parameter/window_colour = Color(0.24, 0.26, 0.3, 1)
+shader_parameter/window_opacity = 0.62
+shader_parameter/floor_line_darkness = 0.12
+shader_parameter/grounding_height_m = 3.0
+shader_parameter/grounding_darkness = 0.22
+shader_parameter/roughness_value = 0.9
+shader_parameter/wall_normal_max = 0.5
+shader_parameter/fade_start_m = 90.0
+shader_parameter/fade_end_m = 240.0
+shader_parameter/lit_window_colour = Color(1, 0.85, 0.55, 1)
+shader_parameter/lit_window_share = 0.0
+shader_parameter/emission_strength = 0.0

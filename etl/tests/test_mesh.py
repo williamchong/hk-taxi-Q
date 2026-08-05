@@ -8,6 +8,8 @@ not remove the things the art direction depends on.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import numpy as np
 import pytest
 
@@ -56,6 +58,46 @@ class TestMerge:
         )
         with pytest.raises(ValueError, match="UV atlas"):
             merge([textured], name="tile")
+
+    def test_uvs_without_a_texture_are_merged(self) -> None:
+        """`P3-7`'s payload is a shader coordinate with no image behind it, so
+        the atlas objection does not reach it — and merging is not optional:
+        every tile goes through here twice, per class and then per tier."""
+        first, second = box(), box(origin=(100, 0, 0))
+        merged = merge(
+            [
+                replace(first, uvs=np.zeros((len(first.positions), 2), dtype=np.float32)),
+                replace(second, uvs=np.ones((len(second.positions), 2), dtype=np.float32)),
+            ],
+            name="tile",
+        )
+
+        assert merged.uvs is not None
+        assert len(merged.uvs) == len(merged.positions)
+        # Concatenated in order, like every other attribute — a UV that stayed
+        # with the wrong vertex is the failure a length check cannot see.
+        assert (merged.uvs[: len(first.positions)] == 0.0).all()
+        assert (merged.uvs[len(first.positions) :] == 1.0).all()
+
+    def test_merging_mapped_with_unmapped_is_rejected(self) -> None:
+        """The same rule colours have, for the same reason: one primitive has one
+        attribute set, and the half without would render at whatever the missing
+        attribute defaults to — for `P3-7` that is height zero, so a whole class
+        would band as though it were at ground level."""
+        plain = box()
+        with pytest.raises(ValueError, match="with and without UVs"):
+            merge(
+                [plain, replace(plain, uvs=np.zeros((len(plain.positions), 2), dtype=np.float32))],
+                name="tile",
+            )
+
+    def test_material_is_not_inherited_from_an_input(self) -> None:
+        """A merged primitive has exactly one material, so taking whichever mesh
+        came first would be a coin toss with no error. The caller names the
+        result — `buildings._write_tile` does."""
+        merged = merge([replace(box(), material="city_facade"), box()], name="tile")
+
+        assert merged.material is None
 
     def test_indices_do_not_widen_to_int64(self) -> None:
         """A Python-list cumsum offsets in int64, which would silently promote
@@ -234,3 +276,13 @@ class TestSelectTriangles:
 
     def test_selecting_nothing_returns_nothing(self) -> None:
         assert select_triangles(box(), np.zeros(12, dtype=bool)) is None
+
+    def test_one_mesh_in_one_out_keeps_its_material(self) -> None:
+        """Both of these rebuild a `MeshData` field by field, so a field they
+        forget is dropped silently — and a tile that lost its material name
+        imports with the default `BaseMaterial3D` and renders as flat colour,
+        which is what it looked like before `P3-7` anyway."""
+        named = replace(box(), material="city_facade")
+
+        assert select_triangles(named, np.ones(12, dtype=bool)).material == "city_facade"
+        assert collapse(named, cell_m=0.5).material == "city_facade"

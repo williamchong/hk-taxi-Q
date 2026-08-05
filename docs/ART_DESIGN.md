@@ -82,11 +82,23 @@ window rows, procedurally. Dense repetitive window grids are the defining visual
 residential towers.
 
 ```
-Inputs:  face normal, TEXCOORD_0.x = height above the building's own base (0-1),
-                      TEXCOORD_0.y = per-building seed
+Inputs:  face normal, TEXCOORD_0.x = metres above the building's own base,
+                      TEXCOORD_0.y = surface marker + per-object phase
 Output:  band mask → darkened window rows, occasional lit window (emissive at night)
 Cost:    a few instructions, zero texture memory
 ```
+
+⚠️ **`TEXCOORD_0.x` was specified here as `0-1` and ships as metres, which is a correction rather
+than a detail.** Normalised, a vertex says what fraction of its own building it is up, and the shader
+cannot recover the building's height from that — so a 3-storey shophouse and a 40-storey tower get
+the *same number of window rows*. The floor count is the signature. In metres the row spacing is a
+constant of the city rather than of the object, and the podium mask becomes an absolute height.
+
+**The storey height is measured, not chosen: 2.8 m.** 227 walls on 219 buildings of one
+individualised (textured) LandsD sheet, read offline and discarded — height-weighted median 2.77 m,
+and Hong Kong's domestic floor-to-floor really is that tight. A guessed 3.2 would have put a storey
+too few on every tower. Column pitch is measured the same way at 2.4 m. `docs/DATA_SOURCES.md`
+records that the sheet does not enter the build path; `docs/PROGRESS.md` carries the distribution.
 
 ⚠️ **Two of those inputs have to come from the ETL, and they are why `P3-7` is one commit across both
 sides.** A vertex knows its world Y, not where its building starts — a podium vertex and a 30th-floor
@@ -99,12 +111,19 @@ that already carries colours.
 default sets `vertex_color_use_as_albedo`, and an opaque material ignores albedo alpha only until
 somebody enables transparency on a tile, at which point the city goes see-through with no error.
 
-A third thing rides the same stream for nothing: **bake a vertical gradient into `COLOR_0`**,
-darkening the bottom couple of metres of every building. Grounding a wall where it meets the pavement
-does more for perceived quality than per-building colour accuracy, and costs zero at runtime.
+A third thing comes for nothing once `TEXCOORD_0.x` exists: **darken the bottom couple of metres of
+every building.** Grounding a wall where it meets the pavement does more for perceived quality than
+per-building colour accuracy.
+
+⚠️ **This said "bake a vertical gradient into `COLOR_0`" and is now done in the shader instead**,
+because it was written before the height payload existed. Baking it would force `colour_for` to
+materialise a per-vertex colour array where it currently returns a read-only broadcast view of four
+bytes — real memory through the bucket phase, for a result `smoothstep(0, h, UV.x)` gives free.
 
 Windows must **not** appear on roofs or ground-level podium faces — mask by normal and by height above
-ground.
+the building's own base. Both are in `assets/shaders/city_facade.gdshader`; the numbers are in
+`tuning/city_facade.tres`, because they are tuning data (hard rule 4) and retuning the city must not
+be a rebuild.
 
 ### What buildings will *not* get
 

@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 import yaml
 
-from pipeline.config import CITIES_ROOT, SUPPORTED_SCHEMA, load_city
+from pipeline.config import CITIES_ROOT, SUPPORTED_SCHEMA, SurfaceClass, load_city
 
 
 @pytest.fixture
@@ -176,6 +176,25 @@ class TestBuildingStyle:
         *shipped* tiles, so structure the ETL alone can see would put the road
         in the right place relative to nothing the player ever meets."""
         assert hong_kong.buildings.structure_class in hong_kong.buildings.classes
+
+    def test_surface_class_reads_the_palette_rather_than_a_new_key(self, hong_kong) -> None:
+        """`P3-7`'s per-vertex marker is derived, not configured — hard rule 3.
+        The distinction the shader needs is one the palette has always drawn: a
+        class with a flat `class_colours` entry is a thing whose colour does not
+        depend on how tall it is, which is exactly the set with no floors to
+        band. A second city gets the right answer from its own palette."""
+        style = hong_kong.buildings
+
+        assert style.surface_class("BUILDING") == SurfaceClass.FACADE
+        assert style.surface_class(style.terrain_class) == SurfaceClass.GROUND
+        assert style.surface_class(style.structure_class) == SurfaceClass.STRUCTURE
+
+    def test_an_unknown_class_bands_like_a_building(self, hong_kong) -> None:
+        """`FACADE` is the fallback rather than a listed case, and that is the
+        safe direction: a new massing class reads as a building until someone
+        gives it a flat colour, and one that must not be banded announces itself
+        by needing a colour that height cannot supply."""
+        assert hong_kong.buildings.surface_class("VEGETATION") == SurfaceClass.FACADE
 
     def test_a_structure_class_that_is_never_tiled_is_rejected(self, rewrite) -> None:
         # A name that is not in `classes` rather than the terrain class, which

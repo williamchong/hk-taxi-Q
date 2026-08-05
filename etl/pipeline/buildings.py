@@ -95,6 +95,18 @@ COLLISION_SUFFIX = "-col"
 # tier whether or not it was asked for — worth knowing before adding one.
 COLLISION_TIER = 0
 
+# The glTF material name a tile ships so the engine knows to give it the
+# window-band shader (`P3-7`). `game/tools/generated_scene_import.gd` dispatches
+# on it; everything else in the bundle keeps the default `BaseMaterial3D`.
+#
+# A name rather than anything structural because glTF offers nothing else: the
+# format has no "use this shader" concept, and the payload that distinguishes a
+# tile — `TEXCOORD_0` — is also what the road surface uses for lane coordinates,
+# so its presence cannot be the signal. The same shape as `COLLISION_SUFFIX`
+# above, and it fails the same way: silently, in the engine, where only
+# `verify_tiles.gd` can see it.
+FACADE_MATERIAL = "city_facade"
+
 
 @dataclass(frozen=True)
 class LodOutput:
@@ -258,14 +270,23 @@ def game_offset(transform: GameTransform) -> np.ndarray:
     return np.asarray(transform.to_game(0.0, 0.0, 0.0), dtype=np.float64)
 
 
+def _seed(mesh: MeshData) -> float:
+    """A stable number in [0, 1) for one source mesh.
+
+    `crc32` of the name — the LandsD object id — rather than `hash`, which is
+    salted per process and would repaint the city on every run.
+
+    Shared by the colour jitter and `P3-7`'s window phase so the two agree: a
+    building whose brightness came out at the top of its band has its window rows
+    in the same place every rebuild, and neither can drift from the other.
+    """
+    return crc32(mesh.name.encode("utf-8")) / 0x1_0000_0000
+
+
 def colour_for(
     style: BuildingStyle, class_id: str, mesh: MeshData, bounds: Bounds | None = None
 ) -> np.ndarray:
     """One RGBA row per vertex: the class or height-band colour, jittered.
-
-    Jitter is seeded from the mesh name — the LandsD building id — via `crc32`
-    rather than `hash`, which is salted per process and would repaint the city
-    on every run.
 
     How much jitter is the class's to say, not the city's alone. Seeding per
     source mesh only means "per object" where the source ships one mesh per
@@ -276,8 +297,7 @@ def colour_for(
 
     jitter = style.jitter_for(class_id)
     if jitter > 0.0:
-        unit = crc32(mesh.name.encode("utf-8")) / 0x1_0000_0000
-        factor = 1.0 + jitter * (2.0 * unit - 1.0)
+        factor = 1.0 + jitter * (2.0 * _seed(mesh) - 1.0)
         red, green, blue = (
             min(255, max(0, round(channel * factor))) for channel in (red, green, blue)
         )
@@ -287,6 +307,79 @@ def colour_for(
     return np.broadcast_to(
         np.array([red, green, blue, 255], dtype=np.uint8), (len(mesh.positions), 4)
     )
+
+
+def facade_uv(
+    style: BuildingStyle, class_id: str, mesh: MeshData, bounds: Bounds | None = None
+) -> np.ndarray:
+    """One `TEXCOORD_0` row per vertex, for the window-band shader (`P3-7`).
+
+    Two things the shader cannot derive and the ETL therefore must ship:
+
+    - **`u` is metres above this mesh's own base.** A vertex knows its world Y,
+      not where its building starts, so a podium vertex and a 30th-floor vertex
+      are indistinguishable to a shader — and Wan Chai's ground moves 40 m across
+      the region, so world Y is not even a proxy. **Metres rather than the 0-1
+      `ART_DESIGN.md` first specified**: normalised, a 3-storey shophouse and a
+      40-storey tower each get the same number of window rows, and the floor
+      *count* is the density signature the whole effect exists to carry.
+    - **`v` is `surface_class + seed`.** The integer part says what this vertex
+      belongs to, because a tile is one merged primitive and nothing else
+      distinguishes a façade from a viaduct. The fraction is a per-object phase,
+      so neighbouring towers do not line their window rows up.
+
+    Packed into one VEC2 rather than taking a second attribute: `TEXCOORD_1`
+    would cost another accessor and another vertex stream for one number that
+    never varies within a mesh.
+
+    ⚠️ **The horizontal window coordinate is deliberately *not* here.** It is
+    derivable in the shader from world position and the wall normal, and a
+    payload that ships what the geometry already knows is bytes on every vertex
+    of every tile forever.
+
+    ⚠️ **Computed on the whole source mesh, before `assign` splits it**, for the
+    same reason the colour is: a viaduct partitioned across four tiles must keep
+    one base, or the four pieces disagree about where the ground was.
+
+    ⚠️ Unlike `colour_for`, this cannot be a broadcast view — `u` varies per
+    vertex — so it is 8 bytes a vertex through the bucket phase.
+
+    ⚠️ **"Its own base" means the source mesh's, which is an object only where
+    the source ships one mesh per object.** True of buildings, false of the
+    ground, whose sheet-sized meshes each measure from their own lowest corner —
+    so `u` on ground is not comparable across a sheet boundary. Harmless while
+    `GROUND` is reserved and unread, and the same caveat `jitter_for` already
+    records for colour. A ground treatment that wants a height must say which
+    height, and that is a schema question rather than a shader one.
+    """
+    low, _ = bounds if bounds is not None else mesh.aabb()
+    uvs = np.empty((len(mesh.positions), 2), dtype=np.float32)
+    uvs[:, 0] = mesh.positions[:, 1] - low[1]
+    uvs[:, 1] = float(style.surface_class(class_id)) + _phase(mesh)
+    return uvs
+
+
+# Distinct window phases. A power of two so `_phase` lands on values float32
+# holds exactly, and 256 because the eye cannot count more offsets than that
+# across a street.
+_PHASES = 256
+
+
+def _phase(mesh: MeshData) -> float:
+    """The seed as a fraction that survives being added to a surface marker.
+
+    ⚠️ **Not `_seed` directly, and the difference is a real defect rather than
+    tidiness.** `_seed` reaches 1 - 2^-32, and float32 has 24 bits of mantissa:
+    near 2.0 its spacing is ~2.4e-7, so `STRUCTURE + 0.9999999998` rounds *up to
+    exactly 3.0*. The shader would read a marker of 3, which is nothing, and a
+    phase of 0. It would have been rare, silent, and confined to whichever
+    viaduct happened to draw a high seed.
+
+    Quantising to 1/256 removes the case by construction rather than by margin:
+    every value is exactly representable at every marker, so `floor` and `fract`
+    round-trip in the shader instead of nearly doing so.
+    """
+    return math.floor(_seed(mesh) * _PHASES) / _PHASES
 
 
 def _ground(mesh: MeshData, offset: np.ndarray, style: BuildingStyle) -> MeshData:
@@ -398,14 +491,25 @@ def build_region(
                 if inside is None:
                     report.clipped += 1
                     continue
-                ground.append(replace(inside, colours=colour_for(style, class_id, inside)))
+                ground.append(
+                    replace(
+                        inside,
+                        colours=colour_for(style, class_id, inside),
+                        uvs=facade_uv(style, class_id, inside),
+                    )
+                )
                 kept += 1
                 continue
             placed = mesh.translated(place.offset)
             bounds = placed.aabb()
-            # Colour comes from the whole mesh's height, before any splitting,
-            # so a viaduct partitioned across four tiles stays one colour.
-            coloured = replace(placed, colours=colour_for(style, class_id, placed, bounds))
+            # Colour and shader payload both come from the whole mesh, before any
+            # splitting, so a viaduct partitioned across four tiles stays one
+            # colour and keeps one base to measure its height above.
+            coloured = replace(
+                placed,
+                colours=colour_for(style, class_id, placed, bounds),
+                uvs=facade_uv(style, class_id, placed, bounds),
+            )
             placements = list(assign(coloured, place.grid, bounds))
             for tile, piece in placements:
                 buckets.setdefault(tile, {}).setdefault(class_id, []).append(piece)
@@ -591,7 +695,11 @@ def _write_tile(
             log.info("  %s: nothing survives LOD%d", tile_id, level)
             break
         suffix = COLLISION_SUFFIX if level == COLLISION_TIER else ""
-        tier = merge(pieces, name=f"{tile_id}{suffix}")
+        # Named after the merge rather than carried through it: a merged
+        # primitive has one material and `merge` refuses to guess which. This is
+        # the tile's request for the window-band shader, and the only channel
+        # glTF gives for it — see `FACADE_MATERIAL`.
+        tier = replace(merge(pieces, name=f"{tile_id}{suffix}"), material=FACADE_MATERIAL)
         boxes.append(tier.aabb())
 
         relative = Path("tiles") / f"{tile_id}_lod{level}.glb"

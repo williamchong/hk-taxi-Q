@@ -87,6 +87,15 @@ class MeshData:
     colours: np.ndarray | None = None  # (n, 4) uint8 RGBA
     uvs: np.ndarray | None = None  # (n, 2) float32
     texture: Texture | None = None
+    # glTF material name, when the *engine* has to recognise it. Left unset the
+    # material is named after the mesh, which is a label; set, it is a contract.
+    #
+    # `P3-7` needs one: `TEXCOORD_0` on a tile is a shader payload rather than a
+    # texture coordinate, so a tile must import with a `ShaderMaterial` where
+    # every other asset keeps its `BaseMaterial3D`. The engine sees a name and
+    # nothing else — this is the only channel glTF offers for that, and it is the
+    # same shape as the `-col` node-name suffix already carrying collision.
+    material: str | None = None
 
     def __post_init__(self) -> None:
         count = len(self.positions)
@@ -509,7 +518,7 @@ def _material(
     gltf: dict[str, Any], binary: bytearray, mesh: MeshData, textures: dict[int, int]
 ) -> int:
     material: dict[str, Any] = {
-        "name": f"{mesh.name}_material",
+        "name": mesh.material or f"{mesh.name}_material",
         "pbrMetallicRoughness": {
             "baseColorFactor": [1.0, 1.0, 1.0, 1.0],
             # Flat-shaded massing under a low sun. Any metallic response reads

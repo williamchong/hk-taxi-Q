@@ -15,6 +15,7 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
+from enum import IntEnum
 from pathlib import Path
 from typing import Any
 
@@ -65,6 +66,31 @@ class TiledSource:
     # Per-tile version stamp used as the cache key. Optional: a publisher that
     # offers none simply gets fetch-once semantics.
     revision_property: str | None = None
+
+
+class SurfaceClass(IntEnum):
+    """What a tile vertex belongs to, as shipped in `TEXCOORD_0.y` (`P3-7`).
+
+    A tile is one merged primitive, so every class in it arrives at the shader
+    through the same material with nothing to tell them apart. This is that
+    something. `BuildingStyle.surface_class` decides which one a class gets.
+
+    ⚠️ **The values are a wire format shared with `city_facade.gdshader`**, which
+    compares against integer literals. Renumbering here silently repaints the
+    city — a viaduct grows windows, or the ground does. They are part of
+    `city.json`'s `schema_version`, not a private enumeration.
+    """
+
+    # Height-banded massing: bands, windows and the grounding gradient.
+    FACADE = 0
+    # The region's ground. Reserved rather than used — merging into the tile
+    # primitive bought the ground a free draw call and cost it its own material,
+    # so a later ground-only treatment needs something to select on and this is
+    # cheaper to ship now than to bump the schema for twice (ARCHITECTURE.md).
+    GROUND = 1
+    # Elevated road structure. Drawn plain: a viaduct soffit has no floors, and
+    # banding one is the giveaway that the effect is procedural.
+    STRUCTURE = 2
 
 
 @dataclass(frozen=True)
@@ -154,6 +180,32 @@ class BuildingStyle:
         floating — and neither says anything on the way past.
         """
         return class_id == self.terrain_class
+
+    def surface_class(self, class_id: str) -> int:
+        """Which kind of surface a class is, as the marker `P3-7` ships per vertex.
+
+        The window-band shader has to tell a façade from a viaduct soffit from
+        the pavement, and a vertex carries nothing that says which it is. So the
+        ETL says, in `TEXCOORD_0.y`'s integer part — see `buildings._facade_uv`.
+
+        **Derived from config that already exists rather than from a new key**,
+        because the distinction is one the palette has always drawn: a class with
+        a flat `class_colours` entry is a thing whose colour does not depend on
+        how tall it is, and that is exactly the set with no floors to band. Hard
+        rule 3 holds — no class name reaches this file, and a second city gets
+        the right answer from its own palette without writing the mapping twice.
+
+        `FACADE` is the fallback rather than a listed case, so a class the
+        palette height-bands is banded by the shader too. That is the safe
+        direction: a new massing class reads as a building until someone gives it
+        a flat colour, and one that should not be banded announces itself by
+        needing a colour that height cannot supply.
+        """
+        if self.is_ground(class_id):
+            return SurfaceClass.GROUND
+        if class_id in self.class_colours:
+            return SurfaceClass.STRUCTURE
+        return SurfaceClass.FACADE
 
     def jitter_for(self, class_id: str) -> float:
         """Brightness variation for one class.

@@ -355,7 +355,7 @@ warns and falls back to the authored width rather than failing; `verify_road_gra
 table's absence as an error.
 
 ⚠️ **`bounds_game` is the union of the content, not the region rectangle.** Wan Chai's declared
-region is 1650 × 887 m; its geometry spans 1668 × 942 m, because a building is assigned to a tile
+region is 1650 × 887 m; its geometry spans 1737 × 977 m, because a building is assigned to a tile
 whole and may overhang, and because the road ribbon is drawn outward from centrelines that run right
 up to the edge. A consumer sizing a spatial partition, framing a camera, or placing diegetic map
 edges off the rectangle will clip real geometry.
@@ -393,7 +393,31 @@ Tile vertices are in region game space, so a tile needs no transform; that is wh
 tiles an `aabb` but no position.
 
 **Tile output carries no textures.** One material, one primitive, colour in `COLOR_0` — that is what
-makes a tile one draw call, checked in-engine by `verify_tiles.gd`.
+makes a tile one draw call, checked in-engine by `verify_tiles.gd`. Since `P3-7` it also carries
+`TEXCOORD_0`, which is **not** a texture coordinate: no image is sampled, and `merge` still refuses a
+textured mesh outright.
+
+| Attribute | Meaning |
+|---|---|
+| `TEXCOORD_0.x` | Metres above **that source object's own base**. A vertex knows its world Y, not where its building starts, and the region's ground moves 40 m — so world Y is not even a proxy. Metres rather than a 0-1 fraction because the floor *count* is the signature the window shader exists to carry |
+| `TEXCOORD_0.y` | `floor()` is a `SurfaceClass` marker — 0 façade, 1 ground, 2 structure. `fract()` is a per-object phase in 1/256 steps, so neighbouring towers do not line their window rows up |
+| Material name | **`city_facade`**, and the name is the contract. glTF cannot say "use this shader", so `tools/generated_scene_import.gd` dispatches on the name and hands the tile `tuning/city_facade.tres`; everything else in the bundle keeps its `BaseMaterial3D` |
+
+⚠️ **The phase is quantised to 1/256 because float32 rounds it into the next marker otherwise.** The
+raw seed reaches 1 − 2⁻³², and float32's spacing near 2.0 is ~2.4e-7, so `STRUCTURE + 0.9999999998`
+becomes exactly `3.0` — an unknown marker with a lost phase, on whichever viaduct drew a high seed.
+1/256 is exactly representable at every marker, so `floor` and `fract` round-trip in the shader.
+
+⚠️ **The marker is derived from the palette, not from a config key.** A class with a flat
+`class_colours` entry is one whose colour does not depend on its height, which is exactly the set with
+no floors to band; anything the height bands colour is a façade. So a second city gets the right
+answer from its own palette, and no class name reaches pipeline logic (hard rule 3).
+
+⚠️ **Three places have to agree and only one of them can fail loudly.** The ETL names the material,
+the import script recognises the name, the shader reads the payload — and if any link breaks, every
+tile keeps its default `BaseMaterial3D` and renders in flat vertex colour, which is what the city
+looked like *before* `P3-7`. There is no error and nothing on screen that reads as broken.
+`verify_tiles.gd` therefore asserts both the payload and the resolved material path.
 
 **The finest tier ships collision; no other tier does.** The tier-0 mesh is named `<tile_id>-col`,
 and Godot's glTF importer reads that suffix into a `StaticBody3D` carrying a
@@ -411,7 +435,8 @@ so it collapses at its own cell size (4 m / 8 m) and then merges with the massin
 triangles at LOD0, no texture, and no extra draw call.** No `schema_version` bumped — nothing was
 added, removed or renamed, and no attribute changed meaning. A consumer reading a tile is not
 *wrong* to keep its old interpretation; it simply draws more. `tiles[].aabb` and `bounds_game` grew
-(1668 × 942 m → 1728 × 977 m) and the region gained a 66th tile, because ground reaches corners no
+(1668 × 942 m → 1737 × 977 m, quoted as 1728 until `P3-7` rebuilt and checked it against a `HEAD`
+baseline) and the region gained a 66th tile, because ground reaches corners no
 building did.
 
 ⚠️ **The tier-0 collider now includes the ground, and nothing in the ETL says so.** The suffix goes
@@ -420,17 +445,24 @@ on the *merged* mesh, so anything in `classes` collides at that tier whether or 
 `buildings.ground_sink_m` drops the ground under the kerb so the two surfaces do not fight;
 `tools/ground_clearance.py` grades it.
 
-**One addition to the vertex stream is planned, and it bumps `schema_version`:**
+**The vertex stream gained `TEXCOORD_0` in `P3-7`, and `schema_version` went 4 to 5.** Its meaning is
+in the table above. Two things about what it cost:
 
-| Addition | Task | Cost |
-|---|---|---|
-| `TEXCOORD_0.xy` = height above the building's own base, per-building seed | `P3-7` | ~2 bytes/vertex quantised. The window-band shader cannot derive either from a vertex, so the ETL must ship them — one commit across both sides |
+⚠️ **It ships float32, not the "~2 bytes/vertex quantised" this file predicted, and the prediction
+was out by more than the encoding.** Measured from PCKs with one variable changed: **32.36 → 36.37 MB,
++4.01 MB**, against 937,889 vertices across both tiers — 7.50 MB of raw VEC2 that the pack compresses
+by 47%. Quantising to `unorm16` would halve the raw side and save perhaps 2 MB, at the price of a
+scale factor in the contract on both sides. **Not done, because the bundle budget is 200 MB and this
+build is at 36.37**; the note is here so a later region short of room knows where 2 MB is hiding.
+Peak ETL RSS went **800 → 900 MB** on the same machine, from materialising 8 bytes a vertex through
+the bucket phase where `colour_for` gets away with a broadcast view.
 
-⚠️ **`P3-7` should reserve a ground marker in the same payload while it is there.** Merging bought
-the ground a free draw call and cost it its own material, so a later ground-only treatment — slope
-blending, a PBR-ish roughness variation, any ground shader — has nothing to select on. A channel of
-`TEXCOORD_0` is where that selector belongs, and adding it with `P3-7` costs one commit instead of
-two schema bumps. Not built.
+⚠️ **The ground marker was reserved here rather than left to a later task.** Merging bought the
+ground a free draw call and cost it its own material, so a ground-only treatment — slope blending, a
+PBR-ish roughness variation, any ground shader — had nothing to select on. `SurfaceClass.GROUND` is in
+the payload now and the shader ignores it, which cost one commit instead of a second schema bump. What
+it does **not** buy is a usable height: `TEXCOORD_0.x` measures from each source mesh's own base, and
+the ground's meshes are sheet-shaped, so the value is not comparable across a sheet boundary.
 
 ⚠️ `COLOR_0.a` is a constant `255` today and looks like the cheaper place for a shader mask. It is
 not: `generated_scene_import.gd` sets `vertex_color_use_as_albedo` project-wide, and an opaque

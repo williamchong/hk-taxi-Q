@@ -94,6 +94,25 @@ shape**, at 15–27× the download. Wan Chai in individualised form is **5.86 GB
 not ship at all (`GENERIC` 47.1 MB, `INFRASTRUCTURE(TB)` 36.5 MB, `VEGETATION(TB)` 12.8 MB on one
 sheet). Shared classes are equal to within a rounding error; terrain is byte-identical.
 
+✅ **`P3-7` read one sheet of it, once, offline — and it still does not ship.** The window-band shader
+needed a storey height, and guessing one would have put the wrong floor count on every tower in the
+region. So `11-SW-15A` was fetched in individualised form (**1.10 GB**, discarded afterwards), the
+wall textures of 515 buildings were autocorrelated down their V axis, and the result — **227 usable
+walls on 219 buildings, height-weighted median floor pitch 2.77 m, column pitch p50 2.42 m** — was
+authored into `game/tuning/city_facade.tres` as three numbers. `ART_DESIGN.md` already sanctioned
+exactly this shape of read for *colour*; this is the same move for spacing.
+
+The probe is **not committed**, deliberately. `deck_error.py`, `overhang.py` and `ground_clearance.py`
+are committed because they grade the *shipped bundle* on every build; this graded a 1.10 GB download
+that no build has, produced three constants, and would be rewritten rather than re-run. The numbers
+and the method are in `PROGRESS.md`, which is what makes it repeatable.
+
+⚠️ **Nothing about that changes the case against shipping the textures**, and the reasons are
+structural rather than budgetary: `mesh.collapse` takes UVs from a *cluster representative*, which is
+meaningless for an atlas coordinate, and `mesh.merge` refuses textured meshes because two textures
+cannot share one primitive. Per-building texture breaks both LOD tiers and the one-draw-call tile —
+before the 5.86 GB is even considered.
+
 ✅ **This confirms `P3-6` rather than reopening it.** The stated reason to reach for individualised
 models was hero landmarks "whose silhouettes LOD1 extrusion destroys" — but that concern belongs to
 **3D-BIT00 Level 1**, which is extruded from footprints by definition. The non-textured 3D

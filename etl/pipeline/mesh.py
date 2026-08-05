@@ -40,14 +40,29 @@ def _as_indices(triangles: np.ndarray) -> np.ndarray:
 def merge(meshes: Sequence[MeshData], *, name: str) -> MeshData:
     """Concatenate meshes into one, so the tile costs one draw call.
 
-    Every input must carry vertex colours or none may: a merged primitive has a
-    single attribute set, and a half-coloured one would render the uncoloured
-    buildings at whatever the missing attribute defaults to.
+    Every input must carry vertex colours or none may, and the same for UVs: a
+    merged primitive has a single attribute set, and a half-coloured one would
+    render the uncoloured buildings at whatever the missing attribute defaults
+    to.
 
     Textured meshes are rejected outright rather than merged. Two textures
     cannot share one primitive without repacking their UVs into an atlas, which
     this does not do — and silently keeping one texture and dropping the other
     would render the second mesh in a single wrong colour, with no error.
+
+    ⚠️ **UVs without a texture are a different question, and they merge** (`P3-7`).
+    This rejected both together until the window-band shader needed a payload
+    the geometry cannot derive: height above the building's own base, and a
+    per-building seed. That is a coordinate meant for a *shader*, not for an
+    image, so the atlas objection does not reach it — nothing has to be repacked
+    because nothing is being sampled. The texture half of the guard is unchanged
+    and still catches the case it was written for.
+
+    **`material` is not carried, where `collapse` and `select_triangles` do carry
+    it.** Those are one mesh in and one out, so the answer is unambiguous; this
+    takes many and a merged primitive has exactly one material, so inheriting
+    whichever mesh happened to be first would be a coin toss with no error. The
+    caller that merges a tile names the result — see `buildings._write_tile`.
     """
     if not meshes:
         raise ValueError(f"cannot merge zero meshes into '{name}'")
@@ -57,8 +72,11 @@ def merge(meshes: Sequence[MeshData], *, name: str) -> MeshData:
         raise ValueError(
             f"'{name}': cannot merge coloured and uncoloured meshes into one primitive"
         )
-    if any(mesh.texture is not None or mesh.uvs is not None for mesh in meshes):
+    if any(mesh.texture is not None for mesh in meshes):
         raise ValueError(f"'{name}': cannot merge textured meshes — that needs a UV atlas")
+    mapped = [mesh.uvs is not None for mesh in meshes]
+    if any(mapped) and not all(mapped):
+        raise ValueError(f"'{name}': cannot merge meshes with and without UVs into one primitive")
 
     # uint32 rather than the int64 a Python-list cumsum defaults to, which would
     # promote every merged index array and double the index buffer.
@@ -71,6 +89,7 @@ def merge(meshes: Sequence[MeshData], *, name: str) -> MeshData:
             [mesh.triangles + offset for mesh, offset in zip(meshes, offsets, strict=True)]
         ),
         colours=np.concatenate([mesh.colours for mesh in meshes]) if all(coloured) else None,
+        uvs=np.concatenate([mesh.uvs for mesh in meshes]) if all(mapped) else None,
     )
 
 
@@ -94,6 +113,7 @@ def select_triangles(mesh: MeshData, keep: np.ndarray) -> MeshData | None:
         colours=None if mesh.colours is None else mesh.colours[used],
         uvs=None if mesh.uvs is None else mesh.uvs[used],
         texture=mesh.texture,
+        material=mesh.material,
     )
 
 
@@ -199,6 +219,7 @@ def collapse(mesh: MeshData, *, cell_m: float, height_field: bool = False) -> Me
         colours=None if mesh.colours is None else mesh.colours[representative][used],
         uvs=None if mesh.uvs is None else mesh.uvs[representative][used],
         texture=mesh.texture,
+        material=mesh.material,
     )
 
 

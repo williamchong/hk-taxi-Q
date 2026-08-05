@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import struct
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -175,6 +176,26 @@ class TestWriting:
         assert colour["normalized"] is True
         assert colour["type"] == "VEC4"
         assert colour["componentType"] == 5121
+
+    def test_a_material_name_is_shipped_when_the_engine_has_to_recognise_it(self, tmp_path) -> None:
+        """`P3-7`: a tile asks for the window-band shader by naming its material,
+        because glTF offers no other channel and the payload that distinguishes a
+        tile — `TEXCOORD_0` — is what the road surface uses for lane coordinates.
+
+        Asserted from the file rather than from `MeshData`, because it is the
+        bytes Godot's importer reads."""
+        write_glb(tmp_path / "t.glb", [replace(self.box(), material="city_facade")])
+        document = self.document_of(tmp_path / "t.glb")
+
+        assert document["materials"][0]["name"] == "city_facade"
+
+    def test_a_mesh_that_names_no_material_is_labelled_after_itself(self, tmp_path) -> None:
+        """Unchanged for every other asset. Roads and vehicles keep a material
+        named for the mesh, which is a label rather than a contract — and keeps
+        them on the default `BaseMaterial3D` at import."""
+        write_glb(tmp_path / "t.glb", [self.box()])
+
+        assert self.document_of(tmp_path / "t.glb")["materials"][0]["name"] == "tile_material"
 
     def test_untextured_meshes_carry_no_image(self, tmp_path) -> None:
         """`P1-2` accepts no textures in the tile output at all."""
