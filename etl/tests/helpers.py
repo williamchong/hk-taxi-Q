@@ -16,6 +16,7 @@ from typing import Any
 import numpy as np
 from pyogrio.raw import write as _ogr_write
 
+from pipeline.config import BuildingStyle, HeightBand
 from pipeline.gltf import MeshData
 from pipeline.terrain import HeightField
 
@@ -122,6 +123,37 @@ def box(
         normals=np.array(normals, dtype=np.float32),
         triangles=np.arange(36, dtype=np.uint32).reshape(-1, 3),
         colours=np.tile(np.array(colour, np.uint8), (36, 1)),
+    )
+
+
+def flat_mesh(name: str, height: float) -> MeshData:
+    """One triangle of a given height, named — the smallest thing `colour_for`
+    and `facade_uv` will read a band and a seed off."""
+    positions = np.array([[0, 0, 0], [1, 0, 0], [0, height, 0]], dtype=np.float64)
+    return MeshData(
+        name=name,
+        positions=positions,
+        normals=np.zeros((3, 3), dtype=np.float32),
+        triangles=np.array([[0, 1, 2]], dtype=np.uint32),
+    )
+
+
+def style(jitter: float = 0.0) -> BuildingStyle:
+    """A minimal two-band building style. `replace()` it for anything else."""
+    return BuildingStyle(
+        classes=("BUILDING", "INFRASTRUCTURE"),
+        terrain_class="TERRAIN",
+        structure_class=None,
+        class_colours={"INFRASTRUCTURE": (100, 100, 100)},
+        height_bands=(
+            HeightBand(up_to_m=12.0, colour=(200, 180, 150)),
+            HeightBand(up_to_m=float("inf"), colour=(190, 200, 200)),
+        ),
+        colour_jitter=jitter,
+        class_colour_jitter={},
+        lod_cell_sizes_m=(0.0,),
+        class_lod_cell_sizes_m={},
+        ground_sink_m=0.0,
     )
 
 

@@ -31,10 +31,10 @@ from pipeline.buildings import (
     facade_uv,
     game_offset,
 )
-from pipeline.config import BuildingStyle, HeightBand, SurfaceClass
+from pipeline.config import BuildingStyle, SurfaceClass
 from pipeline.gltf import MeshData, read_glb
 from pipeline.mesh import collapse
-from tests.helpers import BOX_FACES, box_corners, box_soup, covered, soup
+from tests.helpers import BOX_FACES, box_corners, box_soup, covered, flat_mesh, soup, style
 
 # --------------------------------------------------------------------------
 # Fixture construction — a sheet zip shaped like the real ones
@@ -310,34 +310,6 @@ class TestAssign:
 # --------------------------------------------------------------------------
 # Colour
 # --------------------------------------------------------------------------
-
-
-def flat_mesh(name: str, height: float) -> MeshData:
-    positions = np.array([[0, 0, 0], [1, 0, 0], [0, height, 0]], dtype=np.float64)
-    return MeshData(
-        name=name,
-        positions=positions,
-        normals=np.zeros((3, 3), dtype=np.float32),
-        triangles=np.array([[0, 1, 2]], dtype=np.uint32),
-    )
-
-
-def style(jitter: float = 0.0) -> BuildingStyle:
-    return BuildingStyle(
-        classes=("BUILDING", "INFRASTRUCTURE"),
-        terrain_class="TERRAIN",
-        structure_class=None,
-        class_colours={"INFRASTRUCTURE": (100, 100, 100)},
-        height_bands=(
-            HeightBand(up_to_m=12.0, colour=(200, 180, 150)),
-            HeightBand(up_to_m=float("inf"), colour=(190, 200, 200)),
-        ),
-        colour_jitter=jitter,
-        class_colour_jitter={},
-        lod_cell_sizes_m=(0.0,),
-        class_lod_cell_sizes_m={},
-        ground_sink_m=0.0,
-    )
 
 
 class TestColour:

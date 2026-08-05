@@ -268,14 +268,40 @@ abandons the accurate surface, and recognition is the product.
 
 - **No per-building texture, and no low-res atlas.** Any texture needs UVs, and UVs do not survive the
   vertex clustering that produces both shipped LOD tiers. It is paying to break the LOD system.
-- **No colour sampled per building from the individualised set.** That means the 5.86 GB download for
-  one region, 93–96% of it texture, plus matching ids across two sets that disagree on model count.
-  And oblique aerial capture is dominated by shadow, sky bounce and haze, so the median converges on
-  grey-beige for everything — flattening exactly the old-below/new-above contrast the height bands
-  exist to express. High cost, plausibly negative result.
-- **What the photo data may be used for** is a one-off offline read: cluster the dominant façade
-  colours from a sheet or two and re-author the five `height_bands` in city config from the result.
-  Evidence-based palette, nothing added to the build path.
+- 🚚 **"No colour sampled per building" has moved out of this list — buildings now get it.** All
+  three original objections fell to measurement; see "Per-building façade colour" below and the
+  `PROGRESS.md` entries of 2026-08-06. What survives of the objection is narrower and still binding:
+  **the photographs' `L*` is not usable and is not used.**
+- ⚠️ **What this document used to sanction — "re-author the five `height_bands` from clustered façade
+  colour" — is measured and close to pointless.** Height explains **1.2% of `a*` and 0.8% of `b*`**
+  across all 2,214 buildings, so re-authoring the bands while keeping height as the key moves the fit
+  barely at all. **Height is not the signal**, and the ramp stays what it is: a *lightness* ramp,
+  old-and-darker below to pale-above, which is the one thing height does predict (10.9%).
+
+### Per-building façade colour
+
+Every building carries its **own measured hue**, read offline from the individualised set's photo
+textures and joined to the massing by the building id's stem. 2,214 buildings, 100% matched, and it
+costs the runtime nothing: it lands in the `COLOR_0` the tiles already shipped, so there is no new
+attribute, no schema change, no shader change and no interaction with the LOD clustering. Where an
+atlas is unreadable a building falls back to its height band. `etl/config/cities/hong_kong.yaml`
+holds the switch; `etl/pipeline/colour.py` holds the conversion and the reasoning.
+
+⚠️ **Hue is taken and lightness is refused, and that is a measurement rather than a preference.**
+Across the survey, the `L*` spread *within* one building — its four walls, same cladding, differing
+only in which way they faced the sun — is **22.9 on average and 41.1 at p90**, against a
+between-building spread of **16.25**. The confound is larger than the signal. Hue survives because
+illumination moves value far more than it moves hue, so `a*`/`b*` are evidence and `L*` is a record
+of the flight. Shipping it as albedo would bake that flight's shadows into the city for the engine's
+sun to shade a second time. `facade_hue.strength` scales the measured chroma and is the *stylisation*
+knob, kept separate so the two cannot be confused.
+
+⚠️ **The city still reads pale, and the palette is not why.** Rendered with every façade element
+switched off and no jitter, the colour is barely visible — but dropping the height bands from L\* 80
+to L\* 62 moved the *frame* only from L\* 86.8 to 83.3. An 18-point albedo change bought 3.5 points
+of pixel. **The clean rig's light levels swamp albedo**, which is the thing to fix first if the city
+should read more colourful; `base_wash` and the palette were both eliminated by test before this was
+found. Evidence in `build/driver/flat_colour` against `build/driver/flat_lit`.
 
 ### Hero buildings (~5)
 

@@ -320,6 +320,29 @@ class TestBuildingStyle:
         with pytest.raises(ValueError, match=r"class_colour_jitter\.BUILDING"):
             load_city("hong_kong", cities_root=rewrite(overdo_it))
 
+    @pytest.mark.parametrize("value", [-0.1, 99.0, float("nan"), float("inf")])
+    def test_facade_hue_strength_outside_its_bound_is_rejected(self, rewrite, value) -> None:
+        """⚠️ The ceiling exists to make this test two-sided, and that is the
+        whole point of it. A one-sided `< 0.0` guard admits `.nan` and `.inf`,
+        and a NaN strength reaches `np.clip(np.round(nan)).astype(np.uint8)`,
+        which miscolours every surveyed building without raising anything."""
+
+        def overdo_it(doc: dict[str, Any]) -> None:
+            doc["buildings"]["facade_hue"]["strength"] = value
+
+        with pytest.raises(ValueError, match=r"facade_hue\.strength"):
+            load_city("hong_kong", cities_root=rewrite(overdo_it))
+
+    def test_facade_hue_needs_a_source(self, rewrite) -> None:
+        """`strength` alone colours nothing, so the pair is refused rather than
+        silently ignored."""
+
+        def drop_source(doc: dict[str, Any]) -> None:
+            del doc["buildings"]["facade_hue"]["source"]
+
+        with pytest.raises(ValueError, match="source"):
+            load_city("hong_kong", cities_root=rewrite(drop_source))
+
     @pytest.mark.parametrize("spoil", ["drop", "zero"])
     def test_tiling_the_ground_without_a_sink_is_rejected(self, rewrite, spoil) -> None:
         """The silent failure this check exists for: `roads.py` lays the level-0

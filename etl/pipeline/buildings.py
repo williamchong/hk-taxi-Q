@@ -47,6 +47,7 @@ LOD cell sizes all arrive from `config/cities/*.yaml`.
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import math
 import zipfile
@@ -59,18 +60,33 @@ from zlib import crc32
 import numpy as np
 from numpy.typing import ArrayLike
 
+from pipeline.colour import with_hue
 from pipeline.config import BuildingStyle, CityConfig, RegionConfig, load_city
 from pipeline.crs import GameTransform
 from pipeline.documents import write_document
-from pipeline.fetch import artefact_path, cached_tiles
+from pipeline.fetch import artefact_path, cached_tiles, source_dir
 from pipeline.gltf import Bounds, MeshData, read_scene, write_glb
 from pipeline.mesh import EmptyMeshError, collapse, merge, select_triangles
 
 log = logging.getLogger(__name__)
 
+# A building's measured `(a*, b*)` — hue without lightness. See `colour.py`.
+Hue = tuple[float, float]
+
 # The config key for the tiled source that carries massing. A stage name rather
 # than a city fact — `fetch.py --only buildings` names the same thing.
 SOURCE_ID = "buildings"
+
+# Where the photo survey lands under the sources tree. A stage name for the same
+# reason `SOURCE_ID` is, which keeps the city id out of the city's own config —
+# `source_dir` puts it there, and it is the only thing that should.
+HUE_SOURCE_ID = "facade_colour"
+
+# How many characters of a source id are the variant suffix. `docs/DATA_SOURCES.md`
+# establishes the remaining **stem** as the cross-dataset key: the survey reads
+# the individualised set's `…A0` models and this pipeline reads the non-textured
+# `…C0` ones, and the stem is what joins them.
+_VARIANT_SUFFIX = 2
 
 # Named for what it holds, not for `fetch.py`'s `manifest.json`, which is a
 # different file with a different job.
@@ -283,17 +299,73 @@ def _seed(mesh: MeshData) -> float:
     return crc32(mesh.name.encode("utf-8")) / 0x1_0000_0000
 
 
+def _stem(name: str) -> str:
+    """A source id without its variant suffix — see `_VARIANT_SUFFIX`.
+
+    It was re-verified on sheet `11-SW-10C`: 151 buildings, 151 stems, and every
+    one matched between the non-textured set this pipeline reads and the
+    individualised set the survey read, with no orphan on either side.
+    """
+    return name[:-_VARIANT_SUFFIX]
+
+
+def facade_hue(style: BuildingStyle, city_id: str, *, root: Path | None = None) -> dict[str, Hue]:
+    """Per-building `(a*, b*)` from the photo survey, or empty if there is none.
+
+    Keyed by `_stem`, which is what joins the survey's models to this
+    pipeline's.
+
+    ⚠️ **Missing is normal, not an error.** The survey is a 4.9 GB read that
+    `etl/sources/` caches and `.gitignore` excludes, so a fresh clone has none
+    and must still build the same city it built before. Absent, every building
+    falls back to its height band, which is what `colour_for` already did.
+    Malformed is a different matter and is refused loudly — a partial write of a
+    cache this expensive is likelier than a corrupt one, and silently colouring
+    the city from half a survey is the outcome worth preventing.
+    """
+    if style.facade_hue_source is None:
+        return {}
+    path = source_dir(city_id, HUE_SOURCE_ID, root=root) / style.facade_hue_source
+    try:
+        text = path.read_text()
+    except FileNotFoundError:
+        log.info("no facade hue survey at %s — colouring from height bands", path)
+        return {}
+    try:
+        table = json.loads(text)
+        hues = {stem: (float(row["lab"][1]), float(row["lab"][2])) for stem, row in table.items()}
+    except (AttributeError, KeyError, TypeError, ValueError, IndexError) as exc:
+        raise ValueError(f"{path}: facade hue survey is malformed ({exc})") from exc
+    log.info("facade hue: %d buildings from %s", len(hues), path.name)
+    return hues
+
+
 def colour_for(
-    style: BuildingStyle, class_id: str, mesh: MeshData, bounds: Bounds | None = None
+    style: BuildingStyle,
+    class_id: str,
+    mesh: MeshData,
+    *,
+    bounds: Bounds | None = None,
+    hue: dict[str, Hue] | None = None,
 ) -> np.ndarray:
     """One RGBA row per vertex: the class or height-band colour, jittered.
 
     How much jitter is the class's to say, not the city's alone. Seeding per
     source mesh only means "per object" where the source ships one mesh per
     object, which is true of buildings and false of the ground.
+
+    Where the survey has a colour for this building, its **hue** replaces the
+    band's and its **lightness does not** — the band keeps that, and so does the
+    jitter below. `colour.py` records why the split is the measurement's rather
+    than a preference: the same wall's `L*` moves by up to 39 between its north
+    and south faces, which is illumination, while `a*`/`b*` barely move.
     """
     low, high = bounds if bounds is not None else mesh.aabb()
     red, green, blue = style.colour_for(class_id, high[1] - low[1])
+
+    measured = None if hue is None else hue.get(_stem(mesh.name))
+    if measured is not None:
+        red, green, blue = with_hue((red, green, blue), measured, style.facade_hue_strength)
 
     jitter = style.jitter_for(class_id)
     if jitter > 0.0:
@@ -464,6 +536,7 @@ def build_region(
     """Write every tile of the region, at every LOD tier, and report on them."""
     style = city.buildings
     place = Placement.resolve(city, region_id, sources_root, out_root)
+    hue = facade_hue(style, city.id, root=sources_root)
 
     report = BuildReport()
     # Bucketed by tile *and class*, because the two decimate at different cell
@@ -507,7 +580,7 @@ def build_region(
             # colour and keeps one base to measure its height above.
             coloured = replace(
                 placed,
-                colours=colour_for(style, class_id, placed, bounds),
+                colours=colour_for(style, class_id, placed, bounds=bounds, hue=hue),
                 uvs=facade_uv(style, class_id, placed, bounds),
             )
             placements = list(assign(coloured, place.grid, bounds))

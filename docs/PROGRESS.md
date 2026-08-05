@@ -3,9 +3,10 @@
 Living document. **Update this whenever a task changes status, a decision is made, or an open
 question is answered.** Newest entries at the top of each log.
 
-Last updated: 2026-08-05 (a second facade look ships beside `P3-7`'s — clean/futuristic, no rebuild,
-one `cp` apart — and `Q26` asks which one the city keeps. `P3-10`'s ground and `P3-11`'s taxi are
-still awaiting a verdict; `Q24` and `Q25` are closed)
+Last updated: 2026-08-06 (every building now carries its own photo-measured hue — 2,214 of them,
+100% joined, no schema change — and the survey proved photographic *lightness* unusable on the way.
+`Q26` still asks which look ships, and `Q27` asks why the rig makes albedo barely matter. `P3-10`'s
+ground and `P3-11`'s taxi are still awaiting a verdict; `Q24` and `Q25` are closed)
 
 ---
 
@@ -102,6 +103,7 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ⚠️ conditional ·
 | `Q25` | **The ground tore along every tile boundary.** `collapse` puts a vertex at the *mean of the members present in its mesh*, and terrain was split across tiles before it was collapsed — so the two sides of a boundary averaged differently and the seam opened | 1.76% of the region had ground the source covers and the bundle did not, three quarters of it within 10 m of a tile boundary. Visible as brown bands at grazing angles, and solid-edged since the ground collides | `P1-2`/`P3-10` | 🟢 **Closed 2026-08-05.** `_tile_ground` decimates the region's ground **once per tier** and cuts the result, reversing collapse-then-merge for the one class that is both cut and continuous. Region holes **1.76% → 0.76%**; within 2 m of a boundary **15.65% → 0.42%**, *below* the 0.54% interior rate, so the boundary stopped being special. Triangles unchanged. The 0.76% residual is ordinary sliver loss, not a seam |
 
 | `Q26` | **Which look ships — the measured Hong Kong one or the clean/futuristic one?** `P3-7`'s window bands are accurate and were called dull; `city_facade_clean` is bolder and is *not* what Wan Chai looks like | The whole art direction rests on "accurate city, toy vehicles", and recognition is the product (`Q8`). A white city with amber accent plinths keeps the accurate *massing* and abandons the accurate *surface* — which may be the right trade or may be the one thing that cannot be traded | `P3-9a` | 🔴 Open, and **a verdict rather than a measurement.** Both looks are one `cp` apart and neither needs a rebuild, so this can go to the ≥3 HK drivers as an A/B rather than being decided in advance. Shots in `build/driver/h4` (clean) against `build/driver/clean` (`P3-7`). ⚠️ If the clean look wins, the palette should move from the shader's `base_wash` into `height_bands` in the city config, where CLAUDE.md says palettes live |
+| `Q27` | **Why does albedo barely reach the screen under the clean rig, and what should the light levels be?** Buildings now carry measured per-building hue, and it is nearly invisible | Measured, not suspected: dropping the height bands from `L*` 80 to 62 moved the rendered frame only from `L*` 86.8 to 83.3 — an 18-point albedo change bought 3.5 points of pixel. Every colour decision downstream of this is unreadable until it is answered, including `Q26`'s A/B | `P3-9a` | 🔴 Open. `base_wash` and the palette are both **eliminated by test** — lowering `base_wash` 0.7 → 0.15 raised clipping 20.6% → 26.1% and made it worse. The clipping defect itself is fixed (`tonemap_white` 3.0, `light_energy` 0.9 → 0.1% clipped). What remains is total light energy: `ambient_light_energy` 0.85 → 0.30 lifted frame chroma p90 from 13.9 to 17.3 in a probe, but deepens shadows and is a look change `Q26` owns. Evidence: `build/driver/flat_colour` (elements off, jitter off) against `build/driver/flat_lit` |
 
 **Resolved:** `Q1` (no Z, but `ELEVATION` encodes the level) · `Q2`/`Q3`/`Q5` (building data is fully
 scriptable; 6 sheets, ~44 MB each) · `Q4` (device floor A13 / Adreno 618) · `Q7` (origin at the
@@ -130,6 +132,156 @@ under, and ~0.2 m is a guess until it is driven on a cross-sloped street.
 ---
 
 ## Decision log
+
+### 2026-08-06 — Per-building façade colour ships, and the survey that delivered it also killed half of itself
+
+The probe below said per-building colour was real and that its *lightness* was contaminated. The
+full survey — all six sheets, **2,214 buildings, zero unusable** — settles both halves.
+
+**The join was the risk, and it is exact.** `DATA_SOURCES.md` asserted the shared stem as a
+cross-dataset key from 12 buildings; it was re-verified on sheet `11-SW-10C` in *both* datasets
+(151 stems, 151 matched, no orphan either way) before anything was built on it. On the real region
+build: **2,200 of 2,200 BUILDING meshes matched.** The suffix is not always `C0`/`A0` — a `C1`/`A1`
+variant exists — but stems stay unique within a sheet, so the variant digit never enters the key.
+
+**It costs the runtime nothing.** The hue lands in the `COLOR_0` the tiles already carried: no new
+attribute, no `schema_version` bump (a consumer reading `COLOR_0` as "the building's albedo" is
+still right), no shader change, and no interaction with the vertex clustering that kills textures.
+1,236 distinct vertex colours across the 66 tiles, against 5 height bands before.
+
+🔴 **The measurement that decides the design, and it is the one that says *no*.** Per-building `L*`
+in an aerial photograph is not a building's lightness, it is a record of which way its walls faced
+the sun:
+
+| | |
+|---|---|
+| `L*` spread *within* one building (4 walls, same cladding) | **22.91 mean, 41.14 p90** |
+| `L*` spread *between* different buildings | **16.25 sd** |
+
+**The confound is larger than the signal.** So lightness is measured, stored — the per-orientation
+record was free to collect while the atlas was in memory, and collecting it later means paying the
+download again — and deliberately **unused**. A test fails loudly if it ever reaches albedo. Hue
+survives because illumination moves value far more than hue: `a*` sd 3.84 and `b*` sd 7.63 across
+2,214 buildings reproduce the 140-building probe (3.50, 7.44) at sixteen times the sample.
+
+⚠️ **Height explains 1.2% of `a*` and 0.8% of `b*`** — so the bands never carried this and never
+could. They do explain **10.9% of `L*`**, which is the one thing they should keep doing.
+
+**Three self-inflicted errors, each of which looked like a result.**
+
+- ⚠️ **Clipped highlights have no hue by construction.** A texel at 255 is `a* = b* = 0`, and the
+  "sunlit cladding" estimator hunts precisely there. One smoke-test building came back at exactly
+  `L* 100, C* 0`; it had **42% clipped pixels**. Unexcluded, blown highlights *manufacture* the
+  grey convergence the whole exercise exists to test.
+- ⚠️ **Byte ranges are for sampling, not for coverage.** The probe's 391 MB of 1.15 GB was quoted
+  here as evidence the download was cheap. At full coverage every building is wanted, so the range
+  read pays the whole 4.90 GB *and* re-fetches chunks straddling building boundaries — measured at
+  ~220 KB/s on one stream, about six hours. Read locally instead: **under two minutes for all six
+  sheets.**
+- ⚠️ **`etl/sources/` is a cache, and caching is not committing.** An earlier evaluation argued the
+  survey would burden every clone. It does not: CI never runs the ETL (`ci.yml` says so in its
+  header), so the cost is one developer machine, once, leaving a **754 KB** table behind. The
+  config path is optional and a missing file is not an error, so a clone without it builds the same
+  city it always built.
+
+**And what the render then found, which no amount of ETL work would have fixed.** With every façade
+element switched off and jitter zeroed, the city is still nearly white — and it is **not** the
+palette. Dropping the height bands from `L*` 80 to 62 moved the *frame* from `L*` 86.8 only to 83.3:
+an 18-point albedo change bought 3.5 points of pixel. `base_wash` was eliminated first and was worse
+than useless — lowering it 0.7 → 0.15 *raised* clipping from 20.6% to 26.1%, destroying more hue
+than it delivered. **The clean rig's light levels swamp albedo**, which is now `Q27`. What was fixed
+here is the defect underneath it: `tonemap_white` 1.5 → 3.0 and `light_energy` 1.05 → 0.9 take
+clipping from **20.6% to 0.1%**, because a clipped pixel cannot carry colour at all.
+
+The extraction script is **not committed**, on the probe's precedent — it grades a 5.8 GB download
+no build has, and its output is derived government data that stays under the government terms and
+out of the repository (hard rule 7). What ships is the consumer: `etl/pipeline/colour.py`, the
+optional config, and the fallback.
+
+### 2026-08-06 — The facade-colour probe: **"grey-beige" is half right, and the height bands are the part that is wrong**
+
+`ART_DESIGN.md` rules out per-building colour from the individualised set partly on a prediction —
+oblique aerial capture is shadow- and haze-dominated, so *"the median converges on grey-beige for
+everything"*. Two entries in this log repeat it. **It had never been measured.** One sheet,
+`11-SW-15A`, 140 of its 515 buildings, **391 MB pulled by byte range** out of 1.15 GB.
+
+**Method, and the three bugs it produced before it produced a result.** Each one returned a
+*plausible* number, which is the reason to write them down:
+
+1. **Flipped V.** glTF puts UV (0,0) at the **top-left**; inverting it samples atlas padding.
+2. **The filler is `#3c3c3c`, not black** — 48–92% of a sampled atlas. The first padding guard caught
+   only pure black. Sampling flat neutral dark grey and taking a median produces *literally* "converges
+   on grey-beige", and two runs did exactly that.
+3. ⚠️ **The estimator is the whole argument.** Even sampling cleanly, the median of every wall texel
+   lands on dark neutral grey — a dense district photographed obliquely is mostly shadow, windows and
+   vegetation baked onto facade geometry (5.8% of wall texels are foliage). What an eye calls a
+   building's colour is its **sunlit cladding**, a minority of texel area. Switching to the median of
+   texels above the 65th percentile of L\* moved the same buildings from L\* 40 to **L\* 63**.
+
+**What it found.** Lit estimator, 140 buildings, filler and foliage excluded:
+
+| | value |
+|---|---|
+| L\* | mean 62.75, **sd 18.05**, p10 42.6 → p90 92.5 |
+| chroma C\* | mean 6.61, p90 14.12 — **69.3%** of buildings below C\*=8 |
+| where the variance lives | L\* sd **18.05**, b\* sd 7.44, a\* sd **3.50** |
+| spread from the sheet mean | ΔE mean **16.98** |
+
+✅ **The prediction is right about hue and wrong about convergence.** Hue really is muted — `a*` sd
+3.5 is almost nothing, and seven buildings in ten are perceptually near-neutral. But there is no
+convergence: ΔE 17 is a large difference, and it lives almost entirely in **lightness**.
+
+🔴 **The finding that matters is `Q2`, and it overturns the cheap path this document recommended.**
+
+| | mean ΔE to the photographs | p90 |
+|---|---|---|
+| current config — 5 colours keyed by height | **24.93** | 39.76 |
+| same 5 colours, best-matched instead of height-keyed | 21.14 | — |
+| 5 colours clustered from the data | 7.61 | 12.63 |
+| 8 colours clustered from the data | **5.50** | 9.02 |
+| 12 colours | 4.79 | 7.61 |
+
+Height explains **6.1% of L\*, 1.0% of a\*, 1.6% of b\***, and L\* correlates with building height at
+only **+0.269**. So `ART_DESIGN.md`'s sanctioned move — *"cluster the dominant facade colours and
+re-author the five `height_bands`"* — buys 24.93 → 21.14 ΔE, because **height is not the signal**.
+The variation is per-building and largely achromatic. What captures it is a per-building colour, or a
+small palette assigned per building: **8 entries reach ΔE 5.5**, and 8 entries is 3 bits, which the
+1/256 phase in `TEXCOORD_0.y` could carry as 8 palettes × 32 phases at **zero new payload**.
+
+⚠️ **The largest measured signal is also the most contaminated, and it must not be shipped as
+albedo.** Per-building L\* in an aerial photograph confounds *reflectance* with *illumination* — a
+north-facing or canyon-shadowed building is darker in the photo and not in life. So sd 18.05
+overstates true albedo variation by an unknown amount, and the absolute values (photo lit L\* ~63
+against the config's ~75–80) are partly just "photographs are darker". The hue numbers are the robust
+ones, because illumination moves value far more than it moves hue. **Any use of this data needs
+shadow normalisation first**, which is real work and was not done here.
+
+💡 **The free consequence, which needs no download, no ETL change and no schema bump.** The real
+between-building variation is per-building and mostly *value*; `colour_jitter: 0.06` is ±6%. That is
+far too small to stand in for a p10–p90 spread of L\* 43→93, however much of it is illumination.
+**Widening the per-building value jitter gets closer to the photographs than the height ramp does**,
+and it costs nothing. That is the cheapest thing this probe found.
+
+🟡 **`Q3` is inconclusive and is recorded as such.** Only 54% of walls gave a vertical period at all,
+and the median came back **1.19 m against `P3-7`'s 2.77 m** — pinned at the search floor, so the
+detector is landing on harmonics. This probe reads one triangle where `P3-7` autocorrelated whole
+rectified walls. The phases separate by ΔL\* 6.23 and the dark phase varies about as much as the wall
+does (ΔE sd 7.74 against 8.21), which would *contradict* the "glass is a photograph of the sky"
+prediction — but on an unreliable period that claims nothing. Answering it properly means rebuilding
+`P3-7`'s autocorrelation, not extending this.
+
+⚠️ **And it does not answer the question it gets reached for.** "Revert `P3-7` and go texture-based"
+is not a trade that exists, for three separate reasons worth keeping together: **`P3-7` is the
+`TEXCOORD_0` payload**, which `city_facade_clean` reads too — reverting it breaks both shaders and
+takes the surface marker with it, so viaduct soffits start growing windows. **The photo gives one
+flat colour per building, not a window pattern**, so glazing stays procedural either way (`Q3` above
+is inconclusive, not promising). And **texture cannot ship at all**: `collapse` takes UVs from a
+cluster representative and `merge` refuses textured meshes, so it breaks both LOD tiers and the
+one-draw-call tile. Colour and window pattern are orthogonal axes.
+
+**The probe is not committed**, on `P3-7`'s precedent: it grades a 1.15 GB download no build has.
+Method and numbers are here, which is what makes it repeatable. Nothing entered the build path and no
+photograph reached the bundle.
 
 ### 2026-08-05 — A second look ships beside the first: **clean/futuristic, and the fault in the old one was scale**
 

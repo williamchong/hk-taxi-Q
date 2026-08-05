@@ -25,7 +25,7 @@
 resource_name = "city_facade"
 shader = ExtResource("1_facade")
 shader_parameter/base_colour = Color(0.79, 0.805, 0.82, 1)
-shader_parameter/base_wash = 0.7
+shader_parameter/base_wash = 0.15
 shader_parameter/value_jitter = 0.2
 shader_parameter/warm_cool_jitter = 0.07
 shader_parameter/floor_height_m = 2.8

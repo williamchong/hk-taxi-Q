@@ -93,6 +93,12 @@ class SurfaceClass(IntEnum):
     STRUCTURE = 2
 
 
+# The most a city may amplify its measured facade chroma by. High enough that no
+# defensible art direction hits it, low enough that a typo or a YAML `.inf` does
+# — the point of the bound is the refusal, not the number. See `_scale`.
+HUE_STRENGTH_MAX = 8.0
+
+
 @dataclass(frozen=True)
 class HeightBand:
     """A colour for buildings up to a given height above their own base."""
@@ -152,6 +158,23 @@ class BuildingStyle:
     # are what hide the seam. Sized by measuring what still stands proud of the
     # shipped carriageway — `tools/ground_clearance.py` — not by taste.
     ground_sink_m: float
+    # Optional table of per-building hue measured from photographs, named as a
+    # bare filename that `buildings.facade_hue` resolves through
+    # `fetch.source_dir` — the city id belongs to the tree, not to this value.
+    # **Defaulted, and that is the contract**: the survey
+    # is a 4.9 GB read that `etl/sources/` caches and `.gitignore` excludes, so a
+    # clone that has never run it must still build — and build the same city the
+    # height bands alone always produced.
+    #
+    # ⚠️ **Hue only, never lightness.** The same survey carries a per-building
+    # `L*` with a far larger spread and it is deliberately unused; `colour.py`'s
+    # header has the reason and the numbers.
+    facade_hue_source: str | None = None
+    # How far the measured hue is pushed, as a multiple of what was measured.
+    # 1.0 is faithful; above it keeps *which* building is warmer and exaggerates
+    # only by how much. A stylisation knob, deliberately separated from the
+    # measurement so the two cannot be confused.
+    facade_hue_strength: float = 1.0
 
     def colour_for(self, class_id: str, height_m: float) -> tuple[int, int, int]:
         if class_id in self.class_colours:
@@ -940,6 +963,14 @@ def _building_style(body: dict[str, Any], where: str) -> BuildingStyle:
         # ones a Hong Kong skyline is read by.
         raise ValueError(f"{where}:height_bands must end with `up_to_m: .inf`")
 
+    hue = body.get("facade_hue")
+    hue_source = None if hue is None else str(_require(hue, "source", f"{where}:facade_hue"))
+    hue_strength = (
+        1.0
+        if hue is None
+        else _scale(hue.get("strength", 1.0), f"{where}:facade_hue.strength", HUE_STRENGTH_MAX)
+    )
+
     cells = _cell_sizes(_require(body, "lod_cell_sizes_m", where), f"{where}:lod_cell_sizes_m")
     if not cells:
         raise ValueError(f"{where}:lod_cell_sizes_m is empty")
@@ -1033,10 +1064,20 @@ def _building_style(body: dict[str, Any], where: str) -> BuildingStyle:
         height_bands=bands,
         colour_jitter=jitter,
         class_colour_jitter=class_jitter,
+        facade_hue_source=hue_source,
+        facade_hue_strength=hue_strength,
         lod_cell_sizes_m=cells,
         class_lod_cell_sizes_m=class_cells,
         ground_sink_m=sink,
     )
+
+
+def _number(value: Any, field: str) -> float:
+    """One config value as a float, named in the error when it is not one."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{field} is {value!r}, which is not a number") from None
 
 
 def _jitter(value: Any, field: str) -> float:
@@ -1053,12 +1094,23 @@ def _jitter(value: Any, field: str) -> float:
     false in silence. That is the `P2-7` config trap, and the shape of this test
     happens to close it.
     """
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        raise ValueError(f"{field} is {value!r}, which is not a number") from None
+    number = _number(value, field)
     if not 0.0 <= number < 1.0:
         raise ValueError(f"{field} must be in [0, 1), got {number}")
+    return number
+
+
+def _scale(value: Any, field: str, high: float) -> float:
+    """A non-negative multiplier, bounded above so the test stays two-sided.
+
+    The ceiling is not a taste limit — it is what makes this close the `_jitter`
+    trap above. A one-sided `< 0.0` test passes `.nan` and `.inf`, and a NaN
+    strength propagates through `with_hue` into `np.clip(np.round(nan))`, which
+    silently miscolours every surveyed building rather than failing.
+    """
+    number = _number(value, field)
+    if not 0.0 <= number <= high:
+        raise ValueError(f"{field} must be in [0, {high}], got {number}")
     return number
 
 

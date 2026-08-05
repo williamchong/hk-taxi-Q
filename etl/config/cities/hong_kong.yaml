@@ -232,6 +232,33 @@ buildings:
   # the block reads as a single object rather than many buildings.
   colour_jitter: 0.06
 
+  # Per-building hue measured off the individualised set's photo textures, and
+  # keyed by the building id's stem. Optional by design: the survey is a 4.9 GB
+  # read cached under etl/sources/ and gitignored, so a clone without it builds
+  # the same city the height bands alone produced. See docs/PROGRESS.md
+  # (2026-08-06) for what was measured and, more importantly, what was not.
+  #
+  # ⚠️ Hue only. The same measurement carries a per-building L* with a much
+  # larger spread, and it is NOT used: an aerial photograph confounds a wall's
+  # reflectance with the light that fell on it, and the survey's own
+  # per-orientation record shows one building's north and south walls differing
+  # by up to 39 L*. That is illumination, not paint, and shipping it as albedo
+  # would bake the flight's shadows into the city for the engine's sun to shade
+  # a second time.
+  #
+  # `strength` multiplies the measured chroma. 1.0 is faithful and *muted* —
+  # measured C* is about 6, and seven buildings in ten are perceptually
+  # near-neutral. Above 1.0 keeps which building is warmer and exaggerates only
+  # by how much, so the ordering stays evidence while the amount becomes art
+  # direction. This is the line to move if the city reads too grey or too candy.
+  #
+  # `source` is a filename, not a path: the pipeline resolves it through
+  # `fetch.source_dir`, which is the single definition of the sources-tree
+  # layout. A city's own config never repeats its own id.
+  facade_hue:
+    source: facade_lab.json
+    strength: 2.0
+
   # Vertex-clustering cell size per LOD tier, in metres, coarsest last.
   #
   # No 0.0 entry, and that is the P2-1 review's verdict rather than an
