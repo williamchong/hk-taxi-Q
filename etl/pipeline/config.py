@@ -144,6 +144,17 @@ class BuildingStyle:
         """
         return self.class_lod_cell_sizes_m.get(class_id, self.lod_cell_sizes_m)[level]
 
+    def is_ground(self, class_id: str) -> bool:
+        """Whether this class is the region's ground rather than something on it.
+
+        Named once because two decisions in `buildings.py` turn on it and they
+        have to agree: the ground is the class that gets **sunk** under the
+        carriageway, and the class clustered as a **height field**. A city that
+        drifted between the two would ship ground sunk but torn, or welded but
+        floating — and neither says anything on the way past.
+        """
+        return class_id == self.terrain_class
+
     def jitter_for(self, class_id: str) -> float:
         """Brightness variation for one class.
 

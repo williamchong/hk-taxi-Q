@@ -378,7 +378,7 @@ def build_region(
             report.read += 1
             placed = (
                 _ground(mesh, place.offset, style)
-                if class_id == style.terrain_class
+                if style.is_ground(class_id)
                 else mesh.translated(place.offset)
             )
             bounds = placed.aabb()
@@ -442,7 +442,19 @@ def _write_tile(
         pieces: list[MeshData] = []
         for class_id, mesh in per_class.items():
             try:
-                pieces.append(collapse(mesh, cell_m=style.cell_size_m(class_id, level)))
+                pieces.append(
+                    collapse(
+                        mesh,
+                        cell_m=style.cell_size_m(class_id, level),
+                        # Decided from the class rather than from config: the
+                        # ground *is* a height field, which is a fact about the
+                        # data and not a value to tune. Through the same
+                        # predicate as the sink above, because ground that is
+                        # sunk but torn — or welded but floating — is what the
+                        # two drifting apart would produce. See `collapse`.
+                        height_field=style.is_ground(class_id),
+                    )
+                )
             except EmptyMeshError:
                 # This class has nothing left at this cell size; another may.
                 continue

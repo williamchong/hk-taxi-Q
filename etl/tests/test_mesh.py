@@ -11,8 +11,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from pipeline.gltf import MeshData, Texture
+from pipeline.gltf import MeshData, Texture, normalise, triangle_cross
 from pipeline.mesh import collapse, merge, select_triangles
+from pipeline.terrain import HeightField
 from tests.helpers import box
 
 
@@ -136,6 +137,95 @@ class TestCollapseDecimation:
         decimated = collapse(box(), cell_m=4.0)
         assert decimated.colours is not None
         assert set(map(tuple, decimated.colours)) == {(200, 190, 180, 255)}
+
+
+class TestCollapseHeightField:
+    """`height_field` drops the facing term, and a single-sided sheet needs it
+    dropped.
+
+    Keying on facing exists so a building's wall never averages into its roof.
+    Ground has no such distinction, and where a slope crosses one of the six
+    buckets the shared vertices land in different clusters, move to different
+    means, and the sheet tears open — a hole through to the sky, which is why
+    the gaps appear exactly where the ground is sloped.
+    """
+
+    def _slope(self, rise: float, run: float = 40.0, step: float = 2.0) -> MeshData:
+        """A strip climbing `rise` over `run`, as a continuous triangulated sheet.
+
+        Steep enough and the dominant normal axis flips from +Y to +X partway
+        up, which is the boundary the facing key tears along.
+        """
+        xs = np.arange(0.0, run + step / 2, step)
+        ys = rise * (xs / run) ** 3  # shallow at the foot, near-vertical at the top
+        corners: list[list[tuple[float, float, float]]] = []
+        for index in range(len(xs) - 1):
+            a, b = (xs[index], ys[index]), (xs[index + 1], ys[index + 1])
+            corners.append([(a[0], a[1], 0.0), (b[0], b[1], 0.0), (a[0], a[1], 20.0)])
+            corners.append([(b[0], b[1], 0.0), (b[0], b[1], 20.0), (a[0], a[1], 20.0)])
+        positions = np.array([c for face in corners for c in face], dtype=np.float64)
+        triangles = np.arange(len(positions), dtype=np.uint32).reshape(-1, 3)
+        # Through `triangle_cross` and `normalise` rather than a hand-rolled
+        # cross product: which facing bucket a normal lands in is the whole
+        # subject here, so the fixture has to derive them the way the pipeline
+        # does rather than through a lookalike.
+        face = normalise(triangle_cross(positions, triangles))
+        return MeshData(
+            name="slope",
+            positions=positions,
+            normals=np.repeat(face, 3, axis=0).astype(np.float32),
+            triangles=triangles,
+        )
+
+    def _covered(self, mesh: MeshData) -> float:
+        """Share of the sheet's plan extent that still has surface over it.
+
+        ⚠️ **Coverage, not triangle count.** A tear does not necessarily drop a
+        triangle — measured on this fixture both settings return 24 — it pulls
+        the two sides apart to different cluster means and leaves a wedge of
+        plan with nothing above it. Counting triangles would report the defect
+        as absent. This is the same question `tools/ground_clearance.py` asks of
+        the shipped bundle, through the same height-field query.
+        """
+        xs, zs = np.meshgrid(np.arange(0.5, 40.0, 0.5), np.arange(0.5, 20.0, 0.5))
+        heights = HeightField.from_meshes([mesh]).sample(xs.ravel(), zs.ravel())
+        return float(np.isfinite(heights).mean())
+
+    def test_a_slope_that_tears_with_the_facing_key_survives_without_it(self) -> None:
+        """The defect and the fix in one comparison. Measured on Wan Chai the
+        same way round: region coverage 99.61% with the key, 99.84% without."""
+        slope = self._slope(rise=25.0)
+        torn = collapse(slope, cell_m=4.0)
+        whole = collapse(slope, cell_m=4.0, height_field=True)
+
+        assert self._covered(whole) > self._covered(torn)
+
+    def test_it_does_not_grow_the_mesh(self) -> None:
+        """The whole reason this is affordable: it is a different key, not a
+        finer one, so it buys coverage without buying triangles."""
+        slope = self._slope(rise=25.0)
+        torn = collapse(slope, cell_m=4.0)
+        whole = collapse(slope, cell_m=4.0, height_field=True)
+
+        assert whole.triangle_count <= torn.triangle_count
+        assert len(whole.positions) <= len(torn.positions)
+
+    def test_a_wall_and_a_roof_still_refuse_to_merge_by_default(self) -> None:
+        """The rule this is an exception to, pinned so the exception cannot
+        become the rule. A box's faces meet at hard edges the style depends on,
+        and off is what every class but the ground gets."""
+        kept = collapse(box(size=20.0), cell_m=4.0)
+        assert kept.triangle_count == 12
+        assert kept.positions.min() == 0.0 and kept.positions.max() == 20.0
+
+    def test_a_solid_is_the_wrong_thing_to_pass_it(self) -> None:
+        """Stated as a test because it is the trade rather than a bug: with the
+        facing key gone, the three faces meeting at a box's corner become one
+        cluster and share a vertex. Harmless on a sheet, which has no corners
+        like that; wrong for anything with an inside."""
+        rounded = collapse(box(size=20.0), cell_m=16.0, height_field=True)
+        square = collapse(box(size=16.0 * 1.25), cell_m=16.0)
+        assert len(rounded.positions) < len(square.positions)
 
 
 class TestSelectTriangles:

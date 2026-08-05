@@ -97,6 +97,8 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ⚠️ conditional ·
 | `Q21` | **Should level −1 carriageway be drawn at all?** 15 edges, 5,010 m, **11.6% of carriageway area**, ribboned under the terrain where nothing can see it and nobody can drive it — and solid since collision shipped | Triangles, collider surface and bundle bytes for geometry with no viewer. Against: `P3-3` and Phase 4 want the *edges* to exist, and `roadgraph.json` would keep all 15 either way | Phase 4 | 🟡 Open. `P2-7` could not improve their height — a tunnel is a void — and **11 of their 30 ends are clipped at the region boundary**, so the Cross-Harbour portals have ~42 m of run for an 8 m descent |
 | `Q22` | **10.2% of off-grade carriageway still hangs past its structure**, after narrowing took it from 20.1% | Cosmetic while nothing off-grade is drivable. It stops being cosmetic in Phase 4: a wheel leaving the deck finds air, not a parapet | Phase 4 | 🟡 Open. No width rule reaches the rest — a single-lane ramp is drawn at the two-lane default, a source centreline is not always centred on its deck, and `P2-1` decimates `INFRASTRUCTURE` on a 0.5 m cell. `tools/overhang.py` is the committed instrument; it reads 10.0% against the 10.2% recorded by hand |
 
+| `Q25` | **The ground tears along every tile boundary.** `collapse` puts a vertex at the *mean of the members present in its mesh*, and terrain is split across tiles before it is collapsed — so the two sides of a boundary average differently and the seam opens | 1.76% of the region has ground the source covers and the bundle does not, **three quarters of it within 10 m of a tile boundary** — 15.65% within 2 m against 0.61% beyond 10. Visible as brown bands at grazing angles, and solid-edged since the ground collides | `P1-2`/`P3-10` → decision | 🔴 **Open.** The cell size is not the lever (4 m keeps 99.70%, 0.5 m keeps 100.00% at ~5× the triangles) and the facing key was the smaller half (97.49% → 97.68%). The fix is to decimate the region's terrain **once** and tile the result, reversing collapse-then-merge for one class — a restructure of `_write_tile`, not a flag. Buildings never showed it because a building is assigned to one tile whole |
+
 **Resolved:** `Q1` (no Z, but `ELEVATION` encodes the level) · `Q2`/`Q3`/`Q5` (building data is fully
 scriptable; 6 sheets, ~44 MB each) · `Q4` (device floor A13 / Adreno 618) · `Q7` (origin at the
 region's NW corner) · `Q8` (the city itself is the fun) · `Q9` (read the 17 MB geodatabase, not the
@@ -124,6 +126,53 @@ under, and ~0.2 m is a guess until it is driven on a cross-sloped street.
 ---
 
 ## Decision log
+
+### 2026-08-05 — The ground tears where it is sloped, and the facing key is only the smaller half
+
+**Reported from the driver's seat as a strange gap where the terrain is sloped and elevated**, at
+`(905, 140)`. Probed rather than guessed: the source terrain covers that patch and the shipped tiles
+do not, so `collapse` destroys it. It reads as a wide brown band because a metre-wide crack in a
+near-horizontal surface, seen at a grazing angle, projects across half the frame.
+
+⚠️ **Cell size is not the lever, which is worth recording because it is the obvious first move.**
+Coverage kept against the source, measured region-wide: 8 m **99.35%**, 4 m **99.70%** (ships today),
+2 m **99.77%**, 0.5 m **100.00%**. Two-tenths of a point for 2.3× the triangles. Nothing here is a
+cell-size problem.
+
+**The mechanism found and fixed: the facing key tears a single-sided sheet.** `_cluster_bins` keys
+every vertex on its position *and* on `_facing`'s six-bucket dominant-axis normal, so a building's
+wall never averages into its roof. Ground is a sheet with one height per plan position and no such
+distinction to preserve — and where a slope crosses a bucket boundary the shared vertices land in
+different clusters, move to different means, and the surface pulls apart. `collapse` takes a
+`height_field` flag, and `buildings.py` sets it from the class name rather than from config: this is
+a statement about what the class *is*, not a value to tune.
+
+⚠️ **It bought a fifth of what the plan predicted, and the gap between those two numbers is the
+finding.** Predicted 99.61% → 99.84%; measured on the shipped bundle **97.49% → 97.68%**. The
+*improvement* is the same +0.2 points either way — what was wrong was the baseline. The planning
+probe collapsed each source mesh **whole**; the pipeline collapses each tile **separately**.
+
+**So the dominant mechanism is the tile boundary, and it was invisible to the probe that predicted
+the fix.** `_cluster_bins` bins on `floor(position / cell_m)`, which is world-anchored — but the
+representative position is `_cluster_mean` over *the members present in that mesh*. Terrain split
+across two tiles has different members either side of the boundary, so the two means differ and the
+seam opens. Measured inside the region, holes by distance to the nearest tile boundary:
+
+| within 2 m | 2–4 m | 4–10 m | beyond 10 m |
+|---|---|---|---|
+| **15.65%** | 3.28% | ~3% | **0.61%** |
+
+**Twenty-five times the interior rate**, and roughly three quarters of every hole in the region.
+Buildings never showed it because a building is assigned to one tile whole; the ground is the first
+class the pipeline has ever cut.
+
+**Not fixed here, and it is `Q25`.** The only robust answer is to decimate the region's terrain once
+and tile the result, which reverses the stage's collapse-then-merge order for one class. That is a
+restructure of `_write_tile`, and it is a bigger question than a flag.
+
+⚠️ **The screenshot that prompted this still shows the gap.** Recorded plainly because the numbers
+say why and a reader deserves not to re-derive it: 148 → 132 holes in that patch, and the rest is
+seam.
 
 ### 2026-08-05 — `Q24`: the at-grade road follows the ground, and the thinning is what makes it cheap
 

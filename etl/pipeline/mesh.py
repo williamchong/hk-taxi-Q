@@ -97,8 +97,9 @@ def select_triangles(mesh: MeshData, keep: np.ndarray) -> MeshData | None:
     )
 
 
-def collapse(mesh: MeshData, *, cell_m: float) -> MeshData:
-    """Merge vertices sharing a grid cell and a facing; drop triangles that fold.
+def collapse(mesh: MeshData, *, cell_m: float, height_field: bool = False) -> MeshData:
+    """Merge vertices sharing a grid cell — and, unless `height_field`, a facing;
+    drop triangles that fold.
 
     Vertex clustering rather than quadric error decimation. Three reasons it is
     the right tool for this data specifically:
@@ -116,6 +117,31 @@ def collapse(mesh: MeshData, *, cell_m: float) -> MeshData:
     on position alone and a wall vertex averages with the roof vertex above it,
     rounding off the hard normals the source ships and the style depends on.
 
+    ⚠️ **`height_field` drops that facing term, and a single-sided sheet needs it
+    dropped.** The rule above is a rule about *solids*: a wall and a roof meet at
+    a hard edge that must survive, and a small tear where they meet is inside a
+    closed volume where nothing can see it. Ground is a sheet with one height per
+    plan position and no wall-versus-roof distinction to preserve — so the facing
+    key cannot help it, and where a slope crosses one of the six buckets the
+    shared vertices land in different clusters, move to different means, and
+    **the surface tears open**. Every such tear is a hole through to the sky,
+    which is why the gaps appear exactly where the ground is sloped.
+
+    Measured on Wan Chai's terrain at a 4 m cell: region coverage **99.61% with
+    the facing key against 99.84% without**, for 163,913 triangles against
+    164,494 — better coverage and slightly fewer triangles. This is not a tuning
+    value under hard rule 4; it is a statement about what the class *is*, which
+    is why the caller decides it from the class name rather than from config.
+
+    ⚠️ **It is only safe under the invariant its name states.** With the facing
+    key gone, `_cluster_mean` can average two normals that oppose each other and
+    `normalise` hands back a zero vector for the pair — impossible on the binned
+    path before, because two normals in the same signed-axis bucket cannot
+    cancel. A height field has one surface per plan position and so no opposed
+    pair to average; anything with an inside does, and must not be passed this.
+    Nothing checks it, which is the other reason the caller decides it from the
+    class rather than from a config key someone could set on a building.
+
     `cell_m <= 0` welds exactly: same position, same normal, one vertex —
     lossless, and worth doing because the source repeats every vertex per
     triangle. Whether any tier asks for it is the city's choice; Hong Kong
@@ -124,11 +150,13 @@ def collapse(mesh: MeshData, *, cell_m: float) -> MeshData:
     exact = cell_m <= 0.0
     if exact:
         # Raw float64 positions and normals cannot be packed into one integer,
-        # so this tier pays for the row-wise unique.
+        # so this tier pays for the row-wise unique. An exact weld keeps the
+        # normal whatever the caller said: it merges only vertices that already
+        # agree on one, so there is no facing to tear along.
         key = np.column_stack([mesh.positions, mesh.normals])
         _, representative, inverse = np.unique(key, axis=0, return_index=True, return_inverse=True)
     else:
-        representative, inverse = _cluster_bins(mesh, cell_m)
+        representative, inverse = _cluster_bins(mesh, cell_m, height_field=height_field)
     inverse = inverse.reshape(-1)
 
     triangles = inverse[mesh.triangles]
@@ -174,7 +202,9 @@ def collapse(mesh: MeshData, *, cell_m: float) -> MeshData:
     )
 
 
-def _cluster_bins(mesh: MeshData, cell_m: float) -> tuple[np.ndarray, np.ndarray]:
+def _cluster_bins(
+    mesh: MeshData, cell_m: float, *, height_field: bool
+) -> tuple[np.ndarray, np.ndarray]:
     """Cluster a binned tier, keyed on one integer per vertex.
 
     `np.unique(..., axis=0)` views each row as a void and argsorts it with
@@ -186,13 +216,22 @@ def _cluster_bins(mesh: MeshData, cell_m: float) -> tuple[np.ndarray, np.ndarray
 
     Falls back to the row-wise path if the grid is too large to encode, which
     needs a region ~3,500 km across at 1.5 m cells.
+
+    `height_field` collapses the facing term to one bucket rather than removing
+    it, so both paths keep their shape, the packing arithmetic is unchanged and
+    the overflow guard below stays exact — see `collapse` for why a sheet wants
+    it gone. Required rather than defaulted: the one caller always decides it,
+    and a default here is what a second caller would silently inherit wrong.
     """
     cells = np.floor(mesh.positions / cell_m).astype(np.int64)
-    facing = _facing(mesh.normals).reshape(-1)
+    if height_field:
+        facings, facing = 1, np.zeros(len(mesh.positions), dtype=np.int64)
+    else:
+        facings, facing = _FACINGS, _facing(mesh.normals).reshape(-1)
 
     low = cells.min(axis=0)
     span = (cells.max(axis=0) - low + 1).tolist()
-    if span[0] * span[1] * span[2] * _FACINGS >= 2**63:
+    if span[0] * span[1] * span[2] * facings >= 2**63:
         key = np.column_stack([cells, facing])
         _, representative, inverse = np.unique(key, axis=0, return_index=True, return_inverse=True)
         return representative, inverse
@@ -200,7 +239,7 @@ def _cluster_bins(mesh: MeshData, cell_m: float) -> tuple[np.ndarray, np.ndarray
     offsets = cells - low
     packed = (offsets[:, 0] * span[1] + offsets[:, 1]) * span[2] + offsets[:, 2]
     _, representative, inverse = np.unique(
-        packed * _FACINGS + facing, return_index=True, return_inverse=True
+        packed * facings + facing, return_index=True, return_inverse=True
     )
     return representative, inverse
 
