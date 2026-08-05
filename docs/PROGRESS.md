@@ -7,9 +7,10 @@ Last updated: 2026-08-06 (`Q27` **closed, and not where it was looking**: `COLOR
 sRGB and was consumed as linear, which cost 57% of a facade pixel to albedo-independent light. Six
 lighting levers were ablated and none of them mattered. Before that, every building gained its own
 photo-measured hue — 2,214 of them, 100% joined, no schema change — and the survey proved photographic
-*lightness* unusable on the way. `Q26` still asks which look ships, and now inherits a rig that was
-tuned against the bug. `P3-10`'s ground and `P3-11`'s taxi are still awaiting a verdict; `Q24` and
-`Q25` are closed)
+*lightness* unusable on the way. The façade elements then came **off** on the strength of the fixed
+render — the city now rides on colour and massing alone, parked there until a new art idea. `Q26`
+still asks which look ships, now has a third candidate, and inherits a rig that was tuned against the
+bug. `P3-10`'s ground and `P3-11`'s taxi are still awaiting a verdict; `Q24` and `Q25` are closed)
 
 ---
 
@@ -105,7 +106,7 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ⚠️ conditional ·
 
 | `Q25` | **The ground tore along every tile boundary.** `collapse` puts a vertex at the *mean of the members present in its mesh*, and terrain was split across tiles before it was collapsed — so the two sides of a boundary averaged differently and the seam opened | 1.76% of the region had ground the source covers and the bundle did not, three quarters of it within 10 m of a tile boundary. Visible as brown bands at grazing angles, and solid-edged since the ground collides | `P1-2`/`P3-10` | 🟢 **Closed 2026-08-05.** `_tile_ground` decimates the region's ground **once per tier** and cuts the result, reversing collapse-then-merge for the one class that is both cut and continuous. Region holes **1.76% → 0.76%**; within 2 m of a boundary **15.65% → 0.42%**, *below* the 0.54% interior rate, so the boundary stopped being special. Triangles unchanged. The 0.76% residual is ordinary sliver loss, not a seam |
 
-| `Q26` | **Which look ships — the measured Hong Kong one or the clean/futuristic one?** `P3-7`'s window bands are accurate and were called dull; `city_facade_clean` is bolder and is *not* what Wan Chai looks like | The whole art direction rests on "accurate city, toy vehicles", and recognition is the product (`Q8`). A white city with amber accent plinths keeps the accurate *massing* and abandons the accurate *surface* — which may be the right trade or may be the one thing that cannot be traded | `P3-9a` | 🔴 Open, and **a verdict rather than a measurement.** Both looks are one `cp` apart and neither needs a rebuild, so this can go to the ≥3 HK drivers as an A/B rather than being decided in advance. Shots in `build/driver/h4` (clean) against `build/driver/clean` (`P3-7`). ⚠️ If the clean look wins, the palette should move from the shader's `base_wash` into `height_bands` in the city config, where CLAUDE.md says palettes live |
+| `Q26` | **Which look ships — the measured Hong Kong one or the clean/futuristic one?** `P3-7`'s window bands are accurate and were called dull; `city_facade_clean` is bolder and is *not* what Wan Chai looks like | The whole art direction rests on "accurate city, toy vehicles", and recognition is the product (`Q8`). A white city with amber accent plinths keeps the accurate *massing* and abandons the accurate *surface* — which may be the right trade or may be the one thing that cannot be traded | `P3-9a` | 🔴 Open, and **a verdict rather than a measurement.** Both looks are one `cp` apart and neither needs a rebuild, so this can go to the ≥3 HK drivers as an A/B rather than being decided in advance. ⚠️ **Every shot taken before 2026-08-06 is unusable for this** — `build/driver/h4` and `build/driver/clean` included — because `Q27` had albedo reaching the screen at a third strength in all of them. Re-shoot before comparing. A **third** candidate now exists and is what currently ships: elements off, flat per-building colour on accurate massing. ⚠️ If the clean look wins, the palette should move from the shader's `base_wash` into `height_bands` in the city config, where CLAUDE.md says palettes live |
 | `Q27` | **Why does albedo barely reach the screen under the clean rig, and what should the light levels be?** Buildings now carry measured per-building hue, and it is nearly invisible | Measured, not suspected: dropping the height bands from `L*` 80 to 62 moved the rendered frame only from `L*` 86.8 to 83.3 — an 18-point albedo change bought 3.5 points of pixel. Every colour decision downstream of this is unreadable until it is answered, including `Q26`'s A/B | `P3-9a` | 🟢 **Closed 2026-08-06. It was not the light at all.** `COLOR_0` is authored in sRGB and was consumed as linear, so **57%** of a lit facade pixel's luminance was albedo-*independent* and an albedo difference reached the screen at a third of its size. Fixed in the two facade shaders and `generated_scene_import.gd`; additive share **57% → 6%** at street level. The whole light-levels half of the question is answered "no": ambient, exposure, glow, fog, tonemap curve and specular were each ablated and **none moved transmission by more than 0.05**. See the decision log below |
 
 **Resolved:** `Q1` (no Z, but `ELEVATION` encodes the level) · `Q2`/`Q3`/`Q5` (building data is fully
@@ -135,6 +136,74 @@ under, and ~0.2 m is a guess until it is driven on a cross-sloped street.
 ---
 
 ## Decision log
+
+### 2026-08-06 — Review of the four façade-colour changes, and what it found in the shader
+
+A pass over the clean look, the per-building hue, `Q27` and the switch-off as a unit — the four
+arrived quickly and on top of one another. Most of what came out was small and is folded into each
+of them; three items are worth keeping, and one was a live cost in every frame.
+
+**The shipping facade shader was doing ~80% of its fragment work to multiply it by zero.** Switching
+the elements off in `city_facade.tres` zeroes seven parameters, and the shader's own comments say
+what each *means* — but nothing was skipped: `glazed`, `has_shop` and `accented` all evaluate false,
+and the 149-line block still ran ten `sin`, seven `fwidth` pairs and a `reflect()` per facade
+fragment before discarding the result. In a street canyon that is most of the frame, on the Mobile
+tier. The fix is a derived `draws_detail` guard rather than a new off-switch uniform, so the tuning
+contract is untouched and the block returns by itself when any element comes back — and it still
+pays with the elements on, where `solid_share` of every block has no grid on it at all. ⚠️ **It is
+derived, so it can rot:
+anything added inside that block which draws while all five predicates are off has to be added to
+the predicate.** The shader header says so at the guard. Verified behaviour-preserving by rendering
+both `Q27` viewpoints before and after: **707 and 804 pixels of 2,073,600 differ, by at most 1/255**,
+which is the removed redundant `normalize()` on `NORMAL`/`VIEW` (Godot 4 guarantees both normalised
+in `fragment()`) and is below a quantisation step. `fresnel` is now gated on `is_facade` too — the
+road deck and ground were paying a `pow` plus two `normalize` for a term multiplied out at the end.
+
+**`facade_hue.strength` was validated with a one-sided test, which is the `P2-7` config trap.** YAML
+1.1 resolves `.nan`, every comparison against a NaN is false, so `if strength < 0.0: raise` admits
+it — and a NaN reaches `np.clip(np.round(nan)).astype(np.uint8)`, which miscolours every surveyed
+building without raising anything. `_jitter` documents this exact trap and closes it with a
+*two-sided* range test; `strength` now goes through a `_scale` helper with the same shape and a
+`HUE_STRENGTH_MAX` ceiling that exists to make the test two-sided rather than to express taste.
+
+**The survey path repeated the city id.** `facade_hue.source` was `hong_kong/facade_colour/…` under
+a config file that is already Hong Kong's, concatenated by hand — while `fetch.source_dir` declares
+itself the single definition of the sources-tree layout. A second city's yaml copied and incompletely
+edited would have silently read Hong Kong's survey, which is the shape hard rule 3 exists to stop.
+`source` is now a bare filename resolved through `source_dir`.
+
+Also: the sRGB transfer function existed twice in Python (`colour.py` and `frame_stats.py`, the
+latter already importing from the former) and is now `srgb_to_linear` in one place — two copies of
+that curve disagreeing is what `Q27` *was*. `city_facade_warm.tres` now records that
+`city_facade.gdshader` was forked and fixed in three places that were never back-ported, so choosing
+the warm look knowingly reintroduces moiré, chevrons on curved podia, and a fade that clears the LOD1
+switch by accident; back-porting is deferred rather than done, because keeping that file a faithful
+record of what `P3-7` measured is worth more than keeping two large shaders in step. `ART_DESIGN.md`
+asserted a 260–420 m fade in two places that the same section then explains was wrong — the shipped
+140–244 m is now what it says.
+
+### 2026-08-06 — The façade elements come off, and the city rides on colour and massing alone
+
+Driven, immediately after `Q27` closed, and decided from the driver's seat rather than from a
+screenshot: **the window grid is off and stays off "until we come up with some new art idea to try
+on"** (user's words). With albedo finally arriving at full strength the per-building hue carries the
+street on its own, and the elements were competing with it rather than adding to it.
+
+**Parked rather than deleted.** `city_facade_clean.gdshader` keeps every element it had; seven values
+in `tuning/city_facade.tres` hold them back, and that file's header lists the numbers that restore
+them. Nothing was removed, because the reason to reach for this again is a *new idea*, not a
+rollback — and the tuned state of the dozens of now-inert uniforms is where that idea would start.
+
+**It takes all seven, which is worth knowing before anyone tries to simplify it.** `solid_share = 1.0`
+looks like the whole switch — `glazed = step(solid_share, …)` in the shader, so at 1.0 nothing is
+ever glazed and the curtain-wall, fin and punched treatments stop drawing. Measured, that alone still
+left **86% of the frame different**: shopfronts, cornices, floor lines and mullions are drawn outside
+that gate and each needs zeroing too.
+
+⚠️ **This settles nothing in `Q26`, and it must not be read as a verdict on `P3-7`'s bands.** Every
+element in either look was judged against a city whose albedo was reaching the screen at a third
+strength, which is not a fair test of anything. `Q26` still goes to the drivers, and whatever it
+compares should be re-judged against the fixed render first.
 
 ### 2026-08-06 — `Q27` closes: the city was pale because `COLOR_0` was read in the wrong colour space
 

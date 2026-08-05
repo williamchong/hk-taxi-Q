@@ -127,6 +127,19 @@ be a rebuild.
 
 ### The clean/futuristic variant
 
+🔴 **Every façade element below is switched off in the shipping `city_facade.tres`, and the city is
+massing plus flat per-building colour.** User's call on 2026-08-06, made from the driver's seat: with
+`Q27` fixed, the measured per-building hue carries the city on its own, and the window grid was
+competing with it rather than adding to it. **Parked, not deleted** — the shader keeps all of it and
+seven parameters in one `.tres` hold it back, listed in that file's header with the values that
+restore them. The rest of this section describes what is still in the shader and what turning it back
+on would give.
+
+⚠️ **This retires nothing above it and settles nothing in `Q26`.** Flat colour is where the look
+rests while a new idea is found, not a verdict that the elements were wrong — they were judged
+against a city whose albedo was arriving at a third strength, which is not a fair test of anything.
+Anything reconsidered here should be re-judged against the fixed render first.
+
 **A second look, shipping beside the first and switched by one file.** The window bands above are
 accurate and were called **dull** on sight. The fault is *scale*, not colour: they are drawn at the
 measured 2.8 m × 2.4 m pitch, which from a car at 30 m is about four pixels across — too fine to
@@ -296,12 +309,18 @@ of the flight. Shipping it as albedo would bake that flight's shadows into the c
 sun to shade a second time. `facade_hue.strength` scales the measured chroma and is the *stylisation*
 knob, kept separate so the two cannot be confused.
 
-⚠️ **The city still reads pale, and the palette is not why.** Rendered with every façade element
-switched off and no jitter, the colour is barely visible — but dropping the height bands from L\* 80
-to L\* 62 moved the *frame* only from L\* 86.8 to 83.3. An 18-point albedo change bought 3.5 points
-of pixel. **The clean rig's light levels swamp albedo**, which is the thing to fix first if the city
-should read more colourful; `base_wash` and the palette were both eliminated by test before this was
-found. Evidence in `build/driver/flat_colour` against `build/driver/flat_lit`.
+✅ **The city used to read pale, and neither the palette nor the rig was why.** `COLOR_0` is authored
+in sRGB and was consumed as linear, so **57%** of a lit façade pixel's luminance was
+albedo-*independent* and a per-building difference reached the screen at a third of its size. Closed
+as `Q27` on 2026-08-06; the fix is a conversion in the two façade shaders and the road's
+`BaseMaterial3D`, and the share falls to **6%** at street level.
+
+⚠️ **The lesson is about the diagnosis, not the bug.** "The rig's light levels swamp albedo" was the
+previous entry here, and it was wrong: ambient, exposure, glow, fog, the tonemap curve and specular
+were each ablated and **none moved albedo transmission by more than 0.05**. A washed-out frame is not
+evidence about the lights. Grade a pair of renders with `tools/frame_stats.py` and ask whether an
+*albedo change* survives to the screen before touching anything — a rig can only redistribute
+contrast that arrives.
 
 ### Hero buildings (~5)
 

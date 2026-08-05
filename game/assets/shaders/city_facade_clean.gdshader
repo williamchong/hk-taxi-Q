@@ -35,6 +35,14 @@
 //
 // ⚠️ Like its sibling, this replaces a `BaseMaterial3D` that had
 // `vertex_color_use_as_albedo` set at import, so it must apply `COLOR` itself.
+//
+// ⚠️ **The defaults below are this shader's first pass, not what ships**, and
+// several were corrected after they were judged on real geometry — the bay is
+// 5.5 m rather than 9, the glazing spans one storey rather than two, and the
+// fade ends inside the LOD1 switch. `tuning/city_facade.tres` is what the city
+// actually loads and is where retuning belongs (CLAUDE.md hard rule 4); these
+// exist so the shader is usable on its own. Read a number here as the argument
+// that produced it, and the `.tres` as the verdict.
 
 shader_type spatial;
 
@@ -376,171 +384,201 @@ void fragment() {
 	}
 
 	// Grazing-angle terms. One fresnel serves the glass reflection, the wall sky
-	// bounce and the night mask, so it is computed once whatever the treatment.
-	float facing = clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0);
-	float fresnel = pow(1.0 - facing, fresnel_power);
+	// bounce and the night mask, so it is computed once whatever the treatment —
+	// and only on a facade, because that is its only consumer. The road deck and
+	// the ground fill much of a street frame and were paying a `pow` plus two
+	// `normalize` each for a term multiplied out at the end of the function.
+	float fresnel = 0.0;
 
 	float roughness = wall_roughness;
 
-	// Roofs and soffits: no grid, but not untouched. See `roof_darkness`.
-	if (is_facade && upness >= wall_normal_max) {
-		albedo *= 1.0 - roof_darkness * upness;
-	}
+	if (is_facade) {
+		fresnel = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), fresnel_power);
 
-	if (is_facade && upness < wall_normal_max) {
-		// Everything the grid draws fades together, so a hairline does not
-		// survive out where the surface it belongs to has gone flat.
-		float fade = 1.0 - smoothstep(fade_start_m, fade_end_m, length(VERTEX));
+		if (upness >= wall_normal_max) {
+			// Roofs and soffits: no grid, but not untouched. See `roof_darkness`.
+			albedo *= 1.0 - roof_darkness * upness;
+		} else {
+			// The three per-building draws, taken once and hoisted because the
+			// guard below reads them: whether this building has a curtain wall at
+			// all, whether its podium has shopfronts, and whether it takes an
+			// accent colour. Between them they are what stops a block reading as
+			// one wallpapered surface.
+			float glazed = step(solid_share, draw(seed, 1.0));
+			float has_shop = step(1.0 - shopfront_share, draw(seed, 10.0));
+			bool accented = draw(seed, 2.0) < accent_share;
 
-		// Per-building draws, taken once. `glazed` decides whether this building
-		// has a curtain wall at all — 38% do not, and that share is what stops a
-		// block reading as one wallpapered surface.
-		float glazed = step(solid_share, draw(seed, 1.0));
-		bool accented = draw(seed, 2.0) < accent_share;
-		float which = draw(seed, 4.0);
-		vec3 accent = which < 0.34 ? accent_a : (which < 0.67 ? accent_b : accent_c);
+			// ⚠️ **Every element below is drawn *into* the albedo, so a tuning that
+			// zeroes all of them leaves a no-op that still runs.** `city_facade.tres`
+			// ships exactly that today, and without this guard every facade fragment
+			// pays ten `sin`, seven `fwidth` and a `reflect()` to be multiplied by
+			// zero. The predicate is uniform across the draw when the elements are
+			// off, so the branch is coherent rather than divergent — and it still
+			// pays when they are on, because `solid_share` of every block is mass
+			// with no grid on it at all.
+			//
+			// ⚠️ **It is derived, so it has to be kept honest.** Anything added below
+			// that can reach the albedo while all five of these are off must be added
+			// here too. `mullion_darkness` and `emission_strength` are deliberately
+			// absent: both reach it only through `glazed` or `has_shop`, which are
+			// already tested.
+			bool draws_detail = glazed > 0.5
+				|| has_shop > 0.5
+				|| accented
+				|| cornice_darkness > 0.0
+				|| floor_line_darkness > 0.0;
 
-		// The phase offsets the grids and the seed now *scales* them too: two
-		// towers with the same rhythm at different offsets still read as one
-		// wallpaper. `floor_height_m` stays the measured constant of the city —
-		// what varies is the structural module and how many storeys a glazing
-		// band spans, both of which really do differ building to building.
-		float bay_scale = mix(bay_scale_min, bay_scale_max, draw(seed, 6.0));
-		float band_mult = draw(seed, 7.0) < two_storey_share ? 2.0 : 1.0;
+			if (draws_detail) {
+				// Everything the grid draws fades together, so a hairline does not
+				// survive out where the surface it belongs to has gone flat.
+				float fade = 1.0 - smoothstep(fade_start_m, fade_end_m, length(VERTEX));
 
-		float band_pitch_m = floor_height_m * band_storeys * band_mult;
-		float storey = (height_m - podium_height_m) / floor_height_m + phase;
-		float ribbon = (height_m - podium_height_m) / band_pitch_m + phase;
-		float bay = along_m / (bay_width_m * bay_scale) + phase;
-		float above = over(height_m, podium_height_m);
+				float which = draw(seed, 4.0);
+				vec3 accent = which < 0.34 ? accent_a : (which < 0.67 ? accent_b : accent_c);
 
-		// Which grammar this building is built in. One grid, four sets of ratios.
-		float kind = draw(seed, 5.0);
-		float h_ratio = glass_ratio;
-		float pier = mullion_ratio;
-		float horizontal = 1.0;
-		if (kind < fin_share) {
-			// Vertical fin: continuous piers the full height, no horizontal cut.
-			horizontal = 0.0;
-			pier = fin_pier_ratio;
-		} else if (kind < fin_share + curtain_share) {
-			// Full curtain wall: both masks nearly open, a hairline grid.
-			h_ratio = 0.92;
-			pier = 0.05;
-		} else if (kind < fin_share + curtain_share + punched_share) {
-			// Punched windows in solid wall — the older stock.
-			h_ratio = glass_ratio * 0.62;
-			pier = punched_pier_ratio;
-		}
+				// The phase offsets the grids and the seed now *scales* them too: two
+				// towers with the same rhythm at different offsets still read as one
+				// wallpaper. `floor_height_m` stays the measured constant of the city —
+				// what varies is the structural module and how many storeys a glazing
+				// band spans, both of which really do differ building to building.
+				float bay_scale = mix(bay_scale_min, bay_scale_max, draw(seed, 6.0));
+				float band_mult = draw(seed, 7.0) < two_storey_share ? 2.0 : 1.0;
 
-		// --- the podium, which is the only part a driver ever meets ---------
+				float band_pitch_m = floor_height_m * band_storeys * band_mult;
+				float storey = (height_m - podium_height_m) / floor_height_m + phase;
+				float ribbon = (height_m - podium_height_m) / band_pitch_m + phase;
+				float bay = along_m / (bay_width_m * bay_scale) + phase;
+				float above = over(height_m, podium_height_m);
 
-		// A shopfront on *some* buildings, at a height that varies: a lobby is
-		// double height, a shop is not, and a podium may have neither.
-		float has_shop = step(1.0 - shopfront_share, draw(seed, 10.0));
-		float shop_top = shopfront_top_m * mix(0.8, 1.5, draw(seed, 11.0));
-		float shop = slab(height_m, shopfront_base_m, shop_top) * fade * has_shop;
-		// The plinth between the shopfront and the cornice. On an accent
-		// building it takes the colour — down here, where it is seen.
-		if (accented) {
-			float plinth = slab(height_m, shopfront_top_m, podium_height_m - cornice_thickness_m);
-			albedo = mix(albedo, accent, plinth * accent_opacity * fade);
-		}
-		// A cornice where the podium stops and the tower starts. It is what
-		// makes the two read as one building with a base rather than as a tower
-		// standing in a box.
-		albedo *= (
-			1.0
-			- cornice_darkness
-				* slab(height_m, podium_height_m - cornice_thickness_m, podium_height_m)
-				* fade
-		);
+				// Which grammar this building is built in. One grid, four sets of ratios.
+				float kind = draw(seed, 5.0);
+				float h_ratio = glass_ratio;
+				float pier = mullion_ratio;
+				float horizontal = 1.0;
+				if (kind < fin_share) {
+					// Vertical fin: continuous piers the full height, no horizontal cut.
+					horizontal = 0.0;
+					pier = fin_pier_ratio;
+				} else if (kind < fin_share + curtain_share) {
+					// Full curtain wall: both masks nearly open, a hairline grid.
+					h_ratio = 0.92;
+					pier = 0.05;
+				} else if (kind < fin_share + curtain_share + punched_share) {
+					// Punched windows in solid wall — the older stock.
+					h_ratio = glass_ratio * 0.62;
+					pier = punched_pier_ratio;
+				}
 
-		// --- the tower ------------------------------------------------------
+				// --- the podium, which is the only part a driver ever meets ---------
 
-		// A slab edge at every storey, faint — it is the only thing left at the
-		// old fine pitch, and it is what keeps the real floor count legible on a
-		// building whose glazing spans two storeys at a time.
-		albedo *= 1.0 - floor_line_darkness * band(storey, 0.0, 0.06) * fade * above;
+				// The shopfront's height varies as well as whether it is there at
+				// all — a lobby is double height and a shop is not.
+				float shop_top = shopfront_top_m * mix(0.8, 1.5, draw(seed, 11.0));
+				float shop = slab(height_m, shopfront_base_m, shop_top) * fade * has_shop;
+				// The plinth between the shopfront and the cornice. On an accent
+				// building it takes the colour — down here, where it is seen.
+				if (accented) {
+					float plinth = slab(height_m, shopfront_top_m, podium_height_m - cornice_thickness_m);
+					albedo = mix(albedo, accent, plinth * accent_opacity * fade);
+				}
+				// A cornice where the podium stops and the tower starts. It is what
+				// makes the two read as one building with a base rather than as a tower
+				// standing in a box.
+				albedo *= (
+					1.0
+					- cornice_darkness
+						* slab(height_m, podium_height_m - cornice_thickness_m, podium_height_m)
+						* fade
+				);
 
-		// Glazing centred in its band so neither mask straddles the wrap, where
-		// `fract` would split one ribbon into two.
-		float ribbon_mask = mix(
-			1.0, band(ribbon, 0.5 - h_ratio * 0.5, 0.5 + h_ratio * 0.5), horizontal
-		);
+				// --- the tower ------------------------------------------------------
 
-		// A spandrel course under each glazing ribbon carries the accent up the
-		// tower. Bounded rather than "all the remaining solid": colouring every
-		// non-glazed strip makes the building read as the accent with white
-		// stripes, which is the wrong way round.
-		if (accented && glazed > 0.5) {
-			float course = band(
-				ribbon,
-				0.5 + glass_ratio * 0.5,
-				0.5 + glass_ratio * 0.5 + accent_course_ratio
-			);
-			albedo = mix(albedo, accent, course * above * accent_opacity * fade);
-		}
+				// A slab edge at every storey, faint — it is the only thing left at the
+				// old fine pitch, and it is what keeps the real floor count legible on a
+				// building whose glazing spans two storeys at a time.
+				albedo *= 1.0 - floor_line_darkness * band(storey, 0.0, 0.06) * fade * above;
 
-		// Mullions divide the glazing into bays. Drawn into the albedo after the
-		// glass is mixed in so a mullion is opaque frame, not tinted glass.
-		float tower = ribbon_mask * glazed * above * fade;
-		// ⚠️ **A mullion is wall, not a dark line.** The pier between two panes is
-		// the same pale concrete as the facade, so this cuts the glass away and
-		// lets the wall through — it must not also darken what it reveals, which
-		// is what made the first pass read as a black slot with scratches in it.
-		// `mullion_darkness` is now only the thin shadow line at the reveal.
-		// Tower and podium get their own pier width — a curtain-wall mullion and
-		// a podium column are not the same member.
-		float mullion = band(bay, 0.0, pier);
-		float shop_mullion = band(bay, 0.0, shopfront_pier_ratio);
-		float glass = clamp(
-			tower * (1.0 - mullion) + shop * (1.0 - shop_mullion), 0.0, 1.0
-		);
-		float reveal = max(mullion * tower, shop_mullion * shop);
+				// Glazing centred in its band so neither mask straddles the wrap, where
+				// `fract` would split one ribbon into two.
+				float ribbon_mask = mix(
+					1.0, band(ribbon, 0.5 - h_ratio * 0.5, 0.5 + h_ratio * 0.5), horizontal
+				);
 
-		// The mirror. A reflected ray's own elevation picks up the sky gradient,
-		// so a wall's glazing changes as it turns and as the camera moves — which
-		// is the difference between glass and a dark swatch. Below the horizon it
-		// reflects the city rather than the sky.
-		vec3 to_surface = normalize(world_pos - INV_VIEW_MATRIX[3].xyz);
-		vec3 bounced = reflect(to_surface, normalize(world_n));
-		// Per-pane bow, the thing that makes a real glazed facade ripple.
-		vec2 pane = vec2(floor(ribbon), floor(bay));
-		vec2 within = vec2(fract(ribbon), fract(bay)) - 0.5;
-		float bowed = bounced.y
-			+ within.x * pane_bow
-			+ (draw(seed + dot(pane, vec2(3.0, 17.0)), 9.0) - 0.5) * pane_jitter;
-		vec3 mirrored = mix(
-			ground_reflection,
-			mix(sky_horizon, sky_zenith, clamp(bowed, 0.0, 1.0)),
-			smoothstep(-0.08, 0.08, bowed)
-		);
+				// A spandrel course under each glazing ribbon carries the accent up the
+				// tower. Bounded rather than "all the remaining solid": colouring every
+				// non-glazed strip makes the building read as the accent with white
+				// stripes, which is the wrong way round.
+				if (accented && glazed > 0.5) {
+					float course = band(
+						ribbon,
+						0.5 + glass_ratio * 0.5,
+						0.5 + glass_ratio * 0.5 + accent_course_ratio
+					);
+					albedo = mix(albedo, accent, course * above * accent_opacity * fade);
+				}
 
-		float tint = draw(seed, 8.0);
-		vec3 pane_colour = tint < 0.34 ? glass_colour : (tint < 0.67 ? glass_tint_b : glass_tint_c);
-		vec3 glazing = mix(
-			pane_colour, mirrored, glass_reflect * mix(glass_face_on, 1.0, fresnel)
-		);
-		albedo = mix(albedo, glazing, glass);
-		roughness = mix(wall_roughness, glass_roughness, glass);
-		albedo *= 1.0 - mullion_darkness * reveal * (1.0 - glass);
+				// Mullions divide the glazing into bays. Drawn into the albedo after the
+				// glass is mixed in so a mullion is opaque frame, not tinted glass.
+				float tower = ribbon_mask * glazed * above * fade;
+				// ⚠️ **A mullion is wall, not a dark line.** The pier between two panes is
+				// the same pale concrete as the facade, so this cuts the glass away and
+				// lets the wall through — it must not also darken what it reveals, which
+				// is what made the first pass read as a black slot with scratches in it.
+				// `mullion_darkness` is now only the thin shadow line at the reveal.
+				// Tower and podium get their own pier width — a curtain-wall mullion and
+				// a podium column are not the same member.
+				float mullion = band(bay, 0.0, pier);
+				float shop_mullion = band(bay, 0.0, shopfront_pier_ratio);
+				float glass = clamp(
+					tower * (1.0 - mullion) + shop * (1.0 - shop_mullion), 0.0, 1.0
+				);
+				float reveal = max(mullion * tower, shop_mullion * shop);
 
-		if (emission_strength > 0.0 && lit_window_share > 0.0) {
-			// Per pane, and stable: hashed from the pane's own course and bay
-			// plus the building seed, so a lit pane stays lit as the camera
-			// moves instead of sparkling per fragment.
-			vec2 pane = vec2(floor(ribbon), floor(bay));
-			float hashed = fract(sin(dot(pane, vec2(12.9898, 78.233)) + seed * 0.37) * 43758.5453);
-			EMISSION = lit_window_colour
-				* (glass * step(1.0 - lit_window_share, hashed) * emission_strength);
+				// The mirror. A reflected ray's own elevation picks up the sky gradient,
+				// so a wall's glazing changes as it turns and as the camera moves — which
+				// is the difference between glass and a dark swatch. Below the horizon it
+				// reflects the city rather than the sky.
+				vec3 to_surface = normalize(world_pos - INV_VIEW_MATRIX[3].xyz);
+				vec3 bounced = reflect(to_surface, normalize(world_n));
+				// Per-pane bow, the thing that makes a real glazed facade ripple.
+				vec2 pane = vec2(floor(ribbon), floor(bay));
+				vec2 within = vec2(fract(ribbon), fract(bay)) - 0.5;
+				float bowed = bounced.y
+					+ within.x * pane_bow
+					+ (draw(seed + dot(pane, vec2(3.0, 17.0)), 9.0) - 0.5) * pane_jitter;
+				vec3 mirrored = mix(
+					ground_reflection,
+					mix(sky_horizon, sky_zenith, clamp(bowed, 0.0, 1.0)),
+					smoothstep(-0.08, 0.08, bowed)
+				);
+
+				float tint = draw(seed, 8.0);
+				vec3 pane_colour = tint < 0.34 ? glass_colour : (tint < 0.67 ? glass_tint_b : glass_tint_c);
+				vec3 glazing = mix(
+					pane_colour, mirrored, glass_reflect * mix(glass_face_on, 1.0, fresnel)
+				);
+				albedo = mix(albedo, glazing, glass);
+				roughness = mix(wall_roughness, glass_roughness, glass);
+				albedo *= 1.0 - mullion_darkness * reveal * (1.0 - glass);
+
+				if (emission_strength > 0.0 && lit_window_share > 0.0) {
+					// Per pane, and stable: hashed from the pane's own course and bay
+					// plus the building seed, so a lit pane stays lit as the camera
+					// moves instead of sparkling per fragment. `pane` is the mirror's,
+					// which is the same pane — it was redeclared here and shadowed it.
+					float hashed = fract(sin(dot(pane, vec2(12.9898, 78.233)) + seed * 0.37) * 43758.5453);
+					EMISSION = lit_window_colour
+						* (glass * step(1.0 - lit_window_share, hashed) * emission_strength);
+				}
+			}
 		}
 	}
 
 	// Sky bounce on everything the grid did not turn into glass. Applied last so
 	// it lifts the accent bands and the podium too — a white city without it
-	// reads as grey card wherever the sun is not directly on it.
-	albedo = mix(albedo, sky_reflection, fresnel * wall_sky_tint * (is_facade ? 1.0 : 0.0));
+	// reads as grey card wherever the sun is not directly on it. `fresnel` is
+	// zero off a facade, so it needs no marker test of its own.
+	albedo = mix(albedo, sky_reflection, fresnel * wall_sky_tint);
 
 	ALBEDO = albedo;
 	METALLIC = 0.0;

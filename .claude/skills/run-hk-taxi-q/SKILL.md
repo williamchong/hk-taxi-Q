@@ -222,8 +222,11 @@ to — see Gotchas.
   exit `0`; the city just renders a blank fallback material where the facades were. Verified while
   closing `Q27`: `check.sh` printed `All checks passed` with 330 `SHADER ERROR` lines in its own log.
   After touching a `.gdshader`, grep the run for `SHADER ERROR` yourself —
-  `drive.sh … 2>&1 | grep -i "shader error"` — and look at the PNG. Featureless pale buildings with no
-  window grid is what the fallback looks like, not a lighting problem.
+  `drive.sh … 2>&1 | grep -i "shader error"`. ⚠️ **Do not try to spot it in the PNG.** "Featureless
+  pale buildings with no window grid" was the tell until the facade elements were switched off in
+  `tuning/city_facade.tres`, and it is now also what a *correct* render looks like. The grep is the
+  only reliable test; the remaining visual tell is that the fallback loses the per-building colour
+  too, so every building goes the same white.
 - ⚠️ **Changing `generated_scene_import.gd` does not re-run it.** Godot caches imports on the source
   file, not on the post-import script, so `--import` — and even `touch`ing the `.glb` — leaves the old
   result in place, with no warning. This silently produced a "the fix does nothing" result that was

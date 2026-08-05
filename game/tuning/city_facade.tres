@@ -17,6 +17,30 @@
 ; group of storeys and a bay is 9 m, because the measured 2.4 m column pitch is
 ; about four pixels across from a moving car and reads as noise rather than as
 ; architecture. See the shader header.
+;
+; ⚠️ **Every facade element is currently switched off, and the city is massing
+; plus flat colour.** User's call on 2026-08-06, driven: with `Q27` fixed the
+; per-building colour finally carries the city on its own, and the window grid was
+; competing with it rather than adding to it. Deliberately parked rather than
+; deleted — "until we come up with some new art idea to try on" — so the shader
+; keeps all of it and this file is the only thing holding it back.
+;
+; **Seven parameters do it, and it takes all seven.** `solid_share = 1.0` is the
+; gate: `glazed = step(solid_share, …)` in the shader, so at 1.0 no building is
+; ever glazed and the curtain-wall, fin and punched types stop drawing. That
+; alone leaves the street-level furniture behind — measured, 86% of the frame
+; still differed — because shopfronts, cornices, floor lines and mullions are
+; drawn outside that gate, so each is zeroed too.
+;
+; To bring the windows back, take the seven values from `42da0fb` — nothing else
+; in the file moved, and none of it needs a rebuild:
+;
+;   solid_share 0.38 · glass_ratio 0.44 · shopfront_share 0.55 · accent_share 0.11
+;   cornice_darkness 0.28 · floor_line_darkness 0.11 · mullion_darkness 0.12
+;
+; The dozens of uniforms those seven make inert — `bay_width_m`, `glass_colour`,
+; `pane_bow`, the fresnel terms — are left at their tuned values on purpose. They
+; are the state a future art idea starts from, not dead weight to be cleaned up.
 [gd_resource type="ShaderMaterial" load_steps=2 format=3]
 
 [ext_resource type="Shader" path="res://assets/shaders/city_facade_clean.gdshader" id="1_facade"]
@@ -30,18 +54,18 @@ shader_parameter/value_jitter = 0.2
 shader_parameter/warm_cool_jitter = 0.07
 shader_parameter/floor_height_m = 2.8
 shader_parameter/band_storeys = 1.0
-shader_parameter/glass_ratio = 0.44
+shader_parameter/glass_ratio = 0.0
 shader_parameter/bay_width_m = 5.5
 shader_parameter/mullion_ratio = 0.26
-shader_parameter/mullion_darkness = 0.12
+shader_parameter/mullion_darkness = 0.0
 shader_parameter/podium_height_m = 12.0
 shader_parameter/shopfront_base_m = 0.7
 shader_parameter/shopfront_top_m = 4.6
-shader_parameter/shopfront_share = 0.55
+shader_parameter/shopfront_share = 0.0
 shader_parameter/shopfront_pier_ratio = 0.46
 shader_parameter/cornice_thickness_m = 0.5
-shader_parameter/cornice_darkness = 0.28
-shader_parameter/solid_share = 0.27
+shader_parameter/cornice_darkness = 0.0
+shader_parameter/solid_share = 1.0
 shader_parameter/fin_share = 0.2
 shader_parameter/curtain_share = 0.16
 shader_parameter/punched_share = 0.22
@@ -50,7 +74,7 @@ shader_parameter/punched_pier_ratio = 0.52
 shader_parameter/bay_scale_min = 0.72
 shader_parameter/bay_scale_max = 1.45
 shader_parameter/two_storey_share = 0.22
-shader_parameter/accent_share = 0.11
+shader_parameter/accent_share = 0.0
 shader_parameter/accent_course_ratio = 0.0
 shader_parameter/glass_colour = Color(0.21, 0.27, 0.33, 1)
 shader_parameter/glass_tint_b = Color(0.13, 0.22, 0.21, 1)
@@ -70,7 +94,7 @@ shader_parameter/accent_b = Color(0.11, 0.45, 0.72, 1)
 shader_parameter/accent_c = Color(0.95, 0.62, 0.09, 1)
 shader_parameter/accent_opacity = 0.8
 shader_parameter/wall_sky_tint = 0.18
-shader_parameter/floor_line_darkness = 0.11
+shader_parameter/floor_line_darkness = 0.0
 shader_parameter/grounding_height_m = 3.0
 shader_parameter/grounding_darkness = 0.26
 shader_parameter/wall_roughness = 0.82
