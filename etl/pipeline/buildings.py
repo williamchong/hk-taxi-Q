@@ -9,12 +9,13 @@ material, so a tile's 300-odd buildings collapse into one primitive and one draw
 call — which is why the untextured dataset was chosen over the photogrammetry
 one (`docs/DATA_SOURCES.md`).
 
-**The ground goes through the same path since `P3-10`, and that is the design
-rather than a convenience.** Being one more class in `classes` is what gets it
-the tile's single material for free: it costs no draw call, and it cannot end
-up somewhere the buildings are not. It arrives textured and is stripped on the
-way in (`_ground`) — the *source* is textured even though the massing dataset
-is not, and the tile output carries no textures either way.
+**The ground lands in the same tile primitive since `P3-10`, and that is the
+design rather than a convenience.** Being one more class in `classes` is what
+gets it the tile's single material for free: it costs no draw call, and it
+cannot end up somewhere the buildings are not. It arrives textured and is
+stripped on the way in (`_ground`) — the *source* is textured even though the
+massing dataset is not, and the tile output carries no textures either way. It
+reaches that primitive by a different route, though; see `_tile_ground`.
 
 ⚠️ **A consequence with no line of code behind it: the ground collides.** The
 finest tier is merged and then named `<tile_id>-col`, so everything in it gets
@@ -30,6 +31,11 @@ one cell size does not suit two kinds of geometry: a building is a big box that
 loses half its triangles and keeps its silhouette, while an elevated road deck is
 thinner than the cell that decimates a building and folds into a sliver. The
 merge still runs, so a tile is still one mesh and one draw call.
+
+⚠️ **The ground is the exception, and it runs the other way round** (`Q25`): it
+is decimated once for the whole region and cut into tiles afterwards, because it
+is the only class that is both cut across tiles and a continuous surface, so a
+seam in it is a hole. `_tile_ground` carries the argument.
 
 Sheets are read straight out of their zips. Unpacking six of them costs ~400 MB
 on disk to produce input that is read once.
@@ -371,16 +377,31 @@ def build_region(
     # sizes — see `BuildingStyle.cell_size_m`. Merging still happens per tile;
     # it just happens after the collapse instead of before it.
     buckets: dict[tuple[int, int], dict[str, list[MeshData]]] = {}
+    # The ground does not go in there — see `_tile_ground` for why it is held
+    # whole until every sheet has been read.
+    ground: list[MeshData] = []
 
     for sheet_id, sheet_path in place.sheets:
         kept = 0
         for class_id, mesh in read_sheet(sheet_path, style.classes):
             report.read += 1
-            placed = (
-                _ground(mesh, place.offset, style)
-                if style.is_ground(class_id)
-                else mesh.translated(place.offset)
-            )
+            if style.is_ground(class_id):
+                # Clipped here rather than inside `_tile_ground` so it is counted
+                # like every other class — and so `ground` accumulates only what
+                # the region can use. The sheets are 750 m squares against a
+                # 1.65 x 0.9 km region, so **54% of the source terrain is
+                # outside it**: carrying that to the merge cost a measured
+                # 924 MB of peak RSS against 690 MB, to decimate geometry that
+                # `assign` then threw away.
+                placed = _ground(mesh, place.offset, style)
+                inside = _within_region(placed, place.grid)
+                if inside is None:
+                    report.clipped += 1
+                    continue
+                ground.append(replace(inside, colours=colour_for(style, class_id, inside)))
+                kept += 1
+                continue
+            placed = mesh.translated(place.offset)
             bounds = placed.aabb()
             # Colour comes from the whole mesh's height, before any splitting,
             # so a viaduct partitioned across four tiles stays one colour.
@@ -394,17 +415,29 @@ def build_region(
                 report.clipped += 1
         log.info("  %-12s %4d kept", sheet_id, kept)
 
-    if not buckets:
+    # `_tile_ground` empties the list as it merges, so nothing here holds the
+    # region's ground twice.
+    tiers = _tile_ground(ground, place.grid, style)
+
+    if not buckets and not tiers:
         raise ValueError(
             f"region '{region_id}' produced no tiles. Every source mesh fell outside the "
             f"region bounds — check that the sheets on disk are the ones the bounds select."
         )
 
-    # Popped as they are written so the bucket payload — 173 MB for Wan Chai,
-    # of which the ground `P3-10` added is 52.5 MB —
-    # decays across the write stage instead of all staying live to the end.
-    for tile in sorted(buckets):
-        written = _write_tile(place.out_dir, tile, buckets.pop(tile), style)
+    # The union, not `buckets` alone: a square holding ground and no buildings is
+    # real — the region gained its 66th tile that way when `P3-10` landed — and
+    # iterating one dict would drop it without saying anything.
+    #
+    # Popped as they are written so the bucket payload — ~121 MB for Wan Chai,
+    # 173 MB before `Q25` moved the ground out of it — decays across the write
+    # stage instead of all staying live to the end. The ground arrives already
+    # decimated and comes to 4.0 MB, against the 52.5 MB it occupied here as
+    # source geometry.
+    for tile in sorted(set(buckets) | set(tiers)):
+        written = _write_tile(
+            place.out_dir, tile, buckets.pop(tile, {}), tiers.pop(tile, {}), style
+        )
         if written is not None:
             report.tiles.append(written)
 
@@ -412,8 +445,102 @@ def build_region(
     return report
 
 
+def _tile_ground(
+    meshes: list[MeshData], grid: Grid, style: BuildingStyle
+) -> dict[tuple[int, int], dict[int, MeshData]]:
+    """The region's ground, decimated **once per tier** and then cut into tiles.
+
+    ⚠️ **The order is the whole point, and it is the reverse of every other
+    class** (`Q25`). `collapse` bins on `floor(position / cell_m)`, which is
+    world-anchored, but the vertex it ships is `_cluster_mean` over *the members
+    present in that mesh*. Cut the ground into tiles first and the two sides of
+    a boundary average over different members, land on different positions, and
+    the sheet pulls apart — a crack straight through to the sky, since a height
+    field has no inside. Measured: **15.65%** of probes within 2 m of a tile
+    boundary had no ground over them, against **0.61%** beyond 10 m.
+
+    Collapsing whole and cutting afterwards closes them by construction: every
+    tile is a piece of one surface that was decimated as one surface. Region-wide
+    holes **1.76% → 0.76%**, the band the driver photographed 8.12% → **0.00%**,
+    and the triangle count does not move (87,534 → 87,544).
+
+    Buildings must **not** be treated this way and are not: one is assigned to a
+    tile whole, so it is never cut and has no seam to open, and collapsing the
+    region's massing as one mesh would merge neighbours across the streets
+    between them. The ground is the only class that is both cut and continuous.
+
+    ⚠️ `INFRASTRUCTURE` is cut too — `assign` partitions a two-kilometre viaduct
+    by triangle — and tears by the same mechanism. Left alone deliberately: a
+    viaduct is a closed volume, so its tears are slivers inside solid geometry
+    rather than holes, and moving it would move the geometry `tools/deck_error.py`
+    grades `P2-7` against.
+
+    ⚠️ **The caller's list is emptied here rather than after the call**, because
+    `merge` copies it and the peak is inside this function, not around it:
+    measured at 102.7 MB of source and 113.0 MB of merge live at once. The
+    caller has already clipped each mesh to the region — see `build_region`, and
+    `_within_region` for why that is a memory measure rather than tidiness.
+    """
+    if not meshes:
+        return {}
+
+    whole = merge(meshes, name=style.terrain_class)
+    meshes.clear()
+
+    tiers: dict[tuple[int, int], dict[int, MeshData]] = {}
+    for level in range(len(style.lod_cell_sizes_m)):
+        try:
+            decimated = collapse(
+                whole, cell_m=style.cell_size_m(style.terrain_class, level), height_field=True
+            )
+        except EmptyMeshError:
+            # The whole region's ground is smaller than one cell. Not reachable
+            # on any real region, and `config.py` refuses a cell table that is
+            # not ascending, so no coarser tier can survive what this one did not.
+            break
+        for tile, piece in assign(decimated, grid):
+            tiers.setdefault(tile, {})[level] = piece
+    return tiers
+
+
+def _within_region(mesh: MeshData, grid: Grid) -> MeshData | None:
+    """The mesh's triangles inside the region, plus one tile of margin.
+
+    Only the ground needs this, and it needs it because it is the one class
+    decimated whole (`_tile_ground`). A sheet is a 750 m square against a
+    1.65 x 0.9 km region, so **54% of the source terrain lies outside it** —
+    geometry every other class discards in `assign` *before* `collapse` sees it.
+    Carrying it into a region-wide decimation costs a measured **924 MB of peak
+    RSS against 690 MB**, and 2.70 s against 2.40 s, to produce byte-identical
+    interior tiles.
+
+    ⚠️ **The margin is load-bearing.** A triangle just outside the region still
+    shares vertices with one inside, and cutting it away before the collapse
+    would change which cluster its neighbours average into — trading the tile
+    seam `Q25` closes for a region-boundary one. It only has to exceed the
+    coarsest cell; one tile is far more than that and needs no tuning.
+
+    `_clip_triangles` asks the same question without the margin, for the
+    textured evaluation output, where the region edge is the answer rather than
+    a working boundary.
+    """
+    centroids = mesh.triangle_centroids()
+    margin = grid.tile_size_m
+    inside = (
+        (centroids[:, 0] >= -margin)
+        & (centroids[:, 0] <= grid.max_x + margin)
+        & (centroids[:, 2] >= -margin)
+        & (centroids[:, 2] <= grid.max_z + margin)
+    )
+    return select_triangles(mesh, inside)
+
+
 def _write_tile(
-    out_dir: Path, tile: tuple[int, int], by_class: dict[str, list[MeshData]], style: BuildingStyle
+    out_dir: Path,
+    tile: tuple[int, int],
+    by_class: dict[str, list[MeshData]],
+    ground: dict[int, MeshData],
+    style: BuildingStyle,
 ) -> TileOutput | None:
     """One tile at every tier it has, or `None` when it has none.
 
@@ -434,30 +561,28 @@ def _write_tile(
     lods: list[LodOutput] = []
     boxes: list[Bounds] = []
     for level in range(len(style.lod_cell_sizes_m)):
-        # Collapsed per class, then merged — never the other way round. Merging
-        # first would put a thin bridge deck and a building wall in the same
-        # cluster grid and force one cell size on both, which is the thing this
-        # exists to stop. Merging after keeps the tile **one mesh and one draw
-        # call**, which is the contract `game/tools/verify_tiles.gd` enforces.
+        # Collapsed per class, then merged — for every class that arrives here.
+        # Merging first would put a thin bridge deck and a building wall in the
+        # same cluster grid and force one cell size on both, which is the thing
+        # this exists to stop. Merging after keeps the tile **one mesh and one
+        # draw call**, the contract `game/tools/verify_tiles.gd` enforces.
+        #
+        # ⚠️ The ground does not arrive here, and runs the other way round for
+        # a reason that does not apply to any of these — see `_tile_ground`.
         pieces: list[MeshData] = []
         for class_id, mesh in per_class.items():
             try:
-                pieces.append(
-                    collapse(
-                        mesh,
-                        cell_m=style.cell_size_m(class_id, level),
-                        # Decided from the class rather than from config: the
-                        # ground *is* a height field, which is a fact about the
-                        # data and not a value to tune. Through the same
-                        # predicate as the sink above, because ground that is
-                        # sunk but torn — or welded but floating — is what the
-                        # two drifting apart would produce. See `collapse`.
-                        height_field=style.is_ground(class_id),
-                    )
-                )
+                pieces.append(collapse(mesh, cell_m=style.cell_size_m(class_id, level)))
             except EmptyMeshError:
                 # This class has nothing left at this cell size; another may.
                 continue
+        # The ground arrives already decimated, by `_tile_ground`, because it is
+        # the one class that must be collapsed *before* it is cut. Appended after
+        # the sorted classes rather than merged into them: `TERRAIN(TB)` already
+        # sorted last, so this is the order the tiles have always had, and merge
+        # order is vertex order.
+        if level in ground:
+            pieces.append(ground[level])
         if not pieces:
             # Everything left in this tile is smaller than the cell. Expected at
             # the coarsest tier for a square holding one sign gantry — the tiers
@@ -491,6 +616,11 @@ def _write_tile(
         id=tile_id,
         ix=ix,
         iz=iz,
+        # Source meshes bucketed here. Since `Q25` that excludes the ground,
+        # which no longer *has* a per-tile source count — it is decimated as one
+        # surface for the whole region before anything is cut, so a ground-only
+        # tile reports zero. A diagnostic in `buildings.json`; `export.py` does
+        # not forward it and nothing in `game/` reads it.
         meshes=sum(len(group) for group in by_class.values()),
         # The union of the **shipped tiers**, not of the source geometry.
         #

@@ -371,6 +371,13 @@ a building decimates at 1.5 m and an elevated road deck at 0.5 m, because a deck
 cell flattens into it. The tile is still one mesh and one draw call, because each class is collapsed
 separately and merged afterwards. See `ART_DESIGN.md` "LOD policy".
 
+⚠️ **The ground is decimated before it is tiled, not after** (`Q25`). Every other class is cut into
+tiles and then decimated per tile — which is safe for a building, because a building is assigned to
+one tile whole and never cut. Cutting a *continuous surface* first makes each side of a boundary
+average over different vertices, so the two land in different places and the sheet tears: measured
+at **15.65%** of probes within 2 m of a tile boundary with no ground over them, against 0.61%
+beyond 10 m. Decimating the region's ground once and cutting the result closes that by construction.
+
 ⚠️ **`tiles[].aabb` is the union of the tiers a build actually ships, not of the source geometry.**
 Decimation moves corners and drops anything thinner than a cell, so a source box can describe
 geometry no shipped mesh contains — one Wan Chai tile declared a height 19 m past its own LOD0. Nor

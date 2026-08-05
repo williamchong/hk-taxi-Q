@@ -23,6 +23,7 @@ from pipeline.buildings import (
     COLLISION_TIER,
     SOURCE_ID,
     Grid,
+    _tile_ground,
     assign,
     build_region,
     colour_for,
@@ -30,7 +31,8 @@ from pipeline.buildings import (
 )
 from pipeline.config import BuildingStyle, HeightBand
 from pipeline.gltf import MeshData, read_glb
-from tests.helpers import BOX_FACES, box_corners, box_soup
+from pipeline.mesh import collapse
+from tests.helpers import BOX_FACES, box_corners, box_soup, covered, soup
 
 # --------------------------------------------------------------------------
 # Fixture construction — a sheet zip shaped like the real ones
@@ -595,6 +597,31 @@ class TestBuildRegion:
             assert meshes[0].uvs is None
             assert meshes[0].colours is not None
 
+    def test_a_tile_holding_only_ground_is_still_written(
+        self, hong_kong, sources, tmp_path
+    ) -> None:
+        """The ground no longer travels in `buckets`, so the write loop iterates
+        the union of two dicts. Taking `buckets` alone would drop exactly this
+        square — and the region has one: it gained its 66th tile when `P3-10`
+        put ground in corners no building reaches."""
+        report = self.build(
+            hong_kong,
+            sources,
+            tmp_path,
+            [
+                Fixture("B0300", "BUILDING", 75.0, 75.0, 40.0),
+                Fixture("G0300", "TERRAIN(TB)", 400.0, 300.0, 0.5, footprint=60.0, textured=True),
+            ],
+        )
+        assert [tile.id for tile in report.tiles] == ["t_00_00", "t_02_02"]
+
+    def test_ground_meshes_are_still_counted_as_read(self, hong_kong, sources, tmp_path) -> None:
+        """`read` and `clipped` are the wrong-bounds diagnostic — a `read` of
+        zero, or a `clipped` equal to it, is the failure they exist for. Routing
+        the ground past the buckets must not route it past the tally."""
+        report = self.build(hong_kong, sources, tmp_path, self.ground())
+        assert report.read == len(self.ground())
+
     def test_the_ground_is_sunk_and_the_buildings_are_not(
         self, hong_kong, sources, tmp_path
     ) -> None:
@@ -707,3 +734,91 @@ class TestBuildRegion:
                 sources_root=tmp_path / "empty",
                 out_root=tmp_path / "out",
             )
+
+
+class TestTileGround:
+    """`Q25`: the ground is decimated once and cut afterwards.
+
+    `collapse` bins world-anchored but ships `_cluster_mean` over *the members
+    present in that mesh*. Cut the ground into tiles first and a cluster
+    straddling a boundary averages over a different subset either side, lands on
+    two different positions, and the sheet pulls apart — a crack straight to the
+    sky, since a height field has no inside. Measured on the region: **15.65%**
+    of probes within 2 m of a tile boundary had no ground over them against
+    0.61% beyond 10 m. After this: 0.42% against 0.54%, which is to say the
+    boundary stopped being special.
+
+    Tested here rather than through `build_region` because the synthetic sheet
+    zip builds boxes, and a box is far coarser than the 4 m cluster cell — the
+    tear needs source vertices *finer* than the cell, which is what real terrain
+    has and `landsd_box` cannot express.
+    """
+
+    GRID = Grid(tile_size_m=150.0, max_x=1650.0, max_z=900.0)
+
+    def _style(self, cells: tuple[float, ...]) -> BuildingStyle:
+        """`style()` at one cell size per tier.
+
+        `style()` already names `TERRAIN` as its `terrain_class`, and
+        `_tile_ground` reads only that and the cell table — never `classes`.
+        """
+        return replace(style(), lod_cell_sizes_m=cells)
+
+    def _sheet(self, step: float) -> MeshData:
+        """A ramp spanning x=60-240, so `assign` must cut it at x=150.
+
+        `step` is the source vertex spacing. Below the 4 m cluster cell it puts
+        two rows of vertices in the cell that straddles the boundary, which is
+        what makes the two sides' subsets differ — and is the condition real
+        terrain meets everywhere.
+        """
+        xs, zs = np.arange(60.0, 241.0, step), np.arange(40.0, 111.0, step)
+        height = lambda x: 2.0 + 0.35 * (x - 60.0)  # noqa: E731
+        corners: list[list[tuple[float, float, float]]] = []
+        for i in range(len(xs) - 1):
+            for j in range(len(zs) - 1):
+                a = (xs[i], height(xs[i]), zs[j])
+                b = (xs[i + 1], height(xs[i + 1]), zs[j])
+                c = (xs[i + 1], height(xs[i + 1]), zs[j + 1])
+                d = (xs[i], height(xs[i]), zs[j + 1])
+                corners.append([a, b, d])
+                corners.append([b, c, d])
+        # Flat +Y normals: `height_field=True` replaces the facing term with a
+        # zero column, so what the normals say cannot reach the clustering under
+        # test — see `mesh.collapse`.
+        return soup(corners, name="ground", colour=(176, 169, 154, 255))
+
+    def _holes(self, pieces: list[MeshData]) -> int:
+        """Plan positions across the x=150 boundary with no surface over them."""
+        return int(
+            (~covered(pieces, np.arange(142.0, 159.0, 0.25), np.arange(50.0, 101.0, 0.5))).sum()
+        )
+
+    def test_the_seam_a_tile_boundary_used_to_open_is_closed(self) -> None:
+        """The defect and the fix in one comparison, against the order this
+        replaced. 714 holes to none on this fixture; 8.12% to 0.00% on the band
+        of the region the driver photographed."""
+        sheet = self._sheet(step=1.5)
+        cells = self._style((4.0,))
+
+        torn = [
+            collapse(piece, cell_m=4.0, height_field=True) for _, piece in assign(sheet, self.GRID)
+        ]
+        whole = [tiers[0] for tiers in _tile_ground([sheet], self.GRID, cells).values()]
+
+        assert self._holes(torn) > 0
+        assert self._holes(whole) == 0
+
+    def test_every_tier_reaches_every_tile_the_ground_covers(self) -> None:
+        sheet = self._sheet(step=1.5)
+        cells = self._style((4.0, 8.0))
+
+        tiers = _tile_ground([sheet], self.GRID, cells)
+        assert len(tiers) == 2  # x=60-240 straddles the boundary at 150
+        for tile in tiers.values():
+            assert sorted(tile) == [0, 1]
+
+    def test_a_region_with_no_ground_produces_no_tiers(self) -> None:
+        """A city that does not tile its ground reaches this with nothing, and
+        `merge` refuses an empty list rather than returning an empty mesh."""
+        assert _tile_ground([], self.GRID, self._style((4.0,))) == {}

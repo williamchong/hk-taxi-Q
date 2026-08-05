@@ -4,7 +4,7 @@ Living document. **Update this whenever a task changes status, a decision is mad
 question is answered.** Newest entries at the top of each log.
 
 Last updated: 2026-08-05 (`P3-10` ships the ground, and it collides — `Q18`'s cheap half is on
-screen and awaiting a verdict, and the drive opened `Q24`)
+screen and awaiting a verdict. The drive opened `Q24` and `Q25`; both are closed)
 
 ---
 
@@ -97,7 +97,7 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ⚠️ conditional ·
 | `Q21` | **Should level −1 carriageway be drawn at all?** 15 edges, 5,010 m, **11.6% of carriageway area**, ribboned under the terrain where nothing can see it and nobody can drive it — and solid since collision shipped | Triangles, collider surface and bundle bytes for geometry with no viewer. Against: `P3-3` and Phase 4 want the *edges* to exist, and `roadgraph.json` would keep all 15 either way | Phase 4 | 🟡 Open. `P2-7` could not improve their height — a tunnel is a void — and **11 of their 30 ends are clipped at the region boundary**, so the Cross-Harbour portals have ~42 m of run for an 8 m descent |
 | `Q22` | **10.2% of off-grade carriageway still hangs past its structure**, after narrowing took it from 20.1% | Cosmetic while nothing off-grade is drivable. It stops being cosmetic in Phase 4: a wheel leaving the deck finds air, not a parapet | Phase 4 | 🟡 Open. No width rule reaches the rest — a single-lane ramp is drawn at the two-lane default, a source centreline is not always centred on its deck, and `P2-1` decimates `INFRASTRUCTURE` on a 0.5 m cell. `tools/overhang.py` is the committed instrument; it reads 10.0% against the 10.2% recorded by hand |
 
-| `Q25` | **The ground tears along every tile boundary.** `collapse` puts a vertex at the *mean of the members present in its mesh*, and terrain is split across tiles before it is collapsed — so the two sides of a boundary average differently and the seam opens | 1.76% of the region has ground the source covers and the bundle does not, **three quarters of it within 10 m of a tile boundary** — 15.65% within 2 m against 0.61% beyond 10. Visible as brown bands at grazing angles, and solid-edged since the ground collides | `P1-2`/`P3-10` → decision | 🔴 **Open.** The cell size is not the lever (4 m keeps 99.70%, 0.5 m keeps 100.00% at ~5× the triangles) and the facing key was the smaller half (97.49% → 97.68%). The fix is to decimate the region's terrain **once** and tile the result, reversing collapse-then-merge for one class — a restructure of `_write_tile`, not a flag. Buildings never showed it because a building is assigned to one tile whole |
+| `Q25` | **The ground tore along every tile boundary.** `collapse` puts a vertex at the *mean of the members present in its mesh*, and terrain was split across tiles before it was collapsed — so the two sides of a boundary averaged differently and the seam opened | 1.76% of the region had ground the source covers and the bundle did not, three quarters of it within 10 m of a tile boundary. Visible as brown bands at grazing angles, and solid-edged since the ground collides | `P1-2`/`P3-10` | 🟢 **Closed 2026-08-05.** `_tile_ground` decimates the region's ground **once per tier** and cuts the result, reversing collapse-then-merge for the one class that is both cut and continuous. Region holes **1.76% → 0.76%**; within 2 m of a boundary **15.65% → 0.42%**, *below* the 0.54% interior rate, so the boundary stopped being special. Triangles unchanged. The 0.76% residual is ordinary sliver loss, not a seam |
 
 **Resolved:** `Q1` (no Z, but `ELEVATION` encodes the level) · `Q2`/`Q3`/`Q5` (building data is fully
 scriptable; 6 sheets, ~44 MB each) · `Q4` (device floor A13 / Adreno 618) · `Q7` (origin at the
@@ -126,6 +126,54 @@ under, and ~0.2 m is a guess until it is driven on a cross-sloped street.
 ---
 
 ## Decision log
+
+### 2026-08-05 — `Q25`: the ground is decimated once and cut afterwards, which is the reverse of every other class
+
+**The driver photographed it a second time** — a band across the frame at `(295, 2.3, 115)`, looking
+south toward `z = 150`. Probed rather than guessed: a row of holes centred exactly on a tile
+boundary.
+
+**`collapse` bins world-anchored but ships `_cluster_mean` over the members present in that mesh.**
+Cut the ground into tiles first and the two sides of a boundary average over different subsets, land
+on different positions, and the sheet pulls apart. `_tile_ground` merges the region's ground,
+decimates it **once per tier**, and cuts the result.
+
+| | before | after |
+|---|---|---|
+| region holes | 1.76% | **0.76%** |
+| within 2 m of a tile boundary | 15.65% | **0.42%** — *below* the 0.54% interior |
+| the band in the screenshot | 194 of 2,400 probes | **0** |
+| LOD0 / LOD1 triangles | 521,683 / 253,038 | 521,693 / 253,097 |
+
+`INFRASTRUCTURE` comes out byte-identical, which is the cheapest proof only the ground moved.
+
+**Buildings must not be treated this way, and the reason is not caution.** A building is assigned to
+a tile *whole*, so it is never cut and has no seam to open — and collapsing the region's massing as
+one mesh would merge neighbours across the streets between them. The ground is the only class that
+is both cut and continuous. `INFRASTRUCTURE` is cut too and tears the same way, but a viaduct is a
+closed volume, so its tears are slivers inside solid geometry rather than holes; changing it would
+also move the geometry `deck_error.py` grades `P2-7` against.
+
+⚠️ **Collapsing whole cost 54% more input than it needed, and the review measured it.** The sheets
+are 750 m squares against a 1.65 × 0.9 km region, so **most of the source terrain is outside it** —
+geometry every other class discards in `assign` *before* `collapse` sees it. Decimating it anyway
+took the buildings stage to **924 MB of peak RSS**. Clipping to the region plus one tile of margin
+before the merge brings it to **657 MB**, for byte-identical interior tiles. ⚠️ The margin is
+load-bearing: cutting flush at the region edge would trade the tile seam for a region-boundary one.
+
+⚠️ **Closing holes raises `ground_clearance`'s share without any ground moving, and that nearly
+read as a regression.** Its sampled gate went to **1.0003% against a 1.000% threshold** and failed.
+The cause is the mirror of the denominator trap the tool documents: it was set at 1% when the
+measurement was 0.363%, against a bundle whose tears made 3.35% of the sampled points
+*unmeasurable*. Closing them adds cells proud at the region's own rate — 2.213% against 2.205% —
+so the ratio climbs while the defect does not. **Like-for-like over the cells both bundles could
+see: 2.181% → 2.205%, +0.024pp.** The gate moved to 1.5% with that written at it.
+
+⚠️ **And the earlier facing-key commit had already moved this and was never re-measured.** `P3-10`'s
+entry quotes 0.363% of sampled points; `1ec1605` took it to 0.944% by the same hole-filling
+mechanism, and only `Q25`'s run surfaced it. The rule this earns: **a fix that changes coverage
+changes every share computed over it**, so re-run the grader that owns the number, not only the two
+the checklist names.
 
 ### 2026-08-05 — The ground tears where it is sloped, and the facing key is only the smaller half
 
@@ -166,9 +214,7 @@ seam opens. Measured inside the region, holes by distance to the nearest tile bo
 Buildings never showed it because a building is assigned to one tile whole; the ground is the first
 class the pipeline has ever cut.
 
-**Not fixed here, and it is `Q25`.** The only robust answer is to decimate the region's terrain once
-and tile the result, which reverses the stage's collapse-then-merge order for one class. That is a
-restructure of `_write_tile`, and it is a bigger question than a flag.
+**Not fixed here — it became `Q25`, and was fixed the same day.** See the entry above this one.
 
 ⚠️ **The screenshot that prompted this still shows the gap.** Recorded plainly because the numbers
 say why and a reader deserves not to re-derive it: 148 → 132 holes in that patch, and the rest is
@@ -2129,8 +2175,10 @@ source files** — that rule cost `Q16` two wrong answers in opposite directions
 | Resident triangles, worst measured | — | **280,807** (a ceiling, not a gate — 236,882 before `P3-10`'s ground) | 2026-08-05 |
 | Texture memory | < 128 MB | **0** — no textures ship, ground included | 2026-08-05 |
 | Bundle size | < 200 MB | **32.30 MB** PCK, + wasm. **27.73 MB immediately before `P3-10`**, measured either side of the same build with one variable changed, so the **+4.56 MB is the ground and its collider** — and only the total was measured, not the split | 2026-08-05 |
-| Tile triangles, LOD0 / LOD1 | — | **521,798 / 253,070** (434,149 / 222,375 before the ground) | 2026-08-05 |
-| Ground standing proud of the carriageway | — | **1.9% of area** (3.3% before `Q24`), 0.712% at the centreline against 4.360% at the ribbon's rim — the gap between those two is `Q19`'s widening | 2026-08-05 |
+| Tile triangles, LOD0 / LOD1 | — | **521,693 / 253,097** (434,149 / 222,375 before the ground) | 2026-08-05 |
+| Ground the source has and the bundle does not | — | **0.76%** of the region (1.76% before `Q25`); **0.42%** within 2 m of a tile boundary against 0.54% in the interior | 2026-08-05 |
+| Ground standing proud of the carriageway | — | **2.2% of area, 1.00% of sampled points.** ⚠️ Not comparable with the 1.9% / 0.49% recorded before `Q25`: closing tears made 3.35% more of the carriageway *measurable*, and the new cells are proud at the region's own rate. Like-for-like over what both bundles could see, **2.181% → 2.205%** | 2026-08-05 |
+| Buildings stage, peak RSS | — | **657 MB** (924 MB before the ground was clipped to the region) | 2026-08-05 |
 | Road surface triangles | — | **28,170** (25,028 before `Q24`'s stations) | 2026-08-05 |
 | Road surface triangles | — | **25,028** (35,039 before the 2026-08-04 kerb fix) | 2026-08-04 |
 | Boot to drivable (web, warm) | — | 830 ms, of which 260 ms is tile instantiation | 2026-07-31 |

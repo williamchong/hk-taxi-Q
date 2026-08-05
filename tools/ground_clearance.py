@@ -311,10 +311,21 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--accept-sampled-share",
         type=float,
-        default=0.01,
+        default=0.015,
         # **This is the gate on the sink**, and the only one that grades `P3-10`.
-        # 1% leaves room for the sink to be retuned without a false failure and
-        # still catches it being dropped, halved, or applied to the wrong class.
+        # It has to leave room for the sink to be retuned without a false
+        # failure, and still catch it being dropped, halved, or applied to the
+        # wrong class — any of which reads about 50%.
+        #
+        # ⚠️ **Raised from 1% because closing holes raises this without any
+        # ground moving**, which is the mirror of the denominator trap `Survey`
+        # documents and is just as capable of misleading. It was set at 1% when
+        # the measurement was 0.363% — against a bundle whose torn ground made
+        # 3.35% of the sampled points unmeasurable. `1ec1605` and `Q25` closed
+        # most of those tears, and the newly visible cells are proud at the
+        # region's own rate (2.213% against 2.205%), so the *share* climbed to
+        # 1.0003% while the defect did not. Measured like-for-like over the
+        # cells both bundles could see: **2.181% → 2.205%**, +0.024pp.
         help="fail above this share of sampled points with ground standing proud",
     )
     parser.add_argument(
@@ -325,7 +336,8 @@ def main(argv: list[str] | None = None) -> int:
         # number** — see the note printed beneath it. 3.289% measured on the
         # first build that shipped ground; this fails a build that makes it
         # meaningfully worse and would want lowering the day the chord defect
-        # below is fixed.
+        # below is fixed. It reads 2.199% today, and the same coverage caveat
+        # as the sampled gate applies to any comparison across a ground fix.
         help="fail above this share of all carriageway area with ground proud",
     )
     parser.add_argument(

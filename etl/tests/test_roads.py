@@ -38,7 +38,7 @@ from pipeline.roads import (
     simplify_mask,
 )
 from pipeline.terrain import HeightField
-from tests.helpers import NULL_SENTINELS, line_wkb, write_layer
+from tests.helpers import NULL_SENTINELS, line_wkb, soup, write_layer
 
 
 class TestSimplify:
@@ -758,13 +758,7 @@ THRESHOLDS = DeckSampling(
 
 
 def _mesh(triangles: list[list[tuple[float, float, float]]]) -> MeshData:
-    positions = np.array([c for triangle in triangles for c in triangle], dtype=np.float64)
-    return MeshData(
-        name="fixture",
-        positions=positions,
-        normals=np.tile(np.array([0.0, 1.0, 0.0], np.float32), (len(positions), 1)),
-        triangles=np.arange(len(positions), dtype=np.uint32).reshape(-1, 3),
-    )
+    return soup(triangles, name="fixture")
 
 
 def _ramp(x0: float, x1: float, y0: float, y1: float) -> MeshData:

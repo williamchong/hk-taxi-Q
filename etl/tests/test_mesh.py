@@ -13,8 +13,7 @@ import pytest
 
 from pipeline.gltf import MeshData, Texture, normalise, triangle_cross
 from pipeline.mesh import collapse, merge, select_triangles
-from pipeline.terrain import HeightField
-from tests.helpers import box
+from tests.helpers import box, covered, soup
 
 
 class TestMerge:
@@ -163,33 +162,21 @@ class TestCollapseHeightField:
             a, b = (xs[index], ys[index]), (xs[index + 1], ys[index + 1])
             corners.append([(a[0], a[1], 0.0), (b[0], b[1], 0.0), (a[0], a[1], 20.0)])
             corners.append([(b[0], b[1], 0.0), (b[0], b[1], 20.0), (a[0], a[1], 20.0)])
+        # Real normals, unlike most soup fixtures: which facing bucket one lands
+        # in is the whole subject here, so they are derived through the pipeline's
+        # own `triangle_cross` and `normalise` rather than through a lookalike.
         positions = np.array([c for face in corners for c in face], dtype=np.float64)
         triangles = np.arange(len(positions), dtype=np.uint32).reshape(-1, 3)
-        # Through `triangle_cross` and `normalise` rather than a hand-rolled
-        # cross product: which facing bucket a normal lands in is the whole
-        # subject here, so the fixture has to derive them the way the pipeline
-        # does rather than through a lookalike.
-        face = normalise(triangle_cross(positions, triangles))
-        return MeshData(
-            name="slope",
-            positions=positions,
-            normals=np.repeat(face, 3, axis=0).astype(np.float32),
-            triangles=triangles,
-        )
+        return soup(corners, name="slope", normals=normalise(triangle_cross(positions, triangles)))
 
     def _covered(self, mesh: MeshData) -> float:
-        """Share of the sheet's plan extent that still has surface over it.
+        """Share of this fixture's plan extent that still has surface over it.
 
-        ⚠️ **Coverage, not triangle count.** A tear does not necessarily drop a
-        triangle — measured on this fixture both settings return 24 — it pulls
-        the two sides apart to different cluster means and leaves a wedge of
-        plan with nothing above it. Counting triangles would report the defect
-        as absent. This is the same question `tools/ground_clearance.py` asks of
-        the shipped bundle, through the same height-field query.
+        Coverage rather than triangle count, for the reason `helpers.covered`
+        gives — and this fixture is where that reason was measured: both
+        settings return 24 triangles, so a count reports the tear as absent.
         """
-        xs, zs = np.meshgrid(np.arange(0.5, 40.0, 0.5), np.arange(0.5, 20.0, 0.5))
-        heights = HeightField.from_meshes([mesh]).sample(xs.ravel(), zs.ravel())
-        return float(np.isfinite(heights).mean())
+        return float(covered([mesh], np.arange(0.5, 40.0, 0.5), np.arange(0.5, 20.0, 0.5)).mean())
 
     def test_a_slope_that_tears_with_the_facing_key_survives_without_it(self) -> None:
         """The defect and the fix in one comparison. Measured on Wan Chai the

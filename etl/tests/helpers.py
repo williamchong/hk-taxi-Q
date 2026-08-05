@@ -17,6 +17,7 @@ import numpy as np
 from pyogrio.raw import write as _ogr_write
 
 from pipeline.gltf import MeshData
+from pipeline.terrain import HeightField
 
 # The six faces of an axis-aligned box, over corners ordered x-outer, y-middle,
 # z-inner. Each face is a quad; callers decide how to triangulate it.
@@ -56,6 +57,53 @@ def box_soup(corners: np.ndarray) -> tuple[list, list]:
             positions.append(corners[index])
             normals.append(normal)
     return positions, normals
+
+
+def soup(
+    corners: list[list[tuple[float, float, float]]],
+    *,
+    name: str,
+    normals: np.ndarray | None = None,
+    colour: tuple[int, int, int, int] | None = None,
+) -> MeshData:
+    """Triangle soup from a list of corner triples, vertices unshared.
+
+    The assembly three fixtures had each written out: flatten to float64
+    positions, number the triangles, and repeat one normal per vertex. Shared
+    because the *shapes* differ — a box, a ramp, a sub-cell sheet — while this
+    never does, and because `MeshData`'s invariants are easier to break by hand
+    than to notice.
+
+    `normals` is per *triangle* and is repeated three times; omit it for the
+    flat +Y that a height-field fixture wants, where the normal is not what is
+    under test. Pass `normalise(triangle_cross(...))` where it is.
+    """
+    positions = np.array([corner for face in corners for corner in face], dtype=np.float64)
+    triangles = np.arange(len(positions), dtype=np.uint32).reshape(-1, 3)
+    if normals is None:
+        normals = np.tile(np.array([0.0, 1.0, 0.0], np.float32), (len(triangles), 1))
+    return MeshData(
+        name=name,
+        positions=positions,
+        normals=np.repeat(normals, 3, axis=0).astype(np.float32),
+        triangles=triangles,
+        colours=(
+            None if colour is None else np.tile(np.array(colour, np.uint8), (len(positions), 1))
+        ),
+    )
+
+
+def covered(meshes: list[MeshData], xs: np.ndarray, zs: np.ndarray) -> np.ndarray:
+    """Which of a plan lattice has surface over it, as a boolean mask.
+
+    ⚠️ **Coverage, not triangle count.** A tear in a decimated sheet does not
+    have to drop a triangle — it pulls the two sides apart to different cluster
+    means and leaves a wedge of plan with nothing above it, which a triangle
+    count reports as absent. This is the same question `tools/ground_clearance.py`
+    asks of the shipped bundle, through the same height-field query.
+    """
+    grid_x, grid_z = np.meshgrid(xs, zs)
+    return np.isfinite(HeightField.from_meshes(meshes).sample(grid_x.ravel(), grid_z.ravel()))
 
 
 def box(
