@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from overhang import Tally, _cross_section, _half_width_at, _left_of, _walk
+from overhang import Tally, cross_section, half_width_at, left_of, walk_width
 
 
 class TestCrossSection:
@@ -33,7 +33,7 @@ class TestCrossSection:
     """
 
     def _cells(self, half: float, across: float = 0.5):
-        return _cross_section(np.zeros(2), np.array([0.0, 1.0]), half, across)
+        return cross_section(np.zeros(2), np.array([0.0, 1.0]), half, across)
 
     def test_the_cells_span_the_full_drawn_width(self) -> None:
         cells = self._cells(5.0)
@@ -57,26 +57,26 @@ class TestCrossSection:
 
 class TestHalfWidthAt:
     def test_a_per_station_table_is_indexed_by_vertex(self) -> None:
-        assert _half_width_at([5.12, 4.3, 3.2], 1) == pytest.approx(4.3)
+        assert half_width_at([5.12, 4.3, 3.2], 1) == pytest.approx(4.3)
 
     def test_a_vertex_past_the_end_takes_the_last(self) -> None:
         """The published table is parallel to the graph polyline, so this cannot
         happen on a matched pair — it is the guard for a stale bundle, which is
         the case the tool most wants to survive rather than crash in."""
-        assert _half_width_at([5.12, 3.2], 9) == pytest.approx(3.2)
+        assert half_width_at([5.12, 3.2], 9) == pytest.approx(3.2)
 
     def test_a_pre_q23_bundle_reads_as_a_constant(self) -> None:
         """One number per edge is what schema 3 published. Grading an older
         build is the reason the reader is forgiving here."""
-        assert _half_width_at([5.12], 4) == pytest.approx(5.12)
+        assert half_width_at([5.12], 4) == pytest.approx(5.12)
 
     def test_an_edge_with_no_entry_is_zero_rather_than_a_guess(self) -> None:
-        assert _half_width_at([], 0) == 0.0
+        assert half_width_at([], 0) == 0.0
 
 
 class TestLeftOf:
     def test_it_is_perpendicular_to_travel(self) -> None:
-        normal = _left_of(np.array([3.0, 4.0]))
+        normal = left_of(np.array([3.0, 4.0]))
         assert np.dot(normal, [3.0, 4.0]) == pytest.approx(0.0)
         assert np.hypot(*normal) == pytest.approx(1.0)
 
@@ -84,7 +84,7 @@ class TestLeftOf:
         """A repeated vertex is legal in the graph. Normalising it would divide
         by zero and put NaN into every cell position downstream, where it reads
         as 'no structure here' rather than as an error."""
-        assert np.hypot(*_left_of(np.zeros(2))) == 0.0
+        assert np.hypot(*left_of(np.zeros(2))) == 0.0
 
 
 class TestWalk:
@@ -95,17 +95,17 @@ class TestWalk:
         """The width is per vertex, so a station attributed to the wrong segment
         is measured against a neighbour's width — which on a tapered approach is
         the whole defect being measured."""
-        vertices = [vertex for vertex, _ in _walk(self._polyline(0.0, 10.0, 20.0), 5.0)]
+        vertices = [vertex for vertex, _ in walk_width(self._polyline(0.0, 10.0, 20.0), 5.0)]
         assert set(vertices) == {0, 1}
         assert vertices == sorted(vertices)
 
     def test_a_segment_is_broken_at_most_the_spacing_apart(self) -> None:
-        points = [station for _, station in _walk(self._polyline(0.0, 10.0), 2.0)]
+        points = [station for _, station in walk_width(self._polyline(0.0, 10.0), 2.0)]
         gaps = np.hypot(*np.diff(np.asarray(points)[:, [0, 2]], axis=0).T)
         assert (gaps <= 2.0 + 1e-9).all()
 
     def test_a_segment_shorter_than_the_spacing_still_yields(self) -> None:
-        assert len(list(_walk(self._polyline(0.0, 1.0), 10.0))) >= 1
+        assert len(list(walk_width(self._polyline(0.0, 1.0), 10.0))) >= 1
 
 
 class TestTally:

@@ -38,9 +38,22 @@ from tests.helpers import BOX_FACES, box_corners, box_soup
 
 
 def landsd_box(
-    name: str, easting: float, northing: float, *, width: float, depth: float, height: float
-) -> tuple[bytes, bytes]:
-    """One building in the exact shape LandsD ships: Z-up local, Y-up node."""
+    name: str,
+    easting: float,
+    northing: float,
+    *,
+    width: float,
+    depth: float,
+    height: float,
+    textured: bool = False,
+) -> tuple[bytes, bytes, bytes | None]:
+    """One building in the exact shape LandsD ships: Z-up local, Y-up node.
+
+    `textured` gives it UVs and a `baseColorTexture`, which is the shape the
+    *terrain* class ships in — a 45-megapixel JPEG per sheet. Since `P3-10`
+    tiles the ground alongside the massing, a fixture that only ever produced
+    untextured geometry could not reach the path that strips it.
+    """
     half_x, half_y = width / 2, depth / 2
     positions, normals = box_soup(box_corners((-half_x, -half_y, 0.0), (half_x, half_y, height)))
 
@@ -49,7 +62,23 @@ def landsd_box(
     index_bytes = np.arange(36, dtype="<u2").tobytes()
     binary = position_bytes + normal_bytes + index_bytes
 
-    document = {
+    attributes = {"POSITION": 0, "NORMAL": 1}
+    accessors = [
+        {"bufferView": 0, "componentType": 5126, "count": 36, "type": "VEC3"},
+        {"bufferView": 1, "componentType": 5126, "count": 36, "type": "VEC3"},
+        {"bufferView": 2, "componentType": 5123, "count": 36, "type": "SCALAR"},
+    ]
+    views = [
+        {"buffer": 0, "byteOffset": 0, "byteLength": len(position_bytes)},
+        {"buffer": 0, "byteOffset": len(position_bytes), "byteLength": len(normal_bytes)},
+        {
+            "buffer": 0,
+            "byteOffset": len(position_bytes) + len(normal_bytes),
+            "byteLength": len(index_bytes),
+        },
+    ]
+    primitive: dict[str, object] = {"attributes": attributes, "indices": 2, "mode": 4}
+    document: dict[str, object] = {
         "asset": {"version": "2.0"},
         "scene": 0,
         "scenes": [{"nodes": [0]}],
@@ -62,26 +91,30 @@ def landsd_box(
             },
             {"mesh": 0},
         ],
-        "meshes": [
-            {"primitives": [{"attributes": {"POSITION": 0, "NORMAL": 1}, "indices": 2, "mode": 4}]}
-        ],
-        "accessors": [
-            {"bufferView": 0, "componentType": 5126, "count": 36, "type": "VEC3"},
-            {"bufferView": 1, "componentType": 5126, "count": 36, "type": "VEC3"},
-            {"bufferView": 2, "componentType": 5123, "count": 36, "type": "SCALAR"},
-        ],
-        "bufferViews": [
-            {"buffer": 0, "byteOffset": 0, "byteLength": len(position_bytes)},
-            {"buffer": 0, "byteOffset": len(position_bytes), "byteLength": len(normal_bytes)},
-            {
-                "buffer": 0,
-                "byteOffset": len(position_bytes) + len(normal_bytes),
-                "byteLength": len(index_bytes),
-            },
-        ],
-        "buffers": [{"uri": f"{name}.bin", "byteLength": len(binary)}],
+        "meshes": [{"primitives": [primitive]}],
+        "accessors": accessors,
+        "bufferViews": views,
     }
-    return json.dumps(document).encode(), binary
+
+    image: bytes | None = None
+    if textured:
+        uv_bytes = np.tile(np.array([0.0, 0.0], dtype="<f4"), 36).tobytes()
+        views.append({"buffer": 0, "byteOffset": len(binary), "byteLength": len(uv_bytes)})
+        accessors.append({"bufferView": 3, "componentType": 5126, "count": 36, "type": "VEC2"})
+        binary += uv_bytes
+        attributes["TEXCOORD_0"] = 3
+        primitive["material"] = 0
+
+        # Not a real JPEG. Nothing in the pipeline decodes it — `_ground` drops
+        # it and `write_glb` would only re-embed the bytes — so a decodable
+        # image would test the fixture rather than the stage.
+        image = b"\xff\xd8\xff\xe0 not really a jpeg"
+        document["images"] = [{"uri": f"{name}.jpg", "mimeType": "image/jpeg"}]
+        document["textures"] = [{"source": 0}]
+        document["materials"] = [{"pbrMetallicRoughness": {"baseColorTexture": {"index": 0}}}]
+
+    document["buffers"] = [{"uri": f"{name}.bin", "byteLength": len(binary)}]
+    return json.dumps(document).encode(), binary, image
 
 
 class Fixture(NamedTuple):
@@ -97,6 +130,8 @@ class Fixture(NamedTuple):
     z: float
     height: float
     footprint: float = 20.0
+    # The terrain class ships textured; the massing classes do not.
+    textured: bool = False
 
 
 @pytest.fixture
@@ -142,17 +177,20 @@ def sources(tmp_path: Path, hong_kong):
         with zipfile.ZipFile(directory / "TEST-1.zip", "w") as archive:
             for spec in buildings:
                 easting, northing, _ = _to_source(hong_kong, spec.x, spec.z)
-                document, binary = landsd_box(
+                document, binary, image = landsd_box(
                     spec.name,
                     easting,
                     northing,
                     width=spec.footprint,
                     depth=spec.footprint,
                     height=spec.height,
+                    textured=spec.textured,
                 )
                 member = f"{spec.class_id}/{spec.name}/{spec.name}"
                 archive.writestr(f"{member}.gltf", document)
                 archive.writestr(f"{member}.bin", binary)
+                if image is not None:
+                    archive.writestr(f"{member}.jpg", image)
         return root
 
     return _write
@@ -291,8 +329,10 @@ def style(jitter: float = 0.0) -> BuildingStyle:
             HeightBand(up_to_m=float("inf"), colour=(190, 200, 200)),
         ),
         colour_jitter=jitter,
+        class_colour_jitter={},
         lod_cell_sizes_m=(0.0,),
         class_lod_cell_sizes_m={},
+        ground_sink_m=0.0,
     )
 
 
@@ -516,6 +556,107 @@ class TestBuildRegion:
         without = [lod.triangles for lod in self.tile(lost, "t_00_00").lods]
         assert all(a >= b for a, b in zip(with_override, without, strict=True))
         assert any(a > b for a, b in zip(with_override, without, strict=True))
+
+    def ground(self) -> list[Fixture]:
+        """A building and a patch of the textured ground beneath it, in one tile.
+
+        Flat, wide and textured, which is the shape the LandsD terrain ships in
+        and the shape `P3-10` has to get through a pipeline specified to emit no
+        textures at all.
+        """
+        return [
+            Fixture("B0100", "BUILDING", 75.0, 75.0, 60.0),
+            Fixture(
+                "G0100",
+                "TERRAIN(TB)",
+                75.0,
+                75.0,
+                height=0.5,
+                footprint=100.0,
+                textured=True,
+            ),
+        ]
+
+    def test_the_textured_ground_ships_untextured(self, hong_kong, sources, tmp_path) -> None:
+        """The invariant `P1-2` kept the terrain out of `classes` to protect, now
+        that `P3-10` has put it in.
+
+        Not a formality: `merge` refuses a textured mesh outright, so a
+        regression here fails the build rather than shipping a JPEG — which is
+        why this asserts the *tile* is clean rather than asserting `_ground` was
+        called."""
+        report = self.build(hong_kong, sources, tmp_path, self.ground())
+
+        out = tmp_path / "out" / "hong_kong" / "wan_chai"
+        for lod in self.tile(report, "t_00_00").lods:
+            meshes = read_glb(out / lod.path)
+            assert len(meshes) == 1
+            assert meshes[0].texture is None
+            assert meshes[0].uvs is None
+            assert meshes[0].colours is not None
+
+    def test_the_ground_is_sunk_and_the_buildings_are_not(
+        self, hong_kong, sources, tmp_path
+    ) -> None:
+        """`roads.py` lays the level-0 carriageway at `terrain + 0.0`, so ground
+        drawn where it was sampled is coplanar with the road by construction.
+
+        Measured as a difference between two builds of the same fixtures rather
+        than against an absolute height: the fixture's own elevation, the game
+        transform and the LOD cell all move the number, and none of them is what
+        this is about. Only the ground moves, and it moves by the sink.
+        """
+        sunk = self.build(hong_kong, sources, tmp_path, self.ground(), out="sunk")
+        flat = self.build(
+            replace(hong_kong, buildings=replace(hong_kong.buildings, ground_sink_m=0.0)),
+            sources,
+            tmp_path,
+            self.ground(),
+            out="flat",
+        )
+
+        sink = hong_kong.buildings.ground_sink_m
+        assert sink > 0.0
+        # The ground is the lowest thing in the tile and the building the
+        # tallest, so the box's floor tracks the ground and its ceiling the
+        # building — which is what makes "only the ground moved" visible in an
+        # AABB without reading the meshes apart.
+        (low_sunk, high_sunk), (low_flat, high_flat) = (
+            self.tile(report, "t_00_00").aabb for report in (sunk, flat)
+        )
+        assert low_sunk[1] == pytest.approx(low_flat[1] - sink)
+        assert high_sunk[1] == pytest.approx(high_flat[1])
+
+    def test_the_ground_takes_no_jitter(self, hong_kong, sources, tmp_path) -> None:
+        """Jitter is seeded per source mesh, and the ground arrives as a handful
+        of sheet-sized meshes rather than one per object — so the setting that
+        stops a height band reading as a single mass would instead paint the
+        region in as many shades as there are sheets, seams included.
+
+        ⚠️ Asserted as **one shade across every ground vertex**, not as "the base
+        colour appears somewhere". The jitter factor is a crc32 seed scaled into
+        `[1 - j, 1 + j]`, so for some mesh names it rounds back to the base
+        colour anyway — a test looking for the base colour can pass against the
+        bug. Two ground meshes wearing two shades is the property that fails.
+        """
+        two_sheets = [
+            Fixture("G0100", "TERRAIN(TB)", 40.0, 40.0, height=0.5, footprint=60.0, textured=True),
+            Fixture(
+                "G0101", "TERRAIN(TB)", 110.0, 110.0, height=0.5, footprint=60.0, textured=True
+            ),
+        ]
+
+        def shades(city) -> int:
+            report = self.build(city, sources, tmp_path, two_sheets, out=str(id(city)))
+            path = tmp_path / str(id(city)) / "hong_kong" / "wan_chai"
+            colours = read_glb(path / self.tile(report, "t_00_00").lods[0].path)[0].colours
+            return len(np.unique(colours[:, :3], axis=0))
+
+        jittered = replace(
+            hong_kong, buildings=replace(hong_kong.buildings, class_colour_jitter={})
+        )
+        assert shades(hong_kong) == 1
+        assert shades(jittered) == 2
 
     def test_a_mixed_class_tile_is_one_mesh_at_every_tier(
         self, hong_kong, sources, tmp_path

@@ -152,9 +152,9 @@ dataset.
   widening `Q23` introduced. V is metres along the carriageway, so dashes keep a real-world pitch.
   Junction caps carry `(0, 0)`; a box junction is a mask keyed on the node, not a length of lane.
 - Kerbs modelled but low and mountable — collision is forgiving by design. Built as a 0.15 m riser
-  and a 0.5 m lip. The lip does double duty: with no terrain shipped yet, it is what stops the
-  carriageway ending in mid-air. `P3-10` gives it a second job — the ground tucks *under* the lip,
-  which is what hides the seam.
+  and a 0.5 m lip. The lip used to stop the carriageway ending in mid-air, back when there was no
+  terrain to end against; since `P3-10` its job is the seam — the ground tucks *under* it, 0.20 m
+  down, which is what hides the join.
 - Tram tracks as an inset strip on flagged edges — **not yet built.** `tram_tracks` reaches the graph
   but `P1-4` draws no inset; it belongs with the markings shader, not with the ribbon.
 
@@ -167,9 +167,9 @@ material, so nothing shows; give the ribbon lane markings and the cap will read 
 
 ## Ground
 
-⚠️ **There is no ground in the game today.** Between the roads and under the buildings is skybox.
-`P3-10` is what fixes it, and it lands in `B2` because the build whose verdict question is "does this
-read as Wan Chai?" cannot be judged over a void.
+**Shipped in `P3-10`.** Between the roads and under the buildings used to be skybox; it is ground now.
+It landed in `B2` because the build whose verdict question is "does this read as Wan Chai?" cannot be
+judged over a void.
 
 **The source ships one, and it ships it textured** — 224 MB of JPEG across the region's six sheets
 against 43 MB of geometry. The texture is the whole reason terrain was called unaffordable.
@@ -178,25 +178,41 @@ against 43 MB of geometry. The texture is the whole reason terrain was called un
 untextured, vertex-coloured, merged into the tile's single primitive. That is not a compromise — it is
 what keeps the invariant the whole pipeline rests on.
 
-| | Result |
-|---|---|
-| Triangles, decimated at 4 m cells | **88,081** region-wide ≈ 1,355 per tile |
-| Texture memory | **0** |
-| Bundle | 1.5–2.5 MB against a 26.3 MB PCK |
-| Draw calls | **+0** — it merges with the buildings in the same tile |
+| | Predicted | **Measured** |
+|---|---|---|
+| Triangles, decimated at 4 m cells | 88,081 ≈ 1,355 per tile | **+87,649** at LOD0 (434,149 → 521,798), +30,695 at LOD1 |
+| Texture memory | 0 | **0** — `verify_tiles.gd` still passes |
+| Bundle | 1.5–2.5 MB | **+4.56 MB of PCK** (27.73 → 32.30, measured from the PCK) |
+| Draw calls | +0 | **+0** — one primitive per tile, unchanged |
+
+⚠️ **The bundle figure is nearly double the prediction, and the collider is why.** The estimate
+counted geometry; the ground merges into the tier-0 mesh, so it also gets a
+`ConcavePolygonShape3D`. The split between the two was not separately measured — only the total,
+one variable changed. Worth knowing before predicting the next class's cost from geometry alone.
+
+**Resident triangles went 236,882 → 280,807** at the worst streaming sample, against a mobile budget
+of 300k *visible*. Those are different quantities and `verify_city_streamer.gd` refuses to gate one
+on the other — but the headroom is now thin enough that `P2-6` should not be surprised by it.
+
+⚠️ **The ground collides**, which two earlier lines of this document contradicted each other about.
+It merges into the tier-0 mesh and that mesh is named `-col`, so there was never a version of
+"merged for +0 draw calls" that was also "visual only, no collider". Merged and solid was the call:
+a driver who leaves the road now drives on the pavement instead of falling through what they can
+see. `docs/ARCHITECTURE.md` carries the mechanism.
 
 Deleting the texture also deletes the reason terrain was awkward to decimate: clustering moves UVs and
 a photographic texture smears where it does, and there are no UVs left to move.
 
-**Colour comes in two steps, and may stop after the first.**
+**Colour comes in two steps, and the first has shipped.**
 
-1. **Flat.** One warm ground colour, height- or slope-varied at most. Small, no new dependency, and it
-   is the screenshot that says whether flat ground reads as ground at all — `Q18`.
+1. **Flat.** One warm ground colour — `#b0a99a`, warm concrete. It is placed by what it has to sit
+   between: lighter than the kerb `#9a968d` so the 0.15 m riser still reads as an edge, and lighter
+   than the `#c9b79a` shophouse band so low blocks read as standing *on* it.
 2. **Land-cover classes,** only if flat reads dead. Sample the source JPEG per source triangle, snap
    to a small palette — asphalt, pavement, vegetation, water, bare — and put the class in the cluster
    key alongside the facing. Cluster boundaries then land *on* the park and harbour edges instead of
    blending across them, which is what makes 4 m colour blobs read as deliberate low-poly ground
-   rather than as mush.
+   rather than as mush. **Not written**, and `Q18` is what decides whether it ever is.
 
 **Prior art says the first step can be the last one.** *Art of Rally* ships flat-shaded untextured
 terrain as its finished look, not as a placeholder. Wan Chai is far denser than that game's
@@ -209,11 +225,30 @@ the *real* roads baked into it at their real width, while the generated ribbon s
 terrain and **1.6× wider** — so photographic asphalt and photographic lane markings would show from
 under a wider synthetic road, along with parked cars and baked shadows.
 
-⚠️ **Two things to get right, both cheap to get wrong.** The ground sits coplanar with the level-0
-carriageway by construction, so it must be **sunk under the kerb lip** — roughly 0.2 m, and that
-number is a guess until it is driven on a cross-sloped street. And the first pass is **visual only,
-with no collider**: the kerb currently defines the drivable world, and giving the pavement collision
-is a gameplay change wearing an art change's clothes.
+**The sink was guessed at 0.2 m and measured to 0.2 m.** The ground sits coplanar with the level-0
+carriageway by construction, so it drops under the kerb; `tools/ground_clearance.py` sized the drop
+the way `deck.clearance_m` was sized, by measuring what still stood proud of the shipped road:
+
+| `ground_sink_m` | of carriageway area | of the points the road's height was sampled from |
+|---|---|---|
+| 0.00 | 47.5% | 49.9% |
+| 0.10 | 9.3% | 1.8% |
+| 0.15 | 5.2% | 0.97% |
+| **0.20** | **3.3%** | **0.36%** |
+| 0.25 | 2.2% | 0.24% |
+| 0.35 | 1.2% | 0.12% |
+
+**0.20 m is the shallowest value that passes both gates**, and deeper buys little: the second column
+is the sink's own score and it is already at a third of a percent. Going deeper is not free either —
+the ground hides behind a 0.15 m riser, so every extra centimetre is gap to be seen under at a
+grazing angle.
+
+⚠️ **The first column does not fall with it, because most of it is not the sink's to fix.** The road
+is a *plane* and the ground is not: interpolated along its length between the 2.0% of source
+vertices `simplify` kept, and flat across a width the playability widening made 1.6× too wide. On a
+crest between two retained vertices the ground rises straight through a road that never sampled it —
+**0.35% of centreline points proud within a metre of a vertex against 5.78% at 15–40 m from one.**
+This is `P2-7`'s densification finding at grade, and it is written up as `Q24`.
 
 ---
 

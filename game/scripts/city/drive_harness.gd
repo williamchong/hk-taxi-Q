@@ -1,11 +1,14 @@
 ## Puts the car on the start line and keeps it on the map (`P0-5`, `P2-3`).
 ##
-## The region ships with no ground: the terrain was measured at 267 MB of
-## texture against a 128 MB budget and left out (`P1-2`), so everything that is
-## not carriageway is void. The kerbs are 0.15 m and mountable by design, which
-## means leaving the road is easy and falling out of the world is what happens
-## next. Without this, judging the driving means restarting the scene every time
-## you clip a corner.
+## The kerbs are 0.15 m and mountable by design, so leaving the road is easy.
+## Until `P3-10` that meant falling out of the world, because everything that was
+## not carriageway was void — the terrain was measured at 267 MB of texture
+## against a 128 MB budget and left out (`P1-2`). The ground ships now, untextured
+## and solid, so mounting a kerb lands on the pavement instead.
+##
+## This still earns its place: the region has edges, the elevated network is
+## closed (`Q13`), and level -1 runs under the terrain (`Q21`). Without it,
+## judging the driving means restarting the scene every time you reach one.
 ##
 ## A dev harness, not a game system. `P3-*` owns real respawn rules — where the
 ## player returns to, what it costs them, and what the fare does meanwhile. This

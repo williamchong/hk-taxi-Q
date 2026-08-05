@@ -165,6 +165,11 @@ with itself.
 |---|---|
 | `tools/deck_error.py` | `Q20` — how far the drawn carriageway sits from the deck beneath it, *vertically*, sampled down centrelines. Gates on \|error\| p90, deepest intrusion, and the share it managed to measure at all |
 | `tools/overhang.py` | `Q22`/`Q23` — whether there is a deck beneath it at all, sampled *across the full drawn width*. A ribbon can pass the first and fail the second |
+| `tools/ground_clearance.py` | `Q18`/`Q24` — whether the drawn ground stands *in* the at-grade carriageway. Sizes `buildings.ground_sink_m`, and gates the sink separately from the road's own shape |
+
+`deck_error.py` owns the shared bundle reader; `overhang.py` owns the shared width sweep
+(`walk_width`, `cross_section`, `left_of`, `half_width_at`) and `ground_clearance.py` imports it,
+because reimplementing that walk means rediscovering its duplicated-vertex guard the hard way.
 
 ### GDScript warnings
 
@@ -394,12 +399,31 @@ building. `verify_tiles.gd` asserts it in both directions — present on tier 0,
 bytes. **Measured cost: 5.17 MB of PCK** (21.10 → 26.27 MB, one variable changed), not the 14.91 MB
 tier 0's 434,149 triangles come to as raw faces; the pack compresses them.
 
-**Two additions to the vertex stream are planned, and both bump `schema_version`:**
+**Terrain ships in the tile primitive since `P3-10`.** It is one more entry in `buildings.classes`,
+so it collapses at its own cell size (4 m / 8 m) and then merges with the massing: **+87,649
+triangles at LOD0, no texture, and no extra draw call.** No `schema_version` bumped — nothing was
+added, removed or renamed, and no attribute changed meaning. A consumer reading a tile is not
+*wrong* to keep its old interpretation; it simply draws more. `tiles[].aabb` and `bounds_game` grew
+(1668 × 942 m → 1728 × 977 m) and the region gained a 66th tile, because ground reaches corners no
+building did.
+
+⚠️ **The tier-0 collider now includes the ground, and nothing in the ETL says so.** The suffix goes
+on the *merged* mesh, so anything in `classes` collides at that tier whether or not it was asked to
+— which is what makes the pavement drivable, and is worth knowing before adding a third class.
+`buildings.ground_sink_m` drops the ground under the kerb so the two surfaces do not fight;
+`tools/ground_clearance.py` grades it.
+
+**One addition to the vertex stream is planned, and it bumps `schema_version`:**
 
 | Addition | Task | Cost |
 |---|---|---|
 | `TEXCOORD_0.xy` = height above the building's own base, per-building seed | `P3-7` | ~2 bytes/vertex quantised. The window-band shader cannot derive either from a vertex, so the ETL must ship them — one commit across both sides |
-| Terrain merged into the tile primitive, vertex-coloured | `P3-10` | ~1,355 triangles per tile. No texture, and **no extra draw call**, because it merges rather than becoming a second surface |
+
+⚠️ **`P3-7` should reserve a ground marker in the same payload while it is there.** Merging bought
+the ground a free draw call and cost it its own material, so a later ground-only treatment — slope
+blending, a PBR-ish roughness variation, any ground shader — has nothing to select on. A channel of
+`TEXCOORD_0` is where that selector belongs, and adding it with `P3-7` costs one commit instead of
+two schema bumps. Not built.
 
 ⚠️ `COLOR_0.a` is a constant `255` today and looks like the cheaper place for a shader mask. It is
 not: `generated_scene_import.gd` sets `vertex_color_use_as_albedo` project-wide, and an opaque
@@ -809,9 +833,11 @@ a north-south one.** So the error is invisible on exactly the streets where you 
 eyeball check. There is also a check needing no tooling at all, and it is the one that caught this:
 **the harbour is north**, so from a car facing east, a left turn heads for the water.
 
-**Two things are knowingly missing:** there is **no ground**, so anything off the carriageway is void
-(`P3-10`), and **the flyovers cannot be driven onto** (`Q13`). A dev harness on the root catches the
-car when it falls out of the world, because the kerbs are 0.15 m and mountable by design.
+**One thing is knowingly missing:** **the flyovers cannot be driven onto** (`Q13`). Off the
+carriageway used to be void; since `P3-10` it is ground, and solid, so mounting a kerb now puts the
+car on the pavement rather than through it. The dev harness that catches a car falling out of the
+world still runs — the region has edges, and `Q24` leaves ground standing in the road on some hill
+streets.
 
 ---
 

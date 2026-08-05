@@ -86,9 +86,16 @@ class BuildingStyle:
 
     # Sheet sub-directories holding massing to tile.
     classes: tuple[str, ...]
-    # Sheet sub-directory holding the textured ground, which is read only by the
-    # evaluation path and never tiled. Named here rather than in the pipeline
-    # because "TERRAIN(TB)" is a LandsD spelling, not a fact about terrain.
+    # Sheet sub-directory holding the ground. Named here rather than in the
+    # pipeline because "TERRAIN(TB)" is a LandsD spelling, not a fact about
+    # terrain.
+    #
+    # Two jobs, one name, deliberately. `roads.py` reads it as a height field to
+    # decide how high every road sits (`Q11`), and since `P3-10` it is also one
+    # of `classes` and so tiled and drawn. The same geometry serving both is the
+    # property that matters: any drift between where roads think the ground is
+    # and where it is drawn would show as kerbs at the wrong height on every
+    # street in the region.
     terrain_class: str
     # Class holding elevated road structure, which `RoadNetwork.deck` samples an
     # off-grade carriageway's height from. Optional: a city that declares no
@@ -101,6 +108,9 @@ class BuildingStyle:
     # Fraction of brightness a building's colour may be varied by, seeded from
     # its own id so the result is stable across runs.
     colour_jitter: float
+    # Jitter for a class that must not vary like the rest, overriding the value
+    # above. Same units, same range.
+    class_colour_jitter: dict[str, float]
     # One clustering cell size per LOD tier, in metres, coarsest last. A 0.0
     # entry is an exact weld that loses nothing; whether a city ships one is a
     # bundle decision, not a rule (Q16).
@@ -108,6 +118,14 @@ class BuildingStyle:
     # Cell sizes for a class that must not decimate like the rest, overriding
     # the table above. Same length, same ordering rule.
     class_lod_cell_sizes_m: dict[str, tuple[float, ...]]
+    # How far below its sampled height the drawn ground is placed, in metres.
+    #
+    # `roads.py` lays the level-0 carriageway at `terrain + 0.0`, so ground and
+    # road are coplanar *by construction* and would z-fight the length of the
+    # network. The ground drops under the kerb, whose 0.15 m riser and 0.5 m lip
+    # are what hide the seam. Sized by measuring what still stands proud of the
+    # shipped carriageway — `tools/ground_clearance.py` — not by taste.
+    ground_sink_m: float
 
     def colour_for(self, class_id: str, height_m: float) -> tuple[int, int, int]:
         if class_id in self.class_colours:
@@ -125,6 +143,18 @@ class BuildingStyle:
         measured that on screen at Gloucester Road.
         """
         return self.class_lod_cell_sizes_m.get(class_id, self.lod_cell_sizes_m)[level]
+
+    def jitter_for(self, class_id: str) -> float:
+        """Brightness variation for one class.
+
+        Per class for the same reason as `cell_size_m`: the default suits a
+        city of separate objects and the ground is not one. Jitter is seeded per
+        *source mesh*, which for buildings is one building — the variation is
+        what stops a height band reading as a single mass. The ground arrives as
+        a handful of sheet-sized meshes, so the same rule would paint the region
+        in as many shades, with the seams on the publisher's sheet boundaries.
+        """
+        return self.class_colour_jitter.get(class_id, self.colour_jitter)
 
 
 @dataclass(frozen=True)
@@ -848,30 +878,87 @@ def _building_style(body: dict[str, Any], where: str) -> BuildingStyle:
 
     structure = body.get("structure_class")
     if structure is not None and str(structure) not in classes:
-        # Unlike terrain_class, which is deliberately outside `classes` because
-        # it is never tiled, this one must be inside it: `P2-7` lays the
-        # carriageway on this geometry and is accepted against the *shipped*
-        # tiles, so structure that never ships would be accurate against nothing
-        # the player can meet.
+        # This one must be inside `classes`: `P2-7` lays the carriageway on this
+        # geometry and is accepted against the *shipped* tiles, so structure
+        # that never ships would be accurate against nothing the player can
+        # meet. `terrain_class` is under no such rule — a city may sample the
+        # ground for road heights without drawing it — which is why the two are
+        # checked differently.
         raise ValueError(
             f"{where}:structure_class is {structure!r}, "
             f"which is not in classes ({', '.join(classes)})"
         )
 
-    jitter = float(_require(body, "colour_jitter", where))
-    if not 0.0 <= jitter < 1.0:
-        raise ValueError(f"{where}:colour_jitter must be in [0, 1), got {jitter}")
+    jitter = _jitter(_require(body, "colour_jitter", where), f"{where}:colour_jitter")
+
+    class_jitter: dict[str, float] = {}
+    for name, value in (body.get("class_colour_jitter") or {}).items():
+        field = f"{where}:class_colour_jitter.{name}"
+        if str(name) not in classes:
+            # Same trap as `class_colours`: a misspelled key parses, loads, and
+            # silently overrides nothing.
+            raise ValueError(f"{field} is not in classes ({', '.join(classes)})")
+        class_jitter[str(name)] = _jitter(value, field)
+
+    terrain = str(_require(body, "terrain_class", where))
+    # Zero where the city never tiles its ground: the value is unused there, and
+    # refusing a city for omitting a key it cannot act on would reject correct
+    # output.
+    sink = (
+        _measures(body, where, ("ground_sink_m",))["ground_sink_m"]
+        if "ground_sink_m" in body
+        else 0.0
+    )
+    if terrain in classes and sink <= 0.0:
+        # Tested on the **value**, not on the key. A missing `ground_sink_m` and
+        # an explicit `0.0` reach the same place, and `_measures` admits zero —
+        # so a presence check would let the exact state below through.
+        #
+        # One direction only, on `_check_deck_sampling_has_a_structure_class`'s
+        # pattern. A tiled ground with no sink is the silent failure: `roads.py`
+        # lays the level-0 carriageway at `terrain + 0.0`, so the two surfaces
+        # would be coplanar by construction and z-fight the length of the
+        # network — which looks like a rendering bug rather than a config one.
+        raise ValueError(
+            f"{where}:classes tiles the ground ({terrain!r}), so ground_sink_m must be "
+            f"positive, got {sink}. Set it, or drop {terrain!r} from classes."
+        )
 
     return BuildingStyle(
         classes=classes,
-        terrain_class=str(_require(body, "terrain_class", where)),
+        terrain_class=terrain,
         structure_class=str(structure) if structure is not None else None,
         class_colours=class_colours,
         height_bands=bands,
         colour_jitter=jitter,
+        class_colour_jitter=class_jitter,
         lod_cell_sizes_m=cells,
         class_lod_cell_sizes_m=class_cells,
+        ground_sink_m=sink,
     )
+
+
+def _jitter(value: Any, field: str) -> float:
+    """A brightness-variation fraction, refused when it cannot be used.
+
+    Written once because the global value and the per-class overrides are the
+    same quantity, and the copy that drifts is the one that quietly stops
+    catching anything.
+
+    The range test does the finiteness work for free, and that is worth saying
+    out loud because it is not obvious: YAML 1.1 resolves `.nan` and `.inf`, and
+    every comparison against a NaN is false — so `0.0 <= value` fails and the
+    value is refused rather than surviving to make every downstream comparison
+    false in silence. That is the `P2-7` config trap, and the shape of this test
+    happens to close it.
+    """
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{field} is {value!r}, which is not a number") from None
+    if not 0.0 <= number < 1.0:
+        raise ValueError(f"{field} must be in [0, 1), got {number}")
+    return number
 
 
 def _road_network(body: dict[str, Any], where: str) -> RoadNetwork:

@@ -124,21 +124,29 @@ class Faces:
         )
 
     @classmethod
-    def from_tiles(cls, paths: list[Path], colour: tuple[int, int, int], jitter: float) -> Faces:
+    def from_tiles(
+        cls,
+        paths: list[Path],
+        colour: tuple[int, int, int],
+        jitter: float,
+        class_name: str = "structure",
+    ) -> Faces:
         blocks: list[np.ndarray] = []
         for path in paths:
             for mesh in read_glb(path):
                 if mesh.colours is None or not len(mesh.triangles):
                     continue
-                # All three corners must be structure. A triangle spanning two
-                # classes is a weld artefact rather than a deck.
-                is_structure = _wears(mesh.colours[:, :3], colour, jitter)
-                faces = mesh.triangles[is_structure[mesh.triangles].all(axis=1)]
+                # All three corners must wear the class. A triangle spanning two
+                # of them is a weld artefact rather than a surface.
+                wears = _wears(mesh.colours[:, :3], colour, jitter)
+                faces = mesh.triangles[wears[mesh.triangles].all(axis=1)]
                 if len(faces):
                     blocks.append(mesh.positions[faces].astype(np.float64))
 
         if not blocks:
-            raise SystemExit("no structure geometry in the shipped tiles — is the colour right?")
+            raise SystemExit(
+                f"no '{class_name}' geometry in the shipped tiles — is the colour right?"
+            )
 
         # Signed: winding survives the merge and the decimation — 16,554 faces
         # wound up against 10,174 wound down, the tops and undersides of the
@@ -184,11 +192,15 @@ def _wears(colours: np.ndarray, base: tuple[int, int, int], jitter: float) -> np
     """Which vertex colours could be `base` after the building stage jittered it.
 
     ⚠️ An exact match finds almost nothing — 428 triangles of 434,149 on this
-    region, which looks like a working filter and is not. `colour_for` jitters
-    every class including this one, by a **single scale factor across all three
-    channels**, seeded from the mesh name. So a class does not occupy one colour
-    in the shipped tiles; it occupies a ray from black through its base colour,
-    and the classes are told apart by that direction rather than by a value.
+    region, which looks like a working filter and is not. `colour_for` jitters a
+    class by a **single scale factor across all three channels**, seeded from the
+    mesh name. So a jittered class does not occupy one colour in the shipped
+    tiles; it occupies a ray from black through its base colour, and the classes
+    are told apart by that direction rather than by a value.
+
+    The jitter is per class since `P3-10` — the ground takes none — so the caller
+    has to pass `jitter_for(class)` rather than the city's default. At zero this
+    collapses to the exact match, which is correct rather than a special case.
 
     Tested as "is there one factor that rounds to all three channels": each
     channel admits `f` in `[(c - 0.5) / base, (c + 0.5) / base]`, so the class is
@@ -207,10 +219,10 @@ def _wears(colours: np.ndarray, base: tuple[int, int, int], jitter: float) -> np
     # as soon as the *brightest* jittered value would exceed it, which at a
     # jitter of 0.06 is any channel over about 240. Grey decks are nowhere near
     # either end, so this has never fired — it is here because a city that
-    # coloured its structure near-white would otherwise be silently over-matched.
+    # coloured a matched class near-white would otherwise be silently over-matched.
     if (channels <= 0.0).any() or (channels * (1.0 + jitter) > 255.0).any():
         raise SystemExit(
-            f"structure colour {base} jitters past a channel limit, where `colour_for` clamps "
+            f"colour {base} jitters past a channel limit, where `colour_for` clamps "
             "and this test stops being exact"
         )
 
@@ -221,11 +233,11 @@ def _wears(colours: np.ndarray, base: tuple[int, int, int], jitter: float) -> np
 
 
 # --------------------------------------------------------------------------
-# Reading the shipped bundle — shared with `overhang.py`
+# Reading the shipped bundle — shared with `overhang.py` and `ground_clearance.py`
 #
-# Both tools grade the same bundle and must resolve it the same way, down to
-# the message a missing `city.json` prints. Kept here rather than in a third
-# module because this one is the older and the one `P2-7` cites; the split that
+# All three grade the same bundle and must resolve it the same way, down to the
+# message a missing `city.json` prints. Kept here rather than in a fourth module
+# because this one is the oldest and the one `P2-7` cites; the split that
 # matters is tool-versus-pipeline, and that is unaffected.
 # --------------------------------------------------------------------------
 
@@ -275,6 +287,26 @@ def load_bundle(generated: Path, lod: int, city_id: str) -> tuple[dict[str, Any]
     return manifest, [generated / tile["lods"][lod] for tile in manifest["tiles"]]
 
 
+def class_faces(city: Any, tiles: list[Path], class_name: str) -> Faces:
+    """Upward-facing geometry of one mesh class, across the shipped tiles.
+
+    Colour is the only thing that tells one class from another once a tile is
+    merged into a single primitive, so a class with no `class_colours` entry
+    cannot be graded at all — which is a config answer, not a missing feature.
+
+    `jitter_for`, not the bare `colour_jitter`: a class may override it since
+    `P3-10`, and `_wears` is exact about the interval it tests, so the wrong
+    jitter widens or narrows the ray and silently changes what matches.
+    """
+    colour = city.buildings.class_colours.get(class_name)
+    if colour is None:
+        raise SystemExit(
+            f"city '{city.id}' gives '{class_name}' no entry in class_colours, so it cannot "
+            "be told apart from buildings in a merged tile"
+        )
+    return Faces.from_tiles(tiles, colour, city.buildings.jitter_for(class_name), class_name)
+
+
 def structure_faces(city: Any, tiles: list[Path]) -> tuple[Faces, str]:
     """Upward-facing structure across the tiles, and the class name it came from."""
     structure_class = city.buildings.structure_class
@@ -282,13 +314,7 @@ def structure_faces(city: Any, tiles: list[Path]) -> tuple[Faces, str]:
         raise SystemExit(
             f"city '{city.id}' declares no buildings.structure_class to measure against"
         )
-    colour = city.buildings.class_colours.get(structure_class)
-    if colour is None:
-        raise SystemExit(
-            f"city '{city.id}' gives '{structure_class}' no entry in class_colours, so it cannot "
-            "be told apart from buildings in a merged tile"
-        )
-    return Faces.from_tiles(tiles, colour, city.buildings.colour_jitter), structure_class
+    return class_faces(city, tiles, structure_class), structure_class
 
 
 def drawn_surface(generated: Path, manifest: dict[str, Any]) -> Faces:
@@ -390,10 +416,11 @@ def elevated_samples(
 def nearest(candidates: np.ndarray, to: float, within: float | None = None) -> float | None:
     """The candidate height closest to `to`, or None if none is close enough.
 
-    The tool's one selection rule, in the two places it is made: which drawn
-    surface belongs to this edge, and which deck face this sample sits on. Both
-    are "the nearest height to a reference", and writing it twice would let the
-    two drift into different rules for the same decision.
+    The one selection rule these tools make, wherever they make it: which drawn
+    surface belongs to this edge, which deck face a sample sits on, which terrain
+    face is the ground under a road. All are "the nearest height to a reference",
+    and writing it per site would let them drift into different rules for the
+    same decision.
     """
     if not len(candidates):
         return None

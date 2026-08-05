@@ -94,9 +94,10 @@ Common emoji for this project:
   the import, the GDScript warnings sweep and the verify tools. **Do not run those by hand
   and read the output** — Godot exits `0` even when a script fails to parse, so only the script's
   exit code means anything. See `docs/ARCHITECTURE.md` "Checks".
-- Road-surface or deck-height changes: also `tools/deck_error.py` and `tools/overhang.py`, by hand
-  after a build. They grade the *shipped* bundle and share no code with the pipeline — `check.sh`
-  does not require a built region and should not start requiring one.
+- Road-surface, deck-height or ground changes: also `tools/deck_error.py`, `tools/overhang.py` and
+  `tools/ground_clearance.py`, by hand after a build. They grade the *shipped* bundle and share no
+  code with the pipeline — `check.sh` does not require a built region and should not start requiring
+  one. Moving the road moves what the last of the three measures, so it is not only a ground check.
 - Update `docs/PROGRESS.md` — task status, plus any new decision or open question.
 - **Bundle size is measured from a PCK, never summed from source files.** That rule has been wrong
   in both directions once each.

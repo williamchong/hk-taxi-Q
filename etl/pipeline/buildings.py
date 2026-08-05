@@ -1,13 +1,29 @@
-"""Source massing to per-tile, vertex-coloured GLB (`P1-2`).
+"""Source massing to per-tile, vertex-coloured GLB (`P1-2`, `P3-10`).
 
-Reads the LandsD non-textured glTF sheets a previous fetch cached, moves them
-into the region's game frame, colours each building by height band and class,
-buckets them into tiles, and writes one merged mesh per tile per LOD tier.
+Reads the LandsD glTF sheets a previous fetch cached, moves them into the
+region's game frame, colours each mesh by height band and class, buckets them
+into tiles, and writes one merged mesh per tile per LOD tier.
 
 Merging is the whole point. Untextured, vertex-coloured buildings share a single
 material, so a tile's 300-odd buildings collapse into one primitive and one draw
 call — which is why the untextured dataset was chosen over the photogrammetry
 one (`docs/DATA_SOURCES.md`).
+
+**The ground goes through the same path since `P3-10`, and that is the design
+rather than a convenience.** Being one more class in `classes` is what gets it
+the tile's single material for free: it costs no draw call, and it cannot end
+up somewhere the buildings are not. It arrives textured and is stripped on the
+way in (`_ground`) — the *source* is textured even though the massing dataset
+is not, and the tile output carries no textures either way.
+
+⚠️ **A consequence with no line of code behind it: the ground collides.** The
+finest tier is merged and then named `<tile_id>-col`, so everything in it gets
+a trimesh collider, ground included. That was decided rather than inherited —
+drawing ground the car falls through is worse than drawing none, because the
+player can see it. What it costs is that `collapse` moves vertices to cluster
+means, so a lump can end up standing proud of the carriageway and a 0.15 m step
+is most of the car's suspension travel. `buildings.ground_sink_m` is what holds
+it down, and `tools/ground_clearance.py` is what sizes that.
 
 Within a tier the merge happens **after** the collapse, once per class, because
 one cell size does not suit two kinds of geometry: a building is a big box that
@@ -66,6 +82,11 @@ COLLISION_SUFFIX = "-col"
 # the near band, where nothing can touch a building — suffixing it would pay for
 # a `ConcavePolygonShape3D` in the bundle to be looked at from 300 m away.
 # Measured at 5.17 MB of PCK for the one tier that ships it; see docs/PROGRESS.md.
+#
+# The suffix goes on the *merged* tier, so it covers every class in it. Since
+# `P3-10` that includes the ground, which is the whole reason the ground can be
+# driven on. Anything added to `classes` from here on inherits collision on this
+# tier whether or not it was asked for — worth knowing before adding one.
 COLLISION_TIER = 0
 
 
@@ -239,13 +260,18 @@ def colour_for(
     Jitter is seeded from the mesh name — the LandsD building id — via `crc32`
     rather than `hash`, which is salted per process and would repaint the city
     on every run.
+
+    How much jitter is the class's to say, not the city's alone. Seeding per
+    source mesh only means "per object" where the source ships one mesh per
+    object, which is true of buildings and false of the ground.
     """
     low, high = bounds if bounds is not None else mesh.aabb()
     red, green, blue = style.colour_for(class_id, high[1] - low[1])
 
-    if style.colour_jitter > 0.0:
+    jitter = style.jitter_for(class_id)
+    if jitter > 0.0:
         unit = crc32(mesh.name.encode("utf-8")) / 0x1_0000_0000
-        factor = 1.0 + style.colour_jitter * (2.0 * unit - 1.0)
+        factor = 1.0 + jitter * (2.0 * unit - 1.0)
         red, green, blue = (
             min(255, max(0, round(channel * factor))) for channel in (red, green, blue)
         )
@@ -255,6 +281,41 @@ def colour_for(
     return np.broadcast_to(
         np.array([red, green, blue, 255], dtype=np.uint8), (len(mesh.positions), 4)
     )
+
+
+def _ground(mesh: MeshData, offset: np.ndarray, style: BuildingStyle) -> MeshData:
+    """One ground mesh, placed in the region and ready to tile (`P3-10`).
+
+    Two things separate it from every other class, and it takes the region
+    offset rather than being translated by the caller so that both happen in
+    one pass — terrain sheets are the largest meshes in the region, and
+    `translated` copies the whole position array each time.
+
+    **The texture goes, here rather than at write time.** `merge` refuses a
+    textured mesh whenever it is reached, so this is not what makes the tile
+    untextured — it is *when*. `Texture.data` is raw bytes, and `build_region`
+    holds its buckets live until the write stage, so leaving the strip to
+    `merge` would pin all six sheets' orthophotos — 224 MB — through the whole
+    bucket phase. Measured: peak RSS 716 MB with the strip removed against
+    605 MB with it. `roads._field` strips at the same seam for the same reason.
+
+    ⚠️ It does **not** save the *read*. `_BufferCache.texture` resolves the
+    image while `read_scene` is still building the mesh, so the bytes are
+    resident before this is reached — one sheet at a time. Making `read_scene`
+    skip images a caller does not want is worth ~185 MB more off the peak and
+    belongs to `gltf.py`.
+
+    Dropping the UVs with it is not tidiness. They index a texture that no
+    longer exists, `collapse` moves them to cluster representatives, and a
+    later stage finding UVs on a tile would be right to assume they mean
+    something. Worth 20.5 MB of bucket payload on its own.
+
+    **And it sinks.** `roads.py` lays the level-0 carriageway at `terrain +
+    0.0`, so the two surfaces are coplanar by construction; the ground drops
+    under the kerb's riser and lip, which is what hides the seam.
+    """
+    sunk = offset - np.array([0.0, style.ground_sink_m, 0.0])
+    return replace(mesh.translated(sunk), texture=None, uvs=None)
 
 
 # --------------------------------------------------------------------------
@@ -315,7 +376,11 @@ def build_region(
         kept = 0
         for class_id, mesh in read_sheet(sheet_path, style.classes):
             report.read += 1
-            placed = mesh.translated(place.offset)
+            placed = (
+                _ground(mesh, place.offset, style)
+                if class_id == style.terrain_class
+                else mesh.translated(place.offset)
+            )
             bounds = placed.aabb()
             # Colour comes from the whole mesh's height, before any splitting,
             # so a viaduct partitioned across four tiles stays one colour.
@@ -335,7 +400,8 @@ def build_region(
             f"region bounds — check that the sheets on disk are the ones the bounds select."
         )
 
-    # Popped as they are written so the bucket payload — 133 MB for Wan Chai —
+    # Popped as they are written so the bucket payload — 173 MB for Wan Chai,
+    # of which the ground `P3-10` added is 52.5 MB —
     # decays across the write stage instead of all staying live to the end.
     for tile in sorted(buckets):
         written = _write_tile(place.out_dir, tile, buckets.pop(tile), style)
@@ -474,7 +540,7 @@ def _write_manifest(
 
 
 # --------------------------------------------------------------------------
-# Terrain — evaluation output only
+# Textured terrain — evaluation output only
 # --------------------------------------------------------------------------
 
 
@@ -485,14 +551,18 @@ def build_terrain(
     sources_root: Path | None = None,
     out_root: Path | None = None,
 ) -> list[tuple[str, int, int]]:
-    """Emit each sheet's textured ground mesh, clipped to the region.
+    """Emit each sheet's **textured** ground mesh, clipped to the region.
 
-    Not part of the tile output, and deliberately not merged into it: the ground
-    ships with a 45-megapixel JPEG per sheet, and the building tiles are
-    specified to contain no textures at all. This exists so the terrain can be
-    judged in Godot beside the massing — z-fighting against the `P1-4` road
-    ribbon, and whether photographic ground reads wrong next to flat-shaded
-    volumes — with the texture cost measured rather than guessed.
+    Not what ships. `P3-10` tiles the ground through `build_region` with the
+    texture stripped, which is the version the game gets; this keeps the
+    orthophoto reachable so the choice not to ship it can be re-examined
+    instead of only re-read. `docs/ART_DESIGN.md` records the argument: it would
+    cost a draw call per tile, and it has the *real* roads baked into it at
+    their real width, under a generated ribbon drawn 1.6x wider.
+
+    Not merged into the tile output, and now for one reason rather than two.
+    The remaining one is the texture — 224 MB of JPEG across the region's six
+    sheets, against tiles specified to carry none.
 
     Returns `(sheet, triangles, bytes)` per sheet.
     """
@@ -580,7 +650,7 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     if args.terrain:
-        log.info("terrain (evaluation output, not part of the tile set):")
+        log.info("textured terrain (evaluation output; the tiles above ship it untextured):")
         results = build_terrain(city, args.region)
         log.info(
             "  %d sheets: %d triangles, %.1f MB",

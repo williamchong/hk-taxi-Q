@@ -121,10 +121,18 @@ buildings:
   classes:
     - BUILDING
     - INFRASTRUCTURE
+    - TERRAIN(TB)
 
-  # The textured ground, read only by `--terrain` and never tiled — the tile
-  # output carries no textures. Named here rather than in the pipeline because
-  # the parenthesis is a LandsD spelling, not a fact about terrain.
+  # The ground. Named here rather than in the pipeline because the parenthesis
+  # is a LandsD spelling, not a fact about terrain.
+  #
+  # It is in `classes` above since P3-10, so it is drawn as well as sampled —
+  # roads.py reads it as a height field to decide how high every road sits, and
+  # the tile stage draws the same geometry. The source ships it *textured*, 224
+  # MB of JPEG against 43 MB of geometry, and the texture is read at build time
+  # and never shipped: the tile output carries no textures, which is what keeps
+  # a tile one draw call. `--terrain` still emits the textured version for
+  # evaluation, and docs/ART_DESIGN.md records why we do not ship it.
   terrain_class: TERRAIN(TB)
 
   # The class holding elevated road structure, which `roads.deck` below samples
@@ -139,9 +147,44 @@ buildings:
 
   # Flat colour for a class, overriding the height bands. Elevated road
   # structures are concrete whatever their height, and banding a flyover deck by
-  # height would tint it like the tower it happens to be as tall as.
+  # height would tint it like the tower it happens to be as tall as. The ground
+  # has no height of its own to band by at all.
+  #
+  # The ground colour is warm concrete, and it is placed by what it has to sit
+  # between: lighter than the kerb (#9a968d) so the 0.15 m riser and 0.5 m lip
+  # still read as an edge rather than dissolving into the pavement, and lighter
+  # than the shophouse band (#c9b79a) so low blocks read as standing *on* the
+  # ground. This is the value Q18 tests — if the first pass reads dead, change
+  # this line before reaching for the land-cover classifier.
   class_colours:
     INFRASTRUCTURE: "#9d9a93"
+    TERRAIN(TB): "#b0a99a"
+
+  # Jitter for a class that must not vary like the rest, overriding
+  # colour_jitter below.
+  #
+  # The ground takes none. Jitter is seeded per *source mesh*, which for a
+  # building is one building — the variation is what stops a height band reading
+  # as a single mass. Terrain arrives as a handful of sheet-sized meshes, so the
+  # same rule would paint the region in six shades with the seams landing on the
+  # publisher's sheet boundaries. Ground wants the opposite of what buildings
+  # want: one continuous surface.
+  class_colour_jitter:
+    TERRAIN(TB): 0.0
+
+  # How far under its sampled height the drawn ground is placed, in metres.
+  #
+  # Not taste, and not optional: roads.py lays the level-0 carriageway at
+  # `terrain + 0.0`, so ground and road are coplanar *by construction* and would
+  # z-fight the length of all 98.6 km of network. The ground drops under the
+  # kerb, whose riser and lip are what hide the seam — ART_DESIGN.md calls that
+  # the lip's second job.
+  #
+  # Sized by measuring what still stands proud of the shipped carriageway rather
+  # than by picking a number, on the precedent of roads.deck.clearance_m below:
+  # `collapse` moves vertices to cluster means, so the ground that ships is not
+  # the ground the sampler found. tools/ground_clearance.py grades it.
+  ground_sink_m: 0.20
 
   # Cell sizes for a class that must not decimate like the rest, overriding
   # lod_cell_sizes_m below. Same reasoning as class_colours: infrastructure is
@@ -157,8 +200,16 @@ buildings:
   # entirely cost +20% and +57% on the two coarser tiers of the old three-tier
   # table, against +8.5% and +21% for these, and the deck survives either way —
   # it only has to beat its own thickness.
+  #
+  # The ground goes the other way, and for the mirror-image reason. A building's
+  # cell is fine enough to keep a silhouette worth keeping; ground has no
+  # silhouette, only extent, so the finest tier can be far coarser than a
+  # building's without losing anything anyone can see. It is also the largest
+  # single surface in the region, so the cell is what decides whether it costs
+  # a rounding error or a fifth of the bundle.
   class_lod_cell_sizes_m:
     INFRASTRUCTURE: [0.5, 1.0]
+    TERRAIN(TB): [4.0, 8.0]
 
   # Otherwise coloured by the building's own height above its base. The ramp
   # runs warm-and-darker for the low pre-war and post-war stock to cool-and-

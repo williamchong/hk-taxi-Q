@@ -45,9 +45,9 @@ testpaths = ["tests"]
 # `python -m pipeline` is the documented entry point and runs from this
 # directory, so tests import the same way rather than depending on an install.
 #
-# `../tools` is here so `test_deck_error.py` can import the acceptance tool
-# without a `sys.path` insert of its own. The tool lives outside the package on
-# purpose — it grades the pipeline and must not be importable from it.
+# `../tools` is here so the acceptance-tool tests can import what they grade
+# without a `sys.path` insert of their own. The tools live outside the package
+# on purpose — they grade the pipeline and must not be importable from it.
 pythonpath = [".", "../tools"]
 
 [tool.ruff]

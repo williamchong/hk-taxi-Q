@@ -155,10 +155,20 @@ class TestBuildingStyle:
         # review found LOD1 indistinguishable at closest range.
         assert style.lod_cell_sizes_m[0] == min(style.lod_cell_sizes_m)
 
-    def test_terrain_is_not_a_building_class(self, hong_kong) -> None:
-        """The tile output is specified to contain no textures, and the LandsD
-        terrain ships a 45-megapixel JPEG per sheet."""
-        assert not any("TERRAIN" in name for name in hong_kong.buildings.classes)
+    def test_the_ground_is_tiled_without_jitter_and_with_a_sink(self, hong_kong) -> None:
+        """`P3-10` put the terrain class in `classes`, which `P1-2` had kept it
+        out of because the LandsD terrain ships a 45-megapixel JPEG per sheet.
+        The rule it was protecting is unchanged and lives in `verify_tiles.gd` —
+        the tile output carries no textures — and `buildings._ground` is what
+        keeps it true. What this asserts is the two settings the ground cannot
+        be tiled *correctly* without: no jitter, because it arrives as a handful
+        of sheet-sized meshes rather than one mesh per object, and a sink,
+        because `roads.py` lays the level-0 carriageway coplanar with it."""
+        style = hong_kong.buildings
+        assert style.terrain_class in style.classes
+        assert style.jitter_for(style.terrain_class) == 0.0
+        assert style.jitter_for("BUILDING") > 0.0
+        assert style.ground_sink_m > 0.0
 
     def test_structure_is_a_building_class(self, hong_kong) -> None:
         """The mirror of the rule above, and for the opposite reason. `P2-7`
@@ -168,11 +178,13 @@ class TestBuildingStyle:
         assert hong_kong.buildings.structure_class in hong_kong.buildings.classes
 
     def test_a_structure_class_that_is_never_tiled_is_rejected(self, rewrite) -> None:
-        def use_terrain(doc: dict[str, Any]) -> None:
-            doc["buildings"]["structure_class"] = doc["buildings"]["terrain_class"]
+        # A name that is not in `classes` rather than the terrain class, which
+        # used to stand in for one and has been tiled since `P3-10`.
+        def use_untiled(doc: dict[str, Any]) -> None:
+            doc["buildings"]["structure_class"] = "VEGETATION"
 
         with pytest.raises(ValueError, match="which is not in classes"):
-            load_city("hong_kong", cities_root=rewrite(use_terrain))
+            load_city("hong_kong", cities_root=rewrite(use_untiled))
 
     def test_unordered_height_bands_are_rejected(self, rewrite) -> None:
         """`colour_for` returns the first band a height fits, so an out-of-order
@@ -256,6 +268,84 @@ class TestBuildingStyle:
 
         with pytest.raises(ValueError, match="colour_jitter"):
             load_city("hong_kong", cities_root=rewrite(overdo_it))
+
+    def test_a_class_jitter_wins_over_the_default(self, hong_kong) -> None:
+        style = hong_kong.buildings
+        assert style.jitter_for(style.terrain_class) == 0.0
+        assert style.jitter_for("BUILDING") == style.colour_jitter
+
+    def test_class_jitter_override_must_name_a_real_class(self, rewrite) -> None:
+        """The same trap as `class_colours` and `class_lod_cell_sizes_m`: a
+        misspelling parses, loads, and silently overrides nothing — and the
+        symptom here is the ground rendering in six shades, which reads as a
+        source defect rather than as a typo."""
+
+        def misspell(doc: dict[str, Any]) -> None:
+            doc["buildings"]["class_colour_jitter"] = {"TERRAIN(TP)": 0.0}
+
+        with pytest.raises(ValueError, match="not in classes"):
+            load_city("hong_kong", cities_root=rewrite(misspell))
+
+    @pytest.mark.parametrize("value", [1.5, -0.1, float("nan"), float("inf")])
+    def test_class_jitter_outside_zero_to_one_is_rejected(self, rewrite, value) -> None:
+        """The same range as the default, through the same helper.
+
+        `.nan` and `.inf` are in here for `P2-7`'s reason rather than for
+        completeness: YAML 1.1 resolves both, and a NaN passes every sign test
+        then makes every comparison it feeds silently false. `0.0 <= value`
+        happens to reject it, which is the property worth pinning down."""
+
+        def overdo_it(doc: dict[str, Any]) -> None:
+            doc["buildings"]["class_colour_jitter"] = {"BUILDING": value}
+
+        with pytest.raises(ValueError, match=r"class_colour_jitter\.BUILDING"):
+            load_city("hong_kong", cities_root=rewrite(overdo_it))
+
+    @pytest.mark.parametrize("spoil", ["drop", "zero"])
+    def test_tiling_the_ground_without_a_sink_is_rejected(self, rewrite, spoil) -> None:
+        """The silent failure this check exists for: `roads.py` lays the level-0
+        carriageway at `terrain + 0.0`, so a tiled ground with no sink is
+        coplanar with the road by construction and z-fights the length of the
+        network. That reads as a rendering bug, not as a missing key.
+
+        ⚠️ **An explicit `0.0` is the case worth parametrising for.** The first
+        version of this check tested whether the *key* was present, which reads
+        as equivalent and is not: `_measures` admits zero, so `ground_sink_m:
+        0.0` loaded happily into exactly the coplanar state the message
+        describes. Missing and zero have to arrive at the same error."""
+
+        def spoil_it(doc: dict[str, Any]) -> None:
+            if spoil == "drop":
+                del doc["buildings"]["ground_sink_m"]
+            else:
+                doc["buildings"]["ground_sink_m"] = 0.0
+
+        with pytest.raises(ValueError, match="ground_sink_m"):
+            load_city("hong_kong", cities_root=rewrite(spoil_it))
+
+    def test_a_sink_without_a_tiled_ground_is_allowed(self, rewrite) -> None:
+        """One direction only, on `structure_class`'s precedent. A city that
+        samples the ground for road heights without drawing it has correct
+        output, and refusing its unused key would reject it for nothing."""
+
+        def stop_tiling_it(doc: dict[str, Any]) -> None:
+            terrain = doc["buildings"]["terrain_class"]
+            doc["buildings"]["classes"] = [
+                name for name in doc["buildings"]["classes"] if name != terrain
+            ]
+            for table in ("class_colours", "class_colour_jitter", "class_lod_cell_sizes_m"):
+                doc["buildings"][table].pop(terrain, None)
+
+        city = load_city("hong_kong", cities_root=rewrite(stop_tiling_it))
+        assert city.buildings.terrain_class not in city.buildings.classes
+
+    @pytest.mark.parametrize("value", [-0.1, float("nan"), float("inf")])
+    def test_an_unusable_ground_sink_is_rejected(self, rewrite, value) -> None:
+        def spoil_it(doc: dict[str, Any]) -> None:
+            doc["buildings"]["ground_sink_m"] = value
+
+        with pytest.raises(ValueError, match="ground_sink_m"):
+            load_city("hong_kong", cities_root=rewrite(spoil_it))
 
     def test_missing_buildings_block_is_rejected(self, rewrite) -> None:
         with pytest.raises(ValueError, match="buildings"):

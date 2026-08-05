@@ -37,6 +37,13 @@ is reconstructing the ribbon's *width*, which comes from `city.json`'s
 `widen_for`. A tool that recomputed the widening would agree with the config
 rather than with the mesh.
 
+**`left_of`, `cross_section`, `half_width_at` and `walk_width` are public
+because a third tool uses them.** `ground_clearance.py` asks a different
+question of the same cells, and the four together are how a drawn carriageway is
+walked across its width — `walk_width`'s duplicated-vertex guard most of all,
+which is a defect anyone reimplementing this would have to rediscover. Same
+argument as `deck_error` exporting its bundle reader to this module.
+
 Run:  .venv/bin/python tools/overhang.py --city hong_kong
 """
 
@@ -134,7 +141,7 @@ class Widened:
     overhanging_edges: set[int] = field(default_factory=set)
 
 
-def _left_of(along: np.ndarray) -> np.ndarray:
+def left_of(along: np.ndarray) -> np.ndarray:
     """The plan normal one metre to the left of travel.
 
     Hong Kong drives on the left and `surface.py` offsets the same way, but this
@@ -148,7 +155,7 @@ def _left_of(along: np.ndarray) -> np.ndarray:
     return np.array([along[1], -along[0]]) / length
 
 
-def _cross_section(
+def cross_section(
     point: np.ndarray, normal: np.ndarray, half_width_m: float, across_m: float
 ) -> list[tuple[float, float, float]]:
     """Plan positions across one station's full drawn width, and each one's share.
@@ -171,7 +178,24 @@ def _cross_section(
     ]
 
 
-def _half_width_at(widths: list[float], vertex: int) -> float:
+def half_widths(manifest: dict[str, Any]) -> dict[int, list[float]]:
+    """`city.json`'s carriageway width table, per edge.
+
+    Paired with `half_width_at`, and public for the same reason: the pre-`Q23`
+    fallback below is a compatibility rule, and a second copy of it is a second
+    place for it to stop being true.
+    """
+    return {
+        int(entry["edge"]): (
+            list(entry["half_width_m"])
+            if isinstance(entry["half_width_m"], list)
+            else [float(entry["half_width_m"])]
+        )
+        for entry in manifest["carriageway"]
+    }
+
+
+def half_width_at(widths: list[float], vertex: int) -> float:
     """The published half-width at one polyline vertex.
 
     Indexed by vertex because that is how `city.json` publishes it since `Q23`.
@@ -184,7 +208,7 @@ def _half_width_at(widths: list[float], vertex: int) -> float:
     return float(widths[min(vertex, len(widths) - 1)])
 
 
-def _walk(polyline: np.ndarray, spacing_m: float) -> Iterator[tuple[int, np.ndarray]]:
+def walk_width(polyline: np.ndarray, spacing_m: float) -> Iterator[tuple[int, np.ndarray]]:
     """Stations down a polyline, each with the vertex it came from.
 
     `stations` interpolates but does not say which segment a station belongs
@@ -221,15 +245,7 @@ def survey(
 ) -> tuple[dict[int, Tally], Widened]:
     """Every drawn carriageway cell, asked whether structure lies under it."""
     graph = json.loads((generated / manifest["road_graph"]).read_text())
-    # A pre-`Q23` bundle publishes one number per edge rather than a list.
-    widths = {
-        int(entry["edge"]): (
-            list(entry["half_width_m"])
-            if isinstance(entry["half_width_m"], list)
-            else [float(entry["half_width_m"])]
-        )
-        for entry in manifest["carriageway"]
-    }
+    widths = half_widths(manifest)
     drawn = drawn_surface(generated, manifest)
 
     tallies: dict[int, Tally] = {}
@@ -249,10 +265,10 @@ def survey(
         authored_half = float(edge["width_m"]) / 2.0
 
         previous: np.ndarray | None = None
-        for vertex, station in _walk(polyline, spacing_m):
+        for vertex, station in walk_width(polyline, spacing_m):
             along = polyline[vertex + 1] - polyline[vertex]
-            normal = _left_of(along[[0, 2]])
-            half = _half_width_at(widths.get(edge_id, []), vertex)
+            normal = left_of(along[[0, 2]])
+            half = half_width_at(widths.get(edge_id, []), vertex)
 
             # `None` means "no road is drawn at this cell" and is not evidence
             # either way, so it is left out of both the tally and the rim. They
@@ -261,7 +277,7 @@ def survey(
             # mesh, at a junction trim or against a stale width table, inflate
             # the `overhanging_m` headline.
             rim: list[bool] = []
-            for x, z, span in _cross_section(station[[0, 2]], normal, half, across_m):
+            for x, z, span in cross_section(station[[0, 2]], normal, half, across_m):
                 # The drawn road first, because the question is whether *what is
                 # drawn* is held up. Falling back to the graph's own y would
                 # measure a surface that may not have been built.
@@ -276,7 +292,7 @@ def survey(
                 previous = station
                 continue
             # `Q23` counts centreline metres, so it advances by the distance
-            # walked rather than by the station count — `_walk` does not space
+            # walked rather than by the station count — `walk_width` does not space
             # stations evenly across a segment boundary.
             step = 0.0 if previous is None else float(np.hypot(*(station - previous)[[0, 2]]))
             previous = station

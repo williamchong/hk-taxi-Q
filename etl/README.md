@@ -59,14 +59,15 @@ region bounds with the publisher's sheet index. Move the bounds and the sheet se
 
 Reads the cached sheets — no network — and writes `out/hong_kong/wan_chai/tiles/*.glb`, one merged,
 vertex-coloured mesh per 150 m tile per LOD tier, plus a `buildings.json` intermediate. Wan Chai is
-65 tiles × 3 tiers in about six seconds.
+66 tiles × 2 tiers in a couple of seconds.
 
 The palette, the sheet sub-directories to read, and the LOD cell sizes are all city config
 (`buildings:` in the YAML). Nothing about Hong Kong is in the code.
 
-Add `--terrain` to also emit each sheet's textured ground mesh. That output is **evaluation only**
-and is not part of the tile set: it is 267 MB of JPEG for the region, against a <128 MB texture
-budget. See `PROGRESS.md`.
+The ground is one of those sub-directories since `P3-10`, so it tiles with everything else — with
+its texture stripped, because the tile output carries none. Add `--terrain` to emit the **textured**
+ground instead: that output is **evaluation only** and is not part of the tile set, because its
+JPEGs are 224 MB for the region against a <128 MB texture budget. See `PROGRESS.md`.
 
 Verify the result in the engine, which is the only place the acceptance criteria can be checked:
 
