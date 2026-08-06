@@ -3,7 +3,22 @@
 Living document. **Update this whenever a task changes status, a decision is made, or an open
 question is answered.** Newest entries at the top of each log.
 
-Last updated: 2026-08-06 (**`Q18` closed in one config line**: there is a **chroma knee** an authored
+Last updated: 2026-08-06 (**an art-direction consistency audit over seven fixed viewpoints** — the
+first pass over the whole look rather than over one surface, taken because every class had been
+fixed individually and none graded against the others. The technique holds everywhere and the core
+decision measures out: the taxi's red is **`C*` 86.5 against a frame median of 7.5**. Three new
+questions come out of it — **`Q30`**, the shipped façade palette is not the one `ART_DESIGN.md`
+authorises, because `facade_hue.strength: 2.0` puts **20.1% of buildings over `C*` 20** against 3.9%
+at faithful strength; **`Q31`**, the city's value range has an empty middle, with **51.4% of a shaded
+street frame under `L*` 10 and 0.5% between 10 and 30**, the asphalt being the one albedo never
+re-anchored; and **`Q32`**, which alleged that `INFRASTRUCTURE` renders as the brightest large object
+in its own frame — **and which closed the same day as wrong**, on a probe that tinted the class and
+found it is **2.71% of that frame**, three `L*` above the frame mean, with soffits already fifteen
+points below its own up-faces. The `structure_soffit_darkness` term written for it was built,
+measured and **reverted**; ⚠️ the fault was confusing **ambient occlusion with `N·L`**, and the pale
+beams mistaken for the flyover are `BUILDING`. `ART_DESIGN.md` gained an infrastructure section it
+never had and a fixed viewpoint table.
+Before that, **`Q18` closed in one config line**: there is a **chroma knee** an authored
 hue has to clear — measured on the faceted ground at four levels of one hue, 6.81 arrives at 1.95,
 11.0 at 2.93, 14.0 at 6.25, 31.96 at 28.42 — so the ground's authored warmth was under it and being
 thrown away. `TERRAIN(TB)` 6.81 → **14.0 `C*` at an unchanged `L*` 52.6**: ground expanse
@@ -138,6 +153,9 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ⚠️ conditional ·
 | `Q26` | **Which look ships — the measured Hong Kong one or the clean/futuristic one?** `P3-7`'s window bands are accurate and were called dull; `city_facade_clean` is bolder and is *not* what Wan Chai looks like | The whole art direction rests on "accurate city, toy vehicles", and recognition is the product (`Q8`). A white city with amber accent plinths keeps the accurate *massing* and abandons the accurate *surface* — which may be the right trade or may be the one thing that cannot be traded | `P3-9a` | 🔴 Open, and **a verdict rather than a measurement.** Both looks are one `cp` apart and neither needs a rebuild, so this can go to the ≥3 HK drivers as an A/B rather than being decided in advance. ⚠️ **Every shot taken before 2026-08-06 is unusable for this** — `build/driver/h4` and `build/driver/clean` included — because `Q27` had albedo reaching the screen at a third strength in all of them. Re-shoot before comparing. A **third** candidate now exists and is what currently ships: elements off, flat per-building colour on accurate massing. ⚠️ If the clean look wins, the palette should move from the shader's `base_wash` into `height_bands` in the city config, where CLAUDE.md says palettes live |
 | `Q28` | **Flat walls on distant towers fill with bright and dark horizontal bands.** Reported while driving, and it survives every lighting change | The bands are the loudest thing in a skyline frame, and they made the massing unreadable at the distance most of the city is seen from. They also invalidate any look A/B taken against them — `Q26`'s included | `P3-9a` | 🟢 **Closed 2026-08-06, and it was one word.** `TEXCOORD_0.y` carries a *per-object* seed, and both facade shaders read it into a plain `varying`, which the GPU interpolates. Where a triangle's corners disagree — **2.7% of shipped LOD0 triangles**, worst spread 0.4336, because `collapse` takes UV from one cluster representative — the seed becomes a ramp, `floor(phase * 256 + 0.5)` steps it, and `draw()` hashes each step to an unrelated brightness at `value_jitter` 0.35. `flat` on `phase` and `marker` fixes it. Row-to-row contrast on the reported surface **6.80 → 0.07**; whole-frame **-13.2%** there, **-12.1%** and **-15.2%** on the two fixed viewpoints, at a frame mean that moves 0.2 |
 | `Q27` | **Why does albedo barely reach the screen under the clean rig, and what should the light levels be?** Buildings now carry measured per-building hue, and it is nearly invisible | Measured, not suspected: dropping the height bands from `L*` 80 to 62 moved the rendered frame only from `L*` 86.8 to 83.3 — an 18-point albedo change bought 3.5 points of pixel. Every colour decision downstream of this is unreadable until it is answered, including `Q26`'s A/B | `P3-9a` | 🟢 **Closed 2026-08-06. It was not the light at all.** `COLOR_0` is authored in sRGB and was consumed as linear, so **57%** of a lit facade pixel's luminance was albedo-*independent* and an albedo difference reached the screen at a third of its size. Fixed in the two facade shaders and `generated_scene_import.gd`; additive share **57% → 6%** at street level. The whole light-levels half of the question is answered "no": ambient, exposure, glow, fog, tonemap curve and specular were each ablated and **none moved transmission by more than 0.05**. See the decision log below |
+| `Q30` | **The shipped façade palette is not the one `ART_DESIGN.md` authorises, and `facade_hue.strength` is why.** The five `height_bands` sit at `C*` 1.92–13.84; at `strength: 2.0` the shipped per-building colour is `C*` mean 12.59, p90 27.35, p99 57.33, max 96.73, with **20.1% of 2,171 buildings over `C*` 20** against 3.9% at faithful 1.0 | The palette table is the document a second city would be built from, and it currently describes a city that does not exist. One building in five is more saturated than anything the direction sanctions — the mint, teal and lilac blocks are the palette, not a fault | `Q26` | 🔴 Open. ⚠️ **Amplifying chroma linearly widens the spread far faster than it moves the middle**, so at 2.0 the distribution is *both* too grey (median 9.52) and too candy (p99 57.3) — the knob cannot fix one without worsening the other, which is the argument against tuning it further rather than for. Options: drop toward 1.0–1.5, compress the tail rather than scale it, or re-author the palette table around what ships. **Belongs with `Q26`'s verdict, not before it** |
+| `Q31` | **The city's value range has an empty middle, and the road palette and the shadow fill are both candidates.** Every albedo the pipeline writes sits within `L*` 48.1–63.3 except `surface_colour` `#3c3a37` at **24.5**. Street frames come out bimodal: Causeway Bay in shade is **51.4% of pixels under `L*` 10 and 0.5% between 10 and 30**; under the HKCEC deck 28.9% and 2.0% | Half a street frame carrying no information. It is the frame the player occupies for the whole game, and `P3-9a`'s drivers will see it before anything else | `P3-9a` | 🔴 Open. The buildings and ground took the ×0.520 anchor and the road was left alone, so closing `Q27` moved the asphalt down and nothing moved to meet it. ⚠️ **Both levers produce the same symptom on the lowest-albedo surface**, so change one at a time and grade with `frame_stats.py` — the failing frames are the two shot *in shade*, which is evidence for fill; the 24.5 `L*` outlier is evidence for the palette. `Q27`'s ablation discipline applies |
+| `Q32` | ~~**`INFRASTRUCTURE` renders as the brightest large object in its frame, and its soffit sits at nearly the value of its deck top.**~~ | — | `P3-9a` | 🟢 **Closed 2026-08-06 the day it was opened, and closed as *wrong*.** The premise did not survive a probe that tinted `MARKER_STRUCTURE`. In the viewpoint chosen to showcase the class it is **2.71% of the frame**, its up/side faces render at `L*` **51.1** against a non-sky frame mean of **48.1** — three points, not "the brightest" — and its soffits were already at `L*` **35.9**, fifteen points below its own up-faces. ⚠️ **The pale beams filling that frame are `BUILDING`**; naming the class from the silhouette was the error. ⚠️ **The reasoning fault is the reusable part: "no AO, therefore a soffit renders like a deck top" confuses AO with `N·L`** — under one directional light a down-face takes no direct sun at all, so the 15 `L*` gap *is* the renderer working. A `structure_soffit_darkness` term was built, measured (soffits `L*` 36.3 → 25.8, frame mean 0.05, no other viewpoint touched) and **reverted**: a correct implementation of a wrong premise is still cruft. ✅ What survives and is *true*: the class takes none of the shader's surface treatment, verified at `city_facade_clean.gdshader:437` where everything is gated on `is_facade` — recorded in `ART_DESIGN.md` as a known gap rather than a defect |
 
 **Resolved:** `Q1` (no Z, but `ELEVATION` encodes the level) · `Q2`/`Q3`/`Q5` (building data is fully
 scriptable; 6 sheets, ~44 MB each) · `Q4` (device floor A13 / Adreno 618) · `Q7` (origin at the
@@ -166,6 +184,61 @@ under, and ~0.2 m is a guess until it is driven on a cross-sloped street.
 ---
 
 ## Decision log
+
+### 2026-08-06 — Art-direction consistency audit: seven viewpoints, and one finding that was wrong
+
+A pass over the *whole* look rather than over one surface, taken after `Q18`, `Q28` and `Q29` closed
+in quick succession — every class has now been fixed individually and none had been graded against
+the others. Seven fixed cameras covering every mesh class the pipeline ships, recorded in
+`ART_DESIGN.md` so a later change is judged against these rather than against a fresh camera. Shots
+in `build/driver/art_*`.
+
+**What holds, and it is the expensive half.** The technique is consistent everywhere: untextured,
+vertex-coloured, flat-shaded, one directional light, on buildings, ground, roads, infrastructure and
+the taxi alike — `Q29` closed the last exception. Massing is recognisably Wan Chai from the skyline
+camera. And the core art decision measures out exactly as written: on the open-road frame the taxi's
+red is **`C*` 86.5 against a frame median of 7.5**, on 0.5% of pixels, with the rest of the city's
+99th percentile at 39.8. "Stylise the actors, not the stage" is an order-of-magnitude chroma gap,
+not a metaphor.
+
+**Three findings, and one of them was wrong.** `Q30` — the shipped façade palette is not the
+authorised one, and `facade_hue.strength: 2.0` is the mechanism. `Q31` — the value range has an empty
+middle, with half of a shaded street frame under `L*` 10. Both are measured, over the shipped vertex
+colours and over the frames respectively, and both stand.
+
+🔴 **`Q32` did not, and it is the entry worth reading.** It alleged that `INFRASTRUCTURE` renders as
+the brightest thing in its frame and that a deck soffit sits at nearly the value of its deck top. A
+probe tinting `MARKER_STRUCTURE` red, down-faces green, refuted both in one render: the class is
+**2.71% of the very frame chosen to showcase it**, its up/side faces sit at `L*` 51.1 against a
+non-sky frame mean of 48.1, and its soffits were already at 35.9. ⚠️ **The pale beams filling that
+frame are `BUILDING`** — the class was named from the silhouette. ⚠️ **And the argument behind it
+confused ambient occlusion with `N·L`:** under one directional light a downward face takes no direct
+sun at all, so the 15 `L*` gap between soffit and deck *is* the renderer working, not its absence. A
+`structure_soffit_darkness` term was written, shipped into the `.tres`, graded (soffits `L*`
+36.3 → 25.8, whole-frame mean 0.05, no other viewpoint touched but its own soffits) and **reverted to
+a byte-identical render** — a correct implementation of a wrong premise is still cruft, on
+`LedgeShading`'s precedent. What survives is true and small: the class takes none of the shader's
+surface treatment, verified at `city_facade_clean.gdshader:437`, and that is now recorded in
+`ART_DESIGN.md` as a known gap rather than as a defect.
+
+⚠️ **Three confident diagnoses in this project have now failed the same way** — `LedgeShading`,
+`reface_ledges`, and this — and each was settled in minutes by a probe that asked the frame what it
+was drawing instead of arguing from what it looked like. **Tint the class before naming it.**
+
+**Two smaller ones folded into the document rather than raised.** The source massing carries **real
+window reveals and structural fins on a minority of towers** — so with the shader grid off the city
+draws surface three ways at once, and the relief aliases into speckle at the distance it is seen
+from. That is evidence for `Q26` that was not on the table when `Q26` was written. And the ground,
+whose *colour* `Q18` settled, reads as sand at the waterfront: an unbroken 200 m expanse of one
+correct colour with nothing standing on it. ⚠️ **That is not an argument for the refused land-cover
+classifier** — a fringe round every building is incident of exactly the wrong kind. It is `B3`'s.
+
+⚠️ **`ART_DESIGN.md` had no infrastructure section at all**, for a class with its own colour, its own
+LOD cell sizes and its own grader. Added — and it is a reference rather than a work list, because
+`Q32` then measured the class at 2.71% of the frame picked to flatter it. Found by asking which
+classes the document covers rather than by looking at a frame, which is worth repeating for the
+*other* classes; a gap in coverage is cheaper to find than a defect in a render, and it does not
+depend on reading a frame correctly.
 
 ### 2026-08-06 — `Q18` closes: the ground sat under a chroma knee, and the classifier is refused
 

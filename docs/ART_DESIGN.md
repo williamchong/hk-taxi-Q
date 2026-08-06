@@ -53,6 +53,29 @@ Hong Kong-specific, not generic-city. Anchor colours:
 shadows, and separates building faces without any texture work. Night (neon-forward) is a strong later
 variant — plan the emissive channel now, build the mode later.
 
+🔴 **The table above is the authored palette and it is no longer the shipped one.** The five
+`height_bands` honour it — `C*` 1.92 to 13.84, which is "warm off-white, beige, pale grey-green" —
+but `facade_hue.strength: 2.0` multiplies each building's *measured* chroma on top, and the result
+is not muted. Computed over the 2,171 surveyed buildings that pass `vegetation_max`, against the
+band each would otherwise take:
+
+| `facade_hue.strength` | shipped `C*` mean | p90 | p99 | max | share over `C*` 20 |
+|---|---|---|---|---|---|
+| 1.0 (faithful) | 6.36 | 13.67 | 28.87 | 71.51 | **3.9%** |
+| 1.5 | 9.50 | 20.66 | 42.99 | 76.64 | **10.8%** |
+| **2.0 (ships)** | **12.59** | **27.35** | **57.33** | **96.73** | **20.1%** |
+
+`L*` mean is 61.5 at every strength, so this is chroma alone. One building in five is now more
+saturated than *any* colour this document authorises, and the tail is what the eye picks out: the
+mint, teal, lilac and peach blocks in `build/driver/art_kerb` and `art_skyline` are not a rendering
+fault, they are the palette. ⚠️ **The knob is doing two jobs and only one of them is stated.** Its
+config comment calls it "the line to move if the city reads too grey or too candy" — but at 2.0 the
+distribution is *both*: median 9.52 is still near-neutral while p99 is 57.3. Amplifying chroma
+linearly widens the spread far faster than it moves the middle, so the buildings that were already
+coloured become the loudest thing in the frame long before the grey majority stops being grey.
+Whatever look wins `Q26` should set this against the palette table, and the palette table should
+then be rewritten to describe the city that ships. See `Q30`.
+
 ---
 
 ## Buildings
@@ -73,6 +96,19 @@ rebuilds.
 ⚠️ **The jitter means a class is a *ray* through its base colour, not a value.** Any tool matching a
 class by colour must test the scale factor, not equality — `tools/deck_error.py` matched 428 of
 434,149 triangles before this was understood.
+
+⚠️ **"Untextured extruded footprints" undersells the source, and with the shader grid off that shows
+as an inconsistency rather than as a bonus.** A minority of towers arrive carrying **real recessed
+window reveals and structural fins in the geometry** — visible in the skyline crop under
+`build/driver/art_crops/`, where one slab carries a dotted grid of genuine openings and its
+neighbour continuous piers. So the
+city currently draws surface three ways at once: flat colour on most buildings, geometric relief on
+a few, and neither on the same few once LOD1 clusters at 4 m and swallows the reveal. ⚠️ **And the
+relief does not survive the distance it is seen at** — sub-pixel openings alias into a speckle that
+reads as dirt on the wall, not as fenestration. This is the same aliasing argument `P3-7`'s
+`band()` answered analytically for the *shader* grid; geometry has no such recourse, so the honest
+options are to accept it, or to make the shader grid's return cover these buildings too rather than
+compete with them. It is evidence for `Q26` and was not on the table when `Q26` was written.
 
 ### The window-band shader
 
@@ -366,6 +402,88 @@ overlaps its arms rather than abutting them wherever a short edge is held back b
 6,051 m² of 52,985 m² of cap area. Cap and carriageway are the same colour at the same height in one
 material, so nothing shows; give the ribbon lane markings and the cap will read as a patch over them.
 
+🔴 **The asphalt is the one surface that was never re-anchored, and it is now a hole in the middle of
+the city's value range.** Every other albedo the pipeline writes sits inside 15 `L*` points — kerb
+62.2, band stock 57.4–63.3, ground 52.5, infrastructure 48.1 — and `surface_colour` `#3c3a37` is
+**`L*` 24.5**. That was a survivable gap while `Q27` was open and every albedo rendered lighter than
+it was asked to be. It is not survivable now: the buildings and the ground took the ×0.520 linear
+anchor and the road palette was left alone, so closing `Q27` moved the asphalt down and nothing moved
+to meet it. Measured over the audit frames, the street-level ones come out **bimodal with an empty
+middle**:
+
+| Frame | pixels under `L*` 10 | `L*` 10–30 | `L*` 30–60 | over 60 |
+|---|---|---|---|---|
+| `art_kerb` — Causeway Bay, road in shade | **51.4%** | **0.5%** | 40.0% | 8.1% |
+| `art_taxi` t01.20 — under the HKCEC deck | **28.9%** | **2.0%** | 65.5% | 3.6% |
+| `art_street` — Hennessy Road canyon | 13.2% | 27.0% | 41.5% | 18.3% |
+| `art_skyline` / `art_ground` / `art_infra` | 0.0–3.8% | 0.1–11.5% | 20.6–56.7% | 43.1–64.1% |
+
+Half of a street frame carrying no information at all is not "HK asphalt reads warm", and it is not
+a contrast the lighting rig can fix — `Q27`'s ablation already established that the rig can only
+redistribute contrast that arrives. **The lever is the road palette**, which is where the two
+numbers live, and it should be judged against the same anchor the bands were: `#3c3a37` at
+`C*` 2.18 is also nearly hueless, so a warm asphalt is available at the same time. See `Q31`.
+
+⚠️ **The empty middle is a *lit-versus-unlit* gap, not a dark-albedo gap.** The two worst frames are
+the two shot in shade, and the same asphalt renders at `L*` 30–60 in sun. So the second lever is
+fill — the shadow value — and that one *is* the rig's. Do not reach for both at once; the ablation
+discipline in the Lighting section applies.
+
+---
+
+## Infrastructure
+
+⚠️ **This section exists because the audit found it missing.** Flyovers, ramps, footbridge canopies
+and podium decks are a whole mesh class — `INFRASTRUCTURE` — with its own colour, its own LOD cell
+sizes and its own grader, and until now the only art direction attached to it was one line in the
+city config. ⚠️ **It is a smaller share of the frame than its silhouette suggests** — 2.71% even from
+beneath the Canal Road flyover, measured below — so this section is a reference rather than a list
+of work.
+
+- One flat colour, `#74726d` — `L*` 48.1, `C*` 3.05 — for **deck, soffit, pier, parapet and
+  footbridge alike**, overriding the height bands because a flyover is concrete whatever its height
+- Cell sizes held at `[0.0, 0.5, 1.0]` so a thin deck keeps its depth (see LOD policy)
+
+✅ **The class really does take none of the shader's surface treatment, and that part was read from
+the code rather than guessed.** `roof_darkness`, the grounding gradient and the jitter are all
+applied inside `if (is_facade)` at `city_facade_clean.gdshader:437`, and `is_facade` is
+`marker < MARKER_FACADE + 0.5`. `MARKER_STRUCTURE` is `2.0`, so a flyover arrives as raw `#74726d`
+and is lit, full stop.
+
+🔴 **And it turns out not to matter, which is the opposite of what this section said first.** The
+claim was that infrastructure renders as the brightest large object in its own frame and that a deck
+soffit sits at nearly the value of the deck top. **Both were wrong, and a probe that tinted
+`MARKER_STRUCTURE` red — down-faces green — took ten minutes to say so.** Measured on
+`build/driver/art_infra`, the viewpoint chosen to showcase this class:
+
+| | |
+|---|---|
+| `INFRASTRUCTURE` share of the frame | **2.71%** |
+| …of which faces downward | **15.6%** (0.42% of frame) |
+| Structure up/side faces | `L*` **51.1** against a non-sky frame mean of **48.1** |
+| Structure soffits | `L*` **35.9** — already 15 points below its own up-faces |
+
+⚠️ **The pale beams filling that frame are `BUILDING`, not `INFRASTRUCTURE`** — they did not tint.
+Naming the class from the silhouette was the whole error, and the flyover was never the bright thing.
+
+⚠️ **The reasoning error is worth more than the finding, because it will recur.** "No ambient
+occlusion, therefore a soffit renders like a deck top" confuses **AO with `N·L`**. Under a single
+directional light a downward face takes *no direct sun at all* — the renderer was already doing the
+physically right thing, and the 15 `L*` gap is that term working. AO would have deepened the corner
+where soffit meets pier; it was never what separates a soffit from a deck.
+
+**A `structure_soffit_darkness` term was built, measured and reverted.** It worked exactly as
+designed — flyover soffits `L*` 36.3 → 25.8, whole-frame mean moving 0.05, every other viewpoint
+unchanged but for its own soffits — and it is gone because a correct implementation of a wrong
+premise is still cruft. `Q32` closes here, and 0.42% of one frame is the number that closed it.
+
+⚠️ **What survives, and it is small: the class has no art direction of its own, and one flat colour
+for deck, soffit, pier and parapet means a viaduct's massing is legible only where the sun catches a
+face.** That is a real observation and it is not urgent, because the class is 2.71% of the frame that
+was picked to flatter it. Anyone reopening it should start by measuring the share again from
+wherever they think it looks wrong — and should not reach for a darker `#74726d`, which moves the
+sunlit deck top by exactly as much.
+
 ---
 
 ## Ground
@@ -431,6 +549,20 @@ Anything that later draws ground through a different material has to do the same
    **If parks are wanted, the source is vector land-use polygons, not the photograph** — crisp edges
    at any cell size, and a clean key for `collapse`. See `docs/PROGRESS.md`.
 
+⚠️ **`Q18` closed on the ground's colour and the audit reopens a different complaint about it: at the
+waterfront it reads as *sand*, and that is a content problem rather than a palette one.** In
+`build/driver/art_ground` the reclamation south of HKCEC is an unbroken expanse of one colour running
+to the region edge — correctly faceted since `Q29`, correctly warm since `Q18`, and carrying
+**nothing**: no pavement/carriageway distinction off the ribbon, no planting, no street furniture, no
+contact darkening where a footbridge pier or a building meets it. The chroma tune bought concrete
+over plaster, which was the question asked; what the frame now says is that a *correct* flat colour
+over 200 m with no incident on it converges on beach whatever its hue. ⚠️ **This is not an argument
+for the land-cover classifier, which is refused on resolution and stays refused** — a classifier
+would put a green fringe round every building, which is incident of exactly the wrong kind. The
+lever is what stands *on* the ground, and it is `B3`'s (`P3-3`, `P3-4`, `P3-8`) rather than the
+terrain's. Until then the honest description of the ground is "solved as a surface, unsolved as a
+place".
+
 **Prior art says the first step can be the last one.** *Art of Rally* ships flat-shaded untextured
 terrain as its finished look, not as a placeholder. Wan Chai is far denser than that game's
 countryside, so it settles nothing here — but if the first pass reads dead, **suspect the palette
@@ -490,6 +622,24 @@ widening made 1.6× too wide, so it cuts into a cross-slope at the kerb, and the
 Proportions: shortened wheelbase, tall greenhouse, exaggerated wheel arches. Readable silhouette from
 behind at speed — that's the only angle most players ever see.
 
+✅ **Audited in situ and the split works — the taxi is the only chromatic object in the frame and it
+reads instantly.** On `build/driver/art_taxi` t04.50 the red bodywork is **`C*` 86.5** against a
+frame median of **7.5**, on 0.5% of pixels, with the whole rest of the city's 99th percentile at
+39.8. "Stylise the actors, not the stage" is not a metaphor here; it is an order-of-magnitude chroma
+gap and the car pops out of any frame it is in.
+
+⚠️ **Two things the same shot says are wrong, and both are small.** The **silver roof renders
+ice-blue**, because `SILVER` is a near-neutral and a near-neutral takes its hue from ambient — the
+identical mechanism this document flags for the asphalt under Lighting, arriving on the one part of
+the car that is supposed to read as metal. And the **red lens of the tail cluster is still
+invisible** exactly as `P3-11b` predicted, so the cluster reads amber-over-white with a bump where
+the red should be. Neither is worth a round on its own; both are worth fixing in the next one.
+
+⚠️ **The palette is at seven and the table above says 3–5.** Red, silver, black glazing, amber,
+white plate, yellow plate and badge green. Each was granted for a stated reason and the count is
+recorded rather than enforced — but it is now the standing exception, not a one-off, and the table
+should either move or start being applied.
+
 **Vehicle roster for the slice:** player taxi, private car (2 variants), red taxi (AI), double-decker
 bus, green minibus, tram. See `PROGRESS.md` for the real models these are based on and the drivetrain
 differences that make it an architecture constraint rather than an art note.
@@ -548,6 +698,16 @@ sky contribution came down, `tonemap_white` was pushed around, and the paragraph
 about the symptom. With the conversion in place the asphalt is genuinely dark and the road no longer
 needs ambient held back for it, so **the clean rig is now tuned against inputs that no longer exist**
 and is due a pass — `Q26` owns the look, and the measured starting point is in `PROGRESS.md`.
+
+⚠️ **The rig's pass is now overdue and the audit says what to grade it on: the shadow value, not the
+key.** Post-`Q27` the frames that fail are the two shot in shade — 51.4% and 28.9% of their pixels
+under `L*` 10, with almost nothing between 10 and 30 — while every sunlit frame grades clean and
+clips nowhere. Shadow is where the whole city converges: in `build/driver/art_taxi` t01.20 the
+soffit, the walls and the pavement under the HKCEC deck are one narrow blue-grey band and the
+massing is simply gone. So the correction is a **fill** decision — `ambient_light_energy` and
+`ambient_light_color` — and it is the one the paragraph above warns is entangled with the road
+palette, because the two produce the same symptom on the surface with the lowest albedo. Change one
+at a time and grade with `tools/frame_stats.py`; `Q31` owns the pair.
 
 **The general lesson, and it is the one worth keeping:** a washed-out frame is not evidence about the
 lights. Grade the frame with `tools/frame_stats.py` and ask whether an *albedo change* reaches the
@@ -622,6 +782,38 @@ Not art, but it belongs to the same authenticity budget and is cheap:
 - Bilingual passenger callouts (Cantonese primary)
 - Ferry horn from the harbour side
 - Radio stings between fares
+
+---
+
+## The audit viewpoints
+
+**Seven cameras, fixed, so a look change is judged against the last change rather than against a
+fresh camera.** `Q27` established that two viewpoints can disagree sharply about whether the city
+reads white and that the disagreement is itself the finding; the audit of 2026-08-06 extended the
+pair to a set that covers every mesh class the pipeline ships. All run through
+`.claude/skills/run-hk-taxi-q/drive.sh` and all are deterministic to the centimetre.
+
+| Name | Scene | Camera → look | What it is the evidence for |
+|---|---|---|---|
+| `street` | preview | `270,5.5,691` → `30,4.5,719` | Hennessy Road canyon. Façade colour at eye level, the shipping viewpoint |
+| `skyline` | preview | `520,130,180` → `520,45,640` | Massing and silhouette over the harbour. Where "the city reads white" was judged |
+| `kerb` | preview | `283,6,684` → `300,3.2,700` | Causeway Bay in shade. The value gap, and the chroma tail at its loudest |
+| `ground` | preview | `400,45,300` → `250,0,60` | The waterfront reclamation. Terrain as an expanse, and the region edge |
+| `infra` | preview | `1010,9,890` → `930,13,800` | Canal Road flyover from beneath. Deck, soffit, pier |
+| `taxi` | drive | `--seconds=6 --shots=1.2,4.5 --hold=accelerate@0.3+4` | The car in shade at 1.2 s and in sun at 4.5 s |
+| `aerial` | preview | `850,620,1750` → `850,10,400` | The whole region. Chiefly a fog check — at this range fog erases most of it |
+
+⚠️ **Use `--debug-view=off` on every one of them.** The overlay's opaque text block is several per
+cent of the frame and lands in any statistic taken from the PNG.
+
+⚠️ **Preview shots carry `road_preview.gd`'s overlay whatever the debug flag says** — coloured
+polylines and 1,125 direction arrows, drawn by the scene rather than by the debug view. Thin blue
+lines lying on the ground in `art_infra` are that, not art. `city_drive.tscn` puts the same overlay
+behind `--debug-view`, which is why the `taxi` rows are clean.
+
+⚠️ **A verdict pending on a screenshot has an expiry date that nothing in the repo records.** `Q29`
+lost a day to shots taken one palette commit before they were read. Re-shoot before comparing, and
+say which commit a shot is of.
 
 ---
 
