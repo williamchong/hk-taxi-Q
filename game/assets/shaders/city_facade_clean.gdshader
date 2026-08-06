@@ -376,6 +376,35 @@ void vertex() {
 }
 
 void fragment() {
+	// ⚠️ **The ground arrives smooth-shaded, and it is the only surface here that
+	// does.** LandsD ships terrain flat — all three normals agree on every one of
+	// its 83,637 source triangles — but `mesh.collapse` runs it with
+	// `height_field=True`, which drops the facing term from the cluster key and
+	// then averages the normals of whatever shares a cell. Measured at the shipped
+	// 4 m cell: mean error **8.72°**, with **27.5%** of vertices off by more than
+	// 10°. That is what makes an open expanse read as plaster dunes in a city
+	// whose every other surface is faceted.
+	//
+	// The facing key cannot simply come back: it tore the sheet open where a slope
+	// crossed a bucket boundary — 99.61% region coverage against 99.84% without —
+	// which is the reason `collapse` drops it. So the normal is rebuilt here from
+	// the derivatives of view-space position, which is exact for a flat triangle
+	// and costs no geometry. Per-face normals from the ETL would have to unweld
+	// the ground into ~219k more vertices, about 8 MB against a 32.3 MB PCK, to
+	// buy the same lighting.
+	//
+	// ⚠️ **Computed unconditionally, not inside the branch.** Derivatives are
+	// undefined where a pixel quad straddles a non-uniform branch, and a quad on a
+	// seam straddles two triangles whose `marker` differs.
+	vec3 faceted = normalize(cross(dFdx(VERTEX), dFdy(VERTEX)));
+	// Oriented against the interpolated normal rather than fixed by hand. Which
+	// way the cross product points follows the winding and the projection's
+	// handedness, and a sign that is asserted is a sign that is wrong on one
+	// backend. Not `sign()`: it returns zero on a perpendicular pair and would
+	// hand the mix below a zero vector to light with.
+	faceted = dot(faceted, NORMAL) < 0.0 ? -faceted : faceted;
+	NORMAL = normalize(mix(NORMAL, faceted, 1.0 - step(0.5, abs(marker - MARKER_GROUND))));
+
 	bool is_facade = marker < MARKER_FACADE + 0.5;
 	float seed = floor(phase * PHASE_STEPS + 0.5);
 

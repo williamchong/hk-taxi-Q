@@ -406,6 +406,13 @@ see. `docs/ARCHITECTURE.md` carries the mechanism.
 Deleting the texture also deletes the reason terrain was awkward to decimate: clustering moves UVs and
 a photographic texture smears where it does, and there are no UVs left to move.
 
+⚠️ **The ground is flat-shaded in the fragment stage, and it has to be asked for** (`Q29`). The
+source ships terrain faceted, but `mesh.collapse` averages its normals — the `height_field` path
+drops the facing key, which it must, or the sheet tears — leaving 8.72° of mean normal error and a
+surface that reads as plaster dunes beside a city of hard facets. Both facade shaders rebuild the
+normal from screen-space derivatives where `marker` is `MARKER_GROUND`, which costs no geometry.
+Anything that later draws ground through a different material has to do the same.
+
 **Colour comes in two steps, and the first has shipped.**
 
 1. **Flat.** One warm ground colour — `#837d72`, warm concrete. It is placed by what it has to sit

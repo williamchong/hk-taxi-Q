@@ -149,6 +149,16 @@ vec3 vertex_srgb_to_linear(vec3 c) {
 }
 
 void fragment() {
+	// Flat-shade the ground, for the reason the sibling shader sets out at
+	// length: LandsD ships terrain faceted, `mesh.collapse` averages its normals
+	// once `height_field=True` drops the facing key (mean error 8.72° at the
+	// shipped 4 m cell), and the facing key cannot come back without tearing the
+	// sheet. Rebuilt from derivatives here, which costs no geometry. Computed
+	// unconditionally and oriented against `NORMAL` — see `city_facade_clean`.
+	vec3 faceted = normalize(cross(dFdx(VERTEX), dFdy(VERTEX)));
+	faceted = dot(faceted, NORMAL) < 0.0 ? -faceted : faceted;
+	NORMAL = normalize(mix(NORMAL, faceted, 1.0 - step(0.5, abs(marker - MARKER_GROUND))));
+
 	vec3 albedo = vertex_srgb_to_linear(COLOR.rgb);
 	bool is_facade = marker < MARKER_FACADE + 0.5;
 
