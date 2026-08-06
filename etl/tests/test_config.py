@@ -386,7 +386,12 @@ class TestBuildingStyle:
             doc["buildings"]["classes"] = [
                 name for name in doc["buildings"]["classes"] if name != terrain
             ]
-            for table in ("class_colours", "class_colour_jitter", "class_lod_cell_sizes_m"):
+            for table in (
+                "class_colours",
+                "class_reflectance",
+                "class_colour_jitter",
+                "class_lod_cell_sizes_m",
+            ):
                 doc["buildings"][table].pop(terrain, None)
 
         city = load_city("hong_kong", cities_root=rewrite(stop_tiling_it))
@@ -1016,3 +1021,81 @@ class TestFares:
     def test_a_missing_fares_block_is_rejected(self, rewrite) -> None:
         with pytest.raises(ValueError, match="'fares'"):
             load_city("hong_kong", cities_root=rewrite(lambda doc: doc.pop("fares")))
+
+
+class TestPaletteExposure:
+    """`Q33` — every colour is `reflectance x exposure_anchor`, checked at load.
+
+    The rule's value is entirely in being cross-section, so the tests that
+    matter are the ones that reproduce how it was broken: a change applied to
+    the colours in `buildings:` while `roads:` was not in the diff.
+    """
+
+    def test_the_pre_rule_kerb_is_now_rejected(self, rewrite) -> None:
+        """The exact colour that drifted, against the material it claims.
+
+        `#9a968d` is weathered concrete asserting 58.9% albedo. Before the rule
+        this loaded, built and shipped.
+        """
+
+        def restore(doc: dict[str, Any]) -> None:
+            doc["roads"]["surface"]["kerb_colour"] = "#9a968d"
+
+        with pytest.raises(ValueError, match="kerb_colour"):
+            load_city("hong_kong", cities_root=rewrite(restore))
+
+    def test_re_exposing_buildings_without_the_roads_is_rejected(self, rewrite) -> None:
+        """`235aa4f` in miniature, which is the regression this rule prevents.
+
+        Re-exposing the city means moving the anchor and moving every colour with
+        it. This does the first half and only the `buildings:` half of the
+        second, which is exactly what that commit did — and it must be caught in
+        `roads:`, the section the author never opened. Asserting on the road
+        colour rather than on any failure is the whole point: a per-section check
+        would be satisfied by `buildings:`, which is internally consistent here.
+        """
+
+        def re_expose(doc: dict[str, Any]) -> None:
+            doc["exposure_anchor"] = 0.40
+            for band in doc["buildings"]["height_bands"]:
+                band["reflectance"] = band["reflectance"] * 0.520 / 0.40
+            for name in doc["buildings"]["class_reflectance"]:
+                doc["buildings"]["class_reflectance"][name] *= 0.520 / 0.40
+
+        with pytest.raises(ValueError, match=r"roads\.surface\.surface_colour"):
+            load_city("hong_kong", cities_root=rewrite(re_expose))
+
+    def test_a_colour_with_no_declared_material_is_rejected(self, rewrite) -> None:
+        def drop(doc: dict[str, Any]) -> None:
+            doc["buildings"]["class_reflectance"].pop("TERRAIN(TB)")
+
+        with pytest.raises(ValueError, match="class_reflectance is missing"):
+            load_city("hong_kong", cities_root=rewrite(drop))
+
+    def test_a_material_for_a_colour_that_does_not_exist_is_rejected(self, rewrite) -> None:
+        def stray(doc: dict[str, Any]) -> None:
+            doc["buildings"]["class_reflectance"]["ROOF(TB)"] = 30.0
+
+        with pytest.raises(ValueError, match="class_reflectance names"):
+            load_city("hong_kong", cities_root=rewrite(stray))
+
+    def test_a_zero_anchor_is_rejected(self, rewrite) -> None:
+        """Zero would make every colour black and pass the check for any material.
+
+        The trap worth a test: it turns the rule into a no-op that still reads as
+        enforced, which is worse than not having it.
+        """
+
+        def zero(doc: dict[str, Any]) -> None:
+            doc["exposure_anchor"] = 0.0
+
+        with pytest.raises(ValueError, match=r"must be in \(0, 2\.0\]"):
+            load_city("hong_kong", cities_root=rewrite(zero))
+
+    @pytest.mark.parametrize("value", [0.0, -1.0, 101.0])
+    def test_an_impossible_reflectance_is_rejected(self, rewrite, value) -> None:
+        def spoil(doc: dict[str, Any]) -> None:
+            doc["roads"]["surface"]["surface_reflectance"] = value
+
+        with pytest.raises(ValueError, match="surface_reflectance"):
+            load_city("hong_kong", cities_root=rewrite(spoil))

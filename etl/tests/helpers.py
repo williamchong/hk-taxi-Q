@@ -139,15 +139,23 @@ def flat_mesh(name: str, height: float) -> MeshData:
 
 
 def style(jitter: float = 0.0) -> BuildingStyle:
-    """A minimal two-band building style. `replace()` it for anything else."""
+    """A minimal two-band building style. `replace()` it for anything else.
+
+    The `reflectance` values are plausible materials rather than values
+    consistent with these colours, and deliberately so: `Q33`'s rule is enforced
+    by `load_city`, which a hand-built style never goes through. Made consistent
+    at any sane anchor these colours would need over 100% albedo, which is the
+    honest signal that they are arbitrary test values and not a palette.
+    """
     return BuildingStyle(
         classes=("BUILDING", "INFRASTRUCTURE"),
         terrain_class="TERRAIN",
         structure_class=None,
         class_colours={"INFRASTRUCTURE": (100, 100, 100)},
+        class_reflectance={"INFRASTRUCTURE": 22.0},
         height_bands=(
-            HeightBand(up_to_m=12.0, colour=(200, 180, 150)),
-            HeightBand(up_to_m=float("inf"), colour=(190, 200, 200)),
+            HeightBand(up_to_m=12.0, colour=(200, 180, 150), reflectance=48.0),
+            HeightBand(up_to_m=float("inf"), colour=(190, 200, 200), reflectance=55.0),
         ),
         colour_jitter=jitter,
         class_colour_jitter={},
@@ -231,9 +239,14 @@ def write_layer(
 # would let the second stage pass against a city the first never built.
 CITY_YAML = textwrap.dedent(
     """
-    schema_version: 1
+    schema_version: 2
     id: testville
     name: Testville
+    # Deliberately 1.0 where Hong Kong ships 0.520, so the fixture proves the
+    # palette rule (`Q33`) is portable rather than a Hong Kong constant. At a
+    # unit anchor a declared reflectance *is* the colour's luminance, which
+    # keeps this city hand-checkable in the way the rest of it already is.
+    exposure_anchor: 1.0
     crs:
       projected: EPSG:2326
       geodetic: EPSG:4326
@@ -256,7 +269,7 @@ CITY_YAML = textwrap.dedent(
       terrain_class: TERRAIN
       class_colours: {}
       height_bands:
-        - {up_to_m: .inf, colour: "#808080"}
+        - {up_to_m: .inf, colour: "#808080", reflectance: 21.59}
       colour_jitter: 0.0
       lod_cell_sizes_m: [0.0]
     roads:
@@ -306,6 +319,8 @@ CITY_YAML = textwrap.dedent(
         junction_trim_max_fraction: 0.35
         surface_colour: "#3c3a37"
         kerb_colour: "#9a968d"
+        surface_reflectance: 4.26
+        kerb_reflectance: 30.61
     fares:
       max_snap_m: 30.0
       null_values: ["-99"]

@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from pipeline.buildings import colour_for, facade_hue
-from pipeline.colour import lab_to_srgb, srgb_to_lab, with_hue
+from pipeline.colour import lab_to_srgb, reflectance, srgb_to_lab, with_hue
 from pipeline.config import BuildingStyle, HeightBand
 from tests.helpers import flat_mesh, style
 
@@ -101,7 +101,7 @@ def _style_with_hue(
     path.write_text(json.dumps(table))
     return replace(
         style(),
-        height_bands=(HeightBand(up_to_m=float("inf"), colour=(190, 200, 200)),),
+        height_bands=(HeightBand(up_to_m=float("inf"), colour=(190, 200, 200), reflectance=55.0),),
         facade_hue_source="hue.json",
         facade_hue_strength=strength,
         facade_hue_vegetation_max=vegetation_max,
@@ -224,3 +224,29 @@ class TestFacadeHue:
         lightness = srgb_to_lab(np.array([rgba[0, :3]]))[0, 0]
         band = srgb_to_lab(np.array([[190, 200, 200]]))[0, 0]
         assert lightness == pytest.approx(band, abs=1.5)
+
+
+class TestReflectance:
+    """The measurable half of the palette rule (`Q33`)."""
+
+    def test_white_is_a_perfect_diffuser_and_black_reflects_nothing(self) -> None:
+        assert reflectance((255, 255, 255)) == pytest.approx(100.0)
+        assert reflectance((0, 0, 0)) == pytest.approx(0.0)
+
+    def test_it_is_luminance_rather_than_perceptual_lightness(self) -> None:
+        """Mid-grey is the case that tells the two apart, and getting it wrong
+        would put every declared material out by a factor of two.
+
+        `#808080` is `L*` 53.6 — near the middle perceptually — but reflects only
+        21.6% of the light. The rule is a statement about light, so ratios
+        between surfaces survive a change of exposure anchor; on `L*` they would
+        not.
+        """
+        assert reflectance((128, 128, 128)) == pytest.approx(21.6, abs=0.1)
+
+    def test_the_channels_are_weighted_by_the_srgb_primaries(self) -> None:
+        """Green carries ~72% of luminance and blue ~7%, so a palette checked on
+        a channel average would let a blue surface claim far more light than it
+        reflects."""
+        assert reflectance((0, 255, 0)) == pytest.approx(71.5, abs=0.1)
+        assert reflectance((0, 0, 255)) == pytest.approx(7.2, abs=0.1)

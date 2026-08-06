@@ -35,7 +35,40 @@ The art direction isn't a stylistic preference layered on top of the data. It *i
 
 ## Palette
 
-Hong Kong-specific, not generic-city. Anchor colours:
+### The rule (`Q33`)
+
+**Every authored colour is `material reflectance × exposure_anchor`, and `config.py` refuses to load
+one that is not.** A `reflectance:` is *evidence* — a published diffuse albedo for asphalt or
+concrete or soil, portable to the second city unchanged, arguable against a source rather than
+against taste. The anchor is *art direction* — one number per city carrying the sun, the latitude and
+the mood, and the only thing that moves when the city wants a different time of day. It is the same
+evidence/direction split `facade_hue.strength` already makes.
+
+Hong Kong ships `exposure_anchor: 0.520`, which is not chosen but measured: it is the linear scale
+`235aa4f` applied to the bands, graded at frame `L*` 73.0 → 62.7, gain 0.85, responding share 66.4%.
+
+| Surface | reflectance | source | shipped |
+|---|---|---|---|
+| height bands ×5 | 48.7–61.5% | ⚠️ **back-derived, not cited** | `#968872` … `#8e9393` |
+| kerb | 25.0% | weathered concrete, 20–30% | `#68655c` |
+| infrastructure | 22.0% | weathered + sooty concrete | `#615f5a` |
+| ground | 20.0% | dry soil and urban fill, 15–25% | `#645a45` |
+| asphalt | 10.0% | aged urban asphalt, 7–12% | `#42403d` |
+
+⚠️ **The bands are the one soft entry and the whole rule leans on them.** They are unchanged by the
+rule, so their reflectance is simply what the shipped colour claims once the anchor is divided out —
+the rule is calibrated *on* them and therefore cannot also check them. They read 49–62%, at the top
+of what painted render and ceramic tile do. If that is wrong the anchor is wrong with it and every
+other colour moves. Recorded as a number precisely so it is arguable.
+
+⚠️ **The rule is enforced over the whole config, never per section.** The two road colours live in
+`RoadSurface` where the rest of the palette lives in `BuildingStyle`, and that is exactly how they
+escaped `235aa4f` — not by argument, but because `roads:` was not in the diff that changed
+`buildings:`. A per-section check would have passed that commit. `TestPaletteExposure` reproduces it.
+
+### Anchor colours
+
+Hong Kong-specific, not generic-city:
 
 | Role | Colour family | Notes |
 |---|---|---|
@@ -402,27 +435,34 @@ overlaps its arms rather than abutting them wherever a short edge is held back b
 6,051 m² of 52,985 m² of cap area. Cap and carriageway are the same colour at the same height in one
 material, so nothing shows; give the ribbon lane markings and the cap will read as a patch over them.
 
-🔴 **The asphalt is the one surface that was never re-anchored, and it is now a hole in the middle of
-the city's value range.** Every other albedo the pipeline writes sits inside 15 `L*` points — kerb
-62.2, band stock 57.4–63.3, ground 52.5, infrastructure 48.1 — and `surface_colour` `#3c3a37` is
-**`L*` 24.5**. That was a survivable gap while `Q27` was open and every albedo rendered lighter than
-it was asked to be. It is not survivable now: the buildings and the ground took the ×0.520 linear
-anchor and the road palette was left alone, so closing `Q27` moved the asphalt down and nothing moved
-to meet it. Measured over the audit frames, the street-level ones come out **bimodal with an empty
-middle**:
+🔴 **The asphalt looked like the outlier and it was the one colour already right. Retracted — see
+the palette rule below.** This section previously read "the asphalt is the one surface that was never
+re-anchored, and it is now a hole in the middle of the city's value range", on the evidence that
+every other albedo sat inside 15 `L*` points — kerb 62.2, band stock 57.4–63.3, ground 52.5,
+infrastructure 48.1 — while `surface_colour` `#3c3a37` was `L*` **24.5**. Both halves of that were
+wrong. The kerb had not been re-anchored either, so the comparison set was not the clean one it
+looked like; and read against published albedo rather than against its neighbours, `#3c3a37` was
+claiming **8.2%** reflectance, dead centre of aged asphalt's real 7–12%. The rule moved it 2.7 `L*`
+and moved the kerb 19.4.
 
-| Frame | pixels under `L*` 10 | `L*` 10–30 | `L*` 30–60 | over 60 |
-|---|---|---|---|---|
-| `art_kerb` — Causeway Bay, road in shade | **51.4%** | **0.5%** | 40.0% | 8.1% |
-| `art_taxi` t01.20 — under the HKCEC deck | **28.9%** | **2.0%** | 65.5% | 3.6% |
-| `art_street` — Hennessy Road canyon | 13.2% | 27.0% | 41.5% | 18.3% |
-| `art_skyline` / `art_ground` / `art_infra` | 0.0–3.8% | 0.1–11.5% | 20.6–56.7% | 43.1–64.1% |
+⚠️ **The mechanism of the error is worth more than the error.** The palette was judged only on
+internal consistency, and a set judged that way always indicts its most extreme member — the
+question "do these look consistent with each other" has no way to return "the outlier is the only
+correct one". It took an external referent to see it. `Q33`.
 
-Half of a street frame carrying no information at all is not "HK asphalt reads warm", and it is not
-a contrast the lighting rig can fix — `Q27`'s ablation already established that the rig can only
-redistribute contrast that arrives. **The lever is the road palette**, which is where the two
-numbers live, and it should be judged against the same anchor the bands were: `#3c3a37` at
-`C*` 2.18 is also nearly hueless, so a warm asphalt is available at the same time. See `Q31`.
+What survives unchanged is the *measurement*: the street-level frames really are bimodal with an
+empty middle, and the palette rule did not close it.
+
+| Frame | pixels under `L*` 10 | `L*` 10–30 | shipped before → after |
+|---|---|---|---|
+| `kerb` — Causeway Bay, road in shade | **51.4% → 51.3%** | 0.5% → 2.7% | barely moved |
+| `street` — Hennessy Road canyon | 13.2% → 13.0% | 27.0% → 25.1% | barely moved |
+
+🔴 **That is now positive evidence about the lighting rig rather than an open question about the
+road.** Both levers have been tried: the road albedo was corrected against a material and the hole
+stayed. The remaining candidate is the shadow fill, which is the one thing not yet varied — and note
+that the two failing frames are exactly the two shot *in shade*. `Q31`, and it belongs with the rig
+pass, not with the palette.
 
 ⚠️ **The empty middle is a *lit-versus-unlit* gap, not a dark-albedo gap.** The two worst frames are
 the two shot in shade, and the same asphalt renders at `L*` 30–60 in sun. So the second lever is
@@ -440,14 +480,15 @@ city config. ⚠️ **It is a smaller share of the frame than its silhouette sug
 beneath the Canal Road flyover, measured below — so this section is a reference rather than a list
 of work.
 
-- One flat colour, `#74726d` — `L*` 48.1, `C*` 3.05 — for **deck, soffit, pier, parapet and
+- One flat colour, `#615f5a` — `L*` 40.4, `C*` 3.15, declaring 22% albedo for weathered sooty
+  concrete under the palette rule — for **deck, soffit, pier, parapet and
   footbridge alike**, overriding the height bands because a flyover is concrete whatever its height
 - Cell sizes held at `[0.0, 0.5, 1.0]` so a thin deck keeps its depth (see LOD policy)
 
 ✅ **The class really does take none of the shader's surface treatment, and that part was read from
 the code rather than guessed.** `roof_darkness`, the grounding gradient and the jitter are all
 applied inside `if (is_facade)` at `city_facade_clean.gdshader:437`, and `is_facade` is
-`marker < MARKER_FACADE + 0.5`. `MARKER_STRUCTURE` is `2.0`, so a flyover arrives as raw `#74726d`
+`marker < MARKER_FACADE + 0.5`. `MARKER_STRUCTURE` is `2.0`, so a flyover arrives as raw `#615f5a`
 and is lit, full stop.
 
 🔴 **And it turns out not to matter, which is the opposite of what this section said first.** The
@@ -481,8 +522,8 @@ premise is still cruft. `Q32` closes here, and 0.42% of one frame is the number 
 for deck, soffit, pier and parapet means a viaduct's massing is legible only where the sun catches a
 face.** That is a real observation and it is not urgent, because the class is 2.71% of the frame that
 was picked to flatter it. Anyone reopening it should start by measuring the share again from
-wherever they think it looks wrong — and should not reach for a darker `#74726d`, which moves the
-sunlit deck top by exactly as much.
+wherever they think it looks wrong — and should not reach for a darker `#615f5a` by eye, which moves
+the sunlit deck top by exactly as much and now also needs a material to justify it (`Q33`).
 
 ---
 
@@ -533,11 +574,13 @@ Anything that later draws ground through a different material has to do the same
 
 **Colour comes in two steps, and the first has shipped.**
 
-1. **Flat.** One warm ground colour — `#887c66`, warm concrete. It is placed by what it has to sit
-   between: clear of the kerb `#9a968d` so the 0.15 m riser still reads as an edge, and darker than
-   the `#968872` shophouse band so low blocks read as standing *on* it. It and the bands share the
-   same 0.520 linear scale (`docs/PROGRESS.md`, 2026-08-06) — the level moved, the relationships
-   did not.
+1. **Flat.** One warm ground colour — `#645a45`, declaring 20% albedo for dry soil and urban fill.
+   It was `#887c66` and placed by eye against its neighbours: clear of the kerb so the 0.15 m riser
+   still reads as an edge, and darker than the shophouse band so low blocks read as standing *on*
+   it. The palette rule (`Q33`) re-placed it against a material instead and it fell 13.9 `L*` — the
+   old value was claiming 39.6% reflectance, which is not soil, it is plaster. ⚠️ **Only lightness
+   moved:** `Q18`'s doubled chroma carries through at `C*` 13.6, and darker is where chroma survives
+   best.
 2. ~~**Land-cover classes,** only if flat reads dead.~~ ❌ **Refused 2026-08-06, and it will not be
    written.** Flat did read dead, twice — but the causes were `Q29`'s smooth shading and then the
    ground's chroma sitting under a **knee** the authored hue has to clear. Both are fixed, one in the
@@ -550,7 +593,10 @@ Anything that later draws ground through a different material has to do the same
    at any cell size, and a clean key for `collapse`. See `docs/PROGRESS.md`.
 
 ⚠️ **`Q18` closed on the ground's colour and the audit reopens a different complaint about it: at the
-waterfront it reads as *sand*, and that is a content problem rather than a palette one.** In
+waterfront it reads as *sand*, and that is a content problem rather than a palette one.** ⚠️ **Half
+retracted 2026-08-07:** the palette rule dropped the ground 13.9 `L*` and the `ground` frame's share
+above `L*` 55 went 67.5% → 52.4%, which visibly moved it from beach sand to earth. So the *hue* was
+never the issue and the *value* partly was. What remains below is the half that stands. In
 `build/driver/art_ground` the reclamation south of HKCEC is an unbroken expanse of one colour running
 to the region edge — correctly faceted since `Q29`, correctly warm since `Q18`, and carrying
 **nothing**: no pavement/carriageway distinction off the ribbon, no planting, no street furniture, no
@@ -684,7 +730,7 @@ scenes must name **the same** rig; splitting them is what `golden_hour.tscn`'s h
 
 ⚠️ **`ambient_light_sky_contribution` is the colour of every shadow in the city, and it is the
 setting that misleads.** Dark albedo takes almost all of its light from ambient, so a saturated blue
-sky paints the `#3c3a37` asphalt blue while leaving the sunlit white facades alone — the *road* looks
+sky paints the `#42403d` asphalt blue while leaving the sunlit white facades alone — the *road* looks
 broken and the road's colour is not what is wrong. It is also the only thing separating one white
 face from the next, so lowering it fixes the road and flattens the massing at once. Blend low toward
 a **cool neutral** `ambient_light_color`: shadow colour without sky saturation. Do not reach for the

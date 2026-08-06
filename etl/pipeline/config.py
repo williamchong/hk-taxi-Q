@@ -21,6 +21,7 @@ from typing import Any
 
 import yaml
 
+from pipeline.colour import reflectance
 from pipeline.crs import (
     GameTransform,
     GeodeticBounds,
@@ -28,7 +29,15 @@ from pipeline.crs import (
     project_bounds,
 )
 
-SUPPORTED_SCHEMA = 1
+SUPPORTED_SCHEMA = 2
+# How far a shipped colour may sit from `reflectance x exposure_anchor`, in
+# percentage points of luminance. One 8-bit step at the lightest end of this
+# palette is worth ~0.4, so this is a round-trip through `#rrggbb` and no more —
+# see `_check_exposure` for why it is deliberately not slack.
+EXPOSURE_TOLERANCE_PCT = 0.5
+# Ceiling on `exposure_anchor`. See `_exposure_anchor` — a bound rather than a
+# taste limit, and deliberately above 1.0.
+EXPOSURE_ANCHOR_MAX = 2.0
 CITIES_ROOT = Path(__file__).resolve().parent.parent / "config" / "cities"
 # Where every stage writes its output. One definition, because two stages
 # writing into the same tree from two of them is how they end up disagreeing.
@@ -105,6 +114,9 @@ class HeightBand:
 
     up_to_m: float
     colour: tuple[int, int, int]
+    # Real-world diffuse albedo the colour claims, as a percentage. See
+    # `_check_exposure` for what it is checked against and why it is required.
+    reflectance: float
 
 
 @dataclass(frozen=True)
@@ -136,6 +148,10 @@ class BuildingStyle:
     structure_class: str | None
     # Flat colour for a class, overriding the height bands.
     class_colours: dict[str, tuple[int, int, int]]
+    # Real-world albedo each of those claims, keyed the same way. A parallel map
+    # rather than a field on the entry, following `class_colour_jitter`; every
+    # `class_colours` key must appear here, which `_building_style` enforces.
+    class_reflectance: dict[str, float]
     height_bands: tuple[HeightBand, ...]
     # Fraction of brightness a building's colour may be varied by, seeded from
     # its own id so the result is stable across runs.
@@ -404,6 +420,12 @@ class RoadSurface:
 
     surface_colour: tuple[int, int, int]
     kerb_colour: tuple[int, int, int]
+    # Real-world albedo each of the two claims. Required here for the reason the
+    # rule exists: these two colours are in a different dataclass from the rest
+    # of the palette, and that is precisely how they escaped the one exposure
+    # change every other colour took. See `_check_exposure`.
+    surface_reflectance: float
+    kerb_reflectance: float
 
     def widen_for(
         self, speed_limit_kph: int, *, elevation_level: int, on_structure: bool = False
@@ -693,6 +715,10 @@ class CityConfig:
     buildings: BuildingStyle
     roads: RoadNetwork
     fares: Fares
+    # The one number that converts a material's real albedo into the albedo this
+    # city ships. Art direction — the sun, the latitude, the mood — where the
+    # reflectances it multiplies are physical and portable to the next city.
+    exposure_anchor: float
 
     @property
     def source_ids(self) -> set[str]:
@@ -838,14 +864,73 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
         buildings=_building_style(_require(document, "buildings", path), f"{path}:buildings"),
         roads=_road_network(_require(document, "roads", path), f"{path}:roads"),
         fares=_fares(_require(document, "fares", path), f"{path}:fares"),
+        exposure_anchor=_exposure_anchor(
+            _require(document, "exposure_anchor", path), f"{path}:exposure_anchor"
+        ),
     )
     _check_regions_lie_within_the_city(city, path)
+    _check_exposure(city, path)
     _check_deck_sampling_has_a_structure_class(city, path)
     _check_widening_levels_are_mapped(city, path)
     _check_source_exists(city, city.roads.source, f"{path}:roads.source")
     for index, group in enumerate(city.fares.groups):
         _check_source_exists(city, group.source, f"{path}:fares.groups[{index}].source")
     return city
+
+
+def _check_exposure(city: CityConfig, path: Path) -> None:
+    """Every authored colour is `material reflectance x exposure_anchor` (`Q33`).
+
+    The rule exists because the palette had no external referent. Colours were
+    placed by eye against each other, so the only question a reviewer could ask
+    was whether they looked consistent — and a set judged only on internal
+    consistency always indicts its most extreme member, right or wrong. Stating
+    the material each colour claims to be makes it checkable against published
+    albedos instead. What that caught is in `hong_kong.yaml`'s header and
+    `docs/ART_DESIGN.md`; it is not repeated here.
+
+    ⚠️ **Enforced here, over the whole config, rather than at each parse site.**
+    The colours live in two unrelated dataclasses, and `235aa4f` re-exposed one
+    of them and not the other — not by argument, but because `roads:` was not in
+    the diff that changed `buildings:`. A per-section check would have passed
+    that commit. This is a cross-section rule or it is nothing.
+
+    The tolerance is 8-bit quantisation and nothing else. It is not slack for a
+    colour that nearly obeys: a value that misses by more than a round-trip
+    through `#rrggbb` is asserting a different material, and should either say
+    so or be corrected.
+    """
+    palette: list[tuple[str, tuple[int, int, int], float]] = [
+        (f"buildings.height_bands[{index}]", band.colour, band.reflectance)
+        for index, band in enumerate(city.buildings.height_bands)
+    ]
+    palette += [
+        (f"buildings.class_colours.{name}", colour, city.buildings.class_reflectance[name])
+        for name, colour in city.buildings.class_colours.items()
+    ]
+    palette += [
+        (
+            "roads.surface.surface_colour",
+            city.roads.surface.surface_colour,
+            city.roads.surface.surface_reflectance,
+        ),
+        (
+            "roads.surface.kerb_colour",
+            city.roads.surface.kerb_colour,
+            city.roads.surface.kerb_reflectance,
+        ),
+    ]
+
+    for name, colour, declared in palette:
+        expected = declared * city.exposure_anchor
+        actual = reflectance(colour)
+        if abs(actual - expected) > EXPOSURE_TOLERANCE_PCT:
+            raise ValueError(
+                f"{path}:{name} is #{colour[0]:02x}{colour[1]:02x}{colour[2]:02x}, whose "
+                f"luminance is {actual:.2f}% — but it declares reflectance {declared}% at "
+                f"exposure_anchor {city.exposure_anchor}, which is {expected:.2f}%. "
+                "Change the colour, or change the material it claims to be."
+            )
 
 
 def _check_deck_sampling_has_a_structure_class(city: CityConfig, path: Path) -> None:
@@ -959,6 +1044,9 @@ def _building_style(body: dict[str, Any], where: str) -> BuildingStyle:
         HeightBand(
             up_to_m=float(_require(band, "up_to_m", where)),
             colour=_parse_hex(str(_require(band, "colour", where)), f"{where}:height_bands"),
+            reflectance=_reflectance(
+                _require(band, "reflectance", where), f"{where}:height_bands.reflectance"
+            ),
         )
         for band in _require(body, "height_bands", where)
     )
@@ -1006,6 +1094,26 @@ def _building_style(body: dict[str, Any], where: str) -> BuildingStyle:
         raise ValueError(
             f"{where}:class_colours names {', '.join(sorted(unknown))}, "
             f"which is not in classes ({', '.join(classes)})"
+        )
+
+    class_reflectance = {
+        str(name): _reflectance(value, f"{where}:class_reflectance.{name}")
+        for name, value in (body.get("class_reflectance") or {}).items()
+    }
+    missing = set(class_colours) - set(class_reflectance)
+    if missing:
+        # The two maps are a join, and an unpaired colour is exactly the state
+        # `_check_exposure` exists to make impossible — it would be a colour with
+        # no declared material, which is where the palette drifted from before.
+        raise ValueError(
+            f"{where}:class_reflectance is missing {', '.join(sorted(missing))}, "
+            "which class_colours colours. Every colour declares its material."
+        )
+    stray = set(class_reflectance) - set(class_colours)
+    if stray:
+        raise ValueError(
+            f"{where}:class_reflectance names {', '.join(sorted(stray))}, "
+            "which class_colours does not colour"
         )
 
     class_cells: dict[str, tuple[float, ...]] = {}
@@ -1077,6 +1185,7 @@ def _building_style(body: dict[str, Any], where: str) -> BuildingStyle:
         terrain_class=terrain,
         structure_class=str(structure) if structure is not None else None,
         class_colours=class_colours,
+        class_reflectance=class_reflectance,
         height_bands=bands,
         colour_jitter=jitter,
         class_colour_jitter=class_jitter,
@@ -1114,6 +1223,39 @@ def _jitter(value: Any, field: str) -> float:
     number = _number(value, field)
     if not 0.0 <= number < 1.0:
         raise ValueError(f"{field} must be in [0, 1), got {number}")
+    return number
+
+
+def _exposure_anchor(value: Any, field: str) -> float:
+    """The city's exposure scale, in `(0, EXPOSURE_ANCHOR_MAX]`.
+
+    Its own validator rather than `_scale`, which admits `0.0`. Zero is the trap
+    worth refusing by name: it makes every shipped colour black and then
+    satisfies `_check_exposure` for *any* declared reflectance, turning the rule
+    into a no-op that still reads as enforced.
+
+    The ceiling is above 1.0 on purpose. A city brighter than its own materials
+    is a coherent direction — an over-exposed, blown-out look is a choice, not an
+    error — and the bound is here only to keep the test two-sided against `.nan`
+    and `.inf`, per `_scale`'s reasoning.
+    """
+    number = _number(value, field)
+    if not 0.0 < number <= EXPOSURE_ANCHOR_MAX:
+        raise ValueError(f"{field} must be in (0, {EXPOSURE_ANCHOR_MAX}], got {number}")
+    return number
+
+
+def _reflectance(value: Any, field: str) -> float:
+    """A real-world diffuse albedo as a percentage, in (0, 100].
+
+    Zero is refused rather than clamped: a surface reflecting nothing is a
+    surface no material has, and it would pair with a black colour that passes
+    `_check_exposure` while saying nothing about what it depicts. 100 is the
+    perfect diffuser, so above it is a measurement error, not a bright material.
+    """
+    number = _number(value, field)
+    if not 0.0 < number <= 100.0:
+        raise ValueError(f"{field} must be a percentage in (0, 100], got {number}")
     return number
 
 
@@ -1333,6 +1475,12 @@ def _road_surface(body: dict[str, Any], where: str) -> RoadSurface:
         junction_trim_max_fraction=fraction,
         surface_colour=_parse_hex(str(_require(body, "surface_colour", where)), where),
         kerb_colour=_parse_hex(str(_require(body, "kerb_colour", where)), where),
+        surface_reflectance=_reflectance(
+            _require(body, "surface_reflectance", where), f"{where}:surface_reflectance"
+        ),
+        kerb_reflectance=_reflectance(
+            _require(body, "kerb_reflectance", where), f"{where}:kerb_reflectance"
+        ),
     )
 
 

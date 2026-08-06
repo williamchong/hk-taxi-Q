@@ -3,7 +3,19 @@
 Living document. **Update this whenever a task changes status, a decision is made, or an open
 question is answered.** Newest entries at the top of each log.
 
-Last updated: 2026-08-06 (**an art-direction consistency audit over seven fixed viewpoints** — the
+Last updated: 2026-08-07 (**the palette got a rule, and it overturned the audit's own headline
+finding.** Every authored colour is now `material reflectance x exposure_anchor`, refused at load by
+`config.py:_check_exposure` if it is not — reflectance is cited evidence and portable, the anchor is
+one art-direction number per city. It exists because the palette was judged only on internal
+consistency, which always indicts the most extreme member: the asphalt looked 24 `L*` wrong and,
+divided by the anchor, was claiming **8.2% albedo against real aged asphalt's 7-12%** — the one
+colour already correct. The kerb was claiming **58.9% for concrete that is 20-30%**, having become
+the brightest surface in the city **by not moving** while everything else took `235aa4f`'s -19 `L*`.
+Shipped: asphalt +2.7 `L*`, infrastructure -7.7, ground **-13.9**, kerb **-19.4**. ⚠️ **`Q31` is not
+fixed and is now better evidence:** the shaded-street sub-`L*`-10 share moved 51.4% -> 51.3%, so with
+the albedo corrected against a material the remaining candidate is the shadow fill. `Q33`.)
+
+Previously: 2026-08-06 (**an art-direction consistency audit over seven fixed viewpoints** — the
 first pass over the whole look rather than over one surface, taken because every class had been
 fixed individually and none graded against the others. The technique holds everywhere and the core
 decision measures out: the taxi's red is **`C*` 86.5 against a frame median of 7.5**. Three new
@@ -17,7 +29,7 @@ found it is **2.71% of that frame**, three `L*` above the frame mean, with soffi
 points below its own up-faces. The `structure_soffit_darkness` term written for it was built,
 measured and **reverted**; ⚠️ the fault was confusing **ambient occlusion with `N·L`**, and the pale
 beams mistaken for the flyover are `BUILDING`. `ART_DESIGN.md` gained an infrastructure section it
-never had and a fixed viewpoint table.
+never had and a fixed viewpoint table.)
 Before that, **`Q18` closed in one config line**: there is a **chroma knee** an authored
 hue has to clear — measured on the faceted ground at four levels of one hue, 6.81 arrives at 1.95,
 11.0 at 2.93, 14.0 at 6.25, 31.96 at 28.42 — so the ground's authored warmth was under it and being
@@ -154,8 +166,9 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ⚠️ conditional ·
 | `Q28` | **Flat walls on distant towers fill with bright and dark horizontal bands.** Reported while driving, and it survives every lighting change | The bands are the loudest thing in a skyline frame, and they made the massing unreadable at the distance most of the city is seen from. They also invalidate any look A/B taken against them — `Q26`'s included | `P3-9a` | 🟢 **Closed 2026-08-06, and it was one word.** `TEXCOORD_0.y` carries a *per-object* seed, and both facade shaders read it into a plain `varying`, which the GPU interpolates. Where a triangle's corners disagree — **2.7% of shipped LOD0 triangles**, worst spread 0.4336, because `collapse` takes UV from one cluster representative — the seed becomes a ramp, `floor(phase * 256 + 0.5)` steps it, and `draw()` hashes each step to an unrelated brightness at `value_jitter` 0.35. `flat` on `phase` and `marker` fixes it. Row-to-row contrast on the reported surface **6.80 → 0.07**; whole-frame **-13.2%** there, **-12.1%** and **-15.2%** on the two fixed viewpoints, at a frame mean that moves 0.2 |
 | `Q27` | **Why does albedo barely reach the screen under the clean rig, and what should the light levels be?** Buildings now carry measured per-building hue, and it is nearly invisible | Measured, not suspected: dropping the height bands from `L*` 80 to 62 moved the rendered frame only from `L*` 86.8 to 83.3 — an 18-point albedo change bought 3.5 points of pixel. Every colour decision downstream of this is unreadable until it is answered, including `Q26`'s A/B | `P3-9a` | 🟢 **Closed 2026-08-06. It was not the light at all.** `COLOR_0` is authored in sRGB and was consumed as linear, so **57%** of a lit facade pixel's luminance was albedo-*independent* and an albedo difference reached the screen at a third of its size. Fixed in the two facade shaders and `generated_scene_import.gd`; additive share **57% → 6%** at street level. The whole light-levels half of the question is answered "no": ambient, exposure, glow, fog, tonemap curve and specular were each ablated and **none moved transmission by more than 0.05**. See the decision log below |
 | `Q30` | **The shipped façade palette is not the one `ART_DESIGN.md` authorises, and `facade_hue.strength` is why.** The five `height_bands` sit at `C*` 1.92–13.84; at `strength: 2.0` the shipped per-building colour is `C*` mean 12.59, p90 27.35, p99 57.33, max 96.73, with **20.1% of 2,171 buildings over `C*` 20** against 3.9% at faithful 1.0 | The palette table is the document a second city would be built from, and it currently describes a city that does not exist. One building in five is more saturated than anything the direction sanctions — the mint, teal and lilac blocks are the palette, not a fault | `Q26` | 🔴 Open. ⚠️ **Amplifying chroma linearly widens the spread far faster than it moves the middle**, so at 2.0 the distribution is *both* too grey (median 9.52) and too candy (p99 57.3) — the knob cannot fix one without worsening the other, which is the argument against tuning it further rather than for. Options: drop toward 1.0–1.5, compress the tail rather than scale it, or re-author the palette table around what ships. **Belongs with `Q26`'s verdict, not before it** |
-| `Q31` | **The city's value range has an empty middle, and the road palette and the shadow fill are both candidates.** Every albedo the pipeline writes sits within `L*` 48.1–63.3 except `surface_colour` `#3c3a37` at **24.5**. Street frames come out bimodal: Causeway Bay in shade is **51.4% of pixels under `L*` 10 and 0.5% between 10 and 30**; under the HKCEC deck 28.9% and 2.0% | Half a street frame carrying no information. It is the frame the player occupies for the whole game, and `P3-9a`'s drivers will see it before anything else | `P3-9a` | 🔴 Open. The buildings and ground took the ×0.520 anchor and the road was left alone, so closing `Q27` moved the asphalt down and nothing moved to meet it. ⚠️ **Both levers produce the same symptom on the lowest-albedo surface**, so change one at a time and grade with `frame_stats.py` — the failing frames are the two shot *in shade*, which is evidence for fill; the 24.5 `L*` outlier is evidence for the palette. `Q27`'s ablation discipline applies |
+| `Q31` | **The city's value range has an empty middle, and the road palette and the shadow fill are both candidates.** Every albedo the pipeline writes sits within `L*` 48.1–63.3 except `surface_colour` `#3c3a37` at **24.5**. Street frames come out bimodal: Causeway Bay in shade is **51.4% of pixels under `L*` 10 and 0.5% between 10 and 30**; under the HKCEC deck 28.9% and 2.0% | Half a street frame carrying no information. It is the frame the player occupies for the whole game, and `P3-9a`'s drivers will see it before anything else | `P3-9a` | 🔴 Open. The buildings and ground took the ×0.520 anchor and the road was left alone, so closing `Q27` moved the asphalt down and nothing moved to meet it. ⚠️ **Both levers produce the same symptom on the lowest-albedo surface**, so change one at a time and grade with `frame_stats.py` — the failing frames are the two shot *in shade*, which is evidence for fill; the 24.5 `L*` outlier is evidence for the palette. `Q27`'s ablation discipline applies. ⚠️ **The palette lever has now been pulled and it was not the cause.** `Q33` re-placed the asphalt against published albedo — it moved **+2.7 `L*`**, because `#3c3a37` was already claiming 8.2% reflectance against aged asphalt's real 7-12%. Re-graded on the same two frames: shaded street under `L*` 10 **51.4% -> 51.3%**, 10-30 band **0.5% -> 2.7%**; Hennessy Road **13.2% -> 13.0%**. 🔴 **That leaves the shadow fill as the only untried candidate, and the two failing frames are still exactly the two shot in shade.** It belongs in the owed rig pass, not in the palette |
 | `Q32` | ~~**`INFRASTRUCTURE` renders as the brightest large object in its frame, and its soffit sits at nearly the value of its deck top.**~~ | — | `P3-9a` | 🟢 **Closed 2026-08-06 the day it was opened, and closed as *wrong*.** The premise did not survive a probe that tinted `MARKER_STRUCTURE`. In the viewpoint chosen to showcase the class it is **2.71% of the frame**, its up/side faces render at `L*` **51.1** against a non-sky frame mean of **48.1** — three points, not "the brightest" — and its soffits were already at `L*` **35.9**, fifteen points below its own up-faces. ⚠️ **The pale beams filling that frame are `BUILDING`**; naming the class from the silhouette was the error. ⚠️ **The reasoning fault is the reusable part: "no AO, therefore a soffit renders like a deck top" confuses AO with `N·L`** — under one directional light a down-face takes no direct sun at all, so the 15 `L*` gap *is* the renderer working. A `structure_soffit_darkness` term was built, measured (soffits `L*` 36.3 → 25.8, frame mean 0.05, no other viewpoint touched) and **reverted**: a correct implementation of a wrong premise is still cruft. ✅ What survives and is *true*: the class takes none of the shader's surface treatment, verified at `city_facade_clean.gdshader:437` where everything is gated on `is_facade` — recorded in `ART_DESIGN.md` as a known gap rather than a defect |
+| `Q33` | **The palette had no external referent, so its colours could only be judged against each other.** Every authored colour is now `material reflectance x exposure_anchor`, enforced at load by `_check_exposure` | A set judged only on internal consistency always indicts its most extreme member — here the one colour that was right. It also had no way to stop a re-exposure reaching one config section and not another, which is how the kerb drifted 19 `L*` | `P3-9a` | 🟢 **Closed 2026-08-07, and it overturned `Q31`'s premise.** Reflectance is cited evidence and portable to the second city; `exposure_anchor: 0.520` is the one art-direction number, and it is `235aa4f`'s measured scale rather than a new choice. Divided out, the shipped palette was *claiming* asphalt 8.2% (real 7-12% ✅), kerb **58.9%** (concrete 20-30% 🔴), ground **39.6%** (soil 15-25% 🔴), infrastructure 32.4% (⚠️ marginal). Shipped asphalt `#42403d`, kerb `#68655c`, infrastructure `#615f5a`, ground `#645a45` — lightness only, every authored hue preserved to within `Δab` 0.46. ⚠️ **The five `height_bands` are the rule's soft spot**: the anchor is calibrated on them so they cannot also be checked by it, and they read 49-62%, at the top of what render and tile do. ⚠️ **Enforced over the whole config, never per section** — the road colours live in `RoadSurface` and that is precisely how they escaped `235aa4f` |
 
 **Resolved:** `Q1` (no Z, but `ELEVATION` encodes the level) · `Q2`/`Q3`/`Q5` (building data is fully
 scriptable; 6 sheets, ~44 MB each) · `Q4` (device floor A13 / Adreno 618) · `Q7` (origin at the
@@ -184,6 +197,78 @@ under, and ~0.2 m is a guess until it is driven on a cross-sloped street.
 ---
 
 ## Decision log
+
+### 2026-08-07 — `Q33`: the palette gets a rule, and the rule says the asphalt was right
+
+**Every authored colour is now `material reflectance x exposure_anchor`.** `config.py:_check_exposure`
+refuses to load one that is not, within 8-bit quantisation and no more. `reflectance:` is evidence — a
+published diffuse albedo, portable to the second city, arguable against a source. The anchor is art
+direction — one number per city. It is the same split `facade_hue.strength` already makes, and it is
+what CLAUDE.md hard rule 3 wants: the physical half travels, the taste half does not.
+
+**The rule was not invented, it was named.** `235aa4f` had already done exactly this, scaling seven
+colours by 0.520 in linear light and preserving the ramp. What it lacked was a statement of *which*
+colours were in the set, so the set was defined by which lines happened to be in the diff.
+
+⚠️ **The kerb became the brightest surface in the city by not moving.** Pre-anchor it sat at `L*`
+62.2 against ground 69.4 and infrastructure 63.7 — mid-palette, which is what "pale concrete edging
+the street" should be. Everything else then dropped ~19 `L*` and it did not, because `kerb_colour`
+lives in `RoadSurface` and the commit edited `BuildingStyle`. The commit even reasons *from* it —
+"it leaves the ground 10 `L*` darker than the kerb rather than 7 lighter" — treating as a fixed
+landmark a value that was only fixed by file layout. `git log -L487` shows both road colours
+untouched since `P1-4`.
+
+**Divided by the anchor, every colour states what material it claims to be, and four were wrong:**
+
+| Surface | claimed | real | verdict |
+|---|---|---|---|
+| facades (5 bands) | 49–62% | render/tile 45–55% | ⚠️ top of range, and the rule's soft spot |
+| kerb | **58.9%** | weathered concrete 20–30% | 🔴 as reflective as a white-tiled tower |
+| ground | **39.6%** | dry soil and fill 15–25% | 🔴 which is why the audit read it as sand |
+| infrastructure | 32.4% | weathered concrete 20–30% | ⚠️ marginal |
+| **asphalt** | **8.2%** | aged asphalt 7–12% | ✅ **dead centre** |
+
+Shipped, lightness only, every authored hue preserved to within `Δab` 0.46 and no colour clipping:
+asphalt `#3c3a37` → `#42403d` (**+2.7 `L*`**), infrastructure → `#615f5a` (−7.7), ground → `#645a45`
+(−13.9), kerb → `#68655c` (−19.4). Kerb-to-road reflectance lands at **2.5:1**, which is what
+concrete against asphalt actually is; it was 6.6:1. That leaves 15.6 `L*` of separation, so the
+0.15 m riser still reads as an edge.
+
+**Graded on five audit viewpoints, before and after, same cameras, `--debug-view=off`:**
+
+| Frame | `L*` mean | p10 | share ≥ `L*` 55 |
+|---|---|---|---|
+| `skyline` (control — no facade moved) | 62.8 → 61.5 | 43.0 → 40.0 | 72.5% → 67.9% |
+| `street` | 41.5 → 41.9 | 3.5 → **5.0** | 41.2% → 39.1% |
+| `kerb` (in shade) | 26.2 → 26.7 | 2.9 → **4.6** | 14.6% → 14.5% |
+| `ground` | 60.9 → 57.2 | 26.6 → 21.2 | **67.5% → 52.4%** |
+| `infra` | 52.8 → 46.0 | 32.2 → 16.2 | 48.8% → 45.0% |
+
+No clipping anywhere, before or after (0.0%). `skyline` barely moving is the control working — the
+bands did not change, and it is almost entirely bands. `ground` is the intended result and it is
+visible rather than merely statistical: the reclamation goes from pale beach sand to warm earth.
+
+🔴 **`Q31` is not fixed, and that is the most useful thing here.** The shaded-street sub-`L*`-10
+share went **51.4% → 51.3%**. The palette lever has now been pulled and the hole did not close, so
+the empty middle was never the road's albedo. The shadow fill is the only untried candidate, the two
+failing frames are still exactly the two shot in shade, and it belongs in the owed rig pass.
+
+**The method lesson, and it is the third of its kind.** `LedgeShading`, `reface_ledges` and `Q32`
+all failed by being confident about a cause; this one failed differently and worse — the *comparison
+frame* was wrong, so no amount of care within it could have helped. **A palette compared only to
+itself cannot tell you its outlier is the only correct member.** The fix is not more rigour, it is an
+external referent.
+
+⚠️ **`schema_version` 1 → 2.** The config format gained required keys. This is the city-config
+schema, not the ETL→game data contract, which carries its own versions. `testville` takes
+`exposure_anchor: 1.0` deliberately — a different anchor from Hong Kong's is what proves the rule is
+portable rather than a Hong Kong constant, and at a unit anchor a declared reflectance *is* the
+colour's luminance, keeping the fixture hand-checkable.
+
+`deck_error.py`, `overhang.py` and `ground_clearance.py` all re-run and all unchanged — geometry did
+not move, but they key on vertex colour, which did.
+
+---
 
 ### 2026-08-06 — Art-direction consistency audit: seven viewpoints, and one finding that was wrong
 

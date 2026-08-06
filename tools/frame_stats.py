@@ -68,7 +68,7 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "etl"))
 
-from pipeline.colour import LUMA, srgb_to_lab, srgb_to_linear  # noqa: E402
+from pipeline.colour import luminance, srgb_to_lab  # noqa: E402
 
 log = logging.getLogger(__name__)
 
@@ -106,18 +106,6 @@ class Frame:
         return np.hypot(self.lab[:, 1], self.lab[:, 2])
 
 
-def luminance_of(rgb: np.ndarray) -> np.ndarray:
-    """Linear CIE `Y` for `(n, 3)` sRGB in 0-255.
-
-    Linear rather than `L*` because the additive-share model is only additive in
-    linear light: a diffuse surface's luminance is `albedo * illumination`, and
-    that relationship is what lets a rendered ratio be compared against an albedo
-    ratio at all. In `L*` the same reflectance change produces different numbers
-    at different brightnesses, which is exactly the confound this avoids.
-    """
-    return srgb_to_linear(rgb) @ LUMA
-
-
 def load_frame(path: Path) -> Frame:
     """Decode a PNG, dropping any alpha channel."""
     with Image.open(path) as handle:
@@ -129,7 +117,7 @@ def load_frame(path: Path) -> Frame:
         size=size,
         rgb=rgb,
         lab=srgb_to_lab(rgb),
-        luminance=luminance_of(rgb),
+        luminance=luminance(rgb),
     )
 
 

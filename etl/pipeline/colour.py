@@ -96,6 +96,40 @@ def lab_to_srgb(lab: np.ndarray) -> np.ndarray:
     return np.clip(np.round(v * 255.0), 0, 255).astype(np.uint8)
 
 
+def luminance(rgb: np.ndarray) -> np.ndarray:
+    """Linear CIE `Y` for `(n, 3)` sRGB in 0-255.
+
+    ⚠️ **Linear rather than `L*`, and both callers depend on that for the same
+    reason.** A diffuse surface's luminance is `albedo * illumination`, so in
+    linear light a *ratio* between two surfaces is meaningful and survives any
+    change of exposure. `L*` is perceptually uniform and deliberately non-linear
+    in exactly the way that breaks it — the same reflectance change produces
+    different numbers at different brightnesses. `L*` is the right axis to read a
+    palette on and the wrong one to define it on.
+
+    `tools/frame_stats.py` needs this for its additive-share model and
+    `reflectance` below for the palette rule; it lives here so the two cannot
+    end up disagreeing about what luminance is.
+    """
+    return srgb_to_linear(rgb) @ LUMA
+
+
+def reflectance(rgb: tuple[int, int, int]) -> float:
+    """One colour's luminance as a percentage — the albedo it claims to be.
+
+    The measurable half of the palette rule (`Q33`): every authored colour is
+    `material reflectance x exposure_anchor`, so dividing this by the anchor
+    recovers the real-world material the colour is asserting. That assertion is
+    checkable against published albedos, which is the whole point — it gives a
+    palette an external referent instead of only internal consistency.
+
+    A percentage rather than `luminance`'s 0-1 because that is the unit
+    published albedo tables are quoted in, and the config is authored against
+    them directly.
+    """
+    return float(luminance(np.array([rgb], dtype=np.float64))[0]) * 100.0
+
+
 def with_hue(
     rgb: tuple[int, int, int], hue: tuple[float, float], strength: float
 ) -> tuple[int, int, int]:

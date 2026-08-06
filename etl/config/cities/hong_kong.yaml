@@ -3,9 +3,43 @@
 # Nothing in etl/pipeline/ may hardcode any value from this file (CLAUDE.md hard
 # rule 3). Facts here are verified in docs/DATA_SOURCES.md; correct them there
 # first if one turns out to be wrong.
-schema_version: 1
+schema_version: 2
 id: hong_kong
 name: Hong Kong
+
+# The palette rule (`Q33`). **Every authored colour in this file is a real
+# material's diffuse albedo multiplied by this one number**, and `config.py`'s
+# `_check_exposure` refuses to load a colour that is not.
+#
+# The split is the same one `facade_hue.strength` already makes, and for the
+# same reason. A `reflectance:` is *evidence* — a published albedo for asphalt
+# or concrete or soil, portable to the second city unchanged, and arguable
+# against a source rather than against taste. This anchor is *art direction* —
+# one number carrying the sun, the latitude and the mood, and the only thing
+# that changes when a city wants to look like a different time of day.
+#
+# ⚠️ **It exists because the palette had no external referent and drifted.**
+# Colours were placed by eye against each other, so the only question anyone
+# could ask was whether they looked consistent with one another — and a set
+# judged that way always indicts its most extreme member. It did: the asphalt
+# was 24 L* below everything else and was read as the defect, when dividing by
+# this anchor showed it claiming 8.2% albedo, dead centre of real aged asphalt's
+# 7-12%. The kerb was claiming 58.9% for concrete that is 20-30%.
+#
+# 0.520 is not chosen here — it is measured, and it is the *only* value in this
+# block with a graded frame behind it. `235aa4f` scaled the bands and both class
+# colours by it in linear light and shipped the result: frame L* 73.0 -> 62.7,
+# gain 0.85, responding share 66.4%. That commit is also what motivated the rule,
+# because it applied this factor to the colours in `buildings:` and not to the
+# two in `roads:` — not by argument, but because `roads:` was not in its diff.
+#
+# ⚠️ **The reflectances the five height_bands declare are back-derived from that
+# commit, not cited.** They come out at 49-62%, which is the top of what painted
+# render and ceramic tile actually do. That is the one soft number in the rule,
+# and it is recorded as a reflectance precisely so it can be argued with; if it
+# is wrong, this anchor is wrong with it and every other colour moves. Do not
+# take the bands as evidence for a third city.
+exposure_anchor: 0.520
 
 crs:
   # Every source dataset is published in the HK1980 Grid System — a Transverse
@@ -150,12 +184,18 @@ buildings:
   # height would tint it like the tower it happens to be as tall as. The ground
   # has no height of its own to band by at all.
   #
-  # The ground colour is warm concrete, and it is placed by what it has to sit
-  # between: clear of the kerb (#9a968d) so the 0.15 m riser and 0.5 m lip still
-  # read as an edge rather than dissolving into the pavement, and darker than the
-  # shophouse band (#968872) so low blocks read as standing *on* the ground. This
-  # is the value Q18 tests — if the first pass reads dead, change this line
-  # before reaching for the land-cover classifier.
+  # The ground colour was warm concrete placed by what it had to sit between:
+  # clear of the kerb so the 0.15 m riser and 0.5 m lip still read as an edge
+  # rather than dissolving into the pavement, and darker than the shophouse band
+  # (#968872) so low blocks read as standing *on* the ground. This is the value
+  # Q18 tests — if the first pass reads dead, change this line before reaching
+  # for the land-cover classifier.
+  #
+  # ⚠️ **That placement is history: since Q33 the level is set by the material,
+  # not by the neighbours.** Both relationships still hold and neither is what
+  # produces the number any more — the kerb it is "clear of" moved 19.4 L* in the
+  # same change, which is exactly the fragility of placing a colour against
+  # another colour rather than against a referent.
   #
   # ⚠️ **And it did read dead, and this line is what fixed it — Q18 closed here
   # rather than in a classifier.** The chroma went 6.81 -> 14.0 at an *unchanged*
@@ -191,13 +231,29 @@ buildings:
   # in the frame. Scaling it by the same factor is what keeps "the level moved"
   # from becoming "the palette was re-mixed".
   #
-  # It leaves the ground 10 L* darker than the kerb rather than 7 lighter. That
-  # is the right way round for a kerb the roads config calls "the pale concrete
-  # that edges every street on the island", and the riser reads on contrast,
-  # which grew.
+  # ⚠️ **Both were then re-placed by the palette rule (`Q33`), which moved the
+  # ground down 13.9 L* and the structure down 7.7.** Scaling by the anchor kept
+  # them in step with the bands but preserved what they were in step *from*, and
+  # what they were placed by was the eye. Divided back out, the ground was
+  # claiming 39.6% albedo where dry soil and urban fill are 15-25% — which is
+  # exactly the reading the art-direction audit gave it independently, that the
+  # reclamation renders as sand rather than as ground. Only lightness moved:
+  # Q18's doubled chroma is carried through untouched at C* 13.6, and darker is
+  # where it survives best, per the knee note above.
   class_colours:
-    INFRASTRUCTURE: "#74726d"
-    TERRAIN(TB): "#887c66"
+    INFRASTRUCTURE: "#615f5a"
+    TERRAIN(TB): "#645a45"
+
+  # What each of those claims to be, as a real-world diffuse albedo percentage.
+  # Required for every class_colours entry — see exposure_anchor at the top of
+  # this file for the rule and why an un-declared colour is refused.
+  class_reflectance:
+    # Weathered concrete, at the sooty end: viaduct soffits and pier faces carry
+    # decades of traffic film. Clean concrete is 20-30%.
+    INFRASTRUCTURE: 22.0
+    # Dry soil and urban fill, mid-range of 15-25%. The region is reclamation,
+    # so this is fill and hardstanding rather than anything vegetated.
+    TERRAIN(TB): 20.0
 
   # Jitter for a class that must not vary like the rest, overriding
   # colour_jitter below.
@@ -261,17 +317,31 @@ buildings:
   # rendered frame 10.3 L*, where every other lever tried bought under 1. Each
   # colour is the old one scaled by 0.520 in linear light, so the warm-to-cool
   # ramp the bands were authored for survived and only the level moved.
+  #
+  # ⚠️ **These five colours are unchanged by the palette rule, and their
+  # `reflectance:` values are therefore back-derived rather than cited** — each
+  # is simply what the shipped colour claims once the anchor is divided out. The
+  # rule is calibrated *on* them, so it cannot also check them; they are the one
+  # place in this file where the number describes the colour instead of the
+  # colour answering to the number. The tell is that they read 49-62%, at the
+  # top of what painted render and ceramic tile do. Recorded anyway, because a
+  # soft number stated is arguable and a soft number implied is not.
   height_bands:
     - up_to_m: 12.0     # shophouses, podiums, market blocks
       colour: "#968872"
+      reflectance: 48.7
     - up_to_m: 30.0     # walk-up tenements
       colour: "#9d9586"
+      reflectance: 58.4
     - up_to_m: 60.0     # 1970s-80s residential
       colour: "#9a9a90"
+      reflectance: 61.5
     - up_to_m: 120.0    # modern residential towers
       colour: "#949995"
+      reflectance: 60.1
     - up_to_m: .inf     # commercial towers
       colour: "#8e9393"
+      reflectance: 55.2
 
   # Per-building brightness variation, seeded from the building id so it is
   # stable across runs. Without it a height band renders as one flat mass and
@@ -483,8 +553,32 @@ roads:
 
     # docs/ART_DESIGN.md: HK asphalt reads warm, not blue-grey. The kerb is the
     # pale concrete that edges every street on the island.
-    surface_colour: "#3c3a37"
-    kerb_colour: "#9a968d"
+    #
+    # ⚠️ **These are the two colours the palette rule was written for.** They sit
+    # in `RoadSurface` where the rest of the palette sits in `BuildingStyle`, and
+    # that is the whole reason `235aa4f` re-exposed every other colour in this
+    # file and left these two behind — the section was not in the diff. The kerb
+    # then became the brightest surface in the city *by not moving* while
+    # everything around it dropped 19 L*, and nothing flagged it, because the
+    # commit reasoned *from* the kerb as a fixed landmark.
+    #
+    # The rule reverses the obvious diagnosis. Against its neighbours the asphalt
+    # looked like the outlier at 24.5 L*, 24 below the pack; against published
+    # albedo it was the one colour already right, and it moves 2.7 L*. The kerb
+    # moves 19.4 and the ratio between them lands at 2.5:1, which is what
+    # concrete against asphalt actually is — it was 6.6:1. That leaves 15.6 L* of
+    # separation, so the 0.15 m riser still reads as an edge rather than
+    # dissolving into the carriageway, which is the job kerb contrast has here.
+    surface_colour: "#42403d"
+    kerb_colour: "#68655c"
+
+    # Aged urban asphalt, mid-range. Fresh-laid is ~4% and weathers up: the old
+    # #3c3a37 was claiming 8.2%, so this is a small correction to a colour that
+    # was very nearly right, not the rescue it looked like it needed.
+    surface_reflectance: 10.0
+    # Weathered concrete, mid-range of 20-30%. Kerbs are cast rough, kept wet in
+    # summer and stained at the channel, so the clean end does not apply.
+    kerb_reflectance: 25.0
 
   # Where game y=0 sits for a road deck (Q11). `terrain` samples the LandsD
   # ground mesh under each vertex, which is the only source that knows Wan
