@@ -56,7 +56,7 @@ Hong Kong ships `exposure_anchor: 0.520`, which is not chosen but measured: it i
 | `panel_grey` | 55.2% | ⚠️ **back-derived, not cited** | `#8e9393` |
 | `concrete_kerb` | 25.0% | weathered concrete, 20–30% | `#68655c` |
 | `concrete_sooty` | 22.0% | weathered + sooty concrete | `#615f5a` |
-| `fill_dry` | 20.0% | dry soil and urban fill, 15–25% | `#645a45` |
+| `concrete_paving` | 20.0% | weathered concrete, grubby end of 20–30% | `#5f5a51` |
 | `asphalt_aged` | 10.0% | aged urban asphalt, 7–12% | `#42403d` |
 
 ⚠️ **The five facade materials are the soft entries and the whole rule leans on them.** They are
@@ -628,13 +628,19 @@ Anything that later draws ground through a different material has to do the same
 
 **Colour comes in two steps, and the first has shipped.**
 
-1. **Flat.** One warm ground colour — `#645a45`, declaring 20% albedo for dry soil and urban fill.
-   It was `#887c66` and placed by eye against its neighbours: clear of the kerb so the 0.15 m riser
-   still reads as an edge, and darker than the shophouse band so low blocks read as standing *on*
-   it. The palette rule (`Q33`) re-placed it against a material instead and it fell 13.9 `L*` — the
-   old value was claiming 39.6% reflectance, which is not soil, it is plaster. ⚠️ **Only lightness
-   moved:** `Q18`'s doubled chroma carries through at `C*` 13.6, and darker is where chroma survives
-   best.
+1. **Flat.** One ground colour — `concrete_paving` `#5f5a51`, declaring 20% albedo for weathered
+   concrete at the grubby end of 20–30%. It was `#887c66` and placed by eye against its neighbours:
+   clear of the kerb so the 0.15 m riser still reads as an edge, and darker than the shophouse band
+   so low blocks read as standing *on* it. The palette rule (`Q33`) re-placed it against a material
+   instead and it fell 13.9 `L*` — the old value was claiming 39.6% reflectance, which is not soil,
+   it is plaster. ⚠️ **Then `Q36` found the material itself was wrong:** the surface here is paving,
+   plaza and apron, not the fill under it, and the carriageway is drawn separately from `roads.glb`.
+   Reflectance did not move, so this was chroma only — authored `C*` 13.6 → 5.9, rendered 6.71 →
+   3.53. ⚠️ **`Q18`'s doubled chroma is superseded, and do not restore it without reading `Q36`:**
+   it was compensating for a lightness problem `Q33` later fixed, and the two were never re-graded.
+   ⚠️ **Do not "simplify" this to a neutral grey either** — rendered chroma is roughly \|warm albedo
+   − blue illuminant\|, so authored `C*` 4.47 renders *bluer* (5.04) than authored 5.93 does (3.53).
+   A little authored warmth is what cancels the sky.
 2. ~~**Land-cover classes,** only if flat reads dead.~~ ❌ **Refused 2026-08-06, and it will not be
    written.** Flat did read dead, twice — but the causes were `Q29`'s smooth shading and then the
    ground's chroma sitting under a **knee** the authored hue has to clear. Both are fixed, one in the
@@ -650,7 +656,10 @@ Anything that later draws ground through a different material has to do the same
 waterfront it reads as *sand*, and that is a content problem rather than a palette one.** ⚠️ **Half
 retracted 2026-08-07:** the palette rule dropped the ground 13.9 `L*` and the `ground` frame's share
 above `L*` 55 went 67.5% → 52.4%, which visibly moved it from beach sand to earth. So the *hue* was
-never the issue and the *value* partly was. What remains below is the half that stands. In
+never the issue and the *value* partly was. ⚠️ **Fully retracted 2026-08-07 by `Q36`:** the sand
+reading was also a *material* error — soil, on ground that is paving — and taking the chroma back out
+drops the warm share of this frame from 29.3% to 2.0%. "Correctly warm since `Q18`" below is no
+longer true; the rest of the paragraph is. What remains below is the half that stands. In
 `build/driver/art_ground` the reclamation south of HKCEC is an unbroken expanse of one colour running
 to the region edge — correctly faceted since `Q29`, correctly warm since `Q18`, and carrying
 **nothing**: no pavement/carriageway distinction off the ribbon, no planting, no street furniture, no

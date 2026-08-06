@@ -120,8 +120,17 @@ materials:
     reflectance: 22.0
     source: "weathered concrete, sooty end of 20-30% for clean concrete"
 
-  # The region's ground. Reclamation, so this is fill and hardstanding rather
-  # than anything vegetated.
+  # The region's ground. Reclamation, and what the player sees on it is paving,
+  # plaza, apron and promenade — the carriageway is drawn separately from
+  # `roads.glb`, so this colours everything *between* the roads. Not the fill
+  # underneath them, which is what the old `fill_dry` name and its "dry soil and
+  # urban fill" source were describing. ⚠️ **`Q36` renamed it for that reason:
+  # the comment here already said "fill and hardstanding" while the material
+  # claimed soil, and `Q34`'s rule is that a material is a claim about a
+  # *surface*.** Reflectance did not move, so nothing about the level changed —
+  # 20.0% also orders correctly against the concrete already in this table
+  # (`concrete_kerb` 25.0, `concrete_sooty` 22.0), because a pavement is walked
+  # on, driven over and stained and is the dirtiest concrete in the city.
   #
   # The colour was originally warm concrete placed by what it had to sit between:
   # clear of the kerb so the 0.15 m riser and 0.5 m lip still read as an edge
@@ -136,19 +145,34 @@ materials:
   # art-direction audit gave it independently: the reclamation rendered as sand
   # rather than as ground. `Q33` moved it down 13.9 L*.
   #
-  # ⚠️ **The chroma is deliberate and `Q18` closed here rather than in a
-  # classifier.** The ground did read dead, and this is what fixed it: chroma went
-  # 6.81 -> 14.0 at an *unchanged* L* of 52.6, so every lightness relationship
-  # above and below is untouched and only the amount of hue changed. It had to,
-  # because hue does not arrive in proportion to what is authored — there is a
-  # **chroma knee**, below which whatever is written here is thrown away. Measured
-  # on the faceted ground at four levels of the same hue, albedo C* 6.81 arrives
-  # at 1.95, 11.0 at 2.93, 14.0 at 6.25 and 31.96 at 28.42 — so the old #837d72
-  # rendered as neutral grey, which is why an open expanse read as white plaster.
-  # 18.0 was built and rejected on the eye: it clears the knee too well and the
-  # reclamation reads as beach sand rather than concrete. Only lightness moved in
-  # `Q33`; the doubled chroma is carried through untouched at C* 13.6, and darker
-  # is where it survives best.
+  # ⚠️ **`Q18` doubled the chroma to 14.0 and `Q36` took it back out. Read this
+  # before raising it again.** The knee below is real and its numbers still hold;
+  # what did not hold is the conclusion drawn from them. `Q18` measured that the
+  # ground "read dead" at an *unchanged* L* of 52.6 and fixed it with hue: albedo
+  # C* 6.81 arrives at 1.95, 11.0 at 2.93, 14.0 at 6.25, 31.96 at 28.42, so the
+  # old #837d72 rendered neutral and an open expanse read as white plaster. 18.0
+  # was built and rejected on the eye as beach sand.
+  #
+  # ⚠️ **That was compensation for a lightness problem, and `Q33` then fixed the
+  # lightness without anyone removing the compensation.** The two changes were
+  # never graded together. Measured on `art_ground`, same camera, same box:
+  # `Q18`'s failure state rendered at L* 67.2 / C* 6.48, and this material at
+  # C* 5.93 renders at **L* 49.2 / C* 3.53** — *less* chroma than the state `Q18`
+  # rejected, and it reads as a concrete apron rather than as plaster, because
+  # 18 L* came out of the render in between. Nothing survives of "the ground needs
+  # chroma to read"; what it needed was to stop being pale.
+  #
+  # ⚠️ **There is a null, and it is not at the greyest hex.** Rendered chroma is
+  # roughly |warm albedo - blue illuminant|, so it bottoms out where the two
+  # cancel and climbs again past it: authored C* 5.93 renders at 3.53, while
+  # authored C* 4.47 — less colour in the file — renders at **5.04**, pulled cool.
+  # Authoring a little warmth is what cancels the sky, which is also what real
+  # concrete does under one. Do not "simplify" this toward a neutral grey.
+  #
+  # ⚠️ **The illuminant is blue, which is why this colour's chroma was never the
+  # outlier it looked like** — it rendered at 6.71 against the asphalt's 7.05.
+  # `asphalt_aged` is the frame's grey card and measures the rig at ~7 C* of blue
+  # added to everything; the ambient behind that is `Q31`'s, not this table's.
   #
   # ⚠️ **The knee sits at C* 11-14 for one viewpoint, and it is a property of the
   # viewpoint rather than of the renderer** — do not reuse the number. Measured
@@ -157,19 +181,25 @@ materials:
   # same 6.81 -> 14.0 change buys C* 1.95 -> 6.25 close in, 3.33 -> 5.09 at
   # ~200 m, and nothing at all at ~350 m through fog. Chroma also survives better
   # where the ground renders darker: under L* 55 it holds C* 8-10, at L* 65-75
-  # only 3-5. Distance and surface brightness both move the knee. This value is
-  # still right because it buys the most where the player actually is; distant
-  # ground washing toward fog is correct atmospheric perspective, not a defect.
+  # only 3-5. Distance and surface brightness both move the knee. Distant ground
+  # washing toward fog is correct atmospheric perspective, not a defect.
+  #
+  # ⚠️ **One material still paints two terrains.** The south-east hillside rises
+  # to 50.2 m where the reclamation is flat at a median 3.96 m, and it is
+  # vegetated slope, not paving — so it now claims a material it is not. That is
+  # open, and elevation is the one key with a causal mechanism behind it: a
+  # Hong Kong hillside is green because it is too steep to build on. It wants two
+  # materials and a threshold, never a hue field — see `Q36` in docs/PROGRESS.md.
   #
   # ⚠️ **The knee is measured for *ground* and must not be assumed for the
   # facades.** Ground is up-facing and renders bright, which is what eats chroma;
   # a facade is vertical, darker, and takes facade_hue's strength on top. Most of
   # this palette does sit under C* 11, which is worth someone's attention, but it
   # is not evidence until it is measured on the surface in question.
-  fill_dry:
-    colour: "#645a45"
+  concrete_paving:
+    colour: "#5f5a51"
     reflectance: 20.0
-    source: "dry soil and urban fill, mid-range of 15-25%"
+    source: "weathered concrete, grubby end of 20-30%; paving is walked, driven and stained"
 
   # ⚠️ **These two are the colours the palette rule was written for.** They used
   # to live in `RoadSurface` where the rest of the palette lived in
@@ -355,7 +385,7 @@ buildings:
   # behind the ground's chroma, sits with it under `materials:` at the top.
   class_materials:
     INFRASTRUCTURE: concrete_sooty
-    TERRAIN(TB): fill_dry
+    TERRAIN(TB): concrete_paving
 
   # Jitter for a class that must not vary like the rest, overriding
   # colour_jitter below.

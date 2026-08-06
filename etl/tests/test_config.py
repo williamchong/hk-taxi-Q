@@ -392,10 +392,10 @@ class TestBuildingStyle:
             for table in ("class_materials", "class_colour_jitter", "class_lod_cell_sizes_m"):
                 doc["buildings"][table].pop(terrain, None)
             # ⚠️ The extra line *is* `_check_every_material_is_used` working. The
-            # ground was the only thing referencing `fill_dry`, so dropping the
+            # ground was the only thing referencing `concrete_paving`, so dropping
             # class strands the material — and a stranded material is a colour
             # still being exposure-checked as though it ships.
-            doc["materials"].pop("fill_dry")
+            doc["materials"].pop("concrete_paving")
 
         city = load_city("hong_kong", cities_root=rewrite(stop_tiling_it))
         assert city.buildings.terrain_class not in city.buildings.classes
@@ -1239,7 +1239,7 @@ class TestPaletteExposure:
         answer — an unsourced albedo is how the palette drifted before `Q33`."""
 
         def drop(doc: dict[str, Any]) -> None:
-            del doc["materials"]["fill_dry"]["source"]
+            del doc["materials"]["concrete_paving"]["source"]
 
         with pytest.raises(ValueError, match="source"):
             load_city("hong_kong", cities_root=rewrite(drop))
