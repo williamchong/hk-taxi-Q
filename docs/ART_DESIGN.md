@@ -408,9 +408,11 @@ a photographic texture smears where it does, and there are no UVs left to move.
 
 **Colour comes in two steps, and the first has shipped.**
 
-1. **Flat.** One warm ground colour — `#b0a99a`, warm concrete. It is placed by what it has to sit
-   between: lighter than the kerb `#9a968d` so the 0.15 m riser still reads as an edge, and lighter
-   than the `#c9b79a` shophouse band so low blocks read as standing *on* it.
+1. **Flat.** One warm ground colour — `#837d72`, warm concrete. It is placed by what it has to sit
+   between: clear of the kerb `#9a968d` so the 0.15 m riser still reads as an edge, and darker than
+   the `#968872` shophouse band so low blocks read as standing *on* it. It and the bands share the
+   same 0.520 linear scale (`docs/PROGRESS.md`, 2026-08-06) — the level moved, the relationships
+   did not.
 2. **Land-cover classes,** only if flat reads dead. Sample the source JPEG per source triangle, snap
    to a small palette — asphalt, pavement, vegetation, water, bare — and put the class in the cluster
    key alongside the facing. Cluster boundaries then land *on* the park and harbour edges instead of
@@ -421,6 +423,10 @@ a photographic texture smears where it does, and there are no UVs left to move.
 terrain as its finished look, not as a placeholder. Wan Chai is far denser than that game's
 countryside, so it settles nothing here — but if the first pass reads dead, **suspect the palette
 before the technique**.
+
+✅ **That advice was taken and it held.** The city reading white was the palette — the five
+`height_bands` 19 `L*` too light — and not the flat-shading, the rig, or the missing per-building
+lightness a survey was nearly rebuilt to supply. `Q18` is still open on the technique.
 
 **What is explicitly not done: shipping the orthophoto, resampled or otherwise.** It would cost a draw
 call per tile, since a textured surface cannot merge with a vertex-coloured one. And an orthophoto has

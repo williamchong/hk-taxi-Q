@@ -88,7 +88,9 @@ class TestWithHue:
         assert with_hue((190, 190, 190), (12.0, -9.0), 0.0) == (190, 190, 190)
 
 
-def _style_with_hue(tmp_path: Path, table: dict, strength: float = 1.0) -> BuildingStyle:
+def _style_with_hue(
+    tmp_path: Path, table: dict, *, strength: float = 1.0, vegetation_max: float | None = None
+) -> BuildingStyle:
     """A style whose survey is `table`, written where `facade_hue` will look.
 
     The survey lands under `source_dir`'s layout rather than beside `tmp_path`,
@@ -102,6 +104,7 @@ def _style_with_hue(tmp_path: Path, table: dict, strength: float = 1.0) -> Build
         height_bands=(HeightBand(up_to_m=float("inf"), colour=(190, 200, 200)),),
         facade_hue_source="hue.json",
         facade_hue_strength=strength,
+        facade_hue_vegetation_max=vegetation_max,
     )
 
 
@@ -151,6 +154,66 @@ class TestFacadeHue:
         table = facade_hue(loaded, CITY, root=tmp_path)
         rgba = colour_for(loaded, "BUILDING", flat_mesh("B1234C0", 40.0), hue=table)
         assert rgba[0].tolist() == [*with_hue((190, 200, 200), (4.0, 12.0), 2.0), 255]
+
+    def test_an_overgrown_row_is_dropped(self, tmp_path: Path) -> None:
+        """43 of Wan Chai's 2,214 rows are over half canopy. What they measured
+        is the tree, so the building falls back to its band."""
+        table = {
+            "B1234": {"lab": [60.0, 4.0, 12.0], "vegetation": 0.78},
+            "B5678": {"lab": [60.0, 4.0, 12.0], "vegetation": 0.02},
+        }
+        loaded = _style_with_hue(tmp_path, table, vegetation_max=0.5)
+        assert facade_hue(loaded, CITY, root=tmp_path) == {"B5678": (4.0, 12.0)}
+
+    def test_a_row_exactly_at_the_threshold_is_kept(self, tmp_path: Path) -> None:
+        """The comparison is `<=`, so the threshold names the worst sample still
+        trusted rather than the best one rejected."""
+        table = {"B1234": {"lab": [60.0, 4.0, 12.0], "vegetation": 0.5}}
+        loaded = _style_with_hue(tmp_path, table, vegetation_max=0.5)
+        assert facade_hue(loaded, CITY, root=tmp_path) == {"B1234": (4.0, 12.0)}
+
+    def test_no_threshold_ignores_the_vegetation_column(self, tmp_path: Path) -> None:
+        """The contract that keeps the filter optional. The mixed table is the
+        point: with no threshold no row is read for vegetation, so one that
+        records none and one that is *entirely* canopy both survive."""
+        table = {
+            "B1234": {"lab": [60.0, 4.0, 12.0]},
+            "B5678": {"lab": [60.0, 4.0, 12.0], "vegetation": 1.0},
+        }
+        loaded = _style_with_hue(tmp_path, table)
+        assert facade_hue(loaded, CITY, root=tmp_path) == {
+            "B1234": (4.0, 12.0),
+            "B5678": (4.0, 12.0),
+        }
+
+    def test_a_threshold_of_one_still_requires_the_column(self, tmp_path: Path) -> None:
+        """Why the disabled state is `None` rather than 1.0: a city may want
+        every row *and* the guarantee that the column was there to be checked."""
+        loaded = _style_with_hue(
+            tmp_path, {"B1234": {"lab": [60.0, 4.0, 12.0]}}, vegetation_max=1.0
+        )
+        with pytest.raises(ValueError, match="no `vegetation` column"):
+            facade_hue(loaded, CITY, root=tmp_path)
+
+    def test_a_threshold_without_the_column_names_the_config_key(self, tmp_path: Path) -> None:
+        """⚠️ The failure worth being loud about, and worth being *specific*
+        about: such a survey is intact and merely predates the column, so the
+        message must not send the reader hunting for the partial write that
+        `malformed` means everywhere else in this function."""
+        loaded = _style_with_hue(
+            tmp_path, {"B1234": {"lab": [60.0, 4.0, 12.0]}}, vegetation_max=0.5
+        )
+        with pytest.raises(ValueError, match=r"facade_hue\.vegetation_max"):
+            facade_hue(loaded, CITY, root=tmp_path)
+
+    def test_a_truncated_row_is_still_malformed(self, tmp_path: Path) -> None:
+        """The other side of that split: a real partial write keeps the original
+        message even while a threshold is set."""
+        loaded = _style_with_hue(tmp_path, {}, vegetation_max=0.5)
+        path = tmp_path / CITY / "facade_colour" / "hue.json"
+        path.write_text('{"B1234": {"lab": [60.0], "vegetation": 0.1}}')
+        with pytest.raises(ValueError, match="malformed"):
+            facade_hue(loaded, CITY, root=tmp_path)
 
     def test_the_surveyed_lightness_is_not_used(self, tmp_path: Path) -> None:
         """⚠️ The rule the whole design rests on. The survey's L* is 20 here

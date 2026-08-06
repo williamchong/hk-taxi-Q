@@ -41,6 +41,19 @@
 ; The dozens of uniforms those seven make inert — `bay_width_m`, `glass_colour`,
 ; `pane_bow`, the fresnel terms — are left at their tuned values on purpose. They
 ; are the state a future art idea starts from, not dead weight to be cleaned up.
+;
+; ⚠️ **`base_wash` is 0.0 because the palette lives in the city config**, which
+; is where the shader's header says it belongs. The five `height_bands` in
+; `etl/config/cities/hong_kong.yaml` carry the city's level — they were
+; re-authored 19 L* darker once the anchor probe measured that as what the white
+; city needed — so the wash has nothing left to trial. That leaves `base_colour`
+; inert, kept at its tuned value on the same rule as the window uniforms above.
+;
+; `value_jitter` 0.35 is the small half of that change and is bounded on both
+; sides. Below it a block reads as one mass; above roughly 0.4 the darkest draws
+; stop reading as buildings differing and start reading as a few of them being
+; broken. It is not the lever that fixed the white city — at the 0.6 ceiling it
+; moved the frame 0.4 L*, against 10.3 for the bands.
 [gd_resource type="ShaderMaterial" load_steps=2 format=3]
 
 [ext_resource type="Shader" path="res://assets/shaders/city_facade_clean.gdshader" id="1_facade"]
@@ -49,8 +62,8 @@
 resource_name = "city_facade"
 shader = ExtResource("1_facade")
 shader_parameter/base_colour = Color(0.79, 0.805, 0.82, 1)
-shader_parameter/base_wash = 0.15
-shader_parameter/value_jitter = 0.2
+shader_parameter/base_wash = 0.0
+shader_parameter/value_jitter = 0.35
 shader_parameter/warm_cool_jitter = 0.07
 shader_parameter/floor_height_m = 2.8
 shader_parameter/band_storeys = 1.0

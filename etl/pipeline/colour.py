@@ -6,13 +6,21 @@ separate axes. In sRGB they are not: darkening a colour scales all three
 channels, so there is no way to say "keep this building's cream, but let the
 config decide how light it is".
 
-⚠️ **The split is not stylistic — it is what the measurement supports.** A
-building's `a*`/`b*` in an aerial photograph survive the illumination it was
-shot under; its `L*` does not. `docs/PROGRESS.md` (2026-08-06) records the
-sheet-wide numbers, and the per-orientation record found the same building's
-north and south walls differing by up to 39 `L*` — larger than the whole
-between-building spread. So hue is evidence and lightness is not, and this
-module exists to let the pipeline use one without the other.
+⚠️ **The split is not stylistic — it is what the measurement supports, and only
+just.** A building's surveyed `L*` is *repeatable*: the mean of its four walls
+has an ICC of 0.822 across 2,026 buildings. But repeatability is not validity,
+and the confounds that are constant across all four walls are exactly the ones
+that stability cannot expose — **log pixel count explains 26% of `L*`** and
+height 10%, both building-level, both indistinguishable from paint. At most 54%
+of the variance is plausibly reflectance. `a*`/`b*` carry no such passenger, so
+hue is evidence and lightness is a stable number of uncertain meaning.
+
+⚠️ **It is *not* that walls facing the sun differ from walls facing away.** That
+reading is intuitive, was argued here once, and is wrong by measurement: fitting
+`L* = building + orientation` puts **1.4%** of the variance on compass
+direction, and removing it entirely shrinks the spread within a building by
+0.9%. Anyone re-opening this should attack the pixel-count confound, not the
+shadows. `docs/PROGRESS.md` (2026-08-06) has the full arithmetic.
 
 D65, the sRGB standard illuminant. Written out rather than taking a dependency:
 `colormath` is unmaintained and `colour-science` is a large import for two

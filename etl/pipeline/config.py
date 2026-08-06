@@ -175,6 +175,16 @@ class BuildingStyle:
     # only by how much. A stylisation knob, deliberately separated from the
     # measurement so the two cannot be confused.
     facade_hue_strength: float = 1.0
+    # Largest fraction of a survey sample that may be vegetation before the row
+    # is dropped rather than trusted. A sample that is mostly canopy measured the
+    # tree in front of the building, not the building.
+    #
+    # `None` is no threshold, and it is a separate value rather than 1.0 because
+    # 1.0 is a legal threshold: it keeps every row *and* still requires the
+    # column, which is a thing a city might mean. Setting any threshold makes the
+    # survey's `vegetation` column required — one set against a survey that never
+    # recorded it would filter nothing while looking like it filtered.
+    facade_hue_vegetation_max: float | None = None
 
     def colour_for(self, class_id: str, height_m: float) -> tuple[int, int, int]:
         if class_id in self.class_colours:
@@ -970,6 +980,12 @@ def _building_style(body: dict[str, Any], where: str) -> BuildingStyle:
         if hue is None
         else _scale(hue.get("strength", 1.0), f"{where}:facade_hue.strength", HUE_STRENGTH_MAX)
     )
+    vegetation_max = None if hue is None else hue.get("vegetation_max")
+    hue_vegetation_max = (
+        None
+        if vegetation_max is None
+        else _scale(vegetation_max, f"{where}:facade_hue.vegetation_max", 1.0)
+    )
 
     cells = _cell_sizes(_require(body, "lod_cell_sizes_m", where), f"{where}:lod_cell_sizes_m")
     if not cells:
@@ -1066,6 +1082,7 @@ def _building_style(body: dict[str, Any], where: str) -> BuildingStyle:
         class_colour_jitter=class_jitter,
         facade_hue_source=hue_source,
         facade_hue_strength=hue_strength,
+        facade_hue_vegetation_max=hue_vegetation_max,
         lod_cell_sizes_m=cells,
         class_lod_cell_sizes_m=class_cells,
         ground_sink_m=sink,

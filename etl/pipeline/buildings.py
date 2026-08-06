@@ -322,6 +322,13 @@ def facade_hue(style: BuildingStyle, city_id: str, *, root: Path | None = None) 
     Malformed is a different matter and is refused loudly — a partial write of a
     cache this expensive is likelier than a corrupt one, and silently colouring
     the city from half a survey is the outcome worth preventing.
+
+    Rows whose sample is mostly canopy are dropped, and the reason is on the axis
+    this function returns rather than the one it discards. At `vegetation_max:
+    0.5` that is 43 of Wan Chai's 2,214, and they sit **6.08 `a*` to the green
+    side** of the rest at **more than double the chroma** (`C*` 13.72 against
+    6.35) — because what they measured is a tree. `strength: 2.0` then doubles
+    it, so an unfiltered canopy row reaches the facade about 12 `a*` green.
     """
     if style.facade_hue_source is None:
         return {}
@@ -331,12 +338,39 @@ def facade_hue(style: BuildingStyle, city_id: str, *, root: Path | None = None) 
     except FileNotFoundError:
         log.info("no facade hue survey at %s — colouring from height bands", path)
         return {}
+    limit = style.facade_hue_vegetation_max
     try:
         table = json.loads(text)
-        hues = {stem: (float(row["lab"][1]), float(row["lab"][2])) for stem, row in table.items()}
-    except (AttributeError, KeyError, TypeError, ValueError, IndexError) as exc:
+        # `limit is None` short-circuits before `row["vegetation"]`, which is what
+        # keeps the column optional for a survey that never recorded one.
+        hues = {
+            stem: (float(row["lab"][1]), float(row["lab"][2]))
+            for stem, row in table.items()
+            if limit is None or float(row["vegetation"]) <= limit
+        }
+    except KeyError as exc:
+        if exc.args[0] == "vegetation":
+            # Distinguished from a corrupt cache because the fix is the opposite
+            # one: this survey is intact and simply predates the column, so the
+            # reader should re-run it or drop the threshold, not hunt for a
+            # partial write.
+            raise ValueError(
+                f"{path}: facade_hue.vegetation_max is set, but this survey has no "
+                "`vegetation` column — re-run the survey, or unset the threshold"
+            ) from exc
         raise ValueError(f"{path}: facade hue survey is malformed ({exc})") from exc
-    log.info("facade hue: %d buildings from %s", len(hues), path.name)
+    except (AttributeError, TypeError, ValueError, IndexError) as exc:
+        raise ValueError(f"{path}: facade hue survey is malformed ({exc})") from exc
+    if limit is None:
+        log.info("facade hue: %d buildings from %s", len(hues), path.name)
+    else:
+        log.info(
+            "facade hue: %d buildings from %s, %d dropped over %.0f%% vegetation",
+            len(hues),
+            path.name,
+            len(table) - len(hues),
+            limit * 100.0,
+        )
     return hues
 
 
@@ -356,9 +390,10 @@ def colour_for(
 
     Where the survey has a colour for this building, its **hue** replaces the
     band's and its **lightness does not** — the band keeps that, and so does the
-    jitter below. `colour.py` records why the split is the measurement's rather
-    than a preference: the same wall's `L*` moves by up to 39 between its north
-    and south faces, which is illumination, while `a*`/`b*` barely move.
+    jitter below. The survey's `L*` is repeatable but confounded: log pixel count
+    alone explains 26% of it, so it is not albedo. ⚠️ Not because a building's
+    walls disagree by compass direction — that is 1.4% of the variance, and
+    `colour.py`'s header has the rest of the arithmetic.
     """
     low, high = bounds if bounds is not None else mesh.aabb()
     red, green, blue = style.colour_for(class_id, high[1] - low[1])

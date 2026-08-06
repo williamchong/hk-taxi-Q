@@ -62,18 +62,17 @@ group_uniforms massing;
 // How far the ETL's vertex colour is pulled toward `base_colour`. Not 1.0: the
 // five `height_bands` in `etl/config/cities/hong_kong.yaml` encode the city's
 // old-below / new-above grain, and washing them out entirely throws away real
-// information for no gain. At 0.82 they survive as a tint under the white.
+// information for no gain.
 //
-// ⚠️ This is the *trial* home for the palette. If the look is kept, the bands
-// themselves should be re-authored pale in the city config — CLAUDE.md says the
-// palette lives there — and this drops back toward 0. It is a uniform so the
-// look can be judged before anyone pays for a rebuild.
+// ⚠️ **A trial home for the palette, not its home.** The palette lives in the
+// city config (CLAUDE.md hard rule 4); this exists so a level can be judged
+// before anyone pays for a rebuild, and is expected to sit at 0 once whatever it
+// proved has been written back into the bands. The `.tres` has the verdict.
 uniform vec3 base_colour : source_color = vec3(0.91, 0.92, 0.93);
 uniform float base_wash : hint_range(0.0, 1.0) = 0.82;
 // Per-building brightness spread, from the phase seed. `colour_jitter` in the
-// city config does this in vertex colour, and `base_wash` is exactly what
-// flattens it — so the wash has to put back what it takes out, or a whitened
-// block reads as a single mass. Seeded, so it is stable frame to frame.
+// city config does the same job in vertex colour; this one exists because it can
+// be judged without a rebuild. Seeded, so it is stable frame to frame.
 // ⚠️ **Measured, not chosen** — see the 2026-08-06 probe in `docs/PROGRESS.md`.
 // Across 140 buildings of one sheet the between-building spread is ΔE 17, and it
 // is lopsided: **L\* sd 18.05 against b\* 7.44 and a\* 3.50**. So the fabric
@@ -82,8 +81,9 @@ uniform float base_wash : hint_range(0.0, 1.0) = 0.82;
 // ±3 L\*, several times smaller than what the photographs show, which is why a
 // block read as one mass.
 //
-// ⚠️ The photographic L\* also confounds reflectance with illumination, so the
-// measured spread is an *upper* bound and this is deliberately under it.
+// ⚠️ That photographic spread is an *upper* bound and this stays well under it:
+// a quarter of the survey's `L*` variance tracks nothing but how many pixels the
+// building covered, so it overstates how much real albedo varies.
 uniform float value_jitter : hint_range(0.0, 0.6) = 0.2;
 // The warm-cool axis, per building. `b*` varies twice as much as `a*` in the
 // photographs, which is cream against grey-blue — so this shifts red against

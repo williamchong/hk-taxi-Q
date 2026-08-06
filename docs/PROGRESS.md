@@ -3,7 +3,13 @@
 Living document. **Update this whenever a task changes status, a decision is made, or an open
 question is answered.** Newest entries at the top of each log.
 
-Last updated: 2026-08-06 (`Q27` **closed, and not where it was looking**: `COLOR_0` is authored in
+Last updated: 2026-08-06 (**the white city was the palette, and the anchor probe proved it in one
+`.tres` edit**: the five `height_bands` were 19 `L*` too light, and re-authoring them darker moved the
+frame 10.3 `L*` — 15.5 on the pixels that could respond — where tripling the shader's per-building
+`value_jitter` bought 0.4. Shipping measured `L*` was evaluated and **declined**, but the refusal's
+stated reason was measured and found wrong: orientation explains 1.4% of the survey's `L*`, not the
+39-`L*` shadow the docs claimed. The vegetation filter that evaluation asked for shipped with it.
+Before that, `Q27` **closed, and not where it was looking**: `COLOR_0` is authored in
 sRGB and was consumed as linear, which cost 57% of a facade pixel to albedo-independent light. Six
 lighting levers were ablated and none of them mattered. Before that, every building gained its own
 photo-measured hue — 2,214 of them, 100% joined, no schema change — and the survey proved photographic
@@ -341,6 +347,67 @@ And **`tools/check.sh` exits 0 on a shader that fails to compile** — verified,
 in its own log and `All checks passed` on the last line. The city renders a blank fallback material
 and every gate is green. Same failure mode the repo already documents for GDScript parse errors, and
 it wants the same one-line grep.
+
+### 2026-08-06 — The city read white because the bands *are* white, and `Q27` is what made that visible
+
+The entry below refused to ship the survey's `L*` and left the palette alone. Re-evaluated, both
+halves of that move need correcting — and the second one is the fix.
+
+🔴 **The anchor was never tested after `Q27`, and it was the whole problem.** The entry below records
+that dropping the bands from `L*` 80 to 62 moved the frame only 86.8 → 83.3 — an 18-point albedo
+change buying 3.5 points of pixel, gain ≈ 0.19. That measurement was taken *through* the `Q27` bug.
+Re-run on the fixed renderer, the same change measures **gain 0.85, additive share 7%**: −9.0 `L*`
+whole-frame and **−16.1 `L*` on the 55.9% of pixels that could respond**. The conclusion "the clean
+rig's light levels swamp albedo" was true of the broken build and is false of this one. Nothing was
+re-checked against the palette after the bug closed, and the white city survived on that.
+
+**What shipped:** the five `height_bands` and both `class_colours` scaled by **0.520 in linear
+light** — level only, every relative ordering intact — `base_wash` 0.15 → **0.0**, and `value_jitter`
+0.2 → 0.35. Measured on the shipping pair of viewpoints: frame `L*` **73.0 → 62.7**, responding share
+**66.4%**, `|ΔL*|` mean **15.5**. The ground took the same scale as the facades or it would have been
+left as the one bright plane in the frame; that flips it from 7 `L*` lighter than the kerb to 10
+darker, which is the right way round for a kerb the road config calls "the pale concrete that edges
+every street".
+
+⚠️ **The null hypothesis was run first and it lost — but so did the whole axis it was on.** The probe
+was designed to ask *measured* per-building lightness against *random*. `value_jitter` already ships
+±6.5 `L*` per building at 0.2, so "all 66 buildings over 120 m share one `L*`" was true of the vertex
+colour and false of the frame. Tripling it to the 0.6 ceiling moved the frame **+0.4 `L*`** and
+produced a handful of near-black towers that read as rendering errors. The missing ingredient was
+never lightness *spread*, measured or random. It was lightness *level*.
+
+**Measured `L*` is therefore still not shipped, and the reason below is still wrong.** The survey
+stores `face_L` per orientation, so the claim was testable. Fitting `L* = building + orientation`
+over the 2,026 buildings with all four walls:
+
+| | |
+|---|---|
+| orientation share of variance | **1.4%** (N −2.74, E −1.41, S +2.14, W +2.01; peak-to-peak 4.89) |
+| within-building range, raw → orientation-removed | **23.05 → 22.84**, a 0.9% shrink |
+| reliability of the 4-wall mean (one-way ANOVA ICC) | **0.822** — sound, not unusable |
+
+So "north and south walls differ by 39 `L*`, therefore illumination" does not follow — there is
+almost no compass-shadow to normalise. The old statistic also set a four-wall **range** against a
+between-building **sd**, which are not the same units. ⚠️ **But the conclusion survives on a
+different footing:** reliability is repeatability, not validity, and every confound constant across a
+building's four walls is invisible to that fit. **Log pixel count explains 26% of `L*`** and height
+10%, both building-level, both landing in the same bucket as real albedo — at most **54%** of the
+variance is plausibly paint. It is not shipped because it is not *needed*: the problem it was
+proposed for was fixed by two config numbers and no new data.
+
+✅ **The vegetation filter shipped anyway**, because it was a live defect rather than a conditional
+one. `facade_hue` took every row's hue regardless of what the sample contained, and **43 of 2,214 are
+over half canopy**. The damage is on the axis that ships: those rows sit **6.08 `a*` to the green
+side** of the rest at over double the chroma (`C*` 13.72 against 6.35), and `strength: 2.0` doubles
+it again — an unfiltered canopy row reaches the facade about **12 `a*` green**. `vegetation_max: 0.5`
+drops them. Absent, there is no threshold and the column is not needed; present, the column becomes
+*required*, because a threshold that silently filtered nothing is the failure mode worth refusing.
+A survey that predates the column gets its own message rather than `malformed`, since that one is
+intact and the fix is the opposite of hunting for a partial write.
+
+**Open question this leaves.** `strength: 2.0` puts **2.2% of surveyed buildings out of gamut, worst
+`dE` 61.5**. That is the chroma amplification alone and is unrelated to everything above — it was
+deliberately not bundled, so as not to confound the A/B. It wants its own pass.
 
 ### 2026-08-06 — Per-building façade colour ships, and the survey that delivered it also killed half of itself
 

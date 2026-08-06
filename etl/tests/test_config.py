@@ -333,6 +333,17 @@ class TestBuildingStyle:
         with pytest.raises(ValueError, match=r"facade_hue\.strength"):
             load_city("hong_kong", cities_root=rewrite(overdo_it))
 
+    @pytest.mark.parametrize("value", [-0.1, 1.1, float("nan"), float("inf")])
+    def test_facade_hue_vegetation_max_outside_its_bound_is_rejected(self, rewrite, value) -> None:
+        """A fraction, so the ceiling is 1.0 rather than a taste limit — and it
+        is two-sided for the same NaN reason as `strength` above."""
+
+        def overdo_it(doc: dict[str, Any]) -> None:
+            doc["buildings"]["facade_hue"]["vegetation_max"] = value
+
+        with pytest.raises(ValueError, match=r"facade_hue\.vegetation_max"):
+            load_city("hong_kong", cities_root=rewrite(overdo_it))
+
     def test_facade_hue_needs_a_source(self, rewrite) -> None:
         """`strength` alone colours nothing, so the pair is refused rather than
         silently ignored."""
