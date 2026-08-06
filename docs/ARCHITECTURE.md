@@ -410,8 +410,8 @@ becomes exactly `3.0` — an unknown marker with a lost phase, on whichever viad
 1/256 is exactly representable at every marker, so `floor` and `fract` round-trip in the shader.
 
 ⚠️ **The marker is derived from the palette, not from a config key.** A class with a flat
-`class_colours` entry is one whose colour does not depend on its height, which is exactly the set with
-no floors to band; anything the height bands colour is a façade. So a second city gets the right
+`class_materials` entry is one whose colour does not depend on its height, which is exactly the set
+with no floors to band; anything the height ramp colours is a façade. So a second city gets the right
 answer from its own palette, and no class name reaches pipeline logic (hard rule 3).
 
 ⚠️ **Three places have to agree and only one of them can fail loudly.** The ETL names the material,

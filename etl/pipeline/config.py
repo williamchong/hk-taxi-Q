@@ -13,6 +13,7 @@ wrong by hundreds of metres, which is far more expensive than a stack trace.
 from __future__ import annotations
 
 import math
+from bisect import bisect_right
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import IntEnum
@@ -29,7 +30,7 @@ from pipeline.crs import (
     project_bounds,
 )
 
-SUPPORTED_SCHEMA = 2
+SUPPORTED_SCHEMA = 3
 # How far a shipped colour may sit from `reflectance x exposure_anchor`, in
 # percentage points of luminance. One 8-bit step at the lightest end of this
 # palette is worth ~0.4, so this is a round-trip through `#rrggbb` and no more —
@@ -38,6 +39,10 @@ EXPOSURE_TOLERANCE_PCT = 0.5
 # Ceiling on `exposure_anchor`. See `_exposure_anchor` — a bound rather than a
 # taste limit, and deliberately above 1.0.
 EXPOSURE_ANCHOR_MAX = 2.0
+# How far a set of draw weights may sit from summing to 1.0. Float addition of
+# authored decimals, and nothing else — see `WeightedDraw.build` for why they are
+# refused rather than normalised.
+WEIGHT_SUM_TOLERANCE = 1e-6
 CITIES_ROOT = Path(__file__).resolve().parent.parent / "config" / "cities"
 # Where every stage writes its output. One definition, because two stages
 # writing into the same tree from two of them is how they end up disagreeing.
@@ -109,14 +114,230 @@ HUE_STRENGTH_MAX = 8.0
 
 
 @dataclass(frozen=True)
+class Material:
+    """A real-world surface the city is built out of, and the colour it ships as.
+
+    ⚠️ **The colour and the albedo belong together, and `Q34` is what it cost to
+    learn that.** `reflectance` used to be a field on `HeightBand`, which made the
+    *shape* of the schema assert that material is a function of height — a claim
+    nobody wrote down and the data refuses. Measured on the 2,171-building photo
+    survey, height explains **0.9%** of facade `L*` once log pixel count is
+    controlled, and the best geometric key of any kind reaches 1.4%. So "48.7% =
+    grey painted render" read, on a height bucket, as *"buildings under 12 m are
+    grey painted render"*, which no source supports.
+
+    Naming the material instead makes the claim attach to the thing it is about,
+    and makes it **portable** (CLAUDE.md hard rule 3): concrete is concrete in the
+    second city, where a height-to-material mapping would have to be re-derived
+    from scratch.
+
+    ⚠️ **Every colour the city ships is declared here and nowhere else.** That is
+    what makes `_check_exposure` total — see its docstring, and
+    `_check_every_material_is_used` for the other direction.
+    """
+
+    # The key this material is declared under. Carried on the object so an error
+    # raised deep in a consumer can name it without threading the key along.
+    name: str
+    colour: tuple[int, int, int]
+    # Real-world diffuse albedo, as a percentage. See `_check_exposure` for what
+    # it is checked against and why it is required.
+    reflectance: float
+    # Where that number comes from, in free text. Required, and deliberately not
+    # validated: the point is that somebody had to type an answer, including
+    # "back-derived, not cited" where that is the truth. An unsourced albedo is
+    # how the palette drifted before `Q33`.
+    source: str
+
+
+class _MaterialTable:
+    """The declared materials, plus which of them anything actually referenced.
+
+    Load-scoped and mutable, unlike everything else here. `get` is the *only* way
+    a material reaches a config object, so usage is recorded by the act of using
+    it — a consumer added later is counted without anyone remembering to add it
+    to a list.
+
+    That is the whole reason this is a class rather than a dict. A hand-written
+    enumeration of reference sites in `load_city` would be a second copy of the
+    join, and the copy that drifts is the one that quietly stops catching
+    anything — which is exactly how `class_reflectance` could have failed.
+    """
+
+    def __init__(self, declared: dict[str, Material]) -> None:
+        self.declared = declared
+        self.used: set[str] = set()
+
+    def get(self, name: str, where: str) -> Material:
+        material = self.declared.get(name)
+        if material is None:
+            raise ValueError(
+                f"{where} names material {name!r}, which materials: does not declare. "
+                f"Declared: {', '.join(sorted(self.declared)) or '(none)'}"
+            )
+        self.used.add(name)
+        return material
+
+
+@dataclass(frozen=True)
 class HeightBand:
-    """A colour for buildings up to a given height above their own base."""
+    """A material for buildings up to a given height above their own base.
+
+    ⚠️ **A lightness ramp, not a claim about what buildings are made of.** The
+    band a building falls in is chosen by height because the *look* wants tall
+    buildings paler, and that is legitimate art direction. What is not
+    legitimate is reading the band's material as evidence about the city's
+    stock — see `Material` for the measurement that settled it.
+    """
 
     up_to_m: float
-    colour: tuple[int, int, int]
-    # Real-world diffuse albedo the colour claims, as a percentage. See
-    # `_check_exposure` for what it is checked against and why it is required.
-    reflectance: float
+    material: Material
+
+
+@dataclass(frozen=True)
+class WeightedDraw:
+    """A material chosen from a fixed distribution by one number in [0, 1).
+
+    ⚠️ **Sorted by name, and that is load-bearing rather than tidiness.** The
+    draw is a function of position in this tuple, so ordering it by the YAML's
+    key order would mean re-indenting or alphabetising a config block repaints
+    every building it touches — a diff with no visible intent and a large visible
+    effect. Sorting here makes the output depend on the *set* of weights, which
+    is what the author actually chose.
+
+    ⚠️ **`bounds` ends at exactly 1.0 by assignment, not by summation.** Floating
+    addition of authored weights lands near 1.0, not on it, and a cumulative
+    table whose last entry is 0.9999999999 drops whichever building draws above
+    it off the end of the search. That is `_phase`'s defect in a different shape:
+    rare, silent, and confined to the unlucky object. The sum is validated
+    separately, at parse time, where it can still be a useful error.
+    """
+
+    materials: tuple[Material, ...]
+    bounds: tuple[float, ...]
+
+    @staticmethod
+    def build(weights: dict[str, Any], table: _MaterialTable, where: str) -> WeightedDraw:
+        """Authored weights, with material *names* resolved through `table`.
+
+        The parsing half, kept apart from `of` so the private table is a loader
+        concern and nothing else has to hold one to describe a distribution.
+        """
+        if not weights:
+            raise ValueError(f"{where} is empty — a draw needs at least one material")
+        # Through `_number` rather than trusting YAML to have produced floats: a
+        # quoted weight reaches `fsum` as a string and raises a bare `TypeError`
+        # naming neither the file nor the block, which in a config of forty-odd
+        # numbers is most of the answer. `_measures` says the same where it lives.
+        return WeightedDraw.of(
+            {
+                table.get(str(name), where): _number(weight, f"{where}.{name}")
+                for name, weight in weights.items()
+            },
+            where,
+        )
+
+    @staticmethod
+    def of(weights: Mapping[Material, float], where: str) -> WeightedDraw:
+        """A distribution over materials that already exist."""
+        if not weights:
+            raise ValueError(f"{where} is empty — a draw needs at least one material")
+        total = math.fsum(weights.values())
+        if abs(total - 1.0) > WEIGHT_SUM_TOLERANCE:
+            # ⚠️ Not normalised. A table summing to 0.9 is one somebody stopped
+            # editing, and rescaling it would redistribute the missing tenth
+            # across the materials that *are* listed — silently, and in
+            # proportions nobody chose.
+            raise ValueError(
+                f"{where} weights sum to {total:.6f}, not 1.0. "
+                f"Weights are a distribution and are not normalised for you."
+            )
+        for material, weight in weights.items():
+            if not 0.0 < weight <= 1.0:
+                raise ValueError(f"{where}.{material.name} is {weight}, which is not in (0, 1]")
+
+        # `Material.name` is the sort key, which is the job that field exists to
+        # do — ordering on it here is what makes the draw a function of the *set*
+        # of weights rather than of the order somebody happened to type them in.
+        ordered = sorted(weights, key=lambda material: material.name)
+        running = 0.0
+        bounds: list[float] = []
+        for material in ordered:
+            running += weights[material]
+            bounds.append(running)
+        bounds[-1] = 1.0
+        return WeightedDraw(materials=tuple(ordered), bounds=tuple(bounds))
+
+    def pick(self, draw: float) -> Material:
+        """The material `draw` in [0, 1) falls to."""
+        return self.materials[min(bisect_right(self.bounds, draw), len(self.materials) - 1)]
+
+
+@dataclass(frozen=True)
+class HueSector:
+    """One wedge of the hue circle, and what a building in it is built of."""
+
+    from_deg: float
+    draw: WeightedDraw
+
+
+@dataclass(frozen=True)
+class ChromaRing:
+    """Buildings out to a given chroma, split by hue angle if they need to be.
+
+    ⚠️ **Rings *and* sectors, because chroma alone cannot express the measured
+    structure.** The two largest hue clusters in the survey are cool grey at
+    `C*` 2.6 and neutral grey at `C*` 3.1 — indistinguishable by chroma, and
+    opposite in `b*` (-2.5 against +3.1). A flat chroma bin would merge them.
+
+    Total by construction, which is why it is shaped this way rather than as a
+    list of first-match rules: rings reuse `height_bands`' ascending-and-`.inf`
+    rule, and sectors partition the circle as long as `from_deg` ascends inside
+    [0, 360) — the last one wraps through 360 to the first. A rule list would
+    need a reachability check the loader cannot honestly write.
+    """
+
+    up_to_chroma: float
+    # Exactly one of these. A ring with no hue structure worth naming takes a
+    # single draw; one that has it takes sectors.
+    draw: WeightedDraw | None
+    sectors: tuple[HueSector, ...]
+
+    def draw_for(self, hue_deg: float) -> WeightedDraw:
+        if self.draw is not None:
+            return self.draw
+        index = bisect_right([sector.from_deg for sector in self.sectors], hue_deg) - 1
+        # Below the first boundary is the wrap: it belongs to the last sector,
+        # which runs from its own `from_deg` through 360 and round to this one.
+        return self.sectors[index].draw
+
+
+@dataclass(frozen=True)
+class MaterialAssignment:
+    """Which material a building is built of, and on what evidence.
+
+    ⚠️ **The two branches are named for what is *known* about the building, not
+    for how the answer is computed**, and that is the correction `Q34` had to
+    make to its own first proposal. Falling back to the marginal distribution of
+    the surveyed population reads as the natural default and is wrong:
+    `facade_hue` is optional by contract, so a clone without the 4.9 GB survey
+    must build the **same** city, and a marginal draw would build a different
+    one. An unsurveyed building is not a surveyed building whose hue we are
+    guessing — it is a building the height ramp answers for, exactly as before.
+    """
+
+    # Reached by having no measurement. Required: it is the whole city on a
+    # fresh clone.
+    by_height: tuple[HeightBand, ...]
+    # Reached by having one. Empty where the city states no rule, in which case
+    # a surveyed building takes the height ramp too and only its hue is used.
+    rings: tuple[ChromaRing, ...]
+
+    def draw_for(self, chroma: float, hue_deg: float) -> WeightedDraw | None:
+        for ring in self.rings:
+            if chroma <= ring.up_to_chroma:
+                return ring.draw_for(hue_deg)
+        return None
 
 
 @dataclass(frozen=True)
@@ -146,13 +367,17 @@ class BuildingStyle:
     # deck sampling needs none. Always one of `classes`, so the carriageway
     # lands on geometry that ships rather than on geometry only the ETL sees.
     structure_class: str | None
-    # Flat colour for a class, overriding the height bands.
-    class_colours: dict[str, tuple[int, int, int]]
-    # Real-world albedo each of those claims, keyed the same way. A parallel map
-    # rather than a field on the entry, following `class_colour_jitter`; every
-    # `class_colours` key must appear here, which `_building_style` enforces.
-    class_reflectance: dict[str, float]
-    height_bands: tuple[HeightBand, ...]
+    # Flat material for a class, overriding the height bands.
+    #
+    # This used to be two parallel maps, `class_colours` and `class_reflectance`,
+    # joined by key and checked in both directions by `_building_style`. `Q34`
+    # collapsed them: a colour and the albedo it claims are one fact, and holding
+    # them apart is what made the join — and the check guarding it — necessary at
+    # all. The reasoning that check carried now lives on `_MaterialTable`.
+    class_materials: dict[str, Material]
+    # What everything else is built of, and on what evidence. See
+    # `MaterialAssignment` — the branch names are a contract, not a description.
+    material_assignment: MaterialAssignment
     # Fraction of brightness a building's colour may be varied by, seeded from
     # its own id so the result is stable across runs.
     colour_jitter: float
@@ -202,10 +427,28 @@ class BuildingStyle:
     # recorded it would filter nothing while looking like it filtered.
     facade_hue_vegetation_max: float | None = None
 
+    @property
+    def height_bands(self) -> tuple[HeightBand, ...]:
+        """The unsurveyed ramp, under the name it had before `Q34` nested it."""
+        return self.material_assignment.by_height
+
+    def material_for(self, class_id: str, height_m: float) -> Material:
+        """The material a class at a height is built of, before any variation.
+
+        The **unsurveyed** answer, and the only one this class can give: a
+        surveyed building's material depends on its measured hue and on a seed
+        drawn from its id, neither of which is config. `buildings.material_for`
+        is the whole rule and falls back to this.
+
+        Split out from `colour_for` by `Q34` so the *choice* of material and the
+        extraction of its colour are separable.
+        """
+        if class_id in self.class_materials:
+            return self.class_materials[class_id]
+        return next(band.material for band in self.height_bands if height_m <= band.up_to_m)
+
     def colour_for(self, class_id: str, height_m: float) -> tuple[int, int, int]:
-        if class_id in self.class_colours:
-            return self.class_colours[class_id]
-        return next(band.colour for band in self.height_bands if height_m <= band.up_to_m)
+        return self.material_for(class_id, height_m).colour
 
     def cell_size_m(self, class_id: str, level: int) -> float:
         """Clustering cell for one class at one tier.
@@ -239,7 +482,7 @@ class BuildingStyle:
 
         **Derived from config that already exists rather than from a new key**,
         because the distinction is one the palette has always drawn: a class with
-        a flat `class_colours` entry is a thing whose colour does not depend on
+        a flat `class_materials` entry is a thing whose colour does not depend on
         how tall it is, and that is exactly the set with no floors to band. Hard
         rule 3 holds — no class name reaches this file, and a second city gets
         the right answer from its own palette without writing the mapping twice.
@@ -252,7 +495,7 @@ class BuildingStyle:
         """
         if self.is_ground(class_id):
             return SurfaceClass.GROUND
-        if class_id in self.class_colours:
+        if class_id in self.class_materials:
             return SurfaceClass.STRUCTURE
         return SurfaceClass.FACADE
 
@@ -418,14 +661,14 @@ class RoadSurface:
     # edge between two wide roads is not consumed from both ends.
     junction_trim_max_fraction: float
 
-    surface_colour: tuple[int, int, int]
-    kerb_colour: tuple[int, int, int]
-    # Real-world albedo each of the two claims. Required here for the reason the
-    # rule exists: these two colours are in a different dataclass from the rest
-    # of the palette, and that is precisely how they escaped the one exposure
-    # change every other colour took. See `_check_exposure`.
-    surface_reflectance: float
-    kerb_reflectance: float
+    # ⚠️ **Named, not authored here.** These two colours are in a different
+    # dataclass from the rest of the palette, and that is precisely how they
+    # escaped the one exposure change every other colour took (`235aa4f`). They
+    # now reference the same `materials:` table as everything else, so a section
+    # can no longer be re-exposed without its neighbour — there is only one place
+    # left to change. See `_check_exposure`.
+    surface_material: Material
+    kerb_material: Material
 
     def widen_for(
         self, speed_limit_kph: int, *, elevation_level: int, on_structure: bool = False
@@ -712,6 +955,12 @@ class CityConfig:
     sources: dict[str, str]
     # Datasets that must be selected per region via an index.
     tiled_sources: dict[str, TiledSource]
+    # Every colour the city ships, by name. ⚠️ **Top-level, a sibling of
+    # `exposure_anchor` rather than a member of `buildings:`** — `roads:` draws
+    # from it too, and burying it under one of its two consumers would make the
+    # other reach across for its asphalt. That asymmetry is not hypothetical: it
+    # is the shape that let `235aa4f` re-expose `buildings:` and miss `roads:`.
+    materials: dict[str, Material]
     buildings: BuildingStyle
     roads: RoadNetwork
     fares: Fares
@@ -848,6 +1097,11 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
     if not regions:
         raise ValueError(f"{path} defines no regions")
 
+    # Parsed before anything that could reference it, so every `table.get` below
+    # resolves against a complete table — a material declared after its first use
+    # would otherwise fail on document order rather than on being absent.
+    table = _MaterialTable(_materials(_require(document, "materials", path), f"{path}:materials"))
+
     city = CityConfig(
         id=city_id,
         name=str(_require(document, "name", path)),
@@ -861,14 +1115,24 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
             str(source_id): _tiled_source(str(source_id), body, path)
             for source_id, body in (document.get("tiled_sources") or {}).items()
         },
-        buildings=_building_style(_require(document, "buildings", path), f"{path}:buildings"),
-        roads=_road_network(_require(document, "roads", path), f"{path}:roads"),
+        # Copied rather than aliased: `table` is load-scoped and mutable, and a
+        # frozen config holding a live reference into it is a shape that only
+        # works while nothing keeps the table.
+        materials=dict(table.declared),
+        buildings=_building_style(
+            _require(document, "buildings", path), f"{path}:buildings", table
+        ),
+        roads=_road_network(_require(document, "roads", path), f"{path}:roads", table),
         fares=_fares(_require(document, "fares", path), f"{path}:fares"),
         exposure_anchor=_exposure_anchor(
             _require(document, "exposure_anchor", path), f"{path}:exposure_anchor"
         ),
     )
     _check_regions_lie_within_the_city(city, path)
+    # Usage before exposure, so a stray entry is reported as stray. The other
+    # order exposure-checks a colour that ships nowhere and leads with whichever
+    # complaint that raises, which is the less actionable of the two.
+    _check_every_material_is_used(table, path)
     _check_exposure(city, path)
     _check_deck_sampling_has_a_structure_class(city, path)
     _check_widening_levels_are_mapped(city, path)
@@ -889,48 +1153,57 @@ def _check_exposure(city: CityConfig, path: Path) -> None:
     albedos instead. What that caught is in `hong_kong.yaml`'s header and
     `docs/ART_DESIGN.md`; it is not repeated here.
 
-    ⚠️ **Enforced here, over the whole config, rather than at each parse site.**
-    The colours live in two unrelated dataclasses, and `235aa4f` re-exposed one
-    of them and not the other — not by argument, but because `roads:` was not in
-    the diff that changed `buildings:`. A per-section check would have passed
-    that commit. This is a cross-section rule or it is nothing.
+    ⚠️ **The cross-section property has moved, and this loop is now the wrong
+    place to look for it.** The rule was written to be whole-config because the
+    colours lived in two unrelated dataclasses, and `235aa4f` re-exposed one and
+    not the other — not by argument, but because `roads:` was not in the diff
+    that changed `buildings:`. A per-section check would have passed that commit.
+
+    Since `Q34` there is only one section: this loop is total because the
+    **table** is, not because the loop is careful. That is a stronger guarantee
+    and a more fragile one, because it now depends on something this function
+    cannot see — that no colour is authored outside `materials:`. Two things hold
+    that, and neither is optional: `_check_every_material_is_used` from this side,
+    and `test_no_colour_escapes_the_materials_table` from the other.
 
     The tolerance is 8-bit quantisation and nothing else. It is not slack for a
     colour that nearly obeys: a value that misses by more than a round-trip
     through `#rrggbb` is asserting a different material, and should either say
     so or be corrected.
     """
-    palette: list[tuple[str, tuple[int, int, int], float]] = [
-        (f"buildings.height_bands[{index}]", band.colour, band.reflectance)
-        for index, band in enumerate(city.buildings.height_bands)
-    ]
-    palette += [
-        (f"buildings.class_colours.{name}", colour, city.buildings.class_reflectance[name])
-        for name, colour in city.buildings.class_colours.items()
-    ]
-    palette += [
-        (
-            "roads.surface.surface_colour",
-            city.roads.surface.surface_colour,
-            city.roads.surface.surface_reflectance,
-        ),
-        (
-            "roads.surface.kerb_colour",
-            city.roads.surface.kerb_colour,
-            city.roads.surface.kerb_reflectance,
-        ),
-    ]
-
-    for name, colour, declared in palette:
-        expected = declared * city.exposure_anchor
-        actual = reflectance(colour)
+    for name, material in city.materials.items():
+        expected = material.reflectance * city.exposure_anchor
+        actual = reflectance(material.colour)
         if abs(actual - expected) > EXPOSURE_TOLERANCE_PCT:
+            red, green, blue = material.colour
             raise ValueError(
-                f"{path}:{name} is #{colour[0]:02x}{colour[1]:02x}{colour[2]:02x}, whose "
-                f"luminance is {actual:.2f}% — but it declares reflectance {declared}% at "
-                f"exposure_anchor {city.exposure_anchor}, which is {expected:.2f}%. "
+                f"{path}:materials.{name} is #{red:02x}{green:02x}{blue:02x}, whose "
+                f"luminance is {actual:.2f}% — but it declares reflectance "
+                f"{material.reflectance}% at exposure_anchor {city.exposure_anchor}, "
+                f"which is {expected:.2f}%. "
                 "Change the colour, or change the material it claims to be."
             )
+
+
+def _check_every_material_is_used(table: _MaterialTable, path: Path) -> None:
+    """Nothing may be declared in `materials:` that nothing references.
+
+    The reverse direction of the join, and it inherits its argument from the
+    `class_reflectance` stray-key check this replaces: a table entry that colours
+    nothing parses, loads, and is silently inert — the one way this table can be
+    wrong without saying so. Worse here than there, because `_check_exposure`
+    reads the whole table: an unused entry is a colour being *validated* as
+    though it ships, which is how a palette acquires members it no longer has.
+
+    Usage is recorded by `_MaterialTable.get` rather than enumerated here, so
+    this stays correct when a consumer is added. See that class.
+    """
+    stray = set(table.declared) - table.used
+    if stray:
+        raise ValueError(
+            f"{path}:materials declares {', '.join(sorted(stray))}, which nothing references. "
+            "Every material is a colour the city ships; delete it, or use it."
+        )
 
 
 def _check_deck_sampling_has_a_structure_class(city: CityConfig, path: Path) -> None:
@@ -958,7 +1231,7 @@ def _check_deck_sampling_has_a_structure_class(city: CityConfig, path: Path) -> 
 def _check_widening_levels_are_mapped(city: CityConfig, path: Path) -> None:
     """A widening rule for a level the city never maps is a rule that never fires.
 
-    The same trap `class_colours` and `class_lod_cell_sizes_m` both refuse: the
+    The same trap `class_materials` and `class_lod_cell_sizes_m` both refuse: the
     key is a join, so a level merely absent from `elevation_levels` gives a
     config that loads, a surface that builds, and a rule that silently overrides
     nothing. Off-grade ribbon would go on being drawn at its at-grade width,
@@ -1039,27 +1312,122 @@ def _cell_sizes(values: Any, field: str) -> tuple[float, ...]:
     return sizes
 
 
-def _building_style(body: dict[str, Any], where: str) -> BuildingStyle:
+def _materials(body: dict[str, Any], where: str) -> dict[str, Material]:
+    if not body:
+        raise ValueError(f"{where} is empty — a city ships at least one colour")
+    return {
+        str(name): Material(
+            name=str(name),
+            colour=_parse_hex(str(_require(entry, "colour", f"{where}.{name}")), f"{where}.{name}"),
+            reflectance=_reflectance(
+                _require(entry, "reflectance", f"{where}.{name}"), f"{where}.{name}.reflectance"
+            ),
+            source=str(_require(entry, "source", f"{where}.{name}")),
+        )
+        for name, entry in body.items()
+    }
+
+
+def _hue_sectors(entries: Any, table: _MaterialTable, where: str) -> tuple[HueSector, ...]:
+    sectors = tuple(
+        HueSector(
+            from_deg=float(_require(entry, "from_deg", f"{where}[{index}]")),
+            draw=WeightedDraw.build(
+                _require(entry, "weights", f"{where}[{index}]"), table, f"{where}[{index}].weights"
+            ),
+        )
+        for index, entry in enumerate(entries)
+    )
+    if not sectors:
+        raise ValueError(f"{where} is empty")
+    angles = [sector.from_deg for sector in sectors]
+    if angles != sorted(angles) or len(set(angles)) != len(angles):
+        raise ValueError(f"{where} must be ordered by strictly ascending from_deg")
+    if angles[0] < 0.0 or angles[-1] >= 360.0:
+        # Outside [0, 360) the wrap stops being a partition: an angle below the
+        # first boundary is meant to belong to the last sector, and that is only
+        # a covering of the circle if every boundary is on it.
+        raise ValueError(f"{where} from_deg must all lie in [0, 360), got {angles}")
+    return sectors
+
+
+def _ascending_to_inf(values: list[float], field: str, key: str) -> None:
+    """A first-match table's keys ascend and the last one is open-ended.
+
+    Shared because two tables are built on the same rule — the height ramp and
+    the chroma rings — and this file's norm is that the copy which drifts is the
+    one that quietly stops catching anything (`_jitter`, `_measures`,
+    `_thresholds` all say so where they are defined).
+
+    ⚠️ The open-ended last entry is what makes the table **total**, and totality
+    is the property both callers rely on to have no fallback branch at all. Why
+    each table has no ceiling differs, so that reasoning stays at the call sites.
+    """
+    if not values:
+        raise ValueError(f"{field} is empty")
+    if values != sorted(values):
+        raise ValueError(f"{field} must be ordered by ascending {key}")
+    if values[-1] != float("inf"):
+        raise ValueError(f"{field} must end with `{key}: .inf`")
+
+
+def _material_assignment(
+    body: dict[str, Any], table: _MaterialTable, where: str
+) -> MaterialAssignment:
+    unsurveyed = _require(body, "unsurveyed", where)
     bands = tuple(
         HeightBand(
             up_to_m=float(_require(band, "up_to_m", where)),
-            colour=_parse_hex(str(_require(band, "colour", where)), f"{where}:height_bands"),
-            reflectance=_reflectance(
-                _require(band, "reflectance", where), f"{where}:height_bands.reflectance"
+            material=table.get(
+                str(_require(band, "material", where)),
+                f"{where}:unsurveyed.by_height[{index}]",
             ),
         )
-        for band in _require(body, "height_bands", where)
+        for index, band in enumerate(_require(unsurveyed, "by_height", f"{where}:unsurveyed"))
     )
-    if not bands:
-        raise ValueError(f"{where}:height_bands is empty")
-    heights = [band.up_to_m for band in bands]
-    if heights != sorted(heights):
-        raise ValueError(f"{where}:height_bands must be ordered by ascending up_to_m")
-    if heights[-1] != float("inf"):
-        # Without an open-ended last band, `colour_for` has nothing to return for
-        # a building taller than the table — and the tallest buildings are the
-        # ones a Hong Kong skyline is read by.
-        raise ValueError(f"{where}:height_bands must end with `up_to_m: .inf`")
+    # Without an open-ended last band, `material_for` has nothing to return for a
+    # building taller than the table — and the tallest buildings are the ones a
+    # Hong Kong skyline is read by.
+    _ascending_to_inf([band.up_to_m for band in bands], f"{where}:unsurveyed.by_height", "up_to_m")
+
+    surveyed = body.get("surveyed")
+    rings: tuple[ChromaRing, ...] = ()
+    if surveyed is not None:
+        field = f"{where}:surveyed.rings"
+        rings = tuple(
+            ChromaRing(
+                up_to_chroma=float(_require(ring, "up_to_chroma", field)),
+                draw=(
+                    WeightedDraw.build(ring["weights"], table, f"{field}[{index}].weights")
+                    if "weights" in ring
+                    else None
+                ),
+                sectors=(
+                    _hue_sectors(ring["sectors"], table, f"{field}[{index}].sectors")
+                    if "sectors" in ring
+                    else ()
+                ),
+            )
+            for index, ring in enumerate(_require(surveyed, "rings", f"{where}:surveyed"))
+        )
+        for index, ring in enumerate(rings):
+            if (ring.draw is None) == (not ring.sectors):
+                # Both would make one of them silently dead; neither leaves the
+                # ring with no answer at all.
+                raise ValueError(
+                    f"{field}[{index}] must have exactly one of `weights` or `sectors`"
+                )
+        # The same rule as the height ramp, for a different reason: chroma has no
+        # ceiling either, so an unbounded last ring is what makes this total.
+        _ascending_to_inf([ring.up_to_chroma for ring in rings], field, "up_to_chroma")
+
+    return MaterialAssignment(by_height=bands, rings=rings)
+
+
+def _building_style(body: dict[str, Any], where: str, table: _MaterialTable) -> BuildingStyle:
+    assignment = _material_assignment(
+        _require(body, "material_assignment", where), table, f"{where}:material_assignment"
+    )
 
     hue = body.get("facade_hue")
     hue_source = None if hue is None else str(_require(hue, "source", f"{where}:facade_hue"))
@@ -1083,44 +1451,24 @@ def _building_style(body: dict[str, Any], where: str) -> BuildingStyle:
     if not classes:
         raise ValueError(f"{where}:classes is empty")
 
-    class_colours = {
-        str(name): _parse_hex(str(value), f"{where}:class_colours.{name}")
-        for name, value in (body.get("class_colours") or {}).items()
+    class_materials = {
+        str(name): table.get(str(value), f"{where}:class_materials.{name}")
+        for name, value in (body.get("class_materials") or {}).items()
     }
-    unknown = set(class_colours) - set(classes)
+    unknown = set(class_materials) - set(classes)
     if unknown:
         # A misspelled key parses, loads, and silently colours nothing — the one
         # way this table can be wrong without saying so.
         raise ValueError(
-            f"{where}:class_colours names {', '.join(sorted(unknown))}, "
+            f"{where}:class_materials names {', '.join(sorted(unknown))}, "
             f"which is not in classes ({', '.join(classes)})"
-        )
-
-    class_reflectance = {
-        str(name): _reflectance(value, f"{where}:class_reflectance.{name}")
-        for name, value in (body.get("class_reflectance") or {}).items()
-    }
-    missing = set(class_colours) - set(class_reflectance)
-    if missing:
-        # The two maps are a join, and an unpaired colour is exactly the state
-        # `_check_exposure` exists to make impossible — it would be a colour with
-        # no declared material, which is where the palette drifted from before.
-        raise ValueError(
-            f"{where}:class_reflectance is missing {', '.join(sorted(missing))}, "
-            "which class_colours colours. Every colour declares its material."
-        )
-    stray = set(class_reflectance) - set(class_colours)
-    if stray:
-        raise ValueError(
-            f"{where}:class_reflectance names {', '.join(sorted(stray))}, "
-            "which class_colours does not colour"
         )
 
     class_cells: dict[str, tuple[float, ...]] = {}
     for name, sizes in (body.get("class_lod_cell_sizes_m") or {}).items():
         field = f"{where}:class_lod_cell_sizes_m.{name}"
         if str(name) not in classes:
-            # Same trap as `class_colours`: a misspelled key parses, loads, and
+            # Same trap as `class_materials`: a misspelled key parses, loads, and
             # silently overrides nothing.
             raise ValueError(f"{field} is not in classes ({', '.join(classes)})")
         override = _cell_sizes(sizes, field)
@@ -1151,7 +1499,7 @@ def _building_style(body: dict[str, Any], where: str) -> BuildingStyle:
     for name, value in (body.get("class_colour_jitter") or {}).items():
         field = f"{where}:class_colour_jitter.{name}"
         if str(name) not in classes:
-            # Same trap as `class_colours`: a misspelled key parses, loads, and
+            # Same trap as `class_materials`: a misspelled key parses, loads, and
             # silently overrides nothing.
             raise ValueError(f"{field} is not in classes ({', '.join(classes)})")
         class_jitter[str(name)] = _jitter(value, field)
@@ -1184,9 +1532,8 @@ def _building_style(body: dict[str, Any], where: str) -> BuildingStyle:
         classes=classes,
         terrain_class=terrain,
         structure_class=str(structure) if structure is not None else None,
-        class_colours=class_colours,
-        class_reflectance=class_reflectance,
-        height_bands=bands,
+        class_materials=class_materials,
+        material_assignment=assignment,
         colour_jitter=jitter,
         class_colour_jitter=class_jitter,
         facade_hue_source=hue_source,
@@ -1273,7 +1620,7 @@ def _scale(value: Any, field: str, high: float) -> float:
     return number
 
 
-def _road_network(body: dict[str, Any], where: str) -> RoadNetwork:
+def _road_network(body: dict[str, Any], where: str, table: _MaterialTable) -> RoadNetwork:
     layers = {
         name: _source_layer(_require(body, name, where), f"{where}:{name}", roles)
         for name, roles in _ROAD_LAYER_ROLES.items()
@@ -1329,7 +1676,7 @@ def _road_network(body: dict[str, Any], where: str) -> RoadNetwork:
         lane_width_m=float(_require(body, "lane_width_m", where)),
         tram_streets=frozenset(str(name) for name in (body.get("tram_streets") or ())),
         ground_from_terrain=ground == TERRAIN,
-        surface=_road_surface(_require(body, "surface", where), f"{where}:surface"),
+        surface=_road_surface(_require(body, "surface", where), f"{where}:surface", table),
         deck=_deck_sampling(deck, f"{where}:deck") if deck is not None else None,
         ground_profile=(
             _ground_profile(profile, f"{where}:ground_profile") if profile is not None else None
@@ -1380,7 +1727,7 @@ def _thresholds(
     The closed-key-set check is the reason this is shared rather than written
     per block. Misspelling one of the names is already caught by its absence;
     adding a spare on top of them is not, and would parse, load and tune
-    nothing. Refused for the reason `class_colours` refuses the same thing, with
+    nothing. Refused for the reason `class_materials` refuses the same thing, with
     more grounds: these key sets are closed and known, and they are the blocks
     whose whole point is not to be silently inert.
     """
@@ -1420,7 +1767,7 @@ def _deck_sampling(body: dict[str, Any], where: str) -> DeckSampling:
     )
 
 
-def _road_surface(body: dict[str, Any], where: str) -> RoadSurface:
+def _road_surface(body: dict[str, Any], where: str, table: _MaterialTable) -> RoadSurface:
     widen_default = float(_require(body, "widen_default", where))
     widen = {
         int(threshold): float(factor)
@@ -1473,13 +1820,11 @@ def _road_surface(body: dict[str, Any], where: str) -> RoadSurface:
         kerb_width_m=measures["kerb_width_m"],
         junction_trim_factor=measures["junction_trim_factor"],
         junction_trim_max_fraction=fraction,
-        surface_colour=_parse_hex(str(_require(body, "surface_colour", where)), where),
-        kerb_colour=_parse_hex(str(_require(body, "kerb_colour", where)), where),
-        surface_reflectance=_reflectance(
-            _require(body, "surface_reflectance", where), f"{where}:surface_reflectance"
+        surface_material=table.get(
+            str(_require(body, "surface_material", where)), f"{where}:surface_material"
         ),
-        kerb_reflectance=_reflectance(
-            _require(body, "kerb_reflectance", where), f"{where}:kerb_reflectance"
+        kerb_material=table.get(
+            str(_require(body, "kerb_material", where)), f"{where}:kerb_material"
         ),
     )
 

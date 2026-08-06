@@ -47,24 +47,75 @@ evidence/direction split `facade_hue.strength` already makes.
 Hong Kong ships `exposure_anchor: 0.520`, which is not chosen but measured: it is the linear scale
 `235aa4f` applied to the bands, graded at frame `L*` 73.0 → 62.7, gain 0.85, responding share 66.4%.
 
-| Surface | reflectance | source | shipped |
+| material | reflectance | source | shipped |
 |---|---|---|---|
-| height bands ×5 | 48.7–61.5% | ⚠️ **back-derived, not cited** | `#968872` … `#8e9393` |
-| kerb | 25.0% | weathered concrete, 20–30% | `#68655c` |
-| infrastructure | 22.0% | weathered + sooty concrete | `#615f5a` |
-| ground | 20.0% | dry soil and urban fill, 15–25% | `#645a45` |
-| asphalt | 10.0% | aged urban asphalt, 7–12% | `#42403d` |
+| `render_warm` | 48.7% | ⚠️ **back-derived, not cited** | `#968872` |
+| `render_pale` | 58.4% | ⚠️ **back-derived, not cited** | `#9d9586` |
+| `tile_neutral` | 61.5% | ⚠️ **back-derived, not cited** | `#9a9a90` |
+| `render_cool` | 60.1% | ⚠️ **back-derived, not cited** | `#949995` |
+| `panel_grey` | 55.2% | ⚠️ **back-derived, not cited** | `#8e9393` |
+| `concrete_kerb` | 25.0% | weathered concrete, 20–30% | `#68655c` |
+| `concrete_sooty` | 22.0% | weathered + sooty concrete | `#615f5a` |
+| `fill_dry` | 20.0% | dry soil and urban fill, 15–25% | `#645a45` |
+| `asphalt_aged` | 10.0% | aged urban asphalt, 7–12% | `#42403d` |
 
-⚠️ **The bands are the one soft entry and the whole rule leans on them.** They are unchanged by the
-rule, so their reflectance is simply what the shipped colour claims once the anchor is divided out —
-the rule is calibrated *on* them and therefore cannot also check them. They read 49–62%, at the top
-of what painted render and ceramic tile do. If that is wrong the anchor is wrong with it and every
-other colour moves. Recorded as a number precisely so it is arguable.
+⚠️ **The five facade materials are the soft entries and the whole rule leans on them.** They are
+unchanged by the rule, so their reflectance is simply what the shipped colour claims once the anchor
+is divided out — the rule is calibrated *on* them and therefore cannot also check them. They read
+49–62%, at the top of what painted render and ceramic tile do. If that is wrong the anchor is wrong
+with it and every other colour moves. Recorded as a number precisely so it is arguable.
 
-⚠️ **The rule is enforced over the whole config, never per section.** The two road colours live in
-`RoadSurface` where the rest of the palette lives in `BuildingStyle`, and that is exactly how they
-escaped `235aa4f` — not by argument, but because `roads:` was not in the diff that changed
-`buildings:`. A per-section check would have passed that commit. `TestPaletteExposure` reproduces it.
+⚠️ **Five names for what is really one material family** at five lightnesses. That is a real claim and
+a weaker one than the schema used to make; see `Q34` below. Do not rename the last of them to
+anything glazed — 55.2% contradicts curtain-wall glass's 8–15% diffuse albedo sitting beside it.
+
+### Material is not a function of height (`Q34`)
+
+**A `materials:` table sits at the top level of the city config, and every colour the city ships is
+declared there and nowhere else.** `buildings:` and `roads:` reference entries by name.
+
+That shape is the point. `colour` and `reflectance` used to be fields on `height_bands`, which made
+the *schema* assert that material is a function of height — a claim nobody wrote down and the data
+refuses. Measured on the 2,171-building photo survey, **height explains 0.9% of facade `L*`** once
+log pixel count is controlled, and 0.7% of `a*`; the best geometric key of any kind, height and
+footprint together, reaches 1.4%. So "48.7% = grey painted render" read, on a height bucket, as
+*"buildings under 12 m are grey painted render"*, which no source supports. It also broke hard rule
+3 — a materials table is portable, a height→material mapping is not.
+
+Hue carries the structure that height does not: **five clusters on measured hue capture 72.4%** of
+hue variance. So a surveyed building draws its material from a distribution selected by its measured
+chroma and hue angle, seeded from its own LandsD id; an **unsurveyed** one takes the height ramp,
+which is now explicitly a *lightness ramp* and claims nothing about the stock.
+
+⚠️ **What that buys is lightness conditioned on hue, and not more.** `with_hue` replaces `a*`/`b*`
+immediately afterwards, so the drawn material's own chroma never reaches the screen. The gain is that
+a building rendering cream gets an albedo plausible for cream rather than one plausible for concrete.
+
+⚠️ **Not spatial coherence.** Neighbours draw independently and hue does not supply it either — only
+0.5% of hue variance lies between the survey's six sheets. Real blocks share cladding; these do not.
+That is `Q35`, opened by this shipping, and it wants grading from the *street* viewpoint rather than
+the skyline — a canyon shows three façades at once where the skyline averages hundreds.
+
+Every bin's weights are authored so its *expected* reflectance matches what the height ramp already
+gave that same population, which is possible only because height and hue are near-independent. Graded
+on the two fixed viewpoints: whole-frame `L*` moved **−0.8** (street) and **−0.1** (skyline) while
+~32% of pixels moved by a mean 2.2–2.5 `L*`. The change is a redistribution, not a level change, and
+that is deliberate — it is what makes it readable as one.
+
+⚠️ **The property that guarantees this changed with `Q34`, and the new one is stronger and rests on
+something narrower.** The rule was written to be enforced over the whole config, never per section,
+because the two road colours were authored in `RoadSurface` while the rest of the palette was
+authored in `BuildingStyle` — which is exactly how they escaped `235aa4f`, not by argument but
+because `roads:` was not in the diff that changed `buildings:`. A per-section check would have passed
+that commit.
+
+There is now one section. `_check_exposure` loops over `materials:` and is total **because the table
+is**, not because the loop is careful — which means it depends on something it cannot itself see:
+that no colour is authored anywhere else. Two checks hold that, and neither is optional.
+`_check_every_material_is_used` holds the reverse direction at load;
+`test_no_colour_escapes_the_materials_table` walks the shipped document and fails the day a
+`#rrggbb`-shaped value appears outside `materials:`. That test is what now carries `235aa4f`'s
+lesson.
 
 ### Anchor colours
 
@@ -116,15 +167,17 @@ then be rewritten to describe the city that ships. See `Q30`.
 ### General fabric (≈95% of buildings)
 
 - Source: extruded footprints, untextured
-- **Vertex colour**, assigned by ETL from height band and building class — no textures
+- **Vertex colour**, assigned by ETL from the building's material and class — no textures
 - Flat/faceted shading, hard normals
 - Subtle per-building colour jitter so blocks don't read as uniform
 
-**The palette lives in `etl/config/cities/hong_kong.yaml` under `buildings:`**, not in code — five
-height bands from warm beige for the low pre-war and post-war stock up to cool pale grey for
-commercial towers, a flat concrete grey for `INFRASTRUCTURE`, and the jitter amount. Change it there;
-change *why* here first. The jitter is seeded from each building's LandsD id, so it is stable across
-rebuilds.
+**The palette lives in `etl/config/cities/hong_kong.yaml` under the top-level `materials:` table**,
+not in code, and `buildings:` says which building gets which — a measured-hue draw where the survey
+has a row, and otherwise a five-step lightness ramp running warm beige for the low stock up to cool
+pale grey for commercial towers. `INFRASTRUCTURE` and the ground take flat materials that override
+both. Change it there; change *why* here first. The jitter is seeded from each building's LandsD id,
+so it is stable across rebuilds — and the material draw is seeded from the *same* id through a
+separate `blake2b` stream, deliberately uncorrelated with it.
 
 ⚠️ **The jitter means a class is a *ray* through its base colour, not a value.** Any tool matching a
 class by colour must test the scale factor, not equality — `tools/deck_error.py` matched 428 of
@@ -354,7 +407,7 @@ abandons the accurate surface, and recognition is the product.
   three original objections fell to measurement; see "Per-building façade colour" below and the
   `PROGRESS.md` entries of 2026-08-06. What survives of the objection is narrower and still binding:
   **the photographs' `L*` is not usable and is not used.**
-- ⚠️ **What this document used to sanction — "re-author the five `height_bands` from clustered façade
+- ⚠️ **What this document used to sanction — "re-author the five height bands from clustered façade
   colour" — is measured and close to pointless.** Height explains **1.2% of `a*` and 0.8% of `b*`**
   across all 2,214 buildings, so re-authoring the bands while keeping height as the key moves the fit
   barely at all. **Height is not the signal**, and the ramp stays what it is: a *lightness* ramp,
@@ -366,8 +419,9 @@ Every building carries its **own measured hue**, read offline from the individua
 textures and joined to the massing by the building id's stem. 2,214 buildings, 100% matched, and it
 costs the runtime nothing: it lands in the `COLOR_0` the tiles already shipped, so there is no new
 attribute, no schema change, no shader change and no interaction with the LOD clustering. Where an
-atlas is unreadable a building falls back to its height band. `etl/config/cities/hong_kong.yaml`
-holds the switch; `etl/pipeline/colour.py` holds the conversion and the reasoning.
+atlas is unreadable a building falls back to its height band — and so does its *material*, which is
+the same contract stated once (`Q34`). `etl/config/cities/hong_kong.yaml` holds the switch;
+`etl/pipeline/colour.py` holds the conversion and the reasoning.
 
 ⚠️ **Hue is taken and lightness is refused, and that is a measurement rather than a preference.**
 Across the survey, the `L*` spread *within* one building — its four walls, same cladding, differing

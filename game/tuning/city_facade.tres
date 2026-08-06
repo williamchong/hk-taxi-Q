@@ -43,11 +43,16 @@
 ; are the state a future art idea starts from, not dead weight to be cleaned up.
 ;
 ; ⚠️ **`base_wash` is 0.0 because the palette lives in the city config**, which
-; is where the shader's header says it belongs. The five `height_bands` in
-; `etl/config/cities/hong_kong.yaml` carry the city's level — they were
-; re-authored 19 L* darker once the anchor probe measured that as what the white
-; city needed — so the wash has nothing left to trial. That leaves `base_colour`
-; inert, kept at its tuned value on the same rule as the window uniforms above.
+; is where the shader's header says it belongs. The `materials:` table in
+; `etl/config/cities/hong_kong.yaml` carries the city's level — every colour in
+; it was re-authored 19 L* darker once the anchor probe measured that as what the
+; white city needed — so the wash has nothing left to trial. That leaves
+; `base_colour` inert, kept at its tuned value on the same rule as the window
+; uniforms above.
+;
+; ⚠️ Those colours used to sit inline on the height bands, and `Q34` moved them:
+; the field's position asserted that material is a function of height, which 0.9%
+; of measured facade lightness does not support. Nothing about the level changed.
 ;
 ; `value_jitter` 0.35 is the small half of that change and is bounded on both
 ; sides. Below it a block reads as one mass; above roughly 0.4 the darkest draws

@@ -16,7 +16,7 @@ from typing import Any
 import numpy as np
 from pyogrio.raw import write as _ogr_write
 
-from pipeline.config import BuildingStyle, HeightBand
+from pipeline.config import BuildingStyle, HeightBand, Material, MaterialAssignment
 from pipeline.gltf import MeshData
 from pipeline.terrain import HeightField
 
@@ -151,11 +151,29 @@ def style(jitter: float = 0.0) -> BuildingStyle:
         classes=("BUILDING", "INFRASTRUCTURE"),
         terrain_class="TERRAIN",
         structure_class=None,
-        class_colours={"INFRASTRUCTURE": (100, 100, 100)},
-        class_reflectance={"INFRASTRUCTURE": 22.0},
-        height_bands=(
-            HeightBand(up_to_m=12.0, colour=(200, 180, 150), reflectance=48.0),
-            HeightBand(up_to_m=float("inf"), colour=(190, 200, 200), reflectance=55.0),
+        class_materials={
+            "INFRASTRUCTURE": Material(
+                name="structure", colour=(100, 100, 100), reflectance=22.0, source="test"
+            )
+        },
+        material_assignment=MaterialAssignment(
+            by_height=(
+                HeightBand(
+                    up_to_m=12.0,
+                    material=Material(
+                        name="low", colour=(200, 180, 150), reflectance=48.0, source="test"
+                    ),
+                ),
+                HeightBand(
+                    up_to_m=float("inf"),
+                    material=Material(
+                        name="high", colour=(190, 200, 200), reflectance=55.0, source="test"
+                    ),
+                ),
+            ),
+            # No surveyed rule: the default style takes the height ramp for every
+            # building, surveyed or not, which is what most of these tests mean.
+            rings=(),
         ),
         colour_jitter=jitter,
         class_colour_jitter={},
@@ -239,7 +257,7 @@ def write_layer(
 # would let the second stage pass against a city the first never built.
 CITY_YAML = textwrap.dedent(
     """
-    schema_version: 2
+    schema_version: 3
     id: testville
     name: Testville
     # Deliberately 1.0 where Hong Kong ships 0.520, so the fixture proves the
@@ -247,6 +265,13 @@ CITY_YAML = textwrap.dedent(
     # unit anchor a declared reflectance *is* the colour's luminance, which
     # keeps this city hand-checkable in the way the rest of it already is.
     exposure_anchor: 1.0
+    # Every colour Testville ships (`Q34`). Three, because three things reference
+    # one: the single height band, and the two road surfaces. Declaring a fourth
+    # would fail `_check_every_material_is_used`, which is the point of it.
+    materials:
+      facade: {colour: "#808080", reflectance: 21.59, source: "test fixture"}
+      asphalt: {colour: "#3c3a37", reflectance: 4.26, source: "test fixture"}
+      kerb: {colour: "#9a968d", reflectance: 30.61, source: "test fixture"}
     crs:
       projected: EPSG:2326
       geodetic: EPSG:4326
@@ -267,9 +292,11 @@ CITY_YAML = textwrap.dedent(
     buildings:
       classes: [BUILDING]
       terrain_class: TERRAIN
-      class_colours: {}
-      height_bands:
-        - {up_to_m: .inf, colour: "#808080", reflectance: 21.59}
+      class_materials: {}
+      material_assignment:
+        unsurveyed:
+          by_height:
+            - {up_to_m: .inf, material: facade}
       colour_jitter: 0.0
       lod_cell_sizes_m: [0.0]
     roads:
@@ -317,10 +344,8 @@ CITY_YAML = textwrap.dedent(
         kerb_width_m: 0.5
         junction_trim_factor: 1.0
         junction_trim_max_fraction: 0.35
-        surface_colour: "#3c3a37"
-        kerb_colour: "#9a968d"
-        surface_reflectance: 4.26
-        kerb_reflectance: 30.61
+        surface_material: asphalt
+        kerb_material: kerb
     fares:
       max_snap_m: 30.0
       null_values: ["-99"]

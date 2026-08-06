@@ -11,7 +11,7 @@ import pytest
 
 from pipeline.buildings import colour_for, facade_hue
 from pipeline.colour import lab_to_srgb, reflectance, srgb_to_lab, with_hue
-from pipeline.config import BuildingStyle, HeightBand
+from pipeline.config import BuildingStyle, HeightBand, Material, MaterialAssignment
 from tests.helpers import flat_mesh, style
 
 CITY = "testville"
@@ -101,7 +101,17 @@ def _style_with_hue(
     path.write_text(json.dumps(table))
     return replace(
         style(),
-        height_bands=(HeightBand(up_to_m=float("inf"), colour=(190, 200, 200), reflectance=55.0),),
+        material_assignment=MaterialAssignment(
+            by_height=(
+                HeightBand(
+                    up_to_m=float("inf"),
+                    material=Material(
+                        name="high", colour=(190, 200, 200), reflectance=55.0, source="test"
+                    ),
+                ),
+            ),
+            rings=(),
+        ),
         facade_hue_source="hue.json",
         facade_hue_strength=strength,
         facade_hue_vegetation_max=vegetation_max,
@@ -109,6 +119,18 @@ def _style_with_hue(
 
 
 class TestFacadeHue:
+    """The survey's hue reaching the shipped colour, and the fallback when it
+    does not.
+
+    ⚠️ **Since `Q34` these are also the regression tests for the fallback path,
+    and that is why `_style_with_hue` declares no `rings`.** With no surveyed
+    rule a building takes the height ramp whether or not it was measured, which
+    is the state a fresh clone is permanently in — the survey is a 4.9 GB
+    gitignored read, so CI and every new checkout build the city these tests
+    describe. A change that only worked when the draw was configured would pass
+    a suite that never configures it.
+    """
+
     def test_a_city_without_a_survey_gets_an_empty_table(self) -> None:
         assert facade_hue(style(), CITY) == {}
 

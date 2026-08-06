@@ -30,6 +30,8 @@ standards.
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 
 # CIE standard illuminant D65, the sRGB white point, normalised to Y = 1.
@@ -128,6 +130,21 @@ def reflectance(rgb: tuple[int, int, int]) -> float:
     them directly.
     """
     return float(luminance(np.array([rgb], dtype=np.float64))[0]) * 100.0
+
+
+def chroma_and_hue(hue: tuple[float, float]) -> tuple[float, float]:
+    """`(a*, b*)` as CIELCh chroma and hue angle in degrees, wrapped to [0, 360).
+
+    Named and exported rather than written inline at its one caller, because it
+    is the definition of the units **`hong_kong.yaml` authors thresholds in** —
+    `up_to_chroma` and `from_deg` mean nothing without it, and a config value has
+    to be checkable against something. The polar convention is the arguable part:
+    `atan2(b*, a*)`, so 0° is `+a*` (red), 90° is `+b*` (yellow), 180° is green
+    and 270° blue. Anything binning buildings by hue has to agree with that or it
+    is binning something else.
+    """
+    a_star, b_star = hue
+    return math.hypot(a_star, b_star), math.degrees(math.atan2(b_star, a_star)) % 360.0
 
 
 def with_hue(

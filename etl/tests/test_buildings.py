@@ -24,14 +24,24 @@ from pipeline.buildings import (
     COLLISION_TIER,
     SOURCE_ID,
     Grid,
+    _material_seed,
+    _seed,
     _tile_ground,
     assign,
     build_region,
     colour_for,
     facade_uv,
     game_offset,
+    material_for,
 )
-from pipeline.config import BuildingStyle, SurfaceClass
+from pipeline.config import (
+    BuildingStyle,
+    ChromaRing,
+    HueSector,
+    Material,
+    SurfaceClass,
+    WeightedDraw,
+)
 from pipeline.gltf import MeshData, read_glb
 from pipeline.mesh import collapse
 from tests.helpers import BOX_FACES, box_corners, box_soup, covered, flat_mesh, soup, style
@@ -342,6 +352,202 @@ class TestColour:
         first = colour_for(style(0.1), "BUILDING", flat_mesh("B12345", 8.0))
         second = colour_for(style(0.1), "BUILDING", flat_mesh("B12345", 8.0))
         assert (first == second).all()
+
+
+WARM = Material(name="warm", colour=(200, 180, 150), reflectance=48.0, source="test")
+PALE = Material(name="pale", colour=(190, 200, 200), reflectance=55.0, source="test")
+GREY = Material(name="grey", colour=(150, 150, 150), reflectance=30.0, source="test")
+
+
+def _drawing_style(jitter: float = 0.0, *, warm: dict[Material, float] | None = None):
+    """A style that draws a surveyed building's material from its hue (`Q34`).
+
+    Two rings so both branches are reachable, and the outer one sectored, because
+    a flat chroma bin cannot express the thing the sectors exist for.
+
+    Each draw is a single material at weight 1.0 by default, so a test can assert
+    *which* bin a hue landed in. ⚠️ That makes the default style useless for
+    anything about the draw's *randomness* — with one outcome per bin the seed
+    cannot be observed at all. `warm` splits the warm sector for the tests that
+    need a real distribution; see `test_the_draw_does_not_bias_a_material_s_lightness`.
+    """
+    base = style(jitter)
+    return replace(
+        base,
+        material_assignment=replace(
+            base.material_assignment,
+            rings=(
+                ChromaRing(
+                    up_to_chroma=5.0,
+                    draw=WeightedDraw.of({GREY: 1.0}, "test.neutral"),
+                    sectors=(),
+                ),
+                ChromaRing(
+                    up_to_chroma=float("inf"),
+                    draw=None,
+                    sectors=(
+                        HueSector(
+                            from_deg=30.0,
+                            draw=WeightedDraw.of(warm or {WARM: 1.0}, "test.warm"),
+                        ),
+                        HueSector(from_deg=180.0, draw=WeightedDraw.of({PALE: 1.0}, "test.cool")),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+
+class TestMaterialDraw:
+    """`Q34` — a surveyed building's material comes from its measured hue."""
+
+    def test_an_unsurveyed_building_takes_the_height_ramp(self) -> None:
+        """⚠️ **The contract, not a convenience.** `facade_hue` is optional: the
+        survey is a 4.9 GB gitignored read, so a fresh clone has none and must
+        build the city the ramp alone always produced. The tempting alternative —
+        falling back to the surveyed population's marginal distribution — was
+        proposed while designing this and refused for exactly this reason.
+        """
+        drawing = _drawing_style()
+        for height in (5.0, 12.0, 40.0, 500.0):
+            mesh = flat_mesh("B1", height)
+            assert material_for(drawing, "BUILDING", mesh, height, None) is (
+                drawing.material_for("BUILDING", height)
+            )
+
+    def test_a_class_material_still_wins_outright(self) -> None:
+        """A flyover deck is concrete whatever colour a photograph made it."""
+        drawing = _drawing_style()
+        mesh = flat_mesh("i", 80.0)
+        drawn = material_for(drawing, "INFRASTRUCTURE", mesh, 80.0, (20.0, 20.0))
+        assert drawn is drawing.class_materials["INFRASTRUCTURE"]
+
+    def test_a_near_neutral_building_takes_the_inner_ring(self) -> None:
+        mesh = flat_mesh("B1", 8.0)
+        assert material_for(_drawing_style(), "BUILDING", mesh, 8.0, (1.0, 1.0)).name == "grey"
+
+    def test_hue_angle_and_not_only_chroma_selects_the_material(self) -> None:
+        """⚠️ The reason rings carry sectors at all. These two have the *same*
+        chroma and opposite hue, which a flat chroma bin would merge — and the
+        two largest clusters in the real survey are exactly that shape, cool grey
+        at C* 2.6 against neutral at C* 3.1 but opposite in b*."""
+        mesh = flat_mesh("B1", 8.0)
+        drawing = _drawing_style()
+        warm = material_for(drawing, "BUILDING", mesh, 8.0, (0.0, 20.0))  # +b*, 90 deg
+        cool = material_for(drawing, "BUILDING", mesh, 8.0, (0.0, -20.0))  # -b*, 270 deg
+        assert warm.name == "warm"
+        assert cool.name == "pale"
+
+    def test_the_sector_below_the_first_boundary_wraps_to_the_last(self) -> None:
+        """0-30 deg is not listed, and must not fall off the end: it belongs to
+        the sector that runs from 180 deg through 360 and round to 30."""
+        mesh = flat_mesh("B1", 8.0)
+        drawn = material_for(_drawing_style(), "BUILDING", mesh, 8.0, (20.0, 2.0))
+        assert drawn.name == "pale"
+
+    def test_the_draw_is_stable_across_runs(self) -> None:
+        mesh = flat_mesh("B12345", 8.0)
+        drawing = _drawing_style()
+        first = material_for(drawing, "BUILDING", mesh, 8.0, (10.0, 10.0))
+        assert material_for(drawing, "BUILDING", mesh, 8.0, (10.0, 10.0)) is first
+
+    def test_the_material_seed_does_not_agree_with_the_jitter_seed(self) -> None:
+        """⚠️ **The trap this was written against, and it is not hypothetical.**
+        CRC32 is affine over GF(2), so the obvious `crc32(b"material:" + name)`
+        correlates with `_seed` at Pearson +0.507 over the region's real object
+        ids. That would tie a building's cladding to its jitter — which is +/-3.4
+        L* against the ramp's whole 6.0 L* span — and to its window phase, which
+        is literally `_seed`'s top 8 bits.
+
+        Asserted as a correlation over many names rather than an inequality on
+        one, because two streams can differ everywhere and still track each
+        other, which is the failure mode that matters.
+        """
+        names = [f"B{index:06d}" for index in range(2000)]
+        jitter = np.array([_seed(flat_mesh(name, 8.0)) for name in names])
+        material = np.array([_material_seed(flat_mesh(name, 8.0)) for name in names])
+
+        assert abs(float(np.corrcoef(jitter, material)[0, 1])) < 0.1
+        assert material.min() >= 0.0 and material.max() < 1.0
+
+    def test_the_draw_does_not_bias_a_material_s_lightness(self) -> None:
+        """⚠️ **Tests the defect, not the hash.** If the two seeds agreed, each
+        material would draw a *slice* of the jitter range rather than a sample of
+        it — the pale materials landing on the buildings already jittering bright.
+        Grouping by drawn material and asking for a mean jitter factor of 1.0
+        catches that whatever the hashes are, so it survives a hash change.
+
+        ⚠️ **The split draw is what gives this test any power at all, and it was
+        added after review found the first version could not fail.** With one
+        material per bin every building lands in the same group and the assertion
+        collapses to "the mean of `_seed` is 0.5", which is true however the two
+        streams are related. Split 50/50 and swapping `_material_seed` for `_seed`
+        pulls the groups to 1.030 and 0.970 — 6x outside the bound below.
+        """
+        drawing = _drawing_style(0.06, warm={WARM: 0.5, PALE: 0.5})
+        groups: dict[str, list[float]] = {}
+        for index in range(3000):
+            mesh = flat_mesh(f"B{index:06d}", 8.0)
+            drawn = material_for(drawing, "BUILDING", mesh, 8.0, (10.0, 10.0 + index % 3))
+            factor = 1.0 + drawing.jitter_for("BUILDING") * (2.0 * _seed(mesh) - 1.0)
+            groups.setdefault(drawn.name, []).append(factor)
+
+        assert len(groups) > 1, "a single group cannot show a bias between groups"
+        for name, factors in groups.items():
+            assert sum(factors) / len(factors) == pytest.approx(1.0, abs=0.005), name
+
+
+class TestWeightedDraw:
+    """The distribution itself, apart from anything that uses it."""
+
+    def _draw(self, weights: dict[str, float]) -> WeightedDraw:
+        return WeightedDraw.of(
+            {
+                Material(name=name, colour=(10, 10, 10), reflectance=1.0, source="t"): weight
+                for name, weight in weights.items()
+            },
+            "test",
+        )
+
+    def test_both_ends_of_the_unit_interval_return_a_material(self) -> None:
+        """⚠️ The upper end is the one that has bitten this codebase before. A
+        cumulative table summed from authored decimals lands *near* 1.0, so a
+        seed above the last bound falls off the end of the search — rare, silent,
+        and confined to whichever building drew high. `_phase` carries the same
+        scar. `bounds[-1]` is assigned 1.0 rather than summed to it."""
+        draw = self._draw({"a": 0.1, "b": 0.2, "c": 0.7})
+
+        assert draw.pick(0.0) is not None
+        assert draw.pick(math.nextafter(1.0, 0.0)) is not None
+        assert draw.bounds[-1] == 1.0
+
+    def test_shuffling_the_weights_does_not_repaint_the_city(self) -> None:
+        """⚠️ Sorted by name, deliberately. Otherwise alphabetising or
+        re-indenting a YAML block changes which material every building in it
+        gets — a diff with no visible intent and a very visible effect."""
+        first = self._draw({"alpha": 0.5, "beta": 0.3, "gamma": 0.2})
+        second = self._draw({"gamma": 0.2, "alpha": 0.5, "beta": 0.3})
+
+        assert first == second
+        for seed in (0.0, 0.25, 0.5, 0.75, 0.999):
+            assert first.pick(seed).name == second.pick(seed).name
+
+    def test_the_shares_come_out_as_authored(self) -> None:
+        draw = self._draw({"a": 0.25, "b": 0.75})
+        picks = [draw.pick(index / 10_000.0).name for index in range(10_000)]
+
+        assert picks.count("a") / len(picks) == pytest.approx(0.25, abs=0.01)
+
+    def test_weights_that_do_not_sum_to_one_are_rejected(self) -> None:
+        """⚠️ Not normalised. A table summing to 0.9 is one somebody stopped
+        editing, and rescaling would redistribute the missing tenth invisibly."""
+        with pytest.raises(ValueError, match="sum to"):
+            self._draw({"a": 0.5, "b": 0.4})
+
+    def test_authored_decimals_that_only_nearly_sum_are_accepted(self) -> None:
+        """The tolerance is float addition and nothing else: these three are
+        exactly what an author would write and do not sum to 1.0 in binary."""
+        assert self._draw({"a": 0.1, "b": 0.2, "c": 0.7}).bounds[-1] == 1.0
 
 
 class TestFacadeUv:

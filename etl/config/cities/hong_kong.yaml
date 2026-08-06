@@ -3,7 +3,7 @@
 # Nothing in etl/pipeline/ may hardcode any value from this file (CLAUDE.md hard
 # rule 3). Facts here are verified in docs/DATA_SOURCES.md; correct them there
 # first if one turns out to be wrong.
-schema_version: 2
+schema_version: 3
 id: hong_kong
 name: Hong Kong
 
@@ -33,13 +33,171 @@ name: Hong Kong
 # because it applied this factor to the colours in `buildings:` and not to the
 # two in `roads:` — not by argument, but because `roads:` was not in its diff.
 #
-# ⚠️ **The reflectances the five height_bands declare are back-derived from that
-# commit, not cited.** They come out at 49-62%, which is the top of what painted
-# render and ceramic tile actually do. That is the one soft number in the rule,
-# and it is recorded as a reflectance precisely so it can be argued with; if it
-# is wrong, this anchor is wrong with it and every other colour moves. Do not
-# take the bands as evidence for a third city.
+# ⚠️ **The reflectances the five facade materials declare are back-derived from
+# that commit, not cited.** They come out at 49-62%, which is the top of what
+# painted render and ceramic tile actually do. That is the one soft number in the
+# rule, and it is recorded as a reflectance precisely so it can be argued with; if
+# it is wrong, this anchor is wrong with it and every other colour moves. Do not
+# take them as evidence for a third city.
 exposure_anchor: 0.520
+
+# Every colour this city ships, by name.
+#
+# ⚠️ **No colour may be authored anywhere else in this file.** `buildings:` and
+# `roads:` reference these names; `_check_exposure` reads this table and only
+# this table. A colour written somewhere else would ship unchecked — which is
+# not hypothetical, it is precisely what `235aa4f` did.
+#
+# ⚠️ **Top-level rather than inside `buildings:`, deliberately.** Both sections
+# draw from it. Nesting it under either would make the other reach across for its
+# colours, rebuilding the exact asymmetry that let one section be re-exposed and
+# the other missed.
+#
+# ⚠️ **A material is a claim about a surface, not about a kind of building
+# (`Q34`).** `colour` and `reflectance` used to be fields on `height_bands`,
+# which made the *shape* of this file assert that material is a function of
+# height. It is not: measured on the 2,171-building photo survey, height explains
+# **0.9%** of facade `L*` once log pixel count is controlled, and the best
+# geometric key of any kind reaches 1.4%. Where each material is *used* is
+# decided in `buildings:` and `roads:` below; what it *is* is decided here.
+#
+# `source:` is required and deliberately not validated. The point is that
+# somebody had to type an answer, including "back-derived, not cited" where that
+# is the truth — an unsourced albedo is how this palette drifted before `Q33`.
+materials:
+  # The five facade colours, warm-and-darker through to cool-and-paler.
+  #
+  # ⚠️ **These five are unchanged by the palette rule, and their reflectances are
+  # therefore back-derived rather than cited** — each is simply what the shipped
+  # colour claims once the anchor is divided out. The rule is calibrated *on*
+  # them, so it cannot also check them; they are the one place in this file where
+  # the number describes the colour instead of the colour answering to the
+  # number. The tell is that they read 49-62%, at the top of what painted render
+  # and ceramic tile do. Recorded anyway, because a soft number stated is
+  # arguable and a soft number implied is not.
+  #
+  # ⚠️ **The level they sit at is the whole city's, and it was measured — see
+  # docs/PROGRESS.md (2026-08-06, the anchor probe).** These five were 19 L*
+  # lighter and the city read white from every camera; darkening them moved the
+  # rendered frame 10.3 L*, where every other lever tried bought under 1. Each
+  # colour is the old one scaled by 0.520 in linear light, so the warm-to-cool
+  # ramp they were authored for survived and only the level moved.
+  #
+  # ⚠️ **Five names for what is really one material family**, at five lightnesses.
+  # That is a weaker claim than the height bands used to make and it is still a
+  # claim; it is stated here rather than hidden in the assignment. Do not rename
+  # the last of them to anything glazed: 55.2% contradicts curtain-wall glass's
+  # 8-15% diffuse albedo, which is the trap `Q34` records at length.
+  render_warm:
+    colour: "#968872"
+    reflectance: 48.7
+    source: "back-derived from 235aa4f, not cited; painted render is 30-60%"
+  render_pale:
+    colour: "#9d9586"
+    reflectance: 58.4
+    source: "back-derived from 235aa4f, not cited; painted render is 30-60%"
+  tile_neutral:
+    colour: "#9a9a90"
+    reflectance: 61.5
+    source: "back-derived from 235aa4f, not cited; ceramic facade tile is 45-65%"
+  render_cool:
+    colour: "#949995"
+    reflectance: 60.1
+    source: "back-derived from 235aa4f, not cited; painted render is 30-60%"
+  panel_grey:
+    colour: "#8e9393"
+    reflectance: 55.2
+    source: "back-derived from 235aa4f, not cited; light grey panel is 45-60%"
+
+  # Weathered concrete at the sooty end: viaduct soffits and pier faces carry
+  # decades of traffic film.
+  #
+  # ⚠️ **Re-placed by the palette rule (`Q33`), which moved it down 7.7 L*.**
+  # Scaling by the anchor had kept it in step with the facades but preserved what
+  # it was in step *from*, and what it was placed by was the eye.
+  concrete_sooty:
+    colour: "#615f5a"
+    reflectance: 22.0
+    source: "weathered concrete, sooty end of 20-30% for clean concrete"
+
+  # The region's ground. Reclamation, so this is fill and hardstanding rather
+  # than anything vegetated.
+  #
+  # The colour was originally warm concrete placed by what it had to sit between:
+  # clear of the kerb so the 0.15 m riser and 0.5 m lip still read as an edge
+  # rather than dissolving into the pavement, and darker than the lowest facade
+  # band so low blocks read as standing *on* the ground. ⚠️ **That placement is
+  # history: since `Q33` the level is set by the material, not by the
+  # neighbours.** Both relationships still hold and neither is what produces the
+  # number any more — the kerb it is "clear of" moved 19.4 L* in the same change,
+  # which is exactly the fragility of placing a colour against another colour
+  # rather than against a referent. Divided back out, this was claiming 39.6%
+  # albedo where dry soil and urban fill are 15-25%, which is the reading the
+  # art-direction audit gave it independently: the reclamation rendered as sand
+  # rather than as ground. `Q33` moved it down 13.9 L*.
+  #
+  # ⚠️ **The chroma is deliberate and `Q18` closed here rather than in a
+  # classifier.** The ground did read dead, and this is what fixed it: chroma went
+  # 6.81 -> 14.0 at an *unchanged* L* of 52.6, so every lightness relationship
+  # above and below is untouched and only the amount of hue changed. It had to,
+  # because hue does not arrive in proportion to what is authored — there is a
+  # **chroma knee**, below which whatever is written here is thrown away. Measured
+  # on the faceted ground at four levels of the same hue, albedo C* 6.81 arrives
+  # at 1.95, 11.0 at 2.93, 14.0 at 6.25 and 31.96 at 28.42 — so the old #837d72
+  # rendered as neutral grey, which is why an open expanse read as white plaster.
+  # 18.0 was built and rejected on the eye: it clears the knee too well and the
+  # reclamation reads as beach sand rather than concrete. Only lightness moved in
+  # `Q33`; the doubled chroma is carried through untouched at C* 13.6, and darker
+  # is where it survives best.
+  #
+  # ⚠️ **The knee sits at C* 11-14 for one viewpoint, and it is a property of the
+  # viewpoint rather than of the renderer** — do not reuse the number. Measured
+  # again on the region's only other terrain — the south-east hillside, which
+  # rises to 50.2 m where the rest is flat reclamation at a median 3.96 m — the
+  # same 6.81 -> 14.0 change buys C* 1.95 -> 6.25 close in, 3.33 -> 5.09 at
+  # ~200 m, and nothing at all at ~350 m through fog. Chroma also survives better
+  # where the ground renders darker: under L* 55 it holds C* 8-10, at L* 65-75
+  # only 3-5. Distance and surface brightness both move the knee. This value is
+  # still right because it buys the most where the player actually is; distant
+  # ground washing toward fog is correct atmospheric perspective, not a defect.
+  #
+  # ⚠️ **The knee is measured for *ground* and must not be assumed for the
+  # facades.** Ground is up-facing and renders bright, which is what eats chroma;
+  # a facade is vertical, darker, and takes facade_hue's strength on top. Most of
+  # this palette does sit under C* 11, which is worth someone's attention, but it
+  # is not evidence until it is measured on the surface in question.
+  fill_dry:
+    colour: "#645a45"
+    reflectance: 20.0
+    source: "dry soil and urban fill, mid-range of 15-25%"
+
+  # ⚠️ **These two are the colours the palette rule was written for.** They used
+  # to live in `RoadSurface` where the rest of the palette lived in
+  # `BuildingStyle`, and that is the whole reason `235aa4f` re-exposed every other
+  # colour in this file and left these behind — the section was not in the diff.
+  # The kerb then became the brightest surface in the city *by not moving* while
+  # everything around it dropped 19 L*, and nothing flagged it, because the commit
+  # reasoned *from* the kerb as a fixed landmark. They are in this table now, so
+  # there is no longer a second place to forget.
+  #
+  # The rule reversed the obvious diagnosis. Against its neighbours the asphalt
+  # looked like the outlier at 24.5 L*, 24 below the pack; against published
+  # albedo it was the one colour already right, and it moved 2.7 L*. The kerb
+  # moved 19.4 and the ratio between them lands at 2.5:1, which is what concrete
+  # against asphalt actually is — it was 6.6:1. That leaves 15.6 L* of separation,
+  # so the 0.15 m riser still reads as an edge rather than dissolving into the
+  # carriageway, which is the job kerb contrast has here.
+  asphalt_aged:
+    colour: "#42403d"
+    reflectance: 10.0
+    source: "aged urban asphalt, mid-range of 7-12%; fresh-laid is ~4% and weathers up"
+  # Distinct from concrete_sooty at 22.0, and deliberately so: a cast kerb is not
+  # a viaduct soffit. Kerbs are cast rough, kept wet in summer and stained at the
+  # channel, so the clean end does not apply to them either.
+  concrete_kerb:
+    colour: "#68655c"
+    reflectance: 25.0
+    source: "weathered concrete, mid-range of 20-30%"
 
 crs:
   # Every source dataset is published in the HK1980 Grid System — a Transverse
@@ -179,81 +337,25 @@ buildings:
   # against nothing the player ever meets.
   structure_class: INFRASTRUCTURE
 
-  # Flat colour for a class, overriding the height bands. Elevated road
+  # A flat material for a class, overriding the height bands. Elevated road
   # structures are concrete whatever their height, and banding a flyover deck by
   # height would tint it like the tower it happens to be as tall as. The ground
   # has no height of its own to band by at all.
   #
-  # The ground colour was warm concrete placed by what it had to sit between:
-  # clear of the kerb so the 0.15 m riser and 0.5 m lip still read as an edge
-  # rather than dissolving into the pavement, and darker than the shophouse band
-  # (#968872) so low blocks read as standing *on* the ground. This is the value
-  # Q18 tests — if the first pass reads dead, change this line before reaching
-  # for the land-cover classifier.
+  # ⚠️ **This is also what `surface_class` reads to decide what the window-band
+  # shader may band** — a class with a flat material here is a thing whose colour
+  # does not depend on how tall it is, which is exactly the set with no floors to
+  # draw. Adding an entry here silently stops that class being banded.
   #
-  # ⚠️ **That placement is history: since Q33 the level is set by the material,
-  # not by the neighbours.** Both relationships still hold and neither is what
-  # produces the number any more — the kerb it is "clear of" moved 19.4 L* in the
-  # same change, which is exactly the fragility of placing a colour against
-  # another colour rather than against a referent.
-  #
-  # ⚠️ **And it did read dead, and this line is what fixed it — Q18 closed here
-  # rather than in a classifier.** The chroma went 6.81 -> 14.0 at an *unchanged*
-  # L* of 52.6, so every lightness relationship described above and below is
-  # untouched; only the amount of hue changed. The reason it had to is that hue
-  # does not arrive in proportion to what is authored: there is a **chroma knee**,
-  # below which whatever is written on this line is thrown away. Measured on the
-  # faceted ground at four levels of the same hue, albedo C* 6.81 arrives at 1.95,
-  # 11.0 at 2.93, 14.0 at 6.25 and 31.96 at 28.42 — so the old #837d72 rendered as
-  # neutral grey, which is why an open expanse read as white plaster. 18.0 was
-  # built and rejected on the eye: it clears the knee too well and the reclamation
-  # reads as beach sand rather than concrete.
-  #
-  # ⚠️ **The knee sits at C* 11-14 for one viewpoint, and it is a property of the
-  # viewpoint rather than of the renderer** — do not reuse the number. Measured
-  # again on the region's only other terrain — the south-east hillside, which
-  # rises to 50.2 m where the rest is flat reclamation at a median 3.96 m — the
-  # same 6.81 -> 14.0 change buys C* 1.95 -> 6.25 close in, 3.33 -> 5.09 at
-  # ~200 m, and nothing at all at ~350 m through fog. Chroma also survives better
-  # where the ground renders darker: under L* 55 it holds C* 8-10, at L* 65-75
-  # only 3-5. Distance and surface brightness both move the knee. This value is
-  # still right because it buys the most where the player actually is; distant
-  # ground washing toward fog is correct atmospheric perspective, not a defect.
-  #
-  # ⚠️ **The knee is measured for *ground* and must not be assumed for the
-  # bands.** Ground is up-facing and renders bright, which is what eats chroma;
-  # a facade is vertical, darker, and takes facade_hue's strength on top. Most of
-  # this palette does sit under C* 11, which is worth someone's attention, but it
-  # is not evidence until it is measured on the surface in question.
-  #
-  # ⚠️ **Both take the same 0.520 linear scale as height_bands**, and for the
-  # same reason: a facade-only anchor leaves the ground as the one bright plane
-  # in the frame. Scaling it by the same factor is what keeps "the level moved"
-  # from becoming "the palette was re-mixed".
-  #
-  # ⚠️ **Both were then re-placed by the palette rule (`Q33`), which moved the
-  # ground down 13.9 L* and the structure down 7.7.** Scaling by the anchor kept
-  # them in step with the bands but preserved what they were in step *from*, and
-  # what they were placed by was the eye. Divided back out, the ground was
-  # claiming 39.6% albedo where dry soil and urban fill are 15-25% — which is
-  # exactly the reading the art-direction audit gave it independently, that the
-  # reclamation renders as sand rather than as ground. Only lightness moved:
-  # Q18's doubled chroma is carried through untouched at C* 13.6, and darker is
-  # where it survives best, per the knee note above.
-  class_colours:
-    INFRASTRUCTURE: "#615f5a"
-    TERRAIN(TB): "#645a45"
-
-  # What each of those claims to be, as a real-world diffuse albedo percentage.
-  # Required for every class_colours entry — see exposure_anchor at the top of
-  # this file for the rule and why an un-declared colour is refused.
-  class_reflectance:
-    # Weathered concrete, at the sooty end: viaduct soffits and pier faces carry
-    # decades of traffic film. Clean concrete is 20-30%.
-    INFRASTRUCTURE: 22.0
-    # Dry soil and urban fill, mid-range of 15-25%. The region is reclamation,
-    # so this is fill and hardstanding rather than anything vegetated.
-    TERRAIN(TB): 20.0
+  # ⚠️ **Both materials take the same 0.520 anchor as the facades**, and for the
+  # same reason: a facade-only anchor leaves the ground as the one bright plane in
+  # the frame. That both are named from one table now is what keeps "the level
+  # moved" from becoming "the palette was re-mixed" — there is one place to change
+  # and it cannot be half-applied. What each colour *is*, and the whole argument
+  # behind the ground's chroma, sits with it under `materials:` at the top.
+  class_materials:
+    INFRASTRUCTURE: concrete_sooty
+    TERRAIN(TB): fill_dry
 
   # Jitter for a class that must not vary like the rest, overriding
   # colour_jitter below.
@@ -282,7 +384,7 @@ buildings:
   ground_sink_m: 0.20
 
   # Cell sizes for a class that must not decimate like the rest, overriding
-  # lod_cell_sizes_m below. Same reasoning as class_colours: infrastructure is
+  # lod_cell_sizes_m below. Same reasoning as class_materials: infrastructure is
   # not a building and does not behave like one under either rule.
   #
   # A building is a big box, so a 1.5 m cell halves its triangles and leaves the
@@ -306,42 +408,90 @@ buildings:
     INFRASTRUCTURE: [0.5, 1.0]
     TERRAIN(TB): [4.0, 8.0]
 
-  # Otherwise coloured by the building's own height above its base. The ramp
-  # runs warm-and-darker for the low pre-war and post-war stock to cool-and-
-  # paler for curtain-walled towers, which is how the Wan Chai skyline actually
-  # reads: old grain at street level, new glass above it.
+  # Otherwise the material is picked by the building's own height above its base.
+  # The ramp runs warm-and-darker for the low pre-war and post-war stock to
+  # cool-and-paler for curtain-walled towers.
   #
-  # ⚠️ **The level these sit at is the whole city's, and it was measured — see
-  # docs/PROGRESS.md (2026-08-06, the anchor probe).** These five were 19 L*
-  # lighter and the city read white from every camera; darkening them moved the
-  # rendered frame 10.3 L*, where every other lever tried bought under 1. Each
-  # colour is the old one scaled by 0.520 in linear light, so the warm-to-cool
-  # ramp the bands were authored for survived and only the level moved.
+  # ⚠️ **This is a lightness ramp, and since `Q34` that is *all* it claims.** It
+  # used to carry the colours and their albedos inline, which made the shape of
+  # this file assert that material is a function of height. The comments here used
+  # to say the ramp is "how the Wan Chai skyline actually reads: old grain at
+  # street level, new glass above it" — that reading was tested and it is not
+  # supported. On the 2,171-building photo survey height explains **0.9%** of
+  # facade `L*` once log pixel count is controlled and **0.7%** of `a*`; the best
+  # geometric key of any kind, height and footprint together, reaches 1.4%.
   #
-  # ⚠️ **These five colours are unchanged by the palette rule, and their
-  # `reflectance:` values are therefore back-derived rather than cited** — each
-  # is simply what the shipped colour claims once the anchor is divided out. The
-  # rule is calibrated *on* them, so it cannot also check them; they are the one
-  # place in this file where the number describes the colour instead of the
-  # colour answering to the number. The tell is that they read 49-62%, at the
-  # top of what painted render and ceramic tile do. Recorded anyway, because a
-  # soft number stated is arguable and a soft number implied is not.
-  height_bands:
-    - up_to_m: 12.0     # shophouses, podiums, market blocks
-      colour: "#968872"
-      reflectance: 48.7
-    - up_to_m: 30.0     # walk-up tenements
-      colour: "#9d9586"
-      reflectance: 58.4
-    - up_to_m: 60.0     # 1970s-80s residential
-      colour: "#9a9a90"
-      reflectance: 61.5
-    - up_to_m: 120.0    # modern residential towers
-      colour: "#949995"
-      reflectance: 60.1
-    - up_to_m: .inf     # commercial towers
-      colour: "#8e9393"
-      reflectance: 55.2
+  # So the ramp stays as *art direction* — tall buildings paler is a defensible
+  # look, and the frame-level measurement behind the anchor is real — but which
+  # material a band names is a styling choice, not evidence about the city's
+  # stock. Do not read a band's material as a claim about buildings of that
+  # height. See `materials:` at the top of this file.
+  material_assignment:
+    # ⚠️ **The two branches are named for what is *known* about a building, not
+    # for how the answer is computed.** An unsurveyed building is not a surveyed
+    # one whose hue is being guessed at — it is a building the ramp answers for,
+    # exactly as it always did.
+    unsurveyed:
+      by_height:
+        - up_to_m: 12.0     # shophouses, podiums, market blocks
+          material: render_warm
+        - up_to_m: 30.0     # walk-up tenements
+          material: render_pale
+        - up_to_m: 60.0     # 1970s-80s residential
+          material: tile_neutral
+        - up_to_m: 120.0    # modern residential towers
+          material: render_cool
+        - up_to_m: .inf     # commercial towers
+          material: panel_grey
+
+    # Reached by having a measurement. Optional, and it must stay optional: this
+    # whole block is dead on a clone that has never fetched the 4.9 GB survey,
+    # and such a clone builds the city the ramp above describes.
+    #
+    # ⚠️ **What this buys is *lightness conditioned on hue*, and not more than
+    # that.** `with_hue` replaces a* and b* immediately afterwards, so the drawn
+    # material's own chroma never reaches the screen — only its L* survives. The
+    # gain is that a building rendering cream gets an albedo plausible for cream
+    # rather than one plausible for concrete. It is not "the material now agrees
+    # with the colour"; that phrasing was used while designing this and it claims
+    # more than the mechanism delivers.
+    #
+    # ⚠️ **It buys no spatial coherence either.** Neighbours draw independently,
+    # and hue does not supply it: only 0.5% of hue variance lies between the
+    # survey's six sheets. Real blocks share cladding and these will not. That is
+    # the open half of `Q34`.
+    #
+    # ⚠️ **Every bin's weights are authored so its *expected* reflectance matches
+    # what the height ramp already gave that same population.** Measured over the
+    # region's 2,157 surveyed buildings, the ramp hands every hue bin almost the
+    # same mean — 57.9 inside the neutral ring, 57.5 warm, 56.0 cool — because
+    # height and hue are close to independent, which is the whole finding behind
+    # `Q34`. Matching them is what makes this change gradeable: the city-wide mean
+    # moves 57.52% -> 57.59%, so anything visible in a before/after frame is hue
+    # structure and not a level change. ⚠️ Re-derive these if the ramp moves.
+    surveyed:
+      rings:
+        # Near-neutral, and just over half of the surveyed stock (51.4% at
+        # C* <= 5, median chroma 4.84). No sectors: below this chroma the hue
+        # angle is mostly measurement noise, and splitting on it would assign
+        # cladding from a number that is not really there.
+        - up_to_chroma: 5.0
+          weights: {panel_grey: 0.50, render_cool: 0.30, tile_neutral: 0.20}
+        # Everything with hue worth reading. ⚠️ Sectors rather than a second flat
+        # bin, because chroma alone cannot tell cool grey from neutral grey —
+        # C* 2.6 against 3.1, but opposite in b*.
+        - up_to_chroma: .inf
+          sectors:
+            # Warm: 30-180 deg is +b*, the cream / beige / ochre direction, and
+            # it is where the coloured stock overwhelmingly sits — 80.8% of this
+            # ring. render_warm is the ochre tail.
+            - from_deg: 30.0
+              weights: {render_pale: 0.45, tile_neutral: 0.35, render_warm: 0.20}
+            # Cool: 180 deg round through 360 and on to 30, the -b* blue-grey
+            # direction. Only 19.2% of the ring, and the ramp gave it the darkest
+            # mean of any bin, which is why the split is this lopsided.
+            - from_deg: 180.0
+              weights: {panel_grey: 0.85, render_cool: 0.15}
 
   # Per-building brightness variation, seeded from the building id so it is
   # stable across runs. Without it a height band renders as one flat mass and
@@ -554,31 +704,15 @@ roads:
     # docs/ART_DESIGN.md: HK asphalt reads warm, not blue-grey. The kerb is the
     # pale concrete that edges every street on the island.
     #
-    # ⚠️ **These are the two colours the palette rule was written for.** They sit
-    # in `RoadSurface` where the rest of the palette sits in `BuildingStyle`, and
-    # that is the whole reason `235aa4f` re-exposed every other colour in this
-    # file and left these two behind — the section was not in the diff. The kerb
-    # then became the brightest surface in the city *by not moving* while
-    # everything around it dropped 19 L*, and nothing flagged it, because the
-    # commit reasoned *from* the kerb as a fixed landmark.
-    #
-    # The rule reverses the obvious diagnosis. Against its neighbours the asphalt
-    # looked like the outlier at 24.5 L*, 24 below the pack; against published
-    # albedo it was the one colour already right, and it moves 2.7 L*. The kerb
-    # moves 19.4 and the ratio between them lands at 2.5:1, which is what
-    # concrete against asphalt actually is — it was 6.6:1. That leaves 15.6 L* of
-    # separation, so the 0.15 m riser still reads as an edge rather than
-    # dissolving into the carriageway, which is the job kerb contrast has here.
-    surface_colour: "#42403d"
-    kerb_colour: "#68655c"
-
-    # Aged urban asphalt, mid-range. Fresh-laid is ~4% and weathers up: the old
-    # #3c3a37 was claiming 8.2%, so this is a small correction to a colour that
-    # was very nearly right, not the rescue it looked like it needed.
-    surface_reflectance: 10.0
-    # Weathered concrete, mid-range of 20-30%. Kerbs are cast rough, kept wet in
-    # summer and stained at the channel, so the clean end does not apply.
-    kerb_reflectance: 25.0
+    # ⚠️ **Named from the same table as every other colour, and that is the whole
+    # point.** These two were authored here, in their own section, which is how
+    # `235aa4f` re-exposed the rest of the palette and left them behind — the
+    # section was not in the diff. Referencing the table means there is no longer
+    # a second place to forget. The argument for what each one is, and the
+    # 2.5:1 concrete-to-asphalt ratio the rule recovered, sits with them under
+    # `materials:` at the top of this file.
+    surface_material: asphalt_aged
+    kerb_material: concrete_kerb
 
   # Where game y=0 sits for a road deck (Q11). `terrain` samples the LandsD
   # ground mesh under each vertex, which is the only source that knows Wan

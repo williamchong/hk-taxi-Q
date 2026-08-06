@@ -7,6 +7,7 @@ the expensive failure here, not a syntax error.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -180,7 +181,7 @@ class TestBuildingStyle:
     def test_surface_class_reads_the_palette_rather_than_a_new_key(self, hong_kong) -> None:
         """`P3-7`'s per-vertex marker is derived, not configured — hard rule 3.
         The distinction the shader needs is one the palette has always drawn: a
-        class with a flat `class_colours` entry is a thing whose colour does not
+        class with a flat `class_materials` entry is a thing whose colour does not
         depend on how tall it is, which is exactly the set with no floors to
         band. A second city gets the right answer from its own palette."""
         style = hong_kong.buildings
@@ -210,7 +211,7 @@ class TestBuildingStyle:
         table silently paints towers with the shophouse colour."""
 
         def shuffle(doc: dict[str, Any]) -> None:
-            doc["buildings"]["height_bands"].reverse()
+            doc["buildings"]["material_assignment"]["unsurveyed"]["by_height"].reverse()
 
         with pytest.raises(ValueError, match="ascending"):
             load_city("hong_kong", cities_root=rewrite(shuffle))
@@ -220,14 +221,16 @@ class TestBuildingStyle:
         than the table — and those are what a Hong Kong skyline is read by."""
 
         def close_it(doc: dict[str, Any]) -> None:
-            doc["buildings"]["height_bands"][-1]["up_to_m"] = 500.0
+            doc["buildings"]["material_assignment"]["unsurveyed"]["by_height"][-1]["up_to_m"] = (
+                500.0
+            )
 
         with pytest.raises(ValueError, match=r"\.inf"):
             load_city("hong_kong", cities_root=rewrite(close_it))
 
     def test_a_malformed_colour_is_rejected(self, rewrite) -> None:
         def break_colour(doc: dict[str, Any]) -> None:
-            doc["buildings"]["height_bands"][0]["colour"] = "beige"
+            doc["materials"]["render_warm"]["colour"] = "beige"
 
         with pytest.raises(ValueError, match="#rrggbb"):
             load_city("hong_kong", cities_root=rewrite(break_colour))
@@ -252,7 +255,7 @@ class TestBuildingStyle:
             assert style.cell_size_m("BUILDING", level) == style.lod_cell_sizes_m[level]
 
     def test_class_lod_override_must_name_a_real_class(self, rewrite) -> None:
-        """The same trap as `class_colours`: a misspelling parses, loads, and
+        """The same trap as `class_materials`: a misspelling parses, loads, and
         silently overrides nothing."""
 
         def misspell(doc: dict[str, Any]) -> None:
@@ -294,7 +297,7 @@ class TestBuildingStyle:
         assert style.jitter_for("BUILDING") == style.colour_jitter
 
     def test_class_jitter_override_must_name_a_real_class(self, rewrite) -> None:
-        """The same trap as `class_colours` and `class_lod_cell_sizes_m`: a
+        """The same trap as `class_materials` and `class_lod_cell_sizes_m`: a
         misspelling parses, loads, and silently overrides nothing — and the
         symptom here is the ground rendering in six shades, which reads as a
         source defect rather than as a typo."""
@@ -386,13 +389,13 @@ class TestBuildingStyle:
             doc["buildings"]["classes"] = [
                 name for name in doc["buildings"]["classes"] if name != terrain
             ]
-            for table in (
-                "class_colours",
-                "class_reflectance",
-                "class_colour_jitter",
-                "class_lod_cell_sizes_m",
-            ):
+            for table in ("class_materials", "class_colour_jitter", "class_lod_cell_sizes_m"):
                 doc["buildings"][table].pop(terrain, None)
+            # ⚠️ The extra line *is* `_check_every_material_is_used` working. The
+            # ground was the only thing referencing `fill_dry`, so dropping the
+            # class strands the material — and a stranded material is a colour
+            # still being exposure-checked as though it ships.
+            doc["materials"].pop("fill_dry")
 
         city = load_city("hong_kong", cities_root=rewrite(stop_tiling_it))
         assert city.buildings.terrain_class not in city.buildings.classes
@@ -411,13 +414,15 @@ class TestBuildingStyle:
 
     def test_colour_comes_from_the_band_a_height_falls_in(self, hong_kong) -> None:
         style = hong_kong.buildings
-        assert style.colour_for("BUILDING", 5.0) == style.height_bands[0].colour
-        assert style.colour_for("BUILDING", 1_000.0) == style.height_bands[-1].colour
+        assert style.colour_for("BUILDING", 5.0) == style.height_bands[0].material.colour
+        assert style.colour_for("BUILDING", 1_000.0) == style.height_bands[-1].material.colour
 
-    def test_a_class_colour_wins_over_the_bands(self, hong_kong) -> None:
+    def test_a_class_material_wins_over_the_bands(self, hong_kong) -> None:
         style = hong_kong.buildings
-        assert style.colour_for("INFRASTRUCTURE", 5.0) == style.class_colours["INFRASTRUCTURE"]
-        assert style.colour_for("INFRASTRUCTURE", 200.0) == style.class_colours["INFRASTRUCTURE"]
+        flat = style.class_materials["INFRASTRUCTURE"]
+        assert style.material_for("INFRASTRUCTURE", 5.0) is flat
+        assert style.material_for("INFRASTRUCTURE", 200.0) is flat
+        assert style.colour_for("INFRASTRUCTURE", 200.0) == flat.colour
 
 
 def test_elevation_levels_map_grade_separation_to_deck_heights(hong_kong) -> None:
@@ -842,7 +847,7 @@ class TestDeckSampling:
     def test_a_key_the_block_does_not_use_is_rejected(self, rewrite) -> None:
         """Misspelling one of the four is already caught by its absence, but
         adding a fifth on top of them is not — it would parse, load, and tune
-        nothing. Same trap `class_colours` refuses, on a closed key set."""
+        nothing. Same trap `class_materials` refuses, on a closed key set."""
 
         def extra(doc: dict[str, Any]) -> None:
             doc["roads"]["deck"]["max_above_terrain_m"] = 99.0
@@ -1023,12 +1028,142 @@ class TestFares:
             load_city("hong_kong", cities_root=rewrite(lambda doc: doc.pop("fares")))
 
 
+class TestMaterialAssignment:
+    """`Q34`'s `surveyed:` block — the rings and sectors, and their totality.
+
+    The shape is chosen so it cannot fail to cover a building: rings reuse the
+    height ramp's ascending-and-`.inf` rule, sectors partition the circle. These
+    are the tests that the loader actually refuses the ways it could stop being
+    total, because a gap would show as a crash mid-build, after the expensive
+    source read.
+    """
+
+    def test_it_loads(self, hong_kong) -> None:
+        rings = hong_kong.buildings.material_assignment.rings
+        assert rings
+        assert rings[-1].up_to_chroma == float("inf")
+
+    def test_the_surveyed_block_is_optional(self, rewrite) -> None:
+        """⚠️ The contract. A clone without the 4.9 GB survey must still build,
+        and it builds the city the height ramp describes."""
+
+        def drop(doc: dict[str, Any]) -> None:
+            del doc["buildings"]["material_assignment"]["surveyed"]
+
+        city = load_city("hong_kong", cities_root=rewrite(drop))
+        assert city.buildings.material_assignment.rings == ()
+        # Nothing else had to move, and that is worth asserting rather than
+        # assuming: every material the draw names is also named by the ramp, so
+        # deleting the draw strands none of them. An earlier version of this test
+        # appended two junk bands to keep them referenced, on a guess that was
+        # simply wrong — and the junk bands silently repainted every tower.
+        assert set(city.materials) == set(load_city("hong_kong").materials)
+
+    def test_unordered_rings_are_rejected(self, rewrite) -> None:
+        def invert(doc: dict[str, Any]) -> None:
+            doc["buildings"]["material_assignment"]["surveyed"]["rings"].reverse()
+
+        with pytest.raises(ValueError, match="ascending up_to_chroma"):
+            load_city("hong_kong", cities_root=rewrite(invert))
+
+    def test_a_closed_last_ring_is_rejected(self, rewrite) -> None:
+        """Chroma has no ceiling, so a bounded last ring leaves the most
+        colourful buildings in the region with no rule at all."""
+
+        def close_it(doc: dict[str, Any]) -> None:
+            doc["buildings"]["material_assignment"]["surveyed"]["rings"][-1]["up_to_chroma"] = 40.0
+
+        with pytest.raises(ValueError, match=r"\.inf"):
+            load_city("hong_kong", cities_root=rewrite(close_it))
+
+    def test_a_ring_with_both_weights_and_sectors_is_rejected(self, rewrite) -> None:
+        """Either would be silently dead. Refused rather than resolved by
+        precedence, which would make which one wins a thing to remember."""
+
+        def both(doc: dict[str, Any]) -> None:
+            ring = doc["buildings"]["material_assignment"]["surveyed"]["rings"][-1]
+            ring["weights"] = {"panel_grey": 1.0}
+
+        with pytest.raises(ValueError, match="exactly one of"):
+            load_city("hong_kong", cities_root=rewrite(both))
+
+    def test_a_ring_with_neither_is_rejected(self, rewrite) -> None:
+        def neither(doc: dict[str, Any]) -> None:
+            del doc["buildings"]["material_assignment"]["surveyed"]["rings"][0]["weights"]
+
+        with pytest.raises(ValueError, match="exactly one of"):
+            load_city("hong_kong", cities_root=rewrite(neither))
+
+    def test_unordered_sectors_are_rejected(self, rewrite) -> None:
+        """The wrap only covers the circle if the boundaries ascend."""
+
+        def invert(doc: dict[str, Any]) -> None:
+            doc["buildings"]["material_assignment"]["surveyed"]["rings"][-1]["sectors"].reverse()
+
+        with pytest.raises(ValueError, match="ascending from_deg"):
+            load_city("hong_kong", cities_root=rewrite(invert))
+
+    @pytest.mark.parametrize(("index", "angle"), [(0, -10.0), (-1, 360.0), (-1, 400.0)])
+    def test_a_sector_boundary_off_the_circle_is_rejected(self, rewrite, index, angle) -> None:
+        """Moved at the end that keeps the list ascending, so this reaches the
+        range check rather than tripping the ordering one on the way."""
+
+        def move(doc: dict[str, Any]) -> None:
+            doc["buildings"]["material_assignment"]["surveyed"]["rings"][-1]["sectors"][index][
+                "from_deg"
+            ] = angle
+
+        with pytest.raises(ValueError, match=r"\[0, 360\)"):
+            load_city("hong_kong", cities_root=rewrite(move))
+
+    def test_every_bin_expects_the_reflectance_the_ramp_already_gave_it(self, hong_kong) -> None:
+        """⚠️ **The mitigation that makes this change gradeable**, asserted so it
+        cannot quietly stop being true.
+
+        The draw is meant to change *which* material a building gets, not how
+        light the city is — otherwise a before/after frame shows a level change
+        and the hue structure it was built for is unreadable underneath. Every
+        bin's weights are authored so its expected reflectance matches what the
+        height ramp handed that same population, which is possible only because
+        height and hue are near-independent — the finding behind `Q34`.
+
+        ⚠️ **What this actually compares is the bin against the ramp's *unweighted*
+        band mean, not against the population it was authored from.** The real
+        property — each bin matching the mean reflectance the ramp handed the
+        buildings that fall in it — needs the 2,171-row survey, which is a 4.9 GB
+        gitignored read this suite must run without. So the bound is loose on
+        purpose and means less than the paragraph above: it catches a bin
+        re-weighted toward one end of the palette, and nothing finer. **Do not
+        tighten it expecting it to mean more** — re-derive against the survey
+        instead, the way the shipped weights were.
+        """
+        ramp = hong_kong.buildings.material_assignment.by_height
+        ramp_mean = sum(band.material.reflectance for band in ramp) / len(ramp)
+
+        for ring in hong_kong.buildings.material_assignment.rings:
+            draws = [ring.draw] if ring.draw is not None else [s.draw for s in ring.sectors]
+            for draw in draws:
+                lower = 0.0
+                expected = 0.0
+                for material, bound in zip(draw.materials, draw.bounds, strict=True):
+                    expected += material.reflectance * (bound - lower)
+                    lower = bound
+                assert expected == pytest.approx(ramp_mean, abs=3.0)
+
+
 class TestPaletteExposure:
     """`Q33` — every colour is `reflectance x exposure_anchor`, checked at load.
 
-    The rule's value is entirely in being cross-section, so the tests that
-    matter are the ones that reproduce how it was broken: a change applied to
-    the colours in `buildings:` while `roads:` was not in the diff.
+    ⚠️ **What guarantees the rule changed with `Q34`, and these tests changed
+    with it.** The rule used to earn its keep by being *cross-section*: the
+    colours lived in two unrelated dataclasses and `235aa4f` re-exposed one and
+    not the other, so the tests that mattered reproduced that — a change applied
+    to `buildings:` while `roads:` was not in the diff.
+
+    There is now one section. `_check_exposure` is total because the **table**
+    is, which is stronger, and which moves the load-bearing test to
+    `test_no_colour_escapes_the_materials_table` below: that is what now holds
+    the property this class used to hold.
     """
 
     def test_the_pre_rule_kerb_is_now_rejected(self, rewrite) -> None:
@@ -1039,45 +1174,75 @@ class TestPaletteExposure:
         """
 
         def restore(doc: dict[str, Any]) -> None:
-            doc["roads"]["surface"]["kerb_colour"] = "#9a968d"
+            doc["materials"]["concrete_kerb"]["colour"] = "#9a968d"
 
-        with pytest.raises(ValueError, match="kerb_colour"):
+        with pytest.raises(ValueError, match=r"materials\.concrete_kerb"):
             load_city("hong_kong", cities_root=rewrite(restore))
 
-    def test_re_exposing_buildings_without_the_roads_is_rejected(self, rewrite) -> None:
-        """`235aa4f` in miniature, which is the regression this rule prevents.
+    def test_re_exposing_only_some_materials_is_rejected(self, rewrite) -> None:
+        """`235aa4f` in the only miniature still available, which is the point.
 
         Re-exposing the city means moving the anchor and moving every colour with
-        it. This does the first half and only the `buildings:` half of the
-        second, which is exactly what that commit did — and it must be caught in
-        `roads:`, the section the author never opened. Asserting on the road
-        colour rather than on any failure is the whole point: a per-section check
-        would be satisfied by `buildings:`, which is internally consistent here.
+        it. That commit did the first half and only part of the second, because
+        `roads:` was not in the diff. The *sections* it could be split between
+        are gone, so this splits the table instead — anchor moved, facades
+        rescaled, the two road materials left behind — and it is still caught.
+
+        ⚠️ The salvage is imperfect and worth naming: a partial edit to one table
+        is a more obviously wrong thing to write than an edit that simply stops
+        at a section boundary. The structural defence is that there is now one
+        place to change, not that this test is hard to pass.
         """
 
         def re_expose(doc: dict[str, Any]) -> None:
             doc["exposure_anchor"] = 0.40
-            for band in doc["buildings"]["height_bands"]:
-                band["reflectance"] = band["reflectance"] * 0.520 / 0.40
-            for name in doc["buildings"]["class_reflectance"]:
-                doc["buildings"]["class_reflectance"][name] *= 0.520 / 0.40
+            for name, entry in doc["materials"].items():
+                if name not in ("asphalt_aged", "concrete_kerb"):
+                    entry["reflectance"] = entry["reflectance"] * 0.520 / 0.40
 
-        with pytest.raises(ValueError, match=r"roads\.surface\.surface_colour"):
+        with pytest.raises(ValueError, match=r"materials\.(asphalt_aged|concrete_kerb)"):
             load_city("hong_kong", cities_root=rewrite(re_expose))
 
-    def test_a_colour_with_no_declared_material_is_rejected(self, rewrite) -> None:
-        def drop(doc: dict[str, Any]) -> None:
-            doc["buildings"]["class_reflectance"].pop("TERRAIN(TB)")
+    def test_a_reference_to_an_undeclared_material_is_rejected(self, rewrite) -> None:
+        """The forward direction of the join. A name with no entry would
+        otherwise be a colour that does not exist, discovered at use."""
 
-        with pytest.raises(ValueError, match="class_reflectance is missing"):
-            load_city("hong_kong", cities_root=rewrite(drop))
+        def dangle(doc: dict[str, Any]) -> None:
+            doc["buildings"]["material_assignment"]["unsurveyed"]["by_height"][0]["material"] = (
+                "renderr_warm"
+            )
 
-    def test_a_material_for_a_colour_that_does_not_exist_is_rejected(self, rewrite) -> None:
+        with pytest.raises(ValueError, match="which materials: does not declare"):
+            load_city("hong_kong", cities_root=rewrite(dangle))
+
+    def test_a_material_nothing_references_is_rejected(self, rewrite) -> None:
+        """The reverse direction, inherited from the `class_reflectance` stray
+        check this replaces.
+
+        An entry that colours nothing parses, loads and is silently inert — and
+        worse than merely inert, because `_check_exposure` reads the whole table:
+        it would be a colour validated as though it ships.
+        """
+
         def stray(doc: dict[str, Any]) -> None:
-            doc["buildings"]["class_reflectance"]["ROOF(TB)"] = 30.0
+            doc["materials"]["roof_felt"] = {
+                "colour": "#3a3a38",
+                "reflectance": 8.0,
+                "source": "test",
+            }
 
-        with pytest.raises(ValueError, match="class_reflectance names"):
+        with pytest.raises(ValueError, match="roof_felt, which nothing references"):
             load_city("hong_kong", cities_root=rewrite(stray))
+
+    def test_a_material_without_a_source_is_rejected(self, rewrite) -> None:
+        """Unvalidated but required. The point is that somebody had to type an
+        answer — an unsourced albedo is how the palette drifted before `Q33`."""
+
+        def drop(doc: dict[str, Any]) -> None:
+            del doc["materials"]["fill_dry"]["source"]
+
+        with pytest.raises(ValueError, match="source"):
+            load_city("hong_kong", cities_root=rewrite(drop))
 
     def test_a_zero_anchor_is_rejected(self, rewrite) -> None:
         """Zero would make every colour black and pass the check for any material.
@@ -1095,7 +1260,50 @@ class TestPaletteExposure:
     @pytest.mark.parametrize("value", [0.0, -1.0, 101.0])
     def test_an_impossible_reflectance_is_rejected(self, rewrite, value) -> None:
         def spoil(doc: dict[str, Any]) -> None:
-            doc["roads"]["surface"]["surface_reflectance"] = value
+            doc["materials"]["asphalt_aged"]["reflectance"] = value
 
-        with pytest.raises(ValueError, match="surface_reflectance"):
+        with pytest.raises(ValueError, match="reflectance"):
             load_city("hong_kong", cities_root=rewrite(spoil))
+
+    def test_no_colour_escapes_the_materials_table(self) -> None:
+        """⚠️ **The check `_check_exposure` now depends on and cannot make.**
+
+        This is what carries `235aa4f`'s lesson. That commit re-exposed the
+        colours in `buildings:` and missed the two in `roads:` — not by argument,
+        but because `roads:` was not in the diff. `Q33` answered it with a
+        cross-section loop; `Q34` answered it structurally, by leaving exactly one
+        place a colour may be written. The loop is now total *because the table
+        is*, which is a stronger guarantee resting on a weaker foundation: it
+        holds only while nothing authors a colour anywhere else.
+
+        Nothing in `config.py` can enforce that — a second `_parse_hex` call on a
+        new key would be perfectly well-formed. So it is asserted here, against
+        the shipped document, on the shape of the value rather than on any list of
+        known keys. A new palette key added outside `materials:` fails this test
+        the day it is written.
+        """
+        document = yaml.safe_load((CITIES_ROOT / "hong_kong.yaml").read_text(encoding="utf-8"))
+        declared = {entry["colour"] for entry in document["materials"].values()}
+
+        def hex_colours(node: Any, path: str):
+            if isinstance(node, dict):
+                for key, value in node.items():
+                    yield from hex_colours(value, f"{path}.{key}")
+            elif isinstance(node, list):
+                for index, value in enumerate(node):
+                    yield from hex_colours(value, f"{path}[{index}]")
+            elif isinstance(node, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", node):
+                yield path, node
+
+        outside = {
+            path: value
+            for path, value in hex_colours(document, "")
+            if not path.startswith(".materials.")
+        }
+        assert not outside, (
+            f"colour(s) authored outside materials: {outside}. Every colour the city "
+            "ships is declared in materials: — see _check_exposure."
+        )
+        # And the table is not merely where they are written, but where they all
+        # are: nine distinct colours, none of them repeated under two names.
+        assert len(declared) == len(document["materials"])

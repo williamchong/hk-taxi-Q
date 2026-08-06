@@ -53,6 +53,7 @@ import math
 import zipfile
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import asdict, dataclass, field, replace
+from hashlib import blake2b
 from pathlib import Path, PurePosixPath
 from urllib.parse import unquote
 from zlib import crc32
@@ -60,8 +61,8 @@ from zlib import crc32
 import numpy as np
 from numpy.typing import ArrayLike
 
-from pipeline.colour import with_hue
-from pipeline.config import BuildingStyle, CityConfig, RegionConfig, load_city
+from pipeline.colour import chroma_and_hue, with_hue
+from pipeline.config import BuildingStyle, CityConfig, Material, RegionConfig, load_city
 from pipeline.crs import GameTransform
 from pipeline.documents import write_document
 from pipeline.fetch import artefact_path, cached_tiles, source_dir
@@ -295,8 +296,37 @@ def _seed(mesh: MeshData) -> float:
     Shared by the colour jitter and `P3-7`'s window phase so the two agree: a
     building whose brightness came out at the top of its band has its window rows
     in the same place every rebuild, and neither can drift from the other.
+
+    ⚠️ **`_material_seed` is deliberately *not* this stream** — it is the one
+    consumer that must disagree with it. See that function.
     """
     return crc32(mesh.name.encode("utf-8")) / 0x1_0000_0000
+
+
+def _material_seed(mesh: MeshData) -> float:
+    """A stable number in [0, 1) for one mesh, independent of `_seed`.
+
+    ⚠️ **Not a salted `crc32`, and the obvious way to write that is a trap.**
+    CRC32 is affine over GF(2), so a *prefix*-salted CRC is close to a linear
+    image of the original: measured over the region's real 2,214 object ids,
+    `crc32(b"material:" + name)` correlates with `_seed` at **Pearson +0.507**.
+    A suffix salt happens to escape it (+0.016), but only by accident of where
+    the polynomial division lands — it is not a property worth relying on.
+
+    `blake2b`'s `person` parameter is the purpose-built answer: domain separation
+    inside the compression function rather than bolted onto the message. Measured
+    the same way it comes out at +0.049.
+
+    It has to be independent of two things at once. `_seed` drives the colour
+    jitter, whose +/-3.4 `L*` is over half the ramp's whole 6.0 `L*` span, so a
+    correlated draw would systematically hand the paler materials to the
+    buildings already jittering bright and turn a per-building choice into a
+    lightness gradient. And `_phase` is literally `_seed`'s top 8 bits, so the
+    same correlation would tie a building's cladding to where its window rows
+    sit.
+    """
+    digest = blake2b(mesh.name.encode("utf-8"), digest_size=4, person=b"material")
+    return int.from_bytes(digest.digest(), "big") / 0x1_0000_0000
 
 
 def _stem(name: str) -> str:
@@ -374,6 +404,45 @@ def facade_hue(style: BuildingStyle, city_id: str, *, root: Path | None = None) 
     return hues
 
 
+def material_for(
+    style: BuildingStyle,
+    class_id: str,
+    mesh: MeshData,
+    height_m: float,
+    measured: Hue | None,
+) -> Material:
+    """What one building is built of (`Q34`).
+
+    A class override wins outright; otherwise a **surveyed** building draws from
+    the distribution its measured hue selects, and an **unsurveyed** one takes the
+    height ramp. The fallback is the ramp and not the surveyed population's
+    marginal distribution — `facade_hue` is optional by contract, so a clone
+    without the survey has to build the same city, and a marginal draw would
+    build a different one.
+
+    ⚠️ **This conditions lightness on hue, and nothing more.** It is tempting to
+    say it stops a building's material contradicting its colour, but `with_hue`
+    replaces `a*` and `b*` a line later in `colour_for` — the drawn material's own
+    chroma never reaches the screen. What survives is its `L*`, so what the rule
+    actually buys is that a building rendering cream gets an albedo plausible for
+    cream (tile, 60-75%) rather than one plausible for concrete (20-30%). That is
+    a real and narrow gain and it should not be described as a wider one.
+
+    ⚠️ **Still no spatial coherence.** Neighbours draw independently, and hue does
+    not supply it either: only 0.5% of hue variance lies between the survey's
+    sheets. Real blocks share cladding and this city's will not.
+    """
+    # A guard rather than an early return of `class_materials[class_id]`, so
+    # `BuildingStyle.material_for` below stays the only place that knows what a
+    # class override *is*. Reading that rule in two files is what putting the
+    # materials in one table was for.
+    if measured is not None and class_id not in style.class_materials:
+        draw = style.material_assignment.draw_for(*chroma_and_hue(measured))
+        if draw is not None:
+            return draw.pick(_material_seed(mesh))
+    return style.material_for(class_id, height_m)
+
+
 def colour_for(
     style: BuildingStyle,
     class_id: str,
@@ -389,16 +458,16 @@ def colour_for(
     object, which is true of buildings and false of the ground.
 
     Where the survey has a colour for this building, its **hue** replaces the
-    band's and its **lightness does not** — the band keeps that, and so does the
-    jitter below. The survey's `L*` is repeatable but confounded: log pixel count
-    alone explains 26% of it, so it is not albedo. ⚠️ Not because a building's
-    walls disagree by compass direction — that is 1.4% of the variance, and
-    `colour.py`'s header has the rest of the arithmetic.
+    band's and its **lightness does not** — the material keeps that, and so does
+    the jitter below. The survey's `L*` is repeatable but confounded: log pixel
+    count alone explains 26% of it, so it is not albedo. ⚠️ Not because a
+    building's walls disagree by compass direction — that is 1.4% of the
+    variance, and `colour.py`'s header has the rest of the arithmetic.
     """
     low, high = bounds if bounds is not None else mesh.aabb()
-    red, green, blue = style.colour_for(class_id, high[1] - low[1])
-
     measured = None if hue is None else hue.get(_stem(mesh.name))
+    red, green, blue = material_for(style, class_id, mesh, high[1] - low[1], measured).colour
+
     if measured is not None:
         red, green, blue = with_hue((red, green, blue), measured, style.facade_hue_strength)
 

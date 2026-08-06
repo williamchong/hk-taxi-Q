@@ -291,20 +291,22 @@ def class_faces(city: Any, tiles: list[Path], class_name: str) -> Faces:
     """Upward-facing geometry of one mesh class, across the shipped tiles.
 
     Colour is the only thing that tells one class from another once a tile is
-    merged into a single primitive, so a class with no `class_colours` entry
+    merged into a single primitive, so a class with no `class_materials` entry
     cannot be graded at all — which is a config answer, not a missing feature.
 
     `jitter_for`, not the bare `colour_jitter`: a class may override it since
     `P3-10`, and `_wears` is exact about the interval it tests, so the wrong
     jitter widens or narrows the ray and silently changes what matches.
     """
-    colour = city.buildings.class_colours.get(class_name)
-    if colour is None:
+    material = city.buildings.class_materials.get(class_name)
+    if material is None:
         raise SystemExit(
-            f"city '{city.id}' gives '{class_name}' no entry in class_colours, so it cannot "
+            f"city '{city.id}' gives '{class_name}' no entry in class_materials, so it cannot "
             "be told apart from buildings in a merged tile"
         )
-    return Faces.from_tiles(tiles, colour, city.buildings.jitter_for(class_name), class_name)
+    return Faces.from_tiles(
+        tiles, material.colour, city.buildings.jitter_for(class_name), class_name
+    )
 
 
 def structure_faces(city: Any, tiles: list[Path]) -> tuple[Faces, str]:

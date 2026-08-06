@@ -60,9 +60,14 @@ const float PHASE_STEPS = 256.0;
 
 group_uniforms massing;
 // How far the ETL's vertex colour is pulled toward `base_colour`. Not 1.0: the
-// five `height_bands` in `etl/config/cities/hong_kong.yaml` encode the city's
-// old-below / new-above grain, and washing them out entirely throws away real
-// information for no gain.
+// vertex colour carries the city's per-building variation and washing it out
+// entirely throws away real information for no gain.
+//
+// ⚠️ **It is *not* an old-below / new-above grain, which is what this comment
+// claimed until `Q34`.** That reading was tested and refused: height explains
+// 0.9% of measured facade lightness. What the colour does carry is the measured
+// hue from `facade_hue`, the per-building jitter, and a material drawn from that
+// hue — see `etl/config/cities/hong_kong.yaml`'s `material_assignment`.
 //
 // ⚠️ **A trial home for the palette, not its home.** The palette lives in the
 // city config (CLAUDE.md hard rule 4); this exists so a level can be judged

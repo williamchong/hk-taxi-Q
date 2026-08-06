@@ -613,7 +613,7 @@ def build_region(
         if _draw_edge(builder, edge, style, city.roads.lane_width_m):
             report.edges += 1
     for cap in caps:
-        builder.fan(cap.ring, colour=style.surface_colour)
+        builder.fan(cap.ring, colour=style.surface_material.colour)
         report.junctions += 1
 
     mesh = builder.build(SURFACE_MESH_NAME)
@@ -988,7 +988,9 @@ def _draw_edge(builder: _Builder, edge: _Edge, style: RoadSurface, lane_width_m:
     # own along and across directions, so the two kerbs — being mirror images —
     # take their pairs in opposite orders. The carriageway is right-then-left
     # for the same reason. `test_surface.py` pins every one of these facings.
-    builder.strip(right, left, colour=style.surface_colour, along=along, across=(lanes, 0.0))
+    builder.strip(
+        right, left, colour=style.surface_material.colour, along=along, across=(lanes, 0.0)
+    )
 
     # The riser has no plan width, so both its rails sit at the kerb line and
     # share its U. The lip is where U crosses the kerb — putting the ramp on the
@@ -1007,7 +1009,7 @@ def _draw_edge(builder: _Builder, edge: _Edge, style: RoadSurface, lane_width_m:
             builder.strip(
                 lower[start:stop],
                 upper[start:stop],
-                colour=style.kerb_colour,
+                colour=style.kerb_material.colour,
                 along=along[start:stop],
                 across=across,
             )
