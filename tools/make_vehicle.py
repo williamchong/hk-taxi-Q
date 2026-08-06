@@ -28,7 +28,9 @@ import logging
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
+from itertools import pairwise
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 
@@ -96,6 +98,38 @@ Colour = tuple[int, int, int]
 Point = Sequence[float]
 
 
+class CabinRing(NamedTuple):
+    """One horizontal section of the greenhouse, in absolute coordinates.
+
+    Named rather than a bare 5-tuple because `greenhouse_profile`'s own guard
+    reads three of these fields, and a guard that indexes positionally is the
+    thing it exists to prevent: reorder the tuple and the ordering check starts
+    comparing half-widths to z, silently and in the direction of "passes".
+    """
+
+    y_m: float
+    half_width_m: float
+    z_front: float
+    z_rear: float
+    cut_m: float
+
+
+def _rake_run_m(rake_deg: float, rise_m: float) -> float:
+    """How far a face raked `rake_deg` off vertical travels over `rise_m`."""
+    return rise_m * float(np.tan(np.radians(rake_deg)))
+
+
+def opening_radius_m(chassis: Chassis, shape: Proportions) -> float:
+    """Half-width of a wheel opening — the tyre, plus the clearance round it.
+
+    A function rather than a hand-copied sum, because it had reached five copies
+    across the generator and its tests and one of them was a test re-deriving
+    what it was meant to be checking. Takes both because the tyre is the
+    chassis' and the clearance is the caricature's.
+    """
+    return chassis.wheel_radius_m + shape.well_clearance_m
+
+
 @dataclass(frozen=True)
 class Chassis:
     """The hardpoints, mirrored from `taxi.tscn` and `handling.tres`.
@@ -118,6 +152,11 @@ class Chassis:
     @property
     def ground_y_m(self) -> float:
         return self.hub_y_m - self.wheel_radius_m
+
+    @property
+    def axle_z_m(self) -> tuple[float, float]:
+        """Front and rear axle centrelines. The wheelbase straddles the origin."""
+        return (-self.wheelbase_m / 2.0, self.wheelbase_m / 2.0)
 
 
 @dataclass(frozen=True)
@@ -157,10 +196,27 @@ class Proportions:
     # Greenhouse, as fractions of the body: where the cabin starts and ends
     # along z, and how far the roof pulls in from the belt line.
     cabin_front_z_m: float = -0.62
-    cabin_rear_z_m: float = 1.00
+    # ⚠️ The C-pillar base, and it was 1.00 — 0.30 m *ahead* of the rear axle,
+    # where every reference photograph puts it at or behind. A short cabin is
+    # what made the backlight unaffordable, because rake is paid for out of roof
+    # length: at 1.00 a 30° screen left a 1.01 m roof, shorter than the upright
+    # version started with. At 1.25 the same rake leaves 1.26 m. The two numbers
+    # are one decision, not two, which is why they moved together.
+    cabin_rear_z_m: float = 1.25
     roof_inset_m: float = 0.13
-    roof_front_taper_m: float = 0.30
-    roof_rear_taper_m: float = 0.16
+    # ⚠️ Screen rake, in degrees from vertical, and these are the **authored**
+    # numbers — the roof taper is derived from them rather than the reverse.
+    # It used to be the other way: two taper distances placed the roof edge, and
+    # the top of the glass was a bare `* 0.8` of them. That literal is very
+    # nearly the fraction of the greenhouse the glass occupies (0.38 of 0.48 =
+    # 0.792), so the old code was already treating the screen and the cant rail
+    # above it as one continuous raked plane — it simply had no word for the
+    # angle of that plane, and no way to set one without moving the roof.
+    # Measured off the reference: the front came out at 32.3°, near enough, and
+    # the rear at 18.6°, which reads as a vertical wall from the chase camera —
+    # the one angle `ART_DESIGN.md` says most players ever see.
+    windscreen_rake_deg: float = 35.0
+    backlight_rake_deg: float = 30.0
     # The roof sign is most of what says "taxi" at a distance — as a shape now
     # rather than as a word. Wider across the car than along it, which is the
     # proportion the real fitting has and the one the chase camera sees.
@@ -206,6 +262,31 @@ class Proportions:
     # it is on the boot, as the real car's is, which is why it alone is exempt
     # from the "stays on the bumper" test.
     bumper_top_y_m: float = 0.02
+    # ⚠️ Top of the dark rocker, and the **third** attempt at a strip down the
+    # flank. The first was a box standing 2-3 cm proud, which read as a stick;
+    # the second continued the bumper band at `bumper_top_y_m`, which is 38% of
+    # a 0.58 m flank and read as a stripe painted on a toy. Both are written up
+    # in `_flank_detail`. This one is paint, at the *sill* rather than at bumper
+    # height — 10% of the flank, which is what the reference photographs show.
+    #
+    # ⚠️ A hand-copied literal of `bumper_bottom_y_m`, on purpose, and
+    # `test_one_line_runs_all_the_way_round` holds the two together. Sharing the
+    # line is the whole idea: one break runs unbroken around the car and only
+    # what sits *below* it changes — red across the nose and tail, dark along
+    # the flank, which is a bumper with a valance under it meeting a sill panel.
+    # Set it to `sill_y_m` to switch the rocker off; `_flank` then emits no dark
+    # faces at all, which is the setting `B3`'s traffic wants.
+    rocker_top_y_m: float = -0.14
+    # How far forward of a door's trailing edge its handle sits. The handles
+    # used to be placed from `cabin_mid_z_m` +/- a fixed 0.42, which is not
+    # where a handle is on a car and does not survive the cabin changing length:
+    # at `cabin_rear_z_m = 1.25` that put the rear one 130 mm out over the wheel
+    # opening. Anchored to the door edges it follows the cabin instead.
+    handle_inset_m: float = 0.10
+    # Half the handle's length along the car. Promoted out of `_flank_detail`'s
+    # box literals because `_rear_door_z_m` needs it: "is there room for a second
+    # handle behind the first" is a question about the handle's own size.
+    handle_half_length_m: float = 0.075
     # The 4 SEATS badge, as a shape. It was a green dome with lettering on it,
     # drawn as pixels; the words are gone and the dome is geometry now, faceted
     # at the segment count the wheel arch uses because nothing else in this city
@@ -226,6 +307,111 @@ class Proportions:
     @property
     def cabin_mid_z_m(self) -> float:
         return (self.cabin_front_z_m + self.cabin_rear_z_m) / 2.0
+
+    @property
+    def cabin_half_width_m(self) -> float:
+        """The greenhouse stands one bevel inboard of the flank at the belt line."""
+        return self.half_width_m - self.bevel_m
+
+    @property
+    def glass_band_m(self) -> float:
+        """Height of the glazed band — belt line to the bottom of the cant rail."""
+        return self.roof_y_m - self.cant_rail_m - self.belt_y_m
+
+    @property
+    def bumper_bottom_y_m(self) -> float:
+        """Where the dark bumper band stops and the red valance below it starts.
+
+        Not a ring of its own: this *is* the sill tuck, the body's own fold, and
+        `lower_profile` has always emitted a ring there. Naming it is what turns
+        an accident into a statement — the fixtures that sit on the bumper all
+        clear this line already, and `test_none_of_them_reaches_below_the_valance`
+        now says so against this property rather than recomputing the sum.
+        """
+        return self.sill_y_m + self.bevel_m
+
+    def cabin_ends_m(self, rise_m: float) -> tuple[float, float]:
+        """(front z, rear z) of the cabin `rise_m` above the belt line.
+
+        The one place the sign flip lives. Rake carries the front of the cabin
+        *backwards* and the rear of it *forwards*, and writing that out per ring
+        is two chances to get a minus sign right — which the glass ring and the
+        roof ring above it each needed.
+        """
+        return (
+            self.cabin_front_z_m + _rake_run_m(self.windscreen_rake_deg, rise_m),
+            self.cabin_rear_z_m - _rake_run_m(self.backlight_rake_deg, rise_m),
+        )
+
+    @property
+    def roof_front_taper_m(self) -> float:
+        """How far the roof's leading edge sits behind the windscreen's base.
+
+        Derived, where it used to be authored. The windscreen and the cant rail
+        that caps it are one plane, so one angle places both — and the roof edge
+        is wherever that plane has got to by the time it reaches `roof_y_m`.
+        """
+        return _rake_run_m(self.windscreen_rake_deg, self.glass_band_m + self.cant_rail_m)
+
+    @property
+    def roof_rear_taper_m(self) -> float:
+        """The backlight's counterpart. See `roof_front_taper_m`."""
+        return _rake_run_m(self.backlight_rake_deg, self.glass_band_m + self.cant_rail_m)
+
+    @property
+    def greenhouse_profile(self) -> tuple[CabinRing, ...]:
+        """The cabin's rings: the belt line, the top of the glass, and the roof.
+
+        The two ends of each come from the rake angles through `cabin_ends_m`,
+        so raking a screen moves the glass and the roof edge above it together
+        and by construction.
+
+        ⚠️ **The stack has to stay ordered, and nothing downstream would say so.**
+        `_loft` joins ring *i* to ring *i+1* whatever their coordinates are: give
+        it a front edge that moves backwards, or two rings that cross, and it
+        builds an inverted greenhouse out of quads that are individually valid —
+        no error, no degenerate triangle, and a normal check that still passes
+        because `_polygon_facing` faithfully turns each face outward from a
+        profile that is itself inside out. Rake past about 55° at this cabin
+        length and that is what comes out, so the guard lives here rather than in
+        a test — a `Proportions` this wrong refuses to yield a profile at all.
+
+        ⚠️ **The ordering test is `<=`, not `<`.** Zero rake is a *square*
+        greenhouse, which lofts perfectly well and is the cheap car `B3`'s
+        traffic wants — the same offer `corner_cut_m = 0` and
+        `rocker_top_y_m = sill_y_m` already make. Only genuine inversion is
+        refused; collapse is the roof-length guard below, which is independent.
+        """
+        cut, hw = self.corner_cut_m, self.cabin_half_width_m
+        glass_front, glass_rear = self.cabin_ends_m(self.glass_band_m)
+        roof_front, roof_rear = self.cabin_ends_m(self.glass_band_m + self.cant_rail_m)
+        rings = (
+            CabinRing(self.belt_y_m, hw, self.cabin_front_z_m, self.cabin_rear_z_m, cut * 0.8),
+            CabinRing(
+                self.belt_y_m + self.glass_band_m,
+                hw - self.roof_inset_m * 0.7,
+                glass_front,
+                glass_rear,
+                cut * 0.7,
+            ),
+            CabinRing(self.roof_y_m, hw - self.roof_inset_m, roof_front, roof_rear, cut * 0.55),
+        )
+        for lower, upper in pairwise(rings):
+            if upper.z_front < lower.z_front or lower.z_rear < upper.z_rear:
+                raise ValueError(
+                    f"greenhouse rings are out of order between y {lower.y_m:+.3f} and "
+                    f"{upper.y_m:+.3f}: front {lower.z_front:+.3f} -> {upper.z_front:+.3f}, "
+                    f"rear {lower.z_rear:+.3f} -> {upper.z_rear:+.3f}"
+                )
+        roof = rings[-1]
+        if roof.z_rear - roof.z_front <= 2.0 * roof.cut_m:
+            raise ValueError(
+                f"windscreen_rake_deg={self.windscreen_rake_deg} and "
+                f"backlight_rake_deg={self.backlight_rake_deg} leave no roof between "
+                f"{roof.z_front:+.3f} and {roof.z_rear:+.3f} on a "
+                f"{self.cabin_rear_z_m - self.cabin_front_z_m:.2f} m cabin"
+            )
+        return rings
 
     @property
     def sign_z_m(self) -> float:
@@ -633,8 +819,6 @@ def taxi_body(chassis: Chassis, shape: Proportions) -> MeshData:
     # Lower body, lofted rather than boxed. The extra rings are the bevel: a
     # tucked sill at the bottom and a drawn-in shoulder at the belt, which is
     # what stops the flank reading as a slab without curving a single face.
-    tuck = shape.bevel_m
-    cut = shape.corner_cut_m
     profile = shape.lower_profile
     lower_rings = [
         _ring(y, hw, front_z + inset_z, rear_z - inset_z, ring_cut)
@@ -643,11 +827,19 @@ def taxi_body(chassis: Chassis, shape: Proportions) -> MeshData:
     parts.append(
         _loft(
             lower_rings,
-            # Two dark bands then two red: the bumper, painted on. It used to be
-            # a box standing 6 cm proud of each end, and at the size the car is
-            # actually played at that bar was the widest thing on it. Bodywork
-            # keeps the bumper visible and takes it out of the silhouette.
-            [DARK, DARK, RED, RED],
+            # Red, dark, then two red: the bumper, painted on, with the body's
+            # own valance below it. It used to be a box standing 6 cm proud of
+            # each end, and at the size the car is actually played at that bar
+            # was the widest thing on it. Bodywork keeps the bumper visible and
+            # takes it out of the silhouette.
+            #
+            # ⚠️ The first band is RED, and it was DARK — so the bumper ran to
+            # the bottom of the car and there was nothing under it. Every
+            # reference photograph shows the opposite: the dark band stops, and
+            # red bodywork carries on below it to the bottom edge. That valance
+            # is the lowest 27% of what used to be solid black. The ring it
+            # starts at is `bumper_bottom_y_m`, which the flank shares.
+            [RED, DARK, RED, RED],
             bottom=DARK,
             top=RED,
             # The two long flanks are `_flank`'s, because a loft band cannot
@@ -660,34 +852,14 @@ def taxi_body(chassis: Chassis, shape: Proportions) -> MeshData:
     # Greenhouse: belt to roof through a glass band and a silver cant rail, so
     # the roof colour comes down over the pillars the way the real paint does
     # rather than sitting on top like a lid.
-    inset = shape.roof_inset_m
-    glass_top = shape.roof_y_m - shape.cant_rail_m
-    cabin_hw = hw - tuck
+    #
+    # The three rings and their ordering guard are `greenhouse_profile`'s. They
+    # used to be written out here, with the top of the glass placed at a bare
+    # `* 0.8` of the roof taper — which is how the car ended up with a backlight
+    # raked 18.6° that nobody had chosen and nobody could change on its own.
     parts.append(
         _loft(
-            [
-                _ring(
-                    shape.belt_y_m,
-                    cabin_hw,
-                    shape.cabin_front_z_m,
-                    shape.cabin_rear_z_m,
-                    cut * 0.8,
-                ),
-                _ring(
-                    glass_top,
-                    cabin_hw - inset * 0.7,
-                    shape.cabin_front_z_m + shape.roof_front_taper_m * 0.8,
-                    shape.cabin_rear_z_m - shape.roof_rear_taper_m * 0.8,
-                    cut * 0.7,
-                ),
-                _ring(
-                    shape.roof_y_m,
-                    cabin_hw - inset,
-                    shape.cabin_front_z_m + shape.roof_front_taper_m,
-                    shape.cabin_rear_z_m - shape.roof_rear_taper_m,
-                    cut * 0.55,
-                ),
-            ],
+            [_ring(*ring) for ring in shape.greenhouse_profile],
             [GLASS, SILVER],
             bottom=GLASS,
             top=SILVER,
@@ -815,7 +987,7 @@ def taxi_body(chassis: Chassis, shape: Proportions) -> MeshData:
             _flank(chassis, shape, side=side, ends=(flank_z0, flank_z1), name=f"flank_{side_tag}")
         )
 
-    parts.extend(_flank_detail(shape))
+    parts.extend(_flank_detail(chassis, shape))
     return merge(parts, name="taxi_body")
 
 
@@ -904,16 +1076,15 @@ def _flank(
     rim then turns inward to an inner wall, so an eye at the kerb sees a dark
     wheel well rather than straight through the car.
 
-    The flank is red from the sill to the belt line and carries no trim at all —
-    see `panel` for why the bumper band stops at the corners rather than running
-    through here, and `_flank_detail` for the two strips that used to run along
-    it.
+    The flank is red from the rocker to the belt line and dark below it — see
+    `panels` for what that band is and, just as importantly, what it is not.
+    `_flank_detail` keeps the running list of what else does *not* go here.
     """
     x_out = side * shape.half_width_m
     x_in = side * (shape.half_width_m - shape.well_depth_m)
-    opening_r = chassis.wheel_radius_m + shape.well_clearance_m
+    opening_r = opening_radius_m(chassis, shape)
     hub_y = chassis.hub_y_m
-    wheels_z = (-chassis.wheelbase_m / 2.0, chassis.wheelbase_m / 2.0)
+    wheels_z = chassis.axle_z_m
     front_z, rear_z = ends
 
     def arc_y(z: float, wheel_z: float) -> float:
@@ -926,31 +1097,91 @@ def _flank(
         # segments but would hang bodywork under the floor from 37 up.
         return max(shape.sill_y_m, hub_y + float(np.sqrt(opening_r**2 - offset**2)))
 
-    def panel(z0: float, z1: float, y0: float, y1: float, *, tag: str) -> MeshData:
+    def panels(z0: float, z1: float, y0: float, y1: float, *, tag: str) -> list[MeshData]:
         """One stretch of flank, from the arc (or the sill) up to the belt line.
 
         The two z and the two y are positional and interchangeable by mistake —
         transposing the pairs compiles and builds a silently wrong quad — so
         `tag` is keyword-only to keep the four coordinates adjacent and ordered.
 
-        ⚠️ Red top to bottom, deliberately. The bumper band the nose and tail
-        carry below `bumper_top_y_m` was continued along here for one round, and
-        it was wrong: a dark line down the side reads as a stripe painted on a
-        toy, not as trim. The band stops where `_loft` stops it — wrapped round
-        each end and through the corner chamfers — which is where a real bumper
-        stops too.
+        Two bands, split at `rocker_top_y_m`: dark below, red above. ⚠️ **This
+        is the third dark strip tried down this flank and the first two were
+        both rejected**, so the form matters more than the fact of it. It is
+        *paint*, so it adds nothing to the silhouette — the first attempt was a
+        box standing 2-3 cm proud, and it read as a stick. And it is at the
+        **sill**, 10% of a 0.58 m flank — the second attempt continued the
+        bumper band down from `bumper_top_y_m`, which is 38% of it, and read as
+        a stripe painted on a toy. The line it starts at is the one the nose and
+        tail already break at, so the two meet at the corner chamfers with no
+        jog; what differs is only which side of it is dark.
+
+        ⚠️ **The stretch is cut where the arc crosses the rocker line, and
+        clamping to the line instead is wrong in a way that preserves area.**
+        Clamped, the dark band's outer corner is dragged up to the line while
+        its inner corner stays on the arc, which fills a sliver of the wheel
+        opening and leaves an identical sliver of bodywork uncovered — two
+        triangles on the same base, so the flank measures the same size and the
+        silhouette is quietly a different shape. Cutting at the crossing makes
+        the dark band sit exactly between the arc and the line, everywhere.
         """
-        return _polygon_facing(
-            [
-                (x_out, y0, z0),
-                (x_out, shape.belt_y_m, z0),
-                (x_out, shape.belt_y_m, z1),
-                (x_out, y1, z1),
-            ],
-            RED,
-            (side, 0.0, 0.0),
-            name=f"{name}_{tag}",
-        )
+        rocker = shape.rocker_top_y_m
+        # ⚠️ Snapped to the line before the sign test below, because that test
+        # has no tolerance and `rocker_top_y_m` is a dial. Land it within a
+        # rounding error of an arch sample and the straddle reads as genuine,
+        # the cut lands at `across ~ 0`, and the stretch either side is a sliver
+        # — measured down to **1.4e-30 m²**, and nothing catches it: `_polygon`
+        # refuses only an *exactly* zero cross product, so a 1e-30 normal
+        # normalises to unit length and passes every winding and degeneracy
+        # check the suite has.
+        y0 = rocker if abs(y0 - rocker) < 1e-9 else y0
+        y1 = rocker if abs(y1 - rocker) < 1e-9 else y1
+
+        def band(
+            za: float, zb: float, ya: float, yb: float, *, top: float, colour: Colour, suffix: str
+        ) -> MeshData | None:
+            """One quad of flank, floor `ya`->`yb` to a flat ceiling at `top`.
+
+            Keyword-only past the coordinates for the reason `panels` is: four
+            interchangeable floats in a row transpose silently into a valid,
+            wrong quad, and a bare fifth one immediately after them is the same
+            hazard again.
+            """
+            ring = [
+                (x_out, ya, za),
+                (x_out, top, za),
+                (x_out, top, zb),
+                (x_out, yb, zb),
+            ]
+            # Where the arc meets the band's own ceiling an edge collapses, and a
+            # quad with two coincident corners has no normal — `_polygon` says so
+            # rather than emitting one, so the duplicates go before it sees them.
+            # Below three corners there is no face left to draw at all.
+            ring = [corner for i, corner in enumerate(ring) if corner != ring[i - 1]]
+            if len(ring) < 3:
+                return None
+            return _polygon_facing(ring, colour, (side, 0.0, 0.0), name=f"{name}_{tag}{suffix}")
+
+        stretches = [(z0, z1, y0, y1)]
+        if (y0 - rocker) * (y1 - rocker) < 0.0:
+            across = (rocker - y0) / (y1 - y0)
+            stretches = [
+                (z0, z0 + across * (z1 - z0), y0, rocker),
+                (z0 + across * (z1 - z0), z1, rocker, y1),
+            ]
+
+        faces: list[MeshData] = []
+        for i, (za, zb, ya, yb) in enumerate(stretches):
+            suffix = f"_{i}" if len(stretches) > 1 else ""
+            # Each stretch now lies wholly on one side of the line, so the dark
+            # band is present or absent rather than clipped.
+            wanted = [(max(ya, rocker), max(yb, rocker), shape.belt_y_m, RED, suffix)]
+            if min(ya, yb) < rocker:
+                wanted.insert(0, (ya, yb, rocker, DARK, f"_rocker{suffix}"))
+            for floor_a, floor_b, ceiling, colour, label in wanted:
+                face = band(za, zb, floor_a, floor_b, top=ceiling, colour=colour, suffix=label)
+                if face is not None:
+                    faces.append(face)
+        return faces
 
     parts: list[MeshData] = []
     # Solid stretches: nose to front arch, between the arches, rear arch to tail.
@@ -960,7 +1191,7 @@ def _flank(
         (wheels_z[1] + opening_r, rear_z),
     )
     for i, (z0, z1) in enumerate(spans):
-        parts.append(panel(z0, z1, shape.sill_y_m, shape.sill_y_m, tag=f"span_{i}"))
+        parts.extend(panels(z0, z1, shape.sill_y_m, shape.sill_y_m, tag=f"span_{i}"))
 
     for w, wheel_z in enumerate(wheels_z):
         columns = np.linspace(wheel_z - opening_r, wheel_z + opening_r, shape.arch_segments + 1)
@@ -968,7 +1199,7 @@ def _flank(
             z0, z1 = float(columns[c]), float(columns[c + 1])
             y0, y1 = arc_y(z0, wheel_z), arc_y(z1, wheel_z)
             # Bodywork above the arc.
-            parts.append(panel(z0, z1, y0, y1, tag=f"arch_{w}_{c}"))
+            parts.extend(panels(z0, z1, y0, y1, tag=f"arch_{w}_{c}"))
             # The rim, turning inward into the well.
             parts.append(
                 _polygon_facing(
@@ -995,16 +1226,54 @@ def _flank(
     return parts
 
 
-def _flank_detail(shape: Proportions) -> list[MeshData]:
+def _rear_door_z_m(chassis: Chassis, shape: Proportions) -> float:
+    """Trailing edge of the rear door — the cabin's back, or the arch before it.
+
+    ⚠️ **Refused rather than clamped when it lands ahead of the front door.** A
+    wide enough opening, or a cabin pushed far enough back, drags the arch ahead
+    of `cabin_mid_z_m` and puts the "rear" handle on the *front* door — measured
+    at `well_clearance_m = 0.65`, the two boxes overlap by 135 mm and z-fight.
+    Reachable rather than theoretical: `cabin_rear_z_m` moved 1.00 -> 1.25 to buy
+    the backlight its rake, and rake is paid for out of cabin length, so it will
+    move again. Clamping was tried and is worse — pushing the edge back far
+    enough to separate the boxes carries the rear handle *onto the arch*, which
+    trades a defect for a different one and reports neither. This is the same
+    answer `greenhouse_profile` gives: a `Proportions` that cannot be built
+    refuses, rather than building something quietly wrong.
+
+    A function rather than a line inside `_flank_detail` because the test that
+    checks handle placement was re-deriving this expression verbatim, which made
+    it assert the formula against itself.
+    """
+    behind_the_arch = chassis.axle_z_m[1] - opening_radius_m(chassis, shape)
+    rear_door_z = min(shape.cabin_rear_z_m, behind_the_arch)
+    if rear_door_z - shape.cabin_mid_z_m <= 2.0 * shape.handle_half_length_m:
+        raise ValueError(
+            f"the rear door ends at {rear_door_z:+.3f}, which leaves no room for a handle "
+            f"behind the front door's at {shape.cabin_mid_z_m:+.3f} — the wheel opening "
+            f"({opening_radius_m(chassis, shape):.3f} m) has reached the middle of the cabin"
+        )
+    return rear_door_z
+
+
+def _flank_detail(chassis: Chassis, shape: Proportions) -> list[MeshData]:
     """Door handles, and the running list of what the flank does *not* carry.
 
     They are proud of the surface rather than cut into it. Flat shading reads a
     raised edge and a recessed one identically, and a raised handle costs one box
     where a recess costs a re-tiled flank.
+
+    ⚠️ Placed from the doors' **trailing edges**, which is why this needs the
+    chassis. It used to be `cabin_mid_z_m` +/- a flat 0.42, and that survived
+    only as long as the cabin did not change length: lengthening it to reach the
+    rear axle carried the rear handle 130 mm out over the wheel opening, where a
+    handle floating above a tyre is not a handle. The front door's trailing edge
+    is the cabin's middle; the rear door's is its back — or the arch, whichever
+    comes first, because the arch is where a real rear door stops.
     """
     parts: list[MeshData] = []
     hw = shape.half_width_m
-    cabin_mid_z = shape.cabin_mid_z_m
+    rear_door_z = _rear_door_z_m(chassis, shape)
 
     for tag, side in (("l", -1.0), ("r", 1.0)):
         # ⚠️ No modelled A/B/C pillars. They were straight boxes against a
@@ -1015,13 +1284,19 @@ def _flank_detail(shape: Proportions) -> list[MeshData]:
         # the silver-over-glass reading comes from `_loft`'s cant rail instead,
         # and painting the pillars is not something this model does at all.
         #
-        # ⚠️ No rub strip and no sill skirt. Both were dark bars running most of
-        # the flank's length and standing 2-3 cm proud of it, put there because a
-        # review called the flank flat — and at any distance the car is actually
-        # played at they read as black stripes painted down the side of a toy,
-        # not as trim. **The flank is red from the sill to the belt line and
-        # nothing else goes on it.** Its horizontal break comes from the wheel
-        # arches; the bumper band stops at the corner chamfers, deliberately.
+        # ⚠️ No rub strip. It was a dark bar running most of the flank's length
+        # and standing 2-3 cm proud of it, put there because a review called the
+        # flank flat — and at any distance the car is actually played at it read
+        # as a black stripe painted down the side of a toy, not as trim.
+        #
+        # ⚠️ The sill skirt came back, on the user's call, and it is **not** that
+        # bar. It is paint at the sill rather than a box at the belt, and it is
+        # `panels`' business, not this function's — see the ⚠️ there for the two
+        # forms that failed and why this one is neither. It is still on trial:
+        # 60 mm at review distance is inside the band this file keeps calling
+        # sub-pixel, and the argument for it — that a long high-contrast line
+        # survives where an isolated small shape does not — is an argument and
+        # not a measurement. `rocker_top_y_m = sill_y_m` switches it off.
         #
         # ⚠️ No modelled door shut lines. They were 1 cm wide, 52 cm tall and
         # stood 1 cm PROUD of the flank — so instead of the recessed shadow a
@@ -1029,11 +1304,11 @@ def _flank_detail(shape: Proportions) -> list[MeshData]:
         # the review read them as sticks. Flat shading cannot express a groove:
         # a recess and a rib light identically, and only the silhouette differs.
         # A panel line is a texture, and that is where this one goes.
-        for door, z in (("front", cabin_mid_z - 0.42), ("rear", cabin_mid_z + 0.42)):
+        for door, trailing_z in (("front", shape.cabin_mid_z_m), ("rear", rear_door_z)):
             parts.append(
                 _box_at(
-                    (side * (hw + 0.02), 0.30, z + 0.16),
-                    (0.02, 0.025, 0.075),
+                    (side * (hw + 0.02), 0.30, trailing_z - shape.handle_inset_m),
+                    (0.02, 0.025, shape.handle_half_length_m),
                     SILVER,
                     name=f"handle_{door}_{tag}",
                 )

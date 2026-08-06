@@ -736,6 +736,23 @@ widening made 1.6× too wide, so it cuts into a cross-slope at the kerb, and the
 Proportions: shortened wheelbase, tall greenhouse, exaggerated wheel arches. Readable silhouette from
 behind at speed — that's the only angle most players ever see.
 
+**The screens are raked by angle, not by taper — 35° front, 30° rear.** Both already sloped before
+anyone looked: the roof tapers placed the roof edge and the top of the glass was a bare `* 0.8` of
+them, which came out at 32.3° and **18.6°**. The front was near enough; the rear read as a vertical
+wall from behind, which the line above makes the angle that decides it. Rake is paid for out of roof
+length, so the cabin's rear moved back to the axle to buy it. The windscreen and the cant rail above
+it are **one plane** — the silver is where the paint changes, not where the bodywork turns — so one
+angle places both, and `roof_*_taper_m` is derived from it.
+
+**The lower body breaks once, all the way round, at `bumper_bottom_y_m`.** Below that line it is red
+across the nose and tail — the valance under the bumper — and dark along the flank, which is the
+rocker. That is a bumper meeting a sill panel, as the real car has. ⚠️ **The rocker is the third dark
+strip tried on this flank**; a box standing proud read as a stick and a continued bumper band read as
+a stripe painted on a toy, both recorded in `PROGRESS.md`. It is on trial: at 60 mm it falls inside
+the range `PROGRESS.md`'s `P3-11` review measured as sub-pixel at review distance, and the chase
+camera tracks the car's facing so it never shows the flank at all. `rocker_top_y_m = sill_y_m`
+removes it.
+
 ✅ **Audited in situ and the split works — the taxi is the only chromatic object in the frame and it
 reads instantly.** On `build/driver/art_taxi` t04.50 the red bodywork is **`C*` 86.5** against a
 frame median of **7.5**, on 0.5% of pixels, with the whole rest of the city's 99th percentile at
@@ -760,7 +777,7 @@ differences that make it an architecture constraint rather than an art note.
 
 **The vehicles are generated, not modelled — `P3-11`.** `tools/make_vehicle.py` emits each `.glb`
 into `game/assets/authored/vehicles/` from the numbers in this table plus named proportions
-(wheelbase, track, greenhouse height, arch flare, roof taper, colour list). They are committed:
+(wheelbase, track, greenhouse height, arch flare, **screen rake**, colour list). They are committed:
 hand-authored under CC BY-SA 4.0, not build output. The reason is that everything above is a
 *proportion* spec rather than a detail spec, and proportions are worth tuning in a diff rather than
 guessed in a mesh. ⚠️ **The player taxi's arches must line up with the

@@ -3,7 +3,20 @@
 Living document. **Update this whenever a task changes status, a decision is made, or an open
 question is answered.** Newest entries at the top of each log.
 
-Last updated: 2026-08-07 (**`Q36` closed: the ground claimed to be soil, and Wan Chai's ground is
+Last updated: 2026-08-07 (**the taxi's screens get an angle, and the flank gets its rocker back.**
+Both screens already sloped — 32.3° front, **18.6° rear** — but the rake had no name: the roof
+tapers placed the roof edge and the glass was a bare `* 0.8` of them. `windscreen_rake_deg` /
+`backlight_rake_deg` are the authored numbers now, at 35°/30°, with the tapers derived. Rake is paid
+for out of roof length, so `cabin_rear_z_m` 1.00 → 1.25 carries the C-pillar base back to the rear
+axle where every reference puts it, and the roof comes out *longer* than it started: 1.16 → 1.26 m.
+The bumper stops short of the floor — its lowest 27% is a red valance now — and the **rocker strip
+is back at the third attempt**, as paint at the sill sharing the valance's line, where a proud box
+and a continued bumper band both failed. 1,168 triangles in scene. ⚠️ A test caught a rocker defect
+that **preserved area exactly** — clamping to the line moves one triangle into the wheel opening and
+an identical one out of the bodywork. ⚠️ The rocker is **unjudged from the play camera**, which
+tracks the car's facing and never shows the flank even through a drift.)
+
+Previously: 2026-08-07 (**`Q36` closed: the ground claimed to be soil, and Wan Chai's ground is
 paving.** `fill_dry` → `concrete_paving`, `#645a45` → `#5f5a51` at an unchanged 20.0% reflectance, so
 lightness never moved. Rendered ground chroma `C*` 6.71 → 3.53; warm share of the below-horizon
 `art_ground` frame 29.3% → 2.0%; `street` and `kerb` unmoved to two decimal places. ⚠️ **`Q18`'s
@@ -232,6 +245,111 @@ under, and ~0.2 m is a guess until it is driven on a cross-sloped street.
 ---
 
 ## Decision log
+
+### 2026-08-07 — The taxi's screens get an angle, and the flank gets its rocker back at the third attempt
+
+Asked for as *"both front and rear windshield should be sloped"*, with four reference photographs
+supplied over the course of the round. **1,168 triangles** in scene — 592 body, 4 × 144 tyres —
+against `ART_DESIGN.md`'s 2,000. Shots in `build/driver/taxi_rake`, `taxi_flank`, `taxi_yaw`.
+
+⚠️ **Both screens already sloped, and saying so first is what made the round cheap.** Measured off
+`Proportions` before touching anything: **32.3°** at the front and **18.6°** at the rear. The front
+was within a couple of degrees of the reference and never the complaint; the rear was the defect,
+and at 128 mm of run over a 0.38 m glass band it reads as a vertical wall from the chase camera —
+the one angle this document and `ART_DESIGN.md` both say most players ever see. Had the report been
+taken at face value as "neither slopes", the front would have been changed for no reason.
+
+**The rake had no name, which is why nobody had chosen 18.6°.** `roof_front_taper_m` and
+`roof_rear_taper_m` placed the roof edge, and the top of the glass was a bare `* 0.8` of them. That
+literal is very nearly the fraction of the greenhouse the glass occupies (0.38 of 0.48 = **0.792**),
+so the old code was *already* treating the screen and the cant rail above it as one continuous raked
+plane — it simply had no word for the plane's angle, and no way to set one without moving the roof.
+The two tapers are now derived properties and `windscreen_rake_deg` / `backlight_rake_deg` are the
+authored numbers, at **35°** and **30°**. Re-parameterisation, not a new shape.
+
+**Rake is paid for out of roof length, and that is what moved the cabin.** At the original
+`cabin_rear_z_m = 1.00` a 30° backlight left a **1.01 m** roof, shorter than the upright car started
+with. The C-pillar base was sitting 0.30 m *ahead* of the rear axle, where all four references put it
+at or behind; carrying it to **1.25** leaves a **1.26 m** roof — longer than before the rake. The
+two numbers are one decision and were taken as one. It cost the boot 0.25 m and it broke the door
+handles, which were `cabin_mid_z_m ± 0.42` and went 130 mm out over the rear wheel opening. They are
+placed from the doors' *trailing edges* now, the rear door ending at the arch as a real one does.
+
+**The bumper stops short of the floor, which no reference had been read for before.** Reported as
+*"not exactly black at the bottom — there is some red car body at the very bottom"*, and all four
+photographs agree. `lower_profile` already emitted a ring at the sill tuck; the first band's colour
+went `DARK` → `RED` and the lowest **27%** of what used to be solid black is bodywork. No new ring,
+no new triangles. The line is named `bumper_bottom_y_m` rather than left as `sill_y_m + bevel_m`,
+because every fixture on the bumper already cleared it *exactly* — the fixture-floor test asserted
+the same number — and a coincidence that load-bearing should be a statement.
+
+⚠️ **The rocker strip is back on the user's call, at the third attempt, and the first two are the
+reason it works.** Attempt 1 was a box standing 2-3 cm proud: read as a stick. Attempt 2 continued
+the bumper band down from `bumper_top_y_m`, which is **38%** of a 0.58 m flank: read as a stripe
+painted on a toy. This one is **paint at the sill**, 10% of the flank, and it shares
+`bumper_bottom_y_m` — so one break runs unbroken around the car and only what sits below it changes,
+red across the nose and tail, dark along the flank. That is a bumper with a valance under it meeting
+a sill panel, which is what the real car has. +36 triangles. `rocker_top_y_m = sill_y_m` switches it
+off and is what `B3`'s traffic will want.
+
+⚠️ **A test caught a defect in the rocker that preserved area exactly.** Clamping the dark band to
+the rocker line — the obvious implementation — drags its outer corner up to the line while the inner
+one stays on the arch, which pushes one triangle into the wheel opening and pulls an identical one
+out of the bodywork. Same base, same area, so the flank measured correct to the millimetre and the
+outline was wrong. The stretch is cut at the crossing now. **What found it was the containment check
+against the wheel opening, and an area check alone would have passed it** — the two are only worth
+anything together, which is recorded in both their docstrings.
+
+⚠️ **The review pass found four more, and three of them were tests that could not fail.** Recorded
+because the shape repeats: every one was a *new* test written in the same round as the code it
+checks, which is when the author's model of the code is most likely to be baked into both sides.
+
+- **`test_the_rocker_is_paint_and_not_a_part` collapsed to `0.0 == 0.0`.** It sums an area over a
+  strict selector — exact plane, exact normal — and an empty selection returns zero for both meshes.
+  Its sibling `..._removes_it_entirely` asserted `len(...) == 0`, which a broken selector also
+  satisfies. Both now carry a positive control, which is the cheap general answer: **any test whose
+  subject is "a filtered set" needs one assertion that the filter found anything at all.**
+- **`test_each_handle_sits_on_the_door_it_belongs_to` asserted the formula against itself.** It never
+  built a body — it re-derived `_rear_door_z_m`'s expression *and* the handle's own placement, then
+  compared them. Changing `- handle_inset_m` to `+` in the generator left it green. It reads the mesh
+  now, and the expression lives in one place so it cannot be copied again.
+- **`test_both_handles_clear_both_wheel_openings` did not check both.** It pooled every SILVER face
+  and took one global `min`; the front handle clears both axles by over a metre, so deleting the rear
+  handle outright passed — and the rear handle is what the whole change exists for.
+- **A `Proportions` that cannot be built now refuses in one more place.** `_rear_door_z_m` could put
+  the rear door *ahead* of the front one — 135 mm of overlapping, z-fighting handle boxes at
+  `well_clearance_m = 0.65`, and reachable, since `cabin_rear_z_m` just moved and rake is paid for
+  out of cabin length. ⚠️ **Clamping was tried first and is worse**: pushing the door back far enough
+  to separate the boxes carries the rear handle onto the arch, trading one defect for another and
+  reporting neither.
+
+⚠️ **Two latent defects in the new geometry, neither reachable at the shipped numbers.** `1.` The
+ring-ordering guard demanded *strict* forward motion, so `windscreen_rake_deg = 0` — a square
+greenhouse, which lofts perfectly well and is the cheap car `B3` wants — raised. It tests `<=` now,
+and collapse is the roof-length guard's job, which is independent. `2.` The rocker's straddle test
+had no tolerance, so a `rocker_top_y_m` within a rounding error of an arch sample read as a genuine
+crossing and cut the stretch at `across ≈ 0`: **32 triangles down to 1.4e-30 m²**, and nothing caught
+them — `_polygon` refuses only an *exactly* zero cross product, so a 1e-30 normal normalises to unit
+length and passes every winding and degeneracy check the suite has. Snapped before the test now.
+
+⚠️ **The rocker remains unjudged from the angle that matters, and the reason is structural.** The
+chase camera tracks the car's *facing*, so it stays behind the car even through a full drift — three
+runs at increasing lock never brought the flank into frame. The play camera cannot show this strip.
+That is not a reason to remove it, but it is the standing caveat `P3-11`'s review already stated in
+general terms: 60 mm at review distance is inside the band this project keeps calling sub-pixel. The
+argument for it — that a long high-contrast line survives where an isolated small shape does not —
+is an argument, not a measurement. The red valance is in the same position for the same reason.
+
+**Everything above ships behind `greenhouse_profile`'s ordering guard.** `_loft` joins ring *i* to
+ring *i+1* whatever their coordinates are, and `_polygon_facing` faithfully turns each face outward
+from a profile that is itself inside out — so an over-raked greenhouse builds with no error, no
+degenerate triangle, and a passing winding check. Only the render would say. A `Proportions` that
+cannot be built now refuses to build.
+
+⚠️ **All four reference photographs badge 「TAXI / 5 / SEATS」**, where `P3-11`'s review settled on the
+4-seat variant. Not acted on and not a contradiction to resolve here: the badge carries no lettering
+since the decal sheet was deleted, so it is a green half-disc either way. Recorded so the next person
+reading those photos does not think the model is wrong.
 
 ### 2026-08-07 — `Q33`: the palette gets a rule, and the rule says the asphalt was right
 
