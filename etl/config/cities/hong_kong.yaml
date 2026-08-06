@@ -157,6 +157,35 @@ buildings:
   # is the value Q18 tests — if the first pass reads dead, change this line
   # before reaching for the land-cover classifier.
   #
+  # ⚠️ **And it did read dead, and this line is what fixed it — Q18 closed here
+  # rather than in a classifier.** The chroma went 6.81 -> 14.0 at an *unchanged*
+  # L* of 52.6, so every lightness relationship described above and below is
+  # untouched; only the amount of hue changed. The reason it had to is that hue
+  # does not arrive in proportion to what is authored: there is a **chroma knee**,
+  # below which whatever is written on this line is thrown away. Measured on the
+  # faceted ground at four levels of the same hue, albedo C* 6.81 arrives at 1.95,
+  # 11.0 at 2.93, 14.0 at 6.25 and 31.96 at 28.42 — so the old #837d72 rendered as
+  # neutral grey, which is why an open expanse read as white plaster. 18.0 was
+  # built and rejected on the eye: it clears the knee too well and the reclamation
+  # reads as beach sand rather than concrete.
+  #
+  # ⚠️ **The knee sits at C* 11-14 for one viewpoint, and it is a property of the
+  # viewpoint rather than of the renderer** — do not reuse the number. Measured
+  # again on the region's only other terrain — the south-east hillside, which
+  # rises to 50.2 m where the rest is flat reclamation at a median 3.96 m — the
+  # same 6.81 -> 14.0 change buys C* 1.95 -> 6.25 close in, 3.33 -> 5.09 at
+  # ~200 m, and nothing at all at ~350 m through fog. Chroma also survives better
+  # where the ground renders darker: under L* 55 it holds C* 8-10, at L* 65-75
+  # only 3-5. Distance and surface brightness both move the knee. This value is
+  # still right because it buys the most where the player actually is; distant
+  # ground washing toward fog is correct atmospheric perspective, not a defect.
+  #
+  # ⚠️ **The knee is measured for *ground* and must not be assumed for the
+  # bands.** Ground is up-facing and renders bright, which is what eats chroma;
+  # a facade is vertical, darker, and takes facade_hue's strength on top. Most of
+  # this palette does sit under C* 11, which is worth someone's attention, but it
+  # is not evidence until it is measured on the surface in question.
+  #
   # ⚠️ **Both take the same 0.520 linear scale as height_bands**, and for the
   # same reason: a facade-only anchor leaves the ground as the one bright plane
   # in the frame. Scaling it by the same factor is what keeps "the level moved"
@@ -168,7 +197,7 @@ buildings:
   # which grew.
   class_colours:
     INFRASTRUCTURE: "#74726d"
-    TERRAIN(TB): "#837d72"
+    TERRAIN(TB): "#887c66"
 
   # Jitter for a class that must not vary like the rest, overriding
   # colour_jitter below.

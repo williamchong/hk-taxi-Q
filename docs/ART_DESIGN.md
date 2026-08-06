@@ -415,16 +415,21 @@ Anything that later draws ground through a different material has to do the same
 
 **Colour comes in two steps, and the first has shipped.**
 
-1. **Flat.** One warm ground colour — `#837d72`, warm concrete. It is placed by what it has to sit
+1. **Flat.** One warm ground colour — `#887c66`, warm concrete. It is placed by what it has to sit
    between: clear of the kerb `#9a968d` so the 0.15 m riser still reads as an edge, and darker than
    the `#968872` shophouse band so low blocks read as standing *on* it. It and the bands share the
    same 0.520 linear scale (`docs/PROGRESS.md`, 2026-08-06) — the level moved, the relationships
    did not.
-2. **Land-cover classes,** only if flat reads dead. Sample the source JPEG per source triangle, snap
-   to a small palette — asphalt, pavement, vegetation, water, bare — and put the class in the cluster
-   key alongside the facing. Cluster boundaries then land *on* the park and harbour edges instead of
-   blending across them, which is what makes 4 m colour blobs read as deliberate low-poly ground
-   rather than as mush. **Not written**, and `Q18` is what decides whether it ever is.
+2. ~~**Land-cover classes,** only if flat reads dead.~~ ❌ **Refused 2026-08-06, and it will not be
+   written.** Flat did read dead, twice — but the causes were `Q29`'s smooth shading and then the
+   ground's chroma sitting under a **knee** the authored hue has to clear. Both are fixed, one in the
+   shader and one in a config line. **What kills the classifier is a resolution mismatch**, and no
+   tuning reaches it: the source is ~10 px/m where the ground clusters at 4 m. Its "water" class is
+   not water but shadow and sky-cast — **51.1% of it sits on rooftops** — and its vegetation class
+   resolves at the shipped 4 m cell into **one-cell fringes tracing building footprints**, only 5.5%
+   of cells above half vegetation. It would halo every building in Wan Chai rather than draw a park.
+   **If parks are wanted, the source is vector land-use polygons, not the photograph** — crisp edges
+   at any cell size, and a clean key for `collapse`. See `docs/PROGRESS.md`.
 
 **Prior art says the first step can be the last one.** *Art of Rally* ships flat-shaded untextured
 terrain as its finished look, not as a placeholder. Wan Chai is far denser than that game's

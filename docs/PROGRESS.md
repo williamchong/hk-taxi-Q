@@ -3,13 +3,25 @@
 Living document. **Update this whenever a task changes status, a decision is made, or an open
 question is answered.** Newest entries at the top of each log.
 
-Last updated: 2026-08-06 (**`Q29` closed, and it answers `Q18`'s first half sideways**: flat ground
+Last updated: 2026-08-06 (**`Q18` closed in one config line**: there is a **chroma knee** an authored
+hue has to clear — measured on the faceted ground at four levels of one hue, 6.81 arrives at 1.95,
+11.0 at 2.93, 14.0 at 6.25, 31.96 at 28.42 — so the ground's authored warmth was under it and being
+thrown away. `TERRAIN(TB)` 6.81 → **14.0 `C*` at an unchanged `L*` 52.6**: ground expanse
+**`C*` 1.95 → 6.25** with `L*` within 0.16, and no other viewpoint moves. ⚠️ The knee sits at
+`C*` 11–14 **for one viewpoint only** — on the region's hillside the same change buys 5.09 at 200 m
+and nothing at 350 m, so distance and surface brightness both move it and the number is not
+reusable. ⚠️ **The land-cover classifier is refused, not deferred, on a resolution mismatch**: the
+source is ~10 px/m where the ground clusters at 4 m, so its "water" class is shadow (51.1% of it on
+rooftops) and its vegetation class resolves into one-cell fringing around every building rather than
+into parks. No tuning fixes that; **vector land-use polygons are the source if parks are wanted**.
+Before that, **`Q29`
+closed, and it answers `Q18`'s first half sideways**: flat ground
 does not read — but the defect is *shading*, not colour. LandsD ships terrain faceted and
 `mesh.collapse` averages its normals once the facing key is dropped, mean error **8.72°**, so the
 ground was the only smooth-shaded surface in a flat-shaded city. Rebuilt from derivatives in the
-fragment stage: **zero geometry, zero draw calls, no PCK change**. ⚠️ The land-cover classifier
-`Q18` defers was measured against this and buys **6.5%** of the normal error for **+69%** clusters —
-it addresses albedo where the defect is in the normals. Before that, **`Q28` closed: the banded
+fragment stage: **zero geometry, zero draw calls, no PCK change**. ⚠️ The land-cover classifier was
+measured against this too and buys **6.5%** of the normal error for **+69%** clusters — it addresses
+albedo where the defect is in the normals. Before that, **`Q28` closed: the banded
 towers were a per-object seed being
 interpolated across a triangle**, hashed into random brightness by `value_jitter` — `flat` on two
 varyings, row-to-row contrast 6.80 → 0.07 on the reported surface and -12% to -15% whole-frame at
@@ -115,7 +127,7 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ⚠️ conditional ·
 | `Q13` | Nothing ramped between elevation levels; all 36 nodes joining two levels stepped by a whole deck height | 23.3% of carriageway area unreachable | `P2-2` → Phase 4 | 🟢 **Largely answered 2026-08-02.** All 36 are ramps — 17 junctions, 13 attribute flips, 5 tunnel portals, 1 stub; **no plan-coincident crossings.** After `P2-7`'s sampling the median step is **0.04 m** and 26 of 36 are inside 0.5 m. What remains is the 5 portals and the stub: a tunnel is a void, and their descent happens outside the region. Driving the network is `P4-1` |
 | `Q14` | Taxi stands carry operating-time restrictions in `Status_EN` that `P1-5` discards | A part-time cross-harbour stand is modelled as full-time. `fares.json` has no field for it | `P3-1` | 🟡 Open — deferred deliberately. The source is fetched, so adding it is a schema bump plus a parser |
 | `Q15` | Fare nodes snap by **plan distance only**, because the published points are 2D | A stand under a flyover cannot prefer the street below over the deck above. No Wan Chai node is affected — every winner is level 0, with a ≥4.28 m margin | `P4-2` | 🟡 Open — not reachable with this source |
-| `Q18` | Does flat-coloured ground read as ground, or does it need land-cover colour classified from the source aerial JPEG? And does sinking terrain ~0.2 m under the road deck clear the carriageway on cross-slopes? | Decides whether `P3-10` stops after its cheap half or grows an image-decode stage and a **Pillow** dependency. Get the z-fighting half wrong and the ground fights every road in the region | `P3-10` | 🟢 **Both halves answered 2026-08-06, and the first one sideways.** The 0.2 m guess measured to 0.2 m — **no z-fighting anywhere**. Flat ground came back **not reading**, on `build/driver/q18oblique` — but `Q29` found the cause is *shading*, not colour, and fixed it for nothing. ⚠️ **The classifier this question gates was measured against that defect and does not address it** (6.5% of the normal error for +69% clusters), so the land-cover half is **not earned yet**: re-judge colour on the faceted ground, not the smooth one. What the sink does **not** fix is `Q24` |
+| `Q18` | Does flat-coloured ground read as ground, or does it need land-cover colour classified from the source aerial JPEG? And does sinking terrain ~0.2 m under the road deck clear the carriageway on cross-slopes? | Decides whether `P3-10` stops after its cheap half or grows an image-decode stage and a **Pillow** dependency. Get the z-fighting half wrong and the ground fights every road in the region | `P3-10` | 🟢 **Both halves answered 2026-08-06, and the first one sideways.** The 0.2 m guess measured to 0.2 m — **no z-fighting anywhere**. Flat ground came back **not reading**, on `build/driver/q18oblique` — but `Q29` found the cause is *shading*, not colour, and fixed it for nothing. ⚠️ **The classifier this question gates was measured against that defect and does not address it** (6.5% of the normal error for +69% clusters), so the land-cover half is **not earned**. ✅ **Closed 2026-08-06 on the faceted ground, in one config line.** There is a **chroma knee** the authored hue has to clear and `#837d72` sat under it, so the ground's warmth never reached the frame. `TERRAIN(TB)` → `#887c66`, chroma 6.81 → 14.0 at an unchanged `L*` 52.6: expanse `C*` **1.95 → 6.25**, and it reads as concrete. ⚠️ The knee sits at `C*` 11–14 **for one viewpoint** — distance and surface brightness both move it, so the number is not reusable. **The classifier is refused, not deferred**, on a resolution mismatch: at the shipped 4 m cluster cell the water class is shadow (51.1% of it on rooftops) and the vegetation class is one-cell fringing that would halo every building. See the decision log. What the sink does **not** fix is `Q24` |
 | `Q24` | **The road is a plane and the ground is not**, so ground stood in the carriageway — 3.3% of its area, up to 2.98 m | The ground collides, so this is solid geometry in legal road, on top of `Q19`'s 5.17%. `P3-3`'s traffic will route into it | `roads.py` | 🟢 **Half closed 2026-08-05; the other half is `Q19` and was never this question's.** Two mechanisms, both measured. **Along the road — fixed.** `roads.ground_profile` densifies at-grade edges at 10 m and thins by a 0.10 m vertical error, so the road follows the ground instead of chording over it: area proud **3.289% → 1.898%**, and at the centreline **2.274% → 0.712%**. **Across the road — untouched, and `Q19`'s.** The ribbon is drawn flat across a width the 1.6× widening made too wide, so it cuts into a cross-slope at the kerb: the outer rim moved only 5.393% → 4.360%. The residual floor is the tunnel portals (`Q21`), which no station spacing reaches |
 | `Q19` | **5.17% of drawn carriageway has solid geometry standing in it at bumper height.** At grade: `BUILDING` 1.72%, `INFRASTRUCTURE` 1.60%. A further 1.87% is on off-grade ribbon nobody can reach | The car is stopped by invisible walls on legal carriageway, and `P3-3`'s traffic will route into them. Cosmetic until collision shipped on 2026-08-01 | `P3-3` | 🔴 Open. The `BUILDING` half is the 1.6× widening eating the frontage — a playability trade, not a bug. The `INFRASTRUCTURE` half shrinks with `Q20`. **Wants a verify tool that fails the build when the carriageway is occupied** |
 | `Q21` | **Should level −1 carriageway be drawn at all?** 15 edges, 5,010 m, **11.6% of carriageway area**, ribboned under the terrain where nothing can see it and nobody can drive it — and solid since collision shipped | Triangles, collider surface and bundle bytes for geometry with no viewer. Against: `P3-3` and Phase 4 want the *edges* to exist, and `roadgraph.json` would keep all 15 either way | Phase 4 | 🟡 Open. `P2-7` could not improve their height — a tunnel is a void — and **11 of their 30 ends are clipped at the region boundary**, so the Cross-Harbour portals have ~42 m of run for an 8 m descent |
@@ -154,6 +166,102 @@ under, and ~0.2 m is a guess until it is driven on a cross-sloped street.
 ---
 
 ## Decision log
+
+### 2026-08-06 — `Q18` closes: the ground sat under a chroma knee, and the classifier is refused
+
+With `Q29`'s faceted ground on screen, `Q18`'s colour half was re-judged and **closes in one config
+line**. The land-cover classifier is **refused rather than deferred**, on a resolution argument no
+tuning can reach.
+
+**Chroma does not arrive in proportion to what is authored — there is a knee, and the ground was
+under it.** Measured on the faceted ground at four chroma levels of one hue angle, at an identical
+`L*` 52.6:
+
+| Albedo `C*` | Screen `C*` | Survives |
+|---|---|---|
+| 6.81 (`#837d72`, was shipping) | 1.95 | 28.7% |
+| 11.00 | 2.93 | 26.7% |
+| 14.00 (`#887c66`, ships now) | 6.25 | 44.6% |
+| 31.96 | 28.42 | 88.9% |
+
+Below the knee hue is annihilated; above it, it passes through almost intact. `#837d72`'s authored
+warmth rendered as neutral grey, which is why an open expanse still read as white plaster after the
+shading was fixed. Raising chroma to 14.0 at an **unchanged lightness** fixes it: the expanse goes
+`C*` 1.95 → 6.25 with `L*` within 0.16, so every lightness relationship the config justifies — clear
+of the kerb, darker than the shophouse band, the shared 0.520 linear scale — is untouched.
+Whole-frame movement at the other three viewpoints is under 0.5 `C*` and under 0.06 `L*`; the change
+is confined to the surface it names. ⚠️ `C*` 18 was built and rejected on the eye: it clears the knee
+too well and the reclamation reads as beach sand rather than concrete. Geometry is untouched — only
+vertex colour changed — so `ground_clearance.py` is within accepted bounds on the same numbers,
+`check.sh` exits 0 with 0 `SHADER ERROR`, 597 tests pass and `ruff` is clean. Shots in
+`build/driver/q18final_*`.
+
+⚠️ **The knee sits at `C*` 11–14 for *one viewpoint*, and that is a property of the viewpoint rather
+than of the rig — do not reuse the number.** Wan Chai's ground is almost all flat reclamation, median
+**3.96 m** over 17,628 shipped terrain vertices, but the south-east corner rises to **50.2 m** (734
+vertices above 12 m, centred x≈1220 z≈830) — real hillside, and the only other terrain the region
+has. Measured there with a **differential mask**, which is the reusable part: render the same camera
+at both ground albedos and keep the pixels that responded. Those *are* the ground, exactly, with no
+box-picking and no classifier.
+
+| Viewpoint | Camera | Ground `C*`, `#837d72` → `#887c66` |
+|---|---|---|
+| oblique (what it was tuned on) | 70 m, near | **1.95 → 6.25** |
+| hillside, close | 70 m, ~200 m out | 3.33 → **5.09** |
+| hillside, far | 150 m, ~350 m out | 3.58 → **3.40** — no measurable gain |
+
+Chroma also survives better where the ground renders darker: under `L*` 55 it holds `C*` 8–10, at
+`L*` 65–75 only 3–5. Distance and surface brightness both move the knee. The tune still stands — it
+buys the most exactly where the player is, and distant ground washing toward fog is correct
+atmospheric perspective rather than a defect.
+
+**The classifier is refused on a resolution mismatch, and it is not fixable by tuning.** The source
+is ~10 px/m and the ground clusters at **4 m**, so a per-triangle sample lands on mixed edge texels
+far more often than on the interior of anything. Measured by *area* over the terrain that actually
+ships, clipped to the region (463,049 triangles, 1.695 km²), the classifier speaks to **25%** of
+ground — vegetation-like 17.77%, water-like 7.40% — and both classes fall apart on inspection:
+
+- ⚠️ **The water class is not water.** It covers **7.36% of roof area against 7.45% of open ground**
+  — statistically identical — and **51.1% of the class sits on rooftops**. Nothing that is actually
+  water can be distributed uniformly across roofs. It is shadow and blue sky-cast. That deletes 7.40
+  of the 25 points outright.
+- ⚠️ **The vegetation class is edge speckle at the resolution that ships.** Rasterised at the
+  terrain's own 4 m LOD0 cluster cell over 66,710 cells: only **5.5% exceed 50% vegetation**, with
+  another 5.5% in a 10–50% speckle band, and they fall as **one-cell fringes tracing building
+  footprints and street edges** — not one park-sized coherent mass in the region. Colouring it would
+  put a green halo around every building in Wan Chai, which is worse than the flat colour rather
+  than better. Hong Kong's street trees are real; at 4 m they cannot resolve into trees, only into
+  fringe.
+
+Set against a **Pillow** dependency, an image-decode stage, masking the 16.7% of terrain vertices
+whose texels are roof, and +69% clusters if the class enters the cluster key, it is not worth
+building. `ART_DESIGN.md`'s standing instruction — *suspect the palette before the technique* — is
+right for a third time in a row.
+
+**The redirect the evidence points at.** If parks are wanted, they should come from **vector
+land-use polygons**, not photo classification: a polygon has crisp edges at any cell size and can
+drive `collapse`'s cluster key cleanly, where a photo sample degenerates into fringing. That is a
+different task with a different source and should be scoped as one, not as `P3-10`'s second half.
+
+⚠️ **The refusal was first written on two numbers that were wrong, and both were wrong in the
+proposal's favour.** The share of ground was quoted as **16%** (vegetation-like 7.98%, water-like
+8.16%) from a per-vertex count; by area over the shipped region it is 25%. And "the source's hue is
+`C*` 7.35, under the knee, so a faithful classifier is invisible" leaned on a fixed threshold the
+hillside measurement above disproves — **vegetation's own hue is `C*` 11.87**, at the knee rather
+than under it. A third suspicion also failed: vegetation is *not* a rooftop artefact, running 29.27%
+of open ground against 6.90% of roof area, only 20% of the class on roofs. The refusal survives
+because the resolution argument replaced them, not because the first pass was right. ⚠️ One limit on
+the numbers that replaced them: the roof-versus-open split rasterised building **bounding boxes**,
+which over-cover — they claim 52.3% of the region box. "Vegetation is on open ground" is robust to
+that, since the bias can only understate it, but *51.4% of terrain area under a footprint* is an
+over-estimate and is not quoted as precise.
+
+⚠️ **The knee is measured for *ground* and must not be assumed elsewhere.** Ground is up-facing and
+renders bright, which is what eats chroma; a facade is vertical, darker, and takes `facade_hue`'s
+strength on top of the band colour. Worth noting that most of the palette's authored hexes sit under
+`C*` 11 — but that is a lead, not a finding, until it is measured on the surface in question. The
+mechanism is also **not identified**: `base_wash` is 0.0, so it is fog, the shader's sky tint or
+tonemapping.
 
 ### 2026-08-06 — `Q29`: the ground was the only smooth-shaded surface in a flat-shaded city
 
