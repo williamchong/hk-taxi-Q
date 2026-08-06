@@ -98,8 +98,12 @@ uniform float lit_window_share : hint_range(0.0, 1.0) = 0.0;
 uniform float emission_strength : hint_range(0.0, 4.0) = 0.0;
 
 varying float height_m;
-varying float phase;
-varying float marker;
+// ⚠️ **`flat`** — see `city_facade_clean.gdshader` for the measurement (`Q28`).
+// Both are per-object, a plain varying interpolates them, and an interpolated
+// `phase` hashes into random banding on a flat wall. `height_m` above is the
+// one that genuinely varies within a face and stays interpolated.
+varying flat float phase;
+varying flat float marker;
 varying float upness;
 varying float along_m;
 

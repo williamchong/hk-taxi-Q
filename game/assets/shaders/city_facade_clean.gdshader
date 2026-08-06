@@ -264,8 +264,16 @@ uniform float lit_window_share : hint_range(0.0, 1.0) = 0.0;
 uniform float emission_strength : hint_range(0.0, 4.0) = 0.0;
 
 varying float height_m;
-varying float phase;
-varying float marker;
+// ⚠️ **`flat`, and it is load-bearing** (`Q28`). Both are *per-object* values —
+// `marker` says what a surface is, `phase` is the building's seed — and a plain
+// varying interpolates them. Where a triangle's corners disagree, which
+// `collapse` produces whenever a cluster spans two buildings (measured: 2.7% of
+// LOD0 triangles, worst spread 0.43), `phase` becomes a ramp; `seed` below
+// quantises it to 1/256 and `draw()` hashes each step to an unrelated value, so
+// a single flat wall fills with random bright and dark bands at `value_jitter`'s
+// full amplitude.
+varying flat float phase;
+varying flat float marker;
 varying float upness;
 varying float along_m;
 // The reflection needs a world-space frame, and both are already computed in the

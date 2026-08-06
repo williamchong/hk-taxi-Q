@@ -3,8 +3,12 @@
 Living document. **Update this whenever a task changes status, a decision is made, or an open
 question is answered.** Newest entries at the top of each log.
 
-Last updated: 2026-08-06 (**the white city was the palette, and the anchor probe proved it in one
-`.tres` edit**: the five `height_bands` were 19 `L*` too light, and re-authoring them darker moved the
+Last updated: 2026-08-06 (**`Q28` closed: the banded towers were a per-object seed being
+interpolated across a triangle**, hashed into random brightness by `value_jitter` — `flat` on two
+varyings, row-to-row contrast 6.80 → 0.07 on the reported surface and -12% to -15% whole-frame at
+three viewpoints. ⚠️ Two confident diagnoses were given and measured wrong before that one, and the
+first cost an ETL feature that was built, graded at no effect, and reverted. Before that, **the
+white city was the palette, and the anchor probe proved it in one `.tres` edit**: the five `height_bands` were 19 `L*` too light, and re-authoring them darker moved the
 frame 10.3 `L*` — 15.5 on the pixels that could respond — where tripling the shader's per-building
 `value_jitter` bought 0.4. Shipping measured `L*` was evaluated and **declined**, but the refusal's
 stated reason was measured and found wrong: orientation explains 1.4% of the survey's `L*`, not the
@@ -113,6 +117,7 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ⚠️ conditional ·
 | `Q25` | **The ground tore along every tile boundary.** `collapse` puts a vertex at the *mean of the members present in its mesh*, and terrain was split across tiles before it was collapsed — so the two sides of a boundary averaged differently and the seam opened | 1.76% of the region had ground the source covers and the bundle did not, three quarters of it within 10 m of a tile boundary. Visible as brown bands at grazing angles, and solid-edged since the ground collides | `P1-2`/`P3-10` | 🟢 **Closed 2026-08-05.** `_tile_ground` decimates the region's ground **once per tier** and cuts the result, reversing collapse-then-merge for the one class that is both cut and continuous. Region holes **1.76% → 0.76%**; within 2 m of a boundary **15.65% → 0.42%**, *below* the 0.54% interior rate, so the boundary stopped being special. Triangles unchanged. The 0.76% residual is ordinary sliver loss, not a seam |
 
 | `Q26` | **Which look ships — the measured Hong Kong one or the clean/futuristic one?** `P3-7`'s window bands are accurate and were called dull; `city_facade_clean` is bolder and is *not* what Wan Chai looks like | The whole art direction rests on "accurate city, toy vehicles", and recognition is the product (`Q8`). A white city with amber accent plinths keeps the accurate *massing* and abandons the accurate *surface* — which may be the right trade or may be the one thing that cannot be traded | `P3-9a` | 🔴 Open, and **a verdict rather than a measurement.** Both looks are one `cp` apart and neither needs a rebuild, so this can go to the ≥3 HK drivers as an A/B rather than being decided in advance. ⚠️ **Every shot taken before 2026-08-06 is unusable for this** — `build/driver/h4` and `build/driver/clean` included — because `Q27` had albedo reaching the screen at a third strength in all of them. Re-shoot before comparing. A **third** candidate now exists and is what currently ships: elements off, flat per-building colour on accurate massing. ⚠️ If the clean look wins, the palette should move from the shader's `base_wash` into `height_bands` in the city config, where CLAUDE.md says palettes live |
+| `Q28` | **Flat walls on distant towers fill with bright and dark horizontal bands.** Reported while driving, and it survives every lighting change | The bands are the loudest thing in a skyline frame, and they made the massing unreadable at the distance most of the city is seen from. They also invalidate any look A/B taken against them — `Q26`'s included | `P3-9a` | 🟢 **Closed 2026-08-06, and it was one word.** `TEXCOORD_0.y` carries a *per-object* seed, and both facade shaders read it into a plain `varying`, which the GPU interpolates. Where a triangle's corners disagree — **2.7% of shipped LOD0 triangles**, worst spread 0.4336, because `collapse` takes UV from one cluster representative — the seed becomes a ramp, `floor(phase * 256 + 0.5)` steps it, and `draw()` hashes each step to an unrelated brightness at `value_jitter` 0.35. `flat` on `phase` and `marker` fixes it. Row-to-row contrast on the reported surface **6.80 → 0.07**; whole-frame **-13.2%** there, **-12.1%** and **-15.2%** on the two fixed viewpoints, at a frame mean that moves 0.2 |
 | `Q27` | **Why does albedo barely reach the screen under the clean rig, and what should the light levels be?** Buildings now carry measured per-building hue, and it is nearly invisible | Measured, not suspected: dropping the height bands from `L*` 80 to 62 moved the rendered frame only from `L*` 86.8 to 83.3 — an 18-point albedo change bought 3.5 points of pixel. Every colour decision downstream of this is unreadable until it is answered, including `Q26`'s A/B | `P3-9a` | 🟢 **Closed 2026-08-06. It was not the light at all.** `COLOR_0` is authored in sRGB and was consumed as linear, so **57%** of a lit facade pixel's luminance was albedo-*independent* and an albedo difference reached the screen at a third of its size. Fixed in the two facade shaders and `generated_scene_import.gd`; additive share **57% → 6%** at street level. The whole light-levels half of the question is answered "no": ambient, exposure, glow, fog, tonemap curve and specular were each ablated and **none moved transmission by more than 0.05**. See the decision log below |
 
 **Resolved:** `Q1` (no Z, but `ELEVATION` encodes the level) · `Q2`/`Q3`/`Q5` (building data is fully
@@ -142,6 +147,57 @@ under, and ~0.2 m is a guess until it is driven on a cross-sloped street.
 ---
 
 ## Decision log
+
+### 2026-08-06 — `Q28`: the banded towers were **one word of shader**, and the geometry was never at fault
+
+Reported from the driver's seat as "what's wrong with the building with many lines". The bands are
+a per-object seed being **interpolated across a triangle**, and the fix is `flat` on two varyings in
+both facade shaders. Whole-frame row-to-row contrast: reported view **-13.2%**, the fixed street
+viewpoint **-12.1%**, the skyline **-15.2%** with its p95 halved (6.00 → 2.67). On the surface that
+prompted the report, row-to-row contrast **6.80 → 0.07** and sd **12.70 → 2.95**. Frame mean moves
+0.2 `L*` at every viewpoint, so this removes noise rather than shifting exposure.
+
+**The mechanism.** `buildings.facade_uv` packs `TEXCOORD_0.y` as `surface_class + phase`, a
+*per-object* quantity. The shaders read it in `vertex()` into a plain `varying`, so the GPU
+interpolates it across the face. Where a triangle's corners disagree, `phase` becomes a **ramp**,
+`seed = floor(phase * 256 + 0.5)` quantises that ramp into integer steps, and `draw()` — a `sin`
+hash — maps each step to an unrelated value. At `value_jitter = 0.35` that is ±35% of brightness
+re-rolled every 1/256 of the ramp. The stripes are the hash, drawn *inside* a single flat triangle.
+
+Corners disagree because `collapse` takes colour and UV from **one cluster representative**, which
+is right for colour — averaging two buildings at a shared wall would invent a third — and wrong for
+a seed, because a triangle spanning two buildings then carries two seeds. Measured on the shipped
+LOD0: **14,012 of 521,693 triangles (2.7%)** have a seed that varies across the face, worst spread
+0.4336 — 111 of the 256 seed values inside one triangle. `marker` took the same qualifier: no
+triangle spans two markers today, but one that did would change surface class mid-face.
+
+⚠️ **Two confident wrong answers were given before this one, and both were wrong in the same way —
+asserting a cause from a plausible reading instead of from a measurement.** First "the stripes are
+real per-storey floor geometry"; then "`reface_ledges` cleaned Central Plaza up". The first cost an
+ETL feature (`LedgeShading`, ~440 lines) that was built, measured at **no banding change anywhere**,
+and reverted. What killed both was the same probe: project the shipped tiles onto the reported frame
+and read off what covers the banded pixels. It said one flat 707 m² triangle, constant normal, and
+the engine's own normal buffer agreed at sd 0.00.
+
+The elimination that got there, each by direct test rather than by argument — geometry (engine
+normal buffer: flat), vertex colour (forced uniform red: bands persist), shadow acne
+(`shadow_enabled = false`: those pixels unchanged), the sun at all (`light_energy = 0`: unchanged,
+that wall is ambient-lit), sky ambient (`sky_contribution = 0`: 62% of the frame changed and the
+bands did not), the shader's own sky tint (`wall_sky_tint = 0`: 4.9% changed, bands did not),
+z-fighting (ray-cast: nearest surface 7–23 m clear), and Godot's auto mesh LOD (`generate_lods=false`
+plus a forced reimport: frame byte-identical). What survived was a debug shader writing `fract(UV.y)`
+to `ALBEDO`, which showed the seed ramping 176, 177, 178 down a face that should carry one value.
+
+The source data is clean and was checked rather than assumed: across the four source meshes over that
+footprint, normals are unit-length to 1.0000, agree with face winding at p1 = 1.000, zero flipped,
+four degenerate faces in 41,273. The non-textured set ships no textures and no UVs at all —
+`TEXCOORD_0` on a tile is the ETL's own payload.
+
+⚠️ **The per-storey geometry finding stands and is unrelated.** `B373231543201063A0` really is 8,793
+source triangles over 128 horizontal levels, and `collapse` really cannot remove them at any cell
+size — 1.5 m leaves 105 levels, 8 m leaves 76 — because the facing key means a slab's up-face can
+only merge with another up-face. That is a live triangle-budget question for `P2-6`. It was not what
+anyone could see.
 
 ### 2026-08-06 — The taxi loses its detail parts, and the bumper becomes paint
 
