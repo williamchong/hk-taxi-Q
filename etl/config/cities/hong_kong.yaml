@@ -184,12 +184,16 @@ materials:
   # only 3-5. Distance and surface brightness both move the knee. Distant ground
   # washing toward fog is correct atmospheric perspective, not a defect.
   #
-  # ⚠️ **One material still paints two terrains.** The south-east hillside rises
-  # to 50.2 m where the reclamation is flat at a median 3.96 m, and it is
-  # vegetated slope, not paving — so it now claims a material it is not. That is
-  # open, and elevation is the one key with a causal mechanism behind it: a
-  # Hong Kong hillside is green because it is too steep to build on. It wants two
-  # materials and a threshold, never a hue field — see `Q36` in docs/PROGRESS.md.
+  # ⚠️ **One material paints the hillside too, and splitting it on elevation was
+  # probed and refused — do not re-propose it.** The story was that a Hong Kong
+  # hillside is green because it is too steep to build on, so high ground wants a
+  # vegetated material. In *this* region the opposite holds where it matters:
+  # terrain above 10 m is 9.77% of the surface, renders **0.000%** of all six
+  # fixed viewpoints, and the one road that climbs it looks out over ground that
+  # is **97.5% flat** — a paved terrace with towers on it, which is what this
+  # material already says. Slope-only fails too, on interleaved speckle that
+  # `collapse` preserves because it takes a representative colour rather than an
+  # average. Vegetation, if wanted, is a vector land-use join. `Q36`.
   #
   # ⚠️ **The knee is measured for *ground* and must not be assumed for the
   # facades.** Ground is up-facing and renders bright, which is what eats chroma;

@@ -650,7 +650,12 @@ Anything that later draws ground through a different material has to do the same
    resolves at the shipped 4 m cell into **one-cell fringes tracing building footprints**, only 5.5%
    of cells above half vegetation. It would halo every building in Wan Chai rather than draw a park.
    **If parks are wanted, the source is vector land-use polygons, not the photograph** — crisp edges
-   at any cell size, and a clean key for `collapse`. See `docs/PROGRESS.md`.
+   at any cell size, and a clean key for `collapse`. See `docs/PROGRESS.md`. ⚠️ **`Q36` reached the
+   same destination from the other direction** and the detour is worth knowing about: a *geometric*
+   split of the hillside, on elevation or on slope, was specified and then refused on a tint probe.
+   High terrain draws **0.000% of all six viewpoints above**, and the one road that climbs it looks
+   out over ground that is 97.5% flat — paved terrace, not slope. There is no cheap geometric key
+   here, because in this region the high ground the player can reach is the ground that was built on.
 
 ⚠️ **`Q18` closed on the ground's colour and the audit reopens a different complaint about it: at the
 waterfront it reads as *sand*, and that is a content problem rather than a palette one.** ⚠️ **Half
