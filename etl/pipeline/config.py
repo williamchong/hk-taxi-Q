@@ -117,14 +117,12 @@ HUE_STRENGTH_MAX = 8.0
 class Material:
     """A real-world surface the city is built out of, and the colour it ships as.
 
-    ⚠️ **The colour and the albedo belong together, and `Q34` is what it cost to
-    learn that.** `reflectance` used to be a field on `HeightBand`, which made the
-    *shape* of the schema assert that material is a function of height — a claim
-    nobody wrote down and the data refuses. Measured on the 2,171-building photo
-    survey, height explains **0.9%** of facade `L*` once log pixel count is
-    controlled, and the best geometric key of any kind reaches 1.4%. So "48.7% =
-    grey painted render" read, on a height bucket, as *"buildings under 12 m are
-    grey painted render"*, which no source supports.
+    ⚠️ **The colour and the albedo belong together, and neither belongs on
+    `HeightBand`.** Holding them there makes the *shape* of the schema assert that
+    material is a function of height — a claim nobody would write down and the
+    data refuses: on the 2,171-building photo survey, height explains **0.9%** of
+    facade `L*` once log pixel count is controlled. `Q34` has the rest of the
+    measurement and the worked example.
 
     Naming the material instead makes the claim attach to the thing it is about,
     and makes it **portable** (CLAUDE.md hard rule 3): concrete is concrete in the
@@ -369,11 +367,10 @@ class BuildingStyle:
     structure_class: str | None
     # Flat material for a class, overriding the height bands.
     #
-    # This used to be two parallel maps, `class_colours` and `class_reflectance`,
-    # joined by key and checked in both directions by `_building_style`. `Q34`
-    # collapsed them: a colour and the albedo it claims are one fact, and holding
-    # them apart is what made the join — and the check guarding it — necessary at
-    # all. The reasoning that check carried now lives on `_MaterialTable`.
+    # One map, never two. A colour and the albedo it claims are one fact, and
+    # splitting them into parallel `class_colours` and `class_reflectance` maps
+    # is what makes a join — and the both-directions check guarding it —
+    # necessary at all (`Q34`). `_MaterialTable` carries that reasoning.
     class_materials: dict[str, Material]
     # What everything else is built of, and on what evidence. See
     # `MaterialAssignment` — the branch names are a contract, not a description.

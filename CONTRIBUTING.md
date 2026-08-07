@@ -59,6 +59,12 @@ shipped bundle and need a built region.
 - **Python:** `ruff` for lint and format, type hints on public functions, `pytest` for tests.
 - **GDScript:** `snake_case` files and functions, `PascalCase` classes, **static typing is enforced**
   — untyped declarations fail the build. `gdformat` owns layout; do not hand-format around it.
+- **Comments state what is true, not what changed.** A comment carries the claim and the refusal —
+  *"never hold these apart"* — not the edit that produced it: *"this used to be two maps"*. Where the
+  reasoning is a decision, cite its ID and let [`docs/DECISIONS.md`](docs/DECISIONS.md) hold the
+  evidence, keeping one number locally so the refusal sticks. ⚠️ **A `schema_version` history is the
+  exception**: a bump means a reader would be *wrong* to keep its old interpretation (`CLAUDE.md` hard
+  rule 5), which cannot be stated without naming the old one.
 - **Generated assets are build output.** Never commit anything under `game/assets/generated/`,
   `etl/out/` or `etl/sources/`.
 - ⚠️ **Never commit `game/project.godot` or `game/export_presets.cfg` as a side effect.** Opening the
