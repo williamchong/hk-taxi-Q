@@ -184,11 +184,11 @@ def read_sheet(path: Path, classes: tuple[str, ...]) -> Iterator[tuple[str, Mesh
         for member in members:
             class_id = member.split("/", 1)[0]
             directory = str(PurePosixPath(member).parent)
-            for mesh in read_scene(archive.read(member), _resolver(archive, directory)):
+            for mesh in read_scene(archive.read(member), resolver(archive, directory)):
                 yield class_id, mesh
 
 
-def _resolver(archive: zipfile.ZipFile, directory: str) -> Callable[[str], bytes]:
+def resolver(archive: zipfile.ZipFile, directory: str) -> Callable[[str], bytes]:
     """Resolve a glTF's relative URIs against its own directory in the zip."""
     return lambda uri: archive.read(f"{directory}/{unquote(uri)}")
 
@@ -329,7 +329,7 @@ def _material_seed(mesh: MeshData) -> float:
     return int.from_bytes(digest.digest(), "big") / 0x1_0000_0000
 
 
-def _stem(name: str) -> str:
+def stem(name: str) -> str:
     """A source id without its variant suffix — see `_VARIANT_SUFFIX`.
 
     It was re-verified on sheet `11-SW-10C`: 151 buildings, 151 stems, and every
@@ -342,7 +342,7 @@ def _stem(name: str) -> str:
 def facade_hue(style: BuildingStyle, city_id: str, *, root: Path | None = None) -> dict[str, Hue]:
     """Per-building `(a*, b*)` from the photo survey, or empty if there is none.
 
-    Keyed by `_stem`, which is what joins the survey's models to this
+    Keyed by `stem`, which is what joins the survey's models to this
     pipeline's.
 
     ⚠️ **Missing is normal, not an error.** The survey is a 4.9 GB read that
@@ -465,7 +465,7 @@ def colour_for(
     variance, and `colour.py`'s header has the rest of the arithmetic.
     """
     low, high = bounds if bounds is not None else mesh.aabb()
-    measured = None if hue is None else hue.get(_stem(mesh.name))
+    measured = None if hue is None else hue.get(stem(mesh.name))
     red, green, blue = material_for(style, class_id, mesh, high[1] - low[1], measured).colour
 
     if measured is not None:

@@ -40,7 +40,7 @@ nor wall area (4.5 to 2,877 per m² — not a density either). `Q34`'s regressio
 log pixel count has to be re-fitted, not carried over.
 
 Run:  .venv/bin/python tools/facade_survey.py 11-SW-9D
-      .venv/bin/python tools/facade_survey.py --all --out-dir etl/sources/hong_kong/facade_colour
+      .venv/bin/python tools/facade_survey.py --all --merge
 """
 
 from __future__ import annotations
@@ -63,8 +63,10 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "etl"))
 
+from pipeline.buildings import HUE_SOURCE_ID, resolver, stem  # noqa: E402
 from pipeline.colour import srgb_to_lab  # noqa: E402
-from pipeline.gltf import MeshData, read_scene  # noqa: E402
+from pipeline.fetch import SOURCES_ROOT, source_dir  # noqa: E402
+from pipeline.gltf import MeshData, normalise, read_scene  # noqa: E402
 
 log = logging.getLogger(__name__)
 
@@ -78,6 +80,13 @@ Image.MAX_IMAGE_PIXELS = None
 # each of `T`, `V` and `W`. The 59 match the shipped table's 59 rows for that sheet
 # exactly, with no orphan either way.
 MODEL_PREFIX = "B"
+
+# Matched case-insensitively, as `pipeline/buildings.py` matches it.
+GLTF_SUFFIX = ".gltf"
+
+# The table's filename, which `hong_kong.yaml` names as `facade_hue.source` and
+# `buildings.facade_hue` opens. Per sheet it takes the sheet id as an infix.
+TABLE_STEM = "facade_lab"
 
 # A face is a wall when its normal is within 60 degrees of horizontal. The
 # threshold is deliberately loose and measurably inert: sweeping it from 0.2 to
@@ -97,20 +106,30 @@ VEGETATION_A = -8.0
 # that whole range, so the recorded value stands rather than a fitted one.
 PERCENTILE = 65.0
 
-# A channel at or above this is clipped — the survey's *first* bug, at the other
-# end of the range from filler: a texel at 255 is also `a* = b* = 0`.
+# A texel with **any** channel at or above this is clipped — the survey's *first*
+# bug, at the other end of the range from filler: a texel at 255 is also
+# `a* = b* = 0`. ⚠️ Testing every channel instead would only ever match white,
+# which `is_filler` already rejects, so the column would silently report a
+# fraction of the padding rather than the blown highlights it is named for.
 CLIP_LEVEL = 255
 
-# Texels sampled per building. The estimate is an order statistic, so a uniform
-# subsample is unbiased; without a cap the largest buildings reach 24 million
-# texels and the `L*` conversion alone wants half a gigabyte. Sampling is seeded
-# from the model name so a rerun reproduces the table exactly.
+# Below this many photographic texels a building has not been measured, and the
+# honest row is no row. Small enough that only near-total padding trips it.
+MIN_TEXELS = 64
+
+# Texels carried into the `L*` conversion per building. The estimate is an order
+# statistic, so a uniform subsample is unbiased; the largest building in the
+# region gathers 90.1 million texels and 40% of rows exceed this cap, so without
+# it the conversion alone would want gigabytes. ⚠️ **It bounds the conversion and
+# not the tool's peak** — the uint8 gather that feeds it happens first and is
+# larger. Sampling is seeded from the model name so a rerun reproduces the table.
 SAMPLE_CAP = 2_000_000
 
-# Compass names for the four horizontal quadrants, as (axis, sign) on the
-# Y-up axes `read_scene` produces: +X is east, and north is -Z because the node
-# matrix maps the source's +Y northing onto -Z.
-FACES: dict[str, tuple[int, int]] = {"E": (0, 1), "W": (0, -1), "N": (2, -1), "S": (2, 1)}
+# Compass names for the four horizontal quadrants, as (column, sign) into the
+# (x, z) pair `face_of` builds. On the Y-up axes `read_scene` produces, +X is
+# east, and north is -Z because the node matrix maps the source's +Y northing
+# onto -Z.
+FACES: dict[str, tuple[int, int]] = {"E": (0, 1), "W": (0, -1), "N": (1, -1), "S": (1, 1)}
 
 
 @dataclass(frozen=True)
@@ -151,9 +170,11 @@ def coverage(uvs: np.ndarray, triangles: np.ndarray, width: int, height: int) ->
         determinant = edge_a[0] * edge_b[1] - edge_a[1] * edge_b[0]
         if abs(determinant) < 1e-12:
             continue
-        grid_x, grid_y = np.meshgrid(np.arange(x0, x1), np.arange(y0, y1))
-        offset_x = grid_x - corners[0, 0]
-        offset_y = grid_y - corners[0, 1]
+        # Broadcast a row against a column rather than materialising two integer
+        # grids per triangle: `alpha` and `beta` come out the same shape, with the
+        # same values in the same order, and nine thousand allocations do not.
+        offset_x = np.arange(x0, x1) - corners[0, 0]
+        offset_y = np.arange(y0, y1)[:, None] - corners[0, 1]
         alpha = (offset_x * edge_b[1] - offset_y * edge_b[0]) / determinant
         beta = (offset_y * edge_a[0] - offset_x * edge_a[1]) / determinant
         mask[y0:y1, x0:x1] |= (alpha >= 0) & (beta >= 0) & (alpha + beta <= 1)
@@ -168,14 +189,10 @@ def face_of(normals: np.ndarray) -> np.ndarray:
     """
     horizontal = np.stack([normals[:, 0], normals[:, 2]], axis=1)
     dominant = np.argmax(np.abs(horizontal), axis=1)
+    is_wall = np.abs(normals[:, 1]) < WALL_COS
     chosen = np.full(len(normals), -1, dtype=np.int8)
-    for index, (axis, sign) in enumerate(FACES.values()):
-        axis_column = 0 if axis == 0 else 1
-        picked = (
-            (np.abs(normals[:, 1]) < WALL_COS)
-            & (dominant == axis_column)
-            & (np.sign(horizontal[:, axis_column]) == sign)
-        )
+    for index, (column, sign) in enumerate(FACES.values()):
+        picked = is_wall & (dominant == column) & (np.sign(horizontal[:, column]) == sign)
         chosen[picked] = index
     return chosen
 
@@ -193,18 +210,29 @@ def wall_texels(meshes: list[MeshData]) -> dict[str, np.ndarray]:
             continue
         image = np.asarray(Image.open(io.BytesIO(mesh.texture.data)).convert("RGB"))
         height, width = image.shape[:2]
-        normals = mesh.normals[mesh.triangles].mean(axis=1)
-        normals /= np.linalg.norm(normals, axis=1, keepdims=True) + 1e-12
-        assigned = face_of(normals)
+        assigned = face_of(normalise(mesh.normals[mesh.triangles].mean(axis=1)))
+        flat = image.reshape(-1, 3)
         for index, name in enumerate(names):
             triangles = mesh.triangles[assigned == index]
             if not len(triangles):
                 continue
-            buckets[name].append(image[coverage(mesh.uvs, triangles, width, height)])
-    return {name: np.concatenate(v) for name, v in buckets.items() if v}
+            # `compress` over the flattened atlas rather than `image[mask]`: same
+            # rows in the same order, six times faster, and this gather is the
+            # tool's largest single cost.
+            mask = coverage(mesh.uvs, triangles, width, height)
+            buckets[name].append(np.compress(mask.ravel(), flat, axis=0))
+
+    # Concatenating in a comprehension would hold every chunk alongside every
+    # joined array, doubling the peak on exactly the buildings that set it.
+    gathered = {}
+    for name, chunks in buckets.items():
+        if chunks:
+            gathered[name] = np.concatenate(chunks)
+            chunks.clear()
+    return gathered
 
 
-def _subsample(faces: dict[str, np.ndarray], seed: str) -> tuple[dict[str, np.ndarray], int]:
+def _subsample(faces: dict[str, np.ndarray], seed: str) -> dict[str, np.ndarray]:
     """Cap the sample, keeping each face's share of it proportional.
 
     Per-face caps would not do: they would give a 100,000-texel face the same
@@ -213,7 +241,7 @@ def _subsample(faces: dict[str, np.ndarray], seed: str) -> tuple[dict[str, np.nd
     """
     total = sum(len(pixels) for pixels in faces.values())
     if total <= SAMPLE_CAP:
-        return faces, total
+        return faces
     digest = blake2b(seed.encode("utf-8"), digest_size=8, person=b"survey")
     rng = np.random.default_rng(int.from_bytes(digest.digest(), "big"))
     share = SAMPLE_CAP / total
@@ -223,26 +251,7 @@ def _subsample(faces: dict[str, np.ndarray], seed: str) -> tuple[dict[str, np.nd
         kept[name] = (
             pixels[rng.choice(len(pixels), take, replace=False)] if take < len(pixels) else pixels
         )
-    return kept, total
-
-
-def estimate(rgb: np.ndarray) -> tuple[np.ndarray, np.ndarray] | None:
-    """`(lab, lit_rgb)` for one set of texels, or `None` if none survive the guards.
-
-    ⚠️ **`None` is a refusal to answer, and the caller must keep it one.** The
-    shipped table's failure was emitting a neutral grey for a building whose
-    sample was entirely padding; a row that says nothing sends the building to its
-    height band, which `facade_hue` already documents as the right answer for a
-    measurement that did not happen.
-    """
-    lab = srgb_to_lab(rgb)
-    keep = ~is_filler(rgb) & (lab[:, 1] >= VEGETATION_A)
-    if keep.sum() < 64:
-        return None
-    kept_lab, kept_rgb = lab[keep], rgb[keep]
-    top = kept_lab[:, 0] >= np.percentile(kept_lab[:, 0], PERCENTILE)
-    lit = np.rint(np.median(kept_rgb[top], axis=0))
-    return srgb_to_lab(lit[None, :])[0], lit
+    return kept
 
 
 def is_filler(rgb: np.ndarray) -> np.ndarray:
@@ -250,62 +259,107 @@ def is_filler(rgb: np.ndarray) -> np.ndarray:
     return (rgb[:, 0] == rgb[:, 1]) & (rgb[:, 1] == rgb[:, 2])
 
 
+def photographic(rgb: np.ndarray, lab: np.ndarray) -> np.ndarray:
+    """Texels that are neither atlas padding nor canopy — the ones worth reading.
+
+    One definition, because the estimate and the `vegetation` column that decides
+    whether the pipeline trusts it must agree about what they excluded.
+    """
+    return ~is_filler(rgb) & (lab[:, 1] >= VEGETATION_A)
+
+
+def estimate(rgb: np.ndarray, lab: np.ndarray) -> tuple[np.ndarray, np.ndarray] | None:
+    """`(lab, lit_rgb)` for one set of texels, or `None` if none survive the guards.
+
+    Takes the `L*a*b*` alongside the texels rather than deriving it, so a caller
+    measuring a building and its four faces converts once instead of five times.
+
+    ⚠️ **`None` is a refusal to answer, and the caller must keep it one.** The
+    shipped table's failure was emitting a neutral grey for a building whose
+    sample was entirely padding; a row that says nothing sends the building to its
+    height band, which `facade_hue` already documents as the right answer for a
+    measurement that did not happen.
+    """
+    keep = photographic(rgb, lab)
+    if keep.sum() < MIN_TEXELS:
+        return None
+    kept_lab, kept_rgb = lab[keep], rgb[keep]
+    top = kept_lab[:, 0] >= np.percentile(kept_lab[:, 0], PERCENTILE)
+    lit = np.rint(np.median(kept_rgb[top], axis=0))
+    return srgb_to_lab(lit[None, :])[0], lit
+
+
 def survey_building(meshes: list[MeshData], name: str, sheet: str) -> Row | None:
     """One building's row, or `None` when nothing measurable survives the guards."""
     faces = wall_texels(meshes)
     if not faces:
         return None
-    sampled, total = _subsample(faces, name)
-    pooled = np.concatenate(list(sampled.values())).astype(np.float64)
-    result = estimate(pooled)
+    total = sum(len(pixels) for pixels in faces.values())
+    sampled = _subsample(faces, name)
+    del faces
+
+    # One conversion for the building and its four faces: the faces partition the
+    # pooled sample, so each is a slice of it rather than a separate measurement.
+    bounds = np.cumsum([0, *(len(pixels) for pixels in sampled.values())])
+    pooled = np.concatenate(list(sampled.values()))
+    pooled_lab = srgb_to_lab(pooled)
+
+    result = estimate(pooled, pooled_lab)
     if result is None:
         log.warning("%s: every wall texel is filler or canopy — no row emitted", name)
         return None
     lab, lit = result
 
-    face_lightness: dict[str, float | None] = {name: None for name in FACES}
-    for face, pixels in sampled.items():
-        per_face = estimate(pixels.astype(np.float64))
+    face_lightness: dict[str, float | None] = dict.fromkeys(FACES)
+    for index, face in enumerate(sampled):
+        low, high = bounds[index], bounds[index + 1]
+        per_face = estimate(pooled[low:high], pooled_lab[low:high])
         if per_face is not None:
             face_lightness[face] = round(float(per_face[0][0]), 2)
 
-    keep = ~is_filler(pooled) & (srgb_to_lab(pooled)[:, 1] >= VEGETATION_A)
-    low = min(float(mesh.positions[:, 1].min()) for mesh in meshes)
-    high = max(float(mesh.positions[:, 1].max()) for mesh in meshes)
+    keep = photographic(pooled, pooled_lab)
+    floor = min(float(mesh.positions[:, 1].min()) for mesh in meshes)
+    roof = max(float(mesh.positions[:, 1].max()) for mesh in meshes)
     return Row(
         lab=[round(float(value), 2) for value in lab],
         lit_rgb=[int(value) for value in lit],
         naive_rgb=[int(value) for value in np.rint(pooled[keep].mean(axis=0))],
         face_L=face_lightness,
         pixels=total,
-        clipped=round(float((pooled >= CLIP_LEVEL).all(axis=1).mean()), 4),
-        vegetation=round(float((srgb_to_lab(pooled)[:, 1] < VEGETATION_A).mean()), 4),
-        height_m=round(high - low, 2),
+        clipped=round(float((pooled >= CLIP_LEVEL).any(axis=1).mean()), 4),
+        vegetation=round(float((pooled_lab[:, 1] < VEGETATION_A).mean()), 4),
+        height_m=round(roof - floor, 2),
         sheet=sheet,
     )
 
 
-def survey_sheet(archive: Path, *, stem_suffix: int = 2) -> dict[str, dict[str, Any]]:
-    """Every building on one sheet, keyed by the stem `pipeline/buildings.py` joins on."""
+def survey_sheet(archive: Path) -> dict[str, dict[str, Any]]:
+    """Every building on one sheet, keyed by the stem `pipeline/buildings.py` joins on.
+
+    ⚠️ **Keyed through the pipeline's own `stem`, not a local copy of it.** The two
+    datasets join on this key and nothing checks that they agree — a survey keyed
+    even one character differently produces no error, just a city coloured
+    entirely from height bands.
+    """
     sheet = archive.stem
     rows: dict[str, dict[str, Any]] = {}
     with zipfile.ZipFile(archive) as bundle:
         documents = sorted(
             entry
             for entry in bundle.namelist()
-            if entry.endswith(".gltf") and posixpath.basename(entry).startswith(MODEL_PREFIX)
+            if entry.lower().endswith(GLTF_SUFFIX)
+            and posixpath.basename(entry).startswith(MODEL_PREFIX)
         )
         log.info("%s: %d %s-prefixed models", sheet, len(documents), MODEL_PREFIX)
         for index, document in enumerate(documents, 1):
-            name = posixpath.basename(document)[: -len(".gltf")]
+            name = posixpath.basename(document)[: -len(GLTF_SUFFIX)]
             base = posixpath.dirname(document)
-            meshes = read_scene(
-                bundle.read(document), lambda uri, base=base: bundle.read(posixpath.join(base, uri))
+            row = survey_building(
+                read_scene(bundle.read(document), resolver(bundle, base)), name, sheet
             )
-            row = survey_building(meshes, name, sheet)
             if row is None:
                 continue
-            rows[name[:-stem_suffix]] = asdict(row)
+            rows[stem(name)] = asdict(row)
             log.info("  [%d/%d] %s lab=%s", index, len(documents), name, row.lab)
     return rows
 
@@ -313,17 +367,17 @@ def survey_sheet(archive: Path, *, stem_suffix: int = 2) -> dict[str, dict[str, 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("sheets", nargs="*", help="sheet ids, e.g. 11-SW-9D")
+    parser.add_argument("--city", default="hong_kong")
     parser.add_argument(
         "--zip-dir",
         type=Path,
-        default=ROOT / "etl/sources/individualised",
+        default=SOURCES_ROOT / "individualised",
         help="where the individualised sheet archives live",
     )
+    # Resolved after parsing rather than as a default, because it depends on
+    # --city. `source_dir` is the only thing that knows this tree's shape.
     parser.add_argument(
-        "--out-dir",
-        type=Path,
-        default=ROOT / "etl/sources/hong_kong/facade_colour",
-        help="where to write facade_lab.<sheet>.json",
+        "--out-dir", type=Path, help="where to write facade_lab.<sheet>.json [the city's cache]"
     )
     parser.add_argument("--all", action="store_true", help="every archive in --zip-dir")
     parser.add_argument(
@@ -332,6 +386,7 @@ def main(argv: list[str] | None = None) -> int:
     arguments = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
+    out_dir = arguments.out_dir or source_dir(arguments.city, HUE_SOURCE_ID)
     archives = (
         sorted(arguments.zip_dir.glob("*.zip"))
         if arguments.all
@@ -340,13 +395,16 @@ def main(argv: list[str] | None = None) -> int:
     if not archives:
         parser.error("name at least one sheet, or pass --all")
 
-    arguments.out_dir.mkdir(parents=True, exist_ok=True)
+    def write(name: str, rows: dict[str, dict[str, Any]], label: str) -> None:
+        destination = out_dir / name
+        destination.write_text(json.dumps(rows, indent=1, sort_keys=True))
+        log.info("%s: %d rows -> %s", label, len(rows), destination)
+
+    out_dir.mkdir(parents=True, exist_ok=True)
     merged: dict[str, dict[str, Any]] = {}
     for archive in archives:
         rows = survey_sheet(archive)
-        destination = arguments.out_dir / f"facade_lab.{archive.stem}.json"
-        destination.write_text(json.dumps(rows, indent=1, sort_keys=True))
-        log.info("%s: %d rows -> %s", archive.stem, len(rows), destination)
+        write(f"{TABLE_STEM}.{archive.stem}.json", rows, archive.stem)
         clash = merged.keys() & rows.keys()
         if clash:
             raise ValueError(
@@ -355,9 +413,7 @@ def main(argv: list[str] | None = None) -> int:
         merged.update(rows)
 
     if arguments.merge:
-        destination = arguments.out_dir / "facade_lab.json"
-        destination.write_text(json.dumps(merged, indent=1, sort_keys=True))
-        log.info("merged: %d rows -> %s", len(merged), destination)
+        write(f"{TABLE_STEM}.json", merged, "merged")
     return 0
 
 
