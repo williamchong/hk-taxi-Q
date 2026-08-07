@@ -778,19 +778,36 @@ earlier. **A verdict pending on a screenshot has an expiry date that nothing in 
 **Status.** 🔴 Open · **Owner.** `Q26`
 
 **Claim.** The five `height_bands` sit at `C*` 1.92–13.84. At `facade_hue.strength: 2.0` the shipped
-per-building colour is `C*` mean 12.59, p90 27.35, p99 57.33, max 96.73, with **20.1% of 2,171
-buildings over `C*` 20** against 3.9% at faithful strength 1.0. The palette table describes a city
-that does not exist, and one building in five is more saturated than anything the direction sanctions.
+per-building colour is `C*` mean 15.37, p90 30.39, p99 60.27, max 104.55, with **26.4% of 2,177
+buildings over `C*` 20** against 4.6% at faithful strength 1.0. The palette table describes a city
+that does not exist, and one building in four is more saturated than anything the direction sanctions.
 
 ⚠️ **The knob cannot fix this, which is the argument against tuning it further rather than for.**
 Amplifying chroma linearly widens the spread far faster than it moves the middle, so at 2.0 the
-distribution is *both* too grey (median 9.52) and too candy (p99 57.3). `strength: 2.0` also puts
-**2.2% of surveyed buildings out of gamut, worst `dE` 61.5**.
+distribution is *both* too grey (median 12.25) and too candy (p99 60.3).
+
+**Measured by `tools/facade_chroma.py`, and re-run it before quoting any of this.** Every figure
+here moves when `strength` moves or the survey is re-run, and both have happened. ⚠️ **The two move
+different ends**: `Q37`'s resurvey lifted the median 28.7% (9.52 → 12.25) and the p99 5.1%
+(57.33 → 60.27), because the table it replaced held 222 filler rows at exactly `C*` 0. `strength`
+widens the tail and barely moves the middle. A re-grade that read one as a proxy for the other would
+tune the city the wrong way.
+
+⚠️ **`strength: 2.0` puts 0.6% of surveyed buildings outside the sRGB gamut, worst `dE76` 67.5 —
+and this does not restate the 2.2% / 61.5 recorded here before, which does not reproduce.** Six
+definitions were tried against the superseded table on which that pair was computed — linear-channel
+bounds, encoded bounds, four `dE` thresholds — over both the filtered and unfiltered populations,
+and none returns it. The figure is therefore replaced rather than corrected, and the definition is
+named this time so the next re-grade can reproduce it: **`colour.in_gamut`, which is true exactly
+where `lab_to_srgb`'s clip changed no byte**, and CIE76 for the distance. An unnamed `dE` is a number
+the next measurement cannot check.
 
 **Options.** Drop toward 1.0–1.5; compress the tail rather than scale it; or re-author the palette
-table around what ships. **Belongs with `Q26`'s verdict, not before it.**
+table around what ships. **Belongs with `Q26`'s verdict, not before it.** ⚠️ The re-grade did not
+choose between them, and it slightly strengthens the second: the tail moved 5.1% while the middle
+moved 28.7%, so the saturated buildings are not an artefact of the survey that was withdrawn.
 
-**See.** `ART_DESIGN.md` "Palette" · `Q26` · `Q34`
+**See.** `ART_DESIGN.md` "Palette" · `Q26` · `Q34` · `Q37`
 
 ## `Q31` — The city's value range has an empty middle
 
@@ -1120,7 +1137,8 @@ scheme. 76.6% of rows moved past 0.46 and 15.6% past 5.0. What identifies the ne
 measurement is different evidence: run *without* its filler guard it lands on the shipped achromatic
 value for the rows above 30% filler, reproducing the bug on demand, and the guard alone accounts for
 a median `Δab` of **0.000**. `Q26`'s pending A/B, `Q30` and `Q34` are re-graded against a survey that
-can be re-derived instead of one that cannot.
+can be re-derived instead of one that cannot. `Q34` re-derived as `Q34′` and `Q30` is re-measured;
+`Q26`'s A/B is a verdict and is the one still owed.
 
 ⚠️ **Two rows still read `C* = 0` and both are photographs.** `naive_rgb` of `[82,82,81]` and
 `[87,81,77]` over 2.7 and 3.8 million texels — the per-channel medians simply rounded to a tie.

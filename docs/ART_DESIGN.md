@@ -143,25 +143,32 @@ variant — plan the emissive channel now, build the mode later.
 🔴 **The table above is the authored palette and it is no longer the shipped one.** The five
 `height_bands` honour it — `C*` 1.92 to 13.84, which is "warm off-white, beige, pale grey-green" —
 but `facade_hue.strength: 2.0` multiplies each building's *measured* chroma on top, and the result
-is not muted. Computed over the 2,171 surveyed buildings that pass `vegetation_max`, against the
-band each would otherwise take:
+is not muted. Measured by `tools/facade_chroma.py` over the 2,177 surveyed buildings that pass
+`vegetation_max`, against the band each would otherwise take:
 
-| `facade_hue.strength` | shipped `C*` mean | p90 | p99 | max | share over `C*` 20 |
-|---|---|---|---|---|---|
-| 1.0 (faithful) | 6.36 | 13.67 | 28.87 | 71.51 | **3.9%** |
-| 1.5 | 9.50 | 20.66 | 42.99 | 76.64 | **10.8%** |
-| **2.0 (ships)** | **12.59** | **27.35** | **57.33** | **96.73** | **20.1%** |
+| `facade_hue.strength` | shipped `C*` mean | median | p90 | p99 | max | share over `C*` 20 |
+|---|---|---|---|---|---|---|
+| 1.0 (faithful) | 7.75 | 6.13 | 15.16 | 30.23 | 75.24 | **4.6%** |
+| 1.5 | 11.59 | 9.08 | 22.83 | 45.33 | 99.61 | **14.1%** |
+| **2.0 (ships)** | **15.37** | **12.25** | **30.39** | **60.27** | **104.55** | **26.4%** |
 
-`L*` mean is 61.5 at every strength, so this is chroma alone. One building in five is now more
-saturated than *any* colour this document authorises, and the tail is what the eye picks out: the
-mint, teal, lilac and peach blocks in `build/driver/art_kerb` and `art_skyline` are not a rendering
-fault, they are the palette. ⚠️ **The knob is doing two jobs and only one of them is stated.** Its
-config comment calls it "the line to move if the city reads too grey or too candy" — but at 2.0 the
-distribution is *both*: median 9.52 is still near-neutral while p99 is 57.3. Amplifying chroma
-linearly widens the spread far faster than it moves the middle, so the buildings that were already
-coloured become the loudest thing in the frame long before the grey majority stops being grey.
-Whatever look wins `Q26` should set this against the palette table, and the palette table should
-then be rewritten to describe the city that ships. See `Q30`.
+`L*` mean is 61.5 at every strength, so this is chroma alone. **One building in four** is more
+saturated than *any* colour this document authorises, and the tail is what the eye picks out — the
+mint, teal, lilac and peach blocks in a street frame are not a rendering fault, they are the palette.
+
+⚠️ **The knob is doing two jobs and only one of them is stated.** Its config comment calls it "the
+line to move if the city reads too grey or too candy" — but at 2.0 the distribution is *both*:
+median 12.25 is still near-neutral while p99 is 60.3. Amplifying chroma linearly widens the spread
+far faster than it moves the middle, so the buildings that were already coloured become the loudest
+thing in the frame long before the grey majority stops being grey.
+
+**Re-run the tool whenever `strength` moves or the survey does — the two disagree about which end
+moves.** `Q37`'s resurvey lifted the median 28.7% and the p99 only 5.1% — the table it replaced
+carried 222 rows of atlas filler at exactly `C*` 0, and a population feels that in its middle, not
+at its edge. `strength` does the opposite, and reading either number as a
+proxy for the other is how a city gets tuned in the wrong direction. Whatever look wins `Q26` should
+set this against the palette table, and the palette table should then be rewritten to describe the
+city that ships. See `Q30`.
 
 ---
 

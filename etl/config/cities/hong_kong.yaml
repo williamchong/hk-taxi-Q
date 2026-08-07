@@ -552,10 +552,17 @@ buildings:
   # the arithmetic.
   #
   # `strength` multiplies the measured chroma. 1.0 is faithful and *muted* —
-  # measured C* is about 6, and seven buildings in ten are perceptually
-  # near-neutral. Above 1.0 keeps which building is warmer and exaggerates only
-  # by how much, so the ordering stays evidence while the amount becomes art
-  # direction. This is the line to move if the city reads too grey or too candy.
+  # mean measured C* is 7.75, and six buildings in ten sit under C* 8. Above 1.0
+  # keeps which building is warmer and exaggerates only by how much, so the
+  # ordering stays evidence while the amount becomes art direction. This is the
+  # line to move if the city reads too grey or too candy.
+  #
+  # ⚠️ At 2.0 it reads as both, and that is `Q30`: one building in four exceeds
+  # C* 20, which is above anything ART_DESIGN.md's palette authorises, while the
+  # median is still a near-neutral 12.25. Amplifying widens the spread faster
+  # than it moves the middle, so this knob cannot reach the state it describes.
+  # `tools/facade_chroma.py` measures it — re-run it if this line or the survey
+  # moves, because the two move opposite ends of the distribution.
   #
   # `vegetation_max` drops a survey row whose sample was more than this fraction
   # canopy — 36 of Wan Chai's 2,213 at 0.5. They sit 4.45 a* to the green side of
