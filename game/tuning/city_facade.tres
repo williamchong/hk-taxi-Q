@@ -32,10 +32,10 @@
 ; still differed — because shopfronts, cornices, floor lines and mullions are
 ; drawn outside that gate, so each is zeroed too.
 ;
-; To bring the windows back, take the seven values from `42da0fb` — nothing else
+; To bring the windows back, take the seven values from `542cac3` — nothing else
 ; in the file moved, and none of it needs a rebuild:
 ;
-;   solid_share 0.38 · glass_ratio 0.44 · shopfront_share 0.55 · accent_share 0.11
+;   solid_share 0.27 · glass_ratio 0.44 · shopfront_share 0.55 · accent_share 0.11
 ;   cornice_darkness 0.28 · floor_line_darkness 0.11 · mullion_darkness 0.12
 ;
 ; The dozens of uniforms those seven make inert — `bay_width_m`, `glass_colour`,
