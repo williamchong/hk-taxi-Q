@@ -215,7 +215,7 @@ same reason. Renumbering would silently falsify a dozen entries in `PROGRESS.md`
 "`P3-10`, build `B2`". Where letter order and running order disagree, this plan says which is which.
 `B2` runs first.
 
-Why the city comes before the loop — **user's call, 2026-08-02**:
+Why the city comes before the loop — **user's call**:
 
 - **The scene is the bet, so the scene gets tested first.** `Q8` closed on "the city itself is the
   fun", and the user's own word for it was *gimmick*. Fares, traffic and scoring are all built on the
@@ -355,8 +355,8 @@ trade.
   need a **traction-loss signal**, and wheels that spin up under power and lock under braking need
   **per-wheel angular velocity**. `VehicleWheel3D` gives both free through `get_skidinfo()` — and is
   still refused, because its single `friction_slip` cannot break lateral grip while keeping
-  longitudinal traction, which is the drift the style chain is built on (`P0-5a`, re-asked and
-  re-answered 2026-08-03). Both are cheap to add here instead: `_apply_tyre_forces` already computes
+  longitudinal traction, which is the drift the style chain is built on (`P0-5a`, asked twice and
+  refused twice). Both are cheap to add here instead: `_apply_tyre_forces` already computes
   lateral and longitudinal slip per wheel, so publishing them onto `WheelMount` beside `compression`
   and `steer_angle` costs ~20 lines and changes no physics. **Do it when the effects that consume it
   are built, not before** — `wheel_visual.gd` currently rolls the wheels from road speed, which is a

@@ -262,7 +262,7 @@ put a run there.
 triangles and its six GLBs total **267 MB** — of which **224 MB is the JPEGs**. Over on triangles,
 texture memory and bundle size at once.
 
-✅ **Reassessed 2026-08-01, and the geometry was never the problem.** `P3-10` ships the terrain
+✅ **The geometry was never the problem — the JPEG was.** `P3-10` ships the terrain
 **untextured**, reading the JPEG at build time to derive flat per-vertex colour and then discarding
 it: ~88k triangles, 1.5–2.5 MB of geometry, **zero** texture memory, and **no extra draw call**,
 because an untextured vertex-coloured surface merges into the same tile primitive as the buildings.
@@ -306,13 +306,13 @@ GIS idiom for grade separation — an ordinal level, like OSM's `layer` tag — 
 **ground level**, not from the vertical datum (`Q11`, `roads.ground`). Since `P2-7` that offset is
 only the *fallback*: where the map sheets cover the structure, the real deck is sampled instead.
 
-> ⚠️ **Corrected by `P1-3`.** This section previously ended "Two edges may only form a junction if
-> their `ELEVATION` values match." That rule is right about *crossings* and wrong about junctions,
-> and applying it breaks the network: every one of the 36 endpoints where two levels meet is a **ramp
-> touching down**, and keying nodes on the level takes the region from 6 connected components to
-> **24**, cutting a 163-node elevated island adrift. The hazard it was aimed at never arises, because
-> nodes are formed only where centrelines share an **endpoint**, and a flyover crossing a street
-> shares nothing with it.
+⚠️ **`ELEVATION` must not key nodes** — "two edges may only form a junction if their `ELEVATION`
+values match" is right about *crossings* and wrong about junctions, and applying it breaks the
+network. Every one of the 36 endpoints where two levels meet is a **ramp touching down**, so keying
+nodes on the level takes the region from 6 connected components to **24**, cutting a 163-node
+elevated island adrift. The hazard it is aimed at never arises here, because nodes are formed only
+where centrelines share an **endpoint**, and a flyover crossing a street shares nothing with it.
+`P1-3`.
 
 ### What `P1-3` measured in the geodatabase
 
@@ -536,11 +536,9 @@ Direct static URLs, enumerable via the data.gov.hk CKAN API. No key, no portal, 
 
 ### Buildings — fully scriptable ✅
 
-> **Correction, 2026-07-30.** This section previously stated that the building datasets expose **no
-> direct download URLs** and that the only API served rejected Cesium 3D Tiles behind an emailed key.
-> **Both are wrong**, and that error made "buildings are unautomatable" the project's top data risk
-> for a day. The mistake was reading the CKAN resource list — which does only point at portals — and
-> stopping there, instead of opening the portal's own download panel.
+⚠️ **The CKAN resource list is not the whole story, and reading it alone is what makes buildings look
+unautomatable.** It genuinely does only point at interactive portals. **Open the portal's own
+Downloads panel.**
 
 **The sheet index is the API.** The CSDI portal's Downloads panel serves the non-textured dataset as
 ordinary GIS vector formats, not as 3D models. What you get is a **territory-wide index of 3,456

@@ -97,9 +97,9 @@ the text blocks overlays register with it, and — through `view_changed` — th
 | `full` | plus registered readouts and 3D debug geometry | 38 |
 
 Measured on `city_drive.tscn` at 2.0 s into the standard driver run. Against the <150 budget that is
-affordable, but it is not free — and it was previously *always on* in a debug build, so a fifth of
-the scene's draw calls went on debug text in every screenshot anyone judged the city from. That,
-more than the cost, is why the default is off.
+affordable, but it is not free: left on, a fifth of the scene's draw calls go on debug text — and it
+sits over every screenshot anyone judges the city from. That second reason, more than the cost, is
+why the default is off.
 
 `drive.sh` is the exception: it appends `--debug-view=minimal` unless the caller names a view, on the
 grounds that a scripted run is someone debugging and a screenshot that cannot say where it was taken
@@ -397,8 +397,8 @@ makes a tile one draw call, checked in-engine by `verify_tiles.gd`. Since `P3-7`
 `TEXCOORD_0`, which is **not** a texture coordinate: no image is sampled, and `merge` still refuses a
 textured mesh outright.
 
-⚠️ **"No textures" is stricter than it sounds, and until 2026-08-07 the strict part lived only in a
-GDScript docstring.** `scripts/city/mesh_contract.gd` walks **every shader uniform** and fails on any
+⚠️ **"No textures" is stricter than it sounds, and the strict part is enforced in code rather than
+only stated here.** `scripts/city/mesh_contract.gd` walks **every shader uniform** and fails on any
 that holds a `Texture`, not just the `BaseMaterial3D` albedo/normal/ORM slots — *"a sampler bound here
 would ship an image into a bundle specified to carry none while every other check passed."* So a
 single region-wide data map sampled by world position — a sky-visibility or AO bake, which needs no
@@ -909,9 +909,9 @@ eyeball check. There is also a check needing no tooling at all, and it is the on
 **the harbour is north**, so from a car facing east, a left turn heads for the water.
 
 **One thing is knowingly missing:** **the flyovers cannot be driven onto** (`Q13`). Off the
-carriageway used to be void; since `P3-10` it is ground, and solid, so mounting a kerb now puts the
-car on the pavement rather than through it. The dev harness that catches a car falling out of the
-world still runs — the region has edges, and level -1 runs under the terrain (`Q21`).
+carriageway is ground, and solid (`P3-10`), so mounting a kerb puts the car on the pavement rather
+than through it. The dev harness that catches a car falling out of the world still runs — the region
+has edges, and level −1 runs under the terrain (`Q21`).
 
 ---
 

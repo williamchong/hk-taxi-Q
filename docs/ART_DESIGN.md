@@ -65,18 +65,19 @@ is divided out — the rule is calibrated *on* them and therefore cannot also ch
 49–62%, at the top of what painted render and ceramic tile do. If that is wrong the anchor is wrong
 with it and every other colour moves. Recorded as a number precisely so it is arguable.
 
-⚠️ **Five names for what is really one material family** at five lightnesses. That is a real claim and
-a weaker one than the schema used to make; see `Q34` below. Do not rename the last of them to
-anything glazed — 55.2% contradicts curtain-wall glass's 8–15% diffuse albedo sitting beside it.
+⚠️ **Five names for what is really one material family** at five lightnesses. That is a real claim,
+and a deliberately weaker one than a height→material mapping would make (`Q34`). Do not rename the
+last of them to anything glazed — 55.2% contradicts curtain-wall glass's 8–15% diffuse albedo
+sitting beside it.
 
 ### Material is not a function of height (`Q34`)
 
 **A `materials:` table sits at the top level of the city config, and every colour the city ships is
 declared there and nowhere else.** `buildings:` and `roads:` reference entries by name.
 
-That shape is the point. `colour` and `reflectance` used to be fields on `height_bands`, which made
-the *schema* assert that material is a function of height — a claim nobody wrote down and the data
-refuses. Measured on the 2,171-building photo survey, **height explains 0.9% of facade `L*`** once
+That shape is the point. **`colour` and `reflectance` must not be fields on `height_bands`**, because
+that makes the *schema* assert material is a function of height — a claim nobody would write down and
+the data refuses. Measured on the 2,171-building photo survey, **height explains 0.9% of facade `L*`** once
 log pixel count is controlled, and 0.7% of `a*`; the best geometric key of any kind, height and
 footprint together, reaches 1.4%. So "48.7% = grey painted render" read, on a height bucket, as
 *"buildings under 12 m are grey painted render"*, which no source supports. It also broke hard rule
@@ -210,8 +211,8 @@ Output:  band mask → darkened window rows, occasional lit window (emissive at 
 Cost:    a few instructions, zero texture memory
 ```
 
-⚠️ **`TEXCOORD_0.x` was specified here as `0-1` and ships as metres, which is a correction rather
-than a detail.** Normalised, a vertex says what fraction of its own building it is up, and the shader
+⚠️ **`TEXCOORD_0.x` is metres above the building's base, never normalised `0-1`, and the difference
+is load-bearing.** Normalised, a vertex says what fraction of its own building it is up, and the shader
 cannot recover the building's height from that — so a 3-storey shophouse and a 40-storey tower get
 the *same number of window rows*. The floor count is the signature. In metres the row spacing is a
 constant of the city rather than of the object, and the podium mask becomes an absolute height.
@@ -250,7 +251,7 @@ be a rebuild.
 ### The clean/futuristic variant
 
 🔴 **Every façade element below is switched off in the shipping `city_facade.tres`, and the city is
-massing plus flat per-building colour.** User's call on 2026-08-06, made from the driver's seat: with
+massing plus flat per-building colour.** User's call, made from the driver's seat: with
 `Q27` fixed, the measured per-building hue carries the city on its own, and the window grid was
 competing with it rather than adding to it. **Parked, not deleted** — the shader keeps all of it and
 seven parameters in one `.tres` hold it back, listed in that file's header with the values that
@@ -401,24 +402,23 @@ abandons the accurate surface, and recognition is the product.
 
 ### What buildings will *not* get
 
-- **No per-building texture, and no low-res atlas.** ⚠️ **The reason recorded here was half of one,
-  and the weaker half.** "UVs do not survive vertex clustering" is true — `collapse` takes them from a
-  cluster representative — but the buildings this pipeline ships **have no UVs to lose**: the
-  non-textured set carries `COLOR_0` in one primitive with **zero images** (`DATA_SOURCES.md`). The
-  binding reason is the other one: `merge` refuses textured meshes, so a textured building becomes its
-  own draw call and 53 becomes thousands. ⚠️ **An unclustered LOD0 does not rescue it**, which is the
-  obvious next idea: `collapse`'s `cell_m <= 0` welds on position *and normal*, which is exactly what
-  the two sides of a UV seam share, so even the lossless tier is lossless only for geometry — and
-  restoring that tier costs 30.5 MB and 40% of worst-case visible triangles (`Q16`).
-- 🚚 **"No colour sampled per building" has moved out of this list — buildings now get it.** All
-  three original objections fell to measurement; see "Per-building façade colour" below and the
-  `PROGRESS.md` entries of 2026-08-06. What survives of the objection is narrower and still binding:
-  **the photographs' `L*` is not usable and is not used.**
-- ⚠️ **What this document used to sanction — "re-author the five height bands from clustered façade
-  colour" — is measured and close to pointless.** Height explains **1.2% of `a*` and 0.8% of `b*`**
-  across all 2,214 buildings, so re-authoring the bands while keeping height as the key moves the fit
-  barely at all. **Height is not the signal**, and the ramp stays what it is: a *lightness* ramp,
-  old-and-darker below to pale-above, which is the one thing height does predict (10.9%).
+- **No per-building texture, and no low-res atlas.** ⚠️ **The binding reason is `merge`, not UVs.**
+  `merge` refuses textured meshes, so a textured building becomes its own draw call and 53 becomes
+  thousands. "UVs do not survive vertex clustering" is true — `collapse` takes them from a cluster
+  representative — but it is the weaker half, because the buildings this pipeline ships **have no UVs
+  to lose**: the non-textured set carries `COLOR_0` in one primitive with **zero images**
+  (`DATA_SOURCES.md`). ⚠️ **An unclustered LOD0 does not rescue it**, which is the obvious next idea:
+  `collapse`'s `cell_m <= 0` welds on position *and normal*, which is exactly what the two sides of a
+  UV seam share, so even the lossless tier is lossless only for geometry — and restoring that tier
+  costs 30.5 MB and 40% of worst-case visible triangles (`Q16`).
+- 🚚 **Colour sampled per building is not on this list — buildings get it.** All three original
+  objections fell to measurement; see "Per-building façade colour" below. What remains of the
+  objection is narrower and still binding: **the photographs' `L*` is not usable and is not used.**
+- ⚠️ **Do not re-author the five height bands from clustered façade colour.** It is measured and
+  close to pointless: height explains **1.2% of `a*` and 0.8% of `b*`** across all 2,214 buildings,
+  so re-authoring the bands while keeping height as the key moves the fit barely at all. **Height is
+  not the signal.** The ramp is a *lightness* ramp, old-and-darker below to pale-above, which is the
+  one thing height does predict (10.9%).
 
 ### Per-building façade colour
 
@@ -439,18 +439,16 @@ of the flight. Shipping it as albedo would bake that flight's shadows into the c
 sun to shade a second time. `facade_hue.strength` scales the measured chroma and is the *stylisation*
 knob, kept separate so the two cannot be confused.
 
-✅ **The city used to read pale, and neither the palette nor the rig was why.** `COLOR_0` is authored
-in sRGB and was consumed as linear, so **57%** of a lit façade pixel's luminance was
-albedo-*independent* and a per-building difference reached the screen at a third of its size. Closed
-as `Q27` on 2026-08-06; the fix is a conversion in the two façade shaders and the road's
-`BaseMaterial3D`, and the share falls to **6%** at street level.
+✅ **`COLOR_0` is authored in sRGB and every consumer must linearise it** — the two façade shaders and
+the road's `BaseMaterial3D`. Consumed as linear it puts **57%** of a lit façade pixel's luminance
+into an albedo-*independent* term, so a per-building difference reaches the screen at a third of its
+size and the city reads pale. Converted, the share falls to **6%** at street level. `Q27`.
 
-⚠️ **The lesson is about the diagnosis, not the bug.** "The rig's light levels swamp albedo" was the
-previous entry here, and it was wrong: ambient, exposure, glow, fog, the tonemap curve and specular
-were each ablated and **none moved albedo transmission by more than 0.05**. A washed-out frame is not
-evidence about the lights. Grade a pair of renders with `tools/frame_stats.py` and ask whether an
-*albedo change* survives to the screen before touching anything — a rig can only redistribute
-contrast that arrives.
+⚠️ **A washed-out frame is not evidence about the lights.** "The rig's light levels swamp albedo" is
+the diagnosis to resist here, and it is wrong: ambient, exposure, glow, fog, the tonemap curve and
+specular were each ablated and **none moved albedo transmission by more than 0.05**. Grade a pair of
+renders with `tools/frame_stats.py` and ask whether an *albedo change* survives to the screen before
+touching anything — a rig can only redistribute contrast that arrives.
 
 ### Hero buildings (~5)
 
@@ -485,9 +483,9 @@ dataset.
   widening `Q23` introduced. V is metres along the carriageway, so dashes keep a real-world pitch.
   Junction caps carry `(0, 0)`; a box junction is a mask keyed on the node, not a length of lane.
 - Kerbs modelled but low and mountable — collision is forgiving by design. Built as a 0.15 m riser
-  and a 0.5 m lip. The lip used to stop the carriageway ending in mid-air, back when there was no
-  terrain to end against; since `P3-10` its job is the seam — the ground tucks *under* it, 0.20 m
-  down, which is what hides the join.
+  and a 0.5 m lip. **The lip's job is the seam:** the ground tucks *under* it, 0.20 m down, which is
+  what hides the join. (Before `P3-10` there was no terrain to end against and it stopped the
+  carriageway ending in mid-air.)
 - Tram tracks as an inset strip on flagged edges — **not yet built.** `tram_tracks` reaches the graph
   but `P1-4` draws no inset; it belongs with the markings shader, not with the ribbon.
 
@@ -496,34 +494,29 @@ overlaps its arms rather than abutting them wherever a short edge is held back b
 6,051 m² of 52,985 m² of cap area. Cap and carriageway are the same colour at the same height in one
 material, so nothing shows; give the ribbon lane markings and the cap will read as a patch over them.
 
-🔴 **The asphalt looked like the outlier and it was the one colour already right. Retracted — see
-the palette rule below.** This section previously read "the asphalt is the one surface that was never
-re-anchored, and it is now a hole in the middle of the city's value range", on the evidence that
-every other albedo sat inside 15 `L*` points — kerb 62.2, band stock 57.4–63.3, ground 52.5,
-infrastructure 48.1 — while `surface_colour` `#3c3a37` was `L*` **24.5**. Both halves of that were
-wrong. The kerb had not been re-anchored either, so the comparison set was not the clean one it
-looked like; and read against published albedo rather than against its neighbours, `#3c3a37` was
-claiming **8.2%** reflectance, dead centre of aged asphalt's real 7–12%. The rule moved it 2.7 `L*`
-and moved the kerb 19.4.
+🔴 **The asphalt is not the outlier — it is the one colour that was already right.** Judged against
+its neighbours it looks like a hole in the city's value range: every other albedo sits inside 15 `L*`
+points — kerb 62.2, band stock 57.4–63.3, ground 52.5, infrastructure 48.1 — while `surface_colour`
+was `L*` **24.5**. Judged against published albedo it was claiming **8.2%** reflectance, dead centre
+of aged asphalt's real 7–12%. The palette rule moved it 2.7 `L*` and moved the *kerb* 19.4.
 
-⚠️ **The mechanism of the error is worth more than the error.** The palette was judged only on
-internal consistency, and a set judged that way always indicts its most extreme member — the
-question "do these look consistent with each other" has no way to return "the outlier is the only
-correct one". It took an external referent to see it. `Q33`.
+⚠️ **The mechanism is worth more than the error, and it is why the rule below exists.** A palette
+judged only on internal consistency always indicts its most extreme member — the question "do these
+look consistent with each other" has no way to return "the outlier is the only correct one". It takes
+an external referent to see it. `Q33`.
 
-What survives unchanged is the *measurement*: the street-level frames really are bimodal with an
-empty middle, and the palette rule did not close it.
+**The measurement underneath stands:** the street-level frames really are bimodal with an empty
+middle, and the palette rule did not close it.
 
 | Frame | pixels under `L*` 10 | `L*` 10–30 | shipped before → after |
 |---|---|---|---|
 | `kerb` — Causeway Bay, road in shade | **51.4% → 51.3%** | 0.5% → 2.7% | barely moved |
 | `street` — Hennessy Road canyon | 13.2% → 13.0% | 27.0% → 25.1% | barely moved |
 
-🔴 **That is now positive evidence about the lighting rig rather than an open question about the
-road.** Both levers have been tried: the road albedo was corrected against a material and the hole
-stayed. The remaining candidate is the shadow fill, which is the one thing not yet varied — and note
-that the two failing frames are exactly the two shot *in shade*. `Q31`, and it belongs with the rig
-pass, not with the palette.
+🔴 **That is positive evidence about the lighting rig rather than an open question about the road.**
+The road albedo has been corrected against a material and the hole stayed, so the remaining candidate
+is the **shadow fill** — the one thing not yet varied, and the two failing frames are exactly the two
+shot *in shade*. `Q31`, and it belongs with the rig pass, not with the palette.
 
 ⚠️ **The empty middle is a *lit-versus-unlit* gap, not a dark-albedo gap.** The two worst frames are
 the two shot in shade, and the same asphalt renders at `L*` 30–60 in sun. So the second lever is
@@ -534,7 +527,7 @@ discipline in the Lighting section applies.
 
 ## Infrastructure
 
-⚠️ **This section exists because the audit found it missing.** Flyovers, ramps, footbridge canopies
+Flyovers, ramps, footbridge canopies
 and podium decks are a whole mesh class — `INFRASTRUCTURE` — with its own colour, its own LOD cell
 sizes and its own grader, and until now the only art direction attached to it was one line in the
 city config. ⚠️ **It is a smaller share of the frame than its silhouette suggests** — 2.71% even from
@@ -552,10 +545,9 @@ applied inside `if (is_facade)` at `city_facade_clean.gdshader:437`, and `is_fac
 `marker < MARKER_FACADE + 0.5`. `MARKER_STRUCTURE` is `2.0`, so a flyover arrives as raw `#615f5a`
 and is lit, full stop.
 
-🔴 **And it turns out not to matter, which is the opposite of what this section said first.** The
-claim was that infrastructure renders as the brightest large object in its own frame and that a deck
-soffit sits at nearly the value of the deck top. **Both were wrong, and a probe that tinted
-`MARKER_STRUCTURE` red — down-faces green — took ten minutes to say so.** Measured on
+🔴 **Infrastructure is not the brightest large object in its frame, and its soffit does not sit at
+the value of its deck top.** Both are tempting readings of a flyover shot and both are refuted by a
+probe that tints `MARKER_STRUCTURE` red and its down-faces green. Measured on
 `build/driver/art_infra`, the viewpoint chosen to showcase this class:
 
 | | |
@@ -574,10 +566,10 @@ directional light a downward face takes *no direct sun at all* — the renderer 
 physically right thing, and the 15 `L*` gap is that term working. AO would have deepened the corner
 where soffit meets pier; it was never what separates a soffit from a deck.
 
-**A `structure_soffit_darkness` term was built, measured and reverted.** It worked exactly as
-designed — flyover soffits `L*` 36.3 → 25.8, whole-frame mean moving 0.05, every other viewpoint
-unchanged but for its own soffits — and it is gone because a correct implementation of a wrong
-premise is still cruft. `Q32` closes here, and 0.42% of one frame is the number that closed it.
+⚠️ **Do not add a `structure_soffit_darkness` term.** One was built, measured and reverted: it worked
+exactly as designed — flyover soffits `L*` 36.3 → 25.8, whole-frame mean moving 0.05, every other
+viewpoint unchanged but for its own soffits — and a correct implementation of a wrong premise is
+still cruft. `Q32`, and 0.42% of one frame is the number that closed it.
 
 ⚠️ **What survives, and it is small: the class has no art direction of its own, and one flat colour
 for deck, soffit, pier and parapet means a viaduct's massing is legible only where the sun catches a
@@ -590,8 +582,8 @@ the sunlit deck top by exactly as much and now also needs a material to justify 
 
 ## Ground
 
-**Shipped in `P3-10`.** Between the roads and under the buildings used to be skybox; it is ground now.
-It landed in `B2` because the build whose verdict question is "does this read as Wan Chai?" cannot be
+**Shipped in `P3-10`.** Between the roads and under the buildings is ground, and it is solid. It
+landed in `B2` because the build whose verdict question is "does this read as Wan Chai?" cannot be
 judged over a void.
 
 **The source ships one, and it ships it textured** — 224 MB of JPEG across the region's six sheets
@@ -617,9 +609,9 @@ one variable changed. Worth knowing before predicting the next class's cost from
 of 300k *visible*. Those are different quantities and `verify_city_streamer.gd` refuses to gate one
 on the other — but the headroom is now thin enough that `P2-6` should not be surprised by it.
 
-⚠️ **The ground collides**, which two earlier lines of this document contradicted each other about.
-It merges into the tier-0 mesh and that mesh is named `-col`, so there was never a version of
-"merged for +0 draw calls" that was also "visual only, no collider". Merged and solid was the call:
+⚠️ **The ground collides, and "merged for +0 draw calls" and "visual only, no collider" were never
+compatible.** It merges into the tier-0 mesh and that mesh is named `-col`, so anything merged into
+it is solid. Merged and solid was the call:
 a driver who leaves the road now drives on the pavement instead of falling through what they can
 see. `docs/ARCHITECTURE.md` carries the mechanism.
 
@@ -648,9 +640,9 @@ Anything that later draws ground through a different material has to do the same
    ⚠️ **Do not "simplify" this to a neutral grey either** — rendered chroma is roughly \|warm albedo
    − blue illuminant\|, so authored `C*` 4.47 renders *bluer* (5.04) than authored 5.93 does (3.53).
    A little authored warmth is what cancels the sky.
-2. ~~**Land-cover classes,** only if flat reads dead.~~ ❌ **Refused 2026-08-06, and it will not be
-   written.** Flat did read dead, twice — but the causes were `Q29`'s smooth shading and then the
-   ground's chroma sitting under a **knee** the authored hue has to clear. Both are fixed, one in the
+2. ~~**Land-cover classes,** only if flat reads dead.~~ ❌ **Refused, and it will not be written.**
+   Flat did read dead, twice — but the causes were `Q29`'s smooth shading and then the ground's
+   chroma sitting under a **knee** the authored hue has to clear. Both are fixed, one in the
    shader and one in a config line. **What kills the classifier is a resolution mismatch**, and no
    tuning reaches it: the source is ~10 px/m where the ground clusters at 4 m. Its "water" class is
    not water but shadow and sky-cast — **51.1% of it sits on rooftops** — and its vegetation class
@@ -664,25 +656,22 @@ Anything that later draws ground through a different material has to do the same
    out over ground that is 97.5% flat — paved terrace, not slope. There is no cheap geometric key
    here, because in this region the high ground the player can reach is the ground that was built on.
 
-⚠️ **`Q18` closed on the ground's colour and the audit reopens a different complaint about it: at the
-waterfront it reads as *sand*, and that is a content problem rather than a palette one.** ⚠️ **Half
-retracted 2026-08-07:** the palette rule dropped the ground 13.9 `L*` and the `ground` frame's share
-above `L*` 55 went 67.5% → 52.4%, which visibly moved it from beach sand to earth. So the *hue* was
-never the issue and the *value* partly was. ⚠️ **Fully retracted 2026-08-07 by `Q36`:** the sand
-reading was also a *material* error — soil, on ground that is paving — and taking the chroma back out
-drops the warm share of this frame from 29.3% to 2.0%. "Correctly warm since `Q18`" below is no
-longer true; the rest of the paragraph is. What remains below is the half that stands. In
-`build/driver/art_ground` the reclamation south of HKCEC is an unbroken expanse of one colour running
-to the region edge — correctly faceted since `Q29`, correctly warm since `Q18`, and carrying
-**nothing**: no pavement/carriageway distinction off the ribbon, no planting, no street furniture, no
-contact darkening where a footbridge pier or a building meets it. The chroma tune bought concrete
-over plaster, which was the question asked; what the frame now says is that a *correct* flat colour
-over 200 m with no incident on it converges on beach whatever its hue. ⚠️ **This is not an argument
-for the land-cover classifier, which is refused on resolution and stays refused** — a classifier
-would put a green fringe round every building, which is incident of exactly the wrong kind. The
-lever is what stands *on* the ground, and it is `B3`'s (`P3-3`, `P3-4`, `P3-8`) rather than the
-terrain's. Until then the honest description of the ground is "solved as a surface, unsolved as a
-place".
+⚠️ **The ground is solved as a surface and unsolved as a *place*, and that is a content problem
+rather than a palette one.** In `build/driver/art_ground` the reclamation south of HKCEC is an
+unbroken expanse of one colour running to the region edge — correctly faceted (`Q29`), correctly
+materialled (`Q36`), and carrying **nothing**: no pavement/carriageway distinction off the ribbon, no
+planting, no street furniture, no contact darkening where a footbridge pier or a building meets it.
+**A *correct* flat colour over 200 m with no incident on it converges on beach whatever its hue.**
+
+⚠️ **The colour levers have all been pulled and none of them is the answer.** Chroma bought concrete
+over plaster (`Q18`); the palette rule dropped the ground 13.9 `L*` and moved the frame's share above
+`L*` 55 from 67.5% to 52.4% (`Q33`); naming the material paving rather than soil took the warm share
+of this frame from 29.3% to 2.0% (`Q36`). Each was right and none of them fills an empty plane.
+
+⚠️ **This is not an argument for the land-cover classifier, which is refused on resolution and stays
+refused** — a classifier would put a green fringe round every building, which is incident of exactly
+the wrong kind. The lever is what stands *on* the ground, and it is `B3`'s (`P3-3`, `P3-4`, `P3-8`)
+rather than the terrain's.
 
 **Prior art says the first step can be the last one.** *Art of Rally* ships flat-shaded untextured
 terrain as its finished look, not as a placeholder. Wan Chai is far denser than that game's
@@ -814,10 +803,11 @@ read the mesh, so a mismatch looks correct and drives to the old tuning.
 - **Desktop tier:** **two** directional shadow cascades at 400 m — the camera's far plane
 - No global illumination, no SSAO on mobile
 
-⚠️ **This said "one cascade" until it was measured.** One is cheaper — 55% off the frame's primitives
-against 35% for two — and unusable: it has a distinct artefact at every distance, a visible shadow
-cutoff mid-street at 150 m, banding on large soft shadows at 250 m, and off-screen casters dropping
-out entirely at 400 m. Two gives a fine near split and a coarse far one and shows none of them.
+⚠️ **Two cascades, not one, and the difference is measured.** One is cheaper — 55% off the frame's
+primitives against 35% for two — and unusable: it has a distinct artefact at every distance, a
+visible shadow cutoff mid-street at 150 m, banding on large soft shadows at 250 m, and off-screen
+casters dropping out entirely at 400 m. Two gives a fine near split and a coarse far one and shows
+none of them.
 
 ⚠️ **"Vehicle blob shadow only" deserves re-examination before anyone builds the mobile tier.** Shots
 with shadows *off* looked markedly worse than that line implies — flat and blown out, the canyon
@@ -940,8 +930,8 @@ Not art, but it belongs to the same authenticity budget and is cheap:
 
 **Seven cameras, fixed, so a look change is judged against the last change rather than against a
 fresh camera.** `Q27` established that two viewpoints can disagree sharply about whether the city
-reads white and that the disagreement is itself the finding; the audit of 2026-08-06 extended the
-pair to a set that covers every mesh class the pipeline ships. All run through
+reads white and that the disagreement is itself the finding, so the set covers every mesh class the
+pipeline ships rather than the two that raised the question. All run through
 `.claude/skills/run-hk-taxi-q/drive.sh` and all are deterministic to the centimetre.
 
 | Name | Scene | Camera → look | What it is the evidence for |
@@ -971,15 +961,16 @@ say which commit a shot is of.
 ## Anti-goals
 
 ⚠️ **These are anti-goals, not hard rules.** CLAUDE.md's eight numbered rules are settled; this list
-is art direction and is revisable with evidence. Three entries were revised on 2026-08-07 — not to
-lift them, but because the *reasons* attached to them were wrong, and a wrong reason changes what
-would become possible if one ever were lifted.
+is art direction and is revisable with evidence. **Each entry's stated reason is load-bearing** — a
+wrong reason changes what would become possible if the entry were ever lifted, so the reasons below
+are the part to read before proposing anything against this list.
 
 - No photorealism, PBR metalness workflow, or reflection probes
 - No photogrammetry textures in the bundle. **Reading one at build time to *derive* a flat colour is
   not the same thing, is allowed, and is how the ground is coloured**
 - No per-building unique textures; the window shader replaces them
-- No texture atlas for buildings
+- **No texture atlas for buildings.** `merge` refuses textured meshes and two textures cannot share
+  one primitive — one primitive per tile is what holds draw calls at 53 of 150 (`Q16`)
 - No realistic weather or wet-road reflections in the slice
 - **No baked illumination** — flat shading plus one directional light is the look
 
@@ -989,18 +980,17 @@ fresnel term. What is refused is the texture-map workflow — and **metalness sp
 to reflect**, because the Mobile renderer has no SSR and no probes, so a metal surface renders as
 sky-coloured plastic.
 
-⚠️ **Three reasons the photogrammetry entry used to imply are wrong.** Not **size**: a 45 MP sheet
-compresses to ~1 MB against a 128 MB texture budget and ~167 MB of unused bundle, so "compress it
-smaller" answers an objection nobody made. Not **trademark** in the legal sense — the wording was "a
-trademark surface" and meant *signature look*, which reads as an IP claim beside hard rule 8's SEGA
-one; the imagery is CSDI / DATA.GOV.HK open data. Not **licence**: `LICENSING.md` records that
-commercial use is explicit and that an exported build already ships derived government data. What
-remains is the photogrammetry *look*, a real mismatch with flat shading, and the structural blockers.
+⚠️ **Three reasons that do *not* support the photogrammetry entry, and must not be cited for it.**
+Not **size**: a 45 MP sheet compresses to ~1 MB against a 128 MB texture budget and ~167 MB of unused
+bundle, so "compress it smaller" answers an objection nobody made. Not **trademark** in the legal
+sense — *signature look* is what is meant, and calling it trademark reads as an IP claim beside hard
+rule 8's SEGA one; the imagery is CSDI / DATA.GOV.HK open data. Not **licence**: `LICENSING.md`
+records that commercial use is explicit and that an exported build already ships derived government
+data. What holds it up is the photogrammetry *look*, a real mismatch with flat shading, and the
+structural blockers.
 
-⚠️ **The atlas entry's reason is `merge`, not memory and not UVs.** Two textures cannot share one
-primitive, and one primitive per tile is what holds draw calls at 53 of 150. UVs are the second
-problem and the soluble one — see "What buildings will *not* get" for why they are not even the
-first obstacle.
+⚠️ **The atlas entry's reason is `merge`, not memory and not UVs.** UVs are the second problem and
+the soluble one — see "What buildings will *not* get" for why they are not even the first obstacle.
 
 ⚠️ **Baked *occlusion* is a different question, and is not refused here.** AO is sun-independent,
 survives both rigs and a night mode without a rebake, and is the only occlusion the mobile tier can
