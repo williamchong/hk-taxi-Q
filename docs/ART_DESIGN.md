@@ -401,8 +401,15 @@ abandons the accurate surface, and recognition is the product.
 
 ### What buildings will *not* get
 
-- **No per-building texture, and no low-res atlas.** Any texture needs UVs, and UVs do not survive the
-  vertex clustering that produces both shipped LOD tiers. It is paying to break the LOD system.
+- **No per-building texture, and no low-res atlas.** ⚠️ **The reason recorded here was half of one,
+  and the weaker half.** "UVs do not survive vertex clustering" is true — `collapse` takes them from a
+  cluster representative — but the buildings this pipeline ships **have no UVs to lose**: the
+  non-textured set carries `COLOR_0` in one primitive with **zero images** (`DATA_SOURCES.md`). The
+  binding reason is the other one: `merge` refuses textured meshes, so a textured building becomes its
+  own draw call and 53 becomes thousands. ⚠️ **An unclustered LOD0 does not rescue it**, which is the
+  obvious next idea: `collapse`'s `cell_m <= 0` welds on position *and normal*, which is exactly what
+  the two sides of a UV seam share, so even the lossless tier is lossless only for geometry — and
+  restoring that tier costs 30.5 MB and 40% of worst-case visible triangles (`Q16`).
 - 🚚 **"No colour sampled per building" has moved out of this list — buildings now get it.** All
   three original objections fell to measurement; see "Per-building façade colour" below and the
   `PROGRESS.md` entries of 2026-08-06. What survives of the objection is narrower and still binding:
@@ -950,12 +957,35 @@ say which commit a shot is of.
 
 ## Anti-goals
 
-- No photorealism, PBR metalness workflow, or reflection probes
-- No photogrammetry textures — a trademark surface as well as an aesthetic mismatch. **Reading one at
-  build time to *derive* a flat colour is not the same thing and is allowed**; what must not happen is
-  a photograph reaching the bundle
+⚠️ **These are anti-goals, not hard rules.** CLAUDE.md's eight numbered rules are settled; this list
+is art direction and is revisable with evidence. Several entries below were revised on 2026-08-07
+because the *reasons* attached to them were wrong, which matters more than the tier: a wrong reason
+changes what would become possible if the entry were ever lifted.
+
+- No photorealism, PBR metalness workflow, or reflection probes. ⚠️ **This is not anti-physics.**
+  `Q33`'s cited `reflectance` table *is* PBR's albedo discipline, done as data instead of as texture
+  maps, and both façade shaders already write `ROUGHNESS` and a fresnel term. What is refused is the
+  texture-map workflow — and **metalness specifically has nothing to reflect**, because the Mobile
+  renderer has no SSR and no probes, so a metal surface renders as sky-coloured plastic
+- No photogrammetry textures in the bundle. ⚠️ **Three reasons this used to imply are wrong, and were
+  removed on 2026-08-07.** Not **size**: a 45 MP sheet compresses to ~1 MB against a 128 MB texture
+  budget and ~167 MB of unused bundle, so "compress it smaller" answers an objection nobody made. Not
+  **trademark** in the legal sense — the wording said "a trademark surface" and meant *signature
+  look*, which reads as an IP claim beside hard rule 8's SEGA one; the imagery is CSDI / DATA.GOV.HK
+  open data. Not **licence**: `LICENSING.md` records that commercial use is explicit and that an
+  exported build already ships derived government data. What remains is the photogrammetry *look*,
+  a real mismatch with flat shading, and the structural blockers below. **Reading one at build time
+  to derive a flat colour is not the same thing and is how the ground is coloured**
 - No per-building unique textures; the window shader replaces them
-- No texture atlas for buildings. UVs do not survive the vertex clustering that builds both LOD tiers,
-  so an atlas costs the LOD system, not just memory
+- No texture atlas for buildings — **and the reason is `merge`, not memory and not UVs.** Two textures
+  cannot share one primitive, and one primitive per tile is what holds draw calls at 53 of 150. UVs
+  are the second problem and the soluble one
 - No realistic weather or wet-road reflections in the slice
-- No baked lightmaps — flat shading plus one directional light is the look
+- **No baked illumination.** Flat shading plus one directional light is the look, and a lightmap would
+  bake a sun `Q26` has not chosen and that a night mode would move. ⚠️ **Baked *occlusion* is a
+  different question and is not refused here** — AO is sun-independent, survives both rigs and a night
+  mode without a rebake, and is the only occlusion the **mobile tier** can have, since it ships no
+  realtime shadow maps at all. ⚠️ **And the blocker on lightmaps is not "UVs do not survive
+  clustering"**, because Godot's importer generates a UV2 unwrap of its own. It is **texel budget** —
+  2.143 km² of terrain alone is 2.1 M texels at one per m², before a single façade — together with the
+  baked sun, and the fact that LOD1 would carry no lightmap at all across the 250 m tier switch

@@ -397,6 +397,15 @@ makes a tile one draw call, checked in-engine by `verify_tiles.gd`. Since `P3-7`
 `TEXCOORD_0`, which is **not** a texture coordinate: no image is sampled, and `merge` still refuses a
 textured mesh outright.
 
+⚠️ **"No textures" is stricter than it sounds, and until 2026-08-07 the strict part lived only in a
+GDScript docstring.** `scripts/city/mesh_contract.gd` walks **every shader uniform** and fails on any
+that holds a `Texture`, not just the `BaseMaterial3D` albedo/normal/ORM slots — *"a sampler bound here
+would ship an image into a bundle specified to carry none while every other check passed."* So a
+single region-wide data map sampled by world position — a sky-visibility or AO bake, which needs no
+UVs and adds no draw call — is **not** a loophole in this contract. It is a deliberate amendment to
+it, and it has to change `mesh_contract.gd` and this paragraph together. The check exists to force
+that conversation rather than to make it impossible.
+
 | Attribute | Meaning |
 |---|---|
 | `COLOR_0.rgb` | The surface's albedo, **sRGB-encoded**, as normalised `uint8`. Every consumer must linearise it — see the warning below |
