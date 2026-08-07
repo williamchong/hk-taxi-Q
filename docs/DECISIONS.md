@@ -1020,28 +1020,55 @@ colour operation substitutes for objects.
 
 **Status.** 🔴 Open · **Owner.** `buildings.py`, survey
 
-**Claim.** 222 of 2,214 rows in `facade_lab.json` carry `naive_rgb` and `lit_rgb` of exactly
-`[128,128,128]` — `a* = b* = 0`, `clipped` 0.0005, and a *higher* median pixel count than the rest
-(102,942 against 57,059). RGB(128,128,128) is independently observable as one of the fill colours in
-the raw atlases. **The imagery also covers only a median 14.3% of each building's walls.**
+**Claim.** 222 of 2,214 rows in `facade_lab.json` are achromatic — `a* = b* = 0` — across **23
+distinct greys**, RGB(128,128,128) the most common at 85 rows and RGB(231,231,231) next at 46. Every
+one of them is independently observable as fill in the raw atlases. `lab` is `srgb_to_lab(lit_rgb)`
+to within 0.005 for all 2,214 rows, so `lit_rgb` carries the artefact and `lab` only inherits it.
+**The imagery also covers only a median 14.3% of each building's walls.**
 
 **Why it matters.** It is the **same error class the survey already caught once and fixed** — *"a
-texel at 255 is `a* = b* = 0`"* — at the other end of the range. 10% of buildings render dead-neutral
+texel at 255 is `a* = b* = 0`"* — at the other end of the range. 220 of the 222 clear
+`vegetation_max: 0.5`, so **10.1% of the 2,171 buildings that reach the city** render dead-neutral
 because they were *not measured*, and under `Q34` they also fall into the neutral-grey material bin,
 so a material is assigned from absent data. `Q34` reports that bin at 36.3%; up to ten points of it
 may be filler.
 
+⚠️ **The estimator concentrates filler instead of diluting it.** Filler is bright — `L*` 53.6 at
+grey 128, 78.4 at 194, 91.6 at 231 — and the estimator takes the median of texels above the **65th
+percentile of `L*`**, so filler preferentially wins the cut. Above roughly 35% filler by area the
+entire selected set is filler and the median lands exactly on it. **166 of the 222 carry a chromatic
+`naive_rgb`**: those buildings *were* photographed, and the selection discarded the photograph. A
+mean would have diluted the filler; a bright-tail order statistic cannot.
+
+⚠️ **222 is a floor, not the extent, and the JSON cannot settle it.** Filler below that ~35% share
+pulls a row toward neutral without ever reaching `a* = b* = 0`. Excluding the 222, chroma does fall
+with atlas size — `corr(log pixels, C*)` **−0.20**, largest pixel quartile median `C*` **2.91**
+against 5.8–6.6 for the other three — but the signal is confounded with height and is not monotone:
+within bands it appears only at 40–80 m (6.78 → 2.74) and *reverses* below 20 m (6.10 → 7.18). Big
+buildings are also genuinely more neutral. Only the pixels can separate the two.
+
 ⚠️ **The fix is structural, not another entry in a list.** The guard has been wrong once already —
-the first padding guard caught only pure black, and `#3c3c3c` **is** RGB(60,60,60), so (128,128,128)
-is the *third* filler colour and the second miss. Enumerating them has failed twice. **Reject exact
-`R == G == B` texels** — a photographic texel essentially never is — or detect each atlas's filler as
-its modal exactly-repeated colour.
+the first padding guard caught only pure black, and `#3c3c3c` **is** RGB(60,60,60). 23 distinct
+greys is the measure of why enumeration keeps failing. **Reject exact `R == G == B` texels** — a
+photographic texel essentially never is — or detect each atlas's filler as its modal
+exactly-repeated colour.
 
 ⚠️ **The survey script was never committed and is not in history**, so this is a reconstruct-and-
 revalidate job, not an edit. The method: median of texels above the **65th percentile of `L*`**,
-filler and foliage excluded, per-face `L*` retained. **Acceptance: 1,992 of 2,214 rows come back
-unchanged** — anything less and every building's colour moves, invalidating `Q26`'s pending A/B,
-`Q30` and `Q34`'s grading.
+filler and foliage excluded, per-face `L*` retained. Percentile interpolation, triangle sampling,
+resampling filter and rounding are all unrecorded, so a reconstruction cannot be bit-exact and
+**acceptance is a tolerance, not equality**:
+
+| Gate | Threshold |
+|---|---|
+| Median `Δab` on the 1,992 rows that are not achromatic | **≤ 0.46** — the tolerance `Q33` held authored colour to |
+| Rows still at `C* = 0` | **zero** |
+| The 220 shipped bad rows | chromatic, or dropped so `facade_hue` falls back to the height band |
+| Rows moving `Δab > 2.0` | **enumerated and inspected**, never silently accepted |
+| Key set | 2,214 stems unless a drop is recorded |
+
+Anything looser and every building's colour moves, invalidating `Q26`'s pending A/B, `Q30` and
+`Q34`'s grading.
 
 ⚠️ **Averaging in sRGB is a second, separate question** worth settling in the same pass: ~4.9 `L*`
 away from a linear-light mean, and the same family as the bug `Q27` closed. **Change one at a time.**
