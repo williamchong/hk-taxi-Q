@@ -730,6 +730,16 @@ every region lies inside them.
 no `Node` inheritance and no rendering calls. It should be unit-testable headlessly and portable if
 the engine ever changes.
 
+**A vehicle's drive layout is scene data, not code.** `WheelMount.drives` is authored per wheel in
+each vehicle scene, so RWD and FWD need no code change; each vehicle gets its own `HandlingProfile`,
+and `centre_of_mass_offset_y` plus `anti_roll` already cover a tall van's height. The roster this
+serves is in `ART_DESIGN.md`.
+
+⚠️ **This is why drift bias is derived from chassis geometry, not from `drives`.**
+`VehicleController` computes `WheelMount.is_front` from the wheel's position along the chassis. Had
+it keyed off `drives` or `steers`, the front-wheel-drive Crown would have had its drift bias
+inverted.
+
 ### Script map
 
 | Path | Role |

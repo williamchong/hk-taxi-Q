@@ -779,8 +779,21 @@ recorded rather than enforced — but it is now the standing exception, not a on
 should either move or start being applied.
 
 **Vehicle roster for the slice:** player taxi, private car (2 variants), red taxi (AI), double-decker
-bus, green minibus, tram. See `PROGRESS.md` for the real models these are based on and the drivetrain
-differences that make it an architecture constraint rather than an art note.
+bus, green minibus, tram.
+
+**The player-side roster is real models, not generic cars**, because the **drive layout differs
+across them** — which makes it an architecture constraint rather than an art note. See
+`ARCHITECTURE.md` for how the layout is expressed.
+
+| Vehicle | Drivetrain | Notes |
+|---|---|---|
+| Old Toyota Crown (Comfort) | LPG, **rear-wheel drive** | The iconic HK red taxi |
+| New Toyota Crown | Hybrid, **front-wheel drive** | |
+| Toyota Hiace | CVT | Van proportions — tall, high centre of mass |
+
+⚠️ **Transmission character is not modelled.** `engine_force` is a flat constant with no gears or
+torque curve, so an LPG Crown, a hybrid and a CVT accelerate identically. Flag it before the roster
+work in Phase 5.
 
 **The vehicles are generated, not modelled — `P3-11`.** `tools/make_vehicle.py` emits each `.glb`
 into `game/assets/authored/vehicles/` from the numbers in this table plus named proportions
