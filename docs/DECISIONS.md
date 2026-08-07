@@ -1354,6 +1354,144 @@ axis.
 
 **See.** `Q31` · `ART_DESIGN.md` "Lighting"
 
+## `Q40` — Can façade grammar be surveyed instead of hashed?
+
+**Status.** 🟡 Open — **feasibility established, classifier not yet trustworthy** · **Owner.** `P3-9a`
+
+**The question.** `city_facade_clean.gdshader` decides whether a building is glazed, which of three
+grammars it draws, and which of three glass tints it uses — all from `draw(seed, n)`, a hash of the
+building's UV phase. `float glazed = step(solid_share, draw(seed, 1.0))` at line 449 is a coin flip.
+Can any of it come from the source data instead?
+
+**Why it is worth asking.** `Q26`'s central objection to candidate `A` is that it "keeps the accurate
+*massing* and abandons the accurate *surface*". Surveyed grammar dissolves that objection: `A` stops
+being invented surface and becomes measured surface, which is a materially different thing to put in
+front of three drivers. It should also help `Q35`, since real neighbouring blocks do share cladding
+where a hash does not.
+
+### There is no published attribute, and there was never going to be
+
+Both building sources are geometry only. The **non-textured** models carry `COLOR_0` in one primitive
+with **no images and no UVs at all**; **3D-BIT00 Level 1** is footprints extruded between base and top
+level, explicitly "with no photorealistic texture applied". No `use`, `structure`, `cladding` or
+`year` field exists in either. ✅ **The evidence is the individualised set's photography**, which
+`tools/facade_survey.py` already walks — and then collapses to one order statistic, discarding the
+distribution the answer lives in.
+
+### Probe 1 — glazed-vs-blank and tint, from the 1-D distribution
+
+56 of 59 buildings on `11-SW-9D`. Otsu's split of each building's wall-texel `L*` population, then the
+histogram dip between the two modes.
+
+| | |
+|---|---|
+| photographic texels per linear metre | median **13.6**, p25 5.5, min 2.3 |
+| buildings at ≥ 10 tex/m (≈15 texels across a 1.5 m window) | **61%** |
+| clearly bimodal (dip < 0.25) | **50%** |
+| clearly unimodal (dip > 0.60) | 23% |
+
+⚠️ **Otsu separability is not evidence and was nearly recorded as if it were.** `eta` ranges 0.46–0.95
+with a median of 0.72 and never goes low, because Otsu splits a unimodal blob just as happily. The
+dip depth is the statistic; `eta` is decoration.
+
+⚠️ **Resolution is a confound and has to be gated.** `corr(log tex/m, dip) = −0.463`; the
+well-photographed half has a median dip of 0.18 against 0.42 for the rest. At low resolution **"no
+windows" and "badly photographed" are the same reading**. Controlled to the 34 buildings at
+≥ 10 tex/m the residual correlation falls to −0.28 and 23/7/4 split bimodal/middling/unimodal, so
+real architectural variation does survive. The gate is the answer, and the pattern already exists:
+`estimate()` returns `None` below `MIN_TEXELS`, and `facade_hue` sends an unmeasured building to its
+height band.
+
+✅ **Tint is the better-founded half.** The dark mode is bluer than the light in **77%** of buildings,
+mean `b*` shift **−4.87**, dark-mode `b*` spanning **−11.9 to +14.2**. The three authored glass tints
+convert to `b*` of **−9.20, −1.62 and −14.34 — all cool** — while the shader's own header says Hong
+Kong curtain walls run "from near-black **bronze** through blue-green to pale blue". **17 of 56
+buildings measure a warm dark mode (`b*` > +3) that the authored palette cannot express at any mix.**
+
+⚠️ **The dark mode is "the dark population", not "the glass".** On a curtain wall it is the glazing;
+on a punched-window building it is a shadowed reveal. Tint is only a glass measurement **conditional
+on the building being glazed**, so type has to be decided first.
+
+### Probe 2 — the atlas is axis-aligned but not upright
+
+14 buildings. World-up pushed through each wall triangle's position↔UV Jacobian.
+
+- Wall triangles within 10° of a UV axis: median **100%**, min 85%.
+- Within-building agreement on *which* axis is up: median **0.14**, min 0.00.
+- Dominant angles cluster on 0°/90°/180°; the 42.5°/45° entries are the artefact of averaging a
+  bimodal 0°/90° distribution in doubled-angle space.
+
+So the ambiguity is **90°-discrete per chart, not continuous** — correctable by transpose, with no
+resample. Retaining the mask is nearly free: `coverage()` already builds it and discards it one line
+later, and holding it costs median **0.34 MB** packed (max 6.4 MB) against a tool whose largest
+building already gathers 90.1 million texels.
+
+### Probe 3 — and none of that matters, because the atlas is shredded
+
+20 buildings, **5,831 wall charts**: median **30 per building**, max **1,837**, median chart area
+**3.8 m²** — about one window bay.
+
+| span | ≥1 | ≥2 | ≥3 | ≥5 |
+|---|---|---|---|---|
+| bays across (9 m) | 56.7% | 35.0% | **20.4%** | 4.3% |
+| floors up (2.8 m) | 82.9% | 73.0% | 67.4% | 36.6% |
+
+🔴 **Only 15.2% of wall area — 47 charts of 5,831 — spans three bays *and* three floors.** Median
+building: **0% analysable**. ⚠️ **The asymmetry is the finding:** photogrammetry charts tall narrow
+strips, so the axis the atlas preserves is the *vertical* one, and fin-versus-curtain-versus-punched
+is a claim about *horizontal* structure. Per-chart analysis is dead, and Probe 2's transpose plan
+with it — a 90° transpose is cheap on 30 charts and meaningless on 1,837 of 3.8 m².
+
+### ✅ The world-space unwrap works
+
+Re-project texels through the same Jacobian into a grid whose axes are **metres across the face** and
+**metres up**, at 8 texels/m. Every island lands in one picture, the 90° ambiguity cannot arise
+because the axes are world axes, and a period in the output is a period in metres. It is also
+*smaller* than retaining the atlas mask — a 100 × 60 m face is 0.38 Mpx against the atlas's 2.7 Mpx
+median.
+
+Verified by eye on a 51 × 110 m tower whose 1,837 islands stitch into a legible elevation: continuous
+glazed floor bands, regular mullions, heavier structural bands every ~8 floors, and a dark plant
+floor two-thirds up. A 26 × 42 m block beside it unwraps to blank render with punched openings at
+the base. **The classifier's features are visible in the pictures before any code is written.**
+
+### 🔴 The classifier is not trustworthy yet, and the sheet is why
+
+34 faces over 10 buildings. Two artefacts, both found by reading the numbers rather than the images:
+
+1. ⚠️ **A false `fin` from a missing measurement.** Seven faces report `floor 0.00 m, s = 0.00`, which
+   is the vertical profile refusing to compute — *no usable measurement*, not *no banding*. The
+   classifier reads `floor_s < WEAK` and calls it a fin. Absence of evidence laundered into evidence
+   of absence, which is `Q31`'s confound wearing a different hat.
+2. ⚠️ **Bay periods pinned at the band floor.** `1.38 m` recurs constantly and
+   `int(1.4 × 8) / 8 = 1.375` — the autocorrelation peak is landing on the *minimum lag allowed*, so
+   it found no bay and reported noise. Those faces must refuse, not measure.
+
+**Both share one root: the classifier has four outcomes and no way to say "I don't know",** so every
+failure to measure becomes a confident architectural claim. ✅ Real signal is present alongside them —
+`B353771561001063A0` returns a **3.38 m floor pitch independently on three faces**, which is that
+building's storey height measured from photography.
+
+### Decided
+
+- **Work in the world-space unwrap, never in atlas space.** Probe 3 is the reason.
+- **Tint is 2-D, `L*` × `b*`, dropping `a*`.** PCA over the measured glass: PC1 68.9% (essentially
+  `L*`), PC2 24.7% (the `b*` cool↔warm axis), PC3 6.5% (`a*`). A 1-D ramp would discard a quarter of
+  the variance, and it is the quarter that separates bronze from blue.
+- **The code rides `TEXCOORD_1` (`UV2`), not `COLOR_0`'s alpha byte.** Three grammars × 15 `L*` × 16
+  `b*` is 720 states and will not fit in a byte; `facade_uv` already spends both existing channels
+  (`UV.x` height, `UV.y` class + phase); and `Q27` makes `COLOR_0`'s sRGB/linear semantics somewhere
+  to stay away from. ~2 MB over the region, and a `schema_version` bump on both sides.
+- **Every gate refuses rather than guesses**, and a refusal falls back to the existing hash.
+
+### Open
+
+Fixing the two artefacts, then a validation sheet — elevations with the predicted grammar on each —
+before any of the contract change is written. `Q32`'s "tint the class before naming it" is the rule
+this is following; the sheet is the tinting.
+
+**See.** `Q26` · `Q30` · `Q35` · `Q37` · `Q27` · `DATA_SOURCES.md` "Buildings"
+
 ---
 
 # Tasks
