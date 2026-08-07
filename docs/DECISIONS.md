@@ -11,7 +11,9 @@ lives in git. This file holds *why things are the way they are*.
 - **No dates.** A date appears only where it is the fact itself — a licence term, a data vintage.
 - **No narration.** Not "this was tried, then reverted"; state what is true and what is refused.
   Relations are `**Superseded by.**` / `**See.**` links between IDs.
-- **Twenty-five lines is the ceiling.** A record that needs more is restating a spec.
+- **One claim per record.** A record grows only by carrying another *distinct* ⚠️ — never by
+  narrating how the claim was reached. The longest records here (`P3-11`, `P2-7`, `P1-4`) are long
+  because those tasks produced many separate reusable warnings, not because they tell a story.
 - **Do not restate a spec another doc owns.** `ART_DESIGN.md` owns the palette, `ARCHITECTURE.md`
   owns the data contract. A record gives the claim, the reason and the evidence, then links.
 - **Keep the numbers and the ⚠️.** A refusal without its measurement gets re-proposed.
