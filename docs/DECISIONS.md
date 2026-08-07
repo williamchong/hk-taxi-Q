@@ -1356,7 +1356,7 @@ axis.
 
 ## `Q40` — Can façade grammar be surveyed instead of hashed?
 
-**Status.** 🟡 Open — **feasibility established, classifier not yet trustworthy** · **Owner.** `P3-9a`
+**Status.** 🟡 Open, **narrowed** — grammar branch 🔥 killed; glazing and tint survive · **Owner.** `P3-9a`
 
 **The question.** `city_facade_clean.gdshader` decides whether a building is glazed, which of three
 grammars it draws, and which of three glass tints it uses — all from `draw(seed, n)`, a hash of the
@@ -1455,40 +1455,108 @@ glazed floor bands, regular mullions, heavier structural bands every ~8 floors, 
 floor two-thirds up. A 26 × 42 m block beside it unwraps to blank render with punched openings at
 the base. **The classifier's features are visible in the pictures before any code is written.**
 
-### 🔴 The classifier is not trustworthy yet, and the sheet is why
+🔴 **That last sentence was the overclaim, and it is retained because it is the fault.** Features being
+*visible to a reader* was taken as evidence they were *measurable by a statistic*. They are not: the
+reader was using recession, reflection and context, none of which survive into an `L*` profile. The
+sentence is true and it licensed nothing.
+
+### The classifier's two artefacts, and the refusal that fixed them
 
 34 faces over 10 buildings. Two artefacts, both found by reading the numbers rather than the images:
 
-1. ⚠️ **A false `fin` from a missing measurement.** Seven faces report `floor 0.00 m, s = 0.00`, which
-   is the vertical profile refusing to compute — *no usable measurement*, not *no banding*. The
-   classifier reads `floor_s < WEAK` and calls it a fin. Absence of evidence laundered into evidence
+1. ⚠️ **A false `fin` from a missing measurement.** Seven faces reported `floor 0.00 m, s = 0.00`,
+   which is the vertical profile refusing to compute — *no usable measurement*, not *no banding*. The
+   classifier read `floor_s < WEAK` and called it a fin. Absence of evidence laundered into evidence
    of absence, which is `Q31`'s confound wearing a different hat.
-2. ⚠️ **Bay periods pinned at the band floor.** `1.38 m` recurs constantly and
-   `int(1.4 × 8) / 8 = 1.375` — the autocorrelation peak is landing on the *minimum lag allowed*, so
-   it found no bay and reported noise. Those faces must refuse, not measure.
+2. ⚠️ **Bay periods pinned at the band floor.** `1.38 m` recurred constantly and
+   `int(1.4 × 8) / 8 = 1.375` — the autocorrelation peak landing on the *minimum lag allowed*, so it
+   found no bay and reported noise.
 
-**Both share one root: the classifier has four outcomes and no way to say "I don't know",** so every
-failure to measure becomes a confident architectural claim. ✅ Real signal is present alongside them —
-`B353771561001063A0` returns a **3.38 m floor pitch independently on three faces**, which is that
-building's storey height measured from photography.
+**Both shared one root: four outcomes and no way to say "I don't know",** so every failure to measure
+became a confident architectural claim. The fix is a three-valued measurement — `period` / `flat`
+(measured, no repeat) / `unknown` (no finding) — plus a peak that must be a genuine local maximum
+rather than a shoulder of the autocorrelation's decay from lag 0.
+
+⚠️ **Chasing the first artefact turned up a third bug.** The moving-average detrend needed a window
+wider than the longest period it guarded against (5.2 m → 83 rows) and `mode="same"` corrupts half of
+it at each end, so it **consumed** the signal: a 79-row elevation was left 41 samples where 51 were
+needed, and every elevation under ~13 m was refused outright. A degree-2 polynomial fit removes the
+same storey-wise brightening and costs no samples. **The detrend was the wrong instrument for its own
+stated job.**
+
+Refusals rose 2 → 5, no spurious `1.38 m` survived, and the class tally barely moved — while
+membership churned almost completely. **And none of it mattered.**
+
+### 🔥 The sheet killed the grammar branch
+
+12 of the 34 faces graded against their own photographs: **1 right, 8 wrong, 3 unsure.** Five failure
+modes, of which the first three admit no threshold at all:
+
+1. 🔴 **`L*` modulation measures materials, not recession.** `DEEP = 6.0` was meant to separate
+   punched holes from a hairline grid. `B352631575201063A0`'s dark glass against pale spandrels reads
+   `L*` **17.4** and classifies `punched`; a genuinely punched render-and-window block reads less and
+   classifies `curtain`. Punched-ness is a **depth** property, and depth is exactly what a texture
+   cannot see. The taxonomy's central axis is not measurable from colour at any threshold.
+2. 🔴 **Reflections are most of the signal on glass.** That tower's four elevations carry reflected
+   streets, cars, trees and sky. A mirror-glass tower's texture is substantially **not the tower** —
+   which is why its four faces disagree with each other.
+3. 🔴 **It is not self-consistent.** One decorative lattice screen — an unmistakable 2-D grid —
+   reads `fin` from W and `curtain` from S. A classifier that disagrees with itself about a single
+   physical wall cannot be repaired by moving thresholds.
+4. ⚠️ **Periods appear in blank walls.** `B355691583201063A0` is flat render and returned `punched`
+   and `fin` on two faces. `WEAK = 0.16` is cleared by accident at some lag by the autocorrelation of
+   a smoothly-shaded surface.
+5. ⚠️ **The unwrap admits things that are not façade** — trees, a hillside, an entire neighbouring
+   curved-roof building. Anything in the document whose normal faces that compass direction lands in
+   the elevation.
+
+⚠️ **The single correct call is weaker than it looks.** That wall carries panel joints ~4 m apart,
+inside `BAY_BAND`, and both axes were still reported flat. Right answer, and not obviously for the
+right reason — which in a validation exercise is barely evidence.
+
+⚠️ **The grading was by the classifier's own author, not a third party.** Modes 1, 3 and 5 are
+checkable from the sheet by anyone, which is why it is retained rather than the verdict alone.
+
+**Fin-versus-curtain-versus-punched is not derivable from this data.** Not deferred — modes 1–3 are
+structural. The shader keeps `draw(seed, …)` for grammar, and `Q26`'s objection to candidate `A`
+stands undiminished on that point.
+
+✅ **Real periodicity does exist in the data.** `B353771561001063A0` returns a **3.38 m floor pitch
+independently on three faces** — that building's storey height, measured from photography. *Storey
+height* may therefore be surveyable even though *grammar* is not; it is a different claim, needs its
+own record, and nothing here establishes it.
+
+### What survives, and the check it is still owed
+
+Glazed-vs-blank and the 2-D tint rest on a **bimodality dip**, not on periodicity, so modes 1–4 do not
+reach them. 🔴 **Mode 5 does.** The wall selection that let trees into an elevation is the same
+per-mesh, per-normal test `facade_survey.py` uses, so foreign geometry may also have reached Probe 1's
+histograms — and non-building content would bias a dip toward *bimodal*, in the direction that flatters
+the result. It was visible in a picture and would be invisible in a histogram. **That check is owed
+before the glazing gate is trusted.**
 
 ### Decided
 
-- **Work in the world-space unwrap, never in atlas space.** Probe 3 is the reason.
+- **Work in the world-space unwrap, never in atlas space.** Probe 3 is the reason. It survives the
+  grammar branch's death because glazing and tint are measured per building, not per chart.
 - **Tint is 2-D, `L*` × `b*`, dropping `a*`.** PCA over the measured glass: PC1 68.9% (essentially
   `L*`), PC2 24.7% (the `b*` cool↔warm axis), PC3 6.5% (`a*`). A 1-D ramp would discard a quarter of
   the variance, and it is the quarter that separates bronze from blue.
-- **The code rides `TEXCOORD_1` (`UV2`), not `COLOR_0`'s alpha byte.** Three grammars × 15 `L*` × 16
-  `b*` is 720 states and will not fit in a byte; `facade_uv` already spends both existing channels
-  (`UV.x` height, `UV.y` class + phase); and `Q27` makes `COLOR_0`'s sRGB/linear semantics somewhere
-  to stay away from. ~2 MB over the region, and a `schema_version` bump on both sides.
+- **The code rides `TEXCOORD_1` (`UV2`), not `COLOR_0`'s alpha byte.** ⚠️ Killing grammar drops the
+  state count from 720 to **glazed/blank × 15 `L*` × 16 `b*` = 480**, which still does not fit in a
+  byte, so the decision holds — but on the smaller margin, and the original arithmetic no longer
+  describes it. `facade_uv` already spends both existing channels (`UV.x` height, `UV.y` class +
+  phase), and `Q27` makes `COLOR_0`'s sRGB/linear semantics somewhere to stay away from. ~2 MB over
+  the region, and a `schema_version` bump on both sides.
 - **Every gate refuses rather than guesses**, and a refusal falls back to the existing hash.
 
 ### Open
 
-Fixing the two artefacts, then a validation sheet — elevations with the predicted grammar on each —
-before any of the contract change is written. `Q32`'s "tint the class before naming it" is the rule
-this is following; the sheet is the tinting.
+The contamination check above, first — it gates everything else. Then the survey extension, the
+`TEXCOORD_1` plumbing and the `schema_version` bump for glazing and tint only.
+
+⚠️ **One sheet, `11-SW-9D`, underlies every number here.** The re-survey is 6.1 GB across six; a
+second sheet is worth reading before the gate thresholds are fixed to the first.
 
 **See.** `Q26` · `Q30` · `Q35` · `Q37` · `Q27` · `DATA_SOURCES.md` "Buildings"
 
