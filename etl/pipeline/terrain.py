@@ -11,7 +11,7 @@ parse it, and sampling happens at build time — so it costs nothing at runtime.
 That was reason enough to keep the terrain in the pipeline back when it was
 never rendered; `P3-10` draws it as well, from the same geometry, which is what
 stops the height a road thinks it sits at drifting from the ground drawn under
-it. See the `P1-2` terrain decision in `docs/PROGRESS.md`.
+it. See the `P1-2` terrain decision in `docs/DECISIONS.md`.
 
 Three queries. They share their machinery and differ only in how they pick among
 the surfaces found at one point, which is the whole of what separates them:

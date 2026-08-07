@@ -77,7 +77,7 @@ materials:
   # arguable and a soft number implied is not.
   #
   # ⚠️ **The level they sit at is the whole city's, and it was measured — see
-  # docs/PROGRESS.md (2026-08-06, the anchor probe).** These five were 19 L*
+  # docs/DECISIONS.md, Q27 and Q33.** These five were 19 L*
   # lighter and the city read white from every camera; darkening them moved the
   # rendered frame 10.3 L*, where every other lever tried bought under 1. Each
   # colour is the old one scaled by 0.520 in linear light, so the warm-to-cool
@@ -425,7 +425,7 @@ buildings:
   # silhouette intact. An elevated road deck is *thin* — thinner than 1.5 m — so
   # the same cell clusters its top surface into its bottom one and the structure
   # folds into a warped sliver. P2-1 caught this on screen at Gloucester Road
-  # and on the Hennessy Road footbridge; see docs/PROGRESS.md.
+  # and on the Hennessy Road footbridge; see docs/DECISIONS.md, P2-1.
   #
   # 0.5 m and 1.0 m rather than an outright exemption. Exempting infrastructure
   # entirely cost +20% and +57% on the two coarser tiers of the old three-tier
@@ -535,16 +535,16 @@ buildings:
   # Per-building hue measured off the individualised set's photo textures, and
   # keyed by the building id's stem. Optional by design: the survey is a 4.9 GB
   # read cached under etl/sources/ and gitignored, so a clone without it builds
-  # the same city the height bands alone produced. See docs/PROGRESS.md
-  # (2026-08-06) for what was measured and, more importantly, what was not.
+  # the same city the height bands alone produced. See docs/DECISIONS.md,
+  # Q34, for what was measured and, more importantly, what was not.
   #
   # ⚠️ Hue only. The same measurement carries a per-building L* and it is NOT
-  # used — but not for the reason this file gave until 2026-08-06, which was
+  # used, and the intuitive reason — sunlit walls differ from shaded ones — is
   # testable and wrong. It is unused because it is not *needed*: the flat city it
   # would have fixed was fixed by the height_bands anchor above, for two numbers
   # and no new data. Revisit only if the city still reads flat with the bands
-  # where they are. `colour.py`'s header carries the argument and PROGRESS.md the
-  # arithmetic.
+  # where they are. `colour.py`'s header carries the argument and DECISIONS.md
+  # the arithmetic.
   #
   # `strength` multiplies the measured chroma. 1.0 is faithful and *muted* —
   # measured C* is about 6, and seven buildings in ten are perceptually

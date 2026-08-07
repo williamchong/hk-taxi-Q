@@ -2,7 +2,7 @@ class_name VehicleController
 extends RigidBody3D
 ## Arcade raycast vehicle. Every number comes from HandlingProfile.
 ##
-## Not Godot's VehicleBody3D — P0-5a measured why (docs/PROGRESS.md). The short
+## Not Godot's VehicleBody3D — P0-5a measured why (docs/DECISIONS.md). The short
 ## version: VehicleWheel3D's friction is isotropic, so it cannot express a drift
 ## that breaks lateral grip while keeping traction. That separation is the whole
 ## point of this file, and it lives in _apply_tyre_forces().

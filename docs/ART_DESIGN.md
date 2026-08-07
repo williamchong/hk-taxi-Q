@@ -221,7 +221,7 @@ constant of the city rather than of the object, and the podium mask becomes an a
 individualised (textured) LandsD sheet, read offline and discarded — height-weighted median 2.77 m,
 and Hong Kong's domestic floor-to-floor really is that tight. A guessed 3.2 would have put a storey
 too few on every tower. Column pitch is measured the same way at 2.4 m. `docs/DATA_SOURCES.md`
-records that the sheet does not enter the build path; `docs/PROGRESS.md` carries the distribution.
+records that the sheet does not enter the build path; `docs/DECISIONS.md` carries the distribution.
 
 ⚠️ **Two of those inputs have to come from the ETL, and they are why `P3-7` is one commit across both
 sides.** A vertex knows its world Y, not where its building starts — a podium vertex and a 30th-floor
@@ -649,7 +649,7 @@ Anything that later draws ground through a different material has to do the same
    resolves at the shipped 4 m cell into **one-cell fringes tracing building footprints**, only 5.5%
    of cells above half vegetation. It would halo every building in Wan Chai rather than draw a park.
    **If parks are wanted, the source is vector land-use polygons, not the photograph** — crisp edges
-   at any cell size, and a clean key for `collapse`. See `docs/PROGRESS.md`. ⚠️ **`Q36` reached the
+   at any cell size, and a clean key for `collapse`. See `Q18`. ⚠️ **`Q36` reached the
    same destination from the other direction** and the detour is worth knowing about: a *geometric*
    split of the hillside, on elevation or on slope, was specified and then refused on a tint probe.
    High terrain draws **0.000% of all six viewpoints above**, and the one road that climbs it looks
@@ -744,8 +744,8 @@ angle places both, and `roof_*_taper_m` is derived from it.
 across the nose and tail — the valance under the bumper — and dark along the flank, which is the
 rocker. That is a bumper meeting a sill panel, as the real car has. ⚠️ **The rocker is the third dark
 strip tried on this flank**; a box standing proud read as a stick and a continued bumper band read as
-a stripe painted on a toy, both recorded in `PROGRESS.md`. It is on trial: at 60 mm it falls inside
-the range `PROGRESS.md`'s `P3-11` review measured as sub-pixel at review distance, and the chase
+a stripe painted on a toy, both recorded in `DECISIONS.md`. It is on trial: at 60 mm it falls inside
+the range `P3-11`'s review measured as sub-pixel at review distance, and the chase
 camera tracks the car's facing so it never shows the flank at all. `rocker_top_y_m = sill_y_m`
 removes it.
 
@@ -838,7 +838,7 @@ exactly why it looked as though ambient were painting it. The rig was then tuned
 sky contribution came down, `tonemap_white` was pushed around, and the paragraph above was written
 about the symptom. With the conversion in place the asphalt is genuinely dark and the road no longer
 needs ambient held back for it, so **the clean rig is now tuned against inputs that no longer exist**
-and is due a pass — `Q26` owns the look, and the measured starting point is in `PROGRESS.md`.
+and is due a pass — `Q26` owns the look, and the measured starting point is in `Q27`.
 
 ⚠️ **The rig's pass is now overdue and the audit says what to grade it on: the shadow value, not the
 key.** Post-`Q27` the frames that fail are the two shot in shade — 51.4% and 28.9% of their pixels

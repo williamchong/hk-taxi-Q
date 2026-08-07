@@ -86,7 +86,7 @@ LAMP = (242, 236, 205)
 # indicator in the tail-lamp cluster, which is three lenses stacked — amber
 # over white over red — and that stack is a specific identifying feature of the
 # car's rear. Two colours cannot express three lenses. Flagged rather than
-# quietly taken: see docs/PROGRESS.md, P3-11.
+# quietly taken: see docs/DECISIONS.md, P3-11.
 AMBER = (226, 138, 32)
 # ⚠️ A seventh, on the same terms. It is the 4 SEATS badge and nothing else —
 # the one green thing on a red car, which is exactly why the badge is legible

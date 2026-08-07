@@ -20,7 +20,7 @@ reading is intuitive, was argued here once, and is wrong by measurement: fitting
 `L* = building + orientation` puts **1.4%** of the variance on compass
 direction, and removing it entirely shrinks the spread within a building by
 0.9%. Anyone re-opening this should attack the pixel-count confound, not the
-shadows. `docs/PROGRESS.md` (2026-08-06) has the full arithmetic.
+shadows. `docs/DECISIONS.md`, `Q34`, has the full arithmetic.
 
 D65, the sRGB standard illuminant. Written out rather than taking a dependency:
 `colormath` is unmaintained and `colour-science` is a large import for two

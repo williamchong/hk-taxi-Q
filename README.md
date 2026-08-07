@@ -139,7 +139,8 @@ COOP/COEP headers that it does not send.
 | [`docs/GAME_DESIGN.md`](docs/GAME_DESIGN.md) | Core loop, fares, scoring, controls, HK authenticity mechanics |
 | [`docs/ART_DESIGN.md`](docs/ART_DESIGN.md) | Visual direction, palette, shaders, LOD policy |
 | [`docs/PLAN.md`](docs/PLAN.md) | Phased task breakdown with acceptance criteria |
-| [`docs/PROGRESS.md`](docs/PROGRESS.md) | Live status, decision log, open questions, risks |
+| [`docs/PROGRESS.md`](docs/PROGRESS.md) | Live status — task board, open questions, risks, measured metrics |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | Why anything is the way it is, keyed by `Q` or task ID |
 | [`LICENSING.md`](LICENSING.md) | Which licence covers what, and why the generated data is not ours to relicense |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Checks to run, commit style, and the inbound-MIT licensing of contributions |
 

@@ -104,7 +104,7 @@ COLLISION_SUFFIX = "-col"
 # chosen by distance to the camera, so the coarser one is resident only *beyond*
 # the near band, where nothing can touch a building — suffixing it would pay for
 # a `ConcavePolygonShape3D` in the bundle to be looked at from 300 m away.
-# Measured at 5.17 MB of PCK for the one tier that ships it; see docs/PROGRESS.md.
+# Measured at 5.17 MB of PCK for the one tier that ships it; see docs/DECISIONS.md, P2-5.
 #
 # The suffix goes on the *merged* tier, so it covers every class in it. Since
 # `P3-10` that includes the ground, which is the whole reason the ground can be

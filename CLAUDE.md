@@ -98,7 +98,8 @@ Common emoji for this project:
   `tools/ground_clearance.py`, by hand after a build. They grade the *shipped* bundle and share no
   code with the pipeline — `check.sh` does not require a built region and should not start requiring
   one. Moving the road moves what the last of the three measures, so it is not only a ground check.
-- Update `docs/PROGRESS.md` — task status, plus any new decision or open question.
+- Update `docs/PROGRESS.md` — task status, metrics, risks, and the open-questions index.
+- Record any new decision, or any question that closes, in `docs/DECISIONS.md`, keyed by its ID.
 - **Bundle size is measured from a PCK, never summed from source files.** That rule has been wrong
   in both directions once each.
 
@@ -113,4 +114,5 @@ Common emoji for this project:
 | `docs/GAME_DESIGN.md` | Core loop, fares, scoring, controls, HK authenticity mechanics |
 | `docs/ART_DESIGN.md` | Visual direction, palette, shaders, LOD policy, hero buildings |
 | `docs/PLAN.md` | Phased task breakdown with acceptance criteria |
-| `docs/PROGRESS.md` | Live status, decision log, open questions |
+| `docs/PROGRESS.md` | Live status — task board, open questions, risks, measured metrics |
+| `docs/DECISIONS.md` | **Why anything is the way it is**, keyed by `Q` or task ID. Read before re-proposing something |

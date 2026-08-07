@@ -4,7 +4,7 @@ extends Marker3D
 ##
 ## Chassis layout lives here, in the vehicle scene, rather than in
 ## HandlingProfile: wheelbase and track are per-vehicle model data, while the
-## profile describes feel. See docs/PROGRESS.md, P0-5a.
+## profile describes feel. See docs/DECISIONS.md, P0-5a.
 
 ## Front wheels steer. Both axles may steer if a vehicle wants it.
 @export var steers: bool = false

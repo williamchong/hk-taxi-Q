@@ -64,7 +64,9 @@ shipped bundle and need a built region.
 - ⚠️ **Never commit `game/project.godot` or `game/export_presets.cfg` as a side effect.** Opening the
   editor or running an export rewrites both and strips their comments. Restore with
   `git checkout` and verify with `git diff --exit-code`.
-- **Update [`docs/PROGRESS.md`](docs/PROGRESS.md)** when a task changes status or a decision is made.
+- **Update [`docs/PROGRESS.md`](docs/PROGRESS.md)** when a task changes status or a number is
+  re-measured, and **[`docs/DECISIONS.md`](docs/DECISIONS.md)** when a decision is made or a question
+  closes. Decision records are keyed by ID and stated in the present tense — no dates, no narration.
 
 ## Scope
 

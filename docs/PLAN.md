@@ -35,7 +35,7 @@ not separately playable. Whichever it is, the line is part of the definition of 
 machine-checked unit may follow a human-judged one; two in a row may not.
 
 **Review points are hard gates.** Work stops until the user has driven the build and the verdict is
-recorded in `PROGRESS.md`.
+recorded — the status in `PROGRESS.md`, and what the verdict decided in `DECISIONS.md`.
 
 **Name the verdict question in advance.** This is the field that does the work. `Q8`'s drive test
 asked "is this fun?", nobody had written down "is the car facing the legal direction?", and so a
@@ -211,7 +211,7 @@ split into `a`/`b` pairs, `P3-9` gains an earlier `P3-9a` round in front of it, 
 for the player taxi. Builds run **`B2` → `B1` → `B3` → `B4`**.
 
 ⚠️ **The build letters name content, not running order** — the convention `P2-7` already set, for the
-same reason. Renumbering would silently falsify a dozen entries in `PROGRESS.md` that say things like
+same reason. Renumbering would silently falsify a dozen records in `DECISIONS.md` that say things like
 "`P3-10`, build `B2`". Where letter order and running order disagree, this plan says which is which.
 `B2` runs first.
 
@@ -426,7 +426,7 @@ change the assumptions.
 ## Working agreements for agents
 
 - Reference the task ID in every commit.
-- Update `docs/PROGRESS.md` when a task changes status, and whenever a decision or open question
+- Update `docs/PROGRESS.md` when a task changes status, and `docs/DECISIONS.md` when a decision or open question
   arises.
 - If a task's acceptance criteria turn out to be wrong, say so and propose a change rather than
   quietly redefining it.

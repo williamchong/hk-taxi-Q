@@ -67,7 +67,7 @@ The palette, the sheet sub-directories to read, and the LOD cell sizes are all c
 The ground is one of those sub-directories since `P3-10`, so it tiles with everything else — with
 its texture stripped, because the tile output carries none. Add `--terrain` to emit the **textured**
 ground instead: that output is **evaluation only** and is not part of the tile set, because its
-JPEGs are 224 MB for the region against a <128 MB texture budget. See `PROGRESS.md`.
+JPEGs are 224 MB for the region against a <128 MB texture budget. See `docs/DECISIONS.md`, `P1-2`.
 
 Verify the result in the engine, which is the only place the acceptance criteria can be checked:
 

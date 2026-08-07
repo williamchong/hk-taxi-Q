@@ -1,7 +1,7 @@
 # Data Sources
 
 All facts below were verified against primary sources. **Do not re-research these** — if something
-turns out wrong, correct it here and note it in `PROGRESS.md`.
+turns out wrong, correct it here and record the finding in `DECISIONS.md`.
 
 ## Licence
 
@@ -166,7 +166,7 @@ exactly this shape of read for *colour*; this is the same move for spacing.
 The probe is **not committed**, deliberately. `deck_error.py`, `overhang.py` and `ground_clearance.py`
 are committed because they grade the *shipped bundle* on every build; this graded a 1.10 GB download
 that no build has, produced three constants, and would be rewritten rather than re-run. The numbers
-and the method are in `PROGRESS.md`, which is what makes it repeatable.
+and the method are in `DECISIONS.md`, which is what makes it repeatable.
 
 ⚠️ **Nothing about that changes the case against shipping the textures**, and the reasons are
 structural rather than budgetary: `mesh.collapse` takes UVs from a *cluster representative*, which is

@@ -10,7 +10,7 @@ extends Resource
 ##
 ## The model is a custom raycast vehicle on RigidBody3D, not Godot's
 ## VehicleBody3D and not a physical simulation. P0-5a measured why: see
-## docs/PROGRESS.md. See also docs/GAME_DESIGN.md "Controls".
+## docs/DECISIONS.md, P0-5a. See also docs/GAME_DESIGN.md "Controls".
 
 @export_group("Speed")
 ## Top speed in forward gear.
