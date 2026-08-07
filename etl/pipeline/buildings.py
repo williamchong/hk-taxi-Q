@@ -355,10 +355,10 @@ def facade_hue(style: BuildingStyle, city_id: str, *, root: Path | None = None) 
 
     Rows whose sample is mostly canopy are dropped, and the reason is on the axis
     this function returns rather than the one it discards. At `vegetation_max:
-    0.5` that is 43 of Wan Chai's 2,214, and they sit **6.08 `a*` to the green
-    side** of the rest at **more than double the chroma** (`C*` 13.72 against
-    6.35) — because what they measured is a tree. `strength: 2.0` then doubles
-    it, so an unfiltered canopy row reaches the facade about 12 `a*` green.
+    0.5` that is 36 of Wan Chai's 2,213, and they sit **4.45 `a*` to the green
+    side** of the rest — because what they measured is a tree. `strength: 2.0`
+    then doubles it, so an unfiltered canopy row reaches the facade about 9 `a*`
+    green.
     """
     if style.facade_hue_source is None:
         return {}

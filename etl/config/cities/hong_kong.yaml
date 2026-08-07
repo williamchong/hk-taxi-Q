@@ -496,19 +496,22 @@ buildings:
     # the open half of `Q34`.
     #
     # ⚠️ **Every bin's weights are authored so its *expected* reflectance matches
-    # what the height ramp already gave that same population.** Measured over the
-    # region's 2,157 surveyed buildings, the ramp hands every hue bin almost the
-    # same mean — 57.9 inside the neutral ring, 57.5 warm, 56.0 cool — because
-    # height and hue are close to independent, which is the whole finding behind
-    # `Q34`. Matching them is what makes this change gradeable: the city-wide mean
-    # moves 57.52% -> 57.59%, so anything visible in a before/after frame is hue
-    # structure and not a level change. ⚠️ Re-derive these if the ramp moves.
+    # what the height ramp already gave that same population.** The ramp hands
+    # every hue bin almost the same mean — 57.9 inside the neutral ring, 57.5
+    # warm, 56.0 cool — because height and hue are close to independent, which is
+    # the whole finding behind `Q34`. Matching them is what makes this change
+    # gradeable: anything visible in a before/after frame is hue structure and
+    # not a level change. ⚠️ Re-derive these if the ramp moves.
+    #
+    # ⚠️ **They are owed a re-derivation now: the population moved under them.**
+    # These weights were fitted to the survey `Q37` replaced, and the resurvey
+    # took the neutral ring from 51.6% of surveyed stock to 40.5%. `Q34′` in
+    # PROGRESS.md holds the job.
     surveyed:
       rings:
-        # Near-neutral, and just over half of the surveyed stock (51.4% at
-        # C* <= 5, median chroma 4.84). No sectors: below this chroma the hue
-        # angle is mostly measurement noise, and splitting on it would assign
-        # cladding from a number that is not really there.
+        # Near-neutral, and 40.5% of the surveyed stock. No sectors: below this
+        # chroma the hue angle is mostly measurement noise, and splitting on it
+        # would assign cladding from a number that is not really there.
         - up_to_chroma: 5.0
           weights: {panel_grey: 0.50, render_cool: 0.30, tile_neutral: 0.20}
         # Everything with hue worth reading. ⚠️ Sectors rather than a second flat
@@ -517,12 +520,12 @@ buildings:
         - up_to_chroma: .inf
           sectors:
             # Warm: 30-180 deg is +b*, the cream / beige / ochre direction, and
-            # it is where the coloured stock overwhelmingly sits — 80.8% of this
+            # it is where the coloured stock overwhelmingly sits — 83.5% of this
             # ring. render_warm is the ochre tail.
             - from_deg: 30.0
               weights: {render_pale: 0.45, tile_neutral: 0.35, render_warm: 0.20}
             # Cool: 180 deg round through 360 and on to 30, the -b* blue-grey
-            # direction. Only 19.2% of the ring, and the ramp gave it the darkest
+            # direction. Only 16.5% of the ring, and the ramp gave it the darkest
             # mean of any bin, which is why the split is this lopsided.
             - from_deg: 180.0
               weights: {panel_grey: 0.85, render_cool: 0.15}
@@ -553,12 +556,11 @@ buildings:
   # direction. This is the line to move if the city reads too grey or too candy.
   #
   # `vegetation_max` drops a survey row whose sample was more than this fraction
-  # canopy — 43 of Wan Chai's 2,214 at 0.5. They sit 6.08 a* to the green side of
-  # the rest at over double the chroma (C* 13.72 against 6.35), and `strength`
-  # below then doubles that, so an unfiltered one reaches the facade about 12 a*
-  # green. Omit the key for no threshold at all; setting one makes the survey's
-  # `vegetation` column required, so a threshold can never silently filter
-  # nothing.
+  # canopy — 36 of Wan Chai's 2,213 at 0.5. They sit 4.45 a* to the green side of
+  # the rest, and `strength` below then doubles that, so an unfiltered one reaches
+  # the facade about 9 a* green. Omit the key for no threshold at all; setting one
+  # makes the survey's `vegetation` column required, so a threshold can never
+  # silently filter nothing.
   #
   # `source` is a filename, not a path: the pipeline resolves it through
   # `fetch.source_dir`, which is the single definition of the sources-tree

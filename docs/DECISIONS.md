@@ -59,7 +59,7 @@ lives in git. This file holds *why things are the way they are*.
 | `Q34` | Material is declared in a `materials:` table, not implied from height | ✅ Closed |
 | `Q35` | A per-building material draw gives a salt-and-pepper skyline | 🔴 Open |
 | `Q36` | Wan Chai's ground is paving, not soil | ✅ Closed |
-| `Q37` | 10.0% of the façade survey is atlas filler, not a photograph | 🔴 Open |
+| `Q37` | 10.0% of the façade survey is atlas filler, not a photograph | ✅ Closed, and `Q34` needs re-deriving |
 | `Q38` | `exposure_anchor` is baked into `COLOR_0` at build time | 🟡 Open, deliberately not fixed |
 | `Q39` | `wall_sky_tint` is uniform, so a canyon wall takes a parapet's sky bounce | 🟡 Open |
 
@@ -1018,7 +1018,7 @@ colour operation substitutes for objects.
 
 ## `Q37` — 10.0% of the façade survey is atlas filler, not a photograph
 
-**Status.** 🔴 Open · **Owner.** `buildings.py`, survey
+**Status.** ✅ Closed by `tools/facade_survey.py` · **Owner.** `buildings.py`, survey
 
 **Claim.** 222 of 2,214 rows in `facade_lab.json` are achromatic — `a* = b* = 0` — across **23
 distinct greys**, RGB(128,128,128) the most common at 85 rows and RGB(231,231,231) next at 46. Every
@@ -1030,8 +1030,7 @@ to within 0.005 for all 2,214 rows, so `lit_rgb` carries the artefact and `lab` 
 texel at 255 is `a* = b* = 0`"* — at the other end of the range. 220 of the 222 clear
 `vegetation_max: 0.5`, so **10.1% of the 2,171 buildings that reach the city** render dead-neutral
 because they were *not measured*, and under `Q34` they also fall into the neutral-grey material bin,
-so a material is assigned from absent data. `Q34` reports that bin at 36.3%; up to ten points of it
-may be filler.
+so a material is assigned from absent data.
 
 ⚠️ **The estimator concentrates filler instead of diluting it.** Filler is bright — `L*` 53.6 at
 grey 128, 78.4 at 194, 91.6 at 231 — and the estimator takes the median of texels above the **65th
@@ -1066,20 +1065,33 @@ rows that are more than 30% filler, which is what identifies it as the same meas
 shipped `a*`/`b*` it still sits at a median `Δab` of **1.20**, and that residue is sampling, not the
 fix: the guard alone accounts for a median of **0.000**.
 
-| Gate | Threshold | `11-SW-9D` |
+| Gate | Threshold | Shipped result |
 |---|---|---|
-| Rows still at `C* = 0` | **zero** | ✅ 0 of 59 |
-| Shipped achromatic rows | chromatic, or dropped to the height band | ✅ 3 of 3 chromatic |
-| Key set | unchanged unless a drop is recorded | ✅ 59 of 59 |
-| `height_m`, `vegetation` | reproduced | ✅ exact; median 0.0070 |
-| Median `Δab` against the shipped table | **≤ 0.46** (`Q33`'s tolerance) | ❌ **1.20** |
+| Rows at `C* = 0` | zero | **2** of 2,213, both genuine — see below |
+| Shipped achromatic rows | chromatic, or dropped to the height band | ✅ 221 recovered, 1 dropped |
+| `height_m`, `vegetation` | reproduced | ✅ exact; median 0.0084 |
+| Median `Δab` against the shipped table | **≤ 0.46** (`Q33`'s tolerance) | ❌ **1.04** |
 
-⚠️ **So a rerun is not a repair of the old table but a replacement of it**, and the last gate is the
-price rather than a defect to fix — it cannot be met by any reconstruction, because what it measures
-is the lost sampling scheme. Every building's hue moves by about 1.2 `Δab`, which `strength: 2.0`
-doubles onto the wall, and `Q26`'s pending A/B, `Q30` and `Q34`'s grading are all re-based against a
-survey that can be re-derived rather than one that cannot. Sequence it per sheet: the merge is a clean
-union, so `11-SW-9D` (588 MB, 59 rows) settles the method before the 1.3 GB sheets are touched.
+⚠️ **So this replaced the old table rather than repairing it**, and that last row is the price, not a
+defect left standing — no reconstruction can meet it, because what it measures is the lost sampling
+scheme. 76.6% of rows moved past 0.46 and 15.6% past 5.0. What identifies the new table as the same
+measurement is different evidence: run *without* its filler guard it lands on the shipped achromatic
+value for the rows above 30% filler, reproducing the bug on demand, and the guard alone accounts for
+a median `Δab` of **0.000**. `Q26`'s pending A/B, `Q30` and `Q34` are re-graded against a survey that
+can be re-derived instead of one that cannot.
+
+⚠️ **Two rows still read `C* = 0` and both are photographs.** `naive_rgb` of `[82,82,81]` and
+`[87,81,77]` over 2.7 and 3.8 million texels — the per-channel medians simply rounded to a tie.
+**Achromatic is not the defect's signature; repetition is.** 485 shipped rows shared an `(a*, b*)`
+with another row and `lit_rgb` `[128,128,128]` appeared 85 times; here it is 113 rows and a top
+repeat of 5. Padding produces identical rows, photography does not, and a future check should read
+that rather than the neutral count.
+
+⚠️ **`Q34`'s ring weights are now authored against a population that moved and must be re-derived.**
+The near-neutral ring (`C* <= 5`) falls from **51.6% to 40.5%** of surveyed stock and the population
+median `C*` rises from 4.78 to 6.12, so `panel_grey`'s expected share drops **33.7% → 28.6%** —
+**5.1 points of the neutral bin was filler**. The config's own ⚠️ — *re-derive these if the ramp
+moves* — applies to the survey moving as well.
 
 ⚠️ **Averaging in sRGB is a second, separate question** worth settling in the same pass: ~4.9 `L*`
 away from a linear-light mean, and the same family as the bug `Q27` closed. **Change one at a time.**
