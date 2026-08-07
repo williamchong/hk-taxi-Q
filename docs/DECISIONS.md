@@ -90,12 +90,12 @@ lives in git. This file holds *why things are the way they are*.
 | Topic | Decision | Status |
 |---|---|---|
 | Foundations | Engine, language, targets, region, building source, art direction, monetisation | ✅ Settled |
-| Region bounds | Confirmed **WGS84**, by measurement | ✅ Settled |
+| Region bounds are WGS84 | Confirmed by measurement, and it selects different sheets | ✅ Settled |
 | Licensing | GPLv3 out for store builds, contributions inbound MIT, generated data unrelicensable | ✅ Settled |
 | Genre | Three references, three different questions | ✅ Settled |
-| Shadows | **Two** cascades at 400 m, not four at 600 | ✅ Settled |
+| Two shadow cascades | 400 m, not four at 600 | ✅ Settled |
 | Debug chrome | One owner, one key, **off by default** | ✅ Settled |
-| Colour channel | The vertex stream carries both ground and building colour | ✅ Settled |
+| The vertex stream | Carries both ground and building colour | ✅ Settled |
 | Audit viewpoints | Seven fixed cameras, so a later change is graded against these | ✅ Settled |
 | Rendering proposals | Eight evaluated; two survive | ✅ Settled |
 
@@ -693,7 +693,7 @@ loss upstream of the light.
 ⚠️ **Why not fix it in the ETL.** Writing linear `COLOR_0` would be glTF-conformant and materially
 worse: linear `uint8` spends its codes on highlights the eye cannot separate and starves the shadows,
 which is the problem sRGB encoding exists to solve. It would also change the data contract and break
-the graders, which match shipped vertex colours against `class_colours`.
+the graders, which match shipped vertex colours against `class_materials`.
 
 ⚠️ **The reusable lesson is the statistic, not the bug.** The headline "frame `L*` 86.8 → 83.3" was a
 whole-frame mean, and a third of that frame is sky, fog and glass — pixels that cannot respond and
@@ -863,9 +863,10 @@ rule 3 wants: the physical half travels, the taste half does not.
 the one colour that was already right. Divided by the anchor, the shipped palette was *claiming*
 asphalt **8.2%** (real aged asphalt 7–12% ✅), kerb **58.9%** (concrete 20–30% 🔴), ground **39.6%**
 (15–25% 🔴), infrastructure 32.4% (⚠️ marginal). Shipped, lightness only, every authored hue
-preserved to within `Δab` 0.46: asphalt **+2.7 `L*`**, infrastructure −7.7, ground **−13.9**, kerb
-**−19.4**. Kerb-to-road reflectance lands at 2.5:1, which is what concrete against asphalt is; it was
-6.6:1.
+preserved to within `Δab` 0.46: asphalt `#3c3a37` → **`#42403d`** (+2.7 `L*`), infrastructure
+→ `#615f5a` (−7.7), ground → `#645a45` (**−13.9**), kerb → `#68655c` (**−19.4**). Kerb-to-road
+reflectance lands at 2.5:1, which is what concrete against asphalt is; it was 6.6:1 — and that still
+leaves 15.6 `L*` of separation, so the 0.15 m riser reads as an edge.
 
 **Why the kerb had drifted 19 `L*`.** It became the brightest surface in the city **by not moving** —
 `kerb_colour` lives in `RoadSurface` while the re-exposure commit edited `BuildingStyle`.
@@ -1324,14 +1325,11 @@ geometry**. Geometry was never the problem. Replaced by `P3-10`, which ships no 
 217 turn restrictions**: 175,610 → 3,553 vertices, 592 of 615 nodes in one component (96.3%), 736 at
 grade / 45 elevated / 15 tunnel.
 
-⚠️ **`ELEVATION` must not key nodes**, reversing a note that had survived since `P0-2`. It sounds
-obviously right and it breaks the network: all 36 endpoints where two levels meet are **ramp
-touchdowns**, and applying the rule takes the region from 6 connected components to **24**, dropping
-the largest from 583 nodes to 389 and cutting a **163-node elevated island** adrift — most of the Wan
-Chai Interchange and the Canal Road Flyover, the reason the region was chosen. **The hazard the rule
-was aimed at does not exist here**, because nodes form only where centrelines share an *endpoint*, and
-a flyover crossing over a street shares no vertex with it. The rule is right about crossings and wrong
-about junctions.
+⚠️ **`ELEVATION` must not key nodes.** It sounds obviously right and it breaks the network: all 36
+endpoints where two levels meet are **ramp touchdowns**, so applying the rule takes the region from 6
+connected components to **24**, dropping the largest from 583 nodes to 389 and cutting a **163-node
+elevated island** adrift — most of the Wan Chai Interchange and the Canal Road Flyover, the reason
+the region was chosen. `DATA_SOURCES.md` carries why the hazard it guards against never arises here.
 
 **Roads are clipped to the region, where buildings are not.** A building is assigned to a tile whole
 because splitting a mesh leaves an open shell; **a polyline cut in two is two polylines**, with
@@ -1463,10 +1461,8 @@ null-sentinel comparison.
 a different moment, and each is separately versioned, so merging would make a change to fare nodes
 bump the schema on the document carrying the tiles.
 
-**`bounds_game` is the union of the content, not the region rectangle.** The region is 1650 × 887 m
-and its geometry spans further, because a building is assigned to a tile whole and may overhang, and
-the ribbon is drawn outward from centrelines that run to the boundary. A camera framed on the
-rectangle, or a spatial partition sized to it, would silently clip real buildings.
+**`bounds_game` is the union of the content, not the region rectangle** — `ARCHITECTURE.md` carries
+the figures and what a consumer gets wrong by sizing off the rectangle.
 
 **The stage validates what it wrote, and that is the actual deliverable.** Four classes of error exist
 that **no individual stage can see, because each document is internally valid in all of them**: a fare
@@ -1546,8 +1542,8 @@ code path from it to a file, so a distant tile cannot be rejected *after* being 
 
 ⚠️ **One correction to a claim made here.** Tall towers do *not* survive LOD1 well because they are
 big boxes — measured, towers ≥100 m keep **36%** of their triangles at LOD1 against **44%** for
-everything else. They are hit *harder*, and read as fine in the canyon shot because they were distant,
-where a tower is mostly silhouette.
+everything else. They are hit *harder*. `ART_DESIGN.md`'s LOD policy carries why they read as fine
+anyway.
 
 **The landmark half was declined for a better reason than "not implemented".** There is no landmark
 key in the source — the sheets carry `BUILDING` and `INFRASTRUCTURE` and nothing else. More usefully,
@@ -1613,10 +1609,9 @@ builds the rotation with `Basis.looking_at`. Almost all of `P2-3` is a deletion:
 `Transform3D` literal in the scene and forty lines of `ARCHITECTURE.md` explaining how not to transpose
 it. **The query reproduces the literal to 4 dp.**
 
-**The heading is deliberately not passed to the query.** A zero heading makes `nearest_edge` take the
-edge's own vertex order, and `P1-3` reversed the polyline of every backward edge precisely so that
-order *is* the legal direction. Passing the car's rotation in would let the car decide which way a
-two-way street runs. **The street decides.**
+**The heading is deliberately not passed to the query** — `ARCHITECTURE.md` states why. The
+principle: passing the car's rotation in would let the car decide which way a two-way street runs.
+**The street decides.**
 
 ⚠️ **An assertion alone is not enough, because a transpose is not a 180° flip.** It mirrors the heading
 about world −Z: 171.9° wrong on Expo Drive, 180° on a due east-west street, and **0° — a silent no-op —
@@ -1786,10 +1781,9 @@ Break any link and every tile keeps its default `BaseMaterial3D` and renders in 
 `TEXCOORD_0` format and the resolved material path, because **a check performed by hand is a check
 that will not be performed again.**
 
-**The marker is derived from the palette, not from a new config key.** A class with a flat
-`class_colours` entry is one whose colour does not depend on height, which is exactly the set with no
-floors to band. Hard rule 3 holds — no class name reaches pipeline logic — and `FACADE` is the fallback
-rather than a listed case, so a new massing class bands until someone gives it a flat colour.
+**The marker is derived from the palette, not from a new config key** — `ARCHITECTURE.md` states the
+rule. `FACADE` is the fallback rather than a listed case, so a new massing class bands until someone
+gives it a flat colour.
 
 ⚠️ **`ARCHITECTURE.md` predicted "~2 bytes/vertex quantised" and this ships float32 at four times
 that** — measured at +4.01 MB over 937,889 vertices. `unorm16` would save perhaps 2 MB and costs a
@@ -2060,10 +2054,8 @@ conformance, not as a measured speed-up. Cascade count also costs draw calls in 
 renders correctly and into a script that writes them in `_ready()`: two sources of truth whose
 disagreement would be invisible in the editor.
 
-⚠️ **"Vehicle blob shadow only" deserves re-examination before anyone builds the mobile tier.** Shots
-with shadows *off* look markedly worse than that line implies — flat and blown out, the canyon losing
-its depth entirely. A real mobile tier needs the ambient and tonemap re-tuned *around* a blob shadow,
-not the shadow switched off. `P2-6` inherits it.
+⚠️ **`ART_DESIGN.md`'s "vehicle blob shadow only" line needs re-examination before anyone builds
+the mobile tier**, and that section carries the evidence. `P2-6` inherits it.
 
 **See.** `ART_DESIGN.md` "Lighting" · `Q31`
 
@@ -2164,10 +2156,9 @@ not by looking at a frame. Worth repeating for the other classes.
 - **The wet-material overlay.** Anti-goal, and it needs a second material layer, UVs, mask and noise
   textures, and SSR — four things the pipeline deliberately lacks.
 - **Keeping UVs by restoring an unclustered LOD0.** There are no UVs to keep: the non-textured set
-  ships **0 images and no `TEXCOORD_0`**. An exact weld would not preserve them anyway —
-  `collapse`'s `cell_m <= 0` welds on position *and normal*, which is what the two sides of a UV seam
-  share. Cost would be 30.5 MB and 40% of visible triangles for a difference `Q16` measured as
-  invisible from the driver's seat.
+  ships **0 images and no `TEXCOORD_0`**, and an exact weld would not preserve them anyway (see
+  `ART_DESIGN.md`, "What buildings will *not* get"). Cost would be 30.5 MB and 40% of visible
+  triangles for a difference `Q16` measured as invisible from the driver's seat.
 - **Stealing UVs from the individualised set.** Cheap to acquire — `Accept-Ranges: bytes`, and geometry
   is 4–7% of the download. But **a UV without its image is not data**: they are per-image atlas
   coordinates across primitives that overlap in `[0,1]`, useless as a lightmap parameterisation, and
