@@ -47,6 +47,18 @@ entirely plausible.
 for.** Jitter, clamping and the classes that ignore the height bands all move it.
 Measure it off the built tiles' `COLOR_0`; asking for 18.0 `L*` delivered 16.93.
 
+**A single frame also reports its band shares**, which is `Q31`'s statistic
+rather than `Q27`'s: the fraction of the frame in shadow and the fraction in the
+band above it. That question is not answerable from the percentiles beside it —
+an empty middle falls *between* two adjacent percentiles and the emptier it gets
+the further apart they move. See `SHADOW_L`.
+
+⚠️ **A band share can be satisfied by translation.** `Q31` measured a flat
+surface crossing a threshold: half the `kerb` frame moved from under `L*` 10 to
+over it while its internal spread went 0.79 → 0.85. If the question is whether a
+frame carries *information*, grade the variation inside the shadow mass and not
+the share that sits below a bound.
+
 Clipping is reported on the definition `tonemap_white` was fixed against on
 2026-08-06 — any channel at or above 250 — so those numbers stay comparable.
 
@@ -88,6 +100,25 @@ RESPONSE_L = 0.5
 # pixels are dropped from the ratio statistics only. At 8 bits the darkest code
 # is 1/255 and the step between codes is the whole value.
 MIN_LUMINANCE = 0.01
+
+# The two edges `Q31` states the empty middle in: the share of the frame in
+# shadow, and the share in the band just above it that a street frame is
+# supposed to be carrying information in.
+#
+# ⚠️ **These exist because percentiles cannot show an empty middle, not because
+# a mean is coarse.** The failure is structural: at `kerb` the shipped frame
+# reports p50 7.9 and p90 58.8, so the whole 10-30 band falls *between two
+# adjacent reported percentiles* and no percentile lands inside it. The emptier
+# the middle gets, the further apart the percentiles straddling it move, and the
+# statistic never appears at any resolution of percentile. A band share asks the
+# question the other way round — fixed bounds, measured population — and is the
+# only one of the two that can return "nothing is here".
+#
+# `Q31` was originally asked with numbers computed outside the repo, so nothing
+# could reproduce them; these bounds are chosen to match that phrasing exactly
+# so the old figures and the new ones are the same measurement.
+SHADOW_L = 10.0
+MIDTONE_L = 30.0
 
 
 @dataclass(frozen=True)
@@ -131,6 +162,19 @@ def clipped_fraction(frame: Frame) -> float:
     return float(np.mean(np.any(frame.rgb >= CLIP_LEVEL, axis=1)))
 
 
+def band_shares(frame: Frame) -> tuple[float, float]:
+    """Share of pixels in shadow, and in the band immediately above it.
+
+    Half-open bands, so the two never double-count a pixel: a value on an edge
+    belongs to the band that edge **opens**, not the one it closes. `SHADOW_L`
+    is therefore a midtone, and `MIDTONE_L` is in neither band — it is lit.
+    """
+    lightness = frame.lab[:, 0]
+    shadow = float(np.mean(lightness < SHADOW_L))
+    midtone = float(np.mean((lightness >= SHADOW_L) & (lightness < MIDTONE_L)))
+    return shadow, midtone
+
+
 def relative_luminance(lightness: float) -> float:
     """The linear `Y` an `L*` corresponds to — the inverse of the CIELAB curve."""
     return float(((lightness + 16.0) / 116.0) ** 3)
@@ -149,6 +193,15 @@ def report_absolute(frame: Frame) -> None:
         "    C*      mean %5.1f   p50 %5.1f   p90 %5.1f",
         float(np.mean(chroma)),
         *(float(v) for v in np.percentile(chroma, [50, 90])),
+    )
+    shadow, midtone = band_shares(frame)
+    log.info(
+        "    bands   under %2.0f %5.1f%%   %2.0f-%2.0f %5.1f%%   (Q31's empty middle)",
+        SHADOW_L,
+        100.0 * shadow,
+        SHADOW_L,
+        MIDTONE_L,
+        100.0 * midtone,
     )
     log.info(
         "    clipped %5.1f%%  (any channel >= %d)", 100.0 * clipped_fraction(frame), CLIP_LEVEL
@@ -178,6 +231,23 @@ def report_paired(before: Frame, after: Frame, albedo: tuple[float, float] | Non
         "    C* p90  %5.1f -> %5.1f",
         float(np.percentile(before.chroma, 90)),
         float(np.percentile(after.chroma, 90)),
+    )
+    # The band shares belong in the *whole-frame* block and not in the
+    # responding one below: a rig change that lifts the shadows moves those
+    # pixels into the middle, and asking what the middle weighs over only the
+    # pixels that moved would count the arrivals and miss everything that was
+    # already there.
+    before_shadow, before_midtone = band_shares(before)
+    after_shadow, after_midtone = band_shares(after)
+    log.info(
+        "    under %2.0f %5.1f%% -> %5.1f%%     %2.0f-%2.0f %5.1f%% -> %5.1f%%",
+        SHADOW_L,
+        100.0 * before_shadow,
+        100.0 * after_shadow,
+        SHADOW_L,
+        MIDTONE_L,
+        100.0 * before_midtone,
+        100.0 * after_midtone,
     )
     log.info(
         "    clipped %5.1f%% -> %5.1f%%",
