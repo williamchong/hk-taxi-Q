@@ -94,6 +94,8 @@ Common emoji for this project:
   the import, the GDScript warnings sweep and the verify tools. **Do not run those by hand
   and read the output** — Godot exits `0` even when a script fails to parse, so only the script's
   exit code means anything. See `docs/ARCHITECTURE.md` "Checks".
+- Height-ramp or façade-survey changes: also `tools/ring_weights.py`, and paste what it derives. The
+  surveyed material weights are authored against both, and no check can see them go stale (`Q34′`).
 - Road-surface, deck-height or ground changes: also `tools/deck_error.py`, `tools/overhang.py` and
   `tools/ground_clearance.py`, by hand after a build. They grade the *shipped* bundle and share no
   code with the pipeline — `check.sh` does not require a built region and should not start requiring

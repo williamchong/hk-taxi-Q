@@ -103,12 +103,11 @@ under the same ID.
 | `Q30` | **The shipped façade palette is not the one `ART_DESIGN.md` authorises** | One building in five is more saturated than the direction sanctions | `Q26` | 🔴 Open. ⚠️ `facade_hue.strength` cannot fix it — amplifying chroma widens the spread faster than it moves the middle. **Belongs with `Q26`'s verdict** |
 | `Q31` | **The city's value range has an empty middle** | Half a street frame carrying no information — the frame the player occupies all game | `P3-9a` | 🔴 Open. ⚠️ The palette lever has been pulled (`Q33`) and it was not the cause. **The shadow fill is the only untried candidate**, and both failing frames are the two shot in shade |
 | `Q35` | **A per-building material draw gives a salt-and-pepper skyline** | Two adjacent blocks can land 13 reflectance points apart, where real blocks share cladding | `buildings.py`, `hong_kong.yaml` | 🔴 Open. Candidates: a spatial hash on position, a block join from an external dataset, or accepting it. ⚠️ **Grade it from the street, not the skyline** |
-| `Q34′` | **The material ring weights are authored against a population that has moved** | `Q37`'s resurvey took the near-neutral ring from 51.6% to 40.5% of surveyed stock, so weights chosen to match the height ramp's expected reflectance no longer do | `hong_kong.yaml`, `buildings.py` | 🟡 Open, and mechanical rather than a judgement. `panel_grey` fell 33.7% → 28.6% on its own. ⚠️ The config block says **re-derive these if the ramp moves** — the survey moving counts |
 | `Q38` | **`exposure_anchor` is baked into `COLOR_0` at build time**, so a time-of-day change is a full rebuild | Night is planned, and this is the lever it needs | night mode | 🟡 Open, deliberately not fixed. The fix is cheap and known; it costs `_check_exposure` and its test, both shipped to close a real defect |
 | `Q39` | **`wall_sky_tint` is uniform**, so a canyon wall takes a rooftop parapet's sky bounce | Overstates sky bounce in exactly the frames `Q31` reports as broken | `Q31` | 🟡 Open — free once a sky-visibility term exists, and nothing before that. ⚠️ Do not lower it globally |
 
 **Closed:** `Q1` `Q2` `Q3` `Q4` `Q5` `Q7` `Q8` `Q9` `Q10` `Q11` `Q12` `Q16` `Q17` `Q18` `Q20` `Q23`
-`Q25` `Q27` `Q28` `Q29` `Q32` `Q33` `Q34` `Q36` `Q37`. Each has a record in `DECISIONS.md`.
+`Q25` `Q27` `Q28` `Q29` `Q32` `Q33` `Q34` `Q34′` `Q36` `Q37`. Each has a record in `DECISIONS.md`.
 
 ---
 

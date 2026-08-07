@@ -46,7 +46,9 @@ that checked nothing more than once.
 
 If you changed the ETL, the pipeline must run end to end on the Wan Chai config. If you changed the
 road surface or deck heights, also run `tools/deck_error.py` and `tools/overhang.py` — they grade the
-shipped bundle and need a built region.
+shipped bundle and need a built region. If you moved the height ramp or the façade survey, run
+`tools/ring_weights.py` and paste what it derives: the surveyed material weights are authored against
+both, and nothing in the checks can see that they have gone stale (`Q34′`).
 
 ---
 

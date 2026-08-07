@@ -98,7 +98,9 @@ That is `Q35`, opened by this shipping, and it wants grading from the *street* v
 the skyline — a canyon shows three façades at once where the skyline averages hundreds.
 
 Every bin's weights are authored so its *expected* reflectance matches what the height ramp already
-gave that same population, which is possible only because height and hue are near-independent. Graded
+gave that same population, which is possible only because height and hue are near-independent.
+`tools/ring_weights.py` derives them, and must be re-run whenever the ramp or the survey moves
+(`Q34′`) — a bin's *share* can swing eleven points while its target moves 0.35. Graded
 on the two fixed viewpoints: whole-frame `L*` moved **−0.8** (street) and **−0.1** (skyline) while
 ~32% of pixels moved by a mean 2.2–2.5 `L*`. The change is a redistribution, not a level change, and
 that is deliberate — it is what makes it readable as one.

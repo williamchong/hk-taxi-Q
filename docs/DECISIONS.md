@@ -57,9 +57,10 @@ lives in git. This file holds *why things are the way they are*.
 | `Q32` | ~~`INFRASTRUCTURE` is the brightest large object in its frame~~ | 🟢 Closed as **wrong** |
 | `Q33` | Every authored colour is `material reflectance × exposure_anchor` | ✅ Closed |
 | `Q34` | Material is declared in a `materials:` table, not implied from height | ✅ Closed |
+| `Q34′` | The ring weights are re-derived by a tool, against `Q37`'s survey | ✅ Closed |
 | `Q35` | A per-building material draw gives a salt-and-pepper skyline | 🔴 Open |
 | `Q36` | Wan Chai's ground is paving, not soil | ✅ Closed |
-| `Q37` | 10.0% of the façade survey is atlas filler, not a photograph | ✅ Closed, and `Q34` needs re-deriving |
+| `Q37` | 10.0% of the façade survey is atlas filler, not a photograph | ✅ Closed |
 | `Q38` | `exposure_anchor` is baked into `COLOR_0` at build time | 🟡 Open, deliberately not fixed |
 | `Q39` | `wall_sky_tint` is uniform, so a canyon wall takes a parapet's sky bounce | 🟡 Open |
 
@@ -931,7 +932,48 @@ reflection this renderer does not do.
 **Seeding note.** The draw is seeded by a `blake2b` stream deliberately uncorrelated with the jitter
 seed. ⚠️ A prefix-salted `crc32` measures **+0.507** against it — CRC32 is affine over GF(2).
 
-**See.** `ART_DESIGN.md` "Material is not a function of height" · `Q33` · `Q35` · `Q37`
+**See.** `ART_DESIGN.md` "Material is not a function of height" · `Q33` · `Q35` · `Q37` · `Q34′`
+
+## `Q34′` — The ring weights are re-derived by a tool, against `Q37`'s survey
+
+**Status.** ✅ Closed by `tools/ring_weights.py` · **Owner.** `hong_kong.yaml`
+
+**Claim.** Each bin's weights are the smallest move that makes its expected reflectance the mean the
+height ramp hands that bin's own buildings. Near-neutral `panel_grey` **0.50 → 0.56**, `render_cool`
+0.30 → 0.28, `tile_neutral` 0.20 → 0.16; warm `render_pale` 0.45 → 0.46, `tile_neutral` 0.35 → 0.36,
+`render_warm` 0.20 → 0.18; cool `panel_grey` **0.85 → 0.89**, `render_cool` 0.15 → 0.11. Targets
+57.58 / 57.79 / 55.73%, met to 0.001 / 0.017 / 0.004. Re-run on its own output the tool proposes no
+further move.
+
+**The share moved eleven points and the target moved 0.35.** That is the whole finding, and it is
+`Q34`'s own near-independence result arriving from the other direction: the bins partition on hue,
+every target is a mean over *height*, so `Q37` taking a fifth of the near-neutral ring's stock out of
+it barely moved the height distribution of what stayed or of what arrived. **A large change in a
+bin's share does not imply a large change in its weights** — no weight here moved by more than 0.06.
+
+**Why a tool rather than a spreadsheet.** The config has said *re-derive these if the ramp moves*
+since `Q34` and had no mechanism behind it, which is the same shape of debt `Q37` closed — a table
+nobody could re-derive, wrong for two years. It reads the survey through `facade_hue`'s own
+vegetation filter and bins through the config's own rings, so the population it measures cannot drift
+from the population the pipeline draws for.
+
+⚠️ **The free degree of freedom is fixed by a stated rule, because the target does not fix it.**
+Three materials against two constraints leave a line of solutions and every point on it hits the
+target exactly; picking a different one repaints different buildings for no reason anyone could name
+afterwards. The rule is the minimum-norm move from the shipped weights, which keeps whichever
+material was made dominant dominant.
+
+**Evidence of grading.** Skyline whole-frame `L*` **−0.0**, street **+0.4**, at responding shares of
+4.3% and 7.8% moving a mean 2.65 and 4.82 `L*`. ⚠️ **The street's +0.4 is a draw, not a level** — a
+canyon shows three façades where the skyline averages hundreds, and the skyline is the population an
+expectation is an expectation over. Expected city-wide reflectance moved **57.54 → 57.49**.
+
+⚠️ **`test_config.py`'s bound stays loose, and tightening it is the wrong instinct.** It compares each
+bin against the ramp's *unweighted* band mean because the suite must run without the 4.9 GB survey,
+so it catches a bin re-weighted to one end of the palette and nothing finer. The real check needs the
+survey and is the tool.
+
+**See.** `Q34` · `Q37` · `Q35` · `CONTRIBUTING.md` "Checks"
 
 ## `Q35` — A per-building material draw gives a salt-and-pepper skyline
 
@@ -1087,16 +1129,16 @@ with another row and `lit_rgb` `[128,128,128]` appeared 85 times; here it is 113
 repeat of 5. Padding produces identical rows, photography does not, and a future check should read
 that rather than the neutral count.
 
-⚠️ **`Q34`'s ring weights are now authored against a population that moved and must be re-derived.**
-The near-neutral ring (`C* <= 5`) falls from **51.6% to 40.5%** of surveyed stock and the population
-median `C*` rises from 4.78 to 6.12, so `panel_grey`'s expected share drops **33.7% → 28.6%** —
-**5.1 points of the neutral bin was filler**. The config's own ⚠️ — *re-derive these if the ramp
-moves* — applies to the survey moving as well.
+⚠️ **`Q34`'s ring weights are authored against this population, and `Q34′` re-derived them against
+it.** The near-neutral ring (`C* <= 5`) falls from **51.6% to 40.5%** of surveyed stock and the
+population median `C*` rises from 4.78 to 6.12, so `panel_grey`'s expected share drops **33.7% →
+28.6%** — **5.1 points of the neutral bin was filler**. The config's own ⚠️ — *re-derive these if the
+ramp moves* — covers the survey moving as well, which is the reading `Q34′` had to make first.
 
 ⚠️ **Averaging in sRGB is a second, separate question** worth settling in the same pass: ~4.9 `L*`
 away from a linear-light mean, and the same family as the bug `Q27` closed. **Change one at a time.**
 
-**See.** `Q34` · `Q27` · `Q30` · `Q26`
+**See.** `Q34` · `Q34′` · `Q27` · `Q30` · `Q26`
 
 ## `Q38` — `exposure_anchor` is baked into `COLOR_0` at build time
 
