@@ -861,7 +861,7 @@ moved 28.7%, so the saturated buildings are not an artefact of the survey that w
 
 ## `Q31` — The city's value range has an empty middle
 
-**Status.** 🔴 Open · **Owner.** `P3-9a`
+**Status.** 🟡 Open, but **re-diagnosed, with the cause measured** · **Owner.** `P3-9a`
 
 **Claim.** Street frames come out bimodal. Causeway Bay in shade is **51.4% of pixels under `L*` 10
 and 0.5% between 10 and 30**; under the HKCEC deck 28.9% and 2.0%. Half a street frame carrying no
@@ -872,20 +872,127 @@ published albedo and it moved **+2.7 `L*`**, because `#3c3a37` was already claim
 against aged asphalt's real 7–12%. Re-graded on the same two frames: shaded street under `L*` 10
 **51.4% → 51.3%**, the 10–30 band 0.5% → 2.7%; Hennessy Road 13.2% → 13.0%.
 
-🔴 **That leaves the shadow fill as the only untried candidate**, and the two failing frames are
-still exactly the two shot *in shade*. It belongs in the owed rig pass, not in the palette.
+### The statistic now has a mechanism
+
+**It did not have one until now, which is why every figure above was unauditable.**
+`tools/frame_stats.py` reported percentiles and never band shares, so nothing in the repo could
+reproduce the numbers this question is *stated in*. It now reports both, against `SHADOW_L` and
+`MIDTONE_L`, with the first tests the tool has had.
+
+⚠️ **Percentiles cannot show an empty middle, and this is structural rather than a matter of
+resolution.** The shipped `kerb` frame reports p50 7.9 and p90 58.8 — the entire 10–30 band falls
+between two adjacent reported percentiles, and the emptier the middle gets the further apart the
+percentiles straddling it move. ⚠️ Worse, at an exactly even split `np.percentile` *interpolates
+across the gap*: a 50/50 frame at `L*` 2 and 70 returns p50 **36.0**, a confident mid-grey for a
+frame that has no mid-greys. `kerb` escapes that only by being 51/49.
+
+**The reproduction is exact in three cells of four.** `kerb` returns 51.3% / 2.7% and `street` 13.0%
+under `L*` 10, matching the published post-`Q33` figures. ⚠️ `street`'s 10–30 band returns **25.4%
+against a recorded 25.1%** on a **byte-identical** frame, so that one cell was always slightly wrong.
+
+### The failing set, re-measured — and the second frame found
+
+✅ **"The two failing frames are exactly the two shot in shade" holds.** The deck frame was not lost:
+it is **`taxi` at t01.20**, named in `ART_DESIGN.md`'s Lighting section as `build/driver/art_taxi`
+t01.20, and it reproduces **28.9%** to the decimal.
+
+| viewpoint | under `L*` 10 | 10–30 | reading |
+|---|---|---|---|
+| `kerb` — Causeway Bay in shade | **51.3%** | **2.7%** | the pathology |
+| `taxi` t01.20 — the car in shade | **28.9%** | **12.1%** | the pathology, milder |
+| `street` | 13.0% | 25.4% | healthy — a full middle |
+| `infra` | 0.0% | 39.6% | healthy — the *fullest* middle measured |
+| `skyline` | 0.0% | 3.8% | healthy — its mass is *above* 30 |
+| `taxi` t04.50 — the car in sun | 1.7% | 22.0% | healthy, and the same camera |
+
+⚠️ **What does *not* hold is "under a deck".** `infra` is shot from directly beneath the Canal Road
+flyover and has the **fullest** middle of every frame measured. Being under a structure does not
+predict the fault; being *in shade* does, and the same `taxi` camera grades clean at t04.50 in sun.
+
+✅ **`Q33` helped this frame six-fold and it was never recorded.** The 10–30 band is written as 2.0%
+and now reads **12.1%**, because the post-`Q33` re-grade covered only `kerb` and `street`. The palette
+lever was more effective than the record credits — on the frame nobody re-measured.
+
+⚠️ **A low middle band is not by itself a defect** — `skyline` has 3.8% and is fine. The pathology is
+a high shadow share **and** a low middle together. Read the two columns as a pair or the next person
+optimises `skyline` upward for nothing.
+
+### The cause is the tone curve, not the fill
+
+**`adjustment_contrast = 1.14` is the dominant term, and it had never been ablated.** `Q27`'s sweep
+covered exposure, ambient energy, glow, fog, tonemap and specular; `Q33` was the palette. The
+contrast adjustment was in neither list. Measured on `kerb`, one `.tres` line:
+
+| `adjustment_contrast` | under `L*` 10 | 10–30 | `skyline` `L*` p90−p10 |
+|---|---|---|---|
+| 1.14 (shipped) | 51.3% | 2.7% | 44.1 |
+| 1.11 | 50.4% | 3.5% | 42.9 |
+| 1.07 | 49.6% | 4.3% | 41.5 |
+| 1.00 | **0.9%** | **52.9%** | 39.0 |
+
+✅ **It generalises to the second failing frame.** The same one-line change takes `taxi` t01.20 from
+**28.9% → 0.8%** under `L*` 10, and its middle band 12.1% → 40.2%. Two frames, one cause.
+
+**Godot's contrast adjustment pivots about mid-grey, so at 1.14 everything below it is pushed down**
+and the 10–30 band is precisely the region evacuated into <10. ✅ **That explains why `Q33` looked
+inert on the statistic it was graded against.** The palette and the contrast are **in series with the
+contrast downstream**, so a +2.7 `L*` lift on a surface sitting at `L*` 5 is re-crushed and the mass
+never crosses 10 — 51.4% → 51.3%. What it did move was the band above, which is why the same change
+reads as 0.5% → 2.7% on `kerb` and 2.0% → 12.1% on `taxi`.
+
+⚠️ **It does not explain `Q27`'s null, and the two should not be merged.** `Q27`'s ablations were
+graded on **albedo gain**, which its own encoding fault accounts for; the contrast curve is a claim
+about the **value distribution**. Different statistic, different cause — see the trap below.
+
+### ⚠️ But closing the band does not deliver what the claim asks for
+
+**The 51.3% → 0.9% is one flat surface crossing a threshold, not a frame gaining information.**
+Graded on the *same pixels* — the renders are deterministic and pixel-aligned, so the mask is fixed
+by the baseline:
+
+| frame · variant | shadow-mass `L*` | shadow-mass sd | under `L*` 10 | `skyline` spread |
+|---|---|---|---|---|
+| `kerb` shipped | 4.91 | **0.79** | 51.3% | 44.1 |
+| `kerb` `contrast` 1.00 | 10.99 | **0.85** | 0.9% | 39.0 |
+| `kerb` `ambient_light_energy` 1.4 | 8.59 | **1.05** | 46.7% | 38.2 |
+| `taxi` t01.20 shipped | 4.76 | **0.83** | 28.9% | — |
+| `taxi` t01.20 `contrast` 1.00 | 10.77 | **1.39** | 0.8% | — |
+
+Half the `kerb` frame is the shaded road at a near-constant value, and it stays near-constant: the
+internal spread moves 0.79 → 0.85 against a frame-wide spread of 54. 🔴 **The band share can therefore
+be satisfied by translation**, and "half a street frame carrying no information" is a claim about
+information. The two are not the same test.
+
+⚠️ **`taxi` separates a little more (0.83 → 1.39) and that is not a counter-example.** Its shadow mass
+is several surfaces — soffit, walls, pavement, car — so a uniform lift spreads them by their differing
+albedo. `kerb`'s is one road. Neither reaches a spread a viewer could read as form, and the mechanism
+is the same in both: the lift is uniform, so it can only separate surfaces that already differ.
+
+⚠️ **Contrast strictly dominates the fill on this trade**, which inverts the assumption above: raising
+ambient 65% moves the mass only to 8.59 — *still under 10* — buys 4.6 points of band share, and costs
+**more** massing flatness (38.2) than contrast 1.00 does (39.0). The fill is the weaker lever in both
+directions at once.
+
+✅ **This makes the sky-visibility term a structural conclusion rather than a preference.** Both levers
+are monotone per-pixel functions, and the shaded road is one flat-shaded surface of uniform albedo and
+normal under uniform ambient — a constant. No monotone function of a constant produces variation, at
+any setting. `Q39` is the second consumer. `P3-9a` should carry the bake, and the acceptance test
+should be **within-mass sd, not band share**.
+
+⚠️ **Nothing was shipped.** `clean_daylight.tres` is restored byte-for-byte. The tone curve is the
+thing three drivers are about to judge `Q26` through, and moving it now would change the thing under
+test — the contrast change waits on that verdict.
+
+⚠️ **`Q27` is a trap for the next reader.** It ablated `ambient_light_energy` 0.85 → 0.30 and reports
+it moved albedo gain "by at most 0.05", which reads as *ambient does nothing*. It says no such thing:
+`Q27` measured **albedo gain**, this measures the **value distribution**, and ambient moves the second
+while barely touching the first. Same knob, two statistics, opposite verdicts.
 
 **Corroboration from a second axis.** `Q36` reached the same rig pass on *hue*: `asphalt_aged` is the
 frame's grey card at authored `C*` 2.14 hue 84.6 (warm) and rendered `C*` 7.05 hue **275** (blue), so
 the rig adds ~7 `C*` of blue to everything and the below-horizon frame is 70.7% cool.
 
-⚠️ **Both levers produce the same symptom on the lowest-albedo surface**, so change one at a time and
-grade with `tools/frame_stats.py`. `Q27`'s ablation discipline applies. ⚠️ Do not simply raise the
-fill: `ART_DESIGN.md` records that lowering it corrects the road and flattens the massing at once, and
-raising it is the same trade on the same axis — which is true only while ambient is uniform. `Q39` is
-the second consumer for a sky-visibility term.
-
-**See.** `Q33` · `Q36` · `Q39` · `Q27`
+**See.** `Q33` · `Q36` · `Q39` · `Q27` · `Q26`
 
 ## `Q32` — `INFRASTRUCTURE` is *not* the brightest large object in its frame
 

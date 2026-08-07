@@ -513,23 +513,36 @@ judged only on internal consistency always indicts its most extreme member — t
 look consistent with each other" has no way to return "the outlier is the only correct one". It takes
 an external referent to see it. `Q33`.
 
-**The measurement underneath stands:** the street-level frames really are bimodal with an empty
-middle, and the palette rule did not close it.
+**The measurement underneath stands:** of the two frames below, `kerb` really is bimodal with an empty
+middle, and the palette rule did not close it. ⚠️ The band shares are now `tools/frame_stats.py`'s,
+not an ad-hoc script's. Three of the four cells reproduce exactly; `street`'s 10–30 was recorded as
+25.1% and reproduces at **25.4%** on a byte-identical frame, so that one was always slightly wrong.
 
 | Frame | pixels under `L*` 10 | `L*` 10–30 | shipped before → after |
 |---|---|---|---|
 | `kerb` — Causeway Bay, road in shade | **51.4% → 51.3%** | 0.5% → 2.7% | barely moved |
-| `street` — Hennessy Road canyon | 13.2% → 13.0% | 27.0% → 25.1% | barely moved |
+| `street` — Hennessy Road canyon | 13.2% → 13.0% | 27.0% → 25.4% | barely moved |
 
 🔴 **That is positive evidence about the lighting rig rather than an open question about the road.**
-The road albedo has been corrected against a material and the hole stayed, so the remaining candidate
-is the **shadow fill** — the one thing not yet varied, and the two failing frames are exactly the two
-shot *in shade*. `Q31`, and it belongs with the rig pass, not with the palette.
+The road albedo has been corrected against a material and the hole stayed. ⚠️ **But the rig term is
+`adjustment_contrast`, not the fill** — 1.14 → 1.00 takes `kerb` from 51.3% to **0.9%**, because
+Godot's contrast adjustment pivots about mid-grey and the 10–30 band is what it evacuates downward.
+The fill sits *upstream* of that curve and is re-crushed by it, which is why every earlier lever
+measured as inert. `Q31`.
 
-⚠️ **The empty middle is a *lit-versus-unlit* gap, not a dark-albedo gap.** The two worst frames are
-the two shot in shade, and the same asphalt renders at `L*` 30–60 in sun. So the second lever is
-fill — the shadow value — and that one *is* the rig's. Do not reach for both at once; the ablation
-discipline in the Lighting section applies.
+✅ **The empty middle is a *lit-versus-unlit* gap, not a dark-albedo gap**, and the two failing frames
+really are the two shot in shade — `kerb`, and `taxi` at t01.20, which reproduces its recorded 28.9%
+exactly. The same `taxi` camera grades clean at t04.50 in sun. ⚠️ But *under a deck* is not the
+predictor: `infra`, shot from directly beneath the Canal Road flyover, has the **fullest** middle of
+every audit frame at 39.6%.
+
+🔴 **Do not treat the band share as the acceptance test.** Half the `kerb` frame is the shaded road at
+one near-constant value: dropping the contrast moves that mass from `L*` 4.91 to 10.99 while its
+internal spread goes only 0.79 → 0.85 sd. The statistic reads as fixed because a flat surface crossed
+a threshold, not because anything gained information. Grade **variation within the shadow mass**.
+Neither contrast nor a uniform fill can supply it — both are monotone per-pixel functions and the
+surface is a constant — which is what makes the sky-visibility term structural rather than optional.
+The ablation discipline in the Lighting section applies; one lever at a time.
 
 ---
 
@@ -853,10 +866,12 @@ key.** Post-`Q27` the frames that fail are the two shot in shade — 51.4% and 2
 under `L*` 10, with almost nothing between 10 and 30 — while every sunlit frame grades clean and
 clips nowhere. Shadow is where the whole city converges: in `build/driver/art_taxi` t01.20 the
 soffit, the walls and the pavement under the HKCEC deck are one narrow blue-grey band and the
-massing is simply gone. So the correction is a **fill** decision — `ambient_light_energy` and
-`ambient_light_color` — and it is the one the paragraph above warns is entangled with the road
-palette, because the two produce the same symptom on the surface with the lowest albedo. Change one
-at a time and grade with `tools/frame_stats.py`; `Q31` owns the pair.
+massing is simply gone. ⚠️ **The correction is *not* the fill, and that was measured rather than
+argued.** `adjustment_contrast` — never in `Q27`'s ablation list — is the dominant term: 1.14 → 1.00
+takes `kerb` from 51.3% to 0.9% and `taxi` t01.20 from 28.9% to 0.8%, while a 65% lift of
+`ambient_light_energy` leaves the shadow mass *still under `L*` 10* and costs more massing flatness
+than the contrast change does. The fill is upstream of the tone curve and is re-crushed by it. Change
+one at a time and grade with `tools/frame_stats.py`; `Q31` owns the pair.
 
 **The general lesson, and it is the one worth keeping:** a washed-out frame is not evidence about the
 lights. Grade the frame with `tools/frame_stats.py` and ask whether an *albedo change* reaches the
