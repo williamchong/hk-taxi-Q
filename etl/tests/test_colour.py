@@ -9,8 +9,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from pipeline import colour as colour_module
 from pipeline.buildings import colour_for, facade_hue
-from pipeline.colour import lab_to_srgb, reflectance, srgb_to_lab, with_hue
+from pipeline.colour import in_gamut, lab_to_srgb, reflectance, srgb_to_lab, with_hue
 from pipeline.config import BuildingStyle, HeightBand, Material, MaterialAssignment
 from tests.helpers import flat_mesh, style
 
@@ -49,6 +50,45 @@ class TestConversion:
         red, green, blue = lab_to_srgb(np.array([[95.0, 120.0, -120.0]]))[0]
         assert (red, blue) == (255, 255)
         assert green < 255
+
+
+class TestInGamut:
+    """The predicate `Q30` counts with — what sRGB can and cannot show."""
+
+    def test_every_representable_colour_is_in_gamut(self) -> None:
+        """The floor: a colour that came *from* sRGB cannot be outside it, and a
+        predicate that says otherwise would report the whole city clipped."""
+        rng = np.random.default_rng(0)
+        rgb = rng.integers(0, 256, (20_000, 3))
+        assert in_gamut(srgb_to_lab(rgb)).all()
+
+    def test_over_saturated_colours_are_outside(self) -> None:
+        """The same light violet the clipping test uses: sRGB has no such colour,
+        and `lab_to_srgb` returns one anyway."""
+        assert not in_gamut(np.array([[95.0, 120.0, -120.0]]))[0]
+
+    def test_rounding_alone_is_not_reported_as_clipping(self) -> None:
+        """The failure that makes the count meaningless. Every colour moves a
+        little on the way to `uint8`, so a predicate that could not tell that
+        from a gamut failure would find clipping everywhere — which is what a
+        `dE` threshold below the rounding cost does."""
+        rng = np.random.default_rng(1)
+        lab = srgb_to_lab(rng.integers(0, 256, (5_000, 3)))
+        moved = np.linalg.norm(srgb_to_lab(lab_to_srgb(lab).astype(np.float64)) - lab, axis=1)
+        assert moved.max() < 1.0
+        assert in_gamut(lab).all()
+
+    def test_is_exactly_the_colours_the_clip_leaves_alone(self) -> None:
+        """The definition, asserted against the function it is a claim about:
+        `in_gamut` is true precisely where `lab_to_srgb`'s clip changed nothing.
+        A boundary drawn anywhere else would count colours as lost that ship
+        intact, or the reverse."""
+        rng = np.random.default_rng(2)
+        lab = np.stack(
+            [rng.uniform(0.0, 100.0, 200_000), *rng.uniform(-140.0, 140.0, (2, 200_000))], axis=1
+        )
+        unclipped = np.round(colour_module._lab_to_encoded(lab))
+        assert np.array_equal(in_gamut(lab), (unclipped == lab_to_srgb(lab)).all(axis=1))
 
 
 class TestWithHue:

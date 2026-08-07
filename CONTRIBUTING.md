@@ -48,7 +48,10 @@ If you changed the ETL, the pipeline must run end to end on the Wan Chai config.
 road surface or deck heights, also run `tools/deck_error.py` and `tools/overhang.py` — they grade the
 shipped bundle and need a built region. If you moved the height ramp or the façade survey, run
 `tools/ring_weights.py` and paste what it derives: the surveyed material weights are authored against
-both, and nothing in the checks can see that they have gone stale (`Q34′`).
+both, and nothing in the checks can see that they have gone stale (`Q34′`). If you moved the façade
+survey or `facade_hue.strength`, run `tools/facade_chroma.py` and paste its table into
+`docs/ART_DESIGN.md` — `Q30` is an argument about a distribution, and a stale one argues about a city
+that is not shipping.
 
 ---
 

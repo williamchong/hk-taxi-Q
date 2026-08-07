@@ -77,14 +77,12 @@ def srgb_to_lab(rgb: np.ndarray) -> np.ndarray:
     )
 
 
-def lab_to_srgb(lab: np.ndarray) -> np.ndarray:
-    """CIELAB back to `(n, 3)` sRGB, rounded and clipped to 0-255 `uint8`.
+def _lab_to_encoded(lab: np.ndarray) -> np.ndarray:
+    """CIELAB to sRGB in 0-255, **unclipped** — everything `lab_to_srgb` does
+    except discard the evidence of leaving the gamut.
 
-    ⚠️ **Clipping is silent and it is a real loss.** Lab describes colours sRGB
-    cannot show, and a hue pushed hard enough at a light or dark value lands
-    outside the gamut — where clipping each channel independently shifts the hue
-    it was asked to preserve. Callers that amplify chroma should keep the
-    amplification modest for that reason, not only for taste.
+    Split out so `lab_to_srgb` and `in_gamut` cannot come to disagree about where
+    the boundary is: one clips this and the other measures it.
     """
     lightness, a_star, b_star = lab[:, 0], lab[:, 1], lab[:, 2]
     fy = (lightness + 16.0) / 116.0
@@ -95,7 +93,41 @@ def lab_to_srgb(lab: np.ndarray) -> np.ndarray:
     xyz = np.where(cubed > _EPSILON, cubed, (116.0 * f - 16.0) / _KAPPA) * _WHITE
     linear = xyz @ _FROM_XYZ.T
     v = np.where(linear <= 0.0031308, linear * 12.92, 1.055 * np.abs(linear) ** (1.0 / 2.4) - 0.055)
-    return np.clip(np.round(v * 255.0), 0, 255).astype(np.uint8)
+    return v * 255.0
+
+
+def lab_to_srgb(lab: np.ndarray) -> np.ndarray:
+    """CIELAB back to `(n, 3)` sRGB, rounded and clipped to 0-255 `uint8`.
+
+    ⚠️ **Clipping is silent and it is a real loss.** Lab describes colours sRGB
+    cannot show, and a hue pushed hard enough at a light or dark value lands
+    outside the gamut — where clipping each channel independently shifts the hue
+    it was asked to preserve. Callers that amplify chroma should keep the
+    amplification modest for that reason, not only for taste. `in_gamut` is how
+    to find out how much of a population that is costing.
+    """
+    return np.clip(np.round(_lab_to_encoded(lab)), 0, 255).astype(np.uint8)
+
+
+def in_gamut(lab: np.ndarray) -> np.ndarray:
+    """Which of `(n, 3)` CIELAB colours sRGB can actually show.
+
+    The boundary is **whether `lab_to_srgb`'s clip changed the byte it returns**,
+    which is the loss that reaches a screen and is the only version of the
+    question with no tolerance to argue about. A mathematical `0 <= linear <= 1`
+    is the tempting definition and it does not survive contact with floating
+    point: a colour converted *from* sRGB comes back a few parts in 10^16 outside
+    the cube, so that test reports real colours as unshowable.
+
+    ⚠️ **A `dE` threshold cannot answer this at all.** Every colour loses up to
+    about 0.7 `dE` to the `uint8` grid whether or not sRGB can show it, so no
+    threshold separates the two populations: below 0.7 it counts rounding as
+    clipping, above it misses colours clipped by less than rounding costs. That
+    is why this is a predicate and why `Q30` counts with it rather than with a
+    distance.
+    """
+    encoded = np.round(_lab_to_encoded(lab))
+    return ((encoded >= 0.0) & (encoded <= 255.0)).all(axis=1)
 
 
 def luminance(rgb: np.ndarray) -> np.ndarray:
@@ -153,10 +185,17 @@ def with_hue(
     """`rgb`'s lightness carrying `hue`'s `(a*, b*)`, scaled by `strength`.
 
     `strength` is a stylisation knob and is documented as one: 1.0 reproduces
-    the measured chroma, which is muted enough (`C*` ~6 on seven buildings in
-    ten) that a city built from it reads as almost neutral. Above 1.0 keeps
+    the measured chroma, which is muted enough (six buildings in ten under `C*`
+    8) that a city built from it reads as almost neutral. Above 1.0 keeps
     *which* building is warmer and only exaggerates by how much — so the
     ordering stays evidence and the magnitude becomes art direction.
+
+    ⚠️ **It assigns `a*` and `b*` rather than scaling them**, so the shipped
+    chroma is the measured chroma times `strength` and the material's own chroma
+    never reaches a screen — `buildings.material_for` has what that costs. The
+    consequence worth knowing here is that the drawn material and the jitter
+    reach chroma only by moving `L*` and so moving where the gamut boundary
+    falls, which `tools/facade_chroma.py` measures at 0.04 `C*` over Wan Chai.
     """
     lab = srgb_to_lab(np.array([rgb], dtype=np.float64))
     lab[0, 1] = hue[0] * strength
