@@ -98,7 +98,7 @@ shape**, at 15–27× the download. Wan Chai in individualised form is **5.86 GB
 not ship at all (`GENERIC` 47.1 MB, `INFRASTRUCTURE(TB)` 36.5 MB, `VEGETATION(TB)` 12.8 MB on one
 sheet). Shared classes are equal to within a rounding error; terrain is byte-identical.
 
-#### What the extra classes actually are (scouted 2026-08-07)
+### What the extra classes actually are (scouted 2026-08-07)
 
 **Measured over all six Wan Chai sheets, so nobody re-downloads 6.1 GB to learn this.** Read locally
 from the cache; the whole scan is a `.gltf` parse and needs none of the imagery.
@@ -116,7 +116,7 @@ from the cache; the whole scan is a `.gltf` parse and needs none of the imagery.
 ⚠️ **Six objects means one per sheet.** `GENERIC`, both `(TB)` classes and terrain are single welded
 blobs per map sheet. Only `BUILDING`, `INFRASTRUCTURE` and `WATERBODY` are per-object.
 
-🔴 **`VEGETATION(TB)` is refused, and it is not close.** 1.52 M triangles is **3.5× the entire shipped
+❌ **`VEGETATION(TB)` is refused, and it is not close.** 1.52 M triangles is **3.5× the entire shipped
 city** (434,149 at LOD0) and 1.15× the whole 2,214-building stock — when trees outweigh every
 building in Wan Chai, the mesh is photogrammetry, not modelled trees. It is one welded blob per sheet,
 so there is no per-tree object to instance, cull or LOD; it carries **no `COLOR_0`**, so the
@@ -129,7 +129,7 @@ suffix is not an automatic ban** — `TERRAIN(TB)` ships — but terrain gets aw
 `GENERIC` (3.95 M triangles) and `INFRASTRUCTURE(TB)` (1.55 M) fail the same way, and the
 non-textured set already ships 77 per-object `INFRASTRUCTURE` items.
 
-🟡 **`WATERBODY` is the only cheap one — 605 triangles for all 22 objects across the region — and it
+💡 **`WATERBODY` is the only cheap one — 605 triangles for all 22 objects across the region — and it
 is not the harbour.** They are small inland features, 2–137 triangles each, extents of 3–44 m, and
 several sit at origin heights of **24.6, 62.4 and 113.6 m**: nullahs, catchwaters and service
 reservoirs on the hillside `Q36` measured at **0.000% of all six fixed viewpoints**. So the cheapest

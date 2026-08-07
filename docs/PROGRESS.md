@@ -285,8 +285,10 @@ and `DATA_SOURCES.md`'s individualised entry.
 
 - **Real-time GI (Enlighten).** The premise is absent: *Catalyst* moved off baked lighting because its
   sun moved through a 48-minute cycle. This sun does not move — night is a *switch* between two static
-  rigs. Enlighten's 3 ms was a 2016 console at 60 fps; the mobile tier here is a phone at 280,807
-  resident triangles against a 300k budget. **The sequel's story is evidence *for* baking, not against.**
+  rigs. Enlighten's 3 ms was a 2016 console at 60 fps; the target here is a phone, against a **<300k
+  *visible*** budget with the streamer already holding 280,807 *resident* — ⚠️ different quantities,
+  which `verify_city_streamer.gd` refuses to gate on each other, but thin on both readings.
+  **The sequel's story is evidence *for* baking, not against.**
 - **Planar reflections and SSR.** Unimplemented in the locked Mobile renderer, and the cheap
   equivalent already ships — `city_facade_clean.gdshader` bows a reflected ray per pane through a sky
   gradient with a face-on floor.
