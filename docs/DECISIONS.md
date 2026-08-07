@@ -1040,12 +1040,15 @@ entire selected set is filler and the median lands exactly on it. **166 of the 2
 `naive_rgb`**: those buildings *were* photographed, and the selection discarded the photograph. A
 mean would have diluted the filler; a bright-tail order statistic cannot.
 
-⚠️ **222 is a floor, not the extent, and the JSON cannot settle it.** Filler below that ~35% share
-pulls a row toward neutral without ever reaching `a* = b* = 0`. Excluding the 222, chroma does fall
-with atlas size — `corr(log pixels, C*)` **−0.20**, largest pixel quartile median `C*` **2.91**
-against 5.8–6.6 for the other three — but the signal is confounded with height and is not monotone:
-within bands it appears only at 40–80 m (6.78 → 2.74) and *reverses* below 20 m (6.10 → 7.18). Big
-buildings are also genuinely more neutral. Only the pixels can separate the two.
+⚠️ **222 is a floor, and the pixels put the real reach near five times it.** Filler below that ~35%
+share pulls a row toward neutral without ever reaching `a* = b* = 0`, and the JSON cannot see it:
+excluding the 222, chroma does fall with atlas size — `corr(log pixels, C*)` **−0.20**, largest pixel
+quartile median `C*` **2.91** against 5.8–6.6 for the other three — but the signal is confounded with
+height and is not monotone, appearing only at 40–80 m (6.78 → 2.74) and *reversing* below 20 m
+(6.10 → 7.18). Measured against the imagery instead, on `11-SW-9D`: rejecting filler moves **20 of 59
+buildings** past `Δab` 0.46 and **4** past 2.0, where only **3** were achromatic. 30 of the 59 carry
+filler at all. **Any fix that keys on the achromatic rows treats one building in seven of those it
+should.**
 
 ⚠️ **The fix is structural, not another entry in a list.** The guard has been wrong once already —
 the first padding guard caught only pure black, and `#3c3c3c` **is** RGB(60,60,60). 23 distinct
@@ -1053,22 +1056,30 @@ greys is the measure of why enumeration keeps failing. **Reject exact `R == G ==
 photographic texel essentially never is — or detect each atlas's filler as its modal
 exactly-repeated colour.
 
-⚠️ **The survey script was never committed and is not in history**, so this is a reconstruct-and-
-revalidate job, not an edit. The method: median of texels above the **65th percentile of `L*`**,
-filler and foliage excluded, per-face `L*` retained. Percentile interpolation, triangle sampling,
-resampling filter and rounding are all unrecorded, so a reconstruction cannot be bit-exact and
-**acceptance is a tolerance, not equality**:
+⚠️ **The replacement survey is `tools/facade_survey.py`, and it cannot re-base the old table.** The
+lost script's *sampling* is not recoverable from its outputs: its `pixels` column stands in a ratio of
+**0.17 to 241** against covered wall texels on one sheet, and is no better explained by wall area
+(4.5 to 2,877 per m²), so it counted neither. Nothing left in the file pins it. On `11-SW-9D` the new
+tool matches `height_m` **exactly** on 59 of 59, agrees with the `vegetation` column to a median
+**0.0070**, and — run *without* its filler guard — lands on the shipped achromatic value for the two
+rows that are more than 30% filler, which is what identifies it as the same measurement. Against the
+shipped `a*`/`b*` it still sits at a median `Δab` of **1.20**, and that residue is sampling, not the
+fix: the guard alone accounts for a median of **0.000**.
 
-| Gate | Threshold |
-|---|---|
-| Median `Δab` on the 1,992 rows that are not achromatic | **≤ 0.46** — the tolerance `Q33` held authored colour to |
-| Rows still at `C* = 0` | **zero** |
-| The 220 shipped bad rows | chromatic, or dropped so `facade_hue` falls back to the height band |
-| Rows moving `Δab > 2.0` | **enumerated and inspected**, never silently accepted |
-| Key set | 2,214 stems unless a drop is recorded |
+| Gate | Threshold | `11-SW-9D` |
+|---|---|---|
+| Rows still at `C* = 0` | **zero** | ✅ 0 of 59 |
+| Shipped achromatic rows | chromatic, or dropped to the height band | ✅ 3 of 3 chromatic |
+| Key set | unchanged unless a drop is recorded | ✅ 59 of 59 |
+| `height_m`, `vegetation` | reproduced | ✅ exact; median 0.0070 |
+| Median `Δab` against the shipped table | **≤ 0.46** (`Q33`'s tolerance) | ❌ **1.20** |
 
-Anything looser and every building's colour moves, invalidating `Q26`'s pending A/B, `Q30` and
-`Q34`'s grading.
+⚠️ **So a rerun is not a repair of the old table but a replacement of it**, and the last gate is the
+price rather than a defect to fix — it cannot be met by any reconstruction, because what it measures
+is the lost sampling scheme. Every building's hue moves by about 1.2 `Δab`, which `strength: 2.0`
+doubles onto the wall, and `Q26`'s pending A/B, `Q30` and `Q34`'s grading are all re-based against a
+survey that can be re-derived rather than one that cannot. Sequence it per sheet: the merge is a clean
+union, so `11-SW-9D` (588 MB, 59 rows) settles the method before the 1.3 GB sheets are touched.
 
 ⚠️ **Averaging in sRGB is a second, separate question** worth settling in the same pass: ~4.9 `L*`
 away from a linear-light mean, and the same family as the bug `Q27` closed. **Change one at a time.**
