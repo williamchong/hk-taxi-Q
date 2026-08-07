@@ -86,13 +86,74 @@ match on a shared stem with the variant in the suffix (`…C0` non-textured, `�
 which makes the stem a **stable cross-dataset building key** — a landmark can be matched between the
 two sets by ID with no spatial join. What differs is how the surface is described: non-textured
 carries `COLOR_0` in 1 primitive with 0 images; individualised carries `TEXCOORD_0` in 4 primitives
-with 4 images.
+with 4 images. ⚠️ **"4 and 4" is one building, not the rule** — measured across all six sheets,
+individualised `BUILDING` is 3,204 primitives and 3,202 images over 2,214 objects, so **1.45 on
+average** and many carry exactly one. The load-bearing half of the sentence is the other one: the
+non-textured buildings have **no UVs at all**, so there is nothing for `collapse` to corrupt and
+nothing to "keep" by weakening a LOD tier.
 
 **So individualised buys texture maps and three extra object classes — not one triangle of extra
 shape**, at 15–27× the download. Wan Chai in individualised form is **5.86 GB zipped**, of which
 **93–96% is texture**, and the extra ~94 MB of geometry is entirely classes the non-textured set does
 not ship at all (`GENERIC` 47.1 MB, `INFRASTRUCTURE(TB)` 36.5 MB, `VEGETATION(TB)` 12.8 MB on one
 sheet). Shared classes are equal to within a rounding error; terrain is byte-identical.
+
+#### What the extra classes actually are (scouted 2026-08-07)
+
+**Measured over all six Wan Chai sheets, so nobody re-downloads 6.1 GB to learn this.** Read locally
+from the cache; the whole scan is a `.gltf` parse and needs none of the imagery.
+
+| Class | Objects | Prims | Triangles | Images | Attributes |
+|---|---:|---:|---:|---:|---|
+| `GENERIC` | **6** | 470 | **3,946,502** | 470 | POS+N+UV |
+| `INFRASTRUCTURE(TB)` | **6** | 191 | 1,554,585 | 190 | POS+N+UV+COL |
+| `VEGETATION(TB)` | **6** | 118 | **1,520,184** | 118 | POS+N+UV |
+| `BUILDING` | 2,214 | 3,204 | 1,327,925 | 3,202 | POS+N+UV+COL |
+| `TERRAIN(TB)` | 6 | 6 | 881,735 | 6 | POS+N+UV |
+| `INFRASTRUCTURE` | 77 | 273 | 413,213 | 273 | POS+N+UV |
+| `WATERBODY` | 22 | 22 | **605** | 22 | POS+N+UV |
+
+⚠️ **Six objects means one per sheet.** `GENERIC`, both `(TB)` classes and terrain are single welded
+blobs per map sheet. Only `BUILDING`, `INFRASTRUCTURE` and `WATERBODY` are per-object.
+
+🔴 **`VEGETATION(TB)` is refused, and it is not close.** 1.52 M triangles is **3.5× the entire shipped
+city** (434,149 at LOD0) and 1.15× the whole 2,214-building stock — when trees outweigh every
+building in Wan Chai, the mesh is photogrammetry, not modelled trees. It is one welded blob per sheet,
+so there is no per-tree object to instance, cull or LOD; it carries **no `COLOR_0`**, so the
+terrain trick of deriving a flat colour and discarding the image has nothing honest to derive (a
+canopy is not one colour per 4 m cell); and decimating it lands on hard rule 1's own reasoning —
+*"decimating photogrammetry does not produce low-poly style — it produces blobs."* ⚠️ **The `(TB)`
+suffix is not an automatic ban** — `TERRAIN(TB)` ships — but terrain gets away with it by being a
+**height field**, which `collapse` has a dedicated path for. A canopy is not.
+
+`GENERIC` (3.95 M triangles) and `INFRASTRUCTURE(TB)` (1.55 M) fail the same way, and the
+non-textured set already ships 77 per-object `INFRASTRUCTURE` items.
+
+🟡 **`WATERBODY` is the only cheap one — 605 triangles for all 22 objects across the region — and it
+is not the harbour.** They are small inland features, 2–137 triangles each, extents of 3–44 m, and
+several sit at origin heights of **24.6, 62.4 and 113.6 m**: nullahs, catchwaters and service
+reservoirs on the hillside `Q36` measured at **0.000% of all six fixed viewpoints**. So the cheapest
+class here may also be the least visible. It is cheap enough to be worth a **tint probe** and it must
+have one before it is named — that is `Q36`'s "tint the class before naming it", which has now fired
+four times.
+
+❌ **There is no PBR material data in this dataset, and none can be inferred.** Every material is
+`pbrMetallicRoughness` with an exporter default and nothing else — `BUILDING` at `roughnessFactor
+0.984375` (= 252/256) and `metallicFactor 0.5`, `VEGETATION` at `0.9375` and `0.5`, i.e. half-metal
+leaves. There are **no roughness, metallic or normal maps anywhere in the set**, only
+`baseColorTexture`. Nor is roughness recoverable from the imagery: it is surface microstructure, and
+`Q34` put the ground sample distance at **13–18 cm**, two orders of magnitude above it. Roughness and
+metallic are *material constants* with published values — if they are ever wanted they belong as a
+column in the `materials:` table beside `reflectance`, cited the same way and portable under hard
+rule 3, not derived from a photograph.
+
+⚠️ **And the imagery covers far less of each building than "2,214 matched" suggests.** Sampling six
+barycentric points per near-vertical triangle on `11-SW-14B`, area-weighted, with the atlas filler
+excluded: **median 14.3% of wall area carries real texels, mean 26.6%, and 50.7% of buildings fall
+under 15%.** In a dense district most walls are party walls or occluded, and an aerial only ever saw
+the street-facing faces. Any per-building façade claim from this source therefore rests on a small,
+**occlusion-biased** sample of that building — worth knowing before another attribute is derived from
+it. See `Q37`.
 
 ✅ **`P3-7` read one sheet of it, once, offline — and it still does not ship.** The window-band shader
 needed a storey height, and guessing one would have put the wrong floor count on every tower in the
