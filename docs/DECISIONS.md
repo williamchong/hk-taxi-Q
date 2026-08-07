@@ -652,9 +652,49 @@ recognition is the product (`Q8`). A white city with amber accent plinths keeps 
 that cannot be traded. Both looks are one `cp` apart and neither needs a rebuild, so this can go to
 the ≥3 HK drivers as an A/B rather than being decided in advance.
 
-⚠️ **Every shot taken before `Q27` closed is unusable for this**, `build/driver/h4` and
-`build/driver/clean` included, because albedo was reaching the screen at a third strength in all of
-them. Re-shoot before comparing.
+**The comparison set.** `build/driver/q26_{C,A,B}_cf19201/{street,skyline,kerb}/`, shot against
+`cf19201` with the region rebuilt and synced first, `--debug-view=off`, on the fixed audit cameras.
+`C` is what ships, `A` is the clean look with its seven elements on, `B` is `city_facade_warm.tres`.
+All nine frames differ by hash, so each swap reached the frame. `build/driver/` is gitignored, so the
+set does not survive a clone — but unlike the dangling commit below it is **regenerable**, and the
+three candidate definitions here plus `ART_DESIGN.md`'s cameras are what regenerate it. ⚠️ Shots
+before `Q27` closed — `build/driver/h4` and `build/driver/clean` — remain unusable, because albedo
+was reaching the screen at a third strength in all of them.
+
+⚠️ **Candidate `A` was not reproducible as written.** The recovery note in `city_facade.tres` gave
+`solid_share 0.38` and pointed at `42da0fb`, a commit contained in no branch. No commit in the
+repository has ever carried `0.38`; the switched-on value is **`0.27`**, and `542cac3` is an ancestor
+of `main` whose `city_facade.tres` is byte-identical to the dangling one. Both are corrected in the
+file. A look that is "one `cp` apart" has to survive a fresh clone to be one `cp` apart.
+
+**What the set measures.** Responding share is the fraction of the frame each look moves by
+≥ 0.5 `L*` against `C`, from `tools/frame_stats.py`:
+
+| viewpoint | `A` responds | `A` \|d`L*`\| p90 | `B` responds | `B` \|d`L*`\| p90 |
+|---|---|---|---|---|
+| `street` | 24.3% | 17.82 | **50.9%** | 13.30 |
+| `skyline` | 8.9% | 7.21 | **60.9%** | 7.99 |
+| `kerb` | 14.1% | 23.09 | **42.9%** | 13.81 |
+
+**`B` touches two to seven times more of the frame than `A`, and moves each pixel less.** That is the
+2.4 m pitch against the 9 m bay, in numbers: the measured look textures nearly everything faintly,
+the clean look articulates fewer surfaces strongly. It is the same observation as "reads as noise
+rather than as architecture" in `city_facade.tres`, without relying on the phrasing.
+
+**`A` is close to absent at skyline** — 8.9% responding, whole-frame `L*` 61.3 → 61.0 and `C*`
+unchanged — because its 140–244 m fade retires the detail. `B`'s grid survives to the horizon. So the
+massing-and-silhouette viewpoint barely discriminates `A` from `C`, and whoever runs the A/B should
+know the choice is a street-level one.
+
+⚠️ **`A` adds chroma to a distribution `Q30` already calls oversaturated, and `B` does not.** The
+clean figure is the whole frame, where all three are measured over the same pixels: `C*` mean at
+`street` is 16.6 (`C`) → **18.8** (`A`) → 16.7 (`B`). On responding pixels at `kerb`, `C*` p90 goes
+20.7 → **32.2** under `A` and 32.5 → 35.2 under `B` — ⚠️ read each arrow alone and never across, as a
+responding set is defined per comparison and those two are statistics over different pixels. The
+cause is visible in the frames: `A`'s glazing reflects sky and its accent courses are saturated red,
+blue and orange, so a large share of wall area stops showing the building's **surveyed** hue at all.
+`B` leaves that hue legible. `Q37` and `Q34` paid for that hue, which makes this a cost and not only
+a preference.
 
 ⚠️ **If the clean look wins, the palette moves** from the shader's `base_wash` into `height_bands` in
 the city config, where CLAUDE.md says palettes live.
@@ -664,7 +704,17 @@ on a minority of towers**, so with the shader grid off the city draws surface th
 the relief aliases into speckle at the distance it is seen from. That was not on the table when this
 question was written.
 
-**See.** `ART_DESIGN.md` "The clean/futuristic variant" · `Q27` · `Q30` · `Q31`
+⚠️ **`B` is shown with three known defects and the verdict has to be told so.** `city_facade.gdshader`
+was forked into the clean one and then fixed in three places never back-ported — `band()` without the
+analytic duty-cycle convergence, `along_m` taken from the face normal, and a 90–240 m fade safe
+against the 250 m LOD1 switch only by accident. `city_facade_warm.tres`'s header is the authority on
+that list; if one is ever ported, that is the file to correct and this paragraph follows it. They are
+why `B`'s skyline responds across 60.9% of the frame at low amplitude, so the figure is partly moiré
+and not only texture. Porting them first was rejected: the point of `city_facade_warm.tres` is to be
+a faithful record of what `P3-7` measured, and a driver judging a repaired variant would be judging
+something the repo does not have. The three are cheap to port **after** a verdict that wants them.
+
+**See.** `ART_DESIGN.md` "The clean/futuristic variant" · `Q27` · `Q30` · `Q31` · `Q34` · `Q37`
 
 ## `Q27` — `COLOR_0` is authored sRGB and must be linearised by the consumer
 
@@ -1138,7 +1188,7 @@ measurement is different evidence: run *without* its filler guard it lands on th
 value for the rows above 30% filler, reproducing the bug on demand, and the guard alone accounts for
 a median `Δab` of **0.000**. `Q26`'s pending A/B, `Q30` and `Q34` are re-graded against a survey that
 can be re-derived instead of one that cannot. `Q34` re-derived as `Q34′` and `Q30` is re-measured;
-`Q26`'s A/B is a verdict and is the one still owed.
+`Q26`'s A/B is shot and graded against this survey, so what it still owes is the verdict itself.
 
 ⚠️ **Two rows still read `C* = 0` and both are photographs.** `naive_rgb` of `[82,82,81]` and
 `[87,81,77]` over 2.7 and 3.8 million texels — the per-channel medians simply rounded to a tie.
