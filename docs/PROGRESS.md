@@ -218,6 +218,10 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · ⚠️ conditional ·
 | `Q35` | **A per-building material draw gives a salt-and-pepper skyline where real blocks share cladding, and nothing in the data fixes it.** Opened by `Q34` shipping, which made the problem concrete rather than hypothetical: neighbours now draw independently from the same distribution, so two adjacent 1970s blocks can land on materials 13 reflectance points apart. ⚠️ **Hue does not supply the coherence, and the guess that it would was published here before it was measured** — only **0.5%** of hue variance lies between the survey's six sheets. Block-scale is untested rather than ruled out: the survey carries `sheet` but no coordinates, so the only spatial resolution testable so far is ~1 km, which is far coarser than a city block | The day-one mitigation is real but narrow: every bin's weights are authored so its expected reflectance matches what the height ramp gave that population, which bounds how far apart two neighbours can land *on average* without constraining any individual pair. What it cannot do is make a block read as a block. Worth noting the defect is **most visible exactly where the player is** — a street canyon shows two or three façades at once, where the skyline averages hundreds | `buildings.py`, `hong_kong.yaml` | 🔴 Open. Candidates, none scouted: a **spatial hash** on the building's own position, so the draw is seeded by which ~50 m cell it sits in rather than by its id — cheap, needs no new data, and is a knob (cell size) rather than a rewrite; a **block join** from an external footprint/lot dataset, which buys correctness and costs a new source and a new licence review; or **accepting it**, on the grounds that Hong Kong's stock genuinely is more heterogeneous per block than most cities and the arcade camera moves fast. ⚠️ **Grade it from the street viewpoint, not the skyline** — the skyline is where this looks fine and the canyon is where it does not, and the two disagreed sharply once before (`Q27`) |
 | `Q36` | **The ground claimed to be soil, and Wan Chai's ground is paving.** `fill_dry` sourced itself as "dry soil and urban fill" for a fully built-up reclamation whose visible surface is pavement, plaza, apron and promenade — the carriageway being drawn separately from `roads.glb`. The file already disagreed with itself: the comment above the material said "fill and hardstanding" while the material said soil | `Q34`'s rule is that a material is a claim about a **surface**, and this one was a claim about what is *under* the surface. It also made the ground the only large warm object in an otherwise cool frame, which is what read as sand | `hong_kong.yaml` | 🟢 **Closed 2026-08-07.** `fill_dry` → `concrete_paving`, `#645a45` → `#5f5a51`, **reflectance unchanged at 20.0%**, so lightness never moved and the change is single-variable. 20.0% orders correctly against the concrete already in the table (`concrete_kerb` 25.0, `concrete_sooty` 22.0) — a pavement is the dirtiest concrete in the city. Rendered on `art_ground`: ground patch `C*` **6.71 → 3.53** at an unmoved `L*` 49, warm share of the below-horizon frame **29.3% → 2.0%**. ⚠️ **`Q18`'s doubled chroma is superseded and this is the entry to read before raising it again.** `Q18` measured a low-chroma ground reading as "white plaster" at rendered `L*` 67.2 / `C*` 6.48 and fixed it with hue; `Q33` then took 18 `L*` out of the render for an unrelated reason and **nobody re-graded the pair**. At `L*` 49.2 the same low chroma reads as a concrete apron — *less* chroma than the state `Q18` rejected. The chroma was compensation for a lightness problem that `Q33` had already fixed. ⚠️ **The reusable lesson: two individually-correct changes, never graded together.** Its cousin is the stale-shot trap `Q29` lost a day to — a verdict read one palette commit late — and the guard is the same one `ART_DESIGN.md` already states for screenshots: a verdict has an expiry date nothing in the repo records. Extend it to config, because `Q18`'s chroma outlived the frame that justified it. ⚠️ **There is a null and it is not at the greyest hex**: rendered chroma is roughly \|warm albedo − blue illuminant\|, so authored `C*` 5.93 renders at **3.53** while authored `C*` 4.47 renders at **5.04**, pulled cool. Authoring a little warmth is what cancels the sky. Do not "simplify" toward neutral grey. ⚠️ **The illuminant is measurable and blue**: `asphalt_aged` is the frame's grey card — authored `C*` 2.14 at hue 84.6 (warm), rendered `C*` 7.05 at hue **275** (blue) — so the rig adds ~7 `C*` of blue to everything, and the below-horizon frame was **70.7% cool**. That split is `Q31`'s owed rig pass, reached here independently on the *hue* axis where `Q31` reached it on *value*. ✅ **`street` and `kerb` verified byte-for-byte unmoved** (frame `L*` and `C*` delta 0.00 on both; the ground is not visible from either), so the change is surgical to the one viewpoint that shows terrain. ⚠️ **Refused along the way, and recorded so they are not re-proposed**: sourcing terrain hue from the source aerial JPEG — *not* the classifier `Q18` refused, but the `facade_hue` pattern applied to `TERRAIN(TB)` — fails for three reasons `Q18` never gave (an aerial's variation is baked shadow, and baked illumination in the albedo channel is wrong under both lighting rigs; measured hue lands near `C*` 6 and arrives under the knee; and the amplification it would need is `Q30`, open and red). And an x,y **hue field** is refused: below the knee it is invisible, above it the ground goes patchy, and the palette's real variation is *lightness* — every structural material sits in an 83–96° hue band spanning 16 `L*`. What the ground already varies by is `Q29`'s faceting, on the value channel, for free. ⚠️ **The hillside split was specified, probed and refused 2026-08-07 — and the probe refuted the causal story behind it.** The proposal was two materials on an elevation threshold, reasoning that a Hong Kong hillside is green because it is too steep to build on. Measured over 604,465 terrain triangles (2.143 km² of surface), area-weighted: only **9.77%** of terrain sits above 10 m, and **height and slope pick different sets** — at `y≥10 & slope≥20°` just 3.98% is both, against 5.79% high-but-flat and 2.45% steep-but-low (sea walls and embankments, which are concrete). ⚠️ **Then the tint settled it.** Terrain coloured by height×slope class and shot from all six fixed preview viewpoints renders **0.000% high terrain on every one** — it is a plateau behind and beneath a tower block at the region's southern edge, which is the diegetic map edge. The *only* place a player sees it is the one road that climbs it (2 of 615 graph nodes reach `y≥20`, peaking at 49.8 m), and from the driver's eye there the visible high ground is **97.5% the flat kind** (8.34% of frame against 0.21% steep). So an elevation threshold would paint a paved road terrace with towers on it as vegetation, in the single frame where the question is even visible — the high ground the player can reach is precisely the ground that *was* built on. ⚠️ **Slope-only fails too**: the steep set is a 0.21% fringe there, is interleaved speckle rather than a region, and `collapse` takes the *representative* vertex's colour rather than averaging, so speckle survives decimation as speckle. **If vegetation is wanted the source is vector land-use polygons**, which `ART_DESIGN.md` already names as the answer for parks — crisp edges at any cell size and a clean key for `collapse` — not a geometric threshold. ⚠️ **Fourth instance of "tint the class before naming it"** after `LedgeShading`, `reface_ledges` and `Q32`: the causal story was plausible, was mine, and was wrong about this region. 🟡 **What does stay open is the audit's actual finding**, untouched by any of this: *"an unbroken 200 m expanse of one correct colour with **nothing standing on it**"* — that is emptiness, it is `B3`'s, and no colour operation substitutes for objects |
 
+| `Q37` | **10.0% of the shipped façade survey is the atlas filler, not a photograph — and the imagery covers a median 14.3% of each building's walls.** 222 of 2,214 rows in `facade_lab.json` carry `naive_rgb` and `lit_rgb` of exactly `[128,128,128]`, i.e. `a* = b* = 0`, at `clipped` 0.0005 and a *higher* median pixel count than the rest (102,942 against 57,059). RGB(128,128,128) is independently observable as one of the fill colours in the raw atlases | It is the **same error class the survey already caught once and fixed** — *"a texel at 255 is `a* = b* = 0`"* — at the other end of the range. The consequence is that 10% of buildings render dead-neutral because they were *not measured*, and under `Q34` they also fall into the neutral-grey material bin, so a material is assigned from absent data. `Q34` reports that bin at 36.3%; up to ten points of it may be filler | `buildings.py`, survey | 🔴 Open. ⚠️ **The fix is structural, not another entry in a list.** `PROGRESS.md` records the guard being wrong once already — *"the filler is `#3c3c3c`, not black — the first padding guard caught only pure black"* — and `#3c3c3c` **is** RGB(60,60,60), so (128,128,128) is the *third* filler colour and the second miss. Enumerating them has now failed twice; reject exact `R == G == B` texels instead (a photographic texel essentially never is), or detect each atlas's filler as its modal exactly-repeated colour. ⚠️ **The survey script was never committed and is not in history**, so this is a reconstruct-and-revalidate job, not an edit. The method is in the 2026-08-06 log entry: median of texels above the **65th percentile of `L*`**, filler and foliage excluded, per-face `L*` retained. **Acceptance criterion: 1,992 of 2,214 rows come back unchanged** — anything less and every building's colour moves, invalidating `Q26`'s pending A/B, `Q30` and `Q34`'s grading. ⚠️ **Averaging in sRGB is a second, separate question** worth settling in the same pass: it is ~4.9 `L*` away from a linear-light mean, and it is the same family as the bug `Q27` closed. Change one at a time |
+| `Q38` | **`exposure_anchor` is multiplied into `COLOR_0` at build time, so changing the time of day is a full tile rebuild.** `Q33` describes the anchor as *"the only thing that moves when the city wants a different time of day"*, and `config.py` applies it at load — the product ships baked into the vertex stream | Night is planned in `ART_DESIGN.md` as a later variant, and this is precisely the lever it needs. It is also the one place the project puts an illumination term in the albedo channel it otherwise guards strictly (`Q27`, `Q36`) — a far milder violation, since it is one invertible spatially-uniform scalar, but the same category | night mode | 🟡 Open, and **deliberately not fixed now.** The fix is cheap and known: the two façade shaders already linearise `COLOR_0` themselves and could take the anchor as a uniform, and the road's `BaseMaterial3D` has `albedo_color`, which multiplies vertex colour. What it costs is `_check_exposure` and `test_no_colour_escapes_the_materials_table`, both built around *authored colour = reflectance × anchor* and both shipped days ago to close a real defect. Recorded so the constraint is found before night mode rather than during it |
+| `Q39` | **`wall_sky_tint` is uniform across the city, so a wall at the bottom of a canyon takes the same grazing sky bounce as a rooftop parapet.** `city_facade_clean.gdshader` mixes toward `sky_reflection` by `fresnel * wall_sky_tint` with no occlusion term | It overstates sky bounce in exactly the frames `Q31` reports as broken — the two shot in shade. Small on its own; it matters because it shares its input with `Q31`'s candidate fix | `Q31` | 🟡 Open. Costs nothing to fix **once a sky-visibility term exists** — `fresnel * wall_sky_tint * sky_vis` — and nothing before that, so it is a second consumer for that bake rather than a task of its own. ⚠️ Do not "fix" it by lowering `wall_sky_tint` globally: `ART_DESIGN.md` already records that lowering the ambient fill corrects the road and flattens the massing at once, and this is the same trade on the same axis |
+
 **Resolved:** `Q1` (no Z, but `ELEVATION` encodes the level) · `Q2`/`Q3`/`Q5` (building data is fully
 scriptable; 6 sheets, ~44 MB each) · `Q4` (device floor A13 / Adreno 618) · `Q7` (origin at the
 region's NW corner) · `Q8` (the city itself is the fun) · `Q9` (read the 17 MB geodatabase, not the
@@ -245,6 +249,90 @@ under, and ~0.2 m is a guess until it is driven on a cross-sloped street.
 ---
 
 ## Decision log
+
+### 2026-08-07 — Eight rendering proposals evaluated: two survive, and three of the reasons this repo gave for refusing the rest were wrong
+
+A pass over *Mirror's Edge*, *Catalyst*, PBR, and four ways of getting textures or UVs into the
+bundle. Almost all of it is refused — but the refusals were being made for the wrong reasons, and a
+wrong reason is not a harmless paraphrase: it changes what would become possible if the entry were
+ever lifted. The corrections are in `ART_DESIGN.md`'s anti-goals, `ARCHITECTURE.md`'s tile contract
+and `DATA_SOURCES.md`'s individualised entry.
+
+**What survives, in the order it should be done.** Both are conditional, and the first is free.
+
+1. 🟢 **`Q31`'s bounce-fill pass — do this first, it costs nothing.** *Mirror's Edge*'s radiosity is
+   the observation that **shadow needs its own light**, and that is exactly `Q31`'s last untried
+   lever after `Q33` eliminated the palette. `ambient_light_color` and `ambient_light_energy`, one
+   variable at a time, graded with `tools/frame_stats.py` on `street` and `kerb`. No rebuild.
+   `Q36` reached the same rig pass on the *hue* axis — the illuminant adds ~7 `C*` of blue and the
+   below-horizon frame is 70.7% cool — so the two agree about where the fault is.
+2. 🟡 **A precomputed sky-visibility bake — only if 1 fails, and probe before building.** It is the
+   only occlusion the **mobile tier** can have, since it ships no realtime shadow maps, and it is the
+   term that breaks a tie `ART_DESIGN.md` records as unbreakable: raising the fill *"fixes the road
+   and flattens the massing at once"*, which is true only while ambient is uniform. Inputs already
+   exist — `terrain.py` parses a real height field and buildings are extruded footprints, so the bake
+   is numpy over a heightfield with no new dependency. ⚠️ **Tint-probe it first** with an analytic
+   term off the existing `TEXCOORD_0.x`; `Q32` built, measured and reverted a whole shader term for
+   want of that step. Two delivery routes, both costly: a vertex attribute (`schema_version` 5 → 6,
+   and `TEXCOORD_0` shipped float32 against a predicted 2 bytes) or a region-wide world-space texture
+   (~1–2 MB, and a deliberate amendment to `mesh_contract.gd` — see `ARCHITECTURE.md`). 💡 It has a
+   **second consumer** for free: `Q39`, where `wall_sky_tint` is currently uniform. *Catalyst*'s
+   cheapest reflection tier is described as "a broad sky-visibility mask", which is the same bake.
+3. 🟡 **`WATERBODY`, 605 triangles — tint-probe it, do not ship it on the strength of the number.**
+   See `DATA_SOURCES.md`; most of it is on the hillside `Q36` measured at 0.000% of every viewpoint.
+
+**Refused with a measurement, recorded so they are not re-proposed.**
+
+- **Real-time GI (Enlighten).** The premise is absent: *Catalyst* moved off baked lighting because its
+  sun moved through a 48-minute cycle. This sun does not move — night is a *switch* between two static
+  rigs. Enlighten's 3 ms was a 2016 console at 60 fps; the mobile tier here is a phone at 280,807
+  resident triangles against a 300k budget. **The sequel's story is evidence *for* baking, not against.**
+- **Planar reflections and SSR.** Unimplemented in the locked Mobile renderer, and the cheap
+  equivalent already ships — `city_facade_clean.gdshader` bows a reflected ray per pane through a sky
+  gradient with a face-on floor.
+- **The wet-material overlay.** Anti-goal, and it needs a second material layer, UVs, mask and noise
+  textures, and SSR — four things the pipeline deliberately lacks.
+- **Keeping UVs by restoring an unclustered LOD0.** There are no UVs to keep: the non-textured set
+  ships **0 images and no `TEXCOORD_0`**. And an exact weld would not preserve them anyway —
+  `collapse`'s `cell_m <= 0` welds on position *and normal*, which is what the two sides of a UV seam
+  share. Cost would be 30.5 MB against a 32.30 MB PCK and 40% of visible triangles, for a difference
+  `Q16` measured as invisible from the driver's seat.
+- **Stealing UVs from the individualised set.** Cheap to acquire — `Accept-Ranges: bytes`, and
+  geometry is 4–7% of the download, so the "5.86 GB" objection does not apply to *extraction*. But a
+  UV without its image is not data: they are per-image atlas coordinates across primitives that
+  overlap in `[0,1]`, useless as a lightmap parameterisation, and Godot's importer generates a better
+  unwrap from geometry alone.
+- **Shipping the terrain orthophoto at low resolution.** Size is genuinely a non-issue (~1.1 MB in
+  ETC2). It fails on baked illumination (`Q36`), a **1.6×** road-width misregistration, and +53 draw
+  calls. ⚠️ **High-passing to remove the shadows makes the misregistration worse**, because road edges
+  *are* the high frequencies.
+- **`VEGETATION(TB)` and `GENERIC`.** See `DATA_SOURCES.md`: 1.52 M and 3.95 M triangles, one welded
+  blob per sheet, no `COLOR_0`.
+- 🔴 **Deriving glazed-vs-solid from the imagery — and this one had looked promising.** `Q34` names it
+  as the one cut above resolution and refuses it only for the *albedo* channel, which suggested
+  roughness as the right channel; `city_facade_clean` already ships `glass_ratio 0.52` **hashed per
+  building** with `glass_roughness 0.12` against `wall_roughness 0.82`, so the consumer exists and
+  currently guesses. **Measured on `11-SW-14B`, it does not separate.** A dark-and-blue curtain-wall
+  proxy gives a smooth decay, not two populations, and height does not split it either — share above
+  0.3 runs 29.8% / 24.4% / 25.7% / 16.7% across the 0–15, 15–30, 30–60 and 60 m+ bands, if anything
+  inverted. ⚠️ **And coverage caps every version of it**, including a periodicity classifier this
+  probe does not disprove: median **14.3%** of wall area is photographed at all (`Q37`).
+
+**Two method notes worth more than the findings.**
+
+- ⚠️ **The first run of that probe was invalid and looked fine.** 53.2% of samples landed on exactly
+  RGB(60,60,60) — atlas filler — which suppressed the glass proxy and produced a *tighter, more
+  convincing* distribution than the truth: `b*` of exactly `-0.00` at both quartiles across 354
+  buildings. **A degenerate value that repeats to the last decimal is the tell.** Chasing it is what
+  found `Q37` in shipped data.
+- ⚠️ **Shrinking the atlases to probe them faster is safe for colour and unsafe for everything else.**
+  Measured: mean ΔE **0.64** at 1/4 and **0.80** at 1/8 against a full-res masked mean, and coverage
+  survives *exactly* (error 0.0000) — **provided the filler mask is computed at full resolution and
+  carried through the shrink as a fractional weight**. Shrink first and coverage is unrecoverable,
+  because filler and clipping are exact-value tests. Periodicity has a hard floor at ~1/2: the 2.4 m
+  mullion pitch is 14–18 texels at 13–18 cm GSD. ⚠️ **A persistent shrunken cache is not worth it** —
+  242 MB at 1/16 to save a full-res local pass this log already measures at *under two minutes*.
+  Shrink in RAM inside one pass; do not write a second cache beside the 6.1 GB one.
 
 ### 2026-08-07 — The taxi's screens get an angle, and the flank gets its rocker back at the third attempt
 
