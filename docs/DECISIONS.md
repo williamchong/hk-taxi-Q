@@ -61,7 +61,41 @@ lives in git. This file holds *why things are the way they are*.
 | `Q38` | `exposure_anchor` is baked into `COLOR_0` at build time | 🟡 Open, deliberately not fixed |
 | `Q39` | `wall_sky_tint` is uniform, so a canyon wall takes a parapet's sky bounce | 🟡 Open |
 
-Task and unnumbered decisions follow the questions, in ID order.
+| ID | Decision | Status |
+|---|---|---|
+| `P0-1` | Building data is fully scriptable; the top data risk is retired | ✅ Done |
+| `P0-3` | Acceptance split — a scaffold is not a signed on-device build | ✅ Done / ⬜ `P0-3b` |
+| `P0-4` | Config declares its **datum**, not just its CRS | ✅ Done |
+| `P0-5` | Grey-box gate released conditionally; the fun question moved to `Q8` | ⚠️ Conditional |
+| `P0-5a` | Custom raycast on `RigidBody3D`, not `VehicleBody3D` | ✅ Done |
+| `P0-5b/c/d` | Four handling bugs no linter catches | ✅ Done |
+| `P1-1` | The fetcher derives its own sheet list | ✅ Done |
+| `P1-2` | Vertex clustering, whole-mesh tiling with one exception | ✅ Done |
+| `P1-3` | `ELEVATION` must not key nodes; roads are clipped, buildings are not | ✅ Done |
+| `P1-4` | The road surface is one mesh, capped per level, never merged | ✅ Done |
+| `P1-5` | Fare nodes keep the **kerbside** position | ✅ Done |
+| `P1-6` | The manifest **names** the other documents, and the export stage checks them | ✅ Done |
+| `P1-7` | The manifest is the **only** route to the tiles | ✅ Done |
+| `P2-1` | The city streams, and LOD is **per mesh class** | ✅ Done |
+| `P2-2` | `RoadGraph` publishes the derived width, not the widening rule | ✅ Done |
+| `P2-3` | The start line is **queried**, not written down | ✅ Done |
+| `P2-5` | Buildings get collision from a **mesh name** | ✅ Done |
+| `P2-7` | The off-grade carriageway lies on its structure | ✅ Done |
+| `P3-7` | Window bands are procedural, and the storey height was measured | 🟡 Awaiting review |
+| `P3-10` | The ground is a mesh class, and it collides | 🟡 Awaiting review |
+| `P3-11` | The taxi is generated, and the chassis generates it | 🟡 Awaiting review |
+
+| Topic | Decision | Status |
+|---|---|---|
+| Foundations | Engine, language, targets, region, building source, art direction, monetisation | ✅ Settled |
+| Region bounds | Confirmed **WGS84**, by measurement | ✅ Settled |
+| Licensing | GPLv3 out for store builds, contributions inbound MIT, generated data unrelicensable | ✅ Settled |
+| Genre | Three references, three different questions | ✅ Settled |
+| Shadows | **Two** cascades at 400 m, not four at 600 | ✅ Settled |
+| Debug chrome | One owner, one key, **off by default** | ✅ Settled |
+| Colour channel | The vertex stream carries both ground and building colour | ✅ Settled |
+| Audit viewpoints | Seven fixed cameras, so a later change is graded against these | ✅ Settled |
+| Rendering proposals | Eight evaluated; two survive | ✅ Settled |
 
 ---
 
@@ -1049,3 +1083,1118 @@ ambient fill corrects the road and flattens the massing at once; this is the sam
 axis.
 
 **See.** `Q31` · `ART_DESIGN.md` "Lighting"
+
+---
+
+# Tasks
+
+## `P0-1` — Building data is fully scriptable
+
+**Status.** ✅ Done
+
+See `Q2`/`Q3`/`Q5` above for the claim and its consequences. What belongs here is the method fault:
+the earlier finding that buildings were the top data risk came from **reading the CKAN resource list
+and stopping there**, instead of opening the portal's own Downloads panel. The CKAN list genuinely
+does only point at interactive portals.
+
+**See.** `Q2` `Q3` `Q5` · `DATA_SOURCES.md`
+
+## `P0-3` — A scaffold is not a signed on-device build
+
+**Status.** ✅ Done · `P0-3b` ⬜ Not started
+
+**Claim.** The written criterion "builds and runs on the device floor" bundled a project scaffold
+together with Android SDK setup, Xcode, an Apple signing identity and physical hardware. Split into
+`P0-3` (imports clean, exports verified) and `P0-3b` (signed on-device builds).
+
+**What the split found.** Android exports to a 25 MB APK using the prebuilt template with **no Gradle
+or Android SDK required**. iOS fails only on a missing App Store Team ID, which is the correct
+failure.
+
+⚠️ **`rendering/textures/vram_compression/import_etc2_astc` must be enabled** or Godot refuses to
+export **any** arm64 target, including Apple Silicon macOS.
+
+**Consequences.** `P0-3b` blocks `P2-4`'s and `P2-6`'s reviews — how the car feels under a thumb is
+reachable no other way. It is not on the critical path.
+
+**See.** `Q4` · `ARCHITECTURE.md` "Project settings"
+
+## `P0-4` — Config declares its datum, not just its CRS
+
+**Status.** ✅ Done
+
+**Claim.** `hong_kong.yaml` declares `crs.geodetic` alongside `crs.projected`, and `config.py`
+refuses to load without it.
+
+**Why.** **HK1980 and WGS84 differ by ~304 m on the ground in Hong Kong** — measured, not assumed:
+EPSG:2326's own natural origin is published on the HK1980 datum, and feeding those identical digits
+in as WGS84 lands 304 m away. That is a fifth of the width of the region, and far larger than the
+~10 m people expect.
+
+**How it is held.** `test_crs.py` asserts the two datums disagree by >250 m. ⚠️ **That assertion is
+really a canary** — if it ever shrinks, PROJ has fallen back to a *ballpark* transformation.
+Verification is against external facts, not the code's own output: the load-bearing test projects the
+published grid origin and expects the published false easting/northing, to sub-millimetre.
+
+**Other choices worth knowing.** `transformer()` is `@cache`d per CRS pair; `always_xy=True`
+everywhere, because EPSG:4326 officially declares lat-then-lon and a silent axis swap is the classic
+way to relocate a city into the Indian Ocean; `GameTransform` is **pyproj-free** so the per-vertex hot
+path never re-enters PROJ; the origin is **rounded to whole metres**, so a library upgrade cannot
+renumber every tile; and `deck_height_m()` raises on an unmapped `ELEVATION` rather than defaulting.
+
+⚠️ **Elevation-level keys reject `bool`, not just non-`int`.** PyYAML implements YAML 1.1, where a
+bare `on`/`off`/`yes`/`no` key resolves to a boolean — and because `bool` subclasses `int`,
+`isinstance(key, int)` waves it through. `False == 0` as a dict key, so a stray `off:` would silently
+redefine **ground level**. Verified: such a config loaded without error and returned 42.0 m for level 1.
+
+**See.** Region bounds · `Q10`
+
+## `P0-5` — The grey box cleared the handling and could not clear the premise
+
+**Status.** ⚠️ Passed, conditional
+
+**Verdict.** *"verified and seems acceptable, but I don't know if it is fun or good until we have
+either the Hong Kong scene or game mechanism."* Read as a pass on what `P0-5d` could test, and a
+rejection of its premise — `PLAN.md` claimed the grey box would answer "is this a game?", and it did
+not. Recorded as `Q8`, which closed later on the real city.
+
+**Phase 1 released anyway**, because the gate's purpose was to avoid sinking ETL effort into a game
+that does not work, and the user's answer is that the ETL output is a *precondition* for knowing.
+
+**Deliberately not actioned.** Sustained full lock still spins the car, and `brake_force = 900` gives
+3 m/s² of braking against 5.33 m/s² of acceleration — **the car accelerates faster than it stops**.
+Both real, neither blocking.
+
+**See.** `Q8` · `P0-5a`
+
+## `P0-5a` — Custom raycast on `RigidBody3D`, not `VehicleBody3D`
+
+**Status.** ✅ Done · **Locked** (CLAUDE.md)
+
+**Claim.** The vehicle is a custom raycast controller on `RigidBody3D`. Jolt is used for trimesh
+collision and raycasts, *not* for its built-in `VehicleBody3D`.
+
+⚠️ **`VehicleBody3D` is not broken under Jolt.** It instantiates, simulates, accelerates, steers and
+brakes; the wheel query API works. Anyone repeating the spike should not expect a crash — the problem
+is subtler.
+
+**The decisive finding: `wheel_friction_slip` is isotropic.** One friction number covers every
+direction, so `grip_lateral` and `grip_longitudinal` collapse into each other and a drift cannot break
+lateral grip without destroying traction and braking with it. Measured while holding throttle,
+friction × 0.35 on the rear axle alone cost **30% of speed over 2 s** — an implied scrub of 0.151/s
+against a target of 0.080 — at a **162.6°** peak slip angle against a 14° threshold. A full spin, not
+a slide, violating `GAME_DESIGN.md` on two counts at once. Of 18 `HandlingProfile` fields, 4 map
+directly, 4 are fightable and **10 are absent**.
+
+**Could it be tuned out? Partly — and that is the argument against it.** Yaw damping, counter-steer
+assist and per-axle friction curves would suppress the spin, but that is an arcade correction layer
+built on a physical model actively resisting it, leaving `VehicleBody3D` contributing only suspension
+raycasts. Every future tuning change becomes a negotiation with the engine rather than a dial, and
+vehicle feel is expected to be iterated on more than anything else here.
+
+**Re-asked and re-refused.** The user asked directly whether the built-in vehicle would give
+anything, which is the explicit instruction hard rule 1 requires to reopen a locked decision. It
+genuinely would — per-wheel angular velocity for wheelspin and lockup, `get_skidinfo()` for smoke and
+tyre marks, ~340 lines deleted. Still refused on the capability gap above. "Wheels only" is not
+available either: `VehicleWheel3D` simulates solely under a `VehicleBody3D`. ✅ **The two features
+worth having are cheap to build here instead** — `_apply_tyre_forces` already computes the slip both
+need — and are scheduled into `B4`.
+
+**Consequences.** `HandlingProfile` gains a `Suspension` group and an `anti_roll` field. **Spring rate
+is specified as natural frequency in Hz**, so it stays correct when vehicle mass changes — ⚠️ but it
+is *not* gravity-independent: static sag is `g_eff / (2πf)²`, so `gravity_scale = 1.6` deepens sag by
+the same 1.6×. Wheel **geometry** stays out of the profile; the resource describes feel, which is
+shared across the roster.
+
+**Verified.** Drifting is *cheaper* than gripping — 0.270 speed scrubbed per second against 0.297, at
+a 12.6° peak slip angle against 16.4°. Suspension settles at **50.6 mm sag** against 50.7 predicted.
+
+⚠️ **The importer can reinstate `VehicleWheel3D` behind your back**, from nothing but a mesh name.
+The mechanism and the suffix list are in `ARCHITECTURE.md`.
+
+**See.** `ARCHITECTURE.md` "Stack" · `P3-11`
+
+## `P0-5b/c/d` — Four handling bugs no linter catches
+
+**Status.** ✅ Done
+
+Recorded because each was found by *measuring* rather than by reading, and none is reachable by
+static analysis:
+
+- **Anti-roll signs were inverted** — force pushed *down* on the already-compressed side, amplifying
+  roll instead of resisting it. The car flipped on the first hard corner.
+- **Coasting drag divided by `delta`**, making it framerate-dependent and ~35× too strong.
+  `apply_force` already integrates over the tick.
+- ⚠️ **A `Node3D`-typed `@export` does not resolve from a hand-authored `.tscn`** — it silently read
+  null and the camera never moved. Worth remembering for every scene authored outside the editor.
+- **Steering was inverted.** `InputRouter.steer` is `+1` for right, but a *positive* rotation about
+  `+Y` turns the `−Z` forward vector toward `−X` — left. The headless tests missed it because they
+  only ever steered one direction and never checked which.
+
+Also fixed: wheel raycasts accepted wall faces as ground (free traction and a launch ramp off any
+building), and road slabs were exactly coplanar with the ground plane and z-fought across their whole
+surface.
+
+**See.** `P0-5a`
+
+## `P1-1` — The fetcher derives its own sheet list
+
+**Status.** ✅ Done
+
+**Claim.** `fetch.py` handles two source shapes — fixed-URL (roads) and index-derived (buildings) —
+because that is what the publishers offer. The pipeline knows "some feature property holds a download
+URL"; that it is called `Format_glTF` is config, which is what keeps hard rule 3 intact.
+
+**The corroboration is the result.** Intersecting the region bounds with the 3,456-feature index
+selects exactly the six sheets `P0-1` recorded by hand, and **nothing in config names them**. The
+bounds, the datum and the index all line up.
+
+**Decisions worth knowing.** Caching is **fetch-once, not fetch-if-changed** — CLAUDE.md fixes the
+snapshot, so re-running must not quietly adopt upstream's new month of road data. `REVISIONDATE` is
+per sheet, so a forced re-snapshot costs **3.2 MB instead of 265 MB**. Downloads are atomic. **The
+API key is never written down** — URLs are read from the fetched index at run time and everything
+recorded passes through `redact()`. **Bounds are reprojected before comparison, never compared across
+datums**, pinned by a test using a sheet that only the HK1980 misreading selects. Edge contact counts
+as overlap. Selecting zero tiles is an error.
+
+⚠️ **Four defects an end-to-end run could not have surfaced.** A short HTTP response was committed as
+complete and cached forever — `read(amt)` returns `b''` on a premature close rather than raising, so
+a truncated file was committed and recorded *at its short size*, making the truncation a permanent
+cache hit (reproduced: 5,000 bytes accepted against a declared 1,000,000). **The atomic-rename
+machinery only ever protected against interruption of *our* write.** A failure partway through
+discarded the whole manifest, costing ~283 MB after one transient error. `--force` re-downloaded
+everything, contradicting its own documentation. And a poisoned index would have cached as "zero
+buildings" silently — a portal answering an outage with HTTP 200 and a JSON error body parsed fine,
+selected zero sheets, and exited 0.
+
+**See.** `DATA_SOURCES.md` "Access notes"
+
+## `P1-2` — Vertex clustering, and meshes are assigned to tiles whole
+
+**Status.** ✅ Done
+
+**Claim.** Buildings are decimated by **vertex clustering**, not quadric decimation, and assigned to
+tiles **whole** except where a mesh is too big for a tile.
+
+**Why clustering.** The source is extruded footprints, so clustering keeps silhouettes blocky and
+axis-aligned — which *is* the art direction, where quadric decimation would smooth the corners and
+fight it. It is robust on triangle soup, which this is, and its aggressiveness is one number in
+metres, so the tiers stay tuning data.
+
+**The cluster key includes the facing, not just the cell**, or a wall normal averages into the roof
+normal above it and rounds off the faceting the whole style rests on. ⚠️ "Lossless" is precise about
+**positions**: a cluster *mean* is not the same thing — summing k equal doubles and dividing by k need
+not reproduce them. A representative fixes it. ⚠️ The ground is the one exception and takes
+`height_field=True`, dropping the facing term — see `Q29` and `Q25`.
+
+**Why whole-mesh assignment, and its exception.** Splitting a building at a boundary leaves an open
+shell and makes half of it pop. But the source contains elevated road structures **up to 1,984 m long
+in a single mesh**, which whole-mesh assignment handles two ways, both wrong: one whose centre falls
+outside the region **vanishes entirely**, taking a viaduct across the whole map with it; one whose
+centre falls inside gives a 150 m tile a 2 km bounding box. Oversized meshes are partitioned by
+triangle.
+
+**The geometry is verifiably really Wan Chai**, which matters because a coordinate bug here produces a
+plausible-looking city in the wrong place. The tallest building converts back to **374.5 m at
+22.28011 N, 114.17358 E** against Central Plaza's published 374 m at 22.28028 N, 114.17361 E — a
+**19 m** offset, inside its own 78 m footprint.
+
+⚠️ **Two silent Godot failures, and they look identical.** Godot 4.7's glTF importer reads `COLOR_0`
+but leaves `vertex_color_use_as_albedo` **off**, so every tile imports as a white block — corrected by
+a post-import script wired as a project-wide importer *default*, since per-file would not survive a
+fresh clone. And the `"normalized": true` flag on the colour accessor is load-bearing: drop it and
+Godot reads every colour as 1.0 and the whole city renders white.
+
+**No glTF library.** `pipeline/gltf.py` reads and writes the format directly in ~380 lines. The read
+side would have used a few percent of trimesh or pygltflib, and the write side has to lay out
+accessors and buffer views by hand under either.
+
+**Superseded.** ❌ The terrain verdict — "267 MB, unaffordable" — was **224 MB of JPEG and 43 MB of
+geometry**. Geometry was never the problem. Replaced by `P3-10`, which ships no texture.
+
+**See.** `Q16` · `Q25` · `Q29` · `P3-10`
+
+## `P1-3` — Three things the source forced on the road graph
+
+**Status.** ✅ Done
+
+**Claim.** `python -m pipeline.roads` turns the 17 MB geodatabase into **797 edges over 615 nodes with
+217 turn restrictions**: 175,610 → 3,553 vertices, 592 of 615 nodes in one component (96.3%), 736 at
+grade / 45 elevated / 15 tunnel.
+
+⚠️ **`ELEVATION` must not key nodes**, reversing a note that had survived since `P0-2`. It sounds
+obviously right and it breaks the network: all 36 endpoints where two levels meet are **ramp
+touchdowns**, and applying the rule takes the region from 6 connected components to **24**, dropping
+the largest from 583 nodes to 389 and cutting a **163-node elevated island** adrift — most of the Wan
+Chai Interchange and the Canal Road Flyover, the reason the region was chosen. **The hazard the rule
+was aimed at does not exist here**, because nodes form only where centrelines share an *endpoint*, and
+a flyover crossing over a street shares no vertex with it. The rule is right about crossings and wrong
+about junctions.
+
+**Roads are clipped to the region, where buildings are not.** A building is assigned to a tile whole
+because splitting a mesh leaves an open shell; **a polyline cut in two is two polylines**, with
+nothing to seam. It is also not optional: the geodatabase filters on bounding box, so the
+Central–Wan Chai Bypass is selected and then runs **570 m out into the harbour**. Measured before
+clipping, **14.2% of the region's road length was outside the region**.
+
+**Lane counts are authored, not published.** Verified against every field of every layer: **there is
+no lane attribute anywhere**. What the source does carry is a signed speed limit on the 10% of edges
+that differ from the urban default, a decent proxy for expressway versus street.
+
+**Other properties worth knowing.** Endpoints coincide exactly — 601 distinct at full float precision,
+nearest *distinct* pair **2.26 m** apart — so node snapping needs no tolerance, but must be no finer
+than a millimetre: two clusters differ in their last bits and at a tenth of a millimetre they split,
+silently disconnecting Johnston Road at Fenwick Street. The geometry is over-densified past belief —
+one 51.7 m centreline carries **54,330 vertices** — so Douglas–Peucker is a *correctness* measure for
+`P1-4`, not a size optimisation, and is written iteratively because nearly-collinear input is exactly
+what produces both the vertex count and the stack overflow. `EDGE1END` is a hint, not the truth: in 4
+of 217 it names an end 4–39 m away while the opposite end coincides exactly, and taking the shared
+node resolves all 217.
+
+**Deliberately not in the output.** The turn layer's `EXC_VEH_TYPE` / `INC_VEH_TYPE`,
+`PART_TIME_REST` and `EFF_ALL_DAYS`. ⚠️ One restriction in the region excludes taxis — a turn a real
+red taxi may make and the graph says it may not. Adding a field is a schema change on both sides, so
+it is recorded in `DATA_SOURCES.md` for `P3-3` and `P3-8`.
+
+**Recorded, not fixed.** `roads.py` reaches into `buildings.py` for `Placement` and `read_sheet`, and
+reads its terrain class out of the *buildings* config section, crossing the format/policy layering
+rule. The right shape — a shared sheet-reading module — is easier to see once more stages have said
+what they need from the same sheets.
+
+**See.** `Q9` · `Q11` · `Q12` · `Q13` · `DATA_SOURCES.md` "Roads"
+
+## `P1-4` — The road surface is one mesh, capped per level, never merged
+
+**Status.** ✅ Done
+
+**Claim.** One mesh for the whole region — 28,423 triangles, a fortieth of the massing, and on screen
+whenever the player is. Tiling it would buy nothing but seams and 65 draw calls in place of one.
+
+**Junctions are filled by the convex hull of the arms' corners.** The property that makes this right
+is convexity: the hull's boundary passes through every arm's two end corners, so the mouth between
+them is inside the cap **by construction** — no gap is possible — and it stops at the kerb line rather
+than spilling into the corner between two streets, which is pavement. 393 of 393 single-level
+junctions covered.
+
+**Capped per elevation level**, which is the opposite of how `P1-3` keys nodes and right for the
+opposite reason: a node exists so a flyover and the ramp under it stay one network, where a junction
+cap is a piece of tarmac, and there is none between a street and the tunnel roof 8 m below.
+
+**Self-intersection was the one thing needing real geometry work.** A corner tighter than the road is
+wide has no inner offset curve. Three repairs measured: simplify harder before offsetting (8 folds
+left, 43% of the region's segments); cap the width to the local turning radius (1 fold, but
+**pinches the carriageway to zero** at 24 places); **hold the inner boundary still where it would
+reverse** (0 folds, 93 collapsed quads of 5,188). The third is also what the offset of a too-tight
+corner actually *is* — the inside stops while the outside sweeps past — and it touches neither the
+centreline nor the width.
+
+**Opposed carriageways are drawn twice and left overlapping**, and that decision turned out not to
+exist: the premise that two ribbons leave a gap down the middle of Lockhart Road was never checked
+against the widths, and is false. Five of six pairs already overlap at their authored width. **Nothing
+in `surface.py` knows what a dual carriageway is.**
+
+**Two driver-reported defects, one root cause: every edge was extruded alone.** ⚠️ **A kerb lying
+mid-road is a kerb, not a lane marking** — `kerb_colour` against asphalt, 0.5 m wide and 0.15 m tall,
+at **33.0 km of 98.6 km of kerb line**, because a dual carriageway is two edges each kerbed on both
+sides and `widen_default: 1.6` exists *precisely so* those pairs overlap. Not cosmetic: the mesh ships
+as `road_surface-col` so the collider covers the risers, and `suspension_travel_m = 0.18` means a
+0.15 m step is **83% of the car's total bump travel**. ⚠️ **The junction pinch is the convex hull** —
+at a bend the hull's straight chord cuts the outside of the turn off, narrowing the road to
+`cos(half the turn)` of its width; 8 of 49 two-arm nodes were narrower than their own thinner arm.
+Fixed by mitring through the cap: kerbs overlapping a neighbour's carriageway **33.0 km → 0**, nodes
+pinched **8 → 1** (a 172° hairpin, which no mitre should reach), triangles 35,039 → **25,028**.
+
+**What qualifies as "through" is not a tuning value.** Two arms at a node is one street bending, so
+the corner is carriageway and up to 90° is mitred; three or more and a sharp corner is the pavement
+between two streets, so the limit drops to 45°. Filling that corner would pave the footpath, which is
+what the hull was chosen to avoid.
+
+**Rejected: merging opposed pairs into one ribbon.** The tempting read of the kerb bug. It reopens a
+decision this module's docstring closed with measurements, needs polygon clipping, and would change
+what `roadsurface.json` indexes. Only the *kerb* asks about its neighbours.
+
+⚠️ **The first cut of the overlap test made the stage 8.3× slower and every check still passed** —
+`_within` was **86% of the whole stage**, from a Python loop the file's own style forbids and 476,000
+`np.errstate` context managers (**15% of the stage on their own**) guarding a division whose result
+was masked away. Vectorised: 2.49 s → **0.36 s**, agreeing with the old test on 39,048 samples with
+zero disagreements.
+
+**Still open, deliberately.** The cap carries **no kerb and no lane coordinate** — `fan` writes zero
+UVs. Both were true before and neither was what was reported.
+
+**See.** `Q13` · `Q19` · `Q23` · `Q24` · `ART_DESIGN.md` "Roads"
+
+## `P1-5` — Fare nodes keep the kerbside position
+
+**Status.** ✅ Done
+
+**Claim.** `pos` is the **source** position, not the snapped one. 11 of 29 nodes lie outside even the
+widened carriageway, because the published points are on the pavement and `P1-4` draws from
+centrelines. Only the height comes off the road.
+
+**Why not snap.** Moving each node onto the road throws away the only thing the source surveyed. **The
+kerbside is where the passenger stands**; where the taxi stops is derivable from `nearest_edge` and
+`edge_t`, and the reverse is not.
+
+**What the contract gained, and why then rather than later.** `edge_t`, because `nearest_edge` alone
+names a road that can be 200 m long. `pickup`/`dropoff`, because a quarter of the published points are
+**drop-off only** (66 of 275 territory-wide), and flattening that would let a player hail a fare where
+no taxi may stop for one. Both free here and expensive after `P1-6` freezes the shape.
+
+⚠️ **Rule order in the category table is load-bearing and fails silently.** `Status_EN` is free text
+with sixteen spellings, so matching is first-hit-wins over substrings: `DF` before `PU/DF` files every
+pick-up point as drop-off only and still produces a complete, plausible `fares.json`. `load_city`
+refuses a table where an earlier rule always shadows a later one, and an *unmatched* category raises.
+
+⚠️ **A `P1-3` bug found on the way.** `clean_text` normalised to NFKC, a *compatibility* fold that
+rewrites the full-width brackets Chinese sets its parentheticals in as ASCII. Harmless for road names,
+wrong for 98 fare-node names that go on a bilingual HUD. NFC now, with NFKC used only for the
+null-sentinel comparison.
+
+**See.** `Q14` · `Q15` · `DATA_SOURCES.md` "Fares and points of interest"
+
+## `P1-6` — The manifest names the other documents, and the export stage checks them
+
+**Status.** ✅ Done
+
+**Claim.** `city.json` **references** rather than inlines. Each consumer wants a different document at
+a different moment, and each is separately versioned, so merging would make a change to fare nodes
+bump the schema on the document carrying the tiles.
+
+**`bounds_game` is the union of the content, not the region rectangle.** The region is 1650 × 887 m
+and its geometry spans further, because a building is assigned to a tile whole and may overhang, and
+the ribbon is drawn outward from centrelines that run to the boundary. A camera framed on the
+rectangle, or a spatial partition sized to it, would silently clip real buildings.
+
+**The stage validates what it wrote, and that is the actual deliverable.** Four classes of error exist
+that **no individual stage can see, because each document is internally valid in all of them**: a fare
+node naming an edge the graph no longer has; a tile whose GLB was never written; a document left over
+from another region; geometry outside the declared bounds. Each is a real sequence rather than a
+hypothetical. Verified by breaking three at once.
+
+**Reproducibility was measured, not assumed.** Rebuilt from an empty `out/`, **every one of the 199
+files was byte-identical**, the sole difference being the `generated_utc` stamp. That is what makes
+"did this change anything?" answerable by `diff` for every future ETL change.
+
+**The orchestrator calls each stage's own `main`** with the arguments the documented per-stage command
+would pass. Composing them any other way creates a second code path that can drift from the one people
+actually run.
+
+**See.** `ARCHITECTURE.md` "Data contract" · `Q16`
+
+## `P1-7` — The manifest is the only route to the tiles
+
+**Status.** ✅ Done · **Phase 1 gate passed**
+
+⚠️ **The directory listing had to go, and it was not a style preference.** `DirAccess.get_files_at`
+works in the editor, where `res://` is a folder. In an **exported build** it is a PCK archive Godot's
+virtual filesystem will not enumerate, so the call returns an empty array and the game renders an
+empty city **without a single error**. It would have looked like a content problem in the first device
+build. Deleted rather than deprecated.
+
+**The gate's word is "georeferenced", so something had to be able to disagree.** `tools/verify_city.gd`
+measures each imported mesh against the `aabb` `export.py` recorded: **all 65 tiles agree to within
+1 cm**. The tolerance is generous against what causes drift (float64 into float32 costs ~0.1 mm at
+1.7 km) and tight against what it looks for (an axis flip or dropped offset moves a corner by metres).
+Proven non-vacuous by nudging one tile 0.5 m east: 15 findings, exit 1, nothing spurious.
+
+⚠️ **What it cannot check is z-fighting.** `--headless` loads the dummy rasteriser, so there is no
+frame. A **windowed** run can: render, nudge the camera 2 cm, diff — a fighting surface flips wholesale
+under a sub-pixel move where anti-aliased edges only shift. **653 of 921,600 pixels — 0.071%** on
+Hennessy Road. Evidence, not proof: one camera at one place.
+
+**The sync is manifest-driven, not a directory copy.** `tools/sync_generated.sh` asks the ETL what
+`city.json` names and copies that, which keeps stage intermediates out of the bundle and deletes tiles
+a previous build left behind — nothing else would notice them, because every check starts from the
+manifest and the manifest has forgotten them.
+
+**See.** `ARCHITECTURE.md` "Build pipeline" · `P1-6`
+
+## `P2-1` — The city streams, and LOD is per mesh class
+
+**Status.** ✅ Done — review passed
+
+**Claim.** `CityStreamer` loads and unloads tiles on a worker thread by the published `aabb`.
+`class_lod_cell_sizes_m` holds `INFRASTRUCTURE` at `[0.0, 0.5, 1.0]` against the building default
+`[0.0, 1.5, 4.0]`.
+
+**Why LOD is per class.** `collapse` clusters vertices by cell, so **any structure thinner than the
+cell has its top surface merged into its bottom one**. A 30 m-wide, **0.8 m-thick** deck goes 12
+triangles → **2** at a 1.0 m cell; a 20 × 20 × 60 m tower stays at 12 at every cell size. The tier was
+never too coarse for buildings — it was always too coarse for infrastructure, and merging the two into
+one mesh before collapsing meant one cell size had to serve both. **Ordering is the whole fix:** bucket
+by class, collapse each at its own cell, *then* merge — which keeps the tile one mesh and one draw
+call. Cost: worst-case visible triangles +3.6% against a 300k budget, chosen over an outright exemption
+(+20% at LOD1, +57% at LOD2) because a deck only has to beat its own thickness.
+
+**Evidence.** Draw calls peak **70 → 53** against 150; worst-case *visible* triangles
+**398,574 → 240,598** against 300k — the baseline was over, the streamed city is under. Measured
+in-engine at the same five places before and after, because quoting one spot's "before" against
+another's "after" is how every bundle figure in this project drifted.
+
+**Resident triangles are reported, never gated, and the measurement says that was right.** The worst
+case is 405,210 resident against a 300k budget — but the budget is 300k *visible*, and the streamer
+culls to a **disc** while the renderer frustum-culls to a **cone**: at that same point, 402k resident
+draws as 240k visible. Gating on it would have tightened the bands by ~40% to satisfy an arithmetic
+mismatch.
+
+**The design is split in two, and that is what makes the third criterion structural.**
+`TileStreaming` lives in `scripts/core/`, is pure, and takes an `AABB` and returns an int — there is no
+code path from it to a file, so a distant tile cannot be rejected *after* being loaded.
+
+⚠️ **One correction to a claim made here.** Tall towers do *not* survive LOD1 well because they are
+big boxes — measured, towers ≥100 m keep **36%** of their triangles at LOD1 against **44%** for
+everything else. They are hit *harder*, and read as fine in the canyon shot because they were distant,
+where a tower is mostly silhouette.
+
+**The landmark half was declined for a better reason than "not implemented".** There is no landmark
+key in the source — the sheets carry `BUILDING` and `INFRASTRUCTURE` and nothing else. More usefully,
+`ART_DESIGN.md` specifies the ~5 hero buildings as hand-authored models placed via `landmarks.json`;
+they never pass through `buildings.py`, so the question is moot for exactly the buildings that
+motivated it.
+
+⚠️ **Proving a check can fail was itself a false green.** Breaking `plan_distance_to` reported exit 0
+and no failures — the edit orphaned a local, `unused_variable` is promoted to error, the script never
+parsed, and `quit(1)` never ran. **Never read raw `godot` output and call it a pass**; `tools/check.sh`
+is the only thing that can fail.
+
+**See.** `Q16` · `Q28` · `ARCHITECTURE.md` "Runtime systems"
+
+## `P2-2` — Publish the derived width, not the widening rule
+
+**Status.** ✅ Done — review passed
+
+**Claim.** `roadgraph.json` publishes `width_m` as the *authored* street, while `P1-4` draws the ribbon
+at `width_m × widen_for(...)`. The widening lives on the surface style and `config.py` keeps it there
+on purpose, so the game had no route to the width of the tarmac it was driving on — a lane centre from
+the graph sat a quarter of the widening short. **What ships: `surface.py` records the half-width it
+already computes, and `export.py` carries it into `city.json` without recomputing.**
+
+**Two routes rejected.** **Publish the widening rules** — GDScript would reimplement `widen_for` and
+its "fastest matching rule" semantics: two implementations of one rule across a versioned interface.
+**Mirror the factor in a `.tres`** — satisfies the tuning-as-data rule literally while creating exactly
+the drift this repo keeps paying for. A third, **read lane geometry from the surface UVs**, is rejected
+*for this* and worth keeping for `P3-8`: `TEXCOORD_0` answers "which lane am I in?", a lookup, where
+`P2-2` needs the inverse — and it is `(0, 0)` on junction caps.
+
+**Performance is a check, not a number someone wrote down.** Region-wide 10 m lattice, 15,865 probes:
+p50 14 µs, **p99 45 µs** against a 1 ms budget. **Probing the whole region rather than the road is the
+whole design** — a query on a centreline is won in the first ring, a query mid-block expands rings
+until the 60 m bound stops it, so the **misses are the expensive population** (11%, which is more than
+the top 1% and therefore exactly what p99 lands in). A road-only probe reports 9 µs and understates the
+worst case by five times.
+
+⚠️ **The gate is p99, not max, and that was measured rather than judged.** Across runs the maximum
+ranged 44–229 µs while p99 moved by a single microsecond. *A lone outlier is a fact about the machine;
+a p99 over thousands of probes is a fact about the code.*
+
+⚠️ **The "one parse" claim was false when first written.** Both previews took `RoadGraph.shared()` into
+a **local**. `RoadGraph` is `RefCounted` and the cache is weak, so the only strong reference died when
+`_ready` returned. **A weak cache only works if consumers hold a member.**
+
+**`Q13` is enforced rather than described.** Only level-0 segments enter the index, while `polyline_of`
+still serves all 797 because `P3-3`'s traffic will need them. Proven non-vacuous by indexing off-grade
+segments on purpose: 482 of 505 probes resolved to a flyover.
+
+**Two contract defects worth keeping.** 74 of 797 edges publish `{"en": null}`, and `str(null)` in
+Godot is the literal `"<null>"`, so the `is_empty()` guard meant to substitute "(unnamed)" never fired
+for 9% of the network. And `has_carriageway_widths()` documented "every" and implemented "any".
+
+**See.** `Q13` · `Q23` · `ARCHITECTURE.md` "`roadgraph.json`"
+
+## `P2-3` — The start line is queried, not written down
+
+**Status.** ✅ Done — review passed · **Verdict.** *"car seems ok"*
+
+**Claim.** `RoadSpawn.at_fare_node` resolves fare node `f_004` through `RoadGraph`, and `basis_facing`
+builds the rotation with `Basis.looking_at`. Almost all of `P2-3` is a deletion: a twelve-float
+`Transform3D` literal in the scene and forty lines of `ARCHITECTURE.md` explaining how not to transpose
+it. **The query reproduces the literal to 4 dp.**
+
+**The heading is deliberately not passed to the query.** A zero heading makes `nearest_edge` take the
+edge's own vertex order, and `P1-3` reversed the polyline of every backward edge precisely so that
+order *is* the legal direction. Passing the car's rotation in would let the car decide which way a
+two-way street runs. **The street decides.**
+
+⚠️ **An assertion alone is not enough, because a transpose is not a 180° flip.** It mirrors the heading
+about world −Z: 171.9° wrong on Expo Drive, 180° on a due east-west street, and **0° — a silent no-op —
+on a north-south one.** So `verify_spawn.gd` builds the transposed basis and requires it to *fail*,
+with a 10° floor on the discriminating angle.
+
+⚠️ **Autoloads are not registered under `--script`**, so any headless tool touching one fails to
+compile — and `verify_spawn.gd` then *printed `ok` and exited 0* while erroring, caught only because
+`tools/check.sh` greps stderr as well as reading the exit code.
+
+**The verdict is narrow.** It says the placement change did not damage handling `P0-5` had already
+accepted. It says nothing about feel in the hand, which needs `P0-3b`.
+
+**See.** `P0-3` · `ARCHITECTURE.md` "Coordinates"
+
+## `P2-5` — Buildings get collision from a mesh name
+
+**Status.** ✅ Done — review passed
+
+**Claim.** `buildings.py` names its finest tier `<tile_id>-col`; Godot's glTF importer reads the suffix
+and builds a `StaticBody3D` with a `ConcavePolygonShape3D` at **import** time. That is the entire
+game-side change. **No shape is built at runtime, and the collider cannot drift from the mesh because
+it *is* the mesh.** The idiom was already in the repo — `P1-4` gives the carriageway its collider the
+same way.
+
+**Why it had no owner.** `P2-5`'s criterion is *"no clipping through buildings"* — unreachable, because
+a `SpringArm3D` collides with nothing until the buildings do. `PLAN.md` gave that decision to `P2-1`,
+which decided correctly that **a building collider is an ETL product, not a runtime one**, then closed.
+The decision was right and it left nobody holding the work, so the region shipped as a hologram.
+⚠️ **A capability named only in a design doc has no owner** — dependency graphs link tasks to tasks,
+and the collision was never a task to depend on. The same shape recurred with the player's own car.
+
+**Only the finest tier, and that is policy rather than economy.** A tier is chosen by distance, so the
+coarse one is resident only beyond the 250 m band where nothing can touch a building.
+`verify_tiles.gd` asserts **both directions** — present on tier 0, absent on every other — because a
+suffix that spread would be invisible in every screenshot and show up only as bundle bytes.
+
+**Cost: 21.10 → 26.27 MB PCK, +5.17 MB**, measured from two exports with one variable changed. Worth
+stating what it is *not*: tier 0's 434,149 triangles as raw un-indexed faces would be 14.91 MB, and the
+pack compresses them to a third.
+
+⚠️ **`P2-6` must re-measure hitching.** Instantiating a tile now also registers a trimesh with Jolt on
+the main thread, and `max_instantiations_per_frame` is 2. `P2-1`'s "no hitching" was accepted before
+that cost existed. It is invisible at 120 fps on an M4 Pro and is exactly what the device floor finds.
+
+**The camera verdict was narrow and it stood.** *"camera work mostly with one exception where a road
+suddenly appears mid air"* — that is not the camera. Measured at the car's own position, road geometry
+within 60 m is either y 2–4 (the street) or y 8–10 (the deck above), and **nothing sits in the
+0.3–3.0 m band the car occupies**. It is `Q20`.
+
+⚠️ **A check that hangs is worse than a check that fails**, because a timeout names nothing.
+`RoadGraph.shared()` returned `null` from a guard written to stop it — the fallback used an inline
+`{}`, which is **untyped** — and the resulting script error left `_init` before any `quit()`, so the
+SceneTree ran forever. Fixing that turned the hang into a **silently wrong pass**, reporting `ok`
+computed from absent data. `verify_spawn.gd` now refuses on `has_carriageway_widths()`, which is
+stronger than a null-check: a `city.json` that loads cleanly but publishes an **empty** table passes
+the null-check and fails this one.
+
+**See.** `Q19` · `Q20` · `P2-1`
+
+## `P2-7` — The off-grade carriageway lies on its structure
+
+**Status.** ✅ Done — review passed
+
+The claim, the evidence and the residual are `Q20`; the width rule is `Q23`; the ramp classification is
+`Q13`. What belongs here is what the task learned about **measuring**.
+
+⚠️ **Four sampler ideas were wrong before they were measured.** `1.` **There is no parapet to
+subtract** — transverse profiles across 8 flyovers show the deck centre is a flat plateau with raised
+lips **+0.11 to +0.92 m, off-centre at ±3 to ±6 m**, which a centreline never touches. One config knob
+deleted before it was written. `2.` **Seeding from the existing height and taking the nearest hit is
+worse than taking the highest** — the multi-hit spread is 1.7–2.2 m (slab thickness), so the sampler
+hits the top *and the underside of the same slab*, and the old seed sits below the deck 66% of the
+time. What works is **slab clustering plus continuity**. `3.` **The terrain gate cannot be a minimum
+clearance** — level-1 ramps genuinely touch down, a continuous 0–15 m spectrum with no gap to cut in.
+What separates is the other side, decisively: `e425` samples **8.3 m below** terrain against a
+next-worst of 0.54 m. `4.` ⚠️ **The fallback was the bug, and it hid behind a correct-looking result.**
+`INFRASTRUCTURE` **stops being modelled where a ramp reaches grade**, so falling back to `terrain + 6.0`
+rebuilt the exact cliff the task exists to remove, at the most visible place in the region. An
+uncovered station now takes the deck **either side of it**, interpolated. **Three of those four were
+the plan's own answer; the fourth appeared in no plan** and was found only because a number came back
+worse than predicted and the gap was chased instead of rounded off.
+
+⚠️ **The two grading tools were wrong seven times between them, and every one produced a plausible
+table.** `deck_error.py`: matching the structure colour *exactly* found 428 of 434,149 triangles,
+because `colour_for` **jitters every class** — a class is a *ray* through its base colour, not a value.
+Keeping both face windings scored the carriageway against a deck's underside. Sampling the road mesh's
+own vertices measured **overhang**, because `roads.glb` carries vertices only at the carriageway edges,
+which overhang the deck *by design* — and it looked exactly like a real defect, one named flyover at a
+consistent 8 m. **Overhang is `Q19`'s question; height is `Q20`'s, and conflating them manufactures a
+failure.** Worst, leaving unmeasurable stations out of the denominator read "acceptance met, exit 0"
+while a third of the carriageway had stopped being measured: a total break was already loud, a
+*partial* one was silent. Coverage is now measured against what the centrelines asked for and fails
+below 90%. `overhang.py` was wrong three ways, all **a probe that measures itself** — asking "on
+structure?" across the whole ribbon made the measurement depend on the drawn width, so narrowing would
+shrink the very number that says whether narrowing worked.
+
+⚠️ **The ETL's own error column is not an acceptance measurement.** It resamples the written polyline
+and asks the *same* `HeightField` that produced it, so it can only show the write-out is faithful to
+the sampler. Its value is that its `before` column reproduces the recorded baseline — it validates the
+harness, not the fix.
+
+**Both graders are committed and neither is wired into `tools/check.sh`** — they need a built region,
+which `check.sh` does not require and should not start requiring. The reason to commit them: **a
+measurement that cannot be re-run is an anecdote.**
+
+**Two structural changes the fix forced.** `build_region` became **two passes**, because whether a
+level-0 edge sits on a ramp depends on whether its node is also reached by another level, which no edge
+can know until every edge has been placed. And `deck.clearance_m: 0.20` is **a layer rather than a
+fudge** — a real road is a wearing course laid *on* a structural deck — but its size is set by `P2-1`'s
+0.5 m decimation lifting the shipped deck a median +0.041 m, not by paving practice. `deck_error.py`
+**subtracts** it, so the metric still measures error rather than counting a deliberate layer as one.
+
+⚠️ **Four config spellings loaded in a state they could not act on**, each now refused with a test,
+because the symptom of any of them is *output identical to a city that never asked for deck sampling* —
+a config error shaped to survive review: `deck:` with nothing under it; `.nan`, which passes both
+`<= 0.0` and `< 0.0` then makes every downstream comparison false without raising; `.inf`; and a fifth
+unknown key beside the four.
+
+**The schema-bump rule this established**, now in `ARCHITECTURE.md`: **bump where a consumer would be
+*wrong* to keep its old interpretation, not wherever bytes change.** `roadgraph.json` → 2 is the pure
+case — nothing added, removed or renamed; `polyline.y` simply began meaning something different, which
+a consumer cannot tell by inspection and a diff cannot show. `roads.glb` did **not** bump: its geometry
+moved and no attribute changed meaning.
+
+**See.** `Q13` · `Q20` · `Q21` · `Q22` · `Q23`
+
+## `P3-7` — Window bands are procedural, and the storey height was measured
+
+**Status.** 🟡 Awaiting review
+
+**Claim.** `assets/shaders/city_facade.gdshader` bands every vertical façade in world space — no
+texture, no atlas, no second draw call — reading a surface marker and a per-building phase the ETL
+packs into `TEXCOORD_0`. **Zero triangles moved**, one draw call per tile, **+4.01 MB of PCK**,
+`city.json` schema 4 → 5.
+
+**The storey height was measured off real façades rather than chosen, and the guess would have been
+wrong.** One individualised sheet, autocorrelated down each wall texture's V axis and discarded:
+height-weighted median floor pitch **2.77 m**, column pitch **2.42 m**. Shipped as **2.8 m**. The
+obvious guess was 3.2 — a Western commercial storey — and at 40 storeys that is five floors of error on
+one tower. Hong Kong's domestic floor-to-floor really is that tight.
+
+⚠️ **The eye said the contrast was too strong and the measurement said the opposite.** `window_opacity`
+was dropped 0.62 → 0.30 on judgement; the *rendered* frame measured the same way as the photographs
+came back **0.107 against 0.126** in the source. It was already under, and went back to 0.62. A dark
+square on a pale wall in full sun reads far stronger than its share of the row.
+
+⚠️ **A statistic that lands exactly on a limit you chose is reporting the limit.** The probe's first
+answer was a median floor pitch of exactly **2.00 m** — the lower bound of its own search range.
+Autocorrelation decays monotonically away from lag 0 unless something genuinely repeats, so `argmax`
+over a window returns the window's own left edge on every aperiodic wall. Detrending and taking a
+*local peak* moved the median to 2.70 m.
+
+⚠️ **`mesh.merge` refused any mesh carrying UVs at all** — one condition covering two questions — so
+every tile would have failed. The texture half is still right: two textures cannot share a primitive
+without an atlas. **UVs with no texture are a shader coordinate and merge like any other attribute.**
+
+⚠️ **A float32 rounding trap.** The marker and phase share one float as `marker + seed`; float32's
+spacing near 2.0 is ~2.4e-7, so `STRUCTURE + 0.9999999998` rounds to **exactly 3.0** — an unknown
+marker with a zero phase. The phase is quantised to 1/256, exactly representable at every marker, and
+the test brute-forces all 768 combinations rather than sampling.
+
+⚠️ **Three places must agree and only one can fail loudly.** The ETL names the glTF material
+`city_facade`, `generated_scene_import.gd` dispatches on that name, and the shader reads the payload.
+Break any link and every tile keeps its default `BaseMaterial3D` and renders in flat vertex colour —
+**which is exactly what the city looked like before this task**. `verify_tiles.gd` asserts both the
+`TEXCOORD_0` format and the resolved material path, because **a check performed by hand is a check
+that will not be performed again.**
+
+**The marker is derived from the palette, not from a new config key.** A class with a flat
+`class_colours` entry is one whose colour does not depend on height, which is exactly the set with no
+floors to band. Hard rule 3 holds — no class name reaches pipeline logic — and `FACADE` is the fallback
+rather than a listed case, so a new massing class bands until someone gives it a flat colour.
+
+⚠️ **`ARCHITECTURE.md` predicted "~2 bytes/vertex quantised" and this ships float32 at four times
+that** — measured at +4.01 MB over 937,889 vertices. `unorm16` would save perhaps 2 MB and costs a
+scale factor in the contract on both sides; not done, because the budget is 200 MB. Recorded so a later
+region short of room knows where the 2 MB is.
+
+**See.** `Q26` · `Q28` · `Q2′`/`Q3′` · `ART_DESIGN.md` "The window-band shader"
+
+## `P3-10` — The ground is a mesh class, and it collides
+
+**Status.** 🟡 Awaiting review
+
+**Claim.** Terrain is one more entry in `buildings.classes`. That is the whole design: being a class
+gets it the tile's single material for free, so it costs **no draw call**, and it cannot end up
+somewhere the buildings are not.
+
+**Evidence.** LOD0 +87,649 triangles; 65 → 66 tiles (ground reaches a corner no building did); draw
+calls per tile unchanged at **1**; **PCK 27.73 → 32.30 MB (+4.56)**. ⚠️ **The PCK grew nearly twice
+what `ART_DESIGN.md` predicted, and the collider is the difference** — the 1.5–2.5 MB estimate counted
+geometry. The split between geometry and `ConcavePolygonShape3D` was *not* separately measured, so it
+is not quoted.
+
+**It collides, and that was a decision rather than an inheritance.** `ART_DESIGN.md` said the first
+pass was "visual only, with no collider" while two other lines promised it merged into the tile
+primitive for "+0 draw calls". **Those were never compatible** — `_write_tile` names the merged tier-0
+mesh `<tile_id>-col`, so anything merged into it is solid. User's call: merged and solid. Ground you
+can see and fall through is worse than no ground for a free-roam recognition test. ⚠️ **The standing
+consequence belongs in `ARCHITECTURE.md`:** any future class added to `classes` inherits tier-0
+collision whether or not it asked.
+
+**`ground_sink_m: 0.20` — the guess and the measurement agreed, which is not the same as not
+measuring.** Share of carriageway area proud: 0.00 m → 47.5%; 0.15 → 5.2%; **0.20 → 3.3%**; 0.35 →
+1.2%. 0.20 is the shallowest value passing both gates, and deeper costs a visible gap under a 0.15 m
+riser.
+
+⚠️ **Shipping ground did not create a defect, it revealed one.** See `Q24`. Three explanations were
+measured and rejected first, each of which would have sent the fix somewhere useless: tile decimation
+(median +0.000 at the 4 m cell, inside the sink); the sink being too shallow (refuted by the table
+above); and the tunnel portals (the tail is spread across ordinary hill streets, not concentrated).
+⚠️ **The first measurement was taken at polyline vertices and came back clean**, which is exactly where
+a chord error is zero by construction — **a probe placed where the geometry is defined cannot see a
+defect that lives between definitions.** Asking the same question *between* vertices changed the answer
+by a factor of sixteen.
+
+⚠️ **`tools/ground_clearance.py` gates on a different population from the one it reports first**,
+because the two measure different defects and blending them makes the sink unfalsifiable. The gate is
+the share of **points the road's height was sampled from**; the headline share over all cells carries
+`Q24` as well and is a regression bar, not a standard. A single number would have read 3.3%, looked
+like a failing sink, and sent the next person to deepen it.
+
+**See.** `Q18` · `Q24` · `Q25` · `Q29` · `ART_DESIGN.md` "Ground"
+
+## `P3-11` — The taxi is generated, and the chassis generates it
+
+**Status.** 🟡 Awaiting review · **Verdict on the first round.** *reads as 紅的, does not read as a
+Crown Comfort*
+
+**Claim.** `tools/make_vehicle.py` generates `taxi_body.glb` and `taxi_wheel.glb`. **The chassis is an
+input, and that is the whole design** — `Chassis` mirrors the `WheelMount` markers and `handling.tres`
+rather than proposing geometry of its own, so the mesh is built *around* hardpoints `P0-5` tuned
+against. The desync this avoids is the nastiest kind: the physics never reads a mesh, so a model built
+to its own wheelbase looks right, drives to the old tuning, and shows nothing wrong in a drive.
+**The scene is the authority; the generator follows.**
+
+⚠️ **A guard is only as good as the copies it knows about.** The wheel meshes were parented at an
+authored offset — a fourth copy of `suspension_rest_length_m` — and the guard filtered on the
+`WheelMount` script id, so it never looked at those nodes. Retuning the spring would have moved the
+raycasts and left the meshes behind, which is *precisely* the failure the design exists to prevent.
+
+**Rounded by chamfer, not by smoothing.** This reverses an earlier caution that bevels would fight the
+flat-shaded city. **They do not.** The distinction that matters is chamfer versus smooth shading: faces
+stay flat, edges stay crisp, there are simply more of them. `corner_cut_m = 0` still yields the cheap
+square car `B3`'s traffic wants.
+
+**Triangle budget: `ART_DESIGN.md`'s 800–2,000 stands and the model came up to meet it**, currently
+**1,168 in scene**. The detail knobs are `Proportions` fields, so `B3` can instance a cheap variant by
+passing fewer segments — which answers the objection that a heavier player car makes traffic expensive.
+
+**The car is untextured all the way through.** The decal sheet and its bitmap font are deleted; the
+plates are flat colour, white front and yellow rear per the HK standard, and that asymmetry is what
+proves the model is not mirrored. ⚠️ `BADGE_GREEN` takes the palette to **seven** where `ART_DESIGN.md`
+says 3–5. Flagged rather than quietly taken.
+
+⚠️ **Removing a part is not free when other parts are mounted on it.** `_seated_depth` derives each
+fixture's depth instead of taking a thickness. It sampled two points of a profile that has **three** —
+`face_inset_m` is *not* monotonic, the body being furthest out in the *middle* of the range — so a lens
+stood **8.5 mm proud where 15 mm was promised**, and nothing showed because the shortfall was smaller
+than the margin. **A contract test that checks the sign of a quantity does not check the quantity.**
+⚠️ Known limit, not fixed: `_seated_depth` compensates in y and the corner chamfer is a function of x,
+so a fixture outboard of the chamfer floats clear of the paint by up to 10 cm.
+
+⚠️ **The instruction described where something should end up and was read as permission to delete it**
+— three times, on the bumper, the decal and the badge. **When a note says a feature is in the wrong
+form, the default is to change its form; deleting it needs its own reason.**
+
+⚠️ **Tests written in the same round as the code they check can be unable to fail.** Four found in one
+review: an area sum over a strict selector that collapsed to `0.0 == 0.0` on an empty selection; a test
+that re-derived the formula and compared it against itself, staying green when `-` became `+`; a
+"clears both wheel openings" check that pooled every face and took one global `min`, so deleting the
+rear handle passed. **Any test whose subject is "a filtered set" needs one assertion that the filter
+found anything at all.**
+
+⚠️ **The rocker strip and the red valance are unjudged from the play camera**, and the reason is
+structural: the chase camera tracks the car's *facing*, so it stays behind the car even through a full
+drift, and the flank never enters frame. The argument for them — that a long high-contrast line
+survives where an isolated small shape does not — is an argument, not a measurement.
+
+⚠️ **Detail that cannot be seen at review distance is not detail, it is triangles.** The mirrors, door
+handles, shut lines and pillars were listed as missing while already modelled — 16–150 mm features seen
+from ~8 m in a 1080p frame. The fix is to make them read, not to add them again.
+
+⚠️ **The visual body is not the collider, and the collider did not move.** `P0-5a` rejected a trimesh
+player collider and `P0-5` tuned against the box. The mesh is larger on every axis, which is the safe
+direction — but the visible roof can pass under geometry the collider would have stopped. Worth a look
+when `P2-6` measures.
+
+⚠️ **`drive.sh` renders whatever is already imported.** Rewrite a `.glb` and every screenshot afterwards
+is of the *old* mesh, silently, with `DRIVER OK` and exit 0. **A probe that comes back pixel-identical
+far more likely means the change never arrived than that it had no effect.** Run
+`godot --headless --path game --import` before believing any screenshot.
+
+**See.** `P0-5a` · `ART_DESIGN.md` "Vehicles" · `ARCHITECTURE.md` "The importer can reinstate
+`VehicleWheel3D`"
+
+---
+
+# Standing decisions
+
+## Foundations
+
+**Engine: Godot 4.7, Mobile renderer, Jolt.** Chosen after the target shifted from a free web release
+to a commercial store product, reversing an earlier web-first recommendation. Decisive: native mobile
+performance versus Android WebView GPU throttling, and one codebase covering mobile, desktop and a web
+demo.
+
+**Language: GDScript, not C#.** Desktop C# is fully supported; Android and iOS remain **experimental**;
+web export is **unsupported entirely**. Mobile is a primary target and the free web demo is the planned
+marketing funnel. The complex code lives in the Python ETL anyway, so C#'s tooling advantage earns
+little. The performance escape hatch is **GDExtension** (C++/Rust), not C#.
+
+**Targets: mobile + desktop/Steam.** Adds a gamepad/keyboard input layer, resolution-independent UI, a
+desktop LOD tier and a Steam build path — ~15–20% engineering overhead, accepted for the broader
+revenue options.
+
+**Region: Wan Chai → Causeway Bay.** Chosen over Tsim Sha Tsui and Central: a natural circuit exists in
+the real road layout, map edges are diegetic, and it has real grade separation without Central's
+multi-level data risk.
+
+**Building source: non-textured / 3D-BIT00 Level 1, never photogrammetry.** The tile-based
+photogrammetry mesh has ground gaps, level differences and vehicles baked into the geometry; a prior
+public attempt concluded it suited flight rather than driving simulation. Decimating photogrammetry
+produces blobs, not low-poly style. This is hard rule 1.
+
+**Art direction: accurate city, toy vehicles.** Stylise the actors, not the stage. Recognition is the
+product, so building proportions stay accurate; charm comes from Choro-Q vehicle proportions. Measured:
+on the open-road frame the taxi's red is **`C*` 86.5 against a frame median of 7.5**, with the rest of
+the city's 99th percentile at 39.8. An order-of-magnitude chroma gap, not a metaphor.
+
+**Monetisation: free download + one-time unlock, deferred to launch.** Not F2P — 2–5% conversion needs
+volume this TAM cannot supply, and retention mechanics would corrode a 3-minute arcade loop. Not
+paid-upfront — paid games are <5% of App Store revenue, and "it feels like Hong Kong" cannot be
+conveyed in a screenshot, so **a free slice *is* the marketing**. Build implication: design Wan Chai to
+be standalone-playable.
+
+**See.** `ARCHITECTURE.md` · `ART_DESIGN.md` · `GAME_DESIGN.md`
+
+## Region bounds are WGS84, by measurement
+
+**Claim.** The region bounds in `hong_kong.yaml` are WGS84.
+
+**Why it is load-bearing rather than pedantic.** HK1980 versus WGS84 is a **~304 m** question in Hong
+Kong, and the two readings select **different sheets** — WGS84 gives a contiguous `11-SW` block, HK1980
+swaps two of six. A third of the region rode on an unstated assumption.
+
+**Evidence.** Sheet `11-SW-10C`'s real building positions match the WGS84 projection to within metres
+and the HK1980 one is out by ~250 m; the terrain node sits at the WGS84-projected sheet centre exactly.
+
+**See.** `P0-4` · `DATA_SOURCES.md` "The datum of these bounds is load-bearing"
+
+## Licensing
+
+**Claim.** Code is **GPL-3.0-or-later**, hand-authored assets are CC BY-SA 4.0, and the generated city
+data is **nobody's to relicense** — it stays under the government terms and is never committed.
+Contributions come in **inbound MIT**. `LICENSING.md` is the standing policy.
+
+**The licence choice decided the contribution policy.** GPLv3 cannot ship through the App Store, so
+store builds need a separate proprietary grant — which works only while one party owns the whole
+copyright. A single GPL-only patch would close the iOS route permanently, as it did for VLC. Inbound
+MIT permits sublicensing, which is the exact property that keeps dual licensing available, at far less
+friction than a signed CLA. ⚠️ **No exposure today and no retrofit once a contributor declines**, so
+the file must land before the repo goes public.
+
+**Reading the terms verbatim corrected the credits draft.** The grant is permissive — six acts,
+commercial use explicit, **no usage limit, quota or volume cap of any kind**, so player count consumes
+no government allowance. But the attribution requirement is **stronger than naming a source**: it
+demands acknowledging *ownership of the intellectual property rights*, and **both portals** must be
+named. Hard rule 6 says so.
+
+⚠️ **One false alarm, recorded so it is not re-raised.** Neither portal's grant contains "adapt",
+"modify" or "derivative", which looks alarming for a pipeline that does nothing but derive geometry. It
+is expected: **"adaptation" is a term of art** attaching to literary, dramatic and musical works, and
+for artistic works the restricted act is *copying* — which expressly covers 2D↔3D transformation and is
+granted here as **reproduce**. The alarm came from grepping for a word rather than from the structure
+of the right.
+
+**Landmark depiction, not adaptation, is the top item for legal review.**
+
+**See.** `LICENSING.md` · `CONTRIBUTING.md` · `DATA_SOURCES.md` "Licence"
+
+## Genre direction
+
+| Reference | Contributes | Landed in |
+|---|---|---|
+| *Crazy Taxi* | The loop — fare combo, session timer, arrow, three-minute sessions | Already the design |
+| *Midtown Madness 2* | The world — real shortcuts over invented ramps, tone, drivable roster | `GAME_DESIGN.md`; the risk register |
+| *Forza Horizon* | The reward layer — the losable style chain, scoreable traffic | `GAME_DESIGN.md`; `B3`/`B4` |
+| *Sleeping Dogs* | The nearest commercial precedent for a recognisable HK. The common reading is that **signage density carried it, not street accuracy** — untested here | `P3-9`, the neon note |
+| *Burnout 3* | Traffic as reward rather than obstacle — near miss, oncoming lane, risk-fed boost | `P3-2a` |
+| *Art of Rally* | Flat-shaded untextured terrain as a **finished** look, not a placeholder | `Q18`, `P3-10` |
+
+**Neither open-world structure survives a 1.5 km² region, and the reason is size rather than taste.**
+Midtown Madness consumes map area as content; Forza Horizon uses the open world as its menu, which
+needs traversal to be a pleasure rather than a formality. A checkpoint race across this region is 60–90
+seconds. **The fare loop does the opposite** — it re-randomises the route through the same 1.5 km²
+every session, which makes a small map an *asset*.
+
+⚠️ **A plan-ordering bug this exposed, and it is a shape this project has seen before.** Dense traffic
+converts from obstacle to opportunity only when threading it **pays**, so `B3` would have been reviewed
+in the single state where traffic has no upside, and a "just annoying" verdict would have been an
+artifact of the ordering. Near-miss detection split out as `P3-2a` and moved into `B3`. Same shape as
+`P2-5`'s missing building collision: **a unit whose acceptance depends on a capability scheduled after
+it.**
+
+**Refused, and named so they are not revisited.** Wheelspins and randomised rewards (already an
+anti-goal); live-service and always-online structure (hard rule 2); licensed-car collection as a
+progression spine (the art direction is 800–2,000-triangle toys); and *Crazy Taxi*'s absurd-geometry
+philosophy — ramps scattered wherever the driving goes quiet — which `P3-9` would charge for in full.
+
+**See.** `GAME_DESIGN.md` · `PLAN.md`
+
+## Two shadow cascades at 400 m, not four at 600
+
+**Claim.** `directional_shadow_mode` is 2 PSSM cascades at 400 m.
+
+**Why 400 m.** It is exactly the chase camera's far plane and the streamer's unload, so shadow reach
+and draw distance end together. Distance is free either way — 150, 250, 400 and 600 measure
+**bit-identically** for a given cascade count.
+
+**Evidence.** Frame primitives against Godot's four-cascade default: **−35%** at two cascades, −55% at
+one.
+
+⚠️ **One cascade is what the spec asked for, was shipped first, and had to be withdrawn.** It has a
+distinct artefact at every distance: at 150 m shadows fade out mid-street while the camera draws to
+400 m; at 250 m the HKCEC shadow comes out **banded**; at 400 m it **disappears**, the caster falling
+outside the ortho volume's near plane. The first two are one artefact, not two —
+`directional_shadow_fade_start` is a *fraction* of `max_distance`, so shortening the distance to
+sharpen the near field silently drags the fade band in with it. The two expected artefacts were checked
+on a near-field crop and nobody looked down a long street.
+
+⚠️ **"35% off the frame" is a primitive count, not a frame time.** Every configuration pinned to 8.3 ms
+on this machine, so the GPU saving is **unmeasured**, and shadow-map fill is unchanged since the atlas
+is one texture at any cascade count. Justified as headroom for the unbuilt mobile tier and as spec
+conformance, not as a measured speed-up. Cascade count also costs draw calls in the opposite direction:
+4 → 32, 2 → 35, 1 → 39, off → 26.
+
+**No `LightingProfile` resource, deliberately.** A `.tscn` *is* data — `city_drive.tscn` already carries
+`far = 400.0` the same way. A profile plus an apply script would move values out of a scene the editor
+renders correctly and into a script that writes them in `_ready()`: two sources of truth whose
+disagreement would be invisible in the editor.
+
+⚠️ **"Vehicle blob shadow only" deserves re-examination before anyone builds the mobile tier.** Shots
+with shadows *off* look markedly worse than that line implies — flat and blown out, the canyon losing
+its depth entirely. A real mobile tier needs the ambient and tonemap re-tuned *around* a blob shadow,
+not the shadow switched off. `P2-6` inherits it.
+
+**See.** `ART_DESIGN.md` "Lighting" · `Q31`
+
+## Debug chrome: one owner, one key, off by default
+
+**Claim.** `DebugHud` is an autoload owning every dev readout. `F3` cycles `off → minimal → full`;
+`--debug-view=` sets where a run starts. **The default is off in every build.**
+
+**Why off.** Every screenshot anyone judged Wan Chai from had a five-line text block over it. And
+measured on the standard driver run: **19 draw calls off, 27 at minimal, 38 at full** — debug text was
+costing half as many draw calls as the entire city, because text with an outline does not batch the way
+a flat-shaded mesh does.
+
+**`drive.sh` defaults to `minimal`**, which is the one place the reasoning inverts: a scripted run is
+somebody debugging, and a screenshot that cannot say where it was taken cannot be acted on. The
+position block reports engine metres **and** the EPSG:2326 grid reference, so a suspicious frame is
+checkable against the ETL's own source data.
+
+⚠️ **The toggle is a raw key, not an action** — `[input]` is the *shipped* map, so `drive.sh --hold=`
+cannot press it and the flag is the only route a scripted run has. **Headless parks the HUD whatever
+the flag says.**
+
+**Font sizes are constants rather than a `.tres`, and that is a deliberate reading of hard rule 4:**
+tuning values are *gameplay* values, balanced by someone who should not need a code change. Nothing
+about dev chrome is balanced.
+
+**See.** `ARCHITECTURE.md` "The debug overlay"
+
+## The vertex stream carries both ground and building colour
+
+**Claim.** Colour rides `COLOR_0` on an untextured mesh that merges to one primitive per tile. That
+single choice is what produces 53 draw calls and the bundle the project ships. Ground colour and
+building colour are the same question — *what channel carries colour* — and the project had already
+answered it.
+
+**Rejected: ship the terrain orthophoto, resampled.** ~5.9 MB as ASTC, affordable in isolation. It
+fails on two other counts: a textured surface cannot merge with the vertex-coloured building
+primitive, so it costs **+1 draw call per resident tile**; and an orthophoto has the *real* roads baked
+in at their real width while the generated ribbon sits coplanar and **1.6× wider**, so photographic
+asphalt and lane markings would show from under a wider synthetic road, along with parked cars and
+baked shadows. ⚠️ **High-passing to remove the shadows makes the misregistration worse**, because road
+edges *are* the high frequencies.
+
+**Chosen: the texture is read at build time and thrown away.** ⚠️ Note the ordering that followed —
+flat colour first, look at it, and only then decide whether classification is earned. The classifier
+was subsequently **refused** on resolution grounds (`Q18`), so what ships is flat colour plus
+`facade_hue`'s per-building measurement.
+
+⚠️ **Use `TEXCOORD_0`, not `COLOR_0.a`.** `generated_scene_import.gd` sets `vertex_color_use_as_albedo`
+project-wide. An opaque material ignores albedo alpha only until somebody enables transparency on a
+tile, after which the city renders see-through with no error.
+
+**See.** `Q18` · `Q27` · `P3-7` · `P3-10`
+
+## The audit viewpoints
+
+**Claim.** Seven fixed cameras cover every mesh class the pipeline ships, recorded in `ART_DESIGN.md`
+so a later change is graded **against these** rather than against a fresh camera. Shots live under
+`build/driver/art_*`.
+
+**Why a fixed set.** Every class had been fixed individually and none had been graded against the
+others. A fresh camera per change makes two changes incomparable.
+
+⚠️ **A gap in coverage is cheaper to find than a defect in a render, and it does not depend on reading
+a frame correctly.** `ART_DESIGN.md` had **no infrastructure section at all**, for a class with its own
+colour, its own LOD cell sizes and its own grader — found by asking which classes the document covers,
+not by looking at a frame. Worth repeating for the other classes.
+
+**See.** `ART_DESIGN.md` "The audit viewpoints" · `Q30` · `Q31` · `Q32`
+
+## Rendering proposals: eight evaluated, two survive
+
+**What survives, in the order it should be done.**
+
+1. 🟢 **`Q31`'s bounce-fill pass — first, and it costs nothing.** *Mirror's Edge*'s radiosity is the
+   observation that **shadow needs its own light**, which is exactly `Q31`'s last untried lever.
+   `ambient_light_color` and `ambient_light_energy`, one variable at a time, graded with
+   `tools/frame_stats.py`. No rebuild.
+2. 🟡 **A precomputed sky-visibility bake — only if 1 fails, and probe before building.** It is the
+   only occlusion the **mobile tier** can have, since it ships no realtime shadow maps, and it breaks a
+   tie `ART_DESIGN.md` records as unbreakable: raising the fill *"fixes the road and flattens the
+   massing at once"*, true only while ambient is uniform. Inputs already exist — `terrain.py` parses a
+   real height field and buildings are extruded footprints, so the bake is numpy with no new dependency.
+   ⚠️ **Tint-probe it first** with an analytic term off the existing `TEXCOORD_0.x`; `Q32` built,
+   measured and reverted a whole shader term for want of that step. 💡 It has a **second consumer** for
+   free: `Q39`.
+3. 🟡 **`WATERBODY`, 605 triangles — tint-probe it, do not ship it on the strength of the number.**
+   Most of it is on the hillside `Q36` measured at 0.000% of every viewpoint.
+
+**Refused with a measurement, recorded so they are not re-proposed.**
+
+- **Real-time GI (Enlighten).** The premise is absent: *Catalyst* moved off baked lighting because its
+  sun moved through a 48-minute cycle. **This sun does not move** — night is a *switch* between two
+  static rigs. Its 3 ms was a 2016 console at 60 fps; the target is a phone. **The sequel's story is
+  evidence *for* baking, not against.**
+- **Planar reflections and SSR.** Unimplemented in the locked Mobile renderer, and the cheap equivalent
+  already ships — `city_facade_clean.gdshader` bows a reflected ray per pane through a sky gradient.
+- **The wet-material overlay.** Anti-goal, and it needs a second material layer, UVs, mask and noise
+  textures, and SSR — four things the pipeline deliberately lacks.
+- **Keeping UVs by restoring an unclustered LOD0.** There are no UVs to keep: the non-textured set
+  ships **0 images and no `TEXCOORD_0`**. An exact weld would not preserve them anyway —
+  `collapse`'s `cell_m <= 0` welds on position *and normal*, which is what the two sides of a UV seam
+  share. Cost would be 30.5 MB and 40% of visible triangles for a difference `Q16` measured as
+  invisible from the driver's seat.
+- **Stealing UVs from the individualised set.** Cheap to acquire — `Accept-Ranges: bytes`, and geometry
+  is 4–7% of the download. But **a UV without its image is not data**: they are per-image atlas
+  coordinates across primitives that overlap in `[0,1]`, useless as a lightmap parameterisation, and
+  Godot's importer generates a better unwrap from geometry alone.
+- **Shipping the terrain orthophoto at low resolution.** Size is genuinely a non-issue (~1.1 MB in
+  ETC2). It fails on baked illumination (`Q36`), a **1.6×** road-width misregistration, and +53 draw
+  calls.
+- **`VEGETATION(TB)` and `GENERIC`.** 1.52 M and 3.95 M triangles, one welded blob per sheet, no
+  `COLOR_0`.
+- 🔴 **Deriving glazed-vs-solid from the imagery — and this one had looked promising.** The consumer
+  exists and currently guesses: `city_facade_clean` ships `glass_ratio 0.52` hashed per building.
+  **Measured, it does not separate.** A dark-and-blue curtain-wall proxy gives a smooth decay, not two
+  populations, and height does not split it either — share above 0.3 runs 29.8% / 24.4% / 25.7% /
+  16.7% across the 0–15, 15–30, 30–60 and 60 m+ bands, if anything inverted. ⚠️ **And coverage caps
+  every version of it**: median **14.3%** of wall area is photographed at all (`Q37`).
+
+**Two method notes worth more than the findings.**
+
+⚠️ **A degenerate value that repeats to the last decimal is the tell.** The first run of the glass
+probe was invalid and looked *better* than the truth — 53.2% of samples landed on exactly RGB(60,60,60)
+atlas filler, producing `b*` of exactly `-0.00` at both quartiles across 354 buildings. Chasing it is
+what found `Q37` in shipped data.
+
+⚠️ **Shrinking the atlases to probe them faster is safe for colour and unsafe for everything else.**
+Mean ΔE **0.64** at 1/4 and **0.80** at 1/8, and coverage survives *exactly* — **provided the filler
+mask is computed at full resolution and carried through the shrink as a fractional weight**. Shrink
+first and coverage is unrecoverable, because filler and clipping are exact-value tests. Periodicity has
+a hard floor at ~1/2. ⚠️ **A persistent shrunken cache is not worth it** — 242 MB at 1/16 to save a
+full-res local pass measured at under two minutes.
+
+**See.** `ART_DESIGN.md` anti-goals · `ARCHITECTURE.md` tile contract · `DATA_SOURCES.md` · `Q31` ·
+`Q37` · `Q39`
