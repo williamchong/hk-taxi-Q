@@ -13,9 +13,24 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from facade_chroma import SANCTIONED_MAX, Spread, achieved, band_chroma, clipping, requested
+from facade_chroma import SANCTIONED_MAX, Population, Spread, achieved, band_chroma, clipping
+from ring_weights import ramp_class
 
 from pipeline.colour import chroma_and_hue, srgb_to_lab
+
+
+def violet_among_greys() -> np.ndarray:
+    """Nine neutral buildings and one colour sRGB has no way to show."""
+    lab = np.stack([np.full(10, 61.5), np.zeros(10), np.zeros(10)], axis=1)
+    lab[0] = [95.0, 120.0, -120.0]
+    return lab
+
+
+def band_of(style, heights: dict[str, float]) -> np.ndarray:
+    """The ramp lightness `Population` would derive, without the 4.9 GB survey."""
+    return srgb_to_lab(
+        np.array([style.colour_for(ramp_class(style), h) for h in heights.values()], np.float64)
+    )
 
 
 class TestRequested:
@@ -26,8 +41,11 @@ class TestRequested:
         wrong if `with_hue` ever scaled the material's own chroma instead of
         replacing it: a building's asked-for `C*` is its survey `C*` times
         `strength`, and the material it draws does not enter."""
-        hues = {"a": (3.0, 4.0), "b": (-6.0, 8.0)}
-        lab = requested(hong_kong.buildings, hues, {"a": 12.0, "b": 90.0}, 2.0)
+        style = hong_kong.buildings
+        people = Population(
+            band=band_of(style, {"a": 12.0, "b": 90.0}), hue=np.array([[3.0, 4.0], [-6.0, 8.0]])
+        )
+        lab = people.requested(2.0)
         assert np.hypot(lab[:, 1], lab[:, 2]) == pytest.approx([10.0, 20.0])
 
     def test_lightness_comes_from_the_band_not_the_survey(self, hong_kong) -> None:
@@ -35,22 +53,23 @@ class TestRequested:
         the same hue here, so any difference in `L*` is the ramp doing its job —
         and no difference at all would mean the ramp was not being consulted."""
         style = hong_kong.buildings
-        lab = requested(style, {"a": (3.0, 4.0), "b": (3.0, 4.0)}, {"a": 6.0, "b": 200.0}, 1.0)
+        people = Population(
+            band=band_of(style, {"a": 6.0, "b": 200.0}), hue=np.array([[3.0, 4.0], [3.0, 4.0]])
+        )
+        lab = people.requested(1.0)
         assert lab[0, 0] != lab[1, 0]
         assert lab[1, 0] == pytest.approx(
-            srgb_to_lab(np.array([style.material_for("BUILDING", 200.0).colour]))[0, 0]
+            srgb_to_lab(np.array([style.colour_for(ramp_class(style), 200.0)]))[0, 0]
         )
 
     def test_hue_angle_survives_the_amplification(self, hong_kong) -> None:
         """`strength` is documented as keeping *which* building is warmer and
         changing only by how much. Scaling `a*` and `b*` together is what makes
         that true, and scaling chroma in any other space would not."""
-        hues = {"a": (-6.0, 8.0)}
-        style = hong_kong.buildings
-        angles = [
-            chroma_and_hue(tuple(requested(style, hues, {"a": 30.0}, strength)[0, 1:]))
-            for strength in (1.0, 2.0)
-        ]
+        people = Population(
+            band=band_of(hong_kong.buildings, {"a": 30.0}), hue=np.array([[-6.0, 8.0]])
+        )
+        angles = [chroma_and_hue(tuple(people.requested(s)[0, 1:])) for s in (1.0, 2.0)]
         assert angles[0][1] == pytest.approx(angles[1][1])
         assert angles[1][0] == pytest.approx(2.0 * angles[0][0])
 
@@ -83,11 +102,8 @@ class TestClipping:
         assert (outside, worst) == (0.0, 0.0)
 
     def test_finds_the_colours_srgb_cannot_show(self) -> None:
-        """One light violet among nine greys: 10% outside, and a `dE` large
-        enough that it could not be rounding."""
-        lab = np.stack([np.full(10, 61.5), np.zeros(10), np.zeros(10)], axis=1)
-        lab[0] = [95.0, 120.0, -120.0]
-        outside, worst = clipping(lab)
+        """10% outside, and a `dE` large enough that it could not be rounding."""
+        outside, worst = clipping(violet_among_greys())
         assert outside == pytest.approx(10.0)
         assert worst > 1.0
 
@@ -95,8 +111,7 @@ class TestClipping:
         """The trap in reporting a maximum over the whole population: it would be
         the worst `dE` of *anything*, which is a number about rounding whenever
         nothing clipped, and it would still look like a gamut figure."""
-        lab = np.stack([np.full(10, 61.5), np.zeros(10), np.zeros(10)], axis=1)
-        lab[0] = [95.0, 120.0, -120.0]
+        lab = violet_among_greys()
         _, worst = clipping(lab)
         one = np.linalg.norm(achieved(lab[:1]) - lab[:1], axis=1)[0]
         assert worst == pytest.approx(one)

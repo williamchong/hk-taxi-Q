@@ -164,11 +164,10 @@ thing in the frame long before the grey majority stops being grey.
 
 **Re-run the tool whenever `strength` moves or the survey does — the two disagree about which end
 moves.** `Q37`'s resurvey lifted the median 28.7% and the p99 only 5.1% — the table it replaced
-carried 222 rows of atlas filler at exactly `C*` 0, and a population feels that in its middle, not
-at its edge. `strength` does the opposite, and reading either number as a
-proxy for the other is how a city gets tuned in the wrong direction. Whatever look wins `Q26` should
-set this against the palette table, and the palette table should then be rewritten to describe the
-city that ships. See `Q30`.
+carried 222 rows of atlas filler at exactly `C*` 0, and a population feels that in its middle rather
+than at its edge. `strength` does the opposite, and reading one as a proxy for the other is how a
+city gets tuned in the wrong direction. Whatever look wins `Q26` should set this against the palette
+table, and the palette table should then be rewritten to describe the city that ships. See `Q30`.
 
 ---
 

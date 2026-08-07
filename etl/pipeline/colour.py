@@ -164,6 +164,18 @@ def reflectance(rgb: tuple[int, int, int]) -> float:
     return float(luminance(np.array([rgb], dtype=np.float64))[0]) * 100.0
 
 
+def chroma(lab: np.ndarray) -> np.ndarray:
+    """`(n, 3)` CIELAB as CIELCh chroma — `chroma_and_hue` over whole rows.
+
+    The vectorised counterpart, not a second definition: `hong_kong.yaml`
+    authors `up_to_chroma` in these units and `Q30` counts a population in them,
+    so a tool measuring the city has to agree with the function the config is
+    read through. Kept here rather than written inline at each caller for the
+    same reason `luminance` is.
+    """
+    return np.hypot(lab[:, 1], lab[:, 2])
+
+
 def chroma_and_hue(hue: tuple[float, float]) -> tuple[float, float]:
     """`(a*, b*)` as CIELCh chroma and hue angle in degrees, wrapped to [0, 360).
 
@@ -177,6 +189,21 @@ def chroma_and_hue(hue: tuple[float, float]) -> tuple[float, float]:
     """
     a_star, b_star = hue
     return math.hypot(a_star, b_star), math.degrees(math.atan2(b_star, a_star)) % 360.0
+
+
+def lab_with_hue(lab: np.ndarray, hue: np.ndarray, strength: float) -> np.ndarray:
+    """`(n, 3)` CIELAB keeping its lightness and carrying `(n, 2)` `hue` at
+    `strength` — the assignment `with_hue` makes, before it converts back.
+
+    Split out for the reason `_lab_to_encoded` was: `Q30` measures the colour
+    the config asks for, which only exists at this point in the conversion, and
+    a second copy of the assignment could come to disagree with the one that
+    ships. That `strength` multiplies `(a*, b*)` here and not chroma somewhere
+    later is the whole claim `tools/facade_chroma.py` rests on.
+    """
+    asked = lab.copy()
+    asked[:, 1:] = np.asarray(hue, dtype=np.float64) * strength
+    return asked
 
 
 def with_hue(
@@ -198,7 +225,5 @@ def with_hue(
     falls, which `tools/facade_chroma.py` measures at 0.04 `C*` over Wan Chai.
     """
     lab = srgb_to_lab(np.array([rgb], dtype=np.float64))
-    lab[0, 1] = hue[0] * strength
-    lab[0, 2] = hue[1] * strength
-    out = lab_to_srgb(lab)[0]
+    out = lab_to_srgb(lab_with_hue(lab, np.array([hue], dtype=np.float64), strength))[0]
     return int(out[0]), int(out[1]), int(out[2])

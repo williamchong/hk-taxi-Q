@@ -24,7 +24,6 @@ Run:  .venv/bin/python tools/facade_chroma.py
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import sys
 from dataclasses import dataclass, replace
@@ -36,18 +35,16 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "etl"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from pipeline.buildings import (  # noqa: E402
-    HUE_SOURCE_ID,
-    Placement,
-    colour_for,
-    facade_hue,
-    read_sheet,
-    stem,
+from pipeline.buildings import Placement, colour_for, facade_hue, read_sheet, stem  # noqa: E402
+from pipeline.colour import (  # noqa: E402
+    chroma,
+    in_gamut,
+    lab_to_srgb,
+    lab_with_hue,
+    srgb_to_lab,
 )
-from pipeline.colour import in_gamut, lab_to_srgb, srgb_to_lab  # noqa: E402
 from pipeline.config import BuildingStyle, CityConfig, load_city  # noqa: E402
-from pipeline.fetch import source_dir  # noqa: E402
-from ring_weights import ramp_class  # noqa: E402
+from ring_weights import heights, ramp_class  # noqa: E402
 
 log = logging.getLogger(__name__)
 
@@ -80,59 +77,65 @@ class Spread:
 
     @classmethod
     def of(cls, lab: np.ndarray) -> Spread:
-        chroma = np.hypot(lab[:, 1], lab[:, 2])
+        found = chroma(lab)
         return cls(
-            count=len(chroma),
-            mean=float(chroma.mean()),
-            median=float(np.median(chroma)),
-            p90=float(np.percentile(chroma, 90)),
-            p99=float(np.percentile(chroma, 99)),
-            highest=float(chroma.max()),
-            over=100.0 * float((chroma > SANCTIONED_MAX).mean()),
+            count=len(found),
+            mean=float(found.mean()),
+            median=float(np.median(found)),
+            p90=float(np.percentile(found, 90)),
+            p99=float(np.percentile(found, 99)),
+            highest=float(found.max()),
+            over=100.0 * float((found > SANCTIONED_MAX).mean()),
             lightness=float(lab[:, 0].mean()),
         )
 
 
-def survey(city: CityConfig, *, root: Path | None = None) -> dict[str, tuple[float, float]]:
-    """The survey rows the pipeline trusts, keyed by stem — `facade_hue`'s own
-    filter, called rather than restated."""
-    return facade_hue(city.buildings, city.id, root=root)
+@dataclass(frozen=True)
+class Population:
+    """The surveyed buildings, as the two arrays every figure here comes from.
 
-
-def heights(city: CityConfig, *, root: Path | None = None) -> dict[str, float]:
-    """Each surveyed building's height, from the survey's own column.
-
-    The same column `ring_weights.py` reads and for the same reason: the ramp is
-    a step function and the survey's height matched the placed mesh's on 59 of 59
-    when `Q37` checked, so only a building within centimetres of a band edge
-    could take a different band.
+    Held apart because only one of them depends on `strength`: the band a
+    building takes is fixed, and the sweep varies what is written over its
+    `(a*, b*)`. Joining them once also removes the question of whether two
+    dictionaries keyed by stem are still in step.
     """
-    style = city.buildings
-    assert style.facade_hue_source is not None
-    path = source_dir(city.id, HUE_SOURCE_ID, root=root) / style.facade_hue_source
-    table = json.loads(path.read_text())
-    return {key: float(row["height_m"]) for key, row in table.items()}
 
+    band: np.ndarray
+    hue: np.ndarray
 
-def requested(
-    style: BuildingStyle,
-    hues: dict[str, tuple[float, float]],
-    height: dict[str, float],
-    strength: float,
-) -> np.ndarray:
-    """`(n, 3)` CIELAB the config asks each surveyed building to be.
+    @classmethod
+    def of(cls, city: CityConfig, *, root: Path | None = None) -> Population:
+        """Which rows the pipeline trusts is `facade_hue`'s rule, called rather
+        than restated; the height column is `ring_weights.heights`' for the same
+        reason. Neither is this tool's to decide."""
+        style = city.buildings
+        hues = facade_hue(style, city.id, root=root)
+        if not hues:
+            return cls(np.empty((0, 3)), np.empty((0, 2)))
+        height = heights(city, root=root)
+        answered_by_ramp = ramp_class(style)
+        return cls(
+            band=srgb_to_lab(
+                np.array(
+                    [style.colour_for(answered_by_ramp, height[key]) for key in hues],
+                    dtype=np.float64,
+                )
+            ),
+            hue=np.array(list(hues.values()), dtype=np.float64),
+        )
 
-    The band's lightness carrying the survey's hue at `strength`, which is
-    `with_hue`'s arithmetic before it converts — held in Lab because the gamut
-    question is about the colour that was asked for, and converting first is what
-    destroys the evidence.
-    """
-    answered_by_ramp = ramp_class(style)
-    ramp = [style.material_for(answered_by_ramp, height[key]).colour for key in hues]
-    lab = srgb_to_lab(np.array(ramp, dtype=np.float64))
-    lab[:, 1] = [hue[0] * strength for hue in hues.values()]
-    lab[:, 2] = [hue[1] * strength for hue in hues.values()]
-    return lab
+    def __len__(self) -> int:
+        return len(self.hue)
+
+    def requested(self, strength: float) -> np.ndarray:
+        """`(n, 3)` CIELAB the config asks each surveyed building to be.
+
+        `colour.lab_with_hue` and not an assignment written here, so the colour
+        this measures cannot come apart from the one `with_hue` ships. Held in
+        Lab because the gamut question is about the colour that was *asked* for,
+        and converting first is what destroys the evidence.
+        """
+        return lab_with_hue(self.band, self.hue, strength)
 
 
 def achieved(lab: np.ndarray) -> np.ndarray:
@@ -163,17 +166,12 @@ def band_chroma(style: BuildingStyle) -> tuple[float, float]:
     it. It is the baseline the `strength` rows are departing from.
     """
     ramp = [band.material.colour for band in style.height_bands]
-    lab = srgb_to_lab(np.array(ramp, dtype=np.float64))
-    chroma = np.hypot(lab[:, 1], lab[:, 2])
-    return float(chroma.min()), float(chroma.max())
+    found = chroma(srgb_to_lab(np.array(ramp, dtype=np.float64)))
+    return float(found.min()), float(found.max())
 
 
 def shipped(
-    city: CityConfig,
-    region_id: str,
-    hues: dict[str, tuple[float, float]],
-    *,
-    root: Path | None = None,
+    city: CityConfig, region_id: str, *, root: Path | None = None
 ) -> dict[float, np.ndarray]:
     """`(n, 3)` CIELAB every surveyed building actually receives, per strength.
 
@@ -184,9 +182,16 @@ def shipped(
 
     Every strength answered from one pass over the sheets, because the sheets are
     the expensive part and the strength is a scalar the colour depends on.
+
+    ⚠️ **The mesh is placed before it is coloured even though nothing in the
+    colour reads its position today.** That is the call `build_region` makes, and
+    the fidelity is the point — `Q35`'s leading candidate for the salt-and-pepper
+    skyline is a spatial hash, which would make position matter without touching
+    a line of this file.
     """
     style = city.buildings
     place = Placement.resolve(city, region_id, root, None)
+    hues = facade_hue(style, city.id, root=root)
     styles = {strength: replace(style, facade_hue_strength=strength) for strength in STRENGTHS}
     found: dict[float, list[np.ndarray]] = {strength: [] for strength in STRENGTHS}
     for _, sheet_path in place.sheets:
@@ -194,51 +199,63 @@ def shipped(
             if style.is_ground(class_id) or stem(mesh.name) not in hues:
                 continue
             placed = mesh.translated(place.offset)
+            # Measured once and handed to all three, which is what the argument
+            # is for: `colour_for` would otherwise sweep every vertex twice per
+            # strength to rediscover the same height.
+            bounds = placed.aabb()
             for strength, styled in styles.items():
-                found[strength].append(colour_for(styled, class_id, placed, hue=hues)[0][:3])
+                colour = colour_for(styled, class_id, placed, bounds=bounds, hue=hues)
+                found[strength].append(colour[0][:3])
     return {
         strength: srgb_to_lab(np.array(colours, dtype=np.float64))
         for strength, colours in found.items()
     }
 
 
+def _row(strength: float, found: Spread, suffix: str = "") -> None:
+    """One line of the sweep. Shared because both tables print under the single
+    header above them, so a format that drifted would misalign in silence — and
+    reading the two against each other is the whole reason `--shipped` exists."""
+    log.info(
+        "      %.1f   | %6.2f  %6.2f  %6.2f  %6.2f  %6.2f |     %5.1f%% | %5.1f%s",
+        strength,
+        found.mean,
+        found.median,
+        found.p90,
+        found.p99,
+        found.highest,
+        found.over,
+        found.lightness,
+        suffix,
+    )
+
+
 def report(city: CityConfig, region_id: str | None, *, root: Path | None = None) -> int:
     style = city.buildings
-    hues = survey(city, root=root)
-    if not hues:
+    people = Population.of(city, root=root)
+    if not len(people):
         log.error("no facade survey for %s — there is no shipped chroma to measure", city.id)
         return 1
-    height = heights(city, root=root)
+    asked = {strength: people.requested(strength) for strength in STRENGTHS}
 
     low, high = band_chroma(style)
     log.info("")
-    log.info("  %d surveyed buildings after the vegetation filter", len(hues))
+    log.info("  %d surveyed buildings after the vegetation filter", len(people))
     log.info("  authored height bands sit at C* %.2f to %.2f", low, high)
     log.info("  ships at facade_hue.strength %.1f", style.facade_hue_strength)
     log.info("")
     log.info(
         "  strength |   mean  median     p90     p99     max | over C* %.0f |    L*", SANCTIONED_MAX
     )
-    for strength in STRENGTHS:
+    for strength, lab in asked.items():
         # The colour that survives the round trip, not the one asked for: above
         # `strength` 1.0 the two part company at the top of the range, and the
         # tail is the whole question. Asked-for peaks at C* 154 where sRGB can
         # deliver 102.
-        found = Spread.of(achieved(requested(style, hues, height, strength)))
-        log.info(
-            "      %.1f   | %6.2f  %6.2f  %6.2f  %6.2f  %6.2f |     %5.1f%% | %5.1f",
-            strength,
-            found.mean,
-            found.median,
-            found.p90,
-            found.p99,
-            found.highest,
-            found.over,
-            found.lightness,
-        )
+        _row(strength, Spread.of(achieved(lab)))
     log.info("")
-    for strength in STRENGTHS:
-        outside, worst = clipping(requested(style, hues, height, strength))
+    for strength, lab in asked.items():
+        outside, worst = clipping(lab)
         log.info(
             "  strength %.1f: %.1f%% outside the sRGB gamut, worst dE76 %.1f",
             strength,
@@ -249,21 +266,9 @@ def report(city: CityConfig, region_id: str | None, *, root: Path | None = None)
     if region_id is not None:
         log.info("")
         log.info("  the full pipeline path over %s, for comparison:", region_id)
-        for strength, lab in shipped(city, region_id, hues, root=root).items():
+        for strength, lab in shipped(city, region_id, root=root).items():
             found = Spread.of(lab)
-            log.info(
-                "      %.1f   | %6.2f  %6.2f  %6.2f  %6.2f  %6.2f |"
-                "     %5.1f%% | %5.1f  (%d meshes)",
-                strength,
-                found.mean,
-                found.median,
-                found.p90,
-                found.p99,
-                found.highest,
-                found.over,
-                found.lightness,
-                found.count,
-            )
+            _row(strength, found, f"  ({found.count} meshes)")
     return 0
 
 
@@ -274,14 +279,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--shipped",
         nargs="?",
-        const="wan_chai",
+        # Empty rather than a region id: naming one here would be the only
+        # hardcoded Hong Kong region in the tree, and hard rule 3 keeps city
+        # geography in the config. Bare `--shipped` takes the city's first.
+        const="",
         metavar="REGION",
         help="also walk the region's real meshes through the whole pipeline path",
     )
     arguments = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    return report(load_city(arguments.city), arguments.shipped, root=arguments.sources_root)
+    city = load_city(arguments.city)
+    region = arguments.shipped or next(iter(city.regions), None)
+    return report(city, None if arguments.shipped is None else region, root=arguments.sources_root)
 
 
 if __name__ == "__main__":

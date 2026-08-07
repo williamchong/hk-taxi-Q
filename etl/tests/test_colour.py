@@ -9,9 +9,17 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from pipeline import colour as colour_module
 from pipeline.buildings import colour_for, facade_hue
-from pipeline.colour import in_gamut, lab_to_srgb, reflectance, srgb_to_lab, with_hue
+from pipeline.colour import (
+    _lab_to_encoded,
+    chroma,
+    chroma_and_hue,
+    in_gamut,
+    lab_to_srgb,
+    reflectance,
+    srgb_to_lab,
+    with_hue,
+)
 from pipeline.config import BuildingStyle, HeightBand, Material, MaterialAssignment
 from tests.helpers import flat_mesh, style
 
@@ -87,8 +95,18 @@ class TestInGamut:
         lab = np.stack(
             [rng.uniform(0.0, 100.0, 200_000), *rng.uniform(-140.0, 140.0, (2, 200_000))], axis=1
         )
-        unclipped = np.round(colour_module._lab_to_encoded(lab))
+        unclipped = np.round(_lab_to_encoded(lab))
         assert np.array_equal(in_gamut(lab), (unclipped == lab_to_srgb(lab)).all(axis=1))
+
+
+class TestChroma:
+    def test_agrees_with_the_units_the_config_is_authored_in(self) -> None:
+        """`chroma_and_hue` is the definition `up_to_chroma` and `Q30`'s
+        threshold are both read against. A vectorised second opinion that
+        disagreed would bin buildings by one number and report them by another."""
+        rng = np.random.default_rng(3)
+        lab = np.stack([rng.uniform(0.0, 100.0, 500), *rng.uniform(-90.0, 90.0, (2, 500))], axis=1)
+        assert chroma(lab) == pytest.approx([chroma_and_hue(tuple(row[1:]))[0] for row in lab])
 
 
 class TestWithHue:

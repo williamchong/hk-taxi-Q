@@ -169,30 +169,43 @@ def ramp_class(style: BuildingStyle) -> str:
     return plain[0]
 
 
+def heights(city: CityConfig, *, root: Path | None = None) -> dict[str, float]:
+    """Every surveyed building's height, keyed by stem.
+
+    ⚠️ **The height is the survey's own column, not the placed mesh's.** They are
+    the same measurement taken off two versions of the same building — `Q37`
+    matched them exactly on 59 of 59 on `11-SW-9D` — and the ramp is a step
+    function, so only a row within centimetres of a band edge could differ.
+
+    Read here rather than in each tool that wants it, so that where the survey
+    lives and what its height column is called are written down once —
+    `facade_hue` already owns the same question for the hue column.
+    """
+    style = city.buildings
+    if style.facade_hue_source is None:
+        return {}
+    path = source_dir(city.id, HUE_SOURCE_ID, root=root) / style.facade_hue_source
+    table = json.loads(path.read_text())
+    return {stem: float(row["height_m"]) for stem, row in table.items()}
+
+
 def population(city: CityConfig, *, root: Path | None = None) -> list[tuple[float, float, float]]:
     """`(chroma, hue angle, ramp reflectance)` for every row the pipeline uses.
 
     The vegetation filter is `facade_hue`'s, called rather than copied: which
     rows the pipeline trusts is one rule and it is already written down. Only the
     height is read separately, because that function returns hue and nothing else.
-
-    ⚠️ **The height is the survey's own column, not the placed mesh's.** They are
-    the same measurement taken off two versions of the same building — `Q37`
-    matched them exactly on 59 of 59 on `11-SW-9D` — and the ramp is a step
-    function, so only a row within centimetres of a band edge could differ.
     """
     style = city.buildings
     hues = facade_hue(style, city.id, root=root)
     if not hues:
         return []
-    assert style.facade_hue_source is not None  # facade_hue returns {} without one
-    path = source_dir(city.id, HUE_SOURCE_ID, root=root) / style.facade_hue_source
-    table = json.loads(path.read_text())
+    height = heights(city, root=root)
     answered_by_ramp = ramp_class(style)
     return [
         (
             *chroma_and_hue(hue),
-            style.material_for(answered_by_ramp, float(table[stem]["height_m"])).reflectance,
+            style.material_for(answered_by_ramp, height[stem]).reflectance,
         )
         for stem, hue in hues.items()
     ]
