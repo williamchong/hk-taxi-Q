@@ -65,6 +65,7 @@ lives in git. This file holds *why things are the way they are*.
 | `Q39` | `wall_sky_tint` is uniform, so a canyon wall takes a parapet's sky bounce | 🟡 Open |
 | `Q40` | Can façade grammar be surveyed instead of hashed? | 🟡 Open, narrowed — every measurement question closed: grammar and the dip gate killed, glazing and tint go through the reader; only `TEXCOORD_1` plumbing remains |
 | `Q41` | A vision reader recovers the grammar the statistic could not | 🟡 Open — reader validated and the full region surveyed; open on consumption only |
+| `Q42` | The reader answers seven questions nobody consumes | 🟡 Open — analysed on the 40 validation responses; each field owes its own validation before it is plumbed |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -1780,8 +1781,10 @@ bump, for reader-glazed + surveyed tint + `Q41`'s grammar in one pass.
 ## `Q41` — A vision reader recovers the grammar the statistic could not
 
 **Status.** 🟡 Open — ✅ **the reader passed its graded run, first run, no label corrections**,
-✅ the cache is image-fingerprinted, ✅ the human label spot-check passed with no corrections; open
-on the full-sheet run · **Owner.** `P3-9a`
+✅ the cache is image-fingerprinted, ✅ the human label spot-check passed with no corrections,
+✅ the full-region run is complete (4,734 faces read, 80% of buildings with at least one read
+face); open on consumption — the `TEXCOORD_1` channel design with `Q40`, and `Q42`'s per-field
+validation before any rider is plumbed · **Owner.** `P3-9a`
 
 **The claim.** `Q40`'s kill of fin-versus-curtain-versus-punched is real but narrower than its
 wording: the taxonomy is unreachable *by a per-pixel statistic*, not unreachable from the data. Read
