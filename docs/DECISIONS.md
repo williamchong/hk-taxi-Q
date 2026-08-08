@@ -1677,6 +1677,15 @@ whose W face `Q41`'s reader refused, reads **bimodal (dip 0.241)** through the w
 also occurs: `B358891570501063A0` goes 1.000 → **0.006** and `B357961566001063A0` 0.896 → **0.054**,
 occluding geometry having *hidden* real bimodality on the buildings it covered.
 
+✅ **The second sheet agrees the movement is material, and adds that its direction is not fixed.**
+`11-SW-14B`, 715 measured and 699 gated: verdicts move on **193 of 699** — 102 toward unimodal
+against 91 toward bimodal — tallies 51/154/494 becoming **66/124/509**, median dip 0.857 → 0.881.
+Where `11-SW-9D`'s movement ran net toward unimodal, `14B` sharpens both ends and drains the
+middling bucket: decontamination is not a uniform correction some scale factor on the old numbers
+could reproduce, it changes individual buildings' answers in both directions. The sheets also
+disagree about the city itself — 45% against 71% clearly unimodal — so the threshold re-derivation
+needs more than one sheet, as this record already warns for other numbers.
+
 ⚠️ **Probe 1's absolute numbers do not carry, for a second reason: its implementation was never
 committed** — this record's own `Q37` ghost. The new tool's atlas column, same selection but its own
 histogram parameters, reads 11/51 clearly bimodal against Probe 1's 50%, and its density metric runs
