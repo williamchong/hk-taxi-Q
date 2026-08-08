@@ -1688,8 +1688,9 @@ second sheet is worth reading before the gate thresholds are fixed to the first.
 
 ## `Q41` — A vision reader recovers the grammar the statistic could not
 
-**Status.** 🟡 Open — validation protocol and thresholds fixed **before** the reader's first run;
-the reader is unvalidated until that run is graded · **Owner.** `P3-9a`
+**Status.** 🟡 Open — ✅ **the reader passed its graded run, first run, no label corrections**; open
+on an image fingerprint in the cache, the human label spot-check and the full-sheet run ·
+**Owner.** `P3-9a`
 
 **The claim.** `Q40`'s kill of fin-versus-curtain-versus-punched is real but narrower than its
 wording: the taxonomy is unreachable *by a per-pixel statistic*, not unreachable from the data. Read
@@ -1734,6 +1735,36 @@ Misses are adjudicated by re-inspection; a demonstrably wrong label is corrected
 correction is listed here** — the metric is computed against corrected labels, so label errors
 cannot silently rescue a failing reader without leaving a record.
 
+**The graded run: ✅ PASS, on the first run.** Reader `claude-opus-5`, prompt hash
+`61fae4b11722bb5c`, 40 API calls and no errors:
+
+| Pool | Result | Bar |
+|---|---|---|
+| Strict grammar | **19 / 20** | ≥ 16 |
+| Marginal | **6 / 6** | ≥ 5 |
+| Refusal | **14 / 14** | ≥ 13 |
+| Glazed axis | **23 / 24** | ≥ 90% |
+
+Every pool cleared the threshold fixed at `738e958` before the reader ran. `Q40`'s kill is therefore
+confirmed as **narrow**: the taxonomy is unreachable by a per-pixel statistic and reachable by a
+reader. ⚠️ **The adjudication clause above was not exercised** — no label was re-inspected and none
+was corrected, so these numbers are against the labels exactly as authored. That is the stronger
+reading, but it also means the one miss below is *unadjudicated*, not *upheld*.
+
+The single strict miss is `11-SW-9D` `B358341572401063A0` W: the reader refused at high confidence
+where the label says `blank`. ⚠️ **This is the taxonomy's own boundary, not obviously a reader
+error** — a solid wall with no fenestration and a filler-dominated unreadable face are near
+identical in an unwrap, yet the schema forces them into different pools (`blank` is a grammar;
+refusal is not). The reader's note reads *"flat grey untextured filler blocks with no legible
+fenestration"*, a defensible account of the same image. The lone glazed mismatch, `11-SW-14B`
+`B355381529401063A0` S, is the same face where the reader read `curtain` against a `punched` label —
+one coherent disagreement, not two independent ones.
+
+✅ **Refusal is decisive, which is what makes the fallback safe.** All 14 refusal-pool faces were
+refused at **high** confidence, while most marginal-pool calls returned **low**. The reader declines
+where declining is right and hedges where a reasonable reader could disagree — `Q40`'s "refuse
+rather than guess" contract, measured rather than assumed.
+
 ⚠️ **The labeller and the reader are the same model family, and that is recorded rather than
 hidden.** Independence holds in the direction that matters — the labels predate the reader and its
 API calls never see them — but a family-shared blind spot would pass undetected. A human spot-check
@@ -1746,6 +1777,25 @@ caches every raw API response beside its output table in the sources cache, keye
 and prompt hash; every output row records the model ID and prompt hash that produced it; and
 re-derivation acceptance is defined as *the validation thresholds above passing again*, not as
 byte-identical tables — the same shape `Q37` used when it made survey acceptance a tolerance.
+
+✅ **Replay is verified, not just designed.** A second `--validate` immediately after the graded run
+made **zero API calls** and returned an identical verdict. `cached_read` takes the client as a
+factory rather than an instance, so a fully-cached rerun needs neither the SDK nor a credential. The
+40 responses live under `etl/sources/hong_kong/facade_grammar/raw/<sheet>/`, gitignored under hard
+rule 7, sharing a key with the full-sheet survey so a validated face is free when the sheet runs.
+
+🔴 **`PROMPT_HASH` does not cover the unwrap, and the cache is now populated.** The hash is
+`blake2b(prompt + schema + model)`; the *image* is the reader's other load-bearing input and appears
+in neither the key nor the row. `435f079` refactored `facade_unwrap.py` between the labelling and
+the graded run, so this run is trustworthy only because the refactor was checked to be
+output-preserving **first** — 40/40 canvases byte-identical against `738e958`, and the new `faces=`
+narrowing output-neutral. **Nothing on disk records that check.** The next unwrap change will replay
+40 cached answers against images they no longer describe, silently, and the thresholds will pass on
+a reader nobody measured — `Q37`'s ghost re-entering through the one input the stamp omits. Owed
+before the full-sheet run: fingerprint the encoded PNG in each cached entry and refuse a hit whose
+image no longer matches. ⚠️ **Folding the unwrap into `PROMPT_HASH` is the wrong shape** — it keys
+on source rather than output, so it would discard every paid entry on any unwrap edit, including a
+proven no-op like `435f079`'s.
 
 **The licence covers the read.** The data grant is explicit — *"browse, download, distribute,
 reproduce … for both commercial and non-commercial purposes"* (`LICENSING.md`) — and sending sheet
@@ -1782,8 +1832,10 @@ survey dissolves.
 
 ### Open
 
-The graded validation run, first — it is the acceptance test this record exists to hold. Then the
-human spot-check of the labels, the full-sheet run, and the shared `TEXCOORD_1` channel design with
+✅ The graded validation run — the acceptance test this record existed to hold — **passed**. Still
+open, in order: the **image fingerprint** in the cached entries, owed *before* the full-sheet run
+because the cache is already populated; the human spot-check of the labels, which the reader's own
+passing run does not discharge; the full-sheet run; and the shared `TEXCOORD_1` channel design with
 `Q40`'s glazing and tint.
 
 **See.** `Q40` · `Q26` · `Q37` · `Q35` · `DATA_SOURCES.md` "Buildings" · `LICENSING.md`
