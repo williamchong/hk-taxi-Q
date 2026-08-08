@@ -995,30 +995,33 @@ lever was more effective than the record credits — on the frame nobody re-meas
 a high shadow share **and** a low middle together. Read the two columns as a pair or the next person
 optimises `skyline` upward for nothing.
 
-### 🔴 Three of the six rows cannot be reproduced from the frames on disk
+### ✅ Every row of this table reproduces exactly
 
-Audited after `Q26`'s tone-curve shoot found that a preview frame can be silently mis-aimed. The
-camera was **not** the problem — every frame behind this table passes a sky-mask overlap check
-against a framing-verified reference (0.728–1.000, where a mis-aimed frame scores 0.00–0.10). The
-problem is provenance.
+Audited after `Q26`'s tone-curve shoot found that a preview frame can be silently mis-aimed. Nothing
+here was affected. Measured with `tools/frame_stats.py` on framing-verified frames — the three
+preview viewpoints from the set proven byte-identical to a fresh `HEAD` shot, and `infra` re-shot at
+`7d2f073` in three runs that agreed byte for byte:
 
-| row | published | `frame_stats.py` on the stored frame |
+| row | published | re-measured |
 |---|---|---|
-| `kerb` | 51.3% / 2.7% | ✅ **51.3% / 2.7%** from `q31_verify_kerb` |
-| `street` | 13.0% / 25.4% | 13.2% / 27.0% from `art_street` |
-| `skyline` | 0.0% / 3.8% | 0.0% / 3.3% from `art_skyline` |
-| `infra` | 0.0% / **39.6%** | 🔴 **no stored frame is close.** The four `infra` shots give 0.1%/0.1%, 3.0%/3.0%, 37.9%/3.9% and 0.1%/0.5% |
+| `kerb` | 51.3% / 2.7% | ✅ 51.3% / 2.7% |
+| `street` | 13.0% / 25.4% | ✅ 13.0% / 25.4% |
+| `skyline` | 0.0% / 3.8% | ✅ 0.0% / 3.8% |
+| `infra` | 0.0% / 39.6% | ✅ 0.0% / 39.6% |
 
-🔴 **`infra` is the row this question leans on hardest** — it is the counter-example that killed
-"under a deck predicts the fault", and it is quoted as "the *fullest* middle measured". A frame with
-39.6% in the 10–30 band is far darker than any `infra` shot now on disk (`art_infra` has p10 32.2).
-The number is not shown to be wrong; it is shown to be **unverifiable**, which for a load-bearing
-counter-example is nearly as bad.
+The two `taxi` rows come from `city_drive.tscn`, where `--camera` is ignored outright, so the hazard
+cannot reach them.
 
-⚠️ **The cause is structural, not clerical.** `build/driver/` is gitignored, directory names are
-reused between shoots, and nothing records which commit a frame is of. `ART_DESIGN.md` already warns
-that a screenshot has an expiry date nothing records; this is that warning coming true against a
-published table. **A figure whose frame lives only in `build/driver/` is a figure with no evidence.**
+🔴 **A first pass at this audit reported three of the four as irreproducible, and it was wrong.** It
+took the `build/driver/art_*` directories to be the frames the table was computed from, on the
+strength of their names, and they are different shots — `art_infra` returns 0.1% / 0.1% against the
+published 39.6%. The lesson is not that the figures were fragile but that **`build/driver/` is not
+the provenance and must never be read as though it were.** Directory names there are reused between
+shoots and nothing records which commit a frame is of.
+
+✅ **What makes these figures durable is `ART_DESIGN.md`'s audit-viewpoint table, not any PNG.** The
+cameras are fixed and the renders are deterministic, so any row can be regenerated on demand — which
+is the same property `Q26` relies on for its comparison set. Re-shoot; do not go looking for a file.
 
 ✅ **`Q27` was audited the same way and is clean.** All 32 of its ablation pairs are internally
 aligned — responding share is uniform at 55.9% (`skyline`) and ~40% (`street`) across all sixteen
