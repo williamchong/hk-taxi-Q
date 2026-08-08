@@ -1834,6 +1834,20 @@ entry `cached_read` would have written, keyed by prompt hash and image fingerpri
 with **zero API calls**, so the committed, validated code path still writes every row. An errored or
 expired face is left a cache miss — any later run, batch or synchronous, simply reads it again.
 
+✅ **The full-region survey ran 2026-08-09**: 2,214 buildings, 8,704 faces, 8,614 paid batch reads
+with **zero transport errors**, ~$21 all-in against the ~$103 the run priced at synchronously on
+Opus. All six tables were authored by a credential-less replay — zero API calls — so the committed
+tool re-derives the region from the cache alone. The read rate lands where the coverage-bias caveat
+above said it must: **54% of faces read** (4,734), 46% refused, **80% of buildings carry at least
+one read face** (1,769 of 2,214). The distribution is the city the art direction describes:
+`punched` **3,195 of 4,734 reads (67%)** — tenement and public-housing fabric — then `mixed` 739,
+`curtain` 554, `fin` 124, `blank` 122; the one sheet where `curtain` outnumbers `punched` is
+`11-SW-9D`, the Gloucester Road tower cluster, which is exactly where it should. 88% of reads are
+low-confidence — the validated hedge on degraded photogrammetry, not a defect. `Q42`'s free riders
+populated at region scale: `storey_count` on 3,786 faces (median 15), `emphasis` on essentially
+every read, `signage` on 1,045 faces, and `band_period_floors` still almost never commits (143) —
+consistent with its 0/25 validation showing.
+
 **Reproducibility answers `Q37`'s ghost by tolerance, not byte-equality.** This is the repo's first
 non-deterministic input producer: a rerun against the same bytes may differ. The tool therefore
 caches every raw API response beside its output table in the sources cache, keyed by content, model
@@ -1922,11 +1936,12 @@ survey dissolves.
 
 ### Open
 
-✅ The graded validation run — the acceptance test this record existed to hold — **passed**. Still
-open, in order: the **image fingerprint** in the cached entries, owed *before* the full-sheet run
-because the cache is already populated; the human spot-check of the labels, which the reader's own
-passing run does not discharge; the full-sheet run; and the shared `TEXCOORD_1` channel design with
-`Q40`'s glazing and tint.
+✅ The graded validation run — the acceptance test this record existed to hold — **passed**, and
+every gate that stood between it and the region has since been discharged in order: the image
+fingerprint in the cached entries, the human spot-check of the labels, the resurvey onto Sonnet 5,
+and the full-region run itself (2026-08-09, above). What remains is consumption: the shared
+`TEXCOORD_1` channel design with `Q40`'s glazing and tint, and `Q42`'s per-field validation before
+any rider is plumbed.
 
 **See.** `Q40` · `Q26` · `Q37` · `Q35` · `DATA_SOURCES.md` "Buildings" · `LICENSING.md`
 
