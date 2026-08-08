@@ -1479,7 +1479,9 @@ axis.
 
 ## `Q40` — Can façade grammar be surveyed instead of hashed?
 
-**Status.** 🟡 Open, **narrowed** — grammar branch 🔥 killed; glazing and tint survive · **Owner.** `P3-9a`
+**Status.** 🟡 Open, **narrowed** — grammar branch 🔥 killed; glazing and tint survive, and ✅ the
+contamination check is discharged: the selection moved 19 of 51 verdicts, so the gate's thresholds
+re-derive from the decontaminated selection · **Owner.** `P3-9a`
 
 **The question.** `city_facade_clean.gdshader` decides whether a building is glazed, which of three
 grammars it draws, and which of three glass tints it uses — all from `draw(seed, n)`, a hash of the
@@ -1661,6 +1663,29 @@ histograms — and non-building content would bias a dip toward *bimodal*, in th
 the result. It was visible in a picture and would be invisible in a histogram. **That check is owed
 before the glazing gate is trusted.**
 
+✅ **The check ran, committed as `tools/facade_glazing.py`, and contamination is real and material.**
+The tool computes one dip statistic from both selections per building — Probe 1's `wall_texels()`
+against the pooled depth-filtered unwrap elevations. ⚠️ The two populations differ by more than
+occlusion, deliberately: the unwrap re-grids at 8 texels/m, so its histogram is area-weighted where
+the atlas one is texel-count-weighted, and a well-photographed balcony no longer outvotes the wall
+behind it. On `11-SW-9D`, 52 of 59 buildings measured, 51 gated at ≥ 10 tex/m (as
+√(photographic texels / wall m²)): **the verdict moves on 19 of 51** — 11 toward unimodal, 8 toward
+bimodal — tallies 11/17/23 bimodal/middling/unimodal becoming **9/16/26**, median dip 0.490 → 0.611.
+The flattering direction holds on net, and by name: `B358341572401063A0`, the blank render block
+whose W face `Q41`'s reader refused, reads **bimodal (dip 0.241)** through the wall selection and
+**unimodal (0.972)** decontaminated — the selection invented glazing on a blank wall. The reverse
+also occurs: `B358891570501063A0` goes 1.000 → **0.006** and `B357961566001063A0` 0.896 → **0.054**,
+occluding geometry having *hidden* real bimodality on the buildings it covered.
+
+⚠️ **Probe 1's absolute numbers do not carry, for a second reason: its implementation was never
+committed** — this record's own `Q37` ghost. The new tool's atlas column, same selection but its own
+histogram parameters, reads 11/51 clearly bimodal against Probe 1's 50%, and its density metric runs
+about twice Probe 1's 13.6 median. So the Probe 1 table above describes an uncommitted statistic
+over a contaminated selection, and the glazing gate's thresholds are **owed a re-derivation from the
+decontaminated selection** — on more than one sheet — when the survey extension is built. The dip
+boundaries (0.25 / 0.60) and the ≥ 10 tex/m gate are pinned in the tool so that re-derivation moves
+them deliberately rather than by reimplementation drift.
+
 ### Decided
 
 - **Work in the world-space unwrap, never in atlas space.** Probe 3 is the reason. It survives the
@@ -1678,7 +1703,9 @@ before the glazing gate is trusted.**
 
 ### Open
 
-The contamination check above, first — it gates everything else. Then the survey extension, the
+~~The contamination check above, first — it gates everything else.~~ ✅ Discharged by
+`tools/facade_glazing.py`; the verdict is that Probe 1's numbers cannot be carried, so the survey
+extension starts from the decontaminated selection and re-derives the gate thresholds. Then the
 `TEXCOORD_1` plumbing and the `schema_version` bump for glazing and tint only.
 
 ⚠️ **One sheet, `11-SW-9D`, underlies every number here.** The re-survey is 6.1 GB across six; a
