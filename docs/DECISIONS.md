@@ -737,9 +737,10 @@ viewpoints, `C` at `kerb`, `C` at `street` from the gate run, and `C` at `skylin
 independent shots that agree with each other and with the archive. That is the reproduction claim;
 the 1.14 rows matching the published table follows from it and is not separate evidence.
 
-⚠️ **`C` at `skyline` cost four attempts to yield two clean frames.** One run lost the audit camera
-to the race below and two more died to the renderer stall. The rule that finally produced it is the
-rule stated below: shoot twice, `cmp`, and discard any frame that stands alone.
+⚠️ **`C` at `skyline` cost five attempts to yield two clean frames.** The batch run was ruined by the
+camera hazard below; of the four re-shoots after it, two died to the renderer stall and two came out
+clean and agreeing. The rule that finally produced it is the rule stated below: shoot twice, `cmp`,
+and discard any frame that stands alone.
 
 ⚠️ The gap is **six commits and under three hours, all of them docs**. This shows the build is
 stable, not that it survives change.
