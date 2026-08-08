@@ -70,7 +70,12 @@ CITY_NAME = "city.json"
 # a v4 reader would load a v5 tile happily, ignore the payload, and draw a blank
 # city that reads as a shader bug rather than as a version mismatch. The version
 # gates the asset set, not just the JSON.
-CITY_SCHEMA = 5
+# 6 since `Q40`/`Q41`: every tile ships `TEXCOORD_1` — a packed per-building
+# facade-survey state in `x` (glazed / tint bin / grammar, 0 = refused → hash)
+# with `y` reserved for `Q42`'s riders. Same rule as 5: a v5 reader would load
+# a v6 tile, ignore the payload, and silently draw the hash city while the
+# bundle claims the survey.
+CITY_SCHEMA = 6
 
 # Manifest keys naming a document that ships. One tuple rather than a literal
 # at each use, because `shipped` reads them and `REQUIRED_KEYS` guards them:

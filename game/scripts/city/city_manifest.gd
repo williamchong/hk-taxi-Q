@@ -36,7 +36,12 @@ const PATH: String = "res://assets/generated/city.json"
 ## base, and a surface marker plus phase — and names its material `city_facade`
 ## so the importer gives it the window-band shader. A v4 reader would draw a v5
 ## tile blank and blame the shader.
-const SCHEMA_VERSION: int = 5
+##
+## 6 since `Q40`/`Q41`: every tile ships `TEXCOORD_1` — a packed per-building
+## facade-survey state in `x` (glazed / tint bin / grammar, 0 = refused, falling
+## back to the hash) with `y` reserved for `Q42`'s riders. A v5 reader would
+## silently draw the hash city while the bundle claims the survey.
+const SCHEMA_VERSION: int = 6
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.

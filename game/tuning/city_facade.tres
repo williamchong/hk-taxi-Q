@@ -59,6 +59,19 @@
 ; stop reading as buildings differing and start reading as a few of them being
 ; broken. It is not the lever that fixed the white city — at the 0.6 ceiling it
 ; moved the frame 0.4 L*, against 10.3 for the bands.
+;
+; ⚠️ **`survey_apply` is 0.0: the survey plumbing landed dark** (user's call,
+; 2026-08-09). Since schema 6 every tile carries the measured facade verdicts in
+; `TEXCOORD_1` — reader-glazed, glass tint, grammar (`Q40`/`Q41`) — and at 1.0
+; the shader draws them, with only refusals falling back to the hash. It ships
+; at 0.0 so the parked 2026-08-06 look above stays byte-identical: against this
+; file's parked fabric values the overrides alone would draw a half-look
+; (surveyed curtain walls glaze while punched stock stays blank, because
+; `glass_ratio` is 0.0). The `Q26` re-shoot grades `survey_apply = 1.0`
+; *together with* the seven `542cac3` values as candidate A' — measured surface
+; on accurate massing — and both switches stay one edit here, no rebuild.
+; `glass_astar` is the a* the tint encoding dropped (`Q40` PCA, 6.5%), one
+; value for the city, retuned at `Q26` if at all.
 [gd_resource type="ShaderMaterial" load_steps=2 format=3]
 
 [ext_resource type="Shader" path="res://assets/shaders/city_facade_clean.gdshader" id="1_facade"]
@@ -123,3 +136,5 @@ shader_parameter/fade_end_m = 244.0
 shader_parameter/lit_window_colour = Color(1, 0.85, 0.55, 1)
 shader_parameter/lit_window_share = 0.0
 shader_parameter/emission_strength = 0.0
+shader_parameter/survey_apply = 0.0
+shader_parameter/glass_astar = -2.0

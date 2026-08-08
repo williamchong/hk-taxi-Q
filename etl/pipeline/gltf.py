@@ -86,6 +86,7 @@ class MeshData:
     triangles: np.ndarray  # (m, 3) integer
     colours: np.ndarray | None = None  # (n, 4) uint8 RGBA
     uvs: np.ndarray | None = None  # (n, 2) float32
+    uv2: np.ndarray | None = None  # (n, 2) float32
     texture: Texture | None = None
     # glTF material name, when the *engine* has to recognise it. Left unset the
     # material is named after the mesh, which is a label; set, it is a contract.
@@ -99,7 +100,7 @@ class MeshData:
 
     def __post_init__(self) -> None:
         count = len(self.positions)
-        for attribute in ("normals", "colours", "uvs"):
+        for attribute in ("normals", "colours", "uvs", "uv2"):
             values = getattr(self, attribute)
             if values is not None and len(values) != count:
                 raise ValueError(
@@ -330,6 +331,10 @@ def _primitive(
     if "TEXCOORD_0" in attributes:
         uvs = buffers.accessor(attributes["TEXCOORD_0"]).astype(np.float32)
 
+    uv2 = None
+    if "TEXCOORD_1" in attributes:
+        uv2 = buffers.accessor(attributes["TEXCOORD_1"]).astype(np.float32)
+
     colours = None
     if "COLOR_0" in attributes:
         colours = _as_rgba8(buffers.accessor(attributes["COLOR_0"]))
@@ -341,6 +346,7 @@ def _primitive(
         triangles=triangles,
         colours=colours,
         uvs=uvs,
+        uv2=uv2,
         texture=_texture(gltf, primitive, buffers),
     )
 
@@ -483,6 +489,10 @@ def write_glb(path: Path, meshes: Sequence[MeshData]) -> int:
         if mesh.uvs is not None:
             attributes["TEXCOORD_0"] = _accessor(
                 gltf, binary, mesh.uvs.astype(np.float32), "VEC2", _FLOAT, _ARRAY_BUFFER
+            )
+        if mesh.uv2 is not None:
+            attributes["TEXCOORD_1"] = _accessor(
+                gltf, binary, mesh.uv2.astype(np.float32), "VEC2", _FLOAT, _ARRAY_BUFFER
             )
 
         index_dtype = np.uint16 if len(mesh.positions) <= _UINT16_LIMIT else np.uint32

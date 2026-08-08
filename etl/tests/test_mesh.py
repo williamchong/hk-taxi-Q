@@ -91,6 +91,37 @@ class TestMerge:
                 name="tile",
             )
 
+    def test_uv2_merges_and_half_surveyed_is_rejected(self) -> None:
+        """Schema 6's channel obeys the same all-or-none rule as colours and
+        UVs: a tile half without UV2 would decode the missing half as state 0 —
+        which is a *legal* value (refused), so nothing downstream could tell
+        the defect from a refusal. Only this guard can."""
+        first, second = box(), box(origin=(100, 0, 0))
+        merged = merge(
+            [
+                replace(first, uv2=np.zeros((len(first.positions), 2), dtype=np.float32)),
+                replace(
+                    second,
+                    uv2=np.tile(
+                        np.array([6082.0, 0.0], dtype=np.float32), (len(second.positions), 1)
+                    ),
+                ),
+            ],
+            name="tile",
+        )
+        assert merged.uv2 is not None
+        assert (merged.uv2[: len(first.positions), 0] == 0.0).all()
+        assert (merged.uv2[len(first.positions) :, 0] == 6082.0).all()
+
+        with pytest.raises(ValueError, match="with and without UV2"):
+            merge(
+                [
+                    box(),
+                    replace(box(), uv2=np.zeros((len(box().positions), 2), dtype=np.float32)),
+                ],
+                name="tile",
+            )
+
     def test_material_is_not_inherited_from_an_input(self) -> None:
         """A merged primitive has exactly one material, so taking whichever mesh
         came first would be a coin toss with no error. The caller names the
@@ -178,6 +209,35 @@ class TestCollapseDecimation:
         decimated = collapse(box(), cell_m=4.0)
         assert decimated.colours is not None
         assert set(map(tuple, decimated.colours)) == {(200, 190, 180, 255)}
+
+    def test_uv2_takes_a_representative_and_invents_no_state(self) -> None:
+        """Two buildings, two distinct constant codes, clustered coarsely
+        enough that cells span both: every surviving value must be one of the
+        two inputs. A mean would mint a third code that decodes as some other
+        building's verdicts — the failure the representative pick exists to
+        prevent, and the reason the payload is per-building constant at all."""
+        first, second = box(), box(origin=(2.0, 0, 0))
+        pair = merge(
+            [
+                replace(
+                    first,
+                    uv2=np.tile(
+                        np.array([1026.0, 0.0], dtype=np.float32), (len(first.positions), 1)
+                    ),
+                ),
+                replace(
+                    second,
+                    uv2=np.tile(
+                        np.array([2050.0, 0.0], dtype=np.float32), (len(second.positions), 1)
+                    ),
+                ),
+            ],
+            name="tile",
+        )
+        decimated = collapse(pair, cell_m=8.0)
+        assert decimated.uv2 is not None
+        assert set(decimated.uv2[:, 0].tolist()) <= {1026.0, 2050.0}
+        assert (decimated.uv2[:, 1] == 0.0).all()
 
 
 class TestCollapseHeightField:

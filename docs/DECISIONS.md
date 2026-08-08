@@ -63,9 +63,9 @@ lives in git. This file holds *why things are the way they are*.
 | `Q37` | 10.0% of the façade survey is atlas filler, not a photograph | ✅ Closed |
 | `Q38` | `exposure_anchor` is baked into `COLOR_0` at build time | 🟡 Open, deliberately not fixed |
 | `Q39` | `wall_sky_tint` is uniform, so a canyon wall takes a parapet's sky bounce | 🟡 Open |
-| `Q40` | Can façade grammar be surveyed instead of hashed? | 🟡 Open, narrowed — every measurement question closed: grammar and the dip gate killed, glazing and tint go through the reader; only `TEXCOORD_1` plumbing remains |
-| `Q41` | A vision reader recovers the grammar the statistic could not | 🟡 Open — reader validated and the full region surveyed; open on consumption only |
-| `Q42` | The reader answers seven questions nobody consumes | 🟡 Open — analysed on the 40 validation responses; each field owes its own validation before it is plumbed |
+| `Q40` | Can façade grammar be surveyed instead of hashed? | ✅ Closed — the surveyed verdicts ship in `TEXCOORD_1` (schema 6, +0.24 MB PCK); glazing and tint are the reader's, the dip gate is dead, and the overrides land dark behind `survey_apply = 0.0` until `Q26` |
+| `Q41` | A vision reader recovers the grammar the statistic could not | ✅ Closed — reader validated, region surveyed, and the majority-voted verdicts consumed into `TEXCOORD_1` beside `Q40`'s; refusals fall to the hash |
+| `Q42` | The reader answers seven questions nobody consumes | 🟡 Open — `TEXCOORD_1.y` is reserved at a documented layout, so each rider now needs only its own validation, not a schema bump |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -1480,10 +1480,12 @@ axis.
 
 ## `Q40` — Can façade grammar be surveyed instead of hashed?
 
-**Status.** 🟡 Open, **narrowed** — grammar branch 🔥 killed; ✅ the contamination check is
-discharged (the selection moved 19 of 51 verdicts); the owed threshold re-derivation ran at region
-scale and 🔥 killed the dip gate outright — glazing is decided by `Q41`'s reader, and tint survives
-conditional on it. Open on `TEXCOORD_1` plumbing only · **Owner.** `P3-9a`
+**Status.** ✅ **Closed** — the statistic's grammar branch 🔥 killed, the dip gate 🔥 killed at
+region calibration, and what survived — reader-decided glazing, surveyed tint conditional on it —
+**ships**: packed with `Q41`'s grammar into `TEXCOORD_1`, `schema_version` 5 → 6 both sides in one
+commit, **measured +0.24 MB of PCK** against the "~2 MB" estimated below. The shader overrides land
+dark behind `survey_apply = 0.0` (user's call, 2026-08-09), so the shipped frame is unchanged until
+`Q26` grades the surveyed city as its own candidate · **Owner.** `P3-9a`
 
 **The question.** `city_facade_clean.gdshader` decides whether a building is glazed, which of three
 grammars it draws, and which of three glass tints it uses — all from `draw(seed, n)`, a hash of the
@@ -1770,21 +1772,39 @@ triggered — nothing they are authored against changed.
 
 ### Open
 
-✅ The contamination check is discharged by `tools/facade_glazing.py`; ✅ the survey extension is
-built and has run region-wide; ✅ the threshold re-derivation is discharged by the kill above — no
-gate thresholds exist to fix, and the one-sheet warning is retired with it (six sheets underlie
-every number in the re-derivation). Still open: the `TEXCOORD_1` plumbing and the `schema_version`
-bump, for reader-glazed + surveyed tint + `Q41`'s grammar in one pass.
+Nothing. ✅ The contamination check is discharged by `tools/facade_glazing.py`; ✅ the survey ran
+region-wide; ✅ the threshold re-derivation is discharged by the kill above; ✅ and the `TEXCOORD_1`
+plumbing shipped — reader-glazed + surveyed tint + `Q41`'s grammar in one `schema_version` 5 → 6
+pass, the channel spec recorded in `ARCHITECTURE.md`'s contract table.
+
+Three closure notes that correct this record's own estimates:
+
+- **The measured cost is +0.24 MB of PCK, not the ~2 MB above.** 36.32 → 36.57 MB, one variable
+  changed. The reasoning held — a per-building-constant `x` and an all-zero `y` compress where
+  `TEXCOORD_0`'s per-vertex fractions could not — but at 97% pack compression, not the ~50%
+  extrapolated from `TEXCOORD_0`.
+- **The shipped layout is field-packed, not the flat 480.** "Glazed/blank × 15 × 16 = 480" was the
+  capacity argument that one float suffices; what ships is `glz + 4·tint + 1024·grammar` with an
+  independent refusal zero per field — 4,338 legal codes, max 6082, still exact in float32 with two
+  orders of magnitude to spare. The 480 was an argument, not a format; the format is the table in
+  `ARCHITECTURE.md`.
+- **Float32 over `unorm16`, re-decided on stronger grounds.** `TEXCOORD_0`'s budget argument
+  carries over, and the exactness argument is now structural: integer codes up to 131,071 (riders
+  included) cannot survive a half-float's 11 mantissa bits, so quantising the channel is not an
+  optimisation held in reserve — it is unavailable. The 2 MB `TEXCOORD_0` was told it was hiding is
+  real; the 0.24 MB this channel costs hides nothing worth a scale factor in the contract.
 
 **See.** `Q26` · `Q30` · `Q35` · `Q37` · `Q27` · `Q41` · `DATA_SOURCES.md` "Buildings"
 
 ## `Q41` — A vision reader recovers the grammar the statistic could not
 
-**Status.** 🟡 Open — ✅ **the reader passed its graded run, first run, no label corrections**,
-✅ the cache is image-fingerprinted, ✅ the human label spot-check passed with no corrections,
-✅ the full-region run is complete (4,734 faces read, 80% of buildings with at least one read
-face); open on consumption — the `TEXCOORD_1` channel design with `Q40`, and `Q42`'s per-field
-validation before any rider is plumbed · **Owner.** `P3-9a`
+**Status.** ✅ **Closed** — the reader passed its graded run first run, the full region is surveyed
+(4,734 faces read, 80% of buildings with at least one read face), and **the verdicts are
+consumed**: `tools/facade_grammar.py --merge` reduces the faces to per-building majority votes
+(glazed commits on 1,626 of 2,214 buildings, grammar on 1,442, zero contradictions), and the
+verdicts ship in `TEXCOORD_1` beside `Q40`'s tint. A refusal at any stage — face, vote, or absent
+survey — is the same zero, falling back to the hash. `Q42`'s riders remain the open follow-on ·
+**Owner.** `P3-9a`
 
 **The claim.** `Q40`'s kill of fin-versus-curtain-versus-punched is real but narrower than its
 wording: the taxonomy is unreachable *by a per-pixel statistic*, not unreachable from the data. Read
@@ -1992,12 +2012,16 @@ survey dissolves.
 
 ### Open
 
-✅ The graded validation run — the acceptance test this record existed to hold — **passed**, and
-every gate that stood between it and the region has since been discharged in order: the image
-fingerprint in the cached entries, the human spot-check of the labels, the resurvey onto Sonnet 5,
-and the full-region run itself (2026-08-09, above). What remains is consumption: the shared
-`TEXCOORD_1` channel design with `Q40`'s glazing and tint, and `Q42`'s per-field validation before
-any rider is plumbed.
+Nothing. ✅ The graded validation run — the acceptance test this record existed to hold — passed,
+every gate between it and the region was discharged in order (image fingerprint, label spot-check,
+the Sonnet 5 resurvey, the full-region run), and ✅ the consumption shipped with `Q40`'s: the
+face→building reduction votes each axis independently under a strict majority (a tie refuses), a
+glazed-true-`blank` or glazed-false-`curtain` contradiction refuses the grammar and keeps the
+24/24-graded glazed axis, and `signage` never leaves the per-sheet tables. In the shader the
+surveyed grammar maps onto the existing four-treatment grid — `mixed` takes the generic ribbon,
+`blank` forces solid through the glazed override — and a hash-drawn treatment remains the refusal
+behaviour, per building, exactly as this record specified. `Q42`'s riders are the follow-on, in
+`Q42`.
 
 **See.** `Q40` · `Q26` · `Q37` · `Q35` · `DATA_SOURCES.md` "Buildings" · `LICENSING.md`
 
@@ -3108,8 +3132,13 @@ full-res local pass measured at under two minutes.
 
 ## `Q42` — The reader answers seven questions nobody consumes
 
-**Status.** 🟡 Open — analysis of the 40 paid validation responses only; nothing validated at region
-scale and nothing consumed · **Owner.** `P3-9a`
+**Status.** 🟡 Open — analysis of the 40 paid validation responses; nothing rider-shaped is
+validated at region scale or consumed, **but the channel is now waiting for them**: the `Q40`/`Q41`
+plumbing shipped `TEXCOORD_1` with `y` written `0.0` and its rider layout fixed in
+`ARCHITECTURE.md`'s contract table (storey pitch in 1/32 m steps over the 2.5–4.5 m window, podium
+floors with "no podium" distinct from refusal, balconies, emphasis). Filling a field a
+refusal-aware consumer already reads as "0 = refused" changes bytes, not meaning — so each rider
+now owes exactly its own validation, and no further `schema_version` bump · **Owner.** `P3-9a`
 
 **The observation.** `Q41`'s reader schema asks for more than grammar, glazing and tint: it returns
 `storey_count`, `band_period_floors`, `podium_floors`, `podium_glazed`, `balconies`, `emphasis` and
@@ -3145,12 +3174,12 @@ rule 8): the field's value is hero-building *identification*, generic-signage *p
 `P3-9a` recognisability grading — never rendered text. The survey table is gitignored government-
 derived data regardless (hard rule 7).
 
-**Proposed consumption shape, so the contract bumps once.** The `Q40` plumbing plan already spends
-a `schema_version` bump on `TEXCOORD_1` for glazed × 15 `L*` × 16 `b*` = 480 states — which fits in
-one of `UV2`'s two floats with room to spare. The second float can carry the reconciled storey
-pitch (quantised), podium floors, `balconies` and `emphasis` in the *same* bump, so the vertex
-contract changes once rather than twice. Each consumed field owes its own cheap validation first —
-the graded run validated grammar and glazing only.
+**The consumption shape held, and the contract bumped once.** The `Q40`/`Q41` plumbing spent the
+`schema_version` bump on `TEXCOORD_1` with the graded axes in `x` and this record's riders
+*reserved* in `y` — reconciled storey pitch (quantised to 1/32 m), podium floors, `balconies`,
+`emphasis` — at the bit layout `ARCHITECTURE.md` records. The vertex contract will not change again
+for them: writing a reserved field is bytes, not meaning. Each consumed field still owes its own
+cheap validation first — the graded run validated grammar and glazing only.
 
 **Also visible from here, recorded as options rather than plans** (both are `Q26` art-direction
 calls): the glazing dip's *light* mode is the wall/spandrel colour, so `facade_glazing`'s split can

@@ -98,6 +98,7 @@ func _check(path: String, tier: int) -> PackedStringArray:
 			var where: String = "%s surface %d" % [instance.name, surface]
 			problems.append_array(MeshContract.check_surface(mesh, surface, where))
 			problems.append_array(_check_facade_payload(mesh, surface, where))
+			problems.append_array(_check_survey_payload(mesh, surface, where))
 
 	# One draw call per surface. The budget is stated in draw calls because that
 	# is what the mobile tier runs out of first.
@@ -105,6 +106,7 @@ func _check(path: String, tier: int) -> PackedStringArray:
 		problems.append("%d surfaces, over the %d-surface budget" % [surfaces, MAX_SURFACES])
 
 	problems.append_array(_check_collision(scene_root, tier))
+	problems.append_array(_check_import_settings(path))
 
 	scene_root.free()
 	return problems
@@ -142,6 +144,77 @@ func _check_facade_payload(mesh: Mesh, surface: int, where: String) -> PackedStr
 	elif material.resource_path != FACADE_MATERIAL:
 		problems.append("%s uses %s, not %s" % [where, material.resource_path, FACADE_MATERIAL])
 	return problems
+
+
+## The survey payload holds the codec's invariants (schema 6, `Q40`/`Q41`).
+##
+## `TEXCOORD_1.x` must be a small exact integer whose decoded fields are in
+## range, and `y` must still be unwritten. Beyond the contract itself this is
+## the tripwire for both import hazards: a lightmap unwrap
+## (`meshes/light_baking = 2`) replaces the channel with fractions in [0, 1],
+## and 16-bit attribute compression corrupts large codes — either way the
+## exactness or range checks fail. A full scan rather than a sample, because
+## this is the offline verify tool and one wrong vertex is a wrong building.
+func _check_survey_payload(mesh: Mesh, surface: int, where: String) -> PackedStringArray:
+	if not (mesh.surface_get_format(surface) & Mesh.ARRAY_FORMAT_TEX_UV2):
+		return PackedStringArray(
+			["%s carries no TEXCOORD_1; the survey payload is missing" % where]
+		)
+
+	var uv2s: PackedVector2Array = mesh.surface_get_arrays(surface)[Mesh.ARRAY_TEX_UV2]
+	for uv2: Vector2 in uv2s:
+		var code: float = uv2.x
+		var glazed: float = fmod(code, 4.0)
+		var tint: float = fmod(floor(code / 4.0), 256.0)
+		var grammar: float = floor(code / 1024.0)
+		if (
+			uv2.y != 0.0
+			or code != floor(code)
+			or code < 0.0
+			or code >= 8192.0
+			or glazed > 2.0
+			or tint > 240.0
+			or grammar > 5.0
+		):
+			return PackedStringArray(
+				[
+					(
+						(
+							"%s: TEXCOORD_1 (%f, %f) breaks the survey codec — the ETL and "
+							+ "shader disagree, or the importer rewrote the channel "
+							+ "(lightmap unwrap or attribute compression)"
+						)
+						% [where, uv2.x, uv2.y]
+					)
+				]
+			)
+	return PackedStringArray()
+
+
+## The importer settings that would destroy the payload have not drifted.
+##
+## `meshes/light_baking = 2` (Static Lightmaps) makes the importer generate its
+## own UV2 unwrap, silently overwriting the survey payload with texture
+## coordinates that pass every visual inspection — `docs/ART_DESIGN.md` records
+## the hazard. 1 is Static, which leaves the channel alone.
+func _check_import_settings(path: String) -> PackedStringArray:
+	var import_path: String = path + ".import"
+	var file := FileAccess.open(import_path, FileAccess.READ)
+	if file == null:
+		return PackedStringArray(["%s has no .import beside it" % path])
+	if not file.get_as_text().contains("meshes/light_baking=1"):
+		return PackedStringArray(
+			[
+				(
+					(
+						"%s: meshes/light_baking is not 1 (Static). Static Lightmaps "
+						+ "regenerates UV2 and overwrites the survey payload."
+					)
+					% import_path
+				)
+			]
+		)
+	return PackedStringArray()
 
 
 ## Collision is present on the finest tier and absent everywhere else.

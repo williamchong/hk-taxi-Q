@@ -423,6 +423,15 @@ class BuildingStyle:
     # survey's `vegetation` column required — one set against a survey that never
     # recorded it would filter nothing while looking like it filtered.
     facade_hue_vegetation_max: float | None = None
+    # Optional per-building survey verdicts consumed into `TEXCOORD_1`
+    # (schema 6): the glazing survey's tint table, resolved through
+    # `buildings.HUE_SOURCE_ID`, and the vision reader's merged verdict table,
+    # resolved through `buildings.GRAMMAR_SOURCE_ID`. **Defaulted on the same
+    # contract as `facade_hue_source`**: both are gitignored derived data, and
+    # a clone without them must build the same hash-driven city it always
+    # built — absent, every building ships the refusal sentinel.
+    facade_glazing_source: str | None = None
+    facade_grammar_source: str | None = None
 
     @property
     def height_bands(self) -> tuple[HeightBand, ...]:
@@ -1440,6 +1449,10 @@ def _building_style(body: dict[str, Any], where: str, table: _MaterialTable) -> 
         else _scale(vegetation_max, f"{where}:facade_hue.vegetation_max", 1.0)
     )
 
+    survey = body.get("facade_survey") or {}
+    glazing_source = survey.get("glazing")
+    grammar_source = survey.get("grammar")
+
     cells = _cell_sizes(_require(body, "lod_cell_sizes_m", where), f"{where}:lod_cell_sizes_m")
     if not cells:
         raise ValueError(f"{where}:lod_cell_sizes_m is empty")
@@ -1536,6 +1549,8 @@ def _building_style(body: dict[str, Any], where: str, table: _MaterialTable) -> 
         facade_hue_source=hue_source,
         facade_hue_strength=hue_strength,
         facade_hue_vegetation_max=hue_vegetation_max,
+        facade_glazing_source=None if glazing_source is None else str(glazing_source),
+        facade_grammar_source=None if grammar_source is None else str(grammar_source),
         lod_cell_sizes_m=cells,
         class_lod_cell_sizes_m=class_cells,
         ground_sink_m=sink,

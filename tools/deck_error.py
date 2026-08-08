@@ -60,6 +60,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "etl"))
 
 from pipeline.config import load_city  # noqa: E402
+from pipeline.export import CITY_SCHEMA  # noqa: E402
 from pipeline.gltf import read_glb  # noqa: E402
 
 log = logging.getLogger(__name__)
@@ -280,6 +281,16 @@ def load_bundle(generated: Path, lod: int, city_id: str) -> tuple[dict[str, Any]
             f"no city.json under {generated}. Build the region first:\n"
             f"  cd etl && python -m pipeline --city {city_id} --region <region>"
         ) from None
+
+    # Grading a stale bundle silently is the class of wrong answer the version
+    # exists to catch; one check here covers all three graders, because
+    # `overhang.py` and `ground_clearance.py` import this loader.
+    version = manifest.get("schema_version")
+    if version != CITY_SCHEMA:
+        raise SystemExit(
+            f"{generated / 'city.json'} declares schema_version {version}, these tools "
+            f"grade {CITY_SCHEMA}. Rebuild the region first."
+        )
 
     tiers = min(len(tile["lods"]) for tile in manifest["tiles"])
     if not 0 <= lod < tiers:

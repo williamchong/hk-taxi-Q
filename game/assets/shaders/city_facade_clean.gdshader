@@ -28,10 +28,14 @@
 //      solid walls is what keeps a white city from reading as grey cardboard,
 //      and it cools the shadowed faces the way the reference art does.
 //
-// The inputs are `city_facade`'s, unchanged and documented there in full:
+// The inputs are `city_facade`'s, unchanged and documented there in full,
+// plus the survey channel this shader alone consumes (schema 6):
 //
-//   UV.x  metres above this object's own base
-//   UV.y  `floor()` is the surface marker, `fract()` is a per-object phase
+//   UV.x   metres above this object's own base
+//   UV.y   `floor()` is the surface marker, `fract()` is a per-object phase
+//   UV2.x  packed per-building survey state (`Q40`/`Q41`): glazed verdict,
+//          glass-tint bin and grammar, each field 0 = refused → the hash
+//   UV2.y  reserved for `Q42`'s riders, 0.0 in schema 6
 //
 // ⚠️ Like its sibling, this replaces a `BaseMaterial3D` that had
 // `vertex_color_use_as_albedo` set at import, so it must apply `COLOR` itself.
@@ -57,6 +61,26 @@ const float MARKER_STRUCTURE = 2.0;
 // integer seed round-trips exactly. Hashing the integer rather than the fraction
 // keeps neighbouring seeds far apart in every derived decision.
 const float PHASE_STEPS = 256.0;
+
+// The `TEXCOORD_1` survey codec (schema 6). ⚠️ **Contract constants, not
+// tuning** — mirrors of `facade_state` in `etl/pipeline/buildings.py`, recorded
+// in `docs/ARCHITECTURE.md`'s channel table, the same standing as `PHASE_STEPS`:
+// a one-sided change decodes every surveyed building silently wrong. The codes
+// are integers well under float32's 2^24 exact ceiling, so unlike the phase
+// there is no rounding case — decode still `floor(x + 0.5)`s first.
+const float SURVEY_TINT_FIELD = 4.0;
+const float SURVEY_GRAMMAR_FIELD = 1024.0;
+const float SURVEY_TINT_L_MIN = 5.0;
+const float SURVEY_TINT_L_STEP = 4.0;
+const float SURVEY_TINT_B_MIN = -16.0;
+const float SURVEY_TINT_B_STEP = 2.0;
+const float SURVEY_TINT_B_BINS = 16.0;
+// Grammar codes 1-5, pinned to `GRAMMAR_STATES` order in `buildings.py`.
+const float SURVEY_CURTAIN = 1.0;
+const float SURVEY_PUNCHED = 2.0;
+const float SURVEY_FIN = 3.0;
+const float SURVEY_BLANK = 4.0;
+const float SURVEY_MIXED = 5.0;
 
 group_uniforms massing;
 // How far the ETL's vertex colour is pulled toward `base_colour`. Not 1.0: the
@@ -261,6 +285,18 @@ group_uniforms distance_fade;
 uniform float fade_start_m : hint_range(0.0, 600.0) = 140.0;
 uniform float fade_end_m : hint_range(0.0, 800.0) = 244.0;
 
+group_uniforms survey;
+// The measured-survey overrides (`Q40`/`Q41`): at 1.0 a building whose
+// `TEXCOORD_1` state commits a verdict draws that verdict — glazed, grammar and
+// glass tint — and only refusals fall to the hash. **Ships at 0.0** (user's
+// call, 2026-08-09): the parked 2026-08-06 look stays byte-identical, and the
+// `Q26` re-shoot grades 1.0 together with the seven un-parked fabric values.
+uniform float survey_apply : hint_range(0.0, 1.0) = 0.0;
+// The a* the tint encoding dropped — `Q40`'s PCA left 6.5% of the measured
+// glass variance on a*, so the reconstruction assumes one value for the city.
+// Slightly green, as HK curtain glass reads. Retuned, if at all, at `Q26`.
+uniform float glass_astar : hint_range(-12.0, 12.0) = -2.0;
+
 group_uniforms night;
 // Reserved and shipped at zero, as in the sibling. `ART_DESIGN.md` calls night a
 // strong later variant and says to plan the emissive channel now.
@@ -279,6 +315,12 @@ varying float height_m;
 // full amplitude.
 varying flat float phase;
 varying flat float marker;
+// The decoded survey fields: x glazed (0 refused / 1 solid / 2 glazed), y tint
+// code (0 refused, else 1..240), z grammar (0 refused, else the codes above).
+// `flat` for `phase`'s reason exactly — a per-building value interpolated
+// across a cluster-spanning triangle would blend two codes into a third,
+// meaningless one.
+varying flat vec3 survey_state;
 varying float upness;
 varying float along_m;
 // The reflection needs a world-space frame, and both are already computed in the
@@ -312,6 +354,27 @@ varying vec3 world_n;
 // uses the exact one, and the two sides disagreeing is what this bug *was*.
 vec3 vertex_srgb_to_linear(vec3 c) {
 	return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
+}
+
+// CIELAB to *linear* sRGB — the inverse of `etl/pipeline/colour.py`'s
+// `srgb_to_lab`: the same D65 white point and IEC 61966-2-1 primaries, minus
+// the transfer curve because the shader works in linear. Mirrored by hand for
+// `vertex_srgb_to_linear`'s reason — GLSL cannot import the Python one, and
+// the two sides disagreeing is what `Q27` was. Clamped: a measured tint can
+// sit outside the gamut, and clipping here matches `lab_to_srgb`'s behaviour.
+vec3 lab_to_linear(vec3 lab) {
+	float fy = (lab.x + 16.0) / 116.0;
+	vec3 f = vec3(fy + lab.y / 500.0, fy, fy - lab.z / 200.0);
+	vec3 cubed = f * f * f;
+	// (6/29)^3 and the 24389/27 linear-segment slope, exactly as the ETL.
+	vec3 xyz = mix((116.0 * f - 16.0) / 903.2962963, cubed, step(vec3(0.0088564517), cubed));
+	xyz *= vec3(0.95047, 1.0, 1.08883);
+	mat3 from_xyz = mat3(
+		vec3(3.2404542, -0.9692660, 0.0556434),
+		vec3(-1.5371385, 1.8760108, -0.2040259),
+		vec3(-0.4985314, 0.0415560, 1.0572252)
+	);
+	return clamp(from_xyz * xyz, vec3(0.0), vec3(1.0));
 }
 
 float band(float u, float low, float high) {
@@ -354,6 +417,16 @@ void vertex() {
 	height_m = UV.x;
 	marker = floor(UV.y);
 	phase = fract(UV.y);
+
+	// The packed survey verdicts (`Q40`/`Q41`). Bit fields by division: glazed
+	// in bits 0-1, tint in 2-9, grammar in 10-12. An absent channel reads as
+	// (0, 0), which decodes to all-refused — the correct state by construction.
+	float survey_code = floor(UV2.x + 0.5);
+	survey_state = vec3(
+		mod(survey_code, SURVEY_TINT_FIELD),
+		mod(floor(survey_code / SURVEY_TINT_FIELD), 256.0),
+		floor(survey_code / SURVEY_GRAMMAR_FIELD)
+	);
 
 	vec3 world_normal = normalize(MODEL_NORMAL_MATRIX * NORMAL);
 	upness = abs(world_normal.y);
@@ -450,6 +523,19 @@ void fragment() {
 			float has_shop = step(1.0 - shopfront_share, draw(seed, 10.0));
 			bool accented = draw(seed, 2.0) < accent_share;
 
+			// The survey overrides, applied *upstream* of the guard below on
+			// purpose: the reader's verdict replaces the hash draw where one was
+			// committed (`Q41`), and everything downstream — the guard included —
+			// reads the overridden value. A surveyed `blank` wall is solid
+			// whatever the glazed axis refused; the merge nulls a glazed-true
+			// blank, so the two lines cannot fight a committed verdict.
+			if (survey_apply > 0.5 && survey_state.x > 0.5) {
+				glazed = survey_state.x > 1.5 ? 1.0 : 0.0;
+			}
+			if (survey_apply > 0.5 && abs(survey_state.z - SURVEY_BLANK) < 0.5) {
+				glazed = 0.0;
+			}
+
 			// ⚠️ **Every element below is drawn *into* the albedo, so a tuning that
 			// zeroes all of them leaves a no-op that still runs.** `city_facade.tres`
 			// ships exactly that today, and without this guard every facade fragment
@@ -463,7 +549,11 @@ void fragment() {
 			// that can reach the albedo while all five of these are off must be added
 			// here too. `mullion_darkness` and `emission_strength` are deliberately
 			// absent: both reach it only through `glazed` or `has_shop`, which are
-			// already tested.
+			// already tested. The survey overrides need no term either, and for the
+			// same reason — they are applied *above*, so `glazed` here is already the
+			// overridden value, and the surveyed tint reaches albedo only through
+			// `glass`, which needs `glazed`. At `survey_apply = 0.0` the predicate,
+			// and the parked look it guards, are byte-identical to schema 5.
 			bool draws_detail = glazed > 0.5
 				|| has_shop > 0.5
 				|| accented
@@ -492,20 +582,44 @@ void fragment() {
 				float bay = along_m / (bay_width_m * bay_scale) + phase;
 				float above = over(height_m, podium_height_m);
 
-				// Which grammar this building is built in. One grid, four sets of ratios.
+				// Which grammar this building is built in. One grid, four sets of
+				// ratios: 0 ribbon (the default), 1 fin, 2 curtain, 3 punched.
+				// Hashed by default; the reader's verdict replaces the draw where
+				// one was committed (`Q41`). `mixed` takes the ribbon — "two or
+				// more each covering a substantial share" names no single grammar
+				// to draw — and `blank` was already handled through `glazed`.
 				float kind = draw(seed, 5.0);
+				float treatment = 0.0;
+				if (kind < fin_share) {
+					treatment = 1.0;
+				} else if (kind < fin_share + curtain_share) {
+					treatment = 2.0;
+				} else if (kind < fin_share + curtain_share + punched_share) {
+					treatment = 3.0;
+				}
+				if (survey_apply > 0.5 && survey_state.z > 0.5) {
+					if (abs(survey_state.z - SURVEY_FIN) < 0.5) {
+						treatment = 1.0;
+					} else if (abs(survey_state.z - SURVEY_CURTAIN) < 0.5) {
+						treatment = 2.0;
+					} else if (abs(survey_state.z - SURVEY_PUNCHED) < 0.5) {
+						treatment = 3.0;
+					} else {
+						treatment = 0.0;
+					}
+				}
 				float h_ratio = glass_ratio;
 				float pier = mullion_ratio;
 				float horizontal = 1.0;
-				if (kind < fin_share) {
+				if (treatment == 1.0) {
 					// Vertical fin: continuous piers the full height, no horizontal cut.
 					horizontal = 0.0;
 					pier = fin_pier_ratio;
-				} else if (kind < fin_share + curtain_share) {
+				} else if (treatment == 2.0) {
 					// Full curtain wall: both masks nearly open, a hairline grid.
 					h_ratio = 0.92;
 					pier = 0.05;
-				} else if (kind < fin_share + curtain_share + punched_share) {
+				} else if (treatment == 3.0) {
 					// Punched windows in solid wall — the older stock.
 					h_ratio = glass_ratio * 0.62;
 					pier = punched_pier_ratio;
@@ -596,6 +710,18 @@ void fragment() {
 
 				float tint = draw(seed, 8.0);
 				vec3 pane_colour = tint < 0.34 ? glass_colour : (tint < 0.67 ? glass_tint_b : glass_tint_c);
+				if (survey_apply > 0.5 && survey_state.y > 0.5) {
+					// The measured glass (`Q40`): bin centres back to (L*, b*),
+					// with the a* the encoding dropped assumed from `glass_astar`.
+					// Linear out — no transfer curve, the shader works in linear.
+					// The hash pick above stays the refusal fallback.
+					float tint_code = survey_state.y - 1.0;
+					float l_star = SURVEY_TINT_L_MIN
+						+ (floor(tint_code / SURVEY_TINT_B_BINS) + 0.5) * SURVEY_TINT_L_STEP;
+					float b_star = SURVEY_TINT_B_MIN
+						+ (mod(tint_code, SURVEY_TINT_B_BINS) + 0.5) * SURVEY_TINT_B_STEP;
+					pane_colour = lab_to_linear(vec3(l_star, glass_astar, b_star));
+				}
 				vec3 glazing = mix(
 					pane_colour, mirrored, glass_reflect * mix(glass_face_on, 1.0, fresnel)
 				);

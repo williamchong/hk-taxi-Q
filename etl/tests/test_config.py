@@ -357,6 +357,28 @@ class TestBuildingStyle:
         with pytest.raises(ValueError, match="source"):
             load_city("hong_kong", cities_root=rewrite(drop_source))
 
+    def test_facade_survey_block_is_optional_and_each_key_stands_alone(self, rewrite) -> None:
+        """Same defaulted-is-the-contract rule as `facade_hue`: both tables are
+        gitignored derived data, so a clone without the block — or with half of
+        it — must still build, on the refusal sentinel."""
+        surveyed = load_city("hong_kong").buildings
+        assert surveyed.facade_glazing_source == "facade_glazing.json"
+        assert surveyed.facade_grammar_source == "facade_grammar.json"
+
+        def drop_block(doc: dict[str, Any]) -> None:
+            del doc["buildings"]["facade_survey"]
+
+        stripped = load_city("hong_kong", cities_root=rewrite(drop_block)).buildings
+        assert stripped.facade_glazing_source is None
+        assert stripped.facade_grammar_source is None
+
+        def drop_grammar(doc: dict[str, Any]) -> None:
+            del doc["buildings"]["facade_survey"]["grammar"]
+
+        partial = load_city("hong_kong", cities_root=rewrite(drop_grammar)).buildings
+        assert partial.facade_glazing_source == "facade_glazing.json"
+        assert partial.facade_grammar_source is None
+
     @pytest.mark.parametrize("spoil", ["drop", "zero"])
     def test_tiling_the_ground_without_a_sink_is_rejected(self, rewrite, spoil) -> None:
         """The silent failure this check exists for: `roads.py` lays the level-0

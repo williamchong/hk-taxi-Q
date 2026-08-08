@@ -22,6 +22,7 @@ import pytest
 from pipeline.buildings import (
     BUILDINGS_MANIFEST_NAME,
     COLLISION_TIER,
+    GRAMMAR_STATES,
     SOURCE_ID,
     Grid,
     _material_seed,
@@ -30,7 +31,11 @@ from pipeline.buildings import (
     assign,
     build_region,
     colour_for,
+    facade_glass_tint,
+    facade_state,
+    facade_survey_verdicts,
     facade_uv,
+    facade_uv2,
     game_offset,
     material_for,
 )
@@ -650,6 +655,122 @@ class TestFacadeUv:
             assert colour[0][3] == 255
 
 
+class TestFacadeUv2:
+    """Schema 6's survey payload: the packed `TEXCOORD_1` state code."""
+
+    def test_verdicts_pack_into_the_documented_fields(self) -> None:
+        """The worked example the contract table records: glazed, curtain,
+        (28.06, -7.18) — L* bin 5, b* bin 4, tint code 85 — packs to
+        2 + 4*85 + 1024*1 = 1366."""
+        assert facade_state(True, "curtain", (28.06, -7.18)) == 1366
+
+    def test_every_field_refuses_to_zero_independently(self) -> None:
+        assert facade_state(None, None, None) == 0
+        assert facade_state(False, None, None) == 1
+        assert facade_state(True, None, None) == 2
+        assert facade_state(None, "punched", None) == 2 * 1024
+        assert facade_state(False, "punched", None) == 1 + 2 * 1024
+
+    def test_tint_rides_only_with_a_reader_glazed_verdict(self) -> None:
+        """`Q40`: the survey measured a dark mode on nearly every building, but
+        only where the reader says glass does that mode *mean* glass."""
+        tint = (28.06, -7.18)
+        assert facade_state(False, None, tint) == 1
+        assert facade_state(None, None, tint) == 0
+        assert facade_state(True, None, tint) == 2 + 4 * 85
+
+    def test_grammar_indices_are_pinned_to_the_tool_s_taxonomy(self) -> None:
+        """The shader's `SURVEY_*` constants assume this order; a reorder on
+        either side would silently relabel every surveyed building."""
+        import facade_grammar
+
+        assert GRAMMAR_STATES == facade_grammar.GRAMMARS
+        for index, name in enumerate(GRAMMAR_STATES):
+            assert facade_state(None, name, None) == (index + 1) * 1024
+
+    def test_tint_bins_clamp_at_the_tails_and_split_on_the_edge(self) -> None:
+        low = facade_state(True, None, (-10.0, -40.0))
+        assert low == 2 + 4 * 1  # bin (0, 0) -> tint code 1
+        high = facade_state(True, None, (90.0, 40.0))
+        assert high == 2 + 4 * (14 * 16 + 15 + 1)  # the top bin on both axes
+        # An exact bin edge belongs to the upper bin: L* 9.0 is bin 1, not 0.
+        assert facade_state(True, None, (9.0, -16.0)) == 2 + 4 * (1 * 16 + 0 + 1)
+
+    def test_every_legal_code_survives_float32_exactly(self) -> None:
+        """The `_phase` argument at the new channel's scale, brute-forced over
+        the full field product rather than the emitted subset: every code must
+        be exactly representable and decode to its own fields after the
+        shader's `floor(x + 0.5)`."""
+        for glazed in range(3):
+            for tint in range(241):
+                for grammar in range(6):
+                    code = glazed + 4 * tint + 1024 * grammar
+                    stored = np.float32(code)
+                    assert stored == code
+                    decoded = math.floor(stored + 0.5)
+                    assert decoded % 4 == glazed
+                    assert (decoded // 4) % 256 == tint
+                    assert decoded // 1024 == grammar
+
+    def test_uv2_is_a_constant_row_and_an_absent_stem_is_the_sentinel(self) -> None:
+        mesh = flat_mesh("B123456A0", 8.0)
+        surveyed = facade_uv2(mesh, {"B123456": 1366})
+        assert surveyed.shape == (3, 2)
+        assert (surveyed == np.array([1366.0, 0.0], dtype=np.float32)).all()
+        assert (facade_uv2(mesh, {}) == 0.0).all()
+
+    def survey_style(self):
+        return replace(
+            style(),
+            facade_glazing_source="facade_glazing.json",
+            facade_grammar_source="facade_grammar.json",
+        )
+
+    def write_table(self, root: Path, source_id: str, name: str, table: dict) -> None:
+        directory = root / "testcity" / source_id
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / name).write_text(json.dumps(table))
+
+    def test_loaders_hold_the_missing_is_normal_contract(self, tmp_path: Path) -> None:
+        assert facade_survey_verdicts(self.survey_style(), "testcity", root=tmp_path) == {}
+        assert facade_glass_tint(self.survey_style(), "testcity", root=tmp_path) == {}
+        assert facade_survey_verdicts(style(), "testcity", root=tmp_path) == {}
+
+    def test_loaders_refuse_malformed_tables_loudly(self, tmp_path: Path) -> None:
+        self.write_table(
+            tmp_path,
+            "facade_grammar",
+            "facade_grammar.json",
+            {"B1": {"glazed": True, "grammar": "art-deco"}},
+        )
+        with pytest.raises(ValueError, match=r"facade_grammar\.json"):
+            facade_survey_verdicts(self.survey_style(), "testcity", root=tmp_path)
+
+        # Both dark columns present, one unreadable — a corrupt row, not the
+        # missing-mode refusal the loader is contracted to skip.
+        self.write_table(
+            tmp_path,
+            "facade_colour",
+            "facade_glazing.json",
+            {"B1": {"dark_L": "not a number", "dark_b": -7.18}},
+        )
+        with pytest.raises(ValueError, match=r"facade_glazing\.json"):
+            facade_glass_tint(self.survey_style(), "testcity", root=tmp_path)
+
+    def test_a_row_without_a_dark_mode_is_a_tint_refusal_not_an_error(self, tmp_path: Path) -> None:
+        self.write_table(
+            tmp_path,
+            "facade_colour",
+            "facade_glazing.json",
+            {
+                "B1": {"dark_L": 28.06, "dark_b": -7.18, "tex_per_m": 30.0},
+                "B2": {"light_L": 60.0, "light_b": 2.0, "tex_per_m": 30.0},
+            },
+        )
+        tints = facade_glass_tint(self.survey_style(), "testcity", root=tmp_path)
+        assert tints == {"B1": (28.06, -7.18)}
+
+
 # --------------------------------------------------------------------------
 # End to end
 # --------------------------------------------------------------------------
@@ -742,6 +863,53 @@ class TestBuildRegion:
         )
         assert tile.colours is not None
         assert tile.texture is None
+
+    def test_tiles_carry_the_survey_channel_all_zero_without_a_survey(
+        self, hong_kong, sources, tmp_path
+    ) -> None:
+        """The city-agnostic case: no survey tables in the sources tree, yet
+        every tier of every tile ships `TEXCOORD_1` — all-sentinel, so a
+        second city (or a fresh clone) is the refusal state by construction
+        rather than a conditional channel shape."""
+        self.build(hong_kong, sources, tmp_path)
+        tiles = tmp_path / "out" / "hong_kong" / "wan_chai" / "tiles"
+        for level in range(len(hong_kong.buildings.lod_cell_sizes_m)):
+            [tile] = read_glb(tiles / f"t_00_00_lod{level}.glb")
+            assert tile.uv2 is not None
+            assert (tile.uv2 == 0.0).all()
+
+    def test_a_surveyed_building_s_code_reaches_every_tier(
+        self, hong_kong, sources, tmp_path
+    ) -> None:
+        """The join, the packing and the LOD survival in one pass: a building
+        surveyed glazed-curtain with a measured tint carries code 1366 on every
+        vertex at LOD0 *and* LOD1, while an unsurveyed tile stays at the
+        sentinel."""
+        fixtures = [
+            Fixture("S10001", "BUILDING", 75.0, 75.0, 10.0),
+            Fixture("B0003", "BUILDING", 400.0, 300.0, 40.0),
+        ]
+        root = sources(fixtures)
+        grammar_dir = root / "hong_kong" / "facade_grammar"
+        grammar_dir.mkdir(parents=True)
+        (grammar_dir / "facade_grammar.json").write_text(
+            json.dumps({"S100": {"glazed": True, "grammar": "curtain", "sheet": "TEST-1"}})
+        )
+        colour_dir = root / "hong_kong" / "facade_colour"
+        colour_dir.mkdir(parents=True, exist_ok=True)
+        (colour_dir / "facade_glazing.json").write_text(
+            json.dumps({"S100": {"dark_L": 28.06, "dark_b": -7.18, "tex_per_m": 30.0}})
+        )
+
+        build_region(hong_kong, "wan_chai", sources_root=root, out_root=tmp_path / "out")
+
+        tiles = tmp_path / "out" / "hong_kong" / "wan_chai" / "tiles"
+        for level in range(len(hong_kong.buildings.lod_cell_sizes_m)):
+            [surveyed] = read_glb(tiles / f"t_00_00_lod{level}.glb")
+            assert (surveyed.uv2[:, 0] == 1366.0).all()
+            assert (surveyed.uv2[:, 1] == 0.0).all()
+            [unsurveyed] = read_glb(tiles / f"t_02_02_lod{level}.glb")
+            assert (unsurveyed.uv2 == 0.0).all()
 
     def test_both_height_bands_survive_the_merge(self, hong_kong, sources, tmp_path) -> None:
         """Two boxes in one tile, 10 m and 90 m, so two different bands. Merging

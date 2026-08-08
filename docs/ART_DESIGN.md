@@ -234,9 +234,12 @@ records that the sheet does not enter the build path; `docs/DECISIONS.md` carrie
 ⚠️ **Two of those inputs have to come from the ETL, and they are why `P3-7` is one commit across both
 sides.** A vertex knows its world Y, not where its building starts — a podium vertex and a 30th-floor
 vertex are indistinguishable to the shader — and it has no seed at all, so neighbouring towers would
-share a window pattern. Buildings ship **no UVs today**, so `TEXCOORD_0` is free, costs about 2 bytes
-per vertex quantised, and survives vertex clustering through the same representative-selection path
-that already carries colours.
+share a window pattern. Buildings shipped **no UVs** when this was written, so `TEXCOORD_0` was free
+(shipped float32 rather than the "2 bytes quantised" predicted here — `ARCHITECTURE.md` has the
+measured cost), and it survives vertex clustering through the same representative-selection path that
+already carries colours. **`TEXCOORD_1` is spent now too** (schema 6): the `Q40`/`Q41` survey
+verdicts ride it as one packed per-building state code, with the second float reserved for `Q42`'s
+riders — the channel table in `ARCHITECTURE.md` is the contract.
 
 ⚠️ **Not `COLOR_0.a`**, although it is free and currently a constant `255`: the project-wide import
 default sets `vertex_color_use_as_albedo`, and an opaque material ignores albedo alpha only until
@@ -1034,4 +1037,8 @@ have on **static geometry**, which ships no realtime shadow maps at all. What bl
 **texel budget** — 2.143 km² of terrain alone is 2.1 M texels at one per m², before a single façade —
 plus the baked sun `Q26` has not chosen, and LOD1 carrying no lightmap across the 250 m tier switch.
 ⚠️ **It is not "UVs do not survive clustering"**, because Godot's importer generates its own UV2
-unwrap.
+unwrap. ⚠️ **And that importer behaviour is now an armed hazard rather than a curiosity**: since
+schema 6 the tiles' UV2 *is* the façade-survey payload, so raising `meshes/light_baking` to Static
+Lightmaps would silently overwrite 1,600 buildings' measured verdicts with an unwrap.
+`verify_tiles.gd` asserts the import setting and the payload's integer exactness, so the regression
+fails the check instead of shipping.

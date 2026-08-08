@@ -299,7 +299,7 @@ The interface between ETL and game. **Versioned — change both sides together a
 
 ```json
 {
-  "schema_version": 4,
+  "schema_version": 6,
   "city_id": "hong_kong",
   "region_id": "wan_chai",
   "source_crs": "EPSG:2326",
@@ -411,7 +411,17 @@ that conversation rather than to make it impossible.
 | `COLOR_0.rgb` | The surface's albedo, **sRGB-encoded**, as normalised `uint8`. Every consumer must linearise it — see the warning below |
 | `TEXCOORD_0.x` | Metres above **that source object's own base**. A vertex knows its world Y, not where its building starts, and the region's ground moves 40 m — so world Y is not even a proxy. Metres rather than a 0-1 fraction because the floor *count* is the signature the window shader exists to carry |
 | `TEXCOORD_0.y` | `floor()` is a `SurfaceClass` marker — 0 façade, 1 ground, 2 structure. `fract()` is a per-object phase in 1/256 steps, so neighbouring towers do not line their window rows up |
+| `TEXCOORD_1.x` | The packed **façade-survey state** (`Q40`/`Q41`), a non-negative integer, constant per source building: `code = glz + 4·tint + 1024·grammar`. `glz`: 0 refused · 1 not glazed · 2 glazed (the reader's verdict). `tint`: 0 refused/absent, else `t = 1..240` with `t−1 = L_bin·16 + b_bin` over `L* ∈ [5, 65]` in 15 bins of 4.0 and `b* ∈ [−16, +16]` in 16 bins of 2.0 (dark-mode glass tint, written only when `glz = 2`). `grammar`: 0 refused · 1 curtain · 2 punched · 3 fin · 4 blank · 5 mixed, pinned to `GRAMMARS` in `tools/facade_grammar.py`. **Every field's 0 means "refused — fall back to the hash"**, so an absent channel, an unsurveyed city and a refused building are the same state. Max legal code 6082 ≪ 2²⁴, so every code is exact in float32; consumers still decode with `floor(x + 0.5)` first |
+| `TEXCOORD_1.y` | **Reserved for `Q42`'s riders and written `0.0` in schema 6.** The layout is fixed now so each field can land later, individually, with no further bump — filling a field a refusal-aware consumer already reads as "0 = refused" changes bytes, not meaning. Bits 0–6: storey pitch, `k = 1..65` → `2.5 + (k−1)/32` m (1/32 steps are exact binary fractions). Bits 7–11: podium floors, `k−1` floors with 1 = "no podium", distinct from refusal. Bits 12–13: balconies, 1 no · 2 yes. Bits 14–16: emphasis, 1 horizontal · 2 vertical · 3 grid · 4 none. Max 131,071 < 2²⁴. Each rider owes its own validation before it is written or read |
 | Material name | **`city_facade`**, and the name is the contract. glTF cannot say "use this shader", so `tools/generated_scene_import.gd` dispatches on the name and hands the tile `tuning/city_facade.tres`; everything else in the bundle keeps its `BaseMaterial3D` |
+
+⚠️ **The `TEXCOORD_1` codec constants are contract, not tuning.** The bin ranges and field
+multipliers above are mirrored as constants in `etl/pipeline/buildings.py` (`facade_state`) and
+`assets/shaders/city_facade_clean.gdshader` (`SURVEY_*`) — the same standing as the 1/256 phase — and
+this table is the tiebreak. They do not belong in the city yaml: a codec has no per-city meaning, and
+a one-sided "tuning" of a bin edge decodes every surveyed building silently wrong, which is precisely
+the drift the version exists to catch. What *is* tuning is how the decoded state is applied:
+`survey_apply` and `glass_astar` in `tuning/city_facade.tres`.
 
 ⚠️ **The phase is quantised to 1/256 because float32 rounds it into the next marker otherwise.** The
 raw seed reaches 1 − 2⁻³², and float32's spacing near 2.0 is ~2.4e-7, so `STRUCTURE + 0.9999999998`
@@ -466,6 +476,28 @@ scale factor in the contract on both sides. **Not done, because the bundle budge
 build is at 36.37**; the note is here so a later region short of room knows where 2 MB is hiding.
 Peak ETL RSS went **800 → 900 MB** on the same machine, from materialising 8 bytes a vertex through
 the bucket phase where `colour_for` gets away with a broadcast view.
+
+**The vertex stream gained `TEXCOORD_1` in the `Q40`/`Q41` plumbing, and `schema_version` went 5
+to 6.** Its meaning is in the table above: the measured façade verdicts — reader-glazed, binned
+glass tint, five-state grammar — packed as one integer state code per building, with the second
+float reserved at a documented layout so `Q42`'s riders can land without a third bump (the same
+argument the reserved GROUND marker made below). The channel ships **float32 VEC2, not `unorm16`,
+for the `TEXCOORD_0` reasons plus one of its own**: the budget is 200 MB and the build is nowhere
+near it, and a 16-bit path could not hold the codes exactly anyway — half floats carry 11 mantissa
+bits against codes that reach 6082 now and 131,071 when the riders land. Measured from PCKs with
+one variable changed: **36.32 → 36.57 MB, +0.24 MB** — 7.50 MB of raw VEC2 that the pack compresses
+by 97%. Far cheaper than `TEXCOORD_0`'s +4.01 MB because the payload is a per-building constant
+(and `y` all zeros), which the compressor rewards where `TEXCOORD_0`'s per-vertex fractions gave it
+nothing — `Q40`'s "~2 MB" estimate had this reasoning and still overshot eightfold. ETL peak RSS
+did not repeat `TEXCOORD_0`'s +100 MB either: `facade_uv2` is a broadcast view through the bucket
+phase, materialised only at the tile merge.
+
+⚠️ **Two importer settings would silently destroy this channel, and `verify_tiles.gd` now checks
+both.** `meshes/light_baking = 2` (Static Lightmaps) makes Godot's importer generate its own UV2
+unwrap over the payload — fractions in `[0, 1]` that pass every visual inspection; the tiles ship
+`= 1` (Static). And any 16-bit vertex-attribute compression corrupts large codes. The verifier
+asserts the `.import` setting directly and scans every `TEXCOORD_1` value for exactness and field
+range, so either regression fails the check instead of hashing 1,600 surveyed buildings.
 
 ⚠️ **The ground marker was reserved here rather than left to a later task.** Merging bought the
 ground a free draw call and cost it its own material, so a ground-only treatment — slope blending, a

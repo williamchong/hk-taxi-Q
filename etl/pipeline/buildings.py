@@ -83,6 +83,10 @@ SOURCE_ID = "buildings"
 # `source_dir` puts it there, and it is the only thing that should.
 HUE_SOURCE_ID = "facade_colour"
 
+# Where the vision reader's grammar survey lands (`Q41`) — the same shape, and
+# the same rule, as `HUE_SOURCE_ID` above.
+GRAMMAR_SOURCE_ID = "facade_grammar"
+
 # How many characters of a source id are the variant suffix. `docs/DATA_SOURCES.md`
 # establishes the remaining **stem** as the cross-dataset key: the survey reads
 # the individualised set's `…A0` models and this pipeline reads the non-textured
@@ -404,6 +408,77 @@ def facade_hue(style: BuildingStyle, city_id: str, *, root: Path | None = None) 
     return hues
 
 
+def facade_survey_verdicts(
+    style: BuildingStyle, city_id: str, *, root: Path | None = None
+) -> dict[str, tuple[bool | None, str | None]]:
+    """Per-building `(glazed, grammar)` from the vision reader, or empty.
+
+    Keyed by `stem`, written by `tools/facade_grammar.py --merge`, and holding
+    `facade_hue`'s contract exactly: **missing is normal** — a fresh clone has
+    no survey and must build the same hash-driven city it always built — while
+    malformed refuses loudly, because half a survey silently consumed is the
+    outcome worth preventing. `None` in either slot is the reader refusing,
+    which the packing keeps distinct from every committed value.
+    """
+    if style.facade_grammar_source is None:
+        return {}
+    path = source_dir(city_id, GRAMMAR_SOURCE_ID, root=root) / style.facade_grammar_source
+    try:
+        text = path.read_text()
+    except FileNotFoundError:
+        log.info("no facade grammar survey at %s — facades fall back to the hash", path)
+        return {}
+    try:
+        table = json.loads(text)
+        verdicts: dict[str, tuple[bool | None, str | None]] = {}
+        for key, row in table.items():
+            glazed, grammar = row["glazed"], row["grammar"]
+            if grammar is not None and grammar not in GRAMMAR_STATES:
+                raise ValueError(f"unknown grammar {grammar!r} under {key!r}")
+            if glazed is not None and not isinstance(glazed, bool):
+                raise ValueError(f"non-boolean glazed under {key!r}")
+            verdicts[key] = (glazed, grammar)
+    except (AttributeError, TypeError, KeyError, ValueError) as exc:
+        raise ValueError(f"{path}: facade grammar survey is malformed ({exc})") from exc
+    committed = sum(1 for pair in verdicts.values() if pair != (None, None))
+    log.info(
+        "facade grammar: %d buildings from %s, %d committed", len(verdicts), path.name, committed
+    )
+    return verdicts
+
+
+def facade_glass_tint(
+    style: BuildingStyle, city_id: str, *, root: Path | None = None
+) -> dict[str, tuple[float, float]]:
+    """Per-building glass tint `(L*, b*)` from the glazing survey's dark mode.
+
+    The continuous half of `Q40`'s two-instrument design: the reader decides
+    *whether* a building is glazed (`facade_survey_verdicts`), this table says
+    what the glass measures. Rows without a dark mode are *skipped* rather than
+    refused — the writer's columns are optional where a mode was empty, and an
+    absent tint is a per-building refusal, not a malformed table.
+    """
+    if style.facade_glazing_source is None:
+        return {}
+    path = source_dir(city_id, HUE_SOURCE_ID, root=root) / style.facade_glazing_source
+    try:
+        text = path.read_text()
+    except FileNotFoundError:
+        log.info("no facade glazing survey at %s — glass tints fall back to the hash", path)
+        return {}
+    try:
+        table = json.loads(text)
+        tints = {
+            key: (float(row["dark_L"]), float(row["dark_b"]))
+            for key, row in table.items()
+            if "dark_L" in row and "dark_b" in row
+        }
+    except (AttributeError, TypeError, KeyError, ValueError) as exc:
+        raise ValueError(f"{path}: facade glazing survey is malformed ({exc})") from exc
+    log.info("facade glazing: %d of %d buildings carry a tint", len(tints), len(table))
+    return tints
+
+
 def material_for(
     style: BuildingStyle,
     class_id: str,
@@ -504,9 +579,11 @@ def facade_uv(
       distinguishes a façade from a viaduct. The fraction is a per-object phase,
       so neighbouring towers do not line their window rows up.
 
-    Packed into one VEC2 rather than taking a second attribute: `TEXCOORD_1`
-    would cost another accessor and another vertex stream for one number that
-    never varies within a mesh.
+    Packed into one VEC2 rather than taking a second attribute — an objection
+    that held until schema 6, when the survey verdicts arrived: a multi-field
+    state code has no room left in `v`'s fraction, so `TEXCOORD_1` now exists
+    (`facade_uv2`). The objection still bounds what belongs there: a payload
+    that cannot fit here, not one more number that never varies within a mesh.
 
     ⚠️ **The horizontal window coordinate is deliberately *not* here.** It is
     derivable in the shader from world position and the wall normal, and a
@@ -556,6 +633,96 @@ def _phase(mesh: MeshData) -> float:
     round-trip in the shader instead of nearly doing so.
     """
     return math.floor(_seed(mesh) * _PHASES) / _PHASES
+
+
+# ---------------------------------------------------------------------------
+# The `TEXCOORD_1` survey payload (schema 6, `Q40`/`Q41`).
+#
+# ⚠️ These are **contract constants, not tuning** — the same standing as
+# `_PHASES`: the shader holds mirror copies, `docs/ARCHITECTURE.md`'s channel
+# table records them, and a one-sided change decodes every tint silently wrong,
+# which is exactly the drift hard rule 5's versioning exists to catch. A codec
+# has no per-city meaning, so they do not belong in the city yaml either.
+#
+# Grammar index order is pinned to `tools/facade_grammar.py`'s `GRAMMARS` and a
+# test asserts the two agree.
+GRAMMAR_STATES: tuple[str, ...] = ("curtain", "punched", "fin", "blank", "mixed")
+
+# Tint bins cover the measured dark-mode p1-p99 (`facade_glazing.json`, region
+# scale: L* 9.4-50.5, b* -14.6 to +11.9) in round numbers; the tails clamp.
+TINT_L_MIN, TINT_L_STEP, TINT_L_BINS = 5.0, 4.0, 15
+TINT_B_MIN, TINT_B_STEP, TINT_B_BINS = -16.0, 2.0, 16
+
+# Bit-field multipliers: glazed in bits 0-1, tint in 2-9, grammar in 10-12.
+# Max legal code 2 + 4·240 + 1024·5 = 6082 — far under float32's exact-integer
+# ceiling of 2^24, so unlike `_phase` there is no rounding case to engineer
+# away; the shader still decodes with `floor(x + 0.5)` first, as it does the
+# phase.
+_TINT_FIELD = 4
+_GRAMMAR_FIELD = 1024
+
+
+def facade_state(glazed: bool | None, grammar: str | None, tint: tuple[float, float] | None) -> int:
+    """One building's verdicts packed into the `TEXCOORD_1.x` state code.
+
+    Every field's zero means "refused — fall back to the hash", so `0` as a
+    whole code is the no-survey state and an absent channel decodes the same.
+    The tint rides **only when the reader called the building glazed** —
+    `Q40`'s contract: the survey measured a dark mode on nearly every building,
+    but only where the reader says it is glass does that mode *mean* glass.
+    """
+    code = 0
+    if glazed is not None:
+        code = 2 if glazed else 1
+        if glazed and tint is not None:
+            l_bin = min(int(max(tint[0] - TINT_L_MIN, 0.0) / TINT_L_STEP), TINT_L_BINS - 1)
+            b_bin = min(int(max(tint[1] - TINT_B_MIN, 0.0) / TINT_B_STEP), TINT_B_BINS - 1)
+            code += _TINT_FIELD * (1 + l_bin * TINT_B_BINS + b_bin)
+    if grammar is not None:
+        code += _GRAMMAR_FIELD * (1 + GRAMMAR_STATES.index(grammar))
+    return code
+
+
+def facade_states(
+    style: BuildingStyle, city_id: str, *, root: Path | None = None
+) -> dict[str, int]:
+    """Every surveyed building's state code, keyed by stem; refusals omitted.
+
+    Omitted rather than stored as `0` because `facade_uv2` already reads a
+    missing stem as the sentinel — the dict carries information, not shape.
+    """
+    verdicts = facade_survey_verdicts(style, city_id, root=root)
+    tints = facade_glass_tint(style, city_id, root=root)
+    states = {}
+    for key, (glazed, grammar) in verdicts.items():
+        state = facade_state(glazed, grammar, tints.get(key))
+        if state:
+            states[key] = state
+    return states
+
+
+def facade_uv2(mesh: MeshData, states: dict[str, int]) -> np.ndarray:
+    """One `TEXCOORD_1` row per vertex: the survey state in `x`, `0.0` in `y`.
+
+    **Per-building constant by construction**, which is what survives LOD1's
+    representative-vertex clustering — a cluster spanning two buildings takes
+    one vertex's value, and a constant channel guarantees that value is a code
+    some building actually carries. Ground and structure stems are simply
+    absent from the survey tables, so they ship the refusal sentinel with no
+    special case.
+
+    `y` is reserved for `Q42`'s riders (storey pitch, podium, balconies,
+    emphasis) at the layout `docs/ARCHITECTURE.md` records; each owes its own
+    validation before it is written, and filling a field a refusal-aware
+    consumer already reads as "0 = refused" will not need a schema bump.
+
+    A read-only broadcast view, like `colour_for`'s: unlike `facade_uv` the
+    value never varies within the mesh, so this costs 8 bytes per *mesh*
+    through the bucket phase, not 8 per vertex — `merge` materialises it only
+    at the tile.
+    """
+    code = float(states.get(stem(mesh.name), 0))
+    return np.broadcast_to(np.array([code, 0.0], dtype=np.float32), (len(mesh.positions), 2))
 
 
 def _ground(mesh: MeshData, offset: np.ndarray, style: BuildingStyle) -> MeshData:
@@ -641,6 +808,7 @@ def build_region(
     style = city.buildings
     place = Placement.resolve(city, region_id, sources_root, out_root)
     hue = facade_hue(style, city.id, root=sources_root)
+    states = facade_states(style, city.id, root=sources_root)
 
     report = BuildReport()
     # Bucketed by tile *and class*, because the two decimate at different cell
@@ -673,6 +841,7 @@ def build_region(
                         inside,
                         colours=colour_for(style, class_id, inside),
                         uvs=facade_uv(style, class_id, inside),
+                        uv2=facade_uv2(inside, states),
                     )
                 )
                 kept += 1
@@ -686,6 +855,7 @@ def build_region(
                 placed,
                 colours=colour_for(style, class_id, placed, bounds=bounds, hue=hue),
                 uvs=facade_uv(style, class_id, placed, bounds),
+                uv2=facade_uv2(placed, states),
             )
             placements = list(assign(coloured, place.grid, bounds))
             for tile, piece in placements:

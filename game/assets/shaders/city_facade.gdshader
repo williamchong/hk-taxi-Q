@@ -22,6 +22,13 @@
 // here from world position and the wall normal, and a payload carrying what the
 // geometry already knows costs bytes on every vertex of every tile forever.
 //
+// ⚠️ Since schema 6 every tile also ships `TEXCOORD_1` — the packed facade
+// survey state (`Q40`/`Q41`) — and this shader deliberately does not read it:
+// never referencing `UV2` leaves every building on its hash, which is the
+// refusal behaviour by definition. So the `.tres`-swap contract holds — one
+// `ext_resource` line, no rebuild — with this documented asymmetry: swapping
+// to this shader forfeits the surveyed verdicts, not just the clean look.
+//
 // ⚠️ This replaces a `BaseMaterial3D` that had `vertex_color_use_as_albedo` set
 // at import, so it must apply `COLOR` itself. Drop that and the city renders
 // white — the exact failure `tools/generated_scene_import.gd` exists to prevent.

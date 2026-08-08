@@ -77,6 +77,9 @@ def merge(meshes: Sequence[MeshData], *, name: str) -> MeshData:
     mapped = [mesh.uvs is not None for mesh in meshes]
     if any(mapped) and not all(mapped):
         raise ValueError(f"'{name}': cannot merge meshes with and without UVs into one primitive")
+    surveyed = [mesh.uv2 is not None for mesh in meshes]
+    if any(surveyed) and not all(surveyed):
+        raise ValueError(f"'{name}': cannot merge meshes with and without UV2 into one primitive")
 
     # uint32 rather than the int64 a Python-list cumsum defaults to, which would
     # promote every merged index array and double the index buffer.
@@ -90,6 +93,7 @@ def merge(meshes: Sequence[MeshData], *, name: str) -> MeshData:
         ),
         colours=np.concatenate([mesh.colours for mesh in meshes]) if all(coloured) else None,
         uvs=np.concatenate([mesh.uvs for mesh in meshes]) if all(mapped) else None,
+        uv2=np.concatenate([mesh.uv2 for mesh in meshes]) if all(surveyed) else None,
     )
 
 
@@ -112,6 +116,7 @@ def select_triangles(mesh: MeshData, keep: np.ndarray) -> MeshData | None:
         triangles=_as_indices(triangles),
         colours=None if mesh.colours is None else mesh.colours[used],
         uvs=None if mesh.uvs is None else mesh.uvs[used],
+        uv2=None if mesh.uv2 is None else mesh.uv2[used],
         texture=mesh.texture,
         material=mesh.material,
     )
@@ -218,6 +223,11 @@ def collapse(mesh: MeshData, *, cell_m: float, height_field: bool = False) -> Me
         # third colour along the seam; taking one side's is invisible.
         colours=None if mesh.colours is None else mesh.colours[representative][used],
         uvs=None if mesh.uvs is None else mesh.uvs[representative][used],
+        # UV2 is per-building constant by construction (`facade_uv2`), so a
+        # representative cannot invent a state a source vertex did not carry —
+        # a per-face payload would not survive this pick, which is why the
+        # survey is reduced to one verdict per building before emission.
+        uv2=None if mesh.uv2 is None else mesh.uv2[representative][used],
         texture=mesh.texture,
         material=mesh.material,
     )

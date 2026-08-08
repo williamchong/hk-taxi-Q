@@ -252,6 +252,28 @@ class TestWriting:
         assert restored.texture is not None
         assert restored.texture.data == textured.texture.data
 
+    def test_uv2_round_trips_exactly_and_sits_beside_texcoord_0(self, tmp_path) -> None:
+        """Schema 6: the survey payload is integer state codes, so the file
+        must hand back the exact floats it was given — approx would hide the
+        one corruption that matters."""
+        surveyed = replace(
+            self.box(),
+            uvs=np.zeros((6, 2), dtype=np.float32),
+            uv2=np.tile(np.array([6082.0, 0.0], dtype=np.float32), (6, 1)),
+        )
+        write_glb(tmp_path / "t.glb", [surveyed])
+
+        document = self.document_of(tmp_path / "t.glb")
+        attributes = document["meshes"][0]["primitives"][0]["attributes"]
+        assert {"TEXCOORD_0", "TEXCOORD_1"} <= set(attributes)
+        accessor = document["accessors"][attributes["TEXCOORD_1"]]
+        assert accessor["type"] == "VEC2"
+        assert accessor["componentType"] == 5126
+
+        [restored] = read_glb(tmp_path / "t.glb")
+        assert restored.uv2 is not None
+        assert (restored.uv2 == surveyed.uv2).all()
+
     def test_writing_nothing_is_an_error(self, tmp_path) -> None:
         """An empty tile is a bug upstream, and an empty GLB hides it."""
         with pytest.raises(ValueError, match="no meshes"):
@@ -266,4 +288,12 @@ def test_attribute_length_mismatch_is_rejected() -> None:
             normals=np.zeros((3, 3), dtype=np.float32),
             triangles=np.array([[0, 1, 2]]),
             colours=np.zeros((2, 4), dtype=np.uint8),
+        )
+    with pytest.raises(ValueError, match="uv2"):
+        MeshData(
+            name="bad",
+            positions=np.zeros((3, 3)),
+            normals=np.zeros((3, 3), dtype=np.float32),
+            triangles=np.array([[0, 1, 2]]),
+            uv2=np.zeros((2, 2), dtype=np.float32),
         )
