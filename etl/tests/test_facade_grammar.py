@@ -1,0 +1,154 @@
+"""The `Q41` reader survey (`tools/facade_grammar.py`).
+
+The reader itself needs a credential and 40 API calls; what is testable offline
+is the part whose failure is silent — the grading. A pool rule implemented one
+comparison off passes readers `Q41`'s record says must fail, and the printed
+table looks exactly as authoritative either way. So the tests state each pool's
+rule as a case and hold the scorer to it, and pin the label file to the shape
+the scorer assumes.
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "tools"))
+
+import io
+
+from facade_grammar import (
+    LABELS,
+    MAX_EDGE_PX,
+    PROMPT_HASH,
+    SCHEMA,
+    agrees,
+    encode_elevation,
+    is_miss,
+    refusal_row,
+    score,
+)
+from facade_unwrap import Elevation
+from PIL import Image
+
+
+def label(
+    readable: bool,
+    grammar: str | None = None,
+    *,
+    alt: str | None = None,
+    refusal_ok: bool = False,
+    glazed: bool | None = None,
+) -> dict:
+    return {
+        "sheet": "s",
+        "building": "b",
+        "face": "S",
+        "readable": readable,
+        "grammar": grammar,
+        "alt_grammar": alt,
+        "refusal_ok": refusal_ok,
+        "glazed": glazed,
+        "tint": None,
+        "signage": None,
+        "notes": "",
+    }
+
+
+def result(
+    readable: bool,
+    grammar: str | None = None,
+    *,
+    confidence: str = "high",
+    glazed: bool | None = None,
+) -> dict:
+    return {
+        "readable": readable,
+        "grammar": grammar,
+        "confidence": confidence,
+        "glazed": glazed,
+        "tint": None,
+        "signage": None,
+        "notes": "",
+    }
+
+
+def test_strict_pool_requires_agreement_and_counts_refusal_as_miss() -> None:
+    strict = label(True, "curtain", alt="mixed")
+    assert not is_miss(strict, result(True, "curtain"))
+    assert not is_miss(strict, result(True, "mixed"))  # alt_grammar counts
+    assert is_miss(strict, result(True, "punched"))
+    assert is_miss(strict, result(False))  # refusing a strict face is a miss
+    assert is_miss(strict, result(True, "punched", confidence="low"))  # low hedges nothing here
+
+
+def test_marginal_pool_misses_only_on_confident_disagreement() -> None:
+    marginal = label(True, "punched", refusal_ok=True)
+    assert not is_miss(marginal, result(False))  # refusal is fine
+    assert not is_miss(marginal, result(True, "punched"))
+    assert not is_miss(marginal, result(True, "blank", confidence="low"))
+    assert is_miss(marginal, result(True, "blank"))
+
+
+def test_refusal_pool_misses_only_on_a_confident_claim() -> None:
+    unreadable = label(False)
+    assert not is_miss(unreadable, result(False))
+    assert not is_miss(unreadable, result(True, "curtain", confidence="low"))
+    assert is_miss(unreadable, result(True, "curtain"))
+
+
+def test_score_pools_and_glazed_axis() -> None:
+    results = [
+        (label(True, "curtain", glazed=True), result(True, "curtain", glazed=True)),
+        (label(True, "punched", glazed=False), result(True, "blank", glazed=True)),
+        (label(True, "blank", refusal_ok=True), result(False)),
+        (label(False), result(True, "fin")),
+    ]
+    by_name = {name: (hits, total) for name, hits, total, _ in score(results)}
+    assert by_name["strict grammar"] == (1, 2)
+    assert by_name["marginal"] == (1, 1)
+    assert by_name["refusal"] == (0, 1)
+    # Glazed pairs need a label value AND a readable reader value: rows 1 and 2.
+    assert by_name["glazed"] == (1, 2)
+
+
+def test_refusal_row_matches_the_response_schema() -> None:
+    assert set(refusal_row("x")) == set(SCHEMA["required"])
+    assert not agrees(label(True, "curtain"), refusal_row("x"))
+
+
+def test_label_file_holds_the_shape_and_counts_the_record_states() -> None:
+    faces = json.loads(LABELS.read_text())["faces"]
+    assert len(faces) == 40
+    strict = [f for f in faces if f["readable"] and not f["refusal_ok"]]
+    marginal = [f for f in faces if f["readable"] and f["refusal_ok"]]
+    unreadable = [f for f in faces if not f["readable"]]
+    assert (len(strict), len(marginal), len(unreadable)) == (20, 6, 14)
+    for face in faces:
+        assert (face["grammar"] is None) == (not face["readable"])
+
+
+def test_prompt_hash_is_a_recordable_stamp() -> None:
+    assert len(PROMPT_HASH) == 16
+    assert int(PROMPT_HASH, 16) >= 0
+
+
+def test_encode_elevation_caps_the_long_edge() -> None:
+    tall = Elevation(
+        canvas=np.zeros((3000, 400, 3), dtype=np.uint8),
+        coverage=1.0,
+        width_m=50.0,
+        height_m=375.0,
+    )
+    image = Image.open(io.BytesIO(encode_elevation(tall)))
+    assert max(image.size) == MAX_EDGE_PX
+    small = Elevation(
+        canvas=np.zeros((80, 40, 3), dtype=np.uint8),
+        coverage=1.0,
+        width_m=5.0,
+        height_m=10.0,
+    )
+    assert Image.open(io.BytesIO(encode_elevation(small))).size == (40, 80)

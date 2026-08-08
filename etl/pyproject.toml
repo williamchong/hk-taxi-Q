@@ -38,6 +38,13 @@ dev = [
     "pytest>=8.0",
     "ruff>=0.6",
 ]
+# The Q41 reader survey (`tools/facade_grammar.py`) is the only thing that
+# calls the Claude API, it is hand-run, and nothing the pipeline ships imports
+# it — the same dev-only argument as Pillow. Hard rule 2 is untouched: the
+# survey is build-time tooling, and the game still makes zero network calls.
+survey = [
+    "anthropic>=0.40",
+]
 
 [build-system]
 requires = ["hatchling"]
