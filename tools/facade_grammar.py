@@ -44,6 +44,7 @@ import logging
 import sys
 import zipfile
 from base64 import standard_b64encode
+from collections import Counter
 from hashlib import blake2b
 from pathlib import Path
 
@@ -546,6 +547,62 @@ def survey_sheet(sheet: str, city: str, zip_dir: Path) -> dict[str, dict]:
     return rows
 
 
+def _majority(votes: list[object]) -> object | None:
+    """The strict-majority value, or `None`: a tie is a refusal, not a pick."""
+    counted = Counter(votes)
+    if not counted:
+        return None
+    top, count = counted.most_common(1)[0]
+    return top if count * 2 > len(votes) else None
+
+
+def building_verdicts(faces: dict[str, dict]) -> dict[str, object]:
+    """One building's consumed verdicts, voted from its face records.
+
+    `glazed` and `grammar` are voted independently: a face contributes to a
+    field iff it is readable and committed a value there. Confidence is not
+    consulted — `Q41`'s grading already priced what a low-confidence
+    commitment is worth. A value carries only on a strict majority of the
+    committed votes; a tie, like an empty ballot, refuses to `None`.
+
+    Independent votes can still contradict — `glazed` beside a `blank`
+    grammar, or unglazed beside `curtain`. The grammar yields: `glazed` is the
+    axis the graded run held at 24/24, so the grammar refuses and the glazed
+    verdict stands. Measured over today's six sheets the rule fires zero
+    times; it exists so a consumer may rely on the pair without re-deriving
+    this reduction.
+    """
+    committed = {
+        field: [f[field] for f in faces.values() if f["readable"] and f[field] is not None]
+        for field in ("glazed", "grammar")
+    }
+    verdicts = {field: _majority(votes) for field, votes in committed.items()}
+    if (verdicts["glazed"], verdicts["grammar"]) in ((True, "blank"), (False, "curtain")):
+        verdicts["grammar"] = None
+    verdicts["faces_committed"] = {field: len(votes) for field, votes in committed.items()}
+    return verdicts
+
+
+def merged_table(tables: dict[str, dict[str, dict]]) -> dict[str, dict]:
+    """The per-building verdict table the pipeline joins, from per-sheet rows.
+
+    Unlike `facade_glazing.py`'s merge this one *reduces*: the pipeline wants
+    one verdict per building, not four faces of provenance — and a partial
+    merge would let it half-survey the city, so the loader reads exactly this
+    file or nothing. Only the voted fields and the sheet are copied; the face
+    records — `signage` above all, which reads real trademarks and must never
+    ship — stay in the per-sheet tables.
+    """
+    merged: dict[str, dict] = {}
+    for sheet, rows in sorted(tables.items()):
+        clash = merged.keys() & rows.keys()
+        if clash:
+            raise ValueError(f"{sheet}: {len(clash)} stems already surveyed, e.g. {min(clash)}")
+        for key, row in rows.items():
+            merged[key] = building_verdicts(row["faces"]) | {"sheet": sheet}
+    return merged
+
+
 def agrees(label: dict, result: dict) -> bool:
     """Grammar agreement: the label, or its recorded `alt_grammar`, counts."""
     accepted = {label["grammar"], label["alt_grammar"]} - {None}
@@ -697,6 +754,12 @@ def main(argv: list[str] | None = None) -> int:
         default=INDIVIDUALISED_DIR,
         help="where the individualised sheet archives live",
     )
+    parser.add_argument("--all", action="store_true", help="every archive in --zip-dir")
+    parser.add_argument(
+        "--merge",
+        action="store_true",
+        help="also write the merged per-building verdict table facade_grammar.json",
+    )
     arguments = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
@@ -708,15 +771,31 @@ def main(argv: list[str] | None = None) -> int:
         if not arguments.sheets:
             parser.error("--batch-submit needs sheet ids")
         return batch_submit(arguments.sheets, arguments.city, arguments.zip_dir)
-    if not arguments.sheets:
-        parser.error("name at least one sheet, or pass --validate")
+    sheets = (
+        sorted(archive.stem for archive in arguments.zip_dir.glob("*.zip"))
+        if arguments.all
+        else arguments.sheets
+    )
+    if not sheets:
+        parser.error("name at least one sheet, or pass --all or --validate")
     out_dir = source_dir(arguments.city, SURVEY_SOURCE_ID)
     out_dir.mkdir(parents=True, exist_ok=True)
-    for sheet in arguments.sheets:
+    tables: dict[str, dict[str, dict]] = {}
+    for sheet in sheets:
         rows = survey_sheet(sheet, arguments.city, arguments.zip_dir)
         destination = out_dir / f"facade_grammar.{sheet}.json"
         destination.write_text(json.dumps(rows, indent=1, sort_keys=True))
         log.info("%s: %d buildings -> %s", sheet, len(rows), destination)
+        tables[sheet] = rows
+    if arguments.merge:
+        merged = merged_table(tables)
+        destination = out_dir / "facade_grammar.json"
+        destination.write_text(json.dumps(merged, indent=1, sort_keys=True))
+        committed = {
+            field: sum(row[field] is not None for row in merged.values())
+            for field in ("glazed", "grammar")
+        }
+        log.info("merged: %d buildings -> %s, committed %s", len(merged), destination, committed)
     return 0
 
 

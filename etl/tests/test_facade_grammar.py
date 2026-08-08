@@ -28,10 +28,12 @@ from facade_grammar import (
     UNWRAP_HASH,
     agrees,
     batch_custom_id,
+    building_verdicts,
     cached_read,
     encode_elevation,
     entry_path,
     is_miss,
+    merged_table,
     parse_message,
     refusal_row,
     score,
@@ -118,6 +120,78 @@ def test_score_pools_and_glazed_axis() -> None:
     assert by_name["refusal"] == (0, 1)
     # Glazed pairs need a label value AND a readable reader value: rows 1 and 2.
     assert by_name["glazed"] == (1, 2)
+
+
+class TestMergedTable:
+    """The face→building reduction the pipeline consumes (`--merge`)."""
+
+    def test_strict_majority_commits_and_a_tie_refuses(self) -> None:
+        voted = building_verdicts(
+            {
+                "N": result(True, "punched", glazed=True),
+                "E": result(True, "punched", glazed=True),
+                "S": result(True, "curtain", glazed=False),
+            }
+        )
+        assert voted["grammar"] == "punched"
+        assert voted["glazed"] is True
+        assert voted["faces_committed"] == {"glazed": 3, "grammar": 3}
+
+        tied = building_verdicts(
+            {
+                "N": result(True, "punched"),
+                "S": result(True, "curtain"),
+            }
+        )
+        assert tied["grammar"] is None
+
+    def test_unreadable_and_uncommitted_faces_do_not_vote(self) -> None:
+        # Two refusals beside one committed face: the committed face is a
+        # majority of one, not outvoted by silence.
+        voted = building_verdicts(
+            {
+                "N": result(True, "fin", glazed=True),
+                "E": result(False),
+                "S": refusal_row("coverage below gate"),
+            }
+        )
+        assert voted["grammar"] == "fin"
+        assert voted["glazed"] is True
+        assert voted["faces_committed"] == {"glazed": 1, "grammar": 1}
+        assert building_verdicts({}) == {
+            "glazed": None,
+            "grammar": None,
+            "faces_committed": {"glazed": 0, "grammar": 0},
+        }
+
+    def test_the_axes_vote_independently(self) -> None:
+        # The grammar ties but glazed does not: one refuses, the other commits.
+        voted = building_verdicts(
+            {
+                "N": result(True, "punched", glazed=True),
+                "S": result(True, "curtain", glazed=True),
+            }
+        )
+        assert voted["grammar"] is None
+        assert voted["glazed"] is True
+
+    def test_a_contradiction_refuses_the_grammar_and_keeps_glazed(self) -> None:
+        glazed_blank = building_verdicts({"N": result(True, "blank", glazed=True)})
+        assert (glazed_blank["glazed"], glazed_blank["grammar"]) == (True, None)
+        solid_curtain = building_verdicts({"N": result(True, "curtain", glazed=False)})
+        assert (solid_curtain["glazed"], solid_curtain["grammar"]) == (False, None)
+
+    def test_merged_rows_carry_verdicts_and_never_a_face_field(self) -> None:
+        face = result(True, "curtain", glazed=True) | {"signage": "REVENUE TOWER"}
+        merged = merged_table({"s1": {"B1": {"faces": {"N": face}, "sheet": "s1"}}})
+        assert set(merged["B1"]) == {"glazed", "grammar", "faces_committed", "sheet"}
+        assert merged["B1"]["sheet"] == "s1"
+        assert "signage" not in json.dumps(merged)
+
+    def test_a_stem_surveyed_on_two_sheets_raises(self) -> None:
+        row = {"faces": {"N": result(True, "punched")}}
+        with pytest.raises(ValueError, match="already surveyed"):
+            merged_table({"s1": {"B1": row}, "s2": {"B1": row}})
 
 
 def test_refusal_row_matches_the_response_schema() -> None:
