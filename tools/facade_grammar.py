@@ -227,13 +227,14 @@ UNWRAP_HASH = blake2b(
 ).hexdigest()
 
 
-def read_face(client, png: bytes) -> dict:
-    """One structured read. The schema is enforced at the API layer, so the
-    text that comes back parses or the SDK has already retried."""
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=16000,
-        messages=[
+def request_params(png: bytes) -> dict:
+    """The complete request, built in one place so the synchronous path and
+    the batch path cannot drift: whichever transport carries it, the read the
+    API performs is the one `PROMPT_HASH` names."""
+    return {
+        "model": MODEL,
+        "max_tokens": 16000,
+        "messages": [
             {
                 "role": "user",
                 "content": [
@@ -249,16 +250,26 @@ def read_face(client, png: bytes) -> dict:
                 ],
             }
         ],
-        output_config={"format": {"type": "json_schema", "schema": SCHEMA}},
-    )
-    if response.stop_reason == "refusal":
+        "output_config": {"format": {"type": "json_schema", "schema": SCHEMA}},
+    }
+
+
+def parse_message(message) -> dict:
+    """One response into one cache entry, for either transport. The schema is
+    enforced at the API layer, so the text parses or the SDK has retried."""
+    if message.stop_reason == "refusal":
         # A classifier decline is a refusal row, not an error — the same
         # fallback contract as every other gate.
         return refusal_row("api refusal")
-    text = next((block.text for block in response.content if block.type == "text"), None)
+    text = next((block.text for block in message.content if block.type == "text"), None)
     if text is None:
-        raise RuntimeError(f"response carried no text block (stop_reason={response.stop_reason})")
+        raise RuntimeError(f"response carried no text block (stop_reason={message.stop_reason})")
     return json.loads(text)
+
+
+def read_face(client, png: bytes) -> dict:
+    """One structured read over the synchronous API."""
+    return parse_message(client.messages.create(**request_params(png)))
 
 
 def cached_read(get_client, cache_dir: Path, key: str, elevation: Elevation) -> dict:
@@ -311,6 +322,130 @@ def client_factory():
         return state["client"]
 
     return get
+
+
+# --- Batch transport --------------------------------------------------------
+# The Batch API halves the price of a read and changes nothing else: a
+# submitted request carries `request_params` verbatim, so the read the API
+# performs is still the one `PROMPT_HASH` names, and collection writes the
+# same content-addressed entries `cached_read` would have written. The output
+# tables are then authored by the ordinary survey path replaying that cache —
+# the batch layer is transport, never interpretation.
+
+# Comfortably under the API's 256 MB per-batch cap; a sheet that encodes
+# larger is split, since results are keyed per face and never per batch.
+MAX_BATCH_BYTES = 120 * 1024 * 1024
+
+
+def batch_entry(key: str, png: bytes) -> dict:
+    """One batch request. A custom_id may not contain dots, so the cache
+    path's pieces ride around a dash: `{key}-{fingerprint}`."""
+    fingerprint = blake2b(png, digest_size=8).hexdigest()
+    return {"custom_id": f"{key}-{fingerprint}", "params": request_params(png)}
+
+
+def entry_path(cache_dir: Path, custom_id: str) -> Path:
+    """The cache entry a batch result lands in — `cached_read`'s key exactly,
+    so a collected face replays for free in every later run."""
+    key, _, fingerprint = custom_id.rpartition("-")
+    return cache_dir / f"{key}.{PROMPT_HASH}.{fingerprint}.json"
+
+
+def batch_submit(sheets: list[str], city: str, zip_dir: Path) -> int:
+    """Enumerate every un-cached face of the named sheets and submit them to
+    the Batch API. Batch ids land in a state file beside the caches; nothing
+    else is written until `--batch-collect`."""
+    client = client_factory()()
+    out_root = source_dir(city, SURVEY_SOURCE_ID) / "raw"
+    state_path = out_root / f"batch.{PROMPT_HASH}.json"
+    try:
+        state = json.loads(state_path.read_text())
+    except FileNotFoundError:
+        state = {"model": MODEL, "prompt_hash": PROMPT_HASH, "batches": []}
+
+    def flush(sheet: str, pending: list[dict]) -> None:
+        batch = client.messages.batches.create(requests=pending)
+        state["batches"].append({"id": batch.id, "sheet": sheet, "count": len(pending)})
+        out_root.mkdir(parents=True, exist_ok=True)
+        state_path.write_text(json.dumps(state, indent=1))
+        log.info("%s: submitted %d faces as %s", sheet, len(pending), batch.id)
+
+    for sheet in sheets:
+        cache_dir = out_root / sheet
+        pending: list[dict] = []
+        pending_bytes = 0
+        cached = gated = submitted = 0
+        with zipfile.ZipFile(zip_dir / f"{sheet}.zip") as bundle:
+            for name, entry in sorted(sheet_documents(bundle).items()):
+                for face, elevation in unwrap_building(load_building(bundle, entry)).items():
+                    if elevation.coverage < MIN_COVERAGE:
+                        gated += 1
+                        continue
+                    request = batch_entry(f"{name}_{face}", encode_elevation(elevation))
+                    if entry_path(cache_dir, request["custom_id"]).exists():
+                        cached += 1
+                        continue
+                    pending.append(request)
+                    pending_bytes += len(
+                        request["params"]["messages"][0]["content"][0]["source"]["data"]
+                    )
+                    submitted += 1
+                    if pending_bytes > MAX_BATCH_BYTES:
+                        flush(sheet, pending)
+                        pending, pending_bytes = [], 0
+        if pending:
+            flush(sheet, pending)
+        log.info(
+            "%s: %d submitted, %d already cached, %d below gate", sheet, submitted, cached, gated
+        )
+    return 0
+
+
+def batch_collect(city: str) -> int:
+    """Write every ended batch's results into the response cache. Exit 0 once
+    all batches are collected, 1 while any is still processing — an errored or
+    expired face is left a cache miss, so any later run reads it again."""
+    client = client_factory()()
+    out_root = source_dir(city, SURVEY_SOURCE_ID) / "raw"
+    state_path = out_root / f"batch.{PROMPT_HASH}.json"
+    try:
+        state = json.loads(state_path.read_text())
+    except FileNotFoundError:
+        raise SystemExit(
+            f"no submission recorded for prompt {PROMPT_HASH} — run --batch-submit"
+        ) from None
+
+    still_open = 0
+    for record in state["batches"]:
+        if record.get("collected"):
+            continue
+        batch = client.messages.batches.retrieve(record["id"])
+        if batch.processing_status != "ended":
+            log.info("%s (%s): %s", record["id"], record["sheet"], batch.processing_status)
+            still_open += 1
+            continue
+        cache_dir = out_root / record["sheet"]
+        counts = {"succeeded": 0, "refused": 0, "errored": 0}
+        for result in client.messages.batches.results(record["id"]):
+            if result.result.type != "succeeded":
+                counts["errored"] += 1
+                log.warning(
+                    "%s: %s — left uncached for a later read", result.custom_id, result.result.type
+                )
+                continue
+            row = parse_message(result.result.message)
+            counts["refused" if row.get("notes") == "api refusal" else "succeeded"] += 1
+            path = entry_path(cache_dir, result.custom_id)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(row, indent=1, sort_keys=True))
+        record["collected"] = counts
+        state_path.write_text(json.dumps(state, indent=1))
+        log.info("%s (%s): %s", record["id"], record["sheet"], counts)
+    if still_open:
+        log.info("%d batch(es) still processing", still_open)
+    else:
+        log.info("all batches collected")
+    return 1 if still_open else 0
 
 
 def survey_sheet(sheet: str, city: str, zip_dir: Path) -> dict[str, dict]:
@@ -493,6 +628,16 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("sheets", nargs="*", help="sheet ids to survey, e.g. 11-SW-9D")
     parser.add_argument("--validate", action="store_true", help="grade the Q41 validation set")
+    parser.add_argument(
+        "--batch-submit",
+        action="store_true",
+        help="submit the sheets' un-cached faces to the Batch API at half price",
+    )
+    parser.add_argument(
+        "--batch-collect",
+        action="store_true",
+        help="write ended batches into the response cache (exit 1 while any is processing)",
+    )
     parser.add_argument("--city", default="hong_kong")
     parser.add_argument(
         "--zip-dir",
@@ -505,6 +650,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if arguments.validate:
         return validate(arguments.city, arguments.zip_dir)
+    if arguments.batch_collect:
+        return batch_collect(arguments.city)
+    if arguments.batch_submit:
+        if not arguments.sheets:
+            parser.error("--batch-submit needs sheet ids")
+        return batch_submit(arguments.sheets, arguments.city, arguments.zip_dir)
     if not arguments.sheets:
         parser.error("name at least one sheet, or pass --validate")
     out_dir = source_dir(arguments.city, SURVEY_SOURCE_ID)

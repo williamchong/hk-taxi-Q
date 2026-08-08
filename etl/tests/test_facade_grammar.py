@@ -17,6 +17,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 from facade_grammar import (
     GRAMMARS,
     LABELS,
@@ -25,10 +26,14 @@ from facade_grammar import (
     SCHEMA,
     UNWRAP_HASH,
     agrees,
+    batch_entry,
     cached_read,
     encode_elevation,
+    entry_path,
     is_miss,
+    parse_message,
     refusal_row,
+    request_params,
     score,
 )
 from facade_unwrap import Elevation
@@ -197,6 +202,34 @@ def test_changed_image_refuses_the_hit_but_keeps_the_paid_entry(tmp_path: Path) 
     # still replays it without a client — a reverted unwrap costs nothing.
     assert stale.exists()
     assert cached_read(no_client, tmp_path, "k", old)["grammar"] == "curtain"
+
+
+def test_batch_entry_round_trips_to_the_cache_entry_cached_read_would_write(
+    tmp_path: Path,
+) -> None:
+    sample = elevation(7)
+    png = encode_elevation(sample)
+    request = batch_entry("B1_E", png)
+    # Identical params to the synchronous read — the transports cannot drift.
+    assert request["params"] == request_params(png)
+    assert request["custom_id"] == f"B1_E-{fingerprint_of(sample)}"
+    assert entry_path(tmp_path, request["custom_id"]) == (
+        tmp_path / f"B1_E.{PROMPT_HASH}.{fingerprint_of(sample)}.json"
+    )
+
+
+def test_parse_message_reads_refuses_and_rejects_textless_responses() -> None:
+    canned = result(True, "curtain")
+    read = SimpleNamespace(
+        stop_reason="end_turn",
+        content=[SimpleNamespace(type="text", text=json.dumps(canned))],
+    )
+    assert parse_message(read) == canned
+    assert parse_message(SimpleNamespace(stop_reason="refusal", content=[])) == refusal_row(
+        "api refusal"
+    )
+    with pytest.raises(RuntimeError):
+        parse_message(SimpleNamespace(stop_reason="end_turn", content=[]))
 
 
 def test_encode_elevation_caps_the_long_edge() -> None:

@@ -1824,6 +1824,16 @@ and high-confidence reads of faces a human refused. The region survey therefore 
 The 40 Opus responses stay in the cache under their own prompt hash — the raw record of the original
 graded run, and a free replay if the pin ever moves back.
 
+**The full-sheet spend rides the Batch API, and the batch layer is transport, never
+interpretation.** Batch pricing halves the run again (~$21 against ~$41 synchronous, from ~$103 on
+Opus). The design keeps the validated reader's authority intact: a submitted request carries
+`request_params` verbatim — the same bytes the synchronous path sends, built in one function so the
+transports cannot drift — and `--batch-collect` writes each result into the same content-addressed
+entry `cached_read` would have written, keyed by prompt hash and image fingerprint via the
+`custom_id`. The output tables are then authored by the ordinary survey path replaying that cache
+with **zero API calls**, so the committed, validated code path still writes every row. An errored or
+expired face is left a cache miss — any later run, batch or synchronous, simply reads it again.
+
 **Reproducibility answers `Q37`'s ghost by tolerance, not byte-equality.** This is the repo's first
 non-deterministic input producer: a rerun against the same bytes may differ. The tool therefore
 caches every raw API response beside its output table in the sources cache, keyed by content, model
