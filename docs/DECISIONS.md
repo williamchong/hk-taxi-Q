@@ -768,19 +768,25 @@ verdict, and the driver panel can be shown frames under whichever curve ships.
 
 ### ⚠️ The shoot found a reproducibility hazard in the preview scene
 
-**`free_look_camera.gd` can silently discard `--camera`.** Its `_ready` connects the tile preview's
-`built(low, high)` signal to `frame()`, which overwrites position *and* orientation to auto-frame the
-loaded bounding box. The driver applies `--camera` at startup and the tiles load asynchronously, so
-which one wins is a race decided by load speed. Cold, `built` lands last and the audit camera is
-lost; warm, the driver wins.
+**Using the machine during a preview shoot ruins the frame.** `drive.sh` steals focus for the length
+of a run; a click on that window puts `free_look_camera.gd` into `MOUSE_MODE_CAPTURED`, and every
+mouse movement after it rotates the audit camera. Three runs of one configuration returned
+whole-frame `L*` of **41.39** (correct), **30.94** (pitched down) and **55.75** (aimed at the sky).
 
-⚠️ **It fails silently in every channel that normally catches things.** The run exits `DRIVER OK`,
-`tools/check.sh` is not involved, and the `camera:` line in the log prints the transform that was
-*requested* — before the signal fires — so the log of a lost frame is byte-identical to the log of a
-good one. Two of eighteen frames were taken from the wrong viewpoint here, and the only thing that
-caught them was a byte-comparison against an archived shot. **A preview audit frame is not evidence
-until it has been checked against a sibling.** Three runs of one configuration returned whole-frame
-`L*` of 41.39, 30.94 and 55.75.
+⚠️ **Position survives and only the aim moves, which is what makes it dangerous.** The result is a
+plausible frame of the wrong thing, not a visibly broken one. The run exits `DRIVER OK`,
+`tools/check.sh` is not involved, and the `camera:` line prints the transform requested at placement
+— so the log of a ruined frame is byte-identical to the log of a good one. Two of eighteen frames
+were lost this way, and the only thing that caught them was a byte-comparison against an archived
+shot. **A preview audit frame is not evidence until it has been checked against a sibling.**
+
+🔴 **The first diagnosis of this was wrong and is recorded because the wrong one is plausible.** It
+blamed `free_look_camera.gd`'s `built` → `frame()` auto-framing racing the driver's camera placement.
+Two things refute it: `frame()` sets position *and* orientation, lifting the camera ~600 m to an
+aerial vantage, whereas both ruined frames kept street-level position; and `driver.gd:150-153`
+already awaits a process frame precisely so `frame()` runs first. By elimination, mouse-look is the
+only path in that script that rotates without translating. **The evidence that separated them was
+looking at the frames** — the telemetry, the logs and the exit codes are identical either way.
 
 ✅ **The preview scene is fully settled by `t=0.8`**, and `t=0.8`, `t=1.5` and `t=3.0` are
 byte-identical. The three-second runs the archived set used were buying nothing.
@@ -988,6 +994,36 @@ lever was more effective than the record credits — on the frame nobody re-meas
 ⚠️ **A low middle band is not by itself a defect** — `skyline` has 3.8% and is fine. The pathology is
 a high shadow share **and** a low middle together. Read the two columns as a pair or the next person
 optimises `skyline` upward for nothing.
+
+### 🔴 Three of the six rows cannot be reproduced from the frames on disk
+
+Audited after `Q26`'s tone-curve shoot found that a preview frame can be silently mis-aimed. The
+camera was **not** the problem — every frame behind this table passes a sky-mask overlap check
+against a framing-verified reference (0.728–1.000, where a mis-aimed frame scores 0.00–0.10). The
+problem is provenance.
+
+| row | published | `frame_stats.py` on the stored frame |
+|---|---|---|
+| `kerb` | 51.3% / 2.7% | ✅ **51.3% / 2.7%** from `q31_verify_kerb` |
+| `street` | 13.0% / 25.4% | 13.2% / 27.0% from `art_street` |
+| `skyline` | 0.0% / 3.8% | 0.0% / 3.3% from `art_skyline` |
+| `infra` | 0.0% / **39.6%** | 🔴 **no stored frame is close.** The four `infra` shots give 0.1%/0.1%, 3.0%/3.0%, 37.9%/3.9% and 0.1%/0.5% |
+
+🔴 **`infra` is the row this question leans on hardest** — it is the counter-example that killed
+"under a deck predicts the fault", and it is quoted as "the *fullest* middle measured". A frame with
+39.6% in the 10–30 band is far darker than any `infra` shot now on disk (`art_infra` has p10 32.2).
+The number is not shown to be wrong; it is shown to be **unverifiable**, which for a load-bearing
+counter-example is nearly as bad.
+
+⚠️ **The cause is structural, not clerical.** `build/driver/` is gitignored, directory names are
+reused between shoots, and nothing records which commit a frame is of. `ART_DESIGN.md` already warns
+that a screenshot has an expiry date nothing records; this is that warning coming true against a
+published table. **A figure whose frame lives only in `build/driver/` is a figure with no evidence.**
+
+✅ **`Q27` was audited the same way and is clean.** All 32 of its ablation pairs are internally
+aligned — responding share is uniform at 55.9% (`skyline`) and ~40% (`street`) across all sixteen
+variants, so no pair has a mis-framed member. ✅ **`Q30` is immune**: `tools/facade_chroma.py` reads
+the survey and city config, never a render.
 
 ### The cause is the tone curve, not the fill
 

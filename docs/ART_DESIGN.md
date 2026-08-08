@@ -979,13 +979,14 @@ behind `--debug-view`, which is why the `taxi` rows are clean.
 lost a day to shots taken one palette commit before they were read. Re-shoot before comparing, and
 say which commit a shot is of.
 
-⚠️ **A preview frame can be shot from the wrong camera with nothing anywhere reporting it.**
-`free_look_camera.gd` auto-frames the region when the tile preview finishes loading, and that can
-land after `--camera` was applied — a race against load speed, lost most often by the first run of a
-cold batch. The run exits `DRIVER OK` and the `camera:` log line shows the requested transform either
-way. Two of eighteen frames were taken from the wrong viewpoint while measuring `Q26`'s tone-curve
-stability, and only a byte-comparison against an archived shot caught them. **Shoot each viewpoint
-twice and `cmp`, or compare against the archive.** See `Q26`.
+⚠️ **A preview frame can be shot from the wrong camera with nothing anywhere reporting it.** The run
+window steals focus, and a click on it puts `free_look_camera.gd` into captured-mouse mode, after
+which any mouse movement rotates the audit camera. **Position survives and only the aim moves**, so
+the result is a plausible-looking frame of the wrong thing rather than an obvious failure. The run
+exits `DRIVER OK` and the `camera:` log line reports the requested transform either way. Two of
+eighteen frames were ruined this way while measuring `Q26`'s tone-curve stability, and only a
+byte-comparison against an archived shot caught them. **Leave the machine alone for the length of a
+shoot, and shoot each viewpoint twice and `cmp`.** See `Q26`.
 
 ✅ **These viewpoints are static by `t=0.8`** — `t=0.8`, `t=1.5` and `t=3.0` are byte-identical, so
 the longer runs earlier shots used bought nothing, and an early capture is less likely to hit the

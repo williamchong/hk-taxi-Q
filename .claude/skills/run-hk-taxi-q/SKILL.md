@@ -247,15 +247,18 @@ to — see Gotchas.
 - **`--hold` cannot fly the preview camera.** `free_look_camera.gd` reads
   `Input.is_physical_key_pressed` directly rather than the action map, so `Input.action_press` —
   how everything else here is driven — moves it not at all. Use `--camera` / `--look`.
-- ⚠️ **`--camera` can be silently discarded in the preview scenes, and the log will not say so.**
-  `free_look_camera.gd` connects the tile preview's `built` signal to `frame()`, which overwrites
-  position *and* orientation to auto-frame the loaded bounding box. `--camera` is applied at startup
-  and the tiles load asynchronously, so which wins is a race decided by load speed: a cold first run
-  tends to lose the audit camera, a warm one keeps it. The run still exits `DRIVER OK`, and the
-  `camera:` line prints the transform that was **requested**, before the signal fires — so the log of
-  a lost frame is identical to the log of a good one. Three runs of one configuration returned
-  whole-frame `L*` 41.39, 30.94 and 55.75. **Shoot every audit frame twice and `cmp` them, or compare
-  against an archived shot; a single preview frame is not evidence.**
+- ⚠️ **Using the machine during a preview run corrupts the shot, and the log will not say so.** The
+  window steals focus; a click on it puts `free_look_camera.gd` into `MOUSE_MODE_CAPTURED`, and from
+  then on **every mouse movement rotates the audit camera**. Position is preserved and only
+  orientation moves, which is what makes the result look like a plausible frame rather than an
+  obvious failure. Three runs of one configuration returned whole-frame `L*` 41.39 (correct), 30.94
+  (pitched down) and 55.75 (aimed at the sky). The run still exits `DRIVER OK`, and the `camera:`
+  line prints the transform that was **requested** at placement — so the log of a ruined frame is
+  identical to the log of a good one. **Leave the machine alone for the length of a preview shoot,
+  and shoot every audit frame twice and `cmp` them; a single preview frame is not evidence.**
+  ⚠️ Not to be confused with `free_look_camera.gd`'s `built` → `frame()` auto-framing, which
+  `driver.gd` already handles by awaiting a process frame before placing the camera. That one moves
+  position *and* orientation and is not the failure seen here.
 - **The preview viewpoints are static by `t=0.8`.** `t=0.8`, `t=1.5` and `t=3.0` come out
   byte-identical once the streamer has settled, so there is nothing to be bought by a longer run —
   and shooting early dodges the stall below.
