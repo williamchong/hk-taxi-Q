@@ -1688,8 +1688,8 @@ second sheet is worth reading before the gate thresholds are fixed to the first.
 
 ## `Q41` — A vision reader recovers the grammar the statistic could not
 
-**Status.** 🟡 Open — ✅ **the reader passed its graded run, first run, no label corrections**; open
-on an image fingerprint in the cache, the human label spot-check and the full-sheet run ·
+**Status.** 🟡 Open — ✅ **the reader passed its graded run, first run, no label corrections**, and
+✅ the cache is image-fingerprinted; open on the human label spot-check and the full-sheet run ·
 **Owner.** `P3-9a`
 
 **The claim.** `Q40`'s kill of fin-versus-curtain-versus-punched is real but narrower than its
@@ -1796,6 +1796,29 @@ before the full-sheet run: fingerprint the encoded PNG in each cached entry and 
 image no longer matches. ⚠️ **Folding the unwrap into `PROMPT_HASH` is the wrong shape** — it keys
 on source rather than output, so it would discard every paid entry on any unwrap edit, including a
 proven no-op like `435f079`'s.
+
+✅ **Fingerprinted, and the replay re-verified against the fingerprinted entries.** A cache entry's
+key is now `<face>.<PROMPT_HASH>.<image_hash>.json`, where `image_hash` is the `blake2b` of the
+encoded PNG — a hit is defined by prompt *and* image, so a stale entry is unfindable rather than
+silently replayed, and every output row records the `image_hash` it was read from, closing both
+halves of "neither the key nor the row". Superseded entries are kept: they are the raw record of a
+paid read, and an unwrap change that is later reverted hits them again for free. The 40 existing
+entries were backfilled by **pure rename** — no paid bytes rewritten — with fingerprints computed
+from the current unwrap, which is sound only because `435f079`'s byte-identical check tied that
+unwrap to the one the graded run used; the backfill is that unrecorded check becoming disk state.
+Acceptance: `--validate` with no credential in the environment returned the identical verdict —
+zero API calls against the new keys — and a test pins that a mutated canvas forces a re-read while
+the superseded entry still answers for its own image.
+
+**The per-building row cache is guarded separately, by `UNWRAP_HASH`.** A row hit skips the unwrap
+itself, so the image fingerprint above can never protect it. Its key therefore hashes the three
+source files upstream of the PNG (`facade_grammar.py`, `facade_survey.py`, `facade_unwrap.py`).
+That is source-keying — the shape rejected for `PROMPT_HASH` above — and it is correct *here*
+because the two caches cost different currencies: invalidating a row costs file reads and
+rasterising with **no API spend** (regeneration re-checks each face against the response cache, so
+a no-op refactor replays every paid entry free), while source-keying the response cache would
+discard the paid reads themselves. No row files existed when the guard landed, so nothing needed
+migrating.
 
 **The licence covers the read.** The data grant is explicit — *"browse, download, distribute,
 reproduce … for both commercial and non-commercial purposes"* (`LICENSING.md`) — and sending sheet
