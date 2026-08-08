@@ -8,8 +8,15 @@ second mode, so contamination biases the dip toward *bimodal* — the direction
 that flatters the result. `Q41` retired that hazard for the reader's images
 with `facade_unwrap.py`'s depth buffer, and records the histogram half as still
 owed. This tool is that check, committed rather than run once and lost —
-Probe 1 itself was never committed, which is `Q37`'s ghost, and this table is
-the one the eventual glazing gate will be trusted against.
+Probe 1 itself was never committed, which is `Q37`'s ghost.
+
+⚠️ **No glazing gate consumes the dip, and none should be built on it.** The
+region-scale calibration against `Q41`'s reader found the dip unable to
+predict glazing at any threshold (best Youden 0.100, sign-unstable across
+sheets) and *inverted* on blank-vs-windowed — `Q40` records the kill. The dip
+column stays as the contamination check's own measurement; what the pipeline
+consumes from this table is the tint, and only on buildings the reader says
+are glazed.
 
 For every building on a sheet it computes the dip twice, from the two texel
 selections, and reports where the verdict moves:
@@ -36,9 +43,8 @@ writes `facade_glazing.<sheet>.json` — the unwrap dip, the dark mode's
 `(L*, b*)` tint, and the resolution gate's density — keyed by the stem
 `pipeline/buildings.py` joins on, beside `facade_survey.py`'s colour table.
 ⚠️ **The table records measurements, never verdicts.** The dip boundaries are
-pinned here so that re-deriving them is an edit to this file and a re-emit of
-nothing — a consumer classifies from the dip at read time, and a stale-verdict
-table cannot exist.
+pinned here as the check's own vocabulary; a consumer reads the measurements
+it trusts at read time, and a stale-verdict table cannot exist.
 
 Run:  .venv/bin/python tools/facade_glazing.py 11-SW-9D
       .venv/bin/python tools/facade_glazing.py --all

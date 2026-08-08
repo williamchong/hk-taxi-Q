@@ -63,8 +63,8 @@ lives in git. This file holds *why things are the way they are*.
 | `Q37` | 10.0% of the façade survey is atlas filler, not a photograph | ✅ Closed |
 | `Q38` | `exposure_anchor` is baked into `COLOR_0` at build time | 🟡 Open, deliberately not fixed |
 | `Q39` | `wall_sky_tint` is uniform, so a canyon wall takes a parapet's sky bounce | 🟡 Open |
-| `Q40` | Can façade grammar be surveyed instead of hashed? | 🟡 Open, narrowed — grammar branch killed, glazing and tint survive |
-| `Q41` | A vision reader recovers the grammar the statistic could not | 🟡 Open — protocol fixed, reader unvalidated |
+| `Q40` | Can façade grammar be surveyed instead of hashed? | 🟡 Open, narrowed — every measurement question closed: grammar and the dip gate killed, glazing and tint go through the reader; only `TEXCOORD_1` plumbing remains |
+| `Q41` | A vision reader recovers the grammar the statistic could not | 🟡 Open — reader validated and the full region surveyed; open on consumption only |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -1479,9 +1479,10 @@ axis.
 
 ## `Q40` — Can façade grammar be surveyed instead of hashed?
 
-**Status.** 🟡 Open, **narrowed** — grammar branch 🔥 killed; glazing and tint survive, and ✅ the
-contamination check is discharged: the selection moved 19 of 51 verdicts, so the gate's thresholds
-re-derive from the decontaminated selection · **Owner.** `P3-9a`
+**Status.** 🟡 Open, **narrowed** — grammar branch 🔥 killed; ✅ the contamination check is
+discharged (the selection moved 19 of 51 verdicts); the owed threshold re-derivation ran at region
+scale and 🔥 killed the dip gate outright — glazing is decided by `Q41`'s reader, and tint survives
+conditional on it. Open on `TEXCOORD_1` plumbing only · **Owner.** `P3-9a`
 
 **The question.** `city_facade_clean.gdshader` decides whether a building is glazed, which of three
 grammars it draws, and which of three glass tints it uses — all from `draw(seed, n)`, a hash of the
@@ -1697,6 +1698,56 @@ decontaminated selection** — on more than one sheet — when the survey extens
 boundaries (0.25 / 0.60) and the ≥ 10 tex/m gate are pinned in the tool so that re-derivation moves
 them deliberately rather than by reimplementation drift.
 
+### 🔥 The re-derivation ran, and the answer is that no threshold exists
+
+The survey extension was built (`225a564`: `facade_glazing.py` writes per-building dip, dark/light
+`(L*, b*)` and density tables), run over all six sheets — **2,171 buildings, 2,143 gated** — and
+calibrated against an instrument Probe 1 never had: `Q41`'s reader, whose region survey carries an
+independent per-face `glazed` verdict ("does glazing dominate the façade area") on 1,629 gated
+buildings.
+
+**The dip cannot predict glazing at any threshold.** Sweeping the cut over the full range, the best
+Youden J is **0.100** (0 = chance); "bimodal → glazed" precision is 0.19–0.21 against a 0.14 base
+rate at every candidate boundary; and the conditional medians **flip sign across sheets** — on
+`11-SW-9D` reader-glazed buildings have *higher* dips than the rest (0.792 vs 0.593), on `11-SW-15A`
+*lower* (0.536 vs 0.833). A threshold that must point opposite directions on two sheets of the same
+city is not a threshold.
+
+**The charitable re-scoping fails harder.** Probe 1's framing was glazed-vs-*blank* — two `L*`
+populations against one — so the dip was also tested against the reader's majority grammar,
+`blank` vs any windowed class. The direction is *inverted*: blank walls read **more** bimodal
+(median dip 0.484, n=10) than windowed ones (0.850, n=1,425), negative J at every cut. No grammar
+class separates either (punched 0.870, curtain 0.790, mixed 0.722, fin 1.000). The mechanism is
+mode 1 reaching the histogram: **an `L*` split cannot tell glass from shadow.** A punched tenement
+is exactly as bimodal as a curtain wall — dark window-holes against light wall — and a blank render
+wall splits on weathering and baked occluders. "Two modes" never meant "glazed"; it meant "two
+tones", which every façade in the city has.
+
+**So the glazing decision goes to the reader, and the dip is retired from gating.** `Q41`'s
+`glazed` field covers 80% of buildings with at least one read face; a refusal falls back to the
+hash — the identical consumption contract as grammar, decided in the same `TEXCOORD_1` pass. The
+dip column stays in the table as the contamination check's own measurement, consumed by nothing.
+
+**✅ Tint survives, re-scoped: the reader decides eligibility, the survey provides the value.** The
+dark-mode `(L*, b*)` from the decontaminated selection orders exactly as it should against the
+reader's independently-read tint enum — blue **−4.83** < green **−2.62** < neutral **−1.92**
+median `b*` — which is the behaviour of a real measurement and not of a coincidence. The
+directional claim strengthens at region scale: the dark mode is bluer than the light on **89%** of
+2,142 gated buildings (was 77% on contaminated `9D`), median shift **−6.08 `b*`**. The reader's
+enum is four colour families; the survey's continuous `L*` × `b*` is what the 480-state encoding
+actually wants — the two are complements, not rivals.
+
+**🔥 And the warm-glass palette gap dissolves.** The recorded 17/56 warm dark modes (`b*` > +3) on
+`9D` decomposes cleanly: decontamination alone takes it to 7/51, and conditioning on the reader's
+`glazed` — the conditionality *this record's own caveat demanded* ("tint is only a glass
+measurement conditional on the building being glazed") — takes it to **0/15**. All seven surviving
+warm dark-modes belong to buildings the reader reads as *not glazed*: punched tenements whose dark
+population is shadowed reveals and warm render, not glass. Region-wide, 14 of 226 reader-glazed
+buildings (6%) measure warm, medians negative on all six sheets, `b*` p90 **+1.27**. The authored
+cool palette (`b*` −9.20, −1.62, −14.34) spans the measured glass (median −4.11, p10 −9.20); no
+extension is warranted, no config moves, and `facade_chroma.py` / `ring_weights.py` are not
+triggered — nothing they are authored against changed.
+
 ### Decided
 
 - **Work in the world-space unwrap, never in atlas space.** Probe 3 is the reason. It survives the
@@ -1711,16 +1762,18 @@ them deliberately rather than by reimplementation drift.
   phase), and `Q27` makes `COLOR_0`'s sRGB/linear semantics somewhere to stay away from. ~2 MB over
   the region, and a `schema_version` bump on both sides.
 - **Every gate refuses rather than guesses**, and a refusal falls back to the existing hash.
+- **Glazing is the reader's call, not the dip's.** The region calibration above found no dip
+  threshold with predictive power in either scoping; `Q41`'s `glazed` field decides, a refusal
+  falls to the hash, and the tint is read from `facade_glazing.json` only for reader-glazed
+  buildings.
 
 ### Open
 
-✅ The contamination check that gated everything else is discharged by `tools/facade_glazing.py`;
-the verdict is that Probe 1's numbers cannot be carried, so the survey extension starts from the
-decontaminated selection and re-derives the gate thresholds. Still open: the survey extension, the
-`TEXCOORD_1` plumbing and the `schema_version` bump for glazing and tint only.
-
-⚠️ **One sheet, `11-SW-9D`, underlies every number here.** The re-survey is 6.1 GB across six; a
-second sheet is worth reading before the gate thresholds are fixed to the first.
+✅ The contamination check is discharged by `tools/facade_glazing.py`; ✅ the survey extension is
+built and has run region-wide; ✅ the threshold re-derivation is discharged by the kill above — no
+gate thresholds exist to fix, and the one-sheet warning is retired with it (six sheets underlie
+every number in the re-derivation). Still open: the `TEXCOORD_1` plumbing and the `schema_version`
+bump, for reader-glazed + surveyed tint + `Q41`'s grammar in one pass.
 
 **See.** `Q26` · `Q30` · `Q35` · `Q37` · `Q27` · `Q41` · `DATA_SOURCES.md` "Buildings"
 
