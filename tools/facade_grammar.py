@@ -254,13 +254,19 @@ def request_params(png: bytes) -> dict:
     }
 
 
+# The note a transport-level decline is recorded under. `batch_collect`
+# counts refusals by matching it, so it is a constant rather than a string
+# minted in one place and compared in another.
+API_REFUSAL = "api refusal"
+
+
 def parse_message(message) -> dict:
     """One response into one cache entry, for either transport. The schema is
     enforced at the API layer, so the text parses or the SDK has retried."""
     if message.stop_reason == "refusal":
         # A classifier decline is a refusal row, not an error — the same
         # fallback contract as every other gate.
-        return refusal_row("api refusal")
+        return refusal_row(API_REFUSAL)
     text = next((block.text for block in message.content if block.type == "text"), None)
     if text is None:
         raise RuntimeError(f"response carried no text block (stop_reason={message.stop_reason})")
@@ -270,6 +276,19 @@ def parse_message(message) -> dict:
 def read_face(client, png: bytes) -> dict:
     """One structured read over the synchronous API."""
     return parse_message(client.messages.create(**request_params(png)))
+
+
+def fingerprint_of(png: bytes) -> str:
+    """The content half of a cache entry's name. One definition, because
+    `cached_read` and the batch transport must mint identical keys — a
+    fingerprint that drifted would make every collected result unfindable,
+    and the survey would silently re-buy it."""
+    return blake2b(png, digest_size=8).hexdigest()
+
+
+def cache_path(cache_dir: Path, key: str, fingerprint: str) -> Path:
+    """Where one read's answer lives — the other half of the same contract."""
+    return cache_dir / f"{key}.{PROMPT_HASH}.{fingerprint}.json"
 
 
 def cached_read(get_client, cache_dir: Path, key: str, elevation: Elevation) -> dict:
@@ -284,8 +303,8 @@ def cached_read(get_client, cache_dir: Path, key: str, elevation: Elevation) -> 
     record of a paid read, and an unwrap change that is later reverted hits
     them again for free."""
     png = encode_elevation(elevation)
-    fingerprint = blake2b(png, digest_size=8).hexdigest()
-    path = cache_dir / f"{key}.{PROMPT_HASH}.{fingerprint}.json"
+    fingerprint = fingerprint_of(png)
+    path = cache_path(cache_dir, key, fingerprint)
     try:
         result = json.loads(path.read_text())
     except FileNotFoundError:
@@ -337,18 +356,31 @@ def client_factory():
 MAX_BATCH_BYTES = 120 * 1024 * 1024
 
 
-def batch_entry(key: str, png: bytes) -> dict:
-    """One batch request. A custom_id may not contain dots, so the cache
-    path's pieces ride around a dash: `{key}-{fingerprint}`."""
-    fingerprint = blake2b(png, digest_size=8).hexdigest()
-    return {"custom_id": f"{key}-{fingerprint}", "params": request_params(png)}
+def batch_custom_id(key: str, png: bytes) -> str:
+    """One batch request's id. A custom_id may not contain dots, so the cache
+    path's pieces ride around a dash — `{key}-{fingerprint}` — and the split
+    is `rpartition`, because the fingerprint is hex and cannot contain one."""
+    return f"{key}-{fingerprint_of(png)}"
 
 
 def entry_path(cache_dir: Path, custom_id: str) -> Path:
-    """The cache entry a batch result lands in — `cached_read`'s key exactly,
-    so a collected face replays for free in every later run."""
+    """The cache entry a batch result lands in — `cached_read`'s key exactly
+    (both build through `cache_path`), so a collected face replays for free
+    in every later run."""
     key, _, fingerprint = custom_id.rpartition("-")
-    return cache_dir / f"{key}.{PROMPT_HASH}.{fingerprint}.json"
+    return cache_path(cache_dir, key, fingerprint)
+
+
+def raw_root(city: str) -> Path:
+    """The response caches' root — also where the batch state file lives."""
+    return source_dir(city, SURVEY_SOURCE_ID) / "raw"
+
+
+def batch_state_path(city: str) -> Path:
+    """The submission record for the current prompt. Submit and collect must
+    agree on this path, or paid results are stranded in batches nothing will
+    ever collect."""
+    return raw_root(city) / f"batch.{PROMPT_HASH}.json"
 
 
 def batch_submit(sheets: list[str], city: str, zip_dir: Path) -> int:
@@ -356,8 +388,8 @@ def batch_submit(sheets: list[str], city: str, zip_dir: Path) -> int:
     the Batch API. Batch ids land in a state file beside the caches; nothing
     else is written until `--batch-collect`."""
     client = client_factory()()
-    out_root = source_dir(city, SURVEY_SOURCE_ID) / "raw"
-    state_path = out_root / f"batch.{PROMPT_HASH}.json"
+    out_root = raw_root(city)
+    state_path = batch_state_path(city)
     try:
         state = json.loads(state_path.read_text())
     except FileNotFoundError:
@@ -371,6 +403,21 @@ def batch_submit(sheets: list[str], city: str, zip_dir: Path) -> int:
         log.info("%s: submitted %d faces as %s", sheet, len(pending), batch.id)
 
     for sheet in sheets:
+        # The cache dedupes only at collection, so re-submitting a sheet whose
+        # batches are still in flight would buy every pending face twice.
+        in_flight = sum(
+            record["count"]
+            for record in state["batches"]
+            if record["sheet"] == sheet and not record.get("collected")
+        )
+        if in_flight:
+            log.warning(
+                "%s: %d faces already submitted and not collected — skipped; "
+                "run --batch-collect first",
+                sheet,
+                in_flight,
+            )
+            continue
         cache_dir = out_root / sheet
         pending: list[dict] = []
         pending_bytes = 0
@@ -381,14 +428,19 @@ def batch_submit(sheets: list[str], city: str, zip_dir: Path) -> int:
                     if elevation.coverage < MIN_COVERAGE:
                         gated += 1
                         continue
-                    request = batch_entry(f"{name}_{face}", encode_elevation(elevation))
-                    if entry_path(cache_dir, request["custom_id"]).exists():
+                    png = encode_elevation(elevation)
+                    custom_id = batch_custom_id(f"{name}_{face}", png)
+                    # Probed before `request_params` runs: a cached face costs
+                    # a fingerprint, not a base64 encode of a multi-MB image.
+                    if entry_path(cache_dir, custom_id).exists():
                         cached += 1
                         continue
-                    pending.append(request)
-                    pending_bytes += len(
-                        request["params"]["messages"][0]["content"][0]["source"]["data"]
-                    )
+                    pending.append({"custom_id": custom_id, "params": request_params(png)})
+                    # The request is dominated by the image's base64, sized
+                    # from the PNG itself rather than dug out of the params —
+                    # a probe into the message shape would break in silence
+                    # the day the blocks reorder.
+                    pending_bytes += 4 * ((len(png) + 2) // 3)
                     submitted += 1
                     if pending_bytes > MAX_BATCH_BYTES:
                         flush(sheet, pending)
@@ -406,8 +458,8 @@ def batch_collect(city: str) -> int:
     all batches are collected, 1 while any is still processing — an errored or
     expired face is left a cache miss, so any later run reads it again."""
     client = client_factory()()
-    out_root = source_dir(city, SURVEY_SOURCE_ID) / "raw"
-    state_path = out_root / f"batch.{PROMPT_HASH}.json"
+    out_root = raw_root(city)
+    state_path = batch_state_path(city)
     try:
         state = json.loads(state_path.read_text())
     except FileNotFoundError:
@@ -425,6 +477,7 @@ def batch_collect(city: str) -> int:
             still_open += 1
             continue
         cache_dir = out_root / record["sheet"]
+        cache_dir.mkdir(parents=True, exist_ok=True)
         counts = {"succeeded": 0, "refused": 0, "errored": 0}
         for result in client.messages.batches.results(record["id"]):
             if result.result.type != "succeeded":
@@ -434,9 +487,8 @@ def batch_collect(city: str) -> int:
                 )
                 continue
             row = parse_message(result.result.message)
-            counts["refused" if row.get("notes") == "api refusal" else "succeeded"] += 1
+            counts["refused" if row.get("notes") == API_REFUSAL else "succeeded"] += 1
             path = entry_path(cache_dir, result.custom_id)
-            path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps(row, indent=1, sort_keys=True))
         record["collected"] = counts
         state_path.write_text(json.dumps(state, indent=1))
@@ -459,7 +511,7 @@ def survey_sheet(sheet: str, city: str, zip_dir: Path) -> dict[str, dict]:
     replayed while the code its images came from is the code on disk.
     """
     get_client = client_factory()
-    cache_dir = source_dir(city, SURVEY_SOURCE_ID) / "raw" / sheet
+    cache_dir = raw_root(city) / sheet
     rows: dict[str, dict] = {}
     with zipfile.ZipFile(zip_dir / f"{sheet}.zip") as bundle:
         documents = sheet_documents(bundle)
@@ -546,7 +598,7 @@ def validate(city: str, zip_dir: Path) -> int:
         # The same cache namespace the sheet survey uses, deliberately: a
         # validation face's response is byte-identical to the survey's read of
         # that face, so the validation spend seeds the later full-sheet run.
-        cache_dir = source_dir(city, SURVEY_SOURCE_ID) / "raw" / sheet
+        cache_dir = raw_root(city) / sheet
         by_building: dict[str, list[dict]] = {}
         for label in sheet_labels:
             by_building.setdefault(label["building"], []).append(label)

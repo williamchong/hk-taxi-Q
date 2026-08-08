@@ -137,14 +137,17 @@ def otsu_bin(hist: np.ndarray) -> int:
     return int(np.argmax(variance))
 
 
-def smoothed_split(lstar: np.ndarray) -> tuple[np.ndarray, int]:
-    """`(smoothed histogram, Otsu bin)` — the one histogram both measurements
-    read. The dip and the dark-mode tint must agree about where the boundary
-    between the modes falls, or a building could be bimodal by one reading and
-    tinted from the wrong population by the other."""
-    hist, _ = np.histogram(lstar, bins=BINS, range=(0.0, 100.0))
+def smoothed_split(lstar: np.ndarray) -> tuple[np.ndarray, int, float]:
+    """`(smoothed histogram, Otsu bin, boundary L*)` — the one histogram both
+    measurements read. The dip and the dark-mode tint must agree about where
+    the boundary between the modes falls, or a building could be bimodal by
+    one reading and tinted from the wrong population by the other. The
+    boundary is the histogram's own bin edge, not arithmetic re-derived at a
+    call site."""
+    hist, edges = np.histogram(lstar, bins=BINS, range=(0.0, 100.0))
     smooth = np.convolve(hist.astype(float), np.ones(3) / 3.0, mode="same")
-    return smooth, otsu_bin(smooth)
+    split = otsu_bin(smooth)
+    return smooth, split, float(edges[split + 1])
 
 
 def dip_statistic(lstar: np.ndarray) -> float:
@@ -155,7 +158,7 @@ def dip_statistic(lstar: np.ndarray) -> float:
     Otsu splits a unimodal blob just as happily (`Q40`: `eta` never goes low),
     which is exactly why the dip and not the split quality is the statistic.
     """
-    smooth, split = smoothed_split(lstar)
+    smooth, split, _ = smoothed_split(lstar)
     below, above = smooth[: split + 1], smooth[split + 1 :]
     if not len(above) or below.max() == 0 or above.max() == 0:
         return 1.0
@@ -194,12 +197,12 @@ def mode_tint(lab: np.ndarray) -> dict[str, float]:
     says nothing about glass — the consumer gates on the dip first. Emitting it
     anyway is what keeps this table measurements-only.
     """
-    _, split = smoothed_split(lab[:, 0])
-    # Bin `split` is the last bin of the low mode, so the boundary in `L*` is
-    # its upper edge under the histogram's fixed [0, 100] range.
-    boundary = (split + 1) * (100.0 / BINS)
-    dark = lab[lab[:, 0] <= boundary]
-    light = lab[lab[:, 0] > boundary]
+    _, _, boundary = smoothed_split(lab[:, 0])
+    # Strict `<`: histogram bins are half-open, so a texel exactly at the
+    # boundary was counted in the light mode's bin — the split here must put
+    # it in the same mode the dip's histogram did.
+    dark = lab[lab[:, 0] < boundary]
+    light = lab[lab[:, 0] >= boundary]
     tint: dict[str, float] = {"dark_share": round(len(dark) / len(lab), 3)}
     for name, mode in (("dark", dark), ("light", light)):
         if len(mode):
@@ -262,6 +265,11 @@ def check_sheet(archive: Path) -> list[dict]:
             # and depth buffers — only the capped sample survives.
             atlas_lab, atlas_sampled = photographic_lab(atlas_rgb, name)
             del atlas_rgb
+            # Only `L*` is ever read on the atlas side, and the full Lab
+            # array would otherwise sit resident across the unwrap — the
+            # loop's memory peak.
+            atlas_lstar = atlas_lab[:, 0].copy()
+            del atlas_lab
 
             elevations = unwrap_building(meshes, decoded=decoded)
             del decoded
@@ -280,7 +288,7 @@ def check_sheet(archive: Path) -> list[dict]:
             unwrap_lab, _ = photographic_lab(unwrap_rgb, name)
             del unwrap_rgb
 
-            if len(atlas_lab) < MIN_POPULATION or len(unwrap_lab) < MIN_POPULATION:
+            if len(atlas_lstar) < MIN_POPULATION or len(unwrap_lab) < MIN_POPULATION:
                 log.info(
                     "[%d/%d] %s: too few photographic texels — skipped",
                     index,
@@ -292,11 +300,11 @@ def check_sheet(archive: Path) -> list[dict]:
             # Density estimated from the sample's photographic share, scaled to
             # the full gather — converting every texel of a 90-million-texel
             # building to `L*` would cost more than the answer is worth.
-            share = len(atlas_lab) / atlas_sampled
+            share = len(atlas_lstar) / atlas_sampled
             area = wall_area_m2(meshes)
             tex_per_m = float(np.sqrt(total_texels * share / area)) if area > 0 else 0.0
 
-            atlas, unwrap = verdict(atlas_lab[:, 0]), verdict(unwrap_lab[:, 0])
+            atlas, unwrap = verdict(atlas_lstar), verdict(unwrap_lab[:, 0])
             rows.append(
                 {
                     "building": name,
