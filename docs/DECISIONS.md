@@ -63,6 +63,8 @@ lives in git. This file holds *why things are the way they are*.
 | `Q37` | 10.0% of the façade survey is atlas filler, not a photograph | ✅ Closed |
 | `Q38` | `exposure_anchor` is baked into `COLOR_0` at build time | 🟡 Open, deliberately not fixed |
 | `Q39` | `wall_sky_tint` is uniform, so a canyon wall takes a parapet's sky bounce | 🟡 Open |
+| `Q40` | Can façade grammar be surveyed instead of hashed? | 🟡 Open, narrowed — grammar branch killed, glazing and tint survive |
+| `Q41` | A vision reader recovers the grammar the statistic could not | 🟡 Open — protocol fixed, reader unvalidated |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -1640,7 +1642,10 @@ checkable from the sheet by anyone, which is why it is retained rather than the 
 
 **Fin-versus-curtain-versus-punched is not derivable from this data.** Not deferred — modes 1–3 are
 structural. The shader keeps `draw(seed, …)` for grammar, and `Q26`'s objection to candidate `A`
-stands undiminished on that point.
+stands undiminished on that point. ⚠️ **`Q41` narrows this claim to *not derivable by a per-pixel
+statistic*.** The data demonstrably carries the signal — what is structural is the measurement
+class, not the source. Modes 1–3 remain a complete account of why no threshold on an `L*` profile
+can work.
 
 ✅ **Real periodicity does exist in the data.** `B353771561001063A0` returns a **3.38 m floor pitch
 independently on three faces** — that building's storey height, measured from photography. *Storey
@@ -1679,7 +1684,109 @@ The contamination check above, first — it gates everything else. Then the surv
 ⚠️ **One sheet, `11-SW-9D`, underlies every number here.** The re-survey is 6.1 GB across six; a
 second sheet is worth reading before the gate thresholds are fixed to the first.
 
-**See.** `Q26` · `Q30` · `Q35` · `Q37` · `Q27` · `DATA_SOURCES.md` "Buildings"
+**See.** `Q26` · `Q30` · `Q35` · `Q37` · `Q27` · `Q41` · `DATA_SOURCES.md` "Buildings"
+
+## `Q41` — A vision reader recovers the grammar the statistic could not
+
+**Status.** 🟡 Open — validation protocol and thresholds fixed **before** the reader's first run;
+the reader is unvalidated until that run is graded · **Owner.** `P3-9a`
+
+**The claim.** `Q40`'s kill of fin-versus-curtain-versus-punched is real but narrower than its
+wording: the taxonomy is unreachable *by a per-pixel statistic*, not unreachable from the data. Read
+by a vision model, the world-space elevations classify — including both buildings `Q40`'s
+classifier got wrong. `B352631575201063A0`, the dark-glass tower the `L*` threshold called
+`punched`, unwraps to an unmistakable ribbon curtain wall with its rooftop signage legible;
+`B355691583201063A0`, the flat render block that returned `punched` and `fin`, unwraps to a plainly
+blank wall with one vent. A 19-building pilot across the height range found every well-photographed
+face classifiable and every smear correctly unclassifiable.
+
+**The mechanism is why this is not a rerun of `Q40`'s overclaim.** `Q40`'s five failure modes are
+failures of context-free measurement. A reflected street raises local `L*` variance — noise to a
+histogram — but a reader parses it as *reflection on glass*, which is evidence **for** curtain wall.
+The signal the statistic discarded as contamination is diagnostic to a reader. `Q40` recorded
+"features visible to a reader" as the overclaim that licensed nothing; it licensed nothing *about a
+statistic*. A reader is now a thing a build-time tool can invoke, and that sentence becomes the
+capability under test.
+
+**The unwrap is a committed tool, and its depth buffer retires half of `Q40`'s mode 5.**
+`tools/facade_unwrap.py` re-projects wall texels into metres-across × metres-up at `Q40`'s
+8 texels/m, keeping per texel the surface *outermost* along the face normal — so foreign geometry
+behind a façade can no longer land in its elevation. ⚠️ **Texture-baked occluders survive by
+design**: a tree photographed in front of a wall is in the wall's texels, visible to the reader *as
+a tree*. The histogram half of mode 5 — foreign texels feeding the glazing dip — is still owed
+before `Q40`'s statistic gate is trusted; nothing here discharges it.
+
+**The validation protocol.** 40 faces, drawn deterministically (seeded `blake2b`) from two sheets —
+`11-SW-9D` and `11-SW-14B`, the second because `Q40` warns one sheet underlies every prior number —
+stratified by height quartile, taking each sampled building's best- *and worst*-covered face so
+refusal behaviour is tested, not avoided. Labels are in `tools/facade_grammar_labels.json`, written
+from the images before the reader tool existed. The reader passes when, on its first graded run:
+
+1. **Strict pool** (readable, refusal not acceptable, n=20): grammar agreement — label or its
+   recorded `alt_grammar` — on **≥ 16 of 20**.
+2. **Marginal pool** (readable but `refusal_ok`, n=6): refusal *or* agreeing classification on
+   **≥ 5 of 6**; a confident disagreeing classification is the only miss.
+3. **Refusal pool** (unreadable, n=14): refusal or low confidence on **≥ 13 of 14** — at most one
+   confident grammar claim on a face a reader should have declined.
+4. **Glazed axis**: agreement on **≥ 90%** of faces where both sides commit to a value.
+
+Misses are adjudicated by re-inspection; a demonstrably wrong label is corrected **and every
+correction is listed here** — the metric is computed against corrected labels, so label errors
+cannot silently rescue a failing reader without leaving a record.
+
+⚠️ **The labeller and the reader are the same model family, and that is recorded rather than
+hidden.** Independence holds in the direction that matters — the labels predate the reader and its
+API calls never see them — but a family-shared blind spot would pass undetected. A human spot-check
+of the labels against the PNGs is owed before the survey is trusted at region scale; the label file
+carries the images' provenance so the check is one directory of side-by-side comparisons.
+
+**Reproducibility answers `Q37`'s ghost by tolerance, not byte-equality.** This is the repo's first
+non-deterministic input producer: a rerun against the same bytes may differ. The tool therefore
+caches every raw API response beside its output table in the sources cache, keyed by content, model
+and prompt hash; every output row records the model ID and prompt hash that produced it; and
+re-derivation acceptance is defined as *the validation thresholds above passing again*, not as
+byte-identical tables — the same shape `Q37` used when it made survey acceptance a tolerance.
+
+**The licence covers the read.** The data grant is explicit — *"browse, download, distribute,
+reproduce … for both commercial and non-commercial purposes"* (`LICENSING.md`) — and sending sheet
+imagery through a third-party API is reproduction within that grant. The survey's output is derived
+government data and stays in the uncommitted cache like `facade_lab.json`; the labels file is
+hand-authored judgment *about* the imagery and is committed.
+
+⚠️ **Coverage bias bounds what the survey can ever claim.** The imagery carries real texels on a
+median 14.3% of wall area, occlusion-biased toward street-facing walls (`DATA_SOURCES.md`). A large
+share of the 2,214 buildings will refuse, and must — refusal falls back to the existing hash, which
+is the same contract every `facade_hue` gate already keeps.
+
+**What it feeds.** Grammar rides the `TEXCOORD_1` payload `Q40` already designed for glazing and
+tint — an enum of five states beside the 480 `Q40` counted, decided in the same channel-design pass.
+`Q26`'s objection to candidate `A` — invented surface on accurate massing — is what a validated
+survey dissolves.
+
+### Decided
+
+- **The reader is `claude-opus-5` through the official SDK, structured-output constrained**, so a
+  malformed response is a retry at the API layer, not a parse. The model is pinned in the tool; a
+  model change is a resurvey, not a cache hit.
+- **The schema collects render-facing fields beyond the graded axes** — storey count, heavy-band
+  period, podium split and shopfront glazing, balconies, pattern emphasis — because they ride the
+  same call for free and adding them later would change the prompt hash, making the shipping reader
+  a different reader from the validated one. ⚠️ **They are advisory until separately validated**:
+  the thresholds above grade grammar, refusal behaviour and the glazed axis, and nothing else. The
+  prompt orders nulls over estimates for every one of them — a storey count is *counted or absent*,
+  never inferred from the building's size.
+- **Validation before scale, one sheet before six.** The reader touches `11-SW-9D` in full only
+  after the 40-face gate passes, and the other five sheets only after that run is graded.
+- **Every gate refuses rather than guesses**, and a refusal falls back to the existing hash —
+  `Q40`'s contract, unchanged.
+
+### Open
+
+The graded validation run, first — it is the acceptance test this record exists to hold. Then the
+human spot-check of the labels, the full-sheet run, and the shared `TEXCOORD_1` channel design with
+`Q40`'s glazing and tint.
+
+**See.** `Q40` · `Q26` · `Q37` · `Q35` · `DATA_SOURCES.md` "Buildings" · `LICENSING.md`
 
 ---
 
