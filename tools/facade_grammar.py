@@ -54,17 +54,23 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "etl"))
 sys.path.insert(0, str(ROOT / "tools"))
 
-from facade_survey import INDIVIDUALISED_DIR, load_building, sheet_documents  # noqa: E402
+from facade_survey import (  # noqa: E402
+    INDIVIDUALISED_DIR,
+    claim_stems,
+    load_building,
+    sheet_documents,
+)
 from facade_unwrap import Elevation, unwrap_building  # noqa: E402
-from pipeline.buildings import stem  # noqa: E402
+from pipeline.buildings import GRAMMAR_SOURCE_ID, GRAMMAR_STATES, stem  # noqa: E402
 from pipeline.fetch import source_dir  # noqa: E402
 
 log = logging.getLogger(__name__)
 
 # Where the table and the raw-response cache live: the same uncommitted source
 # cache facade_lab.json uses, because both are derived government data (hard
-# rule 7) that the committed tool re-derives.
-SURVEY_SOURCE_ID = "facade_grammar"
+# rule 7) that the committed tool re-derives. The pipeline's constant, so the
+# writer and the reader cannot name two different directories.
+SURVEY_SOURCE_ID = GRAMMAR_SOURCE_ID
 
 # Pinned. `Q41` records that changing this is a resurvey, not a settings tweak —
 # exercised once: Sonnet 5 passed the same graded gate (strict 18/20, marginal
@@ -81,9 +87,10 @@ MIN_COVERAGE = 0.05
 
 LABELS = ROOT / "tools" / "facade_grammar_labels.json"
 
-# The taxonomy, defined once. The SCHEMA enum is built from it, the labels file
+# The taxonomy, defined once — in the pipeline, whose `TEXCOORD_1` codec pins
+# the index order (schema 6). The SCHEMA enum is built from it, the labels file
 # is tested against it, and a typo'd label can no longer silently score a miss.
-GRAMMARS: tuple[str, ...] = ("curtain", "punched", "fin", "blank", "mixed")
+GRAMMARS: tuple[str, ...] = GRAMMAR_STATES
 
 PROMPT = """\
 You are reading one unwrapped façade elevation of a Hong Kong building, \
@@ -595,9 +602,7 @@ def merged_table(tables: dict[str, dict[str, dict]]) -> dict[str, dict]:
     """
     merged: dict[str, dict] = {}
     for sheet, rows in sorted(tables.items()):
-        clash = merged.keys() & rows.keys()
-        if clash:
-            raise ValueError(f"{sheet}: {len(clash)} stems already surveyed, e.g. {min(clash)}")
+        claim_stems(merged, rows, sheet)
         for key, row in rows.items():
             merged[key] = building_verdicts(row["faces"]) | {"sheet": sheet}
     return merged

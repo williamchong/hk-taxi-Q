@@ -1450,6 +1450,8 @@ def _building_style(body: dict[str, Any], where: str, table: _MaterialTable) -> 
     )
 
     survey = body.get("facade_survey") or {}
+    if not isinstance(survey, dict):
+        raise ValueError(f"{where}:facade_survey must be a mapping")
     glazing_source = survey.get("glazing")
     grammar_source = survey.get("grammar")
 

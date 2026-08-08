@@ -72,6 +72,7 @@ from facade_survey import (  # noqa: E402
     INDIVIDUALISED_DIR,
     SAMPLE_CAP,
     assigned_faces,
+    claim_stems,
     decode_textures,
     load_building,
     photographic,
@@ -437,11 +438,7 @@ def main(argv: list[str] | None = None) -> int:
         summarise(rows)
         table = survey_rows(rows, archive.stem)
         write(f"{TABLE_STEM}.{archive.stem}.json", table, archive.stem)
-        clash = merged.keys() & table.keys()
-        if clash:
-            raise ValueError(
-                f"{archive.stem}: {len(clash)} stems already surveyed, e.g. {min(clash)}"
-            )
+        claim_stems(merged, table, archive.stem)
         merged.update(table)
 
     if arguments.merge:

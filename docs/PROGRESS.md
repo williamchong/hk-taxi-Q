@@ -150,7 +150,7 @@ from source files** — that rule has been wrong in both directions once each (`
 | Visible triangles, worst measured | < 300k | **150,374** ✅ | 2026-08-01 |
 | Resident triangles, worst measured | — | **280,807** (a ceiling, not a gate — 236,882 before `P3-10`'s ground) | 2026-08-05 |
 | Texture memory | < 128 MB | **0** — no textures ship, ground included | 2026-08-05 |
-| Bundle size | < 200 MB | **32.30 MB** PCK, + wasm. **27.73 MB immediately before `P3-10`**, measured either side of the same build with one variable changed, so the **+4.56 MB is the ground and its collider** — and only the total was measured, not the split | 2026-08-05 |
+| Bundle size | < 200 MB | **36.57 MB** PCK, + wasm (36.32 before the `TEXCOORD_1` payload; **32.30** before `P3-7`'s `TEXCOORD_0`; **27.73 immediately before `P3-10`**, so the **+4.56 MB was the ground and its collider** — only the total was measured, not the split) | 2026-08-09 |
 | Tile triangles, LOD0 / LOD1 | — | **521,693 / 253,097** (434,149 / 222,375 before the ground) | 2026-08-05 |
 | Ground the source has and the bundle does not | — | **0.76%** of the region (1.76% before `Q25`); **0.42%** within 2 m of a tile boundary against 0.54% in the interior | 2026-08-05 |
 | Ground standing proud of the carriageway | — | **2.2% of area, 1.00% of sampled points.** ⚠️ Not comparable with the 1.9% / 0.49% recorded before `Q25`: closing tears made 3.35% more of the carriageway *measurable*. Like-for-like over what both bundles could see, **2.181% → 2.205%** | 2026-08-05 |

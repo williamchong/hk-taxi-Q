@@ -655,6 +655,12 @@ class TestFacadeUv:
             assert colour[0][3] == 255
 
 
+def write_survey_table(root: Path, city: str, source_id: str, name: str, table: dict) -> None:
+    directory = root / city / source_id
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / name).write_text(json.dumps(table))
+
+
 class TestFacadeUv2:
     """Schema 6's survey payload: the packed `TEXCOORD_1` state code."""
 
@@ -679,14 +685,18 @@ class TestFacadeUv2:
         assert facade_state(None, None, tint) == 0
         assert facade_state(True, None, tint) == 2 + 4 * 85
 
-    def test_grammar_indices_are_pinned_to_the_tool_s_taxonomy(self) -> None:
-        """The shader's `SURVEY_*` constants assume this order; a reorder on
-        either side would silently relabel every surveyed building."""
-        import facade_grammar
-
-        assert GRAMMAR_STATES == facade_grammar.GRAMMARS
-        for index, name in enumerate(GRAMMAR_STATES):
-            assert facade_state(None, name, None) == (index + 1) * 1024
+    def test_grammar_codes_are_pinned_literally_against_reorder(self) -> None:
+        """The shader's `SURVEY_*` constants assume these exact codes, and
+        `tools/facade_grammar.py` imports the tuple — so the one drift left is
+        a reorder of the tuple itself, which only literal expectations catch."""
+        codes = {name: facade_state(None, name, None) for name in GRAMMAR_STATES}
+        assert codes == {
+            "curtain": 1024,
+            "punched": 2048,
+            "fin": 3072,
+            "blank": 4096,
+            "mixed": 5120,
+        }
 
     def test_tint_bins_clamp_at_the_tails_and_split_on_the_edge(self) -> None:
         low = facade_state(True, None, (-10.0, -40.0))
@@ -727,9 +737,7 @@ class TestFacadeUv2:
         )
 
     def write_table(self, root: Path, source_id: str, name: str, table: dict) -> None:
-        directory = root / "testcity" / source_id
-        directory.mkdir(parents=True, exist_ok=True)
-        (directory / name).write_text(json.dumps(table))
+        write_survey_table(root, "testcity", source_id, name, table)
 
     def test_loaders_hold_the_missing_is_normal_contract(self, tmp_path: Path) -> None:
         assert facade_survey_verdicts(self.survey_style(), "testcity", root=tmp_path) == {}
@@ -890,15 +898,19 @@ class TestBuildRegion:
             Fixture("B0003", "BUILDING", 400.0, 300.0, 40.0),
         ]
         root = sources(fixtures)
-        grammar_dir = root / "hong_kong" / "facade_grammar"
-        grammar_dir.mkdir(parents=True)
-        (grammar_dir / "facade_grammar.json").write_text(
-            json.dumps({"S100": {"glazed": True, "grammar": "curtain", "sheet": "TEST-1"}})
+        write_survey_table(
+            root,
+            "hong_kong",
+            "facade_grammar",
+            "facade_grammar.json",
+            {"S100": {"glazed": True, "grammar": "curtain", "sheet": "TEST-1"}},
         )
-        colour_dir = root / "hong_kong" / "facade_colour"
-        colour_dir.mkdir(parents=True, exist_ok=True)
-        (colour_dir / "facade_glazing.json").write_text(
-            json.dumps({"S100": {"dark_L": 28.06, "dark_b": -7.18, "tex_per_m": 30.0}})
+        write_survey_table(
+            root,
+            "hong_kong",
+            "facade_colour",
+            "facade_glazing.json",
+            {"S100": {"dark_L": 28.06, "dark_b": -7.18, "tex_per_m": 30.0}},
         )
 
         build_region(hong_kong, "wan_chai", sources_root=root, out_root=tmp_path / "out")

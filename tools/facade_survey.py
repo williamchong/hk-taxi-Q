@@ -207,6 +207,18 @@ def assigned_faces(mesh: MeshData) -> np.ndarray:
     return face_of(normalise(mesh.normals[mesh.triangles].mean(axis=1)))
 
 
+def claim_stems(merged: dict, rows: dict, sheet: str) -> None:
+    """Refuse a stem surveyed on two sheets, before `rows` joins `merged`.
+
+    Shared by both merge writers (`facade_glazing.py`, `facade_grammar.py`) so
+    the pipeline can rely on one error contract: a duplicate stem is a survey
+    defect to raise on, never a row to silently overwrite.
+    """
+    clash = merged.keys() & rows.keys()
+    if clash:
+        raise ValueError(f"{sheet}: {len(clash)} stems already surveyed, e.g. {min(clash)}")
+
+
 def sheet_documents(bundle: zipfile.ZipFile) -> dict[str, str]:
     """Building name → archive entry: one sheet's `B`-prefixed models."""
     return {

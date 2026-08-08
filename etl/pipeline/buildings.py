@@ -644,8 +644,9 @@ def _phase(mesh: MeshData) -> float:
 # which is exactly the drift hard rule 5's versioning exists to catch. A codec
 # has no per-city meaning, so they do not belong in the city yaml either.
 #
-# Grammar index order is pinned to `tools/facade_grammar.py`'s `GRAMMARS` and a
-# test asserts the two agree.
+# The reader's taxonomy, owned here because this codec pins the index order;
+# `tools/facade_grammar.py` imports it as its `GRAMMARS`, and a test pins the
+# packed codes literally so a reorder cannot pass.
 GRAMMAR_STATES: tuple[str, ...] = ("curtain", "punched", "fin", "blank", "mixed")
 
 # Tint bins cover the measured dark-mode p1-p99 (`facade_glazing.json`, region
@@ -692,6 +693,10 @@ def facade_states(
     missing stem as the sentinel — the dict carries information, not shape.
     """
     verdicts = facade_survey_verdicts(style, city_id, root=root)
+    if not verdicts:
+        # The tint is consumed only through a reader-glazed verdict, so with no
+        # verdict table there is nothing to read the glazing survey for.
+        return {}
     tints = facade_glass_tint(style, city_id, root=root)
     states = {}
     for key, (glazed, grammar) in verdicts.items():
@@ -716,10 +721,11 @@ def facade_uv2(mesh: MeshData, states: dict[str, int]) -> np.ndarray:
     validation before it is written, and filling a field a refusal-aware
     consumer already reads as "0 = refused" will not need a schema bump.
 
-    A read-only broadcast view, like `colour_for`'s: unlike `facade_uv` the
-    value never varies within the mesh, so this costs 8 bytes per *mesh*
-    through the bucket phase, not 8 per vertex — `merge` materialises it only
-    at the tile.
+    A read-only broadcast view, like `colour_for`'s: the value never varies
+    within the mesh, so the whole-mesh attach costs 8 bytes per *mesh*, not
+    per vertex. Like the colours, the view lasts only until `assign` subsets
+    the mesh into tile pieces — fancy indexing materialises both — so the
+    saving is on the pre-split meshes, not the bucket phase end to end.
     """
     code = float(states.get(stem(mesh.name), 0))
     return np.broadcast_to(np.array([code, 0.0], dtype=np.float32), (len(mesh.positions), 2))

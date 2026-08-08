@@ -321,6 +321,11 @@ varying flat float marker;
 // across a cluster-spanning triangle would blend two codes into a third,
 // meaningless one.
 varying flat vec3 survey_state;
+// The surveyed pane colour, decoded once per vertex rather than per glazed
+// fragment — the tint is per-building constant, so the fragment stage would
+// re-run the whole CIELAB conversion for an answer that never varies within
+// the draw. Garbage when `survey_state.y` is 0; the fragment guards on that.
+varying flat vec3 survey_pane;
 varying float upness;
 varying float along_m;
 // The reflection needs a world-space frame, and both are already computed in the
@@ -424,9 +429,19 @@ void vertex() {
 	float survey_code = floor(UV2.x + 0.5);
 	survey_state = vec3(
 		mod(survey_code, SURVEY_TINT_FIELD),
-		mod(floor(survey_code / SURVEY_TINT_FIELD), 256.0),
+		mod(floor(survey_code / SURVEY_TINT_FIELD), SURVEY_GRAMMAR_FIELD / SURVEY_TINT_FIELD),
 		floor(survey_code / SURVEY_GRAMMAR_FIELD)
 	);
+
+	// The measured glass (`Q40`): bin centres back to (L*, b*), with the a*
+	// the encoding dropped assumed from `glass_astar`. Linear out — no
+	// transfer curve, the shader works in linear.
+	float tint_code = survey_state.y - 1.0;
+	float tint_l = SURVEY_TINT_L_MIN
+		+ (floor(tint_code / SURVEY_TINT_B_BINS) + 0.5) * SURVEY_TINT_L_STEP;
+	float tint_b = SURVEY_TINT_B_MIN
+		+ (mod(tint_code, SURVEY_TINT_B_BINS) + 0.5) * SURVEY_TINT_B_STEP;
+	survey_pane = lab_to_linear(vec3(tint_l, glass_astar, tint_b));
 
 	vec3 world_normal = normalize(MODEL_NORMAL_MATRIX * NORMAL);
 	upness = abs(world_normal.y);
@@ -529,10 +544,11 @@ void fragment() {
 			// reads the overridden value. A surveyed `blank` wall is solid
 			// whatever the glazed axis refused; the merge nulls a glazed-true
 			// blank, so the two lines cannot fight a committed verdict.
-			if (survey_apply > 0.5 && survey_state.x > 0.5) {
+			bool survey_on = survey_apply > 0.5;
+			if (survey_on && survey_state.x > 0.5) {
 				glazed = survey_state.x > 1.5 ? 1.0 : 0.0;
 			}
-			if (survey_apply > 0.5 && abs(survey_state.z - SURVEY_BLANK) < 0.5) {
+			if (survey_on && abs(survey_state.z - SURVEY_BLANK) < 0.5) {
 				glazed = 0.0;
 			}
 
@@ -597,7 +613,7 @@ void fragment() {
 				} else if (kind < fin_share + curtain_share + punched_share) {
 					treatment = 3.0;
 				}
-				if (survey_apply > 0.5 && survey_state.z > 0.5) {
+				if (survey_on && survey_state.z > 0.5) {
 					if (abs(survey_state.z - SURVEY_FIN) < 0.5) {
 						treatment = 1.0;
 					} else if (abs(survey_state.z - SURVEY_CURTAIN) < 0.5) {
@@ -710,17 +726,10 @@ void fragment() {
 
 				float tint = draw(seed, 8.0);
 				vec3 pane_colour = tint < 0.34 ? glass_colour : (tint < 0.67 ? glass_tint_b : glass_tint_c);
-				if (survey_apply > 0.5 && survey_state.y > 0.5) {
-					// The measured glass (`Q40`): bin centres back to (L*, b*),
-					// with the a* the encoding dropped assumed from `glass_astar`.
-					// Linear out — no transfer curve, the shader works in linear.
-					// The hash pick above stays the refusal fallback.
-					float tint_code = survey_state.y - 1.0;
-					float l_star = SURVEY_TINT_L_MIN
-						+ (floor(tint_code / SURVEY_TINT_B_BINS) + 0.5) * SURVEY_TINT_L_STEP;
-					float b_star = SURVEY_TINT_B_MIN
-						+ (mod(tint_code, SURVEY_TINT_B_BINS) + 0.5) * SURVEY_TINT_B_STEP;
-					pane_colour = lab_to_linear(vec3(l_star, glass_astar, b_star));
+				if (survey_on && survey_state.y > 0.5) {
+					// The measured glass, decoded in `vertex()` — the hash pick
+					// above stays the refusal fallback.
+					pane_colour = survey_pane;
 				}
 				vec3 glazing = mix(
 					pane_colour, mirrored, glass_reflect * mix(glass_face_on, 1.0, fresnel)

@@ -35,6 +35,16 @@ const COLLISION_TIER: int = 0
 ## city looked like before `P3-7`. There is nothing to see and nothing to catch.
 const FACADE_MATERIAL: String = "res://tuning/city_facade.tres"
 
+## The `TEXCOORD_1` survey codec (schema 6), mirroring `facade_state` in
+## `etl/pipeline/buildings.py` and the `SURVEY_*` constants in
+## `city_facade_clean.gdshader` — `docs/ARCHITECTURE.md`'s channel table is the
+## tiebreak. Field maxima are the legal ceilings the scan holds every vertex to.
+const SURVEY_TINT_FIELD: float = 4.0
+const SURVEY_GRAMMAR_FIELD: float = 1024.0
+const SURVEY_GLAZED_MAX: float = 2.0
+const SURVEY_TINT_MAX: float = 240.0
+const SURVEY_GRAMMAR_MAX: float = 5.0
+
 
 func _init() -> void:
 	# The manifest rather than a directory listing, so this checks the shipped
@@ -163,18 +173,22 @@ func _check_survey_payload(mesh: Mesh, surface: int, where: String) -> PackedStr
 
 	var uv2s: PackedVector2Array = mesh.surface_get_arrays(surface)[Mesh.ARRAY_TEX_UV2]
 	for uv2: Vector2 in uv2s:
+		if uv2 == Vector2.ZERO:
+			continue  # The refusal sentinel — most of every tile, trivially legal.
 		var code: float = uv2.x
-		var glazed: float = fmod(code, 4.0)
-		var tint: float = fmod(floor(code / 4.0), 256.0)
-		var grammar: float = floor(code / 1024.0)
+		var glazed: float = fmod(code, SURVEY_TINT_FIELD)
+		var tint: float = fmod(
+			floor(code / SURVEY_TINT_FIELD), SURVEY_GRAMMAR_FIELD / SURVEY_TINT_FIELD
+		)
+		var grammar: float = floor(code / SURVEY_GRAMMAR_FIELD)
 		if (
 			uv2.y != 0.0
 			or code != floor(code)
 			or code < 0.0
-			or code >= 8192.0
-			or glazed > 2.0
-			or tint > 240.0
-			or grammar > 5.0
+			or glazed > SURVEY_GLAZED_MAX
+			or tint > SURVEY_TINT_MAX
+			or grammar > SURVEY_GRAMMAR_MAX
+			or (tint > 0.0 and glazed != 2.0)
 		):
 			return PackedStringArray(
 				[
