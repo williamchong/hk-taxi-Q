@@ -37,6 +37,7 @@ Run:  .venv/bin/python tools/facade_grammar.py --validate
 from __future__ import annotations
 
 import argparse
+import inspect
 import io
 import json
 import logging
@@ -179,23 +180,6 @@ PROMPT_HASH = blake2b(
     (PROMPT + json.dumps(SCHEMA, sort_keys=True) + MODEL).encode(), digest_size=8
 ).hexdigest()
 
-# The per-building row cache skips the unwrap itself, so the image fingerprint
-# in each response entry's key never gets a chance to guard a row hit. The row
-# key therefore hashes the code the images come from — the unwrap, the mesh
-# loading it reads, and the encoder in this file. Any edit invalidates every
-# row, which costs file reads and rasterising but **no API spend**: regenerating
-# a row re-derives each face's fingerprint against the response cache, so a
-# no-op refactor replays every paid entry free. Folding this into PROMPT_HASH
-# would instead discard the paid entries themselves — `Q41` records that as the
-# wrong shape, because it keys on source rather than on the image it produces.
-UNWRAP_HASH = blake2b(
-    b"".join(
-        (ROOT / "tools" / name).read_bytes()
-        for name in ("facade_grammar.py", "facade_survey.py", "facade_unwrap.py")
-    ),
-    digest_size=8,
-).hexdigest()
-
 
 def encode_elevation(elevation: Elevation) -> bytes:
     """The elevation as PNG bytes, long edge capped at `MAX_EDGE_PX`."""
@@ -210,6 +194,35 @@ def encode_elevation(elevation: Elevation) -> bytes:
     buffer = io.BytesIO()
     image.save(buffer, format="PNG")
     return buffer.getvalue()
+
+
+# The per-building row cache skips the unwrap itself, so the image fingerprint
+# in each response entry's key never gets a chance to guard a row hit. The row
+# key therefore hashes the code the images actually pass through: the unwrap
+# and the wall survey it reads, the glTF parser and texture decoder under
+# both, and this file's encoder with the two knobs that shape a row. Any edit
+# invalidates every row, which costs file reads and rasterising but **no API
+# spend**: regenerating a row re-derives each face's fingerprint against the
+# response cache, so a no-op refactor replays every paid entry free.
+# Deliberately *not* the whole of this file — a log-message tweak should not
+# re-rasterise a sheet, and a prompt change already renames the row via
+# `PROMPT_HASH`. Folding any of this into PROMPT_HASH would instead discard
+# the paid entries themselves — `Q41` records that as the wrong shape, because
+# it keys on source rather than on the image it produces.
+UNWRAP_HASH = blake2b(
+    b"".join(
+        path.read_bytes()
+        for path in (
+            ROOT / "tools" / "facade_survey.py",
+            ROOT / "tools" / "facade_unwrap.py",
+            ROOT / "etl" / "pipeline" / "gltf.py",
+            ROOT / "etl" / "pipeline" / "buildings.py",
+        )
+    )
+    + inspect.getsource(encode_elevation).encode()
+    + f"{MAX_EDGE_PX} {MIN_COVERAGE}".encode(),
+    digest_size=8,
+).hexdigest()
 
 
 def read_face(client, png: bytes) -> dict:
@@ -260,9 +273,9 @@ def cached_read(get_client, cache_dir: Path, key: str, elevation: Elevation) -> 
     png = encode_elevation(elevation)
     fingerprint = blake2b(png, digest_size=8).hexdigest()
     path = cache_dir / f"{key}.{PROMPT_HASH}.{fingerprint}.json"
-    if path.exists():
+    try:
         result = json.loads(path.read_text())
-    else:
+    except FileNotFoundError:
         if any(cache_dir.glob(f"{key}.{PROMPT_HASH}.*.json")):
             log.warning("%s: cached answers exist, but none for this image — re-reading", key)
         result = read_face(get_client(), png)
@@ -272,8 +285,10 @@ def cached_read(get_client, cache_dir: Path, key: str, elevation: Elevation) -> 
 
 
 def refusal_row(reason: str) -> dict:
+    # `image_hash` is None honestly: a refusal minted here never encoded an
+    # image, unlike an API refusal, which `cached_read` stamps like any read.
     row = dict.fromkeys(SCHEMA["required"])
-    row.update(readable=False, confidence="low", notes=reason)
+    row.update(readable=False, confidence="low", notes=reason, image_hash=None)
     return row
 
 
@@ -313,9 +328,9 @@ def survey_sheet(sheet: str, city: str, zip_dir: Path) -> dict[str, dict]:
         documents = sheet_documents(bundle)
         for index, (name, entry) in enumerate(sorted(documents.items()), 1):
             row_path = cache_dir / f"{name}.row.{PROMPT_HASH}.{UNWRAP_HASH}.json"
-            if row_path.exists():
+            try:
                 row = json.loads(row_path.read_text())
-            else:
+            except FileNotFoundError:
                 faces = unwrap_building(load_building(bundle, entry))
                 row = {}
                 for face, elevation in faces.items():
@@ -329,6 +344,7 @@ def survey_sheet(sheet: str, city: str, zip_dir: Path) -> dict[str, dict]:
                 "faces": row,
                 "model": MODEL,
                 "prompt_hash": PROMPT_HASH,
+                "unwrap_hash": UNWRAP_HASH,
                 "sheet": sheet,
             }
             log.info(

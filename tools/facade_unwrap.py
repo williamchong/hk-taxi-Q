@@ -31,7 +31,6 @@ Run:  .venv/bin/python tools/facade_unwrap.py 11-SW-9D B352631575201063A0
 from __future__ import annotations
 
 import argparse
-import io
 import logging
 import sys
 import zipfile
@@ -50,6 +49,7 @@ from facade_survey import (  # noqa: E402
     FACES,
     INDIVIDUALISED_DIR,
     assigned_faces,
+    decode_textures,
     load_building,
     sheet_documents,
 )
@@ -103,25 +103,22 @@ class _Wall:
     assigned: np.ndarray
 
 
-def _prepare(meshes: list[MeshData]) -> list[_Wall]:
+def _prepare(meshes: list[MeshData], decoded: dict[int, np.ndarray] | None = None) -> list[_Wall]:
     """Decode each distinct texture once, and assign triangles to faces once.
 
     Both are per-building costs that the four per-face rasterisations share —
     an 8k atlas decode is the dominant unwrap cost, and paying it once per face
-    quadrupled it. The decode cache is keyed on `Texture` identity because
-    `read_scene` hands the same object to every primitive sharing an atlas, and
-    it is scoped to one building so each building's decoded atlases are freed
-    before the next one loads.
+    quadrupled it. The decode lives in `facade_survey.decode_textures` so a
+    caller measuring the same building another way can pass its `decoded` dict
+    through and pay each atlas once; left unset it is scoped to one building,
+    so each building's decoded atlases are freed before the next one loads.
     """
-    decoded: dict[int, np.ndarray] = {}
+    decoded = decode_textures(meshes, decoded)
     walls = []
     for mesh in meshes:
         if mesh.texture is None or mesh.uvs is None:
             continue
-        key = id(mesh.texture)
-        if key not in decoded:
-            decoded[key] = np.asarray(Image.open(io.BytesIO(mesh.texture.data)).convert("RGB"))
-        walls.append(_Wall(mesh, decoded[key], assigned_faces(mesh)))
+        walls.append(_Wall(mesh, decoded[id(mesh.texture)], assigned_faces(mesh)))
     return walls
 
 
@@ -217,14 +214,17 @@ def unwrap_face(meshes: list[MeshData], face: str) -> Elevation | None:
 
 
 def unwrap_building(
-    meshes: list[MeshData], faces: Iterable[str] | None = None
+    meshes: list[MeshData],
+    faces: Iterable[str] | None = None,
+    decoded: dict[int, np.ndarray] | None = None,
 ) -> dict[str, Elevation]:
     """The unwrappable faces of one building; refusals are absent keys.
 
     `faces` narrows the work to the ones a caller needs — the validation run
-    reads one or two labelled faces per building, not four.
+    reads one or two labelled faces per building, not four. `decoded` shares
+    the atlas decode with a caller that has already paid for it.
     """
-    walls = _prepare(meshes)
+    walls = _prepare(meshes, decoded)
     elevations = {}
     for face in FACES if faces is None else faces:
         elevation = _rasterise(walls, face)

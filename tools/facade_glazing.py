@@ -54,6 +54,7 @@ from facade_survey import (  # noqa: E402
     INDIVIDUALISED_DIR,
     SAMPLE_CAP,
     assigned_faces,
+    decode_textures,
     load_building,
     photographic,
     sheet_documents,
@@ -61,7 +62,7 @@ from facade_survey import (  # noqa: E402
 )
 from facade_unwrap import unwrap_building  # noqa: E402
 from pipeline.colour import srgb_to_lab  # noqa: E402
-from pipeline.gltf import MeshData  # noqa: E402
+from pipeline.gltf import MeshData, triangle_cross  # noqa: E402
 
 log = logging.getLogger(__name__)
 
@@ -74,6 +75,10 @@ BINS = 50
 # number this tool's atlas column is compared against.
 BIMODAL_BELOW = 0.25
 UNIMODAL_ABOVE = 0.60
+
+# Verdict names in one place: the classifier and the summary tally must agree
+# on membership and order, or the summary miscounts silently.
+KINDS = ("bimodal", "middling", "unimodal")
 
 # Probe 1's resolution gate: below ~10 photographic texels per linear metre,
 # "no windows" and "badly photographed" are the same reading.
@@ -90,7 +95,7 @@ class Verdict:
     """One population's bimodality reading."""
 
     dip: float
-    kind: str  # "bimodal" | "middling" | "unimodal"
+    kind: str  # one of KINDS
 
 
 def otsu_bin(hist: np.ndarray) -> int:
@@ -118,53 +123,62 @@ def dip_statistic(lstar: np.ndarray) -> float:
     """
     hist, _ = np.histogram(lstar, bins=BINS, range=(0.0, 100.0))
     smooth = np.convolve(hist.astype(float), np.ones(3) / 3.0, mode="same")
-    split = otsu_bin(hist)
+    split = otsu_bin(smooth)
     below, above = smooth[: split + 1], smooth[split + 1 :]
     if not len(above) or below.max() == 0 or above.max() == 0:
         return 1.0
     peak_lo = int(np.argmax(below))
     peak_hi = split + 1 + int(np.argmax(above))
     valley = smooth[peak_lo : peak_hi + 1].min()
-    shorter = min(smooth[peak_lo], smooth[peak_hi])
-    return float(valley / shorter) if shorter > 0 else 1.0
+    # Both peaks are their side's max and both sides are non-zero here, so the
+    # shorter peak is provably positive.
+    return float(valley / min(smooth[peak_lo], smooth[peak_hi]))
 
 
 def verdict(lstar: np.ndarray) -> Verdict:
-    dip = dip_statistic(lstar)
+    # Classified after rounding, so the recorded dip is the number the verdict
+    # was made from — a table entry of 0.250 must not read "bimodal".
+    dip = round(dip_statistic(lstar), 3)
     if dip < BIMODAL_BELOW:
         kind = "bimodal"
     elif dip > UNIMODAL_ABOVE:
         kind = "unimodal"
     else:
         kind = "middling"
-    return Verdict(dip=round(dip, 3), kind=kind)
+    return Verdict(dip=dip, kind=kind)
 
 
-def photographic_lstar(rgb: np.ndarray, seed: str) -> np.ndarray:
-    """`L*` of the photographic texels, subsampled under `SAMPLE_CAP`.
+def photographic_lstar(rgb: np.ndarray, seed: str) -> tuple[np.ndarray, int]:
+    """`(L*, sampled)`: photographic texels' `L*`, and how many texels the
+    photographic cut was applied to — the denominator a caller estimating a
+    photographic share must use, rather than re-deriving the sampling rule.
 
     The dip is a property of the distribution, so a seeded uniform subsample
-    is unbiased — the same argument `facade_survey` records for its order
-    statistic, with its own personalisation so the two tools' draws never
-    correlate.
+    under `SAMPLE_CAP` is unbiased — the same argument `facade_survey` records
+    for its order statistic, with its own personalisation so the two tools'
+    draws never correlate.
     """
     if len(rgb) > SAMPLE_CAP:
         digest = blake2b(seed.encode("utf-8"), digest_size=8, person=b"glazing")
         rng = np.random.default_rng(int.from_bytes(digest.digest(), "big"))
         rgb = rgb[rng.choice(len(rgb), SAMPLE_CAP, replace=False)]
     lab = srgb_to_lab(rgb)
-    return lab[photographic(rgb, lab), 0]
+    return lab[photographic(rgb, lab), 0], len(rgb)
 
 
 def wall_area_m2(meshes: list[MeshData]) -> float:
-    """Total area of wall-assigned triangles, in square metres."""
+    """Area of the wall triangles `wall_texels` reads, in square metres.
+
+    Skips untextured meshes for the same reason `wall_texels` does: this is
+    the denominator of a texel density, and a wall that contributes no texels
+    to the numerator must not deflate it.
+    """
     area = 0.0
     for mesh in meshes:
-        walls = mesh.triangles[assigned_faces(mesh) >= 0]
-        if not len(walls):
+        if mesh.texture is None or mesh.uvs is None:
             continue
-        corners = mesh.positions[walls]
-        cross = np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
+        walls = mesh.triangles[assigned_faces(mesh) >= 0]
+        cross = triangle_cross(mesh.positions, walls)
         area += float(np.linalg.norm(cross, axis=1).sum()) / 2.0
     return area
 
@@ -176,22 +190,36 @@ def check_sheet(archive: Path) -> list[dict]:
         documents = sheet_documents(bundle)
         for index, (name, document) in enumerate(sorted(documents.items()), 1):
             meshes = load_building(bundle, document)
-            faces = wall_texels(meshes)
+            decoded = decode_textures(meshes)
+            faces = wall_texels(meshes, decoded)
             if not faces:
                 continue
             atlas_rgb = np.concatenate(list(faces.values()))
             total_texels = len(atlas_rgb)
             del faces
+            # The atlas gather is measured and freed before the unwrap runs, so
+            # the region's 270 MB worst case is never resident beside canvases
+            # and depth buffers — only the capped sample survives.
+            atlas_lstar, atlas_sampled = photographic_lstar(atlas_rgb, name)
+            del atlas_rgb
 
-            elevations = unwrap_building(meshes)
-            unwrap_rgb = (
-                np.concatenate([e.canvas.reshape(-1, 3) for e in elevations.values()])
-                if elevations
-                else np.empty((0, 3), dtype=np.uint8)
-            )
+            elevations = unwrap_building(meshes, decoded=decoded)
+            del decoded
+            # Untextured canvas cells are exact black, which `photographic`
+            # rejects as filler — but only after they were counted against
+            # `SAMPLE_CAP`, so a low-coverage building's sample would be mostly
+            # nothing. Dropped here instead: the cap applies to covered texels.
+            covered = [
+                flat[flat.any(axis=1)]
+                for elevation in elevations.values()
+                for flat in (elevation.canvas.reshape(-1, 3),)
+            ]
+            del elevations
+            unwrap_rgb = np.concatenate(covered) if covered else np.empty((0, 3), dtype=np.uint8)
+            del covered
+            unwrap_lstar, _ = photographic_lstar(unwrap_rgb, name)
+            del unwrap_rgb
 
-            atlas_lstar = photographic_lstar(atlas_rgb, name)
-            unwrap_lstar = photographic_lstar(unwrap_rgb, name)
             if len(atlas_lstar) < MIN_POPULATION or len(unwrap_lstar) < MIN_POPULATION:
                 log.info(
                     "[%d/%d] %s: too few photographic texels — skipped",
@@ -204,7 +232,7 @@ def check_sheet(archive: Path) -> list[dict]:
             # Density estimated from the sample's photographic share, scaled to
             # the full gather — converting every texel of a 90-million-texel
             # building to `L*` would cost more than the answer is worth.
-            share = len(atlas_lstar) / min(total_texels, SAMPLE_CAP)
+            share = len(atlas_lstar) / atlas_sampled
             area = wall_area_m2(meshes)
             tex_per_m = float(np.sqrt(total_texels * share / area)) if area > 0 else 0.0
 
@@ -237,19 +265,20 @@ def check_sheet(archive: Path) -> list[dict]:
 def summarise(rows: list[dict]) -> None:
     """The comparison the `Q40` record is owed, over the gated population."""
 
-    def tally(rows: list[dict], column: str) -> str:
-        kinds = [row[column] for row in rows]
-        return "/".join(str(kinds.count(kind)) for kind in ("bimodal", "middling", "unimodal"))
-
     gated = [row for row in rows if row["tex_per_m"] >= MIN_TEX_PER_M]
+
+    def tally(column: str) -> str:
+        kinds = [row[column] for row in gated]
+        return "/".join(str(kinds.count(kind)) for kind in KINDS)
+
     moved = [row for row in gated if row["atlas_kind"] != row["unwrap_kind"]]
     toward_unimodal = [row for row in moved if row["unwrap_dip"] > row["atlas_dip"]]
     log.info("")
     log.info("%d buildings measured, %d at >= %.0f tex/m", len(rows), len(gated), MIN_TEX_PER_M)
     log.info(
         "gated bimodal/middling/unimodal  atlas %s  unwrap %s",
-        tally(gated, "atlas_kind"),
-        tally(gated, "unwrap_kind"),
+        tally("atlas_kind"),
+        tally("unwrap_kind"),
     )
     log.info(
         "gated median dip  atlas %.3f  unwrap %.3f",

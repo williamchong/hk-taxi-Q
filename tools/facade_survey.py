@@ -222,18 +222,42 @@ def load_building(bundle: zipfile.ZipFile, entry: str) -> list[MeshData]:
     return read_scene(bundle.read(entry), resolver(bundle, posixpath.dirname(entry)))
 
 
-def wall_texels(meshes: list[MeshData]) -> dict[str, np.ndarray]:
+def decode_textures(
+    meshes: list[MeshData], decoded: dict[int, np.ndarray] | None = None
+) -> dict[int, np.ndarray]:
+    """RGB arrays keyed by `id(mesh.texture)` — one decode per distinct atlas.
+
+    `read_scene` hands the same `Texture` object to every primitive sharing an
+    atlas, so identity is a sound dedupe key. An 8k atlas decode is the
+    dominant cost of every tool that reads the photography; a caller measuring
+    the same building more than one way passes the dict through so each atlas
+    is paid for once, not once per measurement.
+    """
+    decoded = {} if decoded is None else decoded
+    for mesh in meshes:
+        if mesh.texture is None or mesh.uvs is None:
+            continue
+        key = id(mesh.texture)
+        if key not in decoded:
+            decoded[key] = np.asarray(Image.open(io.BytesIO(mesh.texture.data)).convert("RGB"))
+    return decoded
+
+
+def wall_texels(
+    meshes: list[MeshData], decoded: dict[int, np.ndarray] | None = None
+) -> dict[str, np.ndarray]:
     """Every textured wall texel of one building, split by compass face.
 
     Returns `uint8` RGB per face. Empty faces are absent rather than empty, which
     is what puts a `null` in `face_L` for a building with nothing facing that way.
     """
+    decoded = decode_textures(meshes, decoded)
     buckets: dict[str, list[np.ndarray]] = {name: [] for name in FACES}
     names = list(FACES)
     for mesh in meshes:
         if mesh.texture is None or mesh.uvs is None:
             continue
-        image = np.asarray(Image.open(io.BytesIO(mesh.texture.data)).convert("RGB"))
+        image = decoded[id(mesh.texture)]
         height, width = image.shape[:2]
         assigned = assigned_faces(mesh)
         flat = image.reshape(-1, 3)

@@ -8,6 +8,8 @@ instrument and the printed table would look exactly as authoritative.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import numpy as np
 from facade_glazing import (
     BIMODAL_BELOW,
@@ -19,7 +21,8 @@ from facade_glazing import (
     wall_area_m2,
 )
 
-from pipeline.gltf import MeshData
+from pipeline.gltf import Texture
+from tests.helpers import soup
 
 
 def test_otsu_splits_two_separated_modes() -> None:
@@ -36,12 +39,11 @@ def test_two_clean_modes_read_bimodal() -> None:
 
 
 def test_one_blob_reads_unimodal() -> None:
-    rng = np.random.default_rng(7)
-    dip = dip_statistic(rng.normal(50, 8, 40_000))
-    assert dip > UNIMODAL_ABOVE
+    lstar = np.random.default_rng(7).normal(50, 8, 40_000)
     # Otsu happily splits this blob (`Q40`: eta never goes low) — the dip is
     # what must refuse to see two modes where there is one.
-    assert verdict(rng.normal(50, 8, 40_000)).kind == "unimodal"
+    assert dip_statistic(lstar) > UNIMODAL_ABOVE
+    assert verdict(lstar).kind == "unimodal"
 
 
 def test_verdict_boundaries_are_the_recorded_ones() -> None:
@@ -49,28 +51,23 @@ def test_verdict_boundaries_are_the_recorded_ones() -> None:
     assert UNIMODAL_ABOVE == 0.60
 
 
-def test_wall_area_counts_walls_and_ignores_roofs() -> None:
-    # One 2x3 m wall facing south (+z normal), one 2x3 m roof facing up: the
-    # roof triangle must not contribute — it is not a wall the survey reads.
-    positions = np.array(
+def test_wall_area_counts_textured_walls_only() -> None:
+    # A 3 m² wall triangle facing south (+z normal) and a 3 m² roof triangle
+    # facing up. Only the wall may count — and only when the mesh carries
+    # texture, because this area is the denominator of a texel density and an
+    # untextured wall contributes nothing to its numerator.
+    bare = soup(
         [
-            [0.0, 0.0, 0.0],
-            [2.0, 0.0, 0.0],
-            [0.0, 3.0, 0.0],
-            [0.0, 10.0, 0.0],
-            [2.0, 10.0, 0.0],
-            [0.0, 10.0, 3.0],
+            [(0.0, 0.0, 0.0), (2.0, 0.0, 0.0), (0.0, 3.0, 0.0)],
+            [(0.0, 10.0, 0.0), (2.0, 10.0, 0.0), (0.0, 10.0, 3.0)],
         ],
-        dtype=np.float32,
-    )
-    normals = np.array(
-        [[0.0, 0.0, 1.0]] * 3 + [[0.0, 1.0, 0.0]] * 3,
-        dtype=np.float32,
-    )
-    mesh = MeshData(
         name="wall-and-roof",
-        positions=positions.astype(np.float64),
-        normals=normals,
-        triangles=np.array([[0, 1, 2], [3, 4, 5]]),
+        normals=np.array([[0.0, 0.0, 1.0], [0.0, 1.0, 0.0]], dtype=np.float32),
     )
-    assert wall_area_m2([mesh]) == 3.0
+    textured = replace(
+        bare,
+        uvs=np.zeros((len(bare.positions), 2), dtype=np.float32),
+        texture=Texture(data=b"", mime_type="image/png"),
+    )
+    assert wall_area_m2([textured]) == 3.0
+    assert wall_area_m2([bare]) == 0.0

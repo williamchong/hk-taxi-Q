@@ -116,7 +116,10 @@ def test_score_pools_and_glazed_axis() -> None:
 
 
 def test_refusal_row_matches_the_response_schema() -> None:
-    assert set(refusal_row("x")) == set(SCHEMA["required"])
+    # Every face row carries `image_hash` — `None` on a refusal minted without
+    # an image, a fingerprint on anything `cached_read` returns.
+    assert set(refusal_row("x")) == set(SCHEMA["required"]) | {"image_hash"}
+    assert refusal_row("x")["image_hash"] is None
     assert not agrees(label(True, "curtain"), refusal_row("x"))
 
 
