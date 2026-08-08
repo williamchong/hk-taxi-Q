@@ -640,7 +640,8 @@ number, not only the ones a checklist names.
 
 ## `Q26` — Which look ships?
 
-**Status.** 🔴 Open, and **a verdict rather than a measurement** · **Owner.** `P3-9a`
+**Status.** 🔴 Open, and **a verdict rather than a measurement** — but ✅ **no longer entangled with
+`Q31`**: the candidates separate identically under both tone curves · **Owner.** `P3-9a`
 
 **The question.** The measured Hong Kong look — `P3-7`'s accurate window bands, called dull — or
 `city_facade_clean`, which is bolder and is *not* what Wan Chai looks like. A third candidate now
@@ -714,7 +715,78 @@ and not only texture. Porting them first was rejected: the point of `city_facade
 a faithful record of what `P3-7` measured, and a driver judging a repaired variant would be judging
 something the repo does not have. The three are cheap to port **after** a verdict that wants them.
 
-**See.** `ART_DESIGN.md` "The clean/futuristic variant" · `Q27` · `Q30` · `Q31` · `Q34` · `Q37`
+### ✅ The verdict does not move with the tone curve
+
+`Q31` found `adjustment_contrast = 1.14` to be the dominant term in the city's value distribution and
+parked its own fix behind this question, on the grounds that "the tone curve is the thing three
+drivers are about to judge `Q26` through". That made the two questions mutually blocking, and the
+dependency had never been measured. It now has: the three candidates were re-shot at contrast **1.14
+and 1.00**, on the same three audit cameras, and paired **within** each contrast.
+
+| viewpoint | `A` responds | `A` p90 | `B` responds | `B` p90 | `B`:`A` |
+|---|---|---|---|---|---|
+| `street` 1.14 | 24.3% | 17.82 | 50.9% | 13.30 | **2.10** |
+| `street` 1.00 | 24.2% | 15.76 | 51.0% | 11.77 | **2.10** |
+| `skyline` 1.14 | 8.9% | 7.21 | 60.9% | 7.99 | **6.84** |
+| `skyline` 1.00 | 8.4% | 6.68 | 59.9% | 6.98 | **7.10** |
+| `kerb` 1.14 | 14.1% | 23.09 | 42.9% | 13.81 | **3.05** |
+| `kerb` 1.00 | 14.0% | 20.24 | 42.6% | 12.14 | **3.05** |
+
+✅ **All nine archived frames were re-shot and came out byte-identical** — `A` and `B` at all three
+viewpoints, `C` at `kerb`, `C` at `street` from the gate run, and `C` at `skyline` from two
+independent shots that agree with each other and with the archive. That is the reproduction claim;
+the 1.14 rows matching the published table follows from it and is not separate evidence.
+
+⚠️ **`C` at `skyline` cost four attempts to yield two clean frames.** One run lost the audit camera
+to the race below and two more died to the renderer stall. The rule that finally produced it is the
+rule stated below: shoot twice, `cmp`, and discard any frame that stands alone.
+
+⚠️ The gap is **six commits and under three hours, all of them docs**. This shows the build is
+stable, not that it survives change.
+
+**Nothing candidate-specific survives the curve.** Responding share moves by at most 1.0 point
+anywhere; the `B`:`A` ratio — the read the pivot scaling divides out of — holds at 2.10 and 3.05
+exactly and moves 6.84 → 7.10 at `skyline`. Magnitudes shrink uniformly: p90 retains a mean of
+**0.888** across all six pairings, spread 0.874–0.926, against a null of **`1/1.14 = 0.877`** stated
+before the shoot. The contrast adjustment scales every difference by its pivot factor and does
+nothing else.
+
+⚠️ **The prediction made in advance was wrong, and it is recorded because it was wrong.** `B` was
+expected to lose more than `A` — broad-and-faint differences should fall under a fixed 0.5 `L*`
+threshold first. Neither lost: `A` retained 95–100% of its responding share and `B` 98–100%. The
+differences between these looks sit far enough above the threshold that a 12% shrink cannot reach it.
+
+🔴 **This is a one-sided test and does not license the reverse claim.** It shows the candidates stay
+*measurably* separated, in the same order, under both curves. Measurable difference is necessary for
+a preference, not sufficient for one, so this cannot show that a *human* verdict is stable — only
+that the specific mechanism `Q31` feared is absent. `Q40` died of taking a reader's ability to see a
+thing as evidence a statistic could measure it; the same overclaim run backwards is available here
+and is refused.
+
+**What it releases.** `Q26` and `Q31` **decouple**. `Q31`'s contrast change no longer waits on this
+verdict, and the driver panel can be shown frames under whichever curve ships.
+
+### ⚠️ The shoot found a reproducibility hazard in the preview scene
+
+**`free_look_camera.gd` can silently discard `--camera`.** Its `_ready` connects the tile preview's
+`built(low, high)` signal to `frame()`, which overwrites position *and* orientation to auto-frame the
+loaded bounding box. The driver applies `--camera` at startup and the tiles load asynchronously, so
+which one wins is a race decided by load speed. Cold, `built` lands last and the audit camera is
+lost; warm, the driver wins.
+
+⚠️ **It fails silently in every channel that normally catches things.** The run exits `DRIVER OK`,
+`tools/check.sh` is not involved, and the `camera:` line in the log prints the transform that was
+*requested* — before the signal fires — so the log of a lost frame is byte-identical to the log of a
+good one. Two of eighteen frames were taken from the wrong viewpoint here, and the only thing that
+caught them was a byte-comparison against an archived shot. **A preview audit frame is not evidence
+until it has been checked against a sibling.** Three runs of one configuration returned whole-frame
+`L*` of 41.39, 30.94 and 55.75.
+
+✅ **The preview scene is fully settled by `t=0.8`**, and `t=0.8`, `t=1.5` and `t=3.0` are
+byte-identical. The three-second runs the archived set used were buying nothing.
+
+**See.** `ART_DESIGN.md` "The clean/futuristic variant" · `ART_DESIGN.md` "The audit viewpoints" ·
+`Q27` · `Q30` · `Q31` · `Q34` · `Q37` · `Q40`
 
 ## `Q27` — `COLOR_0` is authored sRGB and must be linearised by the consumer
 
@@ -979,9 +1051,18 @@ normal under uniform ambient — a constant. No monotone function of a constant 
 any setting. `Q39` is the second consumer. `P3-9a` should carry the bake, and the acceptance test
 should be **within-mass sd, not band share**.
 
-⚠️ **Nothing was shipped.** `clean_daylight.tres` is restored byte-for-byte. The tone curve is the
-thing three drivers are about to judge `Q26` through, and moving it now would change the thing under
-test — the contrast change waits on that verdict.
+⚠️ **Nothing was shipped.** `clean_daylight.tres` is restored byte-for-byte.
+
+✅ **The wait this paragraph imposed is over, and it was never necessary.** It read: "the tone curve
+is the thing three drivers are about to judge `Q26` through, and moving it now would change the thing
+under test — the contrast change waits on that verdict." `Q26` has since re-shot all three candidates
+at 1.14 *and* 1.00 and found the separation between them unchanged — responding share within 1.0
+point everywhere, the `B`:`A` ratio holding at 2.10 and 3.05 exactly, and magnitudes shrinking by a
+uniform 0.888 against a pivot null of 0.877. The curve scales every difference alike, so it is not
+the thing the looks are being told apart by. **The contrast change no longer waits on `Q26`.**
+
+⚠️ It still waits on the acceptance test below — band share is the wrong measure, and within-mass sd
+needs the sky-visibility bake. Being unblocked from `Q26` is not the same as being ready to ship.
 
 ⚠️ **`Q27` is a trap for the next reader.** It ablated `ambient_light_energy` 0.85 → 0.30 and reports
 it moved albedo gain "by at most 0.05", which reads as *ambient does nothing*. It says no such thing:

@@ -247,6 +247,22 @@ to — see Gotchas.
 - **`--hold` cannot fly the preview camera.** `free_look_camera.gd` reads
   `Input.is_physical_key_pressed` directly rather than the action map, so `Input.action_press` —
   how everything else here is driven — moves it not at all. Use `--camera` / `--look`.
+- ⚠️ **`--camera` can be silently discarded in the preview scenes, and the log will not say so.**
+  `free_look_camera.gd` connects the tile preview's `built` signal to `frame()`, which overwrites
+  position *and* orientation to auto-frame the loaded bounding box. `--camera` is applied at startup
+  and the tiles load asynchronously, so which wins is a race decided by load speed: a cold first run
+  tends to lose the audit camera, a warm one keeps it. The run still exits `DRIVER OK`, and the
+  `camera:` line prints the transform that was **requested**, before the signal fires — so the log of
+  a lost frame is identical to the log of a good one. Three runs of one configuration returned
+  whole-frame `L*` 41.39, 30.94 and 55.75. **Shoot every audit frame twice and `cmp` them, or compare
+  against an archived shot; a single preview frame is not evidence.**
+- **The preview viewpoints are static by `t=0.8`.** `t=0.8`, `t=1.5` and `t=3.0` come out
+  byte-identical once the streamer has settled, so there is nothing to be bought by a longer run —
+  and shooting early dodges the stall below.
+- **`FAIL no frame drawn in 600 ticks` gets more likely the longer the shot time.** macOS stops
+  compositing a window it considers obscured, and the capture waits on `frame_post_draw` forever.
+  Captures at `t=3.0` failed repeatedly in one session while `t=0.8` succeeded. Keep the window
+  visible, and prefer early shot times.
 - **Six seconds of full throttle leaves the carriageway.** The default run tops 56 kph and clips
   something at ~5 s. There is no terrain: everything that is not road is void, and the kerbs are
   0.15 m and mountable by design. `drive_harness.gd` respawns the car after a 25 m fall and says so

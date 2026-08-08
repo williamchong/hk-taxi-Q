@@ -979,6 +979,18 @@ behind `--debug-view`, which is why the `taxi` rows are clean.
 lost a day to shots taken one palette commit before they were read. Re-shoot before comparing, and
 say which commit a shot is of.
 
+⚠️ **A preview frame can be shot from the wrong camera with nothing anywhere reporting it.**
+`free_look_camera.gd` auto-frames the region when the tile preview finishes loading, and that can
+land after `--camera` was applied — a race against load speed, lost most often by the first run of a
+cold batch. The run exits `DRIVER OK` and the `camera:` log line shows the requested transform either
+way. Two of eighteen frames were taken from the wrong viewpoint while measuring `Q26`'s tone-curve
+stability, and only a byte-comparison against an archived shot caught them. **Shoot each viewpoint
+twice and `cmp`, or compare against the archive.** See `Q26`.
+
+✅ **These viewpoints are static by `t=0.8`** — `t=0.8`, `t=1.5` and `t=3.0` are byte-identical, so
+the longer runs earlier shots used bought nothing, and an early capture is less likely to hit the
+renderer stall that comes with an obscured window.
+
 ---
 
 ## Anti-goals
