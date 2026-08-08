@@ -33,9 +33,9 @@ from __future__ import annotations
 import argparse
 import io
 import logging
-import posixpath
 import sys
 import zipfile
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -46,10 +46,14 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "etl"))
 sys.path.insert(0, str(ROOT / "tools"))
 
-from facade_survey import FACES, GLTF_SUFFIX, MODEL_PREFIX, face_of  # noqa: E402
-from pipeline.buildings import resolver  # noqa: E402
-from pipeline.fetch import SOURCES_ROOT  # noqa: E402
-from pipeline.gltf import MeshData, normalise, read_scene  # noqa: E402
+from facade_survey import (  # noqa: E402
+    FACES,
+    INDIVIDUALISED_DIR,
+    assigned_faces,
+    load_building,
+    sheet_documents,
+)
+from pipeline.gltf import MeshData  # noqa: E402
 
 log = logging.getLogger(__name__)
 
@@ -90,7 +94,38 @@ class Elevation:
     height_m: float
 
 
-def unwrap_face(meshes: list[MeshData], face: str) -> Elevation | None:
+@dataclass(frozen=True)
+class _Wall:
+    """One textured mesh, decoded and face-assigned once for all four faces."""
+
+    mesh: MeshData
+    image: np.ndarray
+    assigned: np.ndarray
+
+
+def _prepare(meshes: list[MeshData]) -> list[_Wall]:
+    """Decode each distinct texture once, and assign triangles to faces once.
+
+    Both are per-building costs that the four per-face rasterisations share —
+    an 8k atlas decode is the dominant unwrap cost, and paying it once per face
+    quadrupled it. The decode cache is keyed on `Texture` identity because
+    `read_scene` hands the same object to every primitive sharing an atlas, and
+    it is scoped to one building so each building's decoded atlases are freed
+    before the next one loads.
+    """
+    decoded: dict[int, np.ndarray] = {}
+    walls = []
+    for mesh in meshes:
+        if mesh.texture is None or mesh.uvs is None:
+            continue
+        key = id(mesh.texture)
+        if key not in decoded:
+            decoded[key] = np.asarray(Image.open(io.BytesIO(mesh.texture.data)).convert("RGB"))
+        walls.append(_Wall(mesh, decoded[key], assigned_faces(mesh)))
+    return walls
+
+
+def _rasterise(walls: list[_Wall], face: str) -> Elevation | None:
     """Re-project one compass face's textured wall triangles into metres.
 
     Returns `None` when the face has no textured wall triangles, is smaller
@@ -100,23 +135,20 @@ def unwrap_face(meshes: list[MeshData], face: str) -> Elevation | None:
     """
     face_index = list(FACES).index(face)
     across_col, across_sign, depth_col, depth_sign = AXES[face]
-    gathered: list[tuple[MeshData, np.ndarray]] = []
+    gathered: list[tuple[_Wall, np.ndarray]] = []
     lo_a = lo_u = np.inf
     hi_a = hi_u = -np.inf
-    for mesh in meshes:
-        if mesh.texture is None or mesh.uvs is None:
-            continue
-        assigned = face_of(normalise(mesh.normals[mesh.triangles].mean(axis=1)))
-        triangles = mesh.triangles[assigned == face_index]
+    for wall in walls:
+        triangles = wall.mesh.triangles[wall.assigned == face_index]
         if not len(triangles):
             continue
         used = triangles.ravel()
-        across = mesh.positions[used, across_col] * across_sign
+        across = wall.mesh.positions[used, across_col] * across_sign
         lo_a = min(lo_a, across.min())
         hi_a = max(hi_a, across.max())
-        lo_u = min(lo_u, mesh.positions[used, 1].min())
-        hi_u = max(hi_u, mesh.positions[used, 1].max())
-        gathered.append((mesh, triangles))
+        lo_u = min(lo_u, wall.mesh.positions[used, 1].min())
+        hi_u = max(hi_u, wall.mesh.positions[used, 1].max())
+        gathered.append((wall, triangles))
     if not gathered or hi_a - lo_a < MIN_FACE_M or hi_u - lo_u < MIN_FACE_M:
         return None
     width = int(np.ceil((hi_a - lo_a) * TEXELS_PER_M)) + 1
@@ -126,12 +158,12 @@ def unwrap_face(meshes: list[MeshData], face: str) -> Elevation | None:
     canvas = np.zeros((height, width, 3), dtype=np.uint8)
     depth = np.full((height, width), -np.inf)
 
-    for mesh, triangles in gathered:
-        image = np.asarray(Image.open(io.BytesIO(mesh.texture.data)).convert("RGB"))
+    for wall, triangles in gathered:
+        image = wall.image
         image_h, image_w = image.shape[:2]
-        across = (mesh.positions[:, across_col] * across_sign - lo_a) * TEXELS_PER_M
-        up = (mesh.positions[:, 1] - lo_u) * TEXELS_PER_M
-        outward = mesh.positions[:, depth_col] * depth_sign
+        across = (wall.mesh.positions[:, across_col] * across_sign - lo_a) * TEXELS_PER_M
+        up = (wall.mesh.positions[:, 1] - lo_u) * TEXELS_PER_M
+        outward = wall.mesh.positions[:, depth_col] * depth_sign
         for triangle in triangles:
             corner_a, corner_u = across[triangle], up[triangle]
             x0 = max(int(np.floor(corner_a.min())), 0)
@@ -157,7 +189,7 @@ def unwrap_face(meshes: list[MeshData], face: str) -> Elevation | None:
             gamma = 1.0 - alpha - beta
             tri_depth = gamma * outward[triangle[0]] + alpha * outward[triangle[1]]
             tri_depth += beta * outward[triangle[2]]
-            uv = mesh.uvs[triangle]
+            uv = wall.mesh.uvs[triangle]
             tex_u = gamma * uv[0, 0] + alpha * uv[1, 0] + beta * uv[2, 0]
             tex_v = gamma * uv[0, 1] + alpha * uv[1, 1] + beta * uv[2, 1]
             window = depth[y0:y1, x0:x1]
@@ -169,7 +201,7 @@ def unwrap_face(meshes: list[MeshData], face: str) -> Elevation | None:
             taken_y, taken_x = np.nonzero(take)
             source = image[rows[taken_y, taken_x], columns[taken_y, taken_x]]
             canvas[y0 + taken_y, x0 + taken_x] = source
-            window[take] = np.broadcast_to(tri_depth, window.shape)[take]
+            window[take] = tri_depth[take]
 
     return Elevation(
         canvas=np.flipud(canvas),
@@ -179,29 +211,26 @@ def unwrap_face(meshes: list[MeshData], face: str) -> Elevation | None:
     )
 
 
-def unwrap_building(meshes: list[MeshData]) -> dict[str, Elevation]:
-    """Every unwrappable compass face of one building; refusals are absent keys."""
-    faces = {}
-    for face in FACES:
-        elevation = unwrap_face(meshes, face)
+def unwrap_face(meshes: list[MeshData], face: str) -> Elevation | None:
+    """One compass face's elevation, or `None` — see `_rasterise` for when."""
+    return _rasterise(_prepare(meshes), face)
+
+
+def unwrap_building(
+    meshes: list[MeshData], faces: Iterable[str] | None = None
+) -> dict[str, Elevation]:
+    """The unwrappable faces of one building; refusals are absent keys.
+
+    `faces` narrows the work to the ones a caller needs — the validation run
+    reads one or two labelled faces per building, not four.
+    """
+    walls = _prepare(meshes)
+    elevations = {}
+    for face in FACES if faces is None else faces:
+        elevation = _rasterise(walls, face)
         if elevation is not None:
-            faces[face] = elevation
-    return faces
-
-
-def sheet_documents(bundle: zipfile.ZipFile) -> dict[str, str]:
-    """Building name → archive entry, matching `facade_survey.py`'s selection."""
-    return {
-        posixpath.basename(entry)[: -len(GLTF_SUFFIX)]: entry
-        for entry in bundle.namelist()
-        if entry.lower().endswith(GLTF_SUFFIX)
-        and posixpath.basename(entry).startswith(MODEL_PREFIX)
-    }
-
-
-def load_building(bundle: zipfile.ZipFile, entry: str) -> list[MeshData]:
-    """One building's meshes, textures resolved from inside the sheet archive."""
-    return read_scene(bundle.read(entry), resolver(bundle, posixpath.dirname(entry)))
+            elevations[face] = elevation
+    return elevations
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -212,7 +241,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--zip-dir",
         type=Path,
-        default=SOURCES_ROOT / "individualised",
+        default=INDIVIDUALISED_DIR,
         help="where the individualised sheet archives live",
     )
     parser.add_argument(

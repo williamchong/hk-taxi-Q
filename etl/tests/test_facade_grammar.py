@@ -10,17 +10,12 @@ the scorer assumes.
 
 from __future__ import annotations
 
+import io
 import json
-import sys
-from pathlib import Path
 
 import numpy as np
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "tools"))
-
-import io
-
 from facade_grammar import (
+    GRAMMARS,
     LABELS,
     MAX_EDGE_PX,
     PROMPT_HASH,
@@ -121,14 +116,20 @@ def test_refusal_row_matches_the_response_schema() -> None:
 
 
 def test_label_file_holds_the_shape_and_counts_the_record_states() -> None:
-    faces = json.loads(LABELS.read_text())["faces"]
+    document = json.loads(LABELS.read_text())
+    faces = document["faces"]
     assert len(faces) == 40
     strict = [f for f in faces if f["readable"] and not f["refusal_ok"]]
     marginal = [f for f in faces if f["readable"] and f["refusal_ok"]]
     unreadable = [f for f in faces if not f["readable"]]
     assert (len(strict), len(marginal), len(unreadable)) == (20, 6, 14)
+    # A typo'd grammar value would make agrees() unconditionally false and
+    # silently score a miss against the reader — so membership is pinned here.
+    assert document["protocol"]["grammar_values"] == list(GRAMMARS)
     for face in faces:
         assert (face["grammar"] is None) == (not face["readable"])
+        assert face["grammar"] in (*GRAMMARS, None)
+        assert face["alt_grammar"] in (*GRAMMARS, None)
 
 
 def test_prompt_hash_is_a_recordable_stamp() -> None:

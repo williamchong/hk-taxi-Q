@@ -84,6 +84,10 @@ MODEL_PREFIX = "B"
 # Matched case-insensitively, as `pipeline/buildings.py` matches it.
 GLTF_SUFFIX = ".gltf"
 
+# Where `pipeline/fetch.py`'s cache holds the individualised sheet archives.
+# Three survey tools take it as their `--zip-dir` default; one definition.
+INDIVIDUALISED_DIR = SOURCES_ROOT / "individualised"
+
 # The table's filename, which `hong_kong.yaml` names as `facade_hue.source` and
 # `buildings.facade_hue` opens. Per sheet it takes the sheet id as an infix.
 TABLE_STEM = "facade_lab"
@@ -197,6 +201,27 @@ def face_of(normals: np.ndarray) -> np.ndarray:
     return chosen
 
 
+def assigned_faces(mesh: MeshData) -> np.ndarray:
+    """`face_of` over one mesh's triangle normals — the one way every survey
+    tool assigns a triangle to a compass face, so they cannot drift apart."""
+    return face_of(normalise(mesh.normals[mesh.triangles].mean(axis=1)))
+
+
+def sheet_documents(bundle: zipfile.ZipFile) -> dict[str, str]:
+    """Building name → archive entry: one sheet's `B`-prefixed models."""
+    return {
+        posixpath.basename(entry)[: -len(GLTF_SUFFIX)]: entry
+        for entry in bundle.namelist()
+        if entry.lower().endswith(GLTF_SUFFIX)
+        and posixpath.basename(entry).startswith(MODEL_PREFIX)
+    }
+
+
+def load_building(bundle: zipfile.ZipFile, entry: str) -> list[MeshData]:
+    """One building's meshes, textures resolved from inside the sheet archive."""
+    return read_scene(bundle.read(entry), resolver(bundle, posixpath.dirname(entry)))
+
+
 def wall_texels(meshes: list[MeshData]) -> dict[str, np.ndarray]:
     """Every textured wall texel of one building, split by compass face.
 
@@ -210,7 +235,7 @@ def wall_texels(meshes: list[MeshData]) -> dict[str, np.ndarray]:
             continue
         image = np.asarray(Image.open(io.BytesIO(mesh.texture.data)).convert("RGB"))
         height, width = image.shape[:2]
-        assigned = face_of(normalise(mesh.normals[mesh.triangles].mean(axis=1)))
+        assigned = assigned_faces(mesh)
         flat = image.reshape(-1, 3)
         for index, name in enumerate(names):
             triangles = mesh.triangles[assigned == index]
@@ -344,19 +369,10 @@ def survey_sheet(archive: Path) -> dict[str, dict[str, Any]]:
     sheet = archive.stem
     rows: dict[str, dict[str, Any]] = {}
     with zipfile.ZipFile(archive) as bundle:
-        documents = sorted(
-            entry
-            for entry in bundle.namelist()
-            if entry.lower().endswith(GLTF_SUFFIX)
-            and posixpath.basename(entry).startswith(MODEL_PREFIX)
-        )
+        documents = sheet_documents(bundle)
         log.info("%s: %d %s-prefixed models", sheet, len(documents), MODEL_PREFIX)
-        for index, document in enumerate(documents, 1):
-            name = posixpath.basename(document)[: -len(GLTF_SUFFIX)]
-            base = posixpath.dirname(document)
-            row = survey_building(
-                read_scene(bundle.read(document), resolver(bundle, base)), name, sheet
-            )
+        for index, (name, document) in enumerate(sorted(documents.items()), 1):
+            row = survey_building(load_building(bundle, document), name, sheet)
             if row is None:
                 continue
             rows[stem(name)] = asdict(row)
@@ -371,7 +387,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--zip-dir",
         type=Path,
-        default=SOURCES_ROOT / "individualised",
+        default=INDIVIDUALISED_DIR,
         help="where the individualised sheet archives live",
     )
     # Resolved after parsing rather than as a default, because it depends on

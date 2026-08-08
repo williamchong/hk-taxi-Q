@@ -23,8 +23,9 @@ validates *this* reader; swapping the model silently would carry the old run's
 authority onto an unmeasured reader.
 
 ⚠️ **Every gate refuses rather than guesses** (`Q40`'s contract): a face the
-unwrap cannot produce, or the reader declines, yields a refusal row, and a
-refusal falls back to the existing hash exactly as `facade_hue` already does
+reader declines yields a refusal row, and a face the unwrap cannot produce is
+simply absent from its building's table — a consumer reads both as the same
+thing, the fall-back to the existing hash that `facade_hue` already performs
 for an unmeasured building.
 
 Run:  .venv/bin/python tools/facade_grammar.py --validate
@@ -49,9 +50,10 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "etl"))
 sys.path.insert(0, str(ROOT / "tools"))
 
-from facade_unwrap import Elevation, load_building, sheet_documents, unwrap_building  # noqa: E402
+from facade_survey import INDIVIDUALISED_DIR, load_building, sheet_documents  # noqa: E402
+from facade_unwrap import Elevation, unwrap_building  # noqa: E402
 from pipeline.buildings import stem  # noqa: E402
-from pipeline.fetch import SOURCES_ROOT, source_dir  # noqa: E402
+from pipeline.fetch import source_dir  # noqa: E402
 
 log = logging.getLogger(__name__)
 
@@ -72,6 +74,10 @@ MAX_EDGE_PX = 2048
 MIN_COVERAGE = 0.05
 
 LABELS = ROOT / "tools" / "facade_grammar_labels.json"
+
+# The taxonomy, defined once. The SCHEMA enum is built from it, the labels file
+# is tested against it, and a typo'd label can no longer silently score a miss.
+GRAMMARS: tuple[str, ...] = ("curtain", "punched", "fin", "blank", "mixed")
 
 PROMPT = """\
 You are reading one unwrapped façade elevation of a Hong Kong building, \
@@ -122,7 +128,7 @@ SCHEMA = {
         "confidence": {"type": "string", "enum": ["high", "low"]},
         "grammar": {
             "anyOf": [
-                {"type": "string", "enum": ["curtain", "punched", "fin", "blank", "mixed"]},
+                {"type": "string", "enum": list(GRAMMARS)},
                 {"type": "null"},
             ]
         },
@@ -215,16 +221,20 @@ def read_face(client, png: bytes) -> dict:
         # A classifier decline is a refusal row, not an error — the same
         # fallback contract as every other gate.
         return refusal_row("api refusal")
-    text = next(block.text for block in response.content if block.type == "text")
+    text = next((block.text for block in response.content if block.type == "text"), None)
+    if text is None:
+        raise RuntimeError(f"response carried no text block (stop_reason={response.stop_reason})")
     return json.loads(text)
 
 
-def cached_read(client, cache_dir: Path, key: str, elevation: Elevation) -> dict:
-    """The raw-response cache. A hit costs nothing and reproduces exactly."""
+def cached_read(get_client, cache_dir: Path, key: str, elevation: Elevation) -> dict:
+    """The raw-response cache. A hit costs nothing and reproduces exactly —
+    including needing neither the SDK nor a credential, which is why the
+    client arrives as a factory and is only called on a miss."""
     path = cache_dir / f"{key}.{PROMPT_HASH}.json"
     if path.exists():
         return json.loads(path.read_text())
-    result = read_face(client, encode_elevation(elevation))
+    result = read_face(get_client(), encode_elevation(elevation))
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(result, indent=1, sort_keys=True))
     return result
@@ -236,32 +246,52 @@ def refusal_row(reason: str) -> dict:
     return row
 
 
-def make_client():
-    """The SDK client, or a gate message when no credential resolves."""
-    try:
-        import anthropic
-    except ImportError:
-        raise SystemExit(
-            "the `anthropic` package is not installed — .venv/bin/pip install anthropic"
-        ) from None
-    return anthropic.Anthropic()
+def client_factory():
+    """A memoised SDK client — constructed on first use, or a gate message
+    when the package or a credential is missing."""
+    state: dict = {}
+
+    def get():
+        if "client" not in state:
+            try:
+                import anthropic
+            except ImportError:
+                raise SystemExit(
+                    "the `anthropic` package is not installed — .venv/bin/pip install anthropic"
+                ) from None
+            state["client"] = anthropic.Anthropic()
+        return state["client"]
+
+    return get
 
 
 def survey_sheet(sheet: str, city: str, zip_dir: Path) -> dict[str, dict]:
-    """Every face of every building on one sheet, keyed by the pipeline's stem."""
-    client = make_client()
+    """Every face of every building on one sheet, keyed by the pipeline's stem.
+
+    Beside the per-face response cache sits a per-building row cache, written
+    only once every face of the building is settled: a rerun that regenerates
+    the table skips the unwrap itself, not just the API spend, so re-emitting
+    a 651-building sheet costs file reads rather than minutes of rasterising.
+    """
+    get_client = client_factory()
     cache_dir = source_dir(city, SURVEY_SOURCE_ID) / "raw" / sheet
     rows: dict[str, dict] = {}
     with zipfile.ZipFile(zip_dir / f"{sheet}.zip") as bundle:
         documents = sheet_documents(bundle)
         for index, (name, entry) in enumerate(sorted(documents.items()), 1):
-            faces = unwrap_building(load_building(bundle, entry))
-            row: dict[str, dict] = {}
-            for face, elevation in faces.items():
-                if elevation.coverage < MIN_COVERAGE:
-                    row[face] = refusal_row("coverage below gate")
-                    continue
-                row[face] = cached_read(client, cache_dir, f"{name}_{face}", elevation)
+            row_path = cache_dir / f"{name}.row.{PROMPT_HASH}.json"
+            if row_path.exists():
+                row = json.loads(row_path.read_text())
+            else:
+                faces = unwrap_building(load_building(bundle, entry))
+                row = {}
+                for face, elevation in faces.items():
+                    if elevation.coverage < MIN_COVERAGE:
+                        row[face] = refusal_row("coverage below gate")
+                        continue
+                    row[face] = cached_read(get_client, cache_dir, f"{name}_{face}", elevation)
+                row_path.parent.mkdir(parents=True, exist_ok=True)
+                row_path.write_text(json.dumps(row, indent=1, sort_keys=True))
             rows[stem(name)] = {
                 "faces": row,
                 "model": MODEL,
@@ -319,39 +349,49 @@ def score(results: list[tuple[dict, dict]]) -> list[tuple[str, int, int, float]]
 def validate(city: str, zip_dir: Path) -> int:
     """Run the reader over the labelled 40 faces and grade it against the
     thresholds `Q41` fixed in advance. The exit code is the verdict."""
-    client = make_client()
+    get_client = client_factory()
     labels = json.loads(LABELS.read_text())["faces"]
-    cache_dir = source_dir(city, SURVEY_SOURCE_ID) / "raw" / "validation"
 
     results = []
     by_sheet: dict[str, list[dict]] = {}
     for label in labels:
         by_sheet.setdefault(label["sheet"], []).append(label)
     for sheet, sheet_labels in by_sheet.items():
+        # The same cache namespace the sheet survey uses, deliberately: a
+        # validation face's response is byte-identical to the survey's read of
+        # that face, so the validation spend seeds the later full-sheet run.
+        cache_dir = source_dir(city, SURVEY_SOURCE_ID) / "raw" / sheet
+        by_building: dict[str, list[dict]] = {}
+        for label in sheet_labels:
+            by_building.setdefault(label["building"], []).append(label)
         with zipfile.ZipFile(zip_dir / f"{sheet}.zip") as bundle:
             documents = sheet_documents(bundle)
-            unwrapped: dict[str, dict] = {}
-            for label in sheet_labels:
-                name = label["building"]
-                if name not in unwrapped:
-                    unwrapped[name] = unwrap_building(load_building(bundle, documents[name]))
-                elevation = unwrapped[name].get(label["face"])
-                if elevation is None:
-                    results.append((label, refusal_row("unwrap refused")))
-                    continue
-                key = f"{sheet}_{name}_{label['face']}"
-                result = cached_read(client, cache_dir, key, elevation)
-                results.append((label, result))
-                log.info(
-                    "%s %s: reader=%s/%s conf=%s | label=%s%s",
-                    name,
-                    label["face"],
-                    "ok" if result["readable"] else "refuse",
-                    result["grammar"],
-                    result["confidence"],
-                    "refuse" if not label["readable"] else label["grammar"],
-                    " (refusal ok)" if label["refusal_ok"] else "",
+            for name, building_labels in by_building.items():
+                if name not in documents:
+                    raise SystemExit(f"labels name {name}, which is not on sheet {sheet}")
+                faces = unwrap_building(
+                    load_building(bundle, documents[name]),
+                    faces=[label["face"] for label in building_labels],
                 )
+                for label in building_labels:
+                    elevation = faces.get(label["face"])
+                    if elevation is None:
+                        result = refusal_row("unwrap refused")
+                    else:
+                        result = cached_read(
+                            get_client, cache_dir, f"{name}_{label['face']}", elevation
+                        )
+                    results.append((label, result))
+                    log.info(
+                        "%s %s: reader=%s/%s conf=%s | label=%s%s",
+                        name,
+                        label["face"],
+                        "ok" if result["readable"] else "refuse",
+                        result["grammar"],
+                        result["confidence"],
+                        "refuse" if not label["readable"] else label["grammar"],
+                        " (refusal ok)" if label["refusal_ok"] else "",
+                    )
 
     passed = True
     for label_text, hits, total, threshold in score(results):
@@ -378,6 +418,22 @@ def validate(city: str, zip_dir: Path) -> int:
                 la["grammar"] or "refuse",
                 re["notes"],
             )
+        elif (
+            la["glazed"] is not None
+            and re["readable"]
+            and re["glazed"] is not None
+            and la["glazed"] != re["glazed"]
+        ):
+            # Not a miss, but it counts against the glazed axis — without this
+            # line a failing glazed check would print no culprits at all.
+            log.info(
+                "GLAZED %s %s %s: reader %s vs label %s",
+                la["sheet"],
+                la["building"],
+                la["face"],
+                re["glazed"],
+                la["glazed"],
+            )
     log.info("verdict: %s (model %s, prompt %s)", "PASS" if passed else "FAIL", MODEL, PROMPT_HASH)
     return 0 if passed else 1
 
@@ -390,7 +446,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--zip-dir",
         type=Path,
-        default=SOURCES_ROOT / "individualised",
+        default=INDIVIDUALISED_DIR,
         help="where the individualised sheet archives live",
     )
     arguments = parser.parse_args(argv)

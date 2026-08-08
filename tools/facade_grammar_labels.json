@@ -8,7 +8,7 @@
   "field_semantics": {
    "readable": "false = a reader should refuse this face (sliver, filler-dominated, smear, fragments)",
    "grammar": "null when readable is false",
-   "alt_grammar": "a second classification that also counts as agreement; marginal faces only",
+   "alt_grammar": "a second classification that also counts as agreement wherever the reader classifies; on rows with readable=false it is an inert adjudication hint (the refusal-pool rule ignores it: a confident claim there is a miss, hint or not)",
    "refusal_ok": "true = a refusal ALSO counts as correct for this face (legible but marginal)",
    "glazed": "predominantly glazed facade (Q40's glazed-vs-blank axis); null when unreadable",
    "tint": "glass tint family where confidently visible; null otherwise — reflections make most tints unscorable",

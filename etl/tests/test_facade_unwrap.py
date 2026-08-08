@@ -10,15 +10,10 @@ load-bearing: viewer-outside orientation, and outermost-surface-wins.
 from __future__ import annotations
 
 import io
-import sys
-from pathlib import Path
 
 import numpy as np
-from PIL import Image
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "tools"))
-
 from facade_unwrap import TEXELS_PER_M, unwrap_building, unwrap_face
+from PIL import Image
 
 from pipeline.gltf import MeshData, Texture
 
@@ -101,3 +96,5 @@ def test_slivers_and_bare_faces_refuse() -> None:
     assert unwrap_face([wall(0.0, 1.0, QUADRANTS)], "E") is None
     faces = unwrap_building([wall(0.0, 1.0, QUADRANTS)])
     assert list(faces) == ["S"]
+    # Narrowing to the faces a caller needs skips the rest, refusals included.
+    assert unwrap_building([wall(0.0, 1.0, QUADRANTS)], faces=["N", "E"]) == {}
