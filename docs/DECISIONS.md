@@ -1652,7 +1652,8 @@ can work.
 ✅ **Real periodicity does exist in the data.** `B353771561001063A0` returns a **3.38 m floor pitch
 independently on three faces** — that building's storey height, measured from photography. *Storey
 height* may therefore be surveyable even though *grammar* is not; it is a different claim, needs its
-own record, and nothing here establishes it.
+own record, and nothing here establishes it. **That record now exists: `Q42`**, where a second
+instrument lands on the same number.
 
 ### What survives, and the check it is still owed
 
@@ -1724,9 +1725,9 @@ second sheet is worth reading before the gate thresholds are fixed to the first.
 
 ## `Q41` — A vision reader recovers the grammar the statistic could not
 
-**Status.** 🟡 Open — ✅ **the reader passed its graded run, first run, no label corrections**, and
-✅ the cache is image-fingerprinted; open on the human label spot-check and the full-sheet run ·
-**Owner.** `P3-9a`
+**Status.** 🟡 Open — ✅ **the reader passed its graded run, first run, no label corrections**,
+✅ the cache is image-fingerprinted, ✅ the human label spot-check passed with no corrections; open
+on the full-sheet run · **Owner.** `P3-9a`
 
 **The claim.** `Q40`'s kill of fin-versus-curtain-versus-punched is real but narrower than its
 wording: the taxonomy is unreachable *by a per-pixel statistic*, not unreachable from the data. Read
@@ -1806,6 +1807,10 @@ hidden.** Independence holds in the direction that matters — the labels predat
 API calls never see them — but a family-shared blind spot would pass undetected. A human spot-check
 of the labels against the PNGs is owed before the survey is trusted at region scale; the label file
 carries the images' provenance so the check is one directory of side-by-side comparisons.
+✅ **Discharged 2026-08-09**: the 40 faces were reviewed side-by-side against their native-resolution
+unwraps (labels shown, reader answers deliberately withheld), and no label was corrected. The
+adjudication clause therefore remains unexercised, and the graded numbers stand against the labels
+exactly as authored — now with a human check behind them rather than only a same-family one.
 
 **Reproducibility answers `Q37`'s ghost by tolerance, not byte-equality.** This is the repo's first
 non-deterministic input producer: a rerun against the same bytes may differ. The tool therefore
@@ -3003,3 +3008,57 @@ full-res local pass measured at under two minutes.
 
 **See.** `ART_DESIGN.md` anti-goals · `ARCHITECTURE.md` tile contract · `DATA_SOURCES.md` · `Q31` ·
 `Q37` · `Q39`
+
+## `Q42` — The reader answers seven questions nobody consumes
+
+**Status.** 🟡 Open — analysis of the 40 paid validation responses only; nothing validated at region
+scale and nothing consumed · **Owner.** `P3-9a`
+
+**The observation.** `Q41`'s reader schema asks for more than grammar, glazing and tint: it returns
+`storey_count`, `band_period_floors`, `podium_floors`, `podium_glazed`, `balconies`, `emphasis` and
+`signage` on every call — and the plan that survived `Q40` consumes none of them. Every full-sheet
+call collects these fields whether or not anything reads them, so their marginal *collection* cost
+is zero; what they cost is validation and plumbing. The 40 cached responses are already paid for,
+and this record is what they say.
+
+**Fill rates over the 25 readable validation faces** — the reader nulls a field it cannot see, per
+its prompt, so a low count is refusal behaviour, not absence of the feature: `emphasis` 25/25,
+`balconies` 22/25, `tint` 14/25, `storey_count` 10/25, `signage` 9/25, `podium_floors` and
+`podium_glazed` 6/25, `band_period_floors` **0/25**.
+
+**Storey pitch is the strong result, and it is the record `Q40` said storey height was owed.**
+Dividing each face's unwrap height by the reader's `storey_count`: median **3.32 m/floor** over ten
+faces — against the **3.38 m** `Q40` measured by autocorrelation on three faces of a building the
+reader never counted. Two instruments that share nothing but the photography agree to within 2%.
+The caveats are real: the field is *visible floors on this face*, not building storeys — one 55 m
+face with four legible floors computes 13.81 m/floor, and two faces of the same tower disagree 30
+against 35 — so consumption needs a per-building reconciliation (median across faces, a 2.5–4.5 m
+sanity window, and refusal outside it), not a raw read.
+
+**The rest, briefly.** `emphasis` is filled on every readable face and coheres with grammar
+(curtain → horizontal/grid, blank → none) — a shader-ready reading-direction parameter that doubles
+as a grammar cross-check. `balconies` selects punched variants. `podium_floors`/`podium_glazed` are
+sparse but plausibly real, and they are the measured answer to where `P3-7`'s "no windows on podium
+faces" boundary sits. `band_period_floors` never commits and should not be planned around.
+
+🔴 **`signage` reads real identities, which is exactly why it must not ship as content.** The
+validation set alone returned 瑞安集團 / SHUI ON GROUP, REVENUE TOWER, YMCA and FWD — correct,
+verifiable Wan Chai buildings. Real brand text and logos are trademarks (the same instinct as hard
+rule 8): the field's value is hero-building *identification*, generic-signage *placement*, and
+`P3-9a` recognisability grading — never rendered text. The survey table is gitignored government-
+derived data regardless (hard rule 7).
+
+**Proposed consumption shape, so the contract bumps once.** The `Q40` plumbing plan already spends
+a `schema_version` bump on `TEXCOORD_1` for glazed × 15 `L*` × 16 `b*` = 480 states — which fits in
+one of `UV2`'s two floats with room to spare. The second float can carry the reconciled storey
+pitch (quantised), podium floors, `balconies` and `emphasis` in the *same* bump, so the vertex
+contract changes once rather than twice. Each consumed field owes its own cheap validation first —
+the graded run validated grammar and glazing only.
+
+**Also visible from here, recorded as options rather than plans** (both are `Q26` art-direction
+calls): the glazing dip's *light* mode is the wall/spandrel colour, so `facade_glazing`'s split can
+emit a measured two-tone — wall `L*a*b*` beside glass tint — rather than tint alone; and the
+glazed/blank state in `UV2` could drive a specular split so glass reads as glass at grazing light.
+Neither moves until the flat-shaded direction says it may.
+
+**See.** `Q40` · `Q41` · `Q26` · `P3-7` · `ARCHITECTURE.md` "Tile output"
