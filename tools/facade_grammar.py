@@ -10,11 +10,13 @@ has passed.
 ⚠️ **This is the repo's first non-deterministic input producer, and three
 mechanisms answer `Q37`'s ghost** ("a table nobody can re-derive"):
 
-- **Every raw API response is cached** beside the output table, keyed by model
-  and prompt hash. A rerun replays the cache byte-for-byte; only a deliberate
-  prompt or model change re-spends a call.
-- **Every output row records `model` and `prompt_hash`.** A row's provenance is
-  in the row, not in anyone's memory.
+- **Every raw API response is cached** beside the output table, keyed by
+  model, prompt hash **and the fingerprint of the encoded image it answered**.
+  A rerun replays the cache byte-for-byte; a prompt, model or unwrap change
+  re-spends only the calls it actually invalidates.
+- **Every output row records `model`, `prompt_hash` and `image_hash`.** A
+  row's provenance — including the image it was read from — is in the row, not
+  in anyone's memory.
 - **Re-derivation acceptance is the `Q41` thresholds passing again**, not
   byte-equality — `Q37`'s own move of making survey acceptance a tolerance.
 
@@ -177,6 +179,23 @@ PROMPT_HASH = blake2b(
     (PROMPT + json.dumps(SCHEMA, sort_keys=True) + MODEL).encode(), digest_size=8
 ).hexdigest()
 
+# The per-building row cache skips the unwrap itself, so the image fingerprint
+# in each response entry's key never gets a chance to guard a row hit. The row
+# key therefore hashes the code the images come from — the unwrap, the mesh
+# loading it reads, and the encoder in this file. Any edit invalidates every
+# row, which costs file reads and rasterising but **no API spend**: regenerating
+# a row re-derives each face's fingerprint against the response cache, so a
+# no-op refactor replays every paid entry free. Folding this into PROMPT_HASH
+# would instead discard the paid entries themselves — `Q41` records that as the
+# wrong shape, because it keys on source rather than on the image it produces.
+UNWRAP_HASH = blake2b(
+    b"".join(
+        (ROOT / "tools" / name).read_bytes()
+        for name in ("facade_grammar.py", "facade_survey.py", "facade_unwrap.py")
+    ),
+    digest_size=8,
+).hexdigest()
+
 
 def encode_elevation(elevation: Elevation) -> bytes:
     """The elevation as PNG bytes, long edge capped at `MAX_EDGE_PX`."""
@@ -228,16 +247,28 @@ def read_face(client, png: bytes) -> dict:
 
 
 def cached_read(get_client, cache_dir: Path, key: str, elevation: Elevation) -> dict:
-    """The raw-response cache. A hit costs nothing and reproduces exactly —
+    """The raw-response cache. A hit costs an encode and reproduces exactly —
     including needing neither the SDK nor a credential, which is why the
-    client arrives as a factory and is only called on a miss."""
-    path = cache_dir / f"{key}.{PROMPT_HASH}.json"
+    client arrives as a factory and is only called on a miss.
+
+    The image is in the key: an entry answers one prompt about one encoded
+    PNG, so an unwrap change makes a stale entry unfindable rather than
+    silently replayed — `Q37`'s ghost, entering through the one input
+    `PROMPT_HASH` cannot see. Superseded entries are kept: they are the raw
+    record of a paid read, and an unwrap change that is later reverted hits
+    them again for free."""
+    png = encode_elevation(elevation)
+    fingerprint = blake2b(png, digest_size=8).hexdigest()
+    path = cache_dir / f"{key}.{PROMPT_HASH}.{fingerprint}.json"
     if path.exists():
-        return json.loads(path.read_text())
-    result = read_face(get_client(), encode_elevation(elevation))
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(result, indent=1, sort_keys=True))
-    return result
+        result = json.loads(path.read_text())
+    else:
+        if any(cache_dir.glob(f"{key}.{PROMPT_HASH}.*.json")):
+            log.warning("%s: cached answers exist, but none for this image — re-reading", key)
+        result = read_face(get_client(), png)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(result, indent=1, sort_keys=True))
+    return {**result, "image_hash": fingerprint}
 
 
 def refusal_row(reason: str) -> dict:
@@ -272,6 +303,8 @@ def survey_sheet(sheet: str, city: str, zip_dir: Path) -> dict[str, dict]:
     only once every face of the building is settled: a rerun that regenerates
     the table skips the unwrap itself, not just the API spend, so re-emitting
     a 651-building sheet costs file reads rather than minutes of rasterising.
+    Because it skips the unwrap, its key carries `UNWRAP_HASH` — a row is only
+    replayed while the code its images came from is the code on disk.
     """
     get_client = client_factory()
     cache_dir = source_dir(city, SURVEY_SOURCE_ID) / "raw" / sheet
@@ -279,7 +312,7 @@ def survey_sheet(sheet: str, city: str, zip_dir: Path) -> dict[str, dict]:
     with zipfile.ZipFile(zip_dir / f"{sheet}.zip") as bundle:
         documents = sheet_documents(bundle)
         for index, (name, entry) in enumerate(sorted(documents.items()), 1):
-            row_path = cache_dir / f"{name}.row.{PROMPT_HASH}.json"
+            row_path = cache_dir / f"{name}.row.{PROMPT_HASH}.{UNWRAP_HASH}.json"
             if row_path.exists():
                 row = json.loads(row_path.read_text())
             else:

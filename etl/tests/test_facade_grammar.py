@@ -12,6 +12,9 @@ from __future__ import annotations
 
 import io
 import json
+from hashlib import blake2b
+from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 from facade_grammar import (
@@ -20,7 +23,9 @@ from facade_grammar import (
     MAX_EDGE_PX,
     PROMPT_HASH,
     SCHEMA,
+    UNWRAP_HASH,
     agrees,
+    cached_read,
     encode_elevation,
     is_miss,
     refusal_row,
@@ -133,8 +138,62 @@ def test_label_file_holds_the_shape_and_counts_the_record_states() -> None:
 
 
 def test_prompt_hash_is_a_recordable_stamp() -> None:
-    assert len(PROMPT_HASH) == 16
-    assert int(PROMPT_HASH, 16) >= 0
+    for stamp in (PROMPT_HASH, UNWRAP_HASH):
+        assert len(stamp) == 16
+        assert int(stamp, 16) >= 0
+
+
+def elevation(fill: int) -> Elevation:
+    return Elevation(
+        canvas=np.full((8, 8, 3), fill, dtype=np.uint8),
+        coverage=1.0,
+        width_m=1.0,
+        height_m=1.0,
+    )
+
+
+def fingerprint_of(sample: Elevation) -> str:
+    return blake2b(encode_elevation(sample), digest_size=8).hexdigest()
+
+
+def no_client() -> None:
+    raise AssertionError("a cache hit must not construct a client")
+
+
+def canned_client(response: dict, calls: list[int]) -> SimpleNamespace:
+    def create(**_kwargs: object) -> SimpleNamespace:
+        calls.append(1)
+        return SimpleNamespace(
+            stop_reason="end_turn",
+            content=[SimpleNamespace(type="text", text=json.dumps(response))],
+        )
+
+    return SimpleNamespace(messages=SimpleNamespace(create=create))
+
+
+def test_cache_hit_replays_without_a_client_and_stamps_the_image(tmp_path: Path) -> None:
+    sample = elevation(7)
+    canned = result(True, "curtain")
+    (tmp_path / f"k.{PROMPT_HASH}.{fingerprint_of(sample)}.json").write_text(json.dumps(canned))
+    got = cached_read(no_client, tmp_path, "k", sample)
+    assert got == {**canned, "image_hash": fingerprint_of(sample)}
+
+
+def test_changed_image_refuses_the_hit_but_keeps_the_paid_entry(tmp_path: Path) -> None:
+    old, new = elevation(7), elevation(9)
+    stale = tmp_path / f"k.{PROMPT_HASH}.{fingerprint_of(old)}.json"
+    stale.write_text(json.dumps(result(True, "curtain")))
+
+    calls: list[int] = []
+    got = cached_read(lambda: canned_client(result(True, "punched"), calls), tmp_path, "k", new)
+    assert calls == [1]  # the stale entry must not answer for a different image
+    assert got["grammar"] == "punched"
+    assert got["image_hash"] == fingerprint_of(new)
+
+    # The superseded entry is a paid read: it survives, and the old image
+    # still replays it without a client — a reverted unwrap costs nothing.
+    assert stale.exists()
+    assert cached_read(no_client, tmp_path, "k", old)["grammar"] == "curtain"
 
 
 def test_encode_elevation_caps_the_long_edge() -> None:
