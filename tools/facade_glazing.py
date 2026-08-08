@@ -1,4 +1,4 @@
-"""The glazing bimodality check (`Q40`) — does occluded geometry move the dip?
+"""The glazing survey (`Q40`) — dip and glass tint from the decontaminated selection.
 
 `Q40`'s Probe 1 measured glazed-vs-blank as a bimodality dip in each building's
 wall-texel `L*` population — and its wall selection was `wall_texels()`'s
@@ -31,18 +31,30 @@ selection a gate could trust, not which single cause moved each building.
 in front of a wall is in the wall's texels; no geometric filter can remove it.
 The unwrap retires geometry contamination only.
 
+The same walk is also the survey the contamination check gated: per building it
+writes `facade_glazing.<sheet>.json` — the unwrap dip, the dark mode's
+`(L*, b*)` tint, and the resolution gate's density — keyed by the stem
+`pipeline/buildings.py` joins on, beside `facade_survey.py`'s colour table.
+⚠️ **The table records measurements, never verdicts.** The dip boundaries are
+pinned here so that re-deriving them is an edit to this file and a re-emit of
+nothing — a consumer classifies from the dip at read time, and a stale-verdict
+table cannot exist.
+
 Run:  .venv/bin/python tools/facade_glazing.py 11-SW-9D
+      .venv/bin/python tools/facade_glazing.py --all
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
 import zipfile
 from dataclasses import dataclass
 from hashlib import blake2b
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -61,7 +73,9 @@ from facade_survey import (  # noqa: E402
     wall_texels,
 )
 from facade_unwrap import unwrap_building  # noqa: E402
+from pipeline.buildings import HUE_SOURCE_ID, stem  # noqa: E402
 from pipeline.colour import srgb_to_lab  # noqa: E402
+from pipeline.fetch import source_dir  # noqa: E402
 from pipeline.gltf import MeshData, triangle_cross  # noqa: E402
 
 log = logging.getLogger(__name__)
@@ -89,6 +103,16 @@ MIN_TEX_PER_M = 10.0
 # distribution rather than a median.
 MIN_POPULATION = 1024
 
+# The survey table's filename stem; per sheet it takes the sheet id as an
+# infix, exactly as `facade_survey.TABLE_STEM` does for the colour table it
+# sits beside.
+TABLE_STEM = "facade_glazing"
+
+# What of a check row the survey table keeps: the decontaminated measurements
+# a consumer classifies from, and the gate's density. The atlas columns stay
+# out deliberately — they are the contamination comparison, not the survey.
+TABLE_COLUMNS = ("tex_per_m", "dark_share", "dark_L", "dark_b", "light_L", "light_b")
+
 
 @dataclass(frozen=True)
 class Verdict:
@@ -113,6 +137,16 @@ def otsu_bin(hist: np.ndarray) -> int:
     return int(np.argmax(variance))
 
 
+def smoothed_split(lstar: np.ndarray) -> tuple[np.ndarray, int]:
+    """`(smoothed histogram, Otsu bin)` — the one histogram both measurements
+    read. The dip and the dark-mode tint must agree about where the boundary
+    between the modes falls, or a building could be bimodal by one reading and
+    tinted from the wrong population by the other."""
+    hist, _ = np.histogram(lstar, bins=BINS, range=(0.0, 100.0))
+    smooth = np.convolve(hist.astype(float), np.ones(3) / 3.0, mode="same")
+    return smooth, otsu_bin(smooth)
+
+
 def dip_statistic(lstar: np.ndarray) -> float:
     """Valley depth between the two `L*` modes: 0 = clean bimodal, 1 = no dip.
 
@@ -121,9 +155,7 @@ def dip_statistic(lstar: np.ndarray) -> float:
     Otsu splits a unimodal blob just as happily (`Q40`: `eta` never goes low),
     which is exactly why the dip and not the split quality is the statistic.
     """
-    hist, _ = np.histogram(lstar, bins=BINS, range=(0.0, 100.0))
-    smooth = np.convolve(hist.astype(float), np.ones(3) / 3.0, mode="same")
-    split = otsu_bin(smooth)
+    smooth, split = smoothed_split(lstar)
     below, above = smooth[: split + 1], smooth[split + 1 :]
     if not len(above) or below.max() == 0 or above.max() == 0:
         return 1.0
@@ -148,8 +180,36 @@ def verdict(lstar: np.ndarray) -> Verdict:
     return Verdict(dip=dip, kind=kind)
 
 
-def photographic_lstar(rgb: np.ndarray, seed: str) -> tuple[np.ndarray, int]:
-    """`(L*, sampled)`: photographic texels' `L*`, and how many texels the
+def mode_tint(lab: np.ndarray) -> dict[str, float]:
+    """Median `(L*, b*)` of each `L*` mode, split where the dip was measured.
+
+    The boundary is `smoothed_split`'s — the same histogram and the same Otsu
+    bin the dip reads — so the population this calls "dark" is exactly the one
+    the dip called a mode. `Q40`: on a glazed building the dark mode is the
+    glass, and tint is 2-D `L*` x `b*` because `a*` carries 6.5% of the
+    variance; `a*` is dropped here for that recorded reason.
+
+    ⚠️ **Recorded unconditionally, meaningful conditionally.** On a building the
+    dip reads unimodal, the "dark mode" is the shaded half of one material and
+    says nothing about glass — the consumer gates on the dip first. Emitting it
+    anyway is what keeps this table measurements-only.
+    """
+    _, split = smoothed_split(lab[:, 0])
+    # Bin `split` is the last bin of the low mode, so the boundary in `L*` is
+    # its upper edge under the histogram's fixed [0, 100] range.
+    boundary = (split + 1) * (100.0 / BINS)
+    dark = lab[lab[:, 0] <= boundary]
+    light = lab[lab[:, 0] > boundary]
+    tint: dict[str, float] = {"dark_share": round(len(dark) / len(lab), 3)}
+    for name, mode in (("dark", dark), ("light", light)):
+        if len(mode):
+            tint[f"{name}_L"] = round(float(np.median(mode[:, 0])), 2)
+            tint[f"{name}_b"] = round(float(np.median(mode[:, 2])), 2)
+    return tint
+
+
+def photographic_lab(rgb: np.ndarray, seed: str) -> tuple[np.ndarray, int]:
+    """`(lab, sampled)`: photographic texels' `L*a*b*`, and how many texels the
     photographic cut was applied to — the denominator a caller estimating a
     photographic share must use, rather than re-deriving the sampling rule.
 
@@ -163,7 +223,7 @@ def photographic_lstar(rgb: np.ndarray, seed: str) -> tuple[np.ndarray, int]:
         rng = np.random.default_rng(int.from_bytes(digest.digest(), "big"))
         rgb = rgb[rng.choice(len(rgb), SAMPLE_CAP, replace=False)]
     lab = srgb_to_lab(rgb)
-    return lab[photographic(rgb, lab), 0], len(rgb)
+    return lab[photographic(rgb, lab)], len(rgb)
 
 
 def wall_area_m2(meshes: list[MeshData]) -> float:
@@ -200,7 +260,7 @@ def check_sheet(archive: Path) -> list[dict]:
             # The atlas gather is measured and freed before the unwrap runs, so
             # the region's 270 MB worst case is never resident beside canvases
             # and depth buffers — only the capped sample survives.
-            atlas_lstar, atlas_sampled = photographic_lstar(atlas_rgb, name)
+            atlas_lab, atlas_sampled = photographic_lab(atlas_rgb, name)
             del atlas_rgb
 
             elevations = unwrap_building(meshes, decoded=decoded)
@@ -217,10 +277,10 @@ def check_sheet(archive: Path) -> list[dict]:
             del elevations
             unwrap_rgb = np.concatenate(covered) if covered else np.empty((0, 3), dtype=np.uint8)
             del covered
-            unwrap_lstar, _ = photographic_lstar(unwrap_rgb, name)
+            unwrap_lab, _ = photographic_lab(unwrap_rgb, name)
             del unwrap_rgb
 
-            if len(atlas_lstar) < MIN_POPULATION or len(unwrap_lstar) < MIN_POPULATION:
+            if len(atlas_lab) < MIN_POPULATION or len(unwrap_lab) < MIN_POPULATION:
                 log.info(
                     "[%d/%d] %s: too few photographic texels — skipped",
                     index,
@@ -232,11 +292,11 @@ def check_sheet(archive: Path) -> list[dict]:
             # Density estimated from the sample's photographic share, scaled to
             # the full gather — converting every texel of a 90-million-texel
             # building to `L*` would cost more than the answer is worth.
-            share = len(atlas_lstar) / atlas_sampled
+            share = len(atlas_lab) / atlas_sampled
             area = wall_area_m2(meshes)
             tex_per_m = float(np.sqrt(total_texels * share / area)) if area > 0 else 0.0
 
-            atlas, unwrap = verdict(atlas_lstar), verdict(unwrap_lstar)
+            atlas, unwrap = verdict(atlas_lab[:, 0]), verdict(unwrap_lab[:, 0])
             rows.append(
                 {
                     "building": name,
@@ -245,6 +305,7 @@ def check_sheet(archive: Path) -> list[dict]:
                     "atlas_kind": atlas.kind,
                     "unwrap_dip": unwrap.dip,
                     "unwrap_kind": unwrap.kind,
+                    **mode_tint(unwrap_lab),
                 }
             )
             log.info(
@@ -302,21 +363,75 @@ def summarise(rows: list[dict]) -> None:
         )
 
 
+def survey_rows(rows: list[dict], sheet: str) -> dict[str, dict[str, Any]]:
+    """A sheet's check rows as the survey table, keyed by the stem
+    `pipeline/buildings.py` joins on — the same key warning `facade_survey`
+    records: a table keyed one character differently is not an error, just a
+    consumer that never matches anything.
+
+    The unwrap dip is written as `dip`, unqualified, because the table carries
+    only the decontaminated selection — a consumer never chooses between two.
+    """
+    return {
+        stem(row["building"]): {
+            "dip": row["unwrap_dip"],
+            **{column: row[column] for column in TABLE_COLUMNS if column in row},
+            "sheet": sheet,
+        }
+        for row in rows
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("sheets", nargs="+", help="sheet ids, e.g. 11-SW-9D")
+    parser.add_argument("sheets", nargs="*", help="sheet ids, e.g. 11-SW-9D")
+    parser.add_argument("--city", default="hong_kong")
     parser.add_argument(
         "--zip-dir",
         type=Path,
         default=INDIVIDUALISED_DIR,
         help="where the individualised sheet archives live",
     )
+    parser.add_argument(
+        "--out-dir", type=Path, help="where to write facade_glazing.<sheet>.json [the city's cache]"
+    )
+    parser.add_argument("--all", action="store_true", help="every archive in --zip-dir")
+    parser.add_argument(
+        "--merge", action="store_true", help="also write the merged facade_glazing.json"
+    )
     arguments = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    for sheet in arguments.sheets:
-        rows = check_sheet(arguments.zip_dir / f"{sheet}.zip")
+    out_dir = arguments.out_dir or source_dir(arguments.city, HUE_SOURCE_ID)
+    archives = (
+        sorted(arguments.zip_dir.glob("*.zip"))
+        if arguments.all
+        else [arguments.zip_dir / f"{sheet}.zip" for sheet in arguments.sheets]
+    )
+    if not archives:
+        parser.error("name at least one sheet, or pass --all")
+
+    def write(name: str, table: dict[str, dict[str, Any]], label: str) -> None:
+        destination = out_dir / name
+        destination.write_text(json.dumps(table, indent=1, sort_keys=True))
+        log.info("%s: %d rows -> %s", label, len(table), destination)
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    merged: dict[str, dict[str, Any]] = {}
+    for archive in archives:
+        rows = check_sheet(archive)
         summarise(rows)
+        table = survey_rows(rows, archive.stem)
+        write(f"{TABLE_STEM}.{archive.stem}.json", table, archive.stem)
+        clash = merged.keys() & table.keys()
+        if clash:
+            raise ValueError(
+                f"{archive.stem}: {len(clash)} stems already surveyed, e.g. {min(clash)}"
+            )
+        merged.update(table)
+
+    if arguments.merge:
+        write(f"{TABLE_STEM}.json", merged, "merged")
     return 0
 
 

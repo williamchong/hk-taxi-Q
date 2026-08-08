@@ -16,7 +16,9 @@ from facade_glazing import (
     UNIMODAL_ABOVE,
     Verdict,
     dip_statistic,
+    mode_tint,
     otsu_bin,
+    survey_rows,
     verdict,
     wall_area_m2,
 )
@@ -49,6 +51,46 @@ def test_one_blob_reads_unimodal() -> None:
 def test_verdict_boundaries_are_the_recorded_ones() -> None:
     assert BIMODAL_BELOW == 0.25
     assert UNIMODAL_ABOVE == 0.60
+
+
+def test_mode_tint_splits_where_the_dip_does_and_reads_each_mode() -> None:
+    # A cool dark mode against a warm light one — the split the dip measures is
+    # the split the tint reads, so each median lands inside its own mode.
+    rng = np.random.default_rng(7)
+    dark = np.stack(
+        [rng.normal(20, 3, 30_000), np.zeros(30_000), rng.normal(-8, 1, 30_000)], axis=1
+    )
+    light = np.stack(
+        [rng.normal(70, 3, 10_000), np.zeros(10_000), rng.normal(5, 1, 10_000)], axis=1
+    )
+    tint = mode_tint(np.concatenate([dark, light]))
+    assert abs(tint["dark_share"] - 0.75) < 0.01
+    assert abs(tint["dark_L"] - 20.0) < 1.0
+    assert abs(tint["dark_b"] - (-8.0)) < 0.5
+    assert abs(tint["light_L"] - 70.0) < 1.0
+    assert abs(tint["light_b"] - 5.0) < 0.5
+
+
+def test_survey_rows_key_by_stem_and_keep_no_atlas_column() -> None:
+    row = {
+        "building": "B352631575201063A0",
+        "tex_per_m": 12.5,
+        "atlas_dip": 0.241,
+        "atlas_kind": "bimodal",
+        "unwrap_dip": 0.972,
+        "unwrap_kind": "unimodal",
+        "dark_share": 0.4,
+        "dark_L": 22.1,
+        "dark_b": -6.3,
+        "light_L": 68.0,
+        "light_b": 2.2,
+    }
+    table = survey_rows([row], "11-SW-9D")
+    assert set(table) == {"B352631575201063"}
+    entry = table["B352631575201063"]
+    assert entry["dip"] == 0.972
+    assert entry["sheet"] == "11-SW-9D"
+    assert not any("atlas" in key or "kind" in key for key in entry)
 
 
 def test_wall_area_counts_textured_walls_only() -> None:
