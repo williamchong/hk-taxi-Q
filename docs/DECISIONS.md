@@ -1813,6 +1813,17 @@ unwraps (labels shown, reader answers deliberately withheld), and no label was c
 adjudication clause therefore remains unexercised, and the graded numbers stand against the labels
 exactly as authored — now with a human check behind them rather than only a same-family one.
 
+✅ **Resurveyed onto `claude-sonnet-5` (2026-08-09), by the rule this record fixed.** The pin exists
+so that a model change is a graded resurvey, not a settings tweak — and that is how it was changed.
+When the full-sheet run was priced (8,661 paid calls, ~$103 on Opus), Sonnet 5 and Haiku 4.5 were
+graded against the same 40 labels and the same pre-fixed bars. Sonnet 5 **passed** — strict 18/20,
+marginal 6/6, refusal 14/14, glazed **24/24**, prompt `d6e59b39307b215d` — at two-fifths of Opus's
+price. Haiku 4.5 **failed** both the strict pool (15/20) and the refusal pool (12/14), in the
+mirror-image ways the pools exist to catch: high-confidence refusals of degraded-but-readable faces,
+and high-confidence reads of faces a human refused. The region survey therefore runs on Sonnet 5.
+The 40 Opus responses stay in the cache under their own prompt hash — the raw record of the original
+graded run, and a free replay if the pin ever moves back.
+
 **Reproducibility answers `Q37`'s ghost by tolerance, not byte-equality.** This is the repo's first
 non-deterministic input producer: a rerun against the same bytes may differ. The tool therefore
 caches every raw API response beside its output table in the sources cache, keyed by content, model
@@ -1883,9 +1894,10 @@ survey dissolves.
 
 ### Decided
 
-- **The reader is `claude-opus-5` through the official SDK, structured-output constrained**, so a
+- **The reader is `claude-sonnet-5` through the official SDK, structured-output constrained**, so a
   malformed response is a retry at the API layer, not a parse. The model is pinned in the tool; a
-  model change is a resurvey, not a cache hit.
+  model change is a resurvey, not a cache hit — exercised once, above, when the pin moved from
+  `claude-opus-5` on a passing graded run.
 - **The schema collects render-facing fields beyond the graded axes** — storey count, heavy-band
   period, podium split and shopfront glazing, balconies, pattern emphasis — because they ride the
   same call for free and adding them later would change the prompt hash, making the shipping reader

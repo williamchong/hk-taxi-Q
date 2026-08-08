@@ -65,8 +65,10 @@ log = logging.getLogger(__name__)
 # rule 7) that the committed tool re-derives.
 SURVEY_SOURCE_ID = "facade_grammar"
 
-# Pinned. `Q41` records that changing this is a resurvey, not a settings tweak.
-MODEL = "claude-opus-5"
+# Pinned. `Q41` records that changing this is a resurvey, not a settings tweak —
+# exercised once: Sonnet 5 passed the same graded gate (strict 18/20, marginal
+# 6/6, refusal 14/14, glazed 24/24) at two-fifths of Opus's price.
+MODEL = "claude-sonnet-5"
 
 # Larger elevations are downscaled so the long edge fits the model's native
 # resolution; at 8 texels/m even a halved image keeps a 2.4 m bay legible.
