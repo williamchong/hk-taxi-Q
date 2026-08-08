@@ -1679,13 +1679,14 @@ also occurs: `B358891570501063A0` goes 1.000 → **0.006** and `B357961566001063
 occluding geometry having *hidden* real bimodality on the buildings it covered.
 
 ✅ **The second sheet agrees the movement is material, and adds that its direction is not fixed.**
-`11-SW-14B`, 715 measured and 699 gated: verdicts move on **193 of 699** — 102 toward unimodal
-against 91 toward bimodal — tallies 51/154/494 becoming **66/124/509**, median dip 0.857 → 0.881.
+`11-SW-14B`, 715 measured and 699 gated: verdicts move on **195 of 699** — 102 toward unimodal
+against 93 toward bimodal — tallies 51/152/496 becoming **66/123/510**, median dip 0.857 → 0.891.
 Where `11-SW-9D`'s movement ran net toward unimodal, `14B` sharpens both ends and drains the
 middling bucket: decontamination is not a uniform correction some scale factor on the old numbers
 could reproduce, it changes individual buildings' answers in both directions. The sheets also
-disagree about the city itself — 45% against 71% clearly unimodal — so the threshold re-derivation
-needs more than one sheet, as this record already warns for other numbers.
+disagree about the city itself — 51% against 73% clearly unimodal — so the threshold re-derivation
+needs more than one sheet, as this record already warns for other numbers. (Both figures are the
+decontaminated column: 26/51 against 510/699.)
 
 ⚠️ **Probe 1's absolute numbers do not carry, for a second reason: its implementation was never
 committed** — this record's own `Q37` ghost. The new tool's atlas column, same selection but its own
@@ -1713,9 +1714,9 @@ them deliberately rather than by reimplementation drift.
 
 ### Open
 
-~~The contamination check above, first — it gates everything else.~~ ✅ Discharged by
-`tools/facade_glazing.py`; the verdict is that Probe 1's numbers cannot be carried, so the survey
-extension starts from the decontaminated selection and re-derives the gate thresholds. Then the
+✅ The contamination check that gated everything else is discharged by `tools/facade_glazing.py`;
+the verdict is that Probe 1's numbers cannot be carried, so the survey extension starts from the
+decontaminated selection and re-derives the gate thresholds. Still open: the survey extension, the
 `TEXCOORD_1` plumbing and the `schema_version` bump for glazing and tint only.
 
 ⚠️ **One sheet, `11-SW-9D`, underlies every number here.** The re-survey is 6.1 GB across six; a
@@ -1852,8 +1853,11 @@ zero API calls against the new keys — and a test pins that a mutated canvas fo
 the superseded entry still answers for its own image.
 
 **The per-building row cache is guarded separately, by `UNWRAP_HASH`.** A row hit skips the unwrap
-itself, so the image fingerprint above can never protect it. Its key therefore hashes the three
-source files upstream of the PNG (`facade_grammar.py`, `facade_survey.py`, `facade_unwrap.py`).
+itself, so the image fingerprint above can never protect it. Its key therefore hashes the code the
+images actually pass through: `facade_survey.py`, `facade_unwrap.py`, the glTF parser and texture
+decoder under both (`pipeline/gltf.py`, `pipeline/buildings.py`), and `facade_grammar.py`'s encoder
+with its two row-shaping knobs — deliberately *not* the whole reader file, so a log-message tweak
+does not re-rasterise a sheet.
 That is source-keying — the shape rejected for `PROMPT_HASH` above — and it is correct *here*
 because the two caches cost different currencies: invalidating a row costs file reads and
 rasterising with **no API spend** (regeneration re-checks each face against the response cache, so
