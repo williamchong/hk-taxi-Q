@@ -354,6 +354,13 @@ uniform float quiet_clamp : hint_range(0.0, 1.0) = 0.0;
 uniform float quiet_pier_ratio : hint_range(0.0, 0.9) = 0.0;
 uniform float quiet_solid : hint_range(0.0, 1.0) = 0.0;
 uniform float quiet_pane_mute : hint_range(0.0, 1.0) = 0.0;
+// Survey-state triage tint: paints each facade with which mechanism owns its
+// look — magenta the quiet tier (grammar refused), orange a refusal re-glazed
+// by its committed glazed axis (`Q46`'s 46-building carve-out), green a
+// committed grammar. A sighting of wrong fenestration then names its fix —
+// `quiet_*` retune, the carve-out, or the `W4` override table — instead of
+// guessing. Dev-only: never authored on in the `.tres`.
+uniform float survey_debug : hint_range(0.0, 1.0) = 0.0;
 
 group_uniforms night;
 // Reserved and shipped at zero, as in the sibling. `ART_DESIGN.md` calls night a
@@ -1056,6 +1063,16 @@ void fragment() {
 	// reads as grey card wherever the sun is not directly on it. `fresnel` is
 	// zero off a facade, so it needs no marker test of its own.
 	albedo = mix(albedo, sky_reflection, fresnel * wall_sky_tint);
+
+	// The triage tint goes over everything, or an attribution could be read off
+	// a wall the shopfront band or sky bounce had already repainted. Facades
+	// only: markers other than facade carry no survey state to attribute.
+	if (survey_debug > 0.001 && is_facade) {
+		vec3 triage = survey_state.z < 0.5
+			? (survey_state.x > 1.5 ? vec3(1.0, 0.55, 0.0) : vec3(1.0, 0.0, 1.0))
+			: vec3(0.0, 0.8, 0.2);
+		albedo = mix(albedo, triage, survey_debug * 0.65);
+	}
 
 	ALBEDO = albedo;
 	METALLIC = 0.0;
