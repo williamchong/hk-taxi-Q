@@ -68,8 +68,16 @@
 ; file's parked fabric values the overrides alone would draw a half-look
 ; (surveyed curtain walls glaze while punched stock stays blank, because
 ; `glass_ratio` is 0.0). The `Q26` re-shoot grades `survey_apply = 1.0`
-; *together with* the seven `542cac3` values as candidate A' — measured surface
-; on accurate massing — and both switches stay one edit here, no rebuild.
+; *together with* the seven `542cac3` values — measured surface on accurate
+; massing — and both switches stay one edit here, no rebuild. That candidate is
+; `A″`, shot at `Q43` into `build/driver/q43/`; `A′` before it was the same edit
+; over the collapsed fenestration gate and is not a look, only a defect.
+;
+; ⚠️ `recess_colour` and `unglazed_reflect` are what an opening is made of where
+; the survey says glazing does not *dominate* — `punched` stock (`Q43`). Inert
+; while the look is parked, on the same rule as `glass_colour` above, and
+; authored rather than measured: `Q40` measured the tint of glazing, and nothing
+; has measured a concrete reveal.
 ; `glass_astar` is the a* the tint encoding dropped (`Q40` PCA, 6.5%), one
 ; value for the city, retuned at `Q26` if at all.
 [gd_resource type="ShaderMaterial" load_steps=2 format=3]
@@ -120,6 +128,8 @@ shader_parameter/sky_reflection = Color(0.62, 0.78, 0.92, 1)
 shader_parameter/glass_reflect = 0.58
 shader_parameter/fresnel_power = 4.0
 shader_parameter/glass_roughness = 0.12
+shader_parameter/recess_colour = Color(0.12, 0.12, 0.13, 1)
+shader_parameter/unglazed_reflect = 0.18
 shader_parameter/accent_a = Color(0.85, 0.19, 0.16, 1)
 shader_parameter/accent_b = Color(0.11, 0.45, 0.72, 1)
 shader_parameter/accent_c = Color(0.95, 0.62, 0.09, 1)

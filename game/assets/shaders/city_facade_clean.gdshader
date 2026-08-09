@@ -236,6 +236,20 @@ uniform vec3 sky_reflection : source_color = vec3(0.62, 0.78, 0.92);
 uniform float glass_reflect : hint_range(0.0, 1.0) = 0.85;
 uniform float fresnel_power : hint_range(1.0, 8.0) = 4.0;
 uniform float glass_roughness : hint_range(0.0, 1.0) = 0.12;
+// ⚠️ **An opening is not necessarily glass** — the sibling rule to "a mullion is
+// wall, not a dark line", and the second half of `Q43`. Where the survey says
+// glazing does not *dominate* — `punched` stock, which is most of the real
+// Hennessy Road — the openings are dark reveals in solid wall, and these two are
+// what they are made of.
+//
+// ⚠️ **Authored, not measured.** `Q40` measured the tint of *glazing*; nothing has
+// measured a concrete reveal, and the `Q26` re-shoot is where these get judged.
+uniform vec3 recess_colour : source_color = vec3(0.12, 0.12, 0.13);
+// Share of `glass_reflect` a non-dominant opening keeps. Deliberately not zero: a
+// Hong Kong tenement window is dark glass in a concrete hole and does catch the
+// sky, and at zero the openings stop reading as openings and start reading as
+// dark rectangles painted on the wall.
+uniform float unglazed_reflect : hint_range(0.0, 1.0) = 0.18;
 
 group_uniforms accent;
 // Three, hashed per building. Flat and saturated, and applied to whole spandrel
@@ -534,22 +548,48 @@ void fragment() {
 			// all, whether its podium has shopfronts, and whether it takes an
 			// accent colour. Between them they are what stops a block reading as
 			// one wallpapered surface.
+			// ⚠️ **Two questions, and they are not the same question** (`Q43`).
+			// `fenestrated` is geometry: whether this wall has openings at all.
+			// `glazed` is materiality: whether those openings are glass — and it is
+			// the reader's axis, defined in `tools/facade_grammar.py` as whether
+			// glazing *dominates* the façade area. `punched` is defined there as
+			// openings cut into a dominant solid wall, so `(glazed=false, punched)`
+			// is the coherent pair `building_verdicts` is right to keep. One float
+			// doing both jobs is what zeroed the grid on 39.3% of the city's wall
+			// vertices — every punched building, by construction rather than by
+			// accident — with the punched treatment below written, shipped, and
+			// never having drawn a pixel.
+			//
+			// The hash cannot tell the two apart and does not need to: one draw
+			// answers both, exactly as it did before the split.
 			float glazed = step(solid_share, draw(seed, 1.0));
+			float fenestrated = glazed;
 			float has_shop = step(1.0 - shopfront_share, draw(seed, 10.0));
 			bool accented = draw(seed, 2.0) < accent_share;
 
 			// The survey overrides, applied *upstream* of the guard below on
 			// purpose: the reader's verdict replaces the hash draw where one was
 			// committed (`Q41`), and everything downstream — the guard included —
-			// reads the overridden value. A surveyed `blank` wall is solid
-			// whatever the glazed axis refused; the merge nulls a glazed-true
-			// blank, so the two lines cannot fight a committed verdict.
+			// reads the overridden value.
 			bool survey_on = survey_apply > 0.5;
 			if (survey_on && survey_state.x > 0.5) {
 				glazed = survey_state.x > 1.5 ? 1.0 : 0.0;
+				// ⚠️ A committed `glazed` is positive evidence that openings exist;
+				// a committed *un*glazed is not evidence that they do not, because it
+				// says only that glazing does not dominate. So this axis may raise
+				// `fenestrated` and never lower it — the grammar is the one allowed
+				// to deny.
+				fenestrated = max(fenestrated, glazed);
 			}
-			if (survey_on && abs(survey_state.z - SURVEY_BLANK) < 0.5) {
-				glazed = 0.0;
+			// A surveyed `blank` wall is solid whatever the glazed axis refused, and
+			// `blank` is the only verdict that denies openings. Applied after the
+			// glazed override so it wins; the merge nulls a glazed-true blank, so the
+			// two cannot fight a committed verdict. Where the grammar *refused*,
+			// `fenestrated` keeps the hash: nothing the reader answers says "this
+			// wall is blank" except the grammar, and a refusal must not silently
+			// acquire a verdict the reader never gave.
+			if (survey_on && survey_state.z > 0.5) {
+				fenestrated = abs(survey_state.z - SURVEY_BLANK) < 0.5 ? 0.0 : 1.0;
 			}
 
 			// ⚠️ **Every element below is drawn *into* the albedo, so a tuning that
@@ -564,13 +604,17 @@ void fragment() {
 			// ⚠️ **It is derived, so it has to be kept honest.** Anything added below
 			// that can reach the albedo while all five of these are off must be added
 			// here too. `mullion_darkness` and `emission_strength` are deliberately
-			// absent: both reach it only through `glazed` or `has_shop`, which are
-			// already tested. The survey overrides need no term either, and for the
-			// same reason — they are applied *above*, so `glazed` here is already the
-			// overridden value, and the surveyed tint reaches albedo only through
-			// `glass`, which needs `glazed`. At `survey_apply = 0.0` the predicate,
-			// and the parked look it guards, are byte-identical to schema 5.
-			bool draws_detail = glazed > 0.5
+			// absent: both reach it only through `fenestrated` or `has_shop`, which
+			// are already tested. `glazed` earns no term of its own, and that is an
+			// invariant rather than an oversight — since `Q43` it reaches the albedo
+			// only through the pane material, which is multiplied by a mask that
+			// requires `fenestrated`, so `glazed > 0.5` with `fenestrated < 0.5`
+			// draws nothing. The survey overrides need no term either, and for the
+			// same reason — they are applied *above*, so these are already the
+			// overridden values, and the surveyed tint reaches albedo only through
+			// `opening_mask`. At `survey_apply = 0.0` the predicate, and the parked look it
+			// guards, are byte-identical to schema 5.
+			bool draws_detail = fenestrated > 0.5
 				|| has_shop > 0.5
 				|| accented
 				|| cornice_darkness > 0.0
@@ -603,7 +647,7 @@ void fragment() {
 				// Hashed by default; the reader's verdict replaces the draw where
 				// one was committed (`Q41`). `mixed` takes the ribbon — "two or
 				// more each covering a substantial share" names no single grammar
-				// to draw — and `blank` was already handled through `glazed`.
+				// to draw — and `blank` was already handled through `fenestrated`.
 				float kind = draw(seed, 5.0);
 				float treatment = 0.0;
 				if (kind < fin_share) {
@@ -627,14 +671,29 @@ void fragment() {
 				float h_ratio = glass_ratio;
 				float pier = mullion_ratio;
 				float horizontal = 1.0;
+				// ⚠️ **The fin and curtain ratios presume the opening is glass, and
+				// since `Q43` it need not be.** The fin's uncut band and the curtain's
+				// 92% are areas of *glazing* between slender members; handed to a
+				// recess they paint a dark slab rather than windows, on about 2% of
+				// the city's walls — a committed `fin` the survey calls unglazed
+				// (0.94%), plus whatever the hash draws as fin or curtain on a wall
+				// the reader called unglazed but left the grammar refused. So where
+				// materiality contradicts the grammar, the opening falls back to
+				// punched proportions and the *pier* keeps the building's identity.
+				// (A committed unglazed `curtain` cannot arrive — `building_verdicts`
+				// nulls that pair — but the hashed treatment can.)
 				if (treatment == 1.0) {
-					// Vertical fin: continuous piers the full height, no horizontal cut.
-					horizontal = 0.0;
+					// Vertical fin: continuous piers the full height, no horizontal
+					// cut. Unglazed, the cut comes back: a fin tower with punched
+					// windows between its piers is still a fin tower, and a
+					// full-height slot is not an opening.
+					horizontal = 1.0 - glazed;
+					h_ratio = glass_ratio * 0.62;
 					pier = fin_pier_ratio;
 				} else if (treatment == 2.0) {
 					// Full curtain wall: both masks nearly open, a hairline grid.
-					h_ratio = 0.92;
-					pier = 0.05;
+					h_ratio = mix(glass_ratio * 0.62, 0.92, glazed);
+					pier = mix(punched_pier_ratio, 0.05, glazed);
 				} else if (treatment == 3.0) {
 					// Punched windows in solid wall — the older stock.
 					h_ratio = glass_ratio * 0.62;
@@ -680,7 +739,13 @@ void fragment() {
 				// tower. Bounded rather than "all the remaining solid": colouring every
 				// non-glazed strip makes the building read as the accent with white
 				// stripes, which is the wrong way round.
-				if (accented && glazed > 0.5) {
+				// Keyed to `fenestrated`, not `glazed` (`Q43`): the course decorates
+				// the tower grid, so it follows whether that grid is drawn at all
+				// rather than what its openings are made of. ⚠️ It is placed off the
+				// *uniform* `glass_ratio` and not off `h_ratio`, so on any grammar
+				// that overrode the ratio it does not in fact sit against the edge of
+				// the ribbon — pre-existing, and inert while `accent_share` is 0.0.
+				if (accented && fenestrated > 0.5) {
 					float course = band(
 						ribbon,
 						0.5 + glass_ratio * 0.5,
@@ -689,9 +754,15 @@ void fragment() {
 					albedo = mix(albedo, accent, course * above * accent_opacity * fade);
 				}
 
-				// Mullions divide the glazing into bays. Drawn into the albedo after the
-				// glass is mixed in so a mullion is opaque frame, not tinted glass.
-				float tower = ribbon_mask * glazed * above * fade;
+				// Mullions divide the openings into bays. Drawn into the albedo after
+				// the glass is mixed in so a mullion is opaque frame, not tinted glass.
+				//
+				// `fenestrated`, not `glazed` (`Q43`) — this is where the openings get
+				// their shape, and the punched grammar above has already narrowed them
+				// to `glass_ratio * 0.62` in more wall. "Dominant solid" is expressed
+				// as coverage here and as material below, which is how a tenement and
+				// a curtain-wall tower come to differ in more than window spacing.
+				float openings = ribbon_mask * fenestrated * above * fade;
 				// ⚠️ **A mullion is wall, not a dark line.** The pier between two panes is
 				// the same pale concrete as the facade, so this cuts the glass away and
 				// lets the wall through — it must not also darken what it reveals, which
@@ -701,10 +772,29 @@ void fragment() {
 				// a podium column are not the same member.
 				float mullion = band(bay, 0.0, pier);
 				float shop_mullion = band(bay, 0.0, shopfront_pier_ratio);
-				float glass = clamp(
-					tower * (1.0 - mullion) + shop * (1.0 - shop_mullion), 0.0, 1.0
-				);
-				float reveal = max(mullion * tower, shop_mullion * shop);
+				float tower_pane = openings * (1.0 - mullion);
+				float shop_pane = shop * (1.0 - shop_mullion);
+				// ⚠️ **`opening_mask`, not `glass` — since `Q43` this covers recesses
+				// too**, and the name it used to carry is the one whose meaning
+				// changed. Everything below scales by it: the pane colour, the
+				// roughness, the mullion shadow and the night emission.
+				float opening_mask = clamp(tower_pane + shop_pane, 0.0, 1.0);
+				float reveal = max(mullion * openings, shop_mullion * shop);
+
+				// ⚠️ **How glassy this fragment's opening is, weighted per mask rather
+				// than per building.** A shopfront is glass whatever the tower is made
+				// of — `has_shop` never passed through the glazed gate and must not
+				// start now, or every tenement's ground floor turns to concrete. The
+				// two masks are disjoint at any sane tuning (`above` zeroes the tower
+				// below `podium_height_m`, and `shop_top` peaks at `shopfront_top_m *
+				// 1.5`, 6.9 m against 12.0 as shipped), so this is a coverage weight
+				// and not a blend of two materials; the `max` only guards the
+				// fragments where both are zero. ⚠️ Push `shopfront_top_m * 1.5` past
+				// `podium_height_m` and the clamp above caps the denominator while the
+				// numerator keeps climbing, so the overlap reads glassier than its
+				// coverage. Those are both tuning, so this is a caveat, not an
+				// invariant.
+				float glassy = mix(glazed, 1.0, shop_pane / max(opening_mask, 1e-4));
 
 				// The mirror. A reflected ray's own elevation picks up the sky gradient,
 				// so a wall's glazing changes as it turns and as the camera moves — which
@@ -724,28 +814,59 @@ void fragment() {
 					smoothstep(-0.08, 0.08, bowed)
 				);
 
-				float tint = draw(seed, 8.0);
-				vec3 pane_colour = tint < 0.34 ? glass_colour : (tint < 0.67 ? glass_tint_b : glass_tint_c);
-				if (survey_on && survey_state.y > 0.5) {
-					// The measured glass, decoded in `vertex()` — the hash pick
-					// above stays the refusal fallback.
-					pane_colour = survey_pane;
+				// An unglazed opening is a dark reveal that keeps a little of the sky,
+				// not a mirror and not a decal. ⚠️ Not `pane` — that is the mirror's
+				// `vec2` cell index above, and the emission block below still reads it.
+				//
+				// The tint pick is skipped where it cannot be seen: `glassy` is zero
+				// unless this building is glazed or has a shopfront, and at zero the
+				// mix below returns `recess_colour` whatever the pane is. That is a
+				// `sin` and a two-compare select saved on every punched wall — half
+				// the city — and the predicate is per-building, so the branch is as
+				// coherent as `draws_detail` itself.
+				vec3 opening_colour = recess_colour;
+				if (glazed > 0.5 || has_shop > 0.5) {
+					float tint = draw(seed, 8.0);
+					vec3 pane_colour = tint < 0.34
+						? glass_colour
+						: (tint < 0.67 ? glass_tint_b : glass_tint_c);
+					if (survey_on && survey_state.y > 0.5) {
+						// The measured glass, decoded in `vertex()` — the hash pick
+						// above stays the refusal fallback. It reaches the albedo only
+						// through `glassy`, which is right: `Q40` measured the tint of
+						// *glazing*, and a concrete reveal is not glazing.
+						pane_colour = survey_pane;
+					}
+					opening_colour = mix(recess_colour, pane_colour, glassy);
 				}
+				// At `glassy = 1.0` both of these are algebraically the line they
+				// replaced, which is what keeps a glazed building — and the parked
+				// look — byte-identical (`Q43`).
+				float reflected = glass_reflect * mix(unglazed_reflect, 1.0, glassy);
 				vec3 glazing = mix(
-					pane_colour, mirrored, glass_reflect * mix(glass_face_on, 1.0, fresnel)
+					opening_colour, mirrored, reflected * mix(glass_face_on, 1.0, fresnel)
 				);
-				albedo = mix(albedo, glazing, glass);
-				roughness = mix(wall_roughness, glass_roughness, glass);
-				albedo *= 1.0 - mullion_darkness * reveal * (1.0 - glass);
+				albedo = mix(albedo, glazing, opening_mask);
+				// A recess is masonry, so it takes the wall's own roughness rather than
+				// a third uniform — the mirror is what distinguishes it, not the sheen.
+				// `mix(a, mix(a, b, g), m)` is `mix(a, b, g * m)`, one lerp fewer.
+				roughness = mix(wall_roughness, glass_roughness, glassy * opening_mask);
+				albedo *= 1.0 - mullion_darkness * reveal * (1.0 - opening_mask);
 
 				if (emission_strength > 0.0 && lit_window_share > 0.0) {
 					// Per pane, and stable: hashed from the pane's own course and bay
 					// plus the building seed, so a lit pane stays lit as the camera
 					// moves instead of sparkling per fragment. `pane` is the mirror's,
 					// which is the same pane — it was redeclared here and shadowed it.
+					//
+					// ⚠️ Scaled by `opening_mask` and deliberately **not** by `glassy`,
+					// which is the one place materiality is ignored: a tenement window
+					// is lit at night whether or not glazing dominates the façade. So
+					// since `Q43` this lights punched stock too, where it used to light
+					// nothing at all.
 					float hashed = fract(sin(dot(pane, vec2(12.9898, 78.233)) + seed * 0.37) * 43758.5453);
 					EMISSION = lit_window_colour
-						* (glass * step(1.0 - lit_window_share, hashed) * emission_strength);
+						* (opening_mask * step(1.0 - lit_window_share, hashed) * emission_strength);
 				}
 			}
 		}

@@ -48,7 +48,7 @@ lives in git. This file holds *why things are the way they are*.
 | `Q23` | Carriageway width is a property of the station, not of the edge | ✅ Closed |
 | `Q24` | The at-grade road follows the ground; the cross-slope half is `Q19`'s | 🟢 Half closed |
 | `Q25` | Ground is decimated once per tier and cut afterwards | ✅ Closed |
-| `Q26` | Which look ships — the measured Hong Kong one or the clean/futuristic one? | 🔴 Open — a verdict, not a measurement |
+| `Q26` | Which look ships — the measured Hong Kong one or the clean/futuristic one? | 🔴 Open — a verdict, not a measurement; and candidate `A′` is blocked on the glazed gate deleting 43.2% of the city's fenestration |
 | `Q27` | `COLOR_0` is authored sRGB and must be linearised by the consumer | ✅ Closed |
 | `Q28` | A per-object seed must be `flat`, or the GPU interpolates it into bands | ✅ Closed |
 | `Q29` | The ground's normals are rebuilt in the fragment stage | ✅ Closed |
@@ -63,7 +63,7 @@ lives in git. This file holds *why things are the way they are*.
 | `Q37` | 10.0% of the façade survey is atlas filler, not a photograph | ✅ Closed |
 | `Q38` | `exposure_anchor` is baked into `COLOR_0` at build time | 🟡 Open, deliberately not fixed |
 | `Q39` | `wall_sky_tint` is uniform, so a canyon wall takes a parapet's sky bounce | 🟡 Open |
-| `Q40` | Can façade grammar be surveyed instead of hashed? | ✅ Closed — the surveyed verdicts ship in `TEXCOORD_1` (schema 6, +0.24 MB PCK); glazing and tint are the reader's, the dip gate is dead, and the overrides land dark behind `survey_apply = 0.0` until `Q26` |
+| `Q40` | Can façade grammar be surveyed instead of hashed? | ✅ Closed — the surveyed verdicts ship in `TEXCOORD_1` (schema 6, +0.24 MB PCK); glazing and tint are the reader's, the dip gate is dead, and the overrides land dark behind `survey_apply = 0.0` until `Q26`. ⚠️ Rendering them at 1.0 for the first time found the consumer defect under `Q26` — the shader's `glazed` gate zeroes the punched grammar it also ships |
 | `Q41` | A vision reader recovers the grammar the statistic could not | ✅ Closed — reader validated, region surveyed, and the majority-voted verdicts consumed into `TEXCOORD_1` beside `Q40`'s; refusals fall to the hash |
 | `Q42` | The reader answers seven questions nobody consumes | 🟡 Open — `TEXCOORD_1.y` is reserved at a documented layout, so each rider now needs only its own validation, not a schema bump |
 
@@ -795,8 +795,116 @@ looking at the frames** — the telemetry, the logs and the exit codes are ident
 ✅ **The preview scene is fully settled by `t=0.8`**, and `t=0.8`, `t=1.5` and `t=3.0` are
 byte-identical. The three-second runs the archived set used were buying nothing.
 
+### 🔴 Candidate `A′` is not gradeable yet — the glazed gate deletes the punched city
+
+`A′` — `survey_apply = 1.0` **plus** the seven un-parked fabric values, "measured surface on accurate
+massing" — was shot at `e5fb391` on all three cameras and is in `build/driver/q26b/`. The shoot
+itself is clean, and it found a defect that no statistic in this record would have caught.
+
+**The shoot reproduces.** 18 runs, three candidates × three cameras × two runs, zero `SHADER ERROR`.
+Every `r1`/`r2` pair is byte-identical, so no frame was lost to the camera hazard above, and `t=0.8`
+matches `t=3.0` in all nine. `C→A` returns **24.3% / 17.82**, **8.9% / 7.21**, **14.1% / 23.09** —
+the published table to the decimal, at a commit six ahead of `cf19201` and across `Q40`/`Q41`'s
+schema-6 change. `C` is byte-identical to the archive at all three viewpoints, which is what licenses
+reading `B`'s published row beside the new ones without re-shooting it.
+
+⚠️ **One archived frame differs by a single pixel.** `A`/`street` failed `cmp` against `cf19201`;
+the diff is **1 pixel of 2,073,600, one channel, delta 1**, and the frames are identical to the
+grader (0.0% responding). So the shoot-twice-and-`cmp` rule has a false-positive mode: a byte
+difference is the *trigger* to look, not the verdict. Grade the diff before discarding the frame.
+
+**What `A′` measures, taken at face value:**
+
+| viewpoint | `A` responds | `A` p90 | `A′` responds | `A′` p90 | `A′`→ whole-frame `C*` |
+|---|---|---|---|---|---|
+| `street` | 24.3% | 17.82 | **14.5%** | 13.37 | 18.8 → **18.1** (`C` 16.6) |
+| `skyline` | 8.9% | 7.21 | **10.3%** | 6.75 | 15.7 → 15.7 (`C` 15.7) |
+| `kerb` | 14.1% | 23.09 | **8.8%** | 22.37 | 16.7 → **15.9** (`C` 15.3) |
+
+Read alone, that says the survey makes `A` quieter and gives back roughly half its chroma cost at
+`kerb` and a third at `street` — which would answer part of `Q30`. 🔴 **It does not say that, and the
+frames are why.**
+
+**The cause. `glazed` means two different things on the two sides of the contract.** To the reader it
+is "whether glazing **dominates** the façade area" (`facade_grammar.py`); `punched` is defined there
+as "openings cut into a **dominant solid** wall — tenements, public housing, concrete frames". So
+`(glazed=false, grammar=punched)` is the coherent, expected pair, and `building_verdicts` nulls only
+the two genuine contradictions, `(true, blank)` and `(false, curtain)`. **The ETL is correct.** The
+shader then reads `glazed` as "has any fenestration at all": `tower = ribbon_mask * glazed * above *
+fade` at `city_facade_clean.gdshader:694` zeroes the entire grid. Its own comment — "`blank` was
+already handled through `glazed`" — is the tell: the glazed axis was collapsed onto the `blank` case,
+and `punched` arrives through the same door.
+
+**Measured over the shipped tiles: 59.7% of vertices carry a committed grammar that describes
+fenestration, and 43.4% of the city renders blank anyway** — `punched` alone is **39.3%**, and every
+one of its 251,720 vertices is `glazed=false` (100%, by construction, not by accident). `fin` loses
+82.7% of itself the same way and `mixed` 29.5%. The dominant real Hennessy Road stock is exactly the
+class that disappears.
+
+⚠️ **Those shares were first published as "of wall vertices" and they are not** — re-derived at
+`Q43`, all four reproduce exactly on a denominator of **every lod0 vertex in the tiles, ground and
+structure included**, which is 639,834 of them. Ground and road carry no grammar by construction, so
+they dilute every row. Against the population the gate actually acts on — 346,656 lod0 vertices that
+are facade-marked and steeper than `wall_normal_max` — **the defect is half again as large**: 75.0%
+carry a committed grammar, `punched` is **50.1%**, and **66.2% of the city's walls are forced solid**.
+The finding was never in doubt; the denominator was, and it understated it.
+
+⚠️ **The punched treatment already exists and is unreachable.** Line 637 sets `h_ratio = glass_ratio
+* 0.62` under the comment "Punched windows in solid wall — the older stock", and the grammar override
+at 615–624 will duly set `treatment = 3.0` — then feed a mask multiplied by `glazed = 0`. The feature
+was written, shipped, and has never drawn a pixel.
+
+**So the `A′` row above grades a defect, not a look.** Its lower responding share is mostly deleted
+fenestration, not a measured finding about Hong Kong, and its chroma improvement is bought the same
+way. **`A′` must not go in front of drivers in this state**, and the numbers must not be quoted as
+`Q40`'s surveyed city being quieter than the hash.
+
+✅ **This is the argument for shooting the frames rather than the statistics.** Every number in the
+table above is plausible, self-consistent, and reproduces on a re-run. `Q40` closed on evidence that
+the plumbing was correct; it was — the defect is one gate downstream, on a path that had never been
+rendered because `survey_apply` shipped at 0.0.
+
+**Settled at `Q43`, and re-shot as `A″`.** The gate was split rather than forced: `fenestrated` is
+geometry, `glazed` is materiality, and `blank` is the only verdict that denies openings. Twelve runs
+at that commit, `build/driver/q43/`, every `r1`/`r2` pair byte-identical and `t=0.8` matching `t=3.0`
+in all six — and **all twelve `C` frames are byte-identical to `q26b`**, so the parked look is
+unmoved and the baseline is the same one the rows below were graded against.
+
+| viewpoint | | `A` (hash) | `A′` (defect) | `A″` (`Q43`) | `C` |
+|---|---|---|---|---|---|
+| `street` | responds | 24.3% | 14.5% | **19.7%** | — |
+| | p90 \|d`L*`\| | 17.82 | 13.37 | **32.43** | — |
+| | mean `C*` | 18.84 | 18.09 | **17.96** | 16.56 |
+| `skyline` | responds | 8.9% | 10.3% | **11.6%** | — |
+| | p90 \|d`L*`\| | 7.21 | 6.75 | **9.47** | — |
+| | mean `C*` | 15.66 | 15.67 | **15.62** | 15.68 |
+| `kerb` | responds | 14.1% | 8.8% | **14.8%** | — |
+| | p90 \|d`L*`\| | 23.09 | 22.37 | **36.79** | — |
+| | mean `C*` | 16.73 | 15.93 | **15.87** | 15.30 |
+
+**The fenestration is back, and the frames say so in the right shape.** Responding share rises off
+`A′` at every viewpoint, and at `kerb` it passes the hash — 14.8% against 14.1% — which is what
+surveyed `punched` stock drawing where the hash had made it solid looks like. It does *not* return to
+`A` at `street` (19.7% against 24.3%), and should not: the survey says some of those walls really are
+blank, and a punched opening is narrower than a ribbon by `glass_ratio * 0.62`.
+
+**The p90 spread is the half that is new rather than restored.** It roughly doubles against `A′` at
+`street` (13.37 → 32.43) and `kerb` (22.37 → 36.79). A matte recess against pale concrete is a far
+larger lightness step than tinted glass carrying a sky mirror — so buildings now differ in *material*
+and not only in window spacing, which is what `Q40` was run to buy.
+
+✅ **It answers part of `Q30` for free, and this time not by deletion.** `A′` bought its chroma back
+by removing the glass; `A″` keeps every opening and still lands *below* `A′` on all three cameras.
+Against `C`, `A″` gives back **39% of `A`'s chroma cost at `street`** (+1.40 against +2.28) and **60%
+at `kerb`** (+0.57 against +1.43); at `skyline` it sits 0.06 *under* `C`. Matte openings take no sky
+reflection, and sky reflection was a chunk of why `A` raised `C*` above what `ART_DESIGN.md`
+sanctions.
+
+⚠️ **`A″` is now gradeable; it is not graded.** Every number above is a measurement, and `Q26` is a
+verdict — a human preference between `A″`, `B` and `C`. Nothing here says which look ships.
+
 **See.** `ART_DESIGN.md` "The clean/futuristic variant" · `ART_DESIGN.md` "The audit viewpoints" ·
-`Q27` · `Q30` · `Q31` · `Q34` · `Q37` · `Q40`
+`Q27` · `Q30` · `Q31` · `Q34` · `Q37` · `Q40` · `Q41` · `Q43`
 
 ## `Q27` — `COLOR_0` is authored sRGB and must be linearised by the consumer
 
@@ -3188,3 +3296,80 @@ glazed/blank state in `UV2` could drive a specular split so glass reads as glass
 Neither moves until the flat-shaded direction says it may.
 
 **See.** `Q40` · `Q41` · `Q26` · `P3-7` · `ARCHITECTURE.md` "Tile output"
+
+## `Q43` — `glazed` is materiality; `fenestrated` is geometry
+
+**Status.** ✅ Closed — shipped in `city_facade_clean.gdshader`, graded as `A″` under `Q26` ·
+**Owner.** `P3-9a`
+
+**Claim.** The reader's `glazed` and the shader's `glazed` were two different predicates wearing one
+name, and the collision deleted the windows on half the city's walls. They are now two floats:
+
+- **`fenestrated`** — does this wall have openings at all. Only the grammar answers it, and only
+  `blank` answers it *no*.
+- **`glazed`** — are those openings glass. This is the reader's axis, defined in
+  `tools/facade_grammar.py` as whether glazing **dominates** the façade area, and graded 24/24.
+
+**Why the ETL was not the thing to change.** `punched` is defined to the reader as "openings cut
+into a **dominant solid** wall", so `(glazed=false, punched)` is not a contradiction — it is the
+modal Hong Kong tenement, and `building_verdicts` is right to null only `(true, blank)` and
+`(false, curtain)`. Forcing `glazed = 1.0` for any committed fenestrated grammar was the other
+candidate fix and is one line, but it makes the graded glazing axis **inert on 75% of wall vertices**
+— paying for a survey and then not consuming it wherever it overlaps a grammar — and it inverts the
+precedence the ETL already sets, where `glazed` stands and the grammar refuses.
+
+**Precedence, and why it is not symmetric.** A committed `glazed` raises `fenestrated` and never
+lowers it: "glazing dominates" is positive evidence that openings exist, while "glazing does not
+dominate" is no evidence at all that they do not. Where the grammar refused, `fenestrated` keeps the
+hash — nothing the reader returns says "this wall is blank" except the grammar itself, and a refusal
+must not acquire a verdict by inference.
+
+⚠️ **The `draws_detail` early-out is where this bug would have survived the fix.** It is a derived
+predicate over five conditions, and it tested `glazed`; splitting the term at the point of use and
+leaving the guard alone would have skipped the whole block and drawn exactly as many pixels as
+before — feature implemented, feature unreachable, for the second time in one file. It now tests
+`fenestrated`, and the invariant that licenses dropping `glazed` from it is written down: since this
+change `glazed` reaches the albedo only through the pane material, which is multiplied by a mask
+that requires `fenestrated`.
+
+**What an unglazed opening is made of.** Two new tunings, in `city_facade.tres` per hard rule 4:
+`recess_colour` (a dark reveal, `0.12, 0.12, 0.13`) and `unglazed_reflect` (`0.18`, the share of
+`glass_reflect` a non-dominant opening keeps). ⚠️ **Deliberately not zero** — a Hong Kong tenement
+window is dark glass in a concrete hole and does catch the sky; at zero the openings stop reading as
+openings and read as dark rectangles painted on the wall. ⚠️ **Authored, not measured.** `Q40`
+measured the tint of *glazing*; nothing has measured a concrete reveal, and `A″` is where these get
+judged.
+
+⚠️ **Making unreachable code reachable is its own hazard, and it caught two branches.** The `fin` and
+`curtain` ratios describe a *glazed* skin — the fin switches the horizontal cut off entirely, and the
+curtain opens the mask to 92% — because until this change they could only ever be filled with glass.
+Handed a recess they paint a full-height dark slab instead of windows, on about **2% of wall
+vertices**: a committed `fin` the survey calls unglazed (0.94%), plus whatever the hash draws as fin
+or curtain on a wall the reader called unglazed and left the grammar refused (~1.1%). A committed
+unglazed `curtain` is not among them — the merge nulls that pair — but the hashed treatment is. Both
+now fall back to punched proportions where materiality contradicts the grammar, and keep their own
+pier, which is what still tells the types apart. **The review that found it read the diff; the shoot
+did not** — the eight fin buildings are not prominent at any of the three cameras, and the re-shoot
+moved exactly one published number (`kerb` p90 36.67 → 36.79).
+
+⚠️ **Shopfronts are weighted per mask, not per building.** `has_shop` never passed through the glazed
+gate and must not start: a shopfront is glass whatever the tower above it is made of, and a
+per-building weight turns every tenement's ground floor to concrete. The tower and podium masks are
+disjoint by construction, so the weight is coverage, not a blend of two materials.
+
+**Cost.** Two uniforms and about 25 lines across four sites. **No `schema_version` bump, no rebuild,
+no re-survey** — `TEXCOORD_1` and its bit layout are untouched; this is entirely a consumer-side
+reading of fields that already ship. `tools/check.sh` passes, and all twelve parked `C` frames are
+byte-identical to `q26b`, which is the reducibility the split was written to preserve: at
+`survey_apply = 0.0` one hash draw still answers both questions, exactly as before.
+
+⚠️ **The lesson is not "check your gates".** Both sides of this contract were internally correct and
+independently validated — the axis was graded 24/24, the plumbing closed on evidence, and `A′`
+reproduced across 18 runs. What nobody checked was whether two correct definitions were the *same*
+definition. A versioned interface catches shape drift, never semantic drift, and the only instrument
+that caught this one was a rendered frame. Every `Q42` rider consumed from here owes the same check
+in writing: put the reader's sentence beside the uniform's sentence, and if they differ, convert
+rather than assign. `podium_floors` — "lowest floors forming a visibly distinct podium" — against
+`podium_height_m` — "where the tower grid starts" — is the next one queued to make this mistake.
+
+**See.** `Q26` · `Q30` · `Q40` · `Q41` · `Q42` · `ART_DESIGN.md` "The clean/futuristic variant"

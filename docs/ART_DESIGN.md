@@ -340,6 +340,16 @@ to near-black), and a mullion wide enough to be a pier. ⚠️ **A mullion is wa
 the pier between two panes is the same pale concrete as the facade, so it cuts glass away and must
 not also darken what it reveals.
 
+⚠️ **And its sibling: an opening is not necessarily glass** (`Q43`). Whether a wall has openings and
+what those openings are made of are two questions, and one switch answering both is what deleted the
+windows on 66% of the city's wall vertices — every surveyed `punched` building, which is the dominant
+real Hennessy Road stock. Where the survey says glazing does not **dominate**, the openings are dark
+reveals in solid wall rather than a mirrored skin: `recess_colour` is what they are made of and
+`unglazed_reflect` is the share of the reflection they keep. ⚠️ **Not zero** — a tenement window is
+dark glass in a concrete hole and does catch the sky; at zero the openings read as dark rectangles
+painted on. That split is what lets building *types* differ in material and not merely in window
+spacing, and it takes chroma back off the frame for free, because a matte reveal carries no sky.
+
 ⚠️ **`band()` needs analytic antialiasing, not just `fwidth`.** Past about a quarter of a period per
 pixel the smoothstep pair stops meaning anything and the grid turns into diagonal moire on any wall
 seen at a shallow angle — which in a street of towers is most of them. Converge on the band's own
@@ -977,6 +987,13 @@ cent of the frame and lands in any statistic taken from the PNG.
 polylines and 1,125 direction arrows, drawn by the scene rather than by the debug view. Thin blue
 lines lying on the ground in `art_infra` are that, not art. `city_drive.tscn` puts the same overlay
 behind `--debug-view`, which is why the `taxi` rows are clean.
+
+⚠️ **A run can stall the renderer, and it is intermittent — retry before believing it.** `Q43`'s
+re-shoot lost 3 of 5 attempts at one viewpoint to `no frame drawn in 600 ticks — the renderer
+stopped`, while the identical command at the same camera passed on the others. It fails **loudly**
+(the driver exits 1 and writes no frame), so nothing silently enters the set; it just costs runs.
+Retry the viewpoint rather than concluding anything about the look, and note that the frames are
+compared byte for byte afterwards, so a retried run is not a weaker one.
 
 ⚠️ **A verdict pending on a screenshot has an expiry date that nothing in the repo records.** `Q29`
 lost a day to shots taken one palette commit before they were read. Re-shoot before comparing, and
