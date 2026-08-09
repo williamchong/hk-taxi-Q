@@ -261,18 +261,17 @@ be a rebuild.
 
 ### The clean/futuristic variant
 
-🔴 **Every façade element below is switched off in the shipping `city_facade.tres`, and the city is
-massing plus flat per-building colour.** User's call, made from the driver's seat: with
-`Q27` fixed, the measured per-building hue carries the city on its own, and the window grid was
-competing with it rather than adding to it. **Parked, not deleted** — the shader keeps all of it and
-seven parameters in one `.tres` hold it back, listed in that file's header with the values that
-restore them. The rest of this section describes what is still in the shader and what turning it back
-on would give.
+✅ **This variant ships enabled: `city_facade.tres` carries the `A‴` look** — the seven fabric
+values, the surveyed verdicts at `survey_apply = 1.0`, and `P3-7a`'s two corrections (punched
+openings are glass, `Q44`; panes vary per building, `Q45`). User's call, 2026-08-09, from the
+`A‴` audit frames. The look was parked to flat per-building colour from 2026-08-06 — the window
+grid competed with the measured hue rather than adding to it — and `W1`/`W2` are what changed the
+judgment. Candidate `C` (flat colour) remains one `.tres` edit away, listed in that file's header,
+and stays the reducibility baseline the remaining `P3-7a` steps are proved byte-identical against.
 
-⚠️ **This retires nothing above it and settles nothing in `Q26`.** Flat colour is where the look
-rests while a new idea is found, not a verdict that the elements were wrong — they were judged
-against a city whose albedo was arriving at a third strength, which is not a fair test of anything.
-Anything reconsidered here should be re-judged against the fixed render first.
+⚠️ **This is the working default, not `Q26`'s final word.** The enable is the user's own verdict
+on the fixed render; the `≥3`-HK-driver recognition round (`P3-9a`) still grades the shipped look
+on the web build, and `city_facade_warm.tres` (`B`) remains the one-copy alternative.
 
 **A second look, shipping beside the first and switched by one file.** The window bands above are
 accurate and were called **dull** on sight. The fault is *scale*, not colour: they are drawn at the

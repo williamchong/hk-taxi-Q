@@ -67,8 +67,8 @@ lives in git. This file holds *why things are the way they are*.
 | `Q41` | A vision reader recovers the grammar the statistic could not | ✅ Closed — reader validated, region surveyed, and the majority-voted verdicts consumed into `TEXCOORD_1` beside `Q40`'s; refusals fall to the hash |
 | `Q42` | The reader answers seven questions nobody consumes | 🟡 Open — `TEXCOORD_1.y` is reserved at a documented layout, so each rider now needs only its own validation, not a schema bump |
 | `Q43` | `glazed` is materiality; `fenestrated` is geometry | ✅ Closed — shipped in `city_facade_clean.gdshader`, graded as `A″` under `Q26` |
-| `Q44` | A punched opening is glass, not a black hole | 🟡 Open — the `unglazed_glassy` floor is landed (`P3-7a` W1); the `A‴` re-shoot judges it against the `Q30` bar |
-| `Q45` | One pane palette across the city reads as wallpaper | 🟡 Open — the fallback modulation is landed (`P3-7a` W2); the `A‴` re-shoot judges it, bounded by `Q35` |
+| `Q44` | A punched opening is glass, not a black hole | ✅ Closed — the `unglazed_glassy` floor shipped (`P3-7a` W1), the `Q30` bar held, and the user accepted the `A‴` frames |
+| `Q45` | One pane palette across the city reads as wallpaper | ✅ Closed — the fallback modulation shipped (`P3-7a` W2) and the user accepted the `A‴` frames; `Q35` bounds any retune |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -646,12 +646,15 @@ number, not only the ones a checklist names.
 
 ## `Q26` — Which look ships?
 
-**Status.** 🔴 Open, and **a verdict rather than a measurement** — but ✅ **no longer entangled with
-`Q31`**: the candidates separate identically under both tone curves · **Owner.** `P3-9a`
+**Status.** 🟢 **Half closed — `A‴` is enabled as the shipped default** (user's call, 2026-08-09,
+from the `A‴` frames: "much more acceptable now", confirmed from the driver's seat). What remains
+open is the confirmatory half: the ≥3-HK-driver recognition round at `P3-9a` grades the shipped
+look on the web build, `B` and `C` each still one edit away · **Owner.** `P3-9a`
 
 **The question.** The measured Hong Kong look — `P3-7`'s accurate window bands, called dull — or
-`city_facade_clean`, which is bolder and is *not* what Wan Chai looks like. A third candidate now
-exists and is what currently ships: **elements off, flat per-building colour on accurate massing**.
+`city_facade_clean`, which is bolder and is *not* what Wan Chai looks like. A third candidate
+exists and shipped as the default until 2026-08-09: **elements off, flat per-building colour on
+accurate massing**.
 
 **Why it is a verdict.** The whole art direction rests on "accurate city, toy vehicles", and
 recognition is the product (`Q8`). A white city with amber accent plinths keeps the accurate
@@ -925,8 +928,8 @@ and was caught by exactly that protocol — three clean kerb runs agree byte for
 | | mean `C*` | 15.87 | **16.08** | 15.30 |
 
 **The shape is the intended one: same reach, smaller step, glass where holes were.** Responding
-share is unchanged at every viewpoint — the same walls answer — while p90 \|d`L*`\| falls by a
-third to 40% at `street` and `kerb`: an opening that is dark glass carrying a sky mirror sits far
+share is unchanged at every viewpoint — the same walls answer — while p90 \|d`L*`\| falls 41% at
+`street` and 34% at `kerb`: an opening that is dark glass carrying a sky mirror sits far
 closer to pale concrete than a matte near-black recess does, so the buildings still differ in
 material without the openings reading as punched-out voids.
 
@@ -934,14 +937,19 @@ material without the openings reading as punched-out voids.
 Against `C`, the chroma cost is `street` **+1.16** (`A″` +1.40, bar `A` +2.28), `kerb` **+0.78**
 (`A″` +0.57, bar +1.43), `skyline` **−0.05** (`A″` −0.06, bar −0.02). `kerb` re-spent part of the
 give-back exactly as `Q44` predicted — glassed openings take sky reflection again — while
-`street` moved the *other* way: the `Q45` hue pull drags panes toward their buildings'
-near-neutral measured hues, which costs chroma nothing and buys the variation from `L*`/`b*`
-instead.
+`street` moved the *other* way: the `Q45` pull mixes each pane's chromaticity toward its
+building's measured `a*b*`, and against a mostly near-neutral stock that *lowers* pane chroma —
+the variation arrives through `L*`/`b*` spread rather than saturation.
 
-⚠️ **`A‴` is now gradeable; it is not graded.** Every number above is a measurement, and `Q26` is a
-verdict — a human preference between `A‴`, `B` and `C`. Nothing here says which look ships. The
-named review question for the `P3-7a` half: *do punched windows read as windows, and do two
-adjacent towers still read as two buildings?*
+✅ **Graded, and enabled (2026-08-09).** The user answered the named review question — *do punched
+windows read as windows, and do two adjacent towers still read as two buildings?* — in `A‴`'s
+favour from the frames ("much more acceptable now") and called the default: `city_facade.tres`
+now ships the seven fabric values with `survey_apply = 1.0` and the `W1`/`W2` knobs — the exact
+configuration the `A‴` frames were shot from, proved by byte-comparing a fresh shoot of the
+shipped file against `build/driver/q26_A3_422ee16/`. Candidate `C` stays one edit away (the
+recipe is in the `.tres` header) and remains the reducibility baseline for the remaining `P3-7a`
+steps; `B` stays one copy away. The ≥3-HK-driver round at `P3-9a` is the confirmatory half, on
+the web build, against the shipped default.
 
 **See.** `ART_DESIGN.md` "The clean/futuristic variant" · `ART_DESIGN.md` "The audit viewpoints" ·
 `Q27` · `Q30` · `Q31` · `Q34` · `Q37` · `Q40` · `Q41` · `Q43` · `Q44` · `Q45`
@@ -3417,8 +3425,9 @@ rather than assign. `podium_floors` — "lowest floors forming a visibly distinc
 
 ## `Q44` — A punched opening is glass, not a black hole
 
-**Status.** 🟡 Open — user's call, 2026-08-09, judged from `A″`'s frames. This is the judgment
-`Q43` said `recess_colour` / `unglazed_reflect` were owed ("`A″` is where these get judged") ·
+**Status.** ✅ **Closed** — mechanism shipped (`P3-7a` W1), the `Q30` bar held on all three audit
+cameras, and the user accepted the `A‴` frames and enabled the look as the shipped default
+(2026-08-09). This is the judgment `Q43` said `recess_colour` / `unglazed_reflect` were owed ·
 **Owner.** `P3-7a`
 
 **The call.** Hong Kong punched windows are traditional glass windows, usually in aluminium frames —
@@ -3476,7 +3485,9 @@ unconditioned measurement.
 
 ## `Q45` — One pane palette across the city reads as wallpaper
 
-**Status.** 🟡 Open — user's call, 2026-08-09 · **Owner.** `P3-7a`
+**Status.** ✅ **Closed** — mechanism shipped (`P3-7a` W2) at the authored 6.0 / 4.0 / 0.25, and
+the user accepted the `A‴` frames and enabled the look as the shipped default (2026-08-09). The
+`Q35` salt-and-pepper bound stands as the constraint on any retune · **Owner.** `P3-7a`
 
 **Confirmed state.** Pane colour has exactly four values city-wide: three authored tints hashed per
 building (`glass_colour`, `glass_tint_b`, `glass_tint_c`) plus one `recess_colour` shared by every
@@ -3492,8 +3503,10 @@ shader's existing `vertex_srgb_to_linear` — `Q27`'s conversion is mandatory he
 
 **The mechanism, landed (`P3-7a` W2, 2026-08-09).** Both halves, as three tunables:
 `pane_l_jitter` / `pane_b_jitter` (seeded CIELAB jitter on the hashed pick, draw slots 13/14) and
-`pane_hue_pull` (the pane's `a*b*` mixed toward the building's own measured hue, `COLOR_0`
-linearised first). The whole computation is hoisted to `vertex()` into a `flat` varying
+`pane_hue_pull` (the pane's full `a*b*` mixed toward the building's own measured chromaticity,
+`COLOR_0` linearised first — a chromaticity pull, not a hue rotation: near-neutral buildings pull
+their panes toward grey, and running after the jitter it scales the effective `b*` amplitude by
+`1 − pull`; both effects are in the accepted `A‴` frames). The whole computation is hoisted to `vertex()` into a `flat` varying
 `fallback_pane` — `survey_pane`'s exact precedent, since it is per-building constant — using a new
 `linear_to_lab()` that mirrors `etl/pipeline/colour.py`'s forward conversion, kept beside its
 inverse so the pair cannot drift apart separately. The fragment's survey override is untouched:
@@ -3503,10 +3516,10 @@ record said the variation belongs. Zero-amplitude is guarded to skip the Lab rou
 the pick is bit-exact with the old inline select. Shader defaults 0.0; **6.0 / 4.0 / 0.25
 authored in `city_facade.tres` as `A‴` starting points**, not verdicts. Parked byte-identity
 held: all three audit cameras byte-identical to `q26_C_cf19201`, shot twice and sibling-`cmp`'d.
-On the `A‴` re-shoot the modulation costs chroma nothing — `street` mean `C*` *fell* +1.40 →
-+1.16 against `C` relative to `A″`, because the hue pull drags panes toward near-neutral measured
-hues and the variation arrives through `L*`/`b*` instead. The `Q35` salt-and-pepper bound and the
-within-frame read are the user's to judge on the frames (`Q26`).
+On the `A‴` re-shoot the modulation *lowered* frame chroma — `street` mean `C*` cost fell +1.40 →
++1.16 against `C` relative to `A″`, the chromaticity pull toward near-neutral buildings doing
+exactly what the mixing maths says — and the variation arrives through `L*`/`b*` spread instead.
+The `Q35` salt-and-pepper bound stands as the constraint on any retune.
 
 ⚠️ **Modulate the fallback, never the measurement.** A surveyed tint is the answer for that
 building; jittering it re-invents what `Q40` measured. The hash tints and the punched panes
