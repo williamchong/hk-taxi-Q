@@ -81,6 +81,12 @@ const float SURVEY_PUNCHED = 2.0;
 const float SURVEY_FIN = 3.0;
 const float SURVEY_BLANK = 4.0;
 const float SURVEY_MIXED = 5.0;
+// The `survey_debug` triage legend — a contract with the reviewer's eye of the
+// same standing as the codes above, recorded in `docs/DECISIONS.md` `Q46`.
+// Authored in linear space: legibility is the only requirement.
+const vec3 TRIAGE_REFUSED = vec3(1.0, 0.0, 1.0);
+const vec3 TRIAGE_CARVE_OUT = vec3(1.0, 0.55, 0.0);
+const vec3 TRIAGE_COMMITTED = vec3(0.0, 0.8, 0.2);
 
 // The CIELAB constants `lab_to_linear` and `linear_to_lab` share — D65 white,
 // the (6/29)³ knee and the 24389/27 linear-segment slope, exactly as
@@ -354,12 +360,19 @@ uniform float quiet_clamp : hint_range(0.0, 1.0) = 0.0;
 uniform float quiet_pier_ratio : hint_range(0.0, 0.9) = 0.0;
 uniform float quiet_solid : hint_range(0.0, 1.0) = 0.0;
 uniform float quiet_pane_mute : hint_range(0.0, 1.0) = 0.0;
+group_uniforms debug;
 // Survey-state triage tint: paints each facade with which mechanism owns its
-// look — magenta the quiet tier (grammar refused), orange a refusal re-glazed
-// by its committed glazed axis (`Q46`'s 46-building carve-out), green a
-// committed grammar. A sighting of wrong fenestration then names its fix —
-// `quiet_*` retune, the carve-out, or the `W4` override table — instead of
-// guessing. Dev-only: never authored on in the `.tres`.
+// look — magenta the quiet tier (grammar refused), orange a refusal whose
+// committed glazed axis re-raised fenestration on top of that tier (`Q46`'s
+// 46-building carve-out — a subset of the quiet tier, not an alternative),
+// green a committed grammar. A sighting of wrong fenestration then names its
+// fix — `quiet_*` retune, the carve-out, or the `W4` override table — instead
+// of guessing. The value is the tint's opacity, and it draws nothing unless
+// `survey_apply` is on: parked, no survey mechanism owns the look. ⚠️
+// **Dev-only: never authored on in the `.tres`** — the one uniform whose
+// number is a probe, not a verdict. ⚠️ Its evidence stops at the LOD switch:
+// past 250 m `TEXCOORD_1` is a cluster representative's, so one building's
+// attribution can paint its neighbours.
 uniform float survey_debug : hint_range(0.0, 1.0) = 0.0;
 
 group_uniforms night;
@@ -1066,12 +1079,19 @@ void fragment() {
 
 	// The triage tint goes over everything, or an attribution could be read off
 	// a wall the shopfront band or sky bounce had already repainted. Facades
-	// only: markers other than facade carry no survey state to attribute.
-	if (survey_debug > 0.001 && is_facade) {
-		vec3 triage = survey_state.z < 0.5
-			? (survey_state.x > 1.5 ? vec3(1.0, 0.55, 0.0) : vec3(1.0, 0.0, 1.0))
-			: vec3(0.0, 0.8, 0.2);
-		albedo = mix(albedo, triage, survey_debug * 0.65);
+	// only: markers other than facade carry no survey state to attribute. The
+	// `survey_apply` term mirrors every other `survey_state` reader — parked,
+	// there is nothing to attribute.
+	if (survey_debug > 0.0 && survey_apply > 0.5 && is_facade) {
+		vec3 triage;
+		if (survey_state.z >= 0.5) {
+			triage = TRIAGE_COMMITTED;
+		} else if (survey_state.x > 1.5) {
+			triage = TRIAGE_CARVE_OUT;
+		} else {
+			triage = TRIAGE_REFUSED;
+		}
+		albedo = mix(albedo, triage, survey_debug);
 	}
 
 	ALBEDO = albedo;
