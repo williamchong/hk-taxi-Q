@@ -3628,8 +3628,8 @@ overrides as the systematic fix for the 771 refused buildings (`Q46`). Retuning 
 tier conditions on refusal, and these verdicts committed. Any geometry gate — `Q34` stands.
 
 **The candidate routes.** (1) **`R4`, the podium rider** (bits 7–11): `podium_floors` /
-`podium_glazed` are already packed from the graded run, and a committed tower treatment would
-stop at a data-supported boundary. Its preconditions stand unchanged — the `podium_floors` →
+`podium_glazed` are already collected by the graded run's reader (`Q42` — the bits are reserved,
+nothing packed yet), and a committed tower treatment would stop at a data-supported boundary. Its preconditions stand unchanged — the `podium_floors` →
 metres conversion written down before anything is assigned (`Q43`'s drift warning), its own
 validation bar fixed before grading. This finding is an *impact* argument for revisiting the
 rider order, which `Q42` set by fill-rate reliability alone; revisiting it is a decision to
