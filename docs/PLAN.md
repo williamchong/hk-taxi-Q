@@ -320,10 +320,11 @@ trade.
      `W1`/`W2` (re-shoot, `Q30` bar on all three cameras, parked look byte-identical); its own
      record in `DECISIONS.md`, since it deliberately rebalances the "refusal falls to the hash"
      contract `Q40`/`Q41` wrote down. That record also carries one forward-looking sentence now:
-     refusal conservatism extends to `lit_window_share` when the night variant lands. 🟡 Landed
+     refusal conservatism extends to `lit_window_share` when the night variant lands. ✅ Landed
      2026-08-10 as five `quiet_*` tunables (`Q46`): `Q30` bar held (+1.10/+0.74/−0.04), parked
-     byte-identity held with the quiet values authored; the `A⁗` frames
-     (`build/driver/q26_A4_ab98183/`) await acceptance.
+     byte-identity held with the quiet values authored; **accepted in scope the same day** on a
+     `survey_debug`-tinted drive test — refused stock reads quiet, and the residual sightings
+     moved to committed stock (`Q47`).
   4. `W4` — **authored override table, exceptions only.** A committed per-city data file keyed by
      the stable building-ID stem (`DATA_SOURCES.md`'s cross-dataset key), precedence
      **authored > survey > hash**, merged at the same site as the survey overrides. After `W3` this
@@ -331,7 +332,9 @@ trade.
      committed-glazed building that is right about its towers and wrong about its podium, which no
      per-building mechanism can express until `R4` lands. ⚠️ Never a route around the survey at
      scale: 771 grammar-refused buildings is the population that disqualified overrides as the
-     systematic fix.
+     systematic fix. `Q47` re-proved that from the committed side — the tinted drive test put the
+     residual wrong windows overwhelmingly on committed ground bands, a population `W4` must not
+     absorb; the systematic routes are `R4`'s podium bits or a ground-band survey.
   5. `R1` — `emphasis` (bits 14–16). Fills essentially every read face and coheres with grammar; a
      committed value replaces the grammar-implied reading direction, a refusal keeps it. ⚠️ No hand
      labels exist for it — author emphasis labels for the 25 readable validation faces from the

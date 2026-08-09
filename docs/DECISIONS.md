@@ -69,7 +69,8 @@ lives in git. This file holds *why things are the way they are*.
 | `Q43` | `glazed` is materiality; `fenestrated` is geometry | ✅ Closed — shipped in `city_facade_clean.gdshader`, graded as `A″` under `Q26` |
 | `Q44` | A punched opening is glass, not a black hole | ✅ Closed — the `unglazed_glassy` floor shipped (`P3-7a` W1), the `Q30` bar held, and the user accepted the `A‴` frames |
 | `Q45` | One pane palette across the city reads as wallpaper | ✅ Closed — the fallback modulation shipped (`P3-7a` W2) and the user accepted the `A‴` frames; `Q35` bounds any retune |
-| `Q46` | A grammar refusal draws a quiet tier, not invented fenestration | 🟡 Open — the five `quiet_*` tunables shipped (`P3-7a` W3), the `Q30` bar held; awaiting the user's verdict on the `A⁗` frames |
+| `Q46` | A grammar refusal draws a quiet tier, not invented fenestration | ✅ Closed — accepted in scope 2026-08-10 on a `survey_debug`-tinted drive test: refused stock reads quiet; the residual sightings sit on committed stock and open `Q47` |
+| `Q47` | A committed verdict is right about the tower, wrong about the ground band | 🟡 Open — named by `Q46`'s tinted drive test; `W4` is disqualified at scale, the candidate routes are `R4`'s podium bits or a ground-band survey |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -3535,9 +3536,10 @@ within a frame without turning the skyline into salt-and-pepper glass.
 
 ## `Q46` — A grammar refusal draws a quiet tier, not invented fenestration
 
-**Status.** 🟡 **Open — mechanism shipped (`P3-7a` W3, 2026-08-10)**, the `Q30` bar held on all
-three audit cameras and parked byte-identity held; what remains is the user's verdict on the `A⁗`
-frames (`build/driver/q26_A4_ab98183/`) · **Owner.** `P3-7a`
+**Status.** ✅ **Closed — accepted in scope, 2026-08-10.** The `Q30` bar held on all three audit
+cameras, parked byte-identity held, and the user's verdict came from a `survey_debug`-tinted
+drive test: refused stock reads quiet; the residual sightings sit on committed stock (`Q47`) ·
+**Owner.** `P3-7a`
 
 **The call.** The 2026-08-09 drive test of the shipped `A‴` default returned five sightings of
 invented fenestration on windowless stock — HKCEC's service base and tunnel piers, plant boxes, a
@@ -3590,7 +3592,50 @@ is sighted, `W4`'s override table is the remedy, not a wider gate here.
 ⚠️ **Mute chroma, never glassiness.** `quiet_pane_mute` scales `a*b*` only. Dimming the mirror
 instead would re-create the matte holes `Q44` closed — quiet openings are still glass.
 
+**The verdict, and a correction (2026-08-10).** The `A⁗` taxi pair could not carry the verdict —
+its drive script diverged from the pre-`W3` comparison in `build/driver/w3_before_taxi/`, so the
+underpass sighting had no matched "after" — and the verdict came instead from a live drive with
+`survey_debug`, a triage tint in `city_facade_clean.gdshader` that paints each facade by survey
+state (magenta refused, orange this record's 46-building carve-out, green committed). The user's
+finding: refused stock reads quiet, and the surviving wrong windows sit **overwhelmingly on
+committed (green) stock**, the carve-out a minor contributor. That corrects the call above:
+HKCEC's service base and tunnel piers are **grammar-committed** — the tower's verdict paints
+them — so that sighting was never this tier's to fix. The committed-stock residual is a
+population, too many for `W4`'s exceptions-only table; it opens `Q47`.
+
 **Forward.** Refusal conservatism extends to `lit_window_share` when the night variant lands: a
 refused building draws fewer lit windows, on this same eligibility signal.
 
-**See.** `Q34` · `Q40` · `Q41` · `Q43` · `Q44` · `Q45` · `Q30` · `Q26` · `P3-7a`
+**See.** `Q34` · `Q40` · `Q41` · `Q43` · `Q44` · `Q45` · `Q30` · `Q26` · `Q47` · `P3-7a`
+
+## `Q47` — A committed verdict is right about the tower, wrong about the ground band
+
+**Status.** 🟡 **Open** — named by the tinted drive test that accepted `Q46`; nothing per-building
+can express it until a podium boundary exists · **Owner.** `P3-7a`
+
+**The finding.** With `survey_debug` tinting the city by survey state, the user attributed the
+wrong windows that survived `Q46`'s quiet tier **overwhelmingly to committed (green) stock**:
+`Q41`'s per-building majority verdict, earned by tower-biased photography (grammar commits on 12%
+of buildings under 4 m against 78% over 40 m), is painted over the whole massing — podium, service
+wings, ground band — exactly where the player looks from the kerb. HKCEC is the canonical case
+(`W4`'s entry: right about its towers, wrong about its podium), but the drive says it is a
+population, not an exception. The survey's occlusion bias shows up twice with opposite signs: on
+small stock it refuses, which `Q46` now handles; on tall stock it commits from the tower and
+over-generalises downward, which nothing handles.
+
+**What is disqualified.** `W4` overrides at this scale — the same argument that disqualified
+overrides as the systematic fix for the 771 refused buildings (`Q46`). Retuning `W3` — the quiet
+tier conditions on refusal, and these verdicts committed. Any geometry gate — `Q34` stands.
+
+**The candidate routes.** (1) **`R4`, the podium rider** (bits 7–11): `podium_floors` /
+`podium_glazed` are already packed from the graded run, and a committed tower treatment would
+stop at a data-supported boundary. Its preconditions stand unchanged — the `podium_floors` →
+metres conversion written down before anything is assigned (`Q43`'s drift warning), its own
+validation bar fixed before grading. This finding is an *impact* argument for revisiting the
+rider order, which `Q42` set by fill-rate reliability alone; revisiting it is a decision to
+record, not a default. (2) **A ground-band survey pass** — the storefront batch (design now, pay
+after `P3-9a`) reads exactly the band the photography under-covered, and `podium_glazed →
+has_shop` is already named the only data-supported route to a shopfront. Choosing between the
+routes, or sequencing both, is the open decision.
+
+**See.** `Q46` · `Q41` · `Q42` · `Q43` · `Q34` · `P3-7a`
