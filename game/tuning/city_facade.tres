@@ -105,6 +105,21 @@
 ; skyline.
 ; `glass_astar` is the a* the tint encoding dropped (`Q40` PCA, 6.5%), one
 ; value for the city, retuned at `Q26` if at all.
+; The five `quiet_*` values are `Q46`'s quiet tier: where the grammar
+; *refused*, the hash draws from a conservative distribution instead of
+; asserting confident fenestration — the 2026-08-09 drive test's invented
+; windows on plant boxes, tunnel piers and the HKCEC service base were all
+; refused stock. Eligibility is the refusal itself, never height (`Q34`).
+; `quiet_shopfront` and `quiet_clamp` at 1.0 are the categorical halves: a
+; shopfront needs a committed grammar, and refused stock never draws a
+; hash-picked curtain or fin, only punched. `quiet_pier_ratio` 0.68 (a floor
+; over `punched_pier_ratio`), `quiet_solid` 0.55 (solid probability 0.27 →
+; ≈0.67 on refused stock) and `quiet_pane_mute` 0.5 (fallback-pane chroma
+; halved, never its glassiness — `Q44` stands) are graded values, retuned
+; against the `Q30` bar. Bounds: `quiet_solid` is bounded below by the five
+; drive-test sightings and above by refusal covering 35% of buildings — at
+; 1.0 it would blank whole occluded mid-rise streets. All five sit behind
+; `survey_apply`, so the parked recipe above needs no ninth zero.
 [gd_resource type="ShaderMaterial" load_steps=2 format=3]
 
 [ext_resource type="Shader" path="res://assets/shaders/city_facade_clean.gdshader" id="1_facade"]
@@ -177,3 +192,8 @@ shader_parameter/lit_window_share = 0.0
 shader_parameter/emission_strength = 0.0
 shader_parameter/survey_apply = 1.0
 shader_parameter/glass_astar = -2.0
+shader_parameter/quiet_shopfront = 1.0
+shader_parameter/quiet_clamp = 1.0
+shader_parameter/quiet_pier_ratio = 0.68
+shader_parameter/quiet_solid = 0.55
+shader_parameter/quiet_pane_mute = 0.5
