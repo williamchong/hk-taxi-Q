@@ -212,6 +212,20 @@ uniform vec3 glass_colour : source_color = vec3(0.16, 0.21, 0.26);
 // is as flat as one wall colour would be.
 uniform vec3 glass_tint_b : source_color = vec3(0.13, 0.22, 0.21);
 uniform vec3 glass_tint_c : source_color = vec3(0.44, 0.55, 0.63);
+// Per-building modulation of that hashed pick (`Q45`): three tints plus one
+// recess is four pane values across 2,214 buildings, and it reads as wallpaper.
+// A seeded jitter in CIELAB — `L*` and the warm-cool `b*`, the two axes the
+// glass survey measured as carrying the real variation — plus a pull of the
+// pane's hue toward the building's own measured `COLOR_0` hue, so a pane
+// relates to its building instead of to a city-wide lottery. Applied to the
+// **fallback pick only**: a surveyed tint is the answer for that building, and
+// jittering it would re-invent what `Q40` measured. All three ship from the
+// `.tres`; at 0.0 the fallback is the exact uniform value, no round trip.
+// ⚠️ The bound is `Q35` in the opposite direction: panes should vary within a
+// frame without turning the skyline into salt-and-pepper glass.
+uniform float pane_l_jitter : hint_range(0.0, 20.0) = 0.0;
+uniform float pane_b_jitter : hint_range(0.0, 16.0) = 0.0;
+uniform float pane_hue_pull : hint_range(0.0, 1.0) = 0.0;
 // What the glazing reflects. ⚠️ **A single `sky_reflection` colour is why the
 // glass reads as a swatch rather than as a mirror** — real glass shows the sky
 // *gradient*, so the reflected ray's own elevation has to pick between these.
@@ -350,6 +364,12 @@ varying flat vec3 survey_state;
 // re-run the whole CIELAB conversion for an answer that never varies within
 // the draw. Garbage when `survey_state.y` is 0; the fragment guards on that.
 varying flat vec3 survey_pane;
+// The hashed fallback pane, hoisted for `survey_pane`'s exact reason: the
+// `Q45` modulation is two CIELAB round trips, per-building constant, and the
+// fragment would re-run them for an answer that never varies within the draw.
+// `flat` for `phase`'s reason. Always valid — with every `Q45` knob at zero it
+// is the raw hashed pick, bit-exact with what the fragment used to compute.
+varying flat vec3 fallback_pane;
 varying float upness;
 varying float along_m;
 // The reflection needs a world-space frame, and both are already computed in the
@@ -404,6 +424,27 @@ vec3 lab_to_linear(vec3 lab) {
 		vec3(-0.4985314, 0.0415560, 1.0572252)
 	);
 	return clamp(from_xyz * xyz, vec3(0.0), vec3(1.0));
+}
+
+// The forward direction, for `Q45`'s pane modulation: *linear* sRGB to CIELAB,
+// mirroring `srgb_to_lab` in `etl/pipeline/colour.py` minus the transfer curve
+// — same D65 white, same IEC 61966-2-1 primaries, same 216/24389 knee. Kept
+// beside its inverse so the two cannot drift apart separately; a jitter runs a
+// colour through both, and any disagreement between them becomes a colour
+// shift at zero amplitude.
+vec3 linear_to_lab(vec3 rgb) {
+	mat3 to_xyz = mat3(
+		vec3(0.4124564, 0.2126729, 0.0193339),
+		vec3(0.3575761, 0.7151522, 0.1191920),
+		vec3(0.1804375, 0.0721750, 0.9503041)
+	);
+	vec3 xyz = (to_xyz * rgb) / vec3(0.95047, 1.0, 1.08883);
+	vec3 f = mix(
+		(903.2962963 * xyz + 16.0) / 116.0,
+		pow(xyz, vec3(1.0 / 3.0)),
+		step(vec3(0.0088564517), xyz)
+	);
+	return vec3(116.0 * f.y - 16.0, 500.0 * (f.x - f.y), 200.0 * (f.y - f.z));
 }
 
 float band(float u, float low, float high) {
@@ -466,6 +507,29 @@ void vertex() {
 	float tint_b = SURVEY_TINT_B_MIN
 		+ (mod(tint_code, SURVEY_TINT_B_BINS) + 0.5) * SURVEY_TINT_B_STEP;
 	survey_pane = lab_to_linear(vec3(tint_l, glass_astar, tint_b));
+
+	// The hashed fallback pane (`Q45`), the same seed and draw slot the fragment
+	// always used. Modulated per building in CIELAB: `L*`/`b*` jitter on the
+	// pick, then the hue pulled toward the building's own measured colour —
+	// `COLOR` is the ETL's sRGB bytes, so it goes through
+	// `vertex_srgb_to_linear` first (`Q27`, mandatory here as everywhere). The
+	// survey path above is deliberately not touched: the surveyed tint is a
+	// measurement, and only the fallback is ours to vary. Guarded so that at
+	// zero amplitude the pick never round-trips through Lab — bit-exact with
+	// the un-modulated select, which is what keeps the parked look provable.
+	float pane_seed = floor(phase * PHASE_STEPS + 0.5);
+	float pane_tint = draw(pane_seed, 8.0);
+	fallback_pane = pane_tint < 0.34
+		? glass_colour
+		: (pane_tint < 0.67 ? glass_tint_b : glass_tint_c);
+	if (pane_l_jitter + pane_b_jitter + pane_hue_pull > 0.0) {
+		vec3 pane_lab = linear_to_lab(fallback_pane);
+		pane_lab.x += (draw(pane_seed, 13.0) - 0.5) * 2.0 * pane_l_jitter;
+		pane_lab.z += (draw(pane_seed, 14.0) - 0.5) * 2.0 * pane_b_jitter;
+		vec3 building_lab = linear_to_lab(vertex_srgb_to_linear(COLOR.rgb));
+		pane_lab.yz = mix(pane_lab.yz, building_lab.yz, pane_hue_pull);
+		fallback_pane = lab_to_linear(pane_lab);
+	}
 
 	vec3 world_normal = normalize(MODEL_NORMAL_MATRIX * NORMAL);
 	upness = abs(world_normal.y);
@@ -838,19 +902,17 @@ void fragment() {
 				// not a mirror and not a decal. ⚠️ Not `pane` — that is the mirror's
 				// `vec2` cell index above, and the emission block below still reads it.
 				//
-				// The tint pick is skipped where it cannot be seen: `glassy` is zero
-				// unless this building is glazed, has a shopfront, or the `Q44` floor
-				// is up, and at zero the mix below returns `recess_colour` whatever
-				// the pane is. That is a `sin` and a two-compare select saved on
-				// every punched wall — half the city — while the floor is 0.0; the
-				// test is the *uniform*, not the per-fragment `glassy`, so the branch
-				// stays as coherent as `draws_detail` itself.
+				// The pane resolve is skipped where it cannot be seen: `glassy` is
+				// zero unless this building is glazed, has a shopfront, or the `Q44`
+				// floor is up, and at zero the mix below returns `recess_colour`
+				// whatever the pane is. The hashed pick itself moved to `vertex()`
+				// with the `Q45` modulation, so what the branch saves now is the
+				// survey test and the recess mix; the test is the *uniform*, not the
+				// per-fragment `glassy`, so it stays as coherent as `draws_detail`
+				// itself.
 				vec3 opening_colour = recess_colour;
 				if (glazed > 0.5 || has_shop > 0.5 || unglazed_glassy > 1e-4) {
-					float tint = draw(seed, 8.0);
-					vec3 pane_colour = tint < 0.34
-						? glass_colour
-						: (tint < 0.67 ? glass_tint_b : glass_tint_c);
+					vec3 pane_colour = fallback_pane;
 					if (survey_on && survey_state.y > 0.5) {
 						// The measured glass, decoded in `vertex()` — the hash pick
 						// above stays the refusal fallback. It reaches the albedo only

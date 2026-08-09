@@ -68,7 +68,7 @@ lives in git. This file holds *why things are the way they are*.
 | `Q42` | The reader answers seven questions nobody consumes | 🟡 Open — `TEXCOORD_1.y` is reserved at a documented layout, so each rider now needs only its own validation, not a schema bump |
 | `Q43` | `glazed` is materiality; `fenestrated` is geometry | ✅ Closed — shipped in `city_facade_clean.gdshader`, graded as `A″` under `Q26` |
 | `Q44` | A punched opening is glass, not a black hole | 🟡 Open — the `unglazed_glassy` floor is landed (`P3-7a` W1); the `A‴` re-shoot judges it against the `Q30` bar |
-| `Q45` | One pane palette across the city reads as wallpaper | 🟡 Open — user's call: modulate the hashed fallback, never the surveyed tint |
+| `Q45` | One pane palette across the city reads as wallpaper | 🟡 Open — the fallback modulation is landed (`P3-7a` W2); the `A‴` re-shoot judges it, bounded by `Q35` |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -3449,6 +3449,20 @@ albedo rather than modulating it. What varies per pane today is lighting (`pane_
 **The direction.** Modulate pane colour per building: a seeded `L*` / `b*` jitter on the hashed
 fallback, and/or a pull toward the building's own measured hue (`COLOR_0`, linearised through the
 shader's existing `vertex_srgb_to_linear` — `Q27`'s conversion is mandatory here as everywhere).
+
+**The mechanism, landed (`P3-7a` W2, 2026-08-09).** Both halves, as three tunables:
+`pane_l_jitter` / `pane_b_jitter` (seeded CIELAB jitter on the hashed pick, draw slots 13/14) and
+`pane_hue_pull` (the pane's `a*b*` mixed toward the building's own measured hue, `COLOR_0`
+linearised first). The whole computation is hoisted to `vertex()` into a `flat` varying
+`fallback_pane` — `survey_pane`'s exact precedent, since it is per-building constant — using a new
+`linear_to_lab()` that mirrors `etl/pipeline/colour.py`'s forward conversion, kept beside its
+inverse so the pair cannot drift apart separately. The fragment's survey override is untouched:
+`pane_colour = survey_pane` still replaces the fallback wherever a tint was measured, so the
+modulation reaches only the hash tints and (post-`Q44`) the punched panes — exactly where the
+record said the variation belongs. Zero-amplitude is guarded to skip the Lab round trip, so at 0.0
+the pick is bit-exact with the old inline select. Shader defaults 0.0; **6.0 / 4.0 / 0.25
+authored in `city_facade.tres` as `A‴` starting points**, not verdicts. Parked byte-identity
+held: all three audit cameras byte-identical to `q26_C_cf19201`, shot twice and sibling-`cmp`'d.
 
 ⚠️ **Modulate the fallback, never the measurement.** A surveyed tint is the answer for that
 building; jittering it re-invents what `Q40` measured. The hash tints and the punched panes
