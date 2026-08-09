@@ -248,7 +248,7 @@ trade.
 | `P3-10` | **Ground surface** — decimated terrain, vertex-coloured, merged into the tile primitive | Ground everywhere the region has terrain; **no texture ships**; one draw call per tile still; no z-fighting against the carriageway |
 | `P3-7` | Window-band shader, **and the `TEXCOORD_0` payload it reads** | Reads as HK density; no windows on roofs or podium faces. ETL ships height-above-own-base and a per-building seed; `schema_version` bumped in the same commit |
 | `P3-6` | Hero buildings (5) authored, placed via `landmarks.json` | Source geometry excluded; no z-fighting |
-| `P3-7a` | **Survey-driven façade variation** — `Q42`'s reliable riders consumed, and the openings re-judged: punched windows are glass (`Q44`), panes vary per building (`Q45`) | Everything lands dark behind `survey_apply`; parked look byte-identical at every step; each rider graded against a pre-fixed bar before the shader reads it; no new reader field before `Q26`'s verdict |
+| `P3-7a` | **Survey-driven façade variation** — `Q42`'s reliable riders consumed, and the openings re-judged: punched windows are glass (`Q44`), panes vary per building (`Q45`), refusal drawn quietly (`W3`) | Everything lands dark behind `survey_apply`; parked look byte-identical at every step; each rider graded against a pre-fixed bar before the shader reads it; no new reader field before `Q26`'s verdict (user half landed 2026-08-09 — batch design may start; the paid run waits for `P3-9a`) |
 
 - **Deps:** `P1-2`, `P1-7`. **No longer depends on `B1`** — that dependency was ordering, not
   substance. Nothing in the taxi, the ground, the shader or the hero buildings reads a fare.
@@ -296,21 +296,49 @@ trade.
 - **Order — the look fixes run before the riders, because two of `A″`'s defects are already
   judged.** `Q26`'s verdict is a human preference over `A″`, and grading drivers on a look the user
   has already called wrong wastes the drivers. `W1`/`W2` are shader + tuning only — no ETL, no
-  schema; the riders then enrich the corrected candidate in reliability order (`Q42`'s fill rates):
+  schema. The 2026-08-09 drive test added `W3`/`W4` ahead of the riders for the same reason:
+  grading drivers on stock that is confidently wrong wastes the drivers. The riders then enrich the
+  corrected candidate in reliability order (`Q42`'s fill rates):
   1. `W1` — punched openings as glass (`Q44`): re-scope what an unglazed opening is made of,
-     re-shoot, hold the `Q30` chroma bar recorded there.
+     re-shoot, hold the `Q30` chroma bar recorded there. ✅ Landed and accepted 2026-08-09.
   2. `W2` — per-building pane colour (`Q45`): seeded `L*`/`b*` jitter on the hashed fallback and/or
-     a pull toward the building's own measured hue. Never on the surveyed tint.
-  3. `R1` — `emphasis` (bits 14–16). Fills essentially every read face and coheres with grammar; a
+     a pull toward the building's own measured hue. Never on the surveyed tint. ✅ Landed and
+     accepted 2026-08-09.
+  3. `W3` — **quiet tier for survey-refused buildings.** From the 2026-08-09 drive test of the
+     shipped default: shopfronts and confident fenestration on windowless stock — HKCEC's service
+     base and tunnel piers, plant boxes, a footbridge lift tower, sportsground walls. The fix:
+     `has_shop` runs its draw only where the grammar committed (positive evidence); refused
+     buildings fall to punched-with-heavy-piers (never a hash-drawn curtain or fin, which describe a
+     confidently glazed skin), a higher solid probability, and muted panes. Committed buildings are
+     untouched — the accepted `A‴` look stays as graded. **Why refusal is the lever:** grammar
+     committed on 65% of the 2,213 surveyed buildings, but only 12% under 4 m and 25% under 7 m
+     against 78% over 40 m — the survey's occlusion bias makes refusal itself the small/occluded-
+     structure signal — and `blank` committed **10 times region-wide**, so the one verdict that
+     denies openings (`Q43`) is inert at scale. ⚠️ **Not a height gate.** `Q34` stands (height plus
+     footprint explain 1.4% of façade signal); eligibility conditions on the survey's own refusal
+     state, never on geometry. Consumer-side tunables only, zero schema change; graded like
+     `W1`/`W2` (re-shoot, `Q30` bar on all three cameras, parked look byte-identical); its own
+     record in `DECISIONS.md`, since it deliberately rebalances the "refusal falls to the hash"
+     contract `Q40`/`Q41` wrote down. That record also carries one forward-looking sentence now:
+     refusal conservatism extends to `lit_window_share` when the night variant lands.
+  4. `W4` — **authored override table, exceptions only.** A committed per-city data file keyed by
+     the stable building-ID stem (`DATA_SOURCES.md`'s cross-dataset key), precedence
+     **authored > survey > hash**, merged at the same site as the survey overrides. After `W3` this
+     is heroes and stragglers, not a population — the canonical entry is HKCEC's base: a
+     committed-glazed building that is right about its towers and wrong about its podium, which no
+     per-building mechanism can express until `R4` lands. ⚠️ Never a route around the survey at
+     scale: 771 grammar-refused buildings is the population that disqualified overrides as the
+     systematic fix.
+  5. `R1` — `emphasis` (bits 14–16). Fills essentially every read face and coheres with grammar; a
      committed value replaces the grammar-implied reading direction, a refusal keeps it. ⚠️ No hand
      labels exist for it — author emphasis labels for the 25 readable validation faces from the
      cached unwraps, and fix the bar **before** the grading runs (`Q41`'s shape).
-  4. `R2` — reconciled storey pitch (bits 0–6). Per-building median over readable faces, the
+  6. `R2` — reconciled storey pitch (bits 0–6). Per-building median over readable faces, the
      2.5–4.5 m sanity window, refusal outside — `Q42`'s own prescription; the field is *visible
      floors on this face*, never a raw read. A committed pitch replaces `floor_height_m` for that
      building; the city constant stays the fallback.
-  5. `R3` — `balconies` (bits 12–13), selecting a punched variant.
-  6. `R4` — podium (bits 7–11), **last, and only after its conversion is written down**: `Q43`
+  7. `R3` — `balconies` (bits 12–13), selecting a punched variant.
+  8. `R4` — podium (bits 7–11), **last, and only after its conversion is written down**: `Q43`
      names `podium_floors` ("lowest floors forming a visibly distinct podium") against
      `podium_height_m` ("where the tower grid starts") as the next semantic-drift casualty. Put the
      two sentences side by side in the record and convert (floors × reconciled pitch → metres) —
@@ -324,11 +352,45 @@ trade.
   asserts `uv2.y != 0.0` is a codec break, so the first written rider fails the verifier unless its
   range check moves in the same commit. No `schema_version` bump: filling a reserved field a
   refusal-aware consumer already reads as "0 = refused" changes bytes, not meaning (`Q42`).
-- ⚠️ **No new reader field before `Q26`'s verdict.** The prompt hash is the reader's identity; a new
-  field means a new graded run plus a paid full re-survey. Wanted fields — opening proportion (the
-  measured answer `glass_ratio`/`mullion_ratio` never got), ground-floor character (shop / lobby /
-  utility / parking), signage density (placement only, **never rendered text** — `Q42`) — batch into
-  **one** prompt revision after the verdict, so validation is paid once.
+- ⚠️ **New reader fields: design now, pay once, after `P3-9a`.** `Q26`'s user half landed
+  2026-08-09, so the batch may be *designed*; the paid run still waits for the `P3-9a` driver round,
+  since the cache makes waiting free. The prompt hash is the reader's identity; a new field means a
+  new graded run plus a paid full re-survey, so everything wanted ships in **one** prompt revision.
+  The batch is a **ground-band pass** — crop the bottom ~0–8 m of the existing unwrap, its own
+  schema and prompt hash, so the validated façade reader is untouched — collecting the storefront
+  fields the drive test showed the survey under-invests (the player's eye level is the survey's
+  worst-covered band, so expect heavy refusal; `W3` is the backstop): ground-floor character
+  (shop / lobby / carpark / utility / blank, 3 bits), shopfront extent (2 bits), signage density
+  (2 bits — placement only, **never rendered text**, `Q42`), exactly filling `TEXCOORD_1.y` bits
+  17–23. Opening proportion (the measured answer `glass_ratio`/`mullion_ratio` never got) rides
+  `TEXCOORD_1.x`'s free bits. ⚠️ **The `x` bit budget is contested and gets settled on paper before
+  anything writes to it**: opening proportion and the two-tone wall colour below are competing for
+  11 free bits, and allocating them piecemeal is how the layout ends up needing the bump it was
+  designed to avoid. Each field owes `Q43`'s written sentence-conversion check and its own
+  validation, bar fixed first — unchanged.
+- **Two-tone walls — option promoted to task, gated behind `W3`.** `facade_glazing`'s *light* mode
+  is a measured wall/spandrel colour beside the glass tint (`Q42` recorded the option; the
+  art-direction condition has now landed). Reuses the glass-tint codec shape in `x`'s free bits.
+  ⚠️ The measurement is `L*`/`b*` only — no `a*` is stored — so the third channel is borrowed or
+  authored, and the record must say so rather than cite the colour as fully measured. ⚠️ It
+  restyles the *committed* stock `W3` promises not to touch, so it runs after `W3`'s re-shoot with
+  its own grading (`Q30` bar), never in the same shot set.
+- **Two scouts, cheap and offline, before anything is planned around them:**
+  - **Street-facing bit (HOLD until measured).** Shopfronts currently wrap all faces of an eligible
+    building — alleys and party walls included — and the road graph could gate them per face. But
+    it is geometry→façade inference (`Q34`'s discipline applies even though the claim is adjacency,
+    not height), and `mesh.py` records that **a per-face payload does not survive vertex
+    clustering's representative pick** — the recorded reason survey verdicts are per-building. The
+    scout, against data already on disk: what fraction of shopfront-eligible wall area is
+    non-street-facing (is the win worth plumbing?); how many pedestrianised shopping streets are
+    missing from Road Network v2's carriageways (false quiet on real shopfronts); what extending
+    the cluster key by the flag costs in LOD1 vertices. No plumbing until those three numbers are
+    in a record.
+  - **iB1000 structure classes.** 3D-BIT Level 1 footprints are extruded *from the B1000
+    topographic map*; if the published iB1000 layers carry structure categories (shelter / tank /
+    plant), a footprint join gives "utility structure" as data — per-city via config, no vision
+    reader. The scalable long-term answer to `W3`'s whole class. Owes `DATA_SOURCES.md`-grade
+    verification (format, licence, scriptability) before it is a plan item.
 - **Accept:** `tools/check.sh` passes; ETL end-to-end on the Wan Chai config; parked `C` frames
   byte-identical at `survey_apply = 0.0` after every step; each rider's pre-fixed bar met and
   recorded; PCK re-measured per rider batch (`y` is all zeros today and pack-compresses at 97% —
