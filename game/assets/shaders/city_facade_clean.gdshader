@@ -250,6 +250,16 @@ uniform vec3 recess_colour : source_color = vec3(0.12, 0.12, 0.13);
 // sky, and at zero the openings stop reading as openings and start reading as
 // dark rectangles painted on the wall.
 uniform float unglazed_reflect : hint_range(0.0, 1.0) = 0.18;
+// How glassy an *unglazed* opening is (`Q44`): the floor `glassy` cannot fall
+// below on punched stock. The user's call from `A″`'s frames is that a punched
+// window is glass in a concrete hole — it catches the sky and mirrors at grazing
+// angles — and the two uniforms above had left it a matte near-black hole on 67%
+// of read faces. At 0.0 the shader is algebraically the `Q43` code (the mix
+// collapses to `glazed`); at 1.0 the opening material is always glass and
+// `recess_colour` / `unglazed_reflect` become the frame-and-reveal treatment
+// only. Which point in between ships is a tuning verdict on the `A‴` re-shoot,
+// not a code fork.
+uniform float unglazed_glassy : hint_range(0.0, 1.0) = 0.0;
 
 group_uniforms accent;
 // Three, hashed per building. Flat and saturated, and applied to whole spandrel
@@ -612,8 +622,11 @@ void fragment() {
 			// draws nothing. The survey overrides need no term either, and for the
 			// same reason — they are applied *above*, so these are already the
 			// overridden values, and the surveyed tint reaches albedo only through
-			// `opening_mask`. At `survey_apply = 0.0` the predicate, and the parked look it
-			// guards, are byte-identical to schema 5.
+			// `opening_mask`. `unglazed_glassy` (`Q44`) is absent on `glazed`'s
+			// exact rule: it moves what an opening is made of, and an opening needs
+			// `fenestrated` or `has_shop` before it exists. At `survey_apply = 0.0`
+			// the predicate, and the parked look it guards, are byte-identical to
+			// schema 5.
 			bool draws_detail = fenestrated > 0.5
 				|| has_shop > 0.5
 				|| accented
@@ -794,7 +807,14 @@ void fragment() {
 				// numerator keeps climbing, so the overlap reads glassier than its
 				// coverage. Those are both tuning, so this is a caveat, not an
 				// invariant.
-				float glassy = mix(glazed, 1.0, shop_pane / max(opening_mask, 1e-4));
+				// `unglazed_glassy` floors the per-building term (`Q44`): a punched
+				// opening is dark glass in a concrete hole, not a matte recess, so
+				// even where glazing does not dominate the opening keeps some pane.
+				// At 0.0 the inner mix collapses to `glazed` exactly — the parked
+				// look and the `Q43` algebra are untouched.
+				float glassy = mix(
+					mix(unglazed_glassy, 1.0, glazed), 1.0, shop_pane / max(opening_mask, 1e-4)
+				);
 
 				// The mirror. A reflected ray's own elevation picks up the sky gradient,
 				// so a wall's glazing changes as it turns and as the camera moves — which
@@ -819,13 +839,14 @@ void fragment() {
 				// `vec2` cell index above, and the emission block below still reads it.
 				//
 				// The tint pick is skipped where it cannot be seen: `glassy` is zero
-				// unless this building is glazed or has a shopfront, and at zero the
-				// mix below returns `recess_colour` whatever the pane is. That is a
-				// `sin` and a two-compare select saved on every punched wall — half
-				// the city — and the predicate is per-building, so the branch is as
-				// coherent as `draws_detail` itself.
+				// unless this building is glazed, has a shopfront, or the `Q44` floor
+				// is up, and at zero the mix below returns `recess_colour` whatever
+				// the pane is. That is a `sin` and a two-compare select saved on
+				// every punched wall — half the city — while the floor is 0.0; the
+				// test is the *uniform*, not the per-fragment `glassy`, so the branch
+				// stays as coherent as `draws_detail` itself.
 				vec3 opening_colour = recess_colour;
-				if (glazed > 0.5 || has_shop > 0.5) {
+				if (glazed > 0.5 || has_shop > 0.5 || unglazed_glassy > 1e-4) {
 					float tint = draw(seed, 8.0);
 					vec3 pane_colour = tint < 0.34
 						? glass_colour
@@ -835,6 +856,15 @@ void fragment() {
 						// above stays the refusal fallback. It reaches the albedo only
 						// through `glassy`, which is right: `Q40` measured the tint of
 						// *glazing*, and a concrete reveal is not glazing.
+						//
+						// ⚠️ **A punched pane can never take this tint** (`Q44`): on a
+						// punched building the measured dark mode is shadowed reveals
+						// and warm render, not glass, which is why `Q40` conditioned
+						// the measurement on `glazed`. The guard is upheld by the data,
+						// not just this test — the ETL writes a tint only when
+						// `glz = 2`, and `verify_tiles.gd` asserts tint > 0 → glazed —
+						// so the `Q44` floor widening the branch above cannot route it
+						// onto punched stock.
 						pane_colour = survey_pane;
 					}
 					opening_colour = mix(recess_colour, pane_colour, glassy);

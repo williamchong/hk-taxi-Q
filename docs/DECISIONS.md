@@ -66,6 +66,9 @@ lives in git. This file holds *why things are the way they are*.
 | `Q40` | Can façade grammar be surveyed instead of hashed? | ✅ Closed — the surveyed verdicts ship in `TEXCOORD_1` (schema 6, +0.24 MB PCK); glazing and tint are the reader's, the dip gate is dead, and the overrides land dark behind `survey_apply = 0.0` until `Q26`. ⚠️ Rendering them at 1.0 for the first time found the consumer defect under `Q26` — the shader's `glazed` gate zeroes the punched grammar it also ships |
 | `Q41` | A vision reader recovers the grammar the statistic could not | ✅ Closed — reader validated, region surveyed, and the majority-voted verdicts consumed into `TEXCOORD_1` beside `Q40`'s; refusals fall to the hash |
 | `Q42` | The reader answers seven questions nobody consumes | 🟡 Open — `TEXCOORD_1.y` is reserved at a documented layout, so each rider now needs only its own validation, not a schema bump |
+| `Q43` | `glazed` is materiality; `fenestrated` is geometry | ✅ Closed — shipped in `city_facade_clean.gdshader`, graded as `A″` under `Q26` |
+| `Q44` | A punched opening is glass, not a black hole | 🟡 Open — the `unglazed_glassy` floor is landed (`P3-7a` W1); the `A‴` re-shoot judges it against the `Q30` bar |
+| `Q45` | One pane palette across the city reads as wallpaper | 🟡 Open — user's call: modulate the hashed fallback, never the surveyed tint |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -3404,6 +3407,21 @@ punched ratios and heavy piers already express. Candidate mechanisms, judged on 
 than argued: a glassiness floor for unglazed openings, or `glazed` re-scoped to coverage only with
 opening material always glass — `recess_colour` / `unglazed_reflect` becoming the frame-and-reveal
 treatment rather than the whole opening.
+
+**The mechanism, landed (`P3-7a` W1, 2026-08-09).** One tunable spans both candidates rather than
+forking the code: `unglazed_glassy` in `city_facade_clean.gdshader` floors the per-building
+glassiness — `glassy = mix(mix(unglazed_glassy, 1.0, glazed), 1.0, shop_share)` — so 0.0 is the
+`Q43` behaviour exactly (the inner mix collapses to `glazed`), 1.0 makes the opening material
+always glass with the recess reduced to frame-and-reveal, and the shipping point between them is a
+tuning verdict on the `A‴` re-shoot. The tint-pick guard widens to
+`glazed || has_shop || unglazed_glassy > 0` — the *uniform*, not the per-fragment `glassy`, so the
+branch stays coherent — and `reflected` / `roughness` need no edit because both already scale with
+`glassy`, which is what made the floor sufficient. Shader default 0.0; **0.65 authored in
+`city_facade.tres` as the re-shoot's starting point**, not a verdict. Parked byte-identity held:
+`street` / `skyline` / `kerb` at `survey_apply = 0.0`, shot twice and sibling-`cmp`'d, are
+byte-identical to `q26_C_cf19201`. The dark-mode-tint guard below needed no code: the ETL writes a
+tint only at `glz = 2` and `verify_tiles.gd` asserts tint → glazed, so the widened branch cannot
+route `survey_pane` onto punched stock — now stated at the override site.
 
 ⚠️ **The `Q30` trade-off is the bar.** Matte openings are where `A″` gave back 39% / 60% of `A`'s
 chroma cost at `street` / `kerb`; re-glassing re-spends part of that. Acceptance: whole-frame mean
