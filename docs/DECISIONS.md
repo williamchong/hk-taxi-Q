@@ -903,11 +903,48 @@ at `kerb`** (+0.57 against +1.43); at `skyline` it sits 0.06 *under* `C`. Matte 
 reflection, and sky reflection was a chunk of why `A` raised `C*` above what `ART_DESIGN.md`
 sanctions.
 
-⚠️ **`A″` is now gradeable; it is not graded.** Every number above is a measurement, and `Q26` is a
-verdict — a human preference between `A″`, `B` and `C`. Nothing here says which look ships.
+**Re-shot as `A‴` after `P3-7a`'s `W1`/`W2` (2026-08-09, commit `422ee16`) — the candidate the
+verdict now grades.** The user judged two of `A″`'s defects directly from its frames — punched
+openings drawn as matte holes (`Q44`) and one pane palette city-wide (`Q45`) — so `A″` is
+superseded, not merely refined: grading drivers on a look already called wrong wastes the drivers.
+`A‴` is `A″`'s tuning plus `unglazed_glassy 0.65`, `pane_l_jitter 6.0`, `pane_b_jitter 4.0`,
+`pane_hue_pull 0.25`, all shader-side, no rebuild. Shot into `build/driver/q26_A3_422ee16/`,
+every viewpoint sibling-`cmp`'d; one kerb frame arrived corrupt (78 distinct colours against 185)
+and was caught by exactly that protocol — three clean kerb runs agree byte for byte.
+
+| viewpoint | | `A″` (`Q43`) | `A‴` (`P3-7a`) | `C` |
+|---|---|---|---|---|
+| `street` | responds | 19.7% | **19.7%** | — |
+| | p90 \|d`L*`\| | 32.43 | **19.15** | — |
+| | mean `C*` | 17.96 | **17.72** | 16.56 |
+| `skyline` | responds | 11.6% | **11.6%** | — |
+| | p90 \|d`L*`\| | 9.47 | **9.03** | — |
+| | mean `C*` | 15.62 | **15.63** | 15.68 |
+| `kerb` | responds | 14.8% | **14.7%** | — |
+| | p90 \|d`L*`\| | 36.79 | **24.37** | — |
+| | mean `C*` | 15.87 | **16.08** | 15.30 |
+
+**The shape is the intended one: same reach, smaller step, glass where holes were.** Responding
+share is unchanged at every viewpoint — the same walls answer — while p90 \|d`L*`\| falls by a
+third to 40% at `street` and `kerb`: an opening that is dark glass carrying a sky mirror sits far
+closer to pale concrete than a matte near-black recess does, so the buildings still differ in
+material without the openings reading as punched-out voids.
+
+✅ **The `Q30` bar (`Q44`'s acceptance) holds on all three cameras, and only `kerb` re-spent.**
+Against `C`, the chroma cost is `street` **+1.16** (`A″` +1.40, bar `A` +2.28), `kerb` **+0.78**
+(`A″` +0.57, bar +1.43), `skyline` **−0.05** (`A″` −0.06, bar −0.02). `kerb` re-spent part of the
+give-back exactly as `Q44` predicted — glassed openings take sky reflection again — while
+`street` moved the *other* way: the `Q45` hue pull drags panes toward their buildings'
+near-neutral measured hues, which costs chroma nothing and buys the variation from `L*`/`b*`
+instead.
+
+⚠️ **`A‴` is now gradeable; it is not graded.** Every number above is a measurement, and `Q26` is a
+verdict — a human preference between `A‴`, `B` and `C`. Nothing here says which look ships. The
+named review question for the `P3-7a` half: *do punched windows read as windows, and do two
+adjacent towers still read as two buildings?*
 
 **See.** `ART_DESIGN.md` "The clean/futuristic variant" · `ART_DESIGN.md` "The audit viewpoints" ·
-`Q27` · `Q30` · `Q31` · `Q34` · `Q37` · `Q40` · `Q41` · `Q43`
+`Q27` · `Q30` · `Q31` · `Q34` · `Q37` · `Q40` · `Q41` · `Q43` · `Q44` · `Q45`
 
 ## `Q27` — `COLOR_0` is authored sRGB and must be linearised by the consumer
 
@@ -3425,7 +3462,10 @@ route `survey_pane` onto punched stock — now stated at the override site.
 
 ⚠️ **The `Q30` trade-off is the bar.** Matte openings are where `A″` gave back 39% / 60% of `A`'s
 chroma cost at `street` / `kerb`; re-glassing re-spends part of that. Acceptance: whole-frame mean
-`C*` against `C` stays ≤ `A`'s cost on all three audit cameras.
+`C*` against `C` stays ≤ `A`'s cost on all three audit cameras. ✅ **Graded on the `A‴` re-shoot
+and held**: `street` +1.16 ≤ +2.28, `kerb` +0.78 ≤ +1.43, `skyline` −0.05 ≤ −0.02 — only `kerb`
+re-spent, and less than half its headroom. The full table is in `Q26`; what remains open here is
+the user's verdict on the frames.
 
 ⚠️ **Punched panes must not take `facade_glazing`'s dark-mode tint.** `Q40` conditioned the tint on
 `glazed` for exactly this stock — on a punched building the dark population is shadowed reveals and
@@ -3463,6 +3503,10 @@ record said the variation belongs. Zero-amplitude is guarded to skip the Lab rou
 the pick is bit-exact with the old inline select. Shader defaults 0.0; **6.0 / 4.0 / 0.25
 authored in `city_facade.tres` as `A‴` starting points**, not verdicts. Parked byte-identity
 held: all three audit cameras byte-identical to `q26_C_cf19201`, shot twice and sibling-`cmp`'d.
+On the `A‴` re-shoot the modulation costs chroma nothing — `street` mean `C*` *fell* +1.40 →
++1.16 against `C` relative to `A″`, because the hue pull drags panes toward near-neutral measured
+hues and the variation arrives through `L*`/`b*` instead. The `Q35` salt-and-pepper bound and the
+within-frame read are the user's to judge on the frames (`Q26`).
 
 ⚠️ **Modulate the fallback, never the measurement.** A surveyed tint is the answer for that
 building; jittering it re-invents what `Q40` measured. The hash tints and the punched panes

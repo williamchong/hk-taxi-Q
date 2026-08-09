@@ -71,7 +71,10 @@
 ; *together with* the seven `542cac3` values — measured surface on accurate
 ; massing — and both switches stay one edit here, no rebuild. That candidate is
 ; `A″`, shot at `Q43` into `build/driver/q43/`; `A′` before it was the same edit
-; over the collapsed fenestration gate and is not a look, only a defect.
+; over the collapsed fenestration gate and is not a look, only a defect. Since
+; `P3-7a` the candidate is `A‴` — the same edit plus the `unglazed_glassy` and
+; `pane_*` values below at their authored points — shot into
+; `build/driver/q26_A3_422ee16/` and awaiting the user's verdict under `Q26`.
 ;
 ; ⚠️ `recess_colour` and `unglazed_reflect` are what an opening is made of where
 ; the survey says glazing does not *dominate* — `punched` stock (`Q43`). Inert
