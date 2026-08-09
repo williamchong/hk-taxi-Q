@@ -391,12 +391,21 @@ trade.
     non-street-facing (is the win worth plumbing?); how many pedestrianised shopping streets are
     missing from Road Network v2's carriageways (false quiet on real shopfronts); what extending
     the cluster key by the flag costs in LOD1 vertices. No plumbing until those three numbers are
-    in a record.
+    in a record. ✅ The blocker itself is now measured (2026-08-10): a payload keyed by the
+    survey's own quadrant rule ends with mixed-payload triangle corners on 0.88% / 0.62% of
+    LOD0 / LOD1 triangles across 22.9% of buildings — dominated by `face_of` vs `_facing` bucket
+    drift — and packed bits interpolate to garbage, so the hold stands. A `flat` varying would
+    trade the garbage for whole-triangle flips, not fix it. The three win-sizing numbers above
+    remain unmeasured.
   - **iB1000 structure classes.** 3D-BIT Level 1 footprints are extruded *from the B1000
     topographic map*; if the published iB1000 layers carry structure categories (shelter / tank /
     plant), a footprint join gives "utility structure" as data — per-city via config, no vision
     reader. The scalable long-term answer to `W3`'s whole class. Owes `DATA_SOURCES.md`-grade
-    verification (format, licence, scriptability) before it is a plan item.
+    verification (format, licence, scriptability) before it is a plan item. ✅ Scouted 2026-08-10:
+    the layers carry the categories and more — `Building_Pod` podium blocks with base/roof levels
+    (`Q47`'s third route), `BuiltStructurePolygon` / `UtilityPolygon` shelter / tank / plant
+    classes; FGDB via CSDI dataset `landsd_rcd_1637223748322_25497`. The verification bar above
+    still stands — evidence and access caveats in `Q47`'s record.
 - **Accept:** `tools/check.sh` passes; ETL end-to-end on the Wan Chai config; parked `C` frames
   byte-identical at `survey_apply = 0.0` after every step; each rider's pre-fixed bar met and
   recorded; PCK re-measured per rider batch (`y` is all zeros today and pack-compresses at 97% —

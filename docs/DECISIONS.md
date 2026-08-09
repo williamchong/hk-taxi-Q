@@ -70,7 +70,7 @@ lives in git. This file holds *why things are the way they are*.
 | `Q44` | A punched opening is glass, not a black hole | ✅ Closed — the `unglazed_glassy` floor shipped (`P3-7a` W1), the `Q30` bar held, and the user accepted the `A‴` frames |
 | `Q45` | One pane palette across the city reads as wallpaper | ✅ Closed — the fallback modulation shipped (`P3-7a` W2) and the user accepted the `A‴` frames; `Q35` bounds any retune |
 | `Q46` | A grammar refusal draws a quiet tier, not invented fenestration | ✅ Closed — accepted in scope 2026-08-10 on a `survey_debug`-tinted drive test: refused stock reads quiet; the residual sightings sit on committed stock and open `Q47` |
-| `Q47` | A committed verdict is right about the tower, wrong about the ground band | 🟡 Open — named by `Q46`'s tinted drive test; `W4` is disqualified at scale, the candidate routes are `R4`'s podium bits or a ground-band survey |
+| `Q47` | A committed verdict is right about the tower, wrong about the ground band | 🟡 Open — named by `Q46`'s tinted drive test; `W4` is disqualified at scale; routes measured 2026-08-10 — `R4`'s podium bits 68% filled on committed stock, a ground-band survey pays from zero, and iB1000 scouts a third: podium blocks as data |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -3637,5 +3637,48 @@ record, not a default. (2) **A ground-band survey pass** — the storefront batc
 after `P3-9a`) reads exactly the band the photography under-covered, and `podium_glazed →
 has_shop` is already named the only data-supported route to a shopfront. Choosing between the
 routes, or sequencing both, is the open decision.
+
+**The routes, measured (2026-08-10).** The podium fields the graded run already collected, mined
+from the cached sheets — zero API spend. Fill on the population this question names: **981 of the
+1,442 committed-grammar buildings (68.0%) have at least one readable face committing
+`podium_floors`**. Committed stock ≥ 40 m: 417/633 (65.9%) any-face, 322 (50.9%) on a strict
+per-building majority; committed 20–40 m: 298/411 (72.5%) and 289 (70.3%). Region-wide, 1,100
+buildings (49.7%) carry a strict-majority podium; refused stock fills at 33.0%, but `Q46` already
+owns it. The values look like podiums: 1,079 of the 1,100 (98%) say 1–3 floors, and only 42 of the
+1,043 with a visible-storey count exceed it. `podium_glazed` commits beside it — 594 True / 413
+False / 93 refused among the majority-podium buildings — so the `has_shop` route rides the same
+bits. Faces disagree enough that the vote is doing real work: of 472 buildings with two or more
+podium votes, 278 (58.9%) are unanimous. ⚠️ **Fill is prioritisation evidence, not validation** —
+`Q42`'s discipline stands, `R4` still owes its own bar fixed before grading, and no hand labels
+exist for podium yet. The ground-band survey pass, by contrast, starts from zero collected reads
+and pays per face: it remains the only route that *measures* the band rather than inferring its
+extent, but its impact case now has to beat data that is one-half to two-thirds already in hand.
+
+**`R4`'s conversion, written ahead of the call** (`Q43`'s precondition, discharged here). The
+reader answered: *"how many lowest floors form a visibly distinct podium (shopfronts, different
+treatment), null if none."* The shader needs: *the height, in metres, where the committed tower
+treatment stops.* The conversion is `podium_floors` × the building's reconciled pitch (`R2`'s
+per-building median where it commits, the city `floor_height_m` fallback where it refuses) →
+metres, computed at pack time — never `podium_floors` assigned as though floors were metres.
+
+**A third route, scouted (2026-08-10).** iB1000 — the digital topographic map 3D-BIT Level 1 is
+extruded from — carries the podium as a **first-class feature**: `Building_Pod` "Podium Block"
+(code `P`) beside `Building_Bldg`'s building / temporary / open-sided classes, and the FGDB
+metadata lists `BASELEVEL` / `ROOFLEVEL` / `TYPEOFBUILDINGBLOCK` on buildings with a `CERTAINTY`
+flag on podium polygons. A footprint join would give the podium boundary **in metres, from data**
+— no vision reader and no floors-to-metres conversion. The same dataset's `BuiltStructurePolygon`
+and `UtilityPolygon` classes (ventilation shafts, chimneys, transformers, substations, tanks,
+service reservoirs, pavilions, stands) are `W3`'s "utility structure" signal as data, per-city via
+config. Access looks scriptable on the patterns the pipeline already uses: CSDI dataset
+`landsd_rcd_1637223748322_25497` exposes a `TileIndex` layer on the same `file-api` the buildings
+sheet index reads, and its metadata lists portal download links for the FGDB; publisher Lands
+Department via the same two portals whose terms the credits already satisfy. ⚠️ The
+`open.hkmapservice.gov.hk` direct-download endpoint the metadata also advertises is **not** the
+route: probed 2026-08-10, the seamless full set times out (504) and the per-sheet form redirects
+to `hkms.landsd.hksarg` — a government intranet hostname. ⚠️ **Scouted, not verified**: whether
+`Building_Pod` ships `ROOFLEVEL` region-wide, whether its footprints align with 3D-BIT's volumes,
+and the portal download's size all owe `DATA_SOURCES.md`-grade verification before this is a plan
+item (`PLAN.md`'s own bar) — and `podium_glazed` still comes only from a survey, so iB1000 bounds
+the treatment, not the shopfront.
 
 **See.** `Q46` · `Q41` · `Q42` · `Q43` · `Q34` · `P3-7a`
