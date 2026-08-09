@@ -69,6 +69,7 @@ lives in git. This file holds *why things are the way they are*.
 | `Q43` | `glazed` is materiality; `fenestrated` is geometry | ✅ Closed — shipped in `city_facade_clean.gdshader`, graded as `A″` under `Q26` |
 | `Q44` | A punched opening is glass, not a black hole | ✅ Closed — the `unglazed_glassy` floor shipped (`P3-7a` W1), the `Q30` bar held, and the user accepted the `A‴` frames |
 | `Q45` | One pane palette across the city reads as wallpaper | ✅ Closed — the fallback modulation shipped (`P3-7a` W2) and the user accepted the `A‴` frames; `Q35` bounds any retune |
+| `Q46` | A grammar refusal draws a quiet tier, not invented fenestration | 🟡 Open — the five `quiet_*` tunables shipped (`P3-7a` W3), the `Q30` bar held; awaiting the user's verdict on the `A⁗` frames |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -3531,3 +3532,65 @@ apart. Both are graded from the street, and the resolution is scale: pane variat
 within a frame without turning the skyline into salt-and-pepper glass.
 
 **See.** `Q27` · `Q35` · `Q40` · `Q44` · `P3-7a`
+
+## `Q46` — A grammar refusal draws a quiet tier, not invented fenestration
+
+**Status.** 🟡 **Open — mechanism shipped (`P3-7a` W3, 2026-08-10)**, the `Q30` bar held on all
+three audit cameras and parked byte-identity held; what remains is the user's verdict on the `A⁗`
+frames (`build/driver/q26_A4_ab98183/`) · **Owner.** `P3-7a`
+
+**The call.** The 2026-08-09 drive test of the shipped `A‴` default returned five sightings of
+invented fenestration on windowless stock — HKCEC's service base and tunnel piers, plant boxes, a
+footbridge lift tower, sportsground walls — all grammar-refused, where the hash drew with the same
+confidence as anywhere: it could pick curtain or fin, and rolled a shopfront at `shopfront_share`
+without consulting the survey at all. This record deliberately rebalances `Q40`/`Q41`'s "refusal
+falls to the hash": the hash still draws, but from a conservative distribution.
+
+**What refused means — and does not.** Refused is the survey's own small-or-occluded signal —
+grammar commits on 12% of buildings under 4 m against 78% over 40 m, on photography that covers a
+median 14.3% of wall area and is occlusion-biased to the street — not "this wall is blank":
+`blank` is the only opening-denying verdict (`Q43`) and committed 10× region-wide. So the tier
+lowers confidence rather than denying openings: solid probability rises, what still fenestrates is
+punched-with-heavy-piers, panes mute, and a shopfront needs positive evidence. Count as of this
+record: **772 grammar-refused of 2,214** in `facade_grammar.json` (earlier docs recorded
+771/2,213; those figures stand as written).
+
+**The mechanism, landed (`P3-7a` W3, 2026-08-10).** Five tunables in
+`city_facade_clean.gdshader`, eligibility `survey_state.z < 0.5` under `survey_on` — never
+geometry: `quiet_shopfront` shrinks the shopfront lottery on refused stock (authored 1.0 = never,
+the categorical half); `quiet_clamp` is the share of refused stock whose hashed treatment falls to
+punched, on draw slot 15 (authored 1.0); `quiet_pier_ratio` is a `max()` floor over the
+treatment's pier (authored 0.68, against `punched_pier_ratio` 0.52); `quiet_solid` raises the
+solid-share threshold by `mix` toward 1.0 (authored 0.55: solid probability 0.27 → ≈0.67);
+`quiet_pane_mute` scales `fallback_pane`'s chroma in CIELAB after the `Q45` jitter and pull
+(authored 0.5). All five are bit-exactly inert at 0.0 and dead at `survey_apply = 0.0`. Committed
+stock is untouched by construction: the clamp sits upstream of the committed override, which
+rewrites `treatment` unconditionally; the pier is a refusal-gated floor; the solid raise sits
+upstream of the glazed override, so the 46 refused-grammar buildings whose glazed axis committed
+`True` are re-glazed by the committed evidence; and the mute touches only `fallback_pane`, so a
+committed tint wins unmuted (`Q45`'s rule).
+
+**The bar, held.** Whole-frame mean `C*` vs `C`: `street` **+1.10** ≤ +2.28 · `kerb` **+0.74** ≤
++1.43 · `skyline` **−0.04** ≤ −0.02 — below `A‴`'s +1.16/+0.78 on the two street-level cameras,
+the tier removing chroma as the maths says it must. Parked byte-identity: all three cameras at
+`survey_apply = 0.0` with the quiet values authored, shot twice, sibling-`cmp`'d, byte-identical
+to `q26_C_cf19201`. Against the accepted `A‴` frames the change reaches 1.6% / 1.8% / 0.9% of the
+`street` / `skyline` / `kerb` frames, and the responding pixels' `C*` p90 falls 28.1 → 22.6
+(`street`) and 27.6 → 19.3 (`kerb`) — the response is confined to refused stock and is quieter
+than what it replaced.
+
+⚠️ **Not a height gate.** `Q34` stands — height plus footprint explain 1.4% of the façade signal.
+Eligibility is the survey's own refusal state: a tall occluded tower quiets, a short committed
+building does not.
+
+⚠️ **A committed `blank` can still draw a shopfront.** The tier conditions on refusal, and `blank`
+is committed — 10 buildings region-wide, out of scope because committed stock is untouched. If one
+is sighted, `W4`'s override table is the remedy, not a wider gate here.
+
+⚠️ **Mute chroma, never glassiness.** `quiet_pane_mute` scales `a*b*` only. Dimming the mirror
+instead would re-create the matte holes `Q44` closed — quiet openings are still glass.
+
+**Forward.** Refusal conservatism extends to `lit_window_share` when the night variant lands: a
+refused building draws fewer lit windows, on this same eligibility signal.
+
+**See.** `Q34` · `Q40` · `Q41` · `Q43` · `Q44` · `Q45` · `Q30` · `Q26` · `P3-7a`
