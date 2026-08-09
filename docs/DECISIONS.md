@@ -3246,7 +3246,8 @@ plumbing shipped `TEXCOORD_1` with `y` written `0.0` and its rider layout fixed 
 `ARCHITECTURE.md`'s contract table (storey pitch in 1/32 m steps over the 2.5–4.5 m window, podium
 floors with "no podium" distinct from refusal, balconies, emphasis). Filling a field a
 refusal-aware consumer already reads as "0 = refused" changes bytes, not meaning — so each rider
-now owes exactly its own validation, and no further `schema_version` bump · **Owner.** `P3-9a`
+now owes exactly its own validation, and no further `schema_version` bump. Consumption is planned
+as `P3-7a`, in reliability order · **Owner.** `P3-7a`
 
 **The observation.** `Q41`'s reader schema asks for more than grammar, glazing and tint: it returns
 `storey_count`, `band_period_floors`, `podium_floors`, `podium_glazed`, `balconies`, `emphasis` and
@@ -3373,3 +3374,71 @@ rather than assign. `podium_floors` — "lowest floors forming a visibly distinc
 `podium_height_m` — "where the tower grid starts" — is the next one queued to make this mistake.
 
 **See.** `Q26` · `Q30` · `Q40` · `Q41` · `Q42` · `ART_DESIGN.md` "The clean/futuristic variant"
+
+## `Q44` — A punched opening is glass, not a black hole
+
+**Status.** 🟡 Open — user's call, 2026-08-09, judged from `A″`'s frames. This is the judgment
+`Q43` said `recess_colour` / `unglazed_reflect` were owed ("`A″` is where these get judged") ·
+**Owner.** `P3-7a`
+
+**The call.** Hong Kong punched windows are traditional glass windows, usually in aluminium frames —
+dark glass in a concrete hole, but *glass*: they catch the sky, mirror at grazing angles, and read
+as windows. `A″` draws them as matte near-black holes, on the stock that is 67% of read faces and
+the whole of Hennessy Road.
+
+**Confirmed in code, not only on frames.** Three terms compound in `city_facade_clean.gdshader`:
+
+1. `opening_colour` stays `recess_colour` (0.12): the tint pick runs only for `glazed || has_shop`,
+   and even when a shopfront takes the branch, `glassy = 0` on unglazed tower fragments returns the
+   recess whatever the pane.
+2. Reflection: `glass_reflect` 0.58 × `unglazed_reflect` 0.18 ≈ 0.10 at grazing, and
+   × `glass_face_on` 0.18 head-on — **about 2% of the mirror** on a wall faced squarely.
+3. Roughness stays the wall's 0.82: `glassy` zeroes the `glass_roughness` path, so the opening has
+   no specular life either.
+
+**The re-scope.** `Q43` was right to split materiality from geometry — and then wrong to let
+"glazing does not dominate" decide materiality. The reader's `glazed` is a **coverage** claim —
+dominance over the façade area — and coverage never decided what the opening is made of: a
+tenement's openings are still glass; what differs is how much wall surrounds them, which the
+punched ratios and heavy piers already express. Candidate mechanisms, judged on a re-shoot rather
+than argued: a glassiness floor for unglazed openings, or `glazed` re-scoped to coverage only with
+opening material always glass — `recess_colour` / `unglazed_reflect` becoming the frame-and-reveal
+treatment rather than the whole opening.
+
+⚠️ **The `Q30` trade-off is the bar.** Matte openings are where `A″` gave back 39% / 60% of `A`'s
+chroma cost at `street` / `kerb`; re-glassing re-spends part of that. Acceptance: whole-frame mean
+`C*` against `C` stays ≤ `A`'s cost on all three audit cameras.
+
+⚠️ **Punched panes must not take `facade_glazing`'s dark-mode tint.** `Q40` conditioned the tint on
+`glazed` for exactly this stock — on a punched building the dark population is shadowed reveals and
+warm render, not glass. Their pane colour is authored/hashed (and `Q45`-modulated), never the
+unconditioned measurement.
+
+**See.** `Q30` · `Q40` · `Q43` · `Q45` · `Q26`
+
+## `Q45` — One pane palette across the city reads as wallpaper
+
+**Status.** 🟡 Open — user's call, 2026-08-09 · **Owner.** `P3-7a`
+
+**Confirmed state.** Pane colour has exactly four values city-wide: three authored tints hashed per
+building (`glass_colour`, `glass_tint_b`, `glass_tint_c`) plus one `recess_colour` shared by every
+punched opening. The surveyed 240-bin tint varies properly but is written only for reader-glazed
+buildings (~226 of 2,214). Within a building every pane is one colour, and the wall's
+`value_jitter` / `warm_cool_jitter` never reaches the pane — the glazing mix *replaces* the jittered
+albedo rather than modulating it. What varies per pane today is lighting (`pane_bow`,
+`pane_jitter`), not colour.
+
+**The direction.** Modulate pane colour per building: a seeded `L*` / `b*` jitter on the hashed
+fallback, and/or a pull toward the building's own measured hue (`COLOR_0`, linearised through the
+shader's existing `vertex_srgb_to_linear` — `Q27`'s conversion is mandatory here as everywhere).
+
+⚠️ **Modulate the fallback, never the measurement.** A surveyed tint is the answer for that
+building; jittering it re-invents what `Q40` measured. The hash tints and the punched panes
+(`Q44`) are where the variation belongs.
+
+⚠️ **`Q35` interplay, in the opposite direction.** `Q35` complains adjacent blocks land too far
+apart in *wall* reflectance where real blocks share cladding; this record wants panes further
+apart. Both are graded from the street, and the resolution is scale: pane variation should read
+within a frame without turning the skyline into salt-and-pepper glass.
+
+**See.** `Q27` · `Q35` · `Q40` · `Q44` · `P3-7a`

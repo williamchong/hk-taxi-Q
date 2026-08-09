@@ -248,12 +248,14 @@ trade.
 | `P3-10` | **Ground surface** — decimated terrain, vertex-coloured, merged into the tile primitive | Ground everywhere the region has terrain; **no texture ships**; one draw call per tile still; no z-fighting against the carriageway |
 | `P3-7` | Window-band shader, **and the `TEXCOORD_0` payload it reads** | Reads as HK density; no windows on roofs or podium faces. ETL ships height-above-own-base and a per-building seed; `schema_version` bumped in the same commit |
 | `P3-6` | Hero buildings (5) authored, placed via `landmarks.json` | Source geometry excluded; no z-fighting |
+| `P3-7a` | **Survey-driven façade variation** — `Q42`'s reliable riders consumed, and the openings re-judged: punched windows are glass (`Q44`), panes vary per building (`Q45`) | Everything lands dark behind `survey_apply`; parked look byte-identical at every step; each rider graded against a pre-fixed bar before the shader reads it; no new reader field before `Q26`'s verdict |
 
 - **Deps:** `P1-2`, `P1-7`. **No longer depends on `B1`** — that dependency was ordering, not
   substance. Nothing in the taxi, the ground, the shader or the hero buildings reads a fare.
 - **Within the build:** `P3-11` first, because it appears in every screenshot of every later review —
   a shot taken before it is a shot that has to be retaken. Then `P3-10`, because the remaining two
-  are judged against a city that has a floor. Then `P3-7`, then `P3-6`.
+  are judged against a city that has a floor. Then `P3-7`, then `P3-6`; `P3-7a` follows `P3-7` and
+  the region survey, and may run beside `P3-6`.
 - **Review:** drive Hennessy Road and look around; the same viewpoints before and after | web build |
   **Does this read as Wan Chai?** No longer a dress rehearsal — `P3-9a` follows immediately and puts
   the same build in front of people who are not the user.
@@ -283,6 +285,59 @@ trade.
   still look fine, because the mesh is not what the physics reads.
 - **Review:** the taxi from behind at speed, and parked beside a building for scale | web build |
   **Does it read as a toy in an accurate city, rather than as a box?**
+
+#### `P3-7a` — how the survey becomes the look
+
+- **Deliverable:** the reliable half of `Q42`'s riders consumed end-to-end (merge vote →
+  `TEXCOORD_1.y` → shader), plus the two corrections the user called from `A″`'s frames: punched
+  openings behave as glass (`Q44`) and pane colour varies per building (`Q45`). Everything lands
+  dark behind `survey_apply = 0.0`, and the parked look stays byte-identical at every step — `Q43`'s
+  reducibility check, and how each commit proves it changed nothing it did not mean to.
+- **Order — the look fixes run before the riders, because two of `A″`'s defects are already
+  judged.** `Q26`'s verdict is a human preference over `A″`, and grading drivers on a look the user
+  has already called wrong wastes the drivers. `W1`/`W2` are shader + tuning only — no ETL, no
+  schema; the riders then enrich the corrected candidate in reliability order (`Q42`'s fill rates):
+  1. `W1` — punched openings as glass (`Q44`): re-scope what an unglazed opening is made of,
+     re-shoot, hold the `Q30` chroma bar recorded there.
+  2. `W2` — per-building pane colour (`Q45`): seeded `L*`/`b*` jitter on the hashed fallback and/or
+     a pull toward the building's own measured hue. Never on the surveyed tint.
+  3. `R1` — `emphasis` (bits 14–16). Fills essentially every read face and coheres with grammar; a
+     committed value replaces the grammar-implied reading direction, a refusal keeps it. ⚠️ No hand
+     labels exist for it — author emphasis labels for the 25 readable validation faces from the
+     cached unwraps, and fix the bar **before** the grading runs (`Q41`'s shape).
+  4. `R2` — reconciled storey pitch (bits 0–6). Per-building median over readable faces, the
+     2.5–4.5 m sanity window, refusal outside — `Q42`'s own prescription; the field is *visible
+     floors on this face*, never a raw read. A committed pitch replaces `floor_height_m` for that
+     building; the city constant stays the fallback.
+  5. `R3` — `balconies` (bits 12–13), selecting a punched variant.
+  6. `R4` — podium (bits 7–11), **last, and only after its conversion is written down**: `Q43`
+     names `podium_floors` ("lowest floors forming a visibly distinct podium") against
+     `podium_height_m` ("where the tower grid starts") as the next semantic-drift casualty. Put the
+     two sentences side by side in the record and convert (floors × reconciled pitch → metres) —
+     never assign. `podium_glazed` then informs `has_shop`, the only data-supported route to a
+     shopfront sitting roughly where one is.
+- ⚠️ **Each rider owes its own validation, bar fixed before grading.** The graded run validated
+  grammar and glazing only; `Q42`'s fill rates are prioritisation evidence, not validation. Each
+  rider closes its slice of `Q42` in `DECISIONS.md` as it lands.
+- ⚠️ **Three places per rider, one commit:** the merge/pack (`tools/facade_grammar.py`,
+  `etl/pipeline/buildings.py`), the shader decode, and `game/tools/verify_tiles.gd` — which today
+  asserts `uv2.y != 0.0` is a codec break, so the first written rider fails the verifier unless its
+  range check moves in the same commit. No `schema_version` bump: filling a reserved field a
+  refusal-aware consumer already reads as "0 = refused" changes bytes, not meaning (`Q42`).
+- ⚠️ **No new reader field before `Q26`'s verdict.** The prompt hash is the reader's identity; a new
+  field means a new graded run plus a paid full re-survey. Wanted fields — opening proportion (the
+  measured answer `glass_ratio`/`mullion_ratio` never got), ground-floor character (shop / lobby /
+  utility / parking), signage density (placement only, **never rendered text** — `Q42`) — batch into
+  **one** prompt revision after the verdict, so validation is paid once.
+- **Accept:** `tools/check.sh` passes; ETL end-to-end on the Wan Chai config; parked `C` frames
+  byte-identical at `survey_apply = 0.0` after every step; each rider's pre-fixed bar met and
+  recorded; PCK re-measured per rider batch (`y` is all zeros today and pack-compresses at 97% —
+  writing riders spends real bytes, and the rule is measure, never estimate); `ring_weights.py` and
+  `facade_chroma.py` pastes on the survey-touching commits.
+- **Review:** the three audit cameras re-shot at `survey_apply = 1.0` after `W1`/`W2` and again
+  after the riders; the enriched candidate (`A‴`) replaces `A″` in `Q26`'s set | web build | **Do
+  punched windows read as windows, and do two adjacent towers still read as two buildings?**
+- **Deps:** `P3-7` ✅, the region survey ✅ (`Q41`). Independent of `P3-6`.
 
 ### `P3-9a` Recognition round 0 — the city, before the game
 
