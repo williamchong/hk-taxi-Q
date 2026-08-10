@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import threading
+from dataclasses import replace
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
@@ -149,15 +150,7 @@ class TestSelectTiles:
         feature["properties"]["Format_glTF"] = (
             "https://example.test/OpenData/directDownload?sheetName=TALPHA&productFormat=FGDB"
         )
-        suffixed = TiledSource(
-            id="topography",
-            index_url=BUILDINGS.index_url,
-            index_crs=BUILDINGS.index_crs,
-            id_property=BUILDINGS.id_property,
-            url_property=BUILDINGS.url_property,
-            revision_property=BUILDINGS.revision_property,
-            tile_suffix=".zip",
-        )
+        suffixed = replace(BUILDINGS, id="topography", tile_suffix=".zip")
 
         tiles = fetch.select_tiles(
             index_of(feature), suffixed, region_bounds=WAN_CHAI, region_crs="EPSG:4326"

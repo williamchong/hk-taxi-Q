@@ -79,12 +79,16 @@ def read_layer(
     columns: list[str],
     bbox: Bbox | None = None,
     zip_member: str | None = None,
+    expect_crs: str | None = None,
 ) -> Layer:
     """Read one layer, optionally clipped to a bounding box.
 
     `bbox` is `(min_x, min_y, max_x, max_y)` **in the layer's own CRS** — OGR
     does no reprojection here, and this project has already been bitten once by
-    comparing coordinates across datums. Check `Layer.crs` before trusting it.
+    comparing coordinates across datums. `expect_crs` makes that check the
+    read's own job rather than one every caller hand-rolls: a datum mismatch
+    shifts coordinates by hundreds of metres and still looks plausible, so a
+    caller that passes a `bbox` should say which CRS it built it in.
 
     `columns` is required rather than defaulted to all: the road centreline
     layer carries fourteen fields, half of them audit timestamps, and reading
@@ -101,6 +105,11 @@ def read_layer(
         bbox=bbox,
         return_fids=True,
     )
+    if expect_crs is not None and meta["crs"] and meta["crs"] != expect_crs:
+        raise ValueError(
+            f"layer '{layer}' is in {meta['crs']}, but the caller expects {expect_crs}. "
+            f"Reprojection is not done here — fix the config."
+        )
     read = {str(name): values for name, values in zip(meta["fields"], fields, strict=True)}
     missing = [name for name in columns if name not in read]
     if missing:

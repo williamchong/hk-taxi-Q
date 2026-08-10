@@ -1367,12 +1367,13 @@ class TestPodiums:
         with pytest.raises(ValueError, match="not in tiled_sources"):
             load_city("hong_kong", cities_root=rewrite(rename))
 
-    def test_a_member_with_a_stray_placeholder_is_rejected(self, rewrite) -> None:
-        """A `{sheet}` typo would otherwise fail at first read, per sheet,
-        rather than once at load."""
+    @pytest.mark.parametrize("member", ["{sheet}/{sheet}.gdb", "{tile/{tile}.gdb"])
+    def test_a_member_with_a_bad_placeholder_is_rejected(self, rewrite, member: str) -> None:
+        """A `{sheet}` typo or an unclosed brace would otherwise fail at first
+        read, per sheet, rather than once at load."""
 
         def mistype(doc: dict[str, Any]) -> None:
-            doc["podiums"]["member"] = "{sheet}/{sheet}.gdb"
+            doc["podiums"]["member"] = member
 
         with pytest.raises(ValueError, match="placeholder"):
             load_city("hong_kong", cities_root=rewrite(mistype))

@@ -578,7 +578,7 @@ def _tiles_for(
     report: FetchReport,
     *,
     force: bool,
-    context: ssl.SSLContext | None = None,
+    context: ssl.SSLContext | None,
 ) -> list[Artefact]:
     """Fetch a tiled source's index and turn it into the region's artefacts."""
     index_artefact = Artefact(
@@ -676,7 +676,7 @@ def _process(
     *,
     force: bool,
     dry_run: bool,
-    context: ssl.SSLContext | None = None,
+    context: ssl.SSLContext | None,
 ) -> None:
     manifest_key = f"{city.id}/{artefact.key}"
     destination = artefact_path(city.id, artefact, root=root)

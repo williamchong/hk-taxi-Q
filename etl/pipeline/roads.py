@@ -666,7 +666,7 @@ def build_region(
     source = _Source(
         path=cached_source(city, style.source, root=sources_root),
         city=city,
-        bbox=(bounds.min_easting, bounds.min_northing, bounds.max_easting, bounds.max_northing),
+        bbox=bounds.bbox,
     )
     centrelines = source.read(style.centrelines)
     owners, parts = gdb.polylines(centrelines)
@@ -785,13 +785,13 @@ class _Source:
         moves them ~304 m — a fifth of the width of this region — and the result
         is a plausible-looking road network somewhere it is not.
         """
-        read = gdb.read_layer(self.path, layer.layer, columns=layer.columns, bbox=self.bbox)
-        if read.crs and read.crs != self.city.projected_crs:
-            raise ValueError(
-                f"layer '{layer.layer}' is in {read.crs}, but city '{self.city.id}' declares "
-                f"{self.city.projected_crs}. Reprojection is not done here — fix the config."
-            )
-        return read
+        return gdb.read_layer(
+            self.path,
+            layer.layer,
+            columns=layer.columns,
+            bbox=self.bbox,
+            expect_crs=self.city.projected_crs,
+        )
 
 
 def _direction(style: RoadNetwork, code: int, layer: str) -> str:

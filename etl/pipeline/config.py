@@ -1923,11 +1923,12 @@ def _podium_blocks(body: dict[str, Any], where: str) -> PodiumBlocks:
     member = str(_require(body, "member", where))
     try:
         member.format(tile="probe")
-    except (KeyError, IndexError) as error:
-        # A stray placeholder would otherwise surface at first read, per sheet,
-        # rather than at load — the reason `_check_source_exists` gives.
+    except (KeyError, IndexError, ValueError) as error:
+        # A stray or malformed placeholder would otherwise surface at first
+        # read, per sheet, rather than at load — the reason
+        # `_check_source_exists` gives.
         raise ValueError(
-            f"{where}:member {member!r} holds a placeholder other than {{tile}}"
+            f"{where}:member {member!r} allows only the {{tile}} placeholder ({error})"
         ) from error
     return PodiumBlocks(
         source=str(_require(body, "source", where)),

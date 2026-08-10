@@ -94,6 +94,11 @@ class ProjectedBounds:
     def height_m(self) -> float:
         return self.max_northing - self.min_northing
 
+    @property
+    def bbox(self) -> tuple[float, float, float, float]:
+        """`(min_x, min_y, max_x, max_y)` — the order OGR's bbox filter takes."""
+        return (self.min_easting, self.min_northing, self.max_easting, self.max_northing)
+
 
 @cache
 def transformer(from_crs: str, to_crs: str) -> Transformer:

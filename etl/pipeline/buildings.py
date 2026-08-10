@@ -369,24 +369,16 @@ def podium_blocks(
         return []
     region = city.region(region_id)
     bounds = city.projected_bounds(region_id)
-    bbox = (bounds.min_easting, bounds.min_northing, bounds.max_easting, bounds.max_northing)
     layers: list[tuple[str, gdb.Layer]] = []
     for sheet in cached_tiles(city, region, city.tiled_sources[spec.source], root=sources_root):
         layer = gdb.read_layer(
             artefact_path(city.id, sheet, root=sources_root),
             spec.blocks.layer,
             columns=spec.blocks.columns,
-            bbox=bbox,
+            bbox=bounds.bbox,
             zip_member=spec.member.format(tile=sheet.tile_id),
+            expect_crs=city.projected_crs,
         )
-        # The bbox handed to OGR is in the city's projected CRS and OGR does not
-        # reproject it — reading Hong Kong coordinates on the wrong datum moves
-        # them ~304 m, a plausible-looking city somewhere it is not.
-        if layer.crs and layer.crs != city.projected_crs:
-            raise ValueError(
-                f"layer '{spec.blocks.layer}' is in {layer.crs}, but city '{city.id}' declares "
-                f"{city.projected_crs}. Reprojection is not done here — fix the config."
-            )
         layers.append((sheet.tile_id, layer))
     return layers
 
