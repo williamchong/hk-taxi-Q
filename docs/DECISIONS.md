@@ -70,7 +70,7 @@ lives in git. This file holds *why things are the way they are*.
 | `Q44` | A punched opening is glass, not a black hole | ✅ Closed — the `unglazed_glassy` floor shipped (`P3-7a` W1), the `Q30` bar held, and the user accepted the `A‴` frames |
 | `Q45` | One pane palette across the city reads as wallpaper | ✅ Closed — the fallback modulation shipped (`P3-7a` W2) and the user accepted the `A‴` frames; `Q35` bounds any retune |
 | `Q46` | A grammar refusal draws a quiet tier, not invented fenestration | ✅ Closed — accepted in scope 2026-08-10 on a `survey_debug`-tinted drive test: refused stock reads quiet; the residual sightings sit on committed stock and open `Q47` |
-| `Q47` | A committed verdict is right about the tower, wrong about the ground band | 🟡 Open — named by `Q46`'s tinted drive test; `W4` is disqualified at scale; routes measured 2026-08-10 — `R4`'s podium bits 68% filled on committed stock, a ground-band survey pays from zero, and iB1000 scouts a third: podium blocks as data |
+| `Q47` | A committed verdict is right about the tower, wrong about the ground band | 🟡 Open — named by `Q46`'s tinted drive test; `W4` is disqualified at scale; routes measured 2026-08-10 — `R4`'s podium bits 68% filled on committed stock, a ground-band survey pays from zero, and iB1000's third is verified to `DATA_SOURCES.md` grade: podium blocks as data |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -3636,7 +3636,7 @@ rider order, which `Q42` set by fill-rate reliability alone; revisiting it is a 
 record, not a default. (2) **A ground-band survey pass** — the storefront batch (design now, pay
 after `P3-9a`) reads exactly the band the photography under-covered, and `podium_glazed →
 has_shop` is already named the only data-supported route to a shopfront. Choosing between the
-routes, or sequencing both, is the open decision.
+routes, or sequencing them, is the open decision.
 
 **The routes, measured (2026-08-10).** The podium fields the graded run already collected, mined
 from the cached sheets — zero API spend. Fill on the population this question names: **981 of the
