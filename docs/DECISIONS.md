@@ -70,7 +70,7 @@ lives in git. This file holds *why things are the way they are*.
 | `Q44` | A punched opening is glass, not a black hole | ✅ Closed — the `unglazed_glassy` floor shipped (`P3-7a` W1), the `Q30` bar held, and the user accepted the `A‴` frames |
 | `Q45` | One pane palette across the city reads as wallpaper | ✅ Closed — the fallback modulation shipped (`P3-7a` W2) and the user accepted the `A‴` frames; `Q35` bounds any retune |
 | `Q46` | A grammar refusal draws a quiet tier, not invented fenestration | ✅ Closed — accepted in scope 2026-08-10 on a `survey_debug`-tinted drive test: refused stock reads quiet; the residual sightings sit on committed stock and open `Q47` |
-| `Q47` | A committed verdict is right about the tower, wrong about the ground band | 🟡 Open — named by `Q46`'s tinted drive test; `W4` is disqualified at scale; routes measured 2026-08-10 — `R4`'s podium bits 68% filled on committed stock, a ground-band survey pays from zero, and iB1000's third is verified to `DATA_SOURCES.md` grade: podium blocks as data |
+| `Q47` | A committed verdict is right about the tower, wrong about the ground band | 🟡 Route decided 2026-08-10 — the sequence: iB1000 `P`-block metres where a tower meets one (data > survey-inferred), `R4`'s floors→metres conversion elsewhere graded against the 668-tower iB1000 overlap, ground-band batch unchanged in scope; closes when the shipped boundary is graded |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -3610,8 +3610,8 @@ refused building draws fewer lit windows, on this same eligibility signal.
 
 ## `Q47` — A committed verdict is right about the tower, wrong about the ground band
 
-**Status.** 🟡 **Open** — named by the tinted drive test that accepted `Q46`; nothing per-building
-can express it until a podium boundary exists · **Owner.** `P3-7a`
+**Status.** 🟡 **Route decided 2026-08-10** — the sequence in "The call" below; closes when the
+shipped boundary is graded · **Owner.** `P3-7a`
 
 **The finding.** With `survey_debug` tinting the city by survey state, the user attributed the
 wrong windows that survived `Q46`'s quiet tier **overwhelmingly to committed (green) stock**:
@@ -3636,7 +3636,7 @@ rider order, which `Q42` set by fill-rate reliability alone; revisiting it is a 
 record, not a default. (2) **A ground-band survey pass** — the storefront batch (design now, pay
 after `P3-9a`) reads exactly the band the photography under-covered, and `podium_glazed →
 has_shop` is already named the only data-supported route to a shopfront. Choosing between the
-routes, or sequencing them, is the open decision.
+routes, or sequencing them, was the open decision — made in "The call" below.
 
 **The routes, measured (2026-08-10).** The podium fields the graded run already collected, mined
 from the cached sheets — zero API spend. Fill on the population this question names: **981 of the
@@ -3692,5 +3692,25 @@ pattern, download discarded; the dataset entry is in `DATA_SOURCES.md`. ⚠️ T
 does not do: `P` is a partial classification (Central Plaza has none — absence means no distinct
 podium block surveyed, not "no ground band"), and `podium_glazed` still comes only from a survey,
 so iB1000 bounds the treatment, not the shopfront.
+
+**The call (2026-08-10).** The sequence, not a single route: **iB1000 primary, `R4` complement,
+the ground-band batch unchanged in scope.** (a) Where a committed tower intersects a `P` block,
+the boundary is the block's levels — metres from data, no inference. Precedence is
+**data > survey-inferred**, extending the existing `authored > survey > hash` ladder rather than
+inventing a second conflict rule. (b) Where no `P` block exists, `R4`'s conversion supplies the
+boundary — and the 668-tower iB1000 overlap becomes `R4`'s validation set: grade floors→metres
+against the block metres **before anything packs**. That discharges `Q42`'s bar by a join instead
+of hand labels, and the 247 exact level meets show the datasets share a survey lineage (3D-BIT
+Level 1 is extruded from B1000), so the grade tests the reader, not dataset disagreement. (c) The
+post-`P3-9a` batch keeps its existing storefront scope; `has_shop` still rides `R4`'s
+`podium_glazed`, which no topographic layer carries. **Why not the alternatives:** iB1000-only
+leaves 45.2% of towers unfixed by design (`P` is partial — Central Plaza); `R4`-only rests the fix
+on the same tower-biased photography that caused this finding, with a hand-labelling debt the
+overlap pays for free; widening the survey batch pays per face, from zero, in the band the reader
+refuses most, for extent data the other two routes already hold. **Costs accepted:** `gdb.py`
+polygon-Z decoding is a pipeline task, the region build gains a 260 MB build-time download, and
+the merge must record which mechanism won per building. `W4`'s flagship entry shrinks accordingly:
+HKCEC's podium is its own `P` block (3.7→56.0 mPD), so its extent comes from data and any
+remaining override covers treatment only.
 
 **See.** `Q46` · `Q41` · `Q42` · `Q43` · `Q34` · `P3-7a`

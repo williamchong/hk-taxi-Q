@@ -329,10 +329,12 @@ trade.
      the stable building-ID stem (`DATA_SOURCES.md`'s cross-dataset key), precedence
      **authored > survey > hash**, merged at the same site as the survey overrides. After `W3` this
      is heroes and stragglers, not a population — the canonical entry is HKCEC's base: a
-     committed-glazed building that is right about its towers and wrong about its podium, which no
-     per-building mechanism can express until `R4` lands. ⚠️ Never a route around the survey at
-     scale: 771 grammar-refused buildings is the population that disqualified overrides as the
-     systematic fix. `Q47` re-proved that from the committed side — the tinted drive test put the
+     committed-glazed building that is right about its towers and wrong about its podium — and
+     `Q47`'s call shrinks this entry: its podium is its own iB1000 `P` block (3.7→56.0 mPD), so
+     the extent comes from data and any remaining override covers treatment only. ⚠️ Never a
+     route around the survey at scale: 771 grammar-refused buildings is the population that
+     disqualified overrides as the systematic fix. `Q47` re-proved that from the committed side —
+     the tinted drive test put the
      residual wrong windows overwhelmingly on committed ground bands, a population `W4` must not
      absorb; the systematic routes are `R4`'s podium bits or a ground-band survey.
   5. `R1` — `emphasis` (bits 14–16). Fills essentially every read face and coheres with grammar; a
@@ -348,7 +350,10 @@ trade.
      names `podium_floors` ("lowest floors forming a visibly distinct podium") against
      `podium_height_m` ("where the tower grid starts") as the next semantic-drift casualty. Put the
      two sentences side by side in the record and convert (floors × reconciled pitch → metres) —
-     never assign. `podium_glazed` then informs `has_shop`, the only data-supported route to a
+     never assign. `Q47`'s route call (2026-08-10) fixes this rider's bar and narrows its job:
+     grade floors→metres against the 668-tower iB1000 overlap **before packing**, and pack only
+     where no `P` block supplies the boundary — precedence **data > survey-inferred**.
+     `podium_glazed` then informs `has_shop`, the only data-supported route to a
      shopfront sitting roughly where one is.
 - ⚠️ **Each rider owes its own validation, bar fixed before grading.** The graded run validated
   grammar and glazing only; `Q42`'s fill rates are prioritisation evidence, not validation. Each
@@ -406,8 +411,10 @@ trade.
     (`Q47`'s third route), `BuiltStructurePolygon` / `UtilityPolygon` shelter / tank / plant
     classes; FGDB via CSDI dataset `landsd_rcd_1637223748322_25497`. ✅ **Verified to
     `DATA_SOURCES.md` grade 2026-08-10** — dataset entry in `DATA_SOURCES.md` ("iB1000 Digital
-    Topographic Map"), numbers and method in `Q47`'s record. Now eligible as a plan item;
-    sequencing is `Q47`'s route call.
+    Topographic Map"), numbers and method in `Q47`'s record. ✅ **The route call (2026-08-10)
+    makes it the primary podium route**: ingest the `P`-block levels (`gdb.py` polygon-Z decoding
+    — a pipeline task), boundary precedence data > survey-inferred, `R4` covering the blocks'
+    complement. The `BuiltStructurePolygon` / `UtilityPolygon` classes ride the same ingestion.
 - **Accept:** `tools/check.sh` passes; ETL end-to-end on the Wan Chai config; parked `C` frames
   byte-identical at `survey_apply = 0.0` after every step; each rider's pre-fixed bar met and
   recorded; PCK re-measured per rider batch (`y` is all zeros today and pack-compresses at 97% —
