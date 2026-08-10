@@ -415,6 +415,10 @@ trade.
     makes it the primary podium route**: ingest the `P`-block levels (`gdb.py` polygon-Z decoding
     — a pipeline task), boundary precedence data > survey-inferred, `R4` covering the blocks'
     complement. The `BuiltStructurePolygon` / `UtilityPolygon` classes ride the same ingestion.
+    ✅ **Ingested 2026-08-10 (`P3-7a`)**: decoder, `topography` fetch, `podiums:` config and the
+    `podium_blocks` reader landed; `Q47`'s counts reproduced in-pipeline. The tower↔block join is
+    the remaining half, and the utility classes now cost only a config block when `W3`'s successor
+    wants them.
 - **Accept:** `tools/check.sh` passes; ETL end-to-end on the Wan Chai config; parked `C` frames
   byte-identical at `survey_apply = 0.0` after every step; each rider's pre-fixed bar met and
   recorded; PCK re-measured per rider batch (`y` is all zeros today and pack-compresses at 97% —

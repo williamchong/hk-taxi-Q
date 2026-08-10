@@ -3713,4 +3713,14 @@ the merge must record which mechanism won per building. `W4`'s flagship entry sh
 HKCEC's podium is its own `P` block (3.7→56.0 mPD), so its extent comes from data and any
 remaining override covers treatment only.
 
+**Ingestion half landed 2026-08-10 (`P3-7a`).** `gdb.py` decodes polygon-Z (both WKB dialects —
+GDAL hands back the wkb25D high-bit form, not ISO offsets; M and EWKB-SRID refused), the
+`topography` tiled source fetches the six sheets (260 MB, idempotent; the host's incomplete TLS
+chain is completed by a committed intermediate, `extra_cas` in the yaml), and
+`buildings.podium_blocks` reads the `Building` layer per sheet behind the `podiums:` config
+block. The acceptance test reproduces this record's verified numbers from inside the pipeline —
+1,595 blocks (1,220 `T` / 280 `P` / 76 `OS` / 19 `TS`), levels 100% filled on every `T` and `P`,
+every geometry decoded. Nothing consumes the blocks yet; the tower↔block join, the
+mechanism-won provenance, and the contract question stay queued as the second half.
+
 **See.** `Q46` · `Q41` · `Q42` · `Q43` · `Q34` · `P3-7a`

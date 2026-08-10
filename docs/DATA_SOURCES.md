@@ -93,7 +93,12 @@ section exists so an ETL change can be made without opening that file.
 - ⚠️ **`P` is a partial classification, not a promise** — Central Plaza has no `P` block. Absence
   means no distinct podium block was surveyed, not "no ground band".
 - ⚠️ Geometry is MultiPolygon **Z** (M ordinates exist and are dropped by GDAL with a warning).
-  `gdb.py` decodes linestrings only today, so consuming this is a pipeline task, not a config edit.
+  ✅ Ingested `P3-7a` (2026-08-10): `gdb.py` decodes polygon-Z, the sheets fetch to
+  `etl/sources/hong_kong/topography/` via the `topography` tiled source, and
+  `buildings.podium_blocks` reads the `Building` layer per sheet. The verified counts above are
+  reproduced from inside the pipeline by `test_real_blocks_reproduce_the_documented_counts`.
+  Note the WKB arrives with GDAL's **wkb25D high-bit Z flag**, not the ISO 1000-offset codes —
+  the decoder accepts both dialects and refuses M and EWKB-SRID forms.
 
 ### ⚠️ NOT NEEDED — 3D Visualisation Map (Individualised models)
 
@@ -628,7 +633,16 @@ own download links do not** (verified 2026-08-10).
   `directDownload` still 504s. Per-sheet via the TileIndex is the only verified scriptable route —
   and at 260 MB per region it is enough.
 - Read with pyogrio through `/vsizip/<zip path>/<SHEETNO>/<SHEETNO>.gdb`. The probe that verified
-  this (`Q47`) is uncommitted per `P3-7`'s pattern — the download does not enter the build path.
+  this (`Q47`) is uncommitted per `P3-7`'s pattern; the *pipeline* ingestion that replaced it
+  landed as `P3-7a` (2026-08-10) — `topography` tiled source, `podiums:` block, sheets cached
+  under `etl/sources/hong_kong/topography/`.
+- ⚠️ **`open.hkmapservice.gov.hk` serves its TLS chain without the issuing intermediate**
+  (Hongkong Post e-Cert SSL CA 3 - 17) — leaf and root only. Browsers and curl chase the gap via
+  the certificate's AIA URL; Python's OpenSSL does not, so a plain `urlopen` fails
+  `CERTIFICATE_VERIFY_FAILED` against an otherwise-trusted chain. The intermediate is committed at
+  `etl/config/certs/` (provenance and fingerprint in the PEM header) and declared in
+  `hong_kong.yaml`'s `extra_cas`, which `fetch.py` loads as an additional verify anchor —
+  verification is completed, never relaxed. Expires 2032-06-03.
 
 **Portal entry points** (for a human re-checking the index):
 

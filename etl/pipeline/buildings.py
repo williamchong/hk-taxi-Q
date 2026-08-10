@@ -61,6 +61,7 @@ from zlib import crc32
 import numpy as np
 from numpy.typing import ArrayLike
 
+from pipeline import gdb
 from pipeline.colour import chroma_and_hue, with_hue
 from pipeline.config import BuildingStyle, CityConfig, Material, RegionConfig, load_city
 from pipeline.crs import GameTransform
@@ -341,6 +342,53 @@ def stem(name: str) -> str:
     individualised set the survey read, with no orphan on either side.
     """
     return name[:-_VARIANT_SUFFIX]
+
+
+def podium_blocks(
+    city: CityConfig, region_id: str, *, sources_root: Path | None = None
+) -> list[tuple[str, gdb.Layer]]:
+    """The region's surveyed building blocks, one layer per fetched sheet (`Q47`).
+
+    Nothing in the build consumes these yet — the tower↔block join is the
+    second half of `Q47`'s route. What lands here is the verified read: the
+    counts recorded in `DATA_SOURCES.md` are reproduced from exactly these
+    layers by the acceptance test.
+
+    ⚠️ **Missing is loud**, unlike the survey tables below: those are optional
+    derived caches a fresh clone builds without, where this is fetched payload
+    a configured city has promised — `cached_tiles` refusing is the same
+    config-drives-the-fetcher contract the other stages rely on.
+
+    Per-sheet rather than concatenated, twice over: the geodatabase numbers its
+    `OBJECTID`s per sheet, so a merged list would invent an identity the source
+    does not have; and a block crossing a sheet cut is present in both sheets —
+    the read reproduces the probe's method, and dedupe belongs to the join.
+    """
+    spec = city.podiums
+    if spec is None:
+        return []
+    region = city.region(region_id)
+    bounds = city.projected_bounds(region_id)
+    bbox = (bounds.min_easting, bounds.min_northing, bounds.max_easting, bounds.max_northing)
+    layers: list[tuple[str, gdb.Layer]] = []
+    for sheet in cached_tiles(city, region, city.tiled_sources[spec.source], root=sources_root):
+        layer = gdb.read_layer(
+            artefact_path(city.id, sheet, root=sources_root),
+            spec.blocks.layer,
+            columns=spec.blocks.columns,
+            bbox=bbox,
+            zip_member=spec.member.format(tile=sheet.tile_id),
+        )
+        # The bbox handed to OGR is in the city's projected CRS and OGR does not
+        # reproject it — reading Hong Kong coordinates on the wrong datum moves
+        # them ~304 m, a plausible-looking city somewhere it is not.
+        if layer.crs and layer.crs != city.projected_crs:
+            raise ValueError(
+                f"layer '{spec.blocks.layer}' is in {layer.crs}, but city '{city.id}' declares "
+                f"{city.projected_crs}. Reprojection is not done here — fix the config."
+            )
+        layers.append((sheet.tile_id, layer))
+    return layers
 
 
 def facade_hue(style: BuildingStyle, city_id: str, *, root: Path | None = None) -> dict[str, Hue]:

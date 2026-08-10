@@ -19,6 +19,7 @@ from typing import NamedTuple
 import numpy as np
 import pytest
 
+from pipeline import fetch, gdb
 from pipeline.buildings import (
     BUILDINGS_MANIFEST_NAME,
     COLLISION_TIER,
@@ -38,6 +39,7 @@ from pipeline.buildings import (
     facade_uv2,
     game_offset,
     material_for,
+    podium_blocks,
 )
 from pipeline.config import (
     BuildingStyle,
@@ -1282,3 +1284,55 @@ class TestTileGround:
         """A city that does not tile its ground reaches this with nothing, and
         `merge` refuses an empty list rather than returning an empty mesh."""
         assert _tile_ground([], self.GRID, self._style((4.0,))) == {}
+
+
+# --------------------------------------------------------------------------
+# The real iB1000 read — Q47's verification numbers, reproduced (`P3-7a`)
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(
+    not (fetch.source_dir("hong_kong", "topography") / fetch.INDEX_NAME).exists(),
+    reason="requires a fetched topography index",
+)
+def test_real_blocks_reproduce_the_documented_counts(hong_kong) -> None:
+    """Against the live sheets, not a fixture.
+
+    docs/DATA_SOURCES.md records these counts from the probe that verified the
+    dataset (`Q47`); the acceptance bar for the ingestion is that the
+    pipeline's own read reproduces them exactly — same counts, faithful read.
+    Per-sheet bbox reads with no cross-sheet dedupe, which is the probe's
+    method; block identity across sheet cuts belongs to the join.
+    """
+    region = hong_kong.region("wan_chai")
+    source = hong_kong.tiled_sources["topography"]
+    tiles = fetch.cached_tiles(hong_kong, region, source)
+    if not all(fetch.artefact_path("hong_kong", tile).exists() for tile in tiles):
+        pytest.skip("requires fetched topography sheets")
+
+    sheets = podium_blocks(hong_kong, "wan_chai")
+    assert len(sheets) == 6
+
+    blocks = hong_kong.podiums.blocks
+    types = np.concatenate([layer.column(blocks.field("block_type")) for _, layer in sheets])
+    values, counts = np.unique(types.astype(str), return_counts=True)
+    tally = dict(zip(values.tolist(), counts.tolist(), strict=True))
+    assert tally == {"OS": 76, "P": 280, "T": 1220, "TS": 19}
+
+    # Levels are 100% filled on every tower and podium block; nulls live only
+    # on open-sided and temporary structures.
+    solid = np.isin(types.astype(str), ("T", "P"))
+    for role in ("base_level", "roof_level"):
+        levels = np.concatenate(
+            [np.asarray(layer.column(blocks.field(role)), dtype=np.float64) for _, layer in sheets]
+        )
+        assert not np.isnan(levels[solid]).any()
+
+    # And every geometry decodes: the real-FGDB half of the GPKG round-trip.
+    for _, layer in sheets:
+        _, parts = gdb.polygons(layer)
+        assert len(parts) >= len(layer)
+        for rings in parts:
+            for ring in rings:
+                assert len(ring) >= 4
+                assert np.isfinite(ring).all()
