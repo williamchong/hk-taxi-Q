@@ -218,6 +218,38 @@ def _line_block(points: np.ndarray, order: int, prefix: str) -> bytes:
     return struct.pack(f"{prefix}BII", order, 2, len(points)) + body
 
 
+def polygon_wkb(*parts: object, big_endian: bool = False) -> bytes:
+    """A Polygon or MultiPolygon as WKB, plan or Z.
+
+    Each part is a list of rings, each ring a list of `(x, y)` or `(x, y, z)`
+    points — Z is inferred from the point width, so a test exercises the
+    24-byte stride simply by handing three-wide points. One part gives a plain
+    Polygon, several give a MultiPolygon, mirroring `line_wkb`.
+    """
+    order, prefix = (0, ">") if big_endian else (1, "<")
+    blocks: list[bytes] = []
+    z_flags: list[bool] = []
+    for part in parts:
+        block, has_z = _polygon_block(part, order, prefix)
+        blocks.append(block)
+        z_flags.append(has_z)
+    if len(blocks) == 1:
+        return blocks[0]
+    outer = 1006 if any(z_flags) else 6
+    return struct.pack(f"{prefix}BII", order, outer, len(blocks)) + b"".join(blocks)
+
+
+def _polygon_block(rings: object, order: int, prefix: str) -> tuple[bytes, bool]:
+    arrays = [np.asarray(ring, dtype=np.float64) for ring in rings]
+    has_z = bool(arrays) and arrays[0].shape[1] == 3
+    body = b"".join(
+        struct.pack(f"{prefix}I", len(ring)) + ring.astype(f"{prefix}f8", copy=False).tobytes()
+        for ring in arrays
+    )
+    kind = 1003 if has_z else 3
+    return struct.pack(f"{prefix}BII", order, kind, len(arrays)) + body, has_z
+
+
 def write_layer(
     path: Path,
     layer: str,
