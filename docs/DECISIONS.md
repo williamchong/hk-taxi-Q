@@ -3723,4 +3723,24 @@ block. The acceptance test reproduces this record's verified numbers from inside
 every geometry decoded. Nothing consumes the blocks yet; the tower↔block join, the
 mechanism-won provenance, and the contract question stay queued as the second half.
 
+**The contract question argued (2026-08-11), against `ARCHITECTURE.md`, in its own commit.** Five
+points, none of which bumps `schema_version`. (i) Per-building data reaches the game only as
+per-vertex constants on the merged tiles — `city.json` gains no buildings section for this, and
+the join's full-precision output lives in an ETL intermediate (`podiums.json`, written by the new
+`podiums` stage) that `export.py` never names, exactly `buildings.json`'s standing. (ii) Bits 7–11
+stay **floors**, and iB1000's metres convert *against the packed storey pitch* at pack time — not
+because metres would not fit (30 floors ≈ 84 m at the fallback pitch clears HKCEC's 52.3 m), but
+because the shader draws window rows at pitch intervals, so a boundary is only renderable on the
+storey grid: floors × the same packed pitch the shader multiplies back bounds the round-trip error
+at half a pitch by construction, where a separately-quantised metres field would add a second grid
+that cannot agree with the first. (iii) The mechanism-won provenance is ETL-side only — the
+runtime never branches on where a boundary came from, and `R4`'s grading, its only consumer, runs
+in the pipeline; vertex bits spent on it would ship bytes no shader reads. (iv) `R4`'s eventual
+write stays the documented "filling a reserved field a refusal-aware consumer already reads as
+0 = refused" case — `verify_tiles.gd`'s range check moves in *that* commit, per the
+three-places-one-commit rule. (v) The ladder extends to **`authored > data > survey > hash`**:
+authored stays on top because `W4` exists to correct both instruments where the user's eye rules
+(this record already shrank HKCEC's override to treatment-only, its extent now data), data sits
+above survey by this record's own call, and the hash remains the floor every refusal falls to.
+
 **See.** `Q46` · `Q41` · `Q42` · `Q43` · `Q34` · `P3-7a`

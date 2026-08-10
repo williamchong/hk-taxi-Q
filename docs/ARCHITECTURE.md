@@ -423,6 +423,19 @@ a one-sided "tuning" of a bin edge decodes every surveyed building silently wron
 the drift the version exists to catch. What *is* tuning is how the decoded state is applied:
 `survey_apply` and `glass_astar` in `tuning/city_facade.tres`.
 
+⚠️ **Data-supplied podium metres enter through the floors field, not around it** (`Q47`, argued
+2026-08-11). `Q47`'s route makes an iB1000 `P` block the boundary authority where a tower meets one —
+in metres — and bits 7–11 still carry floors. The two agree by construction: the pack converts
+metres → floors against the same packed storey pitch (bits 0–6) the shader multiplies back, so the
+round-trip lands within half a pitch, and a boundary between floor lines was never renderable
+anyway — window rows exist only on the storey grid. A separately-quantised metres field would add a
+second grid that cannot agree with the first. Full-precision metres, the block references and the
+mechanism that won (`authored > data > survey > hash`) stay in the ETL intermediate `podiums.json`,
+which `export.py` never names: the runtime does not branch on provenance, and `R4`'s grading — its
+only consumer — runs in the pipeline. Nothing in this route bumps `schema_version`: `y` is still all
+zeros, and `R4`'s eventual write remains the "filling a reserved field" case above, whose
+`verify_tiles.gd` range check moves in that commit.
+
 ⚠️ **The phase is quantised to 1/256 because float32 rounds it into the next marker otherwise.** The
 raw seed reaches 1 − 2⁻³², and float32's spacing near 2.0 is ~2.4e-7, so `STRUCTURE + 0.9999999998`
 becomes exactly `3.0` — an unknown marker with a lost phase, on whichever viaduct drew a high seed.
