@@ -82,7 +82,20 @@ section exists so an ETL change can be made without opening that file.
   19 `TS`. **`BASELEVEL`/`ROOFLEVEL` are 100% filled on every `T` and every `P` block**; nulls live
   only on open-sided (84%) and temporary (68%) structures. Podium heights (roof − base) p50
   **14.6 m**, p10 6.0, p90 19.6. 668 towers (54.8%) intersect a podium block; 247 meet one exactly
-  (Times Square: `T` base 75.6 mPD = `P` roof 75.6).
+  (Times Square: `T` base 75.6 mPD = `P` roof 75.6). ⚠️ The probe's "intersect" is a strict
+  positive-area **bounding-box** overlap on per-sheet features — the join's acceptance test
+  reproduces these numbers under exactly that frame, and the operative true-geometry counts below
+  are smaller for two stacked reasons: boxes overcount diagonal neighbours, and a block clipped by
+  a sheet cut counted once per sheet here.
+- **Stitched and joined (2026-08-11, `P3-7a`):** a sheet cut **clips** a block — one piece per
+  sheet, identical attributes, abutting exactly on the cut line — so `podiums.stitch` groups the
+  1,595 pieces into **1,480 logical blocks** (1,134 `T` / 251 `P` / 76 `OS` / 19 `TS`; 104 groups
+  span a cut, some three sheets wide). By true polygon overlap (ε = 0.01 m contact), **458 of the
+  1,134 logical towers (40.4%) meet a `P` block** — 538 pairs, **228 exact level meets**. Joined
+  to the shipped meshes (spatial, depth-gated at 0.3 m against the ~0.1 m registration noise):
+  **310 of 1,385 stems carry a data boundary** (291 of them `CERTAINTY`-certain), boundary p50
+  13.6 m. HKCEC lands at 52.1 m over base 3.9 from its own `P` block; Times Square's boundary sits
+  at exactly 75.6 mPD. All pinned by `test_real_join_reproduces_both_frames`.
 - **Alignment with the shipped volumes:** same CRS, and where a block and a mesh correspond 1:1 the
   footprint edges agree to **0.1 m** (Sun Hung Kai Centre podium). Larger bbox deltas are 3D-BIT
   merging tower+podium into one mesh where iB1000 splits blocks — the added information, not
@@ -99,6 +112,9 @@ section exists so an ETL change can be made without opening that file.
   reproduced from inside the pipeline by `test_real_blocks_reproduce_the_documented_counts`.
   Note the WKB arrives with GDAL's **wkb25D high-bit Z flag**, not the ISO 1000-offset codes —
   the decoder accepts both dialects and refuses M and EWKB-SRID forms.
+  ✅ Joined `P3-7a` (2026-08-11): the `podiums` stage stitches, joins, and writes the per-stem
+  boundary with mechanism-won provenance to `podiums.json` — a stage intermediate `export.py`
+  never names. Contract argument under `Q47` in `DECISIONS.md`.
 
 ### ⚠️ NOT NEEDED — 3D Visualisation Map (Individualised models)
 

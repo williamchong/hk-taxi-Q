@@ -351,8 +351,11 @@ trade.
      `podium_height_m` ("where the tower grid starts") as the next semantic-drift casualty. Put the
      two sentences side by side in the record and convert (floors × reconciled pitch → metres) —
      never assign. `Q47`'s route call (2026-08-10) fixes this rider's bar and narrows its job:
-     grade floors→metres against the 668-tower iB1000 overlap **before packing**, and pack only
-     where no `P` block supplies the boundary — precedence **data > survey-inferred**.
+     grade floors→metres against the joined boundaries in `podiums.json` (the tower↔block join
+     landed 2026-08-11 — 310 stems with data metres) **before packing**, and pack only
+     where no `P` block supplies the boundary — precedence **data > survey-inferred**, and the
+     data-metres themselves convert against the packed pitch at pack time (`Q47`'s contract
+     argument).
      `podium_glazed` then informs `has_shop`, the only data-supported route to a
      shopfront sitting roughly where one is.
 - ⚠️ **Each rider owes its own validation, bar fixed before grading.** The graded run validated
@@ -416,9 +419,10 @@ trade.
     — a pipeline task), boundary precedence data > survey-inferred, `R4` covering the blocks'
     complement. The `BuiltStructurePolygon` / `UtilityPolygon` classes ride the same ingestion.
     ✅ **Ingested 2026-08-10 (`P3-7a`)**: decoder, `topography` fetch, `podiums:` config and the
-    `podium_blocks` reader landed; `Q47`'s counts reproduced in-pipeline. The tower↔block join is
-    the remaining half, and the utility classes now cost only a config block when `W3`'s successor
-    wants them.
+    `podium_blocks` reader landed; `Q47`'s counts reproduced in-pipeline. ✅ **Joined 2026-08-11
+    (`P3-7a`)**: the `podiums` stage stitches the clipped pieces and writes per-stem boundary
+    metres with mechanism-won provenance to `podiums.json` (`Q47`'s record has the measured
+    counts). The utility classes now cost only a config block when `W3`'s successor wants them.
 - **Accept:** `tools/check.sh` passes; ETL end-to-end on the Wan Chai config; parked `C` frames
   byte-identical at `survey_apply = 0.0` after every step; each rider's pre-fixed bar met and
   recorded; PCK re-measured per rider batch (`y` is all zeros today and pack-compresses at 97% —

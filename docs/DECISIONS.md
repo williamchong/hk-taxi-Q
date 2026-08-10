@@ -70,7 +70,7 @@ lives in git. This file holds *why things are the way they are*.
 | `Q44` | A punched opening is glass, not a black hole | ✅ Closed — the `unglazed_glassy` floor shipped (`P3-7a` W1), the `Q30` bar held, and the user accepted the `A‴` frames |
 | `Q45` | One pane palette across the city reads as wallpaper | ✅ Closed — the fallback modulation shipped (`P3-7a` W2) and the user accepted the `A‴` frames; `Q35` bounds any retune |
 | `Q46` | A grammar refusal draws a quiet tier, not invented fenestration | ✅ Closed — accepted in scope 2026-08-10 on a `survey_debug`-tinted drive test: refused stock reads quiet; the residual sightings sit on committed stock and open `Q47` |
-| `Q47` | A committed verdict is right about the tower, wrong about the ground band | 🟡 Route decided 2026-08-10 — the sequence: iB1000 `P`-block metres where a tower meets one (data > survey-inferred), `R4`'s floors→metres conversion elsewhere graded against the 668-tower iB1000 overlap, ground-band batch unchanged in scope; closes when the shipped boundary is graded |
+| `Q47` | A committed verdict is right about the tower, wrong about the ground band | 🟡 Route decided 2026-08-10, join landed 2026-08-11 — iB1000 `P`-block metres where a tower meets one (data > survey-inferred; 310 stems carry a data boundary in `podiums.json`, contract argued 2026-08-11), `R4`'s floors→metres conversion elsewhere graded against the joined boundaries before packing; closes when the shipped boundary is graded |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -3742,5 +3742,23 @@ three-places-one-commit rule. (v) The ladder extends to **`authored > data > sur
 authored stays on top because `W4` exists to correct both instruments where the user's eye rules
 (this record already shrank HKCEC's override to treatment-only, its extent now data), data sits
 above survey by this record's own call, and the hash remains the floor every refusal falls to.
+
+**Join landed 2026-08-11 (`P3-7a`, the second half).** The `podiums` stage (between `fetch` and
+`buildings` — the dependency direction `R4`'s pack will need) stitches the per-sheet pieces and
+joins them to the shipped meshes. Two findings the probe's frame could not see, both measured
+against the live sheets: **a sheet cut clips a block** (zero whole-block duplicates; the pieces
+abut exactly on the cut line, so identity is attributes plus contact, and 1,595 pieces group into
+**1,480 logical blocks** — 1,134 `T` / 251 `P`, 104 groups spanning a cut), and **this record's
+668/54.8%/247 is a strict positive-area bounding-box frame** — reproduced verbatim by the
+acceptance test so the numbers stay tied to their method, while the operative join uses true
+polygon overlap: **458/1,134 towers meet a `P` block, 538 pairs, 228 exact level meets**. The
+mesh join is spatial (iB1000 carries no stem) and depth-gated at 0.3 m against the 0.1 m
+registration noise: **310 of 1,385 stems carry a data boundary** (291 certain; p50 13.6 m), each
+row in `podiums.json` recording boundary metres, base, winning blocks, and `mechanism: "data"` —
+the provenance `R4`'s grading conditions on. HKCEC gets 52.1 m over base 3.9 from `11-SW-9D:77`,
+its own `P` block; Times Square's boundary lands at exactly 75.6 mPD, the record's flagship level
+meet. Remaining before this closes: `R4` graded against the joined boundaries **before packing**,
+the pack itself (floors against the packed pitch, per the contract argument above), and the
+shipped boundary graded.
 
 **See.** `Q46` · `Q41` · `Q42` · `Q43` · `Q34` · `P3-7a`
