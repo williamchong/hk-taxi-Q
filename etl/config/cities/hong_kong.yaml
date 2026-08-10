@@ -632,8 +632,7 @@ buildings:
 # `Building` polygon layer whose `TYPEOFBUILDINGBLOCK` domain splits towers
 # from podium blocks, with base/roof levels in mPD that are 100% filled on
 # both (verified counts in DATA_SOURCES.md). Column names are the Lands
-# Department's schema, mapped to roles here per hard rule 3; the `T`/`P`/
-# `OS`/`TS` domain codes land with their first consumer, the tower↔block join.
+# Department's schema, mapped to roles here per hard rule 3.
 podiums:
   source: topography
   # Each sheet zip nests its geodatabase as `<SHEETNO>/<SHEETNO>.gdb` — a
@@ -646,6 +645,13 @@ podiums:
       base_level: BASELEVEL
       roof_level: ROOFLEVEL
       certainty: CERTAINTY
+  # The `TYPEOFBUILDINGBLOCK` domain values the join asks for, mapped like
+  # `fields` above: which letter means "podium block" is the data dictionary's
+  # spelling. The domain also carries `OS` open-sided and `TS` temporary,
+  # which the join reads past — neither is a tower nor sets a boundary.
+  codes:
+    tower: T
+    podium: P
 
 # How P1-3 turns Road Network v2 into a drivable graph.
 #

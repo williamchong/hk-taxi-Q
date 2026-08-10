@@ -349,10 +349,10 @@ def podium_blocks(
 ) -> list[tuple[str, gdb.Layer]]:
     """The region's surveyed building blocks, one layer per fetched sheet (`Q47`).
 
-    Nothing in the build consumes these yet — the tower↔block join is the
-    second half of `Q47`'s route. What lands here is the verified read: the
-    counts recorded in `DATA_SOURCES.md` are reproduced from exactly these
-    layers by the acceptance test.
+    `podiums.build_podiums` consumes these — the tower↔block join, the second
+    half of `Q47`'s route. What lands here is the verified read: the counts
+    recorded in `DATA_SOURCES.md` are reproduced from exactly these layers by
+    the acceptance test.
 
     ⚠️ **Missing is loud**, unlike the survey tables below: those are optional
     derived caches a fresh clone builds without, where this is fetched payload

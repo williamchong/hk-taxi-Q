@@ -431,6 +431,7 @@ class TestOrchestrator:
         assert status == 0
         assert [name for name, _ in calls] == [
             "fetch",
+            "podiums",
             "buildings",
             "roads",
             "surface",
@@ -483,4 +484,4 @@ class TestOrchestrator:
         status = orchestrator.main(["--city", "testville", "--region", REGION])
 
         assert status == 1
-        assert [name for name, _ in calls] == ["fetch", "buildings", "roads"]
+        assert [name for name, _ in calls] == ["fetch", "podiums", "buildings", "roads"]

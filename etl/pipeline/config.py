@@ -553,11 +553,20 @@ class PodiumBlocks:
     geodatabase inside each sheet's zip, with `{tile}` standing for the sheet
     id — how a publisher nests its archive is a packaging fact like a column
     name, so it is declared here and never spelt in pipeline logic.
+
+    `codes` maps the two roles the tower↔block join asks for — `tower` and
+    `podium` — onto the publisher's own domain values, the same indirection
+    `fields` gives column names: which letter means "podium block" is the
+    Lands Department's spelling, not a fact about podiums.
     """
 
     source: str
     member: str
     blocks: SourceLayer
+    codes: dict[str, str]
+
+    def code(self, role: str) -> str:
+        return _field(self.codes, role, "podiums:codes")
 
 
 def _field(fields: Mapping[str, str], role: str, where: str) -> str:
@@ -1918,6 +1927,8 @@ def _source_layer(body: dict[str, Any], where: str, roles: tuple[str, ...]) -> S
 
 _PODIUM_BLOCK_ROLES = ("block_type", "base_level", "roof_level", "certainty")
 
+_PODIUM_CODE_ROLES = ("tower", "podium")
+
 
 def _podium_blocks(body: dict[str, Any], where: str) -> PodiumBlocks:
     member = str(_require(body, "member", where))
@@ -1936,18 +1947,22 @@ def _podium_blocks(body: dict[str, Any], where: str) -> PodiumBlocks:
         blocks=_source_layer(
             _require(body, "blocks", where), f"{where}:blocks", _PODIUM_BLOCK_ROLES
         ),
+        codes=_fields(body, where, _PODIUM_CODE_ROLES, key="codes"),
     )
 
 
-def _fields(body: dict[str, Any], where: str, roles: tuple[str, ...]) -> dict[str, str]:
-    """A role-to-column mapping, checked to cover every role the stage needs.
+def _fields(
+    body: dict[str, Any], where: str, roles: tuple[str, ...], *, key: str = "fields"
+) -> dict[str, str]:
+    """A role-to-value mapping (columns, domain codes), checked to cover every
+    role the stage needs.
 
     Checked at load for the reason `_check_source_exists` gives.
     """
-    fields = {str(role): str(column) for role, column in _require(body, "fields", where).items()}
+    fields = {str(role): str(column) for role, column in _require(body, key, where).items()}
     missing = [role for role in roles if role not in fields]
     if missing:
-        raise ValueError(f"{where}:fields is missing {', '.join(missing)}")
+        raise ValueError(f"{where}:{key} is missing {', '.join(missing)}")
     return fields
 
 

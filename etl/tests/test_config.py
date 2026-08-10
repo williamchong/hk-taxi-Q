@@ -1385,6 +1385,19 @@ class TestPodiums:
         with pytest.raises(ValueError, match="roof_level"):
             load_city("hong_kong", cities_root=rewrite(drop))
 
+    def test_a_missing_code_role_is_rejected(self, rewrite) -> None:
+        """The join asks for the tower and podium domain values by role, so a
+        config that names only one fails at load, not at first join."""
+
+        def drop(doc: dict[str, Any]) -> None:
+            del doc["podiums"]["codes"]["podium"]
+
+        with pytest.raises(ValueError, match="codes is missing podium"):
+            load_city("hong_kong", cities_root=rewrite(drop))
+
+    def test_the_real_config_maps_both_code_roles(self, hong_kong) -> None:
+        assert hong_kong.podiums.code("tower") != hong_kong.podiums.code("podium")
+
     def test_the_tile_suffix_is_parsed_onto_the_source(self, hong_kong) -> None:
         assert hong_kong.tiled_sources["topography"].tile_suffix == ".zip"
         assert hong_kong.tiled_sources["buildings"].tile_suffix is None

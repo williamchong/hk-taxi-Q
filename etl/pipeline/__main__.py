@@ -25,13 +25,17 @@ import logging
 import time
 from collections.abc import Callable
 
-from pipeline import buildings, export, fares, fetch, roads, surface
+from pipeline import buildings, export, fares, fetch, podiums, roads, surface
 
 log = logging.getLogger(__name__)
 
 # Name to entry point. Order is the run order; see the module docstring.
+# `podiums` sits before `buildings` because that is the dependency direction:
+# the buildings stage consumes `podiums.json` when `R4` packs the boundary,
+# so the order never has to move when it starts to.
 STAGES: dict[str, Callable[[list[str]], int]] = {
     "fetch": fetch.main,
+    "podiums": podiums.main,
     "buildings": buildings.main,
     "roads": roads.main,
     "surface": surface.main,

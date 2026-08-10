@@ -77,8 +77,13 @@ def edges_cross(a: np.ndarray, b: np.ndarray) -> bool:
     return bool(((d1 * d2 < 0.0) & (d3 * d4 < 0.0)).any())
 
 
-def gap_between(points: np.ndarray, ring: np.ndarray) -> float:
-    """Smallest distance from any of the points to any edge of the ring."""
+def edge_distances(points: np.ndarray, ring: np.ndarray) -> np.ndarray:
+    """Each point's distance to the nearest edge of the ring, shape `(n,)`.
+
+    The per-point form exists for depth tests: a point *inside* a ring at
+    distance `d` from its boundary is at least `d` deep, which is how the join
+    tells genuine overlap from survey misregistration at a shared wall.
+    """
     a = ring
     b = np.roll(ring, -1, axis=0)
     ab = b - a
@@ -88,7 +93,12 @@ def gap_between(points: np.ndarray, ring: np.ndarray) -> float:
     ap = points[:, None, :] - a[None, :, :]
     t = np.clip((ap * ab[None, :, :]).sum(axis=2) / length_sq[None, :], 0.0, 1.0)
     nearest = a[None, :, :] + t[:, :, None] * ab[None, :, :]
-    return float(np.sqrt(((points[:, None, :] - nearest) ** 2).sum(axis=2)).min())
+    return np.sqrt(((points[:, None, :] - nearest) ** 2).sum(axis=2)).min(axis=1)
+
+
+def gap_between(points: np.ndarray, ring: np.ndarray) -> float:
+    """Smallest distance from any of the points to any edge of the ring."""
+    return float(edge_distances(points, ring).min())
 
 
 def rings_overlap(a: list[np.ndarray], b: list[np.ndarray], *, touch_m: float) -> bool:
