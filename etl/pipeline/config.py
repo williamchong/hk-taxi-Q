@@ -997,6 +997,10 @@ class CityConfig:
     # The surveyed building-block layer, when the city has one (`Q47`). Optional
     # with a default — a city without a topographic source builds as before.
     podiums: PodiumBlocks | None = None
+    # Committed CA certificates that complete a publisher's TLS chain, resolved
+    # to absolute paths at load. For hosts that serve their chain without the
+    # issuing intermediate; verification is never relaxed, only completed.
+    extra_cas: tuple[Path, ...] = ()
 
     @property
     def source_ids(self) -> set[str]:
@@ -1161,6 +1165,7 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
             if document.get("podiums") is not None
             else None
         ),
+        extra_cas=_extra_cas(document.get("extra_cas"), path),
     )
     _check_regions_lie_within_the_city(city, path)
     # Usage before exposure, so a stray entry is reported as stray. The other
@@ -1296,6 +1301,24 @@ def _check_source_exists(city: CityConfig, source_id: str, where: str) -> None:
     if source_id not in city.sources:
         known = ", ".join(sorted(city.sources)) or "none"
         raise ValueError(f"{where} names '{source_id}', which is not in sources ({known})")
+
+
+def _extra_cas(values: Any, path: Path) -> tuple[Path, ...]:
+    """CA certificate paths, resolved against the yaml's own directory.
+
+    Each must exist at load: a fetch that quietly fell back to the default
+    store would re-surface the publisher's broken chain as a mid-run download
+    failure, hundreds of megabytes in.
+    """
+    if not values:
+        return ()
+    resolved: list[Path] = []
+    for value in values:
+        candidate = (path.parent / str(value)).resolve()
+        if not candidate.is_file():
+            raise ValueError(f"{path}:extra_cas names {value!r}, which does not exist")
+        resolved.append(candidate)
+    return tuple(resolved)
 
 
 def _check_tiled_source_exists(city: CityConfig, source_id: str, where: str) -> None:

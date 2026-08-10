@@ -344,6 +344,8 @@ tiled_sources:
   # 260 MB the region — Q47's accepted build-time cost). The per-sheet
   # `directDownload` URLs in this index are keyless and return plain 200s; the
   # ISO record's portal links 403 to scripted GET. See DATA_SOURCES.md "iB1000".
+  # The download host also serves its TLS chain without the issuing
+  # intermediate — hence `extra_cas` below.
   topography:
     index_url: https://portal.csdi.gov.hk/csdi-webpage/file-api?dataset_id=landsd_rcd_1637223748322_25497&format=geojson&layer_name=TileIndex
     index_crs: EPSG:4326
@@ -353,6 +355,17 @@ tiled_sources:
     # The download URL's path is `/OpenData/directDownload` — the format lives
     # in the query string, so the URL offers no filename suffix to inherit.
     tile_suffix: .zip
+
+# open.hkmapservice.gov.hk serves leaf + root but not the issuing
+# intermediate. A browser chases the gap through the certificate's AIA URL;
+# Python's OpenSSL does not, so without help the fetch fails
+# CERTIFICATE_VERIFY_FAILED against a chain the default store does trust.
+# The committed PEM is that intermediate — provenance and fingerprint in its
+# header — loaded as an *additional* verify anchor: it must itself chain to
+# the Hongkong Post root already in the default store, so verification is
+# completed, never relaxed.
+extra_cas:
+  - ../certs/hongkong_post_ecert_ssl_ca_3-17.pem
 
 # How P1-2 turns the source massing into vertex-coloured tiles. Every number
 # here is art direction, not pipeline logic — see docs/ART_DESIGN.md, which is

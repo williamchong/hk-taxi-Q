@@ -253,7 +253,7 @@ def offline(monkeypatch, tmp_path: Path):
     """Replace the network with a stub, and count what it was asked for."""
     fetched: list[str] = []
 
-    def _download(url: str, destination: Path) -> tuple[int, str]:
+    def _download(url: str, destination: Path, **_: Any) -> tuple[int, str]:
         fetched.append(url)
         destination.parent.mkdir(parents=True, exist_ok=True)
         payload = (
@@ -339,7 +339,7 @@ class TestFetchCity:
         """
         ok: list[str] = []
 
-        def _download(url: str, destination: Path) -> tuple[int, str]:
+        def _download(url: str, destination: Path, **_: Any) -> tuple[int, str]:
             if destination.name == "RdNet_IRNP.gdb.zip":
                 raise RuntimeError("connection reset")
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -418,7 +418,7 @@ class TestBadIndex:
     @pytest.fixture
     def serving(self, monkeypatch):
         def _serve(payload: bytes):
-            def _download(url: str, destination: Path) -> tuple[int, str]:
+            def _download(url: str, destination: Path, **_: Any) -> tuple[int, str]:
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 body = payload if destination.name == "index.geojson" else b"model-bytes"
                 destination.write_bytes(body)

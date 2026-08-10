@@ -8,6 +8,7 @@ the expensive failure here, not a syntax error.
 from __future__ import annotations
 
 import re
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -23,13 +24,23 @@ def rewrite(tmp_path: Path):
 
     Mutating the real file beats a hand-written fixture: a stub would drift out
     of step with the schema and keep passing while the real config broke.
+
+    The certs directory is mirrored beside the relocated yaml because the real
+    config spans both: `extra_cas` paths resolve against the yaml's own
+    directory, and a relocation that dropped them would fail the load for
+    every test here, whatever it was actually testing.
     """
 
     def _rewrite(mutate) -> Path:
         document = yaml.safe_load((CITIES_ROOT / "hong_kong.yaml").read_text(encoding="utf-8"))
         mutate(document)
-        (tmp_path / "hong_kong.yaml").write_text(yaml.safe_dump(document), encoding="utf-8")
-        return tmp_path
+        cities = tmp_path / "cities"
+        cities.mkdir(exist_ok=True)
+        (cities / "hong_kong.yaml").write_text(yaml.safe_dump(document), encoding="utf-8")
+        certs = CITIES_ROOT.parent / "certs"
+        if certs.is_dir():
+            shutil.copytree(certs, tmp_path / "certs", dirs_exist_ok=True)
+        return cities
 
     return _rewrite
 
@@ -1382,4 +1393,28 @@ class TestPodiums:
             doc["tiled_sources"]["topography"]["tile_suffix"] = "zip"
 
         with pytest.raises(ValueError, match="tile_suffix"):
+            load_city("hong_kong", cities_root=rewrite(mistype))
+
+
+class TestExtraCas:
+    """`extra_cas:` — committed intermediates that complete a publisher's chain."""
+
+    def test_paths_resolve_against_the_config_directory_and_exist(self, hong_kong) -> None:
+        assert hong_kong.extra_cas
+        for certificate in hong_kong.extra_cas:
+            assert certificate.is_absolute()
+            assert certificate.is_file()
+
+    def test_the_key_is_optional(self, rewrite) -> None:
+        city = load_city("hong_kong", cities_root=rewrite(lambda doc: doc.pop("extra_cas")))
+        assert city.extra_cas == ()
+
+    def test_a_missing_certificate_is_rejected_at_load(self, rewrite) -> None:
+        """Silently falling back to the default store would re-surface the
+        publisher's broken chain as a mid-run download failure instead."""
+
+        def mistype(doc: dict[str, Any]) -> None:
+            doc["extra_cas"] = ["../certs/nonexistent.pem"]
+
+        with pytest.raises(ValueError, match="does not exist"):
             load_city("hong_kong", cities_root=rewrite(mistype))

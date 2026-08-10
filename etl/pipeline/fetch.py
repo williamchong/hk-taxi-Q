@@ -26,6 +26,7 @@ import hashlib
 import json
 import logging
 import os
+import ssl
 import time
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -414,7 +415,26 @@ def _is_cached(entry: dict[str, Any] | None, path: Path, version: str | None) ->
 # --------------------------------------------------------------------------
 
 
-def download(url: str, destination: Path) -> tuple[int, str]:
+def _ssl_context(city: CityConfig) -> ssl.SSLContext | None:
+    """The default-verifying TLS context, extended with the city's extra CAs.
+
+    `None` when the city declares none, so the common path stays exactly the
+    interpreter's default. The extras exist for a publisher that serves its
+    chain without the issuing intermediate (`extra_cas` in the city yaml names
+    which, and the committed PEM's header says why) — verification itself is
+    never relaxed.
+    """
+    if not city.extra_cas:
+        return None
+    context = ssl.create_default_context()
+    for certificate in city.extra_cas:
+        context.load_verify_locations(cafile=certificate)
+    return context
+
+
+def download(
+    url: str, destination: Path, *, context: ssl.SSLContext | None = None
+) -> tuple[int, str]:
     """Stream a URL to disk atomically. Returns (bytes written, sha256).
 
     Writes to a sibling `.part` and renames on success, so neither an
@@ -431,7 +451,10 @@ def download(url: str, destination: Path) -> tuple[int, str]:
             digest = hashlib.sha256()
             written = 0
             request = Request(url, headers={"User-Agent": _USER_AGENT})
-            with urlopen(request, timeout=_TIMEOUT_S) as response, partial.open("wb") as handle:
+            with (
+                urlopen(request, timeout=_TIMEOUT_S, context=context) as response,
+                partial.open("wb") as handle,
+            ):
                 expected = _content_length(response)
                 announced = time.monotonic()
                 while chunk := response.read(_CHUNK_BYTES):
@@ -508,6 +531,7 @@ def fetch_city(
     manifest_path = root / MANIFEST_NAME
     manifest = _load_manifest(manifest_path)
     report = FetchReport(downloaded=[], cached=[])
+    context = _ssl_context(city)
 
     try:
         artefacts: list[Artefact] = [
@@ -519,10 +543,23 @@ def fetch_city(
         for source in city.tiled_sources.values():
             if only is not None and source.id not in only:
                 continue
-            artefacts.extend(_tiles_for(source, city, region, root, manifest, report, force=force))
+            artefacts.extend(
+                _tiles_for(
+                    source, city, region, root, manifest, report, force=force, context=context
+                )
+            )
 
         for artefact in artefacts:
-            _process(artefact, city, root, manifest, report, force=force, dry_run=dry_run)
+            _process(
+                artefact,
+                city,
+                root,
+                manifest,
+                report,
+                force=force,
+                dry_run=dry_run,
+                context=context,
+            )
     finally:
         # In a `finally` because a failure partway through must not throw away
         # what already succeeded. Without this, one dropped connection on the
@@ -541,6 +578,7 @@ def _tiles_for(
     report: FetchReport,
     *,
     force: bool,
+    context: ssl.SSLContext | None = None,
 ) -> list[Artefact]:
     """Fetch a tiled source's index and turn it into the region's artefacts."""
     index_artefact = Artefact(
@@ -553,7 +591,9 @@ def _tiles_for(
     # is. Without it there are no tile names to report, so a dry run on a cold
     # cache could not answer the only question it is asked. It is small, and it
     # is metadata about the download rather than the payload.
-    _process(index_artefact, city, root, manifest, report, force=force, dry_run=False)
+    _process(
+        index_artefact, city, root, manifest, report, force=force, dry_run=False, context=context
+    )
 
     index_path = artefact_path(city.id, index_artefact, root=root)
     try:
@@ -636,6 +676,7 @@ def _process(
     *,
     force: bool,
     dry_run: bool,
+    context: ssl.SSLContext | None = None,
 ) -> None:
     manifest_key = f"{city.id}/{artefact.key}"
     destination = artefact_path(city.id, artefact, root=root)
@@ -656,7 +697,7 @@ def _process(
         return
 
     log.info("  fetching %s", manifest_key)
-    size, sha256 = download(artefact.url, destination)
+    size, sha256 = download(artefact.url, destination, context=context)
     manifest[manifest_key] = {
         # Redacted: see `redact`. Re-derived from config or the index each run,
         # so nothing depends on this being complete.
