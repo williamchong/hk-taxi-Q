@@ -48,6 +48,7 @@ import numpy as np
 
 from pipeline.config import CityConfig, RoadSurface, load_city
 from pipeline.documents import write_document
+from pipeline.geometry import inside_polygon
 from pipeline.gltf import Bounds, MeshData, normalise, write_glb
 from pipeline.mesh import select_triangles
 from pipeline.roads import ROADGRAPH_NAME, plan_lengths, plan_steps, read_graph
@@ -776,33 +777,6 @@ def _assign_trims(
                 report.clamped_trims += 1
 
 
-def _inside_polygon(points: np.ndarray, polygon: np.ndarray) -> np.ndarray:
-    """Which plan points fall inside a plan polygon. Crossing number.
-
-    Written out rather than pulled in: the only candidate dependency is shapely,
-    and `pyproject.toml` already turned down geopandas for wanting pandas to
-    reach the numpy underneath. This is the same trade in miniature.
-
-    Vectorised over the polygon's edges as well as its points, because this is
-    the single most expensive thing the stage does — a Python loop here cost
-    2.2 s of a 2.5 s build. `boundary` earns its scalar walk with a measurement;
-    this never had one.
-    """
-    x, z = points[:, 0][:, None], points[:, 1][:, None]
-    ax, az = polygon[:, 0], polygon[:, 1]
-    bx, bz = np.roll(ax, -1), np.roll(az, -1)
-    rise = bz - az
-    straddles = (az > z) != (bz > z)
-    # `x < ax + (bx - ax) * (z - az) / rise`, cross-multiplied. A horizontal edge
-    # never straddles the ray, so `rise` is non-zero wherever the result is read
-    # and the sign of it is all the division was contributing. Multiplying also
-    # spares the region 476,000 `np.errstate` context managers, which were 15% of
-    # the stage on their own, guarding a quotient that was masked away anyway.
-    side = (x - ax) * rise - (bx - ax) * (z - az)
-    crossings = straddles & np.where(rise > 0.0, side < 0.0, side > 0.0)
-    return crossings.sum(axis=1) % 2 == 1
-
-
 def _cells(low: np.ndarray, high: np.ndarray, level: int) -> list[tuple[int, int, int]]:
     """Grid cells a plan bounding box touches, keyed by elevation level too.
 
@@ -859,7 +833,7 @@ class _Occluders:
             # before the crossing-number sweep that would otherwise dominate.
             if (self._low[key] > high).any() or (self._high[key] < low).any():
                 continue
-            covered |= _inside_polygon(points, self._plans[key])
+            covered |= inside_polygon(points, self._plans[key])
         return covered
 
 
