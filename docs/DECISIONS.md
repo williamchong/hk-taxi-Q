@@ -3661,24 +3661,36 @@ treatment stops.* The conversion is `podium_floors` × the building's reconciled
 per-building median where it commits, the city `floor_height_m` fallback where it refuses) →
 metres, computed at pack time — never `podium_floors` assigned as though floors were metres.
 
-**A third route, scouted (2026-08-10).** iB1000 — the digital topographic map 3D-BIT Level 1 is
-extruded from — carries the podium as a **first-class feature**: `Building_Pod` "Podium Block"
-(code `P`) beside `Building_Bldg`'s building / temporary / open-sided classes, and the FGDB
-metadata lists `BASELEVEL` / `ROOFLEVEL` / `TYPEOFBUILDINGBLOCK` on buildings with a `CERTAINTY`
-flag on podium polygons. A footprint join would give the podium boundary **in metres, from data**
-— no vision reader and no floors-to-metres conversion. The same dataset's `BuiltStructurePolygon`
-and `UtilityPolygon` classes (ventilation shafts, chimneys, transformers, substations, tanks,
-service reservoirs, pavilions, stands) are `W3`'s "utility structure" signal as data, per-city via
-config. Access looks scriptable on the patterns the pipeline already uses: CSDI dataset
-`landsd_rcd_1637223748322_25497` exposes a `TileIndex` layer on the same `file-api` the buildings
-sheet index reads, and its metadata lists portal download links for the FGDB; publisher Lands
-Department via the same two portals whose terms the credits already satisfy. ⚠️ The
-`open.hkmapservice.gov.hk` direct-download endpoint the metadata also advertises is **not** the
-route: probed 2026-08-10, the seamless full set times out (504) and the per-sheet form redirects
-to `hkms.landsd.hksarg` — a government intranet hostname. ⚠️ **Scouted, not verified**: whether
-`Building_Pod` ships `ROOFLEVEL` region-wide, whether its footprints align with 3D-BIT's volumes,
-and the portal download's size all owe `DATA_SOURCES.md`-grade verification before this is a plan
-item (`PLAN.md`'s own bar) — and `podium_glazed` still comes only from a survey, so iB1000 bounds
-the treatment, not the shopfront.
+**A third route, scouted (2026-08-10) and verified to `DATA_SOURCES.md` grade the same day.**
+iB1000 — the digital topographic map 3D-BIT Level 1 is extruded from — carries the podium as a
+**first-class feature**. The scout's layer names were close but not exact: it is one `Building`
+polygon layer (EPSG:2326 verified, levels in mPD), whose `TYPEOFBUILDINGBLOCK` domain splits `T`
+building / `P` "Podium Block" / `OS` open-sided / `TS` temporary, with `BASELEVEL` / `ROOFLEVEL`
+and a `CERTAINTY` flag the data dictionary defines as "certainty of the podium polygon". All three
+owings verified over Wan Chai's six sheets. **(a) Levels ship 100% filled on every `T` (1,220) and
+every `P` (280) block** — nulls exist but live entirely on open-sided (84%) and temporary (68%)
+structures. Podium heights (roof − base) p50 14.6 m, p10 6.0, p90 19.6; `CERTAINTY` 262 certain /
+18 not. 668 towers (54.8%) intersect a podium block, and 247 meet one *exactly*: Times Square's
+`T` base 75.6 mPD = its `P` roof 75.6, Sun Hung Kai Centre 16.4 = 16.4, and HKCEC's podium is its
+own block (3.7→56.0 mPD) beside the 70.3 m old wing — the boundary in metres, per building,
+exactly where `Q41`'s tower verdicts paint today. **(b) Footprints register sub-metre** against
+the shipped volumes: 0.1 m edge agreement where a block and a mesh correspond 1:1 (Sun Hung Kai
+podium); the larger bbox deltas are 3D-BIT merging tower+podium into one mesh where iB1000 splits
+blocks — the added information, not misregistration. **(c) 41.8–45.3 MB per sheet, 260 MB for the
+region**, ~21 s each, keyless. Access *inverts* the scout's caveat: the TileIndex's per-sheet
+`directDownload` URLs return plain 200s (the intranet redirect was the human download form), while
+the ISO record's `download/common/<hash>` portal links 403 to scripted GET and the seamless set
+still 504s — the TileIndex is the only scriptable route, and it is enough.
+`BuiltStructurePolygon` / `UtilityPolygon` carry `W3`'s signal as coded domains (Wan Chai: 10
+ventilation shafts, 10 swimming pools, 6 each fountains / pavilions / basketball courts, an
+electricity substation; 2 pylons, a water tank). Method, for repeatability: grep the ISO record
+for `layer_name=` → fetch the `TileIndex` → intersect with the region's geodetic bounds from
+`load_city` → fetch the six `FGDB` URLs → pyogrio over `/vsizip/<zip>/<SHEETNO>/<SHEETNO>.gdb`
+(raw API and `read_bounds`; `gdb.py` decodes linestrings only and refuses Z, so it sat this probe
+out — consuming iB1000 is a pipeline task, not a config edit). Probe uncommitted per `P3-7`'s
+pattern, download discarded; the dataset entry is in `DATA_SOURCES.md`. ⚠️ Two things the data
+does not do: `P` is a partial classification (Central Plaza has none — absence means no distinct
+podium block surveyed, not "no ground band"), and `podium_glazed` still comes only from a survey,
+so iB1000 bounds the treatment, not the shopfront.
 
 **See.** `Q46` · `Q41` · `Q42` · `Q43` · `Q34` · `P3-7a`

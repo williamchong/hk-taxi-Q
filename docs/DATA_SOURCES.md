@@ -64,6 +64,37 @@ section exists so an ETL change can be made without opening that file.
   base and top level, with **no photorealistic texture applied**.
 - **Why:** a low-poly building by construction. Use as a cross-check against the non-textured models.
 
+### ✅ USE — iB1000 Digital Topographic Map (FGDB)
+
+- **Portal:** `https://portal.csdi.gov.hk/geoportal/?datasetId=landsd_rcd_1637223748322_25497`
+- **Publisher:** Lands Department (Survey and Mapping Office). **Formats:** FGDB, GML, DGN, DWG —
+  one zip per 1:1000 sheet, laid out `<SHEETNO>/<SHEETNO>.gdb`. The schema authority is the *iB1000
+  Data Dictionary — FGDB* v1.2 PDF inside `resources_iB1000_FGDB.zip` on the download host.
+- **CSDI dataset id:** `landsd_rcd_1637223748322_25497` — a `TileIndex` of 3,333 sheet polygons
+  (3.9 MB GeoJSON, WGS84), revision `20260716`. Wan Chai is the **same six `11-SW-*` sheets** as the
+  building models: **41.8–45.3 MB each, 260 MB total**, ~21 s per sheet. See "Access notes".
+- **Content:** the vector topographic map 3D-BIT Level 1 is extruded from — 71 layers,
+  **EPSG:2326 (verified)**, levels in mPD. One `Building` polygon layer carries
+  `TYPEOFBUILDINGBLOCK` (`T` building / **`P` "Podium Block"** / `OS` open-sided / `TS` temporary),
+  `BASELEVEL` / `ROOFLEVEL`, per-level survey-source codes, and `CERTAINTY` — defined by the data
+  dictionary as "certainty of the podium polygon". `BUILDINGNAME` relate tables name landmarks.
+- **Verified over the Wan Chai region (2026-08-10):** 1,595 blocks — 1,220 `T`, 280 `P`, 76 `OS`,
+  19 `TS`. **`BASELEVEL`/`ROOFLEVEL` are 100% filled on every `T` and every `P` block**; nulls live
+  only on open-sided (84%) and temporary (68%) structures. Podium heights (roof − base) p50
+  **14.6 m**, p10 6.0, p90 19.6. 668 towers (54.8%) intersect a podium block; 247 meet one exactly
+  (Times Square: `T` base 75.6 mPD = `P` roof 75.6).
+- **Alignment with the shipped volumes:** same CRS, and where a block and a mesh correspond 1:1 the
+  footprint edges agree to **0.1 m** (Sun Hung Kai Centre podium). Larger bbox deltas are 3D-BIT
+  merging tower+podium into one mesh where iB1000 splits blocks — the added information, not
+  misregistration.
+- **Why:** the podium boundary **in metres, from data** (`Q47`'s third route), and
+  `BuiltStructurePolygon` / `UtilityPolygon` usage codes (ventilation shaft, electricity
+  substation, water tank, pavilion, swimming pool…) are `W3`'s "utility structure" signal as data.
+- ⚠️ **`P` is a partial classification, not a promise** — Central Plaza has no `P` block. Absence
+  means no distinct podium block was surveyed, not "no ground band".
+- ⚠️ Geometry is MultiPolygon **Z** (M ordinates exist and are dropped by GDAL with a warning).
+  `gdb.py` decodes linestrings only today, so consuming this is a pipeline task, not a config edit.
+
 ### ⚠️ NOT NEEDED — 3D Visualisation Map (Individualised models)
 
 - **Portal:** https://data.gov.hk/en-data/dataset/hk-landsd-openmap-3d-visualisation-map-individualised-models
@@ -580,11 +611,31 @@ generalises** — verified by swapping in the individualised dataset
 WFS, WMS and an ArcGIS `FeatureServer` for server-side bbox queries, if the 3.2 MB whole-index
 download ever becomes inconvenient. It has not.
 
+### iB1000 (topographic map) — fully scriptable ✅, but only via the TileIndex
+
+The same index-is-the-API pattern, with one inversion: **the per-sheet URLs work and the portal's
+own download links do not** (verified 2026-08-10).
+
+- Index: `file-api?dataset_id=landsd_rcd_1637223748322_25497&format=geojson&layer_name=TileIndex` —
+  3,333 sheet polygons, WGS84, no key. Properties: `SHEETNO`, `REVISIONDATE`, and per-sheet `FGDB` /
+  `GML` / `DGN` / `DWG` / `TIFF` download URLs — **no API key in any of them**, so nothing to redact.
+- Each `FGDB` property is
+  `https://open.hkmapservice.gov.hk/OpenData/directDownload?productName=iB1000&sheetName=T<SHEETNO>&productFormat=FGDB`
+  → a plain HTTP 200 zip, no session, no redirect — verified on all six Wan Chai sheets. The
+  2026-08-10 scout's intranet-redirect caveat was about the human download *form*, not these URLs.
+- ❌ The `portal.csdi.gov.hk/csdi-webpage/download/common/<hash>` links in the ISO record (full-set
+  FGDB, GPKG, GeoJSON, GML, SHP, KML) return **403 to scripted GET**, and the seamless full-set
+  `directDownload` still 504s. Per-sheet via the TileIndex is the only verified scriptable route —
+  and at 260 MB per region it is enough.
+- Read with pyogrio through `/vsizip/<zip path>/<SHEETNO>/<SHEETNO>.gdb`. The probe that verified
+  this (`Q47`) is uncommitted per `P3-7`'s pattern — the download does not enter the build path.
+
 **Portal entry points** (for a human re-checking the index):
 
 - Non-textured: `https://portal.csdi.gov.hk/geoportal/?datasetId=landsd_rcd_1742809441342_98380`
 - Individualised: `https://portal.csdi.gov.hk/geoportal/?datasetId=landsd_rcd_1671676915450_88604`
 - 3D-BIT00: `https://portal.csdi.gov.hk/geoportal/?datasetId=landsd_rcd_1637306559892_42396`
+- iB1000: `https://portal.csdi.gov.hk/geoportal/?datasetId=landsd_rcd_1637223748322_25497`
 
 **The Cesium 3D Tiles API remains irrelevant.**
 `https://data.map.gov.hk/api/3d-data/3dtiles/{sheet}/tileset.json` serves the tile-based

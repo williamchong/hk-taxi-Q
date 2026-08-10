@@ -402,10 +402,12 @@ trade.
     plant), a footprint join gives "utility structure" as data — per-city via config, no vision
     reader. The scalable long-term answer to `W3`'s whole class. Owes `DATA_SOURCES.md`-grade
     verification (format, licence, scriptability) before it is a plan item. ✅ Scouted 2026-08-10:
-    the layers carry the categories and more — `Building_Pod` podium blocks with base/roof levels
+    the layers carry the categories and more — `Building` `P` podium blocks with base/roof levels
     (`Q47`'s third route), `BuiltStructurePolygon` / `UtilityPolygon` shelter / tank / plant
-    classes; FGDB via CSDI dataset `landsd_rcd_1637223748322_25497`. The verification bar above
-    still stands — evidence and access caveats in `Q47`'s record.
+    classes; FGDB via CSDI dataset `landsd_rcd_1637223748322_25497`. ✅ **Verified to
+    `DATA_SOURCES.md` grade 2026-08-10** — dataset entry in `DATA_SOURCES.md` ("iB1000 Digital
+    Topographic Map"), numbers and method in `Q47`'s record. Now eligible as a plan item;
+    sequencing is `Q47`'s route call.
 - **Accept:** `tools/check.sh` passes; ETL end-to-end on the Wan Chai config; parked `C` frames
   byte-identical at `survey_apply = 0.0` after every step; each rider's pre-fixed bar met and
   recorded; PCK re-measured per rider batch (`y` is all zeros today and pack-compresses at 97% —
