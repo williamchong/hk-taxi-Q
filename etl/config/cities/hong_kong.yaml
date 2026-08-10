@@ -339,6 +339,21 @@ tiled_sources:
     url_property: Format_glTF
     revision_property: REVISIONDATE
 
+  # iB1000 Digital Topographic Map — one FGDB zip per 1:1000 sheet, the same
+  # six 11-SW-* sheets as the building models for Wan Chai (41.8–45.3 MB each,
+  # 260 MB the region — Q47's accepted build-time cost). The per-sheet
+  # `directDownload` URLs in this index are keyless and return plain 200s; the
+  # ISO record's portal links 403 to scripted GET. See DATA_SOURCES.md "iB1000".
+  topography:
+    index_url: https://portal.csdi.gov.hk/csdi-webpage/file-api?dataset_id=landsd_rcd_1637223748322_25497&format=geojson&layer_name=TileIndex
+    index_crs: EPSG:4326
+    id_property: SHEETNO
+    url_property: FGDB
+    revision_property: REVISIONDATE
+    # The download URL's path is `/OpenData/directDownload` — the format lives
+    # in the query string, so the URL offers no filename suffix to inherit.
+    tile_suffix: .zip
+
 # How P1-2 turns the source massing into vertex-coloured tiles. Every number
 # here is art direction, not pipeline logic — see docs/ART_DESIGN.md, which is
 # the document to change first if a colour looks wrong.
@@ -599,6 +614,25 @@ buildings:
   # range and cost 30.5 MB of a 51.6 MB bundle. Adding one back is this line
   # plus a rebuild. See docs/ART_DESIGN.md "LOD policy" and Q16.
   lod_cell_sizes_m: [1.5, 4.0]
+
+# The iB1000 building-block layer — Q47's primary podium-boundary route. One
+# `Building` polygon layer whose `TYPEOFBUILDINGBLOCK` domain splits towers
+# from podium blocks, with base/roof levels in mPD that are 100% filled on
+# both (verified counts in DATA_SOURCES.md). Column names are the Lands
+# Department's schema, mapped to roles here per hard rule 3; the `T`/`P`/
+# `OS`/`TS` domain codes land with their first consumer, the tower↔block join.
+podiums:
+  source: topography
+  # Each sheet zip nests its geodatabase as `<SHEETNO>/<SHEETNO>.gdb` — a
+  # LandsD packaging fact. `{tile}` is the sheet id from the index.
+  member: "{tile}/{tile}.gdb"
+  blocks:
+    layer: Building
+    fields:
+      block_type: TYPEOFBUILDINGBLOCK
+      base_level: BASELEVEL
+      roof_level: ROOFLEVEL
+      certainty: CERTAINTY
 
 # How P1-3 turns Road Network v2 into a drivable graph.
 #

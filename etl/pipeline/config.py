@@ -80,6 +80,11 @@ class TiledSource:
     # Per-tile version stamp used as the cache key. Optional: a publisher that
     # offers none simply gets fetch-once semantics.
     revision_property: str | None = None
+    # Filename suffix for downloaded tiles, for publishers whose download URL
+    # path carries none (`/directDownload?productName=…&productFormat=FGDB`).
+    # Without it such a tile would land as `<id>.bin`, which the zip-aware
+    # readers refuse to route through `/vsizip/`.
+    tile_suffix: str | None = None
 
 
 class SurfaceClass(IntEnum):
@@ -540,6 +545,21 @@ class SourceLayer:
         return sorted(set(self.fields.values()))
 
 
+@dataclass(frozen=True)
+class PodiumBlocks:
+    """The building-block layer of a per-sheet topographic source (`Q47`).
+
+    `source` names a `tiled_sources` entry. `member` is the path of the
+    geodatabase inside each sheet's zip, with `{tile}` standing for the sheet
+    id — how a publisher nests its archive is a packaging fact like a column
+    name, so it is declared here and never spelt in pipeline logic.
+    """
+
+    source: str
+    member: str
+    blocks: SourceLayer
+
+
 def _field(fields: Mapping[str, str], role: str, where: str) -> str:
     """The publisher's column name for a role the pipeline asked for.
 
@@ -974,6 +994,9 @@ class CityConfig:
     # city ships. Art direction — the sun, the latitude, the mood — where the
     # reflectances it multiplies are physical and portable to the next city.
     exposure_anchor: float
+    # The surveyed building-block layer, when the city has one (`Q47`). Optional
+    # with a default — a city without a topographic source builds as before.
+    podiums: PodiumBlocks | None = None
 
     @property
     def source_ids(self) -> set[str]:
@@ -1133,6 +1156,11 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
         exposure_anchor=_exposure_anchor(
             _require(document, "exposure_anchor", path), f"{path}:exposure_anchor"
         ),
+        podiums=(
+            _podium_blocks(document["podiums"], f"{path}:podiums")
+            if document.get("podiums") is not None
+            else None
+        ),
     )
     _check_regions_lie_within_the_city(city, path)
     # Usage before exposure, so a stray entry is reported as stray. The other
@@ -1145,6 +1173,8 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
     _check_source_exists(city, city.roads.source, f"{path}:roads.source")
     for index, group in enumerate(city.fares.groups):
         _check_source_exists(city, group.source, f"{path}:fares.groups[{index}].source")
+    if city.podiums is not None:
+        _check_tiled_source_exists(city, city.podiums.source, f"{path}:podiums.source")
     return city
 
 
@@ -1268,6 +1298,13 @@ def _check_source_exists(city: CityConfig, source_id: str, where: str) -> None:
         raise ValueError(f"{where} names '{source_id}', which is not in sources ({known})")
 
 
+def _check_tiled_source_exists(city: CityConfig, source_id: str, where: str) -> None:
+    """`_check_source_exists`, for a stage that reads a per-sheet dataset."""
+    if source_id not in city.tiled_sources:
+        known = ", ".join(sorted(city.tiled_sources)) or "none"
+        raise ValueError(f"{where} names '{source_id}', which is not in tiled_sources ({known})")
+
+
 def _check_regions_lie_within_the_city(city: CityConfig, path: Path) -> None:
     """A region outside the declared city bounds is a config error, not a shift.
 
@@ -1296,6 +1333,11 @@ def _check_regions_lie_within_the_city(city: CityConfig, path: Path) -> None:
 def _tiled_source(source_id: str, body: dict[str, Any], path: Path) -> TiledSource:
     where = f"{path}:tiled_sources.{source_id}"
     revision = body.get("revision_property")
+    suffix = body.get("tile_suffix")
+    if suffix is not None:
+        suffix = str(suffix)
+        if not suffix.startswith("."):
+            raise ValueError(f"{where}:tile_suffix is {suffix!r}, expected a '.suffix'")
     return TiledSource(
         id=source_id,
         index_url=str(_require(body, "index_url", where)),
@@ -1303,6 +1345,7 @@ def _tiled_source(source_id: str, body: dict[str, Any], path: Path) -> TiledSour
         id_property=str(_require(body, "id_property", where)),
         url_property=str(_require(body, "url_property", where)),
         revision_property=None if revision is None else str(revision),
+        tile_suffix=suffix,
     )
 
 
@@ -1847,6 +1890,28 @@ def _source_layer(body: dict[str, Any], where: str, roles: tuple[str, ...]) -> S
     return SourceLayer(
         layer=str(_require(body, "layer", where)),
         fields=_fields(body, where, roles),
+    )
+
+
+_PODIUM_BLOCK_ROLES = ("block_type", "base_level", "roof_level", "certainty")
+
+
+def _podium_blocks(body: dict[str, Any], where: str) -> PodiumBlocks:
+    member = str(_require(body, "member", where))
+    try:
+        member.format(tile="probe")
+    except (KeyError, IndexError) as error:
+        # A stray placeholder would otherwise surface at first read, per sheet,
+        # rather than at load — the reason `_check_source_exists` gives.
+        raise ValueError(
+            f"{where}:member {member!r} holds a placeholder other than {{tile}}"
+        ) from error
+    return PodiumBlocks(
+        source=str(_require(body, "source", where)),
+        member=member,
+        blocks=_source_layer(
+            _require(body, "blocks", where), f"{where}:blocks", _PODIUM_BLOCK_ROLES
+        ),
     )
 
 

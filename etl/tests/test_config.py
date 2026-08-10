@@ -1329,3 +1329,57 @@ class TestPaletteExposure:
         # And the table is not merely where they are written, but where they all
         # are: nine distinct colours, none of them repeated under two names.
         assert len(declared) == len(document["materials"])
+
+
+class TestPodiums:
+    """The `podiums:` block — Q47's building-block layer, and its `tile_suffix`."""
+
+    def test_the_real_config_declares_the_block_layer(self, hong_kong) -> None:
+        assert hong_kong.podiums is not None
+        assert hong_kong.podiums.source in hong_kong.tiled_sources
+        blocks = hong_kong.podiums.blocks
+        assert blocks.field("base_level") in blocks.columns
+
+    def test_the_block_is_optional(self, rewrite) -> None:
+        """A city without a topographic source builds as before — the same
+        defaulted-is-the-contract rule as the survey tables."""
+        city = load_city("hong_kong", cities_root=rewrite(lambda doc: doc.pop("podiums")))
+        assert city.podiums is None
+
+    def test_a_source_that_is_not_tiled_is_rejected(self, rewrite) -> None:
+        """The block reads per-sheet zips, so a fixed-URL source cannot serve
+        it — naming one is a config error, caught at load."""
+
+        def rename(doc: dict[str, Any]) -> None:
+            doc["podiums"]["source"] = "road_network_gdb"
+
+        with pytest.raises(ValueError, match="not in tiled_sources"):
+            load_city("hong_kong", cities_root=rewrite(rename))
+
+    def test_a_member_with_a_stray_placeholder_is_rejected(self, rewrite) -> None:
+        """A `{sheet}` typo would otherwise fail at first read, per sheet,
+        rather than once at load."""
+
+        def mistype(doc: dict[str, Any]) -> None:
+            doc["podiums"]["member"] = "{sheet}/{sheet}.gdb"
+
+        with pytest.raises(ValueError, match="placeholder"):
+            load_city("hong_kong", cities_root=rewrite(mistype))
+
+    def test_a_missing_role_is_rejected(self, rewrite) -> None:
+        def drop(doc: dict[str, Any]) -> None:
+            del doc["podiums"]["blocks"]["fields"]["roof_level"]
+
+        with pytest.raises(ValueError, match="roof_level"):
+            load_city("hong_kong", cities_root=rewrite(drop))
+
+    def test_the_tile_suffix_is_parsed_onto_the_source(self, hong_kong) -> None:
+        assert hong_kong.tiled_sources["topography"].tile_suffix == ".zip"
+        assert hong_kong.tiled_sources["buildings"].tile_suffix is None
+
+    def test_a_tile_suffix_without_a_dot_is_rejected(self, rewrite) -> None:
+        def mistype(doc: dict[str, Any]) -> None:
+            doc["tiled_sources"]["topography"]["tile_suffix"] = "zip"
+
+        with pytest.raises(ValueError, match="tile_suffix"):
+            load_city("hong_kong", cities_root=rewrite(mistype))

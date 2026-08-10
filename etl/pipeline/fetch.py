@@ -332,8 +332,13 @@ def _tile_filename(tile_id: str, url: str, source: TiledSource) -> str:
     each still records its own size and so each invalidates the other's cache
     entry forever. Assuming the query string is decorative is exactly the
     publisher-shape assumption this module exists to avoid.
+
+    The configured `tile_suffix` wins over the URL's, because a URL like
+    `/directDownload?productFormat=FGDB` carries its format in the query — such
+    a tile would land as `<id>.bin`, and the zip-aware readers refuse to route
+    a `.bin` through `/vsizip/`.
     """
-    suffix = PurePosixPath(urlsplit(url).path).suffix
+    suffix = source.tile_suffix or PurePosixPath(urlsplit(url).path).suffix
     filename = _safe_segment(f"{tile_id}{suffix or '.bin'}")
     if filename is None:
         raise ValueError(

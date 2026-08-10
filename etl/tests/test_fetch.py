@@ -48,6 +48,10 @@ def sheet(name: str, west: float, south: float, size: float = 0.008) -> dict[str
             "SHEETNO": name,
             "REVISIONDATE": "20250929",
             "Format_glTF": f"https://example.test/api/3d-zip/GLTF0/{name}.zip?key=SECRET",
+            # The topography source reads this one — keyless, and with the
+            # format in the query string rather than the URL path, per the
+            # publisher shape `tile_suffix` exists for.
+            "FGDB": f"https://example.test/OpenData/directDownload?sheetName=T{name}&productFormat=FGDB",
         },
     }
 
@@ -136,6 +140,35 @@ class TestSelectTiles:
             index_of(first, second), BUILDINGS, region_bounds=WAN_CHAI, region_crs="EPSG:4326"
         )
         assert len({tile.path for tile in tiles}) == 2
+
+    def test_a_configured_suffix_wins_over_the_urls(self) -> None:
+        """A publisher whose download URL carries its format in the query
+        string offers no suffix to inherit — the tile would land as `.bin`,
+        which the zip-aware readers refuse to route through `/vsizip/`."""
+        feature = sheet("ALPHA", 114.176, 22.278)
+        feature["properties"]["Format_glTF"] = (
+            "https://example.test/OpenData/directDownload?sheetName=TALPHA&productFormat=FGDB"
+        )
+        suffixed = TiledSource(
+            id="topography",
+            index_url=BUILDINGS.index_url,
+            index_crs=BUILDINGS.index_crs,
+            id_property=BUILDINGS.id_property,
+            url_property=BUILDINGS.url_property,
+            revision_property=BUILDINGS.revision_property,
+            tile_suffix=".zip",
+        )
+
+        tiles = fetch.select_tiles(
+            index_of(feature), suffixed, region_bounds=WAN_CHAI, region_crs="EPSG:4326"
+        )
+        assert tiles[0].path == Path("topography/ALPHA.zip")
+
+    def test_without_a_configured_suffix_the_urls_still_decides(self) -> None:
+        tiles = fetch.select_tiles(
+            index_of(OVERLAPPING), BUILDINGS, region_bounds=WAN_CHAI, region_crs="EPSG:4326"
+        )
+        assert tiles[0].path == Path("buildings/OVERLAP.zip")
 
 
 class TestRedact:
@@ -368,7 +401,7 @@ class TestDryRun:
     def test_reports_the_index_as_fetched_not_as_hypothetical(self, city, offline, tmp_path):
         """It really did touch the disk; saying otherwise would be a lie."""
         report = fetch_once(city, tmp_path, dry_run=True)
-        assert report.indexes == ["hong_kong/buildings/index"]
+        assert report.indexes == ["hong_kong/buildings/index", "hong_kong/topography/index"]
         assert "hong_kong/buildings/index" not in report.downloaded
 
     def test_a_later_real_run_reuses_the_index(self, city, offline, tmp_path):
