@@ -191,10 +191,14 @@ class Hkcec:
     # by elevation, the descending roofline cuts the strips off one by one
     # instead — `_wall_ring` clamps each line into [floor, soffit], so a strip
     # the roof has passed degrades to an invisible hairline.
-    ribbon_first_m: float = 16.0  # first strip's underside
-    ribbon_pitch_m: float = 6.0
-    ribbon_m: float = 2.2  # strip thickness
-    ribbon_count: int = 8
+    # Pitch and thickness measured off the street views by pixel profile
+    # (2026-08-12): the strips hold ~30% of the pitch (dark share 0.27-0.37
+    # across six sampled columns) and the hull carries 9-10 bands over ~45 m
+    # of wall — ~4.8 m pitch, ~1.5 m strip.
+    ribbon_first_m: float = 15.0  # first strip's underside
+    ribbon_pitch_m: float = 4.8
+    ribbon_m: float = 1.5  # strip thickness
+    ribbon_count: int = 10
     # Re-sliced 2026-08-12 after the source-vs-hero comparison: 8 m z-bands of
     # the source mesh (p1/p99 extents; eaves the p90 of the outer 12% each
     # side, 3-band rolling median; hull edges the p1/p99 of points 18-40 m up,
