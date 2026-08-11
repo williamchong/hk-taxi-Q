@@ -1,6 +1,7 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/city/tile_preview.gd" id="1_tiles"]
+[ext_resource type="Script" path="res://scripts/city/landmarks.gd" id="7_landmarks"]
 [ext_resource type="Script" path="res://scripts/camera/free_look_camera.gd" id="2_camera"]
 [ext_resource type="PackedScene" path="res://scenes/world/clean_daylight.tscn" id="3_light"]
 [ext_resource type="Script" path="res://scripts/city/road_preview.gd" id="4_roads"]
@@ -14,6 +15,12 @@ script = ExtResource("1_tiles")
 
 [node name="RoadSurface" type="Node3D" parent="."]
 script = ExtResource("5_surface")
+
+; The authored heroes (`P3-6`). Without them this scene shows holes where the
+; excluded source buildings stood — and the audit viewpoints below are the
+; frames the heroes exist to be judged in.
+[node name="Landmarks" type="Node3D" parent="."]
+script = ExtResource("7_landmarks")
 
 ; `P1-5`'s fare nodes. Visible by default, unlike the graph diagnostic below,
 ; because nothing else in this scene draws them and they do not z-fight anything

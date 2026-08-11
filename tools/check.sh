@@ -38,7 +38,7 @@ GDFORMAT="${GDFORMAT:-$ROOT/.venv/bin/gdformat}"
 VERIFY_GENERATED="${VERIFY_GENERATED:-1}"
 VERIFY_TOOLS=(
 	verify_city verify_tiles verify_road_surface verify_road_graph verify_city_streamer
-	verify_spawn
+	verify_spawn verify_landmarks
 )
 
 # Godot reports a compile failure with any of these and still exits 0.

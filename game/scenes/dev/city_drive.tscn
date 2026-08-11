@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=10 format=3]
 
 ; The first scene that puts the car on the real city (`P1-4` + `P0-5`).
 ;
@@ -23,6 +23,7 @@
 [ext_resource type="Script" path="res://scripts/camera/chase_camera.gd" id="5_camera"]
 [ext_resource type="Script" path="res://scripts/city/drive_harness.gd" id="6_harness"]
 [ext_resource type="Script" path="res://scripts/city/road_graph_overlay.gd" id="7_graph"]
+[ext_resource type="Script" path="res://scripts/city/landmarks.gd" id="9_landmarks"]
 
 [node name="CityDrive" type="Node3D"]
 script = ExtResource("6_harness")
@@ -38,6 +39,12 @@ camera_path = NodePath("../CameraRig/Camera3D")
 
 [node name="RoadSurface" type="Node3D" parent="."]
 script = ExtResource("2_surface")
+
+; The authored heroes, placed from `landmarks.json` (`P3-6`). Beside `Tiles`
+; rather than under it: the streamer owns what it streams, and a hero is
+; always resident.
+[node name="Landmarks" type="Node3D" parent="."]
+script = ExtResource("9_landmarks")
 
 [node name="Lighting" parent="." instance=ExtResource("3_light")]
 
