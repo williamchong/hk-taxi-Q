@@ -74,6 +74,21 @@ ALUMINIUM = Material(
     55.0,
     "mill-finish standing-seam aluminium, 50-60%",
 )
+# HKCEC's own pair, read off the Expo Drive East street views (2024): the
+# elevation is *pale* panels carrying thin dark ribbon glazing, under a roof
+# *darker* than the wall — the first shipped treatment had both inverted.
+PANEL = Material(
+    "panel_pale",
+    (134, 128, 119),
+    42.0,
+    "pale precast and granite curtain panels, 35-45%",
+)
+ROOF_GREY = Material(
+    "roof_grey",
+    (90, 96, 99),
+    22.0,
+    "pearl-grey coated aluminium re-roof, 18-28%",
+)
 GLASS = Material(
     "curtain_glass",
     (61, 72, 83),
@@ -99,7 +114,7 @@ GOLD_BAND = Material(
     "the lighter mechanical-floor band on the same glass family",
 )
 
-PALETTE = (ALUMINIUM, GLASS, CONCRETE, GOLD, GOLD_BAND)
+PALETTE = (ALUMINIUM, PANEL, ROOF_GREY, GLASS, CONCRETE, GOLD, GOLD_BAND)
 
 
 def check_palette(anchor: float) -> None:
@@ -116,17 +131,29 @@ PLINTH_FLARE_M = 2.0
 
 @dataclass(frozen=True)
 class WingStation:
-    """One cross-section of the roof shell, at `z_m` along the island.
+    """One cross-section of the island, at `z_m` — roof *and* hull.
 
     The wing is a sequence of these rather than a curve, on the chamfer rule
     (`P3-11`): faces stay flat and every station edge stays crisp, so the
     swoop reads as low-poly rather than as failed smoothing.
+
+    Asymmetric on purpose: the island's plan is a curved, eastward-leaning
+    banana (`mid_m` drifts ~-22 → +13 south), the east flank's roof rolls far
+    lower than the west's, and the hull edges are their own measurement — at
+    the prow the wall stands 15-20 m inside the fold, mid-south it meets the
+    roof edge nearly flush. A symmetric model had fattened the 14 m nose to
+    40 m, which is most of why the source mesh read closer to the street
+    photos than the first hero did.
     """
 
     z_m: float
+    mid_m: float  # plan centre of the roof at this station
+    half_m: float  # eave tip each side of `mid_m`
     ridge_m: float  # roof height on the centreline
-    eave_m: float  # roof height where it meets the outer edge
-    half_w_m: float  # eave tip from the centreline
+    eave_w_m: float  # roof height at the west edge
+    eave_e_m: float  # east edge — the flank that sweeps lowest
+    hull_w_m: float  # the wall's own west edge in plan
+    hull_e_m: float
 
 
 @dataclass(frozen=True)
@@ -138,41 +165,71 @@ class Hkcec:
     mesh (footprint 201 x 349 m, top 71.9 mPD). Local frame: -z is the model's
     north — the harbour side the prow points at.
 
-    ⚠️ **The stations are measured, not styled** — z-band slices of the source
-    mesh (p99 extents, 2026-08-12), because the first eyeballed pass got the
-    building's shape backwards: the roof is a ~63-67 m *plateau* along the
-    whole island whose **edges** roll down (that roll is the wing — strongest
-    mid-south, where edges reach ~27 m), the plan is widest at the *south*
-    (~109 m half-width) and tapers to a ~45 m prow at the north, where the
-    section folds over the nose. The cross-section between ridge and eave is
+    ⚠️ **The stations are measured, not styled** — 8 m z-band slices of the
+    source mesh (2026-08-12, re-sliced at double density after the user judged
+    the source closer to the street photos than the first hero), because the
+    eyeballed pass got the shape backwards and the symmetric pass got it fat:
+    the roof is a ~63-67 m *plateau* whose **edges** roll down (that roll is
+    the wing — deepest on the *east* flank, where edges reach ~20 m), the plan
+    is a curved eastward-leaning banana (station `mid_m` drifts -22 → +13)
+    that is widest at the *south* (~97 m half-width) and tapers to a **14 m**
+    prow folding over the nose. The cross-section between ridge and eaves is
     an arc sampled at `arc_points` — chamfered facets, never smoothed
     (`P3-11`), but enough of them that the shell reads doubly curved the way
     the source's 41k triangles did.
     """
 
     podium_m: float = 8.0  # concrete base band
-    wall_inset_m: float = 10.0  # curtain stands this far inside the eave tips
     fascia_m: float = 1.8  # roof edge thickness — the line the eye reads
-    corner_cut_m: float = 10.0
-    arc_points: int = 9  # cross-section samples, eave to eave
-    # The louvre bands: the real curtain carries horizontal white walkway
-    # bands, and they are placed as fractions of each station's own wall
-    # height so a band can never climb through the roof where the eaves dip.
-    band_fractions: tuple[tuple[float, float], ...] = ((0.38, 0.44), (0.72, 0.78))
+    arc_points: int = 17  # cross-section samples, eave to eave
+    # The ribbon strips: the street views (Expo Drive East, 2024) read the
+    # elevation as pale panels carrying six-plus thin *dark* glazing ribbons —
+    # the first treatment had the values inverted (dark glass hull, light
+    # bands). Placed as fractions of each station's own wall height so a
+    # ribbon can never climb through the roof where the eaves dip.
+    band_fractions: tuple[tuple[float, float], ...] = (
+        (0.06, 0.13),
+        (0.19, 0.26),
+        (0.32, 0.39),
+        (0.45, 0.52),
+        (0.58, 0.65),
+        (0.71, 0.78),
+    )
+    # Re-sliced 2026-08-12 after the source-vs-hero comparison: 8 m z-bands of
+    # the source mesh (p1/p99 extents; eaves the p90 of the outer 12% each
+    # side, 3-band rolling median; hull edges the p1/p99 of points 18-40 m up,
+    # one-flank bands interpolated from their neighbours; prow hull falls back
+    # to the roof edge less 10 m where the hall hides under the fold), then
+    # every column faired with a sigma = 1-band Gaussian along z: the SOM roof
+    # is a fair curve, and 1-3 m of slice noise reads as creases once flat
+    # facets amplify it (user call, same day: one smooth sweep, kept faceted).
     stations: tuple[WingStation, ...] = (
-        WingStation(-158.0, 63.0, 58.0, 40.0),  # prow: the roof folds over the nose
-        WingStation(-133.0, 64.0, 55.0, 54.0),
-        WingStation(-116.0, 66.0, 50.0, 60.0),
-        WingStation(-99.0, 67.0, 42.0, 74.0),  # plateau, edges starting to roll
-        WingStation(-82.0, 67.0, 38.0, 80.0),
-        WingStation(-65.0, 66.0, 38.0, 85.0),
-        WingStation(-48.0, 65.0, 34.0, 90.0),
-        WingStation(-31.0, 65.0, 31.0, 98.0),
-        WingStation(-14.0, 64.0, 28.0, 105.0),  # deepest roll of the wing
-        WingStation(4.0, 64.0, 34.0, 108.0),
-        WingStation(21.0, 64.0, 33.0, 109.0),  # widest — the south, not the prow
-        WingStation(38.0, 65.0, 35.0, 102.0),
-        WingStation(46.0, 65.0, 38.0, 96.0),  # hand-off to the atrium block
+        WingStation(-156.0, -22.4, 18.3, 66.2, 62.8, 59.8, -31.7, -9.9),
+        WingStation(-148.0, -22.1, 22.9, 66.3, 61.6, 57.7, -32.1, -9.3),
+        WingStation(-140.0, -21.2, 28.5, 66.4, 59.6, 54.1, -34.3, -5.8),
+        WingStation(-132.0, -19.7, 33.9, 66.6, 57.0, 50.3, -38.9, 3.1),
+        WingStation(-124.0, -16.4, 39.9, 66.7, 53.8, 46.2, -44.8, 16.4),
+        WingStation(-116.0, -11.0, 47.7, 66.9, 50.0, 41.7, -51.6, 32.6),
+        WingStation(-108.0, -4.4, 57.0, 66.9, 46.6, 37.9, -58.0, 50.9),
+        WingStation(-100.0, 1.3, 65.1, 66.8, 45.2, 36.1, -63.1, 66.0),
+        WingStation(-92.0, 3.9, 70.5, 66.8, 45.4, 35.4, -66.6, 74.5),
+        WingStation(-84.0, 4.0, 74.5, 66.7, 45.5, 34.5, -70.5, 78.4),
+        WingStation(-76.0, 2.9, 78.2, 66.2, 42.9, 33.1, -75.3, 81.0),
+        WingStation(-68.0, 2.0, 81.3, 65.4, 36.8, 30.9, -79.3, 83.3),
+        WingStation(-60.0, 1.7, 83.6, 64.8, 32.1, 28.4, -81.7, 85.3),
+        WingStation(-52.0, 2.2, 85.2, 64.5, 30.6, 26.9, -82.8, 87.4),
+        WingStation(-44.0, 3.4, 86.9, 64.7, 30.6, 25.9, -83.0, 89.6),
+        WingStation(-36.0, 5.4, 88.7, 64.6, 31.3, 23.8, -83.1, 91.9),
+        WingStation(-28.0, 7.7, 90.8, 64.2, 32.6, 21.2, -83.1, 94.1),
+        WingStation(-20.0, 9.7, 92.6, 63.9, 34.0, 19.8, -82.9, 95.8),
+        WingStation(-12.0, 11.3, 93.8, 63.9, 35.3, 19.6, -82.5, 97.2),
+        WingStation(-4.0, 12.4, 94.5, 64.0, 36.0, 19.7, -82.0, 98.4),
+        WingStation(4.0, 12.8, 95.3, 64.1, 36.4, 19.7, -82.5, 99.5),
+        WingStation(12.0, 12.2, 96.3, 64.2, 36.6, 20.2, -84.1, 100.4),
+        WingStation(20.0, 10.5, 96.2, 64.3, 36.5, 22.3, -85.7, 100.9),
+        WingStation(28.0, 8.2, 95.4, 64.4, 35.0, 26.2, -87.2, 101.0),
+        WingStation(36.0, 7.2, 94.7, 64.5, 32.6, 29.3, -87.5, 100.8),
+        WingStation(44.0, 7.6, 93.9, 64.5, 31.0, 30.7, -86.4, 100.7),
     )
     # ⚠️ **The building bridges the streets, and the model must too.** Expo
     # Drive passes under the halls (the spawn line is literally "underneath
@@ -187,25 +244,38 @@ class Hkcec:
     deck_north_z_m: float = -75.0  # north of this the hall is grounded
     deck_bottom_m: float = 12.0  # ~10 m of headroom over the carriageways
     deck_top_m: float = 18.0
-    # Deck plan half-widths by z: the island stations to z 46, then the
-    # measured south-zone slices tapering to the link's landward end.
-    deck_profile: tuple[tuple[float, float], ...] = (
-        (-75.0, 80.0),
-        (-48.0, 90.0),
-        (-31.0, 98.0),
-        (-14.0, 105.0),
-        (4.0, 108.0),
-        (21.0, 109.0),
-        (38.0, 102.0),
-        (46.0, 96.0),
-        (64.0, 84.0),
-        (84.0, 80.0),
-        (104.0, 72.0),
-        (124.0, 66.0),
-        (144.0, 62.0),
-        (164.0, 58.0),
-        (184.0, 40.0),
-        (191.0, 30.0),
+    # Deck plan `(z, mid, half)` — the island stations to z 44, then the
+    # measured south-zone slices tapering to the link's landward end, from
+    # the same 2026-08-12 re-slice as the stations.
+    deck_profile: tuple[tuple[float, float, float], ...] = (
+        (-76.0, 2.9, 78.2),
+        (-68.0, 2.0, 81.3),
+        (-60.0, 1.7, 83.6),
+        (-52.0, 2.2, 85.2),
+        (-44.0, 3.4, 86.9),
+        (-36.0, 5.4, 88.7),
+        (-28.0, 7.7, 90.8),
+        (-20.0, 9.7, 92.6),
+        (-12.0, 11.3, 93.8),
+        (-4.0, 12.4, 94.5),
+        (4.0, 12.8, 95.3),
+        (12.0, 12.2, 96.3),
+        (20.0, 10.5, 96.2),
+        (28.0, 8.2, 95.4),
+        (36.0, 7.2, 94.7),
+        (44.0, 7.6, 93.9),
+        (54.0, 9.5, 81.7),
+        (66.0, 11.7, 78.8),
+        (78.0, 13.8, 75.3),
+        (90.0, 14.9, 72.1),
+        (102.0, 15.6, 68.4),
+        (114.0, 16.3, 64.5),
+        (126.0, 16.5, 61.9),
+        (138.0, 17.2, 61.0),
+        (150.0, 19.7, 60.4),
+        (162.0, 21.4, 58.1),
+        (174.0, 18.2, 50.4),
+        (186.0, 11.1, 38.7),
     )
     # Pier plan positions, authored against the shipped road graph: every
     # candidate on a 26 m grid was tested against densely sampled carriageway
@@ -246,7 +316,6 @@ class Hkcec:
         (0.0, 155.0),
         (26.0, 155.0),
         (-26.0, 178.0),
-        (26.0, 189.0),
     )
     pier_half_m: float = 1.4
     # Solid under-deck mass, `(x0, z0, x1, z1)` in plan, plinth to soffit —
@@ -275,8 +344,11 @@ class Hkcec:
         (4.0, 133.0, 40.0, 169.0),
         (-32.0, 153.0, 0.0, 177.0),
     )
-    atrium_glass_m: float = 48.0  # measured south-zone tops 56-67, eased under the roof
-    atrium_roof_m: float = 53.0
+    # The link keeps the sweep going: measured south-zone tops run 61-67 m,
+    # so the striped hull rises to `atrium_wall_m` and the grey roof crests
+    # above it — the first pass stopped 10 m short at 53.
+    atrium_wall_m: float = 57.0
+    atrium_roof_m: float = 64.0
 
 
 @dataclass(frozen=True)
@@ -328,18 +400,20 @@ def tri_ring(y: float, radius: float, cut: float) -> tuple[Point, ...]:
 
 
 def _shell_section(station: WingStation, arc_points: int) -> list[tuple[float, float]]:
-    """One station's roof profile, eave to eave: `(x, y)` samples of an arc.
+    """One station's roof profile, west eave to east eave: `(x, y)` arc samples.
 
-    `y(t) = eave + (ridge - eave) * (1 - t^2)` over `t` in [-1, 1] — a barrel
-    of flat facets. The count is the chamfer budget: enough that the shell
-    reads doubly curved at review distance, few enough that every facet is
-    still a face (`P3-11`).
+    `y(t) = ridge - (ridge - eave_side) * t^2` over `t` in [-1, 1], taking
+    each side's own eave — the east flank rolls lower than the west, and one
+    quadratic per side keeps the crest at the ridge while the two falls
+    disagree. A barrel of flat facets; the count is the chamfer budget
+    (`P3-11`).
     """
     ts = np.linspace(-1.0, 1.0, arc_points)
     return [
         (
-            float(t) * station.half_w_m,
-            station.eave_m + (station.ridge_m - station.eave_m) * float(1.0 - t * t),
+            station.mid_m + float(t) * station.half_m,
+            station.ridge_m
+            - (station.ridge_m - (station.eave_w_m if t < 0 else station.eave_e_m)) * float(t * t),
         )
         for t in ts
     ]
@@ -355,13 +429,20 @@ def _wing(p: Hkcec, colour: Colour) -> MeshData:
     """
     parts: list[MeshData] = []
     sections = [_shell_section(station, p.arc_points) for station in p.stations]
+
+    def edge(station: WingStation, side: float) -> tuple[float, float]:
+        """A station's eave tip on one side: `(x, eave y)`."""
+        if side < 0:
+            return station.mid_m - station.half_m, station.eave_w_m
+        return station.mid_m + station.half_m, station.eave_e_m
+
     for i in range(len(p.stations) - 1):
         a, b = p.stations[i], p.stations[i + 1]
         near, far = sections[i], sections[i + 1]
         for j in range(p.arc_points - 1):
             (x0, y0), (x1, y1) = near[j], near[j + 1]
             (x2, y2), (x3, y3) = far[j], far[j + 1]
-            outward = ((x0 + x1) / p.arc_points, 1.0, 0.0)
+            outward = ((x0 + x1) / 2.0 - a.mid_m, 40.0, 0.0)
             parts.append(
                 polygon_facing(
                     [(x0, y0, a.z_m), (x1, y1, a.z_m), (x3, y3, b.z_m), (x2, y2, b.z_m)],
@@ -371,26 +452,29 @@ def _wing(p: Hkcec, colour: Colour) -> MeshData:
                 )
             )
         for side in (-1.0, 1.0):
+            (ax, ay), (bx, by) = edge(a, side), edge(b, side)
             parts.append(
                 polygon_facing(
                     [
-                        (side * a.half_w_m, a.eave_m, a.z_m),
-                        (side * b.half_w_m, b.eave_m, b.z_m),
-                        (side * b.half_w_m, b.eave_m - p.fascia_m, b.z_m),
-                        (side * a.half_w_m, a.eave_m - p.fascia_m, a.z_m),
+                        (ax, ay, a.z_m),
+                        (bx, by, b.z_m),
+                        (bx, by - p.fascia_m, b.z_m),
+                        (ax, ay - p.fascia_m, a.z_m),
                     ],
                     colour,
                     (side, 0.0, 0.0),
                     name=f"wing_fascia_{i}_{side}",
                 )
             )
+        (awx, awy), (aex, aey) = edge(a, -1.0), edge(a, 1.0)
+        (bwx, bwy), (bex, bey) = edge(b, -1.0), edge(b, 1.0)
         parts.append(
             polygon_facing(
                 [
-                    (-a.half_w_m, a.eave_m - p.fascia_m, a.z_m),
-                    (a.half_w_m, a.eave_m - p.fascia_m, a.z_m),
-                    (b.half_w_m, b.eave_m - p.fascia_m, b.z_m),
-                    (-b.half_w_m, b.eave_m - p.fascia_m, b.z_m),
+                    (awx, awy - p.fascia_m, a.z_m),
+                    (aex, aey - p.fascia_m, a.z_m),
+                    (bex, bey - p.fascia_m, b.z_m),
+                    (bwx, bwy - p.fascia_m, b.z_m),
                 ],
                 colour,
                 (0.0, -1.0, 0.0),
@@ -401,44 +485,56 @@ def _wing(p: Hkcec, colour: Colour) -> MeshData:
     for index, forward in ((0, -1.0), (len(p.stations) - 1, 1.0)):
         station = p.stations[index]
         cap = [(x, y, station.z_m) for x, y in sections[index]]
-        cap.append((station.half_w_m, station.eave_m - p.fascia_m, station.z_m))
-        cap.append((-station.half_w_m, station.eave_m - p.fascia_m, station.z_m))
+        (ex, ey), (wx, wy) = edge(station, 1.0), edge(station, -1.0)
+        cap.append((ex, ey - p.fascia_m, station.z_m))
+        cap.append((wx, wy - p.fascia_m, station.z_m))
         parts.append(polygon_facing(cap, colour, (0.0, 0.0, forward), name=f"wing_cap_{forward}"))
     return merge(parts, name="wing")
 
 
 def _profile_ring(
-    profile: Sequence[tuple[float, float]], y: float, inset: float = 0.0
+    profile: Sequence[tuple[float, float, float]], y: float, inset: float = 0.0
 ) -> tuple[Point, ...]:
-    """A closed plan ring from a `(z, half_width)` profile, at height `y`.
+    """A closed plan ring from a `(z, mid, half)` profile, at height `y`.
 
     Walking the profile down one side and back up the other, the same shape
     `_wall_ring` walks the stations.
     """
-    left = [(-(half_w - inset), y, z) for z, half_w in profile]
-    right = [(half_w - inset, y, z) for z, half_w in reversed(profile)]
+    left = [(mid - (half - inset), y, z) for z, mid, half in profile]
+    right = [(mid + (half - inset), y, z) for z, mid, half in reversed(profile)]
+    return tuple(left + right)
+
+
+def _hull_ring(stations: Sequence[WingStation], y: float, flare: float = 0.0) -> tuple[Point, ...]:
+    """The measured hull edges as a closed plan ring at height `y`."""
+    left = [(s.hull_w_m - flare, y, s.z_m) for s in stations]
+    right = [(s.hull_e_m + flare, y, s.z_m) for s in reversed(stations)]
     return tuple(left + right)
 
 
 def _wall_ring(p: Hkcec, fraction: float) -> tuple[Point, ...]:
-    """The hall's plan as a ring: the wing's stations, brought inboard.
+    """The hall's hull as a ring, at `fraction` of each station's wall height.
 
-    Walking the stations north-to-south down one side and back up the other
-    gives a closed ring that tapers wherever the roof does. `fraction` places
-    the ring between each station's own floor and soffit — the floor is the
-    podium where the hall is grounded and the deck top where it bridges the
-    streets — so a louvre band follows the roofline and can never climb
-    through it where the eaves dip.
+    Walking the stations north-to-south down the west edges and back up the
+    east gives a closed ring on the measured hull plan. `fraction` places the
+    ring between each station's own floor and that side's soffit — the floor
+    is the podium where the hall is grounded and the deck top where it
+    bridges the streets — so a ribbon strip follows the roofline and can
+    never climb through it where the eaves dip.
     """
-    points: list[tuple[float, float, float]] = []
+    left: list[Point] = []
+    right: list[Point] = []
     for station in p.stations:
-        half_w = max(station.half_w_m - p.wall_inset_m, 8.0)
         floor = p.podium_m if station.z_m <= p.deck_north_z_m else p.deck_top_m
-        soffit = station.eave_m - p.fascia_m
-        points.append((half_w, floor + fraction * (soffit - floor), station.z_m))
-    left = [(-half_w, y, z) for half_w, y, z in points]
-    right = [(half_w, y, z) for half_w, y, z in reversed(points)]
-    return tuple(left + right)
+        # Where the roof rolls all the way down to the deck (the east flank
+        # around z -20..-4 lands within a fascia of deck level), the wall
+        # pinches to half a metre rather than to zero — a zero-height band is
+        # a quad with no normal.
+        soffit_w = max(station.eave_w_m - p.fascia_m, floor + 0.5)
+        soffit_e = max(station.eave_e_m - p.fascia_m, floor + 0.5)
+        left.append((station.hull_w_m, floor + fraction * (soffit_w - floor), station.z_m))
+        right.append((station.hull_e_m, floor + fraction * (soffit_e - floor), station.z_m))
+    return tuple(left + list(reversed(right)))
 
 
 # Every hero's merged node name ends in `buildings.py`'s COLLISION_SUFFIX: the
@@ -451,18 +547,14 @@ def build_hkcec(p: Hkcec | None = None) -> MeshData:
     piers, banded glass under the wing, and the atrium run to the landward
     end."""
     p = p or Hkcec()
-    north = p.stations[0].z_m
-    grounded = max(station.half_w_m for station in p.stations if station.z_m <= p.deck_north_z_m)
+    # The grounded base follows the measured hull — a rectangle here left the
+    # podium jutting ~60 m east of the real prow, the other half of why the
+    # source mesh read closer to the photos than the first hero.
+    grounded = [s for s in p.stations if s.z_m <= p.deck_north_z_m]
     base = loft(
         [
-            ring(
-                -PLINTH_DEPTH_M,
-                grounded + PLINTH_FLARE_M,
-                north - PLINTH_FLARE_M,
-                p.deck_north_z_m,
-                p.corner_cut_m,
-            ),
-            ring(p.podium_m, grounded, north, p.deck_north_z_m, p.corner_cut_m),
+            _hull_ring(grounded, -PLINTH_DEPTH_M, PLINTH_FLARE_M),
+            _hull_ring(grounded, p.podium_m),
         ],
         [CONCRETE.colour],
         bottom=CONCRETE.colour,
@@ -500,34 +592,39 @@ def build_hkcec(p: Hkcec | None = None) -> MeshData:
         for index, (x, z) in enumerate(p.piers)
         if not any(x0 <= x <= x1 and z0 <= z <= z1 for x0, z0, x1, z1 in p.infill)
     ]
-    # The glass hall follows the roof plan inboard of the eaves — so no wall
-    # pokes out past the overhang, and the curtain rises to meet the soffit
-    # everywhere. The intermediate rings are the louvre bands.
+    # The hall's hull follows the roof plan inboard of the eaves — so no wall
+    # pokes out past the overhang, and it rises to meet the soffit everywhere.
+    # The intermediate rings are the dark ribbon-glazing strips on the pale
+    # panel hull.
     fractions = [0.0]
     for band_low, band_high in p.band_fractions:
         fractions.extend((band_low, band_high))
     fractions.append(1.0)
     band_colours: list[Colour] = []
     for index in range(len(fractions) - 1):
-        band_colours.append(ALUMINIUM.colour if index % 2 == 1 else GLASS.colour)
+        band_colours.append(GLASS.colour if index % 2 == 1 else PANEL.colour)
     walls = loft(
         [_wall_ring(p, fraction) for fraction in fractions],
         band_colours,
-        bottom=GLASS.colour,
-        top=GLASS.colour,
+        bottom=PANEL.colour,
+        top=PANEL.colour,
         name="hkcec_walls",
     )
-    wing = _wing(p, ALUMINIUM.colour)
-    south = [(z, half_w) for z, half_w in p.deck_profile if z >= p.stations[-1].z_m]
+    wing = _wing(p, ROOF_GREY.colour)
+    # The link continues the striped hull south — the street views show the
+    # same pale panels and ribbons on the south zone, not a glass block —
+    # with the grey roof cresting over it.
+    south = [row for row in p.deck_profile if row[0] >= p.stations[-1].z_m]
+    atrium_rings = [
+        _profile_ring(south, p.deck_top_m + fraction * (p.atrium_wall_m - p.deck_top_m), 4.0)
+        for fraction in fractions
+    ]
+    atrium_rings.append(_profile_ring(south, p.atrium_roof_m, 12.0))
     atrium = loft(
-        [
-            _profile_ring(south, p.deck_top_m, 4.0),
-            _profile_ring(south, p.atrium_glass_m, 6.0),
-            _profile_ring(south, p.atrium_roof_m, 12.0),
-        ],
-        [GLASS.colour, ALUMINIUM.colour],
+        atrium_rings,
+        [*band_colours, ROOF_GREY.colour],
         bottom=GLASS.colour,
-        top=ALUMINIUM.colour,
+        top=ROOF_GREY.colour,
         name="hkcec_atrium",
     )
     return replace(

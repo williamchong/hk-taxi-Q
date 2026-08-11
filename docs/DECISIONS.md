@@ -3058,9 +3058,30 @@ model check in `verify_landmarks.gd` allows 15 m of overhang for the plinth and 
 massing's AABB swinging past the source's axis-aligned one (~11 m on HKCEC's 349 m at 6.4°).
 
 **Measured.** `replaced = 2` meshes (= 2 stems; no sheet-edge duplicates), 66 tiles unchanged in
-count. Heroes 1,170 + 300 triangles against 8k each — the wing is an arced shell over stations sliced from the source mesh, and the deck bridges the streets on piers authored against the road graph, because the source building is elevated over Expo Drive and Convention Avenue and a solid base would dead-end both. PCK **36.57 → 33.88 MB** — the exclusion gave
-back ~2.7 MB of tile geometry and the heroes cost ~90 KB. Draw calls: 53 measured pre-`P3-6`
+count. Heroes 3,828 + 300 triangles against 8k each — the wing is an arced shell over stations sliced from the source mesh, and the deck bridges the streets on piers authored against the road graph, because the source building is elevated over Expo Drive and Convention Avenue and a solid base would dead-end both. PCK **36.57 → 33.97 MB** — the exclusion gave
+back ~2.7 MB of tile geometry and the heroes cost ~250 KB. Draw calls: 53 measured pre-`P3-6`
 resident set + 2 heroes, still far under 150.
+
+⚠️ **The photos are the arbiter, and they demanded three corrections** (user review rounds,
+2026-08-12, against Expo Drive East street views; the user judged the *source mesh* closer to the
+photos than the hero, and the fixes below are why). **(1) The values were inverted:** the real
+Phase 2 elevation is *pale* panels carrying six-plus thin *dark* ribbon-glazing strips under a
+roof *darker* than the wall; the first treatment shipped a dark glass hull with light bands under
+a near-white roof. Two hero-only materials landed (`panel_pale` 42%, `roof_grey` 22%,
+`Q33`-checked; `aluminium_roof` now touches only Central Plaza). **(2) The symmetric plan was
+fat:** re-sliced at 8 m bands, the island is an eastward-leaning banana (plan centre drifting
+-22 → +13 m), the prow tapers to a **14 m** half-width the symmetric model had fattened to 40, the
+east flank's roof rolls to ~20 m where the west stays ~30-45, and the hull edges are their own
+measurement (flush with the roof edge mid-south, 15-20 m inboard at the prow) — `WingStation`
+carries all of it, and the grounded base follows the measured hull instead of a rectangle that
+jutted ~60 m east of the prow. The link's top was also 10 m short (measured 61-67; was 53), and
+its block is the same striped hull, not glass. **(3) Measured is not yet fair:** 1-3 m of
+slice-to-slice noise reads as creases once flat facets amplify it, so every profile column is
+faired with a σ = 1-band Gaussian along z (user call: the SOM seabird roof is one smooth sweep) —
+the facets stay, honouring `P3-11`'s chamfer-never-smooth rule; only the noise goes. Where the
+faired east roll lands within a fascia of deck level the wall pinches to 0.5 m rather than to a
+zero-height quad. Derivations live in the `Hkcec` dataclass comments; the slicing itself is
+scratch, per the original station authoring.
 
 ⚠️ **The under-deck is solid, not a pier field — the kerb said so** (user review, 2026-08-12).
 The first shipped deck stood on bare piers, and from street level the hall read as a slab floating
