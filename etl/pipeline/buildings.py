@@ -921,8 +921,8 @@ def build_region(
                 # whole position array to produce a mesh nothing here needs.
                 low, high = mesh.aabb()
                 box = (
-                    tuple(value + offset for value, offset in zip(low, place.offset)),
-                    tuple(value + offset for value, offset in zip(high, place.offset)),
+                    tuple(value + offset for value, offset in zip(low, place.offset, strict=True)),
+                    tuple(value + offset for value, offset in zip(high, place.offset, strict=True)),
                 )
                 previous = report.excluded.get(key)
                 report.excluded[key] = box if previous is None else _union([previous, box])
