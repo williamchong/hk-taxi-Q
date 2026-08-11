@@ -476,8 +476,8 @@ Distinctive silhouettes need hand-authored low-poly models, placed via `landmark
 
 | Building | Why it needs authoring | Status |
 |---|---|---|
-| **HK Convention & Exhibition Centre** | The curved "flying wing" roof | ✅ `P3-6` — wing shell over stations, Phase 2 + link only; Phase 1 and its four towers stay generated |
-| **Central Plaza** | Pyramid crown | ✅ `P3-6` — banded triangular shaft, pyramid, two-stage mast |
+| **HK Convention & Exhibition Centre** | The curved "flying wing" roof | ✅ `P3-6` — arced wing shell over stations sliced from the source mesh, louvre-banded curtain, street-bridging deck on road-clear piers; Phase 2 only — Phase 1 and its four towers stay generated |
+| **Central Plaza** | Pyramid crown | ✅ `P3-6` — banded triangular shaft, arcade piers, pyramid, two-stage mast |
 | **Hopewell Centre** | Cylindrical tower | ⬜ |
 | **Times Square** | Needs its signage identity — **massing and placement only, never rendered text** (`Q42`, hard rule 8) | ⬜ |
 | **Wan Chai government slabs** | Read fine as boxes, but the grouping needs composition | ⬜ |
