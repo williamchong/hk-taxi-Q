@@ -180,7 +180,10 @@ class Hkcec:
     # zone — the source mesh is measurably elevated there (bottom 25-50 m over
     # local z 94..144). A solid base would dead-end real roads into concrete,
     # so everything south of `deck_north_z_m` stands on a deck over street
-    # level, carried on piers.
+    # level — but a deck on bare piers reads as a building on stilts from the
+    # kerb (review, 2026-08-12), so the under-deck is `infill`: solid to the
+    # soffit everywhere a carriageway does not need daylight, leaving the
+    # streets real portals.
     deck_north_z_m: float = -75.0  # north of this the hall is grounded
     deck_bottom_m: float = 12.0  # ~10 m of headroom over the carriageways
     deck_top_m: float = 18.0
@@ -246,6 +249,32 @@ class Hkcec:
         (26.0, 189.0),
     )
     pier_half_m: float = 1.4
+    # Solid under-deck mass, `(x0, z0, x1, z1)` in plan, plinth to soffit —
+    # derived from the shipped road graph the way the piers were (2026-08-12):
+    # carriageway polylines densified to 2 m in the local frame, every 4 m
+    # grid cell of the deck plan kept solid at >= `width/2 + 4.8 m` from every
+    # surface sample (the pier rule's 8 m on a 6.4 m carriageway), cells
+    # merged greedily into rectangles, none thinner than 8 m. The rim stays
+    # 6 m inboard of the deck edge so the slab still reads as a deck. Bypass-
+    # tunnel samples (local y < -2.5) are buried and carve nothing; the Lung
+    # Wo interchange (z 93..130) stays fully bridged — the real link bridges
+    # it too.
+    infill: tuple[tuple[float, float, float, float], ...] = (
+        (-72.0, -75.0, -36.0, -55.0),
+        (36.0, -39.0, 88.0, -3.0),
+        (-16.0, -27.0, 16.0, -19.0),
+        (-16.0, -19.0, 36.0, -3.0),
+        (88.0, -19.0, 96.0, -3.0),
+        (-64.0, -15.0, -36.0, -3.0),
+        (-76.0, -3.0, 72.0, 45.0),
+        (72.0, -3.0, 100.0, 25.0),
+        (-68.0, 45.0, 12.0, 57.0),
+        (-64.0, 57.0, -28.0, 65.0),
+        (60.0, 65.0, 72.0, 89.0),
+        (40.0, 69.0, 60.0, 77.0),
+        (4.0, 133.0, 40.0, 169.0),
+        (-32.0, 153.0, 0.0, 177.0),
+    )
     atrium_glass_m: float = 48.0  # measured south-zone tops 56-67, eased under the roof
     atrium_roof_m: float = 53.0
 
@@ -418,8 +447,9 @@ def _wall_ring(p: Hkcec, fraction: float) -> tuple[Point, ...]:
 # tile collision that used to stand on its footprint. Same importer-suffix
 # caution as `make_vehicle.py`: nothing else may end in _wheel/_convcol/etc.
 def build_hkcec(p: Hkcec | None = None) -> MeshData:
-    """Grounded north hall, street-bridging deck on piers, banded glass under
-    the wing, and the atrium run down to the landward end."""
+    """Grounded north hall, street-bridging deck over solid infill and portal
+    piers, banded glass under the wing, and the atrium run to the landward
+    end."""
     p = p or Hkcec()
     north = p.stations[0].z_m
     grounded = max(station.half_w_m for station in p.stations if station.z_m <= p.deck_north_z_m)
@@ -449,6 +479,17 @@ def build_hkcec(p: Hkcec | None = None) -> MeshData:
         top=CONCRETE.colour,
         name="hkcec_deck",
     )
+    infill = [
+        box(
+            (x0, -PLINTH_DEPTH_M, z0),
+            (x1, p.deck_bottom_m, z1),
+            CONCRETE.colour,
+            name=f"hkcec_infill_{index}",
+        )
+        for index, (x0, z0, x1, z1) in enumerate(p.infill)
+    ]
+    # Piers the infill swallowed would render as buried boxes; only the ones
+    # still standing in a street portal survive.
     piers = [
         box(
             (x - p.pier_half_m, -PLINTH_DEPTH_M, z - p.pier_half_m),
@@ -457,6 +498,7 @@ def build_hkcec(p: Hkcec | None = None) -> MeshData:
             name=f"hkcec_pier_{index}",
         )
         for index, (x, z) in enumerate(p.piers)
+        if not any(x0 <= x <= x1 and z0 <= z <= z1 for x0, z0, x1, z1 in p.infill)
     ]
     # The glass hall follows the roof plan inboard of the eaves — so no wall
     # pokes out past the overhang, and the curtain rises to meet the soffit
@@ -489,7 +531,7 @@ def build_hkcec(p: Hkcec | None = None) -> MeshData:
         name="hkcec_atrium",
     )
     return replace(
-        merge([base, deck, *piers, walls, wing, atrium], name=f"hkcec{COLLISION_SUFFIX}"),
+        merge([base, deck, *infill, *piers, walls, wing, atrium], name=f"hkcec{COLLISION_SUFFIX}"),
         material=MATERIAL,
     )
 

@@ -3058,9 +3058,21 @@ model check in `verify_landmarks.gd` allows 15 m of overhang for the plinth and 
 massing's AABB swinging past the source's axis-aligned one (~11 m on HKCEC's 349 m at 6.4°).
 
 **Measured.** `replaced = 2` meshes (= 2 stems; no sheet-edge duplicates), 66 tiles unchanged in
-count. Heroes 1,254 + 300 triangles against 8k each — the wing is an arced shell over stations sliced from the source mesh, and the deck bridges the streets on piers authored against the road graph, because the source building is elevated over Expo Drive and Convention Avenue and a solid base would dead-end both. PCK **36.57 → 33.85 MB** — the exclusion gave
-back ~2.7 MB of tile geometry and the heroes cost 17 KB. Draw calls: 53 measured pre-`P3-6`
+count. Heroes 1,170 + 300 triangles against 8k each — the wing is an arced shell over stations sliced from the source mesh, and the deck bridges the streets on piers authored against the road graph, because the source building is elevated over Expo Drive and Convention Avenue and a solid base would dead-end both. PCK **36.57 → 33.88 MB** — the exclusion gave
+back ~2.7 MB of tile geometry and the heroes cost ~90 KB. Draw calls: 53 measured pre-`P3-6`
 resident set + 2 heroes, still far under 150.
+
+⚠️ **The under-deck is solid, not a pier field — the kerb said so** (user review, 2026-08-12).
+The first shipped deck stood on bare piers, and from street level the hall read as a slab floating
+on stilts over open sky. The fix inverts the default: `infill` fills the deck plan to the soffit
+everywhere a *surface* carriageway does not need daylight — derived from the shipped road graph
+exactly as the piers were (4 m occupancy grid, solid at `width/2 + 4.8 m` from every densified
+sample, greedily merged, nothing thinner than 8 m, rim 6 m inboard so the slab still reads as a
+deck), leaving the streets real portals. The bypass tunnel's samples sit at local y ≈ −7 and carve
+nothing — a buried road needs no daylight — and the Lung Wo interchange (local z 93..130) stays
+fully bridged, which is what the real link does. The wing stations are untouched: the curve is the
+identity and the user called its preservation out explicitly. Piers the infill swallowed are
+dropped at build time; the ones standing in portals stay.
 
 **See.** `ARCHITECTURE.md` "landmarks.json" · `ART_DESIGN.md` "Hero buildings" · `Q33` · `Q38` ·
 `Q42` · `Q47` · `P3-7a` `W4` · `P3-11`
