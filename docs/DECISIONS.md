@@ -3761,4 +3761,76 @@ meet. Remaining before this closes: `R4` graded against the joined boundaries **
 the pack itself (floors against the packed pitch, per the contract argument above), and the
 shipped boundary graded.
 
+**`R4`'s bar, fixed 2026-08-11, before the grader exists.** `Q41`'s discipline, adapted: there,
+hand labels pre-existed and the pools could be counted before the run; here membership is
+data-determined, so what this record fixes is the pool *definitions*, the bars, and a minimum-n
+gate that keeps the headline pool from passing vacuously — the run fills in the n's. The only
+numbers consulted in advance are census, not metres: the join figures above, plus one count taken
+while writing this bar — **235 of the 310 boundary stems have at least one readable face
+committing `podium_floors`** (259 for `storey_count`). Nothing error-shaped was computed before
+this text was committed.
+
+*The instruments.* The grade compares two instruments that share nothing but the stem key and a
+government survey lineage: the vision reader over individualised-mesh unwraps (the survey side)
+against iB1000 `P`-block levels joined to the shipped meshes by geometry (the data side,
+`podiums.json` above). It is therefore not a `deck_error.py`-style re-measurement — the join has
+its own pinned acceptance test — and the grader reads an ETL intermediate rather than the shipped
+bundle because the boundary never ships and its provenance is ETL-side by contract point (iii).
+The tool sits in `tools/` and is run by hand all the same; `ARCHITECTURE.md`'s "a stage cannot
+mark its own work" is satisfied here by instrument independence, not bundle reading.
+
+*The conversion, made executable.* The conversion under grade is the one written ahead of the
+call: floors × reconciled pitch, never floors assigned as metres. `R2` has no code yet, so the
+grader's definition is normative for the pack: per readable face committing `storey_count` ≥ 1,
+pitch = building height ÷ that count; the per-building pitch is the **median over those faces**,
+accepted iff it lands in the 2.5–4.5 m window, else the building refuses to the 2.8 m city
+fallback. A committed pitch is quantised to the bits-0–6 grid (2.5 + (k−1)/32) so the graded
+conversion is byte-for-byte the future packed one. Two deviations confessed now: per-face heights
+exist only at unwrap time, so the pitch divides the *building* height (`facade_lab.json`) by a
+per-face count — the median-over-faces step keeps `Q42`'s face-disagreement signal, the numerator
+does not; and the 2.8 m fallback is *not* on the grid (k − 1 = 9.6), which is itself an argument
+that the refusal path stays a shader uniform rather than ever packing.
+
+*The verdict.* Per building, readable faces vote `podium_floors` with null counted as an explicit
+**0 — "no podium"** (the prompt makes null a commitment, and the codec's k = 1 encodes exactly
+this); the strict-majority rule is the reader tool's own (`_majority`: a tie, like an empty
+ballot, refuses). Mapping null to 0 first is load-bearing — without it a no-podium majority and a
+refusal are indistinguishable.
+
+**The grader passes when, on its first graded run,** over the **291 `certain` rows** (the 19
+uncertain rows are reported beside the pools, never in them — `certain` survives stitching only
+unanimously, so they are exactly the rows whose polygon the source doubts):
+
+| Pool | Membership | Bar |
+|---|---|---|
+| A — metres | certain ∧ majority ≥ 1 floor | \|floors × pitch − `boundary_m`\| p50 ≤ **2.8 m**, p90 ≤ **7.0 m**; gate n ≥ 100 |
+| B — semantic | certain ∧ majority = 0 | ≤ **1/3** of the certain rows holding any majority |
+| C — coverage | certain rows with any majority | ≥ **60%** |
+
+*The arguments.* Half a pitch (≈1.4 m) is the floor the contract argument already accepts by
+construction; one reader floor is one pitch, so a median asked to beat 2.8 m is asked to be
+within ±1 floor — tighter would ask the instrument to beat its own granularity. p90 is two
+miscounted floors plus the half-pitch floor (2 × 2.8 + 1.4 = 7.0). Pool B: every pooled stem
+carries a `P` block, so the survey must beat the 49.7% region-wide base rate of majority podiums
+by a wide margin — if over a third of *certain* data podiums are invisible to the reader, the
+reader's notion of "podium" cannot supply boundaries where no data exists, which is `R4`'s whole
+job under the call. Pool C: below 60%, A and B are measured on too little of the population to
+mean anything; the census (235/310 any-face) makes 60% of *majority* verdicts reachable, not
+pre-passed. Reported unbarred, because they are diagnostics rather than acceptance: the signed
+median (the expected systematic offset — the reader counts the treatment band, the `P` roof
+includes everything under the tower), the committed-vs-fallback pitch split, the exact-level-meet
+subset, and the uncertain 19.
+
+*Adjudication.* Misses are adjudicated by re-inspecting the cached unwraps; a demonstrably wrong
+reading is corrected and **every correction is listed in the result**, so reader errors cannot
+silently rescue a failing grade without leaving a record.
+
+*What the outcome buys.* Pass → the pack proceeds as routed: survey floors only where no `P`
+block, data metres converting against the packed pitch, precedence data > survey-inferred. Fail →
+the route reopens with numbers, and the options are pre-committed: pack data boundaries only and
+refuse survey inference, or a stated-rule correction (`Q34′`'s shape) recorded as fitted on this
+validation set — never a quietly moved bar. The priors make failure live (98% of survey podiums
+say 1–3 floors ≈ 2.8–10 m converted, against a boundary p50 of 13.6 m); that is the grade
+working, not a reason to soften it.
+
 **See.** `Q46` · `Q41` · `Q42` · `Q43` · `Q34` · `P3-7a`
