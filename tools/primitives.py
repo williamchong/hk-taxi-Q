@@ -167,8 +167,8 @@ def loft(
     rings: Sequence[Sequence[Point]],
     band_colours: Sequence[Colour],
     *,
-    bottom: Colour,
-    top: Colour,
+    bottom: Colour | None,
+    top: Colour | None,
     skip_edges: Sequence[int] = (),
     axis: int = 1,
     name: str,
@@ -216,21 +216,28 @@ def loft(
             if edge in skip_edges:
                 continue
             nxt = (edge + 1) % corners
+            # Rings are allowed to touch: a band that has been squeezed out of
+            # existence (HKCEC's ribbon lines where the roof has descended past
+            # them) arrives with coincident corners. Dropping the duplicates
+            # leaves a triangle where one end collapsed and nothing at all
+            # where both did — instead of a zero-area quad with no normal.
+            quad = [tuple(lower[nxt]), tuple(lower[edge]), tuple(upper[edge]), tuple(upper[nxt])]
+            face = [corner for k, corner in enumerate(quad) if corner != quad[k - 1]]
+            if len(face) < 3:
+                continue
             outward = np.mean([lower[edge], lower[nxt], upper[edge], upper[nxt]], axis=0) - centre
             outward[axis] = 0.0
-            parts.append(
-                polygon_facing(
-                    [lower[nxt], lower[edge], upper[edge], upper[nxt]],
-                    colour,
-                    outward,
-                    name=f"{name}_edge{edge}_{i}",
-                )
-            )
+            parts.append(polygon_facing(face, colour, outward, name=f"{name}_edge{edge}_{i}"))
 
     end = np.zeros(3)
     end[axis] = 1.0
-    parts.append(polygon_facing(rings[0], bottom, -end, name=f"{name}_bottom"))
-    parts.append(polygon_facing(rings[-1], top, end, name=f"{name}_top"))
+    # `None` skips a cap: for a profile whose end is buried inside other
+    # geometry or coincident with it, a cap is dead triangles plus a
+    # z-fighting hazard.
+    if bottom is not None:
+        parts.append(polygon_facing(rings[0], bottom, -end, name=f"{name}_bottom"))
+    if top is not None:
+        parts.append(polygon_facing(rings[-1], top, end, name=f"{name}_top"))
     return merge(parts, name=name)
 
 

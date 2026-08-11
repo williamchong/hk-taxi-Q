@@ -3058,9 +3058,12 @@ model check in `verify_landmarks.gd` allows 15 m of overhang for the plinth and 
 massing's AABB swinging past the source's axis-aligned one (~11 m on HKCEC's 349 m at 6.4°).
 
 **Measured.** `replaced = 2` meshes (= 2 stems; no sheet-edge duplicates), 66 tiles unchanged in
-count. Heroes 3,828 + 300 triangles against 8k each — the wing is an arced shell over stations sliced from the source mesh, and the deck bridges the streets on piers authored against the road graph, because the source building is elevated over Expo Drive and Convention Avenue and a solid base would dead-end both. PCK **36.57 → 33.97 MB** — the exclusion gave
-back ~2.7 MB of tile geometry and the heroes cost ~250 KB. Draw calls: 53 measured pre-`P3-6`
-resident set + 2 heroes, still far under 150.
+count. Heroes 3,484 + 300 triangles against 8k each — the wing is an arced shell over stations sliced from the source mesh, and the deck bridges the streets on piers authored against the road graph, because the source building is elevated over Expo Drive and Convention Avenue and a solid base would dead-end both. PCK **36.57 → 33.95 MB** — the exclusion gave
+back ~2.7 MB of tile geometry and the heroes cost ~230 KB. Draw calls: 53 measured pre-`P3-6`
+resident set + 2 heroes, still far under 150. A review pass culled ~1,600 dead triangles the
+banding had been shipping (overtaken ribbon strips as 2 cm hairlines, buried loft caps): dead
+levels now collapse to coincident rings and `loft` drops degenerate bands and takes `None` caps —
+the slivers were a third of the model and sat in the Jolt collider too.
 
 ⚠️ **The photos are the arbiter, and they demanded three corrections** (user review rounds,
 2026-08-12, against Expo Drive East street views; the user judged the *source mesh* closer to the

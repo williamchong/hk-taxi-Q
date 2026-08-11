@@ -248,26 +248,11 @@ class Hkcec:
     deck_north_z_m: float = -75.0  # north of this the hall is grounded
     deck_bottom_m: float = 12.0  # ~10 m of headroom over the carriageways
     deck_top_m: float = 18.0
-    # Deck plan `(z, mid, half)` — the island stations to z 44, then the
-    # measured south-zone slices tapering to the link's landward end, from
-    # the same 2026-08-12 re-slice as the stations.
-    deck_profile: tuple[tuple[float, float, float], ...] = (
-        (-76.0, 2.9, 78.2),
-        (-68.0, 2.0, 81.3),
-        (-60.0, 1.7, 83.6),
-        (-52.0, 2.2, 85.2),
-        (-44.0, 3.4, 86.9),
-        (-36.0, 5.4, 88.7),
-        (-28.0, 7.7, 90.8),
-        (-20.0, 9.7, 92.6),
-        (-12.0, 11.3, 93.8),
-        (-4.0, 12.4, 94.5),
-        (4.0, 12.8, 95.3),
-        (12.0, 12.2, 96.3),
-        (20.0, 10.5, 96.2),
-        (28.0, 8.2, 95.4),
-        (36.0, 7.2, 94.7),
-        (44.0, 7.6, 93.9),
+    # South-zone deck plan `(z, mid, half)` — the measured slices from z 54
+    # to the link's landward end, from the same 2026-08-12 re-slice as the
+    # stations. The island run (z -76..44) is *derived* from the stations in
+    # `build_hkcec`, so a future re-slice cannot leave the deck behind.
+    deck_south: tuple[tuple[float, float, float], ...] = (
         (54.0, 9.5, 81.7),
         (66.0, 11.7, 78.8),
         (78.0, 13.8, 75.3),
@@ -434,18 +419,16 @@ def _wing(p: Hkcec, colour: Colour) -> MeshData:
     parts: list[MeshData] = []
     sections = [_shell_section(station, p.arc_points) for station in p.stations]
 
-    def edge(station: WingStation, side: float) -> tuple[float, float]:
-        """A station's eave tip on one side: `(x, eave y)`."""
-        if side < 0:
-            return station.mid_m - station.half_m, station.eave_w_m
-        return station.mid_m + station.half_m, station.eave_e_m
-
     for i in range(len(p.stations) - 1):
         a, b = p.stations[i], p.stations[i + 1]
         near, far = sections[i], sections[i + 1]
         for j in range(p.arc_points - 1):
             (x0, y0), (x1, y1) = near[j], near[j + 1]
             (x2, y2), (x3, y3) = far[j], far[j + 1]
+            # The y term is ~the roof's rise: big enough that a plateau facet
+            # near the centreline reads "up" however its x-offset rounds,
+            # small enough that a steep flank facet's sign still comes from
+            # the x term.
             outward = ((x0 + x1) / 2.0 - a.mid_m, 40.0, 0.0)
             parts.append(
                 polygon_facing(
@@ -455,8 +438,11 @@ def _wing(p: Hkcec, colour: Colour) -> MeshData:
                     name=f"wing_{i}_{j}",
                 )
             )
-        for side in (-1.0, 1.0):
-            (ax, ay), (bx, by) = edge(a, side), edge(b, side)
+        # The fascia hangs from the sections' own end samples (t = ±1 is the
+        # eave tip), so shell and fascia share bit-identical corners and no
+        # hairline can open between them.
+        for side, k in ((-1.0, 0), (1.0, -1)):
+            (ax, ay), (bx, by) = near[k], far[k]
             parts.append(
                 polygon_facing(
                     [
@@ -470,8 +456,8 @@ def _wing(p: Hkcec, colour: Colour) -> MeshData:
                     name=f"wing_fascia_{i}_{side}",
                 )
             )
-        (awx, awy), (aex, aey) = edge(a, -1.0), edge(a, 1.0)
-        (bwx, bwy), (bex, bey) = edge(b, -1.0), edge(b, 1.0)
+        (awx, awy), (aex, aey) = near[0], near[-1]
+        (bwx, bwy), (bex, bey) = far[0], far[-1]
         parts.append(
             polygon_facing(
                 [
@@ -488,10 +474,10 @@ def _wing(p: Hkcec, colour: Colour) -> MeshData:
 
     for index, forward in ((0, -1.0), (len(p.stations) - 1, 1.0)):
         station = p.stations[index]
-        cap = [(x, y, station.z_m) for x, y in sections[index]]
-        (ex, ey), (wx, wy) = edge(station, 1.0), edge(station, -1.0)
-        cap.append((ex, ey - p.fascia_m, station.z_m))
-        cap.append((wx, wy - p.fascia_m, station.z_m))
+        section = sections[index]
+        cap = [(x, y, station.z_m) for x, y in section]
+        cap.append((section[-1][0], section[-1][1] - p.fascia_m, station.z_m))
+        cap.append((section[0][0], section[0][1] - p.fascia_m, station.z_m))
         parts.append(polygon_facing(cap, colour, (0.0, 0.0, forward), name=f"wing_cap_{forward}"))
     return merge(parts, name="wing")
 
@@ -516,12 +502,6 @@ def _hull_ring(stations: Sequence[WingStation], y: float, flare: float = 0.0) ->
     return tuple(left + right)
 
 
-# Ring `level` 0 is the floor, the last is the soffit, and the ones between
-# are the ribbon lines — kept this far apart where a strip has been overtaken
-# by the roof, so a dead band is a hairline rather than a quad with no normal.
-_LEVEL_GAP_M = 0.02
-
-
 def _ribbon_lines(p: Hkcec) -> list[float]:
     """The strips' absolute elevations, flattened: lo, hi, lo, hi, ..."""
     lines: list[float] = []
@@ -531,19 +511,21 @@ def _ribbon_lines(p: Hkcec) -> list[float]:
     return lines
 
 
-def _clamped_level(level: int, levels: int, target: float, floor: float, soffit: float) -> float:
-    """One ring's height at one station: the target elevation, held inside
-    [floor, soffit] with the stacking order intact."""
+def _level_height(lines: Sequence[float], level: int, floor: float, soffit: float) -> float:
+    """One banding ring's height: level 0 is the floor, the last is the
+    soffit, and the ones between are the ribbon lines clamped into the wall.
+
+    A line the roof has descended past clamps onto the soffit exactly —
+    coincident rings make a dead band degenerate, and `loft` drops it.
+    """
     if level == 0:
         return floor
-    if level == levels - 1:
+    if level > len(lines):
         return soffit
-    low = floor + level * _LEVEL_GAP_M
-    high = soffit - (levels - 1 - level) * _LEVEL_GAP_M
-    return min(max(target, low), high)
+    return min(max(lines[level - 1], floor), soffit)
 
 
-def _wall_ring(p: Hkcec, level: int) -> tuple[Point, ...]:
+def _wall_ring(p: Hkcec, lines: Sequence[float], level: int) -> tuple[Point, ...]:
     """The hall's hull as a ring, at one banding level.
 
     Walking the stations north-to-south down the west edges and back up the
@@ -554,9 +536,6 @@ def _wall_ring(p: Hkcec, level: int) -> tuple[Point, ...]:
     descending roofline cuts the strips off one by one instead of squeezing
     them together.
     """
-    lines = _ribbon_lines(p)
-    levels = len(lines) + 2
-    target = lines[level - 1] if 0 < level <= len(lines) else 0.0
     left: list[Point] = []
     right: list[Point] = []
     for station in p.stations:
@@ -566,12 +545,8 @@ def _wall_ring(p: Hkcec, level: int) -> tuple[Point, ...]:
         # pinches to half a metre rather than to zero.
         soffit_w = max(station.eave_w_m - p.fascia_m, floor + 0.5)
         soffit_e = max(station.eave_e_m - p.fascia_m, floor + 0.5)
-        left.append(
-            (station.hull_w_m, _clamped_level(level, levels, target, floor, soffit_w), station.z_m)
-        )
-        right.append(
-            (station.hull_e_m, _clamped_level(level, levels, target, floor, soffit_e), station.z_m)
-        )
+        left.append((station.hull_w_m, _level_height(lines, level, floor, soffit_w), station.z_m))
+        right.append((station.hull_e_m, _level_height(lines, level, floor, soffit_e), station.z_m))
     return tuple(left + list(reversed(right)))
 
 
@@ -599,20 +574,28 @@ def build_hkcec(p: Hkcec | None = None) -> MeshData:
         top=CONCRETE.colour,
         name="hkcec_base",
     )
+    # The deck's island run is the stations' own plan, starting one station
+    # north of `deck_north_z_m` so the slab tucks under the grounded hall's
+    # south face.
+    deck_profile = [
+        (s.z_m, s.mid_m, s.half_m) for s in p.stations if s.z_m >= p.deck_north_z_m - 1.0
+    ] + list(p.deck_south)
     deck = loft(
         [
-            _profile_ring(p.deck_profile, p.deck_bottom_m),
-            _profile_ring(p.deck_profile, p.deck_top_m),
+            _profile_ring(deck_profile, p.deck_bottom_m),
+            _profile_ring(deck_profile, p.deck_top_m),
         ],
         [CONCRETE.colour],
         bottom=CONCRETE.colour,
         top=CONCRETE.colour,
         name="hkcec_deck",
     )
+    # Tops reach 5 cm past the soffit plane so the hidden face sits inside the
+    # slab instead of exactly coplanar with it — coplanar faces z-fight.
     infill = [
         box(
             (x0, -PLINTH_DEPTH_M, z0),
-            (x1, p.deck_bottom_m, z1),
+            (x1, p.deck_bottom_m + 0.05, z1),
             CONCRETE.colour,
             name=f"hkcec_infill_{index}",
         )
@@ -623,7 +606,7 @@ def build_hkcec(p: Hkcec | None = None) -> MeshData:
     piers = [
         box(
             (x - p.pier_half_m, -PLINTH_DEPTH_M, z - p.pier_half_m),
-            (x + p.pier_half_m, p.deck_bottom_m, z + p.pier_half_m),
+            (x + p.pier_half_m, p.deck_bottom_m + 0.05, z + p.pier_half_m),
             CONCRETE.colour,
             name=f"hkcec_pier_{index}",
         )
@@ -633,44 +616,37 @@ def build_hkcec(p: Hkcec | None = None) -> MeshData:
     # The hall's hull follows the measured plan and rises to meet the soffit
     # everywhere. The intermediate rings are the ribbon lines — storey lines
     # at constant elevations, so the strips stay level around the whole curve
-    # and terminate into the roofline where it descends.
+    # and terminate into the roofline where it descends. No caps: the floor
+    # ring is buried in the podium and deck, and the soffit ring lies exactly
+    # on the wing's underside.
     lines = _ribbon_lines(p)
     levels = len(lines) + 2
     band_colours: list[Colour] = []
     for index in range(levels - 1):
         band_colours.append(GLASS.colour if index % 2 == 1 else PANEL.colour)
     walls = loft(
-        [_wall_ring(p, level) for level in range(levels)],
+        [_wall_ring(p, lines, level) for level in range(levels)],
         band_colours,
-        bottom=PANEL.colour,
-        top=PANEL.colour,
+        bottom=None,
+        top=None,
         name="hkcec_walls",
     )
     wing = _wing(p, ROOF_GREY.colour)
     # The link continues the striped hull south — the street views show the
     # same pale panels and ribbons on the south zone, not a glass block —
     # with the grey roof cresting over it. Same absolute ribbon lines, so the
-    # strips run level across the island-to-link joint.
-    south = [row for row in p.deck_profile if row[0] >= p.stations[-1].z_m]
+    # strips run level across the island-to-link joint. No bottom cap: that
+    # ring lies on the deck top.
+    south = [row for row in deck_profile if row[0] >= p.stations[-1].z_m]
     atrium_rings = [
-        _profile_ring(
-            south,
-            _clamped_level(
-                level,
-                levels,
-                lines[level - 1] if 0 < level <= len(lines) else 0.0,
-                p.deck_top_m,
-                p.atrium_wall_m,
-            ),
-            4.0,
-        )
+        _profile_ring(south, _level_height(lines, level, p.deck_top_m, p.atrium_wall_m), 4.0)
         for level in range(levels)
     ]
     atrium_rings.append(_profile_ring(south, p.atrium_roof_m, 12.0))
     atrium = loft(
         atrium_rings,
         [*band_colours, ROOF_GREY.colour],
-        bottom=GLASS.colour,
+        bottom=None,
         top=ROOF_GREY.colour,
         name="hkcec_atrium",
     )
