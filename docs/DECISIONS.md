@@ -3297,7 +3297,8 @@ plumbing shipped `TEXCOORD_1` with `y` written `0.0` and its rider layout fixed 
 floors with "no podium" distinct from refusal, balconies, emphasis). Filling a field a
 refusal-aware consumer already reads as "0 = refused" changes bytes, not meaning — so each rider
 now owes exactly its own validation, and no further `schema_version` bump. Consumption is planned
-as `P3-7a`, in reliability order · **Owner.** `P3-7a`
+as `P3-7a`, in reliability order. The podium slice was graded 2026-08-11 against the joined
+boundaries and **failed its pre-fixed bar** — the record is under `Q47` · **Owner.** `P3-7a`
 
 **The observation.** `Q41`'s reader schema asks for more than grammar, glazing and tint: it returns
 `storey_count`, `band_period_floors`, `podium_floors`, `podium_glazed`, `balconies`, `emphasis` and
@@ -3610,8 +3611,9 @@ refused building draws fewer lit windows, on this same eligibility signal.
 
 ## `Q47` — A committed verdict is right about the tower, wrong about the ground band
 
-**Status.** 🟡 **Route decided 2026-08-10** — the sequence in "The call" below; closes when the
-shipped boundary is graded · **Owner.** `P3-7a`
+**Status.** 🟡 **Route decided 2026-08-10** — the sequence in "The call" below; `R4`'s conversion
+**failed its pre-fixed bar 2026-08-11**, so the survey-complement half is reopened and the pack is
+blocked on a re-call; closes when the shipped boundary is graded · **Owner.** `P3-7a`
 
 **The finding.** With `survey_debug` tinting the city by survey state, the user attributed the
 wrong windows that survived `Q46`'s quiet tier **overwhelmingly to committed (green) stock**:
@@ -3832,5 +3834,43 @@ refuse survey inference, or a stated-rule correction (`Q34′`'s shape) recorded
 validation set — never a quietly moved bar. The priors make failure live (98% of survey podiums
 say 1–3 floors ≈ 2.8–10 m converted, against a boundary p50 of 13.6 m); that is the grade
 working, not a reason to soften it.
+
+**Graded 2026-08-11 — the bar failed, and the failure is `Q43`'s gap, measured.**
+`tools/podium_error.py`, first graded run, defaults = the bar above. Every bar was fixed at
+`3949e41` before the grader existed; one diagnostic clause (the exact-meet subset, which a
+`podiums.json` row cannot identify) was clarified to aggregate-only at `6aa28dc`, also before the
+run.
+
+| Pool | Result | Bar |
+|---|---|---|
+| A — metres | n=121 (gate 100 met) · \|err\| p50 **10.76 m** · p90 **12.87 m** | ≤ 2.8 / ≤ 7.0 — **FAIL** |
+| B — semantic | 82 of 203 decided, **40.4%** | ≤ 33.3% — **FAIL** |
+| C — coverage | 203 of 291 certain rows decided, **69.8%** | ≥ 60% — pass |
+
+The signed median is **−10.76 m**: the conversion undershoots the data boundary by three to four
+storeys, systematically — only 2.5% of Pool A lands within half a pitch, so this is not noise
+around a workable mean. The pitch is not what failed: 124/310 buildings commit a reconciled
+pitch, p50 **3.28 m**, within 1% of `Q42`'s 3.32 — `R2`'s prescription is validated in passing.
+The uncertain 19 tell the same story from outside the pools (8 verdicts, \|err\| p50 10.46).
+
+*Adjudication: zero corrections.* The five worst misses were re-inspected on both sides; every
+reading is a defensible answer to the reader's own question, so no relabelling can rescue the
+grade. The worst miss is the flagship itself: the 75.6 mPD exact meet — its `P` block is the
+~16-storey podium mall (`boundary_m` 71.4 over base 4.2), and the reader, correctly by its own
+prompt, saw "2 lowest floors of visibly distinct treatment" on three faces. Three of the other
+four are low buildings that *are* mostly podium block — `boundary_m` within ~3 m of the roof —
+wearing one or two floors of shopfront treatment. `podium_floors` measures the treatment band;
+the `P` roof measures the massing under the tower. Two predicates, `Q43`'s pair, now 10.8 m apart
+at the median.
+
+*What the fail buys, per the pre-commitment.* The complement half of the route reopens on the
+recorded options: **(a)** pack data boundaries only and refuse survey-inferred podium metres, or
+**(b)** a stated-rule correction fitted on this validation set, recorded as such (`Q34′`'s
+shape). The evidence leans (a): Pool B failing beside Pool A says 40% of certain data podiums are
+*invisible* as treatment, so no scalar correction of the visible ones closes that gap — but the
+re-call is a route decision, not this grading's to make. What survives untouched: iB1000 primary
+(the 310 data boundaries this grade conditioned on), the reconciled-pitch prescription, and
+`podium_glazed → has_shop`, which never depended on the metres conversion. The pack stays
+blocked until the route is re-called.
 
 **See.** `Q46` · `Q41` · `Q42` · `Q43` · `Q34` · `P3-7a`
