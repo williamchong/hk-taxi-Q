@@ -3818,8 +3818,8 @@ job under the call. Pool C: below 60%, A and B are measured on too little of the
 mean anything; the census (235/310 any-face) makes 60% of *majority* verdicts reachable, not
 pre-passed. Reported unbarred, because they are diagnostics rather than acceptance: the signed
 median (the expected systematic offset — the reader counts the treatment band, the `P` roof
-includes everything under the tower), the committed-vs-fallback pitch split, the exact-level-meet
-subset, and the uncertain 19.
+includes everything under the tower), the committed-vs-fallback pitch split, the join's exact-meet
+count (aggregate only — a `podiums.json` row does not identify its meet), and the uncertain 19.
 
 *Adjudication.* Misses are adjudicated by re-inspecting the cached unwraps; a demonstrably wrong
 reading is corrected and **every correction is listed in the result**, so reader errors cannot
