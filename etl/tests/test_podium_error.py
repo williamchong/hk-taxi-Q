@@ -7,6 +7,7 @@ print a plausible report — these pin them. The graded run itself is a hand-run
 measurement against the real region, not a test.
 """
 
+import pytest
 from podium_error import Graded, grade, podium_verdict, pools, reconciled_pitch
 
 FALLBACK = 2.8
@@ -58,9 +59,17 @@ def test_fallback_stays_exact_and_off_grid():
 
 def test_null_votes_an_explicit_no_podium_and_a_tie_refuses():
     assert podium_verdict({"N": face(podium_floors=2), "E": face()}) is None
+    assert podium_verdict({"N": face(podium_floors=1), "E": face(podium_floors=2)}) is None
     assert podium_verdict({"N": face(), "E": face(), "S": face(podium_floors=2)}) == 0
     won = {"N": face(podium_floors=2), "E": face(podium_floors=2), "S": face()}
     assert podium_verdict(won) == 2
+
+
+def test_a_negative_vote_raises_instead_of_landing_between_the_pools():
+    # A negative winning verdict would join neither pool while counting
+    # against coverage — a defect absorbed as a quietly missing row.
+    with pytest.raises(ValueError):
+        podium_verdict({"N": face(podium_floors=-1)})
 
 
 def test_unreadable_faces_do_not_vote():
@@ -76,6 +85,20 @@ def test_error_is_survey_minus_data_on_the_graded_pitch():
     (row,) = graded
     assert row.committed and row.pitch_m == 3.0  # 12/4, on the grid
     assert row.error_m == 2 * 3.0 - 5.0  # positive: the survey overshoots the data
+
+
+def test_fallback_pitch_flows_through_grade_into_pool_a():
+    # A committing podium face on a building with no survey height grades on
+    # the fallback pitch — the error is real and the row is a Pool A member,
+    # which is what the graded run's fallback-heavy worst misses relied on.
+    rows = {"B1": {"certain": True, "boundary_m": 10.0}}
+    survey = {"B1": {"faces": {"N": face(podium_floors=2)}}}
+    graded, _ = grade(rows, survey, {}, FALLBACK)
+    (row,) = graded
+    assert (row.pitch_m, row.committed) == (FALLBACK, False)
+    assert row.error_m == 2 * FALLBACK - 10.0
+    _, pool_a, _ = pools(graded)
+    assert [member.stem for member in pool_a] == ["B1"]
 
 
 def test_no_podium_and_refusal_carry_no_metres_error():
@@ -119,4 +142,3 @@ def test_pools_are_disjoint_over_certain_rows_only():
     assert [row.stem for row in certain] == ["A", "B", "C"]
     assert [row.stem for row in pool_a] == ["A"]
     assert [row.stem for row in pool_b] == ["B"]
-    assert not {row.stem for row in pool_a} & {row.stem for row in pool_b}

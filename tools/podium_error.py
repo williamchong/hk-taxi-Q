@@ -108,8 +108,6 @@ def survey_rows(city_id: str, root: Path | None = None) -> dict[str, dict]:
     directory = source_dir(city_id, SURVEY_SOURCE_ID, root=root)
     merged: dict[str, dict] = {}
     for path in sorted(directory.glob("facade_grammar.*.json")):
-        if path.name == "facade_grammar.json":
-            continue
         rows = json.loads(path.read_text(encoding="utf-8"))
         claim_stems(merged, rows, path.name)
         merged.update(rows)
@@ -148,6 +146,11 @@ def podium_verdict(faces: dict[str, dict]) -> int | None:
     tie alike, and Pool B would be indistinguishable from refusal.
     """
     votes: list[int] = [face["podium_floors"] or 0 for face in faces.values() if face["readable"]]
+    if any(vote < 0 for vote in votes):
+        # A negative winning verdict would land in neither pool while still
+        # counting against coverage — a row that quietly disappears from the
+        # decided count. A survey-writer defect raises, per `claim_stems`.
+        raise ValueError(f"negative podium_floors among votes {votes}")
     verdict = _majority(votes)
     return None if verdict is None else int(verdict)
 
@@ -322,7 +325,9 @@ def main(argv: list[str] | None = None) -> int:
             100.0 * float((absolute <= half_pitch).mean()),
         )
     else:
-        p50 = p90 = float("inf")
+        # No sentinel: an empty pool is the gate's failure to report, and
+        # "p50 is inf m" would be the sentinel talking, not the data.
+        p50 = p90 = None
 
     decided = len(pool_a) + len(pool_b)
     null_rate = len(pool_b) / decided if decided else 0.0
@@ -354,7 +359,7 @@ def main(argv: list[str] | None = None) -> int:
         f"{float(np.percentile(np.abs(doubted), 50)):.2f}" if doubted else "-",
     )
 
-    worst = sorted(pool_a, key=lambda row: -abs(row.error_m or 0.0))[:5]
+    worst = sorted(pool_a, key=lambda row: -abs(row.error_m))[:5]
     if worst:
         log.info("")
         log.info("  worst misses, for adjudication:")
@@ -373,9 +378,9 @@ def main(argv: list[str] | None = None) -> int:
     problems = []
     if len(pool_a) < args.min_pool:
         problems.append(f"Pool A holds {len(pool_a)} stems against the {args.min_pool} gate")
-    if p50 > args.accept_p50_m:
+    if p50 is not None and p50 > args.accept_p50_m:
         problems.append(f"Pool A |error| p50 is {p50:.2f} m against {args.accept_p50_m:.2f}")
-    if p90 > args.accept_p90_m:
+    if p90 is not None and p90 > args.accept_p90_m:
         problems.append(f"Pool A |error| p90 is {p90:.2f} m against {args.accept_p90_m:.2f}")
     if null_rate > args.accept_null_rate:
         problems.append(
