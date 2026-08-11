@@ -44,20 +44,18 @@ from make_vehicle import (
     RED,
     SILVER,
     Chassis,
-    Colour,
     Proportions,
     _badge,
     _flush_fixture,
     _plates,
     _rear_door_z_m,
     _wheel,
-    box,
     build_taxi,
     opening_radius_m,
-    polygon,
     taxi_body,
     write_taxi,
 )
+from primitives import Colour, box, polygon
 
 from pipeline.gltf import MeshData, triangle_cross
 from pipeline.mesh import select_triangles

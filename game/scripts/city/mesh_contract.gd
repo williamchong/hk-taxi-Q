@@ -76,6 +76,57 @@ static func _collect(node: Node, parent: Transform3D, into: Array[AABB]) -> void
 		_collect(child, here, into)
 
 
+## Triangles below `node` whose centroid falls inside `box`, in `node`'s space.
+##
+## The excluded-footprint probe (`P3-6`, `verify_landmarks.gd`). Here because
+## it carries both of this file's traps at once: transforms are accumulated by
+## hand for the reason `bounds` gives, and the triangle walk pulls vertex
+## buffers back off the RenderingServer — the expensive path `triangles`
+## documents — so each mesh's cheap `get_aabb` gates the pull, which also
+## skips whole meshes (the terrain never reaches a probe floored above it).
+static func triangles_inside(node: Node, box: AABB) -> int:
+	return _count_inside(node, Transform3D.IDENTITY, box)
+
+
+static func _count_inside(node: Node, parent: Transform3D, box: AABB) -> int:
+	var spatial := node as Node3D
+	var here: Transform3D = parent * spatial.transform if spatial != null else parent
+
+	var count: int = 0
+	var instance := node as MeshInstance3D
+	if (
+		instance != null
+		and instance.mesh != null
+		and instance.mesh.get_surface_count() > 0
+		and (here * instance.mesh.get_aabb()).intersects(box)
+	):
+		count += _mesh_triangles_inside(instance.mesh, here, box)
+	for child: Node in node.get_children():
+		count += _count_inside(child, here, box)
+	return count
+
+
+static func _mesh_triangles_inside(mesh: Mesh, here: Transform3D, box: AABB) -> int:
+	var count: int = 0
+	for surface: int in mesh.get_surface_count():
+		var arrays: Array = mesh.surface_get_arrays(surface)
+		var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		# Normalised to one loop: a non-indexed surface is the indexed case
+		# with the identity ordering.
+		var order := PackedInt32Array()
+		if arrays[Mesh.ARRAY_INDEX] != null:
+			order = arrays[Mesh.ARRAY_INDEX]
+		if order.is_empty():
+			order = PackedInt32Array(range(vertices.size()))
+		for i: int in range(0, order.size(), 3):
+			var centroid: Vector3 = (
+				(vertices[order[i]] + vertices[order[i + 1]] + vertices[order[i + 2]]) / 3.0
+			)
+			if box.has_point(here * centroid):
+				count += 1
+	return count
+
+
 ## True where the `-col` name suffix imported as a static body.
 ##
 ## The suffix is the only thing that carries collision from the ETL into the

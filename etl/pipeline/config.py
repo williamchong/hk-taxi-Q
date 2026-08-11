@@ -1242,11 +1242,12 @@ def _check_landmarks_lie_within_a_region(city: CityConfig, path: Path) -> None:
     `_check_source_exists` gives: the failure would otherwise surface as a
     validation finding regions away from the typo that caused it.
     """
+    rectangles = [city.projected_bounds(region_id) for region_id in city.regions]
     for index, landmark in enumerate(city.landmarks):
         contained = any(
             bounds.min_easting <= landmark.easting <= bounds.max_easting
             and bounds.min_northing <= landmark.northing <= bounds.max_northing
-            for bounds in (city.projected_bounds(region_id) for region_id in city.regions)
+            for bounds in rectangles
         )
         if not contained:
             raise ValueError(
@@ -1285,17 +1286,28 @@ def _check_exposure(city: CityConfig, path: Path) -> None:
     so or be corrected.
     """
     for name, material in city.materials.items():
-        expected = material.reflectance * city.exposure_anchor
-        actual = reflectance(material.colour)
-        if abs(actual - expected) > EXPOSURE_TOLERANCE_PCT:
-            red, green, blue = material.colour
-            raise ValueError(
-                f"{path}:materials.{name} is #{red:02x}{green:02x}{blue:02x}, whose "
-                f"luminance is {actual:.2f}% — but it declares reflectance "
-                f"{material.reflectance}% at exposure_anchor {city.exposure_anchor}, "
-                f"which is {expected:.2f}%. "
-                "Change the colour, or change the material it claims to be."
-            )
+        check_material_exposure(material, city.exposure_anchor, f"{path}:materials.{name}")
+
+
+def check_material_exposure(material: Material, anchor: float, where: str) -> None:
+    """One colour against the palette rule — the shared body of
+    `_check_exposure` and `tools/make_landmark.py`'s `check_palette`.
+
+    Shared so the materials table and the landmark palette cannot drift onto
+    different definitions of `Q33`: the generator's colours never pass through
+    this loader, but they make the same claim and answer to the same tolerance.
+    """
+    expected = material.reflectance * anchor
+    actual = reflectance(material.colour)
+    if abs(actual - expected) > EXPOSURE_TOLERANCE_PCT:
+        red, green, blue = material.colour
+        raise ValueError(
+            f"{where} is #{red:02x}{green:02x}{blue:02x}, whose "
+            f"luminance is {actual:.2f}% — but it declares reflectance "
+            f"{material.reflectance}% at exposure_anchor {anchor}, "
+            f"which is {expected:.2f}%. "
+            "Change the colour, or change the material it claims to be."
+        )
 
 
 def _check_every_material_is_used(table: _MaterialTable, path: Path) -> None:
@@ -2017,21 +2029,21 @@ def _podium_blocks(body: dict[str, Any], where: str) -> PodiumBlocks:
 # Where a landmark's committed model must live. Game layout rather than city
 # data — `docs/ARCHITECTURE.md` fixes it and CLAUDE.md commits the directory —
 # so pinning it here is contract enforcement, not a hard-rule-3 violation.
-_LANDMARK_ASSET_ROOT = "res://assets/authored/landmarks/"
+# Public because `export.py`'s validator checks shipped documents against the
+# same root: two spellings of the rule is how they come to disagree.
+LANDMARK_ASSET_ROOT = "res://assets/authored/landmarks/"
 
 
 def _landmarks(entries: list[Any], where: str) -> tuple[Landmark, ...]:
     landmarks = tuple(_landmark(entry, f"{where}[{index}]") for index, entry in enumerate(entries))
     seen: dict[str, str] = {}
+    stems: dict[str, str] = {}
     for index, landmark in enumerate(landmarks):
         place = f"{where}[{index}]"
         if landmark.id in seen:
             raise ValueError(f"{place} reuses id {landmark.id!r}, declared at {seen[landmark.id]}")
         seen[landmark.id] = place
-    stems: dict[str, str] = {}
-    for index, landmark in enumerate(landmarks):
         for stem in landmark.replaces_source_ids:
-            place = f"{where}[{index}]"
             if stem in stems:
                 # Two heroes claiming one building would have the second's
                 # equality check fail on a stem the first already consumed —
@@ -2043,9 +2055,9 @@ def _landmarks(entries: list[Any], where: str) -> tuple[Landmark, ...]:
 
 def _landmark(body: dict[str, Any], where: str) -> Landmark:
     asset = str(_require(body, "asset", where))
-    if not asset.startswith(_LANDMARK_ASSET_ROOT) or not asset.endswith(".glb"):
+    if not asset.startswith(LANDMARK_ASSET_ROOT) or not asset.endswith(".glb"):
         raise ValueError(
-            f"{where}:asset is {asset!r}, expected a .glb under {_LANDMARK_ASSET_ROOT} — "
+            f"{where}:asset is {asset!r}, expected a .glb under {LANDMARK_ASSET_ROOT} — "
             "authored landmark models are committed there (docs/ARCHITECTURE.md)"
         )
     names = _require(body, "name", where)

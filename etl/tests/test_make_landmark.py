@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import make_landmark
 import numpy as np
 import pytest
 from make_landmark import (
@@ -34,7 +35,8 @@ from make_landmark import (
     write_landmarks,
 )
 
-from pipeline.config import load_city
+from pipeline.buildings import COLLISION_SUFFIX
+from pipeline.config import Material, load_city
 from pipeline.gltf import MeshData
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -80,7 +82,7 @@ class TestImportContract:
 
     def test_every_hero_is_its_own_collider(self, landmarks) -> None:
         for filename, mesh in landmarks:
-            assert mesh.name.endswith("-col"), (
+            assert mesh.name.endswith(COLLISION_SUFFIX), (
                 f"{filename}: node '{mesh.name}' has no -col suffix, so the taxi "
                 "drives through the one building the tile mesh no longer covers"
             )
@@ -132,3 +134,11 @@ class TestPalette:
     def test_every_surface_names_a_source(self) -> None:
         for surface in PALETTE:
             assert surface.source.strip(), f"{surface.name}: an unsourced albedo"
+
+    def test_every_declared_surface_is_registered(self) -> None:
+        """A surface added and not appended to PALETTE would be silently exempt
+        from `check_palette` — the filtered set that quietly matches nothing."""
+        declared = [value for value in vars(make_landmark).values() if isinstance(value, Material)]
+        assert declared, "no surfaces declared at module level at all"
+        for surface in declared:
+            assert surface in PALETTE, f"{surface.name} is not in PALETTE"

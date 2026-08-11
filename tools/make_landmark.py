@@ -40,11 +40,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "etl"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from pipeline.colour import reflectance  # noqa: E402
-from pipeline.config import EXPOSURE_TOLERANCE_PCT, load_city  # noqa: E402
+from pipeline.buildings import COLLISION_SUFFIX  # noqa: E402
+from pipeline.config import Material, check_material_exposure, load_city  # noqa: E402
 from pipeline.gltf import MeshData, write_glb  # noqa: E402
 from pipeline.mesh import merge  # noqa: E402
-from primitives import Colour, Point, box_at, loft, polygon_facing, ring  # noqa: E402
+from primitives import Colour, Point, box, loft, polygon_facing, ring  # noqa: E402
 
 LOG = logging.getLogger("make_landmark")
 
@@ -55,59 +55,44 @@ DEFAULT_OUT_DIR = ROOT / "game" / "assets" / "authored" / "landmarks"
 # author. Any other name gets the vertex-colour `BaseMaterial3D` path instead.
 MATERIAL = "landmark_vertex"
 
-# The `-col` suffix is the tile precedent (`buildings.py`, `COLLISION_SUFFIX`):
-# the visible mesh doubles as its own static trimesh collider, which matters
-# here because excluding the source building also removes the tile collision
-# that used to stand on its footprint. Same importer-suffix caution as
-# `make_vehicle.py`: nothing else may end in _wheel/_convcol/_navmesh/etc.
 HKCEC_FILE = "hkcec.glb"
 CENTRAL_PLAZA_FILE = "central_plaza.glb"
 
 
-@dataclass(frozen=True)
-class Surface:
-    """A real material and the colour it ships as — `hong_kong.yaml:materials`
-    in miniature, because these colours cannot live there: the table colours
-    what the ETL draws, and a committed `.glb` never passes through the ETL.
-
-    The same rule still binds (`Q33`): every colour is `reflectance x
-    exposure_anchor`, and `check_palette` refuses to generate on the same
-    tolerance `_check_exposure` refuses to load. The anchor is read from the
-    city config at generate time (`Q38`) — change the anchor and this generator
-    stops until the palette is re-derived, loudly.
-    """
-
-    name: str
-    colour: Colour  # sRGB, what COLOR_0 carries (`Q27`: consumers linearise)
-    reflectance: float  # real-world diffuse albedo, %
-    source: str
-
-
-ALUMINIUM = Surface(
+# `hong_kong.yaml:materials` in miniature, on the config's own `Material`
+# dataclass — these colours cannot live in that table, because the table
+# colours what the ETL draws and a committed `.glb` never passes through the
+# ETL. The same rule still binds (`Q33`): every colour is `reflectance x
+# exposure_anchor`, held by `check_palette` on the same shared check the
+# loader applies to the YAML. The anchor is read from the city config at
+# generate time (`Q38`) — change the anchor and this generator stops until
+# the palette is re-derived, loudly. Colours are sRGB, what `COLOR_0`
+# carries (`Q27`: consumers linearise).
+ALUMINIUM = Material(
     "aluminium_roof",
     (144, 146, 148),
     55.0,
     "mill-finish standing-seam aluminium, 50-60%",
 )
-GLASS = Surface(
+GLASS = Material(
     "curtain_glass",
     (61, 72, 83),
     12.0,
     "curtain-wall glass, 8-15% diffuse — the trap Q34 records: never lighter",
 )
-CONCRETE = Surface(
+CONCRETE = Material(
     "concrete_pale",
     (114, 110, 102),
     30.0,
     "clean concrete and granite podium cladding, 20-35%",
 )
-GOLD = Surface(
+GOLD = Material(
     "gold_glass",
     (87, 75, 54),
     14.0,
     "gold reflective coated glass, 10-20% diffuse",
 )
-GOLD_BAND = Surface(
+GOLD_BAND = Material(
     "gold_band",
     (101, 89, 70),
     20.0,
@@ -118,22 +103,15 @@ PALETTE = (ALUMINIUM, GLASS, CONCRETE, GOLD, GOLD_BAND)
 
 
 def check_palette(anchor: float) -> None:
-    """`_check_exposure` for the colours the ETL never sees."""
+    """`_check_exposure` for the colours the ETL never sees — same shared body."""
     for surface in PALETTE:
-        expected = surface.reflectance * anchor
-        actual = reflectance(surface.colour)
-        if abs(actual - expected) > EXPOSURE_TOLERANCE_PCT:
-            red, green, blue = surface.colour
-            raise ValueError(
-                f"{surface.name} is #{red:02x}{green:02x}{blue:02x}, whose luminance "
-                f"is {actual:.2f}% — but it declares reflectance {surface.reflectance}% "
-                f"at exposure_anchor {anchor}, which is {expected:.2f}%. "
-                "Re-derive the palette, or change the material it claims to be."
-            )
+        check_material_exposure(surface, anchor, surface.name)
 
 
-# How far the plinth continues below y = 0, absorbing terrain disagreement.
+# How far the plinth continues below y = 0, absorbing terrain disagreement,
+# and how far it stands proud of the footprint in plan — pavement, not wall.
 PLINTH_DEPTH_M = 1.0
+PLINTH_FLARE_M = 2.0
 
 
 @dataclass(frozen=True)
@@ -310,6 +288,11 @@ def _wing(stations: Sequence[WingStation], fascia_m: float, colour: Colour) -> M
     return merge(parts, name="wing")
 
 
+# Every hero's merged node name ends in `buildings.py`'s COLLISION_SUFFIX: the
+# visible mesh doubles as its own static trimesh collider, the tile precedent —
+# and it matters here because excluding the source building also removed the
+# tile collision that used to stand on its footprint. Same importer-suffix
+# caution as `make_vehicle.py`: nothing else may end in _wheel/_convcol/etc.
 def build_hkcec(p: Hkcec | None = None) -> MeshData:
     """Base, glass hall tucked under the wing, the wing itself, and the link."""
     p = p or Hkcec()
@@ -317,9 +300,9 @@ def build_hkcec(p: Hkcec | None = None) -> MeshData:
         [
             ring(
                 -PLINTH_DEPTH_M,
-                p.island_half_x_m + 2.0,
-                p.island_north_z_m - 2.0,
-                p.island_south_z_m + 2.0,
+                p.island_half_x_m + PLINTH_FLARE_M,
+                p.island_north_z_m - PLINTH_FLARE_M,
+                p.island_south_z_m + PLINTH_FLARE_M,
                 p.corner_cut_m,
             ),
             ring(
@@ -352,7 +335,10 @@ def build_hkcec(p: Hkcec | None = None) -> MeshData:
     link = loft(
         [
             ring(
-                -PLINTH_DEPTH_M, p.link_half_x_m + 2.0, p.island_south_z_m, p.link_south_z_m + 2.0
+                -PLINTH_DEPTH_M,
+                p.link_half_x_m + PLINTH_FLARE_M,
+                p.island_south_z_m,
+                p.link_south_z_m + PLINTH_FLARE_M,
             ),
             ring(p.podium_m, p.link_half_x_m, p.island_south_z_m, p.link_south_z_m),
             ring(p.link_roof_m, p.link_half_x_m - 2.0, p.island_south_z_m, p.link_south_z_m - 2.0),
@@ -362,7 +348,9 @@ def build_hkcec(p: Hkcec | None = None) -> MeshData:
         top=ALUMINIUM.colour,
         name="hkcec_link",
     )
-    return replace(merge([base, walls, wing, link], name="hkcec-col"), material=MATERIAL)
+    return replace(
+        merge([base, walls, wing, link], name=f"hkcec{COLLISION_SUFFIX}"), material=MATERIAL
+    )
 
 
 def _wall_ring(p: Hkcec, y: float | None) -> tuple[Point, ...]:
@@ -389,9 +377,9 @@ def build_central_plaza(p: CentralPlaza | None = None) -> MeshData:
         [
             ring(
                 -PLINTH_DEPTH_M,
-                p.podium_half_x_m + 2.0,
-                -p.podium_half_z_m - 2.0,
-                p.podium_half_z_m + 2.0,
+                p.podium_half_x_m + PLINTH_FLARE_M,
+                -p.podium_half_z_m - PLINTH_FLARE_M,
+                p.podium_half_z_m + PLINTH_FLARE_M,
                 6.0,
             ),
             ring(p.podium_base_m, p.podium_half_x_m, -p.podium_half_z_m, p.podium_half_z_m, 6.0),
@@ -426,20 +414,22 @@ def build_central_plaza(p: CentralPlaza | None = None) -> MeshData:
         top=ALUMINIUM.colour,
         name="central_plaza_pyramid",
     )
-    mast_base = box_at(
-        (0.0, (p.pyramid_top_m + p.mast_step_m) / 2.0, 0.0),
-        (p.mast_half_m, (p.mast_step_m - p.pyramid_top_m) / 2.0, p.mast_half_m),
-        ALUMINIUM.colour,
-        name="central_plaza_mast_base",
-    )
-    mast_tip = box_at(
-        (0.0, (p.mast_step_m + p.mast_top_m) / 2.0, 0.0),
-        (p.mast_tip_half_m, (p.mast_top_m - p.mast_step_m) / 2.0, p.mast_tip_half_m),
-        ALUMINIUM.colour,
-        name="central_plaza_mast_tip",
-    )
+    mast = [
+        box(
+            (-half, low, -half),
+            (half, high, half),
+            ALUMINIUM.colour,
+            name=f"central_plaza_mast_{index}",
+        )
+        for index, (low, high, half) in enumerate(
+            (
+                (p.pyramid_top_m, p.mast_step_m, p.mast_half_m),
+                (p.mast_step_m, p.mast_top_m, p.mast_tip_half_m),
+            )
+        )
+    ]
     return replace(
-        merge([podium, shaft, pyramid, mast_base, mast_tip], name="central_plaza-col"),
+        merge([podium, shaft, pyramid, *mast], name=f"central_plaza{COLLISION_SUFFIX}"),
         material=MATERIAL,
     )
 

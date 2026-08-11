@@ -45,7 +45,8 @@ from pathlib import Path
 
 from pipeline import __version__
 from pipeline.buildings import BUILDINGS_MANIFEST_NAME, BUILDINGS_MANIFEST_SCHEMA
-from pipeline.config import CityConfig, load_city
+from pipeline.config import LANDMARK_ASSET_ROOT, CityConfig, load_city
+from pipeline.crs import GameTransform
 from pipeline.documents import read_document, round_position, write_document
 from pipeline.fares import FARES_NAME, FARES_SCHEMA
 from pipeline.gltf import Bounds
@@ -221,7 +222,7 @@ def build_region(
         box.add(node["pos"])
 
     transform = city.game_transform(region_id)
-    landmarks = _landmarks_document(city, region_id, buildings)
+    landmarks = _landmarks_document(city, region_id, buildings, transform)
     write_document(out_dir / LANDMARKS_NAME, landmarks)
     # The excluded footprints join the union: the authored hero stands where
     # the excluded buildings stood, so without this the bounds would shrink by
@@ -302,7 +303,9 @@ def _size(path: Path) -> int:
         return 0
 
 
-def _landmarks_document(city: CityConfig, region_id: str, buildings: dict) -> dict:
+def _landmarks_document(
+    city: CityConfig, region_id: str, buildings: dict, transform: GameTransform
+) -> dict:
     """The hero-placement document (`P3-6`), from config plus what the
     building stage actually dropped.
 
@@ -318,7 +321,6 @@ def _landmarks_document(city: CityConfig, region_id: str, buildings: dict) -> di
     anything; written rather than omitted so `validate` reports the mismatch
     instead of this function hiding it.
     """
-    transform = city.game_transform(region_id)
     high_x, high_z = city.region_high(region_id)
     excluded = buildings.get("excluded", {})
     entries = []
@@ -542,10 +544,8 @@ def _check_landmarks(manifest: dict, landmarks: dict, buildings: dict) -> list[s
         if len(pos) != 3:
             problems.append(f"landmark {landmark_id} has no usable position")
             continue
-        if any(
-            pos[axis] < low[axis] - _TOLERANCE_M or pos[axis] > high[axis] + _TOLERANCE_M
-            for axis in range(3)
-        ):
+        outside, _ = _outside([pos], low, high)
+        if outside:
             problems.append(f"landmark {landmark_id} sits outside bounds_game: {pos}")
         footprint = entry.get("excluded_bounds")
         if footprint is None:
@@ -566,8 +566,10 @@ def _check_landmarks(manifest: dict, landmarks: dict, buildings: dict) -> list[s
                     f"replaced: {footprint}"
                 )
         asset = str(entry.get("asset", ""))
-        if not asset.startswith("res://"):
-            problems.append(f"landmark {landmark_id} asset {asset!r} is not a res:// path")
+        if not asset.startswith(LANDMARK_ASSET_ROOT):
+            problems.append(
+                f"landmark {landmark_id} asset {asset!r} is outside {LANDMARK_ASSET_ROOT}"
+            )
     return problems
 
 

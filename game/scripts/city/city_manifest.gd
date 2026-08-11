@@ -154,7 +154,7 @@ static func load_manifest() -> CityManifest:
 		manifest.carriageway_half_width_m[int(entry.get("edge", -1))] = halves
 
 	var extent: Dictionary = document.get("bounds_game", {})
-	manifest.bounds = _box(_point(extent.get("min")), _point(extent.get("max")))
+	manifest.bounds = box(point(extent.get("min")), point(extent.get("max")))
 
 	for entry: Dictionary in document.get("tiles", []):
 		manifest.tiles.append(_tile(entry))
@@ -169,8 +169,12 @@ static func load_manifest() -> CityManifest:
 ## so the northing is a *subtraction*. Returning a `Vector3` rather than a
 ## `Vector2` keeps the elevation, which is the axis that catches a road on the
 ## wrong deck.
-func to_grid(point: Vector3) -> Vector3:
-	return Vector3(point.x + origin_easting, origin_northing - point.z, point.y + origin_elevation)
+func to_grid(game_position: Vector3) -> Vector3:
+	return Vector3(
+		game_position.x + origin_easting,
+		origin_northing - game_position.z,
+		game_position.y + origin_elevation
+	)
 
 
 ## A compass bearing in degrees, `0` at north and rising eastward, from a
@@ -218,7 +222,7 @@ static func _tile(entry: Dictionary) -> Tile:
 
 	var corners: Array = entry.get("aabb", [])
 	if corners.size() == 2:
-		tile.aabb = _box(_point(corners[0]), _point(corners[1]))
+		tile.aabb = box(point(corners[0]), point(corners[1]))
 	else:
 		push_error("tile %s has no usable aabb" % tile.id)
 	return tile
@@ -231,7 +235,7 @@ static func _resolve(relative: Variant) -> String:
 	return PATH.get_base_dir().path_join(path) if not path.is_empty() else ""
 
 
-static func _point(values: Variant) -> Vector3:
+static func point(values: Variant) -> Vector3:
 	var array: Array = values if values is Array else []
 	if array.size() != 3:
 		push_error("expected a 3-element position, got %s" % [values])
@@ -240,6 +244,8 @@ static func _point(values: Variant) -> Vector3:
 
 
 ## An AABB from two corners. `AABB` stores position and size, the contract
-## stores min and max, and the subtraction is the whole difference.
-static func _box(low: Vector3, high: Vector3) -> AABB:
+## stores min and max, and the subtraction is the whole difference. Public,
+## with `point` above, because every generated document spells a position the
+## same way and the locators parse entries of their own documents.
+static func box(low: Vector3, high: Vector3) -> AABB:
 	return AABB(low, high - low)

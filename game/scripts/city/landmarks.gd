@@ -14,7 +14,6 @@
 ## roster.
 extends Node3D
 
-const GeneratedDocument = preload("res://scripts/city/generated_document.gd")
 const GeneratedLandmarks = preload("res://scripts/city/generated_landmarks.gd")
 
 
@@ -26,11 +25,7 @@ func _ready() -> void:
 	var manifest: CityManifest = CityManifest.load_manifest()
 	if manifest == null:
 		return
-	var document: Dictionary = GeneratedDocument.load_object(
-		manifest.landmarks_path,
-		GeneratedLandmarks.SCHEMA_VERSION,
-		GeneratedLandmarks.missing_hint()
-	)
+	var document: Dictionary = GeneratedLandmarks.load_landmarks(manifest.landmarks_path)
 	if document.is_empty():
 		return
 

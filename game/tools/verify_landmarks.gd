@@ -51,15 +51,9 @@ func _init() -> void:
 		quit(1)
 		return
 
+	# That the manifest and the locator name the same existing file is
+	# `verify_city.gd`'s check, with the other three documents.
 	var problems: PackedStringArray = []
-	if manifest.landmarks_path != GeneratedLandmarks.PATH:
-		problems.append(
-			(
-				"city.json says %s, the locator says %s"
-				% [manifest.landmarks_path, GeneratedLandmarks.PATH]
-			)
-		)
-
 	var document: Dictionary = GeneratedLandmarks.load_landmarks()
 	if document.is_empty():
 		# `load_landmarks` pushed the reason; an empty document is not a pass.
@@ -98,7 +92,11 @@ func _check_landmark(manifest: Manifest, entry: Dictionary) -> PackedStringArray
 	var node: Node3D = packed.instantiate()
 	var measured: AABB = MeshContract.bounds(node)
 	var triangles: int = MeshContract.triangles(node)
-	var collides: bool = MeshContract.has_collision(node)
+	# The excluded building took the tile collider on its footprint with it, so
+	# a hero without its own is a building the taxi drives through — visible in
+	# nothing but a drive. `check_collision` rather than `has_collision` for the
+	# richer report, the same reason `verify_tiles.gd` uses it.
+	var collision: PackedStringArray = MeshContract.check_collision(node)
 	node.free()
 
 	if measured.size == Vector3.ZERO:
@@ -108,11 +106,8 @@ func _check_landmark(manifest: Manifest, entry: Dictionary) -> PackedStringArray
 		problems.append(
 			"%s: %d triangles against the %d budget" % [landmark_id, triangles, TRIANGLE_BUDGET]
 		)
-	# The excluded building took the tile collider on its footprint with it, so
-	# a hero without its own is a building the taxi drives through — visible in
-	# nothing but a drive.
-	if not collides:
-		problems.append("%s: no collision — the model needs a -col node" % landmark_id)
+	for problem: String in collision:
+		problems.append("%s: %s" % [landmark_id, problem])
 
 	var placement: Variant = GeneratedLandmarks.placement_of(entry)
 	if placement == null:
@@ -133,26 +128,21 @@ func _check_landmark(manifest: Manifest, entry: Dictionary) -> PackedStringArray
 
 ## No tier-0 tile triangle may stand in the excluded footprint's interior core.
 func _probe_tiles(manifest: Manifest, entry: Dictionary, landmark_id: String) -> PackedStringArray:
-	var corners: Array = (
-		entry.get("excluded_bounds", []) if entry.get("excluded_bounds") is Array else []
-	)
-	if corners.size() != 2:
+	var footprint: Variant = GeneratedLandmarks.excluded_bounds_of(entry)
+	if footprint == null:
 		return ["%s: no usable excluded_bounds to probe" % landmark_id]
-	var low: Vector3 = Manifest._point(corners[0])
-	var high: Vector3 = Manifest._point(corners[1])
+	var box: AABB = footprint as AABB
 
-	var centre: Vector3 = (low + high) / 2.0
+	var centre: Vector3 = box.get_center()
 	var core_low := Vector3(
-		centre.x - (high.x - low.x) / 4.0,
-		low.y + STREETSCAPE_CLEARANCE_M,
-		centre.z - (high.z - low.z) / 4.0
+		centre.x - box.size.x / 4.0,
+		box.position.y + STREETSCAPE_CLEARANCE_M,
+		centre.z - box.size.z / 4.0
 	)
-	var core_high := Vector3(
-		centre.x + (high.x - low.x) / 4.0, high.y, centre.z + (high.z - low.z) / 4.0
-	)
+	var core_high := Vector3(centre.x + box.size.x / 4.0, box.end.y, centre.z + box.size.z / 4.0)
 	if core_high.y <= core_low.y:
 		return ["%s: excluded_bounds too shallow to probe above the streetscape" % landmark_id]
-	var core := AABB(core_low, core_high - core_low)
+	var core: AABB = Manifest.box(core_low, core_high)
 
 	var intruders: int = 0
 	for tile: Manifest.Tile in manifest.tiles:
@@ -162,7 +152,7 @@ func _probe_tiles(manifest: Manifest, entry: Dictionary, landmark_id: String) ->
 		if packed == null:
 			return ["%s: tile %s did not load for probing" % [landmark_id, tile.id]]
 		var node: Node3D = packed.instantiate()
-		intruders += _triangles_inside(node, core)
+		intruders += MeshContract.triangles_inside(node, core)
 		node.free()
 
 	if intruders > 0:
@@ -173,43 +163,3 @@ func _probe_tiles(manifest: Manifest, entry: Dictionary, landmark_id: String) ->
 			)
 		]
 	return []
-
-
-func _triangles_inside(node: Node, core: AABB) -> int:
-	var count: int = 0
-	for instance: MeshInstance3D in node.find_children("*", "MeshInstance3D", true, false):
-		var mesh: Mesh = instance.mesh
-		if mesh == null:
-			continue
-		# Tiles are authored in region space at identity, but that is a fact
-		# about today's importer output — accumulate the transforms anyway, the
-		# way `MeshContract._collect` does, so a wrapper node cannot silently
-		# turn this probe into a no-op.
-		var to_region: Transform3D = _to_root(instance, node)
-		for surface: int in mesh.get_surface_count():
-			var arrays: Array = mesh.surface_get_arrays(surface)
-			var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-			var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
-			if indices.is_empty():
-				for i: int in range(0, vertices.size(), 3):
-					var centroid: Vector3 = (vertices[i] + vertices[i + 1] + vertices[i + 2]) / 3.0
-					if core.has_point(to_region * centroid):
-						count += 1
-			else:
-				for i: int in range(0, indices.size(), 3):
-					var centroid: Vector3 = (
-						(vertices[indices[i]] + vertices[indices[i + 1]] + vertices[indices[i + 2]])
-						/ 3.0
-					)
-					if core.has_point(to_region * centroid):
-						count += 1
-	return count
-
-
-func _to_root(instance: Node3D, top: Node) -> Transform3D:
-	var accumulated := Transform3D.IDENTITY
-	var current: Node = instance
-	while current != top and current is Node3D:
-		accumulated = (current as Node3D).transform * accumulated
-		current = current.get_parent()
-	return accumulated

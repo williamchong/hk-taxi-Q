@@ -17,6 +17,7 @@
 extends SceneTree
 
 const GeneratedFares = preload("res://scripts/city/generated_fares.gd")
+const GeneratedLandmarks = preload("res://scripts/city/generated_landmarks.gd")
 const GeneratedRoadGraph = preload("res://scripts/city/generated_road_graph.gd")
 const GeneratedRoadSurface = preload("res://scripts/city/generated_road_surface.gd")
 const Manifest = preload("res://scripts/city/city_manifest.gd")
@@ -73,7 +74,7 @@ func _init() -> void:
 	quit(1 if not problems.is_empty() else 0)
 
 
-## The manifest names three documents. Each must be there, and each must be the
+## The manifest names four documents. Each must be there, and each must be the
 ## file the dev locators point at — they carry their own constant until `P2-2`
 ## and `P3-1` take the path from the manifest, and this is what stops the two
 ## definitions drifting in the meantime.
@@ -86,6 +87,9 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 		_check_document("road surface", manifest.road_surface_path, GeneratedRoadSurface.PATH)
 	)
 	problems.append_array(_check_document("fare nodes", manifest.fares_path, GeneratedFares.PATH))
+	problems.append_array(
+		_check_document("landmarks", manifest.landmarks_path, GeneratedLandmarks.PATH)
+	)
 	return problems
 
 

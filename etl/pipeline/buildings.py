@@ -910,19 +910,22 @@ def build_region(
                 )
                 kept += 1
                 continue
-            if stem(mesh.name) in replaced_stems:
+            key = stem(mesh.name)
+            if key in replaced_stems:
                 # An authored landmark stands here (`P3-6`). Dropped before
                 # colour and assignment — nothing downstream may see it — and
                 # after the ground branch, so terrain can never be excluded.
                 # The AABB is recorded now because this is the last moment the
-                # mesh has an identity: `merge` erases it.
-                placed = mesh.translated(place.offset)
-                key = stem(mesh.name)
-                report.excluded[key] = (
-                    _union([report.excluded[key], placed.aabb()])
-                    if key in report.excluded
-                    else placed.aabb()
+                # mesh has an identity: `merge` erases it — and it is computed
+                # by translating the corners, because `translated` copies the
+                # whole position array to produce a mesh nothing here needs.
+                low, high = mesh.aabb()
+                box = (
+                    tuple(value + offset for value, offset in zip(low, place.offset)),
+                    tuple(value + offset for value, offset in zip(high, place.offset)),
                 )
+                previous = report.excluded.get(key)
+                report.excluded[key] = box if previous is None else _union([previous, box])
                 report.replaced += 1
                 continue
             placed = mesh.translated(place.offset)
