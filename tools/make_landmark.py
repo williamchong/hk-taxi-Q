@@ -183,18 +183,18 @@ class Hkcec:
     fascia_m: float = 1.8  # roof edge thickness — the line the eye reads
     arc_points: int = 17  # cross-section samples, eave to eave
     # The ribbon strips: the street views (Expo Drive East, 2024) read the
-    # elevation as pale panels carrying six-plus thin *dark* glazing ribbons —
-    # the first treatment had the values inverted (dark glass hull, light
-    # bands). Placed as fractions of each station's own wall height so a
-    # ribbon can never climb through the roof where the eaves dip.
-    band_fractions: tuple[tuple[float, float], ...] = (
-        (0.06, 0.13),
-        (0.19, 0.26),
-        (0.32, 0.39),
-        (0.45, 0.52),
-        (0.58, 0.65),
-        (0.71, 0.78),
-    )
+    # elevation as pale panels carrying thin *dark* glazing ribbons — the
+    # first treatment had the values inverted (dark glass hull, light bands).
+    # The ribbons are storey lines at **constant absolute heights**, not
+    # fractions of the wall: fractions squished every strip into a zebra fan
+    # where the east roll pinches the wall (user review, 2026-08-12). Placed
+    # by elevation, the descending roofline cuts the strips off one by one
+    # instead — `_wall_ring` clamps each line into [floor, soffit], so a strip
+    # the roof has passed degrades to an invisible hairline.
+    ribbon_first_m: float = 16.0  # first strip's underside
+    ribbon_pitch_m: float = 6.0
+    ribbon_m: float = 2.2  # strip thickness
+    ribbon_count: int = 8
     # Re-sliced 2026-08-12 after the source-vs-hero comparison: 8 m z-bands of
     # the source mesh (p1/p99 extents; eaves the p90 of the outer 12% each
     # side, 3-band rolling median; hull edges the p1/p99 of points 18-40 m up,
@@ -512,28 +512,62 @@ def _hull_ring(stations: Sequence[WingStation], y: float, flare: float = 0.0) ->
     return tuple(left + right)
 
 
-def _wall_ring(p: Hkcec, fraction: float) -> tuple[Point, ...]:
-    """The hall's hull as a ring, at `fraction` of each station's wall height.
+# Ring `level` 0 is the floor, the last is the soffit, and the ones between
+# are the ribbon lines — kept this far apart where a strip has been overtaken
+# by the roof, so a dead band is a hairline rather than a quad with no normal.
+_LEVEL_GAP_M = 0.02
+
+
+def _ribbon_lines(p: Hkcec) -> list[float]:
+    """The strips' absolute elevations, flattened: lo, hi, lo, hi, ..."""
+    lines: list[float] = []
+    for index in range(p.ribbon_count):
+        lo = p.ribbon_first_m + index * p.ribbon_pitch_m
+        lines.extend((lo, lo + p.ribbon_m))
+    return lines
+
+
+def _clamped_level(level: int, levels: int, target: float, floor: float, soffit: float) -> float:
+    """One ring's height at one station: the target elevation, held inside
+    [floor, soffit] with the stacking order intact."""
+    if level == 0:
+        return floor
+    if level == levels - 1:
+        return soffit
+    low = floor + level * _LEVEL_GAP_M
+    high = soffit - (levels - 1 - level) * _LEVEL_GAP_M
+    return min(max(target, low), high)
+
+
+def _wall_ring(p: Hkcec, level: int) -> tuple[Point, ...]:
+    """The hall's hull as a ring, at one banding level.
 
     Walking the stations north-to-south down the west edges and back up the
-    east gives a closed ring on the measured hull plan. `fraction` places the
-    ring between each station's own floor and that side's soffit — the floor
-    is the podium where the hall is grounded and the deck top where it
-    bridges the streets — so a ribbon strip follows the roofline and can
-    never climb through it where the eaves dip.
+    east gives a closed ring on the measured hull plan. The ribbon strips sit
+    at constant absolute elevations — storey lines, as on the real elevation —
+    and each is clamped into the wall between that station's floor (podium
+    where grounded, deck top where bridging) and that side's soffit, so the
+    descending roofline cuts the strips off one by one instead of squeezing
+    them together.
     """
+    lines = _ribbon_lines(p)
+    levels = len(lines) + 2
+    target = lines[level - 1] if 0 < level <= len(lines) else 0.0
     left: list[Point] = []
     right: list[Point] = []
     for station in p.stations:
         floor = p.podium_m if station.z_m <= p.deck_north_z_m else p.deck_top_m
         # Where the roof rolls all the way down to the deck (the east flank
         # around z -20..-4 lands within a fascia of deck level), the wall
-        # pinches to half a metre rather than to zero — a zero-height band is
-        # a quad with no normal.
+        # pinches to half a metre rather than to zero.
         soffit_w = max(station.eave_w_m - p.fascia_m, floor + 0.5)
         soffit_e = max(station.eave_e_m - p.fascia_m, floor + 0.5)
-        left.append((station.hull_w_m, floor + fraction * (soffit_w - floor), station.z_m))
-        right.append((station.hull_e_m, floor + fraction * (soffit_e - floor), station.z_m))
+        left.append(
+            (station.hull_w_m, _clamped_level(level, levels, target, floor, soffit_w), station.z_m)
+        )
+        right.append(
+            (station.hull_e_m, _clamped_level(level, levels, target, floor, soffit_e), station.z_m)
+        )
     return tuple(left + list(reversed(right)))
 
 
@@ -592,19 +626,17 @@ def build_hkcec(p: Hkcec | None = None) -> MeshData:
         for index, (x, z) in enumerate(p.piers)
         if not any(x0 <= x <= x1 and z0 <= z <= z1 for x0, z0, x1, z1 in p.infill)
     ]
-    # The hall's hull follows the roof plan inboard of the eaves — so no wall
-    # pokes out past the overhang, and it rises to meet the soffit everywhere.
-    # The intermediate rings are the dark ribbon-glazing strips on the pale
-    # panel hull.
-    fractions = [0.0]
-    for band_low, band_high in p.band_fractions:
-        fractions.extend((band_low, band_high))
-    fractions.append(1.0)
+    # The hall's hull follows the measured plan and rises to meet the soffit
+    # everywhere. The intermediate rings are the ribbon lines — storey lines
+    # at constant elevations, so the strips stay level around the whole curve
+    # and terminate into the roofline where it descends.
+    lines = _ribbon_lines(p)
+    levels = len(lines) + 2
     band_colours: list[Colour] = []
-    for index in range(len(fractions) - 1):
+    for index in range(levels - 1):
         band_colours.append(GLASS.colour if index % 2 == 1 else PANEL.colour)
     walls = loft(
-        [_wall_ring(p, fraction) for fraction in fractions],
+        [_wall_ring(p, level) for level in range(levels)],
         band_colours,
         bottom=PANEL.colour,
         top=PANEL.colour,
@@ -613,11 +645,22 @@ def build_hkcec(p: Hkcec | None = None) -> MeshData:
     wing = _wing(p, ROOF_GREY.colour)
     # The link continues the striped hull south — the street views show the
     # same pale panels and ribbons on the south zone, not a glass block —
-    # with the grey roof cresting over it.
+    # with the grey roof cresting over it. Same absolute ribbon lines, so the
+    # strips run level across the island-to-link joint.
     south = [row for row in p.deck_profile if row[0] >= p.stations[-1].z_m]
     atrium_rings = [
-        _profile_ring(south, p.deck_top_m + fraction * (p.atrium_wall_m - p.deck_top_m), 4.0)
-        for fraction in fractions
+        _profile_ring(
+            south,
+            _clamped_level(
+                level,
+                levels,
+                lines[level - 1] if 0 < level <= len(lines) else 0.0,
+                p.deck_top_m,
+                p.atrium_wall_m,
+            ),
+            4.0,
+        )
+        for level in range(levels)
     ]
     atrium_rings.append(_profile_ring(south, p.atrium_roof_m, 12.0))
     atrium = loft(

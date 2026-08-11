@@ -3068,7 +3068,11 @@ photos than the hero, and the fixes below are why). **(1) The values were invert
 Phase 2 elevation is *pale* panels carrying six-plus thin *dark* ribbon-glazing strips under a
 roof *darker* than the wall; the first treatment shipped a dark glass hull with light bands under
 a near-white roof. Two hero-only materials landed (`panel_pale` 42%, `roof_grey` 22%,
-`Q33`-checked; `aluminium_roof` now touches only Central Plaza). **(2) The symmetric plan was
+`Q33`-checked; `aluminium_roof` now touches only Central Plaza). A follow-up round moved the
+ribbons from wall-height *fractions* to **constant absolute elevations** (16 m + k·6 m, 2.2 m
+thick): fractions squeezed every strip into a zebra fan where the east roll pinches the wall to
+half a metre, where the real strips are storey lines the descending roofline cuts off one by one —
+each line clamps into [floor, soffit] and a strip the roof has passed degrades to a hairline. **(2) The symmetric plan was
 fat:** re-sliced at 8 m bands, the island is an eastward-leaning banana (plan centre drifting
 -22 → +13 m), the prow tapers to a **14 m** half-width the symmetric model had fattened to 40, the
 east flank's roof rolls to ~20 m where the west stays ~30-45, and the hull edges are their own
