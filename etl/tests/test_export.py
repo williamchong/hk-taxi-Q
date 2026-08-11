@@ -16,15 +16,20 @@ file in the suite by three orders of magnitude.
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
 from pipeline import __main__ as orchestrator
 from pipeline.buildings import BUILDINGS_MANIFEST_NAME, BUILDINGS_MANIFEST_SCHEMA
+from pipeline.config import Landmark
 from pipeline.export import (
     CITY_NAME,
     CITY_SCHEMA,
+    LANDMARKS_NAME,
+    LANDMARKS_SCHEMA,
     build_region,
     read_manifest,
     shipped,
@@ -256,6 +261,110 @@ class TestAssembly:
         region.build()
 
         assert (region.out_dir / CITY_NAME).read_bytes() == first
+
+
+class TestLandmarks:
+    """`landmarks.json` — assembly from config, and the two-way stem check.
+
+    Neither side can see the mismatch alone: a config claiming a stem the
+    building stage never saw is internally fine, and so is a `buildings.json`
+    recording an exclusion no landmark owns. `validate` is the only place the
+    two meet.
+    """
+
+    FOOTPRINT: ClassVar[list[list[float]]] = [[40.0, 0.0, 40.0], [60.0, 300.0, 60.0]]
+
+    def hero(self, region, stems: tuple[str, ...] = ("hero_a",), *, excluded: bool = True):
+        """Put one landmark on the region's config, standing at game (50, 50).
+
+        `excluded` also writes the matching record into `buildings.json`, the
+        way a real build would have; a test drops it to make the sides disagree.
+        """
+        easting, northing, _ = region.city.game_transform(REGION).to_source(50.0, 0.0, 50.0)
+        landmark = Landmark(
+            id="hero",
+            asset="res://assets/authored/landmarks/hero.glb",
+            easting=easting,
+            northing=northing,
+            elevation=0.0,
+            rot_y_deg=45.0,
+            name_en="Hero",
+            name_zh="主角",
+            replaces_source_ids=stems,
+        )
+        region.city = replace(region.city, landmarks=(landmark,))
+        if excluded:
+            region.documents[BUILDINGS_MANIFEST_NAME]["excluded"] = {
+                stem: self.FOOTPRINT for stem in stems
+            }
+        return landmark
+
+    def landmarks_document(self, region) -> dict:
+        return json.loads((region.out_dir / LANDMARKS_NAME).read_text(encoding="utf-8"))
+
+    def test_the_manifest_names_the_document_and_ships_it(self, region) -> None:
+        region.build()
+        manifest = region.manifest()
+        assert manifest["landmarks"] == LANDMARKS_NAME
+        assert LANDMARKS_NAME in shipped(manifest)
+        assert (region.out_dir / LANDMARKS_NAME).exists()
+
+    def test_a_city_without_landmarks_ships_an_empty_document(self, region) -> None:
+        region.build()
+        document = self.landmarks_document(region)
+        assert document["schema_version"] == LANDMARKS_SCHEMA
+        assert document["landmarks"] == []
+
+    def test_positions_convert_to_game_space_and_the_bearing_passes_through(self, region) -> None:
+        self.hero(region)
+        region.build()
+        [entry] = self.landmarks_document(region)["landmarks"]
+
+        assert entry["id"] == "hero"
+        assert entry["transform"]["pos"] == [50.0, 0.0, 50.0]
+        assert entry["transform"]["rot_y_deg"] == 45.0
+        assert entry["name"] == {"en": "Hero", "zh": "主角"}
+        assert entry["excluded_bounds"] == self.FOOTPRINT
+
+    def test_the_excluded_footprint_joins_bounds_game(self, region) -> None:
+        """The hero stands where the excluded buildings stood, so the bounds
+        must not shrink by the geometry the region still contains."""
+        self.hero(region)
+        region.build()
+        assert region.manifest()["bounds_game"]["max"][1] == pytest.approx(300.0)
+
+    def test_a_matched_pair_validates_clean(self, region) -> None:
+        """Also the proof the committed `.glb` is never checked as a file —
+        `res://` points into the game tree, which this out-tree lacks."""
+        self.hero(region)
+        region.build()
+        assert region.check() == []
+
+    def test_a_stem_never_excluded_is_flagged(self, region) -> None:
+        self.hero(region, excluded=False)
+        region.build()
+        problems = region.check()
+        assert any("never excluded" in problem for problem in problems)
+
+    def test_an_orphaned_exclusion_is_flagged(self, region) -> None:
+        region.documents[BUILDINGS_MANIFEST_NAME]["excluded"] = {
+            "orphan": [[0.0, 0.0, 0.0], [10.0, 10.0, 10.0]]
+        }
+        region.build()
+        problems = region.check()
+        assert any("belong to no landmark" in problem for problem in problems)
+
+    def test_a_position_off_its_footprint_is_flagged(self, region) -> None:
+        """The authored centroid should stand on what it replaced — a config
+        pasted from the wrong building fails here, not in a drive."""
+        self.hero(region)
+        region.documents[BUILDINGS_MANIFEST_NAME]["excluded"]["hero_a"] = [
+            [150.0, 0.0, 100.0],
+            [170.0, 300.0, 120.0],
+        ]
+        region.build()
+        problems = region.check()
+        assert any("off the footprint" in problem for problem in problems)
 
 
 class TestShippedList:

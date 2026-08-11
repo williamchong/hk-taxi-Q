@@ -75,13 +75,27 @@ CITY_NAME = "city.json"
 # with `y` reserved for `Q42`'s riders. Same rule as 5: a v5 reader would load
 # a v6 tile, ignore the payload, and silently draw the hash city while the
 # bundle claims the survey.
-CITY_SCHEMA = 6
+# 7 since `P3-6`: the manifest names `landmarks.json`, and the tiles no longer
+# contain the buildings its heroes replace. The bump is for the *removal*: a
+# v6 reader would load v7 tiles happily and draw holes where the excluded
+# buildings stood, with no hero over them — the silent wrong answer again.
+# The version gates the whole asset set, not just the JSON.
+CITY_SCHEMA = 7
+
+# The hero-building placement document (`P3-6`), written by this stage from the
+# city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
+# which is why it is assembled here rather than by a stage of its own. The
+# contract is in `docs/ARCHITECTURE.md`; the authored `.glb`s it points at are
+# committed under `res://assets/authored/landmarks/` and are deliberately
+# outside `shipped()` — they are not build output.
+LANDMARKS_NAME = "landmarks.json"
+LANDMARKS_SCHEMA = 1
 
 # Manifest keys naming a document that ships. One tuple rather than a literal
 # at each use, because `shipped` reads them and `REQUIRED_KEYS` guards them:
 # a fourth document added to one and not the other is a `KeyError` raised from
 # inside the validator instead of a finding reported by it.
-DOCUMENT_KEYS = ("road_graph", "road_surface", "fares")
+DOCUMENT_KEYS = ("road_graph", "road_surface", "fares", "landmarks")
 REQUIRED_KEYS = (*DOCUMENT_KEYS, "tiles", "bounds_game")
 
 # Positions are written at millimetre precision, and `bounds_game` is rounded
@@ -206,8 +220,17 @@ def build_region(
     for node in fares["nodes"]:
         box.add(node["pos"])
 
-    low, high = box.corners()
     transform = city.game_transform(region_id)
+    landmarks = _landmarks_document(city, region_id, buildings)
+    write_document(out_dir / LANDMARKS_NAME, landmarks)
+    # The excluded footprints join the union: the authored hero stands where
+    # the excluded buildings stood, so without this the bounds would shrink by
+    # exactly the geometry the region still contains.
+    for entry in landmarks["landmarks"]:
+        if entry["excluded_bounds"] is not None:
+            box.add_box(entry["excluded_bounds"])
+
+    low, high = box.corners()
     document = {
         "schema_version": CITY_SCHEMA,
         "city_id": city.id,
@@ -237,6 +260,7 @@ def build_region(
         # drew it.
         "carriageway": surface["carriageway"],
         "fares": FARES_NAME,
+        "landmarks": LANDMARKS_NAME,
         "etl_version": __version__,
         "generated_utc": generated_utc or datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
@@ -278,11 +302,69 @@ def _size(path: Path) -> int:
         return 0
 
 
+def _landmarks_document(city: CityConfig, region_id: str, buildings: dict) -> dict:
+    """The hero-placement document (`P3-6`), from config plus what the
+    building stage actually dropped.
+
+    Only landmarks inside this region's rectangle ship with it — `config.py`
+    guarantees each lies in *some* region, and a hero belongs to the region
+    that contains it. Positions arrive in the projected CRS and leave in game
+    space; this is the one conversion, so nothing downstream ever sees an
+    easting.
+
+    `excluded_bounds` is the game-space union, over the entry's stems, of the
+    AABBs `buildings.json` recorded at exclusion time — the geometry the
+    in-engine verifier probes the tiles against. `None` when no stem matched
+    anything; written rather than omitted so `validate` reports the mismatch
+    instead of this function hiding it.
+    """
+    transform = city.game_transform(region_id)
+    high_x, high_z = city.region_high(region_id)
+    excluded = buildings.get("excluded", {})
+    entries = []
+    for landmark in city.landmarks:
+        x, y, z = transform.to_game(landmark.easting, landmark.northing, landmark.elevation)
+        if not (0.0 <= x <= high_x and 0.0 <= z <= high_z):
+            continue
+        bounds = None
+        recorded = [excluded[stem] for stem in landmark.replaces_source_ids if stem in excluded]
+        if recorded:
+            union = Box()
+            for aabb in recorded:
+                union.add_box(aabb)
+            low, high = union.corners()
+            bounds = [round_position(low), round_position(high)]
+        entries.append(
+            {
+                "id": landmark.id,
+                "asset": landmark.asset,
+                "transform": {
+                    "pos": round_position((x, y, z)),
+                    # A compass bearing — 0 at north, rising eastward, the
+                    # `CityManifest.bearing_deg` convention. The game converts.
+                    "rot_y_deg": landmark.rot_y_deg,
+                },
+                "name": {"en": landmark.name_en, "zh": landmark.name_zh},
+                "replaces_source_ids": list(landmark.replaces_source_ids),
+                "excluded_bounds": bounds,
+            }
+        )
+    return {
+        "schema_version": LANDMARKS_SCHEMA,
+        "city_id": city.id,
+        "region_id": region_id,
+        "landmarks": entries,
+    }
+
+
 # The manifest read back as an `Input`, which is what it is once written — same
 # version refusal, same rebuild hint, no second copy of the command string. It
 # stays out of `INPUTS` because that tuple is what this stage *reads to write
 # it*; this is for the two callers that read back what it wrote.
 _MANIFEST = Input(CITY_NAME, CITY_SCHEMA, "export")
+
+# Same standing as `_MANIFEST`: written by this stage, read back by `validate`.
+_LANDMARKS = Input(LANDMARKS_NAME, LANDMARKS_SCHEMA, "export")
 
 
 def read_manifest(city: CityConfig, region_id: str, *, out_root: Path | None = None) -> dict:
@@ -347,12 +429,14 @@ def validate(city: CityConfig, region_id: str, *, out_root: Path | None = None) 
         return [f"{CITY_NAME} is missing {', '.join(missing)}"]
 
     buildings = documents[BUILDINGS_MANIFEST_NAME]
+    landmarks = _LANDMARKS.read(out_dir, city.id, region_id)
     return [
-        *_check_identity(manifest, documents),
+        *_check_identity(manifest, {**documents, LANDMARKS_NAME: landmarks}),
         *_check_files(out_dir, manifest),
         *_check_tiles(manifest, buildings),
         *_check_fares(documents[FARES_NAME], documents[ROADGRAPH_NAME]),
         *_check_graph(documents[ROADGRAPH_NAME]),
+        *_check_landmarks(manifest, landmarks, buildings),
         *_check_bounds(manifest, documents),
     ]
 
@@ -419,6 +503,71 @@ def _check_tiles(manifest: dict, buildings: dict) -> list[str]:
             f"{len(extra)} tiles in {CITY_NAME} were not built by "
             f"{BUILDINGS_MANIFEST_NAME}: {extra[:5]}"
         )
+    return problems
+
+
+def _check_landmarks(manifest: dict, landmarks: dict, buildings: dict) -> list[str]:
+    """The heroes and the exclusions agree, in both directions (`P3-6`).
+
+    One direction catches a typo'd stem — a landmark claiming a building the
+    stage never saw, which would z-fight the moment the model lands on the
+    still-present source. The other catches an orphaned exclusion — a hole in
+    the city with no hero over it. Neither side can see the mismatch alone:
+    the config is internally fine, and so is `buildings.json`.
+
+    The `.glb` assets are `res://` paths into the committed game tree, so they
+    are deliberately **not** checked as files here — `shipped()` never lists
+    them, and this stage's out-tree does not contain them.
+    """
+    problems: list[str] = []
+    entries = landmarks.get("landmarks", [])
+
+    claimed = {stem for entry in entries for stem in entry.get("replaces_source_ids", [])}
+    dropped = set(buildings.get("excluded", {}))
+    if missing := sorted(claimed - dropped):
+        problems.append(
+            f"{len(missing)} landmark stems were never excluded by the building stage "
+            f"(typo'd id? wrong variant suffix?): {missing[:5]}"
+        )
+    if stray := sorted(dropped - claimed):
+        problems.append(
+            f"{len(stray)} excluded stems belong to no landmark in {LANDMARKS_NAME}: {stray[:5]}"
+        )
+
+    bounds = manifest["bounds_game"]
+    low, high = bounds["min"], bounds["max"]
+    for entry in entries:
+        landmark_id = str(entry.get("id"))
+        pos = entry.get("transform", {}).get("pos", [])
+        if len(pos) != 3:
+            problems.append(f"landmark {landmark_id} has no usable position")
+            continue
+        if any(
+            pos[axis] < low[axis] - _TOLERANCE_M or pos[axis] > high[axis] + _TOLERANCE_M
+            for axis in range(3)
+        ):
+            problems.append(f"landmark {landmark_id} sits outside bounds_game: {pos}")
+        footprint = entry.get("excluded_bounds")
+        if footprint is None:
+            problems.append(
+                f"landmark {landmark_id} has no excluded_bounds — none of its stems "
+                "matched a source mesh"
+            )
+        else:
+            # The authored position should stand on the footprint it replaced.
+            # One metre of slack: a centroid is not a centre, not misregistration.
+            (flow, fhigh) = footprint
+            if not (
+                flow[0] - 1.0 <= pos[0] <= fhigh[0] + 1.0
+                and flow[2] - 1.0 <= pos[2] <= fhigh[2] + 1.0
+            ):
+                problems.append(
+                    f"landmark {landmark_id} at {pos} stands off the footprint it "
+                    f"replaced: {footprint}"
+                )
+        asset = str(entry.get("asset", ""))
+        if not asset.startswith("res://"):
+            problems.append(f"landmark {landmark_id} asset {asset!r} is not a res:// path")
     return problems
 
 

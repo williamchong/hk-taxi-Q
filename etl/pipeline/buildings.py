@@ -97,7 +97,12 @@ _VARIANT_SUFFIX = 2
 # Named for what it holds, not for `fetch.py`'s `manifest.json`, which is a
 # different file with a different job.
 BUILDINGS_MANIFEST_NAME = "buildings.json"
-BUILDINGS_MANIFEST_SCHEMA = 2
+# 3 since `P3-6`: `excluded` records the stems the landmark config told this
+# stage to drop, with the game-space AABB union of each stem's meshes — the
+# only place that can record it, because identity dies at `merge`. `export.py`
+# checks its landmarks against it and ships each hero's `excluded_bounds` from
+# it. A v2 reader would not know an exclusion had happened at all.
+BUILDINGS_MANIFEST_SCHEMA = 3
 
 # Godot's glTF importer reads node-name suffixes: `-col` gives the mesh a static
 # trimesh collider at import time and leaves it visible. `write_glb` writes the
@@ -163,6 +168,13 @@ class BuildReport:
     # of zero, or a `clipped` equal to it, is the wrong-bounds failure.
     read: int = 0
     clipped: int = 0
+    # Meshes dropped because a landmark replaces them (`P3-6`) — meshes, not
+    # stems: a building straddling a sheet cut is read once per sheet, so this
+    # may exceed the stem count. Zero with landmarks configured is the typo'd
+    # stem failure, and `export.validate` refuses it.
+    replaced: int = 0
+    # Game-space AABB union per replaced stem, for the manifest's `excluded`.
+    excluded: dict[str, Bounds] = field(default_factory=dict)
 
 
 # --------------------------------------------------------------------------
@@ -857,6 +869,12 @@ def build_region(
     states = facade_states(style, city.id, root=sources_root)
 
     report = BuildReport()
+    # Stems a landmark replaces (`P3-6`), across the whole city config: a stem
+    # is globally unique, and scoping the set by region would let a building
+    # near a boundary ship in one region and vanish from the other.
+    replaced_stems = {
+        source_id for landmark in city.landmarks for source_id in landmark.replaces_source_ids
+    }
     # Bucketed by tile *and class*, because the two decimate at different cell
     # sizes — see `BuildingStyle.cell_size_m`. Merging still happens per tile;
     # it just happens after the collapse instead of before it.
@@ -891,6 +909,21 @@ def build_region(
                     )
                 )
                 kept += 1
+                continue
+            if stem(mesh.name) in replaced_stems:
+                # An authored landmark stands here (`P3-6`). Dropped before
+                # colour and assignment — nothing downstream may see it — and
+                # after the ground branch, so terrain can never be excluded.
+                # The AABB is recorded now because this is the last moment the
+                # mesh has an identity: `merge` erases it.
+                placed = mesh.translated(place.offset)
+                key = stem(mesh.name)
+                report.excluded[key] = (
+                    _union([report.excluded[key], placed.aabb()])
+                    if key in report.excluded
+                    else placed.aabb()
+                )
+                report.replaced += 1
                 continue
             placed = mesh.translated(place.offset)
             bounds = placed.aabb()
@@ -1178,6 +1211,9 @@ def _write_manifest(
                 for name, sizes in sorted(city.buildings.class_lod_cell_sizes_m.items())
             },
             "tiles": [asdict(tile) for tile in report.tiles],
+            # Per replaced stem, the game-space AABB union of the meshes this
+            # stage dropped for it (`P3-6`). Sorted so a rerun is byte-stable.
+            "excluded": {key: report.excluded[key] for key in sorted(report.excluded)},
         },
     )
 
@@ -1265,9 +1301,10 @@ def main(argv: list[str] | None = None) -> int:
 
     report = build_region(city, args.region)
     log.info(
-        "%d meshes read, %d clipped away, %d tiles written",
+        "%d meshes read, %d clipped away, %d replaced by landmarks, %d tiles written",
         report.read,
         report.clipped,
+        report.replaced,
         len(report.tiles),
     )
     style = city.buildings

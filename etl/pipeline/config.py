@@ -569,6 +569,41 @@ class PodiumBlocks:
         return _field(self.codes, role, "podiums:codes")
 
 
+@dataclass(frozen=True)
+class Landmark:
+    """One hero building: an authored model and the source meshes it replaces
+    (`P3-6`, contract in `docs/ARCHITECTURE.md` under `landmarks.json`).
+
+    `replaces_source_ids` holds **stems** — the cross-dataset building key
+    `docs/DATA_SOURCES.md` establishes and `buildings.stem` computes — not full
+    source ids. The same keying `P3-7a`'s override table uses, and deliberately
+    unvalidated in shape here (an id format is a publisher's spelling, hard
+    rule 3); a stem that matches nothing is caught by `export.py`'s
+    set-equality check against what the building stage actually dropped.
+
+    The position is authored in the city's projected CRS with elevation in the
+    source datum, because that is what the surveyed blocks and meshes are
+    published in — a number here can be checked against the sheet by eye.
+    `export.py` converts it to game space; nothing downstream reads this form.
+
+    `rot_y_deg` is a **compass bearing**: degrees clockwise from north, viewed
+    from above — the convention `CityManifest.bearing_deg` already pins. The
+    one conversion to a Godot rotation lives in the runtime's `landmarks.gd`.
+    """
+
+    id: str
+    # `res://` path of the committed model, under `assets/authored/landmarks/`.
+    asset: str
+    easting: float
+    northing: float
+    elevation: float
+    rot_y_deg: float
+    # Display names, never rendered signage (`Q42`, hard rule 8).
+    name_en: str
+    name_zh: str
+    replaces_source_ids: tuple[str, ...]
+
+
 def _field(fields: Mapping[str, str], role: str, where: str) -> str:
     """The publisher's column name for a role the pipeline asked for.
 
@@ -1006,6 +1041,10 @@ class CityConfig:
     # The surveyed building-block layer, when the city has one (`Q47`). Optional
     # with a default — a city without a topographic source builds as before.
     podiums: PodiumBlocks | None = None
+    # Hero buildings shipped as authored models (`P3-6`). Empty for a city
+    # without any: the building stage then excludes nothing and the export
+    # writes an empty landmarks document.
+    landmarks: tuple[Landmark, ...] = ()
     # Committed CA certificates that complete a publisher's TLS chain, resolved
     # to absolute paths at load. For hosts that serve their chain without the
     # issuing intermediate; verification is never relaxed, only completed.
@@ -1174,6 +1213,7 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
             if document.get("podiums") is not None
             else None
         ),
+        landmarks=_landmarks(document.get("landmarks") or [], f"{path}:landmarks"),
         extra_cas=_extra_cas(document.get("extra_cas"), path),
     )
     _check_regions_lie_within_the_city(city, path)
@@ -1189,7 +1229,30 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
         _check_source_exists(city, group.source, f"{path}:fares.groups[{index}].source")
     if city.podiums is not None:
         _check_tiled_source_exists(city, city.podiums.source, f"{path}:podiums.source")
+    _check_landmarks_lie_within_a_region(city, path)
     return city
+
+
+def _check_landmarks_lie_within_a_region(city: CityConfig, path: Path) -> None:
+    """Every landmark's position falls inside some declared region.
+
+    A landmark outside every region would still have its source meshes
+    excluded wherever a sheet carries them, while its model ships nowhere —
+    a hole with no hero over it. Checked at load for the reason
+    `_check_source_exists` gives: the failure would otherwise surface as a
+    validation finding regions away from the typo that caused it.
+    """
+    for index, landmark in enumerate(city.landmarks):
+        contained = any(
+            bounds.min_easting <= landmark.easting <= bounds.max_easting
+            and bounds.min_northing <= landmark.northing <= bounds.max_northing
+            for bounds in (city.projected_bounds(region_id) for region_id in city.regions)
+        )
+        if not contained:
+            raise ValueError(
+                f"{path}:landmarks[{index}] ({landmark.id}) sits at "
+                f"E {landmark.easting}, N {landmark.northing} — inside no declared region"
+            )
 
 
 def _check_exposure(city: CityConfig, path: Path) -> None:
@@ -1948,6 +2011,63 @@ def _podium_blocks(body: dict[str, Any], where: str) -> PodiumBlocks:
             _require(body, "blocks", where), f"{where}:blocks", _PODIUM_BLOCK_ROLES
         ),
         codes=_fields(body, where, _PODIUM_CODE_ROLES, key="codes"),
+    )
+
+
+# Where a landmark's committed model must live. Game layout rather than city
+# data — `docs/ARCHITECTURE.md` fixes it and CLAUDE.md commits the directory —
+# so pinning it here is contract enforcement, not a hard-rule-3 violation.
+_LANDMARK_ASSET_ROOT = "res://assets/authored/landmarks/"
+
+
+def _landmarks(entries: list[Any], where: str) -> tuple[Landmark, ...]:
+    landmarks = tuple(_landmark(entry, f"{where}[{index}]") for index, entry in enumerate(entries))
+    seen: dict[str, str] = {}
+    for index, landmark in enumerate(landmarks):
+        place = f"{where}[{index}]"
+        if landmark.id in seen:
+            raise ValueError(f"{place} reuses id {landmark.id!r}, declared at {seen[landmark.id]}")
+        seen[landmark.id] = place
+    stems: dict[str, str] = {}
+    for index, landmark in enumerate(landmarks):
+        for stem in landmark.replaces_source_ids:
+            place = f"{where}[{index}]"
+            if stem in stems:
+                # Two heroes claiming one building would have the second's
+                # equality check fail on a stem the first already consumed —
+                # a confusing report for a config-local mistake.
+                raise ValueError(f"{place} replaces {stem!r}, already claimed at {stems[stem]}")
+            stems[stem] = place
+    return landmarks
+
+
+def _landmark(body: dict[str, Any], where: str) -> Landmark:
+    asset = str(_require(body, "asset", where))
+    if not asset.startswith(_LANDMARK_ASSET_ROOT) or not asset.endswith(".glb"):
+        raise ValueError(
+            f"{where}:asset is {asset!r}, expected a .glb under {_LANDMARK_ASSET_ROOT} — "
+            "authored landmark models are committed there (docs/ARCHITECTURE.md)"
+        )
+    names = _require(body, "name", where)
+    replaces = _require(body, "replaces_source_ids", where)
+    if not isinstance(replaces, list) or not replaces:
+        # An empty list would place a hero inside the source building it was
+        # meant to replace — the z-fighting the field exists to prevent.
+        raise ValueError(f"{where}:replaces_source_ids must be a non-empty list")
+    position = _measures(
+        _require(body, "pos", where), f"{where}:pos", ("easting", "northing", "elevation")
+    )
+    rotation = _measures(body, where, ("rot_y_deg",))
+    return Landmark(
+        id=str(_require(body, "id", where)),
+        asset=asset,
+        easting=position["easting"],
+        northing=position["northing"],
+        elevation=position["elevation"],
+        rot_y_deg=rotation["rot_y_deg"],
+        name_en=str(_require(names, "en", f"{where}:name")),
+        name_zh=str(_require(names, "zh", f"{where}:name")),
+        replaces_source_ids=tuple(str(stem) for stem in replaces),
     )
 
 

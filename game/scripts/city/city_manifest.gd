@@ -41,7 +41,12 @@ const PATH: String = "res://assets/generated/city.json"
 ## facade-survey state in `x` (glazed / tint bin / grammar, 0 = refused, falling
 ## back to the hash) with `y` reserved for `Q42`'s riders. A v5 reader would
 ## silently draw the hash city while the bundle claims the survey.
-const SCHEMA_VERSION: int = 6
+##
+## 7 since `P3-6`: the manifest names `landmarks.json`, and the tiles no longer
+## contain the buildings its heroes replace. The bump is for the removal: a v6
+## reader would draw holes where the excluded buildings stood, with no hero
+## over them.
+const SCHEMA_VERSION: int = 7
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -101,6 +106,7 @@ var tiles: Array[Tile] = []
 var road_graph_path: String
 var road_surface_path: String
 var fares_path: String
+var landmarks_path: String
 
 ## Drawn half-width of the carriageway, in metres, keyed by road-graph edge id —
 ## **one value per station** of that edge's `roadgraph.json` polyline.
@@ -140,6 +146,7 @@ static func load_manifest() -> CityManifest:
 	manifest.road_graph_path = _resolve(document.get("road_graph", ""))
 	manifest.road_surface_path = _resolve(document.get("road_surface", ""))
 	manifest.fares_path = _resolve(document.get("fares", ""))
+	manifest.landmarks_path = _resolve(document.get("landmarks", ""))
 	for entry: Dictionary in document.get("carriageway", []):
 		var halves := PackedFloat32Array()
 		for half: float in entry.get("half_width_m", []):
@@ -177,12 +184,12 @@ static func bearing_deg(forward: Vector3) -> float:
 	return fposmod(rad_to_deg(atan2(forward.x, -forward.z)), 360.0)
 
 
-## Every file the manifest *names*, in order: the three documents, then every
+## Every file the manifest *names*, in order: the four documents, then every
 ## tier of every tile. Not every file a build ships — `city.json` itself is not
 ## in the list, because it names the others and not itself. A caller copying a
 ## region wants this plus `PATH`, which is what `tools/sync_generated.sh` does.
 func shipped() -> PackedStringArray:
-	var paths: PackedStringArray = [road_graph_path, road_surface_path, fares_path]
+	var paths: PackedStringArray = [road_graph_path, road_surface_path, fares_path, landmarks_path]
 	for tile: Tile in tiles:
 		paths.append_array(tile.lods)
 	return paths

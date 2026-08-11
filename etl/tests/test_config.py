@@ -1398,6 +1398,79 @@ class TestPodiums:
     def test_the_real_config_maps_both_code_roles(self, hong_kong) -> None:
         assert hong_kong.podiums.code("tower") != hong_kong.podiums.code("podium")
 
+
+class TestLandmarks:
+    """The `landmarks:` block — P3-6's hero placements.
+
+    Stem *format* is deliberately not validated (an id's shape is a publisher's
+    spelling, hard rule 3); a typo'd stem is `export.validate`'s catch. What
+    load does refuse is everything that is wrong before any data is read.
+    """
+
+    def test_the_real_config_places_the_first_two_heroes(self, hong_kong) -> None:
+        by_id = {landmark.id: landmark for landmark in hong_kong.landmarks}
+        assert set(by_id) >= {"hkcec", "central_plaza"}
+        for landmark in by_id.values():
+            assert landmark.replaces_source_ids, landmark.id
+            assert landmark.asset.startswith("res://assets/authored/landmarks/")
+
+    def test_the_block_is_optional(self, rewrite) -> None:
+        city = load_city("hong_kong", cities_root=rewrite(lambda doc: doc.pop("landmarks")))
+        assert city.landmarks == ()
+
+    def test_a_reused_id_is_rejected(self, rewrite) -> None:
+        def duplicate(doc: dict[str, Any]) -> None:
+            doc["landmarks"].append(dict(doc["landmarks"][0]))
+
+        with pytest.raises(ValueError, match="reuses id"):
+            load_city("hong_kong", cities_root=rewrite(duplicate))
+
+    def test_a_stem_claimed_twice_is_rejected(self, rewrite) -> None:
+        """Two heroes over one building would fail export's set-equality check
+        with a report pointing regions away from the config mistake."""
+
+        def share(doc: dict[str, Any]) -> None:
+            doc["landmarks"][1]["replaces_source_ids"] = list(
+                doc["landmarks"][0]["replaces_source_ids"]
+            )
+
+        with pytest.raises(ValueError, match="already claimed"):
+            load_city("hong_kong", cities_root=rewrite(share))
+
+    def test_an_empty_replacement_list_is_rejected(self, rewrite) -> None:
+        """A hero replacing nothing lands inside the source building it was
+        meant to replace — the z-fighting the field exists to prevent."""
+
+        def strip(doc: dict[str, Any]) -> None:
+            doc["landmarks"][0]["replaces_source_ids"] = []
+
+        with pytest.raises(ValueError, match="non-empty"):
+            load_city("hong_kong", cities_root=rewrite(strip))
+
+    def test_an_asset_outside_the_authored_directory_is_rejected(self, rewrite) -> None:
+        def relocate(doc: dict[str, Any]) -> None:
+            doc["landmarks"][0]["asset"] = "res://assets/generated/hkcec.glb"
+
+        with pytest.raises(ValueError, match="authored/landmarks"):
+            load_city("hong_kong", cities_root=rewrite(relocate))
+
+    def test_a_position_inside_no_region_is_rejected(self, rewrite) -> None:
+        """Excluded wherever its sheets are read, shipped nowhere — a hole with
+        no hero over it, refused at load rather than found in a build."""
+
+        def strand(doc: dict[str, Any]) -> None:
+            doc["landmarks"][0]["pos"]["easting"] = 800000.0
+
+        with pytest.raises(ValueError, match="inside no declared region"):
+            load_city("hong_kong", cities_root=rewrite(strand))
+
+    def test_a_missing_display_name_is_rejected(self, rewrite) -> None:
+        def drop(doc: dict[str, Any]) -> None:
+            del doc["landmarks"][0]["name"]["zh"]
+
+        with pytest.raises(ValueError, match="zh"):
+            load_city("hong_kong", cities_root=rewrite(drop))
+
     def test_the_tile_suffix_is_parsed_onto_the_source(self, hong_kong) -> None:
         assert hong_kong.tiled_sources["topography"].tile_suffix == ".zip"
         assert hong_kong.tiled_sources["buildings"].tile_suffix is None

@@ -653,6 +653,56 @@ podiums:
     tower: T
     podium: P
 
+# Hero buildings shipped as authored models (P3-6) — the landmarks.json
+# contract in docs/ARCHITECTURE.md. The building stage excludes every stem
+# named in `replaces_source_ids` from the tile meshes; export.py converts each
+# `pos` to game space and writes the shipped document.
+#
+# ⚠️ `replaces_source_ids` holds *stems* — DATA_SOURCES.md's cross-dataset
+# building key (the source id minus its variant suffix), the same key the
+# facade survey and P3-7a's override table join on. A stem that matches no
+# source mesh fails export validation, both directions.
+#
+# ⚠️ `pos` is projected CRS (easting/northing, metres) with elevation in mPD —
+# the numbers are checkable against the sheets by eye. `rot_y_deg` is a compass
+# bearing, 0 = north rising eastward, per CityManifest.bearing_deg.
+#
+# Names are display names for HUD/credits use — never rendered signage (Q42,
+# hard rule 8).
+landmarks:
+  # Phase 2 island wing + atrium link only. The Phase 1 podium south of Harbour
+  # Road is a different stem (B358611580502063) carrying four separately-named
+  # towers above it — all stay generated. Discovered 2026-08-12 from 11-SW-9D:
+  # iB1000 block 1103124251 (base 3.6 / roof 70.3 mPD, CERTAINTY 1), 3D-BIT
+  # mesh footprint 201 x 349 m, top 71.9 mPD, single mesh, no sheet-edge dupes.
+  - id: hkcec
+    asset: "res://assets/authored/landmarks/hkcec.glb"
+    pos:
+      easting: 835867.5 # base-band footprint centroid of the excluded mesh
+      northing: 816041.0
+      elevation: 4.0 # mesh base 3.99 mPD; the model's plinth continues 1 m down
+    rot_y_deg: 6.4 # major plan axis, PCA over the source mesh — near north-south
+    name:
+      en: "Convention Centre"
+      zh: "會展"
+    replaces_source_ids: [B358761603301063]
+
+  # iB1000 block 1103126797 (base 3.9 / roof 380.7 mPD, CERTAINTY 1, no P
+  # block — DATA_SOURCES.md); 3D-BIT mesh footprint 78.6 x 82.9 m, top
+  # 378.5 mPD. The footbridge touching the podium is INFRASTRUCTURE class and
+  # a different stem; it stays generated.
+  - id: central_plaza
+    asset: "res://assets/authored/landmarks/central_plaza.glb"
+    pos:
+      easting: 835930.5
+      northing: 815683.0
+      elevation: 4.0
+    rot_y_deg: 143.1 # triangular plan's major axis; refine in the art pass
+    name:
+      en: "Central Plaza"
+      zh: "中環廣場"
+    replaces_source_ids: [B359321570101063]
+
 # How P1-3 turns Road Network v2 into a drivable graph.
 #
 # The `fields:` maps below exist because column names are the Transport

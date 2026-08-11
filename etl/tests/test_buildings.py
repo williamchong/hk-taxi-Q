@@ -22,6 +22,7 @@ import pytest
 from pipeline import fetch, gdb
 from pipeline.buildings import (
     BUILDINGS_MANIFEST_NAME,
+    BUILDINGS_MANIFEST_SCHEMA,
     COLLISION_TIER,
     GRAMMAR_STATES,
     SOURCE_ID,
@@ -45,6 +46,7 @@ from pipeline.config import (
     BuildingStyle,
     ChromaRing,
     HueSector,
+    Landmark,
     Material,
     SurfaceClass,
     WeightedDraw,
@@ -1196,6 +1198,93 @@ class TestBuildRegion:
                 sources_root=tmp_path / "empty",
                 out_root=tmp_path / "out",
             )
+
+
+class TestLandmarkExclusion:
+    """`P3-6`: a stem named by a landmark never reaches a tile.
+
+    Exclusion is tested through the whole stage rather than on a filter
+    function, because the failure that matters is downstream: a mesh that
+    slips past lands in a merged tile where no assertion can find it by name
+    — identity dies at `merge`, which is also why the excluded AABB has to be
+    recorded on the way out.
+    """
+
+    HERO_HEIGHT = 90.0
+
+    def fixtures(self) -> list[Fixture]:
+        return [
+            # Distinct stems on purpose: `stem` strips two characters, so the
+            # default fixture names (B0001, B0002) share the stem "B00" and a
+            # test excluding one would silently exclude the other.
+            Fixture("hero_aC0", "BUILDING", 90.0, 90.0, self.HERO_HEIGHT),
+            Fixture("keep_bC0", "BUILDING", 75.0, 75.0, 10.0),  # same tile
+            # The same stem on the terrain class: ground is never excluded.
+            Fixture("hero_aC0", "TERRAIN(TB)", 90.0, 90.0, 0.5, footprint=100.0, textured=True),
+        ]
+
+    def hero(self, hong_kong, *stems: str) -> Landmark:
+        easting, northing, _ = _to_source(hong_kong, 90.0, 90.0)
+        return Landmark(
+            id="hero",
+            asset="res://assets/authored/landmarks/hero.glb",
+            easting=easting,
+            northing=northing,
+            elevation=0.0,
+            rot_y_deg=0.0,
+            name_en="Hero",
+            name_zh="主角",
+            replaces_source_ids=stems or ("hero_a",),
+        )
+
+    def build(self, city, sources, tmp_path: Path):
+        return build_region(
+            city,
+            "wan_chai",
+            sources_root=sources(self.fixtures()),
+            out_root=tmp_path / "out",
+        )
+
+    def test_the_named_stem_vanishes_and_its_neighbour_stays(
+        self, hong_kong, sources, tmp_path
+    ) -> None:
+        city = replace(hong_kong, landmarks=(self.hero(hong_kong),))
+        report = self.build(city, sources, tmp_path)
+        # The filter found something — `P3-11`'s filtered-set lesson.
+        assert report.replaced == 1
+        tile = {output.id: output for output in report.tiles}["t_00_00"]
+        # The hero was the tall one; with it gone the tile tops out at the
+        # keeper. Height is the signal precisely because names do not survive.
+        assert tile.aabb[1][1] < self.HERO_HEIGHT / 2.0
+
+    def test_ground_sharing_the_stem_is_never_excluded(self, hong_kong, sources, tmp_path) -> None:
+        city = replace(hong_kong, landmarks=(self.hero(hong_kong),))
+        report = self.build(city, sources, tmp_path)
+        assert report.replaced == 1  # the building, not the terrain under it
+        assert any(tile.id == "t_00_00" for tile in report.tiles)
+
+    def test_the_manifest_records_what_was_dropped_and_where(
+        self, hong_kong, sources, tmp_path
+    ) -> None:
+        city = replace(hong_kong, landmarks=(self.hero(hong_kong),))
+        self.build(city, sources, tmp_path)
+        manifest = json.loads(
+            (tmp_path / "out" / "hong_kong" / "wan_chai" / BUILDINGS_MANIFEST_NAME).read_text(
+                encoding="utf-8"
+            )
+        )
+        assert manifest["schema_version"] == BUILDINGS_MANIFEST_SCHEMA
+        low, high = manifest["excluded"]["hero_a"]
+        # The fixture stands at (90, 90) with a 20 m footprint.
+        assert low[0] == pytest.approx(80.0, abs=0.5)
+        assert high[0] == pytest.approx(100.0, abs=0.5)
+        assert high[1] == pytest.approx(self.HERO_HEIGHT, abs=0.5)
+
+    def test_without_landmarks_nothing_is_replaced(self, hong_kong, sources, tmp_path) -> None:
+        city = replace(hong_kong, landmarks=())
+        report = self.build(city, sources, tmp_path)
+        assert report.replaced == 0
+        assert report.excluded == {}
 
 
 class TestTileGround:
