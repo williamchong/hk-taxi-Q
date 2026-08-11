@@ -197,13 +197,20 @@ class CentralPlaza:
 
     podium_half_x_m: float = 39.0
     podium_half_z_m: float = 41.0
+    podium_base_m: float = 12.0  # granite arcade under the atrium glass
     podium_m: float = 30.5
     tower_radius_m: float = 33.0  # triangle centroid to apex
     corner_cut_m: float = 7.5
+    # The lighter mechanical band two-thirds up — with the crown, the feature
+    # that separates this tower from every flat-topped shaft around it.
+    band_low_m: float = 160.0
+    band_high_m: float = 166.0
     shaft_top_m: float = 288.0
-    crown_top_m: float = 330.0  # pyramid
+    pyramid_top_m: float = 335.0  # the glass pyramid's apex
+    mast_step_m: float = 352.0  # the mast thins here
     mast_top_m: float = 374.5  # mesh top 378.53 mPD less base 4.0
-    mast_half_m: float = 1.2
+    mast_half_m: float = 2.2
+    mast_tip_half_m: float = 1.0
 
 
 def tri_ring(y: float, radius: float, cut: float) -> tuple[Point, ...]:
@@ -376,7 +383,7 @@ def _wall_ring(p: Hkcec, y: float | None) -> tuple[Point, ...]:
 
 
 def build_central_plaza(p: CentralPlaza | None = None) -> MeshData:
-    """Podium, triangular shaft, pyramid crown, mast."""
+    """Granite-and-glass podium, banded triangular shaft, glass pyramid, mast."""
     p = p or CentralPlaza()
     podium = loft(
         [
@@ -387,9 +394,12 @@ def build_central_plaza(p: CentralPlaza | None = None) -> MeshData:
                 p.podium_half_z_m + 2.0,
                 6.0,
             ),
+            ring(p.podium_base_m, p.podium_half_x_m, -p.podium_half_z_m, p.podium_half_z_m, 6.0),
             ring(p.podium_m, p.podium_half_x_m, -p.podium_half_z_m, p.podium_half_z_m, 6.0),
         ],
-        [CONCRETE.colour],
+        # Arcade below, the atrium's glass above — the podium is where the
+        # driver actually is, so it gets the one band the tower can spare.
+        [CONCRETE.colour, GLASS.colour],
         bottom=CONCRETE.colour,
         top=CONCRETE.colour,
         name="central_plaza_podium",
@@ -397,30 +407,41 @@ def build_central_plaza(p: CentralPlaza | None = None) -> MeshData:
     shaft = loft(
         [
             tri_ring(p.podium_m, p.tower_radius_m, p.corner_cut_m),
+            tri_ring(p.band_low_m, p.tower_radius_m, p.corner_cut_m),
+            tri_ring(p.band_high_m, p.tower_radius_m, p.corner_cut_m),
             tri_ring(p.shaft_top_m, p.tower_radius_m, p.corner_cut_m),
         ],
-        [GOLD.colour],
+        [GOLD.colour, GOLD_BAND.colour, GOLD.colour],
         bottom=GOLD.colour,
         top=GOLD_BAND.colour,
         name="central_plaza_shaft",
     )
-    crown = loft(
+    pyramid = loft(
         [
             tri_ring(p.shaft_top_m, p.tower_radius_m, p.corner_cut_m),
-            tri_ring(p.crown_top_m, 3.0, 1.0),
+            tri_ring(p.pyramid_top_m, 3.0, 1.0),
         ],
         [ALUMINIUM.colour],
         bottom=GOLD_BAND.colour,
         top=ALUMINIUM.colour,
-        name="central_plaza_crown",
+        name="central_plaza_pyramid",
     )
-    mast = box_at(
-        (0.0, (p.crown_top_m + p.mast_top_m) / 2.0, 0.0),
-        (p.mast_half_m, (p.mast_top_m - p.crown_top_m) / 2.0, p.mast_half_m),
+    mast_base = box_at(
+        (0.0, (p.pyramid_top_m + p.mast_step_m) / 2.0, 0.0),
+        (p.mast_half_m, (p.mast_step_m - p.pyramid_top_m) / 2.0, p.mast_half_m),
         ALUMINIUM.colour,
-        name="central_plaza_mast",
+        name="central_plaza_mast_base",
     )
-    return replace(merge([podium, shaft, crown, mast], name="central_plaza-col"), material=MATERIAL)
+    mast_tip = box_at(
+        (0.0, (p.mast_step_m + p.mast_top_m) / 2.0, 0.0),
+        (p.mast_tip_half_m, (p.mast_top_m - p.mast_step_m) / 2.0, p.mast_tip_half_m),
+        ALUMINIUM.colour,
+        name="central_plaza_mast_tip",
+    )
+    return replace(
+        merge([podium, shaft, pyramid, mast_base, mast_tip], name="central_plaza-col"),
+        material=MATERIAL,
+    )
 
 
 def build_landmarks() -> list[tuple[str, MeshData]]:
