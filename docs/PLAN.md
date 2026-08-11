@@ -328,10 +328,12 @@ trade.
   4. `W4` — **authored override table, exceptions only.** A committed per-city data file keyed by
      the stable building-ID stem (`DATA_SOURCES.md`'s cross-dataset key), precedence
      **authored > survey > hash**, merged at the same site as the survey overrides. After `W3` this
-     is heroes and stragglers, not a population — the canonical entry is HKCEC's base: a
+     is heroes and stragglers, not a population — the canonical entry *was* HKCEC's base: a
      committed-glazed building that is right about its towers and wrong about its podium — and
      `Q47`'s call shrinks this entry: its podium is its own iB1000 `P` block (3.7→56.0 mPD), so
-     the extent comes from data and any remaining override covers treatment only. ⚠️ Never a
+     the extent comes from data and any remaining override covers treatment only. ⚠️ **`P3-6`
+     (2026-08-12) then removed HKCEC from the tiles entirely — the canonical entry is moot; do
+     not author an HKCEC row.** Only the stragglers remain. ⚠️ Never a
      route around the survey at scale: 771 grammar-refused buildings is the population that
      disqualified overrides as the systematic fix. `Q47` re-proved that from the committed side —
      the tinted drive test put the

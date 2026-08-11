@@ -3004,6 +3004,67 @@ far more likely means the change never arrived than that it had no effect.** Run
 **See.** `P0-5a` · `ART_DESIGN.md` "Vehicles" · `ARCHITECTURE.md` "The importer can reinstate
 `VehicleWheel3D`"
 
+## `P3-6` — Two heroes replace their source meshes, and the contract is the deliverable
+
+**Status.** 🟡 Awaiting review · first two of five shipped (HKCEC, Central Plaza), 2026-08-12
+
+**Claim.** `landmarks.json` ships as drafted in `ARCHITECTURE.md`, with the gaps the draft left
+now decided: it is **assembled by `export.py`** from a `landmarks:` block in the city config (no
+new stage — ~2 entries and one CRS conversion do not buy a stage's ceremony), named in the
+manifest under a `landmarks` key (`city.json` 6 → 7 — an old reader would draw holes where the
+excluded buildings stood), and keyed by **stems**, the `DATA_SOURCES.md` cross-dataset building
+key, not the draft's invented `bldg_*` ids. Placement is authored in the projected CRS — the
+numbers are checkable against the sheets by eye — and `rot_y_deg` is a **compass bearing** with
+exactly one conversion site (`generated_landmarks.gd::placement_of`). `P2-1`'s "heroes never pass
+through `buildings.py`" survives intact: the stage only *removes* — and the removal is where
+`excluded_bounds` gets recorded, because identity dies at `merge` and nothing downstream can
+recover where a building stood.
+
+**The acceptance criterion is enforced from two sides that cannot see each other.** "Source
+geometry excluded" is an identity claim and a geometry claim. Identity: `export.py --check` holds
+the config's stems and `buildings.json`'s recorded exclusions **set-equal, both directions** — a
+typo'd stem (z-fighting) and an orphaned exclusion (a hole) are different failures with different
+messages. Geometry: `verify_landmarks.gd` probes the shipped tier-0 tiles for triangles inside
+each excluded footprint's **interior core** — half the plan extents, floored 16 m above base —
+because the full AABB is honestly occupied at its rim (Phase 1's shared wall overlaps HKCEC's
+corner by metres; Central Plaza's footbridge clips its box) and a naive probe would fail forever
+on neighbours that belong there.
+
+⚠️ **Generated, not modelled — but not on `P3-11`'s argument.** That rationale was a proportion
+family with a roster behind it, and five bespoke silhouettes have neither. The argument here is
+reproducibility: a committed generator builds the models from a fresh clone, the byte-comparison
+test catches "edited the generator, forgot to re-run", the proportions are parameterised from
+surveyed dimensions that cite their sheets, and review happens in a diff. A modelled `.glb` would
+be a binary blob whose provenance is a commit message.
+
+⚠️ **Vertex-coloured only; "light texturing" is deferred, not refused** (user call, 2026-08-12).
+The anti-goals ban textures because `merge` cannot carry them; heroes bypass `merge`, so the ban's
+stated reason does not reach them — but the first texture in an untextured bundle is its own
+decision, and the wing and crown carried the silhouettes without it. Hero colours obey `Q33`/`Q38`
+mechanically: `make_landmark.py` self-checks its palette against the live `exposure_anchor` on the
+same tolerance `_check_exposure` applies to the YAML, so an anchor change stops the generator
+loudly.
+
+⚠️ **HKCEC is Phase 2 plus the atrium link, and nothing else.** The named iB1000 block (1103124251)
+covers the island and link; the Phase 1 podium south of Harbour Road is a different stem
+(`B358611580502063`) carrying four separately-named towers, all still generated. **This makes
+`W4`'s canonical HKCEC entry moot** — `P3-7a`'s override table was headlined by HKCEC's committed-
+glazed base, and that base is no longer in any tile. `W4` shrinks; do not author an HKCEC row.
+
+⚠️ **The excluded footprints must stay inside `bounds_game`.** Removal shrinks tile AABBs, and the
+bounds would silently contract past geometry the region still contains — the hero standing where
+the source stood — so `export.py` adds each `excluded_bounds` back into the union. The placed-
+model check in `verify_landmarks.gd` allows 15 m of overhang for the plinth and for the rotated
+massing's AABB swinging past the source's axis-aligned one (~11 m on HKCEC's 349 m at 6.4°).
+
+**Measured.** `replaced = 2` meshes (= 2 stems; no sheet-edge duplicates), 66 tiles unchanged in
+count. Heroes 130 + 132 triangles against 8k each. PCK **36.57 → 33.85 MB** — the exclusion gave
+back ~2.7 MB of tile geometry and the heroes cost 17 KB. Draw calls: 53 measured pre-`P3-6`
+resident set + 2 heroes, still far under 150.
+
+**See.** `ARCHITECTURE.md` "landmarks.json" · `ART_DESIGN.md` "Hero buildings" · `Q33` · `Q38` ·
+`Q42` · `Q47` · `P3-7a` `W4` · `P3-11`
+
 ---
 
 # Standing decisions
