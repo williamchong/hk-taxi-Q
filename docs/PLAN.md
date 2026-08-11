@@ -346,18 +346,18 @@ trade.
      floors on this face*, never a raw read. A committed pitch replaces `floor_height_m` for that
      building; the city constant stays the fallback.
   7. `R3` — `balconies` (bits 12–13), selecting a punched variant.
-  8. `R4` — podium (bits 7–11), **last, and only after its conversion is written down**: `Q43`
-     names `podium_floors` ("lowest floors forming a visibly distinct podium") against
-     `podium_height_m` ("where the tower grid starts") as the next semantic-drift casualty. Put the
-     two sentences side by side in the record and convert (floors × reconciled pitch → metres) —
-     never assign. `Q47`'s route call (2026-08-10) fixes this rider's bar and narrows its job:
-     grade floors→metres against the joined boundaries in `podiums.json` (the tower↔block join
-     landed 2026-08-11 — 310 stems with data metres) **before packing**, and pack only
-     where no `P` block supplies the boundary — precedence **data > survey-inferred**, and the
-     data-metres themselves convert against the packed pitch at pack time (`Q47`'s contract
-     argument).
-     `podium_glazed` then informs `has_shop`, the only data-supported route to a
-     shopfront sitting roughly where one is.
+  8. `R4` — podium (bits 7–11), **last, after `R2`, and data-only**: `Q43` named `podium_floors`
+     ("lowest floors forming a visibly distinct podium") against `podium_height_m` ("where the
+     tower grid starts") as the next semantic-drift casualty, and the graded run proved it —
+     floors × reconciled pitch, graded against the joined boundaries in `podiums.json`
+     (310 stems with data metres) on 2026-08-11 by `tools/podium_error.py`, **failed its
+     pre-fixed bar** (\|err\| p50 10.76 m against 2.8; Spearman ρ = 0.076, no per-building
+     signal). The re-call (`Q47`, same day): pack **data boundaries only**, converting against
+     the packed pitch at pack time — after `R2`, so the round-trip bound holds; survey floors
+     never pack metres; the complement keeps the shader uniform, and the ground-band batch's
+     prompt owes the correctly-worded boundary predicate. `podium_glazed` still informs
+     `has_shop`, the only data-supported route to a shopfront sitting roughly where one is —
+     priced by Pool B's 40% blindness, bar owed at its turn.
 - ⚠️ **Each rider owes its own validation, bar fixed before grading.** The graded run validated
   grammar and glazing only; `Q42`'s fill rates are prioritisation evidence, not validation. Each
   rider closes its slice of `Q42` in `DECISIONS.md` as it lands.

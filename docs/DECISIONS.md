@@ -3612,8 +3612,8 @@ refused building draws fewer lit windows, on this same eligibility signal.
 ## `Q47` — A committed verdict is right about the tower, wrong about the ground band
 
 **Status.** 🟡 **Route decided 2026-08-10** — the sequence in "The call" below; `R4`'s conversion
-**failed its pre-fixed bar 2026-08-11**, so the survey-complement half is reopened and the pack is
-blocked on a re-call; closes when the shipped boundary is graded · **Owner.** `P3-7a`
+**failed its pre-fixed bar 2026-08-11** and the route was **re-called the same day: data-only** —
+survey podium metres never pack; closes when the shipped boundary is graded · **Owner.** `P3-7a`
 
 **The finding.** With `survey_debug` tinting the city by survey state, the user attributed the
 wrong windows that survived `Q46`'s quiet tier **overwhelmingly to committed (green) stock**:
@@ -3872,5 +3872,31 @@ re-call is a route decision, not this grading's to make. What survives untouched
 (the 310 data boundaries this grade conditioned on), the reconciled-pitch prescription, and
 `podium_glazed → has_shop`, which never depended on the metres conversion. The pack stays
 blocked until the route is re-called.
+
+**The re-call (2026-08-11): data-only — option (a), by measurement.** The reopened half closed
+the day it opened, because the choice was measurable on data already in hand. Within Pool A the
+rank correlation between the survey's converted metres and the data boundary is **Spearman
+ρ = 0.076** — no per-building signal — so the best affine correction option (b) could ever ship
+(\|err\| p50 2.46 m, fitted *in-sample* on the set that would grade it) is dominated by
+constants: the shader's existing `podium_height_m = 12.0` uniform already achieves 2.97 / 5.99 on
+the same pool, and the pool's own median (14.31) achieves 1.36. At ρ ≈ 0.08 any honest stated
+rule collapses to "ignore `podium_floors`", which *is* option (a) — and no correction reaches
+Pool B's 40% of certain podiums the reader cannot see at all. Three consequences:
+
+1. **Bits 7–11 fill from `podiums.json` rows alone** (`mechanism: "data"`), converting against
+   the packed pitch at pack time, in `R4`'s existing slot **after `R2`**. The order is
+   load-bearing, not ceremony: a boundary packed today would convert against an ETL copy of the
+   2.8 m fallback while the shader multiplies its own uniform — two 2.8s that a `.tres` retune
+   could split silently, the exact two-grid drift point (ii) refuses. The complement packs
+   nothing and keeps the uniform, which this grade measured as the better estimator anyway.
+2. **Survey `podium_floors` never packs metres.** `podium_glazed → has_shop` survives — it never
+   depended on the conversion — but Pool B prices its blindness: the reader misses 40% of
+   certain podiums, so that rider owes its own bar at its own turn.
+3. **The ground-band batch now owns the complement's boundary predicate.** Its prompt (design
+   now, pay after `P3-9a`) owes the question this grade proved unasked — *where the tower grid
+   starts, in floors* — so the complement's bits have a named future filler under the same
+   codec, not a hope. A uniform retune (12 → ~13.5) is refused for now: it is an art call
+   (`Q26`) measured only on `P`-block towers, and it moves every building to chase a population
+   that may not generalise.
 
 **See.** `Q46` · `Q41` · `Q42` · `Q43` · `Q34` · `P3-7a`
