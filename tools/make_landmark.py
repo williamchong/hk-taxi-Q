@@ -44,7 +44,7 @@ from pipeline.colour import reflectance  # noqa: E402
 from pipeline.config import EXPOSURE_TOLERANCE_PCT, load_city  # noqa: E402
 from pipeline.gltf import MeshData, write_glb  # noqa: E402
 from pipeline.mesh import merge  # noqa: E402
-from primitives import Colour, Point, box_at, loft, ring  # noqa: E402
+from primitives import Colour, Point, box_at, loft, polygon_facing, ring  # noqa: E402
 
 LOG = logging.getLogger("make_landmark")
 
@@ -137,6 +137,21 @@ PLINTH_DEPTH_M = 1.0
 
 
 @dataclass(frozen=True)
+class WingStation:
+    """One cross-section of the roof shell, at `z_m` along the island.
+
+    The wing is a sequence of these rather than a curve, on the chamfer rule
+    (`P3-11`): faces stay flat and every station edge stays crisp, so the
+    swoop reads as low-poly rather than as failed smoothing.
+    """
+
+    z_m: float
+    ridge_m: float  # roof centreline height
+    eave_m: float  # height where the roof meets its outer edge
+    half_w_m: float  # eave tip from the centreline
+
+
+@dataclass(frozen=True)
 class Hkcec:
     """Phase 2 — the island wing and its atrium link, stem `B358761603301063`.
 
@@ -145,8 +160,11 @@ class Hkcec:
     mesh (footprint 201 x 349 m including the link, top 71.9 mPD). Local frame:
     -z is the model's north — the harbour side the roof sweeps toward.
 
-    ⚠️ This is the **massing pass**: right footprint, right heights, the wing
-    stated as an asymmetric swoop. The curved roof is the art commit's job.
+    The stations state the identifying silhouette: the roof narrows and dips
+    into a prow over the harbour, crests a third of the way back at the mesh's
+    ~66 m, and settles over the hall's shoulder — with the eaves flared past
+    the walls, because the overhang is what makes it read as a wing rather
+    than as a hipped roof.
     """
 
     island_half_x_m: float = 95.0  # 3D-BIT E span 201.3 m
@@ -156,9 +174,16 @@ class Hkcec:
     link_half_x_m: float = 22.0
     link_roof_m: float = 18.0
     podium_m: float = 8.0  # concrete base band
-    hall_roof_m: float = 30.0  # glass hall shoulder
-    ridge_m: float = 66.0  # roof crest; mesh top 71.9 mPD less base 4.0, eased
+    wall_inset_m: float = 13.0  # walls stand this far inside the eave tips
+    fascia_m: float = 1.8  # roof edge thickness — the line the eye reads
     corner_cut_m: float = 10.0
+    stations: tuple[WingStation, ...] = (
+        WingStation(-157.0, 40.0, 34.0, 55.0),  # the prow, narrow and low
+        WingStation(-122.0, 60.0, 47.0, 88.0),
+        WingStation(-85.0, 66.0, 52.0, 95.0),  # crest — mesh top 71.9 mPD, eased
+        WingStation(-20.0, 58.0, 46.0, 95.0),
+        WingStation(43.0, 46.0, 38.0, 90.0),  # over the hall's south shoulder
+    )
 
 
 @dataclass(frozen=True)
@@ -202,10 +227,86 @@ def tri_ring(y: float, radius: float, cut: float) -> tuple[Point, ...]:
     return tuple(points)
 
 
+def _wing(stations: Sequence[WingStation], fascia_m: float, colour: Colour) -> MeshData:
+    """The roof shell: tent-section top, flat soffit, fascia edges, two caps.
+
+    Hand-assembled from `polygon_facing` rather than lofted, because a loft's
+    band takes one colour per band and one centroid per profile — and this
+    shape's soffit faces down while its ridge faces up in the *same* band.
+    Outward hints are stated per face; the winding corrects itself.
+    """
+    parts: list[MeshData] = []
+    for i in range(len(stations) - 1):
+        a, b = stations[i], stations[i + 1]
+        quads = (
+            # Top surface, ridge to each eave.
+            (
+                [
+                    (-a.half_w_m, a.eave_m, a.z_m),
+                    (0.0, a.ridge_m, a.z_m),
+                    (0.0, b.ridge_m, b.z_m),
+                    (-b.half_w_m, b.eave_m, b.z_m),
+                ],
+                (-0.4, 1.0, 0.0),
+            ),
+            (
+                [
+                    (a.half_w_m, a.eave_m, a.z_m),
+                    (0.0, a.ridge_m, a.z_m),
+                    (0.0, b.ridge_m, b.z_m),
+                    (b.half_w_m, b.eave_m, b.z_m),
+                ],
+                (0.4, 1.0, 0.0),
+            ),
+            # Fascia — the roof-edge line the eye reads at distance.
+            (
+                [
+                    (-a.half_w_m, a.eave_m, a.z_m),
+                    (-b.half_w_m, b.eave_m, b.z_m),
+                    (-b.half_w_m, b.eave_m - fascia_m, b.z_m),
+                    (-a.half_w_m, a.eave_m - fascia_m, a.z_m),
+                ],
+                (-1.0, 0.0, 0.0),
+            ),
+            (
+                [
+                    (a.half_w_m, a.eave_m, a.z_m),
+                    (b.half_w_m, b.eave_m, b.z_m),
+                    (b.half_w_m, b.eave_m - fascia_m, b.z_m),
+                    (a.half_w_m, a.eave_m - fascia_m, a.z_m),
+                ],
+                (1.0, 0.0, 0.0),
+            ),
+            # Soffit, flat across — what an overhang shows from the street.
+            (
+                [
+                    (-a.half_w_m, a.eave_m - fascia_m, a.z_m),
+                    (a.half_w_m, a.eave_m - fascia_m, a.z_m),
+                    (b.half_w_m, b.eave_m - fascia_m, b.z_m),
+                    (-b.half_w_m, b.eave_m - fascia_m, b.z_m),
+                ],
+                (0.0, -1.0, 0.0),
+            ),
+        )
+        for index, (corners, outward) in enumerate(quads):
+            parts.append(polygon_facing(corners, colour, outward, name=f"wing_{i}_{index}"))
+
+    for station, forward in ((stations[0], -1.0), (stations[-1], 1.0)):
+        cap = [
+            (-station.half_w_m, station.eave_m, station.z_m),
+            (0.0, station.ridge_m, station.z_m),
+            (station.half_w_m, station.eave_m, station.z_m),
+            (station.half_w_m, station.eave_m - fascia_m, station.z_m),
+            (-station.half_w_m, station.eave_m - fascia_m, station.z_m),
+        ]
+        parts.append(polygon_facing(cap, colour, (0.0, 0.0, forward), name=f"wing_cap_{forward}"))
+    return merge(parts, name="wing")
+
+
 def build_hkcec(p: Hkcec | None = None) -> MeshData:
-    """Island hall with the roof swept toward the harbour, plus the link."""
+    """Base, glass hall tucked under the wing, the wing itself, and the link."""
     p = p or Hkcec()
-    hall = loft(
+    base = loft(
         [
             ring(
                 -PLINTH_DEPTH_M,
@@ -221,28 +322,26 @@ def build_hkcec(p: Hkcec | None = None) -> MeshData:
                 p.island_south_z_m,
                 p.corner_cut_m,
             ),
-            ring(
-                p.hall_roof_m,
-                p.island_half_x_m - 3.0,
-                p.island_north_z_m + 3.0,
-                p.island_south_z_m - 3.0,
-                p.corner_cut_m,
-            ),
-            # The swoop: the crest sits on the harbour half, so the south face
-            # rakes long and shallow while the north face stays steep.
-            ring(
-                p.ridge_m,
-                p.island_half_x_m - 55.0,
-                p.island_north_z_m + 35.0,
-                p.island_south_z_m - 120.0,
-                p.corner_cut_m,
-            ),
         ],
-        [CONCRETE.colour, GLASS.colour, ALUMINIUM.colour],
+        [CONCRETE.colour],
         bottom=CONCRETE.colour,
-        top=ALUMINIUM.colour,
-        name="hkcec_hall",
+        top=CONCRETE.colour,
+        name="hkcec_base",
     )
+    # The glass hall follows the roof plan inboard of the eaves — so no wall
+    # pokes out past the overhang, and the curtain rises to meet the soffit
+    # instead of leaving sky between wall top and roof under the crest.
+    walls = loft(
+        [
+            _wall_ring(p, p.podium_m),
+            _wall_ring(p, None),
+        ],
+        [GLASS.colour],
+        bottom=GLASS.colour,
+        top=GLASS.colour,
+        name="hkcec_walls",
+    )
+    wing = _wing(p.stations, p.fascia_m, ALUMINIUM.colour)
     link = loft(
         [
             ring(
@@ -256,7 +355,24 @@ def build_hkcec(p: Hkcec | None = None) -> MeshData:
         top=ALUMINIUM.colour,
         name="hkcec_link",
     )
-    return replace(merge([hall, link], name="hkcec-col"), material=MATERIAL)
+    return replace(merge([base, walls, wing, link], name="hkcec-col"), material=MATERIAL)
+
+
+def _wall_ring(p: Hkcec, y: float | None) -> tuple[Point, ...]:
+    """The hall's plan as a ring: the wing's stations, brought inboard.
+
+    Walking the stations north-to-south down one side and back up the other
+    gives a closed ring that tapers wherever the roof does. At `y = None` each
+    vertex rises to its own station's soffit, so the curtain wall meets the
+    roof everywhere instead of leaving sky under the crest.
+    """
+    inset = [
+        (max(station.half_w_m - p.wall_inset_m, 8.0), station.z_m, station.eave_m - p.fascia_m)
+        for station in p.stations
+    ]
+    left = [(-half_w, soffit if y is None else y, z) for half_w, z, soffit in inset]
+    right = [(half_w, soffit if y is None else y, z) for half_w, z, soffit in reversed(inset)]
+    return tuple(left + right)
 
 
 def build_central_plaza(p: CentralPlaza | None = None) -> MeshData:
