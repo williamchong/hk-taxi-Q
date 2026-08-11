@@ -38,8 +38,18 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "etl"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from pipeline.gltf import MeshData, normalise, write_glb  # noqa: E402
+from pipeline.gltf import MeshData, write_glb  # noqa: E402
 from pipeline.mesh import merge  # noqa: E402
+from primitives import (  # noqa: E402
+    Colour,
+    box,
+    box_at,
+    flank_edges,
+    loft,
+    polygon,
+    polygon_facing,
+    ring,
+)
 
 LOG = logging.getLogger("make_vehicle")
 
@@ -93,9 +103,6 @@ AMBER = (226, 138, 32)
 # as a shape now that its lettering is gone. Nothing may borrow it for anything
 # that is not that badge, or the count stops being defensible.
 BADGE_GREEN = (12, 116, 82)
-
-Colour = tuple[int, int, int]
-Point = Sequence[float]
 
 
 class CabinRing(NamedTuple):
@@ -233,7 +240,7 @@ class Proportions:
     wheel_segments: int = 18
     arch_segments: int = 7
     # How far a chamfer ring pulls in from the face it softens. At this scale a
-    # bevel is one more ring, not a curve — see `_loft`.
+    # bevel is one more ring, not a curve — see `loft`.
     bevel_m: float = 0.06
     # The silver band between the glass and the roof. The reference art shows
     # roof paint coming down over the pillars; without this the roof reads as a
@@ -255,7 +262,7 @@ class Proportions:
     plate_rear_y_m: float = 0.16
     # ⚠️ Top of the bumper, and the bumper is *paint*, not a part. Everything
     # below this line on the lower body is DARK — the nose and tail through
-    # `_loft`, the flanks through `_flank` — so the car keeps a bumper band all
+    # `loft`, the flanks through `_flank` — so the car keeps a bumper band all
     # the way round without one face leaving the silhouette. Raise it and the
     # dark hem climbs the doors; the *front* plate, both badges and the fog
     # lamps sit on the band and have to stay under it. The rear plate does not —
@@ -367,11 +374,11 @@ class Proportions:
         and by construction.
 
         ⚠️ **The stack has to stay ordered, and nothing downstream would say so.**
-        `_loft` joins ring *i* to ring *i+1* whatever their coordinates are: give
+        `loft` joins ring *i* to ring *i+1* whatever their coordinates are: give
         it a front edge that moves backwards, or two rings that cross, and it
         builds an inverted greenhouse out of quads that are individually valid —
         no error, no degenerate triangle, and a normal check that still passes
-        because `_polygon_facing` faithfully turns each face outward from a
+        because `polygon_facing` faithfully turns each face outward from a
         profile that is itself inside out. Rake past about 55° at this cabin
         length and that is what comes out, so the guard lives here rather than in
         a test — a `Proportions` this wrong refuses to yield a profile at all.
@@ -423,7 +430,7 @@ class Proportions:
         """(z inset from each end, y, corner cut) for the rings of the lower body.
 
         Five rings, not the four the shape needs: the extra one is the top of
-        the bumper band, and it exists only so `_loft` has an edge to change
+        the bumper band, and it exists only so `loft` has an edge to change
         colour at. Its inset and cut are *interpolated* from its neighbours
         rather than chosen, which is what makes it a colour change and nothing
         else — the silhouette is identical with the ring and without it, and
@@ -440,7 +447,7 @@ class Proportions:
         # ⚠️ Spliced at a fixed index, so the band top has to fall between the
         # two rings it is spliced between. `bumper_top_y_m`'s own comment invites
         # raising it, and past the shoulder the ring stack comes out unsorted —
-        # at which point `np.interp` returns nonsense without raising and `_loft`
+        # at which point `np.interp` returns nonsense without raising and `loft`
         # builds an inverted band, both silently.
         if not base[1][1] < self.bumper_top_y_m < base[2][1]:
             raise ValueError(
@@ -471,233 +478,6 @@ class Proportions:
 # --------------------------------------------------------------------------
 # Primitives
 # --------------------------------------------------------------------------
-
-
-def _polygon(corners: Sequence[Point], colour: Colour, *, name: str) -> MeshData:
-    """One flat convex face, wound counter-clockwise seen from outside.
-
-    Vertices are never shared between faces. That is what makes the whole model
-    flat-shaded without smoothing groups: every triangle carries its own face
-    normal, so an edge stays an edge and a vertex colour stays crisp across it.
-
-    Triangles and quads go through the same call because a wheel needs both, and
-    the earlier version faked the triangles as quads with two coincident
-    corners. That is not a harmless trick: the face normal comes from
-    `corners[1] - corners[0]` crossed with `corners[-1] - corners[0]`, and
-    duplicating `corners[0]` makes the second of those zero — so every cap on
-    the first wheel got a zero normal and a degenerate triangle to go with it.
-    """
-    positions = np.asarray(corners, dtype=np.float64)
-    if positions.ndim != 2 or positions.shape[0] < 3 or positions.shape[1] != 3:
-        raise ValueError(f"'{name}': need at least three xyz corners, got {positions.shape}")
-
-    face = normalise(np.cross(positions[1] - positions[0], positions[-1] - positions[0])[None, :])
-    if not np.isfinite(face).all() or np.allclose(face, 0.0):
-        raise ValueError(f"'{name}': corners are collinear or coincident, so it has no normal")
-
-    fan = [(0, i, i + 1) for i in range(1, len(positions) - 1)]
-    return MeshData(
-        name=name,
-        positions=positions,
-        normals=np.repeat(face, len(positions), axis=0).astype(np.float32),
-        triangles=np.array(fan, dtype=np.uint32),
-        colours=np.repeat(np.array([[*colour, 255]], dtype=np.uint8), len(positions), axis=0),
-    )
-
-
-def _polygon_facing(
-    corners: Sequence[Point], colour: Colour, outward: Sequence[float], *, name: str
-) -> MeshData:
-    """A face wound so its normal points along `outward`.
-
-    Curved runs — the arch band and its rim — are generated from angles rather
-    than written out corner by corner, and which way round that comes out flips
-    with the side of the car and with the direction of travel around the arc.
-    Stating the direction the face should look and letting the code reverse
-    itself is the difference between one rule and four hand-checked cases; the
-    wheel proved the alternative by rendering itself inside-out.
-    """
-    ring = list(corners)
-    normal = np.cross(
-        np.subtract(ring[1], ring[0], dtype=np.float64),
-        np.subtract(ring[-1], ring[0], dtype=np.float64),
-    )
-    if float(np.dot(normal, np.asarray(outward, dtype=np.float64))) < 0.0:
-        ring.reverse()
-    return _polygon(ring, colour, name=name)
-
-
-def _hexahedron(
-    bottom: Sequence[Point],
-    top: Sequence[Point],
-    colour: Colour,
-    *,
-    name: str,
-) -> MeshData:
-    """Six quads over eight corners, so a taper costs no more than a box.
-
-    Corners run anticlockwise seen from above: (-x,-z), (+x,-z), (+x,+z),
-    (-x,+z). Taking bottom and top as separate rings is what lets a fixture
-    narrow towards its top without becoming two parts.
-
-    One colour for the whole solid. It used to take a colour per named face,
-    which is what painted the old boxed body — a dark glasshouse under a silver
-    roof. `_loft` does that job now, band by band, and every caller left here is
-    a lamp or a bumper that wants one flat colour.
-    """
-    b0, b1, b2, b3 = bottom
-    t0, t1, t2, t3 = top
-    quads = [
-        _polygon(corners, colour, name=f"{name}_{i}")
-        for i, corners in enumerate(
-            (
-                (b0, b1, b2, b3),
-                (t0, t3, t2, t1),
-                (b1, b0, t0, t1),
-                (b3, b2, t2, t3),
-                (b0, b3, t3, t0),
-                (b2, b1, t1, t2),
-            )
-        )
-    ]
-    return merge(quads, name=name)
-
-
-def _ring(
-    y: float, half_w: float, z_front: float, z_back: float, cut: float = 0.0
-) -> tuple[Point, ...]:
-    """One horizontal section, in order around the body.
-
-    With `cut` the four square corners become eight, turning each vertical edge
-    into three short facets instead of one 90° turn. That is what "rounded"
-    means here: the faces stay flat and every edge stays crisp, so the car still
-    belongs in a flat-shaded city — there are simply more of them. Smooth
-    shading would be the thing that broke the art direction; a chamfer is not.
-    """
-    if cut <= 0.0:
-        return (
-            (-half_w, y, z_front),
-            (half_w, y, z_front),
-            (half_w, y, z_back),
-            (-half_w, y, z_back),
-        )
-    cut = min(cut, half_w * 0.9, abs(z_back - z_front) * 0.45)
-    return (
-        (-half_w + cut, y, z_front),
-        (half_w - cut, y, z_front),
-        (half_w, y, z_front + cut),
-        (half_w, y, z_back - cut),
-        (half_w - cut, y, z_back),
-        (-half_w + cut, y, z_back),
-        (-half_w, y, z_back - cut),
-        (-half_w, y, z_front + cut),
-    )
-
-
-def _flank_edges(corners: int) -> tuple[int, int]:
-    """Which two edges of a ring are the long flanks.
-
-    Derived rather than pinned. They were hardcoded as `(2, 6)`, correct only
-    for the eight-corner ring — and `corner_cut_m = 0` is an offered setting
-    that returns four corners, where edge 2 is the *boot face*. Skipping it left
-    a hole through the back of the car and drew both flanks twice, silently, for
-    fifty fewer triangles and no error.
-    """
-    return (corners // 4, 3 * corners // 4)
-
-
-def _loft(
-    rings: Sequence[Sequence[Point]],
-    band_colours: Sequence[Colour],
-    *,
-    bottom: Colour,
-    top: Colour,
-    skip_edges: Sequence[int] = (),
-    axis: int = 1,
-    name: str,
-) -> MeshData:
-    """A profile lofted through stacked rings — the shape a car body is.
-
-    Bevels at this scale are not rounded edges, they are *one more ring* a few
-    centimetres in and up. Stacking three or four rings gives a chamfered sill,
-    a tucked roof and a raked pillar for four quads apiece, and it keeps every
-    face flat — which is the whole point, since the city it drives through is
-    flat-shaded and a smooth-shaded car would sit outside its own art direction.
-
-    `axis` is which way the rings are stacked, and it is a parameter because the
-    4 SEATS badge is the same operation lying on its side — a profile extruded
-    along Z rather than Y. That was written out by hand first, centroid, outward
-    masking and both caps, and it produced the *identical* solid: same 28
-    triangles, same vertices, same area. Two copies of this loop is one more
-    place for the outward-facing rule to be got wrong.
-    """
-    if len(rings) < 2:
-        raise ValueError(f"'{name}': a loft needs at least two rings")
-    if len(band_colours) != len(rings) - 1:
-        raise ValueError(
-            f"'{name}': {len(rings)} rings need {len(rings) - 1} band colours, "
-            f"got {len(band_colours)}"
-        )
-
-    corners = len(rings[0])
-    if any(len(ring) != corners for ring in rings):
-        raise ValueError(f"'{name}': every ring needs the same number of corners")
-    out_of_range = [edge for edge in skip_edges if not 0 <= edge < corners]
-    if out_of_range:
-        raise ValueError(f"'{name}': no edge {out_of_range} on a {corners}-corner ring")
-
-    parts: list[MeshData] = []
-    # Flattened along the stacking axis, both here and on every band below. A
-    # side face looks *outward from the profile*, and leaving the axis component
-    # in tilts that vector by however much the rings taper — which is enough to
-    # flip a face on a steeply raked band.
-    centre = np.mean(np.asarray(rings[0], dtype=np.float64), axis=0)
-    centre[axis] = 0.0
-    for i, colour in enumerate(band_colours):
-        lower, upper = rings[i], rings[i + 1]
-        for edge in range(corners):
-            if edge in skip_edges:
-                continue
-            nxt = (edge + 1) % corners
-            outward = np.mean([lower[edge], lower[nxt], upper[edge], upper[nxt]], axis=0) - centre
-            outward[axis] = 0.0
-            parts.append(
-                _polygon_facing(
-                    [lower[nxt], lower[edge], upper[edge], upper[nxt]],
-                    colour,
-                    outward,
-                    name=f"{name}_edge{edge}_{i}",
-                )
-            )
-
-    end = np.zeros(3)
-    end[axis] = 1.0
-    parts.append(_polygon_facing(rings[0], bottom, -end, name=f"{name}_bottom"))
-    parts.append(_polygon_facing(rings[-1], top, end, name=f"{name}_top"))
-    return merge(parts, name=name)
-
-
-def _box(low: Point, high: Point, colour: Colour, *, name: str) -> MeshData:
-    """An axis-aligned box — the untapered case of `_hexahedron`."""
-    (lx, ly, lz), (hx, hy, hz) = low, high
-
-    def ring(y: float) -> tuple[Point, ...]:
-        return ((lx, y, lz), (hx, y, lz), (hx, y, hz), (lx, y, hz))
-
-    return _hexahedron(ring(ly), ring(hy), colour, name=name)
-
-
-def _box_at(centre: Point, half: Point, colour: Colour, *, name: str) -> MeshData:
-    """A box from its centre and half-extents.
-
-    Fixtures that come in mirrored pairs — lamps, mirrors, arches — are placed
-    by centre, because writing them as opposing corners means every one of them
-    needs its own `min`/`max` reasoning and the left of the pair reads
-    differently from the right.
-    """
-    low = tuple(c - h for c, h in zip(centre, half, strict=True))
-    high = tuple(c + h for c, h in zip(centre, half, strict=True))
-    return _box(low, high, colour, name=name)
 
 
 def _seated_depth(
@@ -753,7 +533,7 @@ def _flush_fixture(
     half_x, half_y = half
     x, y = centre
     z0, z1 = sorted(_seated_depth(shape, y - half_y, y + half_y, rear=rear))
-    return _box((x - half_x, y - half_y, z0), (x + half_x, y + half_y, z1), colour, name=name)
+    return box((x - half_x, y - half_y, z0), (x + half_x, y + half_y, z1), colour, name=name)
 
 
 def _wheel(
@@ -780,7 +560,7 @@ def _wheel(
         # culling renders as a wheel-shaped hole — and the whole-mesh normal
         # check reads 0% outward rather than something ambiguous.
         parts.append(
-            _polygon(
+            polygon(
                 [(half, y0, z0), (-half, y0, z0), (-half, y1, z1), (half, y1, z1)],
                 DARK,
                 name=f"{name}_tread_{i}",
@@ -800,8 +580,8 @@ def _wheel(
                 (face_x, wy0, wz0),
             ]
             hub = [(face_x, 0.0, 0.0), (face_x, wy0, wz0), (face_x, wy1, wz1)]
-            parts.append(_polygon_facing(wall, DARK, (face_x, 0.0, 0.0), name=f"{name}_wall_{i}"))
-            parts.append(_polygon_facing(hub, SILVER, (face_x, 0.0, 0.0), name=f"{name}_hub_{i}"))
+            parts.append(polygon_facing(wall, DARK, (face_x, 0.0, 0.0), name=f"{name}_wall_{i}"))
+            parts.append(polygon_facing(hub, SILVER, (face_x, 0.0, 0.0), name=f"{name}_hub_{i}"))
     return merge(parts, name=name)
 
 
@@ -821,11 +601,11 @@ def taxi_body(chassis: Chassis, shape: Proportions) -> MeshData:
     # what stops the flank reading as a slab without curving a single face.
     profile = shape.lower_profile
     lower_rings = [
-        _ring(y, hw, front_z + inset_z, rear_z - inset_z, ring_cut)
+        ring(y, hw, front_z + inset_z, rear_z - inset_z, ring_cut)
         for inset_z, y, ring_cut in profile
     ]
     parts.append(
-        _loft(
+        loft(
             lower_rings,
             # Red, dark, then two red: the bumper, painted on, with the body's
             # own valance below it. It used to be a box standing 6 cm proud of
@@ -844,7 +624,7 @@ def taxi_body(chassis: Chassis, shape: Proportions) -> MeshData:
             top=RED,
             # The two long flanks are `_flank`'s, because a loft band cannot
             # carry the wheel opening cut through it.
-            skip_edges=_flank_edges(len(lower_rings[0])),
+            skip_edges=flank_edges(len(lower_rings[0])),
             name="lower",
         )
     )
@@ -858,8 +638,8 @@ def taxi_body(chassis: Chassis, shape: Proportions) -> MeshData:
     # `* 0.8` of the roof taper — which is how the car ended up with a backlight
     # raked 18.6° that nobody had chosen and nobody could change on its own.
     parts.append(
-        _loft(
-            [_ring(*ring) for ring in shape.greenhouse_profile],
+        loft(
+            [ring(*section) for section in shape.greenhouse_profile],
             [GLASS, SILVER],
             bottom=GLASS,
             top=SILVER,
@@ -872,9 +652,9 @@ def taxi_body(chassis: Chassis, shape: Proportions) -> MeshData:
     # as a white brick. Blank — see `_plates` for why no lettering survives.
     sign_z = shape.sign_z_m
     parts.append(
-        _loft(
+        loft(
             [
-                _ring(
+                ring(
                     shape.roof_y_m,
                     shape.sign_half_width_m,
                     sign_z - shape.sign_half_length_m,
@@ -884,7 +664,7 @@ def taxi_body(chassis: Chassis, shape: Proportions) -> MeshData:
                 # aft faces stay vertical planes at constant z. Nothing is stuck
                 # to them any more, but the silhouette a raked box gives from
                 # the side is the whole reason the rake is here.
-                _ring(
+                ring(
                     shape.roof_y_m + shape.sign_height_m,
                     shape.sign_half_width_m * 0.86,
                     sign_z - shape.sign_half_length_m,
@@ -899,10 +679,10 @@ def taxi_body(chassis: Chassis, shape: Proportions) -> MeshData:
     )
 
     # ⚠️ No bumper *parts*. There are no boxes here any more and there should
-    # not be: the bumper is the dark band `_loft` and `_flank` paint below
+    # not be: the bumper is the dark band `loft` and `_flank` paint below
     # `bumper_top_y_m`, so it is visible from every angle and adds nothing to
     # the silhouette. Adding a box back is how it went wrong the first time.
-    parts.append(_box_at((0.0, 0.11, front_z + 0.01), (0.42, 0.09, 0.03), DARK, name="grille"))
+    parts.append(box_at((0.0, 0.11, front_z + 0.01), (0.42, 0.09, 0.03), DARK, name="grille"))
     parts.extend(_plates(shape))
     parts.extend(_badge(shape, rear=rear) for rear in (False, True))
 
@@ -912,7 +692,7 @@ def taxi_body(chassis: Chassis, shape: Proportions) -> MeshData:
         # in the bumper. The amber is what stops the nose reading as two blank
         # rectangles, and it pairs with the amber at the top of the tail cluster.
         parts.append(
-            _box_at(
+            box_at(
                 (side * 0.58, 0.19, front_z + 0.015),
                 (0.15, 0.085, 0.035),
                 LAMP,
@@ -920,7 +700,7 @@ def taxi_body(chassis: Chassis, shape: Proportions) -> MeshData:
             )
         )
         parts.append(
-            _box_at(
+            box_at(
                 (side * 0.80, 0.19, front_z + 0.02),
                 (0.065, 0.085, 0.035),
                 AMBER,
@@ -968,7 +748,7 @@ def taxi_body(chassis: Chassis, shape: Proportions) -> MeshData:
         # 0.12 x 0.09 x 0.15, longer front-to-back than across, which is a stalk
         # rather than a mirror — part of what the review read as strange.
         parts.append(
-            _box_at(
+            box_at(
                 (side * (hw + 0.025), 0.34, shape.cabin_front_z_m + 0.06),
                 (0.032, 0.04, 0.035),
                 DARK,
@@ -1033,17 +813,17 @@ def _badge(shape: Proportions, *, rear: bool) -> MeshData:
 
     A prism rather than a flat cut-out for the same reason the plate is a box:
     the bumper band it sits on slopes, and only a solid with depth can be proud
-    of that panel at the top of the badge and buried at the bottom. `_loft`
+    of that panel at the top of the badge and buried at the bottom. `loft`
     builds it, extruding along Z — see `axis` there for why that is not a
     second implementation.
     """
     x, y0, radius = shape.badge_x_m, shape.badge_y_m, shape.badge_radius_m
     angles = np.linspace(np.pi, 0.0, shape.badge_segments + 1)
     outline = [(x + radius * float(np.cos(a)), y0 + radius * float(np.sin(a))) for a in angles]
-    # Sorted, so `rings[0]` is always the end `_loft` caps facing -Z. The nose
+    # Sorted, so `rings[0]` is always the end `loft` caps facing -Z. The nose
     # seats its face at the *lower* z and the tail at the higher one, and
     # passing them in call order would turn one of the two badges inside out.
-    return _loft(
+    return loft(
         [
             [(px, py, z) for px, py in outline]
             for z in sorted(_seated_depth(shape, y0, y0 + radius, rear=rear))
@@ -1129,7 +909,7 @@ def _flank(
         # has no tolerance and `rocker_top_y_m` is a dial. Land it within a
         # rounding error of an arch sample and the straddle reads as genuine,
         # the cut lands at `across ~ 0`, and the stretch either side is a sliver
-        # — measured down to **1.4e-30 m²**, and nothing catches it: `_polygon`
+        # — measured down to **1.4e-30 m²**, and nothing catches it: `polygon`
         # refuses only an *exactly* zero cross product, so a 1e-30 normal
         # normalises to unit length and passes every winding and degeneracy
         # check the suite has.
@@ -1153,13 +933,13 @@ def _flank(
                 (x_out, yb, zb),
             ]
             # Where the arc meets the band's own ceiling an edge collapses, and a
-            # quad with two coincident corners has no normal — `_polygon` says so
+            # quad with two coincident corners has no normal — `polygon` says so
             # rather than emitting one, so the duplicates go before it sees them.
             # Below three corners there is no face left to draw at all.
             ring = [corner for i, corner in enumerate(ring) if corner != ring[i - 1]]
             if len(ring) < 3:
                 return None
-            return _polygon_facing(ring, colour, (side, 0.0, 0.0), name=f"{name}_{tag}{suffix}")
+            return polygon_facing(ring, colour, (side, 0.0, 0.0), name=f"{name}_{tag}{suffix}")
 
         stretches = [(z0, z1, y0, y1)]
         if (y0 - rocker) * (y1 - rocker) < 0.0:
@@ -1202,7 +982,7 @@ def _flank(
             parts.extend(panels(z0, z1, y0, y1, tag=f"arch_{w}_{c}"))
             # The rim, turning inward into the well.
             parts.append(
-                _polygon_facing(
+                polygon_facing(
                     [(x_out, y0, z0), (x_out, y1, z1), (x_in, y1, z1), (x_in, y0, z0)],
                     DARK,
                     (0.0, float(np.sin((c + 0.5) / shape.arch_segments * np.pi)), 0.0),
@@ -1211,7 +991,7 @@ def _flank(
             )
         # Inner wall, so the well has a back to it.
         parts.append(
-            _polygon_facing(
+            polygon_facing(
                 [
                     (x_in, shape.sill_y_m, wheel_z - opening_r),
                     (x_in, hub_y + opening_r, wheel_z - opening_r),
@@ -1281,7 +1061,7 @@ def _flank_detail(chassis: Chassis, shape: Proportions) -> list[MeshData]:
         # proud of the glass at the roofline and read as a black stick growing
         # out of the roof. A box cannot sit flush on a tapering face at more
         # than one height, so this is structural rather than a number to tune:
-        # the silver-over-glass reading comes from `_loft`'s cant rail instead,
+        # the silver-over-glass reading comes from `loft`'s cant rail instead,
         # and painting the pillars is not something this model does at all.
         #
         # ⚠️ No rub strip. It was a dark bar running most of the flank's length
@@ -1306,7 +1086,7 @@ def _flank_detail(chassis: Chassis, shape: Proportions) -> list[MeshData]:
         # A panel line is a texture, and that is where this one goes.
         for door, trailing_z in (("front", shape.cabin_mid_z_m), ("rear", rear_door_z)):
             parts.append(
-                _box_at(
+                box_at(
                     (side * (hw + 0.02), 0.30, trailing_z - shape.handle_inset_m),
                     (0.02, 0.025, shape.handle_half_length_m),
                     SILVER,

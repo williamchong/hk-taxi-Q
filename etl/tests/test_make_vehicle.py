@@ -47,14 +47,14 @@ from make_vehicle import (
     Colour,
     Proportions,
     _badge,
-    _box,
     _flush_fixture,
     _plates,
-    _polygon,
     _rear_door_z_m,
     _wheel,
+    box,
     build_taxi,
     opening_radius_m,
+    polygon,
     taxi_body,
     write_taxi,
 )
@@ -437,8 +437,8 @@ class TestTheScreensAreRaked:
         ids=["front inverted", "front leaves no roof", "rear inverted", "rear leaves no roof"],
     )
     def test_a_rake_the_cabin_cannot_carry_is_refused(self, field: str, value: float) -> None:
-        """⚠️ The failure this replaces is silent. `_loft` joins ring *i* to ring
-        *i+1* whatever their coordinates are, and `_polygon_facing` faithfully
+        """⚠️ The failure this replaces is silent. `loft` joins ring *i* to ring
+        *i+1* whatever their coordinates are, and `polygon_facing` faithfully
         turns each face outward from a profile that is itself inside out — so an
         over-raked greenhouse builds without an error, without a degenerate
         triangle, and passes the winding check. Only the render would say."""
@@ -734,7 +734,7 @@ class TestWinding:
         return float((((mesh.triangle_centroids() - centre) * face_normals).sum(axis=1) > 0).mean())
 
     def test_a_box_faces_outward(self) -> None:
-        assert self._outward_fraction(_box((-1, -1, -1), (1, 1, 1), RED, name="b")) == 1.0
+        assert self._outward_fraction(box((-1, -1, -1), (1, 1, 1), RED, name="b")) == 1.0
 
     def test_the_wheel_faces_outward(self) -> None:
         """The bug this caught: wound the other way, every normal points at the
@@ -749,7 +749,7 @@ class TestWinding:
 
     def test_a_face_with_no_area_is_refused_rather_than_written(self) -> None:
         with pytest.raises(ValueError, match="collinear or coincident"):
-            _polygon([(0, 0, 0), (1, 0, 0), (2, 0, 0)], RED, name="flat")
+            polygon([(0, 0, 0), (1, 0, 0), (2, 0, 0)], RED, name="flat")
 
 
 class TestTaxiContract:
