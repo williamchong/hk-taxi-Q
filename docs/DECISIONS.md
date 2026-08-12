@@ -2645,7 +2645,9 @@ anyway.
 key in the source — the sheets carry `BUILDING` and `INFRASTRUCTURE` and nothing else. More usefully,
 `ART_DESIGN.md` specifies the ~5 hero buildings as hand-authored models placed via `landmarks.json`;
 they never pass through `buildings.py`, so the question is moot for exactly the buildings that
-motivated it.
+motivated it. (Still true after the `P3-6` amendment made HKCEC mesh-sourced: `pipeline/landmarks.py`
+reads the same sheets as a stage of its own, and `buildings.py` still only *removes* — the two meet
+nowhere but `export.py --check`'s set-equality.)
 
 ⚠️ **Proving a check can fail was itself a false green.** Breaking `plan_distance_to` reported exit 0
 and no failures — the edit orphaned a local, `unused_variable` is promoted to error, the script never
@@ -3006,7 +3008,66 @@ far more likely means the change never arrived than that it had no effect.** Run
 
 ## `P3-6` — Two heroes replace their source meshes, and the contract is the deliverable
 
-**Status.** 🟡 Awaiting review · first two of five shipped (HKCEC, Central Plaza), 2026-08-12
+**Status.** 🟡 Awaiting review · two of five shipped (HKCEC mesh-sourced, Central Plaza
+generated), 2026-08-12 · **amended same day: HKCEC ships as its repainted source mesh**
+
+### Amendment — the HKCEC hero is the source mesh, repainted (2026-08-12)
+
+**The user called it, and the record below had already conceded the premise.** Three review
+rounds (below) each moved the generated hero *toward* the source mesh by measurement — 8 m
+slices, the banana plan, the fairing — until the generator was a lossy compressor of a mesh
+already on disk, and the user judged the source "clearly superior in model details and quality".
+The evaluated verdict: use it. `pipeline/landmarks.py` (a stage of its own, after `buildings`)
+extracts stem `B358761603301063` from sheet `11-SW-9D`, moves it to the landmark local frame
+(`rot_y_deg` pins to 0.0 — the mesh keeps source orientation, so the 6.4° PCA bearing retired),
+**slices every triangle at the ribbon elevations** (`mesh.slice_horizontal` — crisp vertex-colour
+bands are edges the mesh must actually have), repaints per triangle by authored-normal facing and
+centroid elevation, welds attribute-identical vertices back (`mesh.weld` — colour in the key, so
+a band edge never bleeds), and ships it as **generated output** under
+`assets/generated/landmarks/`.
+
+⚠️ **Licensing is why nothing about this is committed.** A repainted government mesh is
+government-derived data (hard rule 7): it lands in the gitignored bundle under the publisher's
+terms, `LICENSING.md` and both LICENSE files now say so, and the committed
+`assets/authored/landmarks/hkcec.glb` is deleted. The paint itself became config data: a
+`source_paint` block on the landmark entry (materials by name into the `materials:` table, so
+`Q33`'s exposure check stays total; ribbon constants moved from the retired `Hkcec` dataclass
+with their pixel-profile provenance). The generator keeps Central Plaza and the three unshipped
+heroes; its HKCEC half — `WingStation`, the wing lofts, the deck/pier/infill machinery the last
+review round added — is deleted, with the measured knowledge preserved here and in the yaml
+comments.
+
+**Contract changes.** `city.json` 7 → 8 (manifest gains `landmark_assets`; the authored hkcec
+asset a v7 bundle names no longer exists — same asset-set argument as 6 → 7), `landmarks.json`
+1 → 2 (entries gain `triangle_budget`, read per entry by `verify_landmarks.gd`; the authored 8k
+stays as its fallback for authored heroes). `export.py --check` now holds three spellings of each
+built model equal (config asset, `landmark_assets.json` path, manifest list) and *does* stat the
+generated `.glb` — the authored ones remain deliberately unstatted. `P2-1`'s sentence survives on
+its letter and its point: heroes never pass *through* `buildings.py`; the mesh-sourced ones are
+built by a stage of their own from the same sheets, meeting the exclusion only at `--check`'s
+set-equality.
+
+**Measured.** Source 41,273 triangles → **99,577 shipped** (the growth is walls cut at every
+ribbon edge — the price of crisp bands in vertex colour; walls-only slicing was measured at
+90,171 and rejected as not worth the T-junctions), 203,302 vertices after the weld (298k
+unshared), 6.72 MB glb. Budget pinned at 120k. PCK **33.85 → 39.04 MB** (+5.19 MB; budget
+200 MB). ⚠️ Triangle residency: the streamer's tile worst case is unchanged (**280,783** — the
+verify samples tiles only), but landmarks sit *outside* the streamer and are always resident, so
+the true resident ceiling is now ≈ **380,700** (tiles + 99,877 of heroes) where the hero used to
+ride inside the tile figure at a third of the size. The 300k budget is stated in *visible*
+triangles and was not re-measured; `P2-6` (the performance gate) should measure a frame under
+HKCEC first, and the next always-resident landmark re-opens this arithmetic before it ships.
+Draw calls unchanged (one hero node either way). `check.sh` all green including
+`verify_landmarks` (both heroes ok); the three road graders re-run by hand and within bounds
+(deck p90 96.8% measured, P2-7 met). Street and wing screenshots from the Expo Drive East
+viewpoints confirm pale hull / dark storey ribbons / darker roof on the real massing — canopy
+trusses, roof layering and prow the generator never carried.
+
+⚠️ **What did *not* change:** the exclusion machinery and its two-sided acceptance, the
+`landmarks.json` placement contract, Central Plaza (authored features — crown, mast — the source
+captures badly; the generated model stays), the `W4`-is-moot call, and the vertex-colour-only
+rule (`landmark_vertex` is now owned by `pipeline/landmarks.py` and imported by the generator, so
+the two emitters cannot drift).
 
 **Claim.** `landmarks.json` ships as drafted in `ARCHITECTURE.md`, with the gaps the draft left
 now decided: it is **assembled by `export.py`** from a `landmarks:` block in the city config (no

@@ -6,8 +6,8 @@ different owners.
 | What | Where | Licence |
 |---|---|---|
 | **Code** — pipeline, engine scripts, tools, config, tuning | `etl/`, `game/scripts/`, `game/tools/`, `game/tuning/`, `tools/` | **GPL-3.0-or-later** — [`LICENSE`](LICENSE) |
-| **Hand-authored assets** — hero buildings, vehicles, UI, shaders | `game/assets/authored/` | **CC BY-SA 4.0** |
-| **Generated city data** — tiles, road surface, road graph, fare nodes | `game/assets/generated/`, `etl/out/` — *gitignored* | **Not licensed by this project.** Governed by the DATA.GOV.HK and CSDI Portal Terms of Use |
+| **Hand-authored assets** — authored hero buildings, vehicles, UI, shaders | `game/assets/authored/` | **CC BY-SA 4.0** |
+| **Generated city data** — tiles, road surface, road graph, fare nodes, repainted hero meshes | `game/assets/generated/`, `etl/out/` — *gitignored* | **Not licensed by this project.** Governed by the DATA.GOV.HK and CSDI Portal Terms of Use |
 
 > **Not legal advice.** This file records the project's position. Hard rule 6 requires a Hong Kong IP
 > lawyer to review before launch; the open questions at the end belong in that brief.
@@ -43,9 +43,16 @@ The build is reproducible from them by a single documented command.
 
 ## Hand-authored assets — CC BY-SA 4.0
 
-`game/assets/authored/` holds original creative work: hero building models, the vehicle roster, UI
-and shaders. These are **not** derived from government data — the ETL excludes the source geometry
-each hero building replaces, via `replaces_source_ids` — so they are ours to license.
+`game/assets/authored/` holds original creative work: authored hero building models, the vehicle
+roster, UI and shaders. These are **not** derived from government data — the ETL excludes the source
+geometry each hero building replaces, via `replaces_source_ids` — so they are ours to license.
+
+⚠️ **Not every hero is ours.** A mesh-sourced hero (HKCEC since the `P3-6` amendment) is the
+government's own building mesh, extracted and repainted by `etl/pipeline/landmarks.py`. That model
+is generated city data in every sense of the section below — it ships from
+`game/assets/generated/landmarks/`, is gitignored, and is never committed or relicensed. The
+boundary is mechanical: `assets/authored/` holds only what this project could put under CC BY-SA,
+and a repainted government mesh is not that.
 
 CC BY-SA 4.0 is one-way compatible with GPL-3.0-or-later, which is what allows these assets to
 combine into the GPLv3 game. Store builds carry the separate grant described above.
@@ -58,7 +65,9 @@ CC BY-SA governs only our copyright in the model.
 ## Generated city data — government terms, not ours
 
 `game/assets/generated/` and `etl/out/` are derived from the Lands Department's 3D Visualisation Map
-and the Transport Department's Road Network v2, obtained via DATA.GOV.HK and the CSDI Portal.
+and the Transport Department's Road Network v2, obtained via DATA.GOV.HK and the CSDI Portal. That
+includes the repainted hero meshes under `landmarks/` — a re-coloured government mesh is still the
+government's mesh, whatever it now wears.
 
 **Both directories are gitignored. This repository redistributes no government data.** A clone
 contains none of it until the pipeline is run, at which point the data is fetched from the government
