@@ -28,10 +28,13 @@ dependencies = [
 # us. Only `gdformat` is wired into the checks; see docs/ARCHITECTURE.md
 # "GDScript formatting" for what was left out and why.
 #
-# Pillow decodes the PNGs `tools/frame_stats.py` grades, and is dev-only for the
-# same reason gdtoolkit is: nothing the pipeline ships touches it. It is *not* a
-# step toward the terrain classifier `Q18` defers — that one would put image
-# decoding on the pipeline's critical path and into CI, which this does not.
+# Pillow decodes the PNGs `tools/frame_stats.py` grades, and — since the P3-6
+# amendment — the photo atlases `pipeline/landmarks.py` samples when a landmark
+# opts into `reference_texture`. Still dev-only: the import is lazy behind that
+# config flag, so a city with no mesh-sourced hero never touches it and the
+# core pipeline stays image-free. It is *not* a step toward the terrain
+# classifier `Q18` defers — that one would put image decoding on every build's
+# critical path and into CI, which neither of these does.
 dev = [
     "gdtoolkit>=4.5,<5",
     "pillow>=10.0",

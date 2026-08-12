@@ -1529,6 +1529,29 @@ class TestLandmarks:
         with pytest.raises(ValueError, match="within"):
             load_city("hong_kong", cities_root=rewrite(overshoot))
 
+    def test_an_out_of_range_crease_is_rejected(self, rewrite) -> None:
+        """At 180 growth crosses every edge and the first seed's surface
+        floods the whole mesh."""
+
+        def flood(doc: dict[str, Any]) -> None:
+            doc["landmarks"][0]["source_paint"]["crease_deg"] = 180.0
+
+        with pytest.raises(ValueError, match="crease_deg"):
+            load_city("hong_kong", cities_root=rewrite(flood))
+
+    def test_a_non_boolean_reference_flag_is_rejected(self, rewrite) -> None:
+        def mistype(doc: dict[str, Any]) -> None:
+            doc["landmarks"][0]["source_paint"]["reference_texture"] = "yes"
+
+        with pytest.raises(ValueError, match="reference_texture"):
+            load_city("hong_kong", cities_root=rewrite(mistype))
+
+    def test_the_real_config_references_the_photo(self, hong_kong) -> None:
+        paint = {landmark.id: landmark for landmark in hong_kong.landmarks}["hkcec"].source_paint
+        assert paint.reference_texture is True
+        assert 0.0 < paint.veto_ratio <= 1.0
+        assert 0.0 < paint.crease_deg < 180.0
+
     def test_a_position_inside_no_region_is_rejected(self, rewrite) -> None:
         """Excluded wherever its sheets are read, shipped nowhere — a hole with
         no hero over it, refused at load rather than found in a build."""

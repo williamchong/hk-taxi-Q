@@ -24,9 +24,12 @@ from pipeline.gltf import MeshData, read_glb
 from pipeline.landmarks import (
     ASSETS_SCHEMA,
     LANDMARK_MATERIAL,
+    Reference,
+    _tag_parents,
     build_assets,
+    paint,
 )
-from pipeline.mesh import slice_horizontal, weld
+from pipeline.mesh import merge, slice_horizontal, weld
 from tests.test_buildings import Fixture, _to_source
 
 WALL = Material("wall", (134, 128, 119), 42.0, "test")
@@ -183,8 +186,6 @@ class TestPaint:
     """One triangle per rule, so a misclassification names itself."""
 
     def paint_one(self, mesh: MeshData) -> tuple[int, int, int]:
-        from pipeline.landmarks import paint
-
         out = paint(mesh, PAINT)
         colours = np.unique(out.colours[:, :3], axis=0)
         assert len(colours) == 1, "one triangle must paint one colour"
@@ -219,11 +220,188 @@ class TestPaint:
         assert self.paint_one(self.wall_at(3.0)) == BASE.colour
 
     def test_the_paint_is_srgb_with_full_alpha(self) -> None:
-        from pipeline.landmarks import paint
-
         out = paint(self.wall_at(17.0), PAINT)
         assert (out.colours[:, 3] == 255).all()
         assert (out.colours[:, :3] == WALL.colour).all()
+
+
+def strip_mesh() -> MeshData:
+    """A vertical wall, 12 m wide and 30 m tall, as three side-by-side quads.
+
+    Tall enough to hold ribbon levels 0-3, wide enough that each sliced band
+    carries more than the five decided triangles a strip verdict requires.
+    """
+    quads = []
+    for column in range(3):
+        x0, x1 = column * 4.0, column * 4.0 + 4.0
+        quads.append(
+            MeshData(
+                name=f"q{column}",
+                positions=np.asarray(
+                    [
+                        [x0, 0.0, 0.0],
+                        [x1, 0.0, 0.0],
+                        [x1, 30.0, 0.0],
+                        [x0, 0.0, 0.0],
+                        [x1, 30.0, 0.0],
+                        [x0, 30.0, 0.0],
+                    ],
+                    dtype=np.float64,
+                ),
+                normals=np.asarray([[0.0, 0.0, 1.0]] * 6, dtype=np.float32),
+                triangles=np.asarray([[0, 1, 2], [3, 4, 5]], dtype=np.uint32),
+            )
+        )
+    return merge(quads, name="wall")
+
+
+def wall_reference(atlas: np.ndarray, mesh: MeshData) -> Reference:
+    """A Reference mapping the strip mesh onto `atlas` by elevation.
+
+    v runs 0 at the top of the wall to 1 at its base — the glTF image
+    convention — so atlas row `r` shows at height `30 * (1 - r/(h-1))`.
+    """
+    corners = mesh.positions[mesh.triangles]
+    uvs = np.zeros((len(corners), 3, 2), dtype=np.float32)
+    uvs[:, :, 0] = (corners[:, :, 0] / 12.0).astype(np.float32)
+    uvs[:, :, 1] = (1.0 - corners[:, :, 1] / 30.0).astype(np.float32)
+    return Reference(
+        corners=corners,
+        uvs=uvs,
+        image=np.zeros(len(corners), dtype=np.int32),
+        luminance=(atlas,),
+    )
+
+
+class TestPhotoReference:
+    """The strip verdict: whole ribbons kept or dropped by their photo."""
+
+    def painted_strip_levels(self, atlas: np.ndarray) -> set[int]:
+        mesh, _ = _tag_parents(strip_mesh(), 0)
+        reference = wall_reference(atlas, mesh)
+        heights = [PAINT.base_below_m]
+        for index in range(PAINT.ribbon_count):
+            low = PAINT.ribbon_first_m + index * PAINT.ribbon_pitch_m
+            heights.extend((low, low + PAINT.ribbon_thickness_m))
+        sliced = slice_horizontal(mesh, heights)
+        out = paint(sliced, PAINT, reference)
+        centroids = out.positions[out.triangles].mean(axis=1)[:, 1]
+        ribboned = (out.colours[out.triangles[:, 0], :3] == RIBBON.colour).all(axis=1)
+        levels = np.floor((centroids - PAINT.ribbon_first_m) / PAINT.ribbon_pitch_m)
+        return {int(level) for level in levels[ribboned]}
+
+    def test_a_uniform_photo_vetoes_every_strip(self) -> None:
+        """The sweep case: no glazing in the photo, no bands in the paint."""
+        assert self.painted_strip_levels(np.full((300, 8), 0.5, dtype=np.float32)) == set()
+
+    def test_dark_photo_rows_keep_their_strips(self) -> None:
+        """Bands survive exactly where the photo carries dark glazing rows —
+        here levels 0 and 2, under lighting three times brighter at the top
+        of the wall than the bottom, which an absolute cut would misread."""
+        rows = np.linspace(0.0, 30.0, 300)[::-1]  # row elevation, v convention
+        lighting = 0.2 + 0.4 * (rows / 30.0)
+        atlas = np.tile(lighting[:, None], (1, 8)).astype(np.float32)
+        for level in (0, 2):
+            low = PAINT.ribbon_first_m + level * PAINT.ribbon_pitch_m
+            in_band = (rows >= low) & (rows < low + PAINT.ribbon_thickness_m)
+            atlas[in_band] *= 0.4
+        assert self.painted_strip_levels(atlas) == {0, 2}
+
+    def test_the_scratch_channel_never_ships(self) -> None:
+        mesh, _ = _tag_parents(strip_mesh(), 0)
+        out = paint(
+            slice_horizontal(mesh, [15.0]),
+            PAINT,
+            wall_reference(np.full((16, 8), 0.5, dtype=np.float32), mesh),
+        )
+        assert out.uvs is None
+
+
+class TestGrownSurfaces:
+    """Roof-ness follows the surface, not the angle (`P3-6` amendment)."""
+
+    def rolled_sweep(self) -> MeshData:
+        """A roof strip rolling from flat to vertical in 15-degree steps,
+        every facet above the ribbon grid's first line so a misclassified
+        facet would take bands."""
+        angles = np.radians(np.arange(0, 105, 15, dtype=np.float64))
+        spine = np.zeros((len(angles), 3))
+        spine[:, 1] = 40.0
+        for index in range(1, len(angles)):
+            step = np.asarray([0.0, -np.sin(angles[index - 1]), np.cos(angles[index - 1])])
+            spine[index] = spine[index - 1] + step * 3.0
+        pieces = []
+        for index in range(len(angles) - 1):
+            a, b = spine[index], spine[index + 1]
+            normal = np.asarray(
+                [0.0, np.cos(angles[index]), np.sin(angles[index])], dtype=np.float32
+            )
+            pieces.append(
+                MeshData(
+                    name=f"facet{index}",
+                    positions=np.asarray(
+                        [
+                            [0.0, a[1], a[2]],
+                            [4.0, a[1], a[2]],
+                            [4.0, b[1], b[2]],
+                            [0.0, a[1], a[2]],
+                            [4.0, b[1], b[2]],
+                            [0.0, b[1], b[2]],
+                        ],
+                        dtype=np.float64,
+                    ),
+                    normals=np.asarray([normal] * 6, dtype=np.float32),
+                    triangles=np.asarray([[0, 1, 2], [3, 4, 5]], dtype=np.uint32),
+                )
+            )
+        return merge(pieces, name="sweep")
+
+    def test_a_rolling_sweep_stays_roof_to_the_vertical(self) -> None:
+        out = paint(self.rolled_sweep(), PAINT)
+        colours = {tuple(int(v) for v in c) for c in np.unique(out.colours[:, :3], axis=0)}
+        assert colours == {ROOF.colour}
+
+    def test_a_crease_stops_the_roof(self) -> None:
+        """A flat roof meeting a wall at a right angle: the wall keeps its
+        bands, however close to the roof it stands."""
+        roof = MeshData(
+            name="flat",
+            positions=np.asarray(
+                [
+                    [0.0, 26.5, 0.0],
+                    [4.0, 26.5, 0.0],
+                    [4.0, 26.5, 4.0],
+                    [0.0, 26.5, 0.0],
+                    [4.0, 26.5, 4.0],
+                    [0.0, 26.5, 4.0],
+                ],
+                dtype=np.float64,
+            ),
+            normals=np.asarray([[0.0, 1.0, 0.0]] * 6, dtype=np.float32),
+            triangles=np.asarray([[0, 1, 2], [3, 4, 5]], dtype=np.uint32),
+        )
+        # The wall's top edge is the roof's front edge — a shared, creased edge.
+        wall = MeshData(
+            name="drop",
+            positions=np.asarray(
+                [
+                    [0.0, 26.5, 0.0],
+                    [0.0, 24.7, 0.0],
+                    [4.0, 24.7, 0.0],
+                    [0.0, 26.5, 0.0],
+                    [4.0, 24.7, 0.0],
+                    [4.0, 26.5, 0.0],
+                ],
+                dtype=np.float64,
+            ),
+            normals=np.asarray([[0.0, 0.0, -1.0]] * 6, dtype=np.float32),
+            triangles=np.asarray([[0, 1, 2], [3, 4, 5]], dtype=np.uint32),
+        )
+        out = paint(merge([roof, wall], name="corner"), PAINT)
+        shown = {tuple(int(v) for v in c) for c in np.unique(out.colours[:, :3], axis=0)}
+        # Both wall centroids (25.3 m, 25.9 m) sit inside ribbon level 2
+        # (24.6-26.1 m): a leak across the crease would show as roof grey.
+        assert shown == {ROOF.colour, RIBBON.colour}
 
 
 class TestBuildAssets:

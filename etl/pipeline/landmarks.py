@@ -26,16 +26,19 @@ other. The two meet only at `export.py --check`'s set-equality.
 from __future__ import annotations
 
 import argparse
+import io
 import logging
 import zipfile
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
 
 import numpy as np
 
 from pipeline.buildings import COLLISION_SUFFIX, Placement, resolver, stem
+from pipeline.colour import srgb_to_linear
 from pipeline.config import CityConfig, Landmark, SourcePaint, load_city
 from pipeline.documents import write_document
+from pipeline.fetch import source_dir
 from pipeline.gltf import MeshData, read_scene, write_glb
 from pipeline.mesh import merge, slice_horizontal, weld
 
@@ -89,7 +92,9 @@ def build_assets(
         x, _, z = transform.to_game(landmark.easting, landmark.northing, landmark.elevation)
         if not (0.0 <= x <= high_x and 0.0 <= z <= high_z):
             continue
-        pieces = _source_meshes(place.sheets, set(landmark.replaces_source_ids), city)
+        pieces, matched_sheets = _source_meshes(
+            place.sheets, set(landmark.replaces_source_ids), city
+        )
         if not pieces:
             raise ValueError(
                 f"landmark {landmark.id!r}: no source mesh matched stems "
@@ -102,9 +107,25 @@ def build_assets(
         ) + np.asarray(transform.to_game(0.0, 0.0, 0.0), dtype=np.float64)
         pieces = [piece.translated(local) for piece in pieces]
 
+        reference = None
+        if landmark.source_paint.reference_texture:
+            reference = _load_reference(
+                city,
+                matched_sheets,
+                set(landmark.replaces_source_ids),
+                pieces,
+                local,
+                sources_root,
+            )
+            tagged, cursor = [], 0
+            for piece in pieces:
+                piece, cursor = _tag_parents(piece, cursor)
+                tagged.append(piece)
+            pieces = tagged
+
         read_count = sum(piece.triangle_count for piece in pieces)
         pieces = [slice_horizontal(piece, _band_planes(landmark.source_paint)) for piece in pieces]
-        pieces = [paint(piece, landmark.source_paint) for piece in pieces]
+        pieces = [paint(piece, landmark.source_paint, reference) for piece in pieces]
 
         # Welded last: the paint needed unshared vertices, and carrying them
         # into the file would triple the vertex buffer for no visible change.
@@ -150,8 +171,10 @@ def build_assets(
 
 def _source_meshes(
     sheets: list[tuple[str, Path]], stems: set[str], city: CityConfig
-) -> list[MeshData]:
-    """Every non-terrain mesh in the sheets whose stem is in `stems`.
+) -> tuple[list[MeshData], set[str]]:
+    """Every non-terrain mesh in the sheets whose stem is in `stems`, and the
+    ids of the sheets that matched — the same sheets the photo reference must
+    come from.
 
     The terrain class is skipped for the same reason `buildings.py` never
     excludes it: ground sharing a building's stem is ground, not building.
@@ -184,7 +207,7 @@ def _source_meshes(
             len(matched_sheets),
             ", ".join(sorted(matched_sheets)),
         )
-    return meshes
+    return meshes, matched_sheets
 
 
 def _band_planes(spec: SourcePaint) -> list[float]:
@@ -196,13 +219,301 @@ def _band_planes(spec: SourcePaint) -> list[float]:
     return planes
 
 
-def paint(mesh: MeshData, spec: SourcePaint) -> MeshData:
-    """Colour every triangle by facing and elevation, per `SourcePaint`.
+@dataclass(frozen=True)
+class Reference:
+    """The photo half of the paint: each source triangle's place in the
+    individualised (`…A0`) texture atlas.
+
+    Indexed by the parent-triangle ids `_tag_parents` threads through the
+    slicer, so a sliced fragment can be sampled at its own position inside
+    the parent it came from. `image` is -1 where the A0 variant had no match
+    or no texture — those triangles keep the procedural verdict.
+    """
+
+    corners: np.ndarray  # (t, 3, 3) parent corners, landmark local frame
+    uvs: np.ndarray  # (t, 3, 2) the A0 atlas coordinates at those corners
+    image: np.ndarray  # (t,) int32 index into `luminance`, -1 = no photo
+    luminance: tuple[np.ndarray, ...]  # decoded atlases as linear luminance
+
+
+def _tag_parents(mesh: MeshData, start: int) -> tuple[MeshData, int]:
+    """Write each triangle's global id into a scratch UV channel.
+
+    The id is constant across a triangle's three corners, so
+    `slice_horizontal`'s lerp reproduces it exactly on every fragment — the
+    one per-triangle payload that survives slicing without bookkeeping.
+    `paint` strips the channel; nothing shipped carries it.
+    """
+    if mesh.uvs is not None:
+        raise ValueError(f"mesh '{mesh.name}' already carries UVs; refusing to overwrite")
+    ids = np.arange(start, start + mesh.triangle_count, dtype=np.float32)
+    uvs = np.zeros((len(mesh.positions), 2), dtype=np.float32)
+    uvs[mesh.triangles.reshape(-1), 0] = np.repeat(ids, 3)
+    return replace(mesh, uvs=uvs), start + mesh.triangle_count
+
+
+def _corner_keys(mesh: MeshData) -> list[tuple]:
+    """One order-independent key per triangle, from its mm-rounded corners.
+
+    The A0 and C0 variants carry the same geometry ("not one triangle of
+    extra shape" — DATA_SOURCES.md), but nothing promises the same triangle
+    order or winding, so identity is the sorted corner set.
+    """
+    corners = np.round(mesh.positions[mesh.triangles], 3)
+    return [tuple(sorted(map(tuple, triangle))) for triangle in corners.tolist()]
+
+
+def _load_reference(
+    city: CityConfig,
+    sheet_ids: set[str],
+    stems: set[str],
+    pieces: list[MeshData],
+    offset: np.ndarray,
+    sources_root: Path | None,
+) -> Reference:
+    """Match every source triangle to its photo, via the A0 variant.
+
+    Imports Pillow lazily: image decoding stays off the pipeline's critical
+    path for every city that never opts into `reference_texture`, which keeps
+    the letter of the pyproject note that put Pillow in the dev extras.
+    """
+    try:
+        from PIL import Image
+    except ImportError as error:  # pragma: no cover - environment-dependent
+        raise ValueError(
+            "reference_texture needs Pillow to decode the photo atlases — "
+            "install the dev extras (pip install -e 'etl/[dev]')"
+        ) from error
+
+    directory = source_dir(city.id, "individualised", root=sources_root)
+    lookup: dict[tuple, tuple[int, int]] = {}
+    images: list[np.ndarray] = []
+    a0_pieces: list[MeshData] = []
+    for sheet_id in sorted(sheet_ids):
+        path = directory / f"{sheet_id}.zip"
+        if not path.exists():
+            raise ValueError(
+                f"reference_texture needs {path}, which is not on disk — the "
+                "individualised sheet download is documented in DATA_SOURCES.md"
+            )
+        with zipfile.ZipFile(path) as archive:
+            members = sorted(
+                name
+                for name in archive.namelist()
+                if name.lower().endswith(".gltf") and stem(PurePosixPath(name).parent.name) in stems
+            )
+            for member in members:
+                member_dir = str(PurePosixPath(member).parent)
+                for piece in read_scene(archive.read(member), resolver(archive, member_dir)):
+                    if piece.texture is None or piece.uvs is None:
+                        continue
+                    decoded = np.asarray(
+                        Image.open(io.BytesIO(piece.texture.data)).convert("RGB"),
+                        dtype=np.float64,
+                    )
+                    image_id = len(images)
+                    images.append(srgb_to_linear(decoded).mean(axis=2).astype(np.float32))
+                    local = piece.translated(offset)
+                    a0_pieces.append(local)
+                    for index, key in enumerate(_corner_keys(local)):
+                        lookup[key] = (image_id, index)
+
+    total = sum(piece.triangle_count for piece in pieces)
+    corners = np.zeros((total, 3, 3), dtype=np.float64)
+    uvs = np.zeros((total, 3, 2), dtype=np.float32)
+    image = np.full(total, -1, dtype=np.int32)
+    cursor = 0
+    matched = 0
+    for piece in pieces:
+        for index, key in enumerate(_corner_keys(piece)):
+            hit = lookup.get(key)
+            if hit is None:
+                continue
+            image_id, a0_index = hit
+            a0 = a0_pieces[image_id]
+            corners[cursor + index] = a0.positions[a0.triangles[a0_index]]
+            uvs[cursor + index] = a0.uvs[a0.triangles[a0_index]]
+            image[cursor + index] = image_id
+            matched += 1
+        cursor += piece.triangle_count
+
+    share = matched / total if total else 0.0
+    if share < 0.9:
+        raise ValueError(
+            f"reference_texture matched only {share:.1%} of source triangles to the "
+            "A0 variant — the two variants should share their geometry, so this is "
+            "a stale or mismatched individualised sheet"
+        )
+    if share < 1.0:
+        log.warning("  reference: %.2f%% of triangles carry no photo", 100 * (1 - share))
+    return Reference(corners=corners, uvs=uvs, image=image, luminance=tuple(images))
+
+
+def _sample_reference(
+    mesh: MeshData, reference: Reference, lift_m: float = 0.0
+) -> tuple[np.ndarray, np.ndarray]:
+    """Median linear luminance of each sliced triangle's photo, and whether
+    the samples were usable.
+
+    Four sample points (centroid and edge midpoints), each mapped into the
+    parent triangle's barycentric frame and through its A0 atlas coordinates.
+    Median rather than mean so one sample landing on a window frame or an
+    atlas seam cannot drag the verdict.
+
+    `lift_m` shifts every sample vertically before mapping — how the caller
+    reads the wall *next to* a band rather than the band itself. Walls are
+    planar, so a vertical shift stays on the surface; a shifted sample that
+    leaves its parent triangle is discarded rather than clamped, because a
+    clamped coordinate would silently read some other storey's pixels. A
+    triangle is usable when it has a photo and at least one sample survived.
+    """
+    parent = np.rint(mesh.uvs[mesh.triangles[:, 0], 0]).astype(np.int64)
+    image = reference.image[parent]
+
+    corners = mesh.positions[mesh.triangles]
+    samples = np.concatenate(
+        [
+            corners.mean(axis=1, keepdims=True),
+            (corners + np.roll(corners, -1, axis=1)) / 2.0,
+        ],
+        axis=1,
+    )  # (m, 4, 3)
+    if lift_m:
+        samples = samples + np.asarray([0.0, lift_m, 0.0])
+
+    parent_corners = reference.corners[parent]  # (m, 3, 3)
+    a = parent_corners[:, 0][:, None, :]
+    edge1 = (parent_corners[:, 1] - parent_corners[:, 0])[:, None, :]
+    edge2 = (parent_corners[:, 2] - parent_corners[:, 0])[:, None, :]
+    to_sample = samples - a
+    d11 = (edge1 * edge1).sum(axis=2)
+    d12 = (edge1 * edge2).sum(axis=2)
+    d22 = (edge2 * edge2).sum(axis=2)
+    dp1 = (to_sample * edge1).sum(axis=2)
+    dp2 = (to_sample * edge2).sum(axis=2)
+    denominator = d11 * d22 - d12 * d12
+    denominator[denominator == 0] = 1.0
+    v = (d22 * dp1 - d12 * dp2) / denominator
+    w = (d11 * dp2 - d12 * dp1) / denominator
+    u = 1.0 - v - w
+    inside = (
+        (u > -0.02) & (v > -0.02) & (w > -0.02) & (u < 1.02) & (v < 1.02) & (w < 1.02)
+    )  # (m, 4)
+
+    parent_uvs = reference.uvs[parent]  # (m, 3, 2)
+    uv = (
+        u[..., None] * parent_uvs[:, 0][:, None, :]
+        + v[..., None] * parent_uvs[:, 1][:, None, :]
+        + w[..., None] * parent_uvs[:, 2][:, None, :]
+    ).clip(0.0, 1.0)  # (m, 4, 2)
+
+    luminance = np.zeros(len(corners), dtype=np.float32)
+    usable = (image >= 0) & inside.any(axis=1)
+    for image_id, atlas in enumerate(reference.luminance):
+        rows = np.nonzero(usable & (image == image_id))[0]
+        if not len(rows):
+            continue
+        height, width = atlas.shape
+        columns = np.rint(uv[rows, :, 0] * (width - 1)).astype(np.int64)
+        lines = np.rint(uv[rows, :, 1] * (height - 1)).astype(np.int64)
+        values = np.ma.masked_array(atlas[lines, columns], mask=~inside[rows])
+        luminance[rows] = np.ma.median(values, axis=1).filled(0.0)
+    return luminance, usable
+
+
+def _adjacency(mesh: MeshData) -> tuple[list[list[int]], np.ndarray]:
+    """Edge-sharing neighbours per triangle, and unit face normals.
+
+    Shared by region growth and strip components. Edges are keyed on rounded
+    corner positions, so the unshared vertices the slicer emits still count
+    as the same edge on both sides.
+    """
+    corners = np.round(mesh.positions, 4)[mesh.triangles]
+    normals = mesh.normals[mesh.triangles].mean(axis=1).astype(np.float64)
+    lengths = np.linalg.norm(normals, axis=1)
+    lengths[lengths == 0] = 1.0
+    normals /= lengths[:, None]
+
+    first: dict[bytes, int] = {}
+    neighbours: list[list[int]] = [[] for _ in range(len(corners))]
+    for index, triangle in enumerate(corners):
+        rows = [tuple(row) for row in triangle.tolist()]
+        for edge in ((0, 1), (1, 2), (2, 0)):
+            key = repr(tuple(sorted((rows[edge[0]], rows[edge[1]])))).encode()
+            other = first.setdefault(key, index)
+            if other != index:
+                neighbours[index].append(other)
+                neighbours[other].append(index)
+    return neighbours, normals
+
+
+def _grown(
+    seeds: np.ndarray, neighbours: list[list[int]], normals: np.ndarray, crease_deg: float
+) -> np.ndarray:
+    """Every triangle a seed reaches without crossing a crease.
+
+    A surface is what it is everywhere it stays smooth: the wing roof rolls
+    from flat to near-vertical without a crease, so a normal threshold cannot
+    follow it, but adjacency can. Growth crosses an edge only where the two
+    faces meet at less than `crease_deg` — the eave where roof actually
+    becomes wall is a crease, and growth stops there. Slicing only adds
+    coplanar edges, so it never blocks or leaks growth.
+    """
+    if not seeds.any():
+        return seeds.copy()
+    limit = float(np.cos(np.radians(crease_deg)))
+    grown = seeds.copy()
+    stack = list(np.nonzero(seeds)[0])
+    while stack:
+        current = stack.pop()
+        for neighbour in neighbours[current]:
+            if not grown[neighbour] and float(normals[current] @ normals[neighbour]) >= limit:
+                grown[neighbour] = True
+                stack.append(neighbour)
+    return grown
+
+
+def _components(mask: np.ndarray, neighbours: list[list[int]]) -> np.ndarray:
+    """Connected-component label per masked triangle, -1 outside the mask.
+
+    No crease limit: within one wall the hull curves gently and the slicer's
+    cuts are coplanar, while the surfaces that must not join a wall — the
+    grown roofs and soffits — are excluded by the mask itself, so their
+    creases never even come up.
+    """
+    labels = np.full(len(mask), -1, dtype=np.int64)
+    label = 0
+    for start in np.nonzero(mask)[0]:
+        if labels[start] != -1:
+            continue
+        stack = [int(start)]
+        labels[start] = label
+        while stack:
+            current = stack.pop()
+            for neighbour in neighbours[current]:
+                if mask[neighbour] and labels[neighbour] == -1:
+                    labels[neighbour] = label
+                    stack.append(neighbour)
+        label += 1
+    return labels
+
+
+def paint(mesh: MeshData, spec: SourcePaint, reference: Reference | None = None) -> MeshData:
+    """Colour every triangle by surface, elevation, and — when referenced —
+    the building's own photo.
 
     Per-triangle rather than per-vertex, which is only expressible because the
     mesh arrives unshared from `slice_horizontal` — and only crisp because it
     arrives sliced: no triangle spans a band edge, so a centroid test cannot
     disagree with any part of the triangle it colours.
+
+    Roof and soffit are *grown* from their normal-threshold seeds across
+    smooth adjacency (`_grown`), so the curved sweeps stay one surface to
+    their edges instead of turning into banded wall past the threshold — the
+    defect the first repaint shipped. With a `Reference`, a procedural ribbon
+    additionally survives only where the photo is locally dark (real
+    glazing), judged per plan octant because aerial lighting differs by
+    facing; triangles the photo never saw keep the procedural verdict.
 
     The source's own COLOR_0 (a uniform grey on every LandsD vertex) is
     overwritten, not blended: the repaint is the entire treatment.
@@ -213,17 +524,64 @@ def paint(mesh: MeshData, spec: SourcePaint) -> MeshData:
     # exactly, so the per-triangle mean *is* the face normal.
     face_y = mesh.normals[mesh.triangles].mean(axis=1)[:, 1]
     centroid_y = mesh.triangle_centroids()[:, 1]
+    neighbours, normals = _adjacency(mesh)
+
+    roof = _grown(face_y >= spec.roof_normal_y, neighbours, normals, spec.crease_deg)
+    soffit = _grown(face_y <= -spec.soffit_normal_y, neighbours, normals, spec.crease_deg)
 
     ribbon = np.zeros(len(centroid_y), dtype=bool)
+    level = np.zeros(len(centroid_y), dtype=np.int64)
     if spec.ribbon_count > 0:
-        level = np.floor((centroid_y - spec.ribbon_first_m) / spec.ribbon_pitch_m)
+        level = np.floor((centroid_y - spec.ribbon_first_m) / spec.ribbon_pitch_m).astype(np.int64)
         offset = centroid_y - (spec.ribbon_first_m + level * spec.ribbon_pitch_m)
         ribbon = (level >= 0) & (level < spec.ribbon_count) & (offset < spec.ribbon_thickness_m)
+    ribbon &= ~(roof | soffit)
+
+    if reference is not None and ribbon.any():
+        # The verdict is per *strip*, not per triangle: a ribbon is a
+        # continuous storey line, so one band level on one connected wall is
+        # one decision, taken on the median photo contrast of its triangles.
+        # Per-triangle verdicts turned photo noise into broken dashes.
+        #
+        # The contrast itself is local and vertical, not an absolute darkness
+        # cut: the aerial bakes sun and shade at many times the glazing's own
+        # contrast (wall luminance spans ~0.03-0.66 across facings), so the
+        # only fair comparison for a band sample is the wall half a pitch
+        # above and below it — same plan position, same lighting, glazing the
+        # only difference. Uniform surfaces (the sweeps, the fasciae)
+        # contrast at ~1.0 and lose their strips; real glazing reads darker
+        # and keeps them. Strips the photo cannot decide — no coverage, or
+        # parents too short for a neighbour sample — keep the procedural
+        # verdict.
+        luminance, sampled = _sample_reference(mesh, reference)
+        above, has_above = _sample_reference(mesh, reference, spec.ribbon_pitch_m / 2.0)
+        below, has_below = _sample_reference(mesh, reference, -spec.ribbon_pitch_m / 2.0)
+        beside = np.ma.masked_array(
+            np.stack([above, below]), mask=~np.stack([has_above, has_below])
+        )
+        neighbour = np.ma.mean(beside, axis=0).filled(0.0)
+        decidable = ribbon & sampled & (has_above | has_below) & (neighbour > 0)
+
+        wall_component = _components(~roof & ~soffit, neighbours)
+        contrast = np.ones(len(centroid_y))
+        contrast[decidable] = luminance[decidable] / neighbour[decidable]
+        strips: dict[tuple[int, int], list[int]] = {}
+        for index in np.nonzero(ribbon)[0]:
+            strips.setdefault((int(wall_component[index]), int(level[index])), []).append(
+                int(index)
+            )
+        for members in strips.values():
+            rows = np.asarray(members)
+            decided = rows[decidable[rows]]
+            if len(decided) < 5:
+                continue  # too little photo to overrule the measured layout
+            if float(np.median(contrast[decided])) >= spec.veto_ratio:
+                ribbon[rows] = False
 
     surface = np.full(len(centroid_y), 0, dtype=np.uint8)  # wall
     surface[ribbon] = 1
-    surface[face_y >= spec.roof_normal_y] = 2
-    surface[face_y <= -spec.soffit_normal_y] = 3
+    surface[roof] = 2
+    surface[soffit] = 3
     surface[centroid_y < spec.base_below_m] = 3
 
     palette = np.array(
@@ -237,7 +595,7 @@ def paint(mesh: MeshData, spec: SourcePaint) -> MeshData:
     )
     colours = np.zeros((len(mesh.positions), 4), dtype=np.uint8)
     colours[mesh.triangles.reshape(-1)] = np.repeat(palette[surface], 3, axis=0)
-    return replace(mesh, colours=colours)
+    return replace(mesh, colours=colours, uvs=None)
 
 
 def main(argv: list[str] | None = None) -> int:

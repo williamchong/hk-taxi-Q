@@ -732,6 +732,12 @@ landmarks:
       # The generator's podium band: below it everything paints as base
       # concrete regardless of facing (service base, tunnel piers, deck edge).
       base_below_m: 8.0
+      # The building's own aerial photo (the individualised `A0` variant of
+      # the same mesh) vetoes procedural ribbons where the elevation carries
+      # no glazing — the roof sweeps and fasciae read uniform in the photo,
+      # so the bands stop at the eave the way the real ones do. Needs
+      # sources/hong_kong/individualised/11-SW-9D.zip on disk.
+      reference_texture: true
 
   # iB1000 block 1103126797 (base 3.9 / roof 380.7 mPD, CERTAINTY 1, no P
   # block — DATA_SOURCES.md); 3D-BIT mesh footprint 78.6 x 82.9 m, top

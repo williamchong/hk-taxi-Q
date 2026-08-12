@@ -587,10 +587,27 @@ class SourcePaint:
     strips, each `thickness_m` tall. A strip the roofline has descended past
     simply has no wall surface left at its elevation — no clamping needed.
 
-    The normal thresholds split the mesh into surfaces: a face is roof where
-    its unit normal's y exceeds `roof_normal_y`, soffit/underside where it is
-    below `-soffit_normal_y`, and wall between. Everything with a centroid
-    under `base_below_m` is base regardless of facing (piers, service base).
+    The normal thresholds only *seed* the roof and soffit: a face is a roof
+    seed where its unit normal's y exceeds `roof_normal_y`, a soffit seed
+    below `-soffit_normal_y`. Each region then grows across every edge whose
+    faces meet at less than `crease_deg` — a curved sweep is one surface, and
+    it stays roof all the way down its roll rather than turning into banded
+    wall the moment it passes the threshold (the defect the first repaint
+    shipped). Growth stops at creases, which is where a roof actually ends
+    and a wall begins. Everything with a centroid under `base_below_m` is
+    base regardless of facing (piers, service base).
+
+    `reference_texture` makes the paint consult the building's own aerial
+    photo: the individualised (`…A0`) variant of the same mesh carries the
+    photogrammetry texture, and a procedural ribbon is kept only where that
+    photo is darker than the *same wall half a pitch above and below* — the
+    one comparison that cancels the baked sun and shade, which vary across a
+    facade at many times the glazing's own contrast. A band sample under
+    `veto_ratio` x its vertical neighbours counts as glazing; a uniform
+    surface (a roof sweep, a fascia) contrasts at ~1.0 and loses its bands.
+    The texture never ships (`Q33`: the palette is the four named materials,
+    nothing else); it only votes at build time, and it needs the city's
+    `individualised` sheet zips on disk.
     """
 
     wall: Material
@@ -604,6 +621,9 @@ class SourcePaint:
     base_below_m: float
     roof_normal_y: float = 0.5
     soffit_normal_y: float = 0.5
+    crease_deg: float = 35.0
+    reference_texture: bool = False
+    veto_ratio: float = 0.9
 
 
 @dataclass(frozen=True)
@@ -2186,15 +2206,25 @@ def _source_paint(body: dict[str, Any], where: str, table: _MaterialTable) -> So
     if base["base_below_m"] < 0.0:
         raise ValueError(f"{where}:base_below_m is {base['base_below_m']!r}, expected >= 0")
     thresholds: dict[str, float] = {}
-    for key in ("roof_normal_y", "soffit_normal_y"):
+    for key in ("roof_normal_y", "soffit_normal_y", "veto_ratio"):
         if body.get(key) is None:
             continue
         value = _measures(body, where, (key,))[key]
         if not 0.0 < value <= 1.0:
-            # 0 would claim every wall as roof; above 1 nothing ever matches
-            # and the whole mesh silently paints as wall.
+            # 0 would claim every wall as roof (or veto every band); above 1
+            # nothing ever matches and the knob silently does nothing.
             raise ValueError(f"{where}:{key} is {value!r}, expected within (0, 1]")
         thresholds[key] = value
+    if body.get("crease_deg") is not None:
+        crease = _measures(body, where, ("crease_deg",))["crease_deg"]
+        if not 0.0 < crease < 180.0:
+            # 0 never grows past the seed; 180 grows through every edge and
+            # floods the whole mesh with the first seed's surface.
+            raise ValueError(f"{where}:crease_deg is {crease!r}, expected within (0, 180)")
+        thresholds["crease_deg"] = crease
+    reference = body.get("reference_texture", False)
+    if not isinstance(reference, bool):
+        raise ValueError(f"{where}:reference_texture is {reference!r}, expected a boolean")
     wall, ribbon, roof, base_surface = (
         table.get(str(_require(surfaces, role, f"{where}:materials")), f"{where}:materials:{role}")
         for role in _PAINT_SURFACES
@@ -2209,6 +2239,7 @@ def _source_paint(body: dict[str, Any], where: str, table: _MaterialTable) -> So
         ribbon_thickness_m=strips["thickness_m"],
         ribbon_count=count,
         base_below_m=base["base_below_m"],
+        reference_texture=reference,
         **thresholds,
     )
 
