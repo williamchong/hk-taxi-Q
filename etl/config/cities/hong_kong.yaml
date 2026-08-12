@@ -233,6 +233,30 @@ materials:
     reflectance: 25.0
     source: "weathered concrete, mid-range of 20-30%"
 
+  # HKCEC's repaint surfaces (`P3-6`): the four colours `source_paint` puts on
+  # the extracted Phase 2 source mesh, read off the Expo Drive East street
+  # views (2024) — the elevation is *pale* panels carrying thin dark ribbon
+  # glazing, under a roof *darker* than the wall. `tools/make_landmark.py`
+  # keeps its own Central Plaza palette; these entered this table when the
+  # HKCEC generator retired, because a colour a *pipeline* stage ships must
+  # live where `_check_exposure` can see it.
+  panel_pale:
+    colour: "#868077"
+    reflectance: 42.0
+    source: "pale precast and granite curtain panels, 35-45%"
+  roof_grey:
+    colour: "#5a6063"
+    reflectance: 22.0
+    source: "pearl-grey coated aluminium re-roof, 18-28%"
+  curtain_glass:
+    colour: "#3d4853"
+    reflectance: 12.0
+    source: "curtain-wall glass, 8-15% diffuse — the trap Q34 records: never lighter"
+  concrete_pale:
+    colour: "#726e66"
+    reflectance: 30.0
+    source: "clean concrete and granite podium cladding, 20-35%"
+
 crs:
   # Every source dataset is published in the HK1980 Grid System — a Transverse
   # Mercator projection in metres. All pipeline geometry stays in it until the
@@ -675,17 +699,39 @@ landmarks:
   # towers above it — all stay generated. Discovered 2026-08-12 from 11-SW-9D:
   # iB1000 block 1103124251 (base 3.6 / roof 70.3 mPD, CERTAINTY 1), 3D-BIT
   # mesh footprint 201 x 349 m, top 71.9 mPD, single mesh, no sheet-edge dupes.
+  #
+  # Mesh-sourced (`source_paint` below): the shipped model is the source mesh
+  # itself, extracted and vertex-repainted by `pipeline/landmarks.py` — the
+  # generated hero the P3-6 review rounds converged on, after the user judged
+  # the source closer to the Expo Drive East photos than the generator's
+  # massing. Generated output under government terms; never committed.
   - id: hkcec
-    asset: "res://assets/authored/landmarks/hkcec.glb"
+    asset: "res://assets/generated/landmarks/hkcec.glb"
     pos:
       easting: 835867.5 # base-band footprint centroid of the excluded mesh
       northing: 816041.0
-      elevation: 4.0 # mesh base 3.99 mPD; the model's plinth continues 1 m down
-    rot_y_deg: 6.4 # major plan axis, PCA over the source mesh — near north-south
+      elevation: 4.0 # mesh base 3.99 mPD; sits on terrain the tiles agreed with
+    # The mesh keeps its source orientation, so no bearing: the 6.4 PCA figure
+    # retired with the generated massing it oriented.
+    rot_y_deg: 0.0
     name:
       en: "Convention Centre"
       zh: "會展"
     replaces_source_ids: [B358761603301063]
+    # Measured 99,577 after slicing (41,273 in the source; the growth is the
+    # walls being cut at every ribbon edge — crisp vertex-colour bands cost
+    # exactly those edges), plus ~20% headroom for source-data revisions.
+    triangle_budget: 120000
+    source_paint:
+      materials: { wall: panel_pale, ribbon: curtain_glass, roof: roof_grey, base: concrete_pale }
+      # Measured off the street views by pixel profile (six sampled columns:
+      # dark share 0.27-0.37, 9-10 bands over ~45 m of hull): storey lines at
+      # constant absolute elevations, cut off one by one as the roofline
+      # descends — the derivation P3-6 records.
+      ribbons: { first_m: 15.0, pitch_m: 4.8, thickness_m: 1.5, count: 10 }
+      # The generator's podium band: below it everything paints as base
+      # concrete regardless of facing (service base, tunnel piers, deck edge).
+      base_below_m: 8.0
 
   # iB1000 block 1103126797 (base 3.9 / roof 380.7 mPD, CERTAINTY 1, no P
   # block — DATA_SOURCES.md); 3D-BIT mesh footprint 78.6 x 82.9 m, top

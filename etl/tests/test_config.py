@@ -1412,10 +1412,37 @@ class TestLandmarks:
         assert set(by_id) >= {"hkcec", "central_plaza"}
         for landmark in by_id.values():
             assert landmark.replaces_source_ids, landmark.id
-            assert landmark.asset.startswith("res://assets/authored/landmarks/")
+
+        # Central Plaza stays an authored, committed model.
+        assert by_id["central_plaza"].asset.startswith("res://assets/authored/landmarks/")
+        assert by_id["central_plaza"].source_paint is None
+
+        # HKCEC is mesh-sourced (`P3-6` amendment): its model is generated
+        # output, keeps the source orientation, and carries its own budget.
+        hkcec = by_id["hkcec"]
+        assert hkcec.asset == "res://assets/generated/landmarks/hkcec.glb"
+        assert hkcec.rot_y_deg == 0.0
+        assert hkcec.triangle_budget > 8000
+        paint = hkcec.source_paint
+        assert paint is not None
+        assert {m.name for m in (paint.wall, paint.ribbon, paint.roof, paint.base)} == {
+            "panel_pale",
+            "curtain_glass",
+            "roof_grey",
+            "concrete_pale",
+        }
+        assert paint.ribbon_count == 10
 
     def test_the_block_is_optional(self, rewrite) -> None:
-        city = load_city("hong_kong", cities_root=rewrite(lambda doc: doc.pop("landmarks")))
+        def drop(doc: dict[str, Any]) -> None:
+            doc.pop("landmarks")
+            # The paint surfaces' only referent is the block being dropped, and
+            # a material nothing references is refused — that refusal has its
+            # own test; this one is about the landmarks block.
+            for name in ("panel_pale", "roof_grey", "curtain_glass", "concrete_pale"):
+                del doc["materials"][name]
+
+        city = load_city("hong_kong", cities_root=rewrite(drop))
         assert city.landmarks == ()
 
     def test_a_reused_id_is_rejected(self, rewrite) -> None:
@@ -1447,12 +1474,60 @@ class TestLandmarks:
         with pytest.raises(ValueError, match="non-empty"):
             load_city("hong_kong", cities_root=rewrite(strip))
 
-    def test_an_asset_outside_the_authored_directory_is_rejected(self, rewrite) -> None:
+    def test_an_authored_asset_outside_the_authored_directory_is_rejected(self, rewrite) -> None:
         def relocate(doc: dict[str, Any]) -> None:
-            doc["landmarks"][0]["asset"] = "res://assets/generated/hkcec.glb"
+            # [1] is Central Plaza — the authored mode; [0] is mesh-sourced.
+            doc["landmarks"][1]["asset"] = "res://assets/generated/central_plaza.glb"
 
         with pytest.raises(ValueError, match="authored/landmarks"):
             load_city("hong_kong", cities_root=rewrite(relocate))
+
+    def test_a_mesh_sourced_asset_must_be_its_derived_path(self, rewrite) -> None:
+        """The stage writes `landmarks/<id>.glb`; any other asset spelling
+        would ship a model the manifest points past."""
+
+        def relocate(doc: dict[str, Any]) -> None:
+            doc["landmarks"][0]["asset"] = "res://assets/authored/landmarks/hkcec.glb"
+
+        with pytest.raises(ValueError, match="repainted source mesh"):
+            load_city("hong_kong", cities_root=rewrite(relocate))
+
+    def test_a_mesh_sourced_bearing_is_rejected(self, rewrite) -> None:
+        """The extracted mesh keeps its source orientation — a bearing on top
+        would rotate it twice."""
+
+        def rotate(doc: dict[str, Any]) -> None:
+            doc["landmarks"][0]["rot_y_deg"] = 6.4
+
+        with pytest.raises(ValueError, match="source orientation"):
+            load_city("hong_kong", cities_root=rewrite(rotate))
+
+    def test_a_paint_material_missing_from_the_table_is_rejected(self, rewrite) -> None:
+        """Paint surfaces resolve through the materials table — the invariant
+        that no colour is authored anywhere else in the file."""
+
+        def mistype(doc: dict[str, Any]) -> None:
+            doc["landmarks"][0]["source_paint"]["materials"]["roof"] = "roof_gray"
+
+        with pytest.raises(ValueError, match="materials: does not declare"):
+            load_city("hong_kong", cities_root=rewrite(mistype))
+
+    def test_a_non_positive_triangle_budget_is_rejected(self, rewrite) -> None:
+        def zero(doc: dict[str, Any]) -> None:
+            doc["landmarks"][0]["triangle_budget"] = 0
+
+        with pytest.raises(ValueError, match="positive integer"):
+            load_city("hong_kong", cities_root=rewrite(zero))
+
+    def test_an_out_of_range_normal_threshold_is_rejected(self, rewrite) -> None:
+        """Above 1 nothing ever matches and the whole mesh silently paints as
+        wall — the quiet failure, refused loudly at load."""
+
+        def overshoot(doc: dict[str, Any]) -> None:
+            doc["landmarks"][0]["source_paint"]["roof_normal_y"] = 1.5
+
+        with pytest.raises(ValueError, match="within"):
+            load_city("hong_kong", cities_root=rewrite(overshoot))
 
     def test_a_position_inside_no_region_is_rejected(self, rewrite) -> None:
         """Excluded wherever its sheets are read, shipped nowhere — a hole with

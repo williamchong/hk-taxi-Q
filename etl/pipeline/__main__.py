@@ -25,7 +25,7 @@ import logging
 import time
 from collections.abc import Callable
 
-from pipeline import buildings, export, fares, fetch, podiums, roads, surface
+from pipeline import buildings, export, fares, fetch, landmarks, podiums, roads, surface
 
 log = logging.getLogger(__name__)
 
@@ -37,6 +37,7 @@ STAGES: dict[str, Callable[[list[str]], int]] = {
     "fetch": fetch.main,
     "podiums": podiums.main,
     "buildings": buildings.main,
+    "landmarks": landmarks.main,
     "roads": roads.main,
     "surface": surface.main,
     "fares": fares.main,

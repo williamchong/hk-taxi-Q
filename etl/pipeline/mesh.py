@@ -122,6 +122,167 @@ def select_triangles(mesh: MeshData, keep: np.ndarray) -> MeshData | None:
     )
 
 
+# On-plane tolerance for `slice_horizontal`, in metres. Well under any band
+# thickness the paint will express, and far above float64 noise at sheet
+# magnitudes (~1e-10 m around easting 836,000).
+_ON_PLANE_M = 1e-6
+
+
+def slice_horizontal(mesh: MeshData, heights: Sequence[float]) -> MeshData:
+    """Cut every triangle that crosses a horizontal plane; move no vertex.
+
+    Vertex colours interpolate across a triangle, so a colour boundary is only
+    crisp along edges the mesh actually has. This supplies those edges: after
+    slicing, no triangle spans any of `heights`, so a per-triangle paint can
+    express a band boundary exactly (`landmarks.paint` is the caller).
+
+    The output is unshared — three vertices per triangle — which is both the
+    form the sheet sources arrive in and the invariant a per-triangle paint
+    needs: colouring a shared vertex would bleed into its neighbours. Sharing
+    in the input is tolerated and flattened.
+
+    A vertex within `_ON_PLANE_M` of a plane counts as *on* it and is never
+    cut through; cut points get their y written to exactly the plane height,
+    so a later plane at the same height re-classifies them as on rather than
+    re-cutting. Cut edges are interpolated lower-endpoint-first regardless of
+    winding, so the two triangles sharing an edge compute bit-identical cut
+    points and the sliced surface stays closed. Every cut lands strictly
+    inside an edge (the endpoints are strictly on opposite sides), so no
+    degenerate triangle is created and nothing needs dropping afterwards.
+    """
+    channels = [mesh.positions, mesh.normals.astype(np.float64)]
+    widths = [3, 3]
+    for values in (mesh.colours, mesh.uvs, mesh.uv2):
+        if values is not None:
+            channels.append(values.astype(np.float64))
+            widths.append(values.shape[1])
+    corners = np.concatenate(channels, axis=1)[mesh.triangles]
+
+    for height in sorted(set(float(h) for h in heights)):
+        y = corners[:, :, 1]
+        if height <= y.min() + _ON_PLANE_M or height >= y.max() - _ON_PLANE_M:
+            continue
+        side = np.zeros(y.shape, dtype=np.int8)
+        side[y > height + _ON_PLANE_M] = 1
+        side[y < height - _ON_PLANE_M] = -1
+        crossing = (side == 1).any(axis=1) & (side == -1).any(axis=1)
+        if not crossing.any():
+            continue
+        pieces = [corners[~crossing]]
+        # A crossing triangle has at most one on-plane corner: two would leave
+        # a single strict side, which is not a crossing.
+        on_plane = side == 0
+        split_two = crossing & on_plane.any(axis=1)
+        split_three = crossing & ~on_plane.any(axis=1)
+        if split_two.any():
+            pieces.extend(_split_at_on_corner(corners[split_two], side[split_two], height))
+        if split_three.any():
+            pieces.extend(_split_at_lone_corner(corners[split_three], side[split_three], height))
+        corners = np.concatenate(pieces)
+
+    parts = np.split(corners.reshape(-1, corners.shape[2]), np.cumsum(widths)[:-1], axis=1)
+    optional = iter(parts[2:])
+    return MeshData(
+        name=mesh.name,
+        positions=np.ascontiguousarray(parts[0]),
+        normals=normalise(parts[1]).astype(np.float32),
+        triangles=_as_indices(np.arange(len(corners) * 3).reshape(-1, 3)),
+        colours=None
+        if mesh.colours is None
+        else np.clip(np.rint(next(optional)), 0, 255).astype(np.uint8),
+        uvs=None if mesh.uvs is None else next(optional).astype(np.float32),
+        uv2=None if mesh.uv2 is None else next(optional).astype(np.float32),
+        texture=mesh.texture,
+        material=mesh.material,
+    )
+
+
+def _rotate_corners(corners: np.ndarray, pivot: np.ndarray) -> np.ndarray:
+    """Each triangle cycled so its pivot corner comes first. Winding survives."""
+    order = (pivot[:, None] + np.arange(3)[None, :]) % 3
+    return np.take_along_axis(corners, order[:, :, None], axis=1)
+
+
+def _cut_edge(a: np.ndarray, b: np.ndarray, height: float) -> np.ndarray:
+    """Where edge a-b meets the plane, interpolated lower-endpoint-first.
+
+    The endpoints are strictly on opposite sides, so the denominator cannot
+    vanish. Ordering by height before interpolating makes the arithmetic
+    identical for the neighbouring triangle that walks the same edge the other
+    way — same values in, bit-identical cut point out, no crack.
+    """
+    swap = a[:, 1] > b[:, 1]
+    low = np.where(swap[:, None], b, a)
+    high = np.where(swap[:, None], a, b)
+    t = (height - low[:, 1]) / (high[:, 1] - low[:, 1])
+    cut = low + t[:, None] * (high - low)
+    cut[:, 1] = height
+    return cut
+
+
+def _split_at_on_corner(corners: np.ndarray, side: np.ndarray, height: float) -> list[np.ndarray]:
+    """(O, B, C) with O on the plane: cut B-C at D, yield (O, B, D), (O, D, C)."""
+    rotated = _rotate_corners(corners, np.argmax(side == 0, axis=1))
+    o, b, c = rotated[:, 0], rotated[:, 1], rotated[:, 2]
+    d = _cut_edge(b, c, height)
+    return [np.stack([o, b, d], axis=1), np.stack([o, d, c], axis=1)]
+
+
+def _split_at_lone_corner(corners: np.ndarray, side: np.ndarray, height: float) -> list[np.ndarray]:
+    """(A, B, C) with A alone on its side: cut A-B at D and A-C at E, yield
+    the tip (A, D, E) and the far quad as (D, B, C), (D, C, E).
+
+    The sides are a permutation of (+1, -1, -1) or (-1, +1, +1), so the row
+    sum is the majority sign and the lone corner is the one carrying its
+    negation.
+    """
+    majority = side.sum(axis=1, dtype=np.int8)
+    rotated = _rotate_corners(corners, np.argmax(side == -majority[:, None], axis=1))
+    a, b, c = rotated[:, 0], rotated[:, 1], rotated[:, 2]
+    d = _cut_edge(a, b, height)
+    e = _cut_edge(a, c, height)
+    return [
+        np.stack([a, d, e], axis=1),
+        np.stack([d, b, c], axis=1),
+        np.stack([d, c, e], axis=1),
+    ]
+
+
+def weld(mesh: MeshData) -> MeshData:
+    """Share vertices that agree in **every** attribute; change no triangle.
+
+    The lossless counterpart of `collapse(cell_m=0)`, differing in one way that
+    matters to a painted mesh: the key includes colours and UVs, so two
+    coincident vertices on opposite sides of a colour boundary stay separate
+    and the boundary stays crisp. The exact-weld path in `collapse` keys on
+    position and normal only, which would weld those pairs and bleed one
+    band's colour into its neighbour.
+
+    Worth running after a per-triangle paint (`landmarks.paint`), whose
+    unshared input triples the vertex buffer: everywhere the paint agreed the
+    duplicates collapse back, and everywhere it disagreed they were never
+    mergeable anyway. Rendering is identical either way.
+    """
+    channels = [mesh.positions, mesh.normals.astype(np.float64)]
+    for values in (mesh.colours, mesh.uvs, mesh.uv2):
+        if values is not None:
+            channels.append(values.astype(np.float64))
+    _, representative, inverse = np.unique(
+        np.column_stack(channels), axis=0, return_index=True, return_inverse=True
+    )
+    return MeshData(
+        name=mesh.name,
+        positions=mesh.positions[representative],
+        normals=mesh.normals[representative],
+        triangles=_as_indices(inverse.reshape(-1)[mesh.triangles]),
+        colours=None if mesh.colours is None else mesh.colours[representative],
+        uvs=None if mesh.uvs is None else mesh.uvs[representative],
+        uv2=None if mesh.uv2 is None else mesh.uv2[representative],
+        texture=mesh.texture,
+        material=mesh.material,
+    )
+
+
 def collapse(mesh: MeshData, *, cell_m: float, height_field: bool = False) -> MeshData:
     """Merge vertices sharing a grid cell — and, unless `height_field`, a facing;
     drop triangles that fold.

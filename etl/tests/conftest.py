@@ -24,6 +24,21 @@ def hong_kong():
 
 
 @pytest.fixture
+def sources(tmp_path, hong_kong):
+    """A sources tree holding one synthetic sheet and an index that selects it.
+
+    The builder lives in `test_buildings.py` beside the fixtures it writes;
+    this is only the pytest registration, here because both that module and
+    `test_landmarks.py` request it and conftest is where shared fixtures
+    resolve. Imported inside the body so collecting this module never imports
+    a test module.
+    """
+    from tests.test_buildings import _write_sources
+
+    return _write_sources(tmp_path, hong_kong)
+
+
+@pytest.fixture
 def testville_config(tmp_path):
     """The synthetic city, loaded through the real loader.
 

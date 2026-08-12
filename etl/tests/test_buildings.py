@@ -157,8 +157,13 @@ class Fixture(NamedTuple):
     textured: bool = False
 
 
-@pytest.fixture
-def sources(tmp_path: Path, hong_kong):
+# The `sources` fixture building a synthetic sheet around these lives in
+# `conftest.py` — it moved there when `test_landmarks.py` became its second
+# consumer, because pytest resolves shared fixtures through conftest and an
+# imported fixture function registers under its binding name, not its own.
+
+
+def _write_sources(tmp_path: Path, hong_kong):
     """A sources tree holding one synthetic sheet and an index that selects it."""
     root = tmp_path / "sources"
     directory = root / hong_kong.id / SOURCE_ID
