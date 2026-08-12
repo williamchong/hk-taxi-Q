@@ -362,7 +362,10 @@ trade.
      priced by Pool B's 40% blindness, bar owed at its turn.
 - ⚠️ **Each rider owes its own validation, bar fixed before grading.** The graded run validated
   grammar and glazing only; `Q42`'s fill rates are prioritisation evidence, not validation. Each
-  rider closes its slice of `Q42` in `DECISIONS.md` as it lands.
+  rider closes its slice of `Q42` in `DECISIONS.md` as it lands. ⚠️ **The storey-pitch rider reads
+  `Q48` before its bar is fixed** — four instruments already measure pitch and the shipped constant
+  (`floor_height_m` 2.8, from `P3-7`'s 2.77) is ~16% below the other three (3.38 / 3.32 / 3.28),
+  unreconciled.
 - ⚠️ **Three places per rider, one commit:** the merge/pack (`tools/facade_grammar.py`,
   `etl/pipeline/buildings.py`), the shader decode, and `game/tools/verify_tiles.gd` — which today
   asserts `uv2.y != 0.0` is a codec break, so the first written rider fails the verifier unless its

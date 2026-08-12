@@ -71,6 +71,7 @@ lives in git. This file holds *why things are the way they are*.
 | `Q45` | One pane palette across the city reads as wallpaper | ✅ Closed — the fallback modulation shipped (`P3-7a` W2) and the user accepted the `A‴` frames; `Q35` bounds any retune |
 | `Q46` | A grammar refusal draws a quiet tier, not invented fenestration | ✅ Closed — accepted in scope 2026-08-10 on a `survey_debug`-tinted drive test: refused stock reads quiet; the residual sightings sit on committed stock and open `Q47` |
 | `Q47` | A committed verdict is right about the tower, wrong about the ground band | 🟡 Route decided 2026-08-10, join landed 2026-08-11 — iB1000 `P`-block metres where a tower meets one (data > survey-inferred; 310 stems carry a data boundary in `podiums.json`, contract argued 2026-08-11), `R4`'s floors→metres conversion elsewhere graded against the joined boundaries before packing; closes when the shipped boundary is graded |
+| `Q48` | A contrast ratio measures banding where an `L*` profile could not | 🟡 Open as a **candidate only** — recorded 2026-08-13 from `P3-6`'s photo veto, nothing built and nothing scheduled; Probe 3 and mode 1 do not reach it, mode 4 does, and the evidence is one hero building graded by its author's eye |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -4090,3 +4091,146 @@ Pool B's 40% of certain podiums the reader cannot see at all. Three consequences
    that may not generalise.
 
 **See.** `Q46` · `Q41` · `Q42` · `Q43` · `Q34` · `P3-7a`
+
+## `Q48` — A contrast ratio measures banding where an `L*` profile could not
+
+**Status.** 🟡 **Open as a candidate — nothing built, nothing scheduled** (recorded 2026-08-13 from
+`P3-6`'s photo veto). Both halves of the case are below: why the mechanism escapes `Q40`, and why
+one hero building is not evidence that it scales · **Owner.** `P3-7a`
+
+**Where it comes from.** `P3-6`'s photo-referenced repaint (2026-08-13) had to decide which of
+HKCEC's procedural ribbon strips the real elevation carries. What shipped is neither a classifier
+nor a threshold on brightness — it is a ratio:
+
+```
+contrast = L(band sample) / mean(L(sample +pitch/2), L(sample −pitch/2))
+```
+
+median-aggregated per **strip** — one band level on one connected wall component, because
+per-triangle verdicts turned photo noise into broken dashes — vetoing the ribbon at
+`veto_ratio` 0.9. Each sample is four points per triangle (centroid and edge midpoints) mapped
+through the *parent* source triangle's barycentric frame into its `…A0` atlas coordinates; a lifted
+sample that leaves its parent is discarded rather than clamped, because a clamped coordinate would
+silently read another storey's pixels.
+
+**Why it earns a record: Probe 3 does not reach it.** `Q40` killed per-chart analysis because
+photogrammetry charts tall narrow strips — median 30 charts per building, max 1,837, median chart
+area 3.8 m², and only **15.2% of wall area** (47 charts of 5,831) spanning three bays *and* three
+floors. That finding is about needing a contiguous 2-D neighbourhood **in the image**. This
+statistic needs none: it compares a triangle's photo sample against samples at ±pitch/2 on the same
+surface **in world metres**, mediated by geometry rather than by image adjacency, so chart size is
+irrelevant. `Q40`'s "work in the world-space unwrap, never in atlas space" was a conclusion about
+*pictures*; this is neither an atlas-space read nor a picture but a scattered
+`(world elevation, luminance)` cloud — a third option that record did not consider.
+
+⚠️ **So "measure it from the A0 atlases" is the wrong description, and the next reader will bounce
+it off Probe 3.** The accurate phrasing is *per-triangle atlas samples indexed by world elevation.*
+
+**And mode 1 does not reach it, because the claim is smaller.** `Q40` mode 1 is structural: `L*`
+modulation measures materials, not recession, so punched-versus-curtain — a **depth** property — is
+not derivable from colour at any threshold (`DEEP = 6.0`; dark glass against pale spandrels reads
+`L*` 17.4 and classifies `punched`). *Does this wall carry a repeating horizontal tone modulation at
+storey pitch* is a **tone** claim, and tone is exactly what a texture can see. Band presence is
+strictly weaker than grammar, and mode 1 does not disqualify it. ✅ The lighting objection, which is
+what normally kills a tone claim on an aerial, is answered by the ratio rather than argued away:
+baked sun and shade span **0.03–0.66** wall luminance across facings, an order of magnitude over the
+glazing's own contrast, and dividing by the same wall half a pitch above and below cancels it. An
+absolute darkness cut was tried first and fails.
+
+**What still reaches it — four things, one of them serious.**
+
+1. 🔴 **Mode 4 — periods appear in blank walls — and it lives in the target population.**
+   `B355691583201063A0` is flat render and returned `punched` and `fin` on two faces. Weathering
+   streaks, floor-slab staining and a balcony's baked shadow all produce local vertical contrast on
+   a wall with no windows. The population where this instrument would be *most* valuable — `Q47`'s
+   committed-but-blank ground bands — is precisely the population where its known failure mode
+   lives.
+2. ⚠️ **Mode 2 — reflections are most of the signal on glass.** A mirror tower's bands may be the
+   street opposite it, which is why that tower's four faces disagreed with each other.
+3. ⚠️ **Mode 5 and `Q37` — the selection, not the statistic.** Trees, hillsides and neighbouring
+   buildings reach the survey's wall selection; `facade_glazing.py`'s depth filter moved 19 of 51
+   verdicts on `11-SW-9D` and 195 of 699 on `11-SW-14B`, **in both directions**. And under 15% of
+   wall area is photographed at all, occlusion-biased to street-facing faces.
+4. ⚠️ **It confirms a pitch; it cannot find one.** `ribbon_pitch_m` is an authored input to both the
+   band elevations and the neighbour offset. Sweeping that offset to *find* a period is
+   autocorrelation — `Q40`'s instrument with a better detrend, not a different instrument.
+
+✅ **The one-way veto is the mitigation, and it is a constraint on any future use rather than an
+implementation detail.** The photo may only *remove* bands: a strip it cannot decide — no coverage,
+or a parent too short for a neighbour sample — keeps the procedural verdict, and fewer than five
+decided samples refuses outright (an evidence floor, not a knob: less than that is one parent
+triangle's worth, where a single seam decides the strip). That is what makes mode 4 survivable — a
+false band-signal on a blank wall leaves the existing answer standing, and the useful direction
+(deleting invented fenestration) is the safe one. **Used as an assertion rather than a veto, this
+record does not carry.**
+
+🔴 **The evidence is n=1, graded by its author's eye.** `Q40` retains its own overclaim — "the
+classifier's features are visible in the pictures before any code is written" — as the fault,
+because visible-to-a-*reader* was taken as measurable-by-a-*statistic*. One hero building reviewed
+against reference photographs is the same size of evidence, and that its output was *accepted* is a
+statement about HKCEC's frames, not about the city.
+
+### Two claims, and only one of them is new
+
+**Pitch is not a new question.** Four instruments already measure storey pitch, and the one that
+ships is the outlier:
+
+| Instrument | Pitch | n |
+|---|---|---|
+| `P3-7` atlas-V autocorrelation — **ships as `floor_height_m = 2.8`** | 2.77 m | 227 walls / 219 buildings |
+| `Q40` world-space unwrap autocorrelation | 3.38 m | 3 faces, 1 building |
+| `Q42` reader `storey_count` ÷ face height | 3.32 m | 10 faces |
+| `Q47`'s tower↔block join, validated in passing | 3.28 m | 124 / 310 stems |
+
+The last three agree within 3%; the shipped constant sits **~16% below** them and nobody has
+reconciled the gap (height-weighted walls against unweighted faces is the obvious candidate, and it
+is a guess). `PLAN.md` already queues **storey pitch as a rider** in `P3-7a`'s sequence, at the
+reserved `TEXCOORD_1.y` layout in 1/32 m steps over a 2.5–4.5 m window, owing its own pre-fixed bar.
+So a mechanical pitch measurement is not a `W`-item of its own — **it is the third grader that rider
+is short of**, and `Q47` is this repo's own record of what a rider costs when it is graded against a
+spatial join instead of an independent instrument (\|err\| p50 10.76 m against a 2.80 m criterion,
+zero adjudicated corrections, the miss a predicate gap all along).
+
+**Presence is the new claim**, and its ground is unclaimed twice: it is the discriminator `Q47`'s
+committed-stock population needs and that `W4` cannot reach at exceptions scale, and
+`band_period_floors` is the one reader field that **never commits** — 0 of 25 on the validation
+faces. A mechanical band detector would not audit a verdict the reader gives; it would supply the
+one the reader refuses.
+
+### What it would owe, if it is ever promoted
+
+⚠️ **The statistic transfers; the code does not.**
+
+- **Its own sample lattice.** `lift_m` re-maps into the parent source triangle and discards a sample
+  that leaves it, so a usable neighbour needs a parent spanning ≥ pitch/2 vertically — 2.4 m at
+  HKCEC's 4.8 m grid, ~1.7 m at the region's measured pitch. HKCEC works because the slicer had
+  already cut 99,577 triangles at band elevations; survey stock is unsliced, so a tool would
+  generate sample sites *within* each wall triangle rather than inherit them. The corner-identity
+  path is hero-specific too — `facade_survey.py` loads `…A0` meshes with real `TEXCOORD_0` and needs
+  no parent-id channel.
+- **A pre-fixed bar and a third-party instrument.** `Q41`'s per-face `glazed` and its majority
+  grammar are the obvious calibration set, **on more than one sheet**: `Q40` records that the dip's
+  conditional medians flipped sign between `11-SW-9D` and `11-SW-15A`, and that a threshold which
+  must point opposite directions on two sheets of the same city is not a threshold.
+- **The standing three-places cost if anything ships** — merge/pack, shader decode, and
+  `verify_tiles.gd`, whose `uv2.y != 0.0` assertion breaks on the first written rider. No
+  `schema_version` bump: filling a reserved field a refusal-aware consumer already reads as
+  "0 = refused" changes bytes, not meaning (`Q42`).
+
+⚠️ **The dataset decision is already made; the bytes are not on disk.** `facade_glazing.py`'s region
+run (2,171 buildings, 2,143 gated) proves the read works at region scale, but it did not leave the
+sheets behind: `etl/sources/hong_kong/individualised/` holds **one of six**, the `11-SW-9D` the
+HKCEC repaint needs, and `DATA_SOURCES.md` records the same discard-after-use pattern for `P3-7`'s
+1.10 GB probe. So a region band survey costs a **5.86 GB hand re-download**, not nothing. ✅ What is
+free is that it needs no new source, no new licence position and no new rule reading — the texture
+is consulted at build time and discarded, the palette stays the `Q33`-checked materials, and
+individualised is the per-building set, not the tile-based welded mesh rule 1 forbids.
+
+**Not decided: whether to build it at all.** `PROGRESS.md` records that no unstarted task remains
+before the `P3-9a` gate, and adding one would be the first thing to break that. The cost of doing
+nothing is bounded: the storey-pitch rider grades against the reader alone, and `Q47`'s ground-band
+batch (designed now, paid after `P3-9a`) may recover the presence signal from a re-worded prompt —
+at the price of a new prompt hash and a paid re-survey, which is the asymmetry that made this worth
+recording rather than discarding.
+
+**See.** `Q40` · `Q41` · `Q42` · `Q47` · `Q37` · `P3-6` · `P3-7a` · `PLAN.md` `P3-7a`
