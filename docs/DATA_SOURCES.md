@@ -116,7 +116,17 @@ section exists so an ETL change can be made without opening that file.
   boundary with mechanism-won provenance to `podiums.json` — a stage intermediate `export.py`
   never names. Contract argument under `Q47` in `DECISIONS.md`.
 
-### ⚠️ NOT NEEDED — 3D Visualisation Map (Individualised models)
+### ⚠️ NOT SHIPPED — 3D Visualisation Map (Individualised models)
+
+*(Headed "NOT NEEDED" until the `P3-6` amendment. The dataset still ships nothing
+and the case against its textures below stands whole — but the mesh-sourced hero
+repaint now **consults** one sheet of it at build time: a landmark whose
+`source_paint` sets `reference_texture` samples the `…A0` variant's photo atlas
+to decide which ribbon strips the real elevation carries, per
+`pipeline/landmarks.py`. The stage expects the sheet zip at
+`etl/sources/<city>/individualised/<sheet>.zip`, downloaded by hand via the URL
+pattern below; the texture votes and is discarded, exactly the shape of read
+`P3-7`'s storey-pitch probe established.)*
 
 - **Portal:** https://data.gov.hk/en-data/dataset/hk-landsd-openmap-3d-visualisation-map-individualised-models
 - Same sheet grid and same 3,456-feature index scheme as non-textured. **The download discriminator
@@ -236,7 +246,10 @@ geometry, not this dataset swap — and `PLAN.md`'s `P3-6` already specifies aut
 ✅ **`P3-6` would never need the 5.9 GB anyway.** `download.map.gov.hk` returns
 `Accept-Ranges: bytes`, so the zip central directory can be read with a range request on the tail and
 a single building's `.gltf`/`.bin` pulled by byte range, leaving the JPEGs undownloaded. That is also
-how the split above was measured.
+how the split above was measured. *(The `P3-6` amendment's photo reference weakens "never" to "one
+sheet": the HKCEC repaint samples the JPEGs too, so its build wants `11-SW-9D.zip` whole — 753 MB,
+once, cached. A member-range fetcher that pulls just the one building's directory would shrink that
+to ~80 MB and is the natural follow-up if a second city makes this routine.)*
 
 💡 **The "non-textured" download is itself 70–81% texture.** Each GLTF0 zip carries one terrain JPEG —
 32.5 MB of a 40 MB sheet. Actual building geometry is only ~7–15 MB per sheet.

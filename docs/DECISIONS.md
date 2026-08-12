@@ -3063,6 +3063,31 @@ Draw calls unchanged (one hero node either way). `check.sh` all green including
 viewpoints confirm pale hull / dark storey ribbons / darker roof on the real massing — canopy
 trusses, roof layering and prow the generator never carried.
 
+⚠️ **The photos demanded a fourth correction, and it rebuilt the classifier** (user review,
+2026-08-13: "the texture doesn't follow the accurate shape"). The first repaint classified each
+triangle by its own normal, so wherever the seabird roof rolls steep its faces fell past the
+threshold and took banded wall — ribbons ran across the sweeps like contour lines. Two mechanisms
+replaced it, both data-tuned on the `source_paint` block. **(1) Surfaces grow.** Roof and soffit
+are seeded by the normal thresholds and then grown across every edge whose faces meet at less than
+`crease_deg` (35°): the sweep stays one surface to its rolled edges because it is smooth, and
+growth stops at the eave because that is a crease. **(2) The building's own photo vetoes the
+bands** (`reference_texture` — the user's call to "ref the original texture"). The individualised
+`…A0` variant carries the aerial atlas on identical geometry, so each source triangle maps to its
+photo by corner identity, threaded through the slicer as a scratch UV channel. A ribbon strip —
+one band level on one connected wall, decided strip-wise because per-triangle verdicts turned
+photo noise into broken dashes — survives only where its samples read darker than the same wall
+half a pitch above and below (local vertical contrast; an absolute cut fails because baked sun and
+shade span 0.03-0.66 luminance, an order of magnitude over the glazing's own contrast, measured
+in-band vs out on all eight facings). Uniform surfaces contrast at ~1.0 and lose their strips;
+strips the photo cannot decide keep the measured procedural layout. The texture is consulted and
+discarded — nothing shipped carries it, the palette stays the four `Q33`-checked materials, and
+Pillow stays a dev extra behind a lazy import (`pyproject` note updated;
+`DATA_SOURCES.md`'s "NOT NEEDED" verdict on the individualised set amended to "NOT SHIPPED",
+with the sheet expected at `sources/<city>/individualised/`). Triangle count unchanged (99,577 —
+the slicing is identical); PCK **39.04 → 38.67 MB** (fewer colour boundaries weld better); the
+street and wing frames now match the reference photos on both counts the user reviewed: grey
+sweeps clean to their edges, thin storey ribbons only where the elevation carries them.
+
 ⚠️ **What did *not* change:** the exclusion machinery and its two-sided acceptance, the
 `landmarks.json` placement contract, Central Plaza (authored features — crown, mast — the source
 captures badly; the generated model stays), the `W4`-is-moot call, and the vertex-colour-only
