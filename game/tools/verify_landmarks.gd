@@ -24,9 +24,12 @@ const GeneratedLandmarks = preload("res://scripts/city/generated_landmarks.gd")
 const Manifest = preload("res://scripts/city/city_manifest.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
-## ART_DESIGN.md's hero budget — mirrored in `etl/tests/test_make_landmark.py`,
-## which grades the generator where this grades the shipped import.
-const TRIANGLE_BUDGET: int = 8000
+## The fallback when an entry carries no `triangle_budget` of its own:
+## ART_DESIGN.md's authored-hero budget, mirrored in
+## `etl/tests/test_make_landmark.py`, which grades the generator where this
+## grades the shipped import. Mesh-sourced heroes ship their measured ceiling
+## in the entry (`P3-6` amendment), so the constant never grades them.
+const DEFAULT_TRIANGLE_BUDGET: int = 8000
 
 ## How far above the excluded footprint's base the probe starts. What remains
 ## inside a footprint legitimately: the terrain (≤ 7.5 m elevation on this
@@ -102,10 +105,9 @@ func _check_landmark(manifest: Manifest, entry: Dictionary) -> PackedStringArray
 	if measured.size == Vector3.ZERO:
 		problems.append("%s: %s carries no mesh to measure" % [landmark_id, asset])
 		return problems
-	if triangles > TRIANGLE_BUDGET:
-		problems.append(
-			"%s: %d triangles against the %d budget" % [landmark_id, triangles, TRIANGLE_BUDGET]
-		)
+	var budget: int = int(entry.get("triangle_budget", DEFAULT_TRIANGLE_BUDGET))
+	if triangles > budget:
+		problems.append("%s: %d triangles against the %d budget" % [landmark_id, triangles, budget])
 	for problem: String in collision:
 		problems.append("%s: %s" % [landmark_id, problem])
 

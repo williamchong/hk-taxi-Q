@@ -41,15 +41,21 @@ import logging
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from pipeline import __version__
 from pipeline.buildings import BUILDINGS_MANIFEST_NAME, BUILDINGS_MANIFEST_SCHEMA
-from pipeline.config import LANDMARK_ASSET_ROOT, CityConfig, load_city
+from pipeline.config import (
+    LANDMARK_ASSET_ROOT,
+    LANDMARK_GENERATED_ROOT,
+    CityConfig,
+    load_city,
+)
 from pipeline.crs import GameTransform
 from pipeline.documents import read_document, round_position, write_document
 from pipeline.fares import FARES_NAME, FARES_SCHEMA
 from pipeline.gltf import Bounds
+from pipeline.landmarks import ASSETS_NAME, ASSETS_SCHEMA
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
 from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, SURFACE_NAME
 
@@ -81,23 +87,35 @@ CITY_NAME = "city.json"
 # v6 reader would load v7 tiles happily and draw holes where the excluded
 # buildings stood, with no hero over them — the silent wrong answer again.
 # The version gates the whole asset set, not just the JSON.
-CITY_SCHEMA = 7
+# 8 since the HKCEC repaint (`P3-6` amendment): the manifest names generated
+# hero assets under `landmark_assets`, and the committed
+# `assets/authored/landmarks/hkcec.glb` a v7 bundle's `landmarks.json` points
+# at no longer exists in the repo. Not a bump for the added keys — an old
+# reader ignoring those would be right — but for the asset set again: a v7
+# generated directory would place a hero from a path that now loads nothing,
+# and draw the hole the v7 bump itself was written against.
+CITY_SCHEMA = 8
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
 # which is why it is assembled here rather than by a stage of its own. The
-# contract is in `docs/ARCHITECTURE.md`; the authored `.glb`s it points at are
-# committed under `res://assets/authored/landmarks/` and are deliberately
-# outside `shipped()` — they are not build output.
+# contract is in `docs/ARCHITECTURE.md`. The `.glb`s it points at are either
+# committed under `res://assets/authored/landmarks/` and deliberately outside
+# `shipped()` (they are not build output), or — for mesh-sourced heroes —
+# built by `pipeline/landmarks.py` into the out tree, named in the manifest
+# under `landmark_assets`, and shipped like any tile.
+# Schema 2 with the HKCEC repaint: entries carry `triangle_budget`, and the
+# asset set a v1 document describes (all-authored, all-committed) is gone —
+# same argument as `CITY_SCHEMA` 8.
 LANDMARKS_NAME = "landmarks.json"
-LANDMARKS_SCHEMA = 1
+LANDMARKS_SCHEMA = 2
 
 # Manifest keys naming a document that ships. One tuple rather than a literal
 # at each use, because `shipped` reads them and `REQUIRED_KEYS` guards them:
 # a fourth document added to one and not the other is a `KeyError` raised from
 # inside the validator instead of a finding reported by it.
 DOCUMENT_KEYS = ("road_graph", "road_surface", "fares", "landmarks")
-REQUIRED_KEYS = (*DOCUMENT_KEYS, "tiles", "bounds_game")
+REQUIRED_KEYS = (*DOCUMENT_KEYS, "tiles", "landmark_assets", "bounds_game")
 
 # Positions are written at millimetre precision, and `bounds_game` is rounded
 # from the same values. Rounding both can push a coordinate a hair outside its
@@ -121,6 +139,7 @@ class Input:
 
 INPUTS: tuple[Input, ...] = (
     Input(BUILDINGS_MANIFEST_NAME, BUILDINGS_MANIFEST_SCHEMA, "buildings"),
+    Input(ASSETS_NAME, ASSETS_SCHEMA, "landmarks"),
     Input(SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, "surface"),
     Input(ROADGRAPH_NAME, ROADGRAPH_SCHEMA, "roads"),
     Input(FARES_NAME, FARES_SCHEMA, "fares"),
@@ -224,6 +243,7 @@ def build_region(
     transform = city.game_transform(region_id)
     landmarks = _landmarks_document(city, region_id, buildings, transform)
     write_document(out_dir / LANDMARKS_NAME, landmarks)
+    assets = documents[ASSETS_NAME]
     # The excluded footprints join the union: the authored hero stands where
     # the excluded buildings stood, so without this the bounds would shrink by
     # exactly the geometry the region still contains.
@@ -262,6 +282,10 @@ def build_region(
         "carriageway": surface["carriageway"],
         "fares": FARES_NAME,
         "landmarks": LANDMARKS_NAME,
+        # The mesh-sourced hero models `pipeline/landmarks.py` built — shipped
+        # files like the tile GLBs, unlike the committed authored heroes,
+        # which the manifest never names (`P3-6` amendment).
+        "landmark_assets": sorted(str(asset["path"]) for asset in assets["assets"]),
         "etl_version": __version__,
         "generated_utc": generated_utc or datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
@@ -349,6 +373,10 @@ def _landmarks_document(
                 "name": {"en": landmark.name_en, "zh": landmark.name_zh},
                 "replaces_source_ids": list(landmark.replaces_source_ids),
                 "excluded_bounds": bounds,
+                # What `verify_landmarks.gd` holds the placed model to —
+                # config data, carried so the ceiling lives with the entry it
+                # grades rather than as an in-engine constant.
+                "triangle_budget": landmark.triangle_budget,
             }
         )
     return {
@@ -388,6 +416,7 @@ def shipped(manifest: dict) -> list[str]:
     paths = [str(manifest[key]) for key in DOCUMENT_KEYS]
     for tile in manifest.get("tiles", []):
         paths.extend(str(lod) for lod in tile.get("lods", []))
+    paths.extend(str(path) for path in manifest.get("landmark_assets", []))
     return paths
 
 
@@ -438,7 +467,7 @@ def validate(city: CityConfig, region_id: str, *, out_root: Path | None = None) 
         *_check_tiles(manifest, buildings),
         *_check_fares(documents[FARES_NAME], documents[ROADGRAPH_NAME]),
         *_check_graph(documents[ROADGRAPH_NAME]),
-        *_check_landmarks(manifest, landmarks, buildings),
+        *_check_landmarks(manifest, landmarks, buildings, documents[ASSETS_NAME]),
         *_check_bounds(manifest, documents),
     ]
 
@@ -508,7 +537,7 @@ def _check_tiles(manifest: dict, buildings: dict) -> list[str]:
     return problems
 
 
-def _check_landmarks(manifest: dict, landmarks: dict, buildings: dict) -> list[str]:
+def _check_landmarks(manifest: dict, landmarks: dict, buildings: dict, assets: dict) -> list[str]:
     """The heroes and the exclusions agree, in both directions (`P3-6`).
 
     One direction catches a typo'd stem — a landmark claiming a building the
@@ -517,12 +546,28 @@ def _check_landmarks(manifest: dict, landmarks: dict, buildings: dict) -> list[s
     the city with no hero over it. Neither side can see the mismatch alone:
     the config is internally fine, and so is `buildings.json`.
 
-    The `.glb` assets are `res://` paths into the committed game tree, so they
-    are deliberately **not** checked as files here — `shipped()` never lists
-    them, and this stage's out-tree does not contain them.
+    The *authored* `.glb` assets are `res://` paths into the committed game
+    tree, so they are deliberately **not** checked as files here — `shipped()`
+    never lists them, and this stage's out-tree does not contain them. The
+    *mesh-sourced* ones are build output like any tile: `landmark_assets.json`
+    names them, the manifest carries them under `landmark_assets`, and
+    `_check_files` stats them; this check holds the three spellings of each
+    path — config asset, built path, manifest list — to one another.
     """
     problems: list[str] = []
     entries = landmarks.get("landmarks", [])
+    built = {str(asset.get("id")): str(asset.get("path")) for asset in assets.get("assets", [])}
+    listed = {str(path) for path in manifest.get("landmark_assets", [])}
+    if stale := sorted(set(built.values()) - listed):
+        problems.append(
+            f"{len(stale)} built landmark assets are not in {CITY_NAME}'s "
+            f"landmark_assets: {stale[:5]}"
+        )
+    if unbuilt := sorted(listed - set(built.values())):
+        problems.append(
+            f"{len(unbuilt)} manifest landmark_assets were not built by "
+            f"{ASSETS_NAME}: {unbuilt[:5]}"
+        )
 
     claimed = {stem for entry in entries for stem in entry.get("replaces_source_ids", [])}
     dropped = set(buildings.get("excluded", {}))
@@ -566,7 +611,17 @@ def _check_landmarks(manifest: dict, landmarks: dict, buildings: dict) -> list[s
                     f"replaced: {footprint}"
                 )
         asset = str(entry.get("asset", ""))
-        if not asset.startswith(LANDMARK_ASSET_ROOT):
+        if landmark_id in built:
+            # `sync_generated.sh` mirrors the out tree under
+            # `res://assets/generated/`, which is what makes this equality the
+            # statement "the config's asset path is the built file".
+            expected = f"{LANDMARK_GENERATED_ROOT}{PurePosixPath(built[landmark_id]).name}"
+            if asset != expected:
+                problems.append(
+                    f"landmark {landmark_id} asset {asset!r} does not match its built "
+                    f"model at {built[landmark_id]!r}"
+                )
+        elif not asset.startswith(LANDMARK_ASSET_ROOT):
             problems.append(
                 f"landmark {landmark_id} asset {asset!r} is outside {LANDMARK_ASSET_ROOT}"
             )

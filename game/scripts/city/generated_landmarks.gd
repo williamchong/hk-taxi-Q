@@ -16,7 +16,7 @@ const PATH: String = "res://assets/generated/landmarks.json"
 
 ## Schema this understands, matching `LANDMARKS_SCHEMA` in
 ## `etl/pipeline/export.py`.
-const SCHEMA_VERSION: int = 1
+const SCHEMA_VERSION: int = 2
 
 
 ## The parsed landmark document, or an empty dictionary with a pushed message.

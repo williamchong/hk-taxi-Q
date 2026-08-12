@@ -46,7 +46,7 @@ const PATH: String = "res://assets/generated/city.json"
 ## contain the buildings its heroes replace. The bump is for the removal: a v6
 ## reader would draw holes where the excluded buildings stood, with no hero
 ## over them.
-const SCHEMA_VERSION: int = 7
+const SCHEMA_VERSION: int = 8
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.

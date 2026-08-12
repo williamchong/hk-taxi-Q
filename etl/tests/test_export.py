@@ -24,7 +24,7 @@ import pytest
 
 from pipeline import __main__ as orchestrator
 from pipeline.buildings import BUILDINGS_MANIFEST_NAME, BUILDINGS_MANIFEST_SCHEMA
-from pipeline.config import Landmark
+from pipeline.config import Landmark, Material, SourcePaint
 from pipeline.export import (
     CITY_NAME,
     CITY_SCHEMA,
@@ -36,6 +36,7 @@ from pipeline.export import (
     validate,
 )
 from pipeline.fares import FARES_NAME, FARES_SCHEMA
+from pipeline.landmarks import ASSETS_NAME, ASSETS_SCHEMA
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
 from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, SURFACE_NAME
 
@@ -156,6 +157,14 @@ class _Region:
                     }
                 ],
             },
+            # Written even when empty by the landmarks stage, so export's
+            # input read is unconditional.
+            ASSETS_NAME: {
+                "schema_version": ASSETS_SCHEMA,
+                "city_id": city.id,
+                "region_id": REGION,
+                "assets": [],
+            },
         }
 
         (self.out_dir / SURFACE_NAME).write_bytes(b"glb")
@@ -215,6 +224,7 @@ class TestAssembly:
 
         assert BUILDINGS_MANIFEST_NAME not in names
         assert SURFACE_MANIFEST_NAME not in names
+        assert ASSETS_NAME not in names
         assert set(names) >= {ROADGRAPH_NAME, SURFACE_NAME, FARES_NAME}
 
     def test_the_carriageway_widths_reach_the_manifest(self, region) -> None:
@@ -365,6 +375,104 @@ class TestLandmarks:
         region.build()
         problems = region.check()
         assert any("off the footprint" in problem for problem in problems)
+
+    # -- mesh-sourced heroes (`P3-6` amendment) ----------------------------
+
+    PAINT: ClassVar[SourcePaint] = SourcePaint(
+        wall=Material("wall", (134, 128, 119), 42.0, "test"),
+        ribbon=Material("ribbon", (61, 72, 83), 12.0, "test"),
+        roof=Material("roof", (90, 96, 99), 22.0, "test"),
+        base=Material("base", (114, 110, 102), 30.0, "test"),
+        ribbon_first_m=15.0,
+        ribbon_pitch_m=4.8,
+        ribbon_thickness_m=1.5,
+        ribbon_count=10,
+        base_below_m=8.0,
+    )
+
+    def mesh_hero(self, region, *, built: bool = True):
+        """A `source_paint` hero, with its built model and assets record.
+
+        `built` also writes the `.glb` and the `landmark_assets.json` entry
+        the landmarks stage would have; a test drops it to make the manifest
+        claim a model nothing built.
+        """
+        landmark = self.hero(region)
+        landmark = replace(
+            landmark,
+            asset="res://assets/generated/landmarks/hero.glb",
+            rot_y_deg=0.0,
+            source_paint=self.PAINT,
+            triangle_budget=120_000,
+        )
+        region.city = replace(region.city, landmarks=(landmark,))
+        if built:
+            (region.out_dir / "landmarks").mkdir(exist_ok=True)
+            (region.out_dir / "landmarks" / "hero.glb").write_bytes(b"glb")
+            region.documents[ASSETS_NAME]["assets"] = [
+                {
+                    "id": "hero",
+                    "path": "landmarks/hero.glb",
+                    "triangles": 99_577,
+                    "bytes": 3,
+                    "stems": ["hero_a"],
+                }
+            ]
+        return landmark
+
+    def test_a_mesh_sourced_hero_ships_its_model(self, region) -> None:
+        self.mesh_hero(region)
+        region.build()
+        manifest = region.manifest()
+
+        assert manifest["landmark_assets"] == ["landmarks/hero.glb"]
+        assert "landmarks/hero.glb" in shipped(manifest)
+        assert region.check() == []
+
+    def test_the_entry_carries_its_triangle_budget(self, region) -> None:
+        """The in-engine verifier reads the ceiling from the entry it grades —
+        config data, not a constant it could drift from."""
+        self.mesh_hero(region)
+        region.build()
+        [entry] = self.landmarks_document(region)["landmarks"]
+        assert entry["triangle_budget"] == 120_000
+
+    def test_a_missing_built_model_is_flagged(self, region) -> None:
+        """Unlike the authored heroes, the built ones are files this out-tree
+        must contain — `shipped()` lists them and `_check_files` stats them."""
+        self.mesh_hero(region)
+        region.build()
+        (region.out_dir / "landmarks" / "hero.glb").unlink()
+        problems = region.check()
+        assert any("landmarks/hero.glb" in p and "does not exist" in p for p in problems)
+
+    def test_a_model_built_after_the_manifest_is_flagged(self, region) -> None:
+        """A stale manifest names yesterday's asset set; the assets document
+        is the side a rebuild moves first."""
+        self.mesh_hero(region, built=False)
+        region.build()
+        (region.out_dir / "landmarks").mkdir(exist_ok=True)
+        (region.out_dir / "landmarks" / "hero.glb").write_bytes(b"glb")
+        region.documents[ASSETS_NAME]["assets"] = [
+            {
+                "id": "hero",
+                "path": "landmarks/hero.glb",
+                "triangles": 1,
+                "bytes": 3,
+                "stems": ["hero_a"],
+            }
+        ]
+        problems = region.check()
+        assert any("not in city.json's landmark_assets" in p for p in problems)
+
+    def test_an_asset_disagreeing_with_its_built_model_is_flagged(self, region) -> None:
+        self.mesh_hero(region)
+        region.build()
+        document = self.landmarks_document(region)
+        document["landmarks"][0]["asset"] = "res://assets/authored/landmarks/hero.glb"
+        (region.out_dir / LANDMARKS_NAME).write_text(json.dumps(document), encoding="utf-8")
+        problems = validate(region.city, REGION, out_root=region.out_root)
+        assert any("does not match its built model" in p for p in problems)
 
 
 class TestShippedList:
@@ -542,6 +650,7 @@ class TestOrchestrator:
             "fetch",
             "podiums",
             "buildings",
+            "landmarks",
             "roads",
             "surface",
             "fares",
@@ -593,4 +702,10 @@ class TestOrchestrator:
         status = orchestrator.main(["--city", "testville", "--region", REGION])
 
         assert status == 1
-        assert [name for name, _ in calls] == ["fetch", "podiums", "buildings", "roads"]
+        assert [name for name, _ in calls] == [
+            "fetch",
+            "podiums",
+            "buildings",
+            "landmarks",
+            "roads",
+        ]
