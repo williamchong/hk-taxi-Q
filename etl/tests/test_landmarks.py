@@ -25,6 +25,7 @@ from pipeline.landmarks import (
     ASSETS_SCHEMA,
     LANDMARK_MATERIAL,
     Reference,
+    _band_planes,
     _tag_parents,
     build_assets,
     paint,
@@ -279,11 +280,7 @@ class TestPhotoReference:
     def painted_strip_levels(self, atlas: np.ndarray) -> set[int]:
         mesh, _ = _tag_parents(strip_mesh(), 0)
         reference = wall_reference(atlas, mesh)
-        heights = [PAINT.base_below_m]
-        for index in range(PAINT.ribbon_count):
-            low = PAINT.ribbon_first_m + index * PAINT.ribbon_pitch_m
-            heights.extend((low, low + PAINT.ribbon_thickness_m))
-        sliced = slice_horizontal(mesh, heights)
+        sliced = slice_horizontal(mesh, _band_planes(PAINT))
         out = paint(sliced, PAINT, reference)
         centroids = out.positions[out.triangles].mean(axis=1)[:, 1]
         ribboned = (out.colours[out.triangles[:, 0], :3] == RIBBON.colour).all(axis=1)
@@ -470,10 +467,7 @@ class TestBuildAssets:
         shown = {tuple(int(v) for v in colour) for colour in np.unique(mesh.colours, axis=0)}
         assert (*WALL.colour, 255) in shown
         assert (*RIBBON.colour, 255) in shown
-        first = PAINT.ribbon_first_m
-        y = mesh.positions[mesh.triangles][:, :, 1]
-        straddles = (y.min(axis=1) < first - 1e-6) & (y.max(axis=1) > first + 1e-6)
-        assert not straddles.any()
+        assert not spans(mesh, PAINT.ribbon_first_m)
 
     def test_a_budget_breach_refuses_the_build(self, hong_kong, sources, tmp_path) -> None:
         with pytest.raises(ValueError, match="triangle_budget"):

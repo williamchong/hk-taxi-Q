@@ -55,7 +55,7 @@ from pipeline.crs import GameTransform
 from pipeline.documents import read_document, round_position, write_document
 from pipeline.fares import FARES_NAME, FARES_SCHEMA
 from pipeline.gltf import Bounds
-from pipeline.landmarks import ASSETS_NAME, ASSETS_SCHEMA
+from pipeline.landmarks import ASSETS_NAME, ASSETS_SCHEMA, landmark_in_region
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
 from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, SURFACE_NAME
 
@@ -349,9 +349,12 @@ def _landmarks_document(
     excluded = buildings.get("excluded", {})
     entries = []
     for landmark in city.landmarks:
-        x, y, z = transform.to_game(landmark.easting, landmark.northing, landmark.elevation)
-        if not (0.0 <= x <= high_x and 0.0 <= z <= high_z):
+        # The shared predicate, deliberately: the landmarks stage builds the
+        # models this document places, and two spellings of "in this region"
+        # is how a model ends up built with no entry, or placed with no model.
+        if not landmark_in_region(landmark, transform, high_x, high_z):
             continue
+        x, y, z = transform.to_game(landmark.easting, landmark.northing, landmark.elevation)
         bounds = None
         recorded = [excluded[stem] for stem in landmark.replaces_source_ids if stem in excluded]
         if recorded:

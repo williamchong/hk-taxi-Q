@@ -35,11 +35,12 @@ from pathlib import Path, PurePosixPath
 import numpy as np
 
 from pipeline.buildings import COLLISION_SUFFIX, Placement, resolver, stem
-from pipeline.colour import srgb_to_linear
+from pipeline.colour import LUMA, srgb_to_linear
 from pipeline.config import CityConfig, Landmark, SourcePaint, load_city
+from pipeline.crs import GameTransform
 from pipeline.documents import write_document
 from pipeline.fetch import source_dir
-from pipeline.gltf import MeshData, read_scene, write_glb
+from pipeline.gltf import MeshData, normalise, read_scene, write_glb
 from pipeline.mesh import merge, slice_horizontal, weld
 
 log = logging.getLogger(__name__)
@@ -59,10 +60,30 @@ ASSETS_SCHEMA = 1
 # `LANDMARK_GENERATED_ROOT` asset paths true in the game tree.
 ASSET_DIR = "landmarks"
 
+# The sources-tree directory holding the individualised (`…A0`) sheet zips the
+# photo reference reads — `sources/<city>/individualised/<sheet>.zip`. Named
+# once for the same reason `buildings.SOURCE_ID` is: two spellings of a
+# directory is how they come to disagree.
+INDIVIDUALISED_SOURCE_ID = "individualised"
+
 
 def asset_relpath(landmark: Landmark) -> str:
     """The manifest-form POSIX path of a mesh-sourced hero's model."""
     return f"{ASSET_DIR}/{landmark.id}.glb"
+
+
+def landmark_in_region(
+    landmark: Landmark, transform: GameTransform, high_x: float, high_z: float
+) -> bool:
+    """Whether the landmark's authored position stands inside the region.
+
+    One definition on purpose: this stage decides which models to *build* and
+    `export._landmarks_document` decides which entries to *place*, and the two
+    disagreeing ships a model nothing places — the exact hole
+    `_check_landmarks` exists to catch, manufactured in-house.
+    """
+    x, _, z = transform.to_game(landmark.easting, landmark.northing, landmark.elevation)
+    return 0.0 <= x <= high_x and 0.0 <= z <= high_z
 
 
 def build_assets(
@@ -84,39 +105,32 @@ def build_assets(
 
     assets = []
     for landmark in sorted(city.landmarks, key=lambda entry: entry.id):
-        if landmark.source_paint is None:
+        spec = landmark.source_paint
+        if spec is None:
             continue
-        # Same rectangle filter as `export._landmarks_document`: a hero
-        # belongs to the region that contains it, and building its asset into
-        # another region's out tree would ship a model nothing places.
-        x, _, z = transform.to_game(landmark.easting, landmark.northing, landmark.elevation)
-        if not (0.0 <= x <= high_x and 0.0 <= z <= high_z):
+        if not landmark_in_region(landmark, transform, high_x, high_z):
             continue
-        pieces, matched_sheets = _source_meshes(
-            place.sheets, set(landmark.replaces_source_ids), city
-        )
+        stems = set(landmark.replaces_source_ids)
+        pieces, matched_sheets = _source_meshes(place.sheets, stems, city)
         if not pieces:
             raise ValueError(
                 f"landmark {landmark.id!r}: no source mesh matched stems "
-                f"{sorted(landmark.replaces_source_ids)} in any sheet — check the "
+                f"{sorted(stems)} in any sheet — check the "
                 "stems against the sheet zips (fetch cache stale?)"
             )
-        local = -np.asarray(
+        # `place.offset` is `game_offset(transform)`, so this is the authored
+        # position subtracted in the sheet frame — the model lands back
+        # exactly when `landmarks.json` places it.
+        local = place.offset - np.asarray(
             transform.to_game(landmark.easting, landmark.northing, landmark.elevation),
             dtype=np.float64,
-        ) + np.asarray(transform.to_game(0.0, 0.0, 0.0), dtype=np.float64)
+        )
         pieces = [piece.translated(local) for piece in pieces]
 
         reference = None
-        if landmark.source_paint.reference_texture:
-            reference = _load_reference(
-                city,
-                matched_sheets,
-                set(landmark.replaces_source_ids),
-                pieces,
-                local,
-                sources_root,
-            )
+        if spec.reference_texture:
+            directory = source_dir(city.id, INDIVIDUALISED_SOURCE_ID, root=sources_root)
+            reference = _load_reference(directory, matched_sheets, stems, pieces, local)
             tagged, cursor = [], 0
             for piece in pieces:
                 piece, cursor = _tag_parents(piece, cursor)
@@ -124,8 +138,8 @@ def build_assets(
             pieces = tagged
 
         read_count = sum(piece.triangle_count for piece in pieces)
-        pieces = [slice_horizontal(piece, _band_planes(landmark.source_paint)) for piece in pieces]
-        pieces = [paint(piece, landmark.source_paint, reference) for piece in pieces]
+        pieces = [slice_horizontal(piece, _band_planes(spec)) for piece in pieces]
+        pieces = [paint(piece, spec, reference) for piece in pieces]
 
         # Welded last: the paint needed unshared vertices, and carrying them
         # into the file would triple the vertex buffer for no visible change.
@@ -187,14 +201,7 @@ def _source_meshes(
     matched_sheets: set[str] = set()
     for sheet_id, sheet_path in sheets:
         with zipfile.ZipFile(sheet_path) as archive:
-            members = sorted(
-                name
-                for name in archive.namelist()
-                if name.startswith(prefixes)
-                and name.lower().endswith(".gltf")
-                and stem(PurePosixPath(name).parent.name) in stems
-            )
-            for member in members:
+            for member in _matched_members(archive, stems, prefixes):
                 directory = str(PurePosixPath(member).parent)
                 meshes.extend(read_scene(archive.read(member), resolver(archive, directory)))
                 matched_sheets.add(sheet_id)
@@ -208,6 +215,24 @@ def _source_meshes(
             ", ".join(sorted(matched_sheets)),
         )
     return meshes, matched_sheets
+
+
+def _matched_members(
+    archive: zipfile.ZipFile, stems: set[str], prefixes: tuple[str, ...] = ()
+) -> list[str]:
+    """The archive's `.gltf` members whose directory stem is in `stems`.
+
+    Sorted, the same load-bearing rule as `buildings.read_sheet`: member order
+    decides vertex order, and an unstable order makes every output look
+    changed. One helper so the C0 and A0 walks cannot drift on the filter.
+    """
+    return sorted(
+        name
+        for name in archive.namelist()
+        if (not prefixes or name.startswith(prefixes))
+        and name.lower().endswith(".gltf")
+        and stem(PurePosixPath(name).parent.name) in stems
+    )
 
 
 def _band_planes(spec: SourcePaint) -> list[float]:
@@ -264,12 +289,11 @@ def _corner_keys(mesh: MeshData) -> list[tuple]:
 
 
 def _load_reference(
-    city: CityConfig,
+    directory: Path,
     sheet_ids: set[str],
     stems: set[str],
     pieces: list[MeshData],
     offset: np.ndarray,
-    sources_root: Path | None,
 ) -> Reference:
     """Match every source triangle to its photo, via the A0 variant.
 
@@ -285,7 +309,14 @@ def _load_reference(
             "install the dev extras (pip install -e 'etl/[dev]')"
         ) from error
 
-    directory = source_dir(city.id, "individualised", root=sources_root)
+    # `colour.luminance` per pixel, as a 256-entry table: the atlases arrive
+    # as uint8, and evaluating the sRGB curve over 50M floats per 4096² atlas
+    # was measured at ~70% of the whole stage (both `np.where` branches run).
+    # The table is the same curve at the only 256 inputs that exist, so the
+    # result is exact, and CIE weights keep this the one definition of
+    # luminance the repo has (`colour.py` claims exactly that ownership).
+    lut = srgb_to_linear(np.arange(256, dtype=np.float64)).astype(np.float32)
+
     lookup: dict[tuple, tuple[int, int]] = {}
     images: list[np.ndarray] = []
     a0_pieces: list[MeshData] = []
@@ -297,22 +328,18 @@ def _load_reference(
                 "individualised sheet download is documented in DATA_SOURCES.md"
             )
         with zipfile.ZipFile(path) as archive:
-            members = sorted(
-                name
-                for name in archive.namelist()
-                if name.lower().endswith(".gltf") and stem(PurePosixPath(name).parent.name) in stems
-            )
-            for member in members:
+            for member in _matched_members(archive, stems):
                 member_dir = str(PurePosixPath(member).parent)
                 for piece in read_scene(archive.read(member), resolver(archive, member_dir)):
                     if piece.texture is None or piece.uvs is None:
                         continue
-                    decoded = np.asarray(
-                        Image.open(io.BytesIO(piece.texture.data)).convert("RGB"),
-                        dtype=np.float64,
-                    )
+                    decoded = np.asarray(Image.open(io.BytesIO(piece.texture.data)).convert("RGB"))
                     image_id = len(images)
-                    images.append(srgb_to_linear(decoded).mean(axis=2).astype(np.float32))
+                    images.append(
+                        lut[decoded[..., 0]] * np.float32(LUMA[0])
+                        + lut[decoded[..., 1]] * np.float32(LUMA[1])
+                        + lut[decoded[..., 2]] * np.float32(LUMA[2])
+                    )
                     local = piece.translated(offset)
                     a0_pieces.append(local)
                     for index, key in enumerate(_corner_keys(local)):
@@ -429,17 +456,14 @@ def _adjacency(mesh: MeshData) -> tuple[list[list[int]], np.ndarray]:
     as the same edge on both sides.
     """
     corners = np.round(mesh.positions, 4)[mesh.triangles]
-    normals = mesh.normals[mesh.triangles].mean(axis=1).astype(np.float64)
-    lengths = np.linalg.norm(normals, axis=1)
-    lengths[lengths == 0] = 1.0
-    normals /= lengths[:, None]
+    normals = normalise(mesh.normals[mesh.triangles].mean(axis=1).astype(np.float64))
 
-    first: dict[bytes, int] = {}
+    first: dict[tuple, int] = {}
     neighbours: list[list[int]] = [[] for _ in range(len(corners))]
     for index, triangle in enumerate(corners):
         rows = [tuple(row) for row in triangle.tolist()]
         for edge in ((0, 1), (1, 2), (2, 0)):
-            key = repr(tuple(sorted((rows[edge[0]], rows[edge[1]])))).encode()
+            key = tuple(sorted((rows[edge[0]], rows[edge[1]])))
             other = first.setdefault(key, index)
             if other != index:
                 neighbours[index].append(other)
@@ -510,21 +534,29 @@ def paint(mesh: MeshData, spec: SourcePaint, reference: Reference | None = None)
     Roof and soffit are *grown* from their normal-threshold seeds across
     smooth adjacency (`_grown`), so the curved sweeps stay one surface to
     their edges instead of turning into banded wall past the threshold — the
-    defect the first repaint shipped. With a `Reference`, a procedural ribbon
-    additionally survives only where the photo is locally dark (real
-    glazing), judged per plan octant because aerial lighting differs by
-    facing; triangles the photo never saw keep the procedural verdict.
+    defect the first repaint shipped. With a `Reference`, a ribbon strip
+    additionally survives only where the photo confirms glazing, one whole
+    band level per connected wall at a time — the strip logic below carries
+    the argument; strips the photo cannot decide keep the procedural verdict.
 
     The source's own COLOR_0 (a uniform grey on every LandsD vertex) is
     overwritten, not blended: the repaint is the entire treatment.
     """
+    if reference is not None and mesh.uvs is None:
+        # `_sample_reference` reads parent ids out of the scratch UV channel;
+        # real texture coordinates in it would silently sample the wrong
+        # photo triangles, so their absence is checked, loudly, here.
+        raise ValueError(
+            f"mesh '{mesh.name}': reference paint needs the parent-id channel — "
+            "_tag_parents before slice_horizontal"
+        )
+    centroid_y = mesh.triangle_centroids()[:, 1]
     # Facing comes from the authored normals, not the winding: they are what
     # the renderer shades with, so they are the facing the paint must agree
     # with. Source normals are face-constant and the slicer lerps them
-    # exactly, so the per-triangle mean *is* the face normal.
-    face_y = mesh.normals[mesh.triangles].mean(axis=1)[:, 1]
-    centroid_y = mesh.triangle_centroids()[:, 1]
+    # exactly, so `_adjacency`'s per-triangle mean *is* the face normal.
     neighbours, normals = _adjacency(mesh)
+    face_y = normals[:, 1]
 
     roof = _grown(face_y >= spec.roof_normal_y, neighbours, normals, spec.crease_deg)
     soffit = _grown(face_y <= -spec.soffit_normal_y, neighbours, normals, spec.crease_deg)
@@ -574,7 +606,11 @@ def paint(mesh: MeshData, spec: SourcePaint, reference: Reference | None = None)
             rows = np.asarray(members)
             decided = rows[decidable[rows]]
             if len(decided) < 5:
-                continue  # too little photo to overrule the measured layout
+                # An evidence floor, not a tuning value: fewer samples than
+                # this is one parent triangle's worth, where a single seam or
+                # window frame decides the whole strip. The measured layout
+                # outranks that little photo.
+                continue
             if float(np.median(contrast[decided])) >= spec.veto_ratio:
                 ribbon[rows] = False
 
