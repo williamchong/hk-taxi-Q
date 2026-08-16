@@ -139,13 +139,15 @@ group_uniforms glint;
 // the ambient half dominates, so the glass went back to reading as a panel
 // painted blue. Reverted to Godot's 0.5 default.
 //
-// So the sun is isolated explicitly. ⚠️ **`sun_direction` is fed by
+// So the sun is isolated explicitly. ⚠️ **`sun_toward` is fed by
 // `sun_glint.gd` from the scene's actual `DirectionalLight3D`** rather than
 // authored here: a hand-copied vector would be a second copy of the rig's
 // rotation and would drift silently the first time the sun is retuned or a
 // night mode is added — the desync shape `P3-11`'s chassis guard exists for.
 // The script reads the authority; this uniform is only where it lands.
-uniform vec3 sun_direction = vec3(0.0, -1.0, 0.0);
+// Unit-length and already pointing *at* the sun — `sun_glint.gd` owns both
+// guarantees, so this is used raw.
+uniform vec3 sun_toward = vec3(0.0, 1.0, 0.0);
 uniform float glint_strength : hint_range(0.0, 4.0) = 1.1;
 uniform float glint_sharpness : hint_range(1.0, 256.0) = 48.0;
 
@@ -198,7 +200,16 @@ void fragment() {
 	// gradient cannot: `bounced.y` is invariant under yaw, `bounced · sun` is
 	// not. Confined to glass and lenses — on paint it is a second way to spend
 	// the chroma the clearcoat is already paying for.
-	float glint = pow(max(dot(bounced, -normalize(sun_direction)), 0.0), glint_sharpness);
+	//
+	// ⚠️ **Guarded, where `fresnel` above is not, and the difference is which
+	// branches read it.** `fresnel` is consumed on all three, so a test around
+	// it would only add work. This is read by two, and paint is most of a car
+	// body — so without the guard the `pow` runs on the majority of fragments
+	// that discard it.
+	float glint = 0.0;
+	if (is_glass || is_lamp) {
+		glint = pow(max(dot(bounced, sun_toward), 0.0), glint_sharpness);
+	}
 
 	float roughness = paint_roughness;
 	if (is_glass) {

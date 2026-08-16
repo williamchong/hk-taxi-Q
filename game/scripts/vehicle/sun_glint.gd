@@ -1,4 +1,3 @@
-@tool
 extends Node3D
 ## Feeds the scene's real sun direction into `vehicle_body.gdshader`.
 ##
@@ -7,7 +6,7 @@ extends Node3D
 ## replace the default lighting wholesale for a highlight.
 ##
 ## ⚠️ **The point of this script is that the vector is never authored twice.**
-## The obvious alternative — a `sun_direction` default typed into
+## The obvious alternative — a `sun_toward` default typed into
 ## `vehicle_body.tres` to match the rig — is a second copy of the
 ## `DirectionalLight3D`'s rotation, and the two would drift silently the first
 ## time the sun is retuned or `Q26`'s night mode adds a second rig. Nothing
@@ -19,9 +18,20 @@ extends Node3D
 ## `DECISIONS.md` records night as a *switch* between two static rigs, not a
 ## cycle — so a per-frame write would be the same value every frame forever.
 ## Re-running it is what a rig switch owes.
+##
+## ⚠️ **Deliberately not `@tool`.** The material below is the *shared*, committed
+## `vehicle_body.tres`, and `set_shader_parameter` marks a loaded resource
+## edited. Running at edit time would mutate it whenever a scene containing both
+## a taxi and a sun is opened, and Godot's "save external resources?" prompt
+## would then write a runtime-computed vector into the versioned file over the
+## authored default. There is nothing to see in the editor here anyway: the
+## glint only means something in a running frame.
 
-## Where the material expects the vector.
-const PARAMETER: StringName = &"sun_direction"
+## ⚠️ Named for what the shader needs — the direction **toward** the sun, not
+## the direction light travels. The two differ by a sign, and getting it
+## backwards aims the glint at the antisolar point, where it is simply never
+## seen rather than visibly wrong.
+const PARAMETER: StringName = &"sun_toward"
 
 ## The material to feed. Assigned in the scene rather than looked up, so a
 ## missing wiring fails here with a message instead of somewhere in a render.
@@ -50,9 +60,15 @@ func apply() -> void:
 		# and one that cries wolf every build is not read when it matters.
 		return
 
-	# A `DirectionalLight3D` shines along its own -Z, which is the convention the
-	# shader's `-normalize(sun_direction)` is written against.
-	material.set_shader_parameter(PARAMETER, -sun.global_transform.basis.z)
+	# A `DirectionalLight3D` shines along its own -Z, so +Z points back at the
+	# sun, which is what the glint needs.
+	#
+	# ⚠️ **Normalised here rather than in the shader**, which is where it was.
+	# A rotation basis is unit-length and both shipped rigs measure so, but
+	# nothing enforces it — a scaled parent would silently denormalise it. Doing
+	# it once on the CPU keeps the guarantee and takes an `rsqrt` off every
+	# fragment of every frame, where it was recomputing a constant.
+	material.set_shader_parameter(PARAMETER, sun.global_transform.basis.z.normalized())
 
 
 ## Search from the window root, **not `get_tree().current_scene`**.
@@ -62,7 +78,7 @@ func apply() -> void:
 ## `add_child`s it to the root; nothing assigns `current_scene`, which only
 ## `change_scene_to_*` and the boot path set. An earlier version returned early
 ## on a null `current_scene` — a guard added to suppress a `check.sh` warning —
-## and so silently left `sun_direction` at its default in **every** measured
+## and so silently left `sun_toward` at its default in **every** measured
 ## drive, which read as "the glint does nothing" rather than as "the glint never
 ## ran". The window root is populated on every load path there is.
 func _find_sun() -> DirectionalLight3D:
