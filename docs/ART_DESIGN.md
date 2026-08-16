@@ -781,10 +781,30 @@ widening made 1.6× too wide, so it cuts into a cross-slope at the kerb, and the
 | Property | Target |
 |---|---|
 | Triangles | 800–2,000 |
-| Materials | 1–2, flat shaded |
+| Materials | 1–2, flat shaded — the body's is a `ShaderMaterial` since `P3-11c`, still one |
 | Colours | 3–5 flat colours per vehicle |
 | Wheels | Oversized, separate mesh, simple rotation |
 | Windows | Flat dark colour with a fixed specular hint — no reflection probes |
+
+⚠️ **"Flat shaded" now means flat *albedo*, not flat shading, and `P3-11c` is where that changed.**
+The body carries a surface marker in `UV.y`, and `vehicle_body.gdshader` gives glazing, lamp lenses
+and paint a clearcoat over a three-band sky gradient — zenith, horizon and dark ground, chosen by the
+reflected ray's own elevation. Every colour on the car is still one flat authored value; what varies
+is what the surface *reflects*, which is why this does not reopen textures or per-vertex shading.
+
+⚠️ **Strength was never the variable, and two tunings had to be judged wrong before that was clear.**
+A single flat reflection colour is a swatch at every value — faint when weak, painted-on when strong —
+which is the identical failure this document records against the facades. With the gradient in, the
+glazing's `L*` spread went **sd 0.05 → 6.35**. It is worth more on a car than on a tower: a car turns,
+so its screens sweep the gradient continuously while driving, and a static audit frame undersells it.
+
+⚠️ **Gloss on paint is priced, not refused, and the price is linear.** `paint_reflect 0.12` at the
+stock roughness costs the red `C*` **−5.42**; adding `roughness 0.9 → 0.55` costs **−9.20** in total.
+The shipped car pays the full amount, because at `C*` 69.86 it is still **9× the frame median** and
+clear of the city's 99th percentile — the "only chromatic object" property survives the whole cost.
+⚠️ The residual risk is **recognition**, not art: red is an identifying feature of 紅的 and `P3-9a`
+grades exactly that, so this dial is the first thing to back off if the gate scores poorly. See
+`DECISIONS.md` `P3-11c`.
 
 Proportions: shortened wheelbase, tall greenhouse, exaggerated wheel arches. Readable silhouette from
 behind at speed — that's the only angle most players ever see.
@@ -818,6 +838,20 @@ identical mechanism this document flags for the asphalt under Lighting, arriving
 the car that is supposed to read as metal. And the **red lens of the tail cluster is still
 invisible** exactly as `P3-11b` predicted, so the cluster reads amber-over-white with a bump where
 the red should be. Neither is worth a round on its own; both are worth fixing in the next one.
+
+✅ **The roof is fixed, and the diagnosis above was only half right** (`P3-11c`). A near-neutral does
+take its hue from ambient — but measured, `SILVER` was *itself* authored blue at `b* -3.56`, so no
+lighting change could ever have reached it. `(168,172,178) → (175,171,166)` moves `b*` to `+3.07`
+and holds `L*` at 70.17, and the rendered trim drops from `C*` 10.00 to 6.24 in sun. Fixed at the
+colour and not in the shader, because `SILVER` is also the wheel hubs and those are on the tyre mesh,
+which gets no shader.
+
+🔴 **The tail lens is still not fixed, and `P3-11c` did not fix it.** It is marked as a lens and
+takes the lens roughness, which separates it only where light falls on it — at both audit cameras the
+rear face takes none, and lamp pixels moved `L*` +0.77 in shade and +0.41 in sun. **Both obvious
+fixes are closed**: recolouring the lens is the earlier bug and a white tail lamp besides, and the
+bezel that bought the contrast was removed on request with the trade understood. Faking that bezel in
+the shader is the same reversal wearing a different hat. This wants a decision, not more tuning.
 
 ⚠️ **The palette is at seven and the table above says 3–5.** Red, silver, black glazing, amber,
 white plate, yellow plate and badge green. Each was granted for a stated reason and the count is
@@ -1054,10 +1088,17 @@ are the part to read before proposing anything against this list.
 - **No baked illumination** — flat shading plus one directional light is the look
 
 ⚠️ **"No PBR" is not anti-physics.** `Q33`'s cited `reflectance` table *is* PBR's albedo discipline,
-done as data instead of as texture maps, and both façade shaders already write `ROUGHNESS` and a
-fresnel term. What is refused is the texture-map workflow — and **metalness specifically has nothing
-to reflect**, because the Mobile renderer has no SSR and no probes, so a metal surface renders as
-sky-coloured plastic.
+done as data instead of as texture maps, and all three shaders — both façades and now the vehicle —
+already write `ROUGHNESS` and a fresnel term. What is refused is the texture-map workflow — and
+**metalness specifically has nothing to reflect**, because the Mobile renderer has no SSR and no
+probes, so a metal surface renders as sky-coloured plastic.
+
+⚠️ **That last clause stopped being an argument and became a measurement** (`P3-11c`). Uniform gloss
+on the shipped taxi moved the red bodywork `C*` **79.06 → 70.08** and its hue **−7.9°** in sun, while
+*raising* `L*` — the signature of light the albedo did not ask for. So the cost of gloss here is
+paid in **chroma**, on whatever object is carrying the frame's colour, and it is not recoverable by
+tuning: with nothing to reflect, a specular lobe returns ambient. Gloss is affordable exactly where
+the surface is *supposed* to read as a dark mirror — glazing — and nowhere else.
 
 ⚠️ **Three reasons that do *not* support the photogrammetry entry, and must not be cited for it.**
 Not **size**: a 45 MP sheet compresses to ~1 MB against a 128 MB texture budget and ~167 MB of unused

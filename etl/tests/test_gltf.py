@@ -190,9 +190,13 @@ class TestWriting:
         assert document["materials"][0]["name"] == "city_facade"
 
     def test_a_mesh_that_names_no_material_is_labelled_after_itself(self, tmp_path) -> None:
-        """Unchanged for every other asset. Roads and vehicles keep a material
-        named for the mesh, which is a label rather than a contract — and keeps
-        them on the default `BaseMaterial3D` at import."""
+        """Unchanged for every other asset. Roads, terrain and the taxi's wheel
+        keep a material named for the mesh, which is a label rather than a
+        contract — and keeps them on the default `BaseMaterial3D` at import.
+
+        ⚠️ Not the taxi *body* since `P3-11c`: it names `vehicle_body` and is a
+        second consumer of this channel, so "only tiles ask for a shader" is no
+        longer true. `test_make_vehicle.TestSurfaceMarkers` holds that end."""
         write_glb(tmp_path / "t.glb", [self.box()])
 
         assert self.document_of(tmp_path / "t.glb")["materials"][0]["name"] == "tile_material"

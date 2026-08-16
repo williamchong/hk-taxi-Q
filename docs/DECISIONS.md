@@ -3336,6 +3336,152 @@ philosophy — ramps scattered wherever the driving goes quiet — which `P3-9` 
 
 **See.** `GAME_DESIGN.md` · `PLAN.md`
 
+## `P3-11c` — Gloss is priced per surface, and the gradient is what sells it
+
+**Status.** 🟡 Awaiting review — shipped in `vehicle_body.gdshader` / `vehicle_body.tres`, graded on
+the `taxi` audit frames · **Owner.** `P3-11`
+
+**The question asked.** Whether the car and some buildings could have glossy PBR surfaces, as a
+modern driving game does.
+
+**The answer, and it is a split.** The buildings already do — `city_facade_clean` ships
+`glass_roughness 0.12` against `wall_roughness 0.82` with a per-pane bowed fresnel, and `Q31`'s
+record already refuses SSR and planar reflections on the grounds that the cheap equivalent ships.
+The car now does too — glazing, lamp lenses **and paint**, each at its own strength over a shared
+sky gradient. Nothing here is refused outright; what this record establishes is a **price** for
+gloss on paint, and where the dial sits.
+
+**The probe that decided it, run before any shader existed.** The shipped car, uniform
+`roughness 0.9 → 0.25`, nothing else changed, graded at both `taxi` cameras:
+
+| surface | `t01.20` (shade) | `t04.50` (sun) |
+|---|---|---|
+| red bodywork | `C*` 57.47 → 53.15, hue −14.5° | `C*` **79.06 → 70.08**, hue **−7.9°** |
+| dark glazing | `L*` 0.13 → 1.75, `C*` +5.50 | `L*` 0.52 → 1.69, `C*` +3.77 |
+
+🔴 **The paint row is the finding.** With no SSR and no probes on the Mobile renderer a specular
+lobe samples flat ambient, so what gloss adds to a panel is a *wash of sky*, not a reflection —
+`L*` **rises** while `C*` **falls**, which is `Q27`'s albedo-independent light arriving on the one
+object the direction says carries the frame's colour (`C*` 86.5 against a frame median of 7.5).
+
+⚠️ **This record first concluded that nine points "is not affordable", and that was wrong — twice
+over.** It is corrected below rather than edited away, because the reasoning failed in a way worth
+keeping. First, the price is real but the property it threatens is not: at `C*` 69.86 the taxi is
+still **9× the frame median** and clear of the city's 99th percentile of 39.8, so "the only
+chromatic object in the frame" survives the whole cost. A large margin got smaller; nothing
+inverted. Second, "no tuning recovers it" mistook one *instrument* for the mechanism — see the
+clearcoat section. The measurement was sound; the verdict drawn from it was not.
+
+✅ **The glazing row is worth having, and `ART_DESIGN.md` already authorised it** — "flat dark
+colour with a fixed specular hint, no reflection probes".
+
+**Why a shader rather than a material.** ⚠️ **A `StandardMaterial3D` carries one roughness for a
+whole surface, and the body is one merged primitive holding seven colours** — verified from the
+imported asset, `surface 0` and no other. So the two rows above cannot be bought separately without
+a shader, and "set roughness on the body material" is not a cheaper version of this change; it is
+the paint row.
+
+**Shipped result**, same cameras, against the pre-shader build:
+
+| surface | `t01.20` (shade) | `t04.50` (sun) |
+|---|---|---|
+| red paint | `L*` +1.29, `C*` −3.86 | `L*` +1.14, `C*` **79.06 → 69.86** |
+| silver trim | `L*` +0.23, `C*` −0.31 | `L*` +0.06, `C*` **10.00 → 7.59** |
+| dark glazing | `L*` 0.13 → 9.51, sd **0.05 → 6.35** | `L*` 0.52 → 9.28, sd **1.25 → 7.69** |
+
+**0 pixels moved outside the car** at either camera — the whole change is contained to the taxi.
+⚠️ An intermediate build held paint at `C* −0.62` by leaving it matte; that is the `paint_reflect 0`
+end of the dial below, not a superseded measurement.
+
+**The payload.** `UV.y` carries a surface marker, `floor()`-read, the same shape the tiles use;
+`UV.x` is reserved and zero. Markers are `PAINT` / `GLASS` / `LAMP` / `TRIM`. ⚠️ **`TRIM` is carried but
+takes no branch of its own** — it shares paint's clearcoat, because silver is a near-neutral with
+the least hue of its own to defend and is the surface a sky wash disfigures first. Keeping it
+separable costs nothing now and is what a later brightwork treatment would need; the tiles reserved
+their ground marker on the same reasoning. ⚠️ **Not `COLOR_0.a`**, per `ARCHITECTURE.md`.
+
+⚠️ **Colour is not materiality, and the first pass got this wrong.** Marking by swatch alone handed
+a lens's gloss to the **registration plates and the roof sign**, because `LAMP` and `AMBER` are also
+those parts — the same collision `Q43` records under two predicates wearing one name. `GLASS` and
+`SILVER` name one material each and stay colour rules; every lens is marked by part name.
+
+✅ **The ice-blue roof is fixed, and half of it was never a lighting problem.** `ART_DESIGN.md`
+diagnosed the silver roof as a near-neutral taking its hue from ambient. It is — but measured,
+`SILVER` was itself authored blue at **`b* −3.56`**, so no lighting change could have reached it.
+Now `(168,172,178) → (175,171,166)`: `b* −3.56 → +3.07` with `L*` held at 70.21 → **70.17**, one
+axis moved and the value headroom the original comment exists to protect untouched. Fixed at the
+colour rather than in the shader **because `SILVER` is also the wheel hubs**, which are on the tyre
+mesh and get no shader — a shader-only fix would have split the trim across two meshes.
+
+🔴 **The red tail lens is *not* fixed, and this round should not be read as having fixed it.**
+Marked as a lens and given the lens roughness, it separates only where light actually falls on it;
+at both audit cameras the rear face takes none and the cluster still reads amber-over-white with a
+bump. Lamp pixels moved `L*` **+0.77** in shade and **+0.41** in sun — real, and not enough. The two
+fixes that would work are both closed: recolouring the lens is the earlier bug and a white tail lamp
+besides, and the bezel behind the cluster **was removed on request with the trade understood**.
+Faking that bezel in the shader is the same reversal wearing a different hat, so it was not done.
+This needs a decision, not another round of tuning.
+
+## The reflection needed a gradient, and strength was never the variable
+
+⚠️ **`glass_reflect` went 0.34 → 0.14 → 0.45, and the middle value is the one worth understanding.**
+At 0.34 against a single flat `sky_reflection` colour the backlight came back at `C*` 21 and read as
+a panel painted blue, so it was cut to 0.14 — which the user then judged from the driver's seat as
+barely different, correctly. **Both readings were right and neither was about strength.** A flat
+colour is a swatch at *every* value: faint at 0.14, painted-on at 0.34.
+
+`ART_DESIGN.md` had already recorded this exact failure against the facades — *"a single reflection
+colour is why glass read as a swatch rather than a mirror"* — and the fix transfers whole: reflect
+the view ray and let its own elevation choose between `sky_zenith`, `sky_horizon` and
+`ground_reflection`. Measured on the glazing, `L*` spread went **sd 0.05 → 6.35** at `t01.20`
+(range 0.1–0.3 → 0.2–22.2) and **1.25 → 7.69** at `t04.50`. That is structure, and it is what the
+mean figures could not see: the flat 0.34 build and the gradient build have *similar means* and look
+nothing alike.
+
+⚠️ **It is worth more on a car than on a building, which is why it was under-rated here.** A tower's
+glazing changes only as the camera moves; a car turns, so its screens sweep the gradient
+continuously while driving. A static audit frame systematically undersells it.
+
+## The clearcoat, and the correction it forced
+
+**The user asked for the body to look "glossy like just waxed new cars".** The probe above had been
+read as refusing that. It does not: it refuses a **uniform** gloss, and a waxed panel is not uniform
+— it picks up sky at its shoulders and dark ground below its beltline, concentrated where the
+surface turns away from the eye. So paint takes the same gradient at low strength through a
+near-zero `paint_face_on`, leaving a panel square to the camera with its colour untouched.
+
+🔴 **The hypothesis that this would be nearly free was wrong, and isolating the knobs is what showed
+it.** Both cost, and roughly additively:
+
+| `paint_reflect` | `paint_roughness` | red `C*` at `t04.50` | cost |
+|---|---|---|---|
+| — | 0.9 | 79.06 | — |
+| 0.12 | 0.9 | 73.65 | −5.42 |
+| 0.12 | 0.55 | **69.86** | **−9.20** |
+| uniform probe | 0.25 | 70.08 | −8.98 |
+
+**So gloss on paint is priced, not refused, and the price is linear in how much is asked for.** The
+shipped setting takes the full −9.20 because the look was the request and the margin covers it. The
+dial is `paint_reflect` / `paint_roughness` in the `.tres`, with `0.12 / 0.9` the half-price middle
+and `0 / 0.9` the matte car this task started from — no rebuild, one file.
+
+⚠️ **The residual risk is `P3-9a`, and it is a recognition risk rather than an art one.** The red is
+an identifying feature of 紅的, the gate is ≥3 Hong Kong drivers, and washing it toward pink is
+exactly the axis that gate measures. If recognition scores poorly, this dial is the first thing to
+try before anything structural.
+
+**No contract bump.** `schema_version` covers the ETL→game city artefacts; the taxi is a committed
+authored asset and its vertex format is not versioned. Triangles unchanged at 592, one draw call,
+one material.
+
+**No verify tool covers vehicles**, and every failure here is silent — a missing material name
+leaves the body on its `BaseMaterial3D` and the car renders exactly as before. `TestSurfaceMarkers`
+in `test_make_vehicle.py` is what holds the ETL end; the engine end is held by a render and nothing
+else.
+
+**See.** `ART_DESIGN.md` "Vehicles" and anti-goals · `ARCHITECTURE.md` tile contract · `Q27` ·
+`Q31` · `Q43` · `P3-11`
+
 ## Two shadow cascades at 400 m, not four at 600
 
 **Claim.** `directional_shadow_mode` is 2 PSSM cascades at 400 m.

@@ -26,9 +26,11 @@
 extends EditorScenePostImport
 
 ## Material names the ETL writes to request a specific shader, and what to give
-## them. Mirrors `FACADE_MATERIAL` in `etl/pipeline/buildings.py`.
+## them. Mirrors `FACADE_MATERIAL` in `etl/pipeline/buildings.py` and
+## `BODY_MATERIAL` in `tools/make_vehicle.py`.
 const SHADERS: Dictionary = {
 	"city_facade": "res://tuning/city_facade.tres",
+	"vehicle_body": "res://tuning/vehicle_body.tres",
 }
 
 

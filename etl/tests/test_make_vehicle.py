@@ -37,10 +37,15 @@ import pytest
 from make_vehicle import (
     AMBER,
     BADGE_GREEN,
+    BODY_MATERIAL,
     DARK,
     FIXTURE_PROUD_M,
     GLASS,
     LAMP,
+    MARKER_GLASS,
+    MARKER_LAMP,
+    MARKER_PAINT,
+    MARKER_TRIM,
     RED,
     SILVER,
     Chassis,
@@ -763,10 +768,18 @@ class TestTaxiContract:
 
     def test_nothing_on_the_taxi_is_textured(self, meshes: list[MeshData]) -> None:
         """The city is flat-shaded vertex colour throughout, and a textured car
-        driving through it is the one surface that would not belong."""
+        driving through it is the one surface that would not belong.
+
+        ⚠️ **This used to assert `uvs is None` as well, and that was the same
+        conflation `P3-7` untangled on the tiles**: UVs without a texture are a
+        different question, because a coordinate meant for a *shader* is not a
+        coordinate meant for an image. The body carries a surface marker in
+        `UV.y` now — see `TestSurfaceMarkers`. The texture half of the guard is
+        unchanged and still catches the case it was written for, and the wheel,
+        which asks for no shader, still carries no UVs at all."""
         for mesh in meshes:
             assert mesh.texture is None, f"{mesh.name} carries a texture"
-            assert mesh.uvs is None, f"{mesh.name} carries UVs"
+        assert meshes[1].uvs is None, "the wheel needs no shader payload"
 
     def test_within_the_triangle_ceiling(self, meshes: list[MeshData]) -> None:
         """Counted as the scene instances it: one body, four wheels."""
@@ -811,4 +824,88 @@ class TestTaxiContract:
             assert _rgbs(plate) == {colour}, plate.name
             assert np.sign(plate.positions[:, 2]).mean() == expected_sign, (
                 f"{plate.name} is on the wrong end"
+            )
+
+
+class TestSurfaceMarkers:
+    """The `TEXCOORD_0` payload `vehicle_body.gdshader` reads (`P3-11c`).
+
+    Every failure this class covers is silent in the engine. A missing material
+    name leaves the body on its imported `BaseMaterial3D` and the car simply
+    renders as it did before; a marker that is not an exact integer sends
+    `floor()` to the wrong surface and shades a door like a windscreen. Godot
+    reports neither, and no verify tool covers vehicles.
+    """
+
+    @staticmethod
+    def _markers(body: MeshData) -> np.ndarray:
+        assert body.uvs is not None, "the body carries no shader payload"
+        return body.uvs[:, 1]
+
+    def test_the_body_asks_for_its_shader_by_name(self, meshes: list[MeshData]) -> None:
+        """The only channel glTF offers. Without it `generated_scene_import.gd`
+        matches nothing, the body keeps its `BaseMaterial3D`, and the car looks
+        exactly like the one that shipped before the shader existed — which is
+        why this is asserted rather than left to a render."""
+        body, wheel = meshes
+        assert body.material == BODY_MATERIAL
+        assert wheel.material is None, "the wheel asks for no shader"
+
+    def test_every_marker_is_an_exact_integer(self, meshes: list[MeshData]) -> None:
+        """`floor(UV.y)` is the surface marker, so a value of 0.999 reads as
+        paint and 1.0001 reads as glass. Nothing interpolates here — each part
+        is stamped whole before the merge — and this is what proves it."""
+        markers = self._markers(meshes[0])
+        assert np.array_equal(markers, np.floor(markers))
+        assert set(markers.tolist()) <= {MARKER_PAINT, MARKER_GLASS, MARKER_LAMP, MARKER_TRIM}
+
+    def test_the_reserved_coordinate_is_left_at_zero(self, meshes: list[MeshData]) -> None:
+        """A tile spends `UV.x` on metres above its own base. Nothing on a 4 m
+        car needs that, and shipping noise in a reserved field is how a later
+        consumer inherits a value nobody chose."""
+        body = meshes[0]
+        assert body.uvs is not None
+        assert not body.uvs[:, 0].any()
+
+    def test_the_glazing_is_exactly_the_glass_coloured_vertices(
+        self, meshes: list[MeshData]
+    ) -> None:
+        """`GLASS` names one material and nothing else wears it, so here the
+        colour rule is exact — and it has to be per-vertex, because the
+        greenhouse is one lofted part carrying both `GLASS` and `SILVER`."""
+        body = meshes[0]
+        assert body.colours is not None
+        glass = np.all(body.colours[:, :3] == np.array(GLASS, dtype=np.uint8), axis=1)
+        assert glass.any(), "no glazing on the car"
+        assert np.array_equal(self._markers(body) == MARKER_GLASS, glass)
+
+    def test_the_tail_lens_is_a_lamp_although_it_is_painted_red(
+        self, meshes: list[MeshData]
+    ) -> None:
+        """The reason the name rule exists at all. The bottom lens of the tail
+        cluster is `RED` on `RED` bodywork with no bezel behind it — which is
+        exactly why `ART_DESIGN.md` records the cluster reading as
+        "amber-over-white with a bump where the red should be" — so no colour
+        rule can pick it out of the panel it sits in."""
+        body = meshes[0]
+        assert body.colours is not None
+        red = np.all(body.colours[:, :3] == np.array(RED, dtype=np.uint8), axis=1)
+        assert (red & (self._markers(body) == MARKER_LAMP)).any(), (
+            "the red tail lens is being marked as bodywork"
+        )
+
+    def test_the_plates_and_the_roof_sign_are_not_lenses(self, meshes: list[MeshData]) -> None:
+        """⚠️ **The regression this design was corrected for.** The first pass
+        marked by colour alone, and `LAMP` and `AMBER` are also the front and
+        rear registration plates and the roof sign — so a matte plate was being
+        handed a lens's gloss. Colour is not materiality, which is the same
+        collision `Q43` records on the facades under two predicates wearing one
+        name."""
+        body = meshes[0]
+        assert body.colours is not None
+        markers = self._markers(body)
+        for colour, name in ((LAMP, "LAMP"), (AMBER, "AMBER")):
+            worn = np.all(body.colours[:, :3] == np.array(colour, dtype=np.uint8), axis=1)
+            assert (markers[worn] == MARKER_PAINT).any(), (
+                f"every {name} vertex is marked as a lens — the plates are being over-marked"
             )

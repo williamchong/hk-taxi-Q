@@ -27,7 +27,7 @@ import argparse
 import logging
 import sys
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from itertools import pairwise
 from pathlib import Path
 from typing import NamedTuple
@@ -88,7 +88,15 @@ RED = (198, 32, 40)
 # exposure the city is lit at, so it is chosen against a *screenshot* of the
 # roof rather than against the swatch. It is also the cant rail, the wheel hubs
 # and the door handles, all of which want the same correction.
-SILVER = (168, 172, 178)
+#
+# ⚠️ **Warmed on the hue axis only, and `L*` is the axis that must not move.**
+# `ART_DESIGN.md` records this roof rendering ice-blue and diagnoses it as a
+# near-neutral taking its hue from ambient. It does — but measured, the value
+# above was itself authored blue at `b* -3.56`, so half the fault was in the
+# swatch and no lighting change would have reached it. Now `L* 70.21 -> 70.17`,
+# `b* -3.56 -> +3.07`: the headroom the paragraph above was written to protect
+# is untouched, and the trim carries a hue of its own to resist the sky's.
+SILVER = (175, 171, 166)
 DARK = (30, 32, 36)
 GLASS = (18, 19, 22)
 LAMP = (242, 236, 205)
@@ -103,6 +111,46 @@ AMBER = (226, 138, 32)
 # as a shape now that its lettering is gone. Nothing may borrow it for anything
 # that is not that badge, or the count stops being defensible.
 BADGE_GREEN = (12, 116, 82)
+
+# The glTF material name `generated_scene_import.gd` matches to hand the body a
+# `ShaderMaterial`. A name is the only channel glTF offers — the same contract
+# the tiles use for `city_facade`, and it fails the same way: silently, in the
+# engine, where nothing but a render can see it.
+BODY_MATERIAL = "vehicle_body"
+
+# Surface markers, shipped in `UV.y` and read by `vehicle_body.gdshader`. Same
+# shape as the tiles' payload, where `floor(UV.y)` is the surface marker — the
+# body is one merged primitive, so nothing else tells a windscreen from the
+# bodywork it is set into.
+#
+# ⚠️ **Not `COLOR_0.a`**, which is the cheaper-looking place for a mask and is
+# the one `ARCHITECTURE.md` rules out: `vertex_color_use_as_albedo` is set
+# project-wide, and an opaque `BaseMaterial3D` ignores albedo alpha only until
+# somebody enables transparency, after which the car renders see-through with
+# no error.
+MARKER_PAINT = 0.0
+MARKER_GLASS = 1.0
+MARKER_LAMP = 2.0
+MARKER_TRIM = 3.0
+
+# Which marker each authored colour earns — per *vertex*, because the greenhouse
+# is one lofted part carrying both `GLASS` and `SILVER` and no per-part rule
+# could split it.
+#
+# ⚠️ **Only the two unambiguous swatches are here, and the omissions are the
+# point.** `LAMP` and `AMBER` are *also* the registration plates and the roof
+# sign, so a colour rule marks a matte plate as a lamp lens — colour is not
+# materiality, the same collision `Q43` records on the facades under two
+# predicates wearing one name. Those parts are marked by name below.
+COLOUR_MARKERS: dict[Colour, float] = {
+    GLASS: MARKER_GLASS,
+    SILVER: MARKER_TRIM,
+}
+
+# Parts whose every vertex is a lamp lens, whatever colour it is wearing. Name
+# is the authority here: the tail cluster's bottom lens is `RED` on `RED`
+# bodywork, and the plates share their swatches with the lenses.
+LAMP_PARTS = ("headlamp_", "indicator_", "foglamp_", "taillamp_")
 
 
 class CabinRing(NamedTuple):
@@ -768,7 +816,46 @@ def taxi_body(chassis: Chassis, shape: Proportions) -> MeshData:
         )
 
     parts.extend(_flank_detail(chassis, shape))
-    return merge(parts, name="taxi_body")
+    body = merge([_marked(part) for part in parts], name="taxi_body")
+    # `merge` deliberately does not carry `material` — many meshes in, one out,
+    # and inheriting whichever was first would be a coin toss. The caller names
+    # the result, exactly as `buildings._write_tile` does for a tile.
+    return replace(body, material=BODY_MATERIAL)
+
+
+def _marked(part: MeshData) -> MeshData:
+    """Stamp a part's vertices with the surface marker its shading needs.
+
+    `UV.y` carries the marker; `UV.x` is unused and left at zero, where a tile
+    spends it on height above base. Nothing on a 4 m car needs that.
+
+    Two rules, and which one applies is decided by whether the swatch is
+    ambiguous. `GLASS` and `SILVER` name exactly one material each, so a colour
+    lookup is exact and splits the greenhouse's lofted band correctly. Every
+    other lens shares its colour with something matte, so `LAMP_PARTS` marks by
+    name and overrides.
+
+    The name rule is not tidiness. **The tail cluster's bottom lens is `RED` on
+    `RED` bodywork**, which is exactly why `ART_DESIGN.md` records the cluster
+    reading as "amber-over-white with a bump where the red should be" — no
+    colour rule can see it. Marking it by name lets the shader separate it by
+    *shading*, which leaves the authored colours alone: the bezel behind the
+    cluster was removed on request with the trade understood, and making the
+    lens cream is the earlier bug and a white tail lamp besides.
+    """
+    if part.colours is None:
+        raise ValueError(f"part '{part.name}': cannot mark a part with no vertex colours")
+
+    markers = np.full(len(part.colours), MARKER_PAINT, dtype=np.float32)
+    rgb = part.colours[:, :3]
+    for colour, marker in COLOUR_MARKERS.items():
+        markers[np.all(rgb == np.array(colour, dtype=np.uint8), axis=1)] = marker
+    if part.name.startswith(LAMP_PARTS):
+        markers[:] = MARKER_LAMP
+
+    uvs = np.zeros((len(part.colours), 2), dtype=np.float32)
+    uvs[:, 1] = markers
+    return replace(part, uvs=uvs)
 
 
 def _plates(shape: Proportions) -> list[MeshData]:
