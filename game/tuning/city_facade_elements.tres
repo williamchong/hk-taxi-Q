@@ -13,31 +13,17 @@
 ; and a reimport — no rebuild, because it names the same shader and reads the
 ; same `TEXCOORD_0`/`TEXCOORD_1` payload as the shipped `C`.
 ;
-; ⚠️ **It exists as a file for the reason `Q26` already paid for once.** Candidate
-; `A` was recorded as "one `cp` away" while living only in a commit contained in
-; no branch, and turned out to be unreproducible as written. `Q26`'s own
-; conclusion is that a look which is one `cp` apart has to survive a fresh clone
-; to be one `cp` apart. All three looks now have a file.
-;
-; **Eight values are the whole difference from the shipped `C`**, and a `diff`
-; against `city_facade.tres` should show exactly those eight lines and no others:
+; **The eight values that separate the two looks**, which here are the ON side:
 ;
 ;   solid_share 0.27 · glass_ratio 0.44 · shopfront_share 0.55 · accent_share 0.11
 ;   cornice_darkness 0.28 · floor_line_darkness 0.11 · mullion_darkness 0.12
 ;   survey_apply 1.0
 ;
-; ⚠️ **It takes all eight, and `solid_share` is a gate rather than a value.**
-; `glazed = step(solid_share, …)` in the shader, so at `C`'s 1.0 no building is
-; ever glazed and the curtain-wall, fin and punched types stop drawing — but
-; shopfronts, cornices, floor lines and mullions draw *outside* that gate, and
-; with only the gate opened 86% of the frame still differed.
-;
-; ⚠️ **`survey_apply` must move with the other seven, in either direction.** At
-; 1.0 against `C`'s parked fabric the surveyed verdicts draw a half-look —
-; surveyed curtain walls glaze while punched stock stays blank, because
-; `glass_ratio` is 0.0 — which is what candidate `A′` was, a defect rather than a
-; look, and why it was ungradeable. The five `quiet_*` values need no ninth
-; entry: all of them already sit behind `survey_apply`.
+; ⚠️ **Why it takes all eight, why `solid_share` is a gate rather than a value,
+; and why `survey_apply` must never move alone are argued once, in
+; `city_facade.tres`.** They are facts about the pair, not about this file, and
+; the switch is where a reader already is. Not repeated here, because two copies
+; of an argument drift.
 ;
 ; The lineage: `A″` (`Q43`, `build/driver/q43/`) fixed the collapsed fenestration
 ; gate; `A‴` (`P3-7a`, `build/driver/q26_A3_422ee16/`) added `unglazed_glassy`

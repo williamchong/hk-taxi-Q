@@ -268,11 +268,9 @@ surveyed verdicts at `survey_apply = 1.0`, and `P3-7a`'s two corrections (punche
 glass, `Q44`; panes vary per building, `Q45`) — shipped from 2026-08-09 to that date and now lives
 in **`city_facade_elements.tres`**, one `cp` away.
 
-**All three of `Q26`'s looks are files now, and that is deliberate.** `Q26` recorded candidate `A`
-as "one `cp` away" while it lived only in a commit contained in no branch, and it proved
-unreproducible as written; the conclusion it drew — *a look that is one `cp` apart has to survive a
-fresh clone to be one `cp` apart* — is what the third file discharges. `city_facade.tres` is `C`,
-`city_facade_elements.tres` is `A‴`, `city_facade_warm.tres` is `B`.
+**All three of `Q26`'s looks are files now** — `city_facade.tres` is `C`, `city_facade_elements.tres`
+is `A‴`, `city_facade_warm.tres` is `B` — which discharges the reproducibility lesson `Q26` paid for
+when candidate `A` turned out to be unreproducible as written.
 
 ⚠️ **Nothing was faulted in `A‴`, and this is not `Q26`'s final word.** Both enables were the
 user's own verdict on the fixed render; the `≥3`-HK-driver recognition round (`P3-9a`) still grades
