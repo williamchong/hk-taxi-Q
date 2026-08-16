@@ -16,15 +16,19 @@
 ;
 ; ✅ **This file ships candidate `C`: accurate massing, flat per-building colour,
 ; no facade fabric and no surveyed verdicts.** The user's call, 2026-08-16, to
-; continue development on flat colour. It is the same configuration that shipped
-; from 2026-08-06 to 2026-08-09 and that every `P3-7a` step since has been proved
-; byte-identical against — the reducibility baseline is now also the default.
+; continue development on flat colour, and **`Q26`'s closing verdict on
+; 2026-08-17** — `C` is the look that ships, not merely the one being developed
+; against. It is the same configuration that shipped from 2026-08-06 to
+; 2026-08-09 and that every `P3-7a` step since has been proved byte-identical
+; against — the reducibility baseline is now also the default *and* the answer.
 ;
-; ⚠️ **`A‴` was not faulted, and `Q26` is not closed by this.** The user accepted
-; `A‴` on 2026-08-09 from the `q26_A3_422ee16` frames and it shipped until this
-; change; the `≥3`-HK-driver recognition round at `P3-9a` still owns the verdict.
-; `city_facade_elements.tres` carries `A‴` unchanged and its header holds the
-; argument for the elements. Restoring it is one `cp`.
+; ⚠️ **`A‴` was not faulted, and closing `Q26` is not a verdict against it.** The
+; user accepted `A‴` on 2026-08-09 from the `q26_A3_422ee16` frames and it
+; shipped until 2026-08-16; that grading stands. `city_facade_elements.tres`
+; carries `A‴` unchanged and its header holds the argument for the elements.
+; Restoring it is one `cp`, and the `≥3`-HK-driver round at `P3-9a` — which
+; closed before running — is now what can **reopen** `Q26` rather than what
+; decides it.
 ;
 ; **Eight values separate this from `A‴`**, and `diff` against
 ; `city_facade_elements.tres` should show exactly those eight lines:

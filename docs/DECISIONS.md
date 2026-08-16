@@ -48,7 +48,7 @@ lives in git. This file holds *why things are the way they are*.
 | `Q23` | Carriageway width is a property of the station, not of the edge | ✅ Closed |
 | `Q24` | The at-grade road follows the ground; the cross-slope half is `Q19`'s | 🟢 Half closed |
 | `Q25` | Ground is decimated once per tier and cut afterwards | ✅ Closed |
-| `Q26` | Which look ships — the measured Hong Kong one or the clean/futuristic one? | 🔴 Open — a verdict, not a measurement; and candidate `A′` is blocked on the glazed gate deleting 43.2% of the city's fenestration |
+| `Q26` | Which look ships — the measured Hong Kong one or the clean/futuristic one? | ✅ Closed on candidate `C` — flat per-building colour, the user's call; closed ahead of `P3-9a`, which can now reopen it |
 | `Q27` | `COLOR_0` is authored sRGB and must be linearised by the consumer | ✅ Closed |
 | `Q28` | A per-object seed must be `flat`, or the GPU interpolates it into bands | ✅ Closed |
 | `Q29` | The ground's normals are rebuilt in the fragment stage | ✅ Closed |
@@ -94,6 +94,7 @@ lives in git. This file holds *why things are the way they are*.
 | `P2-5` | Buildings get collision from a **mesh name** | ✅ Done |
 | `P2-7` | The off-grade carriageway lies on its structure | ✅ Done |
 | `P3-7` | Window bands are procedural, and the storey height was measured | 🟡 Awaiting review |
+| `P3-7a` | The task closes at what was judged, and the riders are gated on the look | ✅ Closed as shipped — the remainder is conditional on `P3-9a` reopening `Q26` |
 | `P3-10` | The ground is a mesh class, and it collides | 🟡 Awaiting review |
 | `P3-11` | The taxi is generated, and the chassis generates it | 🟡 Awaiting review |
 
@@ -649,19 +650,50 @@ number, not only the ones a checklist names.
 
 ## `Q26` — Which look ships?
 
-**Status.** 🟡 **Open — the shipped default moved back to `C` on 2026-08-16**, the user's call, to
-continue development on flat per-building colour. `A‴` had been the default since 2026-08-09
-("much more acceptable now", confirmed from the driver's seat) and **nothing about it was
-faulted** — this is a choice of what to develop against, not a verdict against the elements. The
-confirmatory half is unchanged: the ≥3-HK-driver recognition round at `P3-9a` grades whatever
-ships, on the web build. ✅ All three looks are now files, so each is genuinely one `cp` away —
-`city_facade.tres` is `C`, `city_facade_elements.tres` is `A‴`, `city_facade_warm.tres` is `B` ·
-**Owner.** `P3-9a`
+**Status.** ✅ **Closed 2026-08-17 — candidate `C` ships.** Accurate massing, flat per-building
+colour, no façade fabric and no surveyed verdicts. The user's call, on the configuration that had
+already been the working default since 2026-08-16 · **Owner.** `P3-9a`, which can reopen it
 
-⚠️ **The 2026-08-09 enable is not superseded as evidence.** It was a verdict on the fixed render
-and it stands; what changed is which configuration development proceeds on. Anyone re-reading this
-record for `Q26`'s answer should treat both enables as user judgements of the same quality, made
-five days apart, and neither as the closing one.
+### ✅ The verdict — `C`, and what closing on it costs
+
+**No asset moved to close this.** `city_facade.tres` already carried `C`, byte-verified against the
+graded frames at both audit cameras on the 2026-08-16 swap, so this is a verdict on what was
+shipping rather than a change to it. The three looks stay three files: closing the question retires
+the *question*, not the alternatives, and `cp city_facade_elements.tres city_facade.tres` still
+restores `A‴` exactly.
+
+⚠️ **It closes ahead of its own stated confirmatory half, and that is a real deviation.** Every
+version of this record said the ≥3-HK-driver recognition round at `P3-9a` grades whatever ships.
+That round has not run. So `C` ships on the user's own judgement — given twice, 2026-08-16 as the
+default and 2026-08-17 as the verdict — and the driver round changes role: it is no longer what
+*decides* this, it is the test that can **reopen** it. A recognition failure at `P3-9a` that the
+drivers attribute to flat surface reopens `Q26` with `A‴` and `B` still on disk and the tables
+below still valid. Nothing about that path is expensive, which is most of why closing early is
+affordable.
+
+⚠️ **The 2026-08-09 enable of `A‴` is not superseded as evidence, and `A‴` was never faulted.** It
+was a verdict on the fixed render and it stands. What this closure says is which of two accepted
+looks ships, not that the other is wrong — anyone re-reading for the *reason* will not find a fault
+in `A‴`, because there is not one.
+
+🔴 **The whole surveyed-surface chain now ships dark, and this is the price.** `survey_apply = 0.0`
+under `C`, so `Q40`'s reader-glazed verdicts and surveyed tint, `Q41`'s grammar, `Q42`'s reserved
+`TEXCOORD_1.y` riders and `Q47`'s podium pack are all shipped, validated, and consumed by no pixel
+in the default build — about **$21 of paid reads** and **+0.24 MB of PCK** with no viewer. That does
+not make any of it wrong; it is one `cp` from being consumed, and the reader survey is what made
+`A‴` a *measured* look rather than an invented one. But **`P3-7a`'s remaining riders now have no
+shipping consumer**, and whether to continue paying for them — the ground-band batch above all — is
+a scope call this closure deliberately does **not** make.
+
+**`Q30` is re-owned rather than answered.** It was parked on this verdict. Under `C` the elements'
+chroma addition is gone — `C` is the low-chroma end of the set (whole-frame mean `C*` 16.56
+`street` / 15.30 `kerb`, against `A‴`'s 17.72 / 16.08) — so the 26.4%-over-`C*`-20 that `Q30`
+reports is now **entirely the base palette**: `facade_hue` × the height-band weights, baked into
+`COLOR_0` by the ETL and therefore present under all three looks. `Q30` stays open, better posed,
+and owned by `hong_kong.yaml` / `ART_DESIGN.md`.
+
+**The palette does not move.** "If the clean look wins, the palette moves from the shader's
+`base_wash` into `height_bands`" was conditional on `A`. It never fires.
 
 ✅ **The swap was verified rather than assumed.** The shipped `city_facade.tres` renders
 byte-identical frames to the graded `C` at both audit cameras, and the parameter block differs from
@@ -3033,6 +3065,59 @@ scale factor in the contract on both sides; not done, because the budget is 200 
 region short of room knows where the 2 MB is.
 
 **See.** `Q26` · `Q28` · `Q2′`/`Q3′` · `ART_DESIGN.md` "The window-band shader"
+
+## `P3-7a` — The task closes at what was judged, and the riders are gated on the look
+
+**Status.** ✅ **Closed as shipped.** `W1`, `W2` and `W3` landed, graded and accepted; `R1`, `R2`,
+`R3`, `R4`'s pack, two-tone walls and the paid ground-band batch are **neither cancelled nor
+scheduled** — conditional on `P3-9a` reopening `Q26` · **Owner.** `P3-9a`
+
+**Claim.** Every remaining rider is consumed behind `survey_apply`, and `Q26` closed on `C`, which
+ships `survey_apply = 0.0`. The remainder therefore renders nothing in the build that reaches a
+player, and **cannot influence `P3-9a`** — the round that would price it, because `P3-9a` grades
+`C`. Running the gate first prices every rider for free; building them first spends the expensive
+half of the set just before the odds become knowable at no cost.
+
+**What shipped is what was judged.** `W1` (`Q44`), `W2` (`Q45`) and `W3` (`Q46`) are user verdicts
+on frames. The riders are enrichment *beyond* the `A‴` the user accepted, so stopping does not
+degrade `A‴`: `city_facade_elements.tres` holds exactly the configuration that was graded, and the
+answer to a driver panel that rejects flat surface is one `cp`, available now, not a rider.
+
+⚠️ **The task's own safety criterion no longer proves anything, and that is why it stops rather than
+coasts.** "Everything lands dark behind `survey_apply`; parked look byte-identical at every step"
+was load-bearing while the look was undecided — it let risky work proceed behind a switch. With the
+switch permanently off, **a rider that draws nothing at all passes it**. A check whose difficulty
+depends on a decision taken elsewhere has to be re-read when that decision lands.
+
+⚠️ **The remainder is the low-reliability half, and this is measured rather than felt.** `Q42`'s
+fill rates are prioritisation evidence, not validation, and the validated items are the ones that
+landed. `R4` was graded against a pre-fixed bar and **failed** — \|err\| p50 **10.76 m** against
+2.8, Spearman **ρ = 0.076**, no per-building signal. `R3` has no validation. `band_period_floors`
+commits **0/25**. `R1` has **no hand labels in existence**: 25 must be authored before its bar can
+be fixed. `R2` walks into `Q48`, where four instruments read 2.8 / 3.38 / 3.32 / 3.28 and nothing
+reconciles them.
+
+⚠️ **Cost is not symmetric across the remainder, so the stop order is not the dependency order.** A
+shader or tuning rider is `git revert`. The ground-band batch is not — the prompt hash *is* the
+reader's identity, so a new field costs a new graded run **plus** a paid full re-survey. It is also
+the one item whose wait is free by design (the cache), and the one that becomes **most** valuable if
+`P3-9a` fails on street-level surface, since it targets the player's eye level — the survey's
+worst-covered band.
+
+**What closing it unblocks.** `P3-7a` was the last task in flight before the `P3-9a` gate, so
+closing it is what opens the gate. `P3-9a` answers the register's top risk — novelty not surviving
+the first session — which no façade rider addresses.
+
+**What reopens it.** `P3-9a`'s ≥3 HK drivers rejecting the city *and* attributing it to flat
+surface. `Q26` then reopens on one `cp`, and the ground-band batch becomes the first item rather
+than the last.
+
+⚠️ **`W4` is idle, not stopped, and must not grow.** Its canonical entry was HKCEC's base, and
+`P3-6` removed HKCEC from the tiles entirely, so what remains is stragglers rather than a
+population. It is **never** a route around the survey at scale: **771 grammar-refused buildings** is
+the measurement that disqualified overrides as the systematic fix.
+
+**See.** `Q26` · `Q30` · `Q42` · `Q44` · `Q45` · `Q46` · `Q47` · `Q48` · `P3-7` · `PLAN.md` `P3-9a`
 
 ## `P3-10` — The ground is a mesh class, and it collides
 

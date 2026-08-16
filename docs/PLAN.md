@@ -248,7 +248,7 @@ trade.
 | `P3-10` | **Ground surface** — decimated terrain, vertex-coloured, merged into the tile primitive | Ground everywhere the region has terrain; **no texture ships**; one draw call per tile still; no z-fighting against the carriageway |
 | `P3-7` | Window-band shader, **and the `TEXCOORD_0` payload it reads** | Reads as HK density; no windows on roofs or podium faces. ETL ships height-above-own-base and a per-building seed; `schema_version` bumped in the same commit |
 | `P3-6` | Hero buildings (5) — authored or mesh-sourced (`source_paint`), placed via `landmarks.json` | Source geometry excluded; no z-fighting |
-| `P3-7a` | **Survey-driven façade variation** — `Q42`'s reliable riders consumed, and the openings re-judged: punched windows are glass (`Q44`), panes vary per building (`Q45`), refusal drawn quietly (`W3`) | Everything lands dark behind `survey_apply`; parked look byte-identical at every step; each rider graded against a pre-fixed bar before the shader reads it; no new reader field before `Q26`'s verdict (user half landed 2026-08-09 — batch design may start; the paid run waits for `P3-9a`) |
+| `P3-7a` | **Survey-driven façade variation** — the openings re-judged: punched windows are glass (`Q44`), panes vary per building (`Q45`), refusal drawn quietly (`W3`). ✅ **Closed as shipped at those three**; `Q42`'s riders are gated, not delivered | Met by what landed: everything dark behind `survey_apply`, parked look byte-identical at every step, each shipped step graded against a pre-fixed bar. ⚠️ **The remainder is gated on `P3-9a` reopening `Q26`** — `C` ships `survey_apply = 0.0`, so a rider built now renders nothing and cannot influence the round that would price it (`DECISIONS.md` `P3-7a`) |
 
 - **Deps:** `P1-2`, `P1-7`. **No longer depends on `B1`** — that dependency was ordering, not
   substance. Nothing in the taxi, the ground, the shader or the hero buildings reads a fare.
@@ -288,11 +288,20 @@ trade.
 
 #### `P3-7a` — how the survey becomes the look
 
+- ✅ **Closed as shipped.** `W1`, `W2` and `W3` landed, were graded against pre-fixed bars and were
+  accepted by the user on frames. **Everything below from `W4` onward is gated, not scheduled**:
+  `Q26` closed on candidate `C`, which ships `survey_apply = 0.0`, so every remaining rider renders
+  nothing in the build that reaches a player — and none of them can influence `P3-9a`, the round
+  that would price them, because `P3-9a` grades `C`. The gate reopens if `P3-9a`'s drivers reject
+  the city *and* attribute it to flat surface; the ground-band batch is then the **first** item, not
+  the last. The full argument, and what the remainder is worth, is `DECISIONS.md` `P3-7a`. **Read
+  the rest of this section as the plan that resumes, not as work in flight.**
 - **Deliverable:** the reliable half of `Q42`'s riders consumed end-to-end (merge vote →
   `TEXCOORD_1.y` → shader), plus the two corrections the user called from `A″`'s frames: punched
   openings behave as glass (`Q44`) and pane colour varies per building (`Q45`). Everything lands
   dark behind `survey_apply = 0.0`, and the parked look stays byte-identical at every step — `Q43`'s
-  reducibility check, and how each commit proves it changed nothing it did not mean to.
+  reducibility check, and how each commit proves it changed nothing it did not mean to. ⚠️ **A
+  resumed rider cannot use that check** — see `DECISIONS.md` `P3-7a`.
 - **Order — the look fixes run before the riders, because two of `A″`'s defects are already
   judged.** `Q26`'s verdict is a human preference over `A″`, and grading drivers on a look the user
   has already called wrong wastes the drivers. `W1`/`W2` are shader + tuning only — no ETL, no
@@ -371,9 +380,14 @@ trade.
   asserts `uv2.y != 0.0` is a codec break, so the first written rider fails the verifier unless its
   range check moves in the same commit. No `schema_version` bump: filling a reserved field a
   refusal-aware consumer already reads as "0 = refused" changes bytes, not meaning (`Q42`).
-- ⚠️ **New reader fields: design now, pay once, after `P3-9a`.** `Q26`'s user half landed
-  2026-08-09, so the batch may be *designed*; the paid run still waits for the `P3-9a` driver round,
-  since the cache makes waiting free. The prompt hash is the reader's identity; a new field means a
+- 🔴 **New reader fields: not paid for, and the bar to pay is now higher than "after `P3-9a`".**
+  `Q26` closed on `C`, so a ground-band field bought today has no consumer in the shipped build and
+  is a bet on `P3-9a` reopening the look. It is also the **only irreversible item** in the
+  remainder — a shader or tuning rider is `git revert`, a paid batch is not — and the one whose wait
+  is free by design, since the cache makes waiting cost nothing. So it goes **last among the stopped
+  items and first among the resumed ones**, because it targets the player's eye level, the survey's
+  worst-covered band and the most likely thing a driver panel faults. The prompt hash is the
+  reader's identity; a new field means a
   new graded run plus a paid full re-survey, so everything wanted ships in **one** prompt revision.
   The batch is a **ground-band pass** — crop the bottom ~0–8 m of the existing unwrap, its own
   schema and prompt hash, so the validated façade reader is untouched — collecting the storefront

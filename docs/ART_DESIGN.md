@@ -272,11 +272,14 @@ in **`city_facade_elements.tres`**, one `cp` away.
 is `A‴`, `city_facade_warm.tres` is `B` — which discharges the reproducibility lesson `Q26` paid for
 when candidate `A` turned out to be unreproducible as written.
 
-⚠️ **Nothing was faulted in `A‴`, and this is not `Q26`'s final word.** Both enables were the
-user's own verdict on the fixed render; the `≥3`-HK-driver recognition round (`P3-9a`) still grades
-whatever ships, on the web build. `C` is also the reducibility baseline the remaining `P3-7a` steps
-are proved byte-identical against, so the default and the baseline are now the same configuration —
-✅ verified on the swap, both audit cameras byte-identical to the graded `C` frames.
+✅ **`Q26` closed on `C` on 2026-08-17 — this is the look that ships.** ⚠️ **Nothing was faulted in
+`A‴`.** Both enables were the user's own verdict on the fixed render, and the closure chooses
+between two accepted looks rather than rejecting one. It also closed **before** the `≥3`-HK-driver
+recognition round (`P3-9a`), which still grades whatever ships on the web build — so that round is
+now what can **reopen** `Q26`, with `A‴` and `B` on disk and their measured separation still valid.
+`C` is also the reducibility baseline the remaining `P3-7a` steps are proved byte-identical against,
+so the default, the baseline and the answer are now one configuration — ✅ verified on the swap,
+both audit cameras byte-identical to the graded `C` frames.
 
 **A second look, shipping beside the first and switched by one file.** The window bands above are
 accurate and were called **dull** on sight. The fault is *scale*, not colour: they are drawn at the
@@ -421,9 +424,10 @@ always to raise the ceiling, never to raise the floor.
 **Switching is data, and never a rebuild.** Both shaders read the same `TEXCOORD_0` payload and the
 same surface markers, and `tools/generated_scene_import.gd` maps the ETL's material name to
 `tuning/city_facade.tres` and only that path. `tuning/city_facade_warm.tres` holds the measured
-values; `cp` it over and reimport. **Which look ships is `Q26`, and it is a verdict for `P3-9a`'s
-drivers rather than something to settle here** — the clean look keeps the accurate massing and
-abandons the accurate surface, and recognition is the product.
+values; `cp` it over and reimport. **Which look ships was `Q26`, and it closed on candidate `C` on
+2026-08-17** — flat per-building colour on accurate massing, the user's call. The argument that made
+it a verdict rather than a preference still stands and is why `P3-9a` can reopen it: the clean look
+keeps the accurate massing and abandons the accurate surface, and recognition is the product.
 
 ### What buildings will *not* get
 

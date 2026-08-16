@@ -7,6 +7,13 @@
 ; moved to candidate `C`. Nothing about `A‴` was faulted; the user chose to
 ; continue development on flat colour. See `docs/DECISIONS.md` `Q26`.
 ;
+; ⚠️ **`Q26` closed on `C` on 2026-08-17, so this file is now the runner-up
+; rather than the pending alternative.** It is kept, not deprecated: the closure
+; came before the `≥3`-HK-driver round at `P3-9a`, so that round can still
+; reopen the question. `P3-7a` closed with its survey-consuming riders gated on
+; that reopening; if they resume they are graded against *this* file, because
+; nothing else loads the surveyed verdicts at all.
+;
 ; ⚠️ **Not loaded by anything.** `tools/generated_scene_import.gd` maps the ETL's
 ; `city_facade` material name to `res://tuning/city_facade.tres` and only that
 ; path, so restoring this look is `cp city_facade_elements.tres city_facade.tres`
