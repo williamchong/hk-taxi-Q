@@ -261,17 +261,24 @@ be a rebuild.
 
 ### The clean/futuristic variant
 
-✅ **This variant ships enabled: `city_facade.tres` carries the `A‴` look** — the seven fabric
-values, the surveyed verdicts at `survey_apply = 1.0`, and `P3-7a`'s two corrections (punched
-openings are glass, `Q44`; panes vary per building, `Q45`). User's call, 2026-08-09, from the
-`A‴` audit frames. The look was parked to flat per-building colour from 2026-08-06 — the window
-grid competed with the measured hue rather than adding to it — and `W1`/`W2` are what changed the
-judgment. Candidate `C` (flat colour) remains one `.tres` edit away, listed in that file's header,
-and stays the reducibility baseline the remaining `P3-7a` steps are proved byte-identical against.
+⚠️ **This variant's elements are OFF in the shipped build: `city_facade.tres` carries candidate
+`C`** — accurate massing, flat per-building colour, no fabric and no surveyed verdicts. User's
+call, 2026-08-16, to continue development on flat colour. `A‴` — the seven fabric values, the
+surveyed verdicts at `survey_apply = 1.0`, and `P3-7a`'s two corrections (punched openings are
+glass, `Q44`; panes vary per building, `Q45`) — shipped from 2026-08-09 to that date and now lives
+in **`city_facade_elements.tres`**, one `cp` away.
 
-⚠️ **This is the working default, not `Q26`'s final word.** The enable is the user's own verdict
-on the fixed render; the `≥3`-HK-driver recognition round (`P3-9a`) still grades the shipped look
-on the web build, and `city_facade_warm.tres` (`B`) remains the one-copy alternative.
+**All three of `Q26`'s looks are files now, and that is deliberate.** `Q26` recorded candidate `A`
+as "one `cp` away" while it lived only in a commit contained in no branch, and it proved
+unreproducible as written; the conclusion it drew — *a look that is one `cp` apart has to survive a
+fresh clone to be one `cp` apart* — is what the third file discharges. `city_facade.tres` is `C`,
+`city_facade_elements.tres` is `A‴`, `city_facade_warm.tres` is `B`.
+
+⚠️ **Nothing was faulted in `A‴`, and this is not `Q26`'s final word.** Both enables were the
+user's own verdict on the fixed render; the `≥3`-HK-driver recognition round (`P3-9a`) still grades
+whatever ships, on the web build. `C` is also the reducibility baseline the remaining `P3-7a` steps
+are proved byte-identical against, so the default and the baseline are now the same configuration —
+✅ verified on the swap, both audit cameras byte-identical to the graded `C` frames.
 
 **A second look, shipping beside the first and switched by one file.** The window bands above are
 accurate and were called **dull** on sight. The fault is *scale*, not colour: they are drawn at the

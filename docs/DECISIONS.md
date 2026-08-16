@@ -649,10 +649,32 @@ number, not only the ones a checklist names.
 
 ## `Q26` — Which look ships?
 
-**Status.** 🟢 **Half closed — `A‴` is enabled as the shipped default** (user's call, 2026-08-09,
-from the `A‴` frames: "much more acceptable now", confirmed from the driver's seat). What remains
-open is the confirmatory half: the ≥3-HK-driver recognition round at `P3-9a` grades the shipped
-look on the web build, `B` and `C` each still one edit away · **Owner.** `P3-9a`
+**Status.** 🟡 **Open — the shipped default moved back to `C` on 2026-08-16**, the user's call, to
+continue development on flat per-building colour. `A‴` had been the default since 2026-08-09
+("much more acceptable now", confirmed from the driver's seat) and **nothing about it was
+faulted** — this is a choice of what to develop against, not a verdict against the elements. The
+confirmatory half is unchanged: the ≥3-HK-driver recognition round at `P3-9a` grades whatever
+ships, on the web build. ✅ All three looks are now files, so each is genuinely one `cp` away —
+`city_facade.tres` is `C`, `city_facade_elements.tres` is `A‴`, `city_facade_warm.tres` is `B` ·
+**Owner.** `P3-9a`
+
+⚠️ **The 2026-08-09 enable is not superseded as evidence.** It was a verdict on the fixed render
+and it stands; what changed is which configuration development proceeds on. Anyone re-reading this
+record for `Q26`'s answer should treat both enables as user judgements of the same quality, made
+five days apart, and neither as the closing one.
+
+✅ **The swap was verified rather than assumed.** The shipped `city_facade.tres` renders
+byte-identical frames to the graded `C` at both audit cameras, and the parameter block differs from
+`city_facade_elements.tres` by exactly the eight documented values and no others.
+
+🔴 **Consequence for `P3-7a`, and it is a trap.** Every remaining rider on that task — `W4`, the
+`emphasis` and storey-pitch riders, `balconies`, the podium pack — is consumed behind
+`survey_apply`, which is now `0.0` in the shipped file. They will land **invisible in the default
+build**. `PLAN.md` already requires them to land dark and to keep the `C` look byte-identical, so
+this does not change what is built; what it changes is that the criterion is now satisfied
+*trivially*, and a rider that draws nothing at all would pass it. **Grade every remaining `P3-7a`
+step against `city_facade_elements.tres`, not against the default**, or the grading measures a
+uniform that is switched off.
 
 **The question.** The measured Hong Kong look — `P3-7`'s accurate window bands, called dull — or
 `city_facade_clean`, which is bolder and is *not* what Wan Chai looks like. A third candidate
@@ -949,10 +971,13 @@ windows read as windows, and do two adjacent towers still read as two buildings?
 favour from the frames ("much more acceptable now") and called the default: `city_facade.tres`
 now ships the seven fabric values with `survey_apply = 1.0` and the `W1`/`W2` knobs — the exact
 configuration the `A‴` frames were shot from, proved by byte-comparing a fresh shoot of the
-shipped file against `build/driver/q26_A3_422ee16/`. Candidate `C` stays one edit away (the
-recipe is in the `.tres` header) and remains the reducibility baseline for the remaining `P3-7a`
-steps; `B` stays one copy away. The ≥3-HK-driver round at `P3-9a` is the confirmatory half, on
-the web build, against the shipped default.
+shipped file against `build/driver/q26_A3_422ee16/`. The ≥3-HK-driver round at `P3-9a` is the
+confirmatory half, on the web build, against whatever is shipping then.
+
+⚠️ **Superseded as the default on 2026-08-16, and only as the default.** The user moved the
+working look back to candidate `C` to continue development on flat colour; `A‴` moved out of
+`city_facade.tres` into `city_facade_elements.tres` unchanged, and this grading stands. See the
+status at the head of `Q26`.
 
 **See.** `ART_DESIGN.md` "The clean/futuristic variant" · `ART_DESIGN.md` "The audit viewpoints" ·
 `Q27` · `Q30` · `Q31` · `Q34` · `Q37` · `Q40` · `Q41` · `Q43` · `Q44` · `Q45`

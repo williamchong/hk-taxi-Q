@@ -1,60 +1,69 @@
 ; The facade look the city actually loads, shared by every tile.
 ;
 ; `tools/generated_scene_import.gd` maps the ETL's `city_facade` material name to
-; this path and only this path, so this file *is* the switch: it currently names
-; `city_facade_clean.gdshader`, and `city_facade_warm.tres` beside it names the
-; measured `city_facade.gdshader`. Both read the same `TEXCOORD_0` payload, so
-; swapping is a copy and a reimport — never a rebuild.
+; this path and only this path, so this file *is* the switch. All three of
+; `Q26`'s looks now have a file, and swapping is a copy and a reimport — never a
+; rebuild, because all three read the same `TEXCOORD_0`/`TEXCOORD_1` payload:
+;
+;   candidate `C`  this file             flat per-building colour, elements off
+;   candidate `A‴` city_facade_elements  the clean look with its elements on
+;   candidate `B`  city_facade_warm      the measured Hong Kong window bands
 ;
 ; Here rather than as shader defaults because CLAUDE.md hard rule 4 makes tuning
 ; data, not constants — and beside `golden_hour.tres` because the sun these are
 ; judged under is tuned in the same directory. Loaded as **one** resource for all
 ; 66 tiles: retuning the city is this file.
 ;
-; `floor_height_m` is still the measured 2.8 m and stays that way whichever
-; shader is loaded — the massing is real and the floor rhythm should be. What the
-; clean look changes is the *scale everything else is drawn at*: glazing spans a
-; group of storeys and a bay is 9 m, because the measured 2.4 m column pitch is
-; about four pixels across from a moving car and reads as noise rather than as
-; architecture. See the shader header.
+; ✅ **This file ships candidate `C`: accurate massing, flat per-building colour,
+; no facade fabric and no surveyed verdicts.** The user's call, 2026-08-16, to
+; continue development on flat colour. It is the same configuration that shipped
+; from 2026-08-06 to 2026-08-09 and that every `P3-7a` step since has been proved
+; byte-identical against — the reducibility baseline is now also the default.
 ;
-; ✅ **The facade elements are ON: this file ships the `A‴` look** — the seven
-; fabric values below plus the surveyed verdicts at `survey_apply = 1.0` and
-; `P3-7a`'s `W1`/`W2` corrections. User's call, 2026-08-09, from the `A‴`
-; frames ("much more acceptable now"), confirmed from the driver's seat. From
-; 2026-08-06 to then the look was parked to massing plus flat colour — the
-; window grid was competing with the per-building colour rather than adding to
-; it — and what changed the judgment is `W1`/`W2`: punched openings became
-; glass and the panes stopped repeating.
+; ⚠️ **`A‴` was not faulted, and `Q26` is not closed by this.** The user accepted
+; `A‴` on 2026-08-09 from the `q26_A3_422ee16` frames and it shipped until this
+; change; the `≥3`-HK-driver recognition round at `P3-9a` still owns the verdict.
+; `city_facade_elements.tres` carries `A‴` unchanged and its header holds the
+; argument for the elements. Restoring it is one `cp`.
 ;
-; **Seven parameters hold the switch, and it takes all seven** (plus
-; `survey_apply`). `solid_share = 1.0` is the gate: `glazed = step(solid_share,
-; …)` in the shader, so at 1.0 no building is ever glazed and the curtain-wall,
-; fin and punched types stop drawing. That alone leaves the street-level
-; furniture behind — measured, 86% of the frame still differed — because
-; shopfronts, cornices, floor lines and mullions are drawn outside that gate,
-; so each must be zeroed too.
-;
-; To park the look again — candidate `C`, still the reducibility baseline every
-; remaining `P3-7a` step is proved byte-identical against — zero the eight:
+; **Eight values separate this from `A‴`**, and `diff` against
+; `city_facade_elements.tres` should show exactly those eight lines:
 ;
 ;   solid_share 1.0 · glass_ratio 0.0 · shopfront_share 0.0 · accent_share 0.0
 ;   cornice_darkness 0.0 · floor_line_darkness 0.0 · mullion_darkness 0.0
 ;   survey_apply 0.0
 ;
-; The shipped seven are `542cac3`'s, unchanged since that commit.
+; ⚠️ **It takes all eight, and `solid_share` is a gate rather than a zero.**
+; `glazed = step(solid_share, …)` in the shader, so at 1.0 no building is ever
+; glazed and the curtain-wall, fin and punched types stop drawing — but
+; shopfronts, cornices, floor lines and mullions draw *outside* that gate, and
+; with only the gate closed 86% of the frame still differed. The five `quiet_*`
+; values need no ninth zero: all of them sit behind `survey_apply`.
 ;
-; The dozens of uniforms those seven make inert — `bay_width_m`, `glass_colour`,
-; `pane_bow`, the fresnel terms — are left at their tuned values on purpose. They
-; are the state a future art idea starts from, not dead weight to be cleaned up.
+; ⚠️ **`survey_apply = 0.0` is the surveyed half, and it must not move alone.**
+; Since schema 6 every tile carries the measured facade verdicts in `TEXCOORD_1`
+; — reader-glazed, glass tint, grammar (`Q40`/`Q41`). Raising it against the
+; parked fabric here draws a half-look, which is what `A′` was: a defect, not a
+; look. Measured 2026-08-16: at 0.0 the payload costs the frame nothing —
+; today's `C` responds on **0.1%** of the `street` audit frame against the
+; archived pre-survey `C`, whole-frame `L*` unchanged.
+;
+; ⚠️ **This is "the city without the reader", not "the city without
+; measurement".** The per-building hue is `COLOR_0`, which the ETL picks from the
+; `materials:` table in `etl/config/cities/hong_kong.yaml`, and `Q37`'s glazing
+; dip/tint survey is local compute upstream of it. Neither is switched off here.
+;
+; The dozens of uniforms the eight make inert — `bay_width_m`, `glass_colour`,
+; `pane_bow`, the fresnel and `quiet_*` terms — are left at their `A‴` values on
+; purpose. They are what makes the two files diffable, and they are the state a
+; future art idea starts from, not dead weight to be cleaned up.
 ;
 ; ⚠️ **`base_wash` is 0.0 because the palette lives in the city config**, which
 ; is where the shader's header says it belongs. The `materials:` table in
 ; `etl/config/cities/hong_kong.yaml` carries the city's level — every colour in
 ; it was re-authored 19 L* darker once the anchor probe measured that as what the
 ; white city needed — so the wash has nothing left to trial. That leaves
-; `base_colour` inert, kept at its tuned value on the same rule as the window
-; uniforms above.
+; `base_colour` inert, kept at its tuned value on the same rule as above.
 ;
 ; ⚠️ Those colours used to sit inline on the height bands, and `Q34` moved them:
 ; the field's position asserted that material is a function of height, which 0.9%
@@ -66,60 +75,8 @@
 ; broken. It is not the lever that fixed the white city — at the 0.6 ceiling it
 ; moved the frame 0.4 L*, against 10.3 for the bands.
 ;
-; ⚠️ **`survey_apply` is 1.0: the surveyed verdicts draw.** Since schema 6
-; every tile carries the measured facade verdicts in `TEXCOORD_1` —
-; reader-glazed, glass tint, grammar (`Q40`/`Q41`) — and at 1.0 the shader
-; draws them, with only refusals falling back to the hash. ⚠️ Never move it
-; without the seven fabric values above: against the parked values the
-; overrides alone draw a half-look (surveyed curtain walls glaze while punched
-; stock stays blank, because `glass_ratio` is 0.0) — that was `A′`, a defect
-; and not a look. The lineage: `A″` (`Q43`, `build/driver/q43/`) fixed the
-; collapsed fenestration gate; `A‴` (`P3-7a`, `build/driver/q26_A3_422ee16/`)
-; added `unglazed_glassy` and the `pane_*` modulation, held the `Q30` chroma
-; bar on all three audit cameras, and is what the user accepted and this file
-; now ships. The `≥3`-HK-driver recognition round (`P3-9a`) still grades the
-; shipped look on the web build under `Q26`.
-;
-; ⚠️ `recess_colour` and `unglazed_reflect` are what an opening is made of where
-; the survey says glazing does not *dominate* — `punched` stock (`Q43`). Inert
-; while the look is parked, on the same rule as `glass_colour` above, and
-; authored rather than measured: `Q40` measured the tint of glazing, and nothing
-; has measured a concrete reveal.
-; `unglazed_glassy` is `Q44`'s correction to how far those two reach: the user
-; judged `A″`'s punched openings — matte near-black holes on 67% of read faces —
-; and called them glass. It floors the opening's glassiness where glazing does
-; not dominate: 0.0 is the `Q43` behaviour exactly, 1.0 makes the opening
-; material always glass with the recess reduced to frame-and-reveal. 0.65 is
-; the value the user accepted on the `A‴` frames; retune it against the `Q30`
-; chroma bar (mean C* cost vs `C` ≤ `A`'s on all three audit cameras), which
-; it currently passes with headroom.
-; The three `pane_*` values below them are `Q45`: per-building modulation of
-; the hashed pane pick — `L*`/`b*` jitter in CIELAB plus a pull of the pane's
-; chromaticity (the full a*b*, so near-neutral buildings pull their panes
-; toward grey — deliberate, graded into `A‴`) toward the building's own
-; measured `COLOR_0`. Fallback only, never
-; the surveyed tint (that is a measurement), and punched panes never take the
-; dark-mode tint (`Q40` conditioned it on glazed; the ETL enforces it). These
-; are the values the user accepted on the `A‴` frames; the bound on retuning
-; is `Q35`'s: panes should vary within a frame without a salt-and-pepper
-; skyline.
-; `glass_astar` is the a* the tint encoding dropped (`Q40` PCA, 6.5%), one
-; value for the city, retuned at `Q26` if at all.
-; The five `quiet_*` values are `Q46`'s quiet tier: where the grammar
-; *refused*, the hash draws from a conservative distribution instead of
-; asserting confident fenestration — the 2026-08-09 drive test's invented
-; windows on plant boxes, tunnel piers and the HKCEC service base were all
-; refused stock. Eligibility is the refusal itself, never height (`Q34`).
-; `quiet_shopfront` and `quiet_clamp` at 1.0 are the categorical halves: a
-; shopfront needs a committed grammar, and refused stock never draws a
-; hash-picked curtain or fin, only punched. `quiet_pier_ratio` 0.68 (a floor
-; over `punched_pier_ratio`), `quiet_solid` 0.55 (solid probability 0.27 →
-; ≈0.67 on refused stock) and `quiet_pane_mute` 0.5 (fallback-pane chroma
-; halved, never its glassiness — `Q44` stands) are graded values, retuned
-; against the `Q30` bar. Bounds: `quiet_solid` is bounded below by the five
-; drive-test sightings and above by refusal covering 35% of buildings — at
-; 1.0 it would blank whole occluded mid-rise streets. All five sit behind
-; `survey_apply`, so the parked recipe above needs no ninth zero.
+; `floor_height_m` is still the measured 2.8 m and stays that way whichever look
+; is loaded — the massing is real and the floor rhythm should be.
 [gd_resource type="ShaderMaterial" load_steps=2 format=3]
 
 [ext_resource type="Shader" path="res://assets/shaders/city_facade_clean.gdshader" id="1_facade"]
@@ -133,18 +90,18 @@ shader_parameter/value_jitter = 0.35
 shader_parameter/warm_cool_jitter = 0.07
 shader_parameter/floor_height_m = 2.8
 shader_parameter/band_storeys = 1.0
-shader_parameter/glass_ratio = 0.44
+shader_parameter/glass_ratio = 0.0
 shader_parameter/bay_width_m = 5.5
 shader_parameter/mullion_ratio = 0.26
-shader_parameter/mullion_darkness = 0.12
+shader_parameter/mullion_darkness = 0.0
 shader_parameter/podium_height_m = 12.0
 shader_parameter/shopfront_base_m = 0.7
 shader_parameter/shopfront_top_m = 4.6
-shader_parameter/shopfront_share = 0.55
+shader_parameter/shopfront_share = 0.0
 shader_parameter/shopfront_pier_ratio = 0.46
 shader_parameter/cornice_thickness_m = 0.5
-shader_parameter/cornice_darkness = 0.28
-shader_parameter/solid_share = 0.27
+shader_parameter/cornice_darkness = 0.0
+shader_parameter/solid_share = 1.0
 shader_parameter/fin_share = 0.2
 shader_parameter/curtain_share = 0.16
 shader_parameter/punched_share = 0.22
@@ -153,7 +110,7 @@ shader_parameter/punched_pier_ratio = 0.52
 shader_parameter/bay_scale_min = 0.72
 shader_parameter/bay_scale_max = 1.45
 shader_parameter/two_storey_share = 0.22
-shader_parameter/accent_share = 0.11
+shader_parameter/accent_share = 0.0
 shader_parameter/accent_course_ratio = 0.0
 shader_parameter/glass_colour = Color(0.21, 0.27, 0.33, 1)
 shader_parameter/glass_tint_b = Color(0.13, 0.22, 0.21, 1)
@@ -179,7 +136,7 @@ shader_parameter/accent_b = Color(0.11, 0.45, 0.72, 1)
 shader_parameter/accent_c = Color(0.95, 0.62, 0.09, 1)
 shader_parameter/accent_opacity = 0.8
 shader_parameter/wall_sky_tint = 0.18
-shader_parameter/floor_line_darkness = 0.11
+shader_parameter/floor_line_darkness = 0.0
 shader_parameter/grounding_height_m = 3.0
 shader_parameter/grounding_darkness = 0.26
 shader_parameter/wall_roughness = 0.82
@@ -190,7 +147,7 @@ shader_parameter/fade_end_m = 244.0
 shader_parameter/lit_window_colour = Color(1, 0.85, 0.55, 1)
 shader_parameter/lit_window_share = 0.0
 shader_parameter/emission_strength = 0.0
-shader_parameter/survey_apply = 1.0
+shader_parameter/survey_apply = 0.0
 shader_parameter/glass_astar = -2.0
 shader_parameter/quiet_shopfront = 1.0
 shader_parameter/quiet_clamp = 1.0
