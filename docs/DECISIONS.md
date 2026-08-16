@@ -3366,7 +3366,7 @@ object the direction says carries the frame's colour (`C*` 86.5 against a frame 
 
 ⚠️ **This record first concluded that nine points "is not affordable", and that was wrong — twice
 over.** It is corrected below rather than edited away, because the reasoning failed in a way worth
-keeping. First, the price is real but the property it threatens is not: at `C*` 69.86 the taxi is
+keeping. First, the price is real but the property it threatens is not: at `C*` 71.63 the taxi is
 still **9× the frame median** and clear of the city's 99th percentile of 39.8, so "the only
 chromatic object in the frame" survives the whole cost. A large margin got smaller; nothing
 inverted. Second, "no tuning recovers it" mistook one *instrument* for the mechanism — see the
@@ -3385,7 +3385,7 @@ the paint row.
 
 | surface | `t01.20` (shade) | `t04.50` (sun) |
 |---|---|---|
-| red paint | `L*` +1.29, `C*` −3.86 | `L*` +1.14, `C*` **79.06 → 69.86** |
+| red paint | `L*` +1.18, `C*` −3.48 | `L*` +0.70, `C*` **79.06 → 71.63** |
 | silver trim | `L*` +0.23, `C*` −0.31 | `L*` +0.06, `C*` **10.00 → 7.59** |
 | dark glazing | `L*` 0.13 → 9.51, sd **0.05 → 6.35** | `L*` 0.52 → 9.28, sd **1.25 → 7.69** |
 
@@ -3477,7 +3477,8 @@ desync shape `P3-11`'s chassis guard exists for, and nothing here would catch it
 | `t08.00` | **+6.03** | — |
 
 Absent at one heading and strong at another, which is what distinguishes a glint from a wash. The
-audit cameras are unmoved — paint `C*` −9.20 exactly as before, glazing +0.28 — so this costs
+audit cameras are unmoved — paint `C*` −9.20 exactly as before at the then-shipped `fresnel_power`
+4.0, glazing +0.28 — so this costs
 nothing where the look was already graded, and fires where it was not.
 
 ⚠️ **On flat geometry a glint is per-facet, not a moving spot.** Every fragment of a pane shares one
@@ -3520,10 +3521,36 @@ it.** Both cost, and roughly additively:
 | 0.12 | 0.55 | **69.86** | **−9.20** |
 | uniform probe | 0.25 | 70.08 | −8.98 |
 
-**So gloss on paint is priced, not refused, and the price is linear in how much is asked for.** The
-shipped setting takes the full −9.20 because the look was the request and the margin covers it. The
-dial is `paint_reflect` / `paint_roughness` in the `.tres`, with `0.12 / 0.9` the half-price middle
-and `0 / 0.9` the matte car this task started from — no rebuild, one file.
+⚠️ **All four rows are at `fresnel_power` 4.0**, which is no longer what ships — see the refund
+below. The *shape* of the table is what survives: gloss on paint is priced, not refused, and the
+price is roughly linear in how much is asked for. The dial is `paint_reflect` / `paint_roughness`
+in the `.tres`, with `0.12 / 0.9` the half-price middle and `0 / 0.9` the matte car this task
+started from — no rebuild, one file.
+
+## Fresnel is not decoration here, and tightening it refunds a fifth of the price
+
+**Asked whether the taxi could "have some fresnel", the answer was that it already does** — every
+surface class has carried `pow(1 - dot(NORMAL, VIEW), fresnel_power)` since this shader existed.
+What was not known is how much work it does.
+
+🔴 **Ablated — `fresnel` forced to 1.0, so the reflection lands at every angle — the paint loses a
+*further* `C*` 13.75** (69.86 → 56.11 at `t04.50`, `L*` rising 43.88 → 46.81). So the fresnel term
+is the whole reason the clearcoat is affordable: it is what keeps the reflection off a panel facing
+the camera, and `paint_face_on` 0.06 is the knob that says so. Without it there is no priced trade,
+only a wash.
+
+✅ **And it was under-tightened. `fresnel_power` 4.0 → 6.5 gives back `C*` +1.77** (69.86 → 71.63 in
+sun, 53.62 → 54.00 in shade) and takes the hue rotation from −7.4° to −6.3°, for a glazing cost of
+**−0.06 `L*`** — the shipped price falls **−9.20 → −7.43**, a 19% refund. A tighter fresnel
+concentrates the sheen nearer the edges, which is both cheaper *and* closer to what "a fresnel
+effect" is usually asking for.
+
+⚠️ **A rim light was evaluated at the same time and held, not refused.** No rule blocks it and it is
+cheap, but nothing measures a problem it solves: silhouette legibility has never been flagged, and
+the car already sits at `C*` 86.5 against a frame median of 7.5. It also spends the `P3-9a`
+recognition budget through `Q27`'s additive-light mechanism. 💡 The frame that would justify it is
+**night** — "one directional light is the look" is a daylight argument, and `Q26`'s unchosen night
+rig has no sun to shape the car at all.
 
 ⚠️ **The residual risk is `P3-9a`, and it is a recognition risk rather than an art one.** The red is
 an identifying feature of 紅的, the gate is ≥3 Hong Kong drivers, and washing it toward pink is

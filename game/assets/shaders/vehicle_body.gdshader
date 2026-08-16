@@ -18,10 +18,19 @@
 //
 //   matte, as it shipped before this file          79.06
 //   `paint_reflect 0.12`, roughness 0.9            73.65   (-5.42)
-//   `paint_reflect 0.12`, roughness 0.55           69.86   (-9.20)  <- shipped
+//   `paint_reflect 0.12`, roughness 0.55           69.86   (-9.20)
+//
+// ...all three at `fresnel_power` 4.0. Shipped is **71.63 (-7.43)**, because
+// tightening the fresnel to 6.5 refunds 1.77 of that for 0.06 `L*` of glazing.
+//
+// ⚠️ **`fresnel` is what makes any of this affordable, and reads as decoration
+// until it is ablated.** Forced to 1.0 — the reflection landing at every angle
+// rather than grazing ones — the paint loses a *further* `C* 13.75`, down to
+// 56.11. It is the term keeping the clearcoat off a panel that faces the
+// camera, which is what `paint_face_on` 0.06 exists to say.
 //
 // The cost is real and roughly linear in what is asked for. It is affordable
-// because the property it threatens survives it: at 69.86 the car is still 9x
+// because the property it threatens survives it: at 71.63 the car is still 9x
 // the frame median of 7.5 and clear of the city's 99th percentile of 39.8, so
 // `ART_DESIGN.md`'s "the only chromatic object in the frame" holds at the
 // bottom of the dial. ⚠️ The residual risk is **recognition** rather than art —
@@ -84,7 +93,7 @@ uniform float glass_reflect : hint_range(0.0, 1.0) = 0.45;
 // rectangle at exactly the angle the chase camera holds it at — which is the
 // angle the player sees for the whole game.
 uniform float glass_face_on : hint_range(0.0, 1.0) = 0.25;
-uniform float fresnel_power : hint_range(1.0, 8.0) = 4.0;
+uniform float fresnel_power : hint_range(1.0, 8.0) = 6.5;
 uniform float glass_roughness : hint_range(0.0, 1.0) = 0.14;
 
 group_uniforms lamp;

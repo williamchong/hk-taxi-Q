@@ -808,9 +808,15 @@ which is a property to tune rather than a defect. Its direction is read from the
 `DirectionalLight3D` and never authored twice.
 
 ⚠️ **Gloss on paint is priced, not refused, and the price is linear.** `paint_reflect 0.12` at the
-stock roughness costs the red `C*` **−5.42**; adding `roughness 0.9 → 0.55` costs **−9.20** in total.
-The shipped car pays the full amount, because at `C*` 69.86 it is still **9× the frame median** and
+stock roughness costs the red `C*` **−5.42**; adding `roughness 0.9 → 0.55` costs **−9.20** in total
+at `fresnel_power` 4.0. The shipped car pays **−7.43** of that, because tightening the fresnel to 6.5
+refunds `C*` +1.77 for −0.06 `L*` of glazing. At `C*` 71.63 it is still **9× the frame median** and
 clear of the city's 99th percentile — the "only chromatic object" property survives the whole cost.
+
+⚠️ **Fresnel is what makes any of this affordable, and it is easy to mistake for decoration.**
+Ablated — the reflection landing at every angle instead of grazing ones — the paint loses a *further*
+`C*` **13.75**. It is the term keeping the clearcoat off a panel facing the camera; there is no
+priced trade without it, only a wash.
 ⚠️ The residual risk is **recognition**, not art: red is an identifying feature of 紅的 and `P3-9a`
 grades exactly that, so this dial is the first thing to back off if the gate scores poorly. See
 `DECISIONS.md` `P3-11c`.
