@@ -3438,9 +3438,16 @@ the view ray and let its own elevation choose between `sky_zenith`, `sky_horizon
 mean figures could not see: the flat 0.34 build and the gradient build have *similar means* and look
 nothing alike.
 
-⚠️ **It is worth more on a car than on a building, which is why it was under-rated here.** A tower's
-glazing changes only as the camera moves; a car turns, so its screens sweep the gradient
-continuously while driving. A static audit frame systematically undersells it.
+⚠️ **This record first claimed the car "sweeps the gradient continuously" as it turns. That is
+wrong, and the correction is the more useful fact.** `bounced.y` selects the band, and `y` is
+**invariant under yaw** — steering rotates the view ray and the surface normal about the vertical
+axis together, so a flat corner moves nothing. What tilts the normal out of plane is **roll and
+pitch**: cornering lean, acceleration squat, braking dive, kerbs. Measured on a skidpad circle at
+fixed lighting and fixed camera-relative pose, the glazing moves `L*` **23.85 → 27.87** across
+headings — genuinely responsive to driving, by about four points, and through the suspension rather
+than the steering. 💡 **A yaw-responsive term would have to be something the sky gradient is not:
+rotationally asymmetric about the vertical.** A sun-glint on `dot(bounced, sun)` is the cheap
+candidate and is not built.
 
 ## The clearcoat, and the correction it forced
 

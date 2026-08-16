@@ -795,8 +795,10 @@ is what the surface *reflects*, which is why this does not reopen textures or pe
 ⚠️ **Strength was never the variable, and two tunings had to be judged wrong before that was clear.**
 A single flat reflection colour is a swatch at every value — faint when weak, painted-on when strong —
 which is the identical failure this document records against the facades. With the gradient in, the
-glazing's `L*` spread went **sd 0.05 → 6.35**. It is worth more on a car than on a tower: a car turns,
-so its screens sweep the gradient continuously while driving, and a static audit frame undersells it.
+glazing's `L*` spread went **sd 0.05 → 6.35**. On a car it responds to **roll and pitch** — cornering lean,
+squat, dive — and *not* to steering, because the band is chosen by the reflected ray's `y` and yaw
+leaves `y` untouched. Measured on a skidpad circle, the glazing moves `L*` 23.85 → 27.87 across
+headings. ⚠️ An earlier draft of this paragraph claimed turning swept the gradient; it does not.
 
 ⚠️ **Gloss on paint is priced, not refused, and the price is linear.** `paint_reflect 0.12` at the
 stock roughness costs the red `C*` **−5.42**; adding `roughness 0.9 → 0.55` costs **−9.20** in total.
