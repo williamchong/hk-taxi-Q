@@ -1,0 +1,65 @@
+[gd_scene load_steps=10 format=3]
+
+; ⚠️ SPIKE — `city_drive.tscn` with Godot's built-in `VehicleBody3D` in place of
+; the custom raycast controller. `P0-5a` measured that vehicle and rejected it,
+; and CLAUDE.md's locked-decisions table records the rejection; this scene exists
+; to be driven, not to ship. `run/main_scene` still boots `city_drive.tscn`.
+;
+; Everything except the car and its harness is the same node for the same
+; reason. See `city_drive.tscn` for why each of them is here — this file does not
+; repeat that reasoning, because two copies of it would drift.
+;
+; ⚠️ **One difference is not the vehicle model.** `chase_camera.gd` gates its
+; speed-based FOV ramp on `target is VehicleController`, and this car is a
+; `VehicleBody3D`, so the FOV never widens with speed here and does in
+; `city_drive.tscn` — the spike feels slower than it is. Fixing it means
+; duck-typing a shipped script, which a rejected vehicle model does not earn.
+;
+; Drive it with:
+;   .claude/skills/run-hk-taxi-q/drive.sh --scene=res://scenes/dev/city_drive_builtin.tscn
+
+[ext_resource type="Script" path="res://scripts/city/city_streamer.gd" id="1_tiles"]
+[ext_resource type="Resource" path="res://tuning/streaming.tres" id="8_streaming"]
+[ext_resource type="Script" path="res://scripts/city/road_surface_preview.gd" id="2_surface"]
+[ext_resource type="PackedScene" path="res://scenes/world/clean_daylight.tscn" id="3_light"]
+[ext_resource type="PackedScene" path="res://scenes/vehicle/taxi_builtin.tscn" id="4_taxi"]
+[ext_resource type="Script" path="res://scripts/camera/chase_camera.gd" id="5_camera"]
+[ext_resource type="Script" path="res://scripts/city/builtin_drive_harness.gd" id="6_harness"]
+[ext_resource type="Script" path="res://scripts/city/road_graph_overlay.gd" id="7_graph"]
+[ext_resource type="Script" path="res://scripts/city/landmarks.gd" id="9_landmarks"]
+
+[node name="CityDriveBuiltin" type="Node3D"]
+script = ExtResource("6_harness")
+vehicle_path = NodePath("TaxiBuiltin")
+
+[node name="Tiles" type="Node3D" parent="."]
+script = ExtResource("1_tiles")
+profile = ExtResource("8_streaming")
+camera_path = NodePath("../CameraRig/Camera3D")
+
+[node name="RoadSurface" type="Node3D" parent="."]
+script = ExtResource("2_surface")
+
+[node name="Landmarks" type="Node3D" parent="."]
+script = ExtResource("9_landmarks")
+
+[node name="Lighting" parent="." instance=ExtResource("3_light")]
+
+; The same fallback transform as `city_drive.tscn`, and a fallback for the same
+; reason — the harness resolves the real start line from the fare node at
+; runtime. Do not hand-edit it to move the spawn.
+[node name="TaxiBuiltin" parent="." instance=ExtResource("4_taxi")]
+transform = Transform3D(0.0704, 0, -0.9975, 0, 1, 0, 0.9975, 0, 0.0704, 172.3485, 6.5796, 26.9396)
+
+[node name="GraphOverlay" type="Node3D" parent="."]
+script = ExtResource("7_graph")
+vehicle_path = NodePath("../TaxiBuiltin")
+
+[node name="CameraRig" type="SpringArm3D" parent="."]
+margin = 0.3
+script = ExtResource("5_camera")
+target_path = NodePath("../TaxiBuiltin")
+camera_path = NodePath("Camera3D")
+
+[node name="Camera3D" type="Camera3D" parent="CameraRig"]
+far = 400.0

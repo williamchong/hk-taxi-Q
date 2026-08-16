@@ -1,0 +1,63 @@
+[gd_scene load_steps=5 format=3]
+
+; ⚠️ SPIKE — the taxi on Godot's built-in `VehicleBody3D`, which `P0-5a`
+; measured and rejected. `scenes/vehicle/taxi.tscn` is the real car. Nothing in
+; the shipped tree instances this; only `scenes/dev/city_drive_builtin.tscn`
+; does. See docs/DECISIONS.md `P0-5a` and the script header.
+;
+; Same mass, same body collider, same wheel positions and the same
+; `tuning/handling.tres` as `taxi.tscn`, so what differs between the two cars is
+; the vehicle model and nothing else.
+;
+; ⚠️ The tyre mesh is `taxi_tyre.glb` and must stay so. Godot's glTF importer
+; turns any node whose name ends in `_wheel` into a `VehicleWheel3D` — which is
+; how `P3-11` lost its wheels — and here that would silently nest a wheel inside
+; a wheel. See docs/ARCHITECTURE.md "The importer can reinstate VehicleWheel3D".
+
+[ext_resource type="Script" path="res://scripts/vehicle/builtin_vehicle_controller.gd" id="1_ctrl"]
+[ext_resource type="Resource" path="res://tuning/handling.tres" id="2_handling"]
+[ext_resource type="PackedScene" path="res://assets/authored/vehicles/taxi_body.glb" id="3_body"]
+[ext_resource type="PackedScene" path="res://assets/authored/vehicles/taxi_tyre.glb" id="4_tyre"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_body"]
+size = Vector3(1.8, 0.7, 4.0)
+
+[node name="TaxiBuiltin" type="VehicleBody3D"]
+mass = 1200.0
+script = ExtResource("1_ctrl")
+profile = ExtResource("2_handling")
+log_telemetry = true
+
+[node name="Body" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35, 0)
+shape = SubResource("BoxShape3D_body")
+
+[node name="Mesh" parent="." instance=ExtResource("3_body")]
+
+; Suspension and friction are written by the controller from the profile at
+; `_ready`, so the four wheels carry only what is geometry or role. Leaving the
+; numbers out of the scene is deliberate: two places to author one spring is how
+; a spike ends up measuring its own drift instead of Godot's.
+[node name="WheelFL" type="VehicleWheel3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.8, 0, -1.3)
+use_as_steering = true
+
+[node name="Visual" parent="WheelFL" instance=ExtResource("4_tyre")]
+
+[node name="WheelFR" type="VehicleWheel3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.8, 0, -1.3)
+use_as_steering = true
+
+[node name="Visual" parent="WheelFR" instance=ExtResource("4_tyre")]
+
+[node name="WheelRL" type="VehicleWheel3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.8, 0, 1.3)
+use_as_traction = true
+
+[node name="Visual" parent="WheelRL" instance=ExtResource("4_tyre")]
+
+[node name="WheelRR" type="VehicleWheel3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.8, 0, 1.3)
+use_as_traction = true
+
+[node name="Visual" parent="WheelRR" instance=ExtResource("4_tyre")]
