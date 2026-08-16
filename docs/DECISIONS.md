@@ -3449,6 +3449,59 @@ than the steering. 💡 **A yaw-responsive term would have to be something the s
 rotationally asymmetric about the vertical.** A sun-glint on `dot(bounced, sun)` is the cheap
 candidate and is not built.
 
+## The sun glint, and why `SPECULAR` could not be it
+
+**The gradient is yaw-blind by construction** (see the correction above), so a highlight that
+responds to *steering* has to come from something rotationally asymmetric about the vertical. The
+sun is the only such thing in the scene.
+
+🔥 **`SPECULAR` was tried first and refused with a measurement.** Raising it 0.5 → 0.9 lifted the
+glazing's mean `L*` by 5.8 while its p99 spread across headings moved only 2.69 → 3.54 — a uniform
+wash, not a moving hotspot — and the glass went back to reading as a panel painted blue. The cause
+is the one behind everything else in this task: **`SPECULAR` scales ambient specular as well as the
+sun's**, and with no probes the ambient half dominates. It also cost the paint a further `C*` −3.08
+(−9.20 → −12.28) for no glint. Reverted to Godot's default.
+
+**Shipped instead: `pow(dot(bounced, -sun_direction), sharpness)`, isolated from the sun alone.**
+⚠️ **`sun_direction` is fed by `sun_glint.gd` from the scene's real `DirectionalLight3D`**, never
+authored in the `.tres`. A typed-in vector would be a second copy of the rig's rotation and would
+drift silently the first time the sun is retuned or `Q26`'s night mode adds a second rig — the
+desync shape `P3-11`'s chassis guard exists for, and nothing here would catch it.
+
+**Measured on the skidpad**, mask fixed from the no-glint frame:
+
+| heading | glazing `L*` | peak pixel |
+|---|---|---|
+| `t04.00` | +2.48 | +23.69 |
+| `t06.00` | **+0.01** | +27.40 |
+| `t08.00` | **+6.03** | — |
+
+Absent at one heading and strong at another, which is what distinguishes a glint from a wash. The
+audit cameras are unmoved — paint `C*` −9.20 exactly as before, glazing +0.28 — so this costs
+nothing where the look was already graded, and fires where it was not.
+
+⚠️ **On flat geometry a glint is per-facet, not a moving spot.** Every fragment of a pane shares one
+normal, so the whole screen lifts at once and the effect reads as a pane *flashing* as the car
+turns rather than as a highlight sliding across it. At `glint_strength 1.1` that flash blew the
+backlight to near-white; 0.4 with `sharpness 24` makes it a lift. Real glass at distance does flash,
+so this is a property to tune rather than a defect — but it is why the strength that looks right on
+a curved reference car is far too high here.
+
+🔴 **A guard added to silence a warning disabled the feature in every measurement, and that is the
+lesson worth keeping.** `sun_glint.gd` first returned early when `get_tree().current_scene` was
+null, to stop a `push_warning` firing on every `tools/check.sh` run. But `driver.gd` instantiates
+the scene and `add_child`s it — **nothing sets `current_scene`**, which only `change_scene_to_*` and
+the boot path assign. So the glint silently kept its default direction through two rounds of
+tuning, and the result read as "the term does nothing" rather than "the term never ran". It is
+found by searching from `get_tree().root`, which is populated on every load path. ⚠️ The tell was
+that the numbers came back *byte-identical* to the no-glint baseline; a term that is running but
+mistuned does not reproduce a baseline to two decimals.
+
+⚠️ **One measurement artefact, recorded because it inverted a sign.** The first read of the glint
+showed a heading getting *darker*, which is impossible for a purely additive term. The mask was
+`L* ∈ (10, 50)` recomputed per frame, so brightening pushed pixels out of the sample. Masks come
+from the baseline frame and are applied to both.
+
 ## The clearcoat, and the correction it forced
 
 **The user asked for the body to look "glossy like just waxed new cars".** The probe above had been

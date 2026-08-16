@@ -61,10 +61,15 @@ const float MARKER_LAMP = 2.0;
 // at `glass_reflect 0.34` the backlight read as a panel painted blue, and the
 // fault was flatness rather than strength.
 //
-// ⚠️ This is worth more on a car than on a building. A tower's glazing changes
-// only as the camera moves; **a car turns**, so its screens sweep the gradient
-// continuously while driving, which is the cue that reads as glass rather than
-// as paint. Matched to the facades' values so the car and the city agree about
+// ⚠️ **What moves this on a car is roll and pitch, not steering** — and the
+// first version of this comment claimed the opposite. `bounced.y` is the only
+// thing selecting a band, and a vector's `y` is *invariant under yaw*: turning
+// rotates the view ray and the normal about the vertical axis together, so a
+// flat corner changes nothing here. Cornering lean, acceleration squat, braking
+// dive and kerbs are what tilt the normal out of plane. Measured on a skidpad
+// circle at fixed lighting, the glazing moves `L* 23.85-27.87` across headings —
+// real, worth having, and about four points rather than the sweep first
+// claimed. Matched to the facades' values so the car and the city agree about
 // what the sky is.
 uniform vec3 sky_zenith : source_color = vec3(0.24, 0.47, 0.78);
 uniform vec3 sky_horizon : source_color = vec3(0.85, 0.91, 0.96);
@@ -113,6 +118,28 @@ uniform float paint_reflect : hint_range(0.0, 1.0) = 0.12;
 // head-on is exactly where its colour must survive untouched.
 uniform float paint_face_on : hint_range(0.0, 1.0) = 0.06;
 
+group_uniforms glint;
+
+// The sun glint — a highlight that sweeps as the car changes heading.
+//
+// ⚠️ **`SPECULAR` was tried first and is the wrong lever, measured.** Raising it
+// 0.5 -> 0.9 brightened the glazing's mean `L*` by 5.8 while its p99 spread
+// across headings moved only 2.69 -> 3.54: a uniform lift, not a moving
+// hotspot. The cause is the same one behind everything else in this file —
+// `SPECULAR` scales *ambient* specular as well as the sun's, and with no probes
+// the ambient half dominates, so the glass went back to reading as a panel
+// painted blue. Reverted to Godot's 0.5 default.
+//
+// So the sun is isolated explicitly. ⚠️ **`sun_direction` is fed by
+// `sun_glint.gd` from the scene's actual `DirectionalLight3D`** rather than
+// authored here: a hand-copied vector would be a second copy of the rig's
+// rotation and would drift silently the first time the sun is retuned or a
+// night mode is added — the desync shape `P3-11`'s chassis guard exists for.
+// The script reads the authority; this uniform is only where it lands.
+uniform vec3 sun_direction = vec3(0.0, -1.0, 0.0);
+uniform float glint_strength : hint_range(0.0, 4.0) = 1.1;
+uniform float glint_sharpness : hint_range(1.0, 256.0) = 48.0;
+
 varying flat float marker;
 // World space, for the reflected ray. Interpolated rather than `flat`: the
 // gradient has to vary *across* a screen, or a windscreen is one colour again
@@ -158,12 +185,20 @@ void fragment() {
 		smoothstep(-0.08, 0.08, bounced.y)
 	);
 
+	// Isolated from the sun alone, so it moves with heading where the sky
+	// gradient cannot: `bounced.y` is invariant under yaw, `bounced · sun` is
+	// not. Confined to glass and lenses — on paint it is a second way to spend
+	// the chroma the clearcoat is already paying for.
+	float glint = pow(max(dot(bounced, -normalize(sun_direction)), 0.0), glint_sharpness);
+
 	float roughness = paint_roughness;
 	if (is_glass) {
 		roughness = glass_roughness;
+		albedo += sky_horizon * glint * glint_strength;
 		albedo = mix(albedo, mirrored, glass_reflect * mix(glass_face_on, 1.0, fresnel));
 	} else if (is_lamp) {
 		roughness = lamp_roughness;
+		albedo += sky_horizon * glint * glint_strength * 0.5;
 		albedo = mix(albedo, mirrored, lamp_reflect * fresnel);
 	} else {
 		// Paint and trim. `MARKER_TRIM` shares this branch rather than taking one

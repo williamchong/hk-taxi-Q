@@ -50,3 +50,5 @@ shader_parameter/lamp_reflect = 0.06
 shader_parameter/paint_roughness = 0.55
 shader_parameter/paint_reflect = 0.12
 shader_parameter/paint_face_on = 0.06
+shader_parameter/glint_strength = 0.4
+shader_parameter/glint_sharpness = 24.0

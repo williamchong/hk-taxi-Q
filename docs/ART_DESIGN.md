@@ -800,6 +800,13 @@ squat, dive — and *not* to steering, because the band is chosen by the reflect
 leaves `y` untouched. Measured on a skidpad circle, the glazing moves `L*` 23.85 → 27.87 across
 headings. ⚠️ An earlier draft of this paragraph claimed turning swept the gradient; it does not.
 
+⚠️ **The one thing that responds to steering is the sun glint**, because the sky gradient cannot:
+it is rotationally symmetric about the vertical, so no heading change reaches it. A sun term is
+asymmetric about that axis and does. ⚠️ On flat-shaded geometry it is **per-facet** — a pane shares
+one normal, so the screen flashes whole as the car turns rather than a highlight sliding across it,
+which is a property to tune rather than a defect. Its direction is read from the scene's real
+`DirectionalLight3D` and never authored twice.
+
 ⚠️ **Gloss on paint is priced, not refused, and the price is linear.** `paint_reflect 0.12` at the
 stock roughness costs the red `C*` **−5.42**; adding `roughness 0.9 → 0.55` costs **−9.20** in total.
 The shipped car pays the full amount, because at `C*` 69.86 it is still **9× the frame median** and
