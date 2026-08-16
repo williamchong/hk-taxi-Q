@@ -861,15 +861,34 @@ and holds `L*` at 70.17, and the rendered trim drops from `C*` 10.00 to 6.24 in 
 colour and not in the shader, because `SILVER` is also the wheel hubs and those are on the tyre mesh,
 which gets no shader.
 
-🔴 **The tail lens is still not fixed, and `P3-11c` did not fix it.** It is marked as a lens and
-takes the lens roughness, which separates it only where light falls on it — at both audit cameras the
-rear face takes none, and lamp pixels moved `L*` +0.77 in shade and +0.41 in sun. **Both obvious
-fixes are closed**: recolouring the lens is the earlier bug and a white tail lamp besides, and the
-bezel that bought the contrast was removed on request with the trade understood. Faking that bezel in
-the shader is the same reversal wearing a different hat. This wants a decision, not more tuning.
+✅ **The tail lens is fixed, and the fix was a circuit rather than a colour** (`P3-11d`). `P3-11c`
+left it marked as a lens and taking the lens roughness, which separates it only where light falls on
+it — at both audit cameras the rear face takes none, and lamp pixels moved `L*` +0.77 in shade and
++0.41 in sun. It asked for a decision rather than more tuning, because **both obvious fixes were
+closed**: recolouring the lens is the earlier bug and a white tail lamp besides, and faking the
+removed bezel is that reversal wearing a different hat. The decision is that the lamp **lights**.
+Under braking the lens goes `L* 2.29 → 72.72` and reads instantly; coasting it is still invisible,
+which is what an unlit brake lamp is supposed to be.
 
-⚠️ **The palette is at seven and the table above says 3–5.** Red, silver, black glazing, amber,
-white plate, yellow plate and badge green. Each was granted for a stated reason and the count is
+**The lamps switch, and the payload is the other half of the marker.** `UV.x` — reserved and zero
+since `P3-11c` — carries a circuit id per lens: brake, reverse, and an indicator per side.
+`vehicle_lamps.gd` decides which are live from the car's own state and writes them **per instance**,
+because the body material is shared by the whole roster and one car braking must not brake the rest.
+⚠️ **Emission is the lens's hue at a fixed intensity, not its albedo scaled.** An unlit lens is dark
+because of its reflector, not because it is a weaker bulb, and conflating the two makes "invisible
+when off" and "bright when on" one dial pulled two ways — which the high-level brake lamp in the
+backlight cannot live with. ⚠️ `lamp_emission` trades bloom against redness and nothing else past
+1.2: the tonemap is ACES, the red channel is already clipped, so more emission is more *white*.
+Shipped at 1.6, `C*` 44 at the core; at 2.3 it is a white lamp with a red glow round it.
+
+⚠️ **Indicators need a hold, not just a threshold.** An arcade car crosses hard lock constantly, so
+lock alone strobes the tail through every flick and correction until the lamp stops meaning
+"turning". Half a second of held lock, at 0.35 of the lock available *at that speed*.
+
+⚠️ **The palette is at eight and the table above says 3–5.** Red, silver, black glazing, amber,
+white plate, yellow plate, badge green — and now a near-black deep red, whose *darkness* is the
+feature: it is the high-level brake lamp's lens, and `RED` there would be a bright bar across a
+black window every time the car coasts. Each was granted for a stated reason and the count is
 recorded rather than enforced — but it is now the standing exception, not a one-off, and the table
 should either move or start being applied.
 

@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://scripts/vehicle/vehicle_controller.gd" id="1_ctrl"]
 [ext_resource type="Script" path="res://scripts/vehicle/wheel_mount.gd" id="2_wheel"]
@@ -8,6 +8,7 @@
 [ext_resource type="Script" path="res://scripts/vehicle/wheel_visual.gd" id="6_wheelvis"]
 [ext_resource type="Script" path="res://scripts/vehicle/sun_glint.gd" id="7_glint"]
 [ext_resource type="Material" path="res://tuning/vehicle_body.tres" id="8_bodymat"]
+[ext_resource type="Script" path="res://scripts/vehicle/vehicle_lamps.gd" id="9_lamps"]
 
 ; Not the visual body, deliberately — see docs/PROGRESS.md, P3-11. Godot strips
 ; these comments on any editor resave, so the reasoning lives there, not here.
@@ -23,7 +24,13 @@ profile = ExtResource("3_handling")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35, 0)
 shape = SubResource("BoxShape3D_body")
 
+; The lamp rig rides on the body mesh rather than beside it, the same way
+; `WheelVisual` rides on the tyre: the circuits are per-instance shader state,
+; and the instance is the `MeshInstance3D` inside this .glb. See
+; scripts/vehicle/vehicle_lamps.gd. Godot strips these comments on any editor
+; resave, so the reasoning lives in the script, not here.
 [node name="Mesh" parent="." instance=ExtResource("4_body")]
+script = ExtResource("9_lamps")
 
 ; Feeds the body shader the scene's real sun, so the glint never carries a
 ; second copy of the rig's rotation. See scripts/vehicle/sun_glint.gd.

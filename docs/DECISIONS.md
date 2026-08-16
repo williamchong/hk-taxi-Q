@@ -3395,7 +3395,8 @@ the paint row.
 end of the dial below, not a superseded measurement.
 
 **The payload.** `UV.y` carries a surface marker, `floor()`-read, the same shape the tiles use;
-`UV.x` is reserved and zero. Markers are `PAINT` / `GLASS` / `LAMP` / `TRIM`. ⚠️ **`TRIM` is carried but
+`UV.x` is reserved and zero — ⚠️ **`P3-11d` spent it**, on the switched lamp circuit. Markers are
+`PAINT` / `GLASS` / `LAMP` / `TRIM`. ⚠️ **`TRIM` is carried but
 takes no branch of its own** — it shares paint's clearcoat, because silver is a near-neutral with
 the least hue of its own to defend and is the surface a sky wash disfigures first. Keeping it
 separable costs nothing now and is what a later brightwork treatment would need; the tiles reserved
@@ -3421,7 +3422,8 @@ bump. Lamp pixels moved `L*` **+0.77** in shade and **+0.41** in sun — real, a
 fixes that would work are both closed: recolouring the lens is the earlier bug and a white tail lamp
 besides, and the bezel behind the cluster **was removed on request with the trade understood**.
 Faking that bezel in the shader is the same reversal wearing a different hat, so it was not done.
-This needs a decision, not another round of tuning.
+This needs a decision, not another round of tuning. ✅ **`P3-11d` is that decision** — the lens is
+wired to a brake circuit and lights, which recolours nothing and puts nothing behind the cluster.
 
 ## The reflection needed a gradient, and strength was never the variable
 
@@ -3581,6 +3583,100 @@ mistuned does not reproduce a baseline to two decimals.
 showed a heading getting *darker*, which is impossible for a purely additive term. The mask was
 `L* ∈ (10, 50)` recomputed per frame, so brightening pushed pixels out of the sample. Masks come
 from the baseline frame and are applied to both.
+
+## `P3-11d` — The lamps switch, and that is what finally separates the red lens
+
+**Status.** 🟡 Awaiting review — shipped in `tools/make_vehicle.py` (`UV.x` circuits, `DEEP_RED`,
+`_high_brake_lamp`), `vehicle_body.gdshader`, `vehicle_body.tres`, `scripts/vehicle/vehicle_lamps.gd`
+and `scripts/vehicle/vehicle_controller.gd`; graded on paired driver frames at `t03.30` ·
+**Owner.** `P3-11`
+
+**The question asked.** Brake lamps that light under braking, reverse lamps under reverse, and
+indicators that blink on the side the car is turning.
+
+**It closes `P3-11c`'s one open 🔴.** That round left the red tail lens unfixed and said so in
+terms: it is `RED` on `RED` bodywork with no bezel, shading alone moved it `L*` +0.77 in shade and
++0.41 in sun — "real, and not enough" — and **both obvious fixes were closed**, recolouring the lens
+being the earlier bug and faking the removed bezel being that reversal wearing a different hat. It
+asked for a decision rather than another round of tuning. This is the decision: a lens that
+**lights** separates itself, it recolours nothing, and it puts nothing back behind the cluster.
+⚠️ The lens is still invisible when the car is coasting, and that is now correct rather than a
+defect — an unlit brake lamp is supposed to disappear.
+
+**The payload is `UV.x`, which `P3-11c` reserved and left at zero.** `floor(UV.x)` is the switched
+circuit: `NONE` / `BRAKE` / `REVERSE` / `INDICATOR_L` / `INDICATOR_R`. ⚠️ **A second channel rather
+than four more `UV.y` markers**, because the two questions are independent — a lit lens still wants
+the lens roughness and the lens reflection, and folding the wiring into the marker would make the
+shading branch enumerate it. Left and right are **separate** circuits: one amber circuit is a hazard
+warning, not a turn, and a swapped pair signals the opposite of where the car is going. Neither
+failure reads as a bug in a screenshot, so both are held in
+`test_the_indicators_are_split_left_from_right`.
+
+**Names are the wiring, and a rename is a rewiring.** `LAMP_CIRCUITS` is keyed on full part names —
+the tail cluster is one prefix and three circuits — and the tail lenses were renamed from `_0/_1/_2`
+to `_indicator` / `_reverse` / `_brake` so the stacking order and the wiring are one list.
+⚠️ `_check_wiring` raises in the *generator* rather than in a test, because `CIRCUIT_NONE` is a
+valid value meaning "never lights": a lens that loses its key ships a well-formed file, imports
+clean, renders, and is simply dark for ever.
+
+**⚠️ The circuits are `instance uniform`, and that is not an optimisation.** `vehicle_body.tres` is
+one shared resource — `generated_scene_import.gd` hands the same material to every mesh that asks
+for `vehicle_body` by name — so a plain `set_shader_parameter` would put the whole roster on one
+brake pedal, and `ART_DESIGN.md` schedules an AI red taxi on this body. `sun_toward` stays a plain
+uniform for the mirror-image reason: there is one sun and every car agrees where it is. For the same
+reason `vehicle_lamps.gd` reads the *car* and never `InputRouter` — reading the player's input works
+exactly once, and then every AI taxi indicates whenever the player turns.
+
+**One pedal, two lamps, and one statement of the rule.** `brake_reverse` means braking above
+`STATIONARY_KPH` and reverse below it, which is a rule and not an input. `VehicleController` now
+publishes `is_braking()` / `is_reversing()` and `_longitudinal_force()` reads them, so the lamp is
+lit exactly when the brakes are applied. ⚠️ At a standstill with the pedal held the **reverse** lamps
+light, not the brake lamps — reverse is what the pedal is asking for.
+
+**The high-level brake lamp, and the shader change it forced.** Asked for as "only visible when the
+brake light is on", which is a harder specification than it sounds: the emission was
+`albedo × lamp_emission`, so "invisible when off" and "bright when on" were the same dial pulled in
+opposite directions. Fixed by **normalising the hue and discarding the level** — an unlit lens is
+dark because of its reflector, not because it is a weaker bulb — which let the strip be authored at
+`DEEP_RED (58, 10, 12)` and burn at the same intensity as every other lens. ⚠️ **An eighth palette
+colour**, on a table that says 3–5 and a count `ART_DESIGN.md` already calls the standing exception;
+granted because its *darkness* is the feature and `RED` would be a bright bar across a black window
+every time the car coasts. ⚠️ "Inside the window" is a **look, not a coordinate** — the glazing is
+opaque, so a lamp behind it is never drawn; it is seated `FIXTURE_PROUD_M` clear of the backlight,
+against the 30° rake, exactly as `_seated_depth` seats the tail lamps against the nose profile.
+
+**⚠️ `lamp_emission` buys bloom and spends redness, and by 1.2 it is spending nothing else.** The
+tonemap is ACES, which desaturates a clipped channel toward white, and the lens's red channel is at
+255 from 1.2 upward — so every further unit lands on green and blue. Measured on the strip, the same
+294 px, braking at `t03.30`:
+
+| `lamp_emission` | `L*` | `C*` | mean sRGB |
+|---|---|---|---|
+| 0.0 (ablated) | 2.29 | 9.35 | (16, 4, 15) |
+| 1.2 | 67.04 | 56.44 | (255, 123, 120) |
+| **1.6 shipped** | **72.72** | **44.34** | (255, 149, 142) |
+| 2.3 | 79.17 | 31.81 | (255, 176, 170) |
+
+`L* 2.29 → 72.72` is the whole feature: the lens is black when the circuit is out. 1.6 is the knee —
+over the 1.0 glow threshold by enough to carry a halo, still `C*` 44 at the core. **2.3 is a white
+lamp with a red glow round it**, which is the failure this document has refused twice already.
+
+**Indicators need a hold as well as a threshold, and the threshold cannot do it alone.** One says
+how hard a turn is, the other how long it lasts, and an arcade car crosses hard lock constantly — a
+flick round a parked lorry, a correction out of a drift, a lane change. Without `steer_hold_s` the
+tail strobes amber through all of them, which is worse than no indicator: it stops meaning
+"turning". Held at **0.5 s**, on a threshold of 0.35 of the lock available *at that speed* — a
+fraction rather than an angle, because full lock at 140 km/h is a quarter of full lock parked.
+⚠️ Swapping sides restarts the hold; one lock straight to the other is two turns, not one long one.
+The cost is that the lamp is late by half a second, which is the honest thing for it to be: this is
+a read-out of what the car is doing, not a signal of intent.
+
+**What is deliberately not wired.** Headlamps and fog lamps ship `CIRCUIT_NONE` — lenses that catch
+the sun and never light. There is one lighting rig and it is daytime, so there is nothing for a
+headlamp to switch on *for*; `Q26`'s night mode is what would wire them, and the channel is already
+there for it.
+
+**See.** `P3-11` · `P3-11c` · `Q26` · `Q27` · `ART_DESIGN.md` "Vehicles"
 
 ## Two shadow cascades at 400 m, not four at 600
 

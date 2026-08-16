@@ -38,10 +38,17 @@ from make_vehicle import (
     AMBER,
     BADGE_GREEN,
     BODY_MATERIAL,
+    CIRCUIT_BRAKE,
+    CIRCUIT_INDICATOR_L,
+    CIRCUIT_INDICATOR_R,
+    CIRCUIT_NONE,
+    CIRCUIT_REVERSE,
     DARK,
+    DEEP_RED,
     FIXTURE_PROUD_M,
     GLASS,
     LAMP,
+    LAMP_CIRCUITS,
     MARKER_GLASS,
     MARKER_LAMP,
     MARKER_PAINT,
@@ -51,7 +58,9 @@ from make_vehicle import (
     Chassis,
     Proportions,
     _badge,
+    _check_wiring,
     _flush_fixture,
+    _high_brake_lamp,
     _plates,
     _rear_door_z_m,
     _wheel,
@@ -72,20 +81,19 @@ SHIPPED = ROOT / "game" / "assets" / "authored" / "vehicles"
 
 # `ART_DESIGN.md`'s ceiling for one vehicle.
 TRIANGLE_CEILING = 2000
-PALETTE = (RED, SILVER, DARK, GLASS, LAMP, AMBER, BADGE_GREEN)
+PALETTE = (RED, SILVER, DARK, GLASS, LAMP, AMBER, BADGE_GREEN, DEEP_RED)
 
 
-def _rgbs(mesh: MeshData) -> set[Colour]:
-    """Every distinct colour on a mesh, as plain int tuples.
+def _rgbs(mesh: MeshData, where: np.ndarray | None = None) -> set[Colour]:
+    """Every distinct colour on a mesh, or on the vertices `where` selects.
 
     `np.unique` returns rows of `np.uint8`, which compare unequal to the plain
     tuples in `PALETTE` unless converted — and indexing `[0]` to dodge that is
     what let a two-coloured plate pass an equality check.
     """
     assert mesh.colours is not None, f"{mesh.name} carries no colours"
-    return {
-        tuple(int(channel) for channel in rgb) for rgb in np.unique(mesh.colours[:, :3], axis=0)
-    }
+    rgb = mesh.colours[:, :3] if where is None else mesh.colours[where, :3]
+    return {tuple(int(channel) for channel in row) for row in np.unique(rgb, axis=0)}
 
 
 def _tres_float(text: str, field: str) -> float:
@@ -793,11 +801,13 @@ class TestTaxiContract:
             assert len(mesh.colours) == len(mesh.positions)
 
     def test_the_palette_is_the_declared_colours(self, meshes: list[MeshData]) -> None:
-        """`ART_DESIGN.md` asks for 3-5; this is seven. Both extras are
+        """`ART_DESIGN.md` asks for 3-5; this is eight. All three extras are
         deliberate: AMBER because the tail cluster stacks three lenses and two
         colours cannot express three, BADGE_GREEN because the 4 SEATS badge
         stopped being a texture and a green dome is the whole of what is left
-        of it. The assertion is that nothing *else* creeps in."""
+        of it, and DEEP_RED because the high-level brake lamp has to vanish
+        against the glazing it sits on and RED cannot. The assertion is that
+        nothing *else* creeps in."""
         used = set().union(*(_rgbs(mesh) for mesh in meshes))
         assert used <= set(PALETTE), f"unexpected colour: {sorted(used - set(PALETTE))}"
 
@@ -859,14 +869,6 @@ class TestSurfaceMarkers:
         assert np.array_equal(markers, np.floor(markers))
         assert set(markers.tolist()) <= {MARKER_PAINT, MARKER_GLASS, MARKER_LAMP, MARKER_TRIM}
 
-    def test_the_reserved_coordinate_is_left_at_zero(self, meshes: list[MeshData]) -> None:
-        """A tile spends `UV.x` on metres above its own base. Nothing on a 4 m
-        car needs that, and shipping noise in a reserved field is how a later
-        consumer inherits a value nobody chose."""
-        body = meshes[0]
-        assert body.uvs is not None
-        assert not body.uvs[:, 0].any()
-
     def test_the_glazing_is_exactly_the_glass_coloured_vertices(
         self, meshes: list[MeshData]
     ) -> None:
@@ -909,3 +911,118 @@ class TestSurfaceMarkers:
             assert (markers[worn] == MARKER_PAINT).any(), (
                 f"every {name} vertex is marked as a lens — the plates are being over-marked"
             )
+
+
+class TestLampCircuits:
+    """Which lamps switch, and on what (`P3-11d`).
+
+    `UV.x` carries the circuit; `vehicle_lamps.gd` decides which circuits are
+    live and `vehicle_body.gdshader` lights them. Every failure here is silent
+    in exactly the way `TestSurfaceMarkers` describes, with one addition that is
+    worse: `CIRCUIT_NONE` is a *valid* value meaning "never lights", so a lens
+    that loses its wiring ships a well-formed file, imports clean, renders, and
+    is simply dark. Nothing but a graded frame would notice.
+    """
+
+    @staticmethod
+    def _circuits(body: MeshData) -> np.ndarray:
+        assert body.uvs is not None, "the body carries no shader payload"
+        return body.uvs[:, 0]
+
+    def test_every_circuit_is_an_exact_integer(self, meshes: list[MeshData]) -> None:
+        """The shader indexes a `vec4` with `int(UV.x) - 1`, so 2.9999 selects
+        the brake channel for a reverse lens and no interpolation error is
+        recoverable downstream. Each part is stamped whole before the merge."""
+        circuits = self._circuits(meshes[0])
+        assert np.array_equal(circuits, np.floor(circuits))
+        assert set(circuits.tolist()) <= {
+            CIRCUIT_NONE,
+            CIRCUIT_BRAKE,
+            CIRCUIT_REVERSE,
+            CIRCUIT_INDICATOR_L,
+            CIRCUIT_INDICATOR_R,
+        }
+
+    def test_every_circuit_reaches_the_car(self, meshes: list[MeshData]) -> None:
+        """A circuit the shader can switch and no vertex answers to is a lamp
+        that never lights, and `vehicle_lamps.gd` cannot tell the difference —
+        it writes the same four floats either way."""
+        present = set(self._circuits(meshes[0]).tolist())
+        for circuit in set(LAMP_CIRCUITS.values()):
+            assert circuit in present, f"circuit {circuit} is wired to no geometry"
+
+    def test_only_a_lens_is_ever_switched(self, meshes: list[MeshData]) -> None:
+        """⚠️ The shader only reads `UV.x` inside its `MARKER_LAMP` branch, so a
+        circuit stamped on bodywork is invisible until someone moves that read —
+        at which point a door panel starts flashing amber. Held here instead."""
+        body = meshes[0]
+        assert body.uvs is not None
+        switched = self._circuits(body) != CIRCUIT_NONE
+        assert np.all(body.uvs[switched, 1] == MARKER_LAMP)
+
+    def test_the_indicators_are_split_left_from_right(self, meshes: list[MeshData]) -> None:
+        """⚠️ **The one failure that still looks like a working feature.** One
+        amber circuit lights both flanks, which is a hazard warning rather than a
+        turn — and a swapped pair signals the opposite of where the car is going.
+        Neither reads as a bug in a screenshot, so it is arithmetic here: `-Z` is
+        forward, so the car's right is `+X`."""
+        body = meshes[0]
+        circuits = self._circuits(body)
+        x = body.positions[:, 0]
+        assert np.all(x[circuits == CIRCUIT_INDICATOR_L] < 0.0)
+        assert np.all(x[circuits == CIRCUIT_INDICATOR_R] > 0.0)
+
+    def test_the_brake_and_reverse_lenses_are_all_at_the_rear(self, meshes: list[MeshData]) -> None:
+        """Every lens on either circuit is behind the car's middle and spans both
+        sides of its centreline. The colour half is the interesting one: the
+        outer brake lens is `RED`, which is why it needed a circuit at all — it
+        is `RED` on `RED` bodywork and `P3-11c` measured shading alone as not
+        enough to separate it. Lighting the authored colour is the fix that
+        recolours nothing. `DEEP_RED` is the high-level strip, which is the
+        opposite problem: it has to vanish when the circuit is out."""
+        body = meshes[0]
+        assert body.colours is not None
+        circuits = self._circuits(body)
+        wanted = {CIRCUIT_BRAKE: {RED, DEEP_RED}, CIRCUIT_REVERSE: {LAMP}}
+        for circuit, colours in wanted.items():
+            on = circuits == circuit
+            assert np.all(body.positions[on, 2] > 0.0), f"circuit {circuit} is not at the rear"
+            worn = _rgbs(body, on)
+            assert worn == colours, f"circuit {circuit} wears {sorted(worn)}"
+            assert body.positions[on, 0].min() < 0.0 < body.positions[on, 0].max(), (
+                f"circuit {circuit} is only on one side of the car"
+            )
+
+    def test_the_high_level_lamp_sits_in_the_backlight(self, meshes: list[MeshData]) -> None:
+        """⚠️ **Seated against a raked surface, and both failures are silent.**
+        Too far back and it floats off the glass on a stalk; too far forward and
+        it sinks into it, which at this rake happens to the top edge alone — so
+        the lamp is still visible, just half as tall as it was authored, and no
+        count or bound reports it.
+
+        Held against the backlight plane the greenhouse actually builds, so a
+        change to `backlight_rake_deg` or `cabin_rear_z_m` moves both sides of
+        this together instead of stranding the lamp behind the window."""
+        shape = Proportions()
+        lamp = _high_brake_lamp(shape)
+        low, high = lamp.aabb()
+
+        band = (shape.belt_y_m, shape.glass_top_y_m)
+        assert band[0] < low[1] and high[1] < band[1], "the lamp is not inside the glazed band"
+
+        # The plane at each edge of the lamp, from the same rake the loft uses.
+        plane_at_top = shape.cabin_ends_m(high[1] - shape.belt_y_m)[1]
+        plane_at_bottom = shape.cabin_ends_m(low[1] - shape.belt_y_m)[1]
+        assert low[2] == pytest.approx(plane_at_top), "the lamp's back does not reach the glass"
+        assert high[2] == pytest.approx(plane_at_bottom + FIXTURE_PROUD_M), (
+            "the lamp does not stand clear of the glass along its whole height"
+        )
+
+    def test_a_renamed_lamp_is_refused_rather_than_shipped_dark(self) -> None:
+        """`_check_wiring` is the guard, and it runs in the generator rather than
+        only here: the person who renames a part is the person regenerating the
+        `.glb`, and `pytest` is a separate step a regenerate does not require."""
+        parts = [box((0.0, 0.0, 0.0), (1.0, 1.0, 1.0), RED, name=n) for n in LAMP_CIRCUITS]
+        _check_wiring(parts)
+        with pytest.raises(ValueError, match="wired to nothing"):
+            _check_wiring(parts[1:])

@@ -47,6 +47,19 @@ var _corner_mass: float = 0.0
 var _ray_length: float = 0.0
 
 var _steer_angle: float = 0.0
+## Steering as a signed fraction of the lock available at this speed: -1.0 is
+## full left, +1.0 is full right.
+##
+## Published because the indicators need to know the car is turning, and it has
+## to be a *ratio*: lock runs from steer_angle_max_deg at rest to
+## steer_angle_at_top_deg near the limiter, so one threshold in degrees means
+## "a nudge" parked and "everything the car has" at speed.
+##
+## ⚠️ Sign follows InputRouter.steer, not _steer_angle. The physics angle is
+## negated on the way in — a positive rotation about +Y turns -Z forward toward
+## -X, which is left — and a lamp rig reading the raw angle would flash the
+## indicator on the wrong side of the car, which looks like a working feature.
+var steer_ratio: float = 0.0
 var _upside_down_for: float = 0.0
 ## Recomputed once per tick rather than per wheel — they are identical across
 ## the four, and the steered pair differs only by the steering rotation.
@@ -55,6 +68,15 @@ var _upside_down_for: float = 0.0
 ## the car's speed wants the same number in the same tick, and
 ## forward_speed_kph() recomputes a dot product each time it is asked.
 var speed_kph: float = 0.0
+## The brake/reverse pedal, sampled once per tick.
+##
+## ⚠️ **Cached so that this controller is the only thing on the car that reads
+## InputRouter**, which is what makes "the lamps read the car" true rather than
+## nearly true: `is_braking()` reading the autoload directly would report the
+## *player's* pedal for every vehicle sharing this script, and the roster puts
+## an AI taxi on it. Swapping this field for an AI's own intent is then the whole
+## of what a driven car needs — nothing downstream asks where it came from.
+var brake_input: float = 0.0
 var _forward: Vector3 = Vector3.FORWARD
 var _right: Vector3 = Vector3.RIGHT
 var _steered_forward: Vector3 = Vector3.FORWARD
@@ -70,6 +92,26 @@ var _ray_query := PhysicsRayQueryParameters3D.new()
 ## empty — which in a preview scene, where a car can never appear, is for ever.
 static func first_in(tree: SceneTree) -> VehicleController:
 	return tree.get_first_node_in_group(GROUP) as VehicleController
+
+
+## The controller above a node, or null.
+##
+## Climbs rather than taking get_parent(), because a suspension pivot or a
+## re-parented mesh between the two is legal — VehicleController collects its
+## own mounts with a recursive find_children — and a fixed one-step walk
+## dereferences null the moment anything is interposed.
+##
+## ⚠️ Not first_in(): that is a group lookup returning whichever car is first,
+## which is right for a dev overlay and wrong for anything that belongs to *this*
+## car. A lamp rig using it would light the wrong vehicle.
+static func above(node: Node) -> VehicleController:
+	var walk: Node = node
+	while walk != null:
+		var controller := walk as VehicleController
+		if controller != null:
+			return controller
+		walk = walk.get_parent()
+	return null
 
 
 func _ready() -> void:
@@ -142,6 +184,7 @@ func _physics_process(delta: float) -> void:
 		return
 
 	speed_kph = forward_speed_kph()
+	brake_input = InputRouter.brake_reverse
 	_update_steering(delta)
 	_forward = -global_basis.z
 	_right = global_basis.x
@@ -160,6 +203,28 @@ func forward_speed_kph() -> float:
 	return linear_velocity.dot(-global_basis.z) * 3.6
 
 
+## True while the brake/reverse pedal is slowing the car rather than backing it.
+##
+## ⚠️ **One pedal serves both, and the split is a rule, not an input.** Which of
+## the two the driver gets depends on the car's own speed, so anything that
+## re-derives it from the pedal alone is a second copy that drifts the first time
+## STATIONARY_KPH moves. _longitudinal_force() reads these, so there is exactly
+## one statement of the rule and the brake lamp is on precisely when the brakes
+## are. ⚠️ builtin_vehicle_controller.gd is the one copy that remains, and it is
+## the rejected P0-5a spike rather than a car anything ships.
+func is_braking() -> bool:
+	return not is_zero_approx(brake_input) and speed_kph > STATIONARY_KPH
+
+
+## True while the pedal is driving the car backwards. See is_braking().
+##
+## Covers reversing at speed as well as pulling away from rest: once the car is
+## moving backwards speed_kph is negative, so it stays below STATIONARY_KPH and
+## the pedal keeps meaning reverse until it is released.
+func is_reversing() -> bool:
+	return not is_zero_approx(brake_input) and speed_kph <= STATIONARY_KPH
+
+
 func _update_steering(delta: float) -> void:
 	var speed_ratio: float = clampf(absf(speed_kph) / profile.max_speed_kph, 0.0, 1.0)
 	var max_angle: float = deg_to_rad(
@@ -174,6 +239,11 @@ func _update_steering(delta: float) -> void:
 		profile.steer_attack_s if absf(target) > absf(_steer_angle) else profile.steer_release_s
 	)
 	_steer_angle = move_toward(_steer_angle, target, (max_angle / seconds) * delta)
+	# Guarded because max_angle is a profile value and an unassigned resource
+	# reads as all-zeroes — the same case the asserts in _ready cover for the
+	# two that would fail loudly. This one would only ever produce a NAN in a
+	# lamp, so it is handled rather than asserted.
+	steer_ratio = -_steer_angle / max_angle if max_angle > 0.0 else 0.0
 
 
 func _simulate_wheel(wheel: WheelMount, space: PhysicsDirectSpaceState3D, delta: float) -> void:
@@ -242,7 +312,7 @@ func _apply_tyre_forces(
 
 func _longitudinal_force(wheel: WheelMount, rolling_speed: float) -> float:
 	var throttle: float = InputRouter.accelerate
-	var brake: float = InputRouter.brake_reverse
+	var brake: float = brake_input
 
 	# Coasting: bleed rolling speed so the car settles instead of gliding for
 	# ever. No delta — apply_force already integrates over the tick, and dividing
@@ -251,7 +321,7 @@ func _longitudinal_force(wheel: WheelMount, rolling_speed: float) -> float:
 		return -rolling_speed * _corner_mass * profile.coast_drag_per_s
 
 	if not is_zero_approx(brake):
-		if speed_kph > STATIONARY_KPH:
+		if is_braking():
 			# Braking acts on every wheel; drive does not.
 			return -signf(rolling_speed) * profile.brake_force * brake
 		if wheel.drives and speed_kph > -profile.max_reverse_kph:
@@ -319,6 +389,9 @@ func place_at(pose: Transform3D) -> void:
 	linear_velocity = Vector3.ZERO
 	angular_velocity = Vector3.ZERO
 	_steer_angle = 0.0
+	# Published state as well as private, or a car righted at full lock is
+	# replaced pointing straight ahead with its indicator still flashing.
+	steer_ratio = 0.0
 	_upside_down_for = 0.0
 	for wheel: WheelMount in _wheels:
 		wheel.compression = 0.0

@@ -111,6 +111,14 @@ AMBER = (226, 138, 32)
 # as a shape now that its lettering is gone. Nothing may borrow it for anything
 # that is not that badge, or the count stops being defensible.
 BADGE_GREEN = (12, 116, 82)
+# ⚠️ An eighth, and the one whose *darkness* is the whole feature. It is the lens
+# of the high-level brake lamp in the backlight and nothing else. That lamp is
+# asked to be invisible until it lights, and it sits on near-black glazing —
+# `RED` at the authored value is a bright bar across a black window every time
+# the car coasts, which is the opposite of what a third brake lamp is for. Dark
+# enough to disappear against `GLASS`; saturated enough that the shader's
+# hue-normalised emission burns it red rather than pink. See `_high_brake_lamp`.
+DEEP_RED = (58, 10, 12)
 
 # The glTF material name `generated_scene_import.gd` matches to hand the body a
 # `ShaderMaterial`. A name is the only channel glTF offers — the same contract
@@ -151,6 +159,46 @@ COLOUR_MARKERS: dict[Colour, float] = {
 # is the authority here: the tail cluster's bottom lens is `RED` on `RED`
 # bodywork, and the plates share their swatches with the lenses.
 LAMP_PARTS = ("headlamp_", "indicator_", "foglamp_", "taillamp_")
+
+# Which switched circuit a lens is wired to, shipped in `UV.x` and read by
+# `vehicle_body.gdshader`. `MARKER_LAMP` says a surface is a lens; this says
+# whether anything ever turns it *on*, and which switch does it.
+#
+# ⚠️ **A second channel rather than four more markers**, because the two
+# questions are independent: a lit lens still wants the lens roughness and the
+# lens reflection, and folding "which circuit" into `UV.y` would make the
+# shading branch enumerate the wiring. `UV.x` was reserved and zero — a tile
+# spends it on metres above base, which nothing on a 4 m car needs.
+CIRCUIT_NONE = 0.0
+CIRCUIT_BRAKE = 1.0
+CIRCUIT_REVERSE = 2.0
+CIRCUIT_INDICATOR_L = 3.0
+CIRCUIT_INDICATOR_R = 4.0
+
+# ⚠️ **Left and right are separate circuits, and that is the whole point of
+# indicators** — one amber circuit would flash both flanks, which is a hazard
+# warning and not a turn. The side tags come from `taxi_body`'s own
+# `(("l", -1.0), ("r", 1.0))`, where `-Z` is forward, so `r` is the car's right.
+#
+# Keyed on the full part name rather than a prefix: the tail cluster is three
+# lenses on one lamp and they are three different circuits. `taxi_body` raises if
+# any key here names no part, so a rename cannot quietly unwire a lamp.
+#
+# ⚠️ The headlamps and fog lamps are deliberately absent, which leaves them
+# `CIRCUIT_NONE` — lenses that catch the sun and never light. This is a daytime
+# game (`ART_DESIGN.md`, one lighting rig, golden hour), so there is nothing for
+# a headlamp to switch on *for*; `Q26`'s night mode is what would wire them.
+LAMP_CIRCUITS: dict[str, float] = {
+    "indicator_l": CIRCUIT_INDICATOR_L,
+    "indicator_r": CIRCUIT_INDICATOR_R,
+    "taillamp_l_indicator": CIRCUIT_INDICATOR_L,
+    "taillamp_r_indicator": CIRCUIT_INDICATOR_R,
+    "taillamp_l_reverse": CIRCUIT_REVERSE,
+    "taillamp_r_reverse": CIRCUIT_REVERSE,
+    "taillamp_l_brake": CIRCUIT_BRAKE,
+    "taillamp_r_brake": CIRCUIT_BRAKE,
+    "taillamp_high_brake": CIRCUIT_BRAKE,
+}
 
 
 class CabinRing(NamedTuple):
@@ -294,6 +342,18 @@ class Proportions:
     # roof paint coming down over the pillars; without this the roof reads as a
     # pale lid laid on a red box, which is the note the first review returned.
     cant_rail_m: float = 0.10
+    # The high-level brake lamp, sitting in the bottom centre of the backlight.
+    # `rise_m` is measured from the belt line, so it follows the glass rather
+    # than the body — rake the backlight and the lamp rakes with it.
+    #
+    # ⚠️ Sized against the glass it sits in, not against the tail cluster. At
+    # 0.36 m across it is a little under half the cabin's width, which is the
+    # proportion a real high-level strip has; matching the outer lenses' 0.17 m
+    # would read as a third small lamp floating in the window rather than as the
+    # bar that it is.
+    high_brake_half_width_m: float = 0.18
+    high_brake_half_height_m: float = 0.022
+    high_brake_rise_m: float = 0.055
     # Registration plates. Blank rectangles, not lettering: the characters were
     # a texture, and a pixel font is the one thing on the car that does not
     # belong in a flat-shaded city. Colour still carries the information a plate
@@ -374,6 +434,17 @@ class Proportions:
         return self.roof_y_m - self.cant_rail_m - self.belt_y_m
 
     @property
+    def glass_top_y_m(self) -> float:
+        """Top of the glazed band, where the cant rail starts.
+
+        Named for the same reason `bumper_bottom_y_m` is: `belt_y_m +
+        glass_band_m` had reached three call sites and a test, and a fixture
+        seated in the window is exactly the caller that must not carry its own
+        copy of where the window ends.
+        """
+        return self.belt_y_m + self.glass_band_m
+
+    @property
     def bumper_bottom_y_m(self) -> float:
         """Where the dark bumper band stops and the red valance below it starts.
 
@@ -443,7 +514,7 @@ class Proportions:
         rings = (
             CabinRing(self.belt_y_m, hw, self.cabin_front_z_m, self.cabin_rear_z_m, cut * 0.8),
             CabinRing(
-                self.belt_y_m + self.glass_band_m,
+                self.glass_top_y_m,
                 hw - self.roof_inset_m * 0.7,
                 glass_front,
                 glass_rear,
@@ -582,6 +653,52 @@ def _flush_fixture(
     x, y = centre
     z0, z1 = sorted(_seated_depth(shape, y - half_y, y + half_y, rear=rear))
     return box((x - half_x, y - half_y, z0), (x + half_x, y + half_y, z1), colour, name=name)
+
+
+def _high_brake_lamp(shape: Proportions) -> MeshData:
+    """The high-level brake lamp, in the bottom centre of the backlight.
+
+    The third brake lamp every car built since the nineties carries, and the one
+    the driver behind actually reads — it is at eye height and in the middle of
+    the car, where the outer cluster is neither. On the chase camera, which
+    `ART_DESIGN.md` calls the only angle most players ever see, it is the most
+    visible lamp on the vehicle.
+
+    ⚠️ **"Inside the window" is a look, not a coordinate.** The glazing is an
+    opaque flat colour — there is no transparency on this car and
+    `ART_DESIGN.md`'s anti-goals keep it that way — so a lamp *behind* the
+    backlight is a lamp that is never drawn. It is seated on the glass the same
+    way the tail lamps are seated on the paint: `FIXTURE_PROUD_M` clear of the
+    surface, which at 15 mm on a 4 m car reads as sitting in the window rather
+    than as bolted to the outside of it.
+
+    ⚠️ **Seated against the backlight's rake, which is why this is not a
+    `box_at`.** The screen leans 30° off vertical, so its z moves 12 mm across
+    the lamp's own 44 mm of height. Ignoring that sinks the top edge into the
+    glass and floats the bottom one off it — the same arithmetic `_seated_depth`
+    does for the nose and the tail, against a different surface, which is why it
+    is done here rather than by calling that.
+    """
+    y_low = shape.belt_y_m + shape.high_brake_rise_m - shape.high_brake_half_height_m
+    y_high = shape.belt_y_m + shape.high_brake_rise_m + shape.high_brake_half_height_m
+    if y_low <= shape.belt_y_m or y_high >= shape.glass_top_y_m:
+        raise ValueError(
+            f"the high-level brake lamp spans y {y_low:+.3f}..{y_high:+.3f}, which leaves the "
+            f"glazed band {shape.belt_y_m:+.3f}..{shape.glass_top_y_m:+.3f} — "
+            "it would be seated on the boot lid or the cant rail, not in the window"
+        )
+
+    # Rake carries the backlight forward as it rises, so the low edge is the one
+    # furthest back. The box runs from the high edge's plane — the innermost
+    # point, so nothing hangs off the glass — to the low edge's, plus the stand-off.
+    z_high = shape.cabin_ends_m(y_high - shape.belt_y_m)[1]
+    z_low = shape.cabin_ends_m(y_low - shape.belt_y_m)[1]
+    return box(
+        (-shape.high_brake_half_width_m, y_low, z_high),
+        (shape.high_brake_half_width_m, y_high, z_low + FIXTURE_PROUD_M),
+        DEEP_RED,
+        name="taillamp_high_brake",
+    )
 
 
 def _wheel(
@@ -733,6 +850,9 @@ def taxi_body(chassis: Chassis, shape: Proportions) -> MeshData:
     parts.append(box_at((0.0, 0.11, front_z + 0.01), (0.42, 0.09, 0.03), DARK, name="grille"))
     parts.extend(_plates(shape))
     parts.extend(_badge(shape, rear=rear) for rear in (False, True))
+    # Centred, so it is outside the per-side loop below — the only lamp on the
+    # car that is not one of a pair.
+    parts.append(_high_brake_lamp(shape))
 
     for tag, side in (("l", -1.0), ("r", 1.0)):
         # The front cluster is three lamps, not one pale block: the main beam
@@ -778,9 +898,16 @@ def taxi_body(chassis: Chassis, shape: Proportions) -> MeshData:
         # bump at anything past a few metres. The bezel existed to buy that
         # contrast. Removing it was asked for with the trade understood — do not
         # "fix" it by making the lens cream, which is the earlier bug and a
-        # white tail lamp besides.
-        for lens, (offset, colour) in enumerate(
-            ((0.073, AMBER), (0.0, LAMP), (-0.073, RED)),
+        # white tail lamp besides. What the lens has instead is a *circuit*: it
+        # is the brake lamp, and a brake lamp that lights separates itself.
+        #
+        # ⚠️ **Named for the circuit, not numbered `0/1/2` as they were.** The
+        # names are what `LAMP_CIRCUITS` wires, so the stacking order and the
+        # wiring are one list rather than two that can disagree.
+        for offset, colour, circuit in (
+            (0.073, AMBER, "indicator"),
+            (0.0, LAMP, "reverse"),
+            (-0.073, RED, "brake"),
         ):
             parts.append(
                 _flush_fixture(
@@ -789,7 +916,7 @@ def taxi_body(chassis: Chassis, shape: Proportions) -> MeshData:
                     half=(0.085, 0.034),
                     colour=colour,
                     rear=True,
-                    name=f"taillamp_{tag}_{lens}",
+                    name=f"taillamp_{tag}_{circuit}",
                 )
             )
         # Wing mirrors: wider than they are deep. The earlier proportions were
@@ -816,6 +943,7 @@ def taxi_body(chassis: Chassis, shape: Proportions) -> MeshData:
         )
 
     parts.extend(_flank_detail(chassis, shape))
+    _check_wiring(parts)
     body = merge([_marked(part) for part in parts], name="taxi_body")
     # `merge` deliberately does not carry `material` — many meshes in, one out,
     # and inheriting whichever was first would be a coin toss. The caller names
@@ -823,17 +951,52 @@ def taxi_body(chassis: Chassis, shape: Proportions) -> MeshData:
     return replace(body, material=BODY_MATERIAL)
 
 
+def _check_wiring(parts: Sequence[MeshData]) -> None:
+    """Fail if `LAMP_CIRCUITS` names a part that will not carry its circuit.
+
+    ⚠️ **The failure this catches is silent everywhere else.** A lens whose name
+    no longer matches its key ships `CIRCUIT_NONE`, which is a perfectly valid
+    value meaning "never lights" — the glTF is well-formed, the import is clean,
+    the car renders, and the only symptom is a brake lamp that stays dark in a
+    frame nobody is grading. Names are the wiring here, so a rename is a
+    rewiring, and it has to be loud.
+
+    Both directions, because there are two ways to lose a lamp and they look
+    identical from the outside: a key naming no part at all, and a key naming a
+    part that is not a lens. The shader reads `UV.x` only inside its
+    `MARKER_LAMP` branch, so a circuit stamped on bodywork is never switched.
+
+    Run over the parts rather than asserted in a test because the person who
+    renames a part is the person running this, and `pytest` is a separate step
+    that a regenerate does not require.
+    """
+    named = {part.name for part in parts}
+    unwired = sorted(LAMP_CIRCUITS.keys() - named)
+    if unwired:
+        raise ValueError(
+            f"LAMP_CIRCUITS names parts the body does not build: {unwired}. "
+            "A lamp was renamed and is now wired to nothing."
+        )
+    unlit = sorted(name for name in LAMP_CIRCUITS if not name.startswith(LAMP_PARTS))
+    if unlit:
+        raise ValueError(
+            f"LAMP_CIRCUITS wires parts that are not lenses: {unlit}. "
+            f"The shader only switches {MARKER_LAMP} surfaces, so these would ship dark."
+        )
+
+
 def _marked(part: MeshData) -> MeshData:
-    """Stamp a part's vertices with the surface marker its shading needs.
+    """Stamp a part's vertices with the shader payload its shading needs.
 
-    `UV.y` carries the marker; `UV.x` is unused and left at zero, where a tile
-    spends it on height above base. Nothing on a 4 m car needs that.
+    `UV.y` carries the surface marker and `UV.x` the switched circuit — which of
+    the car's lamps, if any, turns this surface on. A tile spends `UV.x` on
+    height above base; nothing on a 4 m car needs that.
 
-    Two rules, and which one applies is decided by whether the swatch is
-    ambiguous. `GLASS` and `SILVER` name exactly one material each, so a colour
-    lookup is exact and splits the greenhouse's lofted band correctly. Every
-    other lens shares its colour with something matte, so `LAMP_PARTS` marks by
-    name and overrides.
+    Two rules for the marker, and which one applies is decided by whether the
+    swatch is ambiguous. `GLASS` and `SILVER` name exactly one material each, so
+    a colour lookup is exact and splits the greenhouse's lofted band correctly.
+    Every other lens shares its colour with something matte, so `LAMP_PARTS`
+    marks by name and overrides.
 
     The name rule is not tidiness. **The tail cluster's bottom lens is `RED` on
     `RED` bodywork**, which is exactly why `ART_DESIGN.md` records the cluster
@@ -842,6 +1005,10 @@ def _marked(part: MeshData) -> MeshData:
     *shading*, which leaves the authored colours alone: the bezel behind the
     cluster was removed on request with the trade understood, and making the
     lens cream is the earlier bug and a white tail lamp besides.
+
+    ⚠️ **The circuit is looked up on the whole name, where the marker matches a
+    prefix, and the difference is load-bearing.** `taillamp_` is one prefix and
+    three circuits — indicator, reverse, brake — stacked on one lamp.
     """
     if part.colours is None:
         raise ValueError(f"part '{part.name}': cannot mark a part with no vertex colours")
@@ -854,6 +1021,7 @@ def _marked(part: MeshData) -> MeshData:
         markers[:] = MARKER_LAMP
 
     uvs = np.zeros((len(part.colours), 2), dtype=np.float32)
+    uvs[:, 0] = LAMP_CIRCUITS.get(part.name, CIRCUIT_NONE)
     uvs[:, 1] = markers
     return replace(part, uvs=uvs)
 

@@ -22,7 +22,7 @@ var _roll_angle: float = 0.0
 func _ready() -> void:
 	_mount = get_parent() as WheelMount
 	assert(_mount != null, "WheelVisual must be a child of a WheelMount.")
-	_controller = _controller_above(_mount)
+	_controller = VehicleController.above(_mount)
 	assert(_controller != null, "WheelVisual found no VehicleController above its mount.")
 
 	_steers = _mount.steers
@@ -33,21 +33,6 @@ func _ready() -> void:
 	_rest_y = -_controller.profile.suspension_rest_length_m
 	if _controller.profile.wheel_radius_m > 0.0:
 		_roll_per_kph = KPH_TO_MS / _controller.profile.wheel_radius_m
-
-
-## Climbs to the controller instead of assuming it is the mount's parent.
-## VehicleController collects its mounts with a recursive find_children, so a
-## suspension pivot between body and mount is legal there and would leave a
-## fixed two-step walk dereferencing null — and asserts are stripped from
-## release builds, so that is a crash rather than a message.
-static func _controller_above(node: Node) -> VehicleController:
-	var walk: Node = node
-	while walk != null:
-		var controller := walk as VehicleController
-		if controller != null:
-			return controller
-		walk = walk.get_parent()
-	return null
 
 
 func _physics_process(delta: float) -> void:

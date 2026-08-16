@@ -42,8 +42,8 @@
 // The input that cannot be derived from geometry is which surface is which, and
 // `tools/make_vehicle.py` ships it in `TEXCOORD_0`:
 //
-//   UV.x  unused, reserved. A tile spends it on metres above the object's base;
-//         nothing on a 4 m car needs that.
+//   UV.x  `floor()` is the switched circuit — which of the car's lamps, if any,
+//         turns this surface on. Reserved and zero before `P3-11d`.
 //   UV.y  `floor()` is the surface marker. The body is one primitive, so
 //         nothing else tells a windscreen from the bodywork around it.
 shader_type spatial;
@@ -54,6 +54,10 @@ render_mode cull_back;
 const float MARKER_PAINT = 0.0;
 const float MARKER_GLASS = 1.0;
 const float MARKER_LAMP = 2.0;
+// Must match `CIRCUIT_*` in `tools/make_vehicle.py`. Only `NONE` is named here:
+// the rest are `lamp_lit`'s four channels in order, and enumerating them again
+// as constants would be a second copy of the ordering with nothing enforcing it.
+const float CIRCUIT_NONE = 0.0;
 // ⚠️ `MARKER_TRIM` (3.0) is shipped by the ETL and takes no branch of its own —
 // it shares paint's clearcoat, for the reason given at that branch. Carried
 // separately anyway, on the tiles' ground-marker reasoning: it costs nothing to
@@ -108,6 +112,62 @@ group_uniforms lamp;
 uniform float lamp_roughness : hint_range(0.0, 1.0) = 0.35;
 uniform float lamp_reflect : hint_range(0.0, 1.0) = 0.06;
 
+// How brightly a switched lens burns when its circuit is live (`P3-11d`).
+//
+// ⚠️ **This is the fix `P3-11c` could not reach, and it reverses none of the
+// decisions that closed the other two.** The red tail lens is `RED` on `RED`
+// bodywork with no bezel; shading alone moved it `L*` +0.77 in shade and +0.41
+// in sun, which that round recorded as "real, and not enough". Recolouring the
+// lens is the earlier bug and a white tail lamp besides, and faking the removed
+// bezel is that reversal wearing a different hat. A lens that *lights* separates
+// itself by emitting its own authored colour, which changes no swatch and puts
+// nothing back behind the cluster. It also only claims the lens when the car is
+// actually braking — the unlit case is still the one `P3-11c` measured.
+//
+// ⚠️ **Above 1.0 on purpose.** `clean_daylight.tres` glows on an HDR threshold
+// of 1.0, so a lens below that is merely a brighter swatch — the bloom is what
+// reads as a lamp rather than as paint, and it is the whole difference at the
+// distance a chase camera holds. The value is priced against the sunlit
+// bodywork next to it, not chosen for a dark scene: this is a daytime game and
+// a brake lamp competing with direct sun is the hard case, not the easy one.
+//
+// ⚠️ **The dial is not brightness against darkness — it is bloom against
+// redness**, and that is worth knowing before turning it up. The tonemap is
+// ACES, which desaturates a clipped channel toward white, and the lens's red
+// channel is already at 255 by 1.2. Everything above that lands on green and
+// blue. Measured on the high-level strip, same 294 px, braking at `t03.30`:
+//
+//   0.0 (ablated)   L*  2.29   C*  9.35    sRGB ( 16,   4,  15)
+//   1.2             L* 67.04   C* 56.44    sRGB (255, 123, 120)
+//   1.6  shipped    L* 72.72   C* 44.34    sRGB (255, 149, 142)
+//   2.3             L* 79.17   C* 31.81    sRGB (255, 176, 170)
+//
+// 1.6 is the knee: enough over the threshold to carry a visible halo, still
+// `C*` 44 at the core. 2.3 is a white lamp with a red glow round it, which is
+// the failure `ART_DESIGN.md` already names for the tail cluster.
+//
+// One value for every lens, which is only affordable because the emission below
+// is normalised: the level a lens is authored at no longer sets how hard it
+// burns, so a near-black strip and a cream reverse lamp can share this dial.
+uniform float lamp_emission : hint_range(0.0, 8.0) = 1.6;
+
+// Which circuits are live this frame, in `CIRCUIT_*` order less one:
+// x brake, y reverse, z indicator left, w indicator right. 0 is out, 1 is full.
+//
+// ⚠️ **`instance uniform`, and that is not an optimisation.** `vehicle_body.tres`
+// is one shared material — `generated_scene_import.gd` hands the same resource
+// to every mesh that asks for `vehicle_body` by name, and `ART_DESIGN.md`'s
+// roster puts an AI red taxi on the streets alongside the player's. A plain
+// uniform is a property of the *material*, so the first car to brake would brake
+// every taxi in Wan Chai. Lamp state is per car, so it goes in the per-instance
+// channel; `sun_toward` above stays a plain uniform for the mirror-image reason
+// — there is one sun, and every car agrees about where it is.
+//
+// Written by `scripts/vehicle/vehicle_lamps.gd`. Unset instances keep the
+// default, which is every lamp out — so the `taxi_builtin` spike, which carries
+// no lamp rig, simply drives around with dark lenses rather than failing.
+instance uniform vec4 lamp_lit = vec4(0.0);
+
 group_uniforms paint;
 
 // Clearcoat. ⚠️ **The measurement that refused gloss on paint refused a
@@ -152,6 +212,10 @@ uniform float glint_strength : hint_range(0.0, 4.0) = 1.1;
 uniform float glint_sharpness : hint_range(1.0, 256.0) = 48.0;
 
 varying flat float marker;
+// `flat` for the same reason `marker` is: every vertex of a lens carries the
+// same circuit, and an interpolated one would land between two channels at the
+// seam between a lamp and the paint it is seated in.
+varying flat float circuit;
 // World space, for the reflected ray. Interpolated rather than `flat`: the
 // gradient has to vary *across* a screen, or a windscreen is one colour again
 // and the whole point of the three bands above is lost.
@@ -160,6 +224,7 @@ varying vec3 world_n;
 
 void vertex() {
 	marker = floor(UV.y);
+	circuit = floor(UV.x);
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	world_n = normalize(MODEL_NORMAL_MATRIX * NORMAL);
 }
@@ -218,6 +283,38 @@ void fragment() {
 		albedo = mix(albedo, mirrored, glass_reflect * mix(glass_face_on, 1.0, fresnel));
 	} else if (is_lamp) {
 		roughness = lamp_roughness;
+		// The lens glows *its own* colour, taken before the reflection is mixed
+		// in: a lit lamp is brighter than what it is reflecting, so letting the
+		// sky tint the emission is the swatch problem again, one surface further
+		// on. Red stays red, amber stays amber, and the white reverse lens is the
+		// only one that goes near white — which is what a reverse lamp is.
+		//
+		// ⚠️ **The hue, normalised — not the albedo scaled — and the high-level
+		// brake lamp is why.** An unlit lens is dark because of what sits behind
+		// it, not because it is a weaker bulb, and `albedo * emission` conflates
+		// the two: it makes "invisible when off" and "bright when on" the same
+		// dial pulled in opposite directions. The strip in the backlight has to
+		// be both, so it is authored near-black (`DEEP_RED`) and burns at the
+		// same intensity as every other lens. Dividing by the largest channel
+		// keeps the hue and discards the level, which is the half that belongs
+		// to the reflector rather than to the lamp.
+		//
+		// ⚠️ Dynamic index rather than four comparisons, which is why `CIRCUIT_*`
+		// is an ordering and not a set — and ⚠️ **bounded at both ends, because
+		// an out-of-range index into a `vec4` is undefined on a Mobile driver
+		// rather than an error.** `CIRCUIT_NONE` lands on -1, so the lower bound
+		// *is* the never-lights test; the upper one is a fifth circuit the
+		// generator could add before anyone widened `lamp_lit`, which is the same
+		// one-swatch-away hazard the divide below already pays for.
+		int channel = int(circuit - CIRCUIT_NONE) - 1;
+		if (channel >= 0 && channel < 4) {
+			// The guard is for a black lens, which is not authored today and is
+			// one swatch away from being: it would divide by zero and emit NaN,
+			// which the Mobile renderer resolves as a white hole in the car.
+			float peak = max(albedo.r, max(albedo.g, albedo.b));
+			vec3 hue = albedo / max(peak, 0.001);
+			EMISSION = hue * lamp_lit[channel] * lamp_emission;
+		}
 		albedo += sky_horizon * glint * glint_strength * 0.5;
 		albedo = mix(albedo, mirrored, lamp_reflect * fresnel);
 	} else {
