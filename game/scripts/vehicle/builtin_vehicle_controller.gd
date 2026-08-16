@@ -33,6 +33,7 @@ const _UNMAPPABLE: PackedStringArray = [
 	"grip_lateral + grip_longitudinal (one isotropic wheel_friction_slip)",
 	"anti_roll (no anti-roll bar; godot_roll_influence is a different mechanism)",
 	"coast_drag_per_s",
+	"rolling_resistance_mps2",
 	"collision_deflection",
 	"collision_speed_retained",
 	"auto_right_delay_s (hand-written below)",

@@ -19,6 +19,23 @@ extends Resource
 @export_range(0.0, 100.0, 1.0, "suffix:km/h") var max_reverse_kph: float
 ## Engine force applied per wheel at full throttle.
 @export_range(0.0, 5000.0, 10.0) var engine_force: float
+## Braking force applied per wheel — on every wheel, unlike engine_force.
+##
+## Divide by the corner mass to read it as a deceleration: 2,400 N on a 1,200 kg
+## taxi is 8.0 m/s², about 0.8 g. Measured on the skidpad it comes out a little
+## better — **8.42 m/s²**, the difference being the engine damping described
+## under coast_drag_per_s, which brakes as well as coasts — for a stop from
+## 72.8 km/h in 2.30 s over 21.9 m.
+##
+## Grip is not the constraint anywhere near here: grip_longitudinal allows 2 ×
+## the wheel load, some 9.4 kN at rest against the 2.4 kN asked, so this dial is
+## linear in what it asks for and will not start locking wheels as it rises.
+##
+## ⚠️ **The top of the range is not usable headroom.** The brake branch applies
+## its force uncapped, and 4F·delta/mass reaches STATIONARY_KPH at exactly
+## F = 5,000 N on a 1,200 kg car at 60 Hz — the slider maximum, to the newton.
+## At that value braking can cross zero within one tick and hand straight over
+## to reverse. Benign, but the margin is gone, and it shrinks with vehicle mass.
 @export_range(0.0, 5000.0, 10.0) var brake_force: float
 
 @export_group("Steering")
@@ -55,7 +72,29 @@ extends Resource
 
 ## Fraction of rolling speed shed per second when coasting — engine braking.
 ## Small values glide, large values stop the car the moment you lift off.
+##
+## ⚠️ **This is the minority of the coast drag, and the majority is invisible
+## from here.** Godot's `default_linear_damp` is 0.1 and `project.godot` does not
+## override it, so the engine damps the body as well. Measured on the flat
+## skidpad with this dial and rolling_resistance_mps2 both at zero, the car
+## decayed at **0.100/s** — exactly the engine default, and exactly twice what
+## this asks for. Restoring the dial gives 0.150/s, so it does contribute its
+## stated 0.05, but it is one third of the total. Tune against a measurement,
+## never against the number written here.
 @export_range(0.0, 1.0, 0.01) var coast_drag_per_s: float
+## Speed-independent share of the coasting deceleration — rolling resistance.
+##
+## ⚠️ **The term that actually stops the car.** Viscous drag is an exponential
+## decay with no zero: every halving of speed halves the force meant to remove
+## it. With this at 0.0 a skidpad coast from 30.6 km/h was **still rolling at
+## 3.9 km/h 13.8 s later**, and the same pedal that would have braked it
+## reverses below STATIONARY_KPH — so there was no way to bring it to rest at
+## all. At the shipped 0.8 the same coast reaches a dead stop in 6.5 s, and
+## 5 km/h takes 1.5 s.
+##
+## This is what makes coasting shed a similar speed per second at 5 km/h as at
+## 50, which is how a driver expects a car to behave.
+@export_range(0.0, 5.0, 0.05, "suffix:m/s²") var rolling_resistance_mps2: float
 
 @export_group("Collision and recovery")
 ## 0 = head-on stop, 1 = full glancing deflection. Glancing hits deflect;

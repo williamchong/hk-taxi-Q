@@ -305,20 +305,35 @@ func _apply_tyre_forces(
 	)
 	apply_force(right * lateral_force, offset)
 
-	var drive: float = _longitudinal_force(wheel, point_velocity.dot(forward))
+	var drive: float = _longitudinal_force(wheel, point_velocity.dot(forward), delta)
 	var traction_cap: float = profile.grip_longitudinal * load
 	apply_force(forward * clampf(drive, -traction_cap, traction_cap), offset)
 
 
-func _longitudinal_force(wheel: WheelMount, rolling_speed: float) -> float:
+func _longitudinal_force(wheel: WheelMount, rolling_speed: float, delta: float) -> float:
 	var throttle: float = InputRouter.accelerate
 	var brake: float = brake_input
 
 	# Coasting: bleed rolling speed so the car settles instead of gliding for
-	# ever. No delta — apply_force already integrates over the tick, and dividing
-	# by it would make the drag framerate-dependent as well as enormous.
+	# ever. Two terms, and the car only settles because of the second — the
+	# viscous one is proportional to speed, so it approaches zero as fast as the
+	# speed it is removing and never arrives. Neither term is divided by delta:
+	# apply_force already integrates over the tick, so dividing would make the
+	# drag framerate-dependent as well as enormous. The cap below is the one
+	# place delta belongs, and for the opposite reason — it turns a speed into
+	# the deceleration that cancels exactly that speed in one tick.
 	if is_zero_approx(throttle) and is_zero_approx(brake):
-		return -rolling_speed * _corner_mass * profile.coast_drag_per_s
+		var decel: float = (
+			rolling_speed * profile.coast_drag_per_s
+			+ signf(rolling_speed) * profile.rolling_resistance_mps2
+		)
+		# ⚠️ Capped at the deceleration that lands exactly on zero this tick —
+		# the same v/delta the lateral force asks for, used here as the limit
+		# rather than the demand. The viscous term cannot overshoot; the constant
+		# one can, and an uncapped rolling resistance does not stop a rolling car
+		# — it reverses it, and then holds it reversing.
+		var decel_to_rest: float = absf(rolling_speed) / delta
+		return -_corner_mass * clampf(decel, -decel_to_rest, decel_to_rest)
 
 	if not is_zero_approx(brake):
 		if is_braking():

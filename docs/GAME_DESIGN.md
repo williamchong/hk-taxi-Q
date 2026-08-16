@@ -151,13 +151,17 @@ it.
 | Collision | Glancing hits deflect; head-on hits cost speed, never control |
 | Recovery | Auto-righting if flipped, within ~1 s |
 | Reverse | Instant, no gear delay |
+| Braking | Strong (~0.8 g) and **as speed-uniform as the engine allows** — Godot's viscous `default_linear_damp` still costs 17% between 65 and 4 km/h, against 36% before `P0-5b/c/d`. Must also out-pull Wan Chai's ramps: `gravity_scale` 1.6 makes a slope pull 60% harder than its angle suggests |
+| Coasting | Sheds a similar speed per second at 5 km/h as at 50, and **comes to a stop**. One pedal serves brake and reverse, so a driver arriving at walking pace has to lift off — coasting is the only thing that can park the car (`P0-5b/c/d`) |
 
 All values live in `game/tuning/handling.tres`. **Expect to iterate on these more than any other part
 of the project** — vehicle feel is the single biggest determinant of whether this is fun.
 
-Two items flagged during `P0-5d` and deliberately left for `P2-3`'s tuning pass: sustained full lock
-still spins the car, and `brake_force` gives 3 m/s² of braking against 5.33 m/s² of acceleration, so
-**the car accelerates faster than it stops.**
+Two items were flagged during `P0-5d` and deliberately left for `P2-3`'s tuning pass. Sustained full
+lock still spins the car. The second — `brake_force` giving 3 m/s² of braking against 5.33 m/s² of
+acceleration, so **the car accelerated faster than it stopped** — was ✅ **closed 2026-08-17** at
+`brake_force` 2,400 N: braking is now 8.0 m/s² and the inequality is the right way round
+(`P0-5b/c/d`).
 
 ---
 

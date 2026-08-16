@@ -2339,9 +2339,9 @@ The mechanism and the suffix list are in `ARCHITECTURE.md`.
 
 **See.** `ARCHITECTURE.md` "Stack" · `P3-11`
 
-## `P0-5b/c/d` — Four handling bugs no linter catches
+## `P0-5b/c/d` — Five handling bugs no linter catches
 
-**Status.** ✅ Done
+**Status.** ✅ Done — the fifth found 2026-08-17, long after the other four
 
 Recorded because each was found by *measuring* rather than by reading, and none is reachable by
 static analysis:
@@ -2360,7 +2360,125 @@ Also fixed: wheel raycasts accepted wall faces as ground (free traction and a la
 building), and road slabs were exactly coplanar with the ground plane and z-fought across their whole
 surface.
 
-**See.** `P0-5a`
+**The fifth, found 2026-08-17 from a user report — too little speed-independent longitudinal force.**
+Reported as "the car should brake at similar force at high speed and low speed, but it brakes very
+slowly at low speed". ✅ **The report was exactly right, and one root cause produced two separate
+faults.**
+
+Godot's `default_linear_damp` (0.1, unoverridden — see below) is *viscous*: it scales with speed and
+vanishes as the car slows. The controller's own speed-independent forces were small enough beside it
+that the engine's share dominated the feel, so every longitudinal deceleration fell away at low
+speed. Ablated on the flat skidpad at the shipped `brake_force = 900`:
+
+| mid-speed | deceleration under full brake |
+|---|---|
+| ~65 km/h | **4.78 m/s²** |
+| ~35 km/h | 3.95 m/s² |
+| ~15 km/h | 3.38 m/s² |
+| ~4 km/h | **3.07 m/s²** |
+
+**A 36% fall** — the constant 3.0 m/s² the dial buys, plus `0.1 × v` that is worth 1.81 m/s² at
+65 km/h and 0.12 at 4. And the coast had the same defect in its pure form: `-rolling_speed ·
+corner_mass · coast_drag_per_s` is viscous with no constant at all, so it is an exponential decay
+with no zero. Coasting from 30.6 km/h the taxi was **still rolling at 3.9 km/h 13.8 s later** and
+would never have stopped.
+
+⚠️ **An earlier draft of this record claimed the brake was already speed-independent** (12.4 km/h/s
+at 62 km/h against 11.2 at 5) and blamed the coast alone. That was the gradient error recorded
+below: the high-speed sample was taken on a downhill stretch of Expo Drive, which ate exactly the
+term under test and made the curve look flat. The user's premise was sound and the measurement was
+not.
+
+⚠️ **It is player-visible only because one pedal serves brake and reverse.** Below `STATIONARY_KPH`
+the pedal means reverse, so a driver arriving at walking pace *must* release it — and then there is
+nothing left that can bring the car to rest. The two designs are independently reasonable and the
+gap is in the seam between them, which is why neither `P0-5a`'s measurements nor `P3-11d`'s lamp
+work saw it.
+
+Fixed by `rolling_resistance_mps2`, a speed-independent term in the coast, shipped at **0.8 m/s²**;
+that same 31 km/h coast now reaches a **dead stop in 6.5 s**, and 5 km/h takes **1.5 s**. Two
+properties are load-bearing:
+
+- **It is capped at the deceleration that lands exactly on zero this tick** — `|rolling_speed| /
+  delta`, the same treatment the lateral force already gets. Uncapped, a constant force does not
+  stop a rolling car, it *reverses* it and then holds it reversing. The cap is also what stops the
+  car juddering on a shallow gradient: it settles at the gravity term instead of flipping sign.
+- **The viscous term stays.** It is what makes lift-off at 100 km/h read as engine braking rather
+  than as a handbrake, and a constant alone cannot express that. The terms add, so lift-off drag at
+  60 km/h goes **2.50 → 3.30 m/s², up 32%**; `coast_drag_per_s` is the dial if that reads as too
+  much. Throttle-on acceleration is byte-identical — the coast branch is gated on both pedals.
+
+⚠️ Under 0.8 m/s² the taxi holds still on grades below ~2.9°, since `gravity_scale` 1.6 makes a
+slope pull 60% harder than its angle suggests.
+
+### ⚠️ `coast_drag_per_s` is the minority of the coast drag
+
+Found while checking the arithmetic above, and the reason the 60 km/h figures are 2.50 rather than
+the 0.83 the dial predicts. `project.godot` does not override Godot's `default_linear_damp` of 0.1,
+so the engine damps the body underneath the controller. Ablated on `skidpad.tscn`:
+
+| `coast_drag_per_s` | `rolling_resistance_mps2` | measured decay |
+|---|---|---|
+| 0.0 | 0.0 | **0.100/s** — the engine default, to three figures |
+| 0.05 | 0.0 | **0.150/s** — the dial contributes 0.0497 against its stated 0.05 |
+| 0.05 | 0.8 | reaches zero; no exponential constant to quote |
+
+So the dial is honest about its own contribution and still only **one third of the viscous total**.
+Every coast number in this record is the total, taken end-to-end from `drive.sh` telemetry; anyone
+tuning from the written value alone is reasoning about a third of the force. Not changed: the engine
+default is doing no harm, and `project.godot` is the file `CLAUDE.md` forbids touching casually.
+
+### 🔴 The first round of these numbers was measured on a gradient, and did not compose
+
+Recorded because the error was invisible in every individual figure and only showed up when two of
+them were added together. The first ablation ran on `city_drive.tscn`, where the two runs happened
+to sit on different stretches of Expo Drive: engine-only came out **0.089/s** and engine-plus-dial
+**0.108/s**, a difference of 0.019 where the dial asks for 0.050. Both figures were real
+measurements of the car; neither was a measurement of the *dial*, because at 4 km/h a **0.14°**
+micro-gradient — two centimetres of fall over eight metres, far below anything a telemetry line
+shows — is worth about 0.05/s on its own, the whole quantity under test.
+
+⚠️ **A drag coefficient must be measured where the ground is known flat.** `skidpad.tscn` exists for
+exactly this and its header already says so ("a measuring instrument, not a place to play"); it was
+not reached for because the bug had been *found* on the city scene and the ablation simply continued
+there. Re-run on the skidpad, the same three runs compose to within 0.6%.
+
+🔴 **The expensive consequence was not a wrong number, it was a wrong verdict.** The same gradient
+put the 62 km/h brake sample on a downhill and the 5 km/h sample on the flat, which flattened a
+36% falloff into an apparent 12.4-against-11.2 — and on that basis this record's first draft told
+the user their premise was mistaken and that only the coast was at fault. It was the user who was
+right. A measurement that contradicts a user's direct experience of their own software is the
+case for re-running it on known ground, not the case for closing the question.
+
+### `brake_force` 900 → 2,400 N — the other half of the same fix
+
+Raising the constant term is the only lever that makes braking speed-uniform, because the viscous
+share it competes with is the engine's and is not tunable from the profile. Same skidpad ablation,
+both values:
+
+| mid-speed | 900 N | 2,400 N |
+|---|---|---|
+| ~65 km/h | 4.78 m/s² | 9.65 m/s² |
+| ~35 km/h | 3.95 m/s² | 8.88 m/s² |
+| ~15 km/h | 3.38 m/s² | 8.36 m/s² |
+| ~4 km/h | 3.07 m/s² | **8.06 m/s²** |
+| **fall, 65 → 4 km/h** | **−36%** | **−17%** |
+
+Low-speed braking is **2.6× stronger in absolute terms and less than half as speed-dependent**,
+which is precisely what was asked for. A stop from 72.8 km/h now takes 2.30 s over 21.9 m.
+
+The old value was also simply too weak to be safe on this map: 3,600 N on 1,200 kg is **0.31 g**, and
+on the HKCEC down-ramp the taxi *gained* speed under full braking (38.90 → 40.65 km/h) because
+`gravity_scale` 1.6 makes the slope pull harder than 0.31 g. It now sheds ~20 km/h/s there.
+
+⚠️ **Grip was never the constraint and still is not.** `grip_longitudinal` 2.0 caps each wheel at
+2 × its load, ~9.4 kN at rest against 900 N of brake — the old value was using **10%** of the
+traction available. Load transfer under 0.8 g moves ~646 N per wheel across a 2.6 m wheelbase, so
+the unloaded rear axle still holds ~8.1 kN of cap. The dial stays linear well past here; it does
+not begin locking wheels as it rises, and a future stronger brake is a tuning change and not a
+model change.
+
+**See.** `P0-5a` · `GAME_DESIGN.md` "Controls"
 
 ## `P1-1` — The fetcher derives its own sheet list
 
