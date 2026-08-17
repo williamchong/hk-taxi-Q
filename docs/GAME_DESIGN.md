@@ -142,12 +142,14 @@ See `docs/ARCHITECTURE.md` for the action-set mapping across touch/gamepad/keybo
 **Handling model:** custom raycast vehicle on `RigidBody3D` with arcade overrides — not Godot's
 `VehicleBody3D`, and not a physical simulation. `P0-5a` measured why: `VehicleBody3D`'s wheel friction
 is **isotropic**, so a drift cannot break lateral grip without destroying traction and braking with
-it.
+it. ⚠️ Since `Q49` the two axes are **coupled but not collapsed** — one friction *ellipse* per tyre,
+semi-axes `grip_lateral` and `grip_longitudinal`. A circle is what `P0-5a` rejected; an ellipse keeps
+both dials meaning what they say while making the tyre spend from one purse.
 
 | Property | Target feel |
 |---|---|
-| Grip | High, forgiving. No spin-outs from small errors |
-| Drift | Button-initiated, easy to hold, scrubs little speed |
+| Grip | High, forgiving. No spin-outs from small errors — but **one budget per tyre**: since `Q49` lateral and longitudinal share a friction ellipse, so braking through a corner costs cornering grip and a power-on corner no longer accelerates |
+| Drift | Button-initiated, easy to hold, scrubs little speed. 🔴 **The target as written is anti-physical and the car does not meet it** — the handbrake locks the rear tyres, and a locked tyre trades slide against speed rather than granting both. Shipped at `handbrake_lock = 0.15`: **16.0° of slip for 2.39 m/s²**, against the 57.8° for 1.96 the pre-`Q49` per-axle grip fudge gave. Fully locked it spins (162°) at any dial value. The honest route to "slides a lot, scrubs little" is `B4`'s per-wheel angular velocity, which is what lets throttle sustain a slide (`Q49`) |
 | Collision | Glancing hits deflect; head-on hits cost speed, never control |
 | Recovery | Auto-righting if flipped, within ~1 s |
 | Reverse | Instant, no gear delay |

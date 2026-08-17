@@ -50,20 +50,34 @@ extends Resource
 
 @export_group("Grip")
 ## Lateral grip multiplier. High and forgiving — no spin-outs from small errors.
+##
+## The semi-axes of the friction ellipse, with grip_longitudinal: a tyre spends
+## both from one budget, so hard braking costs cornering and vice versa. They are
+## separate numbers and the ellipse is not a circle — that separation is what
+## P0-5a rejected VehicleBody3D to keep.
 @export_range(0.0, 5.0, 0.05) var grip_lateral: float
-## Traction under power and braking.
+## Traction under power and braking. See grip_lateral for the ellipse.
 @export_range(0.0, 5.0, 0.05) var grip_longitudinal: float
 
 @export_group("Drift")
-## Lateral grip multiplier applied to the REAR axle while drift is held.
-## Low: the tail must actually step out.
-@export_range(0.0, 1.0, 0.01) var drift_grip_scale: float
-## Lateral grip multiplier applied to the FRONT axle while drift is held.
-## Deliberately much higher than the rear. Scaling both equally can only make
-## a four-wheel slide — the car ploughs wide instead of rotating, which reads
-## as "the road got icy" rather than "I am drifting". The front has to keep
-## enough grip to still point the car.
-@export_range(0.0, 1.0, 0.01) var drift_front_grip_scale: float
+## How far the handbrake lever comes up while drift is held: 0 leaves the rear
+## tyres rolling, 1 locks them solid.
+##
+## The rear tyre force is a blend of the two states, so this is one dial with a
+## physical meaning rather than a grip multiplier. It replaces drift_grip_scale
+## and drift_front_grip_scale, which modelled the *result* of a handbrake without
+## its cause — see VehicleController._locked_tyre_force for what locking does and
+## why nothing here needs to touch lateral grip directly, and note that the front
+## axle is now untouched, as a real handbrake leaves it.
+##
+## ⚠️ **Do not raise this to 1.0 expecting a better drift.** Measured on the
+## skidpad, a fully locked rear axle spins the car — 162° of slip against the 14°
+## in drift_slip_threshold_deg — and it spins from a 0.5 s tap as readily as from
+## a held button, because a locked tyre has almost no lateral force at small slip
+## angles and this axle's force is the only thing resisting yaw. That is correct
+## physics and the wrong game: GAME_DESIGN.md asks for a drift that is easy to
+## hold. The shipped value is the sweep's answer, not a guess.
+@export_range(0.0, 1.0, 0.01) var handbrake_lock: float
 ## Slip angle above which the drift scores style points.
 @export_range(0.0, 90.0, 1.0, "suffix:°") var drift_slip_threshold_deg: float
 ## Fraction of speed lost per second while drifting. Deliberately small —

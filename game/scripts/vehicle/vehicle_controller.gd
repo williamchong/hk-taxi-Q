@@ -77,6 +77,12 @@ var speed_kph: float = 0.0
 ## an AI taxi on it. Swapping this field for an AI's own intent is then the whole
 ## of what a driven car needs — nothing downstream asks where it came from.
 var brake_input: float = 0.0
+## The handbrake button, sampled once per tick. Cached for both reasons
+## `brake_input` is: an AI taxi on this script must not read the *player's*
+## handbrake, and the alternative was four autoload lookups a tick — `InputRouter`
+## has no `class_name`, so those cannot compile to a validated getter the way the
+## typed `profile` reads do.
+var drift_input: bool = false
 var _forward: Vector3 = Vector3.FORWARD
 var _right: Vector3 = Vector3.RIGHT
 var _steered_forward: Vector3 = Vector3.FORWARD
@@ -185,6 +191,7 @@ func _physics_process(delta: float) -> void:
 
 	speed_kph = forward_speed_kph()
 	brake_input = InputRouter.brake_reverse
+	drift_input = InputRouter.drift
 	_update_steering(delta)
 	_forward = -global_basis.z
 	_right = global_basis.x
@@ -277,37 +284,134 @@ func _simulate_wheel(wheel: WheelMount, space: PhysicsDirectSpaceState3D, delta:
 	_apply_tyre_forces(wheel, offset, point_velocity, load, delta)
 
 
-## Where the arcade model lives. Lateral and longitudinal grip are capped
-## independently, so drifting breaks sideways grip while leaving traction and
-## braking untouched — the thing VehicleBody3D's single friction value could not
-## express.
+## Where the arcade model lives. One friction budget per tyre, shaped as an
+## ellipse: lateral and longitudinal keep their own limits, but they are spent
+## from the same purse.
+##
+## ⚠️ **An ellipse is not the isotropic circle `P0-5a` rejected, and the
+## difference is the whole argument.** `VehicleWheel3D` has a single
+## `friction_slip`, so its budget is a *circle* — `grip_lateral` and
+## `grip_longitudinal` collapse into each other and a drift cannot break sideways
+## grip without taking traction and braking with it. Here the semi-axes stay
+## separate, so the two dials still mean what they say. What is new is the
+## coupling between them, which is the part real tyres have and this model did
+## not: until now a car could brake at 0.8 g through full lock and lose no
+## cornering grip whatsoever, because the two clamps never spoke to each other.
+##
+## The drift falls out of that rather than being a case in it — see
+## `_locked_tyre_force`.
 func _apply_tyre_forces(
 	wheel: WheelMount, offset: Vector3, point_velocity: Vector3, load: float, delta: float
 ) -> void:
 	var forward: Vector3 = _steered_forward if wheel.steers else _forward
 	var right: Vector3 = _steered_right if wheel.steers else _right
 
-	# Biased by axle, not uniform. Equal scaling can only produce a four-wheel
-	# slide; the rear has to let go while the front keeps enough grip to point
-	# the car, or the drift ploughs wide instead of rotating.
-	var lateral_grip: float = profile.grip_lateral
-	if InputRouter.drift:
-		lateral_grip *= (
-			profile.drift_front_grip_scale if wheel.is_front else profile.drift_grip_scale
-		)
+	var lateral_cap: float = profile.grip_lateral * load
+	var longitudinal_cap: float = profile.grip_longitudinal * load
+	# ⚠️ An unloaded tyre has no friction budget at all, and every division below —
+	# here and in _locked_tyre_force, which trusts this guard rather than repeating
+	# it — has one of these underneath. Reached in normal driving, not just in the
+	# degenerate case: load goes to zero on the inside wheels of a hard corner.
+	#
+	# ⚠️ It also swallows a profile with grip_lateral or grip_longitudinal at zero,
+	# which is legal and would silently take *both* axes out — no drive, no brakes,
+	# no assert. Nobody ships that, but this early return means more than
+	# "the wheel is in the air".
+	if lateral_cap <= 0.0 or longitudinal_cap <= 0.0:
+		return
 
-	# Force that would cancel all sideways slip this tick, capped by grip.
-	# Dividing by delta is right here: cancelling velocity v needs impulse m·v,
-	# and apply_force delivers F·delta.
-	var lateral_speed: float = point_velocity.dot(right)
-	var lateral_force: float = clampf(
-		-lateral_speed * _corner_mass / delta, -lateral_grip * load, lateral_grip * load
-	)
-	apply_force(right * lateral_force, offset)
+	var along: float = point_velocity.dot(forward)
+	var across: float = point_velocity.dot(right)
 
-	var drive: float = _longitudinal_force(wheel, point_velocity.dot(forward), delta)
-	var traction_cap: float = profile.grip_longitudinal * load
-	apply_force(forward * clampf(drive, -traction_cap, traction_cap), offset)
+	# Force that would cancel all sideways slip this tick. Dividing by delta is
+	# right here: cancelling velocity v needs impulse m·v, and apply_force
+	# delivers F·delta.
+	var lateral: float = -across * _corner_mass / delta
+	var longitudinal: float = _longitudinal_force(wheel, along, delta)
+
+	# How much of the tyre is being asked for, as a fraction of the ellipse. Both
+	# demands are scaled by the same factor when it exceeds 1, so the direction of
+	# the force the tyre wanted survives and only its magnitude is limited —
+	# clamping the two axes separately would bend it toward whichever saturated.
+	#
+	# Squared first: the root is only needed to divide by, so an unsaturated tyre —
+	# which is most tyres on most ticks — never pays for one.
+	var share := Vector2(lateral / lateral_cap, longitudinal / longitudinal_cap)
+	if share.length_squared() > 1.0:
+		var demand: float = share.length()
+		lateral /= demand
+		longitudinal /= demand
+	var rolling: Vector3 = right * lateral + forward * longitudinal
+
+	# The handbrake acts on the rear axle, and `is_front` is derived from chassis
+	# geometry rather than from `drives` — so this stays the rear axle on the
+	# front-wheel-drive Crown too (ARCHITECTURE.md, "drift bias").
+	if not drift_input or wheel.is_front:
+		apply_force(rolling, offset)
+		return
+
+	# Composed here from the same forward/right pair the rolling branch uses, so
+	# the lerp blends like against like rather than two differently-built vectors.
+	var locked := _locked_tyre_force(along, across, lateral_cap, longitudinal_cap, delta)
+	apply_force(rolling.lerp(forward * locked.x + right * locked.y, profile.handbrake_lock), offset)
+
+
+## What the rear tyre would do if the handbrake had locked it solid.
+##
+## ⚠️ **Nothing here reduces grip, and that is the whole mechanism.** A locked
+## tyre is not rolling, so it has no preferred direction: its friction opposes
+## the entire contact-patch velocity as one vector. At 60 kph with a few degrees
+## of slip that vector points almost straight backwards, so the *lateral*
+## component is what collapses — on its own, out of the geometry, with no drift
+## multiplier anywhere in it. The two fields this replaced, `drift_grip_scale`
+## and `drift_front_grip_scale`, were that result modelled without its cause,
+## which is why one of them had to soften the *front* axle for a manoeuvre that
+## does nothing to the front axle.
+##
+## ⚠️ **Measured, a fully locked rear axle spins this car, and no value of any
+## dial prevents it.** Held at full lock from 62.8 kph the slip angle reached
+## **162°** — the number `P0-5a` recorded for the *rejected* `VehicleBody3D` and
+## called a full spin rather than a slide — and *lowering* the handbrake's grip
+## made it worse, not better, because this force is the only thing resisting yaw
+## once the tail is loose. A 0.5 s tap span it too. That is not a bug in the
+## model; a real car at full lock with the rear axle locked really does spin.
+## What it is, is incompatible with `GAME_DESIGN.md`'s "easy to hold" — so the
+## caller blends this with the rolling force rather than switching to it, and
+## `handbrake_lock` is how far the lever was pulled. The full-lock spin is still
+## in here, reachable at 1.0, and the sweep in `docs/DECISIONS.md` is why the
+## shipped value is not.
+##
+## Takes the slip already resolved onto the wheel's axes, and returns its force
+## the same way — `x` along `forward`, `y` along `right` — so the caller composes
+## both branches from one pair of basis vectors.
+##
+## ⚠️ Both caps must be positive. This does not re-check them; `_apply_tyre_forces`
+## returns early on an unloaded tyre and that guard is the only thing standing
+## between these divisions and a zero.
+func _locked_tyre_force(
+	along: float, across: float, lateral_cap: float, longitudinal_cap: float, delta: float
+) -> Vector2:
+	# The same ellipse, read as a radius along the slip direction rather than as a
+	# budget split between two axes. A sliding tyre is still a tyre: it is no more
+	# isotropic than a rolling one, and capping this at the longitudinal figure
+	# alone would quietly hand the drift a circle after all.
+	var reach: float = Vector2(along / longitudinal_cap, across / lateral_cap).length()
+	# Zero only when the tyre is not sliding at all, both caps being positive.
+	if is_zero_approx(reach):
+		return Vector2.ZERO
+
+	# ⚠️ The slip speed cancels and is deliberately never computed. Friction here is
+	# `-slip/|slip| × limit`, and `limit` is itself proportional to `|slip|`, so the
+	# two divide out and what is left scales the slip components directly. Writing
+	# it the long way costs a length() and two divisions to reach the same number.
+	var limit: float = 1.0 / reach
+	# Capped at the force that exactly cancels the slip this tick, the same guard
+	# rolling resistance needs and for the same reason: an uncapped friction does
+	# not stop a sliding tyre, it reverses it and then holds it reversed.
+	# Not `scale`: that shadows Node3D's own property, which project.godot promotes
+	# to an error.
+	var gain: float = minf(limit, _corner_mass / delta)
+	return Vector2(-along * gain, -across * gain)
 
 
 func _longitudinal_force(wheel: WheelMount, rolling_speed: float, delta: float) -> float:

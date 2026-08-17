@@ -43,6 +43,21 @@ const _UNMAPPABLE: PackedStringArray = [
 ## shipped car so both right themselves at the same attitude.
 const _OVERTURNED_DOT: float = VehicleController.OVERTURNED_DOT
 
+## The per-axle lateral grip scales `handling.tres` carried when `P0-5a` was
+## measured, frozen here as constants.
+##
+## ⚠️ **They are deliberately no longer read from the profile, and that is not a
+## tidy-up.** The shipped car has had no such dial since the friction ellipse
+## landed: its tail steps out because a locked tyre spends its budget
+## longitudinally, so `drift_grip_scale` and `drift_front_grip_scale` were
+## deleted from `HandlingProfile` rather than left unread. This spike is evidence
+## for a decision taken against the numbers above, so it has to keep reproducing
+## the run that was actually made — which means pinning them, not tracking a
+## profile that has moved on. Changing them invalidates the comparison in
+## `docs/DECISIONS.md`, `P0-5a`; use `godot_drift_scale_override` to sweep.
+const _P0_5A_REAR_GRIP_SCALE: float = 0.65
+const _P0_5A_FRONT_GRIP_SCALE: float = 0.85
+
 ## ⚠️ **Positive `engine_force` drives this rig backwards.** Godot resolves a
 ## wheel's forward axis from the wheel node's own basis, so the sign belongs to
 ## the rig rather than to a global convention — re-measure it by driving if the
@@ -75,9 +90,9 @@ const _DRIVE_SIGN: float = -1.0
 ## across an axle. 0 suppresses body roll entirely.
 @export_range(0.0, 1.0, 0.01) var godot_roll_influence: float = 0.2
 
-## Rear-axle friction scale while drift is held, overriding the profile's
-## `drift_grip_scale`. Negative means "use the profile", which is what a
-## like-for-like comparison run wants.
+## Rear-axle friction scale while drift is held, overriding
+## `_P0_5A_REAR_GRIP_SCALE`. Negative means "use the recorded value", which is
+## what a like-for-like comparison run wants.
 ##
 ## It exists to sweep the one number the built-in vehicle collapses grip into, so
 ## "is there a value that drifts?" can be answered by measurement rather than by
@@ -228,11 +243,18 @@ func forward_speed_kph() -> float:
 ## Angle between where the car points and where it is going, in degrees. Zero
 ## when tracking, 90° fully sideways, above 90° travelling backwards — which is
 ## what a spin looks like in this number.
+## ⚠️ Both vectors are flattened to the ground plane, and the nose one was not
+## until `Q49`. Comparing a flattened velocity against a pitched nose measures the
+## car's attitude as well as its slip — immaterial on the level skidpad every
+## recorded figure was taken on, wrong the moment a kerb or a landing is involved.
+## `tools/skidpad_ablation.gd` grades the shipped car with this same definition,
+## and `Q49` compares the two instruments' numbers, so they have to agree.
 func slip_angle_deg() -> float:
 	var velocity: Vector3 = Vector3(linear_velocity.x, 0.0, linear_velocity.z)
 	if velocity.length() < 1.0:
 		return 0.0
-	return rad_to_deg(velocity.normalized().angle_to(-global_basis.z))
+	var nose: Vector3 = -global_basis.z
+	return rad_to_deg(velocity.normalized().angle_to(Vector3(nose.x, 0.0, nose.z).normalized()))
 
 
 func _log(delta: float, speed: float) -> void:
@@ -316,8 +338,9 @@ func _apply_drive(speed: float) -> void:
 ## The drift dial, and the whole point of the spike.
 ##
 ## Per-axle friction scaling is expressible — the rear wheels can be given a
-## lower `wheel_friction_slip` than the front, which is what `drift_grip_scale`
-## and `drift_front_grip_scale` ask for. What is *not* expressible is that the
+## lower `wheel_friction_slip` than the front, which is what
+## `_P0_5A_REAR_GRIP_SCALE` and `_P0_5A_FRONT_GRIP_SCALE` ask for. What is *not*
+## expressible is that the
 ## scaling apply to lateral grip only: the same number is the tyre's longitudinal
 ## limit, so the rear axle loses drive and braking by exactly the factor that
 ## lets the tail step out. Watch `speed` against `slip` in the telemetry while
@@ -331,9 +354,9 @@ func _apply_drive(speed: float) -> void:
 func _apply_drift() -> void:
 	var held: bool = InputRouter.drift
 	var override: float = godot_drift_scale_override
-	var rear_grip: float = override if override >= 0.0 else profile.drift_grip_scale
+	var rear_grip: float = override if override >= 0.0 else _P0_5A_REAR_GRIP_SCALE
 	var rear: float = godot_friction_slip * (rear_grip if held else 1.0)
-	var front: float = godot_friction_slip * (profile.drift_front_grip_scale if held else 1.0)
+	var front: float = godot_friction_slip * (_P0_5A_FRONT_GRIP_SCALE if held else 1.0)
 	for wheel: VehicleWheel3D in _rear:
 		wheel.wheel_friction_slip = rear
 	for wheel: VehicleWheel3D in _front:

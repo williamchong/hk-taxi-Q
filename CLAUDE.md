@@ -99,6 +99,13 @@ Common emoji for this project:
 - Façade-survey or `facade_hue.strength` changes: also `tools/facade_chroma.py`, and paste its table
   into `docs/ART_DESIGN.md`. `Q30`'s numbers are the argument that the shipped palette is not the
   authored one, and they are only an argument while they describe the survey that ships.
+- Handling changes — `_apply_tyre_forces`, `HandlingProfile` or `handling.tres`: also
+  `tools/skidpad.sh`, before **and** after, and paste both tables. It grades rather than checks, so
+  `check.sh` cannot and should not run it. ⚠️ Run the **wrapper**, never `skidpad_ablation.gd`
+  directly — Godot exits `0` on a parse error, so only the wrapper's exit code means anything.
+  ⚠️ Measure on `skidpad.tscn`, never `city_drive.tscn` — a 0.14° micro-gradient there is worth the
+  whole quantity under test, and a published figure has already had to be withdrawn over it
+  (`P0-5b/c/d`).
 - Road-surface, deck-height or ground changes: also `tools/deck_error.py`, `tools/overhang.py` and
   `tools/ground_clearance.py`, by hand after a build. They grade the *shipped* bundle and share no
   code with the pipeline — `check.sh` does not require a built region and should not start requiring

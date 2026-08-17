@@ -4804,3 +4804,112 @@ at the price of a new prompt hash and a paid re-survey, which is the asymmetry t
 recording rather than discarding.
 
 **See.** `Q40` · `Q41` · `Q42` · `Q47` · `Q37` · `P3-6` · `P3-7a` · `PLAN.md` `P3-7a`
+
+## `Q49` — A tyre spends one budget, and the handbrake that follows spins the car
+
+**Status.** ✅ Ellipse shipped · 🟡 **Drift feel unresolved** — the value is a compromise, not an
+answer
+
+**Claim.** `_apply_tyre_forces` caps lateral and longitudinal force together, on a **friction
+ellipse** with semi-axes `grip_lateral × load` and `grip_longitudinal × load`, instead of clamping
+each axis independently. The handbrake then blends the rear tyres toward a **locked** state, where
+friction opposes the whole slip vector rather than resolving into axes.
+
+⚠️ **An ellipse is not the isotropic circle `P0-5a` rejected, and that distinction is the whole
+licence for this change.** `VehicleWheel3D` has one `friction_slip`, so its budget is a circle and
+the two grip dials collapse into each other. Here the semi-axes stay separate and both dials keep
+their meaning. What is new is only the *coupling*: before this, the two clamps never spoke, so the
+car could brake at 0.8 g through full lock and lose no cornering grip whatsoever.
+
+**What the handbrake now is.** Nothing scales grip down. A locked tyre is not rolling, so it has no
+preferred direction — its friction opposes the entire contact-patch velocity, and at speed that
+vector points nearly straight backwards, so the *lateral* component collapses out of the geometry.
+That is the real mechanism, and it retired both `drift_grip_scale` and `drift_front_grip_scale`,
+which were the result modelled without its cause — which is why one of them had to soften the
+**front** axle for a manoeuvre that does nothing to the front axle. The front is now untouched.
+
+⚠️ **Measured: a fully locked rear axle spins this car, and no dial prevents it.** Held at full lock
+from 62.78 km/h, peak slip reached **162.1°**, against the **162.6°** `P0-5a` recorded for the
+*rejected* `VehicleBody3D` and called a full spin rather than a slide. ⚠️ Read the two as the same
+verdict, not as agreement to a decimal: `P0-5a`'s figure predates this entry's unification of the
+slip formula (below), and it was a different car on a different model. Two findings make the spin
+structural rather than a tuning miss:
+
+- **Lowering the handbrake's grip made it worse.** Swept 0.05 → 0.30, peak slip went **177.3° →
+  162.3°** and exit speed **−17.45 → 0.00 km/h**. This axle's friction is the only thing resisting
+  yaw once the tail is loose, so weakening it removes the brake on the spin, not the cause.
+- **A 0.5 s tap spun it too** — 135.8° to 170.5° across the same sweep. The spin is not an artefact
+  of holding the button, which is what a "make it a tap" fix would have assumed.
+
+This is correct physics. A real car at full lock with a locked rear axle really does spin. It is
+also the wrong game, so `handbrake_lock` blends the rolling and locked forces rather than switching
+between them, and the full-lock spin stays reachable at 1.0.
+
+**The compromise, and why it is not a solution.** With the blend, slip rises monotonically and the
+spin is gone — but slide and scrub are welded together, and the old model was **strictly better at
+the design targets**:
+
+| `handbrake_lock` | exit km/h | decay /s | decel m/s² | peak slip° | yaw° | distance m |
+|---|---|---|---|---|---|---|
+| 0.10 | 37.56 | 0.128 | 1.75 | 12.7 | −376.1 | 43.1 |
+| **0.15 (shipped)** | **28.39** | **0.198** | **2.39** | **16.0** | **−343.1** | **36.9** |
+| 0.20 | 19.41 | 0.293 | 3.01 | 18.8 | −306.3 | 31.0 |
+| 0.30 | 1.97 | 0.865 | 4.22 | 23.5 | −225.1 | 20.0 |
+| 1.00 | 0.00 | — | 4.36 | 48.1 | −125.1 | 7.8 |
+| *old model* | *34.55* | *0.149* | *1.96* | *57.8* | *−346.6* | *40.6* |
+
+The old fudge held a **57.8°** slide while scrubbing **1.96 m/s²**. Nothing on this curve reaches
+it: 0.15 buys 16.0° for 2.39. ⚠️ **`GAME_DESIGN.md`'s "easy to hold, scrubs little speed" is
+anti-physical** — a real handbrake trades speed for rotation, and the old model got the feel by
+declining to. 0.15 is chosen as the only value clearing `drift_slip_threshold_deg` (14.0°) while
+keeping decay nearest the authored `drift_speed_scrub_per_s` (0.08); both are still missed.
+
+✅ **The route out is already scheduled, and this is evidence for it.** A real driver sustains the
+slide on the throttle, spinning the driven rear wheels back up — that restores forward thrust while
+lateral grip stays broken, which is exactly "slides a lot, scrubs little". It is unreachable here
+because the model has no per-wheel angular velocity. `PLAN.md` schedules that into `B4` for skid
+smoke and lockup, with "do it when the effects that consume it are built, not before" — this is a
+second consumer, and a load-bearing one.
+
+**Also measured.** Cornering is no longer free: a 4 s full-lock corner at throttle **held 62.26 km/h
+where it used to gain to 81.64**, turning tighter for it (yaw −428.9° against −354.9°) over 68.2 m
+instead of 82.0. Braking and coasting are **byte-identical** — 8.79 m/s², stop in 1.97 s / 16.6 m;
+coast to rest in 9.40 s — which is the ellipse behaving: neither manoeuvre asks for two axes at once.
+
+**The instrument.** `tools/skidpad.sh`, five manoeuvres on `skidpad.tscn`, `--handbrake=` to
+sweep, `--scene=` to point it at `skidpad_builtin.tscn` and grade `P0-5a`'s rejected car on the same
+ground. It grades and does not check, so it stays out of `check.sh`. Every figure above is one
+command. Its braking row reproduces `P0-5b/c/d`'s published stop — 72.8 km/h in 2.30 s / 21.9 m
+scales to 1.98 s / 16.3 m at this entry speed, against 1.97 / 16.6 measured — which is the closest
+thing to a calibration this project has.
+
+⚠️ **Three harness bugs, recorded because each produced a plausible number.** The run-up left the
+throttle held, so the coast manoeuvre measured 30 s of *acceleration* to 126 km/h and failed for not
+stopping — wearing the costume of `P0-5b/c/d`'s fifth bug, which is that exact symptom. Displacement
+and `angle_difference` were read end-to-end, so a car that circles reported **6.2 m** travelled and
+**5.1°** of yaw where the truth was ~70 m and ~360°; both accumulate per tick now. And an
+`Array`/`Array[float]` mismatch killed the coroutine mid-run, leaving `ABLATION OK` printed over no
+table — `_printed_rows` now makes an empty run a failure.
+
+⚠️ **The two instruments were measuring different angles.** `builtin_vehicle_controller.gd`'s
+`slip_angle_deg()` flattened the *velocity* to the ground plane and left the **nose** vector pitched,
+so it read the car's attitude into its slip — immaterial on the level skidpad every recorded figure
+came from, wrong the moment a kerb or a landing is involved, and not a like-for-like basis for the
+comparison this entry makes. Both now flatten both vectors, and the two agree exactly: driven through
+`--scene=res://scenes/dev/skidpad_builtin.tscn`, the spike's own telemetry and the ablation's
+independent computation both report **2.2°** peak. One definition, computed in two places because a
+`--script` tool can reach neither class.
+
+⚠️ **A `--script` tool must not name `VehicleController`.** `handling_profile.gd` already said so;
+this was rediscovered the hard way. A type annotation resolves the class in `_init`, before the
+first frame, where the `InputRouter` autoload does not exist — the class fails to compile, GDScript
+caches the failure, and `taxi.tscn` instances a `RigidBody3D` with a **null script**. The run then
+reports "no vehicle" while `WheelMount`, touching no autoload, is found perfectly. `driver.gd`'s
+duck-typing is deliberate, not incidental.
+
+**Consequences.** `HandlingProfile` loses `drift_grip_scale` and `drift_front_grip_scale`, gains
+`handbrake_lock`. `builtin_vehicle_controller.gd` — the rejected `P0-5a` spike — now holds the two
+retired values as frozen constants rather than reading a profile that has moved on, so it keeps
+reproducing the run its findings were taken from.
+
+**See.** `P0-5a` · `P0-5b/c/d` · `GAME_DESIGN.md` "Controls" · `PLAN.md` `B4` · `P3-2b`
