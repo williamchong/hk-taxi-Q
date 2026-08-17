@@ -46,9 +46,12 @@ const PARAMETER_FRONT: StringName = &"lamp_front"
 
 ## How lit the world around the car is, darkest last.
 ##
-## ⚠️ **Ordered, and the comparisons below depend on it.** `_settle` asks
-## whether a reading is *darker* than what is committed by comparing these, so
-## inserting a state in the middle re-sorts the ladder rather than extending it.
+## ⚠️ **Ordered, and two functions depend on it.** `_settle` asks whether a
+## reading is *darker* than what is committed by comparing these, and
+## `_apply_beam` takes the lighter of two states with `<` and then tests the
+## result against `SUN` and `DARK` by name. So inserting a state in the middle
+## re-sorts the ladder rather than extending it, and it changes what the beams
+## do as well as when the lamps switch.
 enum Lighting {
 	## Open sky, sun on the car. Every front lamp out.
 	SUN,
@@ -69,6 +72,8 @@ enum Lighting {
 ## the timer for ever and the indicator that `steer_hold_s` exists to earn is the
 ## one thing that never comes on.
 const TURN_RELEASE: float = 0.75
+
+@export_group("Indicators")
 
 ## Flashes per second. UK and Hong Kong regulation puts a real one between 1 and
 ## 2 Hz, and the middle of that is also what reads as a flash rather than as a
@@ -103,6 +108,8 @@ const TURN_RELEASE: float = 0.75
 ## driver indicates before turning and this car indicates after, so it is already
 ## a read-out of what the car is doing rather than a signal of intent.
 @export_range(0.0, 3.0, 0.05) var steer_hold_s: float = 0.5
+
+@export_group("Light probe")
 
 ## How far the shadow probe looks along the sun before calling the car sunlit.
 ##
@@ -175,24 +182,26 @@ const TURN_RELEASE: float = 0.75
 ## and buys a lamp that only changes when the light really has.
 @export_range(0.0, 10.0, 0.05, "suffix:s") var light_hold_s: float = 1.6
 
-## How hard the main beams throw light on the world.
-##
-## ⚠️ **A lit lens and a thrown beam are two different features, and the lens
-## alone is what looked finished.** The emissive lenses read perfectly from
-## behind the car and light nothing in front of it, so under the HKCEC deck the
-## taxi had blazing lamps on a pitch-black road — the failure only a frame from
-## *ahead* of the car shows.
-##
-## Priced against the rig rather than chosen: `golden_hour.tscn`'s sun is 1.4 and
-## `clean_daylight.tres` glows over 1.0, so a beam that reads on unlit tarmac
-## without blowing out the kerb it crosses sits well above the sun's number and
-## still under what would clip the road to white.
-## ⚠️ **Per lamp, not per car.** Two cones overlap down the middle of the road,
-## which is exactly where the player looks, so this is well under what a single
-## central spot wanted.
-@export_range(0.0, 24.0, 0.1) var beam_energy: float = 7.0
+@export_group("Thrown beams")
 
 ## What share of the beam the side lamps throw, in energy and in reach.
+##
+## ⚠️ **The only beam dial here, because the scene owns the rest.** How bright a
+## lamp is and how far it reaches are properties of the *lamp*, authored beside
+## its position and its cone angle in `taxi.tscn` and read once in `_ready` —
+## which is what lets a roster car carry a dimmer or narrower beam without a
+## second export. This is the one number that belongs to the *state* rather than
+## to the fitting: what `SHADOW` does to whatever the lamp was authored at.
+##
+## ⚠️ It shipped the other way round for a moment, and the asymmetry was silent:
+## reach came from the scene while energy came from an export, so the authored
+## `light_energy` was overwritten before the first frame and editing it did
+## nothing at all.
+##
+## ⚠️ **Not zero, and not much above it.** Position lamps exist to be *seen*, not
+## to see by, so a side lamp that lights the road as far as a headlamp erases the
+## difference the two circuits were split to express. A short dim pool says "lit,
+## but not driving on it".
 ##
 ## ⚠️ **Not zero, and not much above it.** Position lamps exist to be *seen*, not
 ## to see by, so a side lamp that lights the road as far as a headlamp erases the
@@ -251,9 +260,13 @@ var _probe := PhysicsRayQueryParameters3D.new()
 ## However many the scene holds is however many this switches, so a roster car
 ## can ship one cone, or none, without touching this file.
 var _beams: Array[SpotLight3D] = []
-## Each beam's authored reach, by index, so `sidelamp_beam` can shorten it and
-## put it back. Cached because the scene owns the number — this only scales it.
+## Each beam's authored reach and brightness, by index, so `sidelamp_beam` can
+## scale them down and put them back. Cached because the **scene** owns both
+## numbers and this only scales them — and cached rather than read back off the
+## light, because `share` can be 0.3 or 1.0 and dividing the authored value out
+## of a scaled one loses it the first time it is written.
 var _beam_ranges_m: PackedFloat32Array = PackedFloat32Array()
+var _beam_energies: PackedFloat32Array = PackedFloat32Array()
 
 
 func _ready() -> void:
@@ -290,9 +303,15 @@ func _ready() -> void:
 			var beam := node as SpotLight3D
 			_beams.append(beam)
 			_beam_ranges_m.append(beam.spot_range)
+			_beam_energies.append(beam.light_energy)
 	read_rig()
-	# Applied once here rather than waited for: `_apply_beam` only runs on a
-	# change of state, and the state a car starts in is a change from nothing.
+	# ⚠️ **This call can only ever put the beams *out*, and that is the point.**
+	# Both `_lighting` and `_seen` start at `SUN`, so there is no state a car
+	# could boot into that this would light. What it is for is the scene: a car
+	# authored with `visible = true` on its lamps — the obvious mistake to make
+	# when adding one to a roster model — would otherwise drive in daylight with
+	# its beams on until the first state *change* happened to correct it, which
+	# on a sunny route is never.
 	_apply_beam()
 
 
@@ -436,7 +455,10 @@ func _settle(delta: float) -> void:
 		_apply_beam()
 
 
-## Point the thrown light at whatever `_lighting` now says.
+## Point the thrown light at the **lighter** of `_lighting` and the last probe.
+##
+## ⚠️ Deliberately not "whatever `_lighting` says" — the beams and the lenses
+## read different things, and the block comment below is the argument for it.
 ##
 ## ⚠️ **Called on a change of state, not every tick, and that is the one place
 ## in this file where it matters.** The lens writes are per-instance shader
@@ -462,6 +484,15 @@ func _apply_beam() -> void:
 	# switching them — leaving a deck into open shade drops them to the side
 	# lamps' pool while `_lighting` is still `DARK`, instead of holding full beam
 	# and then cutting to nothing.
+	#
+	# ⚠️ **The cost is that the beams are the one thing here the holds no longer
+	# protect, and the symptom would be blamed on them.** `_seen` is the raw
+	# probe with no hold on it, so in exactly the picket fence `light_hold_s`
+	# exists for — committed `DARK`, readings alternating `SUN`/`SHADOW` — the
+	# lenses stay steady while the cones flick at up to `probe_hz`. That is the
+	# accepted price of never lighting sunlit tarmac. ⚠️ If it shows on a drive,
+	# the fix is a short hold on the *light-ward* beam transition alone; it is
+	# **not** a change to the ladder or to `_settle`, which are working.
 	var throwing: Lighting = _lighting if _lighting < _seen else _seen
 
 	# Hidden rather than dimmed to nothing. A zero-energy light is still a light
@@ -474,9 +505,10 @@ func _apply_beam() -> void:
 		beam.visible = lit
 		if not lit:
 			continue
-		beam.light_energy = beam_energy * share
+		beam.light_energy = _beam_energies[i] * share
 		# Reach is scaled with brightness rather than held. A dim lamp that still
-		# reaches 40 m lights a far kerb it could never really touch, which reads
+		# reached the authored 32 m would light a far kerb it could never really
+		# touch, which reads
 		# as the road brightening on its own rather than as the car lighting it.
 		beam.spot_range = _beam_ranges_m[i] * share
 

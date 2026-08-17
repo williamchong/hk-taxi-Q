@@ -70,9 +70,28 @@ script = ExtResource("9_lamps")
 ; light_energy is per lamp, and two overlapping cones add where they cross —
 ; which is the middle of the road. shadow_enabled stays off, and that is the
 ; mobile tier's rule rather than a saving: docs/ART_DESIGN.md allows vehicle blob
-; shadows and no realtime shadow maps. light_energy and spot_range are written by
-; the script from beam_energy and sidelamp_beam; the values here are what a main
-; beam is authored at. Godot strips these comments on any editor resave, so the
+; shadows and no realtime shadow maps.
+;
+; distance_fade is NOT a saving, it is a seat at the table. Forward Mobile pairs
+; at most 8 spot lights PER RENDERED OBJECT and the fragment shader loops that
+; fixed list — measured linear to 8 and then exactly zero from the 9th on, with
+; no warning. roads.glb is ONE mesh for the whole region (docs/ARCHITECTURE.md),
+; so every beam in the game competes for the same 8 slots: at 2 lamps a car that
+; is FOUR CARS, and which four is decided by pair order rather than by distance,
+; so beams would pop on and off the road as the BVH re-pairs. Fading a light out
+; frees its slot, measured: 16 spots on one object give 8 units of light, and
+; fading the first 8 gives the same 8 units from the other half. 35 m of full
+; reach is well past the chase camera and past where a 32 m cone is more than a
+; few pixels, so nothing visible is spent. ⚠️ This bounds the competitors, it does
+; not cap them — a dense street can still put more than four cars inside 50 m,
+; and the roster owes an explicit nearest-N rule on top. See DECISIONS P3-11e.
+;
+; THIS NODE OWNS BRIGHTNESS AND REACH. vehicle_lamps.gd reads light_energy and
+; spot_range once in _ready and thereafter only scales them by sidelamp_beam, so
+; both values here are live and a roster car can carry a dimmer or shorter beam
+; without touching the script. It briefly worked the other way for energy alone
+; — an export overwrote this before the first frame, so editing it did nothing
+; and nothing said so. Godot strips these comments on any editor resave, so the
 ; reasoning lives in the script, not here.
 [node name="HeadlampL" type="SpotLight3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.97030, 0.24192, 0, -0.24192, 0.97030, -0.58, 0.5, -2.05)
@@ -84,6 +103,9 @@ spot_range = 32.0
 spot_angle = 13.0
 spot_angle_attenuation = 2.2
 spot_attenuation = 0.9
+distance_fade_enabled = true
+distance_fade_begin = 35.0
+distance_fade_length = 15.0
 
 [node name="HeadlampR" type="SpotLight3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.97030, 0.24192, 0, -0.24192, 0.97030, 0.58, 0.5, -2.05)
@@ -95,6 +117,9 @@ spot_range = 32.0
 spot_angle = 13.0
 spot_angle_attenuation = 2.2
 spot_attenuation = 0.9
+distance_fade_enabled = true
+distance_fade_begin = 35.0
+distance_fade_length = 15.0
 
 ; Feeds the body shader the scene's real sun, so the glint never carries a
 ; second copy of the rig's rotation. See scripts/vehicle/sun_glint.gd.

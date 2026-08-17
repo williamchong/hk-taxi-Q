@@ -3932,7 +3932,7 @@ they light nothing: under the HKCEC deck the taxi drove with blazing lamps over 
 which the user caught on a chase-camera frame. So `taxi.tscn` now carries a `SpotLight3D` that
 `vehicle_lamps.gd` switches on the same ladder — full on `DARK`, `sidelamp_beam` (0.3) of the energy
 *and of the reach* on `SHADOW`, hidden on `SUN`. Scaling reach with brightness matters: a dim lamp
-that still reaches 40 m lights a far kerb it could never touch, which reads as the road brightening
+that still reached the full 32 m would light a far kerb it could never touch, which reads as the road brightening
 by itself rather than as the car lighting it.
 
 **One cone per lamp — and the single central spot that shipped first was refused on the look.** The
@@ -3964,8 +3964,13 @@ softens the edge, because a crisp-edged circle of light is the other half of the
 which is what `spot_range` alone does. ⚠️ A proper low-beam has a *sharp horizontal cutoff*, which a
 `SpotLight3D` cannot express — the honest fix is `light_projector`, and it is **refused**: the
 non-textured set ships 0 images, and one texture for one lamp is not the place to break that.
-`beam_energy` is **per lamp**, because two cones add where they cross and where they cross is the
-middle of the road.
+**The scene owns brightness and reach; the script owns only what a *state* does to them.**
+`vehicle_lamps.gd` reads `light_energy` and `spot_range` off each lamp once and thereafter scales
+both by `sidelamp_beam`, so a roster car can carry a dimmer or shorter beam with no second export.
+Energy is per lamp, because two cones add where they cross and where they cross is the middle of the
+road. ⚠️ It shipped asymmetric for a moment and the asymmetry was **silent**: reach came from the
+scene while energy came from an export that overwrote the authored value before the first frame, so
+editing the light in the scene did nothing and nothing said so.
 
 **⚠️ The beams read the lighter of the held and current state; the lenses read the held one alone.**
 A lens still lit as the car reaches sunlight is a lamp nobody has switched off yet, which is what
@@ -3977,9 +3982,30 @@ leaving a deck into open shade, instead of holding full beam and then cutting to
 
 ⚠️ **Shadows off, and that is the tier's rule rather than a saving** — `ART_DESIGN.md` grants the
 mobile tier vehicle blob shadows and no realtime shadow maps. It is also why the light is free:
-A/B'd on the same seeded run, `prims` and `draws` are **bit-identical** with the beam and without
-it. Hidden rather than dimmed to zero when off, because a zero-energy light is still a light the
-renderer gathers and loops over per object — and "off" is most cars, most of the time.
+A/B'd on the same seeded run by stashing the scene, `prims` and `draws` are **bit-identical** with
+one cone and with none — and the second cone moved neither, so the measurement is *two lights cost
+what none do*, not *the first one was free*. **Hidden rather than dimmed to zero when off, and the
+guess is now measured**: on Forward Mobile, 1,200 lights at `light_energy = 0` cost **+0.44 µs each**
+of renderer CPU — *exactly* what 1,200 at full energy cost, since Godot has no zero-energy shortcut —
+while 1,200 **hidden** lights measure **0.00**, dropping out of the pairing pass entirely. "Off" is
+most cars most of the time, so this is the common case rather than the corner.
+
+**⚠️ The roster ceiling is four cars, and it is a silent correctness limit rather than a performance
+one.** Forward Mobile is *not* clustered: it pairs at most **8 spot lights per rendered object** and
+the fragment shader loops that fixed list. Measured on one mesh with N identical spots, luminance is
+linear to 8 and then **exactly zero from the 9th on, with no warning and no fallback**. Cross that
+with `ARCHITECTURE.md`: `roads.glb` is **one mesh for the whole region**, deliberately not tiled, and
+"on screen whenever the player is". So every beam in the game competes for the same 8 slots — at two
+lamps a car that is **four cars** — and which four is decided by pair order rather than by distance,
+so beams pop on and off the road as the BVH re-pairs. The player's own taxi is not guaranteed a slot.
+
+`distance_fade` is the mitigation, and it is a *seat at the table* rather than a saving: a faded
+light frees its slot. Measured — 16 spots on one object give 8 units of light, and fading the first 8
+gives the same 8 units from the other half. Shipped at `begin 35 m / length 15 m`, well past the
+chase camera and past where a 32 m cone is more than a few pixels; the shipped frame is
+byte-identical with it and without. ⚠️ **It bounds the competitors, it does not cap them.** A dense
+street can still put more than four cars inside 50 m, so the roster owes an explicit *nearest-N gets
+beams* rule — and owes it **before** it is built on the assumption that a taxi simply has headlights.
 
 **`lamp_lit` was full, so there are two vectors now.** Circuits 5–8 live in `lamp_front`, and ⚠️ the
 **ordering is the contract, not the declaration** — a channel inserted ahead of the others silently
@@ -4954,14 +4980,27 @@ one the reader refuses.
   `schema_version` bump: filling a reserved field a refusal-aware consumer already reads as
   "0 = refused" changes bytes, not meaning (`Q42`).
 
-⚠️ **The dataset decision is already made; the bytes are not on disk.** `facade_glazing.py`'s region
-run (2,171 buildings, 2,143 gated) proves the read works at region scale, but it did not leave the
-sheets behind: `etl/sources/hong_kong/individualised/` holds **one of six**, the `11-SW-9D` the
-HKCEC repaint needs, and `DATA_SOURCES.md` records the same discard-after-use pattern for `P3-7`'s
-1.10 GB probe. So a region band survey costs a **5.86 GB hand re-download**, not nothing. ✅ What is
-free is that it needs no new source, no new licence position and no new rule reading — the texture
-is consulted at build time and discarded, the palette stays the `Q33`-checked materials, and
-individualised is the per-building set, not the tile-based welded mesh rule 1 forbids.
+✅ **The dataset decision is already made, and the bytes *are* on disk — corrected 2026-08-17.**
+`facade_glazing.py`'s region run (2,171 buildings, 2,143 gated) proves the read works at region
+scale, and all six sheets sit in **`etl/sources/individualised/`**, 5.7 GB, fetched 2026-08-06 and
+verified intact. So a region band survey costs **no download at all** on this machine.
+
+⚠️ **The retracted claim was "one of six is on disk, so a region run is a 5.86 GB hand re-download",
+and it was wrong the day it was written** — a week after the sheets landed. It read
+`etl/sources/hong_kong/individualised/`, the `fetch.source_dir` path, which really does hold one
+sheet. But `facade_survey.py`, `facade_glazing.py` and `facade_grammar.py` all default `--zip-dir`
+to `SOURCES_ROOT / "individualised"` — the *other* directory, one level up. **Two paths whose names
+differ only by a city segment, and the cost claim was read off the one no survey tool opens.**
+Check `INDIVIDUALISED_DIR`, not the fetch tree, before pricing anything against the photography.
+
+⚠️ **The retention risk it was reaching for is real and unchanged.** `etl/sources/` is gitignored,
+so a clone has none of this and `DATA_SOURCES.md` records the same discard-after-use pattern for
+`P3-7`'s 1.10 GB probe. The 5.86 GB is what a *fresh* machine pays; it is not what this one owes,
+and no decision should be priced as though the sheets were gone while they are sitting there.
+
+✅ What is free either way is that it needs no new source, no new licence position and no new rule
+reading — the texture is consulted at build time and discarded, the palette stays the `Q33`-checked
+materials, and individualised is the per-building set, not the tile-based welded mesh rule 1 forbids.
 
 **Not decided: whether to build it at all.** `PROGRESS.md` records that no unstarted task remains
 before the `P3-9a` gate, and adding one would be the first thing to break that. The cost of doing

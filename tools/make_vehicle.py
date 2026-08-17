@@ -882,6 +882,12 @@ def taxi_body(chassis: Chassis, shape: Proportions) -> MeshData:
         # inboard, an amber indicator outboard of it, and a small white lamp low
         # in the bumper. The amber is what stops the nose reading as two blank
         # rectangles, and it pairs with the amber at the top of the tail cluster.
+        # ⚠️ **`0.58` is also authored in `game/scenes/vehicle/taxi.tscn`**, which
+        # seats `HeadlampL`/`HeadlampR` — the cones the lamps throw (`P3-11e`) —
+        # at the same offset. Nothing carries a part coordinate across the
+        # Python/Godot seam, so moving this lens leaves the light where it was
+        # and the beam simply stops coming out of the lamp. Visible only in a
+        # frame, and only if someone looks at the nose.
         parts.append(
             box_at(
                 (side * 0.58, 0.19, front_z + 0.015),
