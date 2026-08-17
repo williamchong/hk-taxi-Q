@@ -69,6 +69,7 @@ from deck_error import (  # noqa: E402
     bundle_arguments,
     drawn_surface,
     load_bundle,
+    log_bundle,
     nearest,
     stations,
     structure_faces,
@@ -369,13 +370,7 @@ def main(argv: list[str] | None = None) -> int:
 
     city = load_city(args.city)
     manifest, tiles = load_bundle(args.generated, args.lod, args.city)
-    log.info(
-        "%s / %s, LOD %d, built %s",
-        manifest["city_id"],
-        manifest["region_id"],
-        args.lod,
-        manifest.get("generated_utc", "unknown"),
-    )
+    log_bundle(manifest, args.lod)
 
     deck, structure_class = structure_faces(city, tiles)
     tallies, widened = survey(

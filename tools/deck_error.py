@@ -49,7 +49,7 @@ import itertools
 import json
 import logging
 import sys
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -132,18 +132,7 @@ class Faces:
         jitter: float,
         class_name: str = "structure",
     ) -> Faces:
-        blocks: list[np.ndarray] = []
-        for path in paths:
-            for mesh in read_glb(path):
-                if mesh.colours is None or not len(mesh.triangles):
-                    continue
-                # All three corners must wear the class. A triangle spanning two
-                # of them is a weld artefact rather than a surface.
-                wears = _wears(mesh.colours[:, :3], colour, jitter)
-                faces = mesh.triangles[wears[mesh.triangles].all(axis=1)]
-                if len(faces):
-                    blocks.append(mesh.positions[faces].astype(np.float64))
-
+        blocks = list(class_triangles(paths, lambda colours: wears(colours, colour, jitter)))
         if not blocks:
             raise SystemExit(
                 f"no '{class_name}' geometry in the shipped tiles — is the colour right?"
@@ -189,7 +178,7 @@ class Faces:
         )
 
 
-def _wears(colours: np.ndarray, base: tuple[int, int, int], jitter: float) -> np.ndarray:
+def wears(colours: np.ndarray, base: tuple[int, int, int], jitter: float) -> np.ndarray:
     """Which vertex colours could be `base` after the building stage jittered it.
 
     ⚠️ An exact match finds almost nothing — 428 triangles of 434,149 on this
@@ -298,6 +287,46 @@ def load_bundle(generated: Path, lod: int, city_id: str) -> tuple[dict[str, Any]
     return manifest, [generated / tile["lods"][lod] for tile in manifest["tiles"]]
 
 
+def class_triangles(
+    paths: list[Path], keep: Callable[[np.ndarray], np.ndarray]
+) -> Iterator[np.ndarray]:
+    """Corner arrays for the triangles of one class, across the shipped tiles.
+
+    `keep` takes a mesh's `(n, 3)` uint8 vertex colours and returns which
+    vertices belong to the class — usually `wears` bound to a base colour, but
+    `carriageway_occupancy.py` passes a *complement* to pick buildings, which have
+    height-banded colours and so occupy many rays rather than one.
+
+    ⚠️ **All three corners must wear the class, and that rule lives here alone.**
+    A triangle spanning two of them is a weld artefact rather than a surface.
+    It was written out twice — once here and once in the occupancy tool — which
+    is two places for it to stop being true.
+    """
+    for path in paths:
+        for mesh in read_glb(path):
+            if mesh.colours is None or not len(mesh.triangles):
+                continue
+            worn = keep(mesh.colours[:, :3])
+            faces = mesh.triangles[worn[mesh.triangles].all(axis=1)]
+            if len(faces):
+                yield mesh.positions[faces].astype(np.float64)
+
+
+def log_bundle(manifest: dict[str, Any], lod: int) -> None:
+    """The build stamp, so a run pasted into a report says which build it graded.
+
+    Public because all four bundle graders open with it and a fifth would copy it
+    again — the argument `overhang.py` makes for its own four helpers.
+    """
+    log.info(
+        "%s / %s, LOD %d, built %s",
+        manifest["city_id"],
+        manifest["region_id"],
+        lod,
+        manifest.get("generated_utc", "unknown"),
+    )
+
+
 def class_faces(city: Any, tiles: list[Path], class_name: str) -> Faces:
     """Upward-facing geometry of one mesh class, across the shipped tiles.
 
@@ -306,7 +335,7 @@ def class_faces(city: Any, tiles: list[Path], class_name: str) -> Faces:
     cannot be graded at all — which is a config answer, not a missing feature.
 
     `jitter_for`, not the bare `colour_jitter`: a class may override it since
-    `P3-10`, and `_wears` is exact about the interval it tests, so the wrong
+    `P3-10`, and `wears` is exact about the interval it tests, so the wrong
     jitter widens or narrows the ray and silently changes what matches.
     """
     material = city.buildings.class_materials.get(class_name)
@@ -542,14 +571,7 @@ def main(argv: list[str] | None = None) -> int:
 
     city = load_city(args.city)
     manifest, tiles = load_bundle(args.generated, args.lod, args.city)
-    # The build stamp, so a run pasted into a report says which build it graded.
-    log.info(
-        "%s / %s, LOD %d, built %s",
-        manifest["city_id"],
-        manifest["region_id"],
-        args.lod,
-        manifest.get("generated_utc", "unknown"),
-    )
+    log_bundle(manifest, args.lod)
 
     deck, structure_class = structure_faces(city, tiles)
     taken = elevated_samples(args.generated, manifest, args.spacing_m, args.attribute_within_m)

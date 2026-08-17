@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from deck_error import Faces, _wears, measure, nearest, stations
+from deck_error import Faces, measure, nearest, stations, wears
 
 # `INFRASTRUCTURE`'s `class_materials` entry and `colour_jitter` from
 # `config/cities/hong_kong.yaml`. Copied rather than read through the `hong_kong`
@@ -28,24 +28,24 @@ class TestClassColour:
     so a class occupies a *ray* through its base colour rather than a value."""
 
     def test_the_unjittered_colour_is_its_own_class(self) -> None:
-        assert _wears(np.array([GREY]), GREY, JITTER).all()
+        assert wears(np.array([GREY]), GREY, JITTER).all()
 
     @pytest.mark.parametrize("factor", [0.95, 0.98, 1.0, 1.02, 1.05])
     def test_a_colour_anywhere_along_the_jitter_range_is_matched(self, factor: float) -> None:
         """The failure that started this: matching the base value alone finds
         only the meshes whose seed happened to land near a factor of one."""
         shade = np.array([[round(channel * factor) for channel in GREY]])
-        assert _wears(shade, GREY, JITTER).all(), shade
+        assert wears(shade, GREY, JITTER).all(), shade
 
     def test_a_colour_past_the_configured_jitter_is_refused(self) -> None:
         far = np.array([[round(channel * 1.30) for channel in GREY]])
-        assert not _wears(far, GREY, JITTER).any()
+        assert not wears(far, GREY, JITTER).any()
 
     def test_a_building_band_colour_is_not_mistaken_for_structure(self) -> None:
         """Warm and grey are different directions, not different brightnesses,
         which is what makes one factor across three channels a discriminator."""
         bands = np.array([[194, 177, 149], [200, 189, 170], [204, 186, 157]])
-        assert not _wears(bands, GREY, JITTER).any()
+        assert not wears(bands, GREY, JITTER).any()
 
     @pytest.mark.parametrize("base", [(255, 250, 240), (245, 240, 238)])
     def test_a_base_that_jitters_past_a_channel_is_refused(self, base) -> None:
@@ -57,7 +57,7 @@ class TestClassColour:
         jitter range rounds to colours this function rejects. Clamping bites at
         `base * (1 + jitter)`, not at 255."""
         with pytest.raises(SystemExit, match="channel limit"):
-            _wears(np.array([[250, 250, 250]]), base, JITTER)
+            wears(np.array([[250, 250, 250]]), base, JITTER)
 
 
 class TestFaces:

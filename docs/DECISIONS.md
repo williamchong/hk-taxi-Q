@@ -485,10 +485,65 @@ legal, and `P3-3`'s traffic will route into it — `RoadGraph` has no idea any o
 ⚠️ **A first measurement read 13.71% by marking each triangle's bounding box**; sampling the actual
 surfaces cut it to a third.
 
-**What it wants.** A verify tool that **fails the build when the carriageway is occupied**. Both
-halves want the same missing tool.
+**What it wanted.** A verify tool that **fails the build when the carriageway is occupied**. Both
+halves wanted the same missing tool. ✅ **`tools/carriageway_occupancy.py` shipped 2026-08-18**, the
+fourth sibling of `deck_error` / `overhang` / `ground_clearance` — hand-run, reads only the shipped
+bundle, shares no code with the pipeline. It **fails today**, and the fail is this entry.
 
-**See.** `Q20` · `Q24` · `P2-5`
+**The gate is per-edge, and that is a correction to how this question was posed.** A region share
+tells `P3-3` nothing: `RoadGraph` routes on edges, and what strands a traffic car is one blocked
+edge rather than an average — scattered occupancy a car can weave through and a wall straight across
+the road are the same percentage. The criterion is therefore **a clear corridor at least
+`lane_width_m` (3.2 m) wide, held continuously along every drivable level-0 edge**. Region shares
+are still gated, as a ratchet against the figures above, but they are no longer the headline.
+
+**Measured 2026-08-18, and it fails.** 🔴 **26 drivable level-0 edges keep less than one lane
+clear**, worst first: `e233` **0.00 m** (WAN CHAI INTERCHANGE), `e125` 0.48 m, `e314` 0.49 m
+(LEIGHTON ROAD), `e546` 0.49 m (CONVENTION AVENUE), `e788` 0.49 m (HUNG HING ROAD FLYOVER), `e485`
+0.49 m (WAN CHAI INTERCHANGE). ⚠️ **The blockage reaches the authored lanes, not just the
+widening** — the tool measures the same worst station a second time inside the un-widened width and
+six of the eight tightest read 0.00-0.49 m there too. That is a correction to this entry's own
+framing: the building half was recorded as "the 1.6x widening eating the frontage", and on these
+edges the obstruction is in the real street, so **narrowing would not clear them**.
+
+**The shares both pass, and read lower than the hand figure.** `BUILDING`+`LANDMARK` **1.302%**
+against 1.72%, `INFRASTRUCTURE` **1.115%** against 1.60%, off-grade **1.278%** against 1.87% — total
+**3.693%** where this entry recorded **5.17%**. Same direction, same rough ratio on all three, so it
+reads as one systematic difference rather than three. 🟡 **Not reconciled**, and not tuned toward:
+the likeliest cause is that these are different populations — `P3-6` took HKCEC *out of the tiles*
+on 2026-08-12, after the 5.17% was measured, and a re-measured `Q19` is not the same bundle. The
+instrument counts landmarks (0.085%) precisely so that difference cannot hide, but nothing has
+proved it is the whole gap.
+
+**Three implementation traps, all of which produced a plausible table.** Recorded because each is
+the kind this family keeps meeting. **(1)** The share was divided by the wrong area — `Q19`'s three
+figures sum to its headline, so they share one whole, and gating the level-0 pair against level-0
+area alone read the bars a tenth looser than written. **(2)** A trimmed cross-section was judged
+anyway: cells with no road drawn never enter the corridor list, so one clear cell out of twenty at a
+junction read as a 0.49 m corridor and **condemned 18 edges that are not blocked** — 44 failures
+where there are 26. **(3)** The landmark bearing was applied unnegated; `rot_y_deg` is a compass
+bearing and `generated_landmarks.gd` places a hero with the *negative* rotation. HKCEC's bearing is
+0.0, so that one was invisible until Central Plaza's 143.1 went through it.
+
+⚠️ **Two passes, one walk — and that is a correctness property, not a speed one.** The occupier
+index can only be pruned to the band the road occupies, so the road must be measured before the
+buildings are read. Writing the walk out twice cost **22 s of a 47 s run**, but the real defect was
+that the prune's superset property became a *convention*: change the level filter, the spacing or
+the attribution window in one copy and the index is pruned away from carriageway the survey then
+asks about, and every one of those cells reads **clear**. The walk is recorded into a `Lattice` and
+replayed, which makes it structural. Run time **47.4 s → 26.1 s**, with every measured figure
+unchanged.
+
+⚠️ **A vertical ray cannot find a wall**, which is why `Faces.heights_at` could not be reused
+however much it looks like the right query. A wall projects to a line in plan. The tool samples
+occupier *surfaces* on a lattice and bins them — the same method this entry's own ⚠️ note demands,
+after bounding boxes read 13.71%.
+
+**What this does not do.** It measures; it does not clear. Whether to spend the widening back is a
+`GAME_DESIGN.md` trade and a separate call — and on the evidence above, narrowing is not the fix for
+the edges that actually fail.
+
+**See.** `Q20` · `Q24` · `P2-5` · `P3-3` · `P3-6` for why the population moved
 
 ## `Q20` — Deck heights are sampled from `INFRASTRUCTURE`
 

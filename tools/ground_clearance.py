@@ -67,6 +67,7 @@ from deck_error import (  # noqa: E402
     class_faces,
     drawn_surface,
     load_bundle,
+    log_bundle,
     nearest,
 )
 from overhang import cross_section, half_width_at, half_widths, left_of, walk_width  # noqa: E402
@@ -354,13 +355,7 @@ def main(argv: list[str] | None = None) -> int:
 
     city = load_city(args.city)
     manifest, tiles = load_bundle(args.generated, args.lod, args.city)
-    log.info(
-        "%s / %s, LOD %d, built %s",
-        manifest["city_id"],
-        manifest["region_id"],
-        args.lod,
-        manifest.get("generated_utc", "unknown"),
-    )
+    log_bundle(manifest, args.lod)
 
     ground, terrain_class = ground_faces(city, tiles)
     found = survey(

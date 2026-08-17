@@ -156,7 +156,7 @@ git checkout game/project.godot game/export_presets.cfg
 git diff --exit-code game/project.godot game/export_presets.cfg   # this is the check
 ```
 
-**Two grading tools sit beside the suite and are run by hand.** Both read only the *shipped bundle*
+**Four grading tools sit beside the suite and are run by hand.** All read only the *shipped bundle*
 and share no code with the pipeline, because a stage cannot mark its own work — ask the ETL's own
 sampler about the ETL's own output and it reads |error| p90 0.02 m, which is the sampler agreeing
 with itself.
@@ -167,9 +167,19 @@ with itself.
 | `tools/overhang.py` | `Q22`/`Q23` — whether there is a deck beneath it at all, sampled *across the full drawn width*. A ribbon can pass the first and fail the second |
 | `tools/ground_clearance.py` | `Q18`/`Q24` — whether the drawn ground stands *in* the at-grade carriageway. Sizes `buildings.ground_sink_m`, and gates the sink separately from the road's own shape |
 
-`deck_error.py` owns the shared bundle reader; `overhang.py` owns the shared width sweep
-(`walk_width`, `cross_section`, `left_of`, `half_width_at`) and `ground_clearance.py` imports it,
-because reimplementing that walk means rediscovering its duplicated-vertex guard the hard way.
+| `tools/carriageway_occupancy.py` | `Q19` — whether anything **solid stands in the road at bumper height**, buildings and structure told apart by vertex colour. The only one that gates per *edge* rather than region-wide, because `RoadGraph` routes on edges and a share cannot tell a wall across the road from clutter beside it. ⚠️ **Fails today** |
+`deck_error.py` owns the shared bundle reader (`bundle_arguments`, `load_bundle`, `log_bundle`,
+`Faces`, `wears`, `nearest`); `overhang.py` owns the shared width sweep (`walk_width`,
+`cross_section`, `left_of`, `half_width_at`) and the other two import it, because reimplementing
+that walk means rediscovering its duplicated-vertex guard the hard way.
+
+⚠️ **A tool that needs two passes over the carriageway must still *walk* it once.**
+`carriageway_occupancy.py` genuinely needs two — the occupier index can only be pruned to the band
+the road occupies, so the road has to be measured before the buildings are read — and writing the
+walk out twice cost **22 s of a 47 s run** *and*, far worse, made the prune's superset property a
+convention rather than a guarantee: pass one visiting less than pass two asks about reads as
+**clear**, which is the one direction these tools must never flatter. It records the walk into a
+`Lattice` and replays it instead.
 
 ### GDScript warnings
 

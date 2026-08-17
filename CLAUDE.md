@@ -106,10 +106,14 @@ Common emoji for this project:
   ⚠️ Measure on `skidpad.tscn`, never `city_drive.tscn` — a 0.14° micro-gradient there is worth the
   whole quantity under test, and a published figure has already had to be withdrawn over it
   (`P0-5b/c/d`).
-- Road-surface, deck-height or ground changes: also `tools/deck_error.py`, `tools/overhang.py` and
-  `tools/ground_clearance.py`, by hand after a build. They grade the *shipped* bundle and share no
-  code with the pipeline — `check.sh` does not require a built region and should not start requiring
-  one. Moving the road moves what the last of the three measures, so it is not only a ground check.
+- Road-surface, deck-height or ground changes: also `tools/deck_error.py`, `tools/overhang.py`,
+  `tools/ground_clearance.py` and `tools/carriageway_occupancy.py`, by hand after a build. They grade
+  the *shipped* bundle and share no code with the pipeline — `check.sh` does not require a built
+  region and should not start requiring one. Moving the road moves what `ground_clearance.py`
+  measures, so it is not only a ground check — and **widening, building footprints and landmark
+  placement move `carriageway_occupancy.py`'s answer** without touching the road at all, so that one
+  is owed for those too. It gates per *edge*, because `RoadGraph` routes on edges. ⚠️ It **fails
+  today**; read the exit code rather than the table, and see `PROGRESS.md` for what it is failing on.
 - Update `docs/PROGRESS.md` — task status, metrics, risks, and the open-questions index.
 - Record any new decision, or any question that closes, in `docs/DECISIONS.md`, keyed by its ID.
 - **Bundle size is measured from a PCK, never summed from source files.** That rule has been wrong
