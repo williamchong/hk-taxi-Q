@@ -125,7 +125,8 @@ does. Running `--import` by hand tells you nothing unless you read the output.
 | `gdformat --check` | Layout across all of `game/` | yes |
 | `--import` | Autoloads and what they reach; also builds `game/.godot/` | yes |
 | warnings sweep | `--check-only` per script, grepping for `treated as error` | yes |
-| `verify_city`, `verify_tiles`, `verify_road_surface`, `verify_road_graph`, `verify_city_streamer`, `verify_spawn` | The generated-asset and runtime contracts | **no** |
+| `verify_beam_budget` | The spot-light cap — needs no built region, so it is the one runtime contract CI can check | yes |
+| `verify_city`, `verify_tiles`, `verify_road_surface`, `verify_road_graph`, `verify_city_streamer`, `verify_spawn`, `verify_landmarks` | The generated-asset contracts | **no** |
 
 The sweep is separate from `--import` because `--import` does not do the job: measured, an untyped
 variable planted in `greybox_builder.gd` went unreported, because the import step compiles only
@@ -166,8 +167,8 @@ with itself.
 | `tools/deck_error.py` | `Q20` — how far the drawn carriageway sits from the deck beneath it, *vertically*, sampled down centrelines. Gates on \|error\| p90, deepest intrusion, and the share it managed to measure at all |
 | `tools/overhang.py` | `Q22`/`Q23` — whether there is a deck beneath it at all, sampled *across the full drawn width*. A ribbon can pass the first and fail the second |
 | `tools/ground_clearance.py` | `Q18`/`Q24` — whether the drawn ground stands *in* the at-grade carriageway. Sizes `buildings.ground_sink_m`, and gates the sink separately from the road's own shape |
-
 | `tools/carriageway_occupancy.py` | `Q19` — whether anything **solid stands in the road at bumper height**, buildings and structure told apart by vertex colour. The only one that gates per *edge* rather than region-wide, because `RoadGraph` routes on edges and a share cannot tell a wall across the road from clutter beside it. ⚠️ **Fails today** |
+
 `deck_error.py` owns the shared bundle reader (`bundle_arguments`, `load_bundle`, `log_bundle`,
 `Faces`, `wears`, `nearest`); `overhang.py` owns the shared width sweep (`walk_width`,
 `cross_section`, `left_of`, `half_width_at`) and the other two import it, because reimplementing
@@ -872,6 +873,7 @@ inverted.
 | `tools/verify_city_streamer.gd` | The streaming policy — band edges, hysteresis both ways, and a region-wide residency sweep against the draw-call budget |
 | `tools/verify_spawn.gd` | The start line — orientation against its edge vector, nearside-lane placement, drop height, and the resolved edge against the fare node. **Builds the transposed basis and requires it to fail** |
 | `tools/verify_landmarks.gd` | `landmarks.json` — assets load with mesh and `-col` collision, triangle budget, placed AABB near `bounds_game`, and no tier-0 tile triangle inside each excluded footprint's interior core |
+| `tools/verify_beam_budget.gd` | `BeamBudget` — the spot-light cap is never exceeded **or under-spent**, the nearest cars win when registered farthest-first, a beamless rig takes no slot, and a despawn hands its slot on. ⚠️ The only verify tool that needs **no built region**: it builds its own stub rigs, so it runs whatever `VERIFY_GENERATED` says |
 | `tools/generated_scene_import.gd` | Import fixup — see `[importer_defaults]` above |
 
 ---

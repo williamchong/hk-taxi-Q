@@ -103,6 +103,14 @@ else
 	echo "  ok    warnings"
 fi
 
+# Runs whatever VERIFY_GENERATED says, and that is the point: it needs no built
+# region — only `tuning/beams.tres` and its own stub rigs — so it is the one
+# runtime contract here that CI can actually check. Grouping it with the
+# generated-asset tools would skip it exactly where it is cheapest to run.
+echo "==> verify_beam_budget"
+run_godot verify_beam_budget --headless --path "$ROOT/game" \
+	--script "res://tools/verify_beam_budget.gd"
+
 if [[ "$VERIFY_GENERATED" != 0 ]]; then
 	for tool in "${VERIFY_TOOLS[@]}"; do
 		echo "==> $tool"

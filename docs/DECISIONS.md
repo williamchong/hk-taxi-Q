@@ -4129,6 +4129,71 @@ streamer is still instancing tiles across the hold window and 41% of the frame c
 
 **See.** `P3-11d` · `P3-11c` · `Q21` · `Q26` · `ART_DESIGN.md` "Vehicles"
 
+## `BeamBudget` — the eight spot lights are rationed by distance, not by pair order
+
+**Status.** ✅ Shipped 2026-08-18 · **Owner.** `P3-11e` → `P3-3`
+
+**Claim.** Thrown beams are a **global** resource with a hard cap, so an arbiter hands them to the
+cars nearest the camera and denies the rest. `BeamBudget` is an autoload; lamp rigs register
+themselves; `beams.tres` holds the cap.
+
+**Why an arbiter and not a per-car rule.** Forward Mobile pairs **8 spot lights per rendered
+object** and the fragment shader loops that fixed list. `roads.glb` is one mesh for the whole region
+and on screen whenever the player is, so every beam in the game contends for the same list — at two
+lamps a car, **four cars**. The ninth light is not dimmer, it is **absent**: no warning, no
+fallback. ⚠️ **And which four win is pair order, not distance**, so beams pop as the BVH re-pairs and
+the player's own car is not guaranteed a slot in its own frame. No amount of per-car tuning reaches
+a limit that is enforced across objects.
+
+⚠️ **`distance_fade` was already shipped against this and does not close it.** Fading a far beam
+genuinely frees a slot — 16 spots become 8 units of light, byte-identical in the shipped frame — but
+it **bounds who competes** rather than capping how many win. Eight cars inside the fade radius still
+overrun the list. Both stay.
+
+**What is rationed, and what is not.** Only the thrown cone. A lens is emissive shading on the car's
+own material and costs no light slot, so a denied car still *reads* as lit — which is what a distant
+car should look like anyway. The grant is ANDed into `_apply_beam` rather than applied earlier, so a
+denied car keeps running the `SUN`/`SHADOW`/`DARK` ladder and arrives at its slot with a current
+state rather than a stale one. Cost is read per rig from `beam_count()` instead of assumed to be
+two, so a one-cone scooter and a four-lamp truck are priced as themselves; a rig too big for the
+remaining budget is **skipped rather than stopped at**, since passing over a truck to light two
+motorbikes spends more of the frame.
+
+**Evidence.** ✅ A/B on the same seeded run: the shipped frame is **byte-identical** with the arbiter
+and without it. One car exists, so it is granted and nothing moves — which is the correct result and
+also the reason this needed a test that does not use the scene.
+
+✅ **`verify_beam_budget.gd`, in `check.sh` and deliberately *outside* the `VERIFY_GENERATED` gate**
+— it needs no built region, so it is the one runtime contract here CI can check. Four assertions
+against stub rigs: 16 cars spend **exactly 8** of 8 slots (over-spend *and* under-spend both fail);
+the 4 nearest win when registered **farthest-first**, so registration order cannot pass it by
+accident; a beamless rig takes no slot even when nearest; a despawn hands its slot on.
+
+⚠️ **Three traps, all of which made a passing test lie, and all met while writing it.** **(1)** A
+`Node3D` parented straight to the SceneTree `root` — a `Window` — reports
+`global_position == Vector3.ZERO` whatever its `position` says; every stub sat on the origin, every
+rank tied, and the ranking check degraded into a test of registration order. **(2)** Even under a
+`Node3D` stage the global transform is only computed once a transform notification has propagated,
+so nothing measurable exists during `_init` — the tool defers a frame before it measures anything.
+**(3)** Integer division is a GDScript warning, warnings are errors here, and a parse error in a
+`--script` tool **exits 0**; `_fits` divides in floats for that reason alone. The first two were
+read as budget bugs for two runs before the tool was suspected.
+
+⚠️ **`_profile` is typed `Resource`, not `BeamProfile`.** Naming the global would make this script
+un-parseable wherever the class cache has not been written, and `verify_beam_budget.gd` `load`s it —
+the `--script` trap in `ARCHITECTURE.md` reached from the other side.
+
+**Hysteresis, and why it is not zero.** `swap_margin_m` (8 m) discounts an incumbent's rank, so two
+cars abreast do not trade beams every regrant as their distances cross by centimetres. `regrant_hz`
+is 6, not per-frame, for the same reason: re-ranking at frame rate *swaps* at frame rate.
+
+**What is still owed.** The rule ranks by distance to the camera alone. The chase camera makes the
+player nearest by construction in the shipped scene, so no pin is needed today — ⚠️ but a cinematic
+or a look-back that moves the camera off the player would rank the player like any other car, and
+`P3-3` should decide whether the player's slot is reserved before it fills the streets.
+
+**See.** `P3-11e` · `P3-3` · `ART_DESIGN.md` "Vehicles" · `PROGRESS.md` risk register
+
 ## Two shadow cascades at 400 m, not four at 600
 
 **Claim.** `directional_shadow_mode` is 2 PSSM cascades at 400 m.

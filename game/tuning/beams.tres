@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="BeamProfile" format=3]
+
+[ext_resource type="Script" path="res://scripts/vehicle/beam_profile.gd" id="1_beams"]
+
+[resource]
+script = ExtResource("1_beams")
+max_spot_lights = 8
+regrant_hz = 6.0
+swap_margin_m = 8.0

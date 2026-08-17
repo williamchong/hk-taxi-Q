@@ -21,6 +21,7 @@ run/max_fps.mobile=60
 DebugHud="*res://scripts/ui/debug_hud.gd"
 FpsCounter="*res://scripts/ui/fps_counter.gd"
 InputRouter="*res://scripts/input/input_router.gd"
+BeamBudget="*res://scripts/vehicle/beam_budget.gd"
 
 [debug]
 

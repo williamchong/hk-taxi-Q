@@ -267,6 +267,14 @@ var _beams: Array[SpotLight3D] = []
 ## of a scaled one loses it the first time it is written.
 var _beam_ranges_m: PackedFloat32Array = PackedFloat32Array()
 var _beam_energies: PackedFloat32Array = PackedFloat32Array()
+## Whether `BeamBudget` currently allows this car to throw its beams at all.
+##
+## ⚠️ **Starts `false`, and the first grant switches it on.** The renderer pairs
+## only 8 spot lights per object and `roads.glb` is one object, so beams are a
+## rationed resource rather than a per-car decision — see `beam_budget.gd`. A car
+## that assumed the slot and was later denied would light one frame of road it
+## had no budget for.
+var _beams_granted: bool = false
 
 
 func _ready() -> void:
@@ -305,6 +313,7 @@ func _ready() -> void:
 			_beam_ranges_m.append(beam.spot_range)
 			_beam_energies.append(beam.light_energy)
 	read_rig()
+	_join_budget()
 	# ⚠️ **This call can only ever put the beams *out*, and that is the point.**
 	# Both `_lighting` and `_seen` start at `SUN`, so there is no state a car
 	# could boot into that this would light. What it is for is the scene: a car
@@ -313,6 +322,78 @@ func _ready() -> void:
 	# its beams on until the first state *change* happened to correct it, which
 	# on a sunny route is never.
 	_apply_beam()
+
+
+## How many spot-light slots this car asks for. `BeamBudget`'s side of the deal.
+##
+## Read from the scene rather than assumed to be two, so a roster car with one
+## cone — or a truck with four — is costed as what it is.
+func beam_count() -> int:
+	return _beams.size()
+
+
+## Allow or deny this car's thrown beams. `BeamBudget`'s side of the deal.
+##
+## ⚠️ **Applied through `_apply_beam` rather than by hiding the lights here**, so
+## a grant that arrives while the car is in daylight does not switch anything on:
+## the ladder still has the last word about whether a *granted* beam is lit.
+func set_beams_granted(granted: bool) -> void:
+	if granted == _beams_granted:
+		return
+	_beams_granted = granted
+	_apply_beam()
+
+
+## The arbiter, or `null` where the scene runs without one.
+##
+## Looked up rather than named as a typed autoload, so a scene loaded by a verify
+## tool or a test harness without the autoload still runs its lenses. These are
+## the project's only `/root/` lookups — every other autoload is reached by its
+## global — so the exception lives in one place rather than at each call site.
+func _budget() -> Node:
+	return get_node_or_null(^"/root/BeamBudget")
+
+
+## Ask the arbiter for beams, or light them if there is no arbiter.
+##
+## ⚠️ **Registered only if this car actually throws a beam.** A rig with no
+## `SpotLight3D` — `taxi_builtin.tscn` is one — costs no slot, so putting it in
+## the ranking would let it displace a car that does.
+func _join_budget() -> void:
+	if _beams.is_empty():
+		return
+	var budget: Node = _budget()
+	if budget != null:
+		budget.register(self)
+		return
+	# No arbiter: this is the only car in the world, which is exactly the case the
+	# budget was written for the *absence* of. Light the beams.
+	_beams_granted = true
+
+
+func _enter_tree() -> void:
+	# ⚠️ **Re-registers, because `_ready` fires once per node lifetime and
+	# `_exit_tree` fires on every removal — including a reparent.** A car taken
+	# out of the tree and put back, which is how a pool is built and how `P3-3`
+	# will recycle traffic, would otherwise unregister on the way out and never
+	# register on the way back: its beams stay dark forever, and nothing says so.
+	# Guarded on `_beams`, which is empty until `_ready` has found the lights, so
+	# the very first entry is `_ready`'s to handle.
+	if not _beams.is_empty():
+		_join_budget()
+
+
+func _exit_tree() -> void:
+	# A car that leaves the world holds no slot. Without this a despawned AI taxi
+	# keeps its grant until the next regrant filters the freed node out, which is
+	# a slot the cars still on screen cannot use.
+	var budget: Node = _budget()
+	if budget != null:
+		budget.unregister(self)
+	else:
+		# Nothing to take the grant back, so drop it here — otherwise a pooled car
+		# in an arbiter-less scene returns still believing it holds a slot.
+		_beams_granted = false
 
 
 ## Re-read the scene's lighting rig.
@@ -498,7 +579,13 @@ func _apply_beam() -> void:
 	# Hidden rather than dimmed to nothing. A zero-energy light is still a light
 	# the renderer gathers, culls and loops over per object, and "off" here means
 	# a car in daylight — which is most cars, most of the time.
-	var lit: bool = throwing != Lighting.SUN
+	#
+	# ⚠️ **The grant is ANDed in here rather than earlier, so a denied car still
+	# computes its lighting state.** `_lighting`, `_seen` and the lens circuits go
+	# on being switched by the ladder whatever the budget says — only the cone is
+	# rationed. A car that stopped reading the world while dark would arrive at
+	# its slot with a stale state and light the wrong thing for a hold.
+	var lit: bool = throwing != Lighting.SUN and _beams_granted
 	var share: float = 1.0 if throwing == Lighting.DARK else sidelamp_beam
 	for i: int in _beams.size():
 		var beam: SpotLight3D = _beams[i]
