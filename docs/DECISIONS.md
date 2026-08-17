@@ -5119,3 +5119,42 @@ retired values as frozen constants rather than reading a profile that has moved 
 reproducing the run its findings were taken from.
 
 **See.** `P0-5a` · `P0-5b/c/d` · `GAME_DESIGN.md` "Controls" · `PLAN.md` `B4` · `P3-2b`
+
+---
+
+## `P3-9a` — The build is threaded, so the host is not a free choice
+
+**Status.** 🟡 **Build cut and verified 2026-08-18; drivers not yet run.** The round itself is open.
+
+**Claim.** The `Web Demo` preset ships `variant/thread_support=true`. The engine therefore uses
+`SharedArrayBuffer`, which browsers gate behind **both** `Cross-Origin-Opener-Policy: same-origin`
+and `Cross-Origin-Embedder-Policy: require-corp` on the document response. A host that cannot set
+response headers cannot serve this build at all — it fails at startup with a bare
+`SharedArrayBuffer is not defined`, which names neither the preset nor the headers.
+
+⚠️ **This rules out GitHub Pages**, the otherwise obvious free host, and it is the whole reason
+`tools/serve_web.py` exists instead of `python -m http.server` — the module docstring has said so
+since it was written, and the constraint had simply never been carried up to the point where a host
+gets chosen. **Route taken: itch.io**, whose "SharedArrayBuffer support" embed toggle sets both
+headers, and whose password-protected draft pages keep an unreleased build off the open web.
+
+⚠️ **Do not "fix" this by turning `thread_support` off.** It would open up any static host, and it
+would change the artefact under test: `P3-9a` grades how the city feels to drive, and single-threaded
+web is a different frame budget. The trade is available to a *later* public demo, and never to the
+round that prices the look.
+
+**What was verified before the link goes out.** `tools/check.sh` green; web exported on top of
+`P3-11e` (⚠️ the 2026-08-17 02:05 build predated it and would have shown a taxi with **no
+headlamps** — the stale artefact was found in `build/web/` beside a 49 MB zip of itself and both
+were removed); one scripted drive with **0 `SHADER ERROR`**; loaded in Chrome over the real headers
+with **0 console errors or warnings**. The render shows chromatic paint, the sky gradient in the
+glazing, tail lamps lit under the HKCEC deck and the high-level brake lamp lit under braking — so
+none of the silent-unbind paths `P3-11c`/`d`/`e` opened has fired in the *exported* bundle, which is
+the only build anyone will judge. ⚠️ **This is a smoke check, not the `verify_vehicle.gd` the risk
+register still owes** — it proves this bundle, on this day, by eye. It fails no build.
+
+**Measured.** PCK **38.72 MiB** (40,601,608 bytes) + wasm **37.02 MiB** = **75.74 MiB over the
+wire**, which is the figure a tester actually pays and the one to warn them about. The **+0.05**
+over the 2026-08-12 PCK is the whole of `P3-11c`/`d`/`e`.
+
+**See.** `PLAN.md` `P3-9a` · `PROGRESS.md` risk register · `Q26` · `P3-7a` · `P3-11e`
