@@ -169,11 +169,18 @@ LAMP_PARTS = ("headlamp_", "indicator_", "foglamp_", "taillamp_")
 # lens reflection, and folding "which circuit" into `UV.y` would make the
 # shading branch enumerate the wiring. `UV.x` was reserved and zero — a tile
 # spends it on metres above base, which nothing on a 4 m car needs.
+#
+# ⚠️ **Ordering, not a set, and 4 is a seam rather than a limit.** The shader
+# indexes `int(UV.x) - 1` into `lamp_lit`, which is a `vec4`, so circuits 5 and
+# up land in the second vector `lamp_front`. Renumbering these moves lenses
+# between the two and is not a rename.
 CIRCUIT_NONE = 0.0
 CIRCUIT_BRAKE = 1.0
 CIRCUIT_REVERSE = 2.0
 CIRCUIT_INDICATOR_L = 3.0
 CIRCUIT_INDICATOR_R = 4.0
+CIRCUIT_SIDELAMP = 5.0
+CIRCUIT_HEADLAMP = 6.0
 
 # ⚠️ **Left and right are separate circuits, and that is the whole point of
 # indicators** — one amber circuit would flash both flanks, which is a hazard
@@ -184,11 +191,27 @@ CIRCUIT_INDICATOR_R = 4.0
 # lenses on one lamp and they are three different circuits. `taxi_body` raises if
 # any key here names no part, so a rename cannot quietly unwire a lamp.
 #
-# ⚠️ The headlamps and fog lamps are deliberately absent, which leaves them
-# `CIRCUIT_NONE` — lenses that catch the sun and never light. This is a daytime
-# game (`ART_DESIGN.md`, one lighting rig, golden hour), so there is nothing for
-# a headlamp to switch on *for*; `Q26`'s night mode is what would wire them.
+# ⚠️ **The two front circuits are deliberately *not* split left from right**,
+# which is the opposite call to the indicators directly above and for the same
+# reason. Sides are separate there because a one-sided amber is the whole
+# meaning of the lamp; a one-sided white lamp has no meaning at all except a
+# blown bulb, so a second circuit could only ever express a fault nothing
+# simulates. One switch, both flanks.
+#
+# ⚠️ **`foglamp_*` is switched as the position lamp, and the name is about where
+# it sits rather than what it does.** `taxi_body` builds it as "a small white
+# lamp low in the bumper", which is where a fog lamp lives and also what the
+# small lamp *reads* as from a chase camera — a second, smaller pair of points
+# clear of the main beam. Dimming `headlamp_*` instead was the alternative and
+# is worse twice over: `lamp_emission` is 1.6 against `clean_daylight.tres`'s
+# 1.0 glow threshold, so a lens at a fraction of that carries no bloom and is
+# "merely a brighter swatch" by the shader's own note, and a dim main beam reads
+# as a weak headlamp rather than as a different lamp.
 LAMP_CIRCUITS: dict[str, float] = {
+    "headlamp_l": CIRCUIT_HEADLAMP,
+    "headlamp_r": CIRCUIT_HEADLAMP,
+    "foglamp_l": CIRCUIT_SIDELAMP,
+    "foglamp_r": CIRCUIT_SIDELAMP,
     "indicator_l": CIRCUIT_INDICATOR_L,
     "indicator_r": CIRCUIT_INDICATOR_R,
     "taillamp_l_indicator": CIRCUIT_INDICATOR_L,

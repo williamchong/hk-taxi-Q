@@ -1,5 +1,12 @@
+class_name SunGlint
 extends Node3D
 ## Feeds the scene's real sun direction into `vehicle_body.gdshader`.
+##
+## ⚠️ **`class_name` is here for `find_sun` and not for this node.** Nothing
+## instances this by type — `taxi.tscn` names the script by path — but
+## `vehicle_lamps.gd` needs the same sun this does, and the lookup below is
+## worth more than it looks: it is the one that had to learn `current_scene` is
+## null in a driver run. A private second copy would relearn that the same way.
 ##
 ## The glint needs to know where the sun is, and the shader cannot ask: Godot 4
 ## exposes light only inside a `light()` function, and writing one there would
@@ -52,7 +59,7 @@ func apply() -> void:
 		push_warning("sun_glint: no material assigned; the taxi's glint will not track the sun")
 		return
 
-	var sun: DirectionalLight3D = _find_sun()
+	var sun: DirectionalLight3D = find_sun(self)
 	if sun == null:
 		# The taxi was loaded without a world around it — a verify tool, an
 		# import, the editor. There is no rig to read and no frame to be wrong,
@@ -60,17 +67,35 @@ func apply() -> void:
 		# and one that cries wolf every build is not read when it matters.
 		return
 
-	# A `DirectionalLight3D` shines along its own -Z, so +Z points back at the
-	# sun, which is what the glint needs.
-	#
-	# ⚠️ **Normalised here rather than in the shader**, which is where it was.
-	# A rotation basis is unit-length and both shipped rigs measure so, but
-	# nothing enforces it — a scaled parent would silently denormalise it. Doing
-	# it once on the CPU keeps the guarantee and takes an `rsqrt` off every
-	# fragment of every frame, where it was recomputing a constant.
-	material.set_shader_parameter(PARAMETER, sun.global_transform.basis.z.normalized())
+	material.set_shader_parameter(PARAMETER, toward(sun))
 
 
+## The unit vector pointing **at** the sun, from the rig's own transform.
+##
+## ⚠️ **Shared with `vehicle_lamps.gd`, and the sign is the reason.** A
+## `DirectionalLight3D` shines along its own -Z, so +Z points back at the source
+## — one fact, and every consumer of it fails silently when it is wrong. The
+## glint aimed backwards lands on the antisolar point, where it is simply never
+## seen; the lamps' shadow probe aimed backwards looks merely erratic. Neither
+## shows up in any automated check this project has, which is the whole argument
+## for one definition. This file already refuses to let the *rig* be authored
+## twice; the conversion off it is the same rule one step further on.
+##
+## ⚠️ **Normalised here rather than in the shader**, which is where it was. A
+## rotation basis is unit-length and both shipped rigs measure so, but nothing
+## enforces it — a scaled parent would silently denormalise it. Doing it once on
+## the CPU keeps the guarantee and takes an `rsqrt` off every fragment of every
+## frame, where it was recomputing a constant.
+static func toward(sun: DirectionalLight3D) -> Vector3:
+	return sun.global_transform.basis.z.normalized()
+
+
+## The scene's key light, or null where there is no rig loaded.
+##
+## Static, and shared with `vehicle_lamps.gd`: the glint needs where the sun is
+## and the lamps need whether there is one, and those are the same question
+## asked twice. `from` is any node in the tree — the search does not start there.
+##
 ## Search from the window root, **not `get_tree().current_scene`**.
 ##
 ## ⚠️ **`current_scene` is null in a driver run and this cost a whole round of
@@ -81,8 +106,8 @@ func apply() -> void:
 ## and so silently left `sun_toward` at its default in **every** measured
 ## drive, which read as "the glint does nothing" rather than as "the glint never
 ## ran". The window root is populated on every load path there is.
-func _find_sun() -> DirectionalLight3D:
-	var root: Node = get_tree().root
+static func find_sun(from: Node) -> DirectionalLight3D:
+	var root: Node = from.get_tree().root
 	for light: DirectionalLight3D in root.find_children("*", "DirectionalLight3D", true, false):
 		if light.visible:
 			return light

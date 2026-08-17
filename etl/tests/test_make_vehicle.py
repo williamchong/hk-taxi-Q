@@ -39,10 +39,12 @@ from make_vehicle import (
     BADGE_GREEN,
     BODY_MATERIAL,
     CIRCUIT_BRAKE,
+    CIRCUIT_HEADLAMP,
     CIRCUIT_INDICATOR_L,
     CIRCUIT_INDICATOR_R,
     CIRCUIT_NONE,
     CIRCUIT_REVERSE,
+    CIRCUIT_SIDELAMP,
     DARK,
     DEEP_RED,
     FIXTURE_PROUD_M,
@@ -929,6 +931,29 @@ class TestLampCircuits:
         assert body.uvs is not None, "the body carries no shader payload"
         return body.uvs[:, 0]
 
+    @classmethod
+    def _assert_cluster(
+        cls, body: MeshData, circuit: float, colours: set[Colour], *, front: bool
+    ) -> None:
+        """Assert a circuit's lenses sit on one end of the car, wear exactly
+        `colours`, and span the centreline.
+
+        Shared because the two ends ask the identical three questions, and the
+        one that matters is the *end*: the front and rear both carry a white
+        `LAMP` lens, so a circuit wired to the wrong cluster still renders a car
+        whose lamps light. Only the sign on `z` separates them.
+        """
+        assert body.colours is not None
+        on = cls._circuits(body) == circuit
+        z = body.positions[on, 2]
+        at_end = np.all(z < 0.0) if front else np.all(z > 0.0)
+        assert at_end, f"circuit {circuit} is not at the {'front' if front else 'rear'}"
+        worn = _rgbs(body, on)
+        assert worn == colours, f"circuit {circuit} wears {sorted(worn)}"
+        assert body.positions[on, 0].min() < 0.0 < body.positions[on, 0].max(), (
+            f"circuit {circuit} is only on one side of the car"
+        )
+
     def test_every_circuit_is_an_exact_integer(self, meshes: list[MeshData]) -> None:
         """The shader indexes a `vec4` with `int(UV.x) - 1`, so 2.9999 selects
         the brake channel for a reverse lens and no interpolation error is
@@ -941,7 +966,18 @@ class TestLampCircuits:
             CIRCUIT_REVERSE,
             CIRCUIT_INDICATOR_L,
             CIRCUIT_INDICATOR_R,
+            CIRCUIT_SIDELAMP,
+            CIRCUIT_HEADLAMP,
         }
+
+    def test_no_circuit_outruns_the_shader_payload(self, meshes: list[MeshData]) -> None:
+        """⚠️ **The bound the shader cannot hold on its own.** `vehicle_body`
+        carries the circuits in two `vec4`s and refuses to index past the
+        eighth — so a ninth added here does not fail, or warn, or render wrong:
+        it takes the `CIRCUIT_NONE` branch and the lens is simply dark for ever,
+        which is the silent failure `TestLampCircuits` exists for. Widening the
+        payload means adding a third `instance uniform` and raising this."""
+        assert self._circuits(meshes[0]).max() <= 8.0
 
     def test_every_circuit_reaches_the_car(self, meshes: list[MeshData]) -> None:
         """A circuit the shader can switch and no vertex answers to is a lamp
@@ -972,6 +1008,30 @@ class TestLampCircuits:
         assert np.all(x[circuits == CIRCUIT_INDICATOR_L] < 0.0)
         assert np.all(x[circuits == CIRCUIT_INDICATOR_R] > 0.0)
 
+    def test_the_front_circuits_are_all_at_the_front(self, meshes: list[MeshData]) -> None:
+        """The mirror of the rear test below, and it catches the one mistake the
+        naming invites: `foglamp_*` is switched as the *position* lamp, so a
+        reader tidying `LAMP_CIRCUITS` by moving it to the tail cluster — where
+        the other white lens lives — would light the back of the car when the
+        light drops. Both circuits span the centreline, because neither is split
+        left from right: a one-sided white lamp is a blown bulb, not a signal."""
+        for circuit in (CIRCUIT_SIDELAMP, CIRCUIT_HEADLAMP):
+            self._assert_cluster(meshes[0], circuit, {LAMP}, front=True)
+
+    def test_the_side_lamps_sit_below_the_main_beams(self, meshes: list[MeshData]) -> None:
+        """⚠️ **The two front circuits are two different lamps, and this is what
+        says so.** They are the same colour on the same face of the same car, so
+        wiring both to one pair of lenses would render as a working feature —
+        the nose lights up either way — and the whole point of the pair is that
+        "shade" and "no sky" are visibly different states. Height separates them:
+        `taxi_body` puts the main beam in the cluster and the side lamp low in
+        the bumper band, so nothing overlaps."""
+        body = meshes[0]
+        circuits = self._circuits(body)
+        side = body.positions[circuits == CIRCUIT_SIDELAMP, 1]
+        head = body.positions[circuits == CIRCUIT_HEADLAMP, 1]
+        assert side.max() < head.min(), "the side lamps and the main beams overlap in height"
+
     def test_the_brake_and_reverse_lenses_are_all_at_the_rear(self, meshes: list[MeshData]) -> None:
         """Every lens on either circuit is behind the car's middle and spans both
         sides of its centreline. The colour half is the interesting one: the
@@ -980,18 +1040,9 @@ class TestLampCircuits:
         enough to separate it. Lighting the authored colour is the fix that
         recolours nothing. `DEEP_RED` is the high-level strip, which is the
         opposite problem: it has to vanish when the circuit is out."""
-        body = meshes[0]
-        assert body.colours is not None
-        circuits = self._circuits(body)
         wanted = {CIRCUIT_BRAKE: {RED, DEEP_RED}, CIRCUIT_REVERSE: {LAMP}}
         for circuit, colours in wanted.items():
-            on = circuits == circuit
-            assert np.all(body.positions[on, 2] > 0.0), f"circuit {circuit} is not at the rear"
-            worn = _rgbs(body, on)
-            assert worn == colours, f"circuit {circuit} wears {sorted(worn)}"
-            assert body.positions[on, 0].min() < 0.0 < body.positions[on, 0].max(), (
-                f"circuit {circuit} is only on one side of the car"
-            )
+            self._assert_cluster(meshes[0], circuit, colours, front=False)
 
     def test_the_high_level_lamp_sits_in_the_backlight(self, meshes: list[MeshData]) -> None:
         """⚠️ **Seated against a raked surface, and both failures are silent.**

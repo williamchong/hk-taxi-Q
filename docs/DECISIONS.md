@@ -3879,7 +3879,119 @@ the sun and never light. There is one lighting rig and it is daytime, so there i
 headlamp to switch on *for*; `Q26`'s night mode is what would wire them, and the channel is already
 there for it.
 
-**See.** `P3-11` · `P3-11c` · `Q26` · `Q27` · `ART_DESIGN.md` "Vehicles"
+⚠️ **Superseded by `P3-11e`, and the reasoning above is why rather than how it was wrong.** Both
+pairs now switch. What changed is not the rig but the premise: the switch turned out not to need a
+night rig at all, because *where the car is standing* — under a deck, in a tower's shade — is a
+question this daytime rig answers all day. The channel this entry reserved is the one that paid for
+it, and the out-of-range guard it shipped "against a fifth circuit" is what made widening safe.
+
+**See.** `P3-11` · `P3-11c` · `P3-11e` · `Q26` · `Q27` · `ART_DESIGN.md` "Vehicles"
+
+## `P3-11e` — The front lamps answer to the light, not to the driver
+
+**Claim.** The small bumper lamps light when the car is in shade; the main beams light when the sky
+overhead is shut out, or when the rig is a night one. Both circuits were `CIRCUIT_NONE` until now.
+
+**This reverses nothing — it supplies the premise `P3-11d` said was missing.** That entry left the
+head and fog lamps unwired with a reason rather than an omission: *"there is one lighting rig and it
+is daytime, so there is nothing for a headlamp to switch on for"*. Asked for by the user, the switch
+is no longer the rig — it is **where the car is standing**, which the daytime rig supplies plenty
+of. The channel `P3-11d` said was "already there for it" is the one this spends.
+
+**⚠️ Two of the three asked-for triggers have no shipped content to fire on, and are wired anyway.**
+
+- **Tunnel.** `Q21` records level −1 as 15 edges *"ribboned under the terrain where nothing can see
+  it and nobody can drive it"*, and `road_graph.gd`'s `is_drivable` admits level 0 only. So the
+  trigger is implemented as **"the sky directly overhead is blocked"**, which is the same question a
+  tunnel asks and one the region can actually answer — proven under the HKCEC deck, where the car
+  spawns. A roofed tunnel would trip the identical probe.
+- **Night.** `Q26`'s rig does not exist and this document records night as *a switch between two
+  static rigs*. `read_rig` therefore reads the **scene's real `DirectionalLight3D`** — key-light
+  energy at or below `night_energy`, or a sun at/below the horizon — for the same reason
+  `sun_glint.gd` reads it: a rig fact copied into a second place drifts the first time the rig
+  changes, and nothing reports it. ⚠️ **A night rig must dim or drop its key light, not delete it.**
+  A missing sun is read as "no rig", not as night, deliberately: a verify tool or an import loads
+  the taxi with no world around it, and calling that night puts every headless render of the car on
+  main beam — visible in exactly one place, a graded frame.
+
+**Two lens pairs, not one lens at two levels.** The alternative was a single headlamp circuit driven
+at a fraction for "small". It fails on the shader's own arithmetic: `lamp_emission` is 1.6 against
+`clean_daylight.tres`'s 1.0 glow threshold, so a lens at a fraction of that carries **no bloom**,
+and `P3-11d` measured bloom as *"the whole difference at the distance a chase camera holds"*. It
+also reads wrong — a dim main beam is a weak headlamp, not a different lamp. `taxi_body` already
+builds *"a small white lamp low in the bumper"* per side, so the pair exists. ⚠️ It is named
+`foglamp_*`, for where it sits rather than what it now does.
+
+**⚠️ The side lamps stay lit under the main beams.** Handing over rather than stacking makes the two
+states a different pair of lamps at the same count, which reads as a flicker; stacked, the nose
+visibly gains a lamp — and it is what a car does.
+
+**`lamp_lit` was full, so there are two vectors now.** Circuits 5–8 live in `lamp_front`, and ⚠️ the
+**ordering is the contract, not the declaration** — a channel inserted ahead of the others silently
+moves every lens behind it across the seam. The bounds guard `P3-11d` shipped "against a fifth
+circuit the generator could add" is what made this safe, and it now bounds at `CIRCUIT_COUNT`.
+⚠️ Both vectors are indexed with the **same masked slot**: a ternary is specified to evaluate one
+operand, but Mobile drivers flatten branches, and a flattened `channel - 4` at `channel = 0` is the
+negative index the guard exists to stop, arriving through the fix for it.
+
+**Cover is tested before shadow, and the order is the answer.** Under a deck both probes hit, so
+asking about shadow first puts a car in an underpass on side lamps and never reaches the main beams.
+
+**⚠️ The hold restarts when a reading crosses the committed state, never merely when it changes —
+and this shipped wrong first.** Zeroing the timer on every change reads like a stricter hold and is
+actually a **stall**: two readings that disagree with each other but agree about the *direction* are
+both evidence for the same move, so they cancel each other for ever. It fails on the exact case the
+hold is for. Committed to `DARK` under the deck, then out into a street alternating `SUN`/`SHADOW`
+about once a second, the timer never reaches 1.6 s and **the main beams stay on for the whole
+drive** — the failure the hold was built to prevent, arriving through the hold itself. A canyon
+flickering `DARK`/`SHADOW` stalls the mirror image, with no front lamp lighting at all. Caught in
+review, not by a check: every frame renders, the car drives, and nothing exits non-zero.
+
+**⚠️ The holds are asymmetric, and that is the whole anti-flicker mechanism.** 0.35 s to come on,
+**1.6 s** to go out. A Wan Chai street is a picket fence of shadow — kerbside towers, gantries,
+footbridges — and a car at 50 km/h crosses one a second; symmetric holds strobe the lamps through
+all of it, which is the failure this document already records for the indicators. Being late *into*
+a dark place is the one a driver notices, so only that side is short.
+
+**⚠️ The sun probe is bounded by where collision exists, not by where shadow does.** Only the finest
+tile tier ships a collider (`city_streamer.gd`) and `streaming.tres` puts that band at 250 m, so a
+longer ray passes through the coarse tiles beyond as if they were air. 200 m keeps the probe inside
+the band. It is **not enough for every caster**: `golden_hour.tscn`'s sun sits at 30°, where a
+shadow runs 1.73× the caster's height, so a building **taller than about 115 m** throws its far
+shadow past the end of the ray and that shadow reads as sunlit. Raising the ray past the collider
+band cannot fix that and would only look as though it had.
+
+**Cost, and why it is sampled.** Everything else in `vehicle_lamps.gd` reads a value the controller
+*wrote* that tick; these two probes **ask the physics world**, per car, and `ART_DESIGN.md`'s roster
+multiplies that. Sampled at 10 Hz, which is all the holds can use — 60 Hz re-derives the same answer
+59 times inside the shortest one.
+
+Measured on the built region, 65 tier-0 tiles resident, Forward Mobile: cover ray **0.49 µs**, sun
+ray **0.91 µs**, against **0.50 µs** for one of the four wheel rays the controller already casts
+*every* tick. A probe is three wheel rays, twenty times a second.
+
+⚠️ **Guarding the `set_instance_shader_parameter` writes was proposed and refused on the
+measurement.** The call is a queued RenderingServer command against a CPU-side per-instance value —
+no GPU round-trip — at **33 ns** unchanged and **50 ns** changed. Both writes per car per tick come
+to ~80 ns, so a twenty-car roster spends 1.6 µs a frame; a change-guard would save ~40 ns a skipped
+write and cost two cached `Vector4` fields and two comparisons. The pre-existing `lamp_lit` write
+stays unguarded for the same reason. ⚠️ **`probe_hz` assigned rather than accumulated ran at 8.58 Hz,
+not 10** — `0.1` is not a whole number of 60 Hz ticks, so discarding the overshoot quantised the
+period up by a tick. Fixed by carrying the remainder.
+
+⚠️ **The roster will probe in lockstep, and the obvious fix is refused.** `_probe_due_s` starts at
+zero on every instance — ~28 µs on one tick at twenty cars against 1.4 µs amortised. A random
+starting phase buys ~1% of a frame on the device floor and costs **byte-deterministic driver runs**,
+which is how this project grades frames at all. Stagger from something stable if it ever matters.
+
+**Evidence.** Under the HKCEC deck the lit lens clips **L\* 100.00** against a **38.74** mean for
+the cluster box; the same lenses parked in open sun **peak 96.71** and never clip. Zero
+`SHADER ERROR` lines in the drive log, which is the only reliable test that a `.gdshader` compiled.
+`taxi_body.glb` is unchanged in size and triangle count — 47,608 bytes, 604 triangles — because only
+`UV.x` moved. ⚠️ Not an ablation: a stationary before/after was attempted and abandoned, since the
+streamer is still instancing tiles across the hold window and 41% of the frame changes with it.
+
+**See.** `P3-11d` · `P3-11c` · `Q21` · `Q26` · `ART_DESIGN.md` "Vehicles"
 
 ## Two shadow cascades at 400 m, not four at 600
 

@@ -55,9 +55,16 @@ const float MARKER_PAINT = 0.0;
 const float MARKER_GLASS = 1.0;
 const float MARKER_LAMP = 2.0;
 // Must match `CIRCUIT_*` in `tools/make_vehicle.py`. Only `NONE` is named here:
-// the rest are `lamp_lit`'s four channels in order, and enumerating them again
-// as constants would be a second copy of the ordering with nothing enforcing it.
+// the rest are the channels of `lamp_lit` then `lamp_front` in order, and
+// enumerating them again as constants would be a second copy of the ordering
+// with nothing enforcing it.
 const float CIRCUIT_NONE = 0.0;
+// Where the circuits split across two vectors, and how many they hold between
+// them. The seam is at 4 because that is a `vec4`, not because anything about
+// the car divides there — so it is named once and the total is derived from it
+// rather than both being written down and left to disagree.
+const int CIRCUIT_SEAM = 4;
+const int CIRCUIT_COUNT = 2 * CIRCUIT_SEAM;
 // ⚠️ `MARKER_TRIM` (3.0) is shipped by the ETL and takes no branch of its own —
 // it shares paint's clearcoat, for the reason given at that branch. Carried
 // separately anyway, on the tiles' ground-marker reasoning: it costs nothing to
@@ -152,7 +159,8 @@ uniform float lamp_reflect : hint_range(0.0, 1.0) = 0.06;
 uniform float lamp_emission : hint_range(0.0, 8.0) = 1.6;
 
 // Which circuits are live this frame, in `CIRCUIT_*` order less one:
-// x brake, y reverse, z indicator left, w indicator right. 0 is out, 1 is full.
+// x brake, y reverse, z indicator left, w indicator right, then on into
+// `lamp_front` below. 0 is out, 1 is full.
 //
 // ⚠️ **`instance uniform`, and that is not an optimisation.** `vehicle_body.tres`
 // is one shared material — `generated_scene_import.gd` hands the same resource
@@ -167,6 +175,22 @@ uniform float lamp_emission : hint_range(0.0, 8.0) = 1.6;
 // default, which is every lamp out — so the `taxi_builtin` spike, which carries
 // no lamp rig, simply drives around with dark lenses rather than failing.
 instance uniform vec4 lamp_lit = vec4(0.0);
+
+// Circuits 5-8, in the same ordering: x side lamps, y head lamps, z and w
+// unwired. The car's *front* lamps, and they are in a second vector for one
+// reason only — `lamp_lit` is a `vec4` and its four channels were spent.
+//
+// ⚠️ **A second `instance uniform` rather than a wider payload, and the split
+// is arbitrary.** Nothing about a side lamp belongs with a head lamp more than
+// with a brake lamp; the seam is where GLSL put it. So the *ordering* is the
+// contract and this declaration is not — a fifth channel added to the front of
+// the list would silently move every lens behind it into the other vector.
+// `CIRCUIT_COUNT` is what the bounds guard reads, so that stays true either way.
+//
+// ⚠️ Two of these ship at zero and that is not spare capacity to raid casually:
+// Godot caps instance uniforms per shader, and a third vector spends a slot on
+// a car that has run out of lenses to light long before it runs out of channels.
+instance uniform vec4 lamp_front = vec4(0.0);
 
 group_uniforms paint;
 
@@ -299,21 +323,34 @@ void fragment() {
 		// keeps the hue and discards the level, which is the half that belongs
 		// to the reflector rather than to the lamp.
 		//
-		// ⚠️ Dynamic index rather than four comparisons, which is why `CIRCUIT_*`
-		// is an ordering and not a set — and ⚠️ **bounded at both ends, because
-		// an out-of-range index into a `vec4` is undefined on a Mobile driver
-		// rather than an error.** `CIRCUIT_NONE` lands on -1, so the lower bound
-		// *is* the never-lights test; the upper one is a fifth circuit the
-		// generator could add before anyone widened `lamp_lit`, which is the same
-		// one-swatch-away hazard the divide below already pays for.
+		// ⚠️ Dynamic index rather than a comparison per circuit, which is why
+		// `CIRCUIT_*` is an ordering and not a set — and ⚠️ **bounded at both
+		// ends, because an out-of-range index into a `vec4` is undefined on a
+		// Mobile driver rather than an error.** `CIRCUIT_NONE` lands on -1, so
+		// the lower bound *is* the never-lights test; the upper one is a ninth
+		// circuit the generator could add before anyone widened the payload
+		// again, which is the same one-swatch-away hazard the divide below
+		// already pays for. `P3-11d` shipped this guard against exactly the
+		// widening that has now happened.
 		int channel = int(circuit - CIRCUIT_NONE) - 1;
-		if (channel >= 0 && channel < 4) {
+		if (channel >= 0 && channel < CIRCUIT_COUNT) {
+			// ⚠️ **Both vectors are indexed with the same in-range slot, and
+			// writing `lamp_front[channel - 4]` instead is the bug this line is
+			// shaped to avoid.** The spec says a ternary evaluates one operand,
+			// but Mobile drivers flatten branches routinely — and a flattened
+			// `channel - 4` at `channel = 0` is the negative index the bound
+			// above exists to stop, arriving through the fix for it. Masking to
+			// the low two bits is `channel - 4` on the far side of the seam and
+			// harmless on the near side, so neither operand can be out of range
+			// whichever way the driver compiles this.
+			int slot = channel & (CIRCUIT_SEAM - 1);
+			float level = channel < CIRCUIT_SEAM ? lamp_lit[slot] : lamp_front[slot];
 			// The guard is for a black lens, which is not authored today and is
 			// one swatch away from being: it would divide by zero and emit NaN,
 			// which the Mobile renderer resolves as a white hole in the car.
 			float peak = max(albedo.r, max(albedo.g, albedo.b));
 			vec3 hue = albedo / max(peak, 0.001);
-			EMISSION = hue * lamp_lit[channel] * lamp_emission;
+			EMISSION = hue * level * lamp_emission;
 		}
 		albedo += sky_horizon * glint * glint_strength * 0.5;
 		albedo = mix(albedo, mirrored, lamp_reflect * fresnel);

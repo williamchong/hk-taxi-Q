@@ -875,9 +875,19 @@ Under braking the lens goes `L* 2.29 → 72.72` and reads instantly; coasting it
 which is what an unlit brake lamp is supposed to be.
 
 **The lamps switch, and the payload is the other half of the marker.** `UV.x` — reserved and zero
-since `P3-11c` — carries a circuit id per lens: brake, reverse, and an indicator per side.
-`vehicle_lamps.gd` decides which are live from the car's own state and writes them **per instance**,
-because the body material is shared by the whole roster and one car braking must not brake the rest.
+since `P3-11c` — carries a circuit id per lens: brake, reverse, an indicator per side, and since
+`P3-11e` the two front pairs. `vehicle_lamps.gd` decides which are live and writes them **per
+instance**, because the body material is shared by the whole roster and one car braking must not
+brake the rest. Eight circuits now, across two `instance uniform` vectors — `lamp_lit` is a `vec4`
+and the ordering runs straight on into `lamp_front`.
+
+⚠️ **The rear lamps read the car; the front lamps read the light.** Brake, reverse and the
+indicators answer to what the driver is doing. The side lamps and main beams answer to where the car
+*is* — shade, or no sky overhead — because on this car there is nobody to flick a switch. Two lens
+pairs rather than one lens at two brightnesses: a lens under the 1.0 glow threshold carries no
+bloom, and bloom is the whole difference at chase-camera distance. The side lamps stay lit beneath
+the beams, so the nose gains a lamp rather than swapping one.
+
 ⚠️ **Emission is the lens's hue at a fixed intensity, not its albedo scaled.** An unlit lens is dark
 because of its reflector, not because it is a weaker bulb, and conflating the two makes "invisible
 when off" and "bright when on" one dial pulled two ways — which the high-level brake lamp in the
