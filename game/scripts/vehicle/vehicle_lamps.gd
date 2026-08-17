@@ -187,7 +187,10 @@ const TURN_RELEASE: float = 0.75
 ## `clean_daylight.tres` glows over 1.0, so a beam that reads on unlit tarmac
 ## without blowing out the kerb it crosses sits well above the sun's number and
 ## still under what would clip the road to white.
-@export_range(0.0, 24.0, 0.1) var beam_energy: float = 7.0
+## ⚠️ **Per lamp, not per car.** Two cones overlap down the middle of the road,
+## which is exactly where the player looks, so this is well under what a single
+## central spot wanted.
+@export_range(0.0, 24.0, 0.1) var beam_energy: float = 4.5
 
 ## What share of the beam the side lamps throw, in energy and in reach.
 ##
@@ -240,14 +243,17 @@ var _night: bool = false
 ## Reused, like `VehicleController`'s. Building one per probe would allocate
 ## twice a probe for the life of the process.
 var _probe := PhysicsRayQueryParameters3D.new()
-## The light the front lamps throw, or null on a car that carries none.
+## The lights the front lamps throw — one per lamp, and empty on a car that
+## carries none.
 ##
 ## Optional on purpose, like the lenses: `taxi_builtin.tscn` carries no lamp rig
 ## at all, and an AI taxi too far away to see one is a light worth not spending.
-var _beam: SpotLight3D = null
-## The beam's authored reach, so `sidelamp_beam` can shorten it and put it back.
-## Cached because the scene owns the number — this only scales it.
-var _beam_range_m: float = 0.0
+## However many the scene holds is however many this switches, so a roster car
+## can ship one cone, or none, without touching this file.
+var _beams: Array[SpotLight3D] = []
+## Each beam's authored reach, by index, so `sidelamp_beam` can shorten it and
+## put it back. Cached because the scene owns the number — this only scales it.
+var _beam_ranges_m: PackedFloat32Array = PackedFloat32Array()
 
 
 func _ready() -> void:
@@ -277,12 +283,13 @@ func _ready() -> void:
 		# per candidate, so it never shortens the ray either way.
 		_probe.exclude = [_car.get_rid()]
 		# Searched from the car rather than named by path, for the reason the body
-		# mesh is: the scene owns where the beam sits and how far it reaches, and a
-		# car without one still switches its lenses.
-		var beams: Array[Node] = _car.find_children("*", "SpotLight3D", true, false)
-		if not beams.is_empty():
-			_beam = beams[0] as SpotLight3D
-			_beam_range_m = _beam.spot_range
+		# mesh is: the scene owns where each beam sits and how far it reaches, and
+		# a car without any still switches its lenses. Every spot found is taken,
+		# so adding or removing a lamp is a scene edit and nothing else.
+		for node: Node in _car.find_children("*", "SpotLight3D", true, false):
+			var beam := node as SpotLight3D
+			_beams.append(beam)
+			_beam_ranges_m.append(beam.spot_range)
 	read_rig()
 	# Applied once here rather than waited for: `_apply_beam` only runs on a
 	# change of state, and the state a car starts in is a change from nothing.
@@ -413,6 +420,9 @@ func _settle(delta: float) -> void:
 			if signi(int(seen) - int(_lighting)) != signi(int(_seen) - int(_lighting)):
 				_seen_held_s = 0.0
 			_seen = seen
+			# The beams read `_seen` as well as `_lighting`, so they move here
+			# too — still at the probe rate rather than the tick rate.
+			_apply_beam()
 	_seen_held_s += delta
 
 	# Which hold applies is decided by the *direction* of the change, which is
@@ -436,20 +446,39 @@ func _settle(delta: float) -> void:
 ## fastest. Writing it 60 times a second would be 180 identical writes for every
 ## one that says anything.
 func _apply_beam() -> void:
-	if _beam == null:
+	if _beams.is_empty():
 		return
+
+	# ⚠️ **The beam answers to the lighter of the held and the current reading,
+	# where the lenses answer to the held one alone — and the two are allowed to
+	# disagree.** A lens still lit as the car reaches sunlight is a lamp nobody
+	# has switched off yet, which is what real cars look like all day. A *beam*
+	# that lingers paints a bright pool across sunlit tarmac, and there is no
+	# lighting condition in which that is not a mistake. So the hold governs the
+	# glow and never outlives the sun for the cone: the moment a probe reads
+	# direct sun the beams go out, whatever the lenses are still doing.
+	#
+	# Taking the lighter of the two also steps the beams down rather than
+	# switching them — leaving a deck into open shade drops them to the side
+	# lamps' pool while `_lighting` is still `DARK`, instead of holding full beam
+	# and then cutting to nothing.
+	var throwing: Lighting = _lighting if _lighting < _seen else _seen
+
 	# Hidden rather than dimmed to nothing. A zero-energy light is still a light
 	# the renderer gathers, culls and loops over per object, and "off" here means
 	# a car in daylight — which is most cars, most of the time.
-	_beam.visible = _lighting != Lighting.SUN
-	if not _beam.visible:
-		return
-	var share: float = 1.0 if _lighting == Lighting.DARK else sidelamp_beam
-	_beam.light_energy = beam_energy * share
-	# Reach is scaled with brightness rather than held. A dim lamp that still
-	# reaches 40 m lights a far kerb it could never really touch, which reads as
-	# the road brightening on its own rather than as the car lighting it.
-	_beam.spot_range = _beam_range_m * share
+	var lit: bool = throwing != Lighting.SUN
+	var share: float = 1.0 if throwing == Lighting.DARK else sidelamp_beam
+	for i: int in _beams.size():
+		var beam: SpotLight3D = _beams[i]
+		beam.visible = lit
+		if not lit:
+			continue
+		beam.light_energy = beam_energy * share
+		# Reach is scaled with brightness rather than held. A dim lamp that still
+		# reaches 40 m lights a far kerb it could never really touch, which reads
+		# as the road brightening on its own rather than as the car lighting it.
+		beam.spot_range = _beam_ranges_m[i] * share
 
 
 ## What the world says right now, before any hold is applied.

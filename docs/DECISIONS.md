@@ -3935,13 +3935,32 @@ which the user caught on a chase-camera frame. So `taxi.tscn` now carries a `Spo
 that still reaches 40 m lights a far kerb it could never touch, which reads as the road brightening
 by itself rather than as the car lighting it.
 
-**One spot, not one per lamp.** Two cones from 1.2 m apart merge into a single pool within a couple
-of metres, so the second light buys a light and no picture. ⚠️ **`spot_angle` is Godot's *half*
-angle, and that is the trap in this node** — the first version authored 34, which is a 68° flood
-from a lamp 0.3 m off the ground: most of the cone pointed at the sky and the rest landed under the
-bumper, reading as a puddle round the car rather than a beam. 24° with the lamp at bumper height is
-a beam. `spot_attenuation` sits at 0.45 rather than Godot's 1.0 because the default dies within a
-few metres of a 55 m light, which makes the range dial look broken.
+**One cone per lamp — and the single central spot that shipped first was refused on the look.** The
+argument for one was that two cones merge into a single pool a few metres out, so the second buys a
+light and no picture. That is true of the far field and wrong about the near field, which is the
+half the chase camera is looking at: a car throws *two* roots at its bumper, and one spot throws a
+torch beam. Both are driven by whatever `SpotLight3D`s the scene holds, so the count is a scene edit.
+
+⚠️ **`spot_angle` is Godot's *half* angle, and that is the trap in this node.** The first version
+authored 34 — a 68° flood from a lamp 0.3 m off the ground, so most of the cone pointed at the sky
+and the rest landed under the bumper, reading as a puddle round the car rather than a beam.
+
+**11° is set by pool separation, not by what a headlamp spreads.** Lamps 0.58 m off centre overlap
+from `0.58 / tan(angle)` onward, so 22° merged them inside 1.5 m and rendered as one blob with two
+lamps behind it, and 15° still read as a single lobe with a notch in it. 11° holds them apart to
+about 3 m — where the chase camera sits — so the twin cones are legible in the view the player
+actually has. `spot_attenuation` sits at 0.45 rather than Godot's 1.0 because the default dies
+within a few metres of a 55 m light, which makes the range dial look broken. `beam_energy` is **per
+lamp** and well under the single spot's, because two cones add where they cross and where they cross
+is the middle of the road.
+
+**⚠️ The beams read the lighter of the held and current state; the lenses read the held one alone.**
+A lens still lit as the car reaches sunlight is a lamp nobody has switched off yet, which is what
+real cars look like all day. A *beam* that lingers paints a bright pool across sunlit tarmac, and
+there is no lighting condition in which that is not a mistake — the first version did exactly that
+for the whole 1.6 s of `light_hold_s` on every exit from the deck. So the hold governs the glow and
+never outlives the sun for the cone. Taking the lighter of the two also steps the beams *down* on
+leaving a deck into open shade, instead of holding full beam and then cutting to nothing.
 
 ⚠️ **Shadows off, and that is the tier's rule rather than a saving** — `ART_DESIGN.md` grants the
 mobile tier vehicle blob shadows and no realtime shadow maps. It is also why the light is free:
