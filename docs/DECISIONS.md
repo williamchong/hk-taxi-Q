@@ -3926,6 +3926,29 @@ builds *"a small white lamp low in the bumper"* per side, so the pair exists. �
 states a different pair of lamps at the same count, which reads as a flicker; stacked, the nose
 visibly gains a lamp — and it is what a car does.
 
+**⚠️ A lit lens and a thrown beam are two features, and shipping only the first looked finished.**
+The emissive lenses were graded from *behind* the car, where they are the whole picture. From ahead
+they light nothing: under the HKCEC deck the taxi drove with blazing lamps over a **black road**,
+which the user caught on a chase-camera frame. So `taxi.tscn` now carries a `SpotLight3D` that
+`vehicle_lamps.gd` switches on the same ladder — full on `DARK`, `sidelamp_beam` (0.3) of the energy
+*and of the reach* on `SHADOW`, hidden on `SUN`. Scaling reach with brightness matters: a dim lamp
+that still reaches 40 m lights a far kerb it could never touch, which reads as the road brightening
+by itself rather than as the car lighting it.
+
+**One spot, not one per lamp.** Two cones from 1.2 m apart merge into a single pool within a couple
+of metres, so the second light buys a light and no picture. ⚠️ **`spot_angle` is Godot's *half*
+angle, and that is the trap in this node** — the first version authored 34, which is a 68° flood
+from a lamp 0.3 m off the ground: most of the cone pointed at the sky and the rest landed under the
+bumper, reading as a puddle round the car rather than a beam. 24° with the lamp at bumper height is
+a beam. `spot_attenuation` sits at 0.45 rather than Godot's 1.0 because the default dies within a
+few metres of a 55 m light, which makes the range dial look broken.
+
+⚠️ **Shadows off, and that is the tier's rule rather than a saving** — `ART_DESIGN.md` grants the
+mobile tier vehicle blob shadows and no realtime shadow maps. It is also why the light is free:
+A/B'd on the same seeded run, `prims` and `draws` are **bit-identical** with the beam and without
+it. Hidden rather than dimmed to zero when off, because a zero-energy light is still a light the
+renderer gathers and loops over per object — and "off" is most cars, most of the time.
+
 **`lamp_lit` was full, so there are two vectors now.** Circuits 5–8 live in `lamp_front`, and ⚠️ the
 **ordering is the contract, not the declaration** — a channel inserted ahead of the others silently
 moves every lens behind it across the seam. The bounds guard `P3-11d` shipped "against a fifth

@@ -938,6 +938,9 @@ read the mesh, so a mismatch looks correct and drives to the old tuning.
 
 - One directional light (sun), warm, low angle, from the shared `golden_hour.tscn` rig
 - Ambient from a simple gradient sky — no HDRI, no reflection probes
+- One **shadowless spot per taxi**, switched with the front lamps (`P3-11e`) and hidden in daylight,
+  so the sun is still the only light in the overwhelming majority of frames. Measured at **0 extra
+  draw calls and 0 extra primitives** — a light with no shadow map adds neither
 - **Mobile tier:** vehicle blob shadows only, no realtime shadow maps
 - **Desktop tier:** **two** directional shadow cascades at 400 m — the camera's far plane
 - No global illumination, no SSAO on mobile

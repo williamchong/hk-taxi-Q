@@ -175,6 +175,28 @@ const TURN_RELEASE: float = 0.75
 ## and buys a lamp that only changes when the light really has.
 @export_range(0.0, 10.0, 0.05, "suffix:s") var light_hold_s: float = 1.6
 
+## How hard the main beams throw light on the world.
+##
+## ⚠️ **A lit lens and a thrown beam are two different features, and the lens
+## alone is what looked finished.** The emissive lenses read perfectly from
+## behind the car and light nothing in front of it, so under the HKCEC deck the
+## taxi had blazing lamps on a pitch-black road — the failure only a frame from
+## *ahead* of the car shows.
+##
+## Priced against the rig rather than chosen: `golden_hour.tscn`'s sun is 1.4 and
+## `clean_daylight.tres` glows over 1.0, so a beam that reads on unlit tarmac
+## without blowing out the kerb it crosses sits well above the sun's number and
+## still under what would clip the road to white.
+@export_range(0.0, 24.0, 0.1) var beam_energy: float = 7.0
+
+## What share of the beam the side lamps throw, in energy and in reach.
+##
+## ⚠️ **Not zero, and not much above it.** Position lamps exist to be *seen*, not
+## to see by, so a side lamp that lights the road as far as a headlamp erases the
+## difference the two circuits were split to express. A short dim pool says "lit,
+## but not driving on it".
+@export_range(0.0, 1.0, 0.01) var sidelamp_beam: float = 0.3
+
 ## Key-light energy at or below which the rig counts as night.
 ##
 ## ⚠️ **A dial rather than a rule, because the rig that would trip it does not
@@ -218,6 +240,14 @@ var _night: bool = false
 ## Reused, like `VehicleController`'s. Building one per probe would allocate
 ## twice a probe for the life of the process.
 var _probe := PhysicsRayQueryParameters3D.new()
+## The light the front lamps throw, or null on a car that carries none.
+##
+## Optional on purpose, like the lenses: `taxi_builtin.tscn` carries no lamp rig
+## at all, and an AI taxi too far away to see one is a light worth not spending.
+var _beam: SpotLight3D = null
+## The beam's authored reach, so `sidelamp_beam` can shorten it and put it back.
+## Cached because the scene owns the number — this only scales it.
+var _beam_range_m: float = 0.0
 
 
 func _ready() -> void:
@@ -246,7 +276,17 @@ func _ready() -> void:
 		# is a correctness argument rather than a cost one. Jolt tests the mask
 		# per candidate, so it never shortens the ray either way.
 		_probe.exclude = [_car.get_rid()]
+		# Searched from the car rather than named by path, for the reason the body
+		# mesh is: the scene owns where the beam sits and how far it reaches, and a
+		# car without one still switches its lenses.
+		var beams: Array[Node] = _car.find_children("*", "SpotLight3D", true, false)
+		if not beams.is_empty():
+			_beam = beams[0] as SpotLight3D
+			_beam_range_m = _beam.spot_range
 	read_rig()
+	# Applied once here rather than waited for: `_apply_beam` only runs on a
+	# change of state, and the state a car starts in is a change from nothing.
+	_apply_beam()
 
 
 ## Re-read the scene's lighting rig.
@@ -383,6 +423,33 @@ func _settle(delta: float) -> void:
 	var hold: float = dark_hold_s if _seen > _lighting else light_hold_s
 	if _seen_held_s >= hold:
 		_lighting = _seen
+		_apply_beam()
+
+
+## Point the thrown light at whatever `_lighting` now says.
+##
+## ⚠️ **Called on a change of state, not every tick, and that is the one place
+## in this file where it matters.** The lens writes are per-instance shader
+## values measured at tens of nanoseconds and are left unguarded; a light is a
+## different animal — moving one dirties it for the renderer, and `_lighting`
+## changes at most once per hold, which is a third of a second at its very
+## fastest. Writing it 60 times a second would be 180 identical writes for every
+## one that says anything.
+func _apply_beam() -> void:
+	if _beam == null:
+		return
+	# Hidden rather than dimmed to nothing. A zero-energy light is still a light
+	# the renderer gathers, culls and loops over per object, and "off" here means
+	# a car in daylight — which is most cars, most of the time.
+	_beam.visible = _lighting != Lighting.SUN
+	if not _beam.visible:
+		return
+	var share: float = 1.0 if _lighting == Lighting.DARK else sidelamp_beam
+	_beam.light_energy = beam_energy * share
+	# Reach is scaled with brightness rather than held. A dim lamp that still
+	# reaches 40 m lights a far kerb it could never really touch, which reads as
+	# the road brightening on its own rather than as the car lighting it.
+	_beam.spot_range = _beam_range_m * share
 
 
 ## What the world says right now, before any hold is applied.
