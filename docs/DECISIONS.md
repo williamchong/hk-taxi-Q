@@ -72,6 +72,8 @@ lives in git. This file holds *why things are the way they are*.
 | `Q46` | A grammar refusal draws a quiet tier, not invented fenestration | ✅ Closed — accepted in scope 2026-08-10 on a `survey_debug`-tinted drive test: refused stock reads quiet; the residual sightings sit on committed stock and open `Q47` |
 | `Q47` | A committed verdict is right about the tower, wrong about the ground band | 🟡 Route decided 2026-08-10, join landed 2026-08-11 — iB1000 `P`-block metres where a tower meets one (data > survey-inferred; 310 stems carry a data boundary in `podiums.json`, contract argued 2026-08-11), `R4`'s floors→metres conversion elsewhere graded against the joined boundaries before packing; closes when the shipped boundary is graded |
 | `Q48` | A contrast ratio measures banding where an `L*` profile could not | 🟡 Open as a **candidate only** — recorded 2026-08-13 from `P3-6`'s photo veto, nothing built and nothing scheduled; Probe 3 and mode 1 do not reach it, mode 4 does, and the evidence is one hero building graded by its author's eye |
+| `Q49` | A tyre spends one budget, and the handbrake that follows spins the car | 🟡 **Superseded in mechanism by `Q50`** — the friction ellipse it shipped is gone with the raycast model; its `B4` conclusion stands and is now the only route |
+| `Q50` | The shipped car is Godot's `VehicleBody3D`; `P0-5a` was right and the cost was accepted | ✅ Closed — shipped 2026-08-18 at the user's explicit instruction. Drift window measured **0.01–0.02 wide**, a handbrake tap now does nothing, and `Q49`'s ellipse is lost |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -4257,8 +4259,8 @@ like a taxi.
 rasteriser and Godot exits `0` on a shader error, so a broken `vehicle_body.gdshader` still reaches
 a frame with nothing said. That residue is why the risk register keeps this at Low rather than
 closing it, and it stays with a render plus a `grep -i "shader error"` over the driver log. It also
-grades `taxi.tscn` alone: `taxi_builtin.tscn` carries no lamp rig on purpose, and a roster car earns
-its own entry.
+grades `taxi.tscn` alone, which since `Q50` is the only car in the tree: a roster car earns its own
+entry when it exists, and one carrying no lamp rig is supported rather than broken.
 
 ⚠️ **Two traps shaped the file, and both fail in the direction that looks like a pass.** No
 `class_name` global is named, for the fresh-clone reason `ARCHITECTURE.md` records. And the tool
@@ -5316,6 +5318,107 @@ retired values as frozen constants rather than reading a profile that has moved 
 reproducing the run its findings were taken from.
 
 **See.** `P0-5a` · `P0-5b/c/d` · `GAME_DESIGN.md` "Controls" · `PLAN.md` `B4` · `P3-2b`
+
+---
+
+## `Q50` — The shipped car is Godot's `VehicleBody3D`, and `P0-5a` was right
+
+**Status.** ✅ Shipped 2026-08-18 · **Owner.** `P0-5a` → `B4`
+
+**Claim.** `scenes/vehicle/taxi.tscn` is a `VehicleBody3D` with four `VehicleWheel3D` children.
+`VehicleController` keeps its name and its consumers and loses its model: the suspension ray, the
+spring and damper, the friction ellipse and the anti-roll bar are the engine's now.
+`wheel_mount.gd`, `wheel_visual.gd`, `builtin_vehicle_controller.gd`, `taxi_builtin.tscn`,
+`skidpad_builtin.tscn` and `city_drive_builtin.tscn` are deleted.
+
+⚠️ **This reverses `P0-5a` at the user's explicit instruction, and it is not a re-measurement that
+overturned it.** `P0-5a`'s finding was re-run on the way in and it reproduces, sharper. It is
+recorded here as the cost of the change rather than as an argument against it, because the decision
+was made with the cost in front of it.
+
+**What it cost, measured.** `tools/skidpad.sh` on `skidpad.tscn`, before and after:
+
+| run | entry | exit | decay/s | decel | peak slip | yaw | distance |
+|---|---|---|---|---|---|---|---|
+| corner **before** | 62.78 | 62.26 | 0.002 | 0.04 | 6.7° | −428.9° | 68.2 m |
+| corner **after** | 63.02 | 62.35 | 0.003 | 0.05 | **2.0°** | **−358.2°** | 70.0 m |
+| drift **before** | 62.78 | 28.39 | 0.198 | 2.39 | 16.0° | −343.1° | 36.9 m |
+| drift **after** | 63.02 | 45.06 | 0.084 | 1.25 | **21.8°** | −362.9° | 46.4 m |
+| tap **before** | 62.78 | 60.14 | 0.011 | 0.18 | 7.1° | −434.6° | 66.2 m |
+| tap **after** | 63.02 | 62.34 | 0.003 | 0.05 | **1.9°** | −357.3° | 69.5 m |
+| brake **before** | 62.78 | 0.55 | 0.000 | 8.79 | — | — | 16.6 m |
+| brake **after** | 63.02 | 0.57 | 0.000 | 8.75 | — | — | 17.0 m |
+| coast **before** | 62.78 | 0.95 | 0.000 | 1.83 | — | — | 64.7 m |
+| coast **after** | 63.02 | 0.97 | 0.000 | 1.84 | — | — | 65.2 m |
+
+**Braking and coasting reproduce to within half a percent**, which is the evidence that the two
+things this file still hand-writes — the coast-drag pair and the arcade collision response — ported
+correctly rather than being quietly replaced by engine behaviour.
+
+🔴 **Three regressions, and none is a tuning miss.**
+
+1. **`Q49`'s friction ellipse is gone.** One isotropic `wheel_friction_slip` is a *circle*, so
+   braking through a corner costs no cornering grip and a power-on corner accelerates again — the
+   exact behaviour `Q49` shipped to remove. The corner manoeuvre turns **16% less** for the same
+   speed (yaw −358.2° against −428.9°) and exits *faster* than it entered at the seeded grip before
+   `tyre_grip` was brought down to match.
+2. **The drift window is 0.01–0.02 wide and misses the target.** Swept at `tyre_grip = 2.5`:
+   0.70 → 1.9°, 0.68 → 2.0°, **0.66 → 21.8°**, 0.64 → 36.4°, 0.62 → 52.9°, 0.60 → 75.2°,
+   0.44 → 165.3°. There is no value at `drift_slip_threshold_deg`'s 14°: the car steps from
+   *gripping* to *well past the band* in one increment. Re-run at `tyre_grip = 4.0` the window sits
+   at 0.43/0.44 and is **0.01** wide — it moves with the grip and never widens, which is what makes
+   it a property of the class rather than of the tuning.
+3. **A handbrake tap does nothing.** The 0.5 s `tap` manoeuvre returns 1.9° of slip with yaw and
+   distance *identical to `corner`* — releasing the button restores grip on the same tick, and the
+   slide carries no momentum out of it. The raycast car's locked-tyre force built yaw that outlived
+   the release (7.1° against `corner`'s 6.7°, and 2.1 kph of exit speed). This is the regression
+   least visible in a table and most visible from the driver's seat.
+
+**What had to be re-seeded, and why the old numbers could not carry across.**
+
+- **`brake_force` 2400 → 40.** Under the raycast model it was newtons at a contact patch, applied by
+  this project's own code. Godot's `brake` is its own quantity, and the old number stopped the car
+  from 63 kph in **0.10 s over 1.0 m at 173 m/s²** — 20× the intended deceleration, and the kind of
+  failure that looks like a working brake until someone reads the table. 40 reproduces the baseline
+  to 0.5%.
+- **`tyre_grip` seeded at 2.5**, chosen so the corner manoeuvre retains the baseline's speed
+  (62.35 against 62.26 kph). It is not convertible from `grip_lateral` / `grip_longitudinal` — there
+  is one number where there were two.
+- **`roll_influence` replaces `anti_roll`**, and is a different mechanism: it scales the suspension
+  force that *causes* roll, per wheel, rather than adding a restoring torque across an axle sized
+  from the compression difference. The old term is not portable because `VehicleWheel3D` publishes
+  no suspension compression at all — `is_in_contact()` and `get_skidinfo()` and nothing else.
+- **`suspension_max_force_n` is new and load-bearing.** Godot's 6000 N default cannot carry this car:
+  static corner load is 1200 × 9.8 × 1.6 ÷ 4 ≈ **4704 N**, so the default leaves 1.27× headroom and
+  the spring clips on the first kerb without reporting anything. Seeded at 19000.
+
+**What survived, and why it was worth keeping.** `_integrate_forces` — `VehicleBody3D` *is* a
+`RigidBody3D`, so the arcade collision response reads and writes the same
+`PhysicsDirectBodyState3D`, and `collision_deflection` / `collision_speed_retained` stayed real dials
+rather than joining the unmappable list the `P0-5a` spike had to keep. Coast drag and rolling
+resistance likewise, moved from four contact patches to one central force. The spike listed all four
+as unmappable; they were unmappable *from the spike*, not from the class.
+
+**What the simplification actually bought.** 538 → 400 lines in the controller, and the deletion of
+`wheel_mount.gd` (27) and `wheel_visual.gd` (56) outright: a `VehicleWheel3D` positions, rolls and
+steers its own child mesh, so the `compression` / `grounded` / `steer_angle` publishing contract
+between mount and visual has no reason to exist. The spike went with them — once the shipped car is
+the built-in one, a second built-in car is not a comparison. ✅ `is_braking()`'s warning that
+"`builtin_vehicle_controller.gd` is the one copy that remains" is now discharged rather than
+restated.
+
+⚠️ **`tools/skidpad_ablation.gd`'s `--handbrake` is now `--drift-grip`**, sweeping
+`drift_rear_grip_scale`. The rename is not cosmetic: the field it sets is checked with `in` before
+the run, because `Object.set()` on a missing name is a **silent no-op** that prints a sweep of
+identical rows labelled with values it never applied.
+
+**Still open.** `B4`'s per-wheel angular velocity is now the only route to a drift that holds, and
+`Q49` already said so from the other side. Nothing here changes that; it removes the ellipse that
+was making the current drift *nearly* work.
+
+**See.** `P0-5a` · `Q49` · `P0-5b/c/d` · `GAME_DESIGN.md` "Controls" · `PLAN.md` `B4` ·
+`ARCHITECTURE.md` "The importer can reinstate `VehicleWheel3D`"
+
 
 ---
 

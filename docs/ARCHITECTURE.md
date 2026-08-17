@@ -6,7 +6,7 @@
 |---|---|---|
 | Engine | **Godot 4.7** | MIT, no royalties or seat fees |
 | Renderer | **Mobile** (primary), Compatibility for the web demo | Forward+ only if a desktop tier ever justifies it |
-| Physics | **Jolt** — Godot's default since 4.4 | Used for trimesh collision and raycasts, *not* for `VehicleBody3D` (see `P0-5a`) |
+| Physics | **Jolt** — Godot's default since 4.4 | Trimesh collision, and `VehicleBody3D` for the car since `Q50` reversed `P0-5a` (2026-08-18) |
 | Engine language | **GDScript**, statically typed | See below |
 | ETL | **Python 3.11+** — numpy, pyproj, pyyaml, pyogrio | Build-time only |
 | Targets | iOS, Android, Windows/macOS/Linux (Steam) | Web export reserved for the free demo slice |
@@ -22,10 +22,15 @@ applies to `_col`, `_convcol`, `_navmesh`, `_occ`, `_rigid` and `_vehicle`.
 error**: the import succeeded, `tools/check.sh` passed, the driver printed `DRIVER OK`, and the only
 symptom was a car that rendered without wheels. The mesh is now `taxi_tyre.glb`.
 
-Worth its own heading because of *what* it reinstated. `P0-5a` measured `VehicleWheel3D` and rejected
-it — its friction is isotropic, so it cannot express a drift — and a filename put it back into the
-scene tree. **A locked decision can be undone by a naming convention.** Check the instantiated tree,
-not the source scene, when geometry goes missing.
+Worth its own heading because of *what* it reinstated. `P0-5a` had measured `VehicleWheel3D` and
+rejected it — its friction is isotropic, so it cannot express a drift — and a filename put it back
+into the scene tree. **A locked decision can be undone by a naming convention.** Check the
+instantiated tree, not the source scene, when geometry goes missing.
+
+⚠️ **`Q50` made the car a real `VehicleBody3D`, and that makes this trap worse rather than moot.**
+The tyre mesh is now a child of an actual `VehicleWheel3D`, so a rename back to `taxi_wheel.glb`
+would nest a wheel inside a wheel — which the engine accepts silently, because the outer one is
+legitimately parented to the body. The mesh is `taxi_tyre.glb` and must stay so.
 
 ### Why GDScript, not C#
 
@@ -830,7 +835,7 @@ every region lies inside them.
 | `Landmarks` | Place the authored heroes from `landmarks.json`; always resident, no LOD | ✅ `P3-6` |
 | `RoadGraph` | Runtime queries over `roadgraph.json` — nearest edge, lane centre, routing | ✅ `P2-2` |
 | `RoadSpawn` | Where a car starts, resolved from a fare node through `RoadGraph` | ✅ `P2-3` |
-| `VehicleController` | Player car. Custom raycast vehicle on `RigidBody3D` + arcade overrides | ✅ `P0-5`/`P2-3` |
+| `VehicleController` | Player car. `VehicleBody3D` + arcade overrides — steering rate, top-speed taper, coast drag, drift, collision response, auto-right | ✅ `P0-5`/`P2-3`/`Q50` |
 | `InputRouter` | Abstracts touch / gamepad / keyboard into one action set | 🟡 keyboard + gamepad; `P2-4` |
 | `DebugHud` | Every dev readout, behind `F3` | ✅ |
 | `TrafficSystem` | AI vehicles following road-graph splines; trams as scripted blockers | ⬜ `P3-3` |
@@ -843,15 +848,16 @@ every region lies inside them.
 no `Node` inheritance and no rendering calls. It should be unit-testable headlessly and portable if
 the engine ever changes.
 
-**A vehicle's drive layout is scene data, not code.** `WheelMount.drives` is authored per wheel in
-each vehicle scene, so RWD and FWD need no code change; each vehicle gets its own `HandlingProfile`,
-and `centre_of_mass_offset_y` plus `anti_roll` already cover a tall van's height. The roster this
-serves is in `ART_DESIGN.md`.
+**A vehicle's drive layout is scene data, not code.** `VehicleWheel3D.use_as_traction` is authored
+per wheel in each vehicle scene, so RWD and FWD need no code change; each vehicle gets its own
+`HandlingProfile`, and `centre_of_mass_offset_y` plus `roll_influence` already cover a tall van's
+height. The roster this serves is in `ART_DESIGN.md`.
 
-⚠️ **This is why drift bias is derived from chassis geometry, not from `drives`.**
-`VehicleController` computes `WheelMount.is_front` from the wheel's position along the chassis. Had
-it keyed off `drives` or `steers`, the front-wheel-drive Crown would have had its drift bias
-inverted.
+⚠️ **This is why drift bias is derived from chassis geometry, not from a wheel's role.**
+`VehicleController._group_axles` splits the wheels by their position along the chassis. Had it keyed
+off `use_as_traction` or `use_as_steering` — which since `Q50` are the roles a `VehicleWheel3D`
+carries — the front-wheel-drive Crown would have had its drift bias inverted, silently, and only on
+the second vehicle anyone built.
 
 ### Script map
 

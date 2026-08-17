@@ -8,34 +8,46 @@ extends Resource
 ## never assigned reads as all-zeroes and fails loudly, rather than quietly
 ## driving on values buried in a script.
 ##
-## The model is a custom raycast vehicle on RigidBody3D, not Godot's
-## VehicleBody3D and not a physical simulation. P0-5a measured why: see
-## docs/DECISIONS.md, P0-5a. See also docs/GAME_DESIGN.md "Controls".
+## The model is Godot's VehicleBody3D/VehicleWheel3D, driven from these numbers.
+##
+## ⚠️ **That reverses P0-5a, at the user's explicit instruction (Q50).** The
+## raycast controller this replaced kept lateral and longitudinal grip as separate
+## semi-axes of a friction ellipse; VehicleWheel3D exposes one isotropic
+## wheel_friction_slip, so the two collapse into tyre_grip and the drift becomes a
+## per-axle scale on that single number. What that costs is recorded in
+## docs/DECISIONS.md Q50, measured, and it is a cost rather than a trade.
+## See also docs/GAME_DESIGN.md "Controls".
 
 @export_group("Speed")
 ## Top speed in forward gear.
 @export_range(0.0, 300.0, 1.0, "suffix:km/h") var max_speed_kph: float
 ## Reverse is instant — no gear delay.
 @export_range(0.0, 100.0, 1.0, "suffix:km/h") var max_reverse_kph: float
-## Engine force applied per wheel at full throttle.
+## Drive force at full throttle, handed to `VehicleBody3D.engine_force`.
+##
+## ⚠️ **Not per wheel.** The engine splits it across the wheels marked
+## `use_as_traction`, where the raycast model this replaced applied it at each
+## driven contact patch itself.
 @export_range(0.0, 5000.0, 10.0) var engine_force: float
-## Braking force applied per wheel — on every wheel, unlike engine_force.
+## Braking, handed to `VehicleBody3D.brake`.
 ##
-## Divide by the corner mass to read it as a deceleration: 2,400 N on a 1,200 kg
-## taxi is 8.0 m/s², about 0.8 g. Measured on the skidpad it comes out a little
-## better — **8.42 m/s²**, the difference being the engine damping described
-## under coast_drag_per_s, which brakes as well as coasts — for a stop from
-## 72.8 km/h in 2.30 s over 21.9 m.
+## ⚠️ **This is not newtons and does not convert from the value it replaced.** The
+## raycast model applied `brake_force` at each contact patch itself, and 2,400
+## there was ~8.0 m/s². Godot's `brake` is its own quantity: carried across
+## unchanged it stopped the car from 63 km/h in **0.10 s over 1.0 m at 173 m/s²**,
+## which looks like a working brake until someone reads the table. Re-seeded
+## against `tools/skidpad.sh` at **40**, which reproduces the raycast car's stop to
+## within half a percent — 8.75 m/s² over 17.0 m against 8.79 over 16.6 (`Q50`).
 ##
-## Grip is not the constraint anywhere near here: grip_longitudinal allows 2 ×
-## the wheel load, some 9.4 kN at rest against the 2.4 kN asked, so this dial is
-## linear in what it asks for and will not start locking wheels as it rises.
+## Measured linear in this region: 40 → 8.75 m/s², 80 → 16.53, 120 → 24.20. So it
+## is safe to dial, and ⚠️ **the range below is deliberately far wider than the
+## shipped value** — it has to keep reaching what a heavier roster vehicle needs,
+## and 40 sitting near the bottom of it is information, not a mis-scaled slider.
 ##
-## ⚠️ **The top of the range is not usable headroom.** The brake branch applies
-## its force uncapped, and 4F·delta/mass reaches STATIONARY_KPH at exactly
-## F = 5,000 N on a 1,200 kg car at 60 Hz — the slider maximum, to the newton.
-## At that value braking can cross zero within one tick and hand straight over
-## to reverse. Benign, but the margin is gone, and it shrinks with vehicle mass.
+## Grip does not bind here: `tyre_grip` is isotropic and generous, and the stop is
+## limited by this dial rather than by the tyre. ⚠️ That was checked against
+## `grip_longitudinal` before `Q50` deleted it and has **not** been re-checked
+## against `tyre_grip`.
 @export_range(0.0, 5000.0, 10.0) var brake_force: float
 
 @export_group("Steering")
@@ -49,41 +61,51 @@ extends Resource
 @export_range(0.01, 1.0, 0.01, "suffix:s") var steer_release_s: float
 
 @export_group("Grip")
-## Lateral grip multiplier. High and forgiving — no spin-outs from small errors.
+## VehicleWheel3D.wheel_friction_slip — the tyre's whole friction budget.
 ##
-## The semi-axes of the friction ellipse, with grip_longitudinal: a tyre spends
-## both from one budget, so hard braking costs cornering and vice versa. They are
-## separate numbers and the ellipse is not a circle — that separation is what
-## P0-5a rejected VehicleBody3D to keep.
-@export_range(0.0, 5.0, 0.05) var grip_lateral: float
-## Traction under power and braking. See grip_lateral for the ellipse.
-@export_range(0.0, 5.0, 0.05) var grip_longitudinal: float
+## ⚠️ **One number, and it is isotropic.** It is the tyre's lateral limit and its
+## longitudinal limit at once, so it cannot be spent asymmetrically: this is
+## exactly the property P0-5a rejected VehicleBody3D for, and Q50 accepted. The
+## grip_lateral / grip_longitudinal pair it replaces were the semi-axes of an
+## ellipse, and there is no ellipse here to be the semi-axes of.
+##
+## The practical consequence is that everything below which scales this scales
+## braking and traction with it, by exactly the same factor.
+@export_range(0.0, 20.0, 0.05) var tyre_grip: float
 
 @export_group("Drift")
-## How far the handbrake lever comes up while drift is held: 0 leaves the rear
-## tyres rolling, 1 locks them solid.
+## Rear-axle tyre_grip multiplier while drift is held. 1.0 leaves the rear axle
+## alone; lower breaks it loose.
 ##
-## The rear tyre force is a blend of the two states, so this is one dial with a
-## physical meaning rather than a grip multiplier. It replaces drift_grip_scale
-## and drift_front_grip_scale, which modelled the *result* of a handbrake without
-## its cause — see VehicleController._locked_tyre_force for what locking does and
-## why nothing here needs to touch lateral grip directly, and note that the front
-## axle is now untouched, as a real handbrake leaves it.
+## ⚠️ **Measured, this dial has almost no usable range, and that is a property of
+## the vehicle class rather than of the number.** Swept on tools/skidpad.sh at the
+## shipped tyre_grip of 2.5, against drift_slip_threshold_deg's 14°: 0.68 still
+## grips at 2.0° of slip, 0.66 is already at 21.8° — the shipped value, and the
+## closest any value gets — and 0.64 is out at 36.4°, 0.60 at 75.2°. **Nothing
+## lands on 14°.**
 ##
-## ⚠️ **Do not raise this to 1.0 expecting a better drift.** Measured on the
-## skidpad, a fully locked rear axle spins the car — 162° of slip against the 14°
-## in drift_slip_threshold_deg — and it spins from a 0.5 s tap as readily as from
-## a held button, because a locked tyre has almost no lateral force at small slip
-## angles and this axle's force is the only thing resisting yaw. That is correct
-## physics and the wrong game: GAME_DESIGN.md asks for a drift that is easy to
-## hold. The shipped value is the sweep's answer, not a guess.
-@export_range(0.0, 1.0, 0.01) var handbrake_lock: float
+## ⚠️ **The window moves with tyre_grip and never widens**, which is what makes it
+## structural rather than a tuning miss: re-swept at tyre_grip 4.0 it sits at
+## 0.43/0.44 and is 0.01 wide. Sweep it with `tools/skidpad.sh --drift-grip=`.
+##
+## ⚠️ **And inside it the slide does not hold.** Because tyre_grip is isotropic,
+## the same scale that lets the tail step out takes the rear axle's drive and
+## braking with it — so slip opens only while speed collapses (53.9 → 26.4 kph in
+## 0.75 s with the throttle down throughout), then self-terminates and the car
+## grips again. GAME_DESIGN.md asks for a drift that is easy to hold; this cannot
+## be one. Q50 records that as the accepted cost of the switch.
+@export_range(0.0, 1.0, 0.01) var drift_rear_grip_scale: float
+## Front-axle tyre_grip multiplier while drift is held.
+##
+## A real handbrake does nothing to the front axle, and the raycast model this
+## replaced left it alone for that reason. It is back because the rear-only form
+## is unusable here: with one isotropic budget, softening the rear alone spins the
+## car rather than sliding it, and easing the front is the only lever left that
+## keeps the nose from biting. It models no mechanism — it is a fudge, and it is
+## named honestly rather than dressed up.
+@export_range(0.0, 1.0, 0.01) var drift_front_grip_scale: float
 ## Slip angle above which the drift scores style points.
 @export_range(0.0, 90.0, 1.0, "suffix:°") var drift_slip_threshold_deg: float
-## Fraction of speed lost per second while drifting. Deliberately small —
-## drifting must not feel like a penalty.
-@export_range(0.0, 1.0, 0.01) var drift_speed_scrub_per_s: float
-
 ## Fraction of rolling speed shed per second when coasting — engine braking.
 ## Small values glide, large values stop the car the moment you lift off.
 ##
@@ -120,9 +142,10 @@ extends Resource
 @export_range(0.0, 5.0, 0.05, "suffix:s") var auto_right_delay_s: float
 
 @export_group("Suspension")
-## Chassis layout (wheelbase, track, mount points) is deliberately NOT here:
-## that is per-vehicle model data and belongs to the vehicle scene. Wheel radius
-## is the one exception, because the suspension ray length is derived from it.
+## Chassis layout (wheelbase, track, hardpoints) is deliberately NOT here: that is
+## per-vehicle model data and belongs to the vehicle scene. Wheel radius is the one
+## exception, because `VehicleWheel3D.wheel_radius` needs it — and because
+## `ray_length_m()` below is still what the spawn drops the car from.
 @export_range(0.1, 1.0, 0.01, "suffix:m") var wheel_radius_m: float
 ## Uncompressed spring length, measured from the mount point down to the hub.
 ## It does NOT include the wheel: the ray cast to find the ground is
@@ -143,10 +166,31 @@ extends Resource
 @export_range(0.5, 5.0, 0.05, "suffix:Hz") var suspension_frequency_hz: float
 ## 1.0 is critically damped. Below 1.0 allows a little bounce, above is sluggish.
 @export_range(0.0, 2.0, 0.01) var suspension_damping_ratio: float
-## Artificial anti-roll torque, 0 = none, 1 = rigid. A lowered centre of mass
-## alone does not stop the car rolling over; this is the arcade dial that does,
-## without pinning the body flat and killing the sense of weight.
-@export_range(0.0, 1.0, 0.01) var anti_roll: float
+## VehicleWheel3D.wheel_roll_influence — how much of the suspension force reaches
+## the chassis as roll torque. 0 suppresses body roll entirely, 1 passes it all.
+##
+## ⚠️ **Not an anti-roll bar, and not the anti_roll dial it replaces.** That one
+## added a restoring torque across each axle, sized from the compression
+## *difference* between its two wheels, so it fought roll only while the car was
+## actually rolling. This scales the force that causes roll in the first place,
+## at every wheel independently, whether the car is cornering or standing still.
+## The numbers do not convert, and a value ported across by arithmetic would be a
+## guess wearing a measurement's clothes.
+##
+## It is also why the anti-roll bar could not simply be kept: VehicleWheel3D
+## publishes is_in_contact() and get_skidinfo() but no suspension compression, so
+## the term the old bar was computed from is not readable from here.
+@export_range(0.0, 1.0, 0.01) var roll_influence: float
+## VehicleWheel3D.suspension_max_force, in newtons — the ceiling on what one
+## spring may push with.
+##
+## ⚠️ **Godot's default of 6000 N cannot carry this car, and the failure is
+## quiet.** Static corner load is mass × g × gravity_scale ÷ 4 = 1200 × 9.8 × 1.6
+## ÷ 4 ≈ 4704 N, so the default leaves 1.27× headroom and the spring clips on the
+## first kerb — the car sags onto its bump stops rather than reporting anything.
+## Seeded at roughly 4× static load. It scales with mass and with gravity_scale,
+## so it is not portable to a heavier vehicle unchanged.
+@export_range(0.0, 60000.0, 100.0, "suffix:N") var suspension_max_force_n: float
 
 @export_group("Body")
 ## Downward offset of the centre of mass from the body origin. Lower = less roll.

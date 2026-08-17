@@ -10,11 +10,11 @@ mesh, and the roster is six vehicles that differ mostly by those numbers. Hence
 a generator rather than a modelled asset.
 
 ⚠️ **The chassis is an input, not an output.** `P0-5` tuned handling against the
-`WheelMount` markers in `game/scenes/vehicle/taxi.tscn`, and `P0-5a` chose a
-custom raycast controller precisely so those points are authored rather than
-inferred from a mesh. The physics never reads this file's output, so a model
-built to a different wheelbase would look correct and silently drive to the old
-tuning. `Chassis` below therefore mirrors the scene, and
+wheel hardpoints in `game/scenes/vehicle/taxi.tscn` — `WheelMount` markers then,
+`VehicleWheel3D` nodes since `Q50`, at the same positions. Either way those
+points are authored rather than inferred from a mesh, and the physics never reads
+this file's output, so a model built to a different wheelbase would look correct
+and silently drive to the old tuning. `Chassis` below therefore mirrors the scene, and
 `etl/tests/test_make_vehicle.py` fails if the two ever disagree.
 
 Output goes to `game/assets/authored/vehicles/`, which is **committed** — these
@@ -265,10 +265,10 @@ class Chassis:
     — in that order, with the drive re-reviewed.
     """
 
-    wheelbase_m: float = 2.60  # markers at z = +/-1.30
-    track_m: float = 1.60  # markers at x = +/-0.80
+    wheelbase_m: float = 2.60  # wheel nodes at z = +/-1.30
+    track_m: float = 1.60  # wheel nodes at x = +/-0.80
     wheel_radius_m: float = 0.35  # handling.tres, wheel_radius_m
-    suspension_rest_m: float = 0.35  # handling.tres, hub sits this far below the marker
+    suspension_rest_m: float = 0.35  # handling.tres, hub sits this far below the node
 
     @property
     def hub_y_m(self) -> float:

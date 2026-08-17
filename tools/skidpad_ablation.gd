@@ -9,7 +9,7 @@
 ## them was published from `city_drive.tscn` and had to be withdrawn — a 0.14°
 ## micro-gradient there is worth the whole quantity under test (`P0-5b/c/d`).
 ## This is the repeatable version. Run it before and after a change to
-## `_apply_tyre_forces` or `handling.tres` and paste both tables.
+## `VehicleController`'s drive model or `handling.tres` and paste both tables.
 ##
 ## **It grades, it does not check.** No thresholds, no pass/fail, no place in
 ## `tools/check.sh` — the numbers are the output, and what they should be is a
@@ -28,17 +28,18 @@ const DEFAULT_SCENE: String = "res://scenes/dev/skidpad.tscn"
 ## Every manoeuvre, in table order.
 const MANOEUVRES: PackedStringArray = ["corner", "drift", "tap", "brake", "coast"]
 
-## The subset that can possibly move when `HANDBRAKE_FIELD` does — the only ones
-## a sweep re-runs. Nothing else takes the drift branch in `_apply_tyre_forces`.
-const HANDBRAKE_MANOEUVRES: PackedStringArray = ["drift", "tap"]
+## The subset that can possibly move when `DRIFT_FIELD` does — the only ones
+## a sweep re-runs. Nothing else holds the drift button, so nothing else reaches
+## `VehicleController._apply_drift`.
+const DRIFT_MANOEUVRES: PackedStringArray = ["drift", "tap"]
 
-## The profile field `--handbrake` sweeps.
+## The profile field `--drift-grip` sweeps.
 ##
 ## ⚠️ Set through `Object.set()`, which is a **silent no-op** on a name the
 ## resource does not have. Rename the field and every swept row comes back
 ## identical, correctly labelled, and describing a value that was never applied —
 ## a published table of numbers nobody measured. `_boot` refuses the run instead.
-const HANDBRAKE_FIELD: StringName = &"handbrake_lock"
+const DRIFT_FIELD: StringName = &"drift_rear_grip_scale"
 
 ## Seconds of full throttle before every manoeuvre, to reach a working speed.
 ## Long enough to be well past the initial squat, short enough that the car is
@@ -52,7 +53,7 @@ const MANOEUVRE_S: float = 4.0
 ## measured against the suspension transient of the last.
 const SETTLE_S: float = 0.5
 
-## How long the `tap` manoeuvre holds the handbrake before letting go, while
+## How long the `tap` manoeuvre holds the drift button before letting go, while
 ## steering stays on for the full `MANOEUVRE_S`.
 ##
 ## The pair matters more than either number. `drift` holds the button for the
@@ -77,15 +78,16 @@ const STOPPED_KPH: float = 1.0
 const SLIP_FLOOR_MPS: float = 1.0
 
 var _only: String = ""
-## The scene to grade. `skidpad_builtin.tscn` is the same ground and spawn under
-## `P0-5a`'s rejected `VehicleBody3D` car, and exists to be driven with the same
-## arguments as this one — which it cannot be if the path is a constant.
+## The scene to grade. Configurable rather than constant so a roster car can be
+## put on the same ground and spawn later. ⚠️ Never `city_drive.tscn`: a 0.14°
+## micro-gradient there is worth the whole quantity under test, and a published
+## figure has already had to be withdrawn over it (`P0-5b/c/d`).
 var _scene_path: String = DEFAULT_SCENE
-## Values to sweep `handbrake_lock` over, or empty for whatever
+## Values to sweep `drift_rear_grip_scale` over, or empty for whatever
 ## `handling.tres` ships. Set live on the loaded resource rather than by editing
 ## the file: nothing caches it, so it takes effect on the next tick, and a sweep
 ## that crashed halfway cannot leave the committed tuning holding a probe value.
-var _handbrake_sweep: Array[float] = []
+var _drift_sweep: Array[float] = []
 var _failures: Array[String] = []
 ## ⚠️ **Typed `RigidBody3D`, and every controller method below goes through
 ## `call()`, because naming `VehicleController` here breaks the car.**
@@ -94,9 +96,9 @@ var _failures: Array[String] = []
 ## `InputRouter` autoload, autoloads are not registered under `--script`, and so
 ## resolving that class while *this* script compiles — which a type annotation
 ## does, in `_init`, before the first frame — fails. The failure is not loud.
-## GDScript caches the broken class, `taxi.tscn` then instances a `RigidBody3D`
+## GDScript caches the broken class, `taxi.tscn` then instances a `VehicleBody3D`
 ## with a **null script**, and the run reports "no vehicle" while the wheels,
-## whose class touches no autoload, are found perfectly. Measured here before
+## which are engine classes touching no autoload, are found perfectly. Measured here before
 ## `driver.gd`'s duck-typing was understood to be deliberate.
 var _vehicle: RigidBody3D = null
 var _spawn: Transform3D = Transform3D.IDENTITY
@@ -161,12 +163,12 @@ func _parse_args() -> bool:
 				_only = bits[1]
 			"--scene":
 				_scene_path = bits[1]
-			"--handbrake":
+			"--drift-grip":
 				for piece: String in bits[1].split(",", false):
 					if not piece.is_valid_float():
-						_fail("--handbrake wants numbers, got '%s'" % piece)
+						_fail("--drift-grip wants numbers, got '%s'" % piece)
 						return false
-					_handbrake_sweep.append(piece.to_float())
+					_drift_sweep.append(piece.to_float())
 			_:
 				_fail("unknown argument %s" % bits[0])
 				return false
@@ -209,14 +211,14 @@ func _boot() -> bool:
 func _measure_all() -> void:
 	var results: Array[Result] = []
 	var profile: Resource = _vehicle.get("profile") as Resource
-	if not _handbrake_sweep.is_empty():
+	if not _drift_sweep.is_empty():
 		if profile == null:
-			_fail("--handbrake needs a profile on the vehicle and there is none")
+			_fail("--drift-grip needs a profile on the vehicle and there is none")
 			return
-		# See HANDBRAKE_FIELD: set() would swallow a rename and print a sweep of
+		# See DRIFT_FIELD: set() would swallow a rename and print a sweep of
 		# identical rows labelled with values it never applied.
-		if not HANDBRAKE_FIELD in profile:
-			_fail("--handbrake: %s has no '%s'" % [profile.resource_path, HANDBRAKE_FIELD])
+		if not DRIFT_FIELD in profile:
+			_fail("--drift-grip: %s has no '%s'" % [profile.resource_path, DRIFT_FIELD])
 			return
 
 	# One pass with the shipped tuning when nothing is swept. NAN is the "leave it
@@ -227,23 +229,23 @@ func _measure_all() -> void:
 	# branch as a plain Array, and assigning that to an Array[float] throws at
 	# run time — which killed this coroutine mid-run and still printed ABLATION OK,
 	# because a dead coroutine records no failure. `_printed_rows` now catches it.
-	var values: Array[float] = _handbrake_sweep.duplicate()
+	var values: Array[float] = _drift_sweep.duplicate()
 	if values.is_empty():
 		values.append(NAN)
 	for value: float in values:
 		if not is_nan(value):
-			profile.set(HANDBRAKE_FIELD, value)
+			profile.set(DRIFT_FIELD, value)
 		for manoeuvre: String in MANOEUVRES:
 			if not _only.is_empty() and _only != manoeuvre:
 				continue
-			# ⚠️ Only the two handbrake manoeuvres are swept. The other three never
+			# ⚠️ Only the two drift manoeuvres are swept. The other three never
 			# reach the field — `corner` steers, `brake` brakes, `coast` presses
 			# nothing, and none of them takes the drift branch — so re-running them
 			# per value burns 4.5 s of simulation each to reproduce the previous row
 			# exactly, and then the `@value` suffix dresses the duplicates up as
 			# distinct measurements. That is the failure this whole tool exists to
 			# stop, so it must not be the tool doing it.
-			var swept: bool = not is_nan(value) and manoeuvre in HANDBRAKE_MANOEUVRES
+			var swept: bool = not is_nan(value) and manoeuvre in DRIFT_MANOEUVRES
 			if not is_nan(value) and not swept and value != values[0]:
 				continue
 			var result: Result = await _measure(
@@ -384,11 +386,12 @@ func _speed_kph() -> float:
 ## the per-wheel slip signals back to `B4`, "when the effects that consume it are
 ## built, not before". A measuring instrument is not that consumer.
 ##
-## ⚠️ **This is the same formula as `builtin_vehicle_controller.slip_angle_deg()`,
-## and it has to stay that way.** `Q49` sets a figure from this tool against one
-## `P0-5a` measured through that method, and until `Q49` the two disagreed — that
-## one left the nose vector unflattened. One definition, computed twice because a
-## `--script` tool cannot reach either class; if you change one, change both.
+## ⚠️ **This is now the only definition of slip in the repo.** `Q49` set a figure
+## from this tool against one `P0-5a` measured through the controller's own
+## `slip_angle_deg()`, and until `Q49` the two disagreed — that one left the nose
+## vector unflattened. `Q50` deleted the controller's copy along with the spike
+## that was its only caller, so there is nothing left to keep in step; the
+## flattening below is what those recorded figures mean.
 ##
 ## Flattened to the ground plane so a ramp or a landing cannot read as slip.
 func _slip_deg() -> float:

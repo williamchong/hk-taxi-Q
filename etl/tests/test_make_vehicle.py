@@ -104,32 +104,26 @@ def _tres_float(text: str, field: str) -> float:
     return float(match.group(1))
 
 
-def _mount_resource_id(scene: str) -> str:
-    """The ExtResource id the scene gave `wheel_mount.gd`.
-
-    Resolved from the script path rather than hardcoded, because Godot
-    renumbers these ids on an editor save and a stale literal would quietly
-    select no nodes at all — leaving the desync guard passing over nothing.
-    """
-    match = re.search(r'\[ext_resource [^\]]*wheel_mount\.gd" id="([^"]+)"\]', scene)
-    assert match is not None, "no ext_resource for wheel_mount.gd in taxi.tscn"
-    return match.group(1)
-
-
 def _marker_origins(scene: str) -> dict[str, tuple[float, float, float]]:
-    """Every `WheelMount` in the scene, by node name, as its xyz origin.
+    """Every wheel hardpoint in the scene, by node name, as its xyz origin.
 
-    A `Transform3D` is nine basis floats then three origin floats; the mounts
+    A `Transform3D` is nine basis floats then three origin floats; the wheels
     are unrotated, so only the last three carry chassis information.
+
+    Selected by node *type* since `Q50`, where the hardpoints stopped being
+    `Marker3D`s running `wheel_mount.gd` and became `VehicleWheel3D`s. That is
+    also more robust than what it replaces: matching on the script's ExtResource
+    id meant resolving that id from the script path first, because Godot
+    renumbers the ids on an editor save and a stale literal would quietly select
+    no nodes at all — leaving this guard passing over nothing.
     """
-    wanted = _mount_resource_id(scene)
     origins: dict[str, tuple[float, float, float]] = {}
     for block in re.split(r"^\[node ", scene, flags=re.MULTILINE)[1:]:
         name = re.match(r'name="([^"]+)"', block)
         transform = re.search(r"transform = Transform3D\(([^)]*)\)", block)
         if name is None or transform is None:
             continue
-        if not re.search(rf'script = ExtResource\("{re.escape(wanted)}"\)', block):
+        if 'type="VehicleWheel3D"' not in block:
             continue
         values = [float(part) for part in transform.group(1).split(",")]
         origins[name.group(1)] = (values[-3], values[-2], values[-1])
@@ -140,11 +134,11 @@ def _marker_origins(scene: str) -> dict[str, tuple[float, float, float]]:
 def scene_chassis() -> Chassis:
     """The chassis as the *shipped scene and profile* describe it."""
     origins = _marker_origins(TAXI_SCENE.read_text())
-    assert len(origins) == 4, f"expected four WheelMounts, found {sorted(origins)}"
+    assert len(origins) == 4, f"expected four VehicleWheel3Ds, found {sorted(origins)}"
 
     xs = sorted({round(origin[0], 4) for origin in origins.values()})
     zs = sorted({round(origin[2], 4) for origin in origins.values()})
-    assert len(xs) == 2 and len(zs) == 2, f"mounts are not a rectangle: {origins}"
+    assert len(xs) == 2 and len(zs) == 2, f"wheels are not a rectangle: {origins}"
 
     profile = HANDLING.read_text()
     return Chassis(
@@ -206,9 +200,11 @@ class TestChassisMatchesTheScene:
         )
 
     def test_the_scene_does_not_re_author_the_rest_length(self) -> None:
-        """`wheel_visual.gd` takes its rest offset from the profile, so no wheel
-        mesh may carry one of its own. A scene copy would hover or sink the
-        moment the spring is retuned, with the physics unchanged."""
+        """A `VehicleWheel3D` positions its own child mesh from
+        `wheel_rest_length`, which the controller writes from the profile — so no
+        wheel mesh may carry a transform of its own. A scene copy would hover or
+        sink the moment the spring is retuned, with the physics unchanged. Held
+        by `wheel_visual.gd` reading the profile before `Q50` deleted it."""
         scene = TAXI_SCENE.read_text()
         visuals = [
             block

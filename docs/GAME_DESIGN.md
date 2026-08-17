@@ -139,17 +139,18 @@ yet drivable; neither is scored until something can be jumped off.
 
 See `docs/ARCHITECTURE.md` for the action-set mapping across touch/gamepad/keyboard.
 
-**Handling model:** custom raycast vehicle on `RigidBody3D` with arcade overrides — not Godot's
-`VehicleBody3D`, and not a physical simulation. `P0-5a` measured why: `VehicleBody3D`'s wheel friction
+**Handling model:** Godot's `VehicleBody3D` with arcade overrides, since `Q50` (2026-08-18). It was a
+custom raycast vehicle on `RigidBody3D` until then, and `P0-5a` measured why: `VehicleBody3D`'s wheel friction
 is **isotropic**, so a drift cannot break lateral grip without destroying traction and braking with
-it. ⚠️ Since `Q49` the two axes are **coupled but not collapsed** — one friction *ellipse* per tyre,
-semi-axes `grip_lateral` and `grip_longitudinal`. A circle is what `P0-5a` rejected; an ellipse keeps
-both dials meaning what they say while making the tyre spend from one purse.
+it. 🔴 **That finding was never refuted — `Q50` accepted it as a cost.** `Q49`'s friction ellipse, and
+the `grip_lateral` / `grip_longitudinal` semi-axes it spent from, are gone: `VehicleWheel3D` has one
+`wheel_friction_slip`, so the budget is the circle `P0-5a` rejected and `tyre_grip` is the single
+number both axes now come out of.
 
 | Property | Target feel |
 |---|---|
-| Grip | High, forgiving. No spin-outs from small errors — but **one budget per tyre**: since `Q49` lateral and longitudinal share a friction ellipse, so braking through a corner costs cornering grip and a power-on corner no longer accelerates |
-| Drift | Button-initiated, easy to hold, scrubs little speed. 🔴 **The target as written is anti-physical and the car does not meet it** — the handbrake locks the rear tyres, and a locked tyre trades slide against speed rather than granting both. Shipped at `handbrake_lock = 0.15`: **16.0° of slip for 2.39 m/s²**, against the 57.8° for 1.96 the pre-`Q49` per-axle grip fudge gave. Fully locked it spins (162°) at any dial value. The honest route to "slides a lot, scrubs little" is `B4`'s per-wheel angular velocity, which is what lets throttle sustain a slide (`Q49`) |
+| Grip | High, forgiving. No spin-outs from small errors. 🔴 **`Q49`'s one-budget-per-tyre coupling is lost** — the ellipse is a circle now, so braking through a corner costs no cornering grip and a power-on corner **accelerates again**, which is the behaviour `Q49` was written to remove. Measured on the skidpad, the corner manoeuvre turns 16% less for the same speed: yaw −358.2° against the raycast car's −428.9° |
+| Drift | Button-initiated, easy to hold, scrubs little speed. 🔴 **Not met, and no tuning reaches it** — `drift_rear_grip_scale` is a scale on the one isotropic number, so the window between "grips" and "spins" is **0.01–0.02 wide** and nothing inside it lands on `drift_slip_threshold_deg`'s 14°. Swept at `tyre_grip = 2.5`: 0.68 → 2.0° (grip), **0.66 → 21.8° (shipped)**, 0.64 → 36.4°, 0.60 → 75.2°, 0.44 → 165.3° (full spin). 🔴 **A tap now does nothing at all**: the 0.5 s `tap` manoeuvre returns 1.9° peak and a yaw and distance identical to `corner`, because releasing the button restores grip instantly and the slide carries no momentum. The raycast car's locked-tyre force built yaw that outlived the release (7.1°). The honest route remains `B4`'s per-wheel angular velocity (`Q49`, `Q50`) |
 | Collision | Glancing hits deflect; head-on hits cost speed, never control |
 | Recovery | Auto-righting if flipped, within ~1 s |
 | Reverse | Instant, no gear delay |

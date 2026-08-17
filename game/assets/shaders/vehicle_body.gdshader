@@ -172,8 +172,10 @@ uniform float lamp_emission : hint_range(0.0, 8.0) = 1.6;
 // — there is one sun, and every car agrees about where it is.
 //
 // Written by `scripts/vehicle/vehicle_lamps.gd`. Unset instances keep the
-// default, which is every lamp out — so the `taxi_builtin` spike, which carries
-// no lamp rig, simply drives around with dark lenses rather than failing.
+// default, which is every lamp out — so a car carrying no lamp rig simply drives
+// around with dark lenses rather than failing. An AI roster car too far away to
+// be worth switching is the case that matters now; the `taxi_builtin` spike was
+// the original one, and `Q50` retired it.
 instance uniform vec4 lamp_lit = vec4(0.0);
 
 // Circuits 5-8, in the same ordering: x side lamps, y head lamps, z and w

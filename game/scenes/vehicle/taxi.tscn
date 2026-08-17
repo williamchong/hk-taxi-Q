@@ -1,21 +1,40 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=9 format=3]
+
+; The player's taxi.
+;
+; ⚠️ Since `Q50` this is a `VehicleBody3D` with four `VehicleWheel3D` children,
+; reversing `P0-5a`. It was a `RigidBody3D` with `Marker3D` hardpoints under a
+; hand-rolled raycast model until 2026-08-18. `scripts/vehicle/wheel_mount.gd`
+; and `scripts/vehicle/wheel_visual.gd` were deleted in the same change: a
+; `VehicleWheel3D` positions, rolls and steers its own child mesh, so the tyre
+; instances below carry no script at all.
+;
+; ⚠️ **A `VehicleWheel3D` must be a DIRECT child of the `VehicleBody3D`.** The
+; engine collects them that way and silently ignores one nested any deeper —
+; `vehicle_controller.gd` matches that rule rather than a recursive search, so a
+; misplaced wheel is a car that drives on three.
+;
+; ⚠️ **The tyre mesh is `taxi_tyre.glb` and must stay so.** Godot's glTF importer
+; turns any node whose name ends in `_wheel` into a `VehicleWheel3D` — which is
+; how `P3-11` lost its wheels — and here that would silently nest a wheel inside
+; a wheel. See docs/ARCHITECTURE.md "The importer can reinstate VehicleWheel3D".
+;
+; Godot strips these comments on any editor resave, so anything load-bearing
+; lives in the scripts and in docs/, not here.
 
 [ext_resource type="Script" path="res://scripts/vehicle/vehicle_controller.gd" id="1_ctrl"]
-[ext_resource type="Script" path="res://scripts/vehicle/wheel_mount.gd" id="2_wheel"]
 [ext_resource type="Resource" path="res://tuning/handling.tres" id="3_handling"]
 [ext_resource type="PackedScene" path="res://assets/authored/vehicles/taxi_body.glb" id="4_body"]
 [ext_resource type="PackedScene" path="res://assets/authored/vehicles/taxi_tyre.glb" id="5_wheelmesh"]
-[ext_resource type="Script" path="res://scripts/vehicle/wheel_visual.gd" id="6_wheelvis"]
 [ext_resource type="Script" path="res://scripts/vehicle/sun_glint.gd" id="7_glint"]
 [ext_resource type="Material" path="res://tuning/vehicle_body.tres" id="8_bodymat"]
 [ext_resource type="Script" path="res://scripts/vehicle/vehicle_lamps.gd" id="9_lamps"]
 
-; Not the visual body, deliberately — see docs/PROGRESS.md, P3-11. Godot strips
-; these comments on any editor resave, so the reasoning lives there, not here.
+; Not the visual body, deliberately — see docs/PROGRESS.md, P3-11.
 [sub_resource type="BoxShape3D" id="BoxShape3D_body"]
 size = Vector3(1.8, 0.7, 4.0)
 
-[node name="Taxi" type="RigidBody3D"]
+[node name="Taxi" type="VehicleBody3D"]
 mass = 1200.0
 script = ExtResource("1_ctrl")
 profile = ExtResource("3_handling")
@@ -24,11 +43,10 @@ profile = ExtResource("3_handling")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35, 0)
 shape = SubResource("BoxShape3D_body")
 
-; The lamp rig rides on the body mesh rather than beside it, the same way
-; `WheelVisual` rides on the tyre: the circuits are per-instance shader state,
-; and the instance is the `MeshInstance3D` inside this .glb. See
-; scripts/vehicle/vehicle_lamps.gd. Godot strips these comments on any editor
-; resave, so the reasoning lives in the script, not here.
+; The lamp rig rides on the body mesh rather than beside it, the same way the
+; tyre mesh rides on its wheel: the circuits are per-instance shader state, and
+; the instance is the `MeshInstance3D` inside this .glb. See
+; scripts/vehicle/vehicle_lamps.gd.
 [node name="Mesh" parent="." instance=ExtResource("4_body")]
 script = ExtResource("9_lamps")
 
@@ -50,6 +68,7 @@ script = ExtResource("9_lamps")
 ; vanishing angle. Rendered from the chase camera that lit a tall rounded dome
 ; climbing the screen toward the vanishing point, and it read — correctly — as a
 ; light shining upward rather than as a road being lit. Reported as exactly that.
+; tools/verify_vehicle.gd now checks this rather than trusting the comment.
 ;
 ; 14 down against a half angle of 13 puts the top edge 1 degree BELOW horizontal,
 ; so every ray lands on tarmac and the pool is bounded instead of running to the
@@ -83,16 +102,15 @@ script = ExtResource("9_lamps")
 ; fading the first 8 gives the same 8 units from the other half. 35 m of full
 ; reach is well past the chase camera and past where a 32 m cone is more than a
 ; few pixels, so nothing visible is spent. ⚠️ This bounds the competitors, it does
-; not cap them — a dense street can still put more than four cars inside 50 m,
-; and the roster owes an explicit nearest-N rule on top. See DECISIONS P3-11e.
+; not cap them — `BeamBudget` is the nearest-N rule that does. See DECISIONS
+; P3-11e.
 ;
 ; THIS NODE OWNS BRIGHTNESS AND REACH. vehicle_lamps.gd reads light_energy and
 ; spot_range once in _ready and thereafter only scales them by sidelamp_beam, so
 ; both values here are live and a roster car can carry a dimmer or shorter beam
 ; without touching the script. It briefly worked the other way for energy alone
 ; — an export overwrote this before the first frame, so editing it did nothing
-; and nothing said so. Godot strips these comments on any editor resave, so the
-; reasoning lives in the script, not here.
+; and nothing said so.
 [node name="HeadlampL" type="SpotLight3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.97030, 0.24192, 0, -0.24192, 0.97030, -0.58, 0.5, -2.05)
 visible = false
@@ -127,34 +145,34 @@ distance_fade_length = 15.0
 script = ExtResource("7_glint")
 material = ExtResource("8_bodymat")
 
-[node name="WheelFL" type="Marker3D" parent="."]
+; Suspension, friction and roll influence are written by the controller from
+; `handling.tres` at `_ready`, so these four carry only what is geometry or role.
+; Leaving the numbers out of the scene is deliberate: two places to author one
+; spring is how a car ends up measuring its own tuning instead of the profile's.
+;
+; ⚠️ The roles below are NOT what the controller splits axles by — it uses
+; position along the chassis, because a front-wheel-drive roster car would
+; otherwise invert the drift bias. See VehicleController._group_axles.
+[node name="WheelFL" type="VehicleWheel3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.8, 0, -1.3)
-script = ExtResource("2_wheel")
-steers = true
+use_as_steering = true
 
 [node name="Visual" parent="WheelFL" instance=ExtResource("5_wheelmesh")]
-script = ExtResource("6_wheelvis")
 
-[node name="WheelFR" type="Marker3D" parent="."]
+[node name="WheelFR" type="VehicleWheel3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.8, 0, -1.3)
-script = ExtResource("2_wheel")
-steers = true
+use_as_steering = true
 
 [node name="Visual" parent="WheelFR" instance=ExtResource("5_wheelmesh")]
-script = ExtResource("6_wheelvis")
 
-[node name="WheelRL" type="Marker3D" parent="."]
+[node name="WheelRL" type="VehicleWheel3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.8, 0, 1.3)
-script = ExtResource("2_wheel")
-drives = true
+use_as_traction = true
 
 [node name="Visual" parent="WheelRL" instance=ExtResource("5_wheelmesh")]
-script = ExtResource("6_wheelvis")
 
-[node name="WheelRR" type="Marker3D" parent="."]
+[node name="WheelRR" type="VehicleWheel3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.8, 0, 1.3)
-script = ExtResource("2_wheel")
-drives = true
+use_as_traction = true
 
 [node name="Visual" parent="WheelRR" instance=ExtResource("5_wheelmesh")]
-script = ExtResource("6_wheelvis")

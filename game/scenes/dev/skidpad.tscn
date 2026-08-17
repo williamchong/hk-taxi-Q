@@ -12,9 +12,10 @@
 ; exactly like a spin and is not one. This spawn sits at z −500, some 350 m clear
 ; of the nearest segment on 1600 m of ground.
 ;
-; `skidpad_builtin.tscn` is this scene with `P0-5a`'s rejected `VehicleBody3D`
-; car in place of the real one, at the same spawn and with the same everything
-; else, so the two are comparable. Drive both with the same `--hold` arguments.
+; ⚠️ Since `Q50` the car this grades IS a `VehicleBody3D`, so the paired
+; `skidpad_builtin.tscn` that used to sit beside this one is gone — it would now
+; be a second copy of the same vehicle model. `tools/skidpad.sh --scene=` still
+; takes a path, for when the roster has a second car worth grading here.
 
 [ext_resource type="Script" path="res://scripts/city/greybox_builder.gd" id="1_builder"]
 [ext_resource type="PackedScene" path="res://scenes/vehicle/taxi.tscn" id="2_taxi"]

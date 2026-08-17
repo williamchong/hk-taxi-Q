@@ -278,11 +278,11 @@ trade.
   numbers. Scripting them makes the toy look **tunable in a diff** rather than guessed in a mesh, and
   the same tool goes on to make the rest of `ART_DESIGN.md`'s roster, which `B3` needs. Hard rule 4
   in spirit: the proportions are data.
-- ⚠️ **Accept, additionally: the wheel raycasts must still land where the arches are.** `P0-5` tuned
-  handling against the mount points in `taxi.tscn`, and `P0-5a` chose a custom raycast controller
-  precisely so those points are authored rather than inferred. Moving the visual car without moving
-  the raycasts is how a tuned vehicle silently stops matching its own tuning — and the drive would
-  still look fine, because the mesh is not what the physics reads.
+- ⚠️ **Accept, additionally: the wheels must still land where the arches are.** `P0-5` tuned handling
+  against the hardpoints in `taxi.tscn` — `WheelMount` markers then, `VehicleWheel3D` nodes since
+  `Q50`, at the same positions — and they are authored rather than inferred from the mesh either way.
+  Moving the visual car without moving them is how a tuned vehicle silently stops matching its own
+  tuning, and the drive would still look fine, because the mesh is not what the physics reads.
 - **Review:** the taxi from behind at speed, and parked beside a building for scale | web build |
   **Does it read as a toy in an accurate city, rather than as a box?**
 
@@ -519,16 +519,15 @@ trade.
 
 - **Deps:** `B1`, `B3`. **Review:** play a full session, twice | web build | **Do you want another
   go?** This is the risk register's "novelty does not survive the first session", put directly.
-- ⚠️ **`P3-2b` wants two numbers the controller does not publish yet.** Skid smoke and tyre marks
-  need a **traction-loss signal**, and wheels that spin up under power and lock under braking need
-  **per-wheel angular velocity**. `VehicleWheel3D` gives both free through `get_skidinfo()` — and is
-  still refused, because its single `friction_slip` cannot break lateral grip while keeping
-  longitudinal traction, which is the drift the style chain is built on (`P0-5a`, asked twice and
-  refused twice). Both are cheap to add here instead: `_apply_tyre_forces` already computes
-  lateral and longitudinal slip per wheel, so publishing them onto `WheelMount` beside `compression`
-  and `steer_angle` costs ~20 lines and changes no physics. **Do it when the effects that consume it
-  are built, not before** — `wheel_visual.gd` currently rolls the wheels from road speed, which is a
-  lie nobody can see until there is smoke to compare it against.
+- ✅ **`P3-2b`'s two missing numbers arrived with `Q50`.** Skid smoke and tyre marks need a
+  **traction-loss signal**, and wheels that spin up under power and lock under braking need
+  **per-wheel angular velocity**. `VehicleWheel3D` publishes both — `get_skidinfo()` and `get_rpm()`
+  — and since `Q50` made the car one, they cost nothing to read. ⚠️ **This is the one thing the
+  switch bought that the raycast car could not give**, and it is worth stating next to what it cost
+  (`Q50`): the same isotropic `friction_slip` that makes the drift untunable is what makes these
+  free. `wheel_visual.gd`'s road-speed roll — the lie nobody could see until there was smoke to
+  compare it against — is gone too, because a `VehicleWheel3D` rolls its own mesh from the
+  simulation. **Wire them when the effects that consume them are built, not before.**
 
 ### `P3-9` Authenticity test round 1
 

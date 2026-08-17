@@ -24,7 +24,7 @@ extends Node3D
 ## pedal it samples once a tick — and that is the only thing a lamp on this car
 ## may answer to.
 ##
-## Presentation only, like `WheelVisual`: nothing here is read back by the
+## Presentation only: nothing here is read back by the
 ## physics, so it cannot change how the car drives. It runs on the physics tick
 ## for the same reason that one does — every value it reads is written there, so
 ## a render-rate update would re-derive the identical answer two or three times
@@ -255,8 +255,8 @@ var _probe := PhysicsRayQueryParameters3D.new()
 ## The lights the front lamps throw — one per lamp, and empty on a car that
 ## carries none.
 ##
-## Optional on purpose, like the lenses: `taxi_builtin.tscn` carries no lamp rig
-## at all, and an AI taxi too far away to see one is a light worth not spending.
+## Optional on purpose, like the lenses: a roster car may carry no lamp rig at
+## all, and an AI taxi too far away to see one is a light worth not spending.
 ## However many the scene holds is however many this switches, so a roster car
 ## can ship one cone, or none, without touching this file.
 var _beams: Array[SpotLight3D] = []
@@ -357,8 +357,8 @@ func _budget() -> Node:
 ## Ask the arbiter for beams, or light them if there is no arbiter.
 ##
 ## ⚠️ **Registered only if this car actually throws a beam.** A rig with no
-## `SpotLight3D` — `taxi_builtin.tscn` is one — costs no slot, so putting it in
-## the ranking would let it displace a car that does.
+## `SpotLight3D` costs no slot, so putting it in the ranking would let it
+## displace a car that does.
 func _join_budget() -> void:
 	if _beams.is_empty():
 		return

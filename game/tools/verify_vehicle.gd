@@ -50,9 +50,9 @@ extends SceneTree
 ## Needs no built region: the taxi is a committed authored asset, so this runs
 ## outside `check.sh`'s `VERIFY_GENERATED` gate with `verify_beam_budget.gd`.
 
-## The player's car. `taxi_builtin.tscn` is deliberately not checked — it is
-## `P0-5a`'s spike, it carries no lamp rig, and `vehicle_lamps.gd` records that
-## as supported rather than broken. A roster car earns its own entry here.
+## The player's car, and the only one. A roster car earns its own entry here
+## when it exists; a car carrying no lamp rig is supported rather than broken,
+## which `vehicle_lamps.gd` records, so such an entry would check less than this.
 const SCENE_PATH := "res://scenes/vehicle/taxi.tscn"
 const MATERIAL_PATH := "res://tuning/vehicle_body.tres"
 const SHADER_PATH := "res://assets/shaders/vehicle_body.gdshader"

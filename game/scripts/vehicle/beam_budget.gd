@@ -67,9 +67,8 @@ func _ready() -> void:
 		var script: GDScript = load(PROFILE_SCRIPT) as GDScript
 		if script != null:
 			_profile = script.new() as Resource
-	# Nothing registered yet, and most scenes never will — a menu, or
-	# `taxi_builtin.tscn`, which carries no `SpotLight3D` at all. Woken by
-	# `register`.
+	# Nothing registered yet, and most scenes never will — a menu, or any car
+	# carrying no `SpotLight3D` at all. Woken by `register`.
 	set_process(false)
 
 

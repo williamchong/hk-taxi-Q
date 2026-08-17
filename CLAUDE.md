@@ -10,7 +10,7 @@ them without explicit instruction from the user.
 | Decision | Value | Why |
 |---|---|---|
 | Engine | **Godot 4.7**, Mobile renderer | Commercial mobile app target; native perf; MIT, no royalties |
-| Physics | **Jolt** (Godot default since 4.4) | Stable trimesh collision and raycasts under the custom vehicle controller. ⚠️ *Not* for its built-in `VehicleBody3D` — `P0-5a` measured that and rejected it; `VehicleWheel3D` friction is isotropic, so it cannot express a drift that breaks lateral grip while keeping traction |
+| Physics | **Jolt** (Godot default since 4.4), driving `VehicleBody3D` | Stable trimesh collision under the vehicle. ⚠️ **`Q50` reversed `P0-5a` on the user's explicit instruction (2026-08-18).** The car was a custom raycast controller until then, because `VehicleWheel3D` friction is isotropic and so cannot express a drift that breaks lateral grip while keeping traction. That is still true and was re-measured on the way in: the drift window is **0.01–0.02 wide** and nothing in it lands on `drift_slip_threshold_deg`. The engine model ships anyway; `docs/DECISIONS.md` `Q50` is the record |
 | Language | **GDScript** (not C#) | C# web export is unsupported, and iOS/Android C# export is experimental. See `docs/ARCHITECTURE.md`. |
 | ETL | **Python 3.11+** (`pyogrio`, `pyproj`, `numpy`) | Best geodata tooling; runs offline at build time. `pyogrio` ships its own GDAL, so no system install. **No geopandas** — `gdb.py` wants coordinate arrays, and GeoDataFrames would add pandas to reach the same numpy underneath |
 | Building source | **3D Visualisation Map (non-textured)** + **3D-BIT00 Level 1** | Already flat-shaded extruded volumes — the low-poly look is native to this data |
@@ -99,7 +99,7 @@ Common emoji for this project:
 - Façade-survey or `facade_hue.strength` changes: also `tools/facade_chroma.py`, and paste its table
   into `docs/ART_DESIGN.md`. `Q30`'s numbers are the argument that the shipped palette is not the
   authored one, and they are only an argument while they describe the survey that ships.
-- Handling changes — `_apply_tyre_forces`, `HandlingProfile` or `handling.tres`: also
+- Handling changes — `VehicleController`'s drive model, `HandlingProfile` or `handling.tres`: also
   `tools/skidpad.sh`, before **and** after, and paste both tables. It grades rather than checks, so
   `check.sh` cannot and should not run it. ⚠️ Run the **wrapper**, never `skidpad_ablation.gd`
   directly — Godot exits `0` on a parse error, so only the wrapper's exit code means anything.
