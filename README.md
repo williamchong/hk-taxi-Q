@@ -97,9 +97,10 @@ The warnings sweep is the GDScript linter: 21 engine warnings are set to *error*
 including untyped declarations. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the list.
 
 GitHub Actions runs the same script on every push and pull request, alongside `ruff` and `pytest`. It
-**skips the verify tools** — a fresh checkout has no generated assets to check, and building them in
-CI would mean re-downloading the source data every push. So the asset contracts are yours to run
-locally after a pipeline build; everything else CI catches for you.
+**skips the generated-asset verify tools** — a fresh checkout has no generated assets to check, and
+building them in CI would mean re-downloading the source data every push. The two that need no built
+region (`verify_beam_budget`, `verify_vehicle`) run there anyway. So the asset contracts are yours to
+run locally after a pipeline build; everything else CI catches for you.
 
 Two grading tools sit beside the suite and are run by hand after a build, because they need a built
 region under `etl/out`:

@@ -41,6 +41,14 @@ VERIFY_TOOLS=(
 	verify_spawn verify_landmarks
 )
 
+# The verify tools that need no built region, so they run whatever
+# VERIFY_GENERATED says. Both grade the taxi, which is a committed authored asset
+# plus its tuning: verify_beam_budget builds its own stub rigs, and
+# verify_vehicle instantiates taxi.tscn. Grouping them with the generated-asset
+# tools above would skip them exactly where they are cheapest to run: CI builds
+# no region, so these are the only runtime contracts it can check at all.
+ALWAYS_TOOLS=(verify_beam_budget verify_vehicle)
+
 # Godot reports a compile failure with any of these and still exits 0.
 FATAL='Parse Error|SCRIPT ERROR|Failed to load script|Failed to compile'
 
@@ -103,13 +111,10 @@ else
 	echo "  ok    warnings"
 fi
 
-# Runs whatever VERIFY_GENERATED says, and that is the point: it needs no built
-# region — only `tuning/beams.tres` and its own stub rigs — so it is the one
-# runtime contract here that CI can actually check. Grouping it with the
-# generated-asset tools would skip it exactly where it is cheapest to run.
-echo "==> verify_beam_budget"
-run_godot verify_beam_budget --headless --path "$ROOT/game" \
-	--script "res://tools/verify_beam_budget.gd"
+for tool in "${ALWAYS_TOOLS[@]}"; do
+	echo "==> $tool"
+	run_godot "$tool" --headless --path "$ROOT/game" --script "res://tools/$tool.gd"
+done
 
 if [[ "$VERIFY_GENERATED" != 0 ]]; then
 	for tool in "${VERIFY_TOOLS[@]}"; do

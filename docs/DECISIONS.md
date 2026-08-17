@@ -412,8 +412,9 @@ and the warnings sweep as YAML would have been the obvious shape and wrong for t
 exists.
 
 **Why three of the six checks cannot run there.** `game/assets/generated/` is gitignored build
-output, so `VERIFY_GENERATED=0` skips the verify tools and the script **prints that it skipped
-them** — silence is the failure mode the script exists to break. Giving CI a city means running the
+output, so `VERIFY_GENERATED=0` skips the generated-asset verify tools and the script **prints that
+it skipped them** — silence is the failure mode the script exists to break. (The tools that need no
+region — `verify_beam_budget`, later `verify_vehicle` — sit outside that gate and run in CI.) Giving CI a city means running the
 ETL there, 320 MB from a government server per push. Declined.
 
 ⚠️ **The skip's own guard was a false green, and the shape is reusable.** `if ((VERIFY_GENERATED))`
@@ -3768,10 +3769,10 @@ try before anything structural.
 authored asset and its vertex format is not versioned. Triangles unchanged at 592, one draw call,
 one material.
 
-**No verify tool covers vehicles**, and every failure here is silent — a missing material name
-leaves the body on its `BaseMaterial3D` and the car renders exactly as before. `TestSurfaceMarkers`
-in `test_make_vehicle.py` is what holds the ETL end; the engine end is held by a render and nothing
-else.
+**Every failure here is silent** — a missing material name leaves the body on its `BaseMaterial3D`
+and the car renders exactly as before. `TestSurfaceMarkers` in `test_make_vehicle.py` holds the ETL
+end. ✅ The engine end was held by a render and nothing else until `verify_vehicle.gd` shipped
+2026-08-18; what a render is still the only witness to is whether the shader **compiled**.
 
 **See.** `ART_DESIGN.md` "Vehicles" and anti-goals · `ARCHITECTURE.md` tile contract · `Q27` ·
 `Q31` · `Q43` · `P3-11`
@@ -4164,7 +4165,8 @@ and without it. One car exists, so it is granted and nothing moves — which is 
 also the reason this needed a test that does not use the scene.
 
 ✅ **`verify_beam_budget.gd`, in `check.sh` and deliberately *outside* the `VERIFY_GENERATED` gate**
-— it needs no built region, so it is the one runtime contract here CI can check. Four assertions
+— it needs no built region, so it was the first runtime contract here CI could check
+(`verify_vehicle.gd` is the second). Four assertions
 against stub rigs: 16 cars spend **exactly 8** of 8 slots (over-spend *and* under-spend both fail);
 the 4 nearest win when registered **farthest-first**, so registration order cannot pass it by
 accident; a beamless rig takes no slot even when nearest; a despawn hands its slot on.
@@ -4193,6 +4195,81 @@ or a look-back that moves the camera off the player would rank the player like a
 `P3-3` should decide whether the player's slot is reserved before it fills the streets.
 
 **See.** `P3-11e` · `P3-3` · `ART_DESIGN.md` "Vehicles" · `PROGRESS.md` risk register
+
+## `verify_vehicle.gd` — the import and the scene are the half no test could see
+
+**Status.** ✅ Shipped 2026-08-18 · **Owner.** `P3-11c` / `P3-11d` / `P3-11e` → `P3-3`
+
+**Claim.** The taxi's shading is carried from the ETL to the fragment shader by two channels that
+fail **silently** — a glTF material name and an `instance uniform` name — and a `--script` verify
+tool can hold both. It runs in `check.sh` outside the `VERIFY_GENERATED` gate, because the taxi is a
+committed authored asset rather than build output.
+
+**Why this was not `pytest`'s to do.** The Python side is already strong: `TestSurfaceMarkers` and
+`TestLampCircuits` grade the payload, `_check_wiring` refuses a renamed lamp in the generator
+itself, and `TestShippedAssets` proves the committed `.glb` *is* that generator's output. None of
+that can see the engine. A material name is only a request — `generated_scene_import.gd` is what
+grants it — and an `instance uniform` name is only a string until the renderer matches it. Both
+failures render **nearly right**: the body falls back to the `StandardMaterial3D` it imported with,
+or every lamp stays at the shader's `vec4(0.0)` default, and the car still drives around looking
+like a taxi.
+
+**What it holds.**
+
+- **The body renders with `vehicle_body.tres`**, every surface, backed by `vehicle_body.gdshader`.
+  One assertion for the whole name path: the ETL's name, the import script's dictionary, the `.tres`
+  and the `[importer_defaults]` wiring all fail here.
+- **Every channel `vehicle_lamps.gd` writes is an instance uniform the renderer lists.** Asked of
+  `GeometryInstance3D`'s own `instance_shader_parameters/*` property list — the list
+  `set_instance_shader_parameter` dispatches against — rather than of the shader source. ⚠️ The
+  source would be the *weaker* check: a name present in the text but absent from that list is still
+  a no-op. It is also why `sun_toward` is checked from the other side, in
+  `Shader.get_shader_uniform_list()` and **not** in the instance list: one sun, one material, every
+  car agreeing about where it is. ⚠️ Instance-scope uniforms are **excluded** from
+  `get_shader_uniform_list()` — measured, 16 uniforms listed and neither lamp vector among them — so
+  the two lists are complementary and each is the authority for its own scope.
+- **The `UV` payload survived the import**, read back off the mesh Godot handed the renderer: markers
+  and circuits integral, no circuit past the width the declared vectors carry, and no circuit on
+  anything but a lens. Not a duplicate of `TestLampCircuits` — that grades `MeshData` before the
+  glTF is written, this grades what came out the far side of `ensure_tangents`, surface dedup and
+  LOD generation.
+- **The rig hangs where the script looks** — a controller above it, a `MeshInstance3D` below it, and
+  the glint fed the same resource the body renders with. All three are `assert`s in the scripts, and
+  asserts are **stripped from release builds**.
+- **The beams are authored dark, and no cone reaches above horizontal.** `spot_angle` is Godot's
+  *half* angle, so the aim and the spread have to be read together; `P3-11e` found that by looking
+  at a frame, and until now it was guarded by a comment in a `.tscn` that Godot strips on any editor
+  resave.
+
+**Evidence — every check was proven by breaking the thing it guards**, in the spirit of
+`verify_spawn.gd` building the transposed basis and requiring it to fail:
+
+| Break | What it reports |
+|---|---|
+| `"vehicle_body"` dropped from `generated_scene_import.gd` | the `StandardMaterial3D` it fell back to, by class and path |
+| `lamp_front` renamed in the shader | the channel the script writes that no longer lands — and **only** that. ⚠️ A lost name silently narrows the payload, so the mesh check would otherwise follow it with "96 vertices ask for too much" and blame the car's own lenses for a shader-side defect; the width comes back as `-1` and that second message is suppressed |
+| `instance uniform lamp_lit` demoted to a plain `uniform` | the same failure — which is the point, since that version compiles and brakes the whole roster at once |
+| a lens rewired to circuit 9 and the `.glb` regenerated | 24 vertices asking for a circuit past the 8 the payload carries |
+| a circuit stamped on paint, a marker at 1.5, a marker at 5 | 10 vertices each, named separately |
+| `P3-11e`'s first beam aim (7° down, 11° half) restored | **4.00° above horizontal**, and the lamp authored visible |
+
+**What it deliberately does not do.** ⚠️ **It cannot tell you the shader compiled.** Headless has no
+rasteriser and Godot exits `0` on a shader error, so a broken `vehicle_body.gdshader` still reaches
+a frame with nothing said. That residue is why the risk register keeps this at Low rather than
+closing it, and it stays with a render plus a `grep -i "shader error"` over the driver log. It also
+grades `taxi.tscn` alone: `taxi_builtin.tscn` carries no lamp rig on purpose, and a roster car earns
+its own entry.
+
+⚠️ **Two traps shaped the file, and both fail in the direction that looks like a pass.** No
+`class_name` global is named, for the fresh-clone reason `ARCHITECTURE.md` records. And the tool
+**awaits a frame before loading anything**: autoloads are registered on the first frame, so loading
+`taxi.tscn` from `_init` compiles `vehicle_controller.gd` while `InputRouter` is unresolvable,
+GDScript caches the broken class, and the scene instances a `RigidBody3D` with a null script — the
+same trap `skidpad_ablation.gd` documents from the other side, and it announces itself as a
+`SCRIPT ERROR` that `check.sh` fails on rather than as a wrong answer.
+
+**See.** `P3-11c` · `P3-11d` · `P3-11e` · `BeamBudget` · `ARCHITECTURE.md` "Checks" ·
+`PROGRESS.md` risk register
 
 ## Two shadow cascades at 400 m, not four at 600
 

@@ -125,7 +125,8 @@ does. Running `--import` by hand tells you nothing unless you read the output.
 | `gdformat --check` | Layout across all of `game/` | yes |
 | `--import` | Autoloads and what they reach; also builds `game/.godot/` | yes |
 | warnings sweep | `--check-only` per script, grepping for `treated as error` | yes |
-| `verify_beam_budget` | The spot-light cap — needs no built region, so it is the one runtime contract CI can check | yes |
+| `verify_beam_budget` | The spot-light cap — needs no built region, so CI can check it | yes |
+| `verify_vehicle` | The taxi's shader binding, lamp channels, imported payload and beam aim — the taxi is committed, so this needs no built region either | yes |
 | `verify_city`, `verify_tiles`, `verify_road_surface`, `verify_road_graph`, `verify_city_streamer`, `verify_spawn`, `verify_landmarks` | The generated-asset contracts | **no** |
 
 The sweep is separate from `--import` because `--import` does not do the job: measured, an untyped
@@ -146,6 +147,15 @@ load-bearing. Global classes resolve through the gitignored
 *parse*, `_init` never runs, `quit(1)` is never reached, and the SceneTree exits **0** — the check
 reports success having checked nothing. **Never reference a `class_name` global from a `--script`
 tool.**
+
+⚠️ **Autoloads are registered on the first frame, not before, and a verify tool that loads a scene
+must `await process_frame` first.** Anything loaded from `_init` compiles while `InputRouter` is
+unresolvable, so `vehicle_controller.gd` fails to compile, GDScript **caches the broken class**, and
+the scene instances a `RigidBody3D` with a *null script* — measured. The run then prints
+`SCRIPT ERROR`, which `check.sh` fails on, having graded a car that never loaded.
+`tools/verify_vehicle.gd` and `tools/skidpad_ablation.gd` both open with that `await` for this
+reason. A scene instantiated but never added to the tree must also be `free()`d before `quit()`, or
+Godot reports a page of `ERROR: ... leaked at exit` lines that read like a failure and are not one.
 
 ⚠️ **Running Godot rewrites two committed config files**, stripping every comment and, in
 `project.godot`, the `rendering_method.web` line the web export needs. Restore both afterwards and
@@ -873,7 +883,8 @@ inverted.
 | `tools/verify_city_streamer.gd` | The streaming policy — band edges, hysteresis both ways, and a region-wide residency sweep against the draw-call budget |
 | `tools/verify_spawn.gd` | The start line — orientation against its edge vector, nearside-lane placement, drop height, and the resolved edge against the fare node. **Builds the transposed basis and requires it to fail** |
 | `tools/verify_landmarks.gd` | `landmarks.json` — assets load with mesh and `-col` collision, triangle budget, placed AABB near `bounds_game`, and no tier-0 tile triangle inside each excluded footprint's interior core |
-| `tools/verify_beam_budget.gd` | `BeamBudget` — the spot-light cap is never exceeded **or under-spent**, the nearest cars win when registered farthest-first, a beamless rig takes no slot, and a despawn hands its slot on. ⚠️ The only verify tool that needs **no built region**: it builds its own stub rigs, so it runs whatever `VERIFY_GENERATED` says |
+| `tools/verify_beam_budget.gd` | `BeamBudget` — the spot-light cap is never exceeded **or under-spent**, the nearest cars win when registered farthest-first, a beamless rig takes no slot, and a despawn hands its slot on. ⚠️ One of the two verify tools that need **no built region**: it builds its own stub rigs, so it runs whatever `VERIFY_GENERATED` says |
+| `tools/verify_vehicle.gd` | The taxi's engine-side wiring — the body renders with `vehicle_body.tres` through the import's name channel, the channels `vehicle_lamps.gd` writes are instance uniforms the renderer lists, the imported `UV` payload is integral and inside those channels on lens vertices only, the rig hangs where the script looks, and every beam is authored dark with its cone below horizontal. ⚠️ Needs **no built region** (the taxi is authored and committed), and ⚠️ **sees no frame** — it cannot tell you the shader compiled |
 | `tools/generated_scene_import.gd` | Import fixup — see `[importer_defaults]` above |
 
 ---
