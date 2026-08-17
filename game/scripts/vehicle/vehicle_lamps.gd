@@ -190,7 +190,7 @@ const TURN_RELEASE: float = 0.75
 ## ⚠️ **Per lamp, not per car.** Two cones overlap down the middle of the road,
 ## which is exactly where the player looks, so this is well under what a single
 ## central spot wanted.
-@export_range(0.0, 24.0, 0.1) var beam_energy: float = 4.5
+@export_range(0.0, 24.0, 0.1) var beam_energy: float = 7.0
 
 ## What share of the beam the side lamps throw, in energy and in reach.
 ##

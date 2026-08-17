@@ -3945,14 +3945,27 @@ torch beam. Both are driven by whatever `SpotLight3D`s the scene holds, so the c
 authored 34 — a 68° flood from a lamp 0.3 m off the ground, so most of the cone pointed at the sky
 and the rest landed under the bumper, reading as a puddle round the car rather than a beam.
 
-**11° is set by pool separation, not by what a headlamp spreads.** Lamps 0.58 m off centre overlap
-from `0.58 / tan(angle)` onward, so 22° merged them inside 1.5 m and rendered as one blob with two
-lamps behind it, and 15° still read as a single lobe with a notch in it. 11° holds them apart to
-about 3 m — where the chase camera sits — so the twin cones are legible in the view the player
-actually has. `spot_attenuation` sits at 0.45 rather than Godot's 1.0 because the default dies
-within a few metres of a 55 m light, which makes the range dial look broken. `beam_energy` is **per
-lamp** and well under the single spot's, because two cones add where they cross and where they cross
-is the middle of the road.
+**⚠️ The cone must not reach above horizontal, and getting that wrong is what "the light shines
+upwards" turned out to mean.** Tilt and half-angle have to be read together: 7° down with an 11°
+half-angle puts the *top* of the beam 4° **up**, so part of it never met the road and the rest
+grazed it at a vanishing angle. From the chase camera that lights a tall rounded dome climbing the
+screen toward the vanishing point — which reads, correctly, as a light shining upward rather than a
+road being lit. **14° down against 13° puts the top edge 1° below horizontal**, so every ray lands
+on tarmac and the pool is bounded instead of running to the horizon.
+
+**The half-angle is otherwise set by pool separation, not by what a headlamp spreads.** Lamps 0.58 m
+off centre overlap from `0.58 / tan(angle)` onward, so 22° merged them inside 1.5 m and rendered as
+one blob with two lamps behind it, and 15° still read as a single lobe with a notch. 13° holds them
+apart to about 2.5 m, in front of where the chase camera sits.
+
+**The rest of "too clearly a cone" is the rim and the cutoff.** `spot_angle_attenuation` above 1.0
+softens the edge, because a crisp-edged circle of light is the other half of the tell;
+`spot_attenuation` near the default lets the far end fade rather than stopping at a visible arc,
+which is what `spot_range` alone does. ⚠️ A proper low-beam has a *sharp horizontal cutoff*, which a
+`SpotLight3D` cannot express — the honest fix is `light_projector`, and it is **refused**: the
+non-textured set ships 0 images, and one texture for one lamp is not the place to break that.
+`beam_energy` is **per lamp**, because two cones add where they cross and where they cross is the
+middle of the road.
 
 **⚠️ The beams read the lighter of the held and current state; the lenses read the held one alone.**
 A lens still lit as the car reaches sunlight is a lamp nobody has switched off yet, which is what

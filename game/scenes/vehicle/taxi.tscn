@@ -43,51 +43,58 @@ script = ExtResource("9_lamps")
 ; roots at the bumper are the part that reads as a car rather than as a torch.
 ; The script drives however many spots the scene holds, so this is a scene edit.
 ;
-; Rotated 7 degrees down, so the pool lands down the road rather than at the
-; bumper. Basis is row-major here: the *column* -Z each shines along works out as
-; (0, -0.122, -0.993) — forward and slightly down.
+; spot_angle is Godot's HALF angle, which is the trap in this node, and the tilt
+; has to be read together with it. THE CONE MUST NOT REACH ABOVE HORIZONTAL: at
+; 7 degrees down with a half angle of 11, the top of the beam pointed 4 degrees
+; UP, so part of it never met the road at all and the rest grazed it at a
+; vanishing angle. Rendered from the chase camera that lit a tall rounded dome
+; climbing the screen toward the vanishing point, and it read — correctly — as a
+; light shining upward rather than as a road being lit. Reported as exactly that.
 ;
-; spot_angle is Godot's HALF angle, which is the trap in this node. 34 here is a
-; 68-degree floodlight, and from a lamp 0.3 m off the ground most of that cone
-; points at the sky while the rest lands under the nose — the first version did
-; exactly that and read as a puddle round the car.
+; 14 down against a half angle of 13 puts the top edge 1 degree BELOW horizontal,
+; so every ray lands on tarmac and the pool is bounded instead of running to the
+; horizon. Basis is row-major here: the *column* -Z each shines along works out
+; as (0, -0.242, -0.970).
 ;
-; 11 is set by how far the two pools stay apart, not by what a headlamp spreads.
-; Lamps 0.58 m off centre overlap from d = 0.58/tan(angle) onward, so 22 merged
-; them into one pool inside 1.5 m and rendered as a single blob with two lamps
-; behind it; 15 still read as one lobe with a notch. 11 holds them apart to
-; ~3 m, which is where the chase camera sits, so the twin cones are legible in
-; the view the player actually has.
+; The half angle is otherwise set by how far the two pools stay apart, not by
+; what a headlamp spreads. Lamps 0.58 m off centre overlap from d =
+; 0.58/tan(angle) onward, so 22 merged them inside 1.5 m and rendered as one blob
+; with two lamps behind it, and 15 still read as a single lobe with a notch. 13
+; holds them apart to ~2.5 m, which is in front of where the chase camera sits.
 ;
-; light_energy is per lamp and lower than the single spot's 7.0, because two
-; overlapping cones add where they cross and the centre of the road is exactly
-; where they do. spot_attenuation is below Godot's 1.0 default on purpose: the
-; default falls off fast enough that the pool dies within a few metres of a 55 m
-; light, so the range dial reads as doing nothing. shadow_enabled stays off, and
-; that is the mobile tier's rule rather than a saving: docs/ART_DESIGN.md allows
-; vehicle blob shadows and no realtime shadow maps. light_energy and spot_range
-; are written by the script from beam_energy and sidelamp_beam; the values here
-; are what a main beam is authored at. Godot strips these comments on any editor
-; resave, so the reasoning lives in the script, not here.
+; spot_angle_attenuation above 1.0 softens the rim, because a crisp-edged circle
+; of light is the other half of "too clearly a cone". spot_attenuation near
+; Godot's 1.0 default lets the far end fade rather than stopping at a visible
+; arc, which is what spot_range alone does.
+;
+; light_energy is per lamp, and two overlapping cones add where they cross —
+; which is the middle of the road. shadow_enabled stays off, and that is the
+; mobile tier's rule rather than a saving: docs/ART_DESIGN.md allows vehicle blob
+; shadows and no realtime shadow maps. light_energy and spot_range are written by
+; the script from beam_energy and sidelamp_beam; the values here are what a main
+; beam is authored at. Godot strips these comments on any editor resave, so the
+; reasoning lives in the script, not here.
 [node name="HeadlampL" type="SpotLight3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.99255, 0.12187, 0, -0.12187, 0.99255, -0.58, 0.5, -2.05)
+transform = Transform3D(1, 0, 0, 0, 0.97030, 0.24192, 0, -0.24192, 0.97030, -0.58, 0.5, -2.05)
 visible = false
 light_color = Color(1, 0.97, 0.91, 1)
-light_energy = 4.5
+light_energy = 7.0
 shadow_enabled = false
-spot_range = 55.0
-spot_angle = 11.0
-spot_attenuation = 0.45
+spot_range = 32.0
+spot_angle = 13.0
+spot_angle_attenuation = 2.2
+spot_attenuation = 0.9
 
 [node name="HeadlampR" type="SpotLight3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.99255, 0.12187, 0, -0.12187, 0.99255, 0.58, 0.5, -2.05)
+transform = Transform3D(1, 0, 0, 0, 0.97030, 0.24192, 0, -0.24192, 0.97030, 0.58, 0.5, -2.05)
 visible = false
 light_color = Color(1, 0.97, 0.91, 1)
-light_energy = 4.5
+light_energy = 7.0
 shadow_enabled = false
-spot_range = 55.0
-spot_angle = 11.0
-spot_attenuation = 0.45
+spot_range = 32.0
+spot_angle = 13.0
+spot_angle_attenuation = 2.2
+spot_attenuation = 0.9
 
 ; Feeds the body shader the scene's real sun, so the glint never carries a
 ; second copy of the rig's rotation. See scripts/vehicle/sun_glint.gd.
