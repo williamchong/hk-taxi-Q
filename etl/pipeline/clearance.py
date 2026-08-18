@@ -34,10 +34,11 @@ survives both, so both instruments ask it.
 wall is one triangle a hundred metres tall and centimetres wide in plan; an
 expressway ramp face is the reverse. Splitting by edge length would shatter the
 first into thousands of pieces to no purpose and leave the second whole, taking
-its full height range across a plan footprint it only touches at one end. Every
-piece here is at most `SUBDIVIDE_M` across in plan and as tall as it likes,
-which is what makes taking a piece's whole height range over the cells it
-covers both cheap and honest.
+its full height range across a plan footprint it only touches at one end. A piece
+is at most `SUBDIVIDE_M` across in plan and as tall as it likes, which is what
+makes taking its whole height range over the cells it covers both cheap and
+honest — ⚠️ except where `MAX_SUBDIVISIONS` caps the split, which on this region
+is 9,727 triangles a run and is where this stage over-blocks hardest.
 
 ⚠️ **A station the ribbon never reached is not a starved station.** `surface.py`
 holds each end back so a junction cap can fill the middle, and the nominal
@@ -57,6 +58,7 @@ import logging
 from dataclasses import dataclass, field, replace
 from functools import lru_cache
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 
@@ -92,10 +94,24 @@ BUMPER_HIGH_M = 2.00
 # being rounded to the nearest half metre.
 ACROSS_M = 0.25
 
-# Spacing of the cross-sections along an edge. Matched to the 1 m plan grid
-# `Q19` measures on, so the two instruments ask about the road at the same rate
-# and a disagreement between them is about what they found rather than about how
-# often they looked.
+# Spacing of the cross-sections along an edge, and **the one dimension in which
+# this stage under-reports blockage rather than over-reporting it**.
+#
+# ⚠️ The comment here used to say it was matched to the 1 m plan grid `Q19`
+# measures on, "so the two instruments ask about the road at the same rate and a
+# disagreement between them is about what they found rather than about how often
+# they looked". **That was wrong, and it was measured wrong.** The grader's 1 m is
+# a plan *bin* — every cell it touches blocks in full — so it cannot miss a wall
+# between stations, while a 1 m *spacing* here steps straight over one. Swept with
+# `--along-m` on the same bundle: **21 starved edges at 1.00 m, 24 at 0.50 m and
+# 25 at 0.25 m**, and `e636` HARBOUR ROAD and `e335` LEIGHTON LANE go from
+# passable to **0.00 m clear**. `e636` is one of the six edges the grader condemns
+# and this stage clears (`Q51`), so there the grader is right and this is aliasing.
+#
+# Left at 1.0 pending the user's call, because lowering it re-publishes
+# `city.json`'s `clear_width_m` and so changes what `RoadGraph.is_routable`
+# refuses — a shipped-behaviour change on `P3-3`'s foundation, not a tuning tweak.
+# `tools/clearance_reconcile.py` holds the number so it cannot go quiet.
 ALONG_M = 1.0
 
 # The largest plan extent of one occupier piece. Below this a piece's height
@@ -125,8 +141,14 @@ PIECE_BUDGET = 64_000
 
 # Pieces per triangle are capped, so a single enormous face cannot turn one
 # triangle into a hundred thousand. 32 across covers a 16 m plan span at
-# `SUBDIVIDE_M`; anything wider than that in plan is ground, and ground is
-# excluded below.
+# `SUBDIVIDE_M`.
+#
+# ⚠️ This comment used to end "anything wider than that in plan is ground, and
+# ground is excluded below". **Counted, that is 9,727 triangles per run** — hero
+# meshes and long ramp faces, none of them ground. Each keeps pieces wider than
+# `CELL_M`, and `_emit` then blocks by the piece's plan box at its *whole* height
+# range, so this is where the stage over-blocks hardest. `_plan_steps` returns the
+# count and `build_region` warns it, because a smear nobody counts reads as a wall.
 MAX_SUBDIVISIONS = 32
 
 # What a station whose ribbon was trimmed away publishes. Negative because no
@@ -154,8 +176,22 @@ class ClearanceReport:
     # the city had cleared itself up.
     occupier_triangles: int = 0
     occupier_pieces: int = 0
+    # Triangles `MAX_SUBDIVISIONS` held back from reaching `SUBDIVIDE_M` in plan,
+    # each of which then blocks by a box carrying its whole height range. This
+    # stage's own smear, and the direction it over-blocks in — see `_plan_steps`.
+    occupier_clipped: int = 0
     tiles_read: int = 0
     landmarks_read: int = 0
+    # The spacing the cross-sections were taken at. Carried so `_write` can refuse
+    # to publish a sweep — see `ALONG_M` — rather than trusting every caller of
+    # `build_region` to remember that only the shipped value may reach the bundle.
+    along_m: float = ALONG_M
+
+    def count(self, occupancy: _Occupancy) -> None:
+        """Fold one `occupy` pass into the running totals."""
+        self.occupier_triangles += occupancy.triangles
+        self.occupier_pieces += occupancy.pieces
+        self.occupier_clipped += occupancy.clipped
 
     def tightest(self) -> dict[int, float]:
         """The narrowest measured station of every edge that has one.
@@ -217,8 +253,20 @@ def _spread(counts: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return group, within
 
 
-def walk(graph: dict, drawn: dict[int, dict]) -> tuple[Corridor, ClearanceReport]:
-    """Every cross-section of every drivable level-0 edge, at `ALONG_M` spacing.
+def walk(
+    graph: dict, drawn: dict[int, dict], *, along_m: float = ALONG_M
+) -> tuple[Corridor, ClearanceReport]:
+    """Every cross-section of every drivable level-0 edge, at `along_m` spacing.
+
+    ⚠️ **`along_m` is the one dimension this stage is *wrong* in rather than merely
+    coarse, and it is wrong today.** Everything else here over-blocks — a plan box
+    for a piece, a whole height range for a box — so those make a published width a
+    lower bound on the real corridor. The spacing along the edge is the exception:
+    a wall standing between two cross-sections is not smeared, it is *missed*, and
+    a missed wall reads as clear road that `RoadGraph.is_routable` will then hand a
+    car. Swept on the shipped bundle it costs four edges — see `ALONG_M`. It is a
+    parameter so that stays measurable rather than assumed; sweeping it does not
+    publish, see `main`.
 
     `drawn` is `roadsurface.json`'s carriageway table, keyed by edge id, giving
     the half-width per station and the trims at the two ends.
@@ -266,9 +314,9 @@ def walk(graph: dict, drawn: dict[int, dict]) -> tuple[Corridor, ClearanceReport
         along = plan_lengths(points)
         length = float(along[-1])
         trim_start, trim_end = (entry or {}).get("trim_m", (0.0, 0.0))
-        at = (np.arange(np.ceil(length / ALONG_M)) + 0.5) * ALONG_M
+        at = (np.arange(np.ceil(length / along_m)) + 0.5) * along_m
         at = at[(at >= float(trim_start)) & (at <= length - float(trim_end))]
-        report.sections_trimmed += int(np.ceil(length / ALONG_M)) - len(at)
+        report.sections_trimmed += int(np.ceil(length / along_m)) - len(at)
         if not len(at):
             # Wholly inside its own junction caps. Common and not an error: 208
             # of the region's trims are clamped by edge length precisely because
@@ -372,15 +420,40 @@ def wears(colours: np.ndarray, base: tuple[int, int, int], jitter: float) -> np.
     return low <= high
 
 
-def _plan_steps(corners: np.ndarray) -> np.ndarray:
+class _Steps(NamedTuple):
+    """How finely each triangle splits, and how many the cap held back."""
+
+    steps: np.ndarray
+    clipped: int
+
+
+def _plan_steps(corners: np.ndarray) -> _Steps:
     """How many ways each triangle must be split to get under `SUBDIVIDE_M`.
 
     Separate from `_subdivide` because the answer also sizes the work: `_batches`
     needs it before any piece exists.
+
+    ⚠️ **Returns how many triangles the cap held back, because that is this
+    stage's own over-blocking and nothing used to say so.** A triangle spanning
+    more than `MAX_SUBDIVISIONS * SUBDIVIDE_M` = 16 m in plan keeps pieces wider
+    than a cell, and `_emit` then rasterises each piece's plan box carrying the
+    piece's *whole* height range — so a large sloped face blocks carriageway it
+    is nowhere near. Hero meshes are where this bites, their triangles being the
+    region's largest, and `Q51`'s one edge where this stage is the *more*
+    pessimistic of the two instruments — `e702` EXPO DRIVE CENTRAL, 1.25 m here
+    against the grader's 3.41 m — is `LANDMARK`-blocked. Counted, not fixed by
+    raising the cap: the cap is what bounds `PIECE_BUDGET`'s worst case, and a
+    number in the log is what lets the next reader tell a wall from a smear.
     """
     plan = corners[:, :, [0, 2]]
     span = plan.max(axis=1) - plan.min(axis=1)
-    return np.clip(np.ceil(span.max(axis=1) / SUBDIVIDE_M), 1, MAX_SUBDIVISIONS).astype(np.int64)
+    want = np.ceil(span.max(axis=1) / SUBDIVIDE_M)
+    # Counted from what was *wanted*, not from the clipped result: a triangle
+    # legitimately needing exactly `MAX_SUBDIVISIONS` is not one the cap held back.
+    return _Steps(
+        np.clip(want, 1, MAX_SUBDIVISIONS).astype(np.int64),
+        int((want > MAX_SUBDIVISIONS).sum()),
+    )
 
 
 def _batches(steps: np.ndarray) -> list[tuple[int, int]]:
@@ -583,9 +656,19 @@ def _emit(sections: _Sections, corners: np.ndarray) -> None:
     sections.mark(keys, heights.min(axis=1)[piece], heights.max(axis=1)[piece])
 
 
-def occupy(sections: _Sections, meshes: list[gltf.MeshData], ground: tuple, jitter: float) -> tuple:
+class _Occupancy(NamedTuple):
+    """What one pass over some meshes contributed, for `ClearanceReport.count`."""
+
+    triangles: int
+    pieces: int
+    clipped: int
+
+
+def occupy(
+    sections: _Sections, meshes: list[gltf.MeshData], ground: tuple, jitter: float
+) -> _Occupancy:
     """Block every cross-section sample an occupier's geometry stands over."""
-    triangles = pieces = 0
+    triangles = pieces = clipped = 0
     for mesh in meshes:
         corners = mesh.positions[mesh.triangles]
         if mesh.colours is not None:
@@ -614,12 +697,13 @@ def occupy(sections: _Sections, meshes: list[gltf.MeshData], ground: tuple, jitt
         triangles += len(corners)
 
         # In batches, so one hero mesh cannot decide the pipeline's peak memory.
-        steps = _plan_steps(corners)
+        steps, held = _plan_steps(corners)
+        clipped += held
         for start, end in _batches(steps):
             split = _subdivide(corners[start:end], steps[start:end])
             pieces += len(split)
             _emit(sections, split)
-    return triangles, pieces
+    return _Occupancy(triangles, pieces, clipped)
 
 
 # --------------------------------------------------------------------------
@@ -777,16 +861,19 @@ def open_region(
 
 
 def build_region(
-    city: CityConfig, region_id: str, *, out_root: Path | None = None
+    city: CityConfig, region_id: str, *, out_root: Path | None = None, along_m: float = ALONG_M
 ) -> ClearanceReport:
     """Measure the region already built in its out dir."""
     out_dir, graph, drawn, buildings = open_region(city, region_id, out_root=out_root)
-    corridor, report = walk(graph, drawn)
+    corridor, report = walk(graph, drawn, along_m=along_m)
+    report.along_m = along_m
     log.info(
-        "  %d level-0 edges, %d cross-sections to judge, %d left to their junction caps",
+        "  %d level-0 edges, %d cross-sections to judge, %d left to their junction caps"
+        " at %.2f m spacing",
         report.edges,
         report.sections_measured,
         report.sections_trimmed,
+        report.along_m,
     )
 
     ground, jitter = ground_colour(city)
@@ -796,14 +883,10 @@ def build_region(
     # only the slice standing near the road survives the prune, so holding them
     # all at once would cost a hundredfold what the measurement needs.
     for path in tile_meshes(out_dir, buildings):
-        triangles, pieces = occupy(sections, gltf.read_glb(path), ground, jitter)
-        report.occupier_triangles += triangles
-        report.occupier_pieces += pieces
+        report.count(occupy(sections, gltf.read_glb(path), ground, jitter))
         report.tiles_read += 1
     heroes = landmark_meshes(city, region_id, out_dir)
-    triangles, pieces = occupy(sections, heroes, ground, jitter)
-    report.occupier_triangles += triangles
-    report.occupier_pieces += pieces
+    report.count(occupy(sections, heroes, ground, jitter))
     report.landmarks_read = len(heroes)
 
     log.info(
@@ -813,6 +896,17 @@ def build_region(
         report.occupier_triangles,
         report.occupier_pieces,
     )
+    if report.occupier_clipped:
+        # Warned rather than logged: every one of these blocks by a box wider
+        # than a cell carrying its whole height range, so a clearance measured
+        # near one is a lower bound with no stated floor. See `_plan_steps`.
+        log.warning(
+            "  %d of them span over %.0f m in plan and could not be split to %.2f m — "
+            "each blocks by its plan box at its full height range",
+            report.occupier_clipped,
+            MAX_SUBDIVISIONS * SUBDIVIDE_M,
+            SUBDIVIDE_M,
+        )
     measure(corridor, sections.blocked, report)
     return report
 
@@ -823,7 +917,17 @@ def _write(out_root: Path | None, city: CityConfig, region_id: str, report: Clea
     Same reasoning as `roadsurface.json` and `buildings.json`: `city.json` is
     `export.py`'s to write, and this records only what this stage knows so the
     two stay independently runnable.
+
+    ⚠️ **A swept measurement is never published**, and the refusal lives here
+    rather than at the CLI because `build_region` is public and takes `along_m`
+    too. A bundle measured at a spacing the stage does not ship is a document
+    nobody can reproduce, and `RoadGraph.is_routable` would route on it.
     """
+    if report.along_m != ALONG_M:
+        raise SystemExit(
+            f"{CLEARANCE_NAME} was measured at {report.along_m:.2f} m rather than the "
+            f"shipped {ALONG_M:.2f} m — a sweep reports, it does not publish"
+        )
     return write_document(
         city.out_dir(region_id, out_root) / CLEARANCE_NAME,
         {
@@ -851,6 +955,18 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     parser.add_argument("--city", required=True)
     parser.add_argument("--region", required=True)
+    parser.add_argument(
+        "--along-m",
+        type=float,
+        default=ALONG_M,
+        # A sweep knob for the aliasing `walk` names, and **report-only**: a
+        # bundle whose clearances were measured at a spacing the stage does not
+        # ship would be a document nobody could reproduce, so anything but the
+        # default refuses to write. `--index-cell-m` on
+        # `tools/carriageway_occupancy.py` is the same knob for the other
+        # instrument's own error dimension.
+        help="cross-section spacing along an edge; off the default it reports without writing",
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -859,8 +975,18 @@ def main(argv: list[str] | None = None) -> int:
     region = city.region(args.region)
     log.info("%s / %s", city.name, region.name)
 
-    report = build_region(city, args.region)
-    _write(None, city, args.region, report)
+    report = build_region(city, args.region, along_m=args.along_m)
+    if report.along_m == ALONG_M:
+        _write(None, city, args.region, report)
+    else:
+        # `_write` would refuse this anyway; saying so here is what makes a sweep
+        # read as a measurement rather than as a failed run.
+        log.warning(
+            "  measured at %.2f m rather than the shipped %.2f m — reporting, not writing %s",
+            report.along_m,
+            ALONG_M,
+            CLEARANCE_NAME,
+        )
 
     bar_m = float(city.roads.lane_width_m)
     starved = report.starved(bar_m)

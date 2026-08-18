@@ -42,6 +42,7 @@ import pytest
 from carriageway_occupancy import (
     BUMPER_HIGH_M,
     BUMPER_LOW_M,
+    INDEX_CELL_M,
     Occupied,
     Survey,
     _barycentric,
@@ -105,44 +106,79 @@ class TestClearRun:
         assert _clear_run([False, False], 0.25) == pytest.approx(0.5)
 
 
+def _occupied(heights: list[float], cell_m: float = INDEX_CELL_M) -> Occupied:
+    """One plan cell holding these surface heights, binned at `cell_m`."""
+    return Occupied(
+        cells={(0, 0): np.sort(np.asarray(heights, dtype=np.float64))},
+        triangles_kept=1,
+        triangles_seen=1,
+        samples=len(heights),
+        cell_m=cell_m,
+    )
+
+
 class TestInBand:
     """The band test, at its two edges."""
 
-    def _index(self, heights: list[float]) -> Occupied:
-        return Occupied(
-            cells={(0, 0): np.sort(np.asarray(heights, dtype=np.float64))},
-            triangles_kept=1,
-            triangles_seen=1,
-            samples=len(heights),
-        )
-
     def test_surface_inside_the_band_is_occupation(self) -> None:
-        assert self._index([1.0]).in_band(0.5, 0.5, BUMPER_LOW_M, BUMPER_HIGH_M)
+        assert _occupied([1.0]).in_band(0.5, 0.5, BUMPER_LOW_M, BUMPER_HIGH_M)
 
     def test_surface_below_the_bumper_is_not(self) -> None:
         """Kerbs, road markings and the ribbon's own thickness live here. The
         floor of the band is what keeps them out of a wall count."""
-        assert not self._index([0.1]).in_band(0.5, 0.5, BUMPER_LOW_M, BUMPER_HIGH_M)
+        assert not _occupied([0.1]).in_band(0.5, 0.5, BUMPER_LOW_M, BUMPER_HIGH_M)
 
     def test_surface_above_the_band_is_not(self) -> None:
         """A podium overhanging the street 6 m up is Hong Kong working as
         intended, and counting it would make the city its own defect."""
-        assert not self._index([6.0]).in_band(0.5, 0.5, BUMPER_LOW_M, BUMPER_HIGH_M)
+        assert not _occupied([6.0]).in_band(0.5, 0.5, BUMPER_LOW_M, BUMPER_HIGH_M)
 
     def test_the_band_is_inclusive_at_both_ends(self) -> None:
         """A surface exactly at bumper height is a surface the bumper meets."""
-        assert self._index([BUMPER_LOW_M]).in_band(0.5, 0.5, BUMPER_LOW_M, BUMPER_HIGH_M)
-        assert self._index([BUMPER_HIGH_M]).in_band(0.5, 0.5, BUMPER_LOW_M, BUMPER_HIGH_M)
+        assert _occupied([BUMPER_LOW_M]).in_band(0.5, 0.5, BUMPER_LOW_M, BUMPER_HIGH_M)
+        assert _occupied([BUMPER_HIGH_M]).in_band(0.5, 0.5, BUMPER_LOW_M, BUMPER_HIGH_M)
 
     def test_it_finds_the_band_among_many_heights(self) -> None:
         """The lookup is a binary search over a sorted column, so a wall whose
         samples run from the pavement to the roof must still be found by the
         slice of it that crosses the band — not just by its lowest point."""
-        wall = self._index([0.0, 0.1, 0.2, 1.2, 8.0, 30.0])
+        wall = _occupied([0.0, 0.1, 0.2, 1.2, 8.0, 30.0])
         assert wall.in_band(0.5, 0.5, BUMPER_LOW_M, BUMPER_HIGH_M)
 
     def test_an_empty_cell_is_clear_rather_than_an_error(self) -> None:
-        assert not self._index([1.0]).in_band(99.5, 99.5, BUMPER_LOW_M, BUMPER_HIGH_M)
+        assert not _occupied([1.0]).in_band(99.5, 99.5, BUMPER_LOW_M, BUMPER_HIGH_M)
+
+
+class TestPlanBin:
+    """The plan cell — **the dominant error term in every corridor width**.
+
+    `Q51`'s starved-edges headline is very nearly a function of this constant —
+    `INDEX_CELL_M` carries the swept figures. What is silent is a *mismatch*:
+    bin the heights at one size and query them at another and cells stop lining
+    up, so walls are looked for where they were never filed — and every one of
+    those lookups reads **clear**, the one direction this tool must not flatter.
+    """
+
+    def test_the_query_uses_the_cell_the_heights_were_binned_at(self) -> None:
+        # Cell (0, 0) at 1.0 m spans 0-1 m; at 0.25 m it spans 0-0.25 m. A point
+        # at 0.5 m is inside the first and outside the second, so an index that
+        # ignored its own `cell_m` would answer the same for both.
+        assert _occupied([1.0], 1.0).in_band(0.5, 0.5, BUMPER_LOW_M, BUMPER_HIGH_M)
+        assert not _occupied([1.0], 0.25).in_band(0.5, 0.5, BUMPER_LOW_M, BUMPER_HIGH_M)
+
+    def test_a_coarser_bin_reaches_further(self) -> None:
+        """Which is the smear itself: one sample blocks its whole cell, so the
+        coarser the cell the more carriageway one wall condemns."""
+        assert _occupied([1.0], 4.0).in_band(3.5, 3.5, BUMPER_LOW_M, BUMPER_HIGH_M)
+        assert not _occupied([1.0], 1.0).in_band(3.5, 3.5, BUMPER_LOW_M, BUMPER_HIGH_M)
+
+    def test_the_default_is_the_shipped_constant(self) -> None:
+        # So a sweep cannot become the default by accident. The coarseness is
+        # deliberate: it is what makes this tool immune to the along-edge
+        # aliasing `clearance.py` is exposed to (`Q51`).
+        assert Occupied(cells={}, triangles_kept=0, triangles_seen=0, samples=0).cell_m == (
+            INDEX_CELL_M
+        )
 
 
 class TestLattice:

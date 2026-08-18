@@ -103,7 +103,7 @@ from deck_error import (  # noqa: E402
     wears,
 )
 from overhang import cross_section, half_width_at, half_widths, left_of, walk_width  # noqa: E402
-from pipeline.config import load_city  # noqa: E402
+from pipeline.config import CityConfig, load_city  # noqa: E402
 from pipeline.gltf import read_glb  # noqa: E402
 
 log = logging.getLogger(__name__)
@@ -116,9 +116,21 @@ log = logging.getLogger(__name__)
 BUMPER_LOW_M = 0.30
 BUMPER_HIGH_M = 2.00
 
-# Plan cell for the occupier index. Independent of the carriageway lattice: it
-# only has to be fine enough that a wall's samples land in the same cell as the
-# road point being asked about.
+# Plan cell for the occupier index, and **the dominant error term in every
+# corridor width below** — not `--across-m`, which only quantises the answer.
+# A cell blocks in full as soon as one surface sample lands in it, so a wall
+# `w` metres thick in plan blocks up to `w + 2 * INDEX_CELL_M` of carriageway,
+# and a corridor bounded by two obstructions loses up to twice that again.
+#
+# ⚠️ **This is why the tool reads more starved edges than `clearance.py` does,
+# and it is deliberate.** `Q51` records 26 here against the pipeline's 21, and
+# the gap was measured to this constant: brute-forcing `e132` from its own
+# geometry reproduces **0.98 m at 1.0 m** and **4.00 m at 0.25 m**, which are
+# the two instruments' published numbers exactly. Sweep it with
+# `--index-cell-m` to price that; the default stays coarse on purpose, because
+# the smear is also what makes this tool immune to the aliasing the pipeline is
+# exposed to — a wall between two of its 1 m cross-sections is missed outright,
+# while a 1 m bin cannot miss one. Two instruments, two error dimensions.
 INDEX_CELL_M = 1.0
 
 # Coarse cell for the pruning pass. Free to choose — the prune is a superset
@@ -129,6 +141,20 @@ COARSE_CELL_M = 8.0
 # How much of a station's drawn width must actually be there before a corridor is
 # judged from it. See the guard in `survey`.
 _CORRIDOR_MEASURED = 0.90
+
+# The walk's own defaults, named rather than typed into `argparse` alone because
+# `tools/clearance_reconcile.py` grades with them too. Hand-copied into a second
+# parser, they could drift and the reconciler would quietly ratchet `Q51`'s counts
+# against settings this tool no longer uses.
+SPACING_M = 1.0
+ACROSS_M = 0.5
+SAMPLE_M = 0.25
+
+# Names for the two classes the config cannot supply. `INFRASTRUCTURE` is the
+# city's to name (`buildings.structure_class`); these two are not, and
+# `tools/narrowing.py` already declares them for the same reason.
+BUILDING = "BUILDING"
+LANDMARK = "LANDMARK"
 
 
 @dataclass(frozen=True)
@@ -143,10 +169,14 @@ class Occupied:
     triangles_kept: int
     triangles_seen: int
     samples: int
+    # The plan cell the heights were binned at. Carried rather than read off the
+    # module constant so a sweep cannot bin at one size and query at another —
+    # which reads as a city that has cleared itself up.
+    cell_m: float = INDEX_CELL_M
 
     def in_band(self, x: float, z: float, low: float, high: float) -> bool:
         """Is there surface between `low` and `high` at this plan position?"""
-        heights = self.cells.get((int(np.floor(x / INDEX_CELL_M)), int(np.floor(z / INDEX_CELL_M))))
+        heights = self.cells.get((int(np.floor(x / self.cell_m)), int(np.floor(z / self.cell_m))))
         if heights is None:
             return False
         index = int(np.searchsorted(heights, low, side="left"))
@@ -184,11 +214,75 @@ def _touches_band(
     return False
 
 
+def class_predicates(
+    city: CityConfig,
+) -> tuple[str, Callable[[np.ndarray], np.ndarray], Callable[[np.ndarray], np.ndarray]]:
+    """The structure class's name, and the two colour tests that select occupiers.
+
+    Public because `tools/clearance_reconcile.py` has to index the *same* classes
+    this tool does — that is the entire premise of comparing the two instruments —
+    and a second copy of the complement below is a second place for it to stop
+    being true. `deck_error.class_triangles` carries the same argument about
+    itself, having already been written out twice.
+    """
+    structure_class = city.buildings.structure_class
+    if structure_class is None:
+        raise SystemExit(f"city '{city.id}' declares no buildings.structure_class")
+    material = city.buildings.class_materials[structure_class]
+    jitter = city.buildings.jitter_for(structure_class)
+
+    def is_structure(colours: np.ndarray) -> np.ndarray:
+        return wears(colours, material.colour, jitter)
+
+    def is_building(colours: np.ndarray) -> np.ndarray:
+        # Everything the config gives a flat material to, subtracted. Buildings
+        # take height-banded colours, so they occupy many rays rather than one
+        # and cannot be selected positively — but every class that *can* be is
+        # named in `class_materials`, so the complement is buildings.
+        #
+        # ⚠️ **Every entry, not just structure and ground.** Subtracting only the
+        # two named above left a third flat-material class counted as `BUILDING`
+        # and gated against `--accept-building-share`, while the comment claimed
+        # the complement "stays right when a class is added". It does now.
+        other = np.zeros(len(colours), dtype=bool)
+        for name, entry in city.buildings.class_materials.items():
+            other = other | wears(colours, entry.colour, city.buildings.jitter_for(name))
+        return ~other
+
+    return structure_class, is_structure, is_building
+
+
+def index_classes(
+    city: CityConfig,
+    generated: Path,
+    manifest: dict[str, Any],
+    tiles: list[Path],
+    bands: dict[tuple[int, int], tuple[float, float]],
+    *,
+    sample_m: float,
+    cell_m: float,
+) -> dict[str, Occupied]:
+    """Every occupier class, indexed at one plan cell.
+
+    One call site for all three, so a caller cannot bin two of them at one cell
+    size and the third at another — `survey` would consume that mixed dict without
+    complaint and the mismatched class would simply stop being found.
+    """
+    structure_class, is_structure, is_building = class_predicates(city)
+    return {
+        structure_class: occupiers(tiles, is_structure, bands, sample_m, cell_m=cell_m),
+        BUILDING: occupiers(tiles, is_building, bands, sample_m, cell_m=cell_m),
+        LANDMARK: landmark_occupiers(generated, manifest, bands, sample_m, cell_m=cell_m),
+    }
+
+
 def occupiers(
     tiles: list[Path],
     keep: Callable[[np.ndarray], np.ndarray],
     bands: dict[tuple[int, int], tuple[float, float]],
     sample_m: float,
+    *,
+    cell_m: float = INDEX_CELL_M,
 ) -> Occupied:
     """Index one occupier class's surfaces across the shipped tiles.
 
@@ -196,13 +290,15 @@ def occupiers(
     belongs to `deck_error.class_triangles` and is applied there, not restated
     here.
     """
-    return index_corners(class_triangles(tiles, keep), bands, sample_m)
+    return index_corners(class_triangles(tiles, keep), bands, sample_m, cell_m=cell_m)
 
 
 def index_corners(
     blocks: Iterator[np.ndarray],
     bands: dict[tuple[int, int], tuple[float, float]],
     sample_m: float,
+    *,
+    cell_m: float = INDEX_CELL_M,
 ) -> Occupied:
     """Bin the surfaces of every triangle that could reach the road.
 
@@ -258,7 +354,7 @@ def index_corners(
             block = chosen[steps == count]
             points = np.einsum("kc,tcd->tkd", _barycentric(int(count)), block).reshape(-1, 3)
             sampled += len(points)
-            keys = np.floor(points[:, [0, 2]] / INDEX_CELL_M).astype(np.int64)
+            keys = np.floor(points[:, [0, 2]] / cell_m).astype(np.int64)
             order = np.lexsort((keys[:, 1], keys[:, 0]))
             keys, heights = keys[order], points[order, 1]
             cuts = np.flatnonzero(np.any(np.diff(keys, axis=0) != 0, axis=1)) + 1
@@ -274,6 +370,7 @@ def index_corners(
         triangles_kept=kept,
         triangles_seen=seen,
         samples=sampled,
+        cell_m=cell_m,
     )
 
 
@@ -302,6 +399,13 @@ class Survey:
     # The same corridor measured only inside the authored width, at the same
     # worst station — how much of the blockage the playability widening owns.
     corridor_authored_m: dict[int, float] = field(default_factory=dict)
+    # The across-spacing the reported corridor was counted in, per edge. Every
+    # width above is an integer multiple of it, and it is *not* `--across-m`:
+    # `cross_section` divides the drawn width into whole cells, so a 10.24 m
+    # ribbon at 0.5 m becomes 21 cells of 0.4876. Published because `Q51`'s
+    # table read as centimetre measurement when "0.49 m" only ever meant
+    # "one cell", and the reader cannot tell those apart without this.
+    corridor_span_m: dict[int, float] = field(default_factory=dict)
     # Stations whose cross-section was too trimmed to judge a corridor from.
     # Counted rather than silently skipped, for the reason in the class docstring.
     corridor_stations: int = 0
@@ -539,6 +643,7 @@ def survey(lattice: Lattice, classes: dict[str, Occupied]) -> Survey:
         if clear < found.corridor_m.get(current_edge, float("inf")):
             found.corridor_m[current_edge] = clear
             found.corridor_at[current_edge] = (seen_x, seen_z)
+            found.corridor_span_m[current_edge] = station_span
             found.corridor_authored_m[current_edge] = _clear_run(
                 [wall for wall, within in zip(blocked, inside, strict=True) if within],
                 station_span,
@@ -589,13 +694,24 @@ def main(argv: list[str] | None = None) -> int:
         description="Whether solid geometry stands in the drawn carriageway (Q19).",
     )
     parser.add_argument(
-        "--spacing-m", type=float, default=1.0, help="station spacing along an edge"
+        "--spacing-m", type=float, default=SPACING_M, help="station spacing along an edge"
     )
-    parser.add_argument("--across-m", type=float, default=0.5, help="cell width across the ribbon")
+    parser.add_argument(
+        "--across-m", type=float, default=ACROSS_M, help="cell width across the ribbon"
+    )
+    parser.add_argument(
+        "--index-cell-m",
+        type=float,
+        default=INDEX_CELL_M,
+        # A sweep knob, not a tuning knob. The shipped default stays coarse for
+        # the reason the constant's comment gives; this exists so the gap against
+        # `clearance.py` can be *priced* — see `Q51` — rather than argued about.
+        help="plan cell the occupier index bins at (the dominant error term)",
+    )
     parser.add_argument(
         "--sample-m",
         type=float,
-        default=0.25,
+        default=SAMPLE_M,
         # Fine enough that a wall crossing one `--across-m` cell puts several
         # samples in the 1.7 m band, coarse enough that the lowest storey of the
         # region is a few million points rather than a few hundred million.
@@ -639,9 +755,6 @@ def main(argv: list[str] | None = None) -> int:
     city = load_city(args.city)
     manifest, tiles = load_bundle(args.generated, args.lod, args.city)
 
-    structure_class = city.buildings.structure_class
-    if structure_class is None:
-        raise SystemExit(f"city '{args.city}' declares no buildings.structure_class")
     # ⚠️ Named by the config, never guessed from `class_materials`' iteration
     # order. `terrain_class` is a **required** field (`pipeline/config.py`) and
     # `ground_clearance.py` reads it directly; picking "the first non-structure
@@ -652,9 +765,11 @@ def main(argv: list[str] | None = None) -> int:
     log_bundle(manifest, args.lod)
     log.info("carriageway occupancy, %s, lod %d", args.city, args.lod)
     log.info(
-        "  occupied means class surface %.2f-%.2f m above the drawn road",
+        "  occupied means class surface %.2f-%.2f m above the drawn road, "
+        "binned in %.2f m plan cells",
         BUMPER_LOW_M,
         BUMPER_HIGH_M,
+        args.index_cell_m,
     )
 
     # Read once, used by everything below: the graph feeds the walk and the
@@ -680,36 +795,19 @@ def main(argv: list[str] | None = None) -> int:
             "city.json still name it?"
         )
     bands = band_map(lattice)
-
-    structure_material = city.buildings.class_materials[structure_class]
-    structure_jitter = city.buildings.jitter_for(structure_class)
-
-    def is_structure(colours: np.ndarray) -> np.ndarray:
-        return wears(colours, structure_material.colour, structure_jitter)
-
-    def is_building(colours: np.ndarray) -> np.ndarray:
-        # Everything the config gives a flat material to, subtracted. Buildings
-        # take height-banded colours, so they occupy many rays rather than one
-        # and cannot be selected positively — but every class that *can* be is
-        # named in `class_materials`, so the complement is buildings.
-        #
-        # ⚠️ **Every entry, not just structure and ground.** Subtracting only the
-        # two named above left a third flat-material class counted as `BUILDING`
-        # and gated against `--accept-building-share`, while the comment claimed
-        # the complement "stays right when a class is added". It does now.
-        other = np.zeros(len(colours), dtype=bool)
-        for name in city.buildings.class_materials:
-            material = city.buildings.class_materials[name]
-            other = other | wears(colours, material.colour, city.buildings.jitter_for(name))
-        return ~other
+    structure_class = class_predicates(city)[0]
 
     log.info("")
     log.info("  indexing occupier surfaces near the carriageway:")
-    classes = {
-        structure_class: occupiers(tiles, is_structure, bands, args.sample_m),
-        "BUILDING": occupiers(tiles, is_building, bands, args.sample_m),
-        "LANDMARK": landmark_occupiers(args.generated, manifest, bands, args.sample_m),
-    }
+    classes = index_classes(
+        city,
+        args.generated,
+        manifest,
+        tiles,
+        bands,
+        sample_m=args.sample_m,
+        cell_m=args.index_cell_m,
+    )
     for name, index in classes.items():
         log.info(
             "    %-16s %7d of %7d triangles reach the band, %9d surface samples",
@@ -764,14 +862,26 @@ def main(argv: list[str] | None = None) -> int:
         args.accept_corridor_lanes,
     )
     log.info("    'authored' is the same station measured inside the un-widened width")
+    # ⚠️ Every width below is a *lower bound*, and the two resolutions say how
+    # loose a bound. `cell` is the plan bin, which blocks in full on one sample
+    # and so smears a wall by up to a cell either side; `step` is the across
+    # spacing, which is what the width is counted in. `Q51`'s 26-against-21 was
+    # measured to the first of these — quoting a width without them reads as a
+    # measurement when it is an upper bound on the blockage.
+    log.info(
+        "    each width is an integer number of 'step' cells and a LOWER bound: "
+        "the %.2f m plan bin blocks in full on one sample",
+        args.index_cell_m,
+    )
     tightest = sorted(found.corridor_m.items(), key=lambda item: item[1])[:8]
     for edge_id, clear in tightest:
         x, z = found.corridor_at[edge_id]
         log.info(
-            "    e%-5d %6.2f m clear (authored %5.2f m)  at (%7.1f, %7.1f)  %s",
+            "    e%-5d %6.2f m clear (authored %5.2f m, step %4.2f m)  at (%7.1f, %7.1f)  %s",
             edge_id,
             clear,
             found.corridor_authored_m.get(edge_id, float("nan")),
+            found.corridor_span_m.get(edge_id, float("nan")),
             x,
             z,
             names.get(edge_id, "unnamed"),
@@ -812,7 +922,7 @@ def main(argv: list[str] | None = None) -> int:
     # 2026-08 figure against a bundle that has since had its largest roadside
     # building taken out of the population, and the bar would silently loosen.
     for names_gated, bar in (
-        (("BUILDING", "LANDMARK"), args.accept_building_share),
+        ((BUILDING, LANDMARK), args.accept_building_share),
         ((structure_class,), args.accept_infrastructure_share),
     ):
         share = sum(found.drawn_share(0, name) for name in names_gated)
@@ -843,6 +953,8 @@ def landmark_occupiers(
     manifest: dict[str, Any],
     bands: dict[tuple[int, int], tuple[float, float]],
     sample_m: float,
+    *,
+    cell_m: float = INDEX_CELL_M,
 ) -> Occupied:
     """Hero buildings, which since `P3-6` are not in the tiles at all.
 
@@ -860,7 +972,7 @@ def landmark_occupiers(
     """
     entry = manifest.get("landmarks")
     if not entry:
-        return Occupied(cells={}, triangles_kept=0, triangles_seen=0, samples=0)
+        return Occupied(cells={}, triangles_kept=0, triangles_seen=0, samples=0, cell_m=cell_m)
     catalogue = json.loads((generated / entry).read_text())
 
     def blocks() -> Iterator[np.ndarray]:
@@ -893,7 +1005,7 @@ def landmark_occupiers(
                 corners = mesh.positions[mesh.triangles].astype(np.float64)
                 yield corners @ spin.T + offset
 
-    return index_corners(blocks(), bands, sample_m)
+    return index_corners(blocks(), bands, sample_m, cell_m=cell_m)
 
 
 def road_names(graph: dict[str, Any]) -> dict[int, str]:

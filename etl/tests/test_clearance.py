@@ -52,7 +52,7 @@ from pipeline.clearance import (
 
 
 def _split(corners: np.ndarray) -> np.ndarray:
-    return _subdivide(corners, _plan_steps(corners))
+    return _subdivide(corners, _plan_steps(corners).steps)
 
 
 def _edge(edge_id: int, points: list[list[float]], *, level: int = 0) -> dict:
@@ -211,6 +211,77 @@ class TestWalk:
         graph = {"edges": [_edge(1, [[0.0, 0.0, 0.0], [0.0, 0.0, 10.0], [0.0, 0.0, 20.0]])]}
         with pytest.raises(SystemExit, match="different runs"):
             walk(graph, _drawn(1, [3.2, 3.2], (0.0, 0.0)))
+
+
+class TestAlongSpacing:
+    """`along_m` is the one dimension this stage *misses* in rather than smears.
+
+    ⚠️ Measured on the shipped bundle, lowering it costs four edges — `ALONG_M`
+    carries the sweep — so it is a parameter in order to stay measurable. What is
+    silent is the knob quietly stopping working: a sweep that returned the same
+    cross-sections at every spacing would read as "the aliasing was already
+    priced" when nothing had been swept at all.
+    """
+
+    def test_finer_spacing_judges_strictly_more_cross_sections(self) -> None:
+        graph = {"edges": [_edge(1, [[0.0, 0.0, 0.0], [0.0, 0.0, 40.0]])]}
+        drawn = _drawn(1, [3.2, 3.2], (2.0, 2.0))
+        coarse, _ = walk(graph, drawn, along_m=1.0)
+        fine, _ = walk(graph, drawn, along_m=0.25)
+        assert len(fine.section_count) > len(coarse.section_count)
+
+    def test_the_default_is_the_shipped_constant(self) -> None:
+        # So a sweep cannot become the default by accident: `city.json` is
+        # published from this, and `RoadGraph.is_routable` reads it.
+        graph = {"edges": [_edge(1, [[0.0, 0.0, 0.0], [0.0, 0.0, 40.0]])]}
+        drawn = _drawn(1, [3.2, 3.2], (2.0, 2.0))
+        assert len(walk(graph, drawn)[0].section_count) == len(
+            walk(graph, drawn, along_m=ALONG_M)[0].section_count
+        )
+
+    def test_the_trims_are_still_honoured_at_any_spacing(self) -> None:
+        graph = {"edges": [_edge(1, [[0.0, 0.0, 0.0], [0.0, 0.0, 20.0]])]}
+        corridor, _ = walk(graph, _drawn(1, [3.2, 3.2], (5.0, 4.0)), along_m=0.25)
+        along = np.unique(np.round(corridor.z, 3))
+        assert along.min() >= 5.0 - 0.25
+        assert along.max() <= 16.0 + 0.25
+
+
+class TestSubdivisionCap:
+    """How many triangles the cap held back — this stage's own smear, now counted.
+
+    ⚠️ Silent in exactly the way that matters. A piece the cap left wider than
+    `CELL_M` blocks by its plan box carrying its *whole* height range, so it
+    invents blockage beside anything large and sloped, and the constant's own
+    comment claimed the only such geometry was ground. `MAX_SUBDIVISIONS` carries
+    how many a run actually holds back.
+    """
+
+    def test_a_triangle_inside_the_cap_is_not_counted(self) -> None:
+        small = np.array([[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]]])
+        split = _plan_steps(small)
+        assert split.clipped == 0
+        assert split.steps.max() <= MAX_SUBDIVISIONS
+
+    def test_a_triangle_over_the_cap_is_counted_and_still_clipped(self) -> None:
+        # Wider in plan than `MAX_SUBDIVISIONS * SUBDIVIDE_M`, so it cannot be
+        # split to `SUBDIVIDE_M` and the count is the only thing that says so.
+        span = MAX_SUBDIVISIONS * SUBDIVIDE_M * 4.0
+        huge = np.array([[[0.0, 0.0, 0.0], [span, 0.0, 0.0], [0.0, 0.0, span]]])
+        split = _plan_steps(huge)
+        assert split.clipped == 1
+        assert split.steps.tolist() == [MAX_SUBDIVISIONS]
+
+    def test_the_count_is_per_triangle_not_per_mesh(self) -> None:
+        span = MAX_SUBDIVISIONS * SUBDIVIDE_M * 4.0
+        mixed = np.array(
+            [
+                [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]],
+                [[0.0, 0.0, 0.0], [span, 0.0, 0.0], [0.0, 0.0, span]],
+                [[0.0, 0.0, 0.0], [span, 0.0, 0.0], [0.0, 0.0, span]],
+            ]
+        )
+        assert _plan_steps(mixed).clipped == 2
 
 
 class TestMeasure:
