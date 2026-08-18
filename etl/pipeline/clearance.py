@@ -157,14 +157,23 @@ class ClearanceReport:
     tiles_read: int = 0
     landmarks_read: int = 0
 
-    def starved(self, bar_m: float) -> list[tuple[int, float]]:
-        """Edges whose tightest measured station is under `bar_m`, worst first."""
-        found = [
-            (edge_id, min(width for width in widths if width != NOT_MEASURED))
+    def tightest(self) -> dict[int, float]:
+        """The narrowest measured station of every edge that has one.
+
+        Refusals are filtered before the `min`, never clamped after: `-1.0` is
+        the narrowest number in any row it appears in, so folding it would make
+        every part-trimmed edge the most blocked in the region.
+        """
+        return {
+            edge_id: min(width for width in widths if width != NOT_MEASURED)
             for edge_id, widths in self.corridor_m.items()
             if any(width != NOT_MEASURED for width in widths)
-        ]
-        return sorted((row for row in found if row[1] < bar_m), key=lambda row: row[1])
+        }
+
+    def starved(self, bar_m: float) -> list[tuple[int, float]]:
+        """Edges whose tightest measured station is under `bar_m`, worst first."""
+        found = (row for row in self.tightest().items() if row[1] < bar_m)
+        return sorted(found, key=lambda row: row[1])
 
 
 @dataclass(frozen=True)
@@ -730,17 +739,48 @@ def measure(corridor: Corridor, blocked: np.ndarray, report: ClearanceReport) ->
         widths[station] = width if standing == NOT_MEASURED else min(standing, width)
 
 
-def build_region(
+def ground_colour(city: CityConfig) -> tuple[tuple[int, int, int], float]:
+    """The colour the ground wears, and how far it is jittered either side.
+
+    The ground is excluded by its colour, so a city naming a `terrain_class` it
+    gives no flat material to would measure its own ground as a wall down every
+    street. Named here rather than raised as a `KeyError` from an index three
+    frames down — and shared, so a second caller cannot skip the check.
+    """
+    ground_class = city.buildings.terrain_class
+    if ground_class not in city.buildings.class_materials:
+        raise SystemExit(
+            f"{city.id} names terrain_class {ground_class!r}, which has no class_materials "
+            "entry — there is no colour to exclude the ground by"
+        )
+    return city.buildings.class_materials[ground_class].colour, city.buildings.jitter_for(
+        ground_class
+    )
+
+
+def open_region(
     city: CityConfig, region_id: str, *, out_root: Path | None = None
-) -> ClearanceReport:
-    """Measure the region already built in its out dir."""
+) -> tuple[Path, dict, dict[int, dict], dict]:
+    """A built region's out dir, road graph, carriageway table and tile manifest.
+
+    Shared with `tools/narrowing.py`, which measures the same region at widths it
+    was not drawn at. Four documents resolved one way, so the two cannot end up
+    reading different builds and comparing the results.
+    """
     out_dir = city.out_dir(region_id, out_root)
     rebuild = f"python -m pipeline --city {city.id} --region {region_id}"
     graph = read_graph(out_dir / ROADGRAPH_NAME, city.id, region_id)
     surface = read_document(out_dir / SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, rebuild)
     buildings = read_document(out_dir / BUILDINGS_MANIFEST_NAME, BUILDINGS_MANIFEST_SCHEMA, rebuild)
-
     drawn = {int(entry["edge"]): entry for entry in surface.get("carriageway", [])}
+    return out_dir, graph, drawn, buildings
+
+
+def build_region(
+    city: CityConfig, region_id: str, *, out_root: Path | None = None
+) -> ClearanceReport:
+    """Measure the region already built in its out dir."""
+    out_dir, graph, drawn, buildings = open_region(city, region_id, out_root=out_root)
     corridor, report = walk(graph, drawn)
     log.info(
         "  %d level-0 edges, %d cross-sections to judge, %d left to their junction caps",
@@ -749,18 +789,7 @@ def build_region(
         report.sections_trimmed,
     )
 
-    ground_class = city.buildings.terrain_class
-    if ground_class not in city.buildings.class_materials:
-        # The ground is excluded by its colour, so a city that names a terrain
-        # class it gives no flat material to would measure its own ground as a
-        # wall down every street. Named here rather than raised as a `KeyError`
-        # from an index three frames down.
-        raise SystemExit(
-            f"{city.id} names terrain_class {ground_class!r}, which has no class_materials "
-            "entry — there is no colour to exclude the ground by"
-        )
-    ground = city.buildings.class_materials[ground_class].colour
-    jitter = city.buildings.jitter_for(ground_class)
+    ground, jitter = ground_colour(city)
     sections = _Sections(corridor)
 
     # Streamed one tile at a time. The region's tiles are 43 MB of geometry and

@@ -724,7 +724,7 @@ def main(argv: list[str] | None = None) -> int:
 
     lane_m = float(city.roads.lane_width_m)
     corridor_bar_m = lane_m * args.accept_corridor_lanes
-    names = _road_names(graph)
+    names = road_names(graph)
 
     log.info("")
     log.info("  share of ALL drawn carriageway with geometry standing in it — Q19's frame,")
@@ -896,7 +896,7 @@ def landmark_occupiers(
     return index_corners(blocks(), bands, sample_m)
 
 
-def _road_names(graph: dict[str, Any]) -> dict[int, str]:
+def road_names(graph: dict[str, Any]) -> dict[int, str]:
     """Edge id to a street name, for a failure a reader can go and look at.
 
     English where the source has it, Chinese where it does not — many service
