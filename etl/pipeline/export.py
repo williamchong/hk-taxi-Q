@@ -100,7 +100,14 @@ CITY_NAME = "city.json"
 # silent wrong answer again, and the worst-shaped one yet: a v8 reader would
 # load a v9 bundle happily and route traffic down edges the bundle itself
 # records as holding less than a lane clear.
-CITY_SCHEMA = 9
+# 10 since `P3-12`: `roads.glb` gained a `TEXCOORD_1` marking payload and a
+# material name the engine dispatches a shader on. `P3-7`'s precedent — adding a
+# vertex attribute bumped 4 to 5 — rather than `P3-10`'s, which added none and
+# did not bump. The wrong answer here is quieter than `Q51`'s and still worth
+# the bump: a v9 reader hands the surface a `BaseMaterial3D` and gets an
+# unmarked road, which looks like the road it always drew rather than like a
+# failure.
+CITY_SCHEMA = 10
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,

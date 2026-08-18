@@ -26,10 +26,12 @@
 extends EditorScenePostImport
 
 ## Material names the ETL writes to request a specific shader, and what to give
-## them. Mirrors `FACADE_MATERIAL` in `etl/pipeline/buildings.py` and
-## `BODY_MATERIAL` in `tools/make_vehicle.py`.
+## them. Mirrors `FACADE_MATERIAL` in `etl/pipeline/buildings.py`,
+## `SURFACE_MATERIAL` in `etl/pipeline/surface.py` and `BODY_MATERIAL` in
+## `tools/make_vehicle.py`.
 const SHADERS: Dictionary = {
 	"city_facade": "res://tuning/city_facade.tres",
+	"road_markings": "res://tuning/road_markings.tres",
 	"vehicle_body": "res://tuning/vehicle_body.tres",
 }
 
@@ -63,8 +65,16 @@ func _apply(mesh: Mesh) -> void:
 			standard.vertex_color_use_as_albedo = true
 			# The ETL writes `COLOR_0` in sRGB, and both flags are off by default,
 			# so this is the `BaseMaterial3D` half of the `Q27` fix — the shader
-			# half is `vertex_srgb_to_linear()`, which the two facade shaders have
-			# to carry by hand because there is no such render mode. Without it
-			# the road surface takes the same hit the facades did: sRGB bytes read
-			# as linear render pale and flatten the difference between colours.
+			# half is `vertex_srgb_to_linear()`, which every shader above has to
+			# carry by hand because Godot 4 has no such render mode. Without
+			# either, sRGB bytes read as linear render pale and flatten the
+			# difference between colours.
+			#
+			# ⚠️ **This branch and the one above are exclusive, which is a trap on
+			# the way in rather than on the way out.** Until `P3-12` the road
+			# surface was this branch's headline case; it now names a material and
+			# takes the `continue` above, so `road_markings.gdshader` is what has
+			# to convert its asphalt. Anything moved from here to a shader owes
+			# the same, and nothing fails loudly when it is forgotten — the
+			# surface just lightens.
 			standard.vertex_color_is_srgb = true

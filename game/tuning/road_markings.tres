@@ -1,0 +1,85 @@
+; The road's markings — lane lines, centre lines, kerbside yellows (`P3-12`).
+;
+; `tools/generated_scene_import.gd` maps the ETL's `road_markings` material name
+; to this path and only this path, so this file is the switch: delete the entry
+; there and the surface falls straight back to the `BaseMaterial3D` it imported
+; with before `P3-12`, with no rebuild.
+;
+; Here rather than as shader defaults because CLAUDE.md hard rule 4 makes tuning
+; data, not constants — and beside `golden_hour.tres`, because the low sun these
+; are judged under is tuned in the same directory. Loaded as **one** resource for
+; the whole region: the road surface is a single primitive.
+;
+; ⚠️ **The widths are in lane widths, not metres, and they are wider than life.**
+; U is a lane coordinate, so 0.031 is a real 10 cm line at this region's 3.2 m
+; lane. It ships at 0.05 — a 16 cm line — because a truthful one is under a pixel
+; at the distance the player is actually looking, and the honest version simply
+; vanished. The pitch values are the opposite case: V is metres, so
+; `dash_length_m` and `dash_gap_m` are the real thing and want no fudge.
+;
+; ⚠️ **`fade_m` is not only cosmetic, and it is the one value here that is priced
+; rather than chosen.** A junction cap overlaps its arms rather than abutting
+; them — 6,051 m² of 52,985 m² of cap area, 210 of 1,398 trimmed ends — and that
+; overlap is invisible today only because cap and carriageway are the same colour
+; in one material. Markings drawn under it read as a patch. So the fade has to
+; reach at least as far back as the cap does, and that was measured per arm end
+; across the region rather than guessed:
+;
+;   overlap depth   p50 0.00   p90 1.17   p95 2.36   p99 3.62   worst 4.21 m
+;   overlapped at all: 203 of 1,398 ends (14.5%), reproducing the published 210
+;
+; **6 m clears every end with 42% margin.** It shipped at 9 for one round, from
+; no measurement at all, and the cost of that is the other direction of the same
+; dial: an edge shorter than twice the fade never carries a full marking, and the
+; region's edges are short — p10 is 4.0 m, p25 is 12.5 m.
+;
+;   fade   edges with no marking at all   share of carriageway area
+;   9 m    169 of 797  (21.2%)            8.7%
+;   6 m    121 of 797  (15.2%)            6.0%   <- ships
+;   5 m    104 of 797  (13.0%)            5.2%
+;
+; Going below 5 m starts eating into the measured worst case, and the overlap
+; figure is a derivation from the published trims rather than the hull's own
+; reach — so the margin is doing real work. Some of that 15.2% is *correct*: a
+; 4 m link between two junctions is a junction mouth, and real roads do not mark
+; one. The real fix for the rest is a non-convex cap, which is polygon clipping
+; and is not built. `Q53`.
+;
+; ⚠️ **`draw_double_yellow` is the one marking here with no source behind it.**
+; Every other line is either geometry (a lane boundary) or a published flag —
+; `TRAVEL_DIRECTION`, `BUS_ONLY_LANE`. A kerbside waiting restriction is neither.
+; It is near universal in urban Wan Chai, which is the argument for drawing it,
+; and it is still an invention on streets `P3-9a`'s drivers know. On its own
+; switch for exactly that reason: this is the first thing to turn off if a
+; recognition round reports the markings as wrong rather than as missing.
+;
+; Judged at the `street` and `kerb` viewpoints per `ART_DESIGN.md`'s table, and
+; at a junction approach — the fade is what wants looking at, and the question is
+; whether the lines stop where a driver expects rather than whether they stop.
+
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+[ext_resource type="Shader" path="res://assets/shaders/road_markings.gdshader" id="1_markings"]
+
+[resource]
+resource_name = "road_markings"
+shader = ExtResource("1_markings")
+shader_parameter/line_colour = Color(0.91, 0.91, 0.87, 1.0)
+shader_parameter/yellow_colour = Color(0.86, 0.68, 0.13, 1.0)
+shader_parameter/paint_opacity = 0.85
+shader_parameter/paint_roughness = 0.7
+shader_parameter/road_roughness = 0.95
+shader_parameter/line_width = 0.05
+shader_parameter/centre_width = 0.055
+shader_parameter/bus_width = 0.09
+shader_parameter/yellow_inset = 0.09
+shader_parameter/yellow_gap = 0.06
+shader_parameter/yellow_width = 0.035
+shader_parameter/dash_length_m = 3.0
+shader_parameter/dash_gap_m = 6.0
+shader_parameter/fade_m = 6.0
+shader_parameter/fade_softness_m = 3.0
+shader_parameter/draw_lane_lines = 1.0
+shader_parameter/draw_centre_line = 1.0
+shader_parameter/draw_bus_lane = 1.0
+shader_parameter/draw_double_yellow = 1.0

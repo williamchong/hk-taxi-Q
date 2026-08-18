@@ -56,7 +56,14 @@ const NOT_MEASURED: float = -1.0
 ## the bar it is read against. The bump is for the silent wrong answer again,
 ## and the worst-shaped one yet: a v8 reader would load a v9 bundle happily and
 ## route traffic down edges the bundle itself records as blocked.
-const SCHEMA_VERSION: int = 9
+##
+## 10 since `P3-12`: `roads.glb` ships `TEXCOORD_1` — packed marking state in `x`
+## and the edge's drawn length in `y` — and names its material `road_markings`
+## so the importer gives it the markings shader. `P3-7`'s precedent, which
+## bumped for the same reason on the tiles; the wrong answer is quieter here,
+## because a v9 reader draws an unmarked road that looks like the road it always
+## drew rather than like a failure.
+const SCHEMA_VERSION: int = 10
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.

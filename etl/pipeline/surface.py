@@ -46,7 +46,7 @@ from typing import NamedTuple
 
 import numpy as np
 
-from pipeline.config import CityConfig, RoadSurface, load_city
+from pipeline.config import BOTH, FORWARD, CityConfig, RoadSurface, load_city
 from pipeline.documents import write_document
 from pipeline.geometry import inside_polygon
 from pipeline.gltf import Bounds, MeshData, normalise, write_glb
@@ -74,6 +74,71 @@ SURFACE_MANIFEST_SCHEMA = 4
 # than building the shape in GDScript at load makes the collision part of the
 # asset, which is what `P1-4` is asked to deliver.
 SURFACE_MESH_NAME = "road_surface-col"
+
+# The glTF material name, and the name is the contract: glTF cannot say "use
+# this shader", so `tools/generated_scene_import.gd` dispatches on it and hands
+# the surface `tuning/road_markings.tres`. The same channel `FACADE_MATERIAL`
+# uses, and it fails the same way — silently, in the engine, where only
+# `verify_road_surface.gd` can see it.
+SURFACE_MATERIAL = "road_markings"
+
+# --------------------------------------------------------------------------
+# The `TEXCOORD_1` marking codec (`P3-12`).
+#
+# ⚠️ **Contract, not tuning.** These multipliers are mirrored in
+# `assets/shaders/road_markings.gdshader` (`MARKING_*`) and in
+# `tools/verify_road_surface.gd`, and `docs/ARCHITECTURE.md` is the tiebreak.
+# They do not belong in the city yaml: a codec has no per-city meaning.
+#
+# The layout follows `buildings.facade_state` exactly, for the same reasons —
+# one non-negative integer per vertex, every field's 0 meaning "absent", and the
+# whole code exact in float32 so a consumer can decode it with `floor(x + 0.5)`.
+#
+#   code = surface_class + 4*lanes + 64*direction + 256*bus_lane + 512*tram
+#
+# Max legal code is 1023, which is far inside float32's 24 exact bits.
+#
+# `surface_class` is the field the shader cannot do without. The kerbs run off
+# *both* ends of the lane range — the nearside lip spans U in [-outside, 0] and
+# the offside riser and lip sit at [lanes, lanes + outside] — so `fract(U)`
+# alone would paint a lane line down a kerb. `lanes` is the second: a fragment
+# at U = 3.0 is the offside kerb on a three-lane road and an interior lane
+# boundary on a four-lane one, and nothing in `TEXCOORD_0` separates them.
+#
+# `TEXCOORD_1.y` is the **drawn length of this edge** in metres, constant across
+# it, and 0.0 on a junction cap. The shader wants distance to the nearer end —
+# to fade markings out on a junction approach — and gets it as
+# `min(V, length - V)` per *fragment*.
+#
+# ⚠️ **Writing that distance per vertex instead is wrong, and it looks right.**
+# Distance-to-nearer-end is a V with its kink at the midpoint, and a strip is
+# interpolated linearly between its stations: on an edge Douglas-Peucker left
+# with two, both stations *are* ends, both read 0, and the whole street
+# interpolates to 0 — every marking on it faded out as though it were all
+# junction. **204 of this region's 797 edges carry two stations**, so it is the
+# common case rather than a corner. The length is constant, so it survives any
+# station spacing.
+MARKING_CLASS_CARRIAGEWAY = 0
+MARKING_CLASS_KERB = 1
+MARKING_CLASS_CAP = 2
+MARKING_LANES = 4
+MARKING_DIRECTION = 64
+MARKING_BUS_LANE = 256
+MARKING_TRAM = 512
+# Derived rather than written down: adding a field means moving one line, not
+# remembering to move two. `tram` is the top field and holds one bit.
+MARKING_CODE_MAX = 2 * MARKING_TRAM - 1
+# The widest lane count the codec can say, from the field above it. `lanes = 16`
+# packs to 64 and collides with `direction` while leaving the *total* under the
+# ceiling — so the ceiling is not the guard, this is.
+MARKING_LANES_MAX = MARKING_DIRECTION // MARKING_LANES - 1
+
+# `direction` as the codec spells it, keyed by the vocabulary `config.py`
+# validates against rather than by literals — that module names them "next to
+# the validation, so the stage that acts on them cannot drift from the set that
+# is accepted", and this is that stage. 0 is kept free so an unrecognised value
+# degrades to "absent" rather than to a wrong marking.
+MARKING_DIRECTIONS = {BOTH: 1, FORWARD: 2}
 
 # Ceiling on how far a mitred outside corner may be pushed from the centreline,
 # as a multiple of the half-width. A degeneracy guard, not a tuning value: it
@@ -300,6 +365,27 @@ def _lift(plan: np.ndarray, points: np.ndarray, lift_m: float) -> np.ndarray:
 # --------------------------------------------------------------------------
 
 
+class _Marking(NamedTuple):
+    """One piece of surface's `TEXCOORD_1`, constant across it.
+
+    A pair rather than two parameters because it is one channel: `strip` already
+    takes `across` as a pair for the same reason, and splitting a payload across
+    the signature is how the two halves come to disagree.
+    """
+
+    code: float
+    length_m: float
+
+    def broadcast(self, count: int) -> np.ndarray:
+        """One row per vertex, as a read-only view rather than a copy.
+
+        `_rgba`'s trick, for `_rgba`'s reason — the value is constant across the
+        piece, and `_Builder.build` materialises it in the one `vstack` that
+        needs it. `buildings.facade_uv2` does the same for the tiles' channel.
+        """
+        return np.broadcast_to(np.array(self, dtype=np.float32), (count, 2))
+
+
 class _Builder:
     """Accumulates triangle strips and fans into one vertex-coloured mesh.
 
@@ -314,6 +400,7 @@ class _Builder:
         self._normals: list[np.ndarray] = []
         self._colours: list[np.ndarray] = []
         self._uvs: list[np.ndarray] = []
+        self._uv2: list[np.ndarray] = []
         self._triangles: list[np.ndarray] = []
         self._count = 0
 
@@ -325,6 +412,7 @@ class _Builder:
         colour: tuple[int, int, int],
         along: np.ndarray,
         across: tuple[float, float],
+        marking: _Marking,
     ) -> None:
         """A quad strip between two rails, wound so its face points out of it.
 
@@ -333,6 +421,10 @@ class _Builder:
         shader driven by these rather than in a texture atlas, so U is a lane
         coordinate — an integer U is a lane boundary whatever the widening did
         to the metres.
+
+        `marking` is `TEXCOORD_1`, which is what makes those readable — see the
+        codec constants at the top of this module, including why it carries a
+        length rather than the distance the consumer actually wants.
         """
         span = len(left)
         if span < 2:
@@ -360,9 +452,10 @@ class _Builder:
                 np.float32
             )
         )
+        self._uv2.append(marking.broadcast(2 * span))
         self._count += 2 * span
 
-    def fan(self, ring: np.ndarray, *, colour: tuple[int, int, int]) -> None:
+    def fan(self, ring: np.ndarray, *, colour: tuple[int, int, int], marking: _Marking) -> None:
         """A convex polygon as a fan from its centroid, facing up."""
         if len(ring) < 3:
             return
@@ -387,6 +480,12 @@ class _Builder:
         # coordinate. Box junctions come from a mask keyed on the node, not
         # from these — see `docs/ART_DESIGN.md`.
         self._uvs.append(np.zeros((len(ring) + 1, 2), dtype=np.float32))
+        # ⚠️ Which is why `TEXCOORD_1` exists rather than the consumer reading
+        # the zeros above as "cap": U = 0 *is* the nearside kerb line, so a
+        # kerbside double yellow drawn as `U < eps` would flood every junction.
+        # `(0, 0)` is an in-range value here, not a sentinel. What the cap
+        # carries in `TEXCOORD_1` is the caller's to say.
+        self._uv2.append(marking.broadcast(len(ring) + 1))
         self._count += len(ring) + 1
 
     def build(self, name: str) -> MeshData:
@@ -405,6 +504,8 @@ class _Builder:
             triangles=np.vstack(self._triangles).astype(np.uint32),
             colours=np.vstack(self._colours),
             uvs=np.vstack(self._uvs),
+            uv2=np.vstack(self._uv2),
+            material=SURFACE_MATERIAL,
         )
         twice_area = np.linalg.norm(mesh.triangle_cross(), axis=1)
         kept = select_triangles(mesh, twice_area > _MIN_TWICE_AREA_M2)
@@ -536,6 +637,13 @@ class _Edge:
     # second thing to keep in step with the config.
     published_half_widths: np.ndarray
     lanes: int
+    # Read straight off the published edge and carried only so `TEXCOORD_1` can
+    # say them. Nothing about the ribbon's shape depends on any of the three —
+    # they decide which markings the shader draws on it, which is why they
+    # arrive here rather than in `_shape`.
+    direction: str
+    bus_lane: bool
+    tram_tracks: bool
     level: int
     length_m: float
     trim_start_m: float = 0.0
@@ -569,6 +677,34 @@ class _Edge:
             return None
         row = 0 if at_start else -1
         return np.array([plan[row][0], self.ribbon[row][1], plan[row][1]])
+
+    def marking_code(self, surface_class: int) -> float:
+        """This edge's packed `TEXCOORD_1.x` for one of its surface classes.
+
+        An unrecognised `direction` packs as 0 rather than raising: the codec
+        reads 0 as "absent" everywhere, so the shader falls back to the markings
+        that need no direction instead of drawing a wrong centre line. The
+        closed vocabulary is `roads.py`'s to enforce, and it does.
+
+        ⚠️ **The guard is per field, not on the total, and the total cannot
+        stand in for it.** `lanes` is the only unbounded input — city config
+        authors it per road class with no ceiling — and at 16 it packs to 64,
+        carries into `direction`, and still leaves a total under
+        `MARKING_CODE_MAX`. So a check on the sum passes while the code decodes
+        as no lanes travelling in a direction the vocabulary does not have.
+        """
+        if not 0 < self.lanes <= MARKING_LANES_MAX:
+            raise ValueError(
+                f"{self.lanes} lanes is past what `TEXCOORD_1` can say "
+                f"(1-{MARKING_LANES_MAX}): the code would carry into `direction`"
+            )
+        return float(
+            surface_class
+            + MARKING_LANES * self.lanes
+            + MARKING_DIRECTION * MARKING_DIRECTIONS.get(self.direction, 0)
+            + MARKING_BUS_LANE * int(self.bus_lane)
+            + MARKING_TRAM * int(self.tram_tracks)
+        )
 
     def end_half_width_m(self, at_start: bool) -> float:
         """The half-width this edge arrives at a node with.
@@ -631,7 +767,14 @@ def build_region(
         if _draw_edge(builder, edge, style, city.roads.lane_width_m):
             report.edges += 1
     for cap in caps:
-        builder.fan(cap.ring, colour=style.surface_material.colour)
+        # A cap is no length of lane, so it carries no lanes and no length —
+        # and that zero length is what the markings shader reads through
+        # `min(V, length - V)` as "hard against a junction".
+        builder.fan(
+            cap.ring,
+            colour=style.surface_material.colour,
+            marking=_Marking(float(MARKING_CLASS_CAP), 0.0),
+        )
         report.junctions += 1
 
     mesh = builder.build(SURFACE_MESH_NAME)
@@ -657,6 +800,9 @@ def _prepare(published: dict, style: RoadSurface) -> _Edge:
         points=points,
         published_half_widths=half_widths,
         lanes=published["lanes"],
+        direction=published["direction"],
+        bus_lane=bool(published["bus_lane"]),
+        tram_tracks=bool(published["tram_tracks"]),
         level=published["elevation_level"],
         length_m=float(plan_lengths(points)[-1]) if len(points) > 1 else 0.0,
     )
@@ -958,6 +1104,13 @@ def _draw_edge(builder: _Builder, edge: _Edge, style: RoadSurface, lane_width_m:
         return False
 
     along = plan_lengths(points)
+    # The ribbon as *drawn*, after both junction trims — so V = 0 and V = drawn
+    # are where the carriageway actually stops and the cap takes over, which is
+    # where the shader has to have faded its markings out. The published length
+    # would leave a stub of lane line standing under every cap.
+    drawn_m = float(along[-1])
+    carriageway = _Marking(edge.marking_code(MARKING_CLASS_CARRIAGEWAY), drawn_m)
+    kerb_marking = _Marking(edge.marking_code(MARKING_CLASS_KERB), drawn_m)
     kerb, rise = style.kerb_width_m, style.kerb_height_m
     # U is a lane coordinate: 0 at the nearside kerb line, `lanes` at the
     # offside one. The kerb runs off the ends of that range in the same units.
@@ -980,7 +1133,12 @@ def _draw_edge(builder: _Builder, edge: _Edge, style: RoadSurface, lane_width_m:
     # take their pairs in opposite orders. The carriageway is right-then-left
     # for the same reason. `test_surface.py` pins every one of these facings.
     builder.strip(
-        right, left, colour=style.surface_material.colour, along=along, across=(lanes, 0.0)
+        right,
+        left,
+        colour=style.surface_material.colour,
+        along=along,
+        across=(lanes, 0.0),
+        marking=carriageway,
     )
 
     # The riser has no plan width, so both its rails sit at the kerb line and
@@ -1003,6 +1161,7 @@ def _draw_edge(builder: _Builder, edge: _Edge, style: RoadSurface, lane_width_m:
                 colour=style.kerb_material.colour,
                 along=along[start:stop],
                 across=across,
+                marking=kerb_marking,
             )
     return True
 

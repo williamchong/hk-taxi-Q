@@ -17,6 +17,32 @@ const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 ## rule the tiles are held to, and the reason the surface is untextured.
 const SURFACES: int = 1
 
+## The material the surface must end up with, mirroring `SHADERS` in
+## `tools/generated_scene_import.gd` and `SURFACE_MATERIAL` in
+## `etl/pipeline/surface.py`.
+##
+## Checked for the reason `verify_tiles.gd` checks its own: the dispatch has
+## **no failing state**. If the ETL stopped naming the material, or the import
+## script stopped recognising the name, the road would quietly keep its default
+## `BaseMaterial3D` and render as the flat grey ribbon it was before `P3-12` —
+## passing every other check here, with nothing to see and nothing to catch.
+const MARKINGS_MATERIAL: String = "res://tuning/road_markings.tres"
+
+## The `TEXCOORD_1` marking codec (`P3-12`), mirroring the `MARKING_*` constants
+## in `etl/pipeline/surface.py` and `assets/shaders/road_markings.gdshader` —
+## `docs/ARCHITECTURE.md`'s channel table is the tiebreak.
+const MARKING_LANES_FIELD: float = 4.0
+const MARKING_DIRECTION_FIELD: float = 64.0
+const MARKING_BUS_FIELD: float = 256.0
+const MARKING_CLASS_CAP: float = 2.0
+const MARKING_DIRECTION_MAX: float = 2.0
+const MARKING_CODE_MAX: float = 1023.0
+
+## The longest edge the region may publish, in metres, as a sanity ceiling on
+## `TEXCOORD_1.y`. Not a contract value — geometry is clipped to a region 1.7 km
+## across, so a length past this is a corrupted channel rather than a long road.
+const MAX_EDGE_M: float = 4000.0
+
 
 func _init() -> void:
 	var packed: PackedScene = GeneratedRoadSurface.load_surface()
@@ -61,7 +87,74 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 		# lane coordinate, V is metres along the carriageway.
 		if not (mesh.surface_get_format(surface) & Mesh.ARRAY_FORMAT_TEX_UV):
 			problems.append("surface %d carries no UVs" % surface)
+		problems.append_array(
+			MeshContract.check_shader_material(
+				mesh, surface, "surface %d" % surface, MARKINGS_MATERIAL
+			)
+		)
+		problems.append_array(_check_marking_payload(mesh, surface, "surface %d" % surface))
 
 	problems.append_array(MeshContract.check_collision(scene_root))
+	problems.append_array(
+		MeshContract.check_uv2_import_settings(GeneratedRoadSurface.PATH, "marking payload")
+	)
 
 	return problems
+
+
+## The marking payload holds the codec's invariants (`P3-12`).
+##
+## `TEXCOORD_1.x` must be a small exact integer whose decoded fields are in
+## range, and `y` a non-negative length. Beyond the contract itself this is the
+## tripwire for both import hazards, the same pair `verify_tiles.gd` guards: a
+## lightmap unwrap (`meshes/light_baking = 2`) replaces the channel with
+## fractions in [0, 1], and 16-bit attribute compression corrupts large codes —
+## either way the exactness or range checks fail.
+##
+## ⚠️ There is **no refusal sentinel to skip here**, unlike the tiles. A cap
+## carries `(2, 0)` and a carriageway vertex always carries a class and a lane
+## count, so every vertex is a real code and the scan holds all of them. A run of
+## `Vector2.ZERO` would mean class 0 with no lanes, which is not a road.
+func _check_marking_payload(mesh: Mesh, surface: int, where: String) -> PackedStringArray:
+	if not (mesh.surface_get_format(surface) & Mesh.ARRAY_FORMAT_TEX_UV2):
+		return PackedStringArray(
+			["%s carries no TEXCOORD_1; the markings shader has nothing to read" % where]
+		)
+
+	var uv2s: PackedVector2Array = mesh.surface_get_arrays(surface)[Mesh.ARRAY_TEX_UV2]
+	for uv2: Vector2 in uv2s:
+		var code: float = uv2.x
+		var surface_class: float = fmod(code, MARKING_LANES_FIELD)
+		var lanes: float = fmod(
+			floor(code / MARKING_LANES_FIELD), MARKING_DIRECTION_FIELD / MARKING_LANES_FIELD
+		)
+		var direction: float = fmod(
+			floor(code / MARKING_DIRECTION_FIELD), MARKING_BUS_FIELD / MARKING_DIRECTION_FIELD
+		)
+		if (
+			code != floor(code)
+			or code < 0.0
+			or code > MARKING_CODE_MAX
+			or surface_class > MARKING_CLASS_CAP
+			or direction > MARKING_DIRECTION_MAX
+			or uv2.y < 0.0
+			or uv2.y > MAX_EDGE_M
+			# A junction cap is the only thing that may carry no lanes, and it is
+			# also the only thing that may carry no length — the pair is what the
+			# shader reads as "not a length of lane", and half of it is a bug.
+			or (lanes == 0.0) != (surface_class == MARKING_CLASS_CAP)
+			or (uv2.y == 0.0) != (surface_class == MARKING_CLASS_CAP)
+		):
+			return PackedStringArray(
+				[
+					(
+						(
+							"%s: TEXCOORD_1 (%f, %f) breaks the marking codec — the ETL and "
+							+ "shader disagree, or the importer rewrote the channel "
+							+ "(lightmap unwrap or attribute compression)"
+						)
+						% [where, uv2.x, uv2.y]
+					)
+				]
+			)
+	return PackedStringArray()

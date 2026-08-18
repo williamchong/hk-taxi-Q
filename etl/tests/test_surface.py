@@ -14,6 +14,7 @@ the fixture below is the contract in `docs/ARCHITECTURE.md`, written out.
 from __future__ import annotations
 
 import json
+import struct
 from dataclasses import replace
 from pathlib import Path
 
@@ -23,7 +24,9 @@ import pytest
 from pipeline.gltf import read_glb
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA, plan_lengths
 from pipeline.surface import (
+    MARKING_CODE_MAX,
     SURFACE_MANIFEST_NAME,
+    SURFACE_MATERIAL,
     SURFACE_MESH_NAME,
     SURFACE_NAME,
     _half_widths,
@@ -405,8 +408,71 @@ def testville(tmp_path, testville_config):
     return testville_config, tmp_path
 
 
+@pytest.fixture
+def markedville(tmp_path, testville_config):
+    """One straight one-way bus lane, and nothing for it to meet.
+
+    The three fields `TEXCOORD_1` carries beyond the geometry are all published
+    per edge and all off their defaults here, so a packing that dropped any of
+    them would still pass on `testville` — every edge there is a two-way
+    non-bus street. No node is shared, so there is no trim and no cap either,
+    which is what makes the distance-to-end arithmetic checkable against the
+    edge's own length rather than against whatever a junction held back.
+    """
+    _write_graph(
+        tmp_path,
+        [
+            {"id": 0, "pos": [100.0, 0.0, 300.0], "kind": "endpoint"},
+            {"id": 1, "pos": [500.0, 0.0, 300.0], "kind": "endpoint"},
+        ],
+        [
+            _edge(
+                0,
+                0,
+                1,
+                [[100.0, 0.0, 300.0], [500.0, 0.0, 300.0]],
+                direction="forward",
+                bus_lane=True,
+                tram_tracks=True,
+            )
+        ],
+    )
+    return testville_config, tmp_path
+
+
 def _mesh(tmp_path: Path):
     return read_glb(tmp_path / "out" / "testville" / "middle" / SURFACE_NAME)[0]
+
+
+def _decode(code: float) -> dict[str, int]:
+    """`TEXCOORD_1.x` back into its fields, the way a consumer has to do it.
+
+    Spelled out here rather than imported from the pipeline, so these tests fail
+    when the packing drifts from the layout `docs/ARCHITECTURE.md` publishes
+    instead of agreeing with whatever the pipeline happens to write. `floor(x +
+    0.5)` first is the contract's own instruction — every legal code is exact in
+    float32, and this is what makes that worth asserting.
+    """
+    packed = int(np.floor(code + 0.5))
+    return {
+        "surface_class": packed % 4,
+        "lanes": packed // 4 % 16,
+        "direction": packed // 64 % 4,
+        "bus_lane": packed // 256 % 2,
+        "tram_tracks": packed // 512 % 2,
+    }
+
+
+def _painted(mesh, colour: tuple[int, int, int]) -> np.ndarray:
+    """Mask of the vertices carrying exactly this colour.
+
+    Exact equality is safe here and nowhere else in the project: the road
+    surface takes its two colours flat from the config, with none of the
+    per-building jitter that makes a class a *ray* through its base colour on
+    the tiles (`tools/deck_error.py` matched 428 of 434,149 triangles before
+    that was understood).
+    """
+    return np.all(mesh.colours[:, :3] == np.array(colour, dtype=np.uint8), axis=1)
 
 
 class TestBuildRegion:
@@ -726,6 +792,187 @@ class TestBuildRegion:
 
         with pytest.raises(ValueError, match="schema_version"):
             build_region(city, "middle", out_root=tmp_path / "out")
+
+
+class TestMarkingPayload:
+    """`TEXCOORD_1`, which is what makes `TEXCOORD_0` readable (`P3-12`).
+
+    Every test here is about a question the shader has to be able to answer
+    before it paints anything, and that `TEXCOORD_0` alone cannot — the codec
+    block in `pipeline/surface.py` says why.
+    """
+
+    def test_the_carriageway_says_its_class_lanes_and_direction(self, testville, tmp_path) -> None:
+        city, _ = testville
+        build_region(city, "middle", out_root=tmp_path / "out")
+        mesh = _mesh(tmp_path)
+
+        # The eastern arm alone, and its road rather than its kerb: past the
+        # junction, so nothing else in the region reaches here.
+        arm = mesh.positions[:, 0] > 320.0
+        road = arm & _painted(mesh, city.roads.surface.surface_material.colour)
+        assert road.any()
+
+        codes = np.unique(mesh.uv2[road, 0])
+        assert len(codes) == 1
+        assert _decode(codes[0]) == {
+            "surface_class": 0,
+            "lanes": 2,
+            "direction": 1,
+            "bus_lane": 0,
+            "tram_tracks": 0,
+        }
+
+    def test_a_kerb_says_it_is_a_kerb(self, testville, tmp_path) -> None:
+        """The one field the shader cannot do without. `fract(U)` on the offside
+        lip lands in [0, 0.156], so without this a lane line is painted down
+        every kerb in the region.
+        """
+        city, _ = testville
+        build_region(city, "middle", out_root=tmp_path / "out")
+        mesh = _mesh(tmp_path)
+
+        arm = mesh.positions[:, 0] > 320.0
+        kerb = arm & _painted(mesh, city.roads.surface.kerb_material.colour)
+        assert kerb.any()
+
+        classes = {_decode(code)["surface_class"] for code in mesh.uv2[kerb, 0]}
+        assert classes == {1}
+
+    def test_a_junction_cap_says_so_and_stands_at_zero(self, testville, tmp_path) -> None:
+        """A cap carries `TEXCOORD_0 = (0, 0)`, and U = 0 *is* the nearside kerb
+        line — so a kerbside marking keyed on U alone would flood every junction
+        in the city. The class says what the lane coordinate cannot, and the
+        distance is what actually keeps the shader off it.
+        """
+        city, _ = testville
+        report = build_region(city, "middle", out_root=tmp_path / "out")
+        mesh = _mesh(tmp_path)
+
+        cap = np.array([_decode(code)["surface_class"] == 2 for code in mesh.uv2[:, 0]])
+        assert report.junctions > 0
+        assert cap.any()
+
+        # Every capped vertex stands at a node — testville caps two of them, the
+        # crossroads and the two ends of the diagonal, each a street bending
+        # through a degree-2 node — and within reach of the widest arm meeting
+        # it, the 3-lane diagonal at half-width 5.76 m.
+        nodes = np.array([[300.0, 300.0], [100.0, 300.0], [300.0, 100.0]])
+        plan = mesh.positions[cap][:, [0, 2]]
+        to_nodes = np.hypot(*(plan[:, None, :] - nodes).transpose(2, 1, 0))
+        assert to_nodes.min(axis=0).max() < 12.0
+        # Zero length is what the shader reads as "not a length of lane".
+        np.testing.assert_array_equal(mesh.uv2[cap, 1], 0.0)
+
+    def test_the_ribbon_carries_the_length_it_was_drawn_at(self, markedville, tmp_path) -> None:
+        """`markedville` shares no node, so nothing is trimmed and the ribbon is
+        the whole 400 m of graph.
+
+        ⚠️ The length, not a per-vertex distance to the nearer end — the codec
+        block in `pipeline/surface.py` has the argument. **This fixture is the
+        two-station edge that argument is about**, and it read 0.0 end to end
+        before the payload became a length, which is what this test exists to
+        keep true.
+        """
+        city, _ = markedville
+        build_region(city, "middle", out_root=tmp_path / "out")
+        mesh = _mesh(tmp_path)
+
+        np.testing.assert_allclose(mesh.uv2[:, 1], 400.0, atol=1e-3)
+        # And V is the other half of the pair the shader takes the distance
+        # from, so it has to span that same length.
+        assert mesh.uvs[:, 1].min() == pytest.approx(0.0, abs=1e-4)
+        assert mesh.uvs[:, 1].max() == pytest.approx(400.0, abs=1e-3)
+
+    def test_the_length_is_the_drawn_one_not_the_published_one(self, testville, tmp_path) -> None:
+        """Every arm of the crossroads is held back for its cap, and the fade
+        has to reach zero where the ribbon stops rather than where the
+        centreline did — or a stub of lane line stands under every junction.
+        """
+        city, _ = testville
+        build_region(city, "middle", out_root=tmp_path / "out")
+        mesh = _mesh(tmp_path)
+
+        # The eastern arm: 200 m of centreline from the crossroads to node 2,
+        # trimmed at the junction end only.
+        arm = (mesh.positions[:, 0] > 320.0) & _painted(
+            mesh, city.roads.surface.surface_material.colour
+        )
+        lengths = np.unique(mesh.uv2[arm, 1])
+        assert len(lengths) == 1
+        assert 0.0 < lengths[0] < 200.0
+        # V still runs to that length, which is what makes the two comparable.
+        assert mesh.uvs[arm, 1].max() == pytest.approx(lengths[0], abs=1e-3)
+
+    def test_a_one_way_bus_lane_sets_every_bit_it_owns(self, markedville, tmp_path) -> None:
+        """Three published fields nothing read until now. A centre line on a
+        one-way street is the loud half of getting this wrong; a bus lane drawn
+        on 737 edges instead of 14 is the quiet one.
+        """
+        city, _ = markedville
+        build_region(city, "middle", out_root=tmp_path / "out")
+        mesh = _mesh(tmp_path)
+
+        road = _painted(mesh, city.roads.surface.surface_material.colour)
+        codes = np.unique(mesh.uv2[road, 0])
+        assert len(codes) == 1
+        assert _decode(codes[0]) == {
+            "surface_class": 0,
+            "lanes": 2,
+            "direction": 2,
+            "bus_lane": 1,
+            "tram_tracks": 1,
+        }
+
+    def test_every_code_is_a_small_exact_integer(self, testville, tmp_path) -> None:
+        """The property the codec is built on, and the one a later field would
+        break silently: float32 carries 24 exact bits, the layout tops out at
+        1023, and a consumer decodes with `floor(x + 0.5)` on that promise.
+        """
+        build_region(testville[0], "middle", out_root=tmp_path / "out")
+        mesh = _mesh(tmp_path)
+
+        codes = mesh.uv2[:, 0]
+        np.testing.assert_array_equal(codes, np.floor(codes))
+        assert codes.min() >= 0.0
+        assert codes.max() <= MARKING_CODE_MAX
+        # A negative length would run the fade backwards.
+        assert mesh.uv2[:, 1].min() >= 0.0
+
+    def test_a_lane_count_the_codec_cannot_say_is_refused(self, tmp_path, testville_config) -> None:
+        """⚠️ The guard has to be **per field**, and the total cannot stand in
+        for it. `lanes` is the only unbounded input — city config authors it per
+        road class with no ceiling — and 16 packs to 64, carries straight into
+        the direction field, and still leaves a total inside `MARKING_CODE_MAX`.
+        A check on the sum passes it, and the shader then reads no lanes
+        travelling in a direction the vocabulary does not have.
+        """
+        _write_graph(
+            tmp_path,
+            [
+                {"id": 0, "pos": [100.0, 0.0, 300.0], "kind": "endpoint"},
+                {"id": 1, "pos": [500.0, 0.0, 300.0], "kind": "endpoint"},
+            ],
+            [_edge(0, 0, 1, [[100.0, 0.0, 300.0], [500.0, 0.0, 300.0]], lanes=16)],
+        )
+
+        with pytest.raises(ValueError, match="16 lanes"):
+            build_region(testville_config, "middle", out_root=tmp_path / "out")
+
+    def test_the_surface_asks_the_engine_for_its_shader(self, testville, tmp_path) -> None:
+        """glTF cannot say "use this shader", so the material name is the whole
+        channel — and it fails silently in the engine, which is why
+        `verify_road_surface.gd` checks the other end of it.
+        """
+        build_region(testville[0], "middle", out_root=tmp_path / "out")
+
+        # Read off the document rather than through `read_glb`, which restores
+        # geometry and drops the material name — the same reason
+        # `test_gltf.py` reads the JSON to pin `city_facade`.
+        raw = (tmp_path / "out" / "testville" / "middle" / SURFACE_NAME).read_bytes()
+        length, _ = struct.unpack_from("<II", raw, 12)
+        document = json.loads(raw[20 : 20 + length])
+        assert [material["name"] for material in document["materials"]] == [SURFACE_MATERIAL]
 
 
 def _covered(points: np.ndarray, triangles: np.ndarray) -> np.ndarray:
