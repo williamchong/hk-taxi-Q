@@ -18,6 +18,11 @@ extends Node3D
 ##     source, and nothing routes by it.
 ##   * the legal travel direction, as a chevron — a red chevron means the car is
 ##     pointing against the flow of a one-way street.
+##   * every edge a car cannot fit down, in magenta, drawn once at load (`Q51`).
+##     They were a percentage in `Q19` and then a table; a driver can go and
+##     look at one. They stay drivable and `nearest_edge` still resolves them —
+##     the colour says "traffic will not be sent here", not "you cannot go
+##     here".
 ##
 ## The readout carries the same facts as text, because a screenshot is how an
 ## agent reports this and colours alone do not survive that.
@@ -46,10 +51,14 @@ const _LANE := Color(0.35, 0.90, 0.45)
 const _WITH_FLOW := Color(0.35, 0.90, 0.45)
 const _AGAINST_FLOW := Color(0.95, 0.30, 0.25)
 const _MISS := Color(0.95, 0.65, 0.20)
+const _BLOCKED := Color(0.95, 0.25, 0.85)
 
 var _graph: RoadGraph = null
 var _vehicle: Node3D = null
 var _mesh: MeshInstance3D = null
+# Built once at load rather than per tick: the blocked set does not change
+# while the scene runs, and whole polylines are not a per-frame rebuild.
+var _blocked_mesh: MeshInstance3D = null
 var _readout: Label = null
 
 
@@ -84,6 +93,13 @@ func _ready() -> void:
 	_mesh.top_level = true
 	add_child(_mesh)
 
+	_blocked_mesh = MeshInstance3D.new()
+	_blocked_mesh.name = "BlockedEdges"
+	_blocked_mesh.material_override = material
+	_blocked_mesh.top_level = true
+	_blocked_mesh.mesh = _draw_blocked()
+	add_child(_blocked_mesh)
+
 	if show_readout:
 		# Placed and styled by the HUD rather than here: this used to own a
 		# CanvasLayer and a screen offset picked by eye, which is exactly what
@@ -105,6 +121,7 @@ func _ready() -> void:
 func _apply_view() -> void:
 	var arrows: bool = DebugHud.shows_arrows()
 	_mesh.visible = arrows
+	_blocked_mesh.visible = arrows
 	set_physics_process(arrows or DebugHud.shows_readouts())
 
 
@@ -164,6 +181,23 @@ func _draw_hit(surface: SurfaceTool, hit: RoadGraph.Hit, heading: Vector3) -> vo
 		surface.add_vertex(corner)
 
 
+## Every impassable edge's centreline, once.
+##
+## Null when there are none, which is a legitimate state and not a failure — the
+## whole point of `Q19`'s bar is that a build could one day clear all of them.
+func _draw_blocked() -> ArrayMesh:
+	var blocked: PackedInt32Array = _graph.impassable_edge_ids()
+	if blocked.is_empty():
+		return null
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for edge_id: int in blocked:
+		var points: PackedVector3Array = _graph.polyline_of(edge_id)
+		for step: int in points.size() - 1:
+			PreviewDraw.ribbon(surface, _lift(points[step]), _lift(points[step + 1]), 1.1, _BLOCKED)
+	return surface.commit()
+
+
 ## A cross where the car is, so "no road here" is visibly drawn rather than
 ## silently blank — a blank overlay and a broken overlay look identical.
 func _draw_miss(surface: SurfaceTool, at: Vector3) -> void:
@@ -211,5 +245,26 @@ func _describe(hit: RoadGraph.Hit, at: Vector3, heading: Vector3) -> String:
 			"  not a lane tracker; car is %.2f m from it\n"
 			% RoadGraph.plan_distance(at, hit.lane_centre)
 		)
-		+ "heading agrees with travel: %+.2f%s" % [agreement, against]
+		+ "heading agrees with travel: %+.2f%s\n" % [agreement, against]
+		+ _describe_clearance(hit.edge_id)
 	)
+
+
+## What `Q51` publishes about the edge under the car.
+##
+## Reported even where nothing is wrong, because "this edge is fine" and "nobody
+## measured this edge" are the two answers a blank line cannot tell apart — and
+## the second is the one that would let traffic route into a wall.
+func _describe_clearance(edge_id: int) -> String:
+	var tightest: float = _graph.min_clear_width_of(edge_id)
+	var lane: float = _graph.lane_width_m()
+	if not _graph.has_clearances():
+		# Distinguished from the case below, which it would otherwise be
+		# reported as: "nobody measured this edge" and "this bundle carries no
+		# measurements at all" have different fixes, and naming the wrong one
+		# sends the reader to look at an edge rather than at the build.
+		return "clearance: this bundle publishes none — rebuild and re-sync"
+	if is_inf(tightest):
+		return "clearance: no station measured — wholly inside its junction caps"
+	var verdict: String = "routable" if _graph.is_routable(edge_id) else "⚠ NOT ROUTABLE"
+	return "clearance: %.2f m clear at its tightest, lane %.2f m — %s" % [tightest, lane, verdict]

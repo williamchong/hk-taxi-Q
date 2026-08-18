@@ -27,6 +27,10 @@ const GeneratedDocument = preload("res://scripts/city/generated_document.gd")
 
 const PATH: String = "res://assets/generated/city.json"
 
+## The `carriageway[].clear_width_m` value that means "no cross-section here
+## to judge" — see `carriageway_clear_width_m`.
+const NOT_MEASURED: float = -1.0
+
 ## Schema this understands, matching `CITY_SCHEMA` in `etl/pipeline/export.py`.
 ##
 ## 4 since `Q23`: `carriageway[].half_width_m` is an array, one value per station
@@ -46,7 +50,13 @@ const PATH: String = "res://assets/generated/city.json"
 ## contain the buildings its heroes replace. The bump is for the removal: a v6
 ## reader would draw holes where the excluded buildings stood, with no hero
 ## over them.
-const SCHEMA_VERSION: int = 8
+##
+## 9 since `Q51`: `carriageway[].clear_width_m` says how much of each station a
+## car can actually get through, and the manifest publishes `lane_width_m` as
+## the bar it is read against. The bump is for the silent wrong answer again,
+## and the worst-shaped one yet: a v8 reader would load a v9 bundle happily and
+## route traffic down edges the bundle itself records as blocked.
+const SCHEMA_VERSION: int = 9
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -126,6 +136,30 @@ var landmarks_path: String
 ## table exists to prevent.
 var carriageway_half_width_m: Dictionary[int, PackedFloat32Array] = {}
 
+## Width of the widest gap a car could get through, in metres, keyed by
+## road-graph edge id — **one value per station**, like the half-width above and
+## indexed the same way, so both come off one station.
+##
+## `NOT_MEASURED` (-1.0) where `surface.py` held the ribbon back for a junction
+## cap and there was no cross-section to judge. Negative because no real
+## clearance can be: a consumer that forgets to check it gets an obviously wrong
+## answer rather than a plausible zero, and zero is the one value that would read
+## as "blocked solid" on precisely the stations that are not blocked at all.
+##
+## Not derivable from anything else the bundle ships. `roadgraph.json` describes
+## the authored street and `city.json`'s `half_width_m` describes the tarmac; the
+## question this answers is what *stands in* the tarmac, which only the stage
+## that read the buildings beside it could measure (`Q51`).
+var carriageway_clear_width_m: Dictionary[int, PackedFloat32Array] = {}
+
+## One lane, in metres, as the city config authored it — the bar
+## `carriageway_clear_width_m` is read against.
+##
+## Published rather than re-derived. `roadgraph.json`'s `width_m` is
+## `lanes x lane_width_m` **hand-tuned upward for playability**, so dividing it
+## back by `lanes` does not recover this number.
+var lane_width_m: float = 0.0
+
 
 ## The manifest, or null with a pushed message.
 static func load_manifest() -> CityManifest:
@@ -148,10 +182,10 @@ static func load_manifest() -> CityManifest:
 	manifest.fares_path = _resolve(document.get("fares", ""))
 	manifest.landmarks_path = _resolve(document.get("landmarks", ""))
 	for entry: Dictionary in document.get("carriageway", []):
-		var halves := PackedFloat32Array()
-		for half: float in entry.get("half_width_m", []):
-			halves.append(half)
-		manifest.carriageway_half_width_m[int(entry.get("edge", -1))] = halves
+		var edge: int = int(entry.get("edge", -1))
+		manifest.carriageway_half_width_m[edge] = _floats(entry, "half_width_m")
+		manifest.carriageway_clear_width_m[edge] = _floats(entry, "clear_width_m")
+	manifest.lane_width_m = float(document.get("lane_width_m", 0.0))
 
 	var extent: Dictionary = document.get("bounds_game", {})
 	manifest.bounds = box(point(extent.get("min")), point(extent.get("max")))
@@ -206,6 +240,18 @@ static func missing_hint() -> String:
 		+ "  python -m pipeline --city hong_kong --region wan_chai\n"
 		+ "  tools/sync_generated.sh hong_kong wan_chai"
 	)
+
+
+## One per-station array of a `carriageway` entry, typed.
+##
+## `PackedFloat32Array` cannot be assigned from an untyped `Array`, so both
+## tables have to be walked; walking them in one place is what stops the second
+## from being added without the guard the first has.
+static func _floats(entry: Dictionary, key: String) -> PackedFloat32Array:
+	var values := PackedFloat32Array()
+	for value: float in entry.get(key, []):
+		values.append(value)
+	return values
 
 
 static func _tile(entry: Dictionary) -> Tile:

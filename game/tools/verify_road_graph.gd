@@ -49,8 +49,8 @@ func _init() -> void:
 		quit(1)
 		return
 
-	var graph: RoadGraph = RoadGraph.from_document(document, manifest.carriageway_half_width_m)
-	var problems: PackedStringArray = _check(graph, document, manifest.bounds)
+	var graph: RoadGraph = RoadGraph.from_document(document, manifest)
+	var problems: PackedStringArray = _check(graph, document, manifest)
 	for problem: String in problems:
 		printerr("  FAIL  ", problem)
 	if problems.is_empty():
@@ -58,7 +58,7 @@ func _init() -> void:
 	quit(1 if not problems.is_empty() else 0)
 
 
-func _check(graph: RoadGraph, document: Dictionary, bounds: AABB) -> PackedStringArray:
+func _check(graph: RoadGraph, document: Dictionary, manifest: CityManifest) -> PackedStringArray:
 	var problems: PackedStringArray = []
 	var edges: Array = document.get("edges", [])
 
@@ -170,14 +170,23 @@ func _check(graph: RoadGraph, document: Dictionary, bounds: AABB) -> PackedStrin
 	# --- Q23: the width follows the structure, part-way along an edge -------
 	problems.append_array(_check_structure_width(graph, edges))
 
+	# --- Q51: passability is expressed, and not enforced --------------------
+	problems.append_array(_check_clearance(graph, edges, manifest))
+
 	# --- P2-2: a query fits inside a frame ---------------------------------
-	problems.append_array(_check_query_time(graph, bounds, edges))
+	problems.append_array(_check_query_time(graph, manifest.bounds, edges))
 
 	if problems.is_empty():
 		print(
 			(
 				"  road graph: %d edges, %d drivable, %d indexed segments, %d Q13 probes"
 				% [graph.edge_count(), drivable.size(), graph.indexed_segment_count(), probes]
+			)
+		)
+		print(
+			(
+				"  clearance: %d drivable edges keep under one lane (%.2f m) clear"
+				% [graph.impassable_edge_ids().size(), graph.lane_width_m()]
 			)
 		)
 	return problems
@@ -487,4 +496,95 @@ func _check_lanes(graph: RoadGraph, edges: Array) -> PackedStringArray:
 
 	if checked == 0:
 		problems.append("no multi-lane drivable edge was available to check lane placement")
+	return problems
+
+
+## `Q51`: the graph knows which edges a car cannot fit down, and says so without
+## refusing them.
+##
+## Three separate claims, because they fail in different directions:
+##
+## 1. **Every edge carries a measurement.** An edge with no clearance array reads
+##    as unknown, and unknown reads as passable — so a table covering 796 of 797
+##    edges routes traffic into the 797th and nothing says a word.
+## 2. **`is_routable` differs from `is_drivable` on exactly the blocked set.**
+##    The predicate `P3-3` will route on, checked against the set the overlay
+##    paints, so the two cannot drift apart.
+## 3. **`nearest_edge` still answers on a blocked edge.** This is the whole of
+##    `Q51`'s decision and the half a later change is most likely to undo: it is
+##    tempting to reuse `Q13`'s refusal here, and it would blank the road name
+##    and the lane centre exactly where the player is stuck against a wall.
+##
+## Refuses to pass vacuously, and deliberately **not** by requiring the blocked
+## set to be non-empty: a build that finally clears all 26 has to pass. What is
+## asserted instead is that the measurement ran — that some station reads
+## narrower than the carriageway drawn over it.
+func _check_clearance(graph: RoadGraph, edges: Array, manifest: CityManifest) -> PackedStringArray:
+	var problems: PackedStringArray = PackedStringArray()
+	if not graph.has_clearances():
+		problems.append("some edges carry no clearance measurement; unknown reads as passable")
+		return problems
+
+	var narrowed: int = 0
+	for edge: Dictionary in edges:
+		var edge_id: int = int(edge.get("id", -1))
+		if not graph.is_drivable(edge_id):
+			continue
+		var stations: int = graph.polyline_of(edge_id).size()
+		for station: int in stations:
+			var clear: float = graph.clear_width_of(edge_id, station)
+			if clear == CityManifest.NOT_MEASURED:
+				continue
+			var drawn: float = graph.drawn_half_width_of(edge_id, station) * 2.0
+			if clear > drawn + 0.01:
+				problems.append(
+					(
+						"edge %d station %d keeps %.2f m clear of a %.2f m carriageway"
+						% [edge_id, station, clear, drawn]
+					)
+				)
+			elif clear < drawn:
+				narrowed += 1
+	if narrowed == 0:
+		# Every station of every edge reads exactly as wide as the tarmac over
+		# it. That is not a clear city, it is an instrument that never fired.
+		problems.append("no station anywhere reads narrower than its carriageway")
+
+	var blocked: PackedInt32Array = graph.impassable_edge_ids()
+	for edge_id: int in blocked:
+		if graph.is_routable(edge_id):
+			problems.append("edge %d is impassable and routable at the same time" % edge_id)
+		var points: PackedVector3Array = graph.polyline_of(edge_id)
+		if points.size() < 2:
+			continue
+		# On its own centreline, where nothing can be nearer. A miss here means
+		# passability has been folded into the index and the player has lost the
+		# road under their wheels.
+		var hit: RoadGraph.Hit = graph.nearest_edge(points[floori(points.size() / 2.0)])
+		if not hit.hit():
+			problems.append("edge %d is blocked and nearest_edge no longer finds it" % edge_id)
+
+	# Re-derived from the **manifest's own arrays**, not from
+	# `impassable_edge_ids`. That set is built out of `is_passable`, so
+	# comparing the two would be a tautology no bug could fail — it says only
+	# that a definition equals itself. Reading the published widths straight
+	# from `city.json` instead tests what could actually go wrong: the parse,
+	# and whether each edge's array landed in the right parallel-array slot.
+	for edge: Dictionary in edges:
+		var edge_id: int = int(edge.get("id", -1))
+		var published: PackedFloat32Array = manifest.carriageway_clear_width_m.get(
+			edge_id, PackedFloat32Array()
+		)
+		var tightest: float = INF
+		for width: float in published:
+			if width != CityManifest.NOT_MEASURED:
+				tightest = minf(tightest, width)
+		var expected: bool = graph.is_drivable(edge_id) and tightest >= manifest.lane_width_m
+		if graph.is_routable(edge_id) != expected:
+			problems.append(
+				(
+					"edge %d reads %s from the graph and %s from %s"
+					% [edge_id, graph.is_routable(edge_id), expected, CityManifest.PATH]
+				)
+			)
 	return problems

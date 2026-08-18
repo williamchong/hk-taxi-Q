@@ -48,6 +48,14 @@ CITIES_ROOT = Path(__file__).resolve().parent.parent / "config" / "cities"
 # writing into the same tree from two of them is how they end up disagreeing.
 OUT_ROOT = Path(__file__).resolve().parent.parent / "out"
 
+# The Godot project. The pipeline writes nothing here — `tools/sync_generated.sh`
+# does the copying — and reads exactly one thing: the committed authored landmark
+# models, which `clearance.py` must measure because they stand in the street like
+# any other building. Named here beside the roots that resolve `res://` prefixes,
+# so there is one place the pipeline admits the game tree exists rather than a
+# `parents[2]` buried in a stage.
+GAME_ROOT = Path(__file__).resolve().parent.parent.parent / "game"
+
 
 @dataclass(frozen=True)
 class RegionConfig:

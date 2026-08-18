@@ -45,6 +45,7 @@ from pathlib import Path, PurePosixPath
 
 from pipeline import __version__
 from pipeline.buildings import BUILDINGS_MANIFEST_NAME, BUILDINGS_MANIFEST_SCHEMA
+from pipeline.clearance import CLEARANCE_NAME, CLEARANCE_SCHEMA, NOT_MEASURED
 from pipeline.config import (
     LANDMARK_ASSET_ROOT,
     LANDMARK_GENERATED_ROOT,
@@ -94,7 +95,12 @@ CITY_NAME = "city.json"
 # reader ignoring those would be right — but for the asset set again: a v7
 # generated directory would place a hero from a path that now loads nothing,
 # and draw the hole the v7 bump itself was written against.
-CITY_SCHEMA = 8
+# 9 since `Q51`: `carriageway[]` carries `clear_width_m` beside the drawn width,
+# and the manifest publishes `lane_width_m` as the bar it is read against. The
+# silent wrong answer again, and the worst-shaped one yet: a v8 reader would
+# load a v9 bundle happily and route traffic down edges the bundle itself
+# records as holding less than a lane clear.
+CITY_SCHEMA = 9
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -141,6 +147,7 @@ INPUTS: tuple[Input, ...] = (
     Input(BUILDINGS_MANIFEST_NAME, BUILDINGS_MANIFEST_SCHEMA, "buildings"),
     Input(ASSETS_NAME, ASSETS_SCHEMA, "landmarks"),
     Input(SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, "surface"),
+    Input(CLEARANCE_NAME, CLEARANCE_SCHEMA, "clearance"),
     Input(ROADGRAPH_NAME, ROADGRAPH_SCHEMA, "roads"),
     Input(FARES_NAME, FARES_SCHEMA, "fares"),
 )
@@ -213,6 +220,7 @@ def build_region(
     out_dir, documents = _inputs(city, region_id, out_root)
     buildings = documents[BUILDINGS_MANIFEST_NAME]
     surface = documents[SURFACE_MANIFEST_NAME]
+    clearance = documents[CLEARANCE_NAME]
     graph = documents[ROADGRAPH_NAME]
     fares = documents[FARES_NAME]
 
@@ -279,7 +287,12 @@ def build_region(
         # lane instead of on the ribbon seam. Same category as `tiles[].aabb`:
         # geometry the runtime cannot derive, measured once by the stage that
         # drew it.
-        "carriageway": surface["carriageway"],
+        "carriageway": _carriageway(surface, clearance),
+        # The bar `clear_width_m` is read against, published once rather than
+        # left to the game to re-derive. `roadgraph.json`'s `width_m` is
+        # `lanes x lane_width_m` *hand-tuned upward for playability*, so
+        # dividing it back by `lanes` does not recover this number.
+        "lane_width_m": city.roads.lane_width_m,
         "fares": FARES_NAME,
         "landmarks": LANDMARKS_NAME,
         # The mesh-sourced hero models `pipeline/landmarks.py` built — shipped
@@ -325,6 +338,39 @@ def _size(path: Path) -> int:
         return path.stat().st_size
     except FileNotFoundError:
         return 0
+
+
+def _carriageway(surface: dict, clearance: dict) -> list[dict]:
+    """The per-station carriageway table the game reads.
+
+    Two stages measured this and neither could have measured both — `surface.py`
+    knows how wide it drew the ribbon, `clearance.py` knows what stands in it —
+    so the join happens here, where every other reconciliation of the stage
+    outputs already does. `trim_m` does not travel: it is how a ribbon met its
+    junction caps, which is a question the game never asks.
+
+    Refused rather than padded when the two disagree about an edge. `P2-2` warns
+    and falls back on a short half-width array because a lane centre off the
+    tarmac is survivable; a short *clearance* array is not the same kind of
+    mistake, because the station it fails to describe is the one a router would
+    then believe is clear.
+    """
+    measured = {int(entry["edge"]): entry["clear_width_m"] for entry in clearance["clearance"]}
+    table = []
+    for entry in surface["carriageway"]:
+        edge_id = int(entry["edge"])
+        halves = entry["half_width_m"]
+        clear = measured.get(edge_id)
+        if clear is None or len(clear) != len(halves):
+            raise ValueError(
+                f"edge {edge_id} has {len(halves)} drawn half-widths and "
+                f"{'no' if clear is None else len(clear)} clearances; "
+                f"{SURFACE_MANIFEST_NAME} and {CLEARANCE_NAME} are from different runs"
+            )
+        if any(width < 0.0 and width != NOT_MEASURED for width in clear):
+            raise ValueError(f"edge {edge_id} publishes a negative clearance that is not a refusal")
+        table.append({"edge": edge_id, "half_width_m": halves, "clear_width_m": clear})
+    return table
 
 
 def _landmarks_document(

@@ -62,7 +62,12 @@ SURFACE_MANIFEST_NAME = "roadsurface.json"
 # the whole edge. A reader that keeps the old interpretation gets a list where
 # it wanted a float, which is the loud half — the quiet half is that a reader
 # taking `[0]` would be right on 769 of 797 edges and 0.96 m out on the rest.
-SURFACE_MANIFEST_SCHEMA = 3
+# 4 since `Q51`: `carriageway[].trim_m` says how far back each end of the ribbon
+# was held for its junction cap. Only this stage knows it, and `clearance.py`
+# cannot judge a cross-section without it — the nominal corridor still has a
+# width where the ribbon stops, and reading that as a starved one is exactly the
+# trap that condemned 18 innocent edges in `Q19`.
+SURFACE_MANIFEST_SCHEMA = 4
 
 # Godot's glTF importer reads node-name suffixes: `-col` gives the mesh a static
 # trimesh collider at import time and leaves it visible. Naming it here rather
@@ -120,6 +125,12 @@ class SurfaceReport:
     # second evaluation of `widen_for` is a second thing to keep in step with
     # the config.
     carriageway: dict[int, list[float]] = field(default_factory=dict)
+    # Metres held back from each end of an edge's ribbon so a junction cap can
+    # fill the middle, keyed by graph edge id as `(start, end)`. Recorded for the
+    # same reason as `carriageway`: `_assign_trims` is the one place the trim is
+    # decided, and a downstream re-derivation would be a second thing to keep in
+    # step with the junction rule.
+    trims_m: dict[int, tuple[float, float]] = field(default_factory=dict)
     junctions: int = 0
     # Movements that qualified as running through a node and had their mitre fed
     # into its cap. Reported so a predicate that stopped matching would show.
@@ -594,6 +605,12 @@ def build_region(
     report.on_structure_m = sum(_on_structure_length_m(edge) for edge in graph["edges"])
     ends = _ends_by_node_and_level(graph["edges"], edges)
     _assign_trims(ends, edges, style, report)
+    # After the assignment, not beside `carriageway` above: the trims do not
+    # exist until `_assign_trims` has seen every end that meets every node.
+    report.trims_m = {
+        int(published["id"]): (round(prepared.trim_start_m, 3), round(prepared.trim_end_m, 3))
+        for published, prepared in zip(graph["edges"], edges, strict=True)
+    }
     _measure_level_steps(ends, edges, report)
     for edge in edges:
         _shape(edge, style)
@@ -1132,6 +1149,12 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Sur
     quarter that would put a car 0.96 m off its lane. The taper between the two
     widths is applied here rather than published as a rule, so the mesh and the
     lane centre cannot disagree about where it runs.
+
+    `trim_m` is the other thing only this stage knows: `[start, end]` metres held
+    back from each end so the junction cap can fill the middle. It travels for
+    `clearance.py`, which measures a cross-section per station and must not judge
+    the ones the ribbon never reached. It stays an intermediate — the game reads
+    the *result* of that measurement, never the trims.
     """
     write_document(
         out_dir / SURFACE_MANIFEST_NAME,
@@ -1146,7 +1169,11 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Sur
             "bytes": report.bytes,
             "aabb": report.aabb,
             "carriageway": [
-                {"edge": edge_id, "half_width_m": halves}
+                {
+                    "edge": edge_id,
+                    "half_width_m": halves,
+                    "trim_m": list(report.trims_m.get(edge_id, (0.0, 0.0))),
+                }
                 for edge_id, halves in sorted(report.carriageway.items())
             ],
         },

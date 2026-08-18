@@ -14,6 +14,15 @@ extends RefCounted
 ## and you still get it: `P3-3`'s traffic and any later ramp work need those 60
 ## edges to exist, they just must never be handed a car.
 ##
+## ⚠️ **Passability is expressed here, never enforced.** Some drivable level-0
+## edges keep less than one lane clear (`Q19`, `Q51`), so `is_routable` exists
+## to keep `P3-3`'s traffic off them — but `nearest_edge` is untouched and answers on a
+## blocked edge exactly as it does anywhere else. That is deliberately *not*
+## `Q13`'s pattern above: an off-grade edge is refused because a car cannot be
+## there, while a car can be — and `RoadSpawn` can already put one — on a
+## blocked level-0 edge. Refusing those would blank the road name and the lane
+## centre precisely where the player is stuck against a wall (`Q51`).
+##
 ## What is unreachable is what `elevation_levels` *draws* — a flat deck at
 ## `terrain + 6.0` with a cliff at each end — rather than anything the source
 ## failed to publish. All 36 mixed-level nodes are ramps, and the climb is split
@@ -82,6 +91,16 @@ var _restriction_count: int = 0
 # edge that climbs onto a bridge. An edge the manifest did not name gets an empty
 # entry, and `_build` warns rather than papering over it.
 var _drawn_half: Array[PackedFloat32Array] = []
+# Widest gap a car could get through, per station, from `city.json`. Parallel to
+# `_polylines[slot]` for the same reason as `_drawn_half`, and holding
+# `CityManifest.NOT_MEASURED` where the ribbon was held back for a junction cap.
+# An edge the manifest did not name gets an empty entry and reads as unknown
+# rather than as blocked.
+var _clear: Array[PackedFloat32Array] = []
+# One lane, from `city.json`. The bar `is_passable` reads `_clear` against, and
+# not derivable here: `width_m` is `lanes x lane_width_m` hand-tuned upward.
+var _lane_width_m: float = 0.0
+
 # Cumulative **plan** length to each vertex of an edge. Turns `t` into a prefix
 # lookup instead of a walk, and `t` is plan-parameterised because that is what
 # `fares.py` divides by and so what `edge_t` means.
@@ -115,27 +134,15 @@ static func shared() -> RoadGraph:
 	var live: RoadGraph = _shared.get_ref() if _shared != null else null
 	if live == null:
 		live = RoadGraph.new()
-		var manifest: CityManifest = CityManifest.load_manifest()
-		# Declared, never written as an inline `{}` in a ternary. `_build` takes a
-		# typed dictionary and a literal `{}` is untyped, so passing one raises
-		# "does not have the same element type" — which aborts this function and
-		# returns the `null` the docstring above promises it never returns. Only
-		# the manifest-is-missing branch can reach it, so the guard failed
-		# exactly when it was needed.
-		var half_widths: Dictionary[int, PackedFloat32Array] = {}
-		if manifest != null:
-			half_widths = manifest.carriageway_half_width_m
-		live._build(GeneratedRoadGraph.load_graph(), half_widths)
+		live._build(GeneratedRoadGraph.load_graph(), CityManifest.load_manifest())
 		_shared = weakref(live)
 	return live
 
 
 ## Parse a document directly, for tools that hold their own copy.
-static func from_document(
-	document: Dictionary, half_widths: Dictionary[int, PackedFloat32Array] = {}
-) -> RoadGraph:
+static func from_document(document: Dictionary, manifest: CityManifest = null) -> RoadGraph:
 	var graph := RoadGraph.new()
-	graph._build(document, half_widths)
+	graph._build(document, manifest)
 	return graph
 
 
@@ -217,10 +224,101 @@ func drawn_half_width_of(edge_id: int, station: int) -> float:
 ## Every, not any: one entry of 797 would otherwise pass the gate while the
 ## other 796 silently took the authored-width fallback.
 func has_carriageway_widths() -> bool:
-	for slot: int in _drawn_half.size():
-		if _drawn_half[slot].is_empty():
-			return false
-	return not _ids.is_empty()
+	return _complete(_drawn_half)
+
+
+## One lane, in metres, as the bundle published it — the bar `is_passable` uses.
+##
+## Zero where no manifest was read, which makes every edge with a measurement
+## passable. That is the same fallback `_build` warns about for the widths: a
+## preview opened without a built city should still show a graph, and the
+## warning is what says the answers are not the shipped ones.
+func lane_width_m() -> float:
+	return _lane_width_m
+
+
+## Widest gap a car could get through at one station, in metres (`Q51`).
+##
+## `station` is a vertex index into `polyline_of(edge_id)`, clamped, and it has
+## no default for the same reason `drawn_half_width_of` has none: a wall stands
+## somewhere along an edge rather than over the whole of it, so "the clearance of
+## edge N" is not a question with one answer.
+##
+## ⚠️ **A segment between two stations is judged by the *smaller* of its ends,
+## never by interpolating them.** The widening tapers smoothly and `_half_at`
+## lerps across it; a clearance does not taper — a wall has an edge — and lerping
+## would invent a gap halfway into it that a router would then drive at.
+##
+## Returns `CityManifest.NOT_MEASURED` where `surface.py` held the ribbon back
+## for a junction cap and there was no cross-section to judge, and `0.0` for an
+## edge that is not in the graph.
+func clear_width_of(edge_id: int, station: int) -> float:
+	if not _by_id.has(edge_id):
+		return 0.0
+	var widths: PackedFloat32Array = _clear[_by_id[edge_id]]
+	if widths.is_empty():
+		return CityManifest.NOT_MEASURED
+	return widths[clampi(station, 0, widths.size() - 1)]
+
+
+## The tightest measured station of an edge — the number the bar is read against.
+##
+## `INF` where the edge has no measured station at all, which is "nothing is
+## known to stand here" rather than "this is clear": every station of a short
+## edge can be swallowed by the junction caps at its two ends. `0.0` for an edge
+## that is not in the graph, so an id nobody recognises is never routable.
+func min_clear_width_of(edge_id: int) -> float:
+	if not _by_id.has(edge_id):
+		return 0.0
+	var tightest: float = INF
+	for width: float in _clear[_by_id[edge_id]]:
+		if width != CityManifest.NOT_MEASURED:
+			tightest = minf(tightest, width)
+	return tightest
+
+
+## True where every measured station of the edge keeps at least one lane clear.
+##
+## Not a statement about the level: an off-grade edge can be perfectly passable
+## and still be one `Q13` will not hand a car. `is_routable` is the conjunction.
+func is_passable(edge_id: int) -> bool:
+	if not _by_id.has(edge_id):
+		return false
+	# A missing bar is not a bar of zero. `0.0 >= 0.0` would call a measured
+	# 0.00 m corridor passable, which is the one answer that is certainly
+	# wrong; with nothing to compare against the honest reading is that the
+	# edge is unjudged, and `_build` has already warned that it is.
+	if _lane_width_m <= 0.0:
+		return true
+	return min_clear_width_of(edge_id) >= _lane_width_m
+
+
+## True where the slice lets a car onto this edge **and** a car fits down it.
+##
+## The predicate `P3-3` routes on. Deliberately separate from `nearest_edge`,
+## which still answers on a blocked edge — see the class docstring.
+func is_routable(edge_id: int) -> bool:
+	return is_drivable(edge_id) and is_passable(edge_id)
+
+
+## Every drivable edge a car cannot fit down, in document order.
+func impassable_edge_ids() -> PackedInt32Array:
+	var blocked := PackedInt32Array()
+	for slot: int in _ids.size():
+		var edge_id: int = _ids[slot]
+		if is_drivable(edge_id) and not is_passable(edge_id):
+			blocked.append(edge_id)
+	return blocked
+
+
+## True when **every** edge has a clearance measurement behind it.
+##
+## Every, not any — and implemented that way, which `has_carriageway_widths`
+## above was not when `P2-2` shipped it. One entry of 797 would otherwise pass
+## the gate while the other 796 silently read as unknown, and unknown reads as
+## passable.
+func has_clearances() -> bool:
+	return _complete(_clear)
 
 
 func speed_limit_of(edge_id: int) -> int:
@@ -320,7 +418,13 @@ func nearest_edge(point: Vector3, heading: Vector3 = Vector3.ZERO, radius_m: flo
 	return best
 
 
-func _build(document: Dictionary, half_widths: Dictionary[int, PackedFloat32Array] = {}) -> void:
+func _build(document: Dictionary, manifest: CityManifest = null) -> void:
+	var half_widths: Dictionary[int, PackedFloat32Array] = {}
+	var clearances: Dictionary[int, PackedFloat32Array] = {}
+	if manifest != null:
+		half_widths = manifest.carriageway_half_width_m
+		clearances = manifest.carriageway_clear_width_m
+		_lane_width_m = manifest.lane_width_m
 	var edges: Array = document.get("edges", [])
 	if not edges.is_empty() and half_widths.is_empty():
 		# Warned rather than tolerated. Without the table every lane centre is
@@ -337,11 +441,27 @@ func _build(document: Dictionary, half_widths: Dictionary[int, PackedFloat32Arra
 				% CityManifest.PATH
 			)
 		)
+	if not edges.is_empty() and clearances.is_empty():
+		# Louder than it looks. With no table every edge reads `INF` clear, so
+		# `is_routable` is true everywhere, `impassable_edge_ids` is empty and
+		# the overlay draws nothing — a graph that says the city is clear is
+		# indistinguishable from one that has never been told otherwise.
+		push_warning(
+			(
+				(
+					"No carriageway clearances in %s; every edge will read as passable "
+					+ "and traffic may be routed into a wall. Rebuild the region and "
+					+ "re-run tools/sync_generated.sh."
+				)
+				% CityManifest.PATH
+			)
+		)
 	if edges.is_empty():
 		return
 	_node_count = (document.get("nodes", []) as Array).size()
 	_restriction_count = (document.get("turn_restrictions", []) as Array).size()
 	var out_of_step: int = 0
+	var clear_out_of_step: int = 0
 
 	for edge: Dictionary in edges:
 		var points: PackedVector3Array = PackedVector3Array()
@@ -379,42 +499,84 @@ func _build(document: Dictionary, half_widths: Dictionary[int, PackedFloat32Arra
 		for step: int in points.size() - 1:
 			lengths[step + 1] = lengths[step] + plan_distance(points[step], points[step + 1])
 		_prefix.append(lengths)
-		# Matched to the polyline rather than trusted to match it. The ETL writes
-		# the two from one array and `test_surface.py` pins that they agree — but
-		# a stale `city.json` beside a fresh `roadgraph.json` is the one pairing
-		# `sync_generated.sh` cannot make impossible, and a short array read past
-		# its end is a lane centre off the tarmac rather than an error.
-		#
-		# The matched case takes the published array whole: a `PackedFloat32Array`
-		# is copy-on-write, so the assignment is O(1) and the per-station loop is
-		# only paid by a bundle that is already wrong.
 		var halves: PackedFloat32Array = PackedFloat32Array()
 		if half_widths.has(id):
 			var published: PackedFloat32Array = half_widths[id]
-			if published.size() == points.size():
-				halves = published
-			elif not published.is_empty():
+			if published.size() != points.size() and not published.is_empty():
 				out_of_step += 1
-				halves.resize(points.size())
-				for step: int in points.size():
-					halves[step] = published[mini(step, published.size() - 1)]
+			halves = _matched(published, points.size())
 		_drawn_half.append(halves)
 
-	if out_of_step > 0:
-		# Once, not per edge. A stale manifest misses on every edge it has, and
-		# 797 identical warnings bury the one line that says what to do.
-		push_warning(
-			(
-				(
-					"%d edges publish a carriageway width array that does not match their "
-					+ "polyline; city.json and roadgraph.json are out of step. Re-run "
-					+ "tools/sync_generated.sh."
-				)
-				% out_of_step
-			)
-		)
+		# Read the same way and counted separately: the two tables come from the
+		# same document but a short one means different things. A short width
+		# array is a lane centre off the tarmac; a short clearance array is a
+		# station a router would call clear because nobody measured it.
+		var clear: PackedFloat32Array = PackedFloat32Array()
+		if clearances.has(id):
+			var measured: PackedFloat32Array = clearances[id]
+			if measured.size() != points.size() and not measured.is_empty():
+				clear_out_of_step += 1
+			clear = _matched(measured, points.size())
+		_clear.append(clear)
+
+	_warn_out_of_step(out_of_step, "carriageway width")
+	_warn_out_of_step(clear_out_of_step, "clearance")
 
 	_index()
+
+
+## One message for a table that does not line up with the polylines it indexes.
+##
+## Once, not per edge: a stale manifest misses on every edge it has, and 797
+## identical warnings bury the one line that says what to do. Shared by both
+## tables so the two cannot end up phrased differently for the same fault.
+func _warn_out_of_step(count: int, what: String) -> void:
+	if count <= 0:
+		return
+	push_warning(
+		(
+			(
+				"%d edges publish a %s array that does not match their polyline; "
+				+ "city.json and roadgraph.json are out of step. Re-run "
+				+ "tools/sync_generated.sh."
+			)
+			% [count, what]
+		)
+	)
+
+
+## True when every edge has an entry in a per-station table.
+##
+## **Every**, not any. `has_carriageway_widths` was documented "every" and
+## implemented "any" when `P2-2` shipped it: one entry of 797 passed the gate
+## while the other 796 silently took a fallback. Shared so the two tables cannot
+## drift back apart.
+func _complete(table: Array[PackedFloat32Array]) -> bool:
+	for slot: int in table.size():
+		if table[slot].is_empty():
+			return false
+	return not _ids.is_empty()
+
+
+## A published per-station array, resized to the polyline it belongs to.
+##
+## Matched rather than trusted to match. The ETL writes both tables from one
+## array and `test_surface.py` pins that they agree — but a stale `city.json`
+## beside a fresh `roadgraph.json` is the one pairing `sync_generated.sh` cannot
+## make impossible, and a short array read past its end is a wrong answer rather
+## than an error. The matched case takes the published array whole: a
+## `PackedFloat32Array` is copy-on-write, so that is O(1) and the per-station
+## loop is only paid by a bundle that is already wrong.
+static func _matched(published: PackedFloat32Array, count: int) -> PackedFloat32Array:
+	if published.size() == count:
+		return published
+	if published.is_empty():
+		return PackedFloat32Array()
+	var padded := PackedFloat32Array()
+	padded.resize(count)
+	for step: int in count:
+		padded[step] = published[mini(step, published.size() - 1)]
+	return padded
 
 
 ## Bucket every drivable segment by the plan cells its bounding box touches.

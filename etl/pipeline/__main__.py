@@ -10,7 +10,8 @@ from the one people actually run, and the drift would show up as a full build
 that quietly differs from a partial one.
 
 Ordering is a real dependency chain, not a preference. `surface` reads the
-graph `roads` writes, `fares` snaps to it, and `export` reconciles all four.
+graph `roads` writes, `clearance` measures the ribbon `surface` drew against the
+tiles `buildings` wrote, `fares` snaps to the graph, and `export` reconciles them.
 Only `buildings` is independent, and it runs early because it is by far the
 longest stage — a mistake in it is worth hitting before the quick ones.
 
@@ -25,7 +26,7 @@ import logging
 import time
 from collections.abc import Callable
 
-from pipeline import buildings, export, fares, fetch, landmarks, podiums, roads, surface
+from pipeline import buildings, clearance, export, fares, fetch, landmarks, podiums, roads, surface
 
 log = logging.getLogger(__name__)
 
@@ -40,6 +41,10 @@ STAGES: dict[str, Callable[[list[str]], int]] = {
     "landmarks": landmarks.main,
     "roads": roads.main,
     "surface": surface.main,
+    # After `surface` because it measures the ribbon that stage drew, and before
+    # `export` because `city.json` carries the result. It reads the building
+    # tiles too, which is why it cannot run any earlier than this.
+    "clearance": clearance.main,
     "fares": fares.main,
     "export": export.main,
 }

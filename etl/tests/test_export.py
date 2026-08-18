@@ -24,6 +24,7 @@ import pytest
 
 from pipeline import __main__ as orchestrator
 from pipeline.buildings import BUILDINGS_MANIFEST_NAME, BUILDINGS_MANIFEST_SCHEMA
+from pipeline.clearance import CLEARANCE_NAME, CLEARANCE_SCHEMA
 from pipeline.config import Landmark, Material, SourcePaint
 from pipeline.export import (
     CITY_NAME,
@@ -108,8 +109,22 @@ class _Region:
                 # The drawn half-width per edge, which `export.py` carries into
                 # `city.json` so the game can place a car in the nearside lane.
                 "carriageway": [
-                    {"edge": _EDGE_ID, "half_width_m": 5.12},
-                    {"edge": _EDGE_ID + 1, "half_width_m": 5.12},
+                    {"edge": _EDGE_ID, "half_width_m": [5.12, 5.12], "trim_m": [0.0, 0.0]},
+                    {"edge": _EDGE_ID + 1, "half_width_m": [5.12, 5.12], "trim_m": [0.0, 0.0]},
+                ],
+            },
+            CLEARANCE_NAME: {
+                "schema_version": CLEARANCE_SCHEMA,
+                "city_id": city.id,
+                "region_id": REGION,
+                "bumper_band_m": [0.3, 2.0],
+                "resolution_m": 0.25,
+                # One clear width per station, alongside the drawn half-width
+                # above. `export.py` joins the two; neither stage could have
+                # measured both.
+                "clearance": [
+                    {"edge": _EDGE_ID, "clear_width_m": [10.24, 10.24]},
+                    {"edge": _EDGE_ID + 1, "clear_width_m": [10.24, 2.0]},
                 ],
             },
             ROADGRAPH_NAME: {
@@ -232,10 +247,33 @@ class TestAssembly:
         `export.py` would be a second thing to keep in step with the config."""
         region.build()
         surface = region.documents[SURFACE_MANIFEST_NAME]
-        assert region.manifest()["carriageway"] == surface["carriageway"]
-        assert {entry["edge"] for entry in region.manifest()["carriageway"]} == {
+        table = region.manifest()["carriageway"]
+        assert [entry["half_width_m"] for entry in table] == [
+            entry["half_width_m"] for entry in surface["carriageway"]
+        ]
+        assert {entry["edge"] for entry in table} == {
             edge["id"] for edge in region.documents[ROADGRAPH_NAME]["edges"]
         }
+
+    def test_the_clearances_join_the_widths_and_the_trims_do_not(self, region) -> None:
+        """`Q51`. Two stages measured this table and neither could have measured
+        both, so the join is here. `trim_m` is how a ribbon met its junction
+        caps — an intermediate, and a question the game never asks."""
+        region.build()
+        clearance = region.documents[CLEARANCE_NAME]
+        table = {entry["edge"]: entry for entry in region.manifest()["carriageway"]}
+        for entry in clearance["clearance"]:
+            assert table[entry["edge"]]["clear_width_m"] == entry["clear_width_m"]
+        assert all("trim_m" not in entry for entry in table.values())
+        assert region.manifest()["lane_width_m"] == region.city.roads.lane_width_m
+
+    def test_a_clearance_out_of_step_with_the_widths_is_refused(self, region) -> None:
+        """Not padded. `P2-2` falls back on a short half-width array because a
+        lane centre off the tarmac is survivable; the station a missing
+        clearance fails to describe is the one a router would call clear."""
+        region.documents[CLEARANCE_NAME]["clearance"][0]["clear_width_m"] = [10.24]
+        with pytest.raises(ValueError, match="different runs"):
+            region.build()
 
     def test_the_origin_is_the_region_transform(self, region) -> None:
         region.build()
@@ -653,6 +691,7 @@ class TestOrchestrator:
             "landmarks",
             "roads",
             "surface",
+            "clearance",
             "fares",
             "export",
         ]
@@ -680,7 +719,7 @@ class TestOrchestrator:
 
         orchestrator.main(["--city", "testville", "--region", REGION, "--from", "surface"])
 
-        assert [name for name, _ in calls] == ["surface", "fares", "export"]
+        assert [name for name, _ in calls] == ["surface", "clearance", "fares", "export"]
 
     def test_force_without_fetch_is_refused_rather_than_ignored(self, monkeypatch) -> None:
         calls: list[tuple[str, list[str]]] = []
