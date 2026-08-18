@@ -5632,9 +5632,121 @@ figures unreconciled.
 
 **What this does not do.** It does not clear anything, and it does not give `RoadGraph` a router:
 the graph still stores no adjacency — `from` and `to` are never read — and consumes none of the 217
-published turn restrictions. Both are `P3-3` proper. `RoadSpawn` is also still free to place the
-player on a blocked edge, which is a live defect rather than a future one.
+published turn restrictions. Both are `P3-3` proper. ✅ `RoadSpawn` was also still free to place the
+player on a blocked edge — named here as a live defect rather than a future one, and **closed by `Q52`
+the same day**, which reports the gap at the start line and makes `verify_spawn.gd` refuse.
 
-**See.** `Q19` for the geometry half, still open · `Q13` for the refusal this deliberately is not ·
-`Q23` · `P2-2` · `PROGRESS.md` risk register
+**See.** `Q52` for the start-line half, closed · `Q19` for the geometry half, still open · `Q13` for
+the refusal this deliberately is not · `Q23` · `P2-2` · `PROGRESS.md` risk register
 
+---
+
+## `Q52` — The start line says what it is standing in, and the check is what refuses
+
+**Status.** ✅ Closed 2026-08-18 · **Owner.** `P2-3`
+
+**Claim.** `RoadSpawn.Pose` carries the clear corridor width at the start line, and `Pose.blocked`
+answers whether a car fits where the harness is about to set one down. `drive_harness.gd` warns and
+places the car anyway; `tools/verify_spawn.gd` **fails**. This closes the sentence `Q51` left open —
+*"`RoadSpawn` is also still free to place the player on a blocked edge, which is a live defect."*
+
+**⚠️ It fires on nothing in the shipped bundle, and that is the whole shape of the work.** Measured
+before writing any of it: `f_004` resolves to `e651`, whose stations read `[-1.00, 9.25, 9.00,
+9.25]` against a **3.20 m** lane, and **0 of 29** fare nodes publish onto any of the 21 edges `Q51`
+records as blocked. So there is no reproduction and no before/after number — every assertion
+`verify_spawn.gd` already made passes whether the guard works or not, and a `blocked()` hard-wired
+to `false` would have left the tool green. **The value is entirely in the check being non-vacuous**,
+which is `_check_facing`'s problem exactly: it builds the transposed basis and requires it to be
+rejected, because a north-south street cannot tell the two apart.
+
+**Reports, never relocates — and the reason is `Q51`'s, not a new one.** Three routes were on the
+table and two were refused:
+
+- **Relocating** to the nearest clear station would put the player somewhere no document published.
+  The spawn is derived from a Transport Department taxi stand precisely so it is a *published fact*
+  rather than taste (`P2-3`); a runtime that quietly moves it gives that up to hide a data fault.
+- **Refusing** — an unresolved `Pose` — would drop `drive_harness` onto the authored `Transform3D`
+  that `P2-3` demoted to a fallback. That literal is on the same street: the car lands in the same
+  wall, now with the road name and the lane centre blank. It is the outcome `Q51` argued against
+  when it kept passability out of `nearest_edge`, reproduced one layer up.
+
+So the runtime reports and the **check** refuses. A bundle whose start line stands in a wall fails
+`tools/check.sh` rather than reaching a driver, and what gets fixed is the bundle.
+
+**⚠️ The bar is where the car stands, not `is_passable`.** These are different questions and it is
+worth being exact about why, because carrying two bars is what `Q19` and `Q51` are still paying for
+elsewhere. `is_passable` takes the **minimum over every station** because `P3-3` traverses a whole
+edge; a car being *placed* occupies one stretch of it. Reusing the router's predicate would condemn
+a start line standing in clear road because a wall stands somewhere else on the same street — and on
+the shipped city that is not hypothetical: 21 edges are blocked *somewhere*. The edge's own verdict
+is carried beside it as `Pose.edge_passable` and printed rather than failed, so nothing is hidden;
+it is demoted from the bar to a note. This is not a second instrument measuring the same quantity —
+it is one measurement read at the granularity of the thing asking.
+
+⚠️ **"Where the car stands" is a segment, not a point, and the segments are not small.** A segment is
+worth the tighter of its two stations, and Wan Chai's run to **154.6 m** (median 9.2, p90 33.5).
+**201 of 737 level-0 edges publish only two stations**, and on those this and `min_clear_width_of`
+are arithmetically the same number — the distinction above buys nothing there. It changes the
+verdict on **31 of 2959 segments**, always toward blocked. So the guard is coarse, and coarse in the
+conservative direction; what it is not is *edge-wide*, which is what would have made it wrong rather
+than merely blunt.
+
+**⚠️ `NOT_MEASURED` is `-1.0`, and it sorts below every real clearance.** `RoadGraph._clear_at` takes
+a segment as the **smaller of its two bounding stations** — `clear_width_of`'s existing rule, since a
+clearance does not taper and lerping across it would invent a gap halfway into a wall. A plain
+`minf` over the pair therefore returns `-1.0` wherever one end sits under a junction cap, which
+reads as *nothing was judged here* and silences the guard on exactly the segment that has a wall in
+it. Unmeasured ends are skipped the way `min_clear_width_of` already skips them. **This is 562 of
+Wan Chai's 2959 level-0 segments — 19%** — and the shipped start line's own station 0 is one of them,
+so it was never hypothetical. A further **45 segments are unmeasured at both ends**, and those read
+as unjudged rather than blocked; what stops a whole bundle of them passing quietly is
+`verify_spawn.gd`'s `has_clearances()` gate, not the guard.
+
+**Proven by breaking it, five ways.** The five built start lines are not decoration — each is the
+only thing that catches one break, and the table is how that was established rather than asserted:
+
+| Break | What fails |
+|---|---|
+| `blocked()` → `false` | `f_case_1` (starved end to end) and `f_case_4` |
+| `blocked()` → `true` | `f_case_2` (clear end to end), `f_case_3`, **and the real `e651` spawn** |
+| `_clear_at` → plain `minf` | `f_case_4` only — reads `-1.00 m` where the station published `0.50` |
+| `blocked()` → `not edge_passable` | `f_case_3` only — the station/edge distinction above |
+| `blocked()` stops excepting `NOT_MEASURED` | `f_case_5` only — an unjudged station read as a wall |
+
+All five must also still **resolve**: a guard that started returning an unresolved pose would put
+the harness back on the authored literal, so the refusal `Q51` rejected cannot creep in later.
+
+⚠️ **One branch is out of the fixture's reach, and is covered elsewhere.** An edge the manifest never
+named at all reads unknown, and no case can build that — the synthetic manifest names every edge it
+builds. Breaking `_clear_station` to return `0.0` for such an edge is *not* caught here. It is caught
+by the `has_clearances()` gate, which refuses the whole bundle, and that is the right layer: one
+unnamed edge of 797 is a fault in the build, not in a start line.
+
+**Deliberately not proven against the bundle's own worst edge.** `e233` reads 0.00 m today and would
+make a fine positive control until the day it does not. `verify_road_graph._check_clearance` already
+refuses to depend on the blocked set being non-empty, for the same reason: a build that finally
+clears all 21 has to pass.
+
+**No schema bump.** Nothing in the bundle changed — `CITY_SCHEMA` stays 9, `ROADGRAPH_SCHEMA` stays
+3, and the ETL was not touched. `Hit.clear_width_m` is a runtime field filled from data schema 9
+already publishes, and `nearest_edge` answers exactly as it did: same signature, same edges, still
+resolving on a blocked one. `verify_road_graph`'s third `Q51` claim is unchanged and still passes.
+
+**Where the proof is called from.** `_init`, beside `_check` and not inside it — `_check` grades the
+**shipped** start line and gives up the moment it fails to resolve, so folding the proof in would
+skip it on exactly the broken bundle that most needs its checks working.
+
+**Measured.** `tools/check.sh` green, and the query path is unmoved: p50 **15 µs**, p99 48–51 µs over
+the 17,400-probe region sweep, against a recorded 15/47 and a 1 ms budget. `_clear_at` runs once per
+query, inside `_fill`, after the winning segment is known — the addition is below the instrument's
+1 µs resolution. The drive scene's start-line report is byte-identical —
+`f_004 on edge 651 (EXPO DRIVE), facing 86.0°` at `(172.3485, 6.579562, 26.93956)` — with no warning
+and no note, because `e651` is clear end to end. A guard that fires here would be wrong.
+
+**What this does not do.** It does not stop the player *driving* into one of the 21 blocked edges
+after the start, which is still `Q19`'s geometry half and still open. It guards the one placement
+the game makes today; `P3-*`'s real respawn rules will have to make the same call at every point
+they put the car down, and `Pose.blocked` is what they should ask.
+
+**See.** `Q51` for the sentence this closes · `Q19` for the geometry half, still open · `Q13` for
+the refusal this deliberately is not · `P2-3` · `PROGRESS.md` risk register

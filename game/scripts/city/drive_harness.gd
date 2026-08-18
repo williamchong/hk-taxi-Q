@@ -142,6 +142,26 @@ func _report_spawn(pose: RoadSpawn.Pose, authored: Transform3D) -> void:
 			]
 		)
 	)
+	# Both halves of the clearance answer, in one place: the car is placed either
+	# way — `RoadSpawn` says why it does not move it — and this is where a player
+	# would otherwise find out by driving into it. After the line above rather
+	# than before, so the complaint follows the line that says where. The second
+	# branch is not a fault: the car fits where it stands, and an edge a car
+	# cannot get down the whole of is news about the drive ahead.
+	if pose.blocked():
+		push_warning(
+			(
+				"The start line stands where only %.2f m is clear of the %.2f m lane a car needs (edge %d, %s). Rebuild the region, or start somewhere else with spawn_fare_id."
+				% [pose.clear_width_m, pose.lane_width_m, pose.edge_id, pose.road_name_en]
+			)
+		)
+	elif not pose.edge_passable:
+		print(
+			(
+				"  %.2f m clear here, but edge %d is blocked somewhere along it — the way ahead may not be drivable"
+				% [pose.clear_width_m, pose.edge_id]
+			)
+		)
 	var drift: float = authored.origin.distance_to(pose.transform.origin)
 	if drift > AUTHORED_DRIFT_M:
 		print(

@@ -14,6 +14,15 @@
 ## would pass on such a spawn with the bug present. The transposed basis is
 ## therefore built and required to *fail*, and the discriminating angle floored.
 ##
+## `Q52` gave it a second: **the car has to fit where it is being set down.** The
+## bundle publishes a clear corridor width per station and `RoadSpawn` reports it
+## without acting on it, deliberately — so this is the only thing that refuses,
+## and a rebuild that moves a wall into the start line fails a check instead of
+## reaching a driver. It is proven the same way the first one is, in
+## `_check_the_guard_can_fire`, because the shipped city cannot prove it: the
+## start line stands in 9.00 m of a 3.20 m lane and no fare node lands on any
+## blocked edge.
+##
 ## Exits non-zero if the spawn cannot be resolved or any check fails.
 extends SceneTree
 
@@ -36,6 +45,90 @@ const MAX_FACING_ERROR_DEG: float = 0.1
 ## The car must start off the centreline — that is where opposed carriageway
 ## ribbons overlap and a suspension ray hunts between two coplanar triangles.
 const MIN_LANE_OFFSET_M: float = 0.5
+
+## `city.json`'s "no cross-section was judged here", spelled short enough to fit
+## the case table in `_check_the_guard_can_fire`.
+const UNJUDGED: float = CityManifest.NOT_MEASURED
+
+
+## One built start line, and the answers the guard must give about it.
+##
+## A class rather than a bag of string keys, because every field here is read in
+## a comparison: through a `Dictionary` each one arrives as a `Variant` and needs
+## a cast at the point of use. It also owns the two document shapes it becomes,
+## so the edge, the fare node and the expectations cannot fall out of step —
+## across three parallel arrays nothing but the loop bound was holding them
+## together. `verify_beam_budget.gd`'s `StubRig` is the same idea.
+class Case:
+	extends RefCounted
+
+	## Which failure this case is here to catch, for the message.
+	var why: String
+	## Clear width per station, as `city.json` would publish it.
+	var clear: PackedFloat32Array
+	## What the query must read at the start line.
+	var here: float
+	## Whether the guard must fire, and whether the whole edge is passable.
+	var blocked: bool
+	var passable: bool
+	## Where this case landed in the built city; `place` fills them.
+	var edge_id: int = -1
+	var z_m: float = 0.0
+
+	func _init(
+		case_why: String,
+		case_clear: PackedFloat32Array,
+		case_here: float,
+		case_blocked: bool,
+		case_passable: bool
+	) -> void:
+		why = case_why
+		clear = case_clear
+		here = case_here
+		blocked = case_blocked
+		passable = case_passable
+
+	## Give this case a street of its own. Callers space `z` beyond
+	## `nearest_edge`'s 60 m radius, so no query can be answered by another
+	## case's geometry and no case can pass on it.
+	func place(id: int, z: float) -> void:
+		edge_id = id
+		z_m = z
+
+	func fare_id() -> String:
+		return "f_case_%d" % edge_id
+
+	func label() -> String:
+		return "%s (%s)" % [fare_id(), why]
+
+	## The edge, as `roadgraph.json` would publish it — stations along +X.
+	func edge(spacing_m: float, lane_m: float) -> Dictionary:
+		var polyline: Array[Array] = []
+		for station: int in clear.size():
+			polyline.append([float(station) * spacing_m, 0.0, z_m])
+		return {
+			"id": edge_id,
+			"polyline": polyline,
+			"direction": "both",
+			"elevation_level": 0,
+			"width_m": lane_m * 2.0,
+			"lanes": 2,
+			"road_name": {"en": "CASE %d" % edge_id},
+		}
+
+	## The fare node, as `fares.json` would publish it. Half a station along, so
+	## every start line lands on its edge's **first** segment — which is what
+	## makes a wall at a later station a test of the segment rule.
+	func fare_node(spacing_m: float) -> Dictionary:
+		return {"id": fare_id(), "pos": [spacing_m * 0.5, 0.0, z_m], "nearest_edge": edge_id}
+
+	## Drawn half-widths, one per station. Flat: the lane centre is not what this
+	## is proving, and it is asserted against the shipped city elsewhere.
+	func halves(lane_m: float) -> PackedFloat32Array:
+		var half: PackedFloat32Array = PackedFloat32Array()
+		half.resize(clear.size())
+		half.fill(lane_m)
+		return half
 
 
 func _init() -> void:
@@ -65,13 +158,34 @@ func _init() -> void:
 		quit(1)
 		return
 
+	# The same argument one gate down, for the other table. An edge with no
+	# clearance measurement reads as unknown and unknown reads as clear, so
+	# without this the blocked-spawn check below would pass on a bundle that
+	# never measured the start line at all — reporting nothing, in the shape of
+	# a pass.
+	if not graph.has_clearances():
+		printerr(
+			(
+				"  FAIL  city.json published no carriageway clearances — a spawn in a "
+				+ "wall would read as clear"
+			)
+		)
+		quit(1)
+		return
+
 	var profile: HandlingProfile = load(HANDLING_PATH) as HandlingProfile
 	if profile == null:
 		printerr("  FAIL  no HandlingProfile at %s" % HANDLING_PATH)
 		quit(1)
 		return
 
+	# Two lists, run separately on purpose. `_check` grades the **shipped**
+	# start line and gives up as soon as it fails to resolve; the guard proof
+	# grades the **guard**, on a city built for it, and has to run either way —
+	# folded into `_check` it would be skipped by exactly the broken bundle that
+	# most needs to know its checks still work.
 	var problems: PackedStringArray = _check(graph, fares, profile)
+	problems.append_array(_check_the_guard_can_fire(profile.ray_length_m()))
 	for problem: String in problems:
 		printerr("  FAIL  ", problem)
 	if problems.is_empty():
@@ -107,6 +221,27 @@ func _check(graph: RoadGraph, fares: Dictionary, profile: HandlingProfile) -> Pa
 				% [pose.fare_id, pose.published_edge_id, pose.edge_id]
 			)
 		)
+
+	# --- the car fits where it is being set down (Q52) ---------------------
+	#
+	# What refuses. `RoadSpawn` reports and places anyway on purpose, so this is
+	# the only thing standing between a rebuild that moves a wall into the start
+	# line and a driver finding it with the bumper.
+	if pose.blocked():
+		(
+			problems
+			. append(
+				(
+					"the spawn stands where %.2f m is clear of the %.2f m lane a car needs (edge %d, %s)"
+					% [pose.clear_width_m, pose.lane_width_m, pose.edge_id, pose.road_name_en]
+				)
+			)
+		)
+	elif not pose.edge_passable:
+		# Not a failure. The car fits where it stands, and `Q51` records 21 edges
+		# that are blocked somewhere along them — starting on one is legal and
+		# worth knowing.
+		print("  note:  edge %d is blocked somewhere along it, though not here" % pose.edge_id)
 
 	# --- P2-3: the orientation, against the edge vector --------------------
 	problems.append_array(_check_facing(pose))
@@ -209,4 +344,131 @@ func _check_facing(pose: RoadSpawn.Pose) -> PackedStringArray:
 				% [error_deg, separation_deg]
 			)
 		)
+	return problems
+
+
+## The guard is proven on a city built to fire it, because the shipped one cannot.
+##
+## ⚠️ **Every assertion above passes whether the guard works or not.** The start
+## line stands in 9.00 m of clear road against a 3.20 m lane, and no fare node in
+## the bundle lands on any of the edges `Q51` records as blocked — so a
+## `blocked()` hard-wired to `false` would leave this tool green. That is the trap
+## `_check_facing` avoids by building the transposed basis and requiring it to be
+## rejected, and it is avoided the same way here: five start lines whose answers
+## are known, each one required.
+##
+## Deliberately **not** proven by querying the bundle's own worst edge. A build
+## that finally clears all 21 has to pass, which is why
+## `verify_road_graph._check_clearance` refuses to depend on the blocked set being
+## non-empty either.
+##
+## The five cases are the whole of the decision, one per way it can go wrong:
+##
+## 1. **Starved end to end** — it fires.
+## 2. **Clear end to end** — it does not, so it is not simply always on.
+## 3. **Clear here, walled at the next segment** — it does *not* fire, and
+##    `edge_passable` carries that instead. This is why the bar is where the car
+##    stands rather than `is_passable`, and it is the case that fails if the two
+##    are ever folded together.
+## 4. **A junction cap at one end of a walled segment** — it fires. `-1.0` sorts
+##    below every real clearance, so taking `minf` across the two stations would
+##    read "nothing was judged here" and hide the wall. ⚠️ Not a hypothetical:
+##    **562 of Wan Chai's 2959 level-0 segments** have exactly one unmeasured end.
+## 5. **Unmeasured at both ends** — it does not fire, and `edge_passable` reads
+##    *true*. A station nobody judged is not a wall (45 segments), and what stops
+##    a whole bundle of them passing quietly is the `has_clearances()` gate in
+##    `_init`, not this.
+##
+## All five must still **resolve**. Reporting rather than refusing is `Q51`'s
+## decision, and a guard that started returning an unresolved pose would put the
+## harness back on the authored literal `P2-3` demoted.
+##
+## Called from `_init` rather than from `_check`, and separately from it: this
+## grades the **guard**, where `_check` grades the **shipped** start line and
+## gives up the moment that fails to resolve. Folded in, the proof would be
+## skipped by exactly the broken bundle that most needs its checks working.
+func _check_the_guard_can_fire(ride: float) -> PackedStringArray:
+	var problems: PackedStringArray = []
+
+	# Both sides of this city are made up, so the numbers only have to be
+	# self-consistent: one lane of 3.20 m over a 6.40 m carriageway, stations
+	# 40 m apart, and the start line half a station in — which puts case 3's
+	# wall, at the third station, on the far end of the *next* segment.
+	var lane_m: float = 3.20
+	var spacing_m: float = 40.0
+	var cases: Array[Case] = [
+		Case.new("starved end to end", PackedFloat32Array([0.5, 0.5]), 0.5, true, false),
+		Case.new("clear end to end", PackedFloat32Array([9.0, 9.0]), 9.0, false, true),
+		Case.new(
+			"clear here, walled further along",
+			PackedFloat32Array([9.0, 9.0, 0.5]),
+			9.0,
+			false,
+			false
+		),
+		Case.new(
+			"walled, with a junction cap at one end",
+			PackedFloat32Array([UNJUDGED, 0.5]),
+			0.5,
+			true,
+			false
+		),
+		Case.new(
+			"unmeasured at both ends",
+			PackedFloat32Array([UNJUDGED, UNJUDGED]),
+			UNJUDGED,
+			false,
+			true
+		),
+	]
+
+	var edges: Array[Dictionary] = []
+	var fare_nodes: Array[Dictionary] = []
+	var halves: Dictionary[int, PackedFloat32Array] = {}
+	var clears: Dictionary[int, PackedFloat32Array] = {}
+	for index: int in cases.size():
+		var built: Case = cases[index]
+		built.place(index + 1, float(index) * 100.0)
+		edges.append(built.edge(spacing_m, lane_m))
+		fare_nodes.append(built.fare_node(spacing_m))
+		halves[built.edge_id] = built.halves(lane_m)
+		clears[built.edge_id] = built.clear
+
+	var manifest := CityManifest.new()
+	manifest.lane_width_m = lane_m
+	manifest.carriageway_half_width_m = halves
+	manifest.carriageway_clear_width_m = clears
+	# `nodes` here is the graph's junctions, which this city has none of and
+	# nothing under test reads — not `fare_nodes` above.
+	var graph: RoadGraph = RoadGraph.from_document(
+		{"edges": edges, "nodes": [], "turn_restrictions": []}, manifest
+	)
+	var fares: Dictionary = {"nodes": fare_nodes}
+
+	for built: Case in cases:
+		var pose: RoadSpawn.Pose = RoadSpawn.at_fare_node(graph, fares, built.fare_id(), ride)
+		if not pose.resolved():
+			problems.append(
+				"the guard refused %s instead of reporting it: %s" % [built.label(), pose.problem]
+			)
+			continue
+		if absf(pose.clear_width_m - built.here) > 0.001:
+			problems.append(
+				(
+					"%s reads %.2f m clear where the station published %.2f m"
+					% [built.label(), pose.clear_width_m, built.here]
+				)
+			)
+		if pose.blocked() != built.blocked:
+			problems.append(
+				(
+					"%s reads blocked=%s against %.2f m of a %.2f m lane"
+					% [built.label(), pose.blocked(), pose.clear_width_m, pose.lane_width_m]
+				)
+			)
+		if pose.edge_passable != built.passable:
+			problems.append("%s reads edge_passable=%s" % [built.label(), pose.edge_passable])
+
+	if problems.is_empty():
+		print("  guard: all %d built start lines answered as published" % cases.size())
 	return problems

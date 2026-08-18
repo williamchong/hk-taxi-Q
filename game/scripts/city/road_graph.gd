@@ -21,7 +21,10 @@ extends RefCounted
 ## `Q13`'s pattern above: an off-grade edge is refused because a car cannot be
 ## there, while a car can be — and `RoadSpawn` can already put one — on a
 ## blocked level-0 edge. Refusing those would blank the road name and the lane
-## centre precisely where the player is stuck against a wall (`Q51`).
+## centre precisely where the player is stuck against a wall (`Q51`). What a
+## query does instead is *report* it: `Hit.clear_width_m` is the gap where the
+## hit landed, so a consumer that must not put a car in a wall — `RoadSpawn` —
+## can guard itself without the index deciding for every other caller.
 ##
 ## What is unreachable is what `elevation_levels` *draws* — a flat deck at
 ## `terrain + 6.0` with a cliff at each end — rather than anything the source
@@ -65,6 +68,26 @@ class Hit:
 	## Centre of the nearside lane for `forward` — where a car belongs, and
 	## deliberately not the centreline. See `lane_offset`.
 	var lane_centre: Vector3 = Vector3.ZERO
+	## Widest gap a car could get through **where this hit is**, in metres
+	## (`Q51` publishes it, `Q52` reads it here), or `CityManifest.NOT_MEASURED`
+	## where no cross-section was judged — which is "nothing is known to stand
+	## here" rather than "this is clear".
+	##
+	## Per hit, not per edge, because the two answer different questions. A
+	## router traverses a whole edge and reads `min_clear_width_of`; anything
+	## *placing* a car occupies one stretch of it, and reporting the edge's
+	## minimum here would condemn a hit standing in clear road because a wall
+	## stands somewhere else on the same street.
+	##
+	## ⚠️ **The resolution is the segment, not the point.** A segment is worth
+	## the tighter of its two stations, and Wan Chai's run to 155 m — so on the
+	## 201 level-0 edges publishing only two stations this and
+	## `min_clear_width_of` are the same number. They differ on 31 of 2959
+	## segments, always in the conservative direction.
+	##
+	## Carried, never enforced: the query still resolves on a blocked edge and
+	## this is what lets a consumer guard itself. See the class docstring.
+	var clear_width_m: float = CityManifest.NOT_MEASURED
 	## True where the source signs the edge one-way.
 	var one_way: bool = false
 	var road_name_en: String = ""
@@ -255,10 +278,7 @@ func lane_width_m() -> float:
 func clear_width_of(edge_id: int, station: int) -> float:
 	if not _by_id.has(edge_id):
 		return 0.0
-	var widths: PackedFloat32Array = _clear[_by_id[edge_id]]
-	if widths.is_empty():
-		return CityManifest.NOT_MEASURED
-	return widths[clampi(station, 0, widths.size() - 1)]
+	return _clear_station(_by_id[edge_id], station)
 
 
 ## The tightest measured station of an edge — the number the bar is read against.
@@ -724,6 +744,7 @@ func _fill(hit: Hit, index: int, point: Vector3, heading: Vector3) -> void:
 	var span_m: float = lengths[step + 1] - lengths[step]
 	var half: float = _half_at(slot, step, offset_m / span_m if span_m > 0.0 else 0.0)
 	hit.lane_centre = point + left_of(along) * lane_offset(half * 2.0, _lanes[slot])
+	hit.clear_width_m = _clear_at(slot, step)
 
 
 ## Drawn half-width `fraction` of the way from station `step` to the next.
@@ -739,3 +760,37 @@ func _half_at(slot: int, step: int, fraction: float) -> float:
 	var here: int = clampi(step, 0, halves.size() - 1)
 	var next: int = mini(here + 1, halves.size() - 1)
 	return lerpf(halves[here], halves[next], fraction)
+
+
+## Clear width over the segment running from station `step` to the next.
+##
+## `_half_at`'s deliberate opposite, and that is why it is a second function
+## rather than a flag on the first: the widening tapers, so a drawn half-width
+## interpolates; a clearance does not taper — a wall has an edge — so a segment
+## is worth the **smaller** of the two stations bounding it. That is
+## `clear_width_of`'s rule, and this is where it gets applied to a segment
+## rather than to a station.
+##
+## ⚠️ **An unmeasured end is skipped, not minimised.** `NOT_MEASURED` is -1.0 and
+## so sorts below every real clearance; `minf` would read "nothing was judged
+## here" off every segment with one end under a junction cap — **562 of Wan
+## Chai's 2959**, the start line's own included. `min_clear_width_of` skips them
+## for the same reason, and only both ends unmeasured is unjudged (45 more).
+func _clear_at(slot: int, step: int) -> float:
+	var here: float = _clear_station(slot, step)
+	var next: float = _clear_station(slot, step + 1)
+	if here == CityManifest.NOT_MEASURED:
+		return next
+	if next == CityManifest.NOT_MEASURED:
+		return here
+	return minf(here, next)
+
+
+# One station's clear width, by slot. `clear_width_of` is this plus the id
+# lookup and `_clear_at` calls it twice, which is the split `_half_at` and
+# `drawn_half_width_of` already use — and it keeps the hash off `_fill`.
+func _clear_station(slot: int, station: int) -> float:
+	var widths: PackedFloat32Array = _clear[slot]
+	if widths.is_empty():
+		return CityManifest.NOT_MEASURED
+	return widths[clampi(station, 0, widths.size() - 1)]

@@ -20,6 +20,17 @@ extends RefCounted
 ## nothing left to transpose. This docstring is the home of that argument;
 ## `verify_spawn.gd` and `city_drive.tscn` point here rather than restating it.
 ##
+## ⚠️ **It says what the start line is standing in; it does not move the car.**
+## Some drivable level-0 edges keep less than one lane clear (`Q19`), and the
+## bundle publishes the gap, so `Pose.blocked` can answer whether a car fits
+## where this is about to set one down (`Q52`). It answers and places anyway: relocating
+## would put the player somewhere no document published, and refusing would drop
+## `drive_harness.gd` onto the authored literal above — on the same street, in
+## the same wall, with the road name and the lane centre now blank. That is the
+## outcome `Q51` argued against when it kept passability out of `nearest_edge`.
+## What refuses is `tools/verify_spawn.gd`, so a bundle whose start line stands
+## in a wall fails a check rather than reaching a driver.
+##
 ## Nothing here knows anything about Hong Kong. The fare node id is an argument,
 ## the geometry comes from `RoadGraph`, and the height comes from the vehicle's
 ## own profile (CLAUDE.md hard rule 3).
@@ -69,11 +80,46 @@ class Pose:
 	## Street the car starts on, for the report. May be empty — 74 of Wan Chai's
 	## 797 edges publish no English name.
 	var road_name_en: String = ""
+	## Widest gap a car could get through at the start line, from the query
+	## (`Q52`). `CityManifest.NOT_MEASURED` where no cross-section was judged
+	## there. The number `blocked` is read against.
+	var clear_width_m: float = CityManifest.NOT_MEASURED
+	## One lane, as the bundle published it — the bar, carried so the pose can
+	## be judged and the message written without re-reading the graph.
+	var lane_width_m: float = 0.0
+	## Whether a car fits down the **whole** of the edge, from
+	## `RoadGraph.is_passable`. Reported, never the bar: it is what says "clear
+	## here, blocked further along", which is a fact about the drive rather than
+	## about the start line.
+	var edge_passable: bool = true
 	## Empty when resolved; otherwise what stopped it, ready to push.
 	var problem: String = ""
 
 	func resolved() -> bool:
 		return edge_id >= 0
+
+	## True where the car would be set down somewhere it does not fit (`Q52`).
+	##
+	## ⚠️ **Read where the car stands, not over the whole edge.** `is_passable`
+	## takes the minimum of every station because `P3-3` traverses a whole edge;
+	## a car being placed occupies one stretch of it, and reusing the router's
+	## bar would condemn a start line standing in clear road because a wall
+	## stands somewhere else on the same street — 21 of Wan Chai's edges are
+	## blocked *somewhere*. `edge_passable` carries that other answer rather than
+	## replacing this one. `RoadGraph.Hit.clear_width_m` is the home of how
+	## coarse "where the car stands" actually is.
+	##
+	## A missing bar is not a bar of zero, exactly as in `is_passable`: with no
+	## manifest there is no lane width to judge against and the honest reading is
+	## that the spawn is unjudged, which `RoadGraph._build` has already warned
+	## about. An unmeasured station reads the same way, and so does a pose that
+	## never resolved — its fields are defaults, not measurements.
+	func blocked() -> bool:
+		if not resolved() or lane_width_m <= 0.0:
+			return false
+		if clear_width_m == CityManifest.NOT_MEASURED:
+			return false
+		return clear_width_m < lane_width_m
 
 	## True when the query and the published projection name the same edge.
 	##
@@ -145,6 +191,9 @@ static func at_fare_node(
 	pose.forward = hit.forward
 	pose.lane_centre = hit.lane_centre
 	pose.road_name_en = hit.road_name_en
+	pose.clear_width_m = hit.clear_width_m
+	pose.lane_width_m = graph.lane_width_m()
+	pose.edge_passable = graph.is_passable(hit.edge_id)
 	pose.transform = Transform3D(
 		basis_facing(hit.forward),
 		hit.lane_centre + Vector3.UP * (maxf(ride_height_m, 0.0) + DROP_CLEARANCE_M)

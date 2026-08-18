@@ -408,7 +408,10 @@ no real clearance can be, and zero is the one value that would read as *blocked 
 the stations that are not. `lane_width_m` travels with it as the bar: `roadgraph.json`'s `width_m`
 is `lanes × lane_width_m` **hand-tuned upward for playability**, so dividing it back does not
 recover this number. `RoadGraph` reads the pair as `is_passable` / `is_routable` and — deliberately
-— does **not** fold either into `nearest_edge`.
+— does **not** fold either into `nearest_edge`. What a query does instead is **report** it:
+`Hit.clear_width_m` is the gap at the segment the hit landed on, so a consumer that must not put a
+car in a wall can guard itself without the index deciding for every other caller. `RoadSpawn` is
+that consumer (`Q52`), and it too reports rather than refuses — `verify_spawn.gd` is what fails.
 
 ⚠️ **`bounds_game` is the union of the content, not the region rectangle.** Wan Chai's declared
 region is 1650 × 887 m; its geometry spans 1737 × 977 m, because a building is assigned to a tile
@@ -862,7 +865,7 @@ every region lies inside them.
 | `CityStreamer` | Load/unload tile meshes by camera distance; owns the LOD tier | ✅ `P2-1` |
 | `Landmarks` | Place the authored heroes from `landmarks.json`; always resident, no LOD | ✅ `P3-6` |
 | `RoadGraph` | Runtime queries over `roadgraph.json` — nearest edge, lane centre, routing | ✅ `P2-2` |
-| `RoadSpawn` | Where a car starts, resolved from a fare node through `RoadGraph` | ✅ `P2-3` |
+| `RoadSpawn` | Where a car starts, resolved from a fare node through `RoadGraph`, and what it is standing in (`Q52`) | ✅ `P2-3` |
 | `VehicleController` | Player car. `VehicleBody3D` + arcade overrides — steering rate, top-speed taper, coast drag, drift, collision response, auto-right | ✅ `P0-5`/`P2-3`/`Q50` |
 | `InputRouter` | Abstracts touch / gamepad / keyboard into one action set | 🟡 keyboard + gamepad; `P2-4` |
 | `DebugHud` | Every dev readout, behind `F3` | ✅ |
@@ -897,7 +900,7 @@ the second vehicle anyone built.
 | `scripts/core/plan_lattice.gd` | An even grid of plan positions over a region's bounds. Both region-sweeping verify tools take their sample points from it — counted, not float-accumulated, so the far row and column cannot be dropped |
 | `scripts/city/streaming_profile.gd` | Schema for distance bands, hysteresis and per-frame budgets. Numbers live only in `tuning/streaming.tres` |
 | `scripts/city/road_graph.gd` | One parse per scene, nearest-edge and lane-centre queries over a plan grid. Refuses off-grade edges (`Q13`), and **expresses** — never enforces — passability on the rest (`Q51`) |
-| `scripts/city/road_spawn.gd` | `basis_facing` builds the rotation from a direction, which is what deleted the hand-written transform literal and its transpose trap |
+| `scripts/city/road_spawn.gd` | `basis_facing` builds the rotation from a direction, which is what deleted the hand-written transform literal and its transpose trap; `Pose.blocked` is why a start line in a wall fails a check rather than reaching a driver (`Q52`) |
 | `scripts/city/generated_document.gd` | Parse and version-check a JSON document the ETL wrote. Shared by the locators and by `CityManifest`, so the stale-copy message exists once |
 | `scripts/city/generated_{road_graph,road_surface,fares,landmarks}.gd` | Locators — one definition per document, two readers. `generated_fares.gd` is the one place that knows that document's shape, and `generated_landmarks.gd::placement_of` is the one place the compass bearing becomes a Godot rotation |
 | `scripts/city/landmarks.gd` | Places the authored heroes where `landmarks.json` puts them. ~2 models, always resident — no streaming, no LOD |
@@ -915,7 +918,7 @@ the second vehicle anyone built.
 | `tools/verify_road_surface.gd` | `roads.glb` — one draw call, UVs, trimesh collision |
 | `tools/verify_road_graph.gd` | `RoadGraph`'s queries — the off-grade refusal, edge resolution, lane placement against the published carriageway width, per-station width on a genuinely mixed edge, `Q51`'s passability (every edge measured, `is_routable` agreeing with the published blocked set, and `nearest_edge` **still** answering on a blocked edge), and query time against a 1 ms budget over a region-wide lattice |
 | `tools/verify_city_streamer.gd` | The streaming policy — band edges, hysteresis both ways, and a region-wide residency sweep against the draw-call budget |
-| `tools/verify_spawn.gd` | The start line — orientation against its edge vector, nearside-lane placement, drop height, and the resolved edge against the fare node. **Builds the transposed basis and requires it to fail** |
+| `tools/verify_spawn.gd` | The start line — orientation against its edge vector, nearside-lane placement, drop height, the resolved edge against the fare node, and since `Q52` that a car **fits** where it is set down. **Builds the transposed basis and requires it to fail**, and builds five start lines whose clearances are known and requires each answer — nothing in the shipped city can fire the clearance guard, which stands in 9.00 m of a 3.20 m lane |
 | `tools/verify_landmarks.gd` | `landmarks.json` — assets load with mesh and `-col` collision, triangle budget, placed AABB near `bounds_game`, and no tier-0 tile triangle inside each excluded footprint's interior core |
 | `tools/verify_beam_budget.gd` | `BeamBudget` — the spot-light cap is never exceeded **or under-spent**, the nearest cars win when registered farthest-first, a beamless rig takes no slot, and a despawn hands its slot on. ⚠️ One of the two verify tools that need **no built region**: it builds its own stub rigs, so it runs whatever `VERIFY_GENERATED` says |
 | `tools/verify_vehicle.gd` | The taxi's engine-side wiring — the body renders with `vehicle_body.tres` through the import's name channel, the channels `vehicle_lamps.gd` writes are instance uniforms the renderer lists, the imported `UV` payload is integral and inside those channels on lens vertices only, the rig hangs where the script looks, and every beam is authored dark with its cone below horizontal. ⚠️ Needs **no built region** (the taxi is authored and committed), and ⚠️ **sees no frame** — it cannot tell you the shader compiled |
