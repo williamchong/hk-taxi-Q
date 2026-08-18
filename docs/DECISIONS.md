@@ -5894,3 +5894,176 @@ they put the car down, and `Pose.blocked` is what they should ask.
 
 **See.** `Q51` for the sentence this closes · `Q19` for the geometry half, still open · `Q13` for
 the refusal this deliberately is not · `P2-3` · `PROGRESS.md` risk register
+
+---
+
+## `Q53` — Markings are drawn, arrows are not, and the difference is data
+
+**Status.** ✅ Closed 2026-08-19 · **Owner.** `P3-12`
+
+**Claim.** The road surface draws lane dividers, centre lines, kerbside double yellows and a bus
+lane edge, procedurally, from a shader over `roads.glb`'s own lane coordinate. Turn arrows, road
+text and yellow box junctions are **held**. `roads.glb` gained a `TEXCOORD_1` payload and a material
+name; `city.json` went **9 → 10**, both sides in one commit.
+
+**The proposal was "draw proper road texture like arrows, according to the original texture", and
+two thirds of it is refused on data rather than on cost.** Worth stating plainly, because the
+refusal is not about difficulty:
+
+- **There is no marking data in any source.** Road Network v2 ships seventeen layers — centrelines,
+  turns, bus lanes, speed limits, zebra crossings, prohibitions — and `P1-3` measured that **no
+  layer carries a lane attribute at all** (`DATA_SOURCES.md`). `roadgraph.json`'s `lanes` is
+  authored policy keyed on speed limit. The 217 published turn restrictions are the *complement* of
+  what an arrow shows, and say nothing about lane assignment. Arrow content would be invented.
+- **The only imagery showing real markings is refused on registration, and the number was already
+  measured.** `Q36`/`Q18` rejected the orthophoto partly because the generated ribbon is drawn
+  **1.6× wider** than the real carriageway and sits coplanar with it, so photographic markings land
+  about half a lane out on every street — and high-passing to remove baked shadows makes it *worse*,
+  because road edges are the high frequencies. There is a precedent for consulting imagery at build
+  time and discarding it (`P3-6`'s ribbon veto), but at this registration it can only vote on
+  *whether*, never on *where*.
+- **`GAME_DESIGN.md` already priced the difference.** A widened carriageway is invisible to a
+  driver's memory of a street; a feature standing somewhere they know is not. An arrow pointing the
+  wrong way on Hennessy Road is a debit against `P3-9a`, and a missing arrow is not.
+
+**So what ships is Hong Kong marking *convention*, drawn in lane space.** That is faithful in the
+way that survives the widening: `P1-4`'s `TEXCOORD_0.x` is a lane coordinate — 0 at the nearside
+kerb, `lanes` at the offside — so an integer U is a lane boundary whatever the metres did, and V is
+metres along, so a dash keeps a real pitch. `ART_DESIGN.md` has specified exactly this since `P1-4`
+and `verify_road_surface.gd` has been failing a surface that lost those UVs, naming the shader as
+the reason. This is the completion of a designed feature, not a new one.
+
+**No texture, and that is enforced rather than intended.** `scripts/city/mesh_contract.gd` walks
+**every shader uniform** and fails on any holding a `Texture`. A marking atlas is a contract
+amendment with its own record; a procedural shader is not one.
+
+**⚠️ The lane coordinate cannot be drawn on by itself, and this is the finding the work turned on.**
+Three ways it fails, none visible from the contract table alone:
+
+- The kerbs run off **both** ends of the lane range — nearside lip `U ∈ [−0.156, 0]`, offside riser
+  and lip `[lanes, lanes + 0.156]` — so `fract(U)` paints a lane line down every kerb in the region.
+- A fragment at `U = 3.0` is the offside kerb on a three-lane road and an interior lane boundary on
+  a four-lane one. Nothing in `TEXCOORD_0` separates them; the shader has to know `lanes`.
+- A junction cap carries `(0, 0)`, and **`U = 0` is the nearside kerb line**. A kerbside double
+  yellow keyed on `U < ε` therefore floods all 393 junctions solid yellow. `(0, 0)` reads as a
+  sentinel and is an in-range value.
+
+`TEXCOORD_1` answers all three: a packed class/lanes/direction/bus/tram code in `x`, on the
+`Q40`/`Q41` codec pattern, and the edge's drawn length in `y`.
+
+**⚠️ The length in `y` is not the distance-to-nearer-end the consumer wants, and shipping that
+distance instead is wrong in a way that looks right.** Distance-to-nearer-end is a V with its kink
+at the midpoint; a strip interpolates linearly between its stations. On an edge Douglas–Peucker left
+with **two**, both stations *are* ends, both read zero, and the whole street interpolates flat to
+zero — every marking on it faded out as though it were all junction. **204 of the region's 797 edges
+carry two stations**; only edges lifted onto structure are resampled. This shipped as a per-vertex
+distance first and a unit test on a two-station fixture caught it before any frame did. The length
+is constant per edge, so it survives any station spacing, and `min(V, length − V)` per *fragment* is
+exact everywhere.
+
+**The junction cap overlap is faded around, not fixed — and the fade is priced against it.**
+`ARCHITECTURE.md` has predicted since `P1-4` that markings would expose the cap overlapping its arms
+(6,051 m² of 52,985 m², 210 of 1,398 trimmed ends). Real lane lines stop before a junction anyway,
+so the fade is the realism and the cover at once. **The depth was measured, not chosen** — derived
+per arm end from the published trims:
+
+| | p50 | p90 | p95 | p99 | worst |
+|---|---|---|---|---|---|
+| Cap overlap onto the arm beneath it | 0.00 m | 1.17 m | 2.36 m | 3.62 m | **4.21 m** |
+
+203 of 1,398 ends overlap at all (14.5%), reproducing the published 210 from a different direction.
+
+⚠️ **The dial cuts both ways, and the first value was three metres too generous for nothing.** An
+edge shorter than twice the fade never carries a full marking, and this region's edges are short —
+drawn length p10 **4.0 m**, p25 **12.5 m**:
+
+| `fade_m` | edges with no marking at all | share of carriageway area | clears the 4.21 m worst case |
+|---|---|---|---|
+| 9.0 | 169 of 797 (21.2%) | 8.7% | yes, with 114% margin |
+| **6.0 — ships** | **121 of 797 (15.2%)** | **6.0%** | yes, with 42% margin |
+| 5.0 | 104 of 797 (13.0%) | 5.2% | yes, with 19% margin |
+| 4.0 | 82 of 797 (10.3%) | 4.0% | **no** |
+
+Some of the residue is correct: a 4 m link between two junctions is a junction mouth and real roads
+do not mark one. The margin is doing real work — the overlap figure is derived from the published
+trims rather than from the hull's own reach.
+
+⚠️ **The 6,051 m² is still there.** This hides it; it does not fix it. A box junction, a stop line,
+anything drawn *on* a cap re-exposes it immediately. The fix is the non-convex cap — the union
+boundary rather than the hull — which is polygon clipping and stays unbuilt.
+
+**⚠️ Box junctions are held on content, not on mechanism, and the mechanism is now known.** A
+world-space cross-hatch masked on distance-to-node is **immune** to the cap overlap, because cap and
+arm draw the same thing wherever they overlap — so it needs no polygon clipping. What it needs is a
+list of which junctions have one, and nothing publishes that. 393 junctions in the region against a
+real subset; a heuristic on degree and arm width would put boxes on junctions that do not have them,
+which is the `P3-9a` debit above. An authored table is the honest route and is a `Q34′`-class
+staleness liability, so it waits for someone to want it.
+
+**⚠️ One shipped marking has no source behind it: the kerbside double yellow.** Every other line is
+either geometry (a lane boundary) or a published flag (`TRAVEL_DIRECTION`, `BUS_ONLY_LANE`, 13
+published edges — `DATA_SOURCES.md`'s 14 counts source features, this counts what survived clipping). A waiting restriction is neither. It is near universal in urban Wan Chai, which is the
+argument for drawing it, and it is still an invention on streets the drivers know — so it ships on
+its own uniform, `draw_double_yellow`, and is the first thing to turn off if a recognition round
+reports the markings as *wrong* rather than as missing. It is also drawn on the offside kerb **only
+on a two-way edge**: on a one-way one, `U = lanes` may be a kerb or may be the centre of a dual
+carriageway drawn as an opposed pair, and nothing published separates the two.
+
+**⚠️ Marking colours are authored shader-side, and that is a `Q33` boundary taken knowingly.**
+`tuning/road_markings.tres` holds them, matching `city_facade` and `vehicle_body` — every shader
+colour in this project is authored with its shader. So they sit outside `_check_exposure` and
+outside `test_no_colour_escapes_the_materials_table`, and `Q33` exists *because* the two road
+colours escaped `235aa4f` by being authored where the check did not loop. The user's call,
+2026-08-19. The argument for it is that these are not albedo drawn from measurement — they are
+authored art with no reflectance claim to check — but the precedent is uncomfortable and the day a
+third road colour is authored somewhere else, this is the entry that predicted it.
+
+**⚠️ Moving the road surface onto a `ShaderMaterial` moved the `Q27` fix with it.**
+`generated_scene_import.gd` sets `vertex_color_is_srgb` on a `BaseMaterial3D`, and a material that
+names a shader takes the `continue` branch and never reaches that line. So `road_markings.gdshader`
+carries `vertex_srgb_to_linear` by hand, exactly as the two facade shaders do. Nothing fails loudly
+when this is forgotten — the asphalt just lightens and stops varying with its own albedo. Verified
+against the `street` baseline: the asphalt is unchanged and only the markings are new.
+
+**Cost, measured from PCKs with one variable changed.** **40,702,784 → 40,741,440 B, +38,532 B**,
+against **279,532 B** of raw VEC2 across 34,924 vertices — the pack compresses the payload by 86%,
+because `x` is a per-edge constant with only 17 distinct values region-wide. No triangle moved, no
+draw call added, no material added; `verify_road_surface.gd` still asserts one primitive.
+
+**What holds it.** `verify_road_surface.gd` gained the material check — the dispatch has no failing
+state, and a road that quietly kept its `BaseMaterial3D` would pass every other check and render as
+the grey ribbon it always was — plus a full codec scan and the two importer traps `verify_tiles.gd`
+already guards: `meshes/light_baking = 1` (Static Lightmaps regenerates UV2 straight over the
+payload) and 16-bit attribute compression. Neither was guarded before, because `roads.glb` had never
+carried UV2.
+
+**What this does not do.** No arrows, no road text, no box junctions, no zebra crossings — the
+`ZEBRA` layer is published and unread, and a crossing is a cap-adjacent glyph with the same
+problems. No tram inset: `tram_tracks` reaches the payload and the shader ignores it, because the
+treatment `ART_DESIGN.md` describes is geometry rather than shading.
+
+**⚠️ The markings were the fourth `vertex_srgb_to_linear`, and `city_facade.gdshader` had written
+down in advance that the fourth was the trigger** — *"three call sites still do not earn a fourth
+file … If a fourth appears, that is the point to stop copying and add the include."* So
+`assets/shaders/colour.gdshaderinc` exists now and all four shaders include it. Worth recording not
+for the file but for the mechanism: the rule fired because someone had bothered to say **when** it
+would fire, rather than leaving "this is getting repetitive" to a judgement call at the fourth site.
+
+**⚠️ Godot's shading language rejects `return` in a processor function, and it reads as correct
+GLSL.** `fragment()` was first written with early-outs — the obvious way to flatten three levels of
+nesting — and Godot answers *"Using 'return' in the 'fragment' processor function is incorrect"* at
+**run time**. `tools/check.sh` exits 0 on that, the frame renders, and only `grep -i "shader error"`
+sees it (the hazard `P3-11c` already recorded). It ships as a single gate with the body inside, which
+costs one level and not three.
+
+**⚠️ Two of the review's findings were the same shape: a helper that looked shared and was copied.**
+`verify_road_surface.gd` arrived with private copies of `verify_tiles.gd`'s import-settings check and
+its material check, differing only in a noun. `mesh_contract.gd` opens by arguing against exactly
+that — *"Written once because two copies drift, and the copy that drifts is the one that quietly
+stops catching anything"* — so both are hoisted there as `check_uv2_import_settings` and
+`check_shader_material`, which is the shape `check_collision` already had.
+
+**See.** `ARCHITECTURE.md` `roads.glb` for the channel table and the codec · `ART_DESIGN.md` "Roads"
+· `Q40`/`Q41` for the codec pattern · `Q27` for the sRGB conversion, now shared · `Q23` for the
+per-station widening the lane coordinate survives · `Q18`/`Q36` for the orthophoto refusal this rests
+on · `P1-4` · `P3-7` for the "one commit across two sides" precedent

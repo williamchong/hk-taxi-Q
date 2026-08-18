@@ -249,6 +249,7 @@ trade.
 | `P3-7` | Window-band shader, **and the `TEXCOORD_0` payload it reads** | Reads as HK density; no windows on roofs or podium faces. ETL ships height-above-own-base and a per-building seed; `schema_version` bumped in the same commit |
 | `P3-6` | Hero buildings (5) — authored or mesh-sourced (`source_paint`), placed via `landmarks.json` | Source geometry excluded; no z-fighting |
 | `P3-7a` | **Survey-driven façade variation** — the openings re-judged: punched windows are glass (`Q44`), panes vary per building (`Q45`), refusal drawn quietly (`W3`). ✅ **Closed as shipped at those three**; `Q42`'s riders are gated, not delivered | Met by what landed: everything dark behind `survey_apply`, parked look byte-identical at every step, each shipped step graded against a pre-fixed bar. ⚠️ **The remainder is gated on `P3-9a` reopening `Q26`** — `C` ships `survey_apply = 0.0`, so a rider built now renders nothing and cannot influence the round that would price it (`DECISIONS.md` `P3-7a`) |
+| `P3-12` | **Road markings** — lane dividers, centre lines, kerbside double yellows and a bus-lane edge, drawn procedurally over the ribbon's lane coordinate, **and the `TEXCOORD_1` payload the shader reads**. Arrows, road text and box junctions deliberately out of scope | No texture ships and `mesh_contract.gd` still passes; one primitive, one material, no triangle moved; markings survive the playability widening because U is a lane coordinate; the junction fade is sized against the **measured** cap overlap rather than by eye; `schema_version` bumped on both sides in one commit |
 
 - **Deps:** `P1-2`, `P1-7`. **No longer depends on `B1`** — that dependency was ordering, not
   substance. Nothing in the taxi, the ground, the shader or the hero buildings reads a fare.
@@ -256,6 +257,11 @@ trade.
   a shot taken before it is a shot that has to be retaken. Then `P3-10`, because the remaining two
   are judged against a city that has a floor. Then `P3-7`, then `P3-6`; `P3-7a` follows `P3-7` and
   the region survey, and may run beside `P3-6`.
+- ⚠️ **`P3-12` was added after the build closed and after `P3-9a`'s artefact was cut** (2026-08-19).
+  It belongs to `B2` by subject — it is the road half of "does this read as Hong Kong" — and it
+  depends on nothing in the build, because `P1-4` shipped the lane coordinate it draws on. **Whether
+  it goes in front of the drivers is a separate call**: landing it means re-exporting and
+  re-verifying a 75.74 MiB web build. See `Q53`.
 - **Review:** drive Hennessy Road and look around; the same viewpoints before and after | web build |
   **Does this read as Wan Chai?** No longer a dress rehearsal — `P3-9a` follows immediately and puts
   the same build in front of people who are not the user.

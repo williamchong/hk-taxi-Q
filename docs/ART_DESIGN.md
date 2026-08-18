@@ -524,12 +524,33 @@ authored features the source captures badly.
 ## Roads
 
 - Ribbon mesh generated from road-graph polylines, vertex-coloured
-- Markings via **shader along the ribbon's UV** (lane lines, yellow boxes, crossings) rather than a
-  texture atlas — keeps the untextured pipeline intact. `P1-4` already ships the UVs the shader will
-  read: **U is a lane coordinate**, 0 at the nearside kerb line and `lanes` at the offside, so an
-  integer U is a lane boundary regardless of the playability widening — including the per-station
-  widening `Q23` introduced. V is metres along the carriageway, so dashes keep a real-world pitch.
-  Junction caps carry `(0, 0)`; a box junction is a mask keyed on the node, not a length of lane.
+- Markings via **shader along the ribbon's UV** rather than a texture atlas — keeps the untextured
+  pipeline intact. `P1-4` already ships the UVs the shader reads: **U is a lane coordinate**, 0 at
+  the nearside kerb line and `lanes` at the offside, so an integer U is a lane boundary regardless of
+  the playability widening — including the per-station widening `Q23` introduced. V is metres along
+  the carriageway, so dashes keep a real-world pitch. Junction caps carry `(0, 0)`; a box junction is
+  a mask keyed on the node, not a length of lane.
+  ⚠️ **`(0, 0)` does not identify a cap**, and reading it as though it did is the trap `P3-12` found:
+  `U = 0` *is* the nearside kerb line, so a kerbside marking keyed on U alone floods every junction
+  in the city. A cap says what it is in `TEXCOORD_1` — `ARCHITECTURE.md` carries that channel.
+- ✅ **Shipped `P3-12`, and the scope is the ribbon.** Lane dividers (dashed, 3 m on 6 m), a
+  continuous centre line where `TRAVEL_DIRECTION` says two-way, kerbside double yellows, and a bus
+  lane edge on the **13 edges** the `BUS_ONLY_LANE` join reaches (14 source features —
+  `DATA_SOURCES.md` counts what was read, this counts what survived clipping). **+38,532 B of PCK,
+  no triangle moved, no extra draw call, no extra material.**
+- ⚠️ **Arrows, road text and box junctions are deliberately held**, and not because a glyph needs a
+  texture. **Nothing in the seventeen Road Network v2 layers says which lane turns where**, or which
+  junction carries a box — `DATA_SOURCES.md`, "Lane counts do not exist in any field of any layer".
+  Invented markings on streets the `P3-9a` drivers know is the debit `GAME_DESIGN.md` prices against
+  a hand-added ramp, and an arrow is exactly that debit. The box-junction *mechanism* is now known
+  and cheap — a world-space cross-hatch masked on distance-to-node is immune to the cap overlap,
+  because cap and arm draw the same thing wherever they overlap — so what is missing is content,
+  not machinery. `Q53`.
+- ⚠️ **One marking here has no source behind it: the kerbside double yellow.** Every other line is
+  either geometry or a published flag. It is near universal in urban Wan Chai, which is the argument
+  for drawing it, and it is still an invention — so it ships on its own switch,
+  `draw_double_yellow`, and is the first thing to turn off if a recognition round reports the
+  markings as *wrong* rather than as missing.
 - Kerbs modelled but low and mountable — collision is forgiving by design. Built as a 0.15 m riser
   and a 0.5 m lip. **The lip's job is the seam:** the ground tucks *under* it, 0.20 m down, which is
   what hides the join. (Before `P3-10` there was no terrain to end against and it stopped the
@@ -541,6 +562,19 @@ authored features the source captures badly.
 overlaps its arms rather than abutting them wherever a short edge is held back by the junction trim —
 6,051 m² of 52,985 m² of cap area. Cap and carriageway are the same colour at the same height in one
 material, so nothing shows; give the ribbon lane markings and the cap will read as a patch over them.
+
+✅ **It landed, and the prediction was right in mechanism and answerable in practice** (`P3-12`). The
+markings fade out approaching a node, so nothing is drawn under the overlap — which is also what real
+lane lines do, so the fix and the realism are the same edit. `ARCHITECTURE.md` carries the overlap
+depths the 6 m fade was sized against.
+
+⚠️ **What belongs here is the other end of that dial, because it is an art cost rather than a
+contract one.** An edge shorter than twice the fade never carries a full marking, and this region's
+edges are short — drawn length p10 **4.0 m**, p25 **12.5 m** — so the fade decides how much of the
+city is marked at all: **9 m left 169 of 797 edges bare, 6 m leaves 121**, and the first value bought
+no extra defect coverage for those 48. Some of the residue is correct: a 4 m link between two
+junctions is a junction mouth, and real roads do not mark one. **Judge it on the alley grid**, which
+is where the short edges are and where the loss concentrates.
 
 🔴 **The asphalt is not the outlier — it is the one colour that was already right.** Judged against
 its neighbours it looks like a hole in the city's value range: every other albedo sits inside 15 `L*`

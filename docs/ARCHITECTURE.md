@@ -582,9 +582,16 @@ the ground's meshes are sheet-shaped, so the value is not comparable across a sh
 colours in CIELAB and writes the sRGB bytes, because sRGB is what 8 bits are *for* — it spends its
 codes where the eye can tell them apart, and a linear `uint8` would starve the shadows to gild
 highlights nobody can separate. The cost is that nothing downstream converts for free. Godot 4 has no
-`vertex_color_is_srgb` **render mode** (it survives only as a `BaseMaterial3D` flag), so the two
-facade shaders each carry a `vertex_srgb_to_linear` of their own, and `generated_scene_import.gd`
-sets the flag for everything else — the road surface included.
+`vertex_color_is_srgb` **render mode** (it survives only as a `BaseMaterial3D` flag), so every shader
+in the bundle takes a shared `vertex_srgb_to_linear` from `assets/shaders/colour.gdshaderinc`, and
+`generated_scene_import.gd` sets the flag for everything that names no shader.
+
+⚠️ **The two branches are exclusive, and moving an asset from one to the other is a silent
+regression waiting to happen.** `P3-12` moved the road surface off the flag and onto a shader, so
+`road_markings.gdshader` had to pick the conversion up in the same commit — nothing fails loudly
+when that is forgotten; the surface just lightens and stops varying with its own albedo.
+`colour.gdshaderinc` exists because that was the **fourth** copy of the function, which is the
+trigger `city_facade.gdshader` had written down in advance.
 
 This was silent until `Q27`. Skipping the conversion does not merely lighten the city: sRGB read as
 linear is *brighter than it should be*, and brightness the albedo did not ask for is brightness that
@@ -663,12 +670,42 @@ splitting it would buy nothing but seams and draw calls.
 |---|---|
 | Mesh name | `road_surface-col` |
 | Primitives | 1 — one draw call, like a tile |
-| Attributes | `POSITION`, `NORMAL`, `COLOR_0`, `TEXCOORD_0`; no texture |
+| Attributes | `POSITION`, `NORMAL`, `COLOR_0`, `TEXCOORD_0`, `TEXCOORD_1`; no texture |
 | `TEXCOORD_0` | **U is a lane coordinate**, 0 at the **nearside** kerb line and `lanes` at the offside, so an integer U is a lane boundary whatever the widening did to the metres. V is metres along the carriageway. Junction caps carry `(0, 0)` — a junction is not a length of lane |
+| `TEXCOORD_1.x` | The packed **marking state** (`P3-12`), a non-negative integer, constant per edge: `code = class + 4·lanes + 64·direction + 256·bus_lane + 512·tram_tracks`. `class`: 0 carriageway · 1 kerb · 2 junction cap. `lanes` 1–15. `direction`: 1 both · 2 forward, **0 = absent**, so an unrecognised value draws no centre line rather than a guessed one. `bus_lane`, `tram_tracks`: 0/1. Max legal code **1023** ≪ 2²⁴, so every code is exact in float32; consumers decode with `floor(x + 0.5)` first |
+| `TEXCOORD_1.y` | The edge's **drawn length** in metres — after the junction trims, so it is the ribbon as drawn and not the published centreline. Junction caps carry `0.0`. Distance to the nearer end is `min(V, length − V)`, computed by the consumer |
+| Material name | **`road_markings`**, and the name is the contract, exactly as `city_facade` is on a tile. `tools/generated_scene_import.gd` dispatches on it and hands the surface `tuning/road_markings.tres` |
 
 Nearside means left of travel, because Hong Kong drives on the left. The sign is not a free
 convention: flip it and every asymmetric marking — a kerbside bus lane, a nearside double yellow —
 lands on the wrong side of the road while the geometry still renders perfectly.
+
+⚠️ **The `TEXCOORD_1` codec constants are contract, not tuning** — mirrored as `MARKING_*` in
+`etl/pipeline/surface.py`, `assets/shaders/road_markings.gdshader` and
+`tools/verify_road_surface.gd`, the same standing as the tiles' survey codec, and this table is the
+tiebreak. They do not belong in the city yaml: a codec has no per-city meaning.
+
+⚠️ **`TEXCOORD_0` cannot be drawn on by itself, which is why the second channel exists.** The kerbs
+run off **both** ends of the lane range — the nearside lip spans `U ∈ [−outside, 0]` and the offside
+riser and lip sit at `[lanes, lanes + outside]`, where `outside = kerb_width_m / lane_width_m ≈
+0.156` — so `fract(U)` on a kerb lip lands in `[0, 0.156]` and paints a lane line down it. And a
+fragment at `U = 3.0` is the offside kerb on a three-lane road but an interior lane boundary on a
+four-lane one; no arithmetic on `TEXCOORD_0` separates them. `class` and `lanes` answer both.
+
+⚠️ **A cap's `(0, 0)` is an in-range value, not a sentinel.** `U = 0` *is* the nearside kerb line, so
+a kerbside marking keyed on U alone floods every junction in the city. The cap says what it is in
+`TEXCOORD_1` instead.
+
+⚠️ **`TEXCOORD_1.y` is a length and deliberately not the distance-to-nearer-end the consumer wants.**
+That distance is a V with its kink at the midpoint, and a strip interpolates linearly between its
+stations — so on an edge Douglas–Peucker left with two, both stations *are* ends, both read zero, and
+the whole street interpolates flat to zero. **204 of the region's 797 edges carry two stations**;
+only edges lifted onto structure are resampled. The length is constant per edge, so it survives any
+station spacing, and being constant it packs the way the tiles' survey channel does.
+
+**Measured cost: +38,532 B of PCK** (40,702,784 → 40,741,440, one variable changed) against
+**279,532 B** of raw VEC2 across 34,924 vertices — the pack compresses it by 86%. No triangle moved,
+no draw call and no material was added.
 
 **The `-col` suffix is load-bearing**, for the same reason as on tiles. `verify_road_surface.gd`
 checks that it survived, because nothing on the Python side can see it.
@@ -682,10 +719,17 @@ different levels are never joined.
 
 ⚠️ **A cap overlaps its arms rather than abutting them** where they stop at different distances from
 the node — 210 of the region's 1,398 trimmed ends, 6,051 m² of 52,985 m² of cap area. Invisible
-today, since cap and carriageway are the same colour at the same height in one material; it becomes
-visible when the markings shader lands, because the cap carries no lane coordinate and the ribbon
-beneath it does. The fix is a non-convex cap — the union boundary rather than the hull — which is
-polygon clipping and is deliberately not built yet.
+while cap and carriageway are the same colour at the same height in one material; it becomes visible
+the moment anything is drawn under it. The fix is a non-convex cap — the union boundary rather than
+the hull — which is polygon clipping and is deliberately not built yet.
+
+✅ **`P3-12` landed the markings shader this predicted, and the overlap did not bite** — because the
+shader fades its markings out before the trim, which is what real lane lines do anyway. The depth
+was then measured rather than guessed: derived per arm end from the published trims, the cap reaches
+p90 **1.17 m**, p99 **3.62 m** and a worst **4.21 m** back over the ribbon beneath it, across 203 of
+1,398 ends — reproducing this paragraph's 210 from a different direction. The shipped 6 m fade
+clears every one of them. ⚠️ **The 6,051 m² is still there.** Anything drawn *on* a cap — a box
+junction, a stop line — re-exposes it immediately and wants the non-convex cap first. `Q53`.
 
 ### `fares.json` — pickup and dropoff nodes
 
@@ -904,7 +948,7 @@ the second vehicle anyone built.
 | `scripts/city/generated_document.gd` | Parse and version-check a JSON document the ETL wrote. Shared by the locators and by `CityManifest`, so the stale-copy message exists once |
 | `scripts/city/generated_{road_graph,road_surface,fares,landmarks}.gd` | Locators — one definition per document, two readers. `generated_fares.gd` is the one place that knows that document's shape, and `generated_landmarks.gd::placement_of` is the one place the compass bearing becomes a Godot rotation |
 | `scripts/city/landmarks.gd` | Places the authored heroes where `landmarks.json` puts them. ~2 models, always resident — no streaming, no LOD |
-| `scripts/city/mesh_contract.gd` | The mesh rules every generated asset is held to, plus `triangles` and `bounds`. Read by every verify tool that touches geometry, the previews, and `CityStreamer` |
+| `scripts/city/mesh_contract.gd` | The mesh rules every generated asset is held to, plus `triangles` and `bounds`. Read by every verify tool that touches geometry, the previews, and `CityStreamer`. Also the two checks a payload-carrying asset needs — that it landed on the shader its material name asked for, and that the importer settings which would silently overwrite a `TEXCOORD_1` have not drifted — both hoisted here when `P3-12` gave the road surface a second copy of them |
 | `scripts/city/preview_draw.gd` | Flat ribbons and the unshaded vertex-colour material, shared by the dev previews |
 | `scripts/city/{tile,road_surface,road,fare}_preview.gd` | Dev previews — instantiate tiles, the road surface, the graph with one-way arrows, and the fare nodes tethered to their edges. **Not performance measurements** |
 | `scripts/city/road_graph_overlay.gd` | Dev: the resolved edge, lane centre and legal travel direction under the moving car |
