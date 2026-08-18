@@ -110,10 +110,16 @@ Common emoji for this project:
   after.** It is what priced the current value: narrowing clears *no* blocked edge at any factor
   down to the 1.3x floor and loses one (`Q19`). A widening change that does not re-run it is
   re-opening a question that has been measured shut.
-- **`clearance.py` changes: also `tools/carriageway_occupancy.py`, and paste both tables.** The
-  pipeline publishes a number that tool grades, and the two currently disagree — 21 starved edges
-  against 26 (`Q51`). The gap is only evidence while both figures describe the same bundle, and no
-  check can see one of them go stale.
+- **`clearance.py` or `carriageway_occupancy.py` changes: also `tools/clearance_reconcile.py`, and
+  paste its table.** The pipeline publishes a number that tool grades, they disagree — 21 starved
+  edges against 26 — and the gap is **reconciled** as plan cell size (`Q51`). The reconcile tool is
+  the ratchet that keeps both figures describing the same bundle, and it fails when either count
+  moves: a finding to go and look at, never a bar to retune. Add `--sweep` when the change touches a
+  resolution constant — `ALONG_M`, `ACROSS_M`, `CELL_M`, `SUBDIVIDE_M`, `MAX_SUBDIVISIONS`,
+  `INDEX_CELL_M` — because those are what the gap is made of.
+  ⚠️ **`ALONG_M` aliases walls, so the published clearance is not a lower bound** and `is_routable`
+  routes traffic onto at least one blocked edge today. Lowering it re-publishes `city.json` and
+  changes what routing refuses — the user's call, not a tuning tweak. Numbers in `Q51`.
 - Road-surface, deck-height or ground changes: also `tools/deck_error.py`, `tools/overhang.py`,
   `tools/ground_clearance.py` and `tools/carriageway_occupancy.py`, by hand after a build. They grade
   the *shipped* bundle and share no code with the pipeline — `check.sh` does not require a built

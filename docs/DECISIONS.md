@@ -74,7 +74,7 @@ lives in git. This file holds *why things are the way they are*.
 | `Q48` | A contrast ratio measures banding where an `L*` profile could not | 🟡 Open as a **candidate only** — recorded 2026-08-13 from `P3-6`'s photo veto, nothing built and nothing scheduled; Probe 3 and mode 1 do not reach it, mode 4 does, and the evidence is one hero building graded by its author's eye |
 | `Q49` | A tyre spends one budget, and the handbrake that follows spins the car | 🟡 **Superseded in mechanism by `Q50`** — the friction ellipse it shipped is gone with the raycast model; its `B4` conclusion stands and is now the only route |
 | `Q50` | The shipped car is Godot's `VehicleBody3D`; `P0-5a` was right and the cost was accepted | ✅ Closed — shipped 2026-08-18 at the user's explicit instruction. Drift window measured **0.01–0.02 wide**, a handbrake tap now does nothing, and `Q49`'s ellipse is lost |
-| `Q51` | Traffic is never *sent* down an edge under one lane clear; the player is never *stopped* | ✅ Closed — the graph expresses passability and refuses nothing. `clearance.py` publishes a width per station into `city.json` (schema 9) and `RoadGraph` gains `is_routable`; `nearest_edge` is untouched. ⚠️ The pipeline reads **21** starved edges where `Q19`'s grader reads **26**, and that gap is recorded rather than tuned away |
+| `Q51` | Traffic is never *sent* down an edge under one lane clear; the player is never *stopped* | ✅ Closed — the graph expresses passability and refuses nothing. `clearance.py` publishes a width per station into `city.json` (schema 9) and `RoadGraph` gains `is_routable`; `nearest_edge` is untouched. ✅ **The 21-against-26 gap is reconciled (2026-08-19): plan cell size, verified against 109 M brute-forced samples**, and `tools/clearance_reconcile.py` ratchets both counts. 🔴 It found a live defect on the way — `ALONG_M = 1.0` **aliases walls**, so `is_routable` routes traffic down `e636` today; four more edges starve at finer spacing and the fix is a shipped-behaviour change the user owns |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -5556,7 +5556,8 @@ output into the bundle — would have made the instrument load-bearing in the bu
 which it could never disagree with what ships.
 
 **Measured.** 737 level-0 edges, **38,664 cross-sections** judged at 1 m spacing and 6,812 left to
-their junction caps; 66 tiles and 2 hero meshes read, 118,482 triangles reaching the corridor.
+their junction caps; 66 tiles and 2 hero meshes read, 118,482 triangles reaching the corridor — of
+which **9,727 could not be split to `SUBDIVIDE_M`** and so block by a box, counted since 2026-08-19.
 **21 edges keep less than one lane (3.20 m) clear**, worst `e233` **0.00 m** (WAN CHAI
 INTERCHANGE), then `e125` 0.25 m, `e314` 0.25 m, `e485` 0.50 m, `e627` 0.50 m. **3.8 s** and
 **482 MB**, against the grader's 26.1 s over the same bundle.
@@ -5570,30 +5571,86 @@ in the pipeline. ⚠️ **A budget on triangles does not bound that**, because `
 lets 3,773 triangles become 763,000 pieces; the budget has to be on *pieces*. 12.2 s and 1.64 GB
 → **3.8 s and 482 MB**.
 
-⚠️ **The two instruments do not agree, and the gap is recorded rather than tuned away.** The
-pipeline reads 21 starved edges where the grader reads 26, and on the grader's eight tightest:
+### The two instruments, reconciled 2026-08-19
 
-| edge | `carriageway_occupancy.py` | `clearance.py` |
-|---|---|---|
-| `e233` WAN CHAI INTERCHANGE | 0.00 m | **0.00 m** |
-| `e125` | 0.48 m | **0.25 m** |
-| `e314` LEIGHTON ROAD | 0.49 m | **0.25 m** |
-| `e485` WAN CHAI INTERCHANGE | 0.49 m | **0.50 m** |
-| `e788` HUNG HING ROAD FLYOVER | 0.49 m | **1.00 m** |
-| `e132` | 0.98 m | **4.00 m** |
-| `e426` | 0.98 m | **1.25 m** |
-| `e546` CONVENTION AVENUE | 0.49 m | **2.75 m** |
+⚠️ **The gap was recorded rather than tuned away, and then measured.** ✅ **Reconciled** — the
+mechanism is now known, and it is *not* the one this entry first named. `tools/clearance_reconcile.py`
+runs both over one bundle and holds the counts as a ratchet.
 
-Six of the eight agree that the edge is starved and the worst agrees exactly. Two — `e546` and
-`e132` — disagree by enough to change the verdict. **Both instruments over-block by construction**
-and so both under-report clearance: the grader bins occupier surfaces into 1 m plan cells, this
-rasterises a piece's plan box, and neither ever calls a blocked sample clear. So the disagreement is
-about how much each over-blocks, not about which is measuring something the other cannot see. The
-likeliest mechanism is that the grader judges the **drawn** cross-section and drops cells with no
-road under them, while this judges the **nominal** corridor and drops whole stations the trims
-removed — different treatments of the same junction. 🟡 **Not reconciled.** `Q19` carries an
-unreconciled 5.17% / 3.693% for the same family of reason, and tuning either instrument toward the
-other would destroy the only thing a second one is for.
+**The gap is 6 + 1, not "five".** 26 − 21 = 5 is the *net*, and a net hides a swap:
+
+| direction | edges |
+|---|---|
+| grader condemns, pipeline clears | `e99` `e132` `e207` `e222` `e636` `e781` |
+| pipeline condemns, grader clears | `e702` EXPO DRIVE CENTRAL |
+| both condemn | 20 |
+
+**Both mechanisms this entry originally proposed are dead**, and each took one probe:
+
+- *"The grader judges the **drawn** cross-section where this judges the **nominal** corridor."*
+  Across all 27 edges in the union, the median |Δ| between the graph's own `polyline.y` and the drawn
+  `roads.glb` surface is **0.000 m** (p90 0.007, max 0.139), and **0%** of this stage's cross-section
+  samples fail to find drawn road inside the 0.40 m attribution window. On these edges the nominal
+  corridor *is* the drawn corridor.
+- *"…and drops whole stations the trims removed — different treatments of the same junction."*
+  Replaying the grader's corridor logic with **every trimmed station dropped** gives **26 → 26**. Not
+  one edge's verdict comes from a trim.
+
+**The mechanism is plan cell size, and it was verified against ground truth.** A cell blocks in full
+as soon as one surface sample lands in it, so a wall smears by up to a cell either side and a corridor
+bounded by two obstructions loses twice that again. Brute-forcing `e132` from its own geometry — 590
+occupier triangles, **109 M surface samples at 5 cm**, sharing no code with either instrument —
+reproduces both published numbers exactly:
+
+| `e132`, one station, same band, same 10.24 m width | clear |
+|---|---|
+| ground truth in 1.00 m cells | **0.98 m** — the grader's published figure |
+| ground truth in 0.25 m cells | **4.00 m** — the pipeline's published figure |
+
+Neither instrument was wrong about the city. The grader's starved count is very nearly a function of
+one constant, swept with the new `--index-cell-m`:
+
+| grader plan bin | starved level-0 edges |
+|---|---|
+| **1.00 m** (shipped) | **26** |
+| 0.50 m (`clearance.py`'s own `CELL_M`) | **18** |
+| 0.25 m (`clearance.py`'s `ACROSS_M`) | **9** |
+
+At matched plan resolution the grader is *tighter* than the pipeline, not looser — so the pipeline's
+21 carries its own over-blocking, and neither figure is the truth. Both shipped defaults stay: the
+coarseness is what the next finding shows the grader needs.
+
+🔴 **The reconciliation found a live defect, and it is the pipeline's.** In plan both instruments
+over-block, so those errors bound the answer. **Along the edge, this stage does not over-block — it
+*misses*.** `ALONG_M` is 1.0 m and a wall standing between two cross-sections is skipped, not
+smeared. Swept with the new `--along-m` on the same bundle:
+
+| `clearance.py` along-edge spacing | starved level-0 edges |
+|---|---|
+| **1.00 m** (shipped) | **21** |
+| 0.50 m | **24** |
+| 0.25 m | **25** |
+
+`e636` HARBOUR ROAD and `e335` LEIGHTON LANE fall from *passable* to **0.00 m clear**. `e636` is one
+of the six edges the grader condemns and this stage clears — so **there the grader is simply right,
+and `RoadGraph.is_routable` is routing traffic down a blocked edge today.** The grader's 1 m plan bin
+is precisely what makes it immune to this, which is why its coarseness is not a defect to tune out:
+**two instruments, two error dimensions**, and that is the reconciliation rather than a shared number.
+
+⚠️ **A second silent smear, now counted: 9,727 triangles a run** hit `MAX_SUBDIVISIONS` and keep
+pieces wider than `CELL_M`, each then blocking by its plan box at its *whole* height range. The
+constant's own comment claimed "anything wider than that in plan is ground, and ground is excluded" —
+wrong, and these are hero meshes and long ramp faces. `_plan_steps` returns the count and
+`build_region` warns it. `e702`, the one edge where this stage is the more pessimistic of the two
+(1.25 m against the grader's 3.41 m), is `LANDMARK`-blocked — the signature.
+
+🟡 **What is owed.** Lowering `ALONG_M` re-publishes `city.json`'s `clear_width_m` and so changes what
+`is_routable` refuses — a shipped-behaviour change on `P3-3`'s foundation rather than a tuning tweak,
+so it is the user's call and is **not** taken here. `is_passable` still reads
+`min_clear_width_of >= lane_width_m` with no margin, and a blanket margin was priced and rejected:
+dominating the grader's set needs a **5.00 m** bar, which refuses **37** edges instead of 21 to cover
+6 the grader over-blocks. `Q19` still carries an unreconciled 5.17% / 3.693% — a different question,
+and one this measurement does not touch.
 
 ⚠️ **Measuring at the polyline's own vertices measures almost nothing.** `roads.py` simplifies to
 0.2 m, so a straight street is **two** stations — and both of them are its ends, which is exactly
@@ -5637,7 +5694,8 @@ player on a blocked edge — named here as a live defect rather than a future on
 the same day**, which reports the gap at the start line and makes `verify_spawn.gd` refuse.
 
 **See.** `Q52` for the start-line half, closed · `Q19` for the geometry half, still open · `Q13` for
-the refusal this deliberately is not · `Q23` · `P2-2` · `PROGRESS.md` risk register
+the refusal this deliberately is not · `Q23` · `P2-2` · `tools/clearance_reconcile.py` for the ratchet
+and the sweep that priced the gap · `PROGRESS.md` risk register
 
 ---
 
