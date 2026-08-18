@@ -108,18 +108,23 @@ Common emoji for this project:
   (`P0-5b/c/d`).
 - **`widen_default` or any `roads.surface` widening change: also `tools/narrowing.py`, before and
   after.** It is what priced the current value: narrowing clears *no* blocked edge at any factor
-  down to the 1.3x floor and loses one (`Q19`). A widening change that does not re-run it is
-  re-opening a question that has been measured shut.
+  down to the 1.3x floor and loses two — `e207` and `e595` (`Q19`). A widening change that does not
+  re-run it is re-opening a question that has been measured shut.
 - **`clearance.py` or `carriageway_occupancy.py` changes: also `tools/clearance_reconcile.py`, and
-  paste its table.** The pipeline publishes a number that tool grades, they disagree — 21 starved
+  paste its table.** The pipeline publishes a number that tool grades, they disagree — 24 starved
   edges against 26 — and the gap is **reconciled** as plan cell size (`Q51`). The reconcile tool is
   the ratchet that keeps both figures describing the same bundle, and it fails when either count
   moves: a finding to go and look at, never a bar to retune. Add `--sweep` when the change touches a
   resolution constant — `ALONG_M`, `ACROSS_M`, `CELL_M`, `SUBDIVIDE_M`, `MAX_SUBDIVISIONS`,
   `INDEX_CELL_M` — because those are what the gap is made of.
-  ⚠️ **`ALONG_M` aliases walls, so the published clearance is not a lower bound** and `is_routable`
-  routes traffic onto at least one blocked edge today. Lowering it re-publishes `city.json` and
-  changes what routing refuses — the user's call, not a tuning tweak. Numbers in `Q51`.
+  ✅ **`ALONG_M` is `CELL_M` since 2026-08-19, so the published clearance is a lower bound** at that
+  cell and `is_routable` no longer routes traffic onto a wall. ⚠️ It is a bound at `CELL_M` and no
+  finer — a diagonal edge can corner-cross a cell, which a 0.25 m walk catches and the shipped one
+  does not. ⚠️ **`ALONG_M` is still shipped behaviour, not a tuning knob**: moving it re-publishes
+  `city.json` and changes what routing refuses, so it is the user's call. Numbers in `Q51`.
+  ⚠️ **`tools/narrowing.py` is owed by an `ALONG_M` change too**, and the reason is not obvious — its
+  class split and its refusal table are computed over *the pipeline's* starved population, so a
+  spacing change moves them without touching a single widening value.
 - Road-surface, deck-height or ground changes: also `tools/deck_error.py`, `tools/overhang.py`,
   `tools/ground_clearance.py` and `tools/carriageway_occupancy.py`, by hand after a build. They grade
   the *shipped* bundle and share no code with the pipeline — `check.sh` does not require a built

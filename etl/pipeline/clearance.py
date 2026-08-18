@@ -94,25 +94,30 @@ BUMPER_HIGH_M = 2.00
 # being rounded to the nearest half metre.
 ACROSS_M = 0.25
 
-# Spacing of the cross-sections along an edge, and **the one dimension in which
-# this stage under-reports blockage rather than over-reporting it**.
+# Spacing of the cross-sections along an edge. **Matched to `CELL_M`, and that is
+# the whole of the argument**: occupiers are binned in plan at `CELL_M`, so a walk
+# that steps at cell pitch cannot stride over a cell without sampling it. Every
+# other error here over-blocks, which is what makes a published width a lower
+# bound — this was the one exception, because a wall standing between two
+# cross-sections is not smeared but *missed*, and a missed wall reads as clear
+# road that `RoadGraph.is_routable` then hands a car.
 #
-# ⚠️ The comment here used to say it was matched to the 1 m plan grid `Q19`
-# measures on, "so the two instruments ask about the road at the same rate and a
-# disagreement between them is about what they found rather than about how often
-# they looked". **That was wrong, and it was measured wrong.** The grader's 1 m is
-# a plan *bin* — every cell it touches blocks in full — so it cannot miss a wall
-# between stations, while a 1 m *spacing* here steps straight over one. Swept with
-# `--along-m` on the same bundle: **21 starved edges at 1.00 m, 24 at 0.50 m and
-# 25 at 0.25 m**, and `e636` HARBOUR ROAD and `e335` LEIGHTON LANE go from
-# passable to **0.00 m clear**. `e636` is one of the six edges the grader condemns
-# and this stage clears (`Q51`), so there the grader is right and this is aliasing.
+# ⚠️ It shipped at 1.0 until 2026-08-19, and over that period the published
+# widths were **not** a lower bound. Swept with `--along-m` on the same bundle:
+# **21 starved edges at 1.00 m, 24 at 0.50 m and 25 at 0.25 m**, and `e636`
+# HARBOUR ROAD — one of the six edges the grader condemns and this stage cleared
+# — went from passable to **0.00 m clear**. There the grader was simply right.
+# Taking the call re-published `city.json` and moved what `is_routable` refuses,
+# which is why it was the user's to take and not a tuning tweak (`Q51`).
 #
-# Left at 1.0 pending the user's call, because lowering it re-publishes
-# `city.json`'s `clear_width_m` and so changes what `RoadGraph.is_routable`
-# refuses — a shipped-behaviour change on `P3-3`'s foundation, not a tuning tweak.
-# `tools/clearance_reconcile.py` holds the number so it cannot go quiet.
-ALONG_M = 1.0
+# ⚠️ **One residue survives, and it is why 0.25 m finds one edge more.** The
+# cells are axis-aligned in plan and an edge runs at whatever angle it likes, so a
+# diagonal walk stepping 0.50 m advances 0.35 m in each of x and z and can
+# corner-cross a cell without landing in it. 0.25 m was measured and refused: ~4x
+# the run, and a peak **1.088 GB** RSS — 2.1x the shipped run and back toward the
+# 1.64 GB `PIECE_BUDGET` exists to cut. `tools/clearance_reconcile.py` holds the
+# counts, so neither the fix nor the residue can go quiet.
+ALONG_M = 0.5
 
 # The largest plan extent of one occupier piece. Below this a piece's height
 # range is tight enough over its own plan box that taking the whole of it across
@@ -258,15 +263,17 @@ def walk(
 ) -> tuple[Corridor, ClearanceReport]:
     """Every cross-section of every drivable level-0 edge, at `along_m` spacing.
 
-    ⚠️ **`along_m` is the one dimension this stage is *wrong* in rather than merely
-    coarse, and it is wrong today.** Everything else here over-blocks — a plan box
-    for a piece, a whole height range for a box — so those make a published width a
-    lower bound on the real corridor. The spacing along the edge is the exception:
-    a wall standing between two cross-sections is not smeared, it is *missed*, and
-    a missed wall reads as clear road that `RoadGraph.is_routable` will then hand a
-    car. Swept on the shipped bundle it costs four edges — see `ALONG_M`. It is a
-    parameter so that stays measurable rather than assumed; sweeping it does not
-    publish, see `main`.
+    ⚠️ **`along_m` is the one dimension this stage can be *wrong* in rather than
+    merely coarse.** Everything else here over-blocks — a plan box for a piece, a
+    whole height range for a box — so those make a published width a lower bound on
+    the real corridor. The spacing along the edge is the exception: a wall standing
+    between two cross-sections is not smeared, it is *missed*, and a missed wall
+    reads as clear road that `RoadGraph.is_routable` will then hand a car. ✅ At the
+    shipped `ALONG_M` the walk now steps at `CELL_M`, so it cannot pass over a cell
+    it never samples and the bound holds — see `ALONG_M` for the residue that does
+    survive, and for the three edges taking it cost. It stays a parameter so that
+    remains measurable rather than assumed; sweeping it does not publish, see
+    `main`.
 
     `drawn` is `roadsurface.json`'s carriageway table, keyed by edge id, giving
     the half-width per station and the trims at the two ends.
@@ -802,8 +809,8 @@ def _longest_clear(flags: np.ndarray) -> int:
 def measure(corridor: Corridor, blocked: np.ndarray, report: ClearanceReport) -> None:
     """Fold the per-sample verdicts into one width per cross-section, then per station.
 
-    A station usually gathers several cross-sections — `ALONG_M` is 1 m and the
-    graph's vertices are much further apart than that — and it takes the
+    A station usually gathers several cross-sections — `ALONG_M` is half a metre
+    and the graph's vertices are much further apart than that — and it takes the
     **tightest** of them. Averaging would let a wall across half a station hide
     behind the clear half beside it, which is the same mistake at station scale
     that a region share makes at network scale (`Q19`).

@@ -214,20 +214,22 @@ class TestWalk:
 
 
 class TestAlongSpacing:
-    """`along_m` is the one dimension this stage *misses* in rather than smears.
+    """`along_m` is the one dimension this stage could *miss* in rather than smear.
 
-    ⚠️ Measured on the shipped bundle, lowering it costs four edges — `ALONG_M`
-    carries the sweep — so it is a parameter in order to stay measurable. What is
-    silent is the knob quietly stopping working: a sweep that returned the same
-    cross-sections at every spacing would read as "the aliasing was already
-    priced" when nothing had been swept at all.
+    ⚠️ Measured on the shipped bundle, dropping it to `CELL_M` cost three edges —
+    `ALONG_M` carries the sweep — so it stays a parameter in order to stay
+    measurable. What is silent is the knob quietly stopping working: a sweep that
+    returned the same cross-sections at every spacing would read as "the aliasing
+    was already priced" when nothing had been swept at all.
     """
 
     def test_finer_spacing_judges_strictly_more_cross_sections(self) -> None:
         graph = {"edges": [_edge(1, [[0.0, 0.0, 0.0], [0.0, 0.0, 40.0]])]}
         drawn = _drawn(1, [3.2, 3.2], (2.0, 2.0))
-        coarse, _ = walk(graph, drawn, along_m=1.0)
-        fine, _ = walk(graph, drawn, along_m=0.25)
+        # The coarse side is `ALONG_M` rather than a literal, so this keeps
+        # exercising what ships rather than a spacing the stage has left behind.
+        coarse, _ = walk(graph, drawn, along_m=ALONG_M)
+        fine, _ = walk(graph, drawn, along_m=ALONG_M / 2.0)
         assert len(fine.section_count) > len(coarse.section_count)
 
     def test_the_default_is_the_shipped_constant(self) -> None:

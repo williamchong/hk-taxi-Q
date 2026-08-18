@@ -74,7 +74,7 @@ lives in git. This file holds *why things are the way they are*.
 | `Q48` | A contrast ratio measures banding where an `L*` profile could not | 🟡 Open as a **candidate only** — recorded 2026-08-13 from `P3-6`'s photo veto, nothing built and nothing scheduled; Probe 3 and mode 1 do not reach it, mode 4 does, and the evidence is one hero building graded by its author's eye |
 | `Q49` | A tyre spends one budget, and the handbrake that follows spins the car | 🟡 **Superseded in mechanism by `Q50`** — the friction ellipse it shipped is gone with the raycast model; its `B4` conclusion stands and is now the only route |
 | `Q50` | The shipped car is Godot's `VehicleBody3D`; `P0-5a` was right and the cost was accepted | ✅ Closed — shipped 2026-08-18 at the user's explicit instruction. Drift window measured **0.01–0.02 wide**, a handbrake tap now does nothing, and `Q49`'s ellipse is lost |
-| `Q51` | Traffic is never *sent* down an edge under one lane clear; the player is never *stopped* | ✅ Closed — the graph expresses passability and refuses nothing. `clearance.py` publishes a width per station into `city.json` (schema 9) and `RoadGraph` gains `is_routable`; `nearest_edge` is untouched. ✅ **The 21-against-26 gap is reconciled (2026-08-19): plan cell size, verified against 109 M brute-forced samples**, and `tools/clearance_reconcile.py` ratchets both counts. 🔴 It found a live defect on the way — `ALONG_M = 1.0` **aliases walls**, so `is_routable` routes traffic down `e636` today; four more edges starve at finer spacing and the fix is a shipped-behaviour change the user owns |
+| `Q51` | Traffic is never *sent* down an edge under one lane clear; the player is never *stopped* | ✅ Closed — the graph expresses passability and refuses nothing. `clearance.py` publishes a width per station into `city.json` (schema 9) and `RoadGraph` gains `is_routable`; `nearest_edge` is untouched. ✅ **The 21-against-26 gap is reconciled (2026-08-19): plan cell size, verified against 109 M brute-forced samples**, and `tools/clearance_reconcile.py` ratchets both counts. ✅ It found a live defect on the way — `ALONG_M = 1.0` **aliased walls**, so `is_routable` routed traffic down `e636` — and the call was **taken the same day: `ALONG_M` is `CELL_M` (0.5 m)**, the published count is **24 against 26**, and the published width is a lower bound at that cell |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -513,16 +513,22 @@ framing: the building half was recorded as "the 1.6x widening eating the frontag
 edges the obstruction is in the real street, so **narrowing would not clear them**.
 
 **What blocks them — which this entry never established.** Split by class at the shipped width by
-`tools/narrowing.py`, the 21 edges the pipeline measures are **8 `INFRASTRUCTURE`, 12 `BUILDING`,
-1 `LANDMARK`**. ⚠️ **21 rather than the 26 above, because that is the *other*
-instrument** — `Q51` carries the unreconciled gap between them, and the split and the sweep below
-are both the pipeline's population. Whether the grader's extra five would fall the same way is not
-established here. The two halves are not alike: every near-total blockage is `INFRASTRUCTURE`
-(`e233` 0.00 m, `e125` 0.25 m, `e485` 0.50 m), **six of those eight are the WAN CHAI INTERCHANGE**
-and a seventh is HUNG HING ROAD FLYOVER, while the `BUILDING` half is uniformly mild — 1.25 to
-2.75 m, scattered over Leighton Road, Great George Street, Matheson Street, Lan Fong Road and
-Convention Avenue. The severe half is one locality and it is at-grade ribbon drawn through flyover
+`tools/narrowing.py`, the **24** edges the pipeline measures are **9 `INFRASTRUCTURE`, 14
+`BUILDING`, 1 `LANDMARK`**. ⚠️ **24 rather than the 26 above, because that is the *other*
+instrument** — `Q51` reconciled the gap as plan cell size, and the split and the sweep below are
+both the pipeline's population. Whether the grader's extra two would fall the same way is not
+established here. **7 of the 9 `INFRASTRUCTURE` edges are the WAN CHAI INTERCHANGE** and an eighth
+is HUNG HING ROAD FLYOVER: that half is one locality, at-grade ribbon drawn through flyover
 structure, which is the `Q20`/`Q22` family rather than anything a width rule reaches.
+
+⚠️ **Corrected 2026-08-19, and the correction is the interesting part.** This paragraph used to say
+that *every near-total blockage is `INFRASTRUCTURE`* and that the `BUILDING` half was *"uniformly
+mild — 1.25 to 2.75 m"*. Both were artefacts of `Q51`'s 1 m along-edge aliasing, and both are now
+false. Five edges read **0.00 m** and **three of them are `BUILDING`** — `e627` GREAT GEORGE
+STREET, `e636` HARBOUR ROAD and `e740` — against two `INFRASTRUCTURE` (`e125`, `e233`). The walls
+the coarse walk stepped over were disproportionately building walls, which is what one would expect
+of the thing it was missing: a building wall is thin in plan along the street it faces. **The
+`BUILDING` half is not the mild half.** It is the half a finer instrument found.
 
 **Narrowing is refused, and now on the whole population rather than a sample of two.** The claim
 above was drawn from the eight tightest — of which four are `INFRASTRUCTURE`, which no width rule
@@ -531,23 +537,30 @@ factor `GAME_DESIGN.md` allows:
 
 | widen | edges under one lane | `INFRA` | `BUILDING` | `LANDMARK` | against 1.60x |
 |---|---|---|---|---|---|
-| **1.60x** (shipped) | 21 | 8 | 12 | 1 | — |
-| 1.55x | 21 | 8 | 12 | 1 | none cleared |
-| 1.50x | 21 | 8 | 12 | 1 | none cleared |
-| 1.45x | 22 | 8 | 13 | 1 | none cleared, **`e595` lost** |
-| 1.40x | 22 | 8 | 13 | 1 | none cleared, `e595` lost |
-| 1.35x | 22 | 8 | 13 | 1 | none cleared, `e595` lost |
-| 1.30x | 22 | 8 | 13 | 1 | none cleared, `e595` lost |
+| **1.60x** (shipped) | 24 | 9 | 14 | 1 | — |
+| 1.55x | 24 | 9 | 14 | 1 | none cleared |
+| 1.50x | 24 | 9 | 14 | 1 | none cleared |
+| 1.45x | 26 | 10 | 15 | 1 | none cleared, **`e207` and `e595` lost** |
+| 1.40x | 26 | 10 | 15 | 1 | none cleared, `e207` and `e595` lost |
+| 1.35x | 26 | 10 | 15 | 1 | none cleared, `e207` and `e595` lost |
+| 1.30x | 26 | 10 | 15 | 1 | none cleared, `e207` and `e595` lost |
 
-**Not one edge clears the bar at any factor down to the 1.3x floor**, and `e595` (THOMSON ROAD)
-crosses it the wrong way. So the refusal stands, for the buildings as well as the structure, and it
-is no longer an inference from a sample.
+**Not one edge clears the bar at any factor down to the 1.3x floor**, and two cross it the wrong
+way: `e595` (THOMSON ROAD) and `e207` (CANAL ROAD EAST). So the refusal stands, for the buildings as
+well as the structure, and it is no longer an inference from a sample.
+
+⚠️ **Re-swept 2026-08-19 on `Q51`'s corrected population, and it hardened rather than softened.**
+The table above was 21 / 8 / 12 / 1 losing one edge; at the finer along-edge spacing it is 24 / 9 /
+14 / 1 losing two. Nothing about widening changed — this tool imports `pipeline.clearance` whole, so
+a spacing change moves its population without touching a single width. That dependency was missed
+when the change was planned and is now recorded in `CLAUDE.md`.
 
 ⚠️ **Narrowing cuts both ways, and that is why it had to be measured rather than argued.** The
 published figure is the *widest continuous clear run*, so a narrower corridor removes obstructions
 standing in the widened fringe — and clips a run that lay against one kerb. `e595` is the second
 effect on its own: 3.50 m at 1.60x, 2.50 m at 1.30x, starved by the narrowing rather than by
-anything that moved.
+anything that moved. `e207` CANAL ROAD EAST joined it in the 2026-08-19 re-sweep on the same
+mechanism — 3.25 m at 1.60x, 2.75 m at 1.30x.
 
 ⚠️ **The objection that fixed `widen_default` at 1.6 does not bind anywhere in the authorised
 range**, and it is one line of arithmetic rather than a measurement. The config's reason for 1.6
@@ -561,8 +574,9 @@ it; it is recorded here so it is not raised again as one.
 ⚠️ **Two bars, because they are two questions, and only one of them was ever published.** One lane
 (3.20 m) is whether traffic should be *routed* down an edge — `Q51` gates on it. The car's own width
 is whether the *player* is stuck, and `taxi.tscn` gives the body a 1.8 m `BoxShape3D` with no wheel
-colliders since `Q50`. **17 of the 21 are under 1.8 m**: these are not edges a car threads
-awkwardly, they are edges a car cannot enter. Nothing recorded that until now.
+colliders since `Q50`. **19 of the 24 are under 1.8 m** (17 of 21 before `Q51`'s spacing fix):
+these are not edges a car threads awkwardly, they are edges a car cannot enter. Nothing recorded
+that until now.
 
 ⚠️ **The sweep's columns are not monotonic, and that is the measurement rather than a fault.** Two
 causes, both real: the cross-section samples are 0.25 m apart and **re-phase** as the corridor
@@ -5555,12 +5569,20 @@ between `surface` and `export`, and `tools/carriageway_occupancy.py` is unchange
 output into the bundle — would have made the instrument load-bearing in the build it audits, after
 which it could never disagree with what ships.
 
-**Measured.** 737 level-0 edges, **38,664 cross-sections** judged at 1 m spacing and 6,812 left to
-their junction caps; 66 tiles and 2 hero meshes read, 118,482 triangles reaching the corridor — of
-which **9,727 could not be split to `SUBDIVIDE_M`** and so block by a box, counted since 2026-08-19.
-**21 edges keep less than one lane (3.20 m) clear**, worst `e233` **0.00 m** (WAN CHAI
-INTERCHANGE), then `e125` 0.25 m, `e314` 0.25 m, `e485` 0.50 m, `e627` 0.50 m. **3.8 s** and
-**482 MB**, against the grader's 26.1 s over the same bundle.
+**Measured, at the shipped 0.5 m spacing (2026-08-19).** 737 level-0 edges, **77,286
+cross-sections** judged and 13,317 left to their junction caps; 66 tiles and 2 hero meshes read,
+120,957 triangles reaching the corridor — of which **9,779 could not be split to `SUBDIVIDE_M`**
+and so block by a box. **24 edges keep less than one lane (3.20 m) clear**, and five of them are
+**0.00 m**: `e125`, `e233` (WAN CHAI INTERCHANGE), `e627` (GREAT GEORGE STREET), `e636` (HARBOUR
+ROAD) and `e740`, then `e314` 0.25 m and `e335` / `e485` 0.50 m. **4.4 s** and **789 MB**, against
+the grader's 26.1 s over the same bundle.
+
+⚠️ **The triangle count rose with the spacing — 118,482 to 120,957 — and that is the prune, not the
+city.** The occupier prune is corridor-shaped, so a finer walk lights more plan cells and more
+triangles survive it. Read a movement there against the spacing before reading it as geometry.
+
+*Prior, at the 1 m spacing this shipped with until 2026-08-19: 38,664 cross-sections, 6,812 trimmed,
+118,482 triangles, 9,727 clipped, **21** starved, 3.8 s and 482 MB.*
 
 ⚠️ **Three measured wins, none of which moved a published number** — which is how each was
 checked. `np.einsum` without `optimize=True` runs its own naive C loop instead of reaching BLAS,
@@ -5620,33 +5642,88 @@ At matched plan resolution the grader is *tighter* than the pipeline, not looser
 21 carries its own over-blocking, and neither figure is the truth. Both shipped defaults stay: the
 coarseness is what the next finding shows the grader needs.
 
-🔴 **The reconciliation found a live defect, and it is the pipeline's.** In plan both instruments
-over-block, so those errors bound the answer. **Along the edge, this stage does not over-block — it
-*misses*.** `ALONG_M` is 1.0 m and a wall standing between two cross-sections is skipped, not
-smeared. Swept with the new `--along-m` on the same bundle:
+✅ **The reconciliation found a live defect, it was the pipeline's, and the call was taken the same
+day.** In plan both instruments over-block, so those errors bound the answer. **Along the edge, this
+stage did not over-block — it *missed*.** At `ALONG_M = 1.0` a wall standing between two
+cross-sections is skipped, not smeared. Swept with the new `--along-m` on the same bundle:
 
 | `clearance.py` along-edge spacing | starved level-0 edges |
 |---|---|
-| **1.00 m** (shipped) | **21** |
-| 0.50 m | **24** |
-| 0.25 m | **25** |
+| 1.00 m (shipped until 2026-08-19) | 21 |
+| **0.50 m** (`CELL_M`, shipped since) | **24** |
+| 0.25 m (`ACROSS_M`) | 25 |
 
-`e636` HARBOUR ROAD and `e335` LEIGHTON LANE fall from *passable* to **0.00 m clear**. `e636` is one
-of the six edges the grader condemns and this stage clears — so **there the grader is simply right,
-and `RoadGraph.is_routable` is routing traffic down a blocked edge today.** The grader's 1 m plan bin
-is precisely what makes it immune to this, which is why its coarseness is not a defect to tune out:
-**two instruments, two error dimensions**, and that is the reconciliation rather than a shared number.
+`e636` HARBOUR ROAD and `e335` LEIGHTON LANE fell from *passable* to **0.00 m clear**. `e636` was one
+of the six edges the grader condemned and this stage cleared — so **there the grader was simply
+right, and `RoadGraph.is_routable` was routing traffic down a blocked edge.** The grader's 1 m plan
+bin is precisely what makes it immune to this, which is why its coarseness is not a defect to tune
+out: **two instruments, two error dimensions**, and that is the reconciliation rather than a shared
+number.
 
-⚠️ **A second silent smear, now counted: 9,727 triangles a run** hit `MAX_SUBDIVISIONS` and keep
+### The `ALONG_M` call, taken 2026-08-19
+
+**Claim.** `ALONG_M` is **`CELL_M`**, and the argument is that equality rather than the count it
+produces. Occupiers are binned in plan at `CELL_M`, so a walk stepping at cell pitch cannot stride
+over a cell without sampling it. Below that pitch the stage was sampling more finely than it could
+resolve; above it, it was skipping cells it had already paid to build. **The published width is now a
+lower bound at `CELL_M`**, which is the property the number needed and did not have.
+
+**Not chosen for the count.** 0.25 m finds one edge more and was refused: ~4x the run and a measured
+**1.088 GB** peak RSS — 2.1x the shipped run, and back toward the 1.64 GB that `PIECE_BUDGET` exists
+to cut. ⚠️ **The edge it finds is real, and names the residue that survives.** Plan cells are
+axis-aligned and an edge runs at whatever angle it likes, so a diagonal walk stepping 0.50 m advances
+0.35 m in each of x and z and can **corner-cross a cell without landing in it**. The bound holds at
+`CELL_M` and no finer.
+
+**Measured cost, and it was over-estimated going in.** The stage went **3.8 s → 4.4 s** and
+**482 MB → 789 MB**; the whole ETL **12.8 s → 13.7 s**. The plan for this change predicted ~7 s on
+the reasoning that halving the spacing doubles the work — wrong, because the walk is a small share of
+a stage the occupier read dominates.
+
+**What moved in the bundle.** 21 → **24** starved edges, and the two instruments' disagreements
+**7 → 4**: `e636`, `e132` and `e222` moved to agreement and **none moved the other way**, which is
+the shape a fix should have. `EXPECT_GRADER` did not move, and could not have — the grader was not
+touched.
+
+| | before | after |
+|---|---|---|
+| pipeline starved | 21 | **24** |
+| grader starved | 26 | 26 |
+| disagreements | 7 (6 grader-only, 1 pipeline-only) | **4** (3 grader-only, 1 pipeline-only) |
+| grader-only | `e99` `e132` `e207` `e222` `e636` `e781` | `e99` `e207` `e781` |
+| pipeline-only | `e702` | `e702` |
+| `e636` HARBOUR ROAD | 3.25 m, *passable* | **0.00 m**, agreed |
+
+**No schema bump, and it is the rule rather than the diff that decides.** Hard rule 5 bumps where a
+consumer would be **wrong** to keep its old interpretation. `clear_width_m` still means "the widest
+continuous unblocked run at this station"; the values got more accurate. A v9 reader reads the new
+bundle correctly, so `CITY_SCHEMA` stays **9** and `CLEARANCE_SCHEMA` stays **1**.
+
+⚠️ **`tools/narrowing.py` was owed by this, and the checklist did not say so.** Its class split and
+its refusal table are computed over *the pipeline's* starved population, so a spacing change moves
+them without touching a single widening value — the plan for this change reasoned it was not owed,
+and that was wrong. Re-run, `Q19`'s refusal **holds and hardens**: still **0 edges cleared at every
+factor** down to 1.30x, and now **2 lost** (`e207` CANAL ROAD EAST joins `e595` THOMSON ROAD) where
+it lost 1. The split at the shipped 1.60x is now **9 `INFRASTRUCTURE`, 14 `BUILDING`, 1 `LANDMARK`**.
+`CLAUDE.md` now carries the dependency.
+
+**`Q52` did not fire, and that was checked rather than assumed.** A finer walk is exactly the change
+that could put a start line inside a wall for the first time. `f_004` still stands in **9.00 m** on
+edge 651 (EXPO DRIVE), all five built start lines answer as published, and `check.sh` exits 0.
+
+⚠️ **A second silent smear, now counted: 9,779 triangles a run** (9,727 before the spacing
+change — the prune is corridor-shaped) hit `MAX_SUBDIVISIONS` and keep
 pieces wider than `CELL_M`, each then blocking by its plan box at its *whole* height range. The
 constant's own comment claimed "anything wider than that in plan is ground, and ground is excluded" —
 wrong, and these are hero meshes and long ramp faces. `_plan_steps` returns the count and
 `build_region` warns it. `e702`, the one edge where this stage is the more pessimistic of the two
 (1.25 m against the grader's 3.41 m), is `LANDMARK`-blocked — the signature.
 
-🟡 **What is owed.** Lowering `ALONG_M` re-publishes `city.json`'s `clear_width_m` and so changes what
-`is_routable` refuses — a shipped-behaviour change on `P3-3`'s foundation rather than a tuning tweak,
-so it is the user's call and is **not** taken here. `is_passable` still reads
+🟡 **What is owed.** ✅ The `ALONG_M` half is discharged above. 🔴 **`MAX_SUBDIVISIONS` is not**, and
+it is now the only wrongness left in the stage that has a known cause: 9,779 triangles a run block by
+a plan box at their whole height range. It was deliberately kept out of the `ALONG_M` change because
+it moves the starved count in the **opposite** direction, and folding both into one republish would
+have left the resulting number attributable to neither. `is_passable` still reads
 `min_clear_width_of >= lane_width_m` with no margin, and a blanket margin was priced and rejected:
 dominating the grader's set needs a **5.00 m** bar, which refuses **37** edges instead of 21 to cover
 6 the grader over-blocks. `Q19` still carries an unreconciled 5.17% / 3.693% — a different question,
@@ -5656,8 +5733,8 @@ and one this measurement does not touch.
 0.2 m, so a straight street is **two** stations — and both of them are its ends, which is exactly
 the stretch `surface.py` trims back for the junction caps. The first draft of this stage judged
 every edge at its vertices, measured *nothing whatever* on every two-vertex edge, and published a
-complete-looking table of refusals. It samples along the edge at 1 m now and reports at the nearest
-station. `test_clearance.py` holds both halves.
+complete-looking table of refusals. It samples along the edge at `ALONG_M` now — 0.5 m — and reports
+at the nearest station. `test_clearance.py` holds both halves.
 
 ⚠️ **A station the ribbon never reached is not a starved station.** The nominal corridor still has a
 published width where the ribbon stops, and judging it is what condemned 18 innocent edges in `Q19`
@@ -5710,8 +5787,9 @@ places the car anyway; `tools/verify_spawn.gd` **fails**. This closes the senten
 
 **⚠️ It fires on nothing in the shipped bundle, and that is the whole shape of the work.** Measured
 before writing any of it: `f_004` resolves to `e651`, whose stations read `[-1.00, 9.25, 9.00,
-9.25]` against a **3.20 m** lane, and **0 of 29** fare nodes publish onto any of the 21 edges `Q51`
-records as blocked. So there is no reproduction and no before/after number — every assertion
+9.25]` against a **3.20 m** lane, and **0 of 29** fare nodes publish onto any of the edges `Q51`
+records as blocked — 21 of them then, **24** since the `ALONG_M` fix, and re-checked after it: the
+start line still stands in 9.00 m and all five built ones answer as published. So there is no reproduction and no before/after number — every assertion
 `verify_spawn.gd` already made passes whether the guard works or not, and a `blocked()` hard-wired
 to `false` would have left the tool green. **The value is entirely in the check being non-vacuous**,
 which is `_check_facing`'s problem exactly: it builds the transposed basis and requires it to be
@@ -5736,7 +5814,7 @@ worth being exact about why, because carrying two bars is what `Q19` and `Q51` a
 elsewhere. `is_passable` takes the **minimum over every station** because `P3-3` traverses a whole
 edge; a car being *placed* occupies one stretch of it. Reusing the router's predicate would condemn
 a start line standing in clear road because a wall stands somewhere else on the same street — and on
-the shipped city that is not hypothetical: 21 edges are blocked *somewhere*. The edge's own verdict
+the shipped city that is not hypothetical: **24** edges are blocked *somewhere*. The edge's own verdict
 is carried beside it as `Pose.edge_passable` and printed rather than failed, so nothing is hidden;
 it is demoted from the bar to a note. This is not a second instrument measuring the same quantity —
 it is one measurement read at the granularity of the thing asking.
@@ -5801,7 +5879,7 @@ query, inside `_fill`, after the winning segment is known — the addition is be
 `f_004 on edge 651 (EXPO DRIVE), facing 86.0°` at `(172.3485, 6.579562, 26.93956)` — with no warning
 and no note, because `e651` is clear end to end. A guard that fires here would be wrong.
 
-**What this does not do.** It does not stop the player *driving* into one of the 21 blocked edges
+**What this does not do.** It does not stop the player *driving* into one of the 24 blocked edges
 after the start, which is still `Q19`'s geometry half and still open. It guards the one placement
 the game makes today; `P3-*`'s real respawn rules will have to make the same call at every point
 they put the car down, and `Pose.blocked` is what they should ask.

@@ -3,7 +3,7 @@
 `etl/pipeline/clearance.py` publishes a clear corridor width per station into
 `city.json`, and `RoadGraph.is_routable` routes `P3-3`'s traffic on it.
 `tools/carriageway_occupancy.py` grades the same bundle independently and reads a
-different answer — **21 starved level-0 edges against 26**. `Q51` recorded that
+different answer — **24 starved level-0 edges against 26**. `Q51` recorded that
 gap rather than tuning it away, on the grounds that tuning one instrument toward
 the other destroys the only thing a second one is for.
 
@@ -25,12 +25,17 @@ of both instruments — reproduces each tool's published width from nothing but 
 own cell size; `carriageway_occupancy.INDEX_CELL_M` carries the figures. `--sweep`
 reproduces it here by grading at each of the pipeline's own cells.
 
-⚠️ **Along the edge, the pipeline does not over-block — it *misses*, and that is
-not a bound at all.** A wall standing between two of its cross-sections is skipped
-rather than smeared, and `e636` HARBOUR ROAD — one of the six edges the grader
-condemns and the pipeline clears — is one it skips, so there the grader is simply
-right. The grader's coarse plan bin is what makes it immune to that, which is why
-it is not a defect to tune out. `pipeline.clearance.ALONG_M` carries the sweep.
+⚠️ **Along the edge the pipeline misses rather than over-blocks, and a miss is
+not a bound at all.** ✅ **That is what this tool found, and it is now fixed**: at
+`ALONG_M = 1.0` a wall standing between two cross-sections was skipped rather than
+smeared, and `e636` HARBOUR ROAD — one of the six the grader then condemned and the
+pipeline cleared — was one it skipped. `ALONG_M` is `CELL_M` since 2026-08-19, so
+the walk cannot stride over a cell it never samples; `e636` reads **0.00 m** and
+the two agree about it. The pipeline's count moved **21 -> 24** and the
+disagreements **7 -> 4** in the same breath, which is why the constants below moved
+with it. ⚠️ The bound holds at `CELL_M` and no finer — a diagonal edge can still
+corner-cross an axis-aligned cell, which is the one edge a 0.25 m walk finds and
+the shipped one does not. `pipeline.clearance.ALONG_M` carries the sweep.
 
 So this is a **ratchet**, on the `podium_error.py` precedent: the counts are fixed
 outside the instrument, from `Q51`, and any movement in either is a finding to go
@@ -80,12 +85,15 @@ log = logging.getLogger(__name__)
 
 # `Q51`'s two figures, fixed there and not derived here. The whole point of a
 # ratchet is that the instrument cannot move its own bar.
-EXPECT_PIPELINE = 21
+EXPECT_PIPELINE = 24
 EXPECT_GRADER = 26
-# Edges the two disagree about: 6 the grader condemns and the pipeline clears,
-# plus `e702` the other way. `Q51` said "five", which was the *net* — a count that
-# hides a swap, which is the drift this tool exists to see.
-EXPECT_DISAGREEMENT = 7
+# Edges the two disagree about: 3 the grader condemns and the pipeline clears
+# (`e99`, `e207`, `e781`), plus `e702` the other way. ⚠️ **A single number here
+# hides a swap** — `Q51` first said "five" where the split was 6 + 1, so read the
+# per-side lists in the report rather than this total. Was 7 until `ALONG_M`
+# dropped to `CELL_M`: `e636`, `e132` and `e222` moved to agreement, and none
+# moved the other way.
+EXPECT_DISAGREEMENT = 4
 
 # Plan cells the sweep bins the grader's occupiers at: the grader's own shipped
 # cell first, then the pipeline's plan cell and its across resolution — so the
@@ -216,8 +224,9 @@ def main(argv: list[str] | None = None) -> int:
     log_bundle(manifest, args.lod)
     log.info("clearance reconciliation, %s, lod %d", args.city, args.lod)
     log.info("  one lane is %.2f m. In plan both instruments over-block, and the plan", bar_m)
-    log.info("  cell sets how much; along the edge the pipeline aliases instead — see the")
-    log.info("  module docstring. Neither width is a bound in both dimensions at once.")
+    log.info("  cell sets how much; along the edge the pipeline samples at its own cell")
+    log.info("  pitch, so it no longer misses — see the module docstring. Both widths are")
+    log.info("  lower bounds now, each at its own plan cell, and the cells differ.")
 
     graph = json.loads((args.generated / manifest["road_graph"]).read_text())
     drawn = drawn_surface(args.generated, manifest)
