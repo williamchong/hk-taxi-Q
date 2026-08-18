@@ -116,7 +116,7 @@ func _check(path: String, tier: int) -> PackedStringArray:
 		problems.append("%d surfaces, over the %d-surface budget" % [surfaces, MAX_SURFACES])
 
 	problems.append_array(_check_collision(scene_root, tier))
-	problems.append_array(_check_import_settings(path))
+	problems.append_array(MeshContract.check_uv2_import_settings(path, "survey payload"))
 
 	scene_root.free()
 	return problems
@@ -140,19 +140,7 @@ func _check_facade_payload(mesh: Mesh, surface: int, where: String) -> PackedStr
 	if not (mesh.surface_get_format(surface) & Mesh.ARRAY_FORMAT_TEX_UV):
 		problems.append("%s carries no TEXCOORD_0; the window shader has nothing to read" % where)
 
-	var material := mesh.surface_get_material(surface) as ShaderMaterial
-	if material == null:
-		problems.append(
-			(
-				(
-					"%s did not import with a ShaderMaterial; the ETL's `city_facade` material "
-					+ "name and `tools/generated_scene_import.gd` have stopped agreeing"
-				)
-				% where
-			)
-		)
-	elif material.resource_path != FACADE_MATERIAL:
-		problems.append("%s uses %s, not %s" % [where, material.resource_path, FACADE_MATERIAL])
+	problems.append_array(MeshContract.check_shader_material(mesh, surface, where, FACADE_MATERIAL))
 	return problems
 
 
@@ -202,32 +190,6 @@ func _check_survey_payload(mesh: Mesh, surface: int, where: String) -> PackedStr
 					)
 				]
 			)
-	return PackedStringArray()
-
-
-## The importer settings that would destroy the payload have not drifted.
-##
-## `meshes/light_baking = 2` (Static Lightmaps) makes the importer generate its
-## own UV2 unwrap, silently overwriting the survey payload with texture
-## coordinates that pass every visual inspection — `docs/ART_DESIGN.md` records
-## the hazard. 1 is Static, which leaves the channel alone.
-func _check_import_settings(path: String) -> PackedStringArray:
-	var import_path: String = path + ".import"
-	var file := FileAccess.open(import_path, FileAccess.READ)
-	if file == null:
-		return PackedStringArray(["%s has no .import beside it" % path])
-	if not file.get_as_text().contains("meshes/light_baking=1"):
-		return PackedStringArray(
-			[
-				(
-					(
-						"%s: meshes/light_baking is not 1 (Static). Static Lightmaps "
-						+ "regenerates UV2 and overwrites the survey payload."
-					)
-					% import_path
-				)
-			]
-		)
 	return PackedStringArray()
 
 

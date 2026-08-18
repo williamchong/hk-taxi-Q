@@ -50,6 +50,8 @@ shader_type spatial;
 
 render_mode cull_back;
 
+#include "res://assets/shaders/colour.gdshaderinc"
+
 // Must match `MARKER_*` in `tools/make_vehicle.py`.
 const float MARKER_PAINT = 0.0;
 const float MARKER_GLASS = 1.0;
@@ -253,16 +255,6 @@ void vertex() {
 	circuit = floor(UV.x);
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	world_n = normalize(MODEL_NORMAL_MATRIX * NORMAL);
-}
-
-// `COLOR_0` is sRGB-encoded and nothing converts it for free. Godot 4 has no
-// `vertex_color_is_srgb` render mode — it survives only as a `BaseMaterial3D`
-// flag, and this material is not one — so every shader carries its own, exactly
-// as the two facade shaders do. Skipping it does not merely lighten the car:
-// sRGB read as linear is brighter than it should be, and brightness the albedo
-// did not ask for is brightness that does not vary with albedo (`Q27`).
-vec3 vertex_srgb_to_linear(vec3 c) {
-	return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
 }
 
 void fragment() {

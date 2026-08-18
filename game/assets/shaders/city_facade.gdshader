@@ -45,6 +45,8 @@ shader_type spatial;
 // a lighting change and the bands into one before/after comparison.
 render_mode cull_back;
 
+#include "res://assets/shaders/colour.gdshaderinc"
+
 // Marker values, matching `SurfaceClass` in `etl/pipeline/config.py`. Part of
 // `city.json`'s `schema_version` rather than a private enumeration: renumber
 // either side and a viaduct silently grows windows.
@@ -143,18 +145,6 @@ void vertex() {
 	vec2 tangent = vec2(-world_normal.z, world_normal.x);
 	float span = length(tangent);
 	along_m = span > 1e-4 ? dot(world.xz, tangent / span) : 0.0;
-}
-
-// ⚠️ **`COLOR_0` is authored in sRGB and has to be converted here**, exactly as
-// in `city_facade_clean.gdshader` — see that file for the measurement. Godot 4
-// has no `vertex_color_is_srgb` render mode, so every shader reading `COLOR`
-// converts it or silently renders a pale, low-contrast city. Duplicated rather
-// than shared through a `.gdshaderinc`: three call sites still do not earn a
-// fourth file, and all are named in `docs/ARCHITECTURE.md`'s `COLOR_0` row.
-// ⚠️ `vehicle_body.gdshader` became the third at `P3-11c`. If a fourth appears,
-// that is the point to stop copying and add the include.
-vec3 vertex_srgb_to_linear(vec3 c) {
-	return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
 }
 
 void fragment() {

@@ -158,6 +158,71 @@ static func check_collision(node: Node) -> PackedStringArray:
 	return problems
 
 
+## The surface ended up on the shader its ETL asked for, or why it did not.
+##
+## glTF cannot say "use this shader", so the ETL writes a material *name* and
+## `tools/generated_scene_import.gd` dispatches on it. That dispatch has **no
+## failing state**: if the ETL stops writing the name, or the import script stops
+## recognising it, the asset quietly keeps its default `BaseMaterial3D`, passes
+## every other check here, and renders as whatever it looked like before the
+## shader existed — a flat-coloured city before `P3-7`, an unmarked road before
+## `P3-12`. There is nothing to see and nothing else to catch it.
+##
+## Here rather than in either caller because the tiles and the road surface ask
+## the identical question of different paths, which is what this file is for.
+static func check_shader_material(
+	mesh: Mesh, surface: int, where: String, expected: String
+) -> PackedStringArray:
+	var material := mesh.surface_get_material(surface) as ShaderMaterial
+	if material == null:
+		return PackedStringArray(
+			[
+				(
+					(
+						"%s did not import with a ShaderMaterial; the ETL's material name and "
+						+ "`tools/generated_scene_import.gd` have stopped agreeing, so it is "
+						+ "drawing as though %s did not exist"
+					)
+					% [where, expected]
+				)
+			]
+		)
+	if material.resource_path != expected:
+		return PackedStringArray(["%s uses %s, not %s" % [where, material.resource_path, expected]])
+	return PackedStringArray()
+
+
+## The importer settings that would destroy a `TEXCOORD_1` payload have not
+## drifted. `payload` names what is at stake, for the caller's report.
+##
+## `meshes/light_baking = 2` (Static Lightmaps) makes Godot's importer generate
+## its own UV2 unwrap, silently overwriting the payload with texture coordinates
+## that pass every visual inspection — `docs/ART_DESIGN.md` records the hazard.
+## 1 is Static, which leaves the channel alone.
+##
+## Here rather than in either caller for this file's usual reason, and it earned
+## it immediately: `P3-12` gave the road surface a UV2 payload of its own, and
+## the check it needed already existed as a private copy in `verify_tiles.gd`.
+static func check_uv2_import_settings(path: String, payload: String) -> PackedStringArray:
+	var import_path: String = path + ".import"
+	var file := FileAccess.open(import_path, FileAccess.READ)
+	if file == null:
+		return PackedStringArray(["%s has no .import beside it" % path])
+	if not file.get_as_text().contains("meshes/light_baking=1"):
+		return PackedStringArray(
+			[
+				(
+					(
+						"%s: meshes/light_baking is not 1 (Static). Static Lightmaps "
+						+ "regenerates UV2 and overwrites the %s."
+					)
+					% [import_path, payload]
+				)
+			]
+		)
+	return PackedStringArray()
+
+
 ## Problems with one surface of one mesh, or an empty array if it conforms.
 ##
 ## `where` names the surface for the caller's report — surface indices restart
