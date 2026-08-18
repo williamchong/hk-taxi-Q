@@ -48,7 +48,7 @@ import numpy as np
 
 from pipeline.config import BOTH, FORWARD, CityConfig, RoadSurface, load_city
 from pipeline.documents import write_document
-from pipeline.geometry import inside_polygon
+from pipeline.geometry import edge_distances, inside_polygon
 from pipeline.gltf import Bounds, MeshData, normalise, write_glb
 from pipeline.mesh import select_triangles
 from pipeline.roads import ROADGRAPH_NAME, plan_lengths, plan_steps, read_graph
@@ -95,8 +95,9 @@ SURFACE_MATERIAL = "road_markings"
 # whole code exact in float32 so a consumer can decode it with `floor(x + 0.5)`.
 #
 #   code = surface_class + 4*lanes + 64*direction + 256*bus_lane + 512*tram
+#        + 1024*offside_kerb + 2048*centre
 #
-# Max legal code is 1023, which is far inside float32's 24 exact bits.
+# Max legal code is 131,071, far inside float32's 24 exact bits.
 #
 # `surface_class` is the field the shader cannot do without. The kerbs run off
 # *both* ends of the lane range — the nearside lip spans U in [-outside, 0] and
@@ -143,7 +144,7 @@ MARKING_OFFSIDE_KERB = 1024
 MARKING_CENTRE = 2048
 MARKING_CENTRE_MAX = 63
 # Derived rather than written down: adding a field means moving one line, not
-# remembering to move two. `tram` is the top field and holds one bit.
+# remembering to move two. `centre` is the top field and holds six bits.
 MARKING_CODE_MAX = MARKING_CENTRE * (MARKING_CENTRE_MAX + 1) - 1
 # The widest lane count the codec can say, from the field above it. `lanes = 16`
 # packs to 64 and collides with `direction` while leaving the *total* under the
@@ -214,12 +215,17 @@ class SurfaceReport:
     # step with the junction rule.
     trims_m: dict[int, tuple[float, float]] = field(default_factory=dict)
     junctions: int = 0
-    # Edge ends that resolved to half of an opposed one-way pair, so their
-    # offside boundary carries a road centre rather than a kerb. Reported
-    # because it is the population two markings depend on and neither the
-    # graph nor the ribbon states it: a detection that stopped matching
-    # would silently put a centre line back on nothing.
-    opposed_pairs: int = 0
+    # Edge **ends** that resolved to half of an opposed one-way pair — two per
+    # pair, because each half publishes its own offset. Reported because it is
+    # the population two markings depend on and neither the graph nor the ribbon
+    # states it: a detection that stopped matching would put a centre line back
+    # on nothing, silently.
+    opposed_pair_ends: int = 0
+    # Ends that were detected and then could not be said. Counted separately
+    # rather than folded into the line above, because the two failures want
+    # different fixes — nothing detected is a pairing problem, detected and
+    # unpublishable is a range problem — and one number cannot tell them apart.
+    opposed_pairs_unpublishable: int = 0
     # Movements that qualified as running through a node and had their mitre fed
     # into its cap. Reported so a predicate that stopped matching would show.
     #
@@ -696,7 +702,10 @@ class _Edge:
     # answer, summarised per edge, plus what an opposed partner contributes.
     # Defaults are the conservative reading: nothing known, so nothing drawn.
     offside_kerb: bool = False
-    centre_offset: int = 0
+    # ⚠️ The codec's `k`, not the offset: `k - 1` sixteenths of a lane, with 0
+    # meaning "not half of a pair". The bias is what makes 0 mean absence, so
+    # the raw field is what is stored and the decode is the consumer's.
+    centre_step: int = 0
 
     def corner(self, at_start: bool, *, on_left: bool) -> np.ndarray | None:
         """One of the two corners this ribbon presents to a junction."""
@@ -733,7 +742,7 @@ class _Edge:
             + MARKING_BUS_LANE * int(self.bus_lane)
             + MARKING_TRAM * int(self.tram_tracks)
             + MARKING_OFFSIDE_KERB * int(self.offside_kerb)
-            + MARKING_CENTRE * self.centre_offset
+            + MARKING_CENTRE * self.centre_step
         )
 
     def end_half_width_m(self, at_start: bool) -> float:
@@ -1047,10 +1056,17 @@ def _read_offside(published: list[dict], edges: list[_Edge], report: SurfaceRepo
     re-deriving one is the point; a second geometric test would be a second thing
     to keep in step, and this one is already graded by the kerb it hides.
 
+    ⚠️ **`.all()` rather than a share, because the codec cannot say more.** The
+    carriageway is one strip carrying one code, so this is a per-edge summary of
+    a per-segment answer and the conservative reading is the only honest one.
+    Measured on Wan Chai it costs 10 two-way edges their offside line to partial
+    burial and buys 280 one-way edges theirs, which is why it is worth the
+    coarseness.
+
     **Where do the two flows meet?** Midway between the two *centrelines*, which
     an edge cannot see from its own lane coordinate — the ribbons overlap, so
     both edges' `U = lanes` sit inside the other's carriageway rather than at the
-    join. Published as `centre_offset`, in sixteenths of a lane beyond the
+    join. Published as `centre_step`, in sixteenths of a lane beyond the
     centreline.
 
     ⚠️ **Pairs are found by shared endpoints, which `P1-4` measured as a lower
@@ -1067,56 +1083,96 @@ def _read_offside(published: list[dict], edges: list[_Edge], report: SurfaceRepo
             by_ends[(entry["from"], entry["to"])].append(index)
 
     for index, (entry, edge) in enumerate(zip(published, edges, strict=True)):
-        # `None` means the pass had nothing to say, which is the whole kerb.
+        # `None` means the pass had nothing to say. It is unreachable for an edge
+        # that draws — `_shape` sets `lip_right` beside `right` — and the reading
+        # that matches it is "no neighbour objected", so the kerb stands.
         edge.offside_kerb = edge.kerb_right is None or bool(edge.kerb_right.all())
 
+        if entry["direction"] != FORWARD:
+            continue
         # An edge whose two ends are the same node matches its own key, and a
         # street is not its own opposed carriageway. Left in, it publishes a
-        # centre line down the middle of its own lane.
+        # centre line down the middle of its own lane. The level guard is the
+        # same argument as the junction cap's: a ramp and the street beneath it
+        # can share both nodes and share no tarmac.
         partners = [
-            other for other in by_ends.get((entry["to"], entry["from"]), []) if other != index
+            other
+            for other in by_ends.get((entry["to"], entry["from"]), [])
+            if other != index and edges[other].level == edge.level
         ]
-        if entry["direction"] != FORWARD or not partners:
+        # ⚠️ **Measured symmetrically, and it has to be.** Each half of a pair
+        # publishes its own offset and the two are supposed to name the *same*
+        # line. A one-sided measure — this edge's stations against the partner's
+        # segments — lets them disagree, and they did: the region's pairs landed
+        # their two lines up to 3.9 m apart. The mean of both directions is equal
+        # by construction whichever half is asking.
+        gaps = [
+            0.5 * (there + back)
+            for other in partners
+            if (there := _centreline_gap_m(edge, edges[other])) is not None
+            and (back := _centreline_gap_m(edges[other], edge)) is not None
+        ]
+        if not gaps:
             continue
-        gap = min(
-            (_centreline_gap_m(edge, edges[other]) for other in partners),
-            default=None,
-        )
-        if gap is None:
+        gap = min(gaps)
+        report.opposed_pair_ends += 1
+
+        steps = round((gap / 2.0) / _u_metres(edge) * 16.0)
+        # ⚠️ **Bounded by the carriageway, not by the field.** Six bits reach 3.94
+        # lanes, but a join is only *visible* while `lanes/2 + steps/16 < lanes`,
+        # i.e. `steps < 8 * lanes`. A pair separated by more than its own width
+        # passes a field-range check, publishes, and draws nothing — which is the
+        # failure this first shipped with, found by looking at a frame rather
+        # than by a check. Zero is refused for its own reason: a measured
+        # separation of nothing is a measurement that did not work.
+        if not 0 < steps < min(8 * edge.lanes, MARKING_CENTRE_MAX):
+            report.opposed_pairs_unpublishable += 1
             continue
-        # ⚠️ **In lane-coordinate units, not metres, and those are not
-        # `lane_width_m`.** U is normalised to the ribbon as *drawn*: an integer
-        # U is a lane boundary whatever the widening did, so one U-lane is
-        # `2 * half_width / lanes` on the ground — 5.12 m on a widened two-lane
-        # street, against the 3.20 m the config authors. Dividing by
-        # `lane_width_m` puts the join 1.6x too far out, which on a two-lane
-        # ribbon lands it past `U = lanes` and off the carriageway entirely.
-        u_metres = 2.0 * float(np.median(edge.points[:, _WIDTH])) / edge.lanes
-        steps = round((gap / 2.0) / u_metres * 16.0)
-        if 0 <= steps <= MARKING_CENTRE_MAX - 1:
-            edge.centre_offset = steps + 1
-            report.opposed_pairs += 1
+        edge.centre_step = steps + 1
+
+
+def _u_metres(edge: _Edge) -> float:
+    """What one lane-coordinate unit is worth on the ground, in metres.
+
+    ⚠️ **Not `lane_width_m`.** U is normalised to the ribbon *as drawn* — that is
+    what makes an integer U a lane boundary whatever the widening did — so one
+    U-lane is the drawn width over the lane count: **5.12 m** on a widened
+    two-lane street against the 3.20 m the config authors. Dividing by the
+    authored width puts a join 1.6x too far out, which on a two-lane ribbon
+    lands it past `U = lanes` and off the carriageway entirely.
+
+    ⚠️ Since `Q23` the half-width varies per station while `across` is constant
+    per strip, so U is renormalised at every station and no single scalar is
+    exact. The median is the representative one; every opposed pair in this
+    region is flat-widthed, so today it is also exact.
+    """
+    return 2.0 * float(np.median(edge.points[:, _WIDTH])) / edge.lanes
 
 
 def _centreline_gap_m(edge: _Edge, other: _Edge) -> float | None:
-    """How far this edge's centreline runs from its opposed partner's, in plan.
+    """How far this edge's drawn ribbon runs from its opposed partner's, in plan.
 
-    The median over this edge's own stations rather than the minimum: the two
-    meet at the node they share, so a minimum is always about zero and says
-    nothing about the street between them.
+    ⚠️ **Measured on the ribbon, not on the centreline, and that is the whole
+    correctness of it.** A pair is found by shared endpoints, so the two
+    centrelines *touch* at both ends — those stations contribute an exact 0.0,
+    and on a four-station edge they are half the sample, which drags the median
+    to half the true separation. Measured on Wan Chai: Fleming read **3.85 m**
+    against a true **7.98 m**, and each half of the pair then published a
+    different offset and drew its own line, 3.9 m apart. The ribbon is already
+    trimmed back from both nodes for the junction cap, so it carries no shared
+    station and no zero.
     """
-    here, there = edge.points[:, [0, 2]], other.points[:, [0, 2]]
-    if len(here) == 0 or len(there) < 2:
+    here, there = _ribbon_plan(edge), _ribbon_plan(other)
+    if here is None or there is None or len(there) < 2:
         return None
-    start, end = there[:-1], there[1:]
-    span = end - start
-    length = np.maximum((span * span).sum(axis=1), 1e-12)
-    gaps = []
-    for point in here:
-        along = np.clip(((point - start) * span).sum(axis=1) / length, 0.0, 1.0)
-        foot = start + along[:, None] * span
-        gaps.append(np.hypot(*(foot - point).T).min())
-    return float(np.median(gaps))
+    return float(np.median(edge_distances(here, there, closed=False)))
+
+
+def _ribbon_plan(edge: _Edge) -> np.ndarray | None:
+    """This edge's drawn ribbon in plan, or `None` if it draws nothing."""
+    if edge.ribbon is None or len(edge.ribbon) == 0:
+        return None
+    return edge.ribbon[:, [0, 2]]
 
 
 def _hide_buried_kerbs(edges: list[_Edge], caps: list[_Cap], report: SurfaceReport) -> None:
@@ -1232,7 +1288,19 @@ def _draw_edge(builder: _Builder, edge: _Edge, style: RoadSurface, lane_width_m:
     kerb_marking = _Marking(edge.marking_code(MARKING_CLASS_KERB), drawn_m)
     kerb, rise = style.kerb_width_m, style.kerb_height_m
     # U is a lane coordinate: 0 at the nearside kerb line, `lanes` at the
-    # offside one. The kerb runs off the ends of that range in the same units.
+    # offside one. The kerb runs off the ends of that range.
+    #
+    # ⚠️ **`outside` is not in the same units as U**, despite running in the
+    # same coordinate. U is normalised to the drawn width, so one U-lane is
+    # `2*half_width / lanes` — 5.12 m on a widened two-lane street — while
+    # this divides by the *authored* 3.20 m. Measured on the shipped mesh, a
+    # 0.5 m kerb is drawn 0.15625 U wide, which is 0.800 m at the
+    # carriageway's own scale: out by exactly the 1.60x widening. Harmless
+    # today because nothing reads a kerb's U — the markings shader excludes
+    # the class outright — and left alone rather than corrected because
+    # changing it moves shipped UVs for no visible gain. `_u_metres` is the
+    # honest conversion, and the one to use for anything that has to land in
+    # a real place.
     outside = kerb / lane_width_m
     lanes = float(edge.lanes)
 

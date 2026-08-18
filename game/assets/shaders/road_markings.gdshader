@@ -53,6 +53,10 @@ const float MARKING_BUS_LANE = 256.0;
 const float MARKING_TRAM = 512.0;
 const float MARKING_OFFSIDE_KERB = 1024.0;
 const float MARKING_CENTRE = 2048.0;
+// One past the widest `centre` the six bits hold. Named so the decode can
+// mask like every other field rather than trusting that nothing is ever
+// packed above it — the one unmasked read is the one that breaks silently.
+const float MARKING_CENTRE_SPAN = 64.0;
 // `direction` as the codec spells it. 0 is "absent", and a road whose direction
 // did not survive gets no centre line rather than a guessed one.
 const float DIRECTION_BOTH = 1.0;
@@ -127,15 +131,13 @@ varying flat float surface_class;
 varying flat float lanes;
 varying flat float direction;
 varying flat float bus_lane;
-// 1 where `U = lanes` is a real kerb. 0 is "not known to be", and the difference
-// matters: on one half of a dual carriageway drawn as an opposed pair that
-// boundary is the middle of the road, and a kerbside no-stopping line put there
-// is the loudest way to be wrong about a marking.
+// 1 where `U = lanes` is a real kerb, 0 where that is not known — on one half of
+// a dual carriageway it is the middle of the road, and a kerbside no-stopping
+// line put there is the loudest way to be wrong about a marking.
 varying flat float offside_kerb;
-// Where the two flows of an opposed pair meet, in sixteenths of a lane beyond
-// the centreline, `k - 1` steps. 0 means this edge is not half of a pair. The
-// ETL has to say it — the ribbons overlap, so neither edge's own lane coordinate
-// reaches the join.
+// Where an opposed pair's two flows meet, in sixteenths of a lane beyond the
+// centreline, `k - 1` steps; 0 for an edge that is not half of a pair. Read at
+// the `join` below, which is where the reason it must be published lives.
 varying flat float centre_at;
 varying flat float drawn_m;
 // ⚠️ **The sRGB conversion is hoisted out of the fragment shader, and that rests
@@ -151,14 +153,14 @@ varying flat vec3 albedo_linear;
 
 void vertex() {
 	// `floor(x + 0.5)` before anything else, on the codec's own promise that
-	// every legal code is exact in float32 (max 1023, against 24 exact bits).
+	// every legal code is exact in float32 (max 131,071, against 24 bits).
 	float packed = floor(UV2.x + 0.5);
 	surface_class = floor(mod(packed, MARKING_LANES));
 	lanes = floor(mod(packed / MARKING_LANES, MARKING_DIRECTION / MARKING_LANES));
 	direction = floor(mod(packed / MARKING_DIRECTION, MARKING_BUS_LANE / MARKING_DIRECTION));
 	bus_lane = floor(mod(packed / MARKING_BUS_LANE, MARKING_TRAM / MARKING_BUS_LANE));
 	offside_kerb = floor(mod(packed / MARKING_OFFSIDE_KERB, MARKING_CENTRE / MARKING_OFFSIDE_KERB));
-	centre_at = floor(packed / MARKING_CENTRE);
+	centre_at = floor(mod(packed / MARKING_CENTRE, MARKING_CENTRE_SPAN));
 	drawn_m = UV2.y;
 	albedo_linear = vertex_srgb_to_linear(COLOR.rgb);
 }
@@ -229,30 +231,40 @@ void fragment() {
 		// test — and a one-lane road has no centre to mark.
 		float centre = lanes * 0.5;
 		bool two_way = direction == DIRECTION_BOTH && lanes >= 2.0;
-		float white = 0.0;
+		// Where the road's two flows are separated, which is one of two places.
+		// On a two-way street it is the middle of the ribbon. On one half of an
+		// opposed pair — two one-way carriageways widened until they read as one
+		// road — it is a line neither edge's own geometry marks, so the ETL
+		// publishes where: the ribbons overlap, and `U = lanes` on either lands
+		// inside the other's carriageway rather than at the join.
+		//
+		// The two are exclusive by construction (`centre_at` is only written on a
+		// one-way edge), and `else if` is what says so — as two independent tests
+		// they would both draw the day that stopped being true.
+		float join = centre;
+		bool separated = two_way;
 		if (two_way) {
-			white = draw_centre_line * line_coverage(u, centre, centre_width * 0.5, du);
+			join = centre;
+		} else if (centre_at > 0.0) {
+			join = centre + (centre_at - 1.0) / 16.0;
+			separated = true;
 		}
-
-		// Where two one-way carriageways were widened until they read as one
-		// road, the flows meet at a line neither edge's own geometry marks. The
-		// ETL publishes where, because the ribbons overlap and `U = lanes` on
-		// either of them lands inside the other's carriageway rather than at the
-		// join. 564 m of this region, on Lockhart, Fleming and Tonnochy.
-		if (centre_at > 0.0) {
-			float join = centre + (centre_at - 1.0) / 16.0;
-			white += draw_centre_line * line_coverage(u, join, centre_width * 0.5, du);
-		}
+		float white = separated
+			? draw_centre_line * line_coverage(u, join, centre_width * 0.5, du)
+			: 0.0;
 
 		// Lane dividers. Only the nearest boundary can be within a line's width
 		// of this fragment, so this is one test rather than a loop over the lane
 		// count.
 		//
-		// ⚠️ The centre is suppressed only where a centre line is actually
-		// **drawn**. Keying it on `two_way` alone put a gap in the dividers
-		// whenever `draw_centre_line` was turned down, which defeats the dial.
+		// ⚠️ The dividing line is suppressed only where one is actually **drawn**.
+		// Keying it on `two_way` alone put a gap in the dividers whenever
+		// `draw_centre_line` was turned down, which defeats the dial — and it
+		// missed the opposed-pair join entirely, which lands inside the same
+		// window (the unnamed pair's is at `U = 1.19`, a fifth of a lane from the
+		// divider at `k = 1`) and would have run a dashed line beside a solid one.
 		float k = floor(u + 0.5);
-		float centre_here = two_way && abs(k - centre) < 0.25 ? draw_centre_line : 0.0;
+		float centre_here = separated && abs(k - join) < 0.25 ? draw_centre_line : 0.0;
 		if (k > 0.5 && k < lanes - 0.5) {
 			// The dash, in metres along the road. Phase is offset half a period
 			// so the wrap lands mid-gap — otherwise the leading edge of every
@@ -267,7 +279,7 @@ void fragment() {
 		// The bus lane is the nearside one, so what marks it is the boundary at
 		// U = 1 — continuous, and wider than a lane divider. Skipped where that
 		// boundary is already the centre line of a two-lane two-way street.
-		if (bus_lane > 0.5 && lanes > 1.5 && abs(centre - 1.0) > 0.25) {
+		if (bus_lane > 0.5 && lanes > 1.5 && !(separated && abs(join - 1.0) < 0.25)) {
 			white += draw_bus_lane * line_coverage(u, 1.0, bus_width * 0.5, du);
 		}
 

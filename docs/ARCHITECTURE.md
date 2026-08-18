@@ -703,7 +703,7 @@ the whole street interpolates flat to zero. **204 of the region's 797 edges carr
 only edges lifted onto structure are resampled. The length is constant per edge, so it survives any
 station spacing, and being constant it packs the way the tiles' survey channel does.
 
-**Measured cost: +40,592 B of PCK** (40,702,784 → 40,743,376, one variable changed) against
+**Measured cost: +41,344 B of PCK** (40,702,784 → 40,744,128, one variable changed) against
 **279,532 B** of raw VEC2 across 34,924 vertices — the pack compresses it by 86%. No triangle moved,
 no draw call and no material was added.
 

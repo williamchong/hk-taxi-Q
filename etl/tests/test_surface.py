@@ -449,6 +449,13 @@ def dualville(tmp_path, testville_config):
     read on screen as a single road with nothing separating the two flows.
     Nothing else is here, so whatever the offside pass decides is about this pair
     and not about a neighbour.
+
+    ⚠️ **Both polylines start and end on the shared nodes**, which is what makes
+    them a pair at all — and is the geometry the first version of this fixture
+    got wrong. Given endpoints 4 m apart instead, the two centrelines never touch
+    and a gap measured over the whole polyline never sees the zeros that a real
+    pair contributes at both ends. The bug that hid behind that is in
+    `_centreline_gap_m`'s docstring.
     """
     _write_graph(
         tmp_path,
@@ -457,8 +464,30 @@ def dualville(tmp_path, testville_config):
             {"id": 1, "pos": [500.0, 0.0, 300.0], "kind": "endpoint"},
         ],
         [
-            _edge(0, 0, 1, [[100.0, 0.0, 300.0], [500.0, 0.0, 300.0]], direction="forward"),
-            _edge(1, 1, 0, [[500.0, 0.0, 304.0], [100.0, 0.0, 304.0]], direction="forward"),
+            _edge(
+                0,
+                0,
+                1,
+                [
+                    [100.0, 0.0, 300.0],
+                    [200.0, 0.0, 298.0],
+                    [400.0, 0.0, 298.0],
+                    [500.0, 0.0, 300.0],
+                ],
+                direction="forward",
+            ),
+            _edge(
+                1,
+                1,
+                0,
+                [
+                    [500.0, 0.0, 300.0],
+                    [400.0, 0.0, 302.0],
+                    [200.0, 0.0, 302.0],
+                    [100.0, 0.0, 300.0],
+                ],
+                direction="forward",
+            ),
         ],
     )
     return testville_config, tmp_path
@@ -487,6 +516,15 @@ def _decode(code: float) -> dict[str, int]:
         "offside_kerb": packed // 1024 % 2,
         "centre": packed // 2048 % 64,
     }
+
+
+def _carriageway(mesh) -> np.ndarray:
+    """Mask of the vertices that are road rather than kerb or junction cap.
+
+    By the payload's own class field, not by colour: a cap is painted the same
+    asphalt as the carriageway it fills, so a colour mask quietly includes one.
+    """
+    return np.array([_decode(code)["surface_class"] == 0 for code in mesh.uv2[:, 0]])
 
 
 def _painted(mesh, colour: tuple[int, int, int]) -> np.ndarray:
@@ -1004,18 +1042,31 @@ class TestMarkingPayload:
         report = build_region(city, "middle", out_root=tmp_path / "out")
         mesh = _mesh(tmp_path)
 
-        assert report.opposed_pairs == 2
-        road = _painted(mesh, city.roads.surface.surface_material.colour)
+        assert report.opposed_pair_ends == 2
+        assert report.opposed_pairs_unpublishable == 0
+
+        road = _carriageway(mesh)
         fields = [_decode(c) for c in mesh.uv2[road, 0]]
         centres = {f["centre"] for f in fields}
         assert centres and 0 not in centres
 
+        # 🔴 **The property the whole field exists for, and the one it shipped
+        # without.** Each half publishes its own offset and the two are meant to
+        # name the *same* line. Measured against the region, a gap taken over the
+        # whole centreline read half the truth on a four-station edge — the two
+        # shared nodes contribute an exact 0.0 each — so the halves disagreed and
+        # drew two lines up to 3.9 m apart on Fleming Road.
+        assert len(centres) == 1, "both halves of a pair must publish the same join"
+
         lanes = next(iter({f["lanes"] for f in fields}))
-        for k in centres:
-            join = lanes / 2.0 + (k - 1) / 16.0
-            assert 0.0 < join < lanes, "the join must land on the carriageway"
-        # Half of the 4 m separation, in U-lanes of 2*4.8/2 = 4.8 m.
-        assert min(centres) == pytest.approx(1 + round(2.0 / 4.8 * 16), abs=1)
+        k = next(iter(centres))
+        join = lanes / 2.0 + (k - 1) / 16.0
+        assert 0.0 < join < lanes, "the join must land on the carriageway"
+        # The centrelines are 4 m apart at mid-street and meet at both nodes, so
+        # the join sits between the centreline and half of 4 m. Bounded rather
+        # than pinned: what the median of a tapering gap comes to is not a
+        # number worth freezing, and the two assertions above are the contract.
+        assert 0.0 < (k - 1) / 16.0 * (2 * 4.8 / lanes) <= 2.0
 
     def test_a_pair_does_not_claim_its_offside_is_a_kerb(self, dualville, tmp_path) -> None:
         """The other half of the same fact, and the one that keeps a no-stopping
@@ -1024,7 +1075,7 @@ class TestMarkingPayload:
         build_region(city, "middle", out_root=tmp_path / "out")
         mesh = _mesh(tmp_path)
 
-        road = _painted(mesh, city.roads.surface.surface_material.colour)
+        road = _carriageway(mesh)
         assert all(not _decode(c)["offside_kerb"] for c in mesh.uv2[road, 0])
 
     def test_an_ordinary_street_says_its_offside_is_a_kerb(self, testville, tmp_path) -> None:
@@ -1055,7 +1106,7 @@ class TestMarkingPayload:
             ],
         )
         report = build_region(testville_config, "middle", out_root=tmp_path / "out")
-        assert report.opposed_pairs == 0
+        assert report.opposed_pair_ends == 0
 
     def test_the_surface_asks_the_engine_for_its_shader(self, testville, tmp_path) -> None:
         """glTF cannot say "use this shader", so the material name is the whole

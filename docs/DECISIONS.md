@@ -6001,41 +6001,14 @@ which is the `P3-9a` debit above. An authored table is the honest route and is a
 staleness liability, so it waits for someone to want it.
 
 **🔴 One shipped marking is invented — the kerbside double yellow — and this record first claimed it
-*could not* be sourced. That claim was wrong, and the correction is the more useful half.**
-
-The Road Network v2 geodatabase carries an **`NSR`** layer — No-Stopping Restriction — which
-`DATA_SOURCES.md` has listed in its own contents line ("no-stopping zones") since `P1-3`. Measured
-2026-08-19 on the region already on disk:
-
-| | |
-|---|---|
-| `NSR` features in region | **579** (964 line parts), **44,220 m** |
-| Geometry | **kerb-referenced** — median **2.92 m** from the nearest centreline (p25 2.17, p75 3.72), **0%** on it |
-| Fields | `TIME_ZONE` (5 values) and `REMARKS` carrying literal hours — `0700-2000`, `0700-1000 & 1600-1900` |
-| `ONSTREETPARK` | **607** bays in region, the complement |
-
-So the data says which side is restricted **and** distinguishes an all-day restriction from a
-posted-hours one — which is the single-versus-double-yellow distinction. Nothing about this needed a
-new download; it is in the same 17 MB file `roads.py` already reads.
-
-**⚠️ Why this is worse than an invented decoration.** A double yellow is a legal assertion — no
-stopping at any time — not kerb trim. Painted on every kerb it claims that over roughly **three
-times** the kerb length actually restricted (44,220 m against ~131,000 m of kerb, two sides of
-65,642 m of centreline), and the bundle then contradicts itself twice: the same region publishes
-**607 on-street parking bays**, and the game paints "no stopping" over its own **14 taxi stands**,
-which are fare nodes and the point of the game loop. That is the class of error `GAME_DESIGN.md`
-prices against a hand-added ramp — a feature standing somewhere the player knows.
-
-**⚠️ The join is not free, which is why `NSR` is scoped rather than switched on here.** Measured on
-the same data: only **78%** of `NSR` line parts agree on which side of the road they are on across
-their own length, and **49%** span more than one centreline feature. So it wants a
-linear-referencing stage — chop, assign each piece to an edge and a side, merge contiguous runs into
-`(edge, side, V-range)` — not a per-feature nearest match. And the payload cannot express a V-range
-today: `TEXCOORD_1.x` is per-vertex and **204 of 797 edges carry two stations**, so a restriction
-starting partway along an edge has nowhere to land without inserting stations at its boundaries.
-
-Until then it ships on `draw_double_yellow`, which is the honest lever and the reason the switch
-exists.
+*could not* be sourced. That claim was wrong.** The Road Network v2 geodatabase carries an `NSR`
+layer — No-Stopping Restriction — which `DATA_SOURCES.md` has listed in its own contents line since
+`P1-3` and which this record read past. Painting a double yellow on every kerb asserts *no stopping
+at any time* over roughly three times the kerb actually restricted, and over the bundle's own taxi
+stands. **That is `Q54`**, opened here rather than answered here: it is a sourcing question with its
+own measurements and its own refusals, and burying it inside a closed record is how it would be
+lost. Meanwhile the marking stays on `draw_double_yellow`, which is the honest lever and the reason
+the switch exists.
 
 **✅ The offside half of that question is closed, and it was a different question.** The line was
 drawn on the offside kerb only where `direction == both`, with the note that on a one-way edge
@@ -6072,6 +6045,29 @@ two-lane street against the config's 3.20 m. At the wrong scale the join compute
 two-lane ribbon and fell past the offside kerb, drawing nothing. Caught by rendering it; the test now
 asserts the join lands inside `(0, lanes)`.
 
+⚠️ **The offset shipped wrong twice, and both were the same mistake: measuring a separation on
+geometry that is defined to touch at both ends.** A pair is found by shared endpoints, so the two
+centrelines meet exactly there — and those stations contribute a hard **0.0** to the sample. On a
+four-station edge they are half of it, so the median came out at half the truth: Fleming read
+**3.85 m** against **7.98 m**. The second was that the measure was one-sided — this edge's stations
+against the partner's segments — so the two halves of a pair disagreed even where neither was
+halved. Together they meant every pair drew **two** lines rather than one, up to **3.9 m apart** on
+Fleming, which is precisely the defect the field exists to remove.
+
+Both are fixed by measuring what is actually drawn: the **ribbon**, already trimmed back from both
+nodes for the junction cap, so it carries no shared station and no zero — and averaging both
+directions, which makes the answer equal by construction whichever half is asking. All six pairs now
+publish the same step from both ends. ⚠️ **The test that was supposed to cover this could not**: its
+fixture gave the two polylines endpoints 4 m apart, so they never touched and never produced the
+zeros a real pair does. It now shares its nodes, and asserts that the two halves agree rather than
+that either is a particular number.
+
+⚠️ **The range guard bounds the carriageway, not the field.** Six bits reach 3.94 lanes, but a join
+is only *visible* while `lanes/2 + k/16 < lanes`. A pair separated by more than its own width passed
+a field-range check, published, and drew nothing — which is how this first shipped, found by looking
+at a frame. `steps == 0` is refused for its own reason: a measured separation of nothing is a
+measurement that did not work.
+
 ⚠️ **Pairs are found by shared endpoints, which `P1-4` already recorded as a lower bound** — two
 carriageways that do not share both ends are not counted. That is survivable because the two
 markings rest on *different* tests: the centre line needs the pair, but the kerbside yellow needs
@@ -6102,7 +6098,7 @@ carries `vertex_srgb_to_linear` by hand, exactly as the two facade shaders do. N
 when this is forgotten — the asphalt just lightens and stops varying with its own albedo. Verified
 against the `street` baseline: the asphalt is unchanged and only the markings are new.
 
-**Cost, measured from PCKs with one variable changed.** **40,702,784 → 40,743,376 B, +40,592 B**,
+**Cost, measured from PCKs with one variable changed.** **40,702,784 → 40,744,128 B, +41,344 B**,
 against **279,532 B** of raw VEC2 across 34,924 vertices — the pack compresses the payload by 86%,
 because `x` is a per-edge constant with only 17 distinct values region-wide. No triangle moved, no
 draw call added, no material added; `verify_road_surface.gd` still asserts one primitive.
@@ -6140,7 +6136,76 @@ that — *"Written once because two copies drift, and the copy that drifts is th
 stops catching anything"* — so both are hoisted there as `check_uv2_import_settings` and
 `check_shader_material`, which is the shape `check_collision` already had.
 
-**See.** `ARCHITECTURE.md` `roads.glb` for the channel table and the codec · `ART_DESIGN.md` "Roads"
-· `Q40`/`Q41` for the codec pattern · `Q27` for the sRGB conversion, now shared · `Q23` for the
-per-station widening the lane coordinate survives · `Q18`/`Q36` for the orthophoto refusal this rests
-on · `P1-4` · `P3-7` for the "one commit across two sides" precedent
+⚠️ **Left open by this, and visible only because the join now exists:** each ribbon still draws its
+own lane dividers across its partner's carriageway, because `P1-4` overlaps them by design. With a
+centre line marking where one carriageway ends, the dashes running past it read as wrong-side lane
+lines. Not a defect of the centre line — it is the overlap, made legible.
+
+**See.** `Q54` for the kerbside restriction this got wrong · `ARCHITECTURE.md` `roads.glb` for the
+channel table and the codec · `ART_DESIGN.md` "Roads" · `Q40`/`Q41` for the codec pattern · `Q27`
+for the sRGB conversion, now shared · `Q23` for the per-station widening the lane coordinate
+survives · `Q18`/`Q36` for the orthophoto refusal this rests on · `P1-4` · `P3-7` for the "one
+commit across two sides" precedent
+
+---
+
+## `Q54` — The kerbside yellow is invented, and the layer that would source it was read past
+
+**Status.** 🔴 Open — measured, scoped, not built · **Owner.** unassigned · **Opened** 2026-08-19 by
+`Q53`
+
+**Claim.** `P3-12` paints a kerbside double yellow on every level-0 kerb in the region and recorded
+it as the one marking with no source. **There is a source, it is already on disk, and it is in the
+file the road graph is built from.**
+
+**What `NSR` carries.** Measured on the cached geodatabase, no download:
+
+| | |
+|---|---|
+| Features in region | **579** (964 line parts), **44,220 m** |
+| Geometry | **kerb-referenced** — median **2.92 m** from the nearest centreline (p25 2.17, p75 3.72), **0%** on it. It already says which side |
+| `TIME_ZONE` | 5 values; `REMARKS` carries literal hours — `0700-2000`, `0700-1000 & 1600-1900` |
+| `ONSTREETPARK` | **607** bays in region, the complement |
+
+So the data distinguishes an all-day restriction from a posted-hours one, which is the
+double-versus-single-yellow distinction itself, and it does it per side of the street.
+
+**⚠️ Why the current behaviour is worse than a decoration.** A double yellow is a legal assertion —
+no stopping at any time — not kerb trim. Painted on every kerb it claims that over roughly **three
+times** the kerb length actually restricted (44,220 m against ~131,000 m of kerb, being two sides of
+65,642 m of centreline). And the bundle contradicts itself twice: the same region publishes **607
+on-street parking bays**, and the game paints "no stopping" over its own **14 taxi stands**, which
+are `fares.json`'s nodes and the point of the game loop. This is the class of error
+`GAME_DESIGN.md` prices against a hand-added ramp — a feature standing somewhere the player knows.
+
+**⚠️ Two measured obstacles, which is why this is scoped rather than switched on.**
+
+- **The join is not a nearest-feature match.** Only **78%** of `NSR` line parts agree on which side
+  of the road they are on across their own length, and **49%** span more than one centreline
+  feature. It wants a linear-referencing stage — chop each line at a fine spacing, assign each piece
+  to an edge and a side, merge contiguous pieces into `(edge, side, V-range)` runs — which is the
+  same shape as `clearance.py` rather than the same shape as the `ROUTE_ID` joins `SPEED_LIMIT` and
+  `BUS_ONLY_LANE` get. `NSR` keys on `ST_CODE_1..6`, not `ROUTE_ID`, so there is no key join
+  available.
+- **The payload cannot express a V-range.** `TEXCOORD_1.x` is per-vertex and constant per strip, and
+  **204 of 797 edges carry two stations** — only edges lifted onto structure are resampled. A
+  restriction that starts partway along an edge has nowhere to land without inserting stations at
+  its boundaries, which is new geometry and a new decision about what the ribbon's vertex count is
+  allowed to depend on.
+
+**What is *not* the obstacle.** The widening. `NSR` sits at the real kerb, ~2.9 m from the
+centreline, while the drawn ribbon's kerb is at ~5.1 m — but the payload is consumed as *side plus
+extent along the edge*, in lane coordinates, so the geometry is read for **which side and how far
+along**, never for a position. That is the same "use it as data, not as geometry" pattern `P3-6`
+used to veto HKCEC's ribbon strips against the aerial atlas, and the same reason the 1.6×
+misregistration that killed the orthophoto (`Q18`/`Q36`) does not bite here.
+
+**Until it is built.** `draw_double_yellow` in `tuning/road_markings.tres` turns it off in one line
+with no rebuild. It ships **on**, which is a deliberate choice and not an oversight: a Wan Chai kerb
+usually is restricted, so the marking is right more often than not — but "more often than not" is
+not the standard the rest of this bundle is held to, and the switch is there so the call can be
+reversed the moment a recognition round reports the markings as wrong rather than as missing.
+
+**See.** `Q53` for the markings this belongs to · `DATA_SOURCES.md` for the layer's own row ·
+`Q18`/`Q36` for the registration problem this one does **not** have · `GAME_DESIGN.md` for why an
+invented feature is priced against `P3-9a`

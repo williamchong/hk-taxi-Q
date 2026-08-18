@@ -77,15 +77,20 @@ def edges_cross(a: np.ndarray, b: np.ndarray) -> bool:
     return bool(((d1 * d2 < 0.0) & (d3 * d4 < 0.0)).any())
 
 
-def edge_distances(points: np.ndarray, ring: np.ndarray) -> np.ndarray:
+def edge_distances(points: np.ndarray, ring: np.ndarray, *, closed: bool = True) -> np.ndarray:
     """Each point's distance to the nearest edge of the ring, shape `(n,)`.
 
     The per-point form exists for depth tests: a point *inside* a ring at
     distance `d` from its boundary is at least `d` deep, which is how the join
     tells genuine overlap from survey misregistration at a shared wall.
+
+    `closed=False` treats the vertices as an open polyline instead — no chord
+    from the last back to the first. A ring's closing edge is real geometry; on
+    a road centreline it is a shortcut across the whole street, and every
+    distance measured against it would be wrong by however far the road bends.
     """
-    a = ring
-    b = np.roll(ring, -1, axis=0)
+    a = ring if closed else ring[:-1]
+    b = np.roll(ring, -1, axis=0) if closed else ring[1:]
     ab = b - a
     length_sq = (ab**2).sum(axis=1)
     # A degenerate zero-length edge contributes its endpoint: `t` clamps to 0.
