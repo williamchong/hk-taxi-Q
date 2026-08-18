@@ -41,7 +41,7 @@ lives in git. This file holds *why things are the way they are*.
 | `Q16` | LOD0 does not ship | ✅ Closed |
 | `Q17` | CI runs `tools/check.sh` and cannot check the generated assets | ✅ Closed |
 | `Q18` | Ground colour sits under a chroma knee; the land-cover classifier is refused | ✅ Closed |
-| `Q19` | 5.17% of drawn carriageway has solid geometry standing in it at bumper height | 🔴 Open |
+| `Q19` | 5.17% of drawn carriageway has solid geometry standing in it at bumper height | 🟡 Half answered — the routing exposure closed as `Q51`; the walls stand, and nobody owns moving them |
 | `Q20` | Deck heights are sampled from `INFRASTRUCTURE`, not invented | ✅ Closed |
 | `Q21` | Should level −1 carriageway be drawn at all? | 🟡 Open |
 | `Q22` | 10.2% of off-grade carriageway hangs past its structure | 🟡 Open |
@@ -74,6 +74,7 @@ lives in git. This file holds *why things are the way they are*.
 | `Q48` | A contrast ratio measures banding where an `L*` profile could not | 🟡 Open as a **candidate only** — recorded 2026-08-13 from `P3-6`'s photo veto, nothing built and nothing scheduled; Probe 3 and mode 1 do not reach it, mode 4 does, and the evidence is one hero building graded by its author's eye |
 | `Q49` | A tyre spends one budget, and the handbrake that follows spins the car | 🟡 **Superseded in mechanism by `Q50`** — the friction ellipse it shipped is gone with the raycast model; its `B4` conclusion stands and is now the only route |
 | `Q50` | The shipped car is Godot's `VehicleBody3D`; `P0-5a` was right and the cost was accepted | ✅ Closed — shipped 2026-08-18 at the user's explicit instruction. Drift window measured **0.01–0.02 wide**, a handbrake tap now does nothing, and `Q49`'s ellipse is lost |
+| `Q51` | Traffic is never *sent* down an edge under one lane clear; the player is never *stopped* | ✅ Closed — the graph expresses passability and refuses nothing. `clearance.py` publishes a width per station into `city.json` (schema 9) and `RoadGraph` gains `is_routable`; `nearest_edge` is untouched. ⚠️ The pipeline reads **21** starved edges where `Q19`'s grader reads **26**, and that gap is recorded rather than tuned away |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -468,7 +469,7 @@ crisp edges at any cell size and a clean key for `collapse`.
 
 ## `Q19` — Solid geometry stands in the drawn carriageway
 
-**Status.** 🔴 Open · **Owner.** `P3-3`
+**Status.** 🟡 Half answered · **Owner.** unassigned
 
 **Claim.** **5.17% of drawn carriageway has solid geometry standing in it at bumper height** —
 `BUILDING` 1.72% and `INFRASTRUCTURE` 1.60% at grade, plus a further 1.87% on off-grade ribbon nobody
@@ -483,7 +484,9 @@ with the comment *"widening them the same amount pushes the deck through the bui
 The same effect, found once, fixed locally, never checked across the network.
 
 **Why it is not cosmetic.** Collision shipped, so this is invisible wall on roads the graph says are
-legal, and `P3-3`'s traffic will route into it — `RoadGraph` has no idea any of it is there.
+legal. **`Q51` closed the traffic half**: the bundle now publishes a clear width per station and
+`RoadGraph.is_routable` keeps AI off these edges, so this is no longer `P3-3`'s. What is left is the
+*player*, who can still drive into one — and no task is scheduled to move the geometry.
 
 ⚠️ **A first measurement read 13.71% by marking each triangle's bounding box**; sampling the actual
 surfaces cut it to a third.
@@ -546,7 +549,7 @@ after bounding boxes read 13.71%.
 `GAME_DESIGN.md` trade and a separate call — and on the evidence above, narrowing is not the fix for
 the edges that actually fail.
 
-**See.** `Q20` · `Q24` · `P2-5` · `P3-3` · `P3-6` for why the population moved
+**See.** `Q51` for what routes around this · `Q20` · `Q24` · `P2-5` · `P3-6` for why the population moved
 
 ## `Q20` — Deck heights are sampled from `INFRASTRUCTURE`
 
@@ -5458,3 +5461,120 @@ wire**, which is the figure a tester actually pays and the one to warn them abou
 over the 2026-08-12 PCK is the whole of `P3-11c`/`d`/`e`.
 
 **See.** `PLAN.md` `P3-9a` · `PROGRESS.md` risk register · `Q26` · `P3-7a` · `P3-11e`
+## `Q51` — Traffic is never sent down an edge a car cannot fit through
+
+**Status.** ✅ Closed · **Owner.** `P3-3`
+
+**Claim.** `city.json` publishes a **clear corridor width per carriageway station**, and
+`RoadGraph` reads it as `is_passable` / `is_routable`. `P3-3` routes on `is_routable`. This is the
+routing half of `Q19`, which measured the problem and stopped there on purpose — *"It measures; it
+does not clear."*
+
+**Expressed, never enforced — and that is the whole decision.** `nearest_edge` is untouched and
+answers on a blocked edge exactly as it does anywhere else. It is tempting to reuse `Q13`'s
+refusal, and it would be wrong: an off-grade edge is refused because a car **cannot be** there,
+while a car **can** be — and `RoadSpawn` can already put one — on a blocked level-0 edge. Folding
+passability into the index would blank the road name, the lane centre and the fare `t` precisely
+where the player is stuck against a wall. `verify_road_graph.gd` pins the distinction by asserting
+that `nearest_edge` still finds every edge on the blocked list, so a later change cannot quietly
+turn expression into refusal.
+
+**Why the number rides in `city.json` and not in `roadgraph.json`.** The same argument that already
+routes `carriageway_half_width_m` through the manifest: the graph publishes the **authored** street,
+and `config.py` keeps the playability widening on the surface style deliberately — *"a change here
+never changes `roadgraph.json`"*. Clearance is a fact about what was **built beside the ribbon**,
+which is further from the authored street than the widening is. `ROADGRAPH_SCHEMA` stays 3;
+`CITY_SCHEMA` goes to **9**, for the silent wrong answer: a v8 reader would load a v9 bundle happily
+and route traffic down edges the bundle itself records as blocked. `lane_width_m` travels with it,
+because `width_m` is `lanes x lane_width_m` **hand-tuned upward** and dividing it back does not
+recover the bar.
+
+**The pipeline measures it; the grader still grades it.** `etl/pipeline/clearance.py` is a stage
+between `surface` and `export`, and `tools/carriageway_occupancy.py` is unchanged. That is the
+`surface.py` / `deck_error.py` relationship, and the alternative — publishing the grader's own
+output into the bundle — would have made the instrument load-bearing in the build it audits, after
+which it could never disagree with what ships.
+
+**Measured.** 737 level-0 edges, **38,664 cross-sections** judged at 1 m spacing and 6,812 left to
+their junction caps; 66 tiles and 2 hero meshes read, 118,482 triangles reaching the corridor.
+**21 edges keep less than one lane (3.20 m) clear**, worst `e233` **0.00 m** (WAN CHAI
+INTERCHANGE), then `e125` 0.25 m, `e314` 0.25 m, `e485` 0.50 m, `e627` 0.50 m. **3.8 s** and
+**482 MB**, against the grader's 26.1 s over the same bundle.
+
+⚠️ **Three measured wins, none of which moved a published number** — which is how each was
+checked. `np.einsum` without `optimize=True` runs its own naive C loop instead of reaching BLAS,
+and that contraction was **30% of the stage**; the barycentric lattices were being rebuilt per
+mesh, 1,649 times for 32 distinct answers; and one hero mesh alone subdivided into 2.1 M pieces
+and 6.9 M cell rows, putting peak RSS at **1.64 GB** — more than `buildings`, the longest stage
+in the pipeline. ⚠️ **A budget on triangles does not bound that**, because `MAX_SUBDIVISIONS`
+lets 3,773 triangles become 763,000 pieces; the budget has to be on *pieces*. 12.2 s and 1.64 GB
+→ **3.8 s and 482 MB**.
+
+⚠️ **The two instruments do not agree, and the gap is recorded rather than tuned away.** The
+pipeline reads 21 starved edges where the grader reads 26, and on the grader's eight tightest:
+
+| edge | `carriageway_occupancy.py` | `clearance.py` |
+|---|---|---|
+| `e233` WAN CHAI INTERCHANGE | 0.00 m | **0.00 m** |
+| `e125` | 0.48 m | **0.25 m** |
+| `e314` LEIGHTON ROAD | 0.49 m | **0.25 m** |
+| `e485` WAN CHAI INTERCHANGE | 0.49 m | **0.50 m** |
+| `e788` HUNG HING ROAD FLYOVER | 0.49 m | **1.00 m** |
+| `e132` | 0.98 m | **4.00 m** |
+| `e426` | 0.98 m | **1.25 m** |
+| `e546` CONVENTION AVENUE | 0.49 m | **2.75 m** |
+
+Six of the eight agree that the edge is starved and the worst agrees exactly. Two — `e546` and
+`e132` — disagree by enough to change the verdict. **Both instruments over-block by construction**
+and so both under-report clearance: the grader bins occupier surfaces into 1 m plan cells, this
+rasterises a piece's plan box, and neither ever calls a blocked sample clear. So the disagreement is
+about how much each over-blocks, not about which is measuring something the other cannot see. The
+likeliest mechanism is that the grader judges the **drawn** cross-section and drops cells with no
+road under them, while this judges the **nominal** corridor and drops whole stations the trims
+removed — different treatments of the same junction. 🟡 **Not reconciled.** `Q19` carries an
+unreconciled 5.17% / 3.693% for the same family of reason, and tuning either instrument toward the
+other would destroy the only thing a second one is for.
+
+⚠️ **Measuring at the polyline's own vertices measures almost nothing.** `roads.py` simplifies to
+0.2 m, so a straight street is **two** stations — and both of them are its ends, which is exactly
+the stretch `surface.py` trims back for the junction caps. The first draft of this stage judged
+every edge at its vertices, measured *nothing whatever* on every two-vertex edge, and published a
+complete-looking table of refusals. It samples along the edge at 1 m now and reports at the nearest
+station. `test_clearance.py` holds both halves.
+
+⚠️ **A station the ribbon never reached is not a starved station.** The nominal corridor still has a
+published width where the ribbon stops, and judging it is what condemned 18 innocent edges in `Q19`
+— 44 failures where there are 26. So the trims travel: `roadsurface.json` schema **4** carries
+`carriageway[].trim_m`, and those stations publish `-1.0` rather than `0.0`. Negative because no
+real clearance can be, and zero is the one value that would read as *blocked solid* on precisely
+the stations that are not blocked at all.
+
+⚠️ **The occupier subdivision is by plan extent, never by area.** A building wall is one triangle a
+hundred metres tall and centimetres wide in plan; a ramp face is the reverse. Splitting by edge
+length shatters the first to no purpose and leaves the second whole, smearing its full height range
+across a footprint it touches at one end. Every piece is at most 0.5 m across in plan and as tall as
+it likes, which is what makes taking a piece's whole height range over the cells it covers both
+cheap and honest.
+
+⚠️ **The method is not independent of `Q19`'s, and must not be quoted as if it were.** The
+implementations and the inputs are — this reads the graph's own `polyline.y` for the deck and the
+classes the config names, where the grader samples `roads.glb` and infers class from shipped vertex
+colours — but the *formulation* is shared, because nothing else survives the geometry. A wall at
+bumper height projects to a line in plan, so no footprint test finds it; a footprint-plus-height-span
+test marks the whole area **under a flyover** as blocked, which is the bounding-box error that first
+read 13.71%. Asking what surfaces stand in the band is the only question that answers both.
+
+⚠️ **This is the one place the pipeline reads the game tree.** `central_plaza.glb` is a committed
+authored asset, and a hero standing in the street is measured or it is not. Measuring only the
+heroes the ETL happens to *build* would leave the committed ones out and make the two instruments
+disagree by construction — the same different-populations mistake that left `Q19`'s two headline
+figures unreconciled.
+
+**What this does not do.** It does not clear anything, and it does not give `RoadGraph` a router:
+the graph still stores no adjacency — `from` and `to` are never read — and consumes none of the 217
+published turn restrictions. Both are `P3-3` proper. `RoadSpawn` is also still free to place the
+player on a blocked edge, which is a live defect rather than a future one.
+
+**See.** `Q19` for the geometry half, still open · `Q13` for the refusal this deliberately is not ·
+`Q23` · `P2-2` · `PROGRESS.md` risk register
+

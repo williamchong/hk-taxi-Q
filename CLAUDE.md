@@ -106,6 +106,10 @@ Common emoji for this project:
   ⚠️ Measure on `skidpad.tscn`, never `city_drive.tscn` — a 0.14° micro-gradient there is worth the
   whole quantity under test, and a published figure has already had to be withdrawn over it
   (`P0-5b/c/d`).
+- **`clearance.py` changes: also `tools/carriageway_occupancy.py`, and paste both tables.** The
+  pipeline publishes a number that tool grades, and the two currently disagree — 21 starved edges
+  against 26 (`Q51`). The gap is only evidence while both figures describe the same bundle, and no
+  check can see one of them go stale.
 - Road-surface, deck-height or ground changes: also `tools/deck_error.py`, `tools/overhang.py`,
   `tools/ground_clearance.py` and `tools/carriageway_occupancy.py`, by hand after a build. They grade
   the *shipped* bundle and share no code with the pipeline — `check.sh` does not require a built

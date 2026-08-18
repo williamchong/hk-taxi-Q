@@ -182,7 +182,7 @@ with itself.
 | `tools/deck_error.py` | `Q20` — how far the drawn carriageway sits from the deck beneath it, *vertically*, sampled down centrelines. Gates on \|error\| p90, deepest intrusion, and the share it managed to measure at all |
 | `tools/overhang.py` | `Q22`/`Q23` — whether there is a deck beneath it at all, sampled *across the full drawn width*. A ribbon can pass the first and fail the second |
 | `tools/ground_clearance.py` | `Q18`/`Q24` — whether the drawn ground stands *in* the at-grade carriageway. Sizes `buildings.ground_sink_m`, and gates the sink separately from the road's own shape |
-| `tools/carriageway_occupancy.py` | `Q19` — whether anything **solid stands in the road at bumper height**, buildings and structure told apart by vertex colour. The only one that gates per *edge* rather than region-wide, because `RoadGraph` routes on edges and a share cannot tell a wall across the road from clutter beside it. ⚠️ **Fails today** |
+| `tools/carriageway_occupancy.py` | `Q19` — whether anything **solid stands in the road at bumper height**, buildings and structure told apart by vertex colour. The only one that gates per *edge* rather than region-wide, because `RoadGraph` routes on edges and a share cannot tell a wall across the road from clutter beside it. ⚠️ **Fails today**. Since `Q51` it also grades a number the pipeline publishes for itself — `clearance.py`'s — and the two disagree by 21 edges against 26, recorded rather than reconciled |
 
 `deck_error.py` owns the shared bundle reader (`bundle_arguments`, `load_bundle`, `log_bundle`,
 `Faces`, `wears`, `nearest`); `overhang.py` owns the shared width sweep (`walk_width`,
@@ -273,6 +273,7 @@ hk-taxi-Q/
 │   │   ├── buildings.py         # sheets → vertex-coloured tiles + LOD tiers
 │   │   ├── roads.py             # Road Network geodatabase → roadgraph.json
 │   │   ├── surface.py           # roadgraph.json → roads.glb; ribbon, kerbs, junctions
+│   │   ├── clearance.py         # what stands in the ribbon → clear width per station
 │   │   ├── fares.py             # taxi stands + PUDO + POIs → fare nodes
 │   │   ├── export.py            # → city.json, assembles and validates the stage outputs
 │   │   └── __main__.py          # `python -m pipeline` — every stage, in order
@@ -342,7 +343,11 @@ The interface between ETL and game. **Versioned — change both sides together a
   ],
   "road_graph": "roadgraph.json",
   "road_surface": "roads.glb",
-  "carriageway": [{ "edge": 651, "half_width_m": [5.12, 5.12, 4.32, 3.2] }],
+  "carriageway": [
+    { "edge": 651, "half_width_m": [5.12, 5.12, 4.32, 3.2],
+      "clear_width_m": [-1.0, 10.24, 8.5, 0.0] }
+  ],
+  "lane_width_m": 3.2,
   "fares": "fares.json",
   "landmarks": "landmarks.json",
   "landmark_assets": ["landmarks/hkcec.glb"],
@@ -381,6 +386,18 @@ partway along one. Reading `[0]` as if it covered the edge is right on 769 of th
 and 0.96 m out on the rest, which is exactly the error this table exists to prevent. `RoadGraph`
 warns and falls back to the authored width rather than failing; `verify_road_graph.gd` treats the
 table's absence as an error.
+
+⚠️ **`clear_width_m` is what *stands in* the tarmac, and no consumer can derive it either.**
+Published since schema 9 (`Q51`), one value per station beside `half_width_m` and indexed the same
+way, so both come off one station. It is the widest continuous gap a car could get through at that
+cross-section, measured by `clearance.py` between 0.30 m and 2.00 m above the deck — the same band
+`Q19` measures over, so the two stay comparable. **`-1.0` means no cross-section was judged there**,
+because `surface.py` had held the ribbon back for a junction cap; negative rather than zero because
+no real clearance can be, and zero is the one value that would read as *blocked solid* on precisely
+the stations that are not. `lane_width_m` travels with it as the bar: `roadgraph.json`'s `width_m`
+is `lanes × lane_width_m` **hand-tuned upward for playability**, so dividing it back does not
+recover this number. `RoadGraph` reads the pair as `is_passable` / `is_routable` and — deliberately
+— does **not** fold either into `nearest_edge`.
 
 ⚠️ **`bounds_game` is the union of the content, not the region rectangle.** Wan Chai's declared
 region is 1650 × 887 m; its geometry spans 1737 × 977 m, because a building is assigned to a tile
@@ -863,12 +880,12 @@ the second vehicle anyone built.
 
 | Path | Role |
 |---|---|
-| `scripts/city/city_manifest.gd` | **`city.json`, typed.** The shipping route into the generated city: the tile list, their AABBs, the per-edge carriageway widths, the resolved document paths |
+| `scripts/city/city_manifest.gd` | **`city.json`, typed.** The shipping route into the generated city: the tile list, their AABBs, the per-edge carriageway widths and clearances, the lane-width bar, the resolved document paths |
 | `scripts/city/city_streamer.gd` | Loads and frees tiles by distance to their published `aabb`, off the main thread, and owns the LOD tier |
 | `scripts/core/tile_streaming.gd` | The streaming **policy**, pure — distance to an `AABB` in, tier out. No `Node`, no `load()`, so the decision table is testable headlessly and a tile cannot be rejected *after* being loaded |
 | `scripts/core/plan_lattice.gd` | An even grid of plan positions over a region's bounds. Both region-sweeping verify tools take their sample points from it — counted, not float-accumulated, so the far row and column cannot be dropped |
 | `scripts/city/streaming_profile.gd` | Schema for distance bands, hysteresis and per-frame budgets. Numbers live only in `tuning/streaming.tres` |
-| `scripts/city/road_graph.gd` | One parse per scene, nearest-edge and lane-centre queries over a plan grid. Refuses off-grade edges (`Q13`) |
+| `scripts/city/road_graph.gd` | One parse per scene, nearest-edge and lane-centre queries over a plan grid. Refuses off-grade edges (`Q13`), and **expresses** — never enforces — passability on the rest (`Q51`) |
 | `scripts/city/road_spawn.gd` | `basis_facing` builds the rotation from a direction, which is what deleted the hand-written transform literal and its transpose trap |
 | `scripts/city/generated_document.gd` | Parse and version-check a JSON document the ETL wrote. Shared by the locators and by `CityManifest`, so the stale-copy message exists once |
 | `scripts/city/generated_{road_graph,road_surface,fares,landmarks}.gd` | Locators — one definition per document, two readers. `generated_fares.gd` is the one place that knows that document's shape, and `generated_landmarks.gd::placement_of` is the one place the compass bearing becomes a Godot rotation |
@@ -885,7 +902,7 @@ the second vehicle anyone built.
 | `tools/verify_tiles.gd` | The mesh contract, per tier of every tile the manifest names |
 | `tools/verify_city.gd` | `city.json` — georeferencing, per-tier AABB containment, `bounds_game`, and that the named documents exist |
 | `tools/verify_road_surface.gd` | `roads.glb` — one draw call, UVs, trimesh collision |
-| `tools/verify_road_graph.gd` | `RoadGraph`'s queries — the off-grade refusal, edge resolution, lane placement against the published carriageway width, per-station width on a genuinely mixed edge, and query time against a 1 ms budget over a region-wide lattice |
+| `tools/verify_road_graph.gd` | `RoadGraph`'s queries — the off-grade refusal, edge resolution, lane placement against the published carriageway width, per-station width on a genuinely mixed edge, `Q51`'s passability (every edge measured, `is_routable` agreeing with the published blocked set, and `nearest_edge` **still** answering on a blocked edge), and query time against a 1 ms budget over a region-wide lattice |
 | `tools/verify_city_streamer.gd` | The streaming policy — band edges, hysteresis both ways, and a region-wide residency sweep against the draw-call budget |
 | `tools/verify_spawn.gd` | The start line — orientation against its edge vector, nearside-lane placement, drop height, and the resolved edge against the fare node. **Builds the transposed basis and requires it to fail** |
 | `tools/verify_landmarks.gd` | `landmarks.json` — assets load with mesh and `-col` collision, triangle budget, placed AABB near `bounds_game`, and no tier-0 tile triangle inside each excluded footprint's interior core |

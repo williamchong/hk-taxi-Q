@@ -506,7 +506,7 @@ trade.
 - **Prior art: Burnout 3.** Near-miss, oncoming-lane driving and a risk-fed boost meter are the
   fullest working-out of *traffic as reward rather than obstacle*, and the threshold, the speed gate
   and the pop are tuned quantities there rather than obvious ones.
-- ⚠️ **`Q19` lands here.** 5.17% of drawn carriageway has solid geometry standing in it at bumper
+- ✅ **`Q19`'s routing half landed ahead of this build, as `Q51` (2026-08-18).** `city.json` publishes a clear corridor width per station and `RoadGraph.is_routable` is the predicate to route on, so traffic will not be sent down an edge the bundle records as blocked. ⚠️ **That is 21 edges, where `Q19`'s grader reads 26** — the two instruments disagree and `Q51` records the gap rather than reconciling it, so the graph routes around slightly fewer edges than the grader condemns. ⚠️ The walls are still there — `Q19`'s geometry half is open — and `nearest_edge` deliberately still resolves them, so the *player* can drive into one. ⚠️ Still owed by this task itself: the graph stores no adjacency and reads none of its 217 turn restrictions.
   height, and `RoadGraph` has no idea any of it is there, so traffic will route into it.
 
 ### Build `B4` — "It's a game" — **runs fourth**
