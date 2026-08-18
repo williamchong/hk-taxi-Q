@@ -6000,14 +6000,91 @@ real subset; a heuristic on degree and arm width would put boxes on junctions th
 which is the `P3-9a` debit above. An authored table is the honest route and is a `Q34′`-class
 staleness liability, so it waits for someone to want it.
 
-**⚠️ One shipped marking has no source behind it: the kerbside double yellow.** Every other line is
-either geometry (a lane boundary) or a published flag (`TRAVEL_DIRECTION`, `BUS_ONLY_LANE`, 13
-published edges — `DATA_SOURCES.md`'s 14 counts source features, this counts what survived clipping). A waiting restriction is neither. It is near universal in urban Wan Chai, which is the
-argument for drawing it, and it is still an invention on streets the drivers know — so it ships on
-its own uniform, `draw_double_yellow`, and is the first thing to turn off if a recognition round
-reports the markings as *wrong* rather than as missing. It is also drawn on the offside kerb **only
-on a two-way edge**: on a one-way one, `U = lanes` may be a kerb or may be the centre of a dual
-carriageway drawn as an opposed pair, and nothing published separates the two.
+**🔴 One shipped marking is invented — the kerbside double yellow — and this record first claimed it
+*could not* be sourced. That claim was wrong, and the correction is the more useful half.**
+
+The Road Network v2 geodatabase carries an **`NSR`** layer — No-Stopping Restriction — which
+`DATA_SOURCES.md` has listed in its own contents line ("no-stopping zones") since `P1-3`. Measured
+2026-08-19 on the region already on disk:
+
+| | |
+|---|---|
+| `NSR` features in region | **579** (964 line parts), **44,220 m** |
+| Geometry | **kerb-referenced** — median **2.92 m** from the nearest centreline (p25 2.17, p75 3.72), **0%** on it |
+| Fields | `TIME_ZONE` (5 values) and `REMARKS` carrying literal hours — `0700-2000`, `0700-1000 & 1600-1900` |
+| `ONSTREETPARK` | **607** bays in region, the complement |
+
+So the data says which side is restricted **and** distinguishes an all-day restriction from a
+posted-hours one — which is the single-versus-double-yellow distinction. Nothing about this needed a
+new download; it is in the same 17 MB file `roads.py` already reads.
+
+**⚠️ Why this is worse than an invented decoration.** A double yellow is a legal assertion — no
+stopping at any time — not kerb trim. Painted on every kerb it claims that over roughly **three
+times** the kerb length actually restricted (44,220 m against ~131,000 m of kerb, two sides of
+65,642 m of centreline), and the bundle then contradicts itself twice: the same region publishes
+**607 on-street parking bays**, and the game paints "no stopping" over its own **14 taxi stands**,
+which are fare nodes and the point of the game loop. That is the class of error `GAME_DESIGN.md`
+prices against a hand-added ramp — a feature standing somewhere the player knows.
+
+**⚠️ The join is not free, which is why `NSR` is scoped rather than switched on here.** Measured on
+the same data: only **78%** of `NSR` line parts agree on which side of the road they are on across
+their own length, and **49%** span more than one centreline feature. So it wants a
+linear-referencing stage — chop, assign each piece to an edge and a side, merge contiguous runs into
+`(edge, side, V-range)` — not a per-feature nearest match. And the payload cannot express a V-range
+today: `TEXCOORD_1.x` is per-vertex and **204 of 797 edges carry two stations**, so a restriction
+starting partway along an edge has nowhere to land without inserting stations at its boundaries.
+
+Until then it ships on `draw_double_yellow`, which is the honest lever and the reason the switch
+exists.
+
+**✅ The offside half of that question is closed, and it was a different question.** The line was
+drawn on the offside kerb only where `direction == both`, with the note that on a one-way edge
+`U = lanes` "may be a kerb or may be the centre of a dual carriageway, and nothing published
+separates the two". Something does: `_hide_buried_kerbs` already decides whether a kerb lies inside
+a neighbour's carriageway, because it has to know whether to draw it. That verdict is now published
+as `offside_kerb`, so the marking follows a measurement instead of a proxy — **35%** of carriageway
+vertices carry a known kerb offside, and a missed opposed pair costs a centre line rather than
+putting a no-stopping line down the middle of a road.
+
+**✅ Opposed carriageway pairs get a centre line, which they had no way to grow one.** `P1-4` draws
+the region's six dual carriageways as two overlapping one-way ribbons and deliberately does not
+merge them — so on screen they are one road with nothing separating the two flows, and neither edge
+is `direction: both`, so no centre line was drawn. **564 m of this region**, on Lockhart (three
+stretches), Fleming and Tonnochy, plus one unnamed:
+
+| pair | street | length | centrelines apart | ribbons span |
+|---|---|---|---|---|
+| `e86`/`e89` | LOCKHART ROAD | 197.7 m | 6.82 m | 10.24 m |
+| `e48`/`e205` | LOCKHART ROAD | 159.2 m | 7.74 m | 10.24 m |
+| `e161`/`e243` | LOCKHART ROAD | 101.4 m | 6.83 m | 10.24 m |
+| `e74`/`e268` | FLEMING ROAD | 49.6 m | 3.85 m | 10.24 m |
+| `e130`/`e142` | TONNOCHY ROAD | 46.7 m | 2.66 m | 10.24 m |
+| `e339`/`e340` | (unnamed) | 9.0 m | 1.96 m | 10.24 m |
+
+The join has to be *published* rather than derived, and that is the whole reason it is a codec field:
+the ribbons overlap, so `U = lanes` on either edge lands inside the other's carriageway rather than
+at the meeting line. It ships as sixteenths of a lane beyond the edge's own centreline.
+
+⚠️ **A lane-coordinate unit is not `lane_width_m`, and using the authored width put the line off the
+road entirely.** U is normalised to the ribbon *as drawn* — that is what makes an integer U a lane
+boundary whatever the widening did — so one U-lane is `2·half_width / lanes`, **5.12 m** on a widened
+two-lane street against the config's 3.20 m. At the wrong scale the join computed to `U = 2.06` on a
+two-lane ribbon and fell past the offside kerb, drawing nothing. Caught by rendering it; the test now
+asserts the join lands inside `(0, lanes)`.
+
+⚠️ **Pairs are found by shared endpoints, which `P1-4` already recorded as a lower bound** — two
+carriageways that do not share both ends are not counted. That is survivable because the two
+markings rest on *different* tests: the centre line needs the pair, but the kerbside yellow needs
+only `offside_kerb`, which comes from the buried-kerb geometry. So a missed pair costs a centre line
+and never puts a no-stopping line down the middle of a road.
+
+**⚠️ The two new codec fields did **not** bump `city.json`, and that is `P3-10`'s argument rather
+than `P3-7`'s.** No attribute was added, removed or renamed, and none changed meaning — a field was
+widened inside a channel that already existed. Every field is masked on read, so a reader that
+predates them decodes `lanes`, `direction`, `bus_lane` and `tram_tracks` exactly as before and simply
+draws less. The rule is *bump where a consumer would be wrong to keep its old interpretation*, and
+none would be; the shader that reads the new fields ships in the same commit as the ETL that writes
+them, which is the only pairing that has to hold.
 
 **⚠️ Marking colours are authored shader-side, and that is a `Q33` boundary taken knowingly.**
 `tuning/road_markings.tres` holds them, matching `city_facade` and `vehicle_body` — every shader
@@ -6025,7 +6102,7 @@ carries `vertex_srgb_to_linear` by hand, exactly as the two facade shaders do. N
 when this is forgotten — the asphalt just lightens and stops varying with its own albedo. Verified
 against the `street` baseline: the asphalt is unchanged and only the markings are new.
 
-**Cost, measured from PCKs with one variable changed.** **40,702,784 → 40,741,440 B, +38,532 B**,
+**Cost, measured from PCKs with one variable changed.** **40,702,784 → 40,743,376 B, +40,592 B**,
 against **279,532 B** of raw VEC2 across 34,924 vertices — the pack compresses the payload by 86%,
 because `x` is a per-edge constant with only 17 distinct values region-wide. No triangle moved, no
 draw call added, no material added; `verify_road_surface.gd` still asserts one primitive.

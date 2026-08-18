@@ -672,7 +672,7 @@ splitting it would buy nothing but seams and draw calls.
 | Primitives | 1 — one draw call, like a tile |
 | Attributes | `POSITION`, `NORMAL`, `COLOR_0`, `TEXCOORD_0`, `TEXCOORD_1`; no texture |
 | `TEXCOORD_0` | **U is a lane coordinate**, 0 at the **nearside** kerb line and `lanes` at the offside, so an integer U is a lane boundary whatever the widening did to the metres. V is metres along the carriageway. Junction caps carry `(0, 0)` — a junction is not a length of lane |
-| `TEXCOORD_1.x` | The packed **marking state** (`P3-12`), a non-negative integer, constant per edge: `code = class + 4·lanes + 64·direction + 256·bus_lane + 512·tram_tracks`. `class`: 0 carriageway · 1 kerb · 2 junction cap. `lanes` 1–15. `direction`: 1 both · 2 forward, **0 = absent**, so an unrecognised value draws no centre line rather than a guessed one. `bus_lane`, `tram_tracks`: 0/1. Max legal code **1023** ≪ 2²⁴, so every code is exact in float32; consumers decode with `floor(x + 0.5)` first |
+| `TEXCOORD_1.x` | The packed **marking state** (`P3-12`), a non-negative integer, constant per edge: `code = class + 4·lanes + 64·direction + 256·bus_lane + 512·tram_tracks`. `class`: 0 carriageway · 1 kerb · 2 junction cap. `lanes` 1–15. `direction`: 1 both · 2 forward, **0 = absent**, so an unrecognised value draws no centre line rather than a guessed one. `bus_lane`, `tram_tracks`: 0/1. `offside_kerb` (1024): 1 where `U = lanes` is a real kerb, **0 = not known to be** — on one half of a dual carriageway it is the middle of the road. `centre` (2048, 6 bits): where an opposed pair's two flows meet, in sixteenths of a lane beyond the centreline, `k − 1` steps, 0 = not half of a pair; ⚠️ a U-lane is `2·half_width / lanes` on the ground (5.12 m on a widened two-lane street), **not** `lane_width_m`. Max legal code **131,071** ≪ 2²⁴, so every code is exact in float32; consumers decode with `floor(x + 0.5)` first |
 | `TEXCOORD_1.y` | The edge's **drawn length** in metres — after the junction trims, so it is the ribbon as drawn and not the published centreline. Junction caps carry `0.0`. Distance to the nearer end is `min(V, length − V)`, computed by the consumer |
 | Material name | **`road_markings`**, and the name is the contract, exactly as `city_facade` is on a tile. `tools/generated_scene_import.gd` dispatches on it and hands the surface `tuning/road_markings.tres` |
 
@@ -703,7 +703,7 @@ the whole street interpolates flat to zero. **204 of the region's 797 edges carr
 only edges lifted onto structure are resampled. The length is constant per edge, so it survives any
 station spacing, and being constant it packs the way the tiles' survey channel does.
 
-**Measured cost: +38,532 B of PCK** (40,702,784 → 40,741,440, one variable changed) against
+**Measured cost: +40,592 B of PCK** (40,702,784 → 40,743,376, one variable changed) against
 **279,532 B** of raw VEC2 across 34,924 vertices — the pack compresses it by 86%. No triangle moved,
 no draw call and no material was added.
 

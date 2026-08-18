@@ -440,6 +440,30 @@ def markedville(tmp_path, testville_config):
     return testville_config, tmp_path
 
 
+@pytest.fixture
+def dualville(tmp_path, testville_config):
+    """One street as an opposed one-way pair, 4 m between the centrelines.
+
+    The shape `P1-4` measured six of in Wan Chai and deliberately does not
+    merge: at the 1.5x default each ribbon is 9.6 m wide, so the two overlap and
+    read on screen as a single road with nothing separating the two flows.
+    Nothing else is here, so whatever the offside pass decides is about this pair
+    and not about a neighbour.
+    """
+    _write_graph(
+        tmp_path,
+        [
+            {"id": 0, "pos": [100.0, 0.0, 300.0], "kind": "endpoint"},
+            {"id": 1, "pos": [500.0, 0.0, 300.0], "kind": "endpoint"},
+        ],
+        [
+            _edge(0, 0, 1, [[100.0, 0.0, 300.0], [500.0, 0.0, 300.0]], direction="forward"),
+            _edge(1, 1, 0, [[500.0, 0.0, 304.0], [100.0, 0.0, 304.0]], direction="forward"),
+        ],
+    )
+    return testville_config, tmp_path
+
+
 def _mesh(tmp_path: Path):
     return read_glb(tmp_path / "out" / "testville" / "middle" / SURFACE_NAME)[0]
 
@@ -460,6 +484,8 @@ def _decode(code: float) -> dict[str, int]:
         "direction": packed // 64 % 4,
         "bus_lane": packed // 256 % 2,
         "tram_tracks": packed // 512 % 2,
+        "offside_kerb": packed // 1024 % 2,
+        "centre": packed // 2048 % 64,
     }
 
 
@@ -821,6 +847,8 @@ class TestMarkingPayload:
             "direction": 1,
             "bus_lane": 0,
             "tram_tracks": 0,
+            "offside_kerb": 1,
+            "centre": 0,
         }
 
     def test_a_kerb_says_it_is_a_kerb(self, testville, tmp_path) -> None:
@@ -922,6 +950,8 @@ class TestMarkingPayload:
             "direction": 2,
             "bus_lane": 1,
             "tram_tracks": 1,
+            "offside_kerb": 1,
+            "centre": 0,
         }
 
     def test_every_code_is_a_small_exact_integer(self, testville, tmp_path) -> None:
@@ -958,6 +988,74 @@ class TestMarkingPayload:
 
         with pytest.raises(ValueError, match="16 lanes"):
             build_region(testville_config, "middle", out_root=tmp_path / "out")
+
+    def test_an_opposed_pair_publishes_where_its_flows_meet(self, dualville, tmp_path) -> None:
+        """Two one-way carriageways widened until they read as one road have a
+        centre neither of them marks: the ribbons overlap, so `U = lanes` on
+        either lands inside the other's carriageway rather than at the join.
+
+        ⚠️ The offset is in **lane-coordinate units, and one of those is not
+        `lane_width_m`** — U is normalised to the ribbon as drawn, so a U-lane is
+        `2 * half_width / lanes` on the ground. Dividing by the authored lane
+        width puts the join past `U = lanes` and off the carriageway, which is
+        exactly where it first landed.
+        """
+        city, _ = dualville
+        report = build_region(city, "middle", out_root=tmp_path / "out")
+        mesh = _mesh(tmp_path)
+
+        assert report.opposed_pairs == 2
+        road = _painted(mesh, city.roads.surface.surface_material.colour)
+        fields = [_decode(c) for c in mesh.uv2[road, 0]]
+        centres = {f["centre"] for f in fields}
+        assert centres and 0 not in centres
+
+        lanes = next(iter({f["lanes"] for f in fields}))
+        for k in centres:
+            join = lanes / 2.0 + (k - 1) / 16.0
+            assert 0.0 < join < lanes, "the join must land on the carriageway"
+        # Half of the 4 m separation, in U-lanes of 2*4.8/2 = 4.8 m.
+        assert min(centres) == pytest.approx(1 + round(2.0 / 4.8 * 16), abs=1)
+
+    def test_a_pair_does_not_claim_its_offside_is_a_kerb(self, dualville, tmp_path) -> None:
+        """The other half of the same fact, and the one that keeps a no-stopping
+        line off the middle of a road."""
+        city, _ = dualville
+        build_region(city, "middle", out_root=tmp_path / "out")
+        mesh = _mesh(tmp_path)
+
+        road = _painted(mesh, city.roads.surface.surface_material.colour)
+        assert all(not _decode(c)["offside_kerb"] for c in mesh.uv2[road, 0])
+
+    def test_an_ordinary_street_says_its_offside_is_a_kerb(self, testville, tmp_path) -> None:
+        city, _ = testville
+        build_region(city, "middle", out_root=tmp_path / "out")
+        mesh = _mesh(tmp_path)
+
+        arm = mesh.positions[:, 0] > 320.0
+        road = arm & _painted(mesh, city.roads.surface.surface_material.colour)
+        fields = [_decode(c) for c in mesh.uv2[road, 0]]
+        assert all(f["offside_kerb"] for f in fields)
+        assert all(f["centre"] == 0 for f in fields)
+
+    def test_a_street_is_not_its_own_opposed_carriageway(self, tmp_path, testville_config) -> None:
+        """A loop edge shares both its ends with itself and matches its own key.
+        Left in, it publishes a centre line down the middle of its own lane."""
+        _write_graph(
+            tmp_path,
+            [{"id": 0, "pos": [100.0, 0.0, 300.0], "kind": "endpoint"}],
+            [
+                _edge(
+                    0,
+                    0,
+                    0,
+                    [[100.0, 0.0, 300.0], [200.0, 0.0, 360.0], [100.0, 0.0, 300.0]],
+                    direction="forward",
+                )
+            ],
+        )
+        report = build_region(testville_config, "middle", out_root=tmp_path / "out")
+        assert report.opposed_pairs == 0
 
     def test_the_surface_asks_the_engine_for_its_shader(self, testville, tmp_path) -> None:
         """glTF cannot say "use this shader", so the material name is the whole

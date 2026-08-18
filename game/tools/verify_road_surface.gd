@@ -36,7 +36,9 @@ const MARKING_DIRECTION_FIELD: float = 64.0
 const MARKING_BUS_FIELD: float = 256.0
 const MARKING_CLASS_CAP: float = 2.0
 const MARKING_DIRECTION_MAX: float = 2.0
-const MARKING_CODE_MAX: float = 1023.0
+const MARKING_CENTRE_FIELD: float = 2048.0
+const MARKING_CENTRE_MAX: float = 63.0
+const MARKING_CODE_MAX: float = 131071.0
 
 ## The longest edge the region may publish, in metres, as a sanity ceiling on
 ## `TEXCOORD_1.y`. Not a contract value — geometry is clipped to a region 1.7 km
@@ -139,6 +141,7 @@ func _check_marking_payload(mesh: Mesh, surface: int, where: String) -> PackedSt
 			or direction > MARKING_DIRECTION_MAX
 			or uv2.y < 0.0
 			or uv2.y > MAX_EDGE_M
+			or floor(code / MARKING_CENTRE_FIELD) > MARKING_CENTRE_MAX
 			# A junction cap is the only thing that may carry no lanes, and it is
 			# also the only thing that may carry no length — the pair is what the
 			# shader reads as "not a length of lane", and half of it is a bug.

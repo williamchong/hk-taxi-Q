@@ -125,9 +125,26 @@ MARKING_LANES = 4
 MARKING_DIRECTION = 64
 MARKING_BUS_LANE = 256
 MARKING_TRAM = 512
+# Set where the **offside** boundary of this edge is a real kerb rather than the
+# middle of a road. 0 is "not known to be", which is the conservative reading and
+# the one a consumer should draw nothing on: `U = lanes` is a kerb on an ordinary
+# street and the centre of a dual carriageway drawn as an opposed pair, and a
+# kerbside marking put down the middle of a road is the loudest way to be wrong.
+# Answered by `_hide_buried_kerbs`, which already has to decide it.
+MARKING_OFFSIDE_KERB = 1024
+# Where the two flows of an opposed pair meet, in **sixteenths of a lane beyond
+# the edge's own centreline**, `k - 1` steps, with 0 meaning "this edge is not
+# half of a merged pair". Six bits, so it reaches 3.94 lanes at 0.2 m resolution
+# on this region's 3.2 m lane.
+#
+# It has to be published rather than derived: the two ribbons overlap, so the
+# line belongs midway between the two *centrelines*, and an edge's own lane
+# coordinate cannot see where its partner runs.
+MARKING_CENTRE = 2048
+MARKING_CENTRE_MAX = 63
 # Derived rather than written down: adding a field means moving one line, not
 # remembering to move two. `tram` is the top field and holds one bit.
-MARKING_CODE_MAX = 2 * MARKING_TRAM - 1
+MARKING_CODE_MAX = MARKING_CENTRE * (MARKING_CENTRE_MAX + 1) - 1
 # The widest lane count the codec can say, from the field above it. `lanes = 16`
 # packs to 64 and collides with `direction` while leaving the *total* under the
 # ceiling — so the ceiling is not the guard, this is.
@@ -197,6 +214,12 @@ class SurfaceReport:
     # step with the junction rule.
     trims_m: dict[int, tuple[float, float]] = field(default_factory=dict)
     junctions: int = 0
+    # Edge ends that resolved to half of an opposed one-way pair, so their
+    # offside boundary carries a road centre rather than a kerb. Reported
+    # because it is the population two markings depend on and neither the
+    # graph nor the ribbon states it: a detection that stopped matching
+    # would silently put a centre line back on nothing.
+    opposed_pairs: int = 0
     # Movements that qualified as running through a node and had their mitre fed
     # into its cap. Reported so a predicate that stopped matching would show.
     #
@@ -669,6 +692,11 @@ class _Edge:
     # draw it, so an edge the pass skipped keeps the kerb it always had.
     kerb_left: np.ndarray | None = None
     kerb_right: np.ndarray | None = None
+    # Filled by `_read_offside`, after `_hide_buried_kerbs` — it is that pass's
+    # answer, summarised per edge, plus what an opposed partner contributes.
+    # Defaults are the conservative reading: nothing known, so nothing drawn.
+    offside_kerb: bool = False
+    centre_offset: int = 0
 
     def corner(self, at_start: bool, *, on_left: bool) -> np.ndarray | None:
         """One of the two corners this ribbon presents to a junction."""
@@ -704,6 +732,8 @@ class _Edge:
             + MARKING_DIRECTION * MARKING_DIRECTIONS.get(self.direction, 0)
             + MARKING_BUS_LANE * int(self.bus_lane)
             + MARKING_TRAM * int(self.tram_tracks)
+            + MARKING_OFFSIDE_KERB * int(self.offside_kerb)
+            + MARKING_CENTRE * self.centre_offset
         )
 
     def end_half_width_m(self, at_start: bool) -> float:
@@ -761,6 +791,7 @@ def build_region(
         if (ring := _cap_ring(group, edges, report)) is not None
     ]
     _hide_buried_kerbs(edges, caps, report)
+    _read_offside(graph["edges"], edges, report)
 
     builder = _Builder()
     for edge in edges:
@@ -998,6 +1029,94 @@ class _Occluders:
                 continue
             covered |= inside_polygon(points, self._plans[key])
         return covered
+
+
+def _read_offside(published: list[dict], edges: list[_Edge], report: SurfaceReport) -> None:
+    """What each edge's offside boundary actually is, once every ribbon exists.
+
+    Two questions with one answer between them, and neither can be asked of an
+    edge on its own — which is why this runs after `_hide_buried_kerbs` rather
+    than in `_prepare`.
+
+    **Is `U = lanes` a kerb?** On an ordinary street, yes. On one half of a dual
+    carriageway drawn as an opposed pair it is the middle of the road, and a
+    kerbside double yellow put there is a no-stopping line down the centre of a
+    street — the loudest way to be wrong about a marking. `_hide_buried_kerbs`
+    has already decided this for its own purposes: a kerb it declined to draw is
+    one lying inside a neighbour's carriageway. Reusing its verdict rather than
+    re-deriving one is the point; a second geometric test would be a second thing
+    to keep in step, and this one is already graded by the kerb it hides.
+
+    **Where do the two flows meet?** Midway between the two *centrelines*, which
+    an edge cannot see from its own lane coordinate — the ribbons overlap, so
+    both edges' `U = lanes` sit inside the other's carriageway rather than at the
+    join. Published as `centre_offset`, in sixteenths of a lane beyond the
+    centreline.
+
+    ⚠️ **Pairs are found by shared endpoints, which `P1-4` measured as a lower
+    bound.** Two one-way carriageways that do not share both ends are not
+    counted, and their offsides are then reported as kerbs. The buried-kerb test
+    above is what stops that being a marking fault: where the ribbons really do
+    overlap, the kerb is hidden and `offside_kerb` stays false whether a pair was
+    identified or not. So a missed pair costs the centre line, not a yellow line
+    down the middle of a road.
+    """
+    by_ends: dict[tuple[int, int], list[int]] = defaultdict(list)
+    for index, entry in enumerate(published):
+        if entry["direction"] == FORWARD:
+            by_ends[(entry["from"], entry["to"])].append(index)
+
+    for index, (entry, edge) in enumerate(zip(published, edges, strict=True)):
+        # `None` means the pass had nothing to say, which is the whole kerb.
+        edge.offside_kerb = edge.kerb_right is None or bool(edge.kerb_right.all())
+
+        # An edge whose two ends are the same node matches its own key, and a
+        # street is not its own opposed carriageway. Left in, it publishes a
+        # centre line down the middle of its own lane.
+        partners = [
+            other for other in by_ends.get((entry["to"], entry["from"]), []) if other != index
+        ]
+        if entry["direction"] != FORWARD or not partners:
+            continue
+        gap = min(
+            (_centreline_gap_m(edge, edges[other]) for other in partners),
+            default=None,
+        )
+        if gap is None:
+            continue
+        # ⚠️ **In lane-coordinate units, not metres, and those are not
+        # `lane_width_m`.** U is normalised to the ribbon as *drawn*: an integer
+        # U is a lane boundary whatever the widening did, so one U-lane is
+        # `2 * half_width / lanes` on the ground — 5.12 m on a widened two-lane
+        # street, against the 3.20 m the config authors. Dividing by
+        # `lane_width_m` puts the join 1.6x too far out, which on a two-lane
+        # ribbon lands it past `U = lanes` and off the carriageway entirely.
+        u_metres = 2.0 * float(np.median(edge.points[:, _WIDTH])) / edge.lanes
+        steps = round((gap / 2.0) / u_metres * 16.0)
+        if 0 <= steps <= MARKING_CENTRE_MAX - 1:
+            edge.centre_offset = steps + 1
+            report.opposed_pairs += 1
+
+
+def _centreline_gap_m(edge: _Edge, other: _Edge) -> float | None:
+    """How far this edge's centreline runs from its opposed partner's, in plan.
+
+    The median over this edge's own stations rather than the minimum: the two
+    meet at the node they share, so a minimum is always about zero and says
+    nothing about the street between them.
+    """
+    here, there = edge.points[:, [0, 2]], other.points[:, [0, 2]]
+    if len(here) == 0 or len(there) < 2:
+        return None
+    start, end = there[:-1], there[1:]
+    span = end - start
+    length = np.maximum((span * span).sum(axis=1), 1e-12)
+    gaps = []
+    for point in here:
+        along = np.clip(((point - start) * span).sum(axis=1) / length, 0.0, 1.0)
+        foot = start + along[:, None] * span
+        gaps.append(np.hypot(*(foot - point).T).min())
+    return float(np.median(gaps))
 
 
 def _hide_buried_kerbs(edges: list[_Edge], caps: list[_Cap], report: SurfaceReport) -> None:

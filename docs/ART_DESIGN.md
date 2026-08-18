@@ -536,7 +536,7 @@ authored features the source captures badly.
 - ✅ **Shipped `P3-12`, and the scope is the ribbon.** Lane dividers (dashed, 3 m on 6 m), a
   continuous centre line where `TRAVEL_DIRECTION` says two-way, kerbside double yellows, and a bus
   lane edge on the **13 edges** the `BUS_ONLY_LANE` join reaches (14 source features —
-  `DATA_SOURCES.md` counts what was read, this counts what survived clipping). **+38,532 B of PCK,
+  `DATA_SOURCES.md` counts what was read, this counts what survived clipping). **+40,592 B of PCK,
   no triangle moved, no extra draw call, no extra material.**
 - ⚠️ **Arrows, road text and box junctions are deliberately held**, and not because a glyph needs a
   texture. **Nothing in the seventeen Road Network v2 layers says which lane turns where**, or which
@@ -546,11 +546,18 @@ authored features the source captures badly.
   and cheap — a world-space cross-hatch masked on distance-to-node is immune to the cap overlap,
   because cap and arm draw the same thing wherever they overlap — so what is missing is content,
   not machinery. `Q53`.
-- ⚠️ **One marking here has no source behind it: the kerbside double yellow.** Every other line is
-  either geometry or a published flag. It is near universal in urban Wan Chai, which is the argument
-  for drawing it, and it is still an invention — so it ships on its own switch,
-  `draw_double_yellow`, and is the first thing to turn off if a recognition round reports the
-  markings as *wrong* rather than as missing.
+- 🔴 **The kerbside double yellow is invented, and the claim that it *could not* be sourced was
+  wrong.** It ships painted on every kerb of every level-0 edge. `Q53` recorded it as "the one
+  marking with no source"; the source exists and is already downloaded. The geodatabase's `NSR`
+  layer — No-Stopping Restriction, which `DATA_SOURCES.md` lists in its own contents line — carries
+  **579 features, 44,220 m** in this region, **kerb-referenced** (median 2.92 m off the centreline,
+  0% on it, so it already says which side), with `TIME_ZONE` and `REMARKS` distinguishing an all-day
+  restriction from a posted-hours one — which is the single-versus-double distinction itself.
+  ⚠️ **A double yellow is a legal assertion, not kerb trim**: no stopping at any time. Painting it
+  everywhere claims that on roughly **three times** the kerb length actually restricted, and the
+  bundle contradicts itself twice over — the same region publishes **607 on-street parking bays**
+  and **14 taxi stands**, and the game paints "no stopping" across its own fare nodes. It stays on
+  `draw_double_yellow` until `NSR` is ingested, and that switch is the honest lever meanwhile.
 - Kerbs modelled but low and mountable — collision is forgiving by design. Built as a 0.15 m riser
   and a 0.5 m lip. **The lip's job is the seam:** the ground tucks *under* it, 0.20 m down, which is
   what hides the join. (Before `P3-10` there was no terrain to end against and it stopped the

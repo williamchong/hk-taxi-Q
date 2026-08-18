@@ -51,6 +51,8 @@ const float MARKING_LANES = 4.0;
 const float MARKING_DIRECTION = 64.0;
 const float MARKING_BUS_LANE = 256.0;
 const float MARKING_TRAM = 512.0;
+const float MARKING_OFFSIDE_KERB = 1024.0;
+const float MARKING_CENTRE = 2048.0;
 // `direction` as the codec spells it. 0 is "absent", and a road whose direction
 // did not survive gets no centre line rather than a guessed one.
 const float DIRECTION_BOTH = 1.0;
@@ -125,6 +127,16 @@ varying flat float surface_class;
 varying flat float lanes;
 varying flat float direction;
 varying flat float bus_lane;
+// 1 where `U = lanes` is a real kerb. 0 is "not known to be", and the difference
+// matters: on one half of a dual carriageway drawn as an opposed pair that
+// boundary is the middle of the road, and a kerbside no-stopping line put there
+// is the loudest way to be wrong about a marking.
+varying flat float offside_kerb;
+// Where the two flows of an opposed pair meet, in sixteenths of a lane beyond
+// the centreline, `k - 1` steps. 0 means this edge is not half of a pair. The
+// ETL has to say it — the ribbons overlap, so neither edge's own lane coordinate
+// reaches the join.
+varying flat float centre_at;
 varying flat float drawn_m;
 // ⚠️ **The sRGB conversion is hoisted out of the fragment shader, and that rests
 // on an ETL invariant rather than on nothing.** `surface.py`'s `_rgba`
@@ -145,6 +157,8 @@ void vertex() {
 	lanes = floor(mod(packed / MARKING_LANES, MARKING_DIRECTION / MARKING_LANES));
 	direction = floor(mod(packed / MARKING_DIRECTION, MARKING_BUS_LANE / MARKING_DIRECTION));
 	bus_lane = floor(mod(packed / MARKING_BUS_LANE, MARKING_TRAM / MARKING_BUS_LANE));
+	offside_kerb = floor(mod(packed / MARKING_OFFSIDE_KERB, MARKING_CENTRE / MARKING_OFFSIDE_KERB));
+	centre_at = floor(packed / MARKING_CENTRE);
 	drawn_m = UV2.y;
 	albedo_linear = vertex_srgb_to_linear(COLOR.rgb);
 }
@@ -220,6 +234,16 @@ void fragment() {
 			white = draw_centre_line * line_coverage(u, centre, centre_width * 0.5, du);
 		}
 
+		// Where two one-way carriageways were widened until they read as one
+		// road, the flows meet at a line neither edge's own geometry marks. The
+		// ETL publishes where, because the ribbons overlap and `U = lanes` on
+		// either of them lands inside the other's carriageway rather than at the
+		// join. 564 m of this region, on Lockhart, Fleming and Tonnochy.
+		if (centre_at > 0.0) {
+			float join = centre + (centre_at - 1.0) / 16.0;
+			white += draw_centre_line * line_coverage(u, join, centre_width * 0.5, du);
+		}
+
 		// Lane dividers. Only the nearest boundary can be within a line's width
 		// of this fragment, so this is one test rather than a loop over the lane
 		// count.
@@ -247,15 +271,18 @@ void fragment() {
 			white += draw_bus_lane * line_coverage(u, 1.0, bus_width * 0.5, du);
 		}
 
-		// The kerbside pairs. `un` folds the offside kerb onto the nearside,
-		// which is exact — a reflection preserves |du| — and halves the work.
-		// Only on a two-way road: on a one-way edge `U = lanes` may be a kerb or
-		// may be the centre of a dual carriageway drawn as an opposed pair, six
-		// of which this region has, and nothing published separates the two. A
-		// missing line is quieter than a double yellow down the middle of a road.
+		// The kerbside pairs. `un` folds the offside onto the nearside, which is
+		// exact — a reflection preserves |du| — and halves the work.
+		//
+		// The fold happens only where the offside is a **known kerb**. It used to
+		// key on `two_way`, a proxy that got the right answer for the wrong
+		// reason; the ETL now answers it directly from the buried-kerb pass, so a
+		// one-way street with a real kerb gets its line and one half of a dual
+		// carriageway still does not. A missing line is quieter than a
+		// no-stopping line down the middle of a road.
 		float yellow = 0.0;
 		if (draw_double_yellow > 0.0) {
-			float un = two_way ? min(u, lanes - u) : u;
+			float un = offside_kerb > 0.5 ? min(u, lanes - u) : u;
 			yellow = line_coverage(un, yellow_inset, yellow_width * 0.5, du);
 			yellow += line_coverage(un, yellow_inset + yellow_gap, yellow_width * 0.5, du);
 			yellow *= draw_double_yellow;
