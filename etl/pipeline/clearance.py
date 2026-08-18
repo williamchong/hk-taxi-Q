@@ -10,8 +10,9 @@ owes it as *data* — this stage measures it and `export.py` carries the result
 into `city.json` beside the drawn half-width, which reaches the game by the same
 route and for the same reason (`Q23`, `P2-2`).
 
-**What is measured.** One cross-section per station of every drivable level-0
-edge, spanning the carriageway `surface.py` actually drew there. A sample across
+**What is measured.** A cross-section every `ALONG_M` along every drivable
+level-0 edge, reported at the nearest station, spanning the carriageway
+`surface.py` actually drew there. A sample across
 that section is blocked where an occupier's geometry stands between
 `BUMPER_LOW_M` and `BUMPER_HIGH_M` above the deck, so a podium overhanging the
 street six metres up is Hong Kong working as intended. The station's clearance
@@ -38,7 +39,7 @@ its full height range across a plan footprint it only touches at one end. A piec
 is at most `SUBDIVIDE_M` across in plan and as tall as it likes, which is what
 makes taking its whole height range over the cells it covers both cheap and
 honest — ⚠️ except where `MAX_SUBDIVISIONS` caps the split, which on this region
-is 9,727 triangles a run and is where this stage over-blocks hardest.
+is 9,779 triangles a run and is where this stage over-blocks hardest.
 
 ⚠️ **A station the ribbon never reached is not a starved station.** `surface.py`
 holds each end back so a junction cap can fill the middle, and the nominal
@@ -94,31 +95,6 @@ BUMPER_HIGH_M = 2.00
 # being rounded to the nearest half metre.
 ACROSS_M = 0.25
 
-# Spacing of the cross-sections along an edge. **Matched to `CELL_M`, and that is
-# the whole of the argument**: occupiers are binned in plan at `CELL_M`, so a walk
-# that steps at cell pitch cannot stride over a cell without sampling it. Every
-# other error here over-blocks, which is what makes a published width a lower
-# bound — this was the one exception, because a wall standing between two
-# cross-sections is not smeared but *missed*, and a missed wall reads as clear
-# road that `RoadGraph.is_routable` then hands a car.
-#
-# ⚠️ It shipped at 1.0 until 2026-08-19, and over that period the published
-# widths were **not** a lower bound. Swept with `--along-m` on the same bundle:
-# **21 starved edges at 1.00 m, 24 at 0.50 m and 25 at 0.25 m**, and `e636`
-# HARBOUR ROAD — one of the six edges the grader condemns and this stage cleared
-# — went from passable to **0.00 m clear**. There the grader was simply right.
-# Taking the call re-published `city.json` and moved what `is_routable` refuses,
-# which is why it was the user's to take and not a tuning tweak (`Q51`).
-#
-# ⚠️ **One residue survives, and it is why 0.25 m finds one edge more.** The
-# cells are axis-aligned in plan and an edge runs at whatever angle it likes, so a
-# diagonal walk stepping 0.50 m advances 0.35 m in each of x and z and can
-# corner-cross a cell without landing in it. 0.25 m was measured and refused: ~4x
-# the run, and a peak **1.088 GB** RSS — 2.1x the shipped run and back toward the
-# 1.64 GB `PIECE_BUDGET` exists to cut. `tools/clearance_reconcile.py` holds the
-# counts, so neither the fix nor the residue can go quiet.
-ALONG_M = 0.5
-
 # The largest plan extent of one occupier piece. Below this a piece's height
 # range is tight enough over its own plan box that taking the whole of it across
 # every cell the box touches is honest rather than a smear.
@@ -129,6 +105,39 @@ SUBDIVIDE_M = 0.5
 # usually, not always, which is why `_emit` rasterises the box in full: the
 # subdivision cap can leave a piece wider than a cell.
 CELL_M = SUBDIVIDE_M
+
+# Spacing of the cross-sections along an edge, and **`CELL_M` rather than a value
+# of its own, because the equality is the whole argument**. Occupiers are binned
+# in plan at `CELL_M`, so a walk stepping at cell pitch cannot stride over a cell
+# without sampling it — on axis. Every other error here over-blocks, which is what
+# makes a published width a lower bound; the spacing was the one exception,
+# because a wall standing between two cross-sections is not smeared but *missed*,
+# and a missed wall reads as clear road that `RoadGraph.is_routable` then hands a
+# car. ⚠️ Written as `CELL_M` and not as `0.5` so that moving `SUBDIVIDE_M` cannot
+# leave this behind: nothing else checks the match, and losing it would retire the
+# bound while every comment here still claimed it.
+#
+# ⚠️ It read 1.0 until `Q51`, and over that period the published widths were
+# **not** a lower bound. Swept with `--along-m` on the same bundle: **21 starved
+# edges at 1.00 m, 24 at 0.50 m and 25 at 0.25 m**, and `e636` HARBOUR ROAD — one
+# of the six edges the grader condemned and this stage cleared — went from
+# passable to **0.00 m clear**. There the grader was simply right.
+#
+# ⚠️ **One residue survives, and it is why 0.25 m finds one edge more.** The cells
+# are axis-aligned in plan and an edge runs at whatever angle it likes, so a
+# diagonal walk stepping 0.50 m advances 0.35 m in each of x and z and can
+# corner-cross a cell without landing in it — `e520` TONNOCHY ROAD, 4.50 m here
+# against 2.50 m at 0.25 m.
+#
+# ⚠️ **Below `CELL_M` the extra samples mostly land in cells already sampled**, and
+# that is the argument for stopping here rather than the cost. Unique plan cells
+# reached go 846,087 at 1.0 m to 1,461,818 at 0.5 m — and then to 1,478,556 at
+# 0.25 m, **+1.1% for twice the samples**. All a finer walk buys against this cell
+# index is depth within a cell, at a peak **1.088 GB** RSS against this one's
+# 789 MB, back toward the 1.64 GB `PIECE_BUDGET` exists to cut.
+# `tools/clearance_reconcile.py` holds the counts, so neither the fix nor the
+# residue can go quiet.
+ALONG_M = CELL_M
 
 # Plan cell of the coarse occupancy grid the prune tests against. Coarser than
 # `CELL_M` because it only has to answer "could this triangle be near any
@@ -141,7 +150,9 @@ COARSE_M = 2.0
 # 6.9 M cell rows, which put peak RSS at 1.64 GB — more than the buildings stage,
 # the longest in the pipeline. A budget on *pieces* rather than on triangles is
 # what actually bounds it, because `MAX_SUBDIVISIONS` means 3,773 triangles can
-# produce 763,000 pieces. Measured: 1.64 GB -> 482 MB, and not a second slower.
+# produce 763,000 pieces. Measured when it went in: 1.64 GB -> 482 MB, and not a
+# second slower. ⚠️ Neither is today's peak — `ALONG_M` has halved since, and the
+# stage now runs at 789 MB.
 PIECE_BUDGET = 64_000
 
 # Pieces per triangle are capped, so a single enormous face cannot turn one
@@ -149,7 +160,7 @@ PIECE_BUDGET = 64_000
 # `SUBDIVIDE_M`.
 #
 # ⚠️ This comment used to end "anything wider than that in plan is ground, and
-# ground is excluded below". **Counted, that is 9,727 triangles per run** — hero
+# ground is excluded below". **Counted, that is 9,779 triangles per run** — hero
 # meshes and long ramp faces, none of them ground. Each keeps pieces wider than
 # `CELL_M`, and `_emit` then blocks by the piece's plan box at its *whole* height
 # range, so this is where the stage over-blocks hardest. `_plan_steps` returns the
@@ -264,14 +275,9 @@ def walk(
     """Every cross-section of every drivable level-0 edge, at `along_m` spacing.
 
     ⚠️ **`along_m` is the one dimension this stage can be *wrong* in rather than
-    merely coarse.** Everything else here over-blocks — a plan box for a piece, a
-    whole height range for a box — so those make a published width a lower bound on
-    the real corridor. The spacing along the edge is the exception: a wall standing
-    between two cross-sections is not smeared, it is *missed*, and a missed wall
-    reads as clear road that `RoadGraph.is_routable` will then hand a car. ✅ At the
-    shipped `ALONG_M` the walk now steps at `CELL_M`, so it cannot pass over a cell
-    it never samples and the bound holds — see `ALONG_M` for the residue that does
-    survive, and for the three edges taking it cost. It stays a parameter so that
+    merely coarse** — everything else over-blocks, where a spacing too coarse to
+    reach a wall *misses* it. `ALONG_M` carries why the shipped value bounds that,
+    and the residue that survives. It stays a parameter so the cost of the choice
     remains measurable rather than assumed; sweeping it does not publish, see
     `main`.
 
@@ -809,8 +815,8 @@ def _longest_clear(flags: np.ndarray) -> int:
 def measure(corridor: Corridor, blocked: np.ndarray, report: ClearanceReport) -> None:
     """Fold the per-sample verdicts into one width per cross-section, then per station.
 
-    A station usually gathers several cross-sections — `ALONG_M` is half a metre
-    and the graph's vertices are much further apart than that — and it takes the
+    A station usually gathers several cross-sections — `ALONG_M` is a plan cell and
+    the graph's vertices are much further apart than that — and it takes the
     **tightest** of them. Averaging would let a wall across half a station hide
     behind the clear half beside it, which is the same mistake at station scale
     that a region share makes at network scale (`Q19`).

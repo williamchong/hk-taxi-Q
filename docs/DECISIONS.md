@@ -5627,7 +5627,14 @@ reproduces both published numbers exactly:
 | `e132`, one station, same band, same 10.24 m width | clear |
 |---|---|
 | ground truth in 1.00 m cells | **0.98 m** — the grader's published figure |
-| ground truth in 0.25 m cells | **4.00 m** — the pipeline's published figure |
+| ground truth in 0.25 m cells | **4.00 m** — the pipeline's figure at that station |
+
+⚠️ **The second row is labelled by station, not by edge, and the `ALONG_M` fix is why.** It read
+"the pipeline's published figure" when this was written, and both were 4.00 m. The *edge's*
+published figure is the minimum over its stations, and at 0.5 m spacing that is now **2.00 m** —
+the finer walk reaches stations the 1 m walk stepped over. The ground truth at the station itself
+has not moved, and neither has the plan-cell mechanism this table demonstrates: it is the other
+error dimension arriving on the same edge.
 
 Neither instrument was wrong about the city. The grader's starved count is very nearly a function of
 one constant, swept with the new `--index-cell-m`:
@@ -5717,7 +5724,8 @@ pieces wider than `CELL_M`, each then blocking by its plan box at its *whole* he
 constant's own comment claimed "anything wider than that in plan is ground, and ground is excluded" —
 wrong, and these are hero meshes and long ramp faces. `_plan_steps` returns the count and
 `build_region` warns it. `e702`, the one edge where this stage is the more pessimistic of the two
-(1.25 m against the grader's 3.41 m), is `LANDMARK`-blocked — the signature.
+(**0.75 m** against the grader's 3.41 m, and 1.25 m before the spacing fix), is `LANDMARK`-blocked
+— the signature.
 
 🟡 **What is owed.** ✅ The `ALONG_M` half is discharged above. 🔴 **`MAX_SUBDIVISIONS` is not**, and
 it is now the only wrongness left in the stage that has a known cause: 9,779 triangles a run block by

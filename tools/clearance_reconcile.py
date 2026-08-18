@@ -25,17 +25,15 @@ of both instruments — reproduces each tool's published width from nothing but 
 own cell size; `carriageway_occupancy.INDEX_CELL_M` carries the figures. `--sweep`
 reproduces it here by grading at each of the pipeline's own cells.
 
-⚠️ **Along the edge the pipeline misses rather than over-blocks, and a miss is
-not a bound at all.** ✅ **That is what this tool found, and it is now fixed**: at
-`ALONG_M = 1.0` a wall standing between two cross-sections was skipped rather than
-smeared, and `e636` HARBOUR ROAD — one of the six the grader then condemned and the
-pipeline cleared — was one it skipped. `ALONG_M` is `CELL_M` since 2026-08-19, so
-the walk cannot stride over a cell it never samples; `e636` reads **0.00 m** and
-the two agree about it. The pipeline's count moved **21 -> 24** and the
-disagreements **7 -> 4** in the same breath, which is why the constants below moved
-with it. ⚠️ The bound holds at `CELL_M` and no finer — a diagonal edge can still
-corner-cross an axis-aligned cell, which is the one edge a 0.25 m walk finds and
-the shipped one does not. `pipeline.clearance.ALONG_M` carries the sweep.
+⚠️ **Along the edge the pipeline misses rather than over-blocks, and a miss is not
+a bound at all.** ✅ **This tool found that, and it is fixed**: `ALONG_M` is `CELL_M`,
+so an axis-aligned walk cannot stride over a cell it never samples. `e636` HARBOUR
+ROAD — which the grader condemned and the pipeline cleared, because a wall stood
+between two of its cross-sections — reads **0.00 m** and the two agree about it.
+⚠️ **The bound holds at `CELL_M` and no finer**: a diagonal edge advances 0.35 m in
+each axis per 0.50 m step and can corner-cross a cell without landing in it, which
+is the one edge (`e520` TONNOCHY ROAD, 4.50 m against 2.50 m) a 0.25 m walk finds
+and the shipped one does not. `pipeline.clearance.ALONG_M` carries the sweep.
 
 So this is a **ratchet**, on the `podium_error.py` precedent: the counts are fixed
 outside the instrument, from `Q51`, and any movement in either is a finding to go
@@ -90,9 +88,7 @@ EXPECT_GRADER = 26
 # Edges the two disagree about: 3 the grader condemns and the pipeline clears
 # (`e99`, `e207`, `e781`), plus `e702` the other way. ⚠️ **A single number here
 # hides a swap** — `Q51` first said "five" where the split was 6 + 1, so read the
-# per-side lists in the report rather than this total. Was 7 until `ALONG_M`
-# dropped to `CELL_M`: `e636`, `e132` and `e222` moved to agreement, and none
-# moved the other way.
+# per-side lists in the report rather than this total.
 EXPECT_DISAGREEMENT = 4
 
 # Plan cells the sweep bins the grader's occupiers at: the grader's own shipped
@@ -225,8 +221,8 @@ def main(argv: list[str] | None = None) -> int:
     log.info("clearance reconciliation, %s, lod %d", args.city, args.lod)
     log.info("  one lane is %.2f m. In plan both instruments over-block, and the plan", bar_m)
     log.info("  cell sets how much; along the edge the pipeline samples at its own cell")
-    log.info("  pitch, so it no longer misses — see the module docstring. Both widths are")
-    log.info("  lower bounds now, each at its own plan cell, and the cells differ.")
+    log.info("  pitch, so it no longer misses on axis — see the module docstring. A diagonal")
+    log.info("  edge can still corner-cross a cell, so its bound holds at CELL_M and no finer.")
 
     graph = json.loads((args.generated / manifest["road_graph"]).read_text())
     drawn = drawn_surface(args.generated, manifest)

@@ -106,10 +106,13 @@ Common emoji for this project:
   ⚠️ Measure on `skidpad.tscn`, never `city_drive.tscn` — a 0.14° micro-gradient there is worth the
   whole quantity under test, and a published figure has already had to be withdrawn over it
   (`P0-5b/c/d`).
-- **`widen_default` or any `roads.surface` widening change: also `tools/narrowing.py`, before and
-  after.** It is what priced the current value: narrowing clears *no* blocked edge at any factor
-  down to the 1.3x floor and loses two — `e207` and `e595` (`Q19`). A widening change that does not
-  re-run it is re-opening a question that has been measured shut.
+- **`widen_default`, any `roads.surface` widening change, or anything that moves the pipeline's
+  starved population — `ALONG_M` included: also `tools/narrowing.py`, before and after.** It is what
+  priced the current value: narrowing clears *no* blocked edge at any factor down to the 1.3x floor
+  and loses two — `e207` and `e595` (`Q19`). A change that does not re-run it is re-opening a
+  question that has been measured shut. ⚠️ **The second trigger is the non-obvious one**: this tool
+  imports `pipeline.clearance` whole, so its class split and refusal table are computed over the
+  pipeline's own starved set and a resolution constant moves them without touching a width.
 - **`clearance.py` or `carriageway_occupancy.py` changes: also `tools/clearance_reconcile.py`, and
   paste its table.** The pipeline publishes a number that tool grades, they disagree — 24 starved
   edges against 26 — and the gap is **reconciled** as plan cell size (`Q51`). The reconcile tool is
@@ -122,9 +125,7 @@ Common emoji for this project:
   finer — a diagonal edge can corner-cross a cell, which a 0.25 m walk catches and the shipped one
   does not. ⚠️ **`ALONG_M` is still shipped behaviour, not a tuning knob**: moving it re-publishes
   `city.json` and changes what routing refuses, so it is the user's call. Numbers in `Q51`.
-  ⚠️ **`tools/narrowing.py` is owed by an `ALONG_M` change too**, and the reason is not obvious — its
-  class split and its refusal table are computed over *the pipeline's* starved population, so a
-  spacing change moves them without touching a single widening value.
+  ⚠️ **`tools/narrowing.py` is owed too** — see the bullet above for why that is not obvious.
 - Road-surface, deck-height or ground changes: also `tools/deck_error.py`, `tools/overhang.py`,
   `tools/ground_clearance.py` and `tools/carriageway_occupancy.py`, by hand after a build. They grade
   the *shipped* bundle and share no code with the pipeline — `check.sh` does not require a built
