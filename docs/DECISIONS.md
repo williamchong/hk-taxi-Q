@@ -41,7 +41,7 @@ lives in git. This file holds *why things are the way they are*.
 | `Q16` | LOD0 does not ship | ✅ Closed |
 | `Q17` | CI runs `tools/check.sh` and cannot check the generated assets | ✅ Closed |
 | `Q18` | Ground colour sits under a chroma knee; the land-cover classifier is refused | ✅ Closed |
-| `Q19` | 5.17% of drawn carriageway has solid geometry standing in it at bumper height | 🟡 Half answered — the routing exposure closed as `Q51`; the walls stand, and nobody owns moving them |
+| `Q19` | 5.17% of drawn carriageway has solid geometry standing in it at bumper height | 🟡 Half answered — routing closed as `Q51`. **Narrowing refused on the whole population**: no edge clears at any factor to the 1.3x floor and one is lost. The walls stand; 6 of the 8 severe ones are the WAN CHAI INTERCHANGE, and nobody owns moving them |
 | `Q20` | Deck heights are sampled from `INFRASTRUCTURE`, not invented | ✅ Closed |
 | `Q21` | Should level −1 carriageway be drawn at all? | 🟡 Open |
 | `Q22` | 10.2% of off-grade carriageway hangs past its structure | 🟡 Open |
@@ -512,6 +512,65 @@ six of the eight tightest read 0.00-0.49 m there too. That is a correction to th
 framing: the building half was recorded as "the 1.6x widening eating the frontage", and on these
 edges the obstruction is in the real street, so **narrowing would not clear them**.
 
+**What blocks them — which this entry never established.** Split by class at the shipped width by
+`tools/narrowing.py`, the 21 edges the pipeline measures are **8 `INFRASTRUCTURE`, 12 `BUILDING`,
+1 `LANDMARK`**. ⚠️ **21 rather than the 26 above, because that is the *other*
+instrument** — `Q51` carries the unreconciled gap between them, and the split and the sweep below
+are both the pipeline's population. Whether the grader's extra five would fall the same way is not
+established here. The two halves are not alike: every near-total blockage is `INFRASTRUCTURE`
+(`e233` 0.00 m, `e125` 0.25 m, `e485` 0.50 m), **six of those eight are the WAN CHAI INTERCHANGE**
+and a seventh is HUNG HING ROAD FLYOVER, while the `BUILDING` half is uniformly mild — 1.25 to
+2.75 m, scattered over Leighton Road, Great George Street, Matheson Street, Lan Fong Road and
+Convention Avenue. The severe half is one locality and it is at-grade ribbon drawn through flyover
+structure, which is the `Q20`/`Q22` family rather than anything a width rule reaches.
+
+**Narrowing is refused, and now on the whole population rather than a sample of two.** The claim
+above was drawn from the eight tightest — of which four are `INFRASTRUCTURE`, which no width rule
+was ever going to help, leaving **two `BUILDING` edges** carrying the conclusion. Swept over every
+factor `GAME_DESIGN.md` allows:
+
+| widen | edges under one lane | `INFRA` | `BUILDING` | `LANDMARK` | against 1.60x |
+|---|---|---|---|---|---|
+| **1.60x** (shipped) | 21 | 8 | 12 | 1 | — |
+| 1.55x | 21 | 8 | 12 | 1 | none cleared |
+| 1.50x | 21 | 8 | 12 | 1 | none cleared |
+| 1.45x | 22 | 8 | 13 | 1 | none cleared, **`e595` lost** |
+| 1.40x | 22 | 8 | 13 | 1 | none cleared, `e595` lost |
+| 1.35x | 22 | 8 | 13 | 1 | none cleared, `e595` lost |
+| 1.30x | 22 | 8 | 13 | 1 | none cleared, `e595` lost |
+
+**Not one edge clears the bar at any factor down to the 1.3x floor**, and `e595` (THOMSON ROAD)
+crosses it the wrong way. So the refusal stands, for the buildings as well as the structure, and it
+is no longer an inference from a sample.
+
+⚠️ **Narrowing cuts both ways, and that is why it had to be measured rather than argued.** The
+published figure is the *widest continuous clear run*, so a narrower corridor removes obstructions
+standing in the widened fringe — and clips a run that lay against one kerb. `e595` is the second
+effect on its own: 3.50 m at 1.60x, 2.50 m at 1.30x, starved by the narrowing rather than by
+anything that moved.
+
+⚠️ **The objection that fixed `widen_default` at 1.6 does not bind anywhere in the authorised
+range**, and it is one line of arithmetic rather than a measurement. The config's reason for 1.6
+over 1.3 is that the region's six opposed carriageway pairs sit 1.49-6.82 m apart and must overlap
+into one surface, *"at 1.0x the widest pair leaves a 0.42 m slot down the middle of Lockhart Road"*.
+Two 2-lane ribbons span `6.4 x f` between centrelines, which reproduces that 0.42 m at 1.0x exactly
+— and closes the slot at **f = 1.066**. At 1.3x the widest pair still overlaps by **1.50 m**. The
+slot is a real constraint on narrowing *below* the authorised floor and no constraint at all inside
+it; it is recorded here so it is not raised again as one.
+
+⚠️ **Two bars, because they are two questions, and only one of them was ever published.** One lane
+(3.20 m) is whether traffic should be *routed* down an edge — `Q51` gates on it. The car's own width
+is whether the *player* is stuck, and `taxi.tscn` gives the body a 1.8 m `BoxShape3D` with no wheel
+colliders since `Q50`. **17 of the 21 are under 1.8 m**: these are not edges a car threads
+awkwardly, they are edges a car cannot enter. Nothing recorded that until now.
+
+⚠️ **The sweep's columns are not monotonic, and that is the measurement rather than a fault.** Two
+causes, both real: the cross-section samples are 0.25 m apart and **re-phase** as the corridor
+narrows, which moves a reported run by up to one sample either way; and an edge's figure is the
+*minimum over its stations*, so the binding station can change hands when narrowing helps one and
+hurts another. The aggregate is safe against both — the closest any edge sits to the bar is 2.75 m,
+nearly two samples clear — but a single cell of that table is worth ±0.25 m and no more.
+
 **The shares both pass, and read lower than the hand figure.** `BUILDING`+`LANDMARK` **1.302%**
 against 1.72%, `INFRASTRUCTURE` **1.115%** against 1.60%, off-grade **1.278%** against 1.87% — total
 **3.693%** where this entry recorded **5.17%**. Same direction, same rough ratio on all three, so it
@@ -545,11 +604,12 @@ however much it looks like the right query. A wall projects to a line in plan. T
 occupier *surfaces* on a lattice and bins them — the same method this entry's own ⚠️ note demands,
 after bounding boxes read 13.71%.
 
-**What this does not do.** It measures; it does not clear. Whether to spend the widening back is a
-`GAME_DESIGN.md` trade and a separate call — and on the evidence above, narrowing is not the fix for
-the edges that actually fail.
+**What this does not do.** It measures; it does not clear. Spending the widening back was the
+`GAME_DESIGN.md` trade this entry proposed, and the sweep above has now closed it: narrowing is not
+the fix for any of the edges that fail, buildings included. What is left is moving geometry — the
+interchange for the severe half, and the frontage for the mild one — and **nobody owns either**.
 
-**See.** `Q51` for what routes around this · `Q20` · `Q24` · `P2-5` · `P3-6` for why the population moved
+**See.** `Q51` for what routes around this · `Q20` · `Q22` for the interchange's family · `Q24` · `P2-5` · `P3-6` for why the population moved
 
 ## `Q20` — Deck heights are sampled from `INFRASTRUCTURE`
 

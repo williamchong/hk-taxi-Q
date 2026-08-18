@@ -106,6 +106,10 @@ Common emoji for this project:
   ⚠️ Measure on `skidpad.tscn`, never `city_drive.tscn` — a 0.14° micro-gradient there is worth the
   whole quantity under test, and a published figure has already had to be withdrawn over it
   (`P0-5b/c/d`).
+- **`widen_default` or any `roads.surface` widening change: also `tools/narrowing.py`, before and
+  after.** It is what priced the current value: narrowing clears *no* blocked edge at any factor
+  down to the 1.3x floor and loses one (`Q19`). A widening change that does not re-run it is
+  re-opening a question that has been measured shut.
 - **`clearance.py` changes: also `tools/carriageway_occupancy.py`, and paste both tables.** The
   pipeline publishes a number that tool grades, and the two currently disagree — 21 starved edges
   against 26 (`Q51`). The gap is only evidence while both figures describe the same bundle, and no

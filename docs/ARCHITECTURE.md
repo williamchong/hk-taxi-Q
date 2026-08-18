@@ -184,6 +184,17 @@ with itself.
 | `tools/ground_clearance.py` | `Q18`/`Q24` — whether the drawn ground stands *in* the at-grade carriageway. Sizes `buildings.ground_sink_m`, and gates the sink separately from the road's own shape |
 | `tools/carriageway_occupancy.py` | `Q19` — whether anything **solid stands in the road at bumper height**, buildings and structure told apart by vertex colour. The only one that gates per *edge* rather than region-wide, because `RoadGraph` routes on edges and a share cannot tell a wall across the road from clutter beside it. ⚠️ **Fails today**. Since `Q51` it also grades a number the pipeline publishes for itself — `clearance.py`'s — and the two disagree by 21 edges against 26, recorded rather than reconciled |
 
+**`tools/narrowing.py` sits beside them and is not one of them.** It prices a *proposal* — what
+`Q19`'s clearances would read at a lower `widen_default` — rather than grading what shipped, and it
+does that by importing `pipeline.clearance` and reusing it whole. That is the opposite of the rule
+the four above keep, and deliberate: the question is not whether the measurement is right, which
+`carriageway_occupancy.py` answers, but what the same measurement says at a different width. A
+second implementation would confound the two. Hand-run, reads the ETL out tree rather than the
+shipped bundle, and needs no rebuild — buildings do not move when the ribbon narrows. It **refuses
+to print a table whose baseline column does not reproduce `clearance.json` edge for edge**: the
+1.60x column is the one thing in the sweep that can be checked against something, so it is a
+precondition rather than a diagnostic.
+
 `deck_error.py` owns the shared bundle reader (`bundle_arguments`, `load_bundle`, `log_bundle`,
 `Faces`, `wears`, `nearest`); `overhang.py` owns the shared width sweep (`walk_width`,
 `cross_section`, `left_of`, `half_width_at`) and the other two import it, because reimplementing
