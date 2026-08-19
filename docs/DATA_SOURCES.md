@@ -217,6 +217,15 @@ the street-facing faces. Any per-building façade claim from this source therefo
 **occlusion-biased** sample of that building — worth knowing before another attribute is derived from
 it. See `Q37`.
 
+⚠️ **That exclusion is itself incomplete.** The set carries **duplicated flat placeholder panels
+that are not grey** — one 4,584-byte 512×512 PNG on 21 buildings, one 1,761-byte panel on 29, and
+two further panels that are a *single* colour — and the survey's filler guard rejects only an exact
+`R == G == B` tie, so it passes all of them. **97 atlases on 93 of the 2,213 buildings**, and 92 of
+those clear `vegetation_max`. The grey half is caught: 2,429 of 3,203 `B`-model atlases hold a grey
+modal colour over ≥ 20% of their texels, 1,982 at `#3c3c3c`. So the coverage figure above is an
+**over**-estimate of how much real photography there is, by an amount nobody has measured.
+See `Q55`.
+
 ✅ **`P3-7` read one sheet of it, once, offline — and it still does not ship.** The window-band shader
 needed a storey height, and guessing one would have put the wrong floor count on every tower in the
 region. So `11-SW-15A` was fetched in individualised form (**1.10 GB**, discarded afterwards), the

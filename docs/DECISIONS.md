@@ -75,6 +75,7 @@ lives in git. This file holds *why things are the way they are*.
 | `Q49` | A tyre spends one budget, and the handbrake that follows spins the car | 🟡 **Superseded in mechanism by `Q50`** — the friction ellipse it shipped is gone with the raycast model; its `B4` conclusion stands and is now the only route |
 | `Q50` | The shipped car is Godot's `VehicleBody3D`; `P0-5a` was right and the cost was accepted | ✅ Closed — shipped 2026-08-18 at the user's explicit instruction. Drift window measured **0.01–0.02 wide**, a handbrake tap now does nothing, and `Q49`'s ellipse is lost |
 | `Q51` | Traffic is never *sent* down an edge under one lane clear; the player is never *stopped* | ✅ Closed — the graph expresses passability and refuses nothing. `clearance.py` publishes a width per station into `city.json` (schema 9) and `RoadGraph` gains `is_routable`; `nearest_edge` is untouched. ✅ **The 21-against-26 gap is reconciled (2026-08-19): plan cell size, verified against 109 M brute-forced samples**, and `tools/clearance_reconcile.py` ratchets both counts. ✅ It found a live defect on the way — `ALONG_M = 1.0` **aliased walls**, so `is_routable` routed traffic down `e636` — and the call was **taken the same day: `ALONG_M` is `CELL_M` (0.5 m)**, the published count is **24 against 26**, and the published width is a lower bound at that cell |
+| `Q55` | The façade survey's filler guard reads greyness, and the placeholder panels are coloured | 🔴 Open — measured 2026-08-20, not fixed. **97 atlases on 93 of 2,213 buildings** carry a flat non-grey panel `is_filler` passes; 92 clear `vegetation_max`. Rejecting them moves **43 past `Q33`'s 0.46 `Δab`**, worst **54.69 `L*`**. `Q37` prescribed this fix — *"or detect each atlas's filler as its modal exactly-repeated colour"* — and only the first clause shipped |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -6402,3 +6403,115 @@ rather than an invented one, which is a different kind of dial.
 **See.** `Q53` for the markings this belongs to · `PLAN.md` `P3-13` for the build · `DATA_SOURCES.md`
 for the layer's own row · `Q18`/`Q36` for the registration problem this one does **not** have ·
 `GAME_DESIGN.md` for why an invented feature is priced against `P3-9a`
+
+## `Q55` — The filler guard reads greyness, and the placeholder panels are coloured
+
+**Status.** 🔴 **Open** — measured, not fixed · **Owner.** `tools/facade_survey.py`, survey ·
+**Opened** 2026-08-20
+
+**Claim.** `is_filler` rejects a texel whose channels are an exact three-way tie. **97 atlases on 93
+of the 2,213 buildings in `facade_lab.json` carry a flat panel whose colour is not a tie** — and the
+guard passes every one. All 93 have a row, **92 of them clear `vegetation_max: 0.5`**, so the
+pipeline trusts them. Re-estimating with those texels rejected moves **43 buildings past `Q33`'s
+0.46 `Δab` tolerance**, 15 past 2.0, 5 past 5.0, and up to **54.69 `L*`**.
+
+This is **`Q37` at the one end of the range `Q37` did not check**, and `Q37` wrote the fix down —
+*"**Reject exact `R == G == B` texels** … **or** detect each atlas's filler as its modal
+exactly-repeated colour."* The first clause shipped. The second did not. The same record also states
+the general principle — *"Achromatic is not the defect's signature; **repetition** is"* — and
+nothing in the tool reads repetition.
+
+**The panels are literally the same file.** Hashing every atlas whose modal colour is non-grey and
+holds ≥ 20% of its texels, each colour resolves to **exactly one** `blake2b` digest:
+
+| Placeholder | Bytes | Distinct colours | Copies | Buildings damaged past 0.46 `Δab` | Worst \|Δ`L*`\| |
+|---|---:|---:|---:|---:|---:|
+| `(11,13,14)` | 1,761 | 42 | **29** | 5 / 29 | 0.82 |
+| `(68,65,65)` | 4,584 | 72 | **21** | **18 / 21** | **54.69** |
+| `(233,248,245)` | 2,295 | 57 | **14** | 6 / 14 | 1.25 |
+| `(41,37,25)` | 2,084 | **1** | **8** | **7 / 8** | 7.62 |
+| `(78,154,183)` | 18,952 | 71 | 3 | 0 / 3 | 0.00 |
+| `(177,178,175)` | 13,749 | 92 | 1 | 1 / 1 | 11.27 |
+| `(236,232,232)` | 8,299 | **1** | 1 | 1 / 1 | 33.22 |
+| 12 more | 400 – 4.3 M | 2 – 82,565 | 1–2 each | 7 / 18 | 33.22 |
+
+⚠️ **The counts above are by building-slot**: two buildings carry two panels each, so the
+column sums to 45 against **43** unique buildings past the tolerance.
+
+A **512×256 PNG of a single colour** repeated on eight buildings, and a 256×128 panel repeated on 29
+across **all six sheets**, are not photographs of anything. Photography does not repeat
+byte-for-byte.
+
+**Why it matters.** `Q37` cost the project its whole façade table and re-derived `Q34′` and `Q30`
+behind it, on 222 rows that were **achromatic**. Today there are **2**. The defect did not go away;
+it changed colour, and the instrument built to find it reads the one axis it no longer sits on.
+
+⚠️ **Two mechanisms, and the second one is new.** `Q37`'s story is that filler is *bright*, so a
+median over texels above the **65th percentile of `L*`** preferentially selects it. That reproduces
+here — `(236,232,232)` at 33.4% of one building's walls takes it to `L*` **92.30**, and rejecting it
+gives back 33.22. But `(68,65,65)` is `L*` **27.8**, far *below* any plausible cut, and it wins
+outright on five buildings, at 44–96% of their wall texels. **Above roughly half the sample the
+order statistic is inside the filler wherever the cut falls.** `Q37`'s brightness argument was a
+sufficient condition, not a necessary one, and a fix that leans on the percentile will not reach the
+dark half.
+
+⚠️ **The error runs both ways, which the first sample did not show.** On the `(68,65,65)` subset
+every building shipped **too dark** and the reading looked one-sided. Over all 93 it is not:
+**40 of 93** move up, the worst by **+54.69 `L*`**, and the worst downward move is **−33.22**
+(`B357491563701063`, which carries both `(136,138,137)` and the single-colour `(236,232,232)`).
+Median Δ`L*` is **+0.00**. A correction cannot be described as "the city is too dark".
+
+⚠️ **The population is severely skewed, so do not price this by counting buildings.** Wall-texel
+filler share is p50 **0.94%**, p75 15.6%, p90 33.0%, max 96.5% — 46 buildings above 1%, 33 above 5%,
+19 above 20%, **6 above 50%**. The *largest* population is nearly inert: `(11,13,14)` sits on 29
+buildings and is a 256×128 panel beside a multi-megapixel photograph, median **0.5%** of walls and a
+worst \|Δ`L*`\| of **0.82**. Four colours carry effectively all the damage — `(68,65,65)`,
+`(41,37,25)`, `(136,138,137)`/`(236,232,232)` and `(177,178,175)`.
+
+✅ **What is *not* broken, and it is most of the set.** Of 3,203 `B`-model atlases swept, **2,429**
+have a *grey* modal colour at ≥ 20% and `is_filler` catches every one — 1,982 of them at
+RGB(60,60,60), which is `#3c3c3c`, the exact grey `Q37` records the pre-structural enumeration
+missing. **The structural rule works; its axis is wrong.** This is a gap in the guard, not a
+refutation of `Q37`'s reasoning, and the shipped table is still enormously better than the one it
+replaced.
+
+⚠️ **93 is a floor, and it is `Q37`'s "222 is a floor" in the same shape.** Detection required a
+single exact colour at ≥ 20% of one atlas, sampled on a 1-in-16 lattice; below that threshold
+nothing was looked for, and a panel spread thin across several atlases is invisible to it. The
+re-estimates reject only the colours *detected*, so every Δ above is a **lower bound on the
+correction**, not the corrected value.
+
+⚠️ **Six 4096² JPEGs are the reason a fix must reject texels, not atlases.** `(136,138,137)` on
+four of them, plus `(146,147,151)` and `(28,27,23)`, appear as modal colours at 23–57% inside
+atlases carrying **33,981 – 82,565 distinct colours**. Those are genuine photographs with a flat
+fill region baked into them. Dropping the atlas would discard a real building; dropping the
+modal-colour texels is correct. The distinct-colour count separates the two populations cleanly —
+every duplicated panel is ≤ 122 distinct colours, every photographic atlas is ≥ 33,981 — but it is
+a **diagnostic, not the guard**: the guard is per texel.
+
+⚠️ **`MIN_TEXELS = 64` is the wrong bar once filler is rejected properly, and that is a second
+question.** `B372821591401063` is **96.5%** filler; rejecting it leaves ~38,000 texels, which clears
+64 by three orders of magnitude and answers confidently from 3.5% of a building. `Q37` is explicit
+that *"`None` is a refusal to answer, and the caller must keep it one"* — a **share**-based refusal
+probably belongs beside the count-based one. It should not ride along in the same change.
+
+**What a fix costs, so it is costed before it is started.** `facade_lab.json` is a committed source
+input, not build output, so a guard change re-publishes the survey and `CONTRIBUTING.md` then owes
+`tools/ring_weights.py` (`Q34′`) and `tools/facade_chroma.py` (`Q30`) with their tables pasted —
+`Q34`'s ring weights are authored against this population's `C*` distribution, exactly as they were
+when `Q37` moved it. `facade_colour/superseded/` already holds one generation and is the reversal
+path. **`Q37` walked this whole route and it was not small.**
+
+⚠️ **Nothing here is reproducible from the repo yet.** Every number above came from a scratch script
+reading `facade_survey`'s own `wall_texels` / `photographic` / `estimate`, and that is the same debt
+`Q37` was opened about — a table nobody can re-derive. **The guard belongs in `facade_survey.py`
+with a test, and the sweep belongs beside it**, or this record ages into an assertion.
+
+**Not fixed now, and deliberately.** The measurement is what was asked for and what this records.
+The change touches the input every façade decision from `Q30` to `Q34′` to `Q45` rests on, and it
+should land as one change with its re-derivations, not as a guard commit followed by four stale
+tables.
+
+**See.** `Q37` for the survey this repeats and the fix it already prescribed · `Q34′` and `Q30` for
+what re-publishing the table owes · `Q33` for the 0.46 `Δab` tolerance · `DATA_SOURCES.md`
+"Buildings" for the imagery's coverage · `CONTRIBUTING.md` "Checks"
