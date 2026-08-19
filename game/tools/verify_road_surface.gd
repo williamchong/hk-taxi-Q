@@ -38,11 +38,15 @@ const MARKING_CLASS_CAP: float = 2.0
 const MARKING_DIRECTION_MAX: float = 2.0
 const MARKING_CENTRE_FIELD: float = 2048.0
 const MARKING_CENTRE_MAX: float = 63.0
+## `P3-13`'s two fields: what kind of kerbside line each side carries.
+const MARKING_KERB_NEAR_FIELD: float = 131072.0
+const MARKING_KERB_OFF_FIELD: float = 524288.0
+const MARKING_KERB_SPAN: float = 4.0
 ## Derived from the top field rather than written down, the way
 ## `etl/pipeline/surface.py` derives its own — a literal here is a number that
 ## has to be re-derived by hand the next time a field is added, and getting it
 ## wrong loosens the check silently.
-const MARKING_CODE_MAX: float = MARKING_CENTRE_FIELD * (MARKING_CENTRE_MAX + 1.0) - 1.0
+const MARKING_CODE_MAX: float = MARKING_KERB_OFF_FIELD * MARKING_KERB_SPAN - 1.0
 
 ## The longest edge the region may publish, in metres, as a sanity ceiling on
 ## `TEXCOORD_1.y`. Not a contract value — geometry is clipped to a region 1.7 km
@@ -99,6 +103,7 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 			)
 		)
 		problems.append_array(_check_marking_payload(mesh, surface, "surface %d" % surface))
+		problems.append_array(_check_kerb_extent(mesh, surface, "surface %d" % surface))
 
 	problems.append_array(MeshContract.check_collision(scene_root))
 	problems.append_array(
@@ -106,6 +111,84 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 	)
 
 	return problems
+
+
+## `COLOR_0.a` still says where the kerbside restrictions run (`P3-13`, `Q54`).
+##
+## ⚠️ **The one thing in this asset that fails to *nothing*.** Alpha is the
+## channel `surface.py` writes the restriction extent into, and it is opaque 255
+## by default — so if the ETL stopped writing it, or glTF lost it, or the
+## importer dropped it, every value would read 1.0, the shader would paint every
+## kerb in the region, and the city would look exactly as it did before `P3-13`.
+## There is no error and nothing to see. This is what notices.
+##
+## Three assertions, and the first is the load-bearing one:
+##
+## - some carriageway vertex is 0 and some is 255. Either extreme alone means
+##   the channel has stopped carrying an extent, in one direction or the other.
+## - every value is one of those two. The ETL writes no third, so anything in
+##   between is interpolation baked into the vertices — which is what a lightmap
+##   unwrap or a lossy re-export would leave behind.
+## - a kerb or a cap is opaque. Those carry no extent, and a zero on one would
+##   be the rails coming out of `strip` in the wrong order.
+func _check_kerb_extent(mesh: Mesh, surface: int, where: String) -> PackedStringArray:
+	var arrays: Array = mesh.surface_get_arrays(surface)
+	var colours: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
+	var uv2s: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV2]
+	if colours.is_empty() or colours.size() != uv2s.size():
+		return PackedStringArray(["%s: COLOR_0 and TEXCOORD_1 do not agree in length" % where])
+
+	var restricted: int = 0
+	var clear: int = 0
+	for index: int in colours.size():
+		var alpha: float = colours[index].a
+		var carriageway: bool = fmod(uv2s[index].x, MARKING_LANES_FIELD) == 0.0
+		if alpha > 0.999:
+			restricted += 1 if carriageway else 0
+		elif alpha < 0.001:
+			if not carriageway:
+				return PackedStringArray(
+					[
+						(
+							(
+								"%s: a kerb or cap vertex carries alpha 0. Only the carriageway "
+								+ "carries an extent, so this is `strip` taking its rails in the "
+								+ "wrong order — every yellow line in the city is on the wrong kerb"
+							)
+							% where
+						)
+					]
+				)
+			clear += 1
+		else:
+			return PackedStringArray(
+				[
+					(
+						(
+							"%s: COLOR_0.a is %f, which is neither 0 nor 1. The ETL writes only "
+							+ "those two, so the channel has been resampled — a lightmap unwrap or "
+							+ "a lossy re-export"
+						)
+						% [where, alpha]
+					)
+				]
+			)
+
+	if restricted == 0 or clear == 0:
+		return PackedStringArray(
+			[
+				(
+					(
+						"%s: COLOR_0.a is uniform across the carriageway (%d restricted, %d "
+						+ "clear). The kerbside extent has stopped shipping, and the markings "
+						+ "shader will paint every kerb in the region — `Q54`, silently"
+					)
+					% [where, restricted, clear]
+				)
+			]
+		)
+	print("  kerbside extent: %d carriageway vertices restricted, %d clear" % [restricted, clear])
+	return PackedStringArray()
 
 
 ## The marking payload holds the codec's invariants (`P3-12`).
@@ -150,6 +233,16 @@ func _check_marking_payload(mesh: Mesh, surface: int, where: String) -> PackedSt
 			# shader reads as "not a length of lane", and half of it is a bug.
 			or (lanes == 0.0) != (surface_class == MARKING_CLASS_CAP)
 			or (uv2.y == 0.0) != (surface_class == MARKING_CLASS_CAP)
+			# `P3-13`: a junction cap is not a length of kerb, so neither kerb
+			# field may say anything on one. A code that did would put a yellow
+			# line across a junction the moment anything drew on a cap.
+			or (
+				surface_class == MARKING_CLASS_CAP
+				and (
+					fmod(floor(code / MARKING_KERB_NEAR_FIELD), MARKING_KERB_SPAN) != 0.0
+					or fmod(floor(code / MARKING_KERB_OFF_FIELD), MARKING_KERB_SPAN) != 0.0
+				)
+			)
 		):
 			return PackedStringArray(
 				[

@@ -6000,15 +6000,15 @@ real subset; a heuristic on degree and arm width would put boxes on junctions th
 which is the `P3-9a` debit above. An authored table is the honest route and is a `Q34′`-class
 staleness liability, so it waits for someone to want it.
 
-**🔴 One shipped marking is invented — the kerbside double yellow — and this record first claimed it
-*could not* be sourced. That claim was wrong.** The Road Network v2 geodatabase carries an `NSR`
-layer — No-Stopping Restriction — which `DATA_SOURCES.md` has listed in its own contents line since
-`P1-3` and which this record read past. Painting a double yellow on every kerb asserts *no stopping
-at any time* over roughly three times the kerb actually restricted, and over the bundle's own taxi
-stands. **That is `Q54`**, opened here rather than answered here: it is a sourcing question with its
-own measurements and its own refusals, and burying it inside a closed record is how it would be
-lost. Meanwhile the marking stays on `draw_double_yellow`, which is the honest lever and the reason
-the switch exists.
+**✅ One shipped marking was invented — the kerbside double yellow — and this record first claimed it
+*could not* be sourced. That claim was wrong, and `P3-13` closed it on 2026-08-19.** The Road
+Network v2 geodatabase carries an `NSR` layer — No-Stopping Restriction — which `DATA_SOURCES.md`
+has listed in its own contents line since `P1-3` and which this record read past. Painting a double
+yellow on every kerb asserted *no stopping at any time* over 3.4x the kerb actually restricted, and
+over the bundle's own taxi stands. **That was `Q54`**, opened here rather than answered here: it is
+a sourcing question with its own measurements and its own refusals, and burying it inside a closed
+record is how it would be lost. `draw_double_yellow` stays in `tuning/road_markings.tres`, but it
+now turns off a *sourced* marking rather than an invented one.
 
 **✅ The offside half of that question is closed, and it was a different question.** The line was
 drawn on the offside kerb only where `direction == both`, with the note that on a one-way edge
@@ -6151,8 +6151,16 @@ commit across two sides" precedent
 
 ## `Q54` — The kerbside yellow is invented, and the layer that would source it was read past
 
-**Status.** 🔴 Open — measured, scoped, not built · **Owner.** unassigned · **Opened** 2026-08-19 by
+**Status.** ✅ **Closed by `P3-13`, 2026-08-19** · **Owner.** `P3-13` · **Opened** 2026-08-19 by
 `Q53`
+
+**Closed at 240% → 4%.** `pipeline/kerbside.py` linear-references `NSR` onto the finished graph,
+`roadgraph.json` publishes the runs at schema 4, and the extent reaches the shader in `COLOR_0.a`.
+Graded on the shipped mesh by `tools/kerbside_error.py`: **16,511 m painted against 16,726 m
+reachable — 4% gross error**, where a line on every kerb would over-paint 40,127 m. The rest of this
+record is what was measured on the way, and **four of its own numbers were wrong**; the corrections
+are in the section at the end rather than edited into the paragraphs above, because what this record
+got wrong is the most useful thing in it.
 
 **Claim.** `P3-12` paints a kerbside double yellow on every level-0 kerb in the region and recorded
 it as the one marking with no source. **There is a source, it is already on disk, and it is in the
@@ -6206,6 +6214,80 @@ usually is restricted, so the marking is right more often than not — but "more
 not the standard the rest of this bundle is held to, and the switch is there so the call can be
 reversed the moment a recognition round reports the markings as wrong rather than as missing.
 
-**See.** `Q53` for the markings this belongs to · `DATA_SOURCES.md` for the layer's own row ·
-`Q18`/`Q36` for the registration problem this one does **not** have · `GAME_DESIGN.md` for why an
-invented feature is priced against `P3-9a`
+### What `P3-13` built, and what this record got wrong
+
+**The join.** Each restriction line is sampled every metre, each sample assigned to the nearest
+**level-0** edge, the side taken from the offset's sign, samples accumulated into 1 m cells, gaps
+under 3 m bridged and runs under 5 m dropped. **26,065 m over 650 edge sides**, 20,414 double
+against 5,651 single, from 372 of the layer's 579 features.
+
+⚠️ **Level 0 only, and the alternative was measured rather than assumed away.** For **7%** of the
+region's samples the nearest edge of *any* level is elevated — Canal Road flyover and Morrison Hill
+Road run directly over the streets they shadow — and those restrictions belong to the street
+underneath, whose centreline is a median **4.0 m** away, exactly the offset a kerb sits at. Letting
+an elevated edge win would move 385 m of kerb onto a viaduct that draws no kerb at all.
+
+**Four corrections, and one of them is in the opposite direction to the argument.**
+
+| This record said | It is | Why |
+|---|---|---|
+| 44,220 m of restriction | **33,074 m** | `VEHICLE_TYPE` was never read. Only `1` "all motor vehicles" is a *painted* line; `2`/`3`/`4` are signs (2,822 m) and `5` "Others" names no class (8,323 m, **refused**) |
+| ~3x over-painted | **3.4x** | Measured off the shipped mesh — 40,127 m of over-paint against 16,726 m reachable — rather than off a kerb total |
+| median 2.92 m off the centreline | **2.76 m** | Measured against the *clipped* graph rather than the raw source; p99 8.24 m, worst 17.83 m |
+| paints over its own 14 taxi stands | **9 of 14 stands are genuinely restricted** | Deduped. The source really does run the line past most of them, so the harm was on the other 5 — the argument was right and this particular evidence for it was not |
+
+⚠️ **A fifth thing this record did not see: 2,909 m of real restriction lands on a kerb the drawn
+city does not have.** The 1.6x play widening makes two parallel ribbons overlap, so the strip
+between them is paved over and `MARKING_OFFSIDE_KERB` says — correctly — that `U = lanes` is not a
+kerb there. Gloucester Road, Lung Wo Road and Harbour Drive are most of it. **No shader change
+reaches this**; it is the widening meeting the source, and `kerbside_error.py` reports it on its own
+line so it can never be mistaken for paint in the wrong place.
+
+**How the payload carries an extent the codec cannot.** The kind is `flat` per strip and the extent
+is not, so they ride in different channels: two 2-bit codec fields (`kerb_near`, `kerb_off`; absent
+/ none / single / double, max code **2,097,151**) say *what kind of line*, and `COLOR_0.a` — which
+`_rgba` had been broadcasting as an unread, unchecked 255 on every road vertex — says *where it
+applies*, per **rail**, which is per side of the road because the two rails of the carriageway strip
+*are* the two kerbs. ⚠️ `road_markings.gdshader` hoists the sRGB conversion into a `flat` varying on
+the strength of "no triangle spans two colours"; that argument covers `COLOR.rgb` and the alpha is a
+separate, deliberately non-flat varying.
+
+⚠️ **The whole-edge shortcut is recorded because it is what the next person will propose.**
+Quantising each restriction to a whole `(edge, side)` needs four spare codec bits and moves no
+geometry. Measured against the linear-referenced truth, and with the 6 m junction fade already
+excluded, the best threshold still leaves **33%** gross error — 3,178 m over-painted, 6,227 m
+missed. Exact V-ranges ship instead (the user's call, 2026-08-19), and this is what they cost:
+
+| | before | after |
+|---|---|---|
+| Road mesh vertices | 34,924 | **44,142** (+26.4%) |
+| Road mesh triangles | 28,170 | 37,259 |
+| Shipped PCK | 38.88 MiB | **39.34 MiB** (+477 KiB, +1.20%) |
+| Triangles folding inward at a hairpin | 4, 0.53 m² | 10, 2.37 m² |
+
+`surface.py` inserts a station pair 0.25 m either side of each boundary — **1,179 stations**, after
+filtering to the drawn extent, and one station lands on the carriageway strip *and* on every kerb
+strip beside it, which is why 1,179 stations cost 9,218 vertices. The six new inward-folding
+triangles are the tight-corner boundary walk meeting the extra stations, and they are new *places*
+rather than more of the old one: 1.84 m² across four corners, against 52,985 m² of carriageway.
+
+**One error the codec keeps, priced.** It says one kind per edge side and the source does not
+promise one: **183 m** of Wan Chai's 26,065, across 9 of 650 covered sides, is drawn as the wrong
+kind of line where a posted-hours feature overlaps a 24-hour one. The longer run wins. Giving the
+kind its own per-run channel would cost a second byte on every road vertex to fix 0.7% of one region.
+
+⚠️ **The side convention was asserted, not reasoned about.** `surface.mitres` offsets left of travel
+and `U = 0` is that side because Hong Kong drives on the left; a mirrored convention renders as an
+ordinary road with every yellow line on the wrong kerb. `tests/test_kerbside.py` asserts the join's
+answer against `mitres` **itself** rather than against a comment, so a sign flip in either fails on
+the same day. `verify_road_surface.gd` holds the other end: `COLOR_0.a` must be 0 or 1 and never in
+between, must be opaque outside the carriageway, and must not be uniform — the last one is what
+notices if the extent silently stops shipping and every kerb goes back to being painted.
+
+**What stays out of scope.** `ONSTREETPARK`'s 607 bays, box junctions, and the `VT=5` 8,323 m.
+`draw_double_yellow` remains in `tuning/road_markings.tres` — it now turns off a *sourced* marking
+rather than an invented one, which is a different kind of dial.
+
+**See.** `Q53` for the markings this belongs to · `PLAN.md` `P3-13` for the build · `DATA_SOURCES.md`
+for the layer's own row · `Q18`/`Q36` for the registration problem this one does **not** have ·
+`GAME_DESIGN.md` for why an invented feature is priced against `P3-9a`

@@ -82,6 +82,11 @@ log = logging.getLogger(__name__)
 _TUNING = ("yellow_inset", "fade_m", "fade_softness_m", "draw_double_yellow")
 _PARAMETER = re.compile(r"^shader_parameter/(\w+)\s*=\s*([-\d.eE]+)\s*$", re.MULTILINE)
 
+# Pitch both sides of the comparison integrate the junction fade at, in metres.
+# A tenth of the join's own 1 m resolution, so the 3 m fade ramp is resolved
+# rather than sampled at its ends.
+_INTEGRATION_M = 0.1
+
 # Two triangle corners whose U values straddle the line by less than this are
 # treated as lying on it, and the chord is skipped. Below it the crossing point
 # is the ratio of two numbers that are both noise.
@@ -149,6 +154,18 @@ class Report:
         return sum(min(row[1], row[2]) for row in self.by_side.values())
 
     @property
+    def unsourced_m(self) -> float:
+        """What `P3-12` asserted: a line on every kerb the city draws.
+
+        Computable from this same run because `drawable` *is* that city — the
+        metres of kerb line the mesh could carry if the extent said yes
+        everywhere, which is exactly what it said before `P3-13`. Reported so
+        the before and the after come off one measurement of one mesh rather
+        than out of two runs someone has to trust were comparable.
+        """
+        return sum(max(0.0, row[2] - row[1]) for row in self.by_side.values())
+
+    @property
     def over_m(self) -> float:
         return sum(max(0.0, row[0] - row[1]) for row in self.by_side.values())
 
@@ -182,8 +199,10 @@ def fade(v: np.ndarray, drawn_m: np.ndarray, fade_m: float, softness_m: float) -
     return edge * edge * (3.0 - 2.0 * edge)
 
 
-def painted_lines(mesh, tuning: dict[str, float]) -> list[tuple[np.ndarray, str, float, float]]:
-    """Where the shader draws a kerbside line, as `(midpoint, side, painted, drawable)`.
+def painted_lines(
+    mesh, tuning: dict[str, float]
+) -> list[tuple[np.ndarray, str, float, float, float]]:
+    """Where the shader draws a line, as `(midpoint, side, painted, drawable, drawn_m)`.
 
     The line is the locus `U = yellow_inset` on the nearside and
     `U = lanes - yellow_inset` on the offside, so every carriageway triangle is
@@ -216,7 +235,7 @@ def painted_lines(mesh, tuning: dict[str, float]) -> list[tuple[np.ndarray, str,
     corners = corners[carriageway]
 
     inset = tuning["yellow_inset"]
-    found: list[tuple[np.ndarray, str, float, float]] = []
+    found: list[tuple[np.ndarray, str, float, float, float]] = []
     for side, at in (
         (kerbside.NEARSIDE, lambda row: np.full(3, inset)),
         (kerbside.OFFSIDE, lambda row: lanes[row] - inset),
@@ -229,15 +248,17 @@ def painted_lines(mesh, tuning: dict[str, float]) -> list[tuple[np.ndarray, str,
                 continue
             chord = _chord(mesh, row, at(row), alpha, tuning)
             if chord is not None:
-                found.append((chord[0], side, chord[1], chord[2]))
+                found.append((chord[0], side, chord[1], chord[2], chord[3]))
     return found
 
 
 def _chord(mesh, row, at: np.ndarray, alpha: np.ndarray, tuning: dict[str, float]):
     """One triangle's crossing of the line at `at`, or `None` if it misses.
 
-    Returns the crossing's 3D midpoint, the metres of paint on it, and the
-    metres of kerb line that could have been painted there.
+    Returns the crossing's 3D midpoint, the metres of paint on it, the metres of
+    kerb line that could have been painted there, and the drawn length of the
+    edge it belongs to — which is how the caller tells that edge from its
+    neighbours.
     """
     u = mesh.uvs[row, 0] - at
     v = mesh.uvs[row, 1]
@@ -259,13 +280,33 @@ def _chord(mesh, row, at: np.ndarray, alpha: np.ndarray, tuning: dict[str, float
 
     (v0, alpha0, point0), (v1, alpha1, point1) = hits
     drawn_m = float(mesh.uv2[row[0], 1])
-    middle = np.array([0.5 * (v0 + v1)])
-    weight = float(
-        fade(middle, np.array([drawn_m]), tuning["fade_m"], tuning["fade_softness_m"])[0]
+    length = abs(v1 - v0)
+
+    # ⚠️ **Integrated along the chord, never sampled at its midpoint.** A
+    # triangle here is not small: 204 of the region's edges carry two stations,
+    # so one triangle spans the whole ribbon and its chord runs end to end. The
+    # midpoint of such a chord sits exactly where the junction fade is 1, which
+    # weighed a 12.6 m edge at 12.0 m when the truth is 3.6 — the fade is a
+    # curve over the very interval being measured. Same pitch as
+    # `restricted_metres`, so both sides of the comparison resolve the 3 m ramp
+    # the same way.
+    steps = max(2, int(length / _INTEGRATION_M))
+    at = (np.arange(steps) + 0.5) / steps
+    weight = fade(
+        v0 + at * (v1 - v0),
+        np.full(steps, drawn_m),
+        tuning["fade_m"],
+        tuning["fade_softness_m"],
     )
-    drawable = abs(v1 - v0) * weight
-    painted = drawable * 0.5 * (alpha0 + alpha1) * tuning["draw_double_yellow"]
-    return (point0 + point1) * 0.5, painted, drawable
+    # The alpha is integrated raw where the shader passes it through a
+    # `smoothstep(0.4, 0.6, ...)`. Deliberate, and it costs nothing: over the
+    # half-metre ramp the ETL builds, both are symmetric about 0.5 and integrate
+    # to the same length, and everywhere else the value is already 0 or 1. What
+    # it buys is one less shader constant this tool has to be kept in step with.
+    extent = alpha0 + at * (alpha1 - alpha0)
+    drawable = length * float(weight.mean())
+    painted = length * float((weight * extent).mean()) * tuning["draw_double_yellow"]
+    return (point0 + point1) * 0.5, painted, drawable, drawn_m
 
 
 # How heavily a height difference counts against a plan distance when a painted
@@ -274,6 +315,12 @@ def _chord(mesh, row, at: np.ndarray, alpha: np.ndarray, tuning: dict[str, float
 # same place in plan. Any weight above zero separates them; this one keeps the
 # match plan-led where nothing is stacked.
 _HEIGHT_WEIGHT = 4.0
+
+# How closely a candidate edge's drawn length must match the one the mesh
+# carries in `TEXCOORD_1.y` to be considered the same edge. Millimetres, because
+# that is what the manifest rounds its trims to and what float32 holds at this
+# region's scale.
+_DRAWN_TOLERANCE_M = 0.01
 
 
 class _Attributor:
@@ -288,20 +335,32 @@ class _Attributor:
     Deliberately not the pipeline's own segment index: that one is plan-only on
     purpose, because an `NSR` line has no height to compare with. This one is
     matching drawn geometry, which does.
+
+    ⚠️ **Position is the weaker half of this, and the mesh carries the stronger
+    one.** A yellow line sits half a carriageway off its own centreline, which
+    on a road drawn as several parallel edges can put it nearer a neighbour's —
+    position alone attributed 416 m of paint to a 191 m stretch of Gloucester
+    Road. But `TEXCOORD_1.y` is that edge's *drawn length*, which is very nearly
+    a fingerprint: filtering candidates by it first and only then taking the
+    nearest is what makes the per-edge table mean anything.
     """
 
     cell_m = 25.0
 
-    def __init__(self, edges: list[dict]) -> None:
-        starts, ends, heights, ids = [], [], [], []
+    def __init__(self, edges: list[dict], trims: dict[int, tuple[float, float]]) -> None:
+        starts, ends, heights, ids, drawn = [], [], [], [], []
         for edge in edges:
             points = np.asarray(edge["polyline"], dtype=np.float64)
             if len(points) < 2:
                 continue
+            trim = trims.get(edge["id"], (0.0, 0.0))
+            length = float(np.hypot(*np.diff(points[:, [0, 2]], axis=0).T).sum())
             starts.append(points[:-1])
             ends.append(points[1:])
             heights.append(0.5 * (points[:-1, 1] + points[1:, 1]))
             ids.append(np.full(len(points) - 1, edge["id"]))
+            drawn.append(np.full(len(points) - 1, length - trim[0] - trim[1]))
+        self.drawn = np.concatenate(drawn)
         self.start = np.vstack(starts)[:, [0, 2]]
         self.step = np.vstack(ends)[:, [0, 2]] - self.start
         self.height = np.concatenate(heights)
@@ -317,7 +376,7 @@ class _Attributor:
                     buckets.setdefault((x, z), []).append(index)
         self.buckets = {key: np.array(value) for key, value in buckets.items()}
 
-    def edge_of(self, point: np.ndarray) -> int | None:
+    def edge_of(self, point: np.ndarray, drawn_m: float) -> int | None:
         x, z = int(point[0] // self.cell_m), int(point[2] // self.cell_m)
         near = [
             self.buckets[(x + dx, z + dz)]
@@ -328,6 +387,12 @@ class _Attributor:
         if not near:
             return None
         candidates = np.unique(np.concatenate(near))
+        # The fingerprint first. Kept as a filter rather than a requirement: two
+        # neighbouring edges can be drawn to the same length, and a chord that
+        # matches nothing nearby is better attributed by position than dropped.
+        matched = candidates[np.abs(self.drawn[candidates] - drawn_m) <= _DRAWN_TOLERANCE_M]
+        if len(matched):
+            candidates = matched
         plan = point[[0, 2]] - self.start[candidates]
         travel = np.clip(
             (plan * self.step[candidates]).sum(axis=1) / self.length_squared[candidates], 0.0, 1.0
@@ -360,12 +425,12 @@ def restricted_metres(
         high = min(run["to_m"], length - trims[1])
         if high <= low:
             continue
-        # Integrated numerically at a tenth of the join's own resolution, so the
-        # 3 m fade ramp is resolved rather than sampled at its ends.
-        at = np.arange(low - trims[0] + 0.05, high - trims[0], 0.1)
+        # Integrated numerically at `_INTEGRATION_M`, the same pitch `_chord`
+        # uses on the other side of the comparison.
+        at = np.arange(low - trims[0] + _INTEGRATION_M / 2, high - trims[0], _INTEGRATION_M)
         totals[run["side"]] += float(
             fade(at, np.full(len(at), drawn_m), tuning["fade_m"], tuning["fade_softness_m"]).sum()
-            * 0.1
+            * _INTEGRATION_M
         )
     return totals
 
@@ -459,11 +524,11 @@ def main(argv: list[str] | None = None) -> int:
             report.restricted.add(side, metres)
             report.add(edge_id, side, 0.0, metres, 0.0)
 
-    attribute = _Attributor(graph["edges"])
+    attribute = _Attributor(graph["edges"], trims)
     for mesh in read_glb(out_dir / surface["mesh"]):
-        for point, side, metres, drawable in painted_lines(mesh, tuning):
+        for point, side, metres, drawable, drawn_m in painted_lines(mesh, tuning):
             report.painted.add(side, metres)
-            edge_id = attribute.edge_of(point)
+            edge_id = attribute.edge_of(point, drawn_m)
             if edge_id is not None:
                 report.add(edge_id, side, metres, 0.0, drawable)
 
@@ -517,6 +582,11 @@ def _log(report: Report, worst: int, names: list[str], tuning: dict[str, float])
         report.reachable_m,
     )
     log.info(
+        "  a line on every kerb — what `P3-12` asserted — would over-paint %.0f m: %.0f%%",
+        report.unsourced_m,
+        100.0 * report.unsourced_m / max(report.reachable_m, 1e-9),
+    )
+    log.info(
         "  %d of %d taxi stands stand inside a published restriction",
         report.stands_restricted,
         report.stands,
@@ -524,9 +594,16 @@ def _log(report: Report, worst: int, names: list[str], tuning: dict[str, float])
     for name in names[:worst]:
         log.info("    %s", name)
 
-    ranked = sorted(report.by_side.items(), key=lambda item: -abs(item[1][0] - item[1][1]))[:worst]
+    # Ranked by the error this actually counts, not by `painted - restricted`:
+    # the largest raw gaps are all restrictions on a kerb the city does not
+    # draw, which have their own line above and are nobody's fault to fix.
+    def counted(row: list[float]) -> float:
+        return max(0.0, row[0] - row[1]) + max(0.0, min(row[1], row[2]) - row[0])
+
+    ranked = sorted(report.by_side.items(), key=lambda item: -counted(item[1]))[:worst]
+    ranked = [item for item in ranked if counted(item[1]) > 0.5]
     if ranked:
-        log.info("  worst edge sides by absolute error:")
+        log.info("  worst edge sides by counted error:")
         log.info(
             "    %-8s %-5s %10s %10s %10s %10s",
             "edge",

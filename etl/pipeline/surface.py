@@ -40,16 +40,26 @@ from __future__ import annotations
 import argparse
 import logging
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple
 
 import numpy as np
 
-from pipeline.config import BOTH, FORWARD, CityConfig, RoadSurface, load_city
+from pipeline.config import (
+    BOTH,
+    FORWARD,
+    KERB_DOUBLE,
+    KERB_SINGLE,
+    CityConfig,
+    RoadSurface,
+    load_city,
+)
 from pipeline.documents import write_document
 from pipeline.geometry import edge_distances, inside_polygon
 from pipeline.gltf import Bounds, MeshData, normalise, write_glb
+from pipeline.kerbside import NEARSIDE, OFFSIDE
 from pipeline.mesh import select_triangles
 from pipeline.roads import ROADGRAPH_NAME, plan_lengths, plan_steps, read_graph
 
@@ -95,9 +105,9 @@ SURFACE_MATERIAL = "road_markings"
 # whole code exact in float32 so a consumer can decode it with `floor(x + 0.5)`.
 #
 #   code = surface_class + 4*lanes + 64*direction + 256*bus_lane + 512*tram
-#        + 1024*offside_kerb + 2048*centre
+#        + 1024*offside_kerb + 2048*centre + 131072*kerb_near + 524288*kerb_off
 #
-# Max legal code is 131,071, far inside float32's 24 exact bits.
+# Max legal code is 2,097,151, still far inside float32's 24 exact bits.
 #
 # `surface_class` is the field the shader cannot do without. The kerbs run off
 # *both* ends of the lane range — the nearside lip spans U in [-outside, 0] and
@@ -143,9 +153,37 @@ MARKING_OFFSIDE_KERB = 1024
 # coordinate cannot see where its partner runs.
 MARKING_CENTRE = 2048
 MARKING_CENTRE_MAX = 63
+# What kind of kerbside line each side of this edge carries (`P3-13`, `Q54`).
+# Two bits each, and the vocabulary is the same on both: `KERB_ABSENT` for a
+# surface that says nothing, `KERB_NONE` for a kerb the source was consulted
+# about and does not restrict, then the two lines it can carry.
+#
+# ⚠️ **The codec says what kind of line; `COLOR_0.a` says where it applies.**
+# The kind is constant per edge side and the *extent* is not — 87% of covered
+# sides carry one contiguous run and the rest carry two or more — so the two
+# halves ride in different channels. Putting the extent here as well would mean
+# one code per run, and a code is `flat` across a whole strip.
+#
+# ⚠️ **`ABSENT` and `NONE` draw the same thing and mean different
+# things.** A city whose sources carry no no-stopping layer publishes `ABSENT`
+# everywhere and gets no kerbside lines, which is the honest answer rather than
+# `P3-12`'s invented one. `NONE` is a positive statement, and `P3-3`'s traffic
+# will want it — a kerb known to be unrestricted is where a car may pull over.
+MARKING_KERB_NEAR = 131072
+MARKING_KERB_OFF = 524288
+MARKING_KERB_SPAN = 4
+MARKING_KERB_ABSENT = 0
+MARKING_KERB_NONE = 1
+MARKING_KERB_SINGLE = 2
+MARKING_KERB_DOUBLE = 3
+# The pipeline's kerbside vocabulary as the codec spells it. Keyed on the names
+# `config.py` validates against rather than on literals, for the reason
+# `MARKING_DIRECTIONS` gives: the stage that acts on a vocabulary must not drift
+# from the set that is accepted.
+MARKING_KERB_KINDS = {KERB_SINGLE: MARKING_KERB_SINGLE, KERB_DOUBLE: MARKING_KERB_DOUBLE}
 # Derived rather than written down: adding a field means moving one line, not
-# remembering to move two. `centre` is the top field and holds six bits.
-MARKING_CODE_MAX = MARKING_CENTRE * (MARKING_CENTRE_MAX + 1) - 1
+# remembering to move two. `kerb_off` is the top field and holds two bits.
+MARKING_CODE_MAX = MARKING_KERB_OFF * MARKING_KERB_SPAN - 1
 # The widest lane count the codec can say, from the field above it. `lanes = 16`
 # packs to 64 and collides with `direction` while leaving the *total* under the
 # ceiling — so the ceiling is not the guard, this is.
@@ -179,6 +217,15 @@ _THROUGH_TURN_DEG = 45.0
 # every-neighbour, in metres. Comfortably wider than the widest carriageway in
 # the region, so a ribbon lands in a handful of cells rather than in one each.
 _OVERLAP_CELL_M = 60.0
+
+# Half the gap between the two stations `P3-13` inserts at each end of a
+# restriction, in metres. Not a tuning value: it is how sharply `COLOR_0.a` can
+# turn on, and 0.5 m of ramp is under the width of the line it ends.
+#
+# It is also the floor on how close an inserted station may come to one the
+# polyline already has, which is what keeps the extra quads out of
+# `_MIN_TWICE_AREA_M2`'s way.
+_KERB_STATION_M = 0.25
 
 # Below this, a triangle has collapsed and is dropped. Compared against *twice*
 # the area, which is what the cross product's length gives — a square millimetre
@@ -269,6 +316,19 @@ class SurfaceReport:
     # of it widened. Reported here so the acceptance figure comes off the stage
     # that acted on it rather than only off `tools/overhang.py`.
     on_structure_m: float = 0.0
+    # `P3-13`'s cost and `P3-13`'s known error.
+    #
+    # ⚠️ `kerb_stations` is **stations, not vertices, and the two are far
+    # apart** — one station lands on the carriageway strip and on every kerb
+    # strip drawn beside it, so Wan Chai's 1,179 stations cost 9,218 vertices,
+    # not 2,358. Reported as stations because that is what this stage decides;
+    # the vertex total two lines up is what it cost.
+    #
+    # `kerb_minority_m` is metres drawn as the wrong *kind* of line, because the
+    # codec says one kind per edge side and the source does not promise one; see
+    # `_kerbside`.
+    kerb_stations: int = 0
+    kerb_minority_m: float = 0.0
 
     @property
     def level_changes(self) -> int:
@@ -442,6 +502,7 @@ class _Builder:
         along: np.ndarray,
         across: tuple[float, float],
         marking: _Marking,
+        alpha: tuple[np.ndarray, np.ndarray] | None = None,
     ) -> None:
         """A quad strip between two rails, wound so its face points out of it.
 
@@ -454,6 +515,16 @@ class _Builder:
         `marking` is `TEXCOORD_1`, which is what makes those readable — see the
         codec constants at the top of this module, including why it carries a
         length rather than the distance the consumer actually wants.
+
+        `alpha` is one byte per station of each rail, in the order the rails are
+        given, and it is `COLOR_0.a` — where `P3-13` writes how far along the
+        edge a kerbside restriction runs. Optional because most strips have
+        nothing to say there and an opaque road is what alpha meant before.
+
+        ⚠️ **The channel is per rail, and that is the whole reason it fits.**
+        The two kerbs of a road are the two rails of this strip, so a value that
+        varies across the carriageway *is* a value per side — no second
+        attribute, and no bytes the mesh was not already carrying.
         """
         span = len(left)
         if span < 2:
@@ -475,7 +546,9 @@ class _Builder:
         facing = _rail_normals(left, right)
         self._positions.append(np.vstack([left, right]))
         self._normals.append(np.vstack([facing, facing]))
-        self._colours.append(_rgba(colour, 2 * span))
+        self._colours.append(
+            _rgba(colour, 2 * span, np.concatenate(alpha) if alpha is not None else None)
+        )
         self._uvs.append(
             np.column_stack([np.repeat(across, span), np.concatenate([along, along])]).astype(
                 np.float32
@@ -574,13 +647,29 @@ def _rail_normals(left: np.ndarray, right: np.ndarray) -> np.ndarray:
     return np.where(length > _MIN_SEGMENT_M, normalise(normals), [0.0, 1.0, 0.0])
 
 
-def _rgba(colour: tuple[int, int, int], count: int) -> np.ndarray:
+def _rgba(colour: tuple[int, int, int], count: int, alpha: np.ndarray | None = None) -> np.ndarray:
     """One RGBA row per vertex, as a read-only view rather than a copy.
 
     `_Builder.build` materialises it in the one `vstack` that needs it — the
     same reasoning as `buildings.colour_for`.
+
+    ⚠️ **Alpha is a payload, not opacity, and only on the carriageway.** Since
+    `P3-13` it says where a kerbside restriction runs (`Q54`); everywhere else
+    it is the opaque 255 it always was, which the markings shader never reads
+    because it only looks at alpha inside the carriageway class. The broadcast
+    view is kept for that case — it is the common one, and it is free.
+
+    ⚠️ **`road_markings.gdshader` hoists the sRGB conversion into a `flat`
+    varying on the strength of this function broadcasting one colour per
+    strip.** That argument covers `rgb` and says so; alpha varying per vertex
+    does not touch it, and must not be folded into the same varying.
     """
-    return np.broadcast_to(np.array([*colour, 255], dtype=np.uint8), (count, 4))
+    if alpha is None:
+        return np.broadcast_to(np.array([*colour, 255], dtype=np.uint8), (count, 4))
+    rows = np.empty((count, 4), dtype=np.uint8)
+    rows[:, :3] = colour
+    rows[:, 3] = alpha
+    return rows
 
 
 def _shoelace(ring: np.ndarray) -> float:
@@ -706,6 +795,18 @@ class _Edge:
     # meaning "not half of a pair". The bias is what makes 0 mean absence, so
     # the raw field is what is stored and the decode is the consumer's.
     centre_step: int = 0
+    # `P3-13`: what kind of kerbside line each side carries, as the codec spells
+    # it, and where along the edge it applies. The two are separate because they
+    # ship in separate channels — see the codec block — and because the kind is
+    # constant per side while the extent is not.
+    #
+    # ⚠️ **Runs are in the *published* frame**, measured along `roadgraph.json`'s
+    # polyline, because that is the only frame the graph has. `_draw_edge`
+    # subtracts `trim_start_m` to reach the V the ribbon is drawn at, and doing
+    # that anywhere else means doing it twice.
+    kerb_near: int = MARKING_KERB_ABSENT
+    kerb_off: int = MARKING_KERB_ABSENT
+    restrictions: dict[str, list[tuple[float, float]]] = field(default_factory=dict)
 
     def corner(self, at_start: bool, *, on_left: bool) -> np.ndarray | None:
         """One of the two corners this ribbon presents to a junction."""
@@ -743,6 +844,8 @@ class _Edge:
             + MARKING_TRAM * int(self.tram_tracks)
             + MARKING_OFFSIDE_KERB * int(self.offside_kerb)
             + MARKING_CENTRE * self.centre_step
+            + MARKING_KERB_NEAR * self.kerb_near
+            + MARKING_KERB_OFF * self.kerb_off
         )
 
     def end_half_width_m(self, at_start: bool) -> float:
@@ -766,8 +869,8 @@ def build_region(
     graph = read_graph(out_dir / ROADGRAPH_NAME, city.id, region_id)
     style = city.roads.surface
 
-    edges = [_prepare(edge, style) for edge in graph["edges"]]
     report = SurfaceReport()
+    edges = [_prepare(edge, style, report) for edge in graph["edges"]]
     # Zipped rather than looked up: `_prepare` maps the published edges one for
     # one and in order, so the pairing is the list's own construction. The
     # *published* widths, not the ribbon's — `dedupe` has already dropped
@@ -788,6 +891,10 @@ def build_region(
     }
     _measure_level_steps(ends, edges, report)
     for edge in edges:
+        # After the trims and before the offsets: a boundary outside the drawn
+        # ribbon needs no station, and `_shape` is what turns stations into
+        # rails. See `_add_kerb_stations`.
+        report.kerb_stations += _add_kerb_stations(edge)
         _shape(edge, style)
 
     # Capped after every ribbon exists, because a cap is defined by where the
@@ -827,7 +934,7 @@ def build_region(
     return report
 
 
-def _prepare(published: dict, style: RoadSurface) -> _Edge:
+def _prepare(published: dict, style: RoadSurface, report: SurfaceReport) -> _Edge:
     """One published edge as a ribbon-in-waiting, half-widths already resolved.
 
     The widths are computed against the **published** polyline, before `dedupe`
@@ -836,6 +943,8 @@ def _prepare(published: dict, style: RoadSurface) -> _Edge:
     """
     half_widths = _half_widths(published, style)
     points = dedupe(np.column_stack([_polyline(published), half_widths]))
+    restrictions, kinds, minority_m = _kerbside(published)
+    report.kerb_minority_m += minority_m
     return _Edge(
         points=points,
         published_half_widths=half_widths,
@@ -845,7 +954,125 @@ def _prepare(published: dict, style: RoadSurface) -> _Edge:
         tram_tracks=bool(published["tram_tracks"]),
         level=published["elevation_level"],
         length_m=float(plan_lengths(points)[-1]) if len(points) > 1 else 0.0,
+        kerb_near=kinds[NEARSIDE],
+        kerb_off=kinds[OFFSIDE],
+        restrictions=restrictions,
     )
+
+
+def _add_kerb_stations(edge: _Edge) -> int:
+    """Give this edge the stations its restriction boundaries need (`P3-13`).
+
+    ⚠️ **After the trims are assigned, not in `_prepare` where the runs arrive.**
+    A boundary under a junction cap is one no marking can be drawn at, and this
+    region puts a lot of them there — restrictions start and stop at junctions,
+    which is exactly where the ribbon does not reach. Filtering by the drawn
+    extent is free and it is the difference between paying for every boundary
+    and paying for the ones that show.
+
+    The trims are this stage's own number, so this couples to nothing. ⚠️ The
+    *fade* would cut more still and must not be used: `fade_m` is shader tuning
+    (`tuning/road_markings.tres`), and an ETL that read it would rebuild the
+    city every time someone turned a dial.
+    """
+    if not edge.restrictions:
+        return 0
+    low, high = edge.trim_start_m, edge.length_m - edge.trim_end_m
+    edge.points, added = _insert_stations(
+        edge.points,
+        (
+            bound
+            for runs in edge.restrictions.values()
+            for run in runs
+            for bound in run
+            if low < bound < high
+        ),
+    )
+    return added
+
+
+def _kerbside(
+    published: dict,
+) -> tuple[dict[str, list[tuple[float, float]]], dict[str, int], float]:
+    """One edge's no-stopping runs, the kind each side carries, and what that cost.
+
+    ⚠️ **The codec can say one kind per side and the source does not promise
+    one.** `TIME_ZONE` separates a 24-hour restriction from a posted-hours one,
+    and where a side carries both, the longer wins and the shorter is drawn as
+    the wrong line. That is a real error and it is small — **188 m of Wan Chai's
+    26,065**, across 9 of 650 covered sides — so it is measured and reported
+    rather than designed around. Giving the kind its own per-run channel would
+    cost a second byte on every road vertex to fix 0.7% of one region.
+
+    A side with no run at all is `MARKING_KERB_NONE` rather than `ABSENT` when the
+    graph published a `kerbside` list, because it is then a positive statement:
+    the source was consulted about this kerb and restricts nothing on it. Only a
+    city whose graph carries no such list reports `ABSENT`.
+    """
+    runs = published.get("kerbside")
+    if runs is None:
+        return {}, {NEARSIDE: MARKING_KERB_ABSENT, OFFSIDE: MARKING_KERB_ABSENT}, 0.0
+
+    extents: dict[str, list[tuple[float, float]]] = {NEARSIDE: [], OFFSIDE: []}
+    metres: dict[str, dict[int, float]] = {NEARSIDE: {}, OFFSIDE: {}}
+    for run in runs:
+        side = str(run["side"])
+        start, stop = float(run["from_m"]), float(run["to_m"])
+        extents[side].append((start, stop))
+        kind = MARKING_KERB_KINDS[str(run["kind"])]
+        metres[side][kind] = metres[side].get(kind, 0.0) + stop - start
+
+    kinds: dict[str, int] = {}
+    minority_m = 0.0
+    for side, votes in metres.items():
+        if not votes:
+            kinds[side] = MARKING_KERB_NONE
+            continue
+        # Ties broken by the kind's own code, so a rebuild publishes the same
+        # file — the same reason `kerbside._runs` sorts before taking a maximum.
+        kinds[side] = max(sorted(votes), key=lambda kind: votes[kind])
+        minority_m += sum(votes.values()) - votes[kinds[side]]
+    return extents, kinds, minority_m
+
+
+def _insert_stations(points: np.ndarray, at: Iterable[float]) -> tuple[np.ndarray, int]:
+    """The polyline with a station added at each given distance along it.
+
+    This is what buys the exact V-range. `TEXCOORD_1` is `flat` across a strip
+    and `COLOR_0` is interpolated between stations, so an extent written on the
+    stations the graph happens to have would ramp over whole city blocks. A pair
+    of stations `_KERB_STATION_M` either side of a boundary makes the ramp half
+    a metre instead, which is closer than a driver can see the end of a line.
+
+    ⚠️ **Nothing else about the ribbon changes, and that is the property being
+    relied on.** The new stations lie *on* the existing polyline, so the shape,
+    the plan length and the mitres are all identical — and `_at` interpolates
+    every column, so each one arrives with the correct height and half-width
+    without this function knowing there is a `_WIDTH` column at all.
+
+    A boundary within half a station's spacing of a vertex the polyline already
+    has is skipped: the extent then starts at that vertex instead, which is at
+    most `_KERB_STATION_M / 2` out, and the alternative is a quad thin enough to
+    collapse in `_Builder.build`.
+    """
+    if len(points) < 2:
+        return points, 0
+    along = plan_lengths(points)
+    wanted: list[float] = []
+    for bound in at:
+        for distance in (bound - _KERB_STATION_M, bound + _KERB_STATION_M):
+            if 0.0 < distance < along[-1] and np.abs(along - distance).min() > _KERB_STATION_M / 2:
+                wanted.append(distance)
+    wanted = sorted(set(wanted))
+    if not wanted:
+        return points, 0
+
+    added = np.vstack([_at(points, along, distance) for distance in wanted])
+    merged = np.vstack([points, added])
+    # Stable, so a new station landing exactly on an old one keeps the old one
+    # first and the pair stays in the order `mitres` expects.
+    order = np.argsort(np.concatenate([along, wanted]), kind="stable")
+    return merged[order], len(wanted)
 
 
 def _half_widths(published: dict, style: RoadSurface) -> np.ndarray:
@@ -1319,6 +1546,11 @@ def _draw_edge(builder: _Builder, edge: _Edge, style: RoadSurface, lane_width_m:
     # own along and across directions, so the two kerbs — being mirror images —
     # take their pairs in opposite orders. The carriageway is right-then-left
     # for the same reason. `test_surface.py` pins every one of these facings.
+    # `COLOR_0.a` carries the restriction extent, and it lands on the right rail
+    # because that rail *is* the offside kerb — `_rgba`'s note has the rest.
+    # Published metres, so the trim comes back on: the runs were measured along
+    # the graph's polyline and this is the ribbon after both ends were cut.
+    published = along + edge.trim_start_m
     builder.strip(
         right,
         left,
@@ -1326,6 +1558,7 @@ def _draw_edge(builder: _Builder, edge: _Edge, style: RoadSurface, lane_width_m:
         along=along,
         across=(lanes, 0.0),
         marking=carriageway,
+        alpha=(_extent(edge, OFFSIDE, published), _extent(edge, NEARSIDE, published)),
     )
 
     # The riser has no plan width, so both its rails sit at the kerb line and
@@ -1351,6 +1584,25 @@ def _draw_edge(builder: _Builder, edge: _Edge, style: RoadSurface, lane_width_m:
                 marking=kerb_marking,
             )
     return True
+
+
+def _extent(edge: _Edge, side: str, published: np.ndarray) -> np.ndarray:
+    """`COLOR_0.a` for one rail: 255 where a restriction runs, 0 where none does.
+
+    Two values and no third, because the alpha says *where* and the codec says
+    *what* — a byte that also carried the kind would have to be read through a
+    threshold that the across-the-road interpolation moves.
+
+    Read at the stations `_insert_stations` put there, so an edge whose
+    restriction starts mid-block has a station 0.25 m either side of that point
+    and the ramp between them is half a metre. Without those this would still be
+    correct and would still look wrong: the value is right at every station and
+    linear in between.
+    """
+    inside = np.zeros(len(published), dtype=bool)
+    for start, stop in edge.restrictions.get(side, ()):
+        inside |= (published >= start) & (published <= stop)
+    return np.where(inside, 255, 0).astype(np.uint8)
 
 
 def _through_corners(group: list[_End], edges: list[_Edge]) -> list[list[np.ndarray]]:
@@ -1571,6 +1823,13 @@ def main(argv: list[str] | None = None) -> int:
             "  %.0f m of level-0 carriageway sits on structure and is drawn at its authored "
             "width — Q23",
             report.on_structure_m,
+        )
+    if report.kerb_stations:
+        log.info(
+            "  %d stations inserted at kerbside restriction boundaries; %.0f m of kerb drawn "
+            "as the wrong kind of line",
+            report.kerb_stations,
+            report.kerb_minority_m,
         )
     if report.inverted:
         log.info(

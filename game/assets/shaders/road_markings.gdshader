@@ -16,6 +16,8 @@
 //   UV.y   metres along the carriageway, so a dash keeps a real-world pitch.
 //   UV2.x  packed marking state, a small exact integer, constant per edge.
 //   UV2.y  the edge's **drawn length** in metres, 0.0 on a junction cap.
+//   COLOR.a  where a kerbside no-stopping restriction runs, per rail, and so per
+//          side of the road — see `restricted` below. RGB is the asphalt.
 //
 // ⚠️ **UV alone cannot be drawn on**: the kerbs run off both ends of the lane
 // range, so `fract(U)` paints a line down one, and `U = 3.0` is a kerb on a
@@ -57,6 +59,15 @@ const float MARKING_CENTRE = 2048.0;
 // mask like every other field rather than trusting that nothing is ever
 // packed above it — the one unmasked read is the one that breaks silently.
 const float MARKING_CENTRE_SPAN = 64.0;
+// What kind of kerbside line each side carries (`P3-13`). Two bits each, and
+// the same vocabulary on both: 0 nothing known, 1 known unrestricted, 2 single
+// yellow, 3 double. **Where** it applies is not here — it is `COLOR.a`, which
+// varies along the edge where this cannot.
+const float MARKING_KERB_NEAR = 131072.0;
+const float MARKING_KERB_OFF = 524288.0;
+const float MARKING_KERB_SPAN = 4.0;
+const float MARKING_KERB_SINGLE = 2.0;
+const float MARKING_KERB_DOUBLE = 3.0;
 // `direction` as the codec spells it. 0 is "absent", and a road whose direction
 // did not survive gets no centre line rather than a guessed one.
 const float DIRECTION_BOTH = 1.0;
@@ -140,6 +151,22 @@ varying flat float offside_kerb;
 // the `join` below, which is where the reason it must be published lives.
 varying flat float centre_at;
 varying flat float drawn_m;
+// What the two kerbs of this edge carry, from the codec. `flat` like everything
+// else here: a kind interpolated between two vertices lands between two states.
+varying flat float kerb_near;
+varying flat float kerb_off;
+// ⚠️ **The one varying here that must NOT be flat.** `COLOR.a` is where the ETL
+// writes how far along the edge the restriction runs — 255 on the stations
+// inside it and 0 on the stations outside — and interpolating it is the whole
+// mechanism: `surface.py` inserts a pair of stations a quarter-metre either
+// side of every boundary, so this ramps 0 to 1 over half a metre and the line
+// stops where the source says it stops. Flat here would snap every restriction
+// to whole triangles.
+//
+// It is per *rail*, which is what makes one channel carry two kerbs: the two
+// rails of the carriageway strip are the two sides of the road, so a fragment
+// on the nearside line reads ~95% of the nearside rail's value.
+varying float restricted;
 // ⚠️ **The sRGB conversion is hoisted out of the fragment shader, and that rests
 // on an ETL invariant rather than on nothing.** `surface.py`'s `_rgba`
 // broadcasts one colour over a whole strip and `fan` over a whole cap, so no
@@ -161,7 +188,14 @@ void vertex() {
 	bus_lane = floor(mod(packed / MARKING_BUS_LANE, MARKING_TRAM / MARKING_BUS_LANE));
 	offside_kerb = floor(mod(packed / MARKING_OFFSIDE_KERB, MARKING_CENTRE / MARKING_OFFSIDE_KERB));
 	centre_at = floor(mod(packed / MARKING_CENTRE, MARKING_CENTRE_SPAN));
+	kerb_near = floor(mod(packed / MARKING_KERB_NEAR, MARKING_KERB_SPAN));
+	kerb_off = floor(mod(packed / MARKING_KERB_OFF, MARKING_KERB_SPAN));
 	drawn_m = UV2.y;
+	restricted = COLOR.a;
+	// ⚠️ Only `.rgb`. The hoist above rests on `surface.py:_rgba` broadcasting
+	// one colour per strip, and that argument covers the colour and not the
+	// alpha — which now varies per vertex on purpose. Folding the two into one
+	// varying would make the extent flat and silently undo `P3-13`.
 	albedo_linear = vertex_srgb_to_linear(COLOR.rgb);
 }
 
@@ -292,12 +326,34 @@ void fragment() {
 		// one-way street with a real kerb gets its line and one half of a dual
 		// carriageway still does not. A missing line is quieter than a
 		// no-stopping line down the middle of a road.
+		//
+		// ⚠️ **Since `P3-13` this draws a *sourced* restriction, not a decorative
+		// one.** `kerb_near`/`kerb_off` say which line each kerb carries and
+		// `restricted` says how far along it runs, both from the `NSR` layer. The
+		// city used to paint a double yellow on every kerb it had, which asserted
+		// a legal restriction on 3.6x the kerb that carries one (`Q54`).
 		float yellow = 0.0;
 		if (draw_double_yellow > 0.0) {
 			float un = offside_kerb > 0.5 ? min(u, lanes - u) : u;
-			yellow = line_coverage(un, yellow_inset, yellow_width * 0.5, du);
-			yellow += line_coverage(un, yellow_inset + yellow_gap, yellow_width * 0.5, du);
-			yellow *= draw_double_yellow;
+			// Which kerb this fragment belongs to, recovered *after* the fold —
+			// the fold is what threw the information away. Past the middle of the
+			// ribbon it is the offside; below it, and on any edge whose offside is
+			// not a known kerb, it is the nearside.
+			float kind = (offside_kerb > 0.5 && u * 2.0 > lanes) ? kerb_off : kerb_near;
+			if (kind >= MARKING_KERB_SINGLE) {
+				yellow = line_coverage(un, yellow_inset, yellow_width * 0.5, du);
+				if (kind >= MARKING_KERB_DOUBLE) {
+					yellow += line_coverage(un, yellow_inset + yellow_gap, yellow_width * 0.5, du);
+				}
+				// The extent, as a ramp rather than a test. `restricted` crosses
+				// half over the 0.5 m the ETL's inserted station pair spans, so
+				// this lands the end of the line within a couple of centimetres
+				// of where the source puts it — and antialiases it, which a
+				// `> 0.5` would not. **No derivative is taken inside this
+				// branch**; `du` and `dv` were both read at the top of the
+				// carriageway block, which is what makes the branch legal.
+				yellow *= draw_double_yellow * smoothstep(0.4, 0.6, restricted);
+			}
 		}
 
 		white = clamp(white, 0.0, 1.0) * away;

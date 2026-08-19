@@ -25,11 +25,17 @@ from pipeline.gltf import read_glb
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA, plan_lengths
 from pipeline.surface import (
     MARKING_CODE_MAX,
+    MARKING_KERB_ABSENT,
+    MARKING_KERB_DOUBLE,
+    MARKING_KERB_NONE,
+    MARKING_KERB_SINGLE,
     SURFACE_MANIFEST_NAME,
     SURFACE_MATERIAL,
     SURFACE_MESH_NAME,
     SURFACE_NAME,
     _half_widths,
+    _insert_stations,
+    _kerbside,
     _on_structure_length_m,
     boundary,
     build_region,
@@ -290,6 +296,10 @@ def _edge(edge_id: int, from_node: int, to_node: int, polyline, **overrides) -> 
         "tram_tracks": False,
         "elevation_level": 0,
         "road_name": {"en": "MAIN STREET", "zh": "大街"},
+        # Schema 4 publishes the key on every edge; empty is a region whose
+        # source restricts nothing here, which is what most of these fixtures
+        # want to say. `kerbville` is the one that overrides it.
+        "kerbside": [],
     }
     return {**edge, **overrides}
 
@@ -441,6 +451,38 @@ def markedville(tmp_path, testville_config):
 
 
 @pytest.fixture
+def kerbville(tmp_path, testville_config):
+    """One straight street with a no-stopping restriction over part of it.
+
+    400 m, no node shared with anything, so there is no trim and no cap and V is
+    the edge's own metres. The nearside run is a double yellow over the middle
+    half; the offside carries a shorter single, so the two sides differ in both
+    kind and extent — a payload that wrote one side's answer to both would pass
+    on a fixture where they agreed.
+    """
+    _write_graph(
+        tmp_path,
+        [
+            {"id": 0, "pos": [100.0, 0.0, 300.0], "kind": "endpoint"},
+            {"id": 1, "pos": [500.0, 0.0, 300.0], "kind": "endpoint"},
+        ],
+        [
+            _edge(
+                0,
+                0,
+                1,
+                [[100.0, 0.0, 300.0], [500.0, 0.0, 300.0]],
+                kerbside=[
+                    {"side": "near", "from_m": 100.0, "to_m": 300.0, "kind": "double"},
+                    {"side": "off", "from_m": 150.0, "to_m": 200.0, "kind": "single"},
+                ],
+            )
+        ],
+    )
+    return testville_config, tmp_path
+
+
+@pytest.fixture
 def dualville(tmp_path, testville_config):
     """One street as an opposed one-way pair, 4 m between the centrelines.
 
@@ -515,6 +557,8 @@ def _decode(code: float) -> dict[str, int]:
         "tram_tracks": packed // 512 % 2,
         "offside_kerb": packed // 1024 % 2,
         "centre": packed // 2048 % 64,
+        "kerb_near": packed // 131072 % 4,
+        "kerb_off": packed // 524288 % 4,
     }
 
 
@@ -887,6 +931,11 @@ class TestMarkingPayload:
             "tram_tracks": 0,
             "offside_kerb": 1,
             "centre": 0,
+            # Schema 4 publishes the key and this fixture leaves it empty, which
+            # is "the source was consulted and restricts nothing here" — not the
+            # same as a city with no such layer, which reports 0.
+            "kerb_near": MARKING_KERB_NONE,
+            "kerb_off": MARKING_KERB_NONE,
         }
 
     def test_a_kerb_says_it_is_a_kerb(self, testville, tmp_path) -> None:
@@ -990,6 +1039,11 @@ class TestMarkingPayload:
             "tram_tracks": 1,
             "offside_kerb": 1,
             "centre": 0,
+            # Schema 4 publishes the key and this fixture leaves it empty, which
+            # is "the source was consulted and restricts nothing here" — not the
+            # same as a city with no such layer, which reports 0.
+            "kerb_near": MARKING_KERB_NONE,
+            "kerb_off": MARKING_KERB_NONE,
         }
 
     def test_every_code_is_a_small_exact_integer(self, testville, tmp_path) -> None:
@@ -1122,6 +1176,157 @@ class TestMarkingPayload:
         length, _ = struct.unpack_from("<II", raw, 12)
         document = json.loads(raw[20 : 20 + length])
         assert [material["name"] for material in document["materials"]] == [SURFACE_MATERIAL]
+
+
+class TestKerbside:
+    """`P3-13`: where the kerbside yellow applies, and what kind it is (`Q54`).
+
+    ⚠️ **The rail these land on is the whole thing.** `COLOR_0.a` is written per
+    rail, so the nearside extent and the offside extent are the same channel on
+    opposite sides of one strip — and swapping them mirrors every yellow line in
+    the city while rendering as a perfectly ordinary road. `kerbville` is built
+    with the two sides deliberately unequal so that a payload writing one
+    answer to both cannot pass.
+    """
+
+    def test_the_extent_lands_on_the_rail_of_its_own_side(self, kerbville, tmp_path) -> None:
+        city, root = kerbville
+        build_region(city, "middle", out_root=root / "out")
+        mesh = _mesh(root)
+
+        road = _carriageway(mesh)
+        near = road & (mesh.uvs[:, 0] == 0.0)
+        off = road & (mesh.uvs[:, 0] == 2.0)
+        along = mesh.uvs[:, 1]
+        alpha = mesh.colours[:, 3]
+
+        def at(rail: np.ndarray, distance: float) -> set[int]:
+            """The alpha carried by that rail's station a given V along.
+
+            Asked station by station rather than over a V window, because the
+            stations *are* the answer: this edge has two of its own and eight
+            inserted, and between two boundaries there is nothing in between to
+            sample. That is the whole design — the value is exact where it is
+            written and linear over the half metre between a boundary's pair.
+            """
+            return set(alpha[rail & np.isclose(along, distance)].tolist())
+
+        # The edge shares no node, so nothing is trimmed and V is the published
+        # distance along it exactly. Each boundary is asked from both sides.
+        assert at(near, 99.75) == {0} and at(near, 100.25) == {255}
+        assert at(near, 299.75) == {255} and at(near, 300.25) == {0}
+        assert at(off, 149.75) == {0} and at(off, 150.25) == {255}
+        assert at(off, 199.75) == {255} and at(off, 200.25) == {0}
+        # And the ends of the edge, where neither side is restricted.
+        assert at(near, 0.0) == at(off, 0.0) == {0}
+
+    def test_the_codec_says_the_kind_each_side_carries(self, kerbville, tmp_path) -> None:
+        city, root = kerbville
+        build_region(city, "middle", out_root=root / "out")
+        mesh = _mesh(root)
+
+        codes = {
+            (fields["kerb_near"], fields["kerb_off"])
+            for fields in (_decode(code) for code in mesh.uv2[:, 0])
+            if fields["surface_class"] == 0
+        }
+        assert codes == {(MARKING_KERB_DOUBLE, MARKING_KERB_SINGLE)}
+
+    def test_a_kerb_the_source_does_not_restrict_says_none_not_absent(
+        self, markedville, tmp_path
+    ) -> None:
+        """The distinction the shader ignores and a later consumer will not.
+        `ABSENT` is a city with no such layer; `NONE` is a kerb the source was
+        consulted about and leaves alone, which is where a car may pull over."""
+        city, root = markedville
+        build_region(city, "middle", out_root=root / "out")
+        mesh = _mesh(root)
+
+        for code in mesh.uv2[:, 0]:
+            fields = _decode(code)
+            if fields["surface_class"] != 0:
+                continue
+            assert fields["kerb_near"] == MARKING_KERB_NONE
+            assert fields["kerb_off"] == MARKING_KERB_NONE
+
+    def test_a_graph_that_publishes_no_runs_at_all_says_absent(self, tmp_path, testville_config):
+        """A city whose sources carry no no-stopping layer draws no kerbside
+        line rather than the invented one `P3-12` shipped."""
+        edge = _edge(0, 0, 1, [[100.0, 0.0, 300.0], [500.0, 0.0, 300.0]])
+        del edge["kerbside"]
+        _write_graph(
+            tmp_path,
+            [
+                {"id": 0, "pos": [100.0, 0.0, 300.0], "kind": "endpoint"},
+                {"id": 1, "pos": [500.0, 0.0, 300.0], "kind": "endpoint"},
+            ],
+            [edge],
+        )
+        build_region(testville_config, "middle", out_root=tmp_path / "out")
+        mesh = _mesh(tmp_path)
+
+        for code in mesh.uv2[:, 0]:
+            fields = _decode(code)
+            if fields["surface_class"] == 0:
+                assert fields["kerb_near"] == fields["kerb_off"] == MARKING_KERB_ABSENT
+
+    def test_a_boundary_gets_a_station_either_side_of_it(self, kerbville, tmp_path) -> None:
+        """What the exact V-range costs, and why. Without the pair the alpha
+        would ramp from one graph vertex to the next — 400 m here."""
+        city, root = kerbville
+        report = build_region(city, "middle", out_root=root / "out")
+        mesh = _mesh(root)
+
+        along = sorted(set(np.round(mesh.uvs[_carriageway(mesh), 1], 3).tolist()))
+        # Four boundaries fall inside the drawn ribbon — both ends of both runs
+        # — and each takes a pair.
+        assert report.kerb_stations == 8
+        for ends_at in (100.0, 150.0, 200.0, 300.0):
+            assert pytest.approx(ends_at - 0.25, abs=1e-3) in along
+            assert pytest.approx(ends_at + 0.25, abs=1e-3) in along
+
+    def test_the_longer_kind_wins_a_side_and_the_shorter_is_reported(self) -> None:
+        """The codec says one kind per side and the source does not promise one.
+        Reported rather than designed around — 183 m of Wan Chai's 26,065."""
+        published = {
+            "kerbside": [
+                {"side": "near", "from_m": 0.0, "to_m": 90.0, "kind": "double"},
+                {"side": "near", "from_m": 90.0, "to_m": 100.0, "kind": "single"},
+            ]
+        }
+        extents, kinds, minority_m = _kerbside(published)
+
+        assert kinds["near"] == MARKING_KERB_DOUBLE
+        assert kinds["off"] == MARKING_KERB_NONE
+        assert minority_m == pytest.approx(10.0)
+        assert extents["near"] == [(0.0, 90.0), (90.0, 100.0)]
+
+    def test_an_inserted_station_carries_the_interpolated_half_width(self) -> None:
+        """`_at` interpolates every column, so a station inserted where the
+        carriageway is tapering arrives at the width it should be. Asserted
+        because nothing about the geometry would look wrong if it did not."""
+        points = np.array([[0.0, 0.0, 0.0, 2.0], [100.0, 0.0, 0.0, 4.0]])
+        merged, added = _insert_stations(points, [50.0])
+
+        assert added == 2
+        assert merged[1][0] == pytest.approx(49.75)
+        assert merged[1][3] == pytest.approx(2.995)
+        assert merged[2][3] == pytest.approx(3.005)
+
+    def test_a_boundary_on_an_existing_station_inserts_nothing(self) -> None:
+        """The alternative is a quad thin enough to collapse in `build`, for an
+        extent that is already right to within a tenth of a metre."""
+        points = np.array([[0.0, 0.0, 0.0, 2.0], [50.0, 0.0, 0.0, 2.0], [100.0, 0.0, 0.0, 2.0]])
+        # The boundary's leading station would land 0.05 m from the vertex at
+        # 50 m, so only the trailing one is inserted.
+        _, added = _insert_stations(points, [50.2])
+        assert added == 1
+
+    def test_the_widest_legal_code_is_exact_in_float32(self) -> None:
+        """The codec's own promise, and what `floor(x + 0.5)` in the shader
+        rests on. Two new fields since `P3-12` put the ceiling at 2,097,151."""
+        assert MARKING_CODE_MAX == 2_097_151
+        assert float(np.float32(MARKING_CODE_MAX)) == MARKING_CODE_MAX
 
 
 def _covered(points: np.ndarray, triangles: np.ndarray) -> np.ndarray:

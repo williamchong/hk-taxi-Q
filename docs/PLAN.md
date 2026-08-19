@@ -250,7 +250,7 @@ trade.
 | `P3-6` | Hero buildings (5) — authored or mesh-sourced (`source_paint`), placed via `landmarks.json` | Source geometry excluded; no z-fighting |
 | `P3-7a` | **Survey-driven façade variation** — the openings re-judged: punched windows are glass (`Q44`), panes vary per building (`Q45`), refusal drawn quietly (`W3`). ✅ **Closed as shipped at those three**; `Q42`'s riders are gated, not delivered | Met by what landed: everything dark behind `survey_apply`, parked look byte-identical at every step, each shipped step graded against a pre-fixed bar. ⚠️ **The remainder is gated on `P3-9a` reopening `Q26`** — `C` ships `survey_apply = 0.0`, so a rider built now renders nothing and cannot influence the round that would price it (`DECISIONS.md` `P3-7a`) |
 | `P3-12` | **Road markings** — lane dividers, centre lines, kerbside double yellows and a bus-lane edge, drawn procedurally over the ribbon's lane coordinate, **and the `TEXCOORD_1` payload the shader reads**. Arrows, road text and box junctions deliberately out of scope | No texture ships and `mesh_contract.gd` still passes; one primitive, one material, no triangle moved; markings survive the playability widening because U is a lane coordinate; the junction fade is sized against the **measured** cap overlap rather than by eye; `schema_version` bumped on both sides in one commit |
-| `P3-13` | **Kerbside no-stopping from `NSR`** — the one shipped marking that is invented, sourced. A linear-referencing stage joins the layer to the graph as `(edge, side, V-range, kind)`; the ribbon carries the extent per rail and the codec carries the kind. Parking bays, box junctions and the `ONSTREETPARK` complement deliberately out of scope | Painted length matches the restricted length to within the join's own resolution — graded by `tools/kerbside_error.py`, against **257%** gross error today; no vehicle class is asserted that the source does not name; the side convention is asserted on a fixture rather than reasoned about; `roadgraph.json` and the shader move in one commit each per hard rule 5 |
+| `P3-13` | ✅ **Kerbside no-stopping from `NSR`** — done 2026-08-19 — the one shipped marking that is invented, sourced. A linear-referencing stage joins the layer to the graph as `(edge, side, V-range, kind)`; the ribbon carries the extent per rail and the codec carries the kind. Parking bays, box junctions and the `ONSTREETPARK` complement deliberately out of scope | Painted length matches the restricted length to within the join's own resolution — graded by `tools/kerbside_error.py`. ✅ **4%**, from 240%; no vehicle class is asserted that the source does not name; the side convention is asserted against `surface.mitres` itself rather than reasoned about; `roadgraph.json` and the shader moved in one commit each per hard rule 5 |
 
 - **Deps:** `P1-2`, `P1-7`. **No longer depends on `B1`** — that dependency was ordering, not
   substance. Nothing in the taxi, the ground, the shader or the hero buildings reads a fare.
@@ -518,16 +518,18 @@ trade.
   says the line really does run past them. The measure double-counts overlapping `NSR` parts (one
   stand read 110%), so the build dedupes runs and re-measures; but "the game paints no-stopping over
   its own 14 taxi stands" is looking like an overstatement, and the record should say so.
-- ✅ **Amended by the build (2026-08-19), and every superseded number is here rather than edited into
-  the paragraphs above.** The join shipped first, so the estimates it was planned from now have
-  measurements beside them: **1,474 run boundaries**, not 1,636 — the estimate was taken on unclipped
-  source parts rather than on the graph's own edges. **26,065 m published over 650 edge sides**, not
-  the 33,074 m of source, because 1,736 m of it is overlapping features and the rest leaves the
-  region. Gross over-paint is **257%**, not 297%, measured off the shipped mesh rather than off a kerb
-  total. **9 of 14 taxi stands**, not ~7 — `Q54`'s claim was an *under*statement once the overlaps
-  were deduped. And one obstacle the plan did not see: **2,327 m of restriction lands on a kerb the
-  1.6x widening paved over**, where `MARKING_OFFSIDE_KERB` correctly says there is none, so no shader
-  change reaches it and the reachable total is **17,308 m**.
+- ✅ **Built 2026-08-19, and every superseded number is here rather than edited into the paragraphs
+  above.** **1,474 run boundaries**, not 1,636 — the estimate was taken on unclipped source parts
+  rather than on the graph's own edges — and after filtering to the drawn ribbon only **1,179
+  stations** were inserted. **26,065 m published over 650 edge sides**, not the 33,074 m of source,
+  because 1,736 m of it is overlapping features and the rest leaves the region. Gross over-paint was
+  **240%**, not 297%, measured off the shipped mesh rather than off a kerb total, and is now **4%**.
+  The vertex cost is **+26.4%**, not +19% — a station lands on the carriageway strip *and* on every
+  kerb strip beside it — which is **+477 KiB of PCK, +1.20%**. **9 of 14 taxi stands**, not ~7:
+  `Q54`'s claim was an *under*statement once the overlaps were deduped. And one obstacle the plan did
+  not see: **2,909 m of restriction lands on a kerb the 1.6x widening paved over**, where
+  `MARKING_OFFSIDE_KERB` correctly says there is none, so no shader change reaches it and the
+  reachable total is **16,726 m**. Full record in `DECISIONS.md` `Q54`.
 - **Review:** a kerb known to be unrestricted and one known to be double, before and after |
   **Does the city stop asserting a restriction it cannot support?**
 - **Deps:** `P3-12` (the codec and the shader it extends). Independent of everything else in `B2`.
