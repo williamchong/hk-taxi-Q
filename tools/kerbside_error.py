@@ -56,13 +56,15 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "etl"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from carriageway_occupancy import road_names  # noqa: E402
 from pipeline import kerbside  # noqa: E402
 from pipeline.config import load_city  # noqa: E402
 from pipeline.documents import read_document  # noqa: E402
 from pipeline.fares import FARES_NAME, FARES_SCHEMA  # noqa: E402
-from pipeline.gltf import read_glb  # noqa: E402
-from pipeline.roads import ROADGRAPH_NAME, read_graph  # noqa: E402
+from pipeline.gltf import MeshData, read_glb  # noqa: E402
+from pipeline.roads import ROADGRAPH_NAME, plan_lengths, read_graph  # noqa: E402
 from pipeline.surface import (  # noqa: E402
     MARKING_CENTRE,
     MARKING_CLASS_CARRIAGEWAY,
@@ -104,8 +106,13 @@ class Sides:
     def add(self, side: str, metres: float) -> None:
         if side == kerbside.NEARSIDE:
             self.near += metres
-        else:
+        elif side == kerbside.OFFSIDE:
             self.off += metres
+        else:
+            # An `else` that absorbed this would hide the one failure the split
+            # exists to find: a third spelling is a side convention that has
+            # drifted, and it would land silently in the offside total.
+            raise ValueError(f"unknown side {side!r}, expected one of {', '.join(kerbside.SIDES)}")
 
     @property
     def total(self) -> float:
@@ -113,13 +120,52 @@ class Sides:
 
 
 @dataclass
+class _SideRow:
+    """One `(edge, side)`'s three lengths, and the errors they imply.
+
+    The error arithmetic lives here rather than in each caller because
+    over-paint and missed paint are asymmetric — `drawable` bounds what could
+    have been painted, so a restriction beyond it is unreachable rather than
+    missed — and that distinction is the whole point of keeping three numbers
+    instead of two.
+    """
+
+    painted: float = 0.0
+    restricted: float = 0.0
+    drawable: float = 0.0
+
+    @property
+    def reachable(self) -> float:
+        return min(self.restricted, self.drawable)
+
+    @property
+    def unreachable(self) -> float:
+        return max(0.0, self.restricted - self.drawable)
+
+    @property
+    def unsourced(self) -> float:
+        return max(0.0, self.drawable - self.restricted)
+
+    @property
+    def over(self) -> float:
+        return max(0.0, self.painted - self.restricted)
+
+    @property
+    def missed(self) -> float:
+        return max(0.0, self.reachable - self.painted)
+
+    @property
+    def counted(self) -> float:
+        return self.over + self.missed
+
+
+@dataclass
 class Report:
     painted: Sides = field(default_factory=Sides)
-    restricted: Sides = field(default_factory=Sides)
-    # Per `(edge, side)`: painted, restricted, drawable. Kept per pair rather
-    # than summarised, because a gross ratio near 1 can still be every line in
-    # the wrong place — and this table is the only thing that would say so.
-    by_side: dict[tuple[int, str], list[float]] = field(default_factory=dict)
+    # Per `(edge, side)`. Kept per pair rather than summarised, because a gross
+    # ratio near 1 can still be every line in the wrong place — and this table
+    # is the only thing that would say so.
+    by_side: dict[tuple[int, str], _SideRow] = field(default_factory=dict)
     # Metres of restriction `roadgraph.json` publishes, before any of it is
     # clipped to what the ribbon draws. The gap to `restricted` is junction
     # trims and the marking fade, and it is a floor nothing here can lower.
@@ -130,11 +176,30 @@ class Report:
     stands: int = 0
     stands_restricted: int = 0
 
-    def add(self, edge: int, side: str, painted: float, restricted: float, drawable: float) -> None:
-        row = self.by_side.setdefault((edge, side), [0.0, 0.0, 0.0])
-        row[0] += painted
-        row[1] += restricted
-        row[2] += drawable
+    def add_restricted(self, edge: int, side: str, metres: float) -> None:
+        self._row(edge, side).restricted += metres
+
+    def add_painted(self, edge: int, side: str, metres: float, drawable: float) -> None:
+        row = self._row(edge, side)
+        row.painted += metres
+        row.drawable += drawable
+
+    def _row(self, edge: int, side: str) -> _SideRow:
+        return self.by_side.setdefault((edge, side), _SideRow())
+
+    @property
+    def restricted(self) -> Sides:
+        """Restriction per side, summed back out of the per-pair table.
+
+        Derived rather than accumulated alongside it: the two were kept in step
+        by hand, and a total that can disagree with the table under it is a
+        total nobody can act on. `painted` cannot be derived the same way —
+        a chord that no edge claims never reaches `by_side` at all.
+        """
+        sides = Sides()
+        for (_, side), row in self.by_side.items():
+            sides.add(side, row.restricted)
+        return sides
 
     @property
     def unreachable_m(self) -> float:
@@ -147,11 +212,11 @@ class Report:
         reported on its own line rather than folded into missed paint, where it
         would put a floor under the error that correct work could never clear.
         """
-        return sum(max(0.0, row[1] - row[2]) for row in self.by_side.values())
+        return sum(row.unreachable for row in self.by_side.values())
 
     @property
     def reachable_m(self) -> float:
-        return sum(min(row[1], row[2]) for row in self.by_side.values())
+        return sum(row.reachable for row in self.by_side.values())
 
     @property
     def unsourced_m(self) -> float:
@@ -163,15 +228,15 @@ class Report:
         the before and the after come off one measurement of one mesh rather
         than out of two runs someone has to trust were comparable.
         """
-        return sum(max(0.0, row[2] - row[1]) for row in self.by_side.values())
+        return sum(row.unsourced for row in self.by_side.values())
 
     @property
     def over_m(self) -> float:
-        return sum(max(0.0, row[0] - row[1]) for row in self.by_side.values())
+        return sum(row.over for row in self.by_side.values())
 
     @property
     def missed_m(self) -> float:
-        return sum(max(0.0, min(row[1], row[2]) - row[0]) for row in self.by_side.values())
+        return sum(row.missed for row in self.by_side.values())
 
     @property
     def gross_error(self) -> float:
@@ -200,7 +265,7 @@ def fade(v: np.ndarray, drawn_m: np.ndarray, fade_m: float, softness_m: float) -
 
 
 def painted_lines(
-    mesh, tuning: dict[str, float]
+    mesh: MeshData, tuning: dict[str, float]
 ) -> list[tuple[np.ndarray, str, float, float, float]]:
     """Where the shader draws a line, as `(midpoint, side, painted, drawable, drawn_m)`.
 
@@ -236,7 +301,7 @@ def painted_lines(
 
     inset = tuning["yellow_inset"]
     found: list[tuple[np.ndarray, str, float, float, float]] = []
-    for side, at in (
+    for side, target_u in (
         (kerbside.NEARSIDE, lambda row: np.full(3, inset)),
         (kerbside.OFFSIDE, lambda row: lanes[row] - inset),
     ):
@@ -246,21 +311,27 @@ def painted_lines(
                 # nearside only where the ETL says there is one, so nothing is
                 # drawn here and nothing should be counted.
                 continue
-            chord = _chord(mesh, row, at(row), alpha, tuning)
+            chord = _chord(mesh, row, target_u(row), alpha, tuning)
             if chord is not None:
                 found.append((chord[0], side, chord[1], chord[2], chord[3]))
     return found
 
 
-def _chord(mesh, row, at: np.ndarray, alpha: np.ndarray, tuning: dict[str, float]):
-    """One triangle's crossing of the line at `at`, or `None` if it misses.
+def _chord(
+    mesh: MeshData,
+    row: np.ndarray,
+    target_u: np.ndarray,
+    alpha: np.ndarray,
+    tuning: dict[str, float],
+) -> tuple[np.ndarray, float, float, float] | None:
+    """One triangle's crossing of the line at `target_u`, or `None` if it misses.
 
     Returns the crossing's 3D midpoint, the metres of paint on it, the metres of
     kerb line that could have been painted there, and the drawn length of the
     edge it belongs to — which is how the caller tells that edge from its
     neighbours.
     """
-    u = mesh.uvs[row, 0] - at
+    u = mesh.uvs[row, 0] - target_u
     v = mesh.uvs[row, 1]
     hits: list[tuple[float, float, np.ndarray]] = []
     for a, b in ((0, 1), (1, 2), (2, 0)):
@@ -291,9 +362,9 @@ def _chord(mesh, row, at: np.ndarray, alpha: np.ndarray, tuning: dict[str, float
     # `restricted_metres`, so both sides of the comparison resolve the 3 m ramp
     # the same way.
     steps = max(2, int(length / _INTEGRATION_M))
-    at = (np.arange(steps) + 0.5) / steps
+    sample_t = (np.arange(steps) + 0.5) / steps
     weight = fade(
-        v0 + at * (v1 - v0),
+        v0 + sample_t * (v1 - v0),
         np.full(steps, drawn_m),
         tuning["fade_m"],
         tuning["fade_softness_m"],
@@ -303,7 +374,7 @@ def _chord(mesh, row, at: np.ndarray, alpha: np.ndarray, tuning: dict[str, float
     # half-metre ramp the ETL builds, both are symmetric about 0.5 and integrate
     # to the same length, and everywhere else the value is already 0 or 1. What
     # it buys is one less shader constant this tool has to be kept in step with.
-    extent = alpha0 + at * (alpha1 - alpha0)
+    extent = alpha0 + sample_t * (alpha1 - alpha0)
     drawable = length * float(weight.mean())
     painted = length * float((weight * extent).mean()) * tuning["draw_double_yellow"]
     return (point0 + point1) * 0.5, painted, drawable, drawn_m
@@ -354,7 +425,7 @@ class _Attributor:
             if len(points) < 2:
                 continue
             trim = trims.get(edge["id"], (0.0, 0.0))
-            length = float(np.hypot(*np.diff(points[:, [0, 2]], axis=0).T).sum())
+            length = float(plan_lengths(points)[-1])
             starts.append(points[:-1])
             ends.append(points[1:])
             heights.append(0.5 * (points[:-1, 1] + points[1:, 1]))
@@ -414,7 +485,7 @@ def restricted_metres(
     amount of correct work could reach.
     """
     points = np.asarray(edge["polyline"], dtype=np.float64)
-    length = float(np.hypot(*np.diff(points[:, [0, 2]], axis=0).T).sum())
+    length = float(plan_lengths(points)[-1])
     drawn_m = length - trims[0] - trims[1]
     totals = {kerbside.NEARSIDE: 0.0, kerbside.OFFSIDE: 0.0}
     if drawn_m <= 0.0:
@@ -459,7 +530,7 @@ def stands_in_restriction(fares: dict, edges: dict[int, dict]) -> tuple[int, int
         if edge is None:
             continue
         points = np.asarray(edge["polyline"], dtype=np.float64)
-        length = float(np.hypot(*np.diff(points[:, [0, 2]], axis=0).T).sum())
+        length = float(plan_lengths(points)[-1])
         at = node["edge_t"] * length
         if any(run["from_m"] <= at <= run["to_m"] for run in edge["kerbside"]):
             covered += 1
@@ -521,8 +592,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     for edge_id, edge in edges.items():
         for side, metres in restricted_metres(edge, trims[edge_id], tuning).items():
-            report.restricted.add(side, metres)
-            report.add(edge_id, side, 0.0, metres, 0.0)
+            report.add_restricted(edge_id, side, metres)
 
     attribute = _Attributor(graph["edges"], trims)
     for mesh in read_glb(out_dir / surface["mesh"]):
@@ -530,14 +600,20 @@ def main(argv: list[str] | None = None) -> int:
             report.painted.add(side, metres)
             edge_id = attribute.edge_of(point, drawn_m)
             if edge_id is not None:
-                report.add(edge_id, side, metres, 0.0, drawable)
+                report.add_painted(edge_id, side, metres, drawable)
 
     report.stands, report.stands_restricted, names = stands_in_restriction(fares, edges)
-    _log(report, args.worst, names, tuning)
+    _log(report, args.worst, names, road_names(graph), tuning)
     return 0
 
 
-def _log(report: Report, worst: int, names: list[str], tuning: dict[str, float]) -> None:
+def _log(
+    report: Report,
+    worst: int,
+    names: list[str],
+    streets: dict[int, str],
+    tuning: dict[str, float],
+) -> None:
     log.info("kerbside yellow, as drawn against as published")
     log.info(
         "  tuning: yellow_inset %.3f lanes, fade %.1f m over %.1f m, draw_double_yellow %.2f",
@@ -597,31 +673,30 @@ def _log(report: Report, worst: int, names: list[str], tuning: dict[str, float])
     # Ranked by the error this actually counts, not by `painted - restricted`:
     # the largest raw gaps are all restrictions on a kerb the city does not
     # draw, which have their own line above and are nobody's fault to fix.
-    def counted(row: list[float]) -> float:
-        return max(0.0, row[0] - row[1]) + max(0.0, min(row[1], row[2]) - row[0])
-
-    ranked = sorted(report.by_side.items(), key=lambda item: -counted(item[1]))[:worst]
-    ranked = [item for item in ranked if counted(item[1]) > 0.5]
+    ranked = sorted(report.by_side.items(), key=lambda item: -item[1].counted)[:worst]
+    ranked = [item for item in ranked if item[1].counted > 0.5]
     if ranked:
         log.info("  worst edge sides by counted error:")
         log.info(
-            "    %-8s %-5s %10s %10s %10s %10s",
+            "    %-8s %-5s %10s %10s %10s %10s  %s",
             "edge",
             "side",
             "painted",
             "restr.",
             "drawable",
             "error",
+            "street",
         )
-        for (edge_id, side), (painted, restricted, drawable) in ranked:
+        for (edge_id, side), row in ranked:
             log.info(
-                "    %-8d %-5s %10.1f %10.1f %10.1f %+10.1f",
+                "    %-8d %-5s %10.1f %10.1f %10.1f %+10.1f  %s",
                 edge_id,
                 side,
-                painted,
-                restricted,
-                drawable,
-                painted - restricted,
+                row.painted,
+                row.restricted,
+                row.drawable,
+                row.painted - row.restricted,
+                streets.get(edge_id, "unnamed"),
             )
 
 

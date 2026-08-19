@@ -2033,12 +2033,9 @@ def _kerbside(body: Any, where: str) -> KerbsideRestrictions | None:
     if not kinds:
         raise ValueError(f"{where}:kinds is empty")
 
-    lengths: dict[str, float] = {}
-    for key in ("sample_m", "bridge_gap_m", "min_run_m", "max_offset_m"):
-        value = float(_require(body, key, where))
-        if value <= 0.0:
-            raise ValueError(f"{where}:{key} must be positive, got {value}")
-        lengths[key] = value
+    lengths = _measures(
+        body, where, ("sample_m", "bridge_gap_m", "min_run_m", "max_offset_m"), positive=True
+    )
     if lengths["min_run_m"] < lengths["sample_m"]:
         # A minimum shorter than the pitch cannot reject anything: the shortest
         # run the sampler can produce is one cell.

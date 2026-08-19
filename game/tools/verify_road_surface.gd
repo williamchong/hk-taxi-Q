@@ -34,6 +34,7 @@ const MARKINGS_MATERIAL: String = "res://tuning/road_markings.tres"
 const MARKING_LANES_FIELD: float = 4.0
 const MARKING_DIRECTION_FIELD: float = 64.0
 const MARKING_BUS_FIELD: float = 256.0
+const MARKING_CLASS_CARRIAGEWAY: float = 0.0
 const MARKING_CLASS_CAP: float = 2.0
 const MARKING_DIRECTION_MAX: float = 2.0
 const MARKING_CENTRE_FIELD: float = 2048.0
@@ -142,7 +143,9 @@ func _check_kerb_extent(mesh: Mesh, surface: int, where: String) -> PackedString
 	var clear: int = 0
 	for index: int in colours.size():
 		var alpha: float = colours[index].a
-		var carriageway: bool = fmod(uv2s[index].x, MARKING_LANES_FIELD) == 0.0
+		var carriageway: bool = (
+			fmod(uv2s[index].x, MARKING_LANES_FIELD) == MARKING_CLASS_CARRIAGEWAY
+		)
 		if alpha > 0.999:
 			restricted += 1 if carriageway else 0
 		elif alpha < 0.001:

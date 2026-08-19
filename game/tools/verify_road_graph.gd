@@ -18,6 +18,15 @@ extends SceneTree
 
 const GeneratedRoadGraph = preload("res://scripts/city/generated_road_graph.gd")
 
+## The `kerbside` vocabulary schema 4 publishes. Spelled out rather than
+## compared as literals because `P3-3`'s traffic and `P3-9a`'s fares are the
+## consumers to come, and four bare strings in a checker is how the reader and
+## the writer end up disagreeing about one of them.
+const KERB_NEAR: StringName = &"near"
+const KERB_OFF: StringName = &"off"
+const KERB_SINGLE: StringName = &"single"
+const KERB_DOUBLE: StringName = &"double"
+
 ## Below this and the index is not doing its job — Wan Chai has 737 level-0
 ## edges today. A floor rather than an equality: the region can grow.
 const MIN_DRIVABLE_EDGES: int = 100
@@ -215,16 +224,20 @@ func _check_kerbside(edges: Array) -> PackedStringArray:
 	var last: Dictionary = {}
 
 	for edge: Dictionary in edges:
+		var published: Array = edge.get("kerbside", [])
+		if published.is_empty():
+			continue
 		var id: int = int(edge.get("id", -1))
 		var points: Array = edge.get("polyline", [])
 		var length: float = 0.0
 		for index: int in range(1, points.size()):
-			var step := Vector3(points[index][0], 0.0, points[index][2])
-			step -= Vector3(points[index - 1][0], 0.0, points[index - 1][2])
-			length += step.length()
+			length += RoadGraph.plan_distance(
+				Vector3(points[index - 1][0], points[index - 1][1], points[index - 1][2]),
+				Vector3(points[index][0], points[index][1], points[index][2])
+			)
 
 		last.clear()
-		for run: Dictionary in edge.get("kerbside", []):
+		for run: Dictionary in published:
 			runs += 1
 			var side: String = str(run.get("side", ""))
 			var kind: String = str(run.get("kind", ""))
@@ -232,9 +245,9 @@ func _check_kerbside(edges: Array) -> PackedStringArray:
 			var to_m: float = float(run.get("to_m", -1.0))
 			metres += to_m - from_m
 
-			if side != "near" and side != "off":
+			if side != KERB_NEAR and side != KERB_OFF:
 				problems.append("edge %d has a kerbside run on side '%s'" % [id, side])
-			if kind != "single" and kind != "double":
+			if kind != KERB_SINGLE and kind != KERB_DOUBLE:
 				problems.append("edge %d has a kerbside run of kind '%s'" % [id, kind])
 			if from_m < 0.0 or to_m <= from_m or to_m > length + 1.0:
 				problems.append(

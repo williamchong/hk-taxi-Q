@@ -1189,7 +1189,7 @@ class TestKerbside:
     answer to both cannot pass.
     """
 
-    def test_the_extent_lands_on_the_rail_of_its_own_side(self, kerbville, tmp_path) -> None:
+    def test_the_extent_lands_on_the_rail_of_its_own_side(self, kerbville) -> None:
         city, root = kerbville
         build_region(city, "middle", out_root=root / "out")
         mesh = _mesh(root)
@@ -1220,7 +1220,7 @@ class TestKerbside:
         # And the ends of the edge, where neither side is restricted.
         assert at(near, 0.0) == at(off, 0.0) == {0}
 
-    def test_the_codec_says_the_kind_each_side_carries(self, kerbville, tmp_path) -> None:
+    def test_the_codec_says_the_kind_each_side_carries(self, kerbville) -> None:
         city, root = kerbville
         build_region(city, "middle", out_root=root / "out")
         mesh = _mesh(root)
@@ -1232,9 +1232,7 @@ class TestKerbside:
         }
         assert codes == {(MARKING_KERB_DOUBLE, MARKING_KERB_SINGLE)}
 
-    def test_a_kerb_the_source_does_not_restrict_says_none_not_absent(
-        self, markedville, tmp_path
-    ) -> None:
+    def test_a_kerb_the_source_does_not_restrict_says_none_not_absent(self, markedville) -> None:
         """The distinction the shader ignores and a later consumer will not.
         `ABSENT` is a city with no such layer; `NONE` is a kerb the source was
         consulted about and leaves alone, which is where a car may pull over."""
@@ -1249,7 +1247,9 @@ class TestKerbside:
             assert fields["kerb_near"] == MARKING_KERB_NONE
             assert fields["kerb_off"] == MARKING_KERB_NONE
 
-    def test_a_graph_that_publishes_no_runs_at_all_says_absent(self, tmp_path, testville_config):
+    def test_a_graph_that_publishes_no_runs_at_all_says_absent(
+        self, tmp_path, testville_config
+    ) -> None:
         """A city whose sources carry no no-stopping layer draws no kerbside
         line rather than the invented one `P3-12` shipped."""
         edge = _edge(0, 0, 1, [[100.0, 0.0, 300.0], [500.0, 0.0, 300.0]])
@@ -1270,7 +1270,7 @@ class TestKerbside:
             if fields["surface_class"] == 0:
                 assert fields["kerb_near"] == fields["kerb_off"] == MARKING_KERB_ABSENT
 
-    def test_a_boundary_gets_a_station_either_side_of_it(self, kerbville, tmp_path) -> None:
+    def test_a_boundary_gets_a_station_either_side_of_it(self, kerbville) -> None:
         """What the exact V-range costs, and why. Without the pair the alpha
         would ramp from one graph vertex to the next — 400 m here."""
         city, root = kerbville
