@@ -126,6 +126,13 @@ Common emoji for this project:
   does not. ⚠️ **`ALONG_M` is still shipped behaviour, not a tuning knob**: moving it re-publishes
   `city.json` and changes what routing refuses, so it is the user's call. Numbers in `Q51`.
   ⚠️ **`tools/narrowing.py` is owed too** — see the bullet above for why that is not obvious.
+- **`pipeline/kerbside.py`, the `NSR` config block, or any kerbside-marking change: also
+  `tools/kerbside_error.py`, and paste its table.** It grades the shipped `roads.glb` against the runs
+  `roadgraph.json` publishes, and it is the only instrument that can see the side convention flip —
+  a mirrored city renders as a city. ⚠️ It **does not** grade the join itself: the truth side is what
+  the pipeline published, so a restriction on the wrong centreline is agreed with rather than caught.
+  What covers that is `etl/tests/test_kerbside.py`, which pins the side against `surface.mitres`
+  rather than against a comment.
 - Road-surface, deck-height or ground changes: also `tools/deck_error.py`, `tools/overhang.py`,
   `tools/ground_clearance.py` and `tools/carriageway_occupancy.py`, by hand after a build. They grade
   the *shipped* bundle and share no code with the pipeline — `check.sh` does not require a built

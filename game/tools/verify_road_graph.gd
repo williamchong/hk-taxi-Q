@@ -173,6 +173,9 @@ func _check(graph: RoadGraph, document: Dictionary, manifest: CityManifest) -> P
 	# --- Q51: passability is expressed, and not enforced --------------------
 	problems.append_array(_check_clearance(graph, edges, manifest))
 
+	# --- Q54: the kerbside restrictions are well formed ---------------------
+	problems.append_array(_check_kerbside(edges))
+
 	# --- P2-2: a query fits inside a frame ---------------------------------
 	problems.append_array(_check_query_time(graph, manifest.bounds, edges))
 
@@ -189,6 +192,71 @@ func _check(graph: RoadGraph, document: Dictionary, manifest: CityManifest) -> P
 				% [graph.impassable_edge_ids().size(), graph.lane_width_m()]
 			)
 		)
+	return problems
+
+
+## `Q54`: the no-stopping runs schema 4 publishes say something a consumer can act on.
+##
+## Nothing in the engine reads them yet — the marking shader takes the extent off
+## the road mesh, and `P3-3`'s traffic and `P3-9a`'s fares are the consumers to
+## come — so this is the only thing standing between a malformed join and a
+## build that looks fine. Every failure here is one a reader would otherwise hit
+## as a wrong answer rather than as an error: a range running off the end of its
+## polyline, two runs claiming the same metre of one kerb, or a vocabulary the
+## reader has no case for.
+##
+## The emptiness check is the one that earns its place. A join that stopped
+## finding anything publishes a document that parses, validates and draws — and
+## the region has 650 restricted edge sides, so zero is not a quiet region.
+func _check_kerbside(edges: Array) -> PackedStringArray:
+	var problems: PackedStringArray = PackedStringArray()
+	var runs: int = 0
+	var metres: float = 0.0
+	var last: Dictionary = {}
+
+	for edge: Dictionary in edges:
+		var id: int = int(edge.get("id", -1))
+		var points: Array = edge.get("polyline", [])
+		var length: float = 0.0
+		for index: int in range(1, points.size()):
+			var step := Vector3(points[index][0], 0.0, points[index][2])
+			step -= Vector3(points[index - 1][0], 0.0, points[index - 1][2])
+			length += step.length()
+
+		last.clear()
+		for run: Dictionary in edge.get("kerbside", []):
+			runs += 1
+			var side: String = str(run.get("side", ""))
+			var kind: String = str(run.get("kind", ""))
+			var from_m: float = float(run.get("from_m", -1.0))
+			var to_m: float = float(run.get("to_m", -1.0))
+			metres += to_m - from_m
+
+			if side != "near" and side != "off":
+				problems.append("edge %d has a kerbside run on side '%s'" % [id, side])
+			if kind != "single" and kind != "double":
+				problems.append("edge %d has a kerbside run of kind '%s'" % [id, kind])
+			if from_m < 0.0 or to_m <= from_m or to_m > length + 1.0:
+				problems.append(
+					(
+						"edge %d has a kerbside run %.2f-%.2f m on a %.2f m polyline"
+						% [id, from_m, to_m, length]
+					)
+				)
+			# Ordered and disjoint per side, which is what lets a consumer stop
+			# at the first run covering a position rather than scan them all.
+			if last.has(side) and from_m < float(last[side]):
+				problems.append(
+					"edge %d has overlapping or unordered %s runs at %.2f m" % [id, side, from_m]
+				)
+			last[side] = to_m
+
+	if runs == 0:
+		problems.append(
+			"no edge carries a kerbside run; the NSR join found nothing, or stopped running"
+		)
+	elif problems.is_empty():
+		print("  kerbside: %d no-stopping runs over %.0f m of kerb" % [runs, metres])
 	return problems
 
 

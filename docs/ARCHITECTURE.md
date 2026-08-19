@@ -183,6 +183,7 @@ with itself.
 | `tools/overhang.py` | `Q22`/`Q23` — whether there is a deck beneath it at all, sampled *across the full drawn width*. A ribbon can pass the first and fail the second |
 | `tools/ground_clearance.py` | `Q18`/`Q24` — whether the drawn ground stands *in* the at-grade carriageway. Sizes `buildings.ground_sink_m`, and gates the sink separately from the road's own shape |
 | `tools/carriageway_occupancy.py` | `Q19` — whether anything **solid stands in the road at bumper height**, buildings and structure told apart by vertex colour. The only one that gates per *edge* rather than region-wide, because `RoadGraph` routes on edges and a share cannot tell a wall across the road from clutter beside it. ⚠️ **Fails today**. Since `Q51` it also grades a number the pipeline publishes for itself — `clearance.py`'s — which read 24 against this tool's 26, reconciled as plan cell size and ratcheted by `tools/clearance_reconcile.py` |
+| `tools/kerbside_error.py` | `Q54` — how much of the kerbside yellow the source supports. Reads the shipped `roads.glb`, clips every carriageway triangle against the shader's own yellow locus, and weighs the chord by the junction fade and `COLOR_0.a`. ⚠️ **It does not grade the join** — the truth side is what `roadgraph.json` publishes, so a restriction on the wrong centreline is agreed with. What it sees is the half nothing else can: the rail the extent is written on, whether the alpha survived glTF, and whether the runs slid by a junction trim. Reads the ETL out tree, because the trims travel in `roadsurface.json` and that does not ship |
 
 **`tools/narrowing.py` sits beside them and is not one of them.** It prices a *proposal* — what
 `Q19`'s clearances would read at a lower `widen_default` — rather than grading what shipped, and it
@@ -610,7 +611,7 @@ which the city renders see-through with no error. `TEXCOORD_0` has no such failu
 
 ```json
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "nodes": [{ "id": 1, "pos": [120.5, 4.0, 300.2], "kind": "junction" }],
   "edges": [
     {
@@ -624,7 +625,8 @@ which the city renders see-through with no error. `TEXCOORD_0` has no such failu
       "bus_lane": false,
       "tram_tracks": false,
       "elevation_level": 0,
-      "road_name": { "en": "Gloucester Road", "zh": "告士打道" }
+      "road_name": { "en": "Gloucester Road", "zh": "告士打道" },
+      "kerbside": [{ "side": "near", "from_m": 12.4, "to_m": 88.1, "kind": "double" }]
     }
   ],
   "turn_restrictions": [{ "from_edge": 1, "via_node": 2, "to_edge": 5 }]
@@ -644,6 +646,7 @@ which the city renders see-through with no error. `TEXCOORD_0` has no such failu
 | `polyline` / `pos` | Game-space metres, `y` measured **from ground level, not from the vertical datum**. Since schema 2 an off-grade edge's `y` is **sampled from the map sheets' `INFRASTRUCTURE` structure**, so it follows the real deck and varies along an edge — median grade 2.47%, p90 8.04%. Level-0 edges meeting a node another level also reaches are lifted onto the ramp they sit on. Where the structure covers nothing, `elevation_levels` in city config supplies the flat offset. A node's `y` is the **level nearest grade** among the edges meeting it, and the highest end on that level |
 | `on_structure` | ⚠️ **Derived, not published by any source.** One flag per vertex, added in schema 3: true where that station's height came from sampled structure. `elevation_level` says which deck an edge *belongs to*; this says which of its stations are *standing on one*, and the two differ because a road becomes a bridge partway along an edge. Only `roads.py` can produce it — `y` cannot stand in, since `ground: terrain` puts an at-grade hill road at 49 m. All-false for a city that samples no decks. **897 stations** in Wan Chai, **546 m** of level-0 centreline |
 | `road_name` | `STREET_ENAME` / `STREET_CNAME` — **bilingual names ship in the source.** The null sentinel has four spellings; normalise NFKC and fold dashes before comparing |
+| `kerbside` | `NSR`, added in schema 4 (`P3-13`, closes `Q54`). Runs of one kerb a published no-stopping restriction covers. ⚠️ **The only overlay here that is not a key join** — `NSR` carries street codes, not `ROUTE_ID`, so `pipeline/kerbside.py` linear-references it onto the finished graph. `side` is the ribbon's own, `near` at `TEXCOORD_0`'s `U = 0` and `off` at `U = lanes`; `from_m`/`to_m` are measured along **this** polyline, so a consumer drawing on the trimmed ribbon subtracts its own `trim_start_m`. `kind` is `double` (a 24-hour restriction) or `single` (posted hours), from `TIME_ZONE`. ⚠️ **Only `VEHICLE_TYPE = 1` is here** — a taxi, PLB or goods-vehicle restriction is a sign, and `5` "Others" names no class. Runs are ordered and disjoint per side. **26,065 m over 650 edge sides** in Wan Chai |
 
 **Nodes are formed where centrelines share an endpoint, and nothing else.** Not where they cross: two
 roads crossing in plan at different `ELEVATION` share no endpoint, so no junction is invented.

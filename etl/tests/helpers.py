@@ -353,6 +353,15 @@ CITY_YAML = textwrap.dedent(
       bus_lanes:
         layer: BUS_ONLY_LANE
         fields: {route: ROAD_ROUTE_ID}
+      kerbside_restrictions:
+        layer: NSR
+        fields: {vehicle_type: VEHICLE_TYPE, time_zone: TIME_ZONE}
+        painted_vehicle_types: [1]
+        kinds: {1: double, 3: single, 4: single}
+        sample_m: 1.0
+        bridge_gap_m: 3.0
+        min_run_m: 5.0
+        max_offset_m: 20.0
       travel_directions:
         1: both
         3: forward

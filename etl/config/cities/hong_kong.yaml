@@ -797,6 +797,68 @@ roads:
     fields:
       route: ROAD_ROUTE_ID
 
+  # No-stopping restrictions (`P3-13`, closes `Q54`). ⚠️ **This layer does not
+  # join by key.** SPEED_LIMIT and BUS_ONLY_LANE above carry ROUTE_ID, which is
+  # unique per centreline; NSR carries ST_CODE_1..6 — the *street* codes it runs
+  # along, and a street is many centrelines. So the join is geometric, and
+  # `pipeline/kerbside.py` is where it lives.
+  kerbside_restrictions:
+    layer: NSR
+    fields:
+      vehicle_type: VEHICLE_TYPE
+      time_zone: TIME_ZONE
+
+    # Data specification: 1 = all motor vehicles, 2 = taxis, 3 = PLBs,
+    # 4 = goods vehicles, 5 = others.
+    #
+    # ⚠️ **Only 1 is a painted line.** A restriction on taxis, minibuses or
+    # goods vehicles is posted on a sign; painting it on the kerb would assert
+    # on the road something the source puts on a pole. That is 33,074 m of the
+    # region's 44,220 m — the population `Q54` measured before this field was
+    # read, which is why its over-paint figure was 3x rather than the real 4.0x.
+    #
+    # ⚠️ **5 "Others" is refused deliberately, and it is 8,323 m.** The
+    # specification never names the class it restricts, and asserting a
+    # restriction on an unnamed class is exactly the invention `P3-13` exists to
+    # remove. Only 5% of its samples fall within 3 m of a code-1 line, so it is
+    # not a duplicate of one either. If a later specification names it, this
+    # list is the one line that changes.
+    painted_vehicle_types: [1]
+
+    # Data specification: 1 = 24 hours, 2 = 8-10 am and 5-7 pm, 3 = 7 am to
+    # 7 pm, 4 = 7 am to midnight, 5 = others. Hong Kong's road rule is the plain
+    # one — a 24-hour restriction is a double yellow, a posted-hours one a
+    # single. In region: 27,118 m double against 5,956 m single.
+    #
+    # Every code the layer can carry is listed, because an unlisted one raises
+    # rather than defaulting. EFFECTIVE_DAY is published too and is uniformly 1
+    # ("all days") across every code-1 feature in region, so it distinguishes
+    # nothing here and gets no field.
+    kinds:
+      1: double
+      2: single
+      3: single
+      4: single
+      5: single
+
+    # Pitch the restriction lines are sampled at, which is the resolution of
+    # every published run and the cell two overlapping features are deduped
+    # into. A metre is well under the shortest restriction worth drawing and
+    # well over the millimetre the geometry is published at.
+    sample_m: 1.0
+    # Under a car length, so a break this short is not a place a car can stop.
+    # The source draws plenty of them: a vehicle crossing digitised as a gap,
+    # two features meeting with a hair between them.
+    bridge_gap_m: 3.0
+    # Below this a run is sampling noise on a bend rather than a length of kerb.
+    min_run_m: 5.0
+    # ⚠️ Not a tuning value — the guard that says "this restriction belongs to a
+    # road this region does not contain", and the search radius with it.
+    # Measured against the region: offsets run to a median 2.76 m, p99 8.24 m
+    # and a worst 17.83 m, so this binds on nothing here today. It is written
+    # down so that when it does bind, it binds on something absurd.
+    max_offset_m: 20.0
+
   # Data specification: 1 = travel permitted in both directions (default),
   # 3 = permitted only in the digitised direction of the line feature.
   travel_directions:

@@ -36,7 +36,7 @@ from pathlib import Path
 
 import numpy as np
 
-from pipeline import gdb
+from pipeline import gdb, kerbside
 from pipeline.buildings import Placement, read_sheet
 from pipeline.config import (
     BACKWARD,
@@ -48,6 +48,7 @@ from pipeline.config import (
     SourceLayer,
     load_city,
 )
+from pipeline.crs import GameTransform
 from pipeline.documents import read_document, round_position, write_document
 from pipeline.fetch import cached_source
 from pipeline.terrain import HeightField
@@ -66,7 +67,14 @@ ROADGRAPH_NAME = "roadgraph.json"
 # bridge partway along an edge, not at an edge boundary. Nor can `y`: with
 # `ground: terrain` an at-grade hill road reaches 49 m. Only this stage knows,
 # at the moment it lifts them.
-ROADGRAPH_SCHEMA = 3
+#
+# 4 closes `Q54`, and adds a field for the same reason 3 did: `kerbside`, the
+# runs of each edge the published no-stopping layer restricts. `P3-12` painted a
+# double yellow on every kerb in the region because the graph had no way to say
+# where one belongs, and no attribute already here stands in for it — the layer
+# joins by geometry rather than by key (`pipeline/kerbside.py`), so only a stage
+# holding both it and the finished edges can answer.
+ROADGRAPH_SCHEMA = 4
 
 # `Node.kind` in the data contract. Degree three or more is somewhere a
 # driver can choose; anything else is a road continuing or stopping.
@@ -125,6 +133,12 @@ class Edge:
     tram_tracks: bool
     elevation_level: int
     road_name: dict[str, str | None]
+    # Runs of this edge's two kerbs that a published no-stopping restriction
+    # covers, measured along **this** polyline (`P3-13`). Empty where the source
+    # says nothing, which is the honest answer and the one a consumer should
+    # draw no line for. Filled after every edge exists, because the join is
+    # geometric and an edge cannot find its own restriction alone.
+    kerbside: tuple[kerbside.Restriction, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -191,6 +205,9 @@ class RoadReport:
     # includes everything an interpolated deck spans.
     vertices_on_structure: int = 0
     components: list[int] = field(default_factory=list)
+    # `P3-13`'s counters. `None` for a city whose sources carry no no-stopping
+    # layer, which is not the same as one that carries an empty one.
+    kerbside: kerbside.KerbsideReport | None = None
 
     @property
     def connectivity(self) -> float:
@@ -759,6 +776,7 @@ def build_region(
         source, style, report.edges, edges_of_source
     )
     report.components = _components(len(nodes), report.edges)
+    _kerbside(source, style, transform, region_high, report)
 
     _write(out_root, city, region_id, report)
     return report
@@ -792,6 +810,43 @@ class _Source:
             bbox=self.bbox,
             expect_crs=self.city.projected_crs,
         )
+
+
+def _kerbside(
+    source: _Source,
+    style: RoadNetwork,
+    transform: GameTransform,
+    region_high: tuple[float, float],
+    report: RoadReport,
+) -> None:
+    """Attach each edge's published no-stopping runs (`P3-13`, closes `Q54`).
+
+    Last, and after every edge exists, because the join is geometric rather than
+    by key: `NSR` keys on street codes, not on `ROUTE_ID`, so which centreline a
+    restriction belongs to is a question about the finished graph. That is the
+    whole reason this is not folded into `_route_overlays` beside the speed
+    limits and the bus lanes, where a reader would look for it first.
+
+    ⚠️ **Only level-0 edges are offered.** A kerb is a thing at ground level,
+    and the alternative was measured rather than assumed — `pipeline/kerbside.py`
+    has the 7% and the 4.0 m that decided it.
+    """
+    if style.kerbside is None:
+        return
+    tracks = [
+        (edge.id, np.asarray(edge.polyline, dtype=np.float64))
+        for edge in report.edges
+        if edge.elevation_level == 0 and len(edge.polyline) > 1
+    ]
+    found = kerbside.build(
+        source.read(style.kerbside.layer), style.kerbside, transform, region_high, tracks
+    )
+    report.kerbside = found
+
+    runs: dict[int, list[kerbside.Restriction]] = defaultdict(list)
+    for item in found.restrictions:
+        runs[item.edge].append(item)
+    report.edges = [replace(edge, kerbside=tuple(runs.get(edge.id, ()))) for edge in report.edges]
 
 
 def _direction(style: RoadNetwork, code: int, layer: str) -> str:
@@ -1359,6 +1414,15 @@ def _write(out_root: Path | None, city: CityConfig, region_id: str, report: Road
                 "tram_tracks": edge.tram_tracks,
                 "elevation_level": edge.elevation_level,
                 "road_name": edge.road_name,
+                "kerbside": [
+                    {
+                        "side": run.side,
+                        "from_m": run.start_m,
+                        "to_m": run.end_m,
+                        "kind": run.kind,
+                    }
+                    for run in edge.kerbside
+                ],
             }
             for edge in report.edges
         ],
@@ -1479,6 +1543,38 @@ def main(argv: list[str] | None = None) -> int:
         report.vertices_kept,
         100.0 * report.vertices_kept / max(1, report.vertices_read),
     )
+    if report.kerbside is not None:
+        found = report.kerbside
+        by_kind = ", ".join(
+            f"{metres:.0f} m {kind}" for kind, metres in sorted(found.metres_by_kind.items())
+        )
+        log.info(
+            "  kerbside: %d of %d no-stopping features painted, %s across %d edge sides",
+            found.features_painted,
+            found.features_read,
+            by_kind or "nothing",
+            found.sides_covered,
+        )
+        log.info(
+            "    %.0f m sampled, %.0f m once overlapping features merged, %.0f m published; "
+            "%d runs under the minimum dropped (%.0f m)",
+            found.metres_sampled,
+            found.metres_deduped,
+            found.metres_published,
+            found.runs_dropped,
+            found.metres_dropped,
+        )
+        refused = ", ".join(
+            f"{metres:.0f} m as type {code}"
+            for code, metres in sorted(found.metres_refused.items())
+        )
+        if refused:
+            log.info("    refused: %s", refused)
+        if found.samples_unassigned:
+            log.warning(
+                "    %d in-region samples found no edge within the offset guard",
+                found.samples_unassigned,
+            )
     log.info(
         "  largest component holds %d of %d nodes (%.1f%%), %d components in all",
         max(report.components, default=0),

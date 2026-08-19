@@ -46,7 +46,9 @@ that checked nothing more than once.
 
 If you changed the ETL, the pipeline must run end to end on the Wan Chai config. If you changed the
 road surface or deck heights, also run `tools/deck_error.py` and `tools/overhang.py` — they grade the
-shipped bundle and need a built region. If you moved the height ramp or the façade survey, run
+shipped bundle and need a built region. If you changed `pipeline/kerbside.py`, the `NSR` join or the
+kerbside markings, run `tools/kerbside_error.py` and paste its table: nothing in the checks can see a
+yellow line move to the other kerb, because a mirrored city still looks like a city. If you moved the height ramp or the façade survey, run
 `tools/ring_weights.py` and paste what it derives: the surveyed material weights are authored against
 both, and nothing in the checks can see that they have gone stale (`Q34′`). If you moved the façade
 survey or `facade_hue.strength`, run `tools/facade_chroma.py` and paste its table into

@@ -38,7 +38,7 @@ from pipeline.roads import (
     simplify_mask,
 )
 from pipeline.terrain import HeightField
-from tests.helpers import NULL_SENTINELS, line_wkb, soup, write_layer
+from tests.helpers import NULL_SENTINELS, soup
 
 
 class TestSimplify:
@@ -184,74 +184,6 @@ class TestLanes:
 # --------------------------------------------------------------------------
 
 
-@pytest.fixture
-def testville(tmp_path, testville_config):
-    """A whole city — config, geodatabase and all — under `tmp_path`."""
-    city = testville_config
-
-    transform = city.game_transform("middle")
-
-    def at(x: float, z: float) -> tuple[float, float]:
-        """Region-local game metres to source easting/northing.
-
-        Through the transform rather than off the projected bounds: the origin
-        is rounded outward to whole metres, so the two differ by up to a metre
-        and the expected coordinates below are stated exactly.
-        """
-        easting, northing, _ = transform.to_source(x, 0.0, z)
-        return (easting, northing)
-
-    gpkg = tmp_path / "sources" / "testville" / "roads" / "roads.gpkg"
-    gpkg.parent.mkdir(parents=True)
-
-    write_layer(
-        gpkg,
-        "CENTERLINE",
-        [
-            # A two-way street, west to east, meeting the next at (300, 100).
-            line_wkb([at(100.0, 100.0), at(200.0, 100.0), at(300.0, 100.0)]),
-            # One-way continuing east, on a flyover deck.
-            line_wkb([at(300.0, 100.0), at(500.0, 100.0)]),
-            # A side street joining the same node, unnamed, with a tram.
-            line_wkb([at(300.0, 100.0), at(300.0, 400.0)]),
-            # Runs off the eastern edge of the region and must be cut.
-            line_wkb([at(500.0, 100.0), at(5000.0, 100.0)]),
-        ],
-        {
-            "ELEVATION": np.array([0, 1, 0, 0]),
-            "TRAVEL_DIRECTION": np.array([1, 3, 3, 3]),
-            "ROUTE_ID": np.array([11, 12, 13, 14]),
-            "STREET_ENAME": np.array(
-                ["MAIN STREET", "MAIN STREET", "TRAM STREET", "-99"], dtype=object
-            ),
-            "STREET_CNAME": np.array(["大街", "大街", "電車街", NULL_SENTINELS[1]], dtype=object),
-        },
-    )
-    write_layer(
-        gpkg,
-        "SPEED_LIMIT",
-        [line_wkb([at(300.0, 100.0), at(500.0, 100.0)])],
-        {"ROAD_ROUTE_ID": np.array([12]), "SPEED_LIMIT": np.array(["70 km/h"], dtype=object)},
-    )
-    write_layer(
-        gpkg,
-        "BUS_ONLY_LANE",
-        [line_wkb([at(100.0, 100.0), at(300.0, 100.0)])],
-        {"ROAD_ROUTE_ID": np.array([11])},
-    )
-    write_layer(
-        gpkg,
-        "TURN",
-        [line_wkb([at(250.0, 100.0), at(300.0, 250.0)])],
-        {
-            "EDGE1FID": np.array([1]),
-            "EDGE1END": np.array(["Y"], dtype=object),
-            "EDGE2FID": np.array([3]),
-        },
-    )
-    return city, tmp_path
-
-
 def _graph(tmp_path: Path) -> dict:
     return json.loads((tmp_path / "out" / "testville" / "middle" / "roadgraph.json").read_text())
 
@@ -280,6 +212,7 @@ class TestBuildRegion:
             "tram_tracks",
             "elevation_level",
             "road_name",
+            "kerbside",
         }
 
     def test_on_structure_is_parallel_to_the_polyline(self, testville) -> None:

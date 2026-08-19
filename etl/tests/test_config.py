@@ -1603,3 +1603,56 @@ class TestExtraCas:
 
         with pytest.raises(ValueError, match="does not exist"):
             load_city("hong_kong", cities_root=rewrite(mistype))
+
+
+class TestKerbsideRestrictions:
+    """The `NSR` block (`P3-13`). Every guard here refuses a config that loads —
+    a block that paints nothing, or a kind the surface stage has no case for,
+    would otherwise surface as a quiet absence of yellow lines."""
+
+    def test_hong_kong_declares_one(self, hong_kong) -> None:
+        kerbside = hong_kong.roads.kerbside
+        assert kerbside is not None
+        # Only "all motor vehicles" is a painted line; the rest are signs.
+        assert kerbside.painted_vehicle_types == frozenset({1})
+        # 24 hours is a double yellow; every posted-hours code is a single.
+        assert kerbside.kind_for(1) == "double"
+        assert {kerbside.kind_for(code) for code in (2, 3, 4, 5)} == {"single"}
+
+    def test_the_block_is_optional(self, rewrite) -> None:
+        """A city whose sources carry no such layer draws no kerbside line,
+        which is the honest answer rather than the invented one."""
+        city = load_city(
+            "hong_kong", cities_root=rewrite(lambda doc: doc["roads"].pop("kerbside_restrictions"))
+        )
+        assert city.roads.kerbside is None
+
+    def test_an_unmapped_time_zone_raises_rather_than_defaulting(self, hong_kong) -> None:
+        """These datasets are republished twice a year. A new code filed under a
+        fallback would paint the wrong line everywhere it appeared."""
+        with pytest.raises(KeyError, match="does not map to a kind"):
+            hong_kong.roads.kerbside.kind_for(9)
+
+    def test_an_empty_vehicle_type_list_is_rejected(self, rewrite) -> None:
+        def empty(doc: dict[str, Any]) -> None:
+            doc["roads"]["kerbside_restrictions"]["painted_vehicle_types"] = []
+
+        with pytest.raises(ValueError, match="would paint nothing"):
+            load_city("hong_kong", cities_root=rewrite(empty))
+
+    def test_a_kind_outside_the_vocabulary_is_rejected(self, rewrite) -> None:
+        def invent(doc: dict[str, Any]) -> None:
+            doc["roads"]["kerbside_restrictions"]["kinds"][1] = "triple"
+
+        with pytest.raises(ValueError, match="expected one of"):
+            load_city("hong_kong", cities_root=rewrite(invent))
+
+    def test_a_minimum_run_below_the_sampling_pitch_is_rejected(self, rewrite) -> None:
+        """It could reject nothing: the shortest run the sampler can produce is
+        one cell, so a minimum under that is a dial connected to nothing."""
+
+        def blunt(doc: dict[str, Any]) -> None:
+            doc["roads"]["kerbside_restrictions"]["min_run_m"] = 0.5
+
+        with pytest.raises(ValueError, match="would reject nothing"):
+            load_city("hong_kong", cities_root=rewrite(blunt))

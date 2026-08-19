@@ -766,6 +766,69 @@ _ROAD_LAYER_ROLES: dict[str, tuple[str, ...]] = {
 }
 
 
+# Kinds of kerbside line in the data contract (`P3-13`). The pipeline owns this
+# vocabulary; which of the publisher's time-zone codes means which arrives from
+# the city file, because the mapping is a road rule and not a fact about paint.
+# Hong Kong's is the plain one — a restriction that runs 24 hours is a double
+# yellow and a posted-hours one is a single.
+KERB_SINGLE = "single"
+KERB_DOUBLE = "double"
+KERB_KINDS = (KERB_SINGLE, KERB_DOUBLE)
+
+_KERBSIDE_ROLES = ("vehicle_type", "time_zone")
+
+
+@dataclass(frozen=True)
+class KerbsideRestrictions:
+    """How `P3-13` reads a published no-stopping layer (`Q54`).
+
+    Optional on `RoadNetwork`: a city whose sources carry no such layer leaves
+    the block out and draws no kerbside restriction at all, which is the honest
+    answer rather than the invented one `P3-12` shipped.
+    """
+
+    layer: SourceLayer
+    # Source vehicle-type codes whose restriction is expressed as a **painted
+    # line**. Hong Kong publishes five, and only "all motor vehicles" is paint —
+    # a goods-vehicle or taxi restriction is a sign, and painting one would
+    # assert on the road something the source puts on a pole. `P3-13` also
+    # refuses "Others", whose class the specification never names.
+    painted_vehicle_types: frozenset[int]
+    # Source time-zone code to a kind in `KERB_KINDS`. Every code the layer can
+    # carry must appear: an unlisted one raises rather than defaulting, for the
+    # reason `FareGroup.categorise` gives — these datasets are republished, and
+    # a new code silently filed under a fallback would paint the wrong line
+    # everywhere it appeared.
+    kinds: dict[int, str]
+
+    # Pitch the restriction lines are sampled at, and so the resolution of every
+    # published run. Also the cell the samples are deduped into, which is what
+    # makes two features covering one kerb count once.
+    sample_m: float
+    # Break in a restriction shorter than this is bridged rather than published
+    # as two runs. A gap under a car length is not a place a car can stop, and
+    # the source draws plenty of them — a vehicle crossing digitised as a break,
+    # or two features meeting with a hair between them.
+    bridge_gap_m: float
+    # Shortest run worth publishing. Below this a run is sampling noise on a
+    # bend rather than a length of kerb.
+    min_run_m: float
+    # Furthest a sample may sit from a centreline and still be that edge's. Not
+    # a tuning value — it is the guard that says "this restriction belongs to a
+    # road this region does not contain", and it doubles as the search radius.
+    max_offset_m: float
+
+    def kind_for(self, code: int) -> str:
+        """The kind of line a source time-zone code means."""
+        if code not in self.kinds:
+            known = ", ".join(str(key) for key in sorted(self.kinds))
+            raise KeyError(
+                f"kerbside_restrictions has a feature with time zone {code}, which the city "
+                f"file does not map to a kind. Known codes: {known}"
+            )
+        return self.kinds[code]
+
+
 @dataclass(frozen=True)
 class RoadSurface:
     """How `P1-4` turns the road graph into a drivable ribbon mesh.
@@ -996,6 +1059,10 @@ class RoadNetwork:
     # terrain only at the vertices `simplify` left, which is what shipped before
     # the ground was drawn and nothing could be compared against.
     ground_profile: GroundProfile | None
+
+    # How `P3-13` sources the kerbside no-stopping line (`Q54`). `None` is a
+    # city whose sources carry no such layer, and it draws none.
+    kerbside: KerbsideRestrictions | None
 
     def lanes_for(self, speed_limit_kph: int) -> int:
         """Lane count for an edge, from the fastest matching rule.
@@ -1924,6 +1991,70 @@ def _road_network(body: dict[str, Any], where: str, table: _MaterialTable) -> Ro
         ground_profile=(
             _ground_profile(profile, f"{where}:ground_profile") if profile is not None else None
         ),
+        kerbside=_kerbside(body.get("kerbside_restrictions"), f"{where}:kerbside_restrictions"),
+    )
+
+
+def _kerbside(body: Any, where: str) -> KerbsideRestrictions | None:
+    """The optional kerbside-restriction block, checked at load.
+
+    Every guard here refuses a config that *loads*. A block whose vehicle-type
+    list is empty paints nothing while looking configured; a kind outside
+    `KERB_KINDS` reaches `surface.py` as a string it has no case for; and a
+    `sample_m` of zero divides by it. Caught here, the author sees the file and
+    the key they just edited rather than a numpy error four stages later.
+    """
+    if body is None:
+        return None
+    if not isinstance(body, dict):
+        raise ValueError(f"{where} must be a mapping, got {body!r}")
+
+    painted = _require(body, "painted_vehicle_types", where)
+    codes: set[int] = set()
+    for code in painted:
+        # The `elevation_levels` boolean trap, in a sequence rather than a
+        # mapping: a bare `on` in a YAML list resolves to True, and True == 1,
+        # so it would silently become "paint all motor vehicles".
+        if isinstance(code, bool) or not isinstance(code, int):
+            raise ValueError(f"{where}:painted_vehicle_types has {code!r}, which is not an integer")
+        codes.add(code)
+    if not codes:
+        raise ValueError(f"{where}:painted_vehicle_types is empty; the stage would paint nothing")
+
+    kinds: dict[int, str] = {}
+    for code, kind in _require(body, "kinds", where).items():
+        if isinstance(code, bool) or not isinstance(code, int):
+            raise ValueError(f"{where}:kinds key {code!r} is not an integer")
+        if kind not in KERB_KINDS:
+            raise ValueError(
+                f"{where}:kinds[{code}] is {kind!r}, expected one of {', '.join(KERB_KINDS)}"
+            )
+        kinds[code] = str(kind)
+    if not kinds:
+        raise ValueError(f"{where}:kinds is empty")
+
+    lengths: dict[str, float] = {}
+    for key in ("sample_m", "bridge_gap_m", "min_run_m", "max_offset_m"):
+        value = float(_require(body, key, where))
+        if value <= 0.0:
+            raise ValueError(f"{where}:{key} must be positive, got {value}")
+        lengths[key] = value
+    if lengths["min_run_m"] < lengths["sample_m"]:
+        # A minimum shorter than the pitch cannot reject anything: the shortest
+        # run the sampler can produce is one cell.
+        raise ValueError(
+            f"{where}:min_run_m ({lengths['min_run_m']}) is below sample_m "
+            f"({lengths['sample_m']}), so it would reject nothing"
+        )
+
+    return KerbsideRestrictions(
+        layer=_source_layer(body, where, _KERBSIDE_ROLES),
+        painted_vehicle_types=frozenset(codes),
+        kinds=kinds,
+        sample_m=lengths["sample_m"],
+        bridge_gap_m=lengths["bridge_gap_m"],
+        min_run_m=lengths["min_run_m"],
+        max_offset_m=lengths["max_offset_m"],
     )
 
 

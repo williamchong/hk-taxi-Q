@@ -25,7 +25,13 @@ const PATH: String = "res://assets/generated/roadgraph.json"
 ## of `polyline`. `elevation_level` says which deck an edge belongs to; this says
 ## which of its stations are standing on one, because a road becomes a bridge
 ## partway along an edge rather than at an edge boundary.
-const SCHEMA_VERSION: int = 3
+##
+## 4 since `P3-13`, and it adds a field for the same reason: `kerbside`, the runs
+## of each edge that a published no-stopping restriction covers, per side and
+## measured along `polyline`. Nothing here draws them — the marking shader reads
+## the extent off the road mesh — but `P3-3`'s traffic and `P3-9a`'s fares both
+## want to know where a car may not stop, and that is a fact about the graph.
+const SCHEMA_VERSION: int = 4
 
 
 ## The parsed graph, or an empty dictionary with a pushed message.
