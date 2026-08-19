@@ -469,7 +469,8 @@ crisp edges at any cell size and a clean key for `collapse`.
 
 ## `Q19` — Solid geometry stands in the drawn carriageway
 
-**Status.** 🟡 Half answered · **Owner.** unassigned
+**Status.** 🟡 Half answered · **Owner.** the carriageway-width question, unassigned — the
+interchange half became `Q22`/Phase 4's and `e702` `Q51`'s on 2026-08-20
 
 **Claim.** **5.17% of drawn carriageway has solid geometry standing in it at bumper height** —
 `BUILDING` 1.72% and `INFRASTRUCTURE` 1.60% at grade, plus a further 1.87% on off-grade ribbon nobody
@@ -622,6 +623,81 @@ after bounding boxes read 13.71%.
 `GAME_DESIGN.md` trade this entry proposed, and the sweep above has now closed it: narrowing is not
 the fix for any of the edges that fail, buildings included. What is left is moving geometry — the
 interchange for the severe half, and the frontage for the mild one — and **nobody owns either**.
+
+### The occupiers, named — 2026-08-20
+
+This entry conceded that it had never established *what* blocks the edges it condemns, and read the
+population through the eight rows the grader printed. It printed eight because that listing was
+capped at eight; `Survey` had held the binding station, both widths and the blocker for all 26 since
+the tool shipped. The cap is gone, and the listing now carries the blocker and the **shape** of the
+blockage along the edge — how much of the edge is starved, and its longest unbroken run. ⚠️ **The
+"uniformly mild building half" this entry retracted on 2026-08-19 was a reading of the top of a
+truncated table.** So was every framing before it. The population is below in full.
+
+**The shape separates the two halves cleanly, and it is not the separation this entry assumed.**
+
+| | starved extent | worst unbroken run | median edge length |
+|---|---|---|---|
+| 14 `BUILDING` | **1–3 m** on every one | **1–3 m** | **10.4 m** |
+| 11 `INFRASTRUCTURE` | 1–42 m | `e233` **42 m**, `e55` 25 m, `e398` 18 m in pieces | **101.8 m** |
+| the 771 that pass | — | — | 47.8 m |
+
+⚠️ **The extents above are bounds, not measurements.** They count judged stations at the walk's
+*nominal* 1 m pitch, where the real pitch is `L / ceil(L / 1 m)` per segment — length-weighted mean
+**0.968 m**, shortest segment 0.451 m — and a junction trim between two starved stretches joins them.
+Both errors overstate a blockage and neither overstates a clearance, which is the direction this
+family of instruments is built to fail in. Read "42 m" as "at most 42 m".
+
+⚠️ **The building half is not a frontage standing in a street.** A frontage blocks a continuous run;
+every one of these blocks one to three metres and clears again. And they are **short edges**: 12 of
+the 14 are under 20 m against a graph median of 47.3 m, while **not one** of the 11 structure
+failures is. Starved rate under 20 m is **6.7%**, at 20 m and over **2.1%**.
+
+**What that is, looked at.** `e314` LEIGHTON ROAD (7.2 m long, 0.49 m clear) and `e627` GREAT GEORGE
+STREET (11.0 m, 0.98 m) were driven and shot — `build/driver/q19/`. Both show the same thing, and it
+is neither of this entry's two readings: **the ribbon is drawn wider than the gap it runs through.**
+The buildings are not standing in the road; the road is laid across a slot between two of them that
+is metres narrower than the surface being drawn.
+
+**The mechanism this entry never had, and it is upstream of every width argument in it.**
+`DATA_SOURCES.md` has recorded since `P1-3` that **lane counts do not exist** — no lane attribute in
+any field of any layer of Road Network v2 — and that `roadgraph.json`'s `lanes` is "authored policy
+keyed on speed limit, not published data". That fact was known; what is new is that **it is the
+mechanism behind this entry's building half**, which was never connected to it. All 797 edges take
+one of two invented figures — **720 at 6.4 m** (`lanes_default: 2`) and **77 at 9.6 m** from
+`lanes_by_min_speed_limit_kph` — and the widening then multiplies whichever one it got. So a 7 m
+connector between two Causeway Bay buildings is drawn 6.4 m wide and widened to 10.2 m, and the
+surface reaches the walls because nothing ever said the street was narrower. That is why narrowing
+does not clear these, and why the `authored` column reads the same as the widened one on most of
+them: **the authored width is invented too.**
+
+⚠️ **This does not hand the question an easy answer, and the entry should not read as though it
+does.** The width is absent from the *whole* source, so there is nothing in Road Network v2 to go
+and read. What it does is move the question off "move the frontage" — a modelling job on 14 sites
+with no source of truth — and onto one of two things that can actually be decided: another dataset
+that publishes carriageway extent, or a rule that stops a short junction stub claiming a two-lane
+width it was never told it had. Both are cheaper than moving geometry and neither has been costed.
+
+**The interchange half stands as recorded.** `e233` starves for **42 m without a break** and `e55`
+for 25 m; `e398`'s 18 m comes in pieces with a 9 m worst run, which is a pier field rather than a
+wall. These are the long ramps, they are one locality, and no width rule reaches them. `Q22`'s
+family, Phase 4's scope — named here so this entry stops reading `unassigned` for them.
+
+⚠️ **`e702` EXPO DRIVE CENTRAL is not a grader failure, and a plan for this work was drafted saying
+it was.** `tools/narrowing.py` reports it at 0.75 m `LANDMARK` — HKCEC standing in the road it was
+once given piers to clear (`P3-6`, and this entry's own `DECISIONS.md` note that "a solid base would
+dead-end both") — but the grader reads **3.41 m** there and passes it. `tools/clearance_reconcile.py`
+already files it as the **single `pipeline-only`** disagreement, at **−2.66 m the largest in the
+table**. It is a reconciliation question, not an established defect, and `Q51` owns the mechanism.
+Recorded because the inference from one instrument was made and was wrong.
+
+**Instruments.** Reporting only; nothing measured moved. Grader still **26** and pipeline still
+**24**, `clearance_reconcile` still reads what `Q51` recorded, `narrowing`'s sweep still 24 / 9 / 14
+/ 1 at 1.60x. `_starved_shape` is unit-tested against both families.
+
+**What is owed next, with owners.** The building half wants the width question asked of the sources
+before anything is modelled — **unassigned, and it is now a `DATA_SOURCES.md` question rather than a
+geometry one**. The interchange half is `Q22`/Phase 4's. `e702` is `Q51`'s.
 
 **See.** `Q51` for what routes around this · `Q20` · `Q22` for the interchange's family · `Q24` · `P2-5` · `P3-6` for why the population moved
 

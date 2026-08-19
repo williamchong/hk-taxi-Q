@@ -17,10 +17,21 @@ fails the build.
 Two occupier classes, and they do not share a fix:
 
 - **`INFRASTRUCTURE`** — a genuine defect, and the half that shrank with `Q20`.
-- **Buildings** — the half this project *chose*. `widen_default` is 1.6x and
-  `GAME_DESIGN.md` fixes the range at 1.3-1.8x, so widening eats the pavement
-  first and then the ground-floor frontage. That is a playability trade, not a
-  bug. This tool's job is to stop it drifting unwatched, never to overturn it.
+- **Buildings** — ⚠️ **written here as the half this project *chose*, and that
+  is now known to be false.** The reading was that `widen_default`'s 1.6x eats
+  the pavement and then the ground-floor frontage, so the blockage lives in the
+  widened fringe and is a playability trade rather than a bug. `Q19`'s
+  2026-08-19 re-measurement killed it twice over: three `BUILDING` edges read
+  **0.00 m**, the same stations read 0.00-0.49 m *inside the un-widened width*
+  as well, and `tools/narrowing.py` swept every factor `GAME_DESIGN.md` allows
+  without clearing one edge. The obstruction is in the real street, so this half
+  is not a trade anybody made and narrowing is not its fix.
+
+Which leaves the question this tool now has to answer rather than assume:
+**what is actually standing there.** The corridor listing therefore reports
+every failing edge — never the tightest handful, which is how the sentence
+above survived as long as it did — with its blocker and the shape of the
+blockage along the edge.
 
 ⚠️ **Ground is not an occupier and is excluded by name.** Terrain standing in
 the carriageway is `Q24`, it is `ground_clearance.py`'s to grade, and counting
@@ -74,6 +85,7 @@ import argparse
 import json
 import logging
 import sys
+from collections import Counter
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -406,6 +418,23 @@ class Survey:
     # table read as centimetre measurement when "0.49 m" only ever meant
     # "one cell", and the reader cannot tell those apart without this.
     corridor_span_m: dict[int, float] = field(default_factory=dict)
+    # What was standing at the worst station, most cells first, at the moment
+    # that station became the worst. `Q19` could name the *class* split across
+    # the population and never the blocker on one edge, so a reader could not
+    # tell which of two questions an edge belonged to without re-running a
+    # second tool over a different population.
+    corridor_blockers: dict[int, tuple[str, ...]] = field(default_factory=dict)
+    # Every judged level-0 station's clear run, in walk order, per edge. The
+    # corridor figure above is the minimum of one of these lists; the **shape**
+    # of the list is what tells a wall crossing the street from a frontage
+    # standing in it, and those two do not share a fix.
+    #
+    # ⚠️ Trimmed stations are absent rather than recorded as clear, so a starved
+    # run measured from this can bridge a junction trim and read as one run where
+    # there are two. On Wan Chai that is 129 stations of 47,275, and the
+    # alternative — scoring an unjudgeable station — is the defect that once
+    # condemned 18 innocent edges.
+    corridor_profile: dict[int, list[float]] = field(default_factory=dict)
     # Stations whose cross-section was too trimmed to judge a corridor from.
     # Counted rather than silently skipped, for the reason in the class docstring.
     corridor_stations: int = 0
@@ -447,6 +476,35 @@ def _clear_run(occupied: list[bool], span_m: float) -> float:
         run = 0 if blocked else run + 1
         best = max(best, run)
     return best * span_m
+
+
+def _starved_shape(profile: list[float], bar_m: float, spacing_m: float) -> tuple[float, float]:
+    """How much of an edge is below the bar, and its longest unbroken stretch.
+
+    The first number is a total and the second is a run, and the gap between
+    them is the reading: 2 m of 2 m is a wall across the street, 40 m of 40 m is
+    a frontage standing in it, and 6 m of 60 m in three pieces is a pier field.
+
+    ⚠️ **Both figures are upper bounds, from two causes, and neither is tight.**
+    It counts only judged stations, so a junction trim between two starved
+    stretches joins them into one. And `spacing_m` is the walk's *nominal* pitch
+    rather than its real one: `walk_width` cuts each segment into whole equal
+    pieces, so the true pitch is `L / ceil(L / spacing_m)` and lands anywhere in
+    `(spacing_m / 2, spacing_m]` — on the shipped graph the length-weighted mean
+    is **0.968 m against a nominal 1.0**, and the shortest segment runs at
+    0.451 m. So a published extent reads a few per cent high typically and up to
+    twice on a short segment. Both errors are the direction the corridor figure
+    already takes: it can overstate a blockage, never a clearance. Quoting these
+    metres as a measurement rather than as a bound is the mistake to avoid.
+    """
+    # `_clear_run` reads its argument as "blocked", so handing it the stations
+    # that *pass* makes each of them a wall bounding a starved stretch, and the
+    # longest run it finds is the longest starvation. Delegated rather than
+    # rewritten: the corridor figure this is read against is `_clear_run` across
+    # a station, and the two are now provably the same scan rather than two
+    # hand-copies of it.
+    passes = [clear >= bar_m for clear in profile]
+    return passes.count(False) * spacing_m, _clear_run(passes, spacing_m)
 
 
 @dataclass(frozen=True)
@@ -608,7 +666,10 @@ def survey(lattice: Lattice, classes: dict[str, Occupied]) -> Survey:
     found = Survey()
     found.asked = lattice.asked
 
-    blocked: list[bool] = []
+    # One list, not a `blocked` flag beside it: the flag was `standing is not
+    # None` appended in the same breath, so the two were one fact in two
+    # encodings kept in step by nothing but the order of two lines.
+    standing_at: list[str | None] = []
     inside: list[bool] = []
     station_span = 0.0
     station_cells = 0
@@ -625,21 +686,23 @@ def survey(lattice: Lattice, classes: dict[str, Occupied]) -> Survey:
     def close_station() -> None:
         # The corridor is a level-0 question. An off-grade ribbon nobody can
         # reach cannot strand a traffic car, and `Q21`/`Q22` own its defects.
-        if current_level != 0 or not blocked:
+        if current_level != 0 or not standing_at:
             return
         found.corridor_stations += 1
 
         # ⚠️ **A trimmed cross-section cannot be judged, and judging one anyway
-        # invents blocked edges.** Cells with no road drawn are not appended to
-        # `blocked` at all, so at a junction trim the corridor would be measured
-        # across whatever few cells survived — one clear cell out of twenty reads
+        # invents blocked edges.** Cells with no road drawn are not recorded at
+        # all, so at a junction trim the corridor would be measured across
+        # whatever few cells survived — one clear cell out of twenty reads
         # as a 0.49 m corridor and condemns the edge. Measured on Wan Chai before
         # this guard: 44 edges failed, and seven of the eight tightest sat at
         # exactly one cell's width, which is the artefact rather than a wall.
-        if len(blocked) < _CORRIDOR_MEASURED * station_cells:
+        if len(standing_at) < _CORRIDOR_MEASURED * station_cells:
             found.corridor_skipped += 1
             return
+        blocked = [name is not None for name in standing_at]
         clear = _clear_run(blocked, station_span)
+        found.corridor_profile.setdefault(current_edge, []).append(clear)
         if clear < found.corridor_m.get(current_edge, float("inf")):
             found.corridor_m[current_edge] = clear
             found.corridor_at[current_edge] = (seen_x, seen_z)
@@ -648,12 +711,27 @@ def survey(lattice: Lattice, classes: dict[str, Occupied]) -> Survey:
                 [wall for wall, within in zip(blocked, inside, strict=True) if within],
                 station_span,
             )
+            # Recorded at the binding station and nowhere else. An edge's
+            # blocker is a fact about the cross-section that condemned it, not
+            # about the edge: a street can meet a flyover pier at one end and a
+            # shopfront at the other, and averaging the two would name neither.
+            #
+            # The cell counts order the names and are then dropped: they are a
+            # fact about one cross-section, where the extent that separates the
+            # two fix families is measured *along* the edge and is reported as
+            # `starved` / `worst run`. Ordered rather than `most_common()` —
+            # that breaks a tie by insertion order, which is the order cells
+            # were walked across the section, and the listing has to be stable.
+            tally = Counter(name for name in standing_at if name is not None)
+            found.corridor_blockers[current_edge] = tuple(
+                name for name, _ in sorted(tally.items(), key=lambda item: (-item[1], item[0]))
+            )
 
     for i in range(lattice.asked):
         station = int(lattice.station[i])
         if station != current:
             close_station()
-            blocked = []
+            standing_at = []
             inside = []
             station_cells = 0
             seen_offset = float("inf")
@@ -680,7 +758,7 @@ def survey(lattice: Lattice, classes: dict[str, Occupied]) -> Survey:
             None,
         )
         found.add(current_level, standing, float(lattice.span[i]) * lattice.spacing_m)
-        blocked.append(standing is not None)
+        standing_at.append(standing)
         inside.append(abs(float(lattice.offset[i])) <= float(lattice.authored_half[i]))
     close_station()
 
@@ -873,19 +951,53 @@ def main(argv: list[str] | None = None) -> int:
         "the %.2f m plan bin blocks in full on one sample",
         args.index_cell_m,
     )
-    tightest = sorted(found.corridor_m.items(), key=lambda item: item[1])[:8]
-    for edge_id, clear in tightest:
+    # ⚠️ **Every failing edge, not the tightest handful.** This listing was
+    # capped at eight, and `Q19` then spent two corrections on a population it
+    # could only ever see the top of — "the building half is uniformly mild" was
+    # a reading of the first rows of this table, and it was false. The fix
+    # families the entry now needs cannot be told apart from a sample.
+    starved = sorted(
+        ((edge_id, clear) for edge_id, clear in found.corridor_m.items() if clear < corridor_bar_m),
+        key=lambda item: item[1],
+    )
+    # `starved` is how much of the edge is below the bar and `worst run` is the
+    # longest unbroken stretch of it — the pair that separates `Q19`'s two fix
+    # families. A wall crossing the street blocks a metre or two and clears
+    # again, and the road passes under a building the source extruded shut; a
+    # frontage standing in the carriageway blocks a continuous run. They do not
+    # share a fix, and the corridor figure alone cannot tell them apart.
+    log.info(
+        "    %-6s %7s %9s %6s  %-22s %8s %9s  %-18s  %s",
+        "edge",
+        "clear",
+        "authored",
+        "step",
+        "blocked by",
+        "starved",
+        "worst run",
+        "station",
+        "road",
+    )
+    for edge_id, clear in starved:
         x, z = found.corridor_at[edge_id]
+        starved_m, worst_run_m = _starved_shape(
+            found.corridor_profile[edge_id], corridor_bar_m, lattice.spacing_m
+        )
         log.info(
-            "    e%-5d %6.2f m clear (authored %5.2f m, step %4.2f m)  at (%7.1f, %7.1f)  %s",
+            "    e%-5d %7.2f %9.2f %6.2f  %-22s %6.0f m %7.0f m  (%7.1f, %7.1f)  %s",
             edge_id,
             clear,
             found.corridor_authored_m.get(edge_id, float("nan")),
             found.corridor_span_m.get(edge_id, float("nan")),
+            "+".join(found.corridor_blockers[edge_id]),
+            starved_m,
+            worst_run_m,
             x,
             z,
             names.get(edge_id, "unnamed"),
         )
+    if not starved:
+        log.info("    every drivable level-0 edge keeps a lane clear")
     log.info(
         "    %d level-0 edges judged from %d stations; %d stations too trimmed to judge",
         len(found.corridor_m),
@@ -903,18 +1015,16 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     problems = []
-    starved = sorted(
-        ((edge_id, clear) for edge_id, clear in found.corridor_m.items() if clear < corridor_bar_m),
-        key=lambda item: item[1],
-    )
     if starved:
         named = ", ".join(
             f"e{edge_id} {clear:.2f} m ({names.get(edge_id, 'unnamed')})"
             for edge_id, clear in starved[:6]
         )
+        rest = len(starved) - 6
         problems.append(
             f"{len(starved)} drivable level-0 edges keep less than {corridor_bar_m:.2f} m "
-            f"clear — a traffic car cannot pass: {named}" + (" ..." if len(starved) > 6 else "")
+            f"clear — a traffic car cannot pass: {named}"
+            + (f", and {rest} more listed above" if rest > 0 else "")
         )
     # ⚠️ Buildings and landmarks are gated **together** against the one building
     # bar. `Q19` measured 1.72% while HKCEC was still a tile; `P3-6` moved it to

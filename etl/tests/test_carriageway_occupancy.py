@@ -47,6 +47,7 @@ from carriageway_occupancy import (
     Survey,
     _barycentric,
     _clear_run,
+    _starved_shape,
 )
 
 
@@ -115,6 +116,50 @@ def _occupied(heights: list[float], cell_m: float = INDEX_CELL_M) -> Occupied:
         samples=len(heights),
         cell_m=cell_m,
     )
+
+
+class TestStarvedShape:
+    """How much of an edge is starved, and in how many pieces.
+
+    `Q19`'s two fix families wear one symptom — an edge under one lane — and
+    the corridor figure cannot tell them apart, because it is a minimum and a
+    minimum has no extent. These two numbers are what separates them, so a
+    mistake here files a wall under frontage or the reverse.
+    """
+
+    def test_a_wall_across_the_street_is_one_station(self) -> None:
+        """The building half's signature: clear, blocked for a metre, clear
+        again. That is a road passing under a volume the source extruded shut,
+        and its fix is an opening rather than a moved footprint."""
+        assert _starved_shape([5.0, 5.0, 0.0, 5.0, 5.0], 3.2, 1.0) == pytest.approx((1.0, 1.0))
+
+    def test_a_frontage_standing_in_the_road_is_one_long_run(self) -> None:
+        assert _starved_shape([0.5] * 40 + [5.0], 3.2, 1.0) == pytest.approx((40.0, 40.0))
+
+    def test_the_total_and_the_run_are_reported_separately(self) -> None:
+        """The discriminator, and the reason one number would not do: a pier
+        field starves as much of the edge as a wall of the same total length
+        and is a different defect. Six metres in three pieces, not one six."""
+        assert _starved_shape([0.0, 0.0, 5.0, 0.0, 0.0, 5.0, 0.0, 0.0], 3.2, 1.0) == pytest.approx(
+            (6.0, 2.0)
+        )
+
+    def test_the_bar_is_the_bar_the_gate_uses(self) -> None:
+        """A station exactly at one lane is not starved. `is_passable` reads
+        `>=` on the same figure, and an off-by-one here would report edges the
+        gate does not fail."""
+        assert _starved_shape([3.2, 3.19], 3.2, 1.0) == pytest.approx((1.0, 1.0))
+
+    def test_the_shape_is_measured_in_metres_not_stations(self) -> None:
+        """`--spacing-m` moves the station pitch, and both figures scale with
+        it — a run counted in stations would describe the same blockage
+        differently at a different sampling. ⚠️ This pins the *nominal* pitch,
+        which is the only one this function is given; the walk's real pitch is
+        a little shorter and the docstring says by how much."""
+        assert _starved_shape([0.0, 0.0], 3.2, 0.5) == pytest.approx((1.0, 1.0))
+
+    def test_an_edge_that_never_starves_has_no_shape(self) -> None:
+        assert _starved_shape([5.0, 5.0], 3.2, 1.0) == pytest.approx((0.0, 0.0))
 
 
 class TestInBand:
