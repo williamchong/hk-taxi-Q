@@ -24,6 +24,8 @@ import pytest
 from pipeline.gltf import read_glb
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA, plan_lengths
 from pipeline.surface import (
+    MARKING_CLASS_CARRIAGEWAY,
+    MARKING_CLASS_KERB,
     MARKING_CODE_MAX,
     MARKING_KERB_ABSENT,
     MARKING_KERB_DOUBLE,
@@ -33,10 +35,12 @@ from pipeline.surface import (
     SURFACE_MATERIAL,
     SURFACE_MESH_NAME,
     SURFACE_NAME,
+    SurfaceReport,
     _half_widths,
     _insert_stations,
     _kerbside,
     _on_structure_length_m,
+    _rail_stations,
     boundary,
     build_region,
     dedupe,
@@ -562,13 +566,21 @@ def _decode(code: float) -> dict[str, int]:
     }
 
 
-def _carriageway(mesh) -> np.ndarray:
-    """Mask of the vertices that are road rather than kerb or junction cap.
+def _of_class(mesh, surface_class: int) -> np.ndarray:
+    """Mask of the vertices belonging to one surface class.
 
     By the payload's own class field, not by colour: a cap is painted the same
     asphalt as the carriageway it fills, so a colour mask quietly includes one.
     """
-    return np.array([_decode(code)["surface_class"] == 0 for code in mesh.uv2[:, 0]])
+    return np.array([_decode(code)["surface_class"] == surface_class for code in mesh.uv2[:, 0]])
+
+
+def _carriageway(mesh) -> np.ndarray:
+    return _of_class(mesh, MARKING_CLASS_CARRIAGEWAY)
+
+
+def _kerb(mesh) -> np.ndarray:
+    return _of_class(mesh, MARKING_CLASS_KERB)
 
 
 def _painted(mesh, colour: tuple[int, int, int]) -> np.ndarray:
@@ -1306,9 +1318,11 @@ class TestKerbside:
         carriageway is tapering arrives at the width it should be. Asserted
         because nothing about the geometry would look wrong if it did not."""
         points = np.array([[0.0, 0.0, 0.0, 2.0], [100.0, 0.0, 0.0, 4.0]])
-        merged, added = _insert_stations(points, [50.0])
+        merged, inserted = _insert_stations(points, [50.0])
 
-        assert added == 2
+        # The indices are where the new rows landed *after* the merge sort, not
+        # how many there were — `_add_kerb_stations` marks `_INSERTED` by them.
+        assert inserted.tolist() == [1, 2]
         assert merged[1][0] == pytest.approx(49.75)
         assert merged[1][3] == pytest.approx(2.995)
         assert merged[2][3] == pytest.approx(3.005)
@@ -1318,15 +1332,145 @@ class TestKerbside:
         extent that is already right to within a tenth of a metre."""
         points = np.array([[0.0, 0.0, 0.0, 2.0], [50.0, 0.0, 0.0, 2.0], [100.0, 0.0, 0.0, 2.0]])
         # The boundary's leading station would land 0.05 m from the vertex at
-        # 50 m, so only the trailing one is inserted.
-        _, added = _insert_stations(points, [50.2])
-        assert added == 1
+        # 50 m, so only the trailing one is inserted — between the 50 m station
+        # it was too close to and the 100 m one.
+        _, inserted = _insert_stations(points, [50.2])
+        assert inserted.tolist() == [2]
 
     def test_the_widest_legal_code_is_exact_in_float32(self) -> None:
         """The codec's own promise, and what `floor(x + 0.5)` in the shader
         rests on. Two new fields since `P3-12` put the ceiling at 2,097,151."""
         assert MARKING_CODE_MAX == 2_097_151
         assert float(np.float32(MARKING_CODE_MAX)) == MARKING_CODE_MAX
+
+
+# One bend, twice: level and then climbing 6 m over the second segment. 210 m to
+# 250 m puts all four restriction boundaries on that segment and clear of both
+# ends, so each takes its pair and none is lost to a trim.
+_BEND = [[100.0, 0.0, 300.0], [300.0, 0.0, 300.0], [400.0, 6.0, 400.0]]
+_FLAT = [[x, 0.0, z] for x, _, z in _BEND]
+_BEND_RUNS = [{"side": "near", "from_m": 210.0, "to_m": 250.0, "kind": "double"}]
+
+
+class TestKerbRailStations:
+    """Which of `P3-13`'s stations the kerb rails are drawn from.
+
+    The stations exist so `COLOR_0.a` can turn on in half a metre. Only the
+    carriageway reads that channel, so the kerbs should not be paying for them
+    — and mostly they do not. **The exception is the point of these tests.** A
+    mitred vertex is displaced along its segment as well as across it, so a kerb
+    rail's chord spans a different stretch of road than the centreline does, and
+    height is interpolated along the centreline. Where the road climbs through a
+    bend the two disagree, and the station is carrying the difference.
+    """
+
+    def _street(self, root, config, polyline, kerbside):
+        """One street on its own, built into its own directory."""
+        _write_graph(
+            root,
+            [
+                {"id": 0, "pos": polyline[0], "kind": "endpoint"},
+                {"id": 1, "pos": polyline[-1], "kind": "endpoint"},
+            ],
+            [_edge(0, 0, 1, polyline, kerbside=kerbside)],
+        )
+        return build_region(config, "middle", out_root=root / "out"), _mesh(root)
+
+    def test_a_straight_street_pays_no_kerb_vertex_for_its_restrictions(
+        self, tmp_path, testville_config
+    ) -> None:
+        """The whole point of the thinning: a flat straight ribbon draws exactly
+        the kerb it drew before `P3-13`, while the carriageway gains the
+        stations that carry the extent."""
+        line = [[100.0, 0.0, 300.0], [500.0, 0.0, 300.0]]
+        plain, plain_mesh = self._street(tmp_path / "plain", testville_config, line, [])
+        painted, painted_mesh = self._street(
+            tmp_path / "painted",
+            testville_config,
+            line,
+            [{"side": "near", "from_m": 100.0, "to_m": 300.0, "kind": "double"}],
+        )
+
+        assert plain.kerb_stations == 0
+        assert painted.kerb_stations == 4
+        assert painted.kerb_rail_stations == 0
+        assert _kerb(painted_mesh).sum() == _kerb(plain_mesh).sum()
+        # And the carriageway is where the cost went, which is the trade.
+        assert _carriageway(painted_mesh).sum() > _carriageway(plain_mesh).sum()
+
+    def test_a_station_the_kerb_needs_for_its_height_is_kept(
+        self, tmp_path, testville_config
+    ) -> None:
+        """One variable changed — the same bend, level and then climbing.
+
+        Level, the mitre displaces the rail along the segment and nothing
+        depends on where along it a station is, so every station is free. Put
+        6 m of climb on the same plan and the station beside the bend is
+        carrying a kerb height its own chord does not have. Dropping it would
+        step the kerb away from the carriageway it is welded to.
+        """
+        flat, _ = self._street(tmp_path / "flat", testville_config, _FLAT, _BEND_RUNS)
+        bend, _ = self._street(tmp_path / "bend", testville_config, _BEND, _BEND_RUNS)
+
+        assert flat.kerb_stations == bend.kerb_stations == 4
+        assert flat.kerb_rail_stations == 0
+        assert flat.kerb_rail_offset_m == pytest.approx(0.0, abs=1e-9)
+        # Only the station next to the bend: the other three have neighbours on
+        # the same segment, or an unmitred ribbon end.
+        assert bend.kerb_rail_stations == 1
+
+    def test_a_trim_cut_is_not_counted_as_a_station_P3_13_asked_for(self) -> None:
+        """`_at` lerps every column, so a trim cut landing between an original
+        station and an inserted one arrives carrying a *fraction* of `_INSERTED`.
+
+        It is a ribbon end, not a boundary marker — and it is pinned either way,
+        so no geometry depends on the distinction. What depends on it is the
+        published residue: 316 of this region's ribbons start or end on such a
+        station, and reading the column as truthy rather than as `== 1.0` counts
+        every one of them as `P3-13` cost it does not have. Nothing else would
+        fail, which is why this is pinned here.
+        """
+        # x, y, z, half-width, `_INSERTED` — the two ends part-way between an
+        # original station and an inserted one, as `trim` leaves them.
+        points = np.array(
+            [
+                [0.0, 0.0, 0.0, 2.0, 0.4],
+                [10.0, 0.0, 0.0, 2.0, 1.0],
+                [20.0, 0.0, 0.0, 2.0, 0.0],
+                [30.0, 0.0, 0.0, 2.0, 1.0],
+                [40.0, 0.0, 0.0, 2.0, 0.6],
+            ]
+        )
+        rail = points[:, :3]
+        report = SurfaceReport()
+        stations = _rail_stations(points, [(0, len(points))], (rail,) * 4, report)
+
+        # Both ends stay because they are ends; the two inserted stations go
+        # because the rail runs straight through them.
+        assert stations.tolist() == [0, 2, 4]
+        assert report.kerb_rail_stations == 0
+
+    def test_a_buried_kerb_run_keeps_its_ends(self, dualville, tmp_path) -> None:
+        """`_hide_buried_kerbs` decides coverage per quad, so a run end is a
+        station where the answer changes. Thinning one away would merge two
+        quads that disagree and move the region's largest kerb number, with
+        nothing failing. Asserted as an invariant: restrictions are paint, and
+        paint cannot change how much kerb another carriageway covers.
+        """
+        city, root = dualville
+        plain = build_region(city, "middle", out_root=root / "out")
+
+        graph = json.loads(
+            (root / "out" / "testville" / "middle" / ROADGRAPH_NAME).read_text(encoding="utf-8")
+        )
+        for edge in graph["edges"]:
+            edge["kerbside"] = [{"side": "near", "from_m": 40.0, "to_m": 260.0, "kind": "double"}]
+        painted_root = tmp_path / "painted"
+        _write_graph(painted_root, graph["nodes"], graph["edges"])
+        painted = build_region(city, "middle", out_root=painted_root / "out")
+
+        assert painted.kerb_stations > 0
+        assert painted.buried_kerb_m == pytest.approx(plain.buried_kerb_m)
 
 
 def _covered(points: np.ndarray, triangles: np.ndarray) -> np.ndarray:

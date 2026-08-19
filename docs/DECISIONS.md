@@ -6258,18 +6258,53 @@ geometry. Measured against the linear-referenced truth, and with the 6 m junctio
 excluded, the best threshold still leaves **33%** gross error — 3,178 m over-painted, 6,227 m
 missed. Exact V-ranges ship instead (the user's call, 2026-08-19), and this is what they cost:
 
-| | before | after |
-|---|---|---|
-| Road mesh vertices | 34,924 | **44,142** (+26.4%) |
-| Road mesh triangles | 28,170 | 37,259 |
-| Shipped PCK | 38.88 MiB | **39.34 MiB** (+477 KiB, +1.20%) |
-| Triangles folding inward at a hairpin | 4, 0.53 m² | 10, 2.37 m² |
+| | before | as first shipped | **after the thinning** |
+|---|---|---|---|
+| Road mesh vertices | 34,924 | 44,142 (+26.4%) | **39,176** (+12.2%) |
+| └ of which kerb | 22,668 | 29,552 (+6,884) | **24,586** (+1,918) |
+| Road mesh triangles | 28,170 | 37,259 | **32,295** |
+| Shipped PCK | 38.88 MiB | 39.34 MiB (+1.20%) | **39.16 MiB** (+0.72%) |
+| Triangles folding inward at a hairpin | 4, 0.53 m² | 10, 2.37 m² | 10, 2.37 m² |
 
 `surface.py` inserts a station pair 0.25 m either side of each boundary — **1,179 stations**, after
-filtering to the drawn extent, and one station lands on the carriageway strip *and* on every kerb
-strip beside it, which is why 1,179 stations cost 9,218 vertices. The six new inward-folding
-triangles are the tight-corner boundary walk meeting the extra stations, and they are new *places*
-rather than more of the old one: 1.84 m² across four corners, against 52,985 m² of carriageway.
+filtering to the drawn extent. One station lands on the carriageway strip *and* on every kerb strip
+beside it, which is why they first cost 9,218 vertices rather than 2,358.
+
+✅ **Thinned 2026-08-19, and the thinning found the estimate wrong.** Only the carriageway reads
+`COLOR_0.a`; every kerb vertex in the region carries 255. `_rail_stations` therefore draws the kerbs
+from the stations they need and no more: **4,966 of the kerb's 6,884 inserted vertices go, 72%**,
+leaving the carriageway untouched at 11,200 and the caps at 3,390. ⚠️ The kerb does **not** return to
+its pre-`P3-13` 22,668 — the 1,918 that stay are what the load-bearing stations below cost, and they
+are the price of the kerb being in the right place rather than residue.
+
+⚠️ **390 of the 1,179 are not free, which is the finding.** The residue was priced by stubbing the
+insertion out and calling all 6,884 kerb vertices dead. In plan they are: a mitred vertex sits on
+the intersection of its two neighbouring offset lines, so an interpolated station's boundary point
+lands on the straight line between its neighbours' — 0.16 mm of deviation outside the corners
+`boundary` has to hold still. **Height does not follow.** The mitre displaces a vertex *along* its
+segment as well as across it — that displacement is what closes the joint — so the kerb rail's chord
+spans a different stretch of road than the centreline, and height is interpolated along the
+centreline. Where the road climbs through a bend the two disagree by up to **87 mm**, 12 mm at p99.
+Stubbing would have stepped kerbs away from the carriageway they are welded to, on a mesh that ships
+as one trimesh collider, and nothing would have failed. So 252 stations are kept for their height,
+126 as the ends of a buried-kerb run (`_hide_buried_kerbs` decides coverage per quad, and merging
+two quads across a run end would move `buried_kerb_m` silently), and 12 as ribbon ends. **789 are
+genuinely free**, and those are the ones that went.
+
+**Graded, not asserted.** `_off_line` measures every candidate against a 0.1 mm bar — a *crack*
+threshold, since what a dropped station moves is the kerb away from its own carriageway — and the
+worst deviation actually taken was **0.099 mm**. Checked end to end against a rebuild of the
+previous mesh: 4,966 kerb vertices gone, and every surviving kerb position present in the old mesh
+**except one, 30 µm away** — a single float32 ULP at x ≈ 514, inside a cluster `boundary` had frozen.
+The Hennessy Road viewpoint differs by 35 pixels of 2,073,600, all at the vanishing point. Every
+owed grader reproduces its table: `kerbside_error` 16,511 m painted of 16,726 m reachable, 4% gross;
+`carriageway_occupancy` 26 (still failing, as recorded); `buried_kerb_m` 33,161 m; `deck_error`,
+`overhang` and `ground_clearance` within bounds.
+
+The six inward-folding triangles are the tight-corner boundary walk meeting the extra stations, and
+they are new *places* rather than more of the old one: 1.84 m² across four corners, against
+52,985 m² of carriageway. ⚠️ **The thinning does not touch them** — 10 / 2.37 m² before and after —
+so they are on the carriageway strip, which keeps every station. They stay open.
 
 **One error the codec keeps, priced.** It says one kind per edge side and the source does not
 promise one: **183 m** of Wan Chai's 26,065, across 9 of 650 covered sides, is drawn as the wrong

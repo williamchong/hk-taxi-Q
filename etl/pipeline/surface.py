@@ -245,6 +245,34 @@ _MIN_TWICE_AREA_M2 = 1e-6
 # width without this module saying anything about it.
 _WIDTH = 3
 
+# Column of `_Edge.points` marking the stations `_add_kerb_stations` inserted,
+# 1.0 where it did and 0.0 where the polyline already had one.
+#
+# A column for the same reason `_WIDTH` is one, and the reason bites harder
+# here: `trim` interpolates two new stations at the cuts and `dedupe` drops
+# stations, and this has to survive both to be worth anything. As a column it
+# travels.
+#
+# ⚠️ **Read it as `== 1.0`, not as truthy.** `_at` lerps every column, so a trim
+# cut landing between an original station and an inserted one arrives carrying a
+# *fraction* — 316 of this region's ribbons start or end on one. That station is
+# neither original nor inserted: it is a ribbon end, it is pinned regardless of
+# what this column says, and counting it as inserted would overstate `P3-13`'s
+# residue by a quarter. Only the two cuts can be fractional, so every interior
+# station is exactly 0.0 or 1.0 and the equality is doing no float work.
+_INSERTED = 4
+
+# How far a station may sit off the line between its neighbours and still be
+# dropped from a kerb rail, in metres. 0.1 mm: a hair over float noise on
+# coordinates of this magnitude, and it is a *crack* threshold rather than a
+# visual one — what a dropped station moves is the kerb away from the
+# carriageway it is welded to, and the pair are the same surface.
+#
+# ⚠️ It is a guard, not the claim, and it is load-bearing: a quarter of the
+# candidates fail it, by far enough to matter. `_off_line` has the mechanism and
+# the numbers; `kerb_rail_offset_m` reports the worst deviation actually taken.
+_STRAIGHT_M = 1e-4
+
 
 @dataclass
 class SurfaceReport:
@@ -318,16 +346,21 @@ class SurfaceReport:
     on_structure_m: float = 0.0
     # `P3-13`'s cost and `P3-13`'s known error.
     #
-    # ⚠️ `kerb_stations` is **stations, not vertices, and the two are far
-    # apart** — one station lands on the carriageway strip and on every kerb
-    # strip drawn beside it, so Wan Chai's 1,179 stations cost 9,218 vertices,
-    # not 2,358. Reported as stations because that is what this stage decides;
-    # the vertex total two lines up is what it cost.
+    # ⚠️ `kerb_stations` is **stations, not vertices**: a station lands on the
+    # carriageway strip and on every kerb strip beside it that keeps it, so
+    # Wan Chai's 1,179 cost 4,252 vertices rather than 2,358.
+    #
+    # `kerb_rail_stations` is how many the kerb rails still carry — 390 of the
+    # 1,179 — and `_rail_stations` has the argument for why that is not zero.
+    # `kerb_rail_offset_m` is the worst distance any *dropped* station sat off
+    # the line it was dropped onto, against `_STRAIGHT_M`'s bar.
     #
     # `kerb_minority_m` is metres drawn as the wrong *kind* of line, because the
     # codec says one kind per edge side and the source does not promise one; see
     # `_kerbside`.
     kerb_stations: int = 0
+    kerb_rail_stations: int = 0
+    kerb_rail_offset_m: float = 0.0
     kerb_minority_m: float = 0.0
 
     @property
@@ -447,6 +480,53 @@ def boundary(points: np.ndarray, offsets: np.ndarray, across_m: np.ndarray | flo
 def _lift(plan: np.ndarray, points: np.ndarray, lift_m: float) -> np.ndarray:
     """A plan boundary put back on the ribbon's own heights."""
     return np.column_stack([plan[:, 0], points[:, 1] + lift_m, plan[:, 1]])
+
+
+def _off_line(rail: np.ndarray) -> np.ndarray:
+    """How far each station sits off the line between its two neighbours.
+
+    Ends are infinite: a rail's first and last station have no pair to be
+    between, and dropping either would shorten the rail. So is a station whose
+    neighbours coincide — there is no line to be on.
+
+    This is what makes the kerb thinning provable rather than assumed, and
+    **the measurement is not a formality — it refuses 252 of Wan Chai's 1,041
+    candidates.** In plan the algebra is exact: `_insert_stations` puts its
+    stations *on* the polyline, and `mitres` puts each interior vertex on the
+    intersection of the two neighbouring offset lines, so an interpolated
+    station's boundary point lands on the straight offset line between its
+    neighbours' — even under `Q23`'s varying half-width, since a linearly
+    varying offset of a straight segment is still straight.
+
+    ⚠️ **It is height that does not follow, and the reason is the mitre itself.**
+    A mitred vertex is displaced *along* the segment as well as across it — that
+    displacement is what closes the joint — so the rail's chord between two
+    mitred neighbours spans a different stretch of the segment than the
+    centreline does. Height is interpolated along the centreline. The two
+    parameterisations therefore disagree, and an inserted station carries the
+    difference: up to **87 mm** in this region, 12 mm at p99, against 0.16 mm of
+    plan deviation outside the corners `boundary` had to hold still. Dropping
+    such a station would leave the kerb at a height its own carriageway is not
+    at — a step between two surfaces that are welded everywhere else, on a mesh
+    that ships as one trimesh collider. So it is kept.
+    """
+    offset = np.full(len(rail), np.inf)
+    if len(rail) < 3:
+        return offset
+    before, here, after = rail[:-2], rail[1:-1], rail[2:]
+    span = after - before
+    reach = here - before
+    length_sq = (span * span).sum(axis=1)
+    # ⚠️ Squared, so the bar is `_MIN_SEGMENT_M` **squared** — against the raw
+    # constant this would be a 1 mm coincidence radius rather than a micron.
+    # Named once and used for both the divide and the fallback: the `inf` is
+    # only correct while the two ask the same question, and writing the
+    # predicate twice is how that quietly stops being true.
+    spans = length_sq > _MIN_SEGMENT_M**2
+    along = np.divide((reach * span).sum(axis=1), length_sq, out=np.zeros(len(span)), where=spans)
+    perpendicular = np.linalg.norm(reach - along[:, None] * span, axis=1)
+    offset[1:-1] = np.where(spans, perpendicular, np.inf)
+    return offset
 
 
 # --------------------------------------------------------------------------
@@ -745,7 +825,8 @@ class _Arm(NamedTuple):
 class _Edge:
     """One graph edge, and the ribbon geometry derived from it.
 
-    `points` is `(N, 4)`: x, y, z and the station's half-width — see `_WIDTH`.
+    `points` is `(N, 5)`: x, y, z, the station's half-width and whether `P3-13`
+    inserted it — see `_WIDTH` and `_INSERTED`.
     """
 
     points: np.ndarray
@@ -911,7 +992,7 @@ def build_region(
 
     builder = _Builder()
     for edge in edges:
-        if _draw_edge(builder, edge, style, city.roads.lane_width_m):
+        if _draw_edge(builder, edge, style, city.roads.lane_width_m, report):
             report.edges += 1
     for cap in caps:
         # A cap is no length of lane, so it carries no lanes and no length —
@@ -942,7 +1023,9 @@ def _prepare(published: dict, style: RoadSurface, report: SurfaceReport) -> _Edg
     which is the contract the game reads them under.
     """
     half_widths = _half_widths(published, style)
-    points = dedupe(np.column_stack([_polyline(published), half_widths]))
+    points = dedupe(
+        np.column_stack([_polyline(published), half_widths, np.zeros(len(half_widths))])
+    )
     restrictions, kinds, minority_m = _kerbside(published)
     report.kerb_minority_m += minority_m
     return _Edge(
@@ -978,7 +1061,7 @@ def _add_kerb_stations(edge: _Edge) -> int:
     if not edge.restrictions:
         return 0
     low, high = edge.trim_start_m, edge.length_m - edge.trim_end_m
-    edge.points, added = _insert_stations(
+    edge.points, inserted = _insert_stations(
         edge.points,
         (
             bound
@@ -988,7 +1071,10 @@ def _add_kerb_stations(edge: _Edge) -> int:
             if low < bound < high
         ),
     )
-    return added
+    # Marked here rather than in `_insert_stations`, which stays ignorant of
+    # what any column means — it is handed distances and gives back rows.
+    edge.points[inserted, _INSERTED] = 1.0
+    return len(inserted)
 
 
 def _kerbside(
@@ -1035,8 +1121,14 @@ def _kerbside(
     return extents, kinds, minority_m
 
 
-def _insert_stations(points: np.ndarray, at: Iterable[float]) -> tuple[np.ndarray, int]:
+def _insert_stations(points: np.ndarray, at: Iterable[float]) -> tuple[np.ndarray, np.ndarray]:
     """The polyline with a station added at each given distance along it.
+
+    Returns the merged polyline and the **row indices of the added stations
+    within it**, so a caller can mark them without re-deriving where they went.
+    Indices rather than a count because the merge is a sort: the new rows are
+    interleaved, not appended, and their positions are this function's own
+    answer.
 
     This is what buys the exact V-range. `TEXCOORD_1` is `flat` across a strip
     and `COLOR_0` is interpolated between stations, so an extent written on the
@@ -1055,8 +1147,9 @@ def _insert_stations(points: np.ndarray, at: Iterable[float]) -> tuple[np.ndarra
     most `_KERB_STATION_M / 2` out, and the alternative is a quad thin enough to
     collapse in `_Builder.build`.
     """
+    empty = np.zeros(0, dtype=int)
     if len(points) < 2:
-        return points, 0
+        return points, empty
     along = plan_lengths(points)
     wanted: list[float] = []
     for bound in at:
@@ -1065,14 +1158,19 @@ def _insert_stations(points: np.ndarray, at: Iterable[float]) -> tuple[np.ndarra
                 wanted.append(distance)
     wanted = sorted(set(wanted))
     if not wanted:
-        return points, 0
+        return points, empty
 
     added = np.vstack([_at(points, along, distance) for distance in wanted])
     merged = np.vstack([points, added])
     # Stable, so a new station landing exactly on an old one keeps the old one
     # first and the pair stays in the order `mitres` expects.
     order = np.argsort(np.concatenate([along, wanted]), kind="stable")
-    return merged[order], len(wanted)
+    # Where each added row ended up: `order` says which source row each output
+    # row came from, so the rows drawn from the back of the stack are the new
+    # ones. Read off the sort rather than recomputed, for the same reason
+    # `_Edge` stores `lip_left` instead of re-deriving it — a second expression
+    # for the same thing is a second thing to drift.
+    return merged[order], np.flatnonzero(order >= len(points))
 
 
 def _half_widths(published: dict, style: RoadSurface) -> np.ndarray:
@@ -1474,6 +1572,72 @@ def _runs(keep: np.ndarray) -> list[tuple[int, int]]:
     return [(int(start), int(stop) + 1) for start, stop in changes.reshape(-1, 2)]
 
 
+def _rail_stations(
+    points: np.ndarray,
+    runs: list[tuple[int, int]],
+    rails: tuple[np.ndarray, ...],
+    report: SurfaceReport,
+) -> np.ndarray:
+    """Which of the ribbon's stations the kerb rails are drawn from.
+
+    `P3-13` inserts a pair of stations either side of every drawn restriction
+    boundary so `COLOR_0.a` can turn on in half a metre instead of over a city
+    block. **Only the carriageway strip reads that channel** — every kerb vertex
+    in the region carries 255 — but the stations go into `_Edge.points`, which
+    all four kerb strips are drawn from too. In Wan Chai that was 6,884 vertices
+    of a one-draw-call surface saying nothing, about 18% of the road mesh, in
+    every frame.
+
+    So the kerbs take the stations they need and no more. Three kinds are
+    needed, and the third is the one that is easy to miss:
+
+    - the ribbon's own ends, which are where every rail stops;
+    - a station some rail is genuinely not straight through (`_off_line`);
+    - **the ends of every surviving kerb run.** `_hide_buried_kerbs` decides
+      coverage per *quad*, so a run boundary is a station where the answer
+      changes, and merging the two quads across it would silently move
+      `buried_kerb_m` — the region's largest kerb number — with nothing failing.
+
+    ⚠️ **`runs` must be the very lists the caller then draws**, not a fresh
+    derivation of them. `_draw_edge` remaps each run into the returned stations
+    with `searchsorted`, which is exact only because both of a run's ends are
+    pinned here — hand it a second opinion and a quad silently spans a boundary.
+
+    Everything else is collinear filler, and a rail that skips it is the same
+    rail. `report.kerb_rail_offset_m` is how true that turned out to be.
+
+    ⚠️ **A third of Wan Chai's stations are kept, and the finding is that they
+    were never free.** `PROGRESS.md` priced `P3-13`'s kerb vertices by stubbing
+    the insertion out entirely and reported all 6,884 as dead weight. 390 of
+    the 1,179 are not: 252 carry a kerb height the chord across them does not
+    have, and 138 are ends of a ribbon or of a buried-kerb run. Stubbing would
+    have moved kerbs, quietly. What is actually free is 789 of them.
+    """
+    # Two stations at least, because `_shape` refuses to give an edge a ribbon
+    # below that and `_draw_edge` is the only caller — so both ends exist.
+    inserted = points[:, _INSERTED] == 1.0
+    droppable = inserted.copy()
+    droppable[0] = droppable[-1] = False
+    for start, stop in runs:
+        droppable[start] = droppable[stop - 1] = False
+
+    if droppable.any():
+        offset = np.zeros(len(points))
+        for rail in rails:
+            offset = np.maximum(offset, _off_line(rail))
+        droppable &= offset <= _STRAIGHT_M
+        report.kerb_rail_offset_m = max(
+            report.kerb_rail_offset_m, float(offset[droppable].max(initial=0.0))
+        )
+
+    stations = np.flatnonzero(~droppable)
+    # Counted off what survives, not off what was refused: an inserted station
+    # pinned as a run end costs a rail vertex exactly as much as one a rail
+    # bends through, and this field is the cost.
+    report.kerb_rail_stations += int(inserted[stations].sum())
+    return stations
+
+
 def _measure_level_steps(
     ends: dict[tuple[int, int], list[_End]], edges: list[_Edge], report: SurfaceReport
 ) -> None:
@@ -1499,7 +1663,13 @@ def _measure_level_steps(
     )
 
 
-def _draw_edge(builder: _Builder, edge: _Edge, style: RoadSurface, lane_width_m: float) -> bool:
+def _draw_edge(
+    builder: _Builder,
+    edge: _Edge,
+    style: RoadSurface,
+    lane_width_m: float,
+    report: SurfaceReport,
+) -> bool:
     """The carriageway and both kerbs, between this edge's two trims."""
     points, offsets = edge.ribbon, edge.offsets
     if points is None or offsets is None or edge.left is None or edge.right is None:
@@ -1568,18 +1738,41 @@ def _draw_edge(builder: _Builder, edge: _Edge, style: RoadSurface, lane_width_m:
     # Drawn in runs, because a kerb another carriageway has already covered is
     # not drawn at all — see `_hide_buried_kerbs`. A side with no mask yet is a
     # side nothing was asked about, and keeps the whole kerb it always had.
-    for keep, lower, upper, across in (
-        (edge.kerb_left, left, left_top, (0.0, 0.0)),
-        (edge.kerb_left, left_top, left_out, (0.0, -outside)),
-        (edge.kerb_right, right_top, right, (lanes, lanes)),
-        (edge.kerb_right, right_out, right_top, (lanes + outside, lanes)),
+    #
+    # ⚠️ **On fewer stations than the carriageway**, since the kerb reads none
+    # of what the extra ones carry — `_rail_stations` has the argument and the
+    # measurement. The runs are resolved once and both used and pinned from the
+    # same list, which is what makes the `searchsorted` below exact rather than
+    # nearest: a second derivation of them would not have to agree.
+    #
+    # ⚠️ Only the four *distinct* rails are offered for measurement. `left_top`
+    # is `left` plus a constant height and `right_top` is `right` plus one, and
+    # `_off_line` differences its input, so the two would return answers the
+    # `maximum` already has.
+    kerbs = [
+        _runs(keep) if keep is not None else [(0, len(points))]
+        for keep in (edge.kerb_left, edge.kerb_right)
+    ]
+    stations = _rail_stations(
+        points, kerbs[0] + kerbs[1], (left, left_out, right, right_out), report
+    )
+    kerb_along = along[stations]
+    near, near_top, near_out = left[stations], left_top[stations], left_out[stations]
+    off, off_top, off_out = right[stations], right_top[stations], right_out[stations]
+    for runs, lower, upper, across in (
+        (kerbs[0], near, near_top, (0.0, 0.0)),
+        (kerbs[0], near_top, near_out, (0.0, -outside)),
+        (kerbs[1], off_top, off, (lanes, lanes)),
+        (kerbs[1], off_out, off_top, (lanes + outside, lanes)),
     ):
-        for start, stop in _runs(keep) if keep is not None else [(0, len(points))]:
+        for start, stop in runs:
+            low = int(np.searchsorted(stations, start))
+            high = int(np.searchsorted(stations, stop - 1)) + 1
             builder.strip(
-                lower[start:stop],
-                upper[start:stop],
+                lower[low:high],
+                upper[low:high],
                 colour=style.kerb_material.colour,
-                along=along[start:stop],
+                along=kerb_along[low:high],
                 across=across,
                 marking=kerb_marking,
             )
@@ -1826,9 +2019,11 @@ def main(argv: list[str] | None = None) -> int:
         )
     if report.kerb_stations:
         log.info(
-            "  %d stations inserted at kerbside restriction boundaries; %.0f m of kerb drawn "
-            "as the wrong kind of line",
+            "  %d stations inserted at kerbside restriction boundaries, %d of them kept on a "
+            "kerb rail (worst %.2g m off the line); %.0f m of kerb drawn as the wrong kind of line",
             report.kerb_stations,
+            report.kerb_rail_stations,
+            report.kerb_rail_offset_m,
             report.kerb_minority_m,
         )
     if report.inverted:
