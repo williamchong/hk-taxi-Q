@@ -473,7 +473,8 @@ crisp edges at any cell size and a clean key for `collapse`.
 
 ## `Q19` — Solid geometry stands in the drawn carriageway
 
-**Status.** 🟡 Half answered · **Owner.** the carriageway-width question, unassigned — the
+**Status.** 🟡 Half answered · **Owner.** unassigned — ⚠️ **and no longer "the carriageway-width
+question", which 2026-08-21 refused for the building half**; it is road-versus-footprint now. The
 interchange half became `Q22`/Phase 4's and `e702` `Q51`'s on 2026-08-20
 
 **Claim.** **5.17% of drawn carriageway has solid geometry standing in it at bumper height** —
@@ -788,11 +789,89 @@ Recorded because the inference from one instrument was made and was wrong.
 **24**, `clearance_reconcile` still reads what `Q51` recorded, `narrowing`'s sweep still 24 / 9 / 14
 / 1 at 1.60x. `_starved_shape` is unit-tested against both families.
 
-**What is owed next, with owners.** The building half wants the width question asked of the sources
-before anything is modelled — **unassigned, and it is now a `DATA_SOURCES.md` question rather than a
-geometry one**. The interchange half is `Q22`/Phase 4's. `e702` is `Q51`'s.
+### The building half is not a width defect — 2026-08-21
 
-**See.** `Q51` for what routes around this · `Q20` · `Q22` for the interchange's family · `Q24` · `P2-5` · `P3-6` for why the population moved
+🔴 **The centreline is inside the occupier on 13 of the 15, and no width rule reaches that.** Both
+candidates this entry had left — the per-cross-section lane count and the short-stub rule — are
+**width** rules, and the thing they would move is not what blocks these edges. Neither needed
+building to be refused, which is the cheapest this question has ever closed a route.
+
+Measured with the grader's own walk and occupier index, on **all fifteen** rather than on two.
+
+**The population, taken from the grader rather than from this entry.** 26 failures = **11
+`INFRASTRUCTURE`** + **14 `BUILDING`** + **`e207` `BUILDING+INFRASTRUCTURE`**. ⚠️ **There is no
+`LANDMARK` failure**: the `1 LANDMARK` in the sweep above is `narrowing.py`'s `e702`, which the
+grader passes at 3.41 m, exactly as this entry's own ⚠️ note says. The two splits are two
+populations and this entry has quoted the pipeline's as though it were the grader's.
+
+**The two halves separate perfectly by length, which the record had as a tendency and is a
+partition.** Building half median **11.0 m**, 12 of 15 under 20 m, shortest **`e405` at 3.6 m** —
+an edge drawn 10.24 m wide and 3.6 m long. Structure half median **102.0 m**, and **not one** of the
+11 is under 20 m (min 20.4). Level-0 median is 45.2 m.
+
+**The shape refutes this entry's own driven-and-shot reading.** `corridor_profile` — computed since
+the tool shipped, never printed — gives every judged station's clear run in walk order. Every one
+of the fifteen reads the **full drawn 10.24 m** along most of its length and collapses at one to
+three stations:
+
+| edge | profile (clear m per station, walk order) |
+|---|---|
+| `e627` GREAT GEORGE ST | `10.2 ×7 · 1.0 · 1.5 · 10.2 ×3` |
+| `e132` | `10.2 ×6 · 1.0 · 4.9 · 10.2` |
+| `e740` | `10.2 ×5 · 2.0 · 1.0 · 1.5 · 7.8 · 10.2` |
+| `e314` LEIGHTON RD | `2.4 · 0.5 · 5.9 · 8.8 · 9.3 · 10.2 ×4` |
+
+🔴 **"The ribbon is drawn wider than the gap it runs through" does not survive this.** That reading
+came from driving `e314` and `e627` and is n=2 generalised to 14 — the shape this entry was
+rewritten twice to stop making. A ribbon too wide for its slot is narrow *for the whole slot*; these
+are at full width on either side of the blockage. On `e627` the record's own named edge reads
+**10.2 m clear at seven of twelve stations**.
+
+**A frontage cannot leave 1.0 m of 10.2.** It would leave about half the ribbon. A clear run of
+1.0–2.0 m means the occupier spans ~9 m of the cross-section, so it **crosses** the carriageway
+rather than standing beside it. Shot at eye height along `e627` (`build/driver/q19b/e627_eye`): the
+road runs into a wall filling the full width of the view.
+
+**And the centreline is in it.** Queried at each binding station in the same band:
+
+| | |
+|---|---|
+| Centreline occupied at the binding station | **13 of 15** — 12 `BUILDING`, 1 `INFRASTRUCTURE` |
+| Clear only at the station | `e627`, `e315` — and both are 0.5 m from the occupier |
+| Sideways distance to the first clear cell | 0.5–4.0 m on 12 of 15; `e132` **12.5 m** |
+| Signed against edge direction | mixed, so **not** a systematic registration shift of one layer |
+
+`lanes`, `width_m` and `widen_default` all move the ribbon's *edges*. None of them moves the
+centreline, and the centreline is what is inside the building. That is why `authored` equals `clear`
+on **11 of the 15** and is *worse* on the other four, and why the 1.30–1.60x sweep clears nothing:
+the sweep was measuring the wrong quantity, correctly.
+
+**What this leaves, and it is a different question from the one this entry has been asking.** Not
+"how wide should the ribbon be" but "why is a drivable level-0 centreline inside a building". Three
+readings, none measured yet, and the mixed signs above already argue against a whole-layer offset:
+a **building that spans the street** and is extruded solid to ground (`P3-6` gave HKCEC piers for
+exactly this, and `e132`'s 12.5 m is the shape of it); **per-site disagreement** between Road Network
+v2 centrelines and the 3D Visualisation Map footprints; or a graph edge where no drivable street
+exists. They do not share a fix either, and the population clusters — `e314`, `e335`, `e405` and
+`e499` all sit within 80 m of each other around Leighton Road and Matheson Street, and `e627` and
+`e629` are 27 m apart on Great George Street. A per-site reading is therefore not fifteen sites.
+
+⚠️ **Every number in this section came from three scratch scripts**, which is `Q37`'s debt and
+`Q55`'s, opened again. `corridor_profile` and the centreline query are the two things this question
+turned on and neither is reportable from the shipped tool. **Paying that is the next commit, not a
+later one** — a finding this entry has now reversed three times must not rest on scripts that are
+not in the repo.
+
+**Instruments.** Reporting and measurement only; nothing shipped moved. Every baseline in the
+section above reproduced exactly — **and was run before any of it was read**, which is the only
+ordering under which a grader cannot have been tuned toward the finding it then supports.
+
+**What is owed next, with owners.** ⚠️ **Not the width question** — this section closes that route
+for the building half. What is owed is the reportable instrument above, and then the road-versus-
+footprint question, which is a **geometry and graph** question and not the `DATA_SOURCES.md` one
+this entry named. Still unassigned. The interchange half is `Q22`/Phase 4's. `e702` is `Q51`'s.
+
+**See.** `Q51` for what routes around this · `Q20` · `Q22` for the interchange's family · `Q24` · `P2-5` · `P3-6` for why the population moved, and for the piers · `Q57` for the mechanism this section is the fourth instance of
 
 ## `Q20` — Deck heights are sampled from `INFRASTRUCTURE`
 
@@ -7097,9 +7176,17 @@ estate. But Traffic Aids Drawings publishes the lane **lines** — `RM1101`/`RM1
 `RM1103` CENTRE LINE, `RM1104` WARNING LINE ×409 — between published carriageway edges `RM1109`
 ×317. A count is derivable per cross-section from geometry.
 
-`lanes` is authored **for want of a counter, not for want of data**, and `Q19`'s "the width is
-absent from the whole source, so the choice is another dataset or a rule for short stubs" is
-resolved in favour of the other dataset.
+`lanes` is authored **for want of a counter, not for want of data**, and that is still true and
+still worth having.
+
+🔴 **What this paragraph said next was that `Q19`'s "another dataset or a rule for short stubs" is
+"resolved in favour of the other dataset". Withdrawn 2026-08-21: neither was the answer, because
+neither is about the thing that blocks those edges.** `Q19` measured all fifteen and found the road
+**centreline** inside the occupier on 13 of them — a quantity no lane count and no stub rule moves.
+⚠️ **This is this entry's own mechanism, one hop further on**: a conclusion drawn about *the estate*
+from a fact established about a **width**, when the defect it was aimed at had never been measured.
+A derived lane count remains worth building for what it is — the ribbon does cross the published
+kerb at 75% of stations — but it is not owed to `Q19` and must not be scheduled as its fix.
 
 ### ⚠️ The trap, recorded because it nearly became a fifth claim
 
@@ -7127,7 +7214,7 @@ are untouched. Named and unassigned, in rough order of what they unblock:
 
 | Follow-on | Would answer |
 |---|---|
-| Count `RM1101`/`RM1109` per cross-section into `lanes` | `Q19`'s building half — ⚠️ **but not "which fails *because* the width is invented"**, see the correction below |
+| Count `RM1101`/`RM1109` per cross-section into `lanes` | 🔴 **Not `Q19`'s building half — withdrawn 2026-08-21**, which measured the centreline inside the occupier on 13 of 15 and refused every width rule. What it would still answer is the network-wide overhang `carriageway_margin.py` measured, on its own merits |
 | ✅ **`CartoTransLine RM` → a real `width_m`** | **Done as an instrument, 2026-08-20**: `tools/carriageway_margin.py`. Reads both publishers, reports overhang, ships no width |
 | `DTAD_RD_MARK_SYM_PT` → arrows | `Q53`, on a registration argument rather than a data one |
 | `CartoTransLine TW` → `tram_streets` | retires a `Q34′`-class authored list |
