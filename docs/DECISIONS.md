@@ -5673,7 +5673,10 @@ was making the current drift *nearly* work.
 
 ## `P3-9a` — The build is threaded, so the host is not a free choice
 
-**Status.** 🟡 **Build cut and verified 2026-08-18; drivers not yet run.** The round itself is open.
+**Status.** 🟡 **Build cut and verified 2026-08-20; drivers not yet run.** The round itself is open.
+⚠️ **The artefact has now drifted behind the code twice** — most recently on 2026-08-20, when `Q56`
+reached the macOS export and not the web one. See "The artefact drifts, and the hand-packed zip is
+why" below.
 
 **Claim.** The `Web Demo` preset ships `variant/thread_support=true`. The engine therefore uses
 `SharedArrayBuffer`, which browsers gate behind **both** `Cross-Origin-Opener-Policy: same-origin`
@@ -5702,9 +5705,24 @@ none of the silent-unbind paths `P3-11c`/`d`/`e` opened has fired in the *export
 the only build anyone will judge. ⚠️ **This is a smoke check, not the `verify_vehicle.gd` the risk
 register still owes** — it proves this bundle, on this day, by eye. It fails no build.
 
-**Measured.** PCK **38.72 MiB** (40,601,608 bytes) + wasm **37.02 MiB** = **75.74 MiB over the
-wire**, which is the figure a tester actually pays and the one to warn them about. The **+0.05**
+**Measured, 2026-08-20 (current).** PCK **39.17 MiB** (41,069,488 bytes) + wasm **37.02 MiB**
+(38,817,643 bytes) = **76.19 MiB over the wire** (79,887,131 bytes), which is the figure a tester
+actually pays and the one to warn them about. The itch zip of the same nine files is **47.43 MiB**
+(49,731,639 bytes). **+0.45 MiB** on the figure below, which is `P3-12`, `P3-13` and `Q56` together.
+
+**Prior measurement, 2026-08-18.** PCK **38.72 MiB** (40,601,608 bytes) + wasm **37.02 MiB** =
+**75.74 MiB over the wire**. The **+0.05**
 over the 2026-08-12 PCK is the whole of `P3-11c`/`d`/`e`.
+
+**The artefact drifts, and the hand-packed zip is why.** ⚠️ **Re-exporting `build/web/` does not
+update the distributable, and nothing warns.** No script, no Makefile target, and `tools/export.sh`
+has no zip step. On 2026-08-20 that cost a day: `Q56` re-exported macOS but not web, so `build/web/`
+was a 19 Aug export and the zip was an **18 Aug** one whose PCK predates `P3-12` entirely — a
+distributable with **no road markings at all**, for a round whose whole subject is whether the city
+reads as Hong Kong. **This is the second instance**: the first is the 2026-08-17 cut recorded above,
+found stale in `build/web/` beside a 49 MB zip of itself. **Re-pack the zip on every re-export**, and
+check its mtime against `build/web/index.pck` before sending a link. Building the step into a script
+was considered the same day and deliberately not done, to keep that re-cut minimal.
 
 **See.** `PLAN.md` `P3-9a` · `PROGRESS.md` risk register · `Q26` · `P3-7a` · `P3-11e`
 ## `Q51` — Traffic is never sent down an edge a car cannot fit through

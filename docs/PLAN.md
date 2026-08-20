@@ -262,7 +262,8 @@ trade.
   It belongs to `B2` by subject — it is the road half of "does this read as Hong Kong" — and it
   depends on nothing in the build, because `P1-4` shipped the lane coordinate it draws on. **Whether
   it goes in front of the drivers is a separate call**: landing it means re-exporting and
-  re-verifying a 75.74 MiB web build. See `Q53`.
+  re-verifying a 76.19 MiB web build — **and re-packing the itch zip by hand, which nothing does for
+  you**. See `Q53`, and `P3-9a` for how that zip went two cuts stale.
 - **Review:** drive Hennessy Road and look around; the same viewpoints before and after | web build |
   **Does this read as Wan Chai?** No longer a dress rehearsal — `P3-9a` follows immediately and puts
   the same build in front of people who are not the user.
