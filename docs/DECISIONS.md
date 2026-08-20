@@ -6582,7 +6582,8 @@ for the layer's own row · `Q18`/`Q36` for the registration problem this one doe
 
 ## `Q55` — The filler guard reads greyness, and the placeholder panels are coloured
 
-**Status.** 🔴 **Open** — measured, not fixed · **Owner.** `tools/facade_survey.py`, survey ·
+**Status.** ✅ **Closed 2026-08-21** by the guard and the sweep this record asked for ·
+**Owner.** `tools/facade_survey.py`, survey ·
 **Opened** 2026-08-20
 
 **Claim.** `is_filler` rejects a texel whose channels are an exact three-way tie. **97 atlases on 93
@@ -6671,22 +6672,79 @@ question.** `B372821591401063` is **96.5%** filler; rejecting it leaves ~38,000 
 that *"`None` is a refusal to answer, and the caller must keep it one"* — a **share**-based refusal
 probably belongs beside the count-based one. It should not ride along in the same change.
 
-**What a fix costs, so it is costed before it is started.** `facade_lab.json` is a committed source
-input, not build output, so a guard change re-publishes the survey and `CONTRIBUTING.md` then owes
-`tools/ring_weights.py` (`Q34′`) and `tools/facade_chroma.py` (`Q30`) with their tables pasted —
-`Q34`'s ring weights are authored against this population's `C*` distribution, exactly as they were
-when `Q37` moved it. `facade_colour/superseded/` already holds one generation and is the reversal
-path. **`Q37` walked this whole route and it was not small.**
+**What a fix costs, so it is costed before it is started.** A guard change re-publishes the survey,
+and `CLAUDE.md` then owes `tools/ring_weights.py` (`Q34′`) and `tools/facade_chroma.py` (`Q30`) with
+their tables pasted — `Q34`'s ring weights are authored against this population's `C*` distribution,
+exactly as they were when `Q37` moved it. `facade_colour/superseded/` already holds one generation
+and is the reversal path. **`Q37` walked this whole route and it was not small.**
+
+🔴 **This paragraph said `facade_lab.json` was "a committed source input, not build output". It is
+not committed** — `etl/sources/` is `.gitignore:2`, and `git check-ignore` confirms it. The claim
+also stood in `PROGRESS.md`'s risk register. Nothing downstream turns on it, but it is the third
+instance in this record's own family of a statement that was asserted rather than checked, and it
+made the fix sound more expensive than it is: re-publishing the table is a **local** act, reversible
+from `superseded/`, and reviewable only through the two derived tables and this record.
 
 ⚠️ **Nothing here is reproducible from the repo yet.** Every number above came from a scratch script
 reading `facade_survey`'s own `wall_texels` / `photographic` / `estimate`, and that is the same debt
 `Q37` was opened about — a table nobody can re-derive. **The guard belongs in `facade_survey.py`
 with a test, and the sweep belongs beside it**, or this record ages into an assertion.
 
-**Not fixed now, and deliberately.** The measurement is what was asked for and what this records.
-The change touches the input every façade decision from `Q30` to `Q34′` to `Q45` rests on, and it
-should land as one change with its re-derivations, not as a guard commit followed by four stale
-tables.
+**Not fixed when this was written, and deliberately.** The measurement is what was asked for and
+what this recorded. The change touches the input every façade decision from `Q30` to `Q34′` to `Q45`
+rests on, and it should land as one change with its re-derivations, not as a guard commit followed
+by four stale tables. It did, on 2026-08-21.
+
+### What shipped
+
+`filler_colours` reads each atlas's repeated colours on a 1-in-16 lattice and `is_filler` rejects
+those texels **per atlas colour, per texel**, beside `Q37`'s channel tie. `MODAL_SHARE` is **0.20**,
+the bar `Q55`'s sweep used. Every colour over the bar is taken rather than only the modal one — at a
+fifth of an atlas no more than five can qualify, and an atlas carrying two panels is a case this
+record observed.
+
+⚠️ **The two axes are kept disjoint, and that is not tidiness.** A repeated *grey* is `Q37`'s and is
+filtered out of the colour set. Leaving it in changes no texel — the tie already had it — but two
+thirds of the atlases in the region repeat `#3c3c3c`, black or white past the bar, so the sweep
+would have reported **every grey-padded building in the region** with a zero delta and buried this
+record's 93 in 2,213 rows of nothing. It was caught by review, not by a test, and there is a test
+now.
+
+**Validated the way `Q37` validated.** Re-run with the colour axis disabled, the tool reproduces the
+superseded table on **all six sheets, 2,213 rows, zero differing** — so nothing but the guard can
+have moved a row. With it on, **90 rows move**, none gained and none lost, so no building fell under
+`MIN_TEXELS` and the share-based refusal this record defers is still not owed.
+
+| | `Q55`'s scratch script | `--filler-report`, shipped |
+|---|---|---|
+| Buildings carrying a panel | 93 | **100**, on 132 atlas slots |
+| Rows actually moved | — | **90** |
+| Past `Q33`'s 0.46 `Δab` | 43 | **61** |
+| Past 2.0 / 5.0 | 15 / 5 | 19 / **5** |
+| `ΔL*` up / down | 40 up of 93 | **48 up, 25 down** |
+| Median `ΔL*` | +0.00 | **+0.00** |
+| Worst `ΔL*` | +54.69 / −33.22 | **+54.69 / −33.22** |
+| Wall-texel share p50 / p90 / max | 0.94% / 33.0% / 96.5% | 2.51% / 30.0% / 96.1% |
+
+Every **file-identity** column reproduces exactly — `(68,65,65)` at 4,584 B / 72 colours / 21
+copies, `(41,37,25)` at 2,084 B and a palette of **1**, `(236,232,232)` at 8,299 B and a palette of
+**1**, `(28,27,23)` at 82,565 colours, `(177,178,175)` at 13,749 B / 92. The damage counts run
+*higher* because this record said they would: 93 was a floor, and taking every colour over the bar
+reaches further than the modal one. `B357491563701063` — named above as the worst downward move —
+reads `L*` **92.30** unguarded against **59.08** guarded, which is its −33.22 to the hundredth.
+
+**What the re-derivations found.** `tools/ring_weights.py`: every weight re-derives to **exactly its
+shipped value**, so `hong_kong.yaml` is untouched. That is `Q34′`'s own thesis arriving again — the
+near-neutral ring moved 40.5% → 40.3% of the stock and no weight moved at all.
+`tools/facade_chroma.py`: the share over `C*` 20 moves **26.4% → 26.5%**. ⚠️ **That is the finding,
+not a formality**: the panels were damaging **lightness**, and `Q30`'s argument is about **chroma**,
+so `Q30` survives its own input being corrected rather than being weakened by it.
+
+⚠️ **What is still not graded.** `--filler-report` grades the *guard*, not the *table*: it can say
+which buildings carry a panel and what rejecting it moved, and it cannot say whether the estimate is
+right for the 2,113 buildings that carry none. `MIN_TEXELS`' share-based sibling remains deferred,
+and `tools/facade_glazing.py` deliberately stays on `Q37`'s axis alone — it shares `photographic`,
+its two-argument call keeps the old behaviour, and this record measured no damage on its table.
 
 **See.** `Q37` for the survey this repeats and the fix it already prescribed · `Q34′` and `Q30` for
 what re-publishing the table owes · `Q33` for the 0.46 `Δab` tolerance · `DATA_SOURCES.md`

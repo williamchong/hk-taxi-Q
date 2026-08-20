@@ -13,12 +13,18 @@ import pytest
 from facade_survey import (
     CLIP_LEVEL,
     FACES,
+    MODAL_SHARE,
     PERCENTILE,
     VEGETATION_A,
+    _atlas_filler,
+    _pack,
+    _repeats,
     coverage,
     estimate,
     face_of,
+    filler_colours,
     is_filler,
+    photographic,
 )
 
 from pipeline.colour import srgb_to_lab
@@ -48,6 +54,130 @@ class TestFillerGuard:
         to within a count is a real pixel and rejecting it would throw away the
         neutral end of every genuinely grey building."""
         assert not is_filler(np.array([texel])).any()
+
+
+# `Q55`'s four damaging placeholders. None is a channel tie, so `Q37`'s guard
+# passes every one; `(68, 65, 65)` is the one that also defeats any percentile,
+# at `L*` 27.8 across 44-96% of a building's walls.
+PANELS = [(68, 65, 65), (41, 37, 25), (136, 138, 137), (177, 178, 175)]
+
+
+def atlas(colour: tuple[int, int, int], share: float, size: int = 64) -> np.ndarray:
+    """A photographic atlas with one flat panel covering `share` of it.
+
+    ⚠️ `share` is quantised by `MODAL_STRIDE` — the guard counts on a lattice, so
+    at `size=64` only every fourth row is sampled and a nominal 0.10 reads 0.125.
+    Use a larger `size` where the margin to `MODAL_SHARE` is the point.
+    """
+    rng = np.random.default_rng(11)
+    image = rng.integers(0, 256, size=(size, size, 3), dtype=np.uint8)
+    rows = round(size * share)
+    image[:rows] = colour
+    return image
+
+
+class TestColourFiller:
+    """`Q55`: the structural rule was right and its axis was wrong."""
+
+    @pytest.mark.parametrize("panel", PANELS)
+    def test_a_repeated_coloured_panel_is_found(self, panel: tuple[int, int, int]) -> None:
+        """Each of these ships on a real building today and `is_filler`'s channel
+        tie passes all four — which is the whole of `Q55`."""
+        assert not is_filler(np.array([panel])).any()
+        assert filler_colours({0: atlas(panel, 0.30)}) == frozenset({_pack(np.array([panel]))[0]})
+
+    def test_a_photograph_repeats_nothing(self) -> None:
+        """The guard must find nothing on real photography, or it eats the city.
+        No natural colour survives a 20% bar."""
+        rng = np.random.default_rng(3)
+        assert (
+            filler_colours({0: rng.integers(0, 256, size=(256, 256, 3), dtype=np.uint8)})
+            == frozenset()
+        )
+
+    @pytest.mark.parametrize("grey", [(60, 60, 60), (0, 0, 0), (255, 255, 255)])
+    def test_a_repeated_grey_is_not_reported_as_a_colour(self, grey: tuple[int, int, int]) -> None:
+        """⚠️ **The two axes stay disjoint, and the sweep is why.** These three
+        repeat past the bar on most atlases in the region, and `Q37`'s tie already
+        rejects every one — so returning them changes no texel, but it would put a
+        row in `--filler-report` for nearly every building, each with a zero delta,
+        and bury `Q55`'s 93 in 2,213 rows of nothing.
+        """
+        assert is_filler(np.array([grey])).all(), "the tie already has it"
+        assert filler_colours({0: atlas(grey, 0.30)}) == frozenset()
+
+    def test_a_panel_under_the_bar_is_left_alone(self) -> None:
+        """A deliberate blind spot, and the reason `Q55` calls every figure a
+        lower bound: a small panel beside a multi-megapixel photograph is inert
+        (median 0.5% of walls, worst 0.82 `L*`), so the bar buys safety cheaply."""
+        assert filler_colours({0: atlas((68, 65, 65), MODAL_SHARE / 2, size=256)}) == frozenset()
+
+    def test_the_rejection_is_per_texel_not_per_atlas(self) -> None:
+        """⚠️ **The constraint `Q55` states outright.** Four of the atlases it
+        found are 4096-square photographs of real buildings carrying an embedded
+        panel, 33,981 to 82,565 distinct colours apiece. Dropping the atlas would
+        discard the building; dropping the panel's texels is correct.
+        """
+        image = atlas((68, 65, 65), 0.30, size=256)
+        colours, distinct = _atlas_filler(image)
+        assert distinct > 1000, "this atlas is a photograph, not a panel"
+
+        # ⚠️ Asserted through `_repeats`, not `is_filler`. `is_filler` also
+        # applies `Q37`'s tie, and a random background texel that happens to be
+        # an exact grey is *correctly* rejected by that axis — which made the
+        # obvious spelling of this test seed-dependent (it failed 8 seeds in 30).
+        texels = image.reshape(-1, 3)
+        rejected = _repeats(texels, colours)
+        assert rejected.any() and not rejected.all()
+        assert (texels[rejected] == (68, 65, 65)).all()
+        assert (texels[~rejected] != (68, 65, 65)).any(axis=1).all()
+
+    def test_dark_filler_defeats_the_percentile_and_the_guard_still_takes_it(self) -> None:
+        """⚠️ **The mechanism `Q37`'s brightness argument does not reach.**
+        `Q37` reasoned that filler is *bright*, so a top-percentile median selects
+        it. `(68,65,65)` is `L*` 27.8 — far below any plausible cut — and wins
+        anyway by sheer mass: at 90% of the sample the cut lands *inside* the
+        filler, so the order statistic cannot escape it wherever it falls.
+        """
+        panel = np.tile([68.0, 65.0, 65.0], (900, 1))
+        bright = np.tile([200.0, 150.0, 120.0], (50, 1))
+        dark = np.tile([30.0, 25.0, 20.0], (50, 1))
+        texels = np.vstack([dark, panel, bright])
+        lab = srgb_to_lab(texels)
+
+        unguarded = estimate(texels, lab)
+        assert unguarded is not None
+        assert unguarded[1].tolist() == [68.0, 65.0, 65.0], "filler wins the cut"
+
+        colours = filler_colours({0: texels.astype(np.uint8).reshape(1, -1, 3)})
+        guarded = estimate(texels, lab, colours)
+        assert guarded is not None
+        assert guarded[1].tolist() == [200.0, 150.0, 120.0], "the facade comes back"
+
+    def test_an_all_panel_building_is_refused_not_recoloured(self) -> None:
+        """`estimate`'s refusal has to survive the new axis: a building whose
+        walls are entirely placeholder must emit no row, exactly as an all-grey
+        one does, so `facade_hue` falls back to the height band."""
+        texels = np.tile([68.0, 65.0, 65.0], (5000, 1))
+        colours = filler_colours({0: texels.astype(np.uint8).reshape(1, -1, 3)})
+        assert estimate(texels, srgb_to_lab(texels), colours) is None
+
+    def test_no_colours_is_exactly_the_shipped_guard(self) -> None:
+        """⚠️ **The property `facade_glazing.py` rides on.** It calls
+        `photographic` with two arguments and is deliberately left on `Q37`'s axis
+        alone, so the default must be the old function and not merely close to it
+        — including the exact black its untextured-canvas rejection depends on.
+        """
+        rng = np.random.default_rng(7)
+        texels = rng.integers(0, 256, size=(4000, 3), dtype=np.uint8)
+        texels[:100] = texels[:100, :1]
+        tie = (texels[:, 0] == texels[:, 1]) & (texels[:, 1] == texels[:, 2])
+
+        assert np.array_equal(is_filler(texels), tie)
+        assert np.array_equal(is_filler(texels, frozenset()), tie)
+        assert is_filler(np.array([(0, 0, 0)])).all()
+        lab = srgb_to_lab(texels.astype(float))
+        assert np.array_equal(photographic(texels, lab), ~tie & (lab[:, 1] >= VEGETATION_A))
 
 
 class TestEstimator:

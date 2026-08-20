@@ -99,6 +99,16 @@ Common emoji for this project:
 - Façade-survey or `facade_hue.strength` changes: also `tools/facade_chroma.py`, and paste its table
   into `docs/ART_DESIGN.md`. `Q30`'s numbers are the argument that the shipped palette is not the
   authored one, and they are only an argument while they describe the survey that ships.
+- **Filler-guard changes — `is_filler`, `filler_colours`, `MODAL_SHARE`, `MODAL_STRIDE`: also
+  `tools/facade_survey.py --all --filler-report`, and paste its table.** It is the only thing that
+  reproduces `Q55`, whose every number came from a scratch script — the same debt `Q37` was opened
+  about. ⚠️ **Validate with the guard off first**: re-run the survey with `MODAL_SHARE` above 1.0
+  and diff against the shipped table. It must differ on **zero** rows, and that is what proves
+  nothing but the guard moved — `Q37`'s own validation move. ⚠️ **The two axes must stay
+  disjoint**: a repeated *grey* belongs to `Q37`'s channel tie and is filtered out of the colour
+  set, or the sweep reports every grey-padded building in the region instead of the 100 that carry
+  a panel. ⚠️ `facade_lab.json` is **not committed** — it is under `etl/sources/`, which is
+  gitignored — so re-publishing it is a local act and `superseded/` is the only way back.
 - Handling changes — `VehicleController`'s drive model, `HandlingProfile` or `handling.tres`: also
   `tools/skidpad.sh`, before **and** after, and paste both tables. It grades rather than checks, so
   `check.sh` cannot and should not run it. ⚠️ Run the **wrapper**, never `skidpad_ablation.gd`

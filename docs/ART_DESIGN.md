@@ -148,9 +148,15 @@ is not muted. Measured by `tools/facade_chroma.py` over the 2,177 surveyed build
 
 | `facade_hue.strength` | shipped `C*` mean | median | p90 | p99 | max | share over `C*` 20 |
 |---|---|---|---|---|---|---|
-| 1.0 (faithful) | 7.75 | 6.13 | 15.16 | 30.23 | 75.24 | **4.6%** |
-| 1.5 | 11.59 | 9.08 | 22.83 | 45.33 | 99.61 | **14.1%** |
-| **2.0 (ships)** | **15.37** | **12.25** | **30.39** | **60.27** | **104.55** | **26.4%** |
+| 1.0 (faithful) | 7.77 | 6.15 | 15.16 | 30.23 | 75.24 | **4.6%** |
+| 1.5 | 11.62 | 9.09 | 22.83 | 45.33 | 99.61 | **14.2%** |
+| **2.0 (ships)** | **15.41** | **12.29** | **30.39** | **60.27** | **104.55** | **26.5%** |
+
+⚠️ **Re-measured 2026-08-21 on `Q55`'s corrected survey**, which moved 90 of the 2,213 rows and one
+building by 54.69 `L*`. The table barely moved — **26.4% → 26.5%** over `C*` 20 — and that is a
+finding rather than a formality: the placeholder panels `Q55` removed were damaging **lightness**,
+not chroma, so the argument this table makes survives its own input being corrected. Prior figures
+were 7.75 / 6.13, 11.59 / 9.08 and 15.37 / 12.25 at 26.4%.
 
 `L*` mean is 61.5 at every strength, so this is chroma alone. **One building in four** is more
 saturated than *any* colour this document authorises, and the tail is what the eye picks out — the

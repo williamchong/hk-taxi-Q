@@ -239,13 +239,19 @@ the street-facing faces. Any per-building façade claim from this source therefo
 **occlusion-biased** sample of that building — worth knowing before another attribute is derived from
 it. See `Q37`.
 
-⚠️ **That exclusion is itself incomplete.** The set carries **duplicated flat placeholder panels
-that are not grey** — one 4,584-byte 512×512 PNG on 21 buildings, one 1,761-byte panel on 29, and
-two further panels that are a *single* colour — and the survey's filler guard rejects only an exact
-`R == G == B` tie, so it passes all of them. **97 atlases on 93 of the 2,213 buildings**, and 92 of
-those clear `vegetation_max`. The grey half is caught: 2,429 of 3,203 `B`-model atlases hold a grey
-modal colour over ≥ 20% of their texels, 1,982 at `#3c3c3c`. So the coverage figure above is an
-**over**-estimate of how much real photography there is, by an amount nobody has measured.
+⚠️ **That exclusion was itself incomplete, and is now measured.** The set carries **duplicated flat
+placeholder panels that are not grey** — one 4,584-byte PNG on 21 buildings, one 1,761-byte panel on
+29, and two further panels that are a *single* colour — and the survey's filler guard originally
+rejected only an exact `R == G == B` tie, so it passed all of them. The grey half was always caught:
+2,429 of 3,203 `B`-model atlases hold a grey modal colour over ≥ 20% of their texels, 1,982 at
+`#3c3c3c`.
+
+✅ **Since 2026-08-21 the guard also reads repetition**, which is what `Q37` said the signature was:
+`filler_colours` takes any colour holding ≥ 20% of an atlas and rejects those texels per texel, and
+`facade_survey.py --all --filler-report` publishes what it finds — **100 buildings on 132 atlas
+slots, 90 rows corrected**. So the coverage figure above is still an **over**-estimate of how much
+real photography there is, but the amount is no longer unmeasured: it is that report, and it is
+reproducible. ⚠️ It remains a **floor** — detection needs one exact colour at ≥ 20% of one atlas.
 See `Q55`.
 
 ✅ **`P3-7` read one sheet of it, once, offline — and it still does not ship.** The window-band shader
