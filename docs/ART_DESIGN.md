@@ -538,14 +538,21 @@ authored features the source captures badly.
   lane edge on the **13 edges** the `BUS_ONLY_LANE` join reaches (14 source features —
   `DATA_SOURCES.md` counts what was read, this counts what survived clipping). **+41,344 B of PCK,
   no triangle moved, no extra draw call, no extra material.**
-- ⚠️ **Arrows, road text and box junctions are deliberately held**, and not because a glyph needs a
-  texture. **Nothing in the seventeen Road Network v2 layers says which lane turns where**, or which
-  junction carries a box — `DATA_SOURCES.md`, "Lane counts do not exist in any field of any layer".
-  Invented markings on streets the `P3-9a` drivers know is the debit `GAME_DESIGN.md` prices against
-  a hand-added ramp, and an arrow is exactly that debit. The box-junction *mechanism* is now known
-  and cheap — a world-space cross-hatch masked on distance-to-node is immune to the cap overlap,
-  because cap and arm draw the same thing wherever they overlap — so what is missing is content,
-  not machinery. `Q53`.
+- ⚠️ **Arrows, road text and box junctions are deliberately held** — and 🔴 **the reason given here
+  until 2026-08-20 was wrong.** It read: nothing in the seventeen Road Network v2 layers says which
+  lane turns where, or which junction carries a box, so what is missing is content. The first half
+  is true and the conclusion does not follow. **Traffic Aids Drawings v2 publishes all three** —
+  `DTAD_RD_MARK_SYM_PT` carries **1,365** marking symbols in region, each an `RM` code plus a
+  bearing (`RM1017` straight-ahead ×353, `RM1019` turn-left ×179, `RM1021` turn-right ×92);
+  `DTAD_RD_MARK_ANNO` carries **274** road-text annotations; `DTAD_YL_BOX_POLY` carries **20** box
+  junctions. `Q56`, `Q57`.
+- ⚠️ **The hold stands, on cost and on registration.** An arrow has to land in a lane, and the
+  ribbon is drawn **1.6×** wider than the carriageway (`Q18`/`Q36`), so a published position needs
+  re-registering into lane space rather than copying. A *mis*placed marking on a street the `P3-9a`
+  drivers know is the debit `GAME_DESIGN.md` prices against a hand-added ramp. The box-junction
+  *mechanism* is known and cheap — a world-space cross-hatch masked on distance-to-node is immune
+  to the cap overlap, because cap and arm draw the same thing wherever they overlap. What is
+  missing is neither content nor machinery; it is the work. `Q53`.
 - 🔴 **The kerbside double yellow is invented, and it is the one marking here that asserts something
   rather than describing something.** A double yellow is not kerb trim — it means *no stopping at any
   time* — so painting it on every kerb makes a claim about roughly three times the kerb it actually

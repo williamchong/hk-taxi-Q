@@ -116,6 +116,27 @@ section exists so an ETL change can be made without opening that file.
   boundary with mechanism-won provenance to `podiums.json` — a stage intermediate `export.py`
   never names. Contract argument under `Q47` in `DECISIONS.md`.
 
+#### ⚠️ The road layers of this file, surveyed by `Q57` (2026-08-20) and not in use
+
+**These sheets are already on disk.** The pipeline reads one layer of ~71 — `Building` — for the
+podium join. The rest cost nothing to read, and two of them refute claims this project has been
+making. Domain codes are the data dictionary's own words, quoted, not inferred:
+
+| Layer / code | In Wan Chai (six sheets) | What it answers |
+|---|---|---|
+| **`CartoTransLine`, `TRANSPORTATIONLINETYPE = RM`** — *"RM - Road margin"* | **56,286 segments** | **The carriageway edge.** ⚠️ `Q19` and `PROGRESS.md` have said the carriageway width "no source publishes". It is published, and has been on disk since `P3-7a`. Probed by casting a perpendicular from each centreline station to the first road margin each side — 9,822 stations on 701 centrelines — the width reads p25 **7.02 m**, p50 **9.84 m**, p75 **15.36 m**, against a shipped `width_m` that takes exactly two values, 6.4 m on 720 edges and 9.6 m on 77. ⚠️ **That probe is not a shippable width** — the perpendicular escapes through junction mouths and crosses both halves of a dual carriageway, so it over-reads at the top of the distribution |
+| `CartoTransLine`, `RMU` — *"Road margin under elevated structures"* | 415 features / 9,232 m | The same edge where a deck is overhead. Pairs with `elevation_level` |
+| **`CartoTransLine`, `TW`** — *"TW - Tramway"* | **168 parts / 12,292 m** | **The tram tracks.** `hong_kong.yaml` said "no dataset marks tram tracks" until `Q57`. `RailwayPolygon`, `RAILWAYTYPE = TW`, carries the same extent as **62 polygons** |
+| `CartoTransLine`, `FY` / `FYU` / `TUR` | 89 / 16 / 14 features | *"Flyover / Elevated road / Bridge"*, flyover-under-flyover, and *"Tunnel for vehicles or railway"* — a second opinion on `ELEVATION`, which `Q13` and `Q21` both turn on |
+| `CartoPedLine`, `PA` — *"Pavement margin"* | 2,945 features / **50,904 m** | The footway edge. With `RM` above, the pavement is bounded on both sides — bears on `carriageway_occupancy`'s open failure |
+| `CartoPedLine`, `STP` / `FBR` / `SWY` / `CWY` | 3,577 / 384 / 18 / 85 | Steps, *"Footbridge (over road / water) / Elevated walkway"*, pedestrian subway, covered walkway |
+| `StreetCentreLines`, `STREETTYPE` | 794 features, `SER` 492 / `MAR` 259 / `TRA` 30 / `TUN` 12 | LandsD's own centrelines, carrying `ST_CODE` — the **same street code `NSR` joins on**. Not a second road graph; a second key |
+| `BUILDINGNAME` / `ADDRESS` / `Street_Code` | 306 / 422 / 112 per sheet | Bilingual building names and street addresses. Bears on fare destinations, which today are 29 taxi points |
+
+⚠️ **Codes are three letters and several are traps.** `TW` is *Tramway* here and *tactile warning
+strip* in Traffic Aids Drawings; `RM` is *Road margin* here and a *road-marking code prefix* there.
+Read the dictionary for the file in hand.
+
 ### ⚠️ NOT SHIPPED — 3D Visualisation Map (Individualised models)
 
 *(Headed "NOT NEEDED" until the `P3-6` amendment. The dataset still ships nothing
@@ -400,7 +421,7 @@ filter: **796 centrelines, 529 intersections, 217 turns, 83 speed limits, 14 bus
 | `ROUTE_ID` is **1:1 with the centreline** | 796 distinct values across 796 features | `SPEED_LIMIT` and `BUS_ONLY_LANE` join by key. No linear referencing needed, despite both being modelled as route events |
 | Speed limits cover **under 10%** | 77 of 796 edges, all 70 or 80 km/h, as free text with units | Hong Kong signs only exceptions to the 50 km/h urban default, so the default must come from city config |
 | **`NSR` is the kerbside yellow lines, and `VEHICLE_TYPE` is the field that decides how many** | **579 features / 44,220 m** in region, **kerb-referenced** (median **2.76 m** off the nearest centreline, p99 8.24 m, 0% on it). ⚠️ **`VEHICLE_TYPE` decides which features are paint, and `Q56` corrected who is on that list.** `1` "all motor vehicles" (33,074 m) **and** `5` "Others" (8,323 m) are painted — the specification still names no class for `5`, but the Traffic Aids Drawings draw a line on **93.9%** of its metres in region, 96% of them single yellow. `2`/`3`/`4` (taxis, PLBs, goods vehicles, 2,822 m) are **refused, and not because they are signs** — the drawings paint those too (code 2 at 100%, code 4 at 90.2%, code 3 at 48.4%). They are refused because a class-specific restriction is not a plain yellow line and the codec cannot say which class. `TIME_ZONE` separates double from single outright: `1` is 24 hours (27,118 m, double), `2`–`5` are posted hours (5,956 m, single). `EFFECTIVE_DAY` is uniformly `1` in region and carries nothing. `REMARKS` is `None` for 31,919 m of the 33,074 and **never mentions taxis** within `VEHICLE_TYPE = 1`. `ONSTREETPARK` carries **607** bays as the complement | Ingested by `pipeline/kerbside.py` since `P3-13`, and it is the **one overlay that is not a key join**: `NSR` carries `ST_CODE_1..6` — street codes — where `SPEED_LIMIT` and `BUS_ONLY_LANE` carry `ROUTE_ID`, so it is linear-referenced onto the finished graph. **33,385 m over 722 edge sides** survive (26,065 m over 650 before `Q56` admitted code 5); overlapping features are deduped into 1 m cells rather than counted twice. ⚠️ The layer is a *Measured* MultiLineString and its M values are **not** a join — there is no route key to resolve them against |
-| **Lane counts do not exist** | no lane attribute in any field of any layer | `roadgraph.json`'s `lanes` is authored policy keyed on speed limit, not published data |
+| **Lane counts do not exist *in this dataset*** | no lane attribute in any field of any layer | `roadgraph.json`'s `lanes` is authored policy keyed on speed limit, not published data. ⚠️ **`Q57` narrowed this claim on 2026-08-20 without refuting it.** No source in the estate publishes a lane *count*; Traffic Aids Drawings publishes the lane *lines* — `RM1101`/`RM1102` LANE LINES (212 features in region), `RM1103` CENTRE LINE, `RM1109` EDGE OF CARRIAGEWAY (317) — so a count is derivable per cross-section from geometry. It is authored today because nobody has counted them, not because the city withholds the number |
 | Dual carriageways are **opposed one-way pairs** | 6 places where two one-way edges share both endpoints in opposite directions, **1.96–3.85 m** apart; three of them are Lockhart Road | Lockhart Road is two-way *modelled as two one-ways*. A **lower bound** — carriageways that do not share both endpoints are not counted |
 | Turn geometry is a **hint, not the truth** | `EDGE1END` names an end that touches the second edge in 213 of 217; in the other 4 the *opposite* end coincides exactly | Take the shared node; use the field only to break ties. All 217 then resolve |
 | The **null sentinel has four spellings** | `-99`, plus three using full-width digits with an en-dash or full-width hyphen (`–９９`, `－９９`, `-９９`) | Normalise NFKC *and* fold Unicode dashes before comparing. A raw string compare catches one of four |
@@ -463,10 +484,19 @@ never runs the audit can skip it with `--only`.
 | Layer | In Wan Chai | What it is |
 |---|---|---|
 | **`DTAD_RST_ZONE_LINE`** | **1,763 features / 39,292 m**, `RM1040` 24,932 m + `RM1041` 14,164 m | **The kerbside yellow lines.** The only layer in use. `LINETYPE` carries the marking code; `COLOR = 6` is yellow on 1,559 of them. ⚠️ **`TIME_ZONE` is null on every feature in region** — the posted hours live in `NSR` and nowhere here |
-| `DTAD_YL_BOX_POLY` | 20 polygons, `YELLOWBOX_TYPE = "Yellow Box"` | Yellow box junctions, which `Q53` lists as an unsourced marking. **Not in use** |
+| `DTAD_YL_BOX_POLY` | 20 polygons, `YELLOWBOX_TYPE = "Yellow Box"` | Yellow box junctions, which `Q53` listed as an unsourced marking. **Not in use** |
 | `DTAD_RD_MARK_LINE` | 1,679 features / 61,903 m | Every other marking: `RM1109` 25,204 m and `RM1001` 19,308 m dominate; yellow ones are `RM1043` hatched no-parking (560 m) and `RM1038` box junction (540 m). **Not in use** |
 | `DTAD_CROSSING_LINE` | 121 features / 6,698 m | Crossings. **Not in use** |
 | `DTAD_TY_BAR_LINE` | 4 features / 283 m | Transverse yellow bars. **Not in use** |
+| **`DTAD_RD_MARK_SYM_PT`** | **1,365 points**, `REFNAME` = `RM` code, `ANGLE` = bearing | **The turn arrows `Q53` called unsourceable**, added by `Q57`. `RM1017` straight-ahead ×353, `RM1019` turn-left ×179, `RM1027` ahead+left ×102, `RM1021` turn-right ×92; `RM1135`/`RM1136` are the 望右/望左 crossing markings, not arrows. A code plus a bearing **is** an arrow. **Not in use** |
+| **`DTAD_RD_MARK_ANNO`** | **274 annotations** | **The road text `Q53` called unsourceable.** `TextString` carries `CENTRAL`, `九龍`, `KOW`, `LOON`; `FontName` (`ENGINEERING` 181, `chinese` 91), `FontSize`, `Angle`, `CharacterWidth`. **Not in use** |
+| `DTAD_RD_MARK_LINE_C` | 1,413 features | The other marking half: `RM1104` warning line 409, `RM1101` lane lines 212, `RM1054` angled parking bays 169, `RM1007` bus-lane continuation 136. **Not in use** |
+| `DTAD_RD_MARK_SYM_LINE` | 173 features | `RM1047` bus-stop box ×82, `RM1051` motorcycle bay ×21, `RM1140` KEEP CLEAR ×19, `RM1176` taxi pick-up/drop-off ×5. **Not in use** |
+| `DTAD_TRAFFIC_LIGHT_PT` | 913 points, with `ANGLE` | Signal heads, `REFNAME` naming the aspect (`P24` ×278, `P01` ×149, `S01` ×100). `_LINE` 53 and `_FILLED` 84 are the same objects drawn. **Not in use** |
+| `DTAD_TS_ABV_PT` / `DTAD_TS_POLE_PT` | 3,276 signs / 2,227 poles, both with `ANGLE` | Traffic signs. `SIGNID` (`TS115` ×277, `TS182` ×155) resolves into the twenty `Index Plan/(TS …).pdf` sheets in the same `dataspec` zip. **Not in use** |
+| `DTAD_RAILING_LINE` | 1,753 features | Hong Kong's signature street railings, `LINETYPE` splitting the type — `CRAIL1` 532, `HCAIL2` 372, `bollard0` 161, `CBARRIER` 65. **Not in use** |
+| `DTAD_DROP_KERB_LINE` | 738 features | Dropped kerbs, `REFNAME` `MDK_L`/`MDK_R`/`MDK` — where a vehicle may legally mount. **Not in use** |
+| ⚠️ `DTAD_TW_STRIP_LINE` | 778 features, `REFNAME = TACW` | **Not tramway.** Tactile warning strips at dropped kerbs. Named here because `TW` reads as tramway and a `Q57` probe matched it to *every* street in the region before the join gave it away. The tramway is in iB1000, below |
 
 **The marking codes are defined by the publisher, not inferred.** `dataspec/tadrawings_dataspec.zip`
 contains `Index Plan/(RM 1001 - 1080).pdf`, drawing `CT174/51-5(1)F` from TD's Road Safety &
@@ -516,6 +546,32 @@ Recorded so the sweep is not repeated:
 `hk-td-tis_39` **Fleet Taxi Stopping Places** (new, Oct 2025 — bears on `fares.json`) and
 `hk-hyd-csdi-pavement-polygon`, the Highways Department's maintained pavement extents, which bear on
 `carriageway_occupancy`'s open failure and on the play widening.
+
+✅ **Both had that look, in `Q57`, 2026-08-20.** Fleet Taxi Stopping Places is under "Fares and
+points of interest" below; the pavement extents are next.
+
+### ✅ SURVEYED, not fetched — HyD Pavement Polygon
+
+**`hyd_rcd_1632210918434_60749`** · Highways Department · CSDI Portal only, no DATA.GOV.HK package ·
+ArcGIS `MapServer` layer `INV_PG` and a WFS endpoint
+
+*"The data provides location information of types of pavement maintained by Highways Department"* —
+the maintained pavement as **polygons**, the second independent answer to the carriageway width
+`Q19` called unpublished until `Q57`. Queried over the Wan Chai envelope in EPSG:2326:
+**1,714 polygons**, carrying `FEAT_TYPE`, `SUR_TYPE_1`, `PAVER_TYPE`, and an **`LVL` of `0` / `1` /
+`-1`** that mirrors Road Network v2's `ELEVATION` convention.
+
+| `FEAT_TYPE` | polygons | `Shape_Area` |
+|---|---|---|
+| `1` | 552 | 599,162 m² |
+| `2` | 917 | 129,352 m² |
+| `6` | 85 | 10,763 m² |
+| others (`3`, `7`, `8`, `9`, `31`, `32`) | 160 | 19,842 m² |
+
+⚠️ **The `FEAT_TYPE` domain is not decoded and the areas are not clipped.** The envelope is 1.46 km²
+and the query is `intersects`, so a polygon reaching outside contributes its whole area — `1` at
+599,162 m² is not 41% carriageway, it is an unclipped sum. Anyone acting on this owes the HyD
+specification and a real clip first.
 
 ## Fares and points of interest
 
@@ -602,6 +658,18 @@ Measured across the region's 29 points, and the reason no tie-breaking rule exis
 
 > **Region note:** Hong Kong Island uses **red urban taxis**. Green (NT) or blue (Lantau) livery in
 > this map would read as wrong to any local player.
+
+### ✅ SURVEYED, not fetched — four more point sets that bear on this section (`Q57`)
+
+The two above are what `P1-5` reads. These are the rest of what the estate publishes, all CSDI
+`file-api` GeoJSON on the same pattern and needing no key. Counted inside the region on 2026-08-20:
+
+| Dataset | Territory | In region | Bears on |
+|---|---|---|---|
+| `td_rcd_1760062901418_33580` Fleet Taxi Stopping Places | 17 | **2** | The fare loop. One is *"A section of Expo Drive eastbound outside Hong Kong Convention and Exhibition Centre"* — a landmark the bundle already ships. ⚠️ Names are **prose, not a street code**, so it does not snap the way the two above do |
+| `td_rcd_1638874475129_49745` Bus Stop Location | 4,480 | **70** | `P3-3` traffic, POI density |
+| `td_rcd_1638874728005_80512` GMB Terminus Location | 4,760 | **52** | as above |
+| `td_rcd_1638875413253_59498` Tram Stop Location | 117 | **19** | trams, which `GAME_DESIGN.md` calls the highest-leverage single object in the game |
 
 ---
 

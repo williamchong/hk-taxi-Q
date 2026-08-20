@@ -680,6 +680,17 @@ with no source of truth — and onto one of two things that can actually be deci
 that publishes carriageway extent, or a rule that stops a short junction stub claiming a two-lane
 width it was never told it had. Both are cheaper than moving geometry and neither has been costed.
 
+✅ **The first of those two is answered, and `Q57` answered it on 2026-08-20: the dataset exists and
+is already on disk.** iB1000 `CartoTransLine` carries `TRANSPORTATIONLINETYPE = RM`, *"Road margin"*
+in LandsD's own data dictionary — **56,286 segments** over the six sheets `P3-7a` has been
+downloading since 2026-08-10 for the podium join. Probed at 9,822 stations on 701 centrelines it
+reads p25 **7.02 m**, p50 **9.84 m**, p75 **15.36 m**, against this entry's two invented figures.
+HyD **Pavement Polygon** is the second, unfetched opinion — **1,714** polygons over the envelope
+with an `LVL` mirroring `ELEVATION`. ⚠️ **Still uncosted, and the probe is not a width to ship**:
+the perpendicular escapes through junction mouths and crosses both halves of a dual carriageway, so
+it over-reads at the top of the distribution. What has changed is that "there is nothing to go and
+read" is false — the reading is the work, not the search.
+
 **The interchange half stands as recorded.** `e233` starves for **42 m without a break** and `e55`
 for 25 m; `e398`'s 18 m comes in pieces with a 9 m worst run, which is a pier field rather than a
 wall. These are the long ramps, they are one locality, and no width rule reaches them. `Q22`'s
@@ -2825,6 +2836,11 @@ clipping, **14.2% of the region's road length was outside the region**.
 **Lane counts are authored, not published.** Verified against every field of every layer: **there is
 no lane attribute anywhere**. What the source does carry is a signed speed limit on the 10% of edges
 that differ from the urban default, a decent proxy for expressway versus street.
+
+⚠️ **True of this dataset, and it is the sentence three later records over-read** — see `Q57`. No
+source in the estate publishes a lane *count*; Traffic Aids Drawings publishes the lane *lines*
+between published carriageway edges, so the count is derivable and `lanes` is authored for want of
+a counter.
 
 **Other properties worth knowing.** Endpoints coincide exactly — 601 distinct at full float precision,
 nearest *distinct* pair **2.26 m** apart — so node snapping needs no tolerance, but must be no finer
@@ -5988,11 +6004,22 @@ name; `city.json` went **9 → 10**, both sides in one commit.
 two thirds of it is refused on data rather than on cost.** Worth stating plainly, because the
 refusal is not about difficulty:
 
-- **There is no marking data in any source.** Road Network v2 ships seventeen layers — centrelines,
-  turns, bus lanes, speed limits, zebra crossings, prohibitions — and `P1-3` measured that **no
-  layer carries a lane attribute at all** (`DATA_SOURCES.md`). `roadgraph.json`'s `lanes` is
-  authored policy keyed on speed limit. The 217 published turn restrictions are the *complement* of
-  what an arrow shows, and say nothing about lane assignment. Arrow content would be invented.
+- 🔴 **There is no marking data in any source.** Road Network v2 ships seventeen layers —
+  centrelines, turns, bus lanes, speed limits, zebra crossings, prohibitions — and `P1-3` measured
+  that **no layer carries a lane attribute at all** (`DATA_SOURCES.md`). `roadgraph.json`'s `lanes`
+  is authored policy keyed on speed limit. The 217 published turn restrictions are the *complement*
+  of what an arrow shows, and say nothing about lane assignment. Arrow content would be invented.
+
+  🔴 **This bullet is false, and `Q57` retired it on 2026-08-20.** It reasons about Road Network v2
+  and concludes about *every source*, which is the same step `Q54` and `Q56` were each corrected
+  for. Traffic Aids Drawings v2 publishes **1,365 road-marking symbol points** in this region, each
+  carrying an `RM` code and an `ANGLE`: `RM1017` straight-ahead ×353, `RM1019` turn-left ×179,
+  `RM1027` ahead-and-left ×102, `RM1021` turn-right ×92. A code plus a bearing is an arrow, and the
+  codes are defined in a drawing inside the dataset's own `dataspec` zip. **Arrow content would not
+  be invented; it would be read.** The road text is published too — `DTAD_RD_MARK_ANNO`, 274
+  annotations in region with `TextString`, `FontSize` and `Angle`. **What survives of this record is
+  everything below**: the fade, the codec, the cap overlap, and the scope call. What does not
+  survive is the reason given for the scope call.
 - **The only imagery showing real markings is refused on registration, and the number was already
   measured.** `Q36`/`Q18` rejected the orthophoto partly because the generated ribbon is drawn
   **1.6× wider** than the real carriageway and sits coplanar with it, so photographic markings land
@@ -6077,6 +6104,11 @@ list of which junctions have one, and nothing publishes that. 393 junctions in t
 real subset; a heuristic on degree and arm width would put boxes on junctions that do not have them,
 which is the `P3-9a` debit above. An authored table is the honest route and is a `Q34′`-class
 staleness liability, so it waits for someone to want it.
+
+🔴 **"Nothing publishes that" was wrong, and `Q56` found the list on 2026-08-20** —
+`DTAD_YL_BOX_POLY`, **20 yellow box junctions as polygons** in region, with `RM1038` box-junction
+lines beside them. The authored table this paragraph proposes would have been a hand-copy of a
+published one. The hold stands; it is a scope call now, not a data one.
 
 **✅ One shipped marking was invented — the kerbside double yellow — and this record first claimed it
 *could not* be sourced. That claim was wrong, and `P3-13` closed it on 2026-08-19.** The Road
@@ -6680,3 +6712,151 @@ because a reader who finds it will wonder.
 **See.** `Q54` for the refusal this reverses and the four numbers it corrected in itself ·
 `Q53` for the markings this belongs to, and for the yellow box junction now sourceable ·
 `DATA_SOURCES.md` for both layers' rows · `CONTRIBUTING.md` "Checks" for when this tool is owed
+
+## `Q57` — The estate publishes the markings, the width and the tram, and three records said otherwise
+
+**Status.** ✅ **Closed as a survey, 2026-08-20** · **Owner.** `DATA_SOURCES.md` ·
+**Opened** 2026-08-20 by the user, asking why "unsourceable" keeps turning out to be wrong
+
+**Nothing was built and nothing was fetched.** Four claims are retired, one trap is recorded, and
+the follow-on work is named and left unassigned. The corrections all live in files **already on
+disk**, which is the part worth taking personally.
+
+**Claim.** `Q54` found the kerbside double yellow was invented against a layer in the geodatabase
+the road graph is built from. `Q56` found the box junction was held as unsourced against a dataset
+this repo had just started downloading. Twice is a coincidence; the user asked whether it was a
+pattern. **It is a pattern, it has a mechanism, and it had two more instances.**
+
+### The mechanism
+
+Every wrong claim has the same shape: a fact established against **Road Network v2**, then
+generalised to *the estate*. Road Network v2 is the **semantic** dataset — what is restricted, for
+whom, when. It is exhaustively correct about that and says nothing about paint, kerb lines or
+rails. Every correction so far has come from a **cartographic** source (Traffic Aids Drawings: what
+is painted, in what linetype) or a **topographic** one (iB1000: where the physical edges are).
+
+`P1-3` measured Road Network v2 properly and wrote down what it found. The error is not in the
+measurement; it is in the sentence that follows it, every time, in three separate records.
+
+### What was swept
+
+| Catalogue | Extent |
+|---|---|
+| DATA.GOV.HK CKAN `package_list` | **3,810** packages, of which **60** are Transport Department |
+| CSDI Portal `geoportal/rest/metadata/search` | **1,144** records — TD 57, LandsD 112, HyD 16, CEDD 32, PlanD 37 |
+| `dTAD_IRNP.gdb` | **all 51 layers**, clipped to the region, every low-cardinality field tabulated |
+| iB1000 | **all ~71 layers** across the six `11-SW-*` sheets |
+
+Domain codes were read out of the publishers' own dictionaries — the *iB1000 Data Dictionary —
+FGDB* v1.2 and the `Index Plan` drawings in `tadrawings_dataspec.zip` — never inferred from the
+code letters.
+
+### Correction 1 — `Q53`: "There is no marking data in any source"
+
+False for all three markings that record holds.
+
+| Marking | Layer | In region |
+|---|---|---|
+| **Turn arrows** | `DTAD_RD_MARK_SYM_PT`, `REFNAME` = `RM` code, `ANGLE` = bearing | `RM1017` ahead ×353, `RM1019` left ×179, `RM1027` ahead+left ×102, `RM1021` right ×92 — of 1,365 symbols |
+| **Road text** | `DTAD_RD_MARK_ANNO`, `TextString` / `FontName` / `FontSize` / `Angle` | 274, incl. `CENTRAL`, `九龍`, `KOW`, `LOON` |
+| **Box junctions** | `DTAD_YL_BOX_POLY` + `RM1038` | 20 polygons (found by `Q56`) |
+
+And published beside them, all unused: stop lines `RM1011` ×120, give-way `RM1013` ×83, hatched
+traffic island `RM1037` ×414, crossings ×121, bus-stop boxes `RM1047` ×82, parking bays
+`RM1052`/`RM1054` ×169, edge of carriageway `RM1108`/`RM1109` ×317.
+
+⚠️ **`Q53`'s scope decision is untouched.** The cap overlap, the fade, the `TEXCOORD_1` codec and
+the `P3-9a` debit are all still true, and an arrow that has to be positioned in lane space on a
+ribbon drawn **1.6×** too wide is still a registration problem. **What changed is that it is a cost
+argument, not a data one**, and the record now says so.
+
+### Correction 2 — `Q19` / `PROGRESS.md`: "a carriageway width no source publishes"
+
+False, from two independent directions.
+
+**iB1000 `CartoTransLine`**, domain `dTransportationLineType`, code **`RM` = "Road margin"** —
+LandsD's dictionary, verbatim. **56,286 segments** over the six Wan Chai sheets, downloaded since
+`P3-7a` for the podium join.
+
+Probed by casting a perpendicular from each centreline station to the first road margin each side:
+
+| | p25 | p50 | p75 | p90 | p95 |
+|---|---|---|---|---|---|
+| Measured, 9,822 stations on 701 centrelines | 7.02 m | **9.84 m** | 15.36 m | 20.30 m | 23.18 m |
+| Published `width_m`, 797 edges | 6.40 | 6.40 | 6.40 | 6.40 | 9.60 |
+
+The published width takes **exactly two values** — 6.4 m on 720 edges, 9.6 m on 77 — because it is
+`lanes × 3.2 m` and `lanes` is keyed on the speed-limit table.
+
+⚠️ **The probe is evidence that a width exists, not a width to ship.** The perpendicular escapes
+through junction mouths and crosses both halves of a dual carriageway, so it over-reads at the top
+of the distribution. Anyone building on this owes a real cross-section, not this number.
+
+**Second source, not fetched:** HyD **Pavement Polygon** (`hyd_rcd_1632210918434_60749`, CSDI only)
+— **1,714 polygons** over the Wan Chai envelope, with `FEAT_TYPE`, `SUR_TYPE_1`, `PAVER_TYPE` and an
+`LVL` of `0`/`1`/`-1` mirroring Road Network v2's `ELEVATION`. `Q56`'s sweep already flagged it as
+worth a look; this was the look. ⚠️ Its `FEAT_TYPE` domain is **not decoded** and its areas are
+**not clipped** — see `DATA_SOURCES.md` before quoting either.
+
+### Correction 3 — `hong_kong.yaml`: "no dataset marks tram tracks"
+
+False. iB1000 `CartoTransLine` code **`TW` = "Tramway"** — 168 parts / 12,292 m over the six sheets
+— and `RailwayPolygon` `RAILWAYTYPE = TW` carries the same extent as 62 polygons. Traffic Aids
+Drawings adds `RM1034` TRAM LANE lettering and the `RM1045`/`RM1046` stop markings. CSDI publishes
+**19 tram stops** inside the region.
+
+⚠️ **This does not show `tram_streets` is wrong, and the list still stands.** A tram line carries no
+street name, so it reaches one through a nearest-centreline join, and a naive join puts 35 samples
+on MARSH ROAD and 16 on CANAL ROAD FLYOVER — the flyover being *above* the track it matched. Six of
+the seven authored streets are confirmed, at a median gap from tram line to named centreline of
+**3.06 m** (PERCIVAL) to **11.42 m** (CAUSEWAY, where the corridor is widest); RUSSELL STREET is not
+independently seen. **What was wrong was the comment claiming nothing could check the list**, on
+`GAME_DESIGN.md`'s own highest-leverage object, with no check behind it — a `Q34′` in waiting.
+
+### Correction 4 — "Lane counts do not exist": true, and drawing the wrong conclusion
+
+The literal claim survives: **no lane attribute in any field of any layer**, of any dataset in the
+estate. But Traffic Aids Drawings publishes the lane **lines** — `RM1101`/`RM1102` LANE LINES ×212,
+`RM1103` CENTRE LINE, `RM1104` WARNING LINE ×409 — between published carriageway edges `RM1109`
+×317. A count is derivable per cross-section from geometry.
+
+`lanes` is authored **for want of a counter, not for want of data**, and `Q19`'s "the width is
+absent from the whole source, so the choice is another dataset or a rule for short stubs" is
+resolved in favour of the other dataset.
+
+### ⚠️ The trap, recorded because it nearly became a fifth claim
+
+`DTAD_TW_STRIP_LINE`, 778 features in region, `REFNAME = TACW`. `TW` reads as tramway, and it is
+**tactile warning strips at dropped kerbs**. What gave it away was joining it to street names and
+getting *every street in the region* — GLOUCESTER ROAD 115, LEIGHTON ROAD 108, LOCKHART ROAD 60 —
+which is not a tram network. A three-letter code that looks like the answer is how this whole class
+of error is made; the same `TW` means Tramway one file over.
+
+### What the sweep confirms is genuinely absent
+
+- **A published lane-count attribute.** Nowhere in 3,810 packages or 1,144 CSDI records.
+- **The real-time family** — traffic speed map, journey time indicators, AIVAS, smart-lamppost
+  detectors, parking vacancy, GMB/KMB arrivals. Hard rule 2 bars them at runtime, and none carries
+  geometry the build wants; a snapshot would be a licence and staleness liability for nothing.
+
+### What this costs, and what it does not
+
+**No new fetch** for corrections 1, 3 and 4: `traffic_aids_drawings_gdb` (209 MB) and the six
+`topography` sheets (252 MB) are both already in `etl/sources/`. Only HyD Pavement Polygon is new,
+and it is not fetched.
+
+⚠️ **Nothing here is built, and no schema moved.** `roadgraph.json`, `city.json` and every `.tres`
+are untouched. Named and unassigned, in rough order of what they unblock:
+
+| Follow-on | Would answer |
+|---|---|
+| Count `RM1101`/`RM1109` per cross-section into `lanes` | `Q19`'s building half, which fails *because* the width is invented |
+| `CartoTransLine RM` → a real `width_m` | the same, and `carriageway_occupancy`'s open failure |
+| `DTAD_RD_MARK_SYM_PT` → arrows | `Q53`, on a registration argument rather than a data one |
+| `CartoTransLine TW` → `tram_streets` | retires a `Q34′`-class authored list |
+| Bus / GMB / tram stops, fleet taxi stops | `fares.json`, today 29 points |
+
+**See.** `Q53` for the markings, whose data argument this retires and whose scope call it leaves ·
+`Q54` and `Q56` for the two earlier instances of the same mechanism · `Q19` for the width this
+unblocks and does not fix · `DATA_SOURCES.md` for every layer row and the HyD and CSDI dataset
+entries · `hong_kong.yaml` `tram_streets` for the comment corrected here

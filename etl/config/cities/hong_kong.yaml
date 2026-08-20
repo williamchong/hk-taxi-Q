@@ -960,10 +960,25 @@ roads:
     70: 3
   lane_width_m: 3.2
 
-  # Hand-authored: no dataset marks tram tracks. These are the streets the
-  # Hong Kong Tramways route uses inside the region, including the Happy
-  # Valley branch. docs/GAME_DESIGN.md treats trams as the highest-leverage
-  # single object in the game, so this list earns its hand-authoring.
+  # Hand-authored. These are the streets the Hong Kong Tramways route uses
+  # inside the region, including the Happy Valley branch. docs/GAME_DESIGN.md
+  # treats trams as the highest-leverage single object in the game, so this
+  # list earns the attention; it does not earn being invented.
+  #
+  # ⚠️ This block used to say "no dataset marks tram tracks". That was wrong,
+  # and Q57 corrected it on 2026-08-20. iB1000 publishes tramway centrelines —
+  # CartoTransLine, TRANSPORTATIONLINETYPE = TW, "Tramway" in LandsD's own data
+  # dictionary, 168 parts over the six sheets this region already downloads —
+  # and RailwayPolygon carries the same extent as 62 polygons. Traffic Aids
+  # Drawings adds the RM1034 TRAM LANE lettering and the RM1045/RM1046 stop
+  # markings, and CSDI publishes 19 tram stops inside the region.
+  #
+  # ⚠️ Sourcing it is not a one-line swap, which is why this list still stands.
+  # A tram line has no street name of its own, so it reaches one through a
+  # nearest-centreline join, and a naive join lands 35 samples on MARSH ROAD
+  # and 16 on CANAL ROAD FLYOVER — the flyover is above the track it matches.
+  # The list below is not shown wrong by any of that. What was wrong was the
+  # claim that nothing could check it. See docs/DECISIONS.md Q57.
   tram_streets:
     - JOHNSTON ROAD
     - HENNESSY ROAD
