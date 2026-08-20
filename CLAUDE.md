@@ -154,6 +154,16 @@ Common emoji for this project:
   `--only`. ⚠️ It grades rather than checks — a widening gap is a finding to go and look at, never a
   bar to retune against — and it **cannot** see the side convention flip, because that mirrors both
   sources at once.
+- **`pipeline/tramway.py`, the `tramway` config block, or any tram-rail change: paste `tramway.json`'s
+  `drawn_gauge_m` and `inverted`, before and after.** There is no separate grader and there should
+  not be: the stage grades itself, because the three ways this can break all render as **nothing**
+  and none is visible in a frame. `drawn_gauge_m` is the only thing that can see a mis-paired join —
+  a bed drawn between two rails that are not a track renders perfectly and is a lane wide — and it
+  caught two shipped defects at p90 **1.92 m** and **4.62 m** against a 1.067 m gauge. `inverted`
+  must be **0**: `tramway.gdshader` is `cull_back`, so winding decides visibility and the normal
+  attribute does not, and the first build had **5,111 of 5,112** triangles facing the ground with
+  everything else correct. ⚠️ **A tramway change is also a shader change** — `check.sh` exits 0 on a
+  shader that fails to compile, so render and `grep -i "shader error"`. Numbers in `Q58`.
 - Road-surface, deck-height or ground changes: also `tools/deck_error.py`, `tools/overhang.py`,
   `tools/ground_clearance.py` and `tools/carriageway_occupancy.py`, by hand after a build. They grade
   the *shipped* bundle and share no code with the pipeline — `check.sh` does not require a built

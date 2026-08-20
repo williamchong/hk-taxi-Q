@@ -648,6 +648,61 @@ class CarriagewaySurvey:
 
 
 @dataclass(frozen=True)
+class Tramway:
+    """The published tramway, and how `P3-14` draws it (`Q58`).
+
+    ⚠️ **Unlike `CarriagewaySurvey` above, the pipeline reads this**: it is a
+    build input, not an instrument's truth side. The shape is deliberately the
+    same, because both read a domain code out of the same iB1000 layer and hard
+    rule 3 keeps the code in the city file either way.
+
+    ⚠️ **`codes` selects rails, not track centrelines.** `Q58` measured what the
+    layer actually contains rather than taking the record's word: 56.5% of
+    stations across a tram-flagged edge cross exactly **four** parts, and the
+    modal gap between neighbouring parts is **1.05-1.20 m** — Hong Kong
+    Tramways' 1.067 m gauge. `Q57` and `DATA_SOURCES.md` both called these
+    "tramway centrelines"; they are the rails themselves, and a bed drawn
+    between a mis-paired couple would be a lane wide.
+
+    `gauge_m` and `pair_tolerance_m` are what turn those rails back into tracks,
+    and they are a *measurement* rather than a preference — which is why they
+    are here and not under an art heading. Everything below them is drawing.
+    """
+
+    source: str
+    member: str | None
+    layer: SourceLayer
+    codes: tuple[str, ...]
+    # Published track gauge, and how far a neighbour may sit from it and still
+    # be read as the other rail of the same track.
+    gauge_m: float
+    pair_tolerance_m: float
+    # Drawn width of one rail, and of the bed carrying a pair of them.
+    rail_width_m: float
+    bed_width_m: float
+    # How far above the deck the bed sits, and the rail above the bed. The road
+    # and the ground are coplanar at grade by construction (`P3-10`), so a
+    # tramway laid at deck height would z-fight the terrain it rests on.
+    bed_lift_m: float
+    rail_lift_m: float
+    # Furthest a rail station may sit from a level-0 centreline and still take
+    # its height from it. Beyond this the part is dropped rather than guessed:
+    # the reserve runs between two carriageways, so a rail with no road near it
+    # is one this region does not drive past.
+    max_snap_m: float
+    # Resolved through `_MaterialTable.get`, as every other material reference
+    # is: that call *is* how usage gets recorded, so holding the name as a
+    # string here would leave both materials looking unreferenced.
+    rail_material: Material
+    bed_material: Material
+
+    @property
+    def tiled(self) -> bool:
+        """Whether `source` names `tiled_sources` rather than `sources`."""
+        return self.member is not None
+
+
+@dataclass(frozen=True)
 class SourcePaint:
     """How a mesh-sourced hero is repainted from its source COLOR_0 (`P3-6`).
 
@@ -824,7 +879,19 @@ FARE_KINDS = (TAXI_STAND, PUDO, POI)
 
 # What a fare group must name in the publisher's schema, in roles the pipeline
 # owns. Same indirection as `_ROAD_LAYER_ROLES` and for the same reason.
-_FARE_ROLES = ("name_en", "name_zh", "category")
+#
+# ⚠️ **Only `category` is required, and the two names are deliberately not**
+# (`P3-14`). TD's Tram Stop Location publishes an `OBJECTID`, a `STOP_ID` and a
+# revision date, and no name in either language — 117 features, none named. The
+# alternatives were both worse than an absent role: pointing `name_en` at a
+# column that does not exist makes the config assert something untrue, and
+# pointing it at `STOP_ID` ships "99101" as a place name.
+#
+# `fares.py` already treats an unnamed node as a state rather than an error — it
+# counts them in `FareReport.unnamed` and warns — so a null name reaches the
+# contract intact and says what the source says.
+_FARE_ROLES = ("category",)
+_FARE_OPTIONAL_ROLES = ("name_en", "name_zh")
 
 # What each road layer must declare. The pipeline states its requirements here,
 # in role names it owns, and the city file supplies the column names.
@@ -1227,6 +1294,21 @@ class FareGroup:
     def field(self, role: str) -> str:
         return _field(self.fields, role, f"fare group '{self.kind}'")
 
+    def optional_field(self, role: str) -> str | None:
+        """The publisher's column for a role it need not publish at all.
+
+        `None` where the source has no such column, which is a fact about the
+        source rather than a hole in the config — see `_FARE_OPTIONAL_ROLES`.
+        Separate from `field` so a *required* role still fails loudly: silently
+        returning `None` for `category` would file every feature under nothing.
+        """
+        if role not in _FARE_OPTIONAL_ROLES:
+            raise KeyError(
+                f"fare group '{self.kind}': {role!r} is a required role, "
+                f"use `field` — optional roles are {', '.join(_FARE_OPTIONAL_ROLES)}"
+            )
+        return self.fields.get(role)
+
     def categorise(self, text: str) -> FareCategory:
         """The first rule whose `match` appears in `text`.
 
@@ -1301,6 +1383,12 @@ class CityConfig:
     # nothing a build does, and a city with no such layer is honestly
     # unmeasurable rather than measured against an invented width.
     carriageway_survey: CarriagewaySurvey | None = None
+    # The published tramway, drawn by `pipeline/tramway.py` (`Q58`). Optional
+    # for the same reason `podiums` is, and with a sharper consequence: a city
+    # without the block ships no `tram.glb` and the manifest names none, where
+    # inventing rails off `roads.tram_streets` would put them a measured 3.26 m
+    # from where the estate says they are.
+    tramway: Tramway | None = None
     # Hero buildings shipped as authored models (`P3-6`). Empty for a city
     # without any: the building stage then excludes nothing and the export
     # writes an empty landmarks document.
@@ -1476,6 +1564,7 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
         carriageway_survey=_carriageway_survey(
             document.get("carriageway_survey"), f"{path}:carriageway_survey"
         ),
+        tramway=_tramway(document.get("tramway"), f"{path}:tramway", table),
         landmarks=_landmarks(document.get("landmarks") or [], f"{path}:landmarks", table),
         extra_cas=_extra_cas(document.get("extra_cas"), path),
     )
@@ -1505,6 +1594,12 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
                 _check_tiled_source_exists(city, edge.source, where)
             else:
                 _check_source_exists(city, edge.source, where)
+    if city.tramway is not None:
+        where = f"{path}:tramway.source"
+        if city.tramway.tiled:
+            _check_tiled_source_exists(city, city.tramway.source, where)
+        else:
+            _check_source_exists(city, city.tramway.source, where)
     _check_landmarks_lie_within_a_region(city, path)
     return city
 
@@ -2399,6 +2494,69 @@ def _carriageway_survey(body: Any, where: str) -> CarriagewaySurvey | None:
         # is the entire reason for reading more than one.
         raise ValueError(f"{where}:edges has repeated names ({', '.join(sorted(names))})")
     return CarriagewaySurvey(edges=edges)
+
+
+_TRAMWAY_ROLES = ("line_type",)
+
+
+def _tramway(body: Any, where: str, table: _MaterialTable) -> Tramway | None:
+    """The optional published-tramway block (`Q58`).
+
+    Absent, the region ships no `tram.glb` and the manifest names none — the
+    honest answer for a city with no tramway, and the same shape `podiums` and
+    `carriageway_survey` already use. What is *not* offered is drawing the
+    tramway from `roads.tram_streets` instead: that flag says which streets
+    carry a tram, and `Q58` measured that the rails are a median 3.26 m past the
+    drawn kerb of the edge carrying the flag. The flag cannot place them.
+    """
+    if body is None:
+        return None
+    if not isinstance(body, dict):
+        raise ValueError(f"{where} must be a mapping, got {body!r}")
+
+    codes = tuple(str(code) for code in _require(body, "codes", where))
+    if not codes:
+        raise ValueError(f"{where}:codes is empty; the source would match no feature")
+
+    gauge_m = float(_require(body, "gauge_m", where))
+    tolerance_m = float(_require(body, "pair_tolerance_m", where))
+    if gauge_m <= 0.0 or tolerance_m <= 0.0:
+        raise ValueError(f"{where}: gauge_m and pair_tolerance_m must both be positive")
+    if tolerance_m >= gauge_m:
+        # At half the gauge a rail pairs with the *other track's* near rail as
+        # readily as with its own, and the bed is then drawn across the four-foot
+        # of neither. Refused rather than clamped: the number is a measurement
+        # of the source's digitising spread, so a wrong one is a wrong survey.
+        raise ValueError(
+            f"{where}:pair_tolerance_m is {tolerance_m}, which is not narrower than the "
+            f"{gauge_m} m gauge it qualifies — every rail would pair with both neighbours"
+        )
+
+    bed_width_m = float(_require(body, "bed_width_m", where))
+    rail_width_m = float(_require(body, "rail_width_m", where))
+    if not 0.0 < rail_width_m < bed_width_m:
+        raise ValueError(
+            f"{where}: rail_width_m {rail_width_m} must be positive and narrower than "
+            f"bed_width_m {bed_width_m}"
+        )
+
+    return Tramway(
+        source=str(_require(body, "source", where)),
+        member=(str(body["member"]) if body.get("member") is not None else None),
+        layer=_source_layer(body, where, _TRAMWAY_ROLES),
+        codes=codes,
+        gauge_m=gauge_m,
+        pair_tolerance_m=tolerance_m,
+        rail_width_m=rail_width_m,
+        bed_width_m=bed_width_m,
+        bed_lift_m=float(_require(body, "bed_lift_m", where)),
+        rail_lift_m=float(_require(body, "rail_lift_m", where)),
+        max_snap_m=float(_require(body, "max_snap_m", where)),
+        rail_material=table.get(
+            str(_require(body, "rail_material", where)), f"{where}:rail_material"
+        ),
+        bed_material=table.get(str(_require(body, "bed_material", where)), f"{where}:bed_material"),
+    )
 
 
 def _carriageway_edge(body: Any, where: str) -> CarriagewayEdge:

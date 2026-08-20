@@ -59,6 +59,7 @@ from pipeline.gltf import Bounds
 from pipeline.landmarks import ASSETS_NAME, ASSETS_SCHEMA, landmark_in_region
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
 from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, SURFACE_NAME
+from pipeline.tramway import TRAMWAY_MANIFEST_NAME, TRAMWAY_MANIFEST_SCHEMA
 
 log = logging.getLogger(__name__)
 
@@ -107,7 +108,18 @@ CITY_NAME = "city.json"
 # the bump: a v9 reader hands the surface a `BaseMaterial3D` and gets an
 # unmarked road, which looks like the road it always drew rather than like a
 # failure.
-CITY_SCHEMA = 10
+# 11 since `P3-14`: the manifest names `tram.glb`, a new shipped asset. The
+# `landmark_assets` precedent decides it — 7 and 8 both bumped because "the
+# asset set a v-N document describes" had changed, and `shipped()` is what turns
+# that set into a PCK. A v10 reader draws no tramway, which on its own would be
+# `P3-10`'s no-bump case; what it also does is compute a shipped set that is
+# missing a file the bundle depends on, and being wrong about the contents of
+# the bundle is the thing this number is for.
+#
+# ⚠️ The key is **optional and may be null**: a city whose estate publishes no
+# tramway ships none. So it is deliberately not in `DOCUMENT_KEYS`, which
+# `REQUIRED_KEYS` and `shipped()` both treat as always-present.
+CITY_SCHEMA = 11
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -157,6 +169,7 @@ INPUTS: tuple[Input, ...] = (
     Input(CLEARANCE_NAME, CLEARANCE_SCHEMA, "clearance"),
     Input(ROADGRAPH_NAME, ROADGRAPH_SCHEMA, "roads"),
     Input(FARES_NAME, FARES_SCHEMA, "fares"),
+    Input(TRAMWAY_MANIFEST_NAME, TRAMWAY_MANIFEST_SCHEMA, "tramway"),
 )
 
 
@@ -230,6 +243,7 @@ def build_region(
     clearance = documents[CLEARANCE_NAME]
     graph = documents[ROADGRAPH_NAME]
     fares = documents[FARES_NAME]
+    tramway = documents[TRAMWAY_MANIFEST_NAME]
 
     tiles = [
         {
@@ -301,6 +315,12 @@ def build_region(
         # dividing it back by `lanes` does not recover this number.
         "lane_width_m": city.roads.lane_width_m,
         "fares": FARES_NAME,
+        # `null` where the city drew no tramway, which is the honest answer and
+        # not an omission — see `pipeline/tramway.py`. The asset is named from
+        # the stage's own manifest rather than from `TRAMWAY_NAME` directly, so
+        # a stage that read the source and found nothing cannot be contradicted
+        # here by a constant.
+        "tramway": tramway["asset"],
         "landmarks": LANDMARKS_NAME,
         # The mesh-sourced hero models `pipeline/landmarks.py` built — shipped
         # files like the tile GLBs, unlike the committed authored heroes,
@@ -473,6 +493,8 @@ def shipped(manifest: dict) -> list[str]:
     for tile in manifest.get("tiles", []):
         paths.extend(str(lod) for lod in tile.get("lods", []))
     paths.extend(str(path) for path in manifest.get("landmark_assets", []))
+    if manifest.get("tramway"):
+        paths.append(str(manifest["tramway"]))
     return paths
 
 

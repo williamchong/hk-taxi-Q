@@ -6,6 +6,7 @@
 [ext_resource type="PackedScene" path="res://scenes/world/clean_daylight.tscn" id="3_light"]
 [ext_resource type="Script" path="res://scripts/city/road_preview.gd" id="4_roads"]
 [ext_resource type="Script" path="res://scripts/city/road_surface_preview.gd" id="5_surface"]
+[ext_resource type="Script" path="res://scripts/city/tramway_preview.gd" id="11_tramway"]
 [ext_resource type="Script" path="res://scripts/city/fare_preview.gd" id="6_fares"]
 
 [node name="CityPreview" type="Node3D"]
@@ -15,6 +16,14 @@ script = ExtResource("1_tiles")
 
 [node name="RoadSurface" type="Node3D" parent="."]
 script = ExtResource("5_surface")
+
+; The tramway (`P3-14`). Here as well as in `city_drive.tscn` because the two
+; fixed colour viewpoints `Q27` judges the palette from are shot in this scene,
+; and the rail is the brightest thing the city puts on a road surface — a look
+; change judged without it would be judged on a city that is missing its
+; highest-contrast element.
+[node name="Tramway" type="Node3D" parent="."]
+script = ExtResource("11_tramway")
 
 ; The authored heroes (`P3-6`). Without them this scene shows holes where the
 ; excluded source buildings stood — and the audit viewpoints below are the

@@ -32,6 +32,7 @@ extends EditorScenePostImport
 const SHADERS: Dictionary = {
 	"city_facade": "res://tuning/city_facade.tres",
 	"road_markings": "res://tuning/road_markings.tres",
+	"tramway": "res://tuning/tramway.tres",
 	"vehicle_body": "res://tuning/vehicle_body.tres",
 }
 

@@ -40,6 +40,7 @@ from pipeline.fares import FARES_NAME, FARES_SCHEMA
 from pipeline.landmarks import ASSETS_NAME, ASSETS_SCHEMA
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
 from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, SURFACE_NAME
+from pipeline.tramway import TRAMWAY_MANIFEST_NAME, TRAMWAY_MANIFEST_SCHEMA
 
 REGION = "middle"
 
@@ -171,6 +172,20 @@ class _Region:
                         "dropoff": True,
                     }
                 ],
+            },
+            # Written whether or not the city has a tramway, for the same
+            # reason `ASSETS_NAME` is: export's input read is unconditional, and
+            # a stage that found nothing still has to say so. `testville`
+            # declares no `tramway:` block, so this is the found-nothing shape —
+            # a null asset, which must leave `city.json`'s key null and the
+            # shipped list unchanged.
+            TRAMWAY_MANIFEST_NAME: {
+                "schema_version": TRAMWAY_MANIFEST_SCHEMA,
+                "city_id": city.id,
+                "region_id": REGION,
+                "asset": None,
+                "rails": 0,
+                "tracks": 0,
             },
             # Written even when empty by the landmarks stage, so export's
             # input read is unconditional.
@@ -693,6 +708,7 @@ class TestOrchestrator:
             "surface",
             "clearance",
             "fares",
+            "tramway",
             "export",
         ]
 
@@ -719,7 +735,13 @@ class TestOrchestrator:
 
         orchestrator.main(["--city", "testville", "--region", REGION, "--from", "surface"])
 
-        assert [name for name, _ in calls] == ["surface", "clearance", "fares", "export"]
+        assert [name for name, _ in calls] == [
+            "surface",
+            "clearance",
+            "fares",
+            "tramway",
+            "export",
+        ]
 
     def test_force_without_fetch_is_refused_rather_than_ignored(self, monkeypatch) -> None:
         calls: list[tuple[str, list[str]]] = []

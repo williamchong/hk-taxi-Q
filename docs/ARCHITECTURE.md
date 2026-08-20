@@ -287,6 +287,7 @@ hk-taxi-Q/
 │   │   ├── surface.py           # roadgraph.json → roads.glb; ribbon, kerbs, junctions
 │   │   ├── clearance.py         # what stands in the ribbon → clear width per station
 │   │   ├── fares.py             # taxi stands + PUDO + POIs → fare nodes
+│   │   ├── tramway.py           # published tram rails → tram.glb (P3-14)
 │   │   ├── export.py            # → city.json, assembles and validates the stage outputs
 │   │   └── __main__.py          # `python -m pipeline` — every stage, in order
 │   ├── sources/<city>/<source>/ # raw downloads — GITIGNORED
@@ -338,7 +339,7 @@ The interface between ETL and game. **Versioned — change both sides together a
 
 ```json
 {
-  "schema_version": 8,
+  "schema_version": 11,
   "city_id": "hong_kong",
   "region_id": "wan_chai",
   "source_crs": "EPSG:2326",
@@ -361,6 +362,7 @@ The interface between ETL and game. **Versioned — change both sides together a
   ],
   "lane_width_m": 3.2,
   "fares": "fares.json",
+  "tramway": "tram.glb",
   "landmarks": "landmarks.json",
   "landmark_assets": ["landmarks/hkcec.glb"],
   "etl_version": "0.1.0",
@@ -762,6 +764,14 @@ junction, a stop line — re-exposes it immediately and wants the non-convex cap
 
 `kind` ∈ `taxi_stand` | `pudo` | `poi`. `stand_category` is null unless `kind` is `taxi_stand`.
 
+**`poi` has a producer since `P3-14`**: TD's 19 in-region tram stops. ⚠️ **`name` is null in both
+languages for all of them, and that is the source** — Tram Stop Location publishes `OBJECTID`,
+`STOP_ID` and a revision date and nothing else. `name_en`/`name_zh` are therefore **optional roles**
+in a fare group; the alternatives were shipping `"99101"` as a place name or pointing the config at
+a column that does not exist. ⚠️ **`pickup` and `dropoff` are both false**: a tram stop is somewhere
+a *tram* stops, and `FareCategory` defaults both to true, so it must be said. No schema bump — `poi`
+was always in this vocabulary and `pickup`/`dropoff` always carried the distinction.
+
 **`pos` is the source position — the kerbside, not the carriageway.** 11 of Wan Chai's 29 fare nodes
 lie outside even the widened road surface, because the published points sit on the pavement and the
 ribbon is drawn from centrelines. This is where the *passenger* stands. Where the *taxi* stops is
@@ -775,6 +785,42 @@ that can be 200 m long, and the game would have to redo the projection the ETL a
 of Hong Kong's published pick-up/drop-off points are **drop-off only** (66 of 275 territory-wide, 4
 of the region's 15), and letting a player hail a fare at one would be wrong in a way a local would
 notice.
+
+### `tram.glb` — the published tramway (`P3-14`)
+
+Two rails and a bed per track, at the position iB1000's `CartoTransLine` tramway code publishes.
+One primitive, one material named `tramway`, one draw call, and **no collider**.
+
+⚠️ **`city.json`'s `tramway` key is optional and may be `null`.** A city whose estate publishes no
+tramway ships none, and that is the honest answer rather than a missing file. It is deliberately not
+in `DOCUMENT_KEYS`, which `REQUIRED_KEYS` and `shipped()` both treat as always-present.
+
+⚠️ **This is geometry rather than a marking, and that is measured, not stylistic.** `roads.glb`
+carries a `tram_tracks` bit and always has; the rails are still not drawn from it, because they are
+not on that ribbon. 80 of the 86 flagged edges are one-way, so the reserve runs *between* two opposed
+carriageways — **18.8%** of cross-sections have both tracks on the drawn surface, **1.5%** on
+Hennessy, and the outer rail sits a median **3.26 m** past the drawn kerb. `Q58`.
+
+⚠️ **It must not collide.** It lies on ground solid since `P3-10`, and a 30 mm rail as collision
+geometry is a kerb with no visible cause — landing in the population `carriageway_occupancy.py`
+already fails on. The whole guard is the absence of a `-col` suffix in one string, so
+`verify_tramway.gd` fails on *any* collider: the inverse of every other asset here.
+
+| Channel | Carries |
+|---|---|
+| `COLOR_0.rgb` | The material's colour — `steel_rail` or `concrete_sooty` from `materials:`. Constant per strip, which is what lets the shader convert to linear `flat` |
+| `TEXCOORD_0` | `x` a fraction **across** the strip (0 and 1 on the two edges), `y` metres along. `x` is what shades the polished rail head |
+| `TEXCOORD_1` | `x` the class — **0 bed, 1 rail**; `y` metres along, again |
+
+⚠️ **`TEXCOORD_1.y` duplicates `TEXCOORD_0.y` on purpose**, the same shape `roads.glb` uses. Godot's
+16-bit vertex compression applies to a mesh whose attributes fit the representable range: `roads.glb`
+escapes it because its marking codes reach 2,097,151, and this mesh does not escape it. A contract
+read off `TEXCOORD_0` is read off a quantised copy — the first `verify_tramway.gd` reported the
+tramway starting at **-0.009 m** against an exact float32 zero.
+
+⚠️ **The class is shipped rather than derived.** Inferring it from strip width works today and
+inverts the day `rail_width_m` and `bed_width_m` converge; inferring it from vertex colour makes the
+`materials:` table load-bearing for shading rather than for colour.
 
 ### `landmarks.json` — hero building placement
 
@@ -920,6 +966,7 @@ every region lies inside them.
 | `InputRouter` | Abstracts touch / gamepad / keyboard into one action set | 🟡 keyboard + gamepad; `P2-4` |
 | `DebugHud` | Every dev readout, behind `F3` | ✅ |
 | `TrafficSystem` | AI vehicles following road-graph splines; trams as scripted blockers | ⬜ `P3-3` |
+| `tram.glb` | The published tramway, drawn where iB1000 prints it — **not** a marking on the ribbon (`Q58`). One primitive, one draw call, **no collider** | ✅ `P3-14` |
 | `FareSystem` | Fare state machine: idle → hailed → carrying → delivered/failed | ⬜ `P3-1` |
 | `ScoreSystem` | Base fare, time bonus, **style chain** and **fare combo** — two distinct multipliers | ⬜ `P3-2` |
 | `HUD` | Meter, timer, arrow, destination callout (bilingual) | ⬜ `P3-5` |

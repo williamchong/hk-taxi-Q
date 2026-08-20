@@ -77,6 +77,8 @@ lives in git. This file holds *why things are the way they are*.
 | `Q51` | Traffic is never *sent* down an edge under one lane clear; the player is never *stopped* | ✅ Closed — the graph expresses passability and refuses nothing. `clearance.py` publishes a width per station into `city.json` (schema 9) and `RoadGraph` gains `is_routable`; `nearest_edge` is untouched. ✅ **The 21-against-26 gap is reconciled (2026-08-19): plan cell size, verified against 109 M brute-forced samples**, and `tools/clearance_reconcile.py` ratchets both counts. ✅ It found a live defect on the way — `ALONG_M = 1.0` **aliased walls**, so `is_routable` routed traffic down `e636` — and the call was **taken the same day: `ALONG_M` is `CELL_M` (0.5 m)**, the published count is **24 against 26**, and the published width is a lower bound at that cell |
 | `Q55` | The façade survey's filler guard reads greyness, and the placeholder panels are coloured | 🔴 Open — measured 2026-08-20, not fixed. **97 atlases on 93 of 2,213 buildings** carry a flat non-grey panel `is_filler` passes; 92 clear `vegetation_max`. Rejecting them moves **43 past `Q33`'s 0.46 `Δab`**, worst **54.69 `L*`**. `Q37` prescribed this fix — *"or detect each atlas's filler as its modal exactly-repeated colour"* — and only the first clause shipped |
 | `Q56` | `VEHICLE_TYPE = 5` is a painted line, and a second dataset was the only way to know | ✅ Closed — `painted_vehicle_types: [1, 5]`, 2026-08-20. **+28.1% restriction** (26,065 m / 650 sides -> **33,385 m / 722**) on the evidence of Traffic Aids Drawings v2, where **93.9% of code-5 metres carry a painted line**. `tools/kerbside_source_audit.py` diffs the two sources: agreement **77.0% -> 96.4%**, kind agreement **95.7% -> 99.2%**. ⚠️ Codes 2/3/4 stay refused for a **different reason than `Q54` gave** — the drawings paint them too; the codec cannot say *which class* |
+| `Q57` | The estate publishes the markings, the width and the tram, and three records said otherwise | ✅ Closed as a survey, 2026-08-20. Nothing built, nothing fetched; four claims retired and one trap recorded |
+| `Q58` | The published tramway is **rails, not centrelines**, and it is **not on the carriageway** | ✅ Closed — `P3-14` ships `tram.glb`, 2026-08-20. `CartoTransLine TW` is one rail per part (gauge p50 **1.124 m** against 1.067 published); **only 18.8%** of cross-sections have both tracks on the drawn ribbon and **1.5%** on Hennessy, so a lane-space marking was refused on *measurement*. **+177,328 B of PCK**, one draw call, no collider. ⚠️ The deferral this replaces cited `ART_DESIGN.md` for the opposite of what it says |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -6352,8 +6354,19 @@ problems. ⚠️ **"Refused on data, not cost" is no longer true for two of thes
 Traffic Aids Drawings v2 publishes `DTAD_YL_BOX_POLY` (**20 yellow box junctions as polygons in
 region**, with a `YELLOWBOX_TYPE`) and `DTAD_CROSSING_LINE` (121 features / 6,698 m). The refusal
 stands as a *scope* decision; the "no source" half of its reasoning is dead, and this record is the
-one that would otherwise keep asserting it. No tram inset: `tram_tracks` reaches the payload and the shader ignores it, because the
-treatment `ART_DESIGN.md` describes is geometry rather than shading.
+one that would otherwise keep asserting it. No tram inset: `tram_tracks` reaches the payload and the shader ignores it.
+
+⚠️ **Amended 2026-08-20 by `Q58`. The reason this record gave for that was a misquote**, and it
+stood here and in `road_markings.gdshader` both. This entry said the treatment `ART_DESIGN.md`
+describes is *"geometry rather than shading"*; `ART_DESIGN.md` says *"it belongs with the markings
+shader, not with the ribbon"* — the opposite, in the same sentence, in a file three lines long.
+
+✅ **The conclusion survives the correction, on evidence this record did not have.** `Q58` measured
+where the rails actually are: 80 of the 86 flagged edges are one-way, the reserve runs *between* two
+opposed ribbons, and **only 18.8%** of cross-sections have both tracks on the drawn carriageway —
+**1.5%** on Hennessy. A lane-space rail would have sat a median 3.26 m from the published position.
+So the tramway is geometry after all, and `MARKING_TRAM` stays shipped and undecoded. What changed
+is that it is now refused on a measurement rather than on a misreading.
 
 **⚠️ The markings were the fourth `vertex_srgb_to_linear`, and `city_facade.gdshader` had written
 down in advance that the fourth was the trigger** — *"three call sites still do not earn a fourth
@@ -7002,3 +7015,150 @@ generalised. The sweep is in `Q19`; the numbers say the sequel to this survey is
 `Q54` and `Q56` for the two earlier instances of the same mechanism · `Q19` for the width this
 unblocks and does not fix · `DATA_SOURCES.md` for every layer row and the HyD and CSDI dataset
 entries · `hong_kong.yaml` `tram_streets` for the comment corrected here
+
+---
+
+## `Q58` — The published tramway is rails, not centrelines, and it is not on the carriageway
+
+**Status.** ✅ **Closed, 2026-08-20** — `P3-14` ships `tram.glb` · **Owner.** `pipeline/tramway.py` ·
+**Opened** 2026-08-20 by the user, asking whether the tram rails and stations could be drawn
+
+**Claim.** The tramway is **geometry at the position the estate publishes**, not a marking on the
+ribbon. That is the opposite of what `ART_DESIGN.md` has wanted since `P1-4`, and it is settled by
+measurement rather than by the argument that was standing.
+
+### What was standing, and why it was not a reason
+
+`roads.tram_streets` has flagged **86 edges** since `P1-3`; `surface.py` has shipped that flag as
+`MARKING_TRAM` in `TEXCOORD_1` since `P3-12`; `road_markings.gdshader` declares the constant and
+declines to decode it. Drawing rails in lane space would have cost **one decode line**.
+
+⚠️ **The reason given for not doing it was a misquote, and it stood in two places.**
+`road_markings.gdshader` says *"the treatment `ART_DESIGN.md` describes is an inset strip — geometry,
+not shading"*, and `Q53` repeats it. `ART_DESIGN.md` says: *"`P1-4` draws no inset; **it belongs with
+the markings shader, not with the ribbon**."* The cited file is three lines long, on disk, in this
+repo, and says the opposite of what both records attribute to it.
+
+⚠️ **It is `Q57`'s mechanism with the source one hop closer** — a claim inheriting authority from
+something nobody re-read — and it carries a distinct lesson from `Q57`'s four instances: **a claim
+can be unsupported by its stated evidence and still be true.** Checking the citation showed the
+reasoning was broken. Only measuring showed the answer was not.
+
+### Correction 1 — `TW` publishes rails, and `Q57` and `DATA_SOURCES.md` called them centrelines
+
+Measured independently of the road graph, by walking each `TW` part and casting a perpendicular to
+the nearest other part: the gap is **sharply unimodal at 1.05-1.20 m**, p50 **1.154 m**, with
+essentially no population where a track *separation* would sit. A part is one rail.
+
+Confirmed from the other direction on 1,698 four-rail cross-sections — **56.5%** of stations across a
+tram-flagged edge cross exactly four parts:
+
+| | p10 | p50 | p90 |
+|---|---|---|---|
+| Drawn gauge | 1.066 m | **1.124 m** | 1.221 m |
+| Track separation | 2.445 m | **2.597 m** | 2.768 m |
+
+Hong Kong Tramways' published gauge is **1,067 mm**: the low tail sits exactly on it and the median
+reads 5% over, which is digitising width rather than a wider tramway. ⚠️ Read as centrelines, a bed
+drawn between a mis-paired couple is **a lane wide**.
+
+### Correction 2 — the reserve is not on the drawn carriageway
+
+**80 of the 86 flagged edges are one-way.** Hennessy, Johnston, Yee Wo and Causeway are drawn as
+opposed pairs, so the reserve runs *between* two ribbons rather than down the middle of either —
+which is why every measured offset came back on the same side of both halves. For two anti-parallel
+centrelines, something between them sits on the same relative side of each.
+
+| Street | four-rail sections | both tracks on the drawn ribbon |
+|---|---|---|
+| HENNESSY ROAD | 788 | **1.5%** |
+| JOHNSTON ROAD | 562 | 54.4% |
+| YEE WO STREET | 289 | **0.0%** |
+| CAUSEWAY ROAD | 52 | **0.0%** |
+| **All** | **1,698** | **18.8%** |
+
+The outer rail sits a median **3.26 m** past the drawn kerb, p90 **4.68 m**.
+
+⚠️ **So a lane-space rail would have been an invented marking in `Q54`'s sense** — the shape of thing
+that is a debit against `P3-9a` in a way a missing one is not — and unlike `Q54`'s double yellow it
+could not have claimed the source was absent. `tram_streets` is untouched and keeps its own job: it
+says which streets carry a tram, which is a fact about the street and not a position.
+
+⚠️ **The registration argument that made lane space look free does not survive this.** A lane marking
+is derived from the ribbon's own geometry and cannot be wrong relative to it; a rail has an
+independent published position and would have been a measured 3.26 m from it.
+
+### What ships
+
+`pipeline/tramway.py` reads `CartoTransLine TW`, pairs the rails back into tracks, and writes
+`tram.glb`: **132 rails / 9,912 m in region → 126 drawn (7,300 m) and 53 track beds (3,197 m)**,
+5,112 triangles, **one primitive, one draw call, no collider**. Heights come from the nearest level-0
+centreline via `fares.Segments` — the reserve is a made road surface, level with the carriageways
+either side, not with the ground under them.
+
+**Cost, one variable changed:** two web exports, `tramway:` block and `steel_rail` removed for the
+control. **41,088,640 → 41,265,968 B, +177,328 B (+0.43%).** `city.json` **10 → 11** and the manifest
+key is **optional and may be null** — a city whose estate publishes no tramway ships none.
+
+### ⚠️ Three defects that each rendered as *nothing*, and what caught them
+
+None of the three would have been found by looking at a frame, and two were found by a number the
+stage publishes about itself.
+
+- **Winding.** `mitres` offsets to the *left* of travel, and feeding the strip left-then-right winds
+  every triangle face-down. **5,111 of 5,112 inverted**: correct geometry, correct position, correct
+  material, and `cull_back` drew none of it. The city simply had no tramway in it. Now held by
+  `TramwayReport.inverted`, published in the manifest and pinned by a test.
+- **The bed flared at every sheet boundary.** `_project` clamps to the partner's nearest end, so a
+  rail running on past its partner keeps generating a "centre" that walks out towards it.
+  `drawn_gauge_m` read p90 **1.92 m** against a 1.067 m gauge; trimmed to where both rails run, p90
+  **1.21 m**. The manifest publishes the gauge for exactly this reason — a join that has crossed
+  tracks is invisible downstream.
+- **Mutual pairing lost a fifth of the tramway.** iB1000 is published per sheet, so a rail crossing a
+  boundary arrives as two parts while the rail beside it arrives as one; the long rail's ballot
+  splits and all three go undrawn — **38 of 132 parts**. Taking the one-way vote as well: **8**.
+
+⚠️ **A fourth was a check reading the wrong channel.** Godot's 16-bit vertex compression applies to a
+mesh whose attributes fit the representable range. `roads.glb` escapes it because its marking codes
+reach 2,097,151 and do not fit; the tramway's payload is a 0/1 class and a few hundred metres and
+does. The first `verify_tramway.gd` reported the tramway starting at **-0.009 m** against an exact
+float32 zero. The channel was fine and the bound was written as though compression did not exist.
+
+⚠️ **`rail_metallic` was set by looking at a frame, and the comment beside it had predicted the
+wrong failure.** A metallic surface reflects its environment and the only environment here is the
+sky, so at 0.65 the rails rendered **sky blue** — two painted lines down the reserve. The comment
+said they would go *black*, which is what happens with no sky. It ships at 0.0; the cue that works is
+`rail_roughness` 0.28 against the road's 0.95.
+
+### The stations
+
+TD's **Tram Stop Location** — 117 territory-wide, **19 in region** — ships as the `poi` kind, which
+the contract has listed since `P1-5` with nothing producing one. `config.py` had already said why
+that is the right home: *"a city that adds hotels or malls adds a group rather than a code path."*
+It cost a config block and no code path, and **no schema bump**: `poi` is already in the published
+contract and `pickup`/`dropoff` already carry the distinction, so a v1 reader is not wrong.
+
+⚠️ **The source publishes no name** — `OBJECTID`, `STOP_ID`, `LAST_UPDATE_DATE`, and nothing else,
+across all 117 features. `name_en`/`name_zh` became **optional roles** rather than shipping
+`"99101"` as a place name or pointing the config at a column that does not exist. `fares.py` already
+counted unnamed nodes, so a null name reaches the contract intact.
+
+⚠️ **`pickup` and `dropoff` are both false and had to be stated.** `FareCategory` defaults both to
+true, which is right for a taxi stand and wrong here: a tram stop is somewhere a *tram* stops.
+
+### Deliberately not done
+
+- **No platforms.** A Hong Kong tram stop is a raised island in the carriageway;
+  `carriageway_occupancy.py` already fails at 26 edges and there is no prop system
+  (`ARCHITECTURE.md` names `MultiMeshInstance3D` as a plan). ✅ Worth carrying to whoever picks it
+  up: **the centreline is invariant under the 1.6x widening**, so a centre-island platform registers
+  better against the drawn city than anything kerbside does.
+- **No stop markings** (`RM1045`/`RM1046`) and no `RM1034` TRAM LANE lettering. Published, unread.
+- **No collision.** The tramway lies on ground solid since `P3-10`; a 30 mm rail as collision
+  geometry is a kerb the player cannot see a reason for. Held by `verify_tramway.gd`, which fails on
+  *any* collider — the inverse of every other asset this repo verifies.
+
+**See.** `Q57` for the survey that found the layer and mis-described it · `Q53` for the marking scope
+this does not change, amended there · `Q54` for the invented-marking debit this avoids · `Q19` for
+the widening that puts the ribbon 1.59 m past the published kerb · `ARCHITECTURE.md` for the
+`tram.glb` contract and the class channel · `DATA_SOURCES.md` for the corrected `TW` row

@@ -257,6 +257,22 @@ materials:
     reflectance: 30.0
     source: "clean concrete and granite podium cladding, 20-35%"
 
+  # The tram rail (`P3-14`, `Q58`). The brightest thing this city puts on a road
+  # surface, and that is the material rather than a preference: what the player
+  # sees of a rail set flush in the carriageway is the *head*, kept polished by
+  # the traffic running on it. The body is dark and oxidised, and is not drawn.
+  #
+  # ⚠️ **It sits above the road palette's band on purpose, and that is the one
+  # thing to look at if the tramway reads wrong.** `Q31`'s ratio argument places
+  # kerb against asphalt at 2.5:1; steel against asphalt here is 3.5:1. A rail
+  # that reads as a bright line at a low sun is correct; a rail that reads as
+  # emissive is `road_markings.gdshader`'s clipped-white failure in a new place,
+  # and the dial for it is `tuning/tramway.tres`, not this number.
+  steel_rail:
+    colour: "#72777b"
+    reflectance: 35.0
+    source: "steel rail head polished by use; bare and weathered steel is 30-50%"
+
 crs:
   # Every source dataset is published in the HK1980 Grid System — a Transverse
   # Mercator projection in metres. All pipeline geometry stays in it until the
@@ -359,6 +375,18 @@ sources:
   # no `layer_name`. Verified to resolve on 2026-07-31.
   taxi_stands: https://portal.csdi.gov.hk/csdi-webpage/file-api?dataset_id=td_rcd_1697081907714_17556&format=geojson
   taxi_pudo: https://portal.csdi.gov.hk/csdi-webpage/file-api?dataset_id=td_rcd_1697082382328_14459&format=geojson
+
+  # Tram stops (`P3-14`). Same CSDI `file-api` pattern as the two above, no API
+  # key, no `layer_name` — 117 features territory-wide and **19 inside the
+  # region**, surveyed by `Q57` and fetched by `Q58`. Tiny beside the 218 MB
+  # audit source above.
+  #
+  # ⚠️ These are **not** fare nodes in the taxi sense and are published as the
+  # `poi` kind the contract has always reserved. A tram stop is somewhere a tram
+  # stops; letting a player hail a fare at one would be wrong in the way
+  # `docs/GAME_DESIGN.md` cares about, so its category sets `pickup: false` and
+  # `dropoff: false` explicitly — `FareCategory` defaults both to true.
+  tram_stops: https://portal.csdi.gov.hk/csdi-webpage/file-api?dataset_id=td_rcd_1638875413253_59498&format=geojson
 
 # Buildings ship as one ~44 MB glTF zip per 1:1000 map sheet, 3,456 sheets for
 # the territory, with no single bulk URL. The CSDI portal's `file-api` serves
@@ -764,6 +792,84 @@ carriageway_survey:
       # listing codes against a column this layer does not have is refused at
       # load rather than silently filtering nothing.
       codes: [RM]
+
+# The tramway, drawn by pipeline/tramway.py as tram.glb (P3-14, Q58).
+#
+# ⚠️ **This is a build input, not an instrument's truth side** — unlike
+# `carriageway_survey` directly above, which reads the same layer and is only
+# ever opened by tools/carriageway_margin.py. Same shape, different standing.
+#
+# ⚠️ **`TW` is Tramway here and *tactile warning strip* in the Traffic Aids
+# Drawings**, where `DTAD_TW_STRIP_LINE` carries 778 features at dropped kerbs
+# across every street in the region. That trap is Q57's, recorded because it
+# nearly became a published claim; this block reads iB1000 and nothing else.
+#
+# ⚠️ **`codes: [TW]` selects rails, not track centrelines — measured, not
+# assumed.** Q57 and DATA_SOURCES.md both described the layer as tramway
+# centrelines. Q58 walked every tram-flagged edge and found 56.5% of stations
+# cross exactly **four** parts, with the gap between neighbours sharply
+# unimodal at 1.05-1.20 m: that is the 1,067 mm gauge, so a "part" is one rail.
+# Reading them as centrelines would draw a bed a lane wide down each rail.
+#
+#   measured over 1,698 four-rail cross-sections
+#   gauge               p10 1.066  p50 1.124  p90 1.221 m   (published 1.067)
+#   track separation    p10 2.445  p50 2.597  p90 2.768 m
+#
+# ⚠️ **This is why the tramway is geometry and roads.tram_streets cannot place
+# it.** 80 of the 86 flagged edges are one-way — Hennessy, Johnston, Yee Wo and
+# Causeway are opposed pairs — so the reserve runs *between* two ribbons rather
+# than down the middle of either. Only 18.8% of those cross-sections have both
+# tracks on the drawn carriageway at all (Hennessy 1.5%, Causeway 0.0%), and the
+# outer rail sits a median 3.26 m past the drawn kerb. `tram_streets` stays as
+# it is and keeps its own job: it says which streets carry a tram, which is a
+# fact about the street, not a position.
+tramway:
+  source: topography
+  member: "{tile}/{tile}.gdb"
+  layer: CartoTransLine
+  fields:
+    line_type: TRANSPORTATIONLINETYPE
+  codes: [TW]
+
+  # Hong Kong Tramways' published gauge, and how far a neighbouring rail may sit
+  # from it and still be read as the other half of the same track. The tolerance
+  # is the source's digitising spread rather than a preference: the measured p10
+  # to p90 above spans 1.066-1.221, so 0.35 takes the whole distribution and
+  # still stops well short of the 2.597 m separation that would pair a rail with
+  # the next track along. Refused at load if it ever reaches the gauge.
+  gauge_m: 1.067
+  pair_tolerance_m: 0.35
+
+  # Drawing. `rail_width_m` is authored wider than a 70 mm rail head for the
+  # reason tuning/road_markings.tres gives about line widths — a truthful one is
+  # under a pixel at the distance the player is looking — but unlike a painted
+  # line it may not be widened past the four-foot it has to sit inside.
+  rail_width_m: 0.14
+  # ⚠️ **One bed per track, and its ceiling is the track separation measured
+  # above, not taste.** Two beds are drawn 2.597 m apart at the median and
+  # 2.445 at p10; anything wider than that overlaps its neighbour, and two
+  # coplanar beds at the same lift z-fight down the whole reserve. 2.20 clears
+  # p10 with 0.24 m to spare and leaves a sliver of ground showing between the
+  # tracks, which at any speed reads as one continuous reserve.
+  bed_width_m: 2.20
+
+  # ⚠️ **The ground and the level-0 carriageway are coplanar by construction**:
+  # roads.py samples the terrain and lays the ribbon at `terrain + 0.0`, which
+  # is the property tools/ground_clearance.py exists to measure. A tramway laid
+  # at deck height would z-fight the ground it rests on down its whole length,
+  # so the bed is lifted clear and the rail sits proud of the bed — which is
+  # also what a rail does.
+  bed_lift_m: 0.02
+  rail_lift_m: 0.01
+
+  # Furthest a rail station may sit from a level-0 centreline and still take its
+  # height from it. The reserve runs between two carriageways a measured 6-9 m
+  # from either, so this is generous by design; what it excludes is depot and
+  # siding track with no drivable road near it.
+  max_snap_m: 25.0
+
+  rail_material: steel_rail
+  bed_material: concrete_sooty
 
 # Hero buildings shipped as authored models (P3-6) — the landmarks.json
 # contract in docs/ARCHITECTURE.md. The building stage excludes every stem
@@ -1315,3 +1421,31 @@ fares:
       categories:
         - {match: "PU/DF", id: pickup_dropoff}
         - {match: "DF", id: dropoff, pickup: false}
+
+    # Tram stops (`P3-14`, `Q58`) — the `poi` kind the data contract has always
+    # listed and nothing has ever produced. `config.py` says why that is the
+    # right home: "a city that adds hotels or malls adds a group rather than a
+    # code path", and this is the first thing to take it up on that.
+    #
+    # ⚠️ **No `name_en` / `name_zh`, because the source has none.** TD publishes
+    # `OBJECTID`, `STOP_ID` and a revision date and nothing else — verified
+    # against all 117 territory-wide features, of which 19 fall in region. The
+    # names are optional roles for exactly this case; pointing them at
+    # `STOP_ID` would ship "99101" as a place name.
+    #
+    # ⚠️ **`pickup` and `dropoff` are both false, and must be stated.**
+    # `FareCategory` defaults both to true, which is right for a taxi stand and
+    # wrong here: a tram stop is somewhere a *tram* stops. Letting a player hail
+    # a fare at one would be wrong in the way docs/GAME_DESIGN.md cares about.
+    # What these 19 points are for is `P3-4` — a tram needs somewhere to stop.
+    - kind: poi
+      source: tram_stops
+      crs: EPSG:4326
+      fields:
+        # The one required role. This source publishes no category either, so
+        # it names the field it does have and the single rule below matches
+        # everything — an empty `match` is a substring of every string, and the
+        # loader refuses any rule placed after one.
+        category: STOP_ID
+      categories:
+        - {match: "", id: tram_stop, pickup: false, dropoff: false}

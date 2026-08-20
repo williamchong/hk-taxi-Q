@@ -18,6 +18,7 @@
 [ext_resource type="Script" path="res://scripts/city/city_streamer.gd" id="1_tiles"]
 [ext_resource type="Resource" path="res://tuning/streaming.tres" id="8_streaming"]
 [ext_resource type="Script" path="res://scripts/city/road_surface_preview.gd" id="2_surface"]
+[ext_resource type="Script" path="res://scripts/city/tramway_preview.gd" id="10_tramway"]
 [ext_resource type="PackedScene" path="res://scenes/world/clean_daylight.tscn" id="3_light"]
 [ext_resource type="PackedScene" path="res://scenes/vehicle/taxi.tscn" id="4_taxi"]
 [ext_resource type="Script" path="res://scripts/camera/chase_camera.gd" id="5_camera"]
@@ -39,6 +40,14 @@ camera_path = NodePath("../CameraRig/Camera3D")
 
 [node name="RoadSurface" type="Node3D" parent="."]
 script = ExtResource("2_surface")
+
+; The tramway (`P3-14`), beside the road surface rather than under it: it is a
+; separate mesh at the position iB1000 publishes, and `Q58` measured that this
+; is *not* on the carriageway — only 18.8% of cross-sections have both tracks
+; on the drawn ribbon, and 1.5% on Hennessy. A region whose sources publish no
+; tramway ships none and this node simply stays empty.
+[node name="Tramway" type="Node3D" parent="."]
+script = ExtResource("10_tramway")
 
 ; The authored heroes, placed from `landmarks.json` (`P3-6`). Beside `Tiles`
 ; rather than under it: the streamer owns what it streams, and a hero is

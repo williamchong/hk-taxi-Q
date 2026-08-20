@@ -63,7 +63,19 @@ const NOT_MEASURED: float = -1.0
 ## bumped for the same reason on the tiles; the wrong answer is quieter here,
 ## because a v9 reader draws an unmarked road that looks like the road it always
 ## drew rather than like a failure.
-const SCHEMA_VERSION: int = 10
+##
+## 11 since `P3-14`: the manifest names `tram.glb`, a new shipped asset drawn
+## from iB1000's published rails. The `landmark_assets` precedent decides it —
+## 7 and 8 both bumped because the *asset set* a v-N document describes had
+## changed, and `shipped()` below is what turns that set into a PCK. A v10
+## reader draws no tramway, which on its own would be `P3-10`'s no-bump case;
+## what it also does is compute a shipped set missing a file the bundle
+## depends on.
+##
+## ⚠️ **The key is optional and may be null.** A city whose estate publishes no
+## tramway ships none, so `tramway_path` is empty for such a region and that is
+## the honest answer rather than a missing file.
+const SCHEMA_VERSION: int = 11
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -124,6 +136,14 @@ var road_graph_path: String
 var road_surface_path: String
 var fares_path: String
 var landmarks_path: String
+
+## The tramway mesh (`P3-14`), or **empty** where the region ships none.
+##
+## Unlike the four above this one is genuinely optional: `Q58` draws it from
+## iB1000's `CartoTransLine` tramway code, and a city whose estate publishes no
+## such layer declares no `tramway:` block and exports a null. Callers must
+## treat empty as "this region has no tramway", never as a build failure.
+var tramway_path: String
 
 ## Drawn half-width of the carriageway, in metres, keyed by road-graph edge id —
 ## **one value per station** of that edge's `roadgraph.json` polyline.
@@ -188,6 +208,11 @@ static func load_manifest() -> CityManifest:
 	manifest.road_surface_path = _resolve(document.get("road_surface", ""))
 	manifest.fares_path = _resolve(document.get("fares", ""))
 	manifest.landmarks_path = _resolve(document.get("landmarks", ""))
+	# A **null** `tramway` is the "this region has no tramway" state, and
+	# `_resolve` maps it to empty. Not a branch here on purpose: `str(null)` is
+	# `"<null>"`, which would resolve to a plausible-looking path that loads
+	# nothing, so the guard belongs where every caller gets it.
+	manifest.tramway_path = _resolve(document.get("tramway"))
 	for entry: Dictionary in document.get("carriageway", []):
 		var edge: int = int(entry.get("edge", -1))
 		manifest.carriageway_half_width_m[edge] = _floats(entry, "half_width_m")
@@ -229,12 +254,14 @@ static func bearing_deg(forward: Vector3) -> float:
 	return fposmod(rad_to_deg(atan2(forward.x, -forward.z)), 360.0)
 
 
-## Every file the manifest *names*, in order: the four documents, then every
-## tier of every tile. Not every file a build ships — `city.json` itself is not
+## Every file the manifest *names*, in order: the four documents, the tramway
+## where the region has one, then every tier of every tile. Not every file a build ships — `city.json` itself is not
 ## in the list, because it names the others and not itself. A caller copying a
 ## region wants this plus `PATH`, which is what `tools/sync_generated.sh` does.
 func shipped() -> PackedStringArray:
 	var paths: PackedStringArray = [road_graph_path, road_surface_path, fares_path, landmarks_path]
+	if not tramway_path.is_empty():
+		paths.append(tramway_path)
 	for tile: Tile in tiles:
 		paths.append_array(tile.lods)
 	return paths
@@ -284,6 +311,12 @@ static func _tile(entry: Dictionary) -> Tile:
 ## A manifest-relative path as a `res://` one. Empty stays empty, so a missing
 ## key reads as "not named" rather than as the generated directory itself.
 static func _resolve(relative: Variant) -> String:
+	# ⚠️ `null` is a legitimate value, not a missing one: `city.json` writes it
+	# for an optional document the region does not ship (`P3-14`'s tramway). It
+	# has to be caught before `str`, which would turn it into `"<null>"` and
+	# resolve a path that looks real and loads nothing.
+	if relative == null:
+		return ""
 	var path: String = str(relative)
 	return PATH.get_base_dir().path_join(path) if not path.is_empty() else ""
 

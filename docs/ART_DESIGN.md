@@ -565,8 +565,21 @@ authored features the source captures badly.
   and a 0.5 m lip. **The lip's job is the seam:** the ground tucks *under* it, 0.20 m down, which is
   what hides the join. (Before `P3-10` there was no terrain to end against and it stopped the
   carriageway ending in mid-air.)
-- Tram tracks as an inset strip on flagged edges — **not yet built.** `tram_tracks` reaches the graph
-  but `P1-4` draws no inset; it belongs with the markings shader, not with the ribbon.
+- ✅ **The tramway is built (`P3-14`), and it is neither an inset nor a marking.** It is its own mesh
+  — `tram.glb`, two rails and a bed per track, at the position iB1000 publishes — with `steel_rail`
+  the brightest albedo this city puts on a road surface and `tuning/tramway.tres` the dial.
+  ⚠️ **The value that makes it read is `rail_roughness` 0.28 against the road's 0.95**, not colour:
+  a rail is a polished strip in a matte street, and at a low sun the highlight along the head is the
+  whole cue. At noon a rail and a painted line are nearly the same object, so judge it late.
+  ⚠️ `rail_metallic` ships at **0.0**. A metallic surface reflects its environment and the only
+  environment here is sky, so 0.65 rendered the rails **sky blue** — two painted lines down the
+  reserve.
+  ⚠️ **This bullet used to say "an inset strip … not yet built", and two records then cited it for
+  the opposite of what it says** — `road_markings.gdshader` and `Q53` both read "inset" as "geometry,
+  not shading" where the sentence assigned the work to the shader. `Q58` has the correction and the
+  measurement that decided the real answer: the published rails are **not on the ribbon** at all
+  (18.8% of cross-sections, 1.5% on Hennessy), so a lane-space rail would have been an invented
+  marking in `Q54`'s sense. `tram_tracks` stays shipped in `TEXCOORD_1` and stays undecoded.
 
 ⚠️ **When the markings shader lands it will expose a junction defect that is invisible today.** A cap
 overlaps its arms rather than abutting them wherever a short edge is held back by the junction trim —

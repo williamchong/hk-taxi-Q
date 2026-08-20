@@ -71,10 +71,20 @@ const float MARKING_KERB_DOUBLE = 3.0;
 // `direction` as the codec spells it. 0 is "absent", and a road whose direction
 // did not survive gets no centre line rather than a guessed one.
 const float DIRECTION_BOTH = 1.0;
-// ⚠️ `tram_tracks` is shipped and deliberately not decoded. The tram treatment
-// `ART_DESIGN.md` describes is an inset strip — geometry, not shading — so there
-// is nothing for this shader to do with the bit yet. It stays in the codec so
-// the day it is wanted costs no schema bump.
+// ⚠️ `tram_tracks` is shipped and deliberately not decoded, and since `P3-14`
+// the tramway is drawn as its own mesh — `pipeline/tramway.py`, `tram.glb`.
+//
+// ⚠️ **The reason this comment used to give was a misquote of `ART_DESIGN.md`**
+// ("an inset strip — geometry, not shading"), which says the opposite: *"it
+// belongs with the markings shader, not with the ribbon"*. `Q58` measured the
+// real reason. The published rails are **not on this ribbon**: 80 of the 86
+// flagged edges are one-way, the reserve runs between two opposed carriageways,
+// and only **18.8%** of cross-sections have both tracks on the drawn surface —
+// **1.5%** on Hennessy. A rail drawn in lane space would sit a median 3.26 m
+// from where the estate publishes it.
+//
+// The bit stays in the codec because it is still true and still cheap: it says
+// which streets carry a tram, which `P3-3`'s traffic will want.
 
 group_uniforms paint;
 // Bright white and saturated yellow, per `ART_DESIGN.md`'s anchor colours. Not

@@ -973,15 +973,47 @@ class TestGroundProfile:
 class TestFares:
     """`P1-5`'s config, and the two ways its category table can be wrong."""
 
-    def test_the_shipped_groups_cover_both_published_datasets(self, hong_kong) -> None:
+    def test_the_shipped_groups_cover_every_published_dataset(self, hong_kong) -> None:
         groups = {group.kind: group for group in hong_kong.fares.groups}
 
-        assert set(groups) == {"taxi_stand", "pudo"}
+        assert set(groups) == {"taxi_stand", "pudo", "poi"}
         assert groups["taxi_stand"].source == "taxi_stands"
         assert groups["pudo"].source == "taxi_pudo"
+        # `poi` was in the contract from the start with nothing producing one;
+        # `P3-14`'s tram stops are the first, and they arrived as a config block
+        # and no code path, which is what that vocabulary was reserved for.
+        assert groups["poi"].source == "tram_stops"
         # The property names are the Transport Department's, and this is the
         # test that notices if a republish renames one.
         assert groups["taxi_stand"].field("name_zh") == "Location_TC"
+
+    def test_a_source_publishing_no_names_declares_none(self, hong_kong) -> None:
+        """⚠️ TD's tram stops carry `OBJECTID`, `STOP_ID` and a revision date —
+        no name in either language, across all 117 territory-wide features. The
+        name roles are optional for exactly this, and the alternative was
+        shipping `"99101"` as a place name."""
+        stops = next(g for g in hong_kong.fares.groups if g.kind == "poi")
+
+        assert stops.optional_field("name_en") is None
+        assert stops.optional_field("name_zh") is None
+
+    def test_a_required_role_may_not_be_read_as_optional(self, hong_kong) -> None:
+        """`category` decides what a node *is*; returning None for it silently
+        would file every feature under nothing."""
+        stops = next(g for g in hong_kong.fares.groups if g.kind == "poi")
+
+        with pytest.raises(KeyError, match="category"):
+            stops.optional_field("category")
+
+    def test_a_tram_stop_is_neither_a_pickup_nor_a_dropoff(self, hong_kong) -> None:
+        """`FareCategory` defaults both to true, which is right for a stand and
+        wrong here — a tram stop is somewhere a *tram* stops."""
+        stops = next(g for g in hong_kong.fares.groups if g.kind == "poi")
+        rule = stops.categorise("99101")
+
+        assert rule.id == "tram_stop"
+        assert not rule.pickup
+        assert not rule.dropoff
 
     def test_every_published_category_spelling_is_matched(self, hong_kong) -> None:
         """The sixteen distinct `Status_EN` values in the territory, surveyed

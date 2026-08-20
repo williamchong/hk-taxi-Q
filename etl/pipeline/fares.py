@@ -297,9 +297,13 @@ def _node(
             # point's category says what may happen there, and that is carried
             # by `pickup`/`dropoff` instead.
             stand_category=category.id if group.kind == TAXI_STAND else None,
+            # ⚠️ Optional roles: a publisher may give positions and no names.
+            # TD's tram stops do exactly that — 117 features carrying an
+            # `OBJECTID`, a `STOP_ID` and a date — and a null name is what the
+            # contract should then carry. `FareReport.unnamed` counts them.
             name={
-                "en": _text(properties, group.field("name_en"), null_values),
-                "zh": _text(properties, group.field("name_zh"), null_values),
+                "en": _text(properties, group.optional_field("name_en"), null_values),
+                "zh": _text(properties, group.optional_field("name_zh"), null_values),
             },
             nearest_edge=snap.edge,
             edge_t=round(snap.t, 6),
@@ -325,7 +329,15 @@ def _point(geometry: Any) -> tuple[float, float] | None:
     return float(coordinates[0]), float(coordinates[1])
 
 
-def _text(properties: dict[str, Any], name: str, null_values: Sequence[str]) -> str | None:
+def _text(properties: dict[str, Any], name: str | None, null_values: Sequence[str]) -> str | None:
+    """One text field, or None where the publisher has no such column at all.
+
+    The two cases collapse on purpose: a column that is absent and a column
+    whose value is the source's null sentinel both mean "this node has no name",
+    and the contract spells both as `null`.
+    """
+    if name is None:
+        return None
     return clean_text(properties.get(name), null_values)
 
 

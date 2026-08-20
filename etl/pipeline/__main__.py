@@ -11,7 +11,8 @@ that quietly differs from a partial one.
 
 Ordering is a real dependency chain, not a preference. `surface` reads the
 graph `roads` writes, `clearance` measures the ribbon `surface` drew against the
-tiles `buildings` wrote, `fares` snaps to the graph, and `export` reconciles them.
+tiles `buildings` wrote, `fares` snaps to the graph, `tramway` takes its heights
+from it, and `export` reconciles them.
 Only `buildings` is independent, and it runs early because it is by far the
 longest stage — a mistake in it is worth hitting before the quick ones.
 
@@ -26,7 +27,18 @@ import logging
 import time
 from collections.abc import Callable
 
-from pipeline import buildings, clearance, export, fares, fetch, landmarks, podiums, roads, surface
+from pipeline import (
+    buildings,
+    clearance,
+    export,
+    fares,
+    fetch,
+    landmarks,
+    podiums,
+    roads,
+    surface,
+    tramway,
+)
 
 log = logging.getLogger(__name__)
 
@@ -46,6 +58,12 @@ STAGES: dict[str, Callable[[list[str]], int]] = {
     # tiles too, which is why it cannot run any earlier than this.
     "clearance": clearance.main,
     "fares": fares.main,
+    # After `roads` because every rail takes its height from the nearest level-0
+    # centreline that stage published, and before `export` because `city.json`
+    # names the asset. It reads no tile and measures no ribbon, so it could sit
+    # anywhere between those two; it is here because that is where its output is
+    # wanted rather than because anything forces it.
+    "tramway": tramway.main,
     "export": export.main,
 }
 
