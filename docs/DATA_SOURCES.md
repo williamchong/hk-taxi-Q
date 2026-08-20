@@ -485,7 +485,7 @@ never runs the audit can skip it with `--only`.
 |---|---|---|
 | **`DTAD_RST_ZONE_LINE`** | **1,763 features / 39,292 m**, `RM1040` 24,932 m + `RM1041` 14,164 m | **The kerbside yellow lines.** The only layer in use. `LINETYPE` carries the marking code; `COLOR = 6` is yellow on 1,559 of them. ⚠️ **`TIME_ZONE` is null on every feature in region** — the posted hours live in `NSR` and nowhere here |
 | `DTAD_YL_BOX_POLY` | 20 polygons, `YELLOWBOX_TYPE = "Yellow Box"` | Yellow box junctions, which `Q53` listed as an unsourced marking. **Not in use** |
-| `DTAD_RD_MARK_LINE` | 1,679 features / 61,903 m | Every other marking: `RM1109` 25,204 m and `RM1001` 19,308 m dominate; yellow ones are `RM1043` hatched no-parking (560 m) and `RM1038` box junction (540 m). **Not in use** |
+| **`DTAD_RD_MARK_LINE`** | 1,679 features / 61,903 m | Every other marking: `RM1109` 25,204 m and `RM1001` 19,308 m dominate; yellow ones are `RM1043` hatched no-parking (560 m) and `RM1038` box junction (540 m). ✅ **`RM1108`/`RM1109` EDGE OF CARRIAGEWAY (317 features) in use since 2026-08-20** by `tools/carriageway_margin.py` — the preferred publisher of the carriageway edge, ahead of iB1000's topographic margin. Geometry is plain `MultiLineString`, **2D**, so it needs none of the Z decoding iB1000's lines do |
 | `DTAD_CROSSING_LINE` | 121 features / 6,698 m | Crossings. **Not in use** |
 | `DTAD_TY_BAR_LINE` | 4 features / 283 m | Transverse yellow bars. **Not in use** |
 | **`DTAD_RD_MARK_SYM_PT`** | **1,365 points**, `REFNAME` = `RM` code, `ANGLE` = bearing | **The turn arrows `Q53` called unsourceable**, added by `Q57`. `RM1017` straight-ahead ×353, `RM1019` turn-left ×179, `RM1027` ahead+left ×102, `RM1021` turn-right ×92; `RM1135`/`RM1136` are the 望右/望左 crossing markings, not arrows. A code plus a bearing **is** an arrow. **Not in use** |
@@ -512,6 +512,26 @@ Standards Division, which gives every `RM` code its marking, description and dim
 ⚠️ **That sheet is stamped "FOR INTERNAL ONLY"** and TD ships it inside the published open-data
 `dataspec` bundle. Recorded so a reader who finds it is not surprised; `LICENSING.md`'s terms are the
 government's own and are unchanged by it.
+
+⚠️ **`ELEVATION` is a relative-level *text code*, its domain is not published, and the obvious
+reading of it is wrong.** The FGDB data specification defines the column on every layer that carries
+it as only *"Relative level (e.g. A01, A02)"*, 3-char text — it is **not** Road Network v2's integer
+`ELEVATION`, despite the shared name. Measured 2026-08-20 over the 317 `RM1108`/`RM1109` features in
+region, taking each feature's midpoint and asking how far it lies from the nearest level-0 and
+level-1 graph edge:
+
+| `ELEVATION` | features | median to level 0 | median to level 1 | within 8 m of a level-1 edge |
+|---|---|---|---|---|
+| `A01` | 180 | 5.6 m | **2.6 m** | **93%** |
+| *null* | 126 | **2.7 m** | 11.4 m | 38% |
+| `A03` | 11 | 27.4 m | 218.1 m | 0% |
+
+**`A01` is the elevated network, not the at-grade one, despite being the commonest value**, and the
+at-grade case is the *unmarked* one — a null. A filter written as "keep the codes that mean at
+grade" therefore cannot spell the answer, and one written on "commonest must mean normal" keeps
+exactly the wrong 57% of the layer and still reports a plausible number. `carriageway_survey`
+states it as an **exclusion**, `off_grade_codes: [A01, A03]`. `A03` is excluded as neither: 27 m
+from any level-0 edge, so it describes nothing an instrument on this graph measures.
 
 **What it agrees with `NSR` about, measured.** 1 m samples, 3 m radius, before `Q56` changed
 anything: `RM1040` sits on `NSR TIME_ZONE = 1` for **99.95%** of its length, which independently

@@ -73,22 +73,53 @@ class TestPolylines:
         np.testing.assert_array_equal(parts[0], np.array([(1.0, 2.0), (3.0, 4.0)]))
         np.testing.assert_array_equal(parts[1], np.array([(5.0, 6.0), (7.0, 8.0)]))
 
-    def test_a_z_geometry_is_refused_rather_than_misread(self) -> None:
+    def test_a_z_linestring_is_strided_past_not_misread(self) -> None:
         """Masking the dimension flag off would leave the reader striding 16
-        bytes through 24-byte points — wrong coordinates, no error. The polygon
-        path accepts Z because it strides correctly; the line path has no such
-        caller and refuses."""
-        wkb = struct.pack("<BII", 1, 1002, 2) + np.zeros(6, dtype="<f8").tobytes()
-        with pytest.raises(gdb.GeometryError, match="2D only"):
-            gdb.polylines(_layer("l", [wkb]))
+        bytes through 24-byte points — wrong coordinates, no error. ⚠️ This path
+        *refused* Z until `Q57`, which is what made iB1000's road margin
+        unreadable while the `Building` polygons beside it had been read since
+        `P3-7a`. It now strides like the polygon path and drops the Z column."""
+        points = np.array([(1.0, 2.0, 9.0), (3.0, 4.0, 9.0)])
+        wkb = struct.pack("<BII", 1, 1002, len(points)) + points.astype("<f8").tobytes()
 
-    def test_a_z_part_inside_a_multilinestring_is_refused(self) -> None:
+        _, parts = gdb.polylines(_layer("l", [wkb]))
+        np.testing.assert_array_equal(parts[0], points[:, :2])
+
+    def test_the_old_ogc_high_bit_also_marks_a_z_linestring(self) -> None:
+        """GDAL's export marks Z with the wkb25D high bit rather than the ISO
+        offset, and it is the dialect pyogrio hands back for `CartoTransLine`.
+        Both must decode to the same plan coordinates at the same 24-byte
+        stride — the property `test_multipolygon_z_round_trips_through_gdal`
+        pins for polygons, asserted here directly for lines."""
+        points = np.array([(1.0, 2.0, 9.0), (3.0, 4.0, 9.0)])
+        wkb = struct.pack("<BII", 1, 0x8000_0002, len(points)) + points.astype("<f8").tobytes()
+
+        _, parts = gdb.polylines(_layer("l", [wkb]))
+        np.testing.assert_array_equal(parts[0], points[:, :2])
+
+    def test_a_multilinestring_may_mix_dimensionality_between_parts(self) -> None:
         """The outer header does not speak for the parts, so a 2D multilinestring
-        can legally hold a Z part — the per-part header is the one that counts."""
-        part = struct.pack("<BII", 1, 1002, 2) + np.zeros(6, dtype="<f8").tobytes()
-        wkb = struct.pack("<BII", 1, 5, 1) + part
-        with pytest.raises(gdb.GeometryError, match="2D only"):
-            gdb.polylines(_layer("l", [wkb]))
+        can legally hold a Z part — the per-part header is the one that counts,
+        and a reader that took the outer one would stride the Z part wrong."""
+        flat = np.array([(1.0, 2.0), (3.0, 4.0)])
+        tall = np.array([(5.0, 6.0, 9.0), (7.0, 8.0, 9.0)])
+        first = struct.pack("<BII", 1, 2, len(flat)) + flat.astype("<f8").tobytes()
+        second = struct.pack("<BII", 1, 1002, len(tall)) + tall.astype("<f8").tobytes()
+        wkb = struct.pack("<BII", 1, 5, 2) + first + second
+
+        _, parts = gdb.polylines(_layer("l", [wkb]))
+        np.testing.assert_array_equal(parts[0], flat)
+        np.testing.assert_array_equal(parts[1], tall[:, :2])
+
+    def test_m_ordinates_are_still_refused_on_the_line_path(self) -> None:
+        """Accepting Z must not have accepted M with it: `NSR` is a *Measured*
+        MultiLineString, so this is a live dialect in the estate rather than a
+        hypothetical, and a wrong stride returns coordinates that are wrong
+        without being obviously wrong."""
+        for kind in (2002, 3002, 0x4000_0002, 0xC000_0002):
+            wkb = struct.pack("<BII", 1, kind, 0)
+            with pytest.raises(gdb.GeometryError, match="M ordinates"):
+                gdb.polylines(_layer("l", [wkb]))
 
     def test_a_polygon_where_a_line_was_expected_is_refused(self) -> None:
         wkb = struct.pack("<BI", 1, 3) + b"\x00" * 32

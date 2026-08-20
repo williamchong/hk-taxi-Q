@@ -578,6 +578,76 @@ class PodiumBlocks:
 
 
 @dataclass(frozen=True)
+class CarriagewayEdge:
+    """One published opinion on where the edge of the carriageway runs (`Q57`).
+
+    **Nothing in `pipeline/` reads this**, on the same terms as `KerbsideAudit`:
+    it is config rather than constants in `tools/carriageway_margin.py` because
+    the layer name, the field and the domain codes are the publisher's schema
+    (hard rule 3). A city with no such layer leaves the block out and cannot be
+    measured, which is the honest answer rather than a fabricated width.
+
+    Two of these are declared for Hong Kong on purpose. `Q57` traced four wrong
+    "no source publishes that" claims to one mechanism — a fact established
+    against a single dataset, then generalised to the estate — so an instrument
+    that read *one* margin layer and reported "the width" would be that error in
+    a new place. Where two publishers agree the number is strong; where they
+    diverge, the divergence is the finding.
+
+    `member` is set only for a per-sheet source, exactly as `PodiumBlocks` uses
+    it, and is what distinguishes a `tiled_sources` entry from a `sources` one.
+
+    `codes` are the domain values that mean "carriageway edge"; a value is a
+    *list* because TD spells the same marking `RM1108` and `RM1109`.
+
+    Grade is reached differently by each publisher, and **neither way is the
+    Road Network v2 integer convention**. TD carries a *relative level* text
+    code whose domain its data specification does not enumerate, so
+    `off_grade_codes` lists the values measured to be off-grade and everything
+    else is taken as at grade — an exclusion rather than an inclusion because
+    the at-grade value is null, which a list of included codes cannot spell.
+    iB1000 has no level column at all: it gives the under-deck margin its own
+    domain value, `RMU`, so leaving that out of `codes` is the whole filter and
+    there is nothing for `off_grade_codes` to do. `off_grade_codes` is
+    therefore `()` for a publisher that separates grade by code, and requires
+    an `elevation` field role when it is not — checked, because a config that
+    listed codes against no column would filter nothing and say nothing.
+    """
+
+    name: str
+    source: str
+    member: str | None
+    layer: SourceLayer
+    codes: tuple[str, ...]
+    off_grade_codes: tuple[str, ...]
+
+    @property
+    def tiled(self) -> bool:
+        """Whether `source` names `tiled_sources` rather than `sources`."""
+        return self.member is not None
+
+    @property
+    def elevation_field(self) -> str | None:
+        """The publisher's grade column, where it publishes one."""
+        return self.layer.fields.get("elevation")
+
+
+@dataclass(frozen=True)
+class CarriagewaySurvey:
+    """Every published carriageway edge the city can be measured against (`Q57`).
+
+    Ordered, and the order is read as preference: `tools/carriageway_margin.py`
+    takes the first source that answers a station and falls back down the list,
+    reporting which one answered. Hong Kong leads with the Transport
+    Department's own painted edge — semantically the carriageway rather than a
+    topographic margin that may follow a kerb, a wall or a lot boundary — and
+    falls back to iB1000, which is two orders of magnitude denser.
+    """
+
+    edges: tuple[CarriagewayEdge, ...]
+
+
+@dataclass(frozen=True)
 class SourcePaint:
     """How a mesh-sourced hero is repainted from its source COLOR_0 (`P3-6`).
 
@@ -1226,6 +1296,11 @@ class CityConfig:
     # The surveyed building-block layer, when the city has one (`Q47`). Optional
     # with a default — a city without a topographic source builds as before.
     podiums: PodiumBlocks | None = None
+    # Published carriageway edges, read only by `tools/carriageway_margin.py`
+    # (`Q57`). Optional for the reason `KerbsideAudit` is: its absence changes
+    # nothing a build does, and a city with no such layer is honestly
+    # unmeasurable rather than measured against an invented width.
+    carriageway_survey: CarriagewaySurvey | None = None
     # Hero buildings shipped as authored models (`P3-6`). Empty for a city
     # without any: the building stage then excludes nothing and the export
     # writes an empty landmarks document.
@@ -1398,6 +1473,9 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
             if document.get("podiums") is not None
             else None
         ),
+        carriageway_survey=_carriageway_survey(
+            document.get("carriageway_survey"), f"{path}:carriageway_survey"
+        ),
         landmarks=_landmarks(document.get("landmarks") or [], f"{path}:landmarks", table),
         extra_cas=_extra_cas(document.get("extra_cas"), path),
     )
@@ -1420,6 +1498,13 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
         _check_source_exists(city, group.source, f"{path}:fares.groups[{index}].source")
     if city.podiums is not None:
         _check_tiled_source_exists(city, city.podiums.source, f"{path}:podiums.source")
+    if city.carriageway_survey is not None:
+        for index, edge in enumerate(city.carriageway_survey.edges):
+            where = f"{path}:carriageway_survey.edges[{index}].source"
+            if edge.tiled:
+                _check_tiled_source_exists(city, edge.source, where)
+            else:
+                _check_source_exists(city, edge.source, where)
     _check_landmarks_lie_within_a_region(city, path)
     return city
 
@@ -2283,22 +2368,95 @@ def _source_layer(body: dict[str, Any], where: str, roles: tuple[str, ...]) -> S
     )
 
 
+_CARRIAGEWAY_EDGE_ROLES = ("edge_type",)
+
+
+def _carriageway_survey(body: Any, where: str) -> CarriagewaySurvey | None:
+    """The optional published-carriageway-edge block (`Q57`).
+
+    Checked at load even though only a tool reads it, for the reason
+    `_kerbside_audit` gives: the alternative is an instrument that fails on a
+    typo after reading a geodatabase. An empty `edges` is refused rather than
+    treated as absent — a survey declaring no source would report total
+    coverage of nothing, which reads as agreement.
+    """
+    if body is None:
+        return None
+    if not isinstance(body, dict):
+        raise ValueError(f"{where} must be a mapping, got {body!r}")
+
+    entries = _require(body, "edges", where)
+    edges = tuple(
+        _carriageway_edge(entry, f"{where}:edges[{index}]") for index, entry in enumerate(entries)
+    )
+    if not edges:
+        raise ValueError(f"{where}:edges is empty; leave the block out instead")
+
+    names = [edge.name for edge in edges]
+    if len(set(names)) != len(names):
+        # The report is keyed by name — a duplicate would silently merge two
+        # publishers' answers into one column and hide the disagreement that
+        # is the entire reason for reading more than one.
+        raise ValueError(f"{where}:edges has repeated names ({', '.join(sorted(names))})")
+    return CarriagewaySurvey(edges=edges)
+
+
+def _carriageway_edge(body: Any, where: str) -> CarriagewayEdge:
+    if not isinstance(body, dict):
+        raise ValueError(f"{where} must be a mapping, got {body!r}")
+
+    codes = tuple(str(code) for code in _require(body, "codes", where))
+    if not codes:
+        raise ValueError(f"{where}:codes is empty; the source would match no feature")
+
+    layer = _source_layer(body, where, _CARRIAGEWAY_EDGE_ROLES)
+    off_grade = tuple(str(code) for code in (body.get("off_grade_codes") or ()))
+    if off_grade and "elevation" not in layer.fields:
+        # It would load, filter nothing, and report a level-0 figure computed
+        # over the flyovers too — the silently-inert block `_sampling_block`
+        # refuses for the same reason.
+        raise ValueError(
+            f"{where}:off_grade_codes lists {', '.join(off_grade)} but fields has no "
+            "'elevation' role to read them from"
+        )
+
+    return CarriagewayEdge(
+        name=str(_require(body, "name", where)),
+        source=str(_require(body, "source", where)),
+        member=_tile_member(body, where),
+        layer=layer,
+        codes=codes,
+        off_grade_codes=off_grade,
+    )
+
+
+def _tile_member(body: dict[str, Any], where: str, *, required: bool = False) -> str | None:
+    """The geodatabase path inside a per-sheet zip, with `{tile}` for the sheet id.
+
+    Checked at load rather than at first read: a stray or malformed placeholder
+    would otherwise surface once per sheet, deep into a fetch.
+    """
+    member = _require(body, "member", where) if required else body.get("member")
+    if member is None:
+        return None
+    member = str(member)
+    try:
+        member.format(tile="probe")
+    except (KeyError, IndexError, ValueError) as error:
+        raise ValueError(
+            f"{where}:member {member!r} allows only the {{tile}} placeholder ({error})"
+        ) from error
+    return member
+
+
 _PODIUM_BLOCK_ROLES = ("block_type", "base_level", "roof_level", "certainty")
 
 _PODIUM_CODE_ROLES = ("tower", "podium")
 
 
 def _podium_blocks(body: dict[str, Any], where: str) -> PodiumBlocks:
-    member = str(_require(body, "member", where))
-    try:
-        member.format(tile="probe")
-    except (KeyError, IndexError, ValueError) as error:
-        # A stray or malformed placeholder would otherwise surface at first
-        # read, per sheet, rather than at load — the reason
-        # `_check_source_exists` gives.
-        raise ValueError(
-            f"{where}:member {member!r} allows only the {{tile}} placeholder ({error})"
-        ) from error
+    member = _tile_member(body, where, required=True)
+    assert member is not None  # `required` guarantees it; narrows for the type checker
     return PodiumBlocks(
         source=str(_require(body, "source", where)),
         member=member,

@@ -693,6 +693,78 @@ podiums:
     tower: T
     podium: P
 
+# Where the carriageway edge is *published*, for tools/carriageway_margin.py.
+# Read by no build. Q57 established that the width this project calls
+# unpublished is published twice over, and both sources are already on disk.
+#
+# ⚠️ Two entries, and that is the point rather than belt-and-braces. Q57 traced
+# four wrong "no source publishes that" claims to one mechanism: a fact measured
+# against a single dataset and then generalised to the estate. Reading one
+# margin layer and calling the result "the width" would be that same step.
+#
+# ⚠️ Three-letter codes are traps across these two files. `RM` is *Road margin*
+# in iB1000 and a *road-marking code prefix* in the Traffic Aids Drawings; `TW`
+# is *Tramway* in one and *tactile warning strip* in the other. Every code the
+# tool matches on comes from this block, never from a literal in the tool.
+carriageway_survey:
+  edges:
+    # Ordered by preference — the tool takes the first source that answers a
+    # station. TD's own painted edge leads: it is semantically the edge of the
+    # carriageway, where iB1000's margin is a topographic line that may follow
+    # a kerb, a wall or a lot boundary. It is far sparser, which is why the
+    # denser topographic source sits behind it rather than instead of it.
+    - name: traffic_aids
+      source: traffic_aids_drawings_gdb
+      layer: DTAD_RD_MARK_LINE
+      fields:
+        edge_type: LINETYPE
+        # ⚠️ NOT the Road Network v2 integer level. The FGDB data specification
+        # defines this only as "Relative level (e.g. A01, A02)", 3-char text,
+        # and does not enumerate the domain — so which value means "at grade"
+        # is measured below, not read.
+        elevation: ELEVATION
+      # RM1108/RM1109 EDGE OF CARRIAGEWAY, per the Index Plan drawing
+      # CT174/51-5(1)F inside the dataset's own dataspec zip. One marking, two
+      # codes.
+      codes: [RM1108, RM1109]
+      # ⚠️ Measured 2026-08-20 against the built graph, because guessing here
+      # would have been the exact Q57 mechanism — and the guess would have been
+      # wrong. Of the 317 RM1108/RM1109 features in region, taking each
+      # feature's midpoint and asking how far it sits from the nearest level-0
+      # and level-1 edge:
+      #
+      #   code   n    median to L0   median to L1   within 8 m of L1
+      #   A01   180        5.6 m          2.6 m          93%
+      #   null  126        2.7 m         11.4 m          38%
+      #   A03    11       27.4 m        218.1 m           0%
+      #
+      # A01 is the *elevated* network, not the at-grade one, despite being the
+      # commonest value. Null is at grade. A03 is neither — 27 m from any
+      # level-0 edge, so it describes nothing this instrument measures and is
+      # excluded rather than counted as a kerb.
+      #
+      # Stated as an exclusion because the at-grade value is null, which a list
+      # of included codes cannot spell.
+      off_grade_codes: [A01, A03]
+
+    # iB1000 CartoTransLine, dTransportationLineType. `RM` is "Road margin" in
+    # LandsD's data dictionary, verbatim — 56,286 segments over the six sheets
+    # the podium join has been downloading since P3-7a.
+    - name: ib1000
+      source: topography
+      member: "{tile}/{tile}.gdb"
+      layer: CartoTransLine
+      fields:
+        edge_type: TRANSPORTATIONLINETYPE
+      # ⚠️ `RMU` — "Road margin under elevated structures" — is deliberately
+      # absent, and that omission *is* the grade filter for this publisher.
+      # iB1000 has no level column, so the under-deck margin is separated by
+      # carrying its own code; leaving it out of this list excludes it. There
+      # is nothing for `off_grade_codes` to do here, and it must stay out —
+      # listing codes against a column this layer does not have is refused at
+      # load rather than silently filtering nothing.
+      codes: [RM]
+
 # Hero buildings shipped as authored models (P3-6) — the landmarks.json
 # contract in docs/ARCHITECTURE.md. The building stage excludes every stem
 # named in `replaces_source_ids` from the tile meshes; export.py converts each

@@ -691,6 +691,84 @@ the perpendicular escapes through junction mouths and crosses both halves of a d
 it over-reads at the top of the distribution. What has changed is that "there is nothing to go and
 read" is false — the reading is the work, not the search.
 
+✅ **The reading is done, 2026-08-20 — `tools/carriageway_margin.py`, `Q57`'s follow-on row 2 — and
+it does not support this entry's mechanism.** The instrument answers `Q57`'s "owes a real
+cross-section" by measuring **near-side overhang** (`drawn half-width − nearest published edge`)
+rather than a width: the far ray is precisely what a junction mouth and a dual carriageway corrupt,
+so dropping it removes the confound instead of documenting it again, and it *raises* coverage
+because a station then needs one hit rather than two. **12,502 stations on 709 of 737 level-0
+edges, 92.3% coverage**, against both publishers — TD's painted `RM1108`/`RM1109` first, iB1000's
+`RM` behind it.
+
+**The ribbon does cross the published kerb, and by a lot**: overhang p50 **+1.59 m**, p90
+**+3.24 m**, with **75.0%** of stations past the kerb and **63.0%** past it by more than a metre.
+So the drawn carriageway is genuinely too wide for the street the city publishes, which is this
+entry's claim and is now measured rather than argued.
+
+🔴 **But it is least true exactly where this entry's building half lives, and that is the finding.**
+Split on the record's own bands — 12 of 14 `BUILDING` failures under 20 m, against a graph median
+of 47.3 m:
+
+| edge length | stations | p50 overhang | p90 | past 1 m |
+|---|---|---|---|---|
+| **< 20 m** | 573 | **−0.36 m** | 2.61 | **35.3%** |
+| 20–47.3 m | 2,070 | +1.28 m | 3.11 | 55.6% |
+| ≥ 47.3 m | 9,859 | +1.66 m | 3.28 | 66.2% |
+
+On the short edges the ribbon sits **inside** the published kerb at the median. If an invented width
+were what strands a car on `e627` or `e740`, this column would run the other way. Two readings
+survive and the instrument cannot separate them: either the junction-mouth artefact still dominates
+— a ray crossing an open mouth finds a farther kerb and reads as *less* overhang, which is the same
+direction as the finding — or **the building half is not a width defect at all**.
+
+⚠️ **Junction exclusion cannot settle it, and that is a property of the graph rather than a gap in
+the tool.** Below twice the exclusion radius an edge has no station that is not junction-adjacent,
+so at `--junction-m 12` the `< 20 m` band empties completely: **"short edge" and "junction" are the
+same population here.** The tool prints both columns and says so rather than quietly reporting the
+half that survives.
+
+🔴 **Asked about this entry's own named edges, the instrument mostly cannot answer — and that is
+the most useful thing it says.** The five edges this record names by id — two of the three `BUILDING`
+zeroes, the two narrowing lost, and `e314` from the tightest list — measured at the shipped
+settings:
+
+| edge | road | length | stations | p50 overhang | nearest published kerb |
+|---|---|---|---|---|---|
+| `e627` | GREAT GEORGE STREET | 11.0 m | **1** | **−4.97 m** | 10.09 m |
+| `e314` | LEIGHTON ROAD | 7.2 m | **1** | −2.88 m | 8.00 m |
+| `e636` | HARBOUR ROAD | 16.1 m | **0** | — | — |
+| `e595` | THOMSON ROAD | 8.9 m | **0** | — | — |
+| `e207` | CANAL ROAD EAST | 52.1 m | 16 | +2.04 m | 3.08 m |
+
+Two of the five return **no station at all**, and the two short ones that answer do so from a *single* station
+whose nearest kerb is 8–10 m away — which on a 7 m street is the ray leaving through the junction
+mouth and finding the far side of the crossing. Only `e207`, the one edge over 50 m, behaves. So
+the honest reading is not "the published width refutes the building half"; it is that **this method
+has almost no purchase on a 7–16 m junction stub**, which is exactly what the building half is made
+of. ⚠️ Do not quote the −4.97 m as a measurement of Great George Street. It is one ray, and the
+tool's own coverage column is the number to read beside it.
+
+**What that leaves.** The published edge answers the *network* question — the ribbon is genuinely
+drawn wider than the city's own kerbs, at 75% of stations — and it does not answer this entry's.
+A width taken from data would repaint most of Wan Chai and is not shown to clear one starved edge.
+Whatever closes the building half has to work on stubs an 8 m ray cannot cross, so the remaining
+candidates are the per-cross-section lane count (`Q57` row 1, which reads *between* two published
+edges rather than casting to one) and the short-stub rule this entry has always named — not this.
+
+✅ **The headline is not a function of its own constants**, which is the failure `Q51` found once
+already. Swept over the ray cap, p50 overhang moves **1.69 → 1.59 → 1.53 → 1.50 m** at 10 / 15 / 20
+/ 25 m while coverage climbs 87.7% → 95.0%. ⚠️ The *two-source agreement* is cap-sensitive where the
+headline is not — the publishers disagree by p90 3.76 m at 10 m and 14.30 m at 25 m, because a
+longer ray lets them find different distant things. Quote the headline; do not quote the agreement
+without its cap.
+
+⚠️ **What the instrument still cannot see.** It inherits both publishers' registration error and
+their 2D projection, which the four bundle graders do not — the price of taking truth from outside
+the bundle. And the worst-overhang list is dominated by WAN CHAI INTERCHANGE, GLOUCESTER ROAD and
+CANAL ROAD EAST, all dual carriageways or the interchange: on an opposed one-way pair each ribbon is
+drawn at its own full width across a shared corridor, so the near kerb it crosses is often the
+median. Real, and not the same defect as a building in the frontage.
+
 **The interchange half stands as recorded.** `e233` starves for **42 m without a break** and `e55`
 for 25 m; `e398`'s 18 m comes in pieces with a 9 m worst run, which is a pier field rather than a
 wall. These are the long ramps, they are one locality, and no width rule reaches them. `Q22`'s
@@ -6850,11 +6928,27 @@ are untouched. Named and unassigned, in rough order of what they unblock:
 
 | Follow-on | Would answer |
 |---|---|
-| Count `RM1101`/`RM1109` per cross-section into `lanes` | `Q19`'s building half, which fails *because* the width is invented |
-| `CartoTransLine RM` → a real `width_m` | the same, and `carriageway_occupancy`'s open failure |
+| Count `RM1101`/`RM1109` per cross-section into `lanes` | `Q19`'s building half — ⚠️ **but not "which fails *because* the width is invented"**, see the correction below |
+| ✅ **`CartoTransLine RM` → a real `width_m`** | **Done as an instrument, 2026-08-20**: `tools/carriageway_margin.py`. Reads both publishers, reports overhang, ships no width |
 | `DTAD_RD_MARK_SYM_PT` → arrows | `Q53`, on a registration argument rather than a data one |
 | `CartoTransLine TW` → `tram_streets` | retires a `Q34′`-class authored list |
 | Bus / GMB / tram stops, fleet taxi stops | `fares.json`, today 29 points |
+
+⚠️ **This entry's own causal claim did not survive the first follow-on, and the correction belongs
+here rather than only in `Q19`.** Row 1 above asserted that `Q19`'s building half *"fails because the
+width is invented"*. `tools/carriageway_margin.py` measured it on 2026-08-20 across 12,502 stations
+at 92.3% coverage: the drawn ribbon does cross the published kerb across the network (p50 **+1.59 m**,
+75.0% of stations past it), but on the edges **under 20 m** — where 12 of `Q19`'s 14 `BUILDING`
+failures live — it reads p50 **−0.36 m**, *inside* the published kerb, and only 35.3% past a metre
+against 66.2% on long edges. The width story is strongest where `Q19` does not fail and weakest
+where it does.
+
+That is not yet a refutation: a ray crossing an open junction mouth finds a farther kerb and reads
+as less overhang, which is the same direction as the finding, and below twice the junction radius
+"short edge" and "junction" are the same population and cannot be told apart. What it is, is the
+same shape of error this entry was written to name — a mechanism asserted from one measurement and
+generalised. The sweep is in `Q19`; the numbers say the sequel to this survey is **not** simply
+"ship the published width".
 
 **See.** `Q53` for the markings, whose data argument this retires and whose scope call it leaves ·
 `Q54` and `Q56` for the two earlier instances of the same mechanism · `Q19` for the width this

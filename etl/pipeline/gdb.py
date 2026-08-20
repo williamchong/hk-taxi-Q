@@ -151,6 +151,13 @@ def polylines(layer: Layer) -> tuple[np.ndarray, list[np.ndarray]]:
     invent a straight segment across the gap between them; returning the row
     index instead lets the caller give each part the feature's attributes and
     treat them as the separate edges they are.
+
+    Coordinates are plan-only, on the same terms as `polygons`: a Z geometry is
+    decoded at its true stride and the Z column then dropped. ⚠️ **This path
+    refused Z outright until `Q57`**, which is why iB1000's `CartoTransLine` —
+    `MultiLineString Z`, and the published road margin — was unreadable while
+    the `Building` polygons of the same geodatabase had been read since
+    `P3-7a`. The asymmetry was in this decoder, not in the data.
     """
     owners: list[int] = []
     parts: list[np.ndarray] = []
@@ -165,23 +172,20 @@ def _line_parts(wkb: bytes, where: str) -> list[np.ndarray]:
     order, kind, has_z = _header(wkb, 0)
     if kind not in (_LINESTRING, _MULTILINESTRING):
         raise GeometryError(f"layer '{where}' holds geometry type {kind}, expected a linestring")
-    if has_z:
-        raise GeometryError(f"layer '{where}' holds Z linestrings; the line path reads 2D only")
     if kind == _LINESTRING:
-        return [_coordinates(wkb, 5, order)[0]]
+        return [_coordinates(wkb, 5, order, has_z=has_z)[0]]
 
     (count,) = struct.unpack_from(_uint(order), wkb, 5)
     parts: list[np.ndarray] = []
     offset = 9
     for _ in range(count):
-        # Each part carries its own byte-order flag and type; a mixed-endian
-        # WKB is legal and the outer header does not speak for the parts.
+        # Each part carries its own byte-order flag, type and dimensionality; a
+        # mixed-endian WKB is legal and the outer header does not speak for the
+        # parts. Mirrors `_polygon_parts`, which has always read it this way.
         part_order, part_kind, part_z = _header(wkb, offset)
         if part_kind != _LINESTRING:
             raise GeometryError(f"layer '{where}' has a {part_kind} inside a multilinestring")
-        if part_z:
-            raise GeometryError(f"layer '{where}' holds Z linestrings; the line path reads 2D only")
-        piece, offset = _coordinates(wkb, offset + 5, part_order)
+        piece, offset = _coordinates(wkb, offset + 5, part_order, has_z=part_z)
         parts.append(piece)
     return parts
 

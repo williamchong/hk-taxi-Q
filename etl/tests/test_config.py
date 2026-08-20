@@ -1717,3 +1717,142 @@ class TestKerbsideAudit:
 
         with pytest.raises(ValueError, match="grade every metre unknown"):
             load_city("hong_kong", cities_root=rewrite(empty))
+
+
+class TestCarriagewaySurvey:
+    """The published-carriageway-edge block (`Q57`). Nothing in `pipeline/` reads it, and it is
+    validated at load anyway — the alternative is an instrument that dies on a
+    typo after reading a 218 MB geodatabase and six map sheets."""
+
+    def test_hong_kong_declares_both_publishers(self, hong_kong) -> None:
+        survey = hong_kong.carriageway_survey
+        assert survey is not None
+        assert [edge.name for edge in survey.edges] == ["traffic_aids", "ib1000"]
+
+    def test_the_drawings_lead_because_they_draw_the_carriageway(self, hong_kong) -> None:
+        """Order is preference. TD paints the edge of the carriageway; iB1000's
+        margin is a topographic line that may follow a kerb, a wall or a lot
+        boundary, and is the fallback for its density rather than its meaning."""
+        first = hong_kong.carriageway_survey.edges[0]
+
+        assert first.layer.layer == "DTAD_RD_MARK_LINE"
+        assert first.codes == ("RM1108", "RM1109")
+        assert not first.tiled
+
+    def test_the_topographic_source_is_read_per_sheet(self, hong_kong) -> None:
+        second = hong_kong.carriageway_survey.edges[1]
+
+        assert second.tiled
+        assert second.member == "{tile}/{tile}.gdb"
+        assert second.codes == ("RM",)
+
+    def test_off_grade_is_stated_as_an_exclusion(self, hong_kong) -> None:
+        """⚠️ The regression this pins. At-grade is the *unmarked* case in both
+        files — a null relative level in the drawings, the plain `RM` code in
+        iB1000 — so it cannot be spelt as a list of included values. `Q57`
+        measured that `A01`, the drawings' commonest relative level, sits within
+        8 m of a level-1 edge 93% of the time: it is the elevated network, and
+        an inclusion filter built on "commonest must mean normal" would have
+        kept exactly the wrong 57% of the layer."""
+        drawings, topographic = hong_kong.carriageway_survey.edges
+
+        assert drawings.off_grade_codes == ("A01", "A03")
+        assert drawings.elevation_field == "ELEVATION"
+        # iB1000 has no level column at all, so its under-deck margin is
+        # excluded by carrying a code (`RMU`) that `codes` does not list —
+        # the omission is the filter, and there is nothing to declare.
+        assert topographic.elevation_field is None
+        assert topographic.off_grade_codes == ()
+        assert "RMU" not in topographic.codes
+
+    def test_every_named_source_can_be_fetched(self, hong_kong) -> None:
+        """A typo would surface as a missing file after a build's worth of work."""
+        for edge in hong_kong.carriageway_survey.edges:
+            known = hong_kong.tiled_sources if edge.tiled else hong_kong.sources
+            assert edge.source in known
+
+    def test_the_block_is_optional(self, rewrite) -> None:
+        """A city with no published carriageway edge says so by leaving the
+        block out, and is then honestly unmeasurable rather than measured
+        against an invented width."""
+        cities = rewrite(lambda doc: doc.pop("carriageway_survey"))
+        city = load_city("hong_kong", cities_root=cities)
+
+        assert city.carriageway_survey is None
+
+    def test_an_empty_edge_list_is_rejected(self, rewrite) -> None:
+        """It would report total coverage of nothing, which reads as agreement."""
+
+        def empty(doc: dict[str, Any]) -> None:
+            doc["carriageway_survey"]["edges"] = []
+
+        with pytest.raises(ValueError, match="is empty"):
+            load_city("hong_kong", cities_root=rewrite(empty))
+
+    def test_repeated_names_are_rejected(self, rewrite) -> None:
+        """The report is keyed by name, so a duplicate merges two publishers into
+        one column and hides the disagreement that is the reason for reading
+        more than one of them."""
+
+        def collide(doc: dict[str, Any]) -> None:
+            doc["carriageway_survey"]["edges"][1]["name"] = doc["carriageway_survey"]["edges"][0][
+                "name"
+            ]
+
+        with pytest.raises(ValueError, match="repeated names"):
+            load_city("hong_kong", cities_root=rewrite(collide))
+
+    def test_an_empty_code_list_is_rejected(self, rewrite) -> None:
+        """It would match no feature and report the source as carrying nothing,
+        which is indistinguishable from a publisher having dropped the layer."""
+
+        def empty(doc: dict[str, Any]) -> None:
+            doc["carriageway_survey"]["edges"][0]["codes"] = []
+
+        with pytest.raises(ValueError, match="codes is empty"):
+            load_city("hong_kong", cities_root=rewrite(empty))
+
+    def test_an_unfetchable_plain_source_is_rejected(self, rewrite) -> None:
+        def rename(doc: dict[str, Any]) -> None:
+            doc["carriageway_survey"]["edges"][0]["source"] = "no_such_source"
+
+        with pytest.raises(ValueError, match="which is not in sources"):
+            load_city("hong_kong", cities_root=rewrite(rename))
+
+    def test_an_unfetchable_tiled_source_is_rejected(self, rewrite) -> None:
+        """The per-sheet entry is checked against `tiled_sources`, not `sources`
+        — naming a plain source there would fetch one file and read it as six."""
+
+        def rename(doc: dict[str, Any]) -> None:
+            doc["carriageway_survey"]["edges"][1]["source"] = "road_network_gdb"
+
+        with pytest.raises(ValueError, match="which is not in tiled_sources"):
+            load_city("hong_kong", cities_root=rewrite(rename))
+
+    def test_a_malformed_member_placeholder_is_rejected(self, rewrite) -> None:
+        """Otherwise it surfaces at first read, once per sheet, rather than at
+        load — the same reason `podiums.member` is checked here."""
+
+        def broken(doc: dict[str, Any]) -> None:
+            doc["carriageway_survey"]["edges"][1]["member"] = "{sheet}/{sheet}.gdb"
+
+        with pytest.raises(ValueError, match="placeholder"):
+            load_city("hong_kong", cities_root=rewrite(broken))
+
+    def test_off_grade_codes_without_a_column_to_read_them_from_is_rejected(self, rewrite) -> None:
+        """⚠️ It would load, filter nothing, and publish a level-0 figure computed
+        over the flyovers too — inert config that still prints a plausible
+        number, which is the failure `_sampling_block` refuses for."""
+
+        def orphan(doc: dict[str, Any]) -> None:
+            doc["carriageway_survey"]["edges"][1]["off_grade_codes"] = ["RMU"]
+
+        with pytest.raises(ValueError, match="no 'elevation' role"):
+            load_city("hong_kong", cities_root=rewrite(orphan))
+
+    def test_a_missing_edge_type_role_is_rejected(self, rewrite) -> None:
+        def drop(doc: dict[str, Any]) -> None:
+            doc["carriageway_survey"]["edges"][0]["fields"].pop("edge_type")
+
+        with pytest.raises(ValueError, match="missing edge_type"):
+            load_city("hong_kong", cities_root=rewrite(drop))

@@ -126,6 +126,18 @@ Common emoji for this project:
   does not. ⚠️ **`ALONG_M` is still shipped behaviour, not a tuning knob**: moving it re-publishes
   `city.json` and changes what routing refuses, so it is the user's call. Numbers in `Q51`.
   ⚠️ **`tools/narrowing.py` is owed too** — see the bullet above for why that is not obvious.
+- **`widen_default`, `lanes_*`, `lane_width_m`, or the `carriageway_survey` config block: also
+  `tools/carriageway_margin.py`, and paste its table.** It measures the drawn ribbon against the
+  carriageway edge **two publishers actually print** — TD's `RM1108`/`RM1109`, then iB1000's `RM` —
+  so its truth side is one no build reads, as `kerbside_source_audit.py`'s is. Unlike that one it
+  shares no code with what it grades: the audit runs the pipeline's own join on a second source,
+  this measures the shipped ribbon with neither. ⚠️ It **grades rather than checks** and exits 0
+  whatever it finds; there is no bar, deliberately, and `Q19` records why.
+  ⚠️ Quote the headline, not the two-source agreement: the headline is stable across
+  the ray cap (p50 1.69 → 1.50 m from 10 to 25 m) and the agreement is not (p90 3.76 → 14.30 m over
+  the same sweep). ⚠️ Its truth is a **2D projection carrying the publishers' own registration
+  error**, which the bundle graders below do not inherit — that is the price of reading outside the
+  bundle, not a defect to tune away.
 - **`pipeline/kerbside.py`, the `NSR` config block, or any kerbside-marking change: also
   `tools/kerbside_error.py`, and paste its table.** It grades the shipped `roads.glb` against the runs
   `roadgraph.json` publishes, and it is the only instrument that can see the side convention flip —
