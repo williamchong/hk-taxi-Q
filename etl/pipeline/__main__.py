@@ -28,6 +28,7 @@ import time
 from collections.abc import Callable
 
 from pipeline import (
+    arrows,
     buildings,
     clearance,
     export,
@@ -64,6 +65,12 @@ STAGES: dict[str, Callable[[list[str]], int]] = {
     # anywhere between those two; it is here because that is where its output is
     # wanted rather than because anything forces it.
     "tramway": tramway.main,
+    # After `surface`, and unlike `tramway` that is forced rather than tidy: it
+    # reads `roadsurface.json` for the drawn half-width at each station, because
+    # a published arrow is registered into the lane the ribbon actually has
+    # rather than the one the config says it should. Before `export`, which
+    # names the asset.
+    "arrows": arrows.main,
     "export": export.main,
 }
 

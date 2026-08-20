@@ -29,10 +29,15 @@ import numpy as np
 from pyogrio.raw import read as _ogr_read
 
 # WKB geometry type codes (OGC 06-103r4 §8.2.3). Only the ones this pipeline
-# reads are named; anything else raises rather than being guessed at. Point
-# layers are deliberately absent until a stage needs one — `P1-5` will.
+# reads are named; anything else raises rather than being guessed at. Points
+# were absent here until `P3-15`: `P1-5` was expected to need them and did not,
+# because the taxi stands are published as GeoJSON and go through
+# `fetch.read_feature_collection`. The stage that finally needed a point *inside
+# a geodatabase* was the turn arrows, `DTAD_RD_MARK_SYM_PT`.
+_POINT = 1
 _LINESTRING = 2
 _POLYGON = 3
+_MULTIPOINT = 4
 _MULTILINESTRING = 5
 _MULTIPOLYGON = 6
 
@@ -141,6 +146,68 @@ def _vsi_path(path: Path | str, member: str | None = None) -> str:
     if parts.is_absolute() or ".." in parts.parts:
         raise ValueError(f"zip member {member!r} escapes its archive")
     return f"/vsizip/{text}/{member}"
+
+
+def points(layer: Layer) -> tuple[np.ndarray, np.ndarray]:
+    """Every point part in the layer as one `(n, 2)` block, and the row each came from.
+
+    Owners mirror `polylines` and `polygons`, and for the same reason: a
+    multipoint's points are separate features that happen to share a database
+    row. Unlike those two the parts are returned as a single array rather than a
+    list, because a point has no internal length for a ragged list to carry.
+
+    Coordinates are plan-only, on the same terms as the other two decoders.
+
+    ⚠️ **A non-finite coordinate is passed through, not refused.** `POINT EMPTY`
+    is spelled as NaN in WKB, and this module knows the container and nothing
+    about what is in it — refusing here would put a data judgement in the
+    decoder. The caller counts them; `arrows.py` does it as `empty_geometry`.
+    """
+    owners: list[int] = []
+    parts: list[np.ndarray] = []
+    for row, wkb in enumerate(layer.geometry):
+        for point in _point_parts(wkb, layer.name):
+            owners.append(row)
+            parts.append(point)
+    plan = np.asarray(parts, dtype=np.float64) if parts else np.empty((0, 2), dtype=np.float64)
+    return np.asarray(owners, dtype=np.int64), plan
+
+
+def _point_parts(wkb: bytes, where: str) -> list[np.ndarray]:
+    order, kind, has_z = _header(wkb, 0)
+    if kind not in (_POINT, _MULTIPOINT):
+        raise GeometryError(f"layer '{where}' holds geometry type {kind}, expected a point")
+    if kind == _POINT:
+        return [_ordinate(wkb, 5, order, has_z=has_z)[0]]
+
+    (count,) = struct.unpack_from(_uint(order), wkb, 5)
+    parts: list[np.ndarray] = []
+    offset = 9
+    for _ in range(count):
+        # Each part carries its own byte-order flag, type and dimensionality, as
+        # in `_line_parts` and `_polygon_parts`; the outer header does not speak
+        # for the parts.
+        part_order, part_kind, part_z = _header(wkb, offset)
+        if part_kind != _POINT:
+            raise GeometryError(f"layer '{where}' has a {part_kind} inside a multipoint")
+        point, offset = _ordinate(wkb, offset + 5, part_order, has_z=part_z)
+        parts.append(point)
+    return parts
+
+
+def _ordinate(
+    wkb: bytes, offset: int, order: int, *, has_z: bool = False
+) -> tuple[np.ndarray, int]:
+    """The single plan coordinate at `offset`, and the offset just past it.
+
+    Separate from `_coordinates` because **a point body carries no count
+    prefix** — it is the one geometry in WKB whose body is bare ordinates. Going
+    through `_coordinates` would read the first eight bytes of the X ordinate as
+    a length and stride off the end of the buffer.
+    """
+    width = 3 if has_z else 2
+    block = np.frombuffer(wkb, _real(order), count=width, offset=offset)
+    return np.array(block[:2], dtype=np.float64), offset + width * 8
 
 
 def polylines(layer: Layer) -> tuple[np.ndarray, list[np.ndarray]]:

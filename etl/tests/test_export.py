@@ -23,6 +23,7 @@ from typing import ClassVar
 import pytest
 
 from pipeline import __main__ as orchestrator
+from pipeline.arrows import ARROWS_MANIFEST_NAME, ARROWS_MANIFEST_SCHEMA
 from pipeline.buildings import BUILDINGS_MANIFEST_NAME, BUILDINGS_MANIFEST_SCHEMA
 from pipeline.clearance import CLEARANCE_NAME, CLEARANCE_SCHEMA
 from pipeline.config import Landmark, Material, SourcePaint
@@ -186,6 +187,18 @@ class _Region:
                 "asset": None,
                 "rails": 0,
                 "tracks": 0,
+            },
+            # Same shape and same reason as the tramway above: `testville`
+            # declares no `arrows:` block, so the stage found nothing and says
+            # so, and `city.json`'s key must come out null with the shipped list
+            # unchanged.
+            ARROWS_MANIFEST_NAME: {
+                "schema_version": ARROWS_MANIFEST_SCHEMA,
+                "city_id": city.id,
+                "region_id": REGION,
+                "asset": None,
+                "symbols": 0,
+                "drawn": 0,
             },
             # Written even when empty by the landmarks stage, so export's
             # input read is unconditional.
@@ -709,6 +722,7 @@ class TestOrchestrator:
             "clearance",
             "fares",
             "tramway",
+            "arrows",
             "export",
         ]
 
@@ -740,6 +754,7 @@ class TestOrchestrator:
             "clearance",
             "fares",
             "tramway",
+            "arrows",
             "export",
         ]
 

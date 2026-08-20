@@ -59,7 +59,7 @@ from pipeline.config import CityConfig, Tramway, load_city
 from pipeline.crs import GameTransform
 from pipeline.documents import write_document
 from pipeline.fares import Segments
-from pipeline.fetch import artefact_path, cached_source, cached_tiles
+from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData, write_glb
 from pipeline.mesh import select_triangles
 from pipeline.roads import ROADGRAPH_NAME, plan_lengths, plan_steps, read_graph
@@ -370,16 +370,7 @@ def read_rails(
     measured Z, but it is the *rail's* survey height rather than the deck this
     city drew, and mixing the two puts a tramway through the road it runs on.
     """
-    if spec.tiled:
-        region = city.region(region_id)
-        sheets = cached_tiles(city, region, city.tiled_sources[spec.source], root=sources_root)
-        member = spec.member or ""
-        reads = [
-            (artefact_path(city.id, sheet, root=sources_root), member.format(tile=sheet.tile_id))
-            for sheet in sheets
-        ]
-    else:
-        reads = [(cached_source(city, spec.source, root=sources_root), None)]
+    reads = source_reads(city, spec, region_id, root=sources_root)
 
     wanted = set(spec.codes)
     parts: list[np.ndarray] = []

@@ -136,6 +136,59 @@ static func has_collision(node: Node) -> bool:
 	return not node.find_children("*", "StaticBody3D", true, false).is_empty()
 
 
+## The one `ArrayMesh` a single-primitive asset must carry, or `null` with
+## `problems` saying why.
+##
+## Here because there are now three of these — the road surface, the tramway and
+## the arrows — and this sixteen-line preamble was byte-identical in all three,
+## comment included. `Q58` predicted exactly that: "`mesh_contract.gd` states the
+## repo's own trigger for this, so a third copy should force it."
+##
+## Returns through `problems` rather than as a tuple because GDScript has no
+## tuple return and `_check_shader_surface` below already established the
+## out-parameter shape — which keeps every caller statically typed.
+##
+## ⚠️ `surfaces` is **exact, not a ceiling**: a mesh with no surfaces at all
+## would otherwise pass every per-surface check its caller runs, by never
+## entering the loop.
+static func single_primitive(
+	scene_root: Node, surfaces: int, problems: PackedStringArray
+) -> ArrayMesh:
+	var instances: Array[Node] = scene_root.find_children("*", "MeshInstance3D", true, false)
+	if instances.size() != 1:
+		problems.append("expected one MeshInstance3D, found %d" % instances.size())
+		return null
+
+	var mesh := (instances[0] as MeshInstance3D).mesh as ArrayMesh
+	if mesh == null:
+		problems.append("the MeshInstance3D carries no ArrayMesh")
+		return null
+	if mesh.get_surface_count() != surfaces:
+		problems.append("%d surfaces, expected %d" % [mesh.get_surface_count(), surfaces])
+	return mesh
+
+
+## Problems with an asset that must build **no** collider — the inverse of
+## `check_collision` below.
+##
+## Two assets are in this class and both are things the car drives over rather
+## than into: the tramway lies on ground that is already solid, and an arrow is
+## paint. In both the whole guard is the *absence* of a `-col` suffix in one
+## string in the ETL, which `constant` names so the message says where to look.
+static func check_no_collision(node: Node, asset: String, constant: String) -> PackedStringArray:
+	var bodies: Array[Node] = node.find_children("*", "StaticBody3D", true, false)
+	if bodies.is_empty():
+		return PackedStringArray()
+	return PackedStringArray(
+		[
+			(
+				"%s built %d collider(s); it must build none. " % [asset, bodies.size()]
+				+ "Check that %s has no `-col` suffix." % constant
+			)
+		]
+	)
+
+
 ## Problems with the collider the `-col` suffix should have built, or an empty
 ## array if it conforms.
 ##
@@ -236,10 +289,21 @@ static func check_uv2_import_settings(path: String, payload: String) -> PackedSt
 ## `ALBEDO` itself. Checked here rather than at the call sites because the road
 ## surface and the tiles both ask, and a private second copy is what this file
 ## exists to stop.
-static func check_surface(mesh: Mesh, surface: int, where: String) -> PackedStringArray:
+static func check_surface(
+	mesh: Mesh, surface: int, where: String, expect_vertex_colours: bool = true
+) -> PackedStringArray:
 	var problems: PackedStringArray = []
 
-	if not (mesh.surface_get_format(surface) & Mesh.ARRAY_FORMAT_COLOR):
+	# ⚠️ **The opt-out is a parameter rather than an omitted call**, so a mesh
+	# that ships no `COLOR_0` still gets every other guarantee here and says at
+	# its call site why it is different. The one caller that passes `false` is
+	# `verify_arrows.gd`: `Q33`'s palette rule makes the `materials:` table the
+	# single place a *city* colour is written, and `Q53` deliberately put road
+	# paint outside that table — so an arrow's white lives in `arrows.tres`
+	# beside the lane dividers it matches, and there is no vertex colour for it
+	# to be written into. Everything the ETL paints from the palette still
+	# carries one, and still fails here without it.
+	if expect_vertex_colours and not (mesh.surface_get_format(surface) & Mesh.ARRAY_FORMAT_COLOR):
 		problems.append("%s carries no vertex colours" % where)
 
 	var material: Material = mesh.surface_get_material(surface)

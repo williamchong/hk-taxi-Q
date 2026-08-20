@@ -72,10 +72,15 @@ const NOT_MEASURED: float = -1.0
 ## what it also does is compute a shipped set missing a file the bundle
 ## depends on.
 ##
-## ⚠️ **The key is optional and may be null.** A city whose estate publishes no
-## tramway ships none, so `tramway_path` is empty for such a region and that is
-## the honest answer rather than a missing file.
-const SCHEMA_VERSION: int = 11
+## 12 since `P3-15`: the manifest names `arrows.glb`, the published turn arrows
+## drawn from TD's `DTAD_RD_MARK_SYM_PT`. Exactly `P3-14`'s argument — a v11
+## reader computes a shipped set missing a file the bundle depends on.
+##
+## ⚠️ **Both keys are optional and may be null.** A city whose estate publishes
+## no tramway, or no marking symbols, ships none — so `tramway_path` and
+## `arrows_path` are empty for such a region and that is the honest answer
+## rather than a missing file.
+const SCHEMA_VERSION: int = 12
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -145,6 +150,16 @@ var landmarks_path: String
 ## treat empty as "this region has no tramway", never as a build failure.
 var tramway_path: String
 
+## The turn arrows mesh (`P3-15`), or **empty** where the region ships none.
+##
+## Optional on the same terms as `tramway_path`: `Q53` draws these from TD's
+## published marking symbols, and a city whose estate publishes none declares no
+## `arrows:` block and exports a null. ⚠️ It is also empty where the block is
+## declared and **every** symbol failed the join — the stage names its asset from
+## what it drew, not from a constant — so empty means "no arrows in this
+## bundle", never "no arrows block".
+var arrows_path: String
+
 ## Drawn half-width of the carriageway, in metres, keyed by road-graph edge id —
 ## **one value per station** of that edge's `roadgraph.json` polyline.
 ##
@@ -213,6 +228,9 @@ static func load_manifest() -> CityManifest:
 	# `"<null>"`, which would resolve to a plausible-looking path that loads
 	# nothing, so the guard belongs where every caller gets it.
 	manifest.tramway_path = _resolve(document.get("tramway"))
+	# Null on the same terms, and `_resolve` maps it to empty for the same
+	# `str(null)` reason spelled out above.
+	manifest.arrows_path = _resolve(document.get("arrows"))
 	for entry: Dictionary in document.get("carriageway", []):
 		var edge: int = int(entry.get("edge", -1))
 		manifest.carriageway_half_width_m[edge] = _floats(entry, "half_width_m")
@@ -254,14 +272,16 @@ static func bearing_deg(forward: Vector3) -> float:
 	return fposmod(rad_to_deg(atan2(forward.x, -forward.z)), 360.0)
 
 
-## Every file the manifest *names*, in order: the four documents, the tramway
-## where the region has one, then every tier of every tile. Not every file a build ships — `city.json` itself is not
+## Every file the manifest *names*, in order: the four documents, the tramway and
+## the arrows where the region has them, then every tier of every tile. Not every file a build ships — `city.json` itself is not
 ## in the list, because it names the others and not itself. A caller copying a
 ## region wants this plus `PATH`, which is what `tools/sync_generated.sh` does.
 func shipped() -> PackedStringArray:
 	var paths: PackedStringArray = [road_graph_path, road_surface_path, fares_path, landmarks_path]
 	if not tramway_path.is_empty():
 		paths.append(tramway_path)
+	if not arrows_path.is_empty():
+		paths.append(arrows_path)
 	for tile: Tile in tiles:
 		paths.append_array(tile.lods)
 	return paths

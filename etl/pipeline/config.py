@@ -702,6 +702,106 @@ class Tramway:
         return self.member is not None
 
 
+# What an arrow may show. The vocabulary is the pipeline's, not a city's:
+# a glyph is drawn from these, so a fourth word would need geometry to draw it.
+# ⚠️ These are *movements*, not lane positions. `RM1027` is one arrow with two
+# heads, drawn in one lane; it is not two arrows.
+ARROW_AHEAD = "ahead"
+ARROW_LEFT = "left"
+ARROW_RIGHT = "right"
+ARROW_MOVEMENTS = (ARROW_AHEAD, ARROW_LEFT, ARROW_RIGHT)
+
+
+@dataclass(frozen=True)
+class ArrowGlyph:
+    """One publisher code: what its arrow shows, and how long it is drawn.
+
+    ⚠️ **The length belongs to the code, not to the block.** TD's index plan
+    publishes every turn arrow twice — `RM1017` straight-ahead at **4000 mm**
+    and `RM1018` the same arrow at **6000 mm**, and so on in pairs up to
+    `RM1030`. A single authored length would draw one of each pair wrong by
+    half its own size, on a marking whose whole defence is that it is read
+    rather than invented. Wan Chai happens to publish only the 4 m variants;
+    that is a fact about this region, not about the estate.
+    """
+
+    movements: tuple[str, ...]
+    length_m: float
+
+
+@dataclass(frozen=True)
+class Arrows:
+    """Published turn arrows, and how `P3-15` draws them (`Q53`, `Q57`).
+
+    ⚠️ **`glyphs` maps a publisher's code to a movement, and that mapping is the
+    one thing here that cannot be checked by any grader this repo has.** Every
+    consumer downstream takes "1019 means turn left" on trust, exactly as `Q56`
+    found every consumer taking double-versus-single on trust from
+    `NSR.TIME_ZONE`. The codes are defined in the publisher's own index plan,
+    inside `traffic_aids_data_dictionary` — read it, do not infer the meaning
+    from the count. `Q57`'s `TACW` trap is a three-letter code that looked like
+    the answer.
+
+    ⚠️ **`RM1135`/`RM1136` are not arrows** — they are the 望右/望左 look-right
+    and look-left crossing markings, and they are the two most common codes in
+    the region after `RM1017`. A glyph table that picks up "the top six codes"
+    paints pedestrian warnings down the middle of the carriageway.
+
+    The dimensions below are marking *convention*, drawn to the index plan's
+    figures. They are not a position: where an arrow goes is read from the
+    source, through `max_offset_m` and the lane the offset lands in.
+
+    ⚠️ **There is no material here, and its absence is the decision.** An arrow
+    is the same paint as a lane divider, and `Q53` put the marking colours in
+    `game/tuning/road_markings.tres` rather than in this file's `materials:`
+    table — deliberately outside `Q33`'s exposure rule, because paint is not
+    cladding. That entry predicted that "the day a third road colour is authored
+    somewhere else" would be the problem, and adding `road_paint_white` here
+    would be that day. So `arrows.glb` ships **no `COLOR_0`** and takes its
+    colour from `game/tuning/arrows.tres`, beside the markings it matches. The
+    glTF material *name* the engine dispatches on is `ARROWS_MATERIAL` in
+    `pipeline/arrows.py`, a constant, as `SURFACE_MATERIAL` and
+    `TRAMWAY_MATERIAL` are.
+    """
+
+    source: str
+    member: str | None
+    layer: SourceLayer
+    # Publisher code -> what that code's arrow shows and how long it is.
+    glyphs: dict[str, ArrowGlyph]
+    # The proportions of an arrow, as fractions of its **own** published length,
+    # so the 4 m and 6 m variants of the same marking scale together instead of
+    # sharing an absolute head that is right for one of them.
+    stem_width_frac: float
+    head_length_frac: float
+    head_width_frac: float
+    # How far a turn head reaches across from the stem before it turns.
+    branch_reach_frac: float
+    # How far above the carriageway the glyph sits. The road surface and the
+    # ground are coplanar at grade by construction (`P3-10`), so paint laid at
+    # deck height would z-fight the road it is painted on.
+    lift_m: float
+    # Furthest a symbol may sit from a level-0 centreline and still be placed.
+    # Beyond this it is dropped rather than guessed at: 14.2% of this region's
+    # symbols fall outside even the *real* carriageway of their nearest edge,
+    # and an arrow on the wrong street is the `P3-9a` debit this whole stage is
+    # subordinate to.
+    max_offset_m: float
+    # How far a symbol's own bearing may sit from its host edge's heading before
+    # the match is refused. A symbol squarely across its edge matched the wrong
+    # edge; refusing is how that stops being drawn.
+    #
+    # ⚠️ Refuses the *match*, never rotates the arrow to fit. An arrow turned to
+    # agree with the road would be an invented marking in `Q54`'s sense, and it
+    # would render perfectly.
+    bearing_tolerance_deg: float
+
+    @property
+    def tiled(self) -> bool:
+        """Whether `source` names `tiled_sources` rather than `sources`."""
+        return self.member is not None
+
+
 @dataclass(frozen=True)
 class SourcePaint:
     """How a mesh-sourced hero is repainted from its source COLOR_0 (`P3-6`).
@@ -1389,6 +1489,13 @@ class CityConfig:
     # inventing rails off `roads.tram_streets` would put them a measured 3.26 m
     # from where the estate says they are.
     tramway: Tramway | None = None
+    # Published turn arrows, drawn by `pipeline/arrows.py` (`Q53`). Optional for
+    # the same reason `tramway` is: a city whose estate publishes no marking
+    # symbols ships no `arrows.glb` and the manifest names none. ⚠️ The
+    # alternative — inferring arrows from junction topology — is what `Q53`
+    # priced as content that would be *invented*, and the whole argument for
+    # this stage is that it is read instead.
+    arrows: Arrows | None = None
     # Hero buildings shipped as authored models (`P3-6`). Empty for a city
     # without any: the building stage then excludes nothing and the export
     # writes an empty landmarks document.
@@ -1565,6 +1672,7 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
             document.get("carriageway_survey"), f"{path}:carriageway_survey"
         ),
         tramway=_tramway(document.get("tramway"), f"{path}:tramway", table),
+        arrows=_arrows(document.get("arrows"), f"{path}:arrows"),
         landmarks=_landmarks(document.get("landmarks") or [], f"{path}:landmarks", table),
         extra_cas=_extra_cas(document.get("extra_cas"), path),
     )
@@ -1589,19 +1697,28 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
         _check_tiled_source_exists(city, city.podiums.source, f"{path}:podiums.source")
     if city.carriageway_survey is not None:
         for index, edge in enumerate(city.carriageway_survey.edges):
-            where = f"{path}:carriageway_survey.edges[{index}].source"
-            if edge.tiled:
-                _check_tiled_source_exists(city, edge.source, where)
-            else:
-                _check_source_exists(city, edge.source, where)
+            _check_declared_source(city, edge, f"{path}:carriageway_survey.edges[{index}].source")
     if city.tramway is not None:
-        where = f"{path}:tramway.source"
-        if city.tramway.tiled:
-            _check_tiled_source_exists(city, city.tramway.source, where)
-        else:
-            _check_source_exists(city, city.tramway.source, where)
+        _check_declared_source(city, city.tramway, f"{path}:tramway.source")
+    if city.arrows is not None:
+        _check_declared_source(city, city.arrows, f"{path}:arrows.source")
     _check_landmarks_lie_within_a_region(city, path)
     return city
+
+
+def _check_declared_source(city: CityConfig, spec: Any, where: str) -> None:
+    """A block that names its own `source:` names one the city declares.
+
+    The dispatch on `tiled` is the same five lines for every such block — three
+    of them since `P3-15` — and it goes with `fetch.source_reads`, which makes
+    the same choice at read time. Typed `Any` rather than through
+    `fetch.DeclaredSource` because `config` may not import `fetch`: `fetch`
+    imports `config`.
+    """
+    if spec.tiled:
+        _check_tiled_source_exists(city, spec.source, where)
+    else:
+        _check_source_exists(city, spec.source, where)
 
 
 def _check_landmarks_lie_within_a_region(city: CityConfig, path: Path) -> None:
@@ -2556,6 +2673,105 @@ def _tramway(body: Any, where: str, table: _MaterialTable) -> Tramway | None:
             str(_require(body, "rail_material", where)), f"{where}:rail_material"
         ),
         bed_material=table.get(str(_require(body, "bed_material", where)), f"{where}:bed_material"),
+    )
+
+
+_ARROW_ROLES = ("code", "bearing", "level", "size")
+
+
+def _arrows(body: Any, where: str) -> Arrows | None:
+    """The optional published-turn-arrow block (`Q53`, `Q57`).
+
+    Absent, the region ships no `arrows.glb` and the manifest names none — the
+    same shape `tramway` uses, and honest for a city whose estate publishes no
+    marking symbols. What is *not* offered is a fallback that derives arrows
+    from junction geometry: `Q53` refused arrows precisely because inventing
+    their content is a `P3-9a` debit, and a fallback here would reintroduce it
+    silently on any city missing the block.
+    """
+    if body is None:
+        return None
+    if not isinstance(body, dict):
+        raise ValueError(f"{where} must be a mapping, got {body!r}")
+
+    raw = _require(body, "glyphs", where)
+    if not isinstance(raw, dict) or not raw:
+        raise ValueError(f"{where}:glyphs must be a non-empty mapping of code to glyph")
+    glyphs: dict[str, ArrowGlyph] = {}
+    for code, entry in raw.items():
+        spot = f"{where}:glyphs.{code}"
+        if not isinstance(entry, dict):
+            raise ValueError(f"{spot} must be a mapping with movements and length_m, got {entry!r}")
+        movements = _require(entry, "movements", spot)
+        if isinstance(movements, str) or not isinstance(movements, (list, tuple)):
+            raise ValueError(f"{spot}:movements must be a list, got {movements!r}")
+        named = tuple(str(movement) for movement in movements)
+        if not named:
+            raise ValueError(f"{spot}:movements is empty; an arrow pointing nowhere draws nothing")
+        unknown = [movement for movement in named if movement not in ARROW_MOVEMENTS]
+        if unknown:
+            raise ValueError(
+                f"{spot}:movements names {', '.join(unknown)}, which is not one of "
+                f"{', '.join(ARROW_MOVEMENTS)} — the pipeline has no geometry to draw it"
+            )
+        if len(set(named)) != len(named):
+            # A repeated movement would draw the same head twice, in the same
+            # place, at the same height — invisible, and the mesh silently
+            # heavier. Refused rather than deduped: a duplicate means the table
+            # was transcribed wrong, and the rest of that row is then suspect.
+            raise ValueError(f"{spot}:movements repeats a movement: {named}")
+        length_m = float(_require(entry, "length_m", spot))
+        if length_m <= 0.0:
+            raise ValueError(f"{spot}:length_m must be positive, got {length_m}")
+        glyphs[str(code)] = ArrowGlyph(movements=named, length_m=length_m)
+
+    fractions = {
+        name: float(_require(body, name, where))
+        for name in ("stem_width_frac", "head_length_frac", "head_width_frac", "branch_reach_frac")
+    }
+    outside = {name: value for name, value in fractions.items() if not 0.0 < value < 1.0}
+    if outside:
+        raise ValueError(
+            f"{where}: {', '.join(sorted(outside))} must each be a fraction of an arrow's own "
+            f"length, strictly between 0 and 1; got {outside}"
+        )
+    if fractions["stem_width_frac"] >= fractions["head_width_frac"]:
+        raise ValueError(
+            f"{where}: stem_width_frac {fractions['stem_width_frac']} must be narrower than "
+            f"head_width_frac {fractions['head_width_frac']}, or the head is not a head"
+        )
+
+    max_offset_m = float(_require(body, "max_offset_m", where))
+    if max_offset_m <= 0.0:
+        raise ValueError(f"{where}:max_offset_m must be positive, got {max_offset_m}")
+    tolerance_deg = float(_require(body, "bearing_tolerance_deg", where))
+    if not 0.0 < tolerance_deg <= 90.0:
+        # Past 90 degrees a symbol lying square across its edge passes, which is
+        # the exact signature of a match to the wrong edge. The check would
+        # still run and would refuse nothing.
+        raise ValueError(
+            f"{where}:bearing_tolerance_deg is {tolerance_deg}; it must be positive and no "
+            f"more than 90, or a symbol square across its edge is accepted"
+        )
+
+    lift_m = float(_require(body, "lift_m", where))
+    if lift_m <= 0.0:
+        raise ValueError(
+            f"{where}:lift_m is {lift_m}; paint coplanar with the road it is painted on z-fights"
+        )
+
+    return Arrows(
+        source=str(_require(body, "source", where)),
+        member=_tile_member(body, where),
+        layer=_source_layer(body, where, _ARROW_ROLES),
+        glyphs=glyphs,
+        stem_width_frac=fractions["stem_width_frac"],
+        head_length_frac=fractions["head_length_frac"],
+        head_width_frac=fractions["head_width_frac"],
+        branch_reach_frac=fractions["branch_reach_frac"],
+        lift_m=lift_m,
+        max_offset_m=max_offset_m,
+        bearing_tolerance_deg=tolerance_deg,
     )
 
 

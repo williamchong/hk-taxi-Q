@@ -77,19 +77,9 @@ func _init() -> void:
 func _check(scene_root: Node3D) -> PackedStringArray:
 	var problems: PackedStringArray = []
 
-	var instances: Array[Node] = scene_root.find_children("*", "MeshInstance3D", true, false)
-	if instances.size() != 1:
-		problems.append("expected one MeshInstance3D, found %d" % instances.size())
-		return problems
-
-	var mesh := (instances[0] as MeshInstance3D).mesh as ArrayMesh
+	var mesh: ArrayMesh = MeshContract.single_primitive(scene_root, SURFACES, problems)
 	if mesh == null:
-		problems.append("the MeshInstance3D carries no ArrayMesh")
 		return problems
-	# Exactly, not at most: a mesh with no surfaces at all would otherwise pass
-	# every check below by never entering the loop.
-	if mesh.get_surface_count() != SURFACES:
-		problems.append("%d surfaces, expected %d" % [mesh.get_surface_count(), SURFACES])
 
 	for surface: int in mesh.get_surface_count():
 		problems.append_array(MeshContract.check_surface(mesh, surface, "surface %d" % surface))

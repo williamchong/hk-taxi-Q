@@ -44,6 +44,7 @@ from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
 from pipeline import __version__
+from pipeline.arrows import ARROWS_MANIFEST_NAME, ARROWS_MANIFEST_SCHEMA
 from pipeline.buildings import BUILDINGS_MANIFEST_NAME, BUILDINGS_MANIFEST_SCHEMA
 from pipeline.clearance import CLEARANCE_NAME, CLEARANCE_SCHEMA, NOT_MEASURED
 from pipeline.config import (
@@ -119,7 +120,12 @@ CITY_NAME = "city.json"
 # ⚠️ The key is **optional and may be null**: a city whose estate publishes no
 # tramway ships none. So it is deliberately not in `DOCUMENT_KEYS`, which
 # `REQUIRED_KEYS` and `shipped()` both treat as always-present.
-CITY_SCHEMA = 11
+# 12 since `P3-15`: the manifest names `arrows.glb`, a new shipped asset, on
+# exactly `P3-14`'s argument — a v11 reader computes a shipped set missing a file
+# the bundle depends on, and being wrong about the contents of the bundle is what
+# this number is for. The key is optional and nullable for the same reason
+# `tramway` is: a city whose estate publishes no marking symbols ships none.
+CITY_SCHEMA = 12
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -170,6 +176,7 @@ INPUTS: tuple[Input, ...] = (
     Input(ROADGRAPH_NAME, ROADGRAPH_SCHEMA, "roads"),
     Input(FARES_NAME, FARES_SCHEMA, "fares"),
     Input(TRAMWAY_MANIFEST_NAME, TRAMWAY_MANIFEST_SCHEMA, "tramway"),
+    Input(ARROWS_MANIFEST_NAME, ARROWS_MANIFEST_SCHEMA, "arrows"),
 )
 
 
@@ -244,6 +251,7 @@ def build_region(
     graph = documents[ROADGRAPH_NAME]
     fares = documents[FARES_NAME]
     tramway = documents[TRAMWAY_MANIFEST_NAME]
+    arrows = documents[ARROWS_MANIFEST_NAME]
 
     tiles = [
         {
@@ -321,6 +329,11 @@ def build_region(
         # a stage that read the source and found nothing cannot be contradicted
         # here by a constant.
         "tramway": tramway["asset"],
+        # `null` where the city drew no turn arrows, on the same terms as
+        # `tramway` above and read from the stage's own manifest for the same
+        # reason: a region whose symbols all failed the join must not be
+        # contradicted here by a constant.
+        "arrows": arrows["asset"],
         "landmarks": LANDMARKS_NAME,
         # The mesh-sourced hero models `pipeline/landmarks.py` built — shipped
         # files like the tile GLBs, unlike the committed authored heroes,
@@ -495,6 +508,8 @@ def shipped(manifest: dict) -> list[str]:
     paths.extend(str(path) for path in manifest.get("landmark_assets", []))
     if manifest.get("tramway"):
         paths.append(str(manifest["tramway"]))
+    if manifest.get("arrows"):
+        paths.append(str(manifest["arrows"]))
     return paths
 
 

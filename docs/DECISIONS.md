@@ -6121,7 +6121,9 @@ the refusal this deliberately is not · `P2-3` · `PROGRESS.md` risk register
 
 ## `Q53` — Markings are drawn, arrows are not, and the difference is data
 
-**Status.** ✅ Closed 2026-08-19 · **Owner.** `P3-12`
+**Status.** ✅ Closed 2026-08-19 · **Owner.** `P3-12` · ⚠️ **The arrow half of the scope decision was
+reopened and closed by `P3-15` on 2026-08-21 (`Q59`)** — read that before citing anything here about
+what is not drawn. Box junctions and road text are still held.
 
 **Claim.** The road surface draws lane dividers, centre lines, kerbside double yellows and a bus
 lane edge, procedurally, from a shader over `roads.glb`'s own lane coordinate. Turn arrows, road
@@ -6348,7 +6350,10 @@ already guards: `meshes/light_baking = 1` (Static Lightmaps regenerates UV2 stra
 payload) and 16-bit attribute compression. Neither was guarded before, because `roads.glb` had never
 carried UV2.
 
-**What this does not do.** No arrows, no road text, no box junctions, no zebra crossings — the
+**What this does not do.** ⚠️ **Amended 2026-08-21 by `P3-15`: the arrows are now built** — as their
+own mesh rather than as paint on the ribbon, for the fade and cap-overlap reasons this record itself
+gives (`Q59`). What follows is the scope as `P3-12` shipped it, and the arrow line no longer holds.
+No arrows, no road text, no box junctions, no zebra crossings — the
 `ZEBRA` layer is published and unread, and a crossing is a cap-adjacent glyph with the same
 problems. ⚠️ **"Refused on data, not cost" is no longer true for two of these** — `Q56`, 2026-08-20:
 Traffic Aids Drawings v2 publishes `DTAD_YL_BOX_POLY` (**20 yellow box junctions as polygons in
@@ -7257,3 +7262,208 @@ Three duplications were found and declined, recorded here rather than left silen
 this does not change, amended there · `Q54` for the invented-marking debit this avoids · `Q19` for
 the widening that puts the ribbon 1.59 m past the published kerb · `ARCHITECTURE.md` for the
 `tram.glb` contract and the class channel · `DATA_SOURCES.md` for the corrected `TW` row
+
+---
+
+## `Q59` — The arrows are published, the ribbon is the wrong width, and lane space is the answer
+
+**Status.** ✅ Closed 2026-08-21 by `P3-15` · **Owner.** `pipeline/arrows.py`, `hong_kong.yaml` `arrows:`
+
+**Claim.** TD's `DTAD_RD_MARK_SYM_PT` turn arrows can be drawn, and the registration objection
+`Q53`/`Q57` left standing is answered by reading the published position as a **fraction across the
+carriageway** rather than as a position. `arrows.glb` ships **747 arrows**, 3,246 triangles, one
+primitive, one draw call, no collider. `city.json` **11 → 12**.
+
+### What `Q57` left open, and what settles it
+
+`Q53` held arrows on "there is no marking data in any source". `Q57` retired that bullet — it
+reasoned about Road Network v2 and concluded about the estate — and left this: *"an arrow that has to
+be positioned in lane space on a ribbon drawn 1.6x too wide is still a registration problem. What
+changed is that it is a cost argument, not a data one."*
+
+Measured, on the 760 arrow-coded symbols at grade:
+
+| | |
+|---|---|
+| Gap to the nearest level-0 centreline | p50 **1.64 m**, p90 3.83, p99 6.73, max 26.05 |
+| Inside the **real** carriageway (`lanes x 1.6 m`) | 85.8% |
+| Inside the **drawn** ribbon (`half_width_m`) | **97.2%** |
+| Gap ÷ real half-width | p50 **0.51**, p90 1.14, p99 2.10 |
+
+⚠️ **`Q58`'s refusal of lane space does not transfer, and the reason is geometric rather than a
+matter of taste.** A tram rail sits a measured p50 **3.26 m past** the drawn kerb — off the surface —
+so lane space would have invented its position outright. An arrow is the opposite case: the ribbon is
+drawn *wider* than the real carriageway and about the same centreline, so it **contains** it, 97.2%
+of symbols already land on it, and p50 0.51 of the half-width is exactly where a lane centre belongs.
+
+So the published offset is divided by the real half-width, giving a fraction invariant under the
+widening, and that fraction picks a drawn lane. It is `Q54`'s "use it as data, not as geometry", the
+same escape that let the kerbside join survive the same 1.6x.
+
+⚠️ **The alternative was defensible and is recorded because it may come back.** Drawing at the
+published easting and northing puts every arrow at its true position, and 97.2% of them on the
+ribbon. What it costs is that the arrow then sits about a metre off the drawn lane's centre and reads
+as a **rendering fault** against the dividers `P3-12` draws either side of it, while a lane-registered
+arrow is wrong only about something no driver navigates by. `lane_shift_m` publishes what that choice
+moved: p50 **1.11 m**, p90 2.39, p99 3.57, max 5.84.
+
+### `ANGLE` is a mathematical angle, and three of the four readings are wrong
+
+Game heading is `(90 - ANGLE) mod 360`. On the 314 `RM1017` straight-ahead symbols within 4 m of a
+level-0 centreline, against the host edge's own heading:
+
+| Reading | p50 | p90 | within 10° |
+|---|---|---|---|
+| as-is | 52.0° | 81.6° | 2.9% |
+| `ANGLE + 90` | 38.0° | 65.8° | 11.5% |
+| `180 - ANGLE` | 89.1° | 89.8° | 0.0% |
+| **`90 - ANGLE`** | **0.9°** | **3.7°** | **97.8%** |
+
+⚠️ **A wrong reading here fails the way `Q56`'s kind mapping would have**: perfectly rendered arrows
+pointing across the road, with nothing in the bundle disagreeing. There is **exactly one publisher of
+marking symbols**, so `Q56`'s move — a second source through one join — is unavailable, and
+`tests/test_arrows.py` asserts the convention against the heading `fares.Snap` publishes rather than
+against a comment, the way `test_kerbside.py` holds the side.
+
+### Reading the index plan, not the histogram
+
+The codes come from TD drawing **CT174/51-5(1)F**, inside `traffic_aids_data_dictionary` and already
+on disk. It publishes every turn arrow **twice**, at 4000 mm and 6000 mm, so length belongs to the
+code and not to the block; Wan Chai uses only the 4 m variants.
+
+⚠️ **Four families look like turn arrows and are not**, and the histogram would have taken all four:
+
+| Code | What it is | In region |
+|---|---|---|
+| `RM1116`–`RM1119` | **WARNING ARROW** — the deviation arrow before a lane closure | **61** |
+| `RM1135` / `RM1136` | LOOK RIGHT 望右 / LOOK LEFT 望左, pedestrian crossing markings | 127 / 123 |
+| `RM1167`–`RM1169` | cycle-track arrows | 0 |
+| `RM1144` | LET IN LANE lettering | 0 |
+
+`RM1119` alone is the **second most common arrow-shaped code in the region after `RM1017`**. Painted
+as a turn instruction it tells the player to leave the carriageway. This is `Q57`'s `TACW` trap with
+the sheet that settles it sitting in `etl/sources/`.
+
+### An arrow cannot point against a one-way street
+
+Refused, not recorded: **9 of 761** candidates. Measured, the population is two shapes — most of it
+an opposed carriageway pair (Fleming Road, Tonnochy Road) where the arrow belongs to the *other*
+ribbon a few metres away and the axis test cannot see it because the two ribbons are parallel by
+construction; the rest sit ~2 m from a street whose own direction is the thing in doubt.
+
+⚠️ **Re-matching to the nearest agreeing edge would recover them and is deliberately not done.** It
+would move an arrow onto a road nothing checked, and `GAME_DESIGN.md` prices a missing arrow at
+nothing against a misplaced one. The count is the finding.
+
+⚠️ **The axis test folds modulo 180 and the facing test does not.** Alignment to the road *axis* is
+what catches a match to the wrong edge; which way along it an arrow points is legitimately either way
+on a two-way street, and the region's `direction = both` hosts split 52/48 when measured. Refusing on
+the directed residual would have thrown away half the arrows on every two-way street.
+
+### What the stage publishes about itself
+
+`arrows.json`, on `Q58`'s pattern — every failure here renders as a perfectly drawn arrow, or as
+nothing:
+
+| | |
+|---|---|
+| `symbols` 1,365 = `not_a_turn_arrow` 584 + `on_structure` 20 + `empty_geometry` 0 + `candidates` **761** | |
+| `candidates` 761 = `drawn` **747** + `too_far` 1 + `off_bearing` 4 + `against_one_way` 9 + `no_lane` 0 | |
+| `axis_residual_deg` | p50 1.08, p90 4.78, p99 20.91, **max 88.55**, n 760 |
+| `offset_m` | p50 1.64, p90 3.78, p99 6.49, max 10.89, n 760 |
+| `lane_shift_m` | p50 1.11, p90 2.39, p99 3.57, max 5.84, n 747 |
+| `outside_drawn_ribbon` | 17 · `over_a_cap` 51 · `drawn_on_two_way` 88 |
+| `inverted` | **0** |
+
+⚠️ **`axis_residual_deg` is recorded over every symbol that found a host — including the four
+`off_bearing` then threw away — so `n` is 760 where `drawn` is 747.** Appending it after the guard
+instead confines every percentile to `bearing_tolerance_deg` **by construction**: it read max
+**28.87°** against a 30° bar before this was fixed, which is a number that cannot say anything. It
+now reads **88.55°**, and `off_bearing` beside it is what that tail cost. This is `Q58`'s
+`drawn_gauge_m` trap — a detector bounded by its own filter — caught in review rather than three
+weeks later.
+
+⚠️ **The residual distributions publish p90/p99/max and not p10/p50/p90**, unlike
+`TramwayReport.measured`. Every one of them is a residual whose *tail* is the finding: a median near
+zero is also what a wholly broken join looks like, if most of its symbols sit on straight streets.
+That is `Q58`'s `drawn_gauge_m` lesson applied before rather than after.
+
+⚠️ **`symbol_size` is published and unread.** `SYMBOL_SIZE` is populated for only **2** of the 747
+drawn arrows, so it could not have carried the length even if it meant metres. Recorded in the
+manifest so the question is answerable from a shipped artefact rather than from a scratch script —
+`Q37`'s debt, of which `Q55` was the last instance.
+
+### Why it is a separate mesh and not another codec field
+
+Three independent reasons, any one sufficient:
+
+- **`TEXCOORD_1.x` has no room and the wrong shape.** It is a per-edge constant with **3 spare bits**
+  (max code 2,097,151 against float32's exact 2²⁴), and an arrow is a *point* feature — `Q54`'s
+  V-range problem, whose solution there was `COLOR_0.a`, now spent on the kerbside extent.
+- **The junction fade blanks exactly where arrows live.** `fade_m = 6.0` is priced against the
+  measured 4.21 m worst-case cap overlap and already leaves 121 of 797 edges with no marking at all.
+- **The cap overlap is still there** — `Q53`: "anything drawn *on* a cap re-exposes it immediately."
+  Separate geometry above both cap and arm is immune, as `ART_DESIGN.md` says a world-space box
+  junction would be.
+
+### Cost, one variable changed
+
+**PCK 41,267,328 → 41,426,964 B, +159,636 B (+0.39%)** — a little under what the tramway cost, for a
+comparable amount of geometry. Over the wire **76.53 MiB**. 3,246 triangles, 7,394 vertices, one
+primitive, **one draw call, no collider, no texture, and position and normal only**.
+
+⚠️ **No vertex colour, and the absence is the decision.** `Q53` deliberately kept the marking colours
+out of `materials:`, outside `Q33`'s exposure rule, because paint is not cladding — and predicted
+that "the day a third road colour is authored somewhere else" would be the problem. That day is this
+one, and it is put in `game/tuning/arrows.tres` **beside** `road_markings.tres` so the two whites can
+be read side by side. `MeshContract.check_surface` grew an `expect_vertex_colours` parameter so the
+exception is stated at its call site rather than by omitting the call.
+
+### Two things this got wrong on the way in
+
+⚠️ **The mesh shipped a `TEXCOORD_0` nothing read.** Glyph-local metres, on the reasoning that a
+later shader might want them — which is `Q54`'s unread `COLOR_0.a` exactly, and 59,300 B of a 257 KB
+asset. Dropped, and `verify_arrows.gd` lost the check that existed only to guard it.
+
+⚠️ **An arrow's height came from a second join rather than from its own host edge.** `_draw` snapped
+the nose and tail to the graph afresh, with no memory of which edge the arrow had been registered
+against: **43 of 747** took at least one endpoint from a *different* edge, disagreeing with the
+ribbon they are drawn on by up to **0.515 m** against a `lift_m` of 0.015. Interpolating the host
+edge's own polyline reproduces `Snap.y` to 1.8e-15 m — the same linear interpolation — so it is a
+faithful substitute rather than an approximation, and it removes 1,494 of the stage's 2,255 joins.
+⚠️ The sign is load-bearing: `_axis_residual_deg` folds modulo 180, so an arrow on the far side of a
+two-way street legitimately points backwards along its edge, and without the correction its nose and
+tail heights swap and it tilts against the grade.
+
+⚠️ **The shader reached for `ALPHA` to copy `paint_opacity = 0.85`.** That is a misreading of what
+the value does next door: there the paint is *mixed into the road's own albedo* on one opaque
+surface, so the 0.15 is asphalt showing through. On a second surface 15 mm above the road the same
+number is transparency — a sorted alpha pass, no depth prepass, and thermoplastic modelled as tinted
+glass. It ships opaque.
+
+⚠️ **`verify_arrows.gd` reported 3,246 of 3,246 triangles inverted, and the ETL reported 0.** Both
+were right about their own side: **Godot winds front faces clockwise and glTF winds them
+counter-clockwise**, so the importer reverses every index triple and an up-facing surface arrives
+with `(b-a)x(c-a)` pointing *down*. Established by **measuring two shipped meshes that demonstrably
+render** — `roads.glb` at 32,222 of 32,233 and `tram.glb` at 5,132 of 5,132 — rather than from the
+documentation, which is the mistake `Q57` and `Q58` were each written about. ✅ The 11 that do not
+are `roads.glb`'s known inward folds, which `Q54` counted independently at **11** and 2.41 m².
+
+### What this does not do
+
+No road text (`DTAD_RD_MARK_ANNO`, 274), no box junctions (`DTAD_YL_BOX_POLY`, 20), no stop lines
+(`RM1011`, 120), no give-way (`RM1013`, 83), no hatched islands (`RM1037`, 414). ⚠️ **Box junctions
+are the cheap one** — `ART_DESIGN.md` records the mechanism as known, and they are published as
+polygons with their own hatching angles — and they are the obvious follow-on now this stage exists.
+
+⚠️ **The glyph's origin is taken to be its centre, and nothing downstream can detect that it is
+not.** The publisher gives an insertion point and a `LENGTH` and does not say which end the point is.
+Centre is the least-wrong reading: if the convention is the tail, an arrow is out by half its length
+along a road it is already on; anchoring at the tail when the truth is the centre is out by twice
+that.
+
+**See.** `Q53` for the scope decision this closes half of · `Q57` for the survey that found the layer
+· `Q54` for the invented-marking debit and the data-not-geometry pattern · `Q58` for the lane-space
+refusal that does not transfer, and the self-grading pattern that does · `Q56` for the kind-mapping
+trust this shares and the second source it cannot have · `Q19` for the widening ·
+`ARCHITECTURE.md` for the `arrows.glb` contract

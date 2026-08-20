@@ -34,7 +34,7 @@ cd etl && ../.venv/bin/python -m pipeline --city hong_kong --region wan_chai && 
 tools/sync_generated.sh
 ```
 
-Ends by reporting the file count copied into `game/assets/generated/` (199 for Wan Chai today). No
+Ends by reporting the file count copied into `game/assets/generated/` (140 for Wan Chai today). No
 Godot import step is needed first — `drive.sh` builds `game/.godot/` on its first run, which is
 slow the first time and instant afterwards.
 

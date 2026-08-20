@@ -234,6 +234,75 @@ def _written(out_dir: Path) -> dict:
     return json.loads((out_dir / FARES_NAME).read_text(encoding="utf-8"))
 
 
+class TestTheSideAndHeadingASnapPublishes:
+    """`offset_m` and `heading_deg`, added for `P3-15`.
+
+    ⚠️ **Asserted against `surface.mitres` itself rather than against the
+    comment beside them**, the same discipline `test_kerbside.py` applies to the
+    side convention it shares. A sign flip here mirrors every side-keyed feature
+    that reads this — today the turn arrows — and still renders as a city.
+    """
+
+    def _northward(self):
+        """An edge running north: `-Z` is north, so it runs from +Z to 0."""
+        return [
+            {
+                "id": 0,
+                "polyline": [[0.0, 0.0, 10.0], [0.0, 0.0, 0.0]],
+                "lanes": 2,
+                "direction": "forward",
+                "elevation_level": 0,
+            }
+        ]
+
+    def test_the_nearside_is_the_side_mitres_offsets_towards(self):
+        import numpy as np
+
+        from pipeline.surface import mitres
+
+        points = np.asarray(self._northward()[0]["polyline"], dtype=np.float64)
+        # `mitres` offsets to the left of travel, which is what makes `U = 0`
+        # the nearside. Travelling north, left is west, so its X is negative.
+        assert mitres(points)[0][0] < 0.0
+
+        segments = Segments.of(self._northward())
+        west = segments.nearest(-3.0, 5.0)
+        east = segments.nearest(3.0, 5.0)
+        assert west.offset_m > 0.0, "west of a northbound edge is its nearside"
+        assert east.offset_m < 0.0
+
+    def test_the_offset_magnitude_is_the_distance(self):
+        segments = Segments.of(self._northward())
+        snap = segments.nearest(-3.0, 5.0)
+        assert abs(snap.offset_m) == pytest.approx(snap.distance_m)
+
+    def test_a_point_past_the_end_measures_to_the_end_not_to_the_extension(self):
+        """⚠️ The magnitude comes from the clamped projection on purpose.
+
+        A point beyond a segment's end is that far from the *road*, not that far
+        from its infinite extension, and the two differ by metres exactly where
+        an arrow near a junction sits.
+        """
+        segments = Segments.of(self._northward())
+        snap = segments.nearest(0.0, -4.0)
+        assert snap.distance_m == pytest.approx(4.0)
+
+    def test_the_heading_is_clockwise_from_north(self):
+        segments = Segments.of(self._northward())
+        assert segments.nearest(0.0, 5.0).heading_deg == pytest.approx(0.0)
+
+        eastward = [
+            {
+                "id": 0,
+                "polyline": [[0.0, 0.0, 0.0], [10.0, 0.0, 0.0]],
+                "lanes": 2,
+                "direction": "forward",
+                "elevation_level": 0,
+            }
+        ]
+        assert Segments.of(eastward).nearest(5.0, 0.0).heading_deg == pytest.approx(90.0)
+
+
 class TestBuildRegion:
     def test_it_writes_a_schema_stamped_document(self, testville) -> None:
         testville()

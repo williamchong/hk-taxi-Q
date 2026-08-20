@@ -19,6 +19,7 @@
 [ext_resource type="Resource" path="res://tuning/streaming.tres" id="8_streaming"]
 [ext_resource type="Script" path="res://scripts/city/road_surface_preview.gd" id="2_surface"]
 [ext_resource type="Script" path="res://scripts/city/tramway_preview.gd" id="10_tramway"]
+[ext_resource type="Script" path="res://scripts/city/arrows_preview.gd" id="11_arrows"]
 [ext_resource type="PackedScene" path="res://scenes/world/clean_daylight.tscn" id="3_light"]
 [ext_resource type="PackedScene" path="res://scenes/vehicle/taxi.tscn" id="4_taxi"]
 [ext_resource type="Script" path="res://scripts/camera/chase_camera.gd" id="5_camera"]
@@ -48,6 +49,16 @@ script = ExtResource("2_surface")
 ; tramway ships none and this node simply stays empty.
 [node name="Tramway" type="Node3D" parent="."]
 script = ExtResource("10_tramway")
+
+; The turn arrows (`P3-15`), beside the road surface for the same reason the
+; tramway is — a separate mesh, one draw call — but for the opposite geometric
+; reason. The tramway is separate because `Q58` measured it is *not* on the
+; carriageway; the arrows are separate because they are, and drawing them on it
+; would put them under `road_markings.tres`'s 6 m junction fade at exactly the
+; junctions they are about. A region whose sources publish no marking symbols
+; ships none and this node simply stays empty.
+[node name="Arrows" type="Node3D" parent="."]
+script = ExtResource("11_arrows")
 
 ; The authored heroes, placed from `landmarks.json` (`P3-6`). Beside `Tiles`
 ; rather than under it: the streamer owns what it streams, and a hero is

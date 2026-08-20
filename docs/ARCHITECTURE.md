@@ -288,6 +288,7 @@ hk-taxi-Q/
 │   │   ├── clearance.py         # what stands in the ribbon → clear width per station
 │   │   ├── fares.py             # taxi stands + PUDO + POIs → fare nodes
 │   │   ├── tramway.py           # published tram rails → tram.glb (P3-14)
+│   │   ├── arrows.py            # published turn arrows → arrows.glb (P3-15)
 │   │   ├── export.py            # → city.json, assembles and validates the stage outputs
 │   │   └── __main__.py          # `python -m pipeline` — every stage, in order
 │   ├── sources/<city>/<source>/ # raw downloads — GITIGNORED
@@ -339,7 +340,7 @@ The interface between ETL and game. **Versioned — change both sides together a
 
 ```json
 {
-  "schema_version": 11,
+  "schema_version": 12,
   "city_id": "hong_kong",
   "region_id": "wan_chai",
   "source_crs": "EPSG:2326",
@@ -363,6 +364,7 @@ The interface between ETL and game. **Versioned — change both sides together a
   "lane_width_m": 3.2,
   "fares": "fares.json",
   "tramway": "tram.glb",
+  "arrows": "arrows.glb",
   "landmarks": "landmarks.json",
   "landmark_assets": ["landmarks/hkcec.glb"],
   "etl_version": "0.1.0",
@@ -827,6 +829,50 @@ cannot read outside it. `Q58`.
 inverts the day `rail_width_m` and `bed_width_m` converge; inferring it from vertex colour makes the
 `materials:` table load-bearing for shading rather than for colour.
 
+### `arrows.glb` — the published turn arrows (`P3-15`)
+
+One flat glyph per marking symbol TD publishes, laid `lift_m` above the carriageway. One primitive,
+one material named `arrows`, one draw call, and **no collider**.
+
+| | |
+|---|---|
+| Attributes | `POSITION` and `NORMAL` only — **no `COLOR_0`, no `TEXCOORD_0`, no `TEXCOORD_1`**, no texture |
+
+⚠️ **`city.json`'s `arrows` key is optional and may be `null`**, on the same terms as `tramway`, with
+one extra state: it is also null where the block is declared and **every** symbol failed the join,
+because the stage names its asset from what it drew rather than from a constant.
+
+⚠️ **No `COLOR_0`, and the absence is a decision rather than an omission.** An arrow is the same
+paint as a lane divider, and `Q53` deliberately put the marking colours in
+`game/tuning/road_markings.tres` rather than in `hong_kong.yaml`'s `materials:` table — outside
+`Q33`'s exposure rule, because paint is not cladding. So the arrow's white lives in
+`game/tuning/arrows.tres` beside it, and `MeshContract.check_surface` takes an
+`expect_vertex_colours` parameter so the exception is stated at its one call site rather than by
+skipping the check.
+
+⚠️ **There is no codec here, and that is the point of the stage.** `roads.glb` needs nine packed
+fields because a fragment there must reconstruct which lane it is in; every vertex of this mesh is
+already where `pipeline/arrows.py` decided it goes. What that buys is immunity to the two things that
+made an arrow undrawable on the ribbon: `road_markings.tres`'s 6 m junction fade, which blanks
+exactly the approach an arrow is about, and the 6,051 m² cap overlap, which anything drawn *on* a cap
+re-exposes.
+
+⚠️ **The first draft shipped a `TEXCOORD_0` of glyph-local metres that nothing sampled**, on the
+reasoning that a later shader might want it. That is what `Q54` found `COLOR_0.a` had been doing —
+broadcasting an unread 255 down the whole road mesh — and it cost **59,300 B** of a 257 KB asset. A
+channel earns its place when something reads it.
+
+⚠️ **Winding, not the normal attribute, decides whether this is visible** — `arrows.gdshader` is
+`cull_back`. `arrows.json` publishes `inverted` and it must be **0**. ⚠️ **Godot winds front faces
+clockwise and glTF winds them counter-clockwise**, so the importer reverses every index triple and
+the engine-side and ETL-side tests of the same expression have **opposite signs**. Both are right
+about their own side; `Q59` records how that was established, and against which two shipped meshes.
+
+⚠️ **`arrows.json` publishes residual distributions at p90/p99/max, not p10/p50/p90.** Every one of
+them is a residual whose *tail* is the finding — `axis_residual_deg` is where a match to the wrong
+road goes — and a median near zero is also what a wholly broken join looks like. `Q58`'s
+`drawn_gauge_m` lesson, applied before rather than after.
+
 ### `landmarks.json` — hero building placement
 
 ```json
@@ -972,6 +1018,7 @@ every region lies inside them.
 | `DebugHud` | Every dev readout, behind `F3` | ✅ |
 | `TrafficSystem` | AI vehicles following road-graph splines; trams as scripted blockers | ⬜ `P3-3` |
 | `tram.glb` | The published tramway, drawn where iB1000 prints it — **not** a marking on the ribbon (`Q58`). One primitive, one draw call, **no collider** | ✅ `P3-14` |
+| `arrows.glb` | The published turn arrows, registered into the lane the ribbon actually has — **not** paint on the ribbon, because the junction fade blanks the approach they are about (`Q59`). One primitive, one draw call, **no collider** | ✅ `P3-15` |
 | `FareSystem` | Fare state machine: idle → hailed → carrying → delivered/failed | ⬜ `P3-1` |
 | `ScoreSystem` | Base fare, time bonus, **style chain** and **fare combo** — two distinct multipliers | ⬜ `P3-2` |
 | `HUD` | Meter, timer, arrow, destination callout (bilingual) | ⬜ `P3-5` |

@@ -34,7 +34,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from http.client import HTTPException
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import Any, Protocol
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
@@ -322,6 +322,55 @@ def cached_tiles(
         )
     index = read_feature_collection(index_path, f"tiled source {source.id!r} index")
     return select_tiles(index, source, region_bounds=region.bounds, region_crs=city.geodetic_crs)
+
+
+class DeclaredSource(Protocol):
+    """The three fields a config block needs to name where it is read from.
+
+    Structural rather than a base class because the blocks that satisfy it —
+    `Tramway`, `Arrows`, `CarriagewayEdge` — are frozen dataclasses parsed
+    independently and share nothing else. A `Protocol` types `source_reads`
+    without making them inherit from each other.
+    """
+
+    source: str
+    member: str | None
+
+    @property
+    def tiled(self) -> bool: ...
+
+
+def source_reads(
+    city: CityConfig,
+    spec: DeclaredSource,
+    region_id: str,
+    *,
+    root: Path | None = None,
+) -> list[tuple[Path, str | None]]:
+    """Every `(path, zip member)` a block's `source:` resolves to, tiled or not.
+
+    Here rather than in each stage because the ten lines below were **verbatim**
+    in three places — `tramway.read_rails`, `arrows.read_symbols` and
+    `tools/carriageway_margin.py` — and `Q58` named that duplication while
+    declining the wider refactor it then looked like. It was right to decline:
+    the proposal was a shared *reader*, and the third caller reads points with a
+    different filter, so a shared reader would have had two customers and a
+    bystander. What all three actually share is the path resolution, and it
+    belongs here beside `cached_source`, `cached_tiles` and `artefact_path`.
+
+    ⚠️ It resolves paths and reads nothing, which is what keeps it usable from
+    `tools/` — that rule scopes to what a grader *measures*, not what it opens.
+    """
+    if not spec.tiled:
+        return [(cached_source(city, spec.source, root=root), None)]
+
+    region = city.region(region_id)
+    sheets = cached_tiles(city, region, city.tiled_sources[spec.source], root=root)
+    member = spec.member or ""
+    return [
+        (artefact_path(city.id, sheet, root=root), member.format(tile=sheet.tile_id))
+        for sheet in sheets
+    ]
 
 
 def _tile_filename(tile_id: str, url: str, source: TiledSource) -> str:

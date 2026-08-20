@@ -96,7 +96,7 @@ from pipeline import gdb  # noqa: E402
 from pipeline.config import CarriagewayEdge, CityConfig, load_city  # noqa: E402
 from pipeline.crs import GameTransform  # noqa: E402
 from pipeline.export import read_manifest  # noqa: E402
-from pipeline.fetch import artefact_path, cached_source, cached_tiles  # noqa: E402
+from pipeline.fetch import source_reads  # noqa: E402
 from pipeline.roads import ROADGRAPH_NAME, plan_lengths, read_graph  # noqa: E402
 
 log = logging.getLogger("carriageway_margin")
@@ -276,16 +276,7 @@ def published_edges(
     docstring gives: the sign on Z is a consequence of Godot's handedness, and
     restating it is how it drifts.
     """
-    if spec.tiled:
-        region = city.region(region_id)
-        sheets = cached_tiles(city, region, city.tiled_sources[spec.source], root=sources_root)
-        member = spec.member or ""
-        reads = [
-            (artefact_path(city.id, sheet, root=sources_root), member.format(tile=sheet.tile_id))
-            for sheet in sheets
-        ]
-    else:
-        reads = [(cached_source(city, spec.source, root=sources_root), None)]
+    reads = source_reads(city, spec, region_id, root=sources_root)
 
     wanted = set(spec.codes)
     off_grade = set(spec.off_grade_codes)

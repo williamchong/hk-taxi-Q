@@ -177,6 +177,26 @@ Common emoji for this project:
   attribute does not, and the first build had **5,111 of 5,112** triangles facing the ground with
   everything else correct. ⚠️ **A tramway change is also a shader change** — `check.sh` exits 0 on a
   shader that fails to compile, so render and `grep -i "shader error"`. Numbers in `Q58`.
+- **`pipeline/arrows.py`, the `arrows` config block, or any turn-arrow change: paste `arrows.json`'s
+  two partitions (`symbols` and `candidates`), `axis_residual_deg`, `offset_m`, `against_one_way` and
+  `inverted`, before and after.** There is no separate grader and there should not be: the stage grades itself,
+  because **every way this breaks renders as a perfectly drawn arrow, or as nothing**. An arrow on
+  the wrong street, turned 180°, or drawn from a mis-transcribed glyph table all look correct in a
+  frame. ⚠️ **The residual distributions publish p90/p99/max, not a median** — the tail is where a
+  match to the wrong road goes, and a median near zero is also what a wholly broken join looks like.
+  ⚠️ **`axis_residual_deg` is recorded over the symbols the stage *refuses* as well as the ones it
+  keeps, and `n` exceeding `drawn` is how you tell.** Move that append below the guard and every
+  percentile is confined to `bearing_tolerance_deg` by construction — it read max 28.87 against a
+  30 deg bar for exactly that reason until review caught it. `Q58`'s `drawn_gauge_m` trap.
+  ⚠️ `inverted` must be **0**: `arrows.gdshader` is `cull_back`, so winding decides visibility and
+  the normal attribute does not. ⚠️ **The engine-side and ETL-side winding tests have opposite
+  signs** — Godot winds front faces clockwise and glTF counter-clockwise — so do not "fix" one to
+  agree with the other; `Q59` records how that was settled and against which meshes.
+  ⚠️ **A glyph-table change is a `DATA_SOURCES.md` change**: the codes come from TD drawing
+  `CT174/51-5(1)F`, a **scanned** sheet with no text layer, and reading the histogram instead would
+  have painted 61 `RM1116`-`RM1119` *warning* arrows as turn instructions.
+  ⚠️ **An arrows change is also a shader change** — `check.sh` exits 0 on a shader that fails to
+  compile, so render and `grep -i "shader error"`. Numbers in `Q59`.
 - Road-surface, deck-height or ground changes: also `tools/deck_error.py`, `tools/overhang.py`,
   `tools/ground_clearance.py` and `tools/carriageway_occupancy.py`, by hand after a build. They grade
   the *shipped* bundle and share no code with the pipeline — `check.sh` does not require a built

@@ -552,13 +552,20 @@ authored features the source captures badly.
   bearing (`RM1017` straight-ahead ×353, `RM1019` turn-left ×179, `RM1021` turn-right ×92);
   `DTAD_RD_MARK_ANNO` carries **274** road-text annotations; `DTAD_YL_BOX_POLY` carries **20** box
   junctions. `Q56`, `Q57`.
-- ⚠️ **The hold stands, on cost and on registration.** An arrow has to land in a lane, and the
-  ribbon is drawn **1.6×** wider than the carriageway (`Q18`/`Q36`), so a published position needs
-  re-registering into lane space rather than copying. A *mis*placed marking on a street the `P3-9a`
-  drivers know is the debit `GAME_DESIGN.md` prices against a hand-added ramp. The box-junction
-  *mechanism* is known and cheap — a world-space cross-hatch masked on distance-to-node is immune
-  to the cap overlap, because cap and arm draw the same thing wherever they overlap. What is
-  missing is neither content nor machinery; it is the work. `Q53`.
+- ✅ **The arrows are built (`P3-15`), and the registration objection was answered by measuring
+  it.** The ribbon is drawn **1.6×** wider than the carriageway (`Q18`/`Q36`), but it is wider about
+  the *same centreline*, so it contains the real carriageway: **97.2%** of the region's symbols
+  already fall inside the drawn ribbon, and their offset reads p50 **0.51** of the real half-width —
+  where a lane centre belongs. So the published position is read as a **fraction across the road**,
+  which the widening leaves invariant, and that fraction picks a drawn lane. `747` arrows ship as
+  `arrows.glb` — its own mesh, one draw call, no collider — rather than as paint on the ribbon,
+  because `road_markings.tres`'s 6 m junction fade blanks exactly the approach zone an arrow is
+  about. Numbers in `Q59`.
+- ⚠️ **Road text and box junctions are still held, on cost.** The box-junction *mechanism* is known
+  and cheap — a world-space cross-hatch masked on distance-to-node is immune to the cap overlap,
+  because cap and arm draw the same thing wherever they overlap — and now that `P3-15` has built a
+  world-space marking stage, it is the obvious next one. What is missing is neither content nor
+  machinery; it is the work. `Q53`, `Q59`.
 - 🔴 **The kerbside double yellow is invented, and it is the one marking here that asserts something
   rather than describing something.** A double yellow is not kerb trim — it means *no stopping at any
   time* — so painting it on every kerb makes a claim about roughly three times the kerb it actually

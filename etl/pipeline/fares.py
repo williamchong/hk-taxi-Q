@@ -128,6 +128,26 @@ class Snap:
     # Height of the attachment point, which is where the fare node's own
     # height comes from.
     y: float
+    # Signed perpendicular offset: `|offset_m| == distance_m`, and the sign says
+    # which side of travel the point fell on — **positive is the nearside**, the
+    # rail at `TEXCOORD_0`'s `U = 0`.
+    #
+    # ⚠️ **The expression is `kerbside._Segments.nearest`'s, and it is deliberately
+    # not restated there or here in prose.** Left of travel is
+    # `dot(point - start, (step_z, -step_x))`, which is `surface.mitres`'s normal.
+    # A sign flip mirrors every side-keyed feature in the city and still renders
+    # as a city, so `tests/test_fares.py` asserts it against `mitres` itself
+    # rather than against this comment.
+    #
+    # Added for `P3-15`, which needs a side and a heading to put a turn arrow in
+    # a lane. Folded into the one join rather than written a second time: `Q56`
+    # records why two implementations of a join grade nothing —
+    # "two implementations disagreeing tells you one is wrong and never which".
+    offset_m: float
+    # Game-space heading of the segment the point landed on, degrees clockwise
+    # from north (`-Z`), in `[0, 360)`. What an arrow's own bearing is graded
+    # against.
+    heading_deg: float
 
 
 @dataclass(frozen=True)
@@ -210,11 +230,18 @@ class Segments:
 
         total = self.total_m[hit]
         reached = self.before_m[hit] + along[hit] * self.length_m[hit]
+        # Sign only: the magnitude comes from `distance`, which is measured to
+        # the *clamped* projection. Past a segment's end the two differ, and the
+        # distance is the honest one — a point beyond the end is that far from
+        # the road, not that far from its infinite extension.
+        side = offset_x[hit] * step_z[hit] - offset_z[hit] * step_x[hit]
         return Snap(
             edge=int(self.edge[hit]),
             distance_m=float(distance[hit]),
             t=float(reached / total) if total > 0.0 else 0.0,
             y=float(self.start[hit, 1] + along[hit] * self.delta[hit, 1]),
+            offset_m=float(distance[hit]) if side > 0.0 else -float(distance[hit]),
+            heading_deg=float(np.degrees(np.arctan2(step_x[hit], -step_z[hit])) % 360.0),
         )
 
 

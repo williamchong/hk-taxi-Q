@@ -871,6 +871,116 @@ tramway:
   rail_material: steel_rail
   bed_material: concrete_sooty
 
+# Published turn arrows (P3-15, closes the arrow half of Q53).
+#
+# Q53 held arrows out of P3-12 because "there is no marking data in any source".
+# Q57 retired that on 2026-08-20: it reasoned about Road Network v2 — the
+# *semantic* dataset, which is exhaustively right about what is restricted and
+# says nothing about paint — and concluded about the whole estate. TD's Traffic
+# Aids Drawings v2 publishes DTAD_RD_MARK_SYM_PT: 1,365 marking symbols in this
+# region, each an RM code and a bearing. Arrow content is read, not invented.
+#
+# ⚠️ **ANGLE is a mathematical angle, not a compass bearing.** Game heading is
+# `(90 - ANGLE) mod 360`. Measured on the 314 RM1017 straight-ahead symbols
+# within 4 m of a level-0 centreline, against the host edge's own heading:
+# as-is p50 52.0 deg, ANGLE+90 p50 38.0, 180-ANGLE p50 89.1, and `90 - ANGLE`
+# **p50 0.9 deg, p90 3.7, 97.8% within 10**. The pipeline does not restate this
+# in prose; tests/test_arrows.py asserts it against the same heading fares.Snap
+# publishes, which is surface.mitres's own frame.
+#
+# ⚠️ **The codes below are transcribed from the publisher's index plan**, TD
+# drawing CT174/51-5(1)F "ROAD MARKINGS (RM 1001-1080)", inside
+# traffic_aids_data_dictionary. They are NOT inferred from how often each code
+# appears, and that matters more here than anywhere else in this file: nothing
+# downstream can grade the mapping. Every consumer takes "1019 means turn left"
+# on trust, exactly as Q56 found every consumer taking double-versus-single on
+# trust from NSR.TIME_ZONE.
+#
+# ⚠️ **Four families of code look like turn arrows and are not.** Reading the
+# index plan rather than the histogram is what keeps them out:
+#   RM1116-1119  WARNING ARROW      — the deviation arrow before a lane closure.
+#                                     **61 in region**, and the second most
+#                                     common arrow-shaped code after RM1017.
+#                                     Painting these as turn instructions would
+#                                     tell the player to leave the carriageway.
+#   RM1135/1136  LOOK RIGHT 望右 /   — pedestrian crossing markings, and the two
+#                LOOK LEFT 望左        commonest codes in the region after
+#                                     RM1017 (127 and 123).
+#   RM1167-1169  CYCLE TRACK arrows — a cycle track is not a lane. **0 here**,
+#                                     named because the second city is the
+#                                     business case and this list is what it
+#                                     inherits.
+#   RM1144       LET IN LANE        — lettering, not a symbol. **0 here.**
+# Q57's TACW trap is the same shape: a code that looks like the answer.
+#
+# ⚠️ **Every turn arrow is published twice, at two lengths** — 4000 mm and
+# 6000 mm — so length belongs to the code. Wan Chai publishes only the 4 m
+# variants; the 6 m rows are here because the estate has them, and a region that
+# uses one would otherwise draw it a third too short. In region, at grade:
+# RM1017 x337, RM1019 x175, RM1027 x102, RM1021 x92, RM1025 x46, RM1023 x8,
+# RM1029 x1 — 761 of 781 published turn arrows, the other 20 being on structure.
+arrows:
+  source: traffic_aids_drawings_gdb
+  layer: DTAD_RD_MARK_SYM_PT
+  fields:
+    code: REFNAME
+    bearing: ANGLE
+    level: ELEVATION
+    size: SYMBOL_SIZE
+
+  glyphs:
+    "1017": {movements: [ahead], length_m: 4.0}
+    "1018": {movements: [ahead], length_m: 6.0}
+    "1019": {movements: [left], length_m: 4.0}
+    "1020": {movements: [left], length_m: 6.0}
+    "1021": {movements: [right], length_m: 4.0}
+    "1022": {movements: [right], length_m: 6.0}
+    "1023": {movements: [left, right], length_m: 4.0}
+    "1024": {movements: [left, right], length_m: 6.0}
+    "1025": {movements: [ahead, right], length_m: 4.0}
+    "1026": {movements: [ahead, right], length_m: 6.0}
+    "1027": {movements: [ahead, left], length_m: 4.0}
+    "1028": {movements: [ahead, left], length_m: 6.0}
+    "1029": {movements: [ahead, left, right], length_m: 4.0}
+    "1030": {movements: [ahead, left, right], length_m: 6.0}
+
+  # Proportions, as fractions of each arrow's own length, so the 4 m and 6 m
+  # variants of one marking scale together. On a 4 m arrow these give a 0.34 m
+  # stem, a 1.30 m head 0.94 m across, and a turn head reaching 1.12 m out —
+  # the proportions of the symbol drawn on the index plan.
+  stem_width_frac: 0.085
+  head_length_frac: 0.325
+  head_width_frac: 0.235
+  branch_reach_frac: 0.28
+
+  # ⚠️ **The ground and the level-0 carriageway are coplanar by construction**,
+  # the same property tramway.bed_lift_m is lifted clear of. Paint laid at deck
+  # height z-fights the road it is painted on.
+  lift_m: 0.015
+
+  # Furthest a symbol may sit from a level-0 centreline and still be placed.
+  # 12 m is a little over the widest drawn half-width in the region, so it
+  # admits an arrow in the outermost lane of the widest street and refuses one
+  # that has matched across a junction mouth to a road it is not on. Measured,
+  # and `arrows.json` republishes it as `offset_m` on every run so this comment
+  # is checkable rather than a number from a scratch script (`Q37`): the gap to
+  # the nearest level-0 centreline reads p50 1.64 m, p90 3.78, p99 6.49.
+  max_offset_m: 12.0
+
+  # How far a symbol's own bearing may sit from its host edge's heading before
+  # the match is refused. The residual is p50 0.9 deg and p90 3.7 on symbols
+  # that matched correctly, so 30 is loose against the population it keeps and
+  # tight against the failure it exists to catch — a symbol lying square across
+  # its edge, which is the signature of a match to the wrong road. `arrows.json`
+  # publishes `axis_residual_deg` over the symbols this *refuses* as well as the
+  # ones it keeps — max 88.5 deg — because a distribution taken after its own
+  # filter is confined to that filter and can say nothing (`Q58`).
+  #
+  # ⚠️ It refuses the **match**, and never rotates the arrow onto the road. An
+  # arrow turned to agree with its edge would be an invented marking in Q54's
+  # sense, and it would render perfectly.
+  bearing_tolerance_deg: 30.0
+
 # Hero buildings shipped as authored models (P3-6) — the landmarks.json
 # contract in docs/ARCHITECTURE.md. The building stage excludes every stem
 # named in `replaces_source_ids` from the tile meshes; export.py converts each

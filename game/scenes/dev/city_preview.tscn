@@ -7,6 +7,7 @@
 [ext_resource type="Script" path="res://scripts/city/road_preview.gd" id="4_roads"]
 [ext_resource type="Script" path="res://scripts/city/road_surface_preview.gd" id="5_surface"]
 [ext_resource type="Script" path="res://scripts/city/tramway_preview.gd" id="11_tramway"]
+[ext_resource type="Script" path="res://scripts/city/arrows_preview.gd" id="12_arrows"]
 [ext_resource type="Script" path="res://scripts/city/fare_preview.gd" id="6_fares"]
 
 [node name="CityPreview" type="Node3D"]
@@ -24,6 +25,14 @@ script = ExtResource("5_surface")
 ; highest-contrast element.
 [node name="Tramway" type="Node3D" parent="."]
 script = ExtResource("11_tramway")
+
+; The turn arrows (`P3-15`), here as well as in `city_drive.tscn` for the same
+; reason the tramway is. Separate from the ribbon because drawing them on it
+; would put them under `road_markings.tres`'s 6 m junction fade at exactly the
+; junctions they are about; a region whose sources publish no marking symbols
+; ships none and this node simply stays empty.
+[node name="Arrows" type="Node3D" parent="."]
+script = ExtResource("12_arrows")
 
 ; The authored heroes (`P3-6`). Without them this scene shows holes where the
 ; excluded source buildings stood — and the audit viewpoints below are the

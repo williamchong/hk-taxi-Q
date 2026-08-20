@@ -94,19 +94,9 @@ func _init() -> void:
 func _check(scene_root: Node3D) -> PackedStringArray:
 	var problems: PackedStringArray = []
 
-	var instances: Array[Node] = scene_root.find_children("*", "MeshInstance3D", true, false)
-	if instances.size() != 1:
-		problems.append("expected one MeshInstance3D, found %d" % instances.size())
-		return problems
-
-	var mesh := (instances[0] as MeshInstance3D).mesh as ArrayMesh
+	var mesh: ArrayMesh = MeshContract.single_primitive(scene_root, SURFACES, problems)
 	if mesh == null:
-		problems.append("the MeshInstance3D carries no ArrayMesh")
 		return problems
-	# Exactly, not at most: a mesh with no surfaces at all would otherwise pass
-	# every check below by never entering the loop.
-	if mesh.get_surface_count() != SURFACES:
-		problems.append("%d surfaces, expected %d" % [mesh.get_surface_count(), SURFACES])
 
 	for surface: int in mesh.get_surface_count():
 		var where: String = "surface %d" % surface
@@ -138,16 +128,8 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 ## The whole guard is the absence of a `-col` suffix in `tramway.py`'s mesh
 ## name, which is one token in a string. This is what notices it coming back.
 func _check_has_no_collision(scene_root: Node3D) -> PackedStringArray:
-	var bodies: Array[Node] = scene_root.find_children("*", "StaticBody3D", true, false)
-	if bodies.is_empty():
-		return PackedStringArray()
-	return PackedStringArray(
-		[
-			(
-				"the tramway built %d collider(s); it must build none. " % bodies.size()
-				+ "Check that TRAMWAY_MESH_NAME in etl/pipeline/tramway.py has no `-col` suffix."
-			)
-		]
+	return MeshContract.check_no_collision(
+		scene_root, "the tramway", "TRAMWAY_MESH_NAME in etl/pipeline/tramway.py"
 	)
 
 

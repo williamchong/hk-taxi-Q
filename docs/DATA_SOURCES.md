@@ -482,8 +482,15 @@ is named here to be recognised and skipped.
 restricted, for whom, when), this is *cartographic* (what is painted, in what linetype). That is
 what makes it a genuine second opinion and not a copy.
 
-⚠️ **Fetched, never built.** `traffic_aids_drawings_gdb` is in `sources:` beside
-`road_data_dictionary` and for the same reason: it is read only by `tools/kerbside_source_audit.py`.
+✅ **Built since `P3-15`, and it was "fetched, never built" for three weeks before that.**
+`traffic_aids_drawings_gdb` is now read by `pipeline/arrows.py` as well as by
+`tools/kerbside_source_audit.py` and `tools/carriageway_margin.py`, so a build **does** need it and
+`--only` can no longer skip it for a region declaring an `arrows:` block.
+⚠️ **Its sibling `traffic_aids_data_dictionary` became load-bearing at the same moment.** TD drawing
+**CT174/51-5(1)F**, inside `Index Plan/(RM 1001 - 1080).pdf`, is the only definition of what each `RM`
+code means, and `hong_kong.yaml`'s glyph table is transcribed from it. It is a **scanned drawing with
+no text layer** — `pdftotext` returns nothing — so it has to be read by eye, and `Q59` records what
+reading the histogram instead would have painted.
 It is the **largest single fixed-URL source in the city file**, 13× the road network, because it
 carries the whole territory's markings, signs, railings and poles to reach one layer. A build that
 never runs the audit can skip it with `--only`.
@@ -495,7 +502,7 @@ never runs the audit can skip it with `--only`.
 | **`DTAD_RD_MARK_LINE`** | 1,679 features / 61,903 m | Every other marking: `RM1109` 25,204 m and `RM1001` 19,308 m dominate; yellow ones are `RM1043` hatched no-parking (560 m) and `RM1038` box junction (540 m). ✅ **`RM1108`/`RM1109` EDGE OF CARRIAGEWAY (317 features) in use since 2026-08-20** by `tools/carriageway_margin.py` — the preferred publisher of the carriageway edge, ahead of iB1000's topographic margin. Geometry is plain `MultiLineString`, **2D**, so it needs none of the Z decoding iB1000's lines do |
 | `DTAD_CROSSING_LINE` | 121 features / 6,698 m | Crossings. **Not in use** |
 | `DTAD_TY_BAR_LINE` | 4 features / 283 m | Transverse yellow bars. **Not in use** |
-| **`DTAD_RD_MARK_SYM_PT`** | **1,365 points**, `REFNAME` = `RM` code, `ANGLE` = bearing | **The turn arrows `Q53` called unsourceable**, added by `Q57`. `RM1017` straight-ahead ×353, `RM1019` turn-left ×179, `RM1027` ahead+left ×102, `RM1021` turn-right ×92; `RM1135`/`RM1136` are the 望右/望左 crossing markings, not arrows. A code plus a bearing **is** an arrow. **Not in use** |
+| **`DTAD_RD_MARK_SYM_PT`** | **1,365 points**, `REFNAME` = `RM` code, `ANGLE` = bearing, `ELEVATION` = structure or null, `SYMBOL_SIZE` | **The turn arrows `Q53` called unsourceable**, added by `Q57`. ✅ **In use since `P3-15`** — `pipeline/arrows.py` draws 747 of them (`Q59`). **781 turn arrows in region**, 761 at grade: `RM1017` ahead ×353, `RM1019` left ×179, `RM1027` ahead+left ×102, `RM1021` right ×92, `RM1025` ahead+right ×46, `RM1023` left+right ×8, `RM1029` ahead+left+right ×1 — all of them the **4000 mm** variant of a pair the index plan publishes at 4 m and 6 m. ⚠️ **`ANGLE` is a mathematical angle, not a compass bearing**: game heading is `(90 − ANGLE) mod 360`, which lands p50 **0.9°** from the host edge against 52.0° for the raw value (`Q59`). ⚠️ **Four families of code look like turn arrows and are not.** Two of them are here in force: `RM1116`–`RM1119` **WARNING ARROW** — the deviation arrow before a lane closure — at **61 in region**, the commonest arrow-shaped code after `RM1017`; and `RM1135`/`RM1136`, the 望右/望左 pedestrian crossing markings, at **127** and **123**. The other two are checked and absent here — `RM1167`–`RM1169` cycle-track arrows and `RM1144` LET IN LANE lettering, both **0** — and are named because a second region is what this table exists for. ⚠️ **`SYMBOL_SIZE` is populated for only 2 of the 747 drawn arrows**, so it cannot carry a length |
 | **`DTAD_RD_MARK_ANNO`** | **274 annotations** | **The road text `Q53` called unsourceable.** `TextString` carries `CENTRAL`, `九龍`, `KOW`, `LOON`; `FontName` (`ENGINEERING` 181, `chinese` 91), `FontSize`, `Angle`, `CharacterWidth`. **Not in use** |
 | `DTAD_RD_MARK_LINE_C` | 1,413 features | The other marking half: `RM1104` warning line 409, `RM1101` lane lines 212, `RM1054` angled parking bays 169, `RM1007` bus-lane continuation 136. **Not in use** |
 | `DTAD_RD_MARK_SYM_LINE` | 173 features | `RM1047` bus-stop box ×82, `RM1051` motorcycle bay ×21, `RM1140` KEEP CLEAR ×19, `RM1176` taxi pick-up/drop-off ×5. **Not in use** |

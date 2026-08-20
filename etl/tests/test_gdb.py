@@ -25,6 +25,101 @@ def _layer(name: str, geometry: list[bytes]) -> gdb.Layer:
     )
 
 
+class TestPoints:
+    """The point decoder (`P3-15`).
+
+    ⚠️ **A point body carries no count prefix**, which is what makes it the one
+    geometry here that cannot go through `_coordinates` — that reader would take
+    the first eight bytes of the X ordinate as a length. Every test below is
+    really about that, from a different angle.
+    """
+
+    def test_a_point_decodes_to_its_coordinate(self) -> None:
+        wkb = struct.pack("<BI", 1, 1) + np.array([(1.5, 2.5)], dtype="<f8").tobytes()
+        owners, plan = gdb.points(_layer("marks", [wkb]))
+
+        assert owners.tolist() == [0]
+        assert plan.tolist() == [[1.5, 2.5]]
+
+    def test_a_multipoint_yields_one_part_per_point(self) -> None:
+        parts = b"".join(
+            struct.pack("<BI", 1, 1) + np.array([xy], dtype="<f8").tobytes()
+            for xy in [(1.0, 2.0), (3.0, 4.0)]
+        )
+        wkb = struct.pack("<BII", 1, 4, 2) + parts
+        owners, plan = gdb.points(_layer("marks", [wkb]))
+
+        assert owners.tolist() == [0, 0]
+        assert plan.tolist() == [[1.0, 2.0], [3.0, 4.0]]
+
+    def test_rows_keep_their_owner_mapping(self) -> None:
+        rows = [
+            struct.pack("<BI", 1, 1) + np.array([(1.0, 1.0)], dtype="<f8").tobytes(),
+            struct.pack("<BI", 1, 1) + np.array([(2.0, 2.0)], dtype="<f8").tobytes(),
+        ]
+        owners, plan = gdb.points(_layer("marks", rows))
+
+        assert owners.tolist() == [0, 1]
+        assert plan.tolist() == [[1.0, 1.0], [2.0, 2.0]]
+
+    def test_big_endian_wkb_decodes_to_the_same_coordinate(self) -> None:
+        wkb = struct.pack(">BI", 0, 1) + np.array([(1.5, 2.5)], dtype=">f8").tobytes()
+        owners, plan = gdb.points(_layer("marks", [wkb]))
+
+        assert owners.tolist() == [0]
+        assert plan.tolist() == [[1.5, 2.5]]
+
+    def test_a_z_point_is_strided_past_not_misread(self) -> None:
+        """The X and Y that come back are the X and Y, not X and Z.
+
+        The failure this rules out is the one `polylines` was bitten by before
+        `Q57`: a reader striding 16 bytes through a 24-byte point returns
+        coordinates that are wrong without being obviously wrong.
+        """
+        wkb = struct.pack("<BI", 1, 1001) + np.array([(1.0, 2.0, 99.0)], dtype="<f8").tobytes()
+        _, plan = gdb.points(_layer("marks", [wkb]))
+
+        assert plan.tolist() == [[1.0, 2.0]]
+
+    def test_the_old_ogc_high_bit_also_marks_a_z_point(self) -> None:
+        """GDAL's export writes the high-bit dialect, so this is the one that
+        actually arrives from pyogrio."""
+        wkb = (
+            struct.pack("<BI", 1, 0x8000_0001) + np.array([(1.0, 2.0, 99.0)], dtype="<f8").tobytes()
+        )
+        _, plan = gdb.points(_layer("marks", [wkb]))
+
+        assert plan.tolist() == [[1.0, 2.0]]
+
+    def test_a_multipoint_may_mix_byte_orders_between_parts(self) -> None:
+        little = struct.pack("<BI", 1, 1) + np.array([(1.0, 2.0)], dtype="<f8").tobytes()
+        big = struct.pack(">BI", 0, 1) + np.array([(3.0, 4.0)], dtype=">f8").tobytes()
+        wkb = struct.pack("<BII", 1, 4, 2) + little + big
+        _, plan = gdb.points(_layer("marks", [wkb]))
+
+        assert plan.tolist() == [[1.0, 2.0], [3.0, 4.0]]
+
+    def test_a_linestring_where_a_point_was_expected_is_refused(self) -> None:
+        wkb = struct.pack("<BII", 1, 2, 0)
+        with pytest.raises(gdb.GeometryError, match="expected a point"):
+            gdb.points(_layer("marks", [wkb]))
+
+    def test_m_ordinates_are_still_refused_on_the_point_path(self) -> None:
+        for kind in (2001, 3001, 0x4000_0001):
+            wkb = struct.pack("<BI", 1, kind) + b"\x00" * 32
+            with pytest.raises(gdb.GeometryError, match="M ordinates"):
+                gdb.points(_layer("marks", [wkb]))
+
+    def test_an_empty_point_is_passed_through_rather_than_refused(self) -> None:
+        """⚠️ `POINT EMPTY` is spelled NaN in WKB, and the decoder is not where
+        that judgement belongs — this module knows the container and nothing
+        about what is in it. `arrows.py` counts them as `empty_geometry`."""
+        wkb = struct.pack("<BI", 1, 1) + np.array([(np.nan, np.nan)], dtype="<f8").tobytes()
+        _, plan = gdb.points(_layer("marks", [wkb]))
+
+        assert np.isnan(plan).all()
+
+
 class TestPolylines:
     def test_a_linestring_decodes_to_its_coordinates(self) -> None:
         points = [(1.5, 2.5), (3.0, 4.0), (5.0, 6.0)]
