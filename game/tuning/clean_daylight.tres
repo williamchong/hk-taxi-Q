@@ -77,6 +77,28 @@ glow_levels/2 = 0.6
 glow_levels/3 = 1.0
 glow_levels/4 = 0.6
 glow_levels/5 = 0.2
+; ⚠️ **A contrast pivot is a black-clipper, not a dimmer.** Godot pivots about
+; mid-grey — `v' = (v - 0.5) * contrast + 0.5` — which extrapolates past the
+; endpoints, so at 1.14 every value below sRGB **15.7/255 lands on exactly 0**
+; and the information in it is gone. `Q31` measured the consequence and it was
+; the dominant term in the city's value distribution, ahead of ambient, glow,
+; fog, the tonemap and the palette. 1.14 → 1.00 lifts the shadow mass **+6.1
+; `L*`** on all three frames it was failing on — `kerb` 4.42 → 10.51, `taxi`
+; t01.20 4.59 → 10.67, chase t03.00 4.32 → 10.37.
+;
+; ⚠️ **Do not quote `Q31`'s 51.3% → 0.9% as the expected result.** Re-shot on
+; this build the same change gives 51.0% → **29.0%**, and neither number is
+; wrong: the lifted mass lands within half a point of the `L*` 10 band edge, so
+; a band share on a near-constant surface is a coin toss. That fragility is
+; `Q31`'s own argument for grading **within-mass sd** instead — which barely
+; moves here (0.92 → 0.99), because the lift is a translation. **The shaded road
+; is still flat, and no setting of this dial can change that**: it is one
+; flat-shaded surface of uniform albedo and normal under uniform ambient, and no
+; monotone function of a constant produces variation. That wants the
+; sky-visibility bake, `Q39`.
+;
+; `adjustment_enabled` stays `true` — `adjustment_saturation` is still 1.1, so
+; this is not a no-op block to switch off.
 adjustment_enabled = true
-adjustment_contrast = 1.14
+adjustment_contrast = 1.0
 adjustment_saturation = 1.1

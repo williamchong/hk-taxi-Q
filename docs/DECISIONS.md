@@ -53,7 +53,7 @@ lives in git. This file holds *why things are the way they are*.
 | `Q28` | A per-object seed must be `flat`, or the GPU interpolates it into bands | ✅ Closed |
 | `Q29` | The ground's normals are rebuilt in the fragment stage | ✅ Closed |
 | `Q30` | The shipped façade palette is not the one `ART_DESIGN.md` authorises | 🔴 Open |
-| `Q31` | The city's value range has an empty middle; the shadow fill is the last candidate | 🔴 Open |
+| `Q31` | The city's value range has an empty middle; the shadow fill is the last candidate | 🟡 Open — **the tone curve shipped at 1.00** (2026-08-20), lifting the shadow mass +6.1 `L*`; the mass is still flat (sd 0.92 → 0.99) and the sky-visibility bake is the remainder |
 | `Q32` | ~~`INFRASTRUCTURE` is the brightest large object in its frame~~ | 🟢 Closed as **wrong** |
 | `Q33` | Every authored colour is `material reflectance × exposure_anchor` | ✅ Closed |
 | `Q34` | Material is declared in a `materials:` table, not implied from height | ✅ Closed |
@@ -1612,7 +1612,37 @@ normal under uniform ambient — a constant. No monotone function of a constant 
 any setting. `Q39` is the second consumer. `P3-9a` should carry the bake, and the acceptance test
 should be **within-mass sd, not band share**.
 
-⚠️ **Nothing was shipped.** `clean_daylight.tres` is restored byte-for-byte.
+✅ **`adjustment_contrast = 1.00` shipped on 2026-08-20**, on the user's instruction, after the
+frame was reported as "everything is so dark" from the chase camera — a fourth frame, and not one of
+the audit viewpoints. Re-measured before and after on `kerb`, `taxi` t01.20 and chase t03.00, each
+shot twice and byte-identical on both sides:
+
+| frame | under `L*` 10 | 10–30 | shadow-mass `L*` | mass sd |
+|---|---|---|---|---|
+| `kerb` 1.14 | 51.0% | 2.8% | 4.42 | **0.92** |
+| `kerb` **1.00** | 29.0% | 24.7% | 10.51 | **0.99** |
+| `taxi` t01.20 1.14 | 27.1% | 59.9% | 4.59 | **0.63** |
+| `taxi` t01.20 **1.00** | 6.1% | 33.3% | 10.67 | **0.73** |
+| chase t03.00 1.14 | 18.7% | 64.2% | 4.32 | **0.49** |
+| chase t03.00 **1.00** | 7.3% | 17.7% | 10.37 | **0.52** |
+
+🔴 **The published 51.3% → 0.9% did not reproduce, and the discrepancy is this question's own thesis
+arriving as evidence.** The re-shoot gives 51.0% → **29.0%**. Both are correct measurements: the
+lifted mass lands at `L*` 10.51 here and 10.99 there, straddling the band edge from either side. A
+near-constant surface sitting within half a point of a threshold makes the band share a coin toss —
+which is exactly why this question already argues band share is the wrong acceptance test. **Quote
+the shadow-mass `L*` and the within-mass sd; do not quote the band share.**
+
+✅ **The mass sd column confirms the finding above rather than overturning it.** 0.92 → 0.99, 0.63 →
+0.73, 0.49 → 0.52. The shaded road lifts out of the crush and stays flat, so the sky-visibility bake
+is still the whole of what is left, and `Q39` is still queued behind it. **This ships the half that a
+uniform lever can deliver and closes nothing.**
+
+⚠️ **The drive scene is not frame-stable, contrary to `run-hk-taxi-q`'s determinism claim.**
+`t04.50` differs between two consecutive identical runs by 55% of pixels, max channel delta 251, and
+even `t01.20` returned one outlier in four runs at whole-frame `L*` 54.7 against 26.9 for the other
+three. The preview viewpoints are byte-identical as documented. **Grade drive-scene frames on a
+repeat-until-consensus basis, and never on a single shot.**
 
 ✅ **The wait this paragraph imposed is over, and it was never necessary.** It read: "the tone curve
 is the thing three drivers are about to judge `Q26` through, and moving it now would change the thing
