@@ -945,17 +945,28 @@ Under braking the lens goes `L* 2.29 → 72.72` and reads instantly; coasting it
 which is what an unlit brake lamp is supposed to be.
 
 **The lamps switch, and the payload is the other half of the marker.** `UV.x` — reserved and zero
-since `P3-11c` — carries a circuit id per lens: brake, reverse, an indicator per side, and since
-`P3-11e` the two front pairs. `vehicle_lamps.gd` decides which are live and writes them **per
+since `P3-11c` — carries a circuit id per lens: brake, reverse, an indicator per side, since
+`P3-11e` the two front pairs, and since `P3-11f` the roof sign. `vehicle_lamps.gd` decides which are live and writes them **per
 instance**, because the body material is shared by the whole roster and one car braking must not
 brake the rest. Eight circuits now, across two `instance uniform` vectors — `lamp_lit` is a `vec4`
 and the ordering runs straight on into `lamp_front`.
 
-⚠️ **The rear lamps read the car; the front lamps read the light.** Brake, reverse and the
-indicators answer to what the driver is doing. The side lamps and main beams answer to where the car
-*is* — shade, or no sky overhead — because on this car there is nobody to flick a switch. Two lens
+⚠️ **The rear lamps read the car; the front lamps read the light; the roof sign reads neither.**
+Brake, reverse and the indicators answer to what the driver is doing. The side lamps and main beams
+answer to where the car *is* — shade, or no sky overhead — because on this car there is nobody to
+flick a switch. The sign answers to whether the taxi is in service, which nothing simulates yet, so
+it is held on and is deliberately kept **off** the light ladder — a for-hire sign that goes out in
+the sun is not a subtler sign, it is a wrong one. Two lens
 pairs rather than one lens at two brightnesses: a lens under the 1.0 glow threshold carries no
-bloom, and bloom is the whole difference at chase-camera distance. The side lamps stay lit beneath
+bloom, and bloom is the whole difference at chase-camera distance.
+
+⚠️ **That threshold is the same argument the roof sign turns around, and the two are not in
+conflict.** A dim headlamp is a *worse headlamp* — the pair has to be told apart from the pair below
+it, and without bloom it reads as a weak main beam rather than as a different lamp. A sign is not a
+source at all: it is a lit surface, and bloom is what makes it read as a lamp bolted to the roof.
+Shipped full first and reported as exactly that, so `sign_lit` runs at **0.45** — under the
+`0.63` where `lamp_emission` 1.6 crosses the threshold. Same dial, opposite brief. `DECISIONS.md`
+`P3-11f`. The side lamps stay lit beneath
 the beams, so the nose gains a lamp rather than swapping one.
 
 ⚠️ **Emission is the lens's hue at a fixed intensity, not its albedo scaled.** An unlit lens is dark

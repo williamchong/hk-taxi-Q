@@ -4413,6 +4413,81 @@ streamer is still instancing tiles across the hold window and 41% of the frame c
 
 **See.** `P3-11d` · `P3-11c` · `Q21` · `Q26` · `ART_DESIGN.md` "Vehicles"
 
+## `P3-11f` — The roof sign lights, and it is the one lens that must not bloom
+
+**Claim.** The box on the taxi's roof is a switched lens on `CIRCUIT_ROOFSIGN` (7), held on, and it
+burns at **0.45** of what every other lens on the car burns at. Asked for by the user, along with a
+shorter indicator hold.
+
+**No new geometry, and that is the shape of the change.** `taxi_body.glb` is the same **604
+triangles** it has been since `P3-11d`; the sign was already lofted and was already carrying
+`CIRCUIT_NONE`, which is a valid value meaning *never lights*. What moved is `UV.x` and `UV.y` on the
+vertices that were already there — the same "only `UV.x` moved" change `P3-11e` was. The payload was
+not widened either: `lamp_front` had two channels spare and this spends one, so the shader's
+out-of-range guard and `CIRCUIT_COUNT` are untouched.
+
+**⚠️ It is a lens by *name*, and the roof sign is the case that shows why the rule exists.** The box
+wears `LAMP`, and so do both registration plates — a colour rule marks a matte plate as an
+illuminated one, which is the collision `Q43` records on the facades and the reason `LAMP_PARTS`
+matches on part names. `sign` is the first entry there that is a whole name rather than a side
+prefix, so anything the generator later builds whose name starts with `sign` joins the circuit
+silently. `test_the_roof_sign_is_the_only_thing_lit_above_the_roof` bounds it by geometry instead:
+circuit 7 is the box on the roof and nothing else is switched above the roof line.
+
+**⚠️ The `SILVER` cap comes with it, deliberately.** `COLOUR_MARKERS` claims `SILVER` for
+`MARKER_TRIM` and `LAMP_PARTS` overrides it, so the cap is a lens too. Both halves of that are
+wanted: a lit sign is a translucent box rather than a panel with a lid, and the shader normalises a
+lens's hue before burning it, so a near-neutral cap and the cream flanks land within a shade of each
+other lit. Unlit, the cap trades a roughness and a reflection strength and no colour at all.
+"Fixing" the precedence would leave a lit box with a dark lid on it, which reads as a shading bug
+rather than as a wiring one and would be chased in the shader for a while.
+
+**⚠️ Shipped at full level first, and it was reported as a headlamp bolted to the roof — correctly.**
+`lamp_emission` is 1.6 against `clean_daylight.tres`'s glow threshold of 1.0, so a lens at level 1.0
+carries a halo. That bloom is the whole reason the tail lamps read as lamps rather than as paint
+(`P3-11d` prices it), and it is exactly what a roof sign must not have: a sign is a lit *surface*,
+not a source. Under about **0.63** the emission lands below the threshold and the sign brightens
+without glowing — "merely a brighter swatch" by the shader's own note, which is a fault for a lamp
+and the entire brief for a sign.
+
+Measured under the HKCEC deck, same seeded run, same frame `t03.00`, one variable changed:
+
+| `sign_lit` | sign core sRGB | peak luminance | bloom pixels |
+|---|---|---|---|
+| 1.00, as first shipped | (224.7, 226.8, 227.0) | 249.8 | 1,193 |
+| **0.45, shipped** | (207.2, 209.3, 205.3) | **238.5** | **463** |
+
+In open sun the same change takes the sign from a clipped white blob with a visible ring to a flat
+cream panel; the sunlit numbers are **not quoted**, because the only box that contains the sign
+there also contains sky and road and the halo count is confounded by both.
+
+**⚠️ A level, not a switch, and it is not a dimmer for daylight.** The obvious next move is to scale
+this with `_lighting` so the sign is subtler in sun — and that is refused, because it would put the
+sign back on the light ladder. The two front circuits answer to the light; this one answers to
+whether the car is in service, which nothing simulates yet. Wiring it to `Lighting` would make a
+taxi's for-hire sign go out when it drove into the sun.
+
+**The indicator hold is 0.5 s → 0.3 s, on the user's call** — the lamp read as late from the chase
+camera. `P3-11d` bought that 0.5 s against the tail strobing through every correction, and the trade
+is real but it was never the only guard: `steer_threshold` refuses a correction on **amplitude**,
+which is what makes the hold shortenable at all. What 0.2 s costs is that a flick round a parked
+lorry now has to be shorter than a third of a second to stay dark.
+
+Verified by rendering the same seeded run at both values and diffing the frames — the two builds are
+byte-identical at `t=2.25` and `t=2.70` and differ at `t=2.40`, `t=2.55` and `t=2.85`, which is the
+first flash arriving 0.2 s early and thereafter a 0.2 s phase offset on a 1.5 Hz flasher. At `t=2.40`
+and `t=2.55` the 0.3 build is lit where the 0.5 build is dark. ⚠️ **A raw amber-pixel count does not
+show this and was discarded**: the indicator lens is amber *unlit*, and so is the registration plate,
+so the count climbs with the car's size on screen whatever the lamps are doing. The A/B diff is what
+isolates the lamp.
+
+**See.** `P3-11d` for the circuit payload and the emission dial this is a fraction of · `P3-11e` for
+the second vector and the light ladder this deliberately stays off · `Q43` for colour-is-not-
+materiality · `_plates` in the generator for why the sign is blank — the taxi ships untextured and a
+bitmap font is the one thing no amount of triangles reaches, which is a different constraint from
+hard rule 8's ban on rendered text
+
+
 ## `BeamBudget` — the eight spot lights are rationed by distance, not by pair order
 
 **Status.** ✅ Shipped 2026-08-18 · **Owner.** `P3-11e` → `P3-3`

@@ -180,9 +180,13 @@ uniform float lamp_emission : hint_range(0.0, 8.0) = 1.6;
 // the original one, and `Q50` retired it.
 instance uniform vec4 lamp_lit = vec4(0.0);
 
-// Circuits 5-8, in the same ordering: x side lamps, y head lamps, z and w
-// unwired. The car's *front* lamps, and they are in a second vector for one
-// reason only — `lamp_lit` is a `vec4` and its four channels were spent.
+// Circuits 5-8, in the same ordering: x side lamps, y head lamps, z the roof
+// sign, w unwired. Mostly the car's *front* lamps, and they are in a second
+// vector for one reason only — `lamp_lit` is a `vec4` and its four channels
+// were spent. ⚠️ The roof sign is the channel that breaks that description, and
+// it is here because `z` was the next free slot rather than because it belongs
+// with the head lamps: it answers to whether the car is in service, not to the
+// light. The seam carries no meaning — see the note below.
 //
 // ⚠️ **A second `instance uniform` rather than a wider payload, and the split
 // is arbitrary.** Nothing about a side lamp belongs with a head lamp more than
@@ -191,7 +195,8 @@ instance uniform vec4 lamp_lit = vec4(0.0);
 // the list would silently move every lens behind it into the other vector.
 // `CIRCUIT_COUNT` is what the bounds guard reads, so that stays true either way.
 //
-// ⚠️ Two of these ship at zero and that is not spare capacity to raid casually:
+// ⚠️ One of these ships at zero — `w`, since the roof sign took `z` — and it is
+// not spare capacity to raid casually:
 // Godot caps instance uniforms per shader, and a third vector spends a slot on
 // a car that has run out of lenses to light long before it runs out of channels.
 instance uniform vec4 lamp_front = vec4(0.0);

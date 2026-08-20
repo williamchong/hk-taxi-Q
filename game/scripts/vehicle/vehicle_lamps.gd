@@ -5,7 +5,7 @@ extends Node3D
 ## The body is one merged primitive, so there is no lamp *node* to show or hide.
 ## `tools/make_vehicle.py` stamps each lens with a circuit id in `UV.x` and
 ## `vehicle_body.gdshader` lights the ones this script names — brake, reverse,
-## an indicator per side, and the two front circuits.
+## an indicator per side, the two front circuits, and the roof sign.
 ##
 ## The front lamps answer to the light rather than to the driver, because on
 ## this car there is nobody to flick a switch: side lamps in shade, main beams
@@ -102,12 +102,49 @@ const TURN_RELEASE: float = 0.75
 ## correction out of a drift, a lane change. Every one of those trips the
 ## threshold, and without a hold the tail of the car strobes amber through all of
 ## them, which is worse than no indicator at all: it stops meaning "turning".
-## Holding half a second keeps the lamp for the junctions it is about.
 ##
 ## The cost is that the lamp is late by exactly this much, which is fine — a real
 ## driver indicates before turning and this car indicates after, so it is already
 ## a read-out of what the car is doing rather than a signal of intent.
-@export_range(0.0, 3.0, 0.05) var steer_hold_s: float = 0.5
+##
+## ⚠️ **0.3 rather than the 0.5 this shipped at, on the user's call** — the lamp
+## read as late from the chase camera. That buys back 0.2 s of the lateness above
+## and spends it on the other side of the same trade: a flick round a parked
+## lorry now has to be shorter than a third of a second to stay dark, where it
+## had half a second before. What still refuses a straight-line correction is
+## `steer_threshold`, which rejects on *amplitude* rather than on duration — the
+## hold was never the only guard, which is why it can be shortened without the
+## indicators strobing.
+@export_range(0.0, 3.0, 0.05) var steer_hold_s: float = 0.3
+
+@export_group("Roof sign")
+
+## How hard the illuminated box on the roof burns.
+##
+## ⚠️ **The one circuit on this car that answers to neither the driver nor the
+## light, and that is what it is for.** A roof sign says the car is a taxi and
+## whether it is in service; it is not a read-out of steering, of the pedal, or
+## of whether the sky is shut out. Nothing simulates a hire state yet — there is
+## no fare system on the car — so it holds on, which is a taxi plying for hire.
+##
+## ⚠️ **A level rather than a switch, and the reason is the one thing every other
+## circuit here wants and this one must not have: bloom.** `lamp_emission` is 1.6
+## against `clean_daylight.tres`'s glow threshold of 1.0, so a lens driven to 1.0
+## carries a halo — which is what makes a brake lamp read as a lamp rather than
+## as paint, and is exactly what makes a roof sign read as a headlamp bolted to
+## the roof. Shipped full, in sun, it was reported as precisely that.
+##
+## Under about **0.63** the emission lands below the threshold and the sign
+## brightens without glowing, which the shader's own note calls "merely a
+## brighter swatch" — a fault for a lamp and the whole brief for a sign. 0.45
+## sits clear of the knee rather than on it, so the tonemap has room before the
+## halo comes back.
+##
+## ⚠️ **This is not the place to make the sign dimmer in daylight.** A level that
+## tracked `_lighting` would put the sign back on the light ladder, which is the
+## one thing the paragraph above refuses. Whatever ends up owning the hire state
+## writes this; the sun does not.
+@export_range(0.0, 1.0, 0.05) var sign_lit: float = 0.45
 
 @export_group("Light probe")
 
@@ -474,7 +511,12 @@ func _physics_process(delta: float) -> void:
 
 	_settle(delta)
 	# `CIRCUIT_*` order less one again, continuing into the second vector:
-	# x side lamps, y head lamps, z and w unwired.
+	# x side lamps, y head lamps, z the roof sign, w unwired.
+	#
+	# ⚠️ **`z` holds the roof sign because `z` was free, not because the sign is a
+	# front lamp.** The two below are the light ladder; the sign is not on it and
+	# must not be folded onto it — see `sign_lit`. The shader says the same thing
+	# about the seam between the two vectors being arbitrary.
 	#
 	# ⚠️ **The side lamps stay lit under the main beams rather than handing over
 	# to them**, which is both what a car does — position lamps do not go out
@@ -484,7 +526,7 @@ func _physics_process(delta: float) -> void:
 	var front := Vector4(
 		1.0 if _lighting != Lighting.SUN else 0.0,
 		1.0 if _lighting == Lighting.DARK else 0.0,
-		0.0,
+		sign_lit,
 		0.0,
 	)
 	_body.set_instance_shader_parameter(PARAMETER_FRONT, front)

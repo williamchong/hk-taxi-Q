@@ -44,6 +44,7 @@ from make_vehicle import (
     CIRCUIT_INDICATOR_R,
     CIRCUIT_NONE,
     CIRCUIT_REVERSE,
+    CIRCUIT_ROOFSIGN,
     CIRCUIT_SIDELAMP,
     DARK,
     DEEP_RED,
@@ -84,6 +85,9 @@ SHIPPED = ROOT / "game" / "assets" / "authored" / "vehicles"
 # `ART_DESIGN.md`'s ceiling for one vehicle.
 TRIANGLE_CEILING = 2000
 PALETTE = (RED, SILVER, DARK, GLASS, LAMP, AMBER, BADGE_GREEN, DEEP_RED)
+# How far off the roof line counts as clear of it. Smaller than anything the
+# generator builds and larger than the loft's own float error.
+ROOF_EPS_M = 1e-4
 
 
 def _rgbs(mesh: MeshData, where: np.ndarray | None = None) -> set[Colour]:
@@ -96,6 +100,18 @@ def _rgbs(mesh: MeshData, where: np.ndarray | None = None) -> set[Colour]:
     assert mesh.colours is not None, f"{mesh.name} carries no colours"
     rgb = mesh.colours[:, :3] if where is None else mesh.colours[where, :3]
     return {tuple(int(channel) for channel in row) for row in np.unique(rgb, axis=0)}
+
+
+def _above_roof(mesh: MeshData) -> np.ndarray:
+    """The vertices strictly above the roof panel, which is the roof sign alone.
+
+    `ROOF_EPS_M` is what makes "strictly": the sign's bottom ring sits *on*
+    `roof_y_m`, and so does the roof it stands on, so an inclusive test selects
+    the panel as well and every claim about the sign becomes a claim about the
+    roof. Two tests in two classes ask this, and the tolerance belongs with the
+    question rather than copied beside each of them.
+    """
+    return mesh.positions[:, 1] > Proportions().roof_y_m + ROOF_EPS_M
 
 
 def _tres_float(text: str, field: str) -> float:
@@ -894,13 +910,18 @@ class TestSurfaceMarkers:
             "the red tail lens is being marked as bodywork"
         )
 
-    def test_the_plates_and_the_roof_sign_are_not_lenses(self, meshes: list[MeshData]) -> None:
+    def test_the_plates_are_not_lenses(self, meshes: list[MeshData]) -> None:
         """⚠️ **The regression this design was corrected for.** The first pass
         marked by colour alone, and `LAMP` and `AMBER` are also the front and
-        rear registration plates and the roof sign — so a matte plate was being
-        handed a lens's gloss. Colour is not materiality, which is the same
-        collision `Q43` records on the facades under two predicates wearing one
-        name."""
+        rear registration plates — so a matte plate was being handed a lens's
+        gloss. Colour is not materiality, which is the same collision `Q43`
+        records on the facades under two predicates wearing one name.
+
+        ⚠️ The roof sign used to be named here too and no longer is: it *is* a
+        lens, wired to `CIRCUIT_ROOFSIGN`. The `.any()` is older than that and is
+        not a consequence of it — `LAMP` has always been worn by the headlamps
+        and `AMBER` by the indicators, so neither swatch was ever wholly matte
+        and the question was always whether *some* of it is."""
         body = meshes[0]
         assert body.colours is not None
         markers = self._markers(body)
@@ -909,6 +930,34 @@ class TestSurfaceMarkers:
             assert (markers[worn] == MARKER_PAINT).any(), (
                 f"every {name} vertex is marked as a lens — the plates are being over-marked"
             )
+
+    def test_the_roof_sign_is_a_lens_all_the_way_over_its_cap(self, meshes: list[MeshData]) -> None:
+        """The sign is the only lens above the *roof* line, so height finds it
+        without needing the part back out of the merge. ⚠️ Not the belt line —
+        `taillamp_high_brake` is a lens too and `_high_brake_lamp` seats it
+        strictly between `belt_y_m` and `glass_top_y_m`, so relaxing this
+        threshold to the belt would pull the backlight strip in with it.
+
+        ⚠️ **The cap is what this is really holding.** `SILVER` is the one swatch
+        `COLOUR_MARKERS` claims for `MARKER_TRIM`, and `LAMP_PARTS` overrides it
+        — so a reader who "fixed" that precedence would leave a lit box with a
+        dark lid on it, which reads as a shading bug rather than as a wiring one
+        and would be chased in the shader for a while."""
+        body = meshes[0]
+        assert body.colours is not None
+        markers = self._markers(body)
+        aloft = _above_roof(body)
+        assert aloft.any(), "nothing sits above the roof — the sign has gone"
+        assert np.all(markers[aloft] == MARKER_LAMP), (
+            "part of the roof sign is not marked as a lens"
+        )
+        # The cap specifically, which is the vertex the precedence decides. That
+        # `SILVER` is still up there is not the claim — that it is a lens is.
+        cap = aloft & np.all(body.colours[:, :3] == np.array(SILVER, dtype=np.uint8), axis=1)
+        assert cap.any(), "the sign has lost its cap swatch"
+        assert np.all(markers[cap] == MARKER_LAMP), (
+            "the sign's cap took MARKER_TRIM from its colour — LAMP_PARTS is no longer overriding"
+        )
 
 
 class TestLampCircuits:
@@ -964,6 +1013,7 @@ class TestLampCircuits:
             CIRCUIT_INDICATOR_R,
             CIRCUIT_SIDELAMP,
             CIRCUIT_HEADLAMP,
+            CIRCUIT_ROOFSIGN,
         }
 
     def test_no_circuit_outruns_the_shader_payload(self, meshes: list[MeshData]) -> None:
@@ -1013,6 +1063,27 @@ class TestLampCircuits:
         left from right: a one-sided white lamp is a blown bulb, not a signal."""
         for circuit in (CIRCUIT_SIDELAMP, CIRCUIT_HEADLAMP):
             self._assert_cluster(meshes[0], circuit, {LAMP}, front=True)
+
+    def test_the_roof_sign_is_the_only_thing_lit_above_the_roof(
+        self, meshes: list[MeshData]
+    ) -> None:
+        """⚠️ **The failure this catches is a lens that renders perfectly.**
+        `LAMP_PARTS` gained a whole part name rather than a side prefix for the
+        roof sign, so anything the body later builds whose name starts with
+        `sign` joins the circuit silently — a well-formed file, a clean import,
+        and a second thing on the car glowing whenever the taxi is in service.
+        Bounded by geometry instead: circuit 7 is the box on the roof and
+        nothing else, and no other circuit reaches above the roof line."""
+        body = meshes[0]
+        circuits = self._circuits(body)
+        sign = circuits == CIRCUIT_ROOFSIGN
+        assert np.all(body.positions[sign, 1] >= Proportions().roof_y_m - ROOF_EPS_M), (
+            f"circuit {CIRCUIT_ROOFSIGN} reaches below the roof"
+        )
+        aloft = _above_roof(body)
+        assert set(circuits[aloft].tolist()) == {CIRCUIT_ROOFSIGN}, (
+            "something other than the roof sign is switched above the roof"
+        )
 
     def test_the_side_lamps_sit_below_the_main_beams(self, meshes: list[MeshData]) -> None:
         """⚠️ **The two front circuits are two different lamps, and this is what

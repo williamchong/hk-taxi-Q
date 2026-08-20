@@ -146,10 +146,14 @@ MARKER_TRIM = 3.0
 # could split it.
 #
 # ⚠️ **Only the two unambiguous swatches are here, and the omissions are the
-# point.** `LAMP` and `AMBER` are *also* the registration plates and the roof
-# sign, so a colour rule marks a matte plate as a lamp lens — colour is not
+# point.** `LAMP` and `AMBER` are *also* the front and rear registration plates,
+# so a colour rule marks a matte plate as a lamp lens — colour is not
 # materiality, the same collision `Q43` records on the facades under two
 # predicates wearing one name. Those parts are marked by name below.
+#
+# ⚠️ The roof sign wears `LAMP` too and *is* a lens, which is the same collision
+# read from the other end: no colour rule can separate it from the plate it
+# shares a swatch with, in either direction. `LAMP_PARTS` decides both.
 COLOUR_MARKERS: dict[Colour, float] = {
     GLASS: MARKER_GLASS,
     SILVER: MARKER_TRIM,
@@ -158,7 +162,14 @@ COLOUR_MARKERS: dict[Colour, float] = {
 # Parts whose every vertex is a lamp lens, whatever colour it is wearing. Name
 # is the authority here: the tail cluster's bottom lens is `RED` on `RED`
 # bodywork, and the plates share their swatches with the lenses.
-LAMP_PARTS = ("headlamp_", "indicator_", "foglamp_", "taillamp_")
+#
+# ⚠️ **`sign` is the roof sign, and it is here for exactly the reason the tail
+# cluster is.** It wears `LAMP`, which the registration plates also wear, so no
+# colour rule can tell an illuminated box from a matte plate — the collision
+# `COLOUR_MARKERS` above is written around. It is the only entry that is a whole
+# part name rather than a side prefix, and that is safe only while nothing else
+# the body builds starts with `sign`.
+LAMP_PARTS = ("headlamp_", "indicator_", "foglamp_", "taillamp_", "sign")
 
 # Which switched circuit a lens is wired to, shipped in `UV.x` and read by
 # `vehicle_body.gdshader`. `MARKER_LAMP` says a surface is a lens; this says
@@ -181,6 +192,11 @@ CIRCUIT_INDICATOR_L = 3.0
 CIRCUIT_INDICATOR_R = 4.0
 CIRCUIT_SIDELAMP = 5.0
 CIRCUIT_HEADLAMP = 6.0
+# The roof sign. Seventh rather than folded in with the front lamps because it
+# answers to a different question: the two above are a read-out of the *light*,
+# and this one is a read-out of whether the car is in service. Nothing simulates
+# that yet, so `vehicle_lamps.gd` holds it on — see `sign_lit` there.
+CIRCUIT_ROOFSIGN = 7.0
 
 # ⚠️ **Left and right are separate circuits, and that is the whole point of
 # indicators** — one amber circuit would flash both flanks, which is a hazard
@@ -221,6 +237,7 @@ LAMP_CIRCUITS: dict[str, float] = {
     "taillamp_l_brake": CIRCUIT_BRAKE,
     "taillamp_r_brake": CIRCUIT_BRAKE,
     "taillamp_high_brake": CIRCUIT_BRAKE,
+    "sign": CIRCUIT_ROOFSIGN,
 }
 
 
@@ -838,6 +855,14 @@ def taxi_body(chassis: Chassis, shape: Proportions) -> MeshData:
     # Roof sign, raked rather than a plain cuboid: narrower and shorter at the
     # top, which is the profile the real fitting has and what stops it reading
     # as a white brick. Blank — see `_plates` for why no lettering survives.
+    #
+    # ⚠️ **The whole box is one switched lens, cap included, and the `SILVER` top
+    # is not an oversight.** `LAMP_PARTS` marks by part, so the cap comes with it
+    # — which is right twice over: a lit sign is a translucent box rather than a
+    # panel with a lid, and the shader normalises a lens's hue before it burns
+    # it, so a near-neutral cap and the cream flanks land within a shade of each
+    # other lit. Unlit, the cap trades `MARKER_TRIM` for `MARKER_LAMP`, which is
+    # a roughness and a reflection strength and no colour at all.
     sign_z = shape.sign_z_m
     parts.append(
         loft(
