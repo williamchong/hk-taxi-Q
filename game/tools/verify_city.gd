@@ -20,6 +20,7 @@ const GeneratedFares = preload("res://scripts/city/generated_fares.gd")
 const GeneratedLandmarks = preload("res://scripts/city/generated_landmarks.gd")
 const GeneratedRoadGraph = preload("res://scripts/city/generated_road_graph.gd")
 const GeneratedRoadSurface = preload("res://scripts/city/generated_road_surface.gd")
+const GeneratedTramway = preload("res://scripts/city/generated_tramway.gd")
 const Manifest = preload("res://scripts/city/city_manifest.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
@@ -90,6 +91,16 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 	problems.append_array(
 		_check_document("landmarks", manifest.landmarks_path, GeneratedLandmarks.PATH)
 	)
+	# ⚠️ **Guarded, because this one is optional and the others are not.** A city
+	# whose estate publishes no tramway names `null` and ships none (`P3-14`),
+	# so an empty path is the honest answer rather than a missing file. What the
+	# guard must not do is let a *named* tramway go unchecked: `verify_tramway.gd`
+	# treats an absent asset as a pass, so without this a manifest naming
+	# `tram.glb` with the file gone would pass every check in the repo.
+	if not manifest.tramway_path.is_empty():
+		problems.append_array(
+			_check_document("tramway", manifest.tramway_path, GeneratedTramway.PATH)
+		)
 	return problems
 
 

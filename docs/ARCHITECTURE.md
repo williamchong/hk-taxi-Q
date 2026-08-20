@@ -818,6 +818,11 @@ escapes it because its marking codes reach 2,097,151, and this mesh does not esc
 read off `TEXCOORD_0` is read off a quantised copy — the first `verify_tramway.gd` reported the
 tramway starting at **-0.009 m** against an exact float32 zero.
 
+⚠️ **`tramway.json` publishes the join's own grade, and the useful field is not the obvious one.**
+`off_gauge_stations` — the stations the trim threw away — plus `pairs` against `tracks` is what sees
+a pair joined across two tracks. `drawn_gauge_m` is bounded by `pair_tolerance_m` by construction and
+cannot read outside it. `Q58`.
+
 ⚠️ **The class is shipped rather than derived.** Inferring it from strip width works today and
 inverts the day `rail_width_m` and `bed_width_m` converge; inferring it from vertex colour makes the
 `materials:` table load-bearing for shading rather than for colour.

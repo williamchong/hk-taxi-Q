@@ -1,11 +1,11 @@
 ## Where the ETL's tramway lives, and how to load it.
 ##
-## The fourth of these, for the same reason as `generated_road_surface.gd`: two
+## The fifth of these, for the same reason as `generated_road_surface.gd`: two
 ## things want the tramway for different purposes — the preview draws it,
 ## `verify_tramway.gd` checks it — and a moved path that only one of them learns
 ## about fails silently in the other.
 ##
-## ⚠️ **Unlike the other three, this one may legitimately not be there.** A city
+## ⚠️ **Unlike the other four, this one may legitimately not be there.** A city
 ## whose estate publishes no tramway ships none, and `city.json` names `null`
 ## rather than a path (`P3-14`). So absence is a state to report, not a failure
 ## to push a warning about — which is why `missing_hint` is only ever used by a

@@ -152,10 +152,16 @@ class TestTrackCentres:
     def test_the_centreline_sits_half_a_gauge_from_each_rail(self, spec) -> None:
         left, right = rail(0.0, 100.0, 0.0), rail(0.0, 100.0, GAUGE_M)
 
-        runs = _track_centres(left, right, spec)
+        runs, rejected, tested = _track_centres(left, right, spec)
 
         assert len(runs) == 1
-        assert np.allclose(runs[0][0][:, 2], GAUGE_M * 0.5)
+        assert rejected == 0
+        assert tested == len(left)
+        spine, gauges = runs[0]
+        assert np.allclose(spine[:, 2], GAUGE_M * 0.5)
+        # The gauge comes back per station, from the half-offset the trim
+        # already computed rather than measured again afterwards.
+        assert np.allclose(gauges, GAUGE_M)
 
     def test_a_track_is_trimmed_to_where_both_rails_run(self, spec) -> None:
         """⚠️ **The defect `drawn_gauge_m` caught, and a frame would not.**
@@ -167,12 +173,16 @@ class TestTrackCentres:
         """
         left, right = rail(0.0, 100.0, 0.0), rail(0.0, 40.0, GAUGE_M)
 
-        runs = _track_centres(left, right, spec)
+        runs, rejected, _ = _track_centres(left, right, spec)
 
         assert len(runs) == 1
         spine, _ = runs[0]
         assert spine[:, 0].max() <= 45.0
         assert np.allclose(spine[:, 2], GAUGE_M * 0.5)
+        # ⚠️ The rejected count is what the manifest publishes as the join's
+        # detector — `drawn_gauge_m` cannot see this, because every station it
+        # reports is one the trim already accepted.
+        assert rejected > 0
 
     def test_a_pair_that_parts_and_rejoins_is_two_runs(self, spec) -> None:
         """A crossover swings away from the gauge and comes back.
@@ -186,9 +196,10 @@ class TestTrackCentres:
         swung = (right[:, 0] >= 40.0) & (right[:, 0] <= 60.0)
         right[swung, 2] = 4.0
 
-        runs = _track_centres(left, right, spec)
+        runs, rejected, _ = _track_centres(left, right, spec)
 
         assert len(runs) == 2
+        assert rejected > 0
 
     def test_rails_with_different_station_counts_still_join(self, spec) -> None:
         """The two rails of a track are digitised independently — 28 stations
@@ -196,15 +207,44 @@ class TestTrackCentres:
         them vertex-for-vertex shears across the four-foot."""
         left, right = rail(0.0, 100.0, 0.0, step=4.0), rail(0.0, 100.0, GAUGE_M, step=7.0)
 
-        runs = _track_centres(left, right, spec)
+        runs, _, _ = _track_centres(left, right, spec)
 
         assert len(runs) == 1
-        spine, run = runs[0]
+        spine, gauges = runs[0]
         # Sampled on `left`, so the two agree by construction. One station short
         # of the whole rail: `right`'s coarser step ends at 98, so `left`'s
         # station at 100 has no partner abreast of it and is correctly trimmed.
-        assert len(spine) == len(run) == len(left) - 1
+        assert len(spine) == len(gauges) == len(left) - 1
         assert np.allclose(spine[:, 2], GAUGE_M * 0.5, atol=1e-6)
+
+
+class TestGaugeMetric:
+    """⚠️ **What `drawn_gauge_m` can and cannot see**, pinned because the record
+    got this wrong once: the metric was published as the detector for a
+    mis-paired join, and the trim had already made that impossible."""
+
+    def test_a_cross_track_pairing_yields_no_run_rather_than_a_wide_gauge(self, spec) -> None:
+        """2.597 m is the measured separation between two *tracks* (`Q58`). Every
+        station is outside the tolerance, so the trim rejects all of them —
+        which surfaces as zero runs and as `off_gauge_stations`, never as a
+        gauge reading 2.6 m, because a rejected station never reaches the gauge.
+        """
+        left, right = rail(0.0, 100.0, 0.0), rail(0.0, 100.0, 2.597)
+
+        runs, rejected, tested = _track_centres(left, right, spec)
+
+        assert runs == []
+        assert rejected == tested > 0
+
+    def test_every_reported_gauge_is_inside_the_tolerance_by_construction(self, spec) -> None:
+        """Not a quality bar — an identity. It is here so the next person to
+        read a healthy `drawn_gauge_m` knows it could not have read otherwise."""
+        left, right = rail(0.0, 100.0, 0.0), rail(0.0, 100.0, GAUGE_M + 0.2)
+
+        runs, _, _ = _track_centres(left, right, spec)
+
+        for _, gauges in runs:
+            assert np.all(np.abs(gauges - GAUGE_M) <= TOLERANCE_M)
 
 
 class TestProjection:

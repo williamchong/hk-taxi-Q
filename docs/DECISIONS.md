@@ -7091,13 +7091,13 @@ independent published position and would have been a measured 3.26 m from it.
 ### What ships
 
 `pipeline/tramway.py` reads `CartoTransLine TW`, pairs the rails back into tracks, and writes
-`tram.glb`: **132 rails / 9,912 m in region → 126 drawn (7,300 m) and 53 track beds (3,197 m)**,
-5,112 triangles, **one primitive, one draw call, no collider**. Heights come from the nearest level-0
+`tram.glb`: **132 rails / 9,912 m in region → 126 drawn (7,300 m) and 55 track beds (3,209 m)**,
+5,132 triangles, **one primitive, one draw call, no collider**. Heights come from the nearest level-0
 centreline via `fares.Segments` — the reserve is a made road surface, level with the carriageways
 either side, not with the ground under them.
 
 **Cost, one variable changed:** two web exports, `tramway:` block and `steel_rail` removed for the
-control. **41,088,640 → 41,265,968 B, +177,328 B (+0.43%).** `city.json` **10 → 11** and the manifest
+control. **41,088,640 → 41,267,328 B, +178,688 B (+0.43%).** `city.json` **10 → 11** and the manifest
 key is **optional and may be null** — a city whose estate publishes no tramway ships none.
 
 ### ⚠️ Three defects that each rendered as *nothing*, and what caught them
@@ -7111,9 +7111,8 @@ stage publishes about itself.
   `TramwayReport.inverted`, published in the manifest and pinned by a test.
 - **The bed flared at every sheet boundary.** `_project` clamps to the partner's nearest end, so a
   rail running on past its partner keeps generating a "centre" that walks out towards it.
-  `drawn_gauge_m` read p90 **1.92 m** against a 1.067 m gauge; trimmed to where both rails run, p90
-  **1.21 m**. The manifest publishes the gauge for exactly this reason — a join that has crossed
-  tracks is invisible downstream.
+  The drawn gauge read p90 **1.92 m** against a 1.067 m gauge; trimmed to where both rails run, p90
+  **1.21 m**.
 - **Mutual pairing lost a fifth of the tramway.** iB1000 is published per sheet, so a rail crossing a
   boundary arrives as two parts while the rail beside it arrives as one; the long rail's ballot
   splits and all three go undrawn — **38 of 132 parts**. Taking the one-way vote as well: **8**.
@@ -7157,6 +7156,44 @@ true, which is right for a taxi stand and wrong here: a tram stop is somewhere a
 - **No collision.** The tramway lies on ground solid since `P3-10`; a 30 mm rail as collision
   geometry is a kerb the player cannot see a reason for. Held by `verify_tramway.gd`, which fails on
   *any* collider — the inverse of every other asset this repo verifies.
+
+### ⚠️ The metric that caught two of those can no longer catch them
+
+`drawn_gauge_m` was published as *"the join's own answer"* — the thing that would see a pair joined
+across two tracks, which nothing downstream could notice. **The trim that fixed the flared bed made
+it incapable of that**, and the claim stayed for a while in this record, `PROGRESS.md` and
+`CLAUDE.md`.
+
+`_track_centres` filters stations to `|2·half − gauge| ≤ pair_tolerance_m` and `drawn_gauge_m`
+medians the survivors, so every percentile is confined to **[0.717, 1.417] m** whatever the source
+does. The p90 figures above were measured *before* the trim existed. A cross-track pairing now shows
+up as **zero runs**, not a wide gauge.
+
+✅ **Replaced by `off_gauge_stations` and `pairs` against `tracks`** — the stations the trim threw
+away, which is exactly where a bad join goes. The region reads **53 of 1,041** rejected and **74
+pairs → 55 runs**. `drawn_gauge_m` still ships and still says something narrower: that the trim ran,
+and that nothing moved the geometry after it.
+
+⚠️ **This is the same shape as the misquote at the top of this record** — a statement that was true
+when written and kept after the thing beneath it moved. It is worth more than the bug: the first
+instance took a survey to find, and this one was in code written the same day.
+
+### Deliberately not refactored
+
+Three duplications were found and declined, recorded here rather than left silent:
+
+- **`_Rails` against `tools/carriageway_margin.py`'s `_Index`** — the same plan grid and the same
+  determinant solve, epsilons included. Extracting a `SegmentGrid` into `pipeline/geometry.py` is
+  the right shape (`tools/` may import `pipeline/`), but it means rewiring a shipped grader whose
+  independence from the pipeline is itself a documented property. The repo already carries three
+  other plan indexes with their own cell semantics; this is the first pair that is genuinely the
+  same kind.
+- **The tiled/untiled source-resolution block**, nine lines identical between `tramway.read_rails`
+  and `carriageway_margin.published_edges`. A shared `read_coded_polylines` in `pipeline/fetch.py`
+  would not breach the separation — that rule scopes to what a grader *measures*, not what it reads.
+- **`verify_tramway.gd`'s single-primitive scaffolding**, ~35 lines shared with
+  `verify_road_surface.gd`. `mesh_contract.gd` states the repo's own trigger for this ("a private
+  second copy is what this file exists to stop"), so a third copy should force it.
 
 **See.** `Q57` for the survey that found the layer and mis-described it · `Q53` for the marking scope
 this does not change, amended there · `Q54` for the invented-marking debit this avoids · `Q19` for

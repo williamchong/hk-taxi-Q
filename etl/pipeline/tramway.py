@@ -47,6 +47,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import math
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -60,7 +61,8 @@ from pipeline.documents import write_document
 from pipeline.fares import Segments
 from pipeline.fetch import artefact_path, cached_source, cached_tiles
 from pipeline.gltf import MeshData, write_glb
-from pipeline.roads import ROADGRAPH_NAME, read_graph
+from pipeline.mesh import select_triangles
+from pipeline.roads import ROADGRAPH_NAME, plan_lengths, plan_steps, read_graph
 from pipeline.surface import boundary, dedupe, downward_facing, mitres
 
 log = logging.getLogger(__name__)
@@ -123,6 +125,11 @@ _PAIR_AGREEMENT = 0.5
 # drawn: a two-point rail whose points coincide has no normal to offset along.
 _MIN_PART_M = 1.0
 
+# Below this, twice a triangle's area means it has collapsed and it is dropped.
+# The same bar `surface.py` sets and for the same reason: a square millimetre of
+# tramway is not tramway.
+_MIN_TWICE_AREA_M2 = 1e-6
+
 
 @dataclass
 class TramwayReport:
@@ -130,21 +137,37 @@ class TramwayReport:
 
     parts: int = 0
     parts_m: float = 0.0
-    # Parts that found a partner, and the tracks they became. Two rails make one
-    # track, so `tracks` is at most half of `paired`.
+
+    # ⚠️ **Two orthogonal partitions of `parts`, and reading them as one is
+    # wrong.** Pairing decides whether a *bed* is drawn; snapping decides
+    # whether the *rail* is. A rail can be unpaired and still drawn, and an
+    # unsnapped rail is counted as unpaired too:
+    #
+    #   paired + unpaired                   == parts   (did it find its partner?)
+    #   rails_drawn + unsnapped + too_short == parts   (was it drawn?)
+    #
+    # Rails dropped are reported rather than raised, for the reason `fares.py`
+    # gives about a point in a car park: one unusable part is the publisher's
+    # business and should not cost the region its tramway.
     paired: int = 0
-    # Rails actually drawn, which is not `paired`: a rail with no partner is
-    # still a rail the estate publishes and is still drawn, just without a bed.
+    unpaired: int = 0
     rails_drawn: int = 0
     rails_drawn_m: float = 0.0
-    tracks: int = 0
-    tracks_m: float = 0.0
-    # Rails dropped, by why. Reported rather than raised for the reason
-    # `fares.py` gives about a point in a car park: one unusable part is the
-    # publisher's business and should not cost the region its tramway.
-    unpaired: int = 0
     unsnapped: int = 0
     too_short: int = 0
+
+    # Joined pairs, and the bed runs they produced. ⚠️ **`tracks` is not bounded
+    # by `pairs`**: a pair whose rails part and rejoin — a crossover is exactly
+    # that — yields a run either side, and a sheet-split rail pairs twice
+    # against the same long partner.
+    pairs: int = 0
+    tracks: int = 0
+    tracks_m: float = 0.0
+    # Stations of a joined pair the trim rejected, and how many it tested. ⚠️
+    # **This is what can see a bad join, and `gauges_m` cannot** — see
+    # `_write_manifest`.
+    off_gauge: int = 0
+    pair_stations: int = 0
     gauges_m: list[float] = field(default_factory=list)
     # Triangles wound so they face the ground. Published because an inverted
     # tramway is *invisible* rather than wrong-looking — see `_draw`.
@@ -155,7 +178,8 @@ class TramwayReport:
     bytes: int = 0
     aabb: list[list[float]] = field(default_factory=list)
 
-    def measured(self, values: list[float]) -> dict[str, float]:
+    @staticmethod
+    def measured(values: list[float]) -> dict[str, float]:
         """One distribution as the manifest publishes it."""
         if not values:
             return {}
@@ -179,7 +203,6 @@ class _Rails:
     _CELL_M = 20.0
 
     def __init__(self, parts: list[np.ndarray]) -> None:
-        self.parts = parts
         starts, ends, owners = [], [], []
         for index, part in enumerate(parts):
             starts.append(part[:-1, [0, 2]])
@@ -201,12 +224,17 @@ class _Rails:
     def across(
         self, origin: np.ndarray, normal: np.ndarray, reach_m: float, exclude: int
     ) -> list[tuple[float, int]]:
-        """Every other rail the perpendicular crosses, as `(signed offset, rail)`.
+        """Every other rail the perpendicular crosses, as `(distance, rail)`.
 
-        Signed along `normal`, so the two sides of a station are told apart by
-        the sign rather than by two calls — the same argument `carriageway_
-        margin.py` makes for solving both directions at once, and here it also
-        keeps a track from pairing with a rail on the wrong side of itself.
+        Both directions out of one solve, which is the argument
+        `carriageway_margin.py` makes for the same arithmetic: negating the
+        normal negates the parameter along it and leaves the rest untouched, so
+        the backward ray is the forward one read at negative `along`.
+
+        ⚠️ **Unsigned on purpose.** Which side a neighbour sits on says nothing
+        about whether it is the other rail of this track — a track's two rails
+        straddle nothing, they simply sit a gauge apart — so the caller has no
+        use for the sign and taking `abs` here stops it looking load-bearing.
         """
         near, far = origin - normal * reach_m, origin + normal * reach_m
         low = np.floor_divide(np.minimum(near, far), self._CELL_M).astype(np.intp)
@@ -234,15 +262,16 @@ class _Rails:
         across = (normal[0] * offset[:, 1] - normal[1] * offset[:, 0]) / safe
         hit = solvable & (across >= -1e-9) & (across <= 1.0 + 1e-9) & (np.abs(along) <= reach_m)
         owners = self.owner[rows][hit]
-        return [(float(t), int(owner)) for t, owner in zip(along[hit], owners, strict=True)]
+        distances = np.abs(along[hit])
+        return [(float(t), int(owner)) for t, owner in zip(distances, owners, strict=True)]
 
 
 class _Builder:
     """Accumulates flat quad strips into one vertex-coloured mesh.
 
-    Deliberately simpler than `surface.py`'s: the tramway carries no marking
-    codec, so there is no `TEXCOORD_1`, and every strip here is horizontal, so
-    the normal is up rather than derived per quad.
+    Deliberately simpler than `surface.py`'s: its codec has nine fields and this
+    one has a single class stripe, and every strip here is horizontal, so the
+    normal is up rather than derived per quad.
     """
 
     def __init__(self) -> None:
@@ -301,11 +330,19 @@ class _Builder:
         self._count += 2 * span
 
     def build(self, name: str) -> MeshData | None:
-        """The accumulated geometry, or None where nothing was drawn."""
+        """The accumulated geometry, minus collapsed triangles, or None.
+
+        ⚠️ **The drop is not optional here, for the reason `boundary` gives.**
+        `_draw` offsets through the same `surface.boundary`, which holds the
+        inner rail still around a corner tighter than the strip is wide — and a
+        held boundary leaves a quad with two corners in the same place. A tram
+        reserve turning into a depot has exactly those corners. `surface.py`
+        filters them and this did not, so degenerate triangles shipped.
+        """
         if not self._triangles:
             return None
         count = self._count
-        return MeshData(
+        mesh = MeshData(
             name=name,
             positions=np.vstack(self._positions),
             normals=np.tile(np.array([0.0, 1.0, 0.0], dtype=np.float32), (count, 1)),
@@ -315,6 +352,8 @@ class _Builder:
             uv2=np.vstack(self._uv2),
             material=TRAMWAY_MATERIAL,
         )
+        twice_area = np.linalg.norm(mesh.triangle_cross(), axis=1)
+        return select_triangles(mesh, twice_area > _MIN_TWICE_AREA_M2)
 
 
 def read_rails(
@@ -365,7 +404,7 @@ def read_rails(
 
 
 def _plan_length(points: np.ndarray) -> float:
-    return float(np.hypot(*np.diff(points[:, [0, 2]], axis=0).T).sum())
+    return float(plan_steps(points).sum())
 
 
 def _pair_rails(
@@ -384,12 +423,21 @@ def _pair_rails(
     draw the track twice into the same place.
     """
     index = _Rails(parts)
+    # The upper bound is the ray's own reach, so `across` has already applied it
+    # and only the lower one is left to test.
     reach_m = spec.gauge_m + spec.pair_tolerance_m
-    low, high = spec.gauge_m - spec.pair_tolerance_m, reach_m
+    low = spec.gauge_m - spec.pair_tolerance_m
 
     votes: dict[int, int] = {}
     for rail, part in enumerate(parts):
         plan = part[:, [0, 2]]
+        # ⚠️ **Stations are spaced along the whole rail, not within each source
+        # segment.** Restarting the walk at every vertex was the first version
+        # and it silently weights the vote by how finely a stretch was
+        # digitised: every segment contributes at least one station however
+        # short, so a junction diamond drowns out the plain track either side of
+        # it — and those are exactly the stations the vote exists to outvote.
+        along = plan_lengths(part)
         ballot: Counter[int] = Counter()
         tested = 0
         for segment in range(len(plan) - 1):
@@ -399,19 +447,19 @@ def _pair_rails(
                 continue
             unit = step / length
             normal = np.array([unit[1], -unit[0]])
-            for distance in np.arange(0.0, length, _PAIR_STEP_M):
+            first = math.ceil(along[segment] / _PAIR_STEP_M) * _PAIR_STEP_M
+            for station in np.arange(first, along[segment + 1], _PAIR_STEP_M):
+                origin = plan[segment] + unit * (station - along[segment])
                 tested += 1
                 candidates = [
-                    (abs(offset), partner)
-                    for offset, partner in index.across(
-                        plan[segment] + unit * distance, normal, reach_m, rail
-                    )
-                    if low <= abs(offset) <= high
+                    (offset, partner)
+                    for offset, partner in index.across(origin, normal, reach_m, rail)
+                    if offset >= low
                 ]
                 if candidates:
                     ballot[min(candidates)[1]] += 1
 
-        if not ballot or not tested:
+        if not ballot:
             continue
         partner, agreed = ballot.most_common(1)[0]
         if agreed >= _PAIR_AGREEMENT * tested:
@@ -458,11 +506,14 @@ def _project(points: np.ndarray, onto: np.ndarray) -> np.ndarray | None:
     if not usable.any():
         return None
 
+    # Hoisted: all three depend only on `onto`, and the loop below is per point.
+    starts = plan[:-1]
+    squared = np.where(usable, length**2, 1.0)
     closest = np.empty((len(points), 2))
     for row, point in enumerate(points[:, [0, 2]]):
-        offset = point - plan[:-1]
-        t = np.clip((offset * step).sum(axis=1) / np.where(usable, length**2, 1.0), 0.0, 1.0)
-        feet = plan[:-1] + step * t[:, None]
+        offset = point - starts
+        t = np.clip((offset * step).sum(axis=1) / squared, 0.0, 1.0)
+        feet = starts + step * t[:, None]
         distance = np.where(usable, np.hypot(*(point - feet).T), np.inf)
         closest[row] = feet[int(np.argmin(distance))]
     return closest
@@ -470,7 +521,7 @@ def _project(points: np.ndarray, onto: np.ndarray) -> np.ndarray | None:
 
 def _track_centres(
     left: np.ndarray, right: np.ndarray, spec: Tramway
-) -> list[tuple[np.ndarray, np.ndarray]]:
+) -> tuple[list[tuple[np.ndarray, np.ndarray]], int, int]:
     """The centreline between two rails, trimmed to where they run together.
 
     ⚠️ **A pair is only a track for as long as both rails are there**, and the
@@ -480,17 +531,24 @@ def _track_centres(
     partner falls away behind it. The bed then flares out of the four-foot at
     every sheet boundary and every place a rail is published in two pieces.
 
-    It is caught rather than reasoned about: `drawn_gauge_m` read p90 **1.92 m**
-    against a 1.067 m gauge with this untrimmed, and p90 **1.19 m** with it
-    trimmed. Returned as a list because a run can leave tolerance and come back
-    — a crossover is exactly that — and bridging the gap would draw a bed across
-    the junction it is not part of.
+    It was caught rather than reasoned about, by measuring the drawn gauge
+    against the published 1.067 m: p90 **1.92 m** untrimmed, **1.21 m** trimmed.
+
+    Returned as a list because a run can leave tolerance and come back — a
+    crossover is exactly that — and bridging the gap would draw a bed across the
+    junction it is not part of. Each entry carries the **drawn gauge per
+    station** beside its centreline, from the half-offset computed here rather
+    than measured again after the fact. Also returned: how many of the pair's
+    stations the trim rejected, and how many there were.
+
+    ⚠️ **That rejection count is the join's detector; the gauge is not** — see
+    `_write_manifest`, which says why.
     """
     if len(left) < 2 or len(right) < 2:
-        return []
+        return [], 0, 0
     opposite = _project(left, right)
     if opposite is None:
-        return []
+        return [], 0, 0
 
     half = np.hypot(left[:, 0] - opposite[:, 0], left[:, 2] - opposite[:, 1]) * 0.5
     centres = np.column_stack(
@@ -509,9 +567,9 @@ def _track_centres(
             start = row
         elif not inside and start is not None:
             if row - start >= 2:
-                runs.append((centres[start:row], left[start:row]))
+                runs.append((centres[start:row], 2.0 * half[start:row]))
             start = None
-    return runs
+    return runs, int(np.count_nonzero(~together)), len(together)
 
 
 def _snap_heights(
@@ -558,7 +616,7 @@ def _draw(
     # would notice and it notices by showing nothing.
     left = boundary(spine, offsets, -half)
     right = boundary(spine, offsets, half)
-    along = np.concatenate([[0.0], np.cumsum(np.hypot(*np.diff(spine[:, [0, 2]], axis=0).T))])
+    along = plan_lengths(spine)
     builder.strip(
         np.column_stack([left[:, 0], spine[:, 1], left[:, 1]]),
         np.column_stack([right[:, 0], spine[:, 1], right[:, 1]]),
@@ -636,17 +694,24 @@ def build_region(
     # actually running together. One pair can yield several runs, so `tracks`
     # counts drawn beds rather than joined pairs.
     for voter, partner in _pair_rails(parts, spec, report):
+        report.pairs += 1
         if rail_heights[voter] is None or rail_heights[partner] is None:
             continue
-        for spine, rail_run in _track_centres(parts[voter], parts[partner], spec):
-            if _plan_length(spine) < _MIN_PART_M:
+        runs, rejected, tested = _track_centres(parts[voter], parts[partner], spec)
+        report.off_gauge += rejected
+        report.pair_stations += tested
+        for spine, gauges in runs:
+            length_m = _plan_length(spine)
+            if length_m < _MIN_PART_M:
                 continue
             bed = _snap_heights(spine, segments, spec.max_snap_m, spec.bed_lift_m)
             if bed is None:
                 continue
             report.tracks += 1
-            report.tracks_m += _plan_length(bed)
-            report.gauges_m.append(_gauge_at(rail_run, spine))
+            # `bed` is `spine` with only its height column rewritten, so the two
+            # have the same plan length — measured once rather than twice.
+            report.tracks_m += length_m
+            report.gauges_m.extend(float(gauge) for gauge in gauges)
             _draw(builder, bed, spec.bed_width_m, spec.bed_material.colour, TRAMWAY_CLASS_BED)
 
     mesh = builder.build(TRAMWAY_MESH_NAME)
@@ -660,38 +725,46 @@ def build_region(
     return report
 
 
-def _gauge_at(rail: np.ndarray, spine: np.ndarray) -> float:
-    """Twice the median distance from a rail to its own track centre.
-
-    Published so a build can be checked against the gauge it claims without
-    re-reading the source — `Q58` measured p50 1.124 m against 1.067 m
-    published, and a build that drifts off that is a join that has gone wrong
-    rather than a tramway that has moved.
-    """
-    if len(rail) != len(spine):
-        return float("nan")
-    return float(2.0 * np.median(np.hypot(rail[:, 0] - spine[:, 0], rail[:, 2] - spine[:, 2])))
-
-
 def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: TramwayReport) -> int:
     document = {
         "schema_version": TRAMWAY_MANIFEST_SCHEMA,
         "city_id": city.id,
         "region_id": region_id,
-        "asset": TRAMWAY_NAME if report.tracks else None,
+        # ⚠️ **Gated on what was *written*, not on what was joined.** A region
+        # whose rails all failed to pair still writes `tram.glb` — rails are
+        # drawn without a bed — and naming `null` here would leave a file on
+        # disk that `shipped()` omits. Being wrong about the contents of the
+        # bundle is what `CITY_SCHEMA` 11 was bumped for.
+        "asset": TRAMWAY_NAME if report.rails_drawn else None,
         "rails": report.parts,
         "rails_m": round(report.parts_m, 3),
         "rails_paired": report.paired,
         "rails_unpaired": report.unpaired,
         "rails_drawn": report.rails_drawn,
         "rails_drawn_m": round(report.rails_drawn_m, 3),
+        "pairs": report.pairs,
         "tracks": report.tracks,
         "tracks_m": round(report.tracks_m, 3),
+        # ⚠️ **This is the join's own detector, and `drawn_gauge_m` below is
+        # not.** A pair joined across two *tracks* sits 2.6 m apart, which the
+        # trim rejects at every station — so it shows up here as a pair whose
+        # stations were all thrown away, and as `pairs` exceeding `tracks`. It
+        # does not show up as a wide gauge, because a rejected station never
+        # reaches the gauge.
+        "off_gauge_stations": report.off_gauge,
+        "pair_stations": report.pair_stations,
         "rails_unsnapped": report.unsnapped,
         "rails_too_short": report.too_short,
-        # The join's own answer to the question the city file authors. A drawn
-        # gauge that has wandered off `gauge_m` means rails were paired across
-        # tracks, which nothing downstream could notice.
+        # What the bed was actually built at, per station.
+        #
+        # ⚠️ **Bounded by `pair_tolerance_m` by construction, so it cannot see a
+        # bad join.** `_track_centres` filters stations to within the tolerance
+        # of `gauge_m` and these are the survivors, so every percentile is
+        # confined to `[gauge - tol, gauge + tol]` whatever the source does.
+        # What it *does* check is that the trim ran and that nothing moved the
+        # geometry afterwards — the p90 **1.92 m** that caught the flared bed was
+        # measured before the trim existed, and would read in range today.
+        # `off_gauge_stations` above is what replaced it as the detector.
         "drawn_gauge_m": report.measured(report.gauges_m),
         "inverted": report.inverted,
         "inverted_area_m2": round(report.inverted_area_m2, 3),

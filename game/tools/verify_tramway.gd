@@ -12,9 +12,11 @@
 ## ⚠️ **Absence is a pass, and that is not a loophole.** A city whose estate
 ## publishes no tramway ships none and `city.json` names null (`Q58`), so this
 ## tool cannot treat a missing asset as a failure without failing every such
-## city. What stops that becoming a silent skip is `verify_city.gd`, which
-## checks the manifest and this file's constant agree — a bundle whose manifest
-## *does* name a tramway that is not on disk fails there.
+## city. What stops that becoming a silent skip is `verify_city.gd`, whose
+## `_check_documents` asserts a *named* tramway exists and matches this file's
+## constant — so a manifest naming `tram.glb` with the file gone fails there.
+## ⚠️ That cross-reference was written before the check was, and stood wrong for
+## a while; if this comment is edited again, go and look.
 extends SceneTree
 
 const GeneratedTramway = preload("res://scripts/city/generated_tramway.gd")
@@ -71,7 +73,9 @@ func _init() -> void:
 
 	var packed: PackedScene = GeneratedTramway.load_tramway()
 	if packed == null:
-		printerr(GeneratedTramway.missing_hint())
+		# Present but unloadable, which is not the same as absent — the hint
+		# about rebuilding would be the wrong advice here.
+		printerr("  FAIL  %s exists but did not load as a scene" % GeneratedTramway.PATH)
 		quit(1)
 		return
 

@@ -155,11 +155,14 @@ Common emoji for this project:
   bar to retune against — and it **cannot** see the side convention flip, because that mirrors both
   sources at once.
 - **`pipeline/tramway.py`, the `tramway` config block, or any tram-rail change: paste `tramway.json`'s
-  `drawn_gauge_m` and `inverted`, before and after.** There is no separate grader and there should
-  not be: the stage grades itself, because the three ways this can break all render as **nothing**
-  and none is visible in a frame. `drawn_gauge_m` is the only thing that can see a mis-paired join —
-  a bed drawn between two rails that are not a track renders perfectly and is a lane wide — and it
-  caught two shipped defects at p90 **1.92 m** and **4.62 m** against a 1.067 m gauge. `inverted`
+  `off_gauge_stations`, `pairs` vs `tracks`, and `inverted`, before and after.** There is no separate
+  grader and there should not be: the stage grades itself, because the three ways this can break all
+  render as **nothing** and none is visible in a frame. ⚠️ **The mis-pairing detector is
+  `off_gauge_stations`, not `drawn_gauge_m`** — a bed drawn between two rails that are not a track
+  renders perfectly and is a lane wide, but the trim rejects every one of its stations, so it shows
+  up as rejected stations and as `pairs` exceeding `tracks`. `drawn_gauge_m` is bounded by
+  `pair_tolerance_m` *by construction* and cannot read outside it; the p90 **1.92 m** and **4.62 m**
+  that caught two shipped defects were measured before the trim existed. `inverted`
   must be **0**: `tramway.gdshader` is `cull_back`, so winding decides visibility and the normal
   attribute does not, and the first build had **5,111 of 5,112** triangles facing the ground with
   everything else correct. ⚠️ **A tramway change is also a shader change** — `check.sh` exits 0 on a

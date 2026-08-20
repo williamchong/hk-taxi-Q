@@ -2542,7 +2542,7 @@ def _tramway(body: Any, where: str, table: _MaterialTable) -> Tramway | None:
 
     return Tramway(
         source=str(_require(body, "source", where)),
-        member=(str(body["member"]) if body.get("member") is not None else None),
+        member=_tile_member(body, where),
         layer=_source_layer(body, where, _TRAMWAY_ROLES),
         codes=codes,
         gauge_m=gauge_m,
@@ -2773,7 +2773,12 @@ def _source_paint(body: dict[str, Any], where: str, table: _MaterialTable) -> So
 
 
 def _fields(
-    body: dict[str, Any], where: str, roles: tuple[str, ...], *, key: str = "fields"
+    body: dict[str, Any],
+    where: str,
+    roles: tuple[str, ...],
+    *,
+    key: str = "fields",
+    optional: tuple[str, ...] | None = None,
 ) -> dict[str, str]:
     """A role-to-value mapping (columns, domain codes), checked to cover every
     role the stage needs.
@@ -2784,6 +2789,19 @@ def _fields(
     missing = [role for role in roles if role not in fields]
     if missing:
         raise ValueError(f"{where}:{key} is missing {', '.join(missing)}")
+    if optional is not None:
+        # ⚠️ **An unknown key is refused, and that is what keeps an *optional*
+        # role honest.** A required role fails loudly when it is absent; an
+        # optional one is indistinguishable from a typo, so without this a
+        # renamed `name_zh:` would simply stop being read and every node would
+        # ship nameless. Only checked where a caller declares optional roles —
+        # every other `fields:` block is exhaustively required already.
+        unknown = [role for role in fields if role not in roles and role not in optional]
+        if unknown:
+            allowed = ", ".join((*roles, *optional))
+            raise ValueError(
+                f"{where}:{key} has unknown role(s) {', '.join(sorted(unknown))}. Known: {allowed}"
+            )
     return fields
 
 
@@ -2832,7 +2850,7 @@ def _fare_group(body: dict[str, Any], where: str) -> FareGroup:
         kind=kind,
         source=str(_require(body, "source", where)),
         crs=str(_require(body, "crs", where)),
-        fields=_fields(body, where, _FARE_ROLES),
+        fields=_fields(body, where, _FARE_ROLES, optional=_FARE_OPTIONAL_ROLES),
         categories=categories,
     )
 
