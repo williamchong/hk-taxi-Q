@@ -76,6 +76,7 @@ lives in git. This file holds *why things are the way they are*.
 | `Q50` | The shipped car is Godot's `VehicleBody3D`; `P0-5a` was right and the cost was accepted | ✅ Closed — shipped 2026-08-18 at the user's explicit instruction. Drift window measured **0.01–0.02 wide**, a handbrake tap now does nothing, and `Q49`'s ellipse is lost |
 | `Q51` | Traffic is never *sent* down an edge under one lane clear; the player is never *stopped* | ✅ Closed — the graph expresses passability and refuses nothing. `clearance.py` publishes a width per station into `city.json` (schema 9) and `RoadGraph` gains `is_routable`; `nearest_edge` is untouched. ✅ **The 21-against-26 gap is reconciled (2026-08-19): plan cell size, verified against 109 M brute-forced samples**, and `tools/clearance_reconcile.py` ratchets both counts. ✅ It found a live defect on the way — `ALONG_M = 1.0` **aliased walls**, so `is_routable` routed traffic down `e636` — and the call was **taken the same day: `ALONG_M` is `CELL_M` (0.5 m)**, the published count is **24 against 26**, and the published width is a lower bound at that cell |
 | `Q55` | The façade survey's filler guard reads greyness, and the placeholder panels are coloured | 🔴 Open — measured 2026-08-20, not fixed. **97 atlases on 93 of 2,213 buildings** carry a flat non-grey panel `is_filler` passes; 92 clear `vegetation_max`. Rejecting them moves **43 past `Q33`'s 0.46 `Δab`**, worst **54.69 `L*`**. `Q37` prescribed this fix — *"or detect each atlas's filler as its modal exactly-repeated colour"* — and only the first clause shipped |
+| `Q56` | `VEHICLE_TYPE = 5` is a painted line, and a second dataset was the only way to know | ✅ Closed — `painted_vehicle_types: [1, 5]`, 2026-08-20. **+28.1% restriction** (26,065 m / 650 sides -> **33,385 m / 722**) on the evidence of Traffic Aids Drawings v2, where **93.9% of code-5 metres carry a painted line**. `tools/kerbside_source_audit.py` diffs the two sources: agreement **77.0% -> 96.4%**, kind agreement **95.7% -> 99.2%**. ⚠️ Codes 2/3/4 stay refused for a **different reason than `Q54` gave** — the drawings paint them too; the codec cannot say *which class* |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -6189,7 +6190,11 @@ carried UV2.
 
 **What this does not do.** No arrows, no road text, no box junctions, no zebra crossings — the
 `ZEBRA` layer is published and unread, and a crossing is a cap-adjacent glyph with the same
-problems. No tram inset: `tram_tracks` reaches the payload and the shader ignores it, because the
+problems. ⚠️ **"Refused on data, not cost" is no longer true for two of these** — `Q56`, 2026-08-20:
+Traffic Aids Drawings v2 publishes `DTAD_YL_BOX_POLY` (**20 yellow box junctions as polygons in
+region**, with a `YELLOWBOX_TYPE`) and `DTAD_CROSSING_LINE` (121 features / 6,698 m). The refusal
+stands as a *scope* decision; the "no source" half of its reasoning is dead, and this record is the
+one that would otherwise keep asserting it. No tram inset: `tram_tracks` reaches the payload and the shader ignores it, because the
 treatment `ART_DESIGN.md` describes is geometry rather than shading.
 
 **⚠️ The markings were the fourth `vertex_srgb_to_linear`, and `city_facade.gdshader` had written
@@ -6396,7 +6401,7 @@ the same day. `verify_road_surface.gd` holds the other end: `COLOR_0.a` must be 
 between, must be opaque outside the carriageway, and must not be uniform — the last one is what
 notices if the extent silently stops shipping and every kerb goes back to being painted.
 
-**What stays out of scope.** `ONSTREETPARK`'s 607 bays, box junctions, and the `VT=5` 8,323 m.
+**What stays out of scope.** `ONSTREETPARK`'s 607 bays and box junctions. ⚠️ **The `VT=5` 8,323 m was on this list and is not any more — `Q56` reversed it on 2026-08-20**, on the evidence of a second dataset rather than a re-reading of this one. Box junctions turn out to be sourceable from the same place; see `Q56`.
 `draw_double_yellow` remains in `tuning/road_markings.tres` — it now turns off a *sourced* marking
 rather than an invented one, which is a different kind of dial.
 
@@ -6515,3 +6520,163 @@ tables.
 **See.** `Q37` for the survey this repeats and the fix it already prescribed · `Q34′` and `Q30` for
 what re-publishing the table owes · `Q33` for the 0.46 `Δab` tolerance · `DATA_SOURCES.md`
 "Buildings" for the imagery's coverage · `CONTRIBUTING.md` "Checks"
+
+## `Q56` — `VEHICLE_TYPE = 5` is painted, and the way to know was a second dataset
+
+**Status.** ✅ **Closed by the change that opened it, 2026-08-20** · **Owner.** `pipeline/kerbside.py`
+config, `tools/kerbside_source_audit.py` · **Opened** 2026-08-20 by a question about
+[Traffic Aids Drawings](https://data.gov.hk/tc-data/dataset/hk-td-tis_8-traffic-aids-drawings)
+
+**Closed at 77.0% → 96.4% source agreement.** `painted_vehicle_types` is `[1, 5]`. The region
+publishes **33,385 m of restriction over 722 edge sides**, up from 26,065 m over 650 — **+28.1%** —
+and `tools/kerbside_source_audit.py` is the new instrument that priced it and can re-price it.
+
+**Claim.** `Q54` refused `NSR`'s `VEHICLE_TYPE = 5` "Others" because the specification names no
+class, and asserting a restriction on an unnamed class was the invention `P3-13` existed to remove.
+That reasoning was sound and the conclusion was wrong, and **no amount of re-reading the source
+would have shown it** — the field really does say only `5 – Others`, re-verified on the cached
+`rdnet_dataspec`. What settled it was a **second dataset**.
+
+**What the second dataset is.** Traffic Aids Drawings **2nd generation**
+(`hk-td-tis_16-traffic-aids-drawings-v2`) — the Transport Department's drawing set as spatial
+features, 51 layers, EPSG:2326, monthly. ⚠️ **The 1st generation (`tis_8`) is being withdrawn**; its
+only remaining resource is a CSV pointing at the new one. The layer that matters is
+`DTAD_RST_ZONE_LINE`, and it is *cartographic* where `NSR` is *semantic*: `NSR` says what is
+restricted, for whom and when; this says **what is painted, in what linetype**.
+
+| In region | |
+|---|---|
+| Features | **1,763** (1,778 parts), **39,292 m** |
+| `RM1040` | **24,932 m** — the index plan: "NO STOPPING AT ANY TIME — YELLOW", left line continuous + right line continuous, i.e. a **double yellow** |
+| `RM1041` | **14,164 m** — "NO STOPPING PART TIME — YELLOW", module continuous, i.e. a **single yellow** |
+| `SOLID` / null | 196 m, mapped to no kind and refused |
+| `TIME_ZONE` | **null on all 1,763 features** — the posted hours `NSR` carries are *not* here |
+| Offset from the nearest centreline | median **2.95 m** (p25 2.22, p75 3.94), 1.4% on it |
+
+**The two sources agree on the kind, which is the part nothing could check.** Cross-tabbed at 1 m
+samples within 3 m, before any change:
+
+| `LINETYPE` | `NSR` `TZ1` | `TZ2` | `TZ3` | `TZ4` | `TZ5` |
+|---|---|---|---|---|---|
+| `RM1040` | **24,719** | 0 | 1 | 11 | 1 |
+| `RM1041` | 829 | 66 | 285 | 5,237 | 615 |
+
+`RM1040` lands on `TIME_ZONE = 1` for **99.95%** of its length. `Q54`'s "24 hours is a double
+yellow, posted hours a single" was an assumption about a code table; it is now a measurement against
+a source that draws the line itself.
+
+**The finding.** Of the 39,292 m the drawings restrict, **7,332 m is more than 3 m from any
+`VEHICLE_TYPE = 1` sample — and 7,300 m of that is within 3 m of a `VEHICLE_TYPE = 5` one.** Only
+**24 m** of the entire 39 km is unexplained by `NSR` at all. From the other end, **93.9% of the
+region's code-5 metres carry a painted line** (7,910 m of 8,422 m), **96% of them `RM1041`**. The
+class stays unnamed. What is now known is that TD paints a line there, which is the only question
+this stage asks.
+
+⚠️ **`2`, `3` and `4` stay refused, and the reason had to change.** `Q54` and the city file both
+said a taxi or goods-vehicle restriction "is a sign". The drawings say otherwise: code 2 is **100%**
+covered by a painted line (108 m), code 4 **90.2%** (1,253 m), code 3 **48.4%** (1,486 m). They stay
+out because a **class-specific** restriction is not a plain yellow line and the codec has no way to
+say which class — painting one as an ordinary double yellow would assert on all motor vehicles what
+the source restricts for goods vehicles. That is a codec limit, not a fact about the road, and it is
+**2,847 m** in region. The old reason was wrong and would have survived unexamined.
+
+### `tools/kerbside_source_audit.py`, and why it is not a second join
+
+The tool feeds the drawings through **`pipeline/kerbside.py`'s own join** — same pitch, same bridge,
+same minimum run, same offset guard — and diffs the two run sets cell by cell. Writing a second join
+would grade the join, which sounds better and is not: two implementations disagreeing tells you one
+is wrong and never which. Feeding a second *source* through one join isolates the source, which is
+the question worth asking, because `NSR` is the only thing in the bundle asserting where a car may
+not stop and **nothing had ever checked it**.
+
+| | before (`[1]`) | **after (`[1, 5]`)** |
+|---|---|---|
+| Both sources | 25,529 m — 77.0% of the union | **32,410 m — 96.4%** |
+| Published only | 536 m | 975 m |
+| Drawing only | **7,101 m** | **220 m** |
+| Kind agreed | 24,424 m — 95.7% | **32,138 m — 99.2%** |
+| └ published double, drawing single | 1,055 m | **66 m** |
+| └ published single, drawing double | 50 m | 206 m |
+| Opposite kerb | 100 m | **35 m** |
+
+⚠️ **The kind agreement improving is the load-bearing result, not the coverage.** Coverage was
+always going to rise — metres were added on purpose. Kind disagreement falling from **4.3% to 0.8%**
+of the metres both sources carry was not designed in: the code-5 features carry posted-hours time
+zones on kerbs where an overlapping code-1 feature says 24 hours, and the run vote now resolves
+those the way the drawing does. The build's own "wrong kind of line" figure moves the other way —
+183 m to **359 m**, across 9 sides then, more now — because that counts *source* overlap within one
+edge side, and there is more source. Two figures, two populations; neither is the other's check.
+
+⚠️ **This does not cover the side convention.** Both sources are digitised at the kerb and both
+reach a side through `kerbside._Segments`, so flipping that expression mirrors both answers and the
+tool reports perfect agreement on a mirrored city. `tests/test_kerbside.py` remains the only thing
+holding that end. The `opposite` column catches something narrower and still worth having: the two
+sources putting the same restriction on different kerbs of the same edge — **35 m**, down from 100.
+
+### What it cost, and one thing that went the other way
+
+| | before | **after** |
+|---|---|---|
+| Published restriction | 26,065 m / 650 sides | **33,385 m / 722 sides** |
+| └ double / single | 20,414 / 5,651 | **19,764 / 13,621** |
+| Features painted | 372 of 579 | **530 of 579** |
+| Stations inserted at run boundaries | 1,179 | **1,113** |
+| Road mesh vertices | 39,176 | **39,128** |
+| Road mesh triangles | 32,295 | **32,233** |
+| Shipped PCK | 39.16 MiB | **39.17 MiB** (41,069,488 B) |
+| `kerbside_error` gross | 4% of 16,726 m reachable | **3% of 22,451 m reachable** |
+| Triangles folding inward at a hairpin | 10, 2.37 m² | 11, 2.41 m² |
+
+✅ **28% more restriction made the mesh smaller.** 66 fewer boundary stations, 48 fewer vertices.
+A code-5 run usually continues a code-1 run along the same kerb, so admitting it **removes** the
+boundary between them; the geometry a restriction costs is its *ends*, not its length. The estimate
+before measuring was the opposite, and it was wrong.
+
+⚠️ **Double yellow fell 650 m while single rose 7,970 m**, which reads as a regression and is not:
+the cell vote now sees both features on a shared kerb and the posted-hours one wins where it should.
+The audit's kind column is the evidence — `published double, drawing single` collapsed from 1,055 m
+to 66 m.
+
+⚠️ **One more triangle folds inward at a hairpin** (10 → 11, 2.37 → 2.41 m²). Same defect as `Q54`
+recorded, one new place, still open, still against 52,985 m² of carriageway.
+
+⚠️ **`carriageway_occupancy` still fails at 26 edges** — unchanged, and checked precisely because
+restriction stations move the carriageway's vertices. `deck_error`, `overhang` and
+`ground_clearance` all within bounds; `check.sh` exits 0.
+
+### What the survey of the rest of the catalogue found, so it is not re-run
+
+Prompted by the user, before any of the above was written down: **every** Transport Department
+dataset on DATA.GOV.HK (60), the CSDI Portal's transport-theme catalogue, and every dataset in the
+whole 3,810-package index whose name touches road, parking, marking, restriction, kerb, street,
+lane, loading, stopping, sign or bay.
+
+**Only two datasets in the entire Hong Kong open-data estate assert a kerbside stopping
+restriction**: Road Network v2 `NSR`, and Traffic Aids Drawings v2 `DTAD_RST_ZONE_LINE`. There is no
+third opinion, and the pair above is the whole population. What else exists and what it is *not*:
+
+| Dataset | Why it does not answer this question |
+|---|---|
+| `NSR`'s own `ONSTREETPARK` | The complement — 607 bays in region — and **richer than `Q54` credited**: `OPERATIVE_HOUR_ENG/CHI` (600 chars), `METER_NONMETER`, `CAPACITY`, `VEHICLE_TYPE_DESCRIPTION_1/2`, plus separate overnight-parking hours. It is where a restriction is *not*, in prose. Still out of scope |
+| `hk-td-msd_1` metered parking | CSV of counts per district plus occupancy of new meters. No per-bay geometry |
+| `hk-td-msd_2` non-metered parking | ~250 sensored spaces **territory-wide**, a trial scheme |
+| `hk-td-tis_4` / `tis_5` parking distribution and vacancy | Real-time occupancy, not restriction |
+| `hk-td-tis_36` Pedestrian Streets | Area and effective hours; Road Network v2's `PEDESTRIAN_ZONE` already covers it |
+| `hk-td-tis_39` Fleet Taxi Stopping Places | New (Oct 2025). Bears on `fares.json`, not on yellow lines — **worth its own look** |
+| `hk-hyd-csdi-pavement-polygon` | Highways Department's maintained pavement extents. Bears on `carriageway_occupancy`'s open failure and on the widening, **not** on restrictions — **worth its own look** |
+| `hk-landsd-openmap-road-centreline` | LandsD's centreline, "primarily for approximate location query and map annotation labelling" by its own description. Not a second road graph |
+
+**And what else is inside the drawings, unclaimed.** `DTAD_YL_BOX_POLY` — **20 yellow box junctions
+as polygons** in region with a `YELLOWBOX_TYPE`, which `Q53` lists as an unsourced marking. Also
+`RM1038` box-junction lines (540 m), `RM1043` no-parking hatched yellow (560 m), and
+`DTAD_CROSSING_LINE` at 121 features / 6,698 m. None of it is in scope here; all of it is now known
+to exist and to be reachable through the source this record adds.
+
+⚠️ **One oddity, recorded rather than acted on.** The index plan that defines every `RM` code ships
+inside the dataset's own published `dataspec` zip and is stamped **"FOR INTERNAL ONLY"**. TD put it
+in the open-data bundle; `LICENSING.md`'s terms are the government's own and unchanged by it. Noted
+because a reader who finds it will wonder.
+
+**See.** `Q54` for the refusal this reverses and the four numbers it corrected in itself ·
+`Q53` for the markings this belongs to, and for the yellow box junction now sourceable ·
+`DATA_SOURCES.md` for both layers' rows · `CONTRIBUTING.md` "Checks" for when this tool is owed

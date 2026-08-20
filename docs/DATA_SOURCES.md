@@ -399,7 +399,7 @@ filter: **796 centrelines, 529 intersections, 217 turns, 83 speed limits, 14 bus
 | Geometry is **wildly over-densified** | one 51.7 m centreline carries **54,330 vertices** (median segment 0.4 mm); five features hold 132k of the region's 176k | Douglas–Peucker at 0.2 m is a correctness measure, not a size optimisation. 175,610 → 3,553 vertices, worst deviation 0.1997 m |
 | `ROUTE_ID` is **1:1 with the centreline** | 796 distinct values across 796 features | `SPEED_LIMIT` and `BUS_ONLY_LANE` join by key. No linear referencing needed, despite both being modelled as route events |
 | Speed limits cover **under 10%** | 77 of 796 edges, all 70 or 80 km/h, as free text with units | Hong Kong signs only exceptions to the 50 km/h urban default, so the default must come from city config |
-| **`NSR` is the kerbside yellow lines, and `VEHICLE_TYPE` is the field that decides how many** | **579 features / 44,220 m** in region, **kerb-referenced** (median **2.76 m** off the nearest centreline, p99 8.24 m, 0% on it). ⚠️ **Only `VEHICLE_TYPE = 1` "all motor vehicles" is a painted line — 33,074 m.** `2`/`3`/`4` (taxis, PLBs, goods vehicles, 2,822 m) are signs; `5` "Others" (8,323 m) names no class at all and is **refused**. `TIME_ZONE` separates double from single outright: `1` is 24 hours (27,118 m, double), `2`–`5` are posted hours (5,956 m, single). `EFFECTIVE_DAY` is uniformly `1` in region and carries nothing. `REMARKS` is `None` for 31,919 m of the 33,074 and **never mentions taxis** within `VEHICLE_TYPE = 1`. `ONSTREETPARK` carries **607** bays as the complement | Ingested by `pipeline/kerbside.py` since `P3-13`, and it is the **one overlay that is not a key join**: `NSR` carries `ST_CODE_1..6` — street codes — where `SPEED_LIMIT` and `BUS_ONLY_LANE` carry `ROUTE_ID`, so it is linear-referenced onto the finished graph. **26,065 m over 650 edge sides** survive; 1,736 m of the region's samples are overlapping features and are deduped rather than counted twice. ⚠️ The layer is a *Measured* MultiLineString and its M values are **not** a join — there is no route key to resolve them against |
+| **`NSR` is the kerbside yellow lines, and `VEHICLE_TYPE` is the field that decides how many** | **579 features / 44,220 m** in region, **kerb-referenced** (median **2.76 m** off the nearest centreline, p99 8.24 m, 0% on it). ⚠️ **`VEHICLE_TYPE` decides which features are paint, and `Q56` corrected who is on that list.** `1` "all motor vehicles" (33,074 m) **and** `5` "Others" (8,323 m) are painted — the specification still names no class for `5`, but the Traffic Aids Drawings draw a line on **93.9%** of its metres in region, 96% of them single yellow. `2`/`3`/`4` (taxis, PLBs, goods vehicles, 2,822 m) are **refused, and not because they are signs** — the drawings paint those too (code 2 at 100%, code 4 at 90.2%, code 3 at 48.4%). They are refused because a class-specific restriction is not a plain yellow line and the codec cannot say which class. `TIME_ZONE` separates double from single outright: `1` is 24 hours (27,118 m, double), `2`–`5` are posted hours (5,956 m, single). `EFFECTIVE_DAY` is uniformly `1` in region and carries nothing. `REMARKS` is `None` for 31,919 m of the 33,074 and **never mentions taxis** within `VEHICLE_TYPE = 1`. `ONSTREETPARK` carries **607** bays as the complement | Ingested by `pipeline/kerbside.py` since `P3-13`, and it is the **one overlay that is not a key join**: `NSR` carries `ST_CODE_1..6` — street codes — where `SPEED_LIMIT` and `BUS_ONLY_LANE` carry `ROUTE_ID`, so it is linear-referenced onto the finished graph. **33,385 m over 722 edge sides** survive (26,065 m over 650 before `Q56` admitted code 5); overlapping features are deduped into 1 m cells rather than counted twice. ⚠️ The layer is a *Measured* MultiLineString and its M values are **not** a join — there is no route key to resolve them against |
 | **Lane counts do not exist** | no lane attribute in any field of any layer | `roadgraph.json`'s `lanes` is authored policy keyed on speed limit, not published data |
 | Dual carriageways are **opposed one-way pairs** | 6 places where two one-way edges share both endpoints in opposite directions, **1.96–3.85 m** apart; three of them are Lockhart Road | Lockhart Road is two-way *modelled as two one-ways*. A **lower bound** — carriageways that do not share both endpoints are not counted |
 | Turn geometry is a **hint, not the truth** | `EDGE1END` names an end that touches the second edge in 213 of 217; in the other 4 the *opposite* end coincides exactly | Take the shared node; use the field only to break ties. All 217 then resolve |
@@ -439,6 +439,83 @@ The CKAN API enumerates all 61 resources:
 `https://data.gov.hk/en-data/api/3/action/package_show?id=hk-td-tis_15-road-network-v2`
 
 ---
+
+### ✅ USE (audit only) — Traffic Aids Drawings (2nd Generation)
+
+**`hk-td-tis_16-traffic-aids-drawings-v2`** · Transport Department · EPSG:2326 · **monthly** ·
+FGDB `dTAD_IRNP.gdb.zip`, **218 MB**, 51 layers · added by `Q56`, 2026-08-20
+
+⚠️ **The 1st generation (`hk-td-tis_8-traffic-aids-drawings`) is being withdrawn.** Its only
+remaining resource is a CSV pointing at this one. It is the URL a search engine still returns, so it
+is named here to be recognised and skipped.
+
+**This is TD's drawing set as spatial features** — MicroStation levels (`LV21`–`LV38`), `LINETYPE`,
+`SYMBOL_STEP`, hatch angles, `GAZETTE_DATE`. Where Road Network v2 is *semantic* (what is
+restricted, for whom, when), this is *cartographic* (what is painted, in what linetype). That is
+what makes it a genuine second opinion and not a copy.
+
+⚠️ **Fetched, never built.** `traffic_aids_drawings_gdb` is in `sources:` beside
+`road_data_dictionary` and for the same reason: it is read only by `tools/kerbside_source_audit.py`.
+It is the **largest single fixed-URL source in the city file**, 13× the road network, because it
+carries the whole territory's markings, signs, railings and poles to reach one layer. A build that
+never runs the audit can skip it with `--only`.
+
+| Layer | In Wan Chai | What it is |
+|---|---|---|
+| **`DTAD_RST_ZONE_LINE`** | **1,763 features / 39,292 m**, `RM1040` 24,932 m + `RM1041` 14,164 m | **The kerbside yellow lines.** The only layer in use. `LINETYPE` carries the marking code; `COLOR = 6` is yellow on 1,559 of them. ⚠️ **`TIME_ZONE` is null on every feature in region** — the posted hours live in `NSR` and nowhere here |
+| `DTAD_YL_BOX_POLY` | 20 polygons, `YELLOWBOX_TYPE = "Yellow Box"` | Yellow box junctions, which `Q53` lists as an unsourced marking. **Not in use** |
+| `DTAD_RD_MARK_LINE` | 1,679 features / 61,903 m | Every other marking: `RM1109` 25,204 m and `RM1001` 19,308 m dominate; yellow ones are `RM1043` hatched no-parking (560 m) and `RM1038` box junction (540 m). **Not in use** |
+| `DTAD_CROSSING_LINE` | 121 features / 6,698 m | Crossings. **Not in use** |
+| `DTAD_TY_BAR_LINE` | 4 features / 283 m | Transverse yellow bars. **Not in use** |
+
+**The marking codes are defined by the publisher, not inferred.** `dataspec/tadrawings_dataspec.zip`
+contains `Index Plan/(RM 1001 - 1080).pdf`, drawing `CT174/51-5(1)F` from TD's Road Safety &
+Standards Division, which gives every `RM` code its marking, description and dimensions:
+
+| Code | Description | Dimensions | Kind |
+|---|---|---|---|
+| `RM1040` (TC 515) | NO STOPPING AT ANY TIME — YELLOW | line width 100, spacing 100, **left line continuous, right line continuous** | **double** |
+| `RM1041` (TC 519) | NO STOPPING PART TIME — YELLOW | line width 100, **module continuous** | **single** |
+| `RM1038` (TC 514) | BOX JUNCTION — YELLOW | boundary 300, hatched 100 | — |
+| `RM1043` (PA 12) | NO PARKING HATCHED MARKINGS — YELLOW | line width 100 | — |
+
+⚠️ **That sheet is stamped "FOR INTERNAL ONLY"** and TD ships it inside the published open-data
+`dataspec` bundle. Recorded so a reader who finds it is not surprised; `LICENSING.md`'s terms are the
+government's own and are unchanged by it.
+
+**What it agrees with `NSR` about, measured.** 1 m samples, 3 m radius, before `Q56` changed
+anything: `RM1040` sits on `NSR TIME_ZONE = 1` for **99.95%** of its length, which independently
+confirms the "24 hours is a double yellow" mapping `P3-13` had asserted from a code table. **Only
+24 m of the 39 km is unexplained by `NSR` at all.** The full table is in `Q56`.
+
+**Resources**, verified to resolve 2026-08-20:
+
+| Resource | URL |
+|---|---|
+| Full FGDB (the one the audit reads) | `https://static.data.gov.hk/td/traffic-aids-drawings-v2/dTAD_IRNP.gdb.zip` |
+| Data specification + `Index Plan` | `https://static.data.gov.hk/td/traffic-aids-drawings-v2/dataspec/tadrawings_dataspec.zip` |
+| Per-layer GML / KMZ | `https://static.data.gov.hk/td/traffic-aids-drawings-v2/DTAD_{LAYER}.{gml,kmz}` — `DTAD_RD_MARK_LINE.gml` alone is 163 MB, the same trade the road network's GML makes (`Q9`) |
+
+### ❌ Surveyed and rejected for kerbside restrictions (2026-08-20)
+
+`Q56` swept every Transport Department dataset on DATA.GOV.HK (60), the CSDI Portal catalogue, and
+every one of the 3,810 packages whose name touches road, parking, marking, restriction, kerb,
+street, lane, loading, stopping, sign or bay. **`NSR` and `DTAD_RST_ZONE_LINE` are the only two
+datasets in the estate that assert a kerbside stopping restriction** — there is no third opinion.
+Recorded so the sweep is not repeated:
+
+| Dataset | Why not |
+|---|---|
+| `hk-td-msd_1` Metered Parking Spaces | CSV of counts per district plus new-meter occupancy. No per-bay geometry |
+| `hk-td-msd_2` Non-metered On-street Parking | ~250 sensored spaces **territory-wide**, a trial scheme |
+| `hk-td-tis_4` / `tis_5` parking distribution, vacancy | Real-time occupancy, not restriction |
+| `hk-td-tis_36` Pedestrian Streets | Area and effective hours; Road Network v2's `PEDESTRIAN_ZONE` already covers it |
+| `hk-landsd-openmap-road-centreline` | LandsD's own description: "primarily focused on approximate location query and map annotation labelling" |
+
+⚠️ **Two the sweep turned up that are worth their own look, and are *not* about yellow lines:**
+`hk-td-tis_39` **Fleet Taxi Stopping Places** (new, Oct 2025 — bears on `fares.json`) and
+`hk-hyd-csdi-pavement-polygon`, the Highways Department's maintained pavement extents, which bear on
+`carriageway_occupancy`'s open failure and on the play widening.
 
 ## Fares and points of interest
 

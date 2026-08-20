@@ -336,6 +336,22 @@ sources:
   # field mapping under `roads:` below is verified against it.
   road_data_dictionary: https://static.data.gov.hk/td/road-network-v2/dataspec/rdnet_dataspec.zip
 
+  # Not read by the pipeline either — this one is the *audit* source (`Q56`),
+  # read only by `tools/kerbside_source_audit.py`. Traffic Aids Drawings 2nd
+  # generation: the Transport Department's drawing set as spatial features, 51
+  # layers, monthly. ⚠️ **218 MB, the largest single fixed-URL source here**,
+  # against the road network's 17 MB, because it carries the whole territory's
+  # markings, signs, railings and poles to reach one restriction layer. That is
+  # the price of a second opinion and it is paid at fetch time, once; a build
+  # that never runs the audit can skip it with `--only`.
+  #
+  # ⚠️ The 1st-generation dataset (`tis_8`) is being withdrawn and its only
+  # remaining resource is a CSV pointing here. Do not go back to it.
+  traffic_aids_drawings_gdb: https://static.data.gov.hk/td/traffic-aids-drawings-v2/dTAD_IRNP.gdb.zip
+  # The drawings' own data specification, and the index plan that defines every
+  # RM marking code. `audit.kinds` above is verified against it.
+  traffic_aids_data_dictionary: https://static.data.gov.hk/td/traffic-aids-drawings-v2/dataspec/tadrawings_dataspec.zip
+
   # The two fare-node datasets, both whole-territory point GeoJSON and both
   # small — 518 and 275 features, 343 KB and 192 KB. data.gov.hk lists only a
   # portal link for each, so these URLs come from the CSDI file-api the
@@ -817,13 +833,27 @@ roads:
     # region's 44,220 m — the population `Q54` measured before this field was
     # read, which is why its over-paint figure was 3x rather than the real 4.0x.
     #
-    # ⚠️ **5 "Others" is refused deliberately, and it is 8,323 m.** The
-    # specification never names the class it restricts, and asserting a
-    # restriction on an unnamed class is exactly the invention `P3-13` exists to
-    # remove. Only 5% of its samples fall within 3 m of a code-1 line, so it is
-    # not a duplicate of one either. If a later specification names it, this
-    # list is the one line that changes.
-    painted_vehicle_types: [1]
+    # ✅ **5 "Others" was refused until `Q56`, and it is paint.** `P3-13`
+    # refused it because the specification names no class — verified again on
+    # the cached `rdnet_dataspec`, which really does say only "5 – Others" — and
+    # asserting a restriction on an unnamed class was the invention `P3-13`
+    # existed to remove. What settled it was a *second* source rather than a
+    # re-reading of this one: the Transport Department's Traffic Aids Drawings
+    # v2 draw the restriction lines as they are painted, and **93.9% of this
+    # region's code-5 metres carry one** (7,910 m of 8,422 m), 96% of them the
+    # single-yellow `RM1041`. The class stays unnamed; what is now known is that
+    # TD paints a line there, which is the only question this stage asks.
+    # `tools/kerbside_source_audit.py` is that measurement, repeatable.
+    #
+    # ⚠️ **2, 3 and 4 stay refused, and the same drawing is why the reason had
+    # to change.** "A restriction on taxis, minibuses or goods vehicles is a
+    # sign" is not what the drawings show — code 2 is 100% covered by a painted
+    # line and code 4 is 90.2%. They stay out because a *class-specific*
+    # restriction is not a plain yellow line and this codec has no way to say
+    # which class: painting one as an ordinary double yellow would assert on all
+    # motor vehicles what the source restricts for goods vehicles. That is a
+    # codec limit, not a fact about the road, and it is 2,847 m in region.
+    painted_vehicle_types: [1, 5]
 
     # Data specification: 1 = 24 hours, 2 = 8-10 am and 5-7 pm, 3 = 7 am to
     # 7 pm, 4 = 7 am to midnight, 5 = others. Hong Kong's road rule is the plain
@@ -858,6 +888,35 @@ roads:
     # and a worst 17.83 m, so this binds on nothing here today. It is written
     # down so that when it does bind, it binds on something absurd.
     max_offset_m: 20.0
+
+    # The second opinion (`Q56`). **Not read by the pipeline** — only by
+    # `tools/kerbside_source_audit.py`, which runs the block above's join over
+    # this layer instead and diffs the two answers.
+    #
+    # `DTAD_RST_ZONE_LINE` is the same restrictions drawn cartographically:
+    # where `NSR` says *what is restricted, for whom, when*, this says *what is
+    # painted, in what linetype*. That is why it can grade the kind, which
+    # nothing else in the repo can see — and why it cannot replace `NSR`, whose
+    # `TIME_ZONE` it carries as a column that is **null on all 1,763 features in
+    # this region**.
+    #
+    # The two marking codes are the Transport Department's own, defined in the
+    # index plan shipped inside the dataset's `dataspec` zip:
+    #   RM1040 (TC 515) — "NO STOPPING AT ANY TIME - YELLOW", left line
+    #                     continuous + right line continuous = a double yellow
+    #   RM1041 (TC 519) — "NO STOPPING PART TIME - YELLOW", module continuous
+    #                     = a single yellow
+    # Codes outside this table are refused by the tool rather than defaulted,
+    # for the same reason `kinds:` above lists every code it can meet. In region
+    # that leaves 196 m of `SOLID` and null linetype out of 39,292 m.
+    audit:
+      source: traffic_aids_drawings_gdb
+      layer: DTAD_RST_ZONE_LINE
+      fields:
+        line_type: LINETYPE
+      kinds:
+        RM1040: double
+        RM1041: single
 
   # Data specification: 1 = travel permitted in both directions (default),
   # 3 = permitted only in the digitised direction of the line feature.

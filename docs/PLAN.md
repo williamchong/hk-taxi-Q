@@ -490,6 +490,11 @@ trade.
   one contiguous run, median 23 m, and the region has **1,636 run boundaries**. A station pair 0.25 m
   either side of each boundary is **3,272 inserted stations** against 4,596 today — roughly **+19% on
   the road mesh's vertices**, and a larger collision shape with it. Priced from a PCK, never summed.
+- ⚠️ **The scope refusal below was reversed by `Q56` on 2026-08-20, and is kept for the reasoning
+  rather than the conclusion.** A second dataset — TD's Traffic Aids Drawings v2 — shows a painted
+  line on 93.9% of those code-5 metres, so `painted_vehicle_types` is `[1, 5]`. `VT=2/3/4` stay
+  refused, but *not* because they are signs: the drawings paint those too, and the refusal now rests
+  on the codec being unable to say which class is restricted. Record in `DECISIONS.md` `Q56`.
 - **Scope refusal, recorded rather than silent:** `VEHICLE_TYPE = 5` "Others" is **8,323 m** of kerb,
   mostly peak-hours and geometrically distinct from the `VT=1` lines (only 5% of its samples fall
   within 3 m of one). The class it restricts is not named in the data, and asserting a restriction on

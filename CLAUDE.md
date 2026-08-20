@@ -133,6 +133,15 @@ Common emoji for this project:
   the pipeline published, so a restriction on the wrong centreline is agreed with rather than caught.
   What covers that is `etl/tests/test_kerbside.py`, which pins the side against `surface.mitres`
   rather than against a comment.
+- **`painted_vehicle_types`, `kinds`, or anything that changes *which* restrictions are published:
+  also `tools/kerbside_source_audit.py`, and paste its table.** It runs the pipeline's own join over
+  the Traffic Aids Drawings — a second, independently digitised source of the same restrictions —
+  and diffs the two answers. It is **the only instrument that can grade the kind**: every consumer
+  takes double-versus-single on trust from `NSR.TIME_ZONE`, so a wrong mapping renders perfectly
+  (`Q56`). ⚠️ It needs `traffic_aids_drawings_gdb`, a **218 MB** fetch no build reads; get it with
+  `--only`. ⚠️ It grades rather than checks — a widening gap is a finding to go and look at, never a
+  bar to retune against — and it **cannot** see the side convention flip, because that mirrors both
+  sources at once.
 - Road-surface, deck-height or ground changes: also `tools/deck_error.py`, `tools/overhang.py`,
   `tools/ground_clearance.py` and `tools/carriageway_occupancy.py`, by hand after a build. They grade
   the *shipped* bundle and share no code with the pipeline — `check.sh` does not require a built

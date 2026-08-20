@@ -1613,8 +1613,12 @@ class TestKerbsideRestrictions:
     def test_hong_kong_declares_one(self, hong_kong) -> None:
         kerbside = hong_kong.roads.kerbside
         assert kerbside is not None
-        # Only "all motor vehicles" is a painted line; the rest are signs.
-        assert kerbside.painted_vehicle_types == frozenset({1})
+        # "All motor vehicles" and "Others" are painted lines (`Q56` measured
+        # 93.9% of the latter carrying one in the drawings). The class-specific
+        # codes stay out — not because they are signs, which the drawings
+        # disproved, but because this codec cannot say *which* class.
+        assert kerbside.painted_vehicle_types == frozenset({1, 5})
+        assert not kerbside.painted_vehicle_types & {2, 3, 4}
         # 24 hours is a double yellow; every posted-hours code is a single.
         assert kerbside.kind_for(1) == "double"
         assert {kerbside.kind_for(code) for code in (2, 3, 4, 5)} == {"single"}
@@ -1656,3 +1660,60 @@ class TestKerbsideRestrictions:
 
         with pytest.raises(ValueError, match="would reject nothing"):
             load_city("hong_kong", cities_root=rewrite(blunt))
+
+
+class TestKerbsideAudit:
+    """The second-source block (`Q56`). Nothing in `pipeline/` reads it, and it
+    is checked at load anyway — the alternative is a grader that dies on a typo
+    after reading a 218 MB geodatabase."""
+
+    def test_hong_kong_declares_one(self, hong_kong) -> None:
+        audit = hong_kong.roads.kerbside.audit
+        assert audit is not None
+        assert audit.layer.layer == "DTAD_RST_ZONE_LINE"
+        assert audit.layer.field("line_type") == "LINETYPE"
+        # The Transport Department's own marking codes, from the index plan in
+        # the drawings' dataspec: RM1040 is "no stopping at any time" drawn as
+        # two continuous lines, RM1041 "no stopping part time" as one.
+        assert audit.kinds == {"RM1040": "double", "RM1041": "single"}
+
+    def test_it_names_a_source_that_exists(self, hong_kong) -> None:
+        """A typo here would surface as a missing file after a build's work."""
+        assert hong_kong.roads.kerbside.audit.source in hong_kong.sources
+
+    def test_an_unfetchable_source_is_rejected(self, rewrite) -> None:
+        def rename(doc: dict[str, Any]) -> None:
+            doc["roads"]["kerbside_restrictions"]["audit"]["source"] = "no_such_source"
+
+        with pytest.raises(ValueError, match="which is not in sources"):
+            load_city("hong_kong", cities_root=rewrite(rename))
+
+    def test_the_block_is_optional(self, rewrite) -> None:
+        """A city with one source and no way to check it says so by leaving the
+        block out, rather than by an audit that grades a source against itself."""
+        city = load_city(
+            "hong_kong",
+            cities_root=rewrite(lambda doc: doc["roads"]["kerbside_restrictions"].pop("audit")),
+        )
+        assert city.roads.kerbside is not None
+        assert city.roads.kerbside.audit is None
+
+    def test_a_kind_outside_the_vocabulary_is_rejected(self, rewrite) -> None:
+        """The audit reaches a kind by its own route, so its vocabulary has to be
+        checked on its own rather than inherited from the block it grades."""
+
+        def invent(doc: dict[str, Any]) -> None:
+            doc["roads"]["kerbside_restrictions"]["audit"]["kinds"]["RM1040"] = "triple"
+
+        with pytest.raises(ValueError, match="expected one of"):
+            load_city("hong_kong", cities_root=rewrite(invent))
+
+    def test_an_empty_kind_table_is_rejected(self, rewrite) -> None:
+        """It would map every marking code to nothing, grade the whole region as
+        unmapped, and report the two sources in perfect disagreement."""
+
+        def empty(doc: dict[str, Any]) -> None:
+            doc["roads"]["kerbside_restrictions"]["audit"]["kinds"] = {}
+
+        with pytest.raises(ValueError, match="grade every metre unknown"):
+            load_city("hong_kong", cities_root=rewrite(empty))

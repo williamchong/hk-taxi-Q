@@ -777,6 +777,31 @@ KERB_KINDS = (KERB_SINGLE, KERB_DOUBLE)
 
 _KERBSIDE_ROLES = ("vehicle_type", "time_zone")
 
+_KERBSIDE_AUDIT_ROLES = ("line_type",)
+
+
+@dataclass(frozen=True)
+class KerbsideAudit:
+    """A second, independently digitised source of the same restrictions (`Q56`).
+
+    **Nothing in `pipeline/` reads this.** It is config rather than constants in
+    `tools/kerbside_source_audit.py` for the reason hard rule 3 gives: the layer
+    name, the field and the marking codes are the Transport Department's schema,
+    and a tool that spelled them itself would be the one place a Hong Kong fact
+    lived outside the city file. A city without a second source leaves the block
+    out and cannot be audited, which is the honest answer.
+
+    `kinds` maps the drawing's own marking code onto a `KERB_KINDS` value, so
+    the audit reaches a kind without going through `KerbsideRestrictions.kinds`.
+    That independence is the entire point — an audit that derived its kind from
+    the same `time_zone` table it is grading would agree with it by construction.
+    """
+
+    # A `sources` key, fetched but never read by a build.
+    source: str
+    layer: SourceLayer
+    kinds: dict[str, str]
+
 
 @dataclass(frozen=True)
 class KerbsideRestrictions:
@@ -789,10 +814,13 @@ class KerbsideRestrictions:
 
     layer: SourceLayer
     # Source vehicle-type codes whose restriction is expressed as a **painted
-    # line**. Hong Kong publishes five, and only "all motor vehicles" is paint —
-    # a goods-vehicle or taxi restriction is a sign, and painting one would
-    # assert on the road something the source puts on a pole. `P3-13` also
-    # refuses "Others", whose class the specification never names.
+    # line**. ⚠️ **"The rest are signs" was the reason until `Q56`, and it was
+    # wrong** — the Traffic Aids Drawings paint the class-specific codes too. The
+    # ones that stay out stay out because a restriction on *one class* is not a
+    # plain yellow line and this codec cannot say which class, so painting it
+    # would assert on all motor vehicles what the source restricts for goods
+    # vehicles. That is a limit of the codec, not a fact about the road, and
+    # `audit` below is what can tell the difference.
     painted_vehicle_types: frozenset[int]
     # Source time-zone code to a kind in `KERB_KINDS`. Every code the layer can
     # carry must appear: an unlisted one raises rather than defaulting, for the
@@ -817,6 +845,17 @@ class KerbsideRestrictions:
     # a tuning value — it is the guard that says "this restriction belongs to a
     # road this region does not contain", and it doubles as the search radius.
     max_offset_m: float
+
+    # The second source that grades this one, or `None` where the city has one
+    # source and no way to check it. Read only by `tools/kerbside_source_audit.py`.
+    #
+    # The only field here with a default, because it is the only one whose
+    # absence changes nothing the pipeline does: every other value is a number
+    # the join needs, and defaulting one would let a city ship a restriction
+    # measured against a pitch nobody chose. `_kerbside` passes this explicitly
+    # regardless; the default is for the test fixtures and for a second city
+    # that has no second source yet.
+    audit: KerbsideAudit | None = None
 
     def kind_for(self, code: int) -> str:
         """The kind of line a source time-zone code means."""
@@ -1371,6 +1410,12 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
     _check_deck_sampling_has_a_structure_class(city, path)
     _check_widening_levels_are_mapped(city, path)
     _check_source_exists(city, city.roads.source, f"{path}:roads.source")
+    if city.roads.kerbside is not None and city.roads.kerbside.audit is not None:
+        _check_source_exists(
+            city,
+            city.roads.kerbside.audit.source,
+            f"{path}:roads.kerbside_restrictions.audit.source",
+        )
     for index, group in enumerate(city.fares.groups):
         _check_source_exists(city, group.source, f"{path}:fares.groups[{index}].source")
     if city.podiums is not None:
@@ -2052,6 +2097,37 @@ def _kerbside(body: Any, where: str) -> KerbsideRestrictions | None:
         bridge_gap_m=lengths["bridge_gap_m"],
         min_run_m=lengths["min_run_m"],
         max_offset_m=lengths["max_offset_m"],
+        audit=_kerbside_audit(body.get("audit"), f"{where}:audit"),
+    )
+
+
+def _kerbside_audit(body: Any, where: str) -> KerbsideAudit | None:
+    """The optional second-source block, checked at load like everything else.
+
+    Checked here even though only a tool reads it, because the alternative is a
+    grader that fails halfway through a build's worth of work on a typo. An
+    empty `kinds` is refused for the same reason the pipeline's is: it would
+    grade every metre as an unknown kind and report perfect disagreement.
+    """
+    if body is None:
+        return None
+    if not isinstance(body, dict):
+        raise ValueError(f"{where} must be a mapping, got {body!r}")
+
+    kinds: dict[str, str] = {}
+    for code, kind in _require(body, "kinds", where).items():
+        if kind not in KERB_KINDS:
+            raise ValueError(
+                f"{where}:kinds[{code!r}] is {kind!r}, expected one of {', '.join(KERB_KINDS)}"
+            )
+        kinds[str(code)] = str(kind)
+    if not kinds:
+        raise ValueError(f"{where}:kinds is empty; the audit would grade every metre unknown")
+
+    return KerbsideAudit(
+        source=str(_require(body, "source", where)),
+        layer=_source_layer(body, where, _KERBSIDE_AUDIT_ROLES),
+        kinds=kinds,
     )
 
 
