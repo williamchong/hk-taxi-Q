@@ -37,7 +37,7 @@ lives in git. This file holds *why things are the way they are*.
 | `Q12` | The source's one-way directions match the street | ✅ Closed |
 | `Q13` | All 36 mixed-level nodes are ramps; driving the network is Phase 4 | 🟢 Largely answered |
 | `Q14` | Taxi-stand operating-time restrictions are discarded by `P1-5` | 🟡 Open, deferred |
-| `Q15` | Fare nodes snap by plan distance only, because the published points are 2D | 🟡 Open, not reachable with this source |
+| `Q15` | Fare nodes snap by plan distance only, because the published points are 2D | 🟡 Open, **half fixed** — the deck no longer wins; a point *on* a deck still cannot |
 | `Q16` | LOD0 does not ship | ✅ Closed |
 | `Q17` | CI runs `tools/check.sh` and cannot check the generated assets | ✅ Closed |
 | `Q18` | Ground colour sits under a chroma knee; the land-cover classifier is refused | ✅ Closed |
@@ -368,15 +368,89 @@ a parser — cheap whenever the fare loop needs it, and premature before then.
 
 ## `Q15` — Fare nodes snap by plan distance only
 
-**Status.** 🟡 Open — not reachable with this source · **Owner.** `P4-2`
+**Status.** 🟡 Open — **half fixed**, 2026-08-21 · **Owner.** `P4-2`
 
 **Claim.** The published fare points are 2D, so snapping compares plan distance alone. A stand under
 a flyover cannot prefer the street below over the deck above.
 
-**Why it is not a live defect.** No Wan Chai node is affected — every winner is level 0, with a
-≥4.28 m margin.
+### 🔴 It became live, and here is what fixed it
 
-**See.** `P1-5` · `Q13`
+This entry said *"**Why it is not a live defect.** No Wan Chai node is affected — every winner is
+level 0, with a ≥4.28 m margin."* **That stopped being true on 2026-08-20**, when `P3-14` gave the
+stage a second producer, and it was not re-checked.
+
+`f_032` — a tram stop on **HENNESSY ROAD**, under the **CANAL ROAD FLYOVER**:
+
+```
+  2.93 m  e272  level 1  tram=False  CANAL ROAD FLYOVER   <- winner
+  3.73 m  e217  level 0  tram=True   HENNESSY ROAD        <- the road it is on
+```
+
+The street loses by **0.80 m in plan**, so the node took the deck's height and shipped at `pos.y`
+**12.562 m** against ~4.0 m for the other eighteen stops. `P1-5` says *"Only the height comes off
+the road"*; this took it off the wrong road.
+
+**Fixed by restricting candidates to `elevation_level == 0`** in `fares.build_region` — the same
+restriction `kerbside.py`, `tramway.py` and `arrows.py` already make, and `fares.py` was the only
+`Segments` caller that did not. `f_032` → edge **217**, `edge_t` **0.413511**, `pos.y` **3.947**
+(Δ −8.615 m).
+
+⚠️ **Priced before it landed: 1 of 48 nodes moves.** For the other 47 the level-0-best and the
+any-level-best are the same edge, the largest margin difference across all 48 being **0.805 m**, on
+`f_032` alone. The diff on `fares.json` is that one node.
+
+### ⚠️ Nothing the stage published could see it, and that is why there is now a counter
+
+`worst_snap_m` reads **10.04 m** with the restriction and **10.04 m** without it — the figure
+belongs to `f_040`, which is untouched. `unsnapped` (0), `read`, `outside`, `unnamed` and every
+`by_category` count are byte-identical across the defect. **Every number this stage published was
+blind to it**, which is a stronger reason for a counter than any of them being weak.
+
+`FareReport.off_grade_nearer` and `worst_off_grade_margin_m` now count the points with an off-grade
+edge nearer than the level-0 one they were measured against — the population the restriction changes
+the answer for. Wan Chai reads **1**, by **0.80 m**, warned by the CLI.
+
+⚠️ **Off-grade rather than elevated, and the counter is named for the rule instead of for the
+defect.** The restriction excludes every non-zero level, so this counts a point over a **tunnel** as
+well as one under a deck — 15 of the region's 797 edges are level −1 — and it should, because a
+kerbside point taking a tunnel's height is the same defect upside down. Naming it `under_structure`
+after `f_032` would have described one instance rather than the rule.
+
+⚠️ **Recorded before the `max_snap_m` refusal, not after** — measured under the guard it would be
+bounded by `max_snap_m` by construction and could never report the point the limit threw away.
+`Q58`'s `drawn_gauge_m` trap. ✅ **And it is pinned**, by the fixture's existing snap-limit test
+rather than by a new one: its adrift point sits 125 m from either level-0 edge and 123 m from the
+deck, reads a **2 m** margin, and is then refused. Move the counting block below the guard and that
+assertion is unreachable. The two purpose-built `Q15` tests both use points *inside* `max_snap_m`,
+so on their own they would have left the ordering green either way.
+
+### What is still open
+
+A point that genuinely belongs to an **elevated** road now snaps to the street beneath it, and the
+source has nothing in it to say otherwise. Narrowing the candidate set fixes the direction the
+sources are wrong in here and not the other; that is `P4-2`'s, and `off_grade_nearer` is the detector
+that would show a city where it matters.
+
+### Why the number rather than a per-group config key
+
+An `at_grade:` boolean on the fare group was the obvious alternative and is refused. `_fare_group`
+**does not reject unknown group keys**, so a mistyped `at-grade:` would load cleanly and silently
+restore the defect — the exact failure class `_check_categories_are_reachable` exists to prevent in
+this parser. And "the candidate set for a 2D point snap is the at-grade network" is a fact about the
+*join*, not about a place, so hard rule 3 does not reach it: three sibling stages already encode it
+in code, and making `fares.py` the one where it is a config question would assert something untrue
+about the other three. A city where `off_grade_nearer` is large is the evidence that would justify
+the knob; there is none today.
+
+### ⚠️ The mechanism, which is the fourth instance
+
+A claim measured against **one producer**, generalised to the stage, then left standing when a
+second producer arrived. `Q54`, `Q56` and `Q57` are the same shape. Three places carried this one —
+`fares.py`'s module docstring, `Segments.nearest`'s docstring, and this entry — and all three quoted
+a margin that was only ever about `P1-5`'s two taxi datasets. `DATA_SOURCES.md`'s survey bullet was
+correctly scoped and is annotated rather than corrected.
+
+**See.** `P1-5` · `Q13` · `P3-14` for the producer that made it live · `Q58` for the counter trap
 
 ## `Q16` — LOD0 does not ship
 

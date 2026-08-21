@@ -122,7 +122,7 @@ def _road(polyline: list[list[float]]) -> dict:
 
 
 class _Testville:
-    """A city, a two-road graph, and a writer for its point datasets.
+    """A city, a three-edge graph, and a writer for its point datasets.
 
     Everything a test needs to author source features in game coordinates and
     run the stage over them. Calling it runs the stage.
@@ -201,7 +201,7 @@ def testville(tmp_path):
                     {"id": 1, "pos": [500.0, 0.0, 300.0], "kind": "endpoint"},
                 ],
                 # The first runs east-west through the middle; the second is a
-                # spur far enough away that nothing in these tests reaches it.
+                # southern spur, reached only by the `Q15` flyover test below.
                 # Ids again chosen not to match their list positions.
                 "edges": [
                     {
@@ -211,6 +211,20 @@ def testville(tmp_path):
                     {
                         **_road([[100.0, 0.0, 50.0], [500.0, 0.0, 50.0]]),
                         "id": _FIRST_EDGE_ID + 1,
+                    },
+                    # A deck 2 m north of the spur and 12 m over it, added for
+                    # `Q15`. Level 1, so `build_region` excludes it from the
+                    # candidates outright: it can never be a *published* answer,
+                    # only the one this stage refuses to give. ⚠️ It does move
+                    # `off_grade_nearer`, which is not published and is the
+                    # point — `test_a_point_too_far_from_any_road_...` reads a
+                    # 2 m margin off it and is what pins the counter's placement
+                    # above the `max_snap_m` guard.
+                    {
+                        **_road([[100.0, 12.0, 52.0], [500.0, 12.0, 52.0]]),
+                        "id": _FIRST_EDGE_ID + 2,
+                        "elevation_level": 1,
+                        "road_name": {"en": "MAIN STREET FLYOVER", "zh": "大街天橋"},
                     },
                 ],
                 "turn_restrictions": [],
@@ -437,12 +451,21 @@ class TestBuildRegion:
 
     def test_a_point_too_far_from_any_road_is_dropped_and_counted(self, testville) -> None:
         """`max_snap_m` is 30 in the fixture; this one is 150 m from the
-        nearest edge, which is a car park rather than a kerbside."""
+        nearest edge, which is a car park rather than a kerbside.
+
+        It is also the only point in this file that the snap limit refuses, so
+        it is where `off_grade_nearer`'s placement is pinned: 125 m to either
+        level-0 edge against 123 m to the deck. Counted **above** the guard, as
+        `Q58`'s `drawn_gauge_m` trap says it must be — move that block below and
+        this margin is unreachable, because the point never gets that far.
+        """
         feature = testville.feature
         report = testville([feature(300.0, 175.0, "Urban", "Adrift", "漂")])
 
         assert report.unsnapped == 1
         assert report.nodes == []
+        assert report.off_grade_nearer == 1
+        assert report.worst_off_grade_margin_m == pytest.approx(2.0, abs=0.01)
 
     def test_the_position_kept_is_the_source_one(self, testville) -> None:
         """Not the snapped one. The kerbside is where the passenger stands, and
@@ -457,6 +480,33 @@ class TestBuildRegion:
         assert node["pos"][2] == pytest.approx(308.0, abs=0.01)
         # Height, though, comes off the road it attached to.
         assert node["pos"][1] == pytest.approx(0.0)
+
+    def test_a_point_under_a_flyover_lands_on_the_street_not_the_deck(self, testville) -> None:
+        """`Q15`, live since `P3-14`.
+
+        The deck is 0.5 m away in plan and the street beneath it is 1.5 m, so
+        plan distance alone picks the deck and the node takes its 12 m height.
+        This is `f_032` in miniature: a tram stop on Hennessy Road was won by
+        the Canal Road Flyover overhead by 0.80 m and shipped 8.6 m in the air.
+        """
+        feature = testville.feature
+        report = testville([feature(300.0, 51.5, "Urban", "Beneath", "橋下")])
+        node = report.nodes[0]
+
+        assert node.nearest_edge == _FIRST_EDGE_ID + 1
+        assert node.pos[1] == pytest.approx(0.0)
+        assert report.off_grade_nearer == 1
+        assert report.worst_off_grade_margin_m == pytest.approx(1.0, abs=0.01)
+
+    def test_a_point_with_no_deck_over_it_leaves_the_off_grade_count_alone(self, testville) -> None:
+        """The counter has to be able to read zero, or a region where the
+        restriction never fires is indistinguishable from one where it is not
+        being measured."""
+        feature = testville.feature
+        report = testville([feature(200.0, 308.0, "Urban", "North side", "北")])
+
+        assert report.off_grade_nearer == 0
+        assert report.worst_off_grade_margin_m == pytest.approx(0.0)
 
     def test_ids_are_sequential_across_every_group(self, testville) -> None:
         feature = testville.feature

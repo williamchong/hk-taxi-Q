@@ -780,6 +780,11 @@ ribbon is drawn from centrelines. This is where the *passenger* stands. Where th
 `nearest_edge` at `edge_t`, and that is derivable while the kerbside position would not be if it
 were overwritten. `pos.y` comes off the snapped edge rather than the terrain.
 
+⚠️ **The snap considers `elevation_level == 0` edges only**, so a point under a flyover takes the
+street's height rather than the deck's. It did not until 2026-08-21, and one of `P3-14`'s tram stops
+shipped 8.6 m in the air for it (`Q15`). No schema change — the fields' meanings are unaltered, and
+a reader that kept its old interpretation is now reading a corrected value, not a different one.
+
 **`edge_t`** is the fraction along that edge's plan length. Without it `nearest_edge` names a road
 that can be 200 m long, and the game would have to redo the projection the ETL already did.
 

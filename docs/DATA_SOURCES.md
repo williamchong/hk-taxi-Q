@@ -689,6 +689,10 @@ Measured across the region's 29 points, and the reason no tie-breaking rule exis
 - Every winner is at **elevation level 0**. One level-1 edge appears as a runner-up, losing by 7 m.
   `Q15`: the sources are 2D, so a stand under a flyover has nothing in it to prefer the street below
   over the deck above. Plan distance is the only defensible measure.
+  ⚠️ **Measured over these 29 points and true of them, but it is not a property of the stage.**
+  `P3-14` added 19 tram stops, and one of them — `f_032`, on Hennessy Road under the Canal Road
+  Flyover — has a level-1 runner-up that **wins**, by 0.80 m. Candidates are restricted to level 0
+  since 2026-08-21; `Q15` records what changed and what is still open.
 
 > **Region note:** Hong Kong Island uses **red urban taxis**. Green (NT) or blue (Lantau) livery in
 > this map would read as wrong to any local player.

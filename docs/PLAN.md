@@ -653,7 +653,7 @@ than discovering the rest of it from a bug report.
 | ID | Deliverable | Accept |
 |---|---|---|
 | `P4-1` | `RoadGraph` serves off-grade edges — nearest-edge, lane centres and travel direction across all three levels | The `P2-2` criterion "nearest-edge never returns an off-grade edge" is **deliberately reversed**, its test rewritten to assert the new rule, and the reversal recorded against `Q13` |
-| `P4-2` | Level-aware nearest-edge — a query resolves by 3D proximity, not plan distance | A stand under a flyover resolves to the street, not the deck above it. **Closes `Q15`** |
+| `P4-2` | Level-aware nearest-edge — a query resolves by 3D proximity, not plan distance | A query beside an elevated deck resolves to the deck when it carries height, and to the street when it does not. ⚠️ **The ETL half is already done**: a fare point under a flyover taking the deck's height was `Q15`, fixed 2026-08-21 by restricting the snap to level 0. What remains is the runtime query and the reverse case — a point that genuinely belongs *on* a deck, which no candidate filter can place. **Closes the remaining half of `Q15`** |
 | `P4-3` | Ramp traversal — the car drives grade → deck → grade without leaving the surface | No step over 0.15 m at any of the 36 nodes, measured; the kerb height is the tolerance because it is what the suspension already survives |
 | `P4-4` | Traffic across levels — extends `P3-3` onto the elevated network | AI obeys direction and turn restrictions on ramps; density scales by tier |
 | `P4-5` | Perf pass — 23.3% more drivable area, and the streamer's bands were tuned without it | 60fps on the device floor with the elevated network resident |

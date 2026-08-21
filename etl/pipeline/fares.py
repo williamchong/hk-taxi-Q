@@ -7,12 +7,19 @@ and writes `fares.json` per the contract in `docs/ARCHITECTURE.md`.
 Four measurements off the two sources decide the shape of this — see
 `docs/DATA_SOURCES.md`:
 
-- **Snapping is never ambiguous.** Every one of the region's 29 points sits
-  1.18-8.37 m from a road centreline, and the runner-up edge is at least 4.28 m
-  further away. These are kerbside positions against a centreline graph, so the
-  distance is about half a carriageway and the nearest edge is the road the
-  point is on. No tie-breaking rule was needed, and inventing one would be
-  guessing.
+- **Snapping is never ambiguous — for the two taxi datasets it was measured
+  on.** Every one of the region's 29 points sits 1.18-8.37 m from a road
+  centreline, and the runner-up edge is at least 4.28 m further away. These are
+  kerbside positions against a centreline graph, so the distance is about half a
+  carriageway and the nearest edge is the road the point is on. No tie-breaking
+  rule was needed, and inventing one would be guessing.
+  ⚠️ **That margin is a fact about those two sources, not about this stage.**
+  `P3-14` added 19 tram stops, and one of them — `f_032`, on Hennessy Road under
+  the Canal Road Flyover — was won by the deck overhead by 0.80 m and took its
+  height, 12.562 m against 3.947 m for the road it is on. Candidates are
+  restricted to `elevation_level == 0` in `build_region` for that reason, the
+  same restriction `kerbside.py`, `tramway.py` and `arrows.py` make, and
+  `FareReport.off_grade_nearer` counts the points it changes the answer for.
 - **The source positions are quantised to whole metres.** Published as lon/lat
   to ten decimal places, but every one round-trips to an exact metre on the
   HK1980 grid. So a fare node's position carries about half a metre of its own
@@ -98,6 +105,23 @@ class FareReport:
     # resolve is the acceptance criterion for this task.
     unsnapped: int = 0
     worst_snap_m: float = 0.0
+    # Points with an off-grade edge nearer than the level-0 one they were
+    # measured against — the population the restriction in `build_region`
+    # changed the answer for. One in Wan Chai (`f_032`, under the Canal Road
+    # Flyover), and it is the only number here that can see `Q15`:
+    # `worst_snap_m` reads 10.04 m with the restriction and 10.04 m without it,
+    # so nothing else this stage publishes moves when the snap is wrong. A city
+    # where this is large is the signal to give a group its own rule rather than
+    # adding a per-group config boolean speculatively.
+    #
+    # ⚠️ **Off-grade, not elevated.** The restriction excludes every non-zero
+    # level, so this counts a point over a *tunnel* as well as one under a deck —
+    # 15 of this region's 797 edges are level -1 — and it should, because a
+    # kerbside point taking a tunnel's height is the same defect upside down.
+    # ⚠️ **It counts points the snap limit then refuses**, which is why it is
+    # incremented above that guard; those points reach no node and no `pos`.
+    off_grade_nearer: int = 0
+    worst_off_grade_margin_m: float = 0.0
     # Counted rather than derived from `nodes`, because a `pudo` node does not
     # carry its category into the contract — only what it permits.
     by_category: dict[str, int] = field(default_factory=dict)
@@ -208,10 +232,22 @@ class Segments:
 
         Plan distance is the only defensible measure here, because the sources
         are 2D: a taxi stand carries no height, so a stand under a flyover has
-        nothing in it to prefer the street over the deck above. No point in
-        this region is affected — every winner is at level 0, and the one
-        level-1 runner-up loses by 7 m — but a city with stands under an
-        elevated road would need height in the source to do better. See `Q15`.
+        nothing in it to prefer the street over the deck above.
+
+        ⚠️ **Which edges are candidates is the caller's decision, and every
+        caller passes level 0 only** — `fares.build_region`, `tramway.py` and
+        `arrows.py`, for the same stated reason. That measured nothing until
+        `P3-14` added 19 tram stops: `f_032`, on Hennessy Road under the Canal
+        Road Flyover, was won by the deck by a plan margin of 0.80 m and took
+        its height — 12.562 m against 3.947 m for the road it is actually on.
+        The claim that stood here, that the one level-1 runner-up in the region
+        lost by 7 m, was measured on `P1-5`'s taxi points and never covered a
+        point beneath a deck.
+
+        A point that belongs to an elevated road still cannot be placed on one:
+        narrowing the candidates fixes the direction the sources are wrong in
+        here, not the other. That half of `Q15` is open, and
+        `FareReport.off_grade_nearer` is what would say so.
         """
         offset_x, offset_z = x - self.start[:, 0], z - self.start[:, 2]
         step_x, step_z = self.delta[:, 0], self.delta[:, 2]
@@ -255,7 +291,30 @@ def build_region(
     """Read the region's taxi points and write its `fares.json`."""
     out_dir = city.out_dir(region_id, out_root)
     graph = read_graph(out_dir / ROADGRAPH_NAME, city.id, region_id)
-    segments = Segments.of(graph["edges"])
+    # Level 0 only, the same restriction `kerbside.py`, `tramway.py` and
+    # `arrows.py` all make: the nearest edge of *any* level to a point under a
+    # flyover is the flyover. Measured on this region it moves exactly one of 48
+    # nodes — `f_032` off the Canal Road Flyover deck and back onto Hennessy
+    # Road, 8.6 m down — and leaves the other 47 on the edge they already had,
+    # the largest margin difference among them being 0.80 m. `Q15`.
+    segments = Segments.of([edge for edge in graph["edges"] if int(edge["elevation_level"]) == 0])
+    # Every level the restriction above excludes, which is tunnels as well as
+    # decks. This index is never snapped to — it exists so that restriction can
+    # be counted, because without it a region where the rule never fires and one
+    # where it fires on every node write the same `fares.json`.
+    #
+    # ⚠️ **The polyline test is `Segments.of`'s refusal, restated because this
+    # caller has to survive it.** `of` skips edges under two points and *then*
+    # raises if nothing usable is left, so filtering on emptiness alone would
+    # pass a list of one-point polylines straight into that raise — out of a
+    # stage that has decided it does not need this index at all. Same predicate
+    # `roads.py` folds into the list it hands `kerbside.py`.
+    off_grade_edges = [
+        edge
+        for edge in graph["edges"]
+        if int(edge["elevation_level"]) != 0 and len(edge["polyline"]) > 1
+    ]
+    off_grade = Segments.of(off_grade_edges) if off_grade_edges else None
 
     style = city.fares
     transform = city.game_transform(region_id)
@@ -281,6 +340,17 @@ def build_region(
                 continue
 
             snap = segments.nearest(x, z)
+            if off_grade is not None:
+                margin = snap.distance_m - off_grade.nearest(x, z).distance_m
+                if margin > 0.0:
+                    # ⚠️ **Recorded before the refusal below, not after** —
+                    # `Q58`'s `drawn_gauge_m` trap. Measured under the guard,
+                    # this margin would be bounded by `max_snap_m` by
+                    # construction and could never report the point the limit
+                    # threw away. Pinned by the `max_snap_m` test, whose adrift
+                    # point reads a 2 m margin and is then refused.
+                    report.off_grade_nearer += 1
+                    report.worst_off_grade_margin_m = max(report.worst_off_grade_margin_m, margin)
             if snap.distance_m > style.max_snap_m:
                 # Reported rather than raised: a point in a car park is the
                 # publisher's business, and one bad row should not cost the
@@ -424,6 +494,13 @@ def main(argv: list[str] | None = None) -> int:
         log.info("  %-16s %d", category, count)
     if report.unsnapped:
         log.warning("  %d points had no road edge within the snap limit", report.unsnapped)
+    if report.off_grade_nearer:
+        log.warning(
+            "  %d points had an off-grade edge nearer than the level-0 one they were measured"
+            " against, by up to %.2f m — snap limit refusals included (`Q15`)",
+            report.off_grade_nearer,
+            report.worst_off_grade_margin_m,
+        )
     if report.unnamed:
         log.warning("  %d fare nodes are missing a name in at least one language", report.unnamed)
     return 0
