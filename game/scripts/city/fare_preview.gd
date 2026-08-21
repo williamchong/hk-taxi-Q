@@ -14,6 +14,13 @@
 ## contract at once: if either is wrong the tether points at the wrong street,
 ## or at the wrong end of the right one.
 ##
+## ⚠️ **The tether cannot see a wrong-*level* snap, and did not.** `pos.y` comes
+## off the edge the node snapped to, so when `f_032` was won by the Canal Road
+## Flyover the tether rose to the deck with it and read as perfect. What hid it
+## was this file having no `poi` case until then: all 19 of `P3-14`'s tram stops
+## fell through to the `pickup` test, printed as "drop-off only" in the drop-off
+## grey, and nothing invited a look at them. `Q15`.
+##
 ## No transform is applied, for the same reason as `tile_preview.gd`: the ETL
 ## writes region game-space coordinates, so a node at the origin already lines
 ## up with the tiles, the surface and the graph.
@@ -22,10 +29,13 @@ extends Node3D
 const GeneratedFares = preload("res://scripts/city/generated_fares.gd")
 const PreviewDraw = preload("res://scripts/city/preview_draw.gd")
 
-## The four cases the colours separate. An enum rather than two parallel
+## The five cases the colours separate. An enum rather than two parallel
 ## if-chains, so a colour can never end up without a matching label in the
 ## report — which is the one way a diagnostic can quietly lie.
-enum Case { CROSS_HARBOUR_STAND, STAND, PICKUP_DROPOFF, DROPOFF }
+##
+## `POI` is appended rather than filed beside the fare kinds, because
+## declaration order is report order and it is the case that is not a fare.
+enum Case { CROSS_HARBOUR_STAND, STAND, PICKUP_DROPOFF, DROPOFF, POI }
 
 ## Height of each pin above the node it marks.
 ##
@@ -46,22 +56,33 @@ enum Case { CROSS_HARBOUR_STAND, STAND, PICKUP_DROPOFF, DROPOFF }
 ## Emitted once built, with the bounds of the nodes, so a camera can frame them.
 signal built(low: Vector3, high: Vector3)
 
-# Colour is the whole diagnostic, so the four cases are deliberately far apart
+# Colour is the whole diagnostic, so the five cases are deliberately far apart
 # rather than a ramp: a premium stand and a drop-off-only point must not be
 # distinguishable only by shade on a phone screen in daylight. Drop-off is the
 # dullest because no fare is ever hailed there.
+#
+# ⚠️ **`_TETHER` below is effectively a sixth taken colour**: pins and tethers
+# share one `SurfaceTool` mesh under one unshaded material, so green is spoken
+# for too. With red, amber, cyan and grey gone, violet is what is left — and it
+# is the right end of the wheel for the one case that is not a taxi thing.
 const _COLOURS: Dictionary[Case, Color] = {
 	Case.CROSS_HARBOUR_STAND: Color(0.95, 0.30, 0.28),
 	Case.STAND: Color(0.98, 0.78, 0.20),
 	Case.PICKUP_DROPOFF: Color(0.35, 0.75, 0.95),
 	Case.DROPOFF: Color(0.45, 0.45, 0.52),
+	Case.POI: Color(0.72, 0.42, 0.95),
 }
 
+# `POI` is labelled by its **kind**, not by today's only producer. `config.py`'s
+# reason for the kind existing is that "a city that adds hotels or malls adds a
+# group rather than a code path", and "tram stops" would be a lie the moment one
+# does.
 const _LABELS: Dictionary[Case, String] = {
 	Case.CROSS_HARBOUR_STAND: "cross-harbour stands",
 	Case.STAND: "stands",
 	Case.PICKUP_DROPOFF: "pick-up/drop-off",
 	Case.DROPOFF: "drop-off only",
+	Case.POI: "points of interest (no fare)",
 }
 
 const _TETHER := Color(0.15, 0.90, 0.55)
@@ -222,8 +243,14 @@ func _tether(surface: SurfaceTool, from: Vector3, to: Vector3) -> bool:
 
 
 func _case_for(node: Dictionary) -> Case:
-	if node.get("kind", "") == GeneratedFares.TAXI_STAND:
+	var kind: String = node.get("kind", "")
+	if kind == GeneratedFares.TAXI_STAND:
 		if node.get("stand_category") == GeneratedFares.CROSS_HARBOUR:
 			return Case.CROSS_HARBOUR_STAND
 		return Case.STAND
+	# Before the pickup test, because a POI has neither flag set and the fallback
+	# below reads that as "drop-off only" — a taxi meaning, and the reason 19 tram
+	# stops printed as drop-off points nobody looked at. `Q15`.
+	if kind == GeneratedFares.POI:
+		return Case.POI
 	return Case.PICKUP_DROPOFF if bool(node.get("pickup", true)) else Case.DROPOFF
