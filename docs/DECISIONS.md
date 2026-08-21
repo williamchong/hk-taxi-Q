@@ -7864,3 +7864,106 @@ the order among the four is unassigned.
 never-rendered-text · `Q54` `Q56` for sourced-not-invented and the second-source diff · `Q15` for
 the level-0 snap every dTAD consumer owes · `Q53` for the artefact-inclusion call it records
 against `P3-12` · `DATA_SOURCES.md` for the layer table
+
+## `P3-18` — Box junctions ship as read polygons, and two instruments caught what no frame could
+
+**The decision.** TD's `DTAD_YL_BOX_POLY` publishes every yellow box junction as a surveyed
+polygon — the list `Q53` said nothing publishes, found by `Q56` — and all 20 in region ship as
+`boxjunctions.glb` in `Q58`/`Q59`'s pattern: one primitive, one draw call, no collider, an optional
+`city.json` key (12 → 13), counters the stage publishes about itself. Border and cross-hatch are
+**geometry**, dimensions transcribed from index plan CT174/51-5(1)F's RM1038 row — boundary 300 mm,
+hatched 100 mm, "SPACING = 2000 (2500)", read by eye off the same scanned sheet as the arrow
+glyphs, principal figure shipped. **Purely visual**: a blocking penalty would contradict
+`GAME_DESIGN.md`'s "the player may break every traffic rule", and nothing can queue in a box until
+`P3-3`'s traffic exists — if a hook is ever wanted it is a `B3` decision, not this one. Landed on
+`P3-16`'s gating terms: not gated on `P3-9a`, same geodatabase, no new fetch.
+
+### Why the hatch is triangles and not a shader
+
+The recorded mechanism ("a world-space cross-hatch masked on distance-to-node") predates `Q56`
+finding the polygons; with a real extent to read, the fork was mesh stripes versus a fill mesh
+hatched procedurally. **Opacity decides it.** The box floats 12 mm above the road, so a
+shader-hatched fill must show asphalt *between* stripes with no albedo under the fragment to mix
+into — unlike `road_markings.gdshader`, which paints into the road's own opaque surface. The two
+exits are alpha blend (the sorted transparent pass `arrows.gdshader` refuses, on a mobile budget)
+or alpha scissor (re-aliases every stripe edge, killing the approach's one advantage). Once the AA
+argument is dead, mesh wins on template reuse: `boxjunctions.gdshader` is `arrows.gdshader` with
+the yellow, and the mesh ships position and normal and nothing else.
+
+### Read at its surveyed extent, underfill accepted
+
+The polygon draws where it was surveyed. It underfills the drawn junction at the arm mouths —
+the ribbon is 1.6× the real carriageway — and is **not** scaled to fit: `Q59`'s
+fraction-across-the-carriageway trick reads a *position* as data, but stretching an *extent* would
+be invented geometry in `Q54`'s sense. Cap coverage is not measurable without duplicating
+`surface.py`'s cap hull — a second join in `Q56`'s sense, refused — so the registration counter is
+`nearest_node_m`: centroid to nearest junction node, p50 3.67 m, max **52.88 m** (a box at a
+crossing the graph does not drive — a finding to look at, not a bar). Being separate lifted
+geometry, the mesh is immune to the 6,051 m² cap overlap for `Q53`'s recorded reason.
+
+### The hatch direction, derived and graded
+
+`ANGLE1`/`ANGLE2` — the two hatch directions, 90° apart — are published on **4 of 20** boxes and
+used where present, converted `(90 − ANGLE) mod 360` as arrows converts `ANGLE`. For the other 16
+the direction is **derived: the box's own min-area-rectangle long axis + 45°**, graded mod 90 (an
+orthogonal hatch field is invariant under 90°) against the 4 published pairs: residuals **0.3 /
+5.6 / 29.3 / 35.9°**. The alternative — nearest level-0 edge heading + 45° — read **7.5 / 9.5 /
+38.8 / 0.4** and loses per pair 3 to 1; it also picks an arbitrary arm at exactly the geometry a
+box occupies (one elongated east–west box in region snaps its centroid to a cross street). Neither
+candidate reproduces the publisher's pairs well, and n = 4 — but a wrong direction rotates a hatch
+inside its own border, which misleads no one, where a wrong *position* would. The manifest
+republishes `hatch_angle_residual_deg` on every run so the derivation stays graded.
+
+### The height join, and the cliff the engine check caught
+
+A box spans several arms and has no host edge, so heights are a **per-vertex join** — the primary
+join, not the second opinion arrows refused. The first build took each vertex from whichever arm's
+nearest segment won, and two arms of one junction disagree by up to a measured **0.43 m** where
+they meet: **172 triangles came out near-vertical**, caught by `verify_boxjunctions.gd`'s faces-up
+check while the ETL's own `inverted` read 0 — a shard is steep, not upside down, and the two
+counters exist separately for exactly this (`Q59`). The fix is a distance-weighted blend over every
+segment within `nearest + height_blend_m` (4 m), weighted to zero exactly at the cutoff:
+continuous everywhere, the plain snap far from seams, and the closer model of the drawn cap fan,
+which interpolates between the same arm ends. `height_spread_m` publishes what the join moves
+(p50 0.11 m, max 0.43 m).
+
+### The import lattice, a platform fact every thin mesh now inherits
+
+⚠️ **Godot's scene importer quantises vertex positions to a 16-bit lattice over the mesh's own
+AABB** (`meshes/force_disable_compression` default, which every generated mesh here uses) — for a
+region-spanning mesh that is `span / 65535` ≈ **17 mm**, verified by reading the imported buffer:
+the flipped triangles' coordinate deltas are exact multiples of it. A triangle thinner than the
+pitch can come back from the import with its winding flipped, which `cull_back` culls; **217 of
+12,181 did**, and none of them existed in the shipped GLB, whose float64 read was clean.
+`roads.glb`, `tram.glb` and `arrows.glb` survive the same lattice by never shipping a sub-quantum
+feature — a tram rail is 3.5 quanta — so this stage holds itself to the same bar rather than
+asking the importer for an exception: triangles thinner than two quanta (twice-area over longest
+plan edge) are dropped **per triangle, not per polygon** (judged per polygon, 37 fan-needles
+inside wide quads survived to fail the engine check). `slivers_dropped` (2,032) and
+`import_quantum_m` ship in the manifest so the bar is checkable from an artefact (`Q37`).
+
+### Ordering and the third yellow
+
+`lift_m` is **0.012, deliberately below arrows' 0.015** — 51 arrows sit over caps, and an arrow
+inside a box at equal lift would z-fight the hatching; arrows paint over boxes, as the street
+does. The border rides `border_lift_m` (0.002) above the hatch, because the hatch is deliberately
+not clipped back to the boundary's inner edge — an inward offset of a concave 106-vertex ring can
+self-intersect, and a repaired offset is invented geometry; border segments whose offset crosses
+at a tight vertex are dropped and counted (`degenerate_border_segments`, 7 in region).
+`boxjunctions.tres` carries the **third authored copy of the marking yellow**
+`Color(0.86, 0.68, 0.13, 1.0)` — the day `Q53`'s entry predicted, accepted on `arrows.tres`'s
+terms: paint stays outside `Q33`'s exposure rule, and a mismatch against the kerbside yellows is
+visible in one frame.
+
+### What this does not do
+
+No `RM1038` companion lines (6 in region against 20 polygons — the polygon layer is primary and
+the lines stay unread), no `KEEP CLEAR` (`RM1140`, 19), no road text, no stop or give-way lines —
+each still queued on `P3-15`'s refusals. No gameplay: see the decision above. Verified end to end:
+`check.sh` green, 0 shader errors in four rendered viewpoints shot twice each and byte-identical,
+`roadgraph.json`/`roadsurface.json` byte-identical through the pipeline run — the stage reads the
+graph and touches no road instrument's input.
+
+**See.** `Q53` for the hold this closes · `Q56` for finding the layer · `Q59` for the pattern, the
+scanned-sheet rule and the two-counters discipline · `Q54` for read-never-invented · `Q15` for the
+level-0 snap · `P3-16` for the gating call this inherits · `DATA_SOURCES.md` for the layer table

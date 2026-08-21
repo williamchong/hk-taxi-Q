@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scripts/city/tile_preview.gd" id="1_tiles"]
 [ext_resource type="Script" path="res://scripts/city/landmarks.gd" id="7_landmarks"]
@@ -8,6 +8,7 @@
 [ext_resource type="Script" path="res://scripts/city/road_surface_preview.gd" id="5_surface"]
 [ext_resource type="Script" path="res://scripts/city/tramway_preview.gd" id="11_tramway"]
 [ext_resource type="Script" path="res://scripts/city/arrows_preview.gd" id="12_arrows"]
+[ext_resource type="Script" path="res://scripts/city/boxjunctions_preview.gd" id="13_boxjunctions"]
 [ext_resource type="Script" path="res://scripts/city/fare_preview.gd" id="6_fares"]
 
 [node name="CityPreview" type="Node3D"]
@@ -33,6 +34,12 @@ script = ExtResource("11_tramway")
 ; ships none and this node simply stays empty.
 [node name="Arrows" type="Node3D" parent="."]
 script = ExtResource("12_arrows")
+
+; The published yellow box junctions (`P3-18`), one mesh for the whole region.
+; A region whose sources publish no box polygons ships none and this node
+; simply stays empty.
+[node name="BoxJunctions" type="Node3D" parent="."]
+script = ExtResource("13_boxjunctions")
 
 ; The authored heroes (`P3-6`). Without them this scene shows holes where the
 ; excluded source buildings stood — and the audit viewpoints below are the

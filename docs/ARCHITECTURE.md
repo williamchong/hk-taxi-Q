@@ -289,6 +289,7 @@ hk-taxi-Q/
 │   │   ├── fares.py             # taxi stands + PUDO + POIs → fare nodes
 │   │   ├── tramway.py           # published tram rails → tram.glb (P3-14)
 │   │   ├── arrows.py            # published turn arrows → arrows.glb (P3-15)
+│   │   ├── boxjunctions.py      # published box junctions → boxjunctions.glb (P3-18)
 │   │   ├── export.py            # → city.json, assembles and validates the stage outputs
 │   │   └── __main__.py          # `python -m pipeline` — every stage, in order
 │   ├── sources/<city>/<source>/ # raw downloads — GITIGNORED
@@ -340,7 +341,7 @@ The interface between ETL and game. **Versioned — change both sides together a
 
 ```json
 {
-  "schema_version": 12,
+  "schema_version": 13,
   "city_id": "hong_kong",
   "region_id": "wan_chai",
   "source_crs": "EPSG:2326",
@@ -365,6 +366,7 @@ The interface between ETL and game. **Versioned — change both sides together a
   "fares": "fares.json",
   "tramway": "tram.glb",
   "arrows": "arrows.glb",
+  "boxjunctions": "boxjunctions.glb",
   "landmarks": "landmarks.json",
   "landmark_assets": ["landmarks/hkcec.glb"],
   "etl_version": "0.1.0",
@@ -878,6 +880,29 @@ them is a residual whose *tail* is the finding — `axis_residual_deg` is where 
 road goes — and a median near zero is also what a wholly broken join looks like. `Q58`'s
 `drawn_gauge_m` lesson, applied before rather than after.
 
+### `boxjunctions.glb` — the published yellow box junctions (`P3-18`)
+
+Border and cross-hatch per surveyed `DTAD_YL_BOX_POLY` polygon, the hatch laid `lift_m` above the
+junction and the border `border_lift_m` above that (both below the arrows — they paint over boxes,
+as the street does). One primitive, one material named `boxjunctions`, one draw call, and
+**no collider**.
+
+| | |
+|---|---|
+| Attributes | `POSITION` and `NORMAL` only — no `COLOR_0`, no UVs, no texture |
+
+⚠️ **`city.json`'s `boxjunctions` key is optional and may be `null`**, on exactly `arrows`' terms,
+including the every-box-failed-the-join state.
+
+⚠️ **The engine re-quantises every imported mesh to a 16-bit lattice over its own AABB** —
+`span / 65535`, ~17 mm for a region-spanning mesh — and a triangle thinner than that pitch can come
+back with its winding flipped, which `cull_back` culls. This stage measured it (217 flipped
+triangles that did not exist in the shipped GLB) and ships nothing thinner than two lattice cells;
+`boxjunctions.json` publishes `slivers_dropped` and `import_quantum_m`. Any future stage shipping
+thin geometry inherits the same constraint. `P3-18`.
+
+⚠️ Winding and the p90/p99/max reporting follow `arrows.glb`'s paragraphs above, unchanged.
+
 ### `landmarks.json` — hero building placement
 
 ```json
@@ -1024,6 +1049,7 @@ every region lies inside them.
 | `TrafficSystem` | AI vehicles following road-graph splines; trams as scripted blockers | ⬜ `P3-3` |
 | `tram.glb` | The published tramway, drawn where iB1000 prints it — **not** a marking on the ribbon (`Q58`). One primitive, one draw call, **no collider** | ✅ `P3-14` |
 | `arrows.glb` | The published turn arrows, registered into the lane the ribbon actually has — **not** paint on the ribbon, because the junction fade blanks the approach they are about (`Q59`). One primitive, one draw call, **no collider** | ✅ `P3-15` |
+| `boxjunctions.glb` | The published yellow box junctions, drawn at the extents the estate surveyed and lifted under the arrows that paint over them. Ships nothing thinner than the import lattice. One primitive, one draw call, **no collider** | ✅ `P3-18` |
 | `FareSystem` | Fare state machine: idle → hailed → carrying → delivered/failed | ⬜ `P3-1` |
 | `ScoreSystem` | Base fare, time bonus, **style chain** and **fare combo** — two distinct multipliers | ⬜ `P3-2` |
 | `HUD` | Meter, timer, arrow, destination callout (bilingual) | ⬜ `P3-5` |

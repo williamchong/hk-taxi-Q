@@ -534,8 +534,10 @@ authored features the source captures badly.
   pipeline intact. `P1-4` already ships the UVs the shader reads: **U is a lane coordinate**, 0 at
   the nearside kerb line and `lanes` at the offside, so an integer U is a lane boundary regardless of
   the playability widening — including the per-station widening `Q23` introduced. V is metres along
-  the carriageway, so dashes keep a real-world pitch. Junction caps carry `(0, 0)`; a box junction is
-  a mask keyed on the node, not a length of lane.
+  the carriageway, so dashes keep a real-world pitch. Junction caps carry `(0, 0)`; a box junction
+  is not a length of lane and does not draw here — since `P3-18` it is its own mesh built from the
+  published polygon, not a mask keyed on the node (that plan predates `Q56` finding
+  `DTAD_YL_BOX_POLY`).
   ⚠️ **`(0, 0)` does not identify a cap**, and reading it as though it did is the trap `P3-12` found:
   `U = 0` *is* the nearside kerb line, so a kerbside marking keyed on U alone floods every junction
   in the city. A cap says what it is in `TEXCOORD_1` — `ARCHITECTURE.md` carries that channel.
@@ -561,11 +563,17 @@ authored features the source captures badly.
   `arrows.glb` — its own mesh, one draw call, no collider — rather than as paint on the ribbon,
   because `road_markings.tres`'s 6 m junction fade blanks exactly the approach zone an arrow is
   about. Numbers in `Q59`.
-- ⚠️ **Road text and box junctions are still held, on cost.** The box-junction *mechanism* is known
-  and cheap — a world-space cross-hatch masked on distance-to-node is immune to the cap overlap,
-  because cap and arm draw the same thing wherever they overlap — and now that `P3-15` has built a
-  world-space marking stage, it is the obvious next one. What is missing is neither content nor
-  machinery; it is the work. `Q53`, `Q59`.
+- ✅ **The box junctions are built (`P3-18`, 2026-08-22), and from the polygons rather than the
+  mask.** The held plan — a world-space cross-hatch masked on distance-to-node — predates `Q56`
+  finding `DTAD_YL_BOX_POLY`, so what ships reads the 20 surveyed extents instead of deriving any:
+  `boxjunctions.glb`, border + hatch as lifted geometry (hatch at `lift_m` 0.012, below the arrows;
+  border 2 mm above the hatch), one draw call, no collider, immune to the cap overlap for the same
+  lifted-geometry reason. The marking yellow is authored a **third** time in `boxjunctions.tres` —
+  the day `Q53`'s entry predicted — on `arrows.tres`'s terms. Judged at the fixed viewpoints plus
+  box close-ups: the 100 mm hatch reads at street scale and the shipped widths are the index
+  plan's, unwidened. `Q53`, `Q59`, `DECISIONS.md` `P3-18`.
+- ⚠️ **Road text is still held, on cost.** `DTAD_RD_MARK_ANNO`'s 274 annotations wait on `Q42`'s
+  never-rendered-text rule being squared with lettering that is geometry, not type. `Q53`, `Q59`.
 - 🔴 **The kerbside double yellow is invented, and it is the one marking here that asserts something
   rather than describing something.** A double yellow is not kerb trim — it means *no stopping at any
   time* — so painting it on every kerb makes a claim about roughly three times the kerb it actually

@@ -29,6 +29,7 @@ from collections.abc import Callable
 
 from pipeline import (
     arrows,
+    boxjunctions,
     buildings,
     clearance,
     export,
@@ -71,6 +72,11 @@ STAGES: dict[str, Callable[[list[str]], int]] = {
     # rather than the one the config says it should. Before `export`, which
     # names the asset.
     "arrows": arrows.main,
+    # After `roads` because every vertex takes its height from the nearest
+    # level-0 centreline — `tramway`'s dependency, not `arrows`'s: it reads no
+    # ribbon, since a surveyed polygon is drawn at its surveyed extent rather
+    # than registered into a lane. Before `export`, which names the asset.
+    "boxjunctions": boxjunctions.main,
     "export": export.main,
 }
 

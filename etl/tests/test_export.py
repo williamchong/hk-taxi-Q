@@ -24,6 +24,7 @@ import pytest
 
 from pipeline import __main__ as orchestrator
 from pipeline.arrows import ARROWS_MANIFEST_NAME, ARROWS_MANIFEST_SCHEMA
+from pipeline.boxjunctions import BOXJUNCTIONS_MANIFEST_NAME, BOXJUNCTIONS_MANIFEST_SCHEMA
 from pipeline.buildings import BUILDINGS_MANIFEST_NAME, BUILDINGS_MANIFEST_SCHEMA
 from pipeline.clearance import CLEARANCE_NAME, CLEARANCE_SCHEMA
 from pipeline.config import Landmark, Material, SourcePaint
@@ -206,6 +207,16 @@ class _Region:
                 "symbols": 0,
                 "drawn": 0,
             },
+            # Same shape and same reason again: `testville` declares no
+            # `boxjunctions:` block, so the stage found nothing and says so.
+            BOXJUNCTIONS_MANIFEST_NAME: {
+                "schema_version": BOXJUNCTIONS_MANIFEST_SCHEMA,
+                "city_id": city.id,
+                "region_id": REGION,
+                "asset": None,
+                "boxes": 0,
+                "drawn": 0,
+            },
             # Written even when empty by the landmarks stage, so export's
             # input read is unconditional.
             ASSETS_NAME: {
@@ -275,6 +286,21 @@ class TestAssembly:
         assert SURFACE_MANIFEST_NAME not in names
         assert ASSETS_NAME not in names
         assert set(names) >= {ROADGRAPH_NAME, SURFACE_NAME, FARES_NAME}
+
+    def test_a_drawn_box_junction_asset_is_shipped_and_a_null_is_not(self, region) -> None:
+        """The two halves of the optional-key contract (`P3-18`), in one place:
+        a found-nothing manifest leaves `city.json`'s key null and the shipped
+        list unchanged, and a drawn asset joins both — the same terms `tramway`
+        and `arrows` ship under."""
+        region.build()
+        assert region.manifest()["boxjunctions"] is None
+        assert "boxjunctions.glb" not in shipped(region.manifest())
+
+        region.documents[BOXJUNCTIONS_MANIFEST_NAME]["asset"] = "boxjunctions.glb"
+        (region.out_dir / "boxjunctions.glb").write_bytes(b"glb")
+        region.build()
+        assert region.manifest()["boxjunctions"] == "boxjunctions.glb"
+        assert "boxjunctions.glb" in shipped(region.manifest())
 
     def test_the_carriageway_widths_reach_the_manifest(self, region) -> None:
         """Carried, not recomputed. A second evaluation of `widen_for` in
@@ -746,6 +772,7 @@ class TestOrchestrator:
             "fares",
             "tramway",
             "arrows",
+            "boxjunctions",
             "export",
         ]
 
@@ -778,6 +805,7 @@ class TestOrchestrator:
             "fares",
             "tramway",
             "arrows",
+            "boxjunctions",
             "export",
         ]
 

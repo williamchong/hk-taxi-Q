@@ -981,6 +981,83 @@ arrows:
   # sense, and it would render perfectly.
   bearing_tolerance_deg: 30.0
 
+# Published yellow box junctions (P3-18, the follow-on Q59 recorded).
+#
+# Q53 held box junctions because "nothing publishes which junctions have one";
+# Q56 found the list on 2026-08-20: DTAD_YL_BOX_POLY publishes each box as a
+# surveyed polygon — 20 in this region, 20 m² to 469 m², all at grade. The
+# extent is read, never derived: the region has 393 junction nodes against 20
+# published boxes, so placement from topology would be wrong 19 times in 20.
+#
+# ⚠️ **ANGLE1/ANGLE2 — the two hatch directions, 90 deg apart — are published
+# on only 4 of the region's 20 boxes.** Where present they are used, converted
+# `(90 - ANGLE) mod 360` exactly as arrows converts ANGLE. Elsewhere the
+# direction is derived: the box's own min-area-rectangle long axis + 45 deg.
+# Graded against the 4 published pairs, folded mod 90 (an orthogonal hatch
+# field is invariant under 90 deg): residuals 0.3 / 5.6 / 29.3 / 35.9 deg.
+# The alternative — the nearest level-0 edge's heading + 45 — read 7.5 / 9.5 /
+# 38.8 / 0.4 and loses per pair 3 to 1; it also picks an arbitrary arm at
+# exactly the geometry a box occupies (one elongated east-west box in region
+# snaps its centroid to a cross street). boxjunctions.json republishes the
+# residual as `hatch_angle_residual_deg` on every run.
+boxjunctions:
+  source: traffic_aids_drawings_gdb
+  layer: DTAD_YL_BOX_POLY
+  fields:
+    type: YELLOWBOX_TYPE
+    level: ELEVATION
+    hatch_a: ANGLE1
+    hatch_b: ANGLE2
+
+  # The one published value of the region's layer. The filter exists for the
+  # second city: a type this stage has no business drawing is refused and
+  # counted rather than painted yellow.
+  box_types: ["Yellow Box"]
+
+  # Marking convention, transcribed from the index plan CT174/51-5(1)F row for
+  # RM1038 (TC 514) BOX JUNCTION - YELLOW: "BOUNDARY LINE WIDTH = 300, HATCHED
+  # LINE WIDTH = 100, SPACING = 2000 (2500)". The sheet is a scan with no text
+  # layer, read by eye; the parenthetical spacing is the wider variant and the
+  # principal figure is what ships.
+  border_width_m: 0.3
+  hatch_width_m: 0.1
+  hatch_spacing_m: 2.0
+
+  # Sampling pitch along stripes and border runs. Every vertex takes its height
+  # from the road under it, so this is what lets a stripe follow the crown of a
+  # junction instead of chording across it.
+  station_m: 2.0
+
+  # ⚠️ Deliberately below arrows' 0.015: 51 of the region's turn arrows sit
+  # over junction caps, and an arrow inside a box at equal lift would z-fight
+  # the hatching. Arrows paint over boxes, which is also what the street does.
+  lift_m: 0.012
+
+  # The boundary line rides this far above the hatch, so the two never share a
+  # plane where they cross — the hatch is deliberately not clipped back to the
+  # boundary's inner edge, because an inward offset of a concave 106-vertex
+  # ring can self-intersect and a repaired offset is invented geometry.
+  # 0.012 + 0.002 keeps the border under arrows' 0.015.
+  border_lift_m: 0.002
+
+  # Furthest a box centroid may sit from a level-0 centreline and still be
+  # drawn. Same bar as arrows, re-measured for this layer: the region's 20
+  # centroids snap at 0.2-6.1 m, so 12 admits them all and refuses a box that
+  # has drifted onto no road this build drives.
+  max_offset_m: 12.0
+
+  # How far past the nearest centreline the height join keeps listening — each
+  # vertex's height is a distance-weighted blend of every level-0 segment
+  # within `nearest + height_blend_m`, weighted to zero exactly at that
+  # cutoff. ⚠️ Exists because a hard nearest-edge switch is a cliff: two arms
+  # of one junction disagree about the deck by up to a measured 0.43 m where
+  # they meet, and the first build — which took each vertex from whichever arm
+  # won — shipped 172 near-vertical triangles that verify_boxjunctions.gd
+  # caught while the ETL's own `inverted` read 0. At 4 m the worst seam
+  # spreads that step over an ~11% grade. Far from a seam only one edge is in
+  # range and the blend is the plain snap.
+  height_blend_m: 4.0
+
 # Hero buildings shipped as authored models (P3-6) — the landmarks.json
 # contract in docs/ARCHITECTURE.md. The building stage excludes every stem
 # named in `replaces_source_ids` from the tile meshes; export.py converts each

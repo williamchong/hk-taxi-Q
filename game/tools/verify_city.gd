@@ -21,6 +21,7 @@ const GeneratedLandmarks = preload("res://scripts/city/generated_landmarks.gd")
 const GeneratedRoadGraph = preload("res://scripts/city/generated_road_graph.gd")
 const GeneratedRoadSurface = preload("res://scripts/city/generated_road_surface.gd")
 const GeneratedArrows = preload("res://scripts/city/generated_arrows.gd")
+const GeneratedBoxJunctions = preload("res://scripts/city/generated_boxjunctions.gd")
 const GeneratedTramway = preload("res://scripts/city/generated_tramway.gd")
 const Manifest = preload("res://scripts/city/city_manifest.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
@@ -107,6 +108,13 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 	# `arrows.glb` with the file gone would otherwise pass every check here.
 	if not manifest.arrows_path.is_empty():
 		problems.append_array(_check_document("arrows", manifest.arrows_path, GeneratedArrows.PATH))
+	# Guarded on the same terms again: `verify_boxjunctions.gd` treats an absent
+	# asset as a pass, so a manifest naming `boxjunctions.glb` with the file gone
+	# would otherwise pass every check here.
+	if not manifest.boxjunctions_path.is_empty():
+		problems.append_array(
+			_check_document("box junctions", manifest.boxjunctions_path, GeneratedBoxJunctions.PATH)
+		)
 	return problems
 
 

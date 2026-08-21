@@ -498,7 +498,7 @@ never runs the audit can skip it with `--only`.
 | Layer | In Wan Chai | What it is |
 |---|---|---|
 | **`DTAD_RST_ZONE_LINE`** | **1,763 features / 39,292 m**, `RM1040` 24,932 m + `RM1041` 14,164 m | **The kerbside yellow lines.** The only layer in use. `LINETYPE` carries the marking code; `COLOR = 6` is yellow on 1,559 of them. ⚠️ **`TIME_ZONE` is null on every feature in region** — the posted hours live in `NSR` and nowhere here |
-| `DTAD_YL_BOX_POLY` | 20 polygons, `YELLOWBOX_TYPE = "Yellow Box"` | Yellow box junctions, which `Q53` listed as an unsourced marking. **Not in use** |
+| **`DTAD_YL_BOX_POLY`** | **20 polygons**, `YELLOWBOX_TYPE = "Yellow Box"` | Yellow box junctions, which `Q53` listed as an unsourced marking. ✅ **In use since `P3-18` (2026-08-22)** — `pipeline/boxjunctions.py` draws all 20 as `boxjunctions.glb`. `MultiPolygon`, **2D**, all single-ring with no holes in region, 5–106 vertices (four strongly concave), 20–469 m². ⚠️ **`ANGLE1`/`ANGLE2` — the two hatch directions, always 90° apart — are published on only 4 of the 20**; the stage derives the rest and grades the derivation against those pairs on every run. `ELEVATION` is null/empty on all 20 — at grade under the convention below. The 540 m of `RM1038` lines in `DTAD_RD_MARK_LINE` are a partial companion (6 features against 20 polygons) and stay unread |
 | **`DTAD_RD_MARK_LINE`** | 1,679 features / 61,903 m | Every other marking: `RM1109` 25,204 m and `RM1001` 19,308 m dominate; yellow ones are `RM1043` hatched no-parking (560 m) and `RM1038` box junction (540 m). ✅ **`RM1108`/`RM1109` EDGE OF CARRIAGEWAY (317 features) in use since 2026-08-20** by `tools/carriageway_margin.py` — the preferred publisher of the carriageway edge, ahead of iB1000's topographic margin. Geometry is plain `MultiLineString`, **2D**, so it needs none of the Z decoding iB1000's lines do |
 | `DTAD_CROSSING_LINE` | 121 features / 6,698 m | Crossings. **Not in use** |
 | `DTAD_TY_BAR_LINE` | 4 features / 283 m | Transverse yellow bars. **Not in use** |
@@ -520,7 +520,7 @@ Standards Division, which gives every `RM` code its marking, description and dim
 |---|---|---|---|
 | `RM1040` (TC 515) | NO STOPPING AT ANY TIME — YELLOW | line width 100, spacing 100, **left line continuous, right line continuous** | **double** |
 | `RM1041` (TC 519) | NO STOPPING PART TIME — YELLOW | line width 100, **module continuous** | **single** |
-| `RM1038` (TC 514) | BOX JUNCTION — YELLOW | boundary 300, hatched 100 | — |
+| `RM1038` (TC 514) | BOX JUNCTION — YELLOW | boundary 300, hatched 100, spacing 2000 (2500) | — |
 | `RM1043` (PA 12) | NO PARKING HATCHED MARKINGS — YELLOW | line width 100 | — |
 
 ⚠️ **That sheet is stamped "FOR INTERNAL ONLY"** and TD ships it inside the published open-data

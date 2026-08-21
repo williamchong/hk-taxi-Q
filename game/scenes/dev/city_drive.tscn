@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=11 format=3]
 
 ; The first scene that puts the car on the real city (`P1-4` + `P0-5`).
 ;
@@ -20,6 +20,7 @@
 [ext_resource type="Script" path="res://scripts/city/road_surface_preview.gd" id="2_surface"]
 [ext_resource type="Script" path="res://scripts/city/tramway_preview.gd" id="10_tramway"]
 [ext_resource type="Script" path="res://scripts/city/arrows_preview.gd" id="11_arrows"]
+[ext_resource type="Script" path="res://scripts/city/boxjunctions_preview.gd" id="12_boxjunctions"]
 [ext_resource type="PackedScene" path="res://scenes/world/clean_daylight.tscn" id="3_light"]
 [ext_resource type="PackedScene" path="res://scenes/vehicle/taxi.tscn" id="4_taxi"]
 [ext_resource type="Script" path="res://scripts/camera/chase_camera.gd" id="5_camera"]
@@ -59,6 +60,12 @@ script = ExtResource("10_tramway")
 ; ships none and this node simply stays empty.
 [node name="Arrows" type="Node3D" parent="."]
 script = ExtResource("11_arrows")
+
+; The published yellow box junctions (`P3-18`), one mesh for the whole region,
+; drawn over the caps the ribbon markings fade away from. A region whose
+; sources publish no box polygons ships none and this node simply stays empty.
+[node name="BoxJunctions" type="Node3D" parent="."]
+script = ExtResource("12_boxjunctions")
 
 ; The authored heroes, placed from `landmarks.json` (`P3-6`). Beside `Tiles`
 ; rather than under it: the streamer owns what it streams, and a hero is
