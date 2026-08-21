@@ -968,10 +968,10 @@ road runs into a wall filling the full width of the view.
 
 | | |
 |---|---|
-| Centreline occupied at the binding station | **13 of 15** — 12 `BUILDING`, 1 `INFRASTRUCTURE` |
-| Clear only at the station | `e627`, `e315` — and both are 0.5 m from the occupier |
-| Sideways distance to the first clear cell | 0.5–4.0 m on 12 of 15; `e132` **12.5 m** |
-| Signed against edge direction | mixed, so **not** a systematic registration shift of one layer |
+| Centreline occupied at the binding station | **13 of 15** — 12 `BUILDING`, 1 `INFRASTRUCTURE`. ✅ Reproduced exactly by the instrument below |
+| Clear only at the station | `e627`, `e315` — and both are 0.5 m from the occupier. ✅ Reproduced at **0.49 m** each |
+| Sideways distance to the first clear cell | **0.49–3.90 m on all 13** — 🔴 **corrected 2026-08-21 by the instrument below.** This row read "0.5–4.0 m on 12 of 15; `e132` **12.5 m**" and `e132` is **1.46 m**. There is no outlier, and there could not have been one: `e132`'s ribbon is drawn **10.24 m** wide, so no cell in that cross-section is more than ~5.1 m from its centreline and 12.5 m is not a distance the query can return. Where the figure came from is unrecoverable — the script is gone, which is the debt |
+| Signed against edge direction | mixed, so **not** a systematic registration shift of one layer. ✅ Holds: of the 13, **3 right, 9 left, 1 with no side** — and the tie is reported as a tie rather than assigned one, because the walk starts at the left rim and breaking a tie by index would lean every symmetric cross-section the same way and make this row read less mixed than it is |
 
 `lanes`, `width_m` and `widen_default` all move the ribbon's *edges*. None of them moves the
 centreline, and the centreline is what is inside the building. That is why `authored` equals `clear`
@@ -988,20 +988,55 @@ exists. They do not share a fix either, and the population clusters — `e314`, 
 `e499` all sit within 80 m of each other around Leighton Road and Matheson Street, and `e627` and
 `e629` are 27 m apart on Great George Street. A per-site reading is therefore not fifteen sites.
 
-⚠️ **Every number in this section came from three scratch scripts**, which is `Q37`'s debt and
-`Q55`'s, opened again. `corridor_profile` and the centreline query are the two things this question
-turned on and neither is reportable from the shipped tool. **Paying that is the next commit, not a
-later one** — a finding this entry has now reversed three times must not rest on scripts that are
-not in the repo.
+✅ **Paid 2026-08-21, and it was the next commit.** Every number in this section came from three
+scratch scripts — `Q37`'s debt and `Q55`'s, opened a third time, under a finding this entry has
+reversed three times. All of it is now reportable from the grader itself:
+
+```
+.venv/bin/python tools/carriageway_occupancy.py --city hong_kong --corridor-report
+```
+
+⚠️ **Opt-in, and the default listing is byte-identical with the flag off** — proved by diffing two
+runs rather than asserted, 0 lines differing. That is `Q55`'s own validation move: run the new axis
+off and show that nothing but the axis moved. The two graders this tool owes reproduce their
+baselines exactly with it — `clearance_reconcile.py --sweep` at 24 against 26 with 4 disagreements,
+`narrowing.py` clearing 0 edges at every factor to 1.30x and losing `e207` and `e595` — which is
+what shows the instrument was not tuned toward the finding it supports.
+
+**What it reproduced, and the one thing it did not.** The four profiles above, the 13-of-15
+centreline count with its 12/1 class split, both 0.49 m exceptions, the 14 + 1 + 11 + **0
+`LANDMARK`** split, the building half's p50 11.0 m / 12 under 20 m / `e405` at 3.6 m, the structure
+half's 20.4 m minimum and the level-0 p50 45.2 m — all exact. 🔴 **The sideways-distance row did not
+and is corrected above**: `e132` reads 1.46 m, not 12.5 m, and 12.5 m is farther than that
+cross-section is wide. ⚠️ **The structure half's p50 reads 101.8 m here against the 102.0 m
+recorded**, and the gap is the whole difference: the tool measures edge length **in plan** and the
+scratch script measured it in 3D (101.99 m, which rounds to the published figure). Plan, because
+every other figure this tool publishes is a plan measurement and the structure half is where the
+gradients are — a slope length would make that half read longer for a reason unrelated to what is
+being partitioned.
+
+⚠️ **Two traps the instrument is written around, both of the class that renders as a plausible
+number.** The centreline is `argmin(|offset|)` over the **judged** cells, not over the walked ones —
+the walk's own min-offset cell tracks undrawn cells too, because it answers "where should a reader
+go and look", and indexing the occupier list with it would silently report a rim cell half the drawn
+width away at any junction trim. And a tie between the two sides is reported as *having no side*
+rather than resolved by index, for the reason the `Signed against edge direction` row now records.
 
 **Instruments.** Reporting and measurement only; nothing shipped moved. Every baseline in the
 section above reproduced exactly — **and was run before any of it was read**, which is the only
 ordering under which a grader cannot have been tuned toward the finding it then supports.
 
 **What is owed next, with owners.** ⚠️ **Not the width question** — this section closes that route
-for the building half. What is owed is the reportable instrument above, and then the road-versus-
-footprint question, which is a **geometry and graph** question and not the `DATA_SOURCES.md` one
-this entry named. Still unassigned. The interchange half is `Q22`/Phase 4's. `e702` is `Q51`'s.
+for the building half. ✅ The reportable instrument is paid. What is owed is the road-versus-
+footprint question — **why is a drivable level-0 centreline inside a building** — which is a
+**geometry and graph** question and not the `DATA_SOURCES.md` one this entry named. Three readings,
+none measured: a building that spans the street and is extruded solid to ground, a per-site
+disagreement between Road Network v2 centrelines and the 3D Visualisation Map footprints, or a graph
+edge where no drivable street exists. ⚠️ **The mixed signs argue against a whole-layer shift**, so
+the second is the least likely of the three and the population clusters — `e314`, `e335`, `e405`
+and `e499` within 80 m around Leighton Road and Matheson Street, `e627` and `e629` 27 m apart on
+Great George Street — so a per-site reading is not fifteen sites. Still unassigned. The interchange
+half is `Q22`/Phase 4's. `e702` is `Q51`'s.
 
 **See.** `Q51` for what routes around this · `Q20` · `Q22` for the interchange's family · `Q24` · `P2-5` · `P3-6` for why the population moved, and for the piers · `Q57` for the mechanism this section is the fourth instance of
 

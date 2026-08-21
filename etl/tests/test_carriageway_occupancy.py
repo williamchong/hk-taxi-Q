@@ -46,7 +46,9 @@ from carriageway_occupancy import (
     Occupied,
     Survey,
     _barycentric,
+    _centreline_verdict,
     _clear_run,
+    _profile_runs,
     _starved_shape,
 )
 
@@ -160,6 +162,129 @@ class TestStarvedShape:
 
     def test_an_edge_that_never_starves_has_no_shape(self) -> None:
         assert _starved_shape([5.0, 5.0], 3.2, 1.0) == pytest.approx((0.0, 0.0))
+
+
+class TestProfileRuns:
+    """The profile's run-length encoding — `Q19`'s shape argument, printed.
+
+    `_starved_shape` reduces the same list to a total and a run, and those two
+    numbers let `Q19` read a spot blockage as a frontage for two corrections
+    running. This is the encoding that made the difference visible, so an error
+    here re-hides it.
+    """
+
+    def test_a_repeated_width_is_one_run(self) -> None:
+        assert _profile_runs([10.2, 10.2, 10.2]) == [(10.2, 3)]
+
+    def test_the_building_half_signature_survives_the_encoding(self) -> None:
+        """`e627` as published: full drawn width, a two-station collapse, full
+        width again. A frontage cannot make this shape — it would leave about
+        half the ribbon for its whole length."""
+        assert _profile_runs([10.2] * 7 + [1.0, 1.5] + [10.2] * 3) == [
+            (10.2, 7),
+            (1.0, 1),
+            (1.5, 1),
+            (10.2, 3),
+        ]
+
+    def test_rounding_happens_before_grouping(self) -> None:
+        """⚠️ The trap this function exists around. Every clear run is an
+        integer multiple of a ~0.4876 m across-span, so two stations that both
+        read "full width" differ in the last bits. Grouping the raw floats
+        prints 21 runs of one where the reader needs one run of 21."""
+        assert _profile_runs([10.2400, 10.2401, 10.2399]) == [(10.2, 3)]
+
+    def test_walk_order_is_preserved(self) -> None:
+        """The same widths in a different order are a different edge. Sorting
+        or tallying would turn 'clear, then a wall' into a histogram, which is
+        exactly the reduction that lost the finding the first time."""
+        assert _profile_runs([1.0, 10.2, 1.0]) == [(1.0, 1), (10.2, 1), (1.0, 1)]
+
+    def test_an_edge_with_no_judged_station_encodes_to_nothing(self) -> None:
+        assert _profile_runs([]) == []
+
+
+class TestCentrelineVerdict:
+    """What stands on the centreline, and the two ways to get that wrong.
+
+    `Q19` refused every remaining width candidate on this one query: `lanes`,
+    `width_m` and `widen_default` all move the ribbon's *edges*, so an occupier
+    on the centreline is out of reach of all three. It had never been asked
+    from the shipped tool.
+    """
+
+    def _offsets(self, count: int, span_m: float) -> list[float]:
+        """`walk_carriageway`'s own convention — left rim inward, in even steps,
+        so the centre cell of an odd-length section sits at exactly 0.0."""
+        half = count * span_m / 2.0
+        return [-half + span_m * (i + 0.5) for i in range(count)]
+
+    def test_the_centreline_cell_is_the_one_nearest_zero(self) -> None:
+        offsets = self._offsets(5, 1.0)
+        standing = [None, None, "BUILDING", None, None]
+        verdict = _centreline_verdict(standing, offsets, 1.0)
+        assert verdict is not None
+        assert verdict.occupier == "BUILDING"
+        assert verdict.centre_offset_m == pytest.approx(0.0)
+
+    def test_a_clear_centreline_reports_how_narrowly_it_escaped(self) -> None:
+        """`Q19`'s two exceptions, `e627` and `e315`, are clear at the centre and
+        0.5 m from the occupier. Reporting only "clear" would file them as
+        counter-examples when they are the same defect one cell over."""
+        offsets = self._offsets(5, 1.0)
+        verdict = _centreline_verdict([None, "BUILDING", None, None, None], offsets, 1.0)
+        assert verdict is not None
+        assert verdict.occupier is None
+        assert verdict.to_occupier_m == pytest.approx(1.0)
+        assert verdict.to_clear_m == pytest.approx(0.0)
+
+    def test_a_symmetric_cross_section_is_given_no_side(self) -> None:
+        """⚠️ The bias this function is written against. `Q19` reads the *sign*
+        to tell a whole-layer registration shift from fifteen unrelated sites,
+        and the walk starts at the left rim — so breaking a tie by index would
+        lean every symmetric section negative and make the signs read less mixed
+        than they are."""
+        offsets = self._offsets(5, 1.0)
+        verdict = _centreline_verdict(
+            [None, "BUILDING", "BUILDING", "BUILDING", None], offsets, 1.0
+        )
+        assert verdict is not None
+        assert verdict.to_clear_m == pytest.approx(2.0)
+        assert np.isnan(verdict.clear_offset_m)
+
+    def test_an_asymmetric_cross_section_keeps_its_side(self) -> None:
+        offsets = self._offsets(5, 1.0)
+        verdict = _centreline_verdict(
+            [None, "BUILDING", "BUILDING", "BUILDING", "BUILDING"], offsets, 1.0
+        )
+        assert verdict is not None
+        assert verdict.clear_offset_m == pytest.approx(-2.0)
+
+    def test_a_fully_blocked_section_has_no_way_out(self) -> None:
+        """⚠️ `inf`, never 0.0. A blocked cross-section's distance-to-clear is
+        undefined, and 0.0 is the value that means "the centreline is clear" —
+        the two readings are opposite and would print the same."""
+        offsets = self._offsets(3, 1.0)
+        verdict = _centreline_verdict(["BUILDING"] * 3, offsets, 1.0)
+        assert verdict is not None
+        assert verdict.to_clear_m == float("inf")
+        assert verdict.to_occupier_m == pytest.approx(0.0)
+
+    def test_a_trimmed_section_centres_on_what_was_judged(self) -> None:
+        """⚠️ The index trap. Cells with no road drawn never reach `standing_at`,
+        so at a junction trim the judged cells can all sit to one side. The
+        centreline is the nearest survivor to zero — several metres off the true
+        centre, and still the only centreline this station has. Indexing the
+        walk's own min-offset cell instead would index a list it is not aligned
+        with; index 0 would report the left rim."""
+        offsets = [2.5, 3.5, 4.5]
+        verdict = _centreline_verdict(["BUILDING", None, None], offsets, 1.0)
+        assert verdict is not None
+        assert verdict.centre_offset_m == pytest.approx(2.5)
+        assert verdict.occupier == "BUILDING"
+
+    def test_a_station_with_nothing_judged_has_no_verdict(self) -> None:
+        assert _centreline_verdict([], [], 1.0) is None
 
 
 class TestInBand:

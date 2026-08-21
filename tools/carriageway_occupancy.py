@@ -77,6 +77,16 @@ tiles**, found by vertex colour, and the road from the **shipped `roads.glb`**
 rather than from the graph the ETL wrote.
 
 Run:  .venv/bin/python tools/carriageway_occupancy.py --city hong_kong
+
+⚠️ **`--corridor-report` is where `Q19`'s argument now lives.** The listing above
+says which edges fail and what is standing in them; the report says what the
+blockage is *shaped* like along the edge, and whether the occupier is on the
+**centreline** — which is the question that refused every width fix, because
+`lanes`, `width_m` and `widen_default` all move the ribbon's edges and none of
+them moves its centreline. Both measurements were computed by this tool from the
+day it shipped and thrown away unprinted, so `Q19` reversed itself three times
+on scratch scripts that were never committed (`Q37`'s debt, `Q55`'s). It is
+opt-in and the default listing is unchanged by it: nothing here gates.
 """
 
 from __future__ import annotations
@@ -386,6 +396,38 @@ def index_corners(
     )
 
 
+@dataclass(frozen=True)
+class Centreline:
+    """What stands on the centreline itself, at the station that condemned an edge.
+
+    `Q19`'s building half turns entirely on this and nothing published could
+    answer it: `lanes`, `width_m` and `widen_default` all move the ribbon's
+    *edges*, so if the occupier is on the centreline no width rule reaches it,
+    however the corridor figure moves. That is the argument that refused both
+    remaining width candidates without building either, and until now it lived
+    in a scratch script.
+    """
+
+    occupier: str | None
+    centre_offset_m: float
+    # Sideways distance from the centreline cell to the nearest cell of each
+    # state, and that cell's own signed offset. **Both**, because `Q19` reads
+    # them in opposite directions: the way out for a centreline that is inside
+    # the occupier, and — for the two edges that are clear at the centre — how
+    # narrowly they escaped, which is the figure that makes those two exceptions
+    # rather than counter-examples. The one matching the centre's own state is
+    # 0.0 by construction; `inf` means the whole cross-section is in one state.
+    #
+    # The sign is the side, against edge direction, because `walk_carriageway`
+    # emits offsets across `left_of(along)` — so a systematic registration shift
+    # of one layer shows up as a consistent sign and a per-site disagreement
+    # does not.
+    to_clear_m: float
+    clear_offset_m: float
+    to_occupier_m: float
+    occupier_offset_m: float
+
+
 @dataclass
 class Survey:
     """Every carriageway cell, and what stands in it.
@@ -435,6 +477,12 @@ class Survey:
     # alternative — scoring an unjudgeable station — is the defect that once
     # condemned 18 innocent edges.
     corridor_profile: dict[int, list[float]] = field(default_factory=dict)
+    # What stood on the centreline at the binding station, and how far sideways
+    # the nearest clear cell was. Recorded beside `corridor_blockers` and under
+    # the same rule: a fact about the cross-section that condemned the edge, not
+    # about the edge. It is what tells a width defect from a centreline one, and
+    # no width rule moves a centreline.
+    corridor_centre: dict[int, Centreline] = field(default_factory=dict)
     # Stations whose cross-section was too trimmed to judge a corridor from.
     # Counted rather than silently skipped, for the reason in the class docstring.
     corridor_stations: int = 0
@@ -505,6 +553,87 @@ def _starved_shape(profile: list[float], bar_m: float, spacing_m: float) -> tupl
     # hand-copies of it.
     passes = [clear >= bar_m for clear in profile]
     return passes.count(False) * spacing_m, _clear_run(passes, spacing_m)
+
+
+def _profile_runs(profile: list[float], ndigits: int = 1) -> list[tuple[float, int]]:
+    """The clear-run profile, run-length encoded in walk order.
+
+    `_starved_shape` reduces the same list to two numbers, and the two numbers
+    are what let `Q19` read a spot blockage as a frontage for two corrections
+    running. The *shape* is the reading: `10.2 x7 . 1.0 . 1.5 . 10.2 x3` is a
+    street at full drawn width with something across it, and a frontage standing
+    in the carriageway cannot produce it — it would leave about half the ribbon
+    for the whole of its own length.
+
+    ⚠️ **Round first, then group.** Every clear run is an integer multiple of the
+    station's across-span, which `cross_section` sizes to divide the drawn width
+    into whole cells — 0.4876 m on a 10.24 m ribbon. Grouping the raw floats and
+    rounding afterwards therefore prints 21 runs of one where the reader needs
+    `10.2 x21`, because two neighbouring stations that both read "full width"
+    differ in the last bits.
+    """
+    runs: list[tuple[float, int]] = []
+    for clear in profile:
+        value = round(clear, ndigits)
+        if runs and runs[-1][0] == value:
+            runs[-1] = (value, runs[-1][1] + 1)
+        else:
+            runs.append((value, 1))
+    return runs
+
+
+def _centreline_verdict(
+    standing_at: list[str | None], offset_at: list[float], span_m: float
+) -> Centreline | None:
+    """Read the centreline cell of one cross-section, and its way out.
+
+    ⚠️ **Indexed over the *judged* cells, never over the walked ones.** A cell
+    with no road drawn never reaches `standing_at`, so the centreline is
+    `argmin(|offset|)` of what was judged — which at a junction trim can be
+    several metres off the true centre, and is still the closest thing to a
+    centreline this station has. Taking the walk's own min-offset cell instead
+    would index a list it is not aligned with; taking index 0 would silently
+    report the left rim, half the drawn width away.
+    """
+    if not standing_at:
+        return None
+    centre = min(range(len(standing_at)), key=lambda i: abs(offset_at[i]))
+
+    def nearest(wanted: bool) -> tuple[float, float]:
+        """Distance and signed offset of the closest cell in one state.
+
+        ⚠️ `inf` and NaN rather than 0.0 when the state does not occur. A
+        fully blocked cross-section has no way out and a fully clear one has no
+        occupier, and 0.0 would read as "it is right here" — the reading that
+        matters most is exactly the one at 0.0-0.5 m.
+
+        ⚠️ **A tie returns NaN for the offset, and that is the point.** `Q19`
+        reads the *sign* of this to ask whether the disagreement is one layer
+        shifted sideways or fifteen separate sites, so breaking a tie toward
+        either rim would manufacture the answer: the walk starts at the left rim,
+        so "lowest index wins" leans negative on every symmetric cross-section
+        and the signs would read less mixed than they are. A cross-section clear
+        by the same margin on both sides carries no side, and says so.
+        """
+        found = [i for i, name in enumerate(standing_at) if (name is not None) == wanted]
+        if not found:
+            return float("inf"), float("nan")
+        steps = min(abs(i - centre) for i in found)
+        # At most two cells sit at the same distance — one either side — so two
+        # candidates *is* the tie, and there is nothing further to compare.
+        closest = [i for i in found if abs(i - centre) == steps]
+        return steps * span_m, offset_at[closest[0]] if len(closest) == 1 else float("nan")
+
+    to_clear_m, clear_offset_m = nearest(False)
+    to_occupier_m, occupier_offset_m = nearest(True)
+    return Centreline(
+        standing_at[centre],
+        offset_at[centre],
+        to_clear_m,
+        clear_offset_m,
+        to_occupier_m,
+        occupier_offset_m,
+    )
 
 
 @dataclass(frozen=True)
@@ -671,6 +800,10 @@ def survey(lattice: Lattice, classes: dict[str, Occupied]) -> Survey:
     # encodings kept in step by nothing but the order of two lines.
     standing_at: list[str | None] = []
     inside: list[bool] = []
+    # Index-aligned with `standing_at`, and appended in the same breath for the
+    # reason its neighbour above gives: the alignment is the whole contract, and
+    # `zip(..., strict=True)` below is what holds it.
+    offset_at: list[float] = []
     station_span = 0.0
     station_cells = 0
     current = -1
@@ -711,6 +844,13 @@ def survey(lattice: Lattice, classes: dict[str, Occupied]) -> Survey:
                 [wall for wall, within in zip(blocked, inside, strict=True) if within],
                 station_span,
             )
+            # ⚠️ Read off `offset_at` rather than the walk's own `seen_offset`.
+            # That one tracks the min-offset cell over **every** walked cell,
+            # including the undrawn ones it exists to send a reader to; this
+            # list holds only the judged cells, and the two are not aligned.
+            verdict = _centreline_verdict(standing_at, offset_at, station_span)
+            if verdict is not None:
+                found.corridor_centre[current_edge] = verdict
             # Recorded at the binding station and nowhere else. An edge's
             # blocker is a fact about the cross-section that condemned it, not
             # about the edge: a street can meet a flyover pier at one end and a
@@ -733,6 +873,7 @@ def survey(lattice: Lattice, classes: dict[str, Occupied]) -> Survey:
             close_station()
             standing_at = []
             inside = []
+            offset_at = []
             station_cells = 0
             seen_offset = float("inf")
             current = station
@@ -740,8 +881,12 @@ def survey(lattice: Lattice, classes: dict[str, Occupied]) -> Survey:
             current_level = int(lattice.level[i])
         station_cells += 1
         station_span = float(lattice.span[i])
-        if abs(float(lattice.offset[i])) < seen_offset:
-            seen_offset = abs(float(lattice.offset[i]))
+        # Converted once. Three readers want it now — the reporting position
+        # below, the authored-width flag and the centreline list — and a numpy
+        # scalar unbox is not free 1.1 M times over.
+        offset = float(lattice.offset[i])
+        if abs(offset) < seen_offset:
+            seen_offset = abs(offset)
             seen_x, seen_z = float(lattice.x[i]), float(lattice.z[i])
 
         surface_y = lattice.surface_y[i]
@@ -759,7 +904,8 @@ def survey(lattice: Lattice, classes: dict[str, Occupied]) -> Survey:
         )
         found.add(current_level, standing, float(lattice.span[i]) * lattice.spacing_m)
         standing_at.append(standing)
-        inside.append(abs(float(lattice.offset[i])) <= float(lattice.authored_half[i]))
+        inside.append(abs(offset) <= float(lattice.authored_half[i]))
+        offset_at.append(offset)
     close_station()
 
     return found
@@ -794,6 +940,16 @@ def main(argv: list[str] | None = None) -> int:
         # samples in the 1.7 m band, coarse enough that the lowest storey of the
         # region is a few million points rather than a few hundred million.
         help="how densely each occupier triangle's surface is sampled",
+    )
+    parser.add_argument(
+        "--corridor-report",
+        action="store_true",
+        # Opt-in, and the default listing above is untouched by it. `Q19`'s
+        # history is a record of readers diffing that table across dates, and
+        # this prints a block per failing edge. `facade_survey.py`'s
+        # `--filler-report` is the precedent — `Q55`'s sweep, in the tool it
+        # grades, behind a flag.
+        help="print Q19's corridor profile and centreline query per failing edge",
     )
     parser.add_argument(
         "--accept-building-share",
@@ -1005,6 +1161,17 @@ def main(argv: list[str] | None = None) -> int:
         found.corridor_skipped,
     )
 
+    if args.corridor_report:
+        corridor_report(
+            found,
+            graph,
+            names,
+            starved,
+            spacing_m=args.spacing_m,
+            index_cell_m=args.index_cell_m,
+            structure_class=structure_class,
+        )
+
     log.info("")
     log.info(
         "  %d cells asked, %d measured (%.1f%%), %d with no road drawn",
@@ -1116,6 +1283,208 @@ def landmark_occupiers(
                 yield corners @ spin.T + offset
 
     return index_corners(blocks(), bands, sample_m, cell_m=cell_m)
+
+
+def plan_lengths(graph: dict[str, Any]) -> dict[int, float]:
+    """Each edge's drawn length in plan, from the polyline the walk itself follows.
+
+    Plan rather than 3D, and the difference is not academic on a flyover: every
+    other figure this tool publishes is a plan measurement, and mixing a slope
+    length into the partition below would make the structure half — which is
+    where the gradients are — read longer than it is for the wrong reason.
+    """
+    lengths: dict[int, float] = {}
+    for edge in graph["edges"]:
+        polyline = np.asarray(edge["polyline"], dtype=np.float64)
+        if len(polyline) < 2:
+            continue
+        steps = np.diff(polyline[:, [0, 2]], axis=0)
+        lengths[int(edge["id"])] = float(np.hypot(steps[:, 0], steps[:, 1]).sum())
+    return lengths
+
+
+def _side(offset_m: float) -> str:
+    """The side a cell sits on, or that it has none.
+
+    ⚠️ `Q19` reads the **sign** of this column to tell a whole-layer registration
+    shift from fifteen unrelated sites, so a cross-section that is symmetric
+    about its centreline has to say so rather than be assigned a side by the
+    order the walk happened to visit cells in.
+    """
+    return "either side" if not np.isfinite(offset_m) else f"at {offset_m:+.2f} m"
+
+
+def _median_and_min(values: list[float]) -> tuple[float, float]:
+    """Median and minimum, or NaN for an empty group rather than a crash."""
+    if not values:
+        return float("nan"), float("nan")
+    return float(np.median(values)), min(values)
+
+
+def corridor_report(
+    found: Survey,
+    graph: dict[str, Any],
+    names: dict[int, str],
+    starved: list[tuple[int, float]],
+    *,
+    spacing_m: float,
+    index_cell_m: float,
+    structure_class: str,
+) -> None:
+    """`Q19`'s two decisive measurements, printed from the walk that already ran.
+
+    Both were computed by scratch scripts that were never committed, which is
+    `Q37`'s debt and `Q55`'s opened a third time — and this time under a finding
+    the entry has reversed three times. The corridor profile is the shape that
+    refuted "the ribbon is drawn wider than the gap it runs through"; the
+    centreline query is what refused every remaining width candidate, because no
+    width rule moves a centreline.
+
+    ⚠️ **Reporting only.** Nothing here is gated, nothing here is measured that
+    the default listing does not already measure, and the default listing is
+    unchanged by design — this reads `Survey` and prints. `starved` is the
+    listing's own population rather than a second selection over the same
+    dictionary, so the two can never come to disagree about which edges fail.
+    """
+    lengths = plan_lengths(graph)
+
+    log.info("")
+    log.info(
+        "  Q19 corridor report — %d starved edges, reporting only, nothing gated", len(starved)
+    )
+
+    # ⚠️ Counted from `corridor_blockers`, so this is **the grader's own**
+    # population. `Q19` published a `1 LANDMARK` here that belongs to
+    # `tools/narrowing.py`'s — a different population, whose `e702` this grader
+    # passes at 3.41 m. An empty class is printed as 0 rather than omitted, or
+    # the next reader fills the gap from whichever table is to hand.
+    tally = Counter(" + ".join(found.corridor_blockers[edge_id]) for edge_id, _ in starved)
+    for name in (BUILDING, LANDMARK, structure_class):
+        tally.setdefault(name, 0)
+    log.info(
+        "    split     %s",
+        " · ".join(f"{count} {name}" for name, count in sorted(tally.items())),
+    )
+
+    # The two halves separate by length, and `Q19` had that as a tendency when
+    # it is a partition. Grouped by whether a *building* stands in the edge at
+    # all, so the one mixed edge is counted with the half it belongs to rather
+    # than dropped between the two.
+    building_half = [
+        edge_id
+        for edge_id, _ in starved
+        if {BUILDING, LANDMARK} & set(found.corridor_blockers[edge_id])
+    ]
+    structure_half = [edge_id for edge_id, _ in starved if edge_id not in set(building_half)]
+    for label, group in (("building", building_half), ("structure", structure_half)):
+        metres = [lengths[edge_id] for edge_id in group if edge_id in lengths]
+        median, shortest = _median_and_min(metres)
+        tightest = min(group, key=lambda e: lengths.get(e, float("inf")), default=None)
+        log.info(
+            "    length    %-9s half  n %2d  p50 %6.1f m  %2d under 20 m  min %5.1f m (e%s)",
+            label,
+            len(group),
+            median,
+            sum(1 for value in metres if value < 20.0),
+            shortest,
+            tightest,
+        )
+    judged = [lengths[edge_id] for edge_id in found.corridor_m if edge_id in lengths]
+    log.info(
+        "    length    all judged level-0  n %3d  p50 %6.1f m   — what the two read against",
+        len(judged),
+        _median_and_min(judged)[0],
+    )
+
+    log.info("")
+    log.info("    profile is every judged station's clear run in walk order, run-length encoded;")
+    log.info("    'centre' is what stood on the centreline at the binding station, and its way out")
+    # ⚠️ Trimmed stations are absent from the profile rather than recorded as
+    # clear — `corridor_profile`'s own declaration says so — so a short profile
+    # on a long edge is a junction trim, not a short street. `n` beside the
+    # length is what makes that visible instead of leaving it to be assumed.
+    for edge_id, _ in starved:
+        profile = found.corridor_profile[edge_id]
+        log.info(
+            "    e%-5d %-28s %6.1f m over %3d judged stations",
+            edge_id,
+            names.get(edge_id, "unnamed")[:28],
+            lengths.get(edge_id, float("nan")),
+            len(profile),
+        )
+        log.info(
+            "      profile  %s",
+            " · ".join(
+                f"{clear:.1f}" + (f" x{count}" if count > 1 else "")
+                for clear, count in _profile_runs(profile)
+            ),
+        )
+        centre = found.corridor_centre.get(edge_id)
+        if centre is None:
+            log.info("      centre   no judged cell at the binding station")
+        elif centre.occupier is None:
+            log.info(
+                "      centre   clear at offset %+.2f m; nearest occupier %.2f m away, %s",
+                centre.centre_offset_m,
+                centre.to_occupier_m,
+                _side(centre.occupier_offset_m),
+            )
+        elif not np.isfinite(centre.to_clear_m):
+            log.info(
+                "      centre   %s at offset %+.2f m; the whole cross-section is blocked",
+                centre.occupier,
+                centre.centre_offset_m,
+            )
+        else:
+            log.info(
+                "      centre   %s at offset %+.2f m; first clear cell %.2f m away, %s",
+                centre.occupier,
+                centre.centre_offset_m,
+                centre.to_clear_m,
+                _side(centre.clear_offset_m),
+            )
+
+    log.info("")
+    _centreline_summary(found, building_half, "building")
+    _centreline_summary(found, structure_half, "structure")
+    log.info("    no width rule reaches a centreline: lanes, width_m and widen_default all move")
+    log.info("    the ribbon's edges, which is why narrowing.py clears nothing at any factor")
+    # ⚠️ Stated here rather than left to the reader: every metre above is a
+    # bound. The widths are lower bounds at the plan bin (see INDEX_CELL_M) and
+    # the extents are upper bounds at the walk pitch (see `_starved_shape`).
+    log.info(
+        "    widths are lower bounds at the %.2f m plan bin; the walk pitch is %.2f m",
+        index_cell_m,
+        spacing_m,
+    )
+
+
+def _centreline_summary(found: Survey, group: list[int], label: str) -> None:
+    """How many of one half are condemned on the centreline itself, and by what."""
+    judged = [
+        centre for edge_id in group if (centre := found.corridor_centre.get(edge_id)) is not None
+    ]
+    on_centreline = [centre for centre in judged if centre.occupier is not None]
+    by_class = Counter(centre.occupier for centre in on_centreline)
+    escaped = [f"{centre.to_occupier_m:.2f} m" for centre in judged if centre.occupier is None]
+    log.info(
+        "    centreline  %-9s half  occupied at the binding station on %2d of %2d  (%s)",
+        label,
+        len(on_centreline),
+        len(judged),
+        " · ".join(f"{count} {name}" for name, count in sorted(by_class.items())) or "none",
+    )
+    if escaped:
+        # ⚠️ The exceptions are load-bearing, not a footnote. A centreline clear
+        # by half a cell is not evidence for a width fix — it is the same defect
+        # one bin over — and printing the margin is what stops it reading as a
+        # clearance.
+        log.info(
+            "                %-9s       clear at the centre on %d, occupier %s away",
+            "",
+            len(escaped),
+            " and ".join(escaped),
+        )
 
 
 def road_names(graph: dict[str, Any]) -> dict[int, str]:
