@@ -627,6 +627,31 @@ class TestValidation:
 
         assert region.check() == ["1 fare nodes have an edge_t outside [0, 1]: ['f_001']"]
 
+    def test_a_fare_node_hosted_by_an_off_grade_edge(self, region) -> None:
+        """`Q15`, and it is a staleness check rather than a graph one.
+
+        `fares.py` cannot write this any more, so what reaches here is a
+        `fares.json` built before that restriction and left in the output
+        directory through a `--from` rebuild — the case the unit tests cannot
+        see, because they grade the code, and `off_grade_nearer` cannot either,
+        because a skipped stage prints nothing.
+        """
+        region.build()
+        region.documents[ROADGRAPH_NAME]["edges"][0]["elevation_level"] = 1
+
+        assert region.check() == [
+            "1 fare nodes name an off-grade edge, so their height came off a deck "
+            "or a tunnel rather than the street (`Q15`): ['f_001']"
+        ]
+
+    def test_a_graph_that_omits_elevation_level_reads_as_at_grade(self, region) -> None:
+        """The fixture's own edges carry no `elevation_level`, which is the
+        shape every other test in this file relies on. Pinned so the level
+        lookup keeps its default rather than raising on a graph without it."""
+        region.build()
+
+        assert region.check() == []
+
     def test_a_document_left_over_from_another_region(self, region) -> None:
         """Each document is perfectly valid on its own. Only the set is wrong."""
         region.build()

@@ -450,7 +450,45 @@ second producer arrived. `Q54`, `Q56` and `Q57` are the same shape. Three places
 a margin that was only ever about `P1-5`'s two taxi datasets. `DATA_SOURCES.md`'s survey bullet was
 correctly scoped and is annotated rather than corrected.
 
-**See.** `P1-5` · `Q13` · `P3-14` for the producer that made it live · `Q58` for the counter trap
+### 🔴 The second mechanism, which the copy count hides
+
+`git log -S 'if int(edge["elevation_level"]) == 0'` dates the rule, and the dates are the finding:
+
+| Commit | |
+|---|---|
+| `8d36fc1` `P1-5` | `fares.py` written. **The filter does not exist anywhere in the repo** |
+| `5a09f0d` `P3-14` | `tramway.py` — **first appearance of the filter**, and *the same commit adds the 19 tram stops as `poi`* |
+| `05e9f32` `P3-15` | `arrows.py` — second copy |
+| `25f4864` `Q15` | `fares.py` — third copy |
+
+So this is **not** a copy-paste-omission defect. `P3-14` invented the level-0 rule for the tram
+*rails*, wrote *"a tramway is an at-grade thing"* to justify it, and did not apply it to the tram
+*stops* it added in the same commit — six hundred lines away in a stage it was not editing.
+
+⚠️ **That is why extracting a shared `Segments.at_grade` is refused.** It was proposed on the
+argument that a named method makes "did this caller filter?" greppable, and the chronology retires
+it: at `P1-5` there was nothing to grep for, and at `P3-14` the author had the rule in hand and
+still missed the second consumer. Three call sites, all correct, in two files awaiting review whose
+ETL output `check.sh` cannot re-verify — the cost is real and the prevention is imaginary.
+
+✅ **The rule that generalises**: when a constraint is discovered mid-task, sweep the *rest of that
+task* for consumers, not just the file it was discovered in. If the extraction is ever revisited,
+the form that addresses this is a **required `levels=` keyword** on `Segments.of` — one a caller
+cannot omit — not an opt-in alias that `Segments.of` still bypasses.
+
+### The third guard, added 2026-08-21
+
+`export.py`'s `_check_fares` refuses a `fares.json` whose `nearest_edge` names an off-grade edge.
+⚠️ **It grades the artefact, not the code**: `fares.py` cannot write one any more, so what reaches
+it is a document built *before* the restriction and left in the output directory through a `--from`
+rebuild. `sync_generated.sh` runs `export --check` before copying a byte, so that is where a stale
+bundle stops. Neither of the other two guards can see it — the tests grade the code, and
+`off_grade_nearer` is a stage-time log that a skipped stage never prints.
+⚠️ `.get("elevation_level", 0)` is load-bearing: `test_export.py`'s graph fixture writes edges
+without the field, and it is pinned by a test so the default is not tidied away.
+
+**See.** `P1-5` · `Q13` · `P3-14` for the producer that made it live, and for the commit that
+invented the rule without applying it · `Q58` for the counter trap
 
 ## `Q16` — LOD0 does not ship
 

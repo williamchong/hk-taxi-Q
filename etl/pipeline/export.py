@@ -722,19 +722,34 @@ def _check_landmarks(manifest: dict, landmarks: dict, buildings: dict, assets: d
 
 
 def _check_fares(fares: dict, graph: dict) -> list[str]:
-    """Fare nodes point at edges that exist, at a position along them.
+    """Fare nodes point at edges that exist, at a position along them, at grade.
 
-    The check the fare stage cannot do for itself once its output is on disk:
+    The checks the fare stage cannot do for itself once its output is on disk:
     re-running the road stage renumbers edges, and every `nearest_edge` written
     before that quietly names a different street.
+
+    ⚠️ **The level check is about a stale artefact, not about a stale graph.**
+    `fares.py` has restricted its snap to `elevation_level == 0` since `Q15`, so
+    nothing it writes today can fail this — what fails it is a `fares.json`
+    written *before* that, still sitting in the output directory when
+    `sync_generated.sh` runs. `__main__.py` takes `--from`, so a partial rebuild
+    is an ordinary thing to do, and this is the only guard that sees the result:
+    the unit tests grade the code and `FareReport.off_grade_nearer` is a
+    stage-time log that a skipped stage never prints. It refuses the sync before
+    a byte is copied, which is where a bundle 8.6 m in the air should stop.
     """
-    edges = {int(edge["id"]) for edge in graph.get("edges", [])}
+    levels = {
+        int(edge["id"]): int(edge.get("elevation_level", 0)) for edge in graph.get("edges", [])
+    }
     nodes = fares.get("nodes", [])
     # Counted, like every other check here. This is the one failure that fires
     # on every node at once — renumber the edges and none of them resolve — so
     # listing them would bury the other findings under the region's node count.
-    lost = [node["id"] for node in nodes if int(node["nearest_edge"]) not in edges]
+    lost = [node["id"] for node in nodes if int(node["nearest_edge"]) not in levels]
     adrift = [node["id"] for node in nodes if not 0.0 <= float(node["edge_t"]) <= 1.0]
+    # Defaulting an unknown id to level 0 rather than reporting it: `lost` above
+    # already names it, and a node has one fault worth reading at a time.
+    aloft = [node["id"] for node in nodes if levels.get(int(node["nearest_edge"]), 0) != 0]
 
     problems: list[str] = []
     if lost:
@@ -743,6 +758,11 @@ def _check_fares(fares: dict, graph: dict) -> list[str]:
         )
     if adrift:
         problems.append(f"{len(adrift)} fare nodes have an edge_t outside [0, 1]: {adrift[:5]}")
+    if aloft:
+        problems.append(
+            f"{len(aloft)} fare nodes name an off-grade edge, so their height came off a deck "
+            f"or a tunnel rather than the street (`Q15`): {aloft[:5]}"
+        )
     return problems
 
 
