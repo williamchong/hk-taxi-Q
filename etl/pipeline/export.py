@@ -724,7 +724,7 @@ def _check_landmarks(manifest: dict, landmarks: dict, buildings: dict, assets: d
 def _check_fares(fares: dict, graph: dict) -> list[str]:
     """Fare nodes point at edges that exist, at a position along them, at grade.
 
-    The checks the fare stage cannot do for itself once its output is on disk:
+    The check the fare stage cannot do for itself once its output is on disk:
     re-running the road stage renumbers edges, and every `nearest_edge` written
     before that quietly names a different street.
 
@@ -738,18 +738,30 @@ def _check_fares(fares: dict, graph: dict) -> list[str]:
     stage-time log that a skipped stage never prints. It refuses the sync before
     a byte is copied, which is where a bundle 8.6 m in the air should stop.
     """
-    levels = {
-        int(edge["id"]): int(edge.get("elevation_level", 0)) for edge in graph.get("edges", [])
-    }
+    # ⚠️ **Subscripted rather than defaulted, unlike `clearance.py`'s read of the
+    # same field.** A default would make a roadgraph missing `elevation_level`
+    # pass this check rather than fail it, and a validator that silently agrees
+    # with a document it cannot read is worse than one that crashes on it — the
+    # whole job here is refusing a bundle nothing else would catch. `roads.py`
+    # writes the field on every edge and `read_document` refuses any roadgraph at
+    # another `schema_version`, so the strict read is also the accurate one.
+    levels = {int(edge["id"]): int(edge["elevation_level"]) for edge in graph.get("edges", [])}
     nodes = fares.get("nodes", [])
     # Counted, like every other check here. This is the one failure that fires
     # on every node at once — renumber the edges and none of them resolve — so
     # listing them would bury the other findings under the region's node count.
     lost = [node["id"] for node in nodes if int(node["nearest_edge"]) not in levels]
     adrift = [node["id"] for node in nodes if not 0.0 <= float(node["edge_t"]) <= 1.0]
-    # Defaulting an unknown id to level 0 rather than reporting it: `lost` above
-    # already names it, and a node has one fault worth reading at a time.
-    aloft = [node["id"] for node in nodes if levels.get(int(node["nearest_edge"]), 0) != 0]
+    # `None` for an unknown id rather than a level, so `lost` and `aloft` cannot
+    # both name a node: an edge that resolves to nothing has no level to be wrong
+    # about, and `lost` above already says so. ⚠️ `adrift` is orthogonal to both
+    # and may fire alongside either — which edge and where along it are separate
+    # faults, and a node carrying both should be told about both.
+    aloft = [
+        node["id"]
+        for node in nodes
+        if (level := levels.get(int(node["nearest_edge"]))) is not None and level != 0
+    ]
 
     problems: list[str] = []
     if lost:

@@ -139,17 +139,23 @@ class _Region:
                     {"id": 2, "pos": [200.0, 0.0, 100.0], "kind": "endpoint"},
                 ],
                 "edges": [
+                    # `elevation_level` is written here because `roads.py` writes
+                    # it on every real edge and `_check_fares` reads it strictly.
+                    # The fixture omitted it until `Q15`, which is not a shape any
+                    # published roadgraph has.
                     {
                         "id": _EDGE_ID,
                         "from": 0,
                         "to": 1,
                         "polyline": [[0.0, 0.0, 0.0], [100.0, 0.0, 0.0]],
+                        "elevation_level": 0,
                     },
                     {
                         "id": _EDGE_ID + 1,
                         "from": 1,
                         "to": 2,
                         "polyline": [[100.0, 0.0, 0.0], [200.0, 0.0, 100.0]],
+                        "elevation_level": 0,
                     },
                 ],
                 "turn_restrictions": [
@@ -643,14 +649,6 @@ class TestValidation:
             "1 fare nodes name an off-grade edge, so their height came off a deck "
             "or a tunnel rather than the street (`Q15`): ['f_001']"
         ]
-
-    def test_a_graph_that_omits_elevation_level_reads_as_at_grade(self, region) -> None:
-        """The fixture's own edges carry no `elevation_level`, which is the
-        shape every other test in this file relies on. Pinned so the level
-        lookup keeps its default rather than raising on a graph without it."""
-        region.build()
-
-        assert region.check() == []
 
     def test_a_document_left_over_from_another_region(self, region) -> None:
         """Each document is perfectly valid on its own. Only the set is wrong."""

@@ -442,7 +442,9 @@ in code, and making `fares.py` the one where it is a config question would asser
 about the other three. A city where `off_grade_nearer` is large is the evidence that would justify
 the knob; there is none today.
 
-### ⚠️ The mechanism, which is the fourth instance
+### ⚠️ Mechanism 1 — a claim generalised past the producer it was measured on
+
+`Q57`'s, and this is its fourth instance.
 
 A claim measured against **one producer**, generalised to the stage, then left standing when a
 second producer arrived. `Q54`, `Q56` and `Q57` are the same shape. Three places carried this one —
@@ -450,7 +452,9 @@ second producer arrived. `Q54`, `Q56` and `Q57` are the same shape. Three places
 a margin that was only ever about `P1-5`'s two taxi datasets. `DATA_SOURCES.md`'s survey bullet was
 correctly scoped and is annotated rather than corrected.
 
-### 🔴 The second mechanism, which the copy count hides
+### 🔴 Mechanism 2 — a rule discovered mid-task and not swept across the rest of it
+
+New here, and the copy count hides it.
 
 `git log -S 'if int(edge["elevation_level"]) == 0'` dates the rule, and the dates are the finding:
 
@@ -476,16 +480,32 @@ task* for consumers, not just the file it was discovered in. If the extraction i
 the form that addresses this is a **required `levels=` keyword** on `Segments.of` — one a caller
 cannot omit — not an opt-in alias that `Segments.of` still bypasses.
 
-### The third guard, added 2026-08-21
+### The three guards, and why none is redundant
 
-`export.py`'s `_check_fares` refuses a `fares.json` whose `nearest_edge` names an off-grade edge.
-⚠️ **It grades the artefact, not the code**: `fares.py` cannot write one any more, so what reaches
-it is a document built *before* the restriction and left in the output directory through a `--from`
-rebuild. `sync_generated.sh` runs `export --check` before copying a byte, so that is where a stale
-bundle stops. Neither of the other two guards can see it — the tests grade the code, and
-`off_grade_nearer` is a stage-time log that a skipped stage never prints.
-⚠️ `.get("elevation_level", 0)` is load-bearing: `test_export.py`'s graph fixture writes edges
-without the field, and it is pinned by a test so the default is not tidied away.
+They sit at three layers: the `test_fares.py` fixtures grade the **code**, `off_grade_nearer` grades
+the **run**, and `export.py`'s `_check_fares` grades the **artefact** (added 2026-08-21).
+
+The third one is the one that nearly did not get built, and it covers what the other two structurally
+cannot: **`fares.py` cannot write an off-grade host any more**, so what reaches `_check_fares` is a
+`fares.json` written *before* the restriction and left in the output directory through a `--from`
+rebuild. The tests still pass — they grade the code — and `off_grade_nearer` never prints, because a
+skipped stage prints nothing. `sync_generated.sh` runs `export --check` before copying a byte, so
+that is where a stale bundle stops.
+
+🔴 **It shipped reading `elevation_level` with a default, and that was backwards.** The argument at
+the time was that the default was load-bearing — `test_export.py`'s graph fixture omits the field, so
+a strict read raises out of 22 of that file's 48 tests. That is true and is the wrong way round: it
+weakens production code to accommodate a fixture, and the direction it fails in is the one a
+validator must never take. **A missing `elevation_level` would have made this guard agree with a
+document it could not read**, which is precisely the silent pass it exists to prevent. `export.py`
+subscripts every other graph field strictly — `edge["id"]`, `node["pos"]`, `node["nearest_edge"]` —
+and this was the one lenient read in the file. It is strict now, and the fixture carries the field
+`roads.py` writes on every real edge.
+
+⚠️ **The test written to defend the default went with it.** It was two statements identical to
+`test_a_complete_set_has_no_problems` and caught nothing that test did not, and it was not
+self-checking: adding the field to the fixture would have left it passing while testing nothing, with
+its docstring silently false.
 
 **See.** `P1-5` · `Q13` · `P3-14` for the producer that made it live, and for the commit that
 invented the rule without applying it · `Q58` for the counter trap
