@@ -104,6 +104,7 @@ lives in git. This file holds *why things are the way they are*.
 | `P3-7a` | The task closes at what was judged, and the riders are gated on the look | ✅ Closed as shipped — the remainder is conditional on `P3-9a` reopening `Q26` |
 | `P3-10` | The ground is a mesh class, and it collides | 🟡 Awaiting review |
 | `P3-11` | The taxi is generated, and the chassis generates it | 🟡 Awaiting review |
+| `P3-16` / `P3-17` | Signs and signal heads ship as sourced geometry — instruction classes only, no text, no textures, no invented state | ⬜ Planned — **not gated on `P3-9a`**, the user's call |
 
 | Topic | Decision | Status |
 |---|---|---|
@@ -7796,3 +7797,70 @@ that.
 refusal that does not transfer, and the self-grading pattern that does · `Q56` for the kind-mapping
 trust this shares and the second source it cannot have · `Q19` for the widening ·
 `ARCHITECTURE.md` for the `arrows.glb` contract
+
+## `P3-16` / `P3-17` — Signs and signal heads ship as sourced geometry, and the scope is what keeps them honest
+
+**The decision.** TD's Traffic Aids Drawings publish the region's traffic signs and signal heads as
+located, oriented points, and both ship as their own generated meshes in `Q58`/`Q59`'s pattern: one
+primitive, one draw call, no collider, an optional `city.json` key, counters the stage publishes
+about itself. Planned on the user's instruction, and **deliberately not gated on `P3-9a`** — the
+conservative sequencing, holding new `B2` content until the driver verdict, was put to the user and
+declined, so the tasks may land while the round runs. Whether a re-cut carries them in front of the
+drivers stays the separate call `Q53` recorded for `P3-12`.
+
+### What the region holds, measured before planning
+
+- `DTAD_TS_ABV_PT` / `DTAD_TS_POLE_PT`: **3,276 signs over 193 distinct `SIGNID`s, 2,227 poles**,
+  each with `ANGLE`. The instruction subset lands around **800**: NO ENTRY ×277, GIVE WAY ×121,
+  TURN LEFT/RIGHT ×163, NO LEFT/NO RIGHT TURN ×110, one-way arrow plates (`TS733`/`TS734`) ×133.
+- `DTAD_TRAFFIC_LIGHT_PT`: **913 heads**, `REFNAME` naming the aspect (`P24` ×278, `P01` ×149,
+  `S01` ×100), `ANGLE` the facing. The `_LINE`/`_FILLED` layers are the same objects drawn.
+- **No new fetch.** Both layers sit in the `dTAD_IRNP.gdb.zip` that `pipeline/arrows.py` reads.
+
+### Scope refusals, each with its reason
+
+- **No text faces.** A sign face carrying words is rendered text, which `Q42` forbids and hard
+  rule 8 sits beside. The excluded population is large and identifiable: the no-stopping-zone
+  family ~275, `TS860` time plates ×148, parking-place signs ~124, vehicle-class prohibitions —
+  roughly 550 signs whose meaning *is* their text.
+- **No pictogram textures.** The game ships zero textures, and a sign-face decal would be the
+  first — an art-direction change no one asked for. A face is flat-shaded geometry: disc, ring,
+  extruded arrow — the polygon-building `arrows.py` already does, stood upright.
+- **No invented signal state.** No dataset publishes timing, an invented cycle *instructs*, and
+  nothing obeys it — no traffic before `P3-3`, no player consequence by genre design. Heads ship
+  unlit; the named route for state is `P3-11d`'s `instance uniform` lamp-circuit pattern, wired in
+  `B3` when traffic can stop at a red.
+- **No colliders**, matching `tram.glb` and `arrows.glb`. Putting 2,227 poles into Jolt before
+  `P2-6` has measured a frame on the device floor is the wrong order; a car passing through a pole
+  is the recorded cost, revisited with `B3` (breakaway poles are the genre's answer, and an effect,
+  not a shape).
+
+### The sign catalogue's role, bounded
+
+The user's `hk-traffic-sign-map` viewer reads the same dTAD source and its committed
+`signCatalogue.json` resolves 1,126 `SIGNID`s to Index-Plan class and bilingual description —
+it matched 2,896 of the region's 3,276 signs and is the fastest scope cross-check available.
+**Cross-check only, never authority**: the shipping whitelist transcribes TD's own `TS` Index Plan
+sheets, which is `Q59`'s glyph-table rule restated — the catalogue is OCR-built, its own README
+records partial coverage on the dense sheets, and 380 region signs are uncatalogued (344 of them
+`TSSEPA` separators).
+
+### What the sign layer grades for free
+
+The instruction subset is semantically redundant with the graph — NO ENTRY duplicates one-way
+edges, NO LEFT/NO RIGHT TURN duplicates the **217 published turn restrictions nothing yet reads**.
+That redundancy is `Q56`'s pattern: an independently digitised second source of the same claim.
+`P3-16` owes a report-only counter diffing sign semantics against the graph; a sign whose
+instruction contradicts its edge is a finding about one of them, not a bar to retune.
+
+### Deliberately not jumped
+
+Box junctions (20 polygons, `Q59`'s recorded "obvious follow-on", mechanism already solved) and the
+railing layer (1,753 features, `DATA_SOURCES.md`'s "Hong Kong's signature street railings") remain
+queued and are cheaper per unit of Hong Kong. This decision adds beside them, not ahead of them —
+the order among the four is unassigned.
+
+**See.** `Q58` `Q59` for the mesh pattern and the self-grading discipline · `Q42` for
+never-rendered-text · `Q54` `Q56` for sourced-not-invented and the second-source diff · `Q15` for
+the level-0 snap every dTAD consumer owes · `Q53` for the artefact-inclusion call it records
+against `P3-12` · `DATA_SOURCES.md` for the layer table
