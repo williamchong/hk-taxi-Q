@@ -77,7 +77,15 @@ SURFACE_MANIFEST_NAME = "roadsurface.json"
 # cannot judge a cross-section without it — the nominal corridor still has a
 # width where the ribbon stops, and reading that as a starved one is exactly the
 # trap that condemned 18 innocent edges in `Q19`.
-SURFACE_MANIFEST_SCHEMA = 4
+# 5 since `P3-19`: `carriageway[].kerb_hidden_m` says where each side of the
+# ribbon draws **no kerb**, because a neighbouring ribbon or cap already covers
+# it. Only this stage knows it — `_hide_buried_kerbs` decides it per quad and
+# the answer depends on every other ribbon in the region — and `railings.py`
+# cannot place a fence without it: 11.1% of the region's railing metres join to
+# a kerb that is buried under the opposing carriageway, where a fence drawn on
+# the drawn kerb stands in the middle of merged tarmac. Intermediate, like
+# `trim_m`; the game reads neither.
+SURFACE_MANIFEST_SCHEMA = 5
 
 # Godot's glTF importer reads node-name suffixes: `-col` gives the mesh a static
 # trimesh collider at import time and leaves it visible. Naming it here rather
@@ -332,6 +340,11 @@ class SurfaceReport:
     # region's total kerb, and a collapse in it would mean the overlap test had
     # stopped finding anything rather than that the region had tidied itself up.
     buried_kerb_m: float = 0.0
+    # Per edge and side, the ribbon-metre ranges where the kerb is not drawn —
+    # `buried_kerb_m`'s own decision, kept rather than only summed, because
+    # `P3-19` has to know *where*. Ribbon metres, so zero is the trimmed start
+    # and a consumer subtracts `trim_m[0]` from a published-polyline distance.
+    kerb_hidden_m: dict[int, dict[str, list[list[float]]]] = field(default_factory=dict)
     # Triangles left facing downward, and the area they cover. Tracked rather
     # than assumed away: `boundary` removes all but a handful at the region's
     # sharpest hairpin, and a jump in either number means a ribbon has started
@@ -988,6 +1001,7 @@ def build_region(
         if (ring := _cap_ring(group, edges, report)) is not None
     ]
     _hide_buried_kerbs(edges, caps, report)
+    _record_hidden_kerbs(graph["edges"], edges, report)
     _read_offside(graph["edges"], edges, report)
 
     builder = _Builder()
@@ -1115,7 +1129,7 @@ def _kerbside(
             kinds[side] = MARKING_KERB_NONE
             continue
         # Ties broken by the kind's own code, so a rebuild publishes the same
-        # file — the same reason `kerbside._runs` sorts before taking a maximum.
+        # file — the same reason `kerbside.merge_runs` sorts before taking a maximum.
         kinds[side] = max(sorted(votes), key=lambda kind: votes[kind])
         minority_m += sum(votes.values()) - votes[kinds[side]]
     return extents, kinds, minority_m
@@ -1560,6 +1574,50 @@ def _surviving_kerb(
     return ~buried
 
 
+def _record_hidden_kerbs(published: list[dict], edges: list[_Edge], report: SurfaceReport) -> None:
+    """Where each ribbon draws no kerb, in ribbon metres, per side (`P3-19`).
+
+    `_hide_buried_kerbs` already decides this — per quad, against every other
+    ribbon and cap in the region — and until now only the *total* survived, as
+    `buried_kerb_m`. `P3-19` needs the positions: a pedestrian railing joined
+    to a kerb that is buried under the opposing carriageway is a fence drawn
+    down the middle of merged tarmac, and **11.1% of the region's railing
+    metres join to exactly that**.
+
+    ⚠️ **Published rather than recomputed downstream**, the rule `arrows.py`
+    states for the drawn half-width: coverage is a question about every other
+    ribbon *and* about the junction caps, and a second implementation of it in
+    another stage would disagree near the caps and tell nobody which answer was
+    right (`Q56`).
+
+    ⚠️ **Ribbon metres, not published-polyline metres.** Zero is the trimmed
+    start, because that is the frame the mask itself lives in — a consumer
+    holding a distance along `roadgraph.json`'s polyline subtracts `trim_m[0]`.
+    Edges that draw nothing, and sides that are wholly drawn, are simply absent.
+    """
+    for entry, edge in zip(published, edges, strict=True):
+        if edge.ribbon is None or len(edge.ribbon) < 2:
+            continue
+        along = plan_lengths(edge.ribbon)
+        hidden = {
+            side: [
+                # `stop` is exclusive, the half-open station range `_runs`
+                # publishes and `_draw_edge` slices with.
+                [round(float(along[start]), 3), round(float(along[stop - 1]), 3)]
+                for start, stop in _runs(~mask)
+            ]
+            for side, mask in ((NEARSIDE, edge.kerb_left), (OFFSIDE, edge.kerb_right))
+            if mask is not None
+        }
+        # Only the edges with something to say. A side that is wholly drawn
+        # contributes an empty list and a whole edge of them contributes
+        # nothing, which keeps this out of the 737 entries it has no news for.
+        if any(hidden.values()):
+            report.kerb_hidden_m[int(entry["id"])] = {
+                side: ranges for side, ranges in hidden.items() if ranges
+            }
+
+
 def _runs(keep: np.ndarray) -> list[tuple[int, int]]:
     """Station ranges for each run of consecutive kept segments.
 
@@ -1964,6 +2022,7 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Sur
                     "edge": edge_id,
                     "half_width_m": halves,
                     "trim_m": list(report.trims_m.get(edge_id, (0.0, 0.0))),
+                    "kerb_hidden_m": report.kerb_hidden_m.get(edge_id, {}),
                 }
                 for edge_id, halves in sorted(report.carriageway.items())
             ],
