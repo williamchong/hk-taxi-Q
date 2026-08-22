@@ -35,6 +35,7 @@ const SHADERS: Dictionary = {
 	"tramway": "res://tuning/tramway.tres",
 	"arrows": "res://tuning/arrows.tres",
 	"boxjunctions": "res://tuning/boxjunctions.tres",
+	"railings": "res://tuning/railings.tres",
 	"vehicle_body": "res://tuning/vehicle_body.tres",
 }
 

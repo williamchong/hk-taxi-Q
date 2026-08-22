@@ -1,0 +1,45 @@
+; Pedestrian railings, drawn as their own geometry (`P3-19`, `Q60`).
+;
+; `tools/generated_scene_import.gd` maps the ETL's `railings` material name to
+; this path and only this path, so this file is the switch: delete the entry
+; there and the fences fall back to the `BaseMaterial3D` they imported with,
+; which draws the right fences in whatever grey the importer picks.
+;
+; Here rather than as shader defaults because CLAUDE.md hard rule 4 makes tuning
+; data, not constants — and beside `arrows.tres` and `boxjunctions.tres`, which
+; is the whole point of the file.
+;
+; ⚠️ **`rail_colour` is not a copy of anything, and that is the difference from
+; its two neighbours.** The marking yellow and the marking white are each
+; authored two and three times over, held together only by a mismatch being
+; visible in one frame. A railing shares its colour with nothing in the bundle,
+; so there is no copy to drift — but it also has no second reading to be checked
+; against, which is worth knowing when judging it: the shade below is authored
+; from the street, not derived from a survey, and nothing measures it.
+;
+; ⚠️ **`rail_metallic` stays 0.0**, and that is a measurement rather than taste.
+; `P3-14` shipped the tram rails at 0.65 and they came out **sky blue** — metal
+; reflects its environment, the only environment here is sky, and the mobile
+; tier ships no reflection probes. Painted steel is a dielectric coat over
+; metal, so 0.0 is the truthful value as well as the one that renders.
+;
+; ⚠️ **Nothing here is the fence's shape.** Height, station pitch, how far it
+; stands outside the kerb and how far its foot sinks are geometry, decided by
+; `pipeline/railings.py` from `hong_kong.yaml`'s `railings:` block — every one
+; of them authored there, because no sheet in the bundle publishes a railing
+; dimension (`Q60`). This file only says what colour the steel is painted.
+;
+; Judged at the `street` and `kerb` viewpoints per `ART_DESIGN.md`'s table: a
+; railing is the nearest object to the camera on most of the region's streets,
+; so it is judged against the kerb it stands on rather than from the air.
+
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+[ext_resource type="Shader" path="res://assets/shaders/railings.gdshader" id="1_railings"]
+
+[resource]
+resource_name = "railings"
+shader = ExtResource("1_railings")
+shader_parameter/rail_colour = Color(0.78, 0.8, 0.76, 1.0)
+shader_parameter/rail_roughness = 0.55
+shader_parameter/rail_metallic = 0.0

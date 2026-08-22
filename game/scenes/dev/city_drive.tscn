@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=12 format=3]
 
 ; The first scene that puts the car on the real city (`P1-4` + `P0-5`).
 ;
@@ -21,6 +21,7 @@
 [ext_resource type="Script" path="res://scripts/city/tramway_preview.gd" id="10_tramway"]
 [ext_resource type="Script" path="res://scripts/city/arrows_preview.gd" id="11_arrows"]
 [ext_resource type="Script" path="res://scripts/city/boxjunctions_preview.gd" id="12_boxjunctions"]
+[ext_resource type="Script" path="res://scripts/city/railings_preview.gd" id="13_railings"]
 [ext_resource type="PackedScene" path="res://scenes/world/clean_daylight.tscn" id="3_light"]
 [ext_resource type="PackedScene" path="res://scenes/vehicle/taxi.tscn" id="4_taxi"]
 [ext_resource type="Script" path="res://scripts/camera/chase_camera.gd" id="5_camera"]
@@ -66,6 +67,14 @@ script = ExtResource("11_arrows")
 ; sources publish no box polygons ships none and this node simply stays empty.
 [node name="BoxJunctions" type="Node3D" parent="."]
 script = ExtResource("12_boxjunctions")
+
+; The published pedestrian railings (`P3-19`), one mesh for the whole
+; region, standing on the kerb the ribbon actually drew rather than where
+; they were surveyed — two-thirds of them were surveyed inside it. A region
+; whose sources publish no railing layer ships none and this node simply
+; stays empty.
+[node name="Railings" type="Node3D" parent="."]
+script = ExtResource("13_railings")
 
 ; The authored heroes, placed from `landmarks.json` (`P3-6`). Beside `Tiles`
 ; rather than under it: the streamer owns what it streams, and a hero is

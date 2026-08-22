@@ -37,6 +37,7 @@ from pipeline import (
     fetch,
     landmarks,
     podiums,
+    railings,
     roads,
     surface,
     tramway,
@@ -77,6 +78,13 @@ STAGES: dict[str, Callable[[list[str]], int]] = {
     # ribbon, since a surveyed polygon is drawn at its surveyed extent rather
     # than registered into a lane. Before `export`, which names the asset.
     "boxjunctions": boxjunctions.main,
+    # After `surface`, and forced rather than tidy — `arrows`'s dependency plus
+    # one of its own. It reads `roadsurface.json` for the drawn half-width, the
+    # junction trims **and** `kerb_hidden_m`: a railing is drawn on the kerb the
+    # ribbon actually has, and where that kerb is buried under the opposing
+    # carriageway there is no kerb to put a fence on. Before `export`, which
+    # names the asset.
+    "railings": railings.main,
     "export": export.main,
 }
 

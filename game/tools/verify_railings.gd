@@ -1,0 +1,208 @@
+## Checks the generated pedestrian railings against the data contract, headless.
+##
+## `P3-19` delivers TD's published `DTAD_RAILING_LINE` as geometry standing on
+## the kerb the ribbon actually drew, and the facts that decision rests on are
+## engine-side: whether the importer dispatched the shader on the material name,
+## whether it built a collider it must *not* have, whether the shader still
+## draws both faces, and whether every quad still looks at the road. Run:
+##
+##     godot --headless --path game --script res://tools/verify_railings.gd
+##
+## Exits non-zero if the railings are present and fail any check.
+##
+## ⚠️ **Absence is a pass, and that is not a loophole** — `verify_arrows.gd`'s
+## paragraph, unchanged: a city whose estate publishes no railing layer ships
+## none and `city.json` names null. What stops that becoming a silent skip is
+## `verify_city.gd`, whose `_check_documents` asserts a *named* railing asset
+## exists and matches this file's constant.
+extends SceneTree
+
+const GeneratedRailings = preload("res://scripts/city/generated_railings.gd")
+const MeshContract = preload("res://scripts/city/mesh_contract.gd")
+
+## One primitive, so the whole region's railings cost one draw call — the rule
+## the road surface, the tiles, the tramway, the arrows and the box junctions
+## are all held to.
+const SURFACES: int = 1
+
+## The material the railings must end up with, mirroring `SHADERS` in
+## `tools/generated_scene_import.gd` and `RAILINGS_MATERIAL` in
+## `etl/pipeline/railings.py`.
+##
+## Checked because the dispatch has **no failing state**: fences that kept their
+## imported `BaseMaterial3D` would be the right fences on the right kerbs in
+## whatever colour the importer chose, and nothing else here would notice.
+const RAILINGS_MATERIAL: String = "res://tuning/railings.tres"
+
+## What the shader's render mode must say.
+##
+## ⚠️ **This asset's version of the failure that fails to nothing, and it is not
+## the winding one.** Every other generated mesh here is `cull_back` and is
+## checked for facing the sky. A fence is a single-quad vertical surface the car
+## drives past on both sides, so it is drawn `cull_disabled` — and if that ever
+## became `cull_back`, half of every street's railings would silently stop
+## drawing depending on which way the road was digitised. Nothing else in this
+## file, and nothing in `railings.json`, can see that: the mesh would be
+## identical.
+const CULL_MODE: String = "cull_disabled"
+
+## How far a triangle's winding may disagree with the normal it was given.
+##
+## Zero tolerance in principle — the two are built from the same quad — but the
+## dot product is normalised against float32 positions that Godot re-quantises
+## on import, so the bar is "the wrong side of the surface" rather than "not
+## exactly aligned".
+const MIN_AGREEMENT: float = 0.0
+
+
+func _init() -> void:
+	if not GeneratedRailings.is_present():
+		print("  skip  no railings shipped for this region")
+		quit(0)
+		return
+
+	var packed: PackedScene = GeneratedRailings.load_railings()
+	if packed == null:
+		# Present but unloadable, which is not the same as absent — the hint
+		# about rebuilding would be the wrong advice here.
+		printerr("  FAIL  %s exists but did not load as a scene" % GeneratedRailings.PATH)
+		quit(1)
+		return
+
+	var scene_root: Node3D = packed.instantiate()
+	var problems: PackedStringArray = _check(scene_root)
+	# Instantiated outside the tree, so nothing else will free it — and a
+	# headless run that leaks buries its own result under exit warnings.
+	scene_root.free()
+	for problem: String in problems:
+		printerr("  FAIL  ", problem)
+	if problems.is_empty():
+		print("  ok    ", GeneratedRailings.PATH)
+	quit(1 if not problems.is_empty() else 0)
+
+
+func _check(scene_root: Node3D) -> PackedStringArray:
+	var problems: PackedStringArray = []
+
+	var mesh: ArrayMesh = MeshContract.single_primitive(scene_root, SURFACES, problems)
+	if mesh == null:
+		return problems
+
+	for surface: int in mesh.get_surface_count():
+		var where: String = "surface %d" % surface
+		# `false`: this mesh ships no `COLOR_0` on purpose — see
+		# `RAILINGS_MATERIAL` above and `config.Railings`. Every other guarantee
+		# in `check_surface` still applies, the no-texture one especially.
+		problems.append_array(MeshContract.check_surface(mesh, surface, where, false))
+		problems.append_array(
+			MeshContract.check_shader_material(mesh, surface, where, RAILINGS_MATERIAL)
+		)
+		problems.append_array(_check_draws_both_faces(mesh, surface, where))
+		problems.append_array(_check_faces_the_road(mesh, surface, where))
+
+	problems.append_array(_check_has_no_collision(scene_root))
+	return problems
+
+
+## Railings must **not** collide, and here that is a design decision.
+##
+## `GAME_DESIGN.md` lists pedestrian railings under "deliberately diverge on —
+## omit or make breakable", because Hong Kong's streets faithfully railed are a
+## traffic simulator with no room to be reckless. Drawing them as scenery keeps
+## the picture and keeps the divergence; a collider would quietly undo the
+## second half, and the whole guard against it is the absence of a `-col` suffix
+## in one string in `railings.py`. Breakaway is a `B3` question.
+func _check_has_no_collision(scene_root: Node3D) -> PackedStringArray:
+	return MeshContract.check_no_collision(
+		scene_root, "the railings", "RAILINGS_MESH_NAME in etl/pipeline/railings.py"
+	)
+
+
+## The shader still draws both faces (`P3-19`).
+##
+## Read off the shader's own source because that is the only channel Godot
+## offers: `render_mode` is compiled into the `Shader`, not exposed as a
+## property. Stringy, and worth it — the alternative is that a one-word edit to
+## `railings.gdshader` deletes half the region's fences and every other check in
+## this file, and every counter in `railings.json`, still passes.
+func _check_draws_both_faces(mesh: Mesh, surface: int, where: String) -> PackedStringArray:
+	var material: Material = mesh.surface_get_material(surface)
+	var shaded: ShaderMaterial = material as ShaderMaterial
+	if shaded == null or shaded.shader == null:
+		# The material check above already reports this; saying it twice would
+		# bury the finding that matters under a duplicate.
+		return PackedStringArray()
+	if shaded.shader.code.contains(CULL_MODE):
+		return PackedStringArray()
+	return PackedStringArray(
+		[
+			(
+				"%s: the railing shader does not declare %s. " % [where, CULL_MODE]
+				+ "A fence is one quad thick and the car passes it on both sides — "
+				+ "back-face culling makes half of them invisible, not wrong-looking."
+			)
+		]
+	)
+
+
+## Every quad looks at the carriageway (`P3-19`).
+##
+## The vertical-surface counterpart of `verify_boxjunctions.gd`'s faces-up
+## check, asking the question that matters for a fence: not "does this face the
+## sky" but "does this face the road it was built to face". Under
+## `cull_disabled` a flipped quad still draws — it draws lit from the wrong
+## hemisphere, which reads as a black panel in full sun.
+##
+## Checked here as well as in `railings.json` because the two catch different
+## things. The ETL's `facing_away` counts what `pipeline/railings.py` built;
+## this counts what Godot imported, and an import that mirrors an axis moves one
+## without the other.
+func _check_faces_the_road(mesh: Mesh, surface: int, where: String) -> PackedStringArray:
+	var arrays: Array = mesh.surface_get_arrays(surface)
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+	if indices.is_empty():
+		return PackedStringArray(["%s carries no index buffer to check winding on" % where])
+	if normals.is_empty():
+		return PackedStringArray(["%s carries no normals to check the winding against" % where])
+
+	var disagreeing: int = 0
+	# `floori` of a float divide rather than an integer one: GDScript warns on
+	# integer division and `check.sh` promotes warnings to errors, so the plain
+	# form does not compile. The count is exact — an index buffer is always a
+	# multiple of three.
+	var triangles: int = floori(indices.size() / 3.0)
+	for triangle: int in triangles:
+		var first: int = indices[triangle * 3]
+		var a: Vector3 = vertices[first]
+		var b: Vector3 = vertices[indices[triangle * 3 + 1]]
+		var c: Vector3 = vertices[indices[triangle * 3 + 2]]
+		# ⚠️ **Negated, because Godot winds front faces clockwise and glTF winds
+		# them counter-clockwise** — `verify_arrows.gd`'s expression, kept
+		# verbatim. The sign was established by measurement against `roads.glb`
+		# and `tram.glb`; if this ever needs revisiting, re-measure against those
+		# two rather than re-reading this comment, and do not "fix" either side
+		# to agree with the other (`Q59`).
+		var cross: Vector3 = (a - b).cross(c - a)
+		# A collapsed triangle has no facing to judge. `railings.py` drops them
+		# at twice-area 1e-6, so one here is a rounding survivor rather than a
+		# fold.
+		if cross.length() <= 0.0:
+			continue
+		if cross.normalized().dot(normals[first]) <= MIN_AGREEMENT:
+			disagreeing += 1
+	if disagreeing == 0:
+		return PackedStringArray()
+	return PackedStringArray(
+		[
+			(
+				(
+					"%s: %d of %d triangles are wound away from their own normal. "
+					% [where, disagreeing, triangles]
+				)
+				+ "cull_disabled still draws those — they light from the wrong side, "
+				+ "which reads as a black panel and not as a missing one."
+			)
+		]
+	)

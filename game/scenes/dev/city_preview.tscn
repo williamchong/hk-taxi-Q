@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://scripts/city/tile_preview.gd" id="1_tiles"]
 [ext_resource type="Script" path="res://scripts/city/landmarks.gd" id="7_landmarks"]
@@ -9,6 +9,7 @@
 [ext_resource type="Script" path="res://scripts/city/tramway_preview.gd" id="11_tramway"]
 [ext_resource type="Script" path="res://scripts/city/arrows_preview.gd" id="12_arrows"]
 [ext_resource type="Script" path="res://scripts/city/boxjunctions_preview.gd" id="13_boxjunctions"]
+[ext_resource type="Script" path="res://scripts/city/railings_preview.gd" id="14_railings"]
 [ext_resource type="Script" path="res://scripts/city/fare_preview.gd" id="6_fares"]
 
 [node name="CityPreview" type="Node3D"]
@@ -40,6 +41,14 @@ script = ExtResource("12_arrows")
 ; simply stays empty.
 [node name="BoxJunctions" type="Node3D" parent="."]
 script = ExtResource("13_boxjunctions")
+
+; The published pedestrian railings (`P3-19`), one mesh for the whole
+; region, standing on the kerb the ribbon actually drew rather than where
+; they were surveyed — two-thirds of them were surveyed inside it. A region
+; whose sources publish no railing layer ships none and this node simply
+; stays empty.
+[node name="Railings" type="Node3D" parent="."]
+script = ExtResource("14_railings")
 
 ; The authored heroes (`P3-6`). Without them this scene shows holes where the
 ; excluded source buildings stood — and the audit viewpoints below are the

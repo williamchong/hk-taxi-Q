@@ -59,6 +59,7 @@ from pipeline.documents import read_document, round_position, write_document
 from pipeline.fares import FARES_NAME, FARES_SCHEMA
 from pipeline.gltf import Bounds
 from pipeline.landmarks import ASSETS_NAME, ASSETS_SCHEMA, landmark_in_region
+from pipeline.railings import RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
 from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, SURFACE_NAME
 from pipeline.tramway import TRAMWAY_MANIFEST_NAME, TRAMWAY_MANIFEST_SCHEMA
@@ -131,7 +132,12 @@ CITY_NAME = "city.json"
 # shipped set missing a bundle file. The key is optional and nullable like
 # `tramway` and `arrows`: a city whose estate publishes no box polygons ships
 # none.
-CITY_SCHEMA = 13
+# 14 since `P3-19`: the manifest names `railings.glb`, a new shipped asset —
+# `P3-14`/`P3-15`/`P3-18`'s argument a fourth time, unchanged: a v13 reader
+# computes a shipped set missing a bundle file. The key is optional and nullable
+# like the three before it: a city whose estate publishes no railing layer ships
+# none, and so does one that publishes it and finds no kerb to hang it on.
+CITY_SCHEMA = 14
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -184,6 +190,7 @@ INPUTS: tuple[Input, ...] = (
     Input(TRAMWAY_MANIFEST_NAME, TRAMWAY_MANIFEST_SCHEMA, "tramway"),
     Input(ARROWS_MANIFEST_NAME, ARROWS_MANIFEST_SCHEMA, "arrows"),
     Input(BOXJUNCTIONS_MANIFEST_NAME, BOXJUNCTIONS_MANIFEST_SCHEMA, "boxjunctions"),
+    Input(RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA, "railings"),
 )
 
 
@@ -260,6 +267,7 @@ def build_region(
     tramway = documents[TRAMWAY_MANIFEST_NAME]
     arrows = documents[ARROWS_MANIFEST_NAME]
     boxjunctions = documents[BOXJUNCTIONS_MANIFEST_NAME]
+    railings = documents[RAILINGS_MANIFEST_NAME]
 
     tiles = [
         {
@@ -346,6 +354,7 @@ def build_region(
         # read from the stage's own manifest for its reason: a region whose
         # boxes all failed the join must not be contradicted here by a constant.
         "boxjunctions": boxjunctions["asset"],
+        "railings": railings["asset"],
         "landmarks": LANDMARKS_NAME,
         # The mesh-sourced hero models `pipeline/landmarks.py` built — shipped
         # files like the tile GLBs, unlike the committed authored heroes,
@@ -524,6 +533,8 @@ def shipped(manifest: dict) -> list[str]:
         paths.append(str(manifest["arrows"]))
     if manifest.get("boxjunctions"):
         paths.append(str(manifest["boxjunctions"]))
+    if manifest.get("railings"):
+        paths.append(str(manifest["railings"]))
     return paths
 
 

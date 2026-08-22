@@ -886,6 +886,103 @@ class BoxJunctions:
 
 
 @dataclass(frozen=True)
+class Railings:
+    """Published pedestrian railings, drawn by `pipeline/railings.py` (`P3-19`).
+
+    ⚠️ **This block asserts more than any other in this file, and the reason is
+    that the publisher asserts less.** `DTAD_RAILING_LINE`'s `LINETYPE` domain
+    is **not published**: the fgdb data specification gives the column only the
+    description "Line Type", and the index-plan set that defines every `RM`
+    marking code and every `TS` sign — including both "Miscellaneous Details"
+    sheets — carries no railing sheet at all. So there is no `Q59` transcription
+    available here, and every dimension below is **authored**, declared as
+    authored, rather than read.
+
+    What follows from that is the shape of `drawn_line_types`: a whitelist of
+    codes, and *no type map*. The region publishes 19 values and this stage
+    draws one fence for all of the ones it admits — it does not claim that
+    `CRAIL1` is a different railing from `HCAIL2`, because nothing published
+    says so and `Q54` debits exactly that kind of invention.
+
+    ⚠️ **The position is registered, not read, and that is this block's real
+    debt.** `Q59`'s widening puts the drawn kerb a median 0.9 m *outside* the
+    surveyed railing line, so **67.9% of the region's railing metres fall inside
+    the drawn ribbon** — drawn where surveyed, the signature Hong Kong railing
+    is a picket fence down the middle of the drivable surface. So the
+    longitudinal extent is read and never stretched, and the lateral offset is
+    a rigid move onto the kerb the ETL itself drew. `max_shift_m` is the bar on
+    that move and `railings.json` publishes the whole distribution, because a
+    move nobody measures is an invention nobody can see.
+
+    ⚠️ **There is no material here, and its absence is the decision** — the
+    paragraph `Arrows` and `BoxJunctions` both carry. The colour is authored in
+    `game/tuning/railings.tres`, and the glTF material *name* the engine
+    dispatches on is `RAILINGS_MATERIAL` in `pipeline/railings.py`.
+    """
+
+    source: str
+    member: str | None
+    layer: SourceLayer
+    # Which published `LINETYPE` values this city draws as a railing. ⚠️ A
+    # whitelist and **not** a type map: see the class docstring. Everything
+    # outside it is refused and its metres counted, which is what keeps the
+    # bollards, the crash gates and the four `AMT` variants from being asserted
+    # to be pedestrian railings on the strength of sharing a layer with them.
+    drawn_line_types: tuple[str, ...]
+    # Pitch the source lines are sampled at before being assigned to an edge and
+    # a side. `kerbside.resample`'s parameter, and the cell size the same
+    # stage's dedupe works in: two features drawn along one kerb collapse into
+    # one run rather than counting twice, which this layer needs more than
+    # `NSR` did — the region publishes 1,763 parts with a median length of
+    # 4.6 m for what a driver sees as a few dozen fences.
+    sample_m: float
+    # Furthest a sample may sit from a level-0 centreline and still be assigned
+    # to it. Beyond it the sample is unassigned and counted: a railing round a
+    # plaza or along a footbridge belongs to no kerb, and putting it on the
+    # nearest one is how a fence ends up across a street it was never on.
+    max_offset_m: float
+    # ⚠️ **The bar on the registration, and the number this stage exists to be
+    # honest about.** How far a run may be moved sideways to reach the drawn
+    # kerb before it is refused instead. Measured over the region before it was
+    # chosen: half the railing metres move under 2 m, two-thirds under 3 m, and
+    # 18% would move more than 5 m — those are railings that are not kerb
+    # railings at all, and drawing them would be inventing a fence rather than
+    # relocating one.
+    max_shift_m: float
+    # Gaps in the sampled cells shorter than this are bridged, and runs shorter
+    # than `min_run_m` are dropped. `kerbside`'s parameters, for its reasons: a
+    # break shorter than a car is not a break, and a two-metre orphan is a
+    # fence post rather than a fence.
+    bridge_gap_m: float
+    min_run_m: float
+    # Pitch the drawn fence is stationed at along the kerb. Every station takes
+    # its height from the ribbon, so this is what lets a fence follow the
+    # camber of a street instead of chording across it.
+    station_m: float
+    # ⚠️ **Authored.** Hong Kong's pedestrian railings stand about waist-to-
+    # chest height; no source in this bundle publishes the figure, and the
+    # nearest thing to a publisher — the index-plan set — has no railing sheet.
+    # Declared here rather than fixed in code so the honesty is visible and so
+    # a second city may differ (hard rules 3 and 4).
+    height_m: float
+    # How far the fence's foot is sunk below the ribbon it stands on. The kerb
+    # is flattened for mountability (`GAME_DESIGN.md`) and the ground beside it
+    # is a separate decimated surface, so a fence planted exactly at the road's
+    # own height shows daylight under it wherever the two disagree.
+    base_sink_m: float
+    # How far outside the drawn carriageway edge the fence stands. The kerb
+    # strip `roads.surface.kerb_width_m` draws is what it stands behind, so this
+    # is that width plus a little — a fence *on* the carriageway edge is a fence
+    # the player's wheel clips while driving in lane.
+    outset_m: float
+
+    @property
+    def tiled(self) -> bool:
+        """Whether `source` names `tiled_sources` rather than `sources`."""
+        return self.member is not None
+
+
+@dataclass(frozen=True)
 class SourcePaint:
     """How a mesh-sourced hero is repainted from its source COLOR_0 (`P3-6`).
 
@@ -1585,6 +1682,11 @@ class CityConfig:
     # against 393 junction nodes, so deriving placement from topology would be
     # wrong nineteen times in twenty.
     boxjunctions: BoxJunctions | None = None
+    # Published pedestrian railings, drawn by `pipeline/railings.py` (`P3-19`).
+    # Optional on the same terms as the three blocks above: a city whose estate
+    # publishes no railing layer ships none rather than running a fence down
+    # every kerb it drew.
+    railings: Railings | None = None
     # Hero buildings shipped as authored models (`P3-6`). Empty for a city
     # without any: the building stage then excludes nothing and the export
     # writes an empty landmarks document.
@@ -1763,6 +1865,7 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
         tramway=_tramway(document.get("tramway"), f"{path}:tramway", table),
         arrows=_arrows(document.get("arrows"), f"{path}:arrows"),
         boxjunctions=_boxjunctions(document.get("boxjunctions"), f"{path}:boxjunctions"),
+        railings=_railings(document.get("railings"), f"{path}:railings"),
         landmarks=_landmarks(document.get("landmarks") or [], f"{path}:landmarks", table),
         extra_cas=_extra_cas(document.get("extra_cas"), path),
     )
@@ -1794,6 +1897,8 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
         _check_declared_source(city, city.arrows, f"{path}:arrows.source")
     if city.boxjunctions is not None:
         _check_declared_source(city, city.boxjunctions, f"{path}:boxjunctions.source")
+    if city.railings is not None:
+        _check_declared_source(city, city.railings, f"{path}:railings.source")
     _check_landmarks_lie_within_a_region(city, path)
     return city
 
@@ -2944,6 +3049,83 @@ def _boxjunctions(body: Any, where: str) -> BoxJunctions | None:
         border_lift_m=border_lift_m,
         max_offset_m=max_offset_m,
         height_blend_m=height_blend_m,
+    )
+
+
+_RAILING_ROLES = ("line_type", "level")
+
+
+def _railings(body: Any, where: str) -> Railings | None:
+    """The optional published-railing block (`P3-19`, `Q60`).
+
+    Absent, the region ships no `railings.glb` and the manifest names none —
+    the shape `tramway`, `arrows` and `boxjunctions` all take. What is *not*
+    offered is a fallback that runs a fence down every kerb: this region's
+    published railings cover 20.3 km against 130 km of drawn kerb, and a
+    derived railing would be a wall along streets that have none.
+    """
+    if body is None:
+        return None
+    if not isinstance(body, dict):
+        raise ValueError(f"{where} must be a mapping, got {body!r}")
+
+    raw_types = _require(body, "drawn_line_types", where)
+    if isinstance(raw_types, str) or not isinstance(raw_types, (list, tuple)):
+        raise ValueError(f"{where}:drawn_line_types must be a list, got {raw_types!r}")
+    drawn_line_types = tuple(str(value) for value in raw_types)
+    if not drawn_line_types:
+        # An empty whitelist admits nothing, which is what omitting the block
+        # already does — refused so the difference is a decision, not a typo.
+        raise ValueError(
+            f"{where}:drawn_line_types is empty; a block that draws nothing is a mistake"
+        )
+    if len(set(drawn_line_types)) != len(drawn_line_types):
+        # A repeat would double a code's metres in the refusal accounting and
+        # nothing else, which is exactly the kind of quiet wrong this stage's
+        # counters exist to prevent.
+        raise ValueError(f"{where}:drawn_line_types repeats a code: {drawn_line_types}")
+
+    measures = {
+        name: float(_require(body, name, where))
+        for name in (
+            "sample_m",
+            "max_offset_m",
+            "max_shift_m",
+            "bridge_gap_m",
+            "min_run_m",
+            "station_m",
+            "height_m",
+        )
+    }
+    negative = {name: value for name, value in measures.items() if value <= 0.0}
+    if negative:
+        raise ValueError(f"{where}: {', '.join(sorted(negative))} must be positive; got {negative}")
+    if measures["min_run_m"] < measures["sample_m"]:
+        # A minimum shorter than the sampling pitch cannot refuse anything: the
+        # shortest run the sampler can produce is one cell.
+        raise ValueError(
+            f"{where}:min_run_m {measures['min_run_m']} is shorter than sample_m "
+            f"{measures['sample_m']}, so it would refuse nothing"
+        )
+
+    lifts = {name: float(_require(body, name, where)) for name in ("base_sink_m", "outset_m")}
+    if any(value < 0.0 for value in lifts.values()):
+        raise ValueError(f"{where}: base_sink_m and outset_m may not be negative; got {lifts}")
+
+    return Railings(
+        source=str(_require(body, "source", where)),
+        member=_tile_member(body, where),
+        layer=_source_layer(body, where, _RAILING_ROLES),
+        drawn_line_types=drawn_line_types,
+        sample_m=measures["sample_m"],
+        max_offset_m=measures["max_offset_m"],
+        max_shift_m=measures["max_shift_m"],
+        bridge_gap_m=measures["bridge_gap_m"],
+        min_run_m=measures["min_run_m"],
+        station_m=measures["station_m"],
+        height_m=measures["height_m"],
+        base_sink_m=lifts["base_sink_m"],
+        outset_m=lifts["outset_m"],
     )
 
 

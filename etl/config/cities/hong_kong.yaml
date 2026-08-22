@@ -1058,6 +1058,98 @@ boxjunctions:
   # range and the blend is the plain snap.
   height_blend_m: 4.0
 
+# Pedestrian railings, drawn as their own geometry (P3-19, Q60).
+#
+# ⚠️ THIS IS THE ONE BLOCK IN THIS FILE WHOSE VOCABULARY THE PUBLISHER DOES NOT
+# DEFINE. Every other coded field here is transcribed from a published sheet:
+# the RM marking codes from TD's index plan CT174/51-5(1)F, the TS sign classes
+# from the TS sheets, the iB1000 feature codes from LandsD's dictionary. For
+# DTAD_RAILING_LINE there is nothing. The fgdb data specification gives LINETYPE
+# the description "Line Type" and stops; the index-plan bundle's two
+# "Miscellaneous Details" sheets — CT174/51-6(1)E and 6(2)F — are sign
+# pictograms and lettering, checked by eye, with no railing row on either. So
+# the list below is a whitelist read off the code strings themselves, which is
+# the weakest claim anywhere in this file, and it is recorded as such rather
+# than dressed up. See DATA_SOURCES.md and DECISIONS.md Q60.
+#
+# In region, 1,753 features / 1,763 parts / 20,273 m over NINETEEN LINETYPE
+# values — DATA_SOURCES.md listed four until Q60:
+#
+#   CRAIL1  10,499 m   CRAIL2  2,921 m   HCAIL2  2,073 m   CBARRIER 1,369 m
+#   SOLID      511 m   AMT1      502 m   RAIL1     472 m   AMT        457 m
+#   CRASHGATE  301 m   bollard0  285 m   RAILING1  283 m   bollard2   235 m
+#   bollard3   153 m   AMT2_1.5  118 m   EAG 3      46 m   MSB 5       23 m
+#   AMT1.5_1.0  17 m   AMT-1.5     4 m   bollard1    3 m
+railings:
+  source: traffic_aids_drawings_gdb
+  layer: DTAD_RAILING_LINE
+  fields:
+    line_type: LINETYPE
+    # The same structure column arrows: and boxjunctions: read, with the same
+    # reading: a code names a structure and null is the ground. 1,737 of the
+    # region's 1,753 features are null and 16 carry A01.
+    level: ELEVATION
+
+  # The codes drawn as a pedestrian railing, admitted on the strength of their
+  # own names because nothing published defines them. Everything else in the
+  # layer is refused and its metres reported per code, which is what makes this
+  # list an argument rather than an assumption — a reader can see exactly what
+  # was left out and how much of the region it was.
+  #
+  # ⚠️ CBARRIER (1,369 m) and CRASHGATE (301 m) are deliberately OUT. They read
+  # as vehicle restraint rather than pedestrian railing, and drawing them as the
+  # same fence would assert a sameness no source states — Q54's debit. The
+  # bollards are out for the plainer reason that they are posts, not fences, and
+  # SYMBOL_STEP_1/SYMBOL_SIZE_1 carry their spacing and diameter for whoever
+  # draws them.
+  drawn_line_types: [CRAIL1, CRAIL2, HCAIL2, RAIL1, RAILING1]
+
+  # ---- the join, kerbside.py's parameters and its reasons ----
+  # Pitch the source lines are sampled at, and the cell two overlapping features
+  # collapse into. Finer than kerbside's because this layer is finely chopped:
+  # 1,763 parts, median 4.6 m, tenth percentile 1.0 m.
+  sample_m: 1.0
+  # Furthest a sample may sit from a level-0 centreline and still belong to it.
+  # A railing round a plaza or up a footbridge belongs to no kerb; beyond this
+  # it is counted unassigned rather than dragged onto the nearest street.
+  max_offset_m: 12.0
+  # ⚠️ THE BAR ON THE REGISTRATION. A run whose move onto the drawn kerb exceeds
+  # this is refused rather than drawn. Chosen against the measured distribution
+  # of that move over the whole region, before the stage shipped:
+  #
+  #   0.0-0.5 m   9.4%      3.0-5.0 m  15.9%
+  #   0.5-1.0 m  13.5%      5.0-10  m  10.6%
+  #   1.0-2.0 m  27.0%      over 10 m   7.5%
+  #   2.0-3.0 m  16.1%
+  #
+  # 3.0 keeps two-thirds of the metres. Above it the "railing" is not a kerb
+  # railing at all — it is a plaza edge, a footbridge balustrade or a stair
+  # rail — and moving one of those onto a carriageway edge would be inventing a
+  # fence rather than relocating one. railings.json publishes the whole
+  # distribution, over refusals as well as keeps, so this stays checkable.
+  max_shift_m: 3.0
+  # A break shorter than a car is not a break in a fence, and a run shorter than
+  # a car is a post rather than a fence.
+  bridge_gap_m: 4.0
+  min_run_m: 4.0
+
+  # ---- the fence, every figure authored ----
+  # Pitch the drawn fence is stationed at. Each station takes its height from
+  # the ribbon, so this is what lets it follow the camber of a street.
+  station_m: 2.0
+  # ⚠️ AUTHORED, not read — see the warning at the top of this block. Hong
+  # Kong's pedestrian railings stand about chest height on the footway.
+  height_m: 1.1
+  # The foot sinks this far below the ribbon it stands on. The kerb is flattened
+  # for mountability and the ground is a separately decimated surface, so a
+  # fence planted exactly at road height shows daylight under it wherever the
+  # two disagree.
+  base_sink_m: 0.25
+  # How far outside the drawn carriageway edge the fence stands. Just past the
+  # 0.5 m kerb strip roads.surface draws, so the fence is behind the kerb rather
+  # than on the lane the player drives in.
+  outset_m: 0.6
+
 # Hero buildings shipped as authored models (P3-6) — the landmarks.json
 # contract in docs/ARCHITECTURE.md. The building stage excludes every stem
 # named in `replaces_source_ids` from the tile meshes; export.py converts each

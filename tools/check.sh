@@ -39,6 +39,7 @@ VERIFY_GENERATED="${VERIFY_GENERATED:-1}"
 VERIFY_TOOLS=(
 	verify_city verify_tiles verify_road_surface verify_road_graph verify_city_streamer
 	verify_spawn verify_landmarks verify_tramway verify_arrows verify_boxjunctions
+	verify_railings
 )
 
 # The verify tools that need no built region, so they run whatever
