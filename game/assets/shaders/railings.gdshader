@@ -1,7 +1,8 @@
-// Pedestrian railings, drawn as their own geometry (`P3-19`, `Q60`).
+// Pedestrian railings, drawn as their own geometry (`P3-19`, `Q60`, `Q61`).
 //
-// `boxjunctions.gdshader` with two differences, and both come from the fence
-// being a *vertical* surface the player sees from either side.
+// `boxjunctions.gdshader` with three differences. Two come from the fence being
+// a *vertical* surface the player sees from either side; the third is that a
+// fence is mostly air, and it is the one this shader exists for.
 //
 // ⚠️ **`cull_disabled`, where every other generated mesh in this bundle is
 // `cull_back`.** A fence has two faces and the car drives past both of them —
@@ -24,17 +25,59 @@
 // fence on the far side of a street would darken as the sun crossed it.
 //
 // ⚠️ **`railings.glb` carries no `COLOR_0`**, so there is no vertex colour to
-// convert and `colour.gdshaderinc` is deliberately not included.
+// convert and `colour.gdshaderinc` is deliberately not included. It *does*
+// carry `TEXCOORD_0`, and that is not a texture coordinate either: `UV.x` is
+// metres along the run and `UV.y` is metres above the ribbon deck. Nothing
+// samples an image here, and `mesh_contract.gd` walks every uniform and would
+// refuse the bundle if anything did.
 //
-// ⚠️ **Opaque.** Real railings are hollow — vertical balusters with air between
-// them — and the honest way to draw that is alpha, which `arrows.gdshader`
-// records the mobile-budget objection to: a sorted transparent pass on the
-// device floor, or a scissor that re-aliases every baluster. So this is a solid
-// panel, and the divergence is recorded in `ART_DESIGN.md` rather than hidden.
+// ---------------------------------------------------------------------------
+// ⚠️ **This is the first transparent material in the bundle, and `P3-19` shipped
+// it opaque on an objection that turns out to belong to a different surface.**
+//
+// The recorded reason for the solid panel was `arrows.gdshader`'s: alpha costs
+// "a sorted transparent pass on the device floor, or a scissor that re-aliases
+// every baluster". That note is reasoning about **road paint**, and for road
+// paint it is right — it concludes "Real road paint is opaque. So is this."
+// A railing is the opposite physical case. It is 60-75% air, and the frames
+// said so: `build/driver/railings_street` and `railings_hennessy` shipped
+// reading as white concrete parapets flanking the carriageway.
+//
+// Both halves of the objection have an answer here that they did not have next
+// door:
+//
+//   - **Sorting.** Every other shader in this bundle is opaque, so there is
+//     exactly one transparent object in the scene and nothing to sort it
+//     against. It depth-tests against all opaque geometry the ordinary way, so
+//     a building in front of a fence still occludes it. What is left is the
+//     fence blending with itself where two runs overlap on screen, and
+//     `depth_prepass_alpha` is what removes that.
+//   - **Aliasing.** The scissor aliases because it *samples* a stripe. This
+//     integrates it instead — `bars()` below returns the exact average coverage
+//     over the fragment's own footprint, so a baluster is crisp when it is
+//     wider than a pixel and dissolves into a uniform alpha when it is not.
+//     There is no distance at which it shimmers and none at which it vanishes.
+//
+// ⚠️ **`ALPHA` is coverage, not translucency.** Nothing here is tinted glass:
+// the fence is opaque steel with gaps in it, and the alpha is what fraction of
+// the fragment the steel covers. That is why it is computed geometrically from
+// the authored dimensions rather than authored as an opacity dial — an opacity
+// dial would be `arrows.gdshader`'s misreading of `paint_opacity` in a new
+// place.
+//
+// ⚠️ **Every dimension below is authored and none is read.** No sheet in the
+// bundle publishes a railing dimension — `Q60` establishes that, and the
+// symbology correction strengthened it to "without qualification". So the
+// baluster pitch is in the same position as `height_m`: declared as authored,
+// in tuning data rather than in code (hard rule 4), and judged on the frames.
 
 shader_type spatial;
 
-render_mode cull_disabled;
+// `depth_prepass_alpha` so the fence does not blend with itself where two runs
+// cross on screen. `cull_disabled` stays, and `verify_railings.gd` pins it by
+// substring — a one-word edit here would otherwise delete half the region's
+// fences with every other check still passing.
+render_mode cull_disabled, depth_prepass_alpha;
 
 group_uniforms paint;
 // Hong Kong's street railings are painted a pale institutional grey-green that
@@ -44,19 +87,8 @@ group_uniforms paint;
 // exposure rule.
 //
 // ⚠️ **This shipped at 0.78/0.80/0.76 and clipped.** At that value the fence is
-// within a whisker of white before the sun reaches it, and the shipped frames
-// — `build/driver/railings_street`, `railings_hennessy` — read as a white
-// concrete parapet flanking the carriageway rather than as a railing. Pale was
-// the right reading of the street; there was no headroom left above it. Taken
-// down to leave some, and re-judged at the `street` and `kerb` viewpoints.
-//
-// ⚠️ **Being the wrong value was only ever half of it, and this commit is only
-// that half.** The other half is that a real railing is mostly air, and no
-// colour fixes a solid panel — the fence still has no balusters, no top rail
-// and no post rhythm, because the mesh carries nothing that says where along a
-// fence or how far up it a fragment is. That needs a coordinate the ETL does
-// not yet publish; until it does, this is the shade the steel is painted and
-// not the shade the fence reads as.
+// within a whisker of white before the sun reaches it. Pale was the right
+// reading of the street; there was no headroom left above it.
 uniform vec4 rail_colour : source_color = vec4(0.62, 0.65, 0.60, 1.0);
 // Painted steel, against the road's 0.95 and the markings' 0.7. Lower than
 // paint on tarmac because a railing is a smooth tube rather than thermoplastic
@@ -68,8 +100,81 @@ uniform float rail_roughness : hint_range(0.0, 1.0) = 0.55;
 // which is a dielectric surface over metal, so 0.0 is also the truthful value.
 uniform float rail_metallic : hint_range(0.0, 1.0) = 0.0;
 
+group_uniforms fence;
+// The vertical members, in metres along the run. A Hong Kong pedestrian railing
+// is a picket of narrow balusters at roughly a hand's width — close enough that
+// a child cannot pass, which is what the fence is for.
+uniform float baluster_pitch_m : hint_range(0.02, 1.0) = 0.11;
+uniform float baluster_width_m : hint_range(0.005, 0.5) = 0.035;
+// The heavier uprights the balusters hang between. Pitched independently of
+// `station_m`: the mesh's stations are where the fence takes its height from
+// the ribbon, which is a different question from where its posts are.
+uniform float post_pitch_m : hint_range(0.1, 20.0) = 2.0;
+uniform float post_width_m : hint_range(0.01, 1.0) = 0.09;
+// The horizontal rails, as `(low, high)` in metres above the ribbon deck —
+// `UV.y`'s own frame, so these are read off the street and mean what they say.
+// The top rail is the one a fence is recognised by at distance; the bottom one
+// is what stops the picket reading as loose bars.
+uniform vec2 top_rail_m = vec2(0.95, 1.10);
+uniform vec2 bottom_rail_m = vec2(0.08, 0.18);
+// ⚠️ **Below the deck the fence is solid, and that is what `base_sink_m` is
+// for.** The ETL sinks the foot 0.25 m because the kerb is flattened for
+// mountability and the ground is a separately decimated surface, so the two
+// disagree by centimetres and daylight shows under a fence planted exactly at
+// road height. Balusters would let that daylight straight back through, so the
+// skirt is closed. It is under the pavement wherever the two agree.
+uniform float skirt_top_m = 0.0;
+
+// Antiderivative of a unit-period pulse train of duty cycle `duty`: the total
+// covered length from 0 to `t`. Exact, and the whole reason this shader does
+// not alias.
+float pulse_integral(float t, float duty) {
+	return floor(t) * duty + min(fract(t), duty);
+}
+
+// The average coverage of a `width_m` bar repeating every `pitch_m`, over the
+// `footprint_m` this fragment actually spans. Integrated rather than sampled,
+// so it is 1.0 inside a near baluster, 0.0 in the gap beside it, and settles to
+// the duty cycle `width_m / pitch_m` once a bar is finer than a pixel.
+//
+// ⚠️ **The floor on the footprint is numerical, not visual.** `fwidth` can
+// return 0 on a degenerate derivative, and the division below is by twice it.
+// 0.1 mm is far under any footprint a camera in this game produces.
+float bars(float x_m, float pitch_m, float width_m, float footprint_m) {
+	float duty = clamp(width_m / pitch_m, 0.0, 1.0);
+	float half_span = max(footprint_m, 1e-4) * 0.5 / pitch_m;
+	float t = x_m / pitch_m;
+	float covered = pulse_integral(t + half_span, duty) - pulse_integral(t - half_span, duty);
+	return clamp(covered / (2.0 * half_span), 0.0, 1.0);
+}
+
+// The same integral for a single band rather than a train — a horizontal rail,
+// or the buried skirt.
+float band(float y_m, float low_m, float high_m, float footprint_m) {
+	float half_span = max(footprint_m, 1e-4) * 0.5;
+	float covered = min(y_m + half_span, high_m) - max(y_m - half_span, low_m);
+	return clamp(covered / (2.0 * half_span), 0.0, 1.0);
+}
+
 void fragment() {
+	// `UV` is not a texture coordinate: x is metres along this run of fence and
+	// y is metres above the ribbon deck. `pipeline/railings.py:_run_uvs`.
+	float along_m = UV.x;
+	float up_m = UV.y;
+	float along_footprint_m = fwidth(along_m);
+	float up_footprint_m = fwidth(up_m);
+
+	// Steel is wherever any member is: a baluster, a post, either rail, or the
+	// buried skirt. `max` rather than a sum, because two members overlapping —
+	// a post crossing a rail — is one piece of steel and not two.
+	float steel = bars(along_m, baluster_pitch_m, baluster_width_m, along_footprint_m);
+	steel = max(steel, bars(along_m, post_pitch_m, post_width_m, along_footprint_m));
+	steel = max(steel, band(up_m, top_rail_m.x, top_rail_m.y, up_footprint_m));
+	steel = max(steel, band(up_m, bottom_rail_m.x, bottom_rail_m.y, up_footprint_m));
+	steel = max(steel, band(up_m, -1000.0, skirt_top_m, up_footprint_m));
+
 	ALBEDO = rail_colour.rgb;
+	ALPHA = steel;
 	ROUGHNESS = rail_roughness;
 	METALLIC = rail_metallic;
 	// The mesh gives every vertex the normal that looks at the carriageway; the

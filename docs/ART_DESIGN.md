@@ -601,13 +601,27 @@ authored features the source captures badly.
   measurement that decided the real answer: the published rails are **not on the ribbon** at all
   (18.8% of cross-sections, 1.5% on Hennessy), so a lane-space rail would have been an invented
   marking in `Q54`'s sense. `tram_tracks` stays shipped in `TEXCOORD_1` and stays undecoded.
-- ✅ **Pedestrian railings are built (`P3-19`), and they are a solid panel rather than a fence.**
-  `railings.glb`, one vertical quad per 2 m standing 0.6 m outside the drawn carriageway edge, with
-  `tuning/railings.tres` the dial. **The divergence is opacity, and it is deliberate.** A real
-  railing is hollow — vertical balusters with air between them — and drawing that honestly needs
-  alpha, which is the sorted transparent pass `arrows.gdshader` already records the mobile-budget
-  objection to, or a scissor that re-aliases every baluster. So the fence is opaque, and at the
-  speed the player passes it that is a cue rather than a lie.
+- ✅ **Pedestrian railings are built (`P3-19`), and since `Q61` they are a fence rather than a solid
+  panel.** `railings.glb`, one vertical quad per 2 m standing 0.6 m outside the drawn carriageway
+  edge, with `tuning/railings.tres` the dial. The quad is still one quad; what changed is that it
+  now carries `TEXCOORD_0` as `(metres along the run, metres above the deck)`, and the shader cuts
+  balusters, posts and two rails out of it.
+  🔴 **This bullet said "the divergence is opacity, and it is deliberate", and the frames overruled
+  it.** The recorded objection was `arrows.gdshader`'s — alpha costs a sorted transparent pass or a
+  scissor that re-aliases every baluster — but that note is reasoning about **road paint**, and for
+  road paint it is right. A railing is the opposite physical case: it is 60-75% air, and drawn solid
+  at `rail_colour` 0.78 it shipped reading as a **white concrete parapet** in `railings_street` and
+  `railings_hennessy`. Not a cue — a different object.
+  ⚠️ **Both halves of the objection had an answer here that they do not have next door.** Sorting:
+  every other shader in the bundle is opaque, so there is exactly one transparent object and nothing
+  to sort it against; it depth-tests against opaque geometry normally, and `depth_prepass_alpha`
+  removes the self-blending. Aliasing: the scissor aliases because it *samples* a stripe, and this
+  **integrates** it — the shader returns the exact average coverage over each fragment's own
+  footprint, so a baluster is crisp when it is wider than a pixel and dissolves to a uniform alpha
+  when it is not. There is no distance at which it shimmers and none at which it vanishes.
+  ⚠️ **`ALPHA` is coverage, not translucency.** The steel is opaque and the gaps are gaps. An
+  opacity dial here would be `arrows.gdshader`'s recorded misreading of `paint_opacity` in a new
+  place, which is why there is none.
   ⚠️ **`railings.gdshader` is the only `cull_disabled` shader in the bundle.** A fence is one quad
   thick and the car drives past both faces; the back face negates its normal, or the far side of a
   street would darken as the sun crossed it.
@@ -617,7 +631,15 @@ authored features the source captures badly.
   against.** The marking yellow and white are each authored two and three times over and held
   together by a mismatch being visible in one frame; a railing shares its shade with nothing, so
   nothing measures it. Judge it at the `street` and `kerb` viewpoints — a railing is the nearest
-  object to the camera on most of the region's streets.
+  object to the camera on most of the region's streets. 🔴 **And nothing measuring it is how it
+  shipped clipped**: 0.78/0.80/0.76 left no headroom below white, so the sun took it there. Now
+  0.62/0.65/0.60, taken down on the frames rather than on the reasoning.
+  ⚠️ **The fence's shape is now split across two files, and the split is where the geometry ends.**
+  Height, station pitch, outset and sink are *mesh*, from `hong_kong.yaml`'s `railings:` block;
+  everything finer than a quad — baluster pitch and width, post pitch and width, the two rail bands
+  — is *mask*, and lives in `tuning/railings.tres` because that is where the shader reads it (hard
+  rule 4). Both halves are authored, because no sheet in the bundle publishes a railing dimension at
+  all — `Q60`, strengthened to "without qualification" by the symbology correction.
   ⚠️ **Where the fence stands is not where it was surveyed.** 67.9% of the region's published
   railing metres fall *inside* the 1.6x-widened ribbon, so they are registered onto the drawn kerb;
   `Q60` has the measurement and the bar on the move.

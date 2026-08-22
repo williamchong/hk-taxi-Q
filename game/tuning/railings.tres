@@ -29,11 +29,26 @@
 ; tier ships no reflection probes. Painted steel is a dielectric coat over
 ; metal, so 0.0 is the truthful value as well as the one that renders.
 ;
-; ⚠️ **Nothing here is the fence's shape.** Height, station pitch, how far it
-; stands outside the kerb and how far its foot sinks are geometry, decided by
-; `pipeline/railings.py` from `hong_kong.yaml`'s `railings:` block — every one
-; of them authored there, because no sheet in the bundle publishes a railing
-; dimension (`Q60`). This file only says what colour the steel is painted.
+; ⚠️ **The fence's shape is now split across two files, and the split is where
+; the geometry ends.** Height, station pitch, how far it stands outside the kerb
+; and how far its foot sinks are *mesh* — decided by `pipeline/railings.py` from
+; `hong_kong.yaml`'s `railings:` block. Everything finer than a quad is *mask* —
+; baluster pitch and width, post pitch and width, the two rail bands — and lives
+; here, because it is expressed in the shader and hard rule 4 puts tuning in
+; data. Both halves are authored for the same reason: no sheet in the bundle
+; publishes a railing dimension at all (`Q60`, strengthened by the symbology
+; correction). Neither half is read from anywhere.
+;
+; ⚠️ **The rail bands are in metres above the ribbon deck**, which is `UV.y`'s
+; own frame — `0.0` is the ground line, not the bottom of the mesh. So `(0.95,
+; 1.10)` is a top rail from 950 to 1100 mm up, and it means that on every fence
+; in the region regardless of what the road is doing underneath.
+;
+; ⚠️ **`ALPHA` here is coverage, not opacity.** There is no translucency dial in
+; this file and there should not be: the steel is opaque and the gaps are gaps,
+; so what reaches `ALPHA` is the fraction of a fragment the members cover,
+; computed from the four dimensions below. An opacity uniform would be
+; `arrows.gdshader`'s recorded misreading of `paint_opacity` repeated here.
 ;
 ; Judged at the `street` and `kerb` viewpoints per `ART_DESIGN.md`'s table: a
 ; railing is the nearest object to the camera on most of the region's streets,
@@ -49,3 +64,10 @@ shader = ExtResource("1_railings")
 shader_parameter/rail_colour = Color(0.62, 0.65, 0.6, 1.0)
 shader_parameter/rail_roughness = 0.55
 shader_parameter/rail_metallic = 0.0
+shader_parameter/baluster_pitch_m = 0.11
+shader_parameter/baluster_width_m = 0.035
+shader_parameter/post_pitch_m = 2.0
+shader_parameter/post_width_m = 0.09
+shader_parameter/top_rail_m = Vector2(0.95, 1.1)
+shader_parameter/bottom_rail_m = Vector2(0.08, 0.18)
+shader_parameter/skirt_top_m = 0.0
