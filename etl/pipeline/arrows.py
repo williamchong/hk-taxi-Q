@@ -318,7 +318,7 @@ def glyph_polygons(spec: Arrows, movements: tuple[str, ...], length_m: float) ->
     if ARROW_AHEAD in movements:
         stem_top = tip - head_length
         polygons.append(
-            _ccw([(0.0, tip), (-0.5 * head_width, stem_top), (0.5 * head_width, stem_top)])
+            ccw([(0.0, tip), (-0.5 * head_width, stem_top), (0.5 * head_width, stem_top)])
         )
         # A turn head on an ahead-and-turn glyph hangs below the ahead head, so
         # the two do not overlap into one blob at the top of the stem.
@@ -328,7 +328,7 @@ def glyph_polygons(spec: Arrows, movements: tuple[str, ...], length_m: float) ->
         elbow = stem_top
 
     polygons.append(
-        _ccw(
+        ccw(
             [
                 (-0.5 * stem_width, -tip),
                 (0.5 * stem_width, -tip),
@@ -344,7 +344,7 @@ def glyph_polygons(spec: Arrows, movements: tuple[str, ...], length_m: float) ->
             continue
         shoulder = side * (reach - head_length)
         polygons.append(
-            _ccw(
+            ccw(
                 [
                     (0.0, elbow - 0.5 * stem_width),
                     (shoulder, elbow - 0.5 * stem_width),
@@ -354,7 +354,7 @@ def glyph_polygons(spec: Arrows, movements: tuple[str, ...], length_m: float) ->
             )
         )
         polygons.append(
-            _ccw(
+            ccw(
                 [
                     (side * reach, elbow),
                     (shoulder, elbow + 0.5 * head_width),
@@ -365,7 +365,7 @@ def glyph_polygons(spec: Arrows, movements: tuple[str, ...], length_m: float) ->
     return polygons
 
 
-def _ccw(points: list[tuple[float, float]]) -> np.ndarray:
+def ccw(points: list[tuple[float, float]] | np.ndarray) -> np.ndarray:
     """The polygon, wound counter-clockwise.
 
     Winding is corrected rather than hand-kept per shape: a turn head is the
@@ -521,17 +521,22 @@ def _ribbons(graph: dict, surface: dict) -> dict[int, _Ribbon]:
     return ribbons
 
 
-def _directed_residual_deg(a: float, b: float) -> float:
+def directed_residual_deg(a: float, b: float) -> float:
     """How far heading `a` is from heading `b`, in `[0, 180]`.
 
     The signed question: *does this arrow point the way its edge is drawn?* Only
     a one-way host may answer it, which is why `build_region` reads it and then
-    reads `_axis_residual_deg` for the other one.
+    reads `axis_residual_deg` for the other one.
+
+    ⚠️ **Public because `pipeline/signs.py` reads it too.** These three — this,
+    `axis_residual_deg` and `ccw` — are the canonical statement of conventions
+    more than one stage shares, so they are imported rather than restated, the
+    way `railings.AT_GRADE` and `ArrowReport.measured` already are.
     """
     return abs((a - b + 180.0) % 360.0 - 180.0)
 
 
-def _axis_residual_deg(a: float, b: float) -> float:
+def axis_residual_deg(a: float, b: float) -> float:
     """How far two headings are from sharing an axis, in `[0, 90]`.
 
     ⚠️ **Folded modulo 180 on purpose.** The question this answers is "did the
@@ -541,7 +546,7 @@ def _axis_residual_deg(a: float, b: float) -> float:
     every two-way street; the region's `direction = both` hosts split 52/48
     when it was measured.
     """
-    gap = _directed_residual_deg(a, b)
+    gap = directed_residual_deg(a, b)
     return min(gap, 180.0 - gap)
 
 
@@ -591,7 +596,7 @@ def build_region(
         if snap.distance_m > spec.max_offset_m:
             report.too_far += 1
             continue
-        residual = _axis_residual_deg(symbol.heading_deg, snap.heading_deg)
+        residual = axis_residual_deg(symbol.heading_deg, snap.heading_deg)
         # ⚠️ **Recorded before the refusal, not after**, and the order is the
         # whole value of the number. Appending it below the guard would confine
         # every percentile to `bearing_tolerance_deg` **by construction** — the
@@ -610,7 +615,7 @@ def build_region(
             report.no_lane += 1
             continue
 
-        directed = _directed_residual_deg(symbol.heading_deg, snap.heading_deg)
+        directed = directed_residual_deg(symbol.heading_deg, snap.heading_deg)
         if ribbon.one_way and directed > 90.0:
             # ⚠️ **Refused, not recorded.** An arrow pointing against a one-way
             # street is not a thing the world contains, so this symbol has
@@ -654,7 +659,7 @@ def build_region(
             report.outside_drawn_ribbon += 1
 
         # The deck under the arrow's two ends, off the host edge's own polyline.
-        # ⚠️ **The sign is load-bearing.** `_axis_residual_deg` folds modulo 180,
+        # ⚠️ **The sign is load-bearing.** `axis_residual_deg` folds modulo 180,
         # so an arrow on the far side of a two-way street legitimately points
         # *backwards* along its edge — and without this its nose and tail heights
         # come out swapped, tilting it against the grade instead of with it.

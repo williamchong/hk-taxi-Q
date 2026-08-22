@@ -288,7 +288,7 @@ def _twice_area(ring: np.ndarray) -> float:
 def _wound_up(ring: np.ndarray) -> np.ndarray:
     """The ring, wound so its fan and ears face `+Y`.
 
-    Corrected rather than trusted per feature, for `arrows._ccw`'s reason: WKB
+    Corrected rather than trusted per feature, for `arrows.ccw`'s reason: WKB
     fixes outer-ring orientation only per its own convention, and a reversed
     ring renders as **nothing** under `cull_back` rather than as anything a
     frame would show.

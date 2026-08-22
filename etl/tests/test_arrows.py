@@ -22,11 +22,11 @@ from pipeline.arrows import (
     ARROWS_MATERIAL,
     ArrowReport,
     Symbol,
-    _axis_residual_deg,
     _Builder,
-    _directed_residual_deg,
     _draw,
     _place,
+    axis_residual_deg,
+    directed_residual_deg,
     glyph_polygons,
 )
 from pipeline.config import load_city
@@ -137,7 +137,7 @@ class TestTheBearingConvention:
     def test_a_symbol_pointing_across_its_edge_is_off_axis(self):
         eastward = 90.0
         northward = 0.0
-        assert _axis_residual_deg(eastward, northward) == pytest.approx(90.0)
+        assert axis_residual_deg(eastward, northward) == pytest.approx(90.0)
 
     def test_the_directed_residual_does_not_fold(self):
         """The signed question, which only a one-way host may ask.
@@ -146,8 +146,8 @@ class TestTheBearingConvention:
         questions from the same two numbers, and the first draft wrote the same
         expression out twice.
         """
-        assert _directed_residual_deg(0.0, 180.0) == pytest.approx(180.0)
-        assert _directed_residual_deg(10.0, 350.0) == pytest.approx(20.0)
+        assert directed_residual_deg(0.0, 180.0) == pytest.approx(180.0)
+        assert directed_residual_deg(10.0, 350.0) == pytest.approx(20.0)
 
     def test_the_axis_residual_folds_at_180_so_an_opposing_arrow_is_aligned(self):
         """A two-way street carries arrows pointing both ways down one axis.
@@ -156,8 +156,8 @@ class TestTheBearingConvention:
         far side of every two-way street — the region's two-way hosts split
         roughly evenly when this was measured.
         """
-        assert _axis_residual_deg(0.0, 180.0) == pytest.approx(0.0)
-        assert _axis_residual_deg(10.0, 185.0) == pytest.approx(5.0)
+        assert axis_residual_deg(0.0, 180.0) == pytest.approx(0.0)
+        assert axis_residual_deg(10.0, 185.0) == pytest.approx(5.0)
 
 
 class TestTheGlyph:
