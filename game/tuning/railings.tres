@@ -17,6 +17,12 @@
 ; against, which is worth knowing when judging it: the shade below is authored
 ; from the street, not derived from a survey, and nothing measures it.
 ;
+; ⚠️ **And nothing measuring it is how it shipped clipped.** `P3-19` authored
+; 0.78/0.80/0.76 — pale, which is the right reading of the street — with no
+; headroom left above it, so the sun took the fence to white and the shipped
+; frames read as a concrete parapet rather than a railing. Taken down on the
+; frames rather than on the reasoning, which is the only check this value has.
+;
 ; ⚠️ **`rail_metallic` stays 0.0**, and that is a measurement rather than taste.
 ; `P3-14` shipped the tram rails at 0.65 and they came out **sky blue** — metal
 ; reflects its environment, the only environment here is sky, and the mobile
@@ -40,6 +46,6 @@
 [resource]
 resource_name = "railings"
 shader = ExtResource("1_railings")
-shader_parameter/rail_colour = Color(0.78, 0.8, 0.76, 1.0)
+shader_parameter/rail_colour = Color(0.62, 0.65, 0.6, 1.0)
 shader_parameter/rail_roughness = 0.55
 shader_parameter/rail_metallic = 0.0

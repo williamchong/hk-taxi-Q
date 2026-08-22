@@ -42,7 +42,22 @@ group_uniforms paint;
 // in `hong_kong.yaml`'s `materials:` table for the reason `Q53` gives for the
 // marking colours: street furniture is not cladding, so it sits outside `Q33`'s
 // exposure rule.
-uniform vec4 rail_colour : source_color = vec4(0.78, 0.80, 0.76, 1.0);
+//
+// ⚠️ **This shipped at 0.78/0.80/0.76 and clipped.** At that value the fence is
+// within a whisker of white before the sun reaches it, and the shipped frames
+// — `build/driver/railings_street`, `railings_hennessy` — read as a white
+// concrete parapet flanking the carriageway rather than as a railing. Pale was
+// the right reading of the street; there was no headroom left above it. Taken
+// down to leave some, and re-judged at the `street` and `kerb` viewpoints.
+//
+// ⚠️ **Being the wrong value was only ever half of it, and this commit is only
+// that half.** The other half is that a real railing is mostly air, and no
+// colour fixes a solid panel — the fence still has no balusters, no top rail
+// and no post rhythm, because the mesh carries nothing that says where along a
+// fence or how far up it a fragment is. That needs a coordinate the ETL does
+// not yet publish; until it does, this is the shade the steel is painted and
+// not the shade the fence reads as.
+uniform vec4 rail_colour : source_color = vec4(0.62, 0.65, 0.60, 1.0);
 // Painted steel, against the road's 0.95 and the markings' 0.7. Lower than
 // paint on tarmac because a railing is a smooth tube rather than thermoplastic
 // pressed into aggregate.
