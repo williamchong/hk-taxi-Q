@@ -49,6 +49,7 @@ from __future__ import annotations
 import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
+from typing import NamedTuple
 
 import numpy as np
 
@@ -67,6 +68,24 @@ log = logging.getLogger(__name__)
 NEARSIDE = "near"
 OFFSIDE = "off"
 SIDES = (NEARSIDE, OFFSIDE)
+
+
+class Assigned(NamedTuple):
+    """One sample's place on the graph, as `SideIndex.nearest` answers it.
+
+    `offset_m` is the unsigned perpendicular distance to the centreline — the
+    sign is already spent on `side`. It is returned rather than recomputed by
+    the caller because `P3-19` needs it to price its own registration: a railing
+    drawn on the ribbon's kerb has moved `half_width - offset_m` sideways, and
+    a second implementation of that distance would be a second join in `Q56`'s
+    sense.
+    """
+
+    edge: int
+    side: str
+    along_m: float
+    offset_m: float
+    kind: str
 
 
 @dataclass(frozen=True)
@@ -217,13 +236,13 @@ def _assign(
     report: KerbsideReport,
 ) -> None:
     """Sample every line, put each sample on an edge and a side, and merge runs."""
-    index = _Segments(tracks, spec.max_offset_m)
+    index = SideIndex(tracks, spec.max_offset_m)
     # `(edge, side) -> cell -> kind -> samples`. A dict of counters rather than a
     # set because the cell is where two overlapping features are deduped, and
     # where they disagree about the kind the majority has to be visible.
     cells: dict[tuple[int, str], dict[int, dict[str, int]]] = defaultdict(dict)
 
-    points, kinds = _samples(lines, spec.sample_m)
+    points, kinds = resample(lines, spec.sample_m)
     report.samples = len(points)
     report.metres_sampled = len(points) * spec.sample_m
     inside = (
@@ -234,13 +253,15 @@ def _assign(
     )
     report.samples_outside_region = int((~inside).sum())
 
-    for edge, side, along, kind in index.nearest(points[inside], kinds[inside], report):
-        cell = cells[(edge, side)].setdefault(int(along // spec.sample_m), {})
-        cell[kind] = cell.get(kind, 0) + 1
+    assigned, unassigned = index.nearest(points[inside], kinds[inside])
+    report.samples_unassigned += unassigned
+    for item in assigned:
+        cell = cells[(item.edge, item.side)].setdefault(int(item.along_m // spec.sample_m), {})
+        cell[item.kind] = cell.get(item.kind, 0) + 1
 
     report.metres_deduped = sum(len(found) for found in cells.values()) * spec.sample_m
     for (edge, side), found in sorted(cells.items()):
-        for start, stop, kind in _runs(found, spec):
+        for start, stop, kind in merge_runs(found, spec.sample_m, spec.bridge_gap_m):
             length = (stop - start + 1) * spec.sample_m
             if length < spec.min_run_m:
                 report.runs_dropped += 1
@@ -258,7 +279,7 @@ def _assign(
             )
 
 
-def _samples(lines: list[tuple[np.ndarray, str]], step_m: float) -> tuple[np.ndarray, np.ndarray]:
+def resample(lines: list[tuple[np.ndarray, str]], step_m: float) -> tuple[np.ndarray, np.ndarray]:
     """Every line resampled at a fixed pitch, as one array of points and kinds.
 
     Sampled at the *midpoint* of each step — `step/2`, `3*step/2`, … — so a
@@ -283,8 +304,8 @@ def _samples(lines: list[tuple[np.ndarray, str]], step_m: float) -> tuple[np.nda
     return np.vstack(points), np.concatenate(kinds)
 
 
-def _runs(
-    found: dict[int, dict[str, int]], spec: KerbsideRestrictions
+def merge_runs(
+    found: dict[int, dict[str, int]], sample_m: float, bridge_gap_m: float
 ) -> list[tuple[int, int, str]]:
     """Occupied cells merged into runs, each with the kind most of it carries.
 
@@ -302,7 +323,7 @@ def _runs(
     groups: list[tuple[int, int]] = []
     start = previous = occupied[0]
     for cell in occupied[1:]:
-        if (cell - previous) * spec.sample_m > spec.bridge_gap_m:
+        if (cell - previous) * sample_m > bridge_gap_m:
             groups.append((start, previous))
             start = cell
         previous = cell
@@ -320,7 +341,7 @@ def _runs(
     return runs
 
 
-class _Segments:
+class SideIndex:
     """Every candidate edge's segments, on a grid that makes "nearest" cheap.
 
     The grid cell is exactly `max_offset_m` across, which is what makes a 3x3
@@ -370,18 +391,22 @@ class _Segments:
                     buckets[(x, z)].append(index)
         self.buckets = {key: np.array(value) for key, value in buckets.items()}
 
-    def nearest(
-        self, points: np.ndarray, kinds: np.ndarray, report: KerbsideReport
-    ) -> list[tuple[int, str, float, str]]:
+    def nearest(self, points: np.ndarray, kinds: np.ndarray) -> tuple[list[Assigned], int]:
         """Each sample's edge, side, distance along it, and the kind it carried.
 
         Batched by grid cell rather than run per point: the candidate list is a
         property of the cell, so gathering it once per cell turns a Python loop
         over 28,000 samples into one over a few hundred.
+
+        Returns the assignments and the count of samples that found no edge
+        within `max_offset_m`. Counted out rather than written into a caller's
+        report because two stages now share this index — `P3-13`'s restrictions
+        and `P3-19`'s railings — and each keeps its own tally.
         """
-        found: list[tuple[int, str, float, str]] = []
+        found: list[Assigned] = []
+        unassigned = 0
         if not len(points):
-            return found
+            return found, unassigned
 
         by_cell: dict[tuple[int, int], list[int]] = defaultdict(list)
         for index, (x, z) in enumerate(points // self.max_offset_m):
@@ -395,7 +420,7 @@ class _Segments:
                 if (x + dx, z + dz) in self.buckets
             ]
             if not near:
-                report.samples_unassigned += len(rows)
+                unassigned += len(rows)
                 continue
             candidates = np.unique(np.concatenate(near))
 
@@ -430,14 +455,15 @@ class _Segments:
 
             for row, keep in enumerate(distance <= self.max_offset_m):
                 if not keep:
-                    report.samples_unassigned += 1
+                    unassigned += 1
                     continue
                 found.append(
-                    (
-                        int(self.edge[chosen[row]]),
-                        NEARSIDE if side_of[row] > 0.0 else OFFSIDE,
-                        float(along[row]),
-                        str(kinds[rows[row]]),
+                    Assigned(
+                        edge=int(self.edge[chosen[row]]),
+                        side=NEARSIDE if side_of[row] > 0.0 else OFFSIDE,
+                        along_m=float(along[row]),
+                        offset_m=float(distance[row]),
+                        kind=str(kinds[rows[row]]),
                     )
                 )
-        return found
+        return found, unassigned

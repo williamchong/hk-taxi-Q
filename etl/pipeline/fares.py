@@ -156,7 +156,7 @@ class Snap:
     # which side of travel the point fell on — **positive is the nearside**, the
     # rail at `TEXCOORD_0`'s `U = 0`.
     #
-    # ⚠️ **The expression is `kerbside._Segments.nearest`'s, and it is deliberately
+    # ⚠️ **The expression is `kerbside.SideIndex.nearest`'s, and it is deliberately
     # not restated there or here in prose.** Left of travel is
     # `dot(point - start, (step_z, -step_x))`, which is `surface.mitres`'s normal.
     # A sign flip mirrors every side-keyed feature in the city and still renders

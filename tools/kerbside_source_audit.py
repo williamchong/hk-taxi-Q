@@ -24,7 +24,7 @@ stop, and until now nothing had ever checked it.
 
 ⚠️ **This does not cover the side convention, and must not be quoted as if it
 did.** Both sources are digitised at the kerb and both reach a side through
-`kerbside._Segments`, so flipping that expression mirrors *both* answers and
+`kerbside.SideIndex`, so flipping that expression mirrors *both* answers and
 this tool reports perfect agreement on a mirrored city. `tests/test_kerbside.py`
 pins the side against `surface.mitres` for exactly that reason. What the
 `opposite` column here catches is narrower and still worth having: the two
