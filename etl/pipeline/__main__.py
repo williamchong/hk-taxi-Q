@@ -86,11 +86,13 @@ STAGES: dict[str, Callable[[list[str]], int]] = {
     # carriageway there is no kerb to put a fence on. Before `export`, which
     # names the asset.
     "railings": railings.main,
-    # After `roads`, and that is its only dependency: a sign stands on a pole the
-    # publisher surveyed, so it needs the level-0 centrelines for its height,
-    # its host edge and the kerb side that resolves its facing — and no ribbon at
-    # all, because nothing about a sign is registered into a lane. Before
-    # `export`, which names the asset.
+    # After `surface`, and forced rather than tidy — the same dependency `arrows`
+    # and `railings` have. ⚠️ **It reads `roadsurface.json`**: a published sign
+    # pole is registered onto the kerb the ribbon actually drew, because 77.3% of
+    # them are surveyed inside the 1.6x ribbon and drawn where published three
+    # quarters of the city's signs stand in the road. It needs `roads` too, for
+    # the level-0 centrelines that give it a host edge, a height and the kerb side
+    # that resolves its facing. Before `export`, which names the asset.
     "signs": signs.main,
     "export": export.main,
 }

@@ -7870,8 +7870,8 @@ against `P3-12` · `DATA_SOURCES.md` for the layer table
 ## `P3-16` — Signs ship where the poles are, because the sign layer is a drawing
 
 **Landed 2026-08-23**, on the terms above and with the scope the user set: signs only
-(`P3-17`'s signal heads stay queued), and only the poles that carry a drawn sign. **777 plates on
-699 poles** as `signs.glb`, in `Q58`/`Q59`'s pattern — one primitive, one draw call, no collider,
+(`P3-17`'s signal heads stay queued), and only the poles that carry a drawn sign. **583 plates on
+443 posts** as `signs.glb`, in `Q58`/`Q59`'s pattern — one primitive, one draw call, no collider,
 an optional `city.json` key (14 → 15), counters the stage publishes about itself.
 
 Two measurements taken *while planning* changed the task, and both are the substance of it.
@@ -7984,7 +7984,7 @@ at a second layer, which makes signs the second place in the bundle a published
 extent is moved where `Q60` called the railings the only one. The post keeps its
 along-edge position and its side and moves only across, out to `outset_m` past
 the kerb the ribbon actually drew. `shift_m` p50 **1.75 m**, p90 3.24, max 5.52,
-recorded over n=**578** against 450 drawn, so it reads outside its own bar.
+recorded over n=**578** against 443 drawn, so it reads outside its own bar.
 
 ⚠️ **`max_shift_m` is a pathology bar, not a tight one.** At 6.0 it refuses
 nothing in this region, because the measured worst is 5.52 m and every metre of

@@ -107,8 +107,8 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 ## ⚠️ **The reasoning runs the other way from the arrows', and is weaker.** A
 ## painted arrow must not collide because a 15 mm step across every lane would be
 ## absurd. A sign pole is a real obstacle that a real car really would hit, so its
-## absence here is a **budget** decision rather than a correctness one: 699 posts
-## is 699 collision bodies, and `P2-6` has not measured a frame on the device
+## absence here is a **budget** decision rather than a correctness one: 450 posts
+## is 450 collision bodies, and `P2-6` has not measured a frame on the device
 ## floor. `GAME_DESIGN.md` puts breakaway posts in `B3`, and the whole guard
 ## against one arriving early is the absence of a `-col` suffix in one string.
 func _check_has_no_collision(scene_root: Node3D) -> PackedStringArray:

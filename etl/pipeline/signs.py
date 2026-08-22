@@ -124,7 +124,14 @@ from pipeline import gdb
 # *vertical* surface needs and `surface.downward_facing` cannot answer; and
 # `ccw`, `axis_residual_deg` and `ArrowReport.measured` are the canonical
 # statements of conventions this stage shares with the arrows.
-from pipeline.arrows import ArrowReport, axis_residual_deg, ccw, directed_residual_deg
+from pipeline.arrows import (
+    ArrowReport,
+    axis_residual_deg,
+    ccw,
+    directed_residual_deg,
+    nearside,
+    ribbons,
+)
 from pipeline.config import (
     SIGN_ARROW_BENT_LEFT,
     SIGN_ARROW_BENT_RIGHT,
@@ -153,7 +160,7 @@ from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData, write_glb
 from pipeline.mesh import select_triangles
 from pipeline.railings import AT_GRADE, facing_away
-from pipeline.roads import ROADGRAPH_NAME, plan_lengths, read_graph
+from pipeline.roads import ROADGRAPH_NAME, read_graph
 from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA
 
 log = logging.getLogger(__name__)
@@ -209,18 +216,32 @@ class SignReport:
     # The sign's group named a pole, but too far away to be the same assembly.
     pole_too_far: int = 0
     too_far: int = 0
-    # Posts whose move onto the drawn kerb exceeded `max_shift_m`.
+    # ⚠️ **These three are PLATES, like every other member of the partition** —
+    # a post refuses all of its plates at once. The post-level counts are
+    # `posts_over_shift` and `posts_in_carriageway` below.
+    # Plates on posts whose move onto the drawn kerb exceeded `max_shift_m`.
     over_shift: int = 0
-    # Posts with no drawn ribbon on their host edge, so no kerb to register to.
+    # Plates on posts with no drawn ribbon on their host edge, so no kerb to
+    # register to.
     no_ribbon: int = 0
-    # 🔴 Posts still standing in the drawn carriageway after registration, because
-    # they sit where several widened ribbons overlap and no footway survives.
+    # 🔴 Plates on posts still standing in the drawn carriageway after
+    # registration, where several widened ribbons overlap and no footway survives.
     in_carriageway: int = 0
 
     poles_drawn: int = 0
     # Published poles that were merged into another because they stand on the
     # same physical post. 🔴 The layer really does publish coincident poles.
     poles_merged: int = 0
+    # Posts folded together *after* registration pushed them onto one point —
+    # a different population from `poles_merged`, which is the publisher's own
+    # coincident poles. See `_merge_placements`.
+    posts_merged_after_shift: int = 0
+    # ⚠️ **Post-level refusals, so `shift_m`'s `n` can be decomposed.**
+    # `len(shift_m) == poles_drawn + posts_over_shift + posts_in_carriageway
+    #  + posts_merged_after_shift` — without these a reader cannot tell whether
+    # the excess over `poles_drawn` came from the bar or from somewhere else.
+    posts_over_shift: int = 0
+    posts_in_carriageway: int = 0
     # ⚠️ **How far each post moved sideways onto the drawn kerb**, recorded over
     # every registered post **including the ones `max_shift_m` then refused**, so
     # `n` exceeding `poles_drawn` is the proof it can read outside its own bar
@@ -670,56 +691,7 @@ def _plate_frame(facing_deg: float) -> tuple[np.ndarray, np.ndarray]:
     return normal, right
 
 
-@dataclass(frozen=True)
-class _Ribbon:
-    """The drawn carriageway edge on one level-0 edge, as this stage reads it.
-
-    ⚠️ **Read from `roadsurface.json` rather than recomputed**, `arrows.py`'s
-    reason exactly: the drawn half-width is `surface.py`'s answer after the
-    widening and after `Q23`'s per-station adjustment, and a second
-    implementation here would be a second join in `Q56`'s sense — disagreeing
-    would tell us one was wrong and never which.
-    """
-
-    at: np.ndarray
-    half_width_m: np.ndarray
-
-    def half_width_at(self, t: float) -> float:
-        return float(np.interp(t, self.at, self.half_width_m))
-
-
-def _ribbons(edges: list[dict], surface: dict) -> dict[int, _Ribbon]:
-    drawn = {int(entry["edge"]): entry for entry in surface["carriageway"]}
-    ribbons: dict[int, _Ribbon] = {}
-    for edge in edges:
-        entry = drawn.get(int(edge["id"]))
-        if entry is None:
-            continue
-        points = np.asarray(edge["polyline"], dtype=np.float64)
-        along = plan_lengths(points)
-        total = float(along[-1])
-        half = np.asarray(entry["half_width_m"], dtype=np.float64)
-        if total <= 0.0 or len(half) != len(along):
-            # A width list that does not match the polyline it was measured on is
-            # a contract break, not a rounding problem. Skipped rather than
-            # interpolated across, and visible as a post that found no ribbon.
-            continue
-        ribbons[int(edge["id"])] = _Ribbon(at=along / total, half_width_m=half)
-    return ribbons
-
-
-def _nearside(heading_deg: float) -> np.ndarray:
-    """The unit vector to the nearside of an edge, in game plan space.
-
-    Nearside is *left* of travel — the rail `surface.mitres` offsets to, and the
-    side `Snap.offset_m` is positive on. Spelled once, here, because a sign flip
-    mirrors every post in the city and still renders as a city.
-    """
-    heading = math.radians(heading_deg)
-    return np.array([-math.cos(heading), -math.sin(heading)])
-
-
-def _facing_from_side(snap_heading_deg: float, offset_m: float, one_way: bool) -> float:
+def _facing_from_side(snap_heading_deg: float, side: float, one_way: bool) -> float:
     """Which way a sign on this kerb faces, in game headings.
 
     ⚠️ **Derived, because nothing publishes it** — the module docstring carries
@@ -727,11 +699,15 @@ def _facing_from_side(snap_heading_deg: float, offset_m: float, one_way: bool) -
     `hk-traffic-sign-map`'s `compute-bearings.mjs` rule with a better host: road
     tangent, flipped by which side of it the sign falls on.
 
-    A sign addresses the traffic that passes it, and `Snap.offset_m` is positive
-    on the **nearside**. On a two-way edge each kerb serves a different
-    direction: traffic running along the edge keeps the nearside on its left
-    under drive-on-left, so a nearside sign faces back along the edge and an
-    offside sign faces along it.
+    A sign addresses the traffic that passes it, and `side` is positive on the
+    **nearside**. ⚠️ **It is the side the post was actually placed on, not
+    `Snap.offset_m` directly** — the two disagree at `-0.0`, which
+    `Segments.nearest` returns for a point on the centreline, and the post would
+    then be placed one side and turned to face the other.
+
+    On a two-way edge each kerb serves a different direction: traffic running
+    along the edge keeps the nearside on its left under drive-on-left, so a
+    nearside sign faces back along the edge and an offside sign faces along it.
 
     ⚠️ **A one-way edge is not that case, and getting it wrong was measurable.**
     Both its kerbs serve the *same* traffic, so both signs face back along the
@@ -751,7 +727,7 @@ def _facing_from_side(snap_heading_deg: float, offset_m: float, one_way: bool) -
     relative one, because `Snap.heading_deg` is directed off `TRAVEL_DIRECTION`
     where a marking line's chainage direction is unknown.
     """
-    if one_way or offset_m > 0.0:
+    if one_way or side > 0.0:
         return (snap_heading_deg + 180.0) % 360.0
     return snap_heading_deg % 360.0
 
@@ -895,6 +871,48 @@ def _draw_pole(
 # --------------------------------------------------------------------------
 
 
+@dataclass
+class _Placed:
+    """One post after registration, before anything is drawn.
+
+    Held so the placed points can be deduped before the mesh is built — see
+    `_merge_placements`.
+    """
+
+    x: float
+    z: float
+    y: float
+    facing_deg: float
+    one_way: bool
+    snap: Snap
+    plates: list[Sign]
+
+
+def _merge_placements(
+    placements: list[_Placed], merge_m: float, report: SignReport
+) -> list[_Placed]:
+    """Posts that registration pushed onto the same point, as one post.
+
+    ⚠️ **A second merge, and it is not the same one as `_merge_posts`.** That one
+    removes poles the *publisher* put at one point. This one removes poles the
+    *registration* put there: every post on the same edge, side and `t` is moved
+    to the same offset, so two poles a metre apart before the move can be one
+    after it. Without this they draw as two coincident posts, each restarting its
+    stack at `mount_height_m` — the interpenetration the first merge was added to
+    fix, re-created one step later.
+    """
+    merged: list[_Placed] = []
+    for post in placements:
+        for kept in merged:
+            if math.hypot(post.x - kept.x, post.z - kept.z) <= merge_m:
+                kept.plates.extend(post.plates)
+                report.posts_merged_after_shift += 1
+                break
+        else:
+            merged.append(post)
+    return merged
+
+
 def _merge_posts(
     stacks: dict[tuple[str, float, float], list[Sign]],
     merge_m: float,
@@ -911,19 +929,47 @@ def _merge_posts(
     an assembly onto its primary's anchor.
 
     ⚠️ **Greedy, over a deterministically sorted input**, so two builds of the
-    same data merge the same way. A grid would be cheaper and wrong at the cell
-    boundary, where two poles 0.1 m apart fall in different cells; at 699 posts
-    the quadratic pass costs nothing worth having that failure for.
+    same data merge the same way. Quadratic, and measured at **24 ms** over this
+    region's ~700 posts, which is 0.2% of the run.
+
+    ⚠️ **It does not scale, and the reason to leave it is arithmetic rather than
+    principle.** Held density, it measures 0.015 s at 700 posts, **1.50 s at
+    7,000** and 160 s at 70,000 — so a region ten times this one spends most of
+    the stage's budget here. A uniform grid at cell size `merge_m` with a 3x3
+    neighbour scan is the fix and it is **exact**, not approximate: a pair within
+    `merge_m` cannot fall outside the nine cells. An earlier version of this
+    comment claimed a grid would miss poles at a cell boundary, which is only
+    true of a single-cell lookup, and it is corrected here because it is the
+    recorded reason a later fix would have to argue against.
     """
-    merged: list[tuple[float, float, list[Sign]]] = []
-    for (_group, pole_x, pole_z), carried in sorted(stacks.items()):
-        for kept_x, kept_z, plates in merged:
-            if math.hypot(pole_x - kept_x, pole_z - kept_z) <= merge_m:
-                plates.extend(carried)
+    # ⚠️ **Sorted by position, not by `GG_NAME`.** A greedy pass is decided by the
+    # order it walks, and sorting on the group string walks the region in
+    # alphabetical order — so which pole absorbs which was spatially arbitrary,
+    # and the drawn post stood on the alphabetically-first member. The group is
+    # kept as the last key only to break exact positional ties, so the result
+    # stays reproducible.
+    ordered = sorted(stacks.items(), key=lambda item: (item[0][1], item[0][2], item[0][0]))
+    clusters: list[list[tuple[float, float, list[Sign]]]] = []
+    for (_group, pole_x, pole_z), carried in ordered:
+        for cluster in clusters:
+            if math.hypot(pole_x - cluster[0][0], pole_z - cluster[0][1]) <= merge_m:
+                cluster.append((pole_x, pole_z, list(carried)))
                 report.poles_merged += 1
                 break
         else:
-            merged.append((pole_x, pole_z, list(carried)))
+            clusters.append([(pole_x, pole_z, list(carried))])
+
+    merged: list[tuple[float, float, list[Sign]]] = []
+    for cluster in clusters:
+        # The **centroid**, not the first member: when several groups collapse the
+        # post should stand among them rather than on whichever one the walk
+        # happened to reach first.
+        x = sum(item[0] for item in cluster) / len(cluster)
+        z = sum(item[1] for item in cluster) / len(cluster)
+        plates: list[Sign] = []
+        for item in cluster:
+            plates.extend(item[2])
+        merged.append((x, z, plates))
     return merged
 
 
@@ -956,14 +1002,13 @@ def build_region(
     # was elevated, and the street the feature is actually on was a median 4 m
     # away.
     segments = Segments.of(edges)
-    one_way = {int(edge["id"]): str(edge["direction"]) != "both" for edge in edges}
 
     surface = read_document(
         out_dir / SURFACE_MANIFEST_NAME,
         SURFACE_MANIFEST_SCHEMA,
         f"python -m pipeline.surface --city {city.id} --region {region_id}",
     )
-    ribbons = _ribbons(edges, surface)
+    drawn = ribbons(graph, surface)
 
     # Grouped so a pole is drawn once and its plates stack on it. Sorted by code
     # so the stack order is the source's, not the read order's — a mesh that
@@ -974,6 +1019,15 @@ def build_region(
 
     posts = _merge_posts(stacks, spec.pole_merge_m, report)
     builder = _Builder()
+    # ---- place, then draw ----
+    # ⚠️ **Two phases, because registration can re-create what the merge
+    # removed.** Every post on the same edge, side and `t` is pushed to the
+    # *same* offset, so two poles a metre apart — legitimately distinct where
+    # they were surveyed — land on one point. A merge over surveyed positions
+    # cannot see that, so the placements are deduped before anything is built:
+    # drawing first would put two posts and two plate stacks in one place, each
+    # starting again at `mount_height_m`.
+    placements: list[_Placed] = []
     for pole_x, pole_z, carried in posts:
         snap = segments.nearest(pole_x, pole_z)
         keep: list[Sign] = []
@@ -1005,7 +1059,7 @@ def build_region(
 
         report.offset_m.append(abs(snap.offset_m))
 
-        ribbon = ribbons.get(snap.edge)
+        ribbon = drawn.get(snap.edge)
         if ribbon is None:
             # No drawn carriageway on the host edge, so no kerb to stand on.
             report.no_ribbon += len(keep)
@@ -1024,47 +1078,68 @@ def build_region(
         target_m = side * (half_width_m + spec.outset_m)
         report.inside_ribbon_m.append(max(0.0, half_width_m - abs(snap.offset_m)))
         shift_m = abs(target_m - snap.offset_m)
-        # Recorded **before** the refusal, so `n` past `poles_drawn` is the proof
-        # this distribution can read outside its own bar (`Q58`).
+        # Recorded **before** the refusal, so the distribution can read outside
+        # its own bar (`Q58`); `posts_over_shift` and `posts_in_carriageway` below
+        # are what let a reader decompose `n`.
         report.shift_m.append(shift_m)
         if shift_m > spec.max_shift_m:
             report.over_shift += len(keep)
+            report.posts_over_shift += 1
             continue
 
-        nearside = _nearside(snap.heading_deg)
-        centreline = np.array([pole_x, pole_z]) - snap.offset_m * nearside
-        placed = centreline + target_m * nearside
-        pole_x, pole_z = float(placed[0]), float(placed[1])
+        # ⚠️ **The foot comes off the polyline, never from
+        # `point - offset_m * nearside`.** `Snap.offset_m` is `±distance_m` to
+        # the *clamped* projection, so a post past an edge's end has an
+        # along-edge component in that vector and the subtraction lands off the
+        # centreline. Measured: a post 5 m beyond an edge's end and dead on its
+        # axis reconstructs to 5 m off the road, and the 10.6 m move it then
+        # makes is published as 0.6 m — under `max_shift_m`, invisible to every
+        # counter. `Ribbon.foot_at` reads it instead.
+        placed = ribbon.foot_at(snap.t) + target_m * nearside(snap.heading_deg)
 
         # ⚠️ **Registered onto its host's kerb and still in the road**, because
         # the post landed inside a *different* edge's ribbon — junction mouths and
         # dual carriageways, where several 1.6x ribbons overlap and the drawn city
         # has no footway left at all. That is `Q19`'s territory rather than this
         # stage's, and it is **refused rather than pushed again**: iterating the
-        # push was measured and is worse, plateauing at 9.5% while taking the
+        # push was measured and is worse, plateauing at 9.7% while taking the
         # worst shift from 5.52 m to **16.77 m** — which is a post on the wrong
         # street. `GAME_DESIGN.md` prices a missing sign at nothing against a
         # misplaced one, the reason `arrows.py` gives for the same call.
-        settled = segments.nearest(pole_x, pole_z)
-        settled_ribbon = ribbons.get(settled.edge)
+        settled = segments.nearest(float(placed[0]), float(placed[1]))
+        settled_ribbon = drawn.get(settled.edge)
         if settled_ribbon is not None and abs(settled.offset_m) < settled_ribbon.half_width_at(
             settled.t
         ):
             report.in_carriageway += len(keep)
+            report.posts_in_carriageway += 1
             continue
 
-        facing_deg = _facing_from_side(
-            snap.heading_deg, snap.offset_m, one_way.get(snap.edge, False)
+        placements.append(
+            _Placed(
+                x=float(placed[0]),
+                z=float(placed[1]),
+                y=snap.y,
+                # ⚠️ **`side`, not `snap.offset_m`.** The two disagree at `-0.0`,
+                # which `Segments.nearest` really returns for a post on the
+                # centreline — `-0.0 >= 0.0` is true and `-0.0 > 0.0` is false —
+                # so the post would be placed on the nearside and turned to face
+                # the offside. A perfectly drawn NO ENTRY facing the wrong way,
+                # which is this module's whole failure class.
+                facing_deg=_facing_from_side(snap.heading_deg, side, ribbon.one_way),
+                one_way=ribbon.one_way,
+                snap=snap,
+                plates=keep,
+            )
         )
 
-        # Stack upward from the mount height, tallest-plate-first order left to
-        # the source's own code order.
+    for post in _merge_placements(placements, spec.pole_merge_m, report):
         height = spec.mount_height_m
-        for sign in keep:
+        for sign in post.plates:
             face = spec.faces[sign.code]
             _, half_h = plate_extent_m(spec, face.plate)
-            centre = np.array([pole_x, snap.y + height + half_h, pole_z])
-            _draw_plate(builder, spec, face, centre, facing_deg)
+            centre = np.array([post.x, post.y + height + half_h, post.z])
+            _draw_plate(builder, spec, face, centre, post.facing_deg)
             height += 2.0 * half_h + spec.stack_gap_m
 
             report.drawn += 1
@@ -1072,15 +1147,15 @@ def build_region(
             report.pole_offset_m.append(
                 math.hypot(sign.x - sign.published_x, sign.z - sign.published_z)
             )
-            _record_semantics(report, sign, facing_deg, snap, one_way)
+            _record_semantics(report, sign, post.facing_deg, post.snap, post.one_way)
 
         _draw_pole(
             builder,
             spec,
-            pole_x,
-            pole_z,
-            snap.y,
-            snap.y + height - spec.stack_gap_m + spec.pole_headroom_m,
+            post.x,
+            post.z,
+            post.y,
+            post.y + height - spec.stack_gap_m + spec.pole_headroom_m,
         )
         report.poles_drawn += 1
 
@@ -1108,7 +1183,7 @@ def _record_semantics(
     sign: Sign,
     facing_deg: float,
     snap: Snap,
-    one_way: dict[int, bool],
+    one_way: bool,
 ) -> None:
     """Diff what a sign says against what the graph says, and count the gaps.
 
@@ -1135,7 +1210,7 @@ def _record_semantics(
     """
     if sign.code != _NO_ENTRY:
         return
-    if not one_way.get(snap.edge, False):
+    if not one_way:
         report.no_entry_on_two_way += 1
         return
     if directed_residual_deg(facing_deg, snap.heading_deg) > 90.0:
@@ -1184,6 +1259,13 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Sig
         # 🔴 Published poles folded into another because they stand on the same
         # physical post. The layer really does publish coincident poles.
         "poles_merged": report.poles_merged,
+        # ⚠️ Registration pushes every post on one edge, side and `t` to the same
+        # offset, so it can re-create coincident posts the first merge removed.
+        "posts_merged_after_shift": report.posts_merged_after_shift,
+        # Post-level counterparts of `over_shift` and `in_carriageway`, which are
+        # plates. These are what make `shift_m`'s `n` decomposable.
+        "posts_over_shift": report.posts_over_shift,
+        "posts_in_carriageway": report.posts_in_carriageway,
         # ⚠️ **How far each post moved sideways onto the drawn kerb**, over every
         # registered post including the ones `max_shift_m` refused — `n` past
         # `poles_drawn` is the proof it reads outside its own bar (`Q58`). This is
@@ -1206,9 +1288,11 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Sig
         # What `max_offset_m` is set against, published so the config's comment is
         # checkable against a shipped artefact rather than a scratch script.
         "offset_m": report.measured(report.offset_m),
-        # ⚠️ **How far each sign sat from the pole it was drawn on.** The
-        # measurement the whole stage rests on: the published sign point is a
-        # drawing label, and this is how far from the object it sits. A collapse
+        # ⚠️ **Published point to *surveyed* pole — not to where it is drawn.**
+        # The measurement the whole stage rests on: the abbreviation point is a
+        # drawing label and this is how far it sits from the object it names. The
+        # drawn displacement is larger and is this plus the merge offset plus
+        # `shift_m`. A collapse
         # toward zero would mean the publisher had changed what the layer means.
         "pole_offset_m": report.measured(report.pole_offset_m),
         # ⚠️ **Report-only, and a genuine second-source diff** (`Q56`): a NO ENTRY

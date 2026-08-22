@@ -26,7 +26,8 @@ import numpy as np
 import pytest
 import yaml
 
-from pipeline.arrows import axis_residual_deg
+from pipeline import arrows
+from pipeline.arrows import axis_residual_deg, nearside
 from pipeline.config import SIGN_DRAWINGS, load_city
 from pipeline.fares import Segments
 from pipeline.railings import facing_away
@@ -38,8 +39,9 @@ from pipeline.signs import (
     _draw_plate,
     _draw_pole,
     _facing_from_side,
+    _merge_placements,
     _merge_posts,
-    _nearside,
+    _Placed,
     _plate_frame,
     layer_polygons,
     plate_extent_m,
@@ -133,6 +135,16 @@ def city_with(tmp_path, block: dict[str, Any] | None):
 def spec(tmp_path):
     """`testville` with a signs block bolted on, parsed by the real loader."""
     return city_with(tmp_path, BLOCK).signs
+
+
+def sign(group: str, x: float, z: float, code: str = "TS115") -> Sign:
+    """One `Sign` for the merge tests, where only group and position vary.
+
+    A factory rather than six near-identical constructions — `test_arrows.py`'s
+    `_built` is the house precedent. The published point is irrelevant to
+    merging, which keys on the pole.
+    """
+    return Sign(code=code, group=group, x=x, z=z, published_x=x, published_z=z, axis_deg=0.0)
 
 
 def edge(edge_id: int, points: list[list[float]], *, lanes: int = 2, direction: str = "both"):
@@ -380,7 +392,7 @@ class TestThePublishedAngleIsNotConsumed:
         import inspect
 
         parameters = inspect.signature(_facing_from_side).parameters
-        assert set(parameters) == {"snap_heading_deg", "offset_m", "one_way"}
+        assert set(parameters) == {"snap_heading_deg", "side", "one_way"}
 
 
 class TestTheBlockIsOptional:
@@ -495,12 +507,8 @@ class TestPostsAreRegisteredAndMerged:
         interpenetrate and neither is readable.
         """
         report = SignReport()
-        here = Sign(
-            code="TS115", group="a", x=10.0, z=20.0, published_x=9.0, published_z=20.0, axis_deg=0.0
-        )
-        alongside = Sign(
-            code="TS102", group="b", x=10.2, z=20.1, published_x=9.0, published_z=20.0, axis_deg=0.0
-        )
+        here = sign("a", 10.0, 20.0, code="TS115")
+        alongside = sign("b", 10.2, 20.1, code="TS102")
         posts = _merge_posts(
             {("a", 10.0, 20.0): [here], ("b", 10.2, 20.1): [alongside]}, spec.pole_merge_m, report
         )
@@ -510,12 +518,8 @@ class TestPostsAreRegisteredAndMerged:
 
     def test_a_pole_beyond_the_merge_radius_stays_its_own_post(self, spec):
         report = SignReport()
-        a = Sign(
-            code="TS115", group="a", x=0.0, z=0.0, published_x=0.0, published_z=0.0, axis_deg=0.0
-        )
-        b = Sign(
-            code="TS115", group="b", x=5.0, z=0.0, published_x=5.0, published_z=0.0, axis_deg=0.0
-        )
+        a = sign("a", 0.0, 0.0, code="TS115")
+        b = sign("b", 5.0, 0.0, code="TS115")
         posts = _merge_posts(
             {("a", 0.0, 0.0): [a], ("b", 5.0, 0.0): [b]}, spec.pole_merge_m, report
         )
@@ -564,8 +568,89 @@ class TestPostsAreRegisteredAndMerged:
         """
         northward = [[0.0, 0.0, 10.0], [0.0, 0.0, 0.0]]
         normals = mitres(np.asarray(northward, dtype=np.float64))
-        assert _nearside(0.0)[0] == pytest.approx(-1.0)
+        assert nearside(0.0)[0] == pytest.approx(-1.0)
         assert normals[0][0] < 0.0
+
+
+class TestTheRegistrationArithmetic:
+    """The two ways registration moved a post silently and wrongly.
+
+    ⚠️ Both were found in review, both were invisible to every counter, and both
+    render as a perfectly built signpost.
+    """
+
+    def test_the_foot_comes_off_the_polyline_not_from_the_offset(self):
+        """🔴 `Snap.offset_m` is the distance to the **clamped** projection.
+
+        For a point past an edge's end the displacement has an along-edge
+        component, so `point - offset_m * nearside` is not on the centreline.
+        Here the point is dead on the road's axis 5 m past its end: the
+        reconstruction puts it 5 m off a road it is standing in the middle of,
+        while `Ribbon.foot_at` puts it back on the axis.
+        """
+        eastward = [[0.0, 0.0, 0.0], [100.0, 0.0, 0.0]]
+        ribbons = arrows.ribbons(
+            {"edges": [edge(0, eastward, lanes=2)]},
+            {"carriageway": [{"edge": 0, "half_width_m": [3.2, 3.2], "trim_m": [0.0, 0.0]}]},
+        )
+        snap = Segments.of([edge(0, eastward)]).nearest(105.0, 0.0)
+        assert snap.t == pytest.approx(1.0)
+
+        reconstructed = np.array([105.0, 0.0]) - snap.offset_m * nearside(snap.heading_deg)
+        foot = ribbons[0].foot_at(snap.t)
+        assert foot[0] == pytest.approx(100.0)
+        assert foot[1] == pytest.approx(0.0)
+        # The reconstruction is 5 m off the axis; the foot is on it.
+        assert abs(reconstructed[1]) == pytest.approx(5.0)
+
+    def test_a_post_on_the_centreline_faces_the_side_it_was_placed_on(self):
+        """🔴 `Segments.nearest` returns **-0.0** for a point on the centreline.
+
+        `-0.0 >= 0.0` is true and `-0.0 > 0.0` is false, so placing on
+        `offset_m >= 0` and facing on `offset_m > 0` put the post one side and
+        turned it to face the other — a NO ENTRY drawn perfectly, backwards.
+        `_facing_from_side` takes the side actually used for exactly this.
+        """
+        eastward = [[0.0, 0.0, 0.0], [100.0, 0.0, 0.0]]
+        snap = Segments.of([edge(0, eastward)]).nearest(50.0, 0.0)
+        assert math.copysign(1.0, snap.offset_m) == -1.0
+        side = 1.0 if snap.offset_m >= 0.0 else -1.0
+        assert side == 1.0
+        assert _facing_from_side(snap.heading_deg, side, False) == pytest.approx(
+            (snap.heading_deg + 180.0) % 360.0
+        )
+
+    def test_registration_can_re_collapse_posts_and_is_merged_again(self, spec):
+        """Two posts on one edge, side and `t` are pushed to the same offset.
+
+        The first merge works on surveyed positions and cannot see it, so the
+        placements are deduped too — otherwise each restarts its stack at
+        `mount_height_m` in the same place.
+        """
+        report = SignReport()
+        snap = Segments.of([edge(0, [[0.0, 0.0, 0.0], [100.0, 0.0, 0.0]])]).nearest(50.0, 2.0)
+        a = _Placed(
+            x=50.0,
+            z=-5.6,
+            y=0.0,
+            facing_deg=0.0,
+            one_way=False,
+            snap=snap,
+            plates=[sign("a", 50.0, 2.0)],
+        )
+        b = _Placed(
+            x=50.0,
+            z=-5.6,
+            y=0.0,
+            facing_deg=0.0,
+            one_way=False,
+            snap=snap,
+            plates=[sign("b", 50.0, 3.0, code="TS102")],
+        )
+        merged = _merge_placements([a, b], spec.pole_merge_m, report)
+        assert len(merged) == 1
+        assert len(merged[0].plates) == 2
+        assert report.posts_merged_after_shift == 1
 
 
 class TestTheReportPartitions:

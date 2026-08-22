@@ -1,7 +1,7 @@
 ## Instantiates the ETL's traffic signs, for looking at the city.
 ##
 ## A dev tool, not the streamer, exactly like `railings_preview.gd`. The whole
-## region's signage is one mesh — ~27k triangles for Wan Chai over 699 posts — so
+## region's signage is one mesh — ~19k triangles for Wan Chai over 450 posts — so
 ## there is nothing to stream, and deliberately nothing to LOD: `Q34`'s vertex
 ## clustering annihilates anything thinner than a cell, and a sign plate is a
 ## surface a few millimetres thick on a 64 mm post.

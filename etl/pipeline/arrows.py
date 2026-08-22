@@ -389,6 +389,23 @@ def _place(polygon: np.ndarray, x: float, z: float, heading_deg: float) -> np.nd
     return np.array([x, z]) + polygon[:, :1] * right + polygon[:, 1:2] * forward
 
 
+def nearside(heading_deg: float) -> np.ndarray:
+    """The unit vector to the **nearside** of an edge, in game plan space.
+
+    Nearside is *left* of travel — the rail `surface.mitres` offsets to, and the
+    side `Snap.offset_m` is positive on.
+
+    ⚠️ **Public, and spelled exactly once, because a flip here mirrors every
+    side-keyed feature in the city and still renders as a city.** `_frame`'s own
+    docstring records that this vector was written out three times in the first
+    draft of this module and that "a sign fix lands in two of three places"; it
+    was then written a fourth time in `pipeline/signs.py`, which is what made it
+    public. `tests/test_signs.py` pins it against `surface.mitres` itself rather
+    than against this comment.
+    """
+    return -_frame(heading_deg)[1]
+
+
 def _frame(heading_deg: float) -> tuple[np.ndarray, np.ndarray]:
     """Forward and right in game plan space, for a heading clockwise from north.
 
@@ -457,8 +474,15 @@ class _Builder:
 
 
 @dataclass(frozen=True)
-class _Ribbon:
-    """What `surface.py` drew for one edge, as this stage needs to read it."""
+class Ribbon:
+    """What `surface.py` drew for one edge, as a consumer needs to read it.
+
+    ⚠️ **Public because `pipeline/signs.py` reads it too**, and reads it for the
+    same reason: the drawn half-width is `surface.py`'s answer after the widening
+    and after `Q23`'s per-station adjustment, so a second implementation of it
+    would be a second join in `Q56`'s sense — disagreeing would tell us one was
+    wrong and never which.
+    """
 
     lanes: int
     one_way: bool
@@ -467,6 +491,10 @@ class _Ribbon:
     # widens the ribbon station by station.
     at: np.ndarray
     half_width_m: np.ndarray
+    # The centreline itself, `(n, 2)` as `(x, z)` per station. ⚠️ **Carried so a
+    # consumer can take the foot of a snap from the polyline rather than
+    # reconstruct it** — see `foot_at`.
+    plan: np.ndarray
     # Deck height at each of those stations, straight off the published
     # polyline. ⚠️ **This is what an arrow's height comes from, rather than a
     # fresh snap at its nose and tail.** A second snap is a second join with no
@@ -480,8 +508,31 @@ class _Ribbon:
     trim_end_m: float
     length_m: float
 
+    def half_width_at(self, t: float) -> float:
+        """The drawn half-width at a normalised position along the edge."""
+        return float(np.interp(t, self.at, self.half_width_m))
 
-def _ribbons(graph: dict, surface: dict) -> dict[int, _Ribbon]:
+    def foot_at(self, t: float) -> np.ndarray:
+        """The point on the centreline at `t`, in game plan space.
+
+        ⚠️ **Read from the polyline, never reconstructed as
+        `point - offset_m * nearside`.** `Snap.offset_m` is `±distance_m` to the
+        **clamped** projection, so for anything past an edge's end the
+        displacement has an along-edge component and that subtraction lands off
+        the centreline. Measured on an edge from (0,0) to (100,0) with a point at
+        (105, 0) — dead on the axis, 5 m past the end — the reconstruction gives
+        (105, -5), five metres off a road the point is standing in the middle of.
+        Where the snap did not clamp the two agree to the bit.
+        """
+        return np.array(
+            [
+                float(np.interp(t, self.at, self.plan[:, 0])),
+                float(np.interp(t, self.at, self.plan[:, 1])),
+            ]
+        )
+
+
+def ribbons(graph: dict, surface: dict) -> dict[int, Ribbon]:
     """The drawn ribbon, keyed by edge id.
 
     ⚠️ **Read from `roadsurface.json` rather than recomputed.** The drawn
@@ -491,7 +542,7 @@ def _ribbons(graph: dict, surface: dict) -> dict[int, _Ribbon]:
     never which.
     """
     widths = {int(entry["edge"]): entry for entry in surface["carriageway"]}
-    ribbons: dict[int, _Ribbon] = {}
+    drawn_ribbons: dict[int, Ribbon] = {}
     for edge in graph["edges"]:
         if int(edge["elevation_level"]) != 0:
             continue
@@ -508,17 +559,18 @@ def _ribbons(graph: dict, surface: dict) -> dict[int, _Ribbon]:
             # interpolated across, and visible as a symbol that found no lane.
             continue
         trim = drawn.get("trim_m") or [0.0, 0.0]
-        ribbons[int(edge["id"])] = _Ribbon(
+        drawn_ribbons[int(edge["id"])] = Ribbon(
             lanes=int(edge["lanes"]),
             one_way=str(edge["direction"]) != "both",
             at=along / total,
             half_width_m=half,
+            plan=np.column_stack([points[:, 0], points[:, 2]]),
             height_m=points[:, 1],
             trim_start_m=float(trim[0]),
             trim_end_m=float(trim[1]),
             length_m=total,
         )
-    return ribbons
+    return drawn_ribbons
 
 
 def directed_residual_deg(a: float, b: float) -> float:
@@ -583,7 +635,7 @@ def build_region(
         SURFACE_MANIFEST_SCHEMA,
         f"python -m pipeline.surface --city {city.id} --region {region_id}",
     )
-    ribbons = _ribbons(graph, surface)
+    drawn = ribbons(graph, surface)
     # Level 0 only, the same restriction `kerbside.py` and `tramway.py` both
     # make: for 7% of the kerbside samples the nearest edge of *any* level was
     # elevated, and the street the marking is actually on was a median 4 m away.
@@ -610,7 +662,7 @@ def build_region(
             # Matched a road it is not on. Refused, never rotated onto it.
             report.off_bearing += 1
             continue
-        ribbon = ribbons.get(snap.edge)
+        ribbon = drawn.get(snap.edge)
         if ribbon is None or ribbon.lanes < 1:
             report.no_lane += 1
             continue
@@ -652,7 +704,7 @@ def build_region(
 
         glyph = spec.glyphs[symbol.code]
         along_m = snap.t * ribbon.length_m
-        half_width_m = float(np.interp(snap.t, ribbon.at, ribbon.half_width_m))
+        half_width_m = ribbon.half_width_at(snap.t)
         drawn_offset_m = half_width_m * (1.0 - 2.0 * centre_u / ribbon.lanes)
         report.lane_shift_m.append(abs(drawn_offset_m - snap.offset_m))
         if abs(snap.offset_m) > half_width_m:
@@ -673,10 +725,9 @@ def build_region(
 
         # Nearside is *left* of travel — `U = 0` is the rail `surface.mitres`
         # offsets to the left — so it is `-right` in the edge's own frame.
-        edge_heading = math.radians(snap.heading_deg)
-        nearside = np.array([-math.cos(edge_heading), -math.sin(edge_heading)])
-        centreline = np.array([symbol.x, symbol.z]) - snap.offset_m * nearside
-        placed = centreline + drawn_offset_m * nearside
+        near = nearside(snap.heading_deg)
+        centreline = np.array([symbol.x, symbol.z]) - snap.offset_m * near
+        placed = centreline + drawn_offset_m * near
 
         _draw(builder, spec, symbol, glyph, placed, y_tail, y_nose)
         report.drawn += 1
