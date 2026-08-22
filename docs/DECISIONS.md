@@ -79,6 +79,7 @@ lives in git. This file holds *why things are the way they are*.
 | `Q56` | `VEHICLE_TYPE = 5` is a painted line, and a second dataset was the only way to know | ✅ Closed — `painted_vehicle_types: [1, 5]`, 2026-08-20. **+28.1% restriction** (26,065 m / 650 sides -> **33,385 m / 722**) on the evidence of Traffic Aids Drawings v2, where **93.9% of code-5 metres carry a painted line**. `tools/kerbside_source_audit.py` diffs the two sources: agreement **77.0% -> 96.4%**, kind agreement **95.7% -> 99.2%**. ⚠️ Codes 2/3/4 stay refused for a **different reason than `Q54` gave** — the drawings paint them too; the codec cannot say *which class* |
 | `Q57` | The estate publishes the markings, the width and the tram, and three records said otherwise | ✅ Closed as a survey, 2026-08-20. Nothing built, nothing fetched; four claims retired and one trap recorded |
 | `Q58` | The published tramway is **rails, not centrelines**, and it is **not on the carriageway** | ✅ Closed — `P3-14` ships `tram.glb`, 2026-08-20. `CartoTransLine TW` is one rail per part (gauge p50 **1.124 m** against 1.067 published); **only 18.8%** of cross-sections have both tracks on the drawn ribbon and **1.5%** on Hennessy, so a lane-space marking was refused on *measurement*. **+177,328 B of PCK**, one draw call, no collider. ⚠️ The deferral this replaces cited `ART_DESIGN.md` for the opposite of what it says |
+| `Q60` | The railings are **published**, their **vocabulary is not**, and the drawn kerb has already moved past them | ✅ Closed — `P3-19` ships `railings.glb`, 2026-08-22. **67.9%** of published railing metres fall inside the 1.6x ribbon, so the position is **registered** onto the drawn kerb — the one place in the bundle an extent is moved — bounded by `max_shift_m` 3.0 and priced by a `shift_m` recorded over its own refusals. `LINETYPE` has **no published domain** and no index-plan sheet defines a railing, so the whitelist is read off the code strings and every refusal is published. **+255,208 B of PCK**, one draw call, no collider. ⚠️ `roadsurface.json` gained `kerb_hidden_m` (schema 5) because **11.1%** of them join to a kerb no ribbon draws |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -7967,3 +7968,205 @@ graph and touches no road instrument's input.
 **See.** `Q53` for the hold this closes · `Q56` for finding the layer · `Q59` for the pattern, the
 scanned-sheet rule and the two-counters discipline · `Q54` for read-never-invented · `Q15` for the
 level-0 snap · `P3-16` for the gating call this inherits · `DATA_SOURCES.md` for the layer table
+
+## `Q60` — The railings are published, their vocabulary is not, and the drawn kerb has already moved past them
+
+**Status.** ✅ Closed 2026-08-22 by `P3-19`, which ships `railings.glb`.
+
+**Opened** 2026-08-22 by the user, asking for a plan to draw the railings. `P3-16` had listed the
+layer as one of two things "deliberately not jumped", alongside the box junctions `P3-18` then took.
+
+### The decision
+
+TD's `DTAD_RAILING_LINE` ships as geometry, joined to the graph as `(edge, side, V-range)` in
+`kerbside.py`'s own machinery and drawn as a panel standing on the kerb the ribbon actually has.
+**9,017 m of 20,273 m published**, 9,308 triangles, one primitive, one draw call, **no collider**.
+`city.json` 13 → 14, key optional and null where a city publishes no railing layer.
+
+Three things separate this from every stage before it, and each was measured rather than argued.
+
+### 1. This is the only layer the pipeline reads whose vocabulary the publisher does not define
+
+Every other coded field in `hong_kong.yaml` is transcribed from a published sheet — the `RM`
+marking codes from TD's index plan `CT174/51-5(1)F`, the `TS` sign classes from the twenty `TS`
+sheets, iB1000's features from LandsD's dictionary. For this layer there is **nothing**. The fgdb
+data specification gives `LINETYPE` the description *"Line Type"* and stops. The index-plan bundle's
+only candidates are its two "Miscellaneous Details" drawings, `CT174/51-6(1)E` and `CT174/51-6(2)F`
+— both scans with no text layer, both **read by eye here**, and both are sign pictograms and road
+lettering with no railing row on either.
+
+So `Q59`'s glyph-table rule *cannot be satisfied*, and the honest form of that is to say so rather
+than to invent a table. `drawn_line_types` is a **whitelist and not a type map**: five codes are
+admitted on the strength of their own strings, one fence is drawn for all of them, and **no claim
+is made that `CRAIL1` differs from `HCAIL2`**, because nothing published says it does. Every refused
+code's metres are published, so the whitelist is an argument a reader can check:
+
+| refused | m | | refused | m |
+|---|---|---|---|---|
+| `CBARRIER` | 1,368.85 | | `bollard0` | 284.86 |
+| `SOLID` | 511.43 | | `bollard2` | 234.81 |
+| `AMT1` | 502.36 | | `bollard3` | 152.58 |
+| `AMT` | 456.99 | | `AMT2_1.5` | 118.12 |
+| `CRASHGATE` | 300.89 | | six others | 93.44 |
+
+`CBARRIER` and `CRASHGATE` are out because they read as vehicle restraint rather than pedestrian
+railing, and drawing them as the same fence would assert a sameness no source states — `Q54`'s
+debit. The bollards are out because they are posts; `SYMBOL_STEP_1` and `SYMBOL_SIZE_1` carry their
+spacing and diameter for whoever draws them.
+
+🔴 **`DATA_SOURCES.md` had this layer at four `LINETYPE` values. There are nineteen** — and its
+counts were *features* where its neighbours' were parts. Corrected in the same commit.
+
+⚠️ No railing **dimension** is published either. `height_m` 1.1, `station_m` 2.0, `outset_m` 0.6 and
+`base_sink_m` 0.25 are all authored, and are declared as authored in the config rather than dressed
+as transcriptions.
+
+### 2. The drawn kerb has already moved past the surveyed railing, so the position is registered
+
+This is the stage's real debt and the reason it is a `Q` rather than a task note.
+
+| | |
+|---|---|
+| Real kerb, off the centreline | ~2.76 m (`kerbside.py`'s own figure) |
+| Published railing, off the centreline | p10 2.52 / **p50 4.21** / p90 7.40 m |
+| Drawn half-width | p10 5.12 / **p50 5.12** / p90 6.24 m |
+
+`Q59`'s 1.6x widening has taken the drawn kerb **past** the railing line, by a median 0.9 m. So:
+
+🔴 **67.9% of the region's published railing metres — 13,757 m of 20,273 m — fall inside the drawn
+ribbon.** Drawn where they were surveyed, Hong Kong's signature street railing is a picket fence
+down the middle of the drivable surface. Corroborated in `carriageway_margin.py`'s own shape,
+walking the centreline and casting to the nearest railing: overhang p50 −0.49, **p90 +2.22**, max
+**+5.12 m**, and the ribbon crosses the nearest railing at **45.6%** of stations.
+
+`P3-18` refused to scale a box polygon to fit the ribbon; `P3-15` read an arrow's position as a
+fraction across the carriageway. This does neither and both, and the split is between the axes:
+
+- the **longitudinal** extent — where a railing starts and stops along a street — is read, and never
+  stretched;
+- the **lateral** offset is a rigid translation onto a kerb the ETL itself moved.
+
+⚠️ **The move is not asserted to be small.** Measured over the whole region before `max_shift_m` was
+chosen:
+
+| shift | share | | shift | share |
+|---|---|---|---|---|
+| 0.0–0.5 m | 9.4% | | 3.0–5.0 m | 15.9% |
+| 0.5–1.0 m | 13.5% | | 5.0–10 m | 10.6% |
+| 1.0–2.0 m | 27.0% | | over 10 m | 7.5% |
+| 2.0–3.0 m | 16.1% | | | |
+
+**3.0 m** keeps two-thirds of the metres. Above it the thing being moved is not a kerb railing at
+all — it is a plaza edge, a footbridge balustrade or a stair rail — and relocating one of those onto
+a carriageway edge would be inventing a fence rather than moving one. The bar is applied **per
+sample, not per run**, so a run that hugs the kerb and then wanders keeps its good half.
+
+⚠️ `shift_m` is recorded over every assigned sample **including the ones the bar then refuses** —
+`n` 13,764 against 1,868 refused — which is `Q58`'s `drawn_gauge_m` trap avoided, and the same
+defect review caught in `arrows.py`'s `axis_residual_deg`. Shipped: p50 **1.65**, p90 **3.24**,
+p99 **5.32**, max **6.24 m**.
+
+### 3. A drawn kerb is not always drawn, and `surface.py` had to start saying where
+
+`_hide_buried_kerbs` drops the kerb wherever another ribbon already covers it — **33,128 m of it in
+this region**, because a 1.6x-widened opposed pair merges into one surface. A railing joined to one
+of those is a fence standing in the middle of merged tarmac, and **11.1% of the region's railing
+metres join to exactly that**. It is the failure the registration would otherwise have *created*:
+drawn where surveyed, those railings sit on a median strip; drawn on the kerb, they sit in traffic.
+
+Until now only the total survived, as `buried_kerb_m`. `roadsurface.json` now publishes the ranges —
+`carriageway[].kerb_hidden_m`, `SURFACE_MANIFEST_SCHEMA` **4 → 5**, ribbon metres per side.
+⚠️ **Published rather than recomputed downstream**, which is `arrows.py`'s rule for the drawn
+half-width: coverage is a question about every other ribbon *and* about the junction caps, and a
+second implementation in another stage would disagree near the caps and tell nobody which was right
+(`Q56`). Shipped: **1,011 m** dropped for this reason.
+
+### What the stage publishes about itself
+
+Every failure mode here renders as a perfectly good fence — on the wrong kerb, on the wrong street,
+across merged tarmac, or a junction trim out of place — so the counters are the instrument.
+
+```
+parts 1,763 = 632 not a drawn code + 6 on structure + 0 empty + 1,125 read
+source 20,273.44 m = 4,024.33 refused + 1,579.36 on structure + 14,669.76 read
+14,664 samples: 446 outside the region, 454 unassigned, 1,868 over the shift bar
+872 runs: 218 dropped short (560.75 m), 928.67 m clipped past the ribbon,
+          1,011.23 m on a buried kerb
+drawn 9,017.35 m — CRAIL1 5,760.78 / CRAIL2 1,713.05 / HCAIL2 856.48 /
+                   RAIL1 416.60 / RAILING1 270.44; nearside 5,479.00 m
+facing_away 0 · 9,308 triangles · 10,344 vertices · 305,196 B
+```
+
+⚠️ **`features` counts features and everything under it counts parts**, and the two differ by ten.
+`kerbside.py` records what happens when they are mixed: a share over one, "725 of 579".
+
+⚠️ **`on_structure_m` is kept apart from `refused_m`, and the region is why**: six features carry
+**1,579 m of `CRAIL1`** — a whitelisted code — on a flyover parapet. Folded into the per-code table
+those metres read as "this code was not drawn", which is the opposite of true.
+
+### Winding decides lighting here, not visibility
+
+⚠️ **`railings.gdshader` is `cull_disabled`, the only generated mesh in the bundle that is.** A
+fence is one quad thick and the car passes it on both sides; `cull_back` would make half of every
+street's railings vanish depending on which way the road was digitised, with a byte-identical mesh.
+So the `Q58` failure-to-nothing moves to a new place, and two things hold it: `facing_away` (must be
+0 — every quad is wound to look at the carriageway) and `verify_railings.gd`, which reads the render
+mode out of the shader's **own source**, because Godot exposes `render_mode` nowhere else.
+
+⚠️ **`rail_metallic` ships at 0.0** — `P3-14`'s measured lesson, taken rather than re-learned: metal
+reflects its environment, the only environment is sky, and 0.65 rendered the tram rails sky blue.
+
+⚠️ **The fence is an opaque panel, not balusters.** A real railing is hollow, and drawing that
+honestly needs alpha — the sorted transparent pass `arrows.gdshader` records the mobile-budget
+objection to, or a scissor that re-aliases every baluster. Recorded in `ART_DESIGN.md` as a
+divergence rather than hidden.
+
+### The grader, and a defect in the grader
+
+`tools/railing_error.py` reads the shipped `railings.glb` back and measures it against the source
+layer re-read, sharing no code with the join — deliberately, because an instrument that borrows the
+expression it is checking cannot disagree with it:
+
+```
+drawn 9,043 m over 18,090 stations · fence height 1.35 m
+covered within 6 m: 10,917 m of 14,670 m published (74.4%)
+distance to the nearest published railing: p50 1.41  p90 2.42  p99 2.92  max 4.47 m
+side of the street: 0 of 17,111 stations disagree (0.00%)
+```
+
+The **0 of 17,111** is the one that matters: a mirrored side convention puts every fence on the
+opposite kerb and renders as a city. The 9,043 m against the stage's 9,017 m is not a disagreement
+— the tool measures the fence's own foot line and the stage measures centreline metres, and a fence
+on the outside of a bend is the longer of the two.
+
+⚠️ **The tool's first version overstated the drawn length by 49% — 13,443 m — and it looked
+plausible.** It took "the two lowest corners of each triangle" as a foot segment; a quad fans into
+`[b0, t0, t1]` and `[b0, t1, b1]`, and the first triangle's two lowest corners are a bottom and a
+*top*, which is the panel's diagonal. It also reported the fence as **12.96 m tall**, which was the
+AABB of the whole region's terrain. Both were caught by reading the numbers, not the frame.
+
+### Cost
+
+**+255,208 B of PCK (+0.611%)**, 41,775,608 → 42,030,816 B, measured from **two exports with one
+variable changed** — the `railings:` block removed for the control and the asset taken out of
+`game/assets/generated/`. 9,308 triangles, one draw call, no collider.
+
+### What this does not do
+
+No bollards, no crash gates, no vehicle barriers — each refused above, with its metres. No
+balusters and no transparency. **No collision, and that is the design decision rather than a
+deferral**: `GAME_DESIGN.md` puts railings under "deliberately diverge on — omit or make breakable"
+because Hong Kong's streets faithfully railed are a traffic simulator with no room to be reckless.
+Drawing them as scenery keeps the picture and keeps the divergence. Breakaway is `B3`.
+
+⚠️ **The `GAME_DESIGN.md` tension is real and is not resolved by ignoring it.** That document's
+"omit railings" is about *collision and width*, and a collider-free fence narrows nothing — but only
+because the registration puts it on the drawn kerb. Drawn where surveyed it would have narrowed the
+street by two-thirds of its own length, which is the thing that doc refused. The measurement above
+is what makes this consistent with it rather than an exception to it.
+
+**See.** `Q59` for the widening this is registered against and the glyph-table rule this layer
+cannot satisfy · `Q58` for the mesh pattern and the failure-that-renders-as-nothing · `Q54` for
+read-never-invented and what moving an extent costs · `Q56` for why the coverage test is published
+rather than re-implemented · `Q15` for the level-0 snap · `P3-18` for the stage shape ·
+`GAME_DESIGN.md` for the divergence this sits inside · `DATA_SOURCES.md` for the corrected layer row

@@ -601,6 +601,26 @@ authored features the source captures badly.
   measurement that decided the real answer: the published rails are **not on the ribbon** at all
   (18.8% of cross-sections, 1.5% on Hennessy), so a lane-space rail would have been an invented
   marking in `Q54`'s sense. `tram_tracks` stays shipped in `TEXCOORD_1` and stays undecoded.
+- ✅ **Pedestrian railings are built (`P3-19`), and they are a solid panel rather than a fence.**
+  `railings.glb`, one vertical quad per 2 m standing 0.6 m outside the drawn carriageway edge, with
+  `tuning/railings.tres` the dial. **The divergence is opacity, and it is deliberate.** A real
+  railing is hollow — vertical balusters with air between them — and drawing that honestly needs
+  alpha, which is the sorted transparent pass `arrows.gdshader` already records the mobile-budget
+  objection to, or a scissor that re-aliases every baluster. So the fence is opaque, and at the
+  speed the player passes it that is a cue rather than a lie.
+  ⚠️ **`railings.gdshader` is the only `cull_disabled` shader in the bundle.** A fence is one quad
+  thick and the car drives past both faces; the back face negates its normal, or the far side of a
+  street would darken as the sun crossed it.
+  ⚠️ `rail_metallic` ships at **0.0**, for the tramway's measured reason one bullet up — painted
+  steel is a dielectric coat over metal, and 0.65 would put the sky on it.
+  ⚠️ **`rail_colour` is the one authored colour in this file with no second reading to check it
+  against.** The marking yellow and white are each authored two and three times over and held
+  together by a mismatch being visible in one frame; a railing shares its shade with nothing, so
+  nothing measures it. Judge it at the `street` and `kerb` viewpoints — a railing is the nearest
+  object to the camera on most of the region's streets.
+  ⚠️ **Where the fence stands is not where it was surveyed.** 67.9% of the region's published
+  railing metres fall *inside* the 1.6x-widened ribbon, so they are registered onto the drawn kerb;
+  `Q60` has the measurement and the bar on the move.
 
 ⚠️ **When the markings shader lands it will expose a junction defect that is invisible today.** A cap
 overlaps its arms rather than abutting them wherever a short edge is held back by the junction trim —

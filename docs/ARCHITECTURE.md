@@ -290,6 +290,7 @@ hk-taxi-Q/
 │   │   ├── tramway.py           # published tram rails → tram.glb (P3-14)
 │   │   ├── arrows.py            # published turn arrows → arrows.glb (P3-15)
 │   │   ├── boxjunctions.py      # published box junctions → boxjunctions.glb (P3-18)
+│   │   ├── railings.py          # published railings → railings.glb (P3-19)
 │   │   ├── export.py            # → city.json, assembles and validates the stage outputs
 │   │   └── __main__.py          # `python -m pipeline` — every stage, in order
 │   ├── sources/<city>/<source>/ # raw downloads — GITIGNORED
@@ -902,6 +903,43 @@ triangles that did not exist in the shipped GLB) and ships nothing thinner than 
 thin geometry inherits the same constraint. `P3-18`.
 
 ⚠️ Winding and the p90/p99/max reporting follow `arrows.glb`'s paragraphs above, unchanged.
+
+### `railings.glb` — the published pedestrian railings (`P3-19`)
+
+A vertical panel `height_m` tall standing `outset_m` outside the drawn carriageway edge, one quad
+per `station_m`, for every run of `DTAD_RAILING_LINE` this city draws. One primitive, one material
+named `railings`, one draw call, and **no collider** — and here the collider's absence is a *design*
+decision, not a rendering one: `GAME_DESIGN.md` lists railings under "deliberately diverge on —
+omit or make breakable", because Hong Kong's streets faithfully railed are a traffic simulator with
+no room to be reckless. Breakaway is a `B3` question.
+
+| | |
+|---|---|
+| Attributes | `POSITION` and `NORMAL` only — no `COLOR_0`, no UVs, no texture |
+
+⚠️ **`city.json`'s `railings` key is optional and may be `null`**, on exactly `boxjunctions`' terms,
+including the nothing-survived-the-join state.
+
+⚠️ **`railings.gdshader` is `cull_disabled`, and it is the only generated mesh here that is.** A
+fence is one quad thick and the car passes it on both sides, so back-face culling would make half of
+them invisible — `Q58`'s failure-to-nothing in a new place, and the mesh would be byte-identical.
+`verify_railings.gd` reads the render mode out of the shader's own source because that is the only
+channel Godot offers.
+
+⚠️ **So the winding decides *lighting* rather than visibility.** Every quad is wound to look at the
+carriageway, `railings.json` publishes `facing_away`, and it must be 0: a flipped quad still draws,
+lit from the wrong hemisphere, which reads as a black panel rather than as a missing one.
+
+⚠️ **The position is registered, not read** — the one place in the bundle where a *published extent*
+is moved. `Q59`'s widening puts the drawn kerb a median 0.9 m past the surveyed railing, so **67.9%
+of the region's railing metres fall inside the drawn ribbon** and drawing them where surveyed is a
+picket fence down the middle of the road. The longitudinal extent is read and never stretched; the
+lateral offset is a rigid move, bounded by `max_shift_m` and priced by `shift_m`. `Q60`.
+
+⚠️ **`roadsurface.json` gained `carriageway[].kerb_hidden_m` for this stage** (`SURFACE_MANIFEST_
+SCHEMA` 4 → 5) — the ribbon-metre ranges where a side draws no kerb because a neighbour covers it.
+Only `surface.py` can know it, and without it 11.1% of the region's railings stand in merged tarmac.
+An intermediate, like `trim_m`; the game reads neither.
 
 ### `landmarks.json` — hero building placement
 

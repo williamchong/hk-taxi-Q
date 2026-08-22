@@ -177,6 +177,23 @@ Common emoji for this project:
   attribute does not, and the first build had **5,111 of 5,112** triangles facing the ground with
   everything else correct. ⚠️ **A tramway change is also a shader change** — `check.sh` exits 0 on a
   shader that fails to compile, so render and `grep -i "shader error"`. Numbers in `Q58`.
+- **`pipeline/railings.py`, the `railings` config block, or any railing change: paste `railings.json`'s
+  `shift_m` (with its `n`), `samples_over_shift`, `metres_on_buried_kerb`, `refused_m` and
+  `facing_away`, before and after — and run `tools/railing_error.py` and paste its table.** ⚠️ **The
+  position of a railing is *registered*, not read** — the one place in the bundle a published extent
+  is moved — because **67.9%** of the region's railing metres were surveyed inside the 1.6x ribbon
+  (`Q60`). `shift_m` is the price of that and is recorded over the samples `max_shift_m` refuses, so
+  **`n` must exceed what was drawn**; move that append below the guard and every percentile is
+  confined to the bar by construction — `Q58`'s `drawn_gauge_m` trap, and the defect review caught in
+  `arrows.py`. ⚠️ **A widening change is a railing change**: `widen_default` moves the drawn kerb and
+  therefore moves every fence, silently and plausibly. ⚠️ `facing_away` must be **0** and
+  `railings.gdshader` must stay `cull_disabled` — it is the only generated mesh that is, a fence is
+  one quad thick, and `cull_back` would delete half of them with a byte-identical mesh.
+  ⚠️ **`drawn_line_types` is a whitelist read off code strings and nothing published defines them** —
+  no index-plan sheet covers railings — so a change to it is a `DATA_SOURCES.md` change and the
+  refused metres are what makes it reviewable. ⚠️ **A railings change is also a shader change** —
+  `check.sh` exits 0 on a shader that fails to compile, so render and `grep -i "shader error"`.
+  Numbers in `Q60`.
 - **`pipeline/arrows.py`, the `arrows` config block, or any turn-arrow change: paste `arrows.json`'s
   two partitions (`symbols` and `candidates`), `axis_residual_deg`, `offset_m`, `against_one_way` and
   `inverted`, before and after.** There is no separate grader and there should not be: the stage grades itself,
