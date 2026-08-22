@@ -1024,24 +1024,42 @@ signs:
   # ⚠️ **Read by eye off TD's own TS Index Plan sheets**, inside the dataspec
   # zip that traffic_aids_data_dictionary fetches — CT174/51-1(1)C
   # "(TS 101 - 205)" for the regulatory codes and CT174/51-3(2)D
-  # "(TS 701 - 805)" for the supplementary arrow plates. Both are scanned
-  # drawings with no text layer (pdftotext returns nothing), so this is Q59's
-  # glyph-table rule restated: the table is transcribed from the publisher,
-  # never inferred from the histogram.
+  # "(TS 701 - 805)" for the supplementary arrow plates. Neither has a text
+  # layer (pdftotext returns nothing), so this is Q59's glyph-table rule
+  # restated: the table is transcribed from the publisher, never inferred from
+  # the histogram.
+  #
+  # ⚠️ **They are NOT scanned, which this comment used to say.** pdfinfo reads
+  # `CT174_51_11.dgn` / PScript5.dll / Distiller and pdffonts returns no
+  # embedded font: a MicroStation DGN export whose ruling lines, digits and most
+  # pictograms are vector *paths*. "No text layer" is why the digits must be
+  # read; "scanned" is why the wrong extraction method looked necessary. P3-20
+  # depends on the difference — the table grid is recoverable exactly rather
+  # than detected in pixels.
   #
   # ⚠️ **~/hk-traffic-sign-map's signCatalogue.json is cross-check only, never
   # authority.** It is OCR-built, its own README records partial coverage on the
   # dense sheets, and 380 of this region's signs are uncatalogued (344 of them
-  # TSSEPA separators). It agreed with the sheets on every row below; that is a
-  # check that passed, not the source of the row.
+  # TSSEPA separators).
+  #
+  # 🔴 **"It agreed with the sheets on every row below" was here, and it did
+  # not.** Its `desc` disagrees with the sheet across TS181-TS183 and the sheet
+  # is right — which is the whole reason `Q64` exists. Read its *crops*, which
+  # are the deterministic same-cell half of that project and are correct; its
+  # descriptions come from a separate full-page model read and carry the shift.
   #
   # ⚠️ **WHAT IS ABSENT IS THE DECISION.** Only signs whose meaning is their
   # *shape* are here — 912 of the region's 3,276. Every sign whose meaning is
   # its **text** is refused: TS860 time plates x148, TS280 parking x74, the
   # TS21xx/TS22xx no-stopping-zone family, the vehicle-class prohibitions.
   # Roughly 2,360 signs. TS101 STOP x18 is refused with them rather than shipped
-  # as a wordless octagon. TS182 CYCLES ONLY x155 goes for the same reason as
-  # the text: a bicycle pictogram needs a texture.
+  # as a wordless octagon.
+  #
+  # 🔴 **"TS182 CYCLES ONLY x155 needs a texture" was here, and it was wrong on
+  # the code.** TS182 is ONE WAY TRAFFIC, a pure shape, and it is drawn below;
+  # CYCLES ONLY is TS181, which this region does not carry at all. 155 plates —
+  # the second-commonest code in region after TS115 — were refused for a reason
+  # that never applied to them. See the TS182 face and `Q64`.
   #
   # 🔴 **AND THE REASON IS THE ZERO-TEXTURE RULE, NOT Q42 — an earlier draft of
   # this block cited Q42 and hard rule 8 and both citations were wrong.** Hard
@@ -1135,15 +1153,51 @@ signs:
         - {draw: triangle_down, colour: white, size: 0.72}
 
     # -- one-way and the supplementary arrow plates --
-    # TS183 is regulatory: a white arrow on a blue rectangle. TS733/TS734 are
+    # TS182 is regulatory: a white arrow on a blue rectangle. TS733/TS734 are
     # supplementary plates off CT174/51-3(2)D and are **black on white with a
     # black border**, not blue — checked against the sheet, because the obvious
     # assumption is that a one-way arrow plate matches the one-way sign.
-    TS183:
+    #
+    # 🔴 **This face shipped under TS183 until 2026-08-23, and that was wrong by
+    # exactly one row.** CT174/51-1(1)C prints 181 (TC 138) CYCLES ONLY,
+    # **182 (TC 139) ONE WAY TRAFFIC**, **183 (TC 140) NO STOPPING** — number,
+    # pictogram and description in one cell. So the game drew a one-way arrow on
+    # 11 plates the street gives a no-stopping saltire, and refused the 155
+    # TS182 that are this very face. ⚠️ **The bad row came from
+    # ~/hk-traffic-sign-map's signCatalogue.json `desc`, which is shifted one row
+    # across TS181-TS183 while its *crops* are correct** — two extraction paths
+    # inside that project disagreeing, and this table took the wrong one despite
+    # saying the sheet is authority. `Q59`'s rule was right and was not followed;
+    # `Q64` is the record. Nothing in the bundle could see it: the mesh is
+    # correct, `facing_away` is 0 and `verify_signs.gd` passes. A mislabelled
+    # sign renders perfectly.
+    TS182:
       plate: rect
       layers:
         - {draw: rect, colour: blue, size: 1.00}
         - {draw: arrow_up, colour: white, size: 0.78}
+    # NO STOPPING — a red saltire over a blue disc inside a red ring. The two
+    # bars are two layers rather than one `cross` word so that they sit at two
+    # lifts; `backslash` exists for this face and `pipeline/signs.py` says why.
+    # The blue field is 0.805 of the diameter on the publisher's own cell, so
+    # 0.82 is within a pixel of measured rather than chosen.
+    #
+    # ⚠️ **0.95, not 1.00, and the reason is that a `disc` is a DODECAGON.**
+    # `disc_segments: 12` puts a vertex every 30 degrees, so the rim's inscribed
+    # radius is `cos(15 deg)` = 0.966 of its circumscribed one — and a saltire
+    # sits at exactly 45 degrees, which lands on a **flat**, not a vertex. Bars a
+    # full diameter long put their corners at 1.005 of the radius and they
+    # visibly poke out past the rim at all four diagonals. Found by eye in
+    # review, and it reads as a second sign interpenetrating the first rather
+    # than as an overhang, which is why it is written down here. The existing
+    # slash faces never met it: TS131/TS132/TS133 all draw at 0.92.
+    TS183:
+      plate: disc
+      layers:
+        - {draw: disc, colour: red, size: 1.00}
+        - {draw: disc, colour: blue, size: 0.82}
+        - {draw: slash, colour: red, size: 0.95}
+        - {draw: backslash, colour: red, size: 0.95}
     TS733:
       plate: rect_wide
       rank: supplementary

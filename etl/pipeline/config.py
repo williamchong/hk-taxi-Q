@@ -807,15 +807,21 @@ class Arrows:
 # city naming a shape this list does not hold fails the load rather than shipping
 # a plate with a hole in it.
 #
-# ⚠️ **There is no lettering here and there never will be.** `Q42` and hard rule
-# 8 forbid rendered text, so a sign whose meaning is its words is refused in
-# `faces:` rather than approximated with a shape.
+# ⚠️ **There is no lettering here, and the reason is not the one this comment
+# used to give.** It cited `Q42` and hard rule 8; both were wrong — hard rule 8
+# is the "Crazy Taxi" trademark and `Q42` is the facade survey reading real
+# *company* marks. What refused a glyph is that nothing could draw one: this
+# vocabulary is geometry, and a 24-stroke character is not a shape. `Q63` settled
+# where lettering does arrive — the `P3-20` atlas, sampled per plate — so it
+# stays out of *this* list on the list's own rule (each word has geometry behind
+# it), not on a borrowed prohibition.
 SIGN_DISC = "disc"
 SIGN_BAR = "bar"
 SIGN_RECT = "rect"
 SIGN_RECT_WIDE = "rect_wide"
 SIGN_TRIANGLE_DOWN = "triangle_down"
 SIGN_SLASH = "slash"
+SIGN_BACKSLASH = "backslash"
 SIGN_ARROW_UP = "arrow_up"
 SIGN_ARROW_LEFT = "arrow_left"
 SIGN_ARROW_RIGHT = "arrow_right"
@@ -832,6 +838,7 @@ SIGN_DRAWINGS = (
     SIGN_RECT_WIDE,
     SIGN_TRIANGLE_DOWN,
     SIGN_SLASH,
+    SIGN_BACKSLASH,
     SIGN_ARROW_UP,
     SIGN_ARROW_LEFT,
     SIGN_ARROW_RIGHT,

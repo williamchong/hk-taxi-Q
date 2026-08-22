@@ -142,6 +142,7 @@ from pipeline.config import (
     SIGN_ARROW_U,
     SIGN_ARROW_UP,
     SIGN_BACK_COLOUR,
+    SIGN_BACKSLASH,
     SIGN_BAR,
     SIGN_DISC,
     SIGN_RECT,
@@ -184,6 +185,20 @@ SIGNS_MATERIAL = "signs"
 # Below this, twice a triangle's area means it has collapsed. The bar
 # `surface.py`, `tramway.py` and `arrows.py` all set.
 _MIN_TWICE_AREA_M2 = 1e-6
+
+# The prohibition bar's thickness as a fraction of a disc's diameter — on a disc
+# `half_height_m` *is* the radius, so this coefficient is that fraction directly.
+#
+# ⚠️ **The one sign dimension here that is *measured* rather than authored.**
+# Every other number in this layer carries `Q60`'s NOT-TO-SCALE debt, but a
+# *proportion* survives a sheet with no scale, and TD prints one standard bar:
+# `TS131` 0.097, `TS133` 0.097, `TS183` 0.098, read off the three cells' pixels.
+# It shipped at **0.13** until 2026-08-23 — 34% too thick on every face that has
+# one, which is what authoring a proportion by eye costs. `Q64`.
+#
+# ⚠️ **`SIGN_BAR`'s 0.22 is deliberately still inline**, and the difference is
+# the evidence rather than an oversight: that one is authored, this one is not.
+_SLASH_THICKNESS = 0.097
 
 
 @dataclass
@@ -535,9 +550,26 @@ def layer_polygons(
         return [_rect(half_w, half_h)]
     if draw == SIGN_TRIANGLE_DOWN:
         return [ccw([(-half_w, half_h), (half_w, half_h), (0.0, -half_h)])]
-    if draw == SIGN_SLASH:
-        # The prohibition bar, drawn upper-left to lower-right at 45 degrees.
-        return _rotate([_rect(min(half_w, half_h), 0.13 * half_height_m)], -45.0)
+    if draw in (SIGN_SLASH, SIGN_BACKSLASH):
+        # The prohibition bar at 45 degrees: `slash` upper-left to lower-right,
+        # `backslash` mirrored. Thickness is `_SLASH_THICKNESS` of the diameter —
+        # see the constant for why that number and not another.
+        #
+        # ⚠️ **`backslash` exists so a saltire is authored as TWO LAYERS** rather
+        # than as one `cross` word returning both bars. A word returning two
+        # polygons draws them at one `layer_lift_m`, so they would be coplanar
+        # where they cross, and the config's record of the 4 mm NO ENTRY bar says
+        # what coplanar layers on a sign plate look like. Two layers get two
+        # lifts and the question does not arise.
+        #
+        # ⚠️ **Defined for square-extent plates only.** Every face using either
+        # word is a `disc`, where `min()` is a no-op — but on a `rect_wide` a bar
+        # has to *span*, and both numbers here would be wrong: `min()` confines
+        # it to the inscribed square, and the plate's diagonal is
+        # `atan2(half_h, half_w)` rather than 45 degrees. Nothing validates a
+        # draw word against a plate, so a config could reach this.
+        bar = _rect(min(half_w, half_h), _SLASH_THICKNESS * half_height_m)
+        return _rotate([bar], -45.0 if draw == SIGN_SLASH else 45.0)
     if draw in _ARROW_TURNS:
         turn = _ARROW_TURNS[draw]
         # ⚠️ **A rotated arrow runs along the plate's *other* axis**, so the box

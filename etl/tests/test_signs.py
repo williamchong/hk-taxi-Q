@@ -363,6 +363,27 @@ class TestTheFaceGeometry:
         right = np.vstack(layer_polygons(spec, "arrow_right", 1.0, 0.3, 0.3))
         assert left[:, 0].min() == pytest.approx(-right[:, 0].max())
 
+    def test_a_backslash_crosses_the_slash_it_mirrors(self, spec):
+        """⚠️ The mirror problem again, on the pair that makes `TS183` a saltire.
+
+        A `backslash` that drew a second `slash` would render as a **doubled
+        bar**, which is a plausible-looking plate rather than an obviously broken
+        one — `Q64`'s failure mode, where a wrong sign renders perfectly. So this
+        asserts the two are mirrored in `u` *and* that their axes actually
+        oppose, which a duplicated expression cannot satisfy.
+        """
+        slash = layer_polygons(spec, "slash", 1.0, 0.3, 0.3)[0]
+        backslash = layer_polygons(spec, "backslash", 1.0, 0.3, 0.3)[0]
+
+        mirrored = np.column_stack([-backslash[:, 0], backslash[:, 1]])
+        assert sorted(map(tuple, np.round(slash, 9))) == sorted(map(tuple, np.round(mirrored, 9)))
+
+        def axis(polygon: np.ndarray) -> np.ndarray:
+            edges = np.diff(np.vstack([polygon, polygon[:1]]), axis=0)
+            return edges[int(np.argmax(np.linalg.norm(edges, axis=1)))]
+
+        assert float(axis(slash) @ axis(backslash)) == pytest.approx(0.0, abs=1e-9)
+
 
 class TestThePublishedAngleIsNotConsumed:
     """`ANGLE` is the MicroStation label rotation, and nothing reads it.
