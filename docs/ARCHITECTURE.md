@@ -291,6 +291,7 @@ hk-taxi-Q/
 │   │   ├── arrows.py            # published turn arrows → arrows.glb (P3-15)
 │   │   ├── boxjunctions.py      # published box junctions → boxjunctions.glb (P3-18)
 │   │   ├── railings.py          # published railings → railings.glb (P3-19)
+│   │   ├── signs.py             # published traffic signs → signs.glb (P3-16)
 │   │   ├── export.py            # → city.json, assembles and validates the stage outputs
 │   │   └── __main__.py          # `python -m pipeline` — every stage, in order
 │   ├── sources/<city>/<source>/ # raw downloads — GITIGNORED
@@ -342,7 +343,7 @@ The interface between ETL and game. **Versioned — change both sides together a
 
 ```json
 {
-  "schema_version": 13,
+  "schema_version": 15,
   "city_id": "hong_kong",
   "region_id": "wan_chai",
   "source_crs": "EPSG:2326",
@@ -368,6 +369,8 @@ The interface between ETL and game. **Versioned — change both sides together a
   "tramway": "tram.glb",
   "arrows": "arrows.glb",
   "boxjunctions": "boxjunctions.glb",
+  "railings": "railings.glb",
+  "signs": "signs.glb",
   "landmarks": "landmarks.json",
   "landmark_assets": ["landmarks/hkcec.glb"],
   "etl_version": "0.1.0",
@@ -964,6 +967,42 @@ SCHEMA` 4 → 5) — the ribbon-metre ranges where a side draws no kerb because 
 Only `surface.py` can know it, and without it 11.1% of the region's railings stand in merged tarmac.
 An intermediate, like `trim_m`; the game reads neither.
 
+### `signs.glb` — the published traffic signs (`P3-16`)
+
+A plate per whitelisted sign, standing on the pole `DTAD_TS_POLE_PT` surveyed, and **no collider** —
+which is a *budget* decision rather than a design one, unlike the railings above: a sign post is a
+real obstacle a real car would hit, and 699 of them is 699 collision bodies before `P2-6` has
+measured a frame on the device floor. Breakaway posts are a `B3` question.
+
+🔴 **The position comes from the pole, not from the sign.** `DTAD_TS_ABV_PT` is the publisher's
+*"Traffic sign abbreviation point"* — a drawing label, a median **2.63 m** from the pole and never on
+it — so it is read as data and the pole supplies the geometry, joined through `GG_NAME`. And
+🔴 **nothing publishes which way a sign faces**: the spec calls `ANGLE` the *Ustn* symbol-cell
+rotation, so the facing is **derived** from the host edge, the kerb side and drive-on-left. `Q62`
+records what that still owes.
+
+| | |
+|---|---|
+| Primitives | one, for the whole region's signage |
+| Attributes | `POSITION`, `NORMAL`, `COLOR_0`; no `TEXCOORD_*`, no texture |
+| `COLOR_0` | The plate livery as **sRGB bytes**, straight from `hong_kong.yaml`'s `signs.colours` |
+
+⚠️ **This is the only generated road-furniture mesh that carries `COLOR_0`, and the departure is the
+decision.** `arrows.glb` and `boxjunctions.glb` are one paint each, so `Q53` put their colour in
+their `.tres`. A sign plate is four colours inside one draw call, so the colour has to ride the
+vertex — which makes `colour.gdshaderinc`'s `vertex_srgb_to_linear` mandatory in
+`signs.gdshader`, exactly as `arrows.gdshader` warned in advance. ⚠️ It is also the one exemption to
+`Q33`'s palette-exposure rule; `test_config.py` argues it.
+
+⚠️ **`signs.gdshader` is `cull_back`**, inverting the neighbour above: a fence has no back and a
+sign does, so every plate is drawn twice — face forward, grey reverse. `signs.json` publishes
+`facing_away` and it must be **0**; the first build read **3,200**, every pole triangle in the
+region, with everything else correct.
+
+⚠️ **`city.json`'s `signs` key is optional and may be `null`**, on `boxjunctions`' terms — and null
+is a more ordinary answer here than for any other layer, because a region whose signs are all text
+plates draws none and is right to.
+
 ### `landmarks.json` — hero building placement
 
 ```json
@@ -1111,6 +1150,7 @@ every region lies inside them.
 | `tram.glb` | The published tramway, drawn where iB1000 prints it — **not** a marking on the ribbon (`Q58`). One primitive, one draw call, **no collider** | ✅ `P3-14` |
 | `arrows.glb` | The published turn arrows, registered into the lane the ribbon actually has — **not** paint on the ribbon, because the junction fade blanks the approach they are about (`Q59`). One primitive, one draw call, **no collider** | ✅ `P3-15` |
 | `boxjunctions.glb` | The published yellow box junctions, drawn at the extents the estate surveyed and lifted under the arrows that paint over them. Ships nothing thinner than the import lattice. One primitive, one draw call, **no collider** | ✅ `P3-18` |
+| `signs.glb` | The published traffic signs, standing on the poles TD surveyed rather than at the abbreviation points that name them — those are drawing labels, a median 2.6 m away. Shape-faced signs only; anything whose meaning is its text is refused (`Q42`). One primitive, one draw call, **no collider** | ✅ `P3-16` |
 | `FareSystem` | Fare state machine: idle → hailed → carrying → delivered/failed | ⬜ `P3-1` |
 | `ScoreSystem` | Base fare, time bonus, **style chain** and **fare combo** — two distinct multipliers | ⬜ `P3-2` |
 | `HUD` | Meter, timer, arrow, destination callout (bilingual) | ⬜ `P3-5` |

@@ -7867,6 +7867,161 @@ never-rendered-text · `Q54` `Q56` for sourced-not-invented and the second-sourc
 the level-0 snap every dTAD consumer owes · `Q53` for the artefact-inclusion call it records
 against `P3-12` · `DATA_SOURCES.md` for the layer table
 
+## `P3-16` — Signs ship where the poles are, because the sign layer is a drawing
+
+**Landed 2026-08-23**, on the terms above and with the scope the user set: signs only
+(`P3-17`'s signal heads stay queued), and only the poles that carry a drawn sign. **777 plates on
+699 poles** as `signs.glb`, in `Q58`/`Q59`'s pattern — one primitive, one draw call, no collider,
+an optional `city.json` key (14 → 15), counters the stage publishes about itself.
+
+Two measurements taken *while planning* changed the task, and both are the substance of it.
+
+### The sign layer does not say where a sign is
+
+`DTAD_TS_ABV_PT` is the publisher's *"Traffic sign **abbreviation** point"* and `DTAD_TS_POLE_PT`
+its *"Traffic sign pole point"*. Measured over the region: **zero** of 3,276 abbreviation points
+sit on a pole; nearest pole p50 **2.63 m**, p90 8.25, max 115.5; and the direction of that offset
+is uncorrelated with `ANGLE`. It is a draughtsman's label placement.
+
+So the published point is read as **data, never as geometry** — `Q54`'s rule. **`GG_NAME`**
+(*"Graphical group Name"*) is the join and the only one there is: **3,032 of 3,276 (92.6%)** resolve
+to exactly one pole. A sign resolving to none or to several is refused and counted, never dragged
+onto the nearest pole — that would be a second join in `Q56`'s sense. ⚠️ `GG_NAME` is also reused
+across signs kilometres apart, which `~/hk-traffic-sign-map` caps at **15 m**; the cap is taken at
+its number rather than re-derived, and `pole_offset_m` republishes the distribution it cuts.
+
+### 🔴 Nothing publishes which way a sign faces
+
+The fgdb spec's own row reads *"Angle (For carto-rep feature, same as **Ustn** angle)"* — the
+MicroStation symbol-cell rotation. Measured in the frame `arrows.py` validated to p50 0.9°, the
+angle is **flat** against the road: p50 **44.2°** from the road axis, **19.2%** within 20° of along
+it and **18.1%** of across, against 22.2% for a uniform distribution. `TS115` NO ENTRY — which must
+face its traffic — reads 19.0% and 19.5%. The pole layer's `ANGLE` is the same. `DTAD_TS_PLATE_LINE`
+is not a plate outline but 83,880 ticks of median length 0.06 m.
+
+⚠️ **This was established before, in `~/hk-traffic-sign-map`, and reversed there at some cost**:
+that project fed `ANGLE` to `icon-rotate`, found **59% of same-code signs within 30 m share an
+`ANGLE`** — so opposite carriageways render identically — and reverted it (`fde0258` → `42c343a`).
+Its `CLAUDE.md` carries the rule as an invariant. **The measurement here was taken independently and
+before that was known, and it agrees.**
+
+⚠️ **One reading of the data is wrong in a reproducible way, and it was believed for a while.**
+Comparing `ANGLE` against a road bearing taken as a *grid* angle rather than a game heading appears
+to show **76.3%** of plates lying square across the road — tight enough to design a stage around,
+and it was. It is an artefact: Wan Chai's grid has a strong preferred direction, so reflecting the
+angle variable moves a flat distribution onto "across" and manufactures a mode. The approved plan
+for this task rested on it. Recorded so the next reader does not re-derive it.
+
+So `ANGLE` is read, published as `axis_residual_deg`, and **consumed by nothing** — `arrows.py`'s
+`symbol_size` pattern, so the claim is answerable from a shipped artefact rather than a scratch
+script (`Q37`), and a publisher who starts populating it properly shows up as a mode appearing.
+
+### What is derived, and what that costs
+
+Identity and position are read. Only the **facing** is derived, and the rule is not new: it is
+`~/hk-traffic-sign-map`'s `compute-bearings.mjs` — road tangent, flipped by which side of it the
+sign falls on. ✅ **This pipeline makes it absolute where that project could not.** Its own comment
+records the limit — *"we don't know which way TD's marking chainage runs along the road, so left
+versus right is arbitrary"* — leaving it the relative invariant only. Here the host is the road
+graph: `Snap.heading_deg` is directed off `TRAVEL_DIRECTION`, and the sign of `Snap.offset_m` is
+asserted against `surface.mitres` in `tests/test_fares.py`. With a directed edge and a known kerb,
+drive-on-left fixes the facing outright.
+
+⚠️ **A one-way edge is not the two-way case**, and missing that was measurable: both its kerbs serve
+the same traffic, so both signs face back along it. Without the branch, `no_entry_with_flow` read
+**117 of 253** — the coin-toss a broken rule produces. It is now **0**, and is a self-check in the
+family of `facing_away` rather than a finding. What survives as a genuine second-source diff is
+`no_entry_on_two_way` — **7** signs standing on a street the graph calls two-way, report-only.
+
+⚠️ **The derivation is ungraded.** Unlike `boxjunctions.py`'s hatch angle there is no published
+subset to check it against. That is the honest cost of the layer, and it is why
+`tests/test_signs.py` holds the frame and the side convention against `surface.mitres` itself.
+
+⚠️ **The turn-restriction half of the owed diff is not done.** `TS131`/`TS132` against the graph's
+217 unread turn restrictions needs a sign-to-node-to-turn match this stage does not do. Owed, and
+`PROGRESS.md` says so rather than letting `no_entry_on_two_way` stand in for it.
+
+### Scope: shape, never text
+
+**912 of 3,276 signs are whitelisted** and 777 survive the join. The whitelist is transcribed by eye
+from TD's own sheets — `CT174/51-1(1)C` "(TS 101 - 205)" and `CT174/51-3(2)D` "(TS 701 - 805)", both
+**scanned with no text layer**, `Q59`'s rule. `~/hk-traffic-sign-map`'s `signCatalogue.json` agreed
+on every row and is **cross-check only, never authority**.
+
+Everything whose meaning is its *text* is refused — ~2,364 signs: `TS860` time plates ×148, `TS280`
+parking ×74, the `TS21xx`/`TS22xx` no-stopping family, vehicle-class prohibitions (`Q42`, hard rule
+8). `TS101` STOP ×18 is refused with them rather than shipped as a wordless octagon. `TS182` CYCLES
+ONLY ×155 is refused because a bicycle pictogram is a texture's job and no texture ships.
+⚠️ **`TS102` GIVE WAY ships with its lettering omitted** — the bordered triangle alone. It is the one
+incomplete face, and it is a decision rather than an oversight.
+
+⚠️ **No dimension is published**: every TS sheet is stamped "NOT TO SCALE" and refers dimensions to
+working drawings the `dataspec` bundle does not contain. Plate size, mount height and pole diameter
+are **authored** — `Q60`'s railing-height debt restated, and the weakest-evidenced numbers in the
+block.
+
+⚠️ **Stack order is the publisher's sheet class**, not `SIGNID`: main sign on top, supplementary
+plate below, the order `compute-stacks.mjs` encodes as `regulatory 0 → supplementary 9`. Sorting by
+`SIGNID` alone shipped one build with every NO ENTRY hanging off the bottom of its own arrow plate —
+a perfectly built signpost assembled upside down.
+
+### Three defects the counters could not see
+
+Recorded because each is a `Q58`-shaped failure in a new place, and all three
+survived the whole self-grading apparatus — partitions closing, `facing_away` 0,
+`verify_signs.gd` green — before review caught them.
+
+- **The post stood 20 mm through the face of every sign.** The plate was centred
+  on the pole axis and is `layer_lift_m` thin, against a 64 mm post. Fixed by
+  standing the plate off the post's front tangent. Worst on the 0.25 m
+  supplementary plates, where it was a quarter of the plate height.
+- **Rotated arrows were sized inside the plate's square.** Every glyph took
+  `min(half_w, half_h)`, which is invisible on a disc and guts a wide plate: a
+  `TS733` arrow plate drew a **0.18 m** arrow on its 0.60 m face with 0.21 m of
+  white either side. `_straight_arrow` now takes a reach and a cross separately.
+- ⚠️ **`layer_lift_m` at 4 mm z-fought, and the artefact was plausible.** The
+  white bar of a NO ENTRY fought its own red disc and, at 4 m, read as an
+  *arrowhead-shaped* wedge — close enough to a facet artefact of the 12-gon disc
+  that it was written off as one. The geometry was correct throughout and a
+  vertex dump said so; only a 2.2 m render settled it. 12 mm is clean.
+
+The lesson is `Q61`'s in reverse. There, a recorded argument was correct in its
+reasoning and wrong about which surface it described, and only a frame caught it.
+Here the numbers were all right and the frames were all taken from too far away —
+a self-grading stage buys nothing against a defect that is geometric rather than
+statistical, and a distant screenshot is not a render check.
+
+### Two decisions that run against a neighbour, both deliberately
+
+- ✅ **`signs.glb` ships `COLOR_0`; `arrows.glb` deliberately does not.** An arrow is one paint, so
+  `Q53` put its colour in `arrows.tres`. A plate is four colours in **one draw call**, so the colour
+  rides the vertex and `signs.gdshader` reads it to `ALBEDO`. That makes
+  `colour.gdshaderinc`'s `vertex_srgb_to_linear` mandatory — precisely what `arrows.gdshader` warned
+  about in advance.
+- ⚠️ **This is the one exemption to `Q33`'s palette-exposure rule**, argued rather than taken. The
+  rule's foundation is `_check_exposure`, which grades authored albedo against measured reflectance
+  for *building cladding*; a sign's livery is a printed specification with no reflectance to grade.
+  `Q53` met the same problem for road paint by moving the value out of the city file — which does
+  not transfer, because a `.tres` cannot hold four colours varying per vertex, and the ETL must know
+  them. It is a **city** fact besides (hard rule 3). The exemption is by prefix and narrow: any other
+  new key authoring a colour still fails `test_no_colour_escapes_the_materials_table`.
+- ⚠️ **`cull_back`, where `railings.gdshader` is the bundle's only `cull_disabled` mesh.** `Q61` made
+  that so because a fence is one quad thick. A sign has a back, so every plate is drawn twice, face
+  forward and grey reverse. The first build still shipped **3,200** triangles facing away — every
+  pole in the region — because the prism ring was wound the way a plate wants. `facing_away` caught
+  it; no frame would have.
+
+**No collider**, matching `tram.glb`, `arrows.glb` and `railings.glb` — but the reasoning is weaker
+than the arrows' and is recorded as such: a sign post is a real obstacle a real car would hit, so
+this is a **budget** call before `P2-6` has measured the device floor, not a correctness one.
+Breakaway posts are `B3`.
+
+**See.** `Q58` `Q59` for the mesh pattern and the self-grading discipline · `Q42` for
+never-rendered-text · `Q54` `Q56` for sourced-not-invented and the second-source diff · `Q60` for
+the authored-dimension debt · `Q61` for the cull decision this one inverts · `Q33` for the palette
+rule this one is exempted from · `Q15` for the level-0 snap · **`Q62`** for what the derived facing
+still owes · `DATA_SOURCES.md` for the layer table
+
 ## `P3-18` — Box junctions ship as read polygons, and two instruments caught what no frame could
 
 **The decision.** TD's `DTAD_YL_BOX_POLY` publishes every yellow box junction as a surveyed
