@@ -8634,3 +8634,106 @@ enforced, at one row, found only because someone rendered the sheet and looked.
 See also: `Q59` for the transcribe-never-infer rule this breached · `Q58` for counters that cannot
 see a failure-to-nothing · `Q63` for the texture contract · `Q60` for the authored-dimension debt a
 measured *proportion* escapes · `P3-20` for the human gate this argues for
+
+---
+
+## `Q63` — The bundle carries no images, and that stays a check rather than becoming a habit
+
+**Closed 2026-08-23**, on the user's call. `P3-20` is what needed it; this is the amendment itself.
+
+### The question, stated correctly
+
+`P3-16` refused every text-faced and pictogram sign and cited `Q42` and hard rule 8. Both citations
+were wrong — hard rule 8 is the "Crazy Taxi" trademark, `Q42` is the facade survey reading real
+*company* marks, and a traffic sign's 讓 is a government traffic-control glyph published in the same
+TD index plan the `RM` arrow glyphs are transcribed from. What actually refused it was
+`mesh_contract.gd`: no shader uniform may hold a `Texture`.
+
+So the property was **enforced**, not merely inherited — and the question was never "should signs
+have a texture" but **"what does the bundle lose when 0 stops being 0"**.
+
+### What is actually load-bearing
+
+Three justifications existed in three places, and they are not equal:
+
+1. 🔴 **Draw calls, via `merge` — the real one, and it does not apply here.** `ART_DESIGN.md` is
+   explicit that buildings go untextured because `merge` refuses textured meshes, so a textured
+   building becomes its own draw call and 53 tiles become thousands. `signs.glb` is already its own
+   primitive with its own material and its own draw call; a texture on it costs **zero** extra. The
+   argument that does the work for buildings has nothing to say about signs.
+2. **The art direction — weaker than it sounds.** "Three renderer tricks do the work and none of
+   them is a texture" is about *facades*, where a shader beats an atlas. `P3-16`'s own record calls
+   its refusal of lettering "a *rendering* judgement", and a rendering judgement can be re-made.
+3. **`Texture memory: 0` — a receipt, not a reason.**
+
+### The call: amend narrowly, keep the ratchet
+
+The cost of saying yes was never bytes — an atlas is ~3.4 MB compressed against a 128 MB budget.
+It is that **an absolute check stops being absolute**, and an absolute check is the only kind that
+survives twenty more stages. `Q63`'s own wording is the sharpest statement of it: *"every later
+stage loses the reason to resist."*
+
+That cost is avoidable, because the check's value is not "zero images" but **"no image ships that
+nobody declared"**. So `check_surface` gained `texture_budget_px`:
+
+- **0 is the default and is the old refusal exactly.** All seven call sites say nothing and keep it.
+  A bundle that has never declared a texture cannot grow one by accident.
+- **A declaration buys a ceiling.** The texture is measured and fails above the budget. ⚠️ **A
+  declaration with no ceiling would be a comment** — `PROGRESS.md`'s metric only stays meaningful if
+  something fails when it is exceeded, which is precisely the habit `Q63` feared every later stage
+  would learn.
+- **A declared texture that never arrives fails too**, and that is the half worth having. An
+  undeclared texture is loud. A declared one that is missing is *silent*: the sampler reads white,
+  vertex colour still reaches the pixel, every other check passes, and the city renders as it did
+  before the atlas existed — the same failing state `check_shader_material` is written against.
+
+⚠️ **The declaration is a call-site parameter, not a `city.json` key**, and that is deliberate: it
+is the shape `expect_vertex_colours` already uses in that file ("a parameter rather than an omitted
+call, so a mesh… says at its call site why it is different"), it is visible in a diff, and inventing
+a manifest field before there is a producer would version a contract against nothing. The manifest
+gains a key when `P3-20` ships an atlas the manifest actually names, both sides one commit per hard
+rule 5.
+
+🔴 **Deleting the check and trusting the budget to be generous was considered and rejected.** That
+is how a metric stops being read.
+
+### Three ways the first version of the amendment did not hold, all found in review
+
+🔴 **The budget was per texture, not per surface.** Two textures at exactly the budget passed it and
+three were still fine — a ceiling whole numbers of textures can walk under is not a ceiling, and the
+justification for asserting it at all is `PROGRESS.md`'s `Texture memory`, which is a *total*. It is
+now summed across the surface and compared once.
+
+🔴 **`AtlasTexture` reports its region rather than its atlas** — a 32 x 32 view onto a 2048 x 2048
+sheet measures 1,024 px and would have passed an 8,192 budget while shipping 4.2 million. ⚠️ **That
+is precisely the shape `P3-20` invites**, so the measurement resolves to the image underneath.
+`PlaceholderTexture2D` (1 x 1) and the layered and volumetric textures (whose width times height
+understates them by their layer or depth count) are refused as unmeasurable rather than trusted.
+
+🔴 **The comment justifying that refusal stated something false** — that `Texture3D` and
+`TextureLayered` do not answer `get_width()`/`get_height()`. They do. In a file where the *reason* is
+the load-bearing artefact, a plausible wrong reason is worse than none, and `mesh_contract.gd`'s own
+header is about exactly this: the copy that drifts is the one that quietly stops catching anything.
+
+### What the amendment cost, and what it needs
+
+Nothing measurable: nothing declares a texture, so `Texture memory` is still **0** and the PCK is
+unchanged. ⚠️ **But a conditional rule needs a test the absolute one never did.** Before, "no uniform
+holds a `Texture`" was a branch every `verify_*` tool exercised on every run simply by passing; now
+the refusal paths are reachable only from a call site that declares a budget, and no shipped asset
+does. So `tools/verify_mesh_contract.gd` asserts the *failures* directly, builds its own one-triangle
+meshes so it needs **no built region** (CI runs it on every push), and was mutation-checked: breaking
+the undeclared-texture refusal takes `check.sh` to exit **1**. Nine assertions, covering both the
+`ShaderMaterial` and the `BaseMaterial3D` paths — the second because the amendment added the most new
+code there and no shipped asset will ever reach it under a budget, so nothing else would notice it
+break. ⚠️ Each expects **exactly one** problem, not at least one: returning on the first match would
+let a regression that emits the right refusal *plus* spurious extras stay green.
+
+🔴 **`Q64` re-priced what is behind the wall.** `TS182` ×155 was never a texture problem and shipped
+as geometry, so what the atlas actually unlocks is `TS102`'s 讓 ×74 (blank triangles today),
+`TS101` STOP ×18, and ~2,100 time / parking / vehicle-class plates — of which the time-plate families
+carry their own unanswered question about whether a sheet's *specimen* is the plate.
+
+See also: `P3-20` for the atlas this unblocks · `Q64` for the mislabel found while pricing it ·
+`ART_DESIGN.md` for `merge`'s separate and untouched refusal of textured buildings · `P3-21` for the
+side `/eval` fenced, where road markings stay procedural

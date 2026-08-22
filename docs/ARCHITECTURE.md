@@ -131,6 +131,7 @@ does. Running `--import` by hand tells you nothing unless you read the output.
 | `--import` | Autoloads and what they reach; also builds `game/.godot/` | yes |
 | warnings sweep | `--check-only` per script, grepping for `treated as error` | yes |
 | `verify_beam_budget` | The spot-light cap — needs no built region, so CI can check it | yes |
+| `verify_mesh_contract` | That the no-texture contract still refuses what it should — needs no built region, so CI can check it | yes |
 | `verify_vehicle` | The taxi's shader binding, lamp channels, imported payload and beam aim — the taxi is committed, so this needs no built region either | yes |
 | `verify_city`, `verify_tiles`, `verify_road_surface`, `verify_road_graph`, `verify_city_streamer`, `verify_spawn`, `verify_landmarks` | The generated-asset contracts | **no** |
 
@@ -1202,6 +1203,7 @@ the second vehicle anyone built.
 | `tools/verify_spawn.gd` | The start line — orientation against its edge vector, nearside-lane placement, drop height, the resolved edge against the fare node, and since `Q52` that a car **fits** where it is set down. **Builds the transposed basis and requires it to fail**, and builds five start lines whose clearances are known and requires each answer — nothing in the shipped city can fire the clearance guard, which stands in 9.00 m of a 3.20 m lane |
 | `tools/verify_landmarks.gd` | `landmarks.json` — assets load with mesh and `-col` collision, triangle budget, placed AABB near `bounds_game`, and no tier-0 tile triangle inside each excluded footprint's interior core |
 | `tools/verify_beam_budget.gd` | `BeamBudget` — the spot-light cap is never exceeded **or under-spent**, the nearest cars win when registered farthest-first, a beamless rig takes no slot, and a despawn hands its slot on. ⚠️ One of the two verify tools that need **no built region**: it builds its own stub rigs, so it runs whatever `VERIFY_GENERATED` says |
+| `tools/verify_mesh_contract.gd` | The `Q63` amendment itself — an undeclared texture is refused, a declared one inside its budget is admitted, one over budget is refused, and a declared texture that **never arrives** is refused. ⚠️ It asserts the *failures*, because every other verify tool proves an asset conforms and the risk here is the opposite one: a check that has quietly stopped catching anything. ⚠️ Needs **no built region** — it builds its own one-triangle meshes — which matters because no shipped asset declares a texture, so nothing else exercises these branches at all |
 | `tools/verify_vehicle.gd` | The taxi's engine-side wiring — the body renders with `vehicle_body.tres` through the import's name channel, the channels `vehicle_lamps.gd` writes are instance uniforms the renderer lists, the imported `UV` payload is integral and inside those channels on lens vertices only, the rig hangs where the script looks, and every beam is authored dark with its cone below horizontal. ⚠️ Needs **no built region** (the taxi is authored and committed), and ⚠️ **sees no frame** — it cannot tell you the shader compiled |
 | `tools/generated_scene_import.gd` | Import fixup — see `[importer_defaults]` above |
 
