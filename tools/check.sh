@@ -48,7 +48,7 @@ VERIFY_TOOLS=(
 # verify_vehicle instantiates taxi.tscn. Grouping them with the generated-asset
 # tools above would skip them exactly where they are cheapest to run: CI builds
 # no region, so these are the only runtime contracts it can check at all.
-ALWAYS_TOOLS=(verify_beam_budget verify_vehicle)
+ALWAYS_TOOLS=(verify_beam_budget verify_vehicle verify_mesh_contract)
 
 # Godot reports a compile failure with any of these and still exits 0.
 FATAL='Parse Error|SCRIPT ERROR|Failed to load script|Failed to compile'

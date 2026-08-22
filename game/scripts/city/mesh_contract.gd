@@ -284,13 +284,28 @@ static func check_uv2_import_settings(path: String, payload: String) -> PackedSt
 ## Two shapes conform, because `P3-7` gave tiles a shader and left everything
 ## else alone. What both must satisfy is the same rule the untextured,
 ## vertex-coloured primitive has always had — the colour must reach the pixel,
-## and no texture may be sampled. How that is achieved differs: a
+## and no *undeclared* texture may be sampled. How that is achieved differs: a
 ## `BaseMaterial3D` needs a flag set at import, a `ShaderMaterial` writes
 ## `ALBEDO` itself. Checked here rather than at the call sites because the road
 ## surface and the tiles both ask, and a private second copy is what this file
 ## exists to stop.
+##
+## ⚠️ **"no texture may be sampled" was absolute until `Q63`, and the word that
+## replaced it is *undeclared*, not *some*.** `texture_budget_px` defaults to 0,
+## which is the old refusal exactly, so every call site that says nothing keeps
+## it and the bundle cannot grow an image by accident. A call site that passes a
+## budget is declaring one on purpose, in a diff, and buys a ceiling with it:
+## the texture is measured and fails above the budget, and the *absence* of a
+## declared texture fails too. `Q63` chose this over deleting the check, because
+## a rule that is merely generous is a rule nothing reads — and `ART_DESIGN.md`
+## records that the load-bearing reason buildings stay untextured is `merge`
+## refusing them, which is a separate rule this does not touch.
 static func check_surface(
-	mesh: Mesh, surface: int, where: String, expect_vertex_colours: bool = true
+	mesh: Mesh,
+	surface: int,
+	where: String,
+	expect_vertex_colours: bool = true,
+	texture_budget_px: int = 0
 ) -> PackedStringArray:
 	var problems: PackedStringArray = []
 
@@ -313,7 +328,7 @@ static func check_surface(
 
 	var shaded := material as ShaderMaterial
 	if shaded != null:
-		return _check_shader_surface(shaded, where, problems)
+		return _check_shader_surface(shaded, where, problems, texture_budget_px)
 
 	var standard := material as BaseMaterial3D
 	if standard == null:
@@ -325,31 +340,147 @@ static func check_surface(
 	# asset imports white however good its vertex colours are.
 	if not standard.vertex_color_use_as_albedo:
 		problems.append("%s ignores its vertex colours" % where)
+	var bound: Dictionary = {}
 	for slot: int in [
 		BaseMaterial3D.TEXTURE_ALBEDO,
 		BaseMaterial3D.TEXTURE_NORMAL,
 		BaseMaterial3D.TEXTURE_ORM,
 	]:
-		if standard.get_texture(slot) != null:
-			problems.append("%s references a texture in slot %d" % [where, slot])
+		var texture: Texture = standard.get_texture(slot)
+		if texture != null:
+			bound["slot %d" % slot] = texture
+	problems.append_array(_check_declared_textures(bound, where, texture_budget_px))
 	return problems
 
 
 ## The same two guarantees, asked of a `ShaderMaterial`.
 ##
 ## A shader can do anything, so this checks what is checkable: that a shader is
-## attached at all, and that no uniform holds a texture. The second is the real
-## one — the tile contract is "no textures", and a sampler bound here would ship
-## an image into a bundle specified to carry none while every other check passed.
+## attached at all, and that any uniform holding a texture was declared.
 static func _check_shader_surface(
-	material: ShaderMaterial, where: String, problems: PackedStringArray
+	material: ShaderMaterial, where: String, problems: PackedStringArray, texture_budget_px: int
 ) -> PackedStringArray:
 	if material.shader == null:
 		problems.append("%s is a ShaderMaterial with no shader" % where)
 		return problems
 
+	var bound: Dictionary = {}
 	for uniform: Dictionary in material.shader.get_shader_uniform_list():
 		var name: String = uniform.get("name", "")
-		if material.get_shader_parameter(name) is Texture:
-			problems.append("%s binds a texture to shader uniform '%s'" % [where, name])
+		var value: Variant = material.get_shader_parameter(name)
+		if value is Texture:
+			bound["uniform '%s'" % name] = value
+	problems.append_array(_check_declared_textures(bound, where, texture_budget_px))
 	return problems
+
+
+## Every texture bound to one surface, against what the call site declared.
+##
+## ⚠️ **`texture_budget_px` of 0 is the refusal, and it is the default** — so
+## every existing call site keeps `Q63`'s original rule without saying anything,
+## and a bundle that has never declared a texture still cannot grow one by
+## accident. What changed at `Q63` is only that the refusal became *overridable
+## at a call site that says so*, in the shape `expect_vertex_colours` already
+## uses above: not "textures are forbidden" but "no texture ships that nobody
+## declared".
+##
+## ⚠️ **The budget is asserted, not recorded.** A declaration with no ceiling
+## would be a comment — `PROGRESS.md`'s `Texture memory` metric only stays
+## meaningful if something fails when it is exceeded, and a metric nothing
+## enforces is the thing `Q63` warned every later stage would learn from.
+##
+## ⚠️ **The budget is the surface's TOTAL, not each texture's**, and the first
+## version got that wrong: it compared every texture to the budget separately, so
+## two textures at exactly the budget passed and three were still fine. A ceiling
+## that whole numbers of textures can walk under is not a ceiling. `PROGRESS.md`
+## tracks texture memory as a total, and so does this.
+##
+## ⚠️ **The declared-but-absent case is refused too, and it is the quiet half.**
+## An undeclared texture is loud — the asset ships an image and this file says
+## so. A *declared* texture that never arrives is silent: the sampler reads
+## white, vertex colour still reaches the pixel, every other check passes, and
+## the city renders as it did before the atlas existed. That is the same failing
+## state `check_shader_material` above is written against.
+##
+## Pixels rather than bytes because pixels are what the asset can be asked
+## without decoding it: the on-GPU cost also depends on the import format and
+## mipmaps, so this is a ceiling on the image, not a memory figure.
+##
+## `bound` maps a human label ("uniform \'atlas\'", "slot 0") to its `Texture`, so
+## both material shapes share this tail and the report still names what it found.
+static func _check_declared_textures(
+	bound: Dictionary, where: String, texture_budget_px: int
+) -> PackedStringArray:
+	var problems: PackedStringArray = []
+
+	# A negative budget is a call-site typo, and `<= 0` would quietly read it as
+	# the strict pre-`Q63` rule — the loudest possible bug hidden in the safest
+	# possible behaviour.
+	if texture_budget_px < 0:
+		problems.append("%s declares a negative texture budget (%d)" % [where, texture_budget_px])
+		return problems
+
+	if bound.is_empty():
+		if texture_budget_px > 0:
+			problems.append(
+				(
+					"%s declares a texture budget of %d pixels but binds none"
+					% [where, texture_budget_px]
+				)
+			)
+		return problems
+
+	if texture_budget_px <= 0:
+		for label: String in bound:
+			problems.append("%s %s binds an undeclared texture" % [where, label])
+		return problems
+
+	var total: int = 0
+	var described: PackedStringArray = []
+	for label: String in bound:
+		var texture: Texture = bound[label]
+		var pixels: int = _texture_pixels(texture)
+		if pixels < 0:
+			problems.append(
+				(
+					"%s %s binds a %s, which cannot be measured against a pixel budget"
+					% [where, label, texture.get_class()]
+				)
+			)
+			continue
+		total += pixels
+		described.append("%s %d px" % [label, pixels])
+
+	if total > texture_budget_px:
+		problems.append(
+			(
+				"%s binds %s, %d pixels in total against a declared budget of %d"
+				% [where, ", ".join(described), total, texture_budget_px]
+			)
+		)
+	return problems
+
+
+## Pixels in one bound texture, or **-1** where it cannot be measured honestly.
+##
+## ⚠️ **Three shapes report a size that is not the size that ships**, and each is
+## refused rather than trusted:
+##
+## - 🔴 **`AtlasTexture` reports its REGION, not its atlas** — a 32 x 32 view onto
+##   a 2048 x 2048 sheet measures 1,024 px and would pass an 8,192 budget while
+##   shipping 4.2 million. That is exactly the shape `P3-20` invites, so it is
+##   resolved to the image underneath instead of being taken at its word.
+## - **`TextureLayered` and `Texture3D` do answer `get_width()`/`get_height()`** —
+##   an earlier version of this comment claimed they do not, and that was wrong —
+##   but the answer understates them by their layer or depth count, so width
+##   times height is not what they cost.
+## - **`PlaceholderTexture2D` reports 1 x 1**, which is a declared texture that
+##   did not arrive wearing a size small enough to pass anything.
+static func _texture_pixels(texture: Texture) -> int:
+	var atlas := texture as AtlasTexture
+	if atlas != null:
+		return -1 if atlas.atlas == null else _texture_pixels(atlas.atlas)
+	if texture is TextureLayered or texture is Texture3D or texture is PlaceholderTexture2D:
+		return -1
+	var flat := texture as Texture2D
+	return -1 if flat == null else flat.get_width() * flat.get_height()
