@@ -200,7 +200,7 @@ var railings_path: String
 ## Optional on the same terms as `railings_path`. ⚠️ **But empty is a more
 ## ordinary answer here than for any other key**: `P3-16` draws only the signs
 ## whose meaning is their *shape*, and 2,364 of Wan Chai's 3,276 are text-faced
-## and refused under `Q42`. A region whose signs are all time plates and parking
+## and refused on the no-texture contract. A region whose signs are all time plates and parking
 ## legends draws none and is correct to.
 var signs_path: String
 

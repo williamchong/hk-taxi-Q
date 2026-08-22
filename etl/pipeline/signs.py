@@ -61,6 +61,23 @@ So `ANGLE` is read, published as `axis_residual_deg`, and **consumed by
 nothing** — `arrows.py`'s `symbol_size` pattern, so the claim stays answerable
 from a shipped artefact rather than from a scratch script (`Q37`).
 
+🔴 **The whitelist refuses lettering on the NO-TEXTURE CONTRACT, not on `Q42`.**
+An earlier draft of this module cited `Q42` and hard rule 8 for it and both
+citations were wrong. Hard rule 8 is about the phrase "Crazy Taxi", a SEGA
+trademark. `Q42`'s "never rendered text" is about the facade survey reading real
+*company* marks — SHUI ON GROUP, REVENUE TOWER, FWD — and its reason is trademark
+exposure. A traffic sign's 讓 is a government traffic-control glyph out of the
+same TD index plan `arrows.py` transcribes its `RM` codes from, and no rule here
+forbids it. What refuses it is the **no-texture contract**: `mesh_contract.gd` walks every
+shader uniform and fails the bundle on any that holds a `Texture`, which
+`road_markings.gdshader` records as the thing it deliberately did not amend. So
+lettering would have to be geometry, and a 24-stroke character on a 0.68 m plate
+seen from a moving car is a few pixels of smudge.
+
+⚠️ **That contract is being amended, and 讓 is owed rather than refused** — see
+`P3-20`, the sign texture atlas. This whitelist is the shape-faced subset that
+ships before it lands, not the final scope of the layer.
+
 ⚠️ **What is derived, and where the rule comes from.** Identity and position are
 read: the code from the publisher, the position from a surveyed pole. Only the
 **facing** is derived — and the derivation is not new here. It is
@@ -130,13 +147,14 @@ from pipeline.config import (
     Signs,
     load_city,
 )
-from pipeline.documents import write_document
+from pipeline.documents import read_document, write_document
 from pipeline.fares import Segments, Snap
 from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData, write_glb
 from pipeline.mesh import select_triangles
 from pipeline.railings import AT_GRADE, facing_away
-from pipeline.roads import ROADGRAPH_NAME, read_graph
+from pipeline.roads import ROADGRAPH_NAME, plan_lengths, read_graph
+from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA
 
 log = logging.getLogger(__name__)
 
@@ -176,6 +194,7 @@ class SignReport:
 
         signs == not_whitelisted + on_structure + empty_geometry + candidates
         candidates == drawn + no_pole + ambiguous_pole + pole_too_far + too_far
+                      + no_ribbon + over_shift + in_carriageway
     """
 
     signs: int = 0
@@ -190,8 +209,27 @@ class SignReport:
     # The sign's group named a pole, but too far away to be the same assembly.
     pole_too_far: int = 0
     too_far: int = 0
+    # Posts whose move onto the drawn kerb exceeded `max_shift_m`.
+    over_shift: int = 0
+    # Posts with no drawn ribbon on their host edge, so no kerb to register to.
+    no_ribbon: int = 0
+    # 🔴 Posts still standing in the drawn carriageway after registration, because
+    # they sit where several widened ribbons overlap and no footway survives.
+    in_carriageway: int = 0
 
     poles_drawn: int = 0
+    # Published poles that were merged into another because they stand on the
+    # same physical post. 🔴 The layer really does publish coincident poles.
+    poles_merged: int = 0
+    # ⚠️ **How far each post moved sideways onto the drawn kerb**, recorded over
+    # every registered post **including the ones `max_shift_m` then refused**, so
+    # `n` exceeding `poles_drawn` is the proof it can read outside its own bar
+    # (`Q58`). This is the price of the decision at the top of this module, and
+    # `Q60` is the precedent for publishing it rather than asserting it is small.
+    shift_m: list[float] = field(default_factory=list)
+    # How far inside the drawn carriageway each post was surveyed. The
+    # measurement that forced the registration: 0 means it was already outside.
+    inside_ribbon_m: list[float] = field(default_factory=list)
     # Drawn plates by publisher code. Publishes the face table's *effect* rather
     # than the table: a code that silently stopped matching shows up here as a
     # row that draws nothing.
@@ -319,7 +357,7 @@ def read_signs(
             if code not in spec.faces:
                 # The whitelist doing its work. ~2,360 of the region's signs land
                 # here, and that is the decision rather than a shortfall: their
-                # meaning is their text (`Q42`, hard rule 8).
+                # meaning is their text (the no-texture contract, `mesh_contract.gd`).
                 report.not_whitelisted += 1
                 continue
             if str(levels[owner]).strip().lower() not in AT_GRADE:
@@ -632,6 +670,55 @@ def _plate_frame(facing_deg: float) -> tuple[np.ndarray, np.ndarray]:
     return normal, right
 
 
+@dataclass(frozen=True)
+class _Ribbon:
+    """The drawn carriageway edge on one level-0 edge, as this stage reads it.
+
+    ⚠️ **Read from `roadsurface.json` rather than recomputed**, `arrows.py`'s
+    reason exactly: the drawn half-width is `surface.py`'s answer after the
+    widening and after `Q23`'s per-station adjustment, and a second
+    implementation here would be a second join in `Q56`'s sense — disagreeing
+    would tell us one was wrong and never which.
+    """
+
+    at: np.ndarray
+    half_width_m: np.ndarray
+
+    def half_width_at(self, t: float) -> float:
+        return float(np.interp(t, self.at, self.half_width_m))
+
+
+def _ribbons(edges: list[dict], surface: dict) -> dict[int, _Ribbon]:
+    drawn = {int(entry["edge"]): entry for entry in surface["carriageway"]}
+    ribbons: dict[int, _Ribbon] = {}
+    for edge in edges:
+        entry = drawn.get(int(edge["id"]))
+        if entry is None:
+            continue
+        points = np.asarray(edge["polyline"], dtype=np.float64)
+        along = plan_lengths(points)
+        total = float(along[-1])
+        half = np.asarray(entry["half_width_m"], dtype=np.float64)
+        if total <= 0.0 or len(half) != len(along):
+            # A width list that does not match the polyline it was measured on is
+            # a contract break, not a rounding problem. Skipped rather than
+            # interpolated across, and visible as a post that found no ribbon.
+            continue
+        ribbons[int(edge["id"])] = _Ribbon(at=along / total, half_width_m=half)
+    return ribbons
+
+
+def _nearside(heading_deg: float) -> np.ndarray:
+    """The unit vector to the nearside of an edge, in game plan space.
+
+    Nearside is *left* of travel — the rail `surface.mitres` offsets to, and the
+    side `Snap.offset_m` is positive on. Spelled once, here, because a sign flip
+    mirrors every post in the city and still renders as a city.
+    """
+    heading = math.radians(heading_deg)
+    return np.array([-math.cos(heading), -math.sin(heading)])
+
+
 def _facing_from_side(snap_heading_deg: float, offset_m: float, one_way: bool) -> float:
     """Which way a sign on this kerb faces, in game headings.
 
@@ -808,6 +895,38 @@ def _draw_pole(
 # --------------------------------------------------------------------------
 
 
+def _merge_posts(
+    stacks: dict[tuple[str, float, float], list[Sign]],
+    merge_m: float,
+    report: SignReport,
+) -> list[tuple[float, float, list[Sign]]]:
+    """Groups whose poles stand on the same physical post, as one post.
+
+    🔴 **The layer publishes outright coincident poles.** Nearest-other-pole
+    across this region's drawn set reads **0.00 m** at both p10 and p25, and
+    **232 of 699** posts (33.1%) have a neighbour inside 0.6 m, because several
+    `GG_NAME` groups hang off one real post. Drawn as separate posts their plates
+    interpenetrate and neither is readable — which is what a screenshot of the
+    first build shows. `~/hk-traffic-sign-map` meets the same thing and collapses
+    an assembly onto its primary's anchor.
+
+    ⚠️ **Greedy, over a deterministically sorted input**, so two builds of the
+    same data merge the same way. A grid would be cheaper and wrong at the cell
+    boundary, where two poles 0.1 m apart fall in different cells; at 699 posts
+    the quadratic pass costs nothing worth having that failure for.
+    """
+    merged: list[tuple[float, float, list[Sign]]] = []
+    for (_group, pole_x, pole_z), carried in sorted(stacks.items()):
+        for kept_x, kept_z, plates in merged:
+            if math.hypot(pole_x - kept_x, pole_z - kept_z) <= merge_m:
+                plates.extend(carried)
+                report.poles_merged += 1
+                break
+        else:
+            merged.append((pole_x, pole_z, list(carried)))
+    return merged
+
+
 def build_region(
     city: CityConfig,
     region_id: str,
@@ -839,6 +958,13 @@ def build_region(
     segments = Segments.of(edges)
     one_way = {int(edge["id"]): str(edge["direction"]) != "both" for edge in edges}
 
+    surface = read_document(
+        out_dir / SURFACE_MANIFEST_NAME,
+        SURFACE_MANIFEST_SCHEMA,
+        f"python -m pipeline.surface --city {city.id} --region {region_id}",
+    )
+    ribbons = _ribbons(edges, surface)
+
     # Grouped so a pole is drawn once and its plates stack on it. Sorted by code
     # so the stack order is the source's, not the read order's — a mesh that
     # changes shape between two builds of the same data is not reproducible.
@@ -846,8 +972,9 @@ def build_region(
     for sign in signs:
         stacks[(sign.group, sign.x, sign.z)].append(sign)
 
+    posts = _merge_posts(stacks, spec.pole_merge_m, report)
     builder = _Builder()
-    for (_, pole_x, pole_z), carried in sorted(stacks.items()):
+    for pole_x, pole_z, carried in posts:
         snap = segments.nearest(pole_x, pole_z)
         keep: list[Sign] = []
         # ⚠️ **Bottom to top, supplementary first.** The stack is built upward
@@ -877,6 +1004,55 @@ def build_region(
             continue
 
         report.offset_m.append(abs(snap.offset_m))
+
+        ribbon = ribbons.get(snap.edge)
+        if ribbon is None:
+            # No drawn carriageway on the host edge, so no kerb to stand on.
+            report.no_ribbon += len(keep)
+            continue
+
+        # ⚠️ **The registration.** The post keeps its along-edge position and its
+        # side and moves only across, out to `outset_m` past the kerb the ribbon
+        # actually drew. `Q60`'s move, at a second layer and for its reason:
+        # **77.3%** of this region's poles are surveyed inside the 1.6x ribbon, a
+        # median 1.52 m past the drawn kerb, so drawn where published three
+        # quarters of the city's signs stand in the road.
+        half_width_m = ribbon.half_width_at(snap.t)
+        # A post exactly on the centreline has no side to keep; the nearside is
+        # the one a left-driving city's traffic passes closest to.
+        side = 1.0 if snap.offset_m >= 0.0 else -1.0
+        target_m = side * (half_width_m + spec.outset_m)
+        report.inside_ribbon_m.append(max(0.0, half_width_m - abs(snap.offset_m)))
+        shift_m = abs(target_m - snap.offset_m)
+        # Recorded **before** the refusal, so `n` past `poles_drawn` is the proof
+        # this distribution can read outside its own bar (`Q58`).
+        report.shift_m.append(shift_m)
+        if shift_m > spec.max_shift_m:
+            report.over_shift += len(keep)
+            continue
+
+        nearside = _nearside(snap.heading_deg)
+        centreline = np.array([pole_x, pole_z]) - snap.offset_m * nearside
+        placed = centreline + target_m * nearside
+        pole_x, pole_z = float(placed[0]), float(placed[1])
+
+        # ⚠️ **Registered onto its host's kerb and still in the road**, because
+        # the post landed inside a *different* edge's ribbon — junction mouths and
+        # dual carriageways, where several 1.6x ribbons overlap and the drawn city
+        # has no footway left at all. That is `Q19`'s territory rather than this
+        # stage's, and it is **refused rather than pushed again**: iterating the
+        # push was measured and is worse, plateauing at 9.5% while taking the
+        # worst shift from 5.52 m to **16.77 m** — which is a post on the wrong
+        # street. `GAME_DESIGN.md` prices a missing sign at nothing against a
+        # misplaced one, the reason `arrows.py` gives for the same call.
+        settled = segments.nearest(pole_x, pole_z)
+        settled_ribbon = ribbons.get(settled.edge)
+        if settled_ribbon is not None and abs(settled.offset_m) < settled_ribbon.half_width_at(
+            settled.t
+        ):
+            report.in_carriageway += len(keep)
+            continue
+
         facing_deg = _facing_from_side(
             snap.heading_deg, snap.offset_m, one_way.get(snap.edge, False)
         )
@@ -887,7 +1063,7 @@ def build_region(
         for sign in keep:
             face = spec.faces[sign.code]
             _, half_h = plate_extent_m(spec, face.plate)
-            centre = np.array([sign.x, snap.y + height + half_h, sign.z])
+            centre = np.array([pole_x, snap.y + height + half_h, pole_z])
             _draw_plate(builder, spec, face, centre, facing_deg)
             height += 2.0 * half_h + spec.stack_gap_m
 
@@ -901,8 +1077,8 @@ def build_region(
         _draw_pole(
             builder,
             spec,
-            keep[0].x,
-            keep[0].z,
+            pole_x,
+            pole_z,
             snap.y,
             snap.y + height - spec.stack_gap_m + spec.pole_headroom_m,
         )
@@ -979,7 +1155,7 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Sig
         # The read, as four disjoint parts of `signs`.
         "signs": report.signs,
         # ⚠️ **The big number here is the decision, not a shortfall.** Every sign
-        # whose meaning is its text lands in it (`Q42`, hard rule 8).
+        # whose meaning is its text lands in it (the no-texture contract, `mesh_contract.gd`).
         "not_whitelisted": report.not_whitelisted,
         "on_structure": report.on_structure,
         "empty_geometry": report.empty_geometry,
@@ -997,7 +1173,26 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Sig
         # distribution it cuts.
         "pole_too_far": report.pole_too_far,
         "too_far": report.too_far,
+        # ⚠️ The registration's two refusals — see `build_region`.
+        "no_ribbon": report.no_ribbon,
+        "over_shift": report.over_shift,
+        # 🔴 **Refused because registration could not get them out of the road** —
+        # junction mouths where the widened ribbons overlap and the drawn city has
+        # no footway. A finding about `Q19`'s widening, not about this stage.
+        "in_carriageway": report.in_carriageway,
         "poles_drawn": report.poles_drawn,
+        # 🔴 Published poles folded into another because they stand on the same
+        # physical post. The layer really does publish coincident poles.
+        "poles_merged": report.poles_merged,
+        # ⚠️ **How far each post moved sideways onto the drawn kerb**, over every
+        # registered post including the ones `max_shift_m` refused — `n` past
+        # `poles_drawn` is the proof it reads outside its own bar (`Q58`). This is
+        # the price of registering rather than reading, and `Q60` is the
+        # precedent for publishing it rather than asserting it is small.
+        "shift_m": report.measured(report.shift_m),
+        # How far inside the drawn carriageway each post was **surveyed**, 0 where
+        # it was already outside. The measurement that forced the registration.
+        "inside_ribbon_m": report.measured(report.inside_ribbon_m),
         "by_code": dict(sorted(report.by_code.items())),
         # 🔴 **Published, unread, and flat — which is the finding.** How far each
         # plate's `ANGLE` sits from its host edge's axis: 0 along the road, 90

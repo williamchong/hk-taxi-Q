@@ -1150,7 +1150,7 @@ every region lies inside them.
 | `tram.glb` | The published tramway, drawn where iB1000 prints it — **not** a marking on the ribbon (`Q58`). One primitive, one draw call, **no collider** | ✅ `P3-14` |
 | `arrows.glb` | The published turn arrows, registered into the lane the ribbon actually has — **not** paint on the ribbon, because the junction fade blanks the approach they are about (`Q59`). One primitive, one draw call, **no collider** | ✅ `P3-15` |
 | `boxjunctions.glb` | The published yellow box junctions, drawn at the extents the estate surveyed and lifted under the arrows that paint over them. Ships nothing thinner than the import lattice. One primitive, one draw call, **no collider** | ✅ `P3-18` |
-| `signs.glb` | The published traffic signs, standing on the poles TD surveyed rather than at the abbreviation points that name them — those are drawing labels, a median 2.6 m away. Shape-faced signs only; anything whose meaning is its text is refused (`Q42`). One primitive, one draw call, **no collider** | ✅ `P3-16` |
+| `signs.glb` | The published traffic signs, standing on the poles TD surveyed rather than at the abbreviation points that name them — those are drawing labels, a median 2.6 m away. Shape-faced signs only; anything whose meaning is its text is refused (the no-texture contract). One primitive, one draw call, **no collider** | ✅ `P3-16` |
 | `FareSystem` | Fare state machine: idle → hailed → carrying → delivered/failed | ⬜ `P3-1` |
 | `ScoreSystem` | Base fare, time bonus, **style chain** and **fare combo** — two distinct multipliers | ⬜ `P3-2` |
 | `HUD` | Meter, timer, arrow, destination callout (bilingual) | ⬜ `P3-5` |

@@ -32,11 +32,14 @@ from pipeline.fares import Segments
 from pipeline.railings import facing_away
 from pipeline.signs import (
     SIGNS_MATERIAL,
+    Sign,
     SignReport,
     _Builder,
     _draw_plate,
     _draw_pole,
     _facing_from_side,
+    _merge_posts,
+    _nearside,
     _plate_frame,
     layer_polygons,
     plate_extent_m,
@@ -108,6 +111,9 @@ BLOCK: dict[str, Any] = {
     "layer_lift_m": 0.004,
     "max_offset_m": 12.0,
     "max_pole_span_m": 15.0,
+    "outset_m": 0.6,
+    "max_shift_m": 6.0,
+    "pole_merge_m": 0.75,
 }
 
 
@@ -472,6 +478,94 @@ class TestTheStackOrder:
         """
         with pytest.raises(ValueError, match=r"signs\.source"):
             city_with(tmp_path, {**BLOCK, "source": "no_such_source"})
+
+
+class TestPostsAreRegisteredAndMerged:
+    """The two things a screenshot caught that no counter could.
+
+    ⚠️ Both are `Q60`'s territory: a published position is moved, and the price
+    of moving it is published rather than asserted to be small.
+    """
+
+    def test_coincident_poles_become_one_post(self, spec):
+        """🔴 The layer publishes poles at the *same point*.
+
+        Nearest-other-pole reads 0.00 m at p10 and p25 across the region, because
+        several `GG_NAME` groups hang off one real post. Drawn apart, their plates
+        interpenetrate and neither is readable.
+        """
+        report = SignReport()
+        here = Sign(
+            code="TS115", group="a", x=10.0, z=20.0, published_x=9.0, published_z=20.0, axis_deg=0.0
+        )
+        alongside = Sign(
+            code="TS102", group="b", x=10.2, z=20.1, published_x=9.0, published_z=20.0, axis_deg=0.0
+        )
+        posts = _merge_posts(
+            {("a", 10.0, 20.0): [here], ("b", 10.2, 20.1): [alongside]}, spec.pole_merge_m, report
+        )
+        assert len(posts) == 1
+        assert report.poles_merged == 1
+        assert len(posts[0][2]) == 2
+
+    def test_a_pole_beyond_the_merge_radius_stays_its_own_post(self, spec):
+        report = SignReport()
+        a = Sign(
+            code="TS115", group="a", x=0.0, z=0.0, published_x=0.0, published_z=0.0, axis_deg=0.0
+        )
+        b = Sign(
+            code="TS115", group="b", x=5.0, z=0.0, published_x=5.0, published_z=0.0, axis_deg=0.0
+        )
+        posts = _merge_posts(
+            {("a", 0.0, 0.0): [a], ("b", 5.0, 0.0): [b]}, spec.pole_merge_m, report
+        )
+        assert len(posts) == 2
+        assert report.poles_merged == 0
+
+    def test_merging_is_deterministic_in_the_input_order(self, spec):
+        """Two builds of the same data must merge the same way.
+
+        The pass is greedy, so the order it walks decides which post absorbs
+        which — and a mesh that changes shape between builds is not reproducible.
+        """
+        signs = {
+            ("b", 0.3, 0.0): [
+                Sign(
+                    code="TS115",
+                    group="b",
+                    x=0.3,
+                    z=0.0,
+                    published_x=0.0,
+                    published_z=0.0,
+                    axis_deg=0.0,
+                )
+            ],
+            ("a", 0.0, 0.0): [
+                Sign(
+                    code="TS102",
+                    group="a",
+                    x=0.0,
+                    z=0.0,
+                    published_x=0.0,
+                    published_z=0.0,
+                    axis_deg=0.0,
+                )
+            ],
+        }
+        first = _merge_posts(signs, spec.pole_merge_m, SignReport())
+        second = _merge_posts(dict(reversed(list(signs.items()))), spec.pole_merge_m, SignReport())
+        assert [(x, z) for x, z, _ in first] == [(x, z) for x, z, _ in second]
+
+    def test_the_nearside_is_the_frame_mitres_offsets_in(self):
+        """⚠️ The registration moves along this vector, so its sign is load-bearing.
+
+        A flip mirrors every post in the city onto the far kerb and still renders
+        as a city — held against `mitres` itself rather than against a comment.
+        """
+        northward = [[0.0, 0.0, 10.0], [0.0, 0.0, 0.0]]
+        normals = mitres(np.asarray(northward, dtype=np.float64))
+        assert _nearside(0.0)[0] == pytest.approx(-1.0)
+        assert normals[0][0] < 0.0
 
 
 class TestTheReportPartitions:

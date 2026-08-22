@@ -13,7 +13,7 @@
 ##
 ## ⚠️ **And null is an ordinary answer here, more than for any other layer.**
 ## `P3-16` ships only the signs whose meaning is their *shape*: 2,364 of Wan
-## Chai's 3,276 are text-faced and refused outright under `Q42` and hard rule 8.
+## Chai's 3,276 are text-faced and refused outright under the zero-texture rule.
 ## A region whose signs are all time plates and parking legends draws none and is
 ## correct to. So absence is a state to report, not a failure to warn about.
 ##

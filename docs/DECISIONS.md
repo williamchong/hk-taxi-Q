@@ -5782,7 +5782,7 @@ one the reader refuses.
 - **The standing three-places cost if anything ships** — merge/pack, shader decode, and
   `verify_tiles.gd`, whose `uv2.y != 0.0` assertion breaks on the first written rider. No
   `schema_version` bump: filling a reserved field a refusal-aware consumer already reads as
-  "0 = refused" changes bytes, not meaning (`Q42`).
+  "0 = refused" changes bytes, not meaning (the no-texture contract).
 
 ✅ **The dataset decision is already made, and the bytes *are* on disk — corrected 2026-08-17.**
 `facade_glazing.py`'s region run (2,171 buildings, 2,143 gated) proves the read works at region
@@ -7948,7 +7948,11 @@ from TD's own sheets — `CT174/51-1(1)C` "(TS 101 - 205)" and `CT174/51-3(2)D` 
 **scanned with no text layer**, `Q59`'s rule. `~/hk-traffic-sign-map`'s `signCatalogue.json` agreed
 on every row and is **cross-check only, never authority**.
 
-Everything whose meaning is its *text* is refused — ~2,364 signs: `TS860` time plates ×148, `TS280`
+🔴 **The refusal of lettering was mis-cited as `Q42` and hard rule 8, and both were wrong** —
+hard rule 8 is the "Crazy Taxi" trademark and `Q42` is the facade survey reading real *company*
+marks. What actually refuses it is the **no-texture contract**: `mesh_contract.gd:353` fails any
+shader uniform holding a `Texture`. That is `Q63`, and `P3-20` is the amendment. Everything whose
+meaning is its *text* is refused for now — ~2,364 signs: `TS860` time plates ×148, `TS280`
 parking ×74, the `TS21xx`/`TS22xx` no-stopping family, vehicle-class prohibitions (`Q42`, hard rule
 8). `TS101` STOP ×18 is refused with them rather than shipped as a wordless octagon. `TS182` CYCLES
 ONLY ×155 is refused because a bicycle pictogram is a texture's job and no texture ships.
@@ -7964,6 +7968,46 @@ block.
 plate below, the order `compute-stacks.mjs` encodes as `regulatory 0 → supplementary 9`. Sorting by
 `SIGNID` alone shipped one build with every NO ENTRY hanging off the bottom of its own arrow plate —
 a perfectly built signpost assembled upside down.
+
+### The position across the road is registered too, and that makes two
+
+🔴 **77.3% of the region's sign poles are surveyed inside the drawn
+carriageway** — 540 of 699, a median **1.52 m** past the drawn kerb and up to
+4.92 m. Not because TD put them there: the ribbon is drawn 1.6× the real
+carriageway, so a pole standing on the real kerb lands in the drawn lane. Drawn
+where published, three quarters of the city's signs stand in the road and the
+player drives through them. **The user found this in a screenshot**, after the
+stage had shipped with every counter green.
+
+So the position across the road is **registered rather than read** — `Q60`'s move
+at a second layer, which makes signs the second place in the bundle a published
+extent is moved where `Q60` called the railings the only one. The post keeps its
+along-edge position and its side and moves only across, out to `outset_m` past
+the kerb the ribbon actually drew. `shift_m` p50 **1.75 m**, p90 3.24, max 5.52,
+recorded over n=**578** against 450 drawn, so it reads outside its own bar.
+
+⚠️ **`max_shift_m` is a pathology bar, not a tight one.** At 6.0 it refuses
+nothing in this region, because the measured worst is 5.52 m and every metre of
+it is explained by the widening. It is there to catch a post teleporting across a
+block, and it is published so the claim stays checkable rather than asserted.
+
+⚠️ **Iterating the push was measured and rejected.** Registering onto the host
+edge's kerb still leaves **22.1%** inside *another* edge's ribbon — junction
+mouths and dual carriageways where several widened ribbons overlap. A second and
+third pass take that to 10.6% and 9.7% and never reach zero, while the worst
+shift goes 5.52 m → 10.78 → **16.77 m**, which is a post on the wrong street. So
+the residue is **refused instead**: **195 plates** are dropped as
+`in_carriageway`, a finding about `Q19`'s widening rather than about this stage,
+and `GAME_DESIGN.md`'s "a missing sign costs nothing against a misplaced one" is
+the same call `arrows.py` makes.
+
+🔴 **And the layer publishes coincident poles.** Nearest-other-pole read **0.00 m
+at both p10 and p25**, with 232 of 699 (33.1%) inside 0.6 m, because several
+`GG_NAME` groups hang off one physical post. Drawn apart their plates
+interpenetrate and neither is readable — the user's second screenshot. **121 are
+merged**, greedily over a deterministically sorted input so two builds merge the
+same way; after it, nearest-other-post is p10 2.55 m and only 12 remain inside
+0.6 m.
 
 ### Three defects the counters could not see
 

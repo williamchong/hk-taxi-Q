@@ -1037,18 +1037,38 @@ signs:
   #
   # ⚠️ **WHAT IS ABSENT IS THE DECISION.** Only signs whose meaning is their
   # *shape* are here — 912 of the region's 3,276. Every sign whose meaning is
-  # its **text** is refused, because rendering it would break Q42 and hard rule
-  # 8: TS860 time plates x148, TS280 parking x74, the TS21xx/TS22xx
-  # no-stopping-zone family, the vehicle-class prohibitions. Roughly 2,360
-  # signs. TS101 STOP x18 is refused with them rather than shipped as a wordless
-  # octagon. TS182 CYCLES ONLY x155 is refused for a different reason: a bicycle
-  # pictogram is a texture's job, and no texture ships.
+  # its **text** is refused: TS860 time plates x148, TS280 parking x74, the
+  # TS21xx/TS22xx no-stopping-zone family, the vehicle-class prohibitions.
+  # Roughly 2,360 signs. TS101 STOP x18 is refused with them rather than shipped
+  # as a wordless octagon. TS182 CYCLES ONLY x155 goes for the same reason as
+  # the text: a bicycle pictogram needs a texture.
   #
-  # ⚠️ **TS102 GIVE WAY is drawn with its lettering omitted, and that is the one
+  # 🔴 **AND THE REASON IS THE ZERO-TEXTURE RULE, NOT Q42 — an earlier draft of
+  # this block cited Q42 and hard rule 8 and both citations were wrong.** Hard
+  # rule 8 is about the phrase "Crazy Taxi", a SEGA trademark, and has nothing to
+  # do with street furniture. Q42's "never rendered text" is about the facade
+  # survey reading real *company* marks — SHUI ON GROUP, REVENUE TOWER, YMCA,
+  # FWD — and its reason is trademark exposure. A traffic sign's lettering is
+  # none of that: 讓 and GIVE WAY are government traffic-control glyphs, published
+  # in the same TD index plan the RM arrow glyphs above are transcribed from.
+  #
+  # What actually refuses them is that **this game ships zero textures**
+  # (`Texture memory: 0`, measured), so lettering has to be geometry — and a
+  # 24-stroke character on a 0.68 m plate seen from a moving car is a few pixels
+  # of smudge, which reads worse than a clean shape. The refusal is a *rendering*
+  # judgement and it should be argued as one, not borrowed from a rule about
+  # trademarks.
+  #
+  # ⚠️ **TS102 GIVE WAY is drawn with its lettering omitted, and it is the one
   # incomplete face here.** The plate reads "GIVE WAY / 讓" on the index sheet;
-  # what ships is the red-bordered inverted triangle alone, which is what
-  # carries the instruction at driving speed. Recorded so it reads as a decision
-  # and not as an oversight.
+  # what ships **for now** is the red-bordered inverted triangle alone, and from
+  # the road it reads as a blank plate — which is how the user found it.
+  #
+  # 🔴 **讓 is owed, not refused.** It is coming as part of the sign texture
+  # atlas, and the reason it is not here is the no-texture contract rather than
+  # anything about trademarks: see the scope note above. Thickening the border to
+  # the wordless Vienna-Convention proportion was tried as a substitute and
+  # rejected by the user in favour of the real character.
   #
   # ⚠️ **`rank` orders a stack, and it is read off the sheet the code is defined
   # on** — CT174/51-1(1)C is titled "TRAFFIC SIGNS (REGULATORY)" and
@@ -1202,6 +1222,37 @@ signs:
   # tried, and a sign plate is a rendering device here rather than a thickness —
   # the paint on a real plate is coplanar.
   layer_lift_m: 0.012
+
+  # ---- the registration, and why a published position is moved ----
+  # 🔴 **77.3% of this region's sign poles are surveyed INSIDE the drawn
+  # carriageway** — 540 of 699, a median 1.52 m past the drawn kerb and up to
+  # 4.92 m. Not because TD put them there: the ribbon is drawn 1.6x the real
+  # carriageway (widen_default), so a pole standing on the real kerb lands in the
+  # drawn lane. Drawn where surveyed, three quarters of the city's signs stand in
+  # the road, and the player drives through them.
+  #
+  # ⚠️ **So the position is registered rather than read, and this is the SECOND
+  # place in the bundle a published extent is moved** — Q60 called the railings
+  # the only one. It is the same measurement (67.9% of railing metres) arriving
+  # at a second layer for the same reason, and it is answered the same way:
+  # keep the along-edge position and the side, move only the distance across.
+  #
+  # How far outside the drawn carriageway edge a post stands. The same 0.6 m the
+  # railing classes use, and for the same reason — it is a footway width, not a
+  # sign fact.
+  outset_m: 0.6
+  # ⚠️ THE BAR ON THE REGISTRATION. A pole whose move exceeds this is refused
+  # rather than drawn. Chosen against the measured distribution below rather than
+  # to admit everything, and signs.json republishes `shift_m` over the poles this
+  # refuses so the choice stays checkable (Q58's trap).
+  max_shift_m: 6.0
+  # Two poles closer than this are one post. 🔴 **The published layer has
+  # outright coincident poles** — nearest-other-pole reads 0.00 m at both p10 and
+  # p25, and 232 of 699 (33.1%) have a neighbour inside 0.6 m — because several
+  # GG_NAME groups share one physical post. Drawn separately they interpenetrate
+  # and the plates are unreadable. ~/hk-traffic-sign-map meets the same thing and
+  # collapses an assembly onto its primary's anchor.
+  pole_merge_m: 0.75
 
   # Furthest a pole may sit from a level-0 centreline and still be drawn. A sign
   # inside a building forecourt or up a footbridge belongs to no street; beyond

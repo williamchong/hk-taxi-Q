@@ -968,6 +968,17 @@ class Signs:
     # `hk-traffic-sign-map`'s own 15 m group-span cap, which exists because
     # `GG_NAME` is reused across signs kilometres apart.
     max_pole_span_m: float
+    # How far outside the **drawn** carriageway edge a post stands, and the bar on
+    # the move that puts it there. ⚠️ **The position is registered, not read** —
+    # 77.3% of the region's poles are surveyed inside the 1.6x ribbon, so drawn
+    # where published three quarters of the city's signs stand in the road. This
+    # is `Q60`'s railing registration arriving at a second layer.
+    outset_m: float
+    max_shift_m: float
+    # Two poles closer than this are one post: the layer publishes coincident
+    # poles where several `GG_NAME` groups share one, and drawn apart they
+    # interpenetrate.
+    pole_merge_m: float
 
     @property
     def tiled(self) -> bool:
@@ -3324,6 +3335,9 @@ def _signs(body: Any, where: str) -> Signs | None:
             "layer_lift_m",
             "max_offset_m",
             "max_pole_span_m",
+            "outset_m",
+            "max_shift_m",
+            "pole_merge_m",
         )
     }
     negative = {name: value for name, value in lengths.items() if value <= 0.0}
@@ -3365,6 +3379,9 @@ def _signs(body: Any, where: str) -> Signs | None:
         layer_lift_m=lengths["layer_lift_m"],
         max_offset_m=lengths["max_offset_m"],
         max_pole_span_m=lengths["max_pole_span_m"],
+        outset_m=lengths["outset_m"],
+        max_shift_m=lengths["max_shift_m"],
+        pole_merge_m=lengths["pole_merge_m"],
     )
 
 
