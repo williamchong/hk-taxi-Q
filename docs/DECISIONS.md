@@ -7874,6 +7874,12 @@ against `P3-12` · `DATA_SOURCES.md` for the layer table
 443 posts** as `signs.glb`, in `Q58`/`Q59`'s pattern — one primitive, one draw call, no collider,
 an optional `city.json` key (14 → 15), counters the stage publishes about itself.
 
+⚠️ **Amended the same day by `Q64`, and the counts below are `P3-16`'s as it landed.** The face table
+was shifted one row at `TS182`/`TS183`: 11 mislabelled plates shipped and 155 correct ones were refused.
+The shipped layer is **706 plates on 541 posts**, and the prohibition bar's width moved from an authored
+0.13 to a measured 0.097. Read the numbers here as the record of what this task shipped, and `Q64` for
+what the bundle carries now.
+
 Two measurements taken *while planning* changed the task, and both are the substance of it.
 
 ### The sign layer does not say where a sign is
@@ -8541,3 +8547,90 @@ fidelity rather than an oversight, and recorded rather than hidden.
 glyph-table rule · `Q58` for the counters that can see a failure-to-nothing · `Q54` for
 read-never-invented · `arrows.gdshader` for the opacity objection and why it belongs to paint ·
 `ART_DESIGN.md` for the divergence this closes · `DATA_SOURCES.md` for the corrected layer row
+
+---
+
+## `Q64` — The sign table took a sibling project's description over the publisher's own sheet, and shipped a mislabelled plate
+
+**Closed 2026-08-23.** Found while planning `P3-20`, before any atlas work started.
+
+### What was wrong
+
+`hong_kong.yaml`'s `signs.faces` table drew **`TS183` as a white arrow on a blue rectangle**
+(ONE WAY TRAFFIC) and refused **`TS182`** with the note *"CYCLES ONLY x155 goes for the same reason
+as the text: a bicycle pictogram needs a texture."* Both rows are wrong, by exactly one.
+
+TD's own `CT174/51-1(1)C` "(TS 101 - 205)" prints the number, the pictogram and the description in
+one cell. Rendered at 300 dpi and read directly, with the row alignment anchored on `TS174`
+SPEED LIMIT 50 (which this region carries x37):
+
+| Code | Sheet, cell-for-cell |
+|---|---|
+| `TS181` (TC 138) | CYCLES ONLY — the bicycle disc |
+| `TS182` (TC 139) | **ONE WAY TRAFFIC** — white arrow on a blue rectangle |
+| `TS183` (TC 140) | **NO STOPPING** — red saltire over a blue disc in a red ring |
+| `TS184` (TC 141) | NO STOPPING ZONE (A), 7am-7pm |
+
+So the game drew a one-way arrow on **11 plates** whose street carries a no-stopping saltire, and
+refused **155** `TS182` — the second-commonest code in region after `TS115`'s 179 — for a reason
+that never applied to it. `TS181` does not occur here at all.
+
+### Where the bad row came from
+
+`~/hk-traffic-sign-map`'s `signCatalogue.json`. ⚠️ **That project's *crops* are correct and its
+`desc` strings are shifted one row across `TS181`-`TS183`** — two extraction paths inside one
+repository disagreeing. The crops come from its deterministic same-cell pipeline, where code and
+pictogram are cut from one row band and cannot desync; the descriptions come from a separate opt-in
+full-page model read, and its own README notes the runtime prefers curated text over them.
+
+This table said the sheet was authority and `signCatalogue.json` was "cross-check only, never
+authority" — `Q59`'s rule — and then took the catalogue's word on this row. The rule was right and
+was not followed. It also claimed the catalogue *"agreed with the sheets on every row below"*; it
+did not, and that sentence is what made the disagreement invisible.
+
+### Why nothing caught it
+
+**Every way this fails renders as a perfectly drawn sign.** The mesh is correct, both partitions
+close, `facing_away` is `0` and `verify_signs.gd` passes. This is `Q58`/`Q59`'s failure-to-nothing
+restated one level up: the counters can see a sign drawn *wrongly*, and cannot see a sign drawn
+*correctly meaning something else*. The only instrument that catches it is a human reading a code
+beside its publisher's cell — which is exactly the gate `P3-20` has to build anyway, and is the
+argument for building it.
+
+### What shipped
+
+- `TS182` takes the face `TS183` was drawing. **583 -> 706 plates, 443 -> 541 posts**, with **no
+  texture** — 123 of the 155 survive the join and registration at this layer's usual rates.
+- `TS183` becomes NO STOPPING: red disc, blue field at **0.82** (measured 0.805 on the publisher's
+  cell), and a red saltire. `backslash` is new, so the saltire is **two layers rather than one
+  `cross` word** — one word returning both bars would draw them at a single `layer_lift_m` and leave
+  them coplanar where they cross, which is the 4 mm NO ENTRY failure this block already records.
+- 🔴 **The prohibition bar was 34% too thick, on every face that has one.** Measured off the
+  publisher's cells by pixel: `TS131` 0.097 of the diameter, `TS133` 0.097, `TS183` 0.098. The
+  pipeline drew **0.130**. `_SLASH_THICKNESS = 0.097` now, and because `half_height_m` *is* the
+  radius on a disc the coefficient is the diameter fraction directly. ⚠️ **This is the one sign
+  dimension in the layer that is measured rather than authored** — `Q60`'s NOT-TO-SCALE debt bounds
+  absolute sizes, but a *proportion* survives a sheet with no scale.
+- ⚠️ **A `disc` is a DODECAGON, and a saltire sits on its flats.** `disc_segments: 12` puts vertices
+  every 30 deg, so the rim's inscribed radius is `cos(15 deg)` = 0.966 of its circumscribed one —
+  and 45 deg lands mid-edge. Bars a full diameter long reach 1.005 of the radius and **visibly poke
+  out at all four diagonals**, which reads as a second sign interpenetrating the first rather than
+  as an overhang. Caught by the user in review, not by any check. `TS183` draws at **0.95**;
+  `TS131`/`TS132`/`TS133` never met it because they all draw at 0.92. Verified in the shipped
+  `signs.glb`: ring 12-gon at radius 0.3000 on all twelve vertices, field at 0.2460, both bars at
+  0.2865 with axes -45.00 and -135.00 deg, every centroid within 1e-5 of the plate centre.
+
+### What it changes about `P3-20`
+
+The atlas was scoped to unlock ~2,364 refused plates. **155 of them were never a texture problem**,
+and the largest single win available was a config row. It does not change the `Q63` call, but it
+re-prices it: what is genuinely behind the texture wall is `TS102`'s 讓 (74 plates that read as
+blank triangles today), `TS101` STOP x18, and ~2,100 time / parking / vehicle-class plates.
+
+⚠️ **And it sets `P3-20`'s cardinal rule concretely.** "A missed sign degrades to a dot — a
+*mislabelled* sign must never ship" was inherited as a slogan. This is what it costs when it is not
+enforced, at one row, found only because someone rendered the sheet and looked.
+
+See also: `Q59` for the transcribe-never-infer rule this breached · `Q58` for counters that cannot
+see a failure-to-nothing · `Q63` for the texture contract · `Q60` for the authored-dimension debt a
+measured *proportion* escapes · `P3-20` for the human gate this argues for
