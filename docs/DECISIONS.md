@@ -8011,15 +8011,35 @@ code's metres are published, so the whitelist is an argument a reader can check:
 
 `CBARRIER` and `CRASHGATE` are out because they read as vehicle restraint rather than pedestrian
 railing, and drawing them as the same fence would assert a sameness no source states — `Q54`'s
-debit. The bollards are out because they are posts; `SYMBOL_STEP_1` and `SYMBOL_SIZE_1` carry their
-spacing and diameter for whoever draws them.
+debit. The bollards are out because they are posts.
 
 🔴 **`DATA_SOURCES.md` had this layer at four `LINETYPE` values. There are nineteen** — and its
 counts were *features* where its neighbours' were parts. Corrected in the same commit.
 
-⚠️ No railing **dimension** is published either. `height_m` 1.1, `station_m` 2.0, `outset_m` 0.6 and
-`base_sink_m` 0.25 are all authored, and are declared as authored in the config rather than dressed
-as transcriptions.
+🔴 **This section said the bollards' `SYMBOL_STEP_1` and `SYMBOL_SIZE_1` "carry their spacing and
+diameter for whoever draws them". That is wrong, and it was the one claim here that a railing
+dimension could be *read* rather than authored.** Corrected 2026-08-23, measured against the source
+and against the spec:
+
+| Check | What it says |
+|---|---|
+| fgdb specification | `SYMBOL_SIZE_1` is *"Symbol size of **marker symbol** in first layer"* — cartographic symbology, not a dimension of the thing on the street. `SYMBOL_STEP_1` likewise |
+| What the values are | plot sizes in **inches**. All 21 `RAILING1` features carry `SYMBOL_SIZE_1` 0.8503937 = **21.6 mm** on paper at `SYMBOL_STEP_1` 5.669300 = **144 mm**; `RAIL1` carries *two* numbers (`'4.606297 3.685039'`), which is a dash pattern, not a post |
+| Populated on bollards | **0 of the region's 196 bollard features**, across all five `SYMBOL_SIZE_*` and `SYMBOL_STEP_*` slots |
+
+Two more readings from the same sweep, both of which cut the same way:
+
+- 🔴 **`COLOR` is populated, and it separates the classes** — `CRAIL1` is 7 on 509 of 532 features,
+  `bollard0` is 0 on 143 of 161 — **but it has no published domain either.** The spec gives it
+  *"Color of Feature", Number* and the document carries **no coded-value table anywhere**, for any
+  column. So it corroborates that the publisher holds these apart; it cannot colour anything, and
+  reading a CAD pen index as paint would be `Q54`'s debit in a new place.
+- `LINE_PATTERN_*`, `LINE_WIDTH_*` and `LINE_OFFSET_*` are **entirely null** across the region.
+
+⚠️ **So the layer publishes nothing whatever about physical appearance**, and this section's
+conclusion is stronger than it was rather than weaker: no railing **dimension** is published,
+without qualification. `height_m` 1.1, `station_m` 2.0, `outset_m` 0.6 and `base_sink_m` 0.25 are
+all authored, and are declared as authored in the config rather than dressed as transcriptions.
 
 ### 2. The drawn kerb has already moved past the surveyed railing, so the position is registered
 

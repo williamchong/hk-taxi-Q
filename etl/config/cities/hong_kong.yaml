@@ -1099,9 +1099,20 @@ railings:
   # ⚠️ CBARRIER (1,369 m) and CRASHGATE (301 m) are deliberately OUT. They read
   # as vehicle restraint rather than pedestrian railing, and drawing them as the
   # same fence would assert a sameness no source states — Q54's debit. The
-  # bollards are out for the plainer reason that they are posts, not fences, and
-  # SYMBOL_STEP_1/SYMBOL_SIZE_1 carry their spacing and diameter for whoever
-  # draws them.
+  # bollards are out for the plainer reason that they are posts, not fences.
+  #
+  # 🔴 THIS COMMENT SAID SYMBOL_STEP_1/SYMBOL_SIZE_1 "CARRY THEIR SPACING AND
+  # DIAMETER FOR WHOEVER DRAWS THEM", AND THAT IS WRONG TWICE OVER. The fgdb
+  # specification calls SYMBOL_SIZE_1 "Symbol size of *marker symbol* in first
+  # layer" — cartographic symbology, not a dimension of the thing on the street
+  # — and the values decode as plot sizes in inches: every RAILING1 feature in
+  # the region carries 0.8503937 (= 21.6 mm on paper) at step 5.669300
+  # (= 144 mm), and RAIL1 carries *two* numbers, which is a dash pattern. And
+  # they are not populated on the bollards anyway: 0 of the region's 196 bollard
+  # features carry a value in any of the five SYMBOL_SIZE_* or SYMBOL_STEP_*
+  # slots. So there is no published bollard dimension here, and a stage that
+  # draws one authors its spacing exactly as this block already authors
+  # height_m. See DECISIONS.md Q60.
   drawn_line_types: [CRAIL1, CRAIL2, HCAIL2, RAIL1, RAILING1]
 
   # ---- the join, kerbside.py's parameters and its reasons ----
