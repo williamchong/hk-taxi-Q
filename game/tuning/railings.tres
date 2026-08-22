@@ -24,7 +24,9 @@
 ; a second way for two more revisions: a **green** bias, described as "a pale
 ; institutional grey-green", read off nothing and inherited by all three classes.
 ; Hong Kong's street railings are galvanised steel and they are grey. Corrected
-; on the user's report — which, for this one value, is the instrument.
+; on the user's report — which, for this one value, is the instrument. Now dead
+; neutral: `railings.gdshader` records why the cool cast is left to the sky
+; rather than authored here.
 ;
 ; ⚠️ **`rail_metallic` stays 0.0**, and that is a measurement rather than taste.
 ; `P3-14` shipped the tram rails at 0.65 and they came out **sky blue** — metal

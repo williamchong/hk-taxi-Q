@@ -8248,8 +8248,27 @@ along the centreline would stretch round every corner. `v` is measured from the 
 is the ground line and a rail band can be authored as "0.95 m up" and mean it.
 
 🔴 **`rail_colour` shipped clipped, and nothing measured it.** 0.78/0.80/0.76 left no headroom below
-white. Now 0.62/0.65/0.60, taken down on the frames — which `railings.tres` already recorded as the
+white. Taken down on the frames — which `railings.tres` already recorded as the
 only check this value has.
+
+🔴 **And it was then wrong a second way, in the same value, for two more revisions.** `P3-19` called
+it *"a pale institutional grey-green"*; the green was never read off anything, and all three classes
+inherited it — `railings` 0.62/0.65/0.60, `bollards` 0.42/0.44/0.42, `barriers` 0.5/0.5/0.48, green
+channel highest and blue lowest in every one. Hong Kong's street railings are galvanised steel and
+they are **grey**. Corrected 2026-08-23 on the user's report, which for this value is the instrument.
+
+⚠️ **Dead neutral, because the sky supplies the cool cast.** The first correction put zinc's slight
+blue in the albedo, which double-counts an environment already in the render — `P3-14`'s metallic
+lesson in another form. Measured on the `street` frame, sunlit fence pixels:
+
+| albedo | G−R | B−R |
+|---|---|---|
+| `P3-19` green-grey | **+6.7** | +1.6 |
+| cool (+0.03 blue) | +2.5 | **+11.5** |
+| **neutral, shipped** | **+0.6** | +5.7 |
+
+The three classes are now separated by **value alone**, which is the honest split: a bollard is the
+same steel as the railing beside it, and the shade only stops the two reading as one object.
 
 ### 2. What the data can source is the class, and nothing finer
 

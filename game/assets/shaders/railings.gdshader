@@ -85,28 +85,17 @@ group_uniforms paint;
 // reason `Q53` gives for the marking colours: street furniture is not cladding,
 // so it sits outside `Q33`'s exposure rule.
 //
-// ⚠️ **This said "a pale institutional grey-green" for two revisions and it was
-// wrong** — the green was never read off anything, and every class inherited it
-// (`bollards` 0.42/0.44/0.42, `barriers` 0.5/0.5/0.48, all with the green
-// channel highest and blue lowest). Corrected on the user's report, which is the
-// only instrument this value has ever had: `railings.tres` records that it is
-// the one authored colour in the bundle with no second reading to check it
-// against, and this is the second time that has cost something.
+// ⚠️ **This value has been wrong twice, and `tuning/railings.tres` carries that
+// history** — it is the file that owns the shade, per hard rule 4, and one
+// account of it is enough. What belongs here is the *rendering* half:
 //
 // ⚠️ **Dead neutral, and the cool cast is left to the sky.** Zinc is very
-// slightly blue and the first correction put that in the albedo — which
-// double-counts, because the environment is already in the render: measured on
-// the `street` frame, the fence comes back **B−R +11.5** from a +0.03 albedo
-// bias and **+5.7** from none at all — the sky supplies the cast on its own.
-// That is `P3-14`'s metallic lesson wearing a different hat. The albedo says
-// what the steel is; the sky says what it looks like.
-//
-// The same frame is what says the green is gone: **G−R +6.7** at `P3-19`'s
-// value against **+0.6** now.
-//
-// ⚠️ **It also shipped at 0.78/0.80/0.76 and clipped.** At that value the fence
-// was within a whisker of white before the sun reached it. Pale is the right
-// reading of the street; there was no headroom left above it.
+// slightly blue, and putting that in the albedo double-counts: the environment
+// is already in the render. Measured on the `street` frame, sunlit fence pixels
+// come back **B−R +5.7** from a neutral albedo and **+11.5** once a +0.03 blue
+// bias is added to it. That is `P3-14`'s metallic lesson wearing a different
+// hat — the albedo says what the steel is, the sky says what it looks like. The
+// same frame is what says the green is gone: **G−R +6.7** before, **+0.6** now.
 uniform vec4 rail_colour : source_color = vec4(0.64, 0.64, 0.64, 1.0);
 // Painted steel, against the road's 0.95 and the markings' 0.7. Lower than
 // paint on tarmac because a railing is a smooth tube rather than thermoplastic
