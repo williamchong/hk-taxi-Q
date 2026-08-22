@@ -631,9 +631,16 @@ authored features the source captures badly.
   against.** The marking yellow and white are each authored two and three times over and held
   together by a mismatch being visible in one frame; a railing shares its shade with nothing, so
   nothing measures it. Judge it at the `street` and `kerb` viewpoints — a railing is the nearest
-  object to the camera on most of the region's streets. 🔴 **And nothing measuring it is how it
-  shipped clipped**: 0.78/0.80/0.76 left no headroom below white, so the sun took it there. Now
-  0.62/0.65/0.60, taken down on the frames rather than on the reasoning.
+  object to the camera on most of the region's streets. 🔴 **And nothing measuring it is how it has
+  now been wrong twice.** `P3-19` authored 0.78/0.80/0.76, which left no headroom below white and
+  let the sun take it there. It was then wrong a second way: a **green** bias, called "a pale
+  institutional grey-green", read off nothing and inherited by all three classes. Hong Kong's street
+  railings are galvanised steel and they are **grey**. Now 0.64/0.64/0.64, dead neutral, with the
+  three classes separated by value alone.
+  ⚠️ **The cool cast is the sky's, and it is deliberately not in the albedo.** Measured on the
+  `street` frame: the fence renders **B−R +5.7** from a neutral albedo and **+11.5** once a +0.03
+  blue bias is added to it, which double-counts an environment already in the render — `P3-14`'s
+  metallic lesson in another form. Green gone: **G−R +6.7 → +0.6** on the same frame.
   ⚠️ **The fence's shape is now split across two files, and the split is where the geometry ends.**
   Height, station pitch, outset and sink are *mesh*, from `hong_kong.yaml`'s `railings:` block;
   everything finer than a quad — baluster pitch and width, post pitch and width, the two rail bands

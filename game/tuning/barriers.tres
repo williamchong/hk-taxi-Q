@@ -36,7 +36,7 @@
 [resource]
 resource_name = "barriers"
 shader = ExtResource("1_railings")
-shader_parameter/rail_colour = Color(0.5, 0.5, 0.48, 1.0)
+shader_parameter/rail_colour = Color(0.5, 0.5, 0.5, 1.0)
 ; Rougher than the pedestrian railing: galvanised steel weathers matte where
 ; painted steel keeps a sheen.
 shader_parameter/rail_roughness = 0.7

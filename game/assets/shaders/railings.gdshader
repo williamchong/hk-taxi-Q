@@ -80,16 +80,34 @@ shader_type spatial;
 render_mode cull_disabled, depth_prepass_alpha;
 
 group_uniforms paint;
-// Hong Kong's street railings are painted a pale institutional grey-green that
-// reads almost white in sun and almost grey in shade. Authored here rather than
-// in `hong_kong.yaml`'s `materials:` table for the reason `Q53` gives for the
-// marking colours: street furniture is not cladding, so it sits outside `Q33`'s
-// exposure rule.
+// Hong Kong's street railings are **galvanised steel, and they are grey**.
+// Authored here rather than in `hong_kong.yaml`'s `materials:` table for the
+// reason `Q53` gives for the marking colours: street furniture is not cladding,
+// so it sits outside `Q33`'s exposure rule.
 //
-// ⚠️ **This shipped at 0.78/0.80/0.76 and clipped.** At that value the fence is
-// within a whisker of white before the sun reaches it. Pale was the right
+// ⚠️ **This said "a pale institutional grey-green" for two revisions and it was
+// wrong** — the green was never read off anything, and every class inherited it
+// (`bollards` 0.42/0.44/0.42, `barriers` 0.5/0.5/0.48, all with the green
+// channel highest and blue lowest). Corrected on the user's report, which is the
+// only instrument this value has ever had: `railings.tres` records that it is
+// the one authored colour in the bundle with no second reading to check it
+// against, and this is the second time that has cost something.
+//
+// ⚠️ **Dead neutral, and the cool cast is left to the sky.** Zinc is very
+// slightly blue and the first correction put that in the albedo — which
+// double-counts, because the environment is already in the render: measured on
+// the `street` frame, the fence comes back **B−R +11.5** from a +0.03 albedo
+// bias and **+5.7** from none at all — the sky supplies the cast on its own.
+// That is `P3-14`'s metallic lesson wearing a different hat. The albedo says
+// what the steel is; the sky says what it looks like.
+//
+// The same frame is what says the green is gone: **G−R +6.7** at `P3-19`'s
+// value against **+0.6** now.
+//
+// ⚠️ **It also shipped at 0.78/0.80/0.76 and clipped.** At that value the fence
+// was within a whisker of white before the sun reached it. Pale is the right
 // reading of the street; there was no headroom left above it.
-uniform vec4 rail_colour : source_color = vec4(0.62, 0.65, 0.60, 1.0);
+uniform vec4 rail_colour : source_color = vec4(0.64, 0.64, 0.64, 1.0);
 // Painted steel, against the road's 0.95 and the markings' 0.7. Lower than
 // paint on tarmac because a railing is a smooth tube rather than thermoplastic
 // pressed into aggregate.

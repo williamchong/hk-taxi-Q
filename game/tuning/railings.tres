@@ -17,11 +17,14 @@
 ; against, which is worth knowing when judging it: the shade below is authored
 ; from the street, not derived from a survey, and nothing measures it.
 ;
-; ⚠️ **And nothing measuring it is how it shipped clipped.** `P3-19` authored
-; 0.78/0.80/0.76 — pale, which is the right reading of the street — with no
-; headroom left above it, so the sun took the fence to white and the shipped
-; frames read as a concrete parapet rather than a railing. Taken down on the
-; frames rather than on the reasoning, which is the only check this value has.
+; ⚠️ **And nothing measuring it is how it has now been wrong twice.** `P3-19`
+; authored 0.78/0.80/0.76 — pale, which is the right reading of the street — with
+; no headroom left above it, so the sun took the fence to white and the shipped
+; frames read as a concrete parapet. Taken down on the frames. It was then wrong
+; a second way for two more revisions: a **green** bias, described as "a pale
+; institutional grey-green", read off nothing and inherited by all three classes.
+; Hong Kong's street railings are galvanised steel and they are grey. Corrected
+; on the user's report — which, for this one value, is the instrument.
 ;
 ; ⚠️ **`rail_metallic` stays 0.0**, and that is a measurement rather than taste.
 ; `P3-14` shipped the tram rails at 0.65 and they came out **sky blue** — metal
@@ -61,7 +64,7 @@
 [resource]
 resource_name = "railings"
 shader = ExtResource("1_railings")
-shader_parameter/rail_colour = Color(0.62, 0.65, 0.6, 1.0)
+shader_parameter/rail_colour = Color(0.64, 0.64, 0.64, 1.0)
 shader_parameter/rail_roughness = 0.55
 shader_parameter/rail_metallic = 0.0
 shader_parameter/baluster_pitch_m = 0.11

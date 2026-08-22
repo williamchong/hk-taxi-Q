@@ -34,10 +34,11 @@
 [resource]
 resource_name = "bollards"
 shader = ExtResource("1_railings")
-; Darker than the fence. Hong Kong's footway bollards are commonly a grey
-; galvanised or dark-painted post, and against a pale picket railing the point
-; of the shade is that the two do not read as one object.
-shader_parameter/rail_colour = Color(0.42, 0.44, 0.42, 1.0)
+; Darker than the fence, and the same galvanised grey — Hong Kong's footway
+; bollards are the same steel as the railing beside them. The shade is what keeps
+; the two from reading as one object, so it is a value difference and not a hue
+; one. ⚠️ Carried the fence's unsourced green bias until it was corrected.
+shader_parameter/rail_colour = Color(0.43, 0.43, 0.43, 1.0)
 shader_parameter/rail_roughness = 0.6
 ; 0.0 for `railings.tres`'s measured reason: `P3-14` shipped the tram rails at
 ; 0.65 and they rendered sky blue, because the only environment here is sky.
