@@ -904,18 +904,34 @@ thin geometry inherits the same constraint. `P3-18`.
 
 ⚠️ Winding and the p90/p99/max reporting follow `arrows.glb`'s paragraphs above, unchanged.
 
-### `railings.glb` — the published pedestrian railings (`P3-19`)
+### `railings.glb` — the published street furniture (`P3-19`, `Q61`)
 
-A vertical panel `height_m` tall standing `outset_m` outside the drawn carriageway edge, one quad
-per `station_m`, for every run of `DTAD_RAILING_LINE` this city draws. One primitive, one material
-named `railings`, one draw call, and **no collider** — and here the collider's absence is a *design*
-decision, not a rendering one: `GAME_DESIGN.md` lists railings under "deliberately diverge on —
-omit or make breakable", because Hong Kong's streets faithfully railed are a traffic simulator with
-no room to be reckless. Breakaway is a `B3` question.
+A vertical strip `height_m` tall standing `outset_m` outside the drawn carriageway edge, one quad
+per `station_m`, for every run of `DTAD_RAILING_LINE` this city draws — and **no collider**, which
+is a *design* decision rather than a rendering one: `GAME_DESIGN.md` lists railings under
+"deliberately diverge on — omit or make breakable", because Hong Kong's streets faithfully railed
+are a traffic simulator with no room to be reckless. Breakaway is a `B3` question.
+
+⚠️ **One primitive per *class*, not one per file, since `Q61`.** The layer publishes more than one
+kind of object and the stage draws each as its own mesh, named for its class and carrying a material
+of the same name. Three classes in Hong Kong — `railings`, `bollards`, `barriers` — so three
+primitives and three draw calls. A city's classes are `hong_kong.yaml`'s `railings.classes` table
+and nothing here fixes the list; what is fixed is that **a class id is the mesh name and the glTF
+material name at once**, which is the channel `tools/generated_scene_import.gd` dispatches on.
 
 | | |
 |---|---|
-| Attributes | `POSITION` and `NORMAL` only — no `COLOR_0`, no UVs, no texture |
+| Primitives | one per class — `railings`, `bollards`, `barriers` in this region |
+| Attributes | `POSITION`, `NORMAL`, `TEXCOORD_0`; no `COLOR_0`, no texture |
+| `TEXCOORD_0.x` | Metres **along this run of fence**, restarting at zero for each run. The fence line's own arc length, not the centreline's — the two differ on a bend by the ratio of their radii, and the balusters stand on the fence line |
+| `TEXCOORD_0.y` | Metres above the **ribbon deck**, so `0.0` is the ground line wherever the run stands: `-base_sink_m` at the buried foot, `+height_m` at the top |
+
+⚠️ **`TEXCOORD_0` is not a texture coordinate** — nothing samples an image, and `mesh_contract.gd`
+walks every shader uniform and would refuse the bundle if anything did. It is the same kind of
+shader payload a tile's storey height travels in (`P3-7`), and it is what `railings.gdshader` cuts
+the balusters, posts and rails out of. ⚠️ **The classes share that one shader** and differ only in
+the mask numbers in their `.tres`, so a class handed the wrong material is a picket fence standing
+where a bollard should be; `verify_railings.gd` checks the dispatch per class.
 
 ⚠️ **`city.json`'s `railings` key is optional and may be `null`**, on exactly `boxjunctions`' terms,
 including the nothing-survived-the-join state.
@@ -927,8 +943,15 @@ them invisible — `Q58`'s failure-to-nothing in a new place, and the mesh would
 channel Godot offers.
 
 ⚠️ **So the winding decides *lighting* rather than visibility.** Every quad is wound to look at the
-carriageway, `railings.json` publishes `facing_away`, and it must be 0: a flipped quad still draws,
-lit from the wrong hemisphere, which reads as a black panel rather than as a missing one.
+carriageway, `railings.json` publishes `facing_away` **per class**, and each must be 0: a flipped
+quad still draws, lit from the wrong hemisphere, which reads as a black panel rather than as a
+missing one.
+
+⚠️ **`railings.json` is `RAILINGS_MANIFEST_SCHEMA` 2 and carries no top-level `drawn_m`.** Every
+counter below the join lives under `classes[<id>]`; the total was **removed rather than broadened**,
+because at schema 1 it meant railing metres and at schema 2 it would mean fence plus bollard plus
+vehicle barrier — a reader keeping the old meaning would be wrong, which is hard rule 5's own bar.
+The read counters above the join stay shared: it is one read of one layer.
 
 ⚠️ **The position is registered, not read** — the one place in the bundle where a *published extent*
 is moved. `Q59`'s widening puts the drawn kerb a median 0.9 m past the surveyed railing, so **67.9%

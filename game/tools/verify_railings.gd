@@ -160,11 +160,16 @@ func _check_class(mesh: ArrayMesh, class_id: String) -> PackedStringArray:
 ## omit or make breakable", because Hong Kong's streets faithfully railed are a
 ## traffic simulator with no room to be reckless. Drawing them as scenery keeps
 ## the picture and keeps the divergence; a collider would quietly undo the
-## second half, and the whole guard against it is the absence of a `-col` suffix
-## in one string in `railings.py`. Breakaway is a `B3` question.
+## second half. Breakaway is a `B3` question.
+##
+## ⚠️ **The guard used to be one string in `railings.py` and is now a config
+## check.** Since `Q61` a mesh is named by its class `id` in `hong_kong.yaml`, so
+## the `-col` suffix Godot's importer builds collision from could arrive from a
+## city file; `config._railing_class` refuses an id ending in it. This is the
+## second half of that guard, in the engine, where the collider would appear.
 func _check_has_no_collision(scene_root: Node3D) -> PackedStringArray:
 	return MeshContract.check_no_collision(
-		scene_root, "the railings", "RAILINGS_MESH_NAME in etl/pipeline/railings.py"
+		scene_root, "the railings", "every class id in hong_kong.yaml `railings.classes`"
 	)
 
 

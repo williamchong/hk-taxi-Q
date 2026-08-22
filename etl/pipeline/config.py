@@ -3137,13 +3137,7 @@ def _railings(body: Any, where: str) -> Railings | None:
     if not isinstance(body, dict):
         raise ValueError(f"{where} must be a mapping, got {body!r}")
 
-    measures = {
-        name: float(_require(body, name, where))
-        for name in ("sample_m", "max_offset_m", "max_shift_m")
-    }
-    negative = {name: value for name, value in measures.items() if value <= 0.0}
-    if negative:
-        raise ValueError(f"{where}: {', '.join(sorted(negative))} must be positive; got {negative}")
+    measures = _measures(body, where, ("sample_m", "max_offset_m", "max_shift_m"), positive=True)
 
     raw_classes = _require(body, "classes", where)
     if isinstance(raw_classes, str) or not isinstance(raw_classes, (list, tuple)):
@@ -3221,13 +3215,9 @@ def _railing_class(body: Any, where: str, *, sample_m: float) -> RailingClass:
         # counters exist to prevent.
         raise ValueError(f"{where}:line_types repeats a code: {line_types}")
 
-    measures = {
-        name: float(_require(body, name, where))
-        for name in ("bridge_gap_m", "min_run_m", "station_m", "height_m")
-    }
-    negative = {name: value for name, value in measures.items() if value <= 0.0}
-    if negative:
-        raise ValueError(f"{where}: {', '.join(sorted(negative))} must be positive; got {negative}")
+    measures = _measures(
+        body, where, ("bridge_gap_m", "min_run_m", "station_m", "height_m"), positive=True
+    )
     if measures["min_run_m"] < sample_m:
         # A minimum shorter than the sampling pitch cannot refuse anything: the
         # shortest run the sampler can produce is one cell.
@@ -3236,9 +3226,9 @@ def _railing_class(body: Any, where: str, *, sample_m: float) -> RailingClass:
             f"{sample_m}, so it would refuse nothing"
         )
 
-    lifts = {name: float(_require(body, name, where)) for name in ("base_sink_m", "outset_m")}
-    if any(value < 0.0 for value in lifts.values()):
-        raise ValueError(f"{where}: base_sink_m and outset_m may not be negative; got {lifts}")
+    # `positive=False`: a class may legitimately sit flush on the kerb line with
+    # no sink and no outset, which is zero rather than absent.
+    lifts = _measures(body, where, ("base_sink_m", "outset_m"))
 
     return RailingClass(id=klass_id, line_types=line_types, **measures, **lifts)
 

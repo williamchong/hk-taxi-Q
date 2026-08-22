@@ -20,10 +20,13 @@ Four of them carry the weight:
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pytest
+import yaml
 
-from pipeline.config import RailingClass, Railings, SourceLayer, _railings
+from pipeline.config import RailingClass, Railings, SourceLayer, load_city
 from pipeline.kerbside import NEARSIDE, OFFSIDE
 from pipeline.railings import (
     ClassReport,
@@ -32,11 +35,13 @@ from pipeline.railings import (
     _assign,
     _Builder,
     _draw_run,
+    _sides,
     _visible,
     facing_away,
 )
 from pipeline.roads import plan_lengths
-from pipeline.surface import boundary, mitres
+from pipeline.surface import mitres
+from tests.helpers import CITY_YAML
 
 # Far enough from the origin that nothing here clips on the region bounds, and
 # far enough from them that a kerb is never outside the region.
@@ -108,23 +113,22 @@ def straight(x0: float, x1: float, z: float = 100.0, half: float = 5.0) -> np.nd
     return np.array([[x0, 0.0, z], [x1, 0.0, z]], dtype=np.float64)
 
 
-def ribbon(edge: np.ndarray, half: float = 5.0, outset: float = 0.6, **overrides) -> Ribbon:
+def ribbon(edge: np.ndarray, classes=(), half: float = 5.0, **overrides) -> Ribbon:
     """One edge's drawn ribbon, built the way `railings.ribbons` builds it.
 
-    Through `mitres` and `boundary` rather than by writing the offset out here:
-    those two are what `surface.py` draws the carriageway edge with, and a
-    fixture that computed its own would agree with a wrong stage.
+    Through `mitres` and the stage's own `_sides` rather than by writing the
+    offset out here: those are what `surface.py` draws the carriageway edge with,
+    and a fixture that computed its own would agree with a wrong stage.
+
+    `classes` defaults to the one fence class; pass several and each gets its own
+    standing line at its own `outset_m`, which is what `ribbons` does.
     """
     shaped = np.column_stack([edge, np.full(len(edge), half)])
     offsets = mitres(shaped)
-    across = shaped[:, 3] + outset
     values = {
         "points": shaped,
         "fence": {
-            CLASS_ID: {
-                NEARSIDE: boundary(shaped, offsets, across),
-                OFFSIDE: boundary(shaped, offsets, -across),
-            }
+            entry.id: _sides(shaped, offsets, entry.outset_m) for entry in (classes or (klass(),))
         },
         # `plan_lengths`, because that is what `railings.ribbons` uses — the
         # hand-written two-point version this fixture used to carry only
@@ -276,7 +280,7 @@ class TestBuriedKerb:
         edge = straight(0.0, 100.0)
         drawn = ribbon(edge, hidden={NEARSIDE: [[40.0, 60.0]]})
         report = RailingReport()
-        _draw_run(_Builder(), drawn, klass(), NEARSIDE, 10, 89, "CRAIL1", spec(), report)
+        _draw_run(_Builder(), drawn, klass(), NEARSIDE, 10, 89, "CRAIL1", spec().sample_m, report)
         assert drew(report).metres_on_buried_kerb == pytest.approx(20.0)
         assert drew(report).drawn_m == pytest.approx(60.0)
 
@@ -293,7 +297,9 @@ class TestWinding:
     def test_every_quad_is_wound_toward_the_road(self, side: str) -> None:
         edge = straight(0.0, 100.0)
         builder = _Builder()
-        _draw_run(builder, ribbon(edge), klass(), side, 10, 89, "CRAIL1", spec(), RailingReport())
+        _draw_run(
+            builder, ribbon(edge), klass(), side, 10, 89, "CRAIL1", spec().sample_m, RailingReport()
+        )
         mesh = builder.build("railings")
         assert mesh is not None
         assert facing_away(mesh) == 0
@@ -309,7 +315,9 @@ class TestWinding:
         """
         edge = straight(0.0, 100.0)
         builder = _Builder()
-        _draw_run(builder, ribbon(edge), klass(), side, 10, 89, "CRAIL1", spec(), RailingReport())
+        _draw_run(
+            builder, ribbon(edge), klass(), side, 10, 89, "CRAIL1", spec().sample_m, RailingReport()
+        )
         mesh = builder.build("railings")
         assert mesh is not None
         expected = 1.0 if side == NEARSIDE else -1.0
@@ -327,7 +335,15 @@ class TestFence:
         edge = straight(0.0, 100.0)
         builder = _Builder()
         _draw_run(
-            builder, ribbon(edge), klass(), NEARSIDE, 10, 89, "CRAIL1", spec(), RailingReport()
+            builder,
+            ribbon(edge),
+            klass(),
+            NEARSIDE,
+            10,
+            89,
+            "CRAIL1",
+            spec().sample_m,
+            RailingReport(),
         )
         mesh = builder.build("railings")
         assert mesh is not None
@@ -338,7 +354,15 @@ class TestFence:
         edge = straight(0.0, 100.0)
         builder = _Builder()
         _draw_run(
-            builder, ribbon(edge), klass(), NEARSIDE, 10, 89, "CRAIL1", spec(), RailingReport()
+            builder,
+            ribbon(edge),
+            klass(),
+            NEARSIDE,
+            10,
+            89,
+            "CRAIL1",
+            spec().sample_m,
+            RailingReport(),
         )
         mesh = builder.build("railings")
         assert mesh is not None
@@ -353,7 +377,9 @@ class TestFence:
         """
         edge = straight(0.0, 100.0)
         report = RailingReport()
-        _draw_run(_Builder(), ribbon(edge), klass(), NEARSIDE, 80, 139, "CRAIL1", spec(), report)
+        _draw_run(
+            _Builder(), ribbon(edge), klass(), NEARSIDE, 80, 139, "CRAIL1", spec().sample_m, report
+        )
         assert drew(report).metres_outside_ribbon == pytest.approx(40.0)
         assert drew(report).drawn_m == pytest.approx(20.0)
 
@@ -369,7 +395,16 @@ class TestFence:
         occupied = {cell: {"CRAIL1": 1} for cell in list(range(10, 20)) + list(range(23, 40))}
         report = RailingReport()
         _draw_run(
-            _Builder(), ribbon(edge), klass(), NEARSIDE, 10, 39, "CRAIL1", spec(), report, occupied
+            _Builder(),
+            ribbon(edge),
+            klass(),
+            NEARSIDE,
+            10,
+            39,
+            "CRAIL1",
+            spec().sample_m,
+            report,
+            occupied,
         )
         # Cells 20, 21 and 22 carried no sample and were bridged.
         assert drew(report).metres_bridged == pytest.approx(3.0)
@@ -380,14 +415,25 @@ class TestFence:
         occupied = {cell: {"CRAIL1": 1} for cell in range(10, 40)}
         report = RailingReport()
         _draw_run(
-            _Builder(), ribbon(edge), klass(), NEARSIDE, 10, 39, "CRAIL1", spec(), report, occupied
+            _Builder(),
+            ribbon(edge),
+            klass(),
+            NEARSIDE,
+            10,
+            39,
+            "CRAIL1",
+            spec().sample_m,
+            report,
+            occupied,
         )
         assert drew(report).metres_bridged == 0.0
 
     def test_a_run_shorter_than_a_car_is_a_post_and_is_dropped(self) -> None:
         edge = straight(0.0, 100.0)
         report = RailingReport()
-        _draw_run(_Builder(), ribbon(edge), klass(), NEARSIDE, 10, 11, "CRAIL1", spec(), report)
+        _draw_run(
+            _Builder(), ribbon(edge), klass(), NEARSIDE, 10, 11, "CRAIL1", spec().sample_m, report
+        )
         assert drew(report).runs_dropped == 1
         assert drew(report).metres_dropped_short == pytest.approx(2.0)
         assert drew(report).drawn_m == 0.0
@@ -407,7 +453,7 @@ class TestTrims:
         edge = straight(0.0, 100.0)
         drawn = ribbon(edge, trim_start_m=10.0)
         report = RailingReport()
-        _draw_run(_Builder(), drawn, klass(), NEARSIDE, 20, 39, "CRAIL1", spec(), report)
+        _draw_run(_Builder(), drawn, klass(), NEARSIDE, 20, 39, "CRAIL1", spec().sample_m, report)
         # Cells 20..39 are 20-40 m along the published polyline, so 10-30 m
         # along a ribbon trimmed by 10.
         assert drew(report).drawn_m == pytest.approx(20.0)
@@ -435,7 +481,7 @@ class TestFenceCoordinate:
             10,
             89,
             "CRAIL1",
-            spec(),
+            spec().sample_m,
             RailingReport(),
         )
         mesh = builder.build(CLASS_ID)
@@ -454,7 +500,7 @@ class TestFenceCoordinate:
             10,
             89,
             "CRAIL1",
-            spec(),
+            spec().sample_m,
             RailingReport(),
         )
         mesh = builder.build(CLASS_ID)
@@ -475,7 +521,15 @@ class TestFenceCoordinate:
         )
         builder = _Builder()
         _draw_run(
-            builder, ribbon(edge), klass(), NEARSIDE, 0, 199, "CRAIL1", spec(), RailingReport()
+            builder,
+            ribbon(edge),
+            klass(),
+            NEARSIDE,
+            0,
+            199,
+            "CRAIL1",
+            spec().sample_m,
+            RailingReport(),
         )
         mesh = builder.build(CLASS_ID)
         assert mesh is not None
@@ -489,19 +543,6 @@ class TestFenceCoordinate:
         # And it is genuinely not the centreline: this bend makes the two differ
         # by more than a baluster pitch, which is what the test is worth.
         assert abs(float(walked[-1]) - 200.0) > 1.0
-
-
-def _both(edge: np.ndarray, classes) -> dict:
-    """A `Ribbon.fence` table for several classes, at each one's own outset."""
-    shaped = np.column_stack([edge, np.full(len(edge), 5.0)])
-    offsets = mitres(shaped)
-    return {
-        entry.id: {
-            NEARSIDE: boundary(shaped, offsets, shaped[:, 3] + entry.outset_m),
-            OFFSIDE: boundary(shaped, offsets, -(shaped[:, 3] + entry.outset_m)),
-        }
-        for entry in classes
-    }
 
 
 class TestClasses:
@@ -521,7 +562,7 @@ class TestClasses:
         cells = _assign(
             [(beside(10.0, 90.0, 104.0), "CRAIL1"), (beside(10.0, 90.0, 104.0), "bollard0")],
             {"edges": [{"id": 7, "polyline": edge, "elevation_level": 0}]},
-            {7: ribbon(edge, fence=_both(edge, (fence, posts)))},
+            {7: ribbon(edge, classes=(fence, posts))},
             spec(classes=(fence, posts)),
             _City(),
             "middle",
@@ -541,7 +582,7 @@ class TestClasses:
         _assign(
             [(beside(10.0, 90.0, 104.0), "CRAIL1"), (beside(10.0, 90.0, 104.0), "bollard0")],
             {"edges": [{"id": 7, "polyline": edge, "elevation_level": 0}]},
-            {7: ribbon(edge, fence=_both(edge, (fence, far)))},
+            {7: ribbon(edge, classes=(fence, far))},
             spec(classes=(fence, far)),
             _City(),
             "middle",
@@ -554,22 +595,16 @@ class TestClasses:
 
 
 class TestClassTable:
-    """What the loader refuses, and why each refusal is not tidiness (`Q61`)."""
+    """What the loader refuses, and why each refusal is not tidiness (`Q61`).
+
+    Through the **real loader** on a mutated shipped document, which is
+    `test_tramway.city_with`'s argument and `test_config.py`'s `rewrite`'s before
+    it: *"a stub would drift out of step with the schema and keep passing while
+    the real config broke."* A hand-written block dict is that stub.
+    """
 
     @staticmethod
-    def _body(classes: list[dict]) -> dict:
-        return {
-            "source": "traffic_aids",
-            "layer": "DTAD_RAILING_LINE",
-            "fields": {"line_type": "LINETYPE", "level": "ELEVATION"},
-            "sample_m": 1.0,
-            "max_offset_m": 12.0,
-            "max_shift_m": 3.0,
-            "classes": classes,
-        }
-
-    @staticmethod
-    def _class(**overrides) -> dict:
+    def _class(**overrides) -> dict[str, Any]:
         return {
             "id": "railings",
             "line_types": ["CRAIL1"],
@@ -582,24 +617,37 @@ class TestClassTable:
             **overrides,
         }
 
-    def test_a_code_in_two_classes_is_refused(self) -> None:
+    @staticmethod
+    def _city(tmp_path, classes: list[dict[str, Any]]):
+        document = yaml.safe_load(CITY_YAML)
+        document["railings"] = {
+            "source": "stands",
+            "layer": "DTAD_RAILING_LINE",
+            "fields": {"line_type": "LINETYPE", "level": "ELEVATION"},
+            "sample_m": 1.0,
+            "max_offset_m": 12.0,
+            "max_shift_m": 3.0,
+            "classes": classes,
+        }
+        cities = tmp_path / "cities"
+        cities.mkdir(exist_ok=True)
+        (cities / "testville.yaml").write_text(yaml.safe_dump(document), encoding="utf-8")
+        return load_city("testville", cities_root=cities)
+
+    def test_a_code_in_two_classes_is_refused(self, tmp_path) -> None:
         """⚠️ Not tidiness: it would be drawn twice, and both would look right."""
-        body = self._body(
-            [
-                self._class(),
-                self._class(id="bollards", line_types=["bollard0", "CRAIL1"]),
-            ]
-        )
         with pytest.raises(ValueError, match="drawn twice"):
-            _railings(body, "railings")
+            self._city(
+                tmp_path,
+                [self._class(), self._class(id="bollards", line_types=["bollard0", "CRAIL1"])],
+            )
 
-    def test_two_classes_may_not_share_an_id(self) -> None:
+    def test_two_classes_may_not_share_an_id(self, tmp_path) -> None:
         """An id is a mesh name and a material name; two would collide in one file."""
-        body = self._body([self._class(), self._class(line_types=["bollard0"])])
         with pytest.raises(ValueError, match="repeats an id"):
-            _railings(body, "railings")
+            self._city(tmp_path, [self._class(), self._class(line_types=["bollard0"])])
 
-    def test_an_id_that_would_build_a_collider_is_refused(self) -> None:
+    def test_an_id_that_would_build_a_collider_is_refused(self, tmp_path) -> None:
         """The guard that used to be one string in `pipeline/railings.py`.
 
         Godot's importer turns a `-col` suffix into a static body, and
@@ -607,19 +655,30 @@ class TestClassTable:
         so a city config must not be able to hand the region 9 km of wall.
         """
         with pytest.raises(ValueError, match="-col"):
-            _railings(self._body([self._class(id="railings-col")]), "railings")
+            self._city(tmp_path, [self._class(id="railings-col")])
 
-    def test_a_min_run_under_the_sample_pitch_is_refused(self) -> None:
+    def test_a_min_run_under_the_sample_pitch_is_refused(self, tmp_path) -> None:
         """It could refuse nothing: the shortest run the sampler makes is one cell."""
         with pytest.raises(ValueError, match="would refuse nothing"):
-            _railings(self._body([self._class(min_run_m=0.5)]), "railings")
+            self._city(tmp_path, [self._class(min_run_m=0.5)])
 
-    def test_the_drawn_line_types_are_the_union_of_the_classes(self) -> None:
+    def test_a_dimension_that_is_not_finite_is_refused(self, tmp_path) -> None:
+        """⚠️ The value that never announces itself.
+
+        YAML 1.1 resolves `.nan`, and a NaN passes every sign test — then makes
+        false every comparison downstream and ships a mesh of NaN vertices.
+        `config._measures` is what catches it, and this stage reached for it only
+        after hand-rolling the sign check without the finiteness one.
+        """
+        with pytest.raises(ValueError, match="finite"):
+            self._city(tmp_path, [self._class(height_m=float("nan"))])
+
+    def test_the_drawn_line_types_are_the_union_of_the_classes(self, tmp_path) -> None:
         """Derived, so a code cannot be admitted and then belong to no class."""
-        spec_ = _railings(
-            self._body([self._class(), self._class(id="bollards", line_types=["bollard0"])]),
-            "railings",
-        )
+        spec_ = self._city(
+            tmp_path, [self._class(), self._class(id="bollards", line_types=["bollard0"])]
+        ).railings
+        assert spec_ is not None
         assert spec_.drawn_line_types == ("CRAIL1", "bollard0")
         assert spec_.class_of("CRAIL1").id == "railings"
         assert spec_.class_of("bollard0").id == "bollards"

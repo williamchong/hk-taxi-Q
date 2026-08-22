@@ -316,7 +316,7 @@ def plan_lengths(points: np.ndarray) -> np.ndarray:
     along an edge, and two copies of this convention is two places for it to
     drift.
     """
-    return _lengths(points[:, [0, 2]])
+    return plan_lengths_2d(points[:, [0, 2]])
 
 
 def plan_steps(points: np.ndarray) -> np.ndarray:
@@ -336,8 +336,16 @@ def _steps(plan: np.ndarray) -> np.ndarray:
     return np.hypot(*np.diff(plan, axis=0).T)
 
 
-def _lengths(plan: np.ndarray) -> np.ndarray:
-    """`plan_lengths` for two columns of `(x, z)`. See `_steps` for the split."""
+def plan_lengths_2d(plan: np.ndarray) -> np.ndarray:
+    """`plan_lengths` for two columns of `(x, z)`. See `_steps` for the split.
+
+    Public where `_steps` is private, because a caller outside this module can
+    already hold a plan-only line: `railings._run_uvs` measures along a *fence*
+    line, which never had a height column to drop. Exported rather than copied —
+    `kerbside._plan_lengths` is the third copy of this arithmetic and documents
+    why it cannot import (this module imports `kerbside`), which is a constraint
+    `railings` does not have.
+    """
     return np.concatenate([[0.0], np.cumsum(_steps(plan))])
 
 
@@ -924,7 +932,7 @@ def _follow_ground(
     if not offered:
         return plan, y, 0
 
-    along = _lengths(dense)
+    along = plan_lengths_2d(dense)
     keep = np.zeros(len(dense), dtype=bool)
     keep[anchors] = True
     for start, end in itertools.pairwise(anchors):
@@ -1099,7 +1107,7 @@ def _deck_heights(
     # Along the edge rather than by station index: `resample` inserts stations
     # but never removes the source's own, so the spacing is not uniform and
     # counting stations would weight a densely drawn curve as if it were long.
-    along = _lengths(plan)
+    along = plan_lengths_2d(plan)
     # `clearance_m` on the sampled branch only. It is the road laid *on* the
     # deck, so it belongs wherever the deck is what decides the height — and
     # nowhere near the fallback above, which is not on a deck at all.

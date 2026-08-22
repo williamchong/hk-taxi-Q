@@ -55,7 +55,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "etl"))
 
 from pipeline import gdb  # noqa: E402
-from pipeline.config import CityConfig, RailingClass, load_city  # noqa: E402
+from pipeline.config import CityConfig, load_city  # noqa: E402
 from pipeline.fetch import source_reads  # noqa: E402
 from pipeline.gltf import read_glb  # noqa: E402
 from pipeline.railings import AT_GRADE, RAILINGS_NAME  # noqa: E402
@@ -71,8 +71,10 @@ WALK_M = 0.5
 
 @dataclass
 class Report:
-    """What the shipped mesh says, measured against the source that fed it."""
+    """What one class's shipped mesh says, measured against the source that fed it."""
 
+    # The class graded, so a report and its heading cannot be mismatched.
+    klass_id: str = ""
     drawn_m: float = 0.0
     stations: int = 0
     # Distance from each drawn station to the nearest published railing of a
@@ -146,26 +148,31 @@ def walk(mesh_positions: np.ndarray, triangles: np.ndarray) -> tuple[np.ndarray,
 
 
 def published(
-    city: CityConfig, region_id: str, klass: RailingClass, sources_root: Path | None
-) -> tuple[np.ndarray, float]:
-    """Every published feature of one class, at grade, as sampled points.
+    city: CityConfig, region_id: str, sources_root: Path | None
+) -> dict[str, tuple[np.ndarray, float]]:
+    """Every published feature, at grade, as sampled points **keyed by class**.
 
     Re-read here rather than taken from `railings.json`, which is the difference
     between an instrument and an echo.
 
-    ⚠️ **Filtered to `klass.line_types`, not to the union.** Since `Q61` the
-    layer draws three classes into one `.glb`, and grading a class's mesh
-    against every class's published lines would let a bollard drawn where a
-    railing belongs find a railing nearby and call itself covered. Each class is
-    graded against its own source and nothing else.
+    ⚠️ **Partitioned by class, never pooled.** Since `Q61` the layer draws three
+    classes into one `.glb`, and grading a class's mesh against every class's
+    published lines would let a bollard drawn where a railing belongs find a
+    railing nearby and call itself covered. Each class is graded against its own
+    source and nothing else.
+
+    One read for all of them, though: the layer is read once and split in memory.
+    Called per class it re-opened the geodatabase once per class — 0.26 s each of
+    a 2.4 s run, which is not a performance problem, but it is three answers to a
+    question with one answer.
     """
     spec = city.railings
     if spec is None:
         raise SystemExit(f"city '{city.id}' declares no railings block; nothing to grade")
 
     transform = city.game_transform(region_id)
-    samples: list[np.ndarray] = []
-    total_m = 0.0
+    samples: dict[str, list[np.ndarray]] = {klass.id: [] for klass in spec.classes}
+    total_m: dict[str, float] = {klass.id: 0.0 for klass in spec.classes}
     for path, member in source_reads(city, spec, region_id, root=sources_root):
         layer = gdb.read_layer(
             path,
@@ -179,7 +186,8 @@ def published(
         levels = layer.column(spec.layer.field("level"))
         owners, parts = gdb.polylines(layer)
         for owner, points in zip(owners, parts, strict=True):
-            if str(types[owner]) not in klass.line_types:
+            klass = spec.class_of(str(types[owner]))
+            if klass is None:
                 continue
             if str(levels[owner]).strip().lower() not in AT_GRADE:
                 continue
@@ -192,11 +200,17 @@ def published(
             for index, length in enumerate(np.hypot(step[:, 0], step[:, 1])):
                 if length <= 0.0:
                     continue
-                total_m += float(length)
+                total_m[klass.id] += float(length)
                 steps = max(1, round(length / WALK_M))
                 for fraction in (np.arange(steps) + 0.5) / steps:
-                    samples.append(plan[index] + fraction * step[index])
-    return (np.vstack(samples) if samples else np.empty((0, 2))), total_m
+                    samples[klass.id].append(plan[index] + fraction * step[index])
+    return {
+        klass_id: (
+            np.vstack(points) if points else np.empty((0, 2)),
+            total_m[klass_id],
+        )
+        for klass_id, points in samples.items()
+    }
 
 
 class _Nearest:
@@ -267,13 +281,17 @@ class _Centrelines:
 def survey(
     city: CityConfig,
     region_id: str,
-    klass: RailingClass,
+    klass_id: str,
+    source: np.ndarray,
+    source_m: float,
     *,
     near_m: float,
-    sources_root: Path | None,
     out_root: Path | None,
 ) -> Report | None:
     """Grade one class's shipped mesh against its own published source.
+
+    `source` is that class's share of `published()`, passed in rather than
+    re-read: the layer is one read for all classes.
 
     `None` where the class drew nothing — a region need not publish every class,
     and an absent mesh is not a failure. What *is* a finding is a class that
@@ -293,15 +311,13 @@ def survey(
     # grouping vertices that share a plan position and taking the lowest — pool
     # three classes standing at three heights into one pile and the panel
     # heights it medians are a mixture of all three.
-    mesh = next((entry for entry in read_glb(path) if entry.name == klass.id), None)
+    mesh = next((entry for entry in read_glb(path) if entry.name == klass_id), None)
     if mesh is None:
         return None
 
-    report = Report()
+    report = Report(klass_id=klass_id, source_m=source_m)
     drawn, report.drawn_m, report.height_m = walk(mesh.positions, mesh.triangles)
     report.stations = len(drawn)
-
-    source, report.source_m = published(city, region_id, klass, sources_root)
     lines = _Nearest(source, max(near_m, 1.0))
     fences = _Nearest(drawn, max(near_m, 1.0))
     centres = _Centrelines(read_graph(out_dir / ROADGRAPH_NAME, city.id, region_id))
@@ -340,14 +356,14 @@ def _percentiles(values: list[float]) -> tuple[float, ...]:
     return tuple(float(value) for value in np.percentile(np.asarray(values), (50, 90, 99, 100)))
 
 
-def render(report: Report, klass_id: str, *, near_m: float) -> str:
+def render(report: Report, *, near_m: float) -> str:
     p50, p90, p99, worst = _percentiles(report.to_source_m)
     share = 100.0 * report.covered_m / report.source_m if report.source_m else float("nan")
     mirrored = (
         100.0 * report.side_disagrees / report.side_judged if report.side_judged else float("nan")
     )
     lines = [
-        f"{klass_id} drawn against the {klass_id} published",
+        f"{report.klass_id} drawn against the {report.klass_id} published",
         "",
         f"  drawn                {report.drawn_m:9.0f} m over {report.stations} stations",
         f"  published (this class, at grade)   {report.source_m:9.0f} m",
@@ -395,19 +411,22 @@ def main(argv: list[str] | None = None) -> int:
     # pooled figure because that is the whole point of grading a class against
     # its own source: the fence is 90% of the metres, so anything the two small
     # classes did wrong would vanish into its average.
+    sources = published(city, args.region, args.sources_root)
     for klass in city.railings.classes:
+        source, source_m = sources[klass.id]
         report = survey(
             city,
             args.region,
-            klass,
+            klass.id,
+            source,
+            source_m,
             near_m=args.near_m,
-            sources_root=args.sources_root,
             out_root=args.out_root,
         )
         if report is None:
             log.info("%s: nothing drawn for this region\n", klass.id)
             continue
-        log.info("%s\n", render(report, klass.id, near_m=args.near_m))
+        log.info("%s\n", render(report, near_m=args.near_m))
     return 0
 
 

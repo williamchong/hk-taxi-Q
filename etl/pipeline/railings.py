@@ -85,7 +85,7 @@ from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData, write_glb
 from pipeline.kerbside import NEARSIDE, OFFSIDE, SideIndex, merge_runs, resample
 from pipeline.mesh import select_triangles
-from pipeline.roads import ROADGRAPH_NAME, plan_lengths, read_graph
+from pipeline.roads import ROADGRAPH_NAME, plan_lengths, plan_lengths_2d, read_graph
 from pipeline.surface import (
     SURFACE_MANIFEST_NAME,
     SURFACE_MANIFEST_SCHEMA,
@@ -260,7 +260,6 @@ class RailingReport:
     not_drawn_line_type: int = 0
     on_structure: int = 0
     empty_geometry: int = 0
-    read: int = 0
 
     # Source metres, before any join. `refused_m` is keyed by the publisher's
     # own `LINETYPE`, which is what makes the class table an argument: a reader
@@ -273,7 +272,6 @@ class RailingReport:
     # into the per-code table those metres read as "this code was not drawn",
     # which is the opposite of true.
     on_structure_m: float = 0.0
-    read_m: float = 0.0
 
     samples: int = 0
     samples_outside_region: int = 0
@@ -288,8 +286,29 @@ class RailingReport:
     bytes: int = 0
 
     def klass(self, klass_id: str) -> ClassReport:
-        """This class's counters, created on first use."""
+        """This class's counters, created on first use.
+
+        ⚠️ **Creates on read, so only write paths may call it.** A reader that
+        mistypes an id gets a silent all-zero `ClassReport` and adds a phantom
+        class to the published manifest, which is the shape of quiet wrong every
+        counter in this file exists to prevent.
+        """
         return self.classes.setdefault(klass_id, ClassReport())
+
+    @property
+    def read(self) -> int:
+        """Parts admitted to some class — the fourth part of the `parts` partition.
+
+        Derived rather than stored, for `drawn_m`'s reason: `read_lines` counts
+        this per class on one code path, and a second field incremented beside it
+        is a second thing that can drift.
+        """
+        return sum(report.read for report in self.classes.values())
+
+    @property
+    def read_m(self) -> float:
+        """Source metres admitted to some class. Derived, as `read` is."""
+        return sum(report.read_m for report in self.classes.values())
 
     @property
     def drawn_m(self) -> float:
@@ -301,10 +320,6 @@ class RailingReport:
         to stop a reader trusting.
         """
         return sum(report.drawn_m for report in self.classes.values())
-
-    # One distribution as the manifest publishes it: p50/p90/p99/max, the tail
-    # rather than the middle, for `ArrowReport.measured`'s stated reason.
-    measured = staticmethod(ArrowReport.measured)
 
 
 @dataclass(frozen=True)
@@ -406,16 +421,29 @@ def read_lines(
 
             game_x, _, game_z = transform.to_game(source[:, 0], source[:, 1])
             lines.append((np.column_stack([game_x, game_z]), code))
-            report.read += 1
-            report.read_m += length_m
-            # The same read, split by class. Its whole job is to be compared
-            # with that class's `drawn_m`: `samples_unassigned` is shared and
-            # cannot be attributed, so a class that reads well and draws nothing
-            # is only visible as the gap between these two numbers.
+            # Counted per class and summed by `RailingReport.read`. Its whole
+            # job is to be compared with that class's `drawn_m`:
+            # `samples_unassigned` is shared and cannot be attributed, so a class
+            # that reads well and draws nothing is only visible as the gap
+            # between these two numbers.
             counters = report.klass(klass.id)
             counters.read += 1
             counters.read_m += length_m
     return lines
+
+
+def _sides(shaped: np.ndarray, offsets: np.ndarray, outset_m: float) -> dict[str, np.ndarray]:
+    """One class's standing line on both sides of a ribbon.
+
+    The outset array is built once and negated, rather than written out per
+    side: the two sides of a ribbon are one distance measured in two directions,
+    and computing it twice is two places for a widening to be applied unevenly.
+    """
+    outset = shaped[:, 3] + outset_m
+    return {
+        NEARSIDE: boundary(shaped, offsets, outset),
+        OFFSIDE: boundary(shaped, offsets, -outset),
+    }
 
 
 def ribbons(graph: dict, surface: dict, spec: Railings) -> dict[int, Ribbon]:
@@ -449,13 +477,7 @@ def ribbons(graph: dict, surface: dict, spec: Railings) -> dict[int, Ribbon]:
         offsets = mitres(shaped)
         built[int(edge["id"])] = Ribbon(
             points=shaped,
-            fence={
-                klass.id: {
-                    NEARSIDE: boundary(shaped, offsets, shaped[:, 3] + klass.outset_m),
-                    OFFSIDE: boundary(shaped, offsets, -(shaped[:, 3] + klass.outset_m)),
-                }
-                for klass in spec.classes
-            },
+            fence={klass.id: _sides(shaped, offsets, klass.outset_m) for klass in spec.classes},
             along=plan_lengths(shaped),
             hidden=entry.get("kerb_hidden_m") or {},
             trim_start_m=float(trim_start_m),
@@ -545,7 +567,7 @@ def _run_uvs(plan: np.ndarray, *, height_m: float, sink_m: float) -> np.ndarray:
     authored as "0.95 m up" and mean it, rather than meaning a fraction of a
     height that a second class will change.
     """
-    along = np.concatenate([[0.0], np.cumsum(np.hypot(*np.diff(plan, axis=0).T))])
+    along = plan_lengths_2d(plan)
     return np.column_stack(
         [
             np.concatenate([along, along]),
@@ -690,14 +712,24 @@ def build_region(
     # bollard's in the pile, what let each class carry its own `.tres`, and what
     # make a class's triangle count a number rather than a share. The cost is
     # two extra draw calls against a `<150` budget the drive scene reads 36 on.
-    builders = {klass.id: _Builder() for klass in spec.classes}
+    by_id = {klass.id: klass for klass in spec.classes}
+    builders = {klass_id: _Builder() for klass_id in by_id}
     cells = _assign(lines, graph, drawn, spec, city, region_id, report)
     for (edge, klass_id, side), found in sorted(cells.items()):
         ribbon = drawn[edge]
-        klass = next(entry for entry in spec.classes if entry.id == klass_id)
+        klass = by_id[klass_id]
         for start, stop, code in merge_runs(found, spec.sample_m, klass.bridge_gap_m):
             _draw_run(
-                builders[klass_id], ribbon, klass, side, start, stop, code, spec, report, found
+                builders[klass_id],
+                ribbon,
+                klass,
+                side,
+                start,
+                stop,
+                code,
+                spec.sample_m,
+                report,
+                found,
             )
 
     meshes: list[MeshData] = []
@@ -814,15 +846,17 @@ def _draw_run(
     start_cell: int,
     stop_cell: int,
     code: str,
-    spec: Railings,
+    sample_m: float,
     report: RailingReport,
     occupied: dict[int, dict[str, int]] | None = None,
 ) -> None:
     """One merged run of one class, clipped to the ribbon and to its drawn kerb.
 
-    Every bar and dimension comes off `klass`, and only `sample_m` — the cell
-    pitch the run's own extent is expressed in — comes off `spec`. That split is
-    the point of the class table: the join is shared, and nothing below it is.
+    Every bar and dimension comes off `klass`; `sample_m` is the one shared join
+    parameter, the cell pitch this run's extent is expressed in. Taken as a float
+    rather than as the whole `Railings` so the signature states that split
+    instead of a paragraph having to — the join is shared, and nothing below it
+    is.
 
     `occupied` is the run's own cell table, used only to count the metres drawn
     across bridged gaps — see `_bridged_m`. Optional so a test can drive one run
@@ -830,8 +864,8 @@ def _draw_run(
     """
     report_class = report.klass(klass.id)
     report_class.runs += 1
-    published_start = start_cell * spec.sample_m
-    published_end = (stop_cell + 1) * spec.sample_m
+    published_start = start_cell * sample_m
+    published_end = (stop_cell + 1) * sample_m
     if published_end - published_start < klass.min_run_m:
         report_class.runs_dropped += 1
         report_class.metres_dropped_short += published_end - published_start
@@ -885,7 +919,7 @@ def _draw_run(
 
     if occupied is not None:
         report_class.metres_bridged += _bridged_m(
-            drawn, occupied, start_cell, stop_cell, ribbon, spec
+            drawn, occupied, start_cell, stop_cell, ribbon, sample_m
         )
 
 
@@ -895,7 +929,7 @@ def _bridged_m(
     start_cell: int,
     stop_cell: int,
     ribbon: Ribbon,
-    spec: Railings,
+    sample_m: float,
 ) -> float:
     """Drawn metres standing where the source published no railing.
 
@@ -914,8 +948,8 @@ def _bridged_m(
     for cell in range(start_cell, stop_cell + 1):
         if cell in occupied:
             continue
-        low = cell * spec.sample_m - ribbon.trim_start_m
-        high = low + spec.sample_m
+        low = cell * sample_m - ribbon.trim_start_m
+        high = low + sample_m
         for start, stop in drawn:
             bridged += max(0.0, min(stop, high) - max(start, low))
     return bridged
