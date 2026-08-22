@@ -56,8 +56,9 @@ is the same shape as a kerbside restriction — `(edge, side, V-range)` — beca
 it is the same kind of fact about the same kerb.
 
 ⚠️ **Nothing here invents a railing.** The region publishes 20.3 km of them
-against roughly 130 km of drawn kerb; a fallback keyed on kerbs would run a wall
-down every street that has none, and it would render perfectly.
+against 90.2 km of kerb line, of which 57.1 km is actually drawn once the buried
+kerbs come out; a fallback keyed on kerbs would run a wall down every street that
+has none, and it would render perfectly.
 """
 
 from __future__ import annotations
@@ -119,7 +120,12 @@ _MIN_TWICE_AREA_M2 = 1e-6
 #
 # ⚠️ Not config, for `arrows._AT_GRADE`'s stated reason: it is the source's own
 # encoding of "no structure", not a threshold anyone may tune.
-_AT_GRADE = ("", "none", "null", "<na>")
+#
+# Public where its two siblings are private, because `tools/railing_error.py`
+# has to admit the same features this stage does to grade it, and the
+# alternative is a second copy of the publisher's encoding in a file whose
+# whole job is to disagree with this one.
+AT_GRADE = ("", "none", "null", "<na>")
 
 
 @dataclass
@@ -137,8 +143,16 @@ class RailingReport:
 
         parts == not_drawn_line_type + on_structure + empty_geometry + read
         source_m == refused_m(sum) + on_structure_m + read_m
-        read_m -> sampled -> assigned -> drawn_m, and every step publishes its
-        own loss
+
+    ⚠️ **The metres from `read_m` down do not form a third identity, and trying
+    to read one is a mistake this docstring exists to head off.** They are a
+    chain — sampled, assigned, merged, clipped, drawn — and the losses are
+    measured in two different frames: `metres_dropped_short` and the run extents
+    are *published* metres, while `metres_dropped_sliver`,
+    `metres_outside_ribbon`, `metres_on_buried_kerb` and `drawn_m` are *ribbon*
+    metres, taken after the junction trims come off. `metres_bridged` is the
+    other reason they will not subtract: it is drawn without ever having been
+    sampled.
     """
 
     # ⚠️ **`features` counts features and everything below counts parts**, and
@@ -186,7 +200,13 @@ class RailingReport:
 
     runs: int = 0
     runs_dropped: int = 0
-    metres_dropped: float = 0.0
+    # ⚠️ **Two counters because they are in two frames, and one was misleading.**
+    # A whole run refused for being shorter than `min_run_m` is measured in
+    # *published* metres, before the ribbon clip; a sliver left between two
+    # buried stretches is measured in *ribbon* metres, after it. Summed into one
+    # field they look subtractable from `metres_deduped` and are not.
+    metres_dropped_short: float = 0.0
+    metres_dropped_sliver: float = 0.0
     # Run metres falling outside the drawn ribbon's own extent — past a junction
     # trim, where the cap is and the kerb is not. Clipped rather than drawn, so
     # a fence never crosses a junction mouth.
@@ -197,6 +217,12 @@ class RailingReport:
     metres_on_buried_kerb: float = 0.0
 
     drawn_m: float = 0.0
+    # ⚠️ Of the drawn metres, those standing where the source published no
+    # railing at all: `merge_runs` bridges gaps up to `bridge_gap_m`, and a
+    # bridged metre is drawn without ever having been sampled. It is the one
+    # part of `drawn_m` this stage invents, so it is published rather than
+    # left to be discovered as a partition that does not close.
+    metres_bridged: float = 0.0
     drawn_m_by_type: dict[str, float] = field(default_factory=dict)
     # Of the drawn metres, the share on the ribbon's `U = 0` rail. Not a bar —
     # a region is not obliged to be symmetric — but a flip of the side
@@ -305,7 +331,7 @@ def read_lines(
                 report.not_drawn_line_type += 1
                 report.refused_m[code] = report.refused_m.get(code, 0.0) + length_m
                 continue
-            if str(levels[owner]).strip().lower() not in _AT_GRADE:
+            if str(levels[owner]).strip().lower() not in AT_GRADE:
                 # On a structure. `Q13` keeps the elevated network closed to
                 # driving and `Q15` is the level-0 snap every dTAD consumer
                 # owes: the nearest level-0 kerb to a parapet on a flyover
@@ -539,7 +565,7 @@ def build_region(
     for (edge, side), found in sorted(cells.items()):
         ribbon = drawn[edge]
         for start, stop, code in merge_runs(found, spec.sample_m, spec.bridge_gap_m):
-            _draw_run(builder, ribbon, side, start, stop, code, spec, report)
+            _draw_run(builder, ribbon, side, start, stop, code, spec, report, found)
 
     mesh = builder.build(RAILINGS_MESH_NAME)
     if mesh is not None:
@@ -635,14 +661,20 @@ def _draw_run(
     code: str,
     spec: Railings,
     report: RailingReport,
+    occupied: dict[int, dict[str, int]] | None = None,
 ) -> None:
-    """One merged run of fence, clipped to the ribbon and to its drawn kerb."""
+    """One merged run of fence, clipped to the ribbon and to its drawn kerb.
+
+    `occupied` is the run's own cell table, used only to count the metres drawn
+    across bridged gaps — see `_bridged_m`. Optional so a test can drive one run
+    without building one.
+    """
     report.runs += 1
     published_start = start_cell * spec.sample_m
     published_end = (stop_cell + 1) * spec.sample_m
     if published_end - published_start < spec.min_run_m:
         report.runs_dropped += 1
-        report.metres_dropped += published_end - published_start
+        report.metres_dropped_short += published_end - published_start
         return
 
     start_m = published_start - ribbon.trim_start_m
@@ -658,14 +690,14 @@ def _draw_run(
         high - low for low, high in visible
     )
 
+    drawn: list[tuple[float, float]] = []
     for low, high in visible:
         if high - low < spec.min_run_m:
             # A sliver left between two buried stretches is a panel, not a
-            # fence. Counted with the runs it was cut from rather than as a
-            # refusal of its own: the metres are already in
-            # `metres_on_buried_kerb`'s neighbourhood and double-counting them
-            # would make the partition lie.
-            report.metres_dropped += high - low
+            # fence. Counted apart from the short-run refusals above because it
+            # is measured in ribbon metres and they are measured in published
+            # ones.
+            report.metres_dropped_sliver += high - low
             continue
         at = np.arange(low, high, spec.station_m)
         at = np.append(at, high) if at[-1] < high else at
@@ -683,10 +715,46 @@ def _draw_run(
             facing=facing,
             flip=side == NEARSIDE,
         )
+        drawn.append((low, high))
         report.drawn_m += high - low
         report.drawn_m_by_type[code] = report.drawn_m_by_type.get(code, 0.0) + (high - low)
         if side == NEARSIDE:
             report.drawn_m_nearside += high - low
+
+    if occupied is not None:
+        report.metres_bridged += _bridged_m(drawn, occupied, start_cell, stop_cell, ribbon, spec)
+
+
+def _bridged_m(
+    drawn: list[tuple[float, float]],
+    occupied: dict[int, dict[str, int]],
+    start_cell: int,
+    stop_cell: int,
+    ribbon: Ribbon,
+    spec: Railings,
+) -> float:
+    """Drawn metres standing where the source published no railing.
+
+    ⚠️ **`merge_runs` bridges gaps up to `bridge_gap_m`, and those metres are
+    drawn without ever having been sampled.** Inherited from `kerbside.py`, and
+    right for the same reason — a break shorter than a car is a digitising
+    artefact rather than a gap in a fence — but this stage argues that every
+    metre it draws is accounted for, and without this counter the partition is
+    out by 400 m in Wan Chai with nothing saying so.
+
+    Exact rather than estimated: only the part of an unsampled cell that
+    survived the ribbon clip and the buried-kerb cut is counted, which is why
+    it takes the drawn ranges rather than the run's own extent.
+    """
+    bridged = 0.0
+    for cell in range(start_cell, stop_cell + 1):
+        if cell in occupied:
+            continue
+        low = cell * spec.sample_m - ribbon.trim_start_m
+        high = low + spec.sample_m
+        for start, stop in drawn:
+            bridged += max(0.0, min(stop, high) - max(start, low))
+    return bridged
 
 
 def _facing(plan: np.ndarray, ribbon: Ribbon, at: np.ndarray) -> np.ndarray:
@@ -754,12 +822,22 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Rai
         # The runs, and every metre lost between the join and the mesh.
         "runs": report.runs,
         "runs_dropped": report.runs_dropped,
-        "metres_dropped": round(report.metres_dropped, 2),
+        # ⚠️ Two frames, and they are not addable. A short run is refused in
+        # *published* metres before the ribbon clip; a sliver is refused in
+        # *ribbon* metres after it and after the buried-kerb cut.
+        "metres_dropped_short": round(report.metres_dropped_short, 2),
+        "metres_dropped_sliver": round(report.metres_dropped_sliver, 2),
         "metres_outside_ribbon": round(report.metres_outside_ribbon, 2),
         # ⚠️ Metres on a kerb the surface stage does not draw, because another
         # ribbon covers it. Drawn, this is a fence standing in merged tarmac.
         "metres_on_buried_kerb": round(report.metres_on_buried_kerb, 2),
         "drawn_m": round(report.drawn_m, 2),
+        # ⚠️ **The one part of `drawn_m` the stage invents.** `merge_runs`
+        # bridges gaps up to `bridge_gap_m`, so these metres are drawn where the
+        # source published nothing. Without this the partition
+        # `metres_deduped - dropped - outside_ribbon - buried` misses `drawn_m`
+        # by exactly this much, and nothing says why.
+        "metres_bridged": round(report.metres_bridged, 2),
         "drawn_m_by_type": {
             code: round(metres, 2) for code, metres in sorted(report.drawn_m_by_type.items())
         },

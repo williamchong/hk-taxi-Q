@@ -8090,15 +8090,27 @@ across merged tarmac, or a junction trim out of place — so the counters are th
 parts 1,763 = 632 not a drawn code + 6 on structure + 0 empty + 1,125 read
 source 20,273.44 m = 4,024.33 refused + 1,579.36 on structure + 14,669.76 read
 14,664 samples: 446 outside the region, 454 unassigned, 1,868 over the shift bar
-872 runs: 218 dropped short (560.75 m), 928.67 m clipped past the ribbon,
-          1,011.23 m on a buried kerb
+872 runs: 218 dropped short (392.00 m), 168.75 m dropped as slivers,
+          928.67 m clipped past the ribbon, 1,011.23 m on a buried kerb
 drawn 9,017.35 m — CRAIL1 5,760.78 / CRAIL2 1,713.05 / HCAIL2 856.48 /
                    RAIL1 416.60 / RAILING1 270.44; nearside 5,479.00 m
+       of which 322.88 m is bridged — drawn where the source published nothing
 facing_away 0 · 9,308 triangles · 10,344 vertices · 305,196 B
 ```
 
 ⚠️ **`features` counts features and everything under it counts parts**, and the two differ by ten.
 `kerbside.py` records what happens when they are mixed: a share over one, "725 of 579".
+
+⚠️ **`metres_bridged` is the one part of `drawn_m` this stage invents**, and it was added by the
+review that followed the first build. `merge_runs` bridges gaps up to `bridge_gap_m` — inherited
+from `kerbside.py` and right for its reason, a break shorter than a car is a digitising artefact
+rather than a gap in a fence — but those metres are drawn without ever having been sampled.
+**322.88 m, 3.6% of what is drawn.** Until it was counted, the published numbers were out by 400 m
+with nothing saying why. ⚠️ **And they still do not subtract to `drawn_m`**, which is the second
+half of the same finding: `metres_dropped` was silently mixing two frames — a short run is refused
+in *published* metres before the ribbon clip, a sliver between two buried stretches in *ribbon*
+metres after it — so it is now two counters, 392.00 m and 168.75 m, and `RailingReport`'s docstring
+says outright that no identity holds across them.
 
 ⚠️ **`on_structure_m` is kept apart from `refused_m`, and the region is why**: six features carry
 **1,579 m of `CRAIL1`** — a whitelisted code — on a flyover parapet. Folded into the per-code table

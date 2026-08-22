@@ -56,8 +56,9 @@ sys.path.insert(0, str(ROOT / "etl"))
 
 from pipeline import gdb  # noqa: E402
 from pipeline.config import CityConfig, load_city  # noqa: E402
+from pipeline.fetch import source_reads  # noqa: E402
 from pipeline.gltf import read_glb  # noqa: E402
-from pipeline.railings import RAILINGS_NAME  # noqa: E402
+from pipeline.railings import AT_GRADE, RAILINGS_NAME  # noqa: E402
 from pipeline.roads import ROADGRAPH_NAME, read_graph  # noqa: E402
 
 log = logging.getLogger(__name__)
@@ -89,12 +90,8 @@ class Report:
     # kerb and the ribbon clip refused between them — not a fault, a coverage.
     source_m: float = 0.0
     covered_m: float = 0.0
-
-    @property
-    def height_m(self) -> float:
-        return self._height
-
-    _height: float = 0.0
+    # The median panel, not the mesh's y range — see `walk`.
+    height_m: float = 0.0
 
 
 def walk(mesh_positions: np.ndarray, triangles: np.ndarray) -> tuple[np.ndarray, float, float]:
@@ -156,9 +153,6 @@ def published(
     Re-read here rather than taken from `railings.json`, which is the difference
     between an instrument and an echo.
     """
-    from pipeline.fetch import source_reads
-    from pipeline.railings import _AT_GRADE
-
     spec = city.railings
     if spec is None:
         raise SystemExit(f"city '{city.id}' declares no railings block; nothing to grade")
@@ -181,7 +175,7 @@ def published(
         for owner, points in zip(owners, parts, strict=True):
             if str(types[owner]) not in spec.drawn_line_types:
                 continue
-            if str(levels[owner]).strip().lower() not in _AT_GRADE:
+            if str(levels[owner]).strip().lower() not in AT_GRADE:
                 continue
             source = np.asarray(points, dtype=np.float64)
             if len(source) < 2:
@@ -288,7 +282,7 @@ def survey(
         points, drawn_m, height_m = walk(mesh.positions, mesh.triangles)
         drawn_points.append(points)
         report.drawn_m += drawn_m
-        report._height = max(report._height, height_m)
+        report.height_m = max(report.height_m, height_m)
     drawn = np.vstack(drawn_points) if drawn_points else np.empty((0, 2))
     report.stations = len(drawn)
 

@@ -64,7 +64,7 @@ def spec(**overrides) -> Railings:
 
 
 class _City:
-    """The two things `_assign` asks a `CityConfig` for."""
+    """The one thing `_assign` asks a `CityConfig` for."""
 
     def region_high(self, region_id: str) -> tuple[float, float]:
         del region_id
@@ -316,11 +316,35 @@ class TestFence:
         assert report.metres_outside_ribbon == pytest.approx(40.0)
         assert report.drawn_m == pytest.approx(20.0)
 
+    def test_metres_bridged_counts_the_fence_the_source_never_published(self) -> None:
+        """The one part of `drawn_m` this stage invents.
+
+        `merge_runs` bridges gaps up to `bridge_gap_m`, so a fence crosses them
+        with nothing underneath it in the source. Right — a break shorter than a
+        car is a digitising artefact — but it is invention, and until it was
+        counted the region's numbers were out by 400 m with nothing saying why.
+        """
+        edge = straight(0.0, 100.0)
+        occupied = {cell: {"CRAIL1": 1} for cell in list(range(10, 20)) + list(range(23, 40))}
+        report = RailingReport()
+        _draw_run(_Builder(), ribbon(edge), NEARSIDE, 10, 39, "CRAIL1", spec(), report, occupied)
+        # Cells 20, 21 and 22 carried no sample and were bridged.
+        assert report.metres_bridged == pytest.approx(3.0)
+        assert report.drawn_m == pytest.approx(30.0)
+
+    def test_nothing_is_bridged_when_every_cell_carried_a_sample(self) -> None:
+        edge = straight(0.0, 100.0)
+        occupied = {cell: {"CRAIL1": 1} for cell in range(10, 40)}
+        report = RailingReport()
+        _draw_run(_Builder(), ribbon(edge), NEARSIDE, 10, 39, "CRAIL1", spec(), report, occupied)
+        assert report.metres_bridged == 0.0
+
     def test_a_run_shorter_than_a_car_is_a_post_and_is_dropped(self) -> None:
         edge = straight(0.0, 100.0)
         report = RailingReport()
         _draw_run(_Builder(), ribbon(edge), NEARSIDE, 10, 11, "CRAIL1", spec(), report)
         assert report.runs_dropped == 1
+        assert report.metres_dropped_short == pytest.approx(2.0)
         assert report.drawn_m == 0.0
 
 

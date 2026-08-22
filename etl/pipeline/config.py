@@ -3061,7 +3061,8 @@ def _railings(body: Any, where: str) -> Railings | None:
     Absent, the region ships no `railings.glb` and the manifest names none —
     the shape `tramway`, `arrows` and `boxjunctions` all take. What is *not*
     offered is a fallback that runs a fence down every kerb: this region's
-    published railings cover 20.3 km against 130 km of drawn kerb, and a
+    published railings cover 20.3 km against 57.1 km of *drawn* kerb (90.2 km
+    of kerb line, less the 33.1 km buried under a neighbouring ribbon), and a
     derived railing would be a wall along streets that have none.
     """
     if body is None:
