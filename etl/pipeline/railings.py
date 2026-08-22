@@ -446,12 +446,48 @@ def _visible(ribbon: Ribbon, side: str, start_m: float, end_m: float) -> list[tu
     return kept
 
 
+def _run_uvs(plan: np.ndarray, *, height_m: float, sink_m: float) -> np.ndarray:
+    """`(metres along the fence, metres above the deck)` for one strip's vertices.
+
+    Ordered to match `_Builder.strip`'s own `[bottom, top]` stack, so the two
+    stay in step by construction rather than by a comment.
+
+    ⚠️ **`u` is the *fence line's* arc length, not the centreline's.** `_station`
+    interpolates each station in the centreline's parameter — deliberately, and
+    its docstring says why — so on a bend the two parameterisations differ by
+    the ratio of their radii. Spacing balusters along the centreline's distance
+    would stretch the pitch around the outside of every corner and pinch it
+    around the inside, and it would render as a perfectly good fence with a
+    limp. Measured here, on the line the balusters actually stand on.
+
+    ⚠️ **`u` restarts at zero for every run**, so two runs never share a phase.
+    That is deliberate and it is invisible: `merge_runs` has already closed
+    every gap shorter than `bridge_gap_m`, so what separates two runs is a real
+    break in the published fence, and a baluster rhythm has nothing to carry
+    across it.
+
+    `v` is measured from the **ribbon deck**, not from the fence's own foot, so
+    `v = 0` is the ground line wherever the fence stands: `-sink_m` at the
+    buried foot, `height_m` at the top. That is what lets a rail band be
+    authored as "0.95 m up" and mean it, rather than meaning a fraction of a
+    height that a second class will change.
+    """
+    along = np.concatenate([[0.0], np.cumsum(np.hypot(*np.diff(plan, axis=0).T))])
+    return np.column_stack(
+        [
+            np.concatenate([along, along]),
+            np.concatenate([np.full(len(plan), -sink_m), np.full(len(plan), height_m)]),
+        ]
+    )
+
+
 class _Builder:
     """Vertical strips accumulated into one primitive, and so one draw call."""
 
     def __init__(self) -> None:
         self._positions: list[np.ndarray] = []
         self._normals: list[np.ndarray] = []
+        self._uvs: list[np.ndarray] = []
         self._triangles: list[np.ndarray] = []
         self._count = 0
 
@@ -471,6 +507,13 @@ class _Builder:
         is toward the carriageway. It is passed rather than derived from the
         winding because a strip's own direction says nothing about which side of
         it the road is on.
+
+        Every vertex also carries `TEXCOORD_0` as **`(metres along this run,
+        metres above the ribbon deck)`** — the coordinate `railings.gdshader`
+        cuts the balusters out of. Not a texture coordinate: nothing samples an
+        image, and `mesh_contract.gd` would refuse the bundle if anything did.
+        It is the same channel and the same kind of payload a tile's storey
+        height travels in (`P3-7`).
         """
         if len(plan) < 2:
             return 0
@@ -479,6 +522,7 @@ class _Builder:
         base = self._count
         self._positions.append(np.vstack([bottom, top]))
         self._normals.append(np.vstack([facing, facing]))
+        self._uvs.append(_run_uvs(plan, height_m=height_m, sink_m=sink_m))
 
         stations = len(plan)
         low = base + np.arange(stations - 1)
@@ -502,6 +546,7 @@ class _Builder:
             name=name,
             positions=np.vstack(self._positions),
             normals=np.vstack(self._normals).astype(np.float32),
+            uvs=np.vstack(self._uvs).astype(np.float32),
             triangles=np.vstack(self._triangles).astype(np.uint32),
             material=RAILINGS_MATERIAL,
         )
