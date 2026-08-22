@@ -17,11 +17,18 @@ signs from TD's index plans, iB1000's features from LandsD's dictionary. Here
 the fgdb data specification gives `LINETYPE` the description *"Line Type"* and
 stops, and the index-plan bundle's two "Miscellaneous Details" sheets are sign
 pictograms and lettering with no railing row on either. So `Q59`'s glyph-table
-rule cannot be satisfied from inside the bundle. What follows is that
-`drawn_line_types` is a **whitelist and not a type map**: the stage draws one
-fence for every code it admits and claims no difference between them, and every
-refused code's metres are published so the whitelist is an argument a reader can
-check rather than an assumption.
+rule cannot be satisfied from inside the bundle. Nor is there a second column to
+fall back on: the layer's other 40 are cartography, and `Q60` records the
+measurement — `SYMBOL_SIZE_*` is the spec's own *"symbol size of marker symbol"*
+in inches on paper, `COLOR` is an undomained pen index, `LINE_WIDTH_*` is null
+throughout.
+
+What follows is the shape of `classes` (`Q61`). The layer is split by **class of
+object** — fence, bollard, vehicle restraint — on the strength of the code
+strings, and **never within a class**: all five fence codes draw one fence,
+because nothing published says `CRAIL1` differs from `HCAIL2`. Every code no
+class admits has its metres published per code, so the table is an argument a
+reader can check rather than an assumption.
 
 **2. The position is registered, and that is this stage's debt.** `Q59`'s 1.6x
 widening has already moved the drawn kerb a median 0.9 m *past* the surveyed
@@ -72,7 +79,7 @@ import numpy as np
 
 from pipeline import gdb
 from pipeline.arrows import ArrowReport
-from pipeline.config import CityConfig, GameTransform, Railings, load_city
+from pipeline.config import CityConfig, GameTransform, RailingClass, Railings, load_city
 from pipeline.documents import read_document, write_document
 from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData, write_glb
@@ -92,22 +99,27 @@ log = logging.getLogger(__name__)
 
 RAILINGS_NAME = "railings.glb"
 RAILINGS_MANIFEST_NAME = "railings.json"
-RAILINGS_MANIFEST_SCHEMA = 1
+# 2 since `Q61`: the layer is drawn as three classes, so `drawn_m` no longer
+# means "railing metres" and a consumer keeping that reading would be **wrong**
+# — hard rule 5's own bar. The top-level key is gone rather than broadened, so
+# an old reader fails loudly instead of quietly counting bollards as fence.
+RAILINGS_MANIFEST_SCHEMA = 2
 
-# ⚠️ **No `-col` suffix**, and here that is a design decision rather than a
-# rendering one. A railing is the one piece of street furniture whose real-world
-# purpose is to stop things, and `GAME_DESIGN.md` lists railings under
-# "deliberately diverge on — omit or make breakable" precisely because a
-# faithfully solid one turns a narrow street into a corridor. Collision is a
-# `B3` question, after `P2-6` has measured a frame on the device floor; until
-# then the fence is scenery and the car drives through it, which is the recorded
-# cost.
-RAILINGS_MESH_NAME = "railings"
-
-# glTF material name, the contract channel `ARROWS_MATERIAL` uses:
-# `tools/generated_scene_import.gd` maps this string onto `tuning/railings.tres`
-# and nothing else.
-RAILINGS_MATERIAL = "railings"
+# ⚠️ **A class's `id` is its mesh name and its glTF material name, verbatim.**
+# One string for one identity: `tools/generated_scene_import.gd` dispatches a
+# material by name, and the graders find a class's geometry by mesh name. The
+# contract channel is `ARROWS_MATERIAL`'s.
+#
+# ⚠️ **No `-col` suffix on any of them**, and here that is a design decision
+# rather than a rendering one. A railing is the one piece of street furniture
+# whose real-world purpose is to stop things, and `GAME_DESIGN.md` lists
+# railings under "deliberately diverge on — omit or make breakable" precisely
+# because a faithfully solid one turns a narrow street into a corridor.
+# Collision is a `B3` question, after `P2-6` has measured a frame on the device
+# floor; until then the fence is scenery and the car drives through it, which is
+# the recorded cost. The guard used to be this one string; now that the name
+# comes from config it is `config._railing_class`, which refuses an id ending in
+# `-col`, plus `verify_railings.gd` in the engine.
 
 # Below this, twice a triangle's area means it has collapsed. The bar
 # `surface.py`, `tramway.py`, `arrows.py` and `boxjunctions.py` all set.
@@ -129,8 +141,92 @@ AT_GRADE = ("", "none", "null", "<na>")
 
 
 @dataclass
+class ClassReport:
+    """What one class of the layer joined, refused and drew (`Q61`).
+
+    ⚠️ **Everything below the join lives here, and that is what the schema bump
+    is about.** `drawn_m` on a class means *that class's* metres. There is no
+    top-level `drawn_m` any more — not broadened, removed — because a reader who
+    kept the old one would be counting bollards and vehicle barriers as
+    pedestrian railing and would have no way to notice.
+
+    ⚠️ **The metres still do not form a partition**, for the reason
+    `RailingReport` records and which is unchanged by the split: they are a
+    chain measured in two frames. `metres_dropped_short` and the run extents are
+    *published* metres; `metres_dropped_sliver`, `metres_outside_ribbon`,
+    `metres_on_buried_kerb` and `drawn_m` are *ribbon* metres, taken after the
+    junction trims come off. `metres_bridged` is drawn without ever having been
+    sampled at all.
+    """
+
+    # Parts admitted to this class, and their source metres. The per-class half
+    # of `RailingReport`'s global read: a class whose `read_m` is healthy and
+    # whose `drawn_m` is zero has lost everything in the join, which is the one
+    # failure the shared `samples_unassigned` cannot show.
+    read: int = 0
+    read_m: float = 0.0
+
+    # ⚠️ **The price of the registration, per class, and it has to be per class.**
+    # How far each assigned sample would move sideways to reach the drawn kerb.
+    # Recorded over every assigned sample **before** the `max_shift_m` refusal,
+    # so `n` past what was drawn is the proof it can see outside its own filter
+    # (`Q58`). Per class because the classes stand at different outsets and a
+    # single pooled distribution would hide one class registering badly behind
+    # another registering well.
+    shift_m: list[float] = field(default_factory=list)
+    samples_over_shift: int = 0
+    metres_deduped: float = 0.0
+
+    runs: int = 0
+    runs_dropped: int = 0
+    # ⚠️ Two counters because they are in two frames, and one was misleading.
+    # A whole run refused for being shorter than `min_run_m` is measured in
+    # *published* metres, before the ribbon clip; a sliver left between two
+    # buried stretches is measured in *ribbon* metres, after it.
+    metres_dropped_short: float = 0.0
+    metres_dropped_sliver: float = 0.0
+    # Run metres falling outside the drawn ribbon's own extent — past a junction
+    # trim, where the cap is and the kerb is not.
+    metres_outside_ribbon: float = 0.0
+    # ⚠️ Run metres on a kerb `surface.py` does not draw, because another ribbon
+    # covers it. Dropped: this is the fence-across-merged-tarmac case.
+    metres_on_buried_kerb: float = 0.0
+
+    drawn_m: float = 0.0
+    # ⚠️ Of the drawn metres, those standing where the source published nothing:
+    # `merge_runs` bridges gaps up to `bridge_gap_m`, and a bridged metre is
+    # drawn without ever having been sampled. The one part of `drawn_m` this
+    # stage invents, so it is published rather than left to be discovered as a
+    # partition that does not close. ⚠️ Watch it hardest on `bollards`, whose
+    # published features have a median length of 1.00 m: bridging is doing more
+    # of the work there than anywhere else.
+    metres_bridged: float = 0.0
+    drawn_m_by_type: dict[str, float] = field(default_factory=dict)
+    # Of the drawn metres, the share on the ribbon's `U = 0` rail. Not a bar — a
+    # region is not obliged to be symmetric — but a flip of the side convention
+    # mirrors every fence in the city and still renders as a city, so the one
+    # number that would move is published.
+    drawn_m_nearside: float = 0.0
+
+    # ⚠️ **Must be 0.** Every quad is wound so its front face looks at the
+    # carriageway — the side the player is on. `railings.gdshader` is
+    # `cull_disabled` so a wrong winding still draws, but the *normal* follows
+    # the winding, and a fence lit from behind reads as a black wall. Held here
+    # rather than assumed because the tramway shipped 5,111 of 5,112 triangles
+    # facing the wrong way with everything else correct (`Q58`).
+    facing_away: int = 0
+    triangles: int = 0
+    vertices: int = 0
+    aabb: list[list[float]] = field(default_factory=list)
+
+    # One distribution as the manifest publishes it: p50/p90/p99/max, the tail
+    # rather than the middle, for `ArrowReport.measured`'s stated reason.
+    measured = staticmethod(ArrowReport.measured)
+
+
+@dataclass
 class RailingReport:
-    """What the stage read, joined, refused and drew.
+    """What the stage read and refused, and a `ClassReport` for each class drawn.
 
     ⚠️ **The counters are what can see this stage fail** — `Q58`'s lesson,
     inherited through `arrows.py` and `boxjunctions.py`, and it bites hardest
@@ -139,20 +235,19 @@ class RailingReport:
     railing mirrored to the other side of the street is a fence. A railing drawn
     across merged tarmac is a fence, and it is the one the player crashes into.
 
-    The partitions:
+    What is here is **the read**, which is one read of one layer and so is not
+    per class:
 
         parts == not_drawn_line_type + on_structure + empty_geometry + read
         source_m == refused_m(sum) + on_structure_m + read_m
 
-    ⚠️ **The metres from `read_m` down do not form a third identity, and trying
-    to read one is a mistake this docstring exists to head off.** They are a
-    chain — sampled, assigned, merged, clipped, drawn — and the losses are
-    measured in two different frames: `metres_dropped_short` and the run extents
-    are *published* metres, while `metres_dropped_sliver`,
-    `metres_outside_ribbon`, `metres_on_buried_kerb` and `drawn_m` are *ribbon*
-    metres, taken after the junction trims come off. `metres_bridged` is the
-    other reason they will not subtract: it is drawn without ever having been
-    sampled.
+    Everything after the read is in `ClassReport`.
+
+    ⚠️ **`samples`, `samples_outside_region` and `samples_unassigned` are shared
+    and cannot be split.** `SideIndex.nearest` returns unassigned as a count
+    rather than as the samples themselves, so there is nothing to attribute. A
+    class that joins to nothing is therefore invisible *here* and visible in its
+    own `read_m` against its own `drawn_m`, which is why both are published.
     """
 
     # ⚠️ **`features` counts features and everything below counts parts**, and
@@ -168,79 +263,44 @@ class RailingReport:
     read: int = 0
 
     # Source metres, before any join. `refused_m` is keyed by the publisher's
-    # own `LINETYPE`, which is what makes `drawn_line_types` an argument: a
-    # reader sees exactly which codes were left out and how much of the region
-    # went with them.
+    # own `LINETYPE`, which is what makes the class table an argument: a reader
+    # sees exactly which codes no class admits and how much of the region went
+    # with them.
     source_m: float = 0.0
     refused_m: dict[str, float] = field(default_factory=dict)
     # ⚠️ Kept apart from `refused_m`, and the region is why: six features carry
-    # 1,579 m of `CRAIL1` — a whitelisted code — on a flyover parapet. Folded
+    # 1,579 m of `CRAIL1` — an *admitted* code — on a flyover parapet. Folded
     # into the per-code table those metres read as "this code was not drawn",
-    # which is the opposite of true and would make the whitelist look like it
-    # refuses its own members.
+    # which is the opposite of true.
     on_structure_m: float = 0.0
     read_m: float = 0.0
 
     samples: int = 0
     samples_outside_region: int = 0
     samples_unassigned: int = 0
-
-    # ⚠️ **The price of the registration, and the number this stage exists to
-    # publish.** How far each assigned sample would move sideways to reach the
-    # drawn kerb. Recorded over every assigned sample **before** the
-    # `max_shift_m` refusal, so `n` past `samples_drawn` is the proof it can see
-    # outside its own filter (`Q58`). A distribution that creeps upward is the
-    # widening and the survey drifting apart, which is a finding about the
-    # ribbon rather than about this layer.
-    shift_m: list[float] = field(default_factory=list)
-    samples_over_shift: int = 0
-
     metres_sampled: float = 0.0
-    metres_deduped: float = 0.0
 
-    runs: int = 0
-    runs_dropped: int = 0
-    # ⚠️ **Two counters because they are in two frames, and one was misleading.**
-    # A whole run refused for being shorter than `min_run_m` is measured in
-    # *published* metres, before the ribbon clip; a sliver left between two
-    # buried stretches is measured in *ribbon* metres, after it. Summed into one
-    # field they look subtractable from `metres_deduped` and are not.
-    metres_dropped_short: float = 0.0
-    metres_dropped_sliver: float = 0.0
-    # Run metres falling outside the drawn ribbon's own extent — past a junction
-    # trim, where the cap is and the kerb is not. Clipped rather than drawn, so
-    # a fence never crosses a junction mouth.
-    metres_outside_ribbon: float = 0.0
-    # ⚠️ Run metres on a kerb `surface.py` does not draw, because another ribbon
-    # covers it. Dropped: this is the fence-across-merged-tarmac case, and it is
-    # 11.1% of the region.
-    metres_on_buried_kerb: float = 0.0
+    # One entry per class that read anything, keyed by the class `id` — which is
+    # also its mesh name and its glTF material name.
+    classes: dict[str, ClassReport] = field(default_factory=dict)
 
-    drawn_m: float = 0.0
-    # ⚠️ Of the drawn metres, those standing where the source published no
-    # railing at all: `merge_runs` bridges gaps up to `bridge_gap_m`, and a
-    # bridged metre is drawn without ever having been sampled. It is the one
-    # part of `drawn_m` this stage invents, so it is published rather than
-    # left to be discovered as a partition that does not close.
-    metres_bridged: float = 0.0
-    drawn_m_by_type: dict[str, float] = field(default_factory=dict)
-    # Of the drawn metres, the share on the ribbon's `U = 0` rail. Not a bar —
-    # a region is not obliged to be symmetric — but a flip of the side
-    # convention mirrors every fence in the city and still renders as a city,
-    # so the one number that would move is published.
-    drawn_m_nearside: float = 0.0
-
-    # ⚠️ **Must be 0.** Every quad is wound so its front face looks at the
-    # carriageway — the side the player is on. `railings.gdshader` is
-    # `cull_disabled` so a wrong winding still draws, but the *normal* follows
-    # the winding, and a fence lit from behind reads as a black wall. Held here
-    # rather than assumed because the tramway shipped 5,111 of 5,112 triangles
-    # facing the wrong way with everything else correct (`Q58`).
-    facing_away: int = 0
-    triangles: int = 0
-    vertices: int = 0
+    # One file, so one byte count.
     bytes: int = 0
-    aabb: list[list[float]] = field(default_factory=list)
+
+    def klass(self, klass_id: str) -> ClassReport:
+        """This class's counters, created on first use."""
+        return self.classes.setdefault(klass_id, ClassReport())
+
+    @property
+    def drawn_m(self) -> float:
+        """Every class's drawn metres.
+
+        ⚠️ **Deliberately not published.** It exists so `build_region` can gate
+        the manifest's `asset` key on whether anything was drawn at all. Written
+        into the document it would be the exact number `Q61` bumped the schema
+        to stop a reader trusting.
+        """
+        return sum(report.drawn_m for report in self.classes.values())
 
     # One distribution as the manifest publishes it: p50/p90/p99/max, the tail
     # rather than the middle, for `ArrowReport.measured`'s stated reason.
@@ -261,10 +321,13 @@ class Ribbon:
 
     # The trimmed centreline, `(n, 4)` as `(x, y, z, half_width)`.
     points: np.ndarray
-    # The fence line for each side, `(n, 2)` in plan — the drawn carriageway
-    # edge pushed out by `outset_m`, so the fence stands behind the kerb strip
-    # rather than on the lane.
-    fence: dict[str, np.ndarray]
+    # The standing line for each class and side, `(n, 2)` in plan — the drawn
+    # carriageway edge pushed out by that class's `outset_m`, so the furniture
+    # stands behind the kerb strip rather than on the lane. Keyed
+    # `[class id][side]`: the classes may stand at different outsets, and
+    # precomputing each is three cheap `boundary` calls against a per-station
+    # recomputation in the inner loop.
+    fence: dict[str, dict[str, np.ndarray]]
     # Cumulative plan distance along `points`. **Ribbon metres**: zero is the
     # trimmed start, which is the frame `kerb_hidden_m` is published in.
     along: np.ndarray
@@ -327,7 +390,8 @@ def read_lines(
             report.source_m += length_m
 
             code = str(types[owner])
-            if code not in spec.drawn_line_types:
+            klass = spec.class_of(code)
+            if klass is None:
                 report.not_drawn_line_type += 1
                 report.refused_m[code] = report.refused_m.get(code, 0.0) + length_m
                 continue
@@ -344,6 +408,13 @@ def read_lines(
             lines.append((np.column_stack([game_x, game_z]), code))
             report.read += 1
             report.read_m += length_m
+            # The same read, split by class. Its whole job is to be compared
+            # with that class's `drawn_m`: `samples_unassigned` is shared and
+            # cannot be attributed, so a class that reads well and draws nothing
+            # is only visible as the gap between these two numbers.
+            counters = report.klass(klass.id)
+            counters.read += 1
+            counters.read_m += length_m
     return lines
 
 
@@ -376,12 +447,14 @@ def ribbons(graph: dict, surface: dict, spec: Railings) -> dict[int, Ribbon]:
         if len(shaped) < 2:
             continue
         offsets = mitres(shaped)
-        outset = shaped[:, 3] + spec.outset_m
         built[int(edge["id"])] = Ribbon(
             points=shaped,
             fence={
-                NEARSIDE: boundary(shaped, offsets, outset),
-                OFFSIDE: boundary(shaped, offsets, -outset),
+                klass.id: {
+                    NEARSIDE: boundary(shaped, offsets, shaped[:, 3] + klass.outset_m),
+                    OFFSIDE: boundary(shaped, offsets, -(shaped[:, 3] + klass.outset_m)),
+                }
+                for klass in spec.classes
             },
             along=plan_lengths(shaped),
             hidden=entry.get("kerb_hidden_m") or {},
@@ -401,8 +474,8 @@ def _half_width_at(ribbon: Ribbon, along_m: float) -> float:
     return float(np.interp(along_m, ribbon.along, ribbon.points[:, 3]))
 
 
-def _station(ribbon: Ribbon, side: str, at_m: float) -> tuple[np.ndarray, float]:
-    """The fence point and deck height at one ribbon distance, as `((x, z), y)`.
+def _station(ribbon: Ribbon, klass_id: str, side: str, at_m: float) -> tuple[np.ndarray, float]:
+    """The standing point and deck height at one ribbon distance, as `((x, z), y)`.
 
     ⚠️ Interpolated in the **centreline's** parameter, not the fence line's.
     The ribbon is quads between consecutive offset vertices, so a point at
@@ -410,7 +483,7 @@ def _station(ribbon: Ribbon, side: str, at_m: float) -> tuple[np.ndarray, float]
     quad's outer edge — the two parameterisations differ in length on a bend and
     agree exactly on where the edge is, which is the thing being drawn.
     """
-    rail = ribbon.fence[side]
+    rail = ribbon.fence[klass_id][side]
     index = int(np.clip(np.searchsorted(ribbon.along, at_m) - 1, 0, len(ribbon.along) - 2))
     span = ribbon.along[index + 1] - ribbon.along[index]
     fraction = 0.0 if span <= 0.0 else float((at_m - ribbon.along[index]) / span)
@@ -539,7 +612,12 @@ class _Builder:
         return 2 * (stations - 1)
 
     def build(self, name: str) -> MeshData | None:
-        """The mesh, minus collapsed triangles."""
+        """The mesh, minus collapsed triangles.
+
+        `name` is the class `id`, and it is the mesh name **and** the glTF
+        material name — one string for one identity, so the engine's material
+        dispatch and the graders' mesh lookup cannot drift apart.
+        """
         if not self._triangles:
             return None
         mesh = MeshData(
@@ -548,7 +626,7 @@ class _Builder:
             normals=np.vstack(self._normals).astype(np.float32),
             uvs=np.vstack(self._uvs).astype(np.float32),
             triangles=np.vstack(self._triangles).astype(np.uint32),
-            material=RAILINGS_MATERIAL,
+            material=name,
         )
         twice_area = np.linalg.norm(mesh.triangle_cross(), axis=1)
         return select_triangles(mesh, twice_area > _MIN_TWICE_AREA_M2)
@@ -605,21 +683,37 @@ def build_region(
     )
     drawn = ribbons(graph, surface, spec)
 
-    builder = _Builder()
+    # ⚠️ **One builder per class, and so one primitive per class.** They could
+    # share one — the mask that tells a bollard from a fence is a material
+    # parameter, not a vertex attribute — and they deliberately do not. Separate
+    # meshes are what let `railing_error.py` walk the fence's feet without a
+    # bollard's in the pile, what let each class carry its own `.tres`, and what
+    # make a class's triangle count a number rather than a share. The cost is
+    # two extra draw calls against a `<150` budget the drive scene reads 36 on.
+    builders = {klass.id: _Builder() for klass in spec.classes}
     cells = _assign(lines, graph, drawn, spec, city, region_id, report)
-    for (edge, side), found in sorted(cells.items()):
+    for (edge, klass_id, side), found in sorted(cells.items()):
         ribbon = drawn[edge]
-        for start, stop, code in merge_runs(found, spec.sample_m, spec.bridge_gap_m):
-            _draw_run(builder, ribbon, side, start, stop, code, spec, report, found)
+        klass = next(entry for entry in spec.classes if entry.id == klass_id)
+        for start, stop, code in merge_runs(found, spec.sample_m, klass.bridge_gap_m):
+            _draw_run(
+                builders[klass_id], ribbon, klass, side, start, stop, code, spec, report, found
+            )
 
-    mesh = builder.build(RAILINGS_MESH_NAME)
-    if mesh is not None:
-        report.facing_away = facing_away(mesh)
-        report.triangles = mesh.triangle_count
-        report.vertices = len(mesh.positions)
+    meshes: list[MeshData] = []
+    for klass in spec.classes:
+        mesh = builders[klass.id].build(klass.id)
+        if mesh is None:
+            continue
+        counters = report.klass(klass.id)
+        counters.facing_away = facing_away(mesh)
+        counters.triangles = mesh.triangle_count
+        counters.vertices = len(mesh.positions)
         low, high = mesh.aabb()
-        report.aabb = [list(low), list(high)]
-        report.bytes = write_glb(out_dir / RAILINGS_NAME, [mesh])
+        counters.aabb = [list(low), list(high)]
+        meshes.append(mesh)
+    if meshes:
+        report.bytes = write_glb(out_dir / RAILINGS_NAME, meshes)
 
     _write_manifest(out_dir, city, region_id, report)
     return report
@@ -633,15 +727,21 @@ def _assign(
     city: CityConfig,
     region_id: str,
     report: RailingReport,
-) -> dict[tuple[int, str], dict[int, dict[str, int]]]:
-    """Sample every railing, put each sample on an edge and a side, price the move.
+) -> dict[tuple[int, str, str], dict[int, dict[str, int]]]:
+    """Sample every feature, put each sample on an edge, a class and a side.
 
     ⚠️ **The shift bar is applied per sample, not per run.** A run whose middle
     hugs the kerb and whose tail wanders into a plaza would otherwise be drawn
     whole or refused whole; judged per sample, the wandering tail simply stops
     being part of the run and `merge_runs` closes over what is left.
+
+    ⚠️ **The class is part of the cell key, and it has to be.** A bollard row and
+    a railing can be published along the same kerb — they are different objects
+    in the same place — and pooled into one cell they would merge into a single
+    run, drawn once, at whichever class's height won. Keyed apart they stay two
+    runs and each is drawn as itself.
     """
-    cells: dict[tuple[int, str], dict[int, dict[str, int]]] = {}
+    cells: dict[tuple[int, str, str], dict[int, dict[str, int]]] = {}
     if not lines or not drawn:
         return cells
 
@@ -662,21 +762,30 @@ def _assign(
     report.samples_unassigned += unassigned
 
     for item in assigned:
+        klass = spec.class_of(item.kind)
+        if klass is None:
+            # Unreachable: `read_lines` admits nothing outside the table. Held
+            # rather than asserted because a silently-dropped sample is exactly
+            # the kind of loss this stage's counters exist to make impossible,
+            # and `None` would otherwise surface as an unrelated KeyError below.
+            raise ValueError(f"sample of {item.kind!r} belongs to no class; read_lines admitted it")
+        counters = report.klass(klass.id)
         ribbon = drawn[item.edge]
         at_m = item.along_m - ribbon.trim_start_m
-        shift_m = abs(_half_width_at(ribbon, at_m) + spec.outset_m - item.offset_m)
+        shift_m = abs(_half_width_at(ribbon, at_m) + klass.outset_m - item.offset_m)
         # Recorded before the refusal, so `n` past what was drawn is the proof
         # this distribution can read outside its own filter (`Q58`).
-        report.shift_m.append(shift_m)
+        counters.shift_m.append(shift_m)
         if shift_m > spec.max_shift_m:
-            report.samples_over_shift += 1
+            counters.samples_over_shift += 1
             continue
-        cell = cells.setdefault((item.edge, item.side), {}).setdefault(
+        cell = cells.setdefault((item.edge, klass.id, item.side), {}).setdefault(
             int(item.along_m // spec.sample_m), {}
         )
         cell[item.kind] = cell.get(item.kind, 0) + 1
 
-    report.metres_deduped = sum(len(found) for found in cells.values()) * spec.sample_m
+    for (_edge, klass_id, _side), found in cells.items():
+        report.klass(klass_id).metres_deduped += len(found) * spec.sample_m
     return cells
 
 
@@ -700,6 +809,7 @@ def _tracks(graph: dict, drawn: dict[int, Ribbon]) -> list[tuple[int, np.ndarray
 def _draw_run(
     builder: _Builder,
     ribbon: Ribbon,
+    klass: RailingClass,
     side: str,
     start_cell: int,
     stop_cell: int,
@@ -708,66 +818,75 @@ def _draw_run(
     report: RailingReport,
     occupied: dict[int, dict[str, int]] | None = None,
 ) -> None:
-    """One merged run of fence, clipped to the ribbon and to its drawn kerb.
+    """One merged run of one class, clipped to the ribbon and to its drawn kerb.
+
+    Every bar and dimension comes off `klass`, and only `sample_m` — the cell
+    pitch the run's own extent is expressed in — comes off `spec`. That split is
+    the point of the class table: the join is shared, and nothing below it is.
 
     `occupied` is the run's own cell table, used only to count the metres drawn
     across bridged gaps — see `_bridged_m`. Optional so a test can drive one run
     without building one.
     """
-    report.runs += 1
+    report_class = report.klass(klass.id)
+    report_class.runs += 1
     published_start = start_cell * spec.sample_m
     published_end = (stop_cell + 1) * spec.sample_m
-    if published_end - published_start < spec.min_run_m:
-        report.runs_dropped += 1
-        report.metres_dropped_short += published_end - published_start
+    if published_end - published_start < klass.min_run_m:
+        report_class.runs_dropped += 1
+        report_class.metres_dropped_short += published_end - published_start
         return
 
     start_m = published_start - ribbon.trim_start_m
     end_m = published_end - ribbon.trim_start_m
     clipped_start = min(max(start_m, 0.0), ribbon.length_m)
     clipped_end = min(max(end_m, 0.0), ribbon.length_m)
-    report.metres_outside_ribbon += (end_m - start_m) - (clipped_end - clipped_start)
+    report_class.metres_outside_ribbon += (end_m - start_m) - (clipped_end - clipped_start)
     if clipped_end - clipped_start <= 0.0:
         return
 
     visible = _visible(ribbon, side, clipped_start, clipped_end)
-    report.metres_on_buried_kerb += (clipped_end - clipped_start) - sum(
+    report_class.metres_on_buried_kerb += (clipped_end - clipped_start) - sum(
         high - low for low, high in visible
     )
 
     drawn: list[tuple[float, float]] = []
     for low, high in visible:
-        if high - low < spec.min_run_m:
+        if high - low < klass.min_run_m:
             # A sliver left between two buried stretches is a panel, not a
             # fence. Counted apart from the short-run refusals above because it
             # is measured in ribbon metres and they are measured in published
             # ones.
-            report.metres_dropped_sliver += high - low
+            report_class.metres_dropped_sliver += high - low
             continue
-        at = np.arange(low, high, spec.station_m)
+        at = np.arange(low, high, klass.station_m)
         at = np.append(at, high) if at[-1] < high else at
         plan = np.empty((len(at), 2))
         deck = np.empty(len(at))
         for row, distance in enumerate(at):
-            plan[row], deck[row] = _station(ribbon, side, float(distance))
+            plan[row], deck[row] = _station(ribbon, klass.id, side, float(distance))
 
         facing = _facing(plan, ribbon, at)
         builder.strip(
             plan,
             deck,
-            height_m=spec.height_m,
-            sink_m=spec.base_sink_m,
+            height_m=klass.height_m,
+            sink_m=klass.base_sink_m,
             facing=facing,
             flip=side == NEARSIDE,
         )
         drawn.append((low, high))
-        report.drawn_m += high - low
-        report.drawn_m_by_type[code] = report.drawn_m_by_type.get(code, 0.0) + (high - low)
+        report_class.drawn_m += high - low
+        report_class.drawn_m_by_type[code] = report_class.drawn_m_by_type.get(code, 0.0) + (
+            high - low
+        )
         if side == NEARSIDE:
-            report.drawn_m_nearside += high - low
+            report_class.drawn_m_nearside += high - low
 
     if occupied is not None:
-        report.metres_bridged += _bridged_m(drawn, occupied, start_cell, stop_cell, ribbon, spec)
+        report_class.metres_bridged += _bridged_m(
+            drawn, occupied, start_cell, stop_cell, ribbon, spec
+        )
 
 
 def _bridged_m(
@@ -821,42 +940,18 @@ def _facing(plan: np.ndarray, ribbon: Ribbon, at: np.ndarray) -> np.ndarray:
     return np.column_stack([unit[:, 0], np.zeros(len(unit)), unit[:, 1]]).astype(np.float32)
 
 
-def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: RailingReport) -> int:
-    document = {
-        "schema_version": RAILINGS_MANIFEST_SCHEMA,
-        "city_id": city.id,
-        "region_id": region_id,
-        # Gated on what was drawn, for the reason `tramway.json` records: a
-        # manifest naming an asset the bundle does not hold is what `CITY_SCHEMA`
-        # 11 was bumped over.
-        "asset": RAILINGS_NAME if report.drawn_m > 0.0 else None,
-        # The read, as four disjoint parts of `features`.
-        # ⚠️ `features` is features; every count below it is **parts**. The
-        # two differ by ten in this region, and mixing them is how a share comes
-        # out over one (`kerbside.py`).
-        "features": report.features,
-        "parts": report.parts,
-        "not_drawn_line_type": report.not_drawn_line_type,
-        "on_structure": report.on_structure,
-        "empty_geometry": report.empty_geometry,
+def _class_document(report: ClassReport) -> dict:
+    """One class's counters, in the order the chain runs.
+
+    ⚠️ **The metres are a chain, not a partition, and the docstring on
+    `ClassReport` is the one that explains why.** Read top to bottom: what was
+    admitted, what the join priced and refused, what the ribbon and the buried
+    kerbs took, what was drawn, and how much of what was drawn the stage
+    invented.
+    """
+    return {
         "read": report.read,
-        # ⚠️ **What the whitelist costs, per published code.** Nothing in the
-        # bundle defines `LINETYPE`, so the decision to draw `CRAIL1` and not
-        # `CBARRIER` is an argument from the code strings themselves; this is
-        # the figure that makes the argument reviewable rather than assumed.
-        "source_m": round(report.source_m, 2),
-        "refused_m": {code: round(metres, 2) for code, metres in sorted(report.refused_m.items())},
-        # ⚠️ Separate from `refused_m`, because six of this region's features put
-        # 1,579 m of a *whitelisted* code on a flyover parapet — a `Q15` refusal,
-        # not a vocabulary one.
-        "on_structure_m": round(report.on_structure_m, 2),
         "read_m": round(report.read_m, 2),
-        # The join.
-        "samples": report.samples,
-        "samples_outside_region": report.samples_outside_region,
-        "samples_unassigned": report.samples_unassigned,
-        "metres_sampled": round(report.metres_sampled, 2),
-        "metres_deduped": round(report.metres_deduped, 2),
         # ⚠️ **The price of the registration.** Recorded over every assigned
         # sample including the ones `max_shift_m` then refused, so `n` exceeding
         # the drawn metres is the proof it reads outside its own filter (`Q58`).
@@ -864,7 +959,7 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Rai
         # drifting apart — a finding about the ribbon, not a bar to retune.
         "shift_m": report.measured(report.shift_m),
         "samples_over_shift": report.samples_over_shift,
-        # The runs, and every metre lost between the join and the mesh.
+        "metres_deduped": round(report.metres_deduped, 2),
         "runs": report.runs,
         "runs_dropped": report.runs_dropped,
         # ⚠️ Two frames, and they are not addable. A short run is refused in
@@ -878,10 +973,9 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Rai
         "metres_on_buried_kerb": round(report.metres_on_buried_kerb, 2),
         "drawn_m": round(report.drawn_m, 2),
         # ⚠️ **The one part of `drawn_m` the stage invents.** `merge_runs`
-        # bridges gaps up to `bridge_gap_m`, so these metres are drawn where the
-        # source published nothing. Without this the partition
-        # `metres_deduped - dropped - outside_ribbon - buried` misses `drawn_m`
-        # by exactly this much, and nothing says why.
+        # bridges gaps up to the class's `bridge_gap_m`, so these metres are
+        # drawn where the source published nothing. Watch it hardest on
+        # `bollards`, whose features have a median published length of 1.00 m.
         "metres_bridged": round(report.metres_bridged, 2),
         "drawn_m_by_type": {
             code: round(metres, 2) for code, metres in sorted(report.drawn_m_by_type.items())
@@ -893,8 +987,63 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Rai
         "facing_away": report.facing_away,
         "triangles": report.triangles,
         "vertices": report.vertices,
-        "bytes": report.bytes,
         "aabb": report.aabb,
+    }
+
+
+def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: RailingReport) -> int:
+    document = {
+        "schema_version": RAILINGS_MANIFEST_SCHEMA,
+        "city_id": city.id,
+        "region_id": region_id,
+        # Gated on what was drawn, for the reason `tramway.json` records: a
+        # manifest naming an asset the bundle does not hold is what `CITY_SCHEMA`
+        # 11 was bumped over.
+        "asset": RAILINGS_NAME if report.drawn_m > 0.0 else None,
+        # The read, as four disjoint parts of `features`. One read of one layer,
+        # so this half is not per class.
+        # ⚠️ `features` is features; every count below it is **parts**. The
+        # two differ by ten in this region, and mixing them is how a share comes
+        # out over one (`kerbside.py`).
+        "features": report.features,
+        "parts": report.parts,
+        "not_drawn_line_type": report.not_drawn_line_type,
+        "on_structure": report.on_structure,
+        "empty_geometry": report.empty_geometry,
+        "read": report.read,
+        # ⚠️ **What the class table costs, per published code.** Nothing in the
+        # bundle defines `LINETYPE` and the layer's other columns are
+        # cartography (`Q60`), so admitting `CRAIL1` as a fence and `bollard0`
+        # as a post and neither `SOLID` nor `AMT1` as anything is an argument
+        # from the code strings themselves. This is the figure that makes the
+        # argument reviewable rather than assumed.
+        "source_m": round(report.source_m, 2),
+        "refused_m": {code: round(metres, 2) for code, metres in sorted(report.refused_m.items())},
+        # ⚠️ Separate from `refused_m`, because six of this region's features put
+        # 1,579 m of an *admitted* code on a flyover parapet — a `Q15` refusal,
+        # not a vocabulary one.
+        "on_structure_m": round(report.on_structure_m, 2),
+        "read_m": round(report.read_m, 2),
+        # The join. ⚠️ **Shared and unsplittable**: `SideIndex.nearest` returns
+        # unassigned as a count rather than as the samples themselves, so there
+        # is nothing to attribute to a class. A class that joins to nothing is
+        # invisible here and visible as its own `read_m` against its `drawn_m`.
+        "samples": report.samples,
+        "samples_outside_region": report.samples_outside_region,
+        "samples_unassigned": report.samples_unassigned,
+        "metres_sampled": round(report.metres_sampled, 2),
+        # ⚠️ **Everything below the join is per class, and there is deliberately
+        # no total.** A top-level `drawn_m` would now mean fence plus bollard
+        # plus vehicle barrier, and a reader who kept the schema-1 reading would
+        # count all three as pedestrian railing with nothing to say otherwise.
+        # That is what `RAILINGS_MANIFEST_SCHEMA` 2 is for: the key is removed
+        # rather than broadened, so an old consumer fails loudly.
+        "classes": {
+            klass_id: _class_document(counters)
+            for klass_id, counters in sorted(report.classes.items())
+        },
+        # One file, so one byte count.
+        "bytes": report.bytes,
     }
     return write_document(out_dir / RAILINGS_MANIFEST_NAME, document)
 
@@ -915,14 +1064,16 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     city = load_city(args.city)
     report = build_region(city, args.region, sources_root=args.sources_root, out_root=args.out_root)
-    log.info(
-        "railings: %d features -> %.0f m read, %.0f m drawn in %d runs, %d triangles",
-        report.features,
-        report.read_m,
-        report.drawn_m,
-        report.runs,
-        report.triangles,
-    )
+    log.info("railings: %d features -> %.0f m read", report.features, report.read_m)
+    for klass_id, counters in sorted(report.classes.items()):
+        log.info(
+            "  %-9s %6.0f m read -> %6.0f m drawn in %3d runs, %5d triangles",
+            klass_id,
+            counters.read_m,
+            counters.drawn_m,
+            counters.runs,
+            counters.triangles,
+        )
     return 0
 
 

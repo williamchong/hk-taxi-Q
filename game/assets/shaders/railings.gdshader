@@ -101,20 +101,36 @@ uniform float rail_roughness : hint_range(0.0, 1.0) = 0.55;
 uniform float rail_metallic : hint_range(0.0, 1.0) = 0.0;
 
 group_uniforms fence;
+// ⚠️ **These six are what tell one class of street furniture from another, and
+// they are the whole difference.** `Q61` draws the railing layer as three
+// classes — `railings`, `bollards`, `barriers` — from one `.glb`, through this
+// one shader, with a `.tres` each. A bollard is a strip whose mask keeps wide
+// uprights at a large pitch and no rails; a vehicle barrier is a strip whose
+// mask keeps two horizontal rails and no balusters. Nothing branches; the
+// numbers do the work, which is what keeps the difference in tuning data where
+// hard rule 4 wants it.
+//
+// **A member is switched off by giving it zero width**, and both functions
+// below return exactly 0.0 for a zero-width bar or a zero-height band. That is
+// the convention the bollard and barrier `.tres` files use, and it is why
+// `baluster_width_m` is allowed down to 0.0 rather than to some small epsilon —
+// an epsilon would leave faint ghost balusters on a bollard.
+//
 // The vertical members, in metres along the run. A Hong Kong pedestrian railing
 // is a picket of narrow balusters at roughly a hand's width — close enough that
 // a child cannot pass, which is what the fence is for.
 uniform float baluster_pitch_m : hint_range(0.02, 1.0) = 0.11;
-uniform float baluster_width_m : hint_range(0.005, 0.5) = 0.035;
-// The heavier uprights the balusters hang between. Pitched independently of
-// `station_m`: the mesh's stations are where the fence takes its height from
-// the ribbon, which is a different question from where its posts are.
+uniform float baluster_width_m : hint_range(0.0, 0.5) = 0.035;
+// The heavier uprights the balusters hang between — and, on a bollard, the
+// whole object. Pitched independently of `station_m`: the mesh's stations are
+// where a run takes its height from the ribbon, which is a different question
+// from where its posts are.
 uniform float post_pitch_m : hint_range(0.1, 20.0) = 2.0;
-uniform float post_width_m : hint_range(0.01, 1.0) = 0.09;
+uniform float post_width_m : hint_range(0.0, 1.0) = 0.09;
 // The horizontal rails, as `(low, high)` in metres above the ribbon deck —
 // `UV.y`'s own frame, so these are read off the street and mean what they say.
 // The top rail is the one a fence is recognised by at distance; the bottom one
-// is what stops the picket reading as loose bars.
+// is what stops the picket reading as loose bars. `vec2(0.0, 0.0)` is "no rail".
 uniform vec2 top_rail_m = vec2(0.95, 1.10);
 uniform vec2 bottom_rail_m = vec2(0.08, 0.18);
 // ⚠️ **Below the deck the fence is solid, and that is what `base_sink_m` is

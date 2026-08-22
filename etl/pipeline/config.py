@@ -886,6 +886,66 @@ class BoxJunctions:
 
 
 @dataclass(frozen=True)
+class RailingClass:
+    """One kind of street furniture in the railing layer (`P3-19`, `Q61`).
+
+    ⚠️ **A class is a claim about *what a code is*, and it is the only kind of
+    claim this layer supports.** `Q60` established that `LINETYPE` has no
+    published domain, and the symbology correction closed the last door: the
+    layer's other 40 columns are cartography — `SYMBOL_SIZE_*` is the spec's own
+    *"symbol size of marker symbol"* in inches on paper, `COLOR` is an undomained
+    pen index, `LINE_WIDTH_*` is null throughout. So nothing published says what
+    any of these things look like.
+
+    What follows is the shape of this table. It splits the layer by **class of
+    object** — a fence, a post, a vehicle restraint — on the strength of the code
+    strings, which is the argument `drawn_line_types` was already making for one
+    class and is now making for three. It does **not** split within a class: all
+    five fence codes draw one fence, because nothing says `CRAIL1` differs from
+    `HCAIL2` and `Q54` debits exactly that invention.
+
+    ⚠️ **Every dimension here is authored, and the run parameters are per class
+    because the region forces it, not for symmetry.** Bollard features have a
+    median published length of **1.00 m** and 84% are under 4 m; the fence's
+    `min_run_m` of 4.0 would refuse essentially all of them and report it as a
+    clean run of short-run refusals. A shared value would have been a silent
+    decision to draw no bollards.
+    """
+
+    # The class's own name, and the mesh and glTF material name it draws into.
+    # One string for all three, because they are the same identity: the engine
+    # dispatches a material by name (`tools/generated_scene_import.gd`) and the
+    # graders find a class's geometry by mesh name.
+    id: str
+    # Which published `LINETYPE` values this class admits. ⚠️ Still a whitelist
+    # and **not** a type map — see the class docstring. Disjoint across classes,
+    # checked at load: a code in two classes would be drawn twice, in two
+    # places, and both would look right.
+    line_types: tuple[str, ...]
+    # `kerbside`'s run parameters, per class. A break shorter than this is not a
+    # break and a run shorter than `min_run_m` is not a fence — but what counts
+    # as "shorter" depends on what is being drawn, which is the warning above.
+    bridge_gap_m: float
+    min_run_m: float
+    # Pitch the drawn geometry is stationed at along the kerb. Every station
+    # takes its height from the ribbon, so this is what lets a run follow the
+    # camber of a street instead of chording across it.
+    station_m: float
+    # ⚠️ **Authored**, like everything else here. A pedestrian railing stands
+    # about waist-to-chest; a bollard is shorter; a vehicle barrier is lower
+    # again and heavier.
+    height_m: float
+    # How far the foot is sunk below the ribbon it stands on. The kerb is
+    # flattened for mountability (`GAME_DESIGN.md`) and the ground beside it is
+    # a separate decimated surface, so anything planted exactly at the road's
+    # own height shows daylight under it.
+    base_sink_m: float
+    # How far outside the drawn carriageway edge this class stands. The kerb
+    # strip `roads.surface.kerb_width_m` draws is what it stands behind.
+    outset_m: float
+
+
+@dataclass(frozen=True)
 class Railings:
     """Published pedestrian railings, drawn by `pipeline/railings.py` (`P3-19`).
 
@@ -898,11 +958,22 @@ class Railings:
     available here, and every dimension below is **authored**, declared as
     authored, rather than read.
 
-    What follows from that is the shape of `drawn_line_types`: a whitelist of
-    codes, and *no type map*. The region publishes 19 values and this stage
-    draws one fence for all of the ones it admits — it does not claim that
-    `CRAIL1` is a different railing from `HCAIL2`, because nothing published
-    says so and `Q54` debits exactly that kind of invention.
+    What follows from that is the shape of `classes`: the layer is split by
+    **class of object** — fence, bollard, vehicle restraint — on the strength of
+    the code strings, and **never within a class**. All five fence codes draw
+    one fence: this block does not claim that `CRAIL1` is a different railing
+    from `HCAIL2`, because nothing published says so and `Q54` debits exactly
+    that kind of invention. `drawn_line_types` is derived from the table rather
+    than authored beside it, so a code cannot be admitted and then belong to no
+    class.
+
+    ⚠️ **The join is shared and everything below it is not.** `sample_m`,
+    `max_offset_m` and `max_shift_m` are one join onto one set of kerbs, so they
+    live here. The run parameters and every dimension live on the class, and
+    that is measured rather than tidy: bollard features have a median published
+    length of **1.00 m** and 84% are under 4 m, so the fence's `min_run_m` of
+    4.0 refuses all but a handful of them. Shared, it would have been a silent
+    decision to draw no bollards at all.
 
     ⚠️ **The position is registered, not read, and that is this block's real
     debt.** `Q59`'s widening puts the drawn kerb a median 0.9 m *outside* the
@@ -915,20 +986,15 @@ class Railings:
     move nobody measures is an invention nobody can see.
 
     ⚠️ **There is no material here, and its absence is the decision** — the
-    paragraph `Arrows` and `BoxJunctions` both carry. The colour is authored in
-    `game/tuning/railings.tres`, and the glTF material *name* the engine
-    dispatches on is `RAILINGS_MATERIAL` in `pipeline/railings.py`.
+    paragraph `Arrows` and `BoxJunctions` both carry. The colours are authored
+    in `game/tuning/railings.tres`, `bollards.tres` and `barriers.tres`; what
+    travels from here is each class's `id`, which is also its mesh name and the
+    glTF material name the engine dispatches on.
     """
 
     source: str
     member: str | None
     layer: SourceLayer
-    # Which published `LINETYPE` values this city draws as a railing. ⚠️ A
-    # whitelist and **not** a type map: see the class docstring. Everything
-    # outside it is refused and its metres counted, which is what keeps the
-    # bollards, the crash gates and the four `AMT` variants from being asserted
-    # to be pedestrian railings on the strength of sharing a layer with them.
-    drawn_line_types: tuple[str, ...]
     # Pitch the source lines are sampled at before being assigned to an edge and
     # a side. `kerbside.resample`'s parameter, and the cell size the same
     # stage's dedupe works in: two features drawn along one kerb collapse into
@@ -949,37 +1015,38 @@ class Railings:
     # railings at all, and drawing them would be inventing a fence rather than
     # relocating one.
     max_shift_m: float
-    # Gaps in the sampled cells shorter than this are bridged, and runs shorter
-    # than `min_run_m` are dropped. `kerbside`'s parameters, for its reasons: a
-    # break shorter than a car is not a break, and a two-metre orphan is a
-    # fence post rather than a fence.
-    bridge_gap_m: float
-    min_run_m: float
-    # Pitch the drawn fence is stationed at along the kerb. Every station takes
-    # its height from the ribbon, so this is what lets a fence follow the
-    # camber of a street instead of chording across it.
-    station_m: float
-    # ⚠️ **Authored.** Hong Kong's pedestrian railings stand about waist-to-
-    # chest height; no source in this bundle publishes the figure, and the
-    # nearest thing to a publisher — the index-plan set — has no railing sheet.
-    # Declared here rather than fixed in code so the honesty is visible and so
-    # a second city may differ (hard rules 3 and 4).
-    height_m: float
-    # How far the fence's foot is sunk below the ribbon it stands on. The kerb
-    # is flattened for mountability (`GAME_DESIGN.md`) and the ground beside it
-    # is a separate decimated surface, so a fence planted exactly at the road's
-    # own height shows daylight under it wherever the two disagree.
-    base_sink_m: float
-    # How far outside the drawn carriageway edge the fence stands. The kerb
-    # strip `roads.surface.kerb_width_m` draws is what it stands behind, so this
-    # is that width plus a little — a fence *on* the carriageway edge is a fence
-    # the player's wheel clips while driving in lane.
-    outset_m: float
+    # ⚠️ **What this layer is split into, and the only claim it supports.** One
+    # entry per class of object — see `RailingClass`. The join above is shared
+    # because it is one join onto one set of kerbs; everything below the join is
+    # per class, because a bollard is not a short fence.
+    classes: tuple[RailingClass, ...]
 
     @property
     def tiled(self) -> bool:
         """Whether `source` names `tiled_sources` rather than `sources`."""
         return self.member is not None
+
+    @property
+    def drawn_line_types(self) -> tuple[str, ...]:
+        """Every `LINETYPE` any class admits.
+
+        Derived rather than authored, so a code cannot be admitted by the
+        whitelist and then belong to no class — which would read as a feature
+        that was drawn and then silently vanished.
+        """
+        return tuple(code for klass in self.classes for code in klass.line_types)
+
+    def class_of(self, line_type: str) -> RailingClass | None:
+        """The class admitting `line_type`, or None where none does.
+
+        Linear over three entries. An index would be faster and would have to be
+        kept in step with `classes`, which is a second source of truth for no
+        measurable gain at this size.
+        """
+        for klass in self.classes:
+            if line_type in klass.line_types:
+                return klass
+        return None
 
 
 @dataclass(frozen=True)
@@ -3070,64 +3137,110 @@ def _railings(body: Any, where: str) -> Railings | None:
     if not isinstance(body, dict):
         raise ValueError(f"{where} must be a mapping, got {body!r}")
 
-    raw_types = _require(body, "drawn_line_types", where)
-    if isinstance(raw_types, str) or not isinstance(raw_types, (list, tuple)):
-        raise ValueError(f"{where}:drawn_line_types must be a list, got {raw_types!r}")
-    drawn_line_types = tuple(str(value) for value in raw_types)
-    if not drawn_line_types:
-        # An empty whitelist admits nothing, which is what omitting the block
-        # already does — refused so the difference is a decision, not a typo.
-        raise ValueError(
-            f"{where}:drawn_line_types is empty; a block that draws nothing is a mistake"
-        )
-    if len(set(drawn_line_types)) != len(drawn_line_types):
-        # A repeat would double a code's metres in the refusal accounting and
-        # nothing else, which is exactly the kind of quiet wrong this stage's
-        # counters exist to prevent.
-        raise ValueError(f"{where}:drawn_line_types repeats a code: {drawn_line_types}")
-
     measures = {
         name: float(_require(body, name, where))
-        for name in (
-            "sample_m",
-            "max_offset_m",
-            "max_shift_m",
-            "bridge_gap_m",
-            "min_run_m",
-            "station_m",
-            "height_m",
-        )
+        for name in ("sample_m", "max_offset_m", "max_shift_m")
     }
     negative = {name: value for name, value in measures.items() if value <= 0.0}
     if negative:
         raise ValueError(f"{where}: {', '.join(sorted(negative))} must be positive; got {negative}")
-    if measures["min_run_m"] < measures["sample_m"]:
+
+    raw_classes = _require(body, "classes", where)
+    if isinstance(raw_classes, str) or not isinstance(raw_classes, (list, tuple)):
+        raise ValueError(f"{where}:classes must be a list, got {raw_classes!r}")
+    if not raw_classes:
+        # A table with no entries admits nothing, which is what omitting the
+        # block already does — refused so the difference is a decision, not a
+        # typo.
+        raise ValueError(f"{where}:classes is empty; a block that draws nothing is a mistake")
+    classes = tuple(
+        _railing_class(entry, f"{where}:classes[{index}]", sample_m=measures["sample_m"])
+        for index, entry in enumerate(raw_classes)
+    )
+
+    ids = [klass.id for klass in classes]
+    if len(set(ids)) != len(ids):
+        # An id is a mesh name and a glTF material name, so two classes sharing
+        # one would collide inside a single file and the second would win
+        # silently.
+        raise ValueError(f"{where}:classes repeats an id: {ids}")
+
+    admitted: dict[str, str] = {}
+    for klass in classes:
+        for code in klass.line_types:
+            if code in admitted:
+                # ⚠️ Not a tidiness check. A code in two classes is drawn twice,
+                # in two places, at two heights — and every one of those renders
+                # as a perfectly good piece of street furniture.
+                raise ValueError(
+                    f"{where}:classes admits {code!r} in both {admitted[code]!r} and "
+                    f"{klass.id!r}; it would be drawn twice and both would look right"
+                )
+            admitted[code] = klass.id
+
+    return Railings(
+        source=str(_require(body, "source", where)),
+        member=_tile_member(body, where),
+        layer=_source_layer(body, where, _RAILING_ROLES),
+        sample_m=measures["sample_m"],
+        max_offset_m=measures["max_offset_m"],
+        max_shift_m=measures["max_shift_m"],
+        classes=classes,
+    )
+
+
+def _railing_class(body: Any, where: str, *, sample_m: float) -> RailingClass:
+    """One entry of the railing block's `classes` table (`Q61`)."""
+    if not isinstance(body, dict):
+        raise ValueError(f"{where} must be a mapping, got {body!r}")
+
+    klass_id = str(_require(body, "id", where))
+    if not klass_id:
+        raise ValueError(f"{where}:id is empty; it names a mesh and a glTF material")
+    if klass_id.endswith("-col"):
+        # ⚠️ **The collider guard, and it lives here because the mesh name now
+        # comes from config.** `GAME_DESIGN.md` puts railings under "omit or
+        # make breakable" — a solid one turns a narrow street into a corridor —
+        # and Godot's importer builds a static body from exactly this suffix. It
+        # was one string in `pipeline/railings.py` until the classes arrived;
+        # unguarded here, a city config could hand the region 9 km of wall.
+        raise ValueError(
+            f"{where}:id {klass_id!r} ends in '-col', which Godot's importer turns into "
+            f"collision. Railings ship as scenery (GAME_DESIGN.md); breakaway is a B3 question"
+        )
+
+    raw_types = _require(body, "line_types", where)
+    if isinstance(raw_types, str) or not isinstance(raw_types, (list, tuple)):
+        raise ValueError(f"{where}:line_types must be a list, got {raw_types!r}")
+    line_types = tuple(str(value) for value in raw_types)
+    if not line_types:
+        raise ValueError(f"{where}:line_types is empty; a class that admits nothing is a mistake")
+    if len(set(line_types)) != len(line_types):
+        # A repeat would double a code's metres in the refusal accounting and
+        # nothing else, which is exactly the kind of quiet wrong this stage's
+        # counters exist to prevent.
+        raise ValueError(f"{where}:line_types repeats a code: {line_types}")
+
+    measures = {
+        name: float(_require(body, name, where))
+        for name in ("bridge_gap_m", "min_run_m", "station_m", "height_m")
+    }
+    negative = {name: value for name, value in measures.items() if value <= 0.0}
+    if negative:
+        raise ValueError(f"{where}: {', '.join(sorted(negative))} must be positive; got {negative}")
+    if measures["min_run_m"] < sample_m:
         # A minimum shorter than the sampling pitch cannot refuse anything: the
         # shortest run the sampler can produce is one cell.
         raise ValueError(
-            f"{where}:min_run_m {measures['min_run_m']} is shorter than sample_m "
-            f"{measures['sample_m']}, so it would refuse nothing"
+            f"{where}:min_run_m {measures['min_run_m']} is shorter than the block's sample_m "
+            f"{sample_m}, so it would refuse nothing"
         )
 
     lifts = {name: float(_require(body, name, where)) for name in ("base_sink_m", "outset_m")}
     if any(value < 0.0 for value in lifts.values()):
         raise ValueError(f"{where}: base_sink_m and outset_m may not be negative; got {lifts}")
 
-    return Railings(
-        source=str(_require(body, "source", where)),
-        member=_tile_member(body, where),
-        layer=_source_layer(body, where, _RAILING_ROLES),
-        drawn_line_types=drawn_line_types,
-        sample_m=measures["sample_m"],
-        max_offset_m=measures["max_offset_m"],
-        max_shift_m=measures["max_shift_m"],
-        bridge_gap_m=measures["bridge_gap_m"],
-        min_run_m=measures["min_run_m"],
-        station_m=measures["station_m"],
-        height_m=measures["height_m"],
-        base_sink_m=lifts["base_sink_m"],
-        outset_m=lifts["outset_m"],
-    )
+    return RailingClass(id=klass_id, line_types=line_types, **measures, **lifts)
 
 
 def _carriageway_edge(body: Any, where: str) -> CarriagewayEdge:

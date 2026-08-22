@@ -20,19 +20,29 @@ extends SceneTree
 const GeneratedRailings = preload("res://scripts/city/generated_railings.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
-## One primitive, so the whole region's railings cost one draw call — the rule
-## the road surface, the tiles, the tramway, the arrows and the box junctions
-## are all held to.
-const SURFACES: int = 1
+## One primitive **per class**, so each class costs one draw call — the rule the
+## road surface, the tiles, the tramway, the arrows and the box junctions are
+## all held to. Three classes is three draw calls, which is the price `Q61`
+## records for keeping their geometry separable.
+const SURFACES_PER_CLASS: int = 1
 
-## The material the railings must end up with, mirroring `SHADERS` in
-## `tools/generated_scene_import.gd` and `RAILINGS_MATERIAL` in
-## `etl/pipeline/railings.py`.
+## The classes the ETL draws, and the material each must end up with. Mirrors
+## `classes:` in `etl/config/cities/hong_kong.yaml` and `SHADERS` in
+## `tools/generated_scene_import.gd`; the key is the class `id`, which is the
+## glTF mesh name, the node name and the material name all at once.
 ##
 ## Checked because the dispatch has **no failing state**: fences that kept their
 ## imported `BaseMaterial3D` would be the right fences on the right kerbs in
-## whatever colour the importer chose, and nothing else here would notice.
-const RAILINGS_MATERIAL: String = "res://tuning/railings.tres"
+## whatever colour the importer chose, and nothing else here would notice. Since
+## `Q61` there is a second, sharper version of the same hazard — the three
+## classes share one shader and differ **only** in their `.tres` mask numbers,
+## so a bollard handed `railings.tres` is a picket fence standing where a
+## bollard should be, and it renders perfectly.
+const CLASS_MATERIALS: Dictionary = {
+	"railings": "res://tuning/railings.tres",
+	"bollards": "res://tuning/bollards.tres",
+	"barriers": "res://tuning/barriers.tres",
+}
 
 ## What the shader's render mode must say.
 ##
@@ -84,23 +94,63 @@ func _init() -> void:
 func _check(scene_root: Node3D) -> PackedStringArray:
 	var problems: PackedStringArray = []
 
-	var mesh: ArrayMesh = MeshContract.single_primitive(scene_root, SURFACES, problems)
-	if mesh == null:
+	# One `MeshInstance3D` per class since `Q61`, each named for its class, so
+	# `MeshContract.single_primitive` — which insists on exactly one — no longer
+	# fits. What it was buying is kept: each class must still be one primitive.
+	var instances: Array[Node] = scene_root.find_children("*", "MeshInstance3D", true, false)
+	if instances.is_empty():
+		problems.append("no MeshInstance3D in the railing scene")
 		return problems
 
+	for node: Node in instances:
+		var instance := node as MeshInstance3D
+		var class_id: String = String(instance.name)
+		if not CLASS_MATERIALS.has(class_id):
+			# A class in the config with no row here would import with its
+			# `BaseMaterial3D` and draw, so the mismatch has to fail loudly.
+			problems.append(
+				(
+					"mesh '%s' is not a known railing class. " % class_id
+					+ "CLASS_MATERIALS here, SHADERS in generated_scene_import.gd and "
+					+ "`classes:` in hong_kong.yaml move together."
+				)
+			)
+			continue
+
+		var mesh := instance.mesh as ArrayMesh
+		if mesh == null:
+			problems.append("'%s' carries no ArrayMesh" % class_id)
+			continue
+		if mesh.get_surface_count() != SURFACES_PER_CLASS:
+			problems.append(
+				(
+					"'%s' has %d surfaces, expected %d"
+					% [class_id, mesh.get_surface_count(), SURFACES_PER_CLASS]
+				)
+			)
+
+		problems.append_array(_check_class(mesh, class_id))
+
+	problems.append_array(_check_has_no_collision(scene_root))
+	return problems
+
+
+## Problems with one class's mesh — the per-surface half of `_check`.
+func _check_class(mesh: ArrayMesh, class_id: String) -> PackedStringArray:
+	var problems: PackedStringArray = []
 	for surface: int in mesh.get_surface_count():
-		var where: String = "surface %d" % surface
-		# `false`: this mesh ships no `COLOR_0` on purpose — see
-		# `RAILINGS_MATERIAL` above and `config.Railings`. Every other guarantee
+		var where: String = "'%s' surface %d" % [class_id, surface]
+		# `false`: these meshes ship no `COLOR_0` on purpose — see
+		# `CLASS_MATERIALS` above and `config.Railings`. Every other guarantee
 		# in `check_surface` still applies, the no-texture one especially.
 		problems.append_array(MeshContract.check_surface(mesh, surface, where, false))
 		problems.append_array(
-			MeshContract.check_shader_material(mesh, surface, where, RAILINGS_MATERIAL)
+			MeshContract.check_shader_material(
+				mesh, surface, where, String(CLASS_MATERIALS[class_id])
+			)
 		)
 		problems.append_array(_check_draws_both_faces(mesh, surface, where))
 		problems.append_array(_check_faces_the_road(mesh, surface, where))
-
-	problems.append_array(_check_has_no_collision(scene_root))
 	return problems
 
 

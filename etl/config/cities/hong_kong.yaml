@@ -1090,32 +1090,8 @@ railings:
     # region's 1,753 features are null and 16 carry A01.
     level: ELEVATION
 
-  # The codes drawn as a pedestrian railing, admitted on the strength of their
-  # own names because nothing published defines them. Everything else in the
-  # layer is refused and its metres reported per code, which is what makes this
-  # list an argument rather than an assumption — a reader can see exactly what
-  # was left out and how much of the region it was.
-  #
-  # ⚠️ CBARRIER (1,369 m) and CRASHGATE (301 m) are deliberately OUT. They read
-  # as vehicle restraint rather than pedestrian railing, and drawing them as the
-  # same fence would assert a sameness no source states — Q54's debit. The
-  # bollards are out for the plainer reason that they are posts, not fences.
-  #
-  # 🔴 THIS COMMENT SAID SYMBOL_STEP_1/SYMBOL_SIZE_1 "CARRY THEIR SPACING AND
-  # DIAMETER FOR WHOEVER DRAWS THEM", AND THAT IS WRONG TWICE OVER. The fgdb
-  # specification calls SYMBOL_SIZE_1 "Symbol size of *marker symbol* in first
-  # layer" — cartographic symbology, not a dimension of the thing on the street
-  # — and the values decode as plot sizes in inches: every RAILING1 feature in
-  # the region carries 0.8503937 (= 21.6 mm on paper) at step 5.669300
-  # (= 144 mm), and RAIL1 carries *two* numbers, which is a dash pattern. And
-  # they are not populated on the bollards anyway: 0 of the region's 196 bollard
-  # features carry a value in any of the five SYMBOL_SIZE_* or SYMBOL_STEP_*
-  # slots. So there is no published bollard dimension here, and a stage that
-  # draws one authors its spacing exactly as this block already authors
-  # height_m. See DECISIONS.md Q60.
-  drawn_line_types: [CRAIL1, CRAIL2, HCAIL2, RAIL1, RAILING1]
-
   # ---- the join, kerbside.py's parameters and its reasons ----
+  # Shared by every class below, because it is one join onto one set of kerbs.
   # Pitch the source lines are sampled at, and the cell two overlapping features
   # collapse into. Finer than kerbside's because this layer is finely chopped:
   # 1,763 parts, median 4.6 m, tenth percentile 1.0 m.
@@ -1139,27 +1115,102 @@ railings:
   # fence rather than relocating one. railings.json publishes the whole
   # distribution, over refusals as well as keeps, so this stays checkable.
   max_shift_m: 3.0
-  # A break shorter than a car is not a break in a fence, and a run shorter than
-  # a car is a post rather than a fence.
-  bridge_gap_m: 4.0
-  min_run_m: 4.0
 
-  # ---- the fence, every figure authored ----
-  # Pitch the drawn fence is stationed at. Each station takes its height from
-  # the ribbon, so this is what lets it follow the camber of a street.
-  station_m: 2.0
-  # ⚠️ AUTHORED, not read — see the warning at the top of this block. Hong
-  # Kong's pedestrian railings stand about chest height on the footway.
-  height_m: 1.1
-  # The foot sinks this far below the ribbon it stands on. The kerb is flattened
-  # for mountability and the ground is a separately decimated surface, so a
-  # fence planted exactly at road height shows daylight under it wherever the
-  # two disagree.
-  base_sink_m: 0.25
-  # How far outside the drawn carriageway edge the fence stands. Just past the
-  # 0.5 m kerb strip roads.surface draws, so the fence is behind the kerb rather
-  # than on the lane the player drives in.
-  outset_m: 0.6
+  # ---- the classes, and every figure in them authored ----
+  #
+  # ⚠️ THIS TABLE SPLITS THE LAYER BY CLASS OF OBJECT AND NEVER WITHIN ONE.
+  # LINETYPE has no published domain (Q60) and the layer's other 40 columns are
+  # cartography, not description — SYMBOL_SIZE_* is the spec's own "symbol size
+  # of marker symbol", in inches on paper; COLOR is an undomained pen index;
+  # LINE_WIDTH_* is null throughout. So a class is admitted on the strength of
+  # its code strings, exactly as the old single whitelist was, and no class
+  # claims an internal difference: all five fence codes draw ONE fence, because
+  # nothing published says CRAIL1 differs from HCAIL2 and Q54 debits that
+  # invention.
+  #
+  # ⚠️ Everything the layer refuses is still counted and reported per code, which
+  # is what keeps this table an argument rather than an assumption. What is left
+  # out and why:
+  #   AMT, AMT1, AMT-1.5, AMT1.5_1.0, AMT2_1.5   1,099 m — the numeric suffixes
+  #     LOOK like dimensions and that is a guess, which is the one thing Q60
+  #     refused to do. Out until something published says otherwise.
+  #   SOLID                                        511 m — undomained, and the
+  #     one code whose name describes the shape the fence used to be drawn as.
+  #   EAG 3, MSB 5                                  69 m — undomained, and
+  #     between them a third of a percent of the layer.
+  #
+  # ⚠️ The flyover parapet is NOT here and is not a class: 1,579 m of on-structure
+  # CRAIL1 is refused by ELEVATION before the join, because ribbons() builds
+  # level-0 edges only (Q15). Drawing it needs level-aware assignment, which is
+  # its own task.
+  classes:
+    # Hong Kong's signature street railing. Unchanged from P3-19 in every
+    # figure — this class IS the old block, and its id is still `railings` so
+    # the mesh name, the material name and tuning/railings.tres all hold.
+    - id: railings
+      line_types: [CRAIL1, CRAIL2, HCAIL2, RAIL1, RAILING1]
+      # A break shorter than a car is not a break in a fence, and a run shorter
+      # than a car is a post rather than a fence.
+      bridge_gap_m: 4.0
+      min_run_m: 4.0
+      # Pitch the drawn fence is stationed at. Each station takes its height
+      # from the ribbon, so this is what lets it follow the camber of a street.
+      # ⚠️ NOT the baluster or post pitch — those are the shader's, in
+      # tuning/railings.tres, because that is where they are expressed.
+      station_m: 2.0
+      # ⚠️ AUTHORED, not read. Hong Kong's pedestrian railings stand about chest
+      # height on the footway.
+      height_m: 1.1
+      # The foot sinks this far below the ribbon it stands on. The kerb is
+      # flattened for mountability and the ground is a separately decimated
+      # surface, so anything planted exactly at road height shows daylight under
+      # it wherever the two disagree.
+      base_sink_m: 0.25
+      # Just past the 0.5 m kerb strip roads.surface draws, so the fence is
+      # behind the kerb rather than on the lane the player drives in.
+      outset_m: 0.6
+
+    # Posts, not fences — which is why they were refused outright until Q61
+    # gave them somewhere to go rather than a fence to be drawn as.
+    #
+    # ⚠️ min_run_m 1.0 IS THE WHOLE REASON THE RUN PARAMETERS ARE PER CLASS.
+    # Bollard features have a median published length of 1.00 m and 84% are
+    # under 4 m, so the fence's min_run_m of 4.0 refuses all but a handful and
+    # reports it as a clean tally of short-run refusals. One sample cell is a
+    # bollard; a 4 m bar would have been a silent decision to draw none.
+    - id: bollards
+      line_types: [bollard0, bollard1, bollard2, bollard3]
+      # Shorter than the fence's, because a gap between two rows of bollards is
+      # a real gap — a crossing, a vehicle entrance — far more often than a gap
+      # in a railing is. What this bridges is still published as metres_bridged.
+      bridge_gap_m: 2.0
+      min_run_m: 1.0
+      # Finer than the fence's so a 1 m run still takes its height from the
+      # ribbon at both ends rather than chording.
+      station_m: 1.0
+      # ⚠️ AUTHORED. A Hong Kong footway bollard stands about hip height. Note
+      # that this is the one dimension a source COULD have carried and does not:
+      # SYMBOL_SIZE_1 is null on 0 of 196 bollard features here, and is a plot
+      # size in inches where it is populated at all.
+      height_m: 0.85
+      base_sink_m: 0.25
+      outset_m: 0.6
+
+    # Vehicle restraint. CBARRIER (1,369 m) and CRASHGATE (301 m) read as
+    # restraint rather than pedestrian railing, and P3-19 refused them rather
+    # than draw them as the same fence — Q54's debit. They are in now as their
+    # OWN class, which is the form of the claim the code strings support: not
+    # "these are railings" but "these are a different thing".
+    - id: barriers
+      line_types: [CBARRIER, CRASHGATE]
+      bridge_gap_m: 4.0
+      min_run_m: 4.0
+      station_m: 2.0
+      # ⚠️ AUTHORED. Lower than a pedestrian railing and heavier: a barrier is
+      # built to stop a vehicle, not to keep a person off the carriageway.
+      height_m: 0.9
+      base_sink_m: 0.25
+      outset_m: 0.6
 
 # Hero buildings shipped as authored models (P3-6) — the landmarks.json
 # contract in docs/ARCHITECTURE.md. The building stage excludes every stem

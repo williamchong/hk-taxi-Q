@@ -35,7 +35,14 @@ const SHADERS: Dictionary = {
 	"tramway": "res://tuning/tramway.tres",
 	"arrows": "res://tuning/arrows.tres",
 	"boxjunctions": "res://tuning/boxjunctions.tres",
+	# The three railing-layer classes (`Q61`). One source layer, one `.glb`, three
+	# meshes — and the names are the class `id`s in `hong_kong.yaml` verbatim, so
+	# adding a fourth class means adding a row here and nothing else. They share
+	# `railings.gdshader`: what tells a bollard from a fence is the mask
+	# parameters in each `.tres`, not a shader of its own.
 	"railings": "res://tuning/railings.tres",
+	"bollards": "res://tuning/bollards.tres",
+	"barriers": "res://tuning/barriers.tres",
 	"vehicle_body": "res://tuning/vehicle_body.tres",
 }
 
