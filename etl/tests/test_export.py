@@ -42,6 +42,7 @@ from pipeline.fares import FARES_NAME, FARES_SCHEMA
 from pipeline.landmarks import ASSETS_NAME, ASSETS_SCHEMA
 from pipeline.railings import RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
+from pipeline.signs import SIGNS_MANIFEST_NAME, SIGNS_MANIFEST_SCHEMA
 from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, SURFACE_NAME
 from pipeline.tramway import TRAMWAY_MANIFEST_NAME, TRAMWAY_MANIFEST_SCHEMA
 
@@ -227,6 +228,16 @@ class _Region:
                 "asset": None,
                 "features": 0,
                 "drawn_m": 0.0,
+            },
+            # Same shape and same reason a fifth time: `testville` declares no
+            # `signs:` block, so the stage found nothing and says so.
+            SIGNS_MANIFEST_NAME: {
+                "schema_version": SIGNS_MANIFEST_SCHEMA,
+                "city_id": city.id,
+                "region_id": REGION,
+                "asset": None,
+                "signs": 0,
+                "drawn": 0,
             },
             # Written even when empty by the landmarks stage, so export's
             # input read is unconditional.
@@ -785,6 +796,7 @@ class TestOrchestrator:
             "arrows",
             "boxjunctions",
             "railings",
+            "signs",
             "export",
         ]
 
@@ -819,6 +831,7 @@ class TestOrchestrator:
             "arrows",
             "boxjunctions",
             "railings",
+            "signs",
             "export",
         ]
 

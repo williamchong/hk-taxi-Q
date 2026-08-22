@@ -61,6 +61,7 @@ from pipeline.gltf import Bounds
 from pipeline.landmarks import ASSETS_NAME, ASSETS_SCHEMA, landmark_in_region
 from pipeline.railings import RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
+from pipeline.signs import SIGNS_MANIFEST_NAME, SIGNS_MANIFEST_SCHEMA
 from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, SURFACE_NAME
 from pipeline.tramway import TRAMWAY_MANIFEST_NAME, TRAMWAY_MANIFEST_SCHEMA
 
@@ -137,7 +138,12 @@ CITY_NAME = "city.json"
 # computes a shipped set missing a bundle file. The key is optional and nullable
 # like the three before it: a city whose estate publishes no railing layer ships
 # none, and so does one that publishes it and finds no kerb to hang it on.
-CITY_SCHEMA = 14
+# 15 since `P3-16`: the manifest names `signs.glb`, a new shipped asset — the
+# same argument a fifth time, unchanged: a v14 reader computes a shipped set
+# missing a bundle file. The key is optional and nullable like the four before
+# it: a city whose estate publishes no sign layer ships none, and so does one
+# that publishes it and whose signs are all text-faced.
+CITY_SCHEMA = 15
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -191,6 +197,7 @@ INPUTS: tuple[Input, ...] = (
     Input(ARROWS_MANIFEST_NAME, ARROWS_MANIFEST_SCHEMA, "arrows"),
     Input(BOXJUNCTIONS_MANIFEST_NAME, BOXJUNCTIONS_MANIFEST_SCHEMA, "boxjunctions"),
     Input(RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA, "railings"),
+    Input(SIGNS_MANIFEST_NAME, SIGNS_MANIFEST_SCHEMA, "signs"),
 )
 
 
@@ -268,6 +275,7 @@ def build_region(
     arrows = documents[ARROWS_MANIFEST_NAME]
     boxjunctions = documents[BOXJUNCTIONS_MANIFEST_NAME]
     railings = documents[RAILINGS_MANIFEST_NAME]
+    signs = documents[SIGNS_MANIFEST_NAME]
 
     tiles = [
         {
@@ -355,6 +363,11 @@ def build_region(
         # boxes all failed the join must not be contradicted here by a constant.
         "boxjunctions": boxjunctions["asset"],
         "railings": railings["asset"],
+        # `null` where the city drew no traffic signs, on `tramway`'s terms and
+        # read from the stage's own manifest for its reason. ⚠️ Null is the
+        # ordinary answer for a region whose signs are all text-faced, because
+        # `Q42` refuses those — see `pipeline/signs.py`.
+        "signs": signs["asset"],
         "landmarks": LANDMARKS_NAME,
         # The mesh-sourced hero models `pipeline/landmarks.py` built — shipped
         # files like the tile GLBs, unlike the committed authored heroes,
@@ -535,6 +548,8 @@ def shipped(manifest: dict) -> list[str]:
         paths.append(str(manifest["boxjunctions"]))
     if manifest.get("railings"):
         paths.append(str(manifest["railings"]))
+    if manifest.get("signs"):
+        paths.append(str(manifest["signs"]))
     return paths
 
 

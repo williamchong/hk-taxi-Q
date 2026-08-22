@@ -22,6 +22,7 @@
 [ext_resource type="Script" path="res://scripts/city/arrows_preview.gd" id="11_arrows"]
 [ext_resource type="Script" path="res://scripts/city/boxjunctions_preview.gd" id="12_boxjunctions"]
 [ext_resource type="Script" path="res://scripts/city/railings_preview.gd" id="13_railings"]
+[ext_resource type="Script" path="res://scripts/city/signs_preview.gd" id="14_signs"]
 [ext_resource type="PackedScene" path="res://scenes/world/clean_daylight.tscn" id="3_light"]
 [ext_resource type="PackedScene" path="res://scenes/vehicle/taxi.tscn" id="4_taxi"]
 [ext_resource type="Script" path="res://scripts/camera/chase_camera.gd" id="5_camera"]
@@ -75,6 +76,13 @@ script = ExtResource("12_boxjunctions")
 ; stays empty.
 [node name="Railings" type="Node3D" parent="."]
 script = ExtResource("13_railings")
+
+; The published traffic signs (`P3-16`), one mesh for the whole region, standing
+; on the poles TD surveyed rather than at the abbreviation points that name them
+; — those are drawing labels and sit a median 2.6 m away. Only the signs whose
+; meaning is their *shape* are here; the text-faced 2,364 are refused (`Q42`).
+[node name="Signs" type="Node3D" parent="."]
+script = ExtResource("14_signs")
 
 ; The authored heroes, placed from `landmarks.json` (`P3-6`). Beside `Tiles`
 ; rather than under it: the streamer owns what it streams, and a hero is

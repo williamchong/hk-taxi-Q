@@ -10,6 +10,7 @@
 [ext_resource type="Script" path="res://scripts/city/arrows_preview.gd" id="12_arrows"]
 [ext_resource type="Script" path="res://scripts/city/boxjunctions_preview.gd" id="13_boxjunctions"]
 [ext_resource type="Script" path="res://scripts/city/railings_preview.gd" id="14_railings"]
+[ext_resource type="Script" path="res://scripts/city/signs_preview.gd" id="15_signs"]
 [ext_resource type="Script" path="res://scripts/city/fare_preview.gd" id="6_fares"]
 
 [node name="CityPreview" type="Node3D"]
@@ -49,6 +50,13 @@ script = ExtResource("13_boxjunctions")
 ; stays empty.
 [node name="Railings" type="Node3D" parent="."]
 script = ExtResource("14_railings")
+
+; The published traffic signs (`P3-16`), one mesh for the whole region, standing
+; on the poles TD surveyed rather than at the abbreviation points that name them
+; — those are drawing labels and sit a median 2.6 m away. Only the signs whose
+; meaning is their *shape* are here; the text-faced 2,364 are refused (`Q42`).
+[node name="Signs" type="Node3D" parent="."]
+script = ExtResource("15_signs")
 
 ; The authored heroes (`P3-6`). Without them this scene shows holes where the
 ; excluded source buildings stood — and the audit viewpoints below are the

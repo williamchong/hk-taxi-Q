@@ -802,6 +802,179 @@ class Arrows:
         return self.member is not None
 
 
+# What a sign face may be drawn from. The vocabulary is the pipeline's, not a
+# city's: each word below has geometry in `pipeline/signs.py` that draws it, so a
+# city naming a shape this list does not hold fails the load rather than shipping
+# a plate with a hole in it.
+#
+# ⚠️ **There is no lettering here and there never will be.** `Q42` and hard rule
+# 8 forbid rendered text, so a sign whose meaning is its words is refused in
+# `faces:` rather than approximated with a shape.
+SIGN_DISC = "disc"
+SIGN_BAR = "bar"
+SIGN_RECT = "rect"
+SIGN_RECT_WIDE = "rect_wide"
+SIGN_TRIANGLE_DOWN = "triangle_down"
+SIGN_SLASH = "slash"
+SIGN_ARROW_UP = "arrow_up"
+SIGN_ARROW_LEFT = "arrow_left"
+SIGN_ARROW_RIGHT = "arrow_right"
+SIGN_ARROW_DOWN_LEFT = "arrow_down_left"
+SIGN_ARROW_DOWN_RIGHT = "arrow_down_right"
+SIGN_ARROW_BENT_LEFT = "arrow_bent_left"
+SIGN_ARROW_BENT_RIGHT = "arrow_bent_right"
+SIGN_ARROW_U = "arrow_u"
+
+SIGN_DRAWINGS = (
+    SIGN_DISC,
+    SIGN_BAR,
+    SIGN_RECT,
+    SIGN_RECT_WIDE,
+    SIGN_TRIANGLE_DOWN,
+    SIGN_SLASH,
+    SIGN_ARROW_UP,
+    SIGN_ARROW_LEFT,
+    SIGN_ARROW_RIGHT,
+    SIGN_ARROW_DOWN_LEFT,
+    SIGN_ARROW_DOWN_RIGHT,
+    SIGN_ARROW_BENT_LEFT,
+    SIGN_ARROW_BENT_RIGHT,
+    SIGN_ARROW_U,
+)
+
+# The plate outlines, a subset of the above: what a sign is *cut* to. A layer may
+# be any drawing, but the plate itself has to be a closed outline with a back.
+SIGN_PLATES = (SIGN_DISC, SIGN_RECT, SIGN_RECT_WIDE, SIGN_TRIANGLE_DOWN)
+
+# The livery `pipeline/signs.py` reserves for a plate's back and its post, which
+# no `faces:` row names. ⚠️ **Validated in `_signs` rather than trusted**: it is
+# the one colour key the face table cannot vouch for, so a city naming its livery
+# in its own words would load, pass every config test, and then die partway
+# through the build on a bare `KeyError`.
+SIGN_BACK_COLOUR = "grey"
+
+# How a stack is ordered on its post: main sign on top, supplementary plate
+# hanging below it. The numbers are `hk-traffic-sign-map`'s `compute-stacks.mjs`
+# ranks, and the *names* are the titles of the publisher's own index-plan sheets
+# — CT174/51-1(1)C is "TRAFFIC SIGNS (REGULATORY)" and CT174/51-3(2)D is
+# "TRAFFIC SIGNS (SUPPLEMENTARY)" — so a face's rank is transcribed rather than
+# judged, which is `Q59`'s glyph-table rule applied to one more column.
+SIGN_RANKS = {"regulatory": 0, "warning": 1, "informatory": 2, "supplementary": 9}
+SIGN_RANK_DEFAULT = "regulatory"
+
+
+@dataclass(frozen=True)
+class SignLayer:
+    """One flat coloured shape on the front of a plate.
+
+    `size` is a fraction of the plate's own dimension rather than a length in
+    metres, so a 600 mm disc and a 900 mm disc scale together — the reason
+    `ArrowGlyph.length_m` gives for keeping proportions off absolute numbers.
+    """
+
+    draw: str
+    colour: str
+    size: float
+
+
+@dataclass(frozen=True)
+class SignFace:
+    """One publisher `SIGNID`: the plate it is cut to, and what is drawn on it.
+
+    ⚠️ **This mapping is the one thing here that no grader in this repo can
+    check**, the same debt `Arrows.glyphs` carries. Every consumer downstream
+    takes "TS115 means NO ENTRY" on trust, exactly as `Q56` found every consumer
+    taking double-versus-single on trust from `NSR.TIME_ZONE`. The codes are
+    defined in the publisher's own TS index plan sheets, inside
+    `traffic_aids_data_dictionary` — read them, and do not infer a face from the
+    histogram. `Q59` records what reading the histogram cost the arrows.
+    """
+
+    plate: str
+    layers: tuple[SignLayer, ...]
+    # Where this face sits when several share a post — lower is higher up. See
+    # `SIGN_RANKS`; a face that does not say is `regulatory`.
+    rank: int
+
+
+@dataclass(frozen=True)
+class Signs:
+    """Published traffic signs, and how `P3-16` draws them.
+
+    ⚠️ **The sign layer does not say where a sign is.** `DTAD_TS_ABV_PT` is the
+    publisher's *"Traffic sign abbreviation point"* — the label placed near the
+    pole so the drawing stays legible — and `DTAD_TS_POLE_PT` is the object.
+    Measured: **zero** of the region's 3,276 abbreviation points sit on a pole,
+    nearest pole p50 2.63 m, and the offset direction is uncorrelated with
+    `ANGLE`. So the published point is read as **data, never as geometry**,
+    which is `Q54`'s rule and the same move `Arrows` makes with its lane
+    registration. `poles` carries the layer that does say where.
+
+    ⚠️ **`GG_NAME` is the join, and it is the only one there is.** The spec calls
+    it *"Graphical group Name"*; 92.6% of the region's signs resolve through it
+    to exactly one pole. A sign resolving to none, or to more than one, is
+    refused and counted rather than dragged onto the nearest pole.
+
+    ⚠️ **Every dimension below is authored, and that is not a choice.** The TS
+    index sheets are stamped "NOT TO SCALE" and refer dimensions out to working
+    drawings that the published `dataspec` bundle does not contain. This is the
+    debt `Q60` recorded for railing height, restated: these are the
+    weakest-evidenced numbers in the block, and none of them is a *position*.
+
+    ⚠️ **Unlike `Arrows` and `BoxJunctions`, this block does carry colours, and
+    the departure is deliberate.** Those two ship one paint each and put it in
+    their `.tres` beside the markings they match. A sign plate is four colours
+    and the whole layer is one draw call, so the colour has to travel on the
+    vertex — `signs.glb` ships `COLOR_0` and `signs.gdshader` reads it straight
+    to `ALBEDO`. A channel earns its place when something reads it, which is the
+    bar `Q54` set when it found `COLOR_0.a` broadcasting an unread 255 down the
+    road mesh. The livery is a *city* fact besides (hard rule 3).
+    """
+
+    source: str
+    member: str | None
+    layer: SourceLayer
+    # The pole layer, in the same source. Its geometry is what a sign is drawn on.
+    poles: SourceLayer
+    # Publisher code -> the face drawn for it. A code absent here is refused,
+    # which is how ~2,360 text-faced signs stay out (`Q42`, hard rule 8).
+    faces: dict[str, SignFace]
+    # Named livery, referenced by every `SignLayer.colour`. `#rrggbb` as 0-255,
+    # the form every other colour in the city file takes.
+    colours: dict[str, tuple[int, int, int]]
+
+    disc_diameter_m: float
+    triangle_height_m: float
+    rect_width_m: float
+    rect_height_m: float
+    rect_wide_width_m: float
+    rect_wide_height_m: float
+
+    # Bottom of the lowest plate above the ground.
+    mount_height_m: float
+    # Vertical gap between two plates stacked on one pole.
+    stack_gap_m: float
+    pole_radius_m: float
+    pole_sides: int
+    pole_headroom_m: float
+    disc_segments: int
+    # How far each face layer floats in front of the one beneath it. Coplanar
+    # layers z-fight, the reason `Arrows.lift_m` exists — but a plate is
+    # vertical, so this runs along the plate normal rather than up.
+    layer_lift_m: float
+
+    max_offset_m: float
+    # Furthest a sign may sit from the pole its `GG_NAME` names. ⚠️ Taken from
+    # `hk-traffic-sign-map`'s own 15 m group-span cap, which exists because
+    # `GG_NAME` is reused across signs kilometres apart.
+    max_pole_span_m: float
+
+    @property
+    def tiled(self) -> bool:
+        """Whether `source` names `tiled_sources` rather than `sources`."""
+        return self.member is not None
+
+
 @dataclass(frozen=True)
 class BoxJunctions:
     """Published yellow box junctions, drawn by `pipeline/boxjunctions.py` (`P3-18`).
@@ -1743,6 +1916,7 @@ class CityConfig:
     # priced as content that would be *invented*, and the whole argument for
     # this stage is that it is read instead.
     arrows: Arrows | None = None
+    signs: Signs | None = None
     # Published yellow box junctions, drawn by `pipeline/boxjunctions.py`
     # (`P3-18`). Optional for the same reason `arrows` is — and the fallback it
     # deliberately does not offer is sharper: the region publishes 20 boxes
@@ -1931,6 +2105,7 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
         ),
         tramway=_tramway(document.get("tramway"), f"{path}:tramway", table),
         arrows=_arrows(document.get("arrows"), f"{path}:arrows"),
+        signs=_signs(document.get("signs"), f"{path}:signs"),
         boxjunctions=_boxjunctions(document.get("boxjunctions"), f"{path}:boxjunctions"),
         railings=_railings(document.get("railings"), f"{path}:railings"),
         landmarks=_landmarks(document.get("landmarks") or [], f"{path}:landmarks", table),
@@ -1966,6 +2141,8 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
         _check_declared_source(city, city.boxjunctions, f"{path}:boxjunctions.source")
     if city.railings is not None:
         _check_declared_source(city, city.railings, f"{path}:railings.source")
+    if city.signs is not None:
+        _check_declared_source(city, city.signs, f"{path}:signs.source")
     _check_landmarks_lie_within_a_region(city, path)
     return city
 
@@ -3036,6 +3213,158 @@ def _arrows(body: Any, where: str) -> Arrows | None:
         lift_m=lift_m,
         max_offset_m=max_offset_m,
         bearing_tolerance_deg=tolerance_deg,
+    )
+
+
+_SIGN_ROLES = ("code", "bearing", "level", "group")
+_SIGN_POLE_ROLES = ("group", "level")
+
+
+def _signs(body: Any, where: str) -> Signs | None:
+    """The optional published-traffic-sign block (`P3-16`).
+
+    Absent, the region ships no `signs.glb` and the manifest names none — the
+    shape `tramway`, `arrows`, `boxjunctions` and `railings` all use. What is
+    **not** offered is a fallback that puts a sign at every one-way mouth: the
+    whole defence of this layer is that its content is read, and a fallback
+    would reintroduce invented instruction silently on any city missing the
+    block. `Q54`'s sourced-not-invented rule.
+    """
+    if body is None:
+        return None
+    if not isinstance(body, dict):
+        raise ValueError(f"{where} must be a mapping, got {body!r}")
+
+    colours: dict[str, tuple[int, int, int]] = {}
+    raw_colours = _require(body, "colours", where)
+    if not isinstance(raw_colours, dict) or not raw_colours:
+        raise ValueError(f"{where}:colours must be a non-empty mapping of name to RGB")
+    for name, value in raw_colours.items():
+        spot = f"{where}:colours.{name}"
+        if not isinstance(value, str):
+            raise ValueError(f"{spot} must be a #rrggbb colour, got {value!r}")
+        colours[str(name)] = _parse_hex(value, spot)
+
+    if SIGN_BACK_COLOUR not in colours:
+        raise ValueError(
+            f"{where}:colours does not name {SIGN_BACK_COLOUR!r}, which every plate's back and "
+            f"every post is drawn in — see SIGN_BACK_COLOUR"
+        )
+
+    raw_faces = _require(body, "faces", where)
+    if not isinstance(raw_faces, dict) or not raw_faces:
+        raise ValueError(f"{where}:faces must be a non-empty mapping of code to face")
+    faces: dict[str, SignFace] = {}
+    for code, entry in raw_faces.items():
+        spot = f"{where}:faces.{code}"
+        if not isinstance(entry, dict):
+            raise ValueError(f"{spot} must be a mapping with plate and layers, got {entry!r}")
+        plate = str(_require(entry, "plate", spot))
+        if plate not in SIGN_PLATES:
+            # A plate is what the sign is *cut* to, so it needs a closed outline
+            # and a back. A layer may be any drawing; this may not.
+            raise ValueError(
+                f"{spot}:plate is {plate!r}, which is not one of {', '.join(SIGN_PLATES)}"
+            )
+        raw_layers = _require(entry, "layers", spot)
+        if isinstance(raw_layers, str) or not isinstance(raw_layers, (list, tuple)):
+            raise ValueError(f"{spot}:layers must be a list, got {raw_layers!r}")
+        if not raw_layers:
+            # A face with no layers is a bare plate — a blank sign, which
+            # instructs nothing and renders perfectly. Refused: an empty list is
+            # a transcription that went wrong, not a sign that exists.
+            raise ValueError(f"{spot}:layers is empty; a plate with nothing on it is not a sign")
+        layers: list[SignLayer] = []
+        for index, raw_layer in enumerate(raw_layers):
+            here = f"{spot}:layers[{index}]"
+            if not isinstance(raw_layer, dict):
+                raise ValueError(f"{here} must be a mapping with draw, colour and size")
+            draw = str(_require(raw_layer, "draw", here))
+            if draw not in SIGN_DRAWINGS:
+                raise ValueError(
+                    f"{here}:draw is {draw!r}, which is not one of "
+                    f"{', '.join(SIGN_DRAWINGS)} — the pipeline has no geometry to draw it"
+                )
+            colour = str(_require(raw_layer, "colour", here))
+            if colour not in colours:
+                # Caught here rather than at draw time: an unknown colour would
+                # otherwise fall back to something and render as a plausible
+                # sign in the wrong livery.
+                raise ValueError(
+                    f"{here}:colour is {colour!r}, which {where}:colours does not name"
+                )
+            size = float(_require(raw_layer, "size", here))
+            if not 0.0 < size <= 1.0:
+                raise ValueError(
+                    f"{here}:size is {size}; it is a fraction of the plate's own dimension "
+                    f"and must be greater than 0 and no more than 1"
+                )
+            layers.append(SignLayer(draw=draw, colour=colour, size=size))
+        rank = str(entry.get("rank", SIGN_RANK_DEFAULT))
+        if rank not in SIGN_RANKS:
+            raise ValueError(
+                f"{spot}:rank is {rank!r}, which is not one of "
+                f"{', '.join(SIGN_RANKS)} — those are the index-plan sheet classes"
+            )
+        faces[str(code)] = SignFace(plate=plate, layers=tuple(layers), rank=SIGN_RANKS[rank])
+
+    lengths = {
+        name: float(_require(body, name, where))
+        for name in (
+            "disc_diameter_m",
+            "triangle_height_m",
+            "rect_width_m",
+            "rect_height_m",
+            "rect_wide_width_m",
+            "rect_wide_height_m",
+            "mount_height_m",
+            "stack_gap_m",
+            "pole_radius_m",
+            "pole_headroom_m",
+            "layer_lift_m",
+            "max_offset_m",
+            "max_pole_span_m",
+        )
+    }
+    negative = {name: value for name, value in lengths.items() if value <= 0.0}
+    if negative:
+        raise ValueError(
+            f"{where}: {', '.join(sorted(negative))} must each be positive; got {negative}"
+        )
+
+    disc_segments = int(_require(body, "disc_segments", where))
+    if disc_segments < 3:
+        raise ValueError(f"{where}:disc_segments is {disc_segments}; a disc needs at least 3")
+    pole_sides = int(_require(body, "pole_sides", where))
+    if pole_sides < 3:
+        raise ValueError(f"{where}:pole_sides is {pole_sides}; a prism needs at least 3")
+
+    poles_body = _require(body, "poles", where)
+    if not isinstance(poles_body, dict):
+        raise ValueError(f"{where}:poles must be a mapping, got {poles_body!r}")
+
+    return Signs(
+        source=str(_require(body, "source", where)),
+        member=_tile_member(body, where),
+        layer=_source_layer(body, where, _SIGN_ROLES),
+        poles=_source_layer(poles_body, f"{where}:poles", _SIGN_POLE_ROLES),
+        faces=faces,
+        colours=colours,
+        disc_diameter_m=lengths["disc_diameter_m"],
+        triangle_height_m=lengths["triangle_height_m"],
+        rect_width_m=lengths["rect_width_m"],
+        rect_height_m=lengths["rect_height_m"],
+        rect_wide_width_m=lengths["rect_wide_width_m"],
+        rect_wide_height_m=lengths["rect_wide_height_m"],
+        mount_height_m=lengths["mount_height_m"],
+        stack_gap_m=lengths["stack_gap_m"],
+        pole_radius_m=lengths["pole_radius_m"],
+        pole_sides=pole_sides,
+        pole_headroom_m=lengths["pole_headroom_m"],
+        disc_segments=disc_segments,
+        layer_lift_m=lengths["layer_lift_m"],
+        max_offset_m=lengths["max_offset_m"],
+        max_pole_span_m=lengths["max_pole_span_m"],
     )
 
 

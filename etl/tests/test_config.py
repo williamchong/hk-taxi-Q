@@ -1346,6 +1346,27 @@ class TestPaletteExposure:
         the shipped document, on the shape of the value rather than on any list of
         known keys. A new palette key added outside `materials:` fails this test
         the day it is written.
+
+        ⚠️ **`signs.colours` is the one exemption, and it was argued rather than
+        taken** (`P3-16`). The rule's foundation is `_check_exposure`, which
+        grades authored albedo against measured reflectance for **building
+        cladding under Hong Kong daylight**. A sign's livery is not cladding and
+        has no reflectance to grade: it is a printed specification, and TD prints
+        it. `Q53` met the same problem with road paint and answered it by moving
+        the value out of this file entirely, into `road_markings.tres`.
+
+        ⚠️ **That answer does not transfer here, and the reason is the mesh.**
+        Road paint is one colour and `arrows.glb` carries no `COLOR_0`, so a
+        `.tres` can hold it. A sign plate is four colours inside a single draw
+        call, so the colour has to ride the vertex — which means the ETL must
+        know it, which means it must be in this file. Pushing the values into
+        `signs.tres` and shipping indices instead would split the livery in two:
+        `faces:` would name "red" here while the value lived in Godot. It is a
+        **city** fact besides — a second city prints its own signs — which hard
+        rule 3 puts in config by definition.
+
+        So the exemption is narrow, by prefix, and deliberately not a general
+        escape: any *other* new key authoring a colour still fails.
         """
         document = yaml.safe_load((CITIES_ROOT / "hong_kong.yaml").read_text(encoding="utf-8"))
         declared = {entry["colour"] for entry in document["materials"].values()}
@@ -1363,7 +1384,7 @@ class TestPaletteExposure:
         outside = {
             path: value
             for path, value in hex_colours(document, "")
-            if not path.startswith(".materials.")
+            if not path.startswith(".materials.") and not path.startswith(".signs.colours.")
         }
         assert not outside, (
             f"colour(s) authored outside materials: {outside}. Every colour the city "

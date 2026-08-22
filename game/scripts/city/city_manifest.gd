@@ -84,12 +84,16 @@ const NOT_MEASURED: float = -1.0
 ## railings drawn from TD's `DTAD_RAILING_LINE`. The same argument a fourth time
 ## — a v13 reader computes a shipped set missing a bundle file.
 ##
-## ⚠️ **All four keys are optional and may be null.** A city whose estate
-## publishes no tramway, no marking symbols, no box polygons or no railing layer
-## ships none — so `tramway_path`, `arrows_path`, `boxjunctions_path` and
-## `railings_path` are empty for such a region and that is the honest answer
-## rather than a missing file.
-const SCHEMA_VERSION: int = 14
+## 15 since `P3-16`: the manifest names `signs.glb`, the published traffic signs
+## drawn from TD's `DTAD_TS_ABV_PT`/`DTAD_TS_POLE_PT`. The same argument a fifth
+## time — a v14 reader computes a shipped set missing a bundle file.
+##
+## ⚠️ **All five keys are optional and may be null.** A city whose estate
+## publishes no tramway, no marking symbols, no box polygons, no railing layer or
+## no sign layer ships none — so `tramway_path`, `arrows_path`,
+## `boxjunctions_path`, `railings_path` and `signs_path` are empty for such a
+## region and that is the honest answer rather than a missing file.
+const SCHEMA_VERSION: int = 15
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -191,6 +195,15 @@ var boxjunctions_path: String
 ## block".
 var railings_path: String
 
+## The traffic-sign mesh (`P3-16`), or **empty** where the region ships none.
+##
+## Optional on the same terms as `railings_path`. ⚠️ **But empty is a more
+## ordinary answer here than for any other key**: `P3-16` draws only the signs
+## whose meaning is their *shape*, and 2,364 of Wan Chai's 3,276 are text-faced
+## and refused under `Q42`. A region whose signs are all time plates and parking
+## legends draws none and is correct to.
+var signs_path: String
+
 ## Drawn half-width of the carriageway, in metres, keyed by road-graph edge id —
 ## **one value per station** of that edge's `roadgraph.json` polyline.
 ##
@@ -264,6 +277,7 @@ static func load_manifest() -> CityManifest:
 	manifest.arrows_path = _resolve(document.get("arrows"))
 	manifest.boxjunctions_path = _resolve(document.get("boxjunctions"))
 	manifest.railings_path = _resolve(document.get("railings"))
+	manifest.signs_path = _resolve(document.get("signs"))
 	for entry: Dictionary in document.get("carriageway", []):
 		var edge: int = int(entry.get("edge", -1))
 		manifest.carriageway_half_width_m[edge] = _floats(entry, "half_width_m")
@@ -306,8 +320,8 @@ static func bearing_deg(forward: Vector3) -> float:
 
 
 ## Every file the manifest *names*, in order: the four documents, then the
-## tramway, the arrows, the box junctions and the railings where the region has
-## them, then
+## tramway, the arrows, the box junctions, the railings and the signs where the
+## region has them, then
 ## every tier of every tile. Not every file a build ships — `city.json` itself is not
 ## in the list, because it names the others and not itself. A caller copying a
 ## region wants this plus `PATH`, which is what `tools/sync_generated.sh` does.
@@ -321,6 +335,8 @@ func shipped() -> PackedStringArray:
 		paths.append(boxjunctions_path)
 	if not railings_path.is_empty():
 		paths.append(railings_path)
+	if not signs_path.is_empty():
+		paths.append(signs_path)
 	for tile: Tile in tiles:
 		paths.append_array(tile.lods)
 	return paths

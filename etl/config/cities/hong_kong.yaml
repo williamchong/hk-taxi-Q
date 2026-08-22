@@ -981,6 +981,245 @@ arrows:
   # sense, and it would render perfectly.
   bearing_tolerance_deg: 30.0
 
+# Published traffic signs (P3-16, the sign half of the DTAD estate).
+#
+# ⚠️ **DTAD_TS_ABV_PT IS NOT WHERE THE SIGN IS.** The publisher's own fgdb
+# specification calls it "Traffic sign **abbreviation** point" and calls
+# DTAD_TS_POLE_PT "Traffic sign pole point". Measured over this region: **zero**
+# of 3,276 abbreviation points sit on a pole, the nearest pole is p50 2.63 m
+# away (p90 8.25, max 115.5), and the direction of that offset is uncorrelated
+# with ANGLE — 48% within 20 deg of perpendicular, which is noise. The
+# abbreviation point is where a draughtsman put the label so the drawing stayed
+# legible. It says *which* sign, never *where*.
+#
+# So the position is read as data and never as geometry — Q54's rule, the same
+# move arrows: makes when it registers a symbol into the lane the ribbon
+# actually has. The pole is the object; the abbreviation point names it.
+#
+# ⚠️ **GG_NAME — "Graphical group Name" in the spec — is the join**, and it is
+# the only thing that ties the two layers. 3,032 of the region's 3,276 signs
+# (92.6%) resolve to exactly one pole through it, 24 to more than one, 220 to
+# none. Signs group 1 to 7 per GG_NAME, which is a pole carrying a stack of
+# plates. The 244 that do not resolve to exactly one pole are refused and
+# counted, never dragged onto the nearest pole.
+signs:
+  source: traffic_aids_drawings_gdb
+  layer: DTAD_TS_ABV_PT
+  fields:
+    code: SIGNID
+    bearing: ANGLE
+    level: ELEVATION
+    group: GG_NAME
+
+  # The pole layer, read through the same source. Its own ANGLE is not read:
+  # the plate's orientation comes from the sign, and the pole is round.
+  poles:
+    layer: DTAD_TS_POLE_PT
+    fields:
+      group: GG_NAME
+      level: ELEVATION
+
+  # ---- the faces, transcribed from the publisher's index plan ----
+  #
+  # ⚠️ **Read by eye off TD's own TS Index Plan sheets**, inside the dataspec
+  # zip that traffic_aids_data_dictionary fetches — CT174/51-1(1)C
+  # "(TS 101 - 205)" for the regulatory codes and CT174/51-3(2)D
+  # "(TS 701 - 805)" for the supplementary arrow plates. Both are scanned
+  # drawings with no text layer (pdftotext returns nothing), so this is Q59's
+  # glyph-table rule restated: the table is transcribed from the publisher,
+  # never inferred from the histogram.
+  #
+  # ⚠️ **~/hk-traffic-sign-map's signCatalogue.json is cross-check only, never
+  # authority.** It is OCR-built, its own README records partial coverage on the
+  # dense sheets, and 380 of this region's signs are uncatalogued (344 of them
+  # TSSEPA separators). It agreed with the sheets on every row below; that is a
+  # check that passed, not the source of the row.
+  #
+  # ⚠️ **WHAT IS ABSENT IS THE DECISION.** Only signs whose meaning is their
+  # *shape* are here — 912 of the region's 3,276. Every sign whose meaning is
+  # its **text** is refused, because rendering it would break Q42 and hard rule
+  # 8: TS860 time plates x148, TS280 parking x74, the TS21xx/TS22xx
+  # no-stopping-zone family, the vehicle-class prohibitions. Roughly 2,360
+  # signs. TS101 STOP x18 is refused with them rather than shipped as a wordless
+  # octagon. TS182 CYCLES ONLY x155 is refused for a different reason: a bicycle
+  # pictogram is a texture's job, and no texture ships.
+  #
+  # ⚠️ **TS102 GIVE WAY is drawn with its lettering omitted, and that is the one
+  # incomplete face here.** The plate reads "GIVE WAY / 讓" on the index sheet;
+  # what ships is the red-bordered inverted triangle alone, which is what
+  # carries the instruction at driving speed. Recorded so it reads as a decision
+  # and not as an oversight.
+  #
+  # ⚠️ **`rank` orders a stack, and it is read off the sheet the code is defined
+  # on** — CT174/51-1(1)C is titled "TRAFFIC SIGNS (REGULATORY)" and
+  # CT174/51-3(2)D "TRAFFIC SIGNS (SUPPLEMENTARY)", so this is the publisher's own
+  # classification rather than an art call. It defaults to `regulatory`.
+  # A main sign goes on top and its supplementary plate hangs below it, which is
+  # the rule ~/hk-traffic-sign-map's compute-stacks.mjs encodes as
+  # `regulatory 0 → … → supplementary 9`. Sorting by SIGNID alone puts TS733
+  # above TS115 and hangs the NO ENTRY off the bottom of its own arrow plate.
+  #
+  # A face is a stack of flat coloured layers drawn on the front of the plate,
+  # first listed at the bottom. `size` is a fraction of the plate's own
+  # dimension, so a 600 mm disc and a 750 mm disc scale together. `draw` names
+  # geometry this pipeline has; a word it does not know fails the load rather
+  # than drawing nothing.
+  faces:
+    # -- prohibitory: red ring or red disc --
+    TS115:                                   # NO ENTRY
+      plate: disc
+      layers:
+        - {draw: disc, colour: red, size: 1.00}
+        - {draw: bar, colour: white, size: 0.66}
+    TS116:                                   # ALL VEHICLES PROHIBITED BOTH DIRECTIONS
+      plate: disc
+      layers:
+        - {draw: disc, colour: red, size: 1.00}
+        - {draw: disc, colour: white, size: 0.74}
+    TS131:                                   # NO LEFT TURN
+      plate: disc
+      layers:
+        - {draw: disc, colour: red, size: 1.00}
+        - {draw: disc, colour: white, size: 0.80}
+        - {draw: arrow_bent_left, colour: black, size: 0.62}
+        - {draw: slash, colour: red, size: 0.92}
+    TS132:                                   # NO RIGHT TURN
+      plate: disc
+      layers:
+        - {draw: disc, colour: red, size: 1.00}
+        - {draw: disc, colour: white, size: 0.80}
+        - {draw: arrow_bent_right, colour: black, size: 0.62}
+        - {draw: slash, colour: red, size: 0.92}
+    TS133:                                   # NO U-TURNS
+      plate: disc
+      layers:
+        - {draw: disc, colour: red, size: 1.00}
+        - {draw: disc, colour: white, size: 0.80}
+        - {draw: arrow_u, colour: black, size: 0.62}
+        - {draw: slash, colour: red, size: 0.92}
+
+    # -- mandatory: white symbol on a blue disc --
+    TS106: {plate: disc, layers: [{draw: disc, colour: blue, size: 1.00}, {draw: arrow_up, colour: white, size: 0.70}]}
+    TS107: {plate: disc, layers: [{draw: disc, colour: blue, size: 1.00}, {draw: arrow_left, colour: white, size: 0.70}]}
+    TS108: {plate: disc, layers: [{draw: disc, colour: blue, size: 1.00}, {draw: arrow_right, colour: white, size: 0.70}]}
+    TS109: {plate: disc, layers: [{draw: disc, colour: blue, size: 1.00}, {draw: arrow_down_left, colour: white, size: 0.70}]}
+    TS110: {plate: disc, layers: [{draw: disc, colour: blue, size: 1.00}, {draw: arrow_down_right, colour: white, size: 0.70}]}
+    TS111: {plate: disc, layers: [{draw: disc, colour: blue, size: 1.00}, {draw: arrow_bent_left, colour: white, size: 0.70}]}
+    TS112: {plate: disc, layers: [{draw: disc, colour: blue, size: 1.00}, {draw: arrow_bent_right, colour: white, size: 0.70}]}
+
+    # -- give way: the lettering is deliberately absent, see above --
+    TS102:
+      plate: triangle_down
+      layers:
+        - {draw: triangle_down, colour: red, size: 1.00}
+        - {draw: triangle_down, colour: white, size: 0.72}
+
+    # -- one-way and the supplementary arrow plates --
+    # TS183 is regulatory: a white arrow on a blue rectangle. TS733/TS734 are
+    # supplementary plates off CT174/51-3(2)D and are **black on white with a
+    # black border**, not blue — checked against the sheet, because the obvious
+    # assumption is that a one-way arrow plate matches the one-way sign.
+    TS183:
+      plate: rect
+      layers:
+        - {draw: rect, colour: blue, size: 1.00}
+        - {draw: arrow_up, colour: white, size: 0.78}
+    TS733:
+      plate: rect_wide
+      rank: supplementary
+      layers:
+        - {draw: rect_wide, colour: black, size: 1.00}
+        - {draw: rect_wide, colour: white, size: 0.88}
+        - {draw: arrow_right, colour: black, size: 0.72}
+    TS734:
+      plate: rect_wide
+      rank: supplementary
+      layers:
+        - {draw: rect_wide, colour: black, size: 1.00}
+        - {draw: rect_wide, colour: white, size: 0.88}
+        - {draw: arrow_left, colour: black, size: 0.72}
+
+  # ---- the livery ----
+  # A city fact, not an art choice: these are the colours the publisher's own
+  # sheets print, so they live here rather than in game/tuning/signs.tres (hard
+  # rule 3 — the second city's signs are its own).
+  #
+  # ⚠️ **This is why signs.glb ships COLOR_0 and arrows.glb does not.** An arrow
+  # is one paint, so Q53 put its colour in the .tres beside the markings it
+  # matches. A sign is four colours on one plate and the whole layer is one
+  # draw call, so the colour has to travel on the vertex. The channel is read —
+  # signs.gdshader takes COLOR_0 straight to ALBEDO — which is the bar Q54 set
+  # when it found COLOR_0.a broadcasting an unread 255 down the road mesh.
+  colours:
+    red: "#c21a26"
+    blue: "#0d4794"
+    white: "#f0f0ea"
+    black: "#1c1c1f"
+    # The plate's back and the pole. Galvanised steel, the same reading P3-19
+    # settled for the railings: grey, not green.
+    grey: "#70737a"
+
+  # ---- dimensions, every one of them authored ----
+  # ⚠️ **NO SIGN DIMENSION IS PUBLISHED.** Every TS index sheet is stamped "NOT
+  # TO SCALE" and notes "Please refer to working drawings for detail dimensions
+  # of the traffic sign" — and no working drawing ships in the dataspec bundle.
+  # So these are authored to the standard sizes, exactly the debt Q60 recorded
+  # for railing height and post pitch, and they are the weakest-evidenced
+  # numbers in this block. They are not a position: where a sign goes is read.
+  disc_diameter_m: 0.60
+  triangle_height_m: 0.68
+  rect_width_m: 0.45
+  rect_height_m: 0.60
+  # The supplementary arrow plates are landscape where TS183 is portrait.
+  rect_wide_width_m: 0.60
+  rect_wide_height_m: 0.25
+
+  # Bottom of the lowest plate above the footway. 2.1 m is the standard
+  # clearance where pedestrians pass under a sign.
+  mount_height_m: 2.10
+  # Vertical gap between stacked plates on one pole.
+  stack_gap_m: 0.06
+  # The pole. Rendered as a prism rather than a cylinder — at 60 mm across, from
+  # a car, six sides and twelve are the same picture and one is half the mesh.
+  pole_radius_m: 0.032
+  pole_sides: 6
+  # How far the pole stands proud above the topmost plate.
+  pole_headroom_m: 0.05
+  # Segments in a drawn disc. A 600 mm disc at driving distance is a few pixels
+  # across; twelve is already round and twenty-four is twice the mesh.
+  disc_segments: 12
+
+  # How far each face layer floats in front of the one beneath it. Coplanar
+  # layers z-fight, which is the same reason arrows.lift_m exists — and the
+  # plate is vertical here, so this is along the plate normal rather than up.
+  #
+  # ⚠️ **4 mm was not enough and the failure was easy to misread.** At that value
+  # the white bar of a NO ENTRY z-fought its own red disc, and from 4 m it read
+  # as an *arrowhead-shaped* wedge — plausible enough to be written off as the
+  # 12-gon's facets, which is what happened until a 2.2 m shot settled it. The
+  # geometry was correct throughout: the bar is 4 mm in front and the vertex dump
+  # said so. Only a close render showed it. 12 mm is clean at every distance
+  # tried, and a sign plate is a rendering device here rather than a thickness —
+  # the paint on a real plate is coplanar.
+  layer_lift_m: 0.012
+
+  # Furthest a pole may sit from a level-0 centreline and still be drawn. A sign
+  # inside a building forecourt or up a footbridge belongs to no street; beyond
+  # this it is counted unassigned rather than dragged onto the nearest one. The
+  # same bar arrows: and railings: both set, re-measured for this layer:
+  # signs.json republishes the gap as `offset_m` on every run.
+  max_offset_m: 12.0
+
+  # Furthest a sign may sit from the pole its GG_NAME names before the pair is
+  # refused. ⚠️ **Learned from ~/hk-traffic-sign-map, which hit it first**: its
+  # compute-stacks.mjs caps a group's span at 15 m because "the 15 m span cap
+  # drops pathological GG_NAMEs reused across signs kilometres apart". The same
+  # hazard is visible here — signs.json read pole_offset_m p99 16.3 m and max
+  # 20.3 m before this existed, against a p50 of 2.0 — so the cap is taken at
+  # their number rather than re-derived. signs.json republishes the distribution
+  # so the choice stays checkable.
+  max_pole_span_m: 15.0
+
 # Published yellow box junctions (P3-18, the follow-on Q59 recorded).
 #
 # Q53 held box junctions because "nothing publishes which junctions have one";

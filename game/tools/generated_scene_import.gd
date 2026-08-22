@@ -43,6 +43,14 @@ const SHADERS: Dictionary = {
 	"railings": "res://tuning/railings.tres",
 	"bollards": "res://tuning/bollards.tres",
 	"barriers": "res://tuning/barriers.tres",
+	# ⚠️ **`signs.tres` is the only entry here whose absence is *quiet*.** Every
+	# other row falls back to a visibly wrong colour, because those meshes carry
+	# no `COLOR_0` and the shader is where their colour lives. A sign's livery is
+	# on the vertex, so a missing dispatch still draws the right plates in the
+	# right colours — just without `vertex_srgb_to_linear`, so the whole city's
+	# signage comes out pale (`Q27`). `verify_signs.gd` checks this row for that
+	# reason.
+	"signs": "res://tuning/signs.tres",
 	"vehicle_body": "res://tuning/vehicle_body.tres",
 }
 

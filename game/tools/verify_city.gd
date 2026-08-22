@@ -23,6 +23,7 @@ const GeneratedRoadSurface = preload("res://scripts/city/generated_road_surface.
 const GeneratedArrows = preload("res://scripts/city/generated_arrows.gd")
 const GeneratedBoxJunctions = preload("res://scripts/city/generated_boxjunctions.gd")
 const GeneratedRailings = preload("res://scripts/city/generated_railings.gd")
+const GeneratedSigns = preload("res://scripts/city/generated_signs.gd")
 const GeneratedTramway = preload("res://scripts/city/generated_tramway.gd")
 const Manifest = preload("res://scripts/city/city_manifest.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
@@ -120,6 +121,13 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 		problems.append_array(
 			_check_document("box junctions", manifest.boxjunctions_path, GeneratedBoxJunctions.PATH)
 		)
+	# Guarded on the same terms once more, and this is the guard that matters
+	# most: `verify_signs.gd` treats an absent asset as a pass *and* a null
+	# `signs` key is an ordinary answer for a region whose signs are all
+	# text-faced — so without this a manifest naming `signs.glb` with the file
+	# gone would pass every check in the repo.
+	if not manifest.signs_path.is_empty():
+		problems.append_array(_check_document("signs", manifest.signs_path, GeneratedSigns.PATH))
 	return problems
 
 
