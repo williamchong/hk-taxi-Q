@@ -643,6 +643,25 @@ authored features the source captures badly.
   ⚠️ **Where the fence stands is not where it was surveyed.** 67.9% of the region's published
   railing metres fall *inside* the 1.6x-widened ribbon, so they are registered onto the drawn kerb;
   `Q60` has the measurement and the bar on the move.
+- ✅ **The same layer draws two more things, and a class is a parameterisation rather than a
+  shader** (`Q61`). `railings.glb` carries three meshes — `railings` 9,017 m, `bollards` 463 m,
+  `barriers` 935 m — sharing `railings.gdshader` and differing **only** in the six mask numbers in
+  `tuning/railings.tres`, `bollards.tres` and `barriers.tres`. A bollard keeps wide uprights at a
+  wide pitch and no rails; a vehicle barrier keeps two horizontal rails and no balusters. Nothing
+  branches in the shader, which is what keeps the difference in tuning data (hard rule 4).
+  ⚠️ **So a class handed the wrong `.tres` is a picket fence standing where a bollard should be,
+  and it renders perfectly.** `verify_railings.gd` checks the material dispatch per class for
+  exactly that reason.
+  ⚠️ **Bollards are flat masked quads, not round posts** — one quad thick like the fence beside
+  them, `cull_disabled` for the same reason, thinning to nothing edge-on. Consistent with the
+  bundle's own fidelity rather than an oversight, and recorded here rather than hidden.
+  ⚠️ **The colours are the softest claims in the three files.** `COLOR` is populated in the source
+  and separates the classes, but has no published domain, so the bollard grey and the barrier
+  galvanised are authored the way `rail_colour` is. Hong Kong runs painted vehicle barriers too; a
+  maroon would have been more recognisable and a much larger claim.
+  ⚠️ Three draw calls where `P3-19` had one, against a `<150` budget the drive scene reads 36 on.
+  Separate meshes are what let each class carry its own `.tres` and what let `railing_error.py`
+  walk one class's feet without another's in the pile.
 
 ⚠️ **When the markings shader lands it will expose a junction defect that is invisible today.** A cap
 overlaps its arms rather than abutting them wherever a short edge is held back by the junction trim —

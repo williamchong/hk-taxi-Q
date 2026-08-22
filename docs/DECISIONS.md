@@ -80,6 +80,7 @@ lives in git. This file holds *why things are the way they are*.
 | `Q57` | The estate publishes the markings, the width and the tram, and three records said otherwise | ✅ Closed as a survey, 2026-08-20. Nothing built, nothing fetched; four claims retired and one trap recorded |
 | `Q58` | The published tramway is **rails, not centrelines**, and it is **not on the carriageway** | ✅ Closed — `P3-14` ships `tram.glb`, 2026-08-20. `CartoTransLine TW` is one rail per part (gauge p50 **1.124 m** against 1.067 published); **only 18.8%** of cross-sections have both tracks on the drawn ribbon and **1.5%** on Hennessy, so a lane-space marking was refused on *measurement*. **+177,328 B of PCK**, one draw call, no collider. ⚠️ The deferral this replaces cited `ART_DESIGN.md` for the opposite of what it says |
 | `Q60` | The railings are **published**, their **vocabulary is not**, and the drawn kerb has already moved past them | ✅ Closed — `P3-19` ships `railings.glb`, 2026-08-22. **67.9%** of published railing metres fall inside the 1.6x ribbon, so the position is **registered** onto the drawn kerb — the one place in the bundle an extent is moved — bounded by `max_shift_m` 3.0 and priced by a `shift_m` recorded over its own refusals. `LINETYPE` has **no published domain** and no index-plan sheet defines a railing, so the whitelist is read off the code strings and every refusal is published. **+255,208 B of PCK**, one draw call, no collider. ⚠️ `roadsurface.json` gained `kerb_hidden_m` (schema 5) because **11.1%** of them join to a kerb no ribbon draws |
+| `Q61` | The fence was **solid on an objection borrowed from paint**, and the layer draws **three things**, not one | ✅ Closed — 2026-08-23. `arrows.gdshader`'s alpha objection is about *road paint*, which is genuinely opaque; a railing is 60-75% air and shipped reading as a **white concrete parapet**. `railings.glb` gains `TEXCOORD_0` as `(m along the run, m above the deck)` and the shader **integrates** the baluster coverage over each fragment's `fwidth` footprint — crisp near, uniform far, aliasing at no distance. **The first transparent material in the bundle**, so there is exactly one transparent object and nothing to sort it against. 🔴 `SYMBOL_SIZE_*` is **plot inches, null on 0 of 196 bollards** — `Q60`'s one readable dimension was never readable — so the split is by **class of object** and never within one: `railings` 9,017 m (**byte-identical to `P3-19`**), `bollards` 463 m, `barriers` 935 m. Manifest schema 1 → 2, top-level `drawn_m` **removed rather than broadened**. Three draw calls, still **no collider** |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -8202,3 +8203,123 @@ cannot satisfy · `Q58` for the mesh pattern and the failure-that-renders-as-not
 read-never-invented and what moving an extent costs · `Q56` for why the coverage test is published
 rather than re-implemented · `Q15` for the level-0 snap · `P3-18` for the stage shape ·
 `GAME_DESIGN.md` for the divergence this sits inside · `DATA_SOURCES.md` for the corrected layer row
+
+## `Q61` — The fence was solid on an objection borrowed from paint, and the layer draws three things
+
+**Status.** ✅ Closed 2026-08-23 by `P3-19`'s follow-up.
+
+**Opened** 2026-08-23 by the user, looking at the shipped city: *"white rails looks and feels
+strange"*, and *"there are diff style fences, check if data can source the diff"*. Two questions,
+and the second turned out to answer part of the first.
+
+### 1. The opacity divergence was inherited from a surface it does not describe
+
+`P3-19` shipped the railings as one opaque quad per 2 m station and recorded why: alpha costs *"a
+sorted transparent pass on the device floor, or a scissor that re-aliases every baluster"*. That
+objection is `arrows.gdshader`'s, and **next door it is right** — it reasons about road paint and
+concludes *"Real road paint is opaque. So is this."*
+
+A railing is the opposite physical case. It is 60–75% air, and drawn solid at `rail_colour`
+0.78/0.80/0.76 it shipped reading as a **white concrete parapet** flanking the carriageway in
+`build/driver/railings_street` and `railings_hennessy`. `ART_DESIGN.md` had called it *"a cue rather
+than a lie"*; the frames say it was a different object.
+
+Both halves of the objection have an answer here that they do not have next door:
+
+| | |
+|---|---|
+| **Sorting** | Every other shader in the bundle is opaque, so this is the **first transparent material in it** and there is exactly one transparent object in the scene — nothing to sort it against. It depth-tests against all opaque geometry normally, so a building in front of a fence still occludes it, and `depth_prepass_alpha` removes the one case left: a fence blending with itself where two runs cross on screen |
+| **Aliasing** | The scissor aliases because it **samples** a stripe. `bars()` integrates one — an exact antiderivative of the pulse train, evaluated over each fragment's own `fwidth` footprint — so a baluster is crisp when it is wider than a pixel and settles to the duty cycle when it is not. No distance shimmers and none vanishes |
+
+⚠️ **`ALPHA` is coverage, not translucency.** The steel is opaque and the gaps are gaps, so what
+reaches `ALPHA` is the fraction of the fragment the members cover, computed from the authored
+dimensions. An opacity uniform would be `arrows.gdshader`'s recorded misreading of `paint_opacity`
+repeated in a new place, so there is none.
+
+This needed a coordinate the mesh did not carry. `railings.glb` now ships `TEXCOORD_0` as
+**`(metres along the run, metres above the ribbon deck)`** — not a texture coordinate, the same
+kind of shader payload a tile's storey height travels in (`P3-7`), and inside the no-textures
+contract because `mesh_contract.gd` forbids **textures**, not UVs. **+82,900 B**, no vertex moved,
+every graded counter byte-identical.
+
+⚠️ `u` is the **fence line's** arc length, not the centreline's. `_station` interpolates in the
+centreline's parameter, so on a bend the two differ by the ratio of their radii and balusters spaced
+along the centreline would stretch round every corner. `v` is measured from the **deck**, so `v = 0`
+is the ground line and a rail band can be authored as "0.95 m up" and mean it.
+
+🔴 **`rail_colour` shipped clipped, and nothing measured it.** 0.78/0.80/0.76 left no headroom below
+white. Now 0.62/0.65/0.60, taken down on the frames — which `railings.tres` already recorded as the
+only check this value has.
+
+### 2. What the data can source is the class, and nothing finer
+
+`Q60` established that `LINETYPE` has no published domain. This closed the last door: **the layer's
+other 40 columns are cartography, not description.**
+
+| Column | Spec says | Region says |
+|---|---|---|
+| `SYMBOL_SIZE_*` / `SYMBOL_STEP_*` | *"Symbol size of **marker symbol** in first layer"* | Plot sizes in **inches**. All 21 `RAILING1` features read 0.8503937 (**21.6 mm** on paper) at step 5.669300 (**144 mm**); `RAIL1` carries two numbers, a dash pattern. **Null on 0 of 196 bollard features**, all five slots |
+| `COLOR` | *"Color of Feature"*, Number — **no coded-value table anywhere in the document** | Populated, and it separates the classes: `CRAIL1` is 7 on 509/532, `bollard0` is 0 on 143/161. Corroborates the split; cannot colour anything |
+| `LINE_PATTERN_*`, `LINE_WIDTH_*`, `LINE_OFFSET_*` | — | **Entirely null** |
+
+🔴 That table is also the correction: `Q60` and `hong_kong.yaml` both claimed the bollards'
+`SYMBOL_STEP_1`/`SYMBOL_SIZE_1` *"carry their spacing and diameter for whoever draws them"*. They do
+not, on either the reading or the population — and it was the one claim that a railing dimension
+here could be **read** rather than authored. `Q60`'s conclusion is now unqualified.
+
+So the split is by **class of object**, on the strength of the code strings — the argument the old
+single whitelist was already making — and **never within a class**:
+
+| Class | Codes | Source m | Drawn m | Triangles |
+|---|---|---|---|---|
+| `railings` | `CRAIL1` `CRAIL2` `HCAIL2` `RAIL1` `RAILING1` | 14,670 | **9,017** | 9,308 |
+| `bollards` | `bollard0..3` | 676 | **463** | 938 |
+| `barriers` | `CBARRIER` `CRASHGATE` | 1,609 | **935** | 968 |
+
+⚠️ **The `railings` class is byte-identical to `P3-19`** — every counter, and `railing_error.py`'s
+whole table. The refactor is inert and the two new classes are pure addition.
+
+⚠️ **Still refused, and the refusals are the argument.** `AMT`/`AMT1`/`AMT-1.5`/`AMT1.5_1.0`/
+`AMT2_1.5` (1,099 m) — the numeric suffixes *look* like dimensions, which is a guess and the one
+thing `Q60` refused to make. `SOLID` (511 m) and `EAG 3`/`MSB 5` (69 m) — undomained. And the
+flyover parapet, 1,640 m of on-structure metres, which is not a vocabulary refusal at all:
+`ribbons()` builds level-0 edges only (`Q15`), so drawing it needs level-aware assignment and is its
+own task.
+
+⚠️ **A class is a parameterisation, not a shader.** All three share `railings.gdshader` and differ
+only in the six mask numbers in their `.tres` — a bollard keeps wide uprights at a wide pitch and no
+rails, a barrier keeps two horizontal rails and no balusters. Nothing branches, so the difference
+stays in tuning data (hard rule 4). ⚠️ Which also means a class handed the **wrong `.tres`** is a
+picket fence standing where a bollard should be, rendering perfectly — `verify_railings.gd` checks
+the dispatch per class for exactly that reason.
+
+⚠️ **Bollards are flat masked quads, not round posts.** One quad thick like the fence beside them,
+`cull_disabled` for the same reason, thinning to nothing edge-on. Consistent with the bundle's
+fidelity rather than an oversight, and recorded rather than hidden.
+
+### Consequences
+
+- **`RAILINGS_MANIFEST_SCHEMA` 1 → 2**, and the top-level `drawn_m` is **removed rather than
+  broadened**: it would now mean fence plus bollard plus barrier, and a reader keeping the schema-1
+  meaning would count all three as pedestrian railing. Hard rule 5's own bar. `city.json` is not
+  bumped — it names `railings.glb`, and a consumer that loads and draws it stays correct.
+- **The run parameters are per class because the region forces it.** Bollard features have a median
+  published length of **1.00 m** and 84% are under 4 m; the fence's `min_run_m` of 4.0 would refuse
+  all but a handful and report it as a clean tally. Shared, it was a silent decision to draw none.
+- **The class is part of the cell key.** A bollard row and a railing on one kerb would otherwise
+  merge into one run and be drawn once, at whichever height won.
+- **The collider guard moved and did not weaken.** It was one string in `pipeline/railings.py`; the
+  mesh name comes from config now, so `config._railing_class` refuses an id ending in `-col`.
+  `verify_railings.gd` still asserts zero colliders. **Collision remains a `B3` question**, and
+  `Q60`'s registration is why: `shift_m` p90 3.24 m, max 6.24 m. A decorative fence 3 m from where
+  the real one stands is a cue; a collidable one is a wall in the wrong place.
+- **Three draw calls where there was one**, against a `<150` budget the drive scene reads 36 on.
+- `samples`, `samples_outside_region` and `samples_unassigned` stay **shared and unsplittable** —
+  `SideIndex.nearest` returns unassigned as a count, so there is nothing to attribute. A class that
+  joins to nothing is invisible there and visible as its own `read_m` against its `drawn_m`, which
+  is why both are published.
+
+**See.** `Q60` for the vocabulary and the registration this sits on · `Q59` for the widening and the
+glyph-table rule · `Q58` for the counters that can see a failure-to-nothing · `Q54` for
+read-never-invented · `arrows.gdshader` for the opacity objection and why it belongs to paint ·
+`ART_DESIGN.md` for the divergence this closes · `DATA_SOURCES.md` for the corrected layer row

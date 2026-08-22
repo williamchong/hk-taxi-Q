@@ -177,9 +177,12 @@ Common emoji for this project:
   attribute does not, and the first build had **5,111 of 5,112** triangles facing the ground with
   everything else correct. ⚠️ **A tramway change is also a shader change** — `check.sh` exits 0 on a
   shader that fails to compile, so render and `grep -i "shader error"`. Numbers in `Q58`.
-- **`pipeline/railings.py`, the `railings` config block, or any railing change: paste `railings.json`'s
-  `shift_m` (with its `n`), `samples_over_shift`, `metres_on_buried_kerb`, `metres_bridged`,
-  `refused_m` and `facing_away`, before and after — and run `tools/railing_error.py` and paste its table.** ⚠️ **The
+- **`pipeline/railings.py`, the `railings` config block, or any railing change: paste, PER CLASS,
+  `railings.json`'s `shift_m` (with its `n`), `samples_over_shift`, `metres_on_buried_kerb`,
+  `metres_bridged` and `facing_away`, plus the shared `refused_m`, before and after — and run
+  `tools/railing_error.py` and paste all three of its tables.** ⚠️ **Per class since `Q61`, and
+  pooling them defeats the point**: the fence is 90% of the metres, so anything the two small
+  classes did wrong disappears into its average. ⚠️ **The
   position of a railing is *registered*, not read** — the one place in the bundle a published extent
   is moved — because **67.9%** of the region's railing metres were surveyed inside the 1.6x ribbon
   (`Q60`). `shift_m` is the price of that and is recorded over the samples `max_shift_m` refuses, so
@@ -192,11 +195,23 @@ Common emoji for this project:
   therefore moves every fence, silently and plausibly. ⚠️ `facing_away` must be **0** and
   `railings.gdshader` must stay `cull_disabled` — it is the only generated mesh that is, a fence is
   one quad thick, and `cull_back` would delete half of them with a byte-identical mesh.
-  ⚠️ **`drawn_line_types` is a whitelist read off code strings and nothing published defines them** —
-  no index-plan sheet covers railings — so a change to it is a `DATA_SOURCES.md` change and the
-  refused metres are what makes it reviewable. ⚠️ **A railings change is also a shader change** —
+  ⚠️ **`classes` is a whitelist read off code strings and nothing published defines them** — no
+  index-plan sheet covers railings, and the layer's other 40 columns are cartography (`SYMBOL_SIZE_*`
+  is plot inches, `COLOR` has no domain, `LINE_WIDTH_*` is null) — so a change to it is a
+  `DATA_SOURCES.md` change and the refused metres are what makes it reviewable. ⚠️ **The split is by
+  class of object and never within one**: five codes draw one fence, and keying a style to `CRAIL1`
+  versus `HCAIL2` is `Q54`'s debit on the bundle's weakest-evidenced field.
+  ⚠️ **A class is a parameterisation, not a shader** — all three share `railings.gdshader` and differ
+  only in six mask numbers in their `.tres`, so a class handed the wrong `.tres` is a picket fence
+  standing where a bollard should be and it renders perfectly. `verify_railings.gd` checks the
+  dispatch per class; a new class needs a row there, in `generated_scene_import.gd` and in the config,
+  and `check.sh` fails if the three disagree.
+  ⚠️ **`ALPHA` is coverage, not translucency, and there must be no opacity dial** — the steel is
+  opaque and the gaps are gaps. One would repeat `arrows.gdshader`'s recorded misreading of
+  `paint_opacity`.
+  ⚠️ **A railings change is also a shader change** —
   `check.sh` exits 0 on a shader that fails to compile, so render and `grep -i "shader error"`.
-  Numbers in `Q60`.
+  Numbers in `Q60` and `Q61`.
 - **`pipeline/arrows.py`, the `arrows` config block, or any turn-arrow change: paste `arrows.json`'s
   two partitions (`symbols` and `candidates`), `axis_residual_deg`, `offset_m`, `against_one_way` and
   `inverted`, before and after.** There is no separate grader and there should not be: the stage grades itself,
