@@ -7876,7 +7876,7 @@ an optional `city.json` key (14 → 15), counters the stage publishes about itse
 
 ⚠️ **Amended the same day by `Q64`, and the counts below are `P3-16`'s as it landed.** The face table
 was shifted one row at `TS182`/`TS183`: 11 mislabelled plates shipped and 155 correct ones were refused.
-The shipped layer is **706 plates on 541 posts**, and the prohibition bar's width moved from an authored
+The layer `Q64` left was **706 plates on 541 posts** (**746** on **572** since `P3-22`), and the prohibition bar's width moved from an authored
 0.13 to a measured 0.097. Read the numbers here as the record of what this task shipped, and `Q64` for
 what the bundle carries now.
 
@@ -8790,7 +8790,7 @@ needed to find two cells you can name, so the machinery `P3-20` was scoped aroun
 - 🟡 **`P3-20` — reduced to a two-glyph atlas. GO WITH CAVEATS, and the user's call is owed.**
   ⚠️ **Build it as its own primitive if it is built.** `mesh.py` refuses to merge meshes with and
   without UVs, so putting `TEXCOORD_0` on the existing asset costs **all 34,564 vertices** a channel —
-  276,512 B raw, ~138 KB of PCK, **+0.32%** of the bundle — paid by 706 plates and 541 poles to serve
+  292,928 B raw, ~143 KB of PCK — paid by 746 plates and 572 poles to serve
   92. A separate `signs_text.glb`, the way `railings.glb` already ships three primitives, keeps the
   untextured majority byte-identical and scopes the texture declaration to one surface. Cost: one
   draw call. ⚠️ **NO-GO is equally defensible** and is a taste call about the flat-shaded look rather
@@ -8815,3 +8815,64 @@ arrives.
 See also: `Q64` for the sheet-over-catalogue rule these four codes were read under · `Q63` for the
 texture contract this leaves armed and unused · `P3-22` for the work that follows · `Q54` for
 read-never-derived, which is why the shape codes were checkable at all
+
+---
+
+## `Q66` — A deviation board's direction is the whole message, and nobody publishes it
+
+**Opened and shipped-around 2026-08-23**, during `P3-22`. The one face property in the sign layer
+that is *derived* rather than read.
+
+### The problem
+
+TD splits NO THROUGH ROAD into three codes — `TS615` straight, `TS616` side road left, `TS617` side
+road right — so where direction matters the **code carries it**. It does not do this for deviation
+boards. There is one `TS414`, one `TS588`, one `TS589`, and the index sheet draws `TS414`'s chevrons
+pointing **left** while `TS588`/`TS589`'s point **right**. So the drawing is indicative: the board is
+a physical object turned to face the deviation, and which way its chevrons point is not in the data.
+
+⚠️ **Drawn in a fixed direction, half of them are wrong and every one of them renders perfectly** —
+`Q59`/`Q64`'s failure class exactly.
+
+### The assumption, stated rather than hidden
+
+Chevrons point **away from the kerb the post stands on, into the carriageway**. That is what an
+island nose and the outside of a bend physically do, and it costs nothing new to compute: the
+registration already resolves which kerb a post was pushed onto, and `_facing_from_side` already
+consumes the same number to decide where the plate looks.
+
+`+u` is the viewer's right, so under drive-on-left the **nearside** board is the mirrored case and
+the glyphs are authored for the offside.
+
+⚠️ **The stage publishes `chevrons_drawn` and `chevrons_mirrored` so the assumption stays visible.**
+Today: **11 drawn, 4 mirrored**. A number at either extreme — 0 or 11 — would mean the kerb side had
+stopped being read, which is the only way this fails that a frame cannot show.
+
+### 🔴 What made it much smaller than it looked
+
+**49 of the region's 61 `TS414` and all 10 of its `TS589` are on structures** (`ELEVATION` `A01`),
+and `Q15` restricts this layer to level 0. That is not a defect: a chevron board marks a sharp
+deviation, and in this region sharp deviations are flyover ramps and corridor approaches. So the
+derived-orientation risk lands on **11 drawn boards**, not the 71 the region counts suggested.
+
+⚠️ **`TS589` therefore draws ZERO here**, and its plate kind (`board_tall`) and the `yellow` it added
+to the livery are carried for a face nothing in this region shows. Kept rather than deleted, because
+`faces:` is the publisher's *vocabulary* and hard rule 3 makes the second city the business case —
+but recorded, so nobody reads it as shipping.
+
+### Two traps found building it
+
+🔴 **A chevron is CONCAVE, and `_Builder.polygon` fans from vertex 0.** Fanning the notched outline
+emits triangles outside the shape with half of them wound backwards: `facing_away` read **21** on the
+first build. Split into two convex quads per chevron, the way `_tee` splits the T. The mercy is that
+this one is loud — `signs.gdshader` is `cull_back`, so the bad half goes *missing* rather than drawing
+wrong.
+
+🔴 **Mirroring reverses winding, and that failure is silent.** Negating `u` turns a counter-clockwise
+polygon clockwise, which `cull_back` deletes outright — while `facing_away` still reads 0, because
+the *normal* is untouched. `[::-1]` restores it, and `test_a_mirrored_board_flips_its_glyphs_and_keeps_its_winding`
+is mutation-checked against removing it.
+
+See also: `Q65` for the scope cut that surfaced these four codes · `Q64` for the sheet-over-catalogue
+rule they were read under · `Q15` for the level-0 restriction that took 59 of them · `Q62` for the
+other derived-and-ungraded claim in this layer
