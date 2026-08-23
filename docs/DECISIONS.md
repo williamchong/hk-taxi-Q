@@ -8737,3 +8737,81 @@ carry their own unanswered question about whether a sheet's *specimen* is the pl
 See also: `P3-20` for the atlas this unblocks · `Q64` for the mislabel found while pricing it ·
 `ART_DESIGN.md` for `merge`'s separate and untouched refusal of textured buildings · `P3-21` for the
 side `/eval` fenced, where road markings stay procedural
+
+---
+
+## `Q65` — The sign estate is scoped to what tells the player where to drive
+
+**Decided 2026-08-23** on the user's instruction: *"ignore time, parking, forbidden zone, vehicle type
+etc sign data, and just focus on driving directions related one."* `/eval` was run against it; this
+records the instruction, the verdict, and the two things the verdict changed about it.
+
+### What the cut removes
+
+Of the region's 3,276 published signs, roughly **2,100** are time plates (`TS860` ×148), parking
+(`TS280` ×74, `TS283` ×50), the `TS21xx`/`TS22xx` no-stopping-zone family, and vehicle-class
+prohibitions (`TS119` ×44, `TS130` ×27, `TS136` ×28, `TS117` ×11). They are out of scope as content,
+not merely deferred on cost — a taxi game's signage is the part that instructs the driver.
+
+⚠️ **This retires the question `P3-20` was sized against.** The atlas was justified by unlocking
+~2,364 text-faced plates; that number is now ~92.
+
+### 🔴 What the cut revealed, and it is `Q64` again at a second layer
+
+**Four refused codes are direction signs whose meaning is their SHAPE, so they need no texture at
+all.** Read off TD's own sheets rather than off `signCatalogue.json`, which is what `Q64` exists to
+insist on:
+
+| Code | The sheet's own words | In region |
+|---|---|---|
+| `TS414` | PERMANENT SHARP DEVIATION (TC 210) — a chevron board | **61** |
+| `TS735` | ARROWS (TC 408) — the double-headed supplementary plate, sibling of the `TS733`/`TS734` already shipping | **20** |
+| `TS615` | NO THROUGH ROAD (TC 310) — white T, red bar | **14** |
+| `TS589` | chevron hazard marker | **10** |
+
+**105 plates, zero textures**, on about three new `draw` primitives — and `_bent_arrow` and
+`_u_turn_arrow` are the precedent for baking a composite glyph as one word rather than adding a
+per-layer offset to the face schema.
+
+### 🔴 And what it does NOT remove, which the first reading of it got wrong
+
+This session first concluded the cut closes `P3-20`. That was wrong, and the correction is the
+finding: **GIVE WAY and STOP are the most direction-carrying signs there are, and they are exactly
+the two that need lettering** — `TS102` 讓 ×**74**, which ships today as a bare red triangle and is
+how the user found the defect, and `TS101` STOP / 停 ×**18**, refused outright.
+
+So the cut does not close the atlas. It shrinks it **from 193 cells to about 2**, which is a
+different decision: no OCR, no contact sheet, no `--propose`/`--commit` gate and no grid sweep are
+needed to find two cells you can name, so the machinery `P3-20` was scoped around mostly disappears.
+
+### The verdict
+
+- ✅ **`P3-22` — ship the four shape codes. GO.** The clear win, and independent of everything below.
+- 🟡 **`P3-20` — reduced to a two-glyph atlas. GO WITH CAVEATS, and the user's call is owed.**
+  ⚠️ **Build it as its own primitive if it is built.** `mesh.py` refuses to merge meshes with and
+  without UVs, so putting `TEXCOORD_0` on the existing asset costs **all 34,564 vertices** a channel —
+  276,512 B raw, ~138 KB of PCK, **+0.32%** of the bundle — paid by 706 plates and 541 poles to serve
+  92. A separate `signs_text.glb`, the way `railings.glb` already ships three primitives, keeps the
+  untextured majority byte-identical and scopes the texture declaration to one surface. Cost: one
+  draw call. ⚠️ **NO-GO is equally defensible** and is a taste call about the flat-shaded look rather
+  than an engineering one: the shape of an octagon and of a red-bordered triangle already say stop
+  and give way.
+- ❌ **Bend and narrows warnings (`TS401`–`TS418`, 53 plates across 13 codes). NO-GO.** Thirteen new
+  glyph primitives for 53 plates, at most 8 each — the worst effort-per-plate in the estate.
+- 🟡 **Speed limits (`TS174` ×37, `TS175` ×28, tail to 73). HOLD.** Driving instructions but not
+  *directions*, and a numeral set is the one text case a small atlas serves cheaply — ten glyphs,
+  every one reused.
+- ❌ **`P3-21` road lettering. NO-GO under this scope.** `CENTRAL` / `九龍` on the carriageway is
+  lettering by definition and carries no instruction the road graph does not already give the player,
+  and it needs an authored typeface with its own `LICENSING.md` entry. ⚠️ Its data findings stand and
+  are recorded — `DTAD_RD_MARK_ANNO` is `MultiPolygon`, every feature a rotated rectangle, 67 distinct
+  strings — so reopening costs nothing.
+
+⚠️ **`Q63`'s amendment is not wasted by any of this.** It landed before the cut, it costs nothing
+idle, `Texture memory` is still 0, and the check it replaced is strictly weaker than the one now in
+place — which catches an `AtlasTexture` hiding its real size and a declared texture that never
+arrives.
+
+See also: `Q64` for the sheet-over-catalogue rule these four codes were read under · `Q63` for the
+texture contract this leaves armed and unused · `P3-22` for the work that follows · `Q54` for
+read-never-derived, which is why the shape codes were checkable at all
