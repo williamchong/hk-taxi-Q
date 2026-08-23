@@ -67,6 +67,24 @@ Bounds = tuple[tuple[float, float, float], tuple[float, float, float]]
 class Texture:
     data: bytes
     mime_type: str
+    # Where the image lives, when it is to live *beside* the `.glb` rather than
+    # inside it. Unset — the default, and what every read path produces — the
+    # bytes are embedded as a buffer view.
+    #
+    # 🔴 **Set, `data` is not written by this module and the caller owes the
+    # file.** `write_glb` emits a reference and nothing else; a URI naming a file
+    # nobody wrote is a `.glb` that imports with no texture. `pipeline/signs.py`
+    # is the one caller, and it writes the atlas three lines from where it names
+    # it here.
+    #
+    # ⚠️ **The reason this exists is not glTF's, it is Godot's** (`Q70`).
+    # `gltf/embedded_image_handling` defaults to *Extract Textures*, so an
+    # embedded image is unpacked by the importer into a PNG beside the asset —
+    # a file `city.json` has never heard of, sitting in a directory whose every
+    # other byte the manifest names. `sync_generated.sh` swept it on every run
+    # and `verify_signs.gd` went red until someone forced a re-import. An
+    # external URI is not extracted, so the directory goes back to one owner.
+    uri: str | None = None
 
 
 @dataclass(frozen=True)
@@ -555,18 +573,26 @@ def _texture_index(
     discover it equals itself costs more than the duplicate would. Identity is
     meaningful because `_BufferCache.texture` hands out one `Texture` per image
     per document — sharing the bytes alone would not be enough.
+
+    ⚠️ **`Texture.uri` set, this embeds nothing and writes nothing** — see the
+    field. glTF wants `mimeType` only on the buffer-view form; on a URI it is
+    read off the extension, which is the same rule `_mime_type` applies coming
+    the other way.
     """
     key = id(texture)
     if key in seen:
         return seen[key]
 
     gltf.setdefault("samplers", [{"wrapS": 33071, "wrapT": 33071}])
-    gltf.setdefault("images", []).append(
-        {
+    image: dict[str, Any] = (
+        {"uri": texture.uri}
+        if texture.uri is not None
+        else {
             "bufferView": _buffer_view(gltf, binary, texture.data, target=None),
             "mimeType": texture.mime_type,
         }
     )
+    gltf.setdefault("images", []).append(image)
     gltf.setdefault("textures", []).append({"source": len(gltf["images"]) - 1, "sampler": 0})
     seen[key] = len(gltf["textures"]) - 1
     return seen[key]

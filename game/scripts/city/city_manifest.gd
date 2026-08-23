@@ -92,13 +92,22 @@ const NOT_MEASURED: float = -1.0
 ## give-way lines drawn from TD's `DTAD_RD_MARK_LINE`. The same argument a sixth
 ## time — a v15 reader computes a shipped set missing a bundle file.
 ##
-## ⚠️ **All six keys are optional and may be null.** A city whose estate
+## 17 since `Q70`: the manifest names `signs_text.png`, the sign lettering's
+## atlas, which used to ride inside `signs.glb` as an embedded buffer view. The
+## same argument a seventh time — a v16 reader computes a shipped set missing a
+## bundle file — reached from the other direction, and the direction is the
+## finding: Godot's importer *extracts* an embedded image into a file beside the
+## asset, so the bundle already had that file and only the manifest did not know.
+## `sync_generated.sh` deletes what the manifest does not name, and did.
+##
+## ⚠️ **All seven keys are optional and may be null.** A city whose estate
 ## publishes no tramway, no marking symbols, no box polygons, no railing layer,
 ## no sign layer or no transverse markings ships none — so `tramway_path`,
 ## `arrows_path`, `boxjunctions_path`, `railings_path`, `signs_path` and
 ## `roadmarks_path` are empty for such a region and that is the honest answer
-## rather than a missing file.
-const SCHEMA_VERSION: int = 16
+## rather than a missing file. `signs_text_atlas_path` is emptier still: it is
+## null for all of those *and* for a region whose faces carry no lettering.
+const SCHEMA_VERSION: int = 17
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -220,6 +229,24 @@ var signs_path: String
 ## "no stop lines in this bundle", never "no road_marks block".
 var roadmarks_path: String
 
+## 🔴 **The one image in the bundle** (`Q70`, `Q63`, `P3-20`) — the sign
+## lettering's atlas — or **empty** where the region baked none.
+##
+## ⚠️ **Nothing in the game loads this by path, and it is named anyway.** The
+## atlas reaches the renderer through `signs.glb`, which references it, and
+## `tools/generated_scene_import.gd` deliberately reads the texture the importer
+## already resolved rather than loading a second name for the same file. What
+## this key is for is `shipped()`: the atlas lives in `game/assets/generated/`,
+## `sync_generated.sh` deletes everything the manifest does not name, and before
+## `Q70` this file was not named — so it was swept on every run and
+## `verify_signs.gd` went red until someone forced a re-import by hand.
+##
+## ⚠️ **Emptier than any other optional key.** It is null for every region that
+## ships no signs at all, *and* for one whose drawn faces carry no lettering —
+## which is the state `Texture memory: 0` describes and the default `Q63`
+## insisted stay the default.
+var signs_text_atlas_path: String
+
 ## Drawn half-width of the carriageway, in metres, keyed by road-graph edge id —
 ## **one value per station** of that edge's `roadgraph.json` polyline.
 ##
@@ -295,6 +322,7 @@ static func load_manifest() -> CityManifest:
 	manifest.railings_path = _resolve(document.get("railings"))
 	manifest.signs_path = _resolve(document.get("signs"))
 	manifest.roadmarks_path = _resolve(document.get("roadmarks"))
+	manifest.signs_text_atlas_path = _resolve(document.get("signs_text_atlas"))
 	for entry: Dictionary in document.get("carriageway", []):
 		var edge: int = int(entry.get("edge", -1))
 		manifest.carriageway_half_width_m[edge] = _floats(entry, "half_width_m")
@@ -337,8 +365,8 @@ static func bearing_deg(forward: Vector3) -> float:
 
 
 ## Every file the manifest *names*, in order: the four documents, then the
-## tramway, the arrows, the box junctions, the railings and the signs where the
-## region has them, then
+## tramway, the arrows, the box junctions, the railings, the signs, the stop
+## lines and the sign lettering's atlas where the region has them, then
 ## every tier of every tile. Not every file a build ships — `city.json` itself is not
 ## in the list, because it names the others and not itself. A caller copying a
 ## region wants this plus `PATH`, which is what `tools/sync_generated.sh` does.
@@ -356,6 +384,14 @@ func shipped() -> PackedStringArray:
 		paths.append(signs_path)
 	if not roadmarks_path.is_empty():
 		paths.append(roadmarks_path)
+	# ⚠️ **Independently of `signs_path`, not nested under it** — the ETL's
+	# `shipped()` makes the same call for the same reason. The two are written
+	# together and a bundle with one and not the other is broken, but this
+	# function is the definition of what the bundle contains, and a conditional
+	# that assumed the pair would hide the asymmetric case from the only list
+	# that could show it.
+	if not signs_text_atlas_path.is_empty():
+		paths.append(signs_text_atlas_path)
 	for tile: Tile in tiles:
 		paths.append_array(tile.lods)
 	return paths

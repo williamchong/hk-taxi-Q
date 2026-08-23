@@ -70,10 +70,15 @@ const SHADERS: Dictionary = {
 ## the atlas out of the repository and out of `signs_text.tres` both.
 ##
 ## ⚠️ **The texture is taken from the imported `BaseMaterial3D`, not loaded by
-## path.** There is no path to load: the image lives inside `signs.glb` as an
-## embedded buffer view, and asking Godot for it by name would mean unpacking a
-## second copy next to the asset. This is the only channel glTF offers, the same
-## shape as the material-name dispatch above.
+## path** — still, and now for a different reason. It used to be that there was
+## no path: the image rode inside `signs.glb` as an embedded buffer view. Since
+## `Q70` it ships beside the asset as `signs_text.png`, named by `city.json`,
+## because an *embedded* image is one Godot's importer extracts into a file the
+## manifest had never heard of — and `sync_generated.sh` deletes what the
+## manifest does not name. So a path exists; taking it would still be wrong.
+## Hard-coding one here would put a second name for the same file in a second
+## place, and the ETL is free to rename its output. Reading what the importer
+## resolved keeps this row honest about whatever `signs.glb` actually points at.
 ##
 ## ⚠️ **If this row goes missing the lettering does not vanish — it turns
 ## WHITE**, because the fallback `BaseMaterial3D` still samples the atlas but

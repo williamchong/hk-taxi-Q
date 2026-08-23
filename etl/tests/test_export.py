@@ -249,6 +249,9 @@ class _Region:
                 "asset": None,
                 "signs": 0,
                 "drawn": 0,
+                # `Q70`: a region that drew no signs baked no lettering either,
+                # so the atlas is null on the same terms `asset` is.
+                "text_atlas": None,
             },
             # Written even when empty by the landmarks stage, so export's
             # input read is unconditional.

@@ -149,7 +149,17 @@ CITY_NAME = "city.json"
 # missing a bundle file. The key is optional and nullable like the five before
 # it: a city whose estate publishes no transverse markings ships none, and so
 # does one that publishes them and finds no road drawn across.
-CITY_SCHEMA = 16
+# 17 since `Q70`: the manifest names `signs_text.png`, the sign lettering's
+# atlas, which used to ride inside `signs.glb` as an embedded buffer view. The
+# same argument as 11 through 16 — a v16 reader computes a shipped set missing a
+# file the bundle depends on — but arrived at from the other direction, and the
+# direction is the finding. Godot's importer *extracts* an embedded image beside
+# the asset, so the bundle already had a seventh file here; what it did not have
+# was a manifest that knew, and `sync_generated.sh` deletes what the manifest
+# does not name. The bump is for the asset set, and the key is optional and
+# nullable like the six before it: a region whose faces carry no lettering bakes
+# no atlas, and so does a city whose whitelist has none.
+CITY_SCHEMA = 17
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -376,6 +386,14 @@ def build_region(
         # ordinary answer for a region whose signs are all text-faced, because
         # `Q42` refuses those — see `pipeline/signs.py`.
         "signs": signs["asset"],
+        # 🔴 **The one image in the bundle, named** (`Q70`, `Q63`). `null` where
+        # the region baked no lettering, on `tramway`'s terms. It is here because
+        # of what the *engine* does with an embedded one: Godot extracts it to a
+        # PNG beside the asset, and a file in `game/assets/generated/` that this
+        # document does not name is a file `sync_generated.sh` sweeps — which it
+        # did, on every run, leaving `verify_signs.gd` red. The atlas ships
+        # beside `signs.glb` now and this key is what keeps it there.
+        "signs_text_atlas": signs["text_atlas"],
         # `null` where the city drew no stop or give-way lines, on `tramway`'s
         # terms and read from the stage's own manifest for its reason: a region
         # whose markings all failed the transverse join must not be contradicted
@@ -563,6 +581,13 @@ def shipped(manifest: dict) -> list[str]:
         paths.append(str(manifest["railings"]))
     if manifest.get("signs"):
         paths.append(str(manifest["signs"]))
+    # ⚠️ **Independently of `signs`, not nested under it.** The two are written
+    # together and a bundle with one and not the other is broken, but `shipped()`
+    # is the definition of what a build copies and it reads the manifest key by
+    # key — a conditional that assumed the pair would hide the asymmetric case
+    # from the only list that could show it.
+    if manifest.get("signs_text_atlas"):
+        paths.append(str(manifest["signs_text_atlas"]))
     if manifest.get("roadmarks"):
         paths.append(str(manifest["roadmarks"]))
     return paths

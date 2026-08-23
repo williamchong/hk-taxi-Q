@@ -9390,3 +9390,83 @@ and the invented-marking debit · `Q58` for the self-grading pattern and the `dr
 this entry is the third instance of · `Q59` for the by-eye sheet rule and the winding signs ·
 `Q19` for the widening and for why `width_m` is invented · `Q60` for the 0.43 m junction seam ·
 `Q68` for the GIVE WAY plates this puts a line under
+
+---
+
+## `Q70` — The bundle's one image was a file the manifest had never heard of
+
+**Closed 2026-08-24.** Reported by the user as a working condition rather than as a defect:
+`sync_generated.sh` *"sweeps `signs_0.png` on every run, leaving `verify_signs` red until someone
+knows the incantation — it bit me four times today."*
+
+### The mechanism
+
+`P3-20` embedded the sign lettering's 256 x 256 atlas in `signs.glb` as a glTF buffer view. Godot's
+scene importer defaults `gltf/embedded_image_handling` to **Extract Textures**, so it unpacked that
+image into `game/assets/generated/signs_0.png` — beside the asset, in the one directory where every
+other byte is named by `city.json`.
+
+`sync_generated.sh` deletes what the manifest does not name. That rule is **correct and load-bearing**
+— its own comment records 120 MB of `P1-2t` terrain evaluation shipping unnoticed because every
+check in the project starts from the manifest and the manifest had forgotten it. So the sweep did
+what it is for, on a file that was genuinely unnamed and genuinely in the bundle.
+
+🔴 **Why it did not heal itself.** `signs.glb` is usually *unchanged* across a rebuild of some other
+layer, so Godot did not re-import it and did not re-extract. The cached scene then referenced a
+deleted PNG, the material arrived with no texture, and `check_surface`'s
+declared-texture-never-arrived branch — bought by `Q63` for exactly this class of failure — failed
+`verify_signs.gd`. The "incantation" was `touch signs.glb` followed by a re-import, and it was
+written down nowhere.
+
+### The decision — one owner for the directory, not an exception to the sweep
+
+The tempting fix is to teach the sweep to keep `signs_0.png`. It is the wrong one: an exemption
+re-opens the hole the sweep exists to close, and it encodes Godot's private `<stem>_<index>.png`
+naming into our build script. The invariant worth having is that **everything under
+`game/assets/generated/` is named by the manifest**, and the two ways to restore it are to stop the
+file existing or to name it.
+
+**What ships is the second.** `Texture` gains a `uri`, `_texture_index` emits a reference instead of
+a buffer view, `pipeline/signs.py` writes `signs_text.png` beside the asset, and `city.json` names it
+under `signs_text_atlas` — `CITY_SCHEMA` **16 → 17**, `signs.json` **1 → 2**. An external URI is not
+extracted, so the directory goes back to one writer.
+
+⚠️ **The rejected alternative is recorded because it is cheaper and still wrong.** Setting
+`gltf/embedded_image_handling` to *Embed as Uncompressed* in `[importer_defaults]` is one line and
+also restores single ownership — but 256 x 256 RGBA embedded raw is ~262 KB against a 28.5 KB PNG,
+roughly **+0.5% of a 42.8 MB PCK**, the same order as the whole `P3-23` layer, and it gives up the
+mipmaps the extracted texture gets. Paying a bundle cost to fix a build-hygiene bug is the wrong
+trade when naming the file costs nothing.
+
+### What it measured
+
+**Every lettering counter is byte-identical across the change** — `text_plates` **74**,
+`text_facing_away` **0**, `text_atlas_px` **65,536**, `text_coverage` `TS102`
+**0.2775349092908191** — which is the point: the same pixels, relocated. `signs.glb` **1,083,540 →
+1,054,960 B**, with `signs_text.png` **28,512 B** beside it. **PCK 42,868,332 → 42,856,304 B
+(−12,028, −0.028%)**, two exports one variable apart. The manifest names **145** files where it
+named 144.
+
+✅ **The acceptance criterion is the working condition, not a counter**: `sync_generated.sh` twice
+and then `check.sh`, touching nothing in between, is green — and the sweep prints nothing after the
+first run, where it used to print `removing stale signs_0.png` every time.
+
+⚠️ **`signs.json`'s `bytes` no longer covers the image.** It is `signs.glb` alone, with
+`text_atlas_bytes` beside it — two numbers where there was one, so they are added up on purpose or
+not at all.
+
+⚠️ **A new failure mode, and it is loud.** On a fresh clone Godot must import the PNG before the GLB
+that references it. If it ever does not, the texture arrives null and `verify_signs.gd` fails on the
+declared-texture check. That is a check reporting a real thing, unlike the state this replaces.
+
+### ✅ New lesson
+
+**A generated directory can have two writers, and the second one is invisible.** Every rule in this
+project about `game/assets/generated/` assumed the ETL was the only thing that wrote there; the
+engine's importer had been writing into it since `P3-20` and nothing said so. The sweep was not
+wrong and the atlas was not wrong — the *ownership* was undeclared, and an undeclared owner shows up
+as a check that is red on alternate runs for reasons nobody can reproduce.
+
+**See.** `Q63` for the declaration check that caught it and for why the budget has no slack ·
+`Q68` for the atlas this moves and for `check_shader_source` on a duplicated material ·
+`P3-20` for what the image is · `Q37` for the standing rule that a number nothing reproduces is debt

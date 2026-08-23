@@ -180,7 +180,12 @@ log = logging.getLogger(__name__)
 
 SIGNS_NAME = "signs.glb"
 SIGNS_MANIFEST_NAME = "signs.json"
-SIGNS_MANIFEST_SCHEMA = 1
+# 2 since `Q70`: the manifest names `text_atlas`, the sign lettering's own PNG,
+# because the atlas now ships *beside* `signs.glb` instead of inside it. The
+# bump is what stops `export.py` reading a v1 document and publishing a
+# `city.json` that names no atlas for a bundle that has one — which is the
+# swept-file failure this whole change is about, one level up.
+SIGNS_MANIFEST_SCHEMA = 2
 
 # ⚠️ **No `-col` suffix**, the same call `arrows.glb` and `railings.glb` both
 # make and for a reason this layer states more strongly than either: 728 poles
@@ -204,6 +209,18 @@ SIGNS_MATERIAL = "signs"
 # already ships three of. Cost: one draw call.
 SIGNS_TEXT_MESH_NAME = "signs_text"
 SIGNS_TEXT_MATERIAL = "signs_text"
+
+# 🔴 **The atlas ships beside the `.glb`, not inside it, and Godot is the whole
+# reason** (`Q70`). Embedded, the importer's `gltf/embedded_image_handling`
+# default *extracts* it to `signs_0.png` in the same directory — a file
+# `city.json` does not name, in a directory where the manifest names everything
+# else, so `sync_generated.sh`'s stale sweep deleted it on every run and
+# `verify_signs.gd` failed until someone forced a re-import by hand. Named here
+# and shipped like any other asset, nothing is extracted and nothing is swept.
+#
+# ⚠️ **Not `signs_0.png`.** That is the name the importer would choose, and
+# colliding with it would put this file back in the path of whatever wrote it.
+SIGNS_TEXT_ATLAS_NAME = "signs_text.png"
 
 # Below this, twice a triangle's area means it has collapsed. The bar
 # `surface.py`, `tramway.py` and `arrows.py` all set.
@@ -315,6 +332,13 @@ class SignReport:
     # `PROGRESS.md`'s `Texture memory` is a figure off a shipped artefact rather
     # than a claim (`Q37`).
     text_atlas_px: int = 0
+    # The atlas file itself: what it is called, and how big it is on disk. Both
+    # are new with `Q70`, which moved the image out of the `.glb`. ⚠️ **`bytes`
+    # below no longer accounts for it** — it is `signs.glb`'s own size and the
+    # atlas is not in there any more, so a bundle figure that used to be one
+    # number is two.
+    text_atlas: str | None = None
+    text_atlas_bytes: int = 0
     # 🔴 **The ink fraction of each baked cell, and the only thing that can see a
     # blank one.** A cell that crops the wrong region of the sheet bakes paper,
     # and a plate carrying a blank square on its face is the blank plate this
@@ -1159,7 +1183,12 @@ class _TextBuilder:
             triangles=np.vstack(self._triangles).astype(np.uint32),
             colours=np.tile(np.array([255, 255, 255, 255], dtype=np.uint8), (count, 1)),
             uvs=np.vstack(self._uvs),
-            texture=Texture(data=atlas.png, mime_type="image/png"),
+            # ⚠️ **`uri` set, so this is a reference and `build_region` owes the
+            # file** — see `SIGNS_TEXT_ATLAS_NAME` for why it lives outside the
+            # `.glb`. `data` is carried anyway so the one object still holds the
+            # bytes it names, which is what lets the caller write them without
+            # reaching back into the atlas.
+            texture=Texture(data=atlas.png, mime_type="image/png", uri=SIGNS_TEXT_ATLAS_NAME),
             material=SIGNS_TEXT_MATERIAL,
         )
         # The same collapsed-triangle filter every other builder in the pipeline
@@ -1718,6 +1747,15 @@ def build_region(
             report.text_atlas_px = text.pixels
             report.text_coverage = {code: cell.coverage for code, cell in text.cells.items()}
             meshes.append(text_mesh)
+            # 🔴 **The half of the external reference this module owes** — the
+            # mesh above names `SIGNS_TEXT_ATLAS_NAME` and `gltf.py` writes no
+            # bytes for a URI, so without this line `signs.glb` imports pointing
+            # at nothing. Written before the `.glb` deliberately: Godot imports
+            # a directory in the order it scans it, and an atlas already on disk
+            # is one fewer way for the first import of a fresh clone to resolve
+            # the reference to null.
+            report.text_atlas = SIGNS_TEXT_ATLAS_NAME
+            report.text_atlas_bytes = (out_dir / SIGNS_TEXT_ATLAS_NAME).write_bytes(text.png)
         report.bytes = write_glb(out_dir / SIGNS_NAME, meshes)
 
     _write_manifest(out_dir, city, region_id, report)
@@ -1988,6 +2026,18 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Sig
         # The number `PROGRESS.md`'s `Texture memory` is, and what
         # `generated_signs.gd` declares room for. Moving it is a budget change.
         "text_atlas_px": report.text_atlas_px,
+        # 🔴 **The atlas as a shipped file** (`Q70`), `null` where this region
+        # baked no lettering. `export.py` copies it into `city.json` and
+        # `shipped()` carries it, which is the whole point: an image the manifest
+        # names is an image `sync_generated.sh` keeps. ⚠️ Read from here rather
+        # than from `SIGNS_TEXT_ATLAS_NAME` directly, on the same terms as
+        # `asset` above — a region that baked nothing must not be contradicted
+        # by a constant.
+        "text_atlas": report.text_atlas,
+        # ⚠️ **`bytes` is `signs.glb` alone and no longer covers the image.**
+        # Published separately so the two halves of what this stage writes can be
+        # added up on purpose rather than by assuming one contains the other.
+        "text_atlas_bytes": report.text_atlas_bytes,
         # 🔴 Ink fraction per baked cell. Near zero is a cell cropped off the
         # lettering, which bakes paper and renders as the blank plate `P3-20`
         # exists to replace.

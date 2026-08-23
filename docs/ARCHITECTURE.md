@@ -374,6 +374,7 @@ The interface between ETL and game. **Versioned — change both sides together a
   "roadmarks": "roadmarks.glb",
   "railings": "railings.glb",
   "signs": "signs.glb",
+  "signs_text_atlas": "signs_text.png",
   "landmarks": "landmarks.json",
   "landmark_assets": ["landmarks/hkcec.glb"],
   "etl_version": "0.1.0",
@@ -1040,6 +1041,25 @@ region, with everything else correct.
 ⚠️ **`city.json`'s `signs` key is optional and may be `null`**, on `boxjunctions`' terms — and null
 is a more ordinary answer here than for any other layer, because a region whose signs are all text
 plates draws none and is right to.
+
+🔴 **The lettering's atlas ships as `signs_text.png`, beside the asset and named by the manifest**
+(`Q70`, schema 16 → 17). It used to ride inside `signs.glb` as an embedded buffer view, and the
+reason it no longer does is not glTF's, it is Godot's: `gltf/embedded_image_handling` defaults to
+*Extract Textures*, so the importer unpacked it into `signs_0.png` — a file in
+`game/assets/generated/` that `city.json` had never heard of, in a directory where the manifest
+names everything else. `sync_generated.sh` deletes exactly that, so it did, on every run, and
+`verify_signs.gd` failed until someone forced a re-import by hand. An external URI is not extracted.
+
+⚠️ **Nothing in the game loads the atlas by path, and it is named anyway.** It reaches the renderer
+through `signs.glb`, which references it, and `tools/generated_scene_import.gd` deliberately reads
+the texture the importer resolved rather than hard-coding a second name for the same file. The
+manifest key exists for `shipped()` — which is to say, for the sweep. ⚠️ **The key is optional and
+nullable twice over**: null for every region that ships no signs, *and* for one whose drawn faces
+carry no lettering.
+
+⚠️ **`signs.json`'s `bytes` is `signs.glb` alone and no longer covers the image**; the atlas is
+`text_atlas_bytes` beside it. Two numbers where there was one, on purpose — they are added up
+deliberately or not at all.
 
 ### `landmarks.json` — hero building placement
 

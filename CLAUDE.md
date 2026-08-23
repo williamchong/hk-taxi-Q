@@ -234,6 +234,14 @@ Common emoji for this project:
   was. ⚠️ `text_facing_away` must be **0** — a quad wound the wrong way under `cull_back` is not a
   backwards word, it is no word. ⚠️ **A lettering change is also a shader change** — `check.sh` exits
   0 on a shader that fails to compile, so render and `grep -i "shader error"`. Numbers in `Q68`.
+  🔴 **The atlas ships as its own file, `signs_text.png`, named by `city.json` under
+  `signs_text_atlas` — never embedded in `signs.glb`, and that is not a style preference** (`Q70`).
+  Godot's `gltf/embedded_image_handling` defaults to *Extract Textures*, so an embedded image
+  becomes a PNG beside the asset that the manifest has never heard of, and `sync_generated.sh`
+  deletes exactly that — on every run, leaving `verify_signs` red until someone forces a re-import
+  by hand. ⚠️ **Anything that adds a second image owes the same treatment**: name it in the
+  manifest, or the sweep is right to delete it. ⚠️ **`signs.json`'s `bytes` is `signs.glb` alone**
+  and `text_atlas_bytes` is the image — two numbers where there was one.
 - **`pipeline/arrows.py`, the `arrows` config block, or any turn-arrow change: paste `arrows.json`'s
   two partitions (`symbols` and `candidates`), `axis_residual_deg`, `offset_m`, `against_one_way` and
   `inverted`, before and after.** There is no separate grader and there should not be: the stage grades itself,
