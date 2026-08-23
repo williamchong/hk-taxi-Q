@@ -9,6 +9,13 @@
 ; data, not constants — and beside `road_markings.tres`, which is the whole
 ; point of the file.
 ;
+; ⚠️ **The shader is shared and this file is what makes these arrows arrows**
+; (`Q71`). `marking_paint.gdshader` serves the box junctions and the stop lines
+; too — it was `arrows.gdshader` until the third copy of it was authored — so
+; the colour here is the entire difference between this layer and the yellow one
+; next to it. `verify_arrows.gd` checks the dispatch against *this path*, not
+; against the shader, so a mesh handed the wrong `.tres` still fails.
+;
 ; ⚠️ **`paint_colour` and `paint_roughness` are duplicates of
 ; `road_markings.tres`'s `line_colour` and `paint_roughness`, and the duplication
 ; is the decision.** `Q53` deliberately kept the marking colours out of
@@ -42,7 +49,7 @@
 
 [gd_resource type="ShaderMaterial" load_steps=2 format=3]
 
-[ext_resource type="Shader" path="res://assets/shaders/arrows.gdshader" id="1_arrows"]
+[ext_resource type="Shader" path="res://assets/shaders/marking_paint.gdshader" id="1_arrows"]
 
 [resource]
 resource_name = "arrows"

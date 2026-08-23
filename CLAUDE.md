@@ -207,7 +207,7 @@ Common emoji for this project:
   dispatch per class; a new class needs a row there, in `generated_scene_import.gd` and in the config,
   and `check.sh` fails if the three disagree.
   ⚠️ **`ALPHA` is coverage, not translucency, and there must be no opacity dial** — the steel is
-  opaque and the gaps are gaps. One would repeat `arrows.gdshader`'s recorded misreading of
+  opaque and the gaps are gaps. One would repeat `marking_paint.gdshader`'s recorded misreading of
   `paint_opacity`.
   ⚠️ **A railings change is also a shader change** —
   `check.sh` exits 0 on a shader that fails to compile, so render and `grep -i "shader error"`.
@@ -253,7 +253,7 @@ Common emoji for this project:
   keeps, and `n` exceeding `drawn` is how you tell.** Move that append below the guard and every
   percentile is confined to `bearing_tolerance_deg` by construction — it read max 28.87 against a
   30 deg bar for exactly that reason until review caught it. `Q58`'s `drawn_gauge_m` trap.
-  ⚠️ `inverted` must be **0**: `arrows.gdshader` is `cull_back`, so winding decides visibility and
+  ⚠️ `inverted` must be **0**: `marking_paint.gdshader` is `cull_back`, so winding decides visibility and
   the normal attribute does not. ⚠️ **The engine-side and ETL-side winding tests have opposite
   signs** — Godot winds front faces clockwise and glTF counter-clockwise — so do not "fix" one to
   agree with the other; `Q59` records how that was settled and against which meshes.
@@ -262,6 +262,12 @@ Common emoji for this project:
   have painted 61 `RM1116`-`RM1119` *warning* arrows as turn instructions.
   ⚠️ **An arrows change is also a shader change** — `check.sh` exits 0 on a shader that fails to
   compile, so render and `grep -i "shader error"`. Numbers in `Q59`.
+  🔴 **And a shader change is a change to THREE layers**: `marking_paint.gdshader` is shared by the
+  arrows, the box junctions and the stop lines since `Q71`, on `railings.gdshader`'s precedent — a
+  layer is a parameterisation, not a shader, and the colour lives in each `.tres`. So render and
+  look at all three, not just the one you changed. ⚠️ The per-layer dispatch is still checked:
+  `check_shader_material` compares the material's `resource_path`, not the shader, so a mesh handed
+  the wrong `.tres` still fails — do not reach for `check_shader_source` to quiet it.
 - **`pipeline/roadmarks.py`, the `road_marks` config block, or any stop / give-way line change:
   paste `roadmarks.json`'s two partitions, `host_disagreement` with `host_considered`,
   `axis_residual_deg`, `underfill_m` and `inverted`, before and after.** ⚠️ **`underfill_m` is
@@ -279,15 +285,16 @@ Common emoji for this project:
   is recorded over refusals as well as keeps, and `n` exceeding `drawn` is how you tell** — move
   that append below the guard and every percentile is confined to `bearing_tolerance_deg` by
   construction, the defect review caught in `arrows.py`. ⚠️ **`inverted` must be 0** —
-  `roadmarks.gdshader` is `cull_back`, so winding decides visibility and the normal attribute does
+  `marking_paint.gdshader` is `cull_back`, so winding decides visibility and the normal attribute does
   not; and the engine-side and ETL-side winding tests have **opposite signs** (`Q59`), so do not
   "fix" one to agree with the other. ⚠️ **A dimension change is a `DATA_SOURCES.md` change**: every
   width, count, gap and dash module comes from TD drawing `CT174/51-5(1)F`, a **scanned** sheet with
   no text layer, so `Q59`'s by-eye rule applies and `Q67`'s rasterise-and-diff cannot help. And
   ⚠️ **`LINES SPACING` is the clear gap, not a centre-to-centre pitch** — the pitch reading draws
   every double marking at twice the weight and renders perfectly. ⚠️ **A roadmarks change is also a
-  shader change** — `check.sh` exits 0 on a shader that fails to compile, so render and
-  `grep -i "shader error"`. Numbers in `Q69`.
+  shader change, and its shader is shared with the arrows and the boxes** (`Q71`) — `check.sh` exits
+  0 on a shader that fails to compile, so render and `grep -i "shader error"`, and look at all three
+  layers rather than only this one. Numbers in `Q69`.
 - Road-surface, deck-height or ground changes: also `tools/deck_error.py`, `tools/overhang.py`,
   `tools/ground_clearance.py` and `tools/carriageway_occupancy.py`, by hand after a build. They grade
   the *shipped* bundle and share no code with the pipeline — `check.sh` does not require a built

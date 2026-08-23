@@ -608,6 +608,14 @@ when that is forgotten; the surface just lightens and stops varying with its own
 `colour.gdshaderinc` exists because that was the **fourth** copy of the function, which is the
 trigger `city_facade.gdshader` had written down in advance.
 
+⚠️ **The same trigger fires on whole shaders, not just on functions inside them** (`Q71`). The turn
+arrows, the box junctions and the stop lines each shipped a `.gdshader` that was byte-identical to
+the other two but for a default colour; they share `marking_paint.gdshader` now, on the precedent
+`railings.gdshader` already set with `railings` / `bollards` / `barriers`. **A layer is a
+parameterisation, not a shader** — the colour is in each `.tres`, and
+`MeshContract.check_shader_material` still holds every layer to its own material by `resource_path`,
+so sharing the shader cost the dispatch check nothing.
+
 This was silent until `Q27`. Skipping the conversion does not merely lighten the city: sRGB read as
 linear is *brighter than it should be*, and brightness the albedo did not ask for is brightness that
 does not vary with albedo. Measured, **57%** of a lit facade pixel's luminance was albedo-independent,
@@ -877,7 +885,7 @@ reasoning that a later shader might want it. That is what `Q54` found `COLOR_0.a
 broadcasting an unread 255 down the whole road mesh — and it cost **59,300 B** of a 257 KB asset. A
 channel earns its place when something reads it.
 
-⚠️ **Winding, not the normal attribute, decides whether this is visible** — `arrows.gdshader` is
+⚠️ **Winding, not the normal attribute, decides whether this is visible** — `marking_paint.gdshader` is
 `cull_back`. `arrows.json` publishes `inverted` and it must be **0**. ⚠️ **Godot winds front faces
 clockwise and glTF winds them counter-clockwise**, so the importer reverses every index triple and
 the engine-side and ETL-side tests of the same expression have **opposite signs**. Both are right
@@ -1030,7 +1038,7 @@ records what that still owes.
 decision.** `arrows.glb` and `boxjunctions.glb` are one paint each, so `Q53` put their colour in
 their `.tres`. A sign plate is four colours inside one draw call, so the colour has to ride the
 vertex — which makes `colour.gdshaderinc`'s `vertex_srgb_to_linear` mandatory in
-`signs.gdshader`, exactly as `arrows.gdshader` warned in advance. ⚠️ It is also the one exemption to
+`signs.gdshader`, exactly as `marking_paint.gdshader` warned in advance. ⚠️ It is also the one exemption to
 `Q33`'s palette-exposure rule; `test_config.py` argues it.
 
 ⚠️ **`signs.gdshader` is `cull_back`**, inverting the neighbour above: a fence has no back and a

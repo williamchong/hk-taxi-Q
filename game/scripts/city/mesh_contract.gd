@@ -536,8 +536,8 @@ const MIN_FACING_UP: float = 0.1
 
 ## Every triangle of a ground-plane surface faces the sky.
 ##
-## ⚠️ **The failure that fails to nothing.** `arrows.gdshader`,
-## `boxjunctions.gdshader` and `roadmarks.gdshader` are all `cull_back`, so
+## ⚠️ **The failure that fails to nothing.** The arrows, the box junctions and
+## the stop lines all run `marking_paint.gdshader`, which is `cull_back`, so
 ## winding decides visibility and the normal attribute does not: a mesh wound the
 ## other way is correct geometry, in the correct place, with the correct
 ## material, and the city simply does not have it in it. The tramway shipped
@@ -550,6 +550,11 @@ const MIN_FACING_UP: float = 0.1
 ## differing only in the noun in the failure string. `check_uv2_import_settings`
 ## is the precedent — it was a private copy in `verify_tiles.gd` until the road
 ## surface needed it too.
+##
+## ⚠️ **`Q71` finished the job this started.** The same three tools also pointed
+## at three byte-identical *shaders*, and the rule `single_primitive` states —
+## "a third copy should force it" — applies to a `.gdshader` exactly as it does
+## to sixteen lines of GDScript. They share `marking_paint.gdshader` now.
 ##
 ## Checked here as well as in each stage's own manifest because the two catch
 ## different things: the ETL's `inverted` counts what the pipeline built, this

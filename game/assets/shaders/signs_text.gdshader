@@ -18,7 +18,7 @@
 // — one puts the sign layer into a transparency pass for a glyph a few pixels
 // tall, the other thins the strokes away as the mip chain runs. Either would
 // also have made `ALPHA` a dial on a mesh whose sibling `signs.gdshader` records
-// that it must not have one, which is `arrows.gdshader`'s misreading of
+// that it must not have one, which is `marking_paint.gdshader`'s misreading of
 // `paint_opacity` waiting to happen a third time.
 //
 // ⚠️ **`source_color` on the sampler is doing the `Q27` conversion**, and it is

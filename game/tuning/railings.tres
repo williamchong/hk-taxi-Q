@@ -53,7 +53,7 @@
 ; this file and there should not be: the steel is opaque and the gaps are gaps,
 ; so what reaches `ALPHA` is the fraction of a fragment the members cover,
 ; computed from the four dimensions below. An opacity uniform would be
-; `arrows.gdshader`'s recorded misreading of `paint_opacity` repeated here.
+; `marking_paint.gdshader`'s recorded misreading of `paint_opacity` repeated here.
 ;
 ; Judged at the `street` and `kerb` viewpoints per `ART_DESIGN.md`'s table: a
 ; railing is the nearest object to the camera on most of the region's streets,

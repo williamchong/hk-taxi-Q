@@ -1,10 +1,10 @@
 // Traffic signs, drawn as their own geometry (`P3-16`).
 //
-// Simple for `arrows.gdshader`'s reason — `pipeline/signs.py` has already decided
+// Simple for `marking_paint.gdshader`'s reason — `pipeline/signs.py` has already decided
 // where every vertex goes, so there is nothing to place — with one difference
 // that runs the other way.
 //
-// ⚠️ **This one DOES read `COLOR_0`, and `arrows.gdshader` deliberately does
+// ⚠️ **This one DOES read `COLOR_0`, and `marking_paint.gdshader` deliberately does
 // not.** An arrow is one paint, so its colour is authored next door in
 // `road_markings.tres` where the two can be read side by side. A sign plate is
 // up to four colours — red ring, white field, black glyph, grey back — and the
@@ -13,7 +13,7 @@
 // sign's livery is a *city* fact (hard rule 3) rather than an art call: TD prints
 // those colours, and a second city prints its own.
 //
-// ⚠️ **So `colour.gdshaderinc` is mandatory here, exactly as `arrows.gdshader`
+// ⚠️ **So `colour.gdshaderinc` is mandatory here, exactly as `marking_paint.gdshader`
 // warned.** That file says: *"If the ETL ever ships per-vertex arrow colour, this
 // needs `vertex_srgb_to_linear` the way every other shader here does — the
 // conversion is never free."* This is the shader that shipped per-vertex colour.
@@ -23,7 +23,7 @@
 //
 // ⚠️ **Opaque, and there is no opacity dial** — the same refusal `railings.tres`
 // records. A sign plate is painted aluminium. An `ALPHA` uniform here would
-// repeat `arrows.gdshader`'s recorded misreading of `paint_opacity`, which cost a
+// repeat `marking_paint.gdshader`'s recorded misreading of `paint_opacity`, which cost a
 // sorted alpha pass to model thermoplastic as tinted glass.
 
 shader_type spatial;

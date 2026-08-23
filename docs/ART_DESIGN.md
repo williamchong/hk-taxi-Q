@@ -616,7 +616,7 @@ authored features the source captures badly.
   now carries `TEXCOORD_0` as `(metres along the run, metres above the deck)`, and the shader cuts
   balusters, posts and two rails out of it.
   🔴 **This bullet said "the divergence is opacity, and it is deliberate", and the frames overruled
-  it.** The recorded objection was `arrows.gdshader`'s — alpha costs a sorted transparent pass or a
+  it.** The recorded objection was `marking_paint.gdshader`'s — alpha costs a sorted transparent pass or a
   scissor that re-aliases every baluster — but that note is reasoning about **road paint**, and for
   road paint it is right. A railing is the opposite physical case: it is 60-75% air, and drawn solid
   at `rail_colour` 0.78 it shipped reading as a **white concrete parapet** in `railings_street` and
@@ -629,7 +629,7 @@ authored features the source captures badly.
   footprint, so a baluster is crisp when it is wider than a pixel and dissolves to a uniform alpha
   when it is not. There is no distance at which it shimmers and none at which it vanishes.
   ⚠️ **`ALPHA` is coverage, not translucency.** The steel is opaque and the gaps are gaps. An
-  opacity dial here would be `arrows.gdshader`'s recorded misreading of `paint_opacity` in a new
+  opacity dial here would be `marking_paint.gdshader`'s recorded misreading of `paint_opacity` in a new
   place, which is why there is none.
   ⚠️ **`railings.gdshader` is the only `cull_disabled` shader in the bundle.** A fence is one quad
   thick and the car drives past both faces; the back face negates its normal, or the far side of a

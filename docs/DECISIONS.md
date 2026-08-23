@@ -9470,3 +9470,98 @@ as a check that is red on alternate runs for reasons nobody can reproduce.
 **See.** `Q63` for the declaration check that caught it and for why the budget has no slack ·
 `Q68` for the atlas this moves and for `check_shader_source` on a duplicated material ·
 `P3-20` for what the image is · `Q37` for the standing rule that a number nothing reproduces is debt
+
+---
+
+## `Q71` — Three byte-identical shaders, and the repo had already written the rule
+
+**Closed 2026-08-24.** Raised by the user as earned rather than as a problem: *"the three-shader
+merge is now genuinely earned."*
+
+### What was there
+
+`arrows.gdshader` (`P3-15`), `boxjunctions.gdshader` (`P3-18`) and `roadmarks.gdshader` (`P3-23`)
+were the same eight lines of code:
+
+```
+shader_type spatial;
+render_mode cull_back;
+uniform vec4  paint_colour    : source_color = <white | yellow>;
+uniform float paint_roughness : hint_range(0.0, 1.0) = 0.7;
+void fragment() { ALBEDO = paint_colour.rgb; ROUGHNESS = paint_roughness; }
+```
+
+The only difference was the **default** colour — and all three `.tres` set `paint_colour`
+explicitly, so those defaults were dead values whose sole function was to be further copies of the
+marking white and yellow.
+
+### 🔴 The trigger was already codified, in this exact trio
+
+This is not a judgement call about when duplication becomes too much. `mesh_contract.gd`'s
+`single_primitive` states the rule and attributes it: *"there are now three of these … `Q58`
+predicted exactly that: '`mesh_contract.gd` states the repo's own trigger for this, so a third copy
+should force it.'"* `colour.gdshaderinc` exists on the same rule at the fourth copy of a *function*.
+
+And the rule had already been applied to **these three tools**: `check_faces_up` was extracted the
+day `verify_arrows.gd`, `verify_boxjunctions.gd` and `verify_roadmarks.gd` were found holding
+byte-identical copies of it, differing only in the noun in the failure string. The verify side of
+the trio was merged then. The shader side was the leftover, and `P3-23` is what made it a third.
+
+### The shape — `railings.gdshader`'s precedent, unchanged
+
+One shader, three materials. `railings` / `bollards` / `barriers` already share one shader and
+differ only in their `.tres`, and `ART_DESIGN.md` states the principle: **a layer is a
+parameterisation, not a shader.** What tells an arrow from a box from a stop line is the geometry
+the ETL built and the colour in its `.tres`.
+
+✅ **The load-bearing question was whether the dispatch check survives, and it does.**
+`MeshContract.check_shader_material` compares the material's **`resource_path`** against the `.tres`
+each verify tool names — not the shader — so a box junction handed `roadmarks.tres` still fails, and
+all three verify tools are unchanged. ⚠️ `check_shader_source`, which *does* compare the shader, is
+for the duplicated sign lettering (`Q68`) and must not be reached for here; it would pass exactly
+the case above.
+
+### What it cost and what it bought
+
+**The ledger goes from ten authored copies of the marking colours to eight** — white 6 → 5, yellow
+4 → 3 — because three shader defaults became one. `roadmarks.tres` carries the count and was
+rewritten; a stale ledger is worse than the duplication it describes, since it is the only thing
+anyone reads to find out how bad the duplication is. One shader program is compiled where three
+were.
+
+⚠️ **The prose was the work, not the code.** `arrows.gdshader` was cited by name in a dozen places
+as the canonical home of two arguments — the `paint_opacity` misreading and the `cull_back` winding
+rule. The merged header **absorbs all three comment blocks**; the per-layer arguments that are
+really about geometry (why the hatch is geometry, why a stop line cannot ride `fade_m`, why an arrow
+has no fade) moved into the `.tres` that owns each layer. Live references were repointed —
+`CLAUDE.md`, `ARCHITECTURE.md`, `ART_DESIGN.md`, `mesh_contract.gd`, `railings.tres`,
+`railings.gdshader`, `signs.gdshader`, `signs_text.gdshader`.
+
+🔴 **Closed `DECISIONS.md` entries were deliberately NOT rewritten.** They said `arrows.gdshader`
+and they were true when written; editing a closed record to agree with today's filenames falsifies
+it. The merged header carries a forwarding line saying so.
+
+⚠️ **A shader change is now a change to three layers.** `CLAUDE.md`'s arrows and roadmarks bullets
+say so: render and look at all three, not at the one you edited.
+
+### Verification
+
+`check.sh` green — but it exits 0 on a shader that fails to compile, so that is not the evidence.
+Rendered twice, **0 `SHADER ERROR` lines**: the drive scene at the Expo Drive junction (box junction
+in the marking yellow, give-way line and lane dividers in the marking white, both from one shader)
+and the `street` viewpoint on Hennessy Road (turn arrows reading the *same* white as the lane
+dividers beside them — which is the comparison `arrows.tres` names as the one anyone would notice).
+No PCK re-measured and no bundle figure quoted: no export was taken, and a bundle number is measured
+from a PCK or not stated (`Q61`'s discipline).
+
+### ✅ New lesson
+
+**A codified trigger is only worth having if someone fires it.** The rule, the precedent and the
+prediction were all already written down — in `mesh_contract.gd`, in `Q58`, in `railings.gdshader` —
+and the third copy still shipped and sat there. What closed it was a person noticing, not a check;
+there is no linter for "these two files are the same argument twice".
+
+**See.** `Q58` for the trigger and for `mesh_contract.gd` stating it · `Q53` for why the marking
+colours are outside `Q33`'s palette table · `Q61` for `railings.gdshader`'s three-class precedent and
+for the one place the opacity objection does not transfer · `Q59` for the opposite winding signs ·
+`Q68` for `check_shader_source` and why it is not interchangeable with its sibling

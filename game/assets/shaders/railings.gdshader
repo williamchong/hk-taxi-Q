@@ -1,6 +1,6 @@
 // Pedestrian railings, drawn as their own geometry (`P3-19`, `Q60`, `Q61`).
 //
-// `boxjunctions.gdshader` with three differences. Two come from the fence being
+// `marking_paint.gdshader` with three differences. Two come from the fence being
 // a *vertical* surface the player sees from either side; the third is that a
 // fence is mostly air, and it is the one this shader exists for.
 //
@@ -35,7 +35,7 @@
 // ⚠️ **This is the first transparent material in the bundle, and `P3-19` shipped
 // it opaque on an objection that turns out to belong to a different surface.**
 //
-// The recorded reason for the solid panel was `arrows.gdshader`'s: alpha costs
+// The recorded reason for the solid panel was `marking_paint.gdshader`'s: alpha costs
 // "a sorted transparent pass on the device floor, or a scissor that re-aliases
 // every baluster". That note is reasoning about **road paint**, and for road
 // paint it is right — it concludes "Real road paint is opaque. So is this."
@@ -62,7 +62,7 @@
 // the fence is opaque steel with gaps in it, and the alpha is what fraction of
 // the fragment the steel covers. That is why it is computed geometrically from
 // the authored dimensions rather than authored as an opacity dial — an opacity
-// dial would be `arrows.gdshader`'s misreading of `paint_opacity` in a new
+// dial would be `marking_paint.gdshader`'s misreading of `paint_opacity` in a new
 // place.
 //
 // ⚠️ **Every dimension below is authored and none is read.** No sheet in the

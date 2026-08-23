@@ -9,7 +9,13 @@
 ; data, not constants — and beside `road_markings.tres` and `arrows.tres`, which
 ; is the whole point of the file.
 ;
-; ⚠️ **`paint_colour` is the SIXTH authored copy of the marking white, and the
+; ⚠️ **The shader is shared** (`Q71`). `marking_paint.gdshader` serves the arrows
+; and the box junctions too — this layer was the third copy of it, which is what
+; triggered the merge. `verify_roadmarks.gd` checks the dispatch against *this
+; path* and not against the shader, so a stop line handed `arrows.tres` is still
+; caught even though the two now run identical code.
+;
+; ⚠️ **`paint_colour` is the FIFTH authored copy of the marking white, and the
 ; duplication is the decision** — the paragraph `arrows.tres` and
 ; `boxjunctions.tres` both carry. `Q53` kept the marking colours out of
 ; `hong_kong.yaml`'s `materials:` table, outside `Q33`'s exposure rule, because
@@ -22,12 +28,19 @@
 ; own approach end-on, so a different white reads as a different marking rather
 ; than as a shade.
 ;
-;   road_markings.gdshader  line_colour  (default) = vec3(0.91, 0.91, 0.87)
-;   road_markings.tres      line_colour            = Color(0.91, 0.91, 0.87, 1.0)
-;   arrows.gdshader         paint_colour (default) = vec4(0.91, 0.91, 0.87, 1.0)
-;   arrows.tres             paint_colour           = Color(0.91, 0.91, 0.87, 1.0)
-;   roadmarks.gdshader      paint_colour (default) = vec4(0.91, 0.91, 0.87, 1.0)
-;   road_markings.tres      paint_roughness        = 0.7
+; 🔴 **This ledger is the count, and it must be recomputed whenever the set
+; moves.** It said SIX until `Q71` merged `arrows.gdshader`, `boxjunctions.gdshader`
+; and `roadmarks.gdshader` into `marking_paint.gdshader`: three shader defaults
+; became one, taking the white from six copies to five and the yellow from four
+; to three. A stale ledger is worse than the duplication it describes, because it
+; is the only thing anyone reads to find out how bad the duplication is.
+;
+;   road_markings.gdshader   line_colour  (default) = vec3(0.91, 0.91, 0.87)
+;   road_markings.tres       line_colour            = Color(0.91, 0.91, 0.87, 1.0)
+;   marking_paint.gdshader   paint_colour (default) = vec4(0.91, 0.91, 0.87, 1.0)
+;   arrows.tres              paint_colour           = Color(0.91, 0.91, 0.87, 1.0)
+;   — and this file is the fifth.
+;   road_markings.tres       paint_roughness        = 0.7
 ;
 ; ⚠️ **`paint_opacity` is deliberately NOT copied across**, for `arrows.tres`'s
 ; stated reason: next door the 0.85 is asphalt showing through paint mixed into
@@ -46,7 +59,7 @@
 
 [gd_resource type="ShaderMaterial" load_steps=2 format=3]
 
-[ext_resource type="Shader" path="res://assets/shaders/roadmarks.gdshader" id="1_roadmarks"]
+[ext_resource type="Shader" path="res://assets/shaders/marking_paint.gdshader" id="1_roadmarks"]
 
 [resource]
 resource_name = "roadmarks"
