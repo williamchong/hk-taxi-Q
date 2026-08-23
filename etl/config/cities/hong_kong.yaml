@@ -1400,6 +1400,25 @@ signs:
   # so the choice stays checkable.
   max_pole_span_m: 15.0
 
+  # 🔴 **Where a banned movement stops being a left turn and starts being a
+  # straight-on or a U-turn**, for the diff signs.json publishes as
+  # turn_sign_agreed / _disagreed / _unmatched (Q62). The road graph carries 217
+  # banned movements and TS131/TS132/TS133 are the signs that say the same thing
+  # on a post, so the two sources can be diffed — but only after the graph's
+  # movements are classified, because P1-3 reads OTHER_REST_TYPE and never emits
+  # it. The class is therefore read off the movement's own geometry.
+  #
+  # Measured over all 217 published restrictions at these values: 99 right, 80
+  # U-turn (60 of them leaving by the edge they arrived on), 34 left, and 4 that
+  # pass straight through and so are neither. Every one resolves — no restriction
+  # names an edge or a node that is not there.
+  #
+  # ⚠️ **These classify, they never refuse.** The diff is report-only for Q56's
+  # reason — a disagreement is a finding about one of two sources and this stage
+  # has no standing to say which — so nothing is dropped or gated on them.
+  turn_straight_deg: 30.0
+  turn_u_deg: 135.0
+
 # Published yellow box junctions (P3-18, the follow-on Q59 recorded).
 #
 # Q53 held box junctions because "nothing publishes which junctions have one";

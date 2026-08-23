@@ -111,9 +111,10 @@ import argparse
 import logging
 import math
 from collections import defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -170,7 +171,7 @@ from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData, write_glb
 from pipeline.mesh import select_triangles
 from pipeline.railings import AT_GRADE, facing_away
-from pipeline.roads import ROADGRAPH_NAME, read_graph
+from pipeline.roads import ROADGRAPH_NAME, plan_lengths, read_graph
 from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA
 
 log = logging.getLogger(__name__)
@@ -226,6 +227,11 @@ class SignReport:
         signs == not_whitelisted + on_structure + empty_geometry + candidates
         candidates == drawn + no_pole + ambiguous_pole + pole_too_far + too_far
                       + no_ribbon + over_shift + in_carriageway
+
+    And a third, over the turn prohibitions alone:
+
+        turn_sign_agreed + turn_sign_disagreed + turn_sign_unmatched
+            == sum(by_code[code] for code in _TURN_PROHIBITIONS)
     """
 
     signs: int = 0
@@ -307,6 +313,57 @@ class SignReport:
     # drawn, because refusing them would be asserting the graph is right.
     no_entry_on_two_way: int = 0
     no_entry_with_flow: int = 0
+
+    # 🔴 **The turn-restriction diff `Q62` named — and it does NOT grade the
+    # facing, which is the finding.** Every drawn `TS131`/`TS132`/`TS133` against
+    # the graph's 217 published banned movements, matched through the junction
+    # the sign's own traffic reaches. It was built expecting a side flip to
+    # collapse `agreed`; on this region it moved **29 to 30**, because
+    # `_facing_from_side` does not consult the side on a one-way host and
+    # `turn_sign_on_one_way` is **62 of 68**. `Q62` stays open on the facing and
+    # records this as the reason.
+    #
+    # ✅ **What it does grade is real and is not the facing**: whether the plate
+    # standing here names the movement the graph bans at the junction ahead —
+    # `Q64`'s failure class rather than `Q62`'s, and 14 live disagreements to go
+    # and look at.
+    #
+    # ⚠️ **The three are different in strength and must not be summed.**
+    # `agreed` and `disagreed` are the graded pair — the graph bans something at
+    # this approach, and it either is or is not the movement the plate names.
+    # `unmatched` is *not* a failure: the graph carries 34 left prohibitions
+    # against 38 drawn `TS131`, so it plainly does not publish every signed one.
+    #
+    # ⚠️ **Report-only, never a bar**, for `Q56`'s reason and the one
+    # `kerbside_source_audit.py` states about itself: a disagreement is a finding
+    # about one of two sources and this stage has no standing to say which. It is
+    # sharpened here by what the graph drops — `P1-3` reads `EXC_VEH_TYPE`,
+    # `PART_TIME_REST` and `EFF_ALL_DAYS` and emits none of them, and one
+    # restriction in this region excludes taxis, so a part-time restriction meets
+    # a permanent plate as a disagreement between what two publishers chose to
+    # say.
+    #
+    # 🔴 **How much of the population above can say anything about the kerb
+    # side, inverted.** `_facing_from_side` turns *both* kerbs of a one-way to
+    # face its only traffic, so on a one-way host the facing never reads the
+    # side and a mirrored city produces the identical match. This is the number
+    # that says so — 62 of 68 here — and it is why the mirror moved `agreed` by
+    # one plate rather than collapsing it.
+    #
+    # ⚠️ **Published because a second city is the business case** (hard rule 3):
+    # a region whose prohibition signs stand on two-way streets would read this
+    # low, and there the same diff *would* grade the side.
+    turn_sign_on_one_way: int = 0
+    turn_sign_agreed: int = 0
+    turn_sign_disagreed: int = 0
+    turn_sign_unmatched: int = 0
+    # How far each prohibition plate stands from the junction it was matched to.
+    # ⚠️ **Recorded over all three outcomes, and there is deliberately no bar on
+    # it.** A bound would confine the distribution to itself — `Q58`'s
+    # `drawn_gauge_m` trap — and this is the number that would say whether one is
+    # worth having: edges run to 763 m, so a plate matched from the far end of
+    # one is a match this cannot otherwise see.
+    turn_sign_to_junction_m: list[float] = field(default_factory=list)
 
     # Triangles whose winding disagrees with the normal they were given.
     # ⚠️ **Must be 0.** `signs.gdshader` is `cull_back`, so winding decides
@@ -1271,6 +1328,12 @@ def build_region(
     # was elevated, and the street the feature is actually on was a median 4 m
     # away.
     segments = Segments.of(edges)
+    # ⚠️ **`graph["edges"]` whole, not the level-0 list above.** A restriction's
+    # `from_edge` is level-0 by construction — it is the sign's own host — but
+    # its `to_edge` is wherever the banned turn leads, and a turn barred onto a
+    # ramp is exactly the one that would go missing.
+    by_edge = {int(edge["id"]): edge for edge in graph["edges"]}
+    turns = _turn_classes(graph.get("turn_restrictions", []), by_edge, spec)
 
     surface = read_document(
         out_dir / SURFACE_MANIFEST_NAME,
@@ -1420,7 +1483,7 @@ def build_region(
             report.pole_offset_m.append(
                 math.hypot(sign.x - sign.published_x, sign.z - sign.published_z)
             )
-            _record_semantics(report, sign, post.facing_deg, post.snap, post.one_way)
+            _record_semantics(report, sign, post, turns, by_edge[post.snap.edge])
 
         _draw_pole(
             builder,
@@ -1450,18 +1513,153 @@ def build_region(
 # the graph really does publish the same claim.
 _NO_ENTRY = "TS115"
 
+# The three turn prohibitions, and the movement each one bans. Same rule as
+# `_NO_ENTRY` and the same short list — the graph publishes 217 banned movements
+# and these are the signs that say the same thing on a post.
+#
+# ⚠️ **`TS133` is here although `Q62` named only the first two.** A U-turn leaves
+# by the edge it arrived on, so its two bearings come off one polyline in
+# opposite orders and the change is exactly 180 deg — and `turn_u_deg` is refused
+# at or above 180 — which makes it the one class no threshold can get wrong. It
+# is 5 plates and it costs a dictionary row.
+_TURN_LEFT = "left"
+_TURN_RIGHT = "right"
+_TURN_U = "u"
+# A banned movement that is neither: straight through a junction, or a turn this
+# stage could not classify. Never claimed by a sign, so a plate meeting only this
+# reads as a disagreement — which is what it is. The graph bans *something*
+# there and it is not what the plate names.
+_TURN_OTHER = "other"
+_TURN_PROHIBITIONS = {"TS131": _TURN_LEFT, "TS132": _TURN_RIGHT, "TS133": _TURN_U}
+
+
+def _heading_deg(start: Sequence[float], end: Sequence[float]) -> float:
+    """Plan heading from `start` to `end`, degrees clockwise from north (`-Z`).
+
+    ⚠️ **The same expression `Snap.heading_deg` is built from**, and it is a
+    second copy rather than a first: `fares.py` computes it inline and scalar on
+    the segment a snap landed on. By the rule `arrows.directed_residual_deg`
+    states, that puts its home beside `Snap.heading_deg` in `fares.py`, where the
+    convention is documented, with both callers importing it. Left here because
+    moving it edits `Segments.nearest`, which every stage in the pipeline snaps
+    through, and that is not this task's to touch.
+    """
+    return math.degrees(math.atan2(end[0] - start[0], -(end[2] - start[2]))) % 360.0
+
+
+def _at_node(edge: dict[str, Any], node: int, *, leaving: bool) -> float | None:
+    """Heading of the edge's own end at `node`, arriving at it or leaving it.
+
+    `None` where the node is neither end of the edge, which the graph's own
+    referential check (`export.py`) says cannot happen — kept because the
+    alternative is an `IndexError` in a stage that is only counting.
+    """
+    points = edge["polyline"]
+    if int(edge["from"]) == node:
+        end, inward = points[0], points[1]
+    elif int(edge["to"]) == node:
+        end, inward = points[-1], points[-2]
+    else:
+        return None
+    return _heading_deg(end, inward) if leaving else _heading_deg(inward, end)
+
+
+def _turn_class(arrive_deg: float | None, leave_deg: float | None, spec: Signs) -> str:
+    """Which movement a banned turn is, read off its own geometry.
+
+    🔴 **Read rather than looked up, because the graph publishes no restriction
+    type.** The source's `TURN` layer carries `OTHER_REST_TYPE` and `P1-3` reads
+    it and never emits it, so `roadgraph.json` says only *from here, through
+    here, to there*. Turning left decreases a heading clockwise from north, so
+    the signed change across the junction is the whole classification.
+
+    ⚠️ **A U-turn falls out of this rather than being branched for.** A movement
+    that leaves by the edge it arrived on reads its two bearings off one
+    polyline in opposite orders, so the change is exactly 180 deg — and
+    `turn_u_deg` is refused at or above 180, so it lands here. 60 of the
+    region's 217 restrictions are that shape.
+    """
+    if arrive_deg is None or leave_deg is None:
+        return _TURN_OTHER
+    change = (leave_deg - arrive_deg + 180.0) % 360.0 - 180.0
+    if abs(change) >= spec.turn_u_deg:
+        return _TURN_U
+    if abs(change) <= spec.turn_straight_deg:
+        return _TURN_OTHER
+    return _TURN_LEFT if change < 0.0 else _TURN_RIGHT
+
+
+def _turn_classes(
+    restrictions: Sequence[dict[str, Any]],
+    by_edge: dict[int, dict[str, Any]],
+    spec: Signs,
+) -> dict[tuple[int, int], set[str]]:
+    """Every published turn restriction, keyed by the approach it bans a turn out of.
+
+    ⚠️ **Keyed on `(from_edge, via_node)` because that pair *is* an approach** —
+    one edge arriving at one junction — which is exactly what a sign standing on
+    that edge addresses. Several restrictions can share the pair, so the value is
+    the set of movements banned there.
+    """
+    classes: dict[tuple[int, int], set[str]] = defaultdict(set)
+    for turn in restrictions:
+        from_edge, via_node = int(turn["from_edge"]), int(turn["via_node"])
+        to_edge = int(turn["to_edge"])
+        host, onto = by_edge.get(from_edge), by_edge.get(to_edge)
+        if host is None or onto is None:
+            continue
+        # ⚠️ **A same-edge movement needs no special case, and one was written
+        # and then removed.** `_at_node` reads the two ends of a polyline in
+        # opposite orders, so leaving by the edge you arrived on is a change of
+        # exactly 180 deg and `turn_u_deg` is refused at or above 180 — the
+        # geometry below already answers `_TURN_U` for all 60 of the region's.
+        # The branch was dead: no mutation of it could change a number.
+        classes[(from_edge, via_node)].add(
+            _turn_class(
+                _at_node(host, via_node, leaving=False),
+                _at_node(onto, via_node, leaving=True),
+                spec,
+            )
+        )
+    return dict(classes)
+
+
+def _downstream_node(host: dict[str, Any], post: _Placed) -> tuple[int, float]:
+    """The junction this sign's own traffic reaches next, and how far off it is.
+
+    🔴 **Derived from `facing_deg`, not from the side directly, and that is the
+    point.** A sign faces the traffic it addresses, so that traffic runs at
+    `facing_deg + 180`; `_facing_from_side` returns the edge heading turned
+    around exactly when the post is nearside-or-one-way, so the comparison below
+    is exact rather than tolerant. Reading the facing back out is what couples
+    this counter to the expression it grades: flip the side test and every plate
+    is matched to the *far* end of its edge.
+
+    `Snap.t` is normalised over the whole edge — 0 at `from`, 1 at `to` — so the
+    distance falls out of it, and `roads.py` has already reversed every
+    `backward` edge, so polyline order is `from` to `to`.
+    """
+    # `plan_lengths` rather than a fourth copy of the arithmetic — its own
+    # docstring is that argument — and `Ribbon.length_m` is this same value from
+    # the same call, so `Snap.t` and this are normalised over one number by
+    # construction rather than by coincidence.
+    length_m = float(plan_lengths(np.asarray(host["polyline"], dtype=np.float64))[-1])
+    if directed_residual_deg(post.facing_deg + 180.0, post.snap.heading_deg) < 90.0:
+        return int(host["to"]), (1.0 - post.snap.t) * length_m
+    return int(host["from"]), post.snap.t * length_m
+
 
 def _record_semantics(
     report: SignReport,
     sign: Sign,
-    facing_deg: float,
-    snap: Snap,
-    one_way: bool,
+    post: _Placed,
+    turns: dict[tuple[int, int], set[str]],
+    host: dict[str, Any],
 ) -> None:
     """Diff what a sign says against what the graph says, and count the gaps.
 
-    ⚠️ **The two counters here are different in kind, and conflating them would
-    lose the useful one.**
+    ⚠️ **The counters here are different in kind, and conflating them would lose
+    the useful ones.**
 
     `no_entry_with_flow` is a **self-check that must be 0**, in the family of
     `facing_away`: since `_facing_from_side` turns a one-way's signs to face its
@@ -1469,26 +1667,58 @@ def _record_semantics(
     It is a tautology by design — it was a *finding* until the one-way branch
     existed, and it is exactly what caught that branch missing, at 117 of 253.
 
-    `no_entry_on_two_way` is the genuine second-source diff (`Q56`): a NO ENTRY
+    `no_entry_on_two_way` is a genuine second-source diff (`Q56`): a NO ENTRY
     standing on a street the graph calls two-way is a disagreement between two
     independently digitised sources, and it is **report-only** — a finding to go
     and look at, never a bar to retune against. Refusing on it would be asserting
     the graph is right, and this stage has no standing to do that.
 
-    ⚠️ **The turn-restriction half of `P3-16`'s owed diff is NOT here.** The plan
-    calls for `TS131`/`TS132` to be diffed against the graph's 217 unread turn
-    restrictions, which needs a sign-to-node-to-turn match this stage does not
-    do. It is owed, not done, and `PROGRESS.md` says so rather than this counter
-    quietly standing in for it.
+    🔴 **`turn_sign_*` is the half `P3-16` owed and `Q62` named, and building it
+    refuted the claim it was built on.** 68 prohibition plates run against the
+    graph's 217 banned movements, matched sign → junction → movement, with the
+    junction taken from the facing itself (`_downstream_node`) so that a facing
+    derived onto the wrong kerb would send a plate to the opposite end of its
+    edge. It does not: mirroring the whole region moves `agreed` **29 to 30**,
+    because `_facing_from_side` ignores the side on a one-way host and
+    `turn_sign_on_one_way` is **62 of 68**. The gradeable population for the side
+    is 6 plates, which is not a population worth the name. `Q62` stays open.
+
+    ✅ **It grades something else, and that is worth having**: of the 43 plates
+    whose approach the graph bans anything at, 29 name the movement it bans and
+    **14 do not**. Two independently digitised sources disagreeing about
+    which movement is barred at one junction is `Q64`'s failure class — a code
+    read off the wrong row renders perfectly — and this is the only thing that
+    looks at it.
+
+    ⚠️ **Report-only, never a bar**, and `unmatched` least of all: the graph
+    publishes 34 banned lefts against 38 drawn `TS131`, so silence there is its
+    coverage and not this stage's error.
     """
-    if sign.code != _NO_ENTRY:
+    if sign.code == _NO_ENTRY:
+        if not post.one_way:
+            report.no_entry_on_two_way += 1
+            return
+        if directed_residual_deg(post.facing_deg, post.snap.heading_deg) > 90.0:
+            return
+        report.no_entry_with_flow += 1
         return
-    if not one_way:
-        report.no_entry_on_two_way += 1
+
+    claimed = _TURN_PROHIBITIONS.get(sign.code)
+    if claimed is None:
         return
-    if directed_residual_deg(facing_deg, snap.heading_deg) > 90.0:
-        return
-    report.no_entry_with_flow += 1
+    report.turn_sign_on_one_way += int(post.one_way)
+    node, to_junction_m = _downstream_node(host, post)
+    report.turn_sign_to_junction_m.append(to_junction_m)
+    published = turns.get((post.snap.edge, node))
+    if published is None:
+        # The graph bans nothing out of this approach. ⚠️ **Not a failure** — it
+        # publishes 34 left prohibitions against 38 drawn `TS131`, so it does not
+        # carry every signed one, and this is the bucket that says so.
+        report.turn_sign_unmatched += 1
+    elif claimed in published:
+        report.turn_sign_agreed += 1
+    else:
+        report.turn_sign_disagreed += 1
 
 
 def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: SignReport) -> int:
@@ -1577,6 +1807,23 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Sig
         # than a finding — see `_record_semantics`. It read 117 of 253 while
         # `_facing_from_side` was missing its one-way branch.
         "no_entry_with_flow": report.no_entry_with_flow,
+        # 🔴 **The diff `Q62` named, over `TS131`/`TS132`/`TS133`.** The three
+        # below close over those codes in `by_code`, and they are report-only for
+        # the reason above. ⚠️ **Read `agreed` against `disagreed` and leave
+        # `unmatched` out of the ratio** — the graph does not publish every
+        # signed prohibition, so `unmatched` measures its coverage and not this
+        # stage's join.
+        #
+        # 🔴 **Read `turn_sign_on_one_way` first, because it bounds what the
+        # three below can mean.** At 62 of 68 the facing on almost every one of
+        # these plates never consulted the kerb side, so this diff cannot grade
+        # that side — measured, not assumed: the mirrored region reads 30.
+        "turn_sign_on_one_way": report.turn_sign_on_one_way,
+        "turn_sign_agreed": report.turn_sign_agreed,
+        "turn_sign_disagreed": report.turn_sign_disagreed,
+        "turn_sign_unmatched": report.turn_sign_unmatched,
+        # Recorded over all three outcomes, with no bar on it (`Q58`'s trap).
+        "turn_sign_to_junction_m": report.measured(report.turn_sign_to_junction_m),
         # ⚠️ **Must be 0.** `signs.gdshader` is `cull_back`, so winding decides
         # visibility and the normal attribute does not. The tramway shipped 5,111
         # of 5,112 triangles facing the ground with everything else correct.

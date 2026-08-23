@@ -1023,6 +1023,20 @@ class Signs:
     # interpenetrate.
     pole_merge_m: float
 
+    # 🔴 **Where a published turn restriction stops being a left or a right**,
+    # for the diff `signs._record_semantics` runs against the graph's 217 banned
+    # movements (`Q62`). They are here rather than in the code because the graph
+    # publishes no restriction *type*: `P1-3` reads `OTHER_REST_TYPE` and never
+    # emits it, so the class of a banned movement is read off its own geometry
+    # and these two numbers are what read it.
+    #
+    # ⚠️ **They classify, they never refuse.** Nothing downstream is gated on
+    # the answer — the diff is report-only for `Q56`'s reason — so a movement
+    # that falls between them is counted as neither a left nor a right rather
+    # than dropped.
+    turn_straight_deg: float
+    turn_u_deg: float
+
     @property
     def tiled(self) -> bool:
         """Whether `source` names `tiled_sources` rather than `sources`."""
@@ -3417,6 +3431,16 @@ def _signs(body: Any, where: str) -> Signs | None:
     if not isinstance(poles_body, dict):
         raise ValueError(f"{where}:poles must be a mapping, got {poles_body!r}")
 
+    turns = _measures(body, where, ("turn_straight_deg", "turn_u_deg"))
+    if not 0.0 < turns["turn_straight_deg"] < turns["turn_u_deg"] < 180.0:
+        # Ordered rather than merely positive, because the two bound one band
+        # between them. Equal, they leave no left and no right at all and the
+        # diff would report every plate as disagreeing with a graph that agrees.
+        raise ValueError(
+            f"{where}: turn_straight_deg {turns['turn_straight_deg']} and turn_u_deg "
+            f"{turns['turn_u_deg']} must ascend inside (0, 180), or no movement is a turn"
+        )
+
     return Signs(
         source=str(_require(body, "source", where)),
         member=_tile_member(body, where),
@@ -3448,6 +3472,8 @@ def _signs(body: Any, where: str) -> Signs | None:
         outset_m=lengths["outset_m"],
         max_shift_m=lengths["max_shift_m"],
         pole_merge_m=lengths["pole_merge_m"],
+        turn_straight_deg=turns["turn_straight_deg"],
+        turn_u_deg=turns["turn_u_deg"],
     )
 
 

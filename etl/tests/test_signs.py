@@ -20,6 +20,7 @@ systematic sign error agrees with itself everywhere and renders as a city.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
@@ -28,7 +29,7 @@ import yaml
 
 from pipeline import arrows
 from pipeline.arrows import axis_residual_deg, nearside
-from pipeline.config import SIGN_DRAWINGS, SIGN_PLATES, load_city
+from pipeline.config import SIGN_DRAWINGS, SIGN_PLATES, Signs, load_city
 from pipeline.fares import Segments
 from pipeline.railings import facing_away
 from pipeline.signs import (
@@ -36,6 +37,7 @@ from pipeline.signs import (
     Sign,
     SignReport,
     _Builder,
+    _downstream_node,
     _draw_plate,
     _draw_pole,
     _facing_from_side,
@@ -43,6 +45,8 @@ from pipeline.signs import (
     _merge_posts,
     _Placed,
     _plate_frame,
+    _record_semantics,
+    _turn_classes,
     layer_polygons,
     plate_extent_m,
 )
@@ -130,6 +134,8 @@ BLOCK: dict[str, Any] = {
     "outset_m": 0.6,
     "max_shift_m": 6.0,
     "pole_merge_m": 0.75,
+    "turn_straight_deg": 30.0,
+    "turn_u_deg": 135.0,
 }
 
 
@@ -161,9 +167,26 @@ def sign(group: str, x: float, z: float, code: str = "TS115") -> Sign:
     return Sign(code=code, group=group, x=x, z=z, published_x=x, published_z=z, axis_deg=0.0)
 
 
-def edge(edge_id: int, points: list[list[float]], *, lanes: int = 2, direction: str = "both"):
+def edge(
+    edge_id: int,
+    points: list[list[float]],
+    *,
+    lanes: int = 2,
+    direction: str = "both",
+    from_node: int | None = None,
+    to_node: int | None = None,
+):
+    """One `roadgraph.json` edge dict, enough of one for `Segments.of`.
+
+    ⚠️ **`from`/`to` default to a pair derived from the id** rather than to a
+    constant, so two edges built without them cannot silently share a node and
+    make a junction the test never meant to draw. The turn-restriction diff is
+    the only caller that reads them.
+    """
     return {
         "id": edge_id,
+        "from": 2 * edge_id if from_node is None else from_node,
+        "to": 2 * edge_id + 1 if to_node is None else to_node,
         "polyline": points,
         "lanes": lanes,
         "direction": direction,
@@ -898,3 +921,284 @@ class TestTheReportPartitions:
         assert math.isclose(2.0 * half_h, spec.triangle_height_m)
         assert half_w == pytest.approx(half_h / math.sqrt(3.0) * 2.0)
         assert half_w > half_h
+
+
+# --------------------------------------------------------------------------
+# The turn-restriction diff (`Q62`)
+# --------------------------------------------------------------------------
+#
+# A T junction at node 10, drive-on-left, in the frame `Snap.heading_deg` uses:
+# north is `-Z`, so an edge running north has heading 0.
+#
+#                 |  APPROACH (edge 0), heading 0, node 1 -> node 10
+#     WEST -------+------- EAST
+#     (edge 1)   10       (edge 2)
+#
+# Leaving node 10 westward is a left turn, eastward a right turn.
+APPROACH = [[0.0, 0.0, 100.0], [0.0, 0.0, 0.0]]
+WEST_ARM = [[0.0, 0.0, 0.0], [-100.0, 0.0, 0.0]]
+EAST_ARM = [[0.0, 0.0, 0.0], [100.0, 0.0, 0.0]]
+# ⚠️ **Leaning, not exactly straight, and leaning both ways.** A movement at
+# exactly 0 deg is classified the same by every broken version of the sign test
+# below it, so it cannot tell them apart — the `Q66` trap in miniature. These two
+# sit inside `turn_straight_deg` and fall on opposite sides of zero.
+NORTH_ARM_EAST = [[0.0, 0.0, 0.0], [10.0, 0.0, -100.0]]
+NORTH_ARM_WEST = [[0.0, 0.0, 0.0], [-10.0, 0.0, -100.0]]
+
+# ⚠️ Nearside is *left of travel*, and travel here runs north, so the nearside
+# kerb is at negative x. Both posts sit halfway along, at `t` 0.5.
+NEARSIDE_POST = (-3.0, 50.0)
+OFFSIDE_POST = (3.0, 50.0)
+# ⚠️ **Off-centre on purpose.** At `t` 0.5 the distance to either end of the
+# edge is the same number, so a post halfway along cannot tell the two apart —
+# and the test that measures the distance is precisely the one that must.
+NEARSIDE_POST_QUARTER = (-3.0, 75.0)
+OFFSIDE_POST_QUARTER = (3.0, 75.0)
+
+
+def junction(*arms: tuple[int, list[list[float]]]) -> dict[str, Any]:
+    """The T above as a graph, with `edge 0` arriving at node 10."""
+    edges = [edge(0, APPROACH, from_node=1, to_node=10)]
+    edges += [edge(edge_id, points, from_node=10, to_node=10 + edge_id) for edge_id, points in arms]
+    return {"edges": edges, "turn_restrictions": []}
+
+
+def banned(graph: dict[str, Any], to_edge: int) -> dict[str, Any]:
+    """The movement out of `edge 0` through node 10 onto `to_edge`, banned."""
+    graph["turn_restrictions"].append({"from_edge": 0, "via_node": 10, "to_edge": to_edge})
+    return graph
+
+
+def t_junction(to_edge: int) -> dict[str, Any]:
+    """The T with both arms, and the movement onto `to_edge` banned."""
+    return banned(junction((1, WEST_ARM), (2, EAST_ARM)), to_edge=to_edge)
+
+
+def posted(code: str, at: tuple[float, float], one_way: bool = False) -> tuple[Sign, _Placed]:
+    """One plate of `code` on the approach, as `build_region` would have placed it.
+
+    Returns the real `_Placed` rather than loose fields, so the facing is
+    `_facing_from_side`'s own answer and never hand-written — the coupling
+    between the facing and the junction is the property under test.
+    """
+    segments = Segments.of([edge(0, APPROACH, from_node=1, to_node=10)])
+    snap = segments.nearest(at[0], at[1])
+    # ⚠️ **A restatement of `build_region`, not a rule of its own** — the `>=` is
+    # load-bearing, because `-0.0` belongs to the nearside, and it is pinned by
+    # `test_a_post_on_the_centreline_faces_the_side_it_was_placed_on`. If the
+    # production line moves, this must move with it.
+    side = 1.0 if snap.offset_m >= 0.0 else -1.0
+    plate = sign("g", at[0], at[1], code=code)
+    return plate, _Placed(
+        x=at[0],
+        z=at[1],
+        y=0.0,
+        facing_deg=_facing_from_side(snap.heading_deg, side, one_way),
+        side=side,
+        one_way=one_way,
+        snap=snap,
+        plates=[plate],
+    )
+
+
+def diff(
+    spec: Signs,
+    graph: dict[str, Any],
+    plates: Sequence[tuple[str, tuple[float, float]]],
+    *,
+    one_way: bool = False,
+) -> SignReport:
+    """Run `_record_semantics` over `plates`, the way `build_region` does."""
+    by_edge = {int(item["id"]): item for item in graph["edges"]}
+    turns = _turn_classes(graph["turn_restrictions"], by_edge, spec)
+    report = SignReport()
+    for code, at in plates:
+        plate, post = posted(code, at, one_way)
+        _record_semantics(report, plate, post, turns, by_edge[post.snap.edge])
+    return report
+
+
+class TestTheTurnRestrictionDiff:
+    """The instrument `Q62` named, and the only grader the derived facing has.
+
+    ⚠️ **Every test here must fail under a stated mutation**, because `Q66` is
+    what happens when one does not: that claim shipped with two mutations passing
+    the whole suite, since the property asserted was symmetric under the very
+    swap it was meant to catch. The mutation each test kills is named in its
+    docstring.
+
+    ⚠️ **The facing is never hand-written** — `posted` takes it from
+    `_facing_from_side` — so a test that passes here is testing the expression
+    the stage actually uses.
+    """
+
+    def test_a_sign_is_matched_to_the_junction_its_own_traffic_reaches(self):
+        """🔴 **The whole coupling, and the reason this diff grades the facing.**
+
+        A sign faces the traffic it addresses, so that traffic is heading *away*
+        from the plate — and the junction it governs is the one ahead of it. On a
+        two-way the two kerbs address opposite streams, so they govern opposite
+        ends of the same edge.
+
+        ⚠️ Mutation killed: flipping `side > 0.0` in `_facing_from_side`. That
+        mirrors every post onto the wrong kerb, which sends every plate to the
+        far end of its edge — and nothing else in this file would notice,
+        because a mirrored city renders as a city.
+
+        🔴 **This holds per plate and still does not grade the region**, which is
+        the finding `Q62` keeps: the host here is two-way, and in Wan Chai 62 of
+        68 prohibition plates stand on a *one-way*, where `_facing_from_side`
+        returns the same facing for both kerbs and the mutation changes nothing.
+        Mirroring the whole region moves `turn_sign_agreed` from 29 to 30. The
+        test below pins the branch that makes that so.
+        """
+        host = edge(0, APPROACH, from_node=1, to_node=10)
+        near = posted("TS131", NEARSIDE_POST)[1]
+        far = posted("TS131", OFFSIDE_POST)[1]
+
+        assert _downstream_node(host, near)[0] == 10
+        assert _downstream_node(host, far)[0] == 1
+
+    def test_a_one_way_host_matches_the_same_junction_from_either_kerb(self, spec):
+        """🔴 **The reason this diff cannot grade the kerb side**, pinned.
+
+        `_facing_from_side` turns both kerbs of a one-way to face its only
+        traffic, so both address the same junction and a mirrored city produces
+        an identical match. That is not a defect — it is the correct rule — but
+        it bounds what `turn_sign_agreed` can be read to mean, and
+        `turn_sign_on_one_way` publishes how much of the population it applies
+        to: **62 of 68** in Wan Chai.
+
+        ⚠️ Mutation killed: dropping `one_way or` from `_facing_from_side`, which
+        would make the two kerbs of a one-way disagree — and would also send
+        `no_entry_with_flow` back to the 117 of 253 that found it the first time.
+        """
+        host = edge(0, APPROACH, from_node=1, to_node=10, direction="forward")
+        near = posted("TS131", NEARSIDE_POST, one_way=True)[1]
+        far = posted("TS131", OFFSIDE_POST, one_way=True)[1]
+
+        assert _downstream_node(host, near)[0] == _downstream_node(host, far)[0] == 10
+
+        graph = t_junction(to_edge=1)
+        counted = [
+            (report.turn_sign_agreed, report.turn_sign_on_one_way)
+            for report in (
+                diff(spec, graph, [("TS131", at)], one_way=True)
+                for at in (NEARSIDE_POST, OFFSIDE_POST)
+            )
+        ]
+        assert counted == [(1, 1), (1, 1)]
+
+    def test_the_distance_is_measured_to_the_junction_the_sign_governs(self):
+        """Not to the nearer end, and not to the edge's midpoint.
+
+        `Snap.t` is normalised over the whole edge, so the two kerbs of a post
+        halfway along a 100 m edge are each 50 m from *different* junctions.
+        Published because there is deliberately no bar on it (`Q58`).
+
+        ⚠️ Mutation killed: measuring from the wrong end — `t * length` where the
+        junction is at `t` 1. ⚠️ **Which needs a post that is not halfway
+        along**: at `t` 0.5 both ends are 50 m away and the swap is invisible,
+        which is how the first version of this test passed under it.
+        """
+        host = edge(0, APPROACH, from_node=1, to_node=10)
+        near = posted("TS131", NEARSIDE_POST_QUARTER)[1]
+        far = posted("TS131", OFFSIDE_POST_QUARTER)[1]
+
+        assert near.snap.t == pytest.approx(0.25)
+        # The nearside post governs the far junction, so it is 75 m off it; the
+        # offside post governs the near one, 25 m back the other way.
+        assert _downstream_node(host, near) == (10, pytest.approx(75.0))
+        assert _downstream_node(host, far) == (1, pytest.approx(25.0))
+
+    def test_a_no_left_turn_agrees_with_a_banned_left_and_not_with_a_banned_right(self, spec):
+        """The classification, read off the movement's own geometry.
+
+        🔴 **The graph publishes no restriction *type*** — `P1-3` reads
+        `OTHER_REST_TYPE` and never emits it — so a banned movement is a left or
+        a right only by its bearings. Two sources naming different banned
+        movements at one junction is the finding this whole counter exists for.
+
+        ⚠️ Mutation killed: swapping the sign test in `_turn_class`. Asserted in
+        both directions, because a swap leaves a one-sided test passing.
+        """
+        left, right = t_junction(to_edge=1), t_junction(to_edge=2)
+
+        assert diff(spec, left, [("TS131", NEARSIDE_POST)]).turn_sign_agreed == 1
+        assert diff(spec, left, [("TS132", NEARSIDE_POST)]).turn_sign_disagreed == 1
+        assert diff(spec, right, [("TS132", NEARSIDE_POST)]).turn_sign_agreed == 1
+        assert diff(spec, right, [("TS131", NEARSIDE_POST)]).turn_sign_disagreed == 1
+
+    def test_a_u_turn_is_the_edge_returned_and_falls_out_of_the_180_deg_change(self, spec):
+        """⚠️ **The one class no threshold can get wrong**, which is why `TS133`
+        is in the table although `Q62` named only the two turns.
+
+        A movement that leaves by the edge it arrived on reads its two bearings
+        off one polyline in *opposite* orders, so the change is exactly 180 deg
+        and `turn_u_deg` is refused at or above 180. 60 of the region's 217
+        restrictions are this shape, and none needs a special case — a branch for
+        them was written and removed as dead.
+
+        ⚠️ Mutation killed: flipping either `leaving=` argument in
+        `_turn_classes`, after which both bearings come off the polyline the same
+        way, the change is 0, and a U-turn reads as a straight-through movement.
+        """
+        graph = banned(junction((1, WEST_ARM)), to_edge=0)
+        assert diff(spec, graph, [("TS133", NEARSIDE_POST)]).turn_sign_agreed == 1
+        assert diff(spec, graph, [("TS131", NEARSIDE_POST)]).turn_sign_disagreed == 1
+
+    def test_a_junction_the_graph_bans_nothing_at_is_unmatched_and_not_agreed(self, spec):
+        """The weak bucket, and it must not be the default the others fall into.
+
+        The graph does not publish every signed prohibition — 34 banned lefts
+        against 38 drawn `TS131` — so silence is a coverage fact about the graph
+        and never a passing grade for the sign.
+
+        ⚠️ Mutation killed: treating a missing key as agreement, which would read
+        as a perfect score on a region whose graph carried no restrictions at all.
+        """
+        quiet = junction((1, WEST_ARM), (2, EAST_ARM))
+        report = diff(spec, quiet, [("TS131", NEARSIDE_POST)])
+        assert (report.turn_sign_unmatched, report.turn_sign_agreed) == (1, 0)
+
+    def test_a_movement_straight_through_is_neither_a_left_nor_a_right(self, spec):
+        """A restriction the sign cannot be claiming, so the plate disagrees.
+
+        The region publishes 4 of these. They are a real banned movement, so the
+        approach is *matched* — what is refused is the claim that they are the
+        turn the plate names.
+
+        ⚠️ Mutation killed: letting the straight band fall through to left/right,
+        which turns 4 published restrictions into whichever turn their noise
+        happens to lean. ⚠️ **Both leans and both codes**, because one of each
+        pair still disagrees under that mutation — an earlier version of this
+        test asserted a single lean against a single code and the mutation
+        walked straight through it.
+        """
+        for arm in (NORTH_ARM_EAST, NORTH_ARM_WEST):
+            graph = banned(junction((1, arm)), to_edge=1)
+            for code in ("TS131", "TS132"):
+                report = diff(spec, graph, [(code, NEARSIDE_POST)])
+                assert (report.turn_sign_disagreed, report.turn_sign_unmatched) == (1, 0)
+
+    def test_the_three_outcomes_partition_the_prohibition_plates(self, spec):
+        """The identity `SignReport`'s docstring states, and `signs.json` publishes.
+
+        ⚠️ Mutation killed: any `return` that skips a plate without counting it —
+        the partition is what makes the three numbers readable as shares rather
+        than as three unrelated tallies.
+        """
+        graph = t_junction(to_edge=1)
+        plates = [
+            ("TS131", NEARSIDE_POST),
+            ("TS132", NEARSIDE_POST),
+            ("TS133", NEARSIDE_POST),
+            ("TS131", OFFSIDE_POST),
+            ("TS115", NEARSIDE_POST),
+        ]
+        report = diff(spec, graph, plates)
+        counted = report.turn_sign_agreed + report.turn_sign_disagreed + report.turn_sign_unmatched
+        # Four prohibition plates; the NO ENTRY is counted by the other diff.
+        assert counted == 4
+        assert len(report.turn_sign_to_junction_m) == 4
+        assert report.no_entry_on_two_way == 1
