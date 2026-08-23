@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=14 format=3]
 
 [ext_resource type="Script" path="res://scripts/city/tile_preview.gd" id="1_tiles"]
 [ext_resource type="Script" path="res://scripts/city/landmarks.gd" id="7_landmarks"]
@@ -11,6 +11,7 @@
 [ext_resource type="Script" path="res://scripts/city/boxjunctions_preview.gd" id="13_boxjunctions"]
 [ext_resource type="Script" path="res://scripts/city/railings_preview.gd" id="14_railings"]
 [ext_resource type="Script" path="res://scripts/city/signs_preview.gd" id="15_signs"]
+[ext_resource type="Script" path="res://scripts/city/roadmarks_preview.gd" id="16_roadmarks"]
 [ext_resource type="Script" path="res://scripts/city/fare_preview.gd" id="6_fares"]
 
 [node name="CityPreview" type="Node3D"]
@@ -42,6 +43,14 @@ script = ExtResource("12_arrows")
 ; simply stays empty.
 [node name="BoxJunctions" type="Node3D" parent="."]
 script = ExtResource("13_boxjunctions")
+
+; The published stop and give-way lines (`P3-23`), one mesh for the whole
+; region, drawn across the junction mouths rather than along the road, and
+; hosted by the road each one *crosses* — the two disagree on 43% of the
+; layer. A region whose sources publish no transverse markings ships none and
+; this node simply stays empty.
+[node name="RoadMarks" type="Node3D" parent="."]
+script = ExtResource("16_roadmarks")
 
 ; The published pedestrian railings (`P3-19`), one mesh for the whole
 ; region, standing on the kerb the ribbon actually drew rather than where

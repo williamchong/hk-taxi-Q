@@ -147,6 +147,15 @@ are promoted to errors here, so something as small as an unused parameter does i
 there, read the log for `Parse Error` / `Compile Error` rather than waiting it out — and when
 scripting a Godot run, give it a watchdog rather than a long timeout.
 
+🔴 **A verify tool proves an asset is correct. Nothing proves it is in the world.**
+`verify_roadmarks.gd` calls `GeneratedRoadMarks.load_roadmarks()` and grades the returned
+`PackedScene` in isolation, so it passed while `roadmarks.glb` was in no scene at all — built,
+exported, named by `city.json`, dispatched by the importer, and invisible. The player's report was
+the only instrument that could see it (`Q73`). **Every layer here has the same blind spot**; the others
+are on screen because they happened to get their node. When a layer is added, the node in
+`city_drive.tscn` and `city_preview.tscn` is part of the task, and the check that it renders is a
+frame someone looked at.
+
 ⚠️ **Verify tools `preload` every dependency rather than naming a `class_name` global**, and that is
 load-bearing. Global classes resolve through the gitignored
 `game/.godot/global_script_class_cache.cfg`, so on a fresh clone a tool referencing one fails to
@@ -1289,7 +1298,7 @@ the second vehicle anyone built.
 | `scripts/city/landmarks.gd` | Places the authored heroes where `landmarks.json` puts them. ~2 models, always resident — no streaming, no LOD |
 | `scripts/city/mesh_contract.gd` | The mesh rules every generated asset is held to, plus `triangles` and `bounds`. Read by every verify tool that touches geometry, the previews, and `CityStreamer`. Also the two checks a payload-carrying asset needs — that it landed on the shader its material name asked for, and that the importer settings which would silently overwrite a `TEXCOORD_1` have not drifted — both hoisted here when `P3-12` gave the road surface a second copy of them |
 | `scripts/city/preview_draw.gd` | Flat ribbons and the unshaded vertex-colour material, shared by the dev previews |
-| `scripts/city/*_preview.gd` | Dev previews — one per drawn class: `tile`, `road_surface`, `road`, `fare`, `tramway`, `arrows`, `boxjunctions`, `railings`, `signs`. They instantiate what the manifest names so a layer can be looked at on its own. **Not performance measurements** |
+| `scripts/city/*_preview.gd` | Dev previews — one per drawn class: `tile`, `road_surface`, `road`, `fare`, `tramway`, `arrows`, `boxjunctions`, `roadmarks`, `railings`, `signs`. ⚠️ **Adding a drawn layer means adding its node here** — `roadmarks` had everything else and no node, and nothing caught it (see Checks). They instantiate what the manifest names so a layer can be looked at on its own. **Not performance measurements** |
 | `scripts/city/road_graph_overlay.gd` | Dev: the resolved edge, lane centre and legal travel direction under the moving car |
 | `scripts/city/drive_harness.gd` | Dev: place the car on the resolved start line, and return it there when it leaves the world. On the scene root so its `_ready` runs after the car's |
 | `scripts/camera/free_look_camera.gd` | Dev fly camera. Bypasses `InputRouter` so dev keys stay out of the shipped action map |

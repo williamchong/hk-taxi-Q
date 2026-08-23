@@ -101,6 +101,8 @@ wins.
 | `Q70` | The bundle's one image was a file the manifest had never heard of | ✅ Closed — the atlas ships as `signs_text.png`, named under `signs_text_atlas`; anything that adds a second image owes the same |
 | `Q71` | Three byte-identical shaders, and the repo had already written the rule | ✅ Closed — `marking_paint.gdshader` is shared by the arrows, the boxes and the stop lines; a layer is a parameterisation, not a shader |
 | `Q72` | A NO ENTRY faces the traffic it forbids, not the traffic it stands beside | ✅ Closed — and the counter that stood before it was a tautology certifying the wrong state; `plates_turned` must equal the drawn NO ENTRY family exactly |
+| `Q73` | A layer can pass every check and be in no scene | ✅ Closed — `roadmarks.glb` shipped, was graded, and was drawn nowhere; a verify tool proves an asset is correct and never that it is on screen |
+| `Q74` | `Q71`'s trigger has fired on the preview scripts, and the prose has nowhere to go | 🟡 Open, deferred — ten files, four byte-identical, 0 lines of logic differing; the merge is owed and the per-layer *arguments* have no `.tres` to move into |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -9715,3 +9717,110 @@ makes it non-zero, and if none does, it is measuring the code rather than the ci
 `no_entry_on_two_way` belongs to · `Q58` for the trap this is another instance of · `Q66` for
 `mirror_by_side`, the other per-face flag that decides which way a plate points · `Q64` for what a
 wrong code does to a face that renders perfectly
+
+
+---
+
+## `Q73` — A layer can pass every check and be in no scene
+
+**Closed 2026-08-24.** Reported by the user from the driving seat, against a frame with a GIVE WAY
+plate in it: *"i dont see any give way line on road despite a give way sign exists, is the
+implementation pending or bug?"*
+
+### The mechanism
+
+`P3-23` shipped `roadmarks.glb` — 191 bars, 4,512 triangles, 605 m of give-way line — and shipped
+every part of the contract around it: the `city.json` key, `generated_roadmarks.gd`,
+`tuning/roadmarks.tres`, the importer's material dispatch, and `verify_roadmarks.gd`. It did not
+ship the **node**. `roadmarks_preview.gd` did not exist, neither scene named it, and the only caller
+of `load_roadmarks()` in the whole engine tree was `verify_roadmarks.gd` — the sole other reference
+to the locator being `verify_city.gd` checking its `PATH` against the manifest.
+
+So the mesh was built, exported, synced, imported and graded, and drawn nowhere.
+
+🔴 **The check estate cannot see this, and that is general rather than an oversight here.**
+`verify_roadmarks.gd` loads the asset and grades the returned `PackedScene` in isolation — which is
+what makes it runnable at all, since `check.sh` must not require a scene to be instantiated. It
+therefore answers *"is this asset correct"* and never *"is this asset on screen"*. Every other
+layer's verify tool has the identical blind spot; the other nine are visible because they happened
+to get their node in the same commit as their asset.
+
+⚠️ **The locator's own doc comment asserted the missing node.** `generated_roadmarks.gd` reads
+*"two things want the markings for different purposes — the preview draws them, `verify_roadmarks.gd`
+checks them"*. The preview it names was never written. A comment describing a collaborator is not
+evidence the collaborator exists.
+
+### The decision — the node is part of the layer, and a frame is the check
+
+`roadmarks_preview.gd` on `boxjunctions_preview.gd`'s pattern, plus a node in `city_drive.tscn` and
+`city_preview.tscn`. No new mechanism: this is the tenth of these and the shape was already settled.
+
+**What is not built is a check.** A verify tool that instantiated a scene would need a built region,
+a frame and a rendering device, which is the requirement `Q17` deliberately keeps `check.sh` free
+of. The honest control is that adding a drawn layer means adding its node, recorded in
+`ARCHITECTURE.md`'s script map beside the list that goes stale, and that a new layer is looked at in
+a frame before it is called done — `Q62`'s conclusion for facings, arrived at again from the other
+direction.
+
+### What it measured
+
+Region-wide, pairing every published `TS102` GIVE WAY plate against the give-way lines: of **121**
+plates, **99** have a drawn line beside them, **12** have none published within 30 m, and **10**
+have one the transverse join refused. ⚠️ **A plate with no bar under it is therefore still
+expected** and is not this defect returning — 83 `RM1013` are published at grade and `P3-23` draws
+**75**. At the reported camera the line was drawn all along, at game `y` **3.76** against a road
+surface of **3.75**: correctly lifted 13-15 mm, correctly hosted, and in no scene.
+
+
+---
+
+## `Q74` — `Q71`'s trigger has fired on the preview scripts, and the prose has nowhere to go
+
+**Open, deliberately deferred 2026-08-24.** Raised by the review of `Q73`'s fix, which was the
+*tenth* of these files and the *fourth* byte-identical one.
+
+### The measurement
+
+Ten `scripts/city/*_preview.gd`, 858 lines. **Seven share one body shape** — load a GLB, instantiate,
+measure, print — of 23-27 normalised code lines each. **Four are byte-identical** once the loader
+constant, the local noun and two strings are renamed: `roadmarks`, `boxjunctions`, `arrows`,
+`tramway`. Between the new file and `boxjunctions_preview.gd`, 11 code lines differ textually, 7 of
+them by a noun alone, and **0 lines of logic differ at all**. `find_children("*", "StaticBody3D",
+true, false)` appears in seven of them and three times inside `mesh_contract.gd`, which already
+hoisted the *boolean* form as `has_collision` and never the *integer* form. The ten
+`generated_*.gd` locators are the same story at ~6 code lines apiece.
+
+**`Q71`'s rule is explicit and numeric — a third copy forces the merge — and this is ten.** Its
+closing lesson applies to itself here: *"a codified trigger is only worth having if someone fires
+it."*
+
+### Why it is not done with `Q73`
+
+⚠️ **`Q71` could merge because the per-layer argument had somewhere to go**: the colour moved into
+each layer's own `.tres`, which is that layer's home. **The previews have no `.tres`.** What differs
+between these files is not the code, it is ~120 lines of prose in which each layer argues *its own*
+reason for having no collider — the railings cite `GAME_DESIGN.md`'s "omit or make breakable", the
+signs contradict that and call it a **budget** decision, the road markings argue a 16 mm step at
+every junction *while braking*, the tramway argues from the absent `-col` suffix. Four arguments,
+not one argument with four nouns. The only per-layer home available is the `.tscn` node comment, so
+a merge relocates the prose into scene files — and `Q71` priced exactly this: *"the prose was the
+work, not the code."* There are **56 cross-references to `*_preview.gd`** in the repo, including
+`ARCHITECTURE.md`'s script map and a "exactly like `<sibling>`" chain running through five of them.
+
+⚠️ **And a unilateral deviation is worse than the duplication.** Writing `Q73`'s file to a new shape
+would have made one of seven the odd one out, which a reviewer then has to reason about — the reason
+it shipped on the settled pattern instead.
+
+### The route, smallest first
+
+1. `MeshContract.colliders(node) -> int` beside `has_collision`, applied to all seven call sites.
+   The one step that is unambiguously owed: `mesh_contract.gd` owns this idiom already and its own
+   header states the rule — *"two copies drift, and the copy that drifts is the one that quietly
+   stops catching anything."*
+2. A shared loader collapsing the ten `generated_*.gd`, which differ in a path string and a hint.
+3. Only then one `layer_preview.gd` parameterised per layer, with the prose moved to the `.tscn`
+   comments — `Q71`'s shape at `Q71`'s cost.
+
+⚠️ **`road_surface_preview.gd` is not in the set.** It is the genuine variant — a `built` signal, a
+`push_warning` because absence there *is* an error, and a deferred emit — and folding it in would
+lose the distinction between the mandatory layer and the nine optional ones.

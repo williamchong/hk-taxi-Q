@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=16 format=3]
 
 ; The first scene that puts the car on the real city (`P1-4` + `P0-5`).
 ;
@@ -23,6 +23,7 @@
 [ext_resource type="Script" path="res://scripts/city/boxjunctions_preview.gd" id="12_boxjunctions"]
 [ext_resource type="Script" path="res://scripts/city/railings_preview.gd" id="13_railings"]
 [ext_resource type="Script" path="res://scripts/city/signs_preview.gd" id="14_signs"]
+[ext_resource type="Script" path="res://scripts/city/roadmarks_preview.gd" id="15_roadmarks"]
 [ext_resource type="PackedScene" path="res://scenes/world/clean_daylight.tscn" id="3_light"]
 [ext_resource type="PackedScene" path="res://scenes/vehicle/taxi.tscn" id="4_taxi"]
 [ext_resource type="Script" path="res://scripts/camera/chase_camera.gd" id="5_camera"]
@@ -68,6 +69,15 @@ script = ExtResource("11_arrows")
 ; sources publish no box polygons ships none and this node simply stays empty.
 [node name="BoxJunctions" type="Node3D" parent="."]
 script = ExtResource("12_boxjunctions")
+
+; The published stop and give-way lines (`P3-23`), one mesh for the whole
+; region, drawn across the junction mouths the ribbon markings fade away from.
+; Lifted 16 mm — a clear millimetre above the arrows — because where the two
+; overlap the bar is the boundary and the arrow is an instruction already read.
+; A region whose sources publish no transverse markings ships none and this
+; node simply stays empty.
+[node name="RoadMarks" type="Node3D" parent="."]
+script = ExtResource("15_roadmarks")
 
 ; The published pedestrian railings (`P3-19`), one mesh for the whole
 ; region, standing on the kerb the ribbon actually drew rather than where
