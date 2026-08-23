@@ -1198,6 +1198,56 @@ signs:
         - {draw: disc, colour: blue, size: 0.82}
         - {draw: slash, colour: red, size: 0.95}
         - {draw: backslash, colour: red, size: 0.95}
+    # -- P3-22: direction signs whose meaning is their shape --
+    #
+    # 🔴 **These four were refused with the text families and do not belong to
+    # them** — Q64 at a second layer. Every row read off TD's own sheet:
+    # TS414 is TC 210 on (TS 401 - 505), TS589 TC ... on (TS 506 - 600), TS615
+    # TC 310 on (TS 601 - 700), TS735 TC 408 on (TS 701 - 805). ⚠️ Not off
+    # signCatalogue.json, whose desc calls TS414 "PERMANENT **SPEED** DEVIATION"
+    # where the sheet says **SHARP** — the second independent desc error found.
+    #
+    # PERMANENT SHARP DEVIATION: black chevrons on a white board.
+    # 🔴 `mirror: true` — which way the chevrons point is DERIVED, not read. See
+    # Q66 and `_draw_plate`; TD publishes no left/right pair for a deviation
+    # board the way it does TS615/TS616/TS617, so this is the one face here
+    # whose orientation the publisher does not give.
+    TS414:
+      plate: board_wide
+      mirror: true
+      layers:
+        - {draw: board_wide, colour: white, size: 1.00}
+        - {draw: chevrons, colour: black, size: 0.86}
+    # The same board with a yellow border and the colours inverted: white
+    # chevrons on black. One chevron, because the plate is portrait and
+    # `_chevrons` takes its count from the aspect.
+    TS589:
+      plate: board_tall
+      mirror: true
+      layers:
+        - {draw: board_tall, colour: yellow, size: 1.00}
+        - {draw: board_tall, colour: black, size: 0.84}
+        - {draw: chevrons, colour: white, size: 0.68}
+    # NO THROUGH ROAD. The white T with the red bar laid over its crossbar; TD
+    # splits the side-road variants out as TS616/TS617, so the code carries the
+    # direction and this face needs no mirror.
+    TS615:
+      plate: rect_info
+      layers:
+        - {draw: rect_info, colour: blue, size: 1.00}
+        - {draw: tee, colour: white, size: 1.00}
+        - {draw: tee_bar, colour: red, size: 1.00}
+    # ARROWS — the double-headed supplementary plate. ⚠️ Bordered top and bottom
+    # ONLY, where its TS733/TS734 siblings carry a full frame: read off the cell,
+    # whose opaque box reaches both side edges with no dark column.
+    TS735:
+      plate: rect_wide
+      rank: supplementary
+      layers:
+        - {draw: rect_wide, colour: white, size: 1.00}
+        - {draw: bars_h, colour: black, size: 1.00}
+        - {draw: arrow_double, colour: black, size: 0.78}
+
     TS733:
       plate: rect_wide
       rank: supplementary
@@ -1231,6 +1281,8 @@ signs:
     black: "#1c1c1f"
     # The plate's back and the pole. Galvanised steel, the same reading P3-19
     # settled for the railings: grey, not green.
+    # TS589's border. The one colour here that arrived with P3-22.
+    yellow: "#f0c020"
     grey: "#70737a"
 
   # ---- dimensions, every one of them authored ----
@@ -1244,9 +1296,32 @@ signs:
   triangle_height_m: 0.68
   rect_width_m: 0.45
   rect_height_m: 0.60
-  # The supplementary arrow plates are landscape where TS183 is portrait.
+  # The supplementary arrow plates are landscape where TS182 is portrait.
   rect_wide_width_m: 0.60
   rect_wide_height_m: 0.25
+
+  # ---- P3-22's plates, and where their PROPORTIONS come from ----
+  # ⚠️ **Absolute size is still authored — the sheets are NOT TO SCALE — but the
+  # aspect is not.** A drawing with no scale still draws a plate the right shape,
+  # so the ratio below is measured off the extracted cell's opaque bounding box
+  # and only the size is chosen. That is strictly more evidence than Q60's debt
+  # had, and it is deliberately not retro-fitted to the plates already shipping:
+  # the same measurement says rect_wide should be 1.63 where it is authored 2.4,
+  # and moving it would silently re-shape every TS733/TS734 already reviewed.
+  #
+  # NO THROUGH ROAD (TS615). Cell aspect 1.083.
+  rect_info_width_m: 0.60
+  rect_info_height_m: 0.55
+  # The deviation board (TS414). Cell aspect 3.95 — but the sheet draws three
+  # solid chevrons and two outlined, the outline being "repeat as required", so
+  # the drawn width is a minimum rather than the sign. Three chevrons at this
+  # aspect, which `_chevrons` derives rather than being told.
+  board_wide_width_m: 1.20
+  board_wide_height_m: 0.40
+  # The yellow-bordered deviation board (TS589), which is portrait and carries
+  # one chevron. Cell aspect 0.783.
+  board_tall_width_m: 0.45
+  board_tall_height_m: 0.58
 
   # Bottom of the lowest plate above the footway. 2.1 m is the standard
   # clearance where pedestrians pass under a sign.

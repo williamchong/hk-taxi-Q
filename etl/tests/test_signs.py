@@ -28,7 +28,7 @@ import yaml
 
 from pipeline import arrows
 from pipeline.arrows import axis_residual_deg, nearside
-from pipeline.config import SIGN_DRAWINGS, load_city
+from pipeline.config import SIGN_DRAWINGS, SIGN_PLATES, load_city
 from pipeline.fares import Segments
 from pipeline.railings import facing_away
 from pipeline.signs import (
@@ -90,6 +90,14 @@ BLOCK: dict[str, Any] = {
             "rank": "supplementary",
             "layers": [{"draw": "arrow_left", "colour": "black", "size": 0.72}],
         },
+        "TS414": {
+            "plate": "board_wide",
+            "mirror": True,
+            "layers": [
+                {"draw": "board_wide", "colour": "white", "size": 1.0},
+                {"draw": "chevrons", "colour": "black", "size": 0.86},
+            ],
+        },
     },
     "colours": {
         "red": "#c21a26",
@@ -104,6 +112,12 @@ BLOCK: dict[str, Any] = {
     "rect_height_m": 0.60,
     "rect_wide_width_m": 0.60,
     "rect_wide_height_m": 0.25,
+    "rect_info_width_m": 0.60,
+    "rect_info_height_m": 0.55,
+    "board_wide_width_m": 1.20,
+    "board_wide_height_m": 0.40,
+    "board_tall_width_m": 0.45,
+    "board_tall_height_m": 0.58,
     "mount_height_m": 2.10,
     "stack_gap_m": 0.06,
     "pole_radius_m": 0.032,
@@ -362,6 +376,92 @@ class TestTheFaceGeometry:
         left = np.vstack(layer_polygons(spec, "arrow_left", 1.0, 0.3, 0.3))
         right = np.vstack(layer_polygons(spec, "arrow_right", 1.0, 0.3, 0.3))
         assert left[:, 0].min() == pytest.approx(-right[:, 0].max())
+
+    def test_a_mirrored_board_flips_its_glyphs_and_keeps_its_winding(self, spec):
+        """🔴 **The one face orientation this layer derives rather than reads.**
+
+        TD publishes no left/right code pair for a deviation board, so which way
+        the chevrons point is an assumption (`Q66`): away from the kerb the post
+        stands on. Two things have to hold and only one of them is visible.
+
+        ⚠️ **The invisible one is winding.** Negating `u` turns a
+        counter-clockwise polygon clockwise, and `signs.gdshader` is `cull_back`
+        — so a mirrored board would go *missing* rather than draw backwards,
+        with `facing_away` still reading 0 because the normal is untouched.
+        """
+        face = spec.faces["TS414"]
+        assert face.mirror_by_side
+
+        def drawn(side: float):
+            builder = _Builder()
+            _draw_plate(builder, spec, face, np.zeros(3), 0.0, side)
+            return builder.build("probe")
+
+        nearside, offside = drawn(1.0), drawn(-1.0)
+
+        # The glyphs really did move: the same board on the two kerbs is not the
+        # same mesh. Without this the test passes on a mirror that does nothing.
+        assert not np.allclose(
+            np.sort(nearside.positions, axis=0), np.sort(offside.positions, axis=0)
+        )
+        # And every triangle still faces the way its normal claims, on both.
+        assert facing_away(nearside) == 0
+        assert facing_away(offside) == 0
+
+    def test_an_unmirrored_face_ignores_the_side_it_stands_on(self, spec):
+        """The flag is opt-in, so every face that does not set it is unmoved —
+        otherwise `Q66`'s assumption would leak onto plates TD *does* orient."""
+        face = spec.faces["TS115"]
+        assert not face.mirror_by_side
+
+        meshes = []
+        for side in (1.0, -1.0):
+            builder = _Builder()
+            _draw_plate(builder, spec, face, np.zeros(3), 0.0, side)
+            meshes.append(builder.build("probe").positions)
+        assert np.allclose(meshes[0], meshes[1])
+
+    def test_every_plate_outline_can_be_measured_and_drawn(self, spec):
+        """⚠️ **The drift `_PLATE_RECTS` exists to stop.** A plate is named in
+        three places — `SIGN_PLATES` (what a face may be cut to), the extent
+        lookup, and the outline branch in `layer_polygons` — and `P3-22` added
+        three at once. A plate in the vocabulary that either site does not know
+        raises at build time, on a city that loaded cleanly.
+        """
+        for plate in SIGN_PLATES:
+            half_w, half_h = plate_extent_m(spec, plate)
+            assert half_w > 0.0 and half_h > 0.0, plate
+            assert layer_polygons(spec, plate, 1.0, half_w, half_h), plate
+
+    def test_a_chevron_count_comes_from_the_plate_aspect(self, spec):
+        """⚠️ TD draws three solid chevrons and two outlined — "repeat as
+        required" — so a count is a property of the board's width, not a number
+        to transcribe. A wide board gets three and a portrait one gets one, and
+        both are what the extracted cells show.
+        """
+        wide = layer_polygons(spec, "chevrons", 1.0, 0.60, 0.20)
+        tall = layer_polygons(spec, "chevrons", 1.0, 0.225, 0.29)
+        # Two convex quads per chevron, because a chevron is concave.
+        assert len(wide) == 3 * 2
+        assert len(tall) == 1 * 2
+
+    def test_a_concave_glyph_is_split_into_convex_pieces(self, spec):
+        """⚠️ **`_Builder.polygon` fans from vertex 0 and takes a CONVEX polygon.**
+
+        A chevron and a T are both concave as outlines, and fanning one emits
+        triangles outside the shape with half of them wound backwards — it read
+        `facing_away` **21** on the first build. Asserted as convexity rather
+        than as a piece count so it holds however the glyphs are re-cut, and
+        swept over **every** drawing rather than the four `P3-22` added, so the
+        next concave glyph fails here without anyone remembering to add it —
+        the same sweep `test_every_layer_polygon_is_wound_counter_clockwise`
+        makes one class up.
+        """
+        for draw in SIGN_DRAWINGS:
+            for polygon in layer_polygons(spec, draw, 1.0, 0.60, 0.20):
+                edges = np.diff(np.vstack([polygon, polygon[:2]]), axis=0)
+                cross = edges[:-1, 0] * edges[1:, 1] - edges[:-1, 1] * edges[1:, 0]
+                assert np.all(cross > -1e-12), f"{draw} is concave: {polygon.tolist()}"
 
     def test_a_backslash_crosses_the_slash_it_mirrors(self, spec):
         """⚠️ The mirror problem again, on the pair that makes `TS183` a saltire.
@@ -655,6 +755,7 @@ class TestTheRegistrationArithmetic:
             z=-5.6,
             y=0.0,
             facing_deg=0.0,
+            side=1.0,
             one_way=False,
             snap=snap,
             plates=[sign("a", 50.0, 2.0)],
@@ -664,6 +765,7 @@ class TestTheRegistrationArithmetic:
             z=-5.6,
             y=0.0,
             facing_deg=0.0,
+            side=1.0,
             one_way=False,
             snap=snap,
             plates=[sign("b", 50.0, 3.0, code="TS102")],

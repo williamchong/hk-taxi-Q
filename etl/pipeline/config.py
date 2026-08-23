@@ -819,9 +819,17 @@ SIGN_DISC = "disc"
 SIGN_BAR = "bar"
 SIGN_RECT = "rect"
 SIGN_RECT_WIDE = "rect_wide"
+SIGN_RECT_INFO = "rect_info"
+SIGN_BOARD_WIDE = "board_wide"
+SIGN_BOARD_TALL = "board_tall"
 SIGN_TRIANGLE_DOWN = "triangle_down"
 SIGN_SLASH = "slash"
 SIGN_BACKSLASH = "backslash"
+SIGN_CHEVRONS = "chevrons"
+SIGN_BARS_H = "bars_h"
+SIGN_TEE = "tee"
+SIGN_TEE_BAR = "tee_bar"
+SIGN_ARROW_DOUBLE = "arrow_double"
 SIGN_ARROW_UP = "arrow_up"
 SIGN_ARROW_LEFT = "arrow_left"
 SIGN_ARROW_RIGHT = "arrow_right"
@@ -836,9 +844,17 @@ SIGN_DRAWINGS = (
     SIGN_BAR,
     SIGN_RECT,
     SIGN_RECT_WIDE,
+    SIGN_RECT_INFO,
+    SIGN_BOARD_WIDE,
+    SIGN_BOARD_TALL,
     SIGN_TRIANGLE_DOWN,
     SIGN_SLASH,
     SIGN_BACKSLASH,
+    SIGN_CHEVRONS,
+    SIGN_BARS_H,
+    SIGN_TEE,
+    SIGN_TEE_BAR,
+    SIGN_ARROW_DOUBLE,
     SIGN_ARROW_UP,
     SIGN_ARROW_LEFT,
     SIGN_ARROW_RIGHT,
@@ -851,7 +867,15 @@ SIGN_DRAWINGS = (
 
 # The plate outlines, a subset of the above: what a sign is *cut* to. A layer may
 # be any drawing, but the plate itself has to be a closed outline with a back.
-SIGN_PLATES = (SIGN_DISC, SIGN_RECT, SIGN_RECT_WIDE, SIGN_TRIANGLE_DOWN)
+SIGN_PLATES = (
+    SIGN_DISC,
+    SIGN_RECT,
+    SIGN_RECT_WIDE,
+    SIGN_RECT_INFO,
+    SIGN_BOARD_WIDE,
+    SIGN_BOARD_TALL,
+    SIGN_TRIANGLE_DOWN,
+)
 
 # The livery `pipeline/signs.py` reserves for a plate's back and its post, which
 # no `faces:` row names. ⚠️ **Validated in `_signs` rather than trusted**: it is
@@ -902,6 +926,12 @@ class SignFace:
     # Where this face sits when several share a post — lower is higher up. See
     # `SIGN_RANKS`; a face that does not say is `regulatory`.
     rank: int
+    # 🔴 **Whether this face is mirrored to point away from its own kerb.** Only
+    # the deviation boards set it, and only because TD publishes no left/right
+    # code pair for one the way it does for `TS615`/`TS616`/`TS617` — so unlike
+    # every other face here, which way it points is *derived*. `Q66` records the
+    # assumption and the counter that keeps it visible.
+    mirror_by_side: bool = False
 
 
 @dataclass(frozen=True)
@@ -956,6 +986,12 @@ class Signs:
     rect_height_m: float
     rect_wide_width_m: float
     rect_wide_height_m: float
+    rect_info_width_m: float
+    rect_info_height_m: float
+    board_wide_width_m: float
+    board_wide_height_m: float
+    board_tall_width_m: float
+    board_tall_height_m: float
 
     # Bottom of the lowest plate above the ground.
     mount_height_m: float
@@ -3324,7 +3360,18 @@ def _signs(body: Any, where: str) -> Signs | None:
                 f"{spot}:rank is {rank!r}, which is not one of "
                 f"{', '.join(SIGN_RANKS)} — those are the index-plan sheet classes"
             )
-        faces[str(code)] = SignFace(plate=plate, layers=tuple(layers), rank=SIGN_RANKS[rank])
+        mirror = entry.get("mirror", False)
+        if not isinstance(mirror, bool):
+            raise ValueError(
+                f"{spot}:mirror is {mirror!r}; it is a flag, and the only thing it may say is "
+                f"that this face points away from the kerb its post stands on"
+            )
+        faces[str(code)] = SignFace(
+            plate=plate,
+            layers=tuple(layers),
+            rank=SIGN_RANKS[rank],
+            mirror_by_side=mirror,
+        )
 
     lengths = {
         name: float(_require(body, name, where))
@@ -3335,6 +3382,12 @@ def _signs(body: Any, where: str) -> Signs | None:
             "rect_height_m",
             "rect_wide_width_m",
             "rect_wide_height_m",
+            "rect_info_width_m",
+            "rect_info_height_m",
+            "board_wide_width_m",
+            "board_wide_height_m",
+            "board_tall_width_m",
+            "board_tall_height_m",
             "mount_height_m",
             "stack_gap_m",
             "pole_radius_m",
@@ -3377,6 +3430,12 @@ def _signs(body: Any, where: str) -> Signs | None:
         rect_height_m=lengths["rect_height_m"],
         rect_wide_width_m=lengths["rect_wide_width_m"],
         rect_wide_height_m=lengths["rect_wide_height_m"],
+        rect_info_width_m=lengths["rect_info_width_m"],
+        rect_info_height_m=lengths["rect_info_height_m"],
+        board_wide_width_m=lengths["board_wide_width_m"],
+        board_wide_height_m=lengths["board_wide_height_m"],
+        board_tall_width_m=lengths["board_tall_width_m"],
+        board_tall_height_m=lengths["board_tall_height_m"],
         mount_height_m=lengths["mount_height_m"],
         stack_gap_m=lengths["stack_gap_m"],
         pole_radius_m=lengths["pole_radius_m"],
