@@ -24,7 +24,7 @@ Three decisions differ from arrows, and each is recorded where it bites:
   several arms and has no host, so the join *is* the primary one. It is a
   distance-weighted blend over every arm in range rather than the nearest
   edge's own height, because a hard nearest-edge switch is a cliff — see
-  `_blended_height` for the 172 near-vertical triangles that measured it.
+  `blended_height` for the 172 near-vertical triangles that measured it.
   `height_spread_m` publishes what the join actually moved.
 - **The hatch direction is derived where the publisher is silent.** `ANGLE1` /
   `ANGLE2` are published on 4 of the region's 20 boxes and used where present;
@@ -747,12 +747,12 @@ def _place(
     spans several arms and has no host, so the snap is the primary join rather
     than a second opinion about one.
     """
-    heights = [_blended_height(segments, float(px), float(pz), blend_m) for px, pz in polygon]
+    heights = [blended_height(segments, float(px), float(pz), blend_m) for px, pz in polygon]
     builder.polygon(polygon, np.asarray(heights) + lift_m)
     return heights
 
 
-def _blended_height(segments: Segments, x: float, z: float, blend_m: float) -> float:
+def blended_height(segments: Segments, x: float, z: float, blend_m: float) -> float:
     """The deck height under `(x, z)`, blended across every arm in range.
 
     ⚠️ **Not `Segments.nearest(...).y`, and the difference was measured on the
@@ -771,6 +771,11 @@ def _blended_height(segments: Segments, x: float, z: float, blend_m: float) -> f
     The projection arithmetic mirrors `Segments.nearest`; it reads the public
     arrays rather than calling it because the blend needs every distance, not
     the winner.
+
+    ⚠️ **Public since `P3-23`, which is its second caller.** `pipeline/roadmarks.py`
+    places stop and give-way lines across junction mouths — the same seam, and
+    the same 0.43 m — so it takes this rather than a second copy of forty lines
+    of numerics whose comment carries a measured finding.
     """
     offset_x = x - segments.start[:, 0]
     offset_z = z - segments.start[:, 2]

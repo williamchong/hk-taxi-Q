@@ -38,6 +38,7 @@ from pipeline import (
     landmarks,
     podiums,
     railings,
+    roadmarks,
     roads,
     signs,
     surface,
@@ -79,6 +80,15 @@ STAGES: dict[str, Callable[[list[str]], int]] = {
     # ribbon, since a surveyed polygon is drawn at its surveyed extent rather
     # than registered into a lane. Before `export`, which names the asset.
     "boxjunctions": boxjunctions.main,
+    # After `roads` for the level-0 centrelines — the height under each vertex
+    # and the host edge each bar is drawn **across** — and after `surface` for
+    # `roadsurface.json`'s drawn half-width. ⚠️ **The second one is a dependency
+    # of a counter, not of the geometry**: a published bar is drawn at its
+    # surveyed extent and never registered into a lane, so `arrows`' ribbon
+    # argument does not apply — but `underfill_m` measures a drawn bar against a
+    # drawn kerb, and the graph publishes only the *authored* width. Reading the
+    # graph there was an 18x error. Before `export`, which names the asset.
+    "roadmarks": roadmarks.main,
     # After `surface`, and forced rather than tidy — `arrows`'s dependency plus
     # one of its own. It reads `roadsurface.json` for the drawn half-width, the
     # junction trims **and** `kerb_hidden_m`: a railing is drawn on the kerb the

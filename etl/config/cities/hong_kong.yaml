@@ -1592,6 +1592,147 @@ boxjunctions:
   # range and the blend is the plain snap.
   height_blend_m: 4.0
 
+# Published stop lines and give-way lines (P3-23).
+#
+# The markings under the GIVE WAY plates P3-20 put 讓 on: 74 posts told the
+# player to give way and no line on the carriageway said where. DTAD_RD_MARK_LINE
+# publishes all three transverse markings as surveyed polylines — 211 parts,
+# 1,673 m in region, every one of them straight (chord over length p50 1.0000)
+# and every one at grade (ELEVATION null on all 120 RM1011 and all 83 RM1013;
+# 6 of 8 RM1012, the other two on A01).
+#
+# ⚠️ **THE DIMENSIONS BELOW ARE TRANSCRIBED FROM THE PUBLISHER'S OWN SHEET**,
+# TD index plan CT174/51-5(1)F inside dataspec/tadrawings_dataspec.zip, which is
+# Q59's rule and it bites hardest here: the sheet is a SCAN. pdffonts returns no
+# embedded font and the page is eight indexed 2400-ppi images, so there is no
+# text layer to read and the rows below were read by eye off a 600 dpi render.
+# Q67 measured what eye-reading a sign face costs — four faces wrong out of five
+# — so each row is quoted verbatim rather than paraphrased, and they are three
+# lines of plain lettering rather than a pictogram, which is why they survive
+# the same treatment the TS faces did not.
+#
+#   1011 (TC 506)  STOP LINE      LINE WIDTH = 200, MODULE: CONTINUOUS
+#   1012 (TC 507)  STOP LINES     LINE WIDTH = 200, LINES SPACING = 300,
+#                                 UPPER LINE = CONTINUOUS, LOWER = CONTINUOUS
+#   1013 (TC 508)  GIVE WAY LINES LINE WIDTH = 200, LINES SPACING = 200,
+#                                 UPPER LINE = 600 MARK, 300 GAP
+#                                 LOWER LINE = 600 MARK, 300 GAP
+#
+# ⚠️ **LINES SPACING is the clear gap between the two lines, not a pitch**, and
+# the sheet proves it two rows above: RM1001 DOUBLE LINES publishes LINE WIDTH =
+# 150 with LINES SPACING = 100, and two 150 mm lines whose centres are 100 mm
+# apart is one 250 mm line. Only the gap reading draws a shape.
+#
+# 🔴 **THE HOST IS PICKED BY TRANSVERSALITY, NOT BY PROXIMITY.** This is the one
+# place this stage departs from arrows: and boxjunctions:, and it was measured
+# before it shipped rather than argued. Both of those take the nearest level-0
+# edge and both are right to — an arrow sits mid-lane, a box mid-junction. A stop
+# line sits at a junction MOUTH, drawn across the minor road while lying a metre
+# off the major road's kerb (RM1013 midpoint to nearest centreline: p50 1.10 m,
+# p90 3.30). Measured as |90 - angle to host|:
+#
+#   join              RM1011                        RM1013
+#   nearest edge      p50 10.8, over 30 deg 47/120  p50 16.5, over 30 deg 28/83
+#   transverse pick   p50  1.8, over 30 deg  5/120  p50  4.0, over 30 deg  8/83
+#
+#   the two disagree about the host on 53 of 120 and 36 of 83 — 44% and 43%
+#
+# The extent is published, so a wrong host does not move the paint. It moves the
+# HEIGHT, and two arms of one junction disagree about the deck by up to 0.43 m
+# where they meet (boxjunctions:), so it is a bar sunk into or floating over the
+# asphalt at the one place the player is looking.
+#
+# ⚠️ **axis_residual_deg grades a rule that optimises the thing it reports** —
+# Q58's drawn_gauge_m trap in new clothes — so roadmarks.json publishes
+# host_disagreement, chosen against naive-nearest, as the counter that can
+# actually see this regress. The residual ships too, recorded over refusals as
+# well as keeps, and is worth what that caveat leaves it worth.
+road_marks:
+  source: traffic_aids_drawings_gdb
+  layer: DTAD_RD_MARK_LINE
+  fields:
+    mark_type: LINETYPE
+    # The same structure column arrows:, boxjunctions: and railings: read, with
+    # the same reading: a code names a structure and null is the ground. Null on
+    # 209 of the region's 211 parts.
+    level: ELEVATION
+
+  # Which level-0 edges are CONSIDERED for the host — not how far the host may
+  # be. At 20 m every one of the region's 209 at-grade parts finds a
+  # candidate, and the chosen host then sits p50 7.23 m (p90 16.78) away for
+  # RM1011 and p50 5.11 m (p90 17.55) for RM1013. Far further than an arrow ever
+  # is from its edge, and correctly so: a bar across a four-lane mouth starts on
+  # the far kerb.
+  host_radius_m: 20.0
+
+  # How far the chosen host may sit from square across the marking before the
+  # match is refused. arrows.bearing_tolerance_deg's value with its logic
+  # inverted — there a symbol must lie along its edge, here across it. Keeps
+  # 114 of 120 RM1011 and 75 of 83 RM1013; what it refuses is the tail that is
+  # not a transverse bar at all, of which a 56.9 m RM1013 lying 78.8 deg off
+  # square is the extreme. ⚠️ It refuses the MATCH and never rotates the bar
+  # onto the road, which would be an invented marking in Q54's sense.
+  bearing_tolerance_deg: 30.0
+
+  # Degrees of angular error one metre of extra distance is worth, for the tie
+  # between two candidates equally square across the marking. Small on purpose:
+  # at 0.05 it takes 20 m of extra distance to overturn one degree, so this
+  # breaks ties and never decides a host.
+  proximity_weight_deg_per_m: 0.05
+
+  # Pitch a drawn line is stationed at along its length. Every station takes its
+  # own height from the road under it, so this is what lets the region's longest
+  # drawn bar — 32.37 m — follow the crown of a wide street instead of chording
+  # across it. ⚠️ Not the 33.8 m RM1011: that one is refused as transverse to
+  # nothing, so it is not an example of anything this value does.
+  station_m: 2.0
+
+  # ⚠️ **Above arrows' 0.015, and the order is a legibility call.** A stop line
+  # is the boundary the player must not cross; an arrow is an instruction they
+  # have already read by the time they reach it. So where the two overlap the bar
+  # wins — the same shape of argument boxjunctions.lift_m makes for putting
+  # arrows over box hatching, and a clear 1 mm rather than a hair, because the
+  # engine re-quantises Y on import too.
+  lift_m: 0.016
+
+  # How far past the nearest centreline the per-vertex height join keeps
+  # listening — boxjunctions.height_blend_m's value and its measured reason. A
+  # transverse bar is drawn across a junction MOUTH, which is exactly the seam
+  # where two arms of one junction extrapolate their own grade and disagree by
+  # up to 0.43 m; taking each vertex from whichever arm won built 172
+  # near-vertical triangles there once already.
+  height_blend_m: 4.0
+
+  marks:
+    # ⚠️ No `lines_spacing_m`: a single line has no gap to declare, and the
+    # loader only reads one where there is a second line for it to sit between.
+    - id: stop_line
+      codes: [RM1011]
+      line_width_m: 0.2
+      lines: 1
+
+    # ⚠️ **NOT in the original scope, and adding it was the cheap half of the
+    # decision.** RM1012 is the same object drawn double — 8 features, 6 at
+    # grade — and it costs the RM1013 two-band machinery with the module left
+    # continuous. Leaving it out would have given eight junctions no stop line
+    # while their neighbours got one.
+    - id: stop_lines
+      codes: [RM1012]
+      line_width_m: 0.2
+      lines: 2
+      lines_spacing_m: 0.3
+
+    # ⚠️ **A double BROKEN line, and not triangles.** The give-way triangle is a
+    # different marking on a different row; TC 508 is two dashed lines, and the
+    # sheet's own words are quoted above.
+    - id: give_way_lines
+      codes: [RM1013]
+      line_width_m: 0.2
+      lines: 2
+      lines_spacing_m: 0.2
+      mark_m: 0.6
+      gap_m: 0.3
+
 # Pedestrian railings, drawn as their own geometry (P3-19, Q60).
 #
 # ⚠️ THIS IS THE ONE BLOCK IN THIS FILE WHOSE VOCABULARY THE PUBLISHER DOES NOT

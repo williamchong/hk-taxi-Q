@@ -20,9 +20,9 @@ import yaml
 from pipeline.boxjunctions import (
     BOXJUNCTIONS_MATERIAL,
     BoxJunctionReport,
-    _blended_height,
     _Builder,
     _place,
+    blended_height,
     border_polygons,
     hatch_polygons,
     long_axis_deg,
@@ -271,7 +271,7 @@ class TestTheGeometry:
         }
         segments = Segments.of([low, high])
         transect = [
-            _blended_height(segments, 0.0, z, spec.height_blend_m)
+            blended_height(segments, 0.0, z, spec.height_blend_m)
             for z in np.arange(-4.0, 4.01, 0.1)
         ]
         # On either arm the blend is that arm's own height, exactly.

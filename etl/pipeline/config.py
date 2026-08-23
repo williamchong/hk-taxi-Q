@@ -1340,6 +1340,180 @@ class Railings:
 
 
 @dataclass(frozen=True)
+class RoadMark:
+    """One published transverse marking, and the bar TD draws it as (`P3-23`).
+
+    ⚠️ **Every dimension here is transcribed from the publisher, not authored.**
+    TD's index plan `CT174/51-5(1)F` gives each `RM` code its line width, its
+    line count and its module, and `Q59`'s rule applies at full strength: the
+    sheet is a **scan** — `pdffonts` returns nothing and the page is eight
+    indexed 2400-ppi images — so it is read by eye, and `Q67` proved that eye
+    reading a face gets it wrong four times in five. What makes these
+    checkable is that they are three short rows of plain text rather than a
+    pictogram, quoted verbatim in `hong_kong.yaml` beside each entry.
+
+    ⚠️ **`lines_spacing_m` is the CLEAR GAP between the two lines, not their
+    centre-to-centre pitch, and the sheet proves it rather than this comment.**
+    `RM1001` DOUBLE LINES publishes `LINE WIDTH = 150` with `LINES SPACING =
+    100`; read as a pitch that is two 150 mm lines whose centres are 100 mm
+    apart, which is one 250 mm line. Only the gap reading is a drawable shape.
+    """
+
+    # The entry's own name. Not a mesh name — all three draw into one primitive
+    # in one colour, so unlike `RailingClass.id` this identifies a *counter*,
+    # which is why it carries no `-col` guard.
+    id: str
+    # Which published `LINETYPE` values this entry admits. A list because one
+    # marking can carry two codes — `RM1108`/`RM1109` EDGE OF CARRIAGEWAY is the
+    # precedent already in this file.
+    codes: tuple[str, ...]
+    # Width of each line, across the marking. 200 mm for all three of the
+    # region's codes.
+    line_width_m: float
+    # How many parallel lines the marking draws: 1 for `RM1011` STOP LINE, 2 for
+    # `RM1012` STOP LINES and `RM1013` GIVE WAY LINES.
+    lines: int
+    # The clear gap between them — see the class docstring. Zero, and unread,
+    # where `lines` is 1.
+    lines_spacing_m: float
+    # The dash module along the marking: `mark_m` of paint then `gap_m` of road,
+    # repeating. Both None for a continuous line. ⚠️ **Both or neither** — a
+    # mark with no gap is continuous spelt at length, and a gap with no mark
+    # draws nothing, so the loader refuses a half-declared module rather than
+    # picking one of those two.
+    mark_m: float | None
+    gap_m: float | None
+
+    @property
+    def continuous(self) -> bool:
+        """Whether the marking runs unbroken."""
+        return self.mark_m is None
+
+    @property
+    def band_offsets_m(self) -> tuple[float, ...]:
+        """Each line's centre, across the marking, about the published line.
+
+        ⚠️ **Symmetric about the published polyline, and that is a reading of an
+        unresolved convention rather than a fact.** The source publishes one
+        line per feature and nothing in the specification says whether it is the
+        band's centre or one of its two edges. Centre is the least-wrong choice
+        for the same reason `arrows.py` takes a glyph's insertion point to be
+        its centre: if the convention is an edge, the band is out by half its
+        own width; anchoring on an edge when the truth is the centre is out by
+        twice that. The whole consequence is 0.2 m on a 0.6 m band.
+        """
+        if self.lines <= 1:
+            return (0.0,)
+        pitch = self.line_width_m + self.lines_spacing_m
+        first = -0.5 * pitch * (self.lines - 1)
+        return tuple(first + index * pitch for index in range(self.lines))
+
+
+@dataclass(frozen=True)
+class RoadMarks:
+    """Published stop and give-way lines, drawn by `pipeline/roadmarks.py` (`P3-23`).
+
+    The content is **read, not invented**, on `Q53`'s terms and
+    `BoxJunctions`': `DTAD_RD_MARK_LINE` publishes each bar as a surveyed
+    polyline, straight to four decimal places (chord over length is p50
+    1.0000), so the extent is the source's and only the width is convention.
+
+    🔴 **The host is chosen by transversality, not by proximity, and this is
+    the one place this stage departs from `arrows.py` and `boxjunctions.py`.**
+    Both of those take the nearest level-0 edge, and both are right to: an
+    arrow sits mid-lane and a box sits mid-junction, so the nearest centreline
+    is the one they belong to. A stop line sits at a junction **mouth**,
+    frequently a metre off the *major* road's kerb while being drawn across
+    the *minor* one — `RM1013`'s midpoint is p50 **1.10 m** from the nearest
+    centreline — so proximity hands it the wrong host by construction.
+    Measured over the region before this shipped, as `|90 - angle to host|`:
+
+        join                RM1011                      RM1013
+        nearest edge        p50 10.8  over 30 deg 47/120  p50 16.5  28/83
+        transverse pick     p50  1.8  over 30 deg  5/120  p50  4.0   8/83
+
+        host differs from the nearest edge on 53/120 and 36/83 — 44% and 43%
+
+    A wrong host does not move the paint, because the extent is published. It
+    moves the *height*, the refusal and every counter — and two arms of one
+    junction disagree about the deck by a measured 0.43 m where they meet
+    (`Q60`, `boxjunctions`), so it is a bar sunk into or floating over the
+    asphalt at the one place the player is looking.
+
+    ⚠️ **`axis_residual_deg` under this rule grades a rule that optimises the
+    thing it reports**, which is `Q58`'s `drawn_gauge_m` trap wearing new
+    clothes. So the counter that can actually see this regress is
+    `host_disagreement` — chosen against naive-nearest — published beside the
+    distance the pick travelled. The residual is published too, over the
+    refusals as well as the keeps, and is worth exactly what that caveat leaves
+    it worth.
+
+    ⚠️ **There is no material here, and its absence is the decision** — the
+    paragraph `Arrows` and `BoxJunctions` both carry. The white is authored in
+    `game/tuning/roadmarks.tres`, outside `Q33`'s exposure rule, and the glTF
+    material *name* the engine dispatches on is `ROADMARKS_MATERIAL` in
+    `pipeline/roadmarks.py`.
+    """
+
+    source: str
+    member: str | None
+    layer: SourceLayer
+    # ⚠️ **The transverse pick's search radius, and it is not a `max_offset_m`.**
+    # `arrows.max_offset_m` bounds how far a symbol may be from its host; this
+    # bounds which edges are *considered*, and the winner is then chosen on
+    # angle. Measured: at 20 m every one of the region's 209 at-grade parts finds a
+    # candidate, and the chosen host sits p50 7.23 m / p90 16.78 m away for
+    # `RM1011`. That is much further than an arrow ever is from its edge, and
+    # correctly so — a bar across a four-lane mouth starts on the far kerb.
+    host_radius_m: float
+    # How far the chosen host may sit from square across the marking before the
+    # match is refused. `arrows.bearing_tolerance_deg`'s value and its logic
+    # inverted: there a symbol must lie *along* its edge, here across it.
+    # 30 deg keeps 114 of 120 `RM1011` and 75 of 83 `RM1013`; what it refuses is
+    # the long tail that is not a transverse bar at all — a 56.9 m `RM1013`
+    # lying 78.8 deg off square is the extreme.
+    bearing_tolerance_deg: float
+    # Degrees of angular error one metre of extra distance is worth, when two
+    # candidate edges are equally square across the marking. Small on purpose:
+    # this breaks ties, and anything large enough to overturn a 5 deg angular
+    # difference would be proximity deciding the host again.
+    proximity_weight_deg_per_m: float
+    # Pitch a drawn line is stationed at along its length. Every station takes
+    # its own height from the road under it, so this is what lets a 33 m bar
+    # follow the crown of a wide street instead of chording across it.
+    station_m: float
+    # ⚠️ **Above `arrows.lift_m`, and the order is a legibility call rather than
+    # a fact about paint.** A stop line is the boundary the player must not
+    # cross; an arrow is an instruction they have already read by the time they
+    # reach it. So where the two overlap the bar wins, on the same shape of
+    # argument `boxjunctions.lift_m` uses to put arrows over box hatching.
+    lift_m: float
+    # How far past the nearest centreline the height join keeps listening —
+    # `BoxJunctions.height_blend_m`, and here for the same measured reason. A
+    # stop line is drawn across a junction mouth, which is exactly the seam
+    # where two arms of one junction disagree about the deck by up to 0.43 m,
+    # and a hard nearest-edge switch across that seam is a cliff.
+    height_blend_m: float
+    # One entry per published marking — see `RoadMark`.
+    marks: tuple[RoadMark, ...]
+
+    @property
+    def tiled(self) -> bool:
+        """Whether `source` names `tiled_sources` rather than `sources`."""
+        return self.member is not None
+
+    def mark_of(self, code: str) -> RoadMark | None:
+        """The entry admitting `code`, or None where none does.
+
+        Linear over three entries, for `Railings.class_of`'s stated reason.
+        """
+        for mark in self.marks:
+            if code in mark.codes:
+                return mark
+        return None
+
+
+@dataclass(frozen=True)
 class SourcePaint:
     """How a mesh-sourced hero is repainted from its source COLOR_0 (`P3-6`).
 
@@ -2045,6 +2219,11 @@ class CityConfig:
     # publishes no railing layer ships none rather than running a fence down
     # every kerb it drew.
     railings: Railings | None = None
+    # Published stop and give-way lines, drawn by `pipeline/roadmarks.py`
+    # (`P3-23`). Optional on the same terms as the four blocks above: a city
+    # whose estate publishes no transverse markings ships none rather than
+    # painting a stop line at every junction node it found.
+    road_marks: RoadMarks | None = None
     # Hero buildings shipped as authored models (`P3-6`). Empty for a city
     # without any: the building stage then excludes nothing and the export
     # writes an empty landmarks document.
@@ -2225,6 +2404,7 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
         signs=_signs(document.get("signs"), f"{path}:signs"),
         boxjunctions=_boxjunctions(document.get("boxjunctions"), f"{path}:boxjunctions"),
         railings=_railings(document.get("railings"), f"{path}:railings"),
+        road_marks=_road_marks(document.get("road_marks"), f"{path}:road_marks"),
         landmarks=_landmarks(document.get("landmarks") or [], f"{path}:landmarks", table),
         extra_cas=_extra_cas(document.get("extra_cas"), path),
     )
@@ -2258,6 +2438,8 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
         _check_declared_source(city, city.boxjunctions, f"{path}:boxjunctions.source")
     if city.railings is not None:
         _check_declared_source(city, city.railings, f"{path}:railings.source")
+    if city.road_marks is not None:
+        _check_declared_source(city, city.road_marks, f"{path}:road_marks.source")
     if city.signs is not None:
         _check_declared_source(city, city.signs, f"{path}:signs.source")
     _check_landmarks_lie_within_a_region(city, path)
@@ -3742,6 +3924,149 @@ def _railing_class(body: Any, where: str, *, sample_m: float) -> RailingClass:
     lifts = _measures(body, where, ("base_sink_m", "outset_m"))
 
     return RailingClass(id=klass_id, line_types=line_types, **measures, **lifts)
+
+
+_ROAD_MARK_ROLES = ("mark_type", "level")
+
+
+def _road_marks(body: Any, where: str) -> RoadMarks | None:
+    """The optional published transverse-marking block (`P3-23`).
+
+    Absent, the region ships no `roadmarks.glb` and the manifest names none —
+    the shape `tramway`, `arrows`, `boxjunctions` and `railings` all take. What
+    is *not* offered is a fallback that paints a stop line across every arm of
+    every junction: the region publishes 209 at-grade bars against 393 junction nodes
+    with three or four arms each, so a derived placement would be wrong many
+    times over, and every one of them would render as a perfectly good stop
+    line. `Q53` refused exactly that shape of invention for box junctions.
+    """
+    if body is None:
+        return None
+    if not isinstance(body, dict):
+        raise ValueError(f"{where} must be a mapping, got {body!r}")
+
+    measures = _measures(
+        body,
+        where,
+        ("host_radius_m", "bearing_tolerance_deg", "station_m", "lift_m", "height_blend_m"),
+        positive=True,
+    )
+    if measures["bearing_tolerance_deg"] >= 90.0:
+        # At 90 every angle is inside the bar, so the guard admits a marking
+        # lying *along* its host — which is the failure it exists to catch, and
+        # the population it actually refuses is 18 parts of the region's 209.
+        raise ValueError(
+            f"{where}:bearing_tolerance_deg is {measures['bearing_tolerance_deg']}; at 90 or more "
+            f"it admits a marking lying along its host, which is what it exists to refuse"
+        )
+    # `positive=False`: zero is a legitimate weight — it says pick purely on
+    # angle and break ties by source order. Negatives, which would prefer the
+    # *furthest* candidate edge, `_measures` already refuses.
+    weights = _measures(body, where, ("proximity_weight_deg_per_m",))
+
+    raw_marks = _require(body, "marks", where)
+    if isinstance(raw_marks, str) or not isinstance(raw_marks, (list, tuple)):
+        raise ValueError(f"{where}:marks must be a list, got {raw_marks!r}")
+    if not raw_marks:
+        # A table with no entries admits nothing, which is what omitting the
+        # block already does — refused so the difference is a decision.
+        raise ValueError(f"{where}:marks is empty; a block that draws nothing is a mistake")
+    marks = tuple(
+        _road_mark(entry, f"{where}:marks[{index}]") for index, entry in enumerate(raw_marks)
+    )
+
+    ids = [mark.id for mark in marks]
+    if len(set(ids)) != len(ids):
+        # An id keys this stage's per-marking counters, so two entries sharing
+        # one would merge their tallies and hide whichever drew nothing.
+        raise ValueError(f"{where}:marks repeats an id: {ids}")
+
+    admitted: dict[str, str] = {}
+    for mark in marks:
+        for code in mark.codes:
+            if code in admitted:
+                # ⚠️ Not a tidiness check, and `Railings`' reason: a code in two
+                # entries is drawn twice, in one place, at two widths — and the
+                # wider of them looks exactly like a correctly drawn marking.
+                raise ValueError(
+                    f"{where}:marks admits {code!r} in both {admitted[code]!r} and "
+                    f"{mark.id!r}; it would be drawn twice and the wider would look right"
+                )
+            admitted[code] = mark.id
+
+    return RoadMarks(
+        source=str(_require(body, "source", where)),
+        member=_tile_member(body, where),
+        layer=_source_layer(body, where, _ROAD_MARK_ROLES),
+        marks=marks,
+        **measures,
+        **weights,
+    )
+
+
+def _road_mark(body: Any, where: str) -> RoadMark:
+    """One entry of the road-marking block's `marks` table (`P3-23`)."""
+    if not isinstance(body, dict):
+        raise ValueError(f"{where} must be a mapping, got {body!r}")
+
+    mark_id = str(_require(body, "id", where))
+    if not mark_id:
+        raise ValueError(f"{where}:id is empty; it names this marking's counters")
+
+    raw_codes = _require(body, "codes", where)
+    if isinstance(raw_codes, str) or not isinstance(raw_codes, (list, tuple)):
+        raise ValueError(f"{where}:codes must be a list, got {raw_codes!r}")
+    codes = tuple(str(value) for value in raw_codes)
+    if not codes:
+        raise ValueError(f"{where}:codes is empty; an entry that admits nothing is a mistake")
+    if len(set(codes)) != len(codes):
+        raise ValueError(f"{where}:codes repeats a code: {codes}")
+
+    line_width_m = _measures(body, where, ("line_width_m",), positive=True)["line_width_m"]
+
+    lines = _require(body, "lines", where)
+    if not isinstance(lines, int) or isinstance(lines, bool) or lines < 1:
+        raise ValueError(f"{where}:lines must be a positive integer, got {lines!r}")
+
+    # ⚠️ **Only read where there is a second line for it to be a gap between.**
+    # A single-line marking has none to declare, and requiring `0.0` there is a
+    # field whose own docstring says it is unread — see `RoadMark`. Negatives,
+    # which would overlap the two lines, `_measures` already refuses.
+    lines_spacing_m = (
+        _measures(body, where, ("lines_spacing_m",))["lines_spacing_m"] if lines > 1 else 0.0
+    )
+    if lines > 1 and lines_spacing_m <= 0.0:
+        # ⚠️ The sheet's `LINES SPACING` is the **clear gap**, not a pitch — see
+        # `RoadMark`. Zero here draws two touching lines, which is one line of
+        # twice the width, and it renders as a perfectly good stop line.
+        raise ValueError(
+            f"{where}:lines_spacing_m is {lines_spacing_m} with lines={lines}; the two lines "
+            f"would touch and draw as one line of twice the width"
+        )
+
+    mark_m = body.get("mark_m")
+    gap_m = body.get("gap_m")
+    if (mark_m is None) != (gap_m is None):
+        # ⚠️ Half a module is not a default to pick. A mark with no gap is a
+        # continuous line spelt at length; a gap with no mark draws nothing.
+        # Both are silent, so neither is guessed at.
+        raise ValueError(
+            f"{where}: mark_m and gap_m must be given together or not at all; "
+            f"got mark_m={mark_m!r}, gap_m={gap_m!r}"
+        )
+    if mark_m is not None:
+        module = _measures(body, where, ("mark_m", "gap_m"), positive=True)
+        mark_m, gap_m = module["mark_m"], module["gap_m"]
+
+    return RoadMark(
+        id=mark_id,
+        codes=codes,
+        line_width_m=line_width_m,
+        lines=lines,
+        lines_spacing_m=lines_spacing_m,
+        mark_m=mark_m,
+        gap_m=gap_m,
+    )
 
 
 def _carriageway_edge(body: Any, where: str) -> CarriagewayEdge:

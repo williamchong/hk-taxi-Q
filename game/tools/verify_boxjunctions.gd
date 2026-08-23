@@ -33,12 +33,6 @@ const SURFACES: int = 1
 ## in whatever colour the importer chose, and nothing else here would notice.
 const BOXJUNCTIONS_MATERIAL: String = "res://tuning/boxjunctions.tres"
 
-## How far a triangle may tilt off horizontal before it is a fold rather than a
-## slope. The hatch takes the junction's grade per vertex, and the steepest
-## street in the region is well inside this; what it catches is a triangle at or
-## past vertical, which is a winding failure.
-const MIN_FACING_UP: float = 0.1
-
 
 func _init() -> void:
 	if not GeneratedBoxJunctions.is_present():
@@ -83,7 +77,7 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 		problems.append_array(
 			MeshContract.check_shader_material(mesh, surface, where, BOXJUNCTIONS_MATERIAL)
 		)
-		problems.append_array(_check_faces_up(mesh, surface, where))
+		problems.append_array(MeshContract.check_faces_up(mesh, surface, where, "the boxes"))
 
 	problems.append_array(_check_has_no_collision(scene_root))
 	return problems
@@ -98,62 +92,4 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 func _check_has_no_collision(scene_root: Node3D) -> PackedStringArray:
 	return MeshContract.check_no_collision(
 		scene_root, "the box junctions", "BOXJUNCTIONS_MESH_NAME in etl/pipeline/boxjunctions.py"
-	)
-
-
-## Every triangle faces the sky (`P3-18`).
-##
-## ⚠️ **This asset's version of the failure that fails to nothing.**
-## `boxjunctions.gdshader` is `cull_back`, so winding decides visibility and the
-## normal attribute does not: a mesh wound the other way is correct geometry, in
-## the correct place, with the correct material, and the city simply has no box
-## junctions in it. The tramway shipped exactly that — **5,111 of 5,112**
-## triangles facing the ground — and no frame showed it.
-##
-## Checked here as well as in `boxjunctions.json` because the two catch
-## different things. The ETL's `inverted` counts what `pipeline/boxjunctions.py`
-## built; this counts what Godot imported, and an import that mirrors an axis
-## moves one without the other.
-func _check_faces_up(mesh: Mesh, surface: int, where: String) -> PackedStringArray:
-	var arrays: Array = mesh.surface_get_arrays(surface)
-	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
-	if indices.is_empty():
-		return PackedStringArray(["%s carries no index buffer to check winding on" % where])
-
-	var inverted: int = 0
-	# `floori` of a float divide rather than an integer one: GDScript warns on
-	# integer division and `check.sh` promotes warnings to errors, so the plain
-	# form does not compile. The count is exact — an index buffer is always a
-	# multiple of three.
-	var triangles: int = floori(indices.size() / 3.0)
-	for triangle: int in triangles:
-		var a: Vector3 = vertices[indices[triangle * 3]]
-		var b: Vector3 = vertices[indices[triangle * 3 + 1]]
-		var c: Vector3 = vertices[indices[triangle * 3 + 2]]
-		# ⚠️ **Negated, because Godot winds front faces clockwise and glTF winds
-		# them counter-clockwise** — `verify_arrows.gd`'s expression, kept
-		# verbatim. The sign was established by measurement against `roads.glb`
-		# (32,222 of 32,233 down here) and `tram.glb` (5,132 of 5,132); if this
-		# ever needs revisiting, re-measure against those two rather than
-		# re-reading this comment, and do not "fix" either side to agree with
-		# the other (`Q59`).
-		var cross: Vector3 = (a - b).cross(c - a)
-		var length: float = cross.length()
-		# A collapsed triangle has no facing to judge. `boxjunctions.py` drops
-		# them at twice-area 1e-6, so one here is a rounding survivor rather
-		# than a fold.
-		if length <= 0.0:
-			continue
-		if cross.y / length < MIN_FACING_UP:
-			inverted += 1
-	if inverted == 0:
-		return PackedStringArray()
-	return PackedStringArray(
-		[
-			(
-				"%s: %d of %d triangles do not face up. " % [where, inverted, triangles]
-				+ "cull_back draws none of those — the boxes are invisible, not wrong-looking."
-			)
-		]
 	)

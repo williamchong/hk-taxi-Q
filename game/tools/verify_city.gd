@@ -22,6 +22,7 @@ const GeneratedRoadGraph = preload("res://scripts/city/generated_road_graph.gd")
 const GeneratedRoadSurface = preload("res://scripts/city/generated_road_surface.gd")
 const GeneratedArrows = preload("res://scripts/city/generated_arrows.gd")
 const GeneratedBoxJunctions = preload("res://scripts/city/generated_boxjunctions.gd")
+const GeneratedRoadMarks = preload("res://scripts/city/generated_roadmarks.gd")
 const GeneratedRailings = preload("res://scripts/city/generated_railings.gd")
 const GeneratedSigns = preload("res://scripts/city/generated_signs.gd")
 const GeneratedTramway = preload("res://scripts/city/generated_tramway.gd")
@@ -128,6 +129,13 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 	# gone would pass every check in the repo.
 	if not manifest.signs_path.is_empty():
 		problems.append_array(_check_document("signs", manifest.signs_path, GeneratedSigns.PATH))
+	# Guarded on the same terms a sixth time: `verify_roadmarks.gd` treats an
+	# absent asset as a pass, so a manifest naming `roadmarks.glb` with the file
+	# gone would otherwise pass every check here.
+	if not manifest.roadmarks_path.is_empty():
+		problems.append_array(
+			_check_document("road markings", manifest.roadmarks_path, GeneratedRoadMarks.PATH)
+		)
 	return problems
 
 

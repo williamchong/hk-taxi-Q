@@ -525,3 +525,76 @@ static func _texture_pixels(texture: Texture) -> int:
 		return -1
 	var flat := texture as Texture2D
 	return -1 if flat == null else flat.get_width() * flat.get_height()
+
+
+## How far a triangle may tilt off horizontal before it is a fold rather than a
+## slope. Ground-plane paint takes its host's grade per vertex, and the steepest
+## street in Wan Chai is well inside this; what it catches is a triangle at or
+## past vertical, which is a winding failure.
+const MIN_FACING_UP: float = 0.1
+
+
+## Every triangle of a ground-plane surface faces the sky.
+##
+## ⚠️ **The failure that fails to nothing.** `arrows.gdshader`,
+## `boxjunctions.gdshader` and `roadmarks.gdshader` are all `cull_back`, so
+## winding decides visibility and the normal attribute does not: a mesh wound the
+## other way is correct geometry, in the correct place, with the correct
+## material, and the city simply does not have it in it. The tramway shipped
+## exactly that — **5,111 of 5,112** triangles facing the ground — and no frame
+## showed it.
+##
+## Here rather than as a private copy in each verify tool for this file's usual
+## reason, and it had three callers the day it moved: `verify_arrows.gd`,
+## `verify_boxjunctions.gd` and `verify_roadmarks.gd` held byte-identical copies
+## differing only in the noun in the failure string. `check_uv2_import_settings`
+## is the precedent — it was a private copy in `verify_tiles.gd` until the road
+## surface needed it too.
+##
+## Checked here as well as in each stage's own manifest because the two catch
+## different things: the ETL's `inverted` counts what the pipeline built, this
+## counts what Godot imported, and an import that mirrors an axis moves one
+## without the other.
+static func check_faces_up(
+	mesh: Mesh, surface: int, where: String, noun: String
+) -> PackedStringArray:
+	var arrays: Array = mesh.surface_get_arrays(surface)
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+	if indices.is_empty():
+		return PackedStringArray(["%s carries no index buffer to check winding on" % where])
+
+	var inverted: int = 0
+	# `floori` of a float divide rather than an integer one: GDScript warns on
+	# integer division and `check.sh` promotes warnings to errors, so the plain
+	# form does not compile. The count is exact — an index buffer is always a
+	# multiple of three.
+	var triangle_count: int = floori(indices.size() / 3.0)
+	for triangle: int in triangle_count:
+		var a: Vector3 = vertices[indices[triangle * 3]]
+		var b: Vector3 = vertices[indices[triangle * 3 + 1]]
+		var c: Vector3 = vertices[indices[triangle * 3 + 2]]
+		# ⚠️ **Negated, because Godot winds front faces clockwise and glTF winds
+		# them counter-clockwise.** The sign was established by measurement
+		# against `roads.glb` (32,222 of 32,233 down here) and `tram.glb` (5,132
+		# of 5,132); if this ever needs revisiting, re-measure against those two
+		# rather than re-reading this comment, and do not "fix" either side to
+		# agree with the other (`Q59`).
+		var cross: Vector3 = (a - b).cross(c - a)
+		var length: float = cross.length()
+		# A collapsed triangle has no facing to judge. Every stage drops them at
+		# twice-area 1e-6, so one here is a rounding survivor rather than a fold.
+		if length <= 0.0:
+			continue
+		if cross.y / length < MIN_FACING_UP:
+			inverted += 1
+	if inverted == 0:
+		return PackedStringArray()
+	return PackedStringArray(
+		[
+			(
+				"%s: %d of %d triangles do not face up. " % [where, inverted, triangle_count]
+				+ "cull_back draws none of those — %s are invisible, not wrong-looking." % noun
+			)
+		]
+	)

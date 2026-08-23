@@ -60,6 +60,7 @@ from pipeline.fares import FARES_NAME, FARES_SCHEMA
 from pipeline.gltf import Bounds
 from pipeline.landmarks import ASSETS_NAME, ASSETS_SCHEMA, landmark_in_region
 from pipeline.railings import RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA
+from pipeline.roadmarks import ROADMARKS_MANIFEST_NAME, ROADMARKS_MANIFEST_SCHEMA
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
 from pipeline.signs import SIGNS_MANIFEST_NAME, SIGNS_MANIFEST_SCHEMA
 from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, SURFACE_NAME
@@ -143,7 +144,12 @@ CITY_NAME = "city.json"
 # missing a bundle file. The key is optional and nullable like the four before
 # it: a city whose estate publishes no sign layer ships none, and so does one
 # that publishes it and whose signs are all text-faced.
-CITY_SCHEMA = 15
+# 16 since `P3-23`: the manifest names `roadmarks.glb`, a new shipped asset —
+# the same argument a sixth time, unchanged: a v15 reader computes a shipped set
+# missing a bundle file. The key is optional and nullable like the five before
+# it: a city whose estate publishes no transverse markings ships none, and so
+# does one that publishes them and finds no road drawn across.
+CITY_SCHEMA = 16
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -198,6 +204,7 @@ INPUTS: tuple[Input, ...] = (
     Input(BOXJUNCTIONS_MANIFEST_NAME, BOXJUNCTIONS_MANIFEST_SCHEMA, "boxjunctions"),
     Input(RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA, "railings"),
     Input(SIGNS_MANIFEST_NAME, SIGNS_MANIFEST_SCHEMA, "signs"),
+    Input(ROADMARKS_MANIFEST_NAME, ROADMARKS_MANIFEST_SCHEMA, "roadmarks"),
 )
 
 
@@ -276,6 +283,7 @@ def build_region(
     boxjunctions = documents[BOXJUNCTIONS_MANIFEST_NAME]
     railings = documents[RAILINGS_MANIFEST_NAME]
     signs = documents[SIGNS_MANIFEST_NAME]
+    roadmarks = documents[ROADMARKS_MANIFEST_NAME]
 
     tiles = [
         {
@@ -368,6 +376,11 @@ def build_region(
         # ordinary answer for a region whose signs are all text-faced, because
         # `Q42` refuses those — see `pipeline/signs.py`.
         "signs": signs["asset"],
+        # `null` where the city drew no stop or give-way lines, on `tramway`'s
+        # terms and read from the stage's own manifest for its reason: a region
+        # whose markings all failed the transverse join must not be contradicted
+        # here by a constant.
+        "roadmarks": roadmarks["asset"],
         "landmarks": LANDMARKS_NAME,
         # The mesh-sourced hero models `pipeline/landmarks.py` built — shipped
         # files like the tile GLBs, unlike the committed authored heroes,
@@ -550,6 +563,8 @@ def shipped(manifest: dict) -> list[str]:
         paths.append(str(manifest["railings"]))
     if manifest.get("signs"):
         paths.append(str(manifest["signs"]))
+    if manifest.get("roadmarks"):
+        paths.append(str(manifest["roadmarks"]))
     return paths
 
 

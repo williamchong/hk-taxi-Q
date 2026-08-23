@@ -88,12 +88,17 @@ const NOT_MEASURED: float = -1.0
 ## drawn from TD's `DTAD_TS_ABV_PT`/`DTAD_TS_POLE_PT`. The same argument a fifth
 ## time — a v14 reader computes a shipped set missing a bundle file.
 ##
-## ⚠️ **All five keys are optional and may be null.** A city whose estate
-## publishes no tramway, no marking symbols, no box polygons, no railing layer or
-## no sign layer ships none — so `tramway_path`, `arrows_path`,
-## `boxjunctions_path`, `railings_path` and `signs_path` are empty for such a
-## region and that is the honest answer rather than a missing file.
-const SCHEMA_VERSION: int = 15
+## 16 since `P3-23`: the manifest names `roadmarks.glb`, the published stop and
+## give-way lines drawn from TD's `DTAD_RD_MARK_LINE`. The same argument a sixth
+## time — a v15 reader computes a shipped set missing a bundle file.
+##
+## ⚠️ **All six keys are optional and may be null.** A city whose estate
+## publishes no tramway, no marking symbols, no box polygons, no railing layer,
+## no sign layer or no transverse markings ships none — so `tramway_path`,
+## `arrows_path`, `boxjunctions_path`, `railings_path`, `signs_path` and
+## `roadmarks_path` are empty for such a region and that is the honest answer
+## rather than a missing file.
+const SCHEMA_VERSION: int = 16
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -204,6 +209,17 @@ var railings_path: String
 ## legends draws none and is correct to.
 var signs_path: String
 
+## The stop and give-way line mesh (`P3-23`), or **empty** where the region ships
+## none.
+##
+## Optional on the same terms as `boxjunctions_path`: drawn from TD's published
+## `DTAD_RD_MARK_LINE`, and a city whose estate publishes no transverse markings
+## declares no `road_marks:` block and exports a null. ⚠️ It is also empty where
+## the block is declared and every marking failed the *transverse* join — the
+## stage names its asset from what it drew, not from a constant — so empty means
+## "no stop lines in this bundle", never "no road_marks block".
+var roadmarks_path: String
+
 ## Drawn half-width of the carriageway, in metres, keyed by road-graph edge id —
 ## **one value per station** of that edge's `roadgraph.json` polyline.
 ##
@@ -278,6 +294,7 @@ static func load_manifest() -> CityManifest:
 	manifest.boxjunctions_path = _resolve(document.get("boxjunctions"))
 	manifest.railings_path = _resolve(document.get("railings"))
 	manifest.signs_path = _resolve(document.get("signs"))
+	manifest.roadmarks_path = _resolve(document.get("roadmarks"))
 	for entry: Dictionary in document.get("carriageway", []):
 		var edge: int = int(entry.get("edge", -1))
 		manifest.carriageway_half_width_m[edge] = _floats(entry, "half_width_m")
@@ -337,6 +354,8 @@ func shipped() -> PackedStringArray:
 		paths.append(railings_path)
 	if not signs_path.is_empty():
 		paths.append(signs_path)
+	if not roadmarks_path.is_empty():
+		paths.append(roadmarks_path)
 	for tile: Tile in tiles:
 		paths.append_array(tile.lods)
 	return paths

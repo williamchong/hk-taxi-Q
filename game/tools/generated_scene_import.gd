@@ -35,6 +35,11 @@ const SHADERS: Dictionary = {
 	"tramway": "res://tuning/tramway.tres",
 	"arrows": "res://tuning/arrows.tres",
 	"boxjunctions": "res://tuning/boxjunctions.tres",
+	# The published stop and give-way lines (`P3-23`). One entry for all three
+	# codes, because all three are the same white paint — what tells a give-way
+	# line from a stop line is the geometry `pipeline/roadmarks.py` built, not a
+	# material of its own.
+	"roadmarks": "res://tuning/roadmarks.tres",
 	# The three railing-layer classes (`Q61`). One source layer, one `.glb`, three
 	# meshes — and the names are the class `id`s in `hong_kong.yaml` verbatim, so
 	# adding a fourth class means adding a row here and nothing else. They share
