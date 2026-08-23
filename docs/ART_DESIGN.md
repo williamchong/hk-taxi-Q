@@ -31,6 +31,15 @@ project affordable:
 
 The art direction isn't a stylistic preference layered on top of the data. It *is* the data.
 
+⚠️ **The bundle is no longer literally image-free, and the exception proves the second bullet rather
+than breaking it.** Since `P3-20` one 256 x 256 atlas ships: the lettering on a GIVE WAY plate
+(`Q68`). It costs nothing here because the argument above is about **`merge`** — a textured building
+becomes its own draw call and 53 tiles become thousands — and the sign lettering is already its own
+primitive with its own material. `merge`'s refusal of textured meshes is untouched and is the rule
+doing the work. What changed is that "no textures" stopped being a habit and became a **declaration
+check**: `mesh_contract.gd` admits an image only where a call site names a pixel budget, and
+`PROGRESS.md`'s `Texture memory` is that number with a ceiling on it (`Q63`).
+
 ---
 
 ## Palette

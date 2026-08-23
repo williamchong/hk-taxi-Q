@@ -9000,3 +9000,219 @@ See also: `P3-16` for the facing derivation and the counters that came with it �
 second-source pattern and why a diff is never a bar · `Q64` for the failure class the 14
 disagreements belong to · `Q66` for the symmetric-assertion trap this class fell into twice ·
 `Q58` for the distribution-confined-by-its-own-bar trap `turn_sign_to_junction_m` avoids
+
+---
+
+## `Q67` — Reading a sheet by eye worked once, and there were four more errors waiting
+
+**Opened and closed 2026-08-23**, on the user's question: *"should we verify our other sign readings
+against the sheet too?"* The answer is yes, and the answer is an instrument rather than an eye.
+
+### Why it had to stop being a person looking
+
+`Q64` was found by rendering `CT174/51-1(1)C` and looking at it. That worked — it caught `TS182`
+drawn as `TS183`, 155 plates, invisible to every check in the bundle. What it did not do is
+generalise: the face table has twenty-one rows and every one of them was transcribed the same way.
+
+So `pipeline/sign_sheets.py` resolves a `TSnnn` to the cell TD drew it in, and
+`tools/sign_face_survey.py` rasterises the config's own face from `layer_polygons` and reduces both
+sides to **the area fraction and bounding-box extent of each colour inside the plate outline**. One
+number per colour per face, and draw-word agnostic: a ring drawn a third too thick, a bar drawn two
+thirds as long and an arrow drawn 17% small all move it, and the tool needs to know what none of
+them is.
+
+🔴 **THE ROW IS COUNTED, NOT READ, AND THAT IS THE RISK THE MODULE CARRIES.** The sheets have no
+text layer, so nothing on one says "this cell is 102". What says it is the filename's range plus a
+position in a grid whose rows are contiguous and whose superseded entries keep their slot as a
+greyed row. An off-by-one here is `Q64` arriving through arithmetic. ✅ **So the grid is asserted**:
+`blocks x rows` must bracket the filename's own span — at least it, and less than one block over —
+and a sheet that does not is refused rather than indexed. Every sheet the region uses recovers as
+5 x 21; three 6-block sheets carrying no code we ship are refused loudly, which is the behaviour
+wanted.
+
+⚠️ **Two things about the grid recovery are worth keeping.** The row rules are **solved for as a
+lattice**, not chained: a merged cell drops a rule and ends a chain halfway down the sheet, and a
+chain that starts on the wrong pair locks onto *double* the pitch and reads every second row —
+confidently, and wrongly. And the column blocks come from the sheet's **own regularity** rather than
+four rules at a time, because the gutter between blocks is two rules a hair apart and the grey
+"superseded" fills add spurious full-height columns.
+
+### What it found on its first run
+
+| Code | The sheet | This pipeline drew | |
+|---|---|---|---|
+| `TS414` | **black board, white chevrons** (0.81 black) | white board, black chevrons (0.23 black) | 🔴 **drawn in negative** |
+| `TS735` | the **same full rounded frame** as `TS733`/`TS734` | bordered top and bottom only | 🔴 wrong |
+| `TS115` | bar **0.868** of the diameter long, **0.187** thick | 0.66 by 0.22 | 🔴 the region's commonest sign |
+| `TS116` | white field **0.80** (ring 0.10) | 0.74 (ring 0.13) | 🔴 ring a third too thick |
+| `TS106`–`TS108` | arrow **0.85** of the disc | 0.70 | ⚠️ 17% small |
+| `TS109`/`TS110` | 0.64 | 0.55 | ⚠️ |
+| `TS102` | white field 0.79 wide, **0.072 black lettering** | 0.72, no lettering | ✅ field is fine, words are `P3-20` |
+
+🔴 **`TS414` is `Q64`'s exact failure class and the worst of them**: a real sign, a real code, drawn
+in the wrong colours, rendering perfectly for as long as nobody put it beside the drawing. The
+sheet's cell is a black board with the chevrons *cut out of it* in white — which is what `TS588` and
+`TS589` in the same table already said, and what a deviation board looks like on the street.
+
+🔴 **`TS115` is the finding about the METHOD.** The shipped bar and the published bar have the same
+*area* to within four points and are visibly different bars. A grader that compared area alone
+would have passed it. That is why the tool grades extents as well, and it is the defect the extent
+table was written against.
+
+✅ **The prohibitory ring is ONE number and TD draws it at 0.10 of the diameter everywhere** —
+`TS116` 0.099, `TS131`/`TS132`/`TS133` 0.102, `TS183` 0.100. The config expressed it three different
+ways. The three turn prohibitions were already right; `TS116` was not.
+
+✅ **`TS102`'s white triangle is NOT a defect and was nearly "fixed" into one.** The sheet's field
+measures 0.79 wide against a drawn 0.72, but its corners are **rounded** and this pipeline draws
+sharp ones — so the two agree on area to a point and a half once the lettering is counted. The
+extent column alone would have argued for a change that made the plate worse.
+
+### What is recorded rather than fixed
+
+Four rows still disagree, and all four are **glyph weight** rather than glyph size — they need
+`_straight_arrow`, `_chevrons` and `_tee_bar` re-cut, not a config number moved:
+
+- `TS733`/`TS734` black 0.286 against a drawn 0.478. 🔴 **The cause is named**: `_straight_arrow`
+  ties its stem thickness to `reach`, which on a 2.4-aspect plate is the *long* axis, so the stem
+  comes out 0.48 of the plate height where the sheet draws about 0.22. On a disc `reach == cross`
+  and the weight is right — measured 0.211 against 0.212 — so this is wrong only where the plate is
+  wide.
+- `TS589` white 0.341 against 0.139: one chevron, far too thin. ⚠️ `_chevrons` is *right* on
+  `TS414`'s wide board (0.771 against 0.809), so this is not one number to move.
+- `TS182` white 0.290 against 0.224 — the head is too narrow, `head_half` capped at `0.52 * reach`.
+- `TS615` red 0.083 against 0.035 — `_tee_bar` is small.
+
+### What the tool cannot see, and what covers it
+
+⚠️ **It looks a face up BY ITS CODE and fetches that code's cell**, so a face drawn under the wrong
+code agrees with itself perfectly — `Q64`'s own defect would still be invisible. What covers that is
+`--contact`, which writes every graded cell to one page: the same rendering-and-looking that found
+it, now reproducible instead of remembered. ⚠️ **It grades rather than checks** and exits 0 whatever
+it finds, for `carriageway_margin.py`'s reason — the truth side is a drawing whose corner radii,
+keylines and hairline offsets this pipeline does not model and should not.
+
+⚠️ **The first version of the tool graded the sheet's ink against `signs.colours` and read as a
+catastrophe.** The livery is muted and TD prints saturated process primaries, so every blue disc
+classified as *white* and `TS106` graded 1.000 white against a face that is 0.857 blue. The pipeline
+was correct throughout. The sheet is classified by **hue family** now, which is the only thing the
+two palettes share — and the difference between them is a decision (hard rule 3), not an error.
+
+### Three more things the sweep turned up away from the numbers
+
+- 🔴 **`rank` is the publisher's sheet class and three faces were silently claiming to be
+  regulatory.** `TS414` and `TS589` are on CT174/51-2 TRAFFIC SIGNS (**WARNING**), `TS615` on
+  CT174/51-3(1) (**INFORMATORY**). `rank` is a stack order, so a NO THROUGH ROAD could sit above a
+  NO ENTRY on a post they share. Also: `P3-22`'s block was headed "direction signs", and TD publishes
+  DIRECTION SIGNS as a family this block has none of.
+- ⚠️ **`TS589` carries no TC number on the sheet** — 588 and 589 both leave the cell blank — and the
+  config said `TC ...`. A missing number reads exactly like an untranscribed one, so it is written
+  down. Its description is **PERMANENT SHARP DEVIATION WITH YELLOW BORDER**; `Q65`'s table said
+  "chevron hazard marker", which is a paraphrase in a column headed *the sheet's own words*.
+- 🔴 **`pdfminer.six` was a declared dependency that nothing imported**, carrying a comment
+  describing a design that was never built. Removed.
+
+See also: `Q64` for the mislabel that made the case for this · `Q59` for transcribe-never-infer ·
+`Q60` for why absolute sizes stay authored and a *proportion* escapes that debt · `Q68` for the
+lettering the survey measures and cannot grade · `P3-22` for the four faces whose ranks were wrong
+
+---
+
+## `Q68` — The lettering is read off the drawing, and the bundle's first texture is one opaque cell
+
+**Decided 2026-08-23.** `P3-20` lands: `TS102` GIVE WAY carries **GIVE WAY / 讓** on 74 plates.
+`Q63` is the permission and `Q65` is the scope; this is what was actually built, and the three
+choices inside it that are not obvious.
+
+### The trigger
+
+The user, twice: *"讓 still not appear"*. `TS102` shipped as a bare red triangle — from the road, a
+blank plate. `Q65` had already priced the alternatives and recorded that thickening the border to
+the wordless Vienna-Convention proportion was tried and rejected in favour of the real character.
+
+### 1. The atlas is opaque RGB, with no alpha and no `discard`
+
+Three roads were open: a coverage mask read into `ALPHA`, a cutout, and this. The first two put the
+sign layer into a transparency pass or a mip-thinning artefact for a glyph a few pixels tall, and
+both would have made `ALPHA` a **dial** on a mesh whose sibling `signs.gdshader` records that it must
+not have one — `arrows.gdshader`'s misreading of `paint_opacity` waiting to happen a third time.
+
+Baking the field colour *behind* the glyph costs nothing instead. The quad sits inside the white
+triangle it matches, so its edges are invisible, and the fragment shader is one sample. ⚠️ **Baking
+the livery in does not move it out of the config**: the colours come from `signs.colours` at build
+time, so a second city's atlas is its own (hard rule 3), and the PNG is generated city data —
+gitignored, never committed, never relicensed (hard rule 7).
+
+### 2. The glyph's PLACEMENT is read, not authored
+
+The cell is cropped to the **plate's own bounding box** first, the lettering's box is measured inside
+that, and both come out as fractions of the plate. So where the words sit on the triangle is TD's
+decision. That is what let the face schema stay `(draw, colour, size)` instead of growing a
+per-layer displacement — the thing `Q65`'s note about `_bent_arrow` and `_u_turn_arrow` said to
+avoid — and `size` is simply **ignored** on a `text` layer.
+
+✅ **A free check fell out of it.** The published plate's bounding box measures aspect **1.1525**
+against the equilateral `2/sqrt(3)` = **1.1547** this pipeline draws: 0.2%. The triangle was authored
+and it happens to be the publisher's.
+
+### 3. It is a second primitive in one `.glb`, not a second file
+
+`mesh.py` refuses to merge a mesh that has UVs with one that does not, so `TEXCOORD_0` on the sign
+asset would charge all 36,616 vertices a channel — 292,928 B raw — to serve 74 plates. Two
+primitives keep the untextured majority byte-identical and scope the declaration to one surface, for
+one draw call. `PLAN.md` said "a separate `signs_text.glb`, as `railings.glb` already ships three",
+which is two different things: `railings.glb` ships three primitives **in one file**, and that is the
+precedent followed.
+
+### What it costs, measured
+
+| | |
+|---|---|
+| Atlas | **256 x 256**, one cell, **28.5 KB** PNG embedded in `signs.glb` |
+| `Texture memory` | **65,536 px** — no longer 0, and now has a ceiling |
+| Declared budget | `GeneratedSigns.TEXT_ATLAS_BUDGET_PX`, exactly 256 x 256 |
+| Lettered plates | **74**, ink coverage **27.8%** |
+| Draw calls | +1 |
+
+✅ **Both refusal paths were mutation-checked.** Halving the budget fails `verify_signs.gd` with the
+measured pixel count; breaking the import dispatch fails it with the material message. Neither is
+visible in a frame — a missing atlas samples white and the words vanish into the plate.
+
+⚠️ **`check_shader_material` cannot check this one.** The lettering material is **duplicated** at
+import so it can hold a per-region texture, and a duplicate has no `resource_path`. So
+`check_shader_source` checks the **shader** instead. It is not a softer version of its sibling and
+must not be reached for to quiet one: a surface that could share a material and does not is a draw
+call nobody asked for, and this function would pass it.
+
+### 🔴 The thing that only appeared on screen: `layer_lift_m` was already marginal
+
+The widened `Q67` glyphs made a latent failure obvious. At the shipped **12 mm** the `TS115` bar
+rendered as a truncated wedge and the `TS107` arrow lost its tail — which is *word for word* the
+symptom this constant's own comment records at 4 mm, and it was still there at 12. It is not a
+mesh defect: the bar is a clean planar quad, wound correctly, exactly 0.012 m in front of its disc.
+
+The constraint turns out to be **two-sided**, which nothing recorded:
+
+| `layer_lift_m` | |
+|---|---|
+| 0.012 | 🔴 glyphs fight their own plate; the pole shows through |
+| **0.018** | ✅ clean at 2 m, 6 m and 15 m |
+| 0.024 | 🔴 the pole reappears through the plate |
+| 0.030 | glyphs clean |
+
+⚠️ **The mechanism was not isolated and the fix is empirical.** Depth precision does not explain it
+at these distances, and the artefact is stable across distance rather than shimmering. What is
+recorded is the reproduction and the sweep, so the next person has the ladder rather than the
+conclusion. ⚠️ **The upper bound is a separate latent bug**: `face_centre` stands the plate off by
+exactly `pole_radius_m`, so the plate is *tangent* to the post and the two are coplanar along one
+line. The standoff should clear the pole rather than touch it, and that is not fixed here.
+
+### What is still refused
+
+`TS101` STOP / 停 x18. The machinery now exists and the atlas is a row, so it is one config row, one
+octagon `draw` word and a budget moved from 256x256 to 512x256 — deliberately left for its own diff,
+because `Q63`'s whole point is that an image ships when someone declares room for it.
+
+See also: `Q63` for the contract amendment this is the first user of · `Q65` for the scope that cut
+it to two cells · `Q67` for the survey that measures the lettering and cannot grade it ·
+`Q58` for `text_coverage`, which is the only thing that can see a cell baked off the words

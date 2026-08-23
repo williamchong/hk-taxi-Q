@@ -212,6 +212,28 @@ Common emoji for this project:
   ⚠️ **A railings change is also a shader change** —
   `check.sh` exits 0 on a shader that fails to compile, so render and `grep -i "shader error"`.
   Numbers in `Q60` and `Q61`.
+- **`signs.faces`, `signs.colours`, any plate dimension, or `pipeline/signs.py`'s glyph geometry:
+  also `tools/sign_face_survey.py`, and paste its two tables.** It rasterises the config's own face
+  from `layer_polygons` and diffs it against the cell TD published that code in, as **area and
+  extent per livery colour**. It is the only instrument that can see a face drawn in the wrong
+  *proportions*, and on its first run it found five: `TS414` drawn in negative, `TS735` given the
+  wrong border, `TS115`'s bar a quarter short, `TS116`'s ring a third thick, and every straight
+  mandatory arrow 17% small (`Q67`). ⚠️ **Area alone is not enough and that is the point**: the
+  shipped NO ENTRY bar and the published one have the same area to four points and are visibly
+  different bars. ⚠️ It **grades rather than checks** and exits 0 whatever it finds — the truth side
+  is a drawing whose corner radii and keylines this pipeline does not model. ⚠️ **It cannot see a
+  face on the wrong CODE**, because it looks the config up by code and fetches that code's cell;
+  `Q64`'s own defect would still be invisible. Run `--contact` and *look at the page* when the change
+  touches which code draws what.
+- **`text` layers, `text_cell_px`, `text_source`, or `pipeline/sign_text.py`: paste `signs.json`'s
+  `text_plates`, `text_facing_away`, `text_atlas_px` and `text_coverage`, before and after** — and
+  move `GeneratedSigns.TEXT_ATLAS_BUDGET_PX` in the same diff. 🔴 **This is the one place the bundle
+  ships an image**, admitted by `Q63`'s declaration check rather than in spite of it, so a budget
+  with slack in it is a metric nobody reads. ⚠️ **`text_coverage` is the detector**: a cell cropped
+  off the lettering bakes paper, and a blank square on a plate renders as the blank plate it already
+  was. ⚠️ `text_facing_away` must be **0** — a quad wound the wrong way under `cull_back` is not a
+  backwards word, it is no word. ⚠️ **A lettering change is also a shader change** — `check.sh` exits
+  0 on a shader that fails to compile, so render and `grep -i "shader error"`. Numbers in `Q68`.
 - **`pipeline/arrows.py`, the `arrows` config block, or any turn-arrow change: paste `arrows.json`'s
   two partitions (`symbols` and `candidates`), `axis_residual_deg`, `offset_m`, `against_one_way` and
   `inverted`, before and after.** There is no separate grader and there should not be: the stage grades itself,
