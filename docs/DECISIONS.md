@@ -22,6 +22,11 @@ lives in git. This file holds *why things are the way they are*.
 
 ## Index
 
+**Every record below has a row here.** It once drifted fifteen questions and seven task records
+behind the body, so a record with no row is the defect rather than a missing convenience.
+`PROGRESS.md` carries the live status; where the two disagree, the record's own `**Status.**` line
+wins.
+
 | ID | Decision | Status |
 |---|---|---|
 | `Q1` | Road Network v2 carries no Z, but `ELEVATION` encodes the grade-separation level | ✅ Closed |
@@ -75,12 +80,27 @@ lives in git. This file holds *why things are the way they are*.
 | `Q49` | A tyre spends one budget, and the handbrake that follows spins the car | 🟡 **Superseded in mechanism by `Q50`** — the friction ellipse it shipped is gone with the raycast model; its `B4` conclusion stands and is now the only route |
 | `Q50` | The shipped car is Godot's `VehicleBody3D`; `P0-5a` was right and the cost was accepted | ✅ Closed — shipped 2026-08-18 at the user's explicit instruction. Drift window measured **0.01–0.02 wide**, a handbrake tap now does nothing, and `Q49`'s ellipse is lost |
 | `Q51` | Traffic is never *sent* down an edge under one lane clear; the player is never *stopped* | ✅ Closed — the graph expresses passability and refuses nothing. `clearance.py` publishes a width per station into `city.json` (schema 9) and `RoadGraph` gains `is_routable`; `nearest_edge` is untouched. ✅ **The 21-against-26 gap is reconciled (2026-08-19): plan cell size, verified against 109 M brute-forced samples**, and `tools/clearance_reconcile.py` ratchets both counts. ✅ It found a live defect on the way — `ALONG_M = 1.0` **aliased walls**, so `is_routable` routed traffic down `e636` — and the call was **taken the same day: `ALONG_M` is `CELL_M` (0.5 m)**, the published count is **24 against 26**, and the published width is a lower bound at that cell |
-| `Q55` | The façade survey's filler guard reads greyness, and the placeholder panels are coloured | 🔴 Open — measured 2026-08-20, not fixed. **97 atlases on 93 of 2,213 buildings** carry a flat non-grey panel `is_filler` passes; 92 clear `vegetation_max`. Rejecting them moves **43 past `Q33`'s 0.46 `Δab`**, worst **54.69 `L*`**. `Q37` prescribed this fix — *"or detect each atlas's filler as its modal exactly-repeated colour"* — and only the first clause shipped |
+| `Q52` | The start line says what it is standing in, and the check is what refuses | ✅ Closed |
+| `Q53` | Markings are drawn, arrows are not, and the difference is data | ✅ Closed |
+| `Q54` | The kerbside yellow is invented, and the layer that would source it was read past | ✅ Closed by `P3-13` |
+| `Q55` | The façade survey's filler guard reads greyness, and the placeholder panels are coloured | ✅ **Closed by the guard and the sweep this record asked for.** What it was worth, measured before the fix: **97 atlases on 93 of 2,213 buildings** carry a flat non-grey panel `is_filler` passes; 92 clear `vegetation_max`. Rejecting them moves **43 past `Q33`'s 0.46 `Δab`**, worst **54.69 `L*`**. `Q37` prescribed this fix — *"or detect each atlas's filler as its modal exactly-repeated colour"* — and only the first clause shipped |
 | `Q56` | `VEHICLE_TYPE = 5` is a painted line, and a second dataset was the only way to know | ✅ Closed — `painted_vehicle_types: [1, 5]`, 2026-08-20. **+28.1% restriction** (26,065 m / 650 sides -> **33,385 m / 722**) on the evidence of Traffic Aids Drawings v2, where **93.9% of code-5 metres carry a painted line**. `tools/kerbside_source_audit.py` diffs the two sources: agreement **77.0% -> 96.4%**, kind agreement **95.7% -> 99.2%**. ⚠️ Codes 2/3/4 stay refused for a **different reason than `Q54` gave** — the drawings paint them too; the codec cannot say *which class* |
 | `Q57` | The estate publishes the markings, the width and the tram, and three records said otherwise | ✅ Closed as a survey, 2026-08-20. Nothing built, nothing fetched; four claims retired and one trap recorded |
 | `Q58` | The published tramway is **rails, not centrelines**, and it is **not on the carriageway** | ✅ Closed — `P3-14` ships `tram.glb`, 2026-08-20. `CartoTransLine TW` is one rail per part (gauge p50 **1.124 m** against 1.067 published); **only 18.8%** of cross-sections have both tracks on the drawn ribbon and **1.5%** on Hennessy, so a lane-space marking was refused on *measurement*. **+177,328 B of PCK**, one draw call, no collider. ⚠️ The deferral this replaces cited `ART_DESIGN.md` for the opposite of what it says |
+| `Q59` | The arrows are published, the ribbon is the wrong width, and lane space is the answer | ✅ Closed by `P3-15` |
 | `Q60` | The railings are **published**, their **vocabulary is not**, and the drawn kerb has already moved past them | ✅ Closed — `P3-19` ships `railings.glb`, 2026-08-22. **67.9%** of published railing metres fall inside the 1.6x ribbon, so the position is **registered** onto the drawn kerb — the one place in the bundle an extent is moved — bounded by `max_shift_m` 3.0 and priced by a `shift_m` recorded over its own refusals. `LINETYPE` has **no published domain** and no index-plan sheet defines a railing, so the whitelist is read off the code strings and every refusal is published. **+255,208 B of PCK**, one draw call, no collider. ⚠️ `roadsurface.json` gained `kerb_hidden_m` (schema 5) because **11.1%** of them join to a kerb no ribbon draws |
 | `Q61` | The fence was **solid on an objection borrowed from paint**, and the layer draws **three things**, not one | ✅ Closed — 2026-08-23. `arrows.gdshader`'s alpha objection is about *road paint*, which is genuinely opaque; a railing is 60-75% air and shipped reading as a **white concrete parapet**. `railings.glb` gains `TEXCOORD_0` as `(m along the run, m above the deck)` and the shader **integrates** the baluster coverage over each fragment's `fwidth` footprint — crisp near, uniform far, aliasing at no distance. **The first transparent material in the bundle**, so there is exactly one transparent object and nothing to sort it against. 🔴 `SYMBOL_SIZE_*` is **plot inches, null on 0 of 196 bollards** — `Q60`'s one readable dimension was never readable — so the split is by **class of object** and never within one: `railings` 9,017 m (**byte-identical to `P3-19`**), `bollards` 463 m, `barriers` 935 m. Manifest schema 1 → 2, top-level `drawn_m` **removed rather than broadened**. Three draw calls, still **no collider** |
+| `Q62` | The turn-restriction diff was built to grade the sign facing, and it refuted that | 🟡 Closed in part — it grades `Q64`'s failure class, never the facing; a facing is graded by an A/B render (`Q72`) |
+| `Q63` | The bundle carries no images, and that stays a **check** rather than becoming a habit | ✅ Closed — `mesh_contract.gd` becomes a *declaration* check: a texture is admitted only where a call site names a pixel budget |
+| `Q64` | The sign table took a sibling project's description over the publisher's own sheet, and shipped a mislabelled plate | ✅ Closed — read the codes off `CT174/51-1(1)C`, never off `signCatalogue.json`'s `desc` |
+| `Q65` | The sign estate is scoped to what tells the player where to drive | 🟡 Decided on the user's instruction — speed limits are the one item left open |
+| `Q66` | A deviation board's direction is the whole message, and nobody publishes it | 🟡 Shipped around, not answered — `boards_mirrorable` 11 / `boards_mirrored` 4 |
+| `Q67` | Reading a sheet by eye worked once, and there were four more errors waiting | ✅ Closed — `tools/sign_face_survey.py` rasterises the config's own face and diffs it against TD's cell; five defects found on the first run |
+| `Q68` | The lettering is read off the drawing, and the bundle's first texture is one opaque cell | ✅ Closed — 74 plates carry GIVE WAY / 讓 from a 256 x 256 atlas; `text_coverage` is the detector |
+| `Q69` | A stop line's host is the road it **crosses**, not the road it is nearest | ✅ Closed — `P3-23` ships `roadmarks.glb`; the two picks disagree on 90 of 209, which is the load-bearing counter |
+| `Q70` | The bundle's one image was a file the manifest had never heard of | ✅ Closed — the atlas ships as `signs_text.png`, named under `signs_text_atlas`; anything that adds a second image owes the same |
+| `Q71` | Three byte-identical shaders, and the repo had already written the rule | ✅ Closed — `marking_paint.gdshader` is shared by the arrows, the boxes and the stop lines; a layer is a parameterisation, not a shader |
+| `Q72` | A NO ENTRY faces the traffic it forbids, not the traffic it stands beside | ✅ Closed — and the counter that stood before it was a tautology certifying the wrong state; `plates_turned` must equal the drawn NO ENTRY family exactly |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -102,11 +122,16 @@ lives in git. This file holds *why things are the way they are*.
 | `P2-3` | The start line is **queried**, not written down | ✅ Done |
 | `P2-5` | Buildings get collision from a **mesh name** | ✅ Done |
 | `P2-7` | The off-grade carriageway lies on its structure | ✅ Done |
+| `P3-6` | Hero buildings are mesh-sourced and placed from `landmarks.json` | 🟡 Awaiting review — 2 of ~5 shipped |
 | `P3-7` | Window bands are procedural, and the storey height was measured | 🟡 Awaiting review |
 | `P3-7a` | The task closes at what was judged, and the riders are gated on the look | ✅ Closed as shipped — the remainder is conditional on `P3-9a` reopening `Q26` |
 | `P3-10` | The ground is a mesh class, and it collides | 🟡 Awaiting review |
 | `P3-11` | The taxi is generated, and the chassis generates it | 🟡 Awaiting review |
-| `P3-16` / `P3-17` | Signs and signal heads ship as sourced geometry — instruction classes only, no text, no textures, no invented state | ⬜ Planned — **not gated on `P3-9a`**, the user's call |
+| `P3-11c` `P3-11d` `P3-11e` `P3-11f` | The body shader, the lamp circuits, the front lamps and the roof sign — one `UV` payload, no new geometry | 🟡 Awaiting review |
+| `P3-9a` | Recognition round 0 — the city before the game | 🟡 Build cut and verified; the drivers are not booked |
+| `P3-16` | Signs ship where the **poles** are, because the sign layer is a drawing | ✅ Done — the scope is `Q65`'s, the faces are `Q67`'s and the facing is `Q72`'s |
+| `P3-17` | Signal heads ship as unlit geometry, with no invented cycle | ⬜ Not started — **not gated on `P3-9a`**, the user's call |
+| `P3-18` | Box junctions ship as **read** polygons, and two instruments caught what no frame could | ✅ Done |
 
 | Topic | Decision | Status |
 |---|---|---|

@@ -44,20 +44,18 @@ tools/check.sh
 fails to parse, so only `tools/check.sh`'s exit code means anything. This has produced a green check
 that checked nothing more than once.
 
-If you changed the ETL, the pipeline must run end to end on the Wan Chai config. If you changed the
-road surface or deck heights, also run `tools/deck_error.py` and `tools/overhang.py` — they grade the
-shipped bundle and need a built region. If you changed `pipeline/kerbside.py`, the `NSR` join or the
-kerbside markings, run `tools/kerbside_error.py` and paste its table: nothing in the checks can see a
-yellow line move to the other kerb, because a mirrored city still looks like a city. If you changed
-*which* restrictions are published — `painted_vehicle_types`, the `kinds` map — also run
-`tools/kerbside_source_audit.py` and paste its table: it diffs the published runs against a second
-source that drew the same lines, and it is the only thing that can tell a double yellow from a
-single one (`Q56`). If you moved the height ramp or the façade survey, run
-`tools/ring_weights.py` and paste what it derives: the surveyed material weights are authored against
-both, and nothing in the checks can see that they have gone stale (`Q34′`). If you moved the façade
-survey or `facade_hue.strength`, run `tools/facade_chroma.py` and paste its table into
-`docs/ART_DESIGN.md` — `Q30` is an argument about a distribution, and a stale one argues about a city
-that is not shipping.
+If you changed the ETL, the pipeline must run end to end on the Wan Chai config.
+
+**Then there are the graders, and `CLAUDE.md`'s "Before marking work done" is the list** — kept per
+change, naming which file you touched, which tool that owes and the numbers to paste. Read it there;
+a second copy of it here goes stale against it.
+
+What the list is *for* is not obvious from any single row: **`tools/check.sh` cannot see any of it.**
+A yellow line on the wrong kerb, a fence standing in the road, a sign face drawn in negative, an
+arrow turned 180° — every one of them renders perfectly, and the only thing that catches them is a
+measurement pasted into a doc where the next person can see it go stale. That is why the graders exit
+0 whatever they find: they **grade**, they do not gate, and a widening gap is a finding to go and
+look at rather than a bar to retune against.
 
 ---
 

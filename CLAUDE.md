@@ -318,7 +318,7 @@ Common emoji for this project:
   placement move `carriageway_occupancy.py`'s answer** without touching the road at all, so that one
   is owed for those too. It gates per *edge*, because `RoadGraph` routes on edges. ⚠️ It **fails
   today**; read the exit code rather than the table, and see `PROGRESS.md` for what it is failing on.
-- Update `docs/PROGRESS.md` — task status, metrics, risks, and the open-questions index.
+- Update `docs/PROGRESS.md` — task status, metrics, risks, and the questions index.
 - Record any new decision, or any question that closes, in `docs/DECISIONS.md`, keyed by its ID.
 - **Bundle size is measured from a PCK, never summed from source files.** That rule has been wrong
   in both directions once each.

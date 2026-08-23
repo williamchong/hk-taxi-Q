@@ -7,11 +7,13 @@ Lands Department's 3D Digital Map. Wan Chai and Causeway Bay, reconstructed to t
 Hong Kong driver can navigate it from memory — then widened, ramped, and tuned until it's fun to
 drive badly.
 
-> **Status:** Phase 1 complete, Phase 2 nearly done. One command turns six government map sheets and
-> a road geodatabase into a drivable city in **3 seconds**: 65 building tiles, 797 road edges with
-> turn restrictions, a drivable road surface and 29 fare nodes. Godot streams it, the car drives it,
-> the buildings and the flyovers are solid, and it plays in a browser. Left before the Phase 2 gate:
-> touch input and the on-device performance pass, both of which need a handset. See
+> **Status:** Phases 0 and 1 complete; Phase 2 is two hardware-blocked tasks from its gate, and
+> Phase 3's first build is shipped. One command turns six government map sheets and a road
+> geodatabase into a drivable city in **19 seconds**: 66 building tiles, 797 road edges with turn
+> restrictions, a drivable road surface, 48 fare nodes, and the markings, tram rails, railings and
+> traffic signs the government publishes. Godot streams it, the car drives it, the buildings and the
+> flyovers are solid, and it plays in a browser. Left before the Phase 2 gate: touch input and the
+> on-device performance pass, both of which need a handset. See
 > [`docs/PROGRESS.md`](docs/PROGRESS.md).
 
 ---
@@ -65,8 +67,8 @@ You need [Godot 4.7](https://godotengine.org/) — on macOS, `brew install --cas
 Python 3.11+.
 
 **Build the city.** The first run downloads ~320 MB of source data and caches it; after that the
-whole region rebuilds in about 3 seconds. Output is gitignored build artefact, not source, so a fresh
-clone has none of it until you do this:
+whole region rebuilds in about 19 seconds across 15 stages. Output is gitignored build artefact, not
+source, so a fresh clone has none of it until you do this:
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -e "etl/[dev]"
@@ -80,9 +82,9 @@ tools/sync_generated.sh          # copies exactly what city.json names
 **F3** cycles the debug overlay — off, then a position and frame-rate block, then the road graph's
 readout and chevrons. It starts off; see `docs/ARCHITECTURE.md` "The debug overlay".
 
-**Check it.** The ETL cannot assert engine-side facts about its own output, so six headless tools do.
-The import step is required, not optional — it builds the gitignored `game/.godot/`, without which the
-freshly synced `.glb` files have no import sidecars:
+**Check it.** The ETL cannot assert engine-side facts about its own output, so sixteen headless tools
+do. The import step is required, not optional — it builds the gitignored `game/.godot/`, without
+which the freshly synced `.glb` files have no import sidecars:
 
 ```bash
 tools/check.sh
@@ -93,17 +95,19 @@ the **only** route that fails on error. Godot exits `0` whatever happens — inc
 fails to parse — so the script reads its output and supplies the exit code the engine will not.
 Running the steps by hand and eyeballing them is how a broken check passes.
 
-The warnings sweep is the GDScript linter: 21 engine warnings are set to *error* in `project.godot`,
-including untyped declarations. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the list.
+The warnings sweep is the GDScript linter: engine warnings are set to *error* in `project.godot`,
+including untyped declarations. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the list —
+and for the three that an editor rewrite has silently dropped from the file.
 
 GitHub Actions runs the same script on every push and pull request, alongside `ruff` and `pytest`. It
 **skips the generated-asset verify tools** — a fresh checkout has no generated assets to check, and
-building them in CI would mean re-downloading the source data every push. The two that need no built
-region (`verify_beam_budget`, `verify_vehicle`) run there anyway. So the asset contracts are yours to
-run locally after a pipeline build; everything else CI catches for you.
+building them in CI would mean re-downloading the source data every push. The three that need no
+built region (`verify_beam_budget`, `verify_mesh_contract`, `verify_vehicle`) run there anyway. So
+the asset contracts are yours to run locally after a pipeline build; everything else CI catches for
+you.
 
-Two grading tools sit beside the suite and are run by hand after a build, because they need a built
-region under `etl/out`:
+Grading tools sit beside the suite and are run by hand after a build, because they need a built
+region under `etl/out`. `CLAUDE.md` lists which change owes which; two of them:
 
 ```bash
 .venv/bin/python tools/deck_error.py --city hong_kong --generated etl/out/hong_kong/wan_chai
@@ -189,7 +193,7 @@ Three kinds of thing, three answers, because they have three different owners:
 
 **This repository redistributes no government data** — `etl/sources/`, `etl/out/` and
 `game/assets/generated/` are all gitignored. You regenerate them from the government endpoints
-yourself, in about 3 seconds, and accept those terms directly. An exported *game* does ship them, and
+yourself, in about 19 seconds, and accept those terms directly. An exported *game* does ship them, and
 that is what makes the credits screen mandatory rather than nice-to-have.
 
 ⚠️ **GPLv3 conflicts with App Store distribution terms**, so store builds need a separate proprietary
