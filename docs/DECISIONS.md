@@ -8844,8 +8844,8 @@ consumes the same number to decide where the plate looks.
 `+u` is the viewer's right, so under drive-on-left the **nearside** board is the mirrored case and
 the glyphs are authored for the offside.
 
-⚠️ **The stage publishes `chevrons_drawn` and `chevrons_mirrored` so the assumption stays visible.**
-Today: **11 drawn, 4 mirrored**. A number at either extreme — 0 or 11 — would mean the kerb side had
+⚠️ **The stage publishes `boards_mirrorable` and `boards_mirrored` so the assumption stays visible.**
+Today: **11 mirrorable, 4 mirrored**. A number at either extreme — 0 or 11 — would mean the kerb side had
 stopped being read, which is the only way this fails that a frame cannot show.
 
 ### 🔴 What made it much smaller than it looked
@@ -8872,6 +8872,34 @@ wrong.
 polygon clockwise, which `cull_back` deletes outright — while `facing_away` still reads 0, because
 the *normal* is untouched. `[::-1]` restores it, and `test_a_mirrored_board_flips_its_glyphs_and_keeps_its_winding`
 is mutation-checked against removing it.
+
+### 🔴 What review caught that the build could not
+
+⚠️ **The assumption above was shipped UNPINNED, and the counters did not cover it.** Two mutations
+passed the whole suite: flipping `side > 0.0` to `side < 0.0`, which mirrors every board onto the
+wrong kerb, and authoring `_chevrons` pointing `+u`, which cancels against it. The first version of
+the mirror test asserted only that the two kerbs differ and that winding survived — both symmetric
+under a side swap, so only the winding half bit. `Q66` was a claim in a comment with nothing holding
+it. The orientation is now asserted in both halves, on the *chevrons* rather than the whole mesh —
+the plate outline and its back are symmetric about `u`, so a whole-mesh extent is identical on both
+kerbs and asserts nothing.
+
+Three more the same review found, none of which any counter or frame could show:
+
+- 🔴 **`_arrow_double` had no gap and its docstring said it did.** Both stem tails sat at exactly
+  `u = 0`, so `TS735` drew as one bar with two heads. ⚠️ **Then the fix overshot** —
+  `_straight_arrow` spans **±reach**, so an arrow occupying `gap..half_w` is *half* that long, and
+  setting `reach = half_w - gap` ran both arrows clean off the plate. A flat render showed it
+  instantly; nothing else would have.
+- **The chevron row was left-biased.** The drawn extent is short of the board by `0.08 * pitch` and
+  all of that slack sat on the right, throwing `TS589`'s single chevron 8% of the board off-centre.
+- **`_tee_bar` was coupled to `_tee` by coincidence**, inset against numbers `_tee` owned privately,
+  so a nudge to the T would have left a red bar floating on white.
+
+⚠️ **The counters are named for the *board*, not the chevron** — `mirror_by_side` is a property of
+the face, so a mirrored face carrying no chevrons would make a `chevrons_` field a lie — and one
+`_mirrors()` decides both what is drawn and what is counted, because computed twice the published
+number could drift from the mesh and nothing would say so.
 
 See also: `Q65` for the scope cut that surfaced these four codes · `Q64` for the sheet-over-catalogue
 rule they were read under · `Q15` for the level-0 restriction that took 59 of them · `Q62` for the

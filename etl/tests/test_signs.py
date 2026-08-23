@@ -282,7 +282,9 @@ class TestWhatIsBuiltIsWoundRight:
     def test_a_plate_and_its_back_agree_with_their_normals(self, spec):
         builder = _Builder()
         for facing_deg in (0.0, 45.0, 180.0, 300.0):
-            _draw_plate(builder, spec, spec.faces["TS115"], np.array([0.0, 3.0, 0.0]), facing_deg)
+            _draw_plate(
+                builder, spec, spec.faces["TS115"], np.array([0.0, 3.0, 0.0]), facing_deg, 1.0
+            )
         mesh = builder.build("signs")
         assert mesh is not None
         assert facing_away(mesh) == 0
@@ -326,7 +328,7 @@ class TestWhatIsBuiltIsWoundRight:
         `verify_signs.gd` passes `true` to `check_surface` to match.
         """
         builder = _Builder()
-        _draw_plate(builder, spec, spec.faces["TS107"], np.array([0.0, 3.0, 0.0]), 0.0)
+        _draw_plate(builder, spec, spec.faces["TS107"], np.array([0.0, 3.0, 0.0]), 0.0, 1.0)
         mesh = builder.build("signs")
         assert mesh is not None
         assert mesh.colours is not None
@@ -399,14 +401,69 @@ class TestTheFaceGeometry:
 
         nearside, offside = drawn(1.0), drawn(-1.0)
 
-        # The glyphs really did move: the same board on the two kerbs is not the
-        # same mesh. Without this the test passes on a mirror that does nothing.
-        assert not np.allclose(
-            np.sort(nearside.positions, axis=0), np.sort(offside.positions, axis=0)
+        # 🔴 **Which way it points, not merely that it moved.** The first version
+        # of this test asserted `not allclose` plus `facing_away == 0`, and both
+        # are symmetric under a side swap — so flipping `side > 0.0` to
+        # `side < 0.0`, which mirrors every board onto the wrong kerb, passed the
+        # whole suite. Found in review. `+u` is the viewer's right and the plate
+        # faces `-Z` at `facing_deg` 0, so `_plate_frame` maps `+u` onto `-X`.
+        # ⚠️ Measured on the CHEVRONS, not the mesh — the plate outline and its
+        # back are symmetric about `u`, so a whole-mesh extent is the same on
+        # both kerbs and asserts nothing. The barb tips lie on the axis, and the
+        # glyph points whichever way its tips are extreme.
+        def tip_side(mesh) -> float:
+            black = np.array([28, 28, 31])
+            keep = np.abs(mesh.colours[:, :3].astype(int) - black).sum(1) < 8
+            points = mesh.positions[keep]
+            axis_u = -points[:, 0]
+            tips = axis_u[np.isclose(points[:, 1], 0.0, atol=1e-6)]
+            return 1.0 if tips.max() == pytest.approx(axis_u.max()) else -1.0
+
+        assert tip_side(nearside) > 0.0, "a nearside board must point into the carriageway"
+        assert tip_side(offside) < 0.0, "an offside board must point the other way"
+
+        # The two really are reflections of one another, which `not allclose`
+        # only hinted at.
+        assert np.allclose(
+            np.sort(nearside.positions * np.array([-1.0, 1.0, 1.0]), axis=0),
+            np.sort(offside.positions, axis=0),
         )
         # And every triangle still faces the way its normal claims, on both.
         assert facing_away(nearside) == 0
         assert facing_away(offside) == 0
+
+    def test_a_chevron_points_minus_u_before_any_mirror(self, spec):
+        """🔴 **The other half of `Q66`, and it was unpinned too.**
+
+        `_draw_plate` mirrors for the nearside, so the glyph itself has to be
+        authored for the *offside* — pointing `-u`. Authoring it the other way
+        round and flipping the side test cancel out, and the suite stayed green
+        through exactly that pair of mutations. This is `test_a_left_arrow_
+        points_left_of_the_reader`'s argument at the one face whose direction
+        the publisher does not give.
+        """
+        points = np.vstack(layer_polygons(spec, "chevrons", 1.0, 0.3, 0.3))
+        # The barb tips lie on the axis, and they are the leftmost thing drawn.
+        on_axis = points[np.isclose(points[:, 1], 0.0)]
+        assert on_axis[:, 0].min() == pytest.approx(points[:, 0].min())
+
+    def test_a_chevron_row_is_centred_on_its_board(self, spec):
+        """The row is narrower than the plate, and the slack was all on one side
+        — 8% of `TS589`'s board width, small enough to look like nothing and
+        entirely invisible to every counter the stage publishes."""
+        for half_w, half_h in ((0.6, 0.2), (0.225, 0.29), (0.3, 0.3)):
+            points = np.vstack(layer_polygons(spec, "chevrons", 1.0, half_w, half_h))
+            assert points[:, 0].min() == pytest.approx(-points[:, 0].max(), abs=1e-9)
+
+    def test_the_two_arrows_of_a_double_do_not_touch(self, spec):
+        """⚠️ `_arrow_double`'s docstring claimed a shared gap it did not have:
+        both stem tails sat at exactly `u = 0`, so `TS735` drew as one bar with
+        two heads. Measured off the shipped layer in review, never seen."""
+        polygons = layer_polygons(spec, "arrow_double", 1.0, 0.3, 0.125)
+        right = [p for p in polygons if p[:, 0].mean() > 0.0]
+        left = [p for p in polygons if p[:, 0].mean() < 0.0]
+        assert right and left
+        assert min(p[:, 0].min() for p in right) > max(p[:, 0].max() for p in left)
 
     def test_an_unmirrored_face_ignores_the_side_it_stands_on(self, spec):
         """The flag is opt-in, so every face that does not set it is unmoved —
@@ -590,6 +647,25 @@ class TestTheStackOrder:
             "layers": [{"draw": "disc", "colour": "red", "size": 1.0}],
         }
         with pytest.raises(ValueError, match="urgent"):
+            city_with(tmp_path, block)
+
+    def test_a_non_boolean_mirror_fails_the_load(self, tmp_path):
+        """⚠️ **The one face key whose absence is invisible in a frame.**
+
+        A face that should mirror and does not draws a plausible board pointing
+        the wrong way (`Q66`), so a `mirror: "yes"` quietly read as truthy — or
+        a misspelled `mirrored:` silently ignored — is the failure this layer
+        cannot see. The type check is refused loudly; the misspelling is not,
+        and that is recorded rather than fixed, because nothing here rejects
+        unknown face keys and making it do so is a wider change than `P3-22`.
+        """
+        block = {**BLOCK, "faces": {**BLOCK["faces"]}}
+        block["faces"]["TS999"] = {
+            "plate": "disc",
+            "mirror": "yes",
+            "layers": [{"draw": "disc", "colour": "red", "size": 1.0}],
+        }
+        with pytest.raises(ValueError, match="mirror"):
             city_with(tmp_path, block)
 
     def test_a_colours_table_without_the_back_colour_fails_the_load(self, tmp_path):
@@ -802,8 +878,8 @@ class TestTheReportPartitions:
         builder = _Builder()
         centre_low = np.array([0.0, 2.4, 0.0])
         centre_high = np.array([0.0, 3.1, 0.0])
-        _draw_plate(builder, spec, spec.faces["TS115"], centre_low, 0.0)
-        _draw_plate(builder, spec, spec.faces["TS102"], centre_high, 0.0)
+        _draw_plate(builder, spec, spec.faces["TS115"], centre_low, 0.0, 1.0)
+        _draw_plate(builder, spec, spec.faces["TS102"], centre_high, 0.0, 1.0)
         mesh = builder.build("signs")
         assert mesh is not None
         low, high = mesh.aabb()

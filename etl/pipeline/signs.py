@@ -315,10 +315,14 @@ class SignReport:
     facing_away: int = 0
     # 🔴 **How many boards had their glyphs mirrored to face the carriageway**,
     # over the boards that can be. The one derived orientation in the layer, so
-    # it is published rather than assumed: a number far from half the deviation
-    # boards means the kerb side stopped being read (`Q66`).
-    chevrons_mirrored: int = 0
-    chevrons_drawn: int = 0
+    # it is published rather than assumed: a number at either extreme means the
+    # kerb side stopped being read (`Q66`).
+    #
+    # ⚠️ Named for the *board*, not the chevron: `mirror_by_side` is a property
+    # of the face, so a mirrored face that carries no chevrons would make a
+    # `chevrons_` field a lie.
+    boards_mirrorable: int = 0
+    boards_mirrored: int = 0
     triangles: int = 0
     vertices: int = 0
     bytes: int = 0
@@ -671,7 +675,7 @@ def _chevrons(half_w: float, half_h: float) -> list[np.ndarray]:
 
     🔴 **Which way they point is NOT published, and the caller decides.** These
     are built pointing `-u` and `_draw_plate` mirrors them per instance — see
-    `SignFace.mirrored` and `Q66`. TD publishes no left/right code pair for a
+    `SignFace.mirror_by_side` and `Q66`. TD publishes no left/right code pair for a
     deviation board the way it does for `TS615`/`TS616`/`TS617`, so the sheet's
     drawing is indicative and the installed board is oriented physically.
     """
@@ -682,9 +686,15 @@ def _chevrons(half_w: float, half_h: float) -> list[np.ndarray]:
     # chevron read as an arrowhead rather than a triangle.
     barb = 0.62 * pitch
     notch = 0.30 * pitch
+    # ⚠️ **Centred, because the row is narrower than the plate.** The drawn
+    # extent is `(count - 1) * pitch + barb + notch`, which is short of the
+    # board by `0.08 * pitch`; laying the first tip on the left edge put all of
+    # that slack on the right and threw `TS589`'s single chevron 8% of the board
+    # off-centre — small, visible, and invisible to every counter.
     out: list[np.ndarray] = []
+    first = -0.5 * ((count - 1) * pitch + barb + notch)
     for index in range(count):
-        tip = -half_w + index * pitch
+        tip = first + index * pitch
         # ⚠️ **Two quads, not one six-point outline, because a chevron is
         # CONCAVE.** `_Builder.polygon` fans from vertex 0 and says it takes a
         # convex polygon; fanning the notched outline emits triangles outside
@@ -721,6 +731,15 @@ def _bars_h(half_w: float, half_h: float) -> list[np.ndarray]:
     ]
 
 
+# The T's crossbar, shared by `_tee` and the red bar `_tee_bar` lays over it.
+# ⚠️ **Held here because the two were coupled only by coincidence**: the bar was
+# inset against numbers `_tee` owned privately, so a nudge to the T would have
+# left a red bar floating on white and nothing would have said so.
+_TEE_BAR_HALF = 0.42
+_TEE_BAR_BOTTOM = 0.34
+_TEE_BAR_TOP = 0.66
+
+
 def _tee(half_w: float, half_h: float) -> list[np.ndarray]:
     """The T of a NO THROUGH ROAD plate: a stem rising into a crossbar.
 
@@ -728,11 +747,12 @@ def _tee(half_w: float, half_h: float) -> list[np.ndarray]:
     builder fans convex polygons, and a T is not convex.
     """
     stem_half = 0.11 * half_w
-    bar_half = 0.42 * half_w
-    bar_bottom = 0.34 * half_h
-    bar_top = 0.66 * half_h
+    stem_bottom = -0.74 * half_h
+    bar_half = _TEE_BAR_HALF * half_w
+    bar_bottom = _TEE_BAR_BOTTOM * half_h
+    bar_top = _TEE_BAR_TOP * half_h
     return [
-        _rect_between(-stem_half, stem_half, -0.74 * half_h, bar_bottom),
+        _rect_between(-stem_half, stem_half, stem_bottom, bar_bottom),
         _rect_between(-bar_half, bar_half, bar_bottom, bar_top),
     ]
 
@@ -744,7 +764,16 @@ def _tee_bar(half_w: float, half_h: float) -> list[np.ndarray]:
     around it exactly as the cell draws it — which is also why this is its own
     word: it is a second colour at a position no centred layer can reach.
     """
-    return [_rect_between(-0.34 * half_w, 0.34 * half_w, 0.40 * half_h, 0.60 * half_h)]
+    inset_u = 0.80 * _TEE_BAR_HALF * half_w
+    inset_v = 0.06 * half_h
+    return [
+        _rect_between(
+            -inset_u,
+            inset_u,
+            _TEE_BAR_BOTTOM * half_h + inset_v,
+            _TEE_BAR_TOP * half_h - inset_v,
+        )
+    ]
 
 
 def _arrow_double(half_w: float, half_h: float) -> list[np.ndarray]:
@@ -754,10 +783,18 @@ def _arrow_double(half_w: float, half_h: float) -> list[np.ndarray]:
     so the head proportions stay the ones every other arrow plate on the post
     uses and a stack reads as one family.
     """
-    reach = 0.5 * half_w
+    # ⚠️ **The gap is real and was missing.** `reach = 0.5 * half_w` put both
+    # stem tails at exactly `u = 0`, so the two arrows abutted and drew as one
+    # bar with two heads — which is what this docstring claimed it deliberately
+    # was not. Found in review by measuring the shipped layer, not by looking.
+    gap = 0.12 * half_w
+    # ⚠️ `_straight_arrow` spans **±reach**, so an arrow occupying `gap..half_w`
+    # is half that long. Setting `reach = half_w - gap` ran both arrows clean off
+    # the plate, which the flat render showed instantly and no counter could.
+    reach = 0.5 * (half_w - gap)
     cross = 0.62 * half_h
     out: list[np.ndarray] = []
-    for turn, shift in ((-90.0, half_w - reach), (90.0, -(half_w - reach))):
+    for turn, shift in ((-90.0, gap + reach), (90.0, -(gap + reach))):
         for polygon in _rotate(_straight_arrow(reach, cross), turn):
             moved = polygon.copy()
             moved[:, 0] += shift
@@ -965,13 +1002,25 @@ class _Builder:
         return select_triangles(mesh, twice_area > _MIN_TWICE_AREA_M2)
 
 
+def _mirrors(face: SignFace, side: float) -> bool:
+    """Whether this face's glyphs are flipped to face the carriageway (`Q66`).
+
+    ⚠️ **One function because two callers must agree.** `_draw_plate` decides
+    what is drawn and `build_region` counts what was decided; computed twice,
+    the published `boards_mirrored` could drift from the mesh and nothing would
+    say so — and that counter is the *only* evidence `Q66`'s assumption is being
+    applied at all.
+    """
+    return face.mirror_by_side and side > 0.0
+
+
 def _draw_plate(
     builder: _Builder,
     spec: Signs,
     face: SignFace,
     centre: np.ndarray,
     facing_deg: float,
-    side: float = 1.0,
+    side: float,
 ) -> None:
     """One sign plate: its front layers, and the grey back it needs to be solid.
 
@@ -995,16 +1044,6 @@ def _draw_plate(
     def place(polygon: np.ndarray, lift: float, outward: np.ndarray) -> np.ndarray:
         return face_centre + polygon[:, :1] * right + polygon[:, 1:2] * up + lift * outward
 
-    # The back, wound the other way so its normal is `-n`. Drawn from the plate
-    # outline itself rather than from a box, so a triangular sign has a
-    # triangular back.
-    for polygon in layer_polygons(spec, face.plate, 1.0, half_w, half_h):
-        builder.polygon(
-            place(polygon[::-1], -spec.layer_lift_m, normal),
-            -normal,
-            spec.colours[SIGN_BACK_COLOUR],
-        )
-
     # 🔴 **The one face property that is derived rather than read** (`Q66`). A
     # deviation board's chevrons point the way traffic must go, TD publishes no
     # left/right code pair for one, and the sheet draws `TS414` pointing left
@@ -1021,7 +1060,7 @@ def _draw_plate(
     # clockwise polygon is deleted outright by `signs.gdshader`'s `cull_back`,
     # so without `[::-1]` a mirrored board would go *missing* rather than draw
     # backwards. `facing_away` would still read 0, because the normal is right.
-    mirrored = face.mirror_by_side and side > 0.0
+    mirrored = _mirrors(face, side)
 
     def oriented(polygon: np.ndarray) -> np.ndarray:
         if not mirrored:
@@ -1033,6 +1072,21 @@ def _draw_plate(
         # is about this exact case, a mirrored glyph rendering as nothing under
         # `cull_back` rather than as anything a frame would show.
         return ccw(flipped)
+
+    # The back, wound the other way so its normal is `-n`. Drawn from the plate
+    # outline itself rather than from a box, so a triangular sign has a
+    # triangular back.
+    # ⚠️ **The back is mirrored too, and that is latent rather than cosmetic.**
+    # Every plate in `SIGN_PLATES` is symmetric about `u` today, so this is a
+    # no-op — but a face layer that redraws the plate outline *is* mirrored, so
+    # an asymmetric plate would give a front and a back that disagree. Mirrored
+    # first, then reversed for `-n`.
+    for polygon in layer_polygons(spec, face.plate, 1.0, half_w, half_h):
+        builder.polygon(
+            place(oriented(polygon)[::-1], -spec.layer_lift_m, normal),
+            -normal,
+            spec.colours[SIGN_BACK_COLOUR],
+        )
 
     for depth, layer in enumerate(face.layers):
         lift = depth * spec.layer_lift_m
@@ -1356,8 +1410,8 @@ def build_region(
             _, half_h = plate_extent_m(spec, face.plate)
             centre = np.array([post.x, post.y + height + half_h, post.z])
             if face.mirror_by_side:
-                report.chevrons_drawn += 1
-                report.chevrons_mirrored += int(post.side > 0.0)
+                report.boards_mirrorable += 1
+                report.boards_mirrored += int(_mirrors(face, post.side))
             _draw_plate(builder, spec, face, centre, post.facing_deg, post.side)
             height += 2.0 * half_h + spec.stack_gap_m
 
@@ -1527,8 +1581,8 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Sig
         # visibility and the normal attribute does not. The tramway shipped 5,111
         # of 5,112 triangles facing the ground with everything else correct.
         "facing_away": report.facing_away,
-        "chevrons_drawn": report.chevrons_drawn,
-        "chevrons_mirrored": report.chevrons_mirrored,
+        "boards_mirrorable": report.boards_mirrorable,
+        "boards_mirrored": report.boards_mirrored,
         "triangles": report.triangles,
         "vertices": report.vertices,
         "bytes": report.bytes,
