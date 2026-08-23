@@ -6,7 +6,10 @@ requires-python = ">=3.11"
 license = "GPL-3.0-or-later"
 dependencies = [
     "numpy>=1.26",
+    "pdfminer.six>=20240706",
+    "pillow>=10.0",
     "pyogrio>=0.10",
+    "pypdfium2>=4.30",
     "pyproj>=3.6",
     "pyyaml>=6.0",
 ]
@@ -19,6 +22,29 @@ dependencies = [
 #
 # No glTF library: P1-2 reads and writes the format directly (`pipeline/gltf.py`
 # explains why a dependency would have saved no work).
+#
+# ---- the three P3-20 added, and what they cost ----
+#
+# 🔴 **`pillow` moved up from `dev`, and the claim it used to carry — "the core
+# pipeline stays image-free" — is no longer true.** `Q63` decided that on
+# purpose: the bundle gains its first texture, so the pipeline gains image
+# encoding. Recorded here rather than quietly deleted, because that sentence was
+# the reason the dependency was allowed to be dev-only in the first place.
+#
+# `pdfminer.six` reads the TS Index Plan sheets' **vector** ruling lines in PDF
+# points, and `pypdfium2` renders the cells those lines bound. Both are the
+# `pyogrio` argument restated: pure-Python and a self-contained binary wheel, so
+# neither needs a system install — which is what keeps the build one `pip
+# install` on a fresh machine. ⚠️ **The alternative was `mutool` + `rsvg-convert`
+# + `poppler`**, which is what `~/hk-traffic-sign-map` uses and which would have
+# put three brew packages on the critical path of every build.
+#
+# ⚠️ **The sheets are vector, not scanned** — `pdffonts` is empty but the ruling
+# lines and glyphs are paths — which is the whole reason this is a parsing job
+# rather than an image-processing one. `Q64` records where the "scanned" claim
+# came from. ⚠️ **No OCR here**: `tools/sign_atlas_survey.py` needs `tesseract`
+# to read the printed No. column, and it is a hand-run grader behind a human
+# gate, so that stays a documented system tool and never reaches a build.
 [project.optional-dependencies]
 # gdtoolkit formats GDScript, which has nothing to do with the ETL. It lives
 # here because this is the repo's only Python manifest, the same reason the
