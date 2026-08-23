@@ -414,8 +414,13 @@ class SignReport:
     no_entry_against_flow: int = 0
     # Plates turned 180 degrees off their own post because their face addresses
     # traffic coming the other way (`Q72`). The counter that makes `Q72`'s turn
-    # visible in the manifest rather than only in a frame; it should track the
-    # drawn NO ENTRY family exactly.
+    # visible in the manifest rather than only in a frame.
+    #
+    # ⚠️ **"The NO ENTRY family" means a different set here than in
+    # `no_entry_against_flow` above.** This counts every face carrying
+    # `faces_against_traffic` — `TS115` and `TS116` — where `_NO_ENTRY`, the
+    # second-source axis, is `TS115` alone. `turned_plates_agree` asserts the
+    # identity against `by_code` so it is computed rather than claimed.
     plates_turned: int = 0
 
     # 🔴 **The turn-restriction diff `Q62` named — and it does NOT grade the
@@ -1135,6 +1140,23 @@ def _plate_facing_deg(post_facing_deg: float, face: SignFace) -> float:
     return (post_facing_deg + 180.0) % 360.0
 
 
+def expected_turned(spec: Signs, report: SignReport) -> int:
+    """Drawn plates whose face is turned, counted from `by_code` (`Q72`).
+
+    The other half of `plates_turned`'s identity, derived from a different
+    tally so the two can disagree. Public because `test_signs.py` asserts it
+    against a built report as well.
+    """
+    return sum(
+        count for code, count in report.by_code.items() if spec.faces[code].faces_against_traffic
+    )
+
+
+def turned_plates_agree(spec: Signs, report: SignReport) -> bool:
+    """Whether `plates_turned` and `by_code` tell the same story."""
+    return report.plates_turned == expected_turned(spec, report)
+
+
 class _Builder:
     """Accumulates flat convex polygons, each with its own colour and normal.
 
@@ -1772,7 +1794,7 @@ def build_region(
             report.pole_offset_m.append(
                 math.hypot(sign.x - sign.published_x, sign.z - sign.published_z)
             )
-            _record_semantics(report, sign, post, plate_facing_deg, turns, by_edge[post.snap.edge])
+            _record_semantics(report, sign, post, face, turns, by_edge[post.snap.edge])
 
         _draw_pole(
             builder,
@@ -1783,6 +1805,18 @@ def build_region(
             post.y + height - spec.stack_gap_m + spec.pole_headroom_m,
         )
         report.poles_drawn += 1
+
+    # ⚠️ **Computed, not claimed** — `plates_turned` is exactly the drawn plates
+    # whose face carries `faces_against_traffic`, and both agents that reviewed
+    # `Q72` noted the identity lived only in prose. A turn that silently stops
+    # happening renders as a perfectly drawn sign giving the opposite
+    # instruction, so it is asserted where it is cheap.
+    if not turned_plates_agree(spec, report):
+        raise ValueError(
+            f"plates_turned is {report.plates_turned}, but the drawn faces carrying "
+            f"faces_against_traffic total {expected_turned(spec, report)} — the turn and "
+            f"the per-code counts disagree, so one of them is not counting what it says"
+        )
 
     mesh = builder.build(SIGNS_MESH_NAME)
     if mesh is not None:
@@ -1963,7 +1997,7 @@ def _record_semantics(
     report: SignReport,
     sign: Sign,
     post: _Placed,
-    plate_facing_deg: float,
+    face: SignFace,
     turns: dict[tuple[int, int], set[str]],
     host: dict[str, Any],
 ) -> None:
@@ -1982,8 +2016,21 @@ def _record_semantics(
     at the mouth a driver must not enter by; it addresses traffic coming the
     other way, so it faces **with** the flow. Reported from the driving seat: a
     NO ENTRY staring back down a one-way the car was legally on, with this
-    counter reading 0. It grades the **plate's** facing now, which is the facing
-    `_plate_facing_deg` turned, so it can disagree with the rule that set it.
+    counter reading 0.
+
+    ⚠️ **It is still not data-sensitive, and saying otherwise would repeat the
+    mistake it was written about.** On a one-way host `_facing_from_side` returns
+    `heading + 180` and `_plate_facing_deg` adds another 180, so a flagged plate's
+    facing is identically `heading` and this residual is identically 0. **No input
+    the pipeline can read moves it.** What it catches is `faces_against_traffic`
+    being dropped from a face, or the turn being removed from `_plate_facing_deg`
+    — a config-and-code ratchet, in the family of `facing_away`, and no more.
+
+    🟡 **A check that could disagree would have to read something
+    `_facing_from_side` did not produce** — `_downstream_node` is the obvious
+    candidate, asserting a one-way's NO ENTRY sits at the mouth traffic enters by
+    rather than the one it leaves by. That is a real second opinion, it is not
+    built, and `Q62` is where the debt lives.
 
     `no_entry_on_two_way` is a genuine second-source diff (`Q56`): a NO ENTRY
     standing on a street the graph calls two-way is a disagreement between two
@@ -2012,15 +2059,38 @@ def _record_semantics(
     publishes 34 banned lefts against 38 drawn `TS131`, so silence there is its
     coverage and not this stage's error.
     """
-    if sign.code == _NO_ENTRY:
-        if not post.one_way:
-            report.no_entry_on_two_way += 1
-            return
-        # ⚠️ **The PLATE's facing, not the post's** (`Q72`). Reading the post's
-        # here is what made this a tautology: it grades the rule that set it.
-        if directed_residual_deg(plate_facing_deg, post.snap.heading_deg) <= 90.0:
-            return
-        report.no_entry_against_flow += 1
+    # 🔴 **Two axes that overlap on one code and are not the same set.**
+    # `_NO_ENTRY` is the *second-source* axis — the codes whose instruction the
+    # road graph independently carries — and `TS116` is deliberately not in it,
+    # because ALL VEHICLES PROHIBITED BOTH DIRECTIONS makes no one-way claim for
+    # a two-way host to disagree with. `faces_against_traffic` is the *facing*
+    # axis and covers both. Keying the facing check on the flag rather than on
+    # `_NO_ENTRY` is what stops a flagged face being turned but graded by
+    # nothing: `TS116` was, on 18 of the 197 turned plates.
+    if sign.code == _NO_ENTRY and not post.one_way:
+        report.no_entry_on_two_way += 1
+        return
+    # 🔴 **The UNION, and gating on the flag alone was wrong.** Grading only
+    # flagged faces covers `TS116` but makes the check vanish exactly when the
+    # flag is dropped — the one regression it exists to catch — and a mutation
+    # test caught it doing nothing. `_NO_ENTRY` is this module's own independent
+    # claim that `TS115` is a NO ENTRY, so it grades that code whatever the
+    # config says, while the flag brings in every other turned face.
+    #
+    # ⚠️ **The residual gap, stated rather than hidden**: the flag being dropped
+    # from a face that is *not* `_NO_ENTRY` — `TS116` today — is undetectable
+    # here, because config is the only thing claiming that face should turn and a
+    # check cannot grade its own source of truth. `plates_turned` against
+    # `by_code` covers the count; nothing covers the intent.
+    if face.faces_against_traffic or sign.code == _NO_ENTRY:
+        # ⚠️ **The plate's facing, recomputed rather than passed in.** This
+        # function needs the face for the branch above anyway and `post` carries
+        # its own facing, so taking both would be two routes to one fact.
+        if post.one_way and (
+            directed_residual_deg(_plate_facing_deg(post.facing_deg, face), post.snap.heading_deg)
+            > 90.0
+        ):
+            report.no_entry_against_flow += 1
         return
 
     claimed = _TURN_PROHIBITIONS.get(sign.code)

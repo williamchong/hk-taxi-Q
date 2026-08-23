@@ -847,7 +847,7 @@ def _write_manifest(
         "slivers_dropped": report.slivers_dropped,
         "import_quantum_m": report.import_quantum_m,
         "holes_refused": report.holes_refused,
-        # ⚠️ **Must be 0.** `boxjunctions.gdshader` is `cull_back`, so winding
+        # ⚠️ **Must be 0.** `marking_paint.gdshader` is `cull_back`, so winding
         # decides visibility and the normal attribute does not (`Q58`).
         "inverted": report.inverted,
         "inverted_area_m2": round(report.inverted_area_m2, 4),

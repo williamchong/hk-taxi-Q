@@ -261,7 +261,7 @@ class TestDrawing:
         third road colour had been authored in the ETL.
 
         `TEXCOORD_0` / `TEXCOORD_1`: nothing reads them. The first draft shipped
-        a UV of glyph-local metres that `arrows.gdshader` never sampled, which is
+        a UV of glyph-local metres that `marking_paint.gdshader` never sampled, which is
         what `Q54` found `COLOR_0.a` had been doing, and it cost 59 KB.
         """
         mesh = _built(spec)

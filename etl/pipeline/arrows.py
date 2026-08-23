@@ -436,7 +436,7 @@ class _Builder:
     position the stage decided.
 
     ⚠️ **The first draft shipped a `TEXCOORD_0` of glyph-local metres that
-    `arrows.gdshader` never read**, on the reasoning that a later shader might
+    `marking_paint.gdshader` never read**, on the reasoning that a later shader might
     want it. That is precisely what `Q54` found `COLOR_0.a` had been doing —
     broadcasting an unread 255 down the whole road mesh — and it cost 59 KB of a
     257 KB asset. A channel earns its place when something reads it.
@@ -823,7 +823,7 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Arr
         # instead. Recorded here so the question is answerable from a shipped
         # artefact — `Q37`'s debt, which `Q55` was the last instance of.
         "symbol_size": report.measured(report.symbol_size),
-        # ⚠️ **Must be 0.** `arrows.gdshader` is `cull_back`, so winding decides
+        # ⚠️ **Must be 0.** `marking_paint.gdshader` is `cull_back`, so winding decides
         # visibility and the normal attribute does not. The tramway shipped
         # 5,111 of 5,112 triangles facing the ground with everything else
         # correct, and the city simply had no tramway in it.

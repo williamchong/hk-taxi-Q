@@ -3641,6 +3641,18 @@ def _signs(body: Any, where: str) -> Signs | None:
                 f"{spot}:faces_against_traffic is {against!r}; it is a flag, and the only "
                 f"thing it may say is that this face addresses traffic coming the other way"
             )
+        if mirror and against:
+            # 🔴 **Latent until a face carries both, and then silent.** `_mirrors`
+            # decides which hand the carriageway is on from `post.side` alone,
+            # and `_plate_facing_deg` turning the plate 180 degrees swaps that —
+            # so a face that both mirrors and faces against traffic would mirror
+            # its glyphs the wrong way and render perfectly. Refused at load, in
+            # the idiom of the mirror-plus-text guard above, rather than left for
+            # someone to find in a frame.
+            raise ValueError(
+                f"{spot} both mirrors and faces against traffic; mirroring reads the kerb "
+                f"side that turning the plate has just reversed. One face may do either"
+            )
         faces[str(code)] = SignFace(
             plate=plate,
             layers=tuple(layers),

@@ -341,7 +341,7 @@ class TestTheGeometry:
 
     @pytest.mark.parametrize("heading_deg", [0.0, 37.0, 90.0, 143.0, 216.0, 305.0])
     def test_every_quad_faces_up_at_every_heading(self, spec, heading_deg):
-        # ⚠️ **The failure that fails to nothing.** `roadmarks.gdshader` is
+        # ⚠️ **The failure that fails to nothing.** `marking_paint.gdshader` is
         # `cull_back`, so a quad wound the other way is correct geometry in the
         # correct place that simply is not in the city — the tramway shipped
         # 5,111 of 5,112 like that.

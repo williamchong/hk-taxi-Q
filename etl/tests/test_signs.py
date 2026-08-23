@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
+from dataclasses import replace
 from typing import Any
 
 import numpy as np
@@ -93,6 +94,21 @@ BLOCK: dict[str, Any] = {
         "TS102": {
             "plate": "triangle_down",
             "layers": [{"draw": "triangle_down", "colour": "red", "size": 1.0}],
+        },
+        # The turn prohibitions `TestTheTurnRestrictionDiff` drives. Declared so
+        # `diff` can look a face up the way `build_region` does — a hard lookup —
+        # instead of branching around a fixture gap.
+        "TS131": {
+            "plate": "disc",
+            "layers": [{"draw": "disc", "colour": "red", "size": 1.0}],
+        },
+        "TS132": {
+            "plate": "disc",
+            "layers": [{"draw": "disc", "colour": "red", "size": 1.0}],
+        },
+        "TS133": {
+            "plate": "disc",
+            "layers": [{"draw": "disc", "colour": "red", "size": 1.0}],
         },
         "TS734": {
             "plate": "rect_wide",
@@ -252,7 +268,8 @@ class TestTheFacingIsDerived:
 
         A one-way edge has traffic in one direction, so both its kerbs address
         it. Without this the offside signs came out reversed and `signs.json`
-        read `no_entry_with_flow` at **117 of 253** — the coin-toss a broken rule
+        read the counter now called `no_entry_against_flow` at **117 of 253** — the
+        coin-toss a broken rule
         produces, and the reason that counter exists.
         """
         assert _facing_from_side(0.0, 1.0, True) == pytest.approx(180.0)
@@ -294,14 +311,44 @@ class TestAPlateMayFaceTheOtherWayFromItsPost:
         assert post == pytest.approx((heading + 180.0) % 360.0)
         assert _plate_facing_deg(post, spec.faces["TS115"]) == pytest.approx(heading)
 
-    def test_the_shipped_config_marks_the_no_entry_family_and_nothing_else(self):
+    def test_the_counter_fires_when_the_turn_is_taken_away(self, spec):
+        """🔴 **The only assertion that makes `no_entry_against_flow` more than
+        decoration**, and it is deliberately a *mutation* test.
+
+        The counter cannot be moved by data — on a one-way host the post faces
+        `heading + 180` and the turn adds another 180, so a flagged plate's
+        residual is identically 0. What it guards is the flag and the turn
+        themselves, so the only honest test is to remove one and watch it fire.
+        Without this, re-inverting the comparison leaves a green suite.
+        """
+        graph = {"edges": [edge(0, APPROACH, direction="forward")], "turn_restrictions": []}
+        assert (
+            diff(spec, graph, [("TS115", NEARSIDE_POST)], one_way=True).no_entry_against_flow == 0
+        )
+
+        blunted = replace(spec.faces["TS115"], faces_against_traffic=False)
+        mutated = replace(spec, faces={**spec.faces, "TS115": blunted})
+        assert (
+            diff(mutated, graph, [("TS115", NEARSIDE_POST)], one_way=True).no_entry_against_flow
+            == 1
+        )
+
+    def test_a_turned_face_on_a_two_way_host_is_not_graded_for_flow(self, spec):
+        """`TS116` is turned but makes no one-way claim, so a two-way host is not
+        a disagreement — it must reach neither flow counter."""
+        graph = {"edges": [edge(0, APPROACH, direction="both")], "turn_restrictions": []}
+        report = diff(spec, graph, [("TS115", NEARSIDE_POST)])
+        assert report.no_entry_against_flow == 0
+        assert report.no_entry_on_two_way == 1
+
+    def test_the_shipped_config_marks_the_no_entry_family_and_nothing_else(self, hong_kong):
         """⚠️ Against `hong_kong.yaml` itself, because the flag is data.
 
         A second face quietly gaining it would turn a whole code 180 degrees
         across the region and render perfectly — `Q64`'s failure class, on the
         one field that decides which way an instruction points.
         """
-        faces = load_city("hong_kong").signs.faces
+        faces = hong_kong.signs.faces
         turned = {code for code, face in faces.items() if face.faces_against_traffic}
         assert turned == {"TS115", "TS116"}
 
@@ -1087,14 +1134,7 @@ def diff(
         # test here grade a NO ENTRY at its post's facing, which is the facing
         # the defect drew and not the one that ships.
         #
-        # `.get`, because `BLOCK` declares faces only for the codes its geometry
-        # tests draw while the turn-restriction tests below exercise `TS131` and
-        # `TS133`, which it does not. A code with no declared face cannot be
-        # turned — in a build every drawn code has one, so this is the fixture's
-        # gap and not a state the pipeline can reach.
-        face = spec.faces.get(code)
-        facing = post.facing_deg if face is None else _plate_facing_deg(post.facing_deg, face)
-        _record_semantics(report, plate, post, facing, turns, by_edge[post.snap.edge])
+        _record_semantics(report, plate, post, spec.faces[code], turns, by_edge[post.snap.edge])
     return report
 
 
@@ -1151,7 +1191,7 @@ class TestTheTurnRestrictionDiff:
 
         ⚠️ Mutation killed: dropping `one_way or` from `_facing_from_side`, which
         would make the two kerbs of a one-way disagree — and would also send
-        `no_entry_with_flow` back to the 117 of 253 that found it the first time.
+        `no_entry_against_flow` back to the 117 of 253 that found it the first time.
         """
         host = edge(0, APPROACH, from_node=1, to_node=10, direction="forward")
         near = posted("TS131", NEARSIDE_POST, one_way=True)[1]

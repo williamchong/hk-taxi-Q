@@ -219,7 +219,9 @@ Common emoji for this project:
   ENTRY in the region faced the traffic it was not addressing while `no_entry_with_flow` read 0,
   because the rule turned every one-way sign to face its traffic and 0 was unreachable. The test of
   a counter here is not whether it reads 0 but whether **any reachable configuration makes it
-  non-zero**. ⚠️ **`plates_turned` must equal the drawn NO ENTRY family exactly** (197 = `TS115` 179
+  non-zero**. ⚠️ **`no_entry_against_flow` is a config-and-code ratchet and NOT data-sensitive** —
+  no readable input moves it, only dropping the flag or the turn does — so mutate it rather than
+  reading its 0, and do not describe it as grading the city. ⚠️ **`plates_turned` must equal the drawn NO ENTRY family exactly** (197 = `TS115` 179
   + `TS116` 18); a fall means the turn stopped happening, and a turn that stops renders perfectly.
   ⚠️ **Which faces turn is config, never a code constant** — a second face quietly gaining the flag
   rotates a whole code across the region and renders perfectly (`Q64`'s class).

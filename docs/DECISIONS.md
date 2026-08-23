@@ -9537,6 +9537,13 @@ has no fade) moved into the `.tres` that owns each layer. Live references were r
 `CLAUDE.md`, `ARCHITECTURE.md`, `ART_DESIGN.md`, `mesh_contract.gd`, `railings.tres`,
 `railings.gdshader`, `signs.gdshader`, `signs_text.gdshader`.
 
+⚠️ **And seven more on the ETL side, which the first pass missed** — `arrows.py` (×2),
+`boxjunctions.py`, `roadmarks.py`, `sign_text.py`, `test_arrows.py`, `test_roadmarks.py`, each the
+`cull_back`/`inverted` or `paint_opacity` note whose engine-side half *was* repointed. Caught by a
+review pass, not by any check: a comment naming a file that no longer exists is invisible to
+`check.sh`, to `gdformat` and to `ruff`. The claim "all repointed" was made a commit too early, and
+this is what makes it true.
+
 🔴 **Closed `DECISIONS.md` entries were deliberately NOT rewritten.** They said `arrows.gdshader`
 and they were true when written; editing a closed record to agree with today's filenames falsifies
 it. The merged header carries a forwarding line saying so.
@@ -9621,12 +9628,30 @@ nothing else; `_plate_facing_deg` turns such a face 180° off its post. ⚠️ *
 property of the plate**, which is what makes back-to-back representable at all.
 
 - `plates_turned` **197**, exactly the drawn `TS115`+`TS116` count (179 + 18).
-- `no_entry_against_flow` **0** — the inverse counter, graded on the **plate's** facing so it can
-  disagree with the rule that set it.
+- `no_entry_against_flow` **0** — the inverse counter, graded on the **plate's** facing.
+  🔴 **It is still not data-sensitive, and the first draft of this entry said it was.** On a one-way
+  host the post faces `heading + 180` and the turn adds another 180, so a flagged plate's residual is
+  identically 0 and **no input the pipeline can read moves it**. Caught by review, measured over
+  300k random headings. What it guards is the config and the code, which is worth having — but
+  claiming more would have repeated the exact mistake this entry is about.
+  🟡 A check that *could* disagree has to read something `_facing_from_side` did not produce —
+  `_downstream_node`, asserting a one-way's NO ENTRY sits at the mouth traffic enters by. Not built.
 - ✅ **Mutation-checked**: with the flag off, `plates_turned` **0** and `no_entry_against_flow`
   **173**. So it is a genuine regression guard pinning config to behaviour. ⚠️ **It still cannot
   prove the rule right** — nothing published can, which is `Q62`'s standing debt — it can only
   catch the rule being dropped. Same family as `facing_away`, and said plainly rather than dressed up.
+- 🔴 **The review pass found the guard had a hole and the fix had opened it.** Grading only faces
+  carrying the flag covers `TS116` — 18 of the 197 turned plates, which reached *no* counter as first
+  shipped — but makes the check vanish precisely when the flag is dropped. A mutation test caught it
+  reading 0 where it should have read 173. It grades the **union** of the flag and `_NO_ENTRY`:
+  the flag brings in every turned face, and `_NO_ENTRY` is the module's own claim about `TS115` and
+  so survives the config being wrong. ⚠️ **One gap remains and is stated in the code**: the flag
+  dropped from a face that is not `_NO_ENTRY` is undetectable, because config is the only thing
+  claiming that face should turn and a check cannot grade its own source of truth.
+- ✅ `plates_turned == sum(by_code[c] for c in faces if faces[c].faces_against_traffic)` is now
+  **raised on**, not asserted in prose — 197 = 179 + 18 — and a face may no longer carry both
+  `mirror` and `faces_against_traffic`, which would mirror its glyphs about a kerb side the turn had
+  just reversed.
 - `signs.json` schema **2 → 3**: the rename is the bump. A reader keeping `no_entry_with_flow`'s
   meaning would read a 0 that now means the opposite thing.
 - `city.json` **not** bumped — no key and no vertex attribute changed, only where plates point

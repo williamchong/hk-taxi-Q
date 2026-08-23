@@ -25,7 +25,7 @@ a coverage mask read into `ALPHA`, a cutout with `discard`, and this. The first
 two put the sign layer into a transparency pass or a mip-thinning artefact for a
 glyph a few pixels tall, and both would have made `ALPHA` a dial on a mesh whose
 shader records that it must not have one (`railings.gdshader`'s note, and
-`arrows.gdshader`'s misreading of `paint_opacity` before it). Baking the field
+`marking_paint.gdshader`'s misreading of `paint_opacity` before it). Baking the field
 colour behind the glyph costs nothing instead: the quad sits inside the white
 field it matches, so its edges are invisible, and the shader is one sample.
 
