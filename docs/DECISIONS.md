@@ -7937,15 +7937,17 @@ drive-on-left fixes the facing outright.
 the same traffic, so both signs face back along it. Without the branch, `no_entry_with_flow` read
 **117 of 253** — the coin-toss a broken rule produces. It is now **0**, and is a self-check in the
 family of `facing_away` rather than a finding. What survives as a genuine second-source diff is
-`no_entry_on_two_way` — **7** signs standing on a street the graph calls two-way, report-only.
+`no_entry_on_two_way` — **6** signs standing on a street the graph calls two-way, report-only.
 
 ⚠️ **The derivation is ungraded.** Unlike `boxjunctions.py`'s hatch angle there is no published
 subset to check it against. That is the honest cost of the layer, and it is why
 `tests/test_signs.py` holds the frame and the side convention against `surface.mitres` itself.
 
-⚠️ **The turn-restriction half of the owed diff is not done.** `TS131`/`TS132` against the graph's
-217 unread turn restrictions needs a sign-to-node-to-turn match this stage does not do. Owed, and
-`PROGRESS.md` says so rather than letting `no_entry_on_two_way` stand in for it.
+✅ **The turn-restriction half of the owed diff landed 2026-08-23, and it refuted the claim it was
+built on.** `TS131`/`TS132`/`TS133` against the graph's 217 restrictions reads **29 agreed, 14
+disagreed, 25 unmatched** over 68 plates — a real second-source finding — but `turn_sign_on_one_way`
+is **62 of 68** and mirroring the region moves `agreed` only 29 → 30, so it does **not** grade the
+facing. `Q62` stays open on that and records why.
 
 ### Scope: shape, never text
 
@@ -8904,3 +8906,97 @@ number could drift from the mesh and nothing would say so.
 See also: `Q65` for the scope cut that surfaced these four codes · `Q64` for the sheet-over-catalogue
 rule they were read under · `Q15` for the level-0 restriction that took 59 of them · `Q62` for the
 other derived-and-ungraded claim in this layer
+
+---
+
+## `Q62` — The turn-restriction diff was built to grade the sign facing, and it refuted that
+
+**Closed in part 2026-08-23.** `P3-16` left the sign facing **derived and ungraded**: nothing in the
+dTAD estate publishes which way a sign points, `ANGLE` is the MicroStation label rotation and
+measures flat against the road, so the facing comes from host edge + kerb side + drive-on-left.
+`Q62` named the instrument that would grade it — `TS131`/`TS132` against the graph's **217 published
+turn restrictions nothing yet reads** — and called it *"the only instrument that would grade the
+facing on a population worth the name."*
+
+It is built. It is worth having. **It does not grade the facing**, and that is the finding.
+
+### The claim, and the measurement that refuted it
+
+The match runs sign → junction → movement: a sign faces the traffic it addresses, so that traffic
+runs at `facing_deg + 180`, and the junction it governs is the downstream end of its host edge in
+that direction. The junction is read back out of `facing_deg` **deliberately**, so that a facing
+derived onto the wrong kerb would send a plate to the opposite end of its edge and `turn_sign_agreed`
+would collapse.
+
+🔴 **Mirroring the whole region moved `turn_sign_agreed` from 29 to 30.**
+
+The reason is structural and was measured rather than guessed: `_facing_from_side` turns **both**
+kerbs of a one-way to face its only traffic, so on a one-way host the facing never consults the side
+at all. **`turn_sign_on_one_way` is 62 of 68.** The gradeable population for the kerb side is six
+plates — the same size as `no_entry_on_two_way`, which is exactly what this was meant to improve on.
+
+So `Q62` **stays open on the facing**, and this is recorded as why the obvious instrument cannot
+close it. The counter ships anyway, because what it does grade is real.
+
+### What it does grade, which is `Q64`'s failure class and not `Q62`'s
+
+| counter | Wan Chai | what it means |
+|---|---|---|
+| `turn_sign_on_one_way` | **62** of 68 | how much of the population cannot speak to the kerb side |
+| `turn_sign_agreed` | **29** | the graph bans the movement this plate names, at the junction ahead of it |
+| `turn_sign_disagreed` | **14** | it bans something there, and **not** what the plate names |
+| `turn_sign_unmatched` | **25** | it bans nothing out of that approach |
+| `turn_sign_to_junction_m` | p50 **18.86**, p90 49.88, p99 165.25, max 209.56, n 68 | how far each plate stands from the junction it was matched to |
+
+The partition closes: `29 + 14 + 25 == 68 == TS131 38 + TS132 25 + TS133 5`.
+
+**The 14 disagreements are the live finding.** Two independently digitised sources naming different
+banned movements at one junction is `Q56`'s pattern, and a plate carrying the wrong code renders
+perfectly — `Q64`'s failure class, found by reading a sheet rather than by looking at a frame. This
+is the only thing in the bundle that looks at it.
+
+⚠️ **`unmatched` is not a failure and must not be read as a score.** The graph publishes **34**
+banned lefts against **38** drawn `TS131`, so it plainly does not carry every signed prohibition.
+Read `agreed` against `disagreed` and leave `unmatched` out of the ratio.
+
+⚠️ **Report-only, never a bar** — `Q56`'s reason, sharpened by what the graph drops: `P1-3` reads
+`EXC_VEH_TYPE`, `PART_TIME_REST`, `EFF_ALL_DAYS` and `OTHER_REST_TYPE` and emits **none** of them,
+and one restriction in this region excludes taxis. So a part-time restriction meets a permanent
+plate as a disagreement between what two publishers chose to say, not as an error in either.
+
+### The class of a banned movement is read, because the graph publishes no type
+
+`roadgraph.json` says only *from here, through here, to there*. The class is therefore read off the
+movement's own geometry — the signed heading change across the junction, `turn_straight_deg` 30 and
+`turn_u_deg` 135 in `hong_kong.yaml`. Over all 217 published restrictions: **99 right, 80 U-turn, 34
+left, 4 straight through** and so neither — and **every one resolves**, no restriction naming an edge
+or a node that is not there. **60 of the 80** leave by the edge they arrived on.
+
+⚠️ **`TS133` is included although `Q62` named only the two turns**, and it needs no special case: a
+movement leaving by the edge it arrived on reads its two bearings off one polyline in opposite
+orders, so the change is exactly 180° and lands in the U band by construction. A branch for it was
+written and **removed as dead** — no mutation of it could change a number.
+
+### What review caught, twice, and it was the same mistake both times
+
+🔴 **Two of the first tests asserted properties that were symmetric under the mutations they named** —
+`Q66`'s defect exactly, in a class written to avoid it:
+
+- The straight-band test used a movement at **exactly 0°**, which every broken version of the sign
+  test classifies identically. It now uses two near-straight arms leaning opposite ways and asserts
+  **both** codes disagree with **both**.
+- The distance test put the post at **`t` 0.5**, where the distance to either end of a 100 m edge is
+  the same 50 m. Measuring from the wrong end was invisible. It now sits at `t` 0.25.
+
+Eight mutations are run against the shipped class and all eight fail it, including flipping the kerb
+side, swapping left for right, and letting a missing restriction read as agreement.
+
+⚠️ **The mesh is byte-identical** — 1,160,124 B, 22,278 triangles — so no re-export and no PCK
+re-measure is owed. `SIGNS_MANIFEST_SCHEMA` stays **1** and `city.json` stays **15**: `export.py`
+reads only `["asset"]`, and the rule is to bump where a consumer would be *wrong* to keep its old
+reading.
+
+See also: `P3-16` for the facing derivation and the counters that came with it · `Q56` for the
+second-source pattern and why a diff is never a bar · `Q64` for the failure class the 14
+disagreements belong to · `Q66` for the symmetric-assertion trap this class fell into twice ·
+`Q58` for the distribution-confined-by-its-own-bar trap `turn_sign_to_junction_m` avoids
