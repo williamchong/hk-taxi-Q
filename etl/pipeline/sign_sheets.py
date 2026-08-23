@@ -30,10 +30,13 @@ greyed row. So an off-by-one here is `Q64` all over again, arriving through
 arithmetic instead of through a mis-transcription.
 
 ✅ **Which is why the grid is asserted rather than assumed.** `blocks x rows`
-must equal the filename's own span exactly, and a sheet whose detected grid does
-not multiply out is refused rather than indexed. That check is what caught the
-`(TS 506 - 600)` sheet having a different row count from its siblings, and it is
-the reason a caller may trust a returned cell at all.
+must **bracket** the filename's own span — at least it, and less than one block
+over — and a sheet whose detected grid does not is refused rather than indexed.
+⚠️ It is a bracket rather than an equality because every sheet here is ruled to
+the same 5 x 21 and the short ones run out of codes partway down the last block;
+the slack is held under one block so that a wholly empty block still fails. That
+check is what refuses the three 6-block sheets, and it is the reason a caller may
+trust a returned cell at all.
 """
 
 from __future__ import annotations
@@ -41,6 +44,7 @@ from __future__ import annotations
 import io
 import re
 import zipfile
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -69,6 +73,47 @@ _RULE_MERGE_PX = 3
 # Trimmed off each cell before anything is measured, so the cell's own black
 # ruling lines are not mistaken for ink. A rule is ~4 px at `DEFAULT_SCALE`.
 _BORDER_TRIM_PX = 14
+
+
+# 🔴 **THE SHEET'S INK IS NOT THE GAME'S LIVERY.** `signs.colours` is a muted,
+# art-directed palette — `#c21a26` red, `#0d4794` blue — and TD prints saturated
+# process primaries. A nearest-livery assignment puts every blue disc on the
+# sheet more than 110 units from the game's blue, so the whole plate classifies
+# as *white*; that was the first version of `sign_face_survey.py` and it read as
+# a catastrophe against a pipeline that was correct.
+#
+# So the sheet is classified by **hue family**, which is the only thing the two
+# palettes share: whether a pixel is the red one, the blue one, the dark one or
+# the paper. The livery is deliberately not these numbers, and that difference is
+# a decision (hard rule 3) rather than an error to measure.
+#
+# ⚠️ **Here rather than in either caller, because both are on the TRUTH side.**
+# `sign_face_survey.py` measures a cell's proportions and `sign_text.py` crops
+# the lettering out of one; they must agree on where the plate stops or the atlas
+# bakes a crop of a box the survey never graded. That is not the
+# grader-independence rule — that rule keeps the survey off the *drawn* side,
+# which neither of these touches.
+INK: dict[str, Callable[[np.ndarray, np.ndarray, np.ndarray], np.ndarray]] = {
+    "red": lambda r, g, b: (r > 140) & (g < 110) & (b < 110),
+    "blue": lambda r, g, b: (b > 110) & (r < 110),
+    "black": lambda r, g, b: (r < 90) & (g < 90) & (b < 90),
+    "yellow": lambda r, g, b: (r > 170) & (g > 130) & (b < 110),
+}
+
+
+def ink_masks(cell: np.ndarray, names: Iterable[str]) -> dict[str, np.ndarray]:
+    """`INK` applied to a cell, one boolean mask per requested hue family."""
+    channels = [cell[..., index].astype(int) for index in range(3)]
+    return {name: INK[name](*channels) for name in names if name in INK}
+
+
+# 🔴 **Rendering a sheet is the expensive act in this module** — one page is
+# 10,104 x 7,143 px, ~0.7 s and 216 MB — and the 21 faces the region configures
+# live on four sheets. Without this, `sign_face_survey.py` re-rendered a page
+# per *face*: 14.8 s and 5.5 GB peak, against 3.8 s and 1.8 GB with it, for
+# byte-identical output. Keyed by scale as well as source, because a cell
+# measured at one scale is not the cell measured at another.
+_RESIDENT: dict[tuple[Path, float], Sheet] = {}
 
 
 @dataclass(frozen=True)
@@ -110,9 +155,13 @@ class Sheet:
         block, row = divmod(index, self.rows_per_block)
         x0, x1 = self.columns[block]
         y0, y1 = self.rows[row], self.rows[row + 1]
-        return self.image[
-            int(y0) + trim_px : int(y1) - trim_px, int(x0) + trim_px : int(x1) - trim_px
-        ]
+        # ⚠️ **A copy, not a view.** Basic slicing would keep this cell's whole
+        # parent sheet — 216 MB at `DEFAULT_SCALE` — alive for as long as the
+        # caller holds the crop, and `sign_face_survey.py` holds one per face to
+        # build its contact sheet. Copying costs well under a megabyte.
+        return np.ascontiguousarray(
+            self.image[int(y0) + trim_px : int(y1) - trim_px, int(x0) + trim_px : int(x1) - trim_px]
+        )
 
 
 def _index_plan(dataspec_zip: Path) -> zipfile.ZipFile:
@@ -128,6 +177,16 @@ def _index_plan(dataspec_zip: Path) -> zipfile.ZipFile:
         return zipfile.ZipFile(io.BytesIO(handle.read()))
 
 
+def _scan(inner: zipfile.ZipFile) -> dict[tuple[int, int], str]:
+    """Every `(first, last)` TS range named by a member of an open Index Plan."""
+    found: dict[tuple[int, int], str] = {}
+    for name in inner.namelist():
+        match = _SHEET_NAME.search(name)
+        if match is not None:
+            found[(int(match.group(1)), int(match.group(2)))] = name
+    return found
+
+
 def read_sheets(dataspec_zip: Path) -> dict[tuple[int, int], str]:
     """Every `(first, last)` TS range the dataspec's Index Plan publishes.
 
@@ -136,12 +195,7 @@ def read_sheets(dataspec_zip: Path) -> dict[tuple[int, int], str]:
     layer either.
     """
     with _index_plan(dataspec_zip) as inner:
-        found: dict[tuple[int, int], str] = {}
-        for name in inner.namelist():
-            match = _SHEET_NAME.search(name)
-            if match is not None:
-                found[(int(match.group(1)), int(match.group(2)))] = name
-        return found
+        return _scan(inner)
 
 
 def load_sheet(dataspec_zip: Path, code: int, *, scale: float = DEFAULT_SCALE) -> Sheet:
@@ -151,15 +205,19 @@ def load_sheet(dataspec_zip: Path, code: int, *, scale: float = DEFAULT_SCALE) -
     importing this module — which `pipeline/signs.py` does, for the atlas — does
     not put a PDF renderer on the path of every build that draws no lettering.
     """
+    cached = _RESIDENT.get((dataspec_zip, scale))
+    if cached is not None and cached.holds(code):
+        return cached
+
     import pypdfium2 as pdfium
 
-    sheets = read_sheets(dataspec_zip)
-    match = [(span, name) for span, name in sheets.items() if span[0] <= code <= span[1]]
-    if len(match) != 1:
-        raise KeyError(f"TS{code} is on {len(match)} index-plan sheets, expected exactly 1")
-    (first, last), member = match[0]
-
     with _index_plan(dataspec_zip) as inner:
+        matches = [
+            (span, name) for span, name in _scan(inner).items() if span[0] <= code <= span[1]
+        ]
+        if len(matches) != 1:
+            raise KeyError(f"TS{code} is on {len(matches)} index-plan sheets, expected exactly 1")
+        (first, last), member = matches[0]
         pdf = inner.read(member)
 
     document = pdfium.PdfDocument(pdf)
@@ -185,7 +243,7 @@ def load_sheet(dataspec_zip: Path, code: int, *, scale: float = DEFAULT_SCALE) -
             f"{member}: detected {len(columns)} blocks x {per_block} rows = {cells} cells "
             f"against a filename span of TS{first}-TS{last} = {expected}. Refusing to index it."
         )
-    return Sheet(
+    sheet = Sheet(
         name=member,
         first_code=first,
         last_code=last,
@@ -193,6 +251,12 @@ def load_sheet(dataspec_zip: Path, code: int, *, scale: float = DEFAULT_SCALE) -
         rows=tuple(rows),
         columns=tuple(columns),
     )
+    # One resident sheet per source, replaced rather than accumulated: both
+    # callers walk `sorted(codes)`, so consecutive codes land on the same sheet
+    # and a plain overwrite is the whole of the eviction policy. Holding two
+    # would double the resident 216 MB to buy nothing.
+    _RESIDENT[(dataspec_zip, scale)] = sheet
+    return sheet
 
 
 def _grid(image: np.ndarray) -> tuple[list[float], list[tuple[float, float]]]:

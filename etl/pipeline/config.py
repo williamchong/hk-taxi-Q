@@ -826,7 +826,6 @@ SIGN_TRIANGLE_DOWN = "triangle_down"
 SIGN_SLASH = "slash"
 SIGN_BACKSLASH = "backslash"
 SIGN_CHEVRONS = "chevrons"
-SIGN_BARS_H = "bars_h"
 SIGN_TEE = "tee"
 SIGN_TEE_BAR = "tee_bar"
 SIGN_ARROW_DOUBLE = "arrow_double"
@@ -838,6 +837,14 @@ SIGN_ARROW_DOWN_RIGHT = "arrow_down_right"
 SIGN_ARROW_BENT_LEFT = "arrow_bent_left"
 SIGN_ARROW_BENT_RIGHT = "arrow_bent_right"
 SIGN_ARROW_U = "arrow_u"
+# 🔴 **The one drawing that is not a polygon** (`P3-20`). `text` is a quad
+# carrying the plate's own lettering out of the atlas `pipeline/sign_text.py`
+# bakes from TD's cell — the bundle's first texture, admitted by `Q63`'s
+# amendment to `mesh_contract.gd` rather than in spite of it. Its `size` is read
+# and not authored, so unlike every word above it ignores what the config says
+# and takes its extent from the drawing; the config still names it, because a
+# face without this layer is a face whose plate has no words on it.
+SIGN_TEXT = "text"
 
 SIGN_DRAWINGS = (
     SIGN_DISC,
@@ -851,7 +858,6 @@ SIGN_DRAWINGS = (
     SIGN_SLASH,
     SIGN_BACKSLASH,
     SIGN_CHEVRONS,
-    SIGN_BARS_H,
     SIGN_TEE,
     SIGN_TEE_BAR,
     SIGN_ARROW_DOUBLE,
@@ -863,6 +869,7 @@ SIGN_DRAWINGS = (
     SIGN_ARROW_BENT_LEFT,
     SIGN_ARROW_BENT_RIGHT,
     SIGN_ARROW_U,
+    SIGN_TEXT,
 )
 
 # The plate outlines, a subset of the above: what a sign is *cut* to. A layer may
@@ -892,6 +899,13 @@ SIGN_BACK_COLOUR = "grey"
 # judged, which is `Q59`'s glyph-table rule applied to one more column.
 SIGN_RANKS = {"regulatory": 0, "warning": 1, "informatory": 2, "supplementary": 9}
 SIGN_RANK_DEFAULT = "regulatory"
+# ⚠️ **The rank is load-bearing twice**, and the second use is why the sheet
+# classes are transcribed rather than collapsed to "main or not". Besides
+# ordering the stack, `signs.py` refuses a post carrying *nothing but* plates of
+# this rank: a supplementary plate qualifies the sign above it, and with that
+# sign out of scope (`Q65`) the arrow points at nothing. See `SUPPLEMENTARY`
+# there for the Road Users' Code wording that makes the case.
+SIGN_RANK_SUPPLEMENTARY = SIGN_RANKS["supplementary"]
 
 
 @dataclass(frozen=True)
@@ -933,6 +947,17 @@ class SignFace:
     # assumption and the counter that keeps it visible.
     mirror_by_side: bool = False
 
+    @property
+    def lettered(self) -> bool:
+        """Whether any layer on this face is words rather than a shape.
+
+        The one definition, because three call sites and a grader ask it and a
+        fourth answer would be a way for them to disagree — `signs.py` gates the
+        atlas bake on it, `sign_face_survey.py` notes it, and `_signs` below
+        validates `text_cell_px`/`text_source` against it.
+        """
+        return any(layer.draw == SIGN_TEXT for layer in self.layers)
+
 
 @dataclass(frozen=True)
 class Signs:
@@ -973,8 +998,15 @@ class Signs:
     layer: SourceLayer
     # The pole layer, in the same source. Its geometry is what a sign is drawn on.
     poles: SourceLayer
-    # Publisher code -> the face drawn for it. A code absent here is refused,
-    # which is how ~2,360 text-faced signs stay out (`Q42`, hard rule 8).
+    # Publisher code -> the face drawn for it. A code absent here is refused.
+    # 🔴 **"which is how ~2,360 text-faced signs stay out (`Q42`, hard rule 8)"
+    # was here, and BOTH citations were wrong** — hard rule 8 is the "Crazy Taxi"
+    # trademark and `Q42` is the facade survey reading real *company* marks.
+    # `Q63` corrected that in `signs.py` and this copy was missed. What the
+    # whitelist is actually for is `Q65`'s scope: the time, parking, zone and
+    # vehicle-class plates are out as **content**, because a taxi game's signage
+    # is the part that instructs the driver. A drifting copy of a reason is worse
+    # than no copy, which is `mesh_contract.gd`'s own header.
     faces: dict[str, SignFace]
     # Named livery, referenced by every `SignLayer.colour`. `#rrggbb` as 0-255,
     # the form every other colour in the city file takes.
@@ -1001,6 +1033,23 @@ class Signs:
     pole_sides: int
     pole_headroom_m: float
     disc_segments: int
+    # 🔴 **Side of one atlas cell, and the bundle's only texture dimension**
+    # (`P3-20`). A face carrying a `text` layer gets one square cell of this many
+    # pixels, laid in a row, so the whole atlas is `cell_px x cell_px x cells` —
+    # which is what `mesh_contract.gd`'s declared budget is measured against and
+    # what `PROGRESS.md`'s `Texture memory` stops being 0 for. ⚠️ Raising it is a
+    # budget change and has to move a number in `generated_signs.gd` in the same
+    # diff, which is `Q63`'s entire point: an image ships when someone declares
+    # room for it, never because it fitted.
+    text_cell_px: int
+    # 🔴 **Which declared source the lettering is baked from, and it is NOT the
+    # layer's own.** `source` above is the fgdb the sign points live in; the
+    # glyphs come off the publisher's index-plan sheets, which ship in a
+    # different archive entirely. Named here rather than reached for in
+    # `sign_text.py` because hard rule 3 puts every source id in the city file —
+    # a second city letters its signs from its own publisher's drawings or from
+    # nothing.
+    text_source: str | None
     # How far each face layer floats in front of the one beneath it. Coplanar
     # layers z-fight, the reason `Arrows.lift_m` exists — but a plate is
     # vertical, so this runs along the plate normal rather than up.
@@ -3380,6 +3429,15 @@ def _signs(body: Any, where: str) -> Signs | None:
                 f"{spot}:mirror is {mirror!r}; it is a flag, and the only thing it may say is "
                 f"that this face points away from the kerb its post stands on"
             )
+        if mirror and any(layer.draw == SIGN_TEXT for layer in layers):
+            # 🔴 A mirrored glyph is `Q66`'s whole mechanism and it is exactly
+            # wrong for words: `_draw_plate` negates `u` to turn a chevron round,
+            # and lettering turned round is lettering written backwards. It would
+            # render perfectly, on a plate whose whole job is to be read.
+            raise ValueError(
+                f"{spot} both mirrors and carries a text layer; mirroring writes its "
+                f"lettering backwards. A mirrored face is a face with no words on it"
+            )
         faces[str(code)] = SignFace(
             plate=plate,
             layers=tuple(layers),
@@ -3426,6 +3484,19 @@ def _signs(body: Any, where: str) -> Signs | None:
     pole_sides = int(_require(body, "pole_sides", where))
     if pole_sides < 3:
         raise ValueError(f"{where}:pole_sides is {pole_sides}; a prism needs at least 3")
+    text_cell_px = int(body.get("text_cell_px", 0))
+    text_source = body.get("text_source")
+    lettered = sorted(code for code, face in faces.items() if face.lettered)
+    if lettered and text_cell_px < 8:
+        raise ValueError(
+            f"{where}:text_cell_px is {text_cell_px}, but {', '.join(lettered)} carry text "
+            f"layers. A cell has to be big enough to hold a character"
+        )
+    if lettered and not text_source:
+        raise ValueError(
+            f"{where}: {', '.join(lettered)} carry text layers but text_source names no "
+            f"archive to bake their lettering from"
+        )
 
     poles_body = _require(body, "poles", where)
     if not isinstance(poles_body, dict):
@@ -3466,6 +3537,8 @@ def _signs(body: Any, where: str) -> Signs | None:
         pole_sides=pole_sides,
         pole_headroom_m=lengths["pole_headroom_m"],
         disc_segments=disc_segments,
+        text_cell_px=text_cell_px,
+        text_source=None if text_source is None else str(text_source),
         layer_lift_m=lengths["layer_lift_m"],
         max_offset_m=lengths["max_offset_m"],
         max_pole_span_m=lengths["max_pole_span_m"],

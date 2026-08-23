@@ -54,6 +54,32 @@ const SHADERS: Dictionary = {
 	"vehicle_body": "res://tuning/vehicle_body.tres",
 }
 
+## The one material in the bundle that arrives carrying an image (`P3-20`).
+##
+## 🔴 **A separate table because this row cannot behave like the others.** Every
+## entry in `SHADERS` swaps in one shared resource, which is what turns 131
+## materials into one — but a shared resource cannot hold a *per-region* texture,
+## and the sign lettering's atlas is generated city data: gitignored, rebuilt per
+## region, and never committed (hard rule 7). So this row duplicates its material
+## and hands the copy the texture the glTF importer already decoded, which keeps
+## the atlas out of the repository and out of `signs_text.tres` both.
+##
+## ⚠️ **The texture is taken from the imported `BaseMaterial3D`, not loaded by
+## path.** There is no path to load: the image lives inside `signs.glb` as an
+## embedded buffer view, and asking Godot for it by name would mean unpacking a
+## second copy next to the asset. This is the only channel glTF offers, the same
+## shape as the material-name dispatch above.
+##
+## ⚠️ **If this row goes missing the lettering does not vanish — it turns
+## WHITE**, because the fallback `BaseMaterial3D` still samples the atlas but
+## loses `vertex_srgb_to_linear`, and if the uniform goes unset the shader samples
+## white and the words disappear into the plate. Neither is visible as an error.
+## `verify_signs.gd` checks the dispatch and `signs.json` publishes the cell's ink
+## coverage, because between them that is the only way to see it.
+const TEXTURED: Dictionary = {
+	"signs_text": {"material": "res://tuning/signs_text.tres", "uniform": "glyph_atlas"},
+}
+
 
 func _post_import(scene: Node) -> Object:
 	for instance: MeshInstance3D in scene.find_children("*", "MeshInstance3D", true, false):
@@ -69,6 +95,11 @@ func _apply(mesh: Mesh) -> void:
 			continue
 
 		# The glTF material name, which the importer keeps as the resource name.
+		var textured: Dictionary = TEXTURED.get(material.resource_name, {})
+		if not textured.is_empty():
+			mesh.surface_set_material(surface, _with_texture(material, textured))
+			continue
+
 		var requested: String = SHADERS.get(material.resource_name, "")
 		if not requested.is_empty():
 			# One shared resource across every tile rather than a copy each, so
@@ -97,3 +128,26 @@ func _apply(mesh: Mesh) -> void:
 			# the same, and nothing fails loudly when it is forgotten — the
 			# surface just lightens.
 			standard.vertex_color_is_srgb = true
+
+
+## The declared material, duplicated and given the imported image.
+##
+## ⚠️ **`duplicate()` and not `load()` alone.** Setting the uniform on the shared
+## resource would write a region's texture into a project-wide material, so the
+## last region imported would win and every other one would render someone else's
+## lettering — silently, since a sign with the wrong words on it is a sign.
+func _with_texture(imported: Material, row: Dictionary) -> Material:
+	var target := load(String(row["material"])) as ShaderMaterial
+	if target == null:
+		push_warning("generated_scene_import: %s is not a ShaderMaterial" % row["material"])
+		return imported
+	var source := imported as BaseMaterial3D
+	if source == null or source.albedo_texture == null:
+		# The ETL declared a textured material and shipped no texture. Left as
+		# imported so the failure reaches `check_surface`, which fails a declared
+		# texture that never arrived — the half of `Q63` written for exactly this.
+		push_warning("generated_scene_import: %s carries no image" % imported.resource_name)
+		return imported
+	var copy := target.duplicate() as ShaderMaterial
+	copy.set_shader_parameter(String(row["uniform"]), source.albedo_texture)
+	return copy

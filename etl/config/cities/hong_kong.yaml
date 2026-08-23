@@ -1104,16 +1104,29 @@ signs:
   # than drawing nothing.
   faces:
     # -- prohibitory: red ring or red disc --
+    # NO ENTRY, and the commonest code in the region.
+    # ⚠️ **0.87, measured off the cell (`Q67`), where this said 0.66.** The bar
+    # spans nearly the full disc on TD's own drawing and the shipped one stopped
+    # two thirds of the way across. Its thickness moved with it, in code rather
+    # than here — see `_NO_ENTRY_BAR_THICKNESS`, and see `Q67` for why the two
+    # bars have the same area and so agreed with each other for a year.
     TS115:                                   # NO ENTRY
       plate: disc
       layers:
         - {draw: disc, colour: red, size: 1.00}
-        - {draw: bar, colour: white, size: 0.66}
+        - {draw: bar, colour: white, size: 0.87}
+    # ALL VEHICLES PROHIBITED BOTH DIRECTIONS.
+    # ⚠️ **0.80, measured (`Q67`), where this said 0.74.** TD draws ONE
+    # prohibitory ring and draws it at 0.10 of the diameter on every face that
+    # has one — TS116 0.099, TS131/TS132/TS133 0.102, TS183 0.100 — so the white
+    # field is 0.80 throughout. The three turn prohibitions below already said
+    # 0.80; this face said 0.74, which is a ring a third too thick, and it is
+    # `Q64`'s slash finding arriving on the ring that carries it.
     TS116:                                   # ALL VEHICLES PROHIBITED BOTH DIRECTIONS
       plate: disc
       layers:
         - {draw: disc, colour: red, size: 1.00}
-        - {draw: disc, colour: white, size: 0.74}
+        - {draw: disc, colour: white, size: 0.80}
     TS131:                                   # NO LEFT TURN
       plate: disc
       layers:
@@ -1137,20 +1150,47 @@ signs:
         - {draw: slash, colour: red, size: 0.92}
 
     # -- mandatory: white symbol on a blue disc --
-    TS106: {plate: disc, layers: [{draw: disc, colour: blue, size: 1.00}, {draw: arrow_up, colour: white, size: 0.70}]}
-    TS107: {plate: disc, layers: [{draw: disc, colour: blue, size: 1.00}, {draw: arrow_left, colour: white, size: 0.70}]}
-    TS108: {plate: disc, layers: [{draw: disc, colour: blue, size: 1.00}, {draw: arrow_right, colour: white, size: 0.70}]}
-    TS109: {plate: disc, layers: [{draw: disc, colour: blue, size: 1.00}, {draw: arrow_down_left, colour: white, size: 0.70}]}
-    TS110: {plate: disc, layers: [{draw: disc, colour: blue, size: 1.00}, {draw: arrow_down_right, colour: white, size: 0.70}]}
+    #
+    # ⚠️ **The sizes here are measured (`Q67`) and every one of them said 0.70.**
+    # TD draws these arrows nearly to the rim: TS106's spans 0.85 of the disc,
+    # TS107's 0.82, and the two diagonals 0.64. A single authored 0.70 across all
+    # five is what a table filled in by eye looks like. ⚠️ The GLYPH weight was
+    # right — at 0.85 the drawn white area lands on 0.211 against the sheet's
+    # 0.212 — so this is a scale error and not an arrow that needed redrawing.
+    # ⚠️ The two bent arrows are left at 0.70: they measure 0.83 blue against a
+    # drawn 0.85, which is inside the corner-radius noise the sheet carries.
+    TS106: {plate: disc, layers: [{draw: disc, colour: blue, size: 1.00}, {draw: arrow_up, colour: white, size: 0.85}]}
+    TS107: {plate: disc, layers: [{draw: disc, colour: blue, size: 1.00}, {draw: arrow_left, colour: white, size: 0.85}]}
+    TS108: {plate: disc, layers: [{draw: disc, colour: blue, size: 1.00}, {draw: arrow_right, colour: white, size: 0.85}]}
+    TS109: {plate: disc, layers: [{draw: disc, colour: blue, size: 1.00}, {draw: arrow_down_left, colour: white, size: 0.81}]}
+    TS110: {plate: disc, layers: [{draw: disc, colour: blue, size: 1.00}, {draw: arrow_down_right, colour: white, size: 0.81}]}
     TS111: {plate: disc, layers: [{draw: disc, colour: blue, size: 1.00}, {draw: arrow_bent_left, colour: white, size: 0.70}]}
     TS112: {plate: disc, layers: [{draw: disc, colour: blue, size: 1.00}, {draw: arrow_bent_right, colour: white, size: 0.70}]}
 
-    # -- give way: the lettering is deliberately absent, see above --
+    # -- give way, and the one face in this game with words on it --
+    #
+    # ✅ **讓 SHIPS (P3-20, 2026-08-23).** This plate reads "GIVE WAY / 讓" on
+    # CT174/51-1(1)C and shipped as a bare red triangle until now — from the road
+    # a blank sign, which is how the user found it. The `text` layer is a quad
+    # carrying the lettering out of the atlas `pipeline/sign_text.py` bakes from
+    # that very cell.
+    #
+    # ⚠️ **Nothing here says where the words go.** `size` is ignored on a `text`
+    # layer: the crop, its aspect and its position on the triangle are all read
+    # off TD's drawing, which is why the face schema did not have to grow a
+    # per-layer offset. ⚠️ **It must be the LAST layer** — layers lift in order
+    # and the words go in front of the white field, not behind it.
+    #
+    # ⚠️ The white triangle stays 0.72 and is not a defect: the sheet's field
+    # measures 0.79 wide, but its corners are ROUNDED and this pipeline draws
+    # sharp ones, so the two agree on *area* to a point and a half once the
+    # lettering is counted. `Q67`'s survey is what says so.
     TS102:
       plate: triangle_down
       layers:
         - {draw: triangle_down, colour: red, size: 1.00}
         - {draw: triangle_down, colour: white, size: 0.72}
+        - {draw: text, colour: black, size: 1.00}
 
     # -- one-way and the supplementary arrow plates --
     # TS182 is regulatory: a white arrow on a blue rectangle. TS733/TS734 are
@@ -1171,11 +1211,13 @@ signs:
     # `Q64` is the record. Nothing in the bundle could see it: the mesh is
     # correct, `facing_away` is 0 and `verify_signs.gd` passes. A mislabelled
     # sign renders perfectly.
+    # ⚠️ **0.88, measured (`Q67`), where this said 0.78** — TD's one-way arrow
+    # runs to within 3% of the plate's top and bottom edges.
     TS182:
       plate: rect
       layers:
         - {draw: rect, colour: blue, size: 1.00}
-        - {draw: arrow_up, colour: white, size: 0.78}
+        - {draw: arrow_up, colour: white, size: 0.88}
     # NO STOPPING — a red saltire over a blue disc inside a red ring. The two
     # bars are two layers rather than one `cross` word so that they sit at two
     # lifts; `backslash` exists for this face and `pipeline/signs.py` says why.
@@ -1198,54 +1240,87 @@ signs:
         - {draw: disc, colour: blue, size: 0.82}
         - {draw: slash, colour: red, size: 0.95}
         - {draw: backslash, colour: red, size: 0.95}
-    # -- P3-22: direction signs whose meaning is their shape --
+    # -- P3-22: signs that tell the driver where to go, whose meaning is a shape --
     #
     # 🔴 **These four were refused with the text families and do not belong to
     # them** — Q64 at a second layer. Every row read off TD's own sheet:
-    # TS414 is TC 210 on (TS 401 - 505), TS589 TC ... on (TS 506 - 600), TS615
-    # TC 310 on (TS 601 - 700), TS735 TC 408 on (TS 701 - 805). ⚠️ Not off
+    # TS414 is TC 210 on (TS 401 - 505), TS589 on (TS 506 - 600), TS615
+    # TC 310 on (TS 601 - 700), TS735 TC 408 / PA 10 on (TS 701 - 805). ⚠️ Not off
     # signCatalogue.json, whose desc calls TS414 "PERMANENT **SPEED** DEVIATION"
     # where the sheet says **SHARP** — the second independent desc error found.
     #
-    # PERMANENT SHARP DEVIATION: black chevrons on a white board.
+    # ⚠️ **"direction signs" was the heading here and it is not what these are.**
+    # TD's own classification, off the sheet titles: TS414 and TS589 are
+    # CT174/51-2 TRAFFIC SIGNS (**WARNING**), TS615 is CT174/51-3(1) TRAFFIC SIGNS
+    # (**INFORMATORY**), TS735 is CT174/51-3(2) TRAFFIC SIGNS (**SUPPLEMENTARY**),
+    # and TD publishes DIRECTION SIGNS as a separate family this block has none
+    # of. That matters beyond the label: `rank` IS the sheet class, and three of
+    # these were silently defaulting to `regulatory` — which is a stack order, so
+    # a NO THROUGH ROAD could sit above a NO ENTRY on a post they share.
+    #
+    # ⚠️ **TS589 carries NO TC number on the sheet** — 588 and 589 both leave the
+    # "(Reg. Fig. No.)" cell blank, unlike every other row here. Written down
+    # because a missing number reads exactly like an untranscribed one.
+    #
+    # PERMANENT SHARP DEVIATION (TC 210): black chevrons on a white board.
     # 🔴 `mirror: true` — which way the chevrons point is DERIVED, not read. See
     # Q66 and `_draw_plate`; TD publishes no left/right pair for a deviation
     # board the way it does TS615/TS616/TS617, so this is the one face here
     # whose orientation the publisher does not give.
+    # 🔴 **THIS FACE SHIPPED IN NEGATIVE UNTIL 2026-08-23.** It was authored as
+    # black chevrons on a white board. TD's cell is the other way round: a
+    # **black** board with the chevrons cut out of it in **white**, which is what
+    # TS588/TS589 below already say and what a deviation board looks like on the
+    # street. Measured, the sheet's cell is 0.81 black to 0.19 white and the
+    # shipped face was 0.23 black to 0.77 white — the largest single disagreement
+    # `sign_face_survey.py` found on its first run, and the reason that tool
+    # exists. `Q64` again: it rendered perfectly the whole time.
     TS414:
       plate: board_wide
+      rank: warning
       mirror: true
       layers:
-        - {draw: board_wide, colour: white, size: 1.00}
-        - {draw: chevrons, colour: black, size: 0.86}
-    # The same board with a yellow border and the colours inverted: white
-    # chevrons on black. One chevron, because the plate is portrait and
-    # `_chevrons` takes its count from the aspect.
+        - {draw: board_wide, colour: black, size: 1.00}
+        - {draw: chevrons, colour: white, size: 0.86}
+    # PERMANENT SHARP DEVIATION WITH YELLOW BORDER — the sheet's own words, and
+    # "chevron hazard marker" was this project's paraphrase rather than a
+    # transcription. The same board with a yellow border and the colours
+    # inverted: white chevrons on black. One chevron, because the plate is
+    # portrait and `_chevrons` takes its count from the aspect.
     TS589:
       plate: board_tall
+      rank: warning
       mirror: true
       layers:
         - {draw: board_tall, colour: yellow, size: 1.00}
         - {draw: board_tall, colour: black, size: 0.84}
         - {draw: chevrons, colour: white, size: 0.68}
-    # NO THROUGH ROAD. The white T with the red bar laid over its crossbar; TD
-    # splits the side-road variants out as TS616/TS617, so the code carries the
-    # direction and this face needs no mirror.
+    # NO THROUGH ROAD (TC 310). The white T with the red bar laid over its
+    # crossbar; TD splits the side-road variants out as TS616/TS617, so the code
+    # carries the direction and this face needs no mirror.
     TS615:
       plate: rect_info
+      rank: informatory
       layers:
         - {draw: rect_info, colour: blue, size: 1.00}
         - {draw: tee, colour: white, size: 1.00}
         - {draw: tee_bar, colour: red, size: 1.00}
-    # ARROWS — the double-headed supplementary plate. ⚠️ Bordered top and bottom
-    # ONLY, where its TS733/TS734 siblings carry a full frame: read off the cell,
-    # whose opaque box reaches both side edges with no dark column.
+    # ARROWS (TC 408 / PA 10) — the double-headed supplementary plate.
+    #
+    # 🔴 **"Bordered top and bottom ONLY" was here, and it was wrong.** Re-read
+    # off CT174/51-3(2)D at 12x: the TS735 cell carries the SAME full rounded
+    # frame as its TS733/TS734 siblings. The earlier reading was taken from a
+    # crop wide enough that the side rules of the frame sat outside it, so
+    # "no dark column" was a fact about the crop. Q59's rule again — the sheet is
+    # authority, and it has to be looked at at a size that can answer the
+    # question being asked of it. `bars_h` existed only for this misreading and
+    # went with it.
     TS735:
       plate: rect_wide
       rank: supplementary
       layers:
-        - {draw: rect_wide, colour: white, size: 1.00}
-        - {draw: bars_h, colour: black, size: 1.00}
+        - {draw: rect_wide, colour: black, size: 1.00}
+        - {draw: rect_wide, colour: white, size: 0.88}
         - {draw: arrow_double, colour: black, size: 0.78}
 
     TS733:
@@ -1334,6 +1409,27 @@ signs:
   pole_sides: 6
   # How far the pole stands proud above the topmost plate.
   pole_headroom_m: 0.05
+  # ---- the lettering (P3-20), and the bundle's only texture ----
+  #
+  # 🔴 **This is where `Texture memory` stops being 0.** One square cell per
+  # lettered face, laid in a row, so the atlas is 256 x 256 for the one face that
+  # carries words today. `mesh_contract.gd` admits it only because
+  # `generated_signs.gd` declares room for exactly this many pixels — Q63's
+  # amendment — so raising this number without moving that one fails the build,
+  # which is the entire point of the amendment.
+  #
+  # ⚠️ **256 is chosen against the glyph, not against the budget.** 讓 is 24
+  # strokes and occupies rather less than half the cell's height, so it lands at
+  # roughly 120 px across; at 128 the strokes merge. A 0.68 m plate is a few tens
+  # of pixels on screen at driving distance, so there is nothing to gain above
+  # this and the mip chain does the rest.
+  text_cell_px: 256
+  # 🔴 **A DIFFERENT ARCHIVE from `source` above.** The sign points come from the
+  # 218 MB fgdb; the glyphs are cut out of the publisher's index-plan sheets,
+  # which ship inside the 8.5 MB dataspec zip the layer's own field spec is read
+  # from. Both are already fetched.
+  text_source: traffic_aids_data_dictionary
+
   # Segments in a drawn disc. A 600 mm disc at driving distance is a few pixels
   # across; twelve is already round and twenty-four is twice the mesh.
   disc_segments: 12
@@ -1350,7 +1446,7 @@ signs:
   # said so. Only a close render showed it. 12 mm is clean at every distance
   # tried, and a sign plate is a rendering device here rather than a thickness —
   # the paint on a real plate is coplanar.
-  layer_lift_m: 0.012
+  layer_lift_m: 0.018
 
   # ---- the registration, and why a published position is moved ----
   # 🔴 **77.3% of this region's sign poles are surveyed INSIDE the drawn

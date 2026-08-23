@@ -223,25 +223,66 @@ static func check_collision(node: Node) -> PackedStringArray:
 ##
 ## Here rather than in either caller because the tiles and the road surface ask
 ## the identical question of different paths, which is what this file is for.
+## The message both checks below give when a surface carries no ShaderMaterial.
+##
+## Extracted because the two were byte-identical apart from which name they
+## quoted, and this file exists to stop exactly that — a copy that drifts is the
+## copy that quietly stops catching anything.
+static func _no_shader_material(where: String, expected: String) -> PackedStringArray:
+	return PackedStringArray(
+		[
+			(
+				(
+					"%s did not import with a ShaderMaterial; the ETL's material name and "
+					+ "`tools/generated_scene_import.gd` have stopped agreeing, so it is "
+					+ "drawing as though %s did not exist"
+				)
+				% [where, expected]
+			)
+		]
+	)
+
+
 static func check_shader_material(
 	mesh: Mesh, surface: int, where: String, expected: String
 ) -> PackedStringArray:
 	var material := mesh.surface_get_material(surface) as ShaderMaterial
 	if material == null:
-		return PackedStringArray(
-			[
-				(
-					(
-						"%s did not import with a ShaderMaterial; the ETL's material name and "
-						+ "`tools/generated_scene_import.gd` have stopped agreeing, so it is "
-						+ "drawing as though %s did not exist"
-					)
-					% [where, expected]
-				)
-			]
-		)
+		return _no_shader_material(where, expected)
 	if material.resource_path != expected:
 		return PackedStringArray(["%s uses %s, not %s" % [where, material.resource_path, expected]])
+	return PackedStringArray()
+
+
+## The same dispatch check for a material that had to be **duplicated** (`P3-20`).
+##
+## 🔴 **A duplicate has no `resource_path`**, so `check_shader_material` above
+## reports it as using "" and fails a correctly wired surface. That is not a flaw
+## in it: comparing the path is the stronger check and every shared material in
+## this bundle should keep being held to it. What cannot is the sign lettering,
+## whose material carries a **per-region texture** — generated city data,
+## gitignored, different for every region — so it cannot be one shared resource
+## and cannot be baked into the committed `.tres` either.
+##
+## So the identity to check is the **shader** rather than the resource, which is
+## the thing the `.tres` would have contributed anyway. `expected_material` is
+## carried only so the failure names the file a reader has to go and open.
+##
+## ⚠️ **Do not reach for this to quiet a failing `check_shader_material`.** The
+## two are not interchangeable: a surface that could share a material and does
+## not is a draw call nobody asked for, and this function would pass it.
+static func check_shader_source(
+	mesh: Mesh, surface: int, where: String, expected_shader: String, expected_material: String
+) -> PackedStringArray:
+	var material := mesh.surface_get_material(surface) as ShaderMaterial
+	if material == null:
+		return _no_shader_material(where, expected_material)
+	var shader: Shader = material.shader
+	if shader == null or shader.resource_path != expected_shader:
+		var found: String = "no shader" if shader == null else shader.resource_path
+		return PackedStringArray(
+			["%s runs %s, not %s (from %s)" % [where, found, expected_shader, expected_material]]
+		)
 	return PackedStringArray()
 
 

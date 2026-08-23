@@ -147,17 +147,18 @@ from pipeline.config import (
     SIGN_BACK_COLOUR,
     SIGN_BACKSLASH,
     SIGN_BAR,
-    SIGN_BARS_H,
     SIGN_BOARD_TALL,
     SIGN_BOARD_WIDE,
     SIGN_CHEVRONS,
     SIGN_DISC,
+    SIGN_RANK_SUPPLEMENTARY,
     SIGN_RECT,
     SIGN_RECT_INFO,
     SIGN_RECT_WIDE,
     SIGN_SLASH,
     SIGN_TEE,
     SIGN_TEE_BAR,
+    SIGN_TEXT,
     SIGN_TRIANGLE_DOWN,
     CityConfig,
     GameTransform,
@@ -167,11 +168,12 @@ from pipeline.config import (
 )
 from pipeline.documents import read_document, write_document
 from pipeline.fares import Segments, Snap
-from pipeline.fetch import source_reads
-from pipeline.gltf import MeshData, write_glb
+from pipeline.fetch import cached_source, source_reads
+from pipeline.gltf import MeshData, Texture, write_glb
 from pipeline.mesh import select_triangles
 from pipeline.railings import AT_GRADE, facing_away
 from pipeline.roads import ROADGRAPH_NAME, plan_lengths, read_graph
+from pipeline.sign_text import TextAtlas, build_atlas
 from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA
 
 log = logging.getLogger(__name__)
@@ -192,6 +194,17 @@ SIGNS_MESH_NAME = "signs"
 # string onto `tuning/signs.tres` and nothing else.
 SIGNS_MATERIAL = "signs"
 
+# 🔴 **The lettering's own primitive, and it is separate for a reason that is
+# not aesthetic** (`P3-20`, `Q65`). `mesh.py` refuses to merge a mesh that has
+# UVs with one that does not, so putting `TEXCOORD_0` on the sign asset would
+# cost all 36,616 of its vertices a channel — 292,928 B raw, ~143 KB of PCK —
+# paid by 746 plates and 572 posts to serve the handful that carry words. Two
+# primitives in one `.glb` keeps the untextured majority byte-identical and
+# scopes the texture declaration to one surface, the shape `railings.glb`
+# already ships three of. Cost: one draw call.
+SIGNS_TEXT_MESH_NAME = "signs_text"
+SIGNS_TEXT_MATERIAL = "signs_text"
+
 # Below this, twice a triangle's area means it has collapsed. The bar
 # `surface.py`, `tramway.py` and `arrows.py` all set.
 _MIN_TWICE_AREA_M2 = 1e-6
@@ -206,9 +219,26 @@ _MIN_TWICE_AREA_M2 = 1e-6
 # It shipped at **0.13** until 2026-08-23 — 34% too thick on every face that has
 # one, which is what authoring a proportion by eye costs. `Q64`.
 #
-# ⚠️ **`SIGN_BAR`'s 0.22 is deliberately still inline**, and the difference is
-# the evidence rather than an oversight: that one is authored, this one is not.
+# ⚠️ **`SIGN_BAR` is measured too since `Q67`**, and this comment used to say the
+# opposite — that its 0.22 stayed inline because it was authored where this is
+# not. `sign_face_survey.py` measured it off the same cells: see
+# `_NO_ENTRY_BAR_THICKNESS`.
 _SLASH_THICKNESS = 0.097
+
+# The white bar of a NO ENTRY plate, as a fraction of the disc's diameter — the
+# same "on a disc `half_height_m` is the radius" identity `_SLASH_THICKNESS`
+# uses, so this coefficient is the diameter fraction directly.
+#
+# ⚠️ **Measured, not authored** (`Q67`). `TS115`'s cell reads a bar **0.868** of
+# the diameter long and **0.187** thick. This layer authored 0.66 by 0.22 — a
+# quarter short and a sixth too thick — on the region's commonest sign by a wide
+# margin, so it is the face the player sees wrong most often.
+#
+# 🔴 **The two bars are the same AREA to a tenth**, 0.145 against 0.162, and that
+# is the finding rather than the numbers: a grader that compared area alone would
+# have passed a visibly different bar. `sign_face_survey.py` grades extents for
+# this reason, and this is the defect it was written against.
+_NO_ENTRY_BAR_THICKNESS = 0.187
 
 
 @dataclass
@@ -227,6 +257,7 @@ class SignReport:
         signs == not_whitelisted + on_structure + empty_geometry + candidates
         candidates == drawn + no_pole + ambiguous_pole + pole_too_far + too_far
                       + no_ribbon + over_shift + in_carriageway
+                      + orphan_supplementary
 
     And a third, over the turn prohibitions alone:
 
@@ -257,6 +288,38 @@ class SignReport:
     # 🔴 Plates on posts still standing in the drawn carriageway after
     # registration, where several widened ribbons overlap and no footway survives.
     in_carriageway: int = 0
+    # 🔴 **Supplementary plates left with nothing to qualify.** A post whose only
+    # surviving faces are `supplementary` rank draws none of them: the arrow says
+    # which way the sign above it applies, and `Q65` put most of those signs out
+    # of scope. ⚠️ **This one counts a decision this pipeline made, not a defect
+    # in the source** — the assemblies are real and complete on the street, and
+    # what is incomplete is the whitelist. So a *rise* here is the expected
+    # consequence of narrowing scope, and a fall is what shipping more faces
+    # looks like; neither is a bar. See `build_region`.
+    orphan_supplementary: int = 0
+
+    # ---- the lettering (`P3-20`) ----
+    # 🔴 **Every one of these exists because a broken atlas renders as the plate
+    # it was already rendering.** A cell cropped from empty paper bakes a blank
+    # square; a quad wound backwards draws nothing; a texture that never arrives
+    # samples white. None of the three is visible in a frame and none of them
+    # moves `drawn`, `facing_away` or `triangles`. `Q58`'s rule, on an image.
+    #
+    # Plates that got a lettering quad. A face carrying a `text` layer that draws
+    # zero of these is a face whose atlas cell went missing.
+    text_plates: int = 0
+    # Must be **0**: `signs_text.gdshader` is `cull_back` like its sibling, so
+    # winding decides visibility and the normal attribute does not.
+    text_facing_away: int = 0
+    # What `mesh_contract.gd`'s declared budget is measured against, published so
+    # `PROGRESS.md`'s `Texture memory` is a figure off a shipped artefact rather
+    # than a claim (`Q37`).
+    text_atlas_px: int = 0
+    # 🔴 **The ink fraction of each baked cell, and the only thing that can see a
+    # blank one.** A cell that crops the wrong region of the sheet bakes paper,
+    # and a plate carrying a blank square on its face is the blank plate this
+    # task set out to fix. Near zero here is that failure announcing itself.
+    text_coverage: dict[str, float] = field(default_factory=dict)
 
     poles_drawn: int = 0
     # Published poles that were merged into another because they stand on the
@@ -637,7 +700,7 @@ def layer_polygons(
     if draw == SIGN_BAR:
         # The white bar of a NO ENTRY plate. Its height is a proportion of the
         # plate rather than of `size`, so widening the bar does not thicken it.
-        return [_rect(half_w, 0.22 * half_height_m)]
+        return [_rect(half_w, _NO_ENTRY_BAR_THICKNESS * half_height_m)]
     if draw in _PLATE_RECTS:
         return [_rect(half_w, half_h)]
     if draw == SIGN_TRIANGLE_DOWN:
@@ -664,8 +727,6 @@ def layer_polygons(
         return _rotate([bar], -45.0 if draw == SIGN_SLASH else 45.0)
     if draw == SIGN_CHEVRONS:
         return _chevrons(half_w, half_h)
-    if draw == SIGN_BARS_H:
-        return _bars_h(half_w, half_h)
     if draw == SIGN_TEE:
         return _tee(half_w, half_h)
     if draw == SIGN_TEE_BAR:
@@ -688,6 +749,16 @@ def layer_polygons(
         return _bent_arrow(half_w, half_h, -1.0 if draw == SIGN_ARROW_BENT_LEFT else 1.0)
     if draw == SIGN_ARROW_U:
         return _u_turn_arrow(half_w, half_h)
+    if draw == SIGN_TEXT:
+        # 🔴 **`text` has no polygons and must never quietly get some.** It is a
+        # textured quad placed from `sign_text.TextCell.plate_rect`, and the only
+        # code that may draw it is `_draw_plate`. Returning the plate outline
+        # here — the obvious "reasonable default" — would paint a blank white
+        # rectangle over the face and render as the wordless plate this whole
+        # task exists to replace.
+        raise ValueError(
+            "sign layer 'text' is drawn from the atlas by _draw_plate, not from polygons"
+        )
     raise ValueError(f"no geometry for sign layer {draw!r}")
 
 
@@ -771,21 +842,6 @@ def _chevrons(half_w: float, half_h: float) -> list[np.ndarray]:
                 )
             )
     return out
-
-
-def _bars_h(half_w: float, half_h: float) -> list[np.ndarray]:
-    """A bar along the top edge and another along the bottom, and nothing else.
-
-    ⚠️ **`TS735` is bordered top and bottom only**, where its `TS733`/`TS734`
-    siblings carry a full frame — read off the cell, whose opaque bounding box
-    reaches the left and right edges with no dark column at either. Drawing it
-    as a frame to match the siblings was the obvious call and is the wrong one.
-    """
-    thickness = 0.14 * half_h
-    return [
-        _rect_between(-half_w, half_w, half_h - thickness, half_h),
-        _rect_between(-half_w, half_w, -half_h, -half_h + thickness),
-    ]
 
 
 # The T's crossbar, shared by `_tee` and the red bar `_tee_bar` lays over it.
@@ -1059,6 +1115,92 @@ class _Builder:
         return select_triangles(mesh, twice_area > _MIN_TWICE_AREA_M2)
 
 
+class _TextBuilder:
+    """Accumulates the lettering quads: positions, normals, UVs, one colour.
+
+    ⚠️ **A second builder rather than a flag on the first**, because the two
+    meshes have different vertex layouts and `mesh.py` will not merge them. The
+    split is the whole reason the atlas costs 143 KB less than it might — see
+    `SIGNS_TEXT_MESH_NAME`.
+
+    ⚠️ **It ships `COLOR_0` too, and the colour is white.** The atlas already
+    carries the glyph's colour baked over the plate's field, so nothing needs a
+    tint — but `check_surface` demands vertex colour on this bundle's meshes by
+    default, and a surface that opts out has to say so at its call site. White is
+    the identity under the shader's multiply, so the channel is honest rather
+    than decorative: turn the texture off and the quad is the field colour it
+    sits on, which is the failure mode `Q63` wanted visible.
+    """
+
+    def __init__(self) -> None:
+        self._positions: list[np.ndarray] = []
+        self._normals: list[np.ndarray] = []
+        self._uvs: list[np.ndarray] = []
+        self._triangles: list[np.ndarray] = []
+        self._count = 0
+
+    def quad(self, corners: np.ndarray, normal: np.ndarray, uvs: np.ndarray) -> None:
+        """One four-corner quad, wound to face `normal`, with `uvs` to match."""
+        base = self._count
+        self._triangles.append(np.array([[0, 1, 2], [0, 2, 3]], dtype=np.int64) + base)
+        self._positions.append(corners)
+        self._normals.append(np.tile(normal.astype(np.float32), (4, 1)))
+        self._uvs.append(uvs.astype(np.float32))
+        self._count += 4
+
+    def build(self, name: str, atlas: TextAtlas) -> MeshData | None:
+        if not self._triangles:
+            return None
+        count = self._count
+        mesh = MeshData(
+            name=name,
+            positions=np.vstack(self._positions),
+            normals=np.vstack(self._normals),
+            triangles=np.vstack(self._triangles).astype(np.uint32),
+            colours=np.tile(np.array([255, 255, 255, 255], dtype=np.uint8), (count, 1)),
+            uvs=np.vstack(self._uvs),
+            texture=Texture(data=atlas.png, mime_type="image/png"),
+            material=SIGNS_TEXT_MATERIAL,
+        )
+        # The same collapsed-triangle filter every other builder in the pipeline
+        # ends on. A zero-extent `plate_rect` would emit a degenerate quad, and
+        # `select_triangles` carries `uvs`, `texture` and `material` through, so
+        # the textured mesh is no exception to the rule.
+        twice_area = np.linalg.norm(mesh.triangle_cross(), axis=1)
+        return select_triangles(mesh, twice_area > _MIN_TWICE_AREA_M2)
+
+
+def orphaned_supplementary(spec: Signs, codes: Sequence[str]) -> bool:
+    """Whether a post carries supplementary plates and nothing to qualify.
+
+    🔴 **A supplementary plate is not a sign, and on its own it is not even a
+    claim.** `TS733`/`TS734` are captioned ARROW (RIGHT) and ARROW (LEFT) on
+    CT174/51-3(2)D, and the Road Users' Code says what they do: *"Direction in
+    which the prohibition or restriction applies (symbol may be reversed)"*.
+    `TS735` is *"Prohibition or restriction applies in both directions"*. All
+    three are a preposition attached to the **sentence on the plate above them**
+    — and `Q65` struck most of those sentences out, because the time, parking,
+    zone and vehicle-class plates they qualify are out of scope as content.
+
+    What shipped instead was a post carrying a bare black arrow pointing along
+    the kerb at nothing. It reads as a driving instruction and it is not one,
+    which is `GAME_DESIGN.md`'s standing price the wrong way round: a missing
+    sign costs nothing against a sign that instructs the player wrongly.
+
+    ⚠️ **The test is "nothing here outranks supplementary", not "no regulatory
+    sign here".** An arrow under a `TS414` deviation board or a `TS615` NO
+    THROUGH ROAD is a legitimate assembly, and neither of those is `regulatory`.
+
+    ⚠️ **It is a scope refusal, not a data refusal**, which is why the counter it
+    feeds is a finding rather than a bar: the assembly is complete on the street,
+    and the incomplete thing is this pipeline's face table. Shipping the parent
+    faces would empty it, and narrowing scope again would fill it.
+    """
+    if not codes:
+        return False
+    return all(spec.faces[code].rank == SIGN_RANK_SUPPLEMENTARY for code in codes)
+
+
 def _mirrors(face: SignFace, side: float) -> bool:
     """Whether this face's glyphs are flipped to face the carriageway (`Q66`).
 
@@ -1078,6 +1220,10 @@ def _draw_plate(
     centre: np.ndarray,
     facing_deg: float,
     side: float,
+    *,
+    code: str = "",
+    text: TextAtlas | None = None,
+    text_builder: _TextBuilder | None = None,
 ) -> None:
     """One sign plate: its front layers, and the grey back it needs to be solid.
 
@@ -1147,6 +1293,36 @@ def _draw_plate(
 
     for depth, layer in enumerate(face.layers):
         lift = depth * spec.layer_lift_m
+        if layer.draw == SIGN_TEXT:
+            # 🔴 **The lettering is placed by the publisher, not by this file.**
+            # `cell.plate_rect` is where TD's own drawing puts the words on the
+            # plate, in `-1..1` of its bounding box, so nothing here chooses an
+            # offset — which is what let the face schema stay `(draw, colour,
+            # size)` instead of growing a per-layer displacement.
+            #
+            # ⚠️ **Never `oriented()`.** A mirrored face writes its words
+            # backwards, and `config.py` refuses the combination on the way in
+            # rather than trusting this comment.
+            cell = None if text is None else text.cells.get(code)
+            if cell is None or text_builder is None:
+                continue
+            u0, v0, u1, v1 = cell.plate_rect
+            corners = np.array(
+                [
+                    [u0 * half_w, v0 * half_h],
+                    [u1 * half_w, v0 * half_h],
+                    [u1 * half_w, v1 * half_h],
+                    [u0 * half_w, v1 * half_h],
+                ]
+            )
+            s0, t0, s1, t1 = cell.uv_rect
+            # ⚠️ **`v` runs up and `t` runs down**, so the two vertical pairs are
+            # crossed here. Getting it wrong prints the words upside down on a
+            # plate whose only job is to be read, and `verify_signs.gd` cannot
+            # see it — the mesh is correct and `facing_away` stays 0.
+            uvs = np.array([[s0, t1], [s1, t1], [s1, t0], [s0, t0]])
+            text_builder.quad(place(corners, lift, normal), normal, uvs)
+            continue
         for polygon in layer_polygons(spec, layer.draw, layer.size, half_w, half_h):
             builder.polygon(
                 place(oriented(polygon), lift, normal), normal, spec.colours[layer.colour]
@@ -1351,6 +1527,20 @@ def build_region(
 
     posts = _merge_posts(stacks, spec.pole_merge_m, report)
     builder = _Builder()
+    # ⚠️ **Baked before anything is drawn, and only for faces that ask.** A city
+    # whose whitelist carries no `text` layer bakes nothing, ships no texture and
+    # keeps `Texture memory` at 0 — the default `Q63` insisted stay the default.
+    lettered = sorted(code for code, face in spec.faces.items() if face.lettered)
+    text: TextAtlas | None = None
+    if lettered:
+        assert spec.text_source is not None  # config refuses the pair otherwise
+        text = build_atlas(
+            spec,
+            lettered,
+            cached_source(city, spec.text_source, root=sources_root),
+            cell_px=spec.text_cell_px,
+        )
+    text_builder = _TextBuilder()
     # ---- place, then draw ----
     # ⚠️ **Two phases, because registration can re-create what the merge
     # removed.** Every post on the same edge, side and `t` is pushed to the
@@ -1385,6 +1575,10 @@ def build_region(
                 report.too_far += 1
                 continue
             keep.append(sign)
+
+        if orphaned_supplementary(spec, [sign.code for sign in keep]):
+            report.orphan_supplementary += len(keep)
+            keep = []
 
         if not keep:
             continue
@@ -1475,7 +1669,17 @@ def build_region(
             if face.mirror_by_side:
                 report.boards_mirrorable += 1
                 report.boards_mirrored += int(_mirrors(face, post.side))
-            _draw_plate(builder, spec, face, centre, post.facing_deg, post.side)
+            _draw_plate(
+                builder,
+                spec,
+                face,
+                centre,
+                post.facing_deg,
+                post.side,
+                code=sign.code,
+                text=text,
+                text_builder=text_builder,
+            )
             height += 2.0 * half_h + spec.stack_gap_m
 
             report.drawn += 1
@@ -1502,7 +1706,19 @@ def build_region(
         report.vertices = len(mesh.positions)
         low, high = mesh.aabb()
         report.aabb = [list(low), list(high)]
-        report.bytes = write_glb(out_dir / SIGNS_NAME, [mesh])
+        meshes = [mesh]
+        text_mesh = None if text is None else text_builder.build(SIGNS_TEXT_MESH_NAME, text)
+        if text_mesh is not None:
+            # ⚠️ **`facing_away` is asked of this one too.** It is a second mesh
+            # under the same `cull_back` rule, and a quad wound the wrong way is
+            # not a backwards word — it is no word at all, which is exactly the
+            # failure this stage cannot see in a frame (`Q58`).
+            report.text_facing_away = facing_away(text_mesh)
+            report.text_plates = text_mesh.triangle_count // 2
+            report.text_atlas_px = text.pixels
+            report.text_coverage = {code: cell.coverage for code, cell in text.cells.items()}
+            meshes.append(text_mesh)
+        report.bytes = write_glb(out_dir / SIGNS_NAME, meshes)
 
     _write_manifest(out_dir, city, region_id, report)
     return report
@@ -1738,7 +1954,7 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Sig
         "on_structure": report.on_structure,
         "empty_geometry": report.empty_geometry,
         "candidates": report.candidates,
-        # The join, as five disjoint parts of `candidates`.
+        # The join and the registration, as disjoint parts of `candidates`.
         "drawn": report.drawn,
         # ⚠️ **`GG_NAME` is the only join this layer has.** These two are what it
         # costs: a sign whose graphical group names no at-grade pole, and one
@@ -1758,6 +1974,24 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Sig
         # junction mouths where the widened ribbons overlap and the drawn city has
         # no footway. A finding about `Q19`'s widening, not about this stage.
         "in_carriageway": report.in_carriageway,
+        # 🔴 **Supplementary plates with nothing above them to qualify** — a bare
+        # ARROW (LEFT) pointing along a kerb, which reads as an instruction and is
+        # not one. ⚠️ **A count of this pipeline's own scope, not of the
+        # source's**: the assembly is complete on the street, and `Q65` is what
+        # removed the sign the arrow belongs to. It rises when scope narrows and
+        # falls when more faces ship, so it is a finding rather than a bar.
+        "orphan_supplementary": report.orphan_supplementary,
+        # ---- the lettering, and the three ways it fails to nothing ----
+        "text_plates": report.text_plates,
+        # ⚠️ Must be 0. A backwards quad is not a backwards word, it is no word.
+        "text_facing_away": report.text_facing_away,
+        # The number `PROGRESS.md`'s `Texture memory` is, and what
+        # `generated_signs.gd` declares room for. Moving it is a budget change.
+        "text_atlas_px": report.text_atlas_px,
+        # 🔴 Ink fraction per baked cell. Near zero is a cell cropped off the
+        # lettering, which bakes paper and renders as the blank plate `P3-20`
+        # exists to replace.
+        "text_coverage": dict(sorted(report.text_coverage.items())),
         "poles_drawn": report.poles_drawn,
         # 🔴 Published poles folded into another because they stand on the same
         # physical post. The layer really does publish coincident poles.

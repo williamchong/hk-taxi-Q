@@ -67,7 +67,7 @@ from pipeline.config import (  # noqa: E402
     load_city,
 )
 from pipeline.fetch import cached_source  # noqa: E402
-from pipeline.sign_sheets import load_sheet  # noqa: E402
+from pipeline.sign_sheets import ink_masks, load_sheet  # noqa: E402
 from pipeline.signs import layer_polygons, plate_extent_m  # noqa: E402
 
 log = logging.getLogger(__name__)
@@ -85,25 +85,24 @@ _NOTE = 0.04
 # A colour with less than this share on both sides has no extent worth printing.
 _MINOR = 0.02
 
-# 🔴 **THE SHEET'S INK IS NOT THE GAME'S LIVERY, AND MATCHING THEM WAS THE FIRST
-# VERSION OF THIS TOOL.** `signs.colours` is a muted, art-directed palette —
-# `#c21a26` red, `#0d4794` blue — and TD prints saturated process primaries. A
-# nearest-livery-colour assignment puts every blue disc on the sheet more than
-# 110 units from the game's blue, so the whole plate classified as *white* and
-# `TS106` graded 1.000 white against a face that is 0.857 blue. The tool read as
-# a catastrophe and the pipeline was correct.
-#
-# So the sheet is classified by **hue family**, which is the only thing the two
-# palettes share and is all the grading needs: whether a pixel is the red one,
-# the blue one, the dark one or the paper. The livery is deliberately not these
-# numbers, and that difference is a decision (hard rule 3) rather than an error
-# to measure.
-_INK = {
-    "red": lambda r, g, b: (r > 140) & (g < 110) & (b < 110),
-    "blue": lambda r, g, b: (b > 110) & (r < 110),
-    "black": lambda r, g, b: (r < 90) & (g < 90) & (b < 90),
-    "yellow": lambda r, g, b: (r > 170) & (g > 130) & (b < 110),
-}
+
+def _note(lettered: bool, worst: float) -> str:
+    """The area table's right-hand column: why a row is worth a second look.
+
+    ⚠️ **A lettered face is annotated rather than flagged.** Its glyph is baked
+    from the sheet and is not drawn from `layer_polygons` at all, so the area it
+    is short by is the lettering the rasteriser cannot see — a finding about the
+    tool's reach, not about the face (`Q68`).
+    """
+    if lettered:
+        return "+text"
+    return f"<-- {worst:.3f}" if worst >= _NOTE else ""
+
+
+# The sheet's ink test lives in `pipeline/sign_sheets.py` beside the reader that
+# produces the cell, because `pipeline/sign_text.py` crops against the same
+# thresholds and the two must not drift apart. Its comment there records why the
+# sheet is classified by hue family and not against `signs.colours`.
 
 
 @dataclass(frozen=True)
@@ -142,8 +141,7 @@ def _interior(white: np.ndarray) -> np.ndarray:
 
 def measured(cell: np.ndarray, names: list[str]) -> tuple[Shares, dict[str, tuple[float, float]]]:
     """Colour shares and extents of the publisher's cell, against its plate."""
-    channels = [cell[..., index].astype(int) for index in range(3)]
-    masks = {name: test(*channels) for name, test in _INK.items() if name in names}
+    masks = ink_masks(cell, names)
     inked = np.zeros(cell.shape[:2], dtype=bool)
     for mask in masks.values():
         inked |= mask
@@ -280,9 +278,7 @@ def report(city: CityConfig, *, root: Path | None = None, contact: Path | None =
     for code, found, ours, _, _ in rows:
         cells_text = "  ".join(f"{found.get(n):>6.3f}/{ours.get(n):<6.3f}" for n in names)
         worst = max(abs(found.get(n) - ours.get(n)) for n in names)
-        lettered: bool = any(layer.draw == SIGN_TEXT for layer in spec.faces[code].layers)
-        note: str = "+text" if lettered else ("<-- %s" % f"{worst:.3f}" if worst >= _NOTE else "")
-        log.info("%-7s %s  %s", code, cells_text, note)
+        log.info("%-7s %s  %s", code, cells_text, _note(spec.faces[code].lettered, worst))
 
     log.info("")
     log.info("EXTENT — bounding box of each colour, w x h of the plate, sheet / drawn")

@@ -29,7 +29,7 @@ import yaml
 
 from pipeline import arrows
 from pipeline.arrows import axis_residual_deg, nearside
-from pipeline.config import SIGN_DRAWINGS, SIGN_PLATES, Signs, load_city
+from pipeline.config import SIGN_DRAWINGS, SIGN_PLATES, SIGN_TEXT, Signs, load_city
 from pipeline.fares import Segments
 from pipeline.railings import facing_away
 from pipeline.signs import (
@@ -48,6 +48,7 @@ from pipeline.signs import (
     _record_semantics,
     _turn_classes,
     layer_polygons,
+    orphaned_supplementary,
     plate_extent_m,
 )
 from pipeline.surface import mitres
@@ -96,6 +97,12 @@ BLOCK: dict[str, Any] = {
         },
         "TS414": {
             "plate": "board_wide",
+            # `warning`, because CT174/51-2(1) is TRAFFIC SIGNS (WARNING) and the
+            # rank IS the sheet class. It defaulted to `regulatory` until `Q67`
+            # noticed the three `P3-22` faces were all silently claiming to be
+            # regulatory signs — which is a stack order, so a deviation board
+            # could sit above a NO ENTRY on a post they share.
+            "rank": "warning",
             "mirror": True,
             "layers": [
                 {"draw": "board_wide", "colour": "white", "size": 1.0},
@@ -360,6 +367,16 @@ class TestWhatIsBuiltIsWoundRight:
         assert len({tuple(row) for row in mesh.colours.tolist()}) >= 2
 
 
+# 🔴 **Every drawing except `text`, and the exclusion is the point of naming it.**
+# The two sweeps below cover the whole vocabulary deliberately, so that the next
+# glyph anyone adds is tested without anyone remembering to add it. `text` is the
+# one word that has no polygons at all — it is a textured quad placed from the
+# atlas by `_draw_plate` — so it is excluded HERE, once, rather than by softening
+# either sweep into "whatever `layer_polygons` happens to answer".
+# `test_text_has_no_polygons_and_says_so` is what holds the exclusion honest.
+_POLYGON_DRAWINGS = tuple(draw for draw in SIGN_DRAWINGS if draw != SIGN_TEXT)
+
+
 class TestTheFaceGeometry:
     def test_a_disc_plate_is_as_wide_as_it_is_tall(self, spec):
         half_w, half_h = plate_extent_m(spec, "disc")
@@ -379,7 +396,7 @@ class TestTheFaceGeometry:
         are built as mirrors of one another and half of them come out reversed
         from the same expression — `arrows.py`'s recorded reason for `_ccw`.
         """
-        for draw in SIGN_DRAWINGS:
+        for draw in _POLYGON_DRAWINGS:
             for polygon in layer_polygons(spec, draw, 1.0, 0.3, 0.3):
                 shifted = np.roll(polygon, -1, axis=0)
                 twice_area = float(
@@ -537,7 +554,7 @@ class TestTheFaceGeometry:
         the same sweep `test_every_layer_polygon_is_wound_counter_clockwise`
         makes one class up.
         """
-        for draw in SIGN_DRAWINGS:
+        for draw in _POLYGON_DRAWINGS:
             for polygon in layer_polygons(spec, draw, 1.0, 0.60, 0.20):
                 edges = np.diff(np.vstack([polygon, polygon[:2]]), axis=0)
                 cross = edges[:-1, 0] * edges[1:, 1] - edges[:-1, 1] * edges[1:, 0]
@@ -1202,3 +1219,117 @@ class TestTheTurnRestrictionDiff:
         assert counted == 4
         assert len(report.turn_sign_to_junction_m) == 4
         assert report.no_entry_on_two_way == 1
+
+
+class TestASupplementaryPlateNeedsSomethingToQualify:
+    """🔴 **A post carrying only arrows says nothing, and it looks like it does.**
+
+    `TS733`/`TS734` are captioned ARROW (RIGHT) / ARROW (LEFT) on TD's own
+    supplementary sheet, and the Road Users' Code gives them their meaning:
+    *"Direction in which the prohibition or restriction applies"*. They qualify
+    the plate above them. `Q65` put most of those plates out of scope, so the
+    whitelist started leaving arrows standing on their own — a black arrow
+    pointing along a kerb at nothing, which reads as a driving instruction and
+    is not one. The user found it in a frame; nothing in the bundle could.
+
+    ⚠️ **Tested on `orphaned_supplementary` rather than on a built region**,
+    because the rule is one predicate and a region test would grade the join.
+    """
+
+    def test_an_arrow_on_its_own_is_orphaned(self, spec):
+        assert orphaned_supplementary(spec, ["TS734"])
+
+    def test_two_arrows_on_one_post_are_still_orphaned(self, spec):
+        """The count is not what makes an assembly; the ranks are."""
+        assert orphaned_supplementary(spec, ["TS734", "TS734"])
+
+    def test_an_arrow_under_a_sign_is_kept(self, spec):
+        assert not orphaned_supplementary(spec, ["TS115", "TS734"])
+
+    def test_an_arrow_under_a_WARNING_sign_is_kept(self, spec):
+        """⚠️ **The test is "nothing outranks supplementary", not "a regulatory
+        sign is present".** A deviation board is `warning` and a NO THROUGH ROAD
+        is `informatory`; an arrow under either is a real assembly, and a rule
+        written against `regulatory` would have deleted both.
+        """
+        assert spec.faces["TS414"].rank != 0
+        assert not orphaned_supplementary(spec, ["TS414", "TS734"])
+
+    def test_an_empty_post_is_not_orphaned(self, spec):
+        """Nothing was refused, so nothing is counted — the counter has to stay
+        a count of *this* decision or its partition stops meaning anything."""
+        assert not orphaned_supplementary(spec, [])
+
+
+class TestTheLetteringLayer:
+    """`P3-20`: the one face with words on it, and the bundle's one texture."""
+
+    def test_text_has_no_polygons_and_says_so(self, spec):
+        """🔴 **The refusal `_POLYGON_DRAWINGS` leans on.**
+
+        A `text` layer that quietly returned the plate outline would paint a
+        blank rectangle over the face and render as the wordless plate `P3-20`
+        exists to replace — so the fallback has to be an exception, not a shape.
+        """
+        with pytest.raises(ValueError, match="atlas"):
+            layer_polygons(spec, SIGN_TEXT, 1.0, 0.3, 0.3)
+
+    def test_a_mirrored_face_may_not_carry_text(self, tmp_path):
+        """🔴 **Mirroring writes the words backwards.**
+
+        `Q66`'s mirror negates `u` to turn a chevron round, which is right for a
+        chevron and catastrophic for lettering — on a plate whose whole job is
+        to be read, and it would render perfectly. Refused at load rather than
+        trusted to a comment.
+        """
+        block = {**BLOCK, "text_cell_px": 64, "text_source": "stands"}
+        block["faces"] = {**BLOCK["faces"]}
+        block["faces"]["TS999"] = {
+            "plate": "triangle_down",
+            "mirror": True,
+            "layers": [
+                {"draw": "triangle_down", "colour": "red", "size": 1.0},
+                {"draw": "text", "colour": "black", "size": 1.0},
+            ],
+        }
+        with pytest.raises(ValueError, match="backwards"):
+            city_with(tmp_path, block)
+
+    def test_a_text_layer_without_a_cell_size_fails_the_load(self, tmp_path):
+        """A cell of 0 px bakes nothing, and a plate with nothing baked on it is
+        the blank plate again. Caught on the way in."""
+        block = {**BLOCK, "text_source": "stands"}
+        block["faces"] = {**BLOCK["faces"]}
+        block["faces"]["TS999"] = {
+            "plate": "triangle_down",
+            "layers": [
+                {"draw": "triangle_down", "colour": "red", "size": 1.0},
+                {"draw": "text", "colour": "black", "size": 1.0},
+            ],
+        }
+        with pytest.raises(ValueError, match="text_cell_px"):
+            city_with(tmp_path, block)
+
+    def test_a_text_layer_without_a_source_fails_the_load(self, tmp_path):
+        """⚠️ **The sheets are in a DIFFERENT archive from the signs**, so this
+        is not derivable from `source:` and a city that forgets it would build
+        every plate and silently letter none."""
+        block = {**BLOCK, "text_cell_px": 64}
+        block["faces"] = {**BLOCK["faces"]}
+        block["faces"]["TS999"] = {
+            "plate": "triangle_down",
+            "layers": [
+                {"draw": "triangle_down", "colour": "red", "size": 1.0},
+                {"draw": "text", "colour": "black", "size": 1.0},
+            ],
+        }
+        with pytest.raises(ValueError, match="text_source"):
+            city_with(tmp_path, block)
+
+    def test_a_city_with_no_lettering_needs_neither_key(self, tmp_path):
+        """✅ **Zero textures stays the default** (`Q63`). A city whose faces
+        carry no words declares no budget and ships no image."""
+        city = city_with(tmp_path, BLOCK)
+        assert city.signs is not None
+        assert city.signs.text_cell_px == 0
+        assert city.signs.text_source is None

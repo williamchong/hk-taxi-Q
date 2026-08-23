@@ -24,6 +24,34 @@ extends RefCounted
 
 const PATH: String = "res://assets/generated/signs.glb"
 
+## The mesh carrying the lettering, if this region's faces have any (`P3-20`).
+##
+## Named here rather than in `verify_signs.gd` for this file's own reason: the
+## preview scene and the verify tool both have to agree on what a second
+## primitive in `signs.glb` *is*, and a name learned by only one of them is the
+## silent failure this file exists to prevent. Mirrors `SIGNS_TEXT_MESH_NAME` in
+## `etl/pipeline/signs.py`.
+const TEXT_MESH: String = "signs_text"
+
+## 🔴 **The pixel budget this layer declares, and the reason it may have an image
+## at all** (`Q63`, `P3-20`).
+##
+## `mesh_contract.gd` refuses every undeclared texture in the bundle. A call site
+## that passes a budget is declaring one *on purpose, in a diff*, and buys a
+## ceiling with it — the shipped atlas is measured against this number and fails
+## above it, and a declared texture that never arrived fails too.
+##
+## ⚠️ **This is 256 x 256: one square cell for the one face with words on it.**
+## `text_cell_px` in `hong_kong.yaml` is the other half, `signs.json` publishes
+## what actually shipped as `text_atlas_px`, and `PROGRESS.md` quotes it as
+## `Texture memory`. Three numbers that must move together, which is the cost
+## `Q63` accepted in exchange for the check staying a check.
+##
+## ⚠️ **Raise it only for lettering that is going to ship.** A generous budget is
+## a budget nothing reads, which is precisely what `Q63` refused when it declined
+## to simply delete the rule.
+const TEXT_ATLAS_BUDGET_PX: int = 256 * 256
+
 
 ## The signs as an instantiable scene, or null if they are not there.
 static func load_signs() -> PackedScene:
