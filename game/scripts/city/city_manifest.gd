@@ -372,26 +372,28 @@ static func bearing_deg(forward: Vector3) -> float:
 ## region wants this plus `PATH`, which is what `tools/sync_generated.sh` does.
 func shipped() -> PackedStringArray:
 	var paths: PackedStringArray = [road_graph_path, road_surface_path, fares_path, landmarks_path]
-	if not tramway_path.is_empty():
-		paths.append(tramway_path)
-	if not arrows_path.is_empty():
-		paths.append(arrows_path)
-	if not boxjunctions_path.is_empty():
-		paths.append(boxjunctions_path)
-	if not railings_path.is_empty():
-		paths.append(railings_path)
-	if not signs_path.is_empty():
-		paths.append(signs_path)
-	if not roadmarks_path.is_empty():
-		paths.append(roadmarks_path)
-	# ⚠️ **Independently of `signs_path`, not nested under it** — the ETL's
-	# `shipped()` makes the same call for the same reason. The two are written
-	# together and a bundle with one and not the other is broken, but this
-	# function is the definition of what the bundle contains, and a conditional
-	# that assumed the pair would hide the asymmetric case from the only list
-	# that could show it.
-	if not signs_text_atlas_path.is_empty():
-		paths.append(signs_text_atlas_path)
+	# ⚠️ **One list rather than seven `if`s, in `OPTIONAL_ASSET_KEYS`' order** —
+	# `etl/pipeline/export.py`'s `shipped()` holds the same names in the same
+	# order, so the two can be read side by side as the mirrors they are. It was
+	# seven hand-written copies on both sides until the seventh forced the issue.
+	#
+	# ⚠️ **`signs_text_atlas_path` stands on its own, not nested under
+	# `signs_path`.** The two are written together and a bundle with one and not
+	# the other is broken, but this function is the definition of what the bundle
+	# contains — folding the pair into one test would hide the asymmetric case
+	# from the only list that could show it.
+	var optional: Array[String] = [
+		tramway_path,
+		arrows_path,
+		boxjunctions_path,
+		railings_path,
+		signs_path,
+		signs_text_atlas_path,
+		roadmarks_path,
+	]
+	for asset_path: String in optional:
+		if not asset_path.is_empty():
+			paths.append(asset_path)
 	for tile: Tile in tiles:
 		paths.append_array(tile.lods)
 	return paths

@@ -180,6 +180,26 @@ LANDMARKS_SCHEMA = 2
 # a fourth document added to one and not the other is a `KeyError` raised from
 # inside the validator instead of a finding reported by it.
 DOCUMENT_KEYS = ("road_graph", "road_surface", "fares", "landmarks")
+
+# Manifest keys naming an asset that ships **when the region has one**, in the
+# order `shipped()` lists them. Optional and nullable every one: a city whose
+# estate publishes no tramway, no marking symbols, no box polygons, no railing
+# layer, no sign layer, no transverse markings or no sign lettering ships none.
+#
+# ⚠️ **A tuple because this was seven hand-written copies of one `if`**, and the
+# repo's own trigger — `mesh_contract.gd`'s "a third copy should force it"
+# (`Q58`) — had been quoted in the commit that added the seventh. A new asset is
+# now one row here, and `game/scripts/city/city_manifest.gd`'s `shipped()` holds
+# the same list in the same order so the two can be read as mirrors.
+OPTIONAL_ASSET_KEYS = (
+    "tramway",
+    "arrows",
+    "boxjunctions",
+    "railings",
+    "signs",
+    "signs_text_atlas",
+    "roadmarks",
+)
 REQUIRED_KEYS = (*DOCUMENT_KEYS, "tiles", "landmark_assets", "bounds_game")
 
 # Positions are written at millimetre precision, and `bounds_game` is rounded
@@ -571,25 +591,11 @@ def shipped(manifest: dict) -> list[str]:
     for tile in manifest.get("tiles", []):
         paths.extend(str(lod) for lod in tile.get("lods", []))
     paths.extend(str(path) for path in manifest.get("landmark_assets", []))
-    if manifest.get("tramway"):
-        paths.append(str(manifest["tramway"]))
-    if manifest.get("arrows"):
-        paths.append(str(manifest["arrows"]))
-    if manifest.get("boxjunctions"):
-        paths.append(str(manifest["boxjunctions"]))
-    if manifest.get("railings"):
-        paths.append(str(manifest["railings"]))
-    if manifest.get("signs"):
-        paths.append(str(manifest["signs"]))
-    # ⚠️ **Independently of `signs`, not nested under it.** The two are written
-    # together and a bundle with one and not the other is broken, but `shipped()`
-    # is the definition of what a build copies and it reads the manifest key by
-    # key — a conditional that assumed the pair would hide the asymmetric case
-    # from the only list that could show it.
-    if manifest.get("signs_text_atlas"):
-        paths.append(str(manifest["signs_text_atlas"]))
-    if manifest.get("roadmarks"):
-        paths.append(str(manifest["roadmarks"]))
+    # ⚠️ **Key by key, and `signs_text_atlas` independently of `signs`.** The two
+    # are written together and a bundle with one and not the other is broken, but
+    # this list is the definition of what a build copies — treating the pair as
+    # one would hide the asymmetric case from the only thing that could show it.
+    paths.extend(str(manifest[key]) for key in OPTIONAL_ASSET_KEYS if manifest.get(key))
     return paths
 
 

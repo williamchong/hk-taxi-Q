@@ -341,7 +341,6 @@ class SignReport:
     # below no longer accounts for it** — it is `signs.glb`'s own size and the
     # atlas is not in there any more, so a bundle figure that used to be one
     # number is two.
-    text_atlas: str | None = None
     text_atlas_bytes: int = 0
     # 🔴 **The ink fraction of each baked cell, and the only thing that can see a
     # blank one.** A cell that crops the wrong region of the sheet bakes paper,
@@ -1255,11 +1254,10 @@ class _TextBuilder:
             triangles=np.vstack(self._triangles).astype(np.uint32),
             colours=np.tile(np.array([255, 255, 255, 255], dtype=np.uint8), (count, 1)),
             uvs=np.vstack(self._uvs),
-            # ⚠️ **`uri` set, so this is a reference and `build_region` owes the
-            # file** — see `SIGNS_TEXT_ATLAS_NAME` for why it lives outside the
-            # `.glb`. `data` is carried anyway so the one object still holds the
-            # bytes it names, which is what lets the caller write them without
-            # reaching back into the atlas.
+            # ⚠️ **`uri` set, so the atlas ships beside the `.glb`** — see
+            # `SIGNS_TEXT_ATLAS_NAME` for why. `data` is what `write_glb` writes
+            # there, so the one object carries both the name and the bytes and
+            # nothing else has to know the pairing.
             texture=Texture(data=atlas.png, mime_type="image/png", uri=SIGNS_TEXT_ATLAS_NAME),
             material=SIGNS_TEXT_MATERIAL,
         )
@@ -1837,15 +1835,12 @@ def build_region(
             report.text_atlas_px = text.pixels
             report.text_coverage = {code: cell.coverage for code, cell in text.cells.items()}
             meshes.append(text_mesh)
-            # 🔴 **The half of the external reference this module owes** — the
-            # mesh above names `SIGNS_TEXT_ATLAS_NAME` and `gltf.py` writes no
-            # bytes for a URI, so without this line `signs.glb` imports pointing
-            # at nothing. Written before the `.glb` deliberately: Godot imports
-            # a directory in the order it scans it, and an atlas already on disk
-            # is one fewer way for the first import of a fresh clone to resolve
-            # the reference to null.
-            report.text_atlas = SIGNS_TEXT_ATLAS_NAME
-            report.text_atlas_bytes = (out_dir / SIGNS_TEXT_ATLAS_NAME).write_bytes(text.png)
+            # ⚠️ **`write_glb` writes the atlas beside the `.glb`** — the mesh
+            # names `SIGNS_TEXT_ATLAS_NAME` as its texture's `uri` and `gltf.py`
+            # owns both halves of that reference (`Q70`). Only its size is
+            # recorded here, from the bytes rather than from a `stat` of a file
+            # this module no longer writes.
+            report.text_atlas_bytes = len(text.png)
         report.bytes = write_glb(out_dir / SIGNS_NAME, meshes)
 
     _write_manifest(out_dir, city, region_id, report)
@@ -2165,11 +2160,12 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Sig
         # 🔴 **The atlas as a shipped file** (`Q70`), `null` where this region
         # baked no lettering. `export.py` copies it into `city.json` and
         # `shipped()` carries it, which is the whole point: an image the manifest
-        # names is an image `sync_generated.sh` keeps. ⚠️ Read from here rather
-        # than from `SIGNS_TEXT_ATLAS_NAME` directly, on the same terms as
-        # `asset` above — a region that baked nothing must not be contradicted
-        # by a constant.
-        "text_atlas": report.text_atlas,
+        # names is an image `sync_generated.sh` keeps. ⚠️ **The constant gated on
+        # a counter, exactly as `asset` above is** — a region that baked nothing
+        # must not be contradicted by a constant, and `text_plates` is the counter
+        # that says whether it did. Carrying the name through the report as well
+        # would be a second route to one fact.
+        "text_atlas": SIGNS_TEXT_ATLAS_NAME if report.text_plates else None,
         # ⚠️ **`bytes` is `signs.glb` alone and no longer covers the image.**
         # Published separately so the two halves of what this stage writes can be
         # added up on purpose rather than by assuming one contains the other.

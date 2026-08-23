@@ -338,6 +338,28 @@ class TestAssembly:
         assert region.manifest()["boxjunctions"] == "boxjunctions.glb"
         assert "boxjunctions.glb" in shipped(region.manifest())
 
+    def test_the_sign_atlas_is_shipped_independently_of_the_sign_mesh(self, region) -> None:
+        """🔴 **The regression the sweep bug was** (`Q70`).
+
+        `sync_generated.sh` deletes everything `city.json` does not name, so an
+        atlas missing from `shipped()` is an atlas deleted on every sync — which
+        is exactly what happened while the image rode inside `signs.glb` and the
+        importer extracted it to a name the manifest had never heard of.
+
+        ⚠️ **Asserted independently of `signs`**, because the pair being written
+        together is what would hide the asymmetric case from the only list that
+        could show it.
+        """
+        region.build()
+        assert region.manifest()["signs_text_atlas"] is None
+        assert "signs_text.png" not in shipped(region.manifest())
+
+        region.documents[SIGNS_MANIFEST_NAME]["text_atlas"] = "signs_text.png"
+        (region.out_dir / "signs_text.png").write_bytes(b"png")
+        region.build()
+        assert region.manifest()["signs_text_atlas"] == "signs_text.png"
+        assert "signs_text.png" in shipped(region.manifest())
+
     def test_the_carriageway_widths_reach_the_manifest(self, region) -> None:
         """Carried, not recomputed. A second evaluation of `widen_for` in
         `export.py` would be a second thing to keep in step with the config."""

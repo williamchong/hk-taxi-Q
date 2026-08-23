@@ -9427,9 +9427,15 @@ naming into our build script. The invariant worth having is that **everything un
 file existing or to name it.
 
 **What ships is the second.** `Texture` gains a `uri`, `_texture_index` emits a reference instead of
-a buffer view, `pipeline/signs.py` writes `signs_text.png` beside the asset, and `city.json` names it
+a buffer view, `write_glb` writes `signs_text.png` beside the asset, and `city.json` names it
 under `signs_text_atlas` — `CITY_SCHEMA` **16 → 17**, `signs.json` **1 → 2**. An external URI is not
 extracted, so the directory goes back to one writer.
+
+⚠️ **The reference and the referent have one owner, and the first draft did not.** `signs.py` wrote
+the PNG while `gltf.py` wrote the `images[].uri` naming it, so "who writes the texture" was an
+invariant living in a comment — and a `.glb` pointing at a file nobody wrote imports with no texture
+and renders as an untextured plate. A review pass called it, and `write_glb` owns both halves now,
+writing external images *before* the container so the fresh-clone import ordering still holds.
 
 ⚠️ **The rejected alternative is recorded because it is cheaper and still wrong.** Setting
 `gltf/embedded_image_handling` to *Embed as Uncompressed* in `[importer_defaults]` is one line and

@@ -256,6 +256,53 @@ class TestWriting:
         assert restored.texture is not None
         assert restored.texture.data == textured.texture.data
 
+    def test_a_uri_texture_is_written_beside_the_glb_and_not_inside_it(self, tmp_path) -> None:
+        """🔴 **The whole point of `Q70`**, in one assertion pair.
+
+        An embedded image is one Godot's importer extracts into a file the
+        manifest has never heard of, and `sync_generated.sh` deletes exactly
+        that. A `uri` texture must therefore leave the container carrying only a
+        reference — no `bufferView`, no growth in the binary chunk — and put the
+        bytes on disk itself, because the reference and the referent having two
+        owners is what made this an invariant living in a comment.
+        """
+        payload = b"\x89PNG not really a png"
+        embedded = MeshData(
+            name="ground",
+            positions=self.box().positions,
+            normals=self.box().normals,
+            triangles=self.box().triangles,
+            uvs=np.zeros((6, 2), dtype=np.float32),
+            texture=Texture(data=payload, mime_type="image/png"),
+        )
+        external = replace(
+            embedded,
+            texture=Texture(data=payload, mime_type="image/png", uri="atlas.png"),
+        )
+
+        write_glb(tmp_path / "embedded.glb", [embedded])
+        external_bytes = write_glb(tmp_path / "external.glb", [external])
+
+        document = self.document_of(tmp_path / "external.glb")
+        assert document["images"] == [{"uri": "atlas.png"}]
+        assert (tmp_path / "atlas.png").read_bytes() == payload
+        # The payload left the container rather than being written twice.
+        assert external_bytes < (tmp_path / "embedded.glb").stat().st_size
+
+    def test_a_uri_whose_extension_contradicts_its_mime_type_is_refused(self, tmp_path) -> None:
+        """glTF reads the type off the extension on the URI form, so a mismatch
+        would be resolved silently in the extension's favour."""
+        mesh = MeshData(
+            name="ground",
+            positions=self.box().positions,
+            normals=self.box().normals,
+            triangles=self.box().triangles,
+            uvs=np.zeros((6, 2), dtype=np.float32),
+            texture=Texture(data=b"x", mime_type="image/jpeg", uri="atlas.png"),
+        )
+        with pytest.raises(ValueError, match="must agree"):
+            write_glb(tmp_path / "t.glb", [mesh])
+
     def test_uv2_round_trips_exactly_and_sits_beside_texcoord_0(self, tmp_path) -> None:
         """Schema 6: the survey payload is integer state codes, so the file
         must hand back the exact floats it was given — approx would hide the

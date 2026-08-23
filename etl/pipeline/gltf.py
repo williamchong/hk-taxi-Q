@@ -71,11 +71,11 @@ class Texture:
     # inside it. Unset — the default, and what every read path produces — the
     # bytes are embedded as a buffer view.
     #
-    # 🔴 **Set, `data` is not written by this module and the caller owes the
-    # file.** `write_glb` emits a reference and nothing else; a URI naming a file
-    # nobody wrote is a `.glb` that imports with no texture. `pipeline/signs.py`
-    # is the one caller, and it writes the atlas three lines from where it names
-    # it here.
+    # ⚠️ **Set, `write_glb` writes `data` to `uri` beside the container** — the
+    # reference and the referent have one owner, which is this module. An earlier
+    # draft left the file to the caller and stated the obligation in a comment;
+    # a review called that what it was, and a `.glb` pointing at a file nobody
+    # wrote imports with no texture and renders as an untextured plate.
     #
     # ⚠️ **The reason this exists is not glTF's, it is Godot's** (`Q70`).
     # `gltf/embedded_image_handling` defaults to *Extract Textures*, so an
@@ -461,14 +461,26 @@ def _face_normals(positions: np.ndarray, triangles: np.ndarray) -> np.ndarray:
 
 
 def write_glb(path: Path, meshes: Sequence[MeshData]) -> int:
-    """Write a binary glTF and return its size in bytes.
+    """Write a binary glTF and return **its own** size in bytes.
 
     One node, mesh, primitive and material per entry, so the entry count is the
     tile's draw-call count — which is the thing `P1-2`'s acceptance criteria
     are stated in.
+
+    ⚠️ **It may write more than one file.** A `Texture` carrying a `uri` lives
+    beside the container rather than inside it (`Q70`), and this writes it —
+    see `_write_external_images`. The returned count is the `.glb` alone, so a
+    caller wanting the whole footprint adds the images it declared.
     """
     if not meshes:
         raise ValueError(f"refusing to write {path} with no meshes")
+
+    # 🔴 **Before the container, and that ordering is deliberate.** Godot imports
+    # a directory in the order it scans it, and an image already on disk is one
+    # fewer way for the first import of a fresh clone to resolve the reference to
+    # null. It also means a failure here writes no `.glb` at all, rather than one
+    # that points at a file that never arrived.
+    _write_external_images(path, meshes)
 
     gltf: dict[str, Any] = {
         "asset": {"version": "2.0", "generator": "hk-taxi-Q etl"},
@@ -584,18 +596,51 @@ def _texture_index(
         return seen[key]
 
     gltf.setdefault("samplers", [{"wrapS": 33071, "wrapT": 33071}])
-    image: dict[str, Any] = (
-        {"uri": texture.uri}
-        if texture.uri is not None
-        else {
+    image: dict[str, Any]
+    if texture.uri is None:
+        image = {
             "bufferView": _buffer_view(gltf, binary, texture.data, target=None),
             "mimeType": texture.mime_type,
         }
-    )
+    else:
+        # ⚠️ **Checked rather than trusted.** glTF reads the type off the
+        # extension on this form, so a `Texture` whose declared `mime_type`
+        # disagrees with its own `uri` would be written out with the
+        # disagreement silently resolved in favour of the extension.
+        declared = _mime_type(texture.uri)
+        if declared != texture.mime_type:
+            raise ValueError(
+                f"texture {texture.uri!r} is {declared} by its extension but declares "
+                f"{texture.mime_type!r}; the two must agree"
+            )
+        image = {"uri": texture.uri}
     gltf.setdefault("images", []).append(image)
     gltf.setdefault("textures", []).append({"source": len(gltf["images"]) - 1, "sampler": 0})
     seen[key] = len(gltf["textures"]) - 1
     return seen[key]
+
+
+def _write_external_images(path: Path, meshes: Sequence[MeshData]) -> None:
+    """Write every `Texture` that declared a `uri`, beside `path`.
+
+    🔴 **Here rather than in the caller, because the reference and the referent
+    must not have two owners** (`Q70`). This module writes the `images[].uri`
+    entry; leaving the bytes to whoever built the mesh made "who writes the
+    texture" an invariant that lived in a comment, and a `.glb` pointing at a
+    file nobody wrote imports with no texture and renders as an untextured plate.
+
+    Deduplicated by identity, on `_texture_index`'s reasoning: `_BufferCache`
+    hands out one `Texture` per image, so two primitives sharing one write once.
+    """
+    written: set[int] = set()
+    for mesh in meshes:
+        texture = mesh.texture
+        if texture is None or texture.uri is None or id(texture) in written:
+            continue
+        written.add(id(texture))
+        target = path.parent / texture.uri
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(texture.data)
 
 
 def _buffer_view(
