@@ -1050,6 +1050,16 @@ region, with everything else correct.
 is a more ordinary answer here than for any other layer, because a region whose signs are all text
 plates draws none and is right to.
 
+🔴 **The facing is derived per POST, and then turned per PLATE** (`Q72`). `_facing_from_side` reads
+the host-edge tangent and the kerb side to point a post at the traffic it addresses; almost every
+face agrees with it. The NO ENTRY family does not — it stands at the mouth a driver must *not* enter
+by, so it addresses traffic coming the other way and is turned 180° from its own post by
+`_plate_facing_deg`. ⚠️ **Without that step back-to-back plates are unrepresentable**, and 82 of Wan
+Chai's 499 posts carry a NO ENTRY beside a GIVE WAY, a mandatory disc or a ONE WAY plate. Which faces
+turn is **config** (`SignFace.faces_against_traffic`), not code. `signs.json` publishes
+`plates_turned` and `no_entry_against_flow`; the latter must be 0 and is a regression guard rather
+than proof — nothing published grades a facing, which is `Q62`.
+
 🔴 **The lettering's atlas ships as `signs_text.png`, beside the asset and named by the manifest**
 (`Q70`, schema 16 → 17). It used to ride inside `signs.glb` as an embedded buffer view, and the
 reason it no longer does is not glTF's, it is Godot's: `gltf/embedded_image_handling` defaults to

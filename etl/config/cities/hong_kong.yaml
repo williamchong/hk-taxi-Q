@@ -1110,7 +1110,22 @@ signs:
     # two thirds of the way across. Its thickness moved with it, in code rather
     # than here — see `_NO_ENTRY_BAR_THICKNESS`, and see `Q67` for why the two
     # bars have the same area and so agreed with each other for a year.
+    # 🔴 **`faces_against_traffic` on the two NO ENTRY faces, and only on them**
+    # (`Q72`). Every other face here speaks to the traffic already legally
+    # proceeding and so stands facing back down the road at it, which is what
+    # `_facing_from_side` derives from the pole. These two speak to a driver who
+    # would come *in* the wrong way, so they face **with** the flow instead —
+    # 180 degrees from their own post.
+    #
+    # ⚠️ **It is a property of the FACE, not of the post.** 82 of this region's
+    # 499 posts carry a NO ENTRY beside a GIVE WAY, a mandatory disc or a ONE WAY
+    # plate; on the street those are back-to-back, and a facing derived from the
+    # pole alone cannot say so. It drew all 84 of those NO ENTRY plates turned at
+    # the traffic they are not addressing, which is how the defect was reported —
+    # from the driving seat, with a NO ENTRY staring back down a road the car was
+    # legally on.
     TS115:                                   # NO ENTRY
+      faces_against_traffic: true
       plate: disc
       layers:
         - {draw: disc, colour: red, size: 1.00}
@@ -1123,6 +1138,7 @@ signs:
     # 0.80; this face said 0.74, which is a ring a third too thick, and it is
     # `Q64`'s slash finding arriving on the ring that carries it.
     TS116:                                   # ALL VEHICLES PROHIBITED BOTH DIRECTIONS
+      faces_against_traffic: true
       plate: disc
       layers:
         - {draw: disc, colour: red, size: 1.00}

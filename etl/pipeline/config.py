@@ -946,6 +946,21 @@ class SignFace:
     # every other face here, which way it points is *derived*. `Q66` records the
     # assumption and the counter that keeps it visible.
     mirror_by_side: bool = False
+    # 🔴 **Whether this face addresses traffic that must NOT be here** (`Q72`).
+    #
+    # Almost every sign speaks to the traffic already legally proceeding — GIVE
+    # WAY, the mandatory movement discs, the turn prohibitions, ONE WAY TRAFFIC —
+    # so it stands facing back down the road at them, which is what
+    # `_facing_from_side` derives. A NO ENTRY is the exception and it is the
+    # opposite: it sits at the mouth a driver must not come *in* by, addressing
+    # someone travelling against the flow, so it faces **with** the flow.
+    #
+    # ⚠️ **A face, not a post, and that is the whole point.** One post commonly
+    # carries a GIVE WAY and a NO ENTRY, and they are back-to-back on the real
+    # street — 82 of this region's 499 posts. Deriving the facing from the pole
+    # alone cannot express that, and drew all 84 of those NO ENTRY plates turned
+    # to face the traffic they are not addressing.
+    faces_against_traffic: bool = False
 
     @property
     def lettered(self) -> bool:
@@ -3620,11 +3635,18 @@ def _signs(body: Any, where: str) -> Signs | None:
                 f"{spot} both mirrors and carries a text layer; mirroring writes its "
                 f"lettering backwards. A mirrored face is a face with no words on it"
             )
+        against = entry.get("faces_against_traffic", False)
+        if not isinstance(against, bool):
+            raise ValueError(
+                f"{spot}:faces_against_traffic is {against!r}; it is a flag, and the only "
+                f"thing it may say is that this face addresses traffic coming the other way"
+            )
         faces[str(code)] = SignFace(
             plate=plate,
             layers=tuple(layers),
             rank=SIGN_RANKS[rank],
             mirror_by_side=mirror,
+            faces_against_traffic=against,
         )
 
     lengths = {

@@ -185,7 +185,11 @@ SIGNS_MANIFEST_NAME = "signs.json"
 # bump is what stops `export.py` reading a v1 document and publishing a
 # `city.json` that names no atlas for a bundle that has one — which is the
 # swept-file failure this whole change is about, one level up.
-SIGNS_MANIFEST_SCHEMA = 2
+# 3 since `Q72`: `no_entry_with_flow` is gone and `no_entry_against_flow` is
+# its inverse, joined by `plates_turned`. The rename is the point of the bump —
+# a reader keeping the old key's meaning would read a 0 that now means the
+# opposite thing, which is the silent wrong answer a schema version is for.
+SIGNS_MANIFEST_SCHEMA = 3
 
 # ⚠️ **No `-col` suffix**, the same call `arrows.glb` and `railings.glb` both
 # make and for a reason this layer states more strongly than either: 728 poles
@@ -399,7 +403,20 @@ class SignReport:
     # the same shape `kerbside_source_audit.py` takes. These are counted and
     # drawn, because refusing them would be asserting the graph is right.
     no_entry_on_two_way: int = 0
-    no_entry_with_flow: int = 0
+    # 🔴 **Inverted by `Q72`, and the inversion is the finding.** This was
+    # `no_entry_with_flow`, a self-check its own docstring called "a tautology by
+    # design": `_facing_from_side` turned every one-way sign to face the traffic,
+    # so a NO ENTRY could never come out facing with the flow, and 0 was
+    # unreachable proof that the rule had run. But **facing with the flow is the
+    # correct state for a NO ENTRY** — it addresses the driver who would enter
+    # against it — so 0 was success reported for exactly the configuration that
+    # was wrong. It reads the other way now and must still be 0.
+    no_entry_against_flow: int = 0
+    # Plates turned 180 degrees off their own post because their face addresses
+    # traffic coming the other way (`Q72`). The counter that makes `Q72`'s turn
+    # visible in the manifest rather than only in a frame; it should track the
+    # drawn NO ENTRY family exactly.
+    plates_turned: int = 0
 
     # 🔴 **The turn-restriction diff `Q62` named — and it does NOT grade the
     # facing, which is the finding.** Every drawn `TS131`/`TS132`/`TS133` against
@@ -1079,10 +1096,43 @@ def _facing_from_side(snap_heading_deg: float, side: float, one_way: bool) -> fl
     ✅ The result is an **absolute** facing rather than `compute-bearings.mjs`'s
     relative one, because `Snap.heading_deg` is directed off `TRAVEL_DIRECTION`
     where a marking line's chainage direction is unknown.
+
+    🔴 **This is the facing of the POST, which is the facing of every plate that
+    addresses the traffic already legally there — and that is not all of them.**
+    A NO ENTRY addresses a driver who would come in the wrong way and faces the
+    opposite direction; `_plate_facing_deg` turns it. Before `Q72` there was no
+    such step, so a post's NO ENTRY was drawn staring back down a road the
+    traffic was legally on. See `SignFace.faces_against_traffic`.
     """
     if one_way or side > 0.0:
         return (snap_heading_deg + 180.0) % 360.0
     return snap_heading_deg % 360.0
+
+
+def _plate_facing_deg(post_facing_deg: float, face: SignFace) -> float:
+    """Which way this particular plate faces on a post that faces `post_facing_deg`.
+
+    🔴 **The one place a facing is a property of the plate rather than the pole**
+    (`Q72`). `_facing_from_side` derives where the *post* looks — at the traffic
+    it addresses — and almost every face agrees with it. A NO ENTRY does not: it
+    stands at the mouth a driver must not enter by, so it addresses traffic
+    coming the other way and is turned 180 degrees from its own post.
+
+    ⚠️ **Without this, back-to-back plates are unrepresentable**, which was the
+    defect: 82 of the region's 499 posts carry a NO ENTRY beside a GIVE WAY, a
+    mandatory movement disc or a ONE WAY plate, and on the street those face
+    opposite ways. Drawn from the pole alone all 84 NO ENTRY plates on those
+    posts faced the wrong traffic, and every one of them rendered perfectly.
+
+    ⚠️ **Applied whatever the host's direction, including a two-way one.** The
+    class of the sign is what decides this, not the graph — a NO ENTRY on a
+    street the graph calls two-way is `no_entry_on_two_way`'s second-source
+    disagreement (`Q56`), a finding to go and look at, and it is not this
+    function's business to resolve it by declining to turn the plate.
+    """
+    if not face.faces_against_traffic:
+        return post_facing_deg
+    return (post_facing_deg + 180.0) % 360.0
 
 
 class _Builder:
@@ -1698,12 +1748,18 @@ def build_region(
             if face.mirror_by_side:
                 report.boards_mirrorable += 1
                 report.boards_mirrored += int(_mirrors(face, post.side))
+            # ⚠️ **Per plate, not per post** (`Q72`) — a NO ENTRY is turned to
+            # face the traffic it addresses, which is the opposite of what the
+            # rest of its post addresses. `report.plates_turned` is what makes
+            # the turn visible in the manifest.
+            plate_facing_deg = _plate_facing_deg(post.facing_deg, face)
+            report.plates_turned += int(plate_facing_deg != post.facing_deg)
             _draw_plate(
                 builder,
                 spec,
                 face,
                 centre,
-                post.facing_deg,
+                plate_facing_deg,
                 post.side,
                 code=sign.code,
                 text=text,
@@ -1716,7 +1772,7 @@ def build_region(
             report.pole_offset_m.append(
                 math.hypot(sign.x - sign.published_x, sign.z - sign.published_z)
             )
-            _record_semantics(report, sign, post, turns, by_edge[post.snap.edge])
+            _record_semantics(report, sign, post, plate_facing_deg, turns, by_edge[post.snap.edge])
 
         _draw_pole(
             builder,
@@ -1907,6 +1963,7 @@ def _record_semantics(
     report: SignReport,
     sign: Sign,
     post: _Placed,
+    plate_facing_deg: float,
     turns: dict[tuple[int, int], set[str]],
     host: dict[str, Any],
 ) -> None:
@@ -1915,11 +1972,18 @@ def _record_semantics(
     ⚠️ **The counters here are different in kind, and conflating them would lose
     the useful ones.**
 
-    `no_entry_with_flow` is a **self-check that must be 0**, in the family of
-    `facing_away`: since `_facing_from_side` turns a one-way's signs to face its
-    traffic, a NO ENTRY facing along its own one-way means the rule did not run.
-    It is a tautology by design — it was a *finding* until the one-way branch
-    existed, and it is exactly what caught that branch missing, at 117 of 253.
+    🔴 **`no_entry_against_flow` is a self-check that must be 0, and it is the
+    INVERSE of what stood here until `Q72`.** That one — `no_entry_with_flow` —
+    was described in this docstring as *"a tautology by design"*, and it was:
+    `_facing_from_side` turned every one-way sign to face its traffic, so a NO
+    ENTRY could not come out facing with the flow whatever the data said, and 0
+    was unreachable proof that the rule had run rather than evidence it was
+    right. 🔴 **And the state it certified was the wrong one.** A NO ENTRY stands
+    at the mouth a driver must not enter by; it addresses traffic coming the
+    other way, so it faces **with** the flow. Reported from the driving seat: a
+    NO ENTRY staring back down a one-way the car was legally on, with this
+    counter reading 0. It grades the **plate's** facing now, which is the facing
+    `_plate_facing_deg` turned, so it can disagree with the rule that set it.
 
     `no_entry_on_two_way` is a genuine second-source diff (`Q56`): a NO ENTRY
     standing on a street the graph calls two-way is a disagreement between two
@@ -1952,9 +2016,11 @@ def _record_semantics(
         if not post.one_way:
             report.no_entry_on_two_way += 1
             return
-        if directed_residual_deg(post.facing_deg, post.snap.heading_deg) > 90.0:
+        # ⚠️ **The PLATE's facing, not the post's** (`Q72`). Reading the post's
+        # here is what made this a tautology: it grades the rule that set it.
+        if directed_residual_deg(plate_facing_deg, post.snap.heading_deg) <= 90.0:
             return
-        report.no_entry_with_flow += 1
+        report.no_entry_against_flow += 1
         return
 
     claimed = _TURN_PROHIBITIONS.get(sign.code)
@@ -2090,7 +2156,14 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Sig
         # ⚠️ **Must be 0**, and unlike the line above this is a self-check rather
         # than a finding — see `_record_semantics`. It read 117 of 253 while
         # `_facing_from_side` was missing its one-way branch.
-        "no_entry_with_flow": report.no_entry_with_flow,
+        # 🔴 Must be 0, and it is the INVERSE of the counter that stood here
+        # until `Q72` — see `_record_semantics` for why 0 on the old one was
+        # success reported for the wrong configuration.
+        "no_entry_against_flow": report.no_entry_against_flow,
+        # Plates turned 180 degrees off their own post because their face
+        # addresses traffic coming the other way (`Q72`). Tracks the drawn NO
+        # ENTRY family exactly; a fall to 0 means the turn stopped happening.
+        "plates_turned": report.plates_turned,
         # 🔴 **The diff `Q62` named, over `TS131`/`TS132`/`TS133`.** The three
         # below close over those codes in `by_code`, and they are report-only for
         # the reason above. ⚠️ **Read `agreed` against `disagreed` and leave

@@ -9565,3 +9565,97 @@ there is no linter for "these two files are the same argument twice".
 colours are outside `Q33`'s palette table · `Q61` for `railings.gdshader`'s three-class precedent and
 for the one place the opacity objection does not transfer · `Q59` for the opposite winding signs ·
 `Q68` for `check_shader_source` and why it is not interchangeable with its sibling
+
+---
+
+## `Q72` — A NO ENTRY faces the traffic it forbids, not the traffic it stands beside
+
+**Closed 2026-08-24.** Reported by the user from the driving seat, with a Street View frame of
+告士打道 beside the game's: *"the signs on the opposite side of a same pole is rendered on the same
+side wrongly"*, then *"the TS115 should not be facing us in this angle"*, and then the rule itself —
+*"logically we can tell TS115 should not appear with many other signs that give instruction about
+traffic going forward."*
+
+### The mechanism
+
+`_facing_from_side` derives a facing from the **pole**: host-edge tangent, flipped by kerb side, with
+a branch that makes both kerbs of a one-way face the same way. `_Placed` then carried **one**
+`facing_deg` and every plate on the post inherited it. Back-to-back plates were therefore not merely
+wrong, they were *unrepresentable*.
+
+Measured on the reported spot: the host edge flows at **252°**, the car was travelling **245°** —
+legally, with the flow — and the NO ENTRY was drawn facing **72°**, straight at it. Exactly 180° out.
+
+### 🔴 The self-check was a tautology, and it certified the wrong state
+
+`no_entry_with_flow` was documented in its own docstring as *"a self-check that must be 0 … a
+tautology by design"*. It was: since `_facing_from_side` turned **every** one-way sign to face its
+traffic, a NO ENTRY could not come out facing with the flow whatever the data said. 0 was unreachable
+proof that the rule had run.
+
+**And the state it certified is the wrong one.** A NO ENTRY stands at the mouth a driver must not
+enter by; it addresses someone travelling *against* the flow, so it faces **with** it. The counter
+read 0 while the city was uniformly wrong, and it is what drove the one-way branch that produced it
+(117 of 253 → 0).
+
+### The discriminator is the sign's own meaning, and it needs no new source
+
+Two candidate rules were measured. The first — mine — asked whether a post sat on a central divider,
+by looking for an opposed carriageway within a radius `R`. It is **rejected**: the count runs 8 → 29
+→ 49 → 80 as `R` goes 10 → 30 m, so it is an arbitrary knob with no principled value.
+
+The second is the user's and it carries no constant at all. Almost every face speaks to traffic
+already legally proceeding — GIVE WAY, the mandatory movement discs, the turn prohibitions, ONE WAY
+TRAFFIC — and stands facing back down the road at it. The NO ENTRY family speaks to a driver who
+would come in the wrong way. **They cannot share a face**, so where one post carries both they are
+back-to-back, and the published code says which is which.
+
+The evidence, over the region: **82 of 499 drawn posts carry both a NO ENTRY and a forward-instruction
+sign**, commonest `TS102`+`TS115` (22), `TS102`+`TS107`+`TS115` (19), `TS115`+`TS182` (8) — a GIVE WAY
+facing the emerging traffic with a NO ENTRY at its back, which is what a junction mouth looks like.
+
+### What ships
+
+`SignFace.faces_against_traffic`, **config not code** (hard rule 4), set on `TS115` and `TS116` and
+nothing else; `_plate_facing_deg` turns such a face 180° off its post. ⚠️ **The facing is now a
+property of the plate**, which is what makes back-to-back representable at all.
+
+- `plates_turned` **197**, exactly the drawn `TS115`+`TS116` count (179 + 18).
+- `no_entry_against_flow` **0** — the inverse counter, graded on the **plate's** facing so it can
+  disagree with the rule that set it.
+- ✅ **Mutation-checked**: with the flag off, `plates_turned` **0** and `no_entry_against_flow`
+  **173**. So it is a genuine regression guard pinning config to behaviour. ⚠️ **It still cannot
+  prove the rule right** — nothing published can, which is `Q62`'s standing debt — it can only
+  catch the rule being dropped. Same family as `facing_away`, and said plainly rather than dressed up.
+- `signs.json` schema **2 → 3**: the rename is the bump. A reader keeping `no_entry_with_flow`'s
+  meaning would read a 0 that now means the opposite thing.
+- `city.json` **not** bumped — no key and no vertex attribute changed, only where plates point
+  (`P3-10`'s precedent, which added none and did not bump).
+- **PCK 42,856,304 → 42,856,096 B (−208)**, two exports one variable apart.
+- ✅ Verified as an **A/B render at one camera**: before, three NO ENTRY discs face the viewer; after,
+  the same three show their grey reverses while the no-left-turn and the ONE WAY plate above them
+  still face. `check.sh` green, 1,372 tests pass.
+
+⚠️ **The prior art has the same bug and did not fix it**: `hk-traffic-sign-map`'s `compute-stacks.mjs`
+rotates the whole post by *the primary's* bearing. Worth knowing before that project is cited as
+having solved facing.
+
+### What this does not fix
+
+Two plates of the **same** class back-to-back on one post are still drawn on one face — nothing in
+the data separates them. `no_entry_on_two_way` (**6**) stays a report-only second-source
+disagreement (`Q56`). And the facing is still **derived and ungraded** against any published truth:
+`Q62` stays open, and this narrows it rather than closing it.
+
+### ✅ New lesson
+
+**A self-check written as a tautology will certify whichever state the rule produces, including the
+wrong one.** This one said so about itself — *"a tautology by design"* — and was read as a strength
+for a year. The test of a counter is not whether it is 0; it is whether any reachable configuration
+makes it non-zero, and if none does, it is measuring the code rather than the city. `Q58`'s
+`drawn_gauge_m` trap, arriving on a facing instead of a distance.
+
+**See.** `Q62` for the derived-and-ungraded facing this narrows · `Q56` for the second-source pattern
+`no_entry_on_two_way` belongs to · `Q58` for the trap this is another instance of · `Q66` for
+`mirror_by_side`, the other per-face flag that decides which way a plate points · `Q64` for what a
+wrong code does to a face that renders perfectly

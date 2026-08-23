@@ -212,6 +212,19 @@ Common emoji for this project:
   ⚠️ **A railings change is also a shader change** —
   `check.sh` exits 0 on a shader that fails to compile, so render and `grep -i "shader error"`.
   Numbers in `Q60` and `Q61`.
+- **`signs.faces_against_traffic`, `_facing_from_side` or `_plate_facing_deg`: paste `signs.json`'s
+  `plates_turned`, `no_entry_against_flow`, `no_entry_on_two_way` and `facing_away`, before and
+  after — and mutation-check the flag by turning it off and confirming the counters move.** 🔴 **The
+  counter that stood here before `Q72` was a tautology that certified the wrong state**: every NO
+  ENTRY in the region faced the traffic it was not addressing while `no_entry_with_flow` read 0,
+  because the rule turned every one-way sign to face its traffic and 0 was unreachable. The test of
+  a counter here is not whether it reads 0 but whether **any reachable configuration makes it
+  non-zero**. ⚠️ **`plates_turned` must equal the drawn NO ENTRY family exactly** (197 = `TS115` 179
+  + `TS116` 18); a fall means the turn stopped happening, and a turn that stops renders perfectly.
+  ⚠️ **Which faces turn is config, never a code constant** — a second face quietly gaining the flag
+  rotates a whole code across the region and renders perfectly (`Q64`'s class).
+  ⚠️ **A facing change cannot be graded against anything published** (`Q62`), so the evidence is an
+  **A/B render at one camera**, before and after. Numbers in `Q72`.
 - **`signs.faces`, `signs.colours`, any plate dimension, or `pipeline/signs.py`'s glyph geometry:
   also `tools/sign_face_survey.py`, and paste its two tables.** It rasterises the config's own face
   from `layer_polygons` and diffs it against the cell TD published that code in, as **area and

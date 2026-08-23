@@ -44,6 +44,7 @@ from pipeline.signs import (
     _merge_placements,
     _merge_posts,
     _Placed,
+    _plate_facing_deg,
     _plate_frame,
     _record_semantics,
     _turn_classes,
@@ -73,6 +74,9 @@ BLOCK: dict[str, Any] = {
     },
     "faces": {
         "TS115": {
+            # `Q72`: mirrors `hong_kong.yaml`. Without it the fixture would
+            # disagree with the shipped config about which way a NO ENTRY looks.
+            "faces_against_traffic": True,
             "plate": "disc",
             "layers": [
                 {"draw": "disc", "colour": "red", "size": 1.0},
@@ -253,6 +257,53 @@ class TestTheFacingIsDerived:
         """
         assert _facing_from_side(0.0, 1.0, True) == pytest.approx(180.0)
         assert _facing_from_side(0.0, -1.0, True) == pytest.approx(180.0)
+
+
+class TestAPlateMayFaceTheOtherWayFromItsPost:
+    """`Q72` — the facing is a property of the FACE, not only of the pole.
+
+    🔴 **The defect this closes rendered perfectly and was reported from the
+    driving seat**: a NO ENTRY staring back down a one-way the car was legally
+    on. Almost every face addresses the traffic already proceeding and so agrees
+    with its post; a NO ENTRY addresses the driver who would come in the wrong
+    way and is turned 180 degrees from it. 82 of Wan Chai's 499 posts carry both
+    kinds, and before this they were drawn on one face.
+
+    ⚠️ **Asserted through real `SignFace`s off the real loader**, not against
+    hand-written booleans — the flag is config, and a test that stubbed it could
+    not see the config and the code stop agreeing.
+    """
+
+    def test_a_face_that_addresses_oncoming_traffic_is_turned_from_its_post(self, spec):
+        assert _plate_facing_deg(90.0, spec.faces["TS115"]) == pytest.approx(270.0)
+        assert _plate_facing_deg(270.0, spec.faces["TS115"]) == pytest.approx(90.0)
+
+    def test_every_other_face_agrees_with_its_post(self, spec):
+        for code in ("TS102", "TS107", "TS734", "TS414"):
+            assert _plate_facing_deg(90.0, spec.faces[code]) == pytest.approx(90.0)
+
+    def test_the_turn_is_what_puts_a_no_entry_with_its_one_way_flow(self, spec):
+        """The whole point, stated as geometry rather than as the flag.
+
+        A one-way's traffic runs along `heading`; `_facing_from_side` turns the
+        post to face back at it, and the NO ENTRY must end up pointing the other
+        way — along the flow, at whoever would enter against it.
+        """
+        heading = 252.0
+        post = _facing_from_side(heading, 1.0, True)
+        assert post == pytest.approx((heading + 180.0) % 360.0)
+        assert _plate_facing_deg(post, spec.faces["TS115"]) == pytest.approx(heading)
+
+    def test_the_shipped_config_marks_the_no_entry_family_and_nothing_else(self):
+        """⚠️ Against `hong_kong.yaml` itself, because the flag is data.
+
+        A second face quietly gaining it would turn a whole code 180 degrees
+        across the region and render perfectly — `Q64`'s failure class, on the
+        one field that decides which way an instruction points.
+        """
+        faces = load_city("hong_kong").signs.faces
+        turned = {code for code, face in faces.items() if face.faces_against_traffic}
+        assert turned == {"TS115", "TS116"}
 
 
 class TestThePlateFrame:
@@ -1031,7 +1082,19 @@ def diff(
     report = SignReport()
     for code, at in plates:
         plate, post = posted(code, at, one_way)
-        _record_semantics(report, plate, post, turns, by_edge[post.snap.edge])
+        # ⚠️ **Through `_plate_facing_deg`, exactly as `build_region` does**
+        # (`Q72`). Passing `post.facing_deg` straight through would make every
+        # test here grade a NO ENTRY at its post's facing, which is the facing
+        # the defect drew and not the one that ships.
+        #
+        # `.get`, because `BLOCK` declares faces only for the codes its geometry
+        # tests draw while the turn-restriction tests below exercise `TS131` and
+        # `TS133`, which it does not. A code with no declared face cannot be
+        # turned — in a build every drawn code has one, so this is the fixture's
+        # gap and not a state the pipeline can reach.
+        face = spec.faces.get(code)
+        facing = post.facing_deg if face is None else _plate_facing_deg(post.facing_deg, face)
+        _record_semantics(report, plate, post, facing, turns, by_edge[post.snap.edge])
     return report
 
 
