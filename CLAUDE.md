@@ -254,6 +254,32 @@ Common emoji for this project:
   have painted 61 `RM1116`-`RM1119` *warning* arrows as turn instructions.
   ⚠️ **An arrows change is also a shader change** — `check.sh` exits 0 on a shader that fails to
   compile, so render and `grep -i "shader error"`. Numbers in `Q59`.
+- **`pipeline/roadmarks.py`, the `road_marks` config block, or any stop / give-way line change:
+  paste `roadmarks.json`'s two partitions, `host_disagreement` with `host_considered`,
+  `axis_residual_deg`, `underfill_m` and `inverted`, before and after.** ⚠️ **`underfill_m` is
+  measured against `roadsurface.json`'s DRAWN half-width, never the graph's authored `width_m`** —
+  shipping the latter was an 18x error (p50 0.22 m against 4.04), and it is why this stage depends
+  on `surface` as well as `roads`. There is no separate grader
+  and there should not be: the stage grades itself, because every way this breaks renders as a
+  perfectly drawn bar, or as nothing. 🔴 **`host_disagreement` is the load-bearing counter and
+  `axis_residual_deg` is not** — the residual grades a rule that *optimises the thing it reports*,
+  which is `Q58`'s `drawn_gauge_m` trap for the third time. The disagreement count is how often the
+  transverse pick and the plain nearest edge choose different hosts, **90 of 209** today, and a fall
+  towards zero means the pick has stopped picking. ⚠️ **This is the one stage that does NOT host by
+  nearest edge, and that is not a bug to tidy away**: a stop line sits at a junction mouth, so
+  proximity picks the road it is parallel to on 43% of the layer (`Q69`). ⚠️ **`axis_residual_deg`
+  is recorded over refusals as well as keeps, and `n` exceeding `drawn` is how you tell** — move
+  that append below the guard and every percentile is confined to `bearing_tolerance_deg` by
+  construction, the defect review caught in `arrows.py`. ⚠️ **`inverted` must be 0** —
+  `roadmarks.gdshader` is `cull_back`, so winding decides visibility and the normal attribute does
+  not; and the engine-side and ETL-side winding tests have **opposite signs** (`Q59`), so do not
+  "fix" one to agree with the other. ⚠️ **A dimension change is a `DATA_SOURCES.md` change**: every
+  width, count, gap and dash module comes from TD drawing `CT174/51-5(1)F`, a **scanned** sheet with
+  no text layer, so `Q59`'s by-eye rule applies and `Q67`'s rasterise-and-diff cannot help. And
+  ⚠️ **`LINES SPACING` is the clear gap, not a centre-to-centre pitch** — the pitch reading draws
+  every double marking at twice the weight and renders perfectly. ⚠️ **A roadmarks change is also a
+  shader change** — `check.sh` exits 0 on a shader that fails to compile, so render and
+  `grep -i "shader error"`. Numbers in `Q69`.
 - Road-surface, deck-height or ground changes: also `tools/deck_error.py`, `tools/overhang.py`,
   `tools/ground_clearance.py` and `tools/carriageway_occupancy.py`, by hand after a build. They grade
   the *shipped* bundle and share no code with the pipeline — `check.sh` does not require a built

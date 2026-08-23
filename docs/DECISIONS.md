@@ -9216,3 +9216,177 @@ because `Q63`'s whole point is that an image ships when someone declares room fo
 See also: `Q63` for the contract amendment this is the first user of · `Q65` for the scope that cut
 it to two cells · `Q67` for the survey that measures the lettering and cannot grade it ·
 `Q58` for `text_coverage`, which is the only thing that can see a cell baked off the words
+
+---
+
+## `Q69` — A stop line's host is the road it crosses, not the road it is nearest
+
+**Decided 2026-08-24** by `P3-23`, which ships `RM1011` STOP LINE, `RM1012` STOP LINES and `RM1013`
+GIVE WAY LINES from `DTAD_RD_MARK_LINE` as `roadmarks.glb`. The stage is `boxjunctions.py`'s shape
+and `arrows.py`'s argument for a separate mesh. **One decision in it is new, and it is the reason
+this entry exists.**
+
+### The occasion
+
+`P3-20` put **GIVE WAY / 讓** on 74 plates and there was no give-way line on the carriageway under
+any of them. `Q53`'s Correction 1 had already listed all three codes as published and unused.
+
+### 🔴 The finding — the nearest-edge join is wrong on 43% of this layer
+
+Every other consumer of this geodatabase matches a feature to its **nearest level-0 edge**, and
+every one of them is right to: `arrows.py`'s symbol sits mid-lane, `boxjunctions.py`'s polygon sits
+mid-junction, `kerbside.py`'s restriction sits on a kerb. All three are *interior* features of one
+road.
+
+A stop line is not. It sits at a junction **mouth** — drawn across the minor road while lying about
+a metre off the *major* road's kerb — so proximity hands it the wrong host by construction.
+Measured before a line of the stage was written, as `|90 deg − angle between the marking and its
+host|`:
+
+| join | `RM1011` | `RM1013` |
+|---|---|---|
+| nearest edge | p50 **10.8**, over 30 deg **47/120** | p50 **16.5**, over 30 deg **28/83** |
+| transverse pick | p50 **1.8**, over 30 deg **5/120** | p50 **4.0**, over 30 deg **8/83** |
+
+**The two disagree about the host on 53 of 120 and 36 of 83 — 44% and 43%.** The shipped run reads
+`host_disagreement` **90 of 209**.
+
+The supporting measurement is the offset: `RM1013`'s midpoint is p50 **1.10 m** from the nearest
+centreline (p90 3.30, max 5.75) — right on the kerb of a road it is not about. `RM1011` reads p50
+1.89 m.
+
+**The rule that ships**: among level-0 segments within `host_radius_m` (20 m), pick the one
+minimising `|90 − angle| + proximity_weight_deg_per_m × distance`. At 0.05 deg/m it takes 20 m of
+extra distance to overturn one degree, so proximity breaks ties and never decides. The chosen host
+then sits p50 **6.68 m** away (p90 16.75) — far further than an arrow is ever from its edge, and
+correctly so: a bar across a four-lane mouth starts on the far kerb.
+
+⚠️ **A wrong host does not move the paint.** The extent is published, so the bar is drawn in the
+right place either way. What moves is the **height**, the refusal and every counter — and two arms
+of one junction disagree about the deck by up to a measured 0.43 m where they meet (`Q60`,
+`boxjunctions`). A bar sunk into or floating over the asphalt at a junction is at the one place the
+player is looking.
+
+### ⚠️ `axis_residual_deg` cannot grade this, and `host_disagreement` is why it ships
+
+The residual under the transverse pick grades a rule that **optimises the very thing it reports** —
+`Q58`'s `drawn_gauge_m` trap in new clothes, and the third time this shape has come up (`arrows.py`
+read max 28.87 against a 30 deg bar until review caught it). So the counter that can actually see
+the join regress is the **naive-versus-chosen disagreement count**, published beside the distance
+the pick travelled. The residual ships too, recorded over refusals as well as keeps — `n` **209**
+against `drawn` **191** — and is worth exactly what that caveat leaves it worth.
+
+### 🔴 The sheet, read at 600 dpi, and two things it corrected
+
+TD index plan `CT174/51-5(1)F`. ⚠️ **It is a scan**: `pdffonts` returns no embedded font and the
+page is eight indexed 2400-ppi images, so `Q59`'s by-eye rule applies at full strength and
+`sign_face_survey.py`'s rasterise-and-diff trick (`Q67`) does **not** transfer — there is no vector
+face to diff against.
+
+| Code | The sheet's own words | Dimensions |
+|---|---|---|
+| `RM1011` (TC 506) | **STOP LINE — WHITE** | LINE WIDTH = 200, MODULE: CONTINUOUS |
+| `RM1012` (TC 507) | **STOP LINES — WHITE** | LINE WIDTH = 200, LINES SPACING = 300, both CONTINUOUS |
+| `RM1013` (TC 508) | **GIVE WAY LINES — WHITE** | LINE WIDTH = 200, LINES SPACING = 200, each line **600 MARK, 300 GAP** |
+
+- **`RM1013` is a double *broken* line, not triangles.** The give-way triangle is a different
+  marking on a different row. The scoping note that proposed this task guessed "triangles/dashes";
+  the sheet says dashes.
+- **`RM1012` was not in the proposed scope and is now in it.** Eight features, six at grade, the
+  same object drawn double — it costs the `RM1013` two-band machinery with the module left
+  continuous. Leaving it out would have given eight junctions no stop line while their neighbours
+  got one.
+
+⚠️ **`LINES SPACING` is the CLEAR GAP, not a centre-to-centre pitch, and the sheet proves it rather
+than a comment**: two rows above, `RM1001` DOUBLE LINES publishes `LINE WIDTH = 150` with `LINES
+SPACING = 100`, and two 150 mm lines whose centres are 100 mm apart is one 250 mm line. Only the gap
+reading draws a shape. Read as a pitch, every double marking in the estate ships at the wrong
+weight and renders perfectly.
+
+### What is read, what is convention, and what is neither
+
+- **Read**: position, length, direction, and the at-grade flag. `ELEVATION` is null on 209 of the
+  region's 211 parts.
+- **Convention, from the sheet**: line width, line count, gap, dash module.
+- **Neither, and recorded as such**: which of a double line's two lines the published polyline is.
+  The source publishes one line per feature and the specification does not say. Drawn **symmetric**
+  about it, on `arrows.py`'s reasoning for taking a glyph's insertion point to be its centre: if the
+  convention is an edge, the band is out by half its width; anchoring on an edge when the truth is
+  the centre is out by twice that. The whole consequence is **0.2 m** on a 0.6 m band.
+- The dash **phase** is anchored at the line's start. Where a real gap falls inside a 600/300 module
+  is published nowhere, so anchoring is a choice, and anchoring at an end the source does publish is
+  the one that does not also invent a symmetry.
+
+### The extent is published, so the underfill is published too
+
+`Q54`'s rule and `P3-18`'s call, unchanged: the length is the publisher's and is never stretched to
+the drawn kerb. `underfill_m` — the host's **drawn** width less the marking's published length —
+reads p50 **4.04 m**, p90 8.46, max 9.90, positive on 84%. The bar really does stop well short of
+the drawn kerb, which is what a 1.6x ribbon over a surveyed marking implies and what the task was
+scoped against.
+
+🔴 **The first version of this section said the opposite, on a number that measured the wrong
+thing.** `underfill_m` read the host's `width_m` straight from `roadgraph.json` — the **authored**
+width, `lanes x lane_width_m` — while both its own docstring and this entry described it as the
+drawn kerb and cited `Q19`'s widening. The widening was not in the number at all. Against the
+authored width it read p50 **0.22 m**, an **18x** error, and "the underfill turned out much smaller
+than the task was scoped against" was a conclusion drawn entirely from the defect. `surface.py`'s
+manifest docstring already says a consumer must read `roadsurface.json`'s
+`carriageway[].half_width_m` rather than assume — and warns that off-grade edges are exactly where
+the two coincide, so the direction of the error is not even constant. `railings.py` reads that same
+file for that same half-width. The stage now does too, which is the only change that makes the
+counter mean what its name says.
+
+### The 18 that are refused
+
+`no_transverse_host` **18 of 209**: markings no candidate edge makes transverse. They correlate with
+length — a **56.9 m** `RM1013` lying 78.8 deg off square, a **33.8 m** `RM1011` at 88.7. ⚠️ They are
+refused and counted, never turned onto a road: a rotated bar would be an invented marking in `Q54`'s
+sense and it would render perfectly. `no_edge_in_range` is **0**.
+
+### One defect the tests found, and it was real
+
+`_runs` advanced by `start += period`, which drifts a few ULPs *below* the true multiple, so a
+give-way line whose length lands on a module boundary emitted a final mark **3e-16 m** long. It
+never rendered — the collapsed triangle is dropped downstream — but it was counted in
+`slivers_dropped`, a published counter this stage asks readers to trust. Now `index * period` with a
+`_MIN_MARK_M` floor.
+
+### What it cost, and what it publishes
+
+**211 parts (209 at grade) → 209 candidates → 191 drawn**: `stop_line` 114 (631.4 m),
+`give_way_lines` 75 (605.0 m), `stop_lines` 2 (13.9 m). 4,512 triangles, one primitive, **one draw
+call, no collider, no texture, no `COLOR_0`**. `city.json` **15 → 16**, key optional and nullable.
+
+**Cost, measured from two PCKs with one variable changed**: 42,596,928 → **42,868,332 B
+(+271,404, +0.64%)**. Over the wire **40.88 MiB**.
+
+`inverted` **0**; `slivers_dropped` 30 at `import_quantum_m` 0.025187; `height_spread_m` p50 0.021 /
+p90 0.107 / max 0.867; `mark_length_m` p50 6.18 / max 32.37; `underfill_m` p50 4.04 / p90 8.46.
+
+⚠️ **A second stage input, and it is what the underfill correction cost**: `roadmarks` reads
+`roadsurface.json` as well as `roadgraph.json`, so it is now ordered after `surface` by dependency
+rather than by tidiness. It still reads no ribbon *geometry* — a published bar is drawn at its
+surveyed extent, never registered into a lane — so `arrows`' registration argument does not follow
+it in.
+
+⚠️ **The partition is over PARTS, not features, and the two differ by 2.5x on this layer** — 1,679
+features against 4,162 parts, because `RM1001` and `RM1109` are published as long multi-part lines.
+Both are published so neither can be read as the other.
+
+⚠️ **`lift_m` is 0.016, above `arrows.lift_m`'s 0.015**, and the order is a legibility call rather
+than a fact about paint: a stop line is the boundary the player must not cross, an arrow is an
+instruction they have already read by the time they reach it. Same shape of argument
+`boxjunctions.lift_m` makes for putting arrows over box hatching. A clear millimetre rather than a
+hair, because the engine re-quantises Y on import too.
+
+⚠️ **`blended_height` is public now and this is its second caller.** A stop line is drawn across the
+same junction seam a box junction spans, so it takes `boxjunctions.py`'s distance-weighted blend
+rather than a second copy of forty lines of numerics whose comment carries a measured finding — the
+172 near-vertical triangles a hard nearest-edge switch built.
+
+**See.** `Q53` for the marking scope this closes another line of · `Q54` for the extent-is-read rule
+and the invented-marking debit · `Q58` for the self-grading pattern and the `drawn_gauge_m` trap
+this entry is the third instance of · `Q59` for the by-eye sheet rule and the winding signs ·
+`Q19` for the widening and for why `width_m` is invented · `Q60` for the 0.43 m junction seam ·
+`Q68` for the GIVE WAY plates this puts a line under

@@ -291,6 +291,7 @@ hk-taxi-Q/
 │   │   ├── tramway.py           # published tram rails → tram.glb (P3-14)
 │   │   ├── arrows.py            # published turn arrows → arrows.glb (P3-15)
 │   │   ├── boxjunctions.py      # published box junctions → boxjunctions.glb (P3-18)
+│   │   ├── roadmarks.py         # published stop / give-way lines → roadmarks.glb (P3-23)
 │   │   ├── railings.py          # published railings → railings.glb (P3-19)
 │   │   ├── signs.py             # published traffic signs → signs.glb (P3-16)
 │   │   ├── export.py            # → city.json, assembles and validates the stage outputs
@@ -370,6 +371,7 @@ The interface between ETL and game. **Versioned — change both sides together a
   "tramway": "tram.glb",
   "arrows": "arrows.glb",
   "boxjunctions": "boxjunctions.glb",
+  "roadmarks": "roadmarks.glb",
   "railings": "railings.glb",
   "signs": "signs.glb",
   "landmarks": "landmarks.json",
@@ -908,6 +910,41 @@ thin geometry inherits the same constraint. `P3-18`.
 
 ⚠️ Winding and the p90/p99/max reporting follow `arrows.glb`'s paragraphs above, unchanged.
 
+### `roadmarks.glb` — the published stop and give-way lines (`P3-23`)
+
+`RM1011` STOP LINE, `RM1012` STOP LINES and `RM1013` GIVE WAY LINES from `DTAD_RD_MARK_LINE`, drawn
+at their surveyed extents and laid `lift_m` above the carriageway. One primitive, one material named
+`roadmarks`, one draw call, and **no collider** — a stop line crosses every approach in the city, so
+a collider would be a 16 mm step the player mounts at every junction while braking.
+
+| | |
+|---|---|
+| Attributes | `POSITION` and `NORMAL` only — no `COLOR_0`, no UVs, no texture |
+
+**Its own mesh for `arrows.glb`'s reason, in the stronger form.** The 6 m junction fade in
+`road_markings.tres` "blanks exactly the approach an arrow is about", and the 6,051 m² cap overlap
+re-exposes anything drawn on a cap. A stop line does not merely approach the junction — it *is* the
+junction's edge, drawn on the cap, inside the fade. Painted on the ribbon it would be invisible by
+construction.
+
+🔴 **The host edge is picked by transversality, not proximity, and this is the one place a stage
+here departs from that.** `arrows.py` and `boxjunctions.py` both take the nearest level-0 edge and
+both are right to; a stop line sits at a junction *mouth*, so the nearest centreline is usually the
+road it is parallel to. Measured, the two joins disagree on **44%** of stop lines and **43%** of
+give-way lines. A wrong host does not move the paint — the extent is published — it moves the
+height. `roadmarks.json` publishes `host_disagreement` as the counter that can see this regress;
+`axis_residual_deg` cannot, because it grades a rule that optimises what it reports. `Q69`.
+
+⚠️ **`lift_m` is 0.016, deliberately above `arrows`' 0.015.** A legibility order rather than a fact
+about paint: the bar is the boundary the player must not cross, the arrow an instruction already
+read. A clear millimetre, not a hair — the engine re-quantises Y on import too.
+
+⚠️ **`city.json`'s `roadmarks` key is optional and may be `null`**, on exactly `boxjunctions`'
+terms, including the every-marking-failed-the-join state.
+
+⚠️ The import-lattice constraint, the winding rule and the p90/p99/max reporting follow
+`boxjunctions.glb` and `arrows.glb` above, unchanged.
+
 ### `railings.glb` — the published street furniture (`P3-19`, `Q61`)
 
 A vertical strip `height_m` tall standing `outset_m` outside the drawn carriageway edge, one quad
@@ -1151,6 +1188,7 @@ every region lies inside them.
 | `tram.glb` | The published tramway, drawn where iB1000 prints it — **not** a marking on the ribbon (`Q58`). One primitive, one draw call, **no collider** | ✅ `P3-14` |
 | `arrows.glb` | The published turn arrows, registered into the lane the ribbon actually has — **not** paint on the ribbon, because the junction fade blanks the approach they are about (`Q59`). One primitive, one draw call, **no collider** | ✅ `P3-15` |
 | `boxjunctions.glb` | The published yellow box junctions, drawn at the extents the estate surveyed and lifted under the arrows that paint over them. Ships nothing thinner than the import lattice. One primitive, one draw call, **no collider** | ✅ `P3-18` |
+| `roadmarks.glb` | The published stop and give-way lines, drawn at the extents TD surveyed and hosted by the road each one *crosses* rather than the road it is nearest — the two disagree on 43% of the layer. One primitive, one draw call, **no collider** | ✅ `P3-23` |
 | `signs.glb` | The published traffic signs, standing on the poles TD surveyed rather than at the abbreviation points that name them — those are drawing labels, a median 2.6 m away. Shape-faced signs only; anything whose meaning is its text is refused (the no-texture contract). One primitive, one draw call, **no collider** | ✅ `P3-16` |
 | `FareSystem` | Fare state machine: idle → hailed → carrying → delivered/failed | ⬜ `P3-1` |
 | `ScoreSystem` | Base fare, time bonus, **style chain** and **fare combo** — two distinct multipliers | ⬜ `P3-2` |
