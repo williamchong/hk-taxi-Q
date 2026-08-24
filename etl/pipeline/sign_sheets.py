@@ -232,9 +232,17 @@ class Sheet:
         # parent sheet — 217 MB at `DEFAULT_SCALE` — alive for as long as the
         # caller holds the crop, and `sign_face_survey.py` holds one per face to
         # build its contact sheet. Copying costs well under a megabyte.
-        return np.ascontiguousarray(
-            self.image[int(y0) + trim_px : int(y1) - trim_px, int(x0) + trim_px : int(x1) - trim_px]
-        )
+        #
+        # ⚠️ **`.copy()`, because `ascontiguousarray` only copies when it has to.**
+        # It no-ops on input that is already contiguous, and this slice is only
+        # ever non-contiguous because the trim makes it narrower than the page. A
+        # trim that ever went to zero on x would silently turn this into a view —
+        # pinning the sheet, and aliasing a buffer every other caller shares.
+        # That was a latent bug when the parent was an owned array and a worse
+        # one now the parent is pdfium's.
+        return self.image[
+            int(y0) + trim_px : int(y1) - trim_px, int(x0) + trim_px : int(x1) - trim_px
+        ].copy()
 
 
 def _index_plan(dataspec_zip: Path) -> zipfile.ZipFile:

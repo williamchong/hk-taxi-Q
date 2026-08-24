@@ -245,7 +245,9 @@ def report(city: CityConfig, *, root: Path | None = None, contact: Path | None =
     Extents = dict[str, tuple[float, float]]
     cells: list[tuple[str, np.ndarray]] = []
     rows: list[tuple[str, Shares, Shares, Extents, Extents]] = []
-    for code in sorted(spec.faces):
+    # Numerically, for `load_sheet`'s single-slot cache — see `sign_text.py`,
+    # which carries the reasoning. `"TS1000"` sorts before `"TS101"` as text.
+    for code in sorted(spec.faces, key=lambda code: int(code.removeprefix("TS"))):
         number = int(code.removeprefix("TS"))
         try:
             sheet = load_sheet(archive, number)

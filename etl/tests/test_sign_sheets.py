@@ -112,10 +112,8 @@ def test_the_two_decode_paths_are_byte_identical() -> None:
 def test_a_rendered_sheet_is_three_channel() -> None:
     """`load_sheet`'s guard, on the shipped path and at the shipped scale.
 
-    ⚠️ **The point is the channel count, not the shape.** `_grid` and
-    `ink_masks` both index `range(3)`, so a four-channel page under
-    `rev_byteorder` keeps working — correctly, on a third more memory, and
-    silently. That is the failure this assertion is the only witness to.
+    ⚠️ **The point is the channel count, not the shape** — `load_sheet` carries
+    why, and this is the only test that reaches it at `DEFAULT_SCALE`.
     """
     sheet = load_sheet(_ARCHIVE, _configured_codes()[0])
 

@@ -168,7 +168,14 @@ def build_atlas(
     cells: dict[str, TextCell] = {}
     tiles: list[np.ndarray] = []
 
-    for index, code in enumerate(sorted(codes)):
+    # ⚠️ **Sorted NUMERICALLY, and that is `load_sheet`'s cache rather than
+    # tidiness.** It holds one sheet, evicting on any change, on the stated
+    # ground that its callers walk codes in order — but `"TS1000"` sorts before
+    # `"TS101"` as text, and 8 of the 16 published index-plan sheets carry
+    # 4-digit codes. A string sort therefore interleaves sheets and re-renders
+    # 217 MB pages it had already paid for, silently. Identical to the string
+    # order for today's all-3-digit table, which is why nothing has caught it.
+    for index, code in enumerate(sorted(codes, key=lambda code: int(code.removeprefix("TS")))):
         number = int(code.removeprefix("TS"))
         sheet = load_sheet(dataspec_zip, number)
         cell = sheet.cell(number)
