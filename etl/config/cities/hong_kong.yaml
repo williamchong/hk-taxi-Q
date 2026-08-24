@@ -1185,7 +1185,7 @@ signs:
     TS111: {plate: disc, layers: [{draw: disc, colour: blue, size: 1.00}, {draw: arrow_bent_left, colour: white, size: 0.70}]}
     TS112: {plate: disc, layers: [{draw: disc, colour: blue, size: 1.00}, {draw: arrow_bent_right, colour: white, size: 0.70}]}
 
-    # -- stop, and the two faces in this game with words on them --
+    # -- stop: the first of the two faces in this game with words on it --
     #
     # ✅ **STOP / 停 SHIPS.** The companion to TS102 below, and the plate half of
     # the pair P3-23 opened: 114 stop lines were drawn on the carriageway with

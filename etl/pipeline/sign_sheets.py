@@ -112,8 +112,18 @@ def flood(seed: np.ndarray, allow: np.ndarray) -> np.ndarray:
 
     Iterated dilation rather than a labelling pass, because `scipy` is not a
     dependency of this pipeline and buying one for a connected component would
-    be the largest claim in the module. A cell is a few hundred pixels across,
-    so the loop converges in tens of milliseconds.
+    be the largest claim in the module. The loop runs once per pixel of the
+    longest path through `allow`, which is the *cell's* width rather than the
+    plate's — 233 passes on `TS101` — so it is tens of milliseconds.
+
+    ⚠️ **The seed is clipped to `allow` first**, so a caller may seed with
+    something that overlaps it only partly, or not at all.
+
+    ⚠️ **`.any()` on the difference, not two `.sum()`s.** `grown` contains
+    `reached` by construction, so equal popcount and equal sets are the same
+    statement — but the sums are two full reductions per pass and were **55% of
+    this loop**, where the xor short-circuits in C on the first differing byte.
+    Measured over `TS101`'s 233 passes: 27.3 ms to 13.6 ms, same 129,976 px.
     """
     reached = seed & allow
     while True:
@@ -123,7 +133,7 @@ def flood(seed: np.ndarray, allow: np.ndarray) -> np.ndarray:
         grown[:, 1:] |= reached[:, :-1]
         grown[:, :-1] |= reached[:, 1:]
         grown &= allow
-        if int(grown.sum()) == int(reached.sum()):
+        if not (grown ^ reached).any():
             return reached
         reached = grown
 
@@ -136,11 +146,16 @@ def enclosed_white(inked: np.ndarray) -> np.ndarray:
     glyph. The paper *around* a disc or a triangle is reached and excluded.
 
     ⚠️ **Here for `ink_masks`'s reason, restated.** Both callers of this module
-    are on the TRUTH side and must agree on where a plate stops — the survey
+    are on the TRUTH side and ought to agree on where a plate stops — the survey
     measures a cell's proportions against it and the atlas crops lettering out
-    of it, so a rule that moved in one alone would bake a crop of a box the
-    other never graded. This began as `_interior` in `tools/sign_face_survey.py`
-    and was hoisted the first time `pipeline/sign_text.py` needed it.
+    of it. This began as `_interior` in `tools/sign_face_survey.py` and was
+    hoisted the first time `pipeline/sign_text.py` needed it.
+
+    🔴 **They do NOT agree today, and this function is only half of why.** What
+    the atlas does with the result — take the ink *connected to* this field, and
+    so drop TD's dimension lines — the survey does not. See
+    `sign_text._plate_mask`, which records the 10-of-21 gap and what closing it
+    would move.
     """
     white = ~inked
     border = np.zeros_like(white)
@@ -313,7 +328,13 @@ def _grid(image: np.ndarray) -> tuple[list[float], list[tuple[float, float]]]:
     taken against the cut admits nothing. Verticals first, against the page;
     then the table's own bounds; then horizontals against those.
     """
-    dark = image.max(axis=2) < 90
+    # ⚠️ **Not `image.max(axis=2) < 90`.** numpy reduces badly along a length-3
+    # contiguous axis, and on a 7,143 x 10,104 page that one call was **442 ms
+    # of an 810 ms** sheet load — the rendering is not the expensive act in this
+    # module, this was. Pairwise `maximum` on the three channel views is
+    # byte-identical and **11.5x** faster (38 ms).
+    channels = [image[..., index] for index in range(3)]
+    dark = np.maximum(np.maximum(channels[0], channels[1]), channels[2]) < 90
     height, width = dark.shape
     page = dark[:, : int(width * _TABLE_FRACTION)]
 

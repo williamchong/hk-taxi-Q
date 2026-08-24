@@ -9236,9 +9236,13 @@ line. The standoff should clear the pole rather than touch it, and that is not f
 
 ### `TS101` STOP / 停 — what was still refused, and what it actually cost (2026-08-24)
 
-Shipped. **10 plates drawn** of the 18 the region publishes — 1 refused on a structure (`Q15`), 7 as
-in-carriageway, 1 on an ambiguous pole — and `not_whitelisted` fell by exactly **18**, which is the
-first time that count has been checked against the region rather than asserted from this document.
+Shipped. **10 plates drawn** of the 18 the region publishes — 1 refused on a structure (`Q15`) and
+7 where the registration could not clear the carriageway or the pole was ambiguous — and
+`not_whitelisted` fell by exactly **18**, which is the first time that count has been checked
+against the region rather than asserted from this document. ⚠️ **The per-reason split does not come
+straight off the counter deltas**: `orphan_supplementary` also fell by one, because a post carrying
+nothing but a supplementary plate acquired a STOP to qualify it, so one unit of the
+`in_carriageway` / `ambiguous_pole` rise is that plate rather than a `TS101`.
 The atlas is **512 x 256**, `text_plates` **74 -> 84**, `text_atlas_px` **65,536 -> 131,072**,
 `text_coverage` gains `TS101` at **0.193**, `text_facing_away` **0**. PCK **42,857,500 ->
 42,877,580 B** (+20,080, +0.047%), two exports one variable apart.

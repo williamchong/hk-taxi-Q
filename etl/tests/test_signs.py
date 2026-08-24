@@ -42,7 +42,7 @@ from pipeline.config import (
 )
 from pipeline.fares import Segments
 from pipeline.railings import facing_away
-from pipeline.sign_text import _coverage, _knockout, _livery, _plate_box
+from pipeline.sign_text import _bake, _bounds, _coverage, _livery, _plate_mask
 from pipeline.signs import (
     SIGNS_MATERIAL,
     Sign,
@@ -145,6 +145,10 @@ BLOCK: dict[str, Any] = {
         "blue": "#0d4794",
         "white": "#f0f0ea",
         "black": "#1c1c1f",
+        # ⚠️ Mirrors `hong_kong.yaml` — and `yellow` is here because it *ties*
+        # with `white` on the brightest channel, which is what the polarity test
+        # pins. Dropping it would make that test silently untestable.
+        "yellow": "#f0c020",
         "grey": "#70737a",
     },
     "disc_diameter_m": 0.60,
@@ -1468,28 +1472,32 @@ def _cell(*, hole: bool) -> np.ndarray:
 
 
 class TestWhereThePlateStops:
-    """🔴 `Q68`: the box every lettering fraction is measured against.
+    """🔴 `Q68`: the plate every lettering fraction is measured against.
 
     An error here is invisible by construction — `plate_rect` is a *fraction* of
-    this box, so a box read 13% wide prints the words 13% small on a plate that
+    this, so a plate read 13% wide prints the words 13% small on a face that
     otherwise renders perfectly. `TS101` is the case that found it: TD's two red
-    dimension extension lines took the octagon's box from 269 px to 308.
+    dimension extension lines took the octagon from 269 px to 308.
+
+    ⚠️ Against `_plate_mask` and `_bounds` rather than a wrapper, because those
+    two are what `build_atlas` calls — a test that pins a convenience nobody
+    ships is free to agree with itself while the shipped path drifts.
     """
 
     def test_the_dimension_lines_are_not_the_plate(self):
         """The plate is the ink enclosing the field, not every red pixel."""
-        assert _plate_box(_cell(hole=True)) == (10, 10, 29, 29)
+        assert _bounds(_plate_mask(_cell(hole=True))) == (10, 10, 29, 29)
 
     def test_ink_enclosing_nothing_falls_back_to_all_of_it(self):
         """⚠️ **A solid blob is a face with nothing on it, and refusing it here
-        would report as missing lettering** — `build_atlas` raises on a `None`
-        box, and that message would name the wrong defect. No face in scope
+        would report as missing lettering** — `build_atlas` raises on a missing
+        plate, and that message would name the wrong defect. No face in scope
         reaches this, and the old reading is the honest answer when one does."""
-        assert _plate_box(_cell(hole=False)) == (2, 10, 37, 29)
+        assert _bounds(_plate_mask(_cell(hole=False))) == (2, 10, 37, 29)
 
     def test_a_cell_with_no_ink_at_all_is_still_no_plate(self):
         """The one case that really is nothing to crop."""
-        assert _plate_box(np.full((40, 40, 3), 255, dtype=np.uint8)) is None
+        assert _plate_mask(np.full((40, 40, 3), 255, dtype=np.uint8)) is None
 
 
 class TestTheOctagon:
@@ -1518,20 +1526,37 @@ class TestTheOctagon:
         assert int(on_top.sum()) == 2, "a flat top is two vertices, a corner is one"
 
     def test_the_flats_are_what_the_authored_number_measures(self, spec):
-        """Across the flats, not corner to corner — how a plate is specified."""
-        (polygon,) = layer_polygons(spec, SIGN_OCTAGON, 1.0, 0.3, 0.3)
-        assert math.isclose(polygon[:, 0].max() - polygon[:, 0].min(), 0.6)
-        assert math.isclose(polygon[:, 1].max() - polygon[:, 1].min(), 0.6)
+        """Across the flats, not corner to corner — how a plate is specified.
 
-    def test_it_is_wound_like_every_other_plate(self, spec):
-        """⚠️ `signs.gdshader` is `cull_back`, so winding decides visibility and
-        the normal attribute does not. A clockwise plate is not a backwards
-        plate, it is no plate."""
-        (polygon,) = layer_polygons(spec, SIGN_OCTAGON, 1.0, 0.3, 0.3)
-        area = 0.5 * np.sum(
-            polygon[:, 0] * np.roll(polygon[:, 1], -1) - np.roll(polygon[:, 0], -1) * polygon[:, 1]
-        )
-        assert area > 0.0
+        ⚠️ Sized from `plate_extent_m` rather than from literals, so
+        `octagon_height_m` is actually in the call. Passing `0.3, 0.3` by hand
+        and asserting 0.6 would hold even if the extent read the wrong field.
+        """
+        half_w, half_h = plate_extent_m(spec, SIGN_OCTAGON)
+        (polygon,) = layer_polygons(spec, SIGN_OCTAGON, 1.0, half_w, half_h)
+        for axis in (0, 1):
+            span = polygon[:, axis].max() - polygon[:, axis].min()
+            assert math.isclose(span, spec.octagon_height_m)
+
+    # ⚠️ **No winding test here on purpose.** `SIGN_OCTAGON` is in
+    # `SIGN_DRAWINGS`, so `test_every_layer_polygon_is_wound_counter_clockwise`
+    # and the convexity sweep already cover it — which is what those sweeps are
+    # for, and a hand-written copy could only ever agree with them.
+
+
+def _knockout_cell(*, hole: bool = True) -> tuple[np.ndarray, np.ndarray]:
+    """A red plate with paper knocked out of it, and the plate's own mask.
+
+    `hole=False` keeps the field solid, which is what the crop-bounding test
+    needs: the only paper left is outside the plate.
+    """
+    cell = np.full((20, 20, 3), 255, dtype=np.uint8)
+    cell[5:15, 5:15] = (200, 30, 30)
+    if hole:
+        cell[8:12, 8:12] = 255
+    plate = np.zeros((20, 20), dtype=bool)
+    plate[5:15, 5:15] = True
+    return cell, plate
 
 
 def _face(glyph: str, field: str = "red") -> SignFace:
@@ -1561,29 +1586,36 @@ class TestWhichWayTheLetteringIsCutOut:
     def test_the_livery_comes_off_the_face_and_not_off_a_default(self, spec):
         """🔴 **Both colours were hardcoded to black-on-white.** The `text`
         layer's own `colour` went unread, and the field is the layer beneath."""
-        glyph, field = _livery(spec, _face("white", field="red"))
-        assert tuple(int(v) for v in glyph) == spec.colours["white"]
-        assert tuple(int(v) for v in field) == spec.colours["red"]
+        livery = _livery(spec, _face("white", field="red"))
+        assert tuple(int(v) for v in livery.glyph_rgb) == spec.colours["white"]
+        assert tuple(int(v) for v in livery.field_rgb) == spec.colours["red"]
 
     def test_lighter_than_its_field_is_a_knockout(self, spec):
         """⚠️ **Derived from the livery, never from a colour's NAME.** A second
         city's STOP is its own publisher's, so `"white"` is not a string this
-        may test for — hard rule 3."""
-        white, red = _livery(spec, _face("white", field="red"))
-        black, _ = _livery(spec, _face("black", field="red"))
-        assert _knockout(white, red)
-        assert not _knockout(black, red)
+        may test for — hard rule 3. Both shipped pairs, so the assertion guards
+        the polarities that actually render: `TS101` white-on-red and `TS102`
+        black-on-white."""
+        assert _livery(spec, _face("white", field="red")).knockout
+        assert not _livery(spec, _face("black", field="white")).knockout
 
-    def test_a_knockout_reads_the_paper_and_the_other_reads_the_ink(self, spec):
+    def test_the_brightest_channel_is_not_the_test(self, spec):
+        """🔴 **The regression guard for a tie that ships.** The first version
+        compared `max()`, and in this palette `white` `#f0f0ea` and `yellow`
+        `#f0c020` are **both 240** — so a white glyph on a yellow field read as
+        ink, took the wrong crop and would have baked a blank cell. `yellow` is
+        real livery (`TS589`'s border), so the face is reachable config, and
+        `colour.luminance` separates them 0.87 to 0.56."""
+        white = np.asarray(spec.colours["white"], dtype=float)
+        yellow = np.asarray(spec.colours["yellow"], dtype=float)
+        assert white.max() == yellow.max(), "the tie is the point; pick another pair if it moves"
+        assert _livery(spec, _face("white", field="yellow")).knockout
+
+    def test_a_knockout_reads_the_paper_and_the_other_reads_the_ink(self):
         """The two polarities on one cell, which is the clearest statement of
         why this cannot be a single rule: each returns zero where the other
         returns the glyph."""
-        cell = np.full((20, 20, 3), 255, dtype=np.uint8)
-        cell[5:15, 5:15] = (200, 30, 30)  # a red field
-        cell[8:12, 8:12] = 255  # with paper knocked out of it
-        plate = np.zeros((20, 20), dtype=bool)
-        plate[5:15, 5:15] = True
-
+        cell, plate = _knockout_cell()
         knocked = _coverage(cell, plate, knockout=True)
         assert knocked[9, 9] > 0.9, "the knocked-out paper is the glyph"
         assert knocked[6, 6] < 0.2, "the red field is not"
@@ -1591,15 +1623,22 @@ class TestWhichWayTheLetteringIsCutOut:
         inked = _coverage(cell, plate, knockout=False)
         assert inked.max() == 0.0, "read the other way, a red plate carries no ink at all"
 
-    def test_the_plate_body_bounds_the_crop(self, spec):
+    def test_the_plate_body_bounds_the_crop(self):
         """⚠️ **An octagon's bounding box has paper in its corners**, and on a
         knockout paper is what the glyph is made of — so a crop crossing the
         plate edge reads the corners as lettering and returns the whole plate."""
-        cell = np.full((20, 20, 3), 255, dtype=np.uint8)
-        cell[5:15, 5:15] = (200, 30, 30)
-        plate = np.zeros((20, 20), dtype=bool)
-        plate[5:15, 5:15] = True
+        cell, plate = _knockout_cell(hole=False)
         assert _coverage(cell, plate, knockout=True)[0, 0] == 0.0
+
+    def test_the_bake_lays_the_face_own_colours_down(self, spec):
+        """🔴 **The one place `TS101`'s livery actually lands**, and the failure
+        it guards is a colour swap — which `_livery` returning two same-shaped
+        arrays used to make a one-character mistake."""
+        livery = _livery(spec, _face("white", field="red"))
+        covered = _bake(np.ones((4, 4)), livery, 2)
+        bare = _bake(np.zeros((4, 4)), livery, 2)
+        assert tuple(int(v) for v in covered[0, 0]) == spec.colours["white"]
+        assert tuple(int(v) for v in bare[0, 0]) == spec.colours["red"]
 
     def test_a_face_whose_words_have_no_field_fails_the_load(self, tmp_path):
         """🔴 **The field is the layer beneath the words**, so a leading `text`
@@ -1610,8 +1649,26 @@ class TestWhichWayTheLetteringIsCutOut:
         block = {**BLOCK, "text_cell_px": 64, "text_source": "stands"}
         block["faces"] = {**BLOCK["faces"]}
         block["faces"]["TS999"] = {
-            "plate": "octagon",
+            "plate": "triangle_down",
             "layers": [{"draw": "text", "colour": "white", "size": 1.0}],
         }
         with pytest.raises(ValueError, match="beneath"):
+            city_with(tmp_path, block)
+
+    def test_a_face_may_not_carry_two_text_layers(self, tmp_path):
+        """⚠️ **One cell is baked per face and `_draw_plate` gives it to every
+        `text` layer**, so a second would repeat the first's words and ignore
+        its own `colour` — the same phrase twice on one plate, rendering
+        perfectly. `_livery` reads the first layer and would never see it."""
+        block = {**BLOCK, "text_cell_px": 64, "text_source": "stands"}
+        block["faces"] = {**BLOCK["faces"]}
+        block["faces"]["TS999"] = {
+            "plate": "triangle_down",
+            "layers": [
+                {"draw": "triangle_down", "colour": "white", "size": 1.0},
+                {"draw": "text", "colour": "black", "size": 1.0},
+                {"draw": "text", "colour": "red", "size": 1.0},
+            ],
+        }
+        with pytest.raises(ValueError, match="more than one text layer"):
             city_with(tmp_path, block)

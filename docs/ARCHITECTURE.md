@@ -1088,8 +1088,12 @@ plates draws none and is right to.
 the host-edge tangent and the kerb side to point a post at the traffic it addresses; almost every
 face agrees with it. The NO ENTRY family does not — it stands at the mouth a driver must *not* enter
 by, so it addresses traffic coming the other way and is turned 180° from its own post by
-`_plate_facing_deg`. ⚠️ **Without that step back-to-back plates are unrepresentable**, and 82 of Wan
-Chai's 499 posts carry a NO ENTRY beside a GIVE WAY, a mandatory disc or a ONE WAY plate. Which faces
+`_plate_facing_deg`. ⚠️ **Without that step back-to-back plates are unrepresentable**, and 74 of Wan
+Chai's 503 posts carry a NO ENTRY beside a GIVE WAY, a mandatory disc or a ONE WAY plate.
+⚠️ **This read 82, and 82 was never this measurement** — re-measured 2026-08-24 at **74**, whose
+combination breakdown reproduces `Q72`'s own (`TS102`+`TS115` x22, `TS102`+`TS107`+`TS115` x19,
+`TS115`+`TS182` x8) exactly. `TS101` does not move it: 6 STOP plates share a post, none with a
+NO ENTRY. Which faces
 turn is **config** (`SignFace.faces_against_traffic`), not code. `signs.json` publishes
 `plates_turned` and `no_entry_against_flow`; the latter must be 0 and is a regression guard rather
 than proof — nothing published grades a facing, which is `Q62`.

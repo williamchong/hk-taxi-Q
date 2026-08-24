@@ -65,8 +65,10 @@ dependencies = [
 # Pillow decodes the PNGs `tools/frame_stats.py` grades, and — since the P3-6
 # amendment — the photo atlases `pipeline/landmarks.py` samples when a landmark
 # opts into `reference_texture`. Still dev-only: the import is lazy behind that
-# config flag, so a city with no mesh-sourced hero never touches it and the
-# core pipeline stays image-free. It is *not* a step toward the terrain
+# config flag, so a city with no mesh-sourced hero never touches it. ⚠️ **The
+# rest of that sentence used to read "and the core pipeline stays image-free",
+# which the `pillow` note above retracts** — `P3-20` moved it into
+# `dependencies`. It is *not* a step toward the terrain
 # classifier `Q18` defers — that one would put image decoding on every build's
 # critical path and into CI, which neither of these does.
 dev = [

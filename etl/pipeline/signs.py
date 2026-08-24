@@ -1041,13 +1041,12 @@ def _octagon(half: float) -> np.ndarray:
     corners cut off. So the vertices sit at `22.5 + k * 45`, and the radius is
     the circumscribed one that puts each flat at `half`.
 
-    ⚠️ **Not `_disc(half, 8)`, for that reason** — the segment count is right and
-    the phase is not, and the two differ by a 22.5 degree turn that renders
-    perfectly as the wrong sign.
+    ⚠️ **`_disc(half, 8)` is the trap** — the segment count is right and the
+    phase is not, and the two differ by a 22.5 degree turn that renders
+    perfectly as the wrong sign. So it is `_disc` *turned*, which says that in
+    the code rather than only in this paragraph, and keeps one generator.
     """
-    angles = np.radians(22.5 + 45.0 * np.arange(8))
-    radius = half / math.cos(math.radians(22.5))
-    return np.column_stack([radius * np.cos(angles), radius * np.sin(angles)])
+    return _rotate([_disc(half / math.cos(math.radians(22.5)), 8)], 22.5)[0]
 
 
 def _rect(half_w: float, half_h: float) -> np.ndarray:

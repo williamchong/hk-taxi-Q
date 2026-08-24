@@ -101,10 +101,18 @@ def _note(lettered: bool, worst: float) -> str:
 
 # The sheet's ink test and its enclosed-white rule both live in
 # `pipeline/sign_sheets.py` beside the reader that produces the cell, because
-# `pipeline/sign_text.py` crops against the same thresholds and the same notion
-# of where a plate stops, and the two must not drift apart. The comments there
+# `pipeline/sign_text.py` crops against the same thresholds. The comments there
 # record why the sheet is classified by hue family and not against
 # `signs.colours`, and `enclosed_white` began here as `_interior`.
+#
+# 🔴 **THE PLATE BOX BELOW IS THE UNCORRECTED ONE, AND THE ATLAS NO LONGER USES
+# IT.** `measured()` takes every inked pixel; `sign_text._plate_mask` takes only
+# the ink connected to the field, which drops the red extension lines of the
+# dimension TD draws across each cell. On `TS101` that is 308 px here against
+# 269 there, so the *extent* rows for the 10 affected faces — `TS101`,
+# `TS106`-`TS112`, `TS414`, `TS615` — read small by up to that ratio. The area
+# rows are unaffected, being shares of the mask rather than of its box. Closing
+# it moves ten published rows and is owed its own diff; `Q68` records it.
 
 
 @dataclass(frozen=True)

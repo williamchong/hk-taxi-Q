@@ -3622,6 +3622,15 @@ def _signs(body: Any, where: str) -> Signs | None:
                     f"and must be greater than 0 and no more than 1"
                 )
             layers.append(SignLayer(draw=draw, colour=colour, size=size))
+        if sum(layer.draw == SIGN_TEXT for layer in layers) > 1:
+            # `sign_text.py` bakes ONE cell per face and `_draw_plate` hands it
+            # to every `text` layer, so a second one silently repeats the first's
+            # words and ignores its own `colour` — a plate with the same phrase
+            # on it twice, rendering perfectly.
+            raise ValueError(
+                f"{spot}:layers carries more than one text layer; a face is baked one cell "
+                f"of lettering, so the second would repeat the first's words"
+            )
         if layers[0].draw == SIGN_TEXT:
             # 🔴 **The field a glyph is baked over is the layer beneath it**, so
             # a leading `text` layer has nothing to sit on. `sign_text.py` would

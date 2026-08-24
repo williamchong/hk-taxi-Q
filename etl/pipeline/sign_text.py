@@ -52,6 +52,7 @@ from pathlib import Path
 
 import numpy as np
 
+from pipeline.colour import luminance
 from pipeline.config import SIGN_TEXT, SignFace, Signs
 from pipeline.sign_sheets import enclosed_white, flood, ink_masks, load_sheet
 
@@ -93,38 +94,61 @@ class TextAtlas:
         return self.width * self.height
 
 
-def _livery(spec: Signs, face: SignFace) -> tuple[np.ndarray, np.ndarray]:
-    """The glyph's colour and the field it is laid over, as RGB.
+@dataclass(frozen=True)
+class Livery:
+    """A lettered face's two colours, and which way its glyph is cut.
 
-    🔴 **Both are already in the config and were both hardcoded here.** The
-    `text` layer carries a `colour` that nothing read, and the layer beneath it
-    is the field the words sit on — so `TS102` is black-on-white and `TS101` is
+    🔴 **Both were hardcoded and both were already in the config.** The `text`
+    layer carries a `colour` that nothing read, and the layer beneath it is the
+    field the words sit on — so `TS102` is black-on-white and `TS101` is
     white-on-red without the face schema growing anything. The comment this
     replaces said a face whose lettering is not black "would need this to be a
     parameter"; `TS101` is that face.
+
+    ⚠️ **One object rather than two same-shaped arrays**, because `(glyph,
+    field)` is an unlabelled pair of `(3,)` float64s: swapped at either call
+    site the polarity inverts, and by this module's own doctrine the plate then
+    renders perfectly. Naming them is the only thing that catches it.
     """
-    index = next(i for i, layer in enumerate(face.layers) if layer.draw == SIGN_TEXT)
-    # `config.py` refuses a leading `text` layer on the way in, so there is a
-    # layer beneath and it is the field. Asserted rather than handled: a fallback
-    # here would bake the words onto a colour no config named.
-    assert index > 0, "a text layer with nothing beneath it should not have loaded"
-    return (
-        np.asarray(spec.colours[face.layers[index].colour], dtype=np.float64),
-        np.asarray(spec.colours[face.layers[index - 1].colour], dtype=np.float64),
+
+    glyph_rgb: np.ndarray
+    field_rgb: np.ndarray
+
+    @property
+    def knockout(self) -> bool:
+        """Whether the lettering is the *paper* showing through a solid field.
+
+        ⚠️ **Derived from the livery, never from a colour's name or a config
+        flag.** `TS101` is white cut out of red and `TS102` is black on white,
+        and which of those a face is decides which way its crop runs — but a
+        second city's STOP is its own publisher's, so `"white"` is not a name
+        this may test for (hard rule 3).
+
+        🔴 **`colour.luminance`, not the brightest channel.** Comparing
+        `max()` was the first version and it **ties on the shipped palette**:
+        `white` `#f0f0ea` and `yellow` `#f0c020` are both 240, so a white glyph
+        on a yellow field read as ink rather than knockout and would have baked
+        a blank cell. `yellow` is real livery — it is `TS589`'s border — so that
+        face is reachable config. `colour.py` says why one definition of
+        luminance lives in one place; this is that.
+        """
+        lit = luminance(np.stack([self.glyph_rgb, self.field_rgb]))
+        return bool(lit[0] > lit[1])
+
+
+def _livery(spec: Signs, face: SignFace) -> Livery:
+    """The glyph's colour and the field it is laid over, off the face itself."""
+    index = next((i for i, layer in enumerate(face.layers) if layer.draw == SIGN_TEXT), None)
+    # `config.py` refuses both of these on the way in — a face with no `text`
+    # layer never reaches here, and one whose `text` layer is first has no field
+    # beneath it. Raised rather than asserted, because `assert` is stripped
+    # under `python -O` and this decides what colour the words are baked in.
+    if index is None or index == 0:
+        raise ValueError(f"{face.plate} face has no text layer with a field beneath it")
+    return Livery(
+        glyph_rgb=np.asarray(spec.colours[face.layers[index].colour], dtype=np.float64),
+        field_rgb=np.asarray(spec.colours[face.layers[index - 1].colour], dtype=np.float64),
     )
-
-
-def _knockout(glyph_rgb: np.ndarray, field_rgb: np.ndarray) -> bool:
-    """Whether the lettering is the *paper* showing through a solid field.
-
-    ⚠️ **Derived from the livery, never from a colour's name or a config flag.**
-    `TS101` is white cut out of red and `TS102` is black on white, and which of
-    those a face is decides which way its crop runs — but a second city's STOP
-    is its own publisher's, so "white" is not a name this may test for (hard
-    rule 3). Lighter-than-its-field is the property that actually matters, and
-    it is read off the two colours the face already names.
-    """
-    return float(glyph_rgb.max()) > float(field_rgb.max())
 
 
 def build_atlas(
@@ -149,16 +173,14 @@ def build_atlas(
         sheet = load_sheet(dataspec_zip, number)
         cell = sheet.cell(number)
 
-        glyph_rgb, field_rgb = _livery(spec, spec.faces[code])
-        knockout = _knockout(glyph_rgb, field_rgb)
+        livery = _livery(spec, spec.faces[code])
 
         plate = _plate_mask(cell)
-        if plate is None:
+        box = None if plate is None else _bounds(plate)
+        if plate is None or box is None:
             raise ValueError(f"{code}: no plate found in its index-plan cell")
-        ys, xs = np.nonzero(plate)
-        x0, y0, x1, y1 = int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())
-        inside = cell[y0 : y1 + 1, x0 : x1 + 1]
-        coverage = _coverage(inside, plate[y0 : y1 + 1, x0 : x1 + 1], knockout=knockout)
+        x0, y0, x1, y1 = box
+        coverage = _coverage(_crop(cell, box), _crop(plate, box), knockout=livery.knockout)
 
         ink = _ink_box(coverage)
         if ink is None:
@@ -178,7 +200,7 @@ def build_atlas(
         )
 
         lettering = coverage[iy0 : iy1 + 1, ix0 : ix1 + 1]
-        tiles.append(_bake(lettering, glyph_rgb, field_rgb, cell_px))
+        tiles.append(_bake(lettering, livery, cell_px))
         cells[code] = TextCell(
             plate_rect=plate_rect,
             uv_rect=(index / len(codes), 0.0, (index + 1) / len(codes), 1.0),
@@ -217,8 +239,14 @@ def _coverage(cell: np.ndarray, plate: np.ndarray, *, knockout: bool) -> np.ndar
     On `TS101` they are white knocked out of a solid red octagon: every pixel is
     already far from black, so this returned 0.0000 everywhere and `_ink_box`
     handed back `None`. That path reads the opposite — distance toward paper,
-    which is the least-saturated channel — and is confined to the plate body so
-    that the paper in an octagon's corners is not read as a glyph.
+    which is the *darkest* channel, since a saturated field is dark in at least
+    one of the three and paper is bright in all of them.
+
+    ⚠️ **`ink[~plate]` is applied to both paths and belongs to neither.** It is
+    what keeps the paper in an octagon's corners from being read as a glyph,
+    which only the knockout path could get wrong — but moving it inside that
+    branch would let a non-knockout face read whatever sits outside its own
+    plate, so it stays where it is.
     """
     channels = cell.astype(np.float64)
     red, green, blue = channels[..., 0], channels[..., 1], channels[..., 2]
@@ -232,59 +260,65 @@ def _coverage(cell: np.ndarray, plate: np.ndarray, *, knockout: bool) -> np.ndar
     return ink
 
 
-def _plate_box(cell: np.ndarray) -> tuple[int, int, int, int] | None:
-    """The published plate's bounding box within its cell, in pixels.
+def _crop(array: np.ndarray, box: tuple[int, int, int, int]) -> np.ndarray:
+    """`array` cut to `(x0, y0, x1, y1)`, inclusive.
 
-    ⚠️ **The same ink test `sign_face_survey.py` grades proportions with**, and
-    it has to be: the survey measures a face against the plate box it finds, so
-    a threshold that moved here alone would bake a crop of a box nothing graded.
-
-    🔴 **AND THE TWO NOW DISAGREE, WHICH IS A DEBT AND NOT A DESIGN.** This box
-    excludes TD's dimension lines and `sign_face_survey.measured()` does not, so
-    on `TS101` the atlas measures against 269 px and the survey against 308 —
-    which is why the survey's white extent reads 0.63 where the bake logs 0.725,
-    exactly the 0.873 ratio. The survey is inflated on **10 of 21** faces
-    (`TS101`, `TS106`-`TS112`, `TS414`, `TS615`) and correcting it moves ten
-    published rows, `TS615` by more than 2x — a change to the grader, owed its
-    own diff and its own before-and-after tables. Until then the survey's
-    lettering *extents* understate and its `+text` area gap does not, because
-    that one is a share of the mask rather than of the box.
-
-    🔴 **The plate is the ink that ENCLOSES something, not every inked pixel —
-    and reading it the second way put the lettering 13% small.** TD draws a
-    dimension across each cell, and its two extension lines are red, 3 px wide
-    and outside the plate. A bare bounding box of all ink takes them in: on
-    `TS101` the octagon runs x 182-450 (269 px) and the box read 163-470 (308),
-    so a `plate_rect` measured against it placed `STOP` at **0.873** of the size
-    the publisher draws it. Since everything here is a *fraction* of this box,
-    an error in it is invisible — the words render perfectly, just small.
-
-    So the plate is the ink connected to the white it encloses, plus that white.
-    ⚠️ **Verified to move nothing that ships**: swept over the whole face table,
-    it is byte-identical on every red/black face — `TS102`, `TS115`, `TS116`,
-    `TS131`-`TS133`, `TS183`, `TS733`, `TS734`, `TS735` — and differs only on
-    `TS101`, where it returns a 269 x 269 square, which is what an octagon's
-    bounding box has to be.
-
-    ⚠️ A cell whose ink encloses no white at all falls back to the old reading
-    rather than returning nothing. No face in scope does that — every plate has
-    a field or a knockout — but a plate drawn as a solid blob is a face with
-    nothing on it, and refusing it here would report as missing lettering.
+    ⚠️ **One function because the cell and the plate mask must be cut
+    identically.** Written out twice they can diverge, and a coverage field
+    measured against a mask offset from its own pixels is a plausible-looking
+    wrong answer rather than an error.
     """
-    plate = _plate_mask(cell)
-    if plate is None:
+    x0, y0, x1, y1 = box
+    return array[y0 : y1 + 1, x0 : x1 + 1]
+
+
+def _bounds(mask: np.ndarray) -> tuple[int, int, int, int] | None:
+    """`(x0, y0, x1, y1)` of everything set in `mask`, inclusive."""
+    if not mask.any():
         return None
-    ys, xs = np.nonzero(plate)
+    ys, xs = np.nonzero(mask)
     return int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())
 
 
 def _plate_mask(cell: np.ndarray) -> np.ndarray | None:
-    """The published plate as pixels rather than as a box.
+    """The published plate as pixels: the ink enclosing a field, plus the field.
 
-    ⚠️ **A knockout needs the mask, not the box.** An octagon's bounding box has
-    paper in its corners, and on a reverse-livery face paper is exactly what the
-    glyph is made of — so cropping to the box alone would read the corners as
-    lettering and hand `_ink_box` the whole plate.
+    ⚠️ **The same ink test `sign_face_survey.py` grades proportions with**, and
+    it began as a promise it would stay so: the survey measures a face against
+    the plate it finds, and a rule that moved here alone would bake a crop of a
+    box nothing graded.
+
+    🔴 **THE TWO NOW DISAGREE, WHICH IS A DEBT AND NOT A DESIGN.** This takes
+    only the ink *connected to* the field; `sign_face_survey.measured()` still
+    takes every inked pixel. So on `TS101` the atlas measures against 269 px and
+    the survey against 308, which is why the survey reports that face's
+    lettering extent as 0.63 x 0.59 where the bake logs 0.725 x 0.651 — the same
+    0.873 ratio. The survey is inflated on **10 of 21** faces (`TS101`,
+    `TS106`-`TS112`, `TS414`, `TS615`) and correcting it moves ten published
+    rows, `TS615` by more than 2x, so it is a change to the *grader* and is owed
+    its own diff. Its area column is unaffected — that is a share of the mask
+    rather than of the box.
+
+    🔴 **Why the connectivity, and what reading every inked pixel cost.** TD
+    draws a dimension across each cell and its two extension lines are red, 3 px
+    wide and outside the plate. Everything here is a *fraction* of this, so
+    taking them in is invisible: on `TS101`'s centre row the red runs are
+    163-165, 182-450 and 468-470, giving a box of 308 where the octagon is
+    269 — and the words would have shipped at **0.873** of the size the
+    publisher draws them, rendering perfectly. `Q67` refused every straight
+    mandatory arrow at 17% small for the same reason. Verified byte-identical on
+    every red/black face (`TS102`, `TS115`, `TS116`, `TS131`-`TS133`, `TS183`,
+    `TS733`-`TS735`); on `TS101` it returns a 269 x 269 square, which is what an
+    octagon's bounding box has to be.
+
+    ⚠️ **A knockout needs the mask, not its box.** An octagon's bounding box has
+    paper in its corners, and on a reverse-livery face paper is what the glyph is
+    made of — so cropping to the box alone reads the corners as lettering.
+
+    ⚠️ A cell whose ink encloses no white at all falls back to all of it rather
+    than returning nothing. No face in scope does that — every plate has a field
+    or a knockout — but a plate drawn as a solid blob is a face with nothing on
+    it, and refusing it here would report as missing lettering.
     """
     masks = ink_masks(cell, ("red", "black"))
     inked = masks["red"] | masks["black"]
@@ -293,29 +327,18 @@ def _plate_mask(cell: np.ndarray) -> np.ndarray | None:
     field = enclosed_white(inked)
     if not field.any():
         return inked
-    # Grown by one before the flood, because the field and the ink around it are
-    # adjacent rather than overlapping — a seed of the field alone is
-    # `field & inked`, which is empty, and the flood would return nothing.
-    seed = field.copy()
-    seed[1:, :] |= field[:-1, :]
-    seed[:-1, :] |= field[1:, :]
-    seed[:, 1:] |= field[:, :-1]
-    seed[:, :-1] |= field[:, 1:]
-    return flood(seed, inked) | field
+    # Every enclosed-white component touches ink by construction, so flooding
+    # *from* the field across `inked | field` reaches exactly the field plus the
+    # ink connected to it. No separate seed dilation is needed.
+    return flood(field, inked | field)
 
 
 def _ink_box(coverage: np.ndarray) -> tuple[int, int, int, int] | None:
     """The lettering's own bounding box within the plate, in pixels."""
-    solid = coverage > 0.5
-    if not solid.any():
-        return None
-    ys, xs = np.nonzero(solid)
-    return int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())
+    return _bounds(coverage > 0.5)
 
 
-def _bake(
-    coverage: np.ndarray, glyph_rgb: np.ndarray, field_rgb: np.ndarray, cell_px: int
-) -> np.ndarray:
+def _bake(coverage: np.ndarray, livery: Livery, cell_px: int) -> np.ndarray:
     """One square RGB tile: the glyph's own colour laid over the plate's field.
 
     ⚠️ **Resampled on the coverage and composited afterwards**, never the other
@@ -335,5 +358,5 @@ def _bake(
     # black "would need this to be a parameter". `TS101` is white on red and is
     # that face, so both colours come in from `_livery` — off the config the
     # face already carries, not off a new schema.
-    blended = field_rgb * (1.0 - mask) + glyph_rgb * mask
+    blended = livery.field_rgb * (1.0 - mask) + livery.glyph_rgb * mask
     return np.round(blended).astype(np.uint8)
