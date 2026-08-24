@@ -41,7 +41,8 @@ const TEXT_MESH: String = "signs_text"
 ## ceiling with it — the shipped atlas is measured against this number and fails
 ## above it, and a declared texture that never arrived fails too.
 ##
-## ⚠️ **This is 256 x 256: one square cell for the one face with words on it.**
+## ⚠️ **This is 512 x 256: one square cell for each of the TWO faces with words
+## on them**, laid in a row — `TS102`'s GIVE WAY / 讓 and `TS101`'s STOP / 停.
 ## `text_cell_px` in `hong_kong.yaml` is the other half, `signs.json` publishes
 ## what actually shipped as `text_atlas_px`, and `PROGRESS.md` quotes it as
 ## `Texture memory`. Three numbers that must move together, which is the cost
@@ -49,8 +50,11 @@ const TEXT_MESH: String = "signs_text"
 ##
 ## ⚠️ **Raise it only for lettering that is going to ship.** A generous budget is
 ## a budget nothing reads, which is precisely what `Q63` refused when it declined
-## to simply delete the rule.
-const TEXT_ATLAS_BUDGET_PX: int = 256 * 256
+## to simply delete the rule. It went 256 x 256 -> 512 x 256 in the commit that
+## added the second cell, and neither half of that is optional: a budget raised
+## ahead of the lettering is slack, and lettering added ahead of the budget
+## fails the build. That is the check working.
+const TEXT_ATLAS_BUDGET_PX: int = 512 * 256
 
 
 ## The signs as an instantiable scene, or null if they are not there.

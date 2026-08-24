@@ -30,10 +30,19 @@ import yaml
 
 from pipeline import arrows
 from pipeline.arrows import axis_residual_deg, nearside
-from pipeline.config import SIGN_DRAWINGS, SIGN_PLATES, SIGN_TEXT, Signs, load_city
+from pipeline.config import (
+    SIGN_DRAWINGS,
+    SIGN_OCTAGON,
+    SIGN_PLATES,
+    SIGN_TEXT,
+    SignFace,
+    SignLayer,
+    Signs,
+    load_city,
+)
 from pipeline.fares import Segments
 from pipeline.railings import facing_away
-from pipeline.sign_text import _plate_box
+from pipeline.sign_text import _coverage, _knockout, _livery, _plate_box
 from pipeline.signs import (
     SIGNS_MATERIAL,
     Sign,
@@ -140,6 +149,7 @@ BLOCK: dict[str, Any] = {
     },
     "disc_diameter_m": 0.60,
     "triangle_height_m": 0.68,
+    "octagon_height_m": 0.60,
     "rect_width_m": 0.45,
     "rect_height_m": 0.60,
     "rect_wide_width_m": 0.60,
@@ -729,9 +739,9 @@ class TestTheBlockIsOptional:
         block = {**BLOCK, "faces": dict(BLOCK["faces"])}
         block["faces"]["TS999"] = {
             "plate": "disc",
-            "layers": [{"draw": "octagon", "colour": "red", "size": 1.0}],
+            "layers": [{"draw": "pentagram", "colour": "red", "size": 1.0}],
         }
-        with pytest.raises(ValueError, match="octagon"):
+        with pytest.raises(ValueError, match="pentagram"):
             city_with(tmp_path, block)
 
     def test_an_unknown_colour_fails_the_load(self, tmp_path):
@@ -1480,3 +1490,128 @@ class TestWhereThePlateStops:
     def test_a_cell_with_no_ink_at_all_is_still_no_plate(self):
         """The one case that really is nothing to crop."""
         assert _plate_box(np.full((40, 40, 3), 255, dtype=np.uint8)) is None
+
+
+class TestTheOctagon:
+    """`P3-20`: the STOP plate, and the half-step that decides what it reads as."""
+
+    def test_it_is_as_wide_as_it_is_tall(self, spec):
+        """One authored number, `octagon_height_m`, sizes both extents.
+
+        ✅ **And that squareness is checkable against the publisher**: `Q68`'s
+        corrected plate box reads TD's own `TS101` cell at 269 x 269 px.
+        """
+        half_w, half_h = plate_extent_m(spec, SIGN_OCTAGON)
+        assert math.isclose(half_w, half_h)
+        assert math.isclose(2.0 * half_w, spec.octagon_height_m)
+
+    def test_the_top_is_flat_and_not_a_corner(self, spec):
+        """🔴 **The whole difference between a STOP plate and a rotated square.**
+
+        Vertices at `k * 45` degrees put a point at the top; a STOP has a flat
+        top, flat bottom and flat sides. Half a step out renders perfectly as
+        the wrong shape, which is the only kind of failure this stage has.
+        """
+        (polygon,) = layer_polygons(spec, SIGN_OCTAGON, 1.0, 0.3, 0.3)
+        assert len(polygon) == 8
+        on_top = np.isclose(polygon[:, 1], polygon[:, 1].max())
+        assert int(on_top.sum()) == 2, "a flat top is two vertices, a corner is one"
+
+    def test_the_flats_are_what_the_authored_number_measures(self, spec):
+        """Across the flats, not corner to corner — how a plate is specified."""
+        (polygon,) = layer_polygons(spec, SIGN_OCTAGON, 1.0, 0.3, 0.3)
+        assert math.isclose(polygon[:, 0].max() - polygon[:, 0].min(), 0.6)
+        assert math.isclose(polygon[:, 1].max() - polygon[:, 1].min(), 0.6)
+
+    def test_it_is_wound_like_every_other_plate(self, spec):
+        """⚠️ `signs.gdshader` is `cull_back`, so winding decides visibility and
+        the normal attribute does not. A clockwise plate is not a backwards
+        plate, it is no plate."""
+        (polygon,) = layer_polygons(spec, SIGN_OCTAGON, 1.0, 0.3, 0.3)
+        area = 0.5 * np.sum(
+            polygon[:, 0] * np.roll(polygon[:, 1], -1) - np.roll(polygon[:, 0], -1) * polygon[:, 1]
+        )
+        assert area > 0.0
+
+
+def _face(glyph: str, field: str = "red") -> SignFace:
+    return SignFace(
+        plate=SIGN_OCTAGON,
+        layers=(
+            SignLayer(draw=SIGN_OCTAGON, colour=field, size=1.0),
+            SignLayer(draw=SIGN_TEXT, colour=glyph, size=1.0),
+        ),
+        rank=0,
+        mirror_by_side=False,
+        faces_against_traffic=False,
+    )
+
+
+class TestWhichWayTheLetteringIsCutOut:
+    """🔴 `Q68`: TD draws lettering both ways, and one of them read as zero.
+
+    `TS102` is black ink on a white field; `TS101` is white knocked out of a
+    solid red octagon. The crop that finds the first returns 0.0000 everywhere
+    on the second — `black` ink covers **0.0000** of `TS101`'s cell — so
+    `_ink_box` handed back `None` and `build_atlas` refused a face that is
+    entirely lettering. `Q67` found `TS414` shipped in negative for the same
+    reason: the pipeline assumed one polarity and TD uses two.
+    """
+
+    def test_the_livery_comes_off_the_face_and_not_off_a_default(self, spec):
+        """🔴 **Both colours were hardcoded to black-on-white.** The `text`
+        layer's own `colour` went unread, and the field is the layer beneath."""
+        glyph, field = _livery(spec, _face("white", field="red"))
+        assert tuple(int(v) for v in glyph) == spec.colours["white"]
+        assert tuple(int(v) for v in field) == spec.colours["red"]
+
+    def test_lighter_than_its_field_is_a_knockout(self, spec):
+        """⚠️ **Derived from the livery, never from a colour's NAME.** A second
+        city's STOP is its own publisher's, so `"white"` is not a string this
+        may test for — hard rule 3."""
+        white, red = _livery(spec, _face("white", field="red"))
+        black, _ = _livery(spec, _face("black", field="red"))
+        assert _knockout(white, red)
+        assert not _knockout(black, red)
+
+    def test_a_knockout_reads_the_paper_and_the_other_reads_the_ink(self, spec):
+        """The two polarities on one cell, which is the clearest statement of
+        why this cannot be a single rule: each returns zero where the other
+        returns the glyph."""
+        cell = np.full((20, 20, 3), 255, dtype=np.uint8)
+        cell[5:15, 5:15] = (200, 30, 30)  # a red field
+        cell[8:12, 8:12] = 255  # with paper knocked out of it
+        plate = np.zeros((20, 20), dtype=bool)
+        plate[5:15, 5:15] = True
+
+        knocked = _coverage(cell, plate, knockout=True)
+        assert knocked[9, 9] > 0.9, "the knocked-out paper is the glyph"
+        assert knocked[6, 6] < 0.2, "the red field is not"
+
+        inked = _coverage(cell, plate, knockout=False)
+        assert inked.max() == 0.0, "read the other way, a red plate carries no ink at all"
+
+    def test_the_plate_body_bounds_the_crop(self, spec):
+        """⚠️ **An octagon's bounding box has paper in its corners**, and on a
+        knockout paper is what the glyph is made of — so a crop crossing the
+        plate edge reads the corners as lettering and returns the whole plate."""
+        cell = np.full((20, 20, 3), 255, dtype=np.uint8)
+        cell[5:15, 5:15] = (200, 30, 30)
+        plate = np.zeros((20, 20), dtype=bool)
+        plate[5:15, 5:15] = True
+        assert _coverage(cell, plate, knockout=True)[0, 0] == 0.0
+
+    def test_a_face_whose_words_have_no_field_fails_the_load(self, tmp_path):
+        """🔴 **The field is the layer beneath the words**, so a leading `text`
+        layer has nothing to bake over. `sign_text.py` would have to invent a
+        colour, and the one it invented before `TS101` was white — which on a
+        red plate is a white box with the words in it, rendering as a sticker
+        stuck to the sign."""
+        block = {**BLOCK, "text_cell_px": 64, "text_source": "stands"}
+        block["faces"] = {**BLOCK["faces"]}
+        block["faces"]["TS999"] = {
+            "plate": "octagon",
+            "layers": [{"draw": "text", "colour": "white", "size": 1.0}],
+        }
+        with pytest.raises(ValueError, match="beneath"):
+            city_with(tmp_path, block)

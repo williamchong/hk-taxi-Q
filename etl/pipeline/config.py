@@ -823,6 +823,9 @@ SIGN_RECT_INFO = "rect_info"
 SIGN_BOARD_WIDE = "board_wide"
 SIGN_BOARD_TALL = "board_tall"
 SIGN_TRIANGLE_DOWN = "triangle_down"
+# The STOP plate. Regular, flat-topped, and sized across the flats — so like
+# `disc` and unlike every `rect`, one authored number gives both extents.
+SIGN_OCTAGON = "octagon"
 SIGN_SLASH = "slash"
 SIGN_BACKSLASH = "backslash"
 SIGN_CHEVRONS = "chevrons"
@@ -855,6 +858,7 @@ SIGN_DRAWINGS = (
     SIGN_BOARD_WIDE,
     SIGN_BOARD_TALL,
     SIGN_TRIANGLE_DOWN,
+    SIGN_OCTAGON,
     SIGN_SLASH,
     SIGN_BACKSLASH,
     SIGN_CHEVRONS,
@@ -882,6 +886,7 @@ SIGN_PLATES = (
     SIGN_BOARD_WIDE,
     SIGN_BOARD_TALL,
     SIGN_TRIANGLE_DOWN,
+    SIGN_OCTAGON,
 )
 
 # The livery `pipeline/signs.py` reserves for a plate's back and its post, which
@@ -1029,6 +1034,9 @@ class Signs:
 
     disc_diameter_m: float
     triangle_height_m: float
+    # Across the flats, not corner to corner — the dimension a STOP plate is
+    # specified by, and the one that makes its bounding box square.
+    octagon_height_m: float
     rect_width_m: float
     rect_height_m: float
     rect_wide_width_m: float
@@ -3614,6 +3622,16 @@ def _signs(body: Any, where: str) -> Signs | None:
                     f"and must be greater than 0 and no more than 1"
                 )
             layers.append(SignLayer(draw=draw, colour=colour, size=size))
+        if layers[0].draw == SIGN_TEXT:
+            # 🔴 **The field a glyph is baked over is the layer beneath it**, so
+            # a leading `text` layer has nothing to sit on. `sign_text.py` would
+            # have to invent a colour, and the one it invented before `TS101`
+            # was `white` — which on a red plate bakes a white box with the
+            # words in it and renders as a sticker stuck to the sign.
+            raise ValueError(
+                f"{spot}:layers begins with text; lettering is baked over the layer beneath "
+                f"it, so a face needs a plate colour drawn before its words"
+            )
         rank = str(entry.get("rank", SIGN_RANK_DEFAULT))
         if rank not in SIGN_RANKS:
             raise ValueError(
@@ -3666,6 +3684,7 @@ def _signs(body: Any, where: str) -> Signs | None:
         for name in (
             "disc_diameter_m",
             "triangle_height_m",
+            "octagon_height_m",
             "rect_width_m",
             "rect_height_m",
             "rect_wide_width_m",
@@ -3737,6 +3756,7 @@ def _signs(body: Any, where: str) -> Signs | None:
         colours=colours,
         disc_diameter_m=lengths["disc_diameter_m"],
         triangle_height_m=lengths["triangle_height_m"],
+        octagon_height_m=lengths["octagon_height_m"],
         rect_width_m=lengths["rect_width_m"],
         rect_height_m=lengths["rect_height_m"],
         rect_wide_width_m=lengths["rect_wide_width_m"],

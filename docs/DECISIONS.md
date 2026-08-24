@@ -9234,11 +9234,84 @@ conclusion. ⚠️ **The upper bound is a separate latent bug**: `face_centre` s
 exactly `pole_radius_m`, so the plate is *tangent* to the post and the two are coplanar along one
 line. The standoff should clear the pole rather than touch it, and that is not fixed here.
 
-### What is still refused
+### `TS101` STOP / 停 — what was still refused, and what it actually cost (2026-08-24)
 
-`TS101` STOP / 停 x18. The machinery now exists and the atlas is a row, so it is one config row, one
-octagon `draw` word and a budget moved from 256x256 to 512x256 — deliberately left for its own diff,
-because `Q63`'s whole point is that an image ships when someone declares room for it.
+Shipped. **10 plates drawn** of the 18 the region publishes — 1 refused on a structure (`Q15`), 7 as
+in-carriageway, 1 on an ambiguous pole — and `not_whitelisted` fell by exactly **18**, which is the
+first time that count has been checked against the region rather than asserted from this document.
+The atlas is **512 x 256**, `text_plates` **74 -> 84**, `text_atlas_px` **65,536 -> 131,072**,
+`text_coverage` gains `TS101` at **0.193**, `text_facing_away` **0**. PCK **42,857,500 ->
+42,877,580 B** (+20,080, +0.047%), two exports one variable apart.
+
+🔴 **The estimate above said one config row, one octagon `draw` word and a budget move. It was short
+by two mechanisms, and both are the same mistake in different places: this module knew one way of
+drawing letters and TD uses two.**
+
+**1. The polarity.** `TS102` is black ink on a white field. `TS101` is white **knocked out of a
+solid red octagon** — `black` ink covers **0.0000** of its cell, `_coverage` returned max **0.000**,
+`_ink_box` returned `None`, and `build_atlas` refused a plate that is *entirely* lettering. This is
+`Q67`'s "`TS414` shipped IN NEGATIVE" arriving at the text layer rather than the shape layer.
+
+**2. The livery.** `_bake` read `spec.colours["white"]` and `spec.colours["black"]` under a comment
+saying a face whose lettering is not black "would need this to be a parameter". `TS101` is that
+face.
+
+✅ **Both were answered without a schema change, and the reason is that the config already said
+it.** The `text` layer carries a `colour` that nothing read, and the field a glyph sits on is the
+layer immediately beneath it — so `TS102` is black-on-white and `TS101` is white-on-red off the face
+table as it stands. Polarity is then **derived from those two colours** (lighter than its field is a
+knockout) rather than from the string `"white"` or from a new flag: a second city's STOP is its own
+publisher's, and hard rule 3 does not allow a livery name to be load-bearing in pipeline logic.
+`config.py` refuses a leading `text` layer on the way in, because a face whose words have no field
+would make `sign_text.py` invent a colour — and the one it invented before `TS101` was white, which
+on a red plate is a white box with the words in it, rendering as a sticker stuck to the sign.
+
+✅ **`TS102` is byte-identical throughout** — its atlas cell, its `plate_rect` and its 27.8%
+coverage — which is what says the parameterisation replaced the hardcode rather than moved it.
+
+⚠️ **The octagon is not a 12-gon with a different segment count.** Vertices at `k * 45` degrees put
+a corner at the top and read as a rotated square from a car; a STOP plate has a flat top, a flat
+bottom and flat sides, so they sit at `22.5 + k * 45`. Half a step out renders perfectly as the
+wrong shape. `octagon_height_m: 0.60` is measured across the flats and is **authored** — `Q60`'s
+debt, every TS sheet stamped NOT TO SCALE — matched to `disc_diameter_m` so a STOP reads the same
+size as the NO ENTRY beside it.
+
+✅ **Its squareness is the one proportion here that is genuinely checkable.** A regular octagon's
+bounding box is square, and `sign_face_survey.py` reads its red extent **1.00x1.00 sheet /
+1.00x1.00 drawn**. The `+text` row's area gap — sheet red 0.894 against drawn 1.000 — is the
+lettering the rasteriser cannot see, which is exactly what that annotation means.
+
+✅ **The budget is a ceiling and was mutation-checked**, not asserted: at the old 256 x 256
+declaration `verify_signs` reads *131,072 pixels in total against a declared budget of 65536* and
+`tools/check.sh` exits **1**. `Q63`'s bargain, working in both directions — an image ships when
+someone declares room for it, and only then.
+
+### The prerequisite: a plate's box is the ink that encloses it
+
+🔴 **This landed as its own commit first, and it had to.** `plate_rect` is a *fraction* of the box
+`_plate_box` finds, so an error in that box is invisible by construction — the words render
+perfectly, at the wrong size. TD draws a dimension across every index-plan cell and its two
+extension lines are red, 3 px wide, outside the plate; a bare bounding box of all ink takes them in.
+On `TS101`'s centre row the red runs are **163-165 (3 px)**, **182-450 (269 px)** and **468-470
+(3 px)**, so the box read **308** where the octagon is **269** and the lettering would have shipped
+at **0.873** of the size TD draws it. `Q67` refused every straight mandatory arrow at 17% small for
+the same reason.
+
+So the plate is now the ink connected to the white it *encloses*, plus that white — reusing the
+flood that already did this on the survey's side, hoisted into `sign_sheets.py` as `enclosed_white`
+beside `ink_masks` and for the reason that module already states: both callers are on the truth side
+and must agree on where a plate stops. Verified to move nothing that ships: byte-identical on every
+red/black face (`TS102`, `TS115`, `TS116`, `TS131`-`TS133`, `TS183`, `TS733`, `TS734`, `TS735`), and
+`TS101`'s corrected box is **269 x 269**, which is what an octagon's has to be.
+
+🟡 **And it is not finished.** `sign_face_survey.measured()` still counts the dimension lines, on
+**10 of 21** faces — `TS101`, `TS106`-`TS112`, `TS414`, `TS615` — so the two truth-side callers now
+disagree, which is precisely the drift `sign_sheets.py` warns about. The visible symptom is that the
+survey reports `TS101`'s lettering extent as **0.63 x 0.59** where the bake logs **0.725 x 0.651**,
+the same 0.873 ratio. Correcting it moves ten published rows — `TS615` by more than **2x**, from a
+130 x 47 box to 269 x 269, which is plainly the better reading — so it is a change to the *grader*
+and owed its own diff with its own before-and-after tables. The area column is not affected: that is
+a share of the mask, not of the box.
 
 See also: `Q63` for the contract amendment this is the first user of · `Q65` for the scope that cut
 it to two cells · `Q67` for the survey that measures the lettering and cannot grade it ·

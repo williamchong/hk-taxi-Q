@@ -151,6 +151,7 @@ from pipeline.config import (
     SIGN_BOARD_WIDE,
     SIGN_CHEVRONS,
     SIGN_DISC,
+    SIGN_OCTAGON,
     SIGN_RANK_SUPPLEMENTARY,
     SIGN_RECT,
     SIGN_RECT_INFO,
@@ -722,6 +723,14 @@ def plate_extent_m(spec: Signs, plate: str) -> tuple[float, float]:
         # a given height, so one authored number sizes it.
         half_height = 0.5 * spec.triangle_height_m
         return half_height / math.sqrt(3.0) * 2.0, half_height
+    if plate == SIGN_OCTAGON:
+        # A regular octagon is as wide as it is tall, so `octagon_height_m` —
+        # measured across the flats, which is how a STOP plate is specified —
+        # gives both extents. ⚠️ **That squareness is checkable against the
+        # publisher**: `Q68`'s corrected plate box reads TD's own `TS101` cell at
+        # 269 x 269 px, which is why the box correction had to land first.
+        half = 0.5 * spec.octagon_height_m
+        return half, half
     if plate in _PLATE_RECTS:
         width_m, height_m = _PLATE_RECTS[plate](spec)
         return 0.5 * width_m, 0.5 * height_m
@@ -750,6 +759,8 @@ def layer_polygons(
         return [_rect(half_w, half_h)]
     if draw == SIGN_TRIANGLE_DOWN:
         return [ccw([(-half_w, half_h), (half_w, half_h), (0.0, -half_h)])]
+    if draw == SIGN_OCTAGON:
+        return [_octagon(min(half_w, half_h))]
     if draw in (SIGN_SLASH, SIGN_BACKSLASH):
         # The prohibition bar at 45 degrees: `slash` upper-left to lower-right,
         # `backslash` mirrored. Thickness is `_SLASH_THICKNESS` of the diameter —
@@ -1018,6 +1029,24 @@ def _u_turn_arrow(half_w: float, half_h: float) -> list[np.ndarray]:
 
 def _disc(radius: float, segments: int) -> np.ndarray:
     angles = np.linspace(0.0, 2.0 * math.pi, segments, endpoint=False)
+    return np.column_stack([radius * np.cos(angles), radius * np.sin(angles)])
+
+
+def _octagon(half: float) -> np.ndarray:
+    """A regular octagon `2 * half` across the flats, flat side up.
+
+    ⚠️ **Offset half a step, and that is the whole shape.** Vertices at
+    `k * 45` degrees give a corner at the top and read as a rotated square from
+    a car; a STOP plate has a *flat* top, a flat bottom and flat sides with the
+    corners cut off. So the vertices sit at `22.5 + k * 45`, and the radius is
+    the circumscribed one that puts each flat at `half`.
+
+    ⚠️ **Not `_disc(half, 8)`, for that reason** — the segment count is right and
+    the phase is not, and the two differ by a 22.5 degree turn that renders
+    perfectly as the wrong sign.
+    """
+    angles = np.radians(22.5 + 45.0 * np.arange(8))
+    radius = half / math.cos(math.radians(22.5))
     return np.column_stack([radius * np.cos(angles), radius * np.sin(angles)])
 
 

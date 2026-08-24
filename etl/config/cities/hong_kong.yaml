@@ -1052,8 +1052,10 @@ signs:
   # *shape* are here — 912 of the region's 3,276. Every sign whose meaning is
   # its **text** is refused: TS860 time plates x148, TS280 parking x74, the
   # TS21xx/TS22xx no-stopping-zone family, the vehicle-class prohibitions.
-  # Roughly 2,360 signs. TS101 STOP x18 is refused with them rather than shipped
-  # as a wordless octagon.
+  # Roughly 2,360 signs. ⚠️ **TS101 STOP x18 was refused with them and is not
+  # any more**: it is lettered, from the same sheet and by the same machinery
+  # TS102's 讓 uses, so the thing that refused it — a wordless octagon instructs
+  # nothing — stopped applying the moment the atlas existed (Q68).
   #
   # 🔴 **"TS182 CYCLES ONLY x155 needs a texture" was here, and it was wrong on
   # the code.** TS182 is ONE WAY TRAFFIC, a pure shape, and it is drawn below;
@@ -1183,7 +1185,38 @@ signs:
     TS111: {plate: disc, layers: [{draw: disc, colour: blue, size: 1.00}, {draw: arrow_bent_left, colour: white, size: 0.70}]}
     TS112: {plate: disc, layers: [{draw: disc, colour: blue, size: 1.00}, {draw: arrow_bent_right, colour: white, size: 0.70}]}
 
-    # -- give way, and the one face in this game with words on it --
+    # -- stop, and the two faces in this game with words on them --
+    #
+    # ✅ **STOP / 停 SHIPS.** The companion to TS102 below, and the plate half of
+    # the pair P3-23 opened: 114 stop lines were drawn on the carriageway with
+    # nothing standing over them. Q68 left this as the last thing the atlas
+    # refused, deliberately for its own diff, because Q63's point is that an
+    # image ships when someone declares room for it — and the room is declared
+    # in `generated_signs.gd` in the same commit as this row.
+    #
+    # 🔴 **This face is drawn in NEGATIVE and that is not a detail.** TD's cell
+    # is a solid red octagon with the words *knocked out* of it, where TS102 is
+    # black ink on a white field. The crop runs the opposite way for it, so a
+    # face's polarity is read off the two colours below — a `white` glyph over a
+    # `red` field is lighter than what it sits on, and that is what says
+    # knockout. Q67 found TS414 shipped in negative for the same reason: TD
+    # draws both ways and the pipeline assumed one.
+    #
+    # ⚠️ **The colours here are READ, where they used to be assumed.** `colour`
+    # on a `text` layer went unused and `sign_text.py` baked black-on-white for
+    # every face; the field is the layer beneath the words. Nothing about the
+    # face schema changed to allow it.
+    #
+    # ⚠️ **`octagon` is not a 12-gon with a different count** — a STOP plate has
+    # a flat top and flat sides, so its vertices sit at 22.5 + k*45 degrees. Half
+    # a step out and it reads as a rotated square, perfectly rendered.
+    TS101:
+      plate: octagon
+      layers:
+        - {draw: octagon, colour: red, size: 1.00}
+        - {draw: text, colour: white, size: 1.00}
+
+    # -- give way, and the second face with words on it --
     #
     # ✅ **讓 SHIPS (P3-20, 2026-08-23).** This plate reads "GIVE WAY / 讓" on
     # CT174/51-1(1)C and shipped as a bare red triangle until now — from the road
@@ -1385,6 +1418,10 @@ signs:
   # numbers in this block. They are not a position: where a sign goes is read.
   disc_diameter_m: 0.60
   triangle_height_m: 0.68
+  # STOP, across the flats. Matched to disc_diameter_m so a STOP reads the
+  # same size as the NO ENTRY beside it; TD publishes no dimension for
+  # either, and this is Q60's debt at one more plate.
+  octagon_height_m: 0.60
   rect_width_m: 0.45
   rect_height_m: 0.60
   # The supplementary arrow plates are landscape where TS182 is portrait.
