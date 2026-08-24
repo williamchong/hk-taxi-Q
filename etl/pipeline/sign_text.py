@@ -53,7 +53,7 @@ from pathlib import Path
 import numpy as np
 
 from pipeline.config import Signs
-from pipeline.sign_sheets import ink_masks, load_sheet
+from pipeline.sign_sheets import enclosed_white, flood, ink_masks, load_sheet
 
 log = logging.getLogger(__name__)
 
@@ -188,11 +188,43 @@ def _plate_box(cell: np.ndarray) -> tuple[int, int, int, int] | None:
     ⚠️ **The same ink test `sign_face_survey.py` grades proportions with**, and
     it has to be: the survey measures a face against the plate box it finds, so
     a threshold that moved here alone would bake a crop of a box nothing graded.
+
+    🔴 **The plate is the ink that ENCLOSES something, not every inked pixel —
+    and reading it the second way put the lettering 13% small.** TD draws a
+    dimension across each cell, and its two extension lines are red, 3 px wide
+    and outside the plate. A bare bounding box of all ink takes them in: on
+    `TS101` the octagon runs x 182-450 (269 px) and the box read 163-470 (308),
+    so a `plate_rect` measured against it placed `STOP` at **0.873** of the size
+    the publisher draws it. Since everything here is a *fraction* of this box,
+    an error in it is invisible — the words render perfectly, just small.
+
+    So the plate is the ink connected to the white it encloses, plus that white.
+    ⚠️ **Verified to move nothing that ships**: swept over the whole face table,
+    it is byte-identical on every red/black face — `TS102`, `TS115`, `TS116`,
+    `TS131`-`TS133`, `TS183`, `TS733`, `TS734`, `TS735` — and differs only on
+    `TS101`, where it returns a 269 x 269 square, which is what an octagon's
+    bounding box has to be.
+
+    ⚠️ A cell whose ink encloses no white at all falls back to the old reading
+    rather than returning nothing. No face in scope does that — every plate has
+    a field or a knockout — but a plate drawn as a solid blob is a face with
+    nothing on it, and refusing it here would report as missing lettering.
     """
     masks = ink_masks(cell, ("red", "black"))
     inked = masks["red"] | masks["black"]
     if not inked.any():
         return None
+    field = enclosed_white(inked)
+    if field.any():
+        # Grown by one before the flood, because the field and the ink around it
+        # are adjacent rather than overlapping — a seed of the field alone is
+        # `field & inked`, which is empty, and the flood would return nothing.
+        seed = field.copy()
+        seed[1:, :] |= field[:-1, :]
+        seed[:-1, :] |= field[1:, :]
+        seed[:, 1:] |= field[:, :-1]
+        seed[:, :-1] |= field[:, 1:]
+        inked = flood(seed, inked) | field
     ys, xs = np.nonzero(inked)
     return int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())
 

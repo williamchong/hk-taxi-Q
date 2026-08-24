@@ -67,7 +67,7 @@ from pipeline.config import (  # noqa: E402
     load_city,
 )
 from pipeline.fetch import cached_source  # noqa: E402
-from pipeline.sign_sheets import ink_masks, load_sheet  # noqa: E402
+from pipeline.sign_sheets import enclosed_white, ink_masks, load_sheet  # noqa: E402
 from pipeline.signs import layer_polygons, plate_extent_m  # noqa: E402
 
 log = logging.getLogger(__name__)
@@ -99,10 +99,12 @@ def _note(lettered: bool, worst: float) -> str:
     return f"<-- {worst:.3f}" if worst >= _NOTE else ""
 
 
-# The sheet's ink test lives in `pipeline/sign_sheets.py` beside the reader that
-# produces the cell, because `pipeline/sign_text.py` crops against the same
-# thresholds and the two must not drift apart. Its comment there records why the
-# sheet is classified by hue family and not against `signs.colours`.
+# The sheet's ink test and its enclosed-white rule both live in
+# `pipeline/sign_sheets.py` beside the reader that produces the cell, because
+# `pipeline/sign_text.py` crops against the same thresholds and the same notion
+# of where a plate stops, and the two must not drift apart. The comments there
+# record why the sheet is classified by hue family and not against
+# `signs.colours`, and `enclosed_white` began here as `_interior`.
 
 
 @dataclass(frozen=True)
@@ -115,30 +117,6 @@ class Shares:
         return self.by_colour.get(name, 0.0)
 
 
-def _interior(white: np.ndarray) -> np.ndarray:
-    """`white` minus the part of it connected to the border of the image.
-
-    The plate outline is what everything here is a fraction of, and on a disc or
-    a triangle the cell's corners are white too. Flood the white in from the
-    border and whatever is left is the plate's own white field.
-    """
-    reached = np.zeros_like(white)
-    reached[0, :] |= white[0, :]
-    reached[-1, :] |= white[-1, :]
-    reached[:, 0] |= white[:, 0]
-    reached[:, -1] |= white[:, -1]
-    while True:
-        grown = reached.copy()
-        grown[1:, :] |= reached[:-1, :]
-        grown[:-1, :] |= reached[1:, :]
-        grown[:, 1:] |= reached[:, :-1]
-        grown[:, :-1] |= reached[:, 1:]
-        grown &= white
-        if int(grown.sum()) == int(reached.sum()):
-            return white & ~reached
-        reached = grown
-
-
 def measured(cell: np.ndarray, names: list[str]) -> tuple[Shares, dict[str, tuple[float, float]]]:
     """Colour shares and extents of the publisher's cell, against its plate."""
     masks = ink_masks(cell, names)
@@ -147,7 +125,7 @@ def measured(cell: np.ndarray, names: list[str]) -> tuple[Shares, dict[str, tupl
         inked |= mask
     # ⚠️ The plate is every inked pixel plus the white it *encloses* — so the
     # field of a NO ENTRY counts and the paper around the disc does not.
-    field = _interior(~inked)
+    field = enclosed_white(inked)
     if "white" in names:
         masks["white"] = field
     plate = inked | field

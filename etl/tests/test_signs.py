@@ -33,6 +33,7 @@ from pipeline.arrows import axis_residual_deg, nearside
 from pipeline.config import SIGN_DRAWINGS, SIGN_PLATES, SIGN_TEXT, Signs, load_city
 from pipeline.fares import Segments
 from pipeline.railings import facing_away
+from pipeline.sign_text import _plate_box
 from pipeline.signs import (
     SIGNS_MATERIAL,
     Sign,
@@ -1436,3 +1437,46 @@ class TestTheLetteringLayer:
         assert city.signs is not None
         assert city.signs.text_cell_px == 0
         assert city.signs.text_source is None
+
+
+def _cell(*, hole: bool) -> np.ndarray:
+    """A synthetic index-plan cell: a red plate, and TD's dimension either side.
+
+    The plate is a red square from (10, 10) to (29, 29); with `hole`, it carries
+    a white field from (15, 15) to (24, 24). The two 1 px red columns at x=2 and
+    x=37 stand in for the extension lines of the dimension TD draws across every
+    cell — red, thin, detached, and **not** part of the plate.
+    """
+    cell = np.full((40, 40, 3), 255, dtype=np.uint8)
+    red = (200, 30, 30)
+    cell[10:30, 10:30] = red
+    if hole:
+        cell[15:25, 15:25] = 255
+    cell[15:26, 2] = red
+    cell[15:26, 37] = red
+    return cell
+
+
+class TestWhereThePlateStops:
+    """🔴 `Q68`: the box every lettering fraction is measured against.
+
+    An error here is invisible by construction — `plate_rect` is a *fraction* of
+    this box, so a box read 13% wide prints the words 13% small on a plate that
+    otherwise renders perfectly. `TS101` is the case that found it: TD's two red
+    dimension extension lines took the octagon's box from 269 px to 308.
+    """
+
+    def test_the_dimension_lines_are_not_the_plate(self):
+        """The plate is the ink enclosing the field, not every red pixel."""
+        assert _plate_box(_cell(hole=True)) == (10, 10, 29, 29)
+
+    def test_ink_enclosing_nothing_falls_back_to_all_of_it(self):
+        """⚠️ **A solid blob is a face with nothing on it, and refusing it here
+        would report as missing lettering** — `build_atlas` raises on a `None`
+        box, and that message would name the wrong defect. No face in scope
+        reaches this, and the old reading is the honest answer when one does."""
+        assert _plate_box(_cell(hole=False)) == (2, 10, 37, 29)
+
+    def test_a_cell_with_no_ink_at_all_is_still_no_plate(self):
+        """The one case that really is nothing to crop."""
+        assert _plate_box(np.full((40, 40, 3), 255, dtype=np.uint8)) is None

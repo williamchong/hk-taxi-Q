@@ -107,6 +107,50 @@ def ink_masks(cell: np.ndarray, names: Iterable[str]) -> dict[str, np.ndarray]:
     return {name: INK[name](*channels) for name in names if name in INK}
 
 
+def flood(seed: np.ndarray, allow: np.ndarray) -> np.ndarray:
+    """`seed` grown four-connected as far as `allow` lets it.
+
+    Iterated dilation rather than a labelling pass, because `scipy` is not a
+    dependency of this pipeline and buying one for a connected component would
+    be the largest claim in the module. A cell is a few hundred pixels across,
+    so the loop converges in tens of milliseconds.
+    """
+    reached = seed & allow
+    while True:
+        grown = reached.copy()
+        grown[1:, :] |= reached[:-1, :]
+        grown[:-1, :] |= reached[1:, :]
+        grown[:, 1:] |= reached[:, :-1]
+        grown[:, :-1] |= reached[:, 1:]
+        grown &= allow
+        if int(grown.sum()) == int(reached.sum()):
+            return reached
+        reached = grown
+
+
+def enclosed_white(inked: np.ndarray) -> np.ndarray:
+    """The un-inked pixels a cell's ink *encloses* — the plate's own white field.
+
+    Flood the white in from the cell's border and whatever is left is inside
+    something: the field of a NO ENTRY, the paper showing through a knocked-out
+    glyph. The paper *around* a disc or a triangle is reached and excluded.
+
+    ⚠️ **Here for `ink_masks`'s reason, restated.** Both callers of this module
+    are on the TRUTH side and must agree on where a plate stops — the survey
+    measures a cell's proportions against it and the atlas crops lettering out
+    of it, so a rule that moved in one alone would bake a crop of a box the
+    other never graded. This began as `_interior` in `tools/sign_face_survey.py`
+    and was hoisted the first time `pipeline/sign_text.py` needed it.
+    """
+    white = ~inked
+    border = np.zeros_like(white)
+    border[0, :] |= white[0, :]
+    border[-1, :] |= white[-1, :]
+    border[:, 0] |= white[:, 0]
+    border[:, -1] |= white[:, -1]
+    return white & ~flood(border, white)
+
+
 # 🔴 **Rendering a sheet is the expensive act in this module** — one page is
 # 10,104 x 7,143 px, ~0.7 s and 216 MB — and the 21 faces the region configures
 # live on four sheets. Without this, `sign_face_survey.py` re-rendered a page
