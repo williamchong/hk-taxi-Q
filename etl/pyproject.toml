@@ -37,6 +37,17 @@ dependencies = [
 # `~/hk-traffic-sign-map` uses and which would have put three brew packages on
 # the critical path of every build.
 #
+# ⚠️ **`sign_sheets.load_sheet` renders with `rev_byteorder=True`, which is NOT
+# a declared parameter of `PdfPage.render`** — it reaches the bitmap through
+# `render(**kwargs)` and on into `PdfBitmap.new_native`. So the kwarg travels
+# through a passthrough, and a release that renames it fails loudly where one
+# that changes the bitmap's FORMAT does not. `tests/test_sign_sheets.py` is what
+# catches the second, and it only runs where the dataspec has been fetched.
+# ✅ **The `>=4.30` floor was checked rather than assumed, and it holds**: 4.30.0
+# has the same `render()` signature and both converters, and decodes this
+# region's sheets to bytes identical to 5.13.0's. No ceiling, because the thing
+# that would justify one is what the test above already watches for.
+#
 # 🔴 **`pdfminer.six` WAS declared here and nothing ever imported it** (removed
 # `Q67`). The comment it carried described a design that was not built: it was to
 # read the sheets' ruling lines as vector coordinates in PDF points, and

@@ -166,12 +166,22 @@ def enclosed_white(inked: np.ndarray) -> np.ndarray:
     return white & ~flood(border, white)
 
 
-# 🔴 **Rendering a sheet is the expensive act in this module** — one page is
-# 10,104 x 7,143 px, ~0.7 s and 216 MB — and the 21 faces the region configures
-# live on four sheets. Without this, `sign_face_survey.py` re-rendered a page
-# per *face*: 14.8 s and 5.5 GB peak, against 3.8 s and 1.8 GB with it, for
-# byte-identical output. Keyed by scale as well as source, because a cell
-# measured at one scale is not the cell measured at another.
+# 🔴 **A rendered sheet is the big ALLOCATION in this module** — one page is
+# 10,104 x 7,143 px and **217 MB** — and the 22 faces the region configures live
+# on five sheets. Without this, `sign_face_survey.py` re-rendered a page per
+# *face*: 14.8 s and 5.5 GB peak, against 3.8 s and 1.8 GB with it, for
+# byte-identical output.
+#
+# ⚠️ **Not the big COST in time, and this used to say it was.** A page was ~0.7 s
+# when those figures were taken; `_grid`'s `np.maximum` and then the decode below
+# have it at ~145 ms, which is why `_grid` can say flatly that the rendering is
+# not the expensive act. The two statements contradicted each other in this file
+# for a while. What the cache buys now is overwhelmingly the 217 MB.
+#
+# ⚠️ **Keyed by scale as well as source**, because a cell measured at one scale is
+# not the cell measured at another — so the slot is really one sheet per
+# *(source, scale)*, and a caller that varies scale accumulates 217 MB a value
+# for the life of the process rather than replacing. Nothing does today.
 _RESIDENT: dict[tuple[Path, float], Sheet] = {}
 
 
@@ -187,6 +197,10 @@ class Sheet:
     name: str
     first_code: int
     last_code: int
+    # ⚠️ A **view** into the rendered bitmap's buffer, not an owned copy — see
+    # `load_sheet`. Marked non-writeable there rather than left read-only by
+    # convention: `frozen=True` stops the field being rebound and does nothing
+    # about the pixels, and these alias a buffer two callers share.
     image: np.ndarray  # (h, w, 3) uint8
     rows: tuple[float, ...]
     columns: tuple[tuple[float, float], ...]
@@ -215,7 +229,7 @@ class Sheet:
         x0, x1 = self.columns[block]
         y0, y1 = self.rows[row], self.rows[row + 1]
         # ⚠️ **A copy, not a view.** Basic slicing would keep this cell's whole
-        # parent sheet — 216 MB at `DEFAULT_SCALE` — alive for as long as the
+        # parent sheet — 217 MB at `DEFAULT_SCALE` — alive for as long as the
         # caller holds the crop, and `sign_face_survey.py` holds one per face to
         # build its contact sheet. Copying costs well under a megabyte.
         return np.ascontiguousarray(
@@ -282,7 +296,41 @@ def load_sheet(dataspec_zip: Path, code: int, *, scale: float = DEFAULT_SCALE) -
     document = pdfium.PdfDocument(pdf)
     if len(document) != 1:
         raise ValueError(f"{member}: {len(document)} pages, expected 1")
-    image = np.asarray(document[0].render(scale=scale).to_pil().convert("RGB"))
+    # ⚠️ **`.to_numpy()` on a byteorder-reversed render, NOT `.to_pil().convert("RGB")`.**
+    # pdfium renders `FPDFBitmap_BGR` and `rev_byteorder` gives RGB back in place,
+    # so the PIL round-trip was decoding to the same bytes through four copies of
+    # a 217 MB page. Byte-identical on the whole of every sheet this region reads
+    # — five of them, full page rather than one cell.
+    #
+    # ⚠️ **The decode alone is 1,167 MB against 307 MB; the STAGE is 1,303 against
+    # 514.** Two different measurements, and the second is the one to quote —
+    # `PROGRESS.md` carries it, along with why the first over-sells the win.
+    #
+    # 🔴 **The array is a VIEW: `OWNDATA` is False, where the PIL round-trip
+    # returned a copy.** What keeps the buffer alive is `.base`, a Python-side
+    # ctypes array, so it outlives the bitmap and the document that made it.
+    # That is the invariant this line rests on, it is pinned by
+    # `test_a_sheets_pixels_outlive_the_document_that_rendered_them`, and
+    # `cell()` below carries the mirror-image warning for the same reason.
+    #
+    # 🔴 **And the guard is not a formality.** The PIL round-trip normalised the
+    # bitmap's format and this does not, so a pdfium that takes an alpha path
+    # hands back `(h, w, 4)`. `_grid` and `ink_masks` both index `range(3)`, so
+    # under `rev_byteorder` an RGBA page would keep working — correctly, on a
+    # third more memory, silently. This is the only thing between that and
+    # nothing.
+    image = document[0].render(scale=scale, rev_byteorder=True).to_numpy()
+    if image.ndim != 3 or image.shape[2] != 3 or image.dtype != np.uint8:
+        raise ValueError(
+            f"{member}: rendered {image.shape} {image.dtype}, expected (h, w, 3) uint8"
+        )
+    # ⚠️ **Enforced, not documented.** These pixels are a foreign buffer shared by
+    # both truth-side callers, and `Sheet` being frozen protects the reference
+    # rather than what it points at. It also makes `cell()`'s copy audible: if a
+    # trim ever made that slice full-width, `ascontiguousarray` would no-op and
+    # hand back a writeable alias of the page — this turns that into an error
+    # instead of a caller quietly scribbling on every other caller's sheet.
+    image.flags.writeable = False
 
     rows, columns = _grid(image)
     expected = last - first + 1
@@ -313,7 +361,7 @@ def load_sheet(dataspec_zip: Path, code: int, *, scale: float = DEFAULT_SCALE) -
     # One resident sheet per source, replaced rather than accumulated: both
     # callers walk `sorted(codes)`, so consecutive codes land on the same sheet
     # and a plain overwrite is the whole of the eviction policy. Holding two
-    # would double the resident 216 MB to buy nothing.
+    # would double the resident 217 MB to buy nothing.
     _RESIDENT[(dataspec_zip, scale)] = sheet
     return sheet
 
