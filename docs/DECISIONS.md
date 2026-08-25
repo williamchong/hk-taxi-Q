@@ -105,6 +105,7 @@ wins.
 | `Q74` | `Q71`'s trigger has fired on the preview scripts, and the prose has nowhere to go | 🟡 Open, deferred — ten files, four byte-identical, 0 lines of logic differing; the merge is owed and the per-layer *arguments* have no `.tres` to move into |
 | `Q76` | A layer whose vocabulary nothing publishes, and an assembly that is not a stack | ✅ Closed — the gate is a rule about *spelling*, published as `drawn_by_code`/`refused_by_code` because nothing can grade it; and one head stands for a whole assembly, after the first build drew 8.53 m masts |
 | `Q77` | **A dark signal is not a signal with no state** | ✅ Closed — `P3-17`'s layer built correctly and was dropped from the bundle anyway: unlit heads assert 415 out-of-service signals, and a lit cycle cannot be derived honestly (18 of 107 junctions opposable, 57 of 137 partially populated). `B3` is the route |
+| `Q78` | **A one-way correction was written as a two-way move, and `abs()` hid it** | ✅ Closed — the sign registration pushed *and pulled*: 95 of 654 posts were dragged toward the carriageway by a rule whose stated reason runs outward only, invisible because `shift_m` discards the sign. Clamped, with `posts_kept_as_surveyed` to name the population |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -10447,3 +10448,132 @@ promotions and `rendering_method.web` dropped with every comment stripped. Caugh
 **See.** `Q76` for the gate and the assembly · `Q62` for the ungraded facing and why the render is
 the evidence · `Q54` for sourced-not-invented · `Q69` for junction-mouth hosting · `P3-18` for the
 purely-visual precedent that does not transfer · `Q75` for the settings hazard
+
+## `Q78` — Registration is a one-way correction, and it was written as a two-way move
+
+**Closed 2026-08-26.** `Q60`'s registration exists for a stated reason: `widen_default` draws the
+carriageway ribbon **1.6x** the real one, so a pole surveyed on the real kerb lands in the drawn
+lane and the player drives through it. `hong_kong.yaml` says exactly that, and it is an argument
+about **one direction**.
+
+It was implemented as an unconditional assignment:
+
+```python
+target_m = side * (half_width_m + spec.outset_m)
+```
+
+so every post landed on the identical offset whatever its surveyed position was. Measured over the
+shipped bundle, reusing the pipeline's own read, snap and ribbons:
+
+| | posts | plates | move p50 | p90 | max |
+|---|---|---|---|---|---|
+| pushed outward — surveyed inside kerb+outset | 559 (85.5%) | 778 | 1.93 m | 3.17 | 5.52 |
+| pulled inward — surveyed already clear | **95 (14.5%)** | 121 | 0.69 m | 2.54 | 4.51 |
+| exactly on target | 0 | | | | |
+
+**95 posts were dragged toward the carriageway by a rule whose justification covers only the
+opposite direction** — 36 of them by more than a metre, 6 by more than three.
+
+### 🔴 What hid it, and the general lesson
+
+`shift_m` is `abs(target_m - snap.offset_m)`. **The sign is discarded at the point of
+measurement**, so an inward pull and an outward push are the same number. This is not a counter
+that read the wrong value; it is a counter that *cannot* read this value. It shipped through three
+published distributions, a closing partition and a green `check.sh`.
+
+> **A directional correction measured with an absolute value cannot report its own direction.**
+
+⚠️ **`railings.py` and `signals.py` compute `shift_m` the same way** and are not fixed here — see
+the asymmetry below. The lesson is recorded against all three.
+
+### What changed
+
+A post surveyed further out than `half_width_m + outset_m` keeps the point TD surveyed. Nothing
+else about the stage changes: `side` still comes off `snap.offset_m`, so the facing derivation is
+untouched, and the `in_carriageway` refusal still runs on the kept point — standing clear of one's
+own host kerb says nothing about an overlapping ribbon.
+
+- **Threshold is `half_width_m + outset_m`, not the bare drawn kerb.** The bare-kerb variant keeps
+  151 posts but strands 56 in the 0–0.6 m gutter band, which stops the rule being monotone.
+  `outset_m` is documented as *"a footway width, not a sign fact"*, so nudging a post out of the
+  gutter is the same correction, small.
+- **`shift_m` appends a real `0.0`.** Skipping the append was the tidier branch and would have
+  quietly stopped the documented identity closing. `posts_kept_as_surveyed` names the zeros.
+- **Unconditional, no config flag.** Hard rule 4 governs tuning values; this is a rule, and every
+  city wants it. The new counter is *data-sensitive* — it moves with the survey and with
+  `widen_default` — so unlike `no_entry_against_flow` it needs no mutation to be falsifiable.
+- **`_register` was lifted out of `build_region`**, mirroring `signals.py:_register`, so the branch
+  could be tested rather than re-derived in a test body. A test that restates the condition it is
+  checking is `Q72`'s tautology in a new place.
+
+### Measured, before and after
+
+| | before | after |
+|---|---|---|
+| `schema_version` | 3 | **4** |
+| `drawn` (plates) | 681 | 681 |
+| `poles_drawn` | 503 | **504** |
+| `posts_merged_after_shift` | 11 | **10** |
+| `posts_in_carriageway` / `in_carriageway` | 140 / 218 | 140 / 218 |
+| `posts_over_shift` / `over_shift` | 0 / 0 | 0 / 0 |
+| `posts_kept_as_surveyed` | — | **95** |
+| `shift_m` | p50 1.8069, p90 3.1038, p99 4.5764, max 5.5243, n 654 | p50 **1.7016**, p90 3.0737, p99 4.5764, max 5.5243, n **654** |
+| `plates_turned` / `facing_away` | 197 / 0 | 197 / 0 |
+| `no_entry_against_flow` / `no_entry_on_two_way` | 0 / 6 | 0 / 6 |
+| triangles / `bytes` | 20,533 / 1,065,464 | 20,549 / 1,066,400 |
+
+⚠️ **`drawn` is the invariant, not `poles_drawn`.** A post left where it was surveyed keeps its
+separation from its neighbour, so `posts_merged_after_shift` can only fall — and `poles_drawn` rises
+by exactly what it stops folding away. The identity `len(shift_m) == poles_drawn + posts_over_shift
++ posts_in_carriageway + posts_merged_after_shift` closes on both sides: 654 = 503+0+140+11 before,
+654 = 504+0+140+10 after. A plan for this work asserted `poles_drawn` would be unchanged *and* that
+merges might fall; those cannot both hold, and taking the first as a stop-condition would have
+halted the build on a correct result.
+
+⚠️ **p99 and max did not move, because the tail is all pushes.** Only the low half of the
+distribution changed, which is what a fix to the *inward* population looks like.
+
+⚠️ **`max_shift_m` has quietly narrowed.** It can now only refuse a **push** — a post surveyed
+clear is kept, and a kept post makes no move for the bar to judge.
+
+⚠️ **`PROGRESS.md`'s signs row was stale before this task touched it**, reading 499 / 648 / 138 /
+1.79 and 146 merged against its own 681-on-503 headline. The before column above is a fresh build,
+not that row.
+
+### The evidence is a render, and had to be
+
+`Q62`: a facing or a position on this layer **cannot be graded against anything published**, so the
+evidence is an A/B at one fixed camera — `city_preview.tscn` with an explicit `--camera`/`--look`,
+never a driven frame (`Q76` withdrew a figure over exactly that). Shot at
+`--camera=932,9,736 --look=958,3.5,757`, on the densest cluster of kept posts (8 near x=953 z=750,
+carrying the largest avoided pull at 3.58 m). The two *after* frames are byte-identical, so the
+camera was not disturbed mid-shoot. The same posts stand in both frames, displaced laterally: in
+*before* they sit further into the carriageway, in *after* they stand back on the footway. No post
+is lost, which is `drawn` holding at 681 seen from the other side.
+
+### 🔴 The divergence, stated so nobody "restores consistency"
+
+`railings.py` and `signals.py` carry the identical unconditional push, and this file has described
+them as one move at three layers.
+
+- **`signals.py` is out of scope** — `Q77` dropped the layer, `hong_kong.yaml` declares no
+  `signals:` block, and nothing ships.
+- **`railings.py` is out of scope for a substantive reason, not deferral.** 32.1% of railing metres
+  are outside the ribbon, so the affected share is *larger*. But a fence is a **run**, and the shift
+  bar is applied **per sample**. A conditional push there would kink a run wherever consecutive
+  samples straddle the threshold, turning a straight source fence into a zigzag. **A point object
+  can take this rule and a polyline cannot.**
+
+### ⚠️ What this does NOT fix
+
+The prompt for this work was that sign poles line up on an identical offset. **That is true of
+100% of drawn posts, not 77.3%**, and this change frees only 14.5% of them. The collinearity's
+cause is that `outset_m` is a single constant and the target is computed from the ribbon — **not**
+the direction of the push. The obvious remedy, per-post jitter, is `Q54`'s invention on a published
+position and is refused. **The look question is unresolved, and probably unresolvable without
+inventing position.**
+
+**See.** `Q60` for the railing registration this is the second layer of · `Q58` for why `shift_m`
+reads outside its own bar · `Q54` for sourced-not-invented and why jitter is refused · `Q62` for the
+ungraded facing and why the render is the evidence · `Q72` for the counter that was a tautology ·
+`P3-16` for the layer

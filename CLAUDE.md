@@ -212,6 +212,25 @@ Common emoji for this project:
   ⚠️ **A railings change is also a shader change** —
   `check.sh` exits 0 on a shader that fails to compile, so render and `grep -i "shader error"`.
   Numbers in `Q60` and `Q61`.
+- **`signs.outset_m`, `max_shift_m`, or `signs._register`: paste `signs.json`'s `drawn`,
+  `poles_drawn`, `posts_kept_as_surveyed`, `posts_over_shift`, `posts_in_carriageway`,
+  `posts_merged_after_shift` and `shift_m`, before and after — and A/B render one street that
+  carries kept posts.** 🔴 **`shift_m` is an absolute value, so it CANNOT report the direction of
+  the move it measures.** That is what let the registration pull 95 of 654 posts *toward* the
+  carriageway — a correction whose stated reason runs outward only — through three published
+  distributions and a green `check.sh` (`Q78`). ⚠️ **`drawn` is the invariant, NOT `poles_drawn`**:
+  a post left where it was surveyed keeps its separation from its neighbour, so
+  `posts_merged_after_shift` can only fall and `poles_drawn` rises by exactly what it stops folding
+  away. A stop-condition on `poles_drawn` halts a correct build. ⚠️ **The identity must still
+  close** — `len(shift_m) == poles_drawn + posts_over_shift + posts_in_carriageway +
+  posts_merged_after_shift` — which is why a post that does not move appends a real `0.0` rather
+  than being skipped. ⚠️ **A position on this layer cannot be graded against anything published**
+  (`Q62`), so the evidence is an **A/B render at one fixed camera** — `city_preview.tscn` with an
+  explicit `--camera`/`--look`, never a driven frame, and shoot each side twice and `cmp` them.
+  ⚠️ **`railings.py` and `signals.py` compute `shift_m` the same way and are deliberately NOT
+  aligned**: a fence is a run and the bar is per sample, so a conditional push would zigzag it. Do
+  not "restore consistency". ⚠️ **A widening change is a sign-position change** — `widen_default`
+  moves the drawn kerb and therefore moves every post, silently and plausibly. Numbers in `Q78`.
 - **`signs.faces_against_traffic`, `_facing_from_side` or `_plate_facing_deg`: paste `signs.json`'s
   `plates_turned`, `no_entry_against_flow`, `no_entry_on_two_way` and `facing_away`, before and
   after — and mutation-check the flag by turning it off and confirming the counters move.** 🔴 **The
