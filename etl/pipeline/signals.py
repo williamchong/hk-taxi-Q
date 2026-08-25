@@ -58,7 +58,9 @@ read.** **470 of 913** points sit within 0.05 m of another, and clustering at
 fives) — one surveyed post carrying a stack of aspects, which is the real
 object. That is a grouping this stage *chose*, not one the publisher declared,
 so `assembly_size` publishes what it did and the numbers above are what it is
-read against.
+read against. ⚠️ **Those 553 are the whole layer and `assembly_size` is the
+admitted subset** — the gate and the level-0 filter come off first, leaving 514,
+so the two do not match and neither is wrong.
 
 ⚠️ **The position is registered, not read** — `Q60`'s move arriving at a third
 layer, after the railings and the signs. **72.7%** of the region's signal points
@@ -92,7 +94,6 @@ import math
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 
@@ -107,7 +108,7 @@ from pipeline import gdb
 from pipeline.arrows import ArrowReport, Ribbon, axis_residual_deg, nearside, ribbons
 from pipeline.config import SIGNAL_BODY_COLOUR, CityConfig, GameTransform, Signals, load_city
 from pipeline.documents import read_document, write_document
-from pipeline.fares import Segments
+from pipeline.fares import Segments, Snap
 from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData, write_glb
 from pipeline.mesh import select_triangles
@@ -165,9 +166,12 @@ class SignalReport:
 
     drawn: int = 0
     too_far: int = 0
-    # ⚠️ **These three are HEADS, like every other member of the partition** — a
-    # post refuses all of its heads at once. The post-level counts are
-    # `posts_over_shift` and `posts_in_carriageway` below.
+    # ⚠️ **These three are FEATURES, like every other member of the partition
+    # including `drawn`** — a post refuses everything it carries at once, so each
+    # accumulates `len(carried)`. The post-level counts are `posts_over_shift`
+    # and `posts_in_carriageway` below. 🔴 The word "heads" was used here for the
+    # unit `posts_drawn` measures and again for the unit these measure, in one
+    # file, on the counters whose units are load-bearing.
     no_ribbon: int = 0
     over_shift: int = 0
     # 🔴 Heads on posts still standing in the drawn carriageway after
@@ -182,6 +186,15 @@ class SignalReport:
     # ⚠️ **A different population from the coincidence clustering**, which runs
     # over surveyed positions before anything moves — see `_assemble`.
     posts_merged_after_shift: int = 0
+    # 🔴 **What each of those folds cost, in degrees of facing.** The survivor's
+    # facing wins, so a merge across two posts derived from different host edges
+    # silently re-aims one of them. Eleven of this region's twelve merges agree
+    # to 0.0 and one is 94.9 — a head addressing traffic at right angles to what
+    # its absorbed aspect was derived for. Report-only: the merge is still
+    # right, because two posts on one point cannot both be drawn, and this is
+    # the number that says what was given up (`Q58`'s rule — publish the residual
+    # of any move this stage makes).
+    merged_facing_deg: list[float] = field(default_factory=list)
 
     # ⚠️ **How far each post moved sideways onto the drawn kerb**, recorded over
     # every registered post **including the ones `max_shift_m` then refused**,
@@ -212,9 +225,11 @@ class SignalReport:
     # a distribution taken after a filter is confined to that filter (`Q58`'s
     # `drawn_gauge_m` trap).
     axis_residual_deg: list[float] = field(default_factory=list)
-    # How far each drawn post sat from the level-0 centreline it matched. What
-    # `max_offset_m` is set against, published so the config comment is checkable
-    # against a shipped artefact rather than a scratch script (`Q37`).
+    # How far each **hosted** post sat from the level-0 centreline it matched —
+    # recorded before the `over_shift` and `in_carriageway` refusals, so `n`
+    # exceeds `posts_drawn` for `shift_m`'s reason (`Q58`). What `max_offset_m` is
+    # set against, published so the config comment is checkable against a shipped
+    # artefact rather than a scratch script (`Q37`).
     host_distance_m: list[float] = field(default_factory=list)
     # 🔴 **Posts with a SECOND level-0 edge within `host_ambiguity_m`.** A signal
     # head stands at a junction *mouth*, which is exactly where nearest-edge
@@ -372,10 +387,22 @@ def _assemble(signals: list[Signal], merge_m: float) -> list[tuple[float, float,
     if not signals:
         return []
     points = np.array([[signal.x, signal.z] for signal in signals])
-    # O(n^2) over the region's ~850 admitted heads, which is 722k distance
-    # comparisons in one vectorised pass — cheaper than the road-graph sweep this
-    # stage runs per feature, and a spatial index here would be a second thing to
-    # keep in step for no measurable gain (`Railings.class_of`'s argument).
+    # O(n^2) over the region's ~850 admitted heads: 722k distance comparisons in
+    # one vectorised pass, 0.029 s and 17 MB, which is 1.5% of the stage.
+    #
+    # ⚠️ **That comparison holds at this size and INVERTS above it.** The
+    # road-graph sweep is O(posts x segments) and runs per *post* (514 here, not
+    # per feature); this is O(heads^2). Held density it measures 0.13 s / 216 MB
+    # at 3,000 heads, 0.77 s / 2.4 GB at 10,000 and **9.6 GB at 20,000** — it does
+    # not get slow, it dies. A uniform cell hash at `assembly_merge_m` with a 3x3
+    # neighbour scan is the fix and it is **exact**, not approximate: a pair
+    # within the radius cannot fall outside the nine cells. `tramway.py` and
+    # `kerbside.py` already ship that pattern.
+    #
+    # ⚠️ **Left because regions are bounded**: `read_signals` pushes the region
+    # bbox into OGR, so the territory's 37,167 features only ever reach this in
+    # one call if somebody declares a territory-sized region. `signs._merge_posts`
+    # records the same arithmetic and the same decision.
     spread = np.hypot(
         points[:, None, 0] - points[None, :, 0], points[:, None, 1] - points[None, :, 1]
     )
@@ -395,6 +422,13 @@ def _assemble(signals: list[Signal], merge_m: float) -> list[tuple[float, float,
             seen.add(current)
             members.append(current)
             stack.extend(int(other) for other in np.nonzero(close[current])[0])
+        # ⚠️ **Sorted although nothing downstream reads the order any more.** It
+        # was load-bearing while heads stacked up the post; since the collapse to
+        # one head per assembly the geometry uses only the centroid and the
+        # facing, and `drawn_by_code` is sorted at the end. Kept because
+        # `_merge_placements` is greedy and first-wins, so a stable input keeps
+        # two builds of one input identical — the `posts.sort` below is what
+        # carries that, and this makes the tuple it sorts deterministic too.
         carried = sorted((signals[member] for member in members), key=lambda item: item.code)
         # The post stands at the centroid of what it carries. ⚠️ **Not the first
         # member's position**: that would make the post's place depend on the
@@ -457,11 +491,22 @@ class _Builder:
         return select_triangles(mesh, twice_area > _MIN_TWICE_AREA_M2)
 
 
-def _draw_post(builder: _Builder, spec: Signals, x: float, z: float, top_y: float) -> None:
+def _draw_post(
+    builder: _Builder, spec: Signals, x: float, z: float, base_y: float, top_y: float
+) -> None:
     """The post, as a closed prism with a cap.
 
     No collider, and no bottom cap: the post meets the footway and nothing sees
     under it.
+
+    🔴 **`base_y` is the deck, and dropping it is a defect that shipped.** The
+    first build copied `signs._draw_pole` **without this parameter** and rooted
+    every post at world y=0, so each one ran from sea level up through the
+    carriageway — 3 to 12 m too long, `signals.json`'s AABB reading min-y 0.0
+    against the signs' 3.18. Nothing saw it: `facing_away` was 0, both
+    partitions closed, `verify_signals` was green, and the extra length points
+    *downward* where opaque asphalt hides it from any camera above the road.
+    This stage's own failure class, landing on the stage itself.
 
     ⚠️ **The ring is REVERSED, and that is the whole correctness of this
     function** — `signs._draw_pole`'s recorded defect, inherited rather than
@@ -475,11 +520,12 @@ def _draw_post(builder: _Builder, spec: Signals, x: float, z: float, top_y: floa
     ring = disc(spec.post_radius_m, spec.post_sides)[::-1]
     body = spec.colours[SIGNAL_BODY_COLOUR]
     centre = np.array([x, 0.0, z])
+    # `base_y` and `top_y` are absolute, so the ring contributes only x and z.
     for index in range(spec.post_sides):
         u0 = ring[index]
         u1 = ring[(index + 1) % spec.post_sides]
-        a = centre + np.array([u0[0], 0.0, u0[1]])
-        b = centre + np.array([u1[0], 0.0, u1[1]])
+        a = centre + np.array([u0[0], base_y, u0[1]])
+        b = centre + np.array([u1[0], base_y, u1[1]])
         c = centre + np.array([u1[0], top_y, u1[1]])
         d = centre + np.array([u0[0], top_y, u0[1]])
         outward = np.array([u0[0] + u1[0], 0.0, u0[1] + u1[1]])
@@ -491,8 +537,14 @@ def _draw_post(builder: _Builder, spec: Signals, x: float, z: float, top_y: floa
     builder.polygon(cap, np.array([0.0, 1.0, 0.0]), body)
 
 
-def _draw_head(builder: _Builder, spec: Signals, centre: np.ndarray, facing_deg: float) -> None:
+def _draw_head(builder: _Builder, spec: Signals, front: np.ndarray, facing_deg: float) -> None:
     """One signal head: a closed box, with its aspects on the front face.
+
+    ⚠️ **`front` is the centre of the FRONT FACE, not the centre of the box** —
+    the body runs back from it along `-normal`. It was called `centre` in the
+    first build and the caller placed it as if it were one, which put 0.24 m of
+    a 0.30 m head on the far side of its own post. The name carries the
+    convention now, because the comment did not.
 
     ⚠️ **All six faces, including the bottom.** A head hangs at eye level and
     above — `mount_height_m` is 2.40 — so the underside is the face a driver
@@ -512,8 +564,7 @@ def _draw_head(builder: _Builder, spec: Signals, centre: np.ndarray, facing_deg:
     depth = spec.head_depth_m
 
     # The eight corners, front face first. `front` is the face the traffic sees.
-    front = centre
-    back = centre - depth * normal
+    back = front - depth * normal
     corners = {
         "front": [
             front - half_w * right - half_h * up,
@@ -588,6 +639,19 @@ def _merge_placements(
     for placement in placements:
         for other in kept:
             if math.hypot(other.x - placement.x, other.z - placement.z) <= merge_m:
+                # 🔴 **The survivor's facing wins and the absorbed one is
+                # discarded, so the discard is measured.** Two posts that
+                # registration pushed onto one point were derived from different
+                # host edges, and their facings can disagree: on this region
+                # eleven of the twelve merges agree to 0.0 degrees and **one is
+                # 94.9 degrees apart**, which is a drawn head addressing traffic
+                # at right angles to the traffic its absorbed aspect was derived
+                # for. It renders as a perfectly good signal, and until this
+                # counter existed nothing said so — `posts_merged_after_shift`
+                # counts the fold but cannot see what the fold cost.
+                report.merged_facing_deg.append(
+                    abs((other.facing_deg - placement.facing_deg + 180.0) % 360.0 - 180.0)
+                )
                 other.heads.extend(placement.heads)
                 report.posts_merged_after_shift += 1
                 break
@@ -732,17 +796,27 @@ def build_region(
         # ⚠️ **`assembly_size` is what keeps that honest.** It publishes how many
         # features each drawn head stands for, so the collapse is a number a
         # reader can see rather than a silent discard.
+        # 🔴 **The head's BACK must clear the post, not its front** — and the
+        # first build got this wrong by lifting `signs._draw_plate`'s
+        # `+ pole_radius_m * normal`. That offset is right for a *plate*, which
+        # is one quad thick and only has to stop the post standing through its
+        # face. A box 0.30 m deep needs its own depth in the sum: at
+        # `post_radius_m` alone the body ran -0.240 to +0.072 m along the facing
+        # normal against a post occupying -0.06 to +0.06, so the post was
+        # swallowed whole and four fifths of the head sat behind it, away from
+        # the traffic it addresses. Rendered perfectly, and `facing_away` was 0.
         frame_normal, _ = plate_frame(post.facing_deg)
-        centre = (
+        front = (
             np.array([post.x, post.y + spec.mount_height_m + 0.5 * spec.head_height_m, post.z])
-            + spec.post_radius_m * frame_normal
+            + (spec.post_radius_m + spec.head_depth_m) * frame_normal
         )
-        _draw_head(builder, spec, centre, post.facing_deg)
+        _draw_head(builder, spec, front, post.facing_deg)
         _draw_post(
             builder,
             spec,
             post.x,
             post.z,
+            post.y,
             post.y + spec.mount_height_m + spec.head_height_m + spec.post_headroom_m,
         )
         report.posts_drawn += 1
@@ -771,7 +845,7 @@ def build_region(
 
 
 def _register(
-    spec: Signals, snap: Any, ribbon: Ribbon, report: SignalReport
+    spec: Signals, snap: Snap, ribbon: Ribbon, report: SignalReport
 ) -> tuple[np.ndarray, float] | None:
     """Push a post out to the kerb the ribbon actually drew, or refuse the move.
 
@@ -814,7 +888,7 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Sig
         # Gated on what was written, for the reason `tramway.json` records: a
         # manifest naming an asset the bundle does not hold is what `CITY_SCHEMA`
         # 11 was bumped over.
-        "asset": SIGNALS_NAME if report.drawn else None,
+        "asset": SIGNALS_NAME if report.triangles else None,
         # The read, as four disjoint parts of `features`.
         "features": report.features,
         # 🔴 **The gate's refusals, and the number is a decision** — see
@@ -836,13 +910,19 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Sig
         "posts_over_shift": report.posts_over_shift,
         "posts_in_carriageway": report.posts_in_carriageway,
         "posts_merged_after_shift": report.posts_merged_after_shift,
+        # 🔴 What each fold cost in facing. A non-zero tail is a head re-aimed by
+        # the merge — see `_merge_placements`.
+        "merged_facing_deg": report.measured(report.merged_facing_deg),
         # 🔴 **The gate's effect over the whole vocabulary, both halves.** The
         # only thing that makes a whitelist read off code strings reviewable.
         "drawn_by_code": report.drawn_by_code,
         "refused_by_code": report.refused_by_code,
         # 🔴 **The derived grouping this layer has instead of a `GG_NAME`.**
-        # Heads per post, as a histogram. Nothing else can see the clustering go
-        # wrong: a radius that swallowed a neighbouring post renders perfectly.
+        # Features per **surveyed assembly**, as a histogram — ⚠️ counted before
+        # `_merge_placements` folds any of them, so it sums to `candidates` and
+        # its bin count exceeds `posts_drawn`. Nothing else can see the
+        # clustering go wrong: a radius that swallowed a neighbouring post
+        # renders perfectly.
         "assembly_size": report.assembly_size,
         # 🔴 **Published, unread, and its flatness is the finding.** Recorded
         # over every candidate rather than the drawn ones (`Q58`).

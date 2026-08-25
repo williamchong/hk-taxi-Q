@@ -1033,7 +1033,7 @@ def disc(radius: float, segments: int) -> np.ndarray:
     ⚠️ **Public since `P3-17`, on `arrows.nearside`'s terms**: a second consumer
     is what makes a helper public here rather than copied. `pipeline/signals.py`
     draws its lenses and its post from this, and a second generator would be a
-    second phase convention — see `octagon` below for what that costs.
+    second phase convention — see `_octagon` below for what that costs.
     """
     angles = np.linspace(0.0, 2.0 * math.pi, segments, endpoint=False)
     return np.column_stack([radius * np.cos(angles), radius * np.sin(angles)])

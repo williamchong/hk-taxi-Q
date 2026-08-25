@@ -31,7 +31,7 @@
 ; ⚠️ **And there is no lit aspect, which is the thing to resist changing here.**
 ; `P3-17` ships no cycle — no dataset publishes timing, an invented one
 ; *instructs*, and nothing obeys it until `P3-3`'s traffic exists. Pushing
-; `lamp_glow` up to "make the signals read" would turn every junction in the city
+; `sheeting_glow` up to "make the signals read" would turn every junction in the city
 ; into a standing instruction the game cannot honour. The named route for state is
 ; `P3-11d`'s `instance uniform` lamp circuit, wired in `B3`.
 ;

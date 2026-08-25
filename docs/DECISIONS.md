@@ -10255,7 +10255,9 @@ Checked, over the region and in the frame `arrows.py` validated to p50 0.9°:
 | within 20° of **along** the road | **21.3%** | 22.2% |
 | within 20° of **across** it | **19.3%** | 22.2% |
 
-Flat — `DTAD_TS_ABV_PT`'s own result to within noise. So the facing is derived from the host edge and
+Flat — `DTAD_TS_ABV_PT`'s own result to within noise. ⚠️ **Measured over the whole layer with a
+per-point snap; the shipped `axis_residual_deg` reads p50 43.83 because it snaps per *assembly* over
+admitted candidates.** Same finding, two populations — do not read the gap as drift. So the facing is derived from the host edge and
 the kerb side (`signs.facing_from_side`, imported rather than copied) and `ANGLE` survives only as
 `axis_residual_deg`: published, read by nothing, so the claim stays answerable from a shipped
 artefact rather than a scratch script (`Q37`).
@@ -10274,7 +10276,8 @@ The published point **is** the object here — unlike `P3-16`, where the abbrevi
 draughtsman's label. Lights do not stand on `DTAD_TS_POLE_PT` poles (nearest TS pole p50 **7.59 m**,
 only **5 of 913** coincident) and this layer carries **no `GG_NAME` at all**. What replaces it is
 coincidence: **470 of 913** points sit within 0.05 m of another, clustering at 1 m into **553**
-groups of 1–5.
+groups of 1–5. ⚠️ **That 553 is the whole layer; `assembly_size` below is the admitted subset**
+(514), because the gate and the level-0 filter come off first.
 
 **The first build stacked them, on `signs.py`'s plate model, and drew the five-feature assemblies as
 8.53 m masts carrying five signal heads above one another.** That is a structure no source states:

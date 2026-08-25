@@ -1,7 +1,7 @@
 ## Instantiates the ETL's traffic signal heads, for looking at the city.
 ##
 ## A dev tool, not the streamer, exactly like `roadmarks_preview.gd`. The whole
-## region's heads are one mesh — ~37.7k triangles for Wan Chai over 681 aspects
+## region's heads are one mesh — ~26.6k triangles for Wan Chai over 681 aspects
 ## on 415 posts — so there is nothing to stream, and deliberately nothing to
 ## LOD: `Q34`'s vertex clustering annihilates anything thinner than a cell, and a
 ## 60 mm post is exactly that.

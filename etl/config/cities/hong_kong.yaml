@@ -1868,6 +1868,10 @@ signals:
   # surveyed coincidence, never a published join** — this layer has no GG_NAME —
   # so signals.json publishes assembly_size and those numbers are what it is
   # read against.
+  #
+  # ⚠️ **Those 553 are the WHOLE layer and signals.json's assembly_size is the
+  # ADMITTED subset**, so the two do not match and neither is wrong: the gate and
+  # the level-0 filter come off first, leaving 514. Compare like with like.
   assembly_merge_m: 1.0
 
 road_marks:

@@ -160,18 +160,35 @@ class TestWhatIsBuiltIsWoundRight:
     def test_a_post_agrees_with_its_normals(self, spec):
         """The regression this test exists for, held explicitly."""
         builder = _Builder()
-        _draw_post(builder, spec, 4.0, -7.0, 3.0)
+        _draw_post(builder, spec, 4.0, -7.0, 0.0, 3.0)
         mesh = builder.build("signals")
 
         assert mesh is not None
         assert facing_away(mesh) == 0
+
+    def test_a_post_starts_at_the_deck_it_stands_on(self, spec):
+        """🔴 **The regression this test exists for, and it shipped.** The first
+        build copied `signs._draw_pole` *without* its `base_y`, so every post ran
+        from world y=0 up through the carriageway — 3 to 12 m too long, with
+        `signals.json`'s AABB reading min-y 0.0 against the signs' 3.18.
+
+        Nothing saw it. `facing_away` was 0, both partitions closed,
+        `verify_signals` was green, and the extra length points *downward* where
+        opaque asphalt hides it from any camera above the road."""
+        builder = _Builder()
+        _draw_post(builder, spec, 0.0, 0.0, 6.5, 10.0)
+        mesh = builder.build("signals")
+
+        assert mesh is not None
+        assert mesh.positions[:, 1].min() == pytest.approx(6.5)
+        assert mesh.positions[:, 1].max() == pytest.approx(10.0)
 
     def test_a_post_faces_outward_rather_than_inward(self, spec):
         """`facing_away` alone would pass a post wound inward *and* labelled so.
 
         It asks whether winding and normal agree, not whether either is right."""
         builder = _Builder()
-        _draw_post(builder, spec, 0.0, 0.0, 3.0)
+        _draw_post(builder, spec, 0.0, 0.0, 0.0, 3.0)
         mesh = builder.build("signals")
 
         assert mesh is not None
@@ -188,7 +205,7 @@ class TestWhatIsBuiltIsWoundRight:
         is what selects `signals.tres`, and a head handed `signs.tres` would be
         a signal head lit as painted aluminium and would render perfectly."""
         builder = _Builder()
-        _draw_post(builder, spec, 0.0, 0.0, 3.0)
+        _draw_post(builder, spec, 0.0, 0.0, 0.0, 3.0)
         mesh = builder.build("signals")
 
         assert mesh is not None
@@ -208,16 +225,45 @@ class TestWhatIsBuiltIsWoundRight:
 class TestTheHeadGeometry:
     def test_a_head_is_closed(self, spec):
         """Six faces, and the bottom is not optional: `mount_height_m` is 2.40,
-        so the underside is what a driver stopped at the line looks up at."""
+        so the underside is what a driver stopped at the line looks up at.
+
+        ⚠️ **This asserted only the two vertical normals until review caught
+        it** — a head missing its back face passed. It counts the faces now."""
         builder = _Builder()
         _draw_head(builder, spec, np.array([0.0, 3.0, 0.0]), 0.0)
         mesh = builder.build("signals")
 
         assert mesh is not None
         normals = {tuple(np.round(normal, 3)) for normal in mesh.normals}
-        # Up and down both present, and four sideways.
-        assert (0.0, 1.0, 0.0) in normals
-        assert (0.0, -1.0, 0.0) in normals
+        # Six box faces, all six distinct directions, plus the lens discs which
+        # share the front normal — so six is the count of distinct box normals.
+        assert (0.0, 1.0, 0.0) in normals, "no top"
+        assert (0.0, -1.0, 0.0) in normals, "no bottom"
+        # Facing 0 is north, so the outward normal is -Z and `right` is -X.
+        assert (0.0, 0.0, -1.0) in normals, "no front"
+        assert (0.0, 0.0, 1.0) in normals, "no back"
+        assert (-1.0, 0.0, 0.0) in normals, "no left side"
+        assert (1.0, 0.0, 0.0) in normals, "no right side"
+
+    def test_a_head_sits_in_front_of_its_post(self, spec):
+        """🔴 **The regression this test exists for.** The first build lifted
+        `signs._draw_plate`'s `+ pole_radius_m * normal`, which is right for a
+        plate one quad thick and wrong for a box with depth: 0.24 m of the
+        0.30 m head sat on the far side of its own post, away from the traffic
+        it addresses, and it rendered perfectly.
+
+        The head's **back** must clear the post, so every part of the body lies
+        at or beyond the post's front surface."""
+        builder = _Builder()
+        front = np.array([0.0, 3.0, 0.0]) + (spec.post_radius_m + spec.head_depth_m) * np.array(
+            [0.0, 0.0, -1.0]
+        )
+        _draw_head(builder, spec, front, 0.0)
+        mesh = builder.build("signals")
+
+        assert mesh is not None
+        # Facing north, so "in front" is more negative z than the post surface.
+        assert mesh.positions[:, 2].max() <= -spec.post_radius_m + 1e-9
 
     def test_every_aspect_is_drawn(self, spec):
         builder = _Builder()
@@ -323,11 +369,15 @@ class TestTheShippedRegionReproduces:
     let the two drift.
     """
 
-    def test_the_gate_admits_the_measured_share(self, hong_kong):
-        """843 of the region's 913 features, over 33 of its 46 codes. A change
-        here is a change to what ships, and it should be deliberate."""
+    def test_the_gate_refuses_exactly_the_non_head_vocabulary(self, hong_kong):
+        """Every code the gate turns away, and nothing else. 70 of the region's
+        913 features. A change here is a change to what ships."""
         spec = hong_kong.signals
-        # The region's own vocabulary, transcribed from the layer.
+        # ⚠️ **The refused half of the region's vocabulary, complete, plus a
+        # sample of the admitted half.** It is not the whole 46 — review caught
+        # it being described as such — and it does not need to be: what is
+        # asserted below is that every code the gate turns away is turned away,
+        # which is the half no counter downstream can recover.
         vocabulary = {
             "P24": 278,
             "P01": 149,
