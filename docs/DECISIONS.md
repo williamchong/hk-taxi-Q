@@ -104,6 +104,7 @@ wins.
 | `Q73` | A layer can pass every check and be in no scene | ✅ Closed — `roadmarks.glb` shipped, was graded, and was drawn nowhere; a verify tool proves an asset is correct and never that it is on screen |
 | `Q74` | `Q71`'s trigger has fired on the preview scripts, and the prose has nowhere to go | 🟡 Open, deferred — ten files, four byte-identical, 0 lines of logic differing; the merge is owed and the per-layer *arguments* have no `.tres` to move into |
 | `Q76` | A layer whose vocabulary nothing publishes, and an assembly that is not a stack | ✅ Closed — the gate is a rule about *spelling*, published as `drawn_by_code`/`refused_by_code` because nothing can grade it; and one head stands for a whole assembly, after the first build drew 8.53 m masts |
+| `Q77` | **A dark signal is not a signal with no state** | ✅ Closed — `P3-17`'s layer built correctly and was dropped from the bundle anyway: unlit heads assert 415 out-of-service signals, and a lit cycle cannot be derived honestly (18 of 107 junctions opposable, 57 of 137 partially populated). `B3` is the route |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -133,7 +134,7 @@ wins.
 | `P3-11c` `P3-11d` `P3-11e` `P3-11f` | The body shader, the lamp circuits, the front lamps and the roof sign — one `UV` payload, no new geometry | 🟡 Awaiting review |
 | `P3-9a` | Recognition round 0 — the city before the game | 🟡 Build cut and verified; the drivers are not booked |
 | `P3-16` | Signs ship where the **poles** are, because the sign layer is a drawing | ✅ Done — the scope is `Q65`'s, the faces are `Q67`'s and the facing is `Q72`'s |
-| `P3-17` | Signal heads ship as unlit geometry, with no invented cycle | ✅ Done — the gate is `Q76`'s, and one head stands for a whole assembly |
+| `P3-17` | Signal heads ship as unlit geometry, with no invented cycle | 🚫 **Reversed by `Q77`** — built, then dropped from the bundle: unlit was the premise, and an unlit head asserts a signal out of service |
 | `P3-18` | Box junctions ship as **read** polygons, and two instruments caught what no frame could | ✅ Done |
 
 | Topic | Decision | Status |
@@ -10361,3 +10362,88 @@ pattern and self-grading · `Q60` for the kerb registration · `Q61` `Q71` for a
 parameterisation · `Q62` for the ungraded facing and why the render is the evidence · `Q64` for the
 mis-keyed-table failure class · `Q69` for junction-mouth hosting · `Q73` for the preview node ·
 `P3-16` for the sign layer this is the sibling of · `DATA_SOURCES.md` for the layer row
+
+## `Q77` — A dark signal is not a signal with no state, and a lit one cannot be derived
+
+**Closed 2026-08-26**, the same day `P3-17` landed, on the user's instruction. The layer is
+**dropped from the bundle**: `hong_kong.yaml` declares no `signals:` block, so `city.json` names no
+asset and `sync_generated.sh` sweeps `signals.glb`. The stage, the config loader, `signals.tres`,
+`verify_signals.gd`, `signals_preview.gd` and 41 tests all remain, and every one of them already
+handled an undeclared block as a first-class state — re-declaring it is the whole of the work to
+bring the layer back.
+
+### 🔴 The premise was wrong, not the implementation
+
+`P3-17` refused a signal cycle on the grounds that *"an invented cycle **instructs** and nothing
+obeys it"*, and shipped the heads unlit. That reasoning treated **dark as neutral**. It is not. A
+real signal head is always lit; a dark one means the installation is out of service. So the layer
+did not ship "a signal with no state asserted" — it shipped **415 assertions that Hong Kong's
+signals are switched off**, which is a specific claim about the city and a false one.
+
+The layer itself was correct: 415 heads on the positions TD surveyed, both partitions closing,
+`facing_away` 0, `check.sh` green including its own verify tool. It was dropped on what it *depicts*,
+not on what it got wrong — which is why the code stays.
+
+### And a lit one cannot be made honest from what this repo knows
+
+Measured before the decision, over Wan Chai:
+
+| what a phase plan needs | what the repo has |
+|---|---|
+| Head position | ✅ read from TD |
+| Which approach a head controls | ⚠️ derived, and **ungraded** (`Q62`) |
+| Which junction a head belongs to | ⚠️ nearest node, p50 **11.5 m**, max 37.9 — and **16 of 132** are `endpoint` nodes, not junctions |
+| Which heads share a green | ❌ nothing publishes it |
+| Stage order, timings, clearance intervals | ❌ nothing publishes them |
+
+The approaches do not form crossroads. Of the **107** junctions carrying two or more heads, grouping
+approach bearings at 30°: **29** have every head facing one direction, 43 have two directions but
+only **18** of those are near-opposite, 32 have three, 3 have four. So *which two approaches share a
+green* is derivable at **18 of 107**.
+
+🔴 **And 57 of 137 junctions are partially populated** — the in-carriageway registration refuses 86
+posts, unevenly. That is what makes lighting worse than dark rather than better: an unlit missing
+head is invisible, while a lit junction with a dark arm, or two conflicting arms both green, is
+obviously broken. **Lighting amplifies the gaps instead of hiding them.**
+
+A cycle would therefore have invented the junction grouping, the phase grouping, the stage order,
+the timings and the clearance intervals — five layers stacked on a facing that is already ungraded
+(`Q62`) and a vocabulary nothing defines (`Q76`) — and would have been wrong at roughly four
+junctions in five. That is `Q54`'s debit at a scale nothing else in this bundle carries.
+
+⚠️ **`P3-18`'s precedent was weighed and does not transfer.** Box junctions ship *purely visual*
+with no blocking penalty, so "set dressing that instructs nothing" is established here. But a box
+junction makes no claim about any other box. A green light claims the cross street is red —
+**coordination is the difference**, and coordination is the part that cannot be derived.
+
+### The route that can be honest
+
+`B3`. `P3-3`'s traffic needs a phase plan to stop at, so the plan has to exist and be checkable;
+the heads then render something real instead of inventing it. That is also `P3-11d`'s
+`instance uniform` lamp circuit arriving where it was always named to arrive.
+
+### What was fixed on the way out
+
+Three defects a review found after the layer had shipped, **none of which any counter or check
+could see** — recorded because they are the clearest evidence yet for `Q62`'s render requirement:
+
+- **Every post was rooted at world y=0.** `_draw_post` copied `signs._draw_pole` without its
+  `base_y`, so each ran 3–12 m too long, down through the carriageway. `signals.json`'s AABB read
+  min-y **0.0** against the signs' 3.18. The extra length points *downward*, where opaque asphalt
+  hides it from any camera above the road.
+- **The head hung behind its post.** The caller lifted `signs._draw_plate`'s
+  `+ pole_radius_m * normal`, which is right for a plate one quad thick and wrong for a box 0.30 m
+  deep: the body ran -0.240 to +0.072 m along the facing normal against a post occupying
+  -0.06 to +0.06, so four fifths of the head sat away from the traffic it addresses.
+- **`_merge_placements` folded heads across disagreeing facings.** Eleven of twelve merges agree to
+  0.0°; **one is 94.9°**. Now published as `merged_facing_deg`.
+
+⚠️ **`tools/export.sh web` rewrites `game/project.godot`** — `Q75`'s exact signature, three warning
+promotions and `rendering_method.web` dropped with every comment stripped. Caught by `check.sh`'s
+`settings` step and restored from git, which is the durable half of `Q75`'s fix working as designed.
+`check.sh` itself leaves the file alone; the run skill's note that headless export is safe holds for
+`--import` and **not** for `export.sh`.
+
+**See.** `Q76` for the gate and the assembly · `Q62` for the ungraded facing and why the render is
+the evidence · `Q54` for sourced-not-invented · `Q69` for junction-mouth hosting · `P3-18` for the
+purely-visual precedent that does not transfer · `Q75` for the settings hazard

@@ -434,7 +434,7 @@ The interface between ETL and game. **Versioned — change both sides together a
   "railings": "railings.glb",
   "signs": "signs.glb",
   "signs_text_atlas": "signs_text.png",
-  "signals": "signals.glb",
+  "signals": null,
   "landmarks": "landmarks.json",
   "landmark_assets": ["landmarks/hkcec.glb"],
   "etl_version": "0.1.0",
@@ -1147,7 +1147,13 @@ carry no lettering.
 `text_atlas_bytes` beside it. Two numbers where there was one, on purpose — they are added up
 deliberately or not at all.
 
-### `signals.glb` — the published traffic signal heads (`P3-17`)
+### `signals.glb` — the published traffic signal heads (`P3-17`, **not shipped**)
+
+🚫 **Dropped from the bundle by `Q77`.** `hong_kong.yaml` declares no `signals:` block, so the key
+is `null` and no asset ships. Everything below describes what the stage still builds if a city
+declares one — the code, the material, the verify tool and the preview node all remain. The reason
+is not a defect: an unlit head asserts a signal out of service, and a lit one cannot be derived
+honestly from what this repo knows. `Q77` has the measurements.
 
 One head on one post per signal assembly, drawn where TD surveyed it and registered onto the drawn
 kerb, and **no collider** — the same budget decision the signs record, with one extra edge: a signal

@@ -310,7 +310,9 @@ Common emoji for this project:
   shader change, and its shader is shared with the arrows and the boxes** (`Q71`) — `check.sh` exits
   0 on a shader that fails to compile, so render and `grep -i "shader error"`, and look at all three
   layers rather than only this one. Numbers in `Q69`.
-- **`pipeline/signals.py`, the `signals` config block, or any signal-head change: paste
+- 🚫 **`P3-17`'s signal layer is NOT SHIPPED** (`Q77`): `hong_kong.yaml` declares no `signals:`
+  block, so nothing below applies until one is declared again. Kept because re-declaring the block
+  is the whole of the work to bring it back. **`pipeline/signals.py`, the `signals` config block, or any signal-head change: paste
   `signals.json`'s two partitions, `drawn_by_code` **and** `refused_by_code`, `assembly_size`,
   `axis_residual_deg`, `shift_m` (with its `n`), `host_ambiguous` and `facing_away`, before and
   after.** There is no separate grader and there should not be: the stage grades itself, because

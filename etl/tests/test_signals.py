@@ -10,6 +10,7 @@ grouping, and the partitions that have to close.
 
 from __future__ import annotations
 
+import copy
 import math
 from typing import Any
 
@@ -81,6 +82,20 @@ def city_with(tmp_path, block: dict[str, Any] | None):
 @pytest.fixture
 def spec(tmp_path):
     return city_with(tmp_path, BLOCK).signals
+
+
+def mutated(tmp_path, mutate):
+    """`testville` with `BLOCK` altered by `mutate`, through the real loader.
+
+    ⚠️ **These tests moved here from `test_config.py` when `P3-17`'s layer was
+    dropped from the bundle** (`Q77`). They pinned the *shipped* `signals:`
+    block; Hong Kong no longer declares one, so they pin `BLOCK` above instead
+    — which is the shape every sibling stage's tests already use, and where
+    loader validation belonged in the first place.
+    """
+    block = copy.deepcopy(BLOCK)
+    mutate(block)
+    return city_with(tmp_path, block)
 
 
 def head(x: float, z: float, code: str = "P24") -> Signal:
@@ -361,18 +376,19 @@ class TestPostsThatRegistrationPushedTogether:
         assert report.posts_merged_after_shift == 0
 
 
-class TestTheShippedRegionReproduces:
-    """The numbers `DECISIONS.md` `Q76` and the city file quote.
+class TestTheRegionsVocabulary:
+    """The numbers `DECISIONS.md` `Q76` quotes, over Wan Chai's real codes.
 
-    ⚠️ **Read against the shipped `hong_kong.yaml`, not a fixture** — these are
-    claims about what the gate does to the real vocabulary, and a fixture would
-    let the two drift.
+    ⚠️ **Read against `BLOCK` rather than the shipped city file since `Q77`**,
+    because Hong Kong no longer declares a `signals:` block — the layer was
+    dropped from the bundle. The vocabulary below is still the region's real
+    one, transcribed from `DTAD_TRAFFIC_LIGHT_PT`, so what this pins is the
+    gate's behaviour on real input; it is no longer a claim about what ships.
     """
 
-    def test_the_gate_refuses_exactly_the_non_head_vocabulary(self, hong_kong):
+    def test_the_gate_refuses_exactly_the_non_head_vocabulary(self, spec):
         """Every code the gate turns away, and nothing else. 70 of the region's
-        913 features. A change here is a change to what ships."""
-        spec = hong_kong.signals
+        913 features."""
         # ⚠️ **The refused half of the region's vocabulary, complete, plus a
         # sample of the admitted half.** It is not the whole 46 — review caught
         # it being described as such — and it does not need to be: what is
@@ -438,3 +454,174 @@ class TestTheShippedRegionReproduces:
             "M54R",
         }
         assert "P24" in admitted and "S07L" in admitted
+
+
+class TestSignals:
+    """The published-signal-head block (`P3-17`).
+
+    🔴 **The gate is the weakest-evidenced rule in the bundle, so it is the most
+    heavily tested thing here.** `DTAD_TRAFFIC_LIGHT_PT.REFNAME` has no
+    published domain — no index-plan sheet defines it, the fgdb specification
+    gives the column eight characters of untyped text, and
+    `hk-traffic-sign-map`'s catalogue is `TS`-only — so what admits a code is a
+    rule about *spelling* that this project wrote. Nothing downstream can grade
+    it: a head drawn on a push button renders as a perfectly good signal head.
+    """
+
+    def test_the_region_declares_signals(self, spec) -> None:
+        assert spec is not None
+        assert spec.layer.layer == "DTAD_TRAFFIC_LIGHT_PT"
+        assert not spec.tiled
+
+    def test_the_gate_admits_the_head_codes_the_region_publishes(self, spec) -> None:
+        """Every one of these is a real `REFNAME` in Wan Chai, including the
+        `L`/`R` filter-arrow suffixes."""
+
+        for code in ("P24", "P01", "S01", "P21", "P04R", "P08R", "P07L", "S07L", "S04R"):
+            assert spec.is_head(code), code
+
+    def test_the_gate_refuses_the_objects_that_are_not_heads(self, spec) -> None:
+        """⚠️ **The near misses are the point, and they refuse for three
+        different reasons.** `KLBOLL`/`KRBOLL`/`WIGWAG`/`TRAML` never match a
+        prefix; `PBUTT`/`PBOLL` match and leave letters; `PTR01`/`PTR02`/`STR02`
+        leave **digits behind a letter**, which is the one a laxer rule would
+        wave through. `PBOLL` and `TRAML` also end in `L`, so a suffix strip
+        that ran before the digit test would admit them."""
+
+        for code in ("KLBOLL", "KRBOLL", "PBUTT", "PBOLL", "WIGWAG", "STR02", "PTR01", "TRAML"):
+            assert not spec.is_head(code), code
+
+    def test_the_undecoded_m_family_is_refused(self, spec) -> None:
+        """🔴 **A decision, not an oversight.** The region publishes `M52` x16,
+        `M51`, `M53L` and `M54R`, every one within 2.57 m of a `P`/`S` head — so
+        they are part of the signal assembly rather than strays. But part of the
+        assembly is not *is a head*, nothing published settles which, and drawing
+        them would be inventing 19 heads (`Q54`). Reversing it is one word in
+        `head_prefixes`, and `refused_by_code` is where a reader sees them."""
+
+        assert "M" not in spec.head_prefixes
+        for code in ("M52", "M51", "M53L", "M54R"):
+            assert not spec.is_head(code)
+
+    def test_a_bare_prefix_is_not_a_head(self, spec) -> None:
+        """A prefix with no number after it is not a code, and `P` + `L` is a
+        suffix strip that leaves nothing to test."""
+
+        assert not spec.is_head("P")
+        assert not spec.is_head("PL")
+        assert not spec.is_head("")
+
+    def test_a_lower_case_prefix_is_rejected(self, tmp_path) -> None:
+        """🔴 **The regression this pins, and it is this block's own failure
+        class.** `REFNAME` is upper case throughout the layer and the gate does
+        no case folding, so a city file writing `p` would load clean, pass every
+        other test here, and ship **zero** signals — and a region that draws
+        nothing is indistinguishable from a region that has none."""
+
+        def lower(block: dict[str, Any]) -> None:
+            block["head_prefixes"] = ["p", "s"]
+
+        with pytest.raises(ValueError, match="upper-case ASCII"):
+            mutated(tmp_path, lower)
+
+    def test_a_prefix_carrying_a_digit_is_rejected(self, tmp_path) -> None:
+        def numbered(block: dict[str, Any]) -> None:
+            block["head_prefixes"] = ["P2"]
+
+        with pytest.raises(ValueError, match="upper-case ASCII"):
+            mutated(tmp_path, numbered)
+
+    def test_refusing_a_code_the_prefix_rule_already_refuses_is_rejected(self, tmp_path) -> None:
+        """Dead config that reads as a live decision: a reviewer sees a
+        deliberate refusal where deleting the line would change nothing."""
+
+        def restate(block: dict[str, Any]) -> None:
+            block["refuse_codes"] = ["KLBOLL"]
+
+        with pytest.raises(ValueError, match="already refuses"):
+            mutated(tmp_path, restate)
+
+    def test_refusing_a_code_the_prefix_rule_admits_is_accepted(self, tmp_path) -> None:
+        """The escape hatch the field exists for: a publisher who numbers a push
+        button `P90` gets a signal head out of the spelling rule, and this is the
+        one word that stops it without a code change."""
+
+        def hatch(block: dict[str, Any]) -> None:
+            block["refuse_codes"] = ["P90"]
+
+        spec = mutated(tmp_path, hatch).signals
+        assert not spec.is_head("P90")
+        assert spec.is_head("P24")
+
+    def test_the_lens_livery_must_be_declared(self, tmp_path) -> None:
+        """An unknown colour would otherwise fall back to something and render a
+        plausible head in the wrong livery."""
+
+        def stray(block: dict[str, Any]) -> None:
+            block["lens_colours"] = ["lens_red", "lens_purple"]
+
+        with pytest.raises(ValueError, match="lens_purple"):
+            mutated(tmp_path, stray)
+
+    def test_the_aspect_count_is_derived_from_the_livery(self, spec) -> None:
+        """⚠️ One fact, not two. A `lens_count` authored beside a colour table is
+        a way for them to disagree, and a head drawn with two lenses in three
+        colours renders perfectly."""
+
+        assert spec.lens_count == len(spec.lens_colours) == 3
+
+    def test_lenses_that_overflow_their_own_head_are_rejected(self, tmp_path) -> None:
+        def tall(block: dict[str, Any]) -> None:
+            block["lens_diameter_m"] = 0.40
+
+        with pytest.raises(ValueError, match="head_height_m"):
+            mutated(tmp_path, tall)
+
+    def test_a_lens_lifted_off_the_back_of_its_head_is_rejected(self, tmp_path) -> None:
+        def floating(block: dict[str, Any]) -> None:
+            block["lens_lift_m"] = 0.40
+
+        with pytest.raises(ValueError, match="floats off the back"):
+            mutated(tmp_path, floating)
+
+    def test_an_ambiguity_radius_that_kills_its_own_counter_is_rejected(self, tmp_path) -> None:
+        """`host_ambiguous` is report-only, so nothing renders differently — it
+        just reads 100% forever, and the one instrument that can see the
+        junction-mouth join go weak (`Q69`) stops saying anything."""
+
+        def dead(block: dict[str, Any]) -> None:
+            block["host_ambiguity_m"] = 25.0
+
+        with pytest.raises(ValueError, match="counter would be dead"):
+            mutated(tmp_path, dead)
+
+    def test_a_non_finite_measurement_is_rejected(self, tmp_path) -> None:
+        """⚠️ Why this block goes through `_measures`: YAML 1.1 resolves `.nan`,
+        a NaN passes every sign test, and it then makes false every comparison it
+        feeds downstream."""
+
+        def nan(block: dict[str, Any]) -> None:
+            block["mount_height_m"] = float("nan")
+
+        with pytest.raises(ValueError, match="finite"):
+            mutated(tmp_path, nan)
+
+    def test_the_body_livery_is_required_by_name(self, tmp_path) -> None:
+        """The one colour key `lens_colours` cannot vouch for. Without it the
+        build dies partway through on a bare `KeyError`."""
+
+        def renamed(block: dict[str, Any]) -> None:
+            colours = block["colours"]
+            colours["carcass"] = colours.pop("body")
+
+        with pytest.raises(ValueError, match="does not name 'body'"):
+            mutated(tmp_path, renamed)
+
+    def test_a_city_without_signals_loads(self, tmp_path) -> None:
+        """Optional on the same terms as `tramway`, `arrows`, `signs`,
+        `boxjunctions` and `railings`: a city whose estate publishes no signal
+        layer ships none rather than putting a signal at every junction node.
+
+        🔴 **This is the state Hong Kong itself is in since `Q77`**, so it is the
+        path the shipping city takes rather than a hypothetical one."""
+        assert city_with(tmp_path, None).signals is None
