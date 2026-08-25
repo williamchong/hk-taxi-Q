@@ -57,10 +57,35 @@ after anyone touches the settings dialog.
 
 ⚠️ **It also drops hand-written feature overrides** — settings with a `.web` / `.mobile` suffix.
 Observed three times in one session: `renderer/rendering_method.web` disappeared on every editor
-save, which silently breaks web export because WebGL2 cannot run the mobile renderer. Editing the
-file by hand is what makes them fragile; the editor only persists an override it created itself.
-**Set them through Project Settings → right-click the property → "Override For…"**. Until that is
-done for a given key, re-check with `grep -c 'rendering_method.web' game/project.godot` (must be 1).
+save. Editing the file by hand is what makes them fragile; the editor only persists an override it
+created itself. **Set them through Project Settings → right-click the property → "Override For…"**.
+`check.sh`'s `settings` step now counts the key, so it can no longer go missing unnoticed (`Q75`).
+
+🔴 **The loss then appeared to recur three times, and did not — it was never repaired.** Read the
+setting off every commit that has touched the file and there is one loss, at `78c077e`, unbroken to
+`HEAD`; each 2026-08-25 "restoration" lived in the working tree and was erased by an ordinary
+`checkout` / `reset` / rebase before it was committed. **The rule this leaves is blunt: restore
+`project.godot` and commit it in the same change, never as a loose working-tree edit.** `Q75` has the
+evidence and the one-liner that reproduces it.
+
+✅ **Headless is safe, and this is the first test that could show it.** A restored file came through
+a full `tools/check.sh` — eight Godot invocations including `--import` and the `--check-only` sweep —
+byte-identical. The earlier tests could not distinguish "did not write the file" from "wrote back the
+state it was already in", because they ran against the regressed file. The **windowed editor** hazard
+above stands unchanged. Still run `tools/check.sh` before any export or cut — its `settings` step is
+the only thing that sees this.
+
+⚠️ **What that override actually buys is narrower than this file used to claim, and the difference
+is worth knowing before anyone "fixes" it again.** The line was missing from `78c077e` (2026-08-01)
+until 2026-08-25, and the claim here was that its absence *silently breaks web export because WebGL2
+cannot run the mobile renderer*. **Measured on the shipped web build, it does not.** Godot 4.7 forces
+Compatibility on web regardless — the export that went out without the override reports
+`OpenGL ES 3.0 (WebGL 2.0) - Compatibility` in the browser console, which is the same renderer the
+override asks for. So four web cuts, including the one `P3-9a` was ready to send drivers, ran the
+intended renderer by engine default rather than by instruction. **Keep the override anyway**: the
+project should state the renderer it wants rather than inherit one, and a future engine that gains a
+second web renderer would otherwise change this build silently. But do not describe its absence as a
+broken export — it was not, and the console line is the evidence.
 
 | Setting | Value | Why |
 |---|---|---|
@@ -127,6 +152,7 @@ does. Running `--import` by hand tells you nothing unless you read the output.
 
 | Step | Covers | In CI |
 |---|---|---|
+| `settings` | That `project.godot` still holds the 21 warning promotions and the `rendering_method.web` override — the two things an editor save silently drops | yes |
 | `gdformat --check` | Layout across all of `game/` | yes |
 | `--import` | Autoloads and what they reach; also builds `game/.godot/` | yes |
 | warnings sweep | `--check-only` per script, grepping for `treated as error` | yes |
@@ -231,13 +257,15 @@ The `[debug]` block promotes 21 GDScript warnings to errors. This is the engine'
 checker, and the only one available that resolves types at all: a grammar-level linter sees `basis.z`
 as an identifier and a dot, where the engine sees a `Vector3` on a `Basis`.
 
-🔴 **The file currently promotes only 18, and the list below is the evidence of which three went
-missing.** `native_method_override`, `get_node_default_without_onready` and `onready_with_export`
-were dropped from `project.godot` by `78c077e` — an editor rewrite, the hazard "Running Godot
-rewrites two committed config files" describes two headings above, landing in a commit about the
-start line. Nothing failed, because a promotion that is no longer set cannot fail. **Restore the
-three lines rather than correcting this number down:** a count edited to match a regression is a
-check that certifies the wrong state, which is what `Q72` was opened about.
+✅ **Restored 2026-08-25, and now checked.** `native_method_override`,
+`get_node_default_without_onready` and `onready_with_export` had been missing since `78c077e` — an
+editor rewrite, the hazard "Running Godot rewrites two committed config files" describes two
+headings above, landing in a commit about the start line. Nothing failed for three weeks, because a
+promotion that is no longer set cannot fail. Restoring all three cost **nothing**: the sweep stayed
+green, so the guard was latent rather than masking defects. ⚠️ **Never correct this number down to
+match the file** — a count edited to match a regression is a check that certifies the wrong state,
+which is what `Q72` was opened about. `check.sh`'s `settings` step now counts them, so the file
+cannot lose one quietly again (`Q75`).
 
 **Level 1 is invisible.** Warnings only reach stdout at level `2`; a warning left at `1` shows up in
 the editor's script panel and nowhere else, and the contributor workflow is deliberately headless.

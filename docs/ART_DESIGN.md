@@ -290,8 +290,17 @@ when candidate `A` turned out to be unreproducible as written.
 ✅ **`Q26` closed on `C` on 2026-08-17 — this is the look that ships.** ⚠️ **Nothing was faulted in
 `A‴`.** Both enables were the user's own verdict on the fixed render, and the closure chooses
 between two accepted looks rather than rejecting one. It also closed **before** the `≥3`-HK-driver
-recognition round (`P3-9a`), which still grades whatever ships on the web build — so that round is
-now what can **reopen** `Q26`, with `A‴` and `B` on disk and their measured separation still valid.
+recognition round (`P3-9a`), which grades whatever ships on the web build.
+
+🔴 **That round can NOT reopen `Q26`, and this passage said it could until 2026-08-25 (`Q76`).** The
+web build runs **Compatibility** — no browser can run Forward Mobile, and no setting changes that —
+so the artefact `P3-9a` puts in front of drivers is not the build any of these looks was graded on.
+On a fixed camera it does not merely dim: it **crushes**, `Q31`'s 10–30 band falling **27.0% → 0.7%**
+with a third of the frame under `L*` 10, and chroma with it (C* p90 14.2 → 8.7). A driver disliking
+that frame is evidence about a renderer, not about `C`. **`A‴` and `B` stay on disk and their
+measured separation stays valid** — what is withdrawn is the claim that this round is licensed to
+choose between them. Reopening `Q26` needs `P3-9`'s handset round, which runs the product's own
+renderer.
 `C` is also the reducibility baseline the remaining `P3-7a` steps are proved byte-identical against,
 so the default, the baseline and the answer are now one configuration — ✅ verified on the swap,
 both audit cameras byte-identical to the graded `C` frames.

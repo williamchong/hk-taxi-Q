@@ -85,6 +85,32 @@ if ! "$GDFORMAT" --check "$ROOT/game"; then
 	failed=1
 fi
 
+# Settings that no other check can miss going missing. Opening the editor
+# rewrites project.godot from scratch: it discards every comment, and it drops
+# hand-written feature overrides — the `.web` / `.mobile` suffixed keys, which
+# the editor only persists when it created them itself. That is not
+# hypothetical. 78c077e, a commit about the start line, silently took three
+# warning promotions and rendering_method.web out in one editor save, and
+# nothing failed for three weeks, because a promotion that is no longer set
+# cannot fail and check.sh only greps what the file still asks for.
+#
+# Counts, not names, on purpose: docs/ARCHITECTURE.md "GDScript warnings" and
+# "Project settings" hold the durable list and the rationale. This is the
+# tripwire that says go and read them.
+echo "==> settings"
+promoted="$(grep -c '^gdscript/warnings/.*=2$' "$ROOT/game/project.godot" || true)"
+web_renderer="$(grep -c 'rendering_method.web' "$ROOT/game/project.godot" || true)"
+if [[ "$promoted" != 21 || "$web_renderer" != 1 ]]; then
+	echo "  promoted warnings: $promoted (want 21)"
+	echo "  rendering_method.web: $web_renderer (want 1)"
+	echo "  FAIL  settings — project.godot lost settings, most likely to an" >&2
+	echo "        editor save. Restore them; do NOT edit the numbers here down" >&2
+	echo "        to match. See docs/ARCHITECTURE.md \"Project settings\"." >&2
+	failed=1
+else
+	echo "  ok    settings"
+fi
+
 echo "==> import"
 run_godot "import" --headless --path "$ROOT/game" --import
 

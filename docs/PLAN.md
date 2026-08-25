@@ -565,6 +565,7 @@ trade.
   Times Square **unaided** — there is no arrow to disable — and to say aloud what they recognise on
   the way.
 - **Review:** the drivers themselves | web build link | **Do they know where they are?**
+- ⚠️ **The write-up must name the renderer, because the artefact is not the product** (`Q76`). The web build runs **Compatibility**; every shipping target runs Forward Mobile, and no browser can run it. On a fixed camera the web frame does not dim — it **crushes**: `Q31`'s 10–30 band falls **27.0% → 0.7%** and a third of the frame lands under `L*` 10. Recognition survives that, which is why the round proceeds. **A look verdict does not** — this round may **not** reopen `Q26` or re-price `Q30`/`Q31`, whose every figure was measured on the renderer the drivers will not see.
 - **Deps:** `B2`.
 - **Why a web link and not a handset:** it costs the tester one click and the project nothing, which
   is the only reason this round can happen early — `P0-3b` stays off the critical path. The trade is

@@ -1,10 +1,8 @@
 ; Engine configuration file.
-; It's best edited using the editor UI and not directly,
-; since the parameters that go here are not all obvious.
 ;
-; Format:
-;   [section] ; section goes between []
-;   param=value ; assign values to parameters
+; WARNING: Godot rewrites this file from scratch whenever Project Settings is
+; saved in the editor, discarding every comment below. The durable record of
+; why these values were chosen is docs/ARCHITECTURE.md "Project settings".
 
 config_version=5
 
@@ -14,6 +12,8 @@ config/name="hk-taxi-Q"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
+; Uncapped rendering on a 90/120 Hz phone panel buys nothing above the 60fps
+; target and throttles the device. Desktop stays uncapped.
 run/max_fps.mobile=60
 
 [autoload]
@@ -25,6 +25,11 @@ BeamBudget="*res://scripts/vehicle/beam_budget.gd"
 
 [debug]
 
+; GDScript warnings promoted to errors. Godot still exits 0 on every one of
+; them, so tools/check.sh greps the output — running --import by hand proves
+; nothing. Level 1 is invisible headlessly, only 2 surfaces, so entries here
+; are all 2. Rationale and the omitted warnings: docs/ARCHITECTURE.md
+; "GDScript warnings".
 gdscript/warnings/unused_variable=2
 gdscript/warnings/unused_local_constant=2
 gdscript/warnings/unused_private_class_variable=2
@@ -43,16 +48,25 @@ gdscript/warnings/int_as_enum_without_cast=2
 gdscript/warnings/int_as_enum_without_match=2
 gdscript/warnings/confusable_identifier=2
 gdscript/warnings/confusable_local_declaration=2
+gdscript/warnings/native_method_override=2
+gdscript/warnings/get_node_default_without_onready=2
+gdscript/warnings/onready_with_export=2
 
 [display]
 
 window/size/viewport_width=1920
 window/size/viewport_height=1080
+; Resolution-independent UI: desktop is a target alongside phones.
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 
 [importer_defaults]
 
+; Godot 4.7 imports glTF COLOR_0 into the mesh but leaves
+; vertex_color_use_as_albedo off, so every generated tile arrives white. The
+; post-import script turns it on. Set as an importer default rather than per
+; file because generated assets are gitignored — their .import files do not
+; survive a fresh clone.
 scene={
 "import_script/path": "res://tools/generated_scene_import.gd"
 }
@@ -107,4 +121,5 @@ look_back={
 [rendering]
 
 renderer/rendering_method="mobile"
+renderer/rendering_method.web="gl_compatibility"
 textures/vram_compression/import_etc2_astc=true

@@ -9901,3 +9901,266 @@ it shipped on the settled pattern instead.
 ⚠️ **`road_surface_preview.gd` is not in the set.** It is the genuine variant — a `built` signal, a
 `push_warning` because absence there *is* an error, and a deferred emit — and folding it in would
 lose the distinction between the mandatory layer and the nine optional ones.
+
+---
+
+## `Q75` — A setting that is no longer set cannot fail, and two of them were not set
+
+**Closed 2026-08-25.** Found while acting on the risk register's own 🔴 row before re-cutting
+`P3-9a`'s driver artefact. The row named three missing GDScript warning promotions. Reading the
+commit that dropped them found a fourth casualty nobody had recorded.
+
+### What `78c077e` actually took
+
+`78c077e` is a commit about the start line, dated 2026-08-01. It carries an editor rewrite of
+`game/project.godot` — the hazard `CLAUDE.md` and `ARCHITECTURE.md` both warn about — and in that
+rewrite it removed, none of it mentioned in the message:
+
+| Lost | Class | Noticed |
+|---|---|---|
+| `native_method_override`, `get_node_default_without_onready`, `onready_with_export` | Warning promotions | 2026-08-24, by grading the docs against the build |
+| `renderer/rendering_method.web="gl_compatibility"` | Feature override | **Never, until 2026-08-25** |
+| Five comment blocks, including the one explaining the `check.sh` coupling | Prose | Never |
+
+**Nothing failed for three weeks in either case, and the mechanism is the same one twice:** a
+promotion that is not set cannot be violated, and an override that is not set cannot be read back.
+`check.sh` greps for `treated as error` — it can only ever find what the file still asks for. The
+file was the input to the check *and* the thing being checked.
+
+### What restoring them cost
+
+**Nothing, which is the useful finding.** All 21 promotions restored, `check.sh` exit `0`, zero
+`treated as error` hits across the sweep. The guard had been latent for three weeks rather than
+masking real defects — so this closes as a process failure, not a code one, and no GDScript changed.
+
+### The renderer claim was wrong, and the correction matters more than the fix
+
+`ARCHITECTURE.md` said the missing `rendering_method.web` *"silently breaks web export because WebGL2
+cannot run the mobile renderer"*. **Measured on the shipped build, it does not.** The web export
+taken without the override reports, in the browser console:
+
+```
+OpenGL API OpenGL ES 3.0 (WebGL 2.0 (OpenGL ES 3.0 Chromium)) - Compatibility - Using Device: WebKit
+```
+
+Godot 4.7 forces Compatibility on web whatever `rendering_method` says. So the four web cuts taken
+without the override — including the one `P3-9a` was ready to send drivers — ran the *intended*
+renderer, by engine default rather than by instruction. **The override is restored anyway**: a
+project should state the renderer it wants rather than inherit one, and an engine that later gains a
+second web renderer would otherwise change this build silently. But the doc's claim is corrected
+rather than preserved, because a warning that overstates its consequence is one people learn to
+discount. ⚠️ This is `Q72`'s lesson in the other direction: there, a counter read 0 and could not
+read anything else; here, a hazard was described as fatal and was not. Both are claims nobody had
+put a measurement behind.
+
+### The decision — count the settings, in `check.sh`, and never edit the count down
+
+`ARCHITECTURE.md` already held the durable list, and holding it there was not enough: the file drifted
+from the doc for three weeks with both green. `check.sh` gains a `settings` step, before `--import`,
+that counts two things and fails on either:
+
+- `grep -c '^gdscript/warnings/.*=2$'` must be **21**
+- `grep -c 'rendering_method.web'` must be **1**
+
+**Counts rather than names, deliberately.** The doc owns the list and the rationale; this is the
+tripwire that says go and read it. Naming all 21 here would make a second copy of the list to drift,
+which is `Q71`'s objection.
+
+⚠️ **The failure message says "do NOT edit the numbers here down to match".** That is the whole
+point of `Q72`, and this check is worth exactly as much as that instruction is obeyed. A count edited
+to agree with a regression certifies the wrong state.
+
+### It was mutation-tested, because a check nobody has seen fail is a claim
+
+Four cases, run against copies of the real file:
+
+| Case | Mutation | Result |
+|---|---|---|
+| A | pristine | `failed=0` |
+| B | drop `native_method_override` | `failed=1`, reports 20 (want 21) |
+| C | drop `rendering_method.web` | `failed=1`, reports 0 (want 1) |
+| D | **the exact `78c077e` state** — all three promotions and the override | `failed=1`, reports 18 and 0 |
+
+Case D is the one that matters: the historical regression, replayed, now fails.
+
+### 🔴 It recurred twice, and the trigger was git, not Godot
+
+**Twice on 2026-08-25, within hours of being restored, `project.godot` was found back at 18
+promotions and 0 renderer overrides with the comment blocks stripped again** — caught by `git diff`
+during unrelated work, on a day nobody opened the editor. A **third** loss was found the same way on
+the next session, by `check.sh`'s own new `settings` step, with this record already saying ✅
+restored above it. That is what forced the question below.
+
+🔴 **The answer: not one of the three restorations was ever committed.** Read the setting off
+every commit that has touched the file and it does not waver — `567d861`, `b53019d` and `4d5a804`
+all carry `promoted=21 web=1`; `78c077e`, `4973d00`, `1030aba` and `HEAD` all carry `promoted=18
+web=0`, unbroken:
+
+```
+for c in 567d861 4d5a804 78c077e 4973d00 1030aba HEAD; do
+  echo "$c $(git show ${c}:game/project.godot | grep -c '^gdscript/warnings/.*=2$')"
+done
+```
+
+**There is no recurrence to explain.** Each restoration lived in the working tree and nowhere else,
+and the single loss of `78c077e` simply outlived every one of them. Any ordinary tree operation
+erases an uncommitted edit without a word, and `git reflog` puts three in exactly that window —
+`rebase (start): checkout d65000b~1`, `rebase (start): checkout refs/heads/q62-turn-restriction-diff`
+and a bare `reset: moving to HEAD`. ⚠️ **Which one did it is not proven and does not need to be**:
+the class is established, and no member of it can survive the fix. The three surviving stash entries
+were checked and none contains `project.godot`.
+
+✅ **And headless is safe after all — now tested the way it never was.** The restored file came
+through a full `check.sh` — eight Godot invocations including `--import` and the per-script
+`--check-only` sweep — **byte-identical**, at 21 promotions, 1 override and 18 comments. The earlier
+ruling-out ran `drive.sh` and a `--rendering-method` wrapper but could not distinguish "did not write
+the file" from "wrote it back to the state it was already in", because the baseline was the regressed
+file. Restore first, then test: the same discipline `Q58`'s `drawn_gauge_m` trap is about.
+⚠️ The **windowed editor** hazard stands unchanged — `78c077e` is the proof — and only the
+"first windowed run after an export" speculation is withdrawn.
+
+**What this changes: everything about the fix.** The guard is necessary and stays, but a guard alone
+would have gone on failing forever against a file nobody committed. 🔴 **The durable half of the fix
+is that `game/project.godot` is committed in the same change as the guard that counts it** — a
+restoration that is not committed is not a restoration, and this record asserted ✅ three times over
+a tree that read 18/0.
+
+### ✅ New lesson
+
+**A check whose bar lives in the file it is checking is not a check.** The warnings sweep read its
+own list of what to enforce out of `project.godot`, so deleting an entry from `project.godot` was
+indistinguishable from never having wanted it. Any check configured by the artefact it grades needs a
+second, independent statement of what the configuration should be — here, a count in `check.sh` and a
+list in `ARCHITECTURE.md`. ⚠️ **And the editor-rewrite hazard was already documented, in two files,
+and it still landed** — so the answer to a known-fragile file is a check, not another paragraph.
+
+**And a second one, which this record had to learn about itself: a fix in the working tree is not a
+fix.** This entry said ✅ *restored* three times over a tree that read 18/0, because a restoration
+nobody committed is indistinguishable from one that never happened — and it read as a recurring
+mystery rather than as an uncommitted edit. ⚠️ **Where a record claims a file was repaired, the
+claim is the commit, not the edit**; `git show <commit>:<path>` settles it in one line and is what
+should have been run the first time this "recurred".
+
+⚠️ **A third: a control that is the broken state cannot exonerate anything.** Ruling out `drive.sh`
+and the `--rendering-method` wrapper against the *regressed* file could only ever show that they did
+not make it worse. Restoring first turned the same test into a real result — headless survives a full
+`check.sh` byte-identical. Restore, then test; measuring an intervention against a baseline that
+already carries the defect is `Q58`'s `drawn_gauge_m` trap wearing different clothes.
+
+---
+
+## `Q76` — The round grades a renderer the product will never run
+
+**Closed 2026-08-25, as a decision to proceed with the limitation recorded.** Opened by the user,
+from two screenshots of the same view: *"why on web everything is much darker?"*
+
+### The mechanism
+
+**The web build runs Compatibility; every other target runs Forward Mobile.** `project.godot` sets
+`rendering_method="mobile"`, and the browser overrides it because Forward+ and Forward Mobile are
+both built on `RenderingDevice`, whose backends are Vulkan, D3D12 and Metal. A browser has none.
+WebGPU is the only bridge that could change that and it is not in Godot — proposal
+[`godot-proposals#6646`](https://github.com/godotengine/godot-proposals/issues/6646) is open and
+unimplemented upstream.
+
+⚠️ **This was already proven accidentally, by this repo.** `rendering_method.web` was missing from
+`78c077e` (2026-08-01) until `Q75` restored it 2026-08-25. Four web exports went out with
+`rendering_method="mobile"` and nothing contradicting it, and **every one reported `Compatibility`**
+in the browser console. The engine was told to use Mobile and could not.
+
+⚠️ **Forks exist and the fork route is refused.** dwalter's WebGPU fork works today on 4.6, but is
+heavily AI-generated and the Godot Foundation's 2026 contribution policy declines that, so it will
+not be upstreamed; davnotdev's human implementation is the upstreamable one and its promised draft
+PR had not opened a month past its date. **An engine fork is refused here on three grounds**: it
+fixes a target that is not the product, it makes export templates and upstream patches this
+project's problem, and it puts code of contested provenance into a commercial binary — which is the
+opposite of what `LICENSING.md` exists to protect.
+
+### What it actually does to the frame — measured, not eyeballed
+
+⚠️ **"Darker" is the wrong diagnosis and cost the first measurement.** Controlled pair:
+`city_preview.tscn`, **fixed camera**, one variable.
+
+| | Forward Mobile (product) | Compatibility (web) |
+|---|---|---|
+| L* mean | 28.3 | 27.0 |
+| L* p10 | 10.7 | **0.7** |
+| L* p50 / p90 | 32.0 / 33.2 | 36.9 / 37.4 |
+| C* p90 | 14.2 | 8.7 |
+| under L* 10 | 6.0% | **33.1%** |
+| 10–30 band (`Q31`'s) | 27.0% | **0.7%** |
+
+**Mean L\* moves −1.3.** The frame is not darker; it **crushes** — a third collapses to black while
+the lit part lifts slightly, and the two cancel in the mean. Chroma falls with it, so the web build
+is *less* saturated than the shipped palette, which is `Q30`'s axis moving the other way.
+
+⚠️ **The first attempt at this measurement was invalid and is recorded so it is not repeated.** Run
+on `city_drive.tscn`, the two runs captured different car positions — one in open sun, one under the
+HKCEC deck — and reported a 31-point L* gap that was almost entirely camera. That is the
+`skidpad.tscn` rule in `CLAUDE.md` biting a second quantity: **measure this on a fixed camera in a
+preview scene, never on a driven frame.**
+
+### The compensation that was proposed, and refused
+
+A web-only Environment was evaluated (`/eval`) and **refused**. The deciding evidence is an
+ablation: ambient energy `0.85 → 1.8` under Compatibility.
+
+| | web today | ambient ×2.1 |
+|---|---|---|
+| under L* 10 | 33.1% | **33.0%** |
+| 10–30 band | 0.7% | **0.6%** |
+| p50 / p90 | 36.9 / 37.4 | 46.7 / 47.4 |
+| C* p90 | 8.7 | **8.1** |
+
+**The obvious knob is inert.** It moved the crushed third by 0.1 points, brightened only what was
+already lit, and made chroma worse. `frame_stats.py`'s own header states the rule this invokes —
+*"Ambient, exposure, glow, fog, the tonemap curve and specular were each ablated… and none moved
+gain by more than 0.05… that invariance is diagnostic."* **If light cannot reach it, the loss is not
+in the lighting rig**, so there is currently no knob to compensate *with*, and tuning would be tuning
+in the dark. It would also stand up the second simultaneous look that `golden_hour.tscn`'s own header
+says it was written to prevent.
+
+### The decision — run the round, name the renderer
+
+`P3-9a` goes ahead on Compatibility, and **its write-up must state which renderer it graded.** The
+reasoning is that the round's primary verdict is *do they know where they are*, and recognition
+survives a crushed shadow band — the frames still read as a city. What it is **not** licensed to do
+is settle a look question: `Q26` may not be reopened, and `Q30`/`Q31` may not be re-priced, on
+evidence gathered from a renderer the product does not ship.
+
+⚠️ **`Q31` is erased on the artefact.** Its whole remediation was the 10–30 band, and that band holds
+**27.0%** on Mobile and **0.7%** on web. Every number in `Q31`, `Q30` and `Q26` was measured on
+Forward Mobile, which remains correct **for the product** — the game ships as a native mobile app on
+Vulkan/Metal — and describes nothing a `P3-9a` driver will see.
+
+### How to reproduce, since this needs no new tool
+
+`drive.sh` passes everything after `--` to the driver, so the renderer flag goes on a wrapper:
+
+```sh
+printf '#!/usr/bin/env bash\nexec godot --rendering-method gl_compatibility "$@"\n' > /tmp/godot-compat
+chmod +x /tmp/godot-compat
+GODOT=/tmp/godot-compat .claude/skills/run-hk-taxi-q/drive.sh \
+  --scene=res://scenes/dev/city_preview.tscn \
+  --camera=163,9.2,28.5 --look=205,6.2,24.5 --seconds=2 --shots=1.5 --debug-view=off \
+  --out=build/driver/fx_compat
+.venv/bin/python tools/frame_stats.py build/driver/fx_compat/t01.50.png
+```
+
+✅ **Desktop `gl_compatibility` is a faithful proxy for the web build** — the frame it produces
+matches the browser screenshot that opened this question, which is what makes the gap measurable
+without a browser capture path.
+
+### ✅ New lesson
+
+**A test artefact can differ from the product in a way no check compares, because nothing renders
+both.** Every grader in this repo measures one build; none of them measures two *renderers*. The gap
+survived four web cuts and was found by a person putting two screenshots side by side. ⚠️ **And the
+first instinct — "it's darker, raise the light" — was wrong twice over**: wrong about the statistic
+(it crushes, it does not dim) and wrong about the cure (light does not reach it). Both were caught by
+measuring, and neither would have been caught by looking.
+
+### See
+
+`Q75` (the missing override that proved this) · `Q31` · `Q30` · `Q26` · `P3-9a` · `ARCHITECTURE.md`
+"Project settings"
