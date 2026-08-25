@@ -25,6 +25,7 @@ const GeneratedBoxJunctions = preload("res://scripts/city/generated_boxjunctions
 const GeneratedRoadMarks = preload("res://scripts/city/generated_roadmarks.gd")
 const GeneratedRailings = preload("res://scripts/city/generated_railings.gd")
 const GeneratedSigns = preload("res://scripts/city/generated_signs.gd")
+const GeneratedSignals = preload("res://scripts/city/generated_signals.gd")
 const GeneratedTramway = preload("res://scripts/city/generated_tramway.gd")
 const Manifest = preload("res://scripts/city/city_manifest.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
@@ -135,6 +136,16 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 	if not manifest.roadmarks_path.is_empty():
 		problems.append_array(
 			_check_document("road markings", manifest.roadmarks_path, GeneratedRoadMarks.PATH)
+		)
+	# Guarded on the same terms a seventh time, and on the sharpest version of
+	# the argument: `verify_signals.gd` treats an absent asset as a pass, *and* a
+	# null `signals` key is an ordinary answer twice over — for a region whose
+	# estate publishes no signal layer, and for one whose publisher spells its
+	# codes outside `head_prefixes` (`P3-17`). So without this a manifest naming
+	# `signals.glb` with the file gone would pass every check in the repo.
+	if not manifest.signals_path.is_empty():
+		problems.append_array(
+			_check_document("signals", manifest.signals_path, GeneratedSignals.PATH)
 		)
 	return problems
 

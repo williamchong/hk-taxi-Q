@@ -405,7 +405,7 @@ class SignReport:
     no_entry_on_two_way: int = 0
     # 🔴 **Inverted by `Q72`, and the inversion is the finding.** This was
     # `no_entry_with_flow`, a self-check its own docstring called "a tautology by
-    # design": `_facing_from_side` turned every one-way sign to face the traffic,
+    # design": `facing_from_side` turned every one-way sign to face the traffic,
     # so a NO ENTRY could never come out facing with the flow, and 0 was
     # unreachable proof that the rule had run. But **facing with the flow is the
     # correct state for a NO ENTRY** — it addresses the driver who would enter
@@ -428,7 +428,7 @@ class SignReport:
     # the graph's 217 published banned movements, matched through the junction
     # the sign's own traffic reaches. It was built expecting a side flip to
     # collapse `agreed`; on this region it moved **29 to 30**, because
-    # `_facing_from_side` does not consult the side on a one-way host and
+    # `facing_from_side` does not consult the side on a one-way host and
     # `turn_sign_on_one_way` is **62 of 68**. `Q62` stays open on the facing and
     # records this as the reason.
     #
@@ -453,7 +453,7 @@ class SignReport:
     # say.
     #
     # 🔴 **How much of the population above can say anything about the kerb
-    # side, inverted.** `_facing_from_side` turns *both* kerbs of a one-way to
+    # side, inverted.** `facing_from_side` turns *both* kerbs of a one-way to
     # face its only traffic, so on a one-way host the facing never reads the
     # side and a mirrored city produces the identical match. This is the number
     # that says so — 62 of 68 here — and it is why the mirror moved `agreed` by
@@ -687,7 +687,7 @@ def _read_poles(
 # Every shape below is returned as convex polygons in the plate's own frame:
 # `(u, v)` in metres, `+u` to the **viewer's** right and `+v` up. Polygons are
 # wound counter-clockwise in that frame, which `_place` maps to a normal along
-# the plate's outward direction — see `_plate_frame` for why that holds.
+# the plate's outward direction — see `plate_frame` for why that holds.
 
 
 # Every rectangular plate is just its two authored lengths, and `plate_extent_m`
@@ -750,7 +750,7 @@ def layer_polygons(
     half_h = size * half_height_m
 
     if draw == SIGN_DISC:
-        return [_disc(min(half_w, half_h), spec.disc_segments)]
+        return [disc(min(half_w, half_h), spec.disc_segments)]
     if draw == SIGN_BAR:
         # The white bar of a NO ENTRY plate. Its height is a proportion of the
         # plate rather than of `size`, so widening the bar does not thicken it.
@@ -1027,7 +1027,14 @@ def _u_turn_arrow(half_w: float, half_h: float) -> list[np.ndarray]:
     ]
 
 
-def _disc(radius: float, segments: int) -> np.ndarray:
+def disc(radius: float, segments: int) -> np.ndarray:
+    """A closed ring of `segments` points, counter-clockwise in `(u, v)`.
+
+    ⚠️ **Public since `P3-17`, on `arrows.nearside`'s terms**: a second consumer
+    is what makes a helper public here rather than copied. `pipeline/signals.py`
+    draws its lenses and its post from this, and a second generator would be a
+    second phase convention — see `octagon` below for what that costs.
+    """
     angles = np.linspace(0.0, 2.0 * math.pi, segments, endpoint=False)
     return np.column_stack([radius * np.cos(angles), radius * np.sin(angles)])
 
@@ -1041,12 +1048,12 @@ def _octagon(half: float) -> np.ndarray:
     corners cut off. So the vertices sit at `22.5 + k * 45`, and the radius is
     the circumscribed one that puts each flat at `half`.
 
-    ⚠️ **`_disc(half, 8)` is the trap** — the segment count is right and the
+    ⚠️ **`disc(half, 8)` is the trap** — the segment count is right and the
     phase is not, and the two differ by a 22.5 degree turn that renders
-    perfectly as the wrong sign. So it is `_disc` *turned*, which says that in
+    perfectly as the wrong sign. So it is `disc` *turned*, which says that in
     the code rather than only in this paragraph, and keeps one generator.
     """
-    return _rotate([_disc(half / math.cos(math.radians(22.5)), 8)], 22.5)[0]
+    return _rotate([disc(half / math.cos(math.radians(22.5)), 8)], 22.5)[0]
 
 
 def _rect(half_w: float, half_h: float) -> np.ndarray:
@@ -1070,8 +1077,12 @@ def _rotate(polygons: list[np.ndarray], degrees: float) -> list[np.ndarray]:
 # --------------------------------------------------------------------------
 
 
-def _plate_frame(facing_deg: float) -> tuple[np.ndarray, np.ndarray]:
+def plate_frame(facing_deg: float) -> tuple[np.ndarray, np.ndarray]:
     """The plate's outward normal and its `+u` axis, for a facing heading.
+
+    ⚠️ **Public since `P3-17`**, on `arrows.nearside`'s terms — `pipeline/
+    signals.py` frames its heads with it. The winding guarantee below is the
+    reason it must not be written a second time.
 
     Headings are clockwise from north and north is `-Z`, so a plate facing
     `facing_deg` has outward normal `n = (sin f, 0, -cos f)`. `+u` is the right
@@ -1093,8 +1104,15 @@ def _plate_frame(facing_deg: float) -> tuple[np.ndarray, np.ndarray]:
     return normal, right
 
 
-def _facing_from_side(snap_heading_deg: float, side: float, one_way: bool) -> float:
+def facing_from_side(snap_heading_deg: float, side: float, one_way: bool) -> float:
     """Which way a sign on this kerb faces, in game headings.
+
+    🔴 **Public since `P3-17`, and this is the one that most needed it.**
+    `pipeline/signals.py` derives a signal head's facing from exactly this rule,
+    because a head addresses the traffic approaching its stop line — the traffic
+    already legally proceeding, which is the case a regulatory plate is in. A
+    second copy of this function is a second city, mirrored, and nothing in
+    either would render as wrong (`Q56`).
 
     ⚠️ **Derived, because nothing publishes it** — the module docstring carries
     the publisher's own wording and the prior art. This is
@@ -1145,7 +1163,7 @@ def _plate_facing_deg(post_facing_deg: float, face: SignFace) -> float:
     """Which way this particular plate faces on a post that faces `post_facing_deg`.
 
     🔴 **The one place a facing is a property of the plate rather than the pole**
-    (`Q72`). `_facing_from_side` derives where the *post* looks — at the traffic
+    (`Q72`). `facing_from_side` derives where the *post* looks — at the traffic
     it addresses — and almost every face agrees with it. A NO ENTRY does not: it
     stands at the mouth a driver must not enter by, so it addresses traffic
     coming the other way and is turned 180 degrees from its own post.
@@ -1360,7 +1378,7 @@ def _draw_plate(
     back, it is grey, and drawing it means winding stays the thing that decides
     visibility — which `facing_away` can then hold to 0.
     """
-    normal, right = _plate_frame(facing_deg)
+    normal, right = plate_frame(facing_deg)
     up = np.array([0.0, 1.0, 0.0])
     half_w, half_h = plate_extent_m(spec, face.plate)
     # ⚠️ **Stood off the front of the post, not centred on it.** `centre` is the
@@ -1465,14 +1483,14 @@ def _draw_pole(
     under it.
     """
     # ⚠️ **Reversed, and the reversal is the whole correctness of this function.**
-    # `_disc` winds counter-clockwise in `(u, v)`, which is what a *plate* wants
-    # once `_plate_frame` maps it — but here `u` and `v` become world `X` and
+    # `disc` winds counter-clockwise in `(u, v)`, which is what a *plate* wants
+    # once `plate_frame` maps it — but here `u` and `v` become world `X` and
     # `Z`, and a ring counter-clockwise in `(X, Z)` has its side quads wound
     # inward and its cap wound at the ground. The first build shipped exactly
     # that: 3,200 triangles, every pole triangle in the region, facing away with
     # everything else correct — `Q58`'s tramway defect in miniature, and caught
     # by `facing_away` rather than by looking at it.
-    ring = _disc(spec.pole_radius_m, spec.pole_sides)[::-1]
+    ring = disc(spec.pole_radius_m, spec.pole_sides)[::-1]
     grey = spec.colours[SIGN_BACK_COLOUR]
     centre = np.array([x, 0.0, z])
     for index in range(spec.pole_sides):
@@ -1509,7 +1527,7 @@ class _Placed:
     y: float
     facing_deg: float
     # Which kerb this post stands on: `+1` nearside. Kept because a deviation
-    # board's chevrons point away from it, and `_facing_from_side` has already
+    # board's chevrons point away from it, and `facing_from_side` has already
     # consumed the same number to decide where the plate looks (`Q66`).
     side: float
     one_way: bool
@@ -1779,7 +1797,7 @@ def build_region(
                 # so the post would be placed on the nearside and turned to face
                 # the offside. A perfectly drawn NO ENTRY facing the wrong way,
                 # which is this module's whole failure class.
-                facing_deg=_facing_from_side(snap.heading_deg, side, ribbon.one_way),
+                facing_deg=facing_from_side(snap.heading_deg, side, ribbon.one_way),
                 side=side,
                 one_way=ribbon.one_way,
                 snap=snap,
@@ -1996,7 +2014,7 @@ def _downstream_node(host: dict[str, Any], post: _Placed) -> tuple[int, float]:
 
     🔴 **Derived from `facing_deg`, not from the side directly, and that is the
     point.** A sign faces the traffic it addresses, so that traffic runs at
-    `facing_deg + 180`; `_facing_from_side` returns the edge heading turned
+    `facing_deg + 180`; `facing_from_side` returns the edge heading turned
     around exactly when the post is nearside-or-one-way, so the comparison below
     is exact rather than tolerant. Reading the facing back out is what couples
     this counter to the expression it grades: flip the side test and every plate
@@ -2032,7 +2050,7 @@ def _record_semantics(
     🔴 **`no_entry_against_flow` is a self-check that must be 0, and it is the
     INVERSE of what stood here until `Q72`.** That one — `no_entry_with_flow` —
     was described in this docstring as *"a tautology by design"*, and it was:
-    `_facing_from_side` turned every one-way sign to face its traffic, so a NO
+    `facing_from_side` turned every one-way sign to face its traffic, so a NO
     ENTRY could not come out facing with the flow whatever the data said, and 0
     was unreachable proof that the rule had run rather than evidence it was
     right. 🔴 **And the state it certified was the wrong one.** A NO ENTRY stands
@@ -2042,7 +2060,7 @@ def _record_semantics(
     counter reading 0.
 
     ⚠️ **It is still not data-sensitive, and saying otherwise would repeat the
-    mistake it was written about.** On a one-way host `_facing_from_side` returns
+    mistake it was written about.** On a one-way host `facing_from_side` returns
     `heading + 180` and `_plate_facing_deg` adds another 180, so a flagged plate's
     facing is identically `heading` and this residual is identically 0. **No input
     the pipeline can read moves it.** What it catches is `faces_against_traffic`
@@ -2050,7 +2068,7 @@ def _record_semantics(
     — a config-and-code ratchet, in the family of `facing_away`, and no more.
 
     🟡 **A check that could disagree would have to read something
-    `_facing_from_side` did not produce** — `_downstream_node` is the obvious
+    `facing_from_side` did not produce** — `_downstream_node` is the obvious
     candidate, asserting a one-way's NO ENTRY sits at the mouth traffic enters by
     rather than the one it leaves by. That is a real second opinion, it is not
     built, and `Q62` is where the debt lives.
@@ -2067,7 +2085,7 @@ def _record_semantics(
     junction taken from the facing itself (`_downstream_node`) so that a facing
     derived onto the wrong kerb would send a plate to the opposite end of its
     edge. It does not: mirroring the whole region moves `agreed` **29 to 30**,
-    because `_facing_from_side` ignores the side on a one-way host and
+    because `facing_from_side` ignores the side on a one-way host and
     `turn_sign_on_one_way` is **62 of 68**. The gradeable population for the side
     is 6 plates, which is not a population worth the name. `Q62` stays open.
 
@@ -2249,7 +2267,7 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Sig
         "no_entry_on_two_way": report.no_entry_on_two_way,
         # ⚠️ **Must be 0**, and unlike the line above this is a self-check rather
         # than a finding — see `_record_semantics`. It read 117 of 253 while
-        # `_facing_from_side` was missing its one-way branch.
+        # `facing_from_side` was missing its one-way branch.
         # 🔴 Must be 0, and it is the INVERSE of the counter that stood here
         # until `Q72` — see `_record_semantics` for why 0 on the old one was
         # success reported for the wrong configuration.

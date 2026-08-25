@@ -1299,10 +1299,8 @@ class Signals:
     mount_height_m: float
     post_radius_m: float
     post_sides: int
-    # How far the post rises past the top of the highest head.
+    # How far the post rises past the top of the head.
     post_headroom_m: float
-    # Vertical gap between two heads stacked on one post.
-    stack_gap_m: float
 
     # ---- the join ----
     max_offset_m: float
@@ -4030,7 +4028,6 @@ _SIGNAL_MEASURES = (
     "mount_height_m",
     "post_radius_m",
     "post_headroom_m",
-    "stack_gap_m",
     "max_offset_m",
     "host_ambiguity_m",
     "outset_m",

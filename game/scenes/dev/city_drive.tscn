@@ -24,6 +24,7 @@
 [ext_resource type="Script" path="res://scripts/city/railings_preview.gd" id="13_railings"]
 [ext_resource type="Script" path="res://scripts/city/signs_preview.gd" id="14_signs"]
 [ext_resource type="Script" path="res://scripts/city/roadmarks_preview.gd" id="15_roadmarks"]
+[ext_resource type="Script" path="res://scripts/city/signals_preview.gd" id="16_signals"]
 [ext_resource type="PackedScene" path="res://scenes/world/clean_daylight.tscn" id="3_light"]
 [ext_resource type="PackedScene" path="res://scenes/vehicle/taxi.tscn" id="4_taxi"]
 [ext_resource type="Script" path="res://scripts/camera/chase_camera.gd" id="5_camera"]
@@ -78,6 +79,15 @@ script = ExtResource("12_boxjunctions")
 ; node simply stays empty.
 [node name="RoadMarks" type="Node3D" parent="."]
 script = ExtResource("15_roadmarks")
+
+; The published traffic signal heads (`P3-17`), one mesh for the whole region,
+; standing on the kerb the ribbon actually drew rather than where they were
+; surveyed — nearly three quarters of them were surveyed inside it. Static and
+; **unlit**: no dataset publishes signal timing, an invented cycle instructs, and
+; nothing obeys it until `P3-3`'s traffic exists. A region whose publisher spells
+; its codes outside `head_prefixes` ships none and this node simply stays empty.
+[node name="Signals" type="Node3D" parent="."]
+script = ExtResource("16_signals")
 
 ; The published pedestrian railings (`P3-19`), one mesh for the whole
 ; region, standing on the kerb the ribbon actually drew rather than where

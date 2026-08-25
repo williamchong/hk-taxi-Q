@@ -51,17 +51,17 @@ from pipeline.signs import (
     _downstream_node,
     _draw_plate,
     _draw_pole,
-    _facing_from_side,
     _merge_placements,
     _merge_posts,
     _Placed,
     _plate_facing_deg,
-    _plate_frame,
     _record_semantics,
     _turn_classes,
+    facing_from_side,
     layer_polygons,
     orphaned_supplementary,
     plate_extent_m,
+    plate_frame,
 )
 from pipeline.surface import mitres
 from tests.helpers import CITY_YAML
@@ -249,7 +249,7 @@ class TestTheFacingIsDerived:
         """A pole on the **offside** is at negative `offset_m` for a northward edge.
 
         ⚠️ **Which is to say the nearside is *positive*** — what `Snap.offset_m`
-        documents and what `_facing_from_side`'s `offset_m > 0.0` reads. The first
+        documents and what `facing_from_side`'s `offset_m > 0.0` reads. The first
         version of this summary said "nearside is negative", the exact inversion
         the class docstring above is written against, while the body proved the
         opposite. A test whose title contradicts its assertions is worse than no
@@ -270,13 +270,13 @@ class TestTheFacingIsDerived:
 
     def test_a_nearside_sign_faces_back_along_its_edge(self):
         """Traffic running along the edge meets a nearside sign head-on."""
-        assert _facing_from_side(0.0, 1.0, False) == pytest.approx(180.0)
-        assert _facing_from_side(90.0, 1.0, False) == pytest.approx(270.0)
+        assert facing_from_side(0.0, 1.0, False) == pytest.approx(180.0)
+        assert facing_from_side(90.0, 1.0, False) == pytest.approx(270.0)
 
     def test_an_offside_sign_faces_along_its_edge(self):
         """On a two-way street the offside kerb serves the other direction."""
-        assert _facing_from_side(0.0, -1.0, False) == pytest.approx(0.0)
-        assert _facing_from_side(90.0, -1.0, False) == pytest.approx(90.0)
+        assert facing_from_side(0.0, -1.0, False) == pytest.approx(0.0)
+        assert facing_from_side(90.0, -1.0, False) == pytest.approx(90.0)
 
     def test_both_kerbs_of_a_one_way_face_its_only_traffic(self):
         """⚠️ **The branch whose absence was measurable.**
@@ -287,8 +287,8 @@ class TestTheFacingIsDerived:
         coin-toss a broken rule
         produces, and the reason that counter exists.
         """
-        assert _facing_from_side(0.0, 1.0, True) == pytest.approx(180.0)
-        assert _facing_from_side(0.0, -1.0, True) == pytest.approx(180.0)
+        assert facing_from_side(0.0, 1.0, True) == pytest.approx(180.0)
+        assert facing_from_side(0.0, -1.0, True) == pytest.approx(180.0)
 
 
 class TestAPlateMayFaceTheOtherWayFromItsPost:
@@ -317,12 +317,12 @@ class TestAPlateMayFaceTheOtherWayFromItsPost:
     def test_the_turn_is_what_puts_a_no_entry_with_its_one_way_flow(self, spec):
         """The whole point, stated as geometry rather than as the flag.
 
-        A one-way's traffic runs along `heading`; `_facing_from_side` turns the
+        A one-way's traffic runs along `heading`; `facing_from_side` turns the
         post to face back at it, and the NO ENTRY must end up pointing the other
         way — along the flow, at whoever would enter against it.
         """
         heading = 252.0
-        post = _facing_from_side(heading, 1.0, True)
+        post = facing_from_side(heading, 1.0, True)
         assert post == pytest.approx((heading + 180.0) % 360.0)
         assert _plate_facing_deg(post, spec.faces["TS115"]) == pytest.approx(heading)
 
@@ -384,7 +384,7 @@ class TestThePlateFrame:
         `facing_away` only catches a violation once something is built.
         """
         for facing_deg in (0.0, 37.0, 90.0, 180.0, 271.5):
-            normal, right = _plate_frame(facing_deg)
+            normal, right = plate_frame(facing_deg)
             assert np.allclose(np.cross(right, [0.0, 1.0, 0.0]), normal, atol=1e-12)
 
     def test_a_sign_facing_south_is_read_with_east_on_the_right(self):
@@ -397,19 +397,19 @@ class TestThePlateFrame:
         this test asserted west, on the reflex that a south-facing thing has west
         on its right. It does — on *its* right. The frame is the reader's.
         """
-        _, right = _plate_frame(180.0)
+        _, right = plate_frame(180.0)
         assert right[0] == pytest.approx(1.0)
         assert right[2] == pytest.approx(0.0, abs=1e-12)
 
     def test_a_sign_facing_east_is_read_with_north_on_the_right(self):
         """The second case, because one axis cannot distinguish a transpose."""
-        _, right = _plate_frame(90.0)
+        _, right = plate_frame(90.0)
         assert right[2] == pytest.approx(-1.0)
         assert right[0] == pytest.approx(0.0, abs=1e-12)
 
     def test_the_normal_points_the_way_the_sign_faces(self):
         """Heading 90 is east, so an east-facing plate's normal is `+X`."""
-        normal, _ = _plate_frame(90.0)
+        normal, _ = plate_frame(90.0)
         assert normal[0] == pytest.approx(1.0)
         assert normal[2] == pytest.approx(0.0, abs=1e-12)
 
@@ -503,7 +503,7 @@ class TestTheFaceGeometry:
         assert np.abs(half).max() == pytest.approx(0.5 * np.abs(full).max())
 
     def test_every_layer_polygon_is_wound_counter_clockwise(self, spec):
-        """What `_plate_frame` then turns into an outward-facing triangle.
+        """What `plate_frame` then turns into an outward-facing triangle.
 
         Checked over every drawing the vocabulary has, because the turn glyphs
         are built as mirrors of one another and half of them come out reversed
@@ -559,7 +559,7 @@ class TestTheFaceGeometry:
         # are symmetric under a side swap — so flipping `side > 0.0` to
         # `side < 0.0`, which mirrors every board onto the wrong kerb, passed the
         # whole suite. Found in review. `+u` is the viewer's right and the plate
-        # faces `-Z` at `facing_deg` 0, so `_plate_frame` maps `+u` onto `-X`.
+        # faces `-Z` at `facing_deg` 0, so `plate_frame` maps `+u` onto `-X`.
         # ⚠️ Measured on the CHEVRONS, not the mesh — the plate outline and its
         # back are symmetric about `u`, so a whole-mesh extent is the same on
         # both kerbs and asserts nothing. The barb tips lie on the axis, and the
@@ -714,7 +714,7 @@ class TestThePublishedAngleIsNotConsumed:
         assert axis_residual_deg(10.0, 350.0) == pytest.approx(20.0)
 
     def test_no_facing_depends_on_it(self):
-        """`_facing_from_side` takes no angle argument at all.
+        """`facing_from_side` takes no angle argument at all.
 
         Held as a test rather than as a comment because re-introducing `ANGLE`
         into the facing is the single most plausible future regression here —
@@ -722,7 +722,7 @@ class TestThePublishedAngleIsNotConsumed:
         """
         import inspect
 
-        parameters = inspect.signature(_facing_from_side).parameters
+        parameters = inspect.signature(facing_from_side).parameters
         assert set(parameters) == {"snap_heading_deg", "side", "one_way"}
 
 
@@ -959,14 +959,14 @@ class TestTheRegistrationArithmetic:
         `-0.0 >= 0.0` is true and `-0.0 > 0.0` is false, so placing on
         `offset_m >= 0` and facing on `offset_m > 0` put the post one side and
         turned it to face the other — a NO ENTRY drawn perfectly, backwards.
-        `_facing_from_side` takes the side actually used for exactly this.
+        `facing_from_side` takes the side actually used for exactly this.
         """
         eastward = [[0.0, 0.0, 0.0], [100.0, 0.0, 0.0]]
         snap = Segments.of([edge(0, eastward)]).nearest(50.0, 0.0)
         assert math.copysign(1.0, snap.offset_m) == -1.0
         side = 1.0 if snap.offset_m >= 0.0 else -1.0
         assert side == 1.0
-        assert _facing_from_side(snap.heading_deg, side, False) == pytest.approx(
+        assert facing_from_side(snap.heading_deg, side, False) == pytest.approx(
             (snap.heading_deg + 180.0) % 360.0
         )
 
@@ -1108,7 +1108,7 @@ def posted(code: str, at: tuple[float, float], one_way: bool = False) -> tuple[S
     """One plate of `code` on the approach, as `build_region` would have placed it.
 
     Returns the real `_Placed` rather than loose fields, so the facing is
-    `_facing_from_side`'s own answer and never hand-written — the coupling
+    `facing_from_side`'s own answer and never hand-written — the coupling
     between the facing and the junction is the property under test.
     """
     segments = Segments.of([edge(0, APPROACH, from_node=1, to_node=10)])
@@ -1123,7 +1123,7 @@ def posted(code: str, at: tuple[float, float], one_way: bool = False) -> tuple[S
         x=at[0],
         z=at[1],
         y=0.0,
-        facing_deg=_facing_from_side(snap.heading_deg, side, one_way),
+        facing_deg=facing_from_side(snap.heading_deg, side, one_way),
         side=side,
         one_way=one_way,
         snap=snap,
@@ -1163,7 +1163,7 @@ class TestTheTurnRestrictionDiff:
     docstring.
 
     ⚠️ **The facing is never hand-written** — `posted` takes it from
-    `_facing_from_side` — so a test that passes here is testing the expression
+    `facing_from_side` — so a test that passes here is testing the expression
     the stage actually uses.
     """
 
@@ -1175,14 +1175,14 @@ class TestTheTurnRestrictionDiff:
         two-way the two kerbs address opposite streams, so they govern opposite
         ends of the same edge.
 
-        ⚠️ Mutation killed: flipping `side > 0.0` in `_facing_from_side`. That
+        ⚠️ Mutation killed: flipping `side > 0.0` in `facing_from_side`. That
         mirrors every post onto the wrong kerb, which sends every plate to the
         far end of its edge — and nothing else in this file would notice,
         because a mirrored city renders as a city.
 
         🔴 **This holds per plate and still does not grade the region**, which is
         the finding `Q62` keeps: the host here is two-way, and in Wan Chai 62 of
-        68 prohibition plates stand on a *one-way*, where `_facing_from_side`
+        68 prohibition plates stand on a *one-way*, where `facing_from_side`
         returns the same facing for both kerbs and the mutation changes nothing.
         Mirroring the whole region moves `turn_sign_agreed` from 29 to 30. The
         test below pins the branch that makes that so.
@@ -1197,14 +1197,14 @@ class TestTheTurnRestrictionDiff:
     def test_a_one_way_host_matches_the_same_junction_from_either_kerb(self, spec):
         """🔴 **The reason this diff cannot grade the kerb side**, pinned.
 
-        `_facing_from_side` turns both kerbs of a one-way to face its only
+        `facing_from_side` turns both kerbs of a one-way to face its only
         traffic, so both address the same junction and a mirrored city produces
         an identical match. That is not a defect — it is the correct rule — but
         it bounds what `turn_sign_agreed` can be read to mean, and
         `turn_sign_on_one_way` publishes how much of the population it applies
         to: **62 of 68** in Wan Chai.
 
-        ⚠️ Mutation killed: dropping `one_way or` from `_facing_from_side`, which
+        ⚠️ Mutation killed: dropping `one_way or` from `facing_from_side`, which
         would make the two kerbs of a one-way disagree — and would also send
         `no_entry_against_flow` back to the 117 of 253 that found it the first time.
         """

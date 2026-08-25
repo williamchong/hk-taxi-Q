@@ -352,8 +352,9 @@ hk-taxi-Q/
 │   │   ├── signs.py             # published traffic signs → signs.glb (P3-16)
 │   │   ├── sign_sheets.py       # TD's sign drawings, rasterised (P3-20)
 │   │   ├── sign_text.py         # sign lettering → signs_text.png (P3-20, Q68)
+│   │   ├── signals.py           # published signal heads → signals.glb (P3-17)
 │   │   ├── export.py            # → city.json, assembles and validates the stage outputs
-│   │   └── __main__.py          # `python -m pipeline` — 15 stages, in order
+│   │   └── __main__.py          # `python -m pipeline` — 16 stages, in order
 │   ├── sources/<city>/<source>/ # raw downloads — GITIGNORED
 │   ├── out/<city>/<region>/     # pipeline output — GITIGNORED
 │   └── tests/
@@ -403,7 +404,7 @@ The interface between ETL and game. **Versioned — change both sides together a
 
 ```json
 {
-  "schema_version": 17,
+  "schema_version": 18,
   "city_id": "hong_kong",
   "region_id": "wan_chai",
   "source_crs": "EPSG:2326",
@@ -433,6 +434,7 @@ The interface between ETL and game. **Versioned — change both sides together a
   "railings": "railings.glb",
   "signs": "signs.glb",
   "signs_text_atlas": "signs_text.png",
+  "signals": "signals.glb",
   "landmarks": "landmarks.json",
   "landmark_assets": ["landmarks/hkcec.glb"],
   "etl_version": "0.1.0",
@@ -1144,6 +1146,39 @@ carry no lettering.
 ⚠️ **`signs.json`'s `bytes` is `signs.glb` alone and no longer covers the image**; the atlas is
 `text_atlas_bytes` beside it. Two numbers where there was one, on purpose — they are added up
 deliberately or not at all.
+
+### `signals.glb` — the published traffic signal heads (`P3-17`)
+
+One head on one post per signal assembly, drawn where TD surveyed it and registered onto the drawn
+kerb, and **no collider** — the same budget decision the signs record, with one extra edge: a signal
+post stands at a junction mouth, exactly where the player is braking and turning, so this is the
+layer whose colliders would be felt most. `B3` revisits it.
+
+🔴 **The code on a feature is a GATE, never a look.** `DTAD_TRAFFIC_LIGHT_PT.REFNAME` has no
+published domain — no Index Plan sheet defines it, the fgdb specification gives it eight characters
+of untyped text, and `signCatalogue.json` is `TS`-only — so all 33 admitted codes draw the same
+head, and `signals.json` publishes `drawn_by_code` and `refused_by_code` over the whole 46-code
+vocabulary because that is the only thing that can grade a spelling rule (`Q76`).
+
+🔴 **One head stands for a whole assembly, and the count of features is not the count of heads.**
+This layer publishes no `GG_NAME`; what it publishes is coincidence — 470 of 913 points within
+0.05 m of another — and those are the parts of one installation rather than heads to stack. The
+first build stacked them and drew **8.53 m** masts, with both partitions closed, `facing_away` 0 and
+`check.sh` green. `signals.json`'s `drawn` counts **features** and `posts_drawn` counts **heads**;
+`assembly_size` is the collapse between them.
+
+⚠️ **`ANGLE` is not a facing and is consumed by nothing.** Re-measured on this layer rather than
+inherited from `P3-16`: p50 44.3° off the host edge axis, 21.3% along / 19.3% across against 22.2%
+for a uniform distribution. The facing is derived from the host edge and the kerb side, and is
+**ungraded** — there is no published subset to check it against (`Q62`), so the evidence is an A/B
+render.
+
+⚠️ **It shares `signs.gdshader`**, on `Q61`/`Q71`'s rule that a layer is a parameterisation rather
+than a shader — so a change to that shader is a change to **two** layers, and `check.sh` exits 0 on
+one that fails to compile. `verify_signals.gd` checks the dispatch by `resource_path`, because
+`check_shader_source` would pass a head handed `signs.tres`. ⚠️ `sheeting_glow` is **0** here: a
+signal lens with its lamp off is dark glass, and any glow makes an unlit aspect read as a lit one —
+an instruction this game deliberately does not give.
 
 ### `landmarks.json` — hero building placement
 

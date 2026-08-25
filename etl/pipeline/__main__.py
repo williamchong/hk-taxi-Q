@@ -40,6 +40,7 @@ from pipeline import (
     railings,
     roadmarks,
     roads,
+    signals,
     signs,
     surface,
     tramway,
@@ -104,6 +105,14 @@ STAGES: dict[str, Callable[[list[str]], int]] = {
     # the level-0 centrelines that give it a host edge, a height and the kerb side
     # that resolves its facing. Before `export`, which names the asset.
     "signs": signs.main,
+    # After `surface` and `roads`, the dependency `arrows`, `railings` and
+    # `signs` all have, and for `signs`' reason exactly: a published signal head
+    # is registered onto the kerb the ribbon actually drew, because 72.7% of them
+    # are surveyed inside the 1.6x ribbon and drawn where published nearly three
+    # quarters of the city's signals stand in the road. It needs `roads` for the
+    # level-0 centrelines that give it a host edge, a height and the kerb side
+    # that resolves its facing. Before `export`, which names the asset.
+    "signals": signals.main,
     "export": export.main,
 }
 

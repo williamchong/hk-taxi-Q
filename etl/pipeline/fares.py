@@ -249,6 +249,35 @@ class Segments:
         here, not the other. That half of `Q15` is open, and
         `FareReport.off_grade_nearer` is what would say so.
         """
+        distance, along = self._plan_distances(x, z)
+        hit = int(distance.argmin())
+
+        total = self.total_m[hit]
+        reached = self.before_m[hit] + along[hit] * self.length_m[hit]
+        # Sign only: the magnitude comes from `distance`, which is measured to
+        # the *clamped* projection. Past a segment's end the two differ, and the
+        # distance is the honest one — a point beyond the end is that far from
+        # the road, not that far from its infinite extension.
+        offset_x, offset_z = x - self.start[hit, 0], z - self.start[hit, 2]
+        step_x, step_z = float(self.delta[hit, 0]), float(self.delta[hit, 2])
+        side = offset_x * step_z - offset_z * step_x
+        return Snap(
+            edge=int(self.edge[hit]),
+            distance_m=float(distance[hit]),
+            t=float(reached / total) if total > 0.0 else 0.0,
+            y=float(self.start[hit, 1] + along[hit] * self.delta[hit, 1]),
+            offset_m=float(distance[hit]) if side > 0.0 else -float(distance[hit]),
+            heading_deg=float(np.degrees(np.arctan2(step_x, -step_z)) % 360.0),
+        )
+
+    def _plan_distances(self, x: float, z: float) -> tuple[np.ndarray, np.ndarray]:
+        """Plan distance from `(x, z)` to every segment, and the clamped `along`.
+
+        Extracted so `nearest` and `rivals_within` sweep the graph the **one**
+        way. A second copy of this arithmetic is a second implementation of the
+        join, and `Q56`'s rule is that two implementations disagreeing tells you
+        one is wrong and never which.
+        """
         offset_x, offset_z = x - self.start[:, 0], z - self.start[:, 2]
         step_x, step_z = self.delta[:, 0], self.delta[:, 2]
 
@@ -261,24 +290,31 @@ class Segments:
         projected = offset_x * step_x + offset_z * step_z
         along = (projected / np.where(squared > 0.0, squared, 1.0)).clip(0.0, 1.0)
 
-        distance = np.hypot(offset_x - along * step_x, offset_z - along * step_z)
-        hit = int(distance.argmin())
+        return np.hypot(offset_x - along * step_x, offset_z - along * step_z), along
 
-        total = self.total_m[hit]
-        reached = self.before_m[hit] + along[hit] * self.length_m[hit]
-        # Sign only: the magnitude comes from `distance`, which is measured to
-        # the *clamped* projection. Past a segment's end the two differ, and the
-        # distance is the honest one — a point beyond the end is that far from
-        # the road, not that far from its infinite extension.
-        side = offset_x[hit] * step_z[hit] - offset_z[hit] * step_x[hit]
-        return Snap(
-            edge=int(self.edge[hit]),
-            distance_m=float(distance[hit]),
-            t=float(reached / total) if total > 0.0 else 0.0,
-            y=float(self.start[hit, 1] + along[hit] * self.delta[hit, 1]),
-            offset_m=float(distance[hit]) if side > 0.0 else -float(distance[hit]),
-            heading_deg=float(np.degrees(np.arctan2(step_x[hit], -step_z[hit])) % 360.0),
-        )
+    def rivals_within(self, x: float, z: float, radius_m: float, exclude: int) -> int:
+        """How many **other** edges come within `radius_m` of `(x, z)`.
+
+        🔴 **The counter that can see a nearest-edge host go wrong, for a feature
+        that stands where nearest-edge is weakest.** `nearest` returns one
+        winner and says nothing about how close the runner-up was — and a signal
+        head, like a stop line, sits at a junction *mouth* where several edges
+        are near. `roadmarks.py` measured that geometry picking the wrong road on
+        **43%** of its layer (`Q69`) and answered it with a transverse pick; a
+        head is not drawn *across* anything, so it has no such second rule and
+        this is the instrument instead.
+
+        ⚠️ **Report-only wherever it is used, and never a bar.** A crowded
+        junction is a fact about the city, not a defect in the join — which is
+        why this counts rather than refuses.
+
+        Distinct **edges**, not segments: every polyline of the host's own edge
+        is near by construction, and so are the several segments a single
+        neighbouring road contributes.
+        """
+        distance, _ = self._plan_distances(x, z)
+        near = self.edge[distance <= radius_m]
+        return int(np.count_nonzero(np.unique(near) != exclude))
 
 
 def build_region(

@@ -1841,7 +1841,6 @@ signals:
   post_radius_m: 0.06
   post_sides: 8
   post_headroom_m: 0.15
-  stack_gap_m: 0.12
 
   # ---- the join ----
   #

@@ -100,14 +100,21 @@ const NOT_MEASURED: float = -1.0
 ## asset, so the bundle already had that file and only the manifest did not know.
 ## `sync_generated.sh` deletes what the manifest does not name, and did.
 ##
-## ⚠️ **All seven keys are optional and may be null.** A city whose estate
+## 18 since `P3-17`: the manifest names `signals.glb`, the published traffic
+## signal heads drawn from TD's `DTAD_TRAFFIC_LIGHT_PT`. The same argument an
+## eighth time — a v17 reader computes a shipped set missing a bundle file.
+##
+## ⚠️ **All eight keys are optional and may be null.** A city whose estate
 ## publishes no tramway, no marking symbols, no box polygons, no railing layer,
 ## no sign layer or no transverse markings ships none — so `tramway_path`,
 ## `arrows_path`, `boxjunctions_path`, `railings_path`, `signs_path` and
 ## `roadmarks_path` are empty for such a region and that is the honest answer
-## rather than a missing file. `signs_text_atlas_path` is emptier still: it is
-## null for all of those *and* for a region whose faces carry no lettering.
-const SCHEMA_VERSION: int = 17
+## rather than a missing file. `signals_path` is empty on those terms *and* for
+## a region whose publisher spells its signal codes outside `head_prefixes` —
+## the gate is a rule about spelling that nothing published grades (`P3-17`).
+## `signs_text_atlas_path` is emptier still: it is null for all of those *and*
+## for a region whose faces carry no lettering.
+const SCHEMA_VERSION: int = 18
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -229,6 +236,17 @@ var signs_path: String
 ## "no stop lines in this bundle", never "no road_marks block".
 var roadmarks_path: String
 
+## The traffic signal heads mesh (`P3-17`), or **empty** where the region ships
+## none.
+##
+## ⚠️ **Optional on sharper terms than its siblings.** A city without a
+## `signals:` block exports a null, and so does one whose estate publishes no
+## signal layer — but so does one whose publisher numbers its heads differently,
+## because `DTAD_TRAFFIC_LIGHT_PT.REFNAME` has no published domain and the gate
+## that admits a code is a spelling rule this project wrote. Empty means "no
+## signal heads in this bundle", never "no signal heads exist".
+var signals_path: String
+
 ## 🔴 **The one image in the bundle** (`Q70`, `Q63`, `P3-20`) — the sign
 ## lettering's atlas — or **empty** where the region baked none.
 ##
@@ -322,6 +340,7 @@ static func load_manifest() -> CityManifest:
 	manifest.railings_path = _resolve(document.get("railings"))
 	manifest.signs_path = _resolve(document.get("signs"))
 	manifest.roadmarks_path = _resolve(document.get("roadmarks"))
+	manifest.signals_path = _resolve(document.get("signals"))
 	manifest.signs_text_atlas_path = _resolve(document.get("signs_text_atlas"))
 	for entry: Dictionary in document.get("carriageway", []):
 		var edge: int = int(entry.get("edge", -1))
@@ -390,6 +409,7 @@ func shipped() -> PackedStringArray:
 		signs_path,
 		signs_text_atlas_path,
 		roadmarks_path,
+		signals_path,
 	]
 	for asset_path: String in optional:
 		if not asset_path.is_empty():

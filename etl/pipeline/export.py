@@ -62,6 +62,7 @@ from pipeline.landmarks import ASSETS_NAME, ASSETS_SCHEMA, landmark_in_region
 from pipeline.railings import RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA
 from pipeline.roadmarks import ROADMARKS_MANIFEST_NAME, ROADMARKS_MANIFEST_SCHEMA
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
+from pipeline.signals import SIGNALS_MANIFEST_NAME, SIGNALS_MANIFEST_SCHEMA
 from pipeline.signs import SIGNS_MANIFEST_NAME, SIGNS_MANIFEST_SCHEMA
 from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, SURFACE_NAME
 from pipeline.tramway import TRAMWAY_MANIFEST_NAME, TRAMWAY_MANIFEST_SCHEMA
@@ -149,6 +150,9 @@ CITY_NAME = "city.json"
 # missing a bundle file. The key is optional and nullable like the five before
 # it: a city whose estate publishes no transverse markings ships none, and so
 # does one that publishes them and finds no road drawn across.
+# 18 since `P3-17`: the manifest names `signals.glb`, the published traffic
+# signal heads drawn from TD's `DTAD_TRAFFIC_LIGHT_PT`. The same argument an
+# eighth time — a v17 reader computes a shipped set missing a bundle file.
 # 17 since `Q70`: the manifest names `signs_text.png`, the sign lettering's
 # atlas, which used to ride inside `signs.glb` as an embedded buffer view. The
 # same argument as 11 through 16 — a v16 reader computes a shipped set missing a
@@ -159,7 +163,7 @@ CITY_NAME = "city.json"
 # does not name. The bump is for the asset set, and the key is optional and
 # nullable like the six before it: a region whose faces carry no lettering bakes
 # no atlas, and so does a city whose whitelist has none.
-CITY_SCHEMA = 17
+CITY_SCHEMA = 18
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -199,6 +203,7 @@ OPTIONAL_ASSET_KEYS = (
     "signs",
     "signs_text_atlas",
     "roadmarks",
+    "signals",
 )
 REQUIRED_KEYS = (*DOCUMENT_KEYS, "tiles", "landmark_assets", "bounds_game")
 
@@ -235,6 +240,7 @@ INPUTS: tuple[Input, ...] = (
     Input(RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA, "railings"),
     Input(SIGNS_MANIFEST_NAME, SIGNS_MANIFEST_SCHEMA, "signs"),
     Input(ROADMARKS_MANIFEST_NAME, ROADMARKS_MANIFEST_SCHEMA, "roadmarks"),
+    Input(SIGNALS_MANIFEST_NAME, SIGNALS_MANIFEST_SCHEMA, "signals"),
 )
 
 
@@ -314,6 +320,7 @@ def build_region(
     railings = documents[RAILINGS_MANIFEST_NAME]
     signs = documents[SIGNS_MANIFEST_NAME]
     roadmarks = documents[ROADMARKS_MANIFEST_NAME]
+    signals = documents[SIGNALS_MANIFEST_NAME]
 
     tiles = [
         {
@@ -419,6 +426,11 @@ def build_region(
         # whose markings all failed the transverse join must not be contradicted
         # here by a constant.
         "roadmarks": roadmarks["asset"],
+        # `null` where the city drew no signal heads, on `tramway`'s terms. ⚠️ An
+        # ordinary answer for a region whose estate publishes no signal layer —
+        # and `P3-17` refuses everything its gate does not admit, so a region
+        # whose codes are spelled differently draws none and is correct to.
+        "signals": signals["asset"],
         "landmarks": LANDMARKS_NAME,
         # The mesh-sourced hero models `pipeline/landmarks.py` built — shipped
         # files like the tile GLBs, unlike the committed authored heroes,

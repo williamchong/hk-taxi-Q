@@ -103,6 +103,7 @@ wins.
 | `Q72` | A NO ENTRY faces the traffic it forbids, not the traffic it stands beside | ✅ Closed — and the counter that stood before it was a tautology certifying the wrong state; `plates_turned` must equal the drawn NO ENTRY family exactly |
 | `Q73` | A layer can pass every check and be in no scene | ✅ Closed — `roadmarks.glb` shipped, was graded, and was drawn nowhere; a verify tool proves an asset is correct and never that it is on screen |
 | `Q74` | `Q71`'s trigger has fired on the preview scripts, and the prose has nowhere to go | 🟡 Open, deferred — ten files, four byte-identical, 0 lines of logic differing; the merge is owed and the per-layer *arguments* have no `.tres` to move into |
+| `Q76` | A layer whose vocabulary nothing publishes, and an assembly that is not a stack | ✅ Closed — the gate is a rule about *spelling*, published as `drawn_by_code`/`refused_by_code` because nothing can grade it; and one head stands for a whole assembly, after the first build drew 8.53 m masts |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -132,7 +133,7 @@ wins.
 | `P3-11c` `P3-11d` `P3-11e` `P3-11f` | The body shader, the lamp circuits, the front lamps and the roof sign — one `UV` payload, no new geometry | 🟡 Awaiting review |
 | `P3-9a` | Recognition round 0 — the city before the game | 🟡 Build cut and verified; the drivers are not booked |
 | `P3-16` | Signs ship where the **poles** are, because the sign layer is a drawing | ✅ Done — the scope is `Q65`'s, the faces are `Q67`'s and the facing is `Q72`'s |
-| `P3-17` | Signal heads ship as unlit geometry, with no invented cycle | ⬜ Not started — **not gated on `P3-9a`**, the user's call |
+| `P3-17` | Signal heads ship as unlit geometry, with no invented cycle | ✅ Done — the gate is `Q76`'s, and one head stands for a whole assembly |
 | `P3-18` | Box junctions ship as **read** polygons, and two instruments caught what no frame could | ✅ Done |
 
 | Topic | Decision | Status |
@@ -10193,3 +10194,167 @@ measuring, and neither would have been caught by looking.
 
 `Q75` (the missing override that proved this) · `Q31` · `Q30` · `Q26` · `P3-9a` · `ARCHITECTURE.md`
 "Project settings"
+
+## `P3-17` / `Q76` — Signal heads ship from a vocabulary nothing publishes, and one head is a whole assembly
+
+**Landed 2026-08-26**, on the terms `P3-17` set: TD's published signal estate as static, unlit
+geometry in `Q58`/`Q59`'s pattern — one primitive, one draw call, no collider, an optional
+`city.json` key (17 → 18), counters the stage publishes about itself. **415 heads standing for 681
+published aspects** as `signals.glb`, 26,560 triangles.
+
+Two findings changed the task, and a third changed the geometry after it was built. All three are
+the substance of it.
+
+### 🔴 Nothing published defines this layer's vocabulary
+
+`DTAD_TRAFFIC_LIGHT_PT.REFNAME` has **no domain**. The fgdb data specification gives the column
+eight characters of untyped text — *"Reference Name"* — and nothing else. The Index Plan set that
+defines every `RM` marking code (`Q59`) and every `TS` sign (`P3-16`) carries **no signal sheet**:
+both "Miscellaneous Details" sheets (`CT174/51-6(1)E`) were rendered and read, and they are the
+`RS/S/` sign-pictogram tables, scans besides. `~/hk-traffic-sign-map`'s `signCatalogue.json`, which
+was `P3-16`'s cross-check, is `TS`-only and carries none of these codes.
+
+So there is no `Q59` transcription available, and this is `railings.py`'s `classes` situation rather
+than `arrows.py`'s glyph table: **a whitelist read off code strings**. What the region holds:
+
+| family | features | codes |
+|---|---|---|
+| `P<n>` | 654 | `P24` ×278, `P01` ×149, `P21` ×57, `P04R` ×33, `P08R` ×28, `P07L` ×25 … |
+| `S<n>` | 189 | `S01` ×100, `S07L` ×21, `S04R` ×17, `S08R` ×13 … |
+| `M<n>` | 19 | `M52` ×16, `M51`, `M53L`, `M54R` |
+| other | 51 | `KLBOLL` ×24, `PBUTT` ×8, `PBOLL` ×6, `WIGWAG` ×4, `STR02` ×3, `KRBOLL` ×3, `PTR01`, `PTR02`, `TRAML` |
+
+**The code is read as a GATE — head or not head — and never as a look.** All 33 admitted codes draw
+the *same* head. Claiming `P24` is a different signal from `P01` is precisely `Q54`'s invention on
+the bundle's weakest-evidenced field, with no second source to catch it — `Q64`'s failure class,
+where a shifted table shipped 11 mislabelled plates and rendered perfectly.
+
+⚠️ **What makes that reviewable is `drawn_by_code` and `refused_by_code`**, published over the whole
+46-code vocabulary. A reader who finds `PBUTT` in the drawn table knows the spelling rule broke; one
+who finds `P24` in the refused table knows it broke the other way. Neither is visible in a frame.
+This is `railings.py`'s refused metres at a second layer.
+
+⚠️ **`M<n>` is refused, and that one is a judgement rather than a fact.** All 19 sit within
+**2.57 m** of a `P`/`S` head (p50 0.77 m), so they are plainly part of the signal assembly rather
+than strays — but *part of the assembly* is not *is a head*, and nothing settles it. Refusing costs
+2% of the layer and is one word in `head_prefixes` to reverse.
+
+⚠️ **The 51 non-heads are refused on scope**, and refusing them also keeps `in_carriageway` a clean
+signal: a `KLBOLL` keep-left bollard legitimately stands **in** the carriageway on a splitter island,
+so admitting bollards would make the registration refusal delete exactly the objects that belong
+there.
+
+### `ANGLE` carries no facing — measured here, not assumed
+
+`PROGRESS.md` told this task to assume `P3-16`'s finding until it had been checked on this layer.
+Checked, over the region and in the frame `arrows.py` validated to p50 0.9°:
+
+| | value | uniform |
+|---|---|---|
+| p50 from the host edge axis | **44.3°** | 45° |
+| within 20° of **along** the road | **21.3%** | 22.2% |
+| within 20° of **across** it | **19.3%** | 22.2% |
+
+Flat — `DTAD_TS_ABV_PT`'s own result to within noise. So the facing is derived from the host edge and
+the kerb side (`signs.facing_from_side`, imported rather than copied) and `ANGLE` survives only as
+`axis_residual_deg`: published, read by nothing, so the claim stays answerable from a shipped
+artefact rather than a scratch script (`Q37`).
+
+⚠️ **The one cross-check this layer looks like it offers cannot be made.**
+`DTAD_TRAFFIC_LIGHT_LINE` is the same cells *dropped to graphics* (53 in region), so a dropped
+cell's axis against its point's `ANGLE` would test the cell rotation without going through the road
+graph. But that layer publishes `SIGNID` **null on all 53** and carries no other key, so pairing a
+cell to its point is a nearest-neighbour guess — a second join in `Q56`'s sense, and the move
+`signs.py` refuses when `GG_NAME` resolves to more than one pole. Recorded so the next reader does
+not spend the hour again.
+
+### 🔴 An assembly is not a stack, and the render is what caught it
+
+The published point **is** the object here — unlike `P3-16`, where the abbreviation layer was a
+draughtsman's label. Lights do not stand on `DTAD_TS_POLE_PT` poles (nearest TS pole p50 **7.59 m**,
+only **5 of 913** coincident) and this layer carries **no `GG_NAME` at all**. What replaces it is
+coincidence: **470 of 913** points sit within 0.05 m of another, clustering at 1 m into **553**
+groups of 1–5.
+
+**The first build stacked them, on `signs.py`'s plate model, and drew the five-feature assemblies as
+8.53 m masts carrying five signal heads above one another.** That is a structure no source states:
+`signs.py` stacks because TD publishes a main sign *and* its supplementary plate as separate signs
+sharing a `GG_NAME`, and this layer publishes no such relation. What it publishes is several
+coincident points — the parts of one installation.
+
+So **one head per assembly**, asserting only what the data supports: *there is a signal here, and it
+addresses this traffic*. Which of `P01`, `P21`, `P26`, `S01` is the primary aspect is exactly the
+question nothing published can answer, so a stack ordered by code would be `Q54`'s invention twice
+over. `assembly_size` publishes how many features each drawn head stands for, so the collapse is a
+number rather than a silent discard.
+
+⚠️ **No counter caught this and none would have.** Both partitions closed, `facing_away` read 0,
+every winding test passed, and `check.sh` was green — an 8.53 m mast is a correctly built, correctly
+wound, correctly hosted mesh. It was caught by *looking*, which is why `Q62`'s render requirement is
+not a formality.
+
+### The registration, and the counters
+
+**72.7%** of the region's signal points are surveyed inside the drawn 1.6× ribbon, a median
+**1.48 m** past the drawn kerb — so drawn where published, nearly three quarters of the city's
+signals stand in the road. `Q60`'s move arrives at a **third** layer, after the railings and the
+signs.
+
+Shipped run, both partitions closing exactly:
+
+```
+features   913 = not_whitelisted 70 + on_structure 7 + empty_geometry 0 + candidates 836
+candidates 836 = drawn 681 + too_far 0 + no_ribbon 0 + over_shift 1 + in_carriageway 154
+
+posts_drawn 415   posts_over_shift 1   posts_in_carriageway 86   posts_merged_after_shift 12
+assembly_size  1:248  2:221  3:36  4:7  5:2
+axis_residual_deg  p50 43.83  p90 77.99  p99 88.17  max 89.91   n 833
+host_distance_m    p50  4.30  p90  6.86  p99  9.16  max 12.22   n 514
+shift_m            p50  1.51  p90  3.62  p99  5.49  max  6.65   n 514
+inside_ribbon_m    p50  0.82  p90  3.08  p99  5.03  max  5.12   n 514
+host_ambiguous 18 of 514        facing_away 0        triangles 26560
+```
+
+⚠️ **`drawn` counts FEATURES and `posts_drawn` counts HEADS** — the two differ by exactly the
+collapse above, and the partition is over features so it still closes.
+
+⚠️ **`shift_m`'s `n` of 514 exceeds `posts_drawn` 415 and that is the point** (`Q58`): it decomposes
+as 415 + 86 + 1 + 12, so the distribution can read outside its own bar.
+
+🔴 **`host_ambiguous` is new and has no prior number.** A signal head stands at a junction *mouth*,
+which is where nearest-edge hosting is weakest — `roadmarks.py` measured the same geometry picking
+the road it is *parallel* to on 43% of its layer (`Q69`) and answered with a transverse pick. A head
+is not drawn *across* anything, so it has no such second rule and this counter is the instrument
+instead. It reads **18 of 514** on this region. Report-only, never a bar. It needed one additive
+method on `fares.Segments` — `rivals_within` — because computing it in the stage would have been a
+second implementation of the one join (`Q56`); the sweep was extracted so both use it.
+
+### What else this decides
+
+- **`signs.gdshader` is now a two-layer shader.** `signals.tres` shares it, on `Q61`'s rule for the
+  railing classes and `Q71`'s for the three paint layers: a layer is a parameterisation. So a change
+  to that shader is a change to signs *and* signals, and `check.sh` exits 0 on one that fails to
+  compile. ⚠️ `verify_signals.gd` checks the dispatch by **`resource_path`**, not by shader —
+  `check_shader_source` would pass a head handed `signs.tres`.
+- **`sheeting_glow` is 0 here and the zero is load-bearing.** A sign face is retroreflective; a
+  signal lens with its lamp off is dark glass. Any value above zero makes an unlit aspect read as a
+  lit one, which is the instruction `P3-17` refuses to give.
+- **No colliders**, matching `tram.glb`, `arrows.glb`, `signs.glb` — and this is the layer where
+  they would be felt most, because a signal post sits exactly where the player is braking and
+  turning. A budget decision, revisited in `B3`.
+- **No signal state.** No dataset publishes timing, an invented cycle *instructs*, nothing obeys it
+  until `P3-3`'s traffic exists, and the named route is `P3-11d`'s `instance uniform` lamp circuit.
+- **Three helpers became public in `signs.py`** — `disc`, `plate_frame`, `facing_from_side` — on
+  `arrows.nearside`'s recorded terms: a second consumer is what makes a helper public here rather
+  than copied. `facing_from_side` most of all: a second copy of it is a second city, mirrored, and
+  nothing in either would render as wrong.
+
+**Cost, two PCKs one config block apart: 42,884,244 → 43,483,032 B (+598,788, +1.40%)**, over the
+wire 41.47 MiB. `check.sh` green including the new `verify_signals`; `carriageway_occupancy.py`
+reproduces its recorded **26** and is unmoved by this layer.
+
+**See.** `Q54` for sourced-not-invented · `Q56` for the second-join rule · `Q58` `Q59` for the mesh
+pattern and self-grading · `Q60` for the kerb registration · `Q61` `Q71` for a-layer-is-a-
+parameterisation · `Q62` for the ungraded facing and why the render is the evidence · `Q64` for the
+mis-keyed-table failure class · `Q69` for junction-mouth hosting · `Q73` for the preview node ·
+`P3-16` for the sign layer this is the sibling of · `DATA_SOURCES.md` for the layer row

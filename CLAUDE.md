@@ -310,6 +310,29 @@ Common emoji for this project:
   shader change, and its shader is shared with the arrows and the boxes** (`Q71`) — `check.sh` exits
   0 on a shader that fails to compile, so render and `grep -i "shader error"`, and look at all three
   layers rather than only this one. Numbers in `Q69`.
+- **`pipeline/signals.py`, the `signals` config block, or any signal-head change: paste
+  `signals.json`'s two partitions, `drawn_by_code` **and** `refused_by_code`, `assembly_size`,
+  `axis_residual_deg`, `shift_m` (with its `n`), `host_ambiguous` and `facing_away`, before and
+  after.** There is no separate grader and there should not be: the stage grades itself, because
+  every way this breaks renders as a perfectly drawn signal head or as nothing.
+  🔴 **`refused_by_code` is load-bearing, not decoration.** `REFNAME` has **no published domain** —
+  no index-plan sheet defines it, the fgdb spec gives it 8 untyped characters, and
+  `signCatalogue.json` is `TS`-only — so what admits a code is a rule about *spelling* this project
+  wrote, and publishing both halves of the vocabulary is the only thing that can grade it. A change
+  to `head_prefixes` or `refuse_codes` is a **`DATA_SOURCES.md` change** (`railings.py`'s `classes`,
+  at a second layer). ⚠️ **`drawn` counts FEATURES and `posts_drawn` counts HEADS** — one head stands
+  for a whole assembly — so do not quote one as the other.
+  🔴 **`assembly_size` is the counter that would have caught the defect that shipped.** This layer
+  publishes no `GG_NAME`, so a post is a cluster of coincident points; the first build stacked them
+  and drew **8.53 m** five-head masts while both partitions closed, `facing_away` read 0 and
+  `check.sh` was green. It was caught by *looking*, which is why the render below is not optional.
+  ⚠️ **A facing change cannot be graded against anything published** (`Q62`), so the evidence is an
+  **A/B render at one camera** — shoot one head from the front and from the back, and the aspects
+  must appear only from the front. ⚠️ **`facing_away` must be 0** and ⚠️ **a signals change is also
+  a shader change** — but `signs.gdshader` is **shared with the signs** since `P3-17`, so render and
+  look at **both** layers, and `grep -i "shader error"` because `check.sh` exits 0 on a shader that
+  fails to compile. ⚠️ **`sheeting_glow` must stay 0**: any glow makes an unlit lens read as a lit
+  one, which is an instruction this game refuses to give. Numbers in `Q76`.
 - Road-surface, deck-height or ground changes: also `tools/deck_error.py`, `tools/overhang.py`,
   `tools/ground_clearance.py` and `tools/carriageway_occupancy.py`, by hand after a build. They grade
   the *shipped* bundle and share no code with the pipeline — `check.sh` does not require a built
