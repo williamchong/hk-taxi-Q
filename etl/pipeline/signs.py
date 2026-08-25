@@ -372,11 +372,16 @@ class SignReport:
     posts_in_carriageway: int = 0
     # Posts left standing where TD surveyed them, because they were already clear
     # of the drawn kerb and `outset_m` and so the registration's reason did not
-    # reach them (`Q78`). ⚠️ **These are the zeros inside `shift_m`** — they are
-    # appended rather than skipped, so the identity above still closes — and this
-    # is the only thing that says how many of them there are. It is
-    # data-sensitive: it moves with the survey and with `widen_default`, so
-    # unlike a config-and-code ratchet it can be read rather than mutated.
+    # reach them (`Q78`). ⚠️ **They append a 0.0 to `shift_m` rather than being
+    # skipped**, so the identity above still closes, and this is the only thing
+    # that says how many of them there are. It is data-sensitive: it moves with
+    # the survey and with `widen_default`, so unlike a config-and-code ratchet it
+    # can be read rather than mutated.
+    # ⚠️ **They are not the ONLY zeros in `shift_m`, so do not recover this
+    # number by counting them.** The threshold is a strict `>`, so a post
+    # surveyed *exactly* on `half_width_m + outset_m` takes the push branch and
+    # its move is 0.0 as well. Two populations, one value — which is the same
+    # confusion between a number and what it describes that `Q78` is about.
     posts_kept_as_surveyed: int = 0
     # ⚠️ **How far each post moved sideways onto the drawn kerb**, recorded over
     # every registered post **including the ones `max_shift_m` then refused**, so

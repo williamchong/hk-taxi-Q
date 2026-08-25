@@ -1114,8 +1114,16 @@ class TestTheReportPartitions:
         assert report.posts_kept_as_surveyed == 2
         assert placed == 3
         assert len(report.shift_m) == placed + report.posts_over_shift
-        # The zeros are the kept posts and nothing else.
-        assert report.shift_m.count(0.0) == report.posts_kept_as_surveyed
+        # ⚠️ **Containment, not equality, and the strict `>` is why.** A post
+        # surveyed exactly on `half_width + outset` takes the *push* branch and
+        # its move is 0.0 too, so counting zeros would merge two populations.
+        # Asserting equality here would hold on this fixture and mislead about
+        # the rule — `Q78`'s own confusion between a number and what it counts.
+        assert report.shift_m.count(0.0) >= report.posts_kept_as_surveyed
+        boundary = segments.nearest(50.0, 8.6)
+        assert _register(spec, boundary, ribbon, np.array([50.0, 8.6]), report) is not None
+        assert report.posts_kept_as_surveyed == 2
+        assert report.shift_m[-1] == pytest.approx(0.0)
 
     def test_a_stack_climbs_the_post(self, spec):
         """Two plates on one pole occupy different heights.
