@@ -128,6 +128,7 @@ from pipeline import gdb
 # statements of conventions this stage shares with the arrows.
 from pipeline.arrows import (
     ArrowReport,
+    Ribbon,
     axis_residual_deg,
     ccw,
     directed_residual_deg,
@@ -190,7 +191,13 @@ SIGNS_MANIFEST_NAME = "signs.json"
 # its inverse, joined by `plates_turned`. The rename is the point of the bump —
 # a reader keeping the old key's meaning would read a 0 that now means the
 # opposite thing, which is the silent wrong answer a schema version is for.
-SIGNS_MANIFEST_SCHEMA = 3
+# 4 since `Q78`: `shift_m` changed population rather than name. It used to
+# describe every post reaching registration, all of which moved; it now carries
+# a real 0.0 for the posts left where they were surveyed, so a reader keeping
+# the old interpretation would read the distribution as moves that all happened
+# and would be **wrong about what it describes** — hard rule 5's test, met by a
+# key whose bytes still parse. `posts_kept_as_surveyed` is the new key.
+SIGNS_MANIFEST_SCHEMA = 4
 
 # ⚠️ **No `-col` suffix**, the same call `arrows.glb` and `railings.glb` both
 # make and for a reason this layer states more strongly than either: 728 poles
@@ -363,11 +370,25 @@ class SignReport:
     # the excess over `poles_drawn` came from the bar or from somewhere else.
     posts_over_shift: int = 0
     posts_in_carriageway: int = 0
+    # Posts left standing where TD surveyed them, because they were already clear
+    # of the drawn kerb and `outset_m` and so the registration's reason did not
+    # reach them (`Q78`). ⚠️ **These are the zeros inside `shift_m`** — they are
+    # appended rather than skipped, so the identity above still closes — and this
+    # is the only thing that says how many of them there are. It is
+    # data-sensitive: it moves with the survey and with `widen_default`, so
+    # unlike a config-and-code ratchet it can be read rather than mutated.
+    posts_kept_as_surveyed: int = 0
     # ⚠️ **How far each post moved sideways onto the drawn kerb**, recorded over
     # every registered post **including the ones `max_shift_m` then refused**, so
     # `n` exceeding `poles_drawn` is the proof it can read outside its own bar
     # (`Q58`). This is the price of the decision at the top of this module, and
     # `Q60` is the precedent for publishing it rather than asserting it is small.
+    # ⚠️ **It is the price over the posts that needed a registration, with a real
+    # 0.0 for those that did not** (`Q78`), so it is no longer a distribution of
+    # moves that all happened — read it with `posts_kept_as_surveyed`.
+    # 🔴 **And it is an absolute value, which is exactly what hid `Q78`**: a
+    # directional correction measured with `abs()` cannot report its own
+    # direction. `railings.py` and `signals.py` compute theirs the same way.
     shift_m: list[float] = field(default_factory=list)
     # How far inside the drawn carriageway each post was surveyed. The
     # measurement that forced the registration: 0 means it was already outside.
@@ -1535,6 +1556,72 @@ class _Placed:
     plates: list[Sign]
 
 
+def _register(
+    spec: Signs, snap: Snap, ribbon: Ribbon, published: np.ndarray, report: SignReport
+) -> tuple[np.ndarray, float] | None:
+    """Push a post out to the kerb the ribbon actually drew, or leave it, or refuse.
+
+    ⚠️ **The registration.** The post keeps its along-edge position and its side
+    and moves only across, out to `outset_m` past the kerb the ribbon actually
+    drew. `Q60`'s move, at a second layer and for its reason: **85.5%** of the
+    posts reaching here are surveyed inside the drawn kerb plus `outset_m`, a
+    median 1.93 m short of it, so drawn where published most of the city's signs
+    stand in the road.
+
+    🔴 **And it is clamped to that one direction since `Q78`.** The reason to
+    move a post at all is that `widen_default` draws the ribbon 1.6x the real
+    carriageway, so a pole standing on the real kerb lands in the drawn lane.
+    That argument runs **outward only**. Assigning the target unconditionally
+    also *pulled* the posts already standing clear back toward the road — 95 of
+    654 in this region, 36 of them by more than a metre and 6 by more than three
+    — and no counter could see it, because `shift_m` is an absolute value and an
+    inward pull and an outward push are the same number. A post already clear
+    keeps the position TD surveyed.
+
+    Returns the placed point and the kerb side, or `None` where `max_shift_m`
+    refuses the move. The caller owns the plate-level counter.
+    """
+    half_width_m = ribbon.half_width_at(snap.t)
+    # A post exactly on the centreline has no side to keep; the nearside is the
+    # one a left-driving city's traffic passes closest to.
+    side = 1.0 if snap.offset_m >= 0.0 else -1.0
+    target_m = side * (half_width_m + spec.outset_m)
+    report.inside_ribbon_m.append(max(0.0, half_width_m - abs(snap.offset_m)))
+
+    if abs(snap.offset_m) > half_width_m + spec.outset_m:
+        # ⚠️ **The published point, never a reconstruction.** The trap below
+        # applies here with nothing to catch it: `snap.offset_m` is the distance
+        # to the *clamped* projection, so rebuilding this position from the foot
+        # and the offset would move a post past an edge's end and then report
+        # the move it made as 0.0.
+        #
+        # A real zero rather than a skipped append, so the identity over
+        # `len(shift_m)` still closes; `posts_kept_as_surveyed` is how a reader
+        # tells how many of the distribution's zeros are these.
+        report.shift_m.append(0.0)
+        report.posts_kept_as_surveyed += 1
+        return published, side
+
+    shift_m = abs(target_m - snap.offset_m)
+    # Recorded **before** the refusal, so the distribution can read outside its
+    # own bar (`Q58`); `posts_over_shift` and `posts_in_carriageway` are what let
+    # a reader decompose `n`.
+    report.shift_m.append(shift_m)
+    if shift_m > spec.max_shift_m:
+        report.posts_over_shift += 1
+        return None
+
+    # ⚠️ **The foot comes off the polyline, never from
+    # `point - offset_m * nearside`.** `Snap.offset_m` is `±distance_m` to the
+    # *clamped* projection, so a post past an edge's end has an along-edge
+    # component in that vector and the subtraction lands off the centreline.
+    # Measured: a post 5 m beyond an edge's end and dead on its axis
+    # reconstructs to 5 m off the road, and the 10.6 m move it then makes is
+    # published as 0.6 m — under `max_shift_m`, invisible to every counter.
+    # `Ribbon.foot_at` reads it instead.
+    return ribbon.foot_at(snap.t) + target_m * nearside(snap.heading_deg), side
+
+
 def _merge_placements(
     placements: list[_Placed], merge_m: float, report: SignReport
 ) -> list[_Placed]:
@@ -1736,40 +1823,14 @@ def build_region(
             report.no_ribbon += len(keep)
             continue
 
-        # ⚠️ **The registration.** The post keeps its along-edge position and its
-        # side and moves only across, out to `outset_m` past the kerb the ribbon
-        # actually drew. `Q60`'s move, at a second layer and for its reason:
-        # **77.3%** of this region's poles are surveyed inside the 1.6x ribbon, a
-        # median 1.52 m past the drawn kerb, so drawn where published three
-        # quarters of the city's signs stand in the road.
-        half_width_m = ribbon.half_width_at(snap.t)
-        # A post exactly on the centreline has no side to keep; the nearside is
-        # the one a left-driving city's traffic passes closest to.
-        side = 1.0 if snap.offset_m >= 0.0 else -1.0
-        target_m = side * (half_width_m + spec.outset_m)
-        report.inside_ribbon_m.append(max(0.0, half_width_m - abs(snap.offset_m)))
-        shift_m = abs(target_m - snap.offset_m)
-        # Recorded **before** the refusal, so the distribution can read outside
-        # its own bar (`Q58`); `posts_over_shift` and `posts_in_carriageway` below
-        # are what let a reader decompose `n`.
-        report.shift_m.append(shift_m)
-        if shift_m > spec.max_shift_m:
+        registered = _register(spec, snap, ribbon, np.array([pole_x, pole_z]), report)
+        if registered is None:
             report.over_shift += len(keep)
-            report.posts_over_shift += 1
             continue
+        placed, side = registered
 
-        # ⚠️ **The foot comes off the polyline, never from
-        # `point - offset_m * nearside`.** `Snap.offset_m` is `±distance_m` to
-        # the *clamped* projection, so a post past an edge's end has an
-        # along-edge component in that vector and the subtraction lands off the
-        # centreline. Measured: a post 5 m beyond an edge's end and dead on its
-        # axis reconstructs to 5 m off the road, and the 10.6 m move it then
-        # makes is published as 0.6 m — under `max_shift_m`, invisible to every
-        # counter. `Ribbon.foot_at` reads it instead.
-        placed = ribbon.foot_at(snap.t) + target_m * nearside(snap.heading_deg)
-
-        # ⚠️ **Registered onto its host's kerb and still in the road**, because
-        # the post landed inside a *different* edge's ribbon — junction mouths and
+        # ⚠️ **Clear of its host's kerb and still in the road**, because the post
+        # landed inside a *different* edge's ribbon — junction mouths and
         # dual carriageways, where several 1.6x ribbons overlap and the drawn city
         # has no footway left at all. That is `Q19`'s territory rather than this
         # stage's, and it is **refused rather than pushed again**: iterating the
@@ -1777,6 +1838,9 @@ def build_region(
         # worst shift from 5.52 m to **16.77 m** — which is a post on the wrong
         # street. `GAME_DESIGN.md` prices a missing sign at nothing against a
         # misplaced one, the reason `arrows.py` gives for the same call.
+        # ⚠️ **It runs on a post kept as surveyed too, and must** — standing clear
+        # of its own host's kerb says nothing about an overlapping ribbon, so
+        # skipping the check for that branch would let one through (`Q78`).
         settled = segments.nearest(float(placed[0]), float(placed[1]))
         settled_ribbon = drawn.get(settled.edge)
         if settled_ribbon is not None and abs(settled.offset_m) < settled_ribbon.half_width_at(
@@ -2231,11 +2295,19 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Sig
         # plates. These are what make `shift_m`'s `n` decomposable.
         "posts_over_shift": report.posts_over_shift,
         "posts_in_carriageway": report.posts_in_carriageway,
+        # 🔴 **Posts standing where TD surveyed them** — already clear of the
+        # drawn kerb and `outset_m`, so the registration's outward argument never
+        # reached them (`Q78`). They contribute a real 0.0 to `shift_m` below, and
+        # this is the only thing that says how many of its zeros are theirs.
+        "posts_kept_as_surveyed": report.posts_kept_as_surveyed,
         # ⚠️ **How far each post moved sideways onto the drawn kerb**, over every
         # registered post including the ones `max_shift_m` refused — `n` past
         # `poles_drawn` is the proof it reads outside its own bar (`Q58`). This is
         # the price of registering rather than reading, and `Q60` is the
         # precedent for publishing it rather than asserting it is small.
+        # ⚠️ **Read it with `posts_kept_as_surveyed`** — since `Q78` it is the
+        # price over the posts that needed a registration, with a real 0.0 for
+        # those that did not, so it is not a distribution of moves that happened.
         "shift_m": report.measured(report.shift_m),
         # How far inside the drawn carriageway each post was **surveyed**, 0 where
         # it was already outside. The measurement that forced the registration.

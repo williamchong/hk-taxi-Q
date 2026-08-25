@@ -56,6 +56,7 @@ from pipeline.signs import (
     _Placed,
     _plate_facing_deg,
     _record_semantics,
+    _register,
     _turn_classes,
     facing_from_side,
     layer_polygons,
@@ -923,10 +924,10 @@ class TestPostsAreRegisteredAndMerged:
 
 
 class TestTheRegistrationArithmetic:
-    """The two ways registration moved a post silently and wrongly.
+    """The three ways registration moved a post silently and wrongly.
 
-    ⚠️ Both were found in review, both were invisible to every counter, and both
-    render as a perfectly built signpost.
+    ⚠️ All three were found in review, all three were invisible to every
+    counter, and all three render as a perfectly built signpost.
     """
 
     def test_the_foot_comes_off_the_polyline_not_from_the_offset(self):
@@ -969,6 +970,63 @@ class TestTheRegistrationArithmetic:
         assert facing_from_side(snap.heading_deg, side, False) == pytest.approx(
             (snap.heading_deg + 180.0) % 360.0
         )
+
+    def test_a_post_already_clear_of_the_kerb_keeps_the_point_td_surveyed(self, spec):
+        """🔴 `Q78`: the correction runs outward, and it used to move both ways.
+
+        `widen_default` draws the ribbon 1.6x the real carriageway, so a pole
+        standing on the real kerb lands in the drawn lane — an argument for
+        pushing a post **out**. Assigning the target unconditionally also dragged
+        the posts already standing clear back *toward* the road, and `shift_m` is
+        an absolute value, so no counter could tell the two apart.
+        """
+        eastward = [[0.0, 0.0, 0.0], [100.0, 0.0, 0.0]]
+        ribbon = arrows.ribbons(
+            {"edges": [edge(0, eastward, lanes=2)]},
+            {"carriageway": [{"edge": 0, "half_width_m": [3.2, 3.2], "trim_m": [0.0, 0.0]}]},
+        )[0]
+        # 6 m out, against a 3.2 m drawn half-width and a 0.6 m outset.
+        published = np.array([50.0, 6.0])
+        snap = Segments.of([edge(0, eastward)]).nearest(50.0, 6.0)
+        assert abs(snap.offset_m) > 3.2 + spec.outset_m
+
+        report = SignReport()
+        placed, side = _register(spec, snap, ribbon, published, report)
+
+        assert placed[0] == pytest.approx(published[0])
+        assert placed[1] == pytest.approx(published[1])
+        assert report.posts_kept_as_surveyed == 1
+        # A real 0.0 rather than a skipped append, so the partition still closes.
+        assert report.shift_m == [0.0]
+        # ⚠️ The side still comes off `snap.offset_m`, so the facing derivation
+        # is untouched — this branch moves a position and nothing else.
+        assert side == (1.0 if snap.offset_m >= 0.0 else -1.0)
+
+    def test_a_post_inside_the_ribbon_is_still_pushed_out_to_the_kerb(self, spec):
+        """The guard against `Q78`'s branch inverting.
+
+        ⚠️ **An inverted rule renders as a perfectly built signpost** — standing
+        in the road, which is the state the registration exists to prevent. The
+        push is the case that must keep happening, so it is asserted rather than
+        assumed by the test above passing.
+        """
+        eastward = [[0.0, 0.0, 0.0], [100.0, 0.0, 0.0]]
+        ribbon = arrows.ribbons(
+            {"edges": [edge(0, eastward, lanes=2)]},
+            {"carriageway": [{"edge": 0, "half_width_m": [3.2, 3.2], "trim_m": [0.0, 0.0]}]},
+        )[0]
+        segments = Segments.of([edge(0, eastward)])
+        published = np.array([50.0, 1.0])
+        snap = segments.nearest(50.0, 1.0)
+        assert abs(snap.offset_m) < 3.2 + spec.outset_m
+
+        report = SignReport()
+        placed, _ = _register(spec, snap, ribbon, published, report)
+
+        settled = segments.nearest(float(placed[0]), float(placed[1]))
+        assert abs(settled.offset_m) == pytest.approx(3.2 + spec.outset_m)
+        assert report.posts_kept_as_surveyed == 0
+        assert report.shift_m[0] == pytest.approx(3.2 + spec.outset_m - 1.0)
 
     def test_registration_can_re_collapse_posts_and_is_merged_again(self, spec):
         """Two posts on one edge, side and `t` are pushed to the same offset.
@@ -1020,6 +1078,44 @@ class TestTheReportPartitions:
         measured = SignReport.measured([0.0, 1.0, 2.0, 3.0])
         assert measured["n"] == 4
         assert measured["max"] == pytest.approx(3.0)
+
+    def test_the_shift_distribution_still_decomposes_with_kept_posts_in_it(self, spec):
+        """`Q78`'s kept posts append a real 0.0, so the documented identity holds.
+
+        `len(shift_m) == poles_drawn + posts_over_shift + posts_in_carriageway
+        + posts_merged_after_shift` is what lets a reader tell whether `n`'s
+        excess over the drawn posts came from the bar or from somewhere else.
+        Skipping the append for a post that did not move would have been the
+        tidier branch and would have quietly stopped that partition closing.
+
+        ⚠️ **A wide ribbon, because `max_shift_m` can now only refuse a post
+        surveyed INSIDE the carriageway** — one surveyed clear of it is kept, and
+        a kept post makes no move for the bar to refuse. At the region's real
+        widths nothing reaches the bar at all, which is why this is built rather
+        than sampled.
+        """
+        eastward = [[0.0, 0.0, 0.0], [100.0, 0.0, 0.0]]
+        ribbon = arrows.ribbons(
+            {"edges": [edge(0, eastward, lanes=2)]},
+            {"carriageway": [{"edge": 0, "half_width_m": [8.0, 8.0], "trim_m": [0.0, 0.0]}]},
+        )[0]
+        segments = Segments.of([edge(0, eastward)])
+        report = SignReport()
+
+        placed = 0
+        for z in (0.5, 4.0, 10.0, -12.0):
+            snap = segments.nearest(50.0, z)
+            if _register(spec, snap, ribbon, np.array([50.0, z]), report) is not None:
+                placed += 1
+
+        # 0.5 m in is an 8.1 m push against a 6.0 m bar, so it is refused; 4.0 m
+        # in is pushed; 10.0 and -12.0 are already clear of 8.6 and are kept.
+        assert report.posts_over_shift == 1
+        assert report.posts_kept_as_surveyed == 2
+        assert placed == 3
+        assert len(report.shift_m) == placed + report.posts_over_shift
+        # The zeros are the kept posts and nothing else.
+        assert report.shift_m.count(0.0) == report.posts_kept_as_surveyed
 
     def test_a_stack_climbs_the_post(self, spec):
         """Two plates on one pole occupy different heights.

@@ -1127,6 +1127,12 @@ class Signs:
     # 77.3% of the region's poles are surveyed inside the 1.6x ribbon, so drawn
     # where published three quarters of the city's signs stand in the road. This
     # is `Q60`'s railing registration arriving at a second layer.
+    # 🔴 **And the move is clamped to that direction (`Q78`).** `outset_m` is the
+    # threshold as well as the offset: a post surveyed further out than
+    # `half_width + outset_m` keeps the point TD surveyed, because the argument
+    # for moving it — a ribbon drawn 1.6x too wide — runs outward only. Assigning
+    # the target unconditionally pulled 95 of 654 posts *toward* the carriageway,
+    # invisibly, because `shift_m` is an absolute value.
     outset_m: float
     max_shift_m: float
     # Two poles closer than this are one post: the layer publishes coincident

@@ -1515,14 +1515,33 @@ signs:
   # at a second layer for the same reason, and it is answered the same way:
   # keep the along-edge position and the side, move only the distance across.
   #
+  # 🔴 **AND ONLY OUTWARD, since Q78.** Read the paragraph above as what it is:
+  # an argument for pushing a post OUT of a ribbon drawn too wide. It says
+  # nothing about a post already standing clear, and until 2026-08-26 the rule
+  # moved those too — every post was assigned the same offset whatever its
+  # surveyed position was. ⚠️ **The split is over a different population from
+  # the 540-of-699 above and must not be subtracted from it**: of the 654 posts
+  # that reach the registration, measured against the drawn kerb PLUS outset_m,
+  # 559 (85.5%) are pushed outward and 95 (14.5%) were being pulled INWARD,
+  # toward the carriageway — p50 0.69 m, p90 2.54, max 4.51, with 36 over a
+  # metre and 6 over three. No counter could see it because shift_m is an
+  # absolute value, so a pull and a push are the same number. Those 95 now keep
+  # the point TD surveyed, and signs.json counts them as posts_kept_as_surveyed.
+  #
   # How far outside the drawn carriageway edge a post stands. The same 0.6 m the
   # railing classes use, and for the same reason — it is a footway width, not a
-  # sign fact.
+  # sign fact. ⚠️ It is also the threshold: a post further out than
+  # half_width + outset_m is left alone. Not the bare drawn kerb, which would
+  # keep 151 posts but strand 56 of them in the 0-0.6 m gutter band and so stop
+  # the rule being monotone.
   outset_m: 0.6
   # ⚠️ THE BAR ON THE REGISTRATION. A pole whose move exceeds this is refused
   # rather than drawn. Chosen against the measured distribution below rather than
   # to admit everything, and signs.json republishes `shift_m` over the poles this
   # refuses so the choice stays checkable (Q58's trap).
+  # ⚠️ **Since Q78 it can only ever refuse a PUSH** — a post surveyed clear of
+  # the kerb is kept, and a kept post makes no move for the bar to judge. At this
+  # region's widths nothing reaches it at all: posts_over_shift is 0.
   max_shift_m: 6.0
   # Two poles closer than this are one post. 🔴 **The published layer has
   # outright coincident poles** — nearest-other-pole reads 0.00 m at both p10 and
