@@ -1365,6 +1365,14 @@ class TestPaletteExposure:
         **city** fact besides — a second city prints its own signs — which hard
         rule 3 puts in config by definition.
 
+        ⚠️ **`signals.colours` is the second exemption and it is the SAME
+        argument, checked rather than assumed to transfer** (`P3-17`). A signal
+        head is not cladding either and has no reflectance to grade; it is four
+        colours — body plus three lens aspects — inside a single draw call, so
+        the livery rides `COLOR_0` exactly as a sign plate's does and the ETL
+        must know it. And it is a city fact: a second city's signals are its
+        publisher's, not this one's.
+
         So the exemption is narrow, by prefix, and deliberately not a general
         escape: any *other* new key authoring a colour still fails.
         """
@@ -1384,7 +1392,10 @@ class TestPaletteExposure:
         outside = {
             path: value
             for path, value in hex_colours(document, "")
-            if not path.startswith(".materials.") and not path.startswith(".signs.colours.")
+            if not any(
+                path.startswith(prefix)
+                for prefix in (".materials.", ".signs.colours.", ".signals.colours.")
+            )
         }
         assert not outside, (
             f"colour(s) authored outside materials: {outside}. Every colour the city "
@@ -1909,3 +1920,181 @@ class TestCarriagewaySurvey:
 
         with pytest.raises(ValueError, match="missing edge_type"):
             load_city("hong_kong", cities_root=rewrite(drop))
+
+
+class TestSignals:
+    """The published-signal-head block (`P3-17`).
+
+    🔴 **The gate is the weakest-evidenced rule in the bundle, so it is the most
+    heavily tested thing here.** `DTAD_TRAFFIC_LIGHT_PT.REFNAME` has no
+    published domain — no index-plan sheet defines it, the fgdb specification
+    gives the column eight characters of untyped text, and
+    `hk-traffic-sign-map`'s catalogue is `TS`-only — so what admits a code is a
+    rule about *spelling* that this project wrote. Nothing downstream can grade
+    it: a head drawn on a push button renders as a perfectly good signal head.
+    """
+
+    def test_the_region_declares_signals(self, hong_kong) -> None:
+        spec = hong_kong.signals
+        assert spec is not None
+        assert spec.layer.layer == "DTAD_TRAFFIC_LIGHT_PT"
+        assert not spec.tiled
+
+    def test_the_gate_admits_the_head_codes_the_region_publishes(self, hong_kong) -> None:
+        """Every one of these is a real `REFNAME` in Wan Chai, including the
+        `L`/`R` filter-arrow suffixes."""
+        spec = hong_kong.signals
+
+        for code in ("P24", "P01", "S01", "P21", "P04R", "P08R", "P07L", "S07L", "S04R"):
+            assert spec.is_head(code), code
+
+    def test_the_gate_refuses_the_objects_that_are_not_heads(self, hong_kong) -> None:
+        """⚠️ **The near misses are the point, and they refuse for three
+        different reasons.** `KLBOLL`/`KRBOLL`/`WIGWAG`/`TRAML` never match a
+        prefix; `PBUTT`/`PBOLL` match and leave letters; `PTR01`/`PTR02`/`STR02`
+        leave **digits behind a letter**, which is the one a laxer rule would
+        wave through. `PBOLL` and `TRAML` also end in `L`, so a suffix strip
+        that ran before the digit test would admit them."""
+        spec = hong_kong.signals
+
+        for code in ("KLBOLL", "KRBOLL", "PBUTT", "PBOLL", "WIGWAG", "STR02", "PTR01", "TRAML"):
+            assert not spec.is_head(code), code
+
+    def test_the_undecoded_m_family_is_refused(self, hong_kong) -> None:
+        """🔴 **A decision, not an oversight.** The region publishes `M52` x16,
+        `M51`, `M53L` and `M54R`, every one within 2.57 m of a `P`/`S` head — so
+        they are part of the signal assembly rather than strays. But part of the
+        assembly is not *is a head*, nothing published settles which, and drawing
+        them would be inventing 19 heads (`Q54`). Reversing it is one word in
+        `head_prefixes`, and `refused_by_code` is where a reader sees them."""
+        spec = hong_kong.signals
+
+        assert "M" not in spec.head_prefixes
+        for code in ("M52", "M51", "M53L", "M54R"):
+            assert not spec.is_head(code)
+
+    def test_a_bare_prefix_is_not_a_head(self, hong_kong) -> None:
+        """A prefix with no number after it is not a code, and `P` + `L` is a
+        suffix strip that leaves nothing to test."""
+        spec = hong_kong.signals
+
+        assert not spec.is_head("P")
+        assert not spec.is_head("PL")
+        assert not spec.is_head("")
+
+    def test_a_lower_case_prefix_is_rejected(self, rewrite) -> None:
+        """🔴 **The regression this pins, and it is this block's own failure
+        class.** `REFNAME` is upper case throughout the layer and the gate does
+        no case folding, so a city file writing `p` would load clean, pass every
+        other test here, and ship **zero** signals — and a region that draws
+        nothing is indistinguishable from a region that has none."""
+
+        def lower(doc: dict[str, Any]) -> None:
+            doc["signals"]["head_prefixes"] = ["p", "s"]
+
+        with pytest.raises(ValueError, match="upper-case ASCII"):
+            load_city("hong_kong", cities_root=rewrite(lower))
+
+    def test_a_prefix_carrying_a_digit_is_rejected(self, rewrite) -> None:
+        def numbered(doc: dict[str, Any]) -> None:
+            doc["signals"]["head_prefixes"] = ["P2"]
+
+        with pytest.raises(ValueError, match="upper-case ASCII"):
+            load_city("hong_kong", cities_root=rewrite(numbered))
+
+    def test_refusing_a_code_the_prefix_rule_already_refuses_is_rejected(self, rewrite) -> None:
+        """Dead config that reads as a live decision: a reviewer sees a
+        deliberate refusal where deleting the line would change nothing."""
+
+        def restate(doc: dict[str, Any]) -> None:
+            doc["signals"]["refuse_codes"] = ["KLBOLL"]
+
+        with pytest.raises(ValueError, match="already refuses"):
+            load_city("hong_kong", cities_root=rewrite(restate))
+
+    def test_refusing_a_code_the_prefix_rule_admits_is_accepted(self, rewrite) -> None:
+        """The escape hatch the field exists for: a publisher who numbers a push
+        button `P90` gets a signal head out of the spelling rule, and this is the
+        one word that stops it without a code change."""
+
+        def hatch(doc: dict[str, Any]) -> None:
+            doc["signals"]["refuse_codes"] = ["P90"]
+
+        spec = load_city("hong_kong", cities_root=rewrite(hatch)).signals
+        assert not spec.is_head("P90")
+        assert spec.is_head("P24")
+
+    def test_the_lens_livery_must_be_declared(self, rewrite) -> None:
+        """An unknown colour would otherwise fall back to something and render a
+        plausible head in the wrong livery."""
+
+        def stray(doc: dict[str, Any]) -> None:
+            doc["signals"]["lens_colours"] = ["lens_red", "lens_purple"]
+
+        with pytest.raises(ValueError, match="lens_purple"):
+            load_city("hong_kong", cities_root=rewrite(stray))
+
+    def test_the_aspect_count_is_derived_from_the_livery(self, hong_kong) -> None:
+        """⚠️ One fact, not two. A `lens_count` authored beside a colour table is
+        a way for them to disagree, and a head drawn with two lenses in three
+        colours renders perfectly."""
+        spec = hong_kong.signals
+
+        assert spec.lens_count == len(spec.lens_colours) == 3
+
+    def test_lenses_that_overflow_their_own_head_are_rejected(self, rewrite) -> None:
+        def tall(doc: dict[str, Any]) -> None:
+            doc["signals"]["lens_diameter_m"] = 0.40
+
+        with pytest.raises(ValueError, match="head_height_m"):
+            load_city("hong_kong", cities_root=rewrite(tall))
+
+    def test_a_lens_lifted_off_the_back_of_its_head_is_rejected(self, rewrite) -> None:
+        def floating(doc: dict[str, Any]) -> None:
+            doc["signals"]["lens_lift_m"] = 0.40
+
+        with pytest.raises(ValueError, match="floats off the back"):
+            load_city("hong_kong", cities_root=rewrite(floating))
+
+    def test_an_ambiguity_radius_that_kills_its_own_counter_is_rejected(self, rewrite) -> None:
+        """`host_ambiguous` is report-only, so nothing renders differently — it
+        just reads 100% forever, and the one instrument that can see the
+        junction-mouth join go weak (`Q69`) stops saying anything."""
+
+        def dead(doc: dict[str, Any]) -> None:
+            doc["signals"]["host_ambiguity_m"] = 25.0
+
+        with pytest.raises(ValueError, match="counter would be dead"):
+            load_city("hong_kong", cities_root=rewrite(dead))
+
+    def test_a_non_finite_measurement_is_rejected(self, rewrite) -> None:
+        """⚠️ Why this block goes through `_measures`: YAML 1.1 resolves `.nan`,
+        a NaN passes every sign test, and it then makes false every comparison it
+        feeds downstream."""
+
+        def nan(doc: dict[str, Any]) -> None:
+            doc["signals"]["mount_height_m"] = float("nan")
+
+        with pytest.raises(ValueError, match="finite"):
+            load_city("hong_kong", cities_root=rewrite(nan))
+
+    def test_the_body_livery_is_required_by_name(self, rewrite) -> None:
+        """The one colour key `lens_colours` cannot vouch for. Without it the
+        build dies partway through on a bare `KeyError`."""
+
+        def renamed(doc: dict[str, Any]) -> None:
+            colours = doc["signals"]["colours"]
+            colours["carcass"] = colours.pop("body")
+
+        with pytest.raises(ValueError, match="does not name 'body'"):
+            load_city("hong_kong", cities_root=rewrite(renamed))
+
+    def test_a_city_without_signals_loads(self, rewrite) -> None:
+        """Optional on the same terms as `tramway`, `arrows`, `signs`,
+        `boxjunctions` and `railings`: a city whose estate publishes no signal
+        layer ships none rather than putting a signal at every junction node."""
+
+        def drop(doc: dict[str, Any]) -> None:
+            doc.pop("signals")
+
+        assert load_city("hong_kong", cities_root=rewrite(drop)).signals is None

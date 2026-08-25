@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import math
 from bisect import bisect_right
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import IntEnum
 from pathlib import Path
@@ -896,6 +896,45 @@ SIGN_PLATES = (
 # through the build on a bare `KeyError`.
 SIGN_BACK_COLOUR = "grey"
 
+# The livery `pipeline/signals.py` reserves for a signal head's body, its visor
+# and its post — everything that is not a lens. Validated in `_signals` for
+# `SIGN_BACK_COLOUR`'s reason: it is the one colour key `lens_colours` cannot
+# vouch for, so a city naming its livery in its own words would load, pass every
+# config test, and die partway through the build on a bare `KeyError`.
+SIGNAL_BODY_COLOUR = "body"
+
+
+def _is_signal_head(code: str, prefixes: Sequence[str], refused: Sequence[str]) -> bool:
+    """Whether a `DTAD_TRAFFIC_LIGHT_PT` `REFNAME` names a signal head.
+
+    🔴 **The gate, and the weakest-evidenced rule in the bundle** — the reason
+    lives on `Signals.head_prefixes`. A code is a head when it is one of the
+    declared letters followed by digits, with an optional `L`/`R` suffix, and is
+    not named in `refused`.
+
+    ⚠️ **Free-standing rather than only a method, because `_signals` has to run
+    it before a `Signals` exists** — it refuses a `refuse_codes` entry that the
+    prefix rule already refuses. `Signals.is_head` is what every caller with an
+    instance uses; two implementations of one rule are two ways for the config
+    check and the stage to disagree about what shipped (`Q56`).
+
+    ⚠️ **It is a rule about SPELLING, and nothing published says the spelling
+    means anything.** `refused` is what stops a publisher who numbers a push
+    button `P90` from getting a signal head out of it.
+    """
+    if code in refused:
+        return False
+    for prefix in prefixes:
+        if not code.startswith(prefix):
+            continue
+        rest = code[len(prefix) :]
+        if rest.endswith(("L", "R")):
+            rest = rest[:-1]
+        if rest.isdigit():
+            return True
+    return False
+
+
 # How a stack is ordered on its post: main sign on top, supplementary plate
 # hanging below it. The numbers are `hk-traffic-sign-map`'s `compute-stacks.mjs`
 # ranks, and the *names* are the titles of the publisher's own index-plan sheets
@@ -1108,6 +1147,179 @@ class Signs:
     # than dropped.
     turn_straight_deg: float
     turn_u_deg: float
+
+    @property
+    def tiled(self) -> bool:
+        """Whether `source` names `tiled_sources` rather than `sources`."""
+        return self.member is not None
+
+
+@dataclass(frozen=True)
+class Signals:
+    """Published traffic-signal heads, drawn by `pipeline/signals.py` (`P3-17`).
+
+    ⚠️ **This block asserts about as little as `Railings` does, and for the same
+    reason: the publisher asserts nothing.** `DTAD_TRAFFIC_LIGHT_PT.REFNAME` has
+    **no published domain** — the fgdb data specification gives the column only
+    the description "Reference Name", 8 characters of text — and the index-plan
+    set that defines every `RM` marking code and every `TS` sign carries no
+    signal sheet at all. Both "Miscellaneous Details" sheets (`CT174/51-6(1)E`)
+    were rendered and read: they are the `RS/S/` sign-pictogram tables, and they
+    are scans besides. `~/hk-traffic-sign-map`'s `signCatalogue.json`, which is
+    the cross-check `P3-16` used, is `TS`-only and carries none of these codes.
+
+    So there is no `Q59` transcription available here either, and what follows is
+    the shape of `head_prefixes` below: the code is read as a **gate** — head or
+    not head — and never as a look. All **33** of the region's 46 codes that pass
+    the gate draw the *same* head. This block does not claim that `P24` is a different signal
+    from `P01`, because nothing published says so and `Q54` debits exactly that
+    kind of invention. `signals.json` publishes `drawn_by_code` and
+    `refused_by_code` over the whole vocabulary instead, which is what makes the
+    gate reviewable and what `Railings.classes` uses its refused metres for.
+
+    ⚠️ **`ANGLE` is not a facing, and it was measured here rather than assumed.**
+    `PROGRESS.md` told this task to assume `P3-16`'s finding until it had been
+    checked on this layer. Checked: the angle sits **flat** against the road,
+    which is `DTAD_TS_ABV_PT`'s result to within noise. So the facing is derived
+    from the host edge and the kerb side, exactly as `signs._facing_from_side`
+    derives it, and `ANGLE` survives only as `axis_residual_deg` — published,
+    read by nothing, so the claim stays answerable from a shipped artefact
+    rather than a scratch script (`Q37`).
+
+    ⚠️ **Unlike `Signs`, the published point IS the object.** There is no
+    abbreviation layer here and no pole layer to join to — lights do not stand on
+    `DTAD_TS_POLE_PT` poles — and this layer carries no `GG_NAME` at all.
+    Position is read straight from the point, which is why there is no
+    `max_pole_span_m` here.
+
+    ⚠️ **What replaces `GG_NAME` is coincidence, and it is DERIVED.** Half the
+    region's points sit within 0.05 m of another: one surveyed post carrying a
+    stack of aspects, which is the real object. `assembly_merge_m` is that
+    cluster radius. It is a *derived* grouping over surveyed coincidence and
+    never a published join, so `signals.json` publishes `assembly_size` and the
+    measured distribution is what it is read against.
+
+    ⚠️ **The position is registered, not read** — `Q60`'s move arriving at a
+    third layer, after the railings and the signs. Nearly three quarters of the
+    region's signal points are surveyed inside the drawn ribbon, so drawn where
+    published they stand in the road. `outset_m` is where they go and
+    `max_shift_m` is the bar on the move that puts them there.
+
+    ⚠️ **The measurements behind all four paragraphs above live in the city
+    file, once.** Restating them here as well is two places to update, and the
+    first draft of this docstring already drifted on one of them — it read "all
+    46 codes pass the gate" where 33 do. `Railings` splits them the same way:
+    the distribution tables sit beside the values a reader would tune, and the
+    docstring keeps the finding.
+
+    ⚠️ **Every dimension below is authored, and declared as authored.** Nothing
+    published carries a signal-head dimension: this is `Q60`'s railing debt and
+    `Signs`'s plate debt restated, and these are the weakest-evidenced numbers in
+    the block. None of them is a *position*.
+
+    ⚠️ **There is no shader here, and no state.** The colours are a city fact
+    (hard rule 3) and travel on `COLOR_0` for `Signs`'s reason — the whole layer
+    is one draw call and a head is four colours. The lens colours are **inert**:
+    `P3-17` ships no cycle, because no dataset publishes timing, an invented one
+    *instructs*, and nothing obeys it until `P3-3`'s traffic exists. The named
+    route for state is `P3-11d`'s `instance uniform` lamp circuit, wired in `B3`.
+    """
+
+    source: str
+    member: str | None
+    layer: SourceLayer
+    # 🔴 **The gate, and the weakest evidence in this block.** A `REFNAME` names
+    # a signal head when it is one of these letters followed by digits, with an
+    # optional `L`/`R` suffix — `P24`, `S07L`, `M54R`. Nothing published defines
+    # the vocabulary, so this is a whitelist read off code strings in the sense
+    # `Railings.classes` is, and it is config rather than a constant for hard
+    # rule 3: a second city's publisher spells its own.
+    #
+    # ⚠️ **`M` is deliberately NOT here, and the omission is the decision.**
+    # The region carries `M52` x16, `M51`, `M53L`, `M54R` — 19 features, every
+    # one of them within **2.57 m** of a `P`/`S` head (p50 0.77 m), so they are
+    # plainly part of the signal assembly rather than strays. But *part of the
+    # assembly* is not *is a head*, and there is nothing to read that would
+    # settle it. Drawing them would be inventing 19 heads; refusing them costs
+    # 2% of the layer and shows up in `refused_by_code`, where a reader can see
+    # the decision and reverse it with one word here.
+    head_prefixes: tuple[str, ...]
+    # Codes that pass the prefix rule and are still not heads. Empty for Hong
+    # Kong — the digit rule already refuses all nine of the region's non-head
+    # codes, though ⚠️ **for three different reasons, and "they are all letters"
+    # is not one of them**: `KLBOLL`, `KRBOLL`, `WIGWAG` and `TRAML` never match
+    # `P` or `S` at all; `PBUTT` and `PBOLL` match but leave letters behind;
+    # `PTR01`, `PTR02` and `STR02` leave *digits* behind a letter, which is the
+    # near miss. Listing any of them here fails the load as dead config.
+    #
+    # It exists because the digit rule is a *guess about spelling*: a publisher
+    # who numbers a push button `P90` would otherwise get a signal head, and
+    # this is the one word that stops it without a code change.
+    refuse_codes: tuple[str, ...]
+    # Named livery, on `Signs.colours`' terms and for its reason.
+    colours: dict[str, tuple[int, int, int]]
+
+    # ---- the head, all authored ----
+    head_width_m: float
+    head_height_m: float
+    head_depth_m: float
+    # How far the lens sits proud of the head's front face. Coplanar faces
+    # z-fight, which is why `Arrows.lift_m` and `Signs.layer_lift_m` exist.
+    lens_lift_m: float
+    lens_diameter_m: float
+    lens_segments: int
+    # 🔴 **The aspects, named top to bottom — and a list rather than a count.**
+    # Three is the shape every driver reads, but the *number* of lenses and their
+    # *colours* are one fact and must not be two: a `lens_count` beside a colour
+    # table is a way for them to disagree, and a head drawn with two lenses in
+    # three colours renders perfectly.
+    #
+    # ⚠️ **These are INERT lens colours, not lit ones.** `P3-17` ships no cycle
+    # (see the class docstring), so what is drawn is a signal head with its lamps
+    # off — which is a real thing a driver sees, where a lit red at every junction
+    # would be an instruction this game cannot honour.
+    lens_colours: tuple[str, ...]
+
+    @property
+    def lens_count(self) -> int:
+        """Aspects per head. Derived, so it cannot disagree with the livery."""
+        return len(self.lens_colours)
+
+    def is_head(self, code: str) -> bool:
+        """Whether a published `REFNAME` names a signal head.
+
+        The shape `Railings.class_of` and `RoadMark`-lookup already take: the
+        stage asks the spec, rather than importing a rule and re-passing two of
+        this object's own fields at every call site.
+        """
+        return _is_signal_head(code, self.head_prefixes, self.refuse_codes)
+
+    # ---- the post, all authored ----
+    # Bottom of the lowest head above the ground.
+    mount_height_m: float
+    post_radius_m: float
+    post_sides: int
+    # How far the post rises past the top of the highest head.
+    post_headroom_m: float
+    # Vertical gap between two heads stacked on one post.
+    stack_gap_m: float
+
+    # ---- the join ----
+    max_offset_m: float
+    # 🔴 **How near a SECOND level-0 edge has to be before the host is called
+    # ambiguous.** A signal head stands at a junction *mouth*, which is exactly
+    # where nearest-edge hosting is weakest — `roadmarks.py` measured the same
+    # geometry picking the wrong road on 43% of its layer (`Q69`). There is no
+    # transverse second rule to borrow here, because a head is not drawn across
+    # anything, so this is the counter that can see the join go weak instead.
+    # ⚠️ **It classifies and never refuses**: `host_ambiguous` is report-only,
+    # a finding to go and look at rather than a bar to retune (`Q56`).
+    host_ambiguity_m: float
+    outset_m: float
+    max_shift_m: float
+    # Two points closer than this are one post. Replaces `Signs.pole_merge_m`
+    # AND its `GG_NAME` stack at once, which is the derived-grouping note above.
+    assembly_merge_m: float
 
     @property
     def tiled(self) -> bool:
@@ -2231,6 +2443,13 @@ class CityConfig:
     # this stage is that it is read instead.
     arrows: Arrows | None = None
     signs: Signs | None = None
+    # Published traffic-signal heads, drawn by `pipeline/signals.py` (`P3-17`).
+    # Optional on the same terms as the blocks around it, and the fallback it
+    # deliberately does not offer is the sharpest of them: the region publishes
+    # 553 signal assemblies against 393 junction nodes, so putting a signal at
+    # every junction would be inventing content at a population the estate does
+    # not have (`Q54`).
+    signals: Signals | None = None
     # Published yellow box junctions, drawn by `pipeline/boxjunctions.py`
     # (`P3-18`). Optional for the same reason `arrows` is — and the fallback it
     # deliberately does not offer is sharper: the region publishes 20 boxes
@@ -2425,6 +2644,7 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
         tramway=_tramway(document.get("tramway"), f"{path}:tramway", table),
         arrows=_arrows(document.get("arrows"), f"{path}:arrows"),
         signs=_signs(document.get("signs"), f"{path}:signs"),
+        signals=_signals(document.get("signals"), f"{path}:signals"),
         boxjunctions=_boxjunctions(document.get("boxjunctions"), f"{path}:boxjunctions"),
         railings=_railings(document.get("railings"), f"{path}:railings"),
         road_marks=_road_marks(document.get("road_marks"), f"{path}:road_marks"),
@@ -2465,6 +2685,8 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
         _check_declared_source(city, city.road_marks, f"{path}:road_marks.source")
     if city.signs is not None:
         _check_declared_source(city, city.signs, f"{path}:signs.source")
+    if city.signals is not None:
+        _check_declared_source(city, city.signals, f"{path}:signals.source")
     _check_landmarks_lie_within_a_region(city, path)
     return city
 
@@ -3792,6 +4014,194 @@ def _signs(body: Any, where: str) -> Signs | None:
         pole_merge_m=lengths["pole_merge_m"],
         turn_straight_deg=turns["turn_straight_deg"],
         turn_u_deg=turns["turn_u_deg"],
+    )
+
+
+_SIGNAL_ROLES = ("code", "bearing", "level")
+
+# ⚠️ **Every name here matches its `Signals` field exactly**, which is what lets
+# the constructor below splat them — the shape `_road_marks` already uses.
+_SIGNAL_MEASURES = (
+    "head_width_m",
+    "head_height_m",
+    "head_depth_m",
+    "lens_lift_m",
+    "lens_diameter_m",
+    "mount_height_m",
+    "post_radius_m",
+    "post_headroom_m",
+    "stack_gap_m",
+    "max_offset_m",
+    "host_ambiguity_m",
+    "outset_m",
+    "max_shift_m",
+    "assembly_merge_m",
+)
+
+
+def _signals(body: Any, where: str) -> Signals | None:
+    """The optional published-signal-head block (`P3-17`).
+
+    Absent, the region ships no `signals.glb` and the manifest names none — the
+    shape `tramway`, `arrows`, `signs`, `boxjunctions` and `railings` all take.
+    What is deliberately *not* offered is a fallback that puts a signal at every
+    junction node the graph found: the region publishes 553 signal assemblies
+    against 393 junction nodes, so the two populations are not even the same
+    shape, and deriving one from the other is the invention `Q54` debits.
+    """
+    if body is None:
+        return None
+    if not isinstance(body, dict):
+        raise ValueError(f"{where} must be a mapping, got {body!r}")
+
+    colours: dict[str, tuple[int, int, int]] = {}
+    raw_colours = _require(body, "colours", where)
+    if not isinstance(raw_colours, dict) or not raw_colours:
+        raise ValueError(f"{where}:colours must be a non-empty mapping of name to RGB")
+    for name, value in raw_colours.items():
+        spot = f"{where}:colours.{name}"
+        if not isinstance(value, str):
+            raise ValueError(f"{spot} must be a #rrggbb colour, got {value!r}")
+        colours[str(name)] = _parse_hex(value, spot)
+    if SIGNAL_BODY_COLOUR not in colours:
+        raise ValueError(
+            f"{where}:colours does not name {SIGNAL_BODY_COLOUR!r}, which every head body, "
+            f"visor and post is drawn in — see SIGNAL_BODY_COLOUR"
+        )
+
+    raw_lenses = _require(body, "lens_colours", where)
+    if isinstance(raw_lenses, str) or not isinstance(raw_lenses, (list, tuple)):
+        raise ValueError(f"{where}:lens_colours must be a list of colour names, got {raw_lenses!r}")
+    lens_colours = tuple(str(name) for name in raw_lenses)
+    if not lens_colours:
+        # A head with no lenses is a blank box, which reads as a junction box
+        # rather than a signal and renders perfectly. Refused: an empty list is
+        # a config that went wrong, not a signal that exists.
+        raise ValueError(f"{where}:lens_colours is empty; a head with no aspects is not a signal")
+    unknown = [name for name in lens_colours if name not in colours]
+    if unknown:
+        # Caught here rather than at draw time: an unknown colour would
+        # otherwise fall back to something and render as a plausible head in the
+        # wrong livery, which is this stage's whole failure class.
+        raise ValueError(
+            f"{where}:lens_colours names {', '.join(sorted(set(unknown)))}, which "
+            f"{where}:colours does not define"
+        )
+
+    raw_prefixes = _require(body, "head_prefixes", where)
+    if isinstance(raw_prefixes, str) or not isinstance(raw_prefixes, (list, tuple)):
+        raise ValueError(f"{where}:head_prefixes must be a list, got {raw_prefixes!r}")
+    prefixes = tuple(str(prefix) for prefix in raw_prefixes)
+    if not prefixes:
+        raise ValueError(
+            f"{where}:head_prefixes is empty; the gate would refuse every code and the "
+            f"region would ship no signals at all"
+        )
+    bad = [
+        prefix
+        for prefix in prefixes
+        if not (prefix.isascii() and prefix.isalpha() and prefix.isupper())
+    ]
+    if bad:
+        # The gate is "these letters, then digits". A prefix carrying a digit
+        # makes that rule ambiguous — `P2` would admit `P24` twice over — and an
+        # empty one admits every code in the layer.
+        #
+        # 🔴 **Upper case is required rather than folded, and that is the whole
+        # point of checking it.** `REFNAME` is upper case throughout this layer,
+        # `_is_signal_head` does no case folding, and a city file that wrote `p`
+        # would load clean, pass every config test, and ship **zero** signals —
+        # a region that draws nothing is exactly this block's failure class, and
+        # nothing downstream distinguishes it from a region that has none.
+        raise ValueError(
+            f"{where}:head_prefixes must each be upper-case ASCII letters; "
+            f"got {', '.join(sorted(bad))}"
+        )
+    if len(set(prefixes)) != len(prefixes):
+        raise ValueError(f"{where}:head_prefixes repeats a prefix: {prefixes}")
+
+    # ⚠️ **`get(name, default)` rather than `get(name) or default`**: the second
+    # form turns every *falsy* wrong type — `{}`, `""`, `0`, `false` — into an
+    # empty tuple and walks straight past the type check below.
+    raw_refuse = body.get("refuse_codes", ())
+    if isinstance(raw_refuse, str) or not isinstance(raw_refuse, (list, tuple)):
+        raise ValueError(f"{where}:refuse_codes must be a list, got {raw_refuse!r}")
+    refuse_codes = tuple(str(code) for code in raw_refuse)
+    # ⚠️ **`()` for `refused`, so this tests the PREFIX rule alone** — passing
+    # `refuse_codes` would make every entry refuse itself and the check vacuous.
+    dead = [code for code in refuse_codes if not _is_signal_head(code, prefixes, ())]
+    if dead:
+        # ⚠️ A code the prefix rule already refuses is dead config that reads as
+        # a live decision: a reader sees a deliberate refusal where nothing is
+        # being decided, and deleting the entry would change nothing. None of
+        # this region's nine non-head codes belongs here — see `refuse_codes`.
+        raise ValueError(
+            f"{where}:refuse_codes names {', '.join(sorted(dead))}, which head_prefixes "
+            f"{list(prefixes)} already refuses — remove it rather than restating it"
+        )
+
+    counts = {name: int(_require(body, name, where)) for name in ("lens_segments", "post_sides")}
+    too_few = {name: value for name, value in counts.items() if value < 3}
+    if too_few:
+        raise ValueError(
+            f"{where}: {', '.join(sorted(too_few))} must be at least 3, or the ring is not a "
+            f"ring; got {too_few}"
+        )
+
+    # ⚠️ **Through `_measures` rather than an inline `float(_require(...))`
+    # block**, which is what `_signs` does and what this was written as. It is
+    # strictly stronger: YAML 1.1 resolves `.nan`, and a NaN passes every sign
+    # test and then makes false every comparison it feeds — `_measures`' own
+    # docstring calls it the one bad value that never announces itself.
+    lengths = _measures(body, where, _SIGNAL_MEASURES, positive=True)
+
+    stack_m = len(lens_colours) * lengths["lens_diameter_m"]
+    if stack_m > lengths["head_height_m"]:
+        # The lenses are laid down the head's own height. Overflowing it draws
+        # aspects hanging off the bottom of the body they are mounted in, which
+        # is a perfectly drawn head that is obviously wrong only up close.
+        raise ValueError(
+            f"{where}: {len(lens_colours)} lenses of {lengths['lens_diameter_m']} m need "
+            f"{stack_m:.3f} m but head_height_m is {lengths['head_height_m']}"
+        )
+    if lengths["lens_diameter_m"] > lengths["head_width_m"]:
+        raise ValueError(
+            f"{where}:lens_diameter_m {lengths['lens_diameter_m']} is wider than head_width_m "
+            f"{lengths['head_width_m']}, so the lens stands proud of its own body"
+        )
+    if lengths["lens_lift_m"] >= lengths["head_depth_m"]:
+        # The lift runs along the head's own normal, out from its front face. At
+        # or past the depth the lens floats clear of the back of the head it is
+        # mounted in — three discs hanging in the air behind a box, which from
+        # the road is a head with no aspects on it.
+        raise ValueError(
+            f"{where}:lens_lift_m {lengths['lens_lift_m']} is not less than head_depth_m "
+            f"{lengths['head_depth_m']}, so the lens floats off the back of its own head"
+        )
+    if lengths["host_ambiguity_m"] >= lengths["max_offset_m"]:
+        # 🔴 **A dead counter rather than a wrong city.** `host_ambiguous` is
+        # report-only, so nothing renders differently — but at or past
+        # `max_offset_m` every head that has a host at all has a second edge
+        # inside the radius, the counter reads 100%, and the one instrument that
+        # can see the junction-mouth join go weak (`Q69`) reports nothing for the
+        # rest of the project. A metric nobody can read is `Q63`'s complaint.
+        raise ValueError(
+            f"{where}:host_ambiguity_m {lengths['host_ambiguity_m']} is not less than "
+            f"max_offset_m {lengths['max_offset_m']}; every hosted head would read as "
+            f"ambiguous and the counter would be dead"
+        )
+
+    return Signals(
+        source=str(_require(body, "source", where)),
+        member=_tile_member(body, where),
+        layer=_source_layer(body, where, _SIGNAL_ROLES),
+        head_prefixes=prefixes,
+        refuse_codes=refuse_codes,
+        colours=colours,
+        lens_colours=lens_colours,
+        lens_segments=counts["lens_segments"],
+        post_sides=counts["post_sides"],
+        **lengths,
     )
 
 

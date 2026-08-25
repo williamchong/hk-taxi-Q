@@ -1700,6 +1700,177 @@ boxjunctions:
 # host_disagreement, chosen against naive-nearest, as the counter that can
 # actually see this regress. The residual ships too, recorded over refusals as
 # well as keeps, and is worth what that caveat leaves it worth.
+# ---------------------------------------------------------------------------
+# Traffic signal heads (P3-17)
+# ---------------------------------------------------------------------------
+#
+# TD's DTAD_TRAFFIC_LIGHT_PT, drawn as static unlit geometry on the posts the
+# publisher surveyed. 913 points in region; 843 of them pass the gate below.
+#
+# 🔴 **NOTHING PUBLISHED DEFINES THE REFNAME VOCABULARY, and that is the fact
+# this block is shaped around.** The fgdb data specification gives the column
+# only "Reference Name", 8 characters of text, with no domain. The Index Plan
+# set that defines every RM marking code and every TS sign carries no signal
+# sheet — both "Miscellaneous Details" sheets (CT174/51-6(1)E) were rendered and
+# read, and they are the RS/S/ sign-pictogram tables, scanned besides.
+# ~/hk-traffic-sign-map's signCatalogue.json, which is P3-16's cross-check, is
+# TS-only and carries none of these codes. So this is railings:' situation
+# rather than arrows:' — a whitelist read off code strings, with no Q59
+# transcription available — and it is a DATA_SOURCES.md change for that reason.
+#
+# What the region actually holds, measured before any of this was written:
+#
+#   P<n>    654    P24 x278, P01 x149, P21 x57, P04R x33, P08R x28, P07L x25 ...
+#   S<n>    189    S01 x100, S07L x21, S04R x17, S08R x13, S10R x9 ...
+#   M<n>     19    M52 x16, M51, M53L, M54R
+#   other    51    KLBOLL x24, PBUTT x8, PBOLL x6, WIGWAG x4, STR02 x3,
+#                  KRBOLL x3, PTR01, PTR02, TRAML
+#
+# ⚠️ **The 51 "other" are real street objects and are refused, not missing.**
+# KLBOLL/KRBOLL are keep-left/keep-right bollards, PBUTT a pedestrian push
+# button, WIGWAG the flashing amber. P3-17 is not the task that draws them, and
+# refusing them keeps the in-carriageway counter a clean signal about heads: a
+# keep-left bollard legitimately stands IN the carriageway, on a splitter
+# island, so admitting bollards would make the registration refusal below delete
+# exactly the objects that belong there. They show up in refused_by_code.
+#
+# ⚠️ **M<n> is refused too, and that one is a judgement rather than a fact.**
+# All 19 sit within 2.57 m of a P/S head (p50 0.77 m), so they are plainly part
+# of the signal assembly rather than strays — but part of the assembly is not
+# "is a head", and nothing published settles it. Refusing costs 2% of the layer
+# and is one word to reverse; drawing them would be inventing 19 heads (Q54).
+#
+# 🔴 **ANGLE IS NOT A FACING, AND IT WAS MEASURED HERE RATHER THAN ASSUMED.**
+# PROGRESS.md told this task to assume P3-16's finding until it was checked on
+# this layer. Checked, over the region and in the frame arrows: validated to p50
+# 0.9 deg — the angle sits flat against the road:
+#
+#   p50 44.3 deg from the host edge axis (p90 78.1)
+#   21.3% within 20 deg of ALONG the road
+#   19.3% within 20 deg of ACROSS it
+#   22.2% is what a uniform distribution gives
+#
+# That is DTAD_TS_ABV_PT's own result to within noise. So the facing is derived
+# from the host edge and the kerb side — signs._facing_from_side, imported
+# rather than copied — and ANGLE survives only as axis_residual_deg: published,
+# read by nothing, so the claim stays answerable from a shipped artefact rather
+# than from a scratch script (Q37).
+#
+# ⚠️ **The DTAD_TRAFFIC_LIGHT_LINE cross-check was attempted and cannot be
+# made.** Those 53 in-region features are the same cells dropped to graphics, so
+# comparing a dropped cell's axis against its point's ANGLE would test the cell
+# rotation directly. But the layer publishes SIGNID **null on all 53** and
+# carries no other key, so pairing a dropped cell to its point is a
+# nearest-neighbour guess — a second join in Q56's sense, and the same move
+# signs: refuses when GG_NAME resolves to more than one pole. Recorded so the
+# next reader does not spend the hour again.
+#
+# ⚠️ **The position is registered, not read** — Q60's move at a third layer.
+# 72.7% of the region's signal points are surveyed inside the drawn 1.6x ribbon,
+# a median 1.48 m past the drawn kerb (max 5.12), so drawn where published
+# nearly three quarters of the city's signals stand in the road.
+#
+# ⚠️ **ELEVATION is null on 906 of 913 and A01 on 7**, so null is the NORMAL
+# value on this layer rather than the exception. railings.AT_GRADE already
+# admits it and the 7 are refused as on-structure; said here because a reader
+# who knows the sign layer will read the nulls as a defect.
+signals:
+  source: traffic_aids_drawings_gdb
+  layer: DTAD_TRAFFIC_LIGHT_PT
+  fields:
+    code: REFNAME
+    # Read, published as axis_residual_deg, and consumed by nothing. See above.
+    bearing: ANGLE
+    # The same structure column arrows:, signs:, boxjunctions:, railings: and
+    # road_marks: all read, with the same reading.
+    level: ELEVATION
+
+  # The gate. A code is a head when it is one of these letters followed by
+  # digits, with an optional L/R suffix. Add "M" to draw the 19 M<n> features.
+  head_prefixes: [P, S]
+  # Codes that pass the prefix rule and are still not heads. Empty for Hong
+  # Kong: the digit rule already refuses all nine of the region's non-head
+  # codes, and listing one here fails the load as dead config.
+  #
+  # ⚠️ **It refuses them for three different reasons, and "they are all letters
+  # after the prefix" — which this comment used to say — is wrong for seven of
+  # the nine.** KLBOLL, KRBOLL, WIGWAG and TRAML never match P or S at all;
+  # PBUTT and PBOLL match and leave letters behind; PTR01, PTR02 and STR02 leave
+  # DIGITS behind a letter, which is the near miss and the one worth knowing.
+  refuse_codes: []
+
+  # ⚠️ **Inert lens colours, not lit ones.** P3-17 ships no cycle — no dataset
+  # publishes timing, an invented one instructs, and nothing obeys it until
+  # P3-3's traffic exists. What is drawn is a head with its lamps off, which is
+  # a real thing a driver sees; a lit red at every junction would be an
+  # instruction this game cannot honour. The named route for state is P3-11d's
+  # instance uniform lamp circuit, wired in B3.
+  #
+  # A city fact rather than an art call (hard rule 3), on signs.colours' terms
+  # and travelling on COLOR_0 for its reason: one draw call, four colours.
+  colours:
+    # Head body, visor and post. Required by name — see SIGNAL_BODY_COLOUR.
+    body: "#2b2f33"
+    lens_red: "#4a1416"
+    lens_amber: "#4d3510"
+    lens_green: "#0f3a24"
+  # Top to bottom, and a list rather than a count so the two cannot disagree.
+  lens_colours: [lens_red, lens_amber, lens_green]
+
+  # ---- the head ----
+  #
+  # ⚠️ **AUTHORED, every one of them, and declared as authored.** Nothing
+  # published carries a signal-head dimension: this is Q60's railing debt and
+  # signs:' plate debt restated, and these are the weakest-evidenced numbers in
+  # the block. None of them is a position. A 300 mm aspect in a body a little
+  # over a metre tall is the shape a driver reads; the visor is folded into
+  # head_depth_m rather than modelled, because at any distance the game shows
+  # one it is two pixels of silhouette.
+  head_width_m: 0.42
+  head_height_m: 1.10
+  head_depth_m: 0.30
+  lens_diameter_m: 0.30
+  lens_segments: 12
+  # Coplanar faces z-fight, the reason arrows.lift_m and signs.layer_lift_m
+  # exist — but a lens is on a vertical face, so this runs along the head normal
+  # rather than up.
+  lens_lift_m: 0.012
+
+  # ---- the post ----
+  mount_height_m: 2.40
+  post_radius_m: 0.06
+  post_sides: 8
+  post_headroom_m: 0.15
+  stack_gap_m: 0.12
+
+  # ---- the join ----
+  #
+  # No level-0 street nearer than this and the head is refused rather than
+  # guessed at: without a host edge there is no kerb side, and without a kerb
+  # side there is no facing at all.
+  max_offset_m: 25.0
+  # 🔴 **How near a SECOND level-0 edge has to be before the host is called
+  # ambiguous.** A signal head stands at a junction MOUTH, which is exactly
+  # where nearest-edge hosting is weakest — road_marks: measured the same
+  # geometry picking the wrong road on 43% of its layer (Q69). There is no
+  # transverse second rule to borrow here, because a head is not drawn across
+  # anything, so this is the counter that can see the join go weak instead.
+  # ⚠️ It classifies and never refuses: host_ambiguous is report-only, a finding
+  # to go and look at rather than a bar to retune (Q56).
+  host_ambiguity_m: 3.0
+  # How far outside the DRAWN carriageway edge a post stands, and the bar on the
+  # move that puts it there. See the registration note above.
+  outset_m: 0.45
+  max_shift_m: 6.0
+  # Two points closer than this are one post. This replaces signs:' pole_merge_m
+  # AND its GG_NAME stack at once: 470 of 913 points are within 0.05 m of
+  # another and clustering at 1 m gives 553 assemblies (272 singletons, 220
+  # pairs, 46 triples, 12 quads, 3 fives). ⚠️ **It is a DERIVED grouping over
+  # surveyed coincidence, never a published join** — this layer has no GG_NAME —
+  # so signals.json publishes assembly_size and those numbers are what it is
+  # read against.
+  assembly_merge_m: 1.0
+
 road_marks:
   source: traffic_aids_drawings_gdb
   layer: DTAD_RD_MARK_LINE
