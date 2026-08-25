@@ -152,7 +152,7 @@ does. Running `--import` by hand tells you nothing unless you read the output.
 
 | Step | Covers | In CI |
 |---|---|---|
-| `settings` | That `project.godot` still holds the 21 warning promotions and the `rendering_method.web` override — the two things an editor save silently drops | yes |
+| `settings` | That `project.godot` still holds the 21 warning promotions, `untyped_declaration` by name, and both feature overrides (`rendering_method.web` at its value, `max_fps.mobile`) — what an editor save silently drops | yes |
 | `gdformat --check` | Layout across all of `game/` | yes |
 | `--import` | Autoloads and what they reach; also builds `game/.godot/` | yes |
 | warnings sweep | `--check-only` per script, grepping for `treated as error` | yes |

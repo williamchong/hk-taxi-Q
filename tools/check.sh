@@ -50,6 +50,12 @@ VERIFY_TOOLS=(
 # no region, so these are the only runtime contracts it can check at all.
 ALWAYS_TOOLS=(verify_beam_budget verify_vehicle verify_mesh_contract)
 
+# Promotions docs/ARCHITECTURE.md "GDScript warnings" says project.godot must
+# carry. Named here so the number the settings check wants and the number its
+# diagnostic prints cannot drift apart — the failure it warns against is
+# someone editing one of them down to match a regression.
+WANT_PROMOTED=21
+
 # Godot reports a compile failure with any of these and still exits 0.
 FATAL='Parse Error|SCRIPT ERROR|Failed to load script|Failed to compile'
 
@@ -85,24 +91,40 @@ if ! "$GDFORMAT" --check "$ROOT/game"; then
 	failed=1
 fi
 
-# Settings that no other check can miss going missing. Opening the editor
+# Settings that no other check would notice going missing. Opening the editor
 # rewrites project.godot from scratch: it discards every comment, and it drops
-# hand-written feature overrides — the `.web` / `.mobile` suffixed keys, which
+# hand-written feature overrides — keys with a `.web` / `.mobile` suffix — which
 # the editor only persists when it created them itself. That is not
 # hypothetical. 78c077e, a commit about the start line, silently took three
 # warning promotions and rendering_method.web out in one editor save, and
-# nothing failed for three weeks, because a promotion that is no longer set
-# cannot fail and check.sh only greps what the file still asks for.
+# nothing failed for three weeks: the warnings sweep below greps Godot's output
+# for "treated as error", and Godot emits that only for a warning project.godot
+# itself promotes, so the sweep reads its own enforcement list out of the file
+# it is enforcing. A promotion that is no longer set cannot fail.
 #
-# Counts, not names, on purpose: docs/ARCHITECTURE.md "GDScript warnings" and
-# "Project settings" hold the durable list and the rationale. This is the
-# tripwire that says go and read them.
+# Counts, not names: docs/ARCHITECTURE.md "GDScript warnings" and "Project
+# settings" hold the durable list and the rationale, and this is the tripwire
+# that says go and read them. untyped_declaration is named as well as counted,
+# because CLAUDE.md makes it a hard rule rather than one of 21 equals, and a
+# count passes happily when it is swapped for some other promotion.
+#
+# Every pattern is anchored, and the renderer pins its value. An unanchored key
+# matches a comment that merely mentions it, and passes that key commented out
+# or set to the wrong renderer; all three were demonstrated against this file.
+# The two feature overrides are pinned separately rather than counted as a
+# class, because they did not share a fate: 78c077e took rendering_method.web
+# and left run/max_fps.mobile standing.
 echo "==> settings"
-promoted="$(grep -c '^gdscript/warnings/.*=2$' "$ROOT/game/project.godot" || true)"
-web_renderer="$(grep -c 'rendering_method.web' "$ROOT/game/project.godot" || true)"
-if [[ "$promoted" != 21 || "$web_renderer" != 1 ]]; then
-	echo "  promoted warnings: $promoted (want 21)"
+project_godot="$ROOT/game/project.godot"
+promoted="$(grep -c '^gdscript/warnings/.*=2$' "$project_godot" || true)"
+untyped="$(grep -c '^gdscript/warnings/untyped_declaration=2$' "$project_godot" || true)"
+web_renderer="$(grep -c '^renderer/rendering_method\.web="gl_compatibility"$' "$project_godot" || true)"
+mobile_fps="$(grep -c '^run/max_fps\.mobile=' "$project_godot" || true)"
+if [[ "$promoted" != "$WANT_PROMOTED" || "$untyped" != 1 || "$web_renderer" != 1 || "$mobile_fps" != 1 ]]; then
+	echo "  promoted warnings:    $promoted (want $WANT_PROMOTED)"
+	echo "  untyped_declaration:  $untyped (want 1)"
 	echo "  rendering_method.web: $web_renderer (want 1)"
+	echo "  max_fps.mobile:       $mobile_fps (want 1)"
 	echo "  FAIL  settings — project.godot lost settings, most likely to an" >&2
 	echo "        editor save. Restore them; do NOT edit the numbers here down" >&2
 	echo "        to match. See docs/ARCHITECTURE.md \"Project settings\"." >&2

@@ -9957,14 +9957,31 @@ put a measurement behind.
 
 `ARCHITECTURE.md` already held the durable list, and holding it there was not enough: the file drifted
 from the doc for three weeks with both green. `check.sh` gains a `settings` step, before `--import`,
-that counts two things and fails on either:
+that fails on any of four:
 
 - `grep -c '^gdscript/warnings/.*=2$'` must be **21**
-- `grep -c 'rendering_method.web'` must be **1**
+- `grep -c '^gdscript/warnings/untyped_declaration=2$'` must be **1**
+- `grep -c '^renderer/rendering_method\.web="gl_compatibility"$'` must be **1**
+- `grep -c '^run/max_fps\.mobile='` must be **1**
 
-**Counts rather than names, deliberately.** The doc owns the list and the rationale; this is the
-tripwire that says go and read it. Naming all 21 here would make a second copy of the list to drift,
-which is `Q71`'s objection.
+**Counts rather than names, mostly.** The doc owns the list and the rationale; this is the tripwire
+that says go and read it. Naming all 21 here would make a second copy of the list to drift, which is
+`Q71`'s objection. ⚠️ **`untyped_declaration` is the deliberate exception**, because `CLAUDE.md`
+makes it a hard rule rather than one of 21 equals, and a count cannot see it *swapped* for another
+promotion — verified: substitute any other `=2` line for it and the count still reads 21.
+
+⚠️ **Every pattern is anchored, and the renderer pins its value.** The first cut of this step grepped
+the bare substring `rendering_method.web`, which review showed passes three ways it must not — the key
+commented out with `;`, the key set to `"mobile"`, and (the inverse) a *comment* mentioning the key
+counting as a second instance and failing a file that is correct. `project.godot` is hand-commented in
+this repo and the record above argues for documenting that very key, so the false failure was on the
+next edit, not hypothetical.
+
+⚠️ **The two feature overrides are pinned separately, not counted as a class.** The obvious
+generalisation — count `.web` / `.mobile` suffixed keys, expect 2 — reads as principled and is not
+supported: `78c077e` took `rendering_method.web` and **left `run/max_fps.mobile` standing**, so the
+class shares a mechanism but not a fate. Guarding one member while the comment advertised the class
+was the gap; naming both closes it without inventing a rule the evidence does not carry.
 
 ⚠️ **The failure message says "do NOT edit the numbers here down to match".** That is the whole
 point of `Q72`, and this check is worth exactly as much as that instruction is obeyed. A count edited
@@ -9972,18 +9989,30 @@ to agree with a regression certifies the wrong state.
 
 ### It was mutation-tested, because a check nobody has seen fail is a claim
 
-Four cases, run against copies of the real file:
+Ten cases, run against copies of the real file, driving the step's own text lifted out of
+`check.sh` rather than a reimplementation of it:
 
 | Case | Mutation | Result |
 |---|---|---|
-| A | pristine | `failed=0` |
-| B | drop `native_method_override` | `failed=1`, reports 20 (want 21) |
-| C | drop `rendering_method.web` | `failed=1`, reports 0 (want 1) |
-| D | **the exact `78c077e` state** — all three promotions and the override | `failed=1`, reports 18 and 0 |
+| A | pristine | pass |
+| B | drop one promotion | fail — 20 (want 21) |
+| C | `rendering_method.web` deleted | fail — 0 (want 1) |
+| D | **the exact `78c077e` state** — all three promotions and the override | fail — 18 and 0 |
+| E | `rendering_method.web` commented out with `;` | fail — 0 (want 1) |
+| F | `rendering_method.web` set to `"mobile"` | fail — 0 (want 1) |
+| G | `untyped_declaration` swapped for another promotion, count still 21 | fail — 0 (want 1) |
+| H | `run/max_fps.mobile` deleted | fail — 0 (want 1) |
+| I | a **comment added** mentioning `rendering_method.web` | **pass** |
+| J | `project.godot` missing entirely | fail — all four blank |
 
-Case D is the one that matters: the historical regression, replayed, now fails.
+Case D is the one that matters: the historical regression, replayed, now fails. **E, F, G and I are
+the ones review added** — E, F and G passed the first cut and should not have, and I failed it and
+should not have. ⚠️ **J fails safe but misdiagnoses**: `grep` exits 2 on an unreadable file, `|| true`
+swallows that too, and the operator is told a setting was lost when the real fault is the path. Left
+as it is — the alternative is an existence pre-check, and the step failing loudly is the outcome that
+matters.
 
-### 🔴 It recurred twice, and the trigger was git, not Godot
+### 🔴 It never recurred — no restoration was ever committed
 
 **Twice on 2026-08-25, within hours of being restored, `project.godot` was found back at 18
 promotions and 0 renderer overrides with the comment blocks stripped again** — caught by `git diff`
