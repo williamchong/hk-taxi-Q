@@ -106,7 +106,7 @@ wins.
 | `Q76` | A layer whose vocabulary nothing publishes, and an assembly that is not a stack | ✅ Closed — the gate is a rule about *spelling*, published as `drawn_by_code`/`refused_by_code` because nothing can grade it; and one head stands for a whole assembly, after the first build drew 8.53 m masts |
 | `Q77` | **A dark signal is not a signal with no state** | ✅ Closed — `P3-17`'s layer built correctly and was dropped from the bundle anyway: unlit heads assert 415 out-of-service signals, and a lit cycle cannot be derived honestly (18 of 107 junctions opposable, 57 of 137 partially populated). `B3` is the route. ⚠️ **Amended 2026-08-26** — the drop left `signals_preview.gd` still asking Godot to *load* the absent asset, which errors into the console before it returns null; it reached the `P3-9a` web cut under a row claiming 0 console errors. Fixed with the `is_present()` guard all seven optional-layer verify tools already used |
 | `Q78` | **A one-way correction was written as a two-way move, and `abs()` hid it** | ✅ Closed — the sign registration pushed *and pulled*: 95 of 654 posts were dragged toward the carriageway by a rule whose stated reason runs outward only, invisible because `shift_m` discards the sign. Clamped, with `posts_kept_as_surveyed` to name the population |
-| `Q84` | **The drift cliff was the sweep grid, and the peak was the wrong target** | ✅ Closed — corrects `Q50` regression 2. No cliff: the response is smooth and monotonic at ~990°/unit and 14° lands at **0.6695**; a `%.2f` sweep label printed three distinct values as one row and invited the 0.02 grid. 🔴 But the game scores drift **per second** and `peak_slip_deg` is a one-tick `maxf` — 0.6695 holds 14° for **0.05 s** against shipped 0.66's **0.57 s** — and dwell is bought with exit speed all the way down, which is `Q50`'s isotropic cost stated properly |
+| `Q84` | **The drift cliff was the sweep grid, and the peak was the wrong target** | ✅ Closed — corrects `Q50` regression 2. No cliff: the response is smooth and monotonic at ~990°/unit and 14° lands at **0.6695**; a `%.2f` sweep label printed three distinct values as one row and invited the 0.02 grid. 🔴 But the game scores drift **per second** and `peak_slip_deg` is a one-tick `maxf` — 0.6695 holds 14° for **0.05 s** against shipped 0.66's **0.57 s** — and dwell is bought with exit speed all the way down, which is `Q50`'s isotropic cost stated properly. 🔴 **A release ramp was built and falsified** — the tap is still 1.9°, because the slide takes seconds to build rather than ending too soon; kept for `Q83`'s hysteresis, which is not why it was made |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -11554,9 +11554,11 @@ readable somewhere the player can see — `hud.gd`'s speed-chip `AccentBar` is t
 - ⚠️ **`InputRouter.drift` stays a `bool` and the duration lives in the vehicle.** The router is the
   single source of player *intent*, and the intent is binary — a ramp there would report held while
   nothing is held and lie to `drift_started` / `drift_ended`.
-- 🔴 **The ramp itself is not built.** Every scheme above assumes `_drift_engagement` exists; today
-  the drift dies on the tick the input stops. Hysteresis at the row boundary is a second consumer of
-  it, and the first — a drift that outlives a tap — is `GAME_DESIGN.md`'s unmet target.
+- ✅ **The ramp is built** (`Q84`, 2026-08-27) — `_drift_engagement` with `drift_attack_s` /
+  `drift_release_s`, so hysteresis at the row boundary now has the field it assumed. 🔴 **Its other
+  consumer did not materialise**: a drift that outlives a tap was the reason it was built, and the
+  tap is unchanged at 1.9°. Read `Q84` before assuming the drift persists after release — the
+  engagement does, the slide does not.
 
 **Consequences.** `auto_accelerate` is kept as an accessibility and one-handed option and stops being
 the touch default; nothing sets it, so the `false` default is now shipped behaviour on every scheme
@@ -11637,9 +11639,61 @@ reports first: overshoot, settling time, and the `tap` row, which is not servo-h
 ablation's is the only one. A servo would **add** the second copy. Keep them independent anyway;
 the grader must not call the thing it grades.
 
+## The release ramp was built, and it does not do what it was built for
+
+`_apply_drift()` was open-loop and instantaneous both ways: grip was restored on the tick the button
+came up. The diagnosis — `Q50` regression 3, and this entry's own plan — was that a 0.5 s tap
+therefore returns 1.9° because the slide carries no momentum out of the release, and that a slow
+release on `_update_steering`'s attack/release idiom would let the yaw built during the tap run on.
+
+Built as `_drift_engagement` with `drift_attack_s` / `drift_release_s`. 🔴 **Measured, the tap is
+unchanged: 1.9° peak, yaw and distance still identical to `corner`.** Swept on the release alone:
+
+| `drift_release_s` | tap peak slip | secs>thr | yaw | distance |
+|---|---|---|---|---|
+| 0.5 (shipped) | 1.9° | 0.00 | −357.3° | 69.1 m |
+| 1.0 | 2.0° | 0.00 | −357.4° | 68.5 m |
+| 2.0 | 2.2° | 0.00 | −358.0° | 66.8 m |
+| 3.0 | 3.3° | 0.00 | −360.2° | 64.3 m |
+
+At 3.0 s the release is six times the tap it follows, nothing about it is a tap any more, and it
+still reaches 3.3° against a bar of 14. ⚠️ **The mechanism was mis-diagnosed. The slide takes
+seconds to build; it does not end too quickly.** Held, the car is above 14° for **0.57 s of a 4.00 s
+run**, so the bar is not crossed until the fourth second, and a 0.5 s tap is a small fraction of the
+way there no matter what happens after the button comes up. A locked raycast tyre made yaw the
+instant it stopped rolling — that is why it got 7.1° out of the same tap — whereas an isotropic
+`wheel_friction_slip` has to be *driven* into saturation, which is a rate and not an event.
+**`B4`'s per-wheel angular velocity remains the only honest route**, exactly as `Q49` and `Q50` said,
+and this is now the second measurement that says so rather than the first.
+
+⚠️ **The ramp was verified live before that conclusion was drawn**, because "no change" and "no
+effect" are the same table: `drift_attack_s` at 1.0 s collapses the held drift from 21.8° to 2.0°.
+The wiring works; the hypothesis was wrong. `DRIFT_FIELD`'s silent-no-op warning is about the same
+trap one field over.
+
+✅ **Kept rather than reverted, for a consumer that is recorded and is not this one.** `Q83`'s touch
+scheme holds `drift` past a thumb threshold and **needs hysteresis** at that boundary or a resting
+thumb toggles the drift every tick; every scheme there assumes `_drift_engagement` exists, and it
+did not. It also stops grip snapping between two values in one tick. ⚠️ Neither is why it was built,
+and a change kept for a different reason than it was made for is worth saying out loud.
+
 **Rejected: retuning to 0.6695.** It is the value that lands on the target and it is worse than what
 ships — 0.05 s of drift against 0.57 s. Recorded because it is the obvious move and the one the
 corrected measurement appears to recommend.
+
+**`drift_rear_grip_scale` stays 0.66**, and that is a decision taken on the dwell column rather than
+an absence of one. There is no dominant value: 0.65 buys +0.11 s of drift for −2.25 kph of exit
+speed and 0.64 buys +0.20 s for −3.95, so every candidate trades the two halves of the same design
+line against each other and the tie-break is feel, not a number. ⚠️ **`@export_range`'s step was
+widened 0.01 → 0.001 in the same change.** The band this entry measures is finer than the step the
+inspector advertised, so a `.tres` holding an off-grid value was one editor touch from being snapped
+back and silently retuning the car — `project.godot`'s failure mode, on a dial nothing would catch.
+
+**Driven, not only measured.** `city_drive.tscn`, held drift through the junction east of HKCEC and
+the same corner with a 0.5 s tap: the trajectories differ by 0.87 kph at `t=4` and the car is
+visibly tracking straight through the corner rather than sliding. The skidpad and the city agree,
+which is the point of checking — `P0-5b/c/d` is why a handling figure is never published off
+`city_drive.tscn`, but a *feel* judgement has nowhere else to happen.
 
 **See.** `Q50` for the regression this corrects and for the decision it does not disturb ·
 `P0-5b/c/d` for the same error on a gradient · `Q58` for the bounded-by-its-own-bar trap ·

@@ -80,6 +80,14 @@ var _rear: Array[VehicleWheel3D] = []
 ## indicator on the wrong side of the car, which looks like a working feature.
 var steer_ratio: float = 0.0
 var _upside_down_for: float = 0.0
+## How far the drift has ramped in, 0 gripping to 1 fully loose.
+##
+## Private, and there is no public mirror. `drift_input` is the player's intent
+## and this is the car's answer to it; a HUD or lamp wanting to show "drifting"
+## wants the intent, which is already published. ⚠️ It is deliberately **not** in
+## `InputRouter` (Q83): the router is the single source of intent, the intent is
+## binary, and a ramp there would report held while nothing is held.
+var _drift_engagement: float = 0.0
 ## Recomputed once per tick rather than per reader.
 ##
 ## `speed_kph` is public for the same reason it is cached: everything that wants
@@ -237,7 +245,7 @@ func _physics_process(delta: float) -> void:
 	_update_steering(delta)
 	_apply_drive()
 	_apply_coast_drag(delta)
-	_apply_drift()
+	_apply_drift(delta)
 
 
 ## Signed forward speed in km/h. Negative when reversing.
@@ -380,9 +388,20 @@ func _apply_coast_drag(delta: float) -> void:
 ##
 ## Written every tick rather than on change, so a live edit to either profile dial
 ## takes effect on the next frame instead of on the next button press.
-func _apply_drift() -> void:
-	var rear: float = profile.tyre_grip * (profile.drift_rear_grip_scale if drift_input else 1.0)
-	var front: float = profile.tyre_grip * (profile.drift_front_grip_scale if drift_input else 1.0)
+func _apply_drift(delta: float) -> void:
+	# Rate-limited rather than switched, on _update_steering's idiom and for the
+	# same reason: fast to answer, slow to let go. Grip used to be restored on the
+	# tick the button came up, which is why a 0.5 s tap returned 1.9° of slip and a
+	# yaw identical to a plain corner — the slide carried no momentum out of the
+	# release (Q84, and Q83's "the ramp itself is not built").
+	var seconds: float = profile.drift_attack_s if drift_input else profile.drift_release_s
+	_drift_engagement = move_toward(_drift_engagement, 1.0 if drift_input else 0.0, delta / seconds)
+	var rear: float = (
+		profile.tyre_grip * lerpf(1.0, profile.drift_rear_grip_scale, _drift_engagement)
+	)
+	var front: float = (
+		profile.tyre_grip * lerpf(1.0, profile.drift_front_grip_scale, _drift_engagement)
+	)
 	for wheel: VehicleWheel3D in _rear:
 		wheel.wheel_friction_slip = rear
 	for wheel: VehicleWheel3D in _front:
@@ -427,11 +446,18 @@ func place_at(pose: Transform3D) -> void:
 	brake = 0.0
 	steering = 0.0
 	# Published state as well as private, or a car righted at full lock is
-	# replaced pointing straight ahead with its indicator still flashing.
+	# replaced pointing straight ahead with its indicator still flashing. The
+	# engagement goes with it: the comment above says a car righted mid-drift keeps
+	# its softened axle until the button is next released, and a ramp that survived
+	# the reset would instead hand the replaced car a slide it can no longer see.
 	steer_ratio = 0.0
+	_drift_engagement = 0.0
 	_upside_down_for = 0.0
 	drift_input = false
-	_apply_drift()
+	# Zero delta on purpose: the reset above is what moves the engagement, and this
+	# call only publishes it to the wheels. A real delta would ramp instead, which
+	# is the one place the ramp must not happen — a replaced car is not mid-slide.
+	_apply_drift(0.0)
 
 
 ## Arcade collision response: glancing hits slide, head-on hits cost speed but

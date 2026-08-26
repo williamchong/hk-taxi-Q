@@ -104,7 +104,7 @@ extends Resource
 ## 0.75 s with the throttle down throughout), then self-terminates and the car
 ## grips again. GAME_DESIGN.md asks for a drift that is easy to hold; this cannot
 ## be one. Q50 records that as the accepted cost of the switch.
-@export_range(0.0, 1.0, 0.01) var drift_rear_grip_scale: float
+@export_range(0.0, 1.0, 0.001) var drift_rear_grip_scale: float
 ## Front-axle tyre_grip multiplier while drift is held.
 ##
 ## A real handbrake does nothing to the front axle, and the raycast model this
@@ -114,6 +114,44 @@ extends Resource
 ## keeps the nose from biting. It models no mechanism — it is a fudge, and it is
 ## named honestly rather than dressed up.
 @export_range(0.0, 1.0, 0.01) var drift_front_grip_scale: float
+## Seconds for the drift to reach full engagement while the button is held.
+##
+## Short: the tail should step out when the player asks, not a moment later.
+@export_range(0.01, 1.0, 0.01, "suffix:s") var drift_attack_s: float
+## Seconds for grip to come back after the button is released.
+##
+## 🔴 **This does NOT fix the tap, and Q84 built it expecting that it would.**
+## The diagnosis was that a 0.5 s tap returns 1.9 deg because grip is restored on
+## the tick the button comes up, so the slide carries no momentum out of the
+## release. Built and measured, the tap is unchanged: 1.9 deg, and a yaw and
+## distance still identical to `corner`. Swept, a release of 1.0 s reaches 2.0 deg,
+## 2.0 s reaches 2.2, and 3.0 s — six times the tap itself — reaches 3.3, against a
+## threshold of 14. **Nothing here is a tap any more and it still is not a drift.**
+##
+## ⚠️ **The real cause is that the slide takes seconds to build, not that it ends
+## too quickly.** Held, the drift spends 0.57 s of a 4.00 s run above 14 deg, so
+## the bar is not crossed until late in the fourth second; a 0.5 s tap is a small
+## fraction of the way there whatever happens afterwards. A locked raycast tyre
+## produced yaw immediately (7.1 deg) because the force appears the moment the
+## tyre stops rolling; an isotropic wheel_friction_slip has to be *driven* into
+## saturation, and that is a rate, not an event. B4's per-wheel angular velocity
+## remains the only honest route, exactly as Q49 and Q50 said.
+##
+## ✅ **Kept anyway, for a consumer that is recorded and is not this one.** Q83's
+## touch scheme holds drift past a thumb threshold and needs hysteresis at the
+## boundary; every scheme there assumes `_drift_engagement` exists. It also stops
+## grip snapping between two values in one tick. Both are real, neither was the
+## reason it was built, and saying so is the point of this comment.
+##
+## ⚠️ **Asymmetric with drift_attack_s on purpose, and the asymmetry is the
+## feature.** Same shape as steer_attack_s / steer_release_s above, and for the
+## same reason — the car should answer the input immediately and let go slowly.
+## Do not collapse the two into one number to "restore consistency".
+##
+## ⚠️ **`InputRouter.drift` stays a bool and this duration lives here** (Q83): the
+## router is the single source of player *intent* and the intent is binary. A ramp
+## there would report held while nothing is held and lie to drift_started.
+@export_range(0.01, 3.0, 0.01, "suffix:s") var drift_release_s: float
 ## Slip angle above which the drift scores style points.
 @export_range(0.0, 90.0, 1.0, "suffix:°") var drift_slip_threshold_deg: float
 ## Fraction of rolling speed shed per second when coasting — engine braking.
