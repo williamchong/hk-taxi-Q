@@ -90,7 +90,12 @@ class Hit:
 	var clear_width_m: float = CityManifest.NOT_MEASURED
 	## True where the source signs the edge one-way.
 	var one_way: bool = false
+	## The street's name in each language the source publishes it in. Both are
+	## empty on the 74 edges that carry no name, and **never one without the
+	## other** — measured over the shipped document, `en` without `zh` and `zh`
+	## without `en` are both 0 — so a consumer needs no mixed-language state.
 	var road_name_en: String = ""
+	var road_name_zh: String = ""
 
 	func hit() -> bool:
 		return edge_id >= 0
@@ -105,6 +110,11 @@ var _widths: PackedFloat32Array = PackedFloat32Array()
 var _lanes: PackedInt32Array = PackedInt32Array()
 var _speed_limits: PackedInt32Array = PackedInt32Array()
 var _names: PackedStringArray = PackedStringArray()
+# The same names in Chinese. A second array rather than a joined string:
+# the plate draws them as two lines in two different typefaces, which is
+# what a Hong Kong street sign is, and splitting one back apart per query
+# would be work on the path `P2-2` budgets at 1 ms.
+var _names_zh: PackedStringArray = PackedStringArray()
 var _by_id: Dictionary[int, int] = {}
 var _node_count: int = 0
 var _restriction_count: int = 0
@@ -512,6 +522,8 @@ func _build(document: Dictionary, manifest: CityManifest = null) -> void:
 		var names: Dictionary = edge.get("road_name", {})
 		var english: Variant = names.get("en")
 		_names.append(english if english is String else "")
+		var chinese: Variant = names.get("zh")
+		_names_zh.append(chinese if chinese is String else "")
 
 		var lengths := PackedFloat32Array()
 		lengths.resize(points.size())
@@ -711,6 +723,7 @@ func _fill(hit: Hit, index: int, point: Vector3, heading: Vector3) -> void:
 	hit.point = point
 	hit.one_way = _one_way[slot] == 1
 	hit.road_name_en = _names[slot]
+	hit.road_name_zh = _names_zh[slot]
 
 	var lengths: PackedFloat32Array = _prefix[slot]
 	var total: float = lengths[lengths.size() - 1]
