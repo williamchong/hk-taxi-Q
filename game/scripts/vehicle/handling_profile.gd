@@ -156,7 +156,9 @@ extends Resource
 ## router is the single source of player *intent* and the intent is binary. A ramp
 ## there would report held while nothing is held and lie to drift_started.
 @export_range(0.01, 3.0, 0.01, "suffix:s") var drift_release_s: float
-## Yaw torque applied while the drift is engaged, in N⋅m, signed by the steer.
+## Peak yaw torque at the moment the drift engages, in N⋅m, signed by the steer.
+## Decays from here toward drift_yaw_sustain over drift_yaw_decay_s; this is the
+## kick, not the whole of what a held drift gets.
 ##
 ## 🔴 **This is the game asserting rotation the tyres did not produce, and that is
 ## the point rather than a compromise.** Q84 measured the friction route: slip
@@ -179,6 +181,38 @@ extends Resource
 ## 1200(1.8²+4.0²)/12 ≈ 1924 kg⋅m², so 2000 N⋅m is roughly 60°/s² before the
 ## tyres take their share back.
 @export_range(0.0, 20000.0, 100.0, "suffix:N⋅m") var drift_yaw_torque_nm: float
+## Seconds over which the yaw torque decays from its peak to drift_yaw_sustain of
+## it, timed from the press.
+##
+## 🔴 **The decay runs on TIME, and must never be made to run on measured slip.**
+## Backing the torque off as the angle opens closes the loop, and "slip above the
+## threshold" degrades into "the dial said so" — Q72's tautology, and the exact
+## failure drift_yaw_torque_nm's own note refuses. On time it stays open-loop: the
+## tyres still get to argue, so the angle is an outcome and secs>thr keeps its
+## meaning. The quantity controlled and the quantity measured stay different
+## variables, which is the whole rule.
+##
+## ⚠️ **It exists because torque × time is rotation, so a tap collects a fraction
+## of what a hold does and one constant cannot serve both.** Measured at a flat
+## 1000 N⋅m the hold peaked 42.1° and the tap 2.4°; at 5000 the tap reached 27.0°
+## and the hold spun to 162.9° (Q85). Spending the budget early hands the tap the
+## whole burst and leaves the hold a sustain it can survive.
+##
+## ⚠️ Linear rather than exponential, on _update_steering's move_toward idiom and
+## because it gives the kick an end a player can be told about — "the burst lasts
+## 0.6 s" — instead of an asymptote.
+##
+## ⚠️ Floored at 0.01 rather than 0 because the decay divides by it, the same
+## guard drift_attack_s carries.
+@export_range(0.01, 2.0, 0.01, "suffix:s") var drift_yaw_decay_s: float
+## Fraction of drift_yaw_torque_nm the burst decays to and then holds for as long
+## as the button is down.
+##
+## 0.0 makes the drift a pure kick that friction then eats: the slide
+## self-terminates in about 1.8 s on its own (Q85). Above 0 is what
+## GAME_DESIGN.md's "easy to hold" asks for, so this is the dial that trades a
+## holdable angle against a spin, and drift_yaw_torque_nm no longer has to.
+@export_range(0.0, 1.0, 0.01) var drift_yaw_sustain: float
 ## Slip angle above which the drift scores style points.
 @export_range(0.0, 90.0, 1.0, "suffix:°") var drift_slip_threshold_deg: float
 ## Fraction of rolling speed shed per second when coasting — engine braking.

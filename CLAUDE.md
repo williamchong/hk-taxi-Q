@@ -116,6 +116,19 @@ Common emoji for this project:
   ⚠️ Measure on `skidpad.tscn`, never `city_drive.tscn` — a 0.14° micro-gradient there is worth the
   whole quantity under test, and a published figure has already had to be withdrawn over it
   (`P0-5b/c/d`).
+  🔴 **The drift dials are graded on OPPOSITE columns and there is no single rule for "the drift".**
+  `drift_rear_grip_scale` is graded on `secs>thr` and never on `peak slip`, because the game pays per
+  second above the threshold (`Q84`). The three yaw dials — `drift_yaw_torque_nm`, `drift_yaw_decay_s`,
+  `drift_yaw_sustain` — are graded on **peak slip and exit speed**, and never on `secs>thr`, because
+  that column was flat at 0.78–0.85 across all three of them while peak ran 40° → 130° (`Q86`). Tuning
+  a yaw dial against dwell is tuning against a number it cannot move.
+  ⚠️ **And the skidpad cannot settle a yaw value on its own — drive it too.** An open pad has no far
+  kerb, so 65.7° of peak slip reads as a healthy angle there and is `086° → 219°` and a railing across
+  the carriageway on Expo Drive. That is what rejected 9000 N⋅m (`Q86`). It is not a licence to
+  *measure* in `city_drive.tscn`; the numbers still come from the pad and the drive is a veto.
+  ⚠️ **Sweep with `tools/skidpad.sh --sweep=<field>=<v,…>`, not by editing `handling.tres` in a shell
+  loop.** One such loop blanked the field it was sweeping and published a table of all-zero rows that
+  read like a finding; the flag exists so that cannot happen again.
 - **`widen_default`, any `roads.surface` widening change, or anything that moves the pipeline's
   starved population — `ALONG_M` included: also `tools/narrowing.py`, before and after.** It is what
   priced the current value: narrowing clears *no* blocked edge at any factor down to the 1.3x floor

@@ -93,6 +93,17 @@ var _upside_down_for: float = 0.0
 ## `InputRouter` — see `drift_release_s` in handling_profile.gd for why, kept in
 ## one place so the two cannot drift apart.
 var _drift_engagement: float = 0.0
+## Seconds the drift button has been held, driving the yaw burst's decay.
+##
+## Separate from `_drift_engagement` because they answer different questions: the
+## engagement is how far in the drift is and rises and falls, this is how long it
+## has been asked for and only ever rises. Reusing one for both would make the
+## burst re-arm every time the engagement dipped.
+##
+## ⚠️ **Reset when the engagement reaches zero, not when the button comes up.**
+## That makes `drift_release_s` the re-arm cost with no dial of its own, and it is
+## what stops a player machine-gunning the button for a fresh kick every tick.
+var _drift_held_s: float = 0.0
 ## Recomputed once per tick rather than per reader.
 ##
 ## `speed_kph` is public for the same reason it is cached: everything that wants
@@ -403,6 +414,13 @@ func _apply_drift(delta: float) -> void:
 	# kept for Q83's touch hysteresis, which needs the engagement to exist.
 	var seconds: float = profile.drift_attack_s if drift_input else profile.drift_release_s
 	_drift_engagement = move_toward(_drift_engagement, 1.0 if drift_input else 0.0, delta / seconds)
+	# Held time keeps accruing through the release ramp — the car is still sliding,
+	# so the burst it already spent must stay spent. See _drift_held_s for why the
+	# reset waits for the engagement rather than the button.
+	if drift_input:
+		_drift_held_s += delta
+	elif is_zero_approx(_drift_engagement):
+		_drift_held_s = 0.0
 	_write_drift_grip()
 	_apply_drift_yaw()
 
@@ -445,7 +463,13 @@ func _apply_drift_yaw() -> void:
 	if not _any_wheel_grounded():
 		return
 	var fade: float = clampf(absf(speed_kph) / YAW_ASSIST_FADE_KPH, 0.0, 1.0)
-	var torque: float = -steer_ratio * profile.drift_yaw_torque_nm * _drift_engagement * fade
+	# Linear decay from the peak to the sustain, on held time. ⚠️ On TIME — see
+	# drift_yaw_decay_s for why measured slip here would be Q72's tautology.
+	var decayed: float = clampf(_drift_held_s / profile.drift_yaw_decay_s, 0.0, 1.0)
+	var burst: float = lerpf(1.0, profile.drift_yaw_sustain, decayed)
+	var torque: float = (
+		-steer_ratio * profile.drift_yaw_torque_nm * burst * _drift_engagement * fade
+	)
 	# About the body's own up, not global +Y: a car on a camber or mid-kerb should
 	# rotate about the axis it is standing on.
 	apply_torque(global_basis.y * torque)
@@ -512,6 +536,9 @@ func place_at(pose: Transform3D) -> void:
 	# the reset would instead hand the replaced car a slide it can no longer see.
 	steer_ratio = 0.0
 	_drift_engagement = 0.0
+	# Or a replaced car carries a spent burst and the next press is a sustain with
+	# no kick — which drives correctly, renders correctly, and is wrong.
+	_drift_held_s = 0.0
 	_upside_down_for = 0.0
 	drift_input = false
 	_write_drift_grip()

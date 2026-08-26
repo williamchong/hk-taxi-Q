@@ -114,6 +114,7 @@ wins.
 | `Q83` | **Touch drives its own throttle, and the drift is where the thumb is** | ✅ Decided 2026-08-27 on the user's instruction — two thumbs, both axes each, both **relative**, and `auto_accelerate` is no longer the touch default. 🔴 **The allocation was incomplete and nothing could have caught it**: four touch rects against five actions, with `brake_reverse`, `drift` and `look_back` homeless, while `verify_hud` grades occlusion rather than reachability by design (`Q80`). Three drift schemes were rejected first. ⚠️ Its assumed `_drift_engagement` was built by `Q84`, which found it does not do what it was built for. ⬜ `look_back` still unplaced, and the threshold numbers need `P0-3b`'s handset |
 | `Q84` | **The drift cliff was the sweep grid, and the peak was the wrong target** | ✅ Closed — corrects `Q50` regression 2. No cliff: the response is smooth and monotonic at ~990°/unit and 14° lands at **0.6695**; a `%.2f` sweep label printed three distinct values as one row and invited the 0.02 grid. 🔴 But the game scores drift **per second** and `peak_slip_deg` is a one-tick `maxf` — 0.6695 holds 14° for **0.05 s** against shipped 0.66's **0.57 s** — and dwell is bought with exit speed all the way down, which is `Q50`'s isotropic cost stated properly. 🔴 **A release ramp was built and falsified** — the tap is still 1.9°, because the slide takes seconds to build rather than ending too soon; kept for `Q83`'s hysteresis, which is not why it was made |
 | `Q85` | **The route out of the drift was a quantity the engine does not simulate** | ✅ Closed — `get_rpm()` is road speed re-expressed: this class has no wheel inertia, so a wheel cannot spin up or lock and **`B4`'s per-wheel angular velocity cannot be read at all**. `get_skidinfo()` is real; the fact was already in `hud.gd`, filed under the wrong question. 🔴 `Q50`'s "the road-speed roll is gone" is wrong — it moved into the engine, and `P3-2b` inherits it. ✅ The drift is assisted with a **yaw torque** instead (42.1° against 21.8°), which `Q49`'s anti-physical target licenses. 🔴 It worsens the scrub, and torque and grip are multiplicative rather than alternatives |
+| `Q86` | **The tap needed the torque spent early, and the dwell was never the assist's to buy** | ✅ Closed — torque × time is rotation, so a 0.5 s tap collected **one-eighth** of a 4 s hold's impulse and no constant could serve both. Decayed from a peak toward a sustain over `drift_yaw_decay_s`, on **time** never on measured slip (`Q72`). ✅ Tap **2.4° → 16.0°** and 0.00 → **0.23 s** above the bar, hold dwell 0.78 → 0.82, exit **40.96 → 41.29** — better in every column. 🔴 **`secs>thr` was flat across all three yaw dials** (0.78–0.85) while peak ran 40° → 130°, so these are graded on peak and exit, the opposite of `Q84`'s rule for the grip dial. ⚠️ 9000 N⋅m was the candidate and driving it rejected it — 65.7° on the pad is 086° → 219° and a railing on Expo Drive |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -11806,14 +11807,159 @@ With grip intact the assist is **just tighter steering** — no slip at all. The
 what costs the speed. **The scrub is intrinsic to one isotropic `wheel_friction_slip`**, and no
 arrangement of these two dials separates "slides a lot" from "scrubs little".
 
+### Four things the slide does that no column reports
+
+Measured while the assist was being tuned, and recorded because each is a fact about the *mechanism*
+rather than about a dial, so none of them moves when a dial does.
+
+🔴 **The slide self-terminates after about 1.8 s, so `exit` is measuring two seconds of dead car.**
+Slip crosses `drift_slip_threshold_deg` at **1.17 s**, peaks 30–41° at ~1.5 s, and is back under the
+bar by **2.0 s** — with the throttle held down the whole time. ⚠️ **Slip is not monotonic**, which is
+the trap: reading dwell alone suggests the bar is crossed late in a 4 s run, and it is crossed early
+and then lost. The `exit kph` figures every table above quotes therefore include ~2 s of a car that
+has already stopped drifting and is simply slow.
+
+🔴 **Lifting the throttle cancels the drift outright, and re-applying does not recover it.** Held
+throttle peaks 21.8°; released at the moment of engagement peaks **7.3°** and never crosses the bar;
+re-applied at 1.0 s reaches **4.0°**. This is `Q50`'s isotropy again from the other side — the rear
+axle's drive is the same budget as its grip, so coasting hands the tail its grip back. ⚠️ It means
+the genre's standard drift entry, *lift then flick*, does not exist in this model, and no dial here
+reaches it.
+
+🔴 **On a 90° corner the gripping turn beats the drift on every measure except line.** Grip: 63.0 →
+**63.4 kph** (it gains), 1.10 s, 19.6 m. Drift: 52.8 kph, 0.95 s, 16.3 m, and it saturates past about
+0.7 s of held button. **A drift buys line and time, never speed** — so any scoring or route design
+that assumes drifting is the fast way round is assuming something false about this model.
+
+🔴 **There is no sustained drift equilibrium at any counter-steer timing.** Tested with the counter
+never applied and at 0.6, 0.9 and 1.2 s, the car has exactly two stable states: a **gripping circle**
+(~2° slip, 53 kph, −522° of yaw over 6 s) or a **spin**. Nothing in between holds. ⚠️ **This is the
+direct answer to "can it hold a Forza/Initial D line round a roundabout": not in this model**, and it
+is a property of the friction mechanism rather than of the assist, so `Q86`'s burst does not change
+it either.
+
 **What is not settled here.**
 
 - ⬜ **The value is a desk pick.** 1000 is a drift and 2000 is loose; the tie-break is a thumb, and
   `P0-3b`'s handset is where it happens.
-- ⬜ **The decaying torque is unbuilt**, and it is the only known route to a working tap.
+- ✅ **The decaying torque is built and shipped** — `Q86`, which fixes the tap and supersedes the
+  constant-torque table above.
 - ⚠️ **A tyre model is still the only way to the physical mechanism**, and it does **not** require
   dropping `VehicleWheel3D` — it layers on top. It is a `Q50`-scale call and nobody has made it.
 
 **See.** `Q50` for the class this measures and for the roll it did not remove · `Q49` for the
 anti-physical target that licenses the assist · `Q84` for the ramp this gives a consumer, and for the
 3.4 s it works around · `Q72` for the tautology the torque form avoids · `PLAN.md` `B4` · `P0-5a`
+
+---
+
+## `Q86` — The tap needed the torque spent early, and the dwell was never the assist's to buy
+
+**Status.** ✅ Closed 2026-08-27 · **Owner.** `handling.tres` → `vehicle_controller.gd` ·
+extends `Q85`
+
+**Claim.** A drift button that does nothing on a tap is not a fun button, and `Q85` left it that way
+at every constant torque. Fixed by decaying the yaw torque from a peak toward a sustain over
+`drift_yaw_decay_s`, timed from the press. **The tap goes from 2.4° to 16.0° of peak slip and from
+0.00 s to 0.23 s above the threshold, and the held drift gets better at the same time.**
+
+⚠️ **This was built because drift is a feel mechanic, not because it scores.** The prior
+recommendation was to stop work until `P3-2b`'s scoring gave the drift a consumer; the user's
+correction — *"drift is a fun factor not just because of score"* — is right, and `GAME_DESIGN.md`'s
+**Target feel** table already said so. Recorded because the wrong framing was load-bearing for a
+"stop working on this" conclusion, and because the instrument built in `Q84` (`secs>thr`) is what
+made scoring feel like the point.
+
+### Why decay, in one line of arithmetic
+
+Torque × time is rotation, so a 0.5 s tap collects **one-eighth** of a 4 s hold's angular impulse.
+One constant cannot serve both, and `Q85` measured exactly that: 1000 N⋅m gives a 42.1° hold and a
+dead 2.4° tap; 5000 gives a live 27.0° tap and a **162.9° spin** of a hold. Spending the budget early
+hands the tap the whole burst and leaves the hold a sustain it survives. At the shipped 0.8 s decay
+the tap-to-hold impulse ratio is about **1.2:1** where a constant torque made it 8:1.
+
+🔴 **The decay runs on TIME and must never be made to run on measured slip.** Backing the torque off
+as the angle opens closes the loop, and "slip above the threshold" degrades into "the dial said so" —
+`Q72`'s tautology through the side door, and the exact failure `drift_yaw_torque_nm`'s own note
+refuses. On time it stays open-loop: the tyres still get to argue, so the angle is an outcome and
+`secs>thr` keeps its meaning.
+
+### 🔴 The assist cannot buy dwell, at any setting of any of its three dials
+
+The single most useful result here, and it is a negative one. `secs>thr` was flat across **three**
+independent sweeps:
+
+| swept | range | `secs>thr` across the range |
+|---|---|---|
+| `drift_yaw_decay_s` | 0.4 → 2.0 s | 0.78 → 0.83 |
+| `drift_yaw_sustain` | 0.0 → 0.3 | 0.85 → 0.82 |
+| `drift_yaw_torque_nm` | 5000 → 11000 | 0.78 → 0.80 |
+
+Over those same sweeps peak slip ran 40° → 130°. **The yaw dials buy angle and cost speed; they do
+not buy time above the bar.** Dwell is bounded by the friction mechanism — `Q85` measured the slide
+self-terminating at ~1.8 s — and `drift_rear_grip_scale` tops out at 0.85 s too (`Q84`). ⚠️ **So
+these three dials must be graded on peak slip and on exit speed, never on `secs>thr`**, which is the
+opposite of the rule `Q84` wrote for the grip dial and is why both rules have to be stated per dial
+rather than once for "the drift".
+
+### The pick
+
+Swept at `drift_yaw_decay_s` 0.8 and `drift_yaw_sustain` 0.0:
+
+| peak N⋅m | tap peak | tap `secs>thr` | tap exit | hold peak | hold `secs>thr` | hold exit |
+|---|---|---|---|---|---|---|
+| 5000 | 9.2° | 0.00 | 61.48 | 40.0° | 0.78 | 42.61 |
+| **7000 (shipped)** | **16.0°** | **0.23** | **57.95** | **51.1°** | **0.82** | **41.29** |
+| 9000 | 23.9° | 0.47 | 53.82 | 65.7° | 0.85 | 39.95 |
+| 11000 | 33.2° | 0.58 | 50.18 | 87.1° | 0.80 | 38.63 |
+
+✅ **7000 is better than the shipped baseline in every column** — tap 2.4° → 16.0°, hold dwell 0.78 →
+0.82, and exit speed 40.96 → **41.29**, so for once the drift got better without buying it with
+speed. ⚠️ **9000 was the candidate and was rejected by driving it.** On the skidpad its 65.7° hold
+looks like a healthy angle; on Expo Drive it rotates the car **086° → 219°** and parks it against the
+railing across the carriageway. The skidpad cannot see that, because an open pad has no far kerb.
+
+⚠️ `drift_yaw_sustain` ships at **0.0**, which makes the shipped drift a pure kick that friction then
+eats. It measured best on peak, dwell and exit at once, but 0.0 is a value that makes its own dial
+dead, and the case for raising it — holding an angle through a corner longer than the skidpad's — is
+a feel judgement that `P0-3b`'s handset has to make. It is kept as a dial for that reason.
+
+### Control: the change reaches only the drift branch
+
+`corner`, `brake` and `coast` are **byte-identical** before and after (2.0°/70.0 m, 8.75 m/s²/17.0 m,
+1.84 m/s²/65.2 m). Worth stating because three of the five rows moving would have meant the burst was
+leaking into the ordinary drive model.
+
+### `tools/skidpad_ablation.gd` — the sweep is no longer one hardwired field
+
+`--drift-grip` became `--sweep=<field>=<v1,v2,…>` over any profile float, with `--drift-grip` kept as
+an alias. ⚠️ **The alternative was a shell loop editing `handling.tres`, and that loop has already
+misfired once** — a bad `set --` blanked the field it was sweeping and published a table of all-zero
+rows that read like a finding. Three yaw dials made a hand-edited grid the likeliest way to publish a
+wrong number, so the hazard was removed rather than repeated.
+
+⚠️ **A non-`drift_`-prefixed field now re-runs all five manoeuvres.** Only `drift` and `tap` reach
+`_apply_drift`, so sweeping a drift dial correctly skips the other three; sweeping `engine_force`
+would move all five, and reprinting the first value's rows under later labels is precisely the
+failure this tool exists to prevent. ✅ Validated against known ground truth rather than smoke-tested:
+`--sweep=drift_yaw_torque_nm=1000,5000` reproduced `Q85`'s 2.4° and 27.0° taps exactly.
+
+⚠️ The label column is now sized to its longest entry. A fixed 13 silently pushed every number on a
+`drift@11000.0000` row out of alignment — a published table that misreads as a different quantity per
+row.
+
+**What is not settled here.**
+
+- ⬜ **All three values are desk picks.** They were chosen off a skidpad grid and one drive; the
+  tie-break is a thumb, and `P0-3b`'s handset is where it happens.
+- ⬜ **`drift_yaw_sustain = 0.0` leaves its own dial inert**, and whether a held drift should get a
+  sustain at all is unanswered on anything but the 4 s skidpad corner.
+- ⚠️ **None of this touches `Q85`'s four mechanism findings** — the slide still self-terminates at
+  ~1.8 s, lifting the throttle still cancels it, the gripping turn is still faster, and there is still
+  no sustained equilibrium at any counter-steer timing. A tyre model remains the only route to those,
+  and it is still a `Q50`-scale call nobody has made.
+
+**See.** `Q85` for the assist this reshapes and the four findings it does not fix · `Q84` for
+`secs>thr` and for the opposite grading rule that governs `drift_rear_grip_scale` · `Q72` for the
+tautology the time-based decay avoids · `Q50` for the isotropy underneath all of it ·
+`GAME_DESIGN.md` "Target feel"

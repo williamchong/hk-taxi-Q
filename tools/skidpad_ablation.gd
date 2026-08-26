@@ -28,27 +28,39 @@ const DEFAULT_SCENE: String = "res://scenes/dev/skidpad.tscn"
 ## Every manoeuvre, in table order.
 const MANOEUVRES: PackedStringArray = ["corner", "drift", "tap", "brake", "coast"]
 
-## The subset that can possibly move when `DRIFT_FIELD` does — the only ones
-## a sweep re-runs. Nothing else holds the drift button, so nothing else reaches
-## `VehicleController._apply_drift`.
+## The subset that can possibly move when a `DRIFT_FIELD_PREFIX` field does — the
+## only ones such a sweep re-runs. Nothing else holds the drift button, so nothing
+## else reaches `VehicleController._apply_drift`.
 const DRIFT_MANOEUVRES: PackedStringArray = ["drift", "tap"]
 
-## The profile field `--drift-grip` sweeps.
+## The profile field a sweep writes when `--sweep` does not name another, and the
+## field `--drift-grip` is an alias for.
 ##
 ## ⚠️ Set through `Object.set()`, which is a **silent no-op** on a name the
 ## resource does not have. Rename the field and every swept row comes back
 ## identical, correctly labelled, and describing a value that was never applied —
 ## a published table of numbers nobody measured. `_boot` refuses the run instead.
-const DRIFT_FIELD: StringName = &"drift_rear_grip_scale"
+const DEFAULT_SWEEP_FIELD: StringName = &"drift_rear_grip_scale"
+
+## Name prefix marking a field whose effect is confined to the drift branch.
+##
+## ⚠️ **This decides whether a sweep re-runs three extra manoeuvres or reprints
+## the first value's rows under later labels.** `drift_*` reaches nothing but
+## `_apply_drift`, so `corner`, `brake` and `coast` cannot move and re-running
+## them is 13.5 s of simulation per value to reproduce rows already printed. Any
+## other field — `engine_force`, `tyre_grip` — moves all five, and skipping them
+## would dress stale rows up as measurements of a value never applied to them.
+const DRIFT_FIELD_PREFIX: String = "drift_"
 
 ## The profile field `secs>thr` counts against.
 ##
 ## ⚠️ **This is the design target, and it is NOT a tuning knob.** The knob is
-## `DRIFT_FIELD`; the threshold is what the knob is graded against. Lower it to
-## make `seconds_above_deg` look better and the column becomes `Q58`'s
-## `drawn_gauge_m` — a number bounded by the bar it is measured against, which
-## cannot report the thing it exists to report. Read through `get()` and guarded
-## by `in` for `DRIFT_FIELD`'s reason: `set()`/`get()` swallow a rename silently.
+## whatever `_sweep_field` names; the threshold is what that knob is graded
+## against. Lower it to make `seconds_above_deg` look better and the column
+## becomes `Q58`'s `drawn_gauge_m` — a number bounded by the bar it is measured
+## against, which cannot report the thing it exists to report. Read through `get()` and guarded
+## by `in` for `DEFAULT_SWEEP_FIELD`'s reason: `set()`/`get()` swallow a rename
+## silently.
 const SLIP_THRESHOLD_FIELD: StringName = &"drift_slip_threshold_deg"
 
 ## Seconds of full throttle before every manoeuvre, to reach a working speed.
@@ -93,11 +105,19 @@ var _only: String = ""
 ## micro-gradient there is worth the whole quantity under test, and a published
 ## figure has already had to be withdrawn over it (`P0-5b/c/d`).
 var _scene_path: String = DEFAULT_SCENE
-## Values to sweep `drift_rear_grip_scale` over, or empty for whatever
-## `handling.tres` ships. Set live on the loaded resource rather than by editing
-## the file: nothing caches it, so it takes effect on the next tick, and a sweep
-## that crashed halfway cannot leave the committed tuning holding a probe value.
-var _drift_sweep: Array[float] = []
+## Values to sweep `_sweep_field` over, or empty for whatever `handling.tres`
+## ships. Set live on the loaded resource rather than by editing the file:
+## nothing caches it, so it takes effect on the next tick, and a sweep that
+## crashed halfway cannot leave the committed tuning holding a probe value.
+##
+## ⚠️ **Editing the `.tres` in a shell loop is the alternative this exists to
+## avoid.** One such loop misfired on `set --`, blanked the field it was sweeping
+## and published a table of all-zero rows that looked like a finding.
+var _sweep: Array[float] = []
+## The profile field `_sweep` writes. A variable rather than a constant since
+## `--sweep`, because the drift now has three yaw dials and a grid of them run
+## through hand-edited tuning files is the hazard above.
+var _sweep_field: StringName = DEFAULT_SWEEP_FIELD
 ## Slip angle `seconds_above_deg` counts against, read off the profile at boot.
 ## INF when the profile does not publish one, which makes the column read 0.00
 ## everywhere rather than inventing a bar this project never authored.
@@ -185,15 +205,34 @@ func _parse_args() -> bool:
 				_only = bits[1]
 			"--scene":
 				_scene_path = bits[1]
+			"--sweep":
+				# Split once more, so the field name carries its own "=" separator
+				# and `--sweep=drift_yaw_decay_s=0.4,0.6` reads as one flag.
+				var spec: PackedStringArray = bits[1].split("=", true, 1)
+				if spec.size() < 2 or spec[0].is_empty() or spec[1].is_empty():
+					_fail("--sweep wants field=v1,v2,..., got '%s'" % bits[1])
+					return false
+				_sweep_field = StringName(spec[0])
+				if not _parse_sweep_values(spec[1], "--sweep"):
+					return false
 			"--drift-grip":
-				for piece: String in bits[1].split(",", false):
-					if not piece.is_valid_float():
-						_fail("--drift-grip wants numbers, got '%s'" % piece)
-						return false
-					_drift_sweep.append(piece.to_float())
+				_sweep_field = DEFAULT_SWEEP_FIELD
+				if not _parse_sweep_values(bits[1], "--drift-grip"):
+					return false
 			_:
 				_fail("unknown argument %s" % bits[0])
 				return false
+	return true
+
+
+## Shared by `--sweep` and its `--drift-grip` alias so the two cannot disagree
+## about what counts as a number.
+func _parse_sweep_values(text: String, flag: String) -> bool:
+	for piece: String in text.split(",", false):
+		if not piece.is_valid_float():
+			_fail("%s wants numbers, got '%s'" % [flag, piece])
+			return false
+		_sweep.append(piece.to_float())
 	return true
 
 
@@ -238,15 +277,16 @@ func _boot() -> bool:
 func _measure_all() -> void:
 	var results: Array[Result] = []
 	var profile: Resource = _vehicle.get("profile") as Resource
-	if not _drift_sweep.is_empty():
+	if not _sweep.is_empty():
 		if profile == null:
-			_fail("--drift-grip needs a profile on the vehicle and there is none")
+			_fail("a sweep needs a profile on the vehicle and there is none")
 			return
-		# See DRIFT_FIELD: set() would swallow a rename and print a sweep of
-		# identical rows labelled with values it never applied.
-		if not DRIFT_FIELD in profile:
-			_fail("--drift-grip: %s has no '%s'" % [profile.resource_path, DRIFT_FIELD])
+		# See DEFAULT_SWEEP_FIELD: set() would swallow a typo or a rename and print
+		# a sweep of identical rows labelled with values it never applied.
+		if not _sweep_field in profile:
+			_fail("sweep: %s has no '%s'" % [profile.resource_path, _sweep_field])
 			return
+		print("sweeping: %s" % _sweep_field)
 
 	# One pass with the shipped tuning when nothing is swept. NAN is the "leave it
 	# alone" marker rather than a bool-and-value pair, because it cannot be
@@ -256,12 +296,15 @@ func _measure_all() -> void:
 	# branch as a plain Array, and assigning that to an Array[float] throws at
 	# run time — which killed this coroutine mid-run and still printed ABLATION OK,
 	# because a dead coroutine records no failure. `_printed_rows` now catches it.
-	var values: Array[float] = _drift_sweep.duplicate()
+	var values: Array[float] = _sweep.duplicate()
 	if values.is_empty():
 		values.append(NAN)
+	# See DRIFT_FIELD_PREFIX: a drift dial cannot move the other three manoeuvres,
+	# anything else can.
+	var confined: bool = String(_sweep_field).begins_with(DRIFT_FIELD_PREFIX)
 	for value: float in values:
 		if not is_nan(value):
-			profile.set(DRIFT_FIELD, value)
+			profile.set(_sweep_field, value)
 		for manoeuvre: String in MANOEUVRES:
 			if not _only.is_empty() and _only != manoeuvre:
 				continue
@@ -272,7 +315,7 @@ func _measure_all() -> void:
 			# exactly, and then the `@value` suffix dresses the duplicates up as
 			# distinct measurements. That is the failure this whole tool exists to
 			# stop, so it must not be the tool doing it.
-			var swept: bool = not is_nan(value) and manoeuvre in DRIFT_MANOEUVRES
+			var swept: bool = not is_nan(value) and (not confined or manoeuvre in DRIFT_MANOEUVRES)
 			if not is_nan(value) and not swept and value != values[0]:
 				continue
 			var result: Result = await _measure(
@@ -450,11 +493,19 @@ func _release_everything() -> void:
 		Input.action_release(action)
 
 
+## ⚠️ The label column is sized to its longest entry rather than fixed. `--sweep`
+## can name any field, and a wide one — `drift@11000.0000` at 16 characters —
+## silently pushed every number on its row out of alignment under a fixed 13,
+## which is a published table that misreads as a different quantity per row.
 func _print_table(results: Array[Result]) -> void:
+	var width: int = 13
+	for result: Result in results:
+		width = maxi(width, result.name.length())
+	var row_format: String = "%%-%ds %%9s %%9s %%7s %%9s %%9s %%9s %%9s %%8s %%9s" % width
 	print("")
 	print(
 		(
-			"%-13s %9s %9s %7s %9s %9s %9s %9s %8s %9s"
+			row_format
 			% [
 				"run",
 				"entry",
@@ -469,17 +520,12 @@ func _print_table(results: Array[Result]) -> void:
 			]
 		)
 	)
-	print(
-		(
-			"%-13s %9s %9s %7s %9s %9s %9s %9s %8s %9s"
-			% ["", "kph", "kph", "", "", "m/s²", "deg", "s", "deg", "m"]
-		)
-	)
+	print(row_format % ["", "kph", "kph", "", "", "m/s²", "deg", "s", "deg", "m"])
 	for result: Result in results:
 		_printed_rows += 1
 		print(
 			(
-				"%-13s %9.2f %9.2f %7.2f %9.3f %9.2f %9.1f %9.2f %8.1f %9.1f"
+				("%%-%ds %%9.2f %%9.2f %%7.2f %%9.3f %%9.2f %%9.1f %%9.2f %%8.1f %%9.1f" % width)
 				% [
 					result.name,
 					result.entry_kph,
