@@ -104,7 +104,7 @@ wins.
 | `Q73` | A layer can pass every check and be in no scene | ✅ Closed — `roadmarks.glb` shipped, was graded, and was drawn nowhere; a verify tool proves an asset is correct and never that it is on screen |
 | `Q74` | `Q71`'s trigger has fired on the preview scripts, and the prose has nowhere to go | 🟡 Open, deferred — ten files, four byte-identical, 0 lines of logic differing; the merge is owed and the per-layer *arguments* have no `.tres` to move into |
 | `Q76` | A layer whose vocabulary nothing publishes, and an assembly that is not a stack | ✅ Closed — the gate is a rule about *spelling*, published as `drawn_by_code`/`refused_by_code` because nothing can grade it; and one head stands for a whole assembly, after the first build drew 8.53 m masts |
-| `Q77` | **A dark signal is not a signal with no state** | ✅ Closed — `P3-17`'s layer built correctly and was dropped from the bundle anyway: unlit heads assert 415 out-of-service signals, and a lit cycle cannot be derived honestly (18 of 107 junctions opposable, 57 of 137 partially populated). `B3` is the route. ⚠️ **Amended 2026-08-26** — the drop left `signals_preview.gd` still asking Godot to *load* the absent asset, which errors into the console before it returns null; it reached the `P3-9a` web cut under a row claiming 0 console errors. Fixed with the `is_present()` guard every `verify_*.gd` already used |
+| `Q77` | **A dark signal is not a signal with no state** | ✅ Closed — `P3-17`'s layer built correctly and was dropped from the bundle anyway: unlit heads assert 415 out-of-service signals, and a lit cycle cannot be derived honestly (18 of 107 junctions opposable, 57 of 137 partially populated). `B3` is the route. ⚠️ **Amended 2026-08-26** — the drop left `signals_preview.gd` still asking Godot to *load* the absent asset, which errors into the console before it returns null; it reached the `P3-9a` web cut under a row claiming 0 console errors. Fixed with the `is_present()` guard all seven optional-layer verify tools already used |
 | `Q78` | **A one-way correction was written as a two-way move, and `abs()` hid it** | ✅ Closed — the sign registration pushed *and pulled*: 95 of 654 posts were dragged toward the carriageway by a rule whose stated reason runs outward only, invisible because `shift_m` discards the sign. Clamped, with `posts_kept_as_surveyed` to name the population |
 
 | ID | Decision | Status |
@@ -10466,13 +10466,39 @@ happened and returns."*
 **0 console errors or warnings**. That claim was true for the 2026-08-25 `r2` cut and false 26 hours
 later; `r3` shipped with it and `r4` is the re-cut.
 
-**The fix is a guard that already existed.** `is_present()` is on every `generated_*.gd` loader,
-its docstring already explains why it is *not* a null check, and every `verify_*.gd` tool already
-used it. Only the two preview nodes did not. `roadmarks_preview.gd` had the same unguarded call —
+**The fix is a guard that already existed.** `is_present()` is on every `generated_*.gd` loader, and
+all seven verify tools that load an optional layer already used it. Only the two preview nodes did
+not. ⚠️ **And the docstring is part of why.** It says `is_present()` is *"separate from
+`load_signals` returning null because the two answer different questions"* — a **semantic**
+distinction, and a true one, but not the **operational** reason a caller needs: that one of the two
+routes writes an error to the console on its way to the same answer. A call site reading that could
+reasonably conclude either would do. The comment added at the guard is the missing half, and it is
+at the call site rather than on the helper because that is where the wrong choice gets made.
+`roadmarks_preview.gd` had the same unguarded call —
 dormant purely because that layer ships today — and is fixed in the same commit. The
 `packed == null` branch stays, with the "present but unloadable" message `verify_signals.gd`
 carries, because a corrupt asset and an absent one are different findings and reporting the first
 as "none shipped for this region" would describe a broken build as an empty region.
+
+⚠️ **The two-call shape is the only quiet one, and that was measured rather than assumed** — because
+`ResourceLoader.exists()` followed by `load()` reads as a textbook TOCTOU pre-check and the next
+reader will want to collapse it. Probed against this project on Godot 4.7.1: `load()` and
+`ResourceLoader.load()` both write the error before returning null; **all four `CACHE_MODE_*`
+values make no difference**, since they govern cache reuse and not verbosity; and
+`load_threaded_request()` does not avoid the error but **defers** it — the request returns `OK`
+silently and the same error fires from the worker thread on a later tick, which is strictly worse
+at `_ready()` time. The write is in the C++ loader path and no GDScript-level flag silences it.
+✅ **And `exists()` cannot report a false positive here**: the `.glb` is gitignored build output, so
+an undrawn layer has no file and therefore no `.import` remap to resolve through, and
+`sync_generated.sh` sweeps a stale one left by an earlier local build.
+
+**Applied to all seven optional layers, not the two that were failing** (`/simplify`, 2026-08-26).
+The first fix took `signals_preview.gd` — live — and `roadmarks_preview.gd`, and stopped there;
+`arrows`, `boxjunctions`, `railings`, `signs` and `tramway` carry the identical call in the
+identical shape and each declares "absence is not a warning" in its own docstring. Fixing two of
+seven left the next reader nothing to distinguish them by. ⚠️ **The five are latent for Hong Kong
+and the point is the second city** — hard rule 3's whole premise is that a region declares what it
+publishes, so a layer going absent is the ordinary case, not the exotic one.
 
 🔴 **`check.sh` cannot see this class of defect, and that is the transferable part.** The verify
 tools were the ones already guarding correctly, so the blind spot was precisely the nodes no

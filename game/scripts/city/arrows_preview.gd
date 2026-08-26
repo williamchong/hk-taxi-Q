@@ -21,9 +21,18 @@ const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
 
 func _ready() -> void:
+	# `is_present()` before `load()`, and `signals_preview.gd` carries the reason:
+	# `load()` on an absent path errors into the console before it returns null,
+	# so a null check alone is graceful only after the damage (`Q77`). Latent while
+	# this layer ships; a second city is what makes it live.
+	if not GeneratedArrows.is_present():
+		print("arrows: none shipped for this region")
+		return
+
 	var packed: PackedScene = GeneratedArrows.load_arrows()
 	if packed == null:
-		print("arrows: none shipped for this region")
+		# Present but unloadable, which is not the same as absent.
+		push_error("arrows: %s exists but did not load as a scene" % GeneratedArrows.PATH)
 		return
 
 	var arrows: Node3D = packed.instantiate()
