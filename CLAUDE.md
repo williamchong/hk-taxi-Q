@@ -441,10 +441,15 @@ Common emoji for this project:
   exits 0 on a shader that fails to compile, so render and `grep -i "shader error"`, and look at all
   three layers. 🔴 **Do not light the lantern**: `Q38` bakes the exposure at build time and `Q26` has
   not chosen a look, so a glow here is wrong in every frame the project renders.
-  ⚠️ **`verify_lamps.gd`'s upright bar grades the IMPORTED mesh, not the built one, and the two
-  differ.** The ETL mesh is exactly 50.000% upright; the import reads 51.52%, because Godot
-  quantises positions over the mesh AABB — 0.025 m at this layer's 1,646 m width, against a 0.06 m
-  bracket arm. So do not "tighten" that bar toward a measured value: the value is not this stage's.
+  ⚠️ **`verify_lamps.gd`'s upright bar grades the IMPORTED mesh, and the two used to differ.** Godot
+  quantises imported vertex positions over each mesh's **own AABB**, so the step scales with how wide
+  a layer is rather than how big its objects are — 0.025 m across `lamps.glb`'s 1,646 m, against a
+  0.06 m bracket arm and `signs.glb`'s 0.032 m poles. It read 18,484 upright against the ETL's exact
+  17,940 until `Q82` turned compression off project-wide, at **+446,128 B (+0.931%)** of PCK. 🔴 **It
+  is `[importer_defaults]` in `project.godot` and `check.sh`'s `settings` step pins its value**,
+  because `game/assets/generated/` is gitignored and a per-asset `.import` does not survive a clone.
+  An editor save drops it silently and every generated mesh then imports geometry the ETL did not
+  build. Do not "tighten" the bar toward a measured value either — it is a lay-flat detector.
   Numbers in `Q82`.
 - **Street-name or font changes — `street_plate.json`, the bundled typeface, or any new region:
   also `tools/font_coverage.py --city <c> --region <r>`.** It exits non-zero on a character that is in neither the font nor the

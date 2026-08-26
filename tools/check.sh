@@ -124,11 +124,20 @@ promoted="$(grep -c '^gdscript/warnings/.*=2$' "$project_godot" || true)"
 untyped="$(grep -c '^gdscript/warnings/untyped_declaration=2$' "$project_godot" || true)"
 web_renderer="$(grep -c '^renderer/rendering_method\.web="gl_compatibility"$' "$project_godot" || true)"
 mobile_fps="$(grep -c '^run/max_fps\.mobile=' "$project_godot" || true)"
-if [[ "$promoted" != "$WANT_PROMOTED" || "$untyped" != 1 || "$web_renderer" != 1 || "$mobile_fps" != 1 ]]; then
+# 🔴 Pinned to its VALUE, not merely counted. Godot quantises imported vertex
+# positions over each mesh's own AABB, so the step scales with how wide a layer
+# is rather than how big its objects are — 0.025 m across `lamps.glb`, against a
+# 0.06 m bracket arm and 0.032 m sign poles. Dropped or set false, every
+# generated mesh imports slightly different geometry from the one the ETL built,
+# and the only symptom is a verify tool's count disagreeing with a stage's own.
+# `Q82` measured it; `docs/ARCHITECTURE.md` "Project settings" has the row.
+mesh_compression="$(grep -c '^"meshes/force_disable_compression": true$' "$project_godot" || true)"
+if [[ "$promoted" != "$WANT_PROMOTED" || "$untyped" != 1 || "$web_renderer" != 1 || "$mobile_fps" != 1 || "$mesh_compression" != 1 ]]; then
 	echo "  promoted warnings:    $promoted (want $WANT_PROMOTED)"
 	echo "  untyped_declaration:  $untyped (want 1)"
 	echo "  rendering_method.web: $web_renderer (want 1)"
 	echo "  max_fps.mobile:       $mobile_fps (want 1)"
+	echo "  mesh compression off: $mesh_compression (want 1)"
 	echo "  FAIL  settings — project.godot lost settings, most likely to an" >&2
 	echo "        editor save. Restore them; do NOT edit the numbers here down" >&2
 	echo "        to match. See docs/ARCHITECTURE.md \"Project settings\"." >&2

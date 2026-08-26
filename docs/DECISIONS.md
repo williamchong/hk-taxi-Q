@@ -11329,6 +11329,40 @@ kept post; and `nearest_is_elevated` now indexes the 60 off-grade edges instead 
 exact rather than approximate and returns the identical 177. **`lamps.glb` is byte-identical across
 all of it** (`sha256 c0cc92ac…`), the render is `cmp`-identical, and `check.sh` stayed at 256 ok.
 
+### 🔴 Two omissions the counters could not see, and one setting they led to
+
+**The layer was drawn nowhere the player goes.** `lamps_preview.gd` went into
+`city_preview.tscn` and not into `city_drive.tscn`, which is the scene the game boots into and which
+already carries the tramway, arrows, boxes, railings, signs and markings. Every check was green, the
+asset was correct, the preview render showed it — and driving the city showed no poles. **That is
+`Q73` exactly, quoted in this stage's own preview docstring while the commit made the same mistake.**
+Caught by the user asking why there were no poles on the map. ⚠️ `ARCHITECTURE.md`'s note now says
+*both* scenes; a verify tool still cannot see this, and `Q73` remains the only defence.
+
+**And chasing the imported-mesh discrepancy produced a bundle-wide finding.** Godot quantises
+imported vertex positions over each mesh's **own AABB**, so the step scales with how wide a layer is
+rather than how big its objects are:
+
+| | |
+|---|---|
+| `lamps.glb` AABB | 1,646 m wide → **0.025 m** step |
+| bracket arm radius | 0.06 m — the step is **42%** of it |
+| `signs.glb` pole radius | **0.032 m — thinner than the step** |
+
+Off, the imported mesh matches the ETL exactly: `verify_lamps` reads the ETL's **17,940** upright
+where it read 18,484, and the arm's four clean `|n.y|` values return in place of a 0.10–0.70 smear.
+
+🔴 **Set project-wide in `[importer_defaults]`, and that is forced rather than chosen.**
+`game/assets/generated/` is gitignored, so a per-asset `.import` does not survive a fresh clone — the
+comment already above that block in `project.godot` says so, about the post-import script. Lamps
+alone would have cost **+69,264 B**; every layer costs **+446,128 B (+0.931%)**, 47,897,348 →
+48,343,476. The user's call, taken with both numbers measured. ⚠️ **`check.sh`'s `settings` step pins
+the value** (mutation-checked), because an editor save drops it silently and `Q75` records that this
+file loses hand-written keys exactly that way — which happened again here, when a `git checkout` on
+the uncommitted edit reverted it. *Restore `project.godot` and commit it in the same change.*
+⚠️ Two exports of one setting differed by **80 B** — `project.godot`'s comment churn packed as
+`project.binary` — so a delta is only meaningful against a baseline measured the same way.
+
 ### 🔴 This layer fails differently from every other one here
 
 `GAME_DESIGN.md` prices a missing sign at nothing against a misplaced one, which is why every stage

@@ -68,7 +68,8 @@ window/stretch/aspect="expand"
 ; file because generated assets are gitignored — their .import files do not
 ; survive a fresh clone.
 scene={
-"import_script/path": "res://tools/generated_scene_import.gd"
+"import_script/path": "res://tools/generated_scene_import.gd",
+"meshes/force_disable_compression": true
 }
 
 [input]
