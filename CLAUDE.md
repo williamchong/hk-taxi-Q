@@ -413,8 +413,10 @@ Common emoji for this project:
   ribbons overlap. Deleting that pass leaves both partitions closing, `facing_away` at 0 and
   `check.sh` green, with columns standing in junction mouths. It is **not** a tautology: a foot
   reconstructed from `offset_m` rather than read off the polyline drives it negative (`signs.py`'s
-  recorded 10.6 m defect). ⚠️ **Do not "fix" it by iterating the push** — measured at plateau 9.7%
-  with the worst shift going 5.52 → 16.77 m, which is a column on the wrong street.
+  recorded 10.6 m defect). ⚠️ **Do not "fix" it by iterating the push** — measured on the SIGNS
+  and cited as precedent, not measured here: 9.7% plateau, worst shift 5.52 → 16.77 m (`Q78`), where
+  this layer's own `shift_m` max is 6.7329. The lamps sweep was never run and the argument is
+  borrowed; say so rather than quoting another layer's numbers as this one's.
   🔴 **There must be NO `arms_against_kerb` counter.** The arm direction is derived from the kerb
   side, so such a counter reads 0 by construction — `Q72`'s tautology, which certified a whole
   region's signs as correct while every one faced the wrong way. `lantern_overhang_m` and
@@ -445,11 +447,13 @@ Common emoji for this project:
   quantises imported vertex positions over each mesh's **own AABB**, so the step scales with how wide
   a layer is rather than how big its objects are — 0.025 m across `lamps.glb`'s 1,646 m, against a
   0.06 m bracket arm and `signs.glb`'s 0.032 m poles. It read 18,484 upright against the ETL's exact
-  17,940 until `Q82` turned compression off project-wide, at **+446,128 B (+0.931%)** of PCK. 🔴 **It
+  17,940 until `Q82` turned compression off project-wide, at **+958,720 B (+2.002%)** of PCK and **+3.19 MiB** of GPU buffer, with **0** extra draw calls or primitives. 🔴 **It
   is `[importer_defaults]` in `project.godot` and `check.sh`'s `settings` step pins its value**,
   because `game/assets/generated/` is gitignored and a per-asset `.import` does not survive a clone.
   An editor save drops it silently and every generated mesh then imports geometry the ETL did not
-  build. Do not "tighten" the bar toward a measured value either — it is a lay-flat detector.
+  build. 🔴 **And `[importer_defaults]` seeds only a NEW `.import`** — changing the key does not
+  migrate assets that already have a sidecar, and `check.sh` cannot see a stale one. Delete the
+  sidecars and re-import, then re-measure. Do not "tighten" the bar toward a measured value either — it is a lay-flat detector.
   Numbers in `Q82`.
 - **Street-name or font changes — `street_plate.json`, the bundled typeface, or any new region:
   also `tools/font_coverage.py --city <c> --region <r>`.** It exits non-zero on a character that is in neither the font nor the

@@ -72,27 +72,22 @@ const LAMPS_MATERIAL: String = "res://tuning/lamps.tres"
 ## 50.000%**, with four distinct `|n.y|` values and not one degenerate dropped
 ## (35,880 = 897 x 40 exactly).
 ##
-## 🔴 **The IMPORTED mesh reads 18,484 (51.52%), and the 544-triangle gap is
-## Godot's vertex compression.** `lamps.glb.import` leaves
-## `meshes/force_disable_compression=false`, so positions are quantised over the
-## mesh's own AABB — **1,646 m wide here, which is a 0.025 m step**. The column
-## sides, the caps and the lantern survive exactly, because they are axis-aligned;
-## the **bracket arm does not**. Its 7,176 flank triangles leave the ETL's clean
-## 0.477 and smear across 0.10-0.70, because the arm is 0.06 m in radius and the
-## quantisation step is 42% of that. ⚠️ **This is a bundle-wide property, not this
-## layer's** — `signs.glb`'s poles are 0.032 m, thinner than the step — and it is
-## recorded in `Q82` rather than fixed, because turning compression off is a PCK
-## decision and nothing in a frame showed it.
+## 🔴 **The IMPORTED mesh used to disagree, and chasing that is what found
+## `Q82`'s compression finding.** It read **18,484 (51.52%)** while the ETL built
+## 17,940, because Godot quantised positions over the mesh's own AABB — 1,646 m
+## wide here, a **0.025 m** step, against a bracket arm of 0.06 m radius. The
+## column, caps and lantern survived exactly (axis-aligned); the arm's 7,176
+## flanks smeared off 0.477 across 0.10-0.70. ✅ **`meshes/force_disable_compression`
+## is now `true` project-wide**, so this tool and the stage agree exactly, and
+## `check.sh`'s `settings` step pins the value — it is in `project.godot` rather
+## than beside the asset because `game/assets/generated/` is gitignored.
 ##
-## A laid-flat mesh reads ~0, so 0.35 separates the two with sixteen points of
-## headroom on the *imported* figure — which is the one this tool sees, and the
-## one that moves if the AABB does.
+## A laid-flat mesh reads ~0, so 0.35 separates the two with fifteen points of
+## headroom, and that headroom no longer moves with the AABB.
 ##
-## ⚠️ **This check only catches a TOTAL lay-flat**, which is what it is for. It
-## is not a quality bar and must not be retuned toward the measured value to make
-## it "tighter" — that would fail an ordinary authored change to the arm, and the
-## figure it would be tightened against is the compressed one above, which is not
-## a property of this stage at all.
+## ⚠️ **This check only catches a TOTAL lay-flat**, which is what it is for. It is
+## not a quality bar and must not be retuned toward the measured 0.50 to make it
+## "tighter" — that would fail an ordinary authored change to the arm.
 const MIN_UPRIGHT_SHARE: float = 0.35
 
 

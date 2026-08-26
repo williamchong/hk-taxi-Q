@@ -10,11 +10,18 @@
 ## and the road markings: `lamps.py` writes vertices in **region** game space, so
 ## a node at the origin already lines up with the kerb it stands on.
 ##
-## 🔴 **This node existing at all is `Q73`.** `roadmarks.glb` was built,
-## exported, synced, imported, graded by its own verify tool and drawn *nowhere*
-## — and `check.sh` was green throughout, because a verify tool asks "is this
-## asset correct" and never "is this asset on screen". Every layer here has that
-## blind spot, so the node ships in the same commit as the asset.
+## 🔴 **This node existing at all is `Q73`, and it took TWO commits when it
+## should have taken one.** `roadmarks.glb` was built, exported, synced,
+## imported, graded by its own verify tool and drawn *nowhere* — `check.sh`
+## green throughout, because a verify tool asks "is this asset correct" and never
+## "is this asset on screen".
+##
+## 🔴 **This file then repeated it while quoting it.** The node went into
+## `city_preview.tscn` and not `city_drive.tscn`, which is the scene the game
+## boots into; the layer was correct, verified, visible in every preview shot and
+## **absent from the game**, until someone drove it and asked where the poles
+## were. **A drawn layer needs a node in BOTH scenes, in the same commit as the
+## asset** — and nothing but looking will tell you it does not.
 ##
 ## ⚠️ **Absence is not a warning here.** A city whose estate publishes no utility
 ## point layer ships none (`P3-26`), so a missing asset prints what happened and

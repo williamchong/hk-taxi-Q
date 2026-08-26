@@ -11232,7 +11232,8 @@ what clears the edge next door is a second pass that re-snaps the placed point a
 and refuses it if it lands inside any drawn ribbon — junction mouths and dual carriageways, where
 several 1.6x ribbons overlap and the drawn city has no footway at all. `signs.py` measured the
 obvious alternative and it is worse: iterating the push plateaus at 9.7% while taking the worst shift
-from 5.52 m to **16.77 m**, which is a column on the wrong street.
+from 5.52 m to **16.77 m**, which is a post on the wrong street. ⚠️ **Those are the SIGNS' numbers,
+cited as precedent** — this layer's own `shift_m` max is 6.7329 and the sweep was never run here.
 
 | | `max_shift_m 3.0` | `max_shift_m 6.0` |
 |---|---|---|
@@ -11307,8 +11308,8 @@ are the ones worth carrying:
   0.025 m step**. The column, caps and lantern survive exactly because they are axis-aligned; the
   bracket arm's 7,176 flanks leave a clean `|n.y|` 0.477 and smear across 0.10-0.70, because the arm
   is 0.06 m in radius and the step is 42% of that. ⚠️ **Bundle-wide, not this layer's** —
-  `signs.glb`'s poles are 0.032 m, thinner than the step — and **not fixed**, because turning
-  compression off is a PCK decision and nothing in a frame showed it.
+  `signs.glb`'s poles are 0.032 m, thinner than the step. ✅ **Fixed later the same day** — see
+  the section below; this paragraph records what the review found, not the state it left.
 - 🔴 **A guard's comment claimed a necessity the arithmetic refutes.** The second-stage refusal runs
   on posts kept as surveyed too, and this file said it "must", citing `Q78`. True of a post the stage
   *moved*; false of one it did not — an unmoved point re-snaps to the same edge, and the kept
@@ -11355,8 +11356,32 @@ where it read 18,484, and the arm's four clean `|n.y|` values return in place of
 🔴 **Set project-wide in `[importer_defaults]`, and that is forced rather than chosen.**
 `game/assets/generated/` is gitignored, so a per-asset `.import` does not survive a fresh clone — the
 comment already above that block in `project.godot` says so, about the post-import script. Lamps
-alone would have cost **+69,264 B**; every layer costs **+446,128 B (+0.931%)**, 47,897,348 →
-48,343,476. The user's call, taken with both numbers measured. ⚠️ **`check.sh`'s `settings` step pins
+alone would have cost **+69,264 B**; every layer costs **+958,720 B (+2.002%)**, 47,897,332 →
+48,856,052. The user's call, taken on a figure that was then found to be wrong — see below.
+
+🔴 **The first figure recorded here, +446,128 B, was less than half the truth, and the mechanism is
+worth more than the number.** `[importer_defaults]` seeds only a **newly created** `.import`. It does
+not migrate an asset that already has one — so after the commit, **133 of 141 sidecars still read
+`false`**, including `hkcec.glb`, the largest mesh in the bundle, which went on importing compressed
+with exactly the quantised geometry the change existed to remove. Being identical on both sides of
+the ablation, it fell out of the delta; it is worth **+512,576 B** alone. ⚠️ **`check.sh`'s
+`settings` step pins the `project.godot` value and cannot see a stale sidecar** — delete the sidecars
+and re-import before measuring this key. ⚠️ Three *authored* imports still carry `false` (the taxi
+body, the tyre, `central_plaza.glb`) and are left so deliberately: their AABBs are metres, so the
+quantum is sub-millimetre, and re-importing the committed taxi would move `verify_vehicle`'s figures
+for nothing.
+
+✅ **The runtime cost was measured rather than assumed, and it is small.** +3,343,448 B (+14.57%) of
+`RENDER_BUFFER_MEM_USED`, **0** extra draw calls and **0** extra primitives over an identical route.
+Worst case extra vertex fetch is 165 MB/s on the mobile tier against an Adreno 618's ~25-30 GB/s.
+Nothing in the performance budget is at risk. 🔴 **And the 132 tiles and `roads.glb` never compress
+in either state** — 40 B/vertex both ways, only 11 of 144 surfaces ever carried the compressed flag —
+so the per-asset alternative would have bought nothing on the bulk of the bundle, and the framing
+that weighed "lamps only" against "every layer" was wrong about where the bytes were.
+
+⚠️ **The bundle is not byte-reproducible across imports.** Two exports of one tree differed by
+**48 B**, and `hkcec.glb`'s imported `.scn` by 1 B. Earlier rows in `PROGRESS.md` claim byte-identical
+re-exports; those were of the *ETL output*, which does reproduce, not of the imported bundle. ⚠️ **`check.sh`'s `settings` step pins
 the value** (mutation-checked), because an editor save drops it silently and `Q75` records that this
 file loses hand-written keys exactly that way — which happened again here, when a `git checkout` on
 the uncommitted edit reverted it. *Restore `project.godot` and commit it in the same change.*

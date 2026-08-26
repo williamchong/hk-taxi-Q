@@ -429,23 +429,37 @@ def _clip_half_plane(polygon: np.ndarray, normal: np.ndarray, bound: float) -> n
 def _import_quantum_m(boxes: list[Box]) -> float:
     """The plan pitch Godot's importer will quantise this mesh to.
 
-    ⚠️ **The engine re-quantises what this stage ships, and the first build
-    measured it.** The scene importer compresses vertex positions to a 16-bit
-    lattice over the mesh's own AABB (`meshes/force_disable_compression` is
-    left at its default, as every generated mesh in this project leaves it),
-    which for a region-spanning mesh is `span / 65535` — about **17 mm** for
-    Wan Chai. A clip fragment thinner than that pitch can come back from the
-    import with its winding flipped: 217 of the first build's 12,181 triangles
+    ⚠️ **The engine USED TO re-quantise what this stage ships, and the first
+    build measured it.** The scene importer compressed vertex positions to a
+    16-bit lattice over the mesh's own AABB, which for a region-spanning mesh is
+    `span / 65535` — about **17 mm** for Wan Chai.
+
+    ✅ **`Q82` turned `meshes/force_disable_compression` on project-wide
+    (2026-08-27), so that lattice no longer exists at import**, and this whole
+    paragraph describes a hazard that is switched off. The machinery below is
+    kept anyway and deliberately: it is one `.import` setting between here and
+    the lattice returning, `check.sh`'s `settings` step is the only thing holding
+    it, and a stage that stops refusing sub-quantum slivers cannot be made to
+    start again by a config edit. ⚠️ **What it costs is a second city**: the
+    build-stopping `ValueError` in `roadmarks.py` is sized against this region's
+    17 mm, and at a 6.2 km extent it fires for a hazard that is now off. Read it
+    as a bound on drawn thinness rather than as an import constraint.
+
+    A clip fragment thinner than that pitch could come back from the import with
+    its winding flipped: 217 of the first build's 12,181 triangles
     did, read as up-facing by this stage's own `inverted` counter and refused
     by `verify_boxjunctions.gd`'s engine-side check — the two counters exist
     separately for exactly this (`Q59`).
 
-    `roads.glb`, `tram.glb` and `arrows.glb` survive the same lattice not by
+    `roads.glb`, `tram.glb` and `arrows.glb` survived the same lattice not by
     disabling it but by never shipping a sub-quantum feature — a rail is 3.5
-    quanta wide — so this stage holds itself to the same bar rather than
-    asking the importer for an exception. Derived from the rings' own extent
-    rather than authored, because the pitch is a property of the region's
-    size, not a number anyone should tune.
+    quanta wide — so this stage holds itself to the same bar. ⚠️ **`Q82` did
+    then ask the importer for the exception**, for a different reason: a lamp
+    post's 0.06 m bracket arm and a sign pole's 0.032 m are *below* the quantum,
+    and unlike a box junction they cannot be thickened to clear it.
+
+    Derived from the rings' own extent rather than authored, because the pitch
+    is a property of the region's size, not a number anyone should tune.
     """
     if not boxes:
         return 0.0

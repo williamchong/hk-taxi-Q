@@ -639,9 +639,11 @@ static func check_faces_up(
 ## ⚠️ **`min_upright_share` is per-layer because the geometry is, and it is a
 ## LAY-FLAT DETECTOR rather than a quality bar.** Do not tighten it toward
 ## whatever the current mesh measures: that fails an ordinary authored change to
-## the geometry, and the number it would be tightened against is not stable — see
-## `verify_lamps.gd`, where the ETL mesh is exactly 50.000% upright and the
-## *imported* one reads 51.52%.
+## the geometry. ⚠️ **It also used not to be stable.** Until `Q82` turned
+## `meshes/force_disable_compression` on project-wide, the imported mesh
+## disagreed with the built one — `verify_lamps.gd` read 51.52% against an ETL
+## 50.000%, because Godot quantised positions over each mesh's own AABB. The two
+## agree exactly now, and `check.sh` pins the setting that makes them.
 ##
 ## ⚠️ **Negated, because Godot winds front faces clockwise and glTF winds them
 ## counter-clockwise** — the importer reverses every index triple. Do not "fix"

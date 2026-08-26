@@ -197,7 +197,7 @@ is **not** read by this stage.
 spacing p10 **7.09** / p50 **16.74** / p90 **27.63** m with **zero** coincident pairs under 0.05 m —
 alternating-side street lighting, and an independent agreement with the domain string. ⚠️ **64.1%
 (810 of 1,263) are surveyed inside the drawn 1.6x carriageway**, a median 1.46 m past the drawn kerb,
-so drawn where published four fifths of a kilometre of Wan Chai's lamp columns stand in the road.
+so drawn where published nearly two thirds of Wan Chai's lamp columns stand in the road.
 They are **registered onto the drawn kerb** — `Q60`'s move at a fourth layer. See `DECISIONS.md`
 `Q82`.
 

@@ -131,7 +131,12 @@ mobile_fps="$(grep -c '^run/max_fps\.mobile=' "$project_godot" || true)"
 # generated mesh imports slightly different geometry from the one the ETL built,
 # and the only symptom is a verify tool's count disagreeing with a stage's own.
 # `Q82` measured it; `docs/ARCHITECTURE.md` "Project settings" has the row.
-mesh_compression="$(grep -c '^"meshes/force_disable_compression": true$' "$project_godot" || true)"
+# ⚠️ The trailing comma is optional because it is not ours to control: this key
+# sits in a `scene={...}` dict and Godot puts a comma after every entry but the
+# last, so adding a third importer default would move one onto this line. Pinned
+# strictly, that reads as the setting having been LOST — a false alarm pointing
+# at a message that says not to edit the check down to match.
+mesh_compression="$(grep -c '^"meshes/force_disable_compression": true,\{0,1\}$' "$project_godot" || true)"
 if [[ "$promoted" != "$WANT_PROMOTED" || "$untyped" != 1 || "$web_renderer" != 1 || "$mobile_fps" != 1 || "$mesh_compression" != 1 ]]; then
 	echo "  promoted warnings:    $promoted (want $WANT_PROMOTED)"
 	echo "  untyped_declaration:  $untyped (want 1)"
