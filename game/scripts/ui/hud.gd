@@ -50,6 +50,13 @@ var _car: VehicleController = null
 var _plate: ChamferPanel = null
 var _plate_en: Label = null
 var _plate_zh: Label = null
+## Kept so the plate can be re-cut to each new name, along with the edge
+## `_place` pinned it to. Captured once rather than read back off the Control:
+## `_fit_plate` writes those same offsets, so re-deriving them from the node
+## would drift a little further from the layout on every street change.
+var _plate_lines: VBoxContainer = null
+var _plate_pin := Rect2()
+var _plate_anchor_x: float = 0.0
 var _speed_value: Label = null
 var _readout: Label = null
 ## The reserved, empty slots. Outlined under the dev overlay so the space this
@@ -153,7 +160,7 @@ func _build() -> void:
 	# ---- the street plate: the CITY's voice ----
 	#
 	# A white field with a hard black keyline, which is what a Wan Chai street
-	# name plate actually is. The chamfer is the HUD's one shared shape, so the
+	# name plate actually is, cut to the name on it by `_fit_plate`. The chamfer is the HUD's one shared shape, so the
 	# sign and the instrument read as one family without being one colour.
 	_plate = ChamferPanel.new()
 	_plate.name = "StreetPlate"
@@ -165,13 +172,23 @@ func _build() -> void:
 	# never is one, and an empty white sign is worse than nothing.
 	_plate.visible = false
 	_place(root, _plate, _layout.street_plate)
+	_plate_anchor_x = _plate.anchor_left
+	_plate_pin = Rect2(
+		_plate.offset_left,
+		_plate.offset_top,
+		_plate.offset_right - _plate.offset_left,
+		_plate.offset_bottom - _plate.offset_top
+	)
 
-	var lines: VBoxContainer = _lines(_plate, 0)
+	_plate_lines = _lines(_plate, 0)
+	var lines: VBoxContainer = _plate_lines
 
 	_plate_en = _label("English", _style.plate_size_en, _style.plate_ink)
+	_plate_en.horizontal_alignment = _plate_alignment()
 	lines.add_child(_plate_en)
 
 	_plate_zh = _label("Chinese", _style.plate_size_zh, _style.plate_ink)
+	_plate_zh.horizontal_alignment = _plate_alignment()
 	if font_zh != null:
 		# Overridden on this label alone. The English line keeps the theme's
 		# Noto Sans on purpose — a real Hong Kong plate carries a Latin
@@ -244,6 +261,54 @@ static func _lines(panel: Control, separation: int) -> VBoxContainer:
 	box.alignment = BoxContainer.ALIGNMENT_CENTER
 	panel.add_child(box)
 	return box
+
+
+## Cut the plate to the name on it, about the centre of its reserved box.
+##
+## A street sign is made to fit its lettering. Drawing every name in one
+## fixed-width slab is what made this read as a dialog: `SHARP STREET` sat in
+## the middle of a plate sized for `CROSS HARBOUR TUNNEL`, with the white doing
+## nothing on either side of it.
+##
+## ⚠️ **Clamped to the reserved width**, so a long name cannot grow the plate
+## out of the box `verify_hud.gd` grades — the reservation stays the worst case
+## rather than becoming a suggestion. The `Label`s wrap inside it if one ever
+## does exceed it.
+##
+## ⚠️ **The speed deliberately does NOT do this.** An instrument has a fixed
+## bezel; a readout whose panel resized as the car passed 100 kph would twitch
+## at exactly the moment it is being read.
+func _fit_plate() -> void:
+	var box: Rect2 = _layout.street_plate
+	var wanted: Vector2 = _plate_lines.get_combined_minimum_size() + _style.plate_pad * 2.0
+	var width: float = minf(wanted.x, box.size.x)
+	var height: float = minf(maxf(wanted.y, 0.0), box.size.y)
+
+	# Grows away from whichever edge `_place` pinned it to, so the plate keeps
+	# the screen edge it is aligned against however long the name is — and so
+	# moving it in the `.tres` needs no code change here, which is the whole
+	# point of the layout being data.
+	if is_equal_approx(_plate_anchor_x, 1.0):
+		_plate.offset_right = _plate_pin.end.x
+		_plate.offset_left = _plate_pin.end.x - width
+	elif is_zero_approx(_plate_anchor_x):
+		_plate.offset_left = _plate_pin.position.x
+		_plate.offset_right = _plate_pin.position.x + width
+	else:
+		var centre: float = _plate_pin.position.x + _plate_pin.size.x * 0.5
+		_plate.offset_left = centre - width * 0.5
+		_plate.offset_right = centre + width * 0.5
+	_plate.offset_bottom = _plate_pin.end.y
+	_plate.offset_top = _plate_pin.end.y - height
+
+
+## The lettering hangs off the same screen edge the plate does.
+func _plate_alignment() -> HorizontalAlignment:
+	if is_equal_approx(_plate_anchor_x, 1.0):
+		return HORIZONTAL_ALIGNMENT_RIGHT
+	if is_zero_approx(_plate_anchor_x):
+		return HORIZONTAL_ALIGNMENT_LEFT
+	return HORIZONTAL_ALIGNMENT_CENTER
 
 
 ## The reserved slots follow the dev overlay's readouts: off in every shipped
@@ -390,6 +455,7 @@ func _update_street(delta: float) -> void:
 	if _plate_en.text != _tracker.street_en:
 		_plate_en.text = _tracker.street_en
 		_plate_zh.text = StreetPlate.substitute(_tracker.street_zh, _substitutions)
+		_fit_plate()
 
 
 ## The raw graph answer beside the displayed one, and the change count.

@@ -10745,7 +10745,7 @@ band. It is a clean rule, it is checkable, and it is **wrong**.
 | Arcade taxi | — | — | **top-left**, big | **top-right**, meter | **world-space arrow** |
 | Midtown Madness 2 | **bottom-left**, big digital | **bottom-right**, street map | top-centre | top-left | world-space banner |
 | Forza | **bottom-right**, arc dial | — | bottom-centre | top-right | — |
-| `P3-24` as built | bottom-centre, small | **top-left** | top-centre | — | — |
+| `P3-24` as first built | bottom-centre, small | **top-left** | top-centre | — | — |
 
 Three of the four put the speed in a **bottom corner**. The one reference that is about driving a
 real, named city — MM2 — puts the **minimap bottom-right**. The contract had made both of those
@@ -10765,8 +10765,34 @@ The real constraint is occlusion, and it is perhaps a tenth of the area the rule
 
 `touch_steer_*` stays, recorded for `P2-4` to read, and the HUD is **explicitly allowed** to overlap
 it. Two new `thumb_rest_*` rects — a fingertip in each outer bottom corner — are what the check
-enforces. The layout then moved onto MM2's: speed bottom-left, minimap bottom-right, plate
-bottom-centre between the thumbs.
+enforces. The layout then moved onto MM2's: speed bottom-left, minimap bottom-right.
+
+### Three corrections after that, every one of them from a frame
+
+🔴 **The whole HUD was about twice the size it should have been.** Measured against the references
+it was taken from: the speed sat at ~15% of frame width against MM2's ~7%, and the plate at 31%
+against MM2's minimap at 18%. Every drawn rect and every type size roughly halved, and both readouts
+were pulled down to y 860 — one clear band above `thumb_rest_*`, which is as low as the touch
+contract allows. A HUD is furniture; the city is the deliverable.
+
+🔴 **The plate was drawn at a fixed width and is now cut to its lettering.** `SHARP STREET` sat in
+the middle of a slab sized for `CROSS HARBOUR TUNNEL`, with the white doing nothing on either side —
+which is most of what made it read as a dialog rather than as signage. `hud.gd::_fit_plate` sizes it
+to the name and clamps to the reserved width, so the box `verify_hud.gd` grades stays the honest
+worst case. ⚠️ **The speed deliberately does not do this**: an instrument has a fixed bezel, and a
+panel that resized as the car passed 100 kph would twitch exactly when it is being read.
+
+🔴 **And the arrangement got a rule, which it did not have before.** The plate began **bottom-centre**
+— over the vanishing point, the lane the player is about to be in, and the car itself. Moved to the
+bottom-left it was merely out of the way, but it sat beside the speed, which pairs a street name with
+an instrument. The user's own framing settled it: *"street name and mini map is same category of
+thing, maybe they should be in same side"*. So:
+
+> **left is the car, right is the world, top is the fare, and the middle is the road.**
+
+The plate now hangs above the minimap slot, and `_fit_plate` grows it away from **whichever edge the
+layout pinned it to** — so moving it again is a `.tres` change with no code, which is what the layout
+being data was for.
 
 🔴 **The check now asserts the permission as well as the prohibition**, and that is the durable part.
 `verify_hud.gd` requires that a rect over a **tap zone** is *accepted*, so someone "tightening" the

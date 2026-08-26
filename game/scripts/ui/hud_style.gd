@@ -44,8 +44,11 @@ const PATH: String = "res://tuning/hud_style.tres"
 ## A hard black keyline, not a soft grey border. Real plates have a printed
 ## rule around them and a 1 px neutral stroke is what made this read as a dialog.
 @export var plate_edge: Color = Color(0.07, 0.07, 0.08)
-@export var plate_size_en: int = 36
-@export var plate_size_zh: int = 42
+@export var plate_size_en: int = 26
+@export var plate_size_zh: int = 30
+## Ink-to-edge padding on the plate, which is cut to its text rather than
+## drawn at a fixed width. See `hud.gd::_fit_plate`.
+@export var plate_pad: Vector2 = Vector2(34.0, 14.0)
 
 # ---- the car's voice: instruments ----
 

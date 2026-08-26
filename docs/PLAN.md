@@ -594,10 +594,14 @@ trade.
 
 #### `P3-24` — how the HUD gets its chassis
 
-- **Deliverable:** a `Hud` node on `city_drive.tscn` — a bilingual street plate bottom-centre and a
-  speed readout bottom-left, plus three **empty, reserved** slots (minimap bottom-right, timer, meter)
-  that `P3-5a` and `P3-5b` fill without moving anything that already shipped. The slots are outlined
-  under `DebugHud`'s FULL view, so the space being held can be looked at rather than trusted.
+- **Deliverable:** a `Hud` node on `city_drive.tscn` — a speed readout bottom-left and a bilingual
+  street plate on the right above the minimap slot, plus three **empty, reserved** slots (minimap,
+  timer, meter) that `P3-5a` and `P3-5b` fill without moving anything that already shipped. The slots
+  are outlined under `DebugHud`'s FULL view, so the space being held can be looked at rather than
+  trusted.
+- **The arrangement follows one rule, and it is about what a readout MEANS**: left is the car, right
+  is the world, top is the fare, and the middle is the road and stays empty. Both halves of that were
+  corrections on frames — see `Q80`.
 - **Why it comes out of `P3-5a` and gets its own ID:** speed and current street depend on **no fare
   system**. `P3-5a`'s three deliverables all do. Splitting them lets the chassis, the font and the
   touch contract land and be looked at while `B1` is still unwritten, which is the same argument
@@ -612,9 +616,9 @@ trade.
   the screen and thereby banned the two corners three of four shipped references put the speed and
   the map in. `Q80` records the correction and why the check now asserts the *permission* too.
 - ⚠️ **The layout follows Midtown Madness 2**, the one reference that is about driving a real named
-  city: speed bottom-left, minimap bottom-right, plate bottom-centre. And **no destination-arrow
-  slot** — both references that have a destination put the arrow in the world, which is `P3-5a`'s to
-  build.
+  city: speed bottom-left, minimap bottom-right, and the street plate paired with the map rather than
+  with the speed. And **no destination-arrow slot** — both references that have a destination put the
+  arrow in the world, which is `P3-5a`'s to build.
 - ⚠️ **The UI is flat-shaded, like everything else.** Every panel is a polygon with cut corners, one
   fill, one hard keyline; white is the city speaking and dark is the car speaking. `Q80`.
 - ⚠️ **It needs an off switch before it needs one for screenshots.** `GAME_DESIGN.md` says the

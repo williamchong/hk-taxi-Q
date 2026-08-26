@@ -2,14 +2,30 @@
 
 [ext_resource type="Script" path="res://scripts/ui/hud_layout.gd" id="1_hud_layout"]
 
+; Midtown Madness 2's arrangement: speed bottom-left, map bottom-right, and the
+; middle kept for what the player is reading now. See hud_layout.gd, and Q80 for
+; why the check grades `thumb_rest_*` and not `touch_steer_*`.
+;
+; ⚠️ EVERY DRAWN RECT SHRANK after the first build was looked at — the panels
+; were about twice the share of frame the references give them, and sat inboard
+; instead of hugging an edge. They now run down to y 860, one clear pixel band
+; above `thumb_rest_*`, which is as low as the touch contract allows.
+;
+; 🔴 ONE RULE, AND IT IS ABOUT WHAT A READOUT MEANS: left is the car, right is
+; the world, top is the fare, and the middle is the road and stays empty. The
+; plate began bottom-centre, sitting over the vanishing point and the car; it
+; then went into the left column beside the speed, which paired it with an
+; instrument. A street name and a street map are the same question, so it now
+; sits above the minimap.
+
 [resource]
 script = ExtResource("1_hud_layout")
 design_size = Vector2(1920, 1080)
-speed = Rect2(48, 660, 280, 200)
-street_plate = Rect2(660, 900, 600, 140)
-minimap = Rect2(1568, 600, 304, 260)
-timer = Rect2(48, 48, 380, 150)
-meter = Rect2(1440, 48, 432, 170)
+speed = Rect2(40, 716, 190, 144)
+street_plate = Rect2(1412, 530, 460, 96)
+minimap = Rect2(1632, 650, 240, 210)
+timer = Rect2(40, 40, 300, 110)
+meter = Rect2(1540, 40, 340, 120)
 touch_steer_left = Rect2(0, 480, 560, 600)
 touch_steer_right = Rect2(1360, 480, 560, 600)
 thumb_rest_left = Rect2(0, 880, 280, 200)

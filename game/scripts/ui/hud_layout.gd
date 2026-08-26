@@ -41,23 +41,52 @@ extends Resource
 # Placed off the Midtown Madness 2 reference, which is the closest analogue in
 # the genre: the one driving game here that is about a real, named city and
 # therefore the only one that has ever had to put a street map and a speed on
-# screen at once. Speed bottom-left, map bottom-right, and the middle kept for
-# what the player is reading right now.
+# screen at once.
+#
+# 🔴 **The arrangement follows one rule, and the rule is what a readout is
+# ABOUT rather than where it fits.**
+#
+#   * **left is the car** — speed, and whatever `B4` adds about the drive;
+#   * **right is the world** — the street you are on and the map of it, which
+#     are the same question asked twice and therefore belong together;
+#   * **top is the fare** — timer and meter, `P3-5a`'s;
+#   * **the middle is the road**, and nothing goes in it.
+#
+# The middle mattered immediately: the plate started bottom-centre and sat over
+# the vanishing point and the car. The pairing was the second correction — the
+# plate was moved into the left column beside the speed, which put "where am I"
+# next to "how fast" and left the map it belongs with in the other corner.
 
 ## Speed, bottom-left, big. Raised clear of the left thumb rather than sitting
 ## in the corner: MM2 is a keyboard game and could use the very corner, and we
 ## cannot.
 @export var speed: Rect2 = Rect2(48.0, 660.0, 280.0, 200.0)
-## The bilingual street name plate, bottom-centre between the two thumbs. It can
-## sit lower than the other two because nothing rests in the middle.
-@export var street_plate: Rect2 = Rect2(660.0, 900.0, 600.0, 140.0)
+## The bilingual street name plate, stacked directly above the speed in the
+## bottom-left column.
+##
+## 🔴 **Not bottom-centre, which is where it started**, and not the left column
+## either, which is where it went next. The middle of the frame is the road —
+## the vanishing point, the lane you are about to be in, and the car — and a
+## bright white slab sat in it. The left column then put it beside the speed,
+## which pairs it with an instrument; a street name and a street map are the
+## same question, so it sits above the minimap instead.
+##
+## ⚠️ **This is the plate's MAXIMUM box and its anchor, not its drawn size.** A
+## street sign is cut to its lettering, and a fixed-width one leaves
+## `SHARP STREET` floating in the middle of a slab sized for
+## `CROSS HARBOUR TUNNEL` — which is what makes it read as a dialog rather than
+## as signage. `hud.gd::_fit_plate` shrinks it to its text about this rect's
+## centre and clamps to this width, so the reservation the check grades stays
+## the honest worst case.
+@export var street_plate: Rect2 = Rect2(1412.0, 530.0, 460.0, 96.0)
 
 # ---- reserved, drawn empty, filled by P3-5a and P3-5b ----
 
 ## `P3-5b`. Bottom-right, where MM2 puts it — **not** top-left, which is where
 ## this layout had it before the references were looked at. A street map is
 ## glanced at mid-corner and belongs near the road, not in the far corner of
-## the screen.
+## the screen. The street plate sits directly above it, because the two are one
+## question.
 @export var minimap: Rect2 = Rect2(1568.0, 600.0, 304.0, 260.0)
 ## `P3-5a`'s fare timer. Top-left and large, which is where the arcade-taxi
 ## reference puts its game clock.
