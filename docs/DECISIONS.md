@@ -10879,6 +10879,25 @@ sign bolted to a building.
 and it belongs to the player's car; spending it on furniture now leaves `P3-5a` nothing to say
 "fare" with. `verify_hud.gd` fails if the accent drifts into it.
 
+### A lesson the review pass found, which is `Q53`'s at a third layer
+
+🔴 **An `@export` default is a second copy of the tuning table, and a second copy drifts.**
+`HudLayout` and `HudStyle` shipped with defaults beside every property; three rounds of layout
+changes later, the defaults were one arrangement behind the `.tres` — and one of them was set to
+exactly the placement its own neighbouring comment records as the *rejected* build. Worse,
+`verify_hud.gd` built its mutation probes from `new()`, so the checks that prove the layout guard can
+fail were grading the stale copy rather than what ships.
+
+The repo already had the answer and this file had not used it: **`HandlingProfile` and
+`StreamingProfile` declare their exports with no default at all**, so the numbers exist only in the
+`.tres`. Both HUD resources now do the same, the probes duplicate the loaded resource, and
+`verify_hud.gd` gained the check that convention makes necessary — a key missing from the `.tres` is
+now a **zero**, not a stale value, and a zero-size panel looks like a HUD element that failed to
+appear. Mutation-checked: deleting `speed` from `hud_layout.tres` fails the build by name.
+
+⚠️ Same shape as `Q53`'s authored-colour duplication and `Q71`'s three byte-identical shaders: the
+duplicate is harmless until the two copies disagree, and nothing announces the day they do.
+
 ### Asked and answered: should the street name be top-centre?
 
 **Evaluated 2026-08-26 and refused, on allocation rather than on looks.** Rendered both ways at two

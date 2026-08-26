@@ -50,16 +50,11 @@ var _car: VehicleController = null
 var _plate: ChamferPanel = null
 var _plate_en: Label = null
 var _plate_zh: Label = null
-## Kept so the plate can be re-cut to each new name, along with the edge
-## `_place` pinned it to. Captured once rather than read back off the Control:
-## `_fit_plate` writes those same offsets, so re-deriving them from the node
-## would drift a little further from the layout on every street change.
+## Kept so the plate can be re-cut to each new name.
 var _plate_lines: VBoxContainer = null
-var _plate_pin := Rect2()
-var _plate_anchor_x: float = 0.0
 var _speed_value: Label = null
 ## The chip itself, kept so its bar can be driven every frame.
-var _speed_chip: ChamferPanel = null
+var _speed_chip: AccentBar = null
 var _readout: Label = null
 ## The reserved, empty slots. Outlined under the dev overlay so the space this
 ## HUD holds for `P3-5a` and `P3-5b` can be SEEN rather than taken on trust
@@ -74,7 +69,6 @@ var _shown_speed: String = ""
 ## differentiated from, in m/s.
 var _accel_mps2: float = 0.0
 var _last_speed_ms: float = 0.0
-var _shown_fill: float = 0.0
 
 
 func _ready() -> void:
@@ -167,7 +161,8 @@ func _build() -> void:
 	# ---- the street plate: the CITY's voice ----
 	#
 	# A white field with a hard black keyline, which is what a Wan Chai street
-	# name plate actually is, cut to the name on it by `_fit_plate`. The chamfer is the HUD's one shared shape, so the
+	# name plate actually is, cut to the name on it by `_fit_plate`. The chamfer
+	# is the HUD's one shared shape, so the
 	# sign and the instrument read as one family without being one colour.
 	_plate = ChamferPanel.new()
 	_plate.name = "StreetPlate"
@@ -179,42 +174,27 @@ func _build() -> void:
 	# never is one, and an empty white sign is worse than nothing.
 	_plate.visible = false
 	_place(root, _plate, _layout.street_plate)
-	_plate_anchor_x = _plate.anchor_left
-	_plate_pin = Rect2(
-		_plate.offset_left,
-		_plate.offset_top,
-		_plate.offset_right - _plate.offset_left,
-		_plate.offset_bottom - _plate.offset_top
-	)
 
 	_plate_lines = _lines(_plate, 0)
-	var lines: VBoxContainer = _plate_lines
 
-	# ⚠️ **Always centred, whichever screen edge the plate hangs off.** The
-	# lettering briefly followed the pinned edge, which right-aligned 博覽道東
-	# under EXPO DRIVE EAST — two lines of very different width ragged against
-	# one side. A street sign centres its lines; the PANEL moves, the words do
-	# not.
 	_plate_en = _label("English", _style.plate_size_en, _style.plate_ink)
-	_plate_en.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lines.add_child(_plate_en)
+	_plate_lines.add_child(_plate_en)
 
 	_plate_zh = _label("Chinese", _style.plate_size_zh, _style.plate_ink)
-	_plate_zh.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	if font_zh != null:
 		# Overridden on this label alone. The English line keeps the theme's
 		# Noto Sans on purpose — a real Hong Kong plate carries a Latin
 		# grotesque above a Chinese Kai, so two typefaces is the accurate
 		# answer rather than an inconsistency to tidy up.
 		_plate_zh.add_theme_font_override(&"font", font_zh)
-	lines.add_child(_plate_zh)
+	_plate_lines.add_child(_plate_zh)
 
 	# ---- speed: the CAR's voice ----
 	#
 	# Dark chip, light numerals, one saturated bar along the bottom. The
 	# opposite treatment to the plate on purpose, so a glance tells the two
 	# apart before it has read either.
-	_speed_chip = ChamferPanel.new()
+	_speed_chip = AccentBar.new()
 	_speed_chip.name = "Speed"
 	_speed_chip.chamfer_px = _style.chamfer_px
 	_speed_chip.fill = _style.chip_field
@@ -256,6 +236,12 @@ func _build() -> void:
 
 ## A centred line of HUD text. Four of these differed only in a name, a size and
 ## a colour.
+##
+## ⚠️ **Centred, and the plate must not override it.** The plate's lettering
+## briefly followed whichever screen edge the panel was pinned to, which
+## right-aligned 博覽道東 under EXPO DRIVE EAST — two lines of very different
+## width ragged against one side. A sign centres its lines: the panel moves, the
+## words do not.
 static func _label(node_name: String, size: int, ink: Color) -> Label:
 	var label := Label.new()
 	label.name = node_name
@@ -296,24 +282,25 @@ func _fit_plate() -> void:
 	var box: Rect2 = _layout.street_plate
 	var wanted: Vector2 = _plate_lines.get_combined_minimum_size() + _style.plate_pad * 2.0
 	var width: float = minf(wanted.x, box.size.x)
-	var height: float = minf(maxf(wanted.y, 0.0), box.size.y)
+	var height: float = minf(wanted.y, box.size.y)
 
-	# Grows away from whichever edge `_place` pinned it to, so the plate keeps
+	# Grows away from whichever edge the layout pinned it to, so the plate keeps
 	# the screen edge it is aligned against however long the name is — and so
 	# moving it in the `.tres` needs no code change here, which is the whole
 	# point of the layout being data.
-	if is_equal_approx(_plate_anchor_x, 1.0):
-		_plate.offset_right = _plate_pin.end.x
-		_plate.offset_left = _plate_pin.end.x - width
-	elif is_zero_approx(_plate_anchor_x):
-		_plate.offset_left = _plate_pin.position.x
-		_plate.offset_right = _plate_pin.position.x + width
-	else:
-		var centre: float = _plate_pin.position.x + _plate_pin.size.x * 0.5
-		_plate.offset_left = centre - width * 0.5
-		_plate.offset_right = centre + width * 0.5
-	_plate.offset_bottom = _plate_pin.end.y
-	_plate.offset_top = _plate_pin.end.y - height
+	#
+	# ⚠️ **The anchor comes from the FULL rect, not the shrunk one.** `_axis`
+	# picks its edge by which third of the screen the box falls in, and a plate
+	# cut down to a short name can land in a different third than the slot it
+	# was placed in — which would re-pin it to the opposite edge mid-drive.
+	var horizontal: Vector2 = _axis(box.position.x, box.end.x, _layout.design_size.x)
+	_offsets(
+		_plate,
+		Rect2(
+			box.position.x + (box.size.x - width) * horizontal.x, box.end.y - height, width, height
+		),
+		_layout.street_plate
+	)
 
 
 ## The reserved slots follow the dev overlay's readouts: off in every shipped
@@ -334,16 +321,30 @@ func _show_slots() -> void:
 func _place(parent: Control, control: Control, design: Rect2) -> void:
 	parent.add_child(control)
 	var size: Vector2 = _layout.design_size
-	var horizontal: Vector2 = _axis(design.position.x, design.end.x, size.x)
-	var vertical: Vector2 = _axis(design.position.y, design.end.y, size.y)
-	control.anchor_left = horizontal.x
-	control.anchor_right = horizontal.x
-	control.anchor_top = vertical.x
-	control.anchor_bottom = vertical.x
-	control.offset_left = design.position.x - horizontal.y
-	control.offset_right = design.end.x - horizontal.y
-	control.offset_top = design.position.y - vertical.y
-	control.offset_bottom = design.end.y - vertical.y
+	control.anchor_left = _axis(design.position.x, design.end.x, size.x).x
+	control.anchor_right = control.anchor_left
+	control.anchor_top = _axis(design.position.y, design.end.y, size.y).x
+	control.anchor_bottom = control.anchor_top
+	_offsets(control, design, design)
+
+
+## Write `control`'s offsets so it covers `rect`, against the anchors that
+## `anchored_on` resolves to.
+##
+## The two rects differ only for the street plate, which is drawn smaller than
+## the slot it is anchored in — and the anchor must stay the slot's, or the
+## plate re-pins itself to the far edge the first time a short name shrinks it
+## across a screen third.
+func _offsets(control: Control, rect: Rect2, anchored_on: Rect2) -> void:
+	var size: Vector2 = _layout.design_size
+	var origin := Vector2(
+		_axis(anchored_on.position.x, anchored_on.end.x, size.x).y,
+		_axis(anchored_on.position.y, anchored_on.end.y, size.y).y
+	)
+	control.offset_left = rect.position.x - origin.x
+	control.offset_right = rect.end.x - origin.x
+	control.offset_top = rect.position.y - origin.y
+	control.offset_bottom = rect.end.y - origin.y
 
 
 ## Returns `(anchor, the design coordinate that anchor sits at)` for one axis.
@@ -398,8 +399,14 @@ func _inset_for_safe_area(root: Control) -> void:
 	root.offset_bottom = -maxf(0.0, float(screen.y - safe.end.y)) * canvas_per_pixel.y
 
 
-func _process(delta: float) -> void:
+func _physics_process(delta: float) -> void:
 	_update_accel(delta)
+
+
+## ⚠️ **The acceleration bar is driven from `_physics_process`, not here.** See
+## `_update_accel`; `linear_velocity` only changes on a physics tick, so a
+## render-rate differentiator divides a real change by the wrong interval.
+func _process(delta: float) -> void:
 	_update_speed(delta)
 	_update_street(delta)
 
@@ -414,28 +421,42 @@ func _process(delta: float) -> void:
 ## empty at a steady 80 kph, fills under power, and swings the other way under
 ## braking.
 ##
-## ⚠️ **Every frame, not on the 10 Hz speed gate.** A differentiated velocity
-## sampled at 10 Hz is a staircase; the smoothing needs the small `delta` to be
-## a filter rather than a lag. The work is one subtraction and one lerp.
+## 🔴 **On the physics tick, because that is the only tick the input changes
+## on.** Physics and rendering both run at 60 Hz and are *not* phase-locked, and
+## nothing interpolates between them — so differentiating in `_process` gave
+## some frames no velocity change at all and the next frame two ticks' worth,
+## roughly doubling the variance of a signal this file already has to filter
+## hard. The scene puts `Hud` after `Taxi`, so the car's own `_physics_process`
+## has already written `speed_kph` when this reads it.
+##
+## ⚠️ **`car.speed_kph`, never `forward_speed_kph()`.** `vehicle_controller.gd`
+## caches the first for exactly this reason — "everything that wants the car's
+## speed wants the same number in the same tick" — and the second recomputes a
+## dot product and a global basis per call.
 func _update_accel(delta: float) -> void:
 	var car: VehicleController = _vehicle()
 	if car == null or delta <= 0.0:
 		return
-	var speed_ms: float = car.forward_speed_kph() / 3.6
+	var speed_ms: float = car.speed_kph / 3.6
 	var raw: float = (speed_ms - _last_speed_ms) / delta
 	_last_speed_ms = speed_ms
-	# Exponential, framerate-independent: `delta / tau` clamped, so a slow frame
-	# catches up rather than overshooting.
-	var follow: float = clampf(delta / maxf(_style.accel_smoothing_s, 0.001), 0.0, 1.0)
+
+	# ⚠️ **`1 - exp(-dt/tau)`, not `dt/tau`.** The linear form is that curve's
+	# first-order approximation and it is 4.7% low at 60 fps, 9% at 30 and 19%
+	# at 15 — so the effective time constant *shortens* as frames are dropped
+	# and the bar gets jumpier exactly when the game is struggling, which is the
+	# opposite of what a smoothing filter is for. The exact form also needs no
+	# clamp: it is in [0, 1) for every non-negative delta.
+	var follow: float = 1.0 - exp(-delta / maxf(_style.accel_smoothing_s, 0.001))
 	_accel_mps2 = lerpf(_accel_mps2, raw, follow)
 
 	var fill: float = clampf(_accel_mps2 / maxf(_style.accel_full_scale_mps2, 0.001), -1.0, 1.0)
-	# Assigned only on a visible change: the setter queues a redraw, and a
-	# parked car would otherwise redraw the panel sixty times a second to draw
-	# the same bar.
-	if absf(fill - _shown_fill) < 0.004:
+	# Assigned only on a visibly different reading: the setter queues a redraw,
+	# and the threshold is one pixel of the bar's own half-reach rather than a
+	# chosen constant, so it stays sub-pixel whatever the chip is resized to.
+	var step: float = 1.0 / maxf(_layout.speed.size.x * 0.5, 1.0)
+	if absf(fill - _speed_chip.accent_fill) < step:
 		return
-	_shown_fill = fill
 	_speed_chip.accent_fill = fill
 
 
@@ -450,7 +471,7 @@ func _update_speed(delta: float) -> void:
 		return
 	# `forward_speed_kph` is signed — negative reversing. Shown as a magnitude
 	# with an R, because "-12" is a reading nobody takes off a speedometer.
-	var speed: float = car.forward_speed_kph()
+	var speed: float = car.speed_kph
 	# Guarded on the rendered STRING, not on the magnitude. Keying on the
 	# rounded integer alone let a sign flip between two samples of equal speed
 	# — −12 to +12 — compare equal and leave the readout saying `R 12` while
@@ -524,4 +545,8 @@ func _vehicle() -> VehicleController:
 		_car = null
 	if _car == null:
 		_car = VehicleController.first_in(get_tree())
+		# ⚠️ A fresh car is not a continuation of the old one's velocity. Without
+		# this the first sample after a respawn or a scene change differentiates
+		# across the gap and pins the bar hard over for a filter time-constant.
+		_last_speed_ms = 0.0 if _car == null else _car.speed_kph / 3.6
 	return _car

@@ -42,7 +42,7 @@ const TrackerScript = preload("res://scripts/core/street_tracker.gd")
 const HudLayoutScript = preload("res://scripts/ui/hud_layout.gd")
 const HudStyleScript = preload("res://scripts/ui/hud_style.gd")
 const StreetPlateScript = preload("res://scripts/ui/street_plate.gd")
-const ChamferPanelScript = preload("res://scripts/ui/chamfer_panel.gd")
+const AccentBarScript = preload("res://scripts/ui/accent_bar.gd")
 
 ## ⚠️ **The paths come from the scripts the game loads, never restated here.** A
 ## check that names its own path goes green while the game reads a different
@@ -92,6 +92,16 @@ func _check_layout() -> void:
 			)
 		)
 
+	# 🔴 **A missing `.tres` key is now a zero, not a sensible default.** Dropping
+	# the `@export` defaults removed the second copy of the tuning table that had
+	# already drifted once — and it moved the failure mode from "stale value" to
+	# "no value", which draws a zero-size panel and looks like a HUD element that
+	# failed to appear. Nothing else in the suite would catch that.
+	for slot_name: String in layout.hud_slots():
+		var rect: Rect2 = layout.hud_slots()[slot_name]
+		if rect.size.x <= 0.0 or rect.size.y <= 0.0:
+			_fail("layout", "%s has no size — is it missing from the .tres?" % slot_name)
+
 	var outside: PackedStringArray = layout.within_design()
 	if outside.size() > 0:
 		_fail("layout", "rect(s) outside the design resolution: %s" % ", ".join(outside))
@@ -100,7 +110,12 @@ func _check_layout() -> void:
 	# always returned empty would pass the assertion above for ever, which is
 	# the exact failure `verify_mesh_contract.gd` was written about. So: put a
 	# rect under a thumb on a throwaway copy and require it to be caught.
-	var probe: Resource = HudLayoutScript.new()
+	#
+	# ⚠️ **A duplicate of the SHIPPED resource, not `new()`.** Neither `HudLayout`
+	# nor `HudStyle` declares `@export` defaults any more — the numbers live only
+	# in the `.tres`, as `HandlingProfile` does — so `new()` would hand these
+	# probes an all-zero table and grade nothing.
+	var probe: Resource = layout.duplicate()
 	probe.speed = probe.thumb_rest_left
 	if probe.collisions().is_empty():
 		_fail("layout", "a rect placed on thumb_rest_left was NOT reported — the check is inert")
@@ -109,9 +124,9 @@ func _check_layout() -> void:
 
 	# ⚠️ ...and the other half, which is the one this file got wrong first time.
 	# Overlapping a tap ZONE must be ALLOWED. Without this assertion, someone
-	# "tightening" the check back to `touch_zones()` would pass every test above
+	# "tightening" the check back to `zone_slots()` would pass every test above
 	# and silently re-ban the corners the references use.
-	var over_zone: Resource = HudLayoutScript.new()
+	var over_zone: Resource = layout.duplicate()
 	# The UPPER part of the tap zone, deliberately. A tap zone geometrically
 	# CONTAINS its own thumb rest — the rest is the bottom outer corner of it —
 	# so handing the whole zone to this probe tests nothing and fails for the
@@ -184,11 +199,8 @@ func _check_style() -> void:
 	# the truth. No frame catches that; a rule about which channel dominates
 	# does.
 	#
-	# ⚠️ This replaced a check that the accent stayed clear of **taxi red**. That
-	# rule was written when the bar was yellow-and-blue in order to keep the
-	# car's colour out of the HUD entirely, and the convention beat it: the red
-	# here is not the taxi's paint spent on decoration, it is red used for the
-	# one thing red means.
+	# ⚠️ The taxi-red rule this replaced, and why the convention beat it, is in
+	# `hud_style.gd`.
 	if style.accent.g <= style.accent.r or style.accent.g <= style.accent.b:
 		_fail("style", "the gaining half of the bar is not green — green is go")
 	elif style.accent_negative.r <= style.accent_negative.g:
@@ -216,17 +228,43 @@ func _check_style() -> void:
 
 ## The bar's own arithmetic, which no frame can be trusted to show.
 ##
-## A signed reading drawn from a centre is easy to get subtly wrong — inverted,
-## or clamped on one side only — and it renders as a bar that moves plausibly.
+## 🔴 **Against `bar_span`, not against `accent_fill`.** The first version of
+## this check set `accent_fill` and read it back, which tests Godot's `clampf`
+## and nothing else: a setter mutated to `signf(value)` passed every assertion.
+## What can actually be wrong is the *direction* of a centre-origin bar, and a
+## bar drawn the wrong way sweeps exactly as convincingly as one drawn the right
+## way. `Q72`'s rule — the test of a check is whether any reachable state makes
+## it fail.
 func _check_bar() -> void:
-	var panel: Control = ChamferPanelScript.new()
-	panel.accent_fill = 5.0
-	_expect(is_equal_approx(panel.accent_fill, 1.0), "bar", "over-range reads clamp to full")
-	panel.accent_fill = -5.0
-	_expect(is_equal_approx(panel.accent_fill, -1.0), "bar", "and clamp the same way losing speed")
-	panel.accent_fill = 0.0
-	_expect(is_zero_approx(panel.accent_fill), "bar", "zero is zero")
-	panel.free()
+	var middle: float = 50.0
+	_expect(
+		AccentBarScript.bar_span(0.0, 100.0, 0.0).y == middle,
+		"bar",
+		"a zero reading draws nothing either side of the centre"
+	)
+	_expect(
+		AccentBarScript.bar_span(0.0, 100.0, 1.0).y == 100.0,
+		"bar",
+		"a full positive reading reaches the right edge of the bed"
+	)
+	_expect(
+		AccentBarScript.bar_span(0.0, 100.0, -1.0).y == 0.0,
+		"bar",
+		"a full negative reading reaches the left, which is the inversion test"
+	)
+	_expect(
+		(
+			AccentBarScript.bar_span(0.0, 100.0, 5.0).y == 100.0
+			and AccentBarScript.bar_span(0.0, 100.0, -5.0).y == 0.0
+		),
+		"bar",
+		"over-range readings clamp the same way in both directions"
+	)
+	_expect(
+		AccentBarScript.bar_span(0.0, 100.0, 0.5).y == 75.0,
+		"bar",
+		"and a half reading reaches half way, so the scale is linear"
+	)
 
 
 # ----------------------------------------------------------- plate tuning ----

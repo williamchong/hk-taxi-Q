@@ -1385,8 +1385,9 @@ the second vehicle anyone built.
 | `scripts/ui/fps_counter.gd` | Frame rate and frame time. Gated by `DebugHud`, and it stops counting while hidden |
 | `scripts/ui/hud.gd` | The player's HUD. Samples speed at 10 Hz and the road graph at 5 Hz, sets label text only on a change, and registers a raw-versus-displayed readout with `DebugHud` — the one thing that can see a wrong street plate |
 | `scripts/ui/hud_layout.gd` | Every HUD rect **and** `P2-4`'s touch geometry. ⚠️ Two touch families and the distinction is load-bearing: `touch_steer_*` is where taps are detected and the HUD may overlap it; `thumb_rest_*` is what a fingertip covers and the HUD may not (`Q80`) |
-| `scripts/ui/hud_style.gd` | The HUD's palette, chamfer and type scale. Deliberately **not** the road's paint constants (`Q53`) |
+| `scripts/ui/hud_style.gd` | The HUD's palette, chamfer and type scale. Deliberately **not** the road's paint constants (`Q53`). ⚠️ Declares **no `@export` defaults**, like `HandlingProfile` and `StreamingProfile` — a default is a second copy of the tuning table, and this one drifted (`Q80`) |
 | `scripts/ui/chamfer_panel.gd` | The HUD's one shape: a flat polygon with cut corners. Not a `StyleBox` — a chamfer is not a corner radius, and this bundle ships no UI textures |
+| `scripts/ui/accent_bar.gd` | A `ChamferPanel` that also carries one signed reading — the speed chip's acceleration bar. Split out so the plate and the reserved slots are not carrying five inert speedometer properties. `bar_span` is a pure static precisely so `verify_hud.gd` can grade the bar's **direction**, which is the one thing here that renders perfectly while being wrong |
 | `scripts/core/street_tracker.gd` | Pure: which street the plate should say you are on. Owns the dwell that stops it strobing at a junction, the rule that an unnamed edge is not evidence, and the `changes` counter that grades both |
 | `scenes/world/golden_hour.tscn` | The one lighting rig. Instance it rather than authoring a second Environment |
 | `tools/verify_tiles.gd` | The mesh contract, per tier of every tile the manifest names |

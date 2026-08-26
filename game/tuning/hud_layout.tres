@@ -6,27 +6,20 @@
 ; middle kept for what the player is reading now. See hud_layout.gd, and Q80 for
 ; why the check grades `thumb_rest_*` and not `touch_steer_*`.
 ;
-; ⚠️ EVERY DRAWN RECT SHRANK after the first build was looked at — the panels
-; were about twice the share of frame the references give them, and sat inboard
-; instead of hugging an edge. They now run down to y 860, one clear pixel band
-; above `thumb_rest_*`, which is as low as the touch contract allows.
+; ⚠️ BOTH DRAWN READOUTS SHARE A BASELINE AT y 860 — one clear band above
+; `thumb_rest_*`, which is as low as the touch contract allows, and level with
+; each other so they read as a pair of corners rather than as two floats.
 ;
 ; 🔴 ONE RULE, AND IT IS ABOUT WHAT A READOUT MEANS: left is the car, right is
-; the world, top is the fare, and the middle is the road and stays empty. The
-; plate began bottom-centre, sitting over the vanishing point and the car; it
-; then went into the left column beside the speed, which paired it with an
-; instrument. A street name and a street map are the same question, so it lives
-; on the right with the map.
+; the world, top is the fare, and the middle is the road and stays empty.
 ;
-; 🔴 AND A RELEASE HOLDS NO SPACE FOR UI THAT DOES NOT EXIST. The plate sat at
-; y 530 for one build — mid-frame, floating — purely because the unbuilt minimap
-; was under it, while the speed sat at y 860. Two readouts on two baselines, and
-; the gap between them was a promise to a task nobody has started. What ships
-; goes in the corners; the reserved rects below are the PLAN for the area, and
-; `P3-5a`/`P3-5b` move things when they arrive. That is a `.tres` edit.
+; 🔴 PLAN THE AREA, DO NOT HOLD THE SPACE. What ships is placed as though the
+; reserved slots do not exist, because they do not; a slot's contents arriving
+; is an edit to this file.
 ;
-; Both drawn readouts now share a baseline at y 860 — the bottom-left and
-; bottom-right corners, level with each other, one clear band above the thumbs.
+; ⚠️ EVERY KEY BELOW IS REQUIRED. `hud_layout.gd` declares no defaults, so a key
+; missing here is a zero-size rect rather than something sensible, and
+; `verify_hud.gd` refuses one.
 
 [resource]
 script = ExtResource("1_hud_layout")

@@ -34,7 +34,14 @@ extends Resource
 ## rather than read from `project.godot`: a check that took the rects from here
 ## and the resolution from there would silently pass on a project whose window
 ## settings had moved out from under the layout.
-@export var design_size: Vector2 = Vector2(1920.0, 1080.0)
+##
+## 🔴 **Nothing here declares a default, and that is the convention rather than
+## an oversight.** `HandlingProfile` and `StreamingProfile` do the same: an
+## `@export` with a default is a second copy of the tuning table, and a second
+## copy drifts. This file's did — it sat one arrangement behind the shipped
+## `.tres` while the comments beside it described the new one, and
+## `verify_hud.gd` was grading `new()` rather than what ships.
+@export var design_size: Vector2
 
 # ---- what P3-24 draws ----
 #
@@ -51,65 +58,50 @@ extends Resource
 #     are the same question asked twice and therefore belong together;
 #   * **top is the fare** — timer and meter, `P3-5a`'s;
 #   * **the middle is the road**, and nothing goes in it.
-#
-# The middle mattered immediately: the plate started bottom-centre and sat over
-# the vanishing point and the car. The pairing was the second correction — the
-# plate was moved into the left column beside the speed, which put "where am I"
-# next to "how fast" and left the map it belongs with in the other corner.
 
-## Speed, bottom-left, big. Raised clear of the left thumb rather than sitting
-## in the corner: MM2 is a keyboard game and could use the very corner, and we
-## cannot.
-@export var speed: Rect2 = Rect2(48.0, 660.0, 280.0, 200.0)
-## The bilingual street name plate, stacked directly above the speed in the
-## bottom-left column.
+## Speed, bottom-left. Raised clear of the left thumb rather than sitting in the
+## very corner: MM2 is a keyboard game and could use it, and we cannot.
+@export var speed: Rect2
+
+## The bilingual street name plate, bottom-right, under the minimap slot.
 ##
-## 🔴 **Not bottom-centre, which is where it started**, and not the left column
-## either, which is where it went next. The middle of the frame is the road —
-## the vanishing point, the lane you are about to be in, and the car — and a
-## bright white slab sat in it. The left column then put it beside the speed,
-## which pairs it with an instrument; a street name and a street map are the
-## same question, so it sits above the minimap instead.
+## 🔴 **The middle of the frame is the road and nothing goes in it** — the
+## vanishing point, the lane you are about to be in, and the car. And a street
+## name belongs with the street map rather than with the speed: the two are one
+## question, which is why they share this side.
 ##
 ## ⚠️ **This is the plate's MAXIMUM box and its anchor, not its drawn size.** A
 ## street sign is cut to its lettering, and a fixed-width one leaves
-## `SHARP STREET` floating in the middle of a slab sized for
-## `CROSS HARBOUR TUNNEL` — which is what makes it read as a dialog rather than
-## as signage. `hud.gd::_fit_plate` shrinks it to its text about this rect's
-## centre and clamps to this width, so the reservation the check grades stays
-## the honest worst case.
-@export var street_plate: Rect2 = Rect2(1412.0, 530.0, 460.0, 96.0)
+## `SHARP STREET` floating in a slab sized for `CROSS HARBOUR TUNNEL`.
+## `hud.gd::_fit_plate` shrinks it against this rect's pinned edge and clamps to
+## this width, so the reservation the check grades stays the honest worst case.
+@export var street_plate: Rect2
 
 # ---- planned, NOT held open, filled by P3-5a and P3-5b ----
 #
 # 🔴 **Plan the area; do not hold the space.** These rects say where the timer,
 # meter and minimap will go, and the check keeps them honest — but what ships is
-# placed as though they do not exist, because they do not. For one build the
-# plate sat at y 530, mid-frame and floating, purely because the unbuilt minimap
-# was under it; the speed sat at y 860, and the two readouts were on two
-# baselines with a gap between them that was a promise to a task nobody had
-# started.
-#
-# That cost is paid in **every** release before the last one, for a benefit that
-# arrives once. So a release places what it has, and the arrival of a slot's real
-# contents is a `.tres` edit — which is exactly what the layout being data buys.
+# placed as though they do not exist, because they do not. A gap held open for
+# unbuilt UI makes every release before the last one look wrong, which is a cost
+# paid many times over for a benefit that arrives once. A slot's contents
+# arriving is a `.tres` edit.
 
 ## `P3-5b`. Bottom-right, where MM2 puts it — **not** top-left, which is where
 ## this layout had it before the references were looked at. A street map is
 ## glanced at mid-corner and belongs near the road, not in the far corner of
-## the screen. The street plate sits directly above it, because the two are one
-## question.
-@export var minimap: Rect2 = Rect2(1568.0, 600.0, 304.0, 260.0)
+## the screen. The street plate sits below it, in the corner, because the two are
+## one question.
+@export var minimap: Rect2
 ## `P3-5a`'s fare timer. Top-left and large, which is where the arcade-taxi
 ## reference puts its game clock.
-@export var timer: Rect2 = Rect2(48.0, 48.0, 380.0, 150.0)
+@export var timer: Rect2
 ## `P3-5a`'s fare meter, top-right, on the same reference's `$` readout.
 ##
 ## ⚠️ Named `meter` and not `target`: it was `target` while this layout still
 ## expected to hold a destination callout, and the references moved that into
 ## the world (see below). A rect whose name promises a destination is how the
 ## next task puts one back on the screen without meaning to.
-@export var meter: Rect2 = Rect2(1440.0, 48.0, 432.0, 170.0)
+@export var meter: Rect2
 
 ## ⚠️ **There is deliberately NO slot for the destination ARROW**, and that is a
 ## finding rather than an omission. Both references that have a destination put
@@ -146,13 +138,13 @@ extends Resource
 
 ## Where taps are detected. Informational: `P2-4` reads these, and the HUD is
 ## explicitly ALLOWED to overlap them.
-@export var touch_steer_left: Rect2 = Rect2(0.0, 480.0, 560.0, 600.0)
-@export var touch_steer_right: Rect2 = Rect2(1360.0, 480.0, 560.0, 600.0)
+@export var touch_steer_left: Rect2
+@export var touch_steer_right: Rect2
 
 ## Where a resting thumb actually covers the screen. **Nothing the HUD draws may
 ## intersect these.** Sized as a fingertip in each outer bottom corner.
-@export var thumb_rest_left: Rect2 = Rect2(0.0, 880.0, 280.0, 200.0)
-@export var thumb_rest_right: Rect2 = Rect2(1640.0, 880.0, 280.0, 200.0)
+@export var thumb_rest_left: Rect2
+@export var thumb_rest_right: Rect2
 
 ## ⚠️ **Auto-accelerate is why there is no throttle rect.** `InputRouter`'s touch
 ## default is that the player only steers, brakes and drifts. If that default is
@@ -207,9 +199,10 @@ func zone_slots() -> Dictionary[String, Rect2]:
 func collisions() -> PackedStringArray:
 	var found := PackedStringArray()
 	var thumbs: Dictionary[String, Rect2] = thumb_slots()
-	for hud_name: String in hud_slots():
+	var huds: Dictionary[String, Rect2] = hud_slots()
+	for hud_name: String in huds:
 		for thumb_name: String in thumbs:
-			if hud_slots()[hud_name].intersects(thumbs[thumb_name]):
+			if huds[hud_name].intersects(thumbs[thumb_name]):
 				found.append("%s/%s" % [hud_name, thumb_name])
 	return found
 
