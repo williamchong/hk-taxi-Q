@@ -96,7 +96,8 @@ extends Resource
 ## wheel_friction_slip carries the rear axle's drive as well as its grip.
 ##
 ## ⚠️ **The window moves with tyre_grip**: re-swept at tyre_grip 4.0 it sits at
-## 0.43/0.44. Sweep it with `tools/skidpad.sh --drift-grip=`, at 0.002 or finer.
+## 0.43/0.44. Sweep it with `tools/skidpad.sh --sweep=drift_rear_grip_scale=`, at 0.002 or
+## finer (`--drift-grip=` is kept as an alias for it).
 ##
 ## ⚠️ **And inside it the slide does not hold.** Because tyre_grip is isotropic,
 ## the same scale that lets the tail step out takes the rear axle's drive and
@@ -202,8 +203,17 @@ extends Resource
 ## because it gives the kick an end a player can be told about — "the burst lasts
 ## 0.6 s" — instead of an asymptote.
 ##
-## ⚠️ Floored at 0.01 rather than 0 because the decay divides by it, the same
-## guard drift_attack_s carries.
+## 🔴 **Floored at 0.01 because the decay divides by it — but the annotation binds
+## the inspector and NOT a value loaded from .tres.** This file declares no
+## defaults on purpose, so a handling.tres that simply omits this key reads 0.0,
+## and GDScript float division by zero is +INF rather than an error: the clamp
+## then saturates, the burst collapses to drift_yaw_sustain, and at the shipped
+## 0.0 **the whole yaw assist silently disappears**. That is not the "fails
+## loudly" this file's header promises, and it is stated rather than clamped
+## away because substituting 0.01 would be exactly the quiet default the header
+## refuses. drift_attack_s carries the identical hole. ⚠️ The 0.0/0.0 → NAN path
+## is unreachable: _apply_drift_yaw returns on zero engagement, and held time is
+## always at least one delta by then.
 @export_range(0.01, 2.0, 0.01, "suffix:s") var drift_yaw_decay_s: float
 ## Fraction of drift_yaw_torque_nm the burst decays to and then holds for as long
 ## as the button is down.

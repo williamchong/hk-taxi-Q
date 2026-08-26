@@ -417,8 +417,17 @@ func _apply_drift(delta: float) -> void:
 	# Held time keeps accruing through the release ramp — the car is still sliding,
 	# so the burst it already spent must stay spent. See _drift_held_s for why the
 	# reset waits for the engagement rather than the button.
+	#
+	# ⚠️ **Only on ticks the torque could actually land.** _apply_drift_yaw refuses
+	# airborne, so accruing there would spend a burst that was never applied — the
+	# opposite of the sentence above — and with drift_yaw_sustain at 0.0 a drift
+	# held over a jump would land with no assist at all. GAME_DESIGN.md scores
+	# airtime, so that is a reachable state rather than a corner case. Deferring
+	# the kick to the landing does not reintroduce the mid-air pirouette the
+	# refusal exists for.
 	if drift_input:
-		_drift_held_s += delta
+		if _any_wheel_grounded():
+			_drift_held_s += delta
 	elif is_zero_approx(_drift_engagement):
 		_drift_held_s = 0.0
 	_write_drift_grip()

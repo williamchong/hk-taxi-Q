@@ -7,12 +7,20 @@
 #
 #   --only=drift                     one manoeuvre instead of all five
 #                                    (corner, drift, tap, brake, coast)
-#   --drift-grip=0.38,0.40,0.42      sweep drift_rear_grip_scale; only drift and
-#                                    tap are re-run, the rest cannot move
+#   --sweep=FIELD=0.4,0.6,0.8        sweep any HandlingProfile float. A drift_*
+#                                    field re-runs only drift and tap, since the
+#                                    rest cannot move; anything else re-runs all
+#                                    five. One sweep per run — a second is
+#                                    refused, not merged
+#   --drift-grip=0.38,0.40,0.42      alias for --sweep=drift_rear_grip_scale=...
 #   --scene=res://scenes/dev/...      grade a different car on the same ground
 #
 # Run it before AND after any change to VehicleController's drive model,
 # HandlingProfile or handling.tres, and paste both tables (CLAUDE.md).
+#
+# Sweep with --sweep rather than by editing handling.tres in a shell loop: one
+# such loop blanked the field it was sweeping and published a table of all-zero
+# rows that read like a finding (Q86).
 #
 # Exists for the same reason drive.sh and tools/check.sh do: Godot exits 0 when a
 # script fails to parse, so quit(1) never runs and a broken tool reports success.

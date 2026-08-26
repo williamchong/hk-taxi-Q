@@ -39,7 +39,8 @@ const DRIFT_MANOEUVRES: PackedStringArray = ["drift", "tap"]
 ## ⚠️ Set through `Object.set()`, which is a **silent no-op** on a name the
 ## resource does not have. Rename the field and every swept row comes back
 ## identical, correctly labelled, and describing a value that was never applied —
-## a published table of numbers nobody measured. `_boot` refuses the run instead.
+## a published table of numbers nobody measured. `_measure_all` refuses the run
+## instead, before any manoeuvre is simulated.
 const DEFAULT_SWEEP_FIELD: StringName = &"drift_rear_grip_scale"
 
 ## Name prefix marking a field whose effect is confined to the drift branch.
@@ -228,6 +229,15 @@ func _parse_args() -> bool:
 ## Shared by `--sweep` and its `--drift-grip` alias so the two cannot disagree
 ## about what counts as a number.
 func _parse_sweep_values(text: String, flag: String) -> bool:
+	# 🔴 One sweep per run, refused rather than merged. Both flags append into the
+	# same `_sweep` while `_sweep_field` is simply overwritten by whichever parsed
+	# last, so `--sweep=drift_yaw_decay_s=0.4,0.6 --drift-grip=0.62` would write all
+	# three values to `drift_rear_grip_scale` and print every row correctly labelled
+	# with a value applied to a field it was never meant for. That is the published
+	# table of numbers nobody measured this whole tool exists to prevent.
+	if not _sweep.is_empty():
+		_fail("%s: only one sweep per run, and one is already set" % flag)
+		return false
 	for piece: String in text.split(",", false):
 		if not piece.is_valid_float():
 			_fail("%s wants numbers, got '%s'" % [flag, piece])
@@ -286,6 +296,15 @@ func _measure_all() -> void:
 		if not _sweep_field in profile:
 			_fail("sweep: %s has no '%s'" % [profile.resource_path, _sweep_field])
 			return
+		# 🔴 The bar is not a knob, and generalising the flag is what made it
+		# reachable. `_slip_threshold_deg` is cached at boot, so setting the field
+		# per value writes something nothing reads back: every row would come out
+		# identical and labelled with a distinct threshold it never measured
+		# against. Structurally impossible while the swept field was a constant,
+		# and only a convention once it was not. See SLIP_THRESHOLD_FIELD.
+		if _sweep_field == SLIP_THRESHOLD_FIELD:
+			_fail("sweep: %s is the bar, not the knob — it is read once at boot" % _sweep_field)
+			return
 		print("sweeping: %s" % _sweep_field)
 
 	# One pass with the shipped tuning when nothing is swept. NAN is the "leave it
@@ -308,7 +327,9 @@ func _measure_all() -> void:
 		for manoeuvre: String in MANOEUVRES:
 			if not _only.is_empty() and _only != manoeuvre:
 				continue
-			# ⚠️ Only the two drift manoeuvres are swept. The other three never
+			# ⚠️ Only the two drift manoeuvres are swept **when the swept field is
+			# `drift_`-prefixed** — see DRIFT_FIELD_PREFIX, which is what decides it.
+			# For such a field the other three never
 			# reach the field — `corner` steers, `brake` brakes, `coast` presses
 			# nothing, and none of them takes the drift branch — so re-running them
 			# per value burns 4.5 s of simulation each to reproduce the previous row
@@ -502,6 +523,9 @@ func _print_table(results: Array[Result]) -> void:
 	for result: Result in results:
 		width = maxi(width, result.name.length())
 	var row_format: String = "%%-%ds %%9s %%9s %%7s %%9s %%9s %%9s %%9s %%8s %%9s" % width
+	var data_format: String = (
+		"%%-%ds %%9.2f %%9.2f %%7.2f %%9.3f %%9.2f %%9.1f %%9.2f %%8.1f %%9.1f" % width
+	)
 	print("")
 	print(
 		(
@@ -525,7 +549,7 @@ func _print_table(results: Array[Result]) -> void:
 		_printed_rows += 1
 		print(
 			(
-				("%%-%ds %%9.2f %%9.2f %%7.2f %%9.3f %%9.2f %%9.1f %%9.2f %%8.1f %%9.1f" % width)
+				data_format
 				% [
 					result.name,
 					result.entry_kph,
