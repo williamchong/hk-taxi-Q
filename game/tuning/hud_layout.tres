@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="HudLayout" format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/hud_layout.gd" id="1_hud_layout"]
+
+[resource]
+script = ExtResource("1_hud_layout")
+design_size = Vector2(1920, 1080)
+speed = Rect2(48, 660, 280, 200)
+street_plate = Rect2(660, 900, 600, 140)
+minimap = Rect2(1568, 600, 304, 260)
+timer = Rect2(48, 48, 380, 150)
+meter = Rect2(1440, 48, 432, 170)
+touch_steer_left = Rect2(0, 480, 560, 600)
+touch_steer_right = Rect2(1360, 480, 560, 600)
+thumb_rest_left = Rect2(0, 880, 280, 200)
+thumb_rest_right = Rect2(1640, 880, 280, 200)

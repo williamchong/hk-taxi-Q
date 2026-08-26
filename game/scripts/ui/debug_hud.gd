@@ -100,7 +100,7 @@ func _ready() -> void:
 	# dummy rasteriser draws nothing, so the only thing an overlay could do there
 	# is cost the verify tools a tree walk and a second parse of `city.json`
 	# every frame. Every check.sh tool and every telemetry run is headless.
-	var requested: String = _cmdline_value(VIEW_ARG)
+	var requested: String = cmdline_value(VIEW_ARG)
 	var counter_asked_for: bool = _cmdline().has(FPS_ARG)
 	var forced: bool = not requested.is_empty() or counter_asked_for
 	if DisplayServer.get_name() == "headless" or (not OS.is_debug_build() and not forced):
@@ -347,7 +347,12 @@ static func _cmdline() -> PackedStringArray:
 	return arguments
 
 
-static func _cmdline_value(prefix: String) -> String:
+## ⚠️ **Public, like `style_label`, and for the same reason**: `hud.gd` needs a
+## command-line flag before its own `_ready` has done anything, and a second
+## copy of this is how `fps_counter.gd` came to read only `get_cmdline_args()`
+## and miss every flag a scripted run sends. That defect is recorded in
+## `_cmdline` above; a third copy would be the same one waiting to happen.
+static func cmdline_value(prefix: String) -> String:
 	for argument: String in _cmdline():
 		if argument.begins_with(prefix):
 			return argument.trim_prefix(prefix)

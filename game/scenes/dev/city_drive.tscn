@@ -1,4 +1,4 @@
-[gd_scene load_steps=16 format=3]
+[gd_scene load_steps=17 format=3]
 
 ; The first scene that puts the car on the real city (`P1-4` + `P0-5`).
 ;
@@ -31,6 +31,7 @@
 [ext_resource type="Script" path="res://scripts/city/drive_harness.gd" id="6_harness"]
 [ext_resource type="Script" path="res://scripts/city/road_graph_overlay.gd" id="7_graph"]
 [ext_resource type="Script" path="res://scripts/city/landmarks.gd" id="9_landmarks"]
+[ext_resource type="Script" path="res://scripts/ui/hud.gd" id="17_hud"]
 
 [node name="CityDrive" type="Node3D"]
 script = ExtResource("6_harness")
@@ -154,3 +155,15 @@ camera_path = NodePath("Camera3D")
 ; nothing visible lost at street level.
 [node name="Camera3D" type="Camera3D" parent="CameraRig"]
 far = 400.0
+
+; The player's HUD (`P3-24`) — speed, the street you are on, and three reserved
+; slots that `P3-5a` and `P3-5b` fill. Last in the scene so the Taxi it reads
+; already exists when it first looks, and on layer 10 so `DebugHud` (127) and
+; `FpsCounter` (128) still win the corners when someone turns them on.
+;
+; ⚠️ `--hud=off` frees it. That is for `P3-9` first — the authenticity test is a
+; drive with the direction arrow disabled, and a permanent street plate is
+; closer to a navigation aid than that test's premise assumes — and for clean
+; art-review frames second.
+[node name="Hud" type="CanvasLayer" parent="."]
+script = ExtResource("17_hud")

@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="HudStyle" format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/hud_style.gd" id="1_hud_style"]
+
+; White is the city speaking, dark is the car speaking. See hud_style.gd.
+;
+; ⚠️ The plate white and the accent yellow are NOT the road's paint constants.
+; roadmarks.tres records the marking white as its fifth authored copy and
+; boxjunctions.tres the yellow as its third; a sixth and a fourth here would be
+; that debt again, and a street name plate is not paint (Q53, Q79).
+
+[resource]
+script = ExtResource("1_hud_style")
+chamfer_px = 14.0
+edge_px = 3.0
+slot_edge_px = 2.0
+plate_field = Color(0.93, 0.93, 0.9, 1)
+plate_ink = Color(0.07, 0.07, 0.08, 1)
+plate_edge = Color(0.07, 0.07, 0.08, 1)
+plate_size_en = 36
+plate_size_zh = 42
+chip_field = Color(0.14, 0.135, 0.128, 0.88)
+chip_ink = Color(0.96, 0.96, 0.94, 1)
+chip_muted = Color(0.7, 0.69, 0.65, 1)
+accent = Color(0.86, 0.68, 0.13, 1)
+accent_px = 5.0
+speed_size = 104
+speed_unit_size = 30
+speed_line_tighten = -18
+slot_fill = Color(0.3, 0.85, 0.95, 0.1)
+slot_edge = Color(0.3, 0.85, 0.95, 0.55)

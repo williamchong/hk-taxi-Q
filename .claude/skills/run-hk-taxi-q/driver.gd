@@ -455,6 +455,16 @@ func _parse_args() -> bool:
 				if not ["off", "minimal", "full"].has(value):
 					_fail("--debug-view=%s is not off, minimal or full" % value)
 					return false
+			"--hud":
+				# Same shape as `--debug-view` above, and validated here for the
+				# same reason: `hud.gd` reads the command line itself and its own
+				# fallback is to leave the HUD ON, so a typo would silently
+				# return the frame the caller was trying not to take. ⚠️ A clean
+				# art-review frame now needs BOTH flags — the player's HUD is not
+				# dev chrome and `--debug-view=off` does not touch it.
+				if not ["off", "on"].has(value):
+					_fail("--hud=%s is not off or on" % value)
+					return false
 			_:
 				_fail("unknown argument: %s" % arg)
 				return false

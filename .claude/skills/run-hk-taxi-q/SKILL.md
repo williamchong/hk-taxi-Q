@@ -83,6 +83,7 @@ Everything after `drive.sh` goes to `driver.gd`.
 | `--hold=action@start+duration` | press an action; repeatable |
 | `--camera=x,y,z` / `--look=x,y,z` | teleport the camera (preview scenes only) |
 | `--debug-view=off\|minimal\|full` | debug overlay. **`drive.sh` defaults to `minimal`** |
+| `--hud=off\|on` | the **player's** HUD — speed and street plate. On by default; this is not dev chrome |
 
 Actions are the `[input]` names in `game/project.godot`: `accelerate`, `brake_reverse`,
 `steer_left`, `steer_right`, `drift`, `look_back`. An unknown one fails rather than doing nothing.
@@ -147,6 +148,12 @@ white, and that disagreement was itself a finding.
 
 `--debug-view=off` is not optional for these: the overlay's opaque text block is several per cent of
 the frame and it lands in any statistic taken from the PNG.
+
+⚠️ **Nor is `--hud=off`, since `P3-24`.** The player's HUD is not dev chrome and `--debug-view=off`
+does not touch it: a street plate and a speed readout sit in the frame and land in the same
+statistics. **A clean art-review frame needs both flags.** Conversely `--debug-view=full` is what
+reveals the HUD's reserved slots (minimap, timer, meter) as cyan outlines, and its raw-versus-shown
+street readout — which is how you tell a stale plate from a correct one.
 
 Runs are **deterministic**. The clock reads the engine's physics-frame counter rather than
 accumulating per iteration, so nothing that parks the driver for more than a tick — a screenshot, a

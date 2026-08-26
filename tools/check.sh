@@ -43,12 +43,16 @@ VERIFY_TOOLS=(
 )
 
 # The verify tools that need no built region, so they run whatever
-# VERIFY_GENERATED says. Both grade the taxi, which is a committed authored asset
+# VERIFY_GENERATED says. Most grade the taxi, which is a committed authored asset
 # plus its tuning: verify_beam_budget builds its own stub rigs, and
 # verify_vehicle instantiates taxi.tscn. Grouping them with the generated-asset
 # tools above would skip them exactly where they are cheapest to run: CI builds
 # no region, so these are the only runtime contracts it can check at all.
-ALWAYS_TOOLS=(verify_beam_budget verify_vehicle verify_mesh_contract)
+#
+# verify_hud is here for a sharper version of that reason: what it protects is
+# P2-4's future screen space, and P2-4 is exactly the kind of work that lands on
+# a branch where nobody has built a city.
+ALWAYS_TOOLS=(verify_beam_budget verify_vehicle verify_mesh_contract verify_hud)
 
 # Promotions docs/ARCHITECTURE.md "GDScript warnings" says project.godot must
 # carry. Named here so the number the settings check wants and the number its
