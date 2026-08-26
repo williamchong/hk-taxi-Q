@@ -1460,18 +1460,63 @@ the second vehicle anyone built.
 
 ## Input architecture
 
-Desktop/Steam is a target, so input is abstracted from day one via a single action set:
+Desktop/Steam is a target, so input is abstracted from day one via a single action set. Three
+schemes feed it and no gameplay script knows which one is live.
 
-| Action | Touch | Gamepad | Keyboard |
-|---|---|---|---|
-| `steer` (axis) | Left/right screen zones | Left stick X | A / D, ← / → |
-| `accelerate` | Auto-on, or right zone | RT | W, ↑ |
-| `brake_reverse` | Left-bottom button | LT | S, ↓ |
-| `drift` | Dedicated button | A / Cross | Space |
-| `look_back` | Swipe down | B / Circle | C |
+| Action | Router type | Keyboard | Gamepad | Touch (`P2-4`) |
+|---|---|---|---|---|
+| `steer` | `float`, −1…1 | `A` / `D`, ← / → | Left stick X (axis 0) | thumb 2, horizontal from touch origin |
+| `accelerate` | `float`, 0…1 | `W`, ↑ | RT (axis 5) | thumb 1, **above** touch origin |
+| `brake_reverse` | `float`, 0…1 | `S`, ↓ | LT (axis 4) | thumb 1, **below** touch origin |
+| `drift` | `bool` | `Space` | A / Cross (button 0) | thumb 2, held past the drift threshold |
+| `look_back` | `bool` | `C` | B / Circle (button 1) | ⬜ unplaced |
 
-**Touch default is auto-accelerate** — the player only steers, brakes and drifts. This is the genre
-convention and it keeps mobile input to two thumbs.
+Deadzones are **0.2** on the axes and **0.5** on the buttons, set in `project.godot`'s `[input]` map.
+⚠️ **Keyboard and gamepad ship; touch is `P2-4` and unbuilt** — the rects exist and nothing reads
+them yet.
+
+### The three schemes
+
+**Keyboard** is digital on every action. `steer` comes from `Input.get_axis`, so it arrives as a
+float, but only ever −1, 0 or 1; `VehicleController`'s `steer_attack_s` / `steer_release_s` are what
+turn that step into a rate, and on this scheme they are doing all of the smoothing there is.
+
+**Gamepad** is analog on the three that matter — stick X for steering, and both triggers for the
+longitudinal pair. `drift` and `look_back` are digital face buttons. ⚠️ **Both triggers are already
+spent**, so there is no free analog axis for an analog drift, and `drift` stays a `bool` at the
+router. Giving it duration is the vehicle's job and ⬜ **is not built** — today the drift ends on the
+tick the input stops (`Q50`, `Q83`).
+
+**Touch** is two thumbs and five actions, and the allocation is the whole design. Both axes of both
+thumbs are used:
+
+| | Horizontal | Vertical |
+|---|---|---|
+| **thumb 1** (one outer corner) | free — `look_back` candidate | `accelerate` above origin, `brake_reverse` below |
+| **thumb 2** (other outer corner) | `steer` | `drift` while held past the threshold |
+
+🔴 **Both thumbs are *relative*, not absolute.** The thumb lands anywhere in its zone, that point
+becomes the origin, and travel from it is the input. Absolute sliders were rejected because they
+need real travel area and there is none: `speed` and `street_plate` share a baseline at y 860 with
+the thumb rests starting at y 880, so a slider with usable throw collides with the HUD at **20 px**
+of growth (`Q83`). Relative axes keep the rests fingertip-sized and move nothing.
+
+🔴 **`brake_reverse` is the negative half of one longitudinal axis, not a second control**, which is
+why touch gains a throttle without gaining a third thumb rest. It also matches what the vehicle
+already does: `P0-5b/c/d` made one pedal serve brake *and* reverse, so the axis reads as a single
+continuous longitudinal intent — forward, coast, slow, back — and centre-is-coast is exactly the
+lift-off that `P0-5b/c/d` requires in order to park.
+
+⚠️ **`drift` is a held vertical offset on thumb 2, and it is deliberately not a tap, an origin latch
+or a screen-edge zone** — all three were considered and `Q83` records why each fails. The state is
+where the thumb *is*, so it is self-describing and reversible without lifting; exiting a drift never
+costs steering. Its threshold needs **hysteresis** — a larger offset to enter than to leave — or a
+thumb resting on the boundary toggles the drift every physics tick.
+
+⚠️ **A thumb sweeps an arc, not a rectangle.** The drift threshold is a distance from the touch
+origin, not a horizontal line, for that reason; a straight boundary is crossed at a different
+horizontal position depending on how far the thumb is extended, which would inject steering into
+every drift entry.
 
 ⚠️ **The geometry of those zones already exists, in `tuning/hud_layout.tres`.** `P3-24` declared it
 so the HUD could be checked against it before `P2-4` is written; `P2-4` reads the same rects rather

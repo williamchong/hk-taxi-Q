@@ -11443,3 +11443,114 @@ this obeys where the signs are exempt · `Q62` for why a render is the evidence 
 what night mode is actually blocked on · `Q57` for the survey that opened this file and skipped this
 layer · `P3-26` for the task
 
+
+---
+
+## `Q83` — Touch drives its own throttle, and the drift is where the thumb is
+
+**Status.** ✅ Decided 2026-08-27 on the user's instruction · **Owner.** `P2-4` → `ARCHITECTURE.md`
+"The three schemes"
+
+**Claim.** The touch scheme is **two thumbs, both axes each**, and `auto_accelerate` is no longer its
+default. Thumb 1 is one bipolar vertical axis — `accelerate` above the touch origin,
+`brake_reverse` below. Thumb 2 is `steer` horizontally and `drift` held past a vertical threshold.
+Both thumbs are **relative**: the finger lands anywhere in its zone, that point becomes the origin,
+and travel from it is the input. `look_back` is the one action still unplaced.
+
+**Why this is recorded at all.** The touch default was never a decision entry — it lived in a comment
+in `input_router.gd` and one line of `ARCHITECTURE.md`, and `hud_layout.gd` had built a load-bearing
+warning on top of it. Reversing something in that position needs the reversal written down more than
+the original ever was.
+
+### The allocation was incomplete, and the gap was invisible
+
+`hud_layout.tres` declares four touch rects: `touch_steer_left`, `touch_steer_right` and the two
+thumb rests. Against `InputRouter`'s five actions:
+
+| Action | Home before this entry |
+|---|---|
+| `steer` left / right | ✅ the two zones |
+| `accelerate` | ✅ auto |
+| `brake_reverse` | 🔴 none |
+| `drift` | 🔴 none |
+| `look_back` | 🔴 none |
+
+The zones are 800 px apart on opposite screen edges at the 1920×1080 design size, so one thumb cannot
+reach both: **both thumbs were spent on steering and three of five actions had nowhere to go**, while
+`hud_layout.gd` described the player as one who "steers, brakes and drifts". 🔴 **Nothing was wrong
+and nothing could have caught it** — `verify_hud` grades occlusion, which is knowable at a desk, and
+deliberately not reachability, which is not (`Q80`). The gap is the sort a checklist finds and a
+check never does.
+
+### What the third-rest prediction actually assumed
+
+`hud_layout.gd` predicted that reversing auto-accelerate "lands a third rest here and the check will
+start failing — which is the correct outcome, not a regression to work around." **The default was
+reversed and no third rest landed.** The prediction assumed a throttle would be *added beside* the
+brake. Making `brake_reverse` the negative half of one axis adds no control at all, so the two
+existing rests carry it.
+
+✅ **The rule survives its own falsification and is kept in the narrower form**: a control that cannot
+share an axis with something already placed still lands a third rest, and the check failing is still
+the right outcome. What is disproved is that a throttle is such a control.
+
+⚠️ It also fits what the vehicle already does. `P0-5b/c/d` made **one pedal serve brake and reverse**,
+so a single vertical axis reads as one continuous longitudinal intent — forward, coast, slow, back —
+and **centre-is-coast is the lift-off that record requires in order to park the car at all**.
+
+### Relative, not absolute — and the number is 20 px
+
+Absolute sliders were rejected on a measurement, not a preference. `speed` ends at y 860 and
+`street_plate` ends at y 860; both thumb rests start at y 880. That is **20 px** of clearance, and
+`hud_layout.tres` says it is deliberate — "one clear band above `thumb_rest_*`, which is as low as
+the touch contract allows". A vertical throttle slider with usable throw collides with a drawn
+readout at 20 px of growth, on either side. Relative axes need no travel area, so the rests stay
+fingertip-sized and nothing in the HUD moves.
+
+### Three drift schemes were rejected before this one
+
+Recorded because each is the obvious next idea and each fails for a different reason.
+
+1. **Drift as a tap.** Fails on the model, not the input: a 0.5 s `tap` on the skidpad returns
+   **1.9°** peak with yaw and distance identical to `corner`, because releasing restores grip on the
+   same tick (`Q50`). A tap-initiated drift cannot exist until the grip release is ramped.
+2. **Drift by reaching the outer end of the steering zone.** Fails on counter-steer. A sustained
+   drift is *held with opposite lock*, so correcting a right-hand drift means travelling to the left
+   zone's extreme — **the gesture that corrects a slide is the gesture that initiates the opposite
+   one**.
+3. **Drift armed by where the gesture began**, held until the thumb lifts. Fails twice. Exiting
+   requires lifting thumb 2, which centres the steering in `steer_release_s` = 0.08 s — and exiting a
+   drift is precisely when steering is needed. And the state is **latched history**: two seconds
+   later nothing on screen or under the thumb says why the car is sliding.
+
+✅ **A held vertical offset has none of those.** The state is *where the thumb is*, so it is
+self-describing, continuously reversible, and leaving it costs no steering.
+
+⚠️ **It needs hysteresis** — a larger offset to enter than to leave — or a thumb resting on the
+boundary toggles the drift every physics tick. ⚠️ **And the threshold is a distance from the origin,
+never a horizontal line**: a thumb rooted in a bottom corner sweeps an *arc*, so a straight boundary
+is crossed at a different horizontal position depending on extension, injecting steering into every
+drift entry. ⚠️ **The boundary is invisible and under the thumb**, so the drift state has to be
+readable somewhere the player can see — `hud.gd`'s speed-chip `AccentBar` is the established place.
+
+### What is not settled here
+
+- ⬜ **`look_back` is unplaced.** Thumb 1's horizontal axis is free and is the candidate.
+- ⬜ **The threshold distance and its hysteresis are numbers, and no desk can pick them.** `P2-4`'s
+  acceptance is "the user says whether touch steering is usable at all" and it is blocked on `P0-3b`
+  for hardware.
+- ⚠️ **`InputRouter.drift` stays a `bool` and the duration lives in the vehicle.** The router is the
+  single source of player *intent*, and the intent is binary — a ramp there would report held while
+  nothing is held and lie to `drift_started` / `drift_ended`.
+- 🔴 **The ramp itself is not built.** Every scheme above assumes `_drift_engagement` exists; today
+  the drift dies on the tick the input stops. Hysteresis at the row boundary is a second consumer of
+  it, and the first — a drift that outlives a tap — is `GAME_DESIGN.md`'s unmet target.
+
+**Consequences.** `auto_accelerate` is kept as an accessibility and one-handed option and stops being
+the touch default; nothing sets it, so the `false` default is now shipped behaviour on every scheme
+rather than a placeholder. `hud_layout.tres` is **unchanged** — no rect moved, which is the evidence
+the scheme fits the contract that already existed.
+
+**See.** `Q80` for zones-versus-thumbs and why the check grades occlusion only · `Q50` for the tap
+that returns 1.9° · `P0-5b/c/d` for the one pedal and for why centre must coast · `PLAN.md` `P2-4`
+and `P0-3b` · `ARCHITECTURE.md` "The three schemes"

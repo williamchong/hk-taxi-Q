@@ -13,8 +13,9 @@ extends Node
 ## gameplay node in the same tick.
 ##
 ## STUB — P0-3 scaffold. Keyboard and gamepad work; touch does not. On-screen
-## zones, the auto-accelerate default and buffering for taps shorter than one
-## physics tick are all P2-4.
+## zones, the two relative thumb axes and buffering for taps shorter than one
+## physics tick are all P2-4. The touch scheme itself is settled — see `Q83` and
+## ARCHITECTURE.md "The three schemes".
 
 signal drift_started
 signal drift_ended
@@ -30,8 +31,14 @@ var brake_reverse: float = 0.0
 var drift: bool = false
 var look_back: bool = false
 
-## Touch default is auto-accelerate — the player only steers, brakes and
-## drifts. Set by the platform layer in P2-4; inert until then.
+## Forces full throttle whenever the brake is released. ⚠️ **No longer the touch
+## default — `Q83` reversed it.** Touch drives the throttle for real, on the
+## positive half of thumb 1's vertical axis, and pays no extra thumb rest for it
+## because `brake_reverse` is the negative half of that same axis.
+##
+## Kept as the accessibility and one-handed option. Set by the platform layer in
+## P2-4; nothing sets it today, so the `false` below is shipped behaviour on
+## every scheme rather than a placeholder.
 var auto_accelerate: bool = false
 
 

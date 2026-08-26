@@ -174,11 +174,20 @@ extends Resource
 @export var thumb_rest_left: Rect2
 @export var thumb_rest_right: Rect2
 
-## ⚠️ **Auto-accelerate is why there is no throttle rect.** `InputRouter`'s touch
-## default is that the player only steers, brakes and drifts. If that default is
-## ever reversed, a third rest lands here and the check will start failing
-## against whatever the HUD has grown into — which is the correct outcome, not a
-## regression to work around.
+## ⚠️ **There is no throttle rect, and auto-accelerate is no longer why.** Touch
+## drives its own throttle since `Q83`, on the positive half of one vertical axis
+## whose negative half is `brake_reverse` — a control that shares an axis with
+## one already placed needs no rest of its own.
+##
+## 🔴 **A genuinely new control still lands a third rest here, and the check
+## failing is the correct outcome rather than a regression to work around.** That
+## rule used to stand on the prediction that a throttle is such a control, which
+## `Q83` falsified. The rule is what survived, not the prediction.
+##
+## ⚠️ **Both thumbs are relative, which is why these rects did not have to grow.**
+## An absolute slider needs travel, and there is none: `speed` and `street_plate`
+## share a baseline at y 860 against rests starting at y 880, so 20 px of growth
+## collides with a drawn readout.
 
 ## Path to the shipped table. Named here so `hud.gd` and `verify_hud.gd` cannot
 ## end up loading two different files — a check that names its own path can go
