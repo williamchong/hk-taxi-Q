@@ -11631,18 +11631,18 @@ quantity tuned (grip scale) are different variables joined by physics, so the me
 refute the tuning.
 
 ⚠️ **That is also why a slip servo is refused.** Writing grip *from* slip closes exactly that loop,
-and "peak slip ≈ setpoint" becomes true by construction — `Q58`'s trap and `Q72`'s unreachable
-counter, for the fourth and fifth time. If one is ever built it must change what the ablation
+and "peak slip ≈ setpoint" becomes true by construction — `Q58`'s trap again, and
+`Q72`'s unreachable counter. If one is ever built it must change what the ablation
 reports first: overshoot, settling time, and the `tap` row, which is not servo-held.
 ⚠️ **And the slip definition is no longer duplicated** — `Q50` deleted
 `builtin_vehicle_controller.gd`, so `vehicle_controller.gd` computes no slip at all and the
 ablation's is the only one. A servo would **add** the second copy. Keep them independent anyway;
 the grader must not call the thing it grades.
 
-## The release ramp was built, and it does not do what it was built for
+### The release ramp was built, and it does not do what it was built for
 
 `_apply_drift()` was open-loop and instantaneous both ways: grip was restored on the tick the button
-came up. The diagnosis — `Q50` regression 3, and this entry's own plan — was that a 0.5 s tap
+came up. The diagnosis — `Q50` regression 3 — was that a 0.5 s tap
 therefore returns 1.9° because the slide carries no momentum out of the release, and that a slow
 release on `_update_steering`'s attack/release idiom would let the yaw built during the tap run on.
 

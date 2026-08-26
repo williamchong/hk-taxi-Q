@@ -85,8 +85,8 @@ var _upside_down_for: float = 0.0
 ## Private, and there is no public mirror. `drift_input` is the player's intent
 ## and this is the car's answer to it; a HUD or lamp wanting to show "drifting"
 ## wants the intent, which is already published. ⚠️ It is deliberately **not** in
-## `InputRouter` (Q83): the router is the single source of intent, the intent is
-## binary, and a ramp there would report held while nothing is held.
+## `InputRouter` — see `drift_release_s` in handling_profile.gd for why, kept in
+## one place so the two cannot drift apart.
 var _drift_engagement: float = 0.0
 ## Recomputed once per tick rather than per reader.
 ##
@@ -393,9 +393,19 @@ func _apply_drift(delta: float) -> void:
 	# same reason: fast to answer, slow to let go. Grip used to be restored on the
 	# tick the button came up, which is why a 0.5 s tap returned 1.9° of slip and a
 	# yaw identical to a plain corner — the slide carried no momentum out of the
-	# release (Q84, and Q83's "the ramp itself is not built").
+	# release (Q84). ⚠️ It did not work — the tap is still 1.9° — and Q84 records
+	# why: the slide takes seconds to build rather than ending too soon. This is
+	# kept for Q83's touch hysteresis, which needs the engagement to exist.
 	var seconds: float = profile.drift_attack_s if drift_input else profile.drift_release_s
 	_drift_engagement = move_toward(_drift_engagement, 1.0 if drift_input else 0.0, delta / seconds)
+	_write_drift_grip()
+
+
+## Publishes _drift_engagement to the wheels. Separate from the ramp so place_at()
+## can reset the engagement and push it out without a zero delta standing in for
+## "do not ramp" — the grip still has exactly one owner, which is the point the
+## caller's comment makes.
+func _write_drift_grip() -> void:
 	var rear: float = (
 		profile.tyre_grip * lerpf(1.0, profile.drift_rear_grip_scale, _drift_engagement)
 	)
@@ -433,11 +443,11 @@ func _apply_auto_right(delta: float) -> bool:
 ## a car that fell at full lock would otherwise be replaced at full lock and veer
 ## off immediately.
 ##
-## ⚠️ The `_apply_drift()` call is not tidying. It is skipped for every tick
-## `_apply_auto_right` returns true, so a car righted mid-drift keeps its softened
-## rear axle until the button is next released. Called rather than open-coded so
-## the un-drifted grip has one owner — a per-axle base grip would otherwise have
-## to be added here too, and would not be.
+## ⚠️ The `_write_drift_grip()` call is not tidying. `_apply_drift()` is skipped
+## for every tick `_apply_auto_right` returns true, so a car righted mid-drift
+## keeps its softened rear axle until the button is next released. Called rather
+## than open-coded so the un-drifted grip has one owner — a per-axle base grip
+## would otherwise have to be added here too, and would not be.
 func place_at(pose: Transform3D) -> void:
 	global_transform = pose
 	linear_velocity = Vector3.ZERO
@@ -454,10 +464,7 @@ func place_at(pose: Transform3D) -> void:
 	_drift_engagement = 0.0
 	_upside_down_for = 0.0
 	drift_input = false
-	# Zero delta on purpose: the reset above is what moves the engagement, and this
-	# call only publishes it to the wheels. A real delta would ramp instead, which
-	# is the one place the ramp must not happen — a replaced car is not mid-slide.
-	_apply_drift(0.0)
+	_write_drift_grip()
 
 
 ## Arcade collision response: glancing hits slide, head-on hits cost speed but
