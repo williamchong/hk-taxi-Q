@@ -582,6 +582,7 @@ trade.
 
 | ID | Deliverable | Accept |
 |---|---|---|
+| `P3-24` | **HUD chassis** — speed and current street, bilingual, plus the reserved slots and the thumb-rest contract. **Depends on nothing in `B1` or `B2`** and may be built first | Speed and street read at a glance; the plate does not flicker at a junction and does not blank on an unnamed edge; no HUD rect sits under a **thumb**, and a tool asserts both that and that overlapping a tap *zone* stays legal (`Q80`); the CJK font is a declared third-party asset with its own licence entry (`Q79`) |
 | `P3-1a` | `FareSystem` — hail → carry → deliver/fail state machine. **Standard and short hop only** | The loop runs end to end and can be failed |
 | `P3-5a` | Minimal HUD — destination arrow, timer, meter. Deliberately ugly | Legible; no layout work |
 
@@ -590,6 +591,43 @@ trade.
 - **Review:** play one fare, start to finish | web build | **Is completing a fare worth doing twice?**
 - Cross-harbour and long-haul are held back to `B4` on purpose — they are the interesting fares, and
   they are worth tuning once the plain one is known to work.
+
+#### `P3-24` — how the HUD gets its chassis
+
+- **Deliverable:** a `Hud` node on `city_drive.tscn` — a bilingual street plate bottom-centre and a
+  speed readout bottom-left, plus three **empty, reserved** slots (minimap bottom-right, timer, meter)
+  that `P3-5a` and `P3-5b` fill without moving anything that already shipped. The slots are outlined
+  under `DebugHud`'s FULL view, so the space being held can be looked at rather than trusted.
+- **Why it comes out of `P3-5a` and gets its own ID:** speed and current street depend on **no fare
+  system**. `P3-5a`'s three deliverables all do. Splitting them lets the chassis, the font and the
+  touch contract land and be looked at while `B1` is still unwritten, which is the same argument
+  `P3-9a` made in front of `P3-9`.
+- ⚠️ **The touch reservation is the load-bearing half, and it is a contract, not a margin.**
+  `tuning/hud_layout.tres` names every rect — HUD slots, `P2-4`'s tap zones *and* the thumb rests —
+  and `tools/verify_hud.gd` asserts the HUD clears the **rests**. Without that, "leaving space for
+  touch" is an intention that `P2-4` discovers is false on a handset, which is the one place it is
+  expensive to find out. The layout is data because it has **three** readers: this HUD, `P2-4`'s
+  overlay, and the check.
+- 🔴 **A tap zone is not a thumb, and the first version of that rule was wrong** — it reserved half
+  the screen and thereby banned the two corners three of four shipped references put the speed and
+  the map in. `Q80` records the correction and why the check now asserts the *permission* too.
+- ⚠️ **The layout follows Midtown Madness 2**, the one reference that is about driving a real named
+  city: speed bottom-left, minimap bottom-right, plate bottom-centre. And **no destination-arrow
+  slot** — both references that have a destination put the arrow in the world, which is `P3-5a`'s to
+  build.
+- ⚠️ **The UI is flat-shaded, like everything else.** Every panel is a polygon with cut corners, one
+  fill, one hard keyline; white is the city speaking and dark is the car speaking. `Q80`.
+- ⚠️ **It needs an off switch before it needs one for screenshots.** `GAME_DESIGN.md` says the
+  player should navigate by memory, and `P3-9`'s acceptance test is a drive with the arrow
+  **disabled**. A permanent street plate is not a direction aid — it says where you are, not where
+  to go — but it is closer to one than that test's premise assumes, so `--hud=off` exists for the
+  test first and for art frames second. `--debug-view=`'s precedent.
+- ⚠️ **This is the project's first bundled typeface**, and `LICENSING.md`'s "three licences, three
+  owners" becomes four. See `DECISIONS.md` `Q79` for the font, the licence and the one character in
+  the region it does not cover.
+- **Review:** drive Hennessy Road onto Kai Chiu Road and read the plate | web build | **Does the
+  plate name the street you are on, and does it stay still?**
+- **Deps:** `P2-2` alone. Not `B2`, not `P3-1a`.
 
 ### Build `B3` — "The streets are alive" — **runs third**
 

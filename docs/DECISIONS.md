@@ -10577,3 +10577,243 @@ inventing position.**
 reads outside its own bar · `Q54` for sourced-not-invented and why jitter is refused · `Q62` for the
 ungraded facing and why the render is the evidence · `Q72` for the counter that was a tautology ·
 `P3-16` for the layer
+
+
+---
+
+## `Q79` — The street plate needs a typeface, and the one that fits is not the one that was proposed
+
+**Opened and decided 2026-08-26** by `P3-24`. `roadgraph.json` has published
+`road_name: {en, zh}` since `P1-4` and the engine has read only `en` since — `road_graph.gd` drops
+the Chinese on the floor at parse time. A HUD that names the street the player is on is the first
+consumer that wants both, and wanting both means **shipping a CJK typeface**, which this repository
+has never done.
+
+That is not a small ask here. `P3-21` was refused **partly on this exact cost** — carriageway
+lettering *"needs an authored typeface with its own `LICENSING.md` entry, which is real cost against
+no direction value"* — and `P3-20` went to the length of baking 讓 and 停 out of TD's own drawing
+cells rather than ship a font to draw two words. The difference is that a street plate has ~100
+words, not two, and they are the thing the player reads.
+
+**The user's call was a full font as an authored asset**, taken over an English-only plate and over
+a subset. What follows is which font, and what it turned out to cost.
+
+### Kai, not sans — the authenticity argument beat the obvious one
+
+The first proposal was **Noto Sans HK**, on the reasoning that it shares a family with Godot's
+built-in Noto Sans so the two lines of one plate would not clash. The user asked for Kai to be
+considered against it, and Kai is right:
+
+**Hong Kong street name plates are set in 楷書.** A sans-serif plate is legible and wrong, in a
+project whose entire pillar is that the city is accurate and only the cars are toys. The Latin line
+staying in a grotesque while the Chinese line is Kai is not a clash — **it is what the real plate
+does**, two typefaces on one sign.
+
+| | Free HK Kai 4700 v1.02 | Noto Sans HK | AR PL UKai |
+|---|---|---|---|
+| Script | **楷書** | sans | 楷書 |
+| Glyph forms | **HK** — EDB 《香港小學學習字詞表》 2007 | Pan-CJK, HK variant | Taiwan |
+| Licence | **CC BY 4.0** | OFL 1.1 | Arphic Public License |
+| Commercial / store build | **yes** | yes | 🔴 **no** |
+| Derivatives without rename | **yes** | no — OFL reserved name | yes |
+| Size / glyphs | 6.4 MB TTF / 14,061 | ~9.5 MB OTF / ~44,000 | ~10 MB |
+
+🔴 **AR PL UKai is disqualified on the licence, not on the typeface.** The Arphic Public License
+restricts commercial use, and `LICENSING.md` ships store builds under a **separate proprietary
+grant** — a font that cannot be commercially redistributed cannot be in that build. It is the only
+candidate whose problem is structural rather than aesthetic, and it is worth recording that the
+disqualifying fact is two documents apart from the decision that would have used it.
+
+⚠️ **CC BY 4.0 permits derivatives without a rename, and OFL does not.** That is not a tiebreak
+today — the full font ships — but it is what makes the subset below a cheap option later rather
+than a renaming exercise.
+
+**Provenance is a feature here and not a sentiment.** Free HK Kai was built by a group of Hong Kong
+retirees under the banner 「香港人造香港字」. For a game whose acceptance test is *whether a Hong Kong
+driver recognises Hong Kong*, that is a credits line worth having, and hard rule 6 requires the
+credits line anyway.
+
+### `LICENSING.md`'s three owners become four
+
+Hard rule 7 is *"three licences, three owners"*. A bundled third-party font is **none of the three**:
+not this project's code (GPL-3.0-or-later), not this project's hand-authored asset (CC BY-SA 4.0),
+and not government data. It needs its own section, and CC BY 4.0 obliges the attribution to travel
+with the build — so the credits screen gains a line and `game/assets/authored/fonts/` gains the
+licence text beside the file.
+
+⚠️ **`assets/authored/` now holds something this project did not author.** The directory's rule was
+*"only what this project could put under CC BY-SA"*, and a third-party font is not that. It is
+committed there anyway because the alternative — a fetched build-time dependency — would make the
+game's ability to draw its own UI depend on a network call at build time, and hard rule 2's spirit
+is against that. The boundary is now stated rather than mechanical, which is a real weakening of a
+rule that was previously checkable by looking at a path.
+
+### 🔴 The region needs 166 characters and the font is missing exactly one
+
+Measured over the shipped `roadgraph.json`, not estimated:
+
+| | |
+|---|---|
+| edges | 797 |
+| named edges | 723 · unnamed **74** |
+| `en` present without `zh`, or `zh` without `en` | **0 · 0** |
+| distinct named streets | **99** |
+| distinct CJK characters required | **166** |
+| covered by Free HK Kai | **165** |
+| ASCII covered | 95 of 95 |
+
+✅ **`en` and `zh` are never independently missing**, which deletes a branch: there is no
+mixed-language fallback state to write. A plate is two lines or it is the previous street unchanged.
+
+🔴 **The miss is `啓` (U+5553), in `KAI CHIU ROAD / 啓超道`, on 2 edges.** The font carries **`啟`
+(U+555F)** — the same character in Hong Kong's own standard form — and not TD's variant. So the
+Transport Department's survey and the Education Bureau's character table disagree about how to write
+*kai*, and the visible result is **a tofu box in the middle of one street's plate**, which reads as a
+broken font rather than as a standards mismatch. It is this repository's recurring defect shape: it
+renders perfectly everywhere except one place, and the only way to meet it is to drive down that
+street.
+
+⚠️ **The fix is NOT to rewrite the name in the ETL.** `Q54`'s rule is that published data is neither
+invented nor moved, and a street's *name* is the strongest case of it — `roadgraph.json` keeps
+`啓超道` exactly as TD published it. The substitution is a **display** decision: a table in config,
+applied when the plate is drawn, leaving the document untouched. Same shape as `signs.faces` being
+config rather than a code constant (`Q64`), and for the same reason — the next region will have its
+own variants and none of them belong in a `.gd` file.
+
+⚠️ **And it needs a guard, because one uncovered character is invisible until someone drives there.**
+`tools/font_coverage.py` asserts that every character in every published street name is either in
+the font's `cmap` or in the substitution table, and **exits non-zero** when it is not. It is a check
+and not a grader — there is no judgment in it — so a data refresh or a second city that introduces a
+167th character is refused rather than shipping a box. ⚠️ **Run by hand**, like the other tools in
+`tools/`: `check.sh` is Godot-side and this needs a built region, so `CLAUDE.md` lists it as owed on a
+font or street-name change rather than wiring it into the sweep. 🔴 **And it reads the road graph
+through `pipeline.roads.read_graph`, never `json.loads`** — a review caught the first version doing
+the latter, which meant a stale or reshaped document yielded no `edges`, so the tool reported
+`streets 0` and exited **0**: "every published street name is drawable", having looked at nothing.
+An inert check, in the file written against inert checks. ⚠️ It parses the `cmap` directly rather
+than adding `fontTools` to the ETL: one table, two formats, and no new dependency on the pipeline
+for a check that runs beside it.
+
+### What it costs, and the escape hatch that is now cheap
+
+⚠️ **The bundle movement is the largest in the project's history by an order of magnitude.** The
+recent landings moved PCK +0.047%, +0.64% and −0.028%; a 6.4 MB TTF against a 42,877,580 B PCK is
+**≈ +15%**, and it lands on a web build already **77.91 MiB over the wire** with testers warned off
+mobile data. Quoted as a before/after from two exports one variable apart, per the house rule.
+
+⚠️ **It is also the first texture in the project that grows while the game runs.** A dynamic font
+rasterises glyphs into a runtime atlas. `Texture memory` is 131,072 px today — all of it
+`signs_text.png` — against a <128 MB mobile budget, and this is bounded in practice (166 characters
+at one or two sizes) but not bounded *by construction*. 🔴 **`Q63`'s declaration check cannot see
+it**: that check grades generated **meshes**, and a font is neither generated nor a mesh. The budget
+line in `ARCHITECTURE.md` is the only thing that covers it, and it only covers it if someone reads it.
+
+🟡 **Recorded, not acted on: the region uses 166 of 14,061 glyphs — 1.2%.** A subset is ~100 KB
+against 6.4 MB, it is a build-time step rather than a committed asset, and CC BY 4.0 permits it
+without the rename OFL would have forced. It is not done because the user asked for the full font,
+and because a subset built from *this* region's names is a subset that breaks the moment the region
+moves — which makes it an ETL stage with a coverage contract, not a one-off. `font_coverage.py` is
+the piece that would have to grow to own it.
+
+**See.** `Q54` for sourced-not-invented, and why the name is not rewritten · `Q63` for the texture
+declaration this font falls outside of · `Q64` for config-not-code and the class of defect that
+renders perfectly · `Q65` and `P3-21` for the typeface cost that refused road lettering · `P3-24`
+for the task
+
+
+---
+
+## `Q80` — A touch zone is not a thumb, and the first rule banned the corners every shipped game uses
+
+**Opened and closed 2026-08-26** by `P3-24`, on the user's question — *"can we ref existing mobile
+game UI"* — with four references handed over: NFS No Limits, the arcade taxi, Midtown Madness 2 and
+Forza.
+
+`P3-24` shipped a layout contract whose whole purpose was to reserve screen space for `P2-4`'s touch
+controls, checked by `verify_hud.gd`. The rule it encoded was:
+
+> no HUD rect may intersect any touch rect
+
+and the touch rects were the **tap zones** — the left and right halves of the screen below the top
+band. It is a clean rule, it is checkable, and it is **wrong**.
+
+### What the references say
+
+| | speed | map | timer | money / score | destination |
+|---|---|---|---|---|---|
+| NFS No Limits (**touch**) | **bottom-right**, dial + big number | — | top-right | top-right | left-edge chevron |
+| Arcade taxi | — | — | **top-left**, big | **top-right**, meter | **world-space arrow** |
+| Midtown Madness 2 | **bottom-left**, big digital | **bottom-right**, street map | top-centre | top-left | world-space banner |
+| Forza | **bottom-right**, arc dial | — | bottom-centre | top-right | — |
+| `P3-24` as built | bottom-centre, small | **top-left** | top-centre | — | — |
+
+Three of the four put the speed in a **bottom corner**. The one reference that is about driving a
+real, named city — MM2 — puts the **minimap bottom-right**. The contract had made both of those
+positions illegal.
+
+🔴 **NFS No Limits is the disproof, because it is the one reference that is actually a touch game**,
+and it puts its speedometer squarely in the bottom-right where the right thumb steers. That is not a
+mistake in a shipped product; it is the distinction the rule had missed:
+
+- a **tap zone** is where input is *detected*. It is half the screen, and a non-interactive Control
+  over it blocks nothing — every Control in this HUD is already `MOUSE_FILTER_IGNORE`.
+- a **thumb** is what *occludes pixels*. It is a fingertip resting in an outer bottom corner.
+
+The real constraint is occlusion, and it is perhaps a tenth of the area the rule was reserving.
+
+### What changed
+
+`touch_steer_*` stays, recorded for `P2-4` to read, and the HUD is **explicitly allowed** to overlap
+it. Two new `thumb_rest_*` rects — a fingertip in each outer bottom corner — are what the check
+enforces. The layout then moved onto MM2's: speed bottom-left, minimap bottom-right, plate
+bottom-centre between the thumbs.
+
+🔴 **The check now asserts the permission as well as the prohibition**, and that is the durable part.
+`verify_hud.gd` requires that a rect over a **tap zone** is *accepted*, so someone "tightening" the
+check back onto zones fails the suite instead of silently re-banning the corners. Without that
+assertion the regression is invisible: a stricter check looks like a better check.
+
+⚠️ **The first probe written for that assertion was itself wrong** and the suite caught it. A tap
+zone geometrically **contains** its own thumb rest, so handing the whole zone to the probe fails for
+the wrong reason. The probe uses the zone's upper half — inside the zone, clear of the fingertip,
+which is exactly where the speed readout now sits.
+
+### The finding nobody was looking for
+
+⚠️ **Both references that have a destination put the arrow in the WORLD, not in the HUD** — the
+arcade taxi floats a green arrow above the car, MM2 hangs a banner over the road. `P3-5a`'s
+deliverable says "destination arrow" and `ARCHITECTURE.md` lists it as HUD furniture. It should be a
+world-space marker, which also sits better with `GAME_DESIGN.md`'s *"navigate by memory, not by
+minimap"* than a screen-edge chevron would. **`hud_layout.tres` therefore reserves no arrow slot**,
+and says so.
+
+### And the style, which was the second half of the question
+
+The user's follow-up — *"come up with some ui style that doesn't feel odd and is modern and is
+consistent with our existing art feeling"* — named a real defect. The plate was a rounded off-white
+`StyleBoxFlat` with a thin neutral border and the speed was bare outlined text: **two design
+languages, neither of them this game's**. Rounded corners and soft grey keylines are the two things
+nothing else in the project has.
+
+`ART_DESIGN.md`'s direction is *"low-poly, flat-shaded"* with hard normals, so the UI is flat-shaded
+too: every panel is a **polygon with all four corners cut** (`ChamferPanel`), one flat fill, one hard
+keyline, no gradient, no radius, no shadow. One `draw_colored_polygon` and one `draw_polyline`.
+
+The palette rule is **white is the city speaking, dark is the car speaking** — the plate quotes a Wan
+Chai street name sign, the speed is an instrument chip with a single saturated bar. `verify_hud.gd`
+asserts the plate is lighter than the chip, because a colour tweak can invert that silently and a HUD
+with two dark panels reads as consistent while saying nothing.
+
+⚠️ **The UI palette is deliberately NOT the road's paint constants.** `roadmarks.tres` records the
+marking white as its **fifth** authored copy and `boxjunctions.tres` the yellow as its **third**, with
+`Q53` predicting each new one; a sixth and a fourth here would be that debt again. It is also wrong on
+the merits — a street name plate is not paint, and a re-graded carriageway is no reason to repaint a
+sign bolted to a building.
+
+⚠️ **Taxi red is kept out of the HUD entirely.** It is the anchor table's one non-negotiable colour
+and it belongs to the player's car; spending it on furniture now leaves `P3-5a` nothing to say
+"fare" with. `verify_hud.gd` fails if the accent drifts into it.
+
+**See.** `Q79` for the typeface the plate is set in · `Q53` for the authored-colour duplication this
+palette declines to join · `Q62` for why a HUD readout cannot be graded against anything published ·
+`P3-24` for the task

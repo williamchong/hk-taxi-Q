@@ -133,7 +133,13 @@ why the default is off.
 
 `drive.sh` is the exception: it appends `--debug-view=minimal` unless the caller names a view, on the
 grounds that a scripted run is someone debugging and a screenshot that cannot say where it was taken
-cannot be acted on. The position block reports game metres **and** the source-CRS grid reference
+cannot be acted on.
+
+⚠️ **The player's HUD is separate from all of this and is ON by default**, because it is not dev
+chrome — `--debug-view=off` does not touch it. It costs a measured **+5 draw calls** (44–45 → 49–51
+on the same run), and unlike the overlay above it is paid in every shipped frame. **A clean frame for
+art review therefore needs both `--debug-view=off` and `--hud=off`**, and `P3-9`'s arrow-disabled
+drive needs the second one for a reason that is about the test rather than the picture (`P3-24`). The position block reports game metres **and** the source-CRS grid reference
 (`CityManifest.to_grid`, the inverse of `crs.py`'s `to_game`), so a frame can be checked against the
 ETL's own data rather than only against another frame.
 
@@ -1337,7 +1343,7 @@ every region lies inside them.
 | `signs.glb` | The published traffic signs, standing on the poles TD surveyed rather than at the abbreviation points that name them — those are drawing labels, a median 2.6 m away. Shape-faced signs only; anything whose meaning is its text is refused (the no-texture contract). One primitive, one draw call, **no collider** | ✅ `P3-16` |
 | `FareSystem` | Fare state machine: idle → hailed → carrying → delivered/failed | ⬜ `P3-1` |
 | `ScoreSystem` | Base fare, time bonus, **style chain** and **fare combo** — two distinct multipliers | ⬜ `P3-2` |
-| `HUD` | Meter, timer, arrow, destination callout (bilingual) | ⬜ `P3-5` |
+| `HUD` | The player's HUD. Speed and the bilingual street plate ship; the minimap, timer and meter are **reserved, empty, checked** slots. Flat-shaded like the city — chamfered polygons, one fill, one keyline — with white for the city's voice and dark for the car's. `--hud=off` for `P3-9` and for art frames | 🟡 `P3-24`; meter, timer and the **world-space** destination marker are `P3-5a` |
 | `AudioDirector` | Engine, radio, callouts, ambience buses | ⬜ Phase 5 |
 
 **Architectural rule:** `scripts/core/` holds pure logic — scoring, fare state, traffic rules — with
@@ -1377,6 +1383,11 @@ the second vehicle anyone built.
 | `scripts/camera/free_look_camera.gd` | Dev fly camera. Bypasses `InputRouter` so dev keys stay out of the shipped action map |
 | `scripts/ui/debug_hud.gd` | The one owner of dev chrome. Off by default |
 | `scripts/ui/fps_counter.gd` | Frame rate and frame time. Gated by `DebugHud`, and it stops counting while hidden |
+| `scripts/ui/hud.gd` | The player's HUD. Samples speed at 10 Hz and the road graph at 5 Hz, sets label text only on a change, and registers a raw-versus-displayed readout with `DebugHud` — the one thing that can see a wrong street plate |
+| `scripts/ui/hud_layout.gd` | Every HUD rect **and** `P2-4`'s touch geometry. ⚠️ Two touch families and the distinction is load-bearing: `touch_steer_*` is where taps are detected and the HUD may overlap it; `thumb_rest_*` is what a fingertip covers and the HUD may not (`Q80`) |
+| `scripts/ui/hud_style.gd` | The HUD's palette, chamfer and type scale. Deliberately **not** the road's paint constants (`Q53`) |
+| `scripts/ui/chamfer_panel.gd` | The HUD's one shape: a flat polygon with cut corners. Not a `StyleBox` — a chamfer is not a corner radius, and this bundle ships no UI textures |
+| `scripts/core/street_tracker.gd` | Pure: which street the plate should say you are on. Owns the dwell that stops it strobing at a junction, the rule that an unnamed edge is not evidence, and the `changes` counter that grades both |
 | `scenes/world/golden_hour.tscn` | The one lighting rig. Instance it rather than authoring a second Environment |
 | `tools/verify_tiles.gd` | The mesh contract, per tier of every tile the manifest names |
 | `tools/verify_city.gd` | `city.json` — georeferencing, per-tier AABB containment, `bounds_game`, and that the named documents exist |
@@ -1387,6 +1398,7 @@ the second vehicle anyone built.
 | `tools/verify_landmarks.gd` | `landmarks.json` — assets load with mesh and `-col` collision, triangle budget, placed AABB near `bounds_game`, and no tier-0 tile triangle inside each excluded footprint's interior core |
 | `tools/verify_{tramway,arrows,boxjunctions,roadmarks,railings,signs}.gd` | One per drawn layer — the mesh contract, the draw-call and collider claims, and the per-class material dispatch. ⚠️ `verify_railings.gd` checks the dispatch **per class**, so a new railing class needs a row there, in `generated_scene_import.gd` and in the config, and `check.sh` fails if the three disagree |
 | `tools/verify_beam_budget.gd` | `BeamBudget` — the spot-light cap is never exceeded **or under-spent**, the nearest cars win when registered farthest-first, a beamless rig takes no slot, and a despawn hands its slot on. ⚠️ One of the three verify tools that need **no built region**: it builds its own stub rigs, so it runs whatever `VERIFY_GENERATED` says |
+| `tools/verify_hud.gd` | The HUD's contracts — the thumb-rest reservation (and that overlapping a tap *zone* stays legal), the style's light-plate/dark-chip rule, the plate's font and substitution table, and the street tracker's behaviour from both sides of its dwell. ⚠️ Needs **no built region**: the layout is committed tuning and the tracker takes synthetic samples, which matters because what it protects is `P2-4`'s future screen space |
 | `tools/verify_mesh_contract.gd` | The `Q63` amendment itself — an undeclared texture is refused, a declared one inside its budget is admitted, one over budget is refused, and a declared texture that **never arrives** is refused. ⚠️ It asserts the *failures*, because every other verify tool proves an asset conforms and the risk here is the opposite one: a check that has quietly stopped catching anything. ⚠️ Needs **no built region** — it builds its own one-triangle meshes — which matters because no shipped asset declares a texture, so nothing else exercises these branches at all |
 | `tools/verify_vehicle.gd` | The taxi's engine-side wiring — the body renders with `vehicle_body.tres` through the import's name channel, the channels `vehicle_lamps.gd` writes are instance uniforms the renderer lists, the imported `UV` payload is integral and inside those channels on lens vertices only, the rig hangs where the script looks, and every beam is authored dark with its cone below horizontal. ⚠️ Needs **no built region** (the taxi is authored and committed), and ⚠️ **sees no frame** — it cannot tell you the shader compiled |
 | `tools/generated_scene_import.gd` | Import fixup — see `[importer_defaults]` above |
@@ -1407,6 +1419,14 @@ Desktop/Steam is a target, so input is abstracted from day one via a single acti
 
 **Touch default is auto-accelerate** — the player only steers, brakes and drifts. This is the genre
 convention and it keeps mobile input to two thumbs.
+
+⚠️ **The geometry of those zones already exists, in `tuning/hud_layout.tres`.** `P3-24` declared it
+so the HUD could be checked against it before `P2-4` is written; `P2-4` reads the same rects rather
+than choosing its own, and `verify_hud.gd` fails the day the two disagree. 🔴 **Read `Q80` before
+using them**: `touch_steer_*` is where a tap is *detected* and non-interactive UI may sit over it —
+every HUD Control is `MOUSE_FILTER_IGNORE` — while `thumb_rest_*` is what a fingertip *occludes* and
+is the only part the HUD must keep clear. Conflating the two reserves ten times the area that is
+actually at stake.
 
 `InputRouter` emits the action set; no gameplay script reads raw input events. It samples in
 `_physics_process`, not `_process`: Godot runs every physics step before idle processing, so a

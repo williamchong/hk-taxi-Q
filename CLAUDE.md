@@ -362,6 +362,26 @@ Common emoji for this project:
   placement move `carriageway_occupancy.py`'s answer** without touching the road at all, so that one
   is owed for those too. It gates per *edge*, because `RoadGraph` routes on edges. ⚠️ It **fails
   today**; read the exit code rather than the table, and see `PROGRESS.md` for what it is failing on.
+- **HUD changes — `hud.gd`, `hud_layout.tres`, `hud_style.tres`, `chamfer_panel.gd` or
+  `street_tracker.gd`: `tools/check.sh` (which runs `verify_hud`), plus an A/B render at one camera
+  with `--debug-view=off --hud=off` and again with the HUD on, and the draw-call delta pasted.**
+  ⚠️ **A clean art-review frame needs BOTH `--debug-view=off` and `--hud=off`** — the player's HUD is
+  not dev chrome and the first flag does not touch it. ⚠️ **`verify_hud` sees no frame**: two defects
+  here shipped past a green `check.sh` and were caught by looking — a safe-area inset measured
+  against the window instead of the screen, which pushed the whole HUD off its own edges and logged
+  nothing, and a `--hud=off` crash from `queue_free()` being deferred while `_process` ran once more
+  (Godot exits **0** on a script error). ⚠️ **A layout change is a `P2-4` change**: `hud_layout.tres`
+  is where the touch geometry lives, and 🔴 **`touch_steer_*` and `thumb_rest_*` are not
+  interchangeable** — the HUD may overlap a tap zone and may not overlap a thumb, and the check
+  asserts **both** directions so that "tightening" it back onto zones fails rather than silently
+  banning the corners every shipped reference uses (`Q80`).
+- **Street-name or font changes — `street_plate.json`, the bundled typeface, or any new region:
+  also `tools/font_coverage.py --city <c> --region <r>`.** It exits non-zero on a character that is in neither the font nor the
+  display substitution table, which is the only thing standing between a data refresh and a tofu box
+  on one street's plate. ⚠️ **Substitutions are a DISPLAY fix and `roadgraph.json` is never edited**
+  — a street's name is the strongest case of `Q54`'s sourced-not-invented rule. ⚠️ The bundled font
+  is the **fourth** licence in a repo whose hard rule 7 says three; `LICENSING.md` and the credits
+  screen both carry it (`Q79`).
 - Update `docs/PROGRESS.md` — task status, metrics, risks, and the questions index.
 - Record any new decision, or any question that closes, in `docs/DECISIONS.md`, keyed by its ID.
 - **Bundle size is measured from a PCK, never summed from source files.** That rule has been wrong
