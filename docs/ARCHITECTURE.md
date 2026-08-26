@@ -206,7 +206,7 @@ reason. A scene instantiated but never added to the tree must also be `free()`d 
 Godot reports a page of `ERROR: ... leaked at exit` lines that read like a failure and are not one.
 
 ⚠️ **Running Godot rewrites two committed config files**, stripping every comment and, in
-`project.godot`, the `rendering_method.web` line the web export needs. Restore both afterwards and
+`project.godot`, the `rendering_method.web` line. Restore both afterwards and
 *verify*, because `git checkout` prints `Updated 0 paths from the index` whether or not it restored
 anything:
 
@@ -214,6 +214,19 @@ anything:
 git checkout game/project.godot game/export_presets.cfg
 git diff --exit-code game/project.godot game/export_presets.cfg   # this is the check
 ```
+
+⚠️ **The reason to restore is the EXPORT's comparability, not the `.web` line — measured
+2026-08-27.** This paragraph used to call it "the line the web export needs"; removing it and
+re-exporting produces a **byte-identical** PCK, so it does not reach the web artefact and no bundle
+figure ever turned on it. What *does* turn on the restore is every two-export delta in
+`PROGRESS.md`'s Bundle-size row: `project.godot` is packed as `project.binary`, so an unrestored
+export carries its own stripped comments into the number — **48 B** on the pair that row publishes,
+**80 B** on the compression pair above. ✅ **Given a restored `project.godot` the export is
+byte-deterministic**: three independent runs at one tree land on 48,856,100 B under one sha256, and
+the PCK resolves to **1 B** (+32 characters of `config/name` moves it +32 B). 🔴 **So a delta
+measured across an unrestored export is not a feature's cost**, and `--headless --export-release`
+was **not** what stripped the tree on 2026-08-27 — it left both files clean across all three runs.
+Some other Godot invocation did, so restore-and-verify before an export rather than after one.
 
 **Five grading tools sit beside the suite and are run by hand.** What makes them a set is not the
 count: it is that each reads back what *shipped* and shares no code with the pipeline, because a

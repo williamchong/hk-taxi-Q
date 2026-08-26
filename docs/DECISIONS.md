@@ -11379,9 +11379,21 @@ in either state** — 40 B/vertex both ways, only 11 of 144 surfaces ever carrie
 so the per-asset alternative would have bought nothing on the bulk of the bundle, and the framing
 that weighed "lamps only" against "every layer" was wrong about where the bytes were.
 
-⚠️ **The bundle is not byte-reproducible across imports.** Two exports of one tree differed by
-**48 B**, and `hkcec.glb`'s imported `.scn` by 1 B. Earlier rows in `PROGRESS.md` claim byte-identical
-re-exports; those were of the *ETL output*, which does reproduce, not of the imported bundle. ⚠️ **`check.sh`'s `settings` step pins
+🔴 **That reading is WITHDRAWN, re-measured 2026-08-27.** It said the bundle was not
+byte-reproducible across imports, on two exports of one tree differing by **48 B**, and it
+generalised the byte-identical claims in `PROGRESS.md` to the *ETL output* alone. Both halves were
+wrong. Three independent `tools/export.sh web` runs at `HEAD`, each from a restored `project.godot`,
+land on **48,856,100 B** under one sha256 and match the export on disk — the export **is**
+deterministic. ✅ **The instrument was proved reachable rather than assumed**: +32 characters of
+`config/name` moves the PCK by exactly +32 B, so it resolves to 1 B; four identical hashes and a blind
+instrument are the same observation without that probe, which is `Q72`'s tautology moved to the
+measurement. 🔴 **The 48 B is an uncontrolled input**: `project.godot` is packed as
+`project.binary` and Godot rewrites it, so an unrestored export carries its own comment churn — the
+mechanism this file already records for the **80 B** pair in `ARCHITECTURE.md`. The published
+`48,856,052` is 48 B below what `HEAD` exports and is a finding to go and look at, not a bar to
+retune. ⚠️ **Two claims in `PROGRESS.md` are PCK-level and stand** — the `TS101`
+re-export and `P3-9a`'s `r2`. ⚠️ **`hkcec.glb`'s `.scn` at 1 B was not re-tested**: an
+import artefact, not a pack artefact. ⚠️ **`check.sh`'s `settings` step pins
 the value** (mutation-checked), because an editor save drops it silently and `Q75` records that this
 file loses hand-written keys exactly that way — which happened again here, when a `git checkout` on
 the uncommitted edit reverted it. *Restore `project.godot` and commit it in the same change.*
