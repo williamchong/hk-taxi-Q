@@ -58,6 +58,8 @@ var _plate_lines: VBoxContainer = null
 var _plate_pin := Rect2()
 var _plate_anchor_x: float = 0.0
 var _speed_value: Label = null
+## The chip itself, kept so its bar can be driven every frame.
+var _speed_chip: ChamferPanel = null
 var _readout: Label = null
 ## The reserved, empty slots. Outlined under the dev overlay so the space this
 ## HUD holds for `P3-5a` and `P3-5b` can be SEEN rather than taken on trust
@@ -68,6 +70,11 @@ var _substitutions: Dictionary = {}
 var _street_accum_s: float = 0.0
 var _speed_accum_s: float = 0.0
 var _shown_speed: String = ""
+## Smoothed longitudinal acceleration in m/s², and the last speed it was
+## differentiated from, in m/s.
+var _accel_mps2: float = 0.0
+var _last_speed_ms: float = 0.0
+var _shown_fill: float = 0.0
 
 
 func _ready() -> void:
@@ -183,12 +190,17 @@ func _build() -> void:
 	_plate_lines = _lines(_plate, 0)
 	var lines: VBoxContainer = _plate_lines
 
+	# ⚠️ **Always centred, whichever screen edge the plate hangs off.** The
+	# lettering briefly followed the pinned edge, which right-aligned 博覽道東
+	# under EXPO DRIVE EAST — two lines of very different width ragged against
+	# one side. A street sign centres its lines; the PANEL moves, the words do
+	# not.
 	_plate_en = _label("English", _style.plate_size_en, _style.plate_ink)
-	_plate_en.horizontal_alignment = _plate_alignment()
+	_plate_en.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lines.add_child(_plate_en)
 
 	_plate_zh = _label("Chinese", _style.plate_size_zh, _style.plate_ink)
-	_plate_zh.horizontal_alignment = _plate_alignment()
+	_plate_zh.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	if font_zh != null:
 		# Overridden on this label alone. The English line keeps the theme's
 		# Noto Sans on purpose — a real Hong Kong plate carries a Latin
@@ -202,16 +214,18 @@ func _build() -> void:
 	# Dark chip, light numerals, one saturated bar along the bottom. The
 	# opposite treatment to the plate on purpose, so a glance tells the two
 	# apart before it has read either.
-	var speed_chip := ChamferPanel.new()
-	speed_chip.name = "Speed"
-	speed_chip.chamfer_px = _style.chamfer_px
-	speed_chip.fill = _style.chip_field
-	speed_chip.edge = Color.TRANSPARENT
-	speed_chip.accent = _style.accent
-	speed_chip.accent_px = _style.accent_px
-	_place(root, speed_chip, _layout.speed)
+	_speed_chip = ChamferPanel.new()
+	_speed_chip.name = "Speed"
+	_speed_chip.chamfer_px = _style.chamfer_px
+	_speed_chip.fill = _style.chip_field
+	_speed_chip.edge = Color.TRANSPARENT
+	_speed_chip.accent = _style.accent
+	_speed_chip.accent_negative = _style.accent_negative
+	_speed_chip.accent_track = _style.accent_track
+	_speed_chip.accent_px = _style.accent_px
+	_place(root, _speed_chip, _layout.speed)
 
-	var speed_lines: VBoxContainer = _lines(speed_chip, _style.speed_line_tighten)
+	var speed_lines: VBoxContainer = _lines(_speed_chip, _style.speed_line_tighten)
 
 	_speed_value = _label("Value", _style.speed_size, _style.chip_ink)
 	speed_lines.add_child(_speed_value)
@@ -302,15 +316,6 @@ func _fit_plate() -> void:
 	_plate.offset_top = _plate_pin.end.y - height
 
 
-## The lettering hangs off the same screen edge the plate does.
-func _plate_alignment() -> HorizontalAlignment:
-	if is_equal_approx(_plate_anchor_x, 1.0):
-		return HORIZONTAL_ALIGNMENT_RIGHT
-	if is_zero_approx(_plate_anchor_x):
-		return HORIZONTAL_ALIGNMENT_LEFT
-	return HORIZONTAL_ALIGNMENT_CENTER
-
-
 ## The reserved slots follow the dev overlay's readouts: off in every shipped
 ## frame, on when someone is asking where the space went.
 func _show_slots() -> void:
@@ -394,8 +399,44 @@ func _inset_for_safe_area(root: Control) -> void:
 
 
 func _process(delta: float) -> void:
+	_update_accel(delta)
 	_update_speed(delta)
 	_update_street(delta)
+
+
+## Drive the chip's bar from how hard the car is gaining or losing speed.
+##
+## **Acceleration, and deliberately not engine revs.** A rev counter is what an
+## MT driver reads this bar as, but this car has no gearbox: `VehicleWheel3D`
+## publishes `get_rpm()` and without gearing it is proportional to road speed,
+## so a rev bar would be the number directly above it drawn a second way. What
+## the driver cannot already see is whether the car is *gaining* — the bar is
+## empty at a steady 80 kph, fills under power, and swings the other way under
+## braking.
+##
+## ⚠️ **Every frame, not on the 10 Hz speed gate.** A differentiated velocity
+## sampled at 10 Hz is a staircase; the smoothing needs the small `delta` to be
+## a filter rather than a lag. The work is one subtraction and one lerp.
+func _update_accel(delta: float) -> void:
+	var car: VehicleController = _vehicle()
+	if car == null or delta <= 0.0:
+		return
+	var speed_ms: float = car.forward_speed_kph() / 3.6
+	var raw: float = (speed_ms - _last_speed_ms) / delta
+	_last_speed_ms = speed_ms
+	# Exponential, framerate-independent: `delta / tau` clamped, so a slow frame
+	# catches up rather than overshooting.
+	var follow: float = clampf(delta / maxf(_style.accel_smoothing_s, 0.001), 0.0, 1.0)
+	_accel_mps2 = lerpf(_accel_mps2, raw, follow)
+
+	var fill: float = clampf(_accel_mps2 / maxf(_style.accel_full_scale_mps2, 0.001), -1.0, 1.0)
+	# Assigned only on a visible change: the setter queues a redraw, and a
+	# parked car would otherwise redraw the panel sixty times a second to draw
+	# the same bar.
+	if absf(fill - _shown_fill) < 0.004:
+		return
+	_shown_fill = fill
+	_speed_chip.accent_fill = fill
 
 
 func _update_speed(delta: float) -> void:

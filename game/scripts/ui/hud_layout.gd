@@ -80,7 +80,19 @@ extends Resource
 ## the honest worst case.
 @export var street_plate: Rect2 = Rect2(1412.0, 530.0, 460.0, 96.0)
 
-# ---- reserved, drawn empty, filled by P3-5a and P3-5b ----
+# ---- planned, NOT held open, filled by P3-5a and P3-5b ----
+#
+# 🔴 **Plan the area; do not hold the space.** These rects say where the timer,
+# meter and minimap will go, and the check keeps them honest — but what ships is
+# placed as though they do not exist, because they do not. For one build the
+# plate sat at y 530, mid-frame and floating, purely because the unbuilt minimap
+# was under it; the speed sat at y 860, and the two readouts were on two
+# baselines with a gap between them that was a promise to a task nobody had
+# started.
+#
+# That cost is paid in **every** release before the last one, for a benefit that
+# arrives once. So a release places what it has, and the arrival of a slot's real
+# contents is a `.tres` edit — which is exactly what the layout being data buys.
 
 ## `P3-5b`. Bottom-right, where MM2 puts it — **not** top-left, which is where
 ## this layout had it before the references were looked at. A street map is

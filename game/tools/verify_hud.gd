@@ -42,6 +42,7 @@ const TrackerScript = preload("res://scripts/core/street_tracker.gd")
 const HudLayoutScript = preload("res://scripts/ui/hud_layout.gd")
 const HudStyleScript = preload("res://scripts/ui/hud_style.gd")
 const StreetPlateScript = preload("res://scripts/ui/street_plate.gd")
+const ChamferPanelScript = preload("res://scripts/ui/chamfer_panel.gd")
 
 ## ⚠️ **The paths come from the scripts the game loads, never restated here.** A
 ## check that names its own path goes green while the game reads a different
@@ -57,6 +58,7 @@ var _failed: int = 0
 func _init() -> void:
 	_check_layout()
 	_check_style()
+	_check_bar()
 	_check_plate_tuning()
 	_check_tracker()
 
@@ -186,6 +188,35 @@ func _check_style() -> void:
 
 	if style.chamfer_px <= 0.0:
 		_fail("style", "chamfer_px is 0 — the panels are plain rectangles again")
+
+	# ⚠️ **The bar must be able to say two different things.** It reads
+	# acceleration, signed, and if the two hues collapse together then gaining
+	# and losing speed render identically — a bar that moves and means nothing,
+	# which is what it was before it carried a reading at all.
+	if style.accent.is_equal_approx(style.accent_negative):
+		_fail("style", "the bar draws the same colour gaining and losing speed")
+	elif style.accent_track.a <= 0.0:
+		_fail("style", "the bar has no bed, so a reading of zero looks like a dead panel")
+	else:
+		print("  style: the bar reads two ways and has a bed to read against")
+
+	if style.accel_full_scale_mps2 <= 0.0 or style.accel_smoothing_s <= 0.0:
+		_fail("style", "the acceleration bar's scale or smoothing is zero")
+
+
+## The bar's own arithmetic, which no frame can be trusted to show.
+##
+## A signed reading drawn from a centre is easy to get subtly wrong — inverted,
+## or clamped on one side only — and it renders as a bar that moves plausibly.
+func _check_bar() -> void:
+	var panel: Control = ChamferPanelScript.new()
+	panel.accent_fill = 5.0
+	_expect(is_equal_approx(panel.accent_fill, 1.0), "bar", "over-range reads clamp to full")
+	panel.accent_fill = -5.0
+	_expect(is_equal_approx(panel.accent_fill, -1.0), "bar", "and clamp the same way losing speed")
+	panel.accent_fill = 0.0
+	_expect(is_zero_approx(panel.accent_fill), "bar", "zero is zero")
+	panel.free()
 
 
 # ----------------------------------------------------------- plate tuning ----

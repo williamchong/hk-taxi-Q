@@ -45,9 +45,37 @@ extends Control
 ## A heavier bar along the bottom edge, between the two bottom cuts. This is
 ## where the accent colour lives — one saturated stripe per panel, which is what
 ## keeps the yellow to an accent rather than letting it become a field colour.
+##
+## ⚠️ **It carries a reading, and it did not always.** For one build this was a
+## full-width stripe that never moved: an indicator on an instrument panel that
+## indicated nothing, in a project whose whole discipline is that a thing on
+## screen should be answerable for. It is now driven by `accent_fill`.
 @export var accent: Color = Color(0, 0, 0, 0):
 	set(value):
 		accent = value
+		queue_redraw()
+
+## The colour the bar takes below zero. A second hue rather than a shorter bar,
+## because losing speed and gaining it are different events and not two ends of
+## one quantity to a driver.
+@export var accent_negative: Color = Color(0, 0, 0, 0):
+	set(value):
+		accent_negative = value
+		queue_redraw()
+
+## The unlit bed the bar runs in. Without it a reading of zero is indis-
+## tinguishable from a panel that has stopped drawing.
+@export var accent_track: Color = Color(0, 0, 0, 0):
+	set(value):
+		accent_track = value
+		queue_redraw()
+
+## The reading, -1.0 to 1.0, drawn out from the centre of the bed. Centre-origin
+## because the quantity is signed and a driver reads "gaining or losing" before
+## they read how much.
+@export var accent_fill: float = 0.0:
+	set(value):
+		accent_fill = clampf(value, -1.0, 1.0)
 		queue_redraw()
 
 @export var accent_px: float = 5.0:
@@ -77,15 +105,28 @@ func _draw() -> void:
 		var closed: PackedVector2Array = points.duplicate()
 		closed.append(points[0])
 		draw_polyline(closed, edge, edge_px)
-	if accent.a > 0.0 and accent_px > 0.0:
-		# Between the two bottom cuts, so the bar sits inside the shape rather
-		# than running past its own corners.
-		draw_line(
-			Vector2(cut, box.y - accent_px * 0.5),
-			Vector2(box.x - cut, box.y - accent_px * 0.5),
-			accent,
-			accent_px
-		)
+	if accent_px > 0.0:
+		_draw_bar(box, cut)
+
+
+## The bed, and the reading in it. Between the two bottom cuts, so neither runs
+## past the shape's own corners.
+func _draw_bar(box: Vector2, cut: float) -> void:
+	var y: float = box.y - accent_px * 0.5
+	var left: float = cut
+	var right: float = box.x - cut
+	var middle: float = (left + right) * 0.5
+
+	if accent_track.a > 0.0:
+		draw_line(Vector2(left, y), Vector2(right, y), accent_track, accent_px)
+	if is_zero_approx(accent_fill):
+		return
+
+	var reach: float = (right - middle) if accent_fill > 0.0 else (middle - left)
+	var ink: Color = accent if accent_fill > 0.0 else accent_negative
+	if ink.a <= 0.0:
+		return
+	draw_line(Vector2(middle, y), Vector2(middle + reach * accent_fill, y), ink, accent_px)
 
 
 ## The eight corners of a rectangle with every corner cut, clockwise from the

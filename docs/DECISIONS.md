@@ -10790,9 +10790,37 @@ thing, maybe they should be in same side"*. So:
 
 > **left is the car, right is the world, top is the fare, and the middle is the road.**
 
-The plate now hangs above the minimap slot, and `_fit_plate` grows it away from **whichever edge the
-layout pinned it to** — so moving it again is a `.tres` change with no code, which is what the layout
-being data was for.
+`_fit_plate` grows the plate away from **whichever edge the layout pinned it to** — so moving it is a
+`.tres` change with no code, which is what the layout being data was for.
+
+🔴 **A fourth correction, and it is the one with a rule in it: plan the area, do not hold the space.**
+Pairing the plate with the map put it *above* the minimap slot, at y 530 — mid-frame, floating, while
+the speed sat at y 860. Two readouts on two baselines, and the gap between them was a promise to a
+task nobody has started. The user's rule: *"we should plan for the area usage, but for each UI
+release, we should not leave spaces for ui not existing yet"*. That cost is paid in **every** release
+before the last one, for a benefit that arrives once. Both drawn readouts now sit in the bottom
+corners on **one baseline**, and the reserved rects are the plan rather than a hole in the frame.
+
+⚠️ **And the lettering centres, whichever edge the plate hangs off.** It briefly followed the pinned
+edge, which right-aligned 博覽道東 under EXPO DRIVE EAST — two lines of very different width ragged
+against one side. A sign centres its lines; the panel moves and the words do not.
+
+### The bar under the speed now reads something
+
+⚠️ **It shipped as a full-width stripe that never moved** — an indicator on an instrument panel that
+indicated nothing, in a bundle whose whole discipline is that a drawn thing is answerable for. The
+user asked for revs. It draws **acceleration** instead, and the distinction is the finding: this car
+has no gearbox, so `VehicleWheel3D.get_rpm()` is proportional to road speed and a rev bar would be
+the number directly above it drawn a second way. What a driver cannot already see is whether the car
+is *gaining* — the bar is empty at a steady 80 kph, fills warm under power and cool the other way
+under braking, from a centre origin because "gaining or losing" is read before "how much".
+
+⚠️ **Full scale is measured, not guessed**: 45.6 → 54.8 kph in one second is 2.55 m/s² and 67.5 →
+79.5 is 3.34, both off `drive.sh` telemetry on the shipped car, so 5.0 puts ordinary driving across
+most of the bed with headroom before it pegs. It is differentiated **every frame** and filtered — at
+the 10 Hz speed gate the same signal is a staircase. `verify_hud.gd` asserts the two hues differ (or
+gaining and losing render identically), that the bed exists (or zero looks like a dead panel), and
+that the reading clamps the same way in both directions.
 
 🔴 **The check now asserts the permission as well as the prohibition**, and that is the durable part.
 `verify_hud.gd` requires that a rect over a **tap zone** is *accepted*, so someone "tightening" the

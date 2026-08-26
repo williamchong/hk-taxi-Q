@@ -600,8 +600,15 @@ trade.
   are outlined under `DebugHud`'s FULL view, so the space being held can be looked at rather than
   trusted.
 - **The arrangement follows one rule, and it is about what a readout MEANS**: left is the car, right
-  is the world, top is the fare, and the middle is the road and stays empty. Both halves of that were
-  corrections on frames — see `Q80`.
+  is the world, top is the fare, and the middle is the road and stays empty. Every part of that was a
+  correction on a frame — see `Q80`.
+- 🔴 **Plan the area; do not hold the space.** The reserved rects say where `P3-5a`'s and `P3-5b`'s
+  furniture goes and the check keeps them honest, but a release places what it *has*. Holding a gap
+  open for unbuilt UI makes every release before the last one look wrong, which is a cost paid many
+  times for a benefit that arrives once. Moving something when its neighbour lands is a `.tres` edit.
+- **The bar under the speed reads acceleration**, not engine revs: with no gearbox, wheel RPM is
+  proportional to road speed and would redraw the number above it. Nothing on this HUD is allowed to
+  be decoration.
 - **Why it comes out of `P3-5a` and gets its own ID:** speed and current street depend on **no fare
   system**. `P3-5a`'s three deliverables all do. Splitting them lets the chassis, the font and the
   touch contract land and be looked at while `B1` is still unwritten, which is the same argument

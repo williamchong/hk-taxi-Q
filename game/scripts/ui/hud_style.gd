@@ -68,7 +68,28 @@ const PATH: String = "res://tuning/hud_style.tres"
 ## one non-negotiable colour in the anchor table; spending it on HUD furniture
 ## now leaves `P3-5a` nothing to say "fare" with.
 @export var accent: Color = Color(0.86, 0.68, 0.13)
+## What the bar reads when the car is losing speed. Cool and unsaturated against
+## the accent's warmth — braking is not a smaller version of accelerating.
+##
+## ⚠️ **Not red.** Taxi red is the car's own and `P3-5a`'s to spend, and a red
+## bar on a speedometer also reads as a warning, which losing speed is not.
+@export var accent_negative: Color = Color(0.45, 0.62, 0.78)
+## The unlit bed. A reading of zero must look like zero rather than like a panel
+## that has stopped drawing.
+@export var accent_track: Color = Color(1.0, 1.0, 1.0, 0.12)
 @export var accent_px: float = 5.0
+
+## Longitudinal acceleration, in m/s², at which the bar is hard over.
+##
+## Measured off `drive.sh` telemetry on the shipped car rather than guessed:
+## 45.6 → 54.8 kph in one second is 2.55 m/s², 67.5 → 79.5 is 3.34, and the
+## first second off the line is steeper than either. 5.0 puts ordinary
+## acceleration across most of the bed and leaves headroom before it pegs.
+@export var accel_full_scale_mps2: float = 5.0
+
+## How quickly the bar follows. A physics velocity differentiated per frame is
+## far too noisy to read; this is the time constant of the filter over it.
+@export var accel_smoothing_s: float = 0.18
 
 @export var speed_size: int = 104
 @export var speed_unit_size: int = 30
