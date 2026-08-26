@@ -23,6 +23,7 @@ const GeneratedRoadSurface = preload("res://scripts/city/generated_road_surface.
 const GeneratedArrows = preload("res://scripts/city/generated_arrows.gd")
 const GeneratedBoxJunctions = preload("res://scripts/city/generated_boxjunctions.gd")
 const GeneratedRoadMarks = preload("res://scripts/city/generated_roadmarks.gd")
+const GeneratedLamps = preload("res://scripts/city/generated_lamps.gd")
 const GeneratedRailings = preload("res://scripts/city/generated_railings.gd")
 const GeneratedSigns = preload("res://scripts/city/generated_signs.gd")
 const GeneratedSignals = preload("res://scripts/city/generated_signals.gd")
@@ -119,6 +120,14 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 		problems.append_array(
 			_check_document("railings", manifest.railings_path, GeneratedRailings.PATH)
 		)
+	# Guarded on the same terms: `verify_lamps.gd` treats an absent asset as a
+	# pass, so a manifest naming `lamps.glb` with the file gone would otherwise
+	# pass every check in the repo. ⚠️ **And a null `lamps` key is a LESS
+	# ordinary answer than a null `signals` one** — `UTILITYPOINTTYPE` has a
+	# published domain where `REFNAME` has none — so a bundle that names the
+	# asset really is expected to hold it.
+	if not manifest.lamps_path.is_empty():
+		problems.append_array(_check_document("lamps", manifest.lamps_path, GeneratedLamps.PATH))
 	if not manifest.boxjunctions_path.is_empty():
 		problems.append_array(
 			_check_document("box junctions", manifest.boxjunctions_path, GeneratedBoxJunctions.PATH)

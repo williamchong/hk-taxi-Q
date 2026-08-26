@@ -10,6 +10,7 @@
 [ext_resource type="Script" path="res://scripts/city/arrows_preview.gd" id="12_arrows"]
 [ext_resource type="Script" path="res://scripts/city/boxjunctions_preview.gd" id="13_boxjunctions"]
 [ext_resource type="Script" path="res://scripts/city/railings_preview.gd" id="14_railings"]
+[ext_resource type="Script" path="res://scripts/city/lamps_preview.gd" id="18_lamps"]
 [ext_resource type="Script" path="res://scripts/city/signs_preview.gd" id="15_signs"]
 [ext_resource type="Script" path="res://scripts/city/roadmarks_preview.gd" id="16_roadmarks"]
 [ext_resource type="Script" path="res://scripts/city/signals_preview.gd" id="17_signals"]
@@ -69,6 +70,15 @@ script = ExtResource("17_signals")
 ; stays empty.
 [node name="Railings" type="Node3D" parent="."]
 script = ExtResource("14_railings")
+
+; The published lamp posts (`P3-26`), one mesh for the whole region, standing on
+; the kerb the ribbon actually drew rather than where they were surveyed — 64.1%
+; of them were surveyed inside it. **Unlit**, and deliberately: `Q38` bakes the
+; exposure into `COLOR_0` at build time, `Q26` has not chosen a look, and
+; `ART_DESIGN.md` says to resist adding lights. A region whose sources publish no
+; utility point layer ships none and this node simply stays empty.
+[node name="Lamps" type="Node3D" parent="."]
+script = ExtResource("18_lamps")
 
 ; The published traffic signs (`P3-16`), one mesh for the whole region, standing
 ; on the poles TD surveyed rather than at the abbreviation points that name them

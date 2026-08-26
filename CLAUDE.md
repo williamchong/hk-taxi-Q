@@ -401,6 +401,51 @@ Common emoji for this project:
   it, which is why its exit code is the only thing that means anything. ⚠️ **Do not force the sign
   visible with `if false:`** — the promoted-warnings sweep rejects the file, the HUD never builds,
   and the run still says `DRIVER OK`. Numbers in `Q81`.
+- **`pipeline/lamps.py`, the `lamps` config block, or any lamp-post change: paste `lamps.json`'s two
+  partitions, `min_kerb_clearance_m`, `shift_m` (with its `n`), `lantern_overhang_m`,
+  `lanterns_past_centreline`, `spacing_surveyed_m` vs `spacing_drawn_m`, `gaps_over_report_m` and
+  `facing_away`, before and after — and A/B render one street at a fixed camera.** There is no
+  separate grader and there should not be: the stage grades itself, because every way this breaks
+  renders as a perfectly drawn lamp post or as nothing.
+  🔴 **`min_kerb_clearance_m` is the invariant the user asked for — no column stands in the road —
+  and it comes from TWO refusals, not from `max_shift_m`.** `_register` clears a column's own host
+  kerb; a second pass re-snaps the *placed* point against every edge and refuses it where 1.6x
+  ribbons overlap. Deleting that pass leaves both partitions closing, `facing_away` at 0 and
+  `check.sh` green, with columns standing in junction mouths. It is **not** a tautology: a foot
+  reconstructed from `offset_m` rather than read off the polyline drives it negative (`signs.py`'s
+  recorded 10.6 m defect). ⚠️ **Do not "fix" it by iterating the push** — measured at plateau 9.7%
+  with the worst shift going 5.52 → 16.77 m, which is a column on the wrong street.
+  🔴 **There must be NO `arms_against_kerb` counter.** The arm direction is derived from the kerb
+  side, so such a counter reads 0 by construction — `Q72`'s tautology, which certified a whole
+  region's signs as correct while every one faced the wrong way. `lantern_overhang_m` and
+  `lanterns_past_centreline` are what ship, and the second is reachable by raising `arm_reach_m`,
+  which is the test a counter here has to pass. The facing itself **cannot** be graded against
+  anything published (`Q62`) — the evidence is an A/B render at one fixed camera, shot twice and
+  `cmp`'d.
+  🔴 **The prism ring is NOT reversed here, and `signs._draw_pole`/`signals._draw_post` both reverse
+  theirs.** Both of those carry a paragraph calling the reversal "the whole correctness of this
+  function" and both are right about their own frame; `lamps._strut` builds an explicit one with
+  `u x v == axis`, because a bracket arm is not vertical. Inheriting their fix inverted **25,116 of
+  35,880** triangles. Do not "restore consistency".
+  ⚠️ **`shift_m` is recorded over refusals as well as keeps, and `n` exceeding `drawn` is how you
+  tell** (`Q58`'s trap); `Q78`'s outward-only clamp applies here and deliberately **not** in
+  `railings.py`/`signals.py` — a fence is a run, a lamp post is not.
+  ⚠️ **A widening change is a lamp-position change**: `widen_default` moves the drawn kerb and
+  therefore moves every column, silently and plausibly.
+  ⚠️ **The spacing pair is this layer's own failure mode and no other layer here has it** — a lamp
+  row's regularity *is* its content, so a refusal is a hole where a missing sign is invisible. Quote
+  both distributions; the *difference* is the finding.
+  ⚠️ **The colour is in `materials:` and answers to `Q33`** — `signs.colours`' exemption does not
+  transfer, because a lamp post is not a printed specification and is one colour. ⚠️ **A lamps change
+  is also a shader change, and its shader is shared with the signs and the signals** — `check.sh`
+  exits 0 on a shader that fails to compile, so render and `grep -i "shader error"`, and look at all
+  three layers. 🔴 **Do not light the lantern**: `Q38` bakes the exposure at build time and `Q26` has
+  not chosen a look, so a glow here is wrong in every frame the project renders.
+  ⚠️ **`verify_lamps.gd`'s upright bar grades the IMPORTED mesh, not the built one, and the two
+  differ.** The ETL mesh is exactly 50.000% upright; the import reads 51.52%, because Godot
+  quantises positions over the mesh AABB — 0.025 m at this layer's 1,646 m width, against a 0.06 m
+  bracket arm. So do not "tighten" that bar toward a measured value: the value is not this stage's.
+  Numbers in `Q82`.
 - **Street-name or font changes — `street_plate.json`, the bundled typeface, or any new region:
   also `tools/font_coverage.py --city <c> --region <r>`.** It exits non-zero on a character that is in neither the font nor the
   display substitution table, which is the only thing standing between a data refresh and a tofu box

@@ -165,7 +165,7 @@ does. Running `--import` by hand tells you nothing unless you read the output.
 | `verify_beam_budget` | The spot-light cap — needs no built region, so CI can check it | yes |
 | `verify_mesh_contract` | That the no-texture contract still refuses what it should — needs no built region, so CI can check it | yes |
 | `verify_vehicle` | The taxi's shader binding, lamp channels, imported payload and beam aim — the taxi is committed, so this needs no built region either | yes |
-| `verify_city`, `verify_tiles`, `verify_road_surface`, `verify_road_graph`, `verify_city_streamer`, `verify_spawn`, `verify_landmarks`, `verify_tramway`, `verify_arrows`, `verify_boxjunctions`, `verify_railings`, `verify_signs`, `verify_roadmarks` | The generated-asset contracts — one per asset the manifest names | **no** |
+| `verify_city`, `verify_tiles`, `verify_road_surface`, `verify_road_graph`, `verify_city_streamer`, `verify_spawn`, `verify_landmarks`, `verify_tramway`, `verify_arrows`, `verify_boxjunctions`, `verify_railings`, `verify_signs`, `verify_roadmarks`, `verify_lamps` | The generated-asset contracts — one per asset the manifest names | **no** |
 
 The sweep is separate from `--import` because `--import` does not do the job: measured, an untyped
 variable planted in `greybox_builder.gd` went unreported, because the import step compiles only
@@ -1024,6 +1024,43 @@ terms, including the every-marking-failed-the-join state.
 ⚠️ The import-lattice constraint, the winding rule and the p90/p99/max reporting follow
 `boxjunctions.glb` and `arrows.glb` above, unchanged.
 
+### `lamps.glb` — the published lamp posts (`P3-26`, `Q82`)
+
+A 9 m hexagonal column standing `outset_m` outside the drawn carriageway edge, a bracket arm sloping
+`arm_reach_m` out and `arm_drop_m` down over the carriageway, and a lantern box centred on the far
+end — one per `LPO` point in iB1000's `UtilityPoint` that clears the road. **No collider**, on
+`signs.glb`'s terms: 897 columns is 897 collision bodies and `P2-6` has not measured a frame on the
+device floor. Breakaway is a `B3` question.
+
+| | |
+|---|---|
+| Primitives | 1 — one draw call for the region's lamps |
+| Attributes | `POSITION`, `NORMAL`, `COLOR_0`; no `TEXCOORD_0`, no texture |
+| `COLOR_0` | One colour, from `hong_kong.yaml`'s `materials:` table via `lamps.column_material`. ⚠️ **Carried although the layer is monochrome**, because `signs.gdshader` reads it and a mesh not supplying it renders white |
+| Material name | `lamps` → `res://tuning/lamps.tres`, the third `.tres` on `signs.gdshader` |
+| Collider | none |
+
+✅ **The one layer here whose vocabulary the publisher DEFINES.** `UTILITYPOINTTYPE` carries a
+coded-value domain inside the geodatabase (`LPO - Lamp post`), where `railings.classes` and
+`signals.head_prefixes` are whitelists read off code strings with nothing published behind them.
+`lamps.json` publishes `refused_by_kind` over the rest of the domain regardless.
+
+🔴 **The position is registered rather than read, and the guarantee that no column stands in the
+drawn carriageway comes from TWO refusals.** `_register` pushes a column outward — `Q78`'s clamp, so
+one already clear keeps the surveyed point — to `half_width + outset_m` of its **host** edge, or
+refuses past `max_shift_m`. That says nothing about the edge next door, so the placed point is
+re-snapped against **every** edge and refused where it lands inside any drawn ribbon: junction
+mouths and dual carriageways, where 1.6x ribbons overlap and no footway survives. `lamps.json`
+publishes `min_kerb_clearance_m` as the invariant.
+
+⚠️ **The arm direction is derived from the kerb side and cannot be graded against anything published**
+(`Q62`). What ships instead of a counter over it is `lantern_overhang_m` — a counter over the
+direction itself would read 0 by construction, which is `Q72`'s tautology.
+
+⚠️ **`UtilityPoint` publishes no elevation**, so unlike every sibling stage there is nothing to
+refuse a flyover lamp on and one is drawn on the street underneath. `nearest_is_elevated` reports how
+often that is possible.
+
 ### `railings.glb` — the published street furniture (`P3-19`, `Q61`)
 
 A vertical strip `height_m` tall standing `outset_m` outside the drawn carriageway edge, one quad
@@ -1341,6 +1378,7 @@ every region lies inside them.
 | `boxjunctions.glb` | The published yellow box junctions, drawn at the extents the estate surveyed and lifted under the arrows that paint over them. Ships nothing thinner than the import lattice. One primitive, one draw call, **no collider** | ✅ `P3-18` |
 | `roadmarks.glb` | The published stop and give-way lines, drawn at the extents TD surveyed and hosted by the road each one *crosses* rather than the road it is nearest — the two disagree on 43% of the layer. One primitive, one draw call, **no collider** | ✅ `P3-23` |
 | `signs.glb` | The published traffic signs, standing on the poles TD surveyed rather than at the abbreviation points that name them — those are drawing labels, a median 2.6 m away. Shape-faced signs only; anything whose meaning is its text is refused (the no-texture contract). One primitive, one draw call, **no collider** | ✅ `P3-16` |
+| `lamps.glb` | The published lamp posts, standing on the kerb the ribbon actually drew rather than where LandsD surveyed them — 64.1% of those are inside it — with a bracket arm reaching over the carriageway. The one layer whose vocabulary the publisher defines. Unlit, deliberately: `Q38` bakes the exposure at build time and `Q26` has not chosen a look. One primitive, one draw call, **no collider** | ✅ `P3-26` |
 | `FareSystem` | Fare state machine: idle → hailed → carrying → delivered/failed | ⬜ `P3-1` |
 | `ScoreSystem` | Base fare, time bonus, **style chain** and **fare combo** — two distinct multipliers | ⬜ `P3-2` |
 | `HUD` | The player's HUD. Speed and the bilingual street plate ship; the minimap, timer and meter are **reserved, empty, checked** slots. Flat-shaded like the city — chamfered polygons, one fill, one keyline — with white for the city's voice and dark for the car's. `--hud=off` for `P3-9` and for art frames | 🟡 `P3-24`; meter, timer and the **world-space** destination marker are `P3-5a` |
@@ -1373,11 +1411,11 @@ the second vehicle anyone built.
 | `scripts/city/road_graph.gd` | One parse per scene, nearest-edge and lane-centre queries over a plan grid. Refuses off-grade edges (`Q13`), and **expresses** — never enforces — passability on the rest (`Q51`) |
 | `scripts/city/road_spawn.gd` | `basis_facing` builds the rotation from a direction, which is what deleted the hand-written transform literal and its transpose trap; `Pose.blocked` is why a start line in a wall fails a check rather than reaching a driver (`Q52`) |
 | `scripts/city/generated_document.gd` | Parse and version-check a JSON document the ETL wrote. Shared by the locators and by `CityManifest`, so the stale-copy message exists once |
-| `scripts/city/generated_*.gd` | Locators — one definition per document the manifest names, two readers: `road_graph`, `road_surface`, `fares`, `landmarks`, `tramway`, `arrows`, `boxjunctions`, `roadmarks`, `railings`, `signs`. `generated_fares.gd` is the one place that knows that document's shape, and `generated_landmarks.gd::placement_of` is the one place the compass bearing becomes a Godot rotation |
+| `scripts/city/generated_*.gd` | Locators — one definition per document the manifest names, two readers: `road_graph`, `road_surface`, `fares`, `landmarks`, `tramway`, `arrows`, `boxjunctions`, `roadmarks`, `railings`, `signs`, `lamps`. `generated_fares.gd` is the one place that knows that document's shape, and `generated_landmarks.gd::placement_of` is the one place the compass bearing becomes a Godot rotation |
 | `scripts/city/landmarks.gd` | Places the authored heroes where `landmarks.json` puts them. ~2 models, always resident — no streaming, no LOD |
 | `scripts/city/mesh_contract.gd` | The mesh rules every generated asset is held to, plus `triangles` and `bounds`. Read by every verify tool that touches geometry, the previews, and `CityStreamer`. Also the two checks a payload-carrying asset needs — that it landed on the shader its material name asked for, and that the importer settings which would silently overwrite a `TEXCOORD_1` have not drifted — both hoisted here when `P3-12` gave the road surface a second copy of them |
 | `scripts/city/preview_draw.gd` | Flat ribbons and the unshaded vertex-colour material, shared by the dev previews |
-| `scripts/city/*_preview.gd` | Dev previews — one per drawn class: `tile`, `road_surface`, `road`, `fare`, `tramway`, `arrows`, `boxjunctions`, `roadmarks`, `railings`, `signs`. ⚠️ **Adding a drawn layer means adding its node here** — `roadmarks` had everything else and no node, and nothing caught it (see Checks). They instantiate what the manifest names so a layer can be looked at on its own. **Not performance measurements** |
+| `scripts/city/*_preview.gd` | Dev previews — one per drawn class: `tile`, `road_surface`, `road`, `fare`, `tramway`, `arrows`, `boxjunctions`, `roadmarks`, `railings`, `signs`, `lamps`. ⚠️ **Adding a drawn layer means adding its node here** — `roadmarks` had everything else and no node, and nothing caught it (see Checks). They instantiate what the manifest names so a layer can be looked at on its own. **Not performance measurements** |
 | `scripts/city/road_graph_overlay.gd` | Dev: the resolved edge, lane centre and legal travel direction under the moving car |
 | `scripts/city/drive_harness.gd` | Dev: place the car on the resolved start line, and return it there when it leaves the world. On the scene root so its `_ready` runs after the car's |
 | `scripts/camera/free_look_camera.gd` | Dev fly camera. Bypasses `InputRouter` so dev keys stay out of the shipped action map |

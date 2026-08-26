@@ -273,6 +273,26 @@ materials:
     reflectance: 35.0
     source: "steel rail head polished by use; bare and weathered steel is 30-50%"
 
+  # A lamp column (`P3-26`). Hot-dip galvanised steel that has been weathering in
+  # a marine atmosphere for years: fresh galvanising is bright, 50-60%, and dulls
+  # hard as the spangle goes matt grey.
+  #
+  # ⚠️ **Below `steel_rail`'s 35 on purpose, and the ordering is the argument.**
+  # That one is a rail *head*, kept polished by the traffic running over it — the
+  # brightest steel in the city. A column is the dullest. Getting these two the
+  # same way round matters more than either absolute value, because it is the
+  # part a reviewer can check by looking.
+  #
+  # 🔴 **Dead neutral, and that is `Q61` rather than taste.** The railings shipped
+  # an authored *green* bias read off nothing and read white and strange; the
+  # correction was to a neutral albedo, because the sky supplies the cool cast on
+  # its own — measured on the `street` frame at B-R **+11.5** once blue is
+  # authored in against **+5.7** from a neutral. Do not tint this toward zinc.
+  galvanised_steel:
+    colour: "#6b6b6b"
+    reflectance: 28.0
+    source: "weathered hot-dip galvanised steel; fresh is 50-60% and dulls to 25-35%"
+
 crs:
   # Every source dataset is published in the HK1980 Grid System — a Transverse
   # Mercator projection in metres. All pipeline geometry stays in it until the
@@ -1991,6 +2011,122 @@ railings:
       height_m: 0.9
       base_sink_m: 0.25
       outset_m: 0.6
+
+# ---------------------------------------------------------------------------
+# Lamp posts (P3-26) — iB1000 `UtilityPoint`, `UTILITYPOINTTYPE = LPO`.
+# ---------------------------------------------------------------------------
+#
+# ✅ **The only street-furniture vocabulary in this file the publisher actually
+# defines.** `LPO - Lamp post` is a coded-value domain stored *inside* the
+# geodatabase, readable out of every sheet's `.gdbtable` bytes. `railings.classes`
+# is a whitelist read off code strings because `LINETYPE` has no domain (Q60) and
+# `signals.head_prefixes` was the same (Q76); this is a selection from an answer
+# the publisher wrote down, and a wrong entry here is checkable against the source.
+#
+# ⚠️ **The layer publishes a position and nothing else.** Six columns, not one of
+# them a length: no height, no arm, no lantern, no angle, no elevation level.
+# Geometry Z is 0.0 on all 1,263 — the file's convention, not a defect, since
+# `SpotHeight` reads 0.0 too and keeps its value in a column this layer lacks. So
+# **every dimension below is authored**, which is Q60's railing debt and P3-16's
+# plate debt at a fourth and fifth layer. None of them is a position.
+#
+# ⚠️ **These sheets are already on disk** for the podium join, so this layer costs
+# no fetch at all — the same free lunch Q57 found for the tramway.
+#
+# Measured over the region (P3-26):
+#
+#   in region                     1,263 LPO   (FWH 215, SWH 26, EPO 2 — not drawn)
+#   nearest-neighbour spacing     p10 7.09  p50 16.74  p90 27.63  max 55.46 m
+#   coincident pairs (<0.05 m)    0        <- why there is no assembly clustering
+#   surveyed inside drawn ribbon  810 / 1,263 (64.1%), p50 1.46 m past the kerb
+#   drawn at max_shift_m 3.0      924 (73.2%)   over_shift 211   in_carriageway 128
+#   drawn at max_shift_m 6.0      992 (78.5%)   over_shift   7   in_carriageway 264
+#
+# 🔴 **3.0 rather than signs' 6.0, and the sweep above is the argument.** Going to
+# 6.0 converts 204 over-shift refusals into pushes — and 136 of them then land in
+# another edge's ribbon and are refused anyway, so it buys **68 posts for a 6 m
+# lateral move**. That is `signs.py`'s "a post on the wrong street", and a lamp
+# column is 10 m tall and part of a regular row, so a mis-registered one is more
+# visible than a mis-registered sign rather than less.
+#
+# ⚠️ The sweep above is measured with a scratch host; the stage's own join adds
+# `too_far` and `no_ribbon`, so it ships **897** rather than 924. `lamps.json` is
+# the live count and these are the shape of the trade.
+lamps:
+  source: topography
+  member: "{tile}/{tile}.gdb"
+  layer: UtilityPoint
+  fields:
+    kind: UTILITYPOINTTYPE
+  # ✅ Read off the published domain, not off the code strings. The other three
+  # codes in this domain are hydrants and one electricity pole; `lamps.json`
+  # publishes `refused_by_kind` over all of them so the selection is reviewable.
+  kinds: [LPO]
+
+  # 🔴 **A NAMED MATERIAL, NOT AN AUTHORED HEX — and `signs.colours`' exemption
+  # from Q33 deliberately does NOT transfer here.** That exemption rests on two
+  # things: a sign's livery is a *printed specification* with no reflectance to
+  # grade, and a plate is four colours inside one draw call so the values must
+  # ride COLOR_0. Neither holds for a lamp post. Galvanised steel is a real
+  # surface with a published albedo, which is exactly what `materials:` is for,
+  # and there is **one** colour here. `tramway.rail_material` is the pattern;
+  # `_check_exposure` grades the entry.
+  #
+  # ⚠️ **One material, and `config.py` refuses a second.** The layer publishes no
+  # lantern type and no material of its own, so two liveries would assert a
+  # distinction the publisher does not draw (Q54) — Q60's "five codes draw one
+  # fence" again.
+  column_material: galvanised_steel
+
+  # ---- the column, authored ----
+  # HyD's standard urban column is 8-12 m to the lantern; 9.0 sits mid-range and
+  # is what the region's dual carriageways want. ⚠️ Authored, and there is no
+  # published number to check it against.
+  column_height_m: 9.0
+  # ⚠️ **The CIRCUMRADIUS**, so a hexagon's flat sits at 0.078 m — 13% inside
+  # this number. Stated because a reader checking it against a published
+  # diameter would otherwise be wrong by that much.
+  column_radius_m: 0.09
+  # Six, matching `signs.pole_sides`. ⚠️ **The triangle count is 897x whatever
+  # this is** — at 6 sides a lamp is 40 triangles and the whole layer lands at
+  # 35,880, against the road surface's 32,233. Raising it to 8 costs ~5k
+  # triangles for a silhouette nobody reads at 50 kph.
+  column_sides: 6
+
+  # ---- the bracket arm and lantern, authored ----
+  # The arm reaches over the carriageway — see `lamps.py` for why that direction
+  # is *derived* and ungraded (Q62), and what grades it instead. It **slopes**
+  # down to the lantern rather than running flat: a horizontal arm plus a
+  # separately-dropped housing leaves the lantern floating.
+  arm_reach_m: 1.6
+  arm_radius_m: 0.06
+  arm_drop_m: 0.5
+  lantern_length_m: 0.8
+  lantern_width_m: 0.32
+  lantern_depth_m: 0.16
+
+  # ---- the join ----
+  # A post further than this from any level-0 centreline has no host, so no kerb
+  # side and no arm direction. 12 m is `signs.max_offset_m`'s value and its
+  # reason: a little over the widest drawn half-width in the region.
+  max_offset_m: 12.0
+  # Where a registered column stands, measured out from the drawn kerb. Matches
+  # `signs.outset_m`; a column is a fatter object than a sign post but it stands
+  # in the same footway.
+  outset_m: 0.6
+  # 🔴 See the sweep above. Q78's outward-only clamp applies — `lamps.py` says why
+  # this follows `signs.py` and not `signals.py`/`railings.py`.
+  max_shift_m: 3.0
+  # Posts the registration pushed onto one point. ⚠️ **Small, and it must stay
+  # under `max_shift_m`** (refused at load): this layer publishes zero coincident
+  # pairs, so every fold here is one the move made, and a wide radius would thin a
+  # row whose regularity is the whole reason for drawing it.
+  merge_m: 0.75
+  # 🔴 **Report-only, and this layer's own failure mode.** A missing sign is
+  # invisible; a missing lamp in a regular row is a hole. Surveyed, the region has
+  # 5 neighbour gaps over 40 m; drawn, it has 16. A widening change moves that
+  # number and nothing else would show it.
+  gap_report_m: 40.0
 
 # Hero buildings shipped as authored models (P3-6) — the landmarks.json
 # contract in docs/ARCHITECTURE.md. The building stage excludes every stem

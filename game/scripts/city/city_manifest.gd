@@ -103,18 +103,20 @@ const NOT_MEASURED: float = -1.0
 ## 18 since `P3-17`: the manifest names `signals.glb`, the published traffic
 ## signal heads drawn from TD's `DTAD_TRAFFIC_LIGHT_PT`. The same argument an
 ## eighth time — a v17 reader computes a shipped set missing a bundle file.
+## 19 since `P3-26`: the manifest names `lamps.glb`, the published lamp posts
+## drawn from iB1000's `UtilityPoint` — a ninth time, unchanged.
 ##
-## ⚠️ **All eight keys are optional and may be null.** A city whose estate
-## publishes no tramway, no marking symbols, no box polygons, no railing layer,
-## no sign layer or no transverse markings ships none — so `tramway_path`,
-## `arrows_path`, `boxjunctions_path`, `railings_path`, `signs_path` and
-## `roadmarks_path` are empty for such a region and that is the honest answer
+## ⚠️ **All nine keys are optional and may be null.** A city whose estate
+## publishes no tramway, no marking symbols, no box polygons, no lamp posts, no
+## railing layer, no sign layer or no transverse markings ships none — so
+## `tramway_path`, `arrows_path`, `boxjunctions_path`, `lamps_path`,
+## `railings_path`, `signs_path` and `roadmarks_path` are empty for such a region and that is the honest answer
 ## rather than a missing file. `signals_path` is empty on those terms *and* for
 ## a region whose publisher spells its signal codes outside `head_prefixes` —
 ## the gate is a rule about spelling that nothing published grades (`P3-17`).
 ## `signs_text_atlas_path` is emptier still: it is null for all of those *and*
 ## for a region whose faces carry no lettering.
-const SCHEMA_VERSION: int = 18
+const SCHEMA_VERSION: int = 19
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -215,6 +217,21 @@ var boxjunctions_path: String
 ## it drew — so empty means "no railings in this bundle", never "no railings
 ## block".
 var railings_path: String
+
+## The lamp-post mesh (`P3-26`), or **empty** where the region ships none.
+##
+## Optional on the same terms as `railings_path`: drawn from LandsD's published
+## `UtilityPoint`, and a city whose estate publishes none declares no `lamps:`
+## block and exports a null. ⚠️ It is also empty where the block is declared and
+## no column cleared the carriageway — the stage names its asset from what it
+## drew — so empty means "no lamps in this bundle", never "no lamps block".
+##
+## ⚠️ **Empty is a LESS ordinary answer here than for `signals_path`**, and the
+## difference is the point. A signal layer can vanish because `REFNAME` has no
+## published domain and the gate is a spelling rule; `UTILITYPOINTTYPE` **has** a
+## published domain, stored inside the geodatabase, so a region drawing no lamps
+## has declared no block or found no kerb — it has not misread a vocabulary.
+var lamps_path: String
 
 ## The traffic-sign mesh (`P3-16`), or **empty** where the region ships none.
 ##
@@ -337,6 +354,7 @@ static func load_manifest() -> CityManifest:
 	# `str(null)` reason spelled out above.
 	manifest.arrows_path = _resolve(document.get("arrows"))
 	manifest.boxjunctions_path = _resolve(document.get("boxjunctions"))
+	manifest.lamps_path = _resolve(document.get("lamps"))
 	manifest.railings_path = _resolve(document.get("railings"))
 	manifest.signs_path = _resolve(document.get("signs"))
 	manifest.roadmarks_path = _resolve(document.get("roadmarks"))
@@ -405,6 +423,7 @@ func shipped() -> PackedStringArray:
 		tramway_path,
 		arrows_path,
 		boxjunctions_path,
+		lamps_path,
 		railings_path,
 		signs_path,
 		signs_text_atlas_path,

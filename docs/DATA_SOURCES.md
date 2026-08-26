@@ -152,6 +152,55 @@ making. Domain codes are the data dictionary's own words, quoted, not inferred:
 strip* in Traffic Aids Drawings; `RM` is *Road margin* here and a *road-marking code prefix* there.
 Read the dictionary for the file in hand.
 
+#### The street-furniture layers of this file (`P3-26`, 2026-08-27)
+
+**`Q57` surveyed this file's *road* layers and never opened its utility ones.** They are in the same
+six sheets, already on disk, and one of them is a shipped layer since `P3-26`.
+
+| Layer / code | In Wan Chai (six sheets) | In region | What it is |
+|---|---|---|---|
+| **`UtilityPoint`, `UTILITYPOINTTYPE = LPO`** | **2,096** | **1,263** | **The lamp posts.** ✅ **In use since `P3-26`** — `pipeline/lamps.py` draws them as `lamps.glb` |
+| `UtilityPoint`, `FWH` / `SWH` | 365 / 39 | 215 / 26 | Fresh- and salt-water hydrants. **Not in use** — 0.7 m of street furniture buys none of the vertical rhythm `P3-26` is for |
+| `UtilityPoint`, `EPO` | 2 | 2 | **Not in use**, and two features is not a layer |
+| `RoadAssetPoint`, `RAC` / `BAC` | 11 / 3 | 5 / 2 | **Not in use** |
+| `BuiltStructurePoint`, `GIC` `MON` `UNC` `MAS` `SHR` | 30 | 5 | **Not in use** |
+| ⚠️ `Tree`, `TREETYPE` | **40** | **9** (`OVT` ×8, `TE` ×1) | 🔴 **NOT a street canopy, and the count is not why.** `SOURCEREFNO` reads `ARCHSD WCH/3`, `EMSD WCH/1`, `HKP WCH/1`, `LCSD WCH/6` — per-department survey references, i.e. trees surveyed **individually**, which is never how a street canopy is captured. `OVT` is the *Old and Valuable Tree* register: legally protected specimens. This is a **landmark** layer with nine members. `LandCoverVector2` is **0 features across all six sheets**, so there is no polygon fallback. **Not in use**, and named here so the hour is not spent again |
+
+🔴 **`UTILITYPOINTTYPE` HAS A PUBLISHED DOMAIN, AND IT IS INSIDE THE GEODATABASE.** `LPO - Lamp post`
+and `TE - Tree` / `OVT - Old valuable tree` are coded-value domains (`dTreeType` and its sibling)
+stored in the `.gdbtable` bytes of every sheet. That is a **materially stronger** claim than the two
+layers this project has previously had to guess at: `DTAD_RAILING_LINE.LINETYPE` has no domain
+anywhere (`Q60`) and `DTAD_TRAFFIC_LIGHT_PT.REFNAME` has none either (`Q76`), which is part of why
+`Q77` was arguable at all. It is arguably stronger than `arrows.py`'s glyph table, which is
+transcribed **by eye** off a drawing (`Q59`). ⚠️ So a change to which codes this pipeline draws is
+**not** `railings.py`'s situation — the publisher has already answered, and the answer is checkable
+without leaving the file.
+
+⚠️ **The layer publishes a position and nothing else.** Its six columns are `LASTUPDATEDATE`,
+`UTILITYPOINTID`, `UTILITYPOINTTYPE`, `STATUS`, `DISPLAYSTATUS`, `DATASOURCE`. There is **no
+elevation level, no angle, no height, no lantern type and no arm direction**. ⚠️ **Geometry Z is
+`0.0` on all 1,263** and that is the file's convention rather than a defect: `SpotHeight` — a layer
+whose entire purpose is heights — also reads Z `0.0` and keeps its value in a `HEIGHTVALUE` column.
+`UtilityPoint` has no such column, so **every dimension `lamps.py` draws is authored**, which is
+`Q60`'s railing debt and `P3-16`'s plate debt at a third layer. `STATUS` is `E` on all 1,263.
+
+⚠️ **`UtilityNumber` is a related table, not a column** — 377 rows per sheet, `UTILITYNUMBER` joined
+to `UTILITYPOINTID` through the `LampPostHasNumber` relationship. These are Hong Kong's lamp-post
+numbers. **Not in use**: drawing them needs `P3-20`'s atlas machinery for lettering no driver can
+read at speed, which is `Q65`'s effort-per-plate refusal.
+
+⚠️ **`LPO` is a trap in the same family as `TW` and `RM` above.** It is *Lamp post* here; the
+`DTAD_GIPOLE_PT` layer next door in Traffic Aids Drawings is a different pole population entirely and
+is **not** read by this stage.
+
+**Measured over the region (`P3-26`, and reproduced by the stage's own counters):** nearest-neighbour
+spacing p10 **7.09** / p50 **16.74** / p90 **27.63** m with **zero** coincident pairs under 0.05 m —
+alternating-side street lighting, and an independent agreement with the domain string. ⚠️ **64.1%
+(810 of 1,263) are surveyed inside the drawn 1.6x carriageway**, a median 1.46 m past the drawn kerb,
+so drawn where published four fifths of a kilometre of Wan Chai's lamp columns stand in the road.
+They are **registered onto the drawn kerb** — `Q60`'s move at a fourth layer. See `DECISIONS.md`
+`Q82`.
+
 ### ⚠️ NOT SHIPPED — 3D Visualisation Map (Individualised models)
 
 *(Headed "NOT NEEDED" until the `P3-6` amendment. The dataset still ships nothing

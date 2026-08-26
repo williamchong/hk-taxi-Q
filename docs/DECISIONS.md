@@ -137,6 +137,7 @@ wins.
 | `P3-16` | Signs ship where the **poles** are, because the sign layer is a drawing | ✅ Done — the scope is `Q65`'s, the faces are `Q67`'s and the facing is `Q72`'s |
 | `P3-17` | Signal heads ship as unlit geometry, with no invented cycle | 🚫 **Reversed by `Q77`** — built, then dropped from the bundle: unlit was the premise, and an unlit head asserts a signal out of service |
 | `P3-18` | Box junctions ship as **read** polygons, and two instruments caught what no frame could | ✅ Done |
+| `P3-26` | Lamp posts ship from a vocabulary the publisher **defines**, and no column stands in the road | ✅ Done — 897 of 1,263, two-stage refusal, least kerb clearance **+0.03 m**; the colour goes through `Q33` rather than around it, and the layer buys night mode **nothing** (`Q82`) |
 
 | Topic | Decision | Status |
 |---|---|---|
@@ -11183,3 +11184,191 @@ not need to because `git status` did.
 proportions and why area alone cannot grade a face · `Q79` for the lettering this icon does not need ·
 `Q62` for why a HUD readout cannot be graded against anything published · `Q72` for why a counter
 must be reachable in both directions · `P3-25` for the task
+
+## `Q82` — A published vocabulary, a lantern that stays off, and a counter that had to be reachable
+
+**Opened and closed 2026-08-27** by `P3-26`, on the user's request to add *"street light poles on map
+to add street scene and prepare for night mode"*. `/eval` was run against it; this records the
+verdict, the three things the verdict changed about it, and the two defects the build found.
+
+### 🔴 The night-mode half of the premise was refused, and the layer shipped anyway
+
+**Putting poles on the map prepares for night mode in no engineering sense.** Night is blocked on
+`Q38` — `exposure_anchor` is baked into `COLOR_0` at build time, so a time-of-day change is a full
+tile rebuild — on `Q26` being unchosen, on there being exactly one lighting rig, and on a Mobile tier
+that ships no shadow maps at all, under an `ART_DESIGN.md` Lighting section that ends *"Resist adding
+lights."* 897 `OmniLight3D`s is not a shippable answer, and the honest one — an emissive lantern
+quad, or a few pooled lights near the car — costs the same whether the columns land now or later.
+
+So the justification was cut to the daylight street scene, which the layer earns on its own: the
+region had **no vertical element between kerb height and building façade** — signs top out at 3 m and
+railings at 1.1 — and 897 columns at a 20 m pitch is the cheapest thing that fixes it.
+`Q80`'s rule applies as written: *plan the area, do not hold the space*. The lantern is unlit, and
+`lamps.tres` carries the paragraph saying so.
+
+### ✅ The first street-furniture vocabulary here that the publisher defines
+
+`UtilityPoint.UTILITYPOINTTYPE` carries a coded-value domain **inside the geodatabase** — `LPO - Lamp
+post`, read out of the `.gdbtable` bytes of every sheet, alongside `FWH`/`SWH` hydrants and `EPO`.
+
+| layer | vocabulary | evidence |
+|---|---|---|
+| `DTAD_RAILING_LINE.LINETYPE` | none published (`Q60`) | whitelist read off code strings — the weakest claim in the city file |
+| `DTAD_TRAFFIC_LIGHT_PT.REFNAME` | none published (`Q76`) | the same, and part of why `Q77` was arguable |
+| `DTAD_RD_MARK_SYM_PT.REFNAME` | TD's index plan (`Q59`) | transcribed **by eye** off a drawing |
+| **`UtilityPoint.UTILITYPOINTTYPE`** | **the geodatabase itself** | **machine-readable, ships with the data** |
+
+`refused_by_kind` publishes the rest of the domain anyway, on `railings.py`'s precedent. ⚠️ **What
+does *not* improve is the dimensions**: the layer publishes six columns and not one is a length, an
+angle or a level, and geometry `Z` is `0.0` on all 1,263. That is the file's convention rather than a
+defect — `SpotHeight`, whose entire purpose is heights, also reads `0.0` and keeps its value in a
+column this layer lacks. So every drawn dimension is authored, `Q60`'s debt at a fourth layer.
+
+### 🔴 No column stands in the road, and it takes TWO refusals to say so
+
+The user's instruction was *"similar to fence and signs, lamp post should not occupy road surface"*.
+That guarantee does not come from `max_shift_m`. `_register` clears a column's **own** host kerb;
+what clears the edge next door is a second pass that re-snaps the placed point against *every* edge
+and refuses it if it lands inside any drawn ribbon — junction mouths and dual carriageways, where
+several 1.6x ribbons overlap and the drawn city has no footway at all. `signs.py` measured the
+obvious alternative and it is worse: iterating the push plateaus at 9.7% while taking the worst shift
+from 5.52 m to **16.77 m**, which is a column on the wrong street.
+
+| | `max_shift_m 3.0` | `max_shift_m 6.0` |
+|---|---|---|
+| drawn | **924** (73.2%) | 992 (78.5%) |
+| `over_shift` | 211 | 7 |
+| `in_carriageway` (stage two) | 128 | 264 |
+
+**3.0 ships**, and the sweep is the argument: 6.0 converts 204 over-shift refusals into pushes, and
+136 of them are then refused by stage two anyway — **68 posts for a 6 m lateral move**. The shipped
+stage adds `too_far` (136) and `no_ribbon` on top of the scratch host above, so it draws **897**.
+`min_kerb_clearance_m` reads **+0.0313 m** and is *not* a tautology: a foot reconstructed from
+`offset_m` instead of read off the polyline drives it negative, which is the exact 10.6 m defect
+`signs.py` records.
+
+⚠️ **`Q78`'s outward-only clamp applies here and deliberately not in `railings.py`/`signals.py`.**
+`CLAUDE.md` says not to align those two — a fence is a run and a conditional push would zigzag it. A
+lamp post is not a run.
+
+### 🔴 The counter over the arm direction was refused as a tautology
+
+Which way a lantern reaches is derived from the kerb side, because nothing published says. An
+`arms_against_kerb` counter would therefore read 0 **by construction** — which is `Q72`'s tautology
+exactly, the one that certified a whole region's NO ENTRY signs as correct while every one of them
+faced the wrong traffic, because 0 was unreachable. *The test of a counter is not whether it reads 0
+but whether any reachable configuration makes it non-zero.*
+
+So what ships is **`lantern_overhang_m`** — p50 **1.00 m**, which is `arm_reach_m` less `outset_m`,
+the design intent made visible and a number that moves when either does — and
+**`lanterns_past_centreline`**, which must be 0 and which raising `arm_reach_m` makes non-zero. The
+facing itself is graded by an **A/B render at one fixed camera** (`Q62`), shot twice and `cmp`-identical.
+
+### 🔴 And the colour goes through `Q33` rather than around it
+
+`signs.colours` and `signals.colours` are exempt from the palette rule on two grounds: a sign's
+livery is a *printed specification* with no reflectance to grade, and a plate is four colours inside
+one draw call so the values must ride the vertex. **Neither ground holds for a lamp post.** Galvanised
+steel is a real surface with a published albedo, and there is one colour. So `column_material` names
+`galvanised_steel` in the city's own `materials:` table — `28.0%`, below `steel_rail`'s 35 because
+that one is a rail *head* kept polished by traffic and a column is the dullest steel in the city — and
+`_check_exposure` grades it. Dead neutral `#6b6b6b` on `Q61`'s finding, not tinted toward zinc.
+
+⚠️ **`_check_every_material_is_used` caught the ablation build** that removed the `lamps:` block and
+left the material behind. Working as designed, and worth recording as the guard's first real catch.
+
+### What the build found, and neither was visible in a frame
+
+- 🔴 **The prism ring must NOT be reversed here, and inheriting the recorded fix was how the defect
+  arrived.** `signs._draw_pole` and `signals._draw_post` both reverse theirs and both carry a
+  paragraph calling it *"the whole correctness of this function"*. `lamps._strut` builds an explicit
+  frame with `u x v == axis` — it has to, because a bracket arm is not vertical and there is no world
+  plane to borrow — and in that frame a counter-clockwise ring is what the quad is wound for.
+  Reversing it inverted **25,116 of 35,880** triangles. Caught by `facing_away` on the first run,
+  before the asset was looked at. **So "inherit the recorded defect's fix" is itself a way to ship
+  the defect.**
+- 🔴 **`verify_lamps.gd`'s upright bar was justified with a number nobody had measured** — "measured
+  at 0.70 on the shipped mesh", used to set 0.55, and it failed on its own asset at 18,484 of 35,880.
+  The check was right and the *comment* was the defect. The real figure is enumerable at 20 of 40 per
+  lamp and the bar is now 0.35, with the enumeration written out. A bar whose stated derivation is
+  fiction cannot be re-derived when the geometry moves, which is `Q34′` and `Q37`'s complaint.
+
+### What the review found, after the build was green
+
+`/simplify` ran three reviews over the diff. Five findings changed shipped code, and the first two
+are the ones worth carrying:
+
+- 🔴 **The bar's justification invented a measurement, twice over.** `verify_lamps.gd` first said
+  "measured at 0.70" and failed on its own asset; the correction then said the region reads 51.5%
+  "because `select_triangles` drops a few degenerates". **It drops none** — 35,880 is 897 x 40
+  exactly — and the ETL mesh is **17,940 of 35,880, 50.000%**, verified over every arm heading. The
+  51.52% is real but belongs to the *imported* mesh, and the cause is Godot's vertex compression:
+  `force_disable_compression=false` quantises positions over the mesh AABB, **1,646 m wide here, a
+  0.025 m step**. The column, caps and lantern survive exactly because they are axis-aligned; the
+  bracket arm's 7,176 flanks leave a clean `|n.y|` 0.477 and smear across 0.10-0.70, because the arm
+  is 0.06 m in radius and the step is 42% of that. ⚠️ **Bundle-wide, not this layer's** —
+  `signs.glb`'s poles are 0.032 m, thinner than the step — and **not fixed**, because turning
+  compression off is a PCK decision and nothing in a frame showed it.
+- 🔴 **A guard's comment claimed a necessity the arithmetic refutes.** The second-stage refusal runs
+  on posts kept as surveyed too, and this file said it "must", citing `Q78`. True of a post the stage
+  *moved*; false of one it did not — an unmoved point re-snaps to the same edge, and the kept
+  branch's own `abs(offset_m) > half_width + outset_m` already implies `abs(offset_m) > half_width`.
+  Measured: **281 kept, 281 identical snaps, 0 refusals**, against 78 from the moved half, every one
+  on a different edge. The code stays; the claim was corrected.
+- **`_Placed.arm_reach_m` recorded the config while claiming to record the drawing** — `_draw_lamp`
+  read `spec`. Now it reads the placement, which is what makes the claim true.
+- **The sheet-cut dedup broke the partition it was published under**, silently and only on the input
+  it exists for. It is `duplicate_point` now, counted and published at 0.
+- **`inside_ribbon_m` was an affine copy of `shift_m`** — `max(0, shift - outset)` on every path,
+  agreeing to four decimals at every quantile. Dropped rather than shipped as a second instrument.
+
+Three refactors came out of it, all with the output pinned: `check_stands_upright` moved into
+`mesh_contract.gd` at its **third** byte-identical copy — the rule that file states about itself, and
+the same move `check_faces_up` made for the horizontal case; the grader stopped re-snapping every
+kept post; and `nearest_is_elevated` now indexes the 60 off-grade edges instead of all 797, which is
+exact rather than approximate and returns the identical 177. **`lamps.glb` is byte-identical across
+all of it** (`sha256 c0cc92ac…`), the render is `cmp`-identical, and `check.sh` stayed at 256 ok.
+
+### 🔴 This layer fails differently from every other one here
+
+`GAME_DESIGN.md` prices a missing sign at nothing against a misplaced one, which is why every stage
+above refuses freely. **A lamp row's regularity is its content**, so a refused column is a *hole* in a
+rhythm the eye reads directly. Neither a refusal count nor a survivor count can see that, so both
+spacing distributions ship and the *difference* is the finding: p50 **16.74 → 20.15 m**, gaps over
+40 m **5 → 16**. That is the number a widening change moves without touching a lamp.
+
+### The honest limitation
+
+🔴 **`UtilityPoint` publishes no elevation, so a lamp on a flyover is drawn on the street
+underneath.** Every sibling stage gets an `ELEVATION` and refuses what is on a structure (`Q13`,
+`Q21`); this one has nothing to refuse on. `nearest_is_elevated` — **177 of 1,263**, against
+`kerbside.py`'s 7% for its own layer — is the honest instrument: it cannot fix the placement, and
+saying how big the problem is was the only true thing available.
+
+### Cost
+
+**35,880 triangles** (40 per lamp: column 12 sides + 4 cap, arm 12 and no cap, lantern 6 faces of 2),
+one primitive, **one draw call**, no collider, no texture. `lamps.glb` **2,390,820 B**.
+
+🔴 **The PCK is quoted in three parts, because two exports one variable apart measure the ASSET and
+not the feature.** The control still carried this task's GDScript, material and scene edit, all of
+which are packed:
+
+| | PCK | delta |
+|---|---|---|
+| `r5` at `HEAD`, no `P3-26` at all | 47,010,912 | — |
+| `+ P3-26`'s engine side, `lamps:` block ablated | 47,028,096 | **+17,184** |
+| `+ lamps.glb` | **47,899,764** | **+871,668** |
+| **total** | | **+888,852 B (+1.891%)** |
+
+⚠️ **The first draft of this section quoted only the middle pair** and would have under-reported the
+feature by 17 KB while looking like a rigorous ablation. `CLAUDE.md`'s rule is that bundle size is
+measured from a PCK, and the corollary this adds is that **an ablation control is only a baseline for
+the variable it ablates**.
+
+**See.** `Q60` for the registration this is the fourth layer of · `Q78` for the clamp and why the
+fence stages do not share it · `Q72` for why a counter must be reachable · `Q33` for the palette rule
+this obeys where the signs are exempt · `Q62` for why a render is the evidence · `Q38` and `Q26` for
+what night mode is actually blocked on · `Q57` for the survey that opened this file and skipped this
+layer · `P3-26` for the task
+

@@ -58,6 +58,7 @@ from pipeline.crs import GameTransform
 from pipeline.documents import read_document, round_position, write_document
 from pipeline.fares import FARES_NAME, FARES_SCHEMA
 from pipeline.gltf import Bounds
+from pipeline.lamps import LAMPS_MANIFEST_NAME, LAMPS_MANIFEST_SCHEMA
 from pipeline.landmarks import ASSETS_NAME, ASSETS_SCHEMA, landmark_in_region
 from pipeline.railings import RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA
 from pipeline.roadmarks import ROADMARKS_MANIFEST_NAME, ROADMARKS_MANIFEST_SCHEMA
@@ -163,7 +164,13 @@ CITY_NAME = "city.json"
 # does not name. The bump is for the asset set, and the key is optional and
 # nullable like the six before it: a region whose faces carry no lettering bakes
 # no atlas, and so does a city whose whitelist has none.
-CITY_SCHEMA = 18
+# 19 since `P3-26`: the manifest names `lamps.glb`, the published lamp posts
+# drawn from iB1000's `UtilityPoint`. The same argument a ninth time — a v18
+# reader computes a shipped set missing a bundle file. The key is optional and
+# nullable like the seven before it: a city whose estate publishes no utility
+# point layer ships none, and so does one that publishes it and finds no kerb to
+# stand a column on.
+CITY_SCHEMA = 19
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -187,8 +194,9 @@ DOCUMENT_KEYS = ("road_graph", "road_surface", "fares", "landmarks")
 
 # Manifest keys naming an asset that ships **when the region has one**, in the
 # order `shipped()` lists them. Optional and nullable every one: a city whose
-# estate publishes no tramway, no marking symbols, no box polygons, no railing
-# layer, no sign layer, no transverse markings or no sign lettering ships none.
+# estate publishes no tramway, no marking symbols, no box polygons, no lamp
+# posts, no railing layer, no sign layer, no transverse markings or no sign
+# lettering ships none.
 #
 # ⚠️ **A tuple because this was seven hand-written copies of one `if`**, and the
 # repo's own trigger — `mesh_contract.gd`'s "a third copy should force it"
@@ -199,6 +207,7 @@ OPTIONAL_ASSET_KEYS = (
     "tramway",
     "arrows",
     "boxjunctions",
+    "lamps",
     "railings",
     "signs",
     "signs_text_atlas",
@@ -237,6 +246,7 @@ INPUTS: tuple[Input, ...] = (
     Input(TRAMWAY_MANIFEST_NAME, TRAMWAY_MANIFEST_SCHEMA, "tramway"),
     Input(ARROWS_MANIFEST_NAME, ARROWS_MANIFEST_SCHEMA, "arrows"),
     Input(BOXJUNCTIONS_MANIFEST_NAME, BOXJUNCTIONS_MANIFEST_SCHEMA, "boxjunctions"),
+    Input(LAMPS_MANIFEST_NAME, LAMPS_MANIFEST_SCHEMA, "lamps"),
     Input(RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA, "railings"),
     Input(SIGNS_MANIFEST_NAME, SIGNS_MANIFEST_SCHEMA, "signs"),
     Input(ROADMARKS_MANIFEST_NAME, ROADMARKS_MANIFEST_SCHEMA, "roadmarks"),
@@ -317,6 +327,7 @@ def build_region(
     tramway = documents[TRAMWAY_MANIFEST_NAME]
     arrows = documents[ARROWS_MANIFEST_NAME]
     boxjunctions = documents[BOXJUNCTIONS_MANIFEST_NAME]
+    lamps = documents[LAMPS_MANIFEST_NAME]
     railings = documents[RAILINGS_MANIFEST_NAME]
     signs = documents[SIGNS_MANIFEST_NAME]
     roadmarks = documents[ROADMARKS_MANIFEST_NAME]
@@ -407,6 +418,7 @@ def build_region(
         # read from the stage's own manifest for its reason: a region whose
         # boxes all failed the join must not be contradicted here by a constant.
         "boxjunctions": boxjunctions["asset"],
+        "lamps": lamps["asset"],
         "railings": railings["asset"],
         # `null` where the city drew no traffic signs, on `tramway`'s terms and
         # read from the stage's own manifest for its reason. ⚠️ Null is the

@@ -39,6 +39,7 @@ from pipeline.export import (
     validate,
 )
 from pipeline.fares import FARES_NAME, FARES_SCHEMA
+from pipeline.lamps import LAMPS_MANIFEST_NAME, LAMPS_MANIFEST_SCHEMA
 from pipeline.landmarks import ASSETS_NAME, ASSETS_SCHEMA
 from pipeline.railings import RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA
 from pipeline.roadmarks import ROADMARKS_MANIFEST_NAME, ROADMARKS_MANIFEST_SCHEMA
@@ -258,6 +259,16 @@ class _Region:
             # `signals:` block, so the stage found nothing and says so.
             SIGNALS_MANIFEST_NAME: {
                 "schema_version": SIGNALS_MANIFEST_SCHEMA,
+                "city_id": city.id,
+                "region_id": REGION,
+                "asset": None,
+                "features": 0,
+                "drawn": 0,
+            },
+            # Same shape and same reason a seventh time: `testville` declares no
+            # `lamps:` block, so the stage found nothing and says so.
+            LAMPS_MANIFEST_NAME: {
+                "schema_version": LAMPS_MANIFEST_SCHEMA,
                 "city_id": city.id,
                 "region_id": REGION,
                 "asset": None,
@@ -846,6 +857,7 @@ class TestOrchestrator:
             "railings",
             "signs",
             "signals",
+            "lamps",
             "export",
         ]
 
@@ -883,6 +895,7 @@ class TestOrchestrator:
             "railings",
             "signs",
             "signals",
+            "lamps",
             "export",
         ]
 

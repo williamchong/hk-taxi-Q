@@ -63,6 +63,16 @@ const SHADERS: Dictionary = {
 	# only in the uniforms its `.tres` sets, so this row is what tells the two
 	# apart: a head handed `signs.tres` renders as a signal lit like sheeting.
 	"signals": "res://tuning/signals.tres",
+	# `lamps.tres`: `signs.tres` and `signals.tres`'s third sibling, sharing
+	# `signs.gdshader` for `Q61`'s and `Q71`'s reason — a layer is a
+	# parameterisation, not a shader. ⚠️ **Its fallback failure is the same quiet
+	# one**: the livery is on `COLOR_0`, so a column that kept its imported
+	# `BaseMaterial3D` draws the right prism in the right place and simply loses
+	# `vertex_srgb_to_linear`, coming out pale (`Q27`). 🔴 And a column handed
+	# `signs.tres` renders as a lamp post lit like retroreflective sheeting,
+	# which is why `verify_lamps.gd` checks the `resource_path` and not the
+	# shader.
+	"lamps": "res://tuning/lamps.tres",
 	"vehicle_body": "res://tuning/vehicle_body.tres",
 }
 
