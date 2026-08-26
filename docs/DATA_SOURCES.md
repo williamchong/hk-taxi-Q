@@ -37,6 +37,20 @@ section exists so an ETL change can be made without opening that file.
 
 ⚠️ The ownership sentence is not optional padding — see the attribution note above.
 
+🔴 **A second attribution is now required and it is not the government's.** Since `P3-24` the build
+bundles a third-party typeface under CC BY 4.0, whose attribution must travel with **every
+distributed copy** — not merely sit in the repository. Add to the same screen:
+
+> Street names are set in **Free HK Kai** (自由香港楷書) © 2016 Free Hong Kong Fonts, used under the
+> Creative Commons Attribution 4.0 International licence.
+
+⚠️ **This obligation is recorded and NOT yet discharged: there is no credits screen.** `game/scenes/`
+has no UI scene at all, so the text above exists only here and in
+`game/assets/authored/fonts/LICENSE`. The font ships in the PCK today, which means **the build is
+currently distributing a CC BY work without its credit visible to the person running it.** That is a
+licence gap, not a to-do — it closes when the screen is built, and it should be built before anything
+is published beyond a playtest link. `LICENSING.md`, `DECISIONS.md` `Q79`.
+
 > **Legal note:** because this ships as a commercial product, have a Hong Kong IP lawyer sight-check
 > landmark depiction and the credits text before launch. **Landmark depiction is the top item** in
 > that brief: reading the data terms verbatim cleared the licensing question, which leaves building

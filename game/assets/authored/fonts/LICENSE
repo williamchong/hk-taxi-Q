@@ -1,0 +1,36 @@
+THIRD-PARTY FONT — NOT this project's work, and NOT under this directory's
+CC BY-SA 4.0. See ../LICENSE for what that covers, and LICENSING.md at the
+repository root for why a fourth licence exists at all.
+
+  Free HK Kai 4700 (自由香港楷書) — FreeHKKai4700-v1.02.ttf
+  Version 1.02, 13 January 2017
+  Copyright (c) 2016 Free Hong Kong Fonts (自由香港字型), Open Source Hong Kong
+
+    SPDX-License-Identifier: CC-BY-4.0
+
+    Deed:      https://creativecommons.org/licenses/by/4.0/
+    Legalcode: https://creativecommons.org/licenses/by/4.0/legalcode
+    Project:   https://freehkfonts.opensource.hk/
+    Source:    https://github.com/freehkfonts/freehkkai
+
+WHY THIS FONT. Hong Kong street name plates are set in Kai (楷書). A sans-serif
+plate is legible and wrong in a project whose whole claim is that the city is
+accurate. This face also carries Hong Kong's own glyph forms, from the Education
+Bureau's 《香港小學學習字詞表》 (2007), rather than Taiwan's or the mainland's.
+
+ATTRIBUTION IS REQUIRED AND IS NOT OPTIONAL. CC BY 4.0 obliges the credit to
+travel with every distributed build, which means the in-game credits screen and
+not only this file. That is the same obligation hard rule 6 already imposes for
+the government data, and it is discharged in the same place.
+
+MODIFICATION IS PERMITTED. Unlike the SIL Open Font License, CC BY 4.0 carries no
+reserved font name, so a subset built for one region may keep the name provided
+the attribution stands and the change is indicated. Nothing subsets it today; see
+DECISIONS.md Q79 for why that was recorded rather than done.
+
+COVERAGE IS CHECKED, NOT ASSUMED. tools/font_coverage.py asserts that every
+character in every street name the pipeline publishes is either in this font or
+in the display substitution table, and refuses one that is not. It is run by
+hand, like the other graders in tools/. Wan Chai needs 166
+distinct characters and this font covers 165 of them; the exception, and the
+reason it is not fixed in the data, is Q79.

@@ -1,0 +1,40 @@
+{
+  "_": [
+    "How the HUD's street plate is drawn (P3-24). JSON rather than a .tres, which",
+    "hard rule 4 permits explicitly, because this file has TWO readers in two",
+    "languages: scripts/ui/hud.gd draws from it, and tools/font_coverage.py checks",
+    "against it. A .tres would mean writing a second parser in Python for a",
+    "dictionary literal, and two parsers of one file drift.",
+    "",
+    "The English line is deliberately NOT set in this font. Hong Kong street name",
+    "plates carry a Latin grotesque and a Chinese Kai side by side, so the plate",
+    "using Godot's built-in Noto Sans above Free HK Kai is the real thing, not a",
+    "compromise. See DECISIONS.md Q79."
+  ],
+
+  "font_zh": "res://assets/authored/fonts/FreeHKKai4700-v1.02.ttf",
+
+  "_substitutions": [
+    "Characters the published street names use that `font_zh` does not draw,",
+    "mapped to the form it does. Applied WHEN THE PLATE IS DRAWN — roadgraph.json",
+    "keeps exactly what the Transport Department published, because Q54's rule is",
+    "that sourced data is neither invented nor moved and a street's NAME is the",
+    "strongest case of it.",
+    "",
+    "啓 U+5553 is TD's variant; 啟 U+555F is the same character in the form the",
+    "Education Bureau's 《香港小學學習字詞表》 uses, which is what this font was",
+    "built from. One street in region: KAI CHIU ROAD / 啓超道.",
+    "",
+    "⚠️ This table is NOT a place to correct names. It maps a glyph to the same",
+    "glyph in another encoding. A pair whose two sides are different WORDS is a",
+    "data edit wearing a font's clothes.",
+    "",
+    "tools/font_coverage.py refuses any character that is in neither the font nor",
+    "this table, so a data refresh or a second city cannot quietly ship a tofu",
+    "box. It is run by hand, like the other graders in tools/, and CLAUDE.md",
+    "lists it as owed on a font or street-name change."
+  ],
+  "substitutions": {
+    "啓": "啟"
+  }
+}

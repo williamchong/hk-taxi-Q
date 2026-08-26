@@ -1,13 +1,17 @@
 # Licensing
 
 Three kinds of thing live in this repository, under three different licences, because they have three
-different owners.
+different owners — and since `Q79` there is a **fourth** that belongs to none of them: a typeface
+this project neither wrote nor derived from government data. The three-way split is still the shape
+of the policy; the fourth row is the exception, and it is listed because an exception nobody wrote
+down is a licence breach waiting to be discovered by someone else.
 
 | What | Where | Licence |
 |---|---|---|
 | **Code** — pipeline, engine scripts, tools, config, tuning | `etl/`, `game/scripts/`, `game/tools/`, `game/tuning/`, `tools/` | **GPL-3.0-or-later** — [`LICENSE`](LICENSE) |
 | **Hand-authored assets** — authored hero buildings, vehicles, UI, shaders | `game/assets/authored/` | **CC BY-SA 4.0** |
 | **Generated city data** — tiles, road surface, road graph, fare nodes, repainted hero meshes | `game/assets/generated/`, `etl/out/` — *gitignored* | **Not licensed by this project.** Governed by the DATA.GOV.HK and CSDI Portal Terms of Use |
+| **Bundled third-party assets** — the CJK typeface the street plate is set in | `game/assets/authored/fonts/` | **CC BY 4.0** — not ours, not the government's. [`fonts/LICENSE`](game/assets/authored/fonts/LICENSE) |
 
 > **Not legal advice.** This file records the project's position. Hard rule 6 requires a Hong Kong IP
 > lawyer to review before launch; the open questions at the end belong in that brief.
@@ -59,6 +63,48 @@ combine into the GPLv3 game. Store builds carry the separate grant described abo
 
 ⚠️ A licence is not a depiction right. These models depict real, identifiable Hong Kong landmarks;
 CC BY-SA governs only our copyright in the model.
+
+---
+
+## Bundled third-party assets — someone else's terms, carried
+
+`game/assets/authored/fonts/` holds **Free HK Kai 4700** (自由香港楷書) v1.02, © 2016 Free Hong Kong
+Fonts / Open Source Hong Kong, under **CC BY 4.0**. Full notice in
+[`fonts/LICENSE`](game/assets/authored/fonts/LICENSE); the reasoning is `DECISIONS.md` `Q79`.
+
+🔴 **This is the one thing in `game/assets/authored/` that this project did not author.** That
+directory's rule was mechanical and checkable by path — *"only what this project could put under
+CC BY-SA"* — and a third-party font is not that. The rule is now **stated rather than checkable**,
+which is a real weakening, and it is recorded here rather than left for someone to infer from a
+file extension.
+
+It is committed rather than fetched at build time because the alternative makes the game's ability
+to draw its own UI depend on a network call during the build, which is hard rule 2's spirit if not
+its letter.
+
+### What CC BY 4.0 requires of us
+
+- **Attribution travels with the build.** Not with the repository — with every distributed copy. So
+  the in-game credits screen carries the font, alongside the government attribution hard rule 6
+  already requires. Same screen, same obligation, different owner.
+- **Indicate changes if we make any.** Nothing modifies the font today.
+- **No further restrictions**, which is the clause that matters against the store grant below.
+
+### Why it does not collide with the store build
+
+`game/assets/authored/` is CC BY-SA 4.0 and the code is GPL-3.0-or-later, both of which the store
+build resolves through the separate proprietary grant above. CC BY 4.0 is **permissive about the
+surrounding work**: it licenses the font, imposes no copyleft on what the font is bundled with, and
+carries no field-of-use restriction. A proprietary store build may therefore ship it, provided the
+attribution ships too.
+
+⚠️ **The candidate that failed was rejected here and not on typography.** AR PL UKai is the other
+free Kai face of the right script, and the **Arphic Public License restricts commercial use** — so
+it cannot be in a build distributed under the store grant. The disqualifying fact sits two documents
+away from the decision that would have used it, which is exactly why it is written down here.
+
+⚠️ **CC BY 4.0 has no reserved font name.** OFL would have required a rename for any subset; this
+does not. That is not exercised today and is the reason a subset stays cheap (`Q79`).
 
 ---
 
