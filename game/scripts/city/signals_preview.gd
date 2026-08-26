@@ -27,9 +27,23 @@ const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
 
 func _ready() -> void:
+	# 🔴 **`is_present()`, never a null check on `load_signals()`.** They answer
+	# different questions and only one of them is quiet: `load()` on an absent
+	# path writes `ERROR: No loader found for resource` to the console *before*
+	# it returns null, so a graceful branch below it runs after the damage is
+	# done. `Q77` dropped this layer and that error then shipped in the web
+	# build — into the console `P3-9a` tells testers to read, under a row
+	# claiming 0 errors. `verify_signals.gd` had the guard all along; this call
+	# site simply never learned it. Do not "simplify" it back to one check.
+	if not GeneratedSignals.is_present():
+		print("signals: none shipped for this region")
+		return
+
 	var packed: PackedScene = GeneratedSignals.load_signals()
 	if packed == null:
-		print("signals: none shipped for this region")
+		# Present but unloadable, which is not the same as absent — reporting it
+		# as "none shipped" would describe a broken asset as an empty region.
+		push_error("signals: %s exists but did not load as a scene" % GeneratedSignals.PATH)
 		return
 
 	var signals: Node3D = packed.instantiate()

@@ -25,9 +25,19 @@ const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
 
 func _ready() -> void:
+	# `is_present()` rather than a null check, and `signals_preview.gd` carries
+	# the reason: `load()` on an absent path errors into the console before it
+	# returns null. Latent here rather than live — this layer ships today — but
+	# it is the same call in the same shape, and `Q77` is what a dormant one
+	# costs when its region stops publishing.
+	if not GeneratedRoadMarks.is_present():
+		print("roadmarks: none shipped for this region")
+		return
+
 	var packed: PackedScene = GeneratedRoadMarks.load_roadmarks()
 	if packed == null:
-		print("roadmarks: none shipped for this region")
+		# Present but unloadable, which is not the same as absent.
+		push_error("roadmarks: %s exists but did not load as a scene" % GeneratedRoadMarks.PATH)
 		return
 
 	var marks: Node3D = packed.instantiate()
