@@ -51,16 +51,6 @@ const SURFACES: int = 1
 ## `vertex_srgb_to_linear`, so the whole city's signals render pale (`Q27`).
 const SIGNALS_MATERIAL: String = "res://tuning/signals.tres"
 
-## How near horizontal a triangle's normal must be to count as part of a head or
-## a post.
-##
-## ⚠️ **The inverse of `verify_arrows.gd`'s `MIN_FACING_UP`, for
-## `verify_signs.gd`'s reason.** An arrow lies on the deck, so "faces the sky" is
-## its correctness condition. A signal head is a box standing on a vertical post,
-## so the overwhelming majority of this mesh faces *sideways* — the head's own
-## top and bottom caps are the legitimate exception.
-const MAX_UPRIGHT_Y: float = 0.35
-
 
 func _init() -> void:
 	if not GeneratedSignals.is_present():
@@ -104,7 +94,11 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 		problems.append_array(
 			MeshContract.check_shader_material(mesh, surface, where, SIGNALS_MATERIAL)
 		)
-		problems.append_array(_check_stands_upright(mesh, surface, where))
+		problems.append_array(
+			MeshContract.check_stands_upright(
+				mesh, surface, where, "signals", "Signals are boxes on posts", 0.5
+			)
+		)
 
 	problems.append_array(_check_has_no_collision(scene_root))
 	return problems
@@ -126,81 +120,3 @@ func _check_has_no_collision(scene_root: Node3D) -> PackedStringArray:
 	return MeshContract.check_no_collision(
 		scene_root, "the signals", "SIGNALS_MESH_NAME in etl/pipeline/signals.py"
 	)
-
-
-## The mesh stands upright (`P3-17`).
-##
-## ⚠️ **This asset's version of the failure that fails to nothing.**
-## `signs.gdshader` is `cull_back`, so winding decides visibility and the normal
-## attribute does not: a mesh wound the other way is correct geometry, in the
-## correct place, with the correct material, and the city simply has no signals
-## in it. The tramway shipped exactly that — **5,111 of 5,112** triangles facing
-## the ground — and no frame showed it; the signs shipped 3,200 on their first
-## build because the prism ring was wound the way a plate wants, and this stage
-## reuses that prism.
-##
-## ⚠️ **A vertical surface cannot be graded by "which way is up", so this checks
-## agreement instead**: every triangle's winding must agree with the normal it
-## was given. Asked twice — `pipeline/signals.py`'s `facing_away` counts what the
-## ETL built, this counts what Godot imported, and an import that mirrors an axis
-## moves one without the other.
-func _check_stands_upright(mesh: Mesh, surface: int, where: String) -> PackedStringArray:
-	var arrays: Array = mesh.surface_get_arrays(surface)
-	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
-	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
-	if indices.is_empty():
-		return PackedStringArray(["%s carries no index buffer to check winding on" % where])
-	if normals.is_empty():
-		return PackedStringArray(["%s carries no normals to check winding against" % where])
-
-	var disagreeing: int = 0
-	var upright: int = 0
-	# `floori` of a float divide rather than an integer one: GDScript warns on
-	# integer division and `check.sh` promotes warnings to errors, so the plain
-	# form does not compile. The count is exact — an index buffer is always a
-	# multiple of three.
-	var triangles: int = floori(indices.size() / 3.0)
-	for triangle: int in triangles:
-		var ia: int = indices[triangle * 3]
-		var a: Vector3 = vertices[ia]
-		var b: Vector3 = vertices[indices[triangle * 3 + 1]]
-		var c: Vector3 = vertices[indices[triangle * 3 + 2]]
-		# ⚠️ **Negated, because Godot winds front faces clockwise and glTF winds
-		# them counter-clockwise** — so the importer reverses every index triple.
-		# ⚠️ **Do not "fix" this to agree with the ETL's `facing_away`**, which
-		# tests the same expression with the opposite sign; `Q59` records that
-		# both are right about their own side of the import.
-		var cross: Vector3 = (a - b).cross(c - a)
-		var length: float = cross.length()
-		# A collapsed triangle has no facing to judge. `signals.py` drops them at
-		# twice-area 1e-6, so one here is a rounding survivor rather than a fold.
-		if length <= 0.0:
-			continue
-		if cross.dot(normals[ia]) < 0.0:
-			disagreeing += 1
-		if absf(cross.y / length) <= MAX_UPRIGHT_Y:
-			upright += 1
-
-	var problems: PackedStringArray = []
-	if disagreeing > 0:
-		problems.append(
-			(
-				(
-					"%s: %d of %d triangles are wound against their own normal. "
-					% [where, disagreeing, triangles]
-				)
-				+ "cull_back draws none of those — those signals are invisible, not wrong-looking."
-			)
-		)
-	# A signal mesh is boxes and posts, so most of it is vertical. If it is not,
-	# something has been laid flat — which renders as a head-shaped decal on the
-	# footway rather than as nothing, and so is the failure a frame *might* show.
-	if triangles > 0 and upright * 2 < triangles:
-		problems.append(
-			(
-				"%s: only %d of %d triangles stand upright. " % [where, upright, triangles]
-				+ "Signals are boxes on posts — a mostly-horizontal mesh has been laid flat."
-			)
-		)
-	return problems

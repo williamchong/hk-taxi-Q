@@ -533,6 +533,16 @@ static func _texture_pixels(texture: Texture) -> int:
 ## past vertical, which is a winding failure.
 const MIN_FACING_UP: float = 0.1
 
+## How near horizontal a triangle's **normal** must be for the triangle to count
+## as standing upright.
+##
+## ⚠️ **The inverse question to `MIN_FACING_UP`, and it belongs to a different
+## family of asset.** That one grades ground-plane paint, where "faces the sky"
+## is the correctness condition. This grades street furniture, where the
+## overwhelming majority of the mesh faces *sideways* and the caps are the
+## legitimate exception. All three callers picked 0.35 independently.
+const MAX_UPRIGHT_Y: float = 0.35
+
 
 ## Every triangle of a ground-plane surface faces the sky.
 ##
@@ -603,3 +613,100 @@ static func check_faces_up(
 			)
 		]
 	)
+
+
+## Every triangle's winding agrees with the normal it was given, and enough of
+## the mesh is vertical to rule out the layer having been laid flat.
+##
+## 🔴 **`check_faces_up`'s sibling for the UPRIGHT case, and the third copy is
+## what forced it here** — `single_primitive`'s own rule, applied as it was to
+## the horizontal case: `verify_signs.gd`, `verify_signals.gd` and
+## `verify_lamps.gd` held byte-identical copies differing only in two nouns and
+## the share.
+##
+## ⚠️ **A vertical surface cannot be graded by "which way is up", so this asks
+## agreement instead.** An arrow lies on the deck, so `check_faces_up` is the
+## right question for it; a sign plate, a signal head and a lamp column all face
+## *sideways*, and every sideways is a different one.
+##
+## `signs.gdshader` is `cull_back`, so a mesh wound the other way is correct
+## geometry, in the correct place, with the correct material, and the city simply
+## has none of it in it. Three stages have shipped exactly that: the tramway at
+## 5,111 of 5,112, the signs at 3,200 — the prism ring wound the way a plate
+## wants — and the lamps at 25,116 of 35,880, that last one by *inheriting* the
+## other two's fix into a function that builds its own frame and does not need it.
+##
+## ⚠️ **`min_upright_share` is per-layer because the geometry is, and it is a
+## LAY-FLAT DETECTOR rather than a quality bar.** Do not tighten it toward
+## whatever the current mesh measures: that fails an ordinary authored change to
+## the geometry, and the number it would be tightened against is not stable — see
+## `verify_lamps.gd`, where the ETL mesh is exactly 50.000% upright and the
+## *imported* one reads 51.52%.
+##
+## ⚠️ **Negated, because Godot winds front faces clockwise and glTF winds them
+## counter-clockwise** — the importer reverses every index triple. Do not "fix"
+## this to agree with the ETL-side `facing_away`, which tests the same expression
+## with the opposite sign; `Q59` records that both are right about their own side
+## of the import.
+##
+## Checked here as well as in each stage's own manifest because the two catch
+## different things: the ETL's `facing_away` counts what the pipeline built, this
+## counts what Godot imported, and an import that mirrors an axis moves one
+## without the other.
+static func check_stands_upright(
+	mesh: Mesh, surface: int, where: String, noun: String, shape: String, min_upright_share: float
+) -> PackedStringArray:
+	var arrays: Array = mesh.surface_get_arrays(surface)
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+	if indices.is_empty():
+		return PackedStringArray(["%s carries no index buffer to check winding on" % where])
+	if normals.is_empty():
+		return PackedStringArray(["%s carries no normals to check winding against" % where])
+
+	var disagreeing: int = 0
+	var upright: int = 0
+	# `floori` of a float divide rather than an integer one: GDScript warns on
+	# integer division and `check.sh` promotes warnings to errors, so the plain
+	# form does not compile. The count is exact — an index buffer is always a
+	# multiple of three.
+	var triangle_count: int = floori(indices.size() / 3.0)
+	for triangle: int in triangle_count:
+		var ia: int = indices[triangle * 3]
+		var a: Vector3 = vertices[ia]
+		var b: Vector3 = vertices[indices[triangle * 3 + 1]]
+		var c: Vector3 = vertices[indices[triangle * 3 + 2]]
+		var cross: Vector3 = (a - b).cross(c - a)
+		var length: float = cross.length()
+		# A collapsed triangle has no facing to judge. Every stage drops them at
+		# twice-area 1e-6, so one here is a rounding survivor rather than a fold.
+		if length <= 0.0:
+			continue
+		if cross.dot(normals[ia]) < 0.0:
+			disagreeing += 1
+		if absf(cross.y / length) <= MAX_UPRIGHT_Y:
+			upright += 1
+
+	var problems: PackedStringArray = []
+	if disagreeing > 0:
+		problems.append(
+			(
+				(
+					"%s: %d of %d triangles are wound against their own normal. "
+					% [where, disagreeing, triangle_count]
+				)
+				+ (
+					"cull_back draws none of those — those %s are invisible, not wrong-looking."
+					% noun
+				)
+			)
+		)
+	if triangle_count > 0 and float(upright) < min_upright_share * float(triangle_count):
+		problems.append(
+			(
+				"%s: only %d of %d triangles stand upright. " % [where, upright, triangle_count]
+				+ "%s — a mostly-horizontal mesh has been laid flat." % shape
+			)
+		)
+	return problems
