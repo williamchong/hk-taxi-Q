@@ -33,6 +33,20 @@ extends SceneTree
 ## earned it), and the layout check is exercised against a deliberately
 ## colliding rect as well as against the shipped one.
 ##
+## 🔴 **This tool CAN print `verify_hud: ok` having checked nothing, and no guard
+## inside it can prevent that.** If a `preload`ed script fails to compile — one
+## promoted warning is enough — `MonitorScript.new()` raises a script error and
+## GDScript **aborts the calling function on the spot**. Every assertion after it
+## is skipped, `_failed` stays 0, and `_init` runs on to print `ok` and `quit(0)`.
+## Demonstrated during `P3-25`: mutating `_correcting` to `return false` left its
+## two parameters unused, which is promoted, which produced a green run over an
+## empty suite. A guard is not available — `new() == null` aborts at the guard
+## itself, and `can_instantiate()` cannot be called on the class.
+##
+## What catches it is `tools/check.sh`, which greps stderr for `SCRIPT ERROR` and
+## supplies the exit code Godot will not. **This is the concrete reason CLAUDE.md
+## says never to run a verify tool by hand and read its output.**
+##
 ## ⚠️ **Nothing here references a `class_name` global.** A `--script` tool that
 ## does fails to parse on a fresh clone, where the class cache has not been
 ## written, and the SceneTree then exits **0** having checked nothing.
@@ -43,6 +57,8 @@ const HudLayoutScript = preload("res://scripts/ui/hud_layout.gd")
 const HudStyleScript = preload("res://scripts/ui/hud_style.gd")
 const StreetPlateScript = preload("res://scripts/ui/street_plate.gd")
 const AccentBarScript = preload("res://scripts/ui/accent_bar.gd")
+const MonitorScript = preload("res://scripts/core/wrong_way_monitor.gd")
+const NoEntryIconScript = preload("res://scripts/ui/no_entry_icon.gd")
 
 ## ⚠️ **The paths come from the scripts the game loads, never restated here.** A
 ## check that names its own path goes green while the game reads a different
@@ -51,6 +67,38 @@ const AccentBarScript = preload("res://scripts/ui/accent_bar.gd")
 ## Long enough to clear `StreetTracker.DEFAULT_DWELL_S` in one sample where a
 ## test means to, and used as a fraction where a test means not to.
 const LONG_S: float = 1.0
+
+## `TS115`'s bar, as fractions of the disc's diameter — **the world sign's own
+## numbers**, measured off TD's cell by `tools/sign_face_survey.py` and living in
+## `hong_kong.yaml` (`0.87`) and `signs.py::_NO_ENTRY_BAR_THICKNESS` (`0.187`).
+##
+## 🔴 **Restated here on purpose, and this is the one place in this file that
+## does it.** The rule above is that a check never names its own path, because a
+## check that does goes green while the game reads another file. This is the
+## opposite situation: those two files are build-time Python and YAML that
+## `res://` cannot reach at all, so the HUD's copy in `hud_style.tres` has
+## nothing to be graded against unless a third copy states what the first said.
+## The check is a **ratchet between two things that must agree**, not a source of
+## truth — `clearance_reconcile.py`'s shape. `Q67` is why it is worth having: the
+## same two numbers were authored by eye at 0.66 by 0.22 for a year, on the
+## region's most-seen sign, and no frame showed it.
+const SIGN_BAR_LENGTH: float = 0.87
+const SIGN_BAR_THICKNESS: float = 0.187
+
+## Flashes per second the warning may not exceed. Three per second is the
+## photosensitive-seizure threshold in WCAG 2.3.1 and is a ceiling rather than a
+## preference, so it is asserted rather than left in a comment.
+const MAX_BLINK_HZ: float = 3.0
+
+## Least luminance separation an ink may have from the field it sits on. Three
+## pairs are graded against it — plate, chip and the NO ENTRY bar on its disc —
+## and it was written out three times before it had a name.
+const MIN_CONTRAST: float = 0.30
+
+## A speed comfortably over `WrongWayMonitor.DEFAULT_MIN_KPH`, and one well
+## under it, in m/s. 10 m/s is 36 kph; 1.0 is 3.6.
+const FAST: float = 10.0
+const CRAWL: float = 1.0
 
 var _failed: int = 0
 
@@ -61,6 +109,7 @@ func _init() -> void:
 	_check_bar()
 	_check_plate_tuning()
 	_check_tracker()
+	_check_wrong_way()
 
 	if _failed > 0:
 		push_error("verify_hud: %d check(s) failed" % _failed)
@@ -187,9 +236,9 @@ func _check_style() -> void:
 
 	# Ink must be readable on its own field. Two numbers, and either can be
 	# nudged past the other by someone tuning a colour they liked.
-	if absf(style.plate_ink.get_luminance() - plate_lum) < 0.30:
+	if _contrast(style.plate_ink, style.plate_field) < MIN_CONTRAST:
 		_fail("style", "plate ink is too close in luminance to the plate field")
-	if absf(style.chip_ink.get_luminance() - chip_lum) < 0.30:
+	if _contrast(style.chip_ink, style.chip_field) < MIN_CONTRAST:
 		_fail("style", "chip ink is too close in luminance to the chip field")
 
 	# 🔴 **Green gains, red loses, and a swap renders perfectly.** This is the
@@ -224,6 +273,65 @@ func _check_style() -> void:
 
 	if style.accel_full_scale_mps2 <= 0.0 or style.accel_smoothing_s <= 0.0:
 		_fail("style", "the acceleration bar's scale or smoothing is zero")
+
+	# 🔴 **The wrong-way sign must still be a NO ENTRY.** It is drawn from three
+	# numbers quoted off the sign standing on the pole, and every one of them can
+	# be tuned in the `.tres` by someone who thinks they are picking a HUD colour.
+	# A HUD sign in the wrong red, or with a bar drawn to the wrong proportion, is
+	# not a styling choice — it is a different sign, and `Q67` proved that reads
+	# as perfectly correct to everyone who looks at it.
+	var disc_red: bool = (
+		style.warn_disc.r > style.warn_disc.g and style.warn_disc.r > style.warn_disc.b
+	)
+	var bar_legible: bool = _contrast(style.plate_field, style.warn_disc) >= MIN_CONTRAST
+	if not disc_red:
+		_fail("style", "the wrong-way sign is not red — it is a NO ENTRY, not a decoration")
+	if not bar_legible:
+		_fail("style", "the NO ENTRY bar is not legible against its own disc")
+	if disc_red and bar_legible:
+		print("  style: the wrong-way sign is a red disc with a legible bar")
+
+	if (
+		not is_equal_approx(style.warn_bar_length, SIGN_BAR_LENGTH)
+		or not is_equal_approx(style.warn_bar_thickness, SIGN_BAR_THICKNESS)
+	):
+		_fail(
+			"style",
+			(
+				(
+					"the HUD draws NO ENTRY at %.3f x %.3f and the sign on the pole is "
+					+ "%.3f x %.3f — see hud_style.gd, and Q67 for why nobody can see this"
+				)
+				% [
+					style.warn_bar_length,
+					style.warn_bar_thickness,
+					SIGN_BAR_LENGTH,
+					SIGN_BAR_THICKNESS
+				]
+			)
+		)
+	else:
+		print("  style: the HUD's NO ENTRY matches the one on the pole")
+
+	# ⚠️ A sign that does not blink is a sign that has stopped being an alarm, and
+	# one that blinks too fast is a hazard rather than a warning about one.
+	if style.warn_blink_hz <= 0.0:
+		_fail("style", "the wrong-way sign does not blink")
+	elif style.warn_blink_hz > MAX_BLINK_HZ:
+		_fail(
+			"style",
+			(
+				"the sign blinks at %.1f Hz, over the %.1f Hz photosensitivity ceiling"
+				% [style.warn_blink_hz, MAX_BLINK_HZ]
+			)
+		)
+	else:
+		print(
+			(
+				"  style: the sign blinks at %.1f Hz, under the %.1f Hz ceiling"
+				% [style.warn_blink_hz, MAX_BLINK_HZ]
+			)
+		)
 
 
 ## The bar's own arithmetic, which no frame can be trusted to show.
@@ -414,7 +522,198 @@ func _check_tracker() -> void:
 	_expect(not empty.has_street(), "tracker", "and a miss does not invent one")
 
 
+# ------------------------------------------------------------- wrong way ----
+
+
+## The monitor's behaviour, and the sign's proportions.
+##
+## 🔴 **Every assertion here is written from both sides**, because the region is
+## **93.5% one-way by drivable length** — so a monitor that simply never fired
+## would satisfy any one-sided suite while being the most plausible way for this
+## to be broken. `Q72`'s rule: the test of a counter is not that it reads 0 but
+## that some reachable configuration makes it non-zero.
+func _check_wrong_way() -> void:
+	var legal := Vector3.FORWARD
+
+	# Driving the legal way down a one-way street, for four seconds. Nothing.
+	var with_flow := MonitorScript.new()
+	_drive(with_flow, legal, 0.0, 0.0, FAST, 20)
+	_expect(
+		with_flow.raises == 0 and not with_flow.wrong_way,
+		"way",
+		"driving with the flow of a one-way street raises nothing"
+	)
+
+	# 🔴 **Reversing while pointed the legal way is NOT the wrong way**, and this
+	# assertion is the whole of why the monitor reads the nose. Judged on velocity
+	# — which is how this was built first — backing off the start line raises a NO
+	# ENTRY at 40 kph, and the sign's instruction is *turn around*, which a driver
+	# already facing the right way must not be given.
+	var backing := MonitorScript.new()
+	_drive(backing, legal, 0.0, 180.0, FAST, 20)
+	_expect(
+		backing.raises == 0,
+		"way",
+		"reversing while pointed the legal way raises nothing, however fast or long"
+	)
+
+	# ...and the same street driven at it nose-first does, which is what makes
+	# both assertions above mean something. From both sides of the dwell, so this
+	# one stays expanded rather than folded into `_drive`.
+	var against := MonitorScript.new()
+	against.sample(true, legal, _at(legal, 180.0, 1.0), _at(legal, 180.0, FAST), 0.4)
+	_expect(not against.wrong_way, "way", "the sign does not go up before the dwell is served")
+	against.sample(true, legal, _at(legal, 180.0, 1.0), _at(legal, 180.0, FAST), 0.2)
+	_expect(against.wrong_way, "way", "and it does go up once the dwell is served")
+	_expect(against.raises == 1, "way", "counted as exactly one raise")
+	_drive(against, legal, 180.0, 180.0, FAST, 10)
+	_expect(against.raises == 1, "way", "a sign already up is not raised again on every sample")
+
+	# ⚠️ The other half of the nose rule: a car pointed the wrong way whose wheels
+	# are carrying it the RIGHT way is reversing out of its own mistake, and a
+	# sign that stays up through the correction is one the player drives through.
+	var correcting := MonitorScript.new()
+	_drive(correcting, legal, 180.0, 0.0, FAST, 20)
+	_expect(correcting.raises == 0, "way", "backing out of a mistake is not signed while it works")
+
+	# 🔴 **But sliding sideways is not correcting either, and nothing checked it.**
+	# The withholding bar was the same 120 as the nose bar, so a car pointed fully
+	# backwards while drifting square across the law read as "already carrying
+	# itself back the legal way" and the sign was withheld from the exact moment
+	# it exists for. Found by mutation — dropping the nose bar to 90 left every
+	# other assertion here green, because the withholding bar absorbed it.
+	var drifting := MonitorScript.new()
+	_drive(drifting, legal, 180.0, 90.0, FAST, 10)
+	_expect(drifting.wrong_way, "way", "a car pointed backwards and sliding sideways is signed")
+
+	# ...but being stationary is not being right. A car stopped dead facing the
+	# wrong way is exactly who the sign is for.
+	var stalled := MonitorScript.new()
+	_drive(stalled, legal, 180.0, 0.0, CRAWL, 20)
+	_expect(stalled.wrong_way, "way", "a car stopped facing the wrong way is signed, not excused")
+
+	# 🔴 The junction case, and the reason the bar is 120 degrees rather than 90.
+	# A car crossing or turning across a one-way street passes through
+	# perpendicular, and at 90 everything past it counts as against the flow — so
+	# a legal right turn over a one-way carriageway would ring the alarm halfway
+	# round the corner.
+	var crossing := MonitorScript.new()
+	_drive(crossing, legal, 90.0, 90.0, FAST, 10)
+	_expect(
+		crossing.raises == 0, "way", "crossing a one-way street square on is not driving down it"
+	)
+
+	var oblique := MonitorScript.new()
+	_drive(oblique, legal, 100.0, 100.0, FAST, 10)
+	_expect(oblique.raises == 0, "way", "nor is a turn that carries 100 degrees across the flow")
+
+	# ⚠️ ...and the bar is what refused those, rather than the samples being
+	# harmless. Without this, an angle test that had been broken to `false` would
+	# pass both assertions above.
+	var tight := MonitorScript.new(90.0)
+	_drive(tight, legal, 100.0, 100.0, FAST, 10)
+	_expect(tight.raises == 1, "way", "and at a 90 degree bar that same drive DOES raise")
+
+	# Evidence has to be consecutive. Two glimpses of the wrong way with a legal
+	# sample between them must not bank into a raise — `street_tracker.gd`'s
+	# interleaved-candidate case, at a louder readout.
+	var flapping := MonitorScript.new()
+	flapping.sample(true, legal, _at(legal, 180.0, 1.0), _at(legal, 180.0, FAST), 0.4)
+	flapping.sample(true, legal, _at(legal, 0.0, 1.0), _at(legal, 0.0, FAST), 0.2)
+	flapping.sample(true, legal, _at(legal, 180.0, 1.0), _at(legal, 180.0, FAST), 0.4)
+	_expect(flapping.raises == 0, "way", "interleaved evidence does not accumulate a dwell")
+
+	# The clear, from both sides of its own dwell — which is longer than the
+	# raise, so that driving the wrong way THROUGH a junction does not blink the
+	# sign off in the middle of the emergency it is reporting.
+	var onto_two_way: MonitorScript = _raised(legal)
+	onto_two_way.sample(false, legal, _at(legal, 180.0, 1.0), _at(legal, 180.0, FAST), 0.4)
+	_expect(onto_two_way.wrong_way, "way", "a two-way edge does not clear the sign at once")
+	onto_two_way.sample(false, legal, _at(legal, 180.0, 1.0), _at(legal, 180.0, FAST), 0.5)
+	_expect(not onto_two_way.wrong_way, "way", "it clears once the longer dwell is served")
+
+	# 🔴 **The deliberate departure from `street_tracker.gd`.** The tracker holds
+	# its last answer through a miss, because a stale street name is the honest
+	# answer to "where am I". An alarm must not: latched on by the car leaving the
+	# graph it is a red sign that cannot be dismissed and cannot be acted on.
+	var miss: MonitorScript = _raised(legal)
+	for tick: int in 10:
+		miss.sample(false, legal, _at(legal, 180.0, 1.0), _at(legal, 180.0, FAST), 0.2)
+	_expect(not miss.wrong_way, "way", "a miss clears the sign, unlike a miss on the street plate")
+
+	# 🔴 **And the door the miss rule does not cover: no car at all.** On a scene
+	# change the HUD stops sampling, and a monitor that merely froze left the sign
+	# blinking for ever with nothing driving it.
+	var gone: MonitorScript = _raised(legal)
+	_expect(gone.has_angle(), "way", "a monitor that has sampled reports a real angle")
+	gone.stand_down(LONG_S)
+	_expect(not gone.wrong_way, "way", "and standing down with no car takes the sign back down")
+	_expect(not gone.has_angle(), "way", "with no angle left to report")
+
+	# The sign's own geometry. `Q67` found this project drawing the same bar a
+	# quarter short for a year, so what is asserted is the proportion and not that
+	# something was drawn.
+	var box := Vector2(96.0, 96.0)
+	var bar: Rect2 = NoEntryIconScript.bar_rect(box, SIGN_BAR_LENGTH, SIGN_BAR_THICKNESS)
+	_expect(
+		bar.get_center().is_equal_approx(box * 0.5), "way", "the bar is centred on its own disc"
+	)
+	_expect(
+		is_equal_approx(bar.size.x, box.x * SIGN_BAR_LENGTH), "way", "and spans the published 0.87"
+	)
+	_expect(bar.size.x > bar.size.y * 2.0, "way", "and is a bar rather than a block")
+	# ⚠️ A non-square rect must draw the same sign, not a stretched one. A squashed
+	# NO ENTRY is legible and wrong, which is this file's whole subject.
+	var wide: Rect2 = NoEntryIconScript.bar_rect(
+		Vector2(200.0, 96.0), SIGN_BAR_LENGTH, SIGN_BAR_THICKNESS
+	)
+	_expect(
+		wide.size.is_equal_approx(bar.size), "way", "a non-square rect draws the sign, not an oval"
+	)
+
+
+## A monitor whose sign is already up, for the clearing tests.
+func _raised(legal: Vector3) -> MonitorScript:
+	var monitor := MonitorScript.new()
+	monitor.sample(true, legal, _at(legal, 180.0, 1.0), _at(legal, 180.0, FAST), LONG_S)
+	if not monitor.wrong_way:
+		_fail("way", "the fixture could not raise the sign — every clearing test below is inert")
+	return monitor
+
+
+## A vector `degrees` away from `law` in plan, at `speed_ms`.
+##
+## Taking `law` rather than assuming it means the angle asked for is the angle
+## the monitor measures, whatever law a test passes.
+static func _at(law: Vector3, degrees: float, speed_ms: float) -> Vector3:
+	return law.rotated(Vector3.UP, deg_to_rad(degrees)) * speed_ms
+
+
+## One stretch of driving: `ticks` samples of a car pointed `nose_deg` off `law`
+## and travelling `travel_deg` off it at `speed_ms`.
+##
+## ⚠️ **Folded because a pasted loop still passes.** Nine of these differed only
+## in four numbers, and most assert `raises == 0` — so a copy that kept the
+## previous case's facing would grade the wrong thing and print green.
+static func _drive(
+	monitor: MonitorScript,
+	law: Vector3,
+	nose_deg: float,
+	travel_deg: float,
+	speed_ms: float,
+	ticks: int
+) -> void:
+	for tick: int in ticks:
+		monitor.sample(true, law, _at(law, nose_deg, 1.0), _at(law, travel_deg, speed_ms), 0.2)
+
+
 # ----------------------------------------------------------------- report ----
+
+
+## Luminance separation between two colours. Named because the bare expression
+## appeared three times and reads as arithmetic rather than as the question it is.
+static func _contrast(ink: Color, field: Color) -> float:
+	return absf(ink.get_luminance() - field.get_luminance())
 
 
 func _expect(condition: bool, area: String, what: String) -> void:

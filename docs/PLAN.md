@@ -583,6 +583,7 @@ trade.
 | ID | Deliverable | Accept |
 |---|---|---|
 | `P3-24` | **HUD chassis** — speed and current street, bilingual, plus the reserved slots and the thumb-rest contract. **Depends on nothing in `B1` or `B2`** and may be built first | Speed and street read at a glance; the plate does not flicker at a junction and does not blank on an unnamed edge; no HUD rect sits under a **thumb**, and a tool asserts both that and that overlapping a tap *zone* stays legal (`Q80`); the CJK font is a declared third-party asset with its own licence entry (`Q79`) |
+| `P3-25` | **Wrong-way warning** — a blinking NO ENTRY, top-centre, when the car is pointed against a one-way street. Depends only on `P3-24`'s chassis and `P2-2`'s graph | The sign is up when and only when the car faces against the flow; it does not fire on a turn across a one-way street, on a reverse taken while pointed the legal way, or at a junction; the proportions are the world sign's and a tool fails when they drift; the blink is under the 3 Hz photosensitivity ceiling (`Q81`) |
 | `P3-1a` | `FareSystem` — hail → carry → deliver/fail state machine. **Standard and short hop only** | The loop runs end to end and can be failed |
 | `P3-5a` | Minimal HUD — destination arrow, timer, meter. Deliberately ugly | Legible; no layout work |
 

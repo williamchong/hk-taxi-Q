@@ -44,6 +44,7 @@ const SPEED_HZ: float = 10.0
 var _layout: HudLayout = null
 var _style: HudStyle = null
 var _tracker: StreetTracker = null
+var _monitor: WrongWayMonitor = null
 var _graph: RoadGraph = null
 var _car: VehicleController = null
 
@@ -60,9 +61,16 @@ var _readout: Label = null
 ## HUD holds for `P3-5a` and `P3-5b` can be SEEN rather than taken on trust
 ## from a `.tres`, and invisible in every shipped frame.
 var _slots: Array[ChamferPanel] = []
+## The wrong-way sign. Hidden in every ordinary frame.
+var _warning: NoEntryIcon = null
 
 var _substitutions: Dictionary = {}
 var _street_accum_s: float = 0.0
+## Where the blink is in its own cycle, in seconds. Reset when the sign comes
+## down so the next raise starts LIT — otherwise an alarm can be born dark and
+## appear to arrive up to half a period late, which is the half of the cycle it
+## can least afford.
+var _blink_s: float = 0.0
 var _speed_accum_s: float = 0.0
 var _shown_speed: String = ""
 ## Smoothed longitudinal acceleration in m/s², and the last speed it was
@@ -88,6 +96,7 @@ func _ready() -> void:
 		return
 
 	_tracker = StreetTracker.new()
+	_monitor = WrongWayMonitor.new()
 	_graph = RoadGraph.shared()
 	_build()
 
@@ -213,6 +222,23 @@ func _build() -> void:
 	var unit: Label = _label("Unit", _style.speed_unit_size, _style.chip_muted)
 	unit.text = "km/h"
 	speed_lines.add_child(unit)
+
+	# ---- the wrong way: the CITY refusing ----
+	#
+	# NO ENTRY, the 179 plates of it already standing out there, blinking at the
+	# top of the frame. No panel behind it and no lettering on it — see
+	# `no_entry_icon.gd` for why a disc is admissible in a UI of cut polygons, and
+	# `hud_layout.gd::wrong_way` for why an alarm may share a band that a standing
+	# readout was refused.
+	_warning = NoEntryIcon.new()
+	_warning.name = "WrongWay"
+	_warning.disc = _style.warn_disc
+	# The city's white, already declared once for the plate. See `hud_style.gd`.
+	_warning.bar = _style.plate_field
+	_warning.bar_length = _style.warn_bar_length
+	_warning.bar_thickness = _style.warn_bar_thickness
+	_warning.visible = false
+	_place(root, _warning, _layout.wrong_way)
 
 	# ---- the reserved slots ----
 	#
@@ -409,6 +435,11 @@ func _physics_process(delta: float) -> void:
 func _process(delta: float) -> void:
 	_update_speed(delta)
 	_update_street(delta)
+	# ⚠️ Every frame, unlike the two above, and it is the one thing here that has
+	# to be. The monitor is sampled at `STREET_HZ` with everything else, but the
+	# blink is an animation: gating it at 5 Hz would quantise a 2 Hz square wave
+	# onto 200 ms steps and make the alarm stutter rather than pulse.
+	_update_warning(delta)
 
 
 ## Drive the chip's bar from how hard the car is gaining or losing speed.
@@ -495,9 +526,23 @@ func _update_street(delta: float) -> void:
 
 	var car: VehicleController = _vehicle()
 	if car == null or _graph == null or _graph.is_empty():
+		# 🔴 **Not a bare return.** Freezing the monitor here left a sign that
+		# happened to be up blinking for ever on a scene change, with the car that
+		# earned it already freed — the latched siren `wrong_way_monitor.gd` is
+		# written against, through the one door its miss rule does not cover.
+		_monitor.stand_down(elapsed)
 		return
 
-	var hit: RoadGraph.Hit = _graph.nearest_edge(car.global_position, -car.global_transform.basis.z)
+	# One heading, read once: `nearest_edge` resolves a two-way edge against it and
+	# the monitor judges the nose by it, and they must be the same vector.
+	var heading: Vector3 = -car.global_transform.basis.z
+	var hit: RoadGraph.Hit = _graph.nearest_edge(car.global_position, heading)
+	# Fed the same `Hit` the plate is, so the warning costs no second query on a
+	# path budgeted at 1 ms. ⚠️ **The heading raises the sign and the velocity can
+	# only withhold it** — reversing while pointed the legal way is not something
+	# a NO ENTRY has anything useful to say about. `wrong_way_monitor.gd` is
+	# written around that and records why it was built the other way round first.
+	_monitor.sample(hit.one_way, hit.forward, heading, car.linear_velocity, elapsed)
 	# `elapsed` and not `delta`: the tracker's dwell is in seconds of real time,
 	# and feeding it one frame's worth per sample would stretch a 0.6 s dwell to
 	# 3 s at 5 Hz. The bug this avoids looks like "the plate is slow", which is
@@ -529,12 +574,61 @@ func _update_readout(hit: RoadGraph.Hit) -> void:
 	if _readout == null or not DebugHud.shows_readouts():
 		return
 	var raw: String = hit.road_name_en if not hit.road_name_en.is_empty() else "(unnamed)"
+	var law: String = "one-way" if hit.one_way else "two-way"
+	# Both lines describe the same miss, so they are decided in one place: two
+	# guards on `edge_id` are two chances to disagree about what a miss looks like.
 	if hit.edge_id < 0:
 		raw = "(no edge)"
+		law = "no edge"
+	# ⚠️ The monitor's raw angle beside its verdict, for the same reason the raw
+	# street name sits beside the shown one: `Q62` leaves no published truth to
+	# grade either against, so what makes a wrong answer reportable is the input
+	# it was reached from. `raises` against streets-driven is the number a drive
+	# is checked on — see `wrong_way_monitor.gd`.
+	var angle: String = ("%.0f deg" % _monitor.angle_deg) if _monitor.has_angle() else "--"
 	_readout.text = (
-		"street  shown %s (e%d)\n        raw   %s (e%d)\n        changes %d"
-		% [_tracker.street_en, _tracker.edge_id, raw, hit.edge_id, _tracker.changes]
+		(
+			"street  shown %s (e%d)\n        raw   %s (e%d)\n        changes %d"
+			+ "\nway     %s (%s, %s), raises %d"
+		)
+		% [
+			_tracker.street_en,
+			_tracker.edge_id,
+			raw,
+			hit.edge_id,
+			_tracker.changes,
+			"WRONG" if _monitor.wrong_way else "ok",
+			law,
+			angle,
+			_monitor.raises,
+		]
 	)
+
+
+## Blink the sign while the monitor says the car is going the wrong way.
+##
+## ⚠️ **Blinked by toggling `visible`, not by animating `modulate`.** An alpha
+## ramp queues a `_draw` on every frame for the whole session on a node that is
+## invisible in almost all of them; `visible` re-composites and redraws nothing,
+## and the sign's geometry never changes.
+##
+## The duty cycle is square and half-on, which is what an alarm looks like, and
+## `warn_blink_hz` is capped by `verify_hud.gd` well under the photosensitivity
+## threshold rather than left to taste. See `hud_style.gd`.
+func _update_warning(delta: float) -> void:
+	var lit: bool = false
+	if _monitor.wrong_way:
+		var period: float = 1.0 / maxf(_style.warn_blink_hz, 0.001)
+		_blink_s = fmod(_blink_s + delta, period)
+		lit = _blink_s < period * 0.5
+	else:
+		_blink_s = 0.0
+
+	# Assigned only on a change, like every other write in this file: a node that
+	# runs for the whole session should not touch the scene tree 60 times a
+	# second to say nothing.
+	if _warning.visible != lit:
+		_warning.visible = lit
 
 
 ## `is_instance_valid` rather than a null check: on a scene change the car this

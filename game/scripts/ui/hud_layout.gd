@@ -77,6 +77,31 @@ extends Resource
 ## this width, so the reservation the check grades stays the honest worst case.
 @export var street_plate: Rect2
 
+## The wrong-way warning: a NO ENTRY sign, top-centre, blinking (`P3-25`).
+##
+## 🔴 **Top-centre has a claimant, and this SHARES the band rather than taking
+## it.** `Q80` refused the street plate this slot and reserved it for
+## `P3-5a`'s bilingual destination callout — the note further down says so, and
+## it stands. What earns a place here is `Q80`'s own allocation rule read
+## honestly: *prominence should track information rate against importance*. The
+## street name was refused for being the screen's quietest reading in its
+## loudest band; a wrong-way alarm is the opposite — near-zero duty cycle,
+## maximum importance, and the one readout the player must act on **before**
+## the destination they were driving to matters at all.
+##
+## ⚠️ **It is not a fourth category in the taxonomy.** *Left is the car, right is
+## the world, top is the fare, the middle is the road* is about where a standing
+## readout lives. An alarm does not stand anywhere: it is an **interrupt**, it is
+## absent from every ordinary frame, and it pre-empts. Adding "and alarms" to
+## "top is the fare" would be reading it as furniture.
+##
+## ⚠️ **This rect is 96 x 96 — 5% of frame width — precisely so that sharing is
+## possible.** A worded banner would have forced `P3-5a`'s callout to hide while
+## the warning was up; a small sign leaves the band under it free, which is where
+## the callout goes. That is the whole of what `P3-5a` inherits from this: it
+## starts below y 136, not at y 40.
+@export var wrong_way: Rect2
+
 # ---- planned, NOT held open, filled by P3-5a and P3-5b ----
 #
 # 🔴 **Plan the area; do not hold the space.** These rects say where the timer,
@@ -114,8 +139,11 @@ extends Resource
 ## `GAME_DESIGN.md` announces destinations by name and bilingually, and that is
 ## HUD text: transient, the player's current objective, and the one readout that
 ## earns the most prominent band on the screen. It is left undeclared here
-## because `P3-5a` owns it — but nothing else may take top-centre in the
-## meantime. The street plate was evaluated for it and refused (`Q80`).
+## because `P3-5a` owns it — and the street plate was evaluated for it and
+## refused (`Q80`). ⚠️ **`P3-25` puts a 96 px NO ENTRY sign in the top of that
+## band** — see `wrong_way` above for why an alarm is admitted where a standing
+## readout is not, and note that it leaves the callout its space rather than
+## displacing it.
 
 # ---- where P2-4's thumbs go ----
 #
@@ -174,7 +202,9 @@ func reserved_slots() -> Dictionary[String, Rect2]:
 ## name would silently mislabel every later slot or read past the end, in the one
 ## file whose entire job is to be trusted about where things are.
 func hud_slots() -> Dictionary[String, Rect2]:
-	var slots: Dictionary[String, Rect2] = {"speed": speed, "street_plate": street_plate}
+	var slots: Dictionary[String, Rect2] = {
+		"speed": speed, "street_plate": street_plate, "wrong_way": wrong_way
+	}
 	slots.merge(reserved_slots())
 	return slots
 

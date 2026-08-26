@@ -103,6 +103,44 @@ const PATH: String = "res://tuning/hud_style.tres"
 ## they need at this size.
 @export var speed_line_tighten: int
 
+# ---- the city answering back: the wrong-way sign ----
+
+## The NO ENTRY disc drawn when the car is going the wrong way down a one-way
+## street, and its bar's two proportions.
+##
+## 🔴 **These are the WORLD sign's numbers, and the duplication is deliberate and
+## declared.** `hong_kong.yaml` gives `TS115` a red disc at `size: 1.00` with a
+## white bar at `0.87`, and `signs.py::_NO_ENTRY_BAR_THICKNESS` gives the bar
+## `0.187` — both **measured** off TD's own cell by `sign_face_survey.py`, not
+## authored, after `Q67` found this project had drawn them 0.66 by 0.22 for a
+## year. Those files are build-time and are not reachable from `res://`, so the
+## HUD keeps its own copy and `verify_hud.gd` fails when the two disagree.
+##
+## ⚠️ **This is the one place the UI palette deliberately DOES quote the world**,
+## against the rule at the top of this file. That rule is about the road's
+## *paint* — the marking white and the box-junction yellow, `Q53`'s fifth and
+## third copies — and its reason is that a plate bolted to a building has no
+## business following a re-graded carriageway. This is the opposite case: the
+## icon's whole argument is that it is the same sign the player has been driving
+## past, and a HUD NO ENTRY in some other red would be a worse sign, not a purer
+## palette.
+@export var warn_disc: Color
+@export var warn_bar_length: float
+@export var warn_bar_thickness: float
+
+# ⚠️ **The bar has no colour of its own: it draws in `plate_field`.** The city's
+# white is already declared once in this table, the sign's `#f0f0ea` and the
+# plate's are imperceptibly apart, and a fourth transcribed constant to say so
+# would be the debt above with nothing bought for it.
+
+## Flashes per second while the sign is up.
+##
+## 🔴 **Capped, and the cap is not a taste.** Above three flashes per second is
+## the photosensitive-seizure threshold in WCAG 2.3.1, and an arcade alarm has no
+## reason to go near it — two reads as urgent and stays well clear.
+## `verify_hud.gd` refuses a faster one.
+@export var warn_blink_hz: float
+
 # ---- dev only ----
 
 ## The reserved slots' outline, drawn only under `DebugHud`'s FULL view.

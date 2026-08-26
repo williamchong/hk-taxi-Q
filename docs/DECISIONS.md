@@ -10987,3 +10987,199 @@ than a marginal aesthetic gain because it is what makes `P3-5a`'s additions land
 **See.** `Q79` for the typeface the plate is set in · `Q53` for the authored-colour duplication this
 palette declines to join · `Q62` for why a HUD readout cannot be graded against anything published ·
 `P3-24` for the task
+
+---
+
+## `Q81` — A wrong-way sign is an interrupt, not a readout, and the nose decides rather than the wheels
+
+**Opened and closed 2026-08-26** by `P3-25`, on the user's request for *"a small flashing warning in
+center top of screen when car goes reverse direction of road"*, amended twice by the user during the
+build.
+
+### Why the region makes this a false-alarm problem
+
+Wan Chai is **93.5% one-way by drivable length** — 680 of 797 edges are `direction: forward`, and
+only **8** of its streets are two-way throughout. So the warning is armed nearly everywhere the
+player drives, and the failure that matters is not the missed alarm but the **false** one: a sign
+that cries wolf at every junction teaches the player to ignore the one that counts. Everything below
+is bought with that.
+
+`RoadGraph` had already built the hook. `Hit.one_way` has always been published, and `_fill`
+deliberately does **not** correct `forward` toward the asker on a one-way edge — *"Facing the wrong
+way down a one-way street is a fact about the car and must survive into the overlay rather than being
+quietly corrected here."* This is the consumer that reads it, and it is fed the same `Hit` the street
+plate already fetches at 5 Hz, so the detection costs no second query.
+
+### 🔴 The nose decides; the wheels may only withhold
+
+**This was built on velocity first, and the user refused it: *"i dont know if facing the right way
+then reverse is wrong way"*. He is right, and the reason is not about how far you reverse.** NO ENTRY
+is an *instruction*, and the instruction is **turn around**. A driver whose nose already points the
+legal way has nothing to turn around, so the sign would be telling them to do the wrong thing in the
+most emphatic way the HUD has. The taxi does **40 kph** backwards, so the 10 kph speed floor did not
+save it: reversing off the start line raised a NO ENTRY for one build.
+
+So the **heading** raises the sign. Velocity is still read and can only ever **withhold** it: a car
+pointed the wrong way whose wheels are carrying it the right way is reversing out of its own mistake,
+and a warning that stays up through the correction is one the player learns to drive through.
+
+⚠️ **The stated cost, so nobody rediscovers it as a bug:** reversing a long way at speed up a one-way
+street draws no sign. That is genuinely against the flow and is deliberately unsigned, because the
+alternative is signing every parking manoeuvre and three-point turn in the region with the instruction
+the game reserves for an emergency.
+
+### The four rules, and what each one buys
+
+| Rule | Value | Bought against |
+|---|---|---|
+| Raise dwell | **0.5 s** | The junction strobe. `nearest_edge` hands you the cross street for a few metres, and 34 of the region's streets carry a *mix* of `forward` and `both` edges — so the flag flips under a car driving straight down Hennessy Road |
+| Clear dwell | **0.8 s** | Asymmetric on purpose. Driving the wrong way *through* a junction must not blink the sign off in the middle of the emergency it reports |
+| Angle bar | **120°** | 🔴 **Not 90.** A car turning across a one-way street passes through perpendicular, so at 90 a legal right turn over a one-way carriageway rings the alarm halfway round the corner |
+| Speed floor | **10 kph** | Read on the **withholding** side only. A car slower than this cannot be "already correcting", so a car stopped dead facing the wrong way is signed — being stationary is not being right |
+
+⚠️ **The deliberate departure from `street_tracker.gd`.** The tracker treats a miss as *no evidence*
+and holds its last answer, because a stale street name is the honest reply to "where am I". An alarm
+must not inherit that: latched on by the car leaving the graph, it is a red sign that can be neither
+dismissed nor acted on. So a miss and a two-way edge both count toward **clearing** here. The
+asymmetry follows from the asymmetric cost — the tracker's wrong answer is a stale name, and this
+one's is a siren.
+
+### Top-centre: shared, not taken
+
+`Q80` refused the street plate this slot and reserved it for `P3-5a`'s bilingual destination callout.
+That stands. What admits an alarm is `Q80`'s **own allocation rule** read honestly — *prominence
+should track information rate against importance*. The street name was refused for being the
+screen's quietest reading in its loudest band; a wrong-way alarm is the opposite: near-zero duty
+cycle, maximum importance, and the one readout the player must act on **before** the destination they
+were driving to matters at all.
+
+⚠️ **It is not a fourth category in the taxonomy.** *Left is the car, right is the world, top is the
+fare, the middle is the road* is about where a standing readout lives. An alarm does not stand
+anywhere — it is an interrupt, absent from every ordinary frame. And the rect is **96 x 96, 5% of
+frame width, precisely so that sharing is possible**: a worded banner would have forced the callout
+to hide while the warning was up, and a small sign leaves the band under it free. `P3-5a` inherits
+exactly one constraint — it starts below y 136, not at y 40.
+
+### 🔴 An icon, not a word, and the icon is a real sign
+
+The user: *"dont use text, just show a icon or sth?"* — and the right icon is **NO ENTRY (`TS115`)**,
+the commonest sign code in the region — **179 plates** of it — which the player has driven past all game.
+It is the literal instruction rather than a symbol for one.
+
+Dropping the lettering deletes a whole branch of the work: **no typeface, no translation, and no
+`tools/font_coverage.py` entry**. That tool grades the street names in `roadgraph.json` and would not
+see a hand-authored HUD string at all, so a worded warning would have shipped **ungraded lettering** —
+one character away from `Q79`'s tofu box, in a project whose second city is the business case. It
+also makes the warning language-free for every city after this one.
+
+⚠️ **A disc, in a UI whose every panel is a cut polygon, and `Q80`'s rule is not being broken.** That
+rule governs *furniture*. This is **signage**, and the distinction is already load-bearing in this
+palette — *white is the city speaking, dark is the car speaking*. A sign keeps the shape its
+publisher draws it in; a HUD panel keeps ours. There is deliberately no panel behind it, so nothing
+here is furniture at all.
+
+⚠️ **The proportions are a THIRD copy, knowingly taken.** `Q67` rasterised TD's own cell and found
+the bar spans **0.868** of the diameter and is **0.187** thick, against the 0.66 by 0.22 this project
+had authored by eye for a year — on the face the player sees most often. The world sign draws them
+from `hong_kong.yaml` and `signs.py::_NO_ENTRY_BAR_THICKNESS`, which are build-time and unreachable
+from `res://`, so the HUD keeps its own copy in `hud_style.tres`. `verify_hud.gd` is the **ratchet**
+that fails when the two stop agreeing — `clearance_reconcile.py`'s shape, and the only thing that can
+see a HUD sign drawn to different proportions than the one on the pole.
+
+⚠️ **This is also the one place the UI palette deliberately quotes the world**, against
+`hud_style.gd`'s own rule. That rule is about the road's *paint* (`Q53`'s fifth white, third yellow)
+and its reason is that a plate bolted to a building has no business following a re-graded
+carriageway. This is the opposite case: the icon's whole argument is that it is the same sign, and a
+HUD NO ENTRY in some other red would be a worse sign, not a purer palette.
+
+🔴 **The blink is capped at 2 Hz and the cap is asserted, not commented.** Above **three** flashes per
+second is the photosensitive-seizure threshold in WCAG 2.3.1. It blinks by toggling `visible` rather
+than animating `modulate`, so a node that is invisible in almost every frame queues no redraw.
+
+### What was measured
+
+Every figure below is off `drive.sh` on the shipped city, HUD flags the only variable.
+
+| | draw calls (t=1/2/3) |
+|---|---|
+| `--hud=off` | 45 / 44 / 43 |
+| `--hud=on`, no warning | 53 / 52 / 51 |
+| `--hud=on`, warning lit | 56 / 55 / 54 |
+
+**The sign costs +3 draw calls while lit and 0 while hidden**, against the <150 mobile budget.
+⚠️ **The whole HUD measures +8 here, where `P3-24` recorded +5** — re-measured at `HEAD` with these
+changes stashed and reproducing 45/44/43 → 53/52/51 exactly, so the gap predates this task and the
++5 in `PROGRESS.md` is stale rather than wrong-at-the-time.
+
+**The frame that proves it**, and the route is the user's: *"just drive straight after turn right out
+of hkcec"*. `--hold=accelerate@0.3+12.7 --hold=steer_right@4.6+1.3`, which turns south onto Expo
+Drive East and runs 200 m down the **northbound** carriageway. At `t=12.20` the overlay reads
+`edge 660 EXPO DRIVE EAST (one-way, level 0)`, the pre-existing debug line independently reads
+**`AGAINST FLOW`**, and the monitor reads `way WRONG (one-way, 173 deg), raises 2` with the sign up.
+It is **absent at `t=12.40` and `t=12.60` and back at `t=12.80`**, which is the blink.
+
+⚠️ **`raises 2` on a 13 s drive is correct, and was checked rather than assumed.** The sign goes up
+at `t≈8.6` on `e656` (legal heading 356, car at 170), clears while the car crosses `e494`
+EXPO DRIVE CENTRAL — genuinely legal there, 85° off — and re-raises on `e660`. The clear dwell held
+it through the junction at `t=11.0`, which is what it is for. No frame in that drive shows the sign
+over a road the car was legally on.
+
+⚠️ **Two true negatives on real geometry are worth as much as the positive**: 71° off the law while
+stalled against a wall, and **38° off on `e646`** — Expo Drive's opposite carriageway, which legally
+runs west. Drifting across a dual carriageway makes you legal, and the monitor says so.
+
+### How it can fail, and what stops it
+
+`verify_hud.gd` gains **23 assertions**, every one written from both sides on `Q72`'s rule — a monitor
+that simply never fired would satisfy any one-sided suite while being the most plausible break in a
+region that is 93.5% one-way. **Ten mutations were run and all ten were caught**: the bar length put
+back to `Q67`'s wrong 0.66, the blink at 5 Hz, the disc painted green, the nose bar reduced to 90, the
+withholding bar widened to 120, a miss made to hold as the street plate does, the raise disabled
+outright, the clear dwell made unreachable, `_correcting` stripped of its power to withhold, and
+`stand_down` made a no-op.
+
+### 🔴 Two defects the review pass found, both invisible to a green suite
+
+**The nose bar and the withholding bar were one constant.** `_correcting` reused
+`DEFAULT_ANGLE_DEG`'s 120, so a car pointed fully backwards while **drifting sideways** — travel 90°
+off the law, which is a slide through a junction — counted as "already carrying itself back the legal
+way", and the sign was withheld from exactly the moment it exists for. "Already correcting" is not
+the complement of "pointed the wrong way": the withholding case is a reverse squarely *with* the
+flow, so `CORRECTING_ANGLE_DEG` is the neutral **90** and nothing wider. ⚠️ It was found by
+**mutation, not by reading**: dropping the nose bar to 90 left every assertion green, because the
+withholding bar absorbed the change. The drift case now has its own assertion.
+
+**Losing the car left the sign latched.** `_update_street` returns early when the vehicle is freed on
+a scene change, which froze both clocks — so a sign that happened to be up stayed up, blinking, with
+the car that earned it already gone. That is the latched siren the miss-clearing rule is written
+against, arriving through the one door that rule does not cover. `stand_down()` is that door.
+
+### 🔴 And a trap in the tool itself
+
+**`verify_hud` can print `verify_hud: ok` having checked nothing.** If a `preload`ed script fails to
+compile — one promoted warning is enough — `MonitorScript.new()` raises a script error and GDScript
+**aborts the calling function on the spot**; every assertion after it is skipped, `_failed` stays 0,
+and `_init` runs on to `quit(0)`. Demonstrated here: mutating `_correcting` to `return false` left its
+two parameters unused, which is promoted, which produced a green run over an empty suite.
+
+⚠️ **No guard inside the tool can prevent it** — `new() == null` aborts at the guard itself, and
+`can_instantiate()` cannot be called on the class. One was written, found not to fire, and **removed
+rather than left looking protective**. What catches it is `check.sh`'s `SCRIPT ERROR` grep, verified
+by running the broken monitor through it: **exit 1**, against exit 0 restored. This is the concrete
+case behind CLAUDE.md's rule that a verify tool's own output must never be read by hand.
+
+⚠️ **One incident worth recording**: a probe that forced the sign visible with `if false:` produced a
+run with **no HUD at all** and `DRIVER OK` — the promoted-warnings sweep rejected the file, `hud.gd`
+never compiled, and Godot exited **0**. The measurement looked plausible and was wrong. It is
+`ARCHITECTURE.md`'s standing warning arriving inside a measurement rather than inside a build.
+
+⚠️ **And `project.godot` was found rewritten from scratch mid-session** — every comment stripped,
+three warning promotions and `rendering_method.web` dropped, which is exactly `Q75`. Restored from
+git; **not reproducible** by `drive.sh` or by a headless `--import`, and the most likely culprit is a
+driver run that died mid-frame. `check.sh`'s settings tripwire is what would have caught it, and did
+not need to because `git status` did.
+
+**See.** `Q80` for the band this shares and the allocation rule that admits it · `Q67` for the two
+proportions and why area alone cannot grade a face · `Q79` for the lettering this icon does not need ·
+`Q62` for why a HUD readout cannot be graded against anything published · `Q72` for why a counter
+must be reachable in both directions · `P3-25` for the task

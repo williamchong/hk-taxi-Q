@@ -41,5 +41,12 @@ accel_smoothing_s = 0.18
 speed_size = 68
 speed_unit_size = 20
 speed_line_tighten = -10
+; NO ENTRY (TS115), the same sign standing on 179 posts in the region. The red
+; and the two proportions are quoted from the world sign and graded against it
+; by verify_hud; the bar draws in plate_field. See hud_style.gd and Q81.
+warn_disc = Color(0.761, 0.102, 0.149, 1)
+warn_bar_length = 0.87
+warn_bar_thickness = 0.187
+warn_blink_hz = 2.0
 slot_fill = Color(0.3, 0.85, 0.95, 0.1)
 slot_edge = Color(0.3, 0.85, 0.95, 0.55)
