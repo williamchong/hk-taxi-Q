@@ -104,7 +104,7 @@ wins.
 | `Q73` | A layer can pass every check and be in no scene | ✅ Closed — `roadmarks.glb` shipped, was graded, and was drawn nowhere; a verify tool proves an asset is correct and never that it is on screen |
 | `Q74` | `Q71`'s trigger has fired on the preview scripts, and the prose has nowhere to go | 🟡 Open, deferred — ten files, four byte-identical, 0 lines of logic differing; the merge is owed and the per-layer *arguments* have no `.tres` to move into |
 | `Q76` | A layer whose vocabulary nothing publishes, and an assembly that is not a stack | ✅ Closed — the gate is a rule about *spelling*, published as `drawn_by_code`/`refused_by_code` because nothing can grade it; and one head stands for a whole assembly, after the first build drew 8.53 m masts |
-| `Q77` | **A dark signal is not a signal with no state** | ✅ Closed — `P3-17`'s layer built correctly and was dropped from the bundle anyway: unlit heads assert 415 out-of-service signals, and a lit cycle cannot be derived honestly (18 of 107 junctions opposable, 57 of 137 partially populated). `B3` is the route |
+| `Q77` | **A dark signal is not a signal with no state** | ✅ Closed — `P3-17`'s layer built correctly and was dropped from the bundle anyway: unlit heads assert 415 out-of-service signals, and a lit cycle cannot be derived honestly (18 of 107 junctions opposable, 57 of 137 partially populated). `B3` is the route. ⚠️ **Amended 2026-08-26** — the drop left `signals_preview.gd` still asking Godot to *load* the absent asset, which errors into the console before it returns null; it reached the `P3-9a` web cut under a row claiming 0 console errors. Fixed with the `is_present()` guard every `verify_*.gd` already used |
 | `Q78` | **A one-way correction was written as a two-way move, and `abs()` hid it** | ✅ Closed — the sign registration pushed *and pulled*: 95 of 654 posts were dragged toward the carriageway by a rule whose stated reason runs outward only, invisible because `shift_m` discards the sign. Clamped, with `posts_kept_as_surveyed` to name the population |
 
 | ID | Decision | Status |
@@ -10445,9 +10445,47 @@ promotions and `rendering_method.web` dropped with every comment stripped. Caugh
 `check.sh` itself leaves the file alone; the run skill's note that headless export is safe holds for
 `--import` and **not** for `export.sh`.
 
+### ⚠️ Amended 2026-08-26 — the drop was right, and its cleanup was one call short
+
+**The claim above that every remaining consumer "already handled an undeclared block as a
+first-class state" was half true.** `signals_preview.gd` reached the right *outcome* by the wrong
+*route*: it called `GeneratedSignals.load_signals()` and branched on null, and Godot's `load()` on
+an absent path writes
+
+```
+ERROR: No loader found for resource: res://assets/generated/signals.glb (expected type: unknown)
+   at: _load (core/io/resource_loader.cpp:332)
+```
+
+to the console **before** returning it. So the graceful branch ran after the damage, and the file
+contradicted its own docstring — *"Absence is not a warning here… a missing asset prints what
+happened and returns."*
+
+**Where it cost something.** Straight into the `P3-9a` web cut, as the first line of the console
+`PROGRESS.md` tells testers to read to confirm the SharedArrayBuffer toggle — under a row claiming
+**0 console errors or warnings**. That claim was true for the 2026-08-25 `r2` cut and false 26 hours
+later; `r3` shipped with it and `r4` is the re-cut.
+
+**The fix is a guard that already existed.** `is_present()` is on every `generated_*.gd` loader,
+its docstring already explains why it is *not* a null check, and every `verify_*.gd` tool already
+used it. Only the two preview nodes did not. `roadmarks_preview.gd` had the same unguarded call —
+dormant purely because that layer ships today — and is fixed in the same commit. The
+`packed == null` branch stays, with the "present but unloadable" message `verify_signals.gd`
+carries, because a corrupt asset and an absent one are different findings and reporting the first
+as "none shipped for this region" would describe a broken build as an empty region.
+
+🔴 **`check.sh` cannot see this class of defect, and that is the transferable part.** The verify
+tools were the ones already guarding correctly, so the blind spot was precisely the nodes no
+verifier inspects — `Q73`'s lesson inverted. `Q73` found an asset graded by its verify tool and
+drawn nowhere; this is an asset *absent* on purpose, reported correctly, and erroring on the way.
+Both are invisible to a green `check.sh`, and both were caught by looking at output rather than at
+an exit code. **What caught this one was reading the browser console during a re-pack**, which is
+not a step any script performs. Cost: **288 B** of PCK.
+
 **See.** `Q76` for the gate and the assembly · `Q62` for the ungraded facing and why the render is
 the evidence · `Q54` for sourced-not-invented · `Q69` for junction-mouth hosting · `P3-18` for the
-purely-visual precedent that does not transfer · `Q75` for the settings hazard
+purely-visual precedent that does not transfer · `Q75` for the settings hazard · `Q73` for the
+verify-tool blind spot this inverts
 
 ## `Q78` — Registration is a one-way correction, and it was written as a two-way move
 
