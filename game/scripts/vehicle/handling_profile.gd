@@ -77,16 +77,26 @@ extends Resource
 ## Rear-axle tyre_grip multiplier while drift is held. 1.0 leaves the rear axle
 ## alone; lower breaks it loose.
 ##
-## ⚠️ **Measured, this dial has almost no usable range, and that is a property of
-## the vehicle class rather than of the number.** Swept on tools/skidpad.sh at the
-## shipped tyre_grip of 2.5, against drift_slip_threshold_deg's 14°: 0.68 still
-## grips at 2.0° of slip, 0.66 is already at 21.8° — the shipped value, and the
-## closest any value gets — and 0.64 is out at 36.4°, 0.60 at 75.2°. **Nothing
-## lands on 14°.**
+## ⚠️ **"Nothing lands on 14°" was published here until Q84 and it was wrong.**
+## It came from a 0.02 sweep grid read through a `%.2f` row label, which printed
+## 0.670, 0.668 and 0.665 as three rows all reading `drift@0.67` — a label that
+## could not resolve the band it was being used to explore. Swept at 0.002 the
+## response is smooth and monotonic at ~990°/unit between 0.68 and 0.66, and
+## **0.6695 peaks at exactly 14.0°**. There is no cliff.
 ##
-## ⚠️ **The window moves with tyre_grip and never widens**, which is what makes it
-## structural rather than a tuning miss: re-swept at tyre_grip 4.0 it sits at
-## 0.43/0.44 and is 0.01 wide. Sweep it with `tools/skidpad.sh --drift-grip=`.
+## 🔴 **What is real is that the peak is the wrong target.** GAME_DESIGN.md pays
+## drift per *second* above the threshold, and 0.6695 spends 0.05 s there against
+## the shipped 0.66's 0.57 s — so tuning the peak onto the bar scores nothing.
+## Grade this dial on skidpad.sh's `secs>thr` column, never on `peak slip`.
+##
+## ⚠️ **And dwell is bought with speed, on this one dial, always.** 0.6695 exits
+## at 48.6 kph with 0.05 s of drift; 0.66 at 45.1 with 0.57 s; 0.64 at 41.1 with
+## 0.77 s; 0.60 at 36.4 with 0.85 s. "Easy to hold" and "scrubs little speed" are
+## opposite ends of it. That is Q50's isotropic cost, stated properly — one
+## wheel_friction_slip carries the rear axle's drive as well as its grip.
+##
+## ⚠️ **The window moves with tyre_grip**: re-swept at tyre_grip 4.0 it sits at
+## 0.43/0.44. Sweep it with `tools/skidpad.sh --drift-grip=`, at 0.002 or finer.
 ##
 ## ⚠️ **And inside it the slide does not hold.** Because tyre_grip is isotropic,
 ## the same scale that lets the tail step out takes the rear axle's drive and

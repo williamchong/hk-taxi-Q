@@ -41,6 +41,16 @@ const DRIFT_MANOEUVRES: PackedStringArray = ["drift", "tap"]
 ## a published table of numbers nobody measured. `_boot` refuses the run instead.
 const DRIFT_FIELD: StringName = &"drift_rear_grip_scale"
 
+## The profile field `secs>thr` counts against.
+##
+## ⚠️ **This is the design target, and it is NOT a tuning knob.** The knob is
+## `DRIFT_FIELD`; the threshold is what the knob is graded against. Lower it to
+## make `seconds_above_deg` look better and the column becomes `Q58`'s
+## `drawn_gauge_m` — a number bounded by the bar it is measured against, which
+## cannot report the thing it exists to report. Read through `get()` and guarded
+## by `in` for `DRIFT_FIELD`'s reason: `set()`/`get()` swallow a rename silently.
+const SLIP_THRESHOLD_FIELD: StringName = &"drift_slip_threshold_deg"
+
 ## Seconds of full throttle before every manoeuvre, to reach a working speed.
 ## Long enough to be well past the initial squat, short enough that the car is
 ## nowhere near the 140 kph limiter where the drive taper distorts things.
@@ -88,6 +98,10 @@ var _scene_path: String = DEFAULT_SCENE
 ## the file: nothing caches it, so it takes effect on the next tick, and a sweep
 ## that crashed halfway cannot leave the committed tuning holding a probe value.
 var _drift_sweep: Array[float] = []
+## Slip angle `seconds_above_deg` counts against, read off the profile at boot.
+## INF when the profile does not publish one, which makes the column read 0.00
+## everywhere rather than inventing a bar this project never authored.
+var _slip_threshold_deg: float = INF
 var _failures: Array[String] = []
 ## ⚠️ **Typed `RigidBody3D`, and every controller method below goes through
 ## `call()`, because naming `VehicleController` here breaks the car.**
@@ -131,6 +145,14 @@ class Result:
 	var decel_mps2: float = 0.0
 	## Largest angle between where the car pointed and where it was going.
 	var peak_slip_deg: float = 0.0
+	## Seconds spent at or above `drift_slip_threshold_deg`.
+	##
+	## ⚠️ **This is the statistic the game scores and `peak_slip_deg` is not.**
+	## `GAME_DESIGN.md` pays drift as points *per second* above a threshold, so a
+	## tune whose peak merely touches the threshold scores for ~0 s. A peak is a
+	## `maxf` over one tick and cannot see duration; keep both, because dwell
+	## alone cannot tell a drift from a spin and `yaw_deg` is what separates them.
+	var seconds_above_deg: float = 0.0
 	## Heading swept over the phase — how far round the manoeuvre brought the
 	## car. Separates a drift from a spin far more clearly than slip does.
 	var yaw_deg: float = 0.0
@@ -205,6 +227,11 @@ func _boot() -> bool:
 	print("vehicle: %s at %s" % [_vehicle.name, _spawn.origin])
 	var profile: Resource = _vehicle.get("profile") as Resource
 	print("profile: %s" % ("none" if profile == null else profile.resource_path))
+	if profile != null and SLIP_THRESHOLD_FIELD in profile:
+		_slip_threshold_deg = profile.get(SLIP_THRESHOLD_FIELD)
+		print("slip threshold: %.1f deg" % _slip_threshold_deg)
+	else:
+		print("slip threshold: none published — secs>thr will read 0.00")
 	return true
 
 
@@ -249,7 +276,7 @@ func _measure_all() -> void:
 			if not is_nan(value) and not swept and value != values[0]:
 				continue
 			var result: Result = await _measure(
-				manoeuvre, "%s@%.2f" % [manoeuvre, value] if swept else manoeuvre
+				manoeuvre, "%s@%.4f" % [manoeuvre, value] if swept else manoeuvre
 			)
 			if result == null:
 				return
@@ -357,7 +384,10 @@ func _sample(
 		var heading: float = _vehicle.global_rotation.y
 		into.distance_m += last_position.distance_to(position)
 		into.yaw_deg += rad_to_deg(angle_difference(last_heading, heading))
-		into.peak_slip_deg = maxf(into.peak_slip_deg, _slip_deg())
+		var slip_deg: float = _slip_deg()
+		into.peak_slip_deg = maxf(into.peak_slip_deg, slip_deg)
+		if slip_deg >= _slip_threshold_deg:
+			into.seconds_above_deg += _step
 		last_position = position
 		last_heading = heading
 
@@ -424,21 +454,32 @@ func _print_table(results: Array[Result]) -> void:
 	print("")
 	print(
 		(
-			"%-12s %9s %9s %7s %9s %9s %9s %8s %9s"
-			% ["run", "entry", "exit", "secs", "decay/s", "decel", "peak slip", "yaw", "distance"]
+			"%-13s %9s %9s %7s %9s %9s %9s %9s %8s %9s"
+			% [
+				"run",
+				"entry",
+				"exit",
+				"secs",
+				"decay/s",
+				"decel",
+				"peak slip",
+				"secs>thr",
+				"yaw",
+				"distance"
+			]
 		)
 	)
 	print(
 		(
-			"%-12s %9s %9s %7s %9s %9s %9s %8s %9s"
-			% ["", "kph", "kph", "", "", "m/s²", "deg", "deg", "m"]
+			"%-13s %9s %9s %7s %9s %9s %9s %9s %8s %9s"
+			% ["", "kph", "kph", "", "", "m/s²", "deg", "s", "deg", "m"]
 		)
 	)
 	for result: Result in results:
 		_printed_rows += 1
 		print(
 			(
-				"%-12s %9.2f %9.2f %7.2f %9.3f %9.2f %9.1f %8.1f %9.1f"
+				"%-13s %9.2f %9.2f %7.2f %9.3f %9.2f %9.1f %9.2f %8.1f %9.1f"
 				% [
 					result.name,
 					result.entry_kph,
@@ -447,6 +488,7 @@ func _print_table(results: Array[Result]) -> void:
 					result.decay_per_s,
 					result.decel_mps2,
 					result.peak_slip_deg,
+					result.seconds_above_deg,
 					result.yaw_deg,
 					result.distance_m,
 				]

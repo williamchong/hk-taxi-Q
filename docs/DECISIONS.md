@@ -78,7 +78,7 @@ wins.
 | `Q47` | A committed verdict is right about the tower, wrong about the ground band | 🟡 Route decided 2026-08-10, join landed 2026-08-11 — iB1000 `P`-block metres where a tower meets one (data > survey-inferred; 310 stems carry a data boundary in `podiums.json`, contract argued 2026-08-11), `R4`'s floors→metres conversion elsewhere graded against the joined boundaries before packing; closes when the shipped boundary is graded |
 | `Q48` | A contrast ratio measures banding where an `L*` profile could not | 🟡 Open as a **candidate only** — recorded 2026-08-13 from `P3-6`'s photo veto, nothing built and nothing scheduled; Probe 3 and mode 1 do not reach it, mode 4 does, and the evidence is one hero building graded by its author's eye |
 | `Q49` | A tyre spends one budget, and the handbrake that follows spins the car | 🟡 **Superseded in mechanism by `Q50`** — the friction ellipse it shipped is gone with the raycast model; its `B4` conclusion stands and is now the only route |
-| `Q50` | The shipped car is Godot's `VehicleBody3D`; `P0-5a` was right and the cost was accepted | ✅ Closed — shipped 2026-08-18 at the user's explicit instruction. Drift window measured **0.01–0.02 wide**, a handbrake tap now does nothing, and `Q49`'s ellipse is lost |
+| `Q50` | The shipped car is Godot's `VehicleBody3D`; `P0-5a` was right and the cost was accepted | ✅ Closed — shipped 2026-08-18 at the user's explicit instruction. ⚠️ **Regression 2 corrected by `Q84`** — there is no drift cliff; the peak is the wrong target and dwell trades against speed. A handbrake tap still does nothing and `Q49`'s ellipse is still lost |
 | `Q51` | Traffic is never *sent* down an edge under one lane clear; the player is never *stopped* | ✅ Closed — the graph expresses passability and refuses nothing. `clearance.py` publishes a width per station into `city.json` (schema 9) and `RoadGraph` gains `is_routable`; `nearest_edge` is untouched. ✅ **The 21-against-26 gap is reconciled (2026-08-19): plan cell size, verified against 109 M brute-forced samples**, and `tools/clearance_reconcile.py` ratchets both counts. ✅ It found a live defect on the way — `ALONG_M = 1.0` **aliased walls**, so `is_routable` routed traffic down `e636` — and the call was **taken the same day: `ALONG_M` is `CELL_M` (0.5 m)**, the published count is **24 against 26**, and the published width is a lower bound at that cell |
 | `Q52` | The start line says what it is standing in, and the check is what refuses | ✅ Closed |
 | `Q53` | Markings are drawn, arrows are not, and the difference is data | ✅ Closed |
@@ -106,6 +106,7 @@ wins.
 | `Q76` | A layer whose vocabulary nothing publishes, and an assembly that is not a stack | ✅ Closed — the gate is a rule about *spelling*, published as `drawn_by_code`/`refused_by_code` because nothing can grade it; and one head stands for a whole assembly, after the first build drew 8.53 m masts |
 | `Q77` | **A dark signal is not a signal with no state** | ✅ Closed — `P3-17`'s layer built correctly and was dropped from the bundle anyway: unlit heads assert 415 out-of-service signals, and a lit cycle cannot be derived honestly (18 of 107 junctions opposable, 57 of 137 partially populated). `B3` is the route. ⚠️ **Amended 2026-08-26** — the drop left `signals_preview.gd` still asking Godot to *load* the absent asset, which errors into the console before it returns null; it reached the `P3-9a` web cut under a row claiming 0 console errors. Fixed with the `is_present()` guard all seven optional-layer verify tools already used |
 | `Q78` | **A one-way correction was written as a two-way move, and `abs()` hid it** | ✅ Closed — the sign registration pushed *and pulled*: 95 of 654 posts were dragged toward the carriageway by a rule whose stated reason runs outward only, invisible because `shift_m` discards the sign. Clamped, with `posts_kept_as_surveyed` to name the population |
+| `Q84` | **The drift cliff was the sweep grid, and the peak was the wrong target** | ✅ Closed — corrects `Q50` regression 2. No cliff: the response is smooth and monotonic at ~990°/unit and 14° lands at **0.6695**; a `%.2f` sweep label printed three distinct values as one row and invited the 0.02 grid. 🔴 But the game scores drift **per second** and `peak_slip_deg` is a one-tick `maxf` — 0.6695 holds 14° for **0.05 s** against shipped 0.66's **0.57 s** — and dwell is bought with exit speed all the way down, which is `Q50`'s isotropic cost stated properly |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -6004,6 +6005,17 @@ correctly rather than being quietly replaced by engine behaviour.
    *gripping* to *well past the band* in one increment. Re-run at `tyre_grip = 4.0` the window sits
    at 0.43/0.44 and is **0.01** wide — it moves with the grip and never widens, which is what makes
    it a property of the class rather than of the tuning.
+
+   🔴 **Corrected by `Q84` (2026-08-27). This regression as written is wrong, and it is the only one
+   of the three that is.** There is no cliff: swept at 0.002 instead of 0.02 the response is smooth
+   and monotonic at ~990°/unit, and **0.6695 peaks at exactly 14.0°**. The step from "gripping" to
+   "past the band" was the sweep grid, made invisible by a `%.2f` row label that printed 0.670,
+   0.668 and 0.665 as three rows all reading `drift@0.67`. ⚠️ **The conclusion survives on a
+   different mechanism**, which is why `Q50`'s decision is untouched: the peak is the wrong target,
+   because the game pays drift *per second* above the threshold and 0.6695 spends 0.05 s there
+   against 0.66's 0.57 s — and dwell is bought with speed on this one dial, exit falling
+   48.6 → 45.1 → 41.1 → 36.4 kph as dwell rises 0.05 → 0.57 → 0.77 → 0.85 s. Read `Q84` before
+   quoting any number in this paragraph.
 3. **A handbrake tap does nothing.** The 0.5 s `tap` manoeuvre returns 1.9° of slip with yaw and
    distance *identical to `corner`* — releasing the button restores grip on the same tick, and the
    slide carries no momentum out of it. The raycast car's locked-tyre force built yaw that outlived
@@ -11554,3 +11566,82 @@ the scheme fits the contract that already existed.
 **See.** `Q80` for zones-versus-thumbs and why the check grades occlusion only · `Q50` for the tap
 that returns 1.9° · `P0-5b/c/d` for the one pedal and for why centre must coast · `PLAN.md` `P2-4`
 and `P0-3b` · `ARCHITECTURE.md` "The three schemes"
+
+
+---
+
+## `Q84` — The drift cliff was the sweep grid, and the peak was the wrong target
+
+**Status.** ✅ Closed 2026-08-27 · **Owner.** `handling.tres` → `GAME_DESIGN.md` "Drift" · corrects
+`Q50` regression 2
+
+**Claim.** There is no cliff in `drift_rear_grip_scale`. Swept at **0.002** instead of 0.02 the slip
+response is smooth and monotonic at **~990°/unit** between 0.68 and 0.66, and **0.6695 peaks at
+exactly 14.0°** — `drift_slip_threshold_deg`. `Q50`'s "the window is 0.01–0.02 wide and nothing in
+it lands on 14°" was a **sampling artefact**, not a property of `VehicleWheel3D`.
+
+**How it hid.** `skidpad_ablation.gd` formatted the sweep label `"%s@%.2f"`. At two decimal places
+0.670, 0.668 and 0.665 all print as `drift@0.67` — **the label could not resolve the band it was
+being used to explore**, which is what invited the 0.02 grid that produced the finding. The rows
+were always distinct; only their names collided. Fixed to `%.4f`.
+
+⚠️ **This is `P0-5b/c/d` in a different costume.** There a published deceleration curve was wrong
+because the samples sat on a gradient; here a published *discontinuity* was wrong because the
+samples sat on too coarse a grid. Both times every individual number was correct and the conclusion
+drawn across them was not. **A finding about the shape of a response needs its sampling resolution
+justified, not just its measurement conditions.** That is the third time this project has paid for
+it, and the first time the instrument's own output format was the thing concealing it.
+
+🔴 **But `Q50`'s conclusion survives on a different mechanism, which is why its decision is
+untouched.** The peak is the wrong target. `GAME_DESIGN.md` pays drift as points **per second**
+above the threshold, and `peak_slip_deg` is a `maxf` over a single tick — so a tune whose peak
+merely touches 14° scores for approximately no time at all. Measured on the new `secs>thr` column:
+
+| `drift_rear_grip_scale` | peak slip | **secs above 14°** | exit kph | yaw |
+|---|---|---|---|---|
+| 0.6800 | 2.0° | 0.00 | 55.35 | −357.5° |
+| 0.6750 | 7.5° | 0.00 | 52.83 | −367.0° |
+| 0.6700 | 13.6° | 0.00 | 48.92 | −368.8° |
+| **0.6695** | **14.0°** | **0.05** | 48.63 | −368.7° |
+| 0.6680 | 15.4° | 0.27 | 47.86 | −368.0° |
+| 0.6650 | 18.0° | 0.43 | 46.62 | −366.3° |
+| 0.6630 | 19.5° | 0.48 | 45.94 | −365.0° |
+| **0.6600 (shipped)** | **21.8°** | **0.57** | 45.06 | −362.9° |
+| 0.6500 | 29.1° | 0.68 | 42.81 | −355.6° |
+| 0.6400 | 36.4° | 0.77 | 41.11 | −348.1° |
+| 0.6000 | 75.2° | 0.85 | 36.36 | −319.8° |
+
+**The real structural finding, and it is sharper than the one it replaces.** Dwell rises
+monotonically as grip falls and **exit speed collapses with it**, 55.4 → 36.4 kph. `GAME_DESIGN.md`
+asks for a drift that is *both* easy to hold *and* scrubs little speed; those are **opposite ends of
+this one dial**. That is `Q50`'s isotropic cost stated properly — one `wheel_friction_slip` carries
+the rear axle's drive as well as its grip, so every degree of slide is paid for in traction. No
+value of this dial is a good drift, and that is a property of the class, exactly as `P0-5a` said.
+
+**What was built.** `secs>thr` on `skidpad_ablation.gd`, counting seconds at or above
+`drift_slip_threshold_deg`. ⚠️ **`peak slip` is kept, not replaced** — dwell alone cannot tell a
+drift from a spin, and `yaw_deg` is what separates them; the three are read together.
+🔴 **The threshold is a design target and must never become a tuning knob.** Lower
+`drift_slip_threshold_deg` to make `secs>thr` look better and the column becomes `Q58`'s
+`drawn_gauge_m` — a number bounded by the bar it is graded against. The knob is
+`drift_rear_grip_scale`. The column is safe *only* because the quantity measured (slip) and the
+quantity tuned (grip scale) are different variables joined by physics, so the measurement can
+refute the tuning.
+
+⚠️ **That is also why a slip servo is refused.** Writing grip *from* slip closes exactly that loop,
+and "peak slip ≈ setpoint" becomes true by construction — `Q58`'s trap and `Q72`'s unreachable
+counter, for the fourth and fifth time. If one is ever built it must change what the ablation
+reports first: overshoot, settling time, and the `tap` row, which is not servo-held.
+⚠️ **And the slip definition is no longer duplicated** — `Q50` deleted
+`builtin_vehicle_controller.gd`, so `vehicle_controller.gd` computes no slip at all and the
+ablation's is the only one. A servo would **add** the second copy. Keep them independent anyway;
+the grader must not call the thing it grades.
+
+**Rejected: retuning to 0.6695.** It is the value that lands on the target and it is worse than what
+ships — 0.05 s of drift against 0.57 s. Recorded because it is the obvious move and the one the
+corrected measurement appears to recommend.
+
+**See.** `Q50` for the regression this corrects and for the decision it does not disturb ·
+`P0-5b/c/d` for the same error on a gradient · `Q58` for the bounded-by-its-own-bar trap ·
+`Q83` for `_drift_engagement`, whose absence is the *other* half of the drift being unusable ·
+`GAME_DESIGN.md` "Drift" · `PLAN.md` `B4`
