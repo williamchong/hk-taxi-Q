@@ -4,7 +4,7 @@
 
 ; White is the city speaking, dark is the car speaking. See hud_style.gd.
 ;
-; ⚠️ The plate white and the accent yellow are NOT the road's paint constants.
+; ⚠️ The plate white is NOT the road's paint constant.
 ; roadmarks.tres records the marking white as its fifth authored copy and
 ; boxjunctions.tres the yellow as its third; a sixth and a fourth here would be
 ; that debt again, and a street name plate is not paint (Q53, Q79).
@@ -29,8 +29,8 @@ plate_pad = Vector2(34, 14)
 chip_field = Color(0.14, 0.135, 0.128, 0.88)
 chip_ink = Color(0.96, 0.96, 0.94, 1)
 chip_muted = Color(0.7, 0.69, 0.65, 1)
-accent = Color(0.86, 0.68, 0.13, 1)
-accent_negative = Color(0.45, 0.62, 0.78, 1)
+accent = Color(0.3, 0.82, 0.38, 1)
+accent_negative = Color(0.92, 0.29, 0.26, 1)
 accent_track = Color(1, 1, 1, 0.12)
 accent_px = 4.0
 accel_full_scale_mps2 = 5.0

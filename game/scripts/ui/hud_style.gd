@@ -59,21 +59,22 @@ const PATH: String = "res://tuning/hud_style.tres"
 @export var chip_ink: Color = Color(0.96, 0.96, 0.94)
 @export var chip_muted: Color = Color(0.70, 0.69, 0.65)
 
-## The one saturated colour, in the family of Hong Kong's box-junction yellow.
-## Used as a single bar along the bottom of an instrument and nowhere else —
-## `ART_DESIGN.md` says the saturated accents are accents, and a HUD is where
-## that discipline is easiest to lose.
+## The bar's two readings: **green for gaining speed, red for losing it.**
 ##
-## ⚠️ **Taxi red is deliberately NOT here.** It is the player's own car and the
-## one non-negotiable colour in the anchor table; spending it on HUD furniture
-## now leaves `P3-5a` nothing to say "fare" with.
-@export var accent: Color = Color(0.86, 0.68, 0.13)
-## What the bar reads when the car is losing speed. Cool and unsaturated against
-## the accent's warmth — braking is not a smaller version of accelerating.
+## 🔴 **The convention beat the palette argument, and it should have.** These
+## were the box-junction yellow and a cool blue, chosen so that no HUD furniture
+## spent the taxi's red. But green-is-go and red-is-stop is the oldest
+## convention a driver has — it is the traffic signal and it is the car's own
+## brake lamps — and a bar that a driver has to *learn* is a bar that is not
+## doing its job. The red here is not the taxi's body colour being spent on
+## decoration; it is red used for the one thing red means.
 ##
-## ⚠️ **Not red.** Taxi red is the car's own and `P3-5a`'s to spend, and a red
-## bar on a speedometer also reads as a warning, which losing speed is not.
-@export var accent_negative: Color = Color(0.45, 0.62, 0.78)
+## ⚠️ **Kept clear of the vehicle palette on both sides.** This green is brighter
+## and cooler than `ART_DESIGN.md`'s deep vegetation green and the minibus roof,
+## and this red is hotter and lighter than the taxi body, so neither reads as an
+## object that has escaped the world into the HUD.
+@export var accent: Color = Color(0.30, 0.82, 0.38)
+@export var accent_negative: Color = Color(0.92, 0.29, 0.26)
 ## The unlit bed. A reading of zero must look like zero rather than like a panel
 ## that has stopped drawing.
 @export var accent_track: Color = Color(1.0, 1.0, 1.0, 0.12)

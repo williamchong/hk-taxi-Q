@@ -177,14 +177,24 @@ func _check_style() -> void:
 	if absf(style.chip_ink.get_luminance() - chip_lum) < 0.30:
 		_fail("style", "chip ink is too close in luminance to the chip field")
 
-	# ⚠️ **Taxi red must not be spent on furniture.** `ART_DESIGN.md` calls the
-	# red non-negotiable and it belongs to the player's car; an accent that
-	# drifts into it leaves `P3-5a` nothing to say "fare" with.
-	var accent: Color = style.accent
-	if accent.r > 0.6 and accent.g < 0.35 and accent.b < 0.35:
-		_fail("style", "the accent has drifted into taxi red, which is the car's colour")
+	# 🔴 **Green gains, red loses, and a swap renders perfectly.** This is the
+	# oldest convention a driver has — the traffic signal, and the car's own
+	# brake lamps — and the two colours sit one `.tres` edit apart. Transposed,
+	# the bar moves exactly as convincingly and tells the driver the opposite of
+	# the truth. No frame catches that; a rule about which channel dominates
+	# does.
+	#
+	# ⚠️ This replaced a check that the accent stayed clear of **taxi red**. That
+	# rule was written when the bar was yellow-and-blue in order to keep the
+	# car's colour out of the HUD entirely, and the convention beat it: the red
+	# here is not the taxi's paint spent on decoration, it is red used for the
+	# one thing red means.
+	if style.accent.g <= style.accent.r or style.accent.g <= style.accent.b:
+		_fail("style", "the gaining half of the bar is not green — green is go")
+	elif style.accent_negative.r <= style.accent_negative.g:
+		_fail("style", "the losing half of the bar is not red — red is stop")
 	else:
-		print("  style: accent is clear of taxi red")
+		print("  style: the bar gains green and loses red")
 
 	if style.chamfer_px <= 0.0:
 		_fail("style", "chamfer_px is 0 — the panels are plain rectangles again")

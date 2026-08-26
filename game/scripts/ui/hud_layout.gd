@@ -111,13 +111,19 @@ extends Resource
 ## next task puts one back on the screen without meaning to.
 @export var meter: Rect2 = Rect2(1440.0, 48.0, 432.0, 170.0)
 
-## ⚠️ **There is deliberately NO slot for the destination arrow**, and that is a
+## ⚠️ **There is deliberately NO slot for the destination ARROW**, and that is a
 ## finding rather than an omission. Both references that have a destination put
 ## the arrow **in the world** — the arcade taxi floats a green arrow above the
 ## car, MM2 hangs a banner over the road — not in the HUD. It also sits better
 ## with `GAME_DESIGN.md`'s "navigate by memory, not by minimap" than a screen-
-## edge chevron would. `P3-5a` should build a world-space marker, and if it ever
-## wants a screen slot it should add one here on purpose.
+## edge chevron would. `P3-5a` should build a world-space marker.
+##
+## ⚠️ **The destination CALLOUT is a different thing and top-centre is its slot.**
+## `GAME_DESIGN.md` announces destinations by name and bilingually, and that is
+## HUD text: transient, the player's current objective, and the one readout that
+## earns the most prominent band on the screen. It is left undeclared here
+## because `P3-5a` owns it — but nothing else may take top-centre in the
+## meantime. The street plate was evaluated for it and refused (`Q80`).
 
 # ---- where P2-4's thumbs go ----
 #

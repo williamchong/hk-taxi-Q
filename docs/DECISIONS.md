@@ -10815,6 +10815,17 @@ the number directly above it drawn a second way. What a driver cannot already se
 is *gaining* — the bar is empty at a steady 80 kph, fills warm under power and cool the other way
 under braking, from a centre origin because "gaining or losing" is read before "how much".
 
+🔴 **And the bar is green gaining, red losing — the convention beat the palette rule.** It shipped
+yellow-and-blue, chosen so that no HUD furniture spent the taxi's red, and `verify_hud.gd` asserted
+the accent stayed clear of it. The user: *"for accerlate, I think convention is green is go red is
+stop"*, which is right and outranks the rule it broke — green-is-go is the traffic signal and the
+car's own brake lamps, and a bar a driver has to *learn* is a bar that is not working. The red here
+is not the taxi's paint spent on decoration; it is red used for the one thing red means. ⚠️ **The
+guard changed with it**, from "the accent is not taxi red" to **"green gains and red loses"** —
+because the two colours are one `.tres` edit apart, a transposition renders exactly as convincingly
+and tells the driver the opposite of the truth, and no frame can catch that. Mutation-checked:
+swapping them fails the build.
+
 ⚠️ **Full scale is measured, not guessed**: 45.6 → 54.8 kph in one second is 2.55 m/s² and 67.5 →
 79.5 is 3.34, both off `drive.sh` telemetry on the shipped car, so 5.0 puts ordinary driving across
 most of the bed with headroom before it pegs. It is differentiated **every frame** and filtered — at
@@ -10867,6 +10878,28 @@ sign bolted to a building.
 ⚠️ **Taxi red is kept out of the HUD entirely.** It is the anchor table's one non-negotiable colour
 and it belongs to the player's car; spending it on furniture now leaves `P3-5a` nothing to say
 "fare" with. `verify_hud.gd` fails if the accent drifts into it.
+
+### Asked and answered: should the street name be top-centre?
+
+**Evaluated 2026-08-26 and refused, on allocation rather than on looks.** Rendered both ways at two
+viewpoints; top-centre reads **well** — a clean header, no road occlusion, fine over open sky and
+over the HKCEC deck soffit alike. It was refused anyway, for three reasons that a frame cannot show:
+
+🔴 **Top-centre is the most prominent slot on the screen and the street name is the lowest-frequency
+readout on it.** The name changes perhaps once every fifteen seconds; the speed changes every frame
+and the fare timer every second. Prominence should track information rate against importance, and
+spending the best slot on the quietest reading is the wrong allocation.
+
+🔴 **That slot has a claimant already.** `GAME_DESIGN.md` announces destinations **by name,
+bilingually** — `Times Square / 時代廣場` — and that callout is transient, is the player's current
+objective, and is the one thing the arcade-taxi reference puts front and centre. ⚠️ This corrects
+`Q80`'s earlier note that no HUD slot is reserved for the destination: the **arrow** goes into the
+world, and the **name callout** does not. Top-centre is `P3-5a`'s.
+
+⚠️ **And it undoes the pairing that put the plate where it is.** A street name and a street map are
+the same question, which is why they share the right-hand side; top-centre separates them by the
+whole frame. It also makes "top" mean both *the fare* and *the world*, and the taxonomy is worth more
+than a marginal aesthetic gain because it is what makes `P3-5a`'s additions land without a re-layout.
 
 **See.** `Q79` for the typeface the plate is set in · `Q53` for the authored-colour duplication this
 palette declines to join · `Q62` for why a HUD readout cannot be graded against anything published ·
