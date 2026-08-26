@@ -37,6 +37,11 @@ const OVERTURNED_DOT: float = 0.1
 const RIGHTING_LIFT_M: float = 1.5
 ## Spin retained after a wall scrape. A glancing hit must never take control.
 const SCRAPE_SPIN_RETAINED: float = 0.5
+## Speed over which the drift yaw assist reaches full strength, easing in from a
+## standstill. A structural constant rather than a dial: it exists to stop a
+## discontinuity, not to shape the feel, and every other rate in this file eases.
+const YAW_ASSIST_FADE_KPH: float = 10.0
+
 ## Fraction of top speed over which drive force eases to zero. Shapes the
 ## approach to max_speed_kph rather than setting it, so it stays a structural
 ## constant while the speed itself remains a profile dial.
@@ -399,6 +404,51 @@ func _apply_drift(delta: float) -> void:
 	var seconds: float = profile.drift_attack_s if drift_input else profile.drift_release_s
 	_drift_engagement = move_toward(_drift_engagement, 1.0 if drift_input else 0.0, delta / seconds)
 	_write_drift_grip()
+	_apply_drift_yaw()
+
+
+## Yaw assist while the drift is engaged. See drift_yaw_torque_nm for why this is
+## a torque and must not become a slip-angle setpoint.
+##
+## ⚠️ Signed from steer_ratio — see its own doc for the rotation-direction
+## convention — and negated for the same reason _update_steering negates on the
+## way in. Stated once there rather than restated here.
+##
+## 🔴 **Refused with no wheel on the ground.** Torque does not care whether the
+## tyres can answer it, and nothing else here would bound the spin: taxi.tscn sets
+## no angular_damp and the project sets no default, so what actually limits this
+## is tyre lateral force. Airborne there is none, and a held drift off a kerb
+## would be a mid-air pirouette — reachable, because GAME_DESIGN.md scores airtime.
+##
+## ⚠️ Eased in from a standstill rather than gated: a stationary car has no tyre
+## force to resist the assist either, so it would spin on the spot with the
+## handbrake down, and a hard cut-in at walking pace is a pop the rest of this
+## file's rates do not have.
+## True while any wheel is on the ground.
+##
+## Two loops rather than `_front + _rear`, which would build a throwaway array
+## every tick the drift is held. Rear first: it is the axle the drift is about,
+## so it is the one most likely to answer on the first comparison.
+func _any_wheel_grounded() -> bool:
+	for wheel: VehicleWheel3D in _rear:
+		if wheel.is_in_contact():
+			return true
+	for wheel: VehicleWheel3D in _front:
+		if wheel.is_in_contact():
+			return true
+	return false
+
+
+func _apply_drift_yaw() -> void:
+	if is_zero_approx(_drift_engagement):
+		return
+	if not _any_wheel_grounded():
+		return
+	var fade: float = clampf(absf(speed_kph) / YAW_ASSIST_FADE_KPH, 0.0, 1.0)
+	var torque: float = -steer_ratio * profile.drift_yaw_torque_nm * _drift_engagement * fade
+	# About the body's own up, not global +Y: a car on a camber or mid-kerb should
+	# rotate about the axis it is standing on.
+	apply_torque(global_basis.y * torque)
 
 
 ## Publishes _drift_engagement to the wheels. Separate from the ramp so place_at()

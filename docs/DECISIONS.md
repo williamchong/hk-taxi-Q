@@ -113,6 +113,7 @@ wins.
 | `Q82` | **A published vocabulary, a lantern that stays off, and a counter that had to be reachable** | ✅ Closed 2026-08-27 — 🔴 **the night-mode half of the premise was refused and the layer shipped anyway**: night is blocked on `Q38`, which bakes exposure into `COLOR_0` at build time, and 897 `OmniLight3D`s is not a shippable answer. Justified instead on the daylight street scene, which it earns — the region had no vertical element between kerb height and façade. ✅ First vocabulary here the publisher **defines**. 🔴 No column in the road is a **two-stage** refusal, not `max_shift_m`, and `arms_against_kerb` was refused as `Q72`'s tautology. ⚠️ Vertex compression turned off project-wide at **+2.002%** of PCK, so the upright bar grades the mesh the ETL actually built |
 | `Q83` | **Touch drives its own throttle, and the drift is where the thumb is** | ✅ Decided 2026-08-27 on the user's instruction — two thumbs, both axes each, both **relative**, and `auto_accelerate` is no longer the touch default. 🔴 **The allocation was incomplete and nothing could have caught it**: four touch rects against five actions, with `brake_reverse`, `drift` and `look_back` homeless, while `verify_hud` grades occlusion rather than reachability by design (`Q80`). Three drift schemes were rejected first. ⚠️ Its assumed `_drift_engagement` was built by `Q84`, which found it does not do what it was built for. ⬜ `look_back` still unplaced, and the threshold numbers need `P0-3b`'s handset |
 | `Q84` | **The drift cliff was the sweep grid, and the peak was the wrong target** | ✅ Closed — corrects `Q50` regression 2. No cliff: the response is smooth and monotonic at ~990°/unit and 14° lands at **0.6695**; a `%.2f` sweep label printed three distinct values as one row and invited the 0.02 grid. 🔴 But the game scores drift **per second** and `peak_slip_deg` is a one-tick `maxf` — 0.6695 holds 14° for **0.05 s** against shipped 0.66's **0.57 s** — and dwell is bought with exit speed all the way down, which is `Q50`'s isotropic cost stated properly. 🔴 **A release ramp was built and falsified** — the tap is still 1.9°, because the slide takes seconds to build rather than ending too soon; kept for `Q83`'s hysteresis, which is not why it was made |
+| `Q85` | **The route out of the drift was a quantity the engine does not simulate** | ✅ Closed — `get_rpm()` is road speed re-expressed: this class has no wheel inertia, so a wheel cannot spin up or lock and **`B4`'s per-wheel angular velocity cannot be read at all**. `get_skidinfo()` is real; the fact was already in `hud.gd`, filed under the wrong question. 🔴 `Q50`'s "the road-speed roll is gone" is wrong — it moved into the engine, and `P3-2b` inherits it. ✅ The drift is assisted with a **yaw torque** instead (42.1° against 21.8°), which `Q49`'s anti-physical target licenses. 🔴 It worsens the scrub, and torque and grip are multiplicative rather than alternatives |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -2973,7 +2974,9 @@ vehicle feel is expected to be iterated on more than anything else here.
 **Re-asked and re-refused.** The user asked directly whether the built-in vehicle would give
 anything, which is the explicit instruction hard rule 1 requires to reopen a locked decision. It
 genuinely would — per-wheel angular velocity for wheelspin and lockup, `get_skidinfo()` for smoke and
-tyre marks, ~340 lines deleted. Still refused on the capability gap above. "Wheels only" is not
+tyre marks, ~340 lines deleted. 🔴 **Half of that was wrong, and `Q85` measured it: the built-in class
+publishes no per-wheel angular velocity either.** `get_skidinfo()` and the deleted lines were real;
+wheelspin and lockup were never on offer from any of the options considered here. Still refused on the capability gap above. "Wheels only" is not
 available either: `VehicleWheel3D` simulates solely under a `VehicleBody3D`. ✅ **The two features
 worth having are cheap to build here instead** — `_apply_tyre_forces` already computes the slip both
 need — and are scheduled into `B4`.
@@ -5919,6 +5922,11 @@ because the model has no per-wheel angular velocity. `PLAN.md` schedules that in
 smoke and lockup, with "do it when the effects that consume it are built, not before" — this is a
 second consumer, and a load-bearing one.
 
+🔴 **`Q85` (2026-08-27) closed that route: `VehicleBody3D` has no wheel inertia either**, so the
+mechanism described above is unreachable in the shipped class as well as in the raycast one. What
+survives is this entry's *other* finding — that the target is **anti-physical** — which is what
+licensed the yaw assist that shipped instead.
+
 **Also measured.** Cornering is no longer free: a 4 s full-lock corner at throttle **held 62.26 km/h
 where it used to gain to 81.64**, turning tighter for it (yaw −428.9° against −354.9°) over 68.2 m
 instead of 82.0. Braking and coasting are **byte-identical** — 8.79 m/s², stop in 1.97 s / 16.6 m;
@@ -6069,6 +6077,12 @@ identical rows labelled with values it never applied.
 **Still open.** `B4`'s per-wheel angular velocity is now the only route to a drift that holds, and
 `Q49` already said so from the other side. Nothing here changes that; it removes the ellipse that
 was making the current drift *nearly* work.
+
+🔴 **Corrected by `Q85` (2026-08-27): that route does not exist.** `get_rpm()` is road speed
+re-expressed — this class carries no wheel inertia — so per-wheel angular velocity cannot be *read*
+here at all, and the drift is assisted with a yaw torque instead. ⚠️ **And "the road-speed roll is
+gone" above is wrong**: the simulation's wheel rotation *is* road speed, so the lie was relocated
+into the engine rather than removed, and `P3-2b` inherits it the day tyre marks exist.
 
 **See.** `P0-5a` · `Q49` · `P0-5b/c/d` · `GAME_DESIGN.md` "Controls" · `PLAN.md` `B4` ·
 `ARCHITECTURE.md` "The importer can reinstate `VehicleWheel3D`"
@@ -11670,7 +11684,9 @@ way there no matter what happens after the button comes up. A locked raycast tyr
 instant it stopped rolling — that is why it got 7.1° out of the same tap — whereas an isotropic
 `wheel_friction_slip` has to be *driven* into saturation, which is a rate and not an event.
 **`B4`'s per-wheel angular velocity remains the only honest route**, exactly as `Q49` and `Q50` said,
-and this is now the second measurement that says so rather than the first.
+and this is now the second measurement that says so rather than the first. 🔴 **Written the same day
+and wrong: `Q85` measured that no such quantity exists to read.** The drift is assisted with a yaw
+torque instead, which is what finally gives this entry's ramp a consumer.
 
 ⚠️ **The ramp was verified live before that conclusion was drawn**, because "no change" and "no
 effect" are the same table: `drift_attack_s` at 1.0 s collapses the held drift from 21.8° to 2.0°.
@@ -11705,3 +11721,99 @@ which is the point of checking — `P0-5b/c/d` is why a handling figure is never
 `P0-5b/c/d` for the same error on a gradient · `Q58` for the bounded-by-its-own-bar trap ·
 `Q83` for `_drift_engagement`, whose absence is the *other* half of the drift being unusable ·
 `GAME_DESIGN.md` "Drift" · `PLAN.md` `B4`
+
+
+---
+
+## `Q85` — The route out of the drift was a quantity the engine does not simulate
+
+**Status.** ✅ Closed 2026-08-27 · **Owner.** `handling.tres` → `GAME_DESIGN.md` "Drift" · corrects
+`PLAN.md` `B4`, `Q49`, `Q50` and `Q84`
+
+**Claim.** `VehicleWheel3D.get_rpm()` is road speed re-expressed. Godot's `VehicleBody3D` is a
+Bullet raycast vehicle: wheel rotation is integrated from the **contact-point velocity**, and there
+is no wheel inertia state. So a wheel here cannot spin up under power and cannot lock under braking,
+and **`B4`'s "per-wheel angular velocity" is not a thing that can be read.** Measured:
+
+| condition | `get_rpm()` ÷ road rpm | `get_skidinfo()` |
+|---|---|---|
+| full throttle, grip 1.00 | −1.010 | 1.000 |
+| full throttle, grip 0.66 (shipped) | −1.010 | 1.000 |
+| full throttle, **grip 0.10** | **−1.014** | 0.717 → 0.800 |
+| **full brake, 73.5 → 20.6 kph** | **−0.993 → −0.977** | 1.000 |
+
+At one-tenth rear grip the ratio is **identical** to full grip — there is no wheelspin to report —
+and through a complete stop the wheel never locks. ✅ **`get_skidinfo()` is real** and does move when
+grip breaks, so the traction-loss half of `B4` stands; it read 1.000 throughout the brake, so it is
+not a lockup signal either.
+
+⚠️ **The fact was already in the repo, filed under the wrong question.** `hud.gd` refused to draw a
+rev bar because *"`get_rpm()` … is proportional to road speed, so a rev bar would be the number
+directly above it drawn a second way"* (`Q79`-era, `P3-24`). That was reached as an instrument-design
+argument and never carried across to `PLAN.md`'s physics claim two documents away. Different failure
+from `Q84`'s coarse grid, and harder to catch: nothing was unmeasured, it was mis-shelved.
+
+🔴 **`Q50`'s "the road-speed roll is gone" is wrong, and the lie was relocated rather than removed.**
+`Q50` deleted `wheel_visual.gd` and recorded the win as *"the road-speed roll — the lie nobody could
+see until there was smoke to compare it against — is gone too, because a `VehicleWheel3D` rolls its
+own mesh from the simulation."* The simulation's rotation **is** road speed. So the moment `B4` adds
+tyre marks, a wheel rolls smoothly while smoke pours off it and a full stop leaves marks from a wheel
+that never locked — the exact comparison `Q50` said would expose it. **`P3-2b` inherits this**, and no
+check can see it.
+
+### The drift is assisted instead, and the assist is not physical
+
+`Q49` recorded that `GAME_DESIGN.md`'s *"easy to hold, scrubs little speed"* is **anti-physical** — a
+real handbrake trades speed for rotation. Chasing a wheel-inertia model to reach an admittedly
+unphysical target is the wrong instrument for the goal, so the button now applies a **yaw torque**
+while engaged: `drift_yaw_torque_nm`, signed by `steer_ratio` and scaled by `_drift_engagement`,
+which is what finally gives `Q84`'s ramp a consumer.
+
+🔴 **It is a TORQUE and must never become a slip-angle setpoint.** Drive the car to a target angle
+and "slip above `drift_slip_threshold_deg`" degrades into "the player held the button" — `Q72`'s
+tautology moved into the gameplay, where `secs>thr` stops grading anything. As a torque the physics
+resists, so the angle stays an outcome. Same rule that makes `Q84`'s dwell column safe.
+
+| `drift_yaw_torque_nm` | drift peak | `secs>thr` | exit kph | tap peak |
+|---|---|---|---|---|
+| 0 (before) | 21.8° | 0.57 | 45.06 | 1.9° |
+| **1000 (shipped)** | **42.1°** | **0.78** | **40.96** | 2.4° |
+| 2000 | 65.9° | 0.85 | 38.98 | 6.2° |
+| 3000 | 102.4° | 0.82 | 37.79 | 12.0° |
+| 5000 | 162.9° | 1.02 | 36.53 | 27.0° |
+
+✅ **The slide now arrives at once instead of taking 3.4 s**, and 42° is a drift where 21.8° was a
+slither. 🔴 **It does not fix "scrubs little speed" — it makes it worse** (45.06 → 40.96 kph),
+because angle is bought with lateral scrub.
+
+🔴 **The tap is not fixed at any constant torque.** It only works at 5000 (27°, 0.52 s of dwell), and
+at 5000 the held drift is a **162.9°** spin — within a degree of the 165.3° `Q50` called a full spin.
+The tap wants five times what the hold survives, which is the argument for a torque that **decays
+over the hold**: a tap keeps the kick, a hold gets the kick then relies on grip. ⚠️ Decay on **time**,
+never on measured slip, or the setpoint tautology comes back through the side door.
+
+🔴 **The assist cannot replace the grip cut, and this is the sharpest statement of `Q50`'s cost yet.**
+Measured with grip restored so the torque would make the angle and the tyres would keep the speed:
+
+| | peak slip | exit kph | yaw |
+|---|---|---|---|
+| torque 2000, grip 0.85 | 1.8° | 57.61 | −367.7° |
+| torque 2000, grip 1.00 | 1.8° | 60.80 | −365.6° |
+| torque 3000, grip 1.00 | 1.7° | 59.82 | −372.1° |
+
+With grip intact the assist is **just tighter steering** — no slip at all. The two are
+**multiplicative**: torque only expresses itself as slip once grip is broken, and breaking grip is
+what costs the speed. **The scrub is intrinsic to one isotropic `wheel_friction_slip`**, and no
+arrangement of these two dials separates "slides a lot" from "scrubs little".
+
+**What is not settled here.**
+
+- ⬜ **The value is a desk pick.** 1000 is a drift and 2000 is loose; the tie-break is a thumb, and
+  `P0-3b`'s handset is where it happens.
+- ⬜ **The decaying torque is unbuilt**, and it is the only known route to a working tap.
+- ⚠️ **A tyre model is still the only way to the physical mechanism**, and it does **not** require
+  dropping `VehicleWheel3D` — it layers on top. It is a `Q50`-scale call and nobody has made it.
+
+**See.** `Q50` for the class this measures and for the roll it did not remove · `Q49` for the
+anti-physical target that licenses the assist · `Q84` for the ramp this gives a consumer, and for the
+3.4 s it works around · `Q72` for the tautology the torque form avoids · `PLAN.md` `B4` · `P0-5a`

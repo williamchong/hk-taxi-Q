@@ -134,8 +134,12 @@ extends Resource
 ## fraction of the way there whatever happens afterwards. A locked raycast tyre
 ## produced yaw immediately (7.1 deg) because the force appears the moment the
 ## tyre stops rolling; an isotropic wheel_friction_slip has to be *driven* into
-## saturation, and that is a rate, not an event. B4's per-wheel angular velocity
-## remains the only honest route, exactly as Q49 and Q50 said.
+## saturation, and that is a rate, not an event.
+##
+## 🔴 **Q85 then closed the route Q49, Q50 and Q84 all named.** get_rpm() is road
+## speed re-expressed — this class carries no wheel inertia, so per-wheel angular
+## velocity cannot be read here at all. The drift is assisted with a yaw torque
+## instead; see drift_yaw_torque_nm.
 ##
 ## ✅ **Kept anyway, for a consumer that is recorded and is not this one.** Q83's
 ## touch scheme holds drift past a thumb threshold and needs hysteresis at the
@@ -152,6 +156,29 @@ extends Resource
 ## router is the single source of player *intent* and the intent is binary. A ramp
 ## there would report held while nothing is held and lie to drift_started.
 @export_range(0.01, 3.0, 0.01, "suffix:s") var drift_release_s: float
+## Yaw torque applied while the drift is engaged, in N⋅m, signed by the steer.
+##
+## 🔴 **This is the game asserting rotation the tyres did not produce, and that is
+## the point rather than a compromise.** Q84 measured the friction route: slip
+## needs about 3.4 s of held input to reach drift_slip_threshold_deg, because
+## lowering wheel_friction_slip only asks the tyres to lose an argument with
+## momentum and that takes seconds. Torque on the body opens the same angle in a
+## tick. Q49 already recorded that GAME_DESIGN.md's "easy to hold, scrubs little
+## speed" is anti-physical, so fidelity was never the target this had to hit.
+##
+## 🔴 **It is a TORQUE and must never become a slip-angle setpoint.** Drive the
+## car to a target angle and "slip above the threshold" degrades into "the player
+## held the button" — Q72's tautology moved into the gameplay, and secs>thr stops
+## grading anything. As a torque the physics still resists, so the angle is an
+## outcome and the measurement keeps its meaning. Same rule that makes Q84's
+## dwell column safe: the quantity controlled and the quantity measured must stay
+## different variables.
+##
+## ⚠️ Scaled by the drift engagement, so it inherits drift_attack_s and
+## drift_release_s rather than switching. Yaw inertia here is m(x²+z²)/12 =
+## 1200(1.8²+4.0²)/12 ≈ 1924 kg⋅m², so 2000 N⋅m is roughly 60°/s² before the
+## tyres take their share back.
+@export_range(0.0, 20000.0, 100.0, "suffix:N⋅m") var drift_yaw_torque_nm: float
 ## Slip angle above which the drift scores style points.
 @export_range(0.0, 90.0, 1.0, "suffix:°") var drift_slip_threshold_deg: float
 ## Fraction of rolling speed shed per second when coasting — engine braking.

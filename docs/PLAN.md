@@ -676,15 +676,21 @@ trade.
 
 - **Deps:** `B1`, `B3`. **Review:** play a full session, twice | web build | **Do you want another
   go?** This is the risk register's "novelty does not survive the first session", put directly.
-- ✅ **`P3-2b`'s two missing numbers arrived with `Q50`.** Skid smoke and tyre marks need a
-  **traction-loss signal**, and wheels that spin up under power and lock under braking need
-  **per-wheel angular velocity**. `VehicleWheel3D` publishes both — `get_skidinfo()` and `get_rpm()`
-  — and since `Q50` made the car one, they cost nothing to read. ⚠️ **This is the one thing the
-  switch bought that the raycast car could not give**, and it is worth stating next to what it cost
-  (`Q50`): the same isotropic `friction_slip` that makes the drift untunable is what makes these
-  free. `wheel_visual.gd`'s road-speed roll — the lie nobody could see until there was smoke to
-  compare it against — is gone too, because a `VehicleWheel3D` rolls its own mesh from the
-  simulation. **Wire them when the effects that consume them are built, not before.**
+- ⚠️ **`P3-2b` got ONE of its two missing numbers from `Q50`, not two** (corrected by `Q85`,
+  2026-08-27). Skid smoke and tyre marks need a **traction-loss signal**, and `VehicleWheel3D`
+  publishes that: ✅ `get_skidinfo()` is real, measured moving 1.000 → 0.717 when grip breaks, and
+  costs nothing to read. 🔴 **`get_rpm()` is NOT per-wheel angular velocity — it is road speed
+  re-expressed.** This class is a Bullet raycast vehicle with no wheel inertia, so a wheel cannot
+  spin up under power (ratio to road speed is identical at grip 1.00 and 0.10) and cannot lock under
+  braking (−0.993 → −0.977 through a full stop). **Wheelspin and lockup are not available**, and
+  planning them here is planning a quantity the engine does not simulate.
+  🔴 **Worse, `P3-2b` inherits a lie the moment it draws anything.** `Q50` recorded that
+  `wheel_visual.gd`'s road-speed roll was gone "because a `VehicleWheel3D` rolls its own mesh from
+  the simulation" — but the simulation's rotation *is* road speed, so a wheel will roll smoothly
+  while smoke pours off it. No check can see that; only looking can. ⚠️ **`get_skidinfo()` is still the one
+  thing the switch bought that the raycast car could not give**, and it is worth stating next to
+  what it cost (`Q50`): the same isotropic `friction_slip` that makes the drift untunable is what
+  makes it free. **Wire it when the effects that consume it are built, not before.**
 
 ### `P3-9` Authenticity test round 1
 
