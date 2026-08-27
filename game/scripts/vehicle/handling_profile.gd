@@ -162,8 +162,10 @@ extends Resource
 ## drift_front_grip_scale, which would invert the axles — unreachable inside the
 ## measured window, and unenforced.
 ##
-## ⚠️ Nothing below drift_fade_from_kph is touched, which is deliberate: every
-## published number in Q84 and Q86 was measured at 63 km/h and stays valid.
+## ⚠️ This dial touches nothing below drift_fade_from_kph — but
+## drift_rear_grip_scale_at_low does, so Q84's and Q86's 63 km/h figures no longer
+## describe the shipped car. Q89 re-published them: the drift there is 69.8 deg /
+## 0.87 s and the tap 20.5 / 0.40.
 @export_range(0.0, 1.0, 0.001) var drift_rear_grip_scale_at_top: float
 ## Rear-axle multiplier at and below drift_low_fade_kph, interpolating up to
 ## drift_rear_grip_scale at drift_fade_from_kph. LOWER than the base scale: the
@@ -302,11 +304,12 @@ extends Resource
 ## GAME_DESIGN.md's "easy to hold" asks for, so this is the dial that trades a
 ## holdable angle against a spin, and drift_yaw_torque_nm no longer has to.
 @export_range(0.0, 1.0, 0.01) var drift_yaw_sustain: float
-## Speed at which the drift starts withdrawing, in km/h. At or below it both the
-## full yaw torque and the full drift_rear_grip_scale apply.
+## Speed at which the drift starts withdrawing upward, in km/h. At it exactly,
+## both the full yaw torque and the full drift_rear_grip_scale apply.
 ##
-## 🔴 **This is ONE knee governing TWO envelopes, which is why it stopped saying
-## "yaw".** Above it the yaw assist fades toward nothing by drift_yaw_fade_to_kph,
+## 🔴 **This is ONE knee governing THREE envelopes, which is why it stopped saying
+## "yaw".** Below it the rear cut DEEPENS toward drift_rear_grip_scale_at_low
+## (Q89) rather than holding steady, so this is a hinge and not a floor. Above it the yaw assist fades toward nothing by drift_yaw_fade_to_kph,
 ## and drift_rear_grip_scale eases toward drift_rear_grip_scale_at_top all the way
 ## to max_speed_kph. They deliberately share no top: the assist is worthless above
 ## the speed the drift spins at anyway, while the grip value the car wants keeps
@@ -319,11 +322,10 @@ extends Resource
 ## the grip cut spins the car on its own, which is what
 ## drift_rear_grip_scale_at_top then fixed. Q87 and Q88 carry the numbers.
 ##
-## ⚠️ **Nothing below this is touched, deliberately**: every published figure in Q84
-## and Q86 was measured at 63 km/h and stays valid. ⚠️ It is not a floor on the
-## drift working, though — below ~50 km/h the slide barely develops at all and the
-## car accelerates through the manoeuvre, so the usable band is roughly 60-100
-## km/h (Q88).
+## 🔴 **Q84's and Q86's 63 km/h figures are SUPERSEDED**: 63 sits 2 km/h under this
+## knee and so inside the low taper, which is why Q89 had to re-publish the
+## design-speed table where the three changes before it did not. The usable band is
+## now 34-86 km/h, against Q88's 60-100.
 ##
 ## ⚠️ Mirrors _update_steering's speed taper, which solves the same shape of
 ## problem: an input authority that must shrink as speed rises.

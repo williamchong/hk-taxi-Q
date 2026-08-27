@@ -437,8 +437,22 @@ func _apply_drift(delta: float) -> void:
 	# kept for Q83's touch hysteresis, which needs the engagement to exist.
 	# Sample before the ramp moves, so the entry tick is the one that latches.
 	if drift_input and is_zero_approx(_drift_engagement):
-		_drift_low_locked = absf(speed_kph) < profile.drift_fade_from_kph
-		_drift_rear_scale = _rear_grip_scale()
+		var entry: float = absf(speed_kph)
+		_drift_low_locked = entry < profile.drift_fade_from_kph
+		# Only the low branch is ever read back — see _drift_low_locked — so asking
+		# for the high one here would compute a value nothing consumes and write the
+		# knee test a second time, where the two copies could drift apart.
+		if _drift_low_locked:
+			_drift_rear_scale = _low_grip_scale(entry)
+	# 🔴 **The lock RELEASES but never re-arms, and both halves follow the same
+	# rule.** Gaining speed out of the low band is self-correcting for the same
+	# reason tracking works above the knee, so holding a 0.44 cut up there — where
+	# it spins the car — is not defensible. Re-arming on the way *down* is the
+	# thing that is not: that is the feedback loop, one step at a time. A drift
+	# that entered above the knee and fell below it therefore keeps the base scale
+	# and behaves as it did before Q89 — inert rather than dangerous.
+	if _drift_low_locked and absf(speed_kph) >= profile.drift_fade_from_kph:
+		_drift_low_locked = false
 	var seconds: float = profile.drift_attack_s if drift_input else profile.drift_release_s
 	_drift_engagement = move_toward(_drift_engagement, 1.0 if drift_input else 0.0, delta / seconds)
 	# Held time keeps accruing through the release ramp — the car is still sliding,
@@ -549,36 +563,28 @@ func _speed_fade_out(speed: float) -> float:
 	return 0.0 if speed >= profile.drift_yaw_fade_to_kph else 1.0
 
 
-## The rear axle's grip multiplier at this speed, easing from
-## drift_rear_grip_scale toward drift_rear_grip_scale_at_top above the knee.
-##
-## 🔴 **Interpolates to max_speed_kph rather than plateauing where the yaw fade
-## does, because the value the car wants moves with speed** — 86 km/h wants ~0.680
-## and 105 km/h ~0.710, and 0.680 at 105 is still a 163.5 deg spin. The two
-## mechanisms share a knee and not a top, which is why only the knee was renamed.
-##
-## ⚠️ **Both degenerate cases return the base scale, i.e. behave as though this
-## taper did not exist.** A zero at_top is an unauthored profile, and reading it
-## literally would drive the rear grip to *zero* at speed rather than merely
-## failing to help. Same reasoning as _speed_fade_out's zero span, and the
-## opposite of what a naive guard does there.
-func _rear_grip_scale() -> float:
-	if profile.drift_rear_grip_scale_at_top <= 0.0:
-		return profile.drift_rear_grip_scale
-	var speed: float = absf(speed_kph)
-	if speed < profile.drift_fade_from_kph:
-		return _low_grip_scale(speed)
-	return _high_grip_scale(speed)
-
-
 ## The rear scale at or above the knee, easing the cut off as speed rises. Returns
 ## the base scale below the knee, so a drift that entered fast and then slowed
 ## settles on the tuned value rather than falling into the low taper's feedback.
+##
+## 🔴 **The at_top guard lives HERE, on the per-tick path, and not in a wrapper.**
+## It stood one call up until review: `_write_drift_grip` reaches this directly, so
+## a profile leaving drift_rear_grip_scale_at_top unauthored would lerp the rear
+## grip toward *zero* as speed rose — the catastrophe the guard was written for,
+## with the guard still in the file and no longer on the path that reads it. Same
+## shape as `_speed_fade_out`'s zero span, and the second time a guard here has
+## been walked past rather than removed.
+##
+## ⚠️ Both degenerate cases return the base scale, i.e. behave as though this taper
+## did not exist.
 func _high_grip_scale(speed: float) -> float:
-	var span: float = profile.max_speed_kph - profile.drift_fade_from_kph
+	if profile.drift_rear_grip_scale_at_top <= 0.0:
+		return profile.drift_rear_grip_scale
+	var knee: float = profile.drift_fade_from_kph
+	var span: float = profile.max_speed_kph - knee
 	if span <= 0.0:
 		return profile.drift_rear_grip_scale
-	var over: float = clampf((speed - profile.drift_fade_from_kph) / span, 0.0, 1.0)
+	var over: float = clampf((speed - knee) / span, 0.0, 1.0)
 	return lerpf(profile.drift_rear_grip_scale, profile.drift_rear_grip_scale_at_top, over)
 
 
@@ -595,11 +601,16 @@ func _high_grip_scale(speed: float) -> float:
 func _low_grip_scale(speed: float) -> float:
 	if profile.drift_rear_grip_scale_at_low <= 0.0:
 		return profile.drift_rear_grip_scale
-	if speed <= profile.drift_low_fade_kph:
-		return profile.drift_rear_grip_scale_at_low
+	# ⚠️ Ordered before the floor deliberately. Below it this guard could never
+	# fire — the caller only enters under the knee, so the floor return already
+	# caught every such speed whenever the pair is inverted — and an inverted pair
+	# then gave a flat at_low right up to the knee and a step there, instead of the
+	# "behave as though the taper did not exist" this file promises everywhere else.
 	var span: float = profile.drift_fade_from_kph - profile.drift_low_fade_kph
 	if span <= 0.0:
 		return profile.drift_rear_grip_scale
+	if speed <= profile.drift_low_fade_kph:
+		return profile.drift_rear_grip_scale_at_low
 	var under: float = clampf((speed - profile.drift_low_fade_kph) / span, 0.0, 1.0)
 	return lerpf(profile.drift_rear_grip_scale_at_low, profile.drift_rear_grip_scale, under)
 
