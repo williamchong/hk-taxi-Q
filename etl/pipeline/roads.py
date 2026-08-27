@@ -186,6 +186,23 @@ class RoadReport:
     vertices_gated: int = 0
     edges_sampled: int = 0
     ends_lifted: int = 0
+    # `Q90`'s, and they partition one population: off-grade edge ends whose
+    # structure stops before the node. `touchdown_grade_pct` is recorded over
+    # the first two, so `len(...) == ends_descended + ends_over_grade` and `n`
+    # exceeding `ends_descended` is what says the distribution is not confined
+    # to the cap by construction — `Q58`'s `drawn_gauge_m` trap, which
+    # `arrows.py` and `roadmarks.py` have each been corrected for.
+    #
+    # ⚠️ `ends_no_target` is the third and it is deliberately OUTSIDE that
+    # distribution: an end with no terrain to measure from has no grade, and
+    # appending one would be inventing the number the other two are graded on.
+    # It is counted rather than dropped because a refusal this change cannot see
+    # is the exact failure the two above are written against — review found it
+    # holding the identity true by never reaching the list.
+    ends_descended: int = 0
+    ends_over_grade: int = 0
+    ends_no_target: int = 0
+    touchdown_grade_pct: list[float] = field(default_factory=list)
     # `Q24`'s, on the at-grade edges the two counters above never reach.
     #
     # ⚠️ `edges_followed` counts edges that took the path, **not** edges that
@@ -222,6 +239,10 @@ class RoadReport:
         self.vertices_gated += counts.gated
         self.edges_sampled += int(counts.sampled > 0)
         self.ends_lifted += counts.ends_lifted
+        self.ends_descended += counts.ends_descended
+        self.ends_over_grade += counts.ends_over_grade
+        self.ends_no_target += counts.ends_no_target
+        self.touchdown_grade_pct += counts.touchdown_grade_pct
         self.vertices_on_structure += counts.on_structure
         self.vertices_followed += counts.followed
         self.vertices_offered += counts.offered
@@ -244,6 +265,10 @@ class _Counts:
     sampled: int = 0
     gated: int = 0
     ends_lifted: int = 0
+    ends_descended: int = 0
+    ends_over_grade: int = 0
+    ends_no_target: int = 0
+    touchdown_grade_pct: list[float] = field(default_factory=list)
     on_structure: int = 0
     # `Q24`'s stations, kept apart from `added` rather than folded into it: the
     # two are added for different reasons on different edges, and one number
@@ -646,6 +671,19 @@ class _Deck:
 
     field: HeightField
     thresholds: DeckSampling
+    # What `elevation_levels` maps level 0 to: the height a touchdown descends
+    # *to* (`Q90`). The one quantity a deck sampler needs that is not about the
+    # deck, and it is here rather than a fifth argument to `_measured` because
+    # the descent is deck sampling — it exists only where a deck stops.
+    #
+    # Read from the city rather than assumed zero because the target is the
+    # **unlifted** street, which is `_from_terrain`'s `terrain + deck_m` at level
+    # 0 — so a city that puts level 0 anywhere but zero would otherwise land its
+    # ramps that far off the road they meet. ⚠️ Not `_lifted_heights`' reasoning,
+    # which says the opposite about its own end: a *lifted* end deliberately does
+    # not add the flat offset, because it is resting on a ramp deck rather than
+    # on the ground the offset is measured from.
+    level_zero_m: float
 
     def floor(self, terrain: np.ndarray) -> np.ndarray:
         """The lowest a structure sample may sit and still be a deck.
@@ -770,10 +808,10 @@ def build_region(
                 )
             )
 
-    mixed = _mixed_level_nodes(item.edge for item in pending)
+    levels = _levels_at_node(item.edge for item in pending)
     for item in pending:
         edge, counts = _measured(
-            item, surfaces, city.deck_height_m(item.edge.elevation_level), mixed
+            item, surfaces, city.deck_height_m(item.edge.elevation_level), levels
         )
         report.edges.append(edge)
         report.add(counts)
@@ -867,20 +905,48 @@ def _direction(style: RoadNetwork, code: int, layer: str) -> str:
     return style.travel_directions[code]
 
 
-def _mixed_level_nodes(edges: Iterable[Edge]) -> set[int]:
-    """Nodes more than one elevation level reaches.
+def _levels_at_node(edges: Iterable[Edge]) -> dict[int, set[int]]:
+    """Which elevation levels meet at each node.
 
-    `Q13`'s 36, and every one of them measured as a ramp — 17 where the
-    structure already reaches grade at the node, 13 where the publisher's
-    `ELEVATION` attribute flips partway up, 5 tunnel portals and one stub. The
-    13 are why the level-0 side needs anything done to it at all: there the
-    at-grade edge is itself 2.1 to 4.0 m up the ramp, drawn at ground level.
+    A node reached by more than one is `Q13`'s, and all 36 of the region's are
+    ramps — 17 where the structure already reaches grade at the node, 13 where
+    the publisher's `ELEVATION` attribute flips partway up, 5 tunnel portals and
+    one stub. The 13 are why the level-0 side needs anything done to it at all:
+    there the at-grade edge is itself 2.1 to 4.0 m up the ramp, drawn at ground
+    level.
+
+    ⚠️ **The levels rather than a "mixed" flag, because the two ramp ends ask
+    different questions of the same node.** `_lifted_heights` asks whether
+    *another* level is here, and `_descend` asks whether **level 0** is — it
+    descends to the street, so a node without one has nothing to land on. Every
+    mixed node in Wan Chai is `(-1, 0)` or `(0, 1)`, which makes the two agree
+    here and is exactly why a flag would survive review: `elevation_levels`
+    declares a level 2, and a `(1, 2)` node would send a descent to a street
+    that is not there.
     """
     levels: dict[int, set[int]] = defaultdict(set)
     for edge in edges:
         levels[edge.from_node].add(edge.elevation_level)
         levels[edge.to_node].add(edge.elevation_level)
-    return {node for node, found in levels.items() if len(found) > 1}
+    return levels
+
+
+def _ramp_ends(edge: Edge, levels: dict[int, set[int]]) -> tuple[bool, bool]:
+    """Which of this edge's ends sit where a ramp changes level.
+
+    Level -1 is a tunnel, which is a void — its portals are mixed nodes and
+    there is no structure under them to find. `Q21` asks whether they should be
+    drawn at all; nothing here can improve their height, and excluding them is
+    what keeps `_lifted_heights` off them.
+    """
+    if edge.elevation_level < 0:
+        return (False, False)
+    reaches = (
+        (lambda node: len(levels[node]) > 1)
+        if edge.elevation_level == 0
+        else (lambda node: 0 in levels[node])
+    )
+    return (reaches(edge.from_node), reaches(edge.to_node))
 
 
 def _follow_ground(
@@ -950,7 +1016,7 @@ def _follow_ground(
 
 
 def _measured(
-    item: _Pending, surfaces: _Surfaces, deck_m: float, mixed: set[int]
+    item: _Pending, surfaces: _Surfaces, deck_m: float, levels: dict[int, set[int]]
 ) -> tuple[Edge, _Counts]:
     """One pending run with its heights, and a tally of where they came from.
 
@@ -961,14 +1027,11 @@ def _measured(
     """
     level = item.edge.elevation_level
     ground, deck = surfaces.ground, surfaces.deck
-    # Level 0 only. Level -1 is a tunnel, which is a void — its portals are
-    # mixed nodes and there is no structure under them to find. `Q21` asks
-    # whether they should be drawn at all; nothing here can improve their height.
-    ends = (
-        (item.edge.from_node in mixed, item.edge.to_node in mixed)
-        if deck is not None and level == 0
-        else (False, False)
-    )
+    # Opposite ends of the same ramp, and `_ramp_ends` asks each its own
+    # question: level 0 whether to *lift* this end onto a structure that reaches
+    # past the node, level 1 and above whether to *descend* it to the street the
+    # structure stops short of.
+    ends = _ramp_ends(item.edge, levels) if deck is not None else (False, False)
 
     # One guard, so "sampling" is decided once rather than derived here and
     # negated again below — and so both fields are narrowed for everything after.
@@ -999,7 +1062,7 @@ def _measured(
     counts = _Counts(off_terrain=off_terrain, added=len(plan) - len(item.plan))
 
     if level > 0:
-        y, on_structure = _deck_heights(deck, plan, terrain, fallback, counts)
+        y, on_structure = _deck_heights(deck, plan, terrain, fallback, ends, counts)
     else:
         y, on_structure = _lifted_heights(deck, plan, terrain, fallback, ends, counts)
     counts.on_structure = int(on_structure.sum())
@@ -1057,7 +1120,12 @@ def _from_terrain(terrain: np.ndarray, deck_m: float) -> tuple[np.ndarray, int]:
 
 
 def _deck_heights(
-    deck: _Deck, plan: np.ndarray, terrain: np.ndarray, fallback: np.ndarray, counts: _Counts
+    deck: _Deck,
+    plan: np.ndarray,
+    terrain: np.ndarray,
+    fallback: np.ndarray,
+    ends: tuple[bool, bool],
+    counts: _Counts,
 ) -> tuple[np.ndarray, np.ndarray]:
     """An off-grade carriageway's height, taken from the structure it is built on.
 
@@ -1083,10 +1151,18 @@ def _deck_heights(
     flat offset. That is `ISLAND EASTERN CORRIDOR`'s stub, whose every sample
     the terrain gate refuses, and it is the case the offset is still right for.
 
-    `on_structure` is therefore all-or-nothing here, and deliberately so: where
-    the deck is held across a hole by interpolation, those stations *are* on the
-    deck — that is the whole claim the interpolation makes — so reporting them
-    as bare ground would contradict the height published beside them.
+    `on_structure` follows the claim each station's height makes. Where the deck
+    is held across a hole by interpolation those stations *are* on the deck —
+    that is the whole claim the interpolation makes — so reporting them as bare
+    ground would contradict the height published beside them. A station `_descend`
+    ramps to grade makes the opposite claim and is flagged false, which is the
+    contract `ARCHITECTURE.md` already states: true where the height came from
+    sampled structure.
+
+    ⚠️ **Interpolating across a hole is not what fires in this region.** Measured
+    over every level-1 edge in Wan Chai there is not one hole that is not at an
+    edge end, so the paragraph above describes a branch with no case here and
+    `_descend` handles all of them (`Q90`).
     """
     sampled = deck.field.sample_along(plan[:, 0], plan[:, 1], slab_gap_m=deck.thresholds.slab_gap_m)
 
@@ -1112,7 +1188,125 @@ def _deck_heights(
     # deck, so it belongs wherever the deck is what decides the height — and
     # nowhere near the fallback above, which is not on a deck at all.
     y = np.interp(along, along[usable], sampled[usable]) + deck.thresholds.clearance_m
-    return y, np.ones(len(plan), dtype=bool)
+    return _descend(deck, along, terrain, y, usable, ends, counts)
+
+
+def _descend(
+    deck: _Deck,
+    along: np.ndarray,
+    terrain: np.ndarray,
+    y: np.ndarray,
+    usable: np.ndarray,
+    ends: tuple[bool, bool],
+    counts: _Counts,
+) -> tuple[np.ndarray, np.ndarray]:
+    """An off-grade edge ramped down to the street its structure stops short of.
+
+    Answers `Q90`. `INFRASTRUCTURE` stops being modelled where a ramp reaches
+    grade, and `_deck_heights` answers a hole by interpolating across it — which
+    at an edge *end* has nothing on the far side to interpolate to, so
+    `np.interp` clamps to the first covered station. The ribbon is then held dead
+    level in the air all the way to the node: **1.83 m** of it at node 175,
+    `FLEMING ROAD`, a flyover visibly afloat over the street it lands on.
+
+    The precondition is topological rather than a height test, which is
+    `_lifted_heights`' rule at the other end of the same ramp: this end descends
+    because a **level-0** edge meets it, and that street's height is what it
+    descends to.
+
+    ⚠️ **The two are not the same query, and nothing stops both firing.**
+    `_deck_heights` gates on `sample_along`'s slab continuity and this on the
+    hole it leaves; `_lifted_heights` gates on `sample_lowest_above` and
+    `at_grade_m`. Where those disagree at a shared node the street would publish
+    `terrain + lift + clearance_m` while this targets `terrain + level_zero_m`,
+    re-opening a step at the node the descent exists to close. **Measured: the 16
+    lifted ends and the 9 descended ends are disjoint in this region** — so that
+    is a fact about the data, not a property of the construction, and it is
+    recorded here rather than asserted away.
+
+    🔴 **Bounded, and the bound keeps one edge out.** Eight of the region's
+    nine end holes reconstruct at 2.0-6.8%, and opposed carriageways of one
+    flyover agree to within a point. `MARSH ROAD`'s `e248` is the ninth and wants
+    0.66 m over a 1.9 m hole — **35.8%** — so it is left standing, because a
+    grade no road climbs is evidence that the missing metres were never a ramp.
+
+    ⚠️ **The grade is measured to the drawn ribbon, `clearance_m` included.**
+    Taken off the sampled deck top it reads about 0.2 m shallower over the same
+    run, which understated every row of `Q90`'s first table; the cap has to be
+    compared against what actually gets drawn.
+
+    ⚠️ **A negative step is descended, and that is not an oversight.** `e365`
+    at node 30 sits 0.43 m *below* its at-grade neighbours, and the node station
+    rising to meet the street while the ribbon falls onto its deck is the right
+    repair for how it renders. What it does not repair is `Q13`'s attribute flip
+    underneath — a level-1 label on a run that is really at grade — so `abs`
+    here is the sign being out of scope rather than discarded.
+
+    ⚠️ **`touchdown_grade_pct` is recorded over the refusals as well as the
+    keeps.** Appended below the guard it would be confined to
+    `touchdown_max_grade_pct` by construction and would report a clean sweep
+    whatever the data did — `Q58`'s `drawn_gauge_m` trap, caught in review in
+    `arrows.py` and again in `roadmarks.py`. `len(touchdown_grade_pct)` exceeding
+    `ends_descended` by exactly the refusals is the identity that says so.
+
+    ⚠️ **An end with no terrain under it has no height to descend to**, so it
+    is left clamped and counted as `ends_no_target` — never appended to
+    `touchdown_grade_pct`, because there is no grade to record.
+    `_lifted_heights` records the mirror case as silent and points at
+    `vertices_off_terrain`; that counter cannot isolate an end that wanted to
+    descend and could not, which is why this one exists.
+
+    ⚠️ **The precondition can no longer send a descent to a street that is
+    not there.** `_ramp_ends` asks for level 0 at the node rather than for any
+    second level, because `elevation_levels` declares a level 2 and a `(1, 2)`
+    node is mixed with nothing at grade to land on. Every mixed node in Wan Chai
+    is `(-1, 0)` or `(0, 1)`, so the weaker test agreed here and would have
+    shipped.
+    """
+    out = y.copy()
+    on_structure = np.ones(len(y), dtype=bool)
+    for reaches_grade, start, step in ((ends[0], 0, 1), (ends[1], len(y) - 1, -1)):
+        if not reaches_grade or usable[start]:
+            continue
+        if not np.isfinite(terrain[start]):
+            counts.ends_no_target += 1
+            continue
+        index = start
+        while 0 <= index < len(y) and not usable[index]:
+            index += step
+        if not 0 <= index < len(y):
+            # Unreachable while `_deck_heights` returns early on an edge with no
+            # usable sample at all, and spelled anyway: a backward walk that ran
+            # out would leave `index` at -1, and reading the far end of the edge
+            # as though it were the near deck is a plausible height from the
+            # wrong place — the exact failure this function exists to remove. It
+            # counts rather than vanishing, so no `continue` here can become the
+            # quiet refusal `ends_no_target` was added for.
+            counts.ends_no_target += 1
+            continue
+
+        grade = float(terrain[start]) + deck.level_zero_m
+        run_m = abs(float(along[index]) - float(along[start]))
+        # An infinite grade is what a zero-length run *means* here — a drop with
+        # no road to lose it over — so it goes through the same guard as a steep
+        # one rather than being skipped before the counter sees it.
+        drop = abs(float(out[index]) - grade)
+        percent = drop / run_m * 100.0 if run_m > 0.0 else float("inf")
+        counts.touchdown_grade_pct.append(percent)
+        if percent > deck.thresholds.touchdown_max_grade_pct:
+            counts.ends_over_grade += 1
+            continue
+        counts.ends_descended += 1
+
+        # The uncovered run alone, so the first covered station keeps both the
+        # height the structure gave it and its flag. `along` decreases with a
+        # backward walk and so does the numerator, which is why one expression
+        # serves both directions without sorting the pair.
+        reach = slice(start, index) if step == 1 else slice(index + 1, start + 1)
+        fraction = (along[reach] - along[start]) / (along[index] - along[start])
+        out[reach] = grade + fraction * (float(out[index]) - grade)
+        on_structure[reach] = False
+    return out, on_structure
 
 
 def _lifted_heights(
@@ -1480,6 +1674,7 @@ def _surfaces(
         deck=_Deck(
             field=_field(place, region_high, structure_class, city, region_id),
             thresholds=thresholds,
+            level_zero_m=city.deck_height_m(0),
         ),
     )
 
@@ -1608,6 +1803,24 @@ def main(argv: list[str] | None = None) -> int:
         log.info(
             "  %d stations published as resting on structure, drawn at their authored width",
             report.vertices_on_structure,
+        )
+    if report.touchdown_grade_pct and city.roads.deck is not None:
+        # Both halves on one line, because the refusals are the reason the
+        # distribution can be trusted and a line reporting only the keeps is the
+        # clean sweep `Q90` warns this counter must not be able to report. The
+        # second half of the test is a type narrowing: no end can be graded by a
+        # city that samples no decks.
+        median, worst = np.percentile(report.touchdown_grade_pct, (50, 100))
+        log.info(
+            "  %d off-grade ends descended to grade, %d refused over %.1f%%, %d with no street "
+            "to land on; graded across %d at median %.1f%%, max %.1f%%",
+            report.ends_descended,
+            report.ends_over_grade,
+            city.roads.deck.touchdown_max_grade_pct,
+            report.ends_no_target,
+            len(report.touchdown_grade_pct),
+            median,
+            worst,
         )
     if report.edges_followed:
         log.info(

@@ -2601,6 +2601,26 @@ roads:
     # ends; at 0.5 one of them loses its lift entirely, and at 1.0 three do.
     at_grade_m: 0.30
 
+    # The steepest a touchdown may be reconstructed at (Q90). INFRASTRUCTURE
+    # stops being modelled where a ramp reaches grade, so the last stretch of
+    # every touchdown is uncovered; the ribbon is ramped from the node's
+    # at-grade height to the first covered station instead of being held level
+    # in the air, and this is where that stops being a ramp.
+    #
+    # Bounded by the two populations, which are far apart. The six touchdowns
+    # this reconstructs run 1.9-6.1%, and opposed carriageways of one flyover
+    # agree with each other to within a point: FLEMING ROAD 5.3/6.1, HUNG HING
+    # ROAD FLYOVER 2.2/1.9. The worst refusal is MARSH ROAD's e248 at 24.8%,
+    # which is 0.66 m over a 1.9 m hole and no road ramps at that.
+    #
+    # Ten leaves a 4x margin over the steepest keep and refuses the defect by
+    # 2.5x, so anything from 8 to 15 gives this region the same answer. That
+    # makes it a classifier and not a tuning value - but it is still a
+    # statement about what a road can climb, so it is a city's to declare and
+    # not a constant in code. Hong Kong's own steepest public roads are around
+    # 20%, which is the other reason 10 is not close to a real ramp here.
+    touchdown_max_grade_pct: 10.0
+
     # How far above the sampled structure the carriageway is drawn, which is the
     # layer a real road actually is: a wearing course on a structural deck.
     #

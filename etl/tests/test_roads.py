@@ -25,9 +25,10 @@ from pipeline.roads import (
     _Deck,
     _deck_heights,
     _follow_ground,
+    _levels_at_node,
     _lifted_heights,
-    _mixed_level_nodes,
     _node_heights,
+    _ramp_ends,
     build_region,
     clean_text,
     clip,
@@ -686,7 +687,12 @@ class TestNodeHeights:
 # --------------------------------------------------------------------------
 
 THRESHOLDS = DeckSampling(
-    resample_m=10.0, slab_gap_m=3.0, max_below_terrain_m=1.0, at_grade_m=0.30, clearance_m=0.0
+    resample_m=10.0,
+    slab_gap_m=3.0,
+    max_below_terrain_m=1.0,
+    at_grade_m=0.30,
+    touchdown_max_grade_pct=10.0,
+    clearance_m=0.0,
 )
 
 
@@ -716,7 +722,9 @@ def _sheet(x0: float, x1: float, y0: float, y1: float) -> list[MeshData]:
 
 
 def _deck(*meshes: MeshData) -> _Deck:
-    return _Deck(field=HeightField.from_meshes(list(meshes)), thresholds=THRESHOLDS)
+    return _Deck(
+        field=HeightField.from_meshes(list(meshes)), thresholds=THRESHOLDS, level_zero_m=0.0
+    )
 
 
 def _straight(x_end: float, step: float = 10.0) -> np.ndarray:
@@ -736,7 +744,9 @@ class TestDeckHeights:
         terrain = np.zeros(len(plan))
         deck = _deck(*_sheet(-5.0, 45.0, 5.0, 5.0))
 
-        y, on_structure = _deck_heights(deck, plan, terrain, terrain + 6.0, _Counts())
+        y, on_structure = _deck_heights(
+            deck, plan, terrain, terrain + 6.0, (False, False), _Counts()
+        )
         np.testing.assert_allclose(y, 5.0)
         assert on_structure.all(), "and every station says so, for `Q23`"
 
@@ -751,7 +761,7 @@ class TestDeckHeights:
         deck = _deck(*_sheet(-1.0, 10.0, 4.0, 4.0), *_sheet(30.0, 41.0, 4.0, 4.0))
 
         counts = _Counts()
-        y, on_structure = _deck_heights(deck, plan, terrain, terrain + 6.0, counts)
+        y, on_structure = _deck_heights(deck, plan, terrain, terrain + 6.0, (False, False), counts)
 
         assert counts.sampled == 4, "the four covered stations"
         np.testing.assert_allclose(y, 4.0), "and the gap holds the deck, not +6"
@@ -768,7 +778,7 @@ class TestDeckHeights:
         deck = _deck(*_sheet(500.0, 520.0, 4.0, 4.0))
 
         counts = _Counts()
-        y, on_structure = _deck_heights(deck, plan, terrain, terrain + 6.0, counts)
+        y, on_structure = _deck_heights(deck, plan, terrain, terrain + 6.0, (False, False), counts)
 
         assert counts.sampled == 0
         np.testing.assert_allclose(y, 6.0)
@@ -783,7 +793,7 @@ class TestDeckHeights:
         deck = _deck(*_sheet(-5.0, 25.0, -8.0, -8.0))
 
         counts = _Counts()
-        y, on_structure = _deck_heights(deck, plan, terrain, terrain + 6.0, counts)
+        y, on_structure = _deck_heights(deck, plan, terrain, terrain + 6.0, (False, False), counts)
 
         assert counts.gated == len(plan)
         assert counts.sampled == 0
@@ -798,8 +808,135 @@ class TestDeckHeights:
         deck = _deck(*_sheet(-5.0, 25.0, -0.54, -0.54))
 
         counts = _Counts()
-        _deck_heights(deck, plan, terrain, terrain + 6.0, counts)
+        _deck_heights(deck, plan, terrain, terrain + 6.0, (False, False), counts)
         assert counts.gated == 0
+
+
+class TestDescend:
+    """`Q90`'s half: the deck ramped down to the street it stops short of.
+
+    Every fixture here is a *leading* hole with structure further along, which
+    is what `INFRASTRUCTURE` does at a real touchdown — it is the case
+    `TestDeckHeights` covers only as an interior gap, where the clamp is not
+    reachable.
+    """
+
+    def _run(
+        self, deck: _Deck, plan: np.ndarray, ends: tuple[bool, bool]
+    ) -> tuple[np.ndarray, np.ndarray, _Counts]:
+        terrain = np.zeros(len(plan))
+        counts = _Counts()
+        y, on_structure = _deck_heights(deck, plan, terrain, terrain + 6.0, ends, counts)
+        return y, on_structure, counts
+
+    def test_a_hole_at_the_node_ramps_to_grade_instead_of_clamping(self) -> None:
+        """The defect the user drove to: 24 m of ribbon held level in the air
+        over the street, because `np.interp` clamps outside its range."""
+        plan = _straight(40.0)
+        deck = _deck(*_sheet(20.0, 45.0, 2.0, 2.0))
+
+        y, on_structure, counts = self._run(deck, plan, (True, False))
+
+        assert counts.ends_descended == 1 and counts.ends_over_grade == 0
+        assert y[0] == pytest.approx(0.0), "the node meets the street it lands on"
+        assert y[2] == pytest.approx(2.0), "and the deck is untouched from its first sample"
+        np.testing.assert_allclose(y[:3], [0.0, 1.0, 2.0], err_msg="linear over the hole")
+        assert list(on_structure) == [False, False, True, True, True], (
+            "a ramped station is not standing on structure, whatever the deck beside it says"
+        )
+
+    def test_a_grade_no_road_climbs_is_refused_and_still_counted(self) -> None:
+        """`MARSH ROAD`'s `e248`: 0.66 m to lose over 1.9 m of hole. Left
+        standing, because a grade like that says the missing metres were never
+        a ramp."""
+        plan = _straight(40.0)
+        deck = _deck(*_sheet(9.0, 45.0, 8.0, 8.0))
+
+        y, on_structure, counts = self._run(deck, plan, (True, False))
+
+        assert counts.ends_descended == 0 and counts.ends_over_grade == 1
+        assert y[0] == pytest.approx(8.0), "the clamp stands where the ramp is refused"
+        assert on_structure.all(), "and a clamped station still claims the deck"
+
+    def test_the_distribution_is_recorded_over_refusals_as_well_as_keeps(self) -> None:
+        """`Q58`'s trap. Appended below the guard, `touchdown_grade_pct` would
+        be confined to the cap by construction and would report a clean sweep
+        whatever the data did — so `n` has to exceed what was descended."""
+        plan = _straight(40.0)
+        deck = _deck(*_sheet(9.0, 45.0, 8.0, 8.0))
+
+        _, _, counts = self._run(deck, plan, (True, False))
+
+        assert len(counts.touchdown_grade_pct) == 1
+        assert counts.touchdown_grade_pct[0] > THRESHOLDS.touchdown_max_grade_pct, (
+            "the refused grade is in the distribution, not filtered out of it"
+        )
+        assert len(counts.touchdown_grade_pct) == (
+            counts.ends_descended + counts.ends_over_grade
+        ), "and the two counters partition it"
+
+    def test_an_end_at_no_mixed_node_is_left_alone(self) -> None:
+        """The precondition is topological. A hole at an end that meets no other
+        level is a clipped region boundary, and there is no street there to
+        descend to."""
+        plan = _straight(40.0)
+        deck = _deck(*_sheet(20.0, 45.0, 2.0, 2.0))
+
+        y, on_structure, counts = self._run(deck, plan, (False, False))
+
+        assert counts.ends_descended == 0 and not counts.touchdown_grade_pct
+        np.testing.assert_allclose(y, 2.0, err_msg="clamped, as before `Q90`")
+        assert on_structure.all()
+
+    def test_both_ends_descend_independently(self) -> None:
+        plan = _straight(60.0)
+        deck = _deck(*_sheet(18.0, 42.0, 1.5, 1.5))
+
+        y, on_structure, counts = self._run(deck, plan, (True, True))
+
+        assert counts.ends_descended == 2
+        assert y[0] == pytest.approx(0.0) and y[-1] == pytest.approx(0.0)
+        assert y[3] == pytest.approx(1.5), "the deck between them is untouched"
+        assert not on_structure[0] and not on_structure[-1] and on_structure[3]
+
+    def test_a_node_with_no_terrain_under_it_is_left_clamped_and_counted(self) -> None:
+        """There is no height to descend *to*. ⚠️ It is **counted** rather than
+        silent: a refusal outside the distribution is what held the partition
+        identity true by never reaching the list, which is the exact failure the
+        other two counters are written against."""
+        plan = _straight(40.0)
+        terrain = np.zeros(len(plan))
+        terrain[0] = np.nan
+        deck = _deck(*_sheet(20.0, 45.0, 2.0, 2.0))
+
+        counts = _Counts()
+        y, on_structure = _deck_heights(
+            deck, plan, terrain, np.full(len(plan), 6.0), (True, False), counts
+        )
+
+        assert counts.ends_descended == 0 and counts.ends_over_grade == 0
+        assert counts.ends_no_target == 1
+        assert not counts.touchdown_grade_pct, (
+            "an end with no terrain has no grade, and inventing one would poison "
+            "the distribution the other two counters are graded on"
+        )
+        assert y[0] == pytest.approx(2.0) and on_structure.all()
+
+    def test_the_descent_lands_on_the_city_level_zero_rather_than_on_zero(self) -> None:
+        """A city that puts level 0 anywhere but zero would otherwise land its
+        ramps that far off the street they meet — `_lifted_heights`' own
+        reasoning, at the other end of the same ramp."""
+        plan = _straight(40.0)
+        deck = _Deck(
+            field=HeightField.from_meshes(list(_sheet(20.0, 45.0, 2.0, 2.0))),
+            thresholds=THRESHOLDS,
+            level_zero_m=0.5,
+        )
+
+        y, _, counts = self._run(deck, plan, (True, False))
+
+        assert counts.ends_descended == 1
+        assert y[0] == pytest.approx(0.5)
 
 
 class TestLiftedHeights:
@@ -878,7 +1015,34 @@ class TestLiftedHeights:
         assert on_structure[0] and on_structure[-1] and not on_structure[len(y) // 2]
 
 
-class TestMixedLevelNodes:
+def _edge_at_level(level: int, from_node: int, to_node: int) -> Edge:
+    return Edge(
+        id=0,
+        source_id=0,
+        from_node=from_node,
+        to_node=to_node,
+        polyline=[],
+        on_structure=[],
+        direction="forward",
+        lanes=2,
+        width_m=6.0,
+        speed_limit_kph=50,
+        bus_lane=False,
+        tram_tracks=False,
+        elevation_level=level,
+        road_name={"en": None, "zh": None},
+    )
+
+
+class TestLevelsAtNode:
+    """Which levels meet at a node, and the two different questions asked of it.
+
+    `_lifted_heights` asks whether *another* level is here; `_descend` asks
+    whether **level 0** is, because it descends to the street. A single "mixed"
+    flag answered both while every mixed node in the region happened to be
+    `(-1, 0)` or `(0, 1)`.
+    """
+
     def test_a_node_two_levels_reach_is_found(self) -> None:
         edges = [
             Edge(
@@ -914,4 +1078,30 @@ class TestMixedLevelNodes:
                 road_name={"en": None, "zh": None},
             ),
         ]
-        assert _mixed_level_nodes(edges) == {1}
+        levels = _levels_at_node(edges)
+        assert {node for node, found in levels.items() if len(found) > 1} == {1}
+        assert levels == {0: {1}, 1: {1, 0}, 2: {0}}
+
+    def test_an_off_grade_end_descends_only_where_level_zero_meets_it(self) -> None:
+        """The descent target is the street, so a node without one has nothing
+        to land on. `elevation_levels` declares a level 2, and a `(1, 2)` node
+        would otherwise send a descent to a street that is not there — the case
+        a "mixed" flag could not tell apart."""
+        levels = {0: {1}, 1: {1, 2}, 2: {2}}
+        elevated = _edge_at_level(1, 0, 1)
+
+        assert _ramp_ends(elevated, levels) == (False, False), (
+            "level 1 meeting level 2 is mixed, and is still no street to descend to"
+        )
+        assert _ramp_ends(elevated, {0: {1}, 1: {1, 0}, 2: {0}}) == (False, True)
+
+    def test_a_level_zero_end_lifts_wherever_another_level_meets_it(self) -> None:
+        at_grade = _edge_at_level(0, 0, 1)
+        assert _ramp_ends(at_grade, {0: {0}, 1: {0, 1}}) == (False, True)
+        assert _ramp_ends(at_grade, {0: {0}, 1: {0}}) == (False, False)
+
+    def test_a_tunnel_takes_neither(self) -> None:
+        """`Q21`: a portal is a mixed node with no structure under it to find,
+        and excluding level -1 is what keeps `_lifted_heights` off it."""
+        tunnel = _edge_at_level(-1, 0, 1)
+        assert _ramp_ends(tunnel, {0: {-1, 0}, 1: {-1, 0}}) == (False, False)

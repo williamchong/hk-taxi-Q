@@ -118,6 +118,7 @@ wins.
 | `Q87` | **The assist was tuned at one speed, and the grip cut has no speed term at all** | ✅ Closed — `Q86`'s assist had a fade-in and no fade-out, so 7000 N⋅m landed at any speed while every value was picked at 63 km/h; the tap that gives 16.0° there **spun the car at 84**. Fixed by `drift_fade_from_kph`/`_to_kph` (65/85): the 105 km/h tap goes **163.3° → 17.5°** and 39.2 → 80.0 m, and the design-speed table is byte-identical. ⚠️ `skidpad.sh` could not see it — `RUN_UP_S` fixed entry at one speed, so `--run-up=` now varies it. 🔴 **Necessary, not sufficient**: with the assist off entirely the drift still reads 95.2° at 86 and 165.2° at 105, so `drift_rear_grip_scale` spins the car by itself and has no speed term. ✅ **Closed by `Q88`** the same day — `drift_rear_grip_scale_at_top` removes the spin at every speed |
 | `Q88` | **The grip cut got the speed term, and the static sweep lied about how much** | ✅ Closed — `drift_rear_grip_scale_at_top` **0.80**, interpolated from the knee to `max_speed_kph`. ✅ **The spin is gone at every speed**: 86 km/h drift 165.0° → **50.4°/0.98 s** (the design-speed feel), 105 km/h drift 165.4° → **2.4°**, its exit 21.95 → **70.14 kph**; the city 84 km/h tap holds **76.00** against a 76.60 no-drift baseline. Design speed byte-identical for the third change running. 🔴 **The static sweep over-predicted by 3×** — 0.710 held constant reads 44.9° at 105, reached via the taper it read 159.4°, because the car decelerates below the knee inside the drift. ⚠️ 0.78 gives a real 75.8° drift at 105 and was **refused**: it sits 0.01 from a 75.8 → 2.8 cliff, which is `Q84`'s lesson on this exact dial. 0.80 fails safe — inert above ~100 km/h. ⚠️ **And the band had a bottom nobody had tuned**: below ~50 km/h the drift returned 2.9–3.9° and the car accelerated through the manoeuvre — ✅ fixed by `Q89`, which also supersedes this question's 63 km/h figures |
 | `Q89` | **The low end needed the opposite correction, and tracking it was unstable** | ✅ Closed — `drift_rear_grip_scale_at_low` **0.44** and `drift_low_fade_kph` **41** deepen the cut as speed falls. ✅ **The drift now works 34–86 km/h**, dwell 0.42–0.98, where 42 and 49 km/h were 3.9° and 2.9° — inert. 🔴 **The yaw assist cannot substitute**: at 42 km/h slip *falls* 4.2° → 3.6° as torque goes 0 → 20000, the top of its range. 🔴 **A tracking taper is unstable below the knee** — a drift scrubs speed, so deepening the cut as speed falls is positive feedback, and it turned the design speed into a **165.0° spin**. Fixed by latching at engagement; the branch that is stable tracks, the one that is not latches, and the asymmetry is deliberate. 🔴 **Re-publishes the design-speed table** — 63 km/h 51.1° → 69.8°, tap 16.0° → 20.5° — because 63 sits inside the new taper by construction |
+| `Q90` | **Every hole in the structure is a touchdown, and the sampler clamps where it should descend** | ✅ Closed — `INFRASTRUCTURE` stops where a ramp reaches grade, and `_deck_heights` answered an *end* hole with `np.interp`'s clamp, so the ribbon hung level in the air to the node: **1.83 m** at node 175 `FLEMING ROAD`, a flyover visibly afloat over the street, **found by the user driving to it**. ✅ **8 ends descended, 1 refused**, every one landing at +0.00; mixed-node step median 0.184 → **0.000 m**, 24 → **29 of 36** inside 0.5 m, worst non-portal **1.83 → 0.67**. 🔴 **Zero interior holes region-wide**, so the interpolation the branch was written for never fired. 🔴 **`deck_error.py` cannot see this and never could** — an absent deck reads as *uncovered*, not wrong — so it owes `tools/touchdown_error.py`, which fails the pre-fix bundle. ⚠️ The grade is ribbon-to-ribbon: reading it off the deck top drops `clearance_m` and understated every row. ⚠️ **One refusal, not the two predicted** — the negative step descends fine, and that prediction confused the two ends of the ramp |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -379,7 +380,8 @@ region-wide, 1.96–3.85 m apart, and that is a **floor**, counting only pairs s
 **Claim.** Nothing in the source ramps between elevation levels *as an attribute*, but every one of
 the 36 nodes joining two levels is a real ramp: **17 junctions, 13 attribute flips, 5 tunnel portals,
 1 stub, and zero plan-coincident crossings.** After `P2-7`'s deck sampling the median step is
-**0.04 m** and 26 of 36 are inside 0.5 m.
+**0.04 m** and 26 of 36 are inside 0.5 m — ⚠️ **24 of 36 when re-measured**, and **29 of 36**
+since `Q90` ramped the touchdowns to their nodes.
 
 **Why the 13 look like a 6 m cliff.** They are **one road, split where the publisher's `ELEVATION`
 changes partway up the ramp** — so both sides are wrong by about half a deck height each, in opposite
@@ -390,7 +392,8 @@ threshold was put.
 
 **What remains.** The 5 portals and `e425`'s stub. A tunnel is a void, and the descent happens
 outside the region — **8 m over a 42 m stub is a 19% grade** for the Cross-Harbour approach. It
-resolves only if the region grows east (`Q6`).
+resolves only if the region grows east (`Q6`). ⚠️ **And 6 clamped ramp touchdowns** (`Q90`), which
+are the whole of the rest of the residual and stayed invisible while the step was quoted as a median.
 
 **Consequences.** The network is still *closed to driving*: `nearest_edge` refuses all 60 off-grade
 edges. Opening it is `P4-1`, which reverses `P2-2`'s refusal.
@@ -12349,3 +12352,163 @@ accelerating, not a parking-speed spin. The band's real bottom is around 26 km/h
 **See.** `Q88` for the bottom this closes and the method finding it explains · `Q87` for the mirror
 case at the top · `Q85` for why torque cannot substitute for grip · `Q84` for the dial's grading rule
 and the figures this supersedes
+
+## `Q90` — Every hole in the structure is a touchdown, and the sampler clamps where it should descend
+
+**Status.** ✅ Closed · **Owner.** `P2-7`'s `_deck_heights` → `pipeline/roads.py::_descend` ·
+found by the user, by driving to it
+
+**Claim.** `INFRASTRUCTURE` stops being modelled where a ramp reaches grade, and `_deck_heights`
+answers a hole by interpolating across it. At an edge *end* there is nothing on the far side to
+interpolate to, so `np.interp` **clamps to the first covered station** — the ribbon was held dead
+level in the air all the way to the node instead of descending to it. Fixed by ramping from the
+node's at-grade height to the first covered station, bounded by
+`deck.touchdown_max_grade_pct` (**10.0**).
+
+| edge | node | clamped run | step before | grade | road | |
+|---|---|---|---|---|---|---|
+| `e208` | 175 | 26.9 m | **+1.83** | 6.8% | `FLEMING ROAD` | ✅ |
+| `e118` | 175 | 24.0 m | **+1.48** | 6.2% | `FLEMING ROAD` | ✅ |
+| `e726` | 394 | 30.0 m | +0.87 | 2.9% | `HUNG HING ROAD FLYOVER` | ✅ |
+| `e727` | 392 | 34.1 m | +0.84 | 2.4% | `HUNG HING ROAD FLYOVER` | ✅ |
+| `e248` | 269 | **1.9 m** | +0.67 | **35.8%** | `MARSH ROAD` | 🔴 refused |
+| `e365` | 23 | 8.9 m | +0.60 | 6.7% | off `VICTORIA PARK ROAD` | ✅ |
+| `e519` | 170 | 19.5 m | +0.59 | 3.0% | `HARBOUR ROAD` / `TONNOCHY ROAD` | ✅ |
+| `e365` | 30 | 20.8 m | **−0.42** | 2.0% | off `GLOUCESTER ROAD` | ✅ |
+| `e248` | 255 | 15.3 m | +0.06 | 0.4% | `MARSH ROAD` | ✅ |
+
+**Evidence.** **8 descended, 1 refused, graded across 9** — median 3.0%, max 35.8%. Every descended
+end lands at **+0.00 m**. Node 175's four edge ends now read one height, **3.495**, where two of them
+stood at 4.98 and 5.33. Across the 36 mixed nodes the step falls to a median **0.184 → 0.000 m** with
+**24 → 29 of 36** inside `P2-7`'s 0.5 m criterion; excluding `Q21`'s portals and `e425`'s stub the
+worst is **1.83 → 0.67 m**, which is the one refusal. The other **81 of 90** off-grade ends were
+never clamped: **76** carry structure to the node, and the remaining 5 are ends the region boundary
+clipped or `e425`'s wholly-fallback stub. ⚠️ **14 of 90 read as uncovered to the tiles against 9
+clamped by the pipeline**, and that five-end gap is `P2-1`'s 0.5 m decimation losing the deck's own
+edge — the disagreement the grader reports rather than fails on.
+
+**Two reads sharing no code, agreeing to the metre.** The clamp is read from `roadgraph.json` alone —
+a run of bit-identical `y` at an edge end is the only thing `np.interp` can leave outside its range.
+The hole is read from the shipped tiles' `INFRASTRUCTURE` faces by vertex colour. They agreed on all
+90 ends, which is what made this a mechanism rather than a reading, and `tools/touchdown_error.py`
+re-checks it on every build.
+
+✅ **It accounted for the whole residual.** Before the fix, excluding the portals and the stub,
+**every** mixed node past 0.5 m was one of these — 6 of 6. There was no second cause.
+
+### 🔴 There are ZERO interior holes, so the branch never did what it was written for
+
+`_deck_heights`' docstring defends interpolation as *"holds the deck across the hole"*, and measured
+over every level-1 edge in the region **there is not one hole that is not at an edge end**. Every gap
+is a touchdown. So in Wan Chai the justification had no case and the clamp was the *only* behaviour
+that ever fired. ⚠️ Measured on the **decimated** tiles, which are the coarser read and would
+over-report holes rather than hide them, so it is a floor on the claim and not a ceiling.
+
+### 🔴 The grade is measured ribbon-to-ribbon, and reading it off the deck top understates it
+
+`clearance_m` is 0.20 m of wearing course the ribbon carries and the deck does not, so a grade taken
+from the sampled structure top is about 0.2 m shallower over the same run than the one the road
+actually climbs. The first pass at this table was written that way and read 6.1/5.3/2.2/1.9/24.8
+against the 6.8/6.2/2.9/2.4/35.8 above. ⚠️ **The cap must be compared against what gets drawn**, so
+`_descend` and `touchdown_error.py` both measure to `out[index]`, clearance included.
+
+### 🔴 One refusal, not two — and the negative step was NOT the second
+
+`e248` at node 269 is the only end over the cap: 0.66 m to lose over a **1.9 m** hole is 35.8%, and
+no road ramps at that. Either the structure genuinely stops 0.66 m above the street or the at-grade
+`e466` is the misplaced edge; it wants eyes, not a rule, and it is what leaves the 0.67 m worst step.
+
+⚠️ **`e365` at node 30 was expected to be refused and is not, and the expectation was wrong.** Its
+step is *negative* — the elevated ribbon sat 0.43 m **below** its three at-grade `GLOUCESTER ROAD`
+neighbours — and the reasoning that a descent "would have to make the deck climb" confused the two
+ends of the ramp. The node station rises to meet the street and the ribbon descends onto its deck
+over 20.8 m at 2.0%, which closes the step. The underlying defect stands: a level-1 label on a run
+that is really at grade is `Q13`'s attribute flip, and this fixes how it *renders* without fixing
+what it *is*.
+
+### The bound is a classifier, not a tuning value
+
+The six real touchdowns run 2.0-6.8% and opposed carriageways of one flyover agree to within a
+point — `FLEMING ROAD` 6.2/6.8, `HUNG HING ROAD FLYOVER` 2.9/2.4. Two independent digitisations
+converging on a plausible ramp grade is the evidence that the missing metres are an unmodelled
+embankment rather than absent road. The worst refusal is 5x the steepest keep, so anything from 8 to
+15 gives this region the same answer. ⚠️ **It is still config and not a constant**: it is a statement
+about what a road can climb, and the second city will not share it — `at_grade_m`'s precedent.
+
+### 🔴 `touchdown_grade_pct` is recorded over the refusals as well as the keeps
+
+Appended below the guard it would be confined to the cap by construction and would report a clean
+sweep whatever the data did — `Q58`'s `drawn_gauge_m` trap, caught in review in `arrows.py` and again
+in `roadmarks.py`. `len(touchdown_grade_pct) == ends_descended + ends_over_grade` is the identity, and
+**9 against 8** is what says the distribution is not the cap describing itself.
+
+### What the graders said, including the one that reads worse
+
+- `deck_error.py`: **acceptance met, unmoved.** \|error\| p90 0.094, deepest below 0.48, median
+  −0.040 — identical to three decimals. Within ±0.10 m 92.8% → **92.9%**; stations unmatched by the
+  drawn road **20 → 13** and with no deck under them **87 → 94**, which is the same seven stations
+  changing sides. 🔴 **This tool cannot see the defect and never could**: where the structure is
+  absent there is nothing to measure against, so a clamped end is *uncovered* rather than wrong.
+  That is why `Q90` owes a grader of its own.
+- `tools/touchdown_error.py`: **new, and it fails the pre-fix bundle** — 8 ends clamped inside the
+  cap. After: `PASS`, 1 refused. It is a **one-sided** bar by construction: a ribbon still clamped
+  over a hole it could be ramped across is this defect returning, while one left clamped over the cap
+  is the refusal working.
+- `overhang.py`: `Q22` **10.0% → 10.1%** (5,248 → 5,307 m²). ⚠️ **Not a regression, and the
+  instrument is why**: it asks whether *structure* lies under the ribbon, never whether *air* does,
+  so a ramp resting on the terrain still reads as hanging. The metres moved from air to ground and
+  the number did not notice. `Q22` stays open and this does not touch it.
+- `ground_clearance.py`: within bounds, unmoved to three decimals.
+- `carriageway_occupancy.py`: still **fails on the same 26 edges** — `Q19`'s population, unchanged.
+- `check.sh`: exit 0. ⚠️ Its two `on_structure` assertions are **level-0 only**, so neither could
+  have seen this; `_check_structure_width` and `_check_lanes` both skip off-grade edges.
+
+### The evidence is a frame, because no counter could have caught this
+
+`Q62`'s rule, arrived at from the other side: every counter here read correctly while the bridge
+floated. Shot at one fixed camera in `city_preview.tscn`, `--debug-view=off --hud=off`, twice and
+`cmp`'d **byte-identical**, in `build/driver/q90_clean1`. ⚠️ **The overlay is not deterministic and
+the geometry is** — a `--debug-view=minimal` pair differs in **2,843 pixels confined to rows 15-82**,
+which is the fps readout and nothing below it.
+
+### Found by review: two silent refusals and a gate that was weaker than its target
+
+🔴 **`mixed` did not guarantee a street to descend to.** The gate was "a node another level also
+reaches", and the target is `terrain + level_zero_m` — which assumes a **level-0** edge is there.
+`elevation_levels` declares a level 2, and a `(1, 2)` node is mixed with nothing at grade to land on.
+Every mixed node in Wan Chai is `(-1, 0)` or `(0, 1)`, so the weak test agreed here and would have
+shipped. ⚠️ **And the grader could not have caught it**: a wrongly descended end is no longer
+clamped, so `clamped_m == 0` drops it from both halves of the tool's partition. Fixed by
+`_ramp_ends`, which asks each end of the ramp its own question — `_lifted_heights` whether *another*
+level is present, `_descend` whether **level 0** is — off one `_levels_at_node` map.
+
+🔴 **The terrain-NaN refusal was silent, and it held the partition identity true by never reaching
+the list.** In a change whose whole argument is that a distribution must be recorded over its
+refusals, one refusal was invisible by exactly the mechanism the other two are written against.
+`ends_no_target` counts it, deliberately **outside** `touchdown_grade_pct`: an end with no terrain
+has no grade, and inventing one would poison the distribution the other two are graded on.
+`vertices_off_terrain` cannot stand in — it counts NaN terrain anywhere on any edge and cannot
+isolate an end that wanted to descend and could not.
+
+⚠️ **`_deck_heights` and `_lifted_heights` do not ask the same question, and both can fire.** The
+first gates on `sample_along`'s slab continuity, the second on `sample_lowest_above` and
+`at_grade_m`. Where they disagree at a shared node the street publishes `terrain + lift +
+clearance_m` while the descent targets `terrain + level_zero_m`, re-opening a step at the node this
+exists to close. **Measured: the 16 lifted and 9 descended ends are disjoint here** — a fact about
+the data, not a property of the construction, and recorded rather than asserted away.
+
+⚠️ **The comment justifying `level_zero_m` cited a precedent that says the opposite.** It read "for
+the reason `_lifted_heights` already gives", and that function's own comment says the flat offset is
+deliberately *not* added at a lifted end. The real reason is that the descent targets the
+**unlifted** street, which is `_from_terrain`'s `terrain + deck_m` at level 0.
+
+### No schema bump, and that is the rule rather than an omission
+
+`on_structure` means what `ARCHITECTURE.md` already says — true where the height came from sampled
+structure — and a descended station's height comes from the street, so **false** is the field's
+existing meaning applied to a new case. Values move; no consumer would be wrong to keep its old
+interpretation, which is hard rule 5's test. `roadgraph.json` stays at schema 4 and `city.json` at 19.
+
+**See.** `Q20` for the sampler this corrects · `Q13` for the mixed nodes and the attribute flip
+`e365` is an instance of · `Q22` for what it deliberately leaves open · `Q21` for the portals
+excluded from the residual · `Q62` for why the evidence is a render

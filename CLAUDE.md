@@ -394,6 +394,37 @@ Common emoji for this project:
   look at **both** layers, and `grep -i "shader error"` because `check.sh` exits 0 on a shader that
   fails to compile. ⚠️ **`sheeting_glow` must stay 0**: any glow makes an unlit lens read as a lit
   one, which is an instruction this game refuses to give. Numbers in `Q76`.
+- **`_deck_heights`, `_descend`, `_lifted_heights`, or `deck.touchdown_max_grade_pct`: also
+  `tools/touchdown_error.py`, and paste its table — plus the roads stage's `descended / refused /
+  graded across` line, before and after.** 🔴 **`deck_error.py` cannot see this defect and never
+  could**: where the structure is absent there is nothing to measure against, so a ribbon clamped
+  level in the air over an unmodelled touchdown reads as *uncovered* rather than wrong, and it
+  scored a clean `P2-7` acceptance over a flyover visibly afloat above the street (`Q90`).
+  ⚠️ **The grade is measured ribbon-to-ribbon, `clearance_m` included, never off the deck top** —
+  the deck-top reading is ~0.2 m shallower over the same run and understated every row of `Q90`'s
+  first table. ⚠️ **`touchdown_grade_pct` is recorded over the refusals as well as the keeps, and
+  `n` exceeding `ends_descended` is how you tell** — recorded below the guard it is confined to the
+  cap by construction and reports a clean sweep whatever the data does, which is `Q58`'s
+  `drawn_gauge_m` trap for the fourth time. 🔴 **There is a THIRD refusal and it is deliberately
+  OUTSIDE that distribution**: `ends_no_target` counts an end with no terrain to measure from, and
+  it must stay counted rather than appended — an end with no grade has no grade to record, and
+  review found this one holding the identity true by never reaching the list. So the partition is
+  `len(touchdown_grade_pct) == ends_descended + ends_over_grade`, with `ends_no_target` beside it.
+  🔴 **`_descend` gates on a LEVEL-0 edge at the node, never on "mixed"** — `elevation_levels`
+  declares a level 2, and a `(1, 2)` node is mixed with no street to land on. ⚠️ **The grader cannot
+  catch that**: a wrongly descended end is no longer clamped, so `clamped_m == 0` drops it from both
+  halves of its partition. ⚠️ **`_deck_heights` and `_lifted_heights` ask different questions of the
+  same node** — `sample_along` continuity against `sample_lowest_above` + `at_grade_m` — so both
+  firing on one end is possible and would re-open a step; the 16 lifted and 9 descended ends are
+  measured disjoint, which is data and not construction. ⚠️ **The bar is one-sided on purpose**: a ribbon still
+  clamped *inside* the cap is the defect returning, one clamped *over* it is the refusal working.
+  ⚠️ **`overhang.py` will read slightly worse and that is the instrument** — it asks whether
+  structure lies under the ribbon, never whether air does, so a ramp resting on the terrain still
+  counts as hanging and `Q22` is untouched. 🔴 **The evidence is a frame** (`Q62`): every counter
+  read correctly while the bridge floated, so shoot one fixed camera in `city_preview.tscn` with
+  `--debug-view=off --hud=off`, twice, and `cmp` them — a `minimal` pair differs in the fps readout
+  alone. ⚠️ **`check.sh` cannot help**: both its `on_structure` assertions skip off-grade edges.
+  Numbers in `Q90`.
 - Road-surface, deck-height or ground changes: also `tools/deck_error.py`, `tools/overhang.py`,
   `tools/ground_clearance.py` and `tools/carriageway_occupancy.py`, by hand after a build. They grade
   the *shipped* bundle and share no code with the pipeline — `check.sh` does not require a built

@@ -2307,8 +2307,8 @@ class DeckSampling:
 
     `elevation_levels` gives a level one flat offset, which `Q20` measured as
     |error| p90 4.19 m against the real decks, with the ribbon sitting *below*
-    the deck — inside the structure — in 66% of samples. These four values
-    replace that constant with a measurement of what the road is built on.
+    the deck — inside the structure — in 66% of samples. These values replace
+    that constant with a measurement of what the road is built on.
 
     Tuning data rather than constants in code (CLAUDE.md hard rule 4), and none
     of it is derivable: every value here was measured on Wan Chai, and a city
@@ -2329,6 +2329,11 @@ class DeckSampling:
     # this close to the ground is the ground. Also the residual step that lift
     # is allowed to leave behind, which is what bounds it.
     at_grade_m: float
+    # The steepest a touchdown may be reconstructed at, where the structure
+    # stops before the ramp reaches the node (`Q90`). Above it the step is left
+    # standing and counted, because a grade no road climbs is evidence that the
+    # missing metres are not a ramp.
+    touchdown_max_grade_pct: float
     # How far above the sampled structure the carriageway is drawn. Not a fudge
     # factor: a real road is a wearing course laid *on* a structural deck, and
     # this is that layer. It also has to absorb the tile decimation, which is
@@ -3635,10 +3640,13 @@ def _deck_sampling(body: dict[str, Any], where: str) -> DeckSampling:
     # A spacing or a slab gap of zero is degenerate — the first asks for
     # infinitely many stations, the second makes every distinct height its own
     # slab and so defeats the clustering the query is built on.
+    # A touchdown grade of zero admits no descent at all, which is the
+    # pre-`Q90` clamp wearing a config key — inert, and inert in the way
+    # `_thresholds` exists to refuse.
     values = _thresholds(
         body,
         where,
-        positive=("resample_m", "slab_gap_m"),
+        positive=("resample_m", "slab_gap_m", "touchdown_max_grade_pct"),
         signed=("max_below_terrain_m", "at_grade_m", "clearance_m"),
     )
     return DeckSampling(
@@ -3646,6 +3654,7 @@ def _deck_sampling(body: dict[str, Any], where: str) -> DeckSampling:
         slab_gap_m=values["slab_gap_m"],
         max_below_terrain_m=values["max_below_terrain_m"],
         at_grade_m=values["at_grade_m"],
+        touchdown_max_grade_pct=values["touchdown_max_grade_pct"],
         clearance_m=values["clearance_m"],
     )
 
