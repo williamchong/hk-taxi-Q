@@ -115,6 +115,33 @@ extends Resource
 ## keeps the nose from biting. It models no mechanism — it is a fudge, and it is
 ## named honestly rather than dressed up.
 @export_range(0.0, 1.0, 0.01) var drift_front_grip_scale: float
+## Rear-axle multiplier at max_speed_kph, interpolated from drift_rear_grip_scale
+## starting at drift_fade_from_kph. Higher means less cut, i.e. the drift eases
+## off as speed rises.
+##
+## 🔴 **This is the half of Q87 the yaw fade could not reach.** With the yaw assist
+## switched off entirely the held drift still read 95.2 deg at 86 km/h and 165.2 at
+## 105 — one isotropic friction budget, cut by a constant factor, spins the car on
+## its own once there is enough speed in it. The cut needed a speed term and had
+## none.
+##
+## ⚠️ **The value the car wants MOVES with speed, which is why this interpolates to
+## max_speed_kph rather than plateauing at drift_yaw_fade_to_kph like the yaw
+## does.** Swept against the 51.1 deg the button gives at the design speed: 86 km/h
+## wants ~0.680 (50.1 deg) and 105 km/h wants ~0.710 (44.9 deg). A single
+## high-speed value cannot serve both — 0.680 at 105 still reads 163.5.
+##
+## ⚠️ **Fitted, not guessed**: 0.75 here predicts 0.685 at 86 and 0.708 at 105
+## against those two targets.
+##
+## 🔴 **The usable window is narrow and it closes ABOVE, not below.** At 86 km/h
+## 0.700 gives 20.4 deg and 0.715 gives 2.1 — the drift stops existing rather than
+## getting milder. Sweep at 0.005 or finer near the knee; Q84 records what a coarse
+## grid does to exactly this dial.
+##
+## ⚠️ Nothing below drift_fade_from_kph is touched, which is deliberate: every
+## published number in Q84 and Q86 was measured at 63 km/h and stays valid.
+@export_range(0.0, 1.0, 0.001) var drift_rear_grip_scale_at_top: float
 ## Seconds for the drift to reach full engagement while the button is held.
 ##
 ## Short: the tail should step out when the player asks, not a moment later.
@@ -250,10 +277,10 @@ extends Resource
 ## 10-65 km/h.
 ## These shape feel — they decide the speed band the button works in — so
 ## CLAUDE.md hard rule 4 makes them data.
-@export_range(0.0, 200.0, 1.0, "suffix:km/h") var drift_yaw_fade_from_kph: float
+@export_range(0.0, 200.0, 1.0, "suffix:km/h") var drift_fade_from_kph: float
 ## Speed at or above which the yaw assist is fully withdrawn, in km/h.
 ##
-## ⚠️ Below drift_yaw_fade_from_kph this degenerates to a hard step at this speed
+## ⚠️ Below drift_fade_from_kph this degenerates to a hard step at this speed
 ## rather than dividing by a zero or negative span. 🔴 **A zero here means nobody
 ## authored the pair, and yields FULL assist rather than none** — the step test is
 ## true at every speed for an all-zero profile, so the safe-looking reading would

@@ -496,7 +496,7 @@ func _apply_drift_yaw() -> void:
 ##
 ## Separate from the fade-in above because they are different kinds of number: the
 ## fade-in exists to remove a discontinuity and shapes no feel, and this decides
-## the speed band the drift button works in. See drift_yaw_fade_from_kph.
+## the speed band the drift button works in. See drift_fade_from_kph.
 ##
 ## 🔴 **A zero span returns full assist, NOT none, and the difference is the whole
 ## point of the guard.** An unassigned profile reads as all-zeroes, and a naive
@@ -514,12 +514,35 @@ func _apply_drift_yaw() -> void:
 ## ⚠️ An equal, non-zero pair is still a deliberate hard cutoff at that speed, and
 ## is kept as one — only a zero fade_to means "nobody authored this".
 func _speed_fade_out(speed: float) -> float:
-	var span: float = profile.drift_yaw_fade_to_kph - profile.drift_yaw_fade_from_kph
+	var span: float = profile.drift_yaw_fade_to_kph - profile.drift_fade_from_kph
 	if span > 0.0:
-		return 1.0 - clampf((speed - profile.drift_yaw_fade_from_kph) / span, 0.0, 1.0)
+		return 1.0 - clampf((speed - profile.drift_fade_from_kph) / span, 0.0, 1.0)
 	if profile.drift_yaw_fade_to_kph <= 0.0:
 		return 1.0
 	return 0.0 if speed >= profile.drift_yaw_fade_to_kph else 1.0
+
+
+## The rear axle's grip multiplier at this speed, easing from
+## drift_rear_grip_scale toward drift_rear_grip_scale_at_top above the knee.
+##
+## 🔴 **Interpolates to max_speed_kph rather than plateauing where the yaw fade
+## does, because the value the car wants moves with speed** — 86 km/h wants ~0.680
+## and 105 km/h ~0.710, and 0.680 at 105 is still a 163.5 deg spin. The two
+## mechanisms share a knee and not a top, which is why only the knee was renamed.
+##
+## ⚠️ **Both degenerate cases return the base scale, i.e. behave as though this
+## taper did not exist.** A zero at_top is an unauthored profile, and reading it
+## literally would drive the rear grip to *zero* at speed rather than merely
+## failing to help. Same reasoning as _speed_fade_out's zero span, and the
+## opposite of what a naive guard does there.
+func _rear_grip_scale() -> float:
+	if profile.drift_rear_grip_scale_at_top <= 0.0:
+		return profile.drift_rear_grip_scale
+	var span: float = profile.max_speed_kph - profile.drift_fade_from_kph
+	if span <= 0.0:
+		return profile.drift_rear_grip_scale
+	var over: float = clampf((absf(speed_kph) - profile.drift_fade_from_kph) / span, 0.0, 1.0)
+	return lerpf(profile.drift_rear_grip_scale, profile.drift_rear_grip_scale_at_top, over)
 
 
 ## Publishes _drift_engagement to the wheels. Separate from the ramp so place_at()
@@ -527,9 +550,7 @@ func _speed_fade_out(speed: float) -> float:
 ## "do not ramp" — the grip still has exactly one owner, which is the point the
 ## caller's comment makes.
 func _write_drift_grip() -> void:
-	var rear: float = (
-		profile.tyre_grip * lerpf(1.0, profile.drift_rear_grip_scale, _drift_engagement)
-	)
+	var rear: float = profile.tyre_grip * lerpf(1.0, _rear_grip_scale(), _drift_engagement)
 	var front: float = (
 		profile.tyre_grip * lerpf(1.0, profile.drift_front_grip_scale, _drift_engagement)
 	)

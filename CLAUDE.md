@@ -134,9 +134,15 @@ Common emoji for this project:
   rows, and it is also why a yaw assist tuned at 63 and applied at 84 spun the car for a whole
   release with a green `check.sh` and five clean rows (`Q87`). 4 s → 63.02 kph, 6 s → 86.36, 8 s →
   105.47; rows compare only *within* one run-up, so quote `entry kph`.
-  ⚠️ **The drift is only tuned for roughly 40–70 kph**: above that `drift_rear_grip_scale` spins the
-  car on its own — 95.2° at 86 kph and 165.2° at 105 with the yaw assist switched off entirely — and
-  it carries **no speed term**. Do not read a high-speed drift into the yaw fade dials.
+  ⚠️ **The drift withdraws with speed and there are TWO envelopes, sharing a knee and not a top.**
+  `drift_fade_from_kph` (65) is where both begin; the yaw is fully spent at `drift_yaw_fade_to_kph`
+  (85), while `drift_rear_grip_scale` interpolates toward `drift_rear_grip_scale_at_top` all the way
+  to `max_speed_kph`, because the grip value the car wants **moves** with speed (`Q88`). Above about
+  100 kph the button is deliberately **inert**, which is the safe side of a cliff, not a bug.
+  🔴 **A static sweep of a speed-dependent grip dial gives an upper bound on a fix, never an
+  estimate.** Held constant, 0.710 reads 44.9° at 105 kph; reached via the taper at that same entry
+  speed it read **159.4°**, because the car decelerates below the knee inside the drift and the cut
+  deepens underneath it. Sweep the taper dial itself (`Q88`).
 - **`widen_default`, any `roads.surface` widening change, or anything that moves the pipeline's
   starved population — `ALONG_M` included: also `tools/narrowing.py`, before and after.** It is what
   priced the current value: narrowing clears *no* blocked edge at any factor down to the 1.3x floor

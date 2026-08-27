@@ -115,7 +115,8 @@ wins.
 | `Q84` | **The drift cliff was the sweep grid, and the peak was the wrong target** | ✅ Closed — corrects `Q50` regression 2. No cliff: the response is smooth and monotonic at ~990°/unit and 14° lands at **0.6695**; a `%.2f` sweep label printed three distinct values as one row and invited the 0.02 grid. 🔴 But the game scores drift **per second** and `peak_slip_deg` is a one-tick `maxf` — 0.6695 holds 14° for **0.05 s** against shipped 0.66's **0.57 s** — and dwell is bought with exit speed all the way down, which is `Q50`'s isotropic cost stated properly. 🔴 **A release ramp was built and falsified** — the tap is still 1.9°, because the slide takes seconds to build rather than ending too soon; kept for `Q83`'s hysteresis, which is not why it was made |
 | `Q85` | **The route out of the drift was a quantity the engine does not simulate** | ✅ Closed — `get_rpm()` is road speed re-expressed: this class has no wheel inertia, so a wheel cannot spin up or lock and **`B4`'s per-wheel angular velocity cannot be read at all**. `get_skidinfo()` is real; the fact was already in `hud.gd`, filed under the wrong question. 🔴 `Q50`'s "the road-speed roll is gone" is wrong — it moved into the engine, and `P3-2b` inherits it. ✅ The drift is assisted with a **yaw torque** instead (42.1° against 21.8°), which `Q49`'s anti-physical target licenses. 🔴 It worsens the scrub, and torque and grip are multiplicative rather than alternatives. ⚠️ **The constant-torque figures here are superseded by `Q86`**, which decays it and re-tunes the peak to 7000 |
 | `Q86` | **The tap needed the torque spent early, and the dwell was never the assist's to buy** | ✅ Closed — torque × time is rotation, so a 0.5 s tap collected **one-eighth** of a 4 s hold's impulse and no constant could serve both. Decayed from a peak toward a sustain over `drift_yaw_decay_s`, on **time** never on measured slip (`Q72`). ✅ Tap **2.4° → 16.0°** and 0.00 → **0.23 s** above the bar, hold dwell 0.78 → 0.82, exit **40.96 → 41.29** — better in every column. 🔴 **`secs>thr` was flat across all three yaw dials** (0.78–0.85) while peak ran 40° → 130°, so these are graded on peak and exit, the opposite of `Q84`'s rule for the grip dial. ⚠️ 9000 N⋅m was the candidate and driving it rejected it — 65.7° on the pad is 086° → 219° and a railing on Expo Drive. ⚠️ **All of it measured at one 63 km/h entry**, which `Q87` found was the tool's blind spot |
-| `Q87` | **The assist was tuned at one speed, and the grip cut has no speed term at all** | 🟡 Partly closed — `Q86`'s assist had a fade-in and no fade-out, so 7000 N⋅m landed at any speed while every value was picked at 63 km/h; the tap that gives 16.0° there **spun the car at 84**. Fixed by `drift_yaw_fade_from_kph`/`_to_kph` (65/85): the 105 km/h tap goes **163.3° → 17.5°** and 39.2 → 80.0 m, and the design-speed table is byte-identical. ⚠️ `skidpad.sh` could not see it — `RUN_UP_S` fixed entry at one speed, so `--run-up=` now varies it. 🔴 **Necessary, not sufficient**: with the assist off entirely the drift still reads 95.2° at 86 and 165.2° at 105, so `drift_rear_grip_scale` spins the car by itself and has no speed term. ⬜ Unfixed — it is `Q84`'s dial on the opposite grading column |
+| `Q87` | **The assist was tuned at one speed, and the grip cut has no speed term at all** | 🟡 Partly closed — `Q86`'s assist had a fade-in and no fade-out, so 7000 N⋅m landed at any speed while every value was picked at 63 km/h; the tap that gives 16.0° there **spun the car at 84**. Fixed by `drift_fade_from_kph`/`_to_kph` (65/85): the 105 km/h tap goes **163.3° → 17.5°** and 39.2 → 80.0 m, and the design-speed table is byte-identical. ⚠️ `skidpad.sh` could not see it — `RUN_UP_S` fixed entry at one speed, so `--run-up=` now varies it. 🔴 **Necessary, not sufficient**: with the assist off entirely the drift still reads 95.2° at 86 and 165.2° at 105, so `drift_rear_grip_scale` spins the car by itself and has no speed term. ⬜ Unfixed — it is `Q84`'s dial on the opposite grading column |
+| `Q88` | **The grip cut got the speed term, and the static sweep lied about how much** | ✅ Closed — `drift_rear_grip_scale_at_top` **0.80**, interpolated from the knee to `max_speed_kph`. ✅ **The spin is gone at every speed**: 86 km/h drift 165.0° → **50.4°/0.98 s** (the design-speed feel), 105 km/h drift 165.4° → **2.4°**, its exit 21.95 → **70.14 kph**; the city 84 km/h tap holds **76.00** against a 76.60 no-drift baseline. Design speed byte-identical for the third change running. 🔴 **The static sweep over-predicted by 3×** — 0.710 held constant reads 44.9° at 105, reached via the taper it read 159.4°, because the car decelerates below the knee inside the drift. ⚠️ 0.78 gives a real 75.8° drift at 105 and was **refused**: it sits 0.01 from a 75.8 → 2.8 cliff, which is `Q84`'s lesson on this exact dial. 0.80 fails safe — inert above ~100 km/h |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -12005,7 +12006,7 @@ extends `Q86`
 **Claim.** `Q86`'s yaw assist had a fade-**in** from a standstill and no fade-**out**, so the full
 7000 N⋅m landed at any speed while every value had been picked at the skidpad's 63 km/h. The same
 0.5 s tap that gives 16.0° at 63 km/h **spun the car at 84** on Expo Drive — 84 → 27 km/h in one
-second, ending across the road with the wrong-way sign lit. Fixed by `drift_yaw_fade_from_kph` /
+second, ending across the road with the wrong-way sign lit. Fixed by `drift_fade_from_kph` /
 `drift_yaw_fade_to_kph`, 65 and 85. 🔴 **And the fix is necessary, not sufficient — see below.**
 
 ⚠️ **`tools/skidpad.sh` could not see this, by construction.** `RUN_UP_S` fixed entry at 63 km/h,
@@ -12026,7 +12027,7 @@ to quote, because the run-up is open-loop.
 | 105.47 | **tap** | **163.3° (spin)** | **17.5°** |
 
 ✅ **The design speed is untouched** — the full five-row table is byte-identical, because 63 sits
-below `drift_yaw_fade_from_kph`. ✅ The 105 km/h tap's distance goes **39.2 → 80.0 m**: the car
+below `drift_fade_from_kph`. ✅ The 105 km/h tap's distance goes **39.2 → 80.0 m**: the car
 travels instead of spinning on the spot. ✅ Confirmed on the route that found it: the 84 km/h city
 tap now holds **66.90 km/h** where it fell to 27.69, against a no-drift baseline of 76.60.
 
@@ -12095,7 +12096,8 @@ does not become optional because the assist is spent.
 
 **What is not settled here.**
 
-- ⬜ **The grip cut has no speed term** — the finding above, and the larger half of the defect.
+- ✅ **The grip cut now has a speed term** — `Q88`, `drift_rear_grip_scale_at_top`, which closes
+  this and removes the spin at every speed.
 - ⬜ **65 and 85 are desk picks**, chosen so 63 km/h is untouched and the assist is spent by the
   speed the car spins at anyway. `P0-3b`'s handset is where they get a thumb.
 - ⚠️ **The fade band is narrow (20 km/h) and linear.** Nothing has looked at whether the withdrawal
@@ -12104,3 +12106,87 @@ does not become optional because the assist is spent.
 **See.** `Q86` for the assist this bounds · `Q84` for `drift_rear_grip_scale` and its opposite
 grading rule · `Q50` for the isotropy that makes the grip cut spin the car · `Q85` for the mechanism
 findings none of this reaches
+
+---
+
+## `Q88` — The grip cut got the speed term, and the static sweep lied about how much
+
+**Status.** ✅ Closed 2026-08-28 · **Owner.** `handling.tres` → `vehicle_controller.gd` ·
+closes `Q87`'s open half
+
+**Claim.** `Q87` fixed the yaw assist's share of the high-speed spin and measured that the grip cut
+carried the rest: with the assist off entirely the held drift read **95.2° at 86 km/h and 165.2° at
+105**, because one isotropic budget cut by a constant factor spins the car once there is enough speed
+in it. `drift_rear_grip_scale_at_top` gives it a speed term — **0.80**, interpolated from
+`drift_rear_grip_scale` starting at `drift_fade_from_kph` and running to `max_speed_kph`.
+
+| entry km/h | run | before `Q87` | after `Q87` | **now** |
+|---|---|---|---|---|
+| 63.02 | drift | 51.1° / 0.82 | 51.1° / 0.82 | **51.1° / 0.82** |
+| 63.02 | tap | 16.0° / 0.23 | 16.0° / 0.23 | **16.0° / 0.23** |
+| 86.36 | drift | 165.0° spin | 103.2° | **50.4° / 0.98** |
+| 86.36 | tap | 54.8° | 8.7° | **2.7°** |
+| 105.47 | drift | 165.4° spin | 165.2° spin | **2.4°** |
+| 105.47 | tap | 163.3° spin | 17.5° | **2.4°** |
+
+✅ **The spin is gone at every speed**, and the design speed is **byte-identical** for the third
+change running — nothing below the knee is touched, so every number `Q84` and `Q86` published stays
+valid. ✅ At 86 km/h the drift now reproduces the design-speed feel almost exactly (50.4° / 0.98 s
+against 51.1° / 0.82). ✅ Exit speed at 105 km/h goes **21.95 → 70.14**, distance **43.0 → 98.1 m**.
+✅ In the city the 84 km/h tap now holds **76.00 km/h** against a no-drift baseline of **76.60** — it
+costs essentially nothing, where the original defect dropped it to 27.69.
+
+⚠️ **The cost, stated plainly: the drift is inert above about 100 km/h** (2.4°). That is the chosen
+failure mode — see the knife-edge below.
+
+### 🔴 The static sweep over-predicted the fix by a factor of three, and this is a method finding
+
+Swept as a **constant**, `drift_rear_grip_scale` 0.710 gives 44.9° at 105 km/h. Fitted into the taper
+so the car sees ≈0.708 at that entry speed, the same run gave **159.4°** — still a spin.
+
+The sweep is not wrong; it answers a different question. A constant holds that value for the whole
+run, and **the taper does not**: the car decelerates hard inside a drift, so it falls back below the
+knee within a second and the cut deepens again underneath it. The spin then develops at a speed the
+entry-speed reading never described. ⚠️ **So a static sweep of a dial that is about to become
+speed-dependent gives an upper bound on the fix, not an estimate of it** — the trajectory is the
+thing, and only the dial in its final form measures the dial in its final form. The published 0.80
+was picked by sweeping `drift_rear_grip_scale_at_top` itself, not by fitting.
+
+### The knife edge that was rejected
+
+At 105 km/h, swept at 0.01: 0.760 → 141.5°, 0.770 → 110.2°, **0.780 → 75.8° / 1.07 s**, 0.790 → 2.8°.
+
+So a real high-speed drift *is* reachable, at 0.78, and it was **refused**. It sits 0.01 from a cliff
+that drops 75.8° → 2.8°, which makes it hostage to any change in `tyre_grip`, mass, or the yaw dials —
+and `Q84` is the record of what this project already paid for reading a narrow band through too
+coarse a grid, on this exact dial. 0.80 fails **safe**: the button stops working before it starts
+spinning the car, and inert is a failure a player can drive through.
+
+⚠️ **Sweep this at 0.005 or finer near the knee.** The window closes *above*, not below — at 86 km/h
+0.700 gives 20.4° and 0.715 gives 2.1°, so the drift stops existing rather than getting milder.
+
+### The knee is now shared, so it stopped saying "yaw"
+
+`drift_fade_from_kph` → **`drift_fade_from_kph`**: one speed at which the drift begins to
+withdraw, governing both mechanisms. They deliberately do **not** share a top. The yaw is fully spent
+at `drift_yaw_fade_to_kph` (85), while the grip cut interpolates all the way to `max_speed_kph`,
+because ⚠️ **the grip value the car wants moves with speed** — 86 km/h wants ~0.680 and 105 km/h
+~0.710, and 0.680 at 105 is still a 163.5° spin. A plateau cannot serve both.
+
+⚠️ **Both degenerate cases in `_rear_grip_scale` return the base scale**, i.e. behave as though the
+taper did not exist. A zero `at_top` is an unauthored profile, and reading it literally would drive
+rear grip to **zero** at speed rather than merely failing to help — the inverse of the `_speed_fade_out`
+defect review caught, and guarded the same way.
+
+**What is not settled here.**
+
+- ⬜ **0.80 is a desk pick**, chosen for the safe side of a cliff. `P0-3b`'s handset decides whether
+  inert-above-100 is the right feel or merely the safe one.
+- ⚠️ **`drift_front_grip_scale` still has no speed term**, and was not measured to need one.
+- ⚠️ **None of this touches `Q85`'s four mechanism findings.** The drift still self-terminates, the
+  throttle still cancels it, the gripping turn is still faster, and there is still no sustained
+  equilibrium at any speed.
+
+**See.** `Q87` for the half this closes and the yaw fade it pairs with · `Q84` for this dial's
+grading rule and for the coarse-grid lesson the knife edge invokes · `Q50` for the isotropy that
+makes a constant cut spin the car · `Q86` for the yaw envelope
