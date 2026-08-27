@@ -139,6 +139,12 @@ Common emoji for this project:
   (85), while `drift_rear_grip_scale` interpolates toward `drift_rear_grip_scale_at_top` all the way
   to `max_speed_kph`, because the grip value the car wants **moves** with speed (`Q88`). Above about
   100 kph the button is deliberately **inert**, which is the safe side of a cliff, not a bug.
+  ⚠️ **The band has a bottom nobody tuned**: below ~50 kph the drift returns 2.9–3.9° and `decay/s`
+  goes *negative* — the car accelerates through the manoeuvre instead of scrubbing. So the usable
+  band is roughly **60–100 kph**, and typical city speeds sit under it. Not caused by the tapers,
+  which touch nothing below the knee; it is `Q84`'s momentum dependence. **Grade a drift change at a
+  low `--run-up` as well as a high one** — three consecutive changes checked "design speed
+  byte-identical" without once asking what happens beneath it (`Q88`).
   🔴 **A static sweep of a speed-dependent grip dial gives an upper bound on a fix, never an
   estimate.** Held constant, 0.710 reads 44.9° at 105 kph; reached via the taper at that same entry
   speed it read **159.4°**, because the car decelerates below the knee inside the drift and the cut

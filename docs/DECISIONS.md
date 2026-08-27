@@ -115,8 +115,8 @@ wins.
 | `Q84` | **The drift cliff was the sweep grid, and the peak was the wrong target** | ✅ Closed — corrects `Q50` regression 2. No cliff: the response is smooth and monotonic at ~990°/unit and 14° lands at **0.6695**; a `%.2f` sweep label printed three distinct values as one row and invited the 0.02 grid. 🔴 But the game scores drift **per second** and `peak_slip_deg` is a one-tick `maxf` — 0.6695 holds 14° for **0.05 s** against shipped 0.66's **0.57 s** — and dwell is bought with exit speed all the way down, which is `Q50`'s isotropic cost stated properly. 🔴 **A release ramp was built and falsified** — the tap is still 1.9°, because the slide takes seconds to build rather than ending too soon; kept for `Q83`'s hysteresis, which is not why it was made |
 | `Q85` | **The route out of the drift was a quantity the engine does not simulate** | ✅ Closed — `get_rpm()` is road speed re-expressed: this class has no wheel inertia, so a wheel cannot spin up or lock and **`B4`'s per-wheel angular velocity cannot be read at all**. `get_skidinfo()` is real; the fact was already in `hud.gd`, filed under the wrong question. 🔴 `Q50`'s "the road-speed roll is gone" is wrong — it moved into the engine, and `P3-2b` inherits it. ✅ The drift is assisted with a **yaw torque** instead (42.1° against 21.8°), which `Q49`'s anti-physical target licenses. 🔴 It worsens the scrub, and torque and grip are multiplicative rather than alternatives. ⚠️ **The constant-torque figures here are superseded by `Q86`**, which decays it and re-tunes the peak to 7000 |
 | `Q86` | **The tap needed the torque spent early, and the dwell was never the assist's to buy** | ✅ Closed — torque × time is rotation, so a 0.5 s tap collected **one-eighth** of a 4 s hold's impulse and no constant could serve both. Decayed from a peak toward a sustain over `drift_yaw_decay_s`, on **time** never on measured slip (`Q72`). ✅ Tap **2.4° → 16.0°** and 0.00 → **0.23 s** above the bar, hold dwell 0.78 → 0.82, exit **40.96 → 41.29** — better in every column. 🔴 **`secs>thr` was flat across all three yaw dials** (0.78–0.85) while peak ran 40° → 130°, so these are graded on peak and exit, the opposite of `Q84`'s rule for the grip dial. ⚠️ 9000 N⋅m was the candidate and driving it rejected it — 65.7° on the pad is 086° → 219° and a railing on Expo Drive. ⚠️ **All of it measured at one 63 km/h entry**, which `Q87` found was the tool's blind spot |
-| `Q87` | **The assist was tuned at one speed, and the grip cut has no speed term at all** | 🟡 Partly closed — `Q86`'s assist had a fade-in and no fade-out, so 7000 N⋅m landed at any speed while every value was picked at 63 km/h; the tap that gives 16.0° there **spun the car at 84**. Fixed by `drift_fade_from_kph`/`_to_kph` (65/85): the 105 km/h tap goes **163.3° → 17.5°** and 39.2 → 80.0 m, and the design-speed table is byte-identical. ⚠️ `skidpad.sh` could not see it — `RUN_UP_S` fixed entry at one speed, so `--run-up=` now varies it. 🔴 **Necessary, not sufficient**: with the assist off entirely the drift still reads 95.2° at 86 and 165.2° at 105, so `drift_rear_grip_scale` spins the car by itself and has no speed term. ⬜ Unfixed — it is `Q84`'s dial on the opposite grading column |
-| `Q88` | **The grip cut got the speed term, and the static sweep lied about how much** | ✅ Closed — `drift_rear_grip_scale_at_top` **0.80**, interpolated from the knee to `max_speed_kph`. ✅ **The spin is gone at every speed**: 86 km/h drift 165.0° → **50.4°/0.98 s** (the design-speed feel), 105 km/h drift 165.4° → **2.4°**, its exit 21.95 → **70.14 kph**; the city 84 km/h tap holds **76.00** against a 76.60 no-drift baseline. Design speed byte-identical for the third change running. 🔴 **The static sweep over-predicted by 3×** — 0.710 held constant reads 44.9° at 105, reached via the taper it read 159.4°, because the car decelerates below the knee inside the drift. ⚠️ 0.78 gives a real 75.8° drift at 105 and was **refused**: it sits 0.01 from a 75.8 → 2.8 cliff, which is `Q84`'s lesson on this exact dial. 0.80 fails safe — inert above ~100 km/h |
+| `Q87` | **The assist was tuned at one speed, and the grip cut has no speed term at all** | ✅ Closed — `Q86`'s assist had a fade-in and no fade-out, so 7000 N⋅m landed at any speed while every value was picked at 63 km/h; the tap that gives 16.0° there **spun the car at 84**. Fixed by `drift_fade_from_kph`/`_to_kph` (65/85): the 105 km/h tap goes **163.3° → 17.5°** and 39.2 → 80.0 m, and the design-speed table is byte-identical. ⚠️ `skidpad.sh` could not see it — `RUN_UP_S` fixed entry at one speed, so `--run-up=` now varies it. 🔴 **Necessary, not sufficient**: with the assist off entirely the drift still reads 95.2° at 86 and 165.2° at 105, so `drift_rear_grip_scale` spins the car by itself and has no speed term. ✅ **Closed by `Q88`** the same day — `drift_rear_grip_scale_at_top` removes the spin at every speed |
+| `Q88` | **The grip cut got the speed term, and the static sweep lied about how much** | ✅ Closed — `drift_rear_grip_scale_at_top` **0.80**, interpolated from the knee to `max_speed_kph`. ✅ **The spin is gone at every speed**: 86 km/h drift 165.0° → **50.4°/0.98 s** (the design-speed feel), 105 km/h drift 165.4° → **2.4°**, its exit 21.95 → **70.14 kph**; the city 84 km/h tap holds **76.00** against a 76.60 no-drift baseline. Design speed byte-identical for the third change running. 🔴 **The static sweep over-predicted by 3×** — 0.710 held constant reads 44.9° at 105, reached via the taper it read 159.4°, because the car decelerates below the knee inside the drift. ⚠️ 0.78 gives a real 75.8° drift at 105 and was **refused**: it sits 0.01 from a 75.8 → 2.8 cliff, which is `Q84`'s lesson on this exact dial. 0.80 fails safe — inert above ~100 km/h. ⚠️ **And the band has a bottom nobody tuned**: below ~50 km/h the drift returns 2.9–3.9° and the car accelerates through the manoeuvre, so the usable band is ~60–100 and city speeds sit under it |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -12000,8 +12000,8 @@ tautology the time-based decay avoids · `Q50` for the isotropy underneath all o
 
 ## `Q87` — The assist was tuned at one speed, and the grip cut has no speed term at all
 
-**Status.** 🟡 Partly closed 2026-08-28 · **Owner.** `handling.tres` → `vehicle_controller.gd` ·
-extends `Q86`
+**Status.** ✅ Closed 2026-08-28 · **Owner.** `handling.tres` → `vehicle_controller.gd` ·
+extends `Q86` · its open half closed by `Q88` the same day
 
 **Claim.** `Q86`'s yaw assist had a fade-**in** from a standstill and no fade-**out**, so the full
 7000 N⋅m landed at any speed while every value had been picked at the skidpad's 63 km/h. The same
@@ -12066,8 +12066,10 @@ At 86 km/h even **1000 N⋅m** of assist reads 121.5°, and at 105 even **500** 
 why no setting of the fade could have reached the 51° the button gives at 63. The fade stops the
 assist adding to the spin (165.0 → 103.2 at 86) and that is its whole ceiling.
 
-⚠️ **So the drift button is only tuned for roughly 40–70 km/h**, and above that it is the grip cut
-that breaks it. ⬜ **Unfixed, and deliberately not fixed here**: a speed term on
+⚠️ **So the drift button was only tuned for roughly 40–70 km/h**, and above that it was the grip cut
+that broke it. ✅ **Fixed by `Q88` the same day** — `drift_rear_grip_scale_at_top`, which removes the
+spin at every speed and leaves the design speed byte-identical; the paragraph below is why it was
+left out of *this* change, not an open item. **Deliberately not fixed here**: a speed term on
 `drift_rear_grip_scale` is a change to the dial `Q84` governs and `Q50` priced, on the opposite
 grading column from these three (`secs>thr`, not peak), and it would move the shipped 63 km/h feel
 that every number in `Q84` and `Q86` describes. That is the user's call.
@@ -12167,7 +12169,7 @@ spinning the car, and inert is a failure a player can drive through.
 
 ### The knee is now shared, so it stopped saying "yaw"
 
-`drift_fade_from_kph` → **`drift_fade_from_kph`**: one speed at which the drift begins to
+`drift_yaw_fade_from_kph` → **`drift_fade_from_kph`**: one speed at which the drift begins to
 withdraw, governing both mechanisms. They deliberately do **not** share a top. The yaw is fully spent
 at `drift_yaw_fade_to_kph` (85), while the grip cut interpolates all the way to `max_speed_kph`,
 because ⚠️ **the grip value the car wants moves with speed** — 86 km/h wants ~0.680 and 105 km/h
@@ -12178,8 +12180,31 @@ taper did not exist. A zero `at_top` is an unauthored profile, and reading it li
 rear grip to **zero** at speed rather than merely failing to help — the inverse of the `_speed_fade_out`
 defect review caught, and guarded the same way.
 
+### ⚠️ The usable band has a BOTTOM too, and nothing here had measured it
+
+Every figure in this question and in `Q87` was taken at 63 km/h or above, because that is what the
+default run-up produces. Below the knee the taper does nothing by construction — but that is not the
+same as the drift working. Measured:
+
+| entry km/h | drift peak | `secs>thr` | exit |
+|---|---|---|---|
+| 42.18 | **3.9°** | 0.00 | 54.83 |
+| 49.48 | **2.9°** | 0.00 | 54.88 |
+| 63.02 | 51.1° | 0.82 | 41.29 |
+
+⚠️ **Below about 50 km/h the button barely does anything**, and `decay/s` goes *negative* — the car
+**accelerates** through the manoeuvre (42.18 → 54.83) instead of scrubbing. This is not a regression
+and no change here caused it: nothing below `drift_fade_from_kph` is touched, and it is the same
+momentum dependence `Q84` recorded when it found the slide takes seconds to build rather than ending
+too soon. But it means the honest usable band is roughly **60–100 km/h**, not "everything below 100",
+and the bottom of it had never been measured — three consecutive changes verified "the design speed
+is byte-identical" without ever asking what happens under it.
+
 **What is not settled here.**
 
+- ⬜ **Whether the bottom of the band matters.** Typical city driving is 40–60 km/h, so the drift may
+  be least available exactly where it is most used. Nothing has been tuned for it and no dial here
+  addresses it.
 - ⬜ **0.80 is a desk pick**, chosen for the safe side of a cliff. `P0-3b`'s handset decides whether
   inert-above-100 is the right feel or merely the safe one.
 - ⚠️ **`drift_front_grip_scale` still has no speed term**, and was not measured to need one.

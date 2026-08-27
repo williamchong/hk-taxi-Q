@@ -108,6 +108,11 @@ extends Resource
 @export_range(0.0, 1.0, 0.001) var drift_rear_grip_scale: float
 ## Front-axle tyre_grip multiplier while drift is held.
 ##
+## ⚠️ **Deliberately has no speed term where the rear does, and the asymmetry is
+## the mechanism rather than an omission.** What spins the car at speed is the
+## front/rear *imbalance*, so tapering the rear alone closes it — 0.19 down to 0.05
+## at the limiter — while tapering both would preserve the gap and fix nothing.
+##
 ## A real handbrake does nothing to the front axle, and the raycast model this
 ## replaced left it alone for that reason. It is back because the rear-only form
 ## is unusable here: with one isotropic budget, softening the rear alone spins the
@@ -127,17 +132,35 @@ extends Resource
 ##
 ## ⚠️ **The value the car wants MOVES with speed, which is why this interpolates to
 ## max_speed_kph rather than plateauing at drift_yaw_fade_to_kph like the yaw
-## does.** Swept against the 51.1 deg the button gives at the design speed: 86 km/h
-## wants ~0.680 (50.1 deg) and 105 km/h wants ~0.710 (44.9 deg). A single
-## high-speed value cannot serve both — 0.680 at 105 still reads 163.5.
+## does.** Swept as a CONSTANT rear scale, 86 km/h wants ~0.680 and 105 km/h wants
+## ~0.710, and 0.680 at 105 still reads 163.5 — so no plateau serves both.
 ##
-## ⚠️ **Fitted, not guessed**: 0.75 here predicts 0.685 at 86 and 0.708 at 105
-## against those two targets.
+## 🔴 **Those constant-value figures are an upper bound on a fix, NOT a prediction
+## of one, and fitting this dial to them is the mistake Q88 exists to record.** A
+## constant holds for the whole run and this taper does not: the car decelerates
+## below the knee inside a drift and the cut deepens underneath it, so the spin
+## develops at a speed the entry reading never described. Fitted to reach ~0.708 at
+## 105 the run measured 159.4 deg — still a spin, against the 44.9 the constant
+## sweep promised.
 ##
-## 🔴 **The usable window is narrow and it closes ABOVE, not below.** At 86 km/h
-## 0.700 gives 20.4 deg and 0.715 gives 2.1 — the drift stops existing rather than
-## getting milder. Sweep at 0.005 or finer near the knee; Q84 records what a coarse
-## grid does to exactly this dial.
+## ⚠️ **So 0.80 was swept on THIS dial, not fitted.** It gives 86 km/h 50.4 deg /
+## 0.98 s — the design speed's own feel — and leaves 105 km/h inert at 2.4.
+##
+## 🔴 **It is the safe side of a cliff, chosen deliberately.** At 105 km/h 0.780
+## gives a real 75.8 deg drift and 0.790 gives 2.8; a value 0.01 from that edge is
+## hostage to any change in tyre_grip, mass or the yaw dials, which is what Q84
+## already cost this project on this exact dial. Inert is a failure a player drives
+## through; a spin is not.
+##
+## ⚠️ **The window closes ABOVE, not below** — at 86 km/h a constant 0.700 gives
+## 20.4 deg and 0.715 gives 2.1, the drift ceasing to exist rather than softening.
+## Sweep at 0.005 or finer near the knee, and sweep this dial rather than the
+## constant.
+##
+## ⚠️ **Lower than drift_rear_grip_scale is legal** and means a looser tail at
+## speed; the lerp is monotone either way. Nothing guards it against exceeding
+## drift_front_grip_scale, which would invert the axles — unreachable inside the
+## measured window, and unenforced.
 ##
 ## ⚠️ Nothing below drift_fade_from_kph is touched, which is deliberate: every
 ## published number in Q84 and Q86 was measured at 63 km/h and stays valid.
@@ -250,23 +273,31 @@ extends Resource
 ## GAME_DESIGN.md's "easy to hold" asks for, so this is the dial that trades a
 ## holdable angle against a spin, and drift_yaw_torque_nm no longer has to.
 @export_range(0.0, 1.0, 0.01) var drift_yaw_sustain: float
-## Speed at which the yaw assist starts fading out, in km/h. At or below it the
-## full torque is applied.
+## Speed at which the drift starts withdrawing, in km/h. At or below it both the
+## full yaw torque and the full drift_rear_grip_scale apply.
 ##
-## 🔴 **Necessary and NOT sufficient, and the measurement says so.** The assist was
+## 🔴 **This is ONE knee governing TWO envelopes, which is why it stopped saying
+## "yaw".** Above it the yaw assist fades toward nothing by drift_yaw_fade_to_kph,
+## and drift_rear_grip_scale eases toward drift_rear_grip_scale_at_top all the way
+## to max_speed_kph. They deliberately share no top: the assist is worthless above
+## the speed the drift spins at anyway, while the grip value the car wants keeps
+## MOVING with speed (Q88). Editing this moves both.
+##
+## ⚠️ **The yaw fade alone was necessary and not sufficient (Q87).** The assist was
 ## tuned at the skidpad's 63 km/h and applied at every speed, so the same 0.5 s tap
-## that gives 16.0 deg at 63 spins the car at 105. But with the assist switched off
-## entirely the held drift still reads **95.2 deg at 86 km/h and 165.2 at 105** —
-## the grip cut spins the car on its own, and this pair only stops the assist
-## adding to it (165.0 -> 95.2 at 86). ⚠️ **Do not read a fixed high-speed drift
-## into these dials.** drift_rear_grip_scale carries the rest and has no speed
-## term at all; Q86 records the numbers.
+## that gives 16.0 deg at 63 spun the car at 105. But with the assist switched off
+## entirely the held drift still read **95.2 deg at 86 km/h and 165.2 at 105** —
+## the grip cut spins the car on its own, which is what
+## drift_rear_grip_scale_at_top then fixed. Q87 and Q88 carry the numbers.
+##
+## ⚠️ **Nothing below this is touched, deliberately**: every published figure in Q84
+## and Q86 was measured at 63 km/h and stays valid. ⚠️ It is not a floor on the
+## drift working, though — below ~50 km/h the slide barely develops at all and the
+## car accelerates through the manoeuvre, so the usable band is roughly 60-100
+## km/h (Q88).
 ##
 ## ⚠️ Mirrors _update_steering's speed taper, which solves the same shape of
-## problem — an input authority that must shrink as speed rises — and is why this
-## is a pair of dials rather than a curve. Unlike that taper it does NOT run to
-## max_speed_kph: the assist is worthless above the speed the drift spins at
-## anyway, so it is spent well before the limiter.
+## problem: an input authority that must shrink as speed rises.
 ##
 ## ⚠️ Distinct from VehicleController.YAW_ASSIST_FADE_KPH, which fades the assist
 ## *in* from a standstill and is a structural constant because it shapes no feel.
@@ -278,7 +309,10 @@ extends Resource
 ## These shape feel — they decide the speed band the button works in — so
 ## CLAUDE.md hard rule 4 makes them data.
 @export_range(0.0, 200.0, 1.0, "suffix:km/h") var drift_fade_from_kph: float
-## Speed at or above which the yaw assist is fully withdrawn, in km/h.
+## Speed at or above which the yaw assist is fully withdrawn, in km/h. ⚠️ **Yaw
+## only** — it keeps its prefix because the grip taper does not stop here, it runs
+## on to max_speed_kph. The two envelopes share drift_fade_from_kph and nothing
+## else.
 ##
 ## ⚠️ Below drift_fade_from_kph this degenerates to a hard step at this speed
 ## rather than dividing by a zero or negative span. 🔴 **A zero here means nobody
