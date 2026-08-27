@@ -165,6 +165,35 @@ extends Resource
 ## ⚠️ Nothing below drift_fade_from_kph is touched, which is deliberate: every
 ## published number in Q84 and Q86 was measured at 63 km/h and stays valid.
 @export_range(0.0, 1.0, 0.001) var drift_rear_grip_scale_at_top: float
+## Rear-axle multiplier at and below drift_low_fade_kph, interpolating up to
+## drift_rear_grip_scale at drift_fade_from_kph. LOWER than the base scale: the
+## cut must DEEPEN as speed falls.
+##
+## 🔴 **The low end fails the opposite way from the high end and needs the
+## opposite correction.** Below ~50 km/h the tyre never saturates — 0.66 leaves
+## enough grip to hold the corner — so the drift returns 2.9-3.9 deg and the car
+## accelerates through the manoeuvre instead of scrubbing (Q89).
+##
+## 🔴 **The yaw assist CANNOT substitute here, and that is measured, not assumed.**
+## At 42 km/h slip reads 4.2 deg at zero torque and *falls* to 3.6 at 20000 N*m,
+## the top of drift_yaw_torque_nm's range — more torque makes LESS slip, because
+## with grip unbroken the rotation is absorbed as a tighter line rather than a
+## slide. That is Q85's multiplicative finding from the other side, and it is why
+## this is a grip dial and not a torque one.
+##
+## ⚠️ **The window here is narrow and moves ~8x faster than at the top.** Measured
+## as constants: 42 km/h wants ~0.45 (18.6 deg) and 0.35 spins it (152.9); 49 km/h
+## wants ~0.55 (16.7 deg) and 0.45 spins it (158.4). That is a ~0.10 window whose
+## centre moves ~0.010 per km/h, against 0.0012 above the knee. Sweep at 0.01 or
+## finer, and sweep THIS dial rather than a constant (Q88).
+@export_range(0.0, 1.0, 0.001) var drift_rear_grip_scale_at_low: float
+## Speed at and below which drift_rear_grip_scale_at_low applies in full, in km/h.
+##
+## ⚠️ **A floor, not a knee, and it is what stops the low taper extrapolating into
+## nonsense.** The wanted curve is steep enough that a line through the measured
+## points reaches zero grip around 20 km/h; holding the value flat below here is
+## what keeps a parking-speed handbrake from being a guaranteed spin.
+@export_range(0.0, 200.0, 1.0, "suffix:km/h") var drift_low_fade_kph: float
 ## Seconds for the drift to reach full engagement while the button is held.
 ##
 ## Short: the tail should step out when the player asks, not a moment later.

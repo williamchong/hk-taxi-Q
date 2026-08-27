@@ -104,6 +104,29 @@ var _drift_engagement: float = 0.0
 ## That makes `drift_release_s` the re-arm cost with no dial of its own, and it is
 ## what stops a player machine-gunning the button for a fresh kick every tick.
 var _drift_held_s: float = 0.0
+## The rear grip scale this drift is running at, sampled once when it engages.
+##
+## 🔴 **Latched, NOT tracked, and that is the whole reason the speed taper works.**
+## A drift scrubs speed, so a scale that follows the *current* speed feeds back on
+## itself below the knee: slower means a deeper cut means more slide means slower.
+## Built that way first and the design speed became a 165.0 deg spin (Q89). Sampled
+## at engagement it is constant for the manoeuvre, which is exactly what every
+## constant-value sweep measured — and those sweeps found a good drift at every
+## speed.
+##
+## ⚠️ The cost is that a live edit to a grip dial does not take hold until the next
+## press, where every other dial here applies on the next frame.
+var _drift_rear_scale: float = 0.0
+## True when this drift engaged below the knee, so _drift_rear_scale is in force.
+##
+## 🔴 **The latch is asymmetric ON PURPOSE and must not be "made consistent".**
+## Above the knee, losing speed moves the scale back toward drift_rear_grip_scale
+## — the value everything is tuned at — so tracking is self-correcting and gives
+## the better drift. Below it, losing speed moves the scale *away* from that value
+## into a deeper cut, which is the feedback loop that turned the design speed into
+## a 165.0 deg spin. So the branch that is stable tracks and the branch that is not
+## latches (Q89).
+var _drift_low_locked: bool = false
 ## Recomputed once per tick rather than per reader.
 ##
 ## `speed_kph` is public for the same reason it is cached: everything that wants
@@ -412,6 +435,10 @@ func _apply_drift(delta: float) -> void:
 	# release (Q84). ⚠️ It did not work — the tap is still 1.9° — and Q84 records
 	# why: the slide takes seconds to build rather than ending too soon. This is
 	# kept for Q83's touch hysteresis, which needs the engagement to exist.
+	# Sample before the ramp moves, so the entry tick is the one that latches.
+	if drift_input and is_zero_approx(_drift_engagement):
+		_drift_low_locked = absf(speed_kph) < profile.drift_fade_from_kph
+		_drift_rear_scale = _rear_grip_scale()
 	var seconds: float = profile.drift_attack_s if drift_input else profile.drift_release_s
 	_drift_engagement = move_toward(_drift_engagement, 1.0 if drift_input else 0.0, delta / seconds)
 	# Held time keeps accruing through the release ramp — the car is still sliding,
@@ -538,11 +565,43 @@ func _speed_fade_out(speed: float) -> float:
 func _rear_grip_scale() -> float:
 	if profile.drift_rear_grip_scale_at_top <= 0.0:
 		return profile.drift_rear_grip_scale
+	var speed: float = absf(speed_kph)
+	if speed < profile.drift_fade_from_kph:
+		return _low_grip_scale(speed)
+	return _high_grip_scale(speed)
+
+
+## The rear scale at or above the knee, easing the cut off as speed rises. Returns
+## the base scale below the knee, so a drift that entered fast and then slowed
+## settles on the tuned value rather than falling into the low taper's feedback.
+func _high_grip_scale(speed: float) -> float:
 	var span: float = profile.max_speed_kph - profile.drift_fade_from_kph
 	if span <= 0.0:
 		return profile.drift_rear_grip_scale
-	var over: float = clampf((absf(speed_kph) - profile.drift_fade_from_kph) / span, 0.0, 1.0)
+	var over: float = clampf((speed - profile.drift_fade_from_kph) / span, 0.0, 1.0)
 	return lerpf(profile.drift_rear_grip_scale, profile.drift_rear_grip_scale_at_top, over)
+
+
+## The rear scale below the knee, deepening the cut as speed falls.
+##
+## 🔴 **The opposite correction from the one above the knee, for the opposite
+## failure.** Up there a constant cut spins the car; down here it never breaks the
+## tyre at all, so the cut has to get deeper rather than shallower. See
+## drift_rear_grip_scale_at_low for why no amount of yaw torque substitutes.
+##
+## ⚠️ Same degenerate rule as everywhere else in this file: a zero at_low is an
+## unauthored profile and returns the base scale, i.e. behaves as though this
+## taper did not exist.
+func _low_grip_scale(speed: float) -> float:
+	if profile.drift_rear_grip_scale_at_low <= 0.0:
+		return profile.drift_rear_grip_scale
+	if speed <= profile.drift_low_fade_kph:
+		return profile.drift_rear_grip_scale_at_low
+	var span: float = profile.drift_fade_from_kph - profile.drift_low_fade_kph
+	if span <= 0.0:
+		return profile.drift_rear_grip_scale
+	var under: float = clampf((speed - profile.drift_low_fade_kph) / span, 0.0, 1.0)
+	return lerpf(profile.drift_rear_grip_scale_at_low, profile.drift_rear_grip_scale, under)
 
 
 ## Publishes _drift_engagement to the wheels. Separate from the ramp so place_at()
@@ -550,7 +609,12 @@ func _rear_grip_scale() -> float:
 ## "do not ramp" — the grip still has exactly one owner, which is the point the
 ## caller's comment makes.
 func _write_drift_grip() -> void:
-	var rear: float = profile.tyre_grip * lerpf(1.0, _rear_grip_scale(), _drift_engagement)
+	# Not named `scale`: Node3D has one, and this project promotes shadowing to an
+	# error — which the ablation wrapper caught and `gdformat` did not.
+	var rear_scale: float = (
+		_drift_rear_scale if _drift_low_locked else _high_grip_scale(absf(speed_kph))
+	)
+	var rear: float = profile.tyre_grip * lerpf(1.0, rear_scale, _drift_engagement)
 	var front: float = (
 		profile.tyre_grip * lerpf(1.0, profile.drift_front_grip_scale, _drift_engagement)
 	)
@@ -607,6 +671,8 @@ func place_at(pose: Transform3D) -> void:
 	# Or a replaced car carries a spent burst and the next press is a sustain with
 	# no kick — which drives correctly, renders correctly, and is wrong.
 	_drift_held_s = 0.0
+	_drift_rear_scale = profile.drift_rear_grip_scale
+	_drift_low_locked = false
 	_upside_down_for = 0.0
 	drift_input = false
 	_write_drift_grip()
