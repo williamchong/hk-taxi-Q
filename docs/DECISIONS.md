@@ -12415,8 +12415,43 @@ against the 6.8/6.2/2.9/2.4/35.8 above. ⚠️ **The cap must be compared agains
 ### 🔴 One refusal, not two — and the negative step was NOT the second
 
 `e248` at node 269 is the only end over the cap: 0.66 m to lose over a **1.9 m** hole is 35.8%, and
-no road ramps at that. Either the structure genuinely stops 0.66 m above the street or the at-grade
-`e466` is the misplaced edge; it wants eyes, not a rule, and it is what leaves the 0.67 m worst step.
+no road ramps at that.
+
+✅ **Looked at, and the refusal is right for a reason better than the grade.** The `MARSH ROAD` deck
+**ends in a 0.65 m vertical face 1.8 m past the node** — walked at 1 m, there is no structure at all
+before it and its first face is 3.91 against a street at 3.44. So the missing descent is not 1.9 m of
+`e248`; it is the **10 m of `e466`** beyond the node, `MARSH ROAD` between node 269 and the
+`LOCKHART ROAD` junction at node 28, labelled level 0 and drawn flat at terrain. Extrapolating the
+deck's own **5.9%** back from its end face reaches the street about 5.7 m from node 28, so the real
+touchdown is part-way along `e466` and lifting it would ramp node 28 → node 269 at **5.5%** — the
+same grade, on the same road. `Q13`'s attribute flip, at a node where nothing could catch it.
+
+🔴 **No per-edge sampler can reach it, which is why it is still open.** `_lifted_heights` measures a
+lift from the structure under the edge's *own* plan, and `e466` has structure under **0 of its 2
+stations**; the height that would fix it lives on the neighbouring edge. Closing it needs a
+node-level pass after every edge is shaped — a new mechanism, not a tuning value, and one node in
+this region wants it.
+
+### ✅ Every other residual step is `at_grade_m` + `clearance_m`, by construction
+
+The seven mixed nodes still carrying a step decompose exactly, against published heights alone:
+**(deck above the street at the node) + `clearance_m`**.
+
+| node | step | deck above street | road | |
+|---|---|---|---|---|
+| 269 | 0.67 | **0.47** | `MARSH ROAD` | 🔴 outlier |
+| 370 | 0.44 | 0.24 | `WAN CHAI INTERCHANGE` | designed |
+| 275 | 0.39 | 0.19 | `CANAL ROAD FLYOVER` | designed |
+| 261 | 0.26 | 0.06 | `WAN CHAI INTERCHANGE` | designed |
+| 501 | 0.26 | 0.06 | `GLOUCESTER ROAD` | designed |
+| 167 | 0.19 | −0.01 | `GLOUCESTER ROAD` | designed |
+| 89 | 0.18 | −0.02 | `WAN CHAI INTERCHANGE` | designed |
+
+Six of seven sit inside `at_grade_m` (**0.30**), which is what that value's own config note says it
+is — *"this value **is** the residual step the lift leaves behind"* — plus the 0.20 m of wearing
+course. ⚠️ **So the region has exactly one real residual, not seven**, and the other six are the
+tolerance working rather than six more defects. Node 269 is outside it only because its deck is
+measured 1.8 m away, where the ramp is still 0.47 m up.
 
 ⚠️ **`e365` at node 30 was expected to be refused and is not, and the expectation was wrong.** Its
 step is *negative* — the elevated ribbon sat 0.43 m **below** its three at-grade `GLOUCESTER ROAD`
