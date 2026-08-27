@@ -14,6 +14,10 @@
 #                                    refused, not merged
 #   --drift-grip=0.38,0.40,0.42      alias for --sweep=drift_rear_grip_scale=...
 #   --scene=res://scenes/dev/...      grade a different car on the same ground
+#   --run-up=6                       seconds of throttle before the manoeuvre,
+#                                    i.e. the entry speed. Default 4 (~63 kph).
+#                                    Rows are only comparable within one run-up;
+#                                    quote `entry kph`, which is what was reached
 #
 # Run it before AND after any change to VehicleController's drive model,
 # HandlingProfile or handling.tres, and paste both tables (CLAUDE.md).

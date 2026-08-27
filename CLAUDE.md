@@ -129,6 +129,14 @@ Common emoji for this project:
   ⚠️ **Sweep with `tools/skidpad.sh --sweep=<field>=<v,…>`, not by editing `handling.tres` in a shell
   loop.** One such loop blanked the field it was sweeping and published a table of all-zero rows that
   read like a finding; the flag exists so that cannot happen again.
+  🔴 **Grade anything speed-dependent at more than one `--run-up`, because the default entry speed is
+  the tool's blind spot.** A fixed 63 kph entry is what makes every other column comparable across
+  rows, and it is also why a yaw assist tuned at 63 and applied at 84 spun the car for a whole
+  release with a green `check.sh` and five clean rows (`Q87`). 4 s → 63.02 kph, 6 s → 86.36, 8 s →
+  105.47; rows compare only *within* one run-up, so quote `entry kph`.
+  ⚠️ **The drift is only tuned for roughly 40–70 kph**: above that `drift_rear_grip_scale` spins the
+  car on its own — 95.2° at 86 kph and 165.2° at 105 with the yaw assist switched off entirely — and
+  it carries **no speed term**. Do not read a high-speed drift into the yaw fade dials.
 - **`widen_default`, any `roads.surface` widening change, or anything that moves the pipeline's
   starved population — `ALONG_M` included: also `tools/narrowing.py`, before and after.** It is what
   priced the current value: narrowing clears *no* blocked edge at any factor down to the 1.3x floor

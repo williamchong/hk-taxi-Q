@@ -471,7 +471,8 @@ func _apply_drift_yaw() -> void:
 		return
 	if not _any_wheel_grounded():
 		return
-	var fade: float = clampf(absf(speed_kph) / YAW_ASSIST_FADE_KPH, 0.0, 1.0)
+	var speed: float = absf(speed_kph)
+	var fade: float = clampf(speed / YAW_ASSIST_FADE_KPH, 0.0, 1.0) * _speed_fade_out(speed)
 	# Linear decay from the peak to the sustain, on held time. ⚠️ On TIME — see
 	# drift_yaw_decay_s for why measured slip here would be Q72's tautology.
 	var decayed: float = clampf(_drift_held_s / profile.drift_yaw_decay_s, 0.0, 1.0)
@@ -482,6 +483,22 @@ func _apply_drift_yaw() -> void:
 	# About the body's own up, not global +Y: a car on a camber or mid-kerb should
 	# rotate about the axis it is standing on.
 	apply_torque(global_basis.y * torque)
+
+
+## How much of the yaw assist survives at this speed, 1.0 full to 0.0 withdrawn.
+##
+## Separate from the fade-in above because they are different kinds of number: the
+## fade-in exists to remove a discontinuity and shapes no feel, and this decides
+## the speed band the drift button works in. See drift_yaw_fade_from_kph.
+##
+## ⚠️ A span of zero or less is a hard step at drift_yaw_fade_to_kph rather than a
+## divide by zero — an unassigned profile reads as all-zeroes, and _update_steering
+## guards max_angle for the same reason.
+func _speed_fade_out(speed: float) -> float:
+	var span: float = profile.drift_yaw_fade_to_kph - profile.drift_yaw_fade_from_kph
+	if span <= 0.0:
+		return 0.0 if speed >= profile.drift_yaw_fade_to_kph else 1.0
+	return 1.0 - clampf((speed - profile.drift_yaw_fade_from_kph) / span, 0.0, 1.0)
 
 
 ## Publishes _drift_engagement to the wheels. Separate from the ramp so place_at()

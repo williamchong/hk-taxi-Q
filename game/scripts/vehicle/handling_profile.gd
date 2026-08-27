@@ -223,6 +223,36 @@ extends Resource
 ## GAME_DESIGN.md's "easy to hold" asks for, so this is the dial that trades a
 ## holdable angle against a spin, and drift_yaw_torque_nm no longer has to.
 @export_range(0.0, 1.0, 0.01) var drift_yaw_sustain: float
+## Speed at which the yaw assist starts fading out, in km/h. At or below it the
+## full torque is applied.
+##
+## 🔴 **Necessary and NOT sufficient, and the measurement says so.** The assist was
+## tuned at the skidpad's 63 km/h and applied at every speed, so the same 0.5 s tap
+## that gives 16.0 deg at 63 spins the car at 105. But with the assist switched off
+## entirely the held drift still reads **95.2 deg at 86 km/h and 165.2 at 105** —
+## the grip cut spins the car on its own, and this pair only stops the assist
+## adding to it (165.0 -> 95.2 at 86). ⚠️ **Do not read a fixed high-speed drift
+## into these dials.** drift_rear_grip_scale carries the rest and has no speed
+## term at all; Q86 records the numbers.
+##
+## ⚠️ Mirrors _update_steering's speed taper, which solves the same shape of
+## problem — an input authority that must shrink as speed rises — and is why this
+## is a pair of dials rather than a curve. Unlike that taper it does NOT run to
+## max_speed_kph: the assist is worthless above the speed the drift spins at
+## anyway, so it is spent well before the limiter.
+##
+## ⚠️ Distinct from VehicleController.YAW_ASSIST_FADE_KPH, which fades the assist
+## *in* from a standstill and is a structural constant because it shapes no feel.
+## These shape feel — they decide the speed band the button works in — so
+## CLAUDE.md hard rule 4 makes them data.
+@export_range(0.0, 200.0, 1.0, "suffix:km/h") var drift_yaw_fade_from_kph: float
+## Speed at or above which the yaw assist is fully withdrawn, in km/h.
+##
+## ⚠️ Below drift_yaw_fade_from_kph this degenerates to a hard step at this speed
+## rather than dividing by a zero or negative span. Handled rather than asserted,
+## for the reason _update_steering gives about max_angle: an unassigned profile
+## reads as all-zeroes, and the failure here is a silent one.
+@export_range(0.0, 200.0, 1.0, "suffix:km/h") var drift_yaw_fade_to_kph: float
 ## Slip angle above which the drift scores style points.
 @export_range(0.0, 90.0, 1.0, "suffix:°") var drift_slip_threshold_deg: float
 ## Fraction of rolling speed shed per second when coasting — engine braking.

@@ -64,10 +64,18 @@ const DRIFT_FIELD_PREFIX: String = "drift_"
 ## silently.
 const SLIP_THRESHOLD_FIELD: StringName = &"drift_slip_threshold_deg"
 
-## Seconds of full throttle before every manoeuvre, to reach a working speed.
-## Long enough to be well past the initial squat, short enough that the car is
-## nowhere near the 140 kph limiter where the drive taper distorts things.
-const RUN_UP_S: float = 4.0
+## Default seconds of full throttle before every manoeuvre, to reach a working
+## speed. Long enough to be well past the initial squat, short enough that the car
+## is nowhere near the 140 kph limiter where the drive taper distorts things.
+##
+## ⚠️ **Overridable since `--run-up`, and a fixed entry speed is exactly what hid
+## a defect.** Every other column is only comparable because entry is identical
+## across rows, so this stays constant *within* a run — but a dial whose effect
+## depends on speed cannot be graded at one speed at all, and the drift's yaw
+## assist was tuned at the 63 kph this produces and then applied at 84, where the
+## same tap spins the car. Vary it between runs, never expect two run-ups to be
+## comparable on anything but the trend.
+const DEFAULT_RUN_UP_S: float = 4.0
 
 ## Seconds the manoeuvre itself is held and measured.
 const MANOEUVRE_S: float = 4.0
@@ -106,6 +114,10 @@ var _only: String = ""
 ## micro-gradient there is worth the whole quantity under test, and a published
 ## figure has already had to be withdrawn over it (`P0-5b/c/d`).
 var _scene_path: String = DEFAULT_SCENE
+## Seconds of run-up, and so the entry speed every row is measured from. Reported
+## as `entry kph` rather than requested, because the run-up is open-loop: this
+## asks for seconds of throttle and the car answers with whatever speed it made.
+var _run_up_s: float = DEFAULT_RUN_UP_S
 ## Values to sweep `_sweep_field` over, or empty for whatever `handling.tres`
 ## ships. Set live on the loaded resource rather than by editing the file:
 ## nothing caches it, so it takes effect on the next tick, and a sweep that
@@ -206,6 +218,14 @@ func _parse_args() -> bool:
 				_only = bits[1]
 			"--scene":
 				_scene_path = bits[1]
+			"--run-up":
+				if not bits[1].is_valid_float():
+					_fail("--run-up wants a number of seconds, got '%s'" % bits[1])
+					return false
+				_run_up_s = bits[1].to_float()
+				if _run_up_s <= 0.0:
+					_fail("--run-up must be positive, got %s" % _run_up_s)
+					return false
 			"--sweep":
 				# Split once more, so the field name carries its own "=" separator
 				# and `--sweep=drift_yaw_decay_s=0.4,0.6` reads as one flag.
@@ -354,9 +374,11 @@ func _measure_all() -> void:
 
 ## Run-up, then the manoeuvre, sampling every physics tick.
 ##
-## The run-up is not measured and not reported: it is the same for all four, and
-## including it would average the manoeuvre against four seconds of straight-line
-## acceleration that says nothing about grip.
+## The run-up is not measured and not reported: it is the same for every row in a
+## run, and including it would average the manoeuvre against seconds of
+## straight-line acceleration that says nothing about grip. Its *result* is
+## reported, as `entry kph`, which is the number to quote when comparing runs at
+## different `--run-up`.
 func _measure(manoeuvre: String, label: String) -> Result:
 	_release_everything()
 	_vehicle.call("place_at", _spawn)
@@ -367,7 +389,7 @@ func _measure(manoeuvre: String, label: String) -> Result:
 	await _hold(SETTLE_S)
 
 	Input.action_press(&"accelerate")
-	await _hold(RUN_UP_S)
+	await _hold(_run_up_s)
 
 	var result := Result.new()
 	# Named before the manoeuvre runs, not after: `_sample` reports its failures
