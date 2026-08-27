@@ -243,15 +243,22 @@ extends Resource
 ##
 ## ⚠️ Distinct from VehicleController.YAW_ASSIST_FADE_KPH, which fades the assist
 ## *in* from a standstill and is a structural constant because it shapes no feel.
+## ⚠️ **Keep this above that constant.** The two ramps multiply, so setting this
+## below it makes them overlap, the product never reaches 1.0, and
+## drift_yaw_torque_nm quietly stops meaning the torque actually applied. At the
+## shipped 65 against 10 they are disjoint and the product is a true 1.0 across
+## 10-65 km/h.
 ## These shape feel — they decide the speed band the button works in — so
 ## CLAUDE.md hard rule 4 makes them data.
 @export_range(0.0, 200.0, 1.0, "suffix:km/h") var drift_yaw_fade_from_kph: float
 ## Speed at or above which the yaw assist is fully withdrawn, in km/h.
 ##
 ## ⚠️ Below drift_yaw_fade_from_kph this degenerates to a hard step at this speed
-## rather than dividing by a zero or negative span. Handled rather than asserted,
-## for the reason _update_steering gives about max_angle: an unassigned profile
-## reads as all-zeroes, and the failure here is a silent one.
+## rather than dividing by a zero or negative span. 🔴 **A zero here means nobody
+## authored the pair, and yields FULL assist rather than none** — the step test is
+## true at every speed for an all-zero profile, so the safe-looking reading would
+## switch the assist off everywhere and reproduce exactly the silent disappearance
+## drift_yaw_decay_s refuses to hide.
 @export_range(0.0, 200.0, 1.0, "suffix:km/h") var drift_yaw_fade_to_kph: float
 ## Slip angle above which the drift scores style points.
 @export_range(0.0, 90.0, 1.0, "suffix:°") var drift_slip_threshold_deg: float

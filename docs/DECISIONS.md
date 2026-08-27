@@ -114,7 +114,7 @@ wins.
 | `Q83` | **Touch drives its own throttle, and the drift is where the thumb is** | ✅ Decided 2026-08-27 on the user's instruction — two thumbs, both axes each, both **relative**, and `auto_accelerate` is no longer the touch default. 🔴 **The allocation was incomplete and nothing could have caught it**: four touch rects against five actions, with `brake_reverse`, `drift` and `look_back` homeless, while `verify_hud` grades occlusion rather than reachability by design (`Q80`). Three drift schemes were rejected first. ⚠️ Its assumed `_drift_engagement` was built by `Q84`, which found it does not do what it was built for. ⬜ `look_back` still unplaced, and the threshold numbers need `P0-3b`'s handset |
 | `Q84` | **The drift cliff was the sweep grid, and the peak was the wrong target** | ✅ Closed — corrects `Q50` regression 2. No cliff: the response is smooth and monotonic at ~990°/unit and 14° lands at **0.6695**; a `%.2f` sweep label printed three distinct values as one row and invited the 0.02 grid. 🔴 But the game scores drift **per second** and `peak_slip_deg` is a one-tick `maxf` — 0.6695 holds 14° for **0.05 s** against shipped 0.66's **0.57 s** — and dwell is bought with exit speed all the way down, which is `Q50`'s isotropic cost stated properly. 🔴 **A release ramp was built and falsified** — the tap is still 1.9°, because the slide takes seconds to build rather than ending too soon; kept for `Q83`'s hysteresis, which is not why it was made |
 | `Q85` | **The route out of the drift was a quantity the engine does not simulate** | ✅ Closed — `get_rpm()` is road speed re-expressed: this class has no wheel inertia, so a wheel cannot spin up or lock and **`B4`'s per-wheel angular velocity cannot be read at all**. `get_skidinfo()` is real; the fact was already in `hud.gd`, filed under the wrong question. 🔴 `Q50`'s "the road-speed roll is gone" is wrong — it moved into the engine, and `P3-2b` inherits it. ✅ The drift is assisted with a **yaw torque** instead (42.1° against 21.8°), which `Q49`'s anti-physical target licenses. 🔴 It worsens the scrub, and torque and grip are multiplicative rather than alternatives. ⚠️ **The constant-torque figures here are superseded by `Q86`**, which decays it and re-tunes the peak to 7000 |
-| `Q86` | **The tap needed the torque spent early, and the dwell was never the assist's to buy** | ✅ Closed — torque × time is rotation, so a 0.5 s tap collected **one-eighth** of a 4 s hold's impulse and no constant could serve both. Decayed from a peak toward a sustain over `drift_yaw_decay_s`, on **time** never on measured slip (`Q72`). ✅ Tap **2.4° → 16.0°** and 0.00 → **0.23 s** above the bar, hold dwell 0.78 → 0.82, exit **40.96 → 41.29** — better in every column. 🔴 **`secs>thr` was flat across all three yaw dials** (0.78–0.85) while peak ran 40° → 130°, so these are graded on peak and exit, the opposite of `Q84`'s rule for the grip dial. ⚠️ 9000 N⋅m was the candidate and driving it rejected it — 65.7° on the pad is 086° → 219° and a railing on Expo Drive |
+| `Q86` | **The tap needed the torque spent early, and the dwell was never the assist's to buy** | ✅ Closed — torque × time is rotation, so a 0.5 s tap collected **one-eighth** of a 4 s hold's impulse and no constant could serve both. Decayed from a peak toward a sustain over `drift_yaw_decay_s`, on **time** never on measured slip (`Q72`). ✅ Tap **2.4° → 16.0°** and 0.00 → **0.23 s** above the bar, hold dwell 0.78 → 0.82, exit **40.96 → 41.29** — better in every column. 🔴 **`secs>thr` was flat across all three yaw dials** (0.78–0.85) while peak ran 40° → 130°, so these are graded on peak and exit, the opposite of `Q84`'s rule for the grip dial. ⚠️ 9000 N⋅m was the candidate and driving it rejected it — 65.7° on the pad is 086° → 219° and a railing on Expo Drive. ⚠️ **All of it measured at one 63 km/h entry**, which `Q87` found was the tool's blind spot |
 | `Q87` | **The assist was tuned at one speed, and the grip cut has no speed term at all** | 🟡 Partly closed — `Q86`'s assist had a fade-in and no fade-out, so 7000 N⋅m landed at any speed while every value was picked at 63 km/h; the tap that gives 16.0° there **spun the car at 84**. Fixed by `drift_yaw_fade_from_kph`/`_to_kph` (65/85): the 105 km/h tap goes **163.3° → 17.5°** and 39.2 → 80.0 m, and the design-speed table is byte-identical. ⚠️ `skidpad.sh` could not see it — `RUN_UP_S` fixed entry at one speed, so `--run-up=` now varies it. 🔴 **Necessary, not sufficient**: with the assist off entirely the drift still reads 95.2° at 86 and 165.2° at 105, so `drift_rear_grip_scale` spins the car by itself and has no speed term. ⬜ Unfixed — it is `Q84`'s dial on the opposite grading column |
 
 | ID | Decision | Status |
@@ -11985,7 +11985,12 @@ row.
   no sustained equilibrium at any counter-steer timing. A tyre model remains the only route to those,
   and it is still a `Q50`-scale call nobody has made.
 
-**See.** `Q85` for the assist this reshapes and the four findings it does not fix · `Q84` for
+⚠️ **Every figure above was measured at one entry speed, 63 km/h, and `Q87` found that mattered.**
+The assist had no fade-out, so this torque landed at any speed and the tap that reads 16.0° here spun
+the car at 84. The table is still correct — it is now bounded to the speed it was taken at.
+
+**See.** `Q87` for the speed fade that bounds this, and for the grip cut that carries the rest ·
+`Q85` for the assist this reshapes and the four findings it does not fix · `Q84` for
 `secs>thr` and for the opposite grading rule that governs `drift_rear_grip_scale` · `Q72` for the
 tautology the time-based decay avoids · `Q50` for the isotropy underneath all of it ·
 `GAME_DESIGN.md` "Target feel"
@@ -12029,6 +12034,22 @@ tap now holds **66.90 km/h** where it fell to 27.69, against a no-drift baseline
 authority that must shrink as speed rises. Unlike that taper it does **not** run to `max_speed_kph`,
 because the assist is worthless above the speed the drift spins at anyway.
 
+✅ **Sampled inside the band as well as at its ends**, because a fade tested only at 63 and 86 would
+not show a cliff in between:
+
+| entry km/h | tap peak | `secs>thr` |
+|---|---|---|
+| 63.02 | 16.0° | 0.23 |
+| 69.30 | **19.9°** | 0.40 |
+| 75.27 | 16.8° | 0.30 |
+| 80.96 | 11.8° | 0.00 |
+| 86.36 | 8.7° | 0.00 |
+
+Smooth and monotonic from 69 on. ⚠️ **The peak is at ~69 km/h, not at the design speed** — entry
+speed makes slip on its own, so the fade withdraws torque against a rising natural response and the
+product turns over just inside the band. Nothing is wrong with it, but "full authority below 65" does
+not mean "most drift at 63".
+
 ### 🔴 The remaining defect is the grip cut, and it is bigger than the assist was
 
 The control that settles it — the held drift with the yaw assist switched **off entirely**:
@@ -12049,6 +12070,28 @@ that breaks it. ⬜ **Unfixed, and deliberately not fixed here**: a speed term o
 `drift_rear_grip_scale` is a change to the dial `Q84` governs and `Q50` priced, on the opposite
 grading column from these three (`secs>thr`, not peak), and it would move the shipped 63 km/h feel
 that every number in `Q84` and `Q86` describes. That is the user's call.
+
+### Found by review, after it shipped
+
+🔴 **The zero-span guard returned "no assist" where it had to return "full assist".** An unassigned
+profile reads as all-zeroes, and a `speed >= fade_to` test is true at *every* speed for a zero pair —
+so the guard written for safety switched the assist off everywhere, which is precisely the silent
+disappearance `drift_yaw_decay_s` documents and refuses to paper over one commit earlier. ⚠️ **And
+the precedent cited for it was wrong**: `_update_steering`'s `max_angle` guard returns 0.0 because
+0.0 is the *only* defined answer there and the alternative is a NAN, where here both values are well
+defined and the choice is a design decision. Now returns 1.0, so a mis-authored profile behaves as it
+did before the fade existed — mutation-tested by setting `drift_yaw_fade_to_kph` to 0, which
+reproduces the pre-fade **165.0°** at 86 km/h exactly rather than the 95.2° of an assist switched
+off. An equal, non-zero pair is still honoured as a deliberate hard cutoff.
+
+⚠️ **`--run-up` can now walk into the drive taper, and no column would show it.** `DEFAULT_RUN_UP_S`
+is chosen to stay clear of it; a caller's is not. Entry above `max_speed_kph * (1 - TOP_SPEED_TAPER)`
+— 119 km/h — now prints a note, and `--run-up` itself is printed in the preamble so a pasted table
+says what produced it. Not refused: this tool grades rather than checks.
+
+⚠️ **The assist is skipped rather than applied as a zero torque above `drift_yaw_fade_to_kph`.** That
+band did not exist before this change and is now routine. Placed *after* the airborne refusal, which
+does not become optional because the assist is spent.
 
 **What is not settled here.**
 

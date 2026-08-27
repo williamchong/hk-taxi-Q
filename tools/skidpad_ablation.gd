@@ -77,6 +77,17 @@ const SLIP_THRESHOLD_FIELD: StringName = &"drift_slip_threshold_deg"
 ## comparable on anything but the trend.
 const DEFAULT_RUN_UP_S: float = 4.0
 
+## Fraction of `max_speed_kph` above which the controller's drive taper is easing
+## engine force off, so an entry speed inside it grades the taper alongside
+## whatever is under test.
+##
+## ⚠️ **A deliberate copy of `VehicleController.TOP_SPEED_TAPER`**, which this
+## file cannot name: `--script` tools do not get `class_name` resolution, the same
+## constraint that keeps every controller call here behind `call()`. Warned about
+## rather than refused — this tool grades and does not check — but a run-up that
+## reaches the band needs saying, because nothing in the table shows it.
+const TOP_SPEED_TAPER: float = 0.15
+
 ## Seconds the manoeuvre itself is held and measured.
 const MANOEUVRE_S: float = 4.0
 
@@ -292,6 +303,7 @@ func _boot() -> bool:
 	# every manoeuvre should restart from, not the one it was dropped at.
 	_spawn = _vehicle.global_transform
 	_step = 1.0 / float(Engine.physics_ticks_per_second)
+	print("run-up:  %.2f s" % _run_up_s)
 	print("scene:   %s" % _scene_path)
 	print("vehicle: %s at %s" % [_vehicle.name, _spawn.origin])
 	var profile: Resource = _vehicle.get("profile") as Resource
@@ -396,6 +408,22 @@ func _measure(manoeuvre: String, label: String) -> Result:
 	# through this, and during a sweep three bare `drift:` messages name no value.
 	result.name = label
 	result.entry_kph = _speed_kph()
+	# See TOP_SPEED_TAPER: entry inside the band means the drive taper is easing
+	# engine force off during the manoeuvre, which no column reports.
+	var max_speed: float = 0.0
+	var profile: Resource = _vehicle.get("profile") as Resource
+	if profile != null and &"max_speed_kph" in profile:
+		max_speed = profile.get(&"max_speed_kph")
+	if max_speed > 0.0 and result.entry_kph > max_speed * (1.0 - TOP_SPEED_TAPER):
+		print(
+			(
+				(
+					"  note  %s entered at %.2f kph, inside the drive taper above %.2f — "
+					+ "engine force is easing off during this row"
+				)
+				% [label, result.entry_kph, max_speed * (1.0 - TOP_SPEED_TAPER)]
+			)
+		)
 
 	match manoeuvre:
 		"corner":

@@ -473,6 +473,13 @@ func _apply_drift_yaw() -> void:
 		return
 	var speed: float = absf(speed_kph)
 	var fade: float = clampf(speed / YAW_ASSIST_FADE_KPH, 0.0, 1.0) * _speed_fade_out(speed)
+	# ⚠️ Above drift_yaw_fade_to_kph this is exactly zero for every tick of a held
+	# drift, which is a band the car really does spend time in — so this returns
+	# rather than handing the physics server a torque of zero all the way up the
+	# speed range. Placed after the airborne guard, not before it: that refusal is
+	# 🔴 load-bearing and does not become optional because the assist is spent.
+	if is_zero_approx(fade):
+		return
 	# Linear decay from the peak to the sustain, on held time. ⚠️ On TIME — see
 	# drift_yaw_decay_s for why measured slip here would be Q72's tautology.
 	var decayed: float = clampf(_drift_held_s / profile.drift_yaw_decay_s, 0.0, 1.0)
@@ -491,14 +498,28 @@ func _apply_drift_yaw() -> void:
 ## fade-in exists to remove a discontinuity and shapes no feel, and this decides
 ## the speed band the drift button works in. See drift_yaw_fade_from_kph.
 ##
-## ⚠️ A span of zero or less is a hard step at drift_yaw_fade_to_kph rather than a
-## divide by zero — an unassigned profile reads as all-zeroes, and _update_steering
-## guards max_angle for the same reason.
+## 🔴 **A zero span returns full assist, NOT none, and the difference is the whole
+## point of the guard.** An unassigned profile reads as all-zeroes, and a naive
+## `speed >= fade_to` test is true at every speed for a zero pair — so it would
+## switch the assist off everywhere, which is exactly the silent disappearance
+## drift_yaw_decay_s documents and refuses to paper over. 1.0 leaves a
+## mis-authored profile behaving as it did before this fade existed, which is the
+## honest degenerate value here.
+##
+## ⚠️ **_update_steering's max_angle guard is NOT the precedent, though an earlier
+## version of this comment claimed it was.** There 0.0 is the only defined answer
+## and the alternative is a NAN. Here both 0.0 and 1.0 are well defined and the
+## choice between them is a design decision, not a numerical one.
+##
+## ⚠️ An equal, non-zero pair is still a deliberate hard cutoff at that speed, and
+## is kept as one — only a zero fade_to means "nobody authored this".
 func _speed_fade_out(speed: float) -> float:
 	var span: float = profile.drift_yaw_fade_to_kph - profile.drift_yaw_fade_from_kph
-	if span <= 0.0:
-		return 0.0 if speed >= profile.drift_yaw_fade_to_kph else 1.0
-	return 1.0 - clampf((speed - profile.drift_yaw_fade_from_kph) / span, 0.0, 1.0)
+	if span > 0.0:
+		return 1.0 - clampf((speed - profile.drift_yaw_fade_from_kph) / span, 0.0, 1.0)
+	if profile.drift_yaw_fade_to_kph <= 0.0:
+		return 1.0
+	return 0.0 if speed >= profile.drift_yaw_fade_to_kph else 1.0
 
 
 ## Publishes _drift_engagement to the wheels. Separate from the ramp so place_at()
