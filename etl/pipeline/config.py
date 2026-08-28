@@ -772,11 +772,43 @@ class Arrows:
     # The proportions of an arrow, as fractions of its **own** published length,
     # so the 4 m and 6 m variants of the same marking scale together instead of
     # sharing an absolute head that is right for one of them.
-    stem_width_frac: float
+    #
+    # 🔴 **Measured off TD's pictogram since `Q92`, where they were authored and
+    # wrong.** `CT174/51-5(1)F` publishes `LENGTH` for `RM1017`-`RM1030` and no
+    # other dimension, so the shape can only come from the drawing itself; the
+    # figures here are read from it at 700 dpi and every one of them moved. The
+    # ahead head was drawn **0.325 long by 0.235 across** against a published
+    # 0.390 by 0.122 — nearly twice as wide and a fifth too short — and the stem
+    # was a uniform 0.085 where the drawing tapers it.
     head_length_frac: float
     head_width_frac: float
-    # How far a turn head reaches across from the stem before it turns.
+    # The stem is a **taper**, wide at the tail and narrow under the head, which
+    # is what the drawing shows and what a single width could not be.
+    stem_width_nose_frac: float
+    stem_width_tail_frac: float
+    # The turn branch, which has its own head and is not the ahead head reused.
+    # 🔴 **That reuse was the defect `Q92` found**: `shoulder` is
+    # `reach - head_length`, and with a reach of 0.28 against a head of 0.325 it
+    # came out **negative** — the turn head's base landed 0.18 m past the far
+    # side of the stem, so head and stem merged into a blob on **416 of 747**
+    # drawn arrows. `branch_reach_frac` must exceed `branch_head_length_frac`,
+    # and `parse` refuses a city where it does not.
+    #
+    # ⚠️ **The published branch is a swept hook ending in a barbed dart, and
+    # this is a straight arm and a plain triangle.** The reach (0.150) and the
+    # barb span (0.233) are measured off `RM1027`; the head's own length is
+    # authored, because a dart with a concave rear has no single length to read.
+    # The simplification is deliberate and recorded rather than hidden — see
+    # `DATA_SOURCES.md`.
     branch_reach_frac: float
+    branch_head_length_frac: float
+    branch_head_width_frac: float
+    # How far below the ahead head's base the turn branch's axis sits, as a
+    # fraction of length. Measured 0.145 on `RM1027`. ⚠️ **Not derived from the
+    # head width, which is what it used to be**: the two are independent in the
+    # drawing, and tying them meant a change to the head silently moved the
+    # branch.
+    branch_drop_frac: float
     # How far above the carriageway the glyph sits. The road surface and the
     # ground are coplanar at grade by construction (`P3-10`), so paint laid at
     # deck height would z-fight the road it is painted on.
@@ -3857,7 +3889,16 @@ def _arrows(body: Any, where: str) -> Arrows | None:
 
     fractions = {
         name: float(_require(body, name, where))
-        for name in ("stem_width_frac", "head_length_frac", "head_width_frac", "branch_reach_frac")
+        for name in (
+            "head_length_frac",
+            "head_width_frac",
+            "stem_width_nose_frac",
+            "stem_width_tail_frac",
+            "branch_reach_frac",
+            "branch_head_length_frac",
+            "branch_head_width_frac",
+            "branch_drop_frac",
+        )
     }
     outside = {name: value for name, value in fractions.items() if not 0.0 < value < 1.0}
     if outside:
@@ -3865,10 +3906,27 @@ def _arrows(body: Any, where: str) -> Arrows | None:
             f"{where}: {', '.join(sorted(outside))} must each be a fraction of an arrow's own "
             f"length, strictly between 0 and 1; got {outside}"
         )
-    if fractions["stem_width_frac"] >= fractions["head_width_frac"]:
+    if fractions["stem_width_tail_frac"] >= fractions["head_width_frac"]:
         raise ValueError(
-            f"{where}: stem_width_frac {fractions['stem_width_frac']} must be narrower than "
-            f"head_width_frac {fractions['head_width_frac']}, or the head is not a head"
+            f"{where}: stem_width_tail_frac {fractions['stem_width_tail_frac']} must be narrower "
+            f"than head_width_frac {fractions['head_width_frac']}, or the head is not a head"
+        )
+    if fractions["stem_width_nose_frac"] > fractions["stem_width_tail_frac"]:
+        raise ValueError(
+            f"{where}: stem_width_nose_frac {fractions['stem_width_nose_frac']} exceeds "
+            f"stem_width_tail_frac {fractions['stem_width_tail_frac']}; the drawn stem tapers "
+            f"toward the head, and reversing it draws a wedge pointing the wrong way"
+        )
+    if fractions["branch_reach_frac"] <= fractions["branch_head_length_frac"]:
+        # 🔴 **The `Q92` defect, refused rather than commented.** `glyph_polygons`
+        # puts the branch head's base at `reach - branch_head_length` from the
+        # stem centre; when that is negative the base lands on the far side of
+        # the stem, the head swallows it, and 416 of the region's 747 arrows
+        # render as a blob. It shipped for a release because nothing checked it.
+        raise ValueError(
+            f"{where}: branch_reach_frac {fractions['branch_reach_frac']} must exceed "
+            f"branch_head_length_frac {fractions['branch_head_length_frac']}, or the turn head's "
+            f"base falls on the far side of the stem"
         )
 
     max_offset_m = float(_require(body, "max_offset_m", where))
@@ -3895,10 +3953,14 @@ def _arrows(body: Any, where: str) -> Arrows | None:
         member=_tile_member(body, where),
         layer=_source_layer(body, where, _ARROW_ROLES),
         glyphs=glyphs,
-        stem_width_frac=fractions["stem_width_frac"],
         head_length_frac=fractions["head_length_frac"],
         head_width_frac=fractions["head_width_frac"],
+        stem_width_nose_frac=fractions["stem_width_nose_frac"],
+        stem_width_tail_frac=fractions["stem_width_tail_frac"],
         branch_reach_frac=fractions["branch_reach_frac"],
+        branch_head_length_frac=fractions["branch_head_length_frac"],
+        branch_head_width_frac=fractions["branch_head_width_frac"],
+        branch_drop_frac=fractions["branch_drop_frac"],
         lift_m=lift_m,
         max_offset_m=max_offset_m,
         bearing_tolerance_deg=tolerance_deg,

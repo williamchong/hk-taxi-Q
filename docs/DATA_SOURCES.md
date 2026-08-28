@@ -605,6 +605,27 @@ Standards Division, which gives every `RM` code its marking, description and dim
 | `RM1012` (TC 507) | **STOP LINES — WHITE** | line width 200, lines spacing 300, **upper continuous, lower continuous** | **double** |
 | `RM1013` (TC 508) | **GIVE WAY LINES — WHITE** | line width 200, lines spacing 200, **upper 600 mark / 300 gap, lower 600 mark / 300 gap** | **double, broken** |
 | `RM1001` (TC 501) | DOUBLE LINES — WHITE | line width 150, lines spacing 100, both continuous | **double** |
+| `RM1017`-`RM1030` (TC 509) | **TURN ARROWS — WHITE** | **`LENGTH = 4000` or `6000`, and nothing else** | — |
+
+🔴 **The arrows are the row where the sheet publishes a length and no shape, and `Q93` is what that
+cost.** `RM1017`-`RM1030` carry `LENGTH` alone; head, stem and branch are not dimensioned anywhere in
+the `dataspec` bundle, and the sheet is stamped **NOT TO SCALE**. So the proportions can come from
+nowhere but the pictogram in the sheet's own `Marking` column, which is what `hong_kong.yaml`'s
+comment claimed and was not: measured at 700 dpi off `RM1017` and `RM1027`, two cells that agree,
+**every authored figure was wrong** — the ahead head 0.325 → **0.390** of the glyph's length long and
+0.235 → **0.122** across, nearly twice the drawing, and a uniform 0.085 stem where the drawing tapers
+**0.076 → 0.032**. The branch reach is **0.150** and its barb span **0.233**.
+
+⚠️ **One arrow figure remains authored and cannot be read: `branch_head_length_frac`.** The published
+turn branch is a swept hook ending in a **barbed dart** whose rear is concave; `arrows.py` draws a
+straight arm and a plain triangle, so the head has no single length on the drawing to transcribe. The
+hook and the barbs are not modelled. This is `Q60`'s railing height and `P3-16`'s plate dimensions at
+a third layer — authored because nothing published it, and recorded here rather than in a comment.
+
+⚠️ **`Q67`'s rasterise-and-diff cannot grade any of it.** That tool compares a config face against the
+cell TD published the code in, and works because the TS sheets are vector DGN exports. This page is a
+**scan** — `pdffonts` returns nothing and it is eight indexed 2400-ppi images — so `Q59`'s by-eye rule
+is the whole of the check on these numbers.
 
 ⚠️ **`LINES SPACING` IS THE CLEAR GAP BETWEEN THE TWO LINES, NOT A CENTRE-TO-CENTRE PITCH**, and the
 sheet proves it rather than this note: `RM1001` publishes line width **150** with spacing **100**,

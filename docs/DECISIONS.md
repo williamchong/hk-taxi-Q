@@ -121,6 +121,7 @@ wins.
 | `Q90` | **Every hole in the structure is a touchdown, and the sampler clamps where it should descend** | ✅ Closed — `INFRASTRUCTURE` stops where a ramp reaches grade, and `_deck_heights` answered an *end* hole with `np.interp`'s clamp, so the ribbon hung level in the air to the node: **1.83 m** at node 175 `FLEMING ROAD`, a flyover visibly afloat over the street, **found by the user driving to it**. ✅ **8 ends descended, 1 refused**, every one landing at +0.00; mixed-node step median 0.184 → **0.000 m**, 24 → **29 of 36** inside 0.5 m, worst non-portal **1.83 → 0.67**. 🔴 **Zero interior holes region-wide**, so the interpolation the branch was written for never fired. 🔴 **`deck_error.py` cannot see this and never could** — an absent deck reads as *uncovered*, not wrong — so it owes `tools/touchdown_error.py`, which fails the pre-fix bundle. ⚠️ The grade is ribbon-to-ribbon: reading it off the deck top drops `clearance_m` and understated every row. ⚠️ **One refusal, not the two predicted** — the negative step descends fine, and that prediction confused the two ends of the ramp. ✅ **The refusal was then looked at**: the `MARSH ROAD` deck ends in a 0.65 m vertical face 1.8 m past node 269, so the missing descent is the 10 m of level-0 `e466` beyond it, and the region has **one** real residual rather than seven — every other stepped node is (deck above the street) + `clearance_m` inside `at_grade_m`. ⬜ **Closing it needs a node-level pass and is unassigned**: `e466` has structure under 0 of its 2 stations, so the height lives on the neighbouring edge |
 | `Q91` | **The markings were disappearing into the pixel grid, and no counter could see it** | ✅ Closed — `anti_aliasing/quality/msaa_3d` **2** (4x). The 0.1 m box junction hatch is **one pixel tall at 13.6 m** on the chase rig, and with MSAA off a sub-pixel line is lit only where a pixel centre lands inside it, so it broke into dashes and then vanished — **found by the user from the driving seat, twice**. 🔴 **Every ETL counter was correct throughout**: 20 of 20 boxes drawn, `inverted` 0, `slivers_dropped` 2,032 at the declared quantum, and a top-down raster of the shipped `boxjunctions.glb` is a complete grid. The defect existed only in the raster. ⚠️ **Coverage is conserved and only continuity is lost** (0.0580 vs 0.0574 of the same world area at two resolutions), so no lift, colour or width change could have reached it. ⚠️ **Verified on both renderers including a real web export in Chrome**; 8x refused because WebGL2 caps `MAX_SAMPLES` at 4. 🔴 **0 draw calls and 0 primitives**, so `ARCHITECTURE.md`'s budget cannot see this change at all. ⬜ Mobile cost **unmeasured and unmeasurable today** — no floor handset, `P0-3b` |
 | `Q92` | **The markings were drawn on a model of the road, not the road, and 23.2% of the box junctions shipped under the asphalt** | ✅ Closed — `surface.DrawnSurface`. `boxjunctions` and `roadmarks` took their heights from `blended_height`, a distance-weighted blend of level-0 **centreline** heights; what `surface.py` draws at a junction is a convex-hull cap fanned from its ring's centroid, a different function. Off the centreline the drawn road stands up to **0.218 m** above the blend against a `lift_m` of **0.012**, so the paint sank into the road in patches with clean edges — **found by the user from the driving seat**, reported as strips missing from a box junction. ✅ **`roadsurface.json` schema 5 → 6 publishes the cap rings** and the query rebuilds `_Builder.fan`'s own triangulation from them. **Box junctions: below the road 23.2% → **9.4%**, and in the carriageway itself 11.1% → **0.32%**; stop and give-way lines 20.0% → 5.8% and 11.3% → 0.71%.** Both meshes triangle-for-triangle identical — only Y moved. 🔴 **Every ETL counter was correct throughout and `Q91` closed on the projection that cannot see this**: "a top-down raster of the shipped `boxjunctions.glb` is a complete grid" is true, and the mesh is complete in **plan** and wrong in **Y**. ✅ Paid with `tools/paint_clearance.py`, which reads the shipped meshes and shares no code with the pipeline. ⚠️ **Raising `lift_m` was refused** — clearing p99 needs **0.158 m**, paint floating 16 cm over the road. ⬜ The **9.4%** that remains is paint covered by a *second* surface drawn over it — an overlapping ribbon's kerb lip, or a cap over an arm, the 6,051 m² `Q53` measured — reported, gated separately, and unassigned |
+| `Q93` | **The turn arrows were authored, not read, and the branch reused the ahead head's length** | ✅ Closed — `CT174/51-5(1)F` publishes `LENGTH` for `RM1017`-`RM1030` and **no other dimension**, so the shape can come from nowhere but TD's own pictogram; read at 700 dpi off two cells that agree, **every authored figure was wrong**. Ahead head **0.325 → 0.390** long and **0.235 → 0.122** across (nearly twice the drawing); the stem was a uniform 0.085 where the drawing **tapers 0.076 → 0.032**. 🔴 **One of them was a defect rather than a difference**: `shoulder = reach - head_length` with a reach of 0.28 against a head of 0.325 is **negative**, so the turn head's base landed 0.18 m past the *far* side of the stem and swallowed it — a blob on **416 of 747** drawn arrows, shipped since `P3-15`. ✅ `branch_head_length_frac`/`_width_frac` split it out and `config.py` refuses `branch_reach_frac <= branch_head_length_frac`. ✅ **The ratchet is dimension-independent**: a test asserts no head overlaps the stem, mutation-checked at 0.00 m² on the fix, **0.137 m²** on the reused length and **0.620 m²** on the exact pre-fix config. Every counter unchanged — `by_glyph` 331/99/1/46/173/8/89, `drawn` 747, `inverted` 0, 3,246 triangles. ⚠️ **`branch_head_length_frac` is the one figure still authored** — the drawn branch is a swept hook ending in a barbed dart with a concave rear, and this draws a straight arm and a plain triangle. Recorded in `DATA_SOURCES.md`, not hidden. ⚠️ **`Q67`'s rasterise-and-diff cannot grade this** — the page is a scan — so `Q59`'s by-eye rule is still the whole of the check on the numbers |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -12853,3 +12854,77 @@ docstring and no caller is the next reader's trap.
 `Q72` for the tautology this refuses to add · `Q62` for why the evidence is a frame · `Q54` for why a
 surveyed extent is not scaled onto the drawn ribbon
 
+
+## `Q93` — The turn arrows were authored where the publisher had drawn them
+
+**Status.** ✅ Closed 2026-08-28. `pipeline/arrows.py`'s glyph, `config.Arrows`' proportions.
+
+### What the user saw
+
+"The road drawing arrows are overlapping and hard to read", with a frame of Expo Drive East showing
+two arrows whose heads and stems had merged into one shape.
+
+### The defect
+
+`arrows.py` computed `shoulder = side * (reach - head_length)` — the base of the turn head, out along
+the branch. With `branch_reach_frac` 0.28 and `head_length_frac` 0.325 that is **−0.18 m** on a 4 m
+arrow: **negative**. The base landed 0.18 m past the *far* side of the stem, so a 1.30 × 0.94 m
+triangle straddled the whole 0.34 m stem, and the connector arm was drawn on the wrong side.
+
+The branch had no length of its own — the code reused the **ahead** head's. **416 of 747** drawn
+arrows carry a turn branch: 173 `left`, 89 `right`, 99 `ahead+left`, 46 `ahead+right`, 8 `left+right`,
+1 `ahead+left+right`. It has been in every build since `P3-15`.
+
+### Reading the sheet
+
+`CT174/51-5(1)F` publishes `LENGTH = 4000` / `6000` for `RM1017`-`RM1030` and **no other dimension**,
+and is stamped NOT TO SCALE. So the shape can come from nowhere but TD's own pictogram, which is what
+`hong_kong.yaml` already claimed — "the proportions of the symbol drawn on the index plan" — and was
+not. Rendered at 700 dpi and measured on two independent cells that agree, `RM1017` (ahead) and
+`RM1027` (ahead & turn left), as a fraction of each glyph's own drawn length:
+
+| | authored | published |
+|---|---|---|
+| ahead head length | 0.325 | **0.390** |
+| ahead head width | 0.235 | **0.122** |
+| stem width | 0.085 uniform | **tapers 0.076 → 0.032** |
+| branch reach | 0.28 | **0.150** |
+| branch head length | *(reused 0.325)* | 0.100, authored |
+| branch head barb span | *(reused 0.235)* | **0.233** |
+| branch drop below the head | *derived from head width* | **0.145** |
+
+The ahead head was drawn nearly **twice as wide** as the publisher's and a fifth too short. Every
+authored figure moved.
+
+### What is still authored, and said so
+
+**`branch_head_length_frac`.** The published branch is a swept hook ending in a barbed dart whose rear
+is concave; this draws a straight arm and a plain triangle, so there is no single length to read off
+the drawing. The hook and the barbs are not modelled. Recorded in `DATA_SOURCES.md` rather than hidden
+— the same debt `Q60` records for railing height and `P3-16` for plate dimensions, both authored
+because nothing published them.
+
+⚠️ **`Q67`'s rasterise-and-diff does not transfer.** That grades a sign face against the cell TD
+published it in; this page is a **scan** (`pdffonts` empty), so `Q59`'s by-eye rule is the whole of
+the check on the numbers themselves.
+
+### The guards
+
+- `config.py` refuses `branch_reach_frac <= branch_head_length_frac`, naming both, because a comment
+  did not stop it once already. It also refuses a stem that widens toward the head.
+- 🔴 **A dimension-independent ratchet**: `test_arrows.py::test_no_head_overlaps_the_stem_it_grows_from`
+  clips every head against the stem on every movement combination the region publishes, at both
+  published lengths. The arm is deliberately excluded — an arm crossing the stem is a joint, a *head*
+  over the stem is always the shoulder having gone the wrong way. **Mutation-checked**: 0.00 m² on the
+  fix, **0.137 m²** with the branch reusing `head_length_frac`, **0.620 m²** on the exact pre-fix
+  config. A test that cannot fail is `Q72`'s tautology in a second place.
+
+### Cost
+
+Every counter unchanged: `by_glyph` 331/99/1/46/173/8/89, `drawn` 747, `axis_residual_deg` n 760
+against 747 drawn, `offset_m`, `over_a_cap` 51, `inverted` 0. **3,246 triangles and 197,968 bytes,
+both identical** — the same polygon count in a different shape.
+
+**See.** `Q59` for the glyph-table rule and why the codes are read rather than inferred · `Q67` for
+the sign-face survey that caught this class on the other layer, and why it cannot reach here · `Q54`
+for sourced-not-invented · `Q60` and `P3-16` for the authored-dimension precedent

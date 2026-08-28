@@ -965,13 +965,44 @@ arrows:
     "1030": {movements: [ahead, left, right], length_m: 6.0}
 
   # Proportions, as fractions of each arrow's own length, so the 4 m and 6 m
-  # variants of one marking scale together. On a 4 m arrow these give a 0.34 m
-  # stem, a 1.30 m head 0.94 m across, and a turn head reaching 1.12 m out —
-  # the proportions of the symbol drawn on the index plan.
-  stem_width_frac: 0.085
-  head_length_frac: 0.325
-  head_width_frac: 0.235
-  branch_reach_frac: 0.28
+  # variants of one marking scale together.
+  #
+  # 🔴 **Measured off TD's own pictogram, 2026-08-28 (Q92) — the figures that
+  # stood here before were authored and every one of them was wrong.**
+  # CT174/51-5(1)F publishes `LENGTH = 4000` / `6000` for RM1017-RM1030 and no
+  # other dimension, so the shape can come from nowhere but the drawing. Read at
+  # 700 dpi off two independent cells that agree, RM1017 (ahead) and RM1027
+  # (ahead & turn left), as a fraction of each glyph's own drawn length:
+  #
+  #   ahead head length   0.390   (was 0.325)
+  #   ahead head width    0.122   (was 0.235 — nearly twice the drawing)
+  #   stem, under head    0.032   (was a uniform 0.085; the drawing tapers)
+  #   stem, at the tail   0.076
+  #   branch reach        0.150   (was 0.28)
+  #   branch barb span    0.233
+  #   branch drop         0.145   (was derived from the head width)
+  #
+  # On a 4 m arrow that is a 1.56 m head 0.49 m across, a stem tapering 0.30 m
+  # to 0.13 m, and a turn head reaching 0.60 m out with a 0.93 m barb span.
+  #
+  # 🔴 **branch_head_length_frac is the one figure still authored, and it is the
+  # one that was the defect.** The drawn branch is a swept hook ending in a
+  # barbed dart whose rear is concave, so it has no single length to read; the
+  # code used to reuse `head_length_frac` for it, which made the head's base
+  # land 0.18 m past the FAR side of the stem and merged the two into a blob on
+  # 416 of the region's 747 arrows. It must stay below `branch_reach_frac`, and
+  # config.py refuses a city where it does not.
+  #
+  # ⚠️ **The hook and the barbs are not modelled** — this draws a straight arm
+  # and a plain triangle. Recorded in DATA_SOURCES.md rather than hidden.
+  head_length_frac: 0.390
+  head_width_frac: 0.122
+  stem_width_nose_frac: 0.032
+  stem_width_tail_frac: 0.076
+  branch_reach_frac: 0.150
+  branch_head_length_frac: 0.100
+  branch_head_width_frac: 0.233
+  branch_drop_frac: 0.145
 
   # ⚠️ **The ground and the level-0 carriageway are coplanar by construction**,
   # the same property tramway.bed_lift_m is lifted clear of. Paint laid at deck

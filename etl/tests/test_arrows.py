@@ -32,7 +32,7 @@ from pipeline.arrows import (
 from pipeline.config import load_city
 from pipeline.fares import Segments
 from pipeline.surface import downward_facing, mitres
-from tests.helpers import CITY_YAML
+from tests.helpers import CITY_YAML, polygon_area
 
 # The block as `hong_kong.yaml` declares it, trimmed to the codes the tests use.
 # Held here rather than in `helpers.py`'s `CITY_YAML` because the block is
@@ -54,10 +54,14 @@ BLOCK: dict[str, Any] = {
         "1021": {"movements": ["right"], "length_m": 4.0},
         "1027": {"movements": ["ahead", "left"], "length_m": 4.0},
     },
-    "stem_width_frac": 0.085,
-    "head_length_frac": 0.325,
-    "head_width_frac": 0.235,
-    "branch_reach_frac": 0.28,
+    "head_length_frac": 0.390,
+    "head_width_frac": 0.122,
+    "stem_width_nose_frac": 0.032,
+    "stem_width_tail_frac": 0.076,
+    "branch_reach_frac": 0.150,
+    "branch_head_length_frac": 0.100,
+    "branch_head_width_frac": 0.233,
+    "branch_drop_frac": 0.145,
     "lift_m": 0.015,
     "max_offset_m": 12.0,
     "bearing_tolerance_deg": 30.0,
@@ -220,6 +224,52 @@ class TestTheGlyph:
         assert right[:, 0].max() > 0.5
         assert left[:, 0].max() == pytest.approx(-right[:, 0].min(), abs=1e-9)
 
+    def test_no_head_overlaps_the_stem_it_grows_from(self, spec):
+        """🔴 **The ratchet on `Q92`, and it does not depend on any dimension.**
+
+        The defect was arithmetic, not a wrong number: `shoulder` came out
+        `reach - head_length`, negative, so the turn head's base landed 0.18 m
+        past the FAR side of the stem and the two merged into one blob. It
+        shipped on **416 of the region's 747 arrows** and rendered as a perfectly
+        solid shape, which is why nothing downstream saw it.
+
+        ⚠️ **The arm is deliberately excluded and the head is not.** An arm
+        crossing the stem is a joint — the two are one piece of paint — but a
+        *head* over the stem is always the shoulder having gone the wrong way.
+        Checked on every movement combination the region publishes, and on both
+        published lengths, because the bug scaled with length and so must the
+        test.
+        """
+        combinations = {glyph.movements for glyph in spec.glyphs.values()}
+        assert combinations, "the fixture publishes no glyph to check"
+        for movements in sorted(combinations):
+            for length_m in (4.0, 6.0):
+                polygons = glyph_polygons(spec, movements, length_m)
+                # Heads are the triangles; the stem is the one quad that
+                # reaches the tail. Identified by shape rather than by position
+                # in the list, so re-ordering the emission cannot quietly make
+                # this test check nothing.
+                stem = next(
+                    p
+                    for p in polygons
+                    if len(p) == 4 and p[:, 1].min() == pytest.approx(-0.5 * length_m)
+                )
+                heads = [p for p in polygons if len(p) == 3]
+                assert heads, f"{movements} at {length_m} m drew no head"
+                for head in heads:
+                    overlap = _clip(head, stem)
+                    assert polygon_area(overlap) == pytest.approx(0.0, abs=1e-12), (
+                        f"{movements} at {length_m} m: a head overlaps the stem by "
+                        f"{polygon_area(overlap):.4f} m2 — the shoulder has gone the wrong way"
+                    )
+                for first in range(len(heads)):
+                    for second in range(first + 1, len(heads)):
+                        overlap = _clip(heads[first], heads[second])
+                        assert polygon_area(overlap) == pytest.approx(0.0, abs=1e-12), (
+                            f"{movements} at {length_m} m: two heads overlap by "
+                            f"{polygon_area(overlap):.4f} m2"
+                        )
+
     def test_the_two_published_lengths_of_one_marking_scale_together(self, spec):
         """`RM1017` and `RM1018` are the same arrow at 4 m and 6 m.
 
@@ -330,7 +380,25 @@ class TestConfigRefusals:
 
     def test_a_stem_wider_than_its_head_is_refused(self, tmp_path):
         with pytest.raises(ValueError, match="not a head"):
-            city_with(tmp_path, {**BLOCK, "stem_width_frac": 0.9})
+            city_with(tmp_path, {**BLOCK, "stem_width_tail_frac": 0.9})
+
+    def test_a_stem_that_widens_toward_the_head_is_refused(self, tmp_path):
+        """The drawn stem tapers toward the nose; reversing it draws a wedge
+        pointing the wrong way, and it renders perfectly."""
+        with pytest.raises(ValueError, match="wrong way"):
+            city_with(tmp_path, {**BLOCK, "stem_width_nose_frac": 0.077})
+
+    def test_a_turn_head_longer_than_its_reach_is_refused(self, tmp_path):
+        """🔴 **The `Q92` defect, as a config refusal.**
+
+        `glyph_polygons` puts the turn head's base at `reach - head_length` from
+        the stem centre. Negative, that base lands on the far side of the stem
+        and the head swallows it — which is what shipped on **416 of 747**
+        arrows, because the branch reused the *ahead* head's length and nothing
+        compared the two.
+        """
+        with pytest.raises(ValueError, match="far side of the stem"):
+            city_with(tmp_path, {**BLOCK, "branch_head_length_frac": 0.150})
 
     def test_a_bearing_tolerance_past_a_right_angle_is_refused(self, tmp_path):
         """Past 90 degrees a symbol lying square across its edge passes, which
@@ -342,3 +410,44 @@ class TestConfigRefusals:
     def test_paint_coplanar_with_its_road_is_refused(self, tmp_path):
         with pytest.raises(ValueError, match="z-fights"):
             city_with(tmp_path, {**BLOCK, "lift_m": 0.0})
+
+
+def _clip(subject: np.ndarray, window: np.ndarray) -> np.ndarray:
+    """Sutherland-Hodgman: the part of one convex polygon inside another.
+
+    Both inputs are convex and wound counter-clockwise — `ccw` guarantees it and
+    `test_every_polygon_is_wound_counter_clockwise` holds it — so a half-plane
+    clip per window edge is exact rather than approximate.
+
+    ⚠️ **Written out rather than folded over `boxjunctions._clip_half_plane`, and
+    that is the point.** This is the only thing standing between a wrong
+    `shoulder` and a shipped blob, and a check that shares its arithmetic with
+    the geometry it checks agrees with it by construction — `deck_error.py`
+    books the same cost against its own barycentric copy. Twenty lines is the
+    price of an independent answer.
+    """
+    output = subject
+    for index in range(len(window)):
+        if not len(output):
+            return output
+        start, end = window[index], window[(index + 1) % len(window)]
+        edge = end - start
+
+        def side(points: np.ndarray, start=start, edge=edge) -> np.ndarray:
+            offset = points - start
+            return edge[0] * offset[:, 1] - edge[1] * offset[:, 0]
+
+        inside = side(output) >= 0.0
+        clipped: list[np.ndarray] = []
+        for corner in range(len(output)):
+            here, there = output[corner], output[(corner + 1) % len(output)]
+            if inside[corner]:
+                clipped.append(here)
+            if inside[corner] != inside[(corner + 1) % len(output)]:
+                first = side(here[None, :])[0]
+                second = side(there[None, :])[0]
+                span = first - second
+                if abs(span) > 1e-15:
+                    clipped.append(here + (there - here) * (first / span))
+        output = np.asarray(clipped) if clipped else np.zeros((0, 2))
+    return output

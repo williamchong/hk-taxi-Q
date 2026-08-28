@@ -334,6 +334,17 @@ Common emoji for this project:
   ⚠️ **A glyph-table change is a `DATA_SOURCES.md` change**: the codes come from TD drawing
   `CT174/51-5(1)F`, a **scanned** sheet with no text layer, and reading the histogram instead would
   have painted 61 `RM1116`-`RM1119` *warning* arrows as turn instructions.
+  🔴 **And so is a *dimension* change, because that sheet publishes `LENGTH` for `RM1017`-`RM1030`
+  and nothing else** — every proportion is read off TD's pictogram by eye (`Q59`), and `Q67`'s
+  rasterise-and-diff cannot help here because the page is a scan. ⚠️ **The turn branch is not the
+  ahead head**: reusing its length made `shoulder = reach - head_length` **negative**, put the turn
+  head's base past the far side of the stem and merged the two into a blob on **416 of 747** arrows,
+  through a release and a green `check.sh`. `config.py` refuses that now, and
+  `test_no_head_overlaps_the_stem_it_grows_from` catches the class whatever the numbers are —
+  ⚠️ **mutation-check it rather than reading its pass**, the way `Q72` says a counter is tested.
+  ⚠️ **`branch_head_length_frac` is the one figure still authored** — the drawn branch is a swept
+  hook ending in a barbed dart and this is a straight arm and a plain triangle — so a change to it is
+  a `DATA_SOURCES.md` change too. Numbers in `Q93`.
   ⚠️ **An arrows change is also a shader change** — `check.sh` exits 0 on a shader that fails to
   compile, so render and `grep -i "shader error"`. Numbers in `Q59`.
   🔴 **And a shader change is a change to THREE layers**: `marking_paint.gdshader` is shared by the

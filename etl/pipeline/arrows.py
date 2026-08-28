@@ -307,11 +307,21 @@ def glyph_polygons(spec: Arrows, movements: tuple[str, ...], length_m: float) ->
     frame into the world with a **negative determinant**, so counter-clockwise
     here is clockwise in the `(x, z)` plane, which is what faces `+Y`.
     `ArrowReport.inverted` is what actually holds that end.
+
+    🔴 **The proportions are TD's, measured, since `Q92`.** `CT174/51-5(1)F`
+    publishes `LENGTH` for these codes and nothing else, so the shape can only
+    come from the pictogram; read off it at 700 dpi, every authored figure was
+    wrong, and one of them was a defect rather than a difference. See
+    `config.Arrows` for the table and for what the straight-arm model still does
+    not reproduce.
     """
-    stem_width = spec.stem_width_frac * length_m
     head_length = spec.head_length_frac * length_m
     head_width = spec.head_width_frac * length_m
+    nose_width = spec.stem_width_nose_frac * length_m
+    tail_width = spec.stem_width_tail_frac * length_m
     reach = spec.branch_reach_frac * length_m
+    branch_length = spec.branch_head_length_frac * length_m
+    branch_width = spec.branch_head_width_frac * length_m
     tip = 0.5 * length_m
 
     polygons: list[np.ndarray] = []
@@ -320,36 +330,49 @@ def glyph_polygons(spec: Arrows, movements: tuple[str, ...], length_m: float) ->
         polygons.append(
             ccw([(0.0, tip), (-0.5 * head_width, stem_top), (0.5 * head_width, stem_top)])
         )
-        # A turn head on an ahead-and-turn glyph hangs below the ahead head, so
-        # the two do not overlap into one blob at the top of the stem.
-        elbow = stem_top - 0.6 * head_width
+        # Measured on `RM1027` rather than derived from the head, which is what
+        # it used to be: the drawing places the branch 0.145 of a length below
+        # the ahead head's base, and tying the two meant a change to the head
+        # silently moved the branch.
+        elbow = stem_top - spec.branch_drop_frac * length_m
     else:
-        stem_top = tip - 0.5 * head_width
+        # No ahead head, so the branch sits at the nose and the stem runs to it.
+        stem_top = tip - 0.5 * branch_width
         elbow = stem_top
 
     polygons.append(
         ccw(
             [
-                (-0.5 * stem_width, -tip),
-                (0.5 * stem_width, -tip),
-                (0.5 * stem_width, stem_top),
-                (-0.5 * stem_width, stem_top),
+                (-0.5 * tail_width, -tip),
+                (0.5 * tail_width, -tip),
+                (0.5 * nose_width, stem_top),
+                (-0.5 * nose_width, stem_top),
             ]
         )
     )
 
+    # The stem's own width where the branch leaves it, so the arm is as thick as
+    # the shaft it grows out of. `np.interp` clamps, which is what keeps a glyph
+    # whose branch sits above `stem_top` from extrapolating past `nose_width`.
+    arm_width = float(np.interp(elbow, (-tip, stem_top), (tail_width, nose_width)))
     for movement in movements:
         side = _SIDES.get(movement)
         if side is None:
             continue
-        shoulder = side * (reach - head_length)
+        # 🔴 **`branch_length`, never `head_length`.** Reusing the ahead head's
+        # length here made this negative — a reach of 0.28 against a head of
+        # 0.325 — so the turn head's base landed on the *far* side of the stem
+        # and swallowed it on 416 of 747 arrows. `config.py` refuses a city
+        # where `branch_reach_frac` does not exceed `branch_head_length_frac`,
+        # because a comment did not stop it once already.
+        shoulder = side * (reach - branch_length)
         polygons.append(
             ccw(
                 [
-                    (0.0, elbow - 0.5 * stem_width),
-                    (shoulder, elbow - 0.5 * stem_width),
-                    (shoulder, elbow + 0.5 * stem_width),
-                    (0.0, elbow + 0.5 * stem_width),
+                    (0.0, elbow - 0.5 * arm_width),
+                    (shoulder, elbow - 0.5 * arm_width),
+                    (shoulder, elbow + 0.5 * arm_width),
+                    (0.0, elbow + 0.5 * arm_width),
                 ]
             )
         )
@@ -357,8 +380,8 @@ def glyph_polygons(spec: Arrows, movements: tuple[str, ...], length_m: float) ->
             ccw(
                 [
                     (side * reach, elbow),
-                    (shoulder, elbow + 0.5 * head_width),
-                    (shoulder, elbow - 0.5 * head_width),
+                    (shoulder, elbow + 0.5 * branch_width),
+                    (shoulder, elbow - 0.5 * branch_width),
                 ]
             )
         )
