@@ -24,6 +24,7 @@ import numpy as np
 import pytest
 from carriageway_margin import (
     _BANDS,
+    EdgeWidth,
     Report,
     Station,
     _Index,
@@ -31,12 +32,13 @@ from carriageway_margin import (
     _sides,
     edge_widths,
     lane_bracket,
+    lane_verdict,
     main,
     nearest_published,
     width_published,
 )
 
-from pipeline.config import WidthBounds
+from pipeline.config import BOTH, FORWARD, WidthBounds
 
 
 def _ask(indexes: list[tuple[str, _Index]]) -> list[tuple[str, float | None, float | None]]:
@@ -339,61 +341,145 @@ class TestLaneBracket:
         assert lane_bracket(11.9, _bounds(), two_way=True) == (3, 3)
 
 
-def _station(edge: int, near: float, far: float, *, junction: bool = False) -> Station:
+def _station(
+    edge: int, near: float, far: float, *, junction: bool = False, spanned: bool = True
+) -> Station:
+    """One station. `spanned=False` is the near side answering and no far ray."""
     return Station(
         edge=edge,
         nearest_m=near,
         overhang_m=0.0,
         source="only",
         near_junction=junction,
-        width_source="only",
-        width_near_m=near,
-        width_far_m=far,
+        width_source="only" if spanned else "",
+        width_near_m=near if spanned else float("nan"),
+        width_far_m=far if spanned else float("nan"),
     )
 
 
 class TestWidthPartition:
-    """The counters, and the trap CLAUDE.md records firing in four other stages."""
+    """The counters, and the trap CLAUDE.md records firing in four other stages.
 
-    def test_the_distribution_is_recorded_over_the_refusals(self) -> None:
-        """The `drawn_gauge_m` trap. Appended below the ceiling guard the
-        distribution is confined to it by construction and reports a clean sweep
-        whatever the region does — so `n` must exceed the keeps and `max` must
-        exceed the bar. Both are checked, because either alone can be satisfied
-        by a distribution that never saw a refusal."""
+    ⚠️ **These drive the population, never the counters.** An earlier version of
+    this class set `report.widths` and `report.width_over_ceiling` by hand and
+    then asserted arithmetic on the values it had just chosen — it would have
+    passed unchanged had `survey` appended *below* the guard, which is the whole
+    defect the section stakes itself on. Everything here is now derived from
+    `stations`, so the assertions can only be satisfied by the derivation.
+    """
+
+    def _report(self, spans: list[Station], *, bare: int = 0, unmeasured: int = 0) -> Report:
+        """A report holding real stations: `spans` reached across, `bare` did not."""
         report = Report()
-        report.widths = [8.0, 9.0, 40.0]
-        report.width_over_ceiling = 1
+        report.stations = [*spans, *[_station(1, 3.0, 4.0, spanned=False) for _ in range(bare)]]
+        report.unmeasured = unmeasured
+        return report
 
-        assert report.width_measured == 3
-        assert report.width_kept == 2
-        assert max(report.widths) > 16.5
+    def test_a_refused_span_still_reaches_the_population(self) -> None:
+        """The `drawn_gauge_m` trap. A width over the ceiling has to be visible
+        in `n` and in `max`, or the distribution is confined to the bar by
+        construction and reports a clean sweep whatever the region does. Both
+        are asserted: either alone is satisfied by a population that never saw
+        a refusal."""
+        report = self._report([_station(1, 4.0, 4.0), _station(1, 14.0, 15.0)])
 
-    def test_a_station_nobody_spanned_is_counted_beside_the_distribution(self) -> None:
-        """A station with one ray has no width to record. Appending a
-        placeholder would hold the identity true by never reaching the list,
-        which is what review found `touchdown_error.py`'s `ends_no_target`
-        doing. So the partition closes against the walk, not against itself."""
-        report = Report()
-        report.stations_walked = 10
-        report.widths = [8.0, 9.0, 40.0]
-        report.width_no_span = 7
+        widths = [s.width_m for s in report.spans]
 
-        assert report.width_measured + report.width_no_span == report.stations_walked
-        assert report.width_coverage == pytest.approx(0.3)
+        assert len(widths) == 2
+        assert max(widths) == pytest.approx(29.0)
+        assert max(widths) > _bounds().max_m
+
+    def test_the_bounds_are_applied_where_the_table_is_printed(self) -> None:
+        """`survey` does not take `bounds` at all, so there is no guard for the
+        measurement to be stored on the wrong side of. This pins that: the same
+        report yields different keeps under different bounds, without being
+        re-surveyed."""
+        report = self._report([_station(1, 4.0, 4.0), _station(1, 14.0, 15.0)])
+        widths = [s.width_m for s in report.spans]
+
+        assert sum(1 for w in widths if w <= 16.5) == 1
+        assert sum(1 for w in widths if w <= 29.5) == 2
+
+    def test_a_station_nobody_spanned_is_outside_the_distribution(self) -> None:
+        """A station with one ray has no width, so it is reported beside the
+        distribution rather than inside it with a placeholder — which is what
+        review found `touchdown_error.py`'s `ends_no_target` doing."""
+        report = self._report([_station(1, 4.0, 4.0)], bare=6, unmeasured=3)
+
+        assert len(report.spans) == 1
+        assert report.stations_walked == 10
+        assert report.width_no_span == 9
 
     def test_width_coverage_is_not_the_near_side_coverage(self) -> None:
-        """`coverage` is "one hit *either* side". A width needs both and is far
-        sparser; reporting one as the other states a number for a measurement
-        that was not made."""
-        report = Report()
-        report.stations_walked = 100
-        report.unmeasured = 8
-        report.stations = [_station(1, 3.0, 4.0) for _ in range(92)]
-        report.widths = [7.0] * 50
+        """`coverage` is "one hit *either* side" and reads far higher. Reporting
+        one as the other states a number for a measurement that was not made."""
+        report = self._report([_station(1, 3.0, 4.0) for _ in range(50)], bare=42, unmeasured=8)
 
         assert report.coverage == pytest.approx(0.92)
         assert report.width_coverage == pytest.approx(0.50)
+
+
+class TestLaneVerdict:
+    """The aggregate over published edges, which had no test of its own."""
+
+    def _rows(self, *widths: float) -> list[EdgeWidth]:
+        return [
+            EdgeWidth(
+                edge=i,
+                median_m=width,
+                n=5,
+                refused_share=0.0,
+                off_centre=0.1,
+                source="only",
+                refused=False,
+            )
+            for i, width in enumerate(widths)
+        ]
+
+    def _report(self, rows: list[EdgeWidth], direction: str, lanes: int) -> Report:
+        report = Report()
+        report.directions = {row.edge: direction for row in rows}
+        report.lanes = {row.edge: lanes for row in rows}
+        return report
+
+    def test_the_authored_count_below_the_bracket_is_too_few(self) -> None:
+        rows = self._rows(14.14)
+
+        verdict = lane_verdict(rows, self._report(rows, FORWARD, 2), _bounds())
+
+        assert (verdict.too_few, verdict.too_many, verdict.outside) == (1, 0, 1)
+
+    def test_the_authored_count_above_the_bracket_is_too_many(self) -> None:
+        rows = self._rows(7.0)
+
+        verdict = lane_verdict(rows, self._report(rows, FORWARD, 5), _bounds())
+
+        assert (verdict.too_few, verdict.too_many, verdict.outside) == (0, 1, 1)
+
+    def test_a_count_inside_an_ambiguous_bracket_is_neither(self) -> None:
+        """(3, 4) holds an authored 3 and an authored 4, so neither is a finding
+        about the graph — the ambiguity is, and it is counted separately."""
+        rows = self._rows(14.14)
+
+        verdict = lane_verdict(rows, self._report(rows, FORWARD, 3), _bounds())
+
+        assert (verdict.outside, verdict.ambiguous) == (0, 1)
+
+    def test_an_unambiguous_odd_two_way_count_is_a_3_4_2_7_finding(self) -> None:
+        rows = self._rows(11.9)
+
+        verdict = lane_verdict(rows, self._report(rows, BOTH, 3), _bounds())
+
+        assert [edge for edge, _ in verdict.findings] == [0]
+
+    def test_the_same_span_one_way_is_not_a_finding(self) -> None:
+        """3.4.2.7 is a rule about two-way single carriageways. A one-way edge
+        may carry three lanes, so the same 11.9 m must not be reported."""
+        rows = self._rows(11.9)
+
+        verdict = lane_verdict(rows, self._report(rows, FORWARD, 3), _bounds())
+
+        assert verdict.findings == []
 
 
 class TestEdgeWidths:

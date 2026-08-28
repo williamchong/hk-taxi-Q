@@ -2098,6 +2098,18 @@ def _measures(
     return values
 
 
+def _pair(values: list[Any], where: str) -> tuple[float, float]:
+    """Two finite, positive, ascending measurements — `_measures` for a pair."""
+    try:
+        low, high = float(values[0]), float(values[1])
+    except (TypeError, ValueError):
+        raise ValueError(f"{where} is {values!r}, which is not a pair of numbers") from None
+    for value in (low, high):
+        if not math.isfinite(value) or value <= 0.0:
+            raise ValueError(f"{where} must be finite and positive, got {value}")
+    return low, high
+
+
 # Directions a city file may declare. `BACKWARD` never reaches
 # `roadgraph.json`: a source that codes direction against its own digitisation
 # is normalised away by reversing the polyline, so the game never has to know
@@ -3830,20 +3842,29 @@ def _width_bounds(body: Any, where: str) -> WidthBounds | None:
     if not isinstance(body, dict):
         raise ValueError(f"{where} must be a mapping, got {body!r}")
 
-    max_m = float(_require(body, "max_m", where))
-    min_m = float(_require(body, "min_m", where))
-    hard_min_m = float(_require(body, "hard_min_m", where))
+    # ⚠️ **Through `_measures` rather than an inline `float(_require(...))`
+    # block**, for the reason `_signals` records: YAML 1.1 resolves `.nan` and
+    # `.inf`, and a NaN passes every sign test below while making false every
+    # comparison it feeds. The ordering guard would catch a NaN by accident;
+    # `.inf` in `max_m` it would not.
+    metres = _measures(body, where, ("max_m", "min_m", "hard_min_m"), positive=True)
+    max_m, min_m, hard_min_m = metres["max_m"], metres["min_m"], metres["hard_min_m"]
+
     lane = _require(body, "lane_m", where)
     if not (isinstance(lane, list) and len(lane) == 2):
         raise ValueError(f"{where}:lane_m must be a [narrowest, widest] pair, got {lane!r}")
-    lane_m = (float(lane[0]), float(lane[1]))
+    # The same finiteness rule, applied by hand because `_measures` reads named
+    # keys and this one is a pair. `lane_m: [3.0, .inf]` otherwise loads
+    # cleanly and gives `lane_bracket` a zero lower bound against a real upper
+    # one — an inverted bracket, published with no error.
+    lane_m = _pair(lane, f"{where}:lane_m")
 
     if not 0.0 < hard_min_m < min_m < max_m:
         raise ValueError(
             f"{where} must satisfy 0 < hard_min_m < min_m < max_m, "
             f"got {hard_min_m} / {min_m} / {max_m}"
         )
-    if not 0.0 < lane_m[0] < lane_m[1]:
+    if not lane_m[0] < lane_m[1]:
         raise ValueError(f"{where}:lane_m must be ascending and positive, got {lane_m}")
     if lane_m[0] > hard_min_m:
         # The hard refusal is "narrower than one through lane". A `lane_m` floor

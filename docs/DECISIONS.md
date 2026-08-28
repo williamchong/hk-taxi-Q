@@ -13026,6 +13026,16 @@ both ways and taking the first publisher that answers:
 after the 1.6x playability widening the drawn ribbon is 10.24 m, and STEWART ROAD
 is drawn **4.6 m narrower than its own carriageway**.
 
+🔴 **Superseded by `Q95`, 2026-08-29 — read this table as provisional.** It came from a scratch
+script whose commit touched only the docs, and the instrument built since **does not reproduce it**:
+the p10 matches to 0.03 m on all three roads, but `HENNESSY ROAD` reproduces on every percentile only
+at a **25 m ray cap this entry never states**, and `STEWART ROAD` and `CANAL ROAD EAST` reproduce at
+no cap. ⚠️ **And the fourth column is the move `Q95` refuses**: dividing by `lane_width_m` makes the
+answer agree with the constant under test, so lanes are now bracketed by TPDM 4.3.9.8's 3.0-3.65 m
+instead. ⚠️ **The third column is also a *span* rather than a width on a one-way edge** — the ray
+crosses an opposed pair — and every `HENNESSY ROAD` and `CANAL ROAD EAST` edge is one-way, as is
+`STEWART ROAD`'s `e505`. Run `tools/carriageway_margin.py` for the figures that stand.
+
 ⚠️ **The probe over-reads and `Q57` says why** — a perpendicular escapes through a
 junction mouth and crosses a dual carriageway, which is what HENNESSY ROAD's p90
 of 23.17 m is. It does not change this conclusion: STEWART ROAD's **p10** is
@@ -13136,7 +13146,7 @@ measured span = BOTH published edges at one station, from ONE publisher
   9,531 of 13,546 stations were spanned (70.4%, 15.0 m ray), against 12,502 on the near side
   spanned by: ib1000 9,311, traffic_aids 220
   both spanned 117 stations, disagreeing by p50 1.05 m, p90 11.06 m
-  4,015 stations no publisher spanned; partition 9,531 + 4,015 = 13,546
+  4,015 stations no publisher spanned
 
 station span, recorded over the REFUSALS too — n 9,531 exceeds the 8,204 kept
   population                     n     p50     p90     max   > 16.5    < 7.3
@@ -13200,6 +13210,14 @@ only at a **ray cap of 25 m or more**, which its prose never states; and `STEWAR
 16.67 m from 15 m through 40 m. ⚠️ **The stated method does not determine the stated numbers.**
 Nothing was tuned toward them, and the scratch figures in `Q94` should be read as provisional until
 someone re-derives them here.
+
+⚠️ **The counters are DERIVED from one unfiltered population, not accumulated beside it.** `survey`
+does not take the bounds at all — it measures, and the standard is applied where the table is
+printed — so `n` and the keeps are two views of the same list and cannot drift to opposite sides of a
+guard. That is `Q58`'s `drawn_gauge_m` trap made unreachable rather than merely avoided. ⚠️ **An
+earlier draft also printed a `9,531 + 4,015 = 13,546` "partition"**, which was theatre: the second
+term was defined as the third minus the first, so it could not fail — `Q72`'s tautology, in the
+report this entry uses to argue against tautologies.
 
 ⚠️ **Mutation-checked rather than read** (`Q72`): the ceiling reaches **0** refusals at
 `--max-width-m 29.5`, and at 6.0 m it refuses 8,228 while `n` stays 9,531 against 1,245 kept — which

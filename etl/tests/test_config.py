@@ -1881,6 +1881,20 @@ class TestCarriagewaySurvey:
         with pytest.raises(ValueError, match="ascending and positive"):
             load_city("hong_kong", cities_root=rewrite(backwards))
 
+    def test_an_infinite_lane_width_is_rejected(self, rewrite) -> None:
+        """YAML 1.1 resolves `.inf`, and this file relies on that for
+        `height_bands`' open last band. Here it loads cleanly past an ascending
+        check — `3.0 < inf` is true — and then gives `lane_bracket` a zero lower
+        bound against a real upper one, publishing an inverted bracket with no
+        error. `_measures` covers the three metre figures; the pair needs the
+        same rule applied by hand."""
+
+        def unbounded(doc: dict[str, Any]) -> None:
+            doc["carriageway_survey"]["width_bounds"]["lane_m"] = [3.0, float("inf")]
+
+        with pytest.raises(ValueError, match="finite and positive"):
+            load_city("hong_kong", cities_root=rewrite(unbounded))
+
     def test_a_lane_floor_above_the_hard_minimum_is_rejected(self, rewrite) -> None:
         """The two would then disagree about what one lane is, and a width the
         hard minimum keeps would bracket to no lanes at all."""
