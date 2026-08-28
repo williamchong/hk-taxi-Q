@@ -2421,6 +2421,20 @@ roads:
   lanes_default: 2
   lanes_by_min_speed_limit_kph:
     70: 3
+
+  # 🔴 **The product of these two is 6.4 m, and that is below every carriageway
+  # width Hong Kong permits.** TD's Transport Planning & Design Manual Vol 2
+  # Table 3.4.2.1 (March 2026) gives a minimum two-lane single carriageway of
+  # **7.3 m** and allows 6.75 m only *per direction* of a dual carriageway. So
+  # the authored width is not merely underived — it is outside the published
+  # range, on 720 of the region's 737 edges. `Q95`.
+  #
+  # ⚠️ **3.2 m is inside the published *lane* range and below the table's own
+  # arithmetic.** TPDM 4.3.9.8 puts a through lane at **3.0-3.65 m**; the
+  # carriageway table implies 3.375 m for distributors (13.5/4, 10/3, 6.75/2)
+  # and 3.65 m for trunk roads (14.6/4). 3.2 is legal and small. It is left
+  # alone deliberately: raising it moves every ribbon in the region, which is
+  # `Q95`'s decision and not a number to change in passing.
   lane_width_m: 3.2
 
   # Hand-authored. These are the streets the Hong Kong Tramways route uses

@@ -123,6 +123,7 @@ wins.
 | `Q92` | **The markings were drawn on a model of the road, not the road, and 23.2% of the box junctions shipped under the asphalt** | ✅ Closed — `surface.DrawnSurface`. `boxjunctions` and `roadmarks` took their heights from `blended_height`, a distance-weighted blend of level-0 **centreline** heights; what `surface.py` draws at a junction is a convex-hull cap fanned from its ring's centroid, a different function. Off the centreline the drawn road stands up to **0.218 m** above the blend against a `lift_m` of **0.012**, so the paint sank into the road in patches with clean edges — **found by the user from the driving seat**, reported as strips missing from a box junction. ✅ **`roadsurface.json` schema 5 → 6 publishes the cap rings** and the query rebuilds `_Builder.fan`'s own triangulation from them. **Box junctions: below the road 23.2% → **9.4%**, and in the carriageway itself 11.1% → **0.32%**; stop and give-way lines 20.0% → 5.8% and 11.3% → 0.71%.** Both meshes triangle-for-triangle identical — only Y moved. 🔴 **Every ETL counter was correct throughout and `Q91` closed on the projection that cannot see this**: "a top-down raster of the shipped `boxjunctions.glb` is a complete grid" is true, and the mesh is complete in **plan** and wrong in **Y**. ✅ Paid with `tools/paint_clearance.py`, which reads the shipped meshes and shares no code with the pipeline. ⚠️ **Raising `lift_m` was refused** — clearing p99 needs **0.158 m**, paint floating 16 cm over the road. ⬜ The **9.4%** that remains is paint covered by a *second* surface drawn over it — an overlapping ribbon's kerb lip, or a cap over an arm, the 6,051 m² `Q53` measured — reported, gated separately, and unassigned |
 | `Q93` | **The turn arrows were authored, not read, and the branch reused the ahead head's length** | ✅ Closed — `CT174/51-5(1)F` publishes `LENGTH` for `RM1017`-`RM1030` and **no other dimension**, so the shape can come from nowhere but TD's own pictogram; read at 700 dpi off two cells that agree, **every authored figure was wrong**. Ahead head **0.325 → 0.390** long and **0.235 → 0.122** across (nearly twice the drawing); the stem was a uniform 0.085 where the drawing **tapers 0.076 → 0.032**. 🔴 **One of them was a defect rather than a difference**: `shoulder = reach - head_length` with a reach of 0.28 against a head of 0.325 is **negative**, so the turn head's base landed 0.18 m past the *far* side of the stem and swallowed it — a blob on **416 of 747** drawn arrows, shipped since `P3-15`. ✅ `branch_head_length_frac`/`_width_frac` split it out and `config.py` refuses `branch_reach_frac <= branch_head_length_frac`. ✅ **The ratchet is dimension-independent**: a test asserts no head overlaps the stem, mutation-checked at 0.00 m² on the fix, **0.137 m²** on the reused length and **0.620 m²** on the exact pre-fix config. Every counter unchanged — `by_glyph` 331/99/1/46/173/8/89, `drawn` 747, `inverted` 0, 3,246 triangles. 🔴 **Amended the same day, from the driving seat: the branch is now AUTHORED and the measured figures are declined.** TD's branch head is genuinely wider than it is deep — its barbs do the work — so a plain triangle at 0.150/0.100/0.233 is a mushroom on the shaft, and a faithful six-point dart (overlay agreement 0.831 → **0.874**) is a detached diamond whose 0.09 m barbs `Q91`'s sub-pixel problem eats anyway. It ships as an arrowhead longer than it is wide, sized against the frame. ✅ **The sheet itself is vindicated**: `RM1016` publishes `SIZE = 5600(H) x 2000` and its pictogram measures **2.802** against 2.800, so NOT TO SCALE means no scale bar rather than stylised, and the ahead head and stem stay measured |
 | `Q94` | **Two arrows with different instructions land in one lane, because the lane count is invented** | 🟡 **Half closed 2026-08-28 — counted, not fixed.** The lane registration snaps a published offset to one of `ribbon.lanes` slots, and that count is authored from the speed-limit table; where the real carriageway is wider, two symbols collapse into one slot and draw **one shaft wearing two branches**, which is an instruction the world does not contain. Found from the driving seat on STEWART ROAD. **89 pairs stacked in one lane, 51 of them disagreeing**, of 747 drawn. On HENNESSY ROAD `e239` a `right` published 4.52 m out and an `ahead` published 1.63 m out both land at −2.56 m. ✅ `arrows.json` publishes `stacked_pairs` and `stacked_disagreeing`, reachable at zero and mutation-checked; every other counter was correct throughout and `inverted` read 0. 🔴 **The finding is that the arrows are themselves a lane-count source** — a row across a carriageway is the count, written down: **31 of 306** arrow-carrying edges imply more lanes than the graph has, nine of them four against two. That narrows `Q57`'s narrowing of `Q19` again, from a layer already in the bundle. ⬜ Sourcing the count is **unassigned**: it moves every ribbon, kerb, registered layer and clearance grader in the region |
+| `Q95` | **The authored carriageway width is outside the range Hong Kong permits** | 🟡 **Open — measured and bounded, nothing changed.** `width_m` is `lanes x lane_width_m` = **6.4 m** on 720 of 737 edges. TD's Transport Planning & Design Manual Vol 2 Table 3.4.2.1 (March 2026) gives a minimum two-lane single carriageway of **7.3 m** and allows 6.75 m only *per direction* of a dual carriageway — so the authored width is not merely underived, it is **below every figure TD publishes**. ✅ STEWART ROAD's measured **14.81 m** is corroborated by the same table: a 13.5 m four-lane carriageway plus a parking strip, reconcilable with no two-lane figure. ✅ **And the standard supplies the bound the width instrument lacks** — the widest urban carriageway is 13.5 m (15.8 on a tight curve), so a two-sided ray returning **36.09 m on LUNG WO ROAD** is a citable refusal rather than a suspicion. 🔴 **A standard is not a survey**: it says what a road should be, so it cannot give a per-edge width and using it to assign one would repeat the move `Q54` argues against. ⬜ Sourcing the width is **on hold behind the instrument** — `carriageway_margin.py` measures a one-sided overhang because the two-sided ray is corrupted, and that is the work `Q57` scoped and never did |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -13060,3 +13061,83 @@ clearance grader in the region. It is also the most direct lead `Q19` has had.
 narrowing and the lane lines · `Q54` for why a published extent is not overruled by a derived one ·
 `Q72` for the reachable-at-zero test this counter had to pass · `Q93` for the glyph these are drawn
 with
+
+
+## `Q95` — The authored carriageway width is outside the range Hong Kong permits
+
+**Status.** 🟡 Open 2026-08-29. Measured, bounded and recorded; no value changed.
+
+### The question
+
+Asked why STEWART ROAD is drawn at two lanes when the street is five wide, and then whether a design
+standard could settle it. TD publishes one: the **Transport Planning & Design Manual**, Volume 2
+Chapter 3, March 2026 edition. It was referenced nowhere in this repo.
+
+### What it says
+
+`DATA_SOURCES.md` carries the table. The three figures that bite:
+
+- A **two-lane single carriageway** is **7.3 m** minimum; 6.75 m is allowed only *per direction* of a
+  dual carriageway (Table 3.4.2.1).
+- A **through traffic lane** is **3.0–3.65 m**, exclusive of hard strips (4.3.9.8).
+- A **four-lane single carriageway** is **13.5 m**, rising to **15.8 m** on a curve under 150 m
+  radius (3.4.4.1), with an optional **3 m** parking strip beside it (3.4.2.6).
+
+### 🔴 What ships is out of range
+
+`roadgraph.json`'s `width_m` is `lanes × lane_width_m` = 2 × 3.2 = **6.4 m** on **720 of the region's
+737 edges**. That is below the 7.3 m minimum for a two-lane single carriageway, and below even the
+6.75 m allowed per direction of a dual carriageway.
+
+`Q19` and `Q57` recorded the width as *invented*. This is a sharper statement: it is invented **and
+outside the published range**, on 98% of the network. `lane_width_m` 3.2 is itself legal but small —
+inside TPDM's 3.0–3.65 lane range, and below the table's own arithmetic of 3.375 m for distributors
+and 3.65 m for trunk roads.
+
+### ✅ Two things the standard is genuinely good for
+
+**It corroborates a measurement.** STEWART ROAD reads **14.81 m** by ray and **15.61 m** at a second
+spacing; `Q94`'s arrows put three symbols side by side at one station; the user's photograph shows
+five lanes. TPDM adds the fourth voice: 14.8 m is a **13.5 m four-lane urban carriageway plus a
+parking strip**, or a four-lane widened on a curve. It is reconcilable with no two-lane figure in the
+table. Four independent sources, one answer.
+
+**It bounds the instrument.** The widest urban carriageway is 13.5 m, 15.8 m on a tight curve, ~16.5 m
+with a parking strip. So the two-sided ray returning **36.09 m on LUNG WO ROAD** and **35.26 m on
+FLEMING ROAD** has crossed a median, a 5.5 m tram reserve (3.4.2.3) or a junction mouth. That is now a
+**citable refusal** rather than a suspicion, and it is exactly what `tools/carriageway_margin.py`
+needs to graduate from a one-sided overhang to a per-edge width.
+
+3.4.2.7 supplies a second rule: a two-way single carriageway **must not** carry three lanes, other
+than a climbing lane on a gradient. So an odd derived count on a `direction=both` edge is a finding.
+
+### 🔴 What the standard must not be used for
+
+**It is not a survey.** It says what a Hong Kong road *should* be, never what one *is*. Assigning
+`width_m` from the road's class would be authoring policy with better provenance — structurally the
+same move as `lanes_by_min_speed_limit_kph`, which is what produced this question. `Q54`'s rule
+points the other way: the extent is read, not derived. And the table is headed **Minimum**, with
+3.4.2.2 letting trunk widths fall below it "on economic or other grounds".
+
+### What is not done
+
+Nothing is changed. `lane_width_m` stays 3.2 and the lane table stays authored, because moving either
+moves every ribbon, kerb, registered layer and clearance grader in the region.
+
+⬜ **The blocker is an instrument, not a decision.** `carriageway_margin.py` measures a *one-sided*
+overhang precisely because the two-sided ray is corrupted; a per-edge width needs that ray fixed, and
+TPDM now supplies the rejection bound it was missing. That is the work `Q57` scoped and never did, and
+it is the prerequisite for `Q94`'s lane count and for anything that would draw STEWART ROAD at its own
+width.
+
+⚠️ **When it is done, the widening is part of the same decision.** `widen_default: 1.6` is a
+*multiplier on a placeholder*. Applied to a real width it over-widens streets that are already wide
+and under-widens the narrowest; the shape `GAME_DESIGN.md` actually asks for — "the genre needs wide
+roads" — is a **floor**, not a proportion. Expressed as `drawn = max(real_width, playable_floor)` with
+the floor at today's drawn value, most of the region is byte-identical and the change is confined to
+the genuinely wide streets, which is what makes the grader re-baseline affordable.
+
+**See.** `Q94` for the arrows that made this visible and for the lane count they imply · `Q19` for the
+invisible walls the invented width causes · `Q57` for the previous narrowing and the instrument it
+scoped · `Q54` for why a published extent is not overruled by a derived one · `GAME_DESIGN.md` for the
+widening this would re-open

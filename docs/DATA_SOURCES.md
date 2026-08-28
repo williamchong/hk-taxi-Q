@@ -733,6 +733,62 @@ and the query is `intersects`, so a polygon reaching outside contributes its who
 599,162 m² is not 41% carriageway, it is an unclipped sum. Anyone acting on this owes the HyD
 specification and a real clip first.
 
+### ✅ READ, not fetched — TD's Transport Planning & Design Manual, Volume 2 (`Q95`)
+
+**`https://www.td.gov.hk/filemanager/en/content_5055/V2_03_2026.pdf`** · Transport Department ·
+published on `td.gov.hk`, **not** a DATA.GOV.HK or CSDI dataset · Chapter 3, **March 2026 edition**,
+282 pages, with a real text layer (`pdffonts` lists embedded fonts, `pdftotext` recovers the tables).
+
+🔴 **A design standard is not a survey, and the difference decides what it may be used for.** It says
+what a Hong Kong road *should* be, never what one *is* — so it cannot give a per-edge width, and
+using it to assign one would be authoring policy with better provenance, which is the move
+`lanes_by_min_speed_limit_kph` already makes and `Q54` argues against. What it *can* do is bound an
+instrument and give an authored number its source.
+
+**Table 3.4.2.1 — Minimum Carriageway Widths in Urban Areas**, per carriageway:
+
+| Road type | single, 2 lane | single, 4 lane | dual, 2 lane | dual, 3 lane | dual, 4 lane |
+|---|---|---|---|---|---|
+| Trunk Road / Expressway | — | — | 7.3 | 11 | 14.6 |
+| Primary Distributor | — | — | 6.75 | 10 | 13.5 |
+| District Distributor | **7.3 or 10.3** | **13.5** | 6.75 | 10 | — |
+| Local Distributor | **7.3 or 10.3** | **13.5** | 6.75 | — | — |
+
+And four clauses this project touches directly:
+
+- **3.4.2.3** — a double-track tram reserve requires **5.5 m**. `pipeline/tramway.py`'s territory.
+- **3.4.2.6** — distributors may carry an extra **3 m** parking strip beside the running lanes.
+- **3.4.4.1** — carriageways widen on curves under 400 m radius: a 13.5 m four-lane becomes **15.8 m**
+  below 150 m.
+- **4.3.9.8** — a through traffic lane is **3.0–3.65 m**, exclusive of hard strips.
+- **3.4.2.7** — a two-way single carriageway **must not** be divided into three lanes, other than a
+  climbing lane on a gradient. A derived odd lane count on a `direction=both` edge is therefore a
+  finding, not a reading.
+
+🔴 **What this says about what ships.** `roadgraph.json`'s `width_m` is `lanes × lane_width_m` =
+2 × 3.2 = **6.4 m** on 720 of the region's 737 edges. That is **below every figure in the table** —
+under the 7.3 m minimum for a two-lane single carriageway, and under even the 6.75 m allowed *per
+direction* on a dual carriageway. The authored width is not merely underived; it is outside the range
+TD permits.
+
+✅ **And STEWART ROAD's measured 14.81 m is corroborated rather than merely observed**: it matches a
+13.5 m four-lane urban carriageway with a parking strip, or a four-lane widened on a curve (15.8 m).
+It is reconcilable with no two-lane figure in the table. `Q94`'s arrows say the same thing
+independently — three symbols side by side at one station.
+
+✅ **The bound an instrument needs.** The widest urban carriageway here is 13.5 m, 15.8 m on a tight
+curve, ~16.5 m with a parking strip. So a two-sided ray returning **36.09 m on LUNG WO ROAD** or
+**35.26 m on FLEMING ROAD** has crossed a median, a tram reserve or a junction mouth — which is now a
+citable refusal rather than a suspicion, and is what `tools/carriageway_margin.py` would need to
+measure a *width* rather than a one-sided overhang.
+
+⚠️ **Read, not fetched.** Nothing in `etl/` downloads this and nothing should: it is one table, and
+the figures above are transcribed here the way `CT174/51-5(1)F`'s marking dimensions are. ⚠️ **It is
+city-specific**, so any value taken from it belongs in `etl/config/cities/hong_kong.yaml` under hard
+rule 3 — the second city has its own manual. ⚠️ **A standard is a floor, not a description**: the
+table is headed *Minimum*, and 3.4.2.2 lets trunk widths fall below it "on economic or other
+grounds".
+
 ## Fares and points of interest
 
 Both datasets are read by `P1-5`. **data.gov.hk lists only a portal link for each — no direct file.**
