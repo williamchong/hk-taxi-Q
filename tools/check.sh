@@ -124,6 +124,14 @@ promoted="$(grep -c '^gdscript/warnings/.*=2$' "$project_godot" || true)"
 untyped="$(grep -c '^gdscript/warnings/untyped_declaration=2$' "$project_godot" || true)"
 web_renderer="$(grep -c '^renderer/rendering_method\.web="gl_compatibility"$' "$project_godot" || true)"
 mobile_fps="$(grep -c '^run/max_fps\.mobile=' "$project_godot" || true)"
+# 🔴 Pinned to its VALUE, not counted. MSAA degrades silently: dropped or set to
+# 0, nothing errors, no counter moves and the only symptom is thin geometry —
+# the box junction hatch, sign poles, lamp columns — breaking into dashes at
+# middle distance, which is what it was turned on to stop. 4x (2) is also the
+# ceiling WebGL2 guarantees, so 8x here would be clamped on the web cut and
+# quietly diverge the platforms. `Q91` measured it; docs/ARCHITECTURE.md
+# "Project settings" has the row.
+msaa="$(grep -c '^anti_aliasing/quality/msaa_3d=2$' "$project_godot" || true)"
 # 🔴 Pinned to its VALUE, not merely counted. Godot quantises imported vertex
 # positions over each mesh's own AABB, so the step scales with how wide a layer
 # is rather than how big its objects are — 0.025 m across `lamps.glb`, against a
@@ -137,12 +145,13 @@ mobile_fps="$(grep -c '^run/max_fps\.mobile=' "$project_godot" || true)"
 # strictly, that reads as the setting having been LOST — a false alarm pointing
 # at a message that says not to edit the check down to match.
 mesh_compression="$(grep -c '^"meshes/force_disable_compression": true,\{0,1\}$' "$project_godot" || true)"
-if [[ "$promoted" != "$WANT_PROMOTED" || "$untyped" != 1 || "$web_renderer" != 1 || "$mobile_fps" != 1 || "$mesh_compression" != 1 ]]; then
+if [[ "$promoted" != "$WANT_PROMOTED" || "$untyped" != 1 || "$web_renderer" != 1 || "$mobile_fps" != 1 || "$mesh_compression" != 1 || "$msaa" != 1 ]]; then
 	echo "  promoted warnings:    $promoted (want $WANT_PROMOTED)"
 	echo "  untyped_declaration:  $untyped (want 1)"
 	echo "  rendering_method.web: $web_renderer (want 1)"
 	echo "  max_fps.mobile:       $mobile_fps (want 1)"
 	echo "  mesh compression off: $mesh_compression (want 1)"
+	echo "  msaa_3d=2 (4x):       $msaa (want 1)"
 	echo "  FAIL  settings — project.godot lost settings, most likely to an" >&2
 	echo "        editor save. Restore them; do NOT edit the numbers here down" >&2
 	echo "        to match. See docs/ARCHITECTURE.md \"Project settings\"." >&2

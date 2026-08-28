@@ -119,6 +119,7 @@ wins.
 | `Q88` | **The grip cut got the speed term, and the static sweep lied about how much** | ✅ Closed — `drift_rear_grip_scale_at_top` **0.80**, interpolated from the knee to `max_speed_kph`. ✅ **The spin is gone at every speed**: 86 km/h drift 165.0° → **50.4°/0.98 s** (the design-speed feel), 105 km/h drift 165.4° → **2.4°**, its exit 21.95 → **70.14 kph**; the city 84 km/h tap holds **76.00** against a 76.60 no-drift baseline. Design speed byte-identical for the third change running. 🔴 **The static sweep over-predicted by 3×** — 0.710 held constant reads 44.9° at 105, reached via the taper it read 159.4°, because the car decelerates below the knee inside the drift. ⚠️ 0.78 gives a real 75.8° drift at 105 and was **refused**: it sits 0.01 from a 75.8 → 2.8 cliff, which is `Q84`'s lesson on this exact dial. 0.80 fails safe — inert above ~100 km/h. ⚠️ **And the band had a bottom nobody had tuned**: below ~50 km/h the drift returned 2.9–3.9° and the car accelerated through the manoeuvre — ✅ fixed by `Q89`, which also supersedes this question's 63 km/h figures |
 | `Q89` | **The low end needed the opposite correction, and tracking it was unstable** | ✅ Closed — `drift_rear_grip_scale_at_low` **0.44** and `drift_low_fade_kph` **41** deepen the cut as speed falls. ✅ **The drift now works 34–86 km/h**, dwell 0.42–0.98, where 42 and 49 km/h were 3.9° and 2.9° — inert. 🔴 **The yaw assist cannot substitute**: at 42 km/h slip *falls* 4.2° → 3.6° as torque goes 0 → 20000, the top of its range. 🔴 **A tracking taper is unstable below the knee** — a drift scrubs speed, so deepening the cut as speed falls is positive feedback, and it turned the design speed into a **165.0° spin**. Fixed by latching at engagement; the branch that is stable tracks, the one that is not latches, and the asymmetry is deliberate. 🔴 **Re-publishes the design-speed table** — 63 km/h 51.1° → 69.8°, tap 16.0° → 20.5° — because 63 sits inside the new taper by construction |
 | `Q90` | **Every hole in the structure is a touchdown, and the sampler clamps where it should descend** | ✅ Closed — `INFRASTRUCTURE` stops where a ramp reaches grade, and `_deck_heights` answered an *end* hole with `np.interp`'s clamp, so the ribbon hung level in the air to the node: **1.83 m** at node 175 `FLEMING ROAD`, a flyover visibly afloat over the street, **found by the user driving to it**. ✅ **8 ends descended, 1 refused**, every one landing at +0.00; mixed-node step median 0.184 → **0.000 m**, 24 → **29 of 36** inside 0.5 m, worst non-portal **1.83 → 0.67**. 🔴 **Zero interior holes region-wide**, so the interpolation the branch was written for never fired. 🔴 **`deck_error.py` cannot see this and never could** — an absent deck reads as *uncovered*, not wrong — so it owes `tools/touchdown_error.py`, which fails the pre-fix bundle. ⚠️ The grade is ribbon-to-ribbon: reading it off the deck top drops `clearance_m` and understated every row. ⚠️ **One refusal, not the two predicted** — the negative step descends fine, and that prediction confused the two ends of the ramp. ✅ **The refusal was then looked at**: the `MARSH ROAD` deck ends in a 0.65 m vertical face 1.8 m past node 269, so the missing descent is the 10 m of level-0 `e466` beyond it, and the region has **one** real residual rather than seven — every other stepped node is (deck above the street) + `clearance_m` inside `at_grade_m`. ⬜ **Closing it needs a node-level pass and is unassigned**: `e466` has structure under 0 of its 2 stations, so the height lives on the neighbouring edge |
+| `Q91` | **The markings were disappearing into the pixel grid, and no counter could see it** | ✅ Closed — `anti_aliasing/quality/msaa_3d` **2** (4x). The 0.1 m box junction hatch is **one pixel tall at 13.6 m** on the chase rig, and with MSAA off a sub-pixel line is lit only where a pixel centre lands inside it, so it broke into dashes and then vanished — **found by the user from the driving seat, twice**. 🔴 **Every ETL counter was correct throughout**: 20 of 20 boxes drawn, `inverted` 0, `slivers_dropped` 2,032 at the declared quantum, and a top-down raster of the shipped `boxjunctions.glb` is a complete grid. The defect existed only in the raster. ⚠️ **Coverage is conserved and only continuity is lost** (0.0580 vs 0.0574 of the same world area at two resolutions), so no lift, colour or width change could have reached it. ⚠️ **Verified on both renderers including a real web export in Chrome**; 8x refused because WebGL2 caps `MAX_SAMPLES` at 4. 🔴 **0 draw calls and 0 primitives**, so `ARCHITECTURE.md`'s budget cannot see this change at all. ⬜ Mobile cost **unmeasured and unmeasurable today** — no floor handset, `P0-3b` |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -12550,3 +12551,109 @@ interpretation, which is hard rule 5's test. `roadgraph.json` stays at schema 4 
 **See.** `Q20` for the sampler this corrects · `Q13` for the mixed nodes and the attribute flip
 `e365` is an instance of · `Q22` for what it deliberately leaves open · `Q21` for the portals
 excluded from the residual · `Q62` for why the evidence is a render
+
+## `Q91` — The markings were disappearing into the pixel grid
+
+**Status.** ✅ Closed — 2026-08-28 · **Owner.** `game/project.godot`, `tools/check.sh`
+
+**Claim.** `rendering/anti_aliasing/quality/msaa_3d` is **2** (4x). The project shipped with no
+anti-aliasing keys at all, so Godot's `Disabled` default applied, and thin geometry was being lost
+to the rasteriser rather than drawn wrong.
+
+### What was actually happening
+
+Reported from the driving seat: *"why some part of grid is missing?"*, twice, at two different box
+junctions. It is not a data defect and not a depth defect.
+
+- **The mesh is whole.** `boxjunctions.json` reads 20 boxes, 20 candidates, 20 drawn, `too_far` 0,
+  `inverted` 0. A top-down raster of the shipped `boxjunctions.glb` renders a complete cross-hatch
+  at both junctions. What looks like a hole at the Expo Drive box is the surveyed polygon's own arc
+  around the traffic island; what looks like one at Convention Avenue is three separate published
+  polygons with real gaps between them (`P3-18`'s read-at-surveyed-extent).
+- **It is not z-fighting.** The same box at **80 m** from a steep camera renders its hatch intact,
+  while the same box at **20–40 m** from the chase rig does not. Distance is not the variable and
+  the 12 mm `lift_m` is fine; the viewing *angle* is the variable.
+- **It is sub-pixel rasterisation.** A ground feature of width `w` at distance `d` from a camera
+  `h` above it subtends `h*w/d^2`. On the chase rig — 70 deg vertical FOV, 1080 px, eye 2.4 m over
+  the paint, 1.297e-3 rad/px — the 0.1 m hatch is **one pixel tall at 13.6 m** and the 0.3 m border
+  at **23.6 m**. That is exactly the order in which they die in a driven frame, and it is why the
+  border outlives the hatch inside it.
+
+### The measurement that named the mechanism
+
+Re-rendered the identical frame at 1920x1080 and 3024x1680 — same camera, same scene, same depth
+range, only the pixel grid changed. Nothing else in the scene can respond to resolution, so this
+isolates the rasteriser.
+
+🔴 **Yellow coverage of the same world area came out 0.0580 against 0.0574** — identical to within
+1%. **The paint is not being lost; its continuity is.** Sampling is unbiased at any resolution, so
+the renderer already draws the right *amount* of yellow and cannot express a line dimmer than one
+whole pixel of it. That is the finding that rules out every alternative fix: a brighter colour, a
+wider `lift_m`, a bigger `hatch_width_m` (which `Q54` forbids anyway — it is transcribed from TD's
+`RM1038` row) all address an amount that was never wrong.
+
+### Why MSAA rather than `Q61`'s trick
+
+`railings.gdshader` solves the same class of problem analytically — it integrates baluster coverage
+over each fragment's `fwidth` footprint, "aliasing at no distance" — and `ART_DESIGN.md`'s `band()`
+does the same for the facade. That is the better answer **for one layer** and it stays available.
+It was not taken here because it fixes only the hatch: the arrows, the stop lines, `signs.glb`'s
+0.032 m poles, the lamp columns, the railings and every building silhouette alias too, and porting
+it would cost an ETL stage change, a `TEXCOORD_0`, a second transparent material in a bundle `Q61`
+justified as having exactly one, and either a per-layer branch in `marking_paint.gdshader` or a
+fourth shader — reversing `Q71`. The two are complementary, not competing.
+
+⚠️ **FXAA is not a substitute and neither is TAA.** `screen_space_aa` post-processes what the
+rasteriser produced, so where a stripe was dropped entirely there is nothing to smooth — it would
+soften the stair-steps and leave the hatch dotted. TAA needs motion vectors and ghosts under fast
+camera motion, which is most of this game.
+
+### Cost, and the budget that cannot see it
+
+**Draw calls and primitives are byte-identical at 0 / 2x / 4x** — 63 draws, 716,912 primitives on
+`city_drive` at the same simulated instant. MSAA changes nothing about what is submitted. Its cost
+is fill rate and framebuffer bandwidth, and **no row of `ARCHITECTURE.md`'s performance budget
+tracks either** — it gates on draw calls, visible triangles, texture memory and bundle size. So
+this change passes that budget unanimously and the pass means nothing.
+
+⬜ **Desktop frame time is a floor, not a number**: an M4 Pro holds the 120 Hz vsync cap (8.3 ms) at
+all three settings, which establishes only that 4x does not push it below 120 fps at 1080p.
+⬜ **Mobile is unmeasured and unmeasurable today** — the tier is unbuilt and blocked on `P0-3b`,
+which needs a signing identity and the two floor handsets, and 4x at 1080p is roughly +50 MB of
+framebuffer by arithmetic (8 B/px x 2.07 M px x 3) before any tiler resolve is accounted for. So no
+`.mobile` override is set, deliberately, and re-deciding it belongs to that tier.
+
+### Web, which is a different renderer and had to be tested separately
+
+`project.godot` declares `renderer/rendering_method.web="gl_compatibility"`, so the web cut never
+runs the Mobile renderer and "does MSAA work" is two questions. Both answered:
+
+- **Compatibility, locally**: 4.6% of the frame changes, partially-covered paint pixels **2,463 ->
+  5,657**, and the far hatch reconnects.
+- **A real web export, in Chrome**, exported twice one setting apart: **6,819 -> 9,170** distinct
+  colours, **38,096 -> 45,950** partially-covered edge pixels, diagonals visibly smooth.
+
+🔴 **8x is refused, and not on cost.** Chrome reports `MAX_SAMPLES` **4** on WebGL2 — the floor
+ES 3.0 requires — so `msaa_3d=3` is clamped on web and would ship a different frame per platform
+for nothing. ⚠️ The canvas reports `antialias: false` on its default drawing buffer and that is
+**not** evidence against any of this: Godot renders into its own multisampled target and resolves
+before blitting, so that attribute describes the presentation surface, not the 3D pass.
+
+### Why it is pinned
+
+`check.sh`'s `settings` step pins the **value**, on `Q82`'s and `Q75`'s precedent. Dropped or set
+to 0, nothing errors, no counter moves, and the only symptom is thin geometry breaking into dashes
+at middle distance — which is the defect this closes. That failure is not hypothetical here:
+`78c077e` took `renderer/rendering_method.web` the same way, and this session reproduced it live —
+a stray `godot --path game --resolution ...` invocation, run outside `drive.sh`, rewrote
+`project.godot` from scratch, stripping all 18 comments and dropping four settings including that
+override and three warning promotions.
+
+⚠️ **`Q27`'s two fixed audit viewpoints are re-baselined by this change**, and the render-derived
+figures recorded against them — frame `L*`, `gain`, `responding share`, `additive share` in `Q27`
+and `ART_DESIGN.md` — were measured on frames with no AA. The conclusions stand; the pixels do not.
+
+**See.** `P3-18` for the hatch and the mesh-versus-shader fork this vindicates · `Q61` for the
+analytic alternative and why it stays available · `Q71` for the shared paint shader ·
+`Q82` for the value-pinning precedent · `Q75` for the setting that was lost this way before ·
+`Q54` for why the stripe width is not a dial · `Q62` for why the evidence is a frame

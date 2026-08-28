@@ -121,6 +121,25 @@ look_back={
 
 [rendering]
 
+; 4x MSAA. The city is thin geometry over big flat colour fields — 0.1 m box
+; junction hatch, 0.032 m sign poles, lamp columns, kerb lines — and with no
+; anti-aliasing a stripe narrower than a pixel is lit only where a pixel centre
+; lands inside it, so it breaks into dashes and then vanishes. Measured on the
+; chase rig: the hatch is one pixel tall at 13.6 m and its 0.3 m border at 23.6.
+; ⚠️ 4x (2) and never 8x (3): WebGL2 reports MAX_SAMPLES 4, so 8x is clamped on
+; the web build and would ship a different frame per platform for nothing.
+; ⚠️ Deliberately no .mobile override — that tier is unbuilt (P0-3b) and this is
+; a bandwidth cost nobody has a floor handset to measure. Re-decide it there.
+; Costs 0 draw calls and 0 primitives, which is why the ARCHITECTURE.md budget
+; cannot see it at all. Q91.
+;
+; ⚠️ Set as a BASE value, never as a feature override, and 2026-08-28 is the
+; evidence: an editor save that same day stripped every comment here, dropped
+; three warning promotions and took renderer/rendering_method.web with them —
+; and left this line standing. The editor only persists an override it created
+; itself (ARCHITECTURE.md "Project settings"), so a .web/.mobile suffix here
+; would be the fragile form of exactly the same setting.
+anti_aliasing/quality/msaa_3d=2
 renderer/rendering_method="mobile"
 renderer/rendering_method.web="gl_compatibility"
 textures/vram_compression/import_etc2_astc=true
