@@ -51,7 +51,7 @@ wins.
 | `Q21` | Should level −1 carriageway be drawn at all? | 🟡 Open |
 | `Q22` | 10.2% of off-grade carriageway hangs past its structure | 🟡 Open |
 | `Q23` | Carriageway width is a property of the station, not of the edge | ✅ Closed |
-| `Q24` | The at-grade road follows the ground; the cross-slope half is `Q19`'s | 🟢 Half closed |
+| `Q24` | The at-grade road follows the ground; the cross-slope half is `Q19`'s | 🟢 Half closed — ⚠️ **amended 2026-08-28**: "the outer metre" understates it (`e192` is **10.5% of the authored carriageway** proud past suspension travel, to +1.27 m), the residual is **three** mechanisms not one, and a cross-tilt fix is worth **0.60% → 0.54%** region-wide. Instrument added, no fix |
 | `Q25` | Ground is decimated once per tier and cut afterwards | ✅ Closed |
 | `Q26` | Which look ships — the measured Hong Kong one or the clean/futuristic one? | ✅ Closed on candidate `C` — flat per-building colour, the user's call; closed ahead of `P3-9a`, which can now reopen it |
 | `Q27` | `COLOR_0` is authored sRGB and must be linearised by the consumer | ✅ Closed |
@@ -1213,6 +1213,45 @@ through on its own.
 from 2.98 m under the ground to **0.32 m** — a road again from the driver's seat — while the *same
 camera* barely changes, because what is left there is the outer metre of a widened ribbon cutting
 into the hillside. The banded measurement is both the proof and the accounting.
+
+### ⚠️ Amended 2026-08-28 — "the outer metre" understates it, and there are three mechanisms
+
+Re-opened by the user driving to `e192` CAROLINE HILL ROAD and asking why the terrain covers the
+road. It is the region's **second-worst edge** by this tool and its **most cross-sloped** one, and
+the paragraph above is wrong in one direction: the residual is not confined to the widened rim.
+Measured per cell against the car's 0.18 m suspension travel, `e192` reads **10.5% of the AUTHORED
+carriageway** proud, to **+1.27 m**, against 15.4% of the rim. A tenth of a lane the player actually
+drives, not an outer metre.
+
+🔴 **The mechanism this entry names is real but is a minority of the defect.** Across all 737 level-0
+edges, **87** carry ground proud past suspension travel somewhere and 14 do so over more than a tenth
+of their ribbon. Removing a best-fit cross-tilt per station — the fix this entry's "across the road"
+sentence implies — takes the region from **0.60% → 0.54%** of ribbon area, because 723 edges need
+nothing. Per edge it is dramatic where it applies (`e497` 16.2% → 0.8%, `e465` 18.9% → 0.5%, `e192`
+12.2% → 3.5%) and **two edges get worse** (`e191` 11.2 → 11.4, `e153` 10.3 → 11.9), because the ground
+is not a plane across every ribbon. The three mechanisms do not share a fix:
+
+- **The widening**, and it dominates. On 6 of the worst 12 the defect is almost entirely outside the
+  authored width — `e153` KAI CHIU ROAD **0.0% authored against 27.1% rim**, `e191` 1.4 / 27.1,
+  `e748` OI KWAN ROAD 0.8 / 26.2. That is `Q19`'s, and `Q19` has already refused narrowing on the
+  whole population.
+- **The flat cross-section**, which is this entry's and is a Caroline Hill outlier: region-wide the
+  across-ribbon tilt is p50 0.027 m, p90 0.111 m, and `e192`'s **0.575 m** is the maximum.
+- **A street that should perhaps not be drivable at all.** JARDINE'S CRESCENT `e757` reads **51.1%
+  proud inside its authored 6.4 m** — a stepped market lane given a 10.24 m ribbon. Neither a tilt
+  nor a narrowing reaches it.
+
+🔴 **And the published max was the window's edge, not the region's worst.** `--ground-within-m` is
+3.0 and rejected cells returned `None`, so **121 cells with terrain standing 3.07–7.65 m above the
+carriageway** were counted as *coverage misses* rather than as the deepest burials in the region —
+`deck_error.py`'s fourth defect inverted, the worst cells leaving the numerator instead of the
+denominator shrinking. The window is right and stays; the overflow is now published beside it, which
+makes every `worst_m` an honest lower bound.
+
+**No fix ships with this amendment.** The instrument does: `ground_clearance.py` publishes the
+per-edge population and the authored/rim split, and gates on the edge count as a regression ratchet.
+Which mechanism to buy is undecided — see the three above, and note that the region shares this
+entry is written in cannot grade any of them.
 
 **See.** `Q19` · `Q21` · `P3-10`
 
