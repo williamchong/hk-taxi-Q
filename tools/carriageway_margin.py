@@ -1539,6 +1539,12 @@ def _render_pairs(rows: list[EdgeWidth], report: Report, bounds: WidthBounds) ->
     generalisation — a property established on one population and quoted for
     another — which is the error the span table was careful about.
     """
+    # ⚠️ **`== FORWARD` here and `not two_way` in `_render_crossing` are the same
+    # test only because `BACKWARD` never reaches `roadgraph.json`** — `roads.py`
+    # normalises it away by reversing the polyline. Were a third value to arrive,
+    # this table would exclude those edges and that one would include them, and
+    # `pipeline/carriageway.py` would refuse them outright. Pinned by
+    # `test_a_backward_centreline_is_normalised_to_forward`.
     one_way = [row for row in rows if report.directions.get(row.edge) == FORWARD]
     # ⚠️ **Counted over `one_way`, not over every row, or the funnel lies.**
     # `_candidate` never looks at direction, so a two-way edge with an
@@ -1662,6 +1668,8 @@ def _render_crossing(rows: list[EdgeWidth], report: Report, bounds: WidthBounds)
     real Hong Kong carriageway may sit below the manual's minimum.
     """
     with_median = [row for row in rows if not row.refused]
+    # ⚠️ `not two_way` rather than `== FORWARD`, which `_render_pairs` uses —
+    # equivalent only while `BACKWARD` cannot reach the graph. See there.
     one_way = [row for row in with_median if not row.two_way]
     lines = [
         "",

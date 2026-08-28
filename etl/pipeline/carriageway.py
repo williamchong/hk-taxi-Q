@@ -357,6 +357,12 @@ def _license(edge, span: float, own: float, bounds: WidthBounds) -> tuple[float 
         # into, so the span is the width with nothing to classify.
         return span, "two_way_span"
     if edge.direction != FORWARD:
+        # Unreachable while `roads.py` normalises `BACKWARD` away by reversing
+        # the polyline, and refused rather than assumed: `carriageway_margin.py`
+        # asks the same question as `!= BOTH`, so a third value would have the
+        # two surveys disagree about which edges are one-way — and their
+        # agreement is the only check on this stage. Pinned by
+        # `test_a_backward_centreline_is_normalised_to_forward`.
         return None, ""
     if span - own < bounds.hard_min_m:
         return span, "one_way_uncrossed"

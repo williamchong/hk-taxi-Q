@@ -11,12 +11,13 @@ from __future__ import annotations
 
 import itertools
 import json
+from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-from pipeline.config import DeckSampling, GroundProfile
+from pipeline.config import BACKWARD, BOTH, FORWARD, DeckSampling, GroundProfile
 from pipeline.gltf import MeshData
 from pipeline.roads import (
     ROADGRAPH_SCHEMA,
@@ -338,6 +339,64 @@ class TestBuildRegion:
 
         directions = sorted(edge["direction"] for edge in document["edges"])
         assert directions == ["both", "forward", "forward", "forward"]
+
+    def test_a_backward_centreline_is_normalised_to_forward(self, testville) -> None:
+        """🔴 **`BACKWARD` never reaches `roadgraph.json`**, and two instruments
+        rely on it without saying so.
+
+        A source that codes direction against its own digitisation is normalised
+        away here by reversing the polyline, so the game never has to know the
+        difference — `config.py` states it beside the constants and nothing
+        pinned it. What rests on it: `carriageway_margin.py` asks "is this edge
+        one-way?" as `== FORWARD` in one table and `not two_way` (i.e.
+        `!= BOTH`) in another, and `pipeline/carriageway.py` refuses anything
+        `!= FORWARD`. Those three agree **only** because a third value cannot
+        arrive. Drop the reversal and the two carriageway surveys — whose
+        agreement is the whole cross-check on the measured width (`Q95`) —
+        silently diverge on the edges it would produce, one licensing widths the
+        other refuses.
+        """
+        city, tmp_path = testville
+        ahead = build_region(
+            city, "middle", sources_root=tmp_path / "sources", out_root=tmp_path / "out"
+        )
+        reversed_city = _with_directions(city, {**city.roads.travel_directions, 3: BACKWARD})
+        behind = build_region(
+            reversed_city, "middle", sources_root=tmp_path / "sources", out_root=tmp_path / "out"
+        )
+
+        # The contract this test is named for: the word never appears, whatever
+        # the source said. ⚠️ Implied by the multiset check below — `ahead` is
+        # pinned to {both, forward x3} by
+        # `test_a_one_way_direction_survives_into_the_output` — and kept anyway,
+        # because it states the invariant the two carriageway surveys rely on
+        # and fails with a message naming it.
+        assert {edge.direction for edge in behind.edges} <= {BOTH, FORWARD}
+        assert sorted(e.direction for e in behind.edges) == sorted(e.direction for e in ahead.edges)
+
+        # …and it is a *reversal*, not a relabelling — otherwise every one-way
+        # street would keep its direction word and run the wrong way.
+        #
+        # 🔴 **Paired by `source_id`, not pooled into one set.** A membership
+        # test over all baseline polylines passes when the right geometries are
+        # reversed and attached to the *wrong* edges, because a pooled set cannot
+        # say which edge a polyline came from.
+        ahead_by_source: dict[int, list[tuple]] = defaultdict(list)
+        for edge in ahead.edges:
+            ahead_by_source[edge.source_id].append(tuple(edge.polyline))
+
+        checked = 0
+        for edge in behind.edges:
+            if edge.direction != FORWARD:
+                continue
+            assert tuple(reversed(edge.polyline)) in ahead_by_source[edge.source_id]
+            checked += 1
+        # ⚠️ **The guard counts the loop, not the baseline.** An earlier version
+        # asserted the *baseline* comprehension was non-empty, which says nothing
+        # about whether the loop above ran — it iterates `behind`. Pinning the
+        # count against `ahead`'s own one-way total is what makes a vacuous pass
+        # impossible.
+        assert checked == sum(1 for edge in ahead.edges if edge.direction == FORWARD) > 0
 
     def test_positions_carry_no_negative_zero(self, testville) -> None:
         """A vertex clipped to the western edge lands on -0.0, which is legal
