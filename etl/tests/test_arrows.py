@@ -63,7 +63,7 @@ BLOCK: dict[str, Any] = {
     "branch_reach_frac": 0.190,
     "branch_head_length_frac": 0.135,
     "branch_head_width_frac": 0.115,
-    "branch_drop_frac": 0.128,
+    "branch_drop_frac": 0.145,
     "lift_m": 0.015,
     "max_offset_m": 12.0,
     "bearing_tolerance_deg": 30.0,
@@ -227,7 +227,7 @@ class TestTheGlyph:
         assert left[:, 0].max() == pytest.approx(-right[:, 0].min(), abs=1e-9)
 
     def test_no_head_overlaps_the_stem_it_grows_from(self, spec):
-        """🔴 **The ratchet on `Q92`, and it does not depend on any dimension.**
+        """🔴 **The ratchet on `Q93`, and it does not depend on any dimension.**
 
         The defect was arithmetic, not a wrong number: `shoulder` came out
         `reach - head_length`, negative, so the turn head's base landed 0.18 m
@@ -288,12 +288,9 @@ class TestStackedArrows:
     """`Q94`: drawn arrows that landed on top of one another.
 
     🔴 **The counter that would have caught what shipped**, and the one this
-    stage did not have. The lane registration snaps a published offset to one of
-    `ribbon.lanes` slots; where the graph's *invented* lane count is narrower
-    than the carriageway TD painted, two symbols with different instructions
-    collapse into one slot and draw a shaft wearing both branches. Every
-    partition still closes, `inverted` still reads 0, and the only trace is a
-    frame — which is how it reached the driving seat on STEWART ROAD.
+    stage did not have — `ArrowReport.stacked_pairs` records why. What these
+    pin is the two things a wrong bar would quietly change: which pairs count,
+    and whether a 0 is reachable.
     """
 
     @staticmethod
@@ -312,9 +309,7 @@ class TestStackedArrows:
         assert (report.stacked_pairs, report.stacked_disagreeing) == (1, 1)
 
     def test_the_same_instruction_twice_is_a_duplicate_and_not_a_disagreement(self):
-        """⚠️ The split is the point: two `ahead` arrows in one lane are a
-        duplicate, an `ahead` and a `right` are an instruction the world does not
-        contain. Pooling them would hide the second in the first."""
+        """⚠️ Pooling the two would hide a contradiction inside a duplicate."""
         report = ArrowReport()
         _count_stacked([self._laid(0.0, 0.0), self._laid(0.0, 1.0)], report)
         assert (report.stacked_pairs, report.stacked_disagreeing) == (1, 0)
@@ -470,7 +465,7 @@ class TestConfigRefusals:
             city_with(tmp_path, {**BLOCK, "stem_width_nose_frac": 0.077})
 
     def test_a_turn_head_longer_than_its_reach_is_refused(self, tmp_path):
-        """🔴 **The `Q92` defect, as a config refusal.**
+        """🔴 **The `Q93` defect, as a config refusal.**
 
         `glyph_polygons` puts the turn head's base at `reach - head_length` from
         the stem centre. Negative, that base lands on the far side of the stem

@@ -773,7 +773,7 @@ class Arrows:
     # so the 4 m and 6 m variants of the same marking scale together instead of
     # sharing an absolute head that is right for one of them.
     #
-    # 🔴 **Measured off TD's pictogram since `Q92`, where they were authored and
+    # 🔴 **Measured off TD's pictogram since `Q93`, where they were authored and
     # wrong.** `CT174/51-5(1)F` publishes `LENGTH` for `RM1017`-`RM1030` and no
     # other dimension, so the shape can only come from the drawing itself; the
     # figures here are read from it at 700 dpi and every one of them moved. The
@@ -787,19 +787,24 @@ class Arrows:
     stem_width_nose_frac: float
     stem_width_tail_frac: float
     # The turn branch, which has its own head and is not the ahead head reused.
-    # 🔴 **That reuse was the defect `Q92` found**: `shoulder` is
+    # 🔴 **That reuse was the defect `Q93` found**: `shoulder` is
     # `reach - head_length`, and with a reach of 0.28 against a head of 0.325 it
     # came out **negative** — the turn head's base landed 0.18 m past the far
     # side of the stem, so head and stem merged into a blob on **416 of 747**
     # drawn arrows. `branch_reach_frac` must exceed `branch_head_length_frac`,
     # and `parse` refuses a city where it does not.
     #
-    # ⚠️ **The published branch is a swept hook ending in a barbed dart, and
-    # this is a straight arm and a plain triangle.** The reach (0.150) and the
-    # barb span (0.233) are measured off `RM1027`; the head's own length is
-    # authored, because a dart with a concave rear has no single length to read.
-    # The simplification is deliberate and recorded rather than hidden — see
-    # `DATA_SOURCES.md`.
+    # 🔴 **All three branch figures are AUTHORED, and that is a reversal.** They
+    # were measured off `RM1027` first — reach 0.150, head 0.100 long, barb span
+    # 0.233 — and the result was reported from the driving seat as not making
+    # sense. TD's branch head is genuinely *wider than it is deep*, because thin
+    # barbs sweeping back from the tip do the work, so this model's plain
+    # triangle at those proportions is a mushroom on the shaft; drawn faithfully
+    # as a six-point dart it is a detached diamond, and its barbs are 0.09 m on a
+    # 4 m arrow, which `Q91`'s sub-pixel problem removes at any driving distance.
+    # Sized against the frame instead. ⚠️ **The ahead head and the stem above
+    # are NOT authored** — an overlay against TD's own cell agrees on both.
+    # `DATA_SOURCES.md` carries the argument.
     branch_reach_frac: float
     branch_head_length_frac: float
     branch_head_width_frac: float
@@ -3918,7 +3923,7 @@ def _arrows(body: Any, where: str) -> Arrows | None:
             f"toward the head, and reversing it draws a wedge pointing the wrong way"
         )
     if fractions["branch_reach_frac"] <= fractions["branch_head_length_frac"]:
-        # 🔴 **The `Q92` defect, refused rather than commented.** `glyph_polygons`
+        # 🔴 **The `Q93` defect, refused rather than commented.** `glyph_polygons`
         # puts the branch head's base at `reach - branch_head_length` from the
         # stem centre; when that is negative the base lands on the far side of
         # the stem, the head swallows it, and 416 of the region's 747 arrows

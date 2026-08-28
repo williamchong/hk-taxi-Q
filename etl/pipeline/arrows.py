@@ -43,8 +43,10 @@ invented marking in `Q54`'s sense, and it would render perfectly.
 from __future__ import annotations
 
 import argparse
+import itertools
 import logging
 import math
+from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple
@@ -329,7 +331,7 @@ def glyph_polygons(spec: Arrows, movements: tuple[str, ...], length_m: float) ->
     here is clockwise in the `(x, z)` plane, which is what faces `+Y`.
     `ArrowReport.inverted` is what actually holds that end.
 
-    🔴 **The proportions are TD's, measured, since `Q92`.** `CT174/51-5(1)F`
+    🔴 **The proportions are TD's, measured, since `Q93`.** `CT174/51-5(1)F`
     publishes `LENGTH` for these codes and nothing else, so the shape can only
     come from the pictogram; read off it at 700 dpi, every authored figure was
     wrong, and one of them was a defect rather than a difference. See
@@ -806,25 +808,30 @@ class _Laid(NamedTuple):
 
 
 def _count_stacked(laid: list[_Laid], report: ArrowReport) -> None:
-    """Pairs of drawn arrows that landed on top of each other (`Q94`).
+    """Pairs of drawn arrows that landed on top of each other.
 
-    🔴 **The counter that would have caught what shipped.** Two published
-    symbols with different instructions, snapped to the same lane slot because
-    `roadgraph.json`'s lane count is narrower than the carriageway TD painted,
-    draw one shaft wearing two branches. Every partition in this stage closes
-    while that happens, `inverted` reads 0, and the only trace is a frame.
+    Why this stage needs the counter at all is on `ArrowReport.stacked_pairs`.
 
     ⚠️ **The bar is derived, not authored**: half the shorter glyph's own
     length, because two arrows whose centres are closer than that overlap for
     certain whatever their headings. Same lane of the same edge, so arrows in
     adjacent lanes and arrows repeated along a lane are not counted.
     """
-    for first in range(len(laid)):
-        a = laid[first]
-        for second in range(first + 1, len(laid)):
-            b = laid[second]
-            if a.edge != b.edge or a.lane != b.lane:
-                continue
+    # ⚠️ **`(edge, lane)` is the gate, so grouping on it first is exact rather
+    # than an approximation.** Measured 9.3 ms to 0.38 ms here and 1.47 s to
+    # 41 ms at ten thousand arrows; Wan Chai is 1.5 km² and the second city is
+    # the business case, so the scaling is the reason rather than today's number.
+    # ⚠️ **Unlike `signals._assemble` and `lamps._merge`, which decline the same
+    # kind of reduction**: those need a uniform cell hash over a continuous
+    # radius and are left because `read_*` pushes the region bbox into OGR. Here
+    # the classes are discrete and already computed, so there is nothing to
+    # decline.
+    lanes: dict[tuple[int, int], list[_Laid]] = defaultdict(list)
+    for arrow in laid:
+        lanes[(arrow.edge, arrow.lane)].append(arrow)
+
+    for slot in lanes.values():
+        for a, b in itertools.combinations(slot, 2):
             if float(np.hypot(*(a.at - b.at))) >= 0.5 * min(a.length_m, b.length_m):
                 continue
             report.stacked_pairs += 1

@@ -967,7 +967,7 @@ arrows:
   # Proportions, as fractions of each arrow's own length, so the 4 m and 6 m
   # variants of one marking scale together.
   #
-  # 🔴 **Measured off TD's own pictogram, 2026-08-28 (Q92) — the figures that
+  # 🔴 **Measured off TD's own pictogram, 2026-08-28 (Q93) — the figures that
   # stood here before were authored and every one of them was wrong.**
   # CT174/51-5(1)F publishes `LENGTH = 4000` / `6000` for RM1017-RM1030 and no
   # other dimension, so the shape can come from nowhere but the drawing. Read at
@@ -979,8 +979,10 @@ arrows:
   #   stem, under head    0.032   (was a uniform 0.085; the drawing tapers)
   #   stem, at the tail   0.076
   #   branch reach        0.150   (was 0.28)   — measured, then AUTHORED, below
-  #   branch barb span    0.233               — measured, then AUTHORED, below
-  #   branch drop         0.128   (was derived from the head width)
+  #   branch head length  0.100               — measured, then AUTHORED, below
+  #   branch barb span    0.233   (this model has no barbs; it is the head's
+  #                                full width across, so branch_head_width_frac)
+  #   branch drop         0.145   (was derived from the head width)
   #
   # On a 4 m arrow that is a 1.56 m head 0.49 m across and a stem tapering 0.30 m
   # to 0.13 m.
@@ -1009,9 +1011,9 @@ arrows:
   # arrow — which is the debt Q60 records for railing height and P3-16 for plate
   # dimensions, at a third layer. ⚠️ The hook and the barbs are not modelled.
   #
-  # ⚠️ **The ahead head and the stem above are NOT authored** — those are
-  # measured, and an overlay against TD's own cell agrees on them. Do not let
-  # this note license re-authoring them.
+  # ⚠️ **This licenses nothing above it.** The ahead head and the stem are
+  # measured and an overlay against TD's own cell agrees on them; only the three
+  # branch figures were declined.
   head_length_frac: 0.390
   head_width_frac: 0.122
   stem_width_nose_frac: 0.032
@@ -1019,7 +1021,7 @@ arrows:
   branch_reach_frac: 0.190
   branch_head_length_frac: 0.135
   branch_head_width_frac: 0.115
-  branch_drop_frac: 0.128
+  branch_drop_frac: 0.145
 
   # ⚠️ **The ground and the level-0 carriageway are coplanar by construction**,
   # the same property tramway.bed_lift_m is lifted clear of. Paint laid at deck
