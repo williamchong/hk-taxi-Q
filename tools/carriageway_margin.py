@@ -1479,12 +1479,7 @@ def _render_width(
         p50, p90 = _percentiles(values, (50, 90))
         lines.append(f"  {label:<32} {len(values):>4} edges  p50 {p50:>6.2f}  p90 {p90:>6.2f}")
     if published:
-        gaps = [row.median_m - report.widths_authored.get(row.edge, 0.0) for row in published]
-        p10, p50, p90 = _percentiles(gaps, (10, 50, 90))
-        lines.append(
-            f"  measured - authored width_m: p10 {p10:+.2f}  p50 {p50:+.2f}  p90 {p90:+.2f}; "
-            f"wider on {_share_over(gaps, 0.0):.0%}"
-        )
+        lines.append(_authored_gap([(row.edge, row.median_m) for row in published], report, "  "))
         below = [row.median_m for row in published]
         lines.append(
             f"  below TD's {bounds.min_m:.1f} m two-lane minimum: "
@@ -1617,12 +1612,7 @@ def _render_pairs(rows: list[EdgeWidth], report: Report, bounds: WidthBounds) ->
             f"  DECOMPOSED CARRIAGEWAY — a width, not a span   {len(decomposed):>4} edges  "
             f"p50 {p50:>6.2f}  p90 {p90:>6.2f}"
         )
-        gaps = [row.own_m - report.widths_authored.get(row.edge, 0.0) for row in decomposed]
-        p10, p50, p90 = _percentiles(gaps, (10, 50, 90))
-        lines.append(
-            f"    measured - authored width_m: p10 {p10:+.2f}  p50 {p50:+.2f}  p90 {p90:+.2f}; "
-            f"wider on {_share_over(gaps, 0.0):.0%}"
-        )
+        lines.append(_authored_gap([(row.edge, row.own_m) for row in decomposed], report, "    "))
 
     lines.append("")
     lines.append(f"widest {_WORST} DECOMPOSED carriageways")
@@ -1634,6 +1624,25 @@ def _render_pairs(rows: list[EdgeWidth], report: Report, bounds: WidthBounds) ->
             f"{report.names.get(row.edge, 'unnamed')}"
         )
     return lines
+
+
+def _authored_gap(measured: list[tuple[int, float]], report: Report, indent: str) -> str:
+    """The `measured - authored width_m` line, shared by the three tables that print one.
+
+    ⚠️ **The values come in from the caller rather than being read off a row
+    here, and that is the whole point.** The three callers measure different
+    things — a kerb-to-kerb span, a decomposed half, a licensed width — so a
+    version of this that took rows would have to know which table it was
+    printing, and the branch would be the pooling those tables exist to avoid.
+    What is shared is the arithmetic against `widths_authored` and the format,
+    which is all that was ever the same.
+    """
+    gaps = [value - report.widths_authored.get(edge, 0.0) for edge, value in measured]
+    p10, p50, p90 = _percentiles(gaps, (10, 50, 90))
+    return (
+        f"{indent}measured - authored width_m: p10 {p10:+.2f}  p50 {p50:+.2f}  "
+        f"p90 {p90:+.2f}; wider on {_share_over(gaps, 0.0):.0%}"
+    )
 
 
 def _render_crossing(rows: list[EdgeWidth], report: Report, bounds: WidthBounds) -> list[str]:
@@ -1670,7 +1679,11 @@ def _render_crossing(rows: list[EdgeWidth], report: Report, bounds: WidthBounds)
         f"  beyond over the {len(one_way)} published one-way rows: "
         f"p10 {p10:+.2f}  p50 {p50:+.2f}  p90 {p90:+.2f}"
     )
-    verdicts = Counter(row.crossing(bounds) for row in one_way)
+    # Asked once per row and reused by every counter below, for `grouped`'s
+    # reason: three separate passes could only ever agree by construction, and
+    # a reader has to take that on trust rather than read it.
+    verdict_of = {row.edge: row.crossing(bounds) for row in one_way}
+    verdicts = Counter(verdict_of.values())
     counts = "  ".join(f"{name} {verdicts.get(name, 0)}" for name in _CROSSINGS)
     lines.append(f"  {counts}")
 
@@ -1681,10 +1694,10 @@ def _render_crossing(rows: list[EdgeWidth], report: Report, bounds: WidthBounds)
     # than scored as a miss — scoring it would grade the rule on rows it
     # declined to judge.
     predicted = [row for row in one_way if row.partner is not None]
-    scored = [row for row in predicted if row.crossing(bounds) != UNRESOLVED]
+    scored = [row for row in predicted if verdict_of[row.edge] != UNRESOLVED]
     if scored:
         agreed = sum(
-            1 for row in scored if (row.crossing(bounds) == UNCROSSED) == (row.median_gap_m < 0.0)
+            1 for row in scored if (verdict_of[row.edge] == UNCROSSED) == (row.median_gap_m < 0.0)
         )
         lines.append(
             f"  cross-check vs the pairs' own residual, over the {len(scored)} mutual rows it "
@@ -1700,7 +1713,7 @@ def _render_crossing(rows: list[EdgeWidth], report: Report, bounds: WidthBounds)
     # so both bases can fire and they disagree about the number — `own_m` against
     # the whole span. `basis` resolves it toward the partner; the count is what
     # says how often that mattered.
-    overlap = sum(1 for row in one_way if row.decomposed and row.crossing(bounds) == UNCROSSED)
+    overlap = sum(1 for row in one_way if row.decomposed and verdict_of[row.edge] == UNCROSSED)
     lines.append(f"  rows both decomposed and uncrossed — the two bases disagree: {overlap}")
 
     lines.append("")
@@ -1713,14 +1726,23 @@ def _render_crossing(rows: list[EdgeWidth], report: Report, bounds: WidthBounds)
     # own ceiling, so two FLEMING ROAD rows are licensed here while their 16.56 m
     # span is refused above. Filtering to `with_median` first would drop them and
     # make this table disagree with `_render_pairs` about the same 14 rows.
-    published: list[EdgeWidth] = []
+    # ⚠️ One pass, and the basis is asked for ONCE per row. Three passes calling
+    # `basis` again per name would let a row answer differently in two of them if
+    # the rule ever stopped being a pure function of the row and the bounds —
+    # `_sides` is single-called two hundred lines above for the same reason,
+    # so that two readings "cannot disagree about what was hit".
+    grouped: dict[str, list[EdgeWidth]] = defaultdict(list)
+    for row in rows:
+        grouped[row.basis(bounds)].append(row)
+
+    published: list[tuple[int, float]] = []
     for name in _BASES:
-        group = [row for row in rows if row.basis(bounds) == name]
-        published.extend(group)
+        group = grouped.get(name, [])
         if not group:
             lines.append(f"  {name:<20} {0:>5}")
             continue
         widths = [row.carriageway_m(bounds) for row in group]
+        published.extend((row.edge, width) for row, width in zip(group, widths, strict=True))
         p50, p90 = _percentiles(widths, (50, 90))
         lines.append(
             f"  {name:<20} {len(group):>5} {p50:>7.2f} {p90:>7.2f} "
@@ -1731,15 +1753,7 @@ def _render_crossing(rows: list[EdgeWidth], report: Report, bounds: WidthBounds)
         f"{len(rows) - len(published)} carry a reading this cannot attribute"
     )
     if published:
-        gaps = [
-            row.carriageway_m(bounds) - report.widths_authored.get(row.edge, 0.0)
-            for row in published
-        ]
-        p10, p50, p90 = _percentiles(gaps, (10, 50, 90))
-        lines.append(
-            f"  measured - authored width_m: p10 {p10:+.2f}  p50 {p50:+.2f}  p90 {p90:+.2f}; "
-            f"wider on {_share_over(gaps, 0.0):.0%}"
-        )
+        lines.append(_authored_gap(published, report, "  "))
     return lines
 
 
