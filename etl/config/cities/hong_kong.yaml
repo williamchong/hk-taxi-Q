@@ -820,6 +820,32 @@ carriageway_survey:
     # half by a figure it could never reach.
     dual_max_m: 14.6
 
+    # Table 3.4.2.1, the SAME dual column's other end — a two-lane dual
+    # carriageway for a Primary, District or Local Distributor. The narrowest
+    # opposed carriageway the manual permits.
+    #
+    # 🔴 It bounds the room a span leaves BEYOND the edge's own carriageway,
+    # never a carriageway itself. `2 x the near ray` is what the edge sits in;
+    # subtract it from the span and what is left is the space an opposed
+    # carriageway would have to occupy. Under `hard_min_m` there is not one
+    # through lane of it, so the ray stopped at the far kerb of the road it was
+    # walking and the span IS this edge's width. At or above this figure there
+    # is room for the narrowest dual carriageway TD publishes, so the span may
+    # have crossed a median and stays a span. Between the two nothing is read.
+    #
+    # ⚠️ The middle band is not indecision to tune away — it is the honest
+    # answer for a reading with room for a lane but not a carriageway, and it is
+    # what keeps a real counter-example out of the published widths. Q95 records
+    # TONNOCHY ROAD e130/e142 at a 16.7 m span with halves of 6.43 and 11.78,
+    # "not a ray that stayed put"; a single threshold anywhere in this gap would
+    # publish that span as somebody's carriageway width.
+    #
+    # ⚠️ Distributors only. The Trunk Road row of the same column is 7.3 m, so
+    # this is the permissive end and a span is called crossed as readily as the
+    # manual allows. Refusing more here would publish more widths, which is the
+    # direction an instrument grading its own project must not lean.
+    dual_min_m: 6.75
+
     # 3.4.2.3 — a double-track tram reserve requires 5.5 m, the widest
     # separator transcribed in DATA_SOURCES.md.
     #

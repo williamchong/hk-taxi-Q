@@ -675,6 +675,23 @@ class WidthBounds:
     # from — a decomposed half is by definition a dual carriageway, so it gets
     # the tighter ceiling the manual already publishes for it.
     dual_max_m: float
+    # The NARROWEST one carriageway of an opposed pair — the same column's other
+    # end, and the bound that says whether a span crossed a median at all.
+    #
+    # 🔴 **This is a bound on the room a span leaves BEYOND the edge's own
+    # carriageway**, not on the carriageway itself. Under one through lane
+    # (`hard_min_m`) there is nowhere for an opposed carriageway to be, so the
+    # span never crossed one and *is* this edge's width; at or above this there
+    # is room for the narrowest dual carriageway the manual permits, so it may
+    # have. Between the two the reading is published as neither, because a
+    # single threshold would have to call that gap one way or the other and the
+    # data does not say which.
+    #
+    # ⚠️ **A clause, not a fitted value.** `Q72` rejected a pairing test built
+    # on a free radius whose count ran 8 → 29 → 49 → 80 over the range; both
+    # ends of this rule are transcribed figures, which is what keeps the
+    # instrument from being tuned toward the answer it is grading.
+    dual_min_m: float
     # The widest thing that may legitimately sit *between* two opposed
     # carriageways.
     #
@@ -3892,6 +3909,7 @@ def _width_bounds(body: Any, where: str) -> WidthBounds | None:
             "min_m",
             "hard_min_m",
             "dual_max_m",
+            "dual_min_m",
             "median_max_m",
             "pair_bearing_tolerance_deg",
         ),
@@ -3899,6 +3917,7 @@ def _width_bounds(body: Any, where: str) -> WidthBounds | None:
     )
     max_m, min_m, hard_min_m = values["max_m"], values["min_m"], values["hard_min_m"]
     dual_max_m, median_max_m = values["dual_max_m"], values["median_max_m"]
+    dual_min_m = values["dual_min_m"]
     tolerance_deg = values["pair_bearing_tolerance_deg"]
 
     lane = _require(body, "lane_m", where)
@@ -3935,6 +3954,18 @@ def _width_bounds(body: Any, where: str) -> WidthBounds | None:
             f"{where} must satisfy hard_min_m < dual_max_m < max_m, "
             f"got {hard_min_m} / {dual_max_m} / {max_m}"
         )
+    # The two ends of one column, and the crossing rule reads them as a pair of
+    # brackets around an undecided band. At or below `hard_min_m` the band is
+    # empty and every span is read as uncrossed; at or above `dual_max_m` the
+    # narrowest carriageway of a pair would be wider than the widest, and no
+    # span could be read as crossed at all. Either way one of the three states
+    # becomes unreachable, which is a rule that has stopped classifying while
+    # still printing a table.
+    if not hard_min_m < dual_min_m < dual_max_m:
+        raise ValueError(
+            f"{where} must satisfy hard_min_m < dual_min_m < dual_max_m, "
+            f"got {hard_min_m} / {dual_min_m} / {dual_max_m}"
+        )
     # A separator is what is left of a span after both carriageways, so a bound
     # at or above the span's own ceiling bounds nothing. ⚠️ Deliberately NOT the
     # stronger `2 * hard_min_m + median_max_m <= max_m`: that would tie a
@@ -3961,6 +3992,7 @@ def _width_bounds(body: Any, where: str) -> WidthBounds | None:
         hard_min_m=hard_min_m,
         lane_m=lane_m,
         dual_max_m=dual_max_m,
+        dual_min_m=dual_min_m,
         median_max_m=median_max_m,
         pair_bearing_tolerance_deg=tolerance_deg,
     )

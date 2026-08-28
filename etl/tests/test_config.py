@@ -1854,6 +1854,9 @@ class TestCarriagewaySurvey:
         # The decomposition's three. `dual_max_m` is Table 3.4.2.1's dual
         # column and deliberately not the single column `max_m` reads.
         assert (bounds.dual_max_m, bounds.median_max_m) == (14.6, 5.5)
+        # …and the same column's other end, which is what says whether a span
+        # crossed a median at all. A distributor's two-lane dual carriageway.
+        assert bounds.dual_min_m == 6.75
         assert bounds.pair_bearing_tolerance_deg == 30.0
 
     def test_a_dual_ceiling_at_or_above_the_span_ceiling_is_rejected(self, rewrite) -> None:
@@ -1866,6 +1869,20 @@ class TestCarriagewaySurvey:
             doc["carriageway_survey"]["width_bounds"]["dual_max_m"] = 16.5
 
         with pytest.raises(ValueError, match="hard_min_m < dual_max_m < max_m"):
+            load_city("hong_kong", cities_root=rewrite(wide))
+
+    def test_a_dual_floor_outside_its_own_column_is_rejected(self, rewrite) -> None:
+        """The crossing rule reads the dual column's two ends as brackets around
+        an undecided band. At or below `hard_min_m` the band is empty and every
+        span reads as uncrossed; at or above `dual_max_m` the narrowest
+        carriageway of a pair would be wider than the widest and nothing could
+        read as crossed. Either way a state becomes unreachable and the rule has
+        stopped classifying while still printing a table."""
+
+        def wide(doc: dict[str, Any]) -> None:
+            doc["carriageway_survey"]["width_bounds"]["dual_min_m"] = 14.6
+
+        with pytest.raises(ValueError, match="hard_min_m < dual_min_m < dual_max_m"):
             load_city("hong_kong", cities_root=rewrite(wide))
 
     def test_a_separator_wider_than_the_span_is_rejected(self, rewrite) -> None:

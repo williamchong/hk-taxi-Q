@@ -20,12 +20,19 @@ nothing shows up as a zero segment count in the first line of output.
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import numpy as np
 import pytest
 from carriageway_margin import (
     _BANDS,
+    BASIS_DECOMPOSED,
+    BASIS_TWO_WAY,
+    BASIS_UNCROSSED,
+    CROSSED,
+    UNCROSSED,
+    UNRESOLVED,
     EdgeWidth,
     Report,
     Station,
@@ -57,6 +64,7 @@ def _bounds(**overrides: object) -> WidthBounds:
         "hard_min_m": 3.0,
         "lane_m": (3.0, 3.65),
         "dual_max_m": 14.6,
+        "dual_min_m": 6.75,
         "median_max_m": 5.5,
         "pair_bearing_tolerance_deg": 30.0,
     }
@@ -797,3 +805,171 @@ class TestRayCapRefusal:
         the report announces a clean sweep the cap manufactured."""
         with pytest.raises(SystemExit, match="cannot reach"):
             main(["--city", "hong_kong", "--region", "wan_chai", "--max-ray-m", "8.0"])
+
+
+class TestCrossing:
+    """Did the two-sided ray reach past the carriageway its centreline sits in?
+
+    🔴 **The counters are driven through the population, never set by hand.**
+    `TestWidthPartition` records why: an earlier version of that class assigned
+    the report's own counters directly and so tested nothing but its own
+    arithmetic. Every row below comes out of `edge_widths`.
+    """
+
+    def test_a_span_with_no_room_beyond_it_is_the_edges_own_carriageway(self) -> None:
+        """🔴 The finding this rule generalises. `Q95` measured that 96 of 110
+        mutual pairs refuse their own split because the ray stopped at the far
+        kerb and never crossed the median — LOCKHART ROAD's three shared-endpoint
+        pairs among them. A centred 7 m span leaves 0 m beyond a 7 m carriageway,
+        which is nowhere for an opposed one to be."""
+        report = Report()
+        report.stations = [_station(1, 3.5, 3.5) for _ in range(3)]
+        report.directions = {1: FORWARD}
+        bounds = _bounds()
+
+        (row,) = edge_widths(report, bounds)
+
+        assert row.beyond_m == pytest.approx(0.0)
+        assert row.crossing(bounds) == UNCROSSED
+        assert row.basis(bounds) == BASIS_UNCROSSED
+        # The SPAN is the width here, not half of it — the two one-way bases
+        # publish different measurements, which is why the basis travels with it.
+        assert row.carriageway_m(bounds) == pytest.approx(7.0)
+
+    def test_a_span_with_a_whole_carriageway_beyond_it_stays_a_span(self) -> None:
+        """A short near ray and a long far one: 6 m of carriageway and 10 m
+        beyond it, which is room for the narrowest dual carriageway TD
+        publishes. Nothing may be read off it."""
+        report = Report()
+        report.stations = [_station(1, 3.0, 13.0) for _ in range(3)]
+        report.directions = {1: FORWARD}
+        bounds = _bounds()
+
+        (row,) = edge_widths(report, bounds)
+
+        assert row.beyond_m == pytest.approx(10.0)
+        assert row.crossing(bounds) == CROSSED
+        assert row.basis(bounds) == ""
+        assert math.isnan(row.carriageway_m(bounds))
+
+    def test_the_middle_band_publishes_nothing_and_is_why_there_are_three_states(
+        self,
+    ) -> None:
+        """🔴 `Q95`'s own counter-example, in the shape it has on the region:
+        TONNOCHY ROAD `e142`, a 16.7 m span over an 11.78 m half — "not a ray
+        that stayed put". 4.96 m beyond is room for a lane and not for a
+        carriageway, and a single threshold anywhere in that gap would publish
+        16.7 m as somebody's width."""
+        report = Report()
+        report.stations = [_station(1, 5.89, 10.85) for _ in range(3)]
+        report.directions = {1: FORWARD}
+        bounds = _bounds()
+
+        (row,) = edge_widths(report, bounds)
+
+        assert bounds.hard_min_m < row.beyond_m < bounds.dual_min_m
+        assert row.crossing(bounds) == UNRESOLVED
+        assert row.basis(bounds) == ""
+        assert math.isnan(row.carriageway_m(bounds))
+
+    def test_every_state_is_reachable_at_zero_and_at_all_rows(self) -> None:
+        """⚠️ `Q72`'s test of a counter, applied to all three states: the
+        question is never whether one reads 0 but whether any reachable
+        configuration moves it. Driving the bounds together rather than reading
+        the region's own numbers is what makes that a test.
+
+        🔴 The floor is what licenses a width, and the ceiling never does — at
+        `dual_min_m == hard_min_m` nothing is unresolved, and at
+        `dual_min_m == dual_max_m` nothing is crossed, but neither moves what is
+        published. That is measured on the region too, and it is the reason the
+        sweep of this bound leaves the licensed count flat.
+        """
+        report = Report()
+        report.stations = [_station(1, 3.0, 13.0) for _ in range(3)]
+        report.directions = {1: FORWARD}
+
+        (crossed,) = edge_widths(report, _bounds())
+        assert crossed.crossing(_bounds()) == CROSSED
+        # The band collapses upward: with the narrowest dual carriageway as wide
+        # as the widest, nothing has room to have crossed.
+        assert crossed.crossing(_bounds(dual_min_m=14.6)) == UNRESOLVED
+        # …and downward, where every reading that is not uncrossed is crossed.
+        assert crossed.crossing(_bounds(dual_min_m=3.0)) == CROSSED
+        # The uncrossed boundary answers to `hard_min_m` and to nothing else,
+        # which is why sweeping `dual_min_m` cannot move it.
+        assert crossed.crossing(_bounds(hard_min_m=12.0)) == UNCROSSED
+
+    def test_the_verdict_is_recorded_over_the_refusals_too(self) -> None:
+        """⚠️ `Q58`'s `drawn_gauge_m` trap, at a fourth counter. `beyond_m` is a
+        property of two numbers the row already carries, so a row whose span the
+        ceiling refuses still has one — and `basis` is what declines to read it,
+        separately and visibly."""
+        report = Report()
+        report.stations = [_station(1, 10.0, 10.0) for _ in range(3)]
+        report.directions = {1: FORWARD}
+        bounds = _bounds()
+
+        (row,) = edge_widths(report, bounds)
+
+        assert row.refused is True
+        assert row.beyond_m == pytest.approx(0.0)
+        assert row.crossing(bounds) == UNCROSSED
+        # Uncrossed, and still publishing nothing: the span is past `max_m`, so
+        # the ray crossed *something* even though there is no room beside it.
+        assert row.basis(bounds) == ""
+
+    def test_a_two_way_edge_is_a_width_without_being_classified(self) -> None:
+        """It is already a whole carriageway — `_pair_up` refuses to split one on
+        the ground that decomposing a street into itself is not a split, and the
+        span table has published these as widths since `Q95`."""
+        report = Report()
+        report.stations = [_station(1, 3.0, 13.0) for _ in range(3)]
+        report.directions = {1: BOTH}
+        bounds = _bounds()
+
+        (row,) = edge_widths(report, bounds)
+
+        assert row.crossing(bounds) == CROSSED
+        assert row.basis(bounds) == BASIS_TWO_WAY
+        assert row.carriageway_m(bounds) == pytest.approx(16.0)
+
+    def test_a_decomposed_pair_outranks_uncrossed_and_the_two_disagree(self) -> None:
+        """🔴 Both bases can fire on one row, and they name different numbers.
+        A partner whose own half measures under a through lane inflates this
+        row's residual into the non-negative, so `decomposed` fires while the
+        span itself has no room beside it. `basis` resolves toward the partner
+        that voted back; the report counts how often that mattered rather than
+        assuming it never does — it is 2 rows on the region, both MARSH ROAD."""
+        # MARSH ROAD `e36`/`e149`'s own shape, rounded: a 4.4 m span against a
+        # partner reading 12.5 m of the same pair. The residual only clears zero
+        # because the partner's half is small, and the two halves disagree about
+        # the span by 8 m — which is what makes these rows worth counting.
+        rows = {
+            row.edge: row for row in edge_widths(_pair_report(1.75, 2.65, 1.85, 10.65), _bounds())
+        }
+        bounds = _bounds()
+
+        assert rows[1].crossing(bounds) == UNCROSSED
+        assert rows[1].decomposed is True
+        assert rows[1].basis(bounds) == BASIS_DECOMPOSED
+        # …and the two really do disagree: half a span, not the whole of it.
+        assert rows[1].carriageway_m(bounds) == pytest.approx(3.5)
+        assert rows[1].median_m == pytest.approx(4.4)
+
+
+class TestDualMinBound:
+    def test_a_bound_outside_the_dual_column_is_refused(self) -> None:
+        """The config guard, which `replace` in `main` goes round. Below the
+        floor no span could ever be read as crossing; above the dual ceiling the
+        narrowest carriageway of a pair would be wider than the widest."""
+        with pytest.raises(SystemExit, match="must lie within"):
+            main(
+                [
+                    "--city",
+                    "hong_kong",
+                    "--region",
+                    "wan_chai",
+                    "--dual-min-m",
+                    "20.0",
+                ]
+            )

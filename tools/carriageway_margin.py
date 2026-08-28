@@ -173,6 +173,22 @@ _BANDS = ((0.0, 20.0, "< 20 m"), (20.0, 47.3, "20-47.3 m"), (47.3, float("inf"),
 # than at `inf`, and a NaN from a zero-width span falls out of every band.
 _OFF_CENTRE_BANDS = ((0.0, 0.10), (0.10, 0.25), (0.25, 0.50), (0.50, 1.01))
 
+# Did the two-sided ray reach past the carriageway its centreline is drawn in?
+# `UNRESOLVED` is a real answer and not a missing one — see `EdgeWidth.crossing`.
+UNCROSSED = "uncrossed"
+UNRESOLVED = "unresolved"
+CROSSED = "crossed"
+_CROSSINGS = (UNCROSSED, UNRESOLVED, CROSSED)
+
+# Which route licensed a width. ⚠️ The two one-way bases measure different
+# things — `BASIS_DECOMPOSED` publishes half a span and `BASIS_UNCROSSED`
+# publishes the whole of one — so the basis is carried beside every width this
+# tool writes rather than pooled into a single column.
+BASIS_TWO_WAY = "two_way_span"
+BASIS_UNCROSSED = "one_way_uncrossed"
+BASIS_DECOMPOSED = "decomposed"
+_BASES = (BASIS_TWO_WAY, BASIS_UNCROSSED, BASIS_DECOMPOSED)
+
 
 @dataclass
 class Station:
@@ -945,6 +961,59 @@ class EdgeWidth:
     # unreadable half, and pooling the two flags would hide which failed.
     own_refused: bool = True
 
+    # ── did the ray cross a median at all? (`Q95` follow-on) ──────────────
+    #
+    # `roadgraph.json`'s own `direction`, carried on the row because the basis
+    # below depends on it and a property may not reach into the report.
+    two_way: bool = False
+
+    @property
+    def beyond_m(self) -> float:
+        """What the span leaves BEYOND this edge's own carriageway.
+
+        🔴 **The classifier, and it needs no new measurement.** `median_m` is
+        the span and `own_m` is twice the near ray — the carriageway the
+        centreline is drawn in — so their difference is the room left over for
+        whatever the ray crossed into. `_render_pairs`'s residual says the same
+        thing and needs a *mutual partner* to say it, which is why it reaches
+        110 rows where this reaches every one.
+
+        ⚠️ **A difference of two medians, not the median of a difference.** On
+        an edge whose stations agree the two coincide; where they do not, this
+        edge's own stations disagree about where its kerb is, and the middle
+        band below is where that lands. Taking the median per station instead
+        would hide exactly that.
+        """
+        return self.median_m - self.own_m
+
+    def crossing(self, bounds: WidthBounds) -> str:
+        """Whether the span crossed into an opposed carriageway: the three states.
+
+        🔴 **Both bounds are transcribed TPDM clauses and neither is fitted.**
+        Under one through lane (4.3.9.8) there is nowhere for an opposed
+        carriageway to be, so the ray stopped at the far kerb of the road it was
+        walking. At or above the narrowest dual carriageway in Table 3.4.2.1
+        there is room for one, so the span may be two. `Q72` rejected a pairing
+        rule built on a free radius whose count ran 8 → 29 → 49 → 80 across it;
+        a rule whose ends are published figures cannot be walked toward an
+        answer that way.
+
+        ⚠️ **The middle state is load-bearing and is not indecision.** A single
+        threshold has to call a reading with room for a lane but not a
+        carriageway one way or the other, and `Q95`'s own TONNOCHY ROAD
+        counter-example — 16.7 m of span over halves of 6.43 and 11.78, "not a
+        ray that stayed put" — sits in that gap. Published as neither, it stays
+        out of the widths; published as uncrossed, it would BE one.
+        """
+        beyond = self.beyond_m
+        if math.isnan(beyond):
+            return UNRESOLVED
+        if beyond < bounds.hard_min_m:
+            return UNCROSSED
+        if beyond >= bounds.dual_min_m:
+            return CROSSED
+        return UNRESOLVED
+
     @property
     def decomposed(self) -> bool:
         """Whether this row's `own_m` is a carriageway width that may be read.
@@ -954,6 +1023,63 @@ class EdgeWidth:
         decomposed half is by definition one carriageway of a pair.
         """
         return self.partner is not None and self.median_gap_m >= 0.0 and not self.own_refused
+
+    def basis(self, bounds: WidthBounds) -> str:
+        """Which route, if any, licenses reading a CARRIAGEWAY WIDTH off this row.
+
+        Four states, and the empty one is the common answer — a row with a
+        perfectly good span and no way to say whose carriageway it is.
+
+        🔴 **`decomposed` is tested BEFORE `refused`, and that is not an
+        oversight.** `refused` is `max_m`, a bound on a *single* carriageway — a
+        four-lane one plus a parking strip. A decomposed row is by definition
+        one half of a *dual*, and `Q95` settled that a half answers to the dual
+        column instead, because reading the single column at both scales bounds
+        the half by a figure it could never reach. Applying the span's ceiling
+        to a row already split is that same error pointing the other way, and it
+        would make this table disagree with `_render_pairs` — which publishes
+        all 14 decomposed rows — by exactly the two FLEMING ROAD edges whose
+        16.56 m span is a perfectly ordinary 6.82 + 2.19 + 7.54 dual
+        carriageway. The dual ceiling still applies, inside `decomposed`.
+
+        🔴 **And it outranks `uncrossed` where both fire, though they name
+        different numbers.** A partner whose own half measures small inflates
+        this row's residual into the non-negative, so `decomposed` can fire on a
+        pair one half of which is junk while `uncrossed` reads the span as this
+        edge's whole width. The overlap is counted in the report rather than
+        assumed empty; a partner that voted back is the stronger evidence, so it
+        wins. ⚠️ The region's own numbers argue the other way — every one of the
+        report's cross-check disagreements traces to a partner's reading rather
+        than to this rule — but flipping the precedence to suit one run's table
+        is fitting, and it moves 2 rows of 276. `Q95` records it for the
+        assignment to settle.
+        """
+        if self.decomposed:
+            return BASIS_DECOMPOSED
+        if self.refused:
+            return ""
+        if self.two_way:
+            # Already whole: `_render_pairs` never pairs a two-way edge, on the
+            # ground that decomposing a street into itself is not a split.
+            return BASIS_TWO_WAY
+        if self.crossing(bounds) == UNCROSSED:
+            return BASIS_UNCROSSED
+        return ""
+
+    def carriageway_m(self, bounds: WidthBounds) -> float:
+        """The width this row licenses, or NaN where it licenses none.
+
+        ⚠️ **Two different measurements behind one number, which is why the
+        basis travels with it.** A decomposed row's width is `own_m`, half of a
+        span; every other published row's is the span itself. Quoting the two
+        as one column without the basis beside it would be `Q57`'s
+        generalisation — a property established on one population and read
+        across another.
+        """
+        basis = self.basis(bounds)
+        if not basis:
+            return float("nan")
+        return self.own_m if basis == BASIS_DECOMPOSED else self.median_m
 
 
 def edge_widths(report: Report, bounds: WidthBounds, *, minimum_n: int = 3) -> list[EdgeWidth]:
@@ -997,6 +1123,7 @@ def edge_widths(report: Report, bounds: WidthBounds, *, minimum_n: int = 3) -> l
                 own_m=own,
                 candidate=_candidate(stations, bounds),
                 own_refused=not bounds.hard_min_m <= own <= bounds.dual_max_m,
+                two_way=report.directions.get(edge_id) == BOTH,
             )
         )
     _pair_up(rows, report)
@@ -1366,6 +1493,7 @@ def _render_width(
         )
 
     lines.extend(_render_pairs(rows, report, bounds))
+    lines.extend(_render_crossing(rows, report, bounds))
 
     lines.append("")
     lines.append(
@@ -1508,7 +1636,116 @@ def _render_pairs(rows: list[EdgeWidth], report: Report, bounds: WidthBounds) ->
     return lines
 
 
-def write_widths(rows: list[EdgeWidth], report: Report, destination: Path) -> int:
+def _render_crossing(rows: list[EdgeWidth], report: Report, bounds: WidthBounds) -> list[str]:
+    """Which one-way spans never crossed a median, and the widths that licenses.
+
+    🔴 **A FOURTH table with different rules again, and the reason it exists is
+    reach.** `_render_pairs` above can only speak about an edge whose opposed
+    partner voted back — 110 rows — and it found that 96 of them refuse their
+    own split because the ray stopped at the near kerb and never crossed. That
+    is a statement about the *span*, and it does not need a partner to make: it
+    reads off `beyond_m`, which every row with a median carries. This table is
+    that statement applied to all of them, with the pairs kept as the check.
+
+    ⚠️ **The check is a prediction, not a fit.** The two instruments were built
+    for different questions and agree only if the reading is sound, so their
+    disagreement is a finding — and 3.4.2.2 supplies an honest cause, since a
+    real Hong Kong carriageway may sit below the manual's minimum.
+    """
+    with_median = [row for row in rows if not row.refused]
+    one_way = [row for row in with_median if not row.two_way]
+    lines = [
+        "",
+        "crossing: did the span reach PAST the carriageway its centreline sits in?",
+        f"  beyond = span - own; uncrossed under {bounds.hard_min_m:.2f} m (4.3.9.8, one through "
+        f"lane), crossed at {bounds.dual_min_m:.2f} m (Table 3.4.2.1, narrowest dual carriageway)",
+    ]
+    if not one_way:
+        lines.append("  no published one-way row — nothing to classify")
+        return lines
+
+    beyond = [row.beyond_m for row in one_way]
+    p10, p50, p90 = _percentiles(beyond, (10, 50, 90))
+    lines.append(
+        f"  beyond over the {len(one_way)} published one-way rows: "
+        f"p10 {p10:+.2f}  p50 {p50:+.2f}  p90 {p90:+.2f}"
+    )
+    verdicts = Counter(row.crossing(bounds) for row in one_way)
+    counts = "  ".join(f"{name} {verdicts.get(name, 0)}" for name in _CROSSINGS)
+    lines.append(f"  {counts}")
+
+    # 🔴 The free cross-check, and it is free because the two instruments were
+    # built for different questions. On a mutual pair the residual already says
+    # whether the parts fit inside the whole; this rule says the same thing from
+    # one side. ⚠️ `unresolved` makes no prediction and is counted apart rather
+    # than scored as a miss — scoring it would grade the rule on rows it
+    # declined to judge.
+    predicted = [row for row in one_way if row.partner is not None]
+    scored = [row for row in predicted if row.crossing(bounds) != UNRESOLVED]
+    if scored:
+        agreed = sum(
+            1 for row in scored if (row.crossing(bounds) == UNCROSSED) == (row.median_gap_m < 0.0)
+        )
+        lines.append(
+            f"  cross-check vs the pairs' own residual, over the {len(scored)} mutual rows it "
+            f"predicts ({len(predicted) - len(scored)} unresolved, no prediction):"
+        )
+        lines.append(
+            f"    agreed {agreed}, disagreed {len(scored) - agreed} — a finding to go and look "
+            "at, never a bar to retune (3.4.2.2 permits a carriageway below the minimum)"
+        )
+
+    # ⚠️ Counted rather than assumed empty. Where a partner measured its own half
+    # as under a through lane this row's residual inflates into the non-negative,
+    # so both bases can fire and they disagree about the number — `own_m` against
+    # the whole span. `basis` resolves it toward the partner; the count is what
+    # says how often that mattered.
+    overlap = sum(1 for row in one_way if row.decomposed and row.crossing(bounds) == UNCROSSED)
+    lines.append(f"  rows both decomposed and uncrossed — the two bases disagree: {overlap}")
+
+    lines.append("")
+    lines.append("published CARRIAGEWAY WIDTH by basis — ⚠️ not one population, see the code")
+    lines.append(
+        f"  {'basis':<20} {'n':>5} {'p50':>7} {'p90':>7} {'< ' + format(bounds.min_m, '.1f'):>8}"
+    )
+    # ⚠️ **Grouped over EVERY row with a median, not over the span-published
+    # ones.** A decomposed half answers to the dual column and not to the span's
+    # own ceiling, so two FLEMING ROAD rows are licensed here while their 16.56 m
+    # span is refused above. Filtering to `with_median` first would drop them and
+    # make this table disagree with `_render_pairs` about the same 14 rows.
+    published: list[EdgeWidth] = []
+    for name in _BASES:
+        group = [row for row in rows if row.basis(bounds) == name]
+        published.extend(group)
+        if not group:
+            lines.append(f"  {name:<20} {0:>5}")
+            continue
+        widths = [row.carriageway_m(bounds) for row in group]
+        p50, p90 = _percentiles(widths, (50, 90))
+        lines.append(
+            f"  {name:<20} {len(group):>5} {p50:>7.2f} {p90:>7.2f} "
+            f"{_share_under(widths, bounds.min_m):>7.1%}"
+        )
+    lines.append(
+        f"  {'-- licensed':<20} {len(published):>5} of {len(rows)} edges with a median; "
+        f"{len(rows) - len(published)} carry a reading this cannot attribute"
+    )
+    if published:
+        gaps = [
+            row.carriageway_m(bounds) - report.widths_authored.get(row.edge, 0.0)
+            for row in published
+        ]
+        p10, p50, p90 = _percentiles(gaps, (10, 50, 90))
+        lines.append(
+            f"  measured - authored width_m: p10 {p10:+.2f}  p50 {p50:+.2f}  p90 {p90:+.2f}; "
+            f"wider on {_share_over(gaps, 0.0):.0%}"
+        )
+    return lines
+
+
+def write_widths(
+    rows: list[EdgeWidth], report: Report, bounds: WidthBounds, destination: Path
+) -> int:
     """The per-edge rows as JSON, for the decision this tool cannot make.
 
     ⚠️ **`etl/out/` is gitignored**, so this is a local artefact exactly as
@@ -1540,6 +1777,16 @@ def write_widths(rows: list[EdgeWidth], report: Report, destination: Path) -> in
             "n": row.n,
             "span_m": _number(row.median_m),
             "own_m": _number(row.own_m),
+            # ⚠️ **`carriageway_m` is null on most rows and that is the point of
+            # the file.** A reader that wants only the attributable widths
+            # filters on it; one that wants to know what was refused, and on
+            # which of the three verdicts, has `crossing` and `beyond_m` beside
+            # it. Writing only the licensed rows would hand the next reader a
+            # survey in which nothing was declined.
+            "beyond_m": _number(row.beyond_m),
+            "crossing": row.crossing(bounds),
+            "basis": row.basis(bounds),
+            "carriageway_m": _number(row.carriageway_m(bounds)),
             "off_centre": _number(row.off_centre),
             "partner": row.partner,
             "candidate": row.candidate,
@@ -1600,6 +1847,16 @@ def main(argv: list[str] | None = None) -> int:
         help="override how far off anti-parallel two centrelines may run and still pair",
     )
     parser.add_argument(
+        "--dual-min-m",
+        type=float,
+        # 🔴 The crossing rule's lower bracket gets a flag for `--max-width-m`'s
+        # reason: a counter that classifies has to be shown reachable at BOTH
+        # ends, and the only honest way to show it is from the command line
+        # (`Q72`). Lowered to `hard_min_m` nothing is uncrossed; raised to
+        # `dual_max_m` nothing is crossed.
+        help="override the narrowest opposed carriageway; below it a span never crossed a median",
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         help="also write the per-edge rows to carriageway_width.json under the region's out dir",
@@ -1658,6 +1915,25 @@ def main(argv: list[str] | None = None) -> int:
                 "pairs and the sweep reports an empty table as a finding."
             )
         bounds = replace(bounds, pair_bearing_tolerance_deg=args.pair_bearing_deg)
+    if args.dual_min_m is not None:
+        if bounds is None:
+            raise SystemExit(
+                f"--dual-min-m has nothing to override: city '{city.id}' declares no "
+                "carriageway_survey.width_bounds, so no span is classified."
+            )
+        # The config guard, repeated because `replace` goes round it — the same
+        # move `--max-width-m` makes. ⚠️ Inclusive at both ends here, unlike the
+        # config's strict ordering: sweeping TO a collapsed band is exactly how
+        # the three states are shown reachable, and refusing the endpoints would
+        # make the mutation check the tool asks for impossible to run.
+        if not bounds.hard_min_m <= args.dual_min_m <= bounds.dual_max_m:
+            raise SystemExit(
+                f"--dual-min-m {args.dual_min_m} must lie within "
+                f"[{bounds.hard_min_m}, {bounds.dual_max_m}] — below the floor no span could "
+                "cross a median, and above the dual ceiling the narrowest carriageway of a pair "
+                "would be wider than the widest."
+            )
+        bounds = replace(bounds, dual_min_m=args.dual_min_m)
     if bounds is not None and 2.0 * args.max_ray_m <= bounds.max_m:
         # 🔴 The `drawn_gauge_m` trap, reachable from the command line. Two rays
         # capped at `max_ray_m` cannot sum past twice it, so a small enough cap
@@ -1700,7 +1976,7 @@ def main(argv: list[str] | None = None) -> int:
         destination = city.out_dir(args.region, args.out_root) / "carriageway_width.json"
         log.info(
             "%d edge rows -> %s (gitignored; re-run to rebuild)",
-            write_widths(rows, report, destination),
+            write_widths(rows, report, bounds, destination),
             destination,
         )
     # Grades, never checks. See the docstring, and CLAUDE.md's rule for the

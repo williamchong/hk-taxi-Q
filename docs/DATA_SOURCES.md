@@ -807,6 +807,18 @@ widest thing transcribed here that may legitimately sit between them. Both live 
 a centreline the instrument has mis-centred — where a *negative* one is not, and a distribution
 sitting above it is a finding about a central-reserve clause nobody has transcribed.
 
+✅ **And the same column's *other* end is a bound too, since 2026-08-29 — it is what says whether a
+ray crossed a median at all.** Subtract twice a station's near ray from its span and what is left is
+the room an opposed carriageway would need. Under **3.0 m** (4.3.9.8, one through lane) there is none,
+so the ray stopped at the far kerb of the road it was walking and the span *is* that edge's
+carriageway; at or above **6.75 m** (Table 3.4.2.1, dual two-lane distributor — `dual_min_m`) there is
+room for the narrowest dual TD publishes, so it may have crossed. Between them nothing is read, and
+that middle band is load-bearing: `Q95`'s own TONNOCHY ROAD counter-example sits in it, and a single
+threshold anywhere in the gap would publish a 16.7 m span as a carriageway width. This is what takes
+the region from **14** attributable widths to **276 of 387**. ⚠️ **The permissive end of the column on
+purpose** — the Trunk Road row is 7.3 m — because refusing more would publish *more* widths, which is
+the direction an instrument grading its own project must not lean.
+
 ⚠️ **4.3.9.8's 3.0-3.65 m is the lane divisor, and `roads.lane_width_m` must never be.** 3.2 m is the
 authored constant the whole question is about; dividing by it makes the instrument agree with the
 graph by construction. The lane count is therefore a bracket, ambiguous on 178 of 343 edges.

@@ -193,7 +193,7 @@ Common emoji for this project:
   there is one cap and not two. 🔴 **On a one-way edge the number is a KERB-TO-KERB SPAN and not a
   carriageway width** wherever the ray crosses an opposed pair; the TPDM ceiling cannot see that and
   `off_centre` is what does. The two coincide on 34 edges.
-  🔴 **There is a THIRD table since the split, and it has different rules again — paste all three.**
+  🔴 **There is a THIRD table since the split, and it has different rules again — paste all four.**
   It pairs each one-way edge with its opposed partner and reports `own = 2 x near` per half with the
   leftover as the median. ⚠️ **Do not pool it into the span line**: that is `Q57`'s generalisation,
   a property established on one population and quoted for another. 🔴 **The load-bearing counter is
@@ -210,6 +210,21 @@ Common emoji for this project:
   the sixth is 9.0 m with no station clear of a node. ⚠️ **`--pair-bearing-deg` is the rule's one free
   value, so sweep it and paste the table** — `Q72` rejected a divider test whose count ran
   8 → 29 → 49 → 80 over a free radius, and this one is flat at 14 decomposed from 10° to 75°.
+  🔴 **And a FOURTH since the crossing rule, which is the one that publishes WIDTHS — 276 of 387
+  edges.** `beyond = span - 2 x near ray` is the room an opposed carriageway would need; under
+  `hard_min_m` there is none, so the span *is* that edge's carriageway. ⚠️ **Three states, and the
+  middle one publishes nothing on purpose** — TONNOCHY `e142` sits in it, and a single threshold in
+  that gap ships a 16.7 m span as a width. ⚠️ **`carriageway_m` is not one population**: a decomposed
+  row publishes half a span and every other row publishes the whole of one, so quote the `basis`
+  column with it or it is `Q57`'s generalisation again.
+  🔴 **`--dual-min-m` classifies and licenses NOTHING, so do not read its sweep as a plateau.**
+  Over 3.0 → 14.6 the crossed count runs 79 → 0 while uncrossed and licensed stay flat at 230 and
+  276 — that bound only moves rows between two states that both publish nothing, and every width
+  rests on `hard_min_m` instead. Sweep it anyway; a *moving* licensed count means the states have
+  stopped meaning what they say. ✅ **The width is cap-insensitive where the span is not** (p50
+  7.15-7.18 m over a 10-25 m ray sweep), so quote the cap for the span line and not for this one.
+  ⚠️ **The pairs' residual cross-checks this for free and its misses are about the PAIRING** — 12 of
+  14 are rows whose partner claims an impossible half. A finding, never a bar to retune.
   ⚠️ `--json` writes `carriageway_width.json` under `etl/out/`, which is **gitignored** — a local act
   like `facade_lab.json`, and re-running is the only way back.
   🔴 **Lanes are a bracket from TPDM 4.3.9.8 (3.0-3.65 m) and never a division by `lane_width_m`** —

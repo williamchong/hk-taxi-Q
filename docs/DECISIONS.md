@@ -13322,6 +13322,129 @@ artefact exactly as `facade_lab.json` is: no build reads it, and re-running the 
 back. It carries every row with its flags, refusals included, because a file holding only the
 readable rows would hand the next reader a survey in which nothing was refused.
 
+### The span that never crossed IS a width, 2026-08-29 — 276 edges, from two clauses
+
+The split above answers **14 of 343** and locates the rest: 96 of 110 mutual pairs refuse themselves
+because *the ray never crossed the median at all*, so on those edges the published span is already
+that edge's carriageway. That is a statement about **one edge's own two rays** and it does not need a
+partner to make. Stated so, it reaches every row rather than the 110 that pair.
+
+```
+beyond_m = span - own          # own = 2 x the median near ray, already on every row
+```
+
+Three states, and **both ends are transcribed clauses** — there is no fitted value:
+
+| `beyond_m` | verdict | what may be read |
+|---|---|---|
+| `< 3.0 m` (4.3.9.8, one through lane) | **uncrossed** | no room for an opposed carriageway — the span **is** this edge's width |
+| `>= 6.75 m` (Table 3.4.2.1, dual 2-lane distributor) | **crossed** | room for the narrowest dual TD permits — stays a span |
+| between | **unresolved** | room for a lane and not a carriageway; nothing is read |
+
+```
+crossing, over the 309 published one-way rows
+  beyond          p10 +0.23   p50 +1.21   p90 +7.51
+  uncrossed 230   unresolved 39   crossed 40
+
+published CARRIAGEWAY WIDTH by basis — ⚠️ NOT one population
+  basis                    n     p50     p90    < 7.3
+  two_way_span            34    8.46   11.58   26.5%
+  one_way_uncrossed      228    7.18   10.88   56.1%
+  decomposed              14    6.05    7.33   85.7%
+  -- licensed            276 of 387 edges with a median; 111 unattributable
+  measured - authored width_m: p10 -1.45  p50 +0.81  p90 +4.17; wider on 66%
+```
+
+✅ **All three tables above are byte-identical**, which is the ratchet on the change; `survey()` was
+not touched, so the overhang headline could not move.
+
+🔴 **The middle state is load-bearing, and this entry's own counter-example is what needs it.**
+TONNOCHY ROAD `e142` — 16.75 m of span over an 11.78 m half, recorded above as "not a ray that stayed
+put" — reads `beyond` **4.96**, and its partner `e130` reads **10.30**. Under three states one is
+`unresolved` and the other `crossed`, and **neither publishes a width**. A single threshold anywhere
+in the 3.0–6.75 gap would have published 16.7 m as somebody's carriageway. ✅ And all six LOCKHART
+ROAD edges — `surface.py`'s three shared-endpoint pairs, the only ground truth here — read
+`uncrossed` at `beyond` 0.19–1.47 and publish 6.7–8.1 m.
+
+### 🔴 The bound that classifies does not license anything, and the sweep is how that was found
+
+```
+  dual_min  uncrossed  unresolved  crossed   licensed
+       3.0        230           0       79        276
+      5.00        230          20       59        276
+      6.75        230          39       40        276
+      9.00        230          62       17        276
+      14.6        230          79        0        276
+```
+
+`crossed` reaches **0** at one end and **79** at the other, so the state is reachable both ways
+(`Q72`). But `uncrossed` is **flat at 230** and the licensed count is **flat at 276** across the whole
+range, because this bound only ever moves a row between `unresolved` and `crossed` — and neither
+publishes anything. ⚠️ **So the count is NOT flat the way `pair_bearing_tolerance_deg`'s was** (14
+decomposed from 10° to 75°), and quoting a plateau here would be false. What is invariant is the
+output. Every published width rests on `hard_min_m`, 4.3.9.8's through lane; `dual_min_m` is
+descriptive, and it is worth having only because "definitely crossed" and "cannot tell" are different
+answers to the assignment.
+
+⚠️ **Reachability at zero is shown in the tests, not on the region** — `TestCrossing` drives all three
+states through `edge_widths` and collapses the band from both sides, which is where `Q95`'s own
+`test_a_mutual_pair_decomposes` makes the same argument.
+
+### ✅ The width is cap-INSENSITIVE where the span is not
+
+```
+  ray m   one-way rows   uncrossed   licensed   p50 uncrossed width
+     10            281         236        272          7.15
+     15            309         230        276          7.18
+     20            306         230        287          7.18
+     25            301         227        288          7.15
+```
+
+`CLAUDE.md` records the span as cap-sensitive — non-junction p50 7.40 → 9.15 m from 10 to 25 m — and
+that is exactly what an uncrossed reading should be immune to, because a ray that stopped early does
+not care how much further it was allowed to go. It is: **p50 7.15–7.18 m across a 2.5x sweep.** The
+licensed *count* drifts 272 → 288 with the cap and the width does not.
+
+### The cross-check the pairs give for free, and what its misses turn out to be
+
+The two instruments were built for different questions, so on a mutual pair the rule predicts the
+residual's sign: uncrossed ⟹ negative, crossed ⟹ non-negative.
+
+```
+  78 mutual rows carry a prediction (19 unresolved, none made): agreed 64, disagreed 14
+```
+
+🔴 **12 of the 14 misses are `crossed` rows whose PARTNER reports an impossible half** — `e375`
+GLOUCESTER ROAD's partner claims **13.90 m** of its own carriageway, `e393`'s **12.12 m**, `e113`'s
+**10.22 m** — which drives the residual negative without this row's own two rays being in doubt. That
+is a finding about the *pairing*, not about the crossing rule: a residual is contaminated by the
+partner's reading and `beyond_m` is not. ⚠️ **It is reported and nothing is retuned on it**; 3.4.2.2
+supplies an honest alternative cause, since a real carriageway may sit below the manual's minimum.
+
+The other 2 are both MARSH ROAD, and they are the rows where **both bases fire and name different
+numbers** (`e36` 3.44 m as a decomposed half against 4.34 m as a span). `basis` resolves toward the
+partner that voted back. ⚠️ **The region's own numbers argue the other way** — every disagreement above
+traces to a partner — but flipping the precedence to suit one run's table is fitting, and it moves 2
+rows of 276. Left as it is, recorded here, for the assignment to settle.
+
+⚠️ **`decomposed` is tested BEFORE the span ceiling, and the two FLEMING ROAD rows are why.** `max_m`
+16.5 bounds a *single* carriageway; a decomposed half is by definition one of a *dual* and answers to
+`dual_max_m`, as this entry already argued in the other direction. `e74`/`e268`'s 16.56 m span is an
+ordinary 6.82 + 2.19 + 7.54 dual carriageway, and gating it on the single column would have made this
+table disagree with the pairs table about the same 14 rows.
+
+### 🔴 What this does and does not unblock
+
+It answers **276 of 387** edges with a carriageway width against 14, which is enough to assign from —
+and the assignment is still not made here, because it is the same decision as the widening and
+`Q54`'s rule is not what settles a *playability* floor. What is now on disk for it: a per-edge width,
+the basis that licensed it, and the reading that refused it.
+
+⚠️ **The headline finding is unchanged and sharper.** 56.1% of the one-way widths sit below TD's 7.3 m
+two-lane minimum, and the measured-minus-authored p50 is **+0.81 m** — so the authored 6.4 m is too
+narrow on two thirds of the network and *too wide* on a real tail. A floor expressed as
+`max(real_width, playable_floor)` is still the shape this wants; it is now possible to price it.
+
 **See.** `Q94` for the arrows that made this visible and for the lane count they imply · `Q19` for the
 invisible walls the invented width causes · `Q57` for the previous narrowing and the instrument it
 scoped · `Q54` for why a published extent is not overruled by a derived one · `GAME_DESIGN.md` for the
