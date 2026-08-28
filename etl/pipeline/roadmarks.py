@@ -48,7 +48,6 @@ import numpy as np
 
 from pipeline import gdb
 from pipeline.arrows import ArrowReport
-from pipeline.boxjunctions import blended_height
 from pipeline.config import CityConfig, GameTransform, RoadMark, RoadMarks, load_city
 from pipeline.documents import read_document, write_document
 from pipeline.fares import Segments
@@ -63,7 +62,12 @@ from pipeline.mesh import select_triangles
 # parts are null.
 from pipeline.railings import AT_GRADE
 from pipeline.roads import ROADGRAPH_NAME, plan_lengths_2d, read_graph
-from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, downward_facing
+from pipeline.surface import (
+    SURFACE_MANIFEST_NAME,
+    SURFACE_MANIFEST_SCHEMA,
+    DrawnSurface,
+    downward_facing,
+)
 
 log = logging.getLogger(__name__)
 
@@ -86,6 +90,13 @@ ROADMARKS_MATERIAL = "roadmarks"
 # Below this, twice a triangle's area means it has collapsed. The bar
 # `surface.py`, `tramway.py`, `arrows.py` and `boxjunctions.py` all set.
 _MIN_TWICE_AREA_M2 = 1e-6
+
+# Slack on `_reachable`'s narrowing, in metres. ⚠️ **Arbitrary, and deliberately
+# on the generous side** — `_reachable` proves `d_min + 2r` is already exact for
+# a plain nearest, so every metre here is surplus. It is kept because the two
+# errors are not symmetric: too generous costs a few projections a marking, too
+# tight silently changes an answer. Do not read it as derived from anything.
+_REACH_MARGIN_M = 3.0
 
 # Below this, a dash module's last painted run is rounding rather than paint.
 # The same shape of bar as `_MIN_TWICE_AREA_M2` and it exists for a measured
@@ -179,6 +190,15 @@ class RoadMarkReport:
     # Per drawn marking, max minus min of its vertices' snapped road heights.
     # What the per-vertex join actually moved.
     height_spread_m: list[float] = field(default_factory=list)
+
+    # 🔴 **The tripwire on the cap join (`Q92`)**, and it matters more here than
+    # on any other layer: a stop line sits *at* a junction mouth, so most of this
+    # paint stands on cap tarmac and the height model it replaced was furthest
+    # wrong exactly there. `vertices_over_cap` reads **0** if `roadsurface.json`
+    # stops publishing `caps`, or publishes them at a level this stage does not
+    # read — the one way the fix reverts with every partition still closing.
+    vertices_drawn: int = 0
+    vertices_over_cap: int = 0
 
     # Triangles dropped for being thinner than the engine's import lattice, and
     # the lattice pitch they were judged against — `boxjunctions._import_quantum_m`
@@ -396,9 +416,8 @@ class Network:
         """Plan distance from `point` to every segment.
 
         `Segments.nearest`'s projection with the winner-take-all dropped — the
-        gap `blended_height` records when it says it "reads the public arrays
-        rather than calling it because the blend needs every distance, not the
-        winner".
+        gap the height join used to record: a caller that needs every distance
+        cannot use a helper that returns only the winner.
         """
         start = self.segments.start[:, [0, 2]]
         delta = self.segments.delta[:, [0, 2]]
@@ -433,7 +452,7 @@ def _host(network: Network, marking: Marking, spec: RoadMarks) -> Host | None:
     ⚠️ **A wrong host does not move the paint**, because the extent is
     published. It moves the height, the refusal and every counter — and two arms
     of one junction disagree about the deck by up to a measured 0.43 m where
-    they meet (`boxjunctions.blended_height`), so it is a bar sunk into or
+    they meet (`Q92`), so it is a bar sunk into or
     floating over the asphalt at the one place the player is looking.
 
     The score is angular error plus `proximity_weight_deg_per_m` per metre, so
@@ -690,7 +709,7 @@ def _import_quantum_m(markings: list[Marking]) -> float:
     return float(spans.max()) / 65535.0
 
 
-def _drawn_widths(out_dir: Path, city_id: str, region_id: str) -> dict[int, float]:
+def _drawn_widths(surface: dict) -> dict[int, float]:
     """Each level-0 edge's **drawn** carriageway width, from `roadsurface.json`.
 
     ⚠️ **Not `roadgraph.json`'s `width_m`, and the difference is 18x on the one
@@ -708,13 +727,11 @@ def _drawn_widths(out_dir: Path, city_id: str, region_id: str) -> dict[int, floa
     The whole quantity is a report-only cost figure, so the mean is honest where
     carrying the profile would imply a precision the match does not have.
 
-    `railings.py` already reads this file for this same half-width.
+    `railings.py` already reads this file for this same half-width. The document
+    itself is read once by the caller and handed here, because `Q92` gave this
+    stage a second thing to take from it — the junction caps `DrawnSurface`
+    reads — and two reads of one manifest is two chances to read two versions.
     """
-    surface = read_document(
-        out_dir / SURFACE_MANIFEST_NAME,
-        SURFACE_MANIFEST_SCHEMA,
-        f"python -m pipeline.surface --city {city_id} --region {region_id}",
-    )
     return {
         int(entry["edge"]): 2.0
         * float(np.mean(np.asarray(entry["half_width_m"], dtype=np.float64)))
@@ -757,17 +774,16 @@ def _check_marks_clear_the_lattice(spec: RoadMarks, thinness_bar_m: float) -> No
 
 
 def _reachable(
-    segments: Segments, marking: Marking, host: Host, quads: list[np.ndarray], blend_m: float
+    segments: Segments, marking: Marking, host: Host, quads: list[np.ndarray]
 ) -> Segments:
-    """The segments that can carry weight for any vertex of this marking.
+    """The segments that can be nearest to any vertex of this marking.
 
     ⚠️ **A narrowing, not an approximation — the heights it produces are
-    bit-identical.** `blended_height` weights every segment within
-    `nearest + blend_m` of the vertex it is placed at, and scans the whole
-    network to find them. For a marking whose vertices all lie within `r` of its
+    bit-identical.** For a marking whose vertices all lie within `r` of its
     midpoint, `|d(vertex, s) - d(midpoint, s)| <= r`, so a segment further than
-    `d_min + 2r + blend_m` from the midpoint is outside every vertex's cutoff and
-    cannot contribute. Keeping the rest changes no sum.
+    `d_min + 2r` from the midpoint is nearest to no vertex of it and cannot be
+    chosen. Keeping the rest changes no answer.
+
 
     ⚠️ **The reason it is worth the fifteen lines is the second city, not this
     one.** Vertices scale with region area and so do segments, so the unnarrowed
@@ -781,7 +797,7 @@ def _reachable(
     midpoint = marking.midpoint
     corners = np.vstack(quads) if quads else marking.line
     radius = float(np.linalg.norm(corners - midpoint, axis=1).max())
-    cutoff = float(distance.min()) + 2.0 * radius + blend_m
+    cutoff = float(distance.min()) + 2.0 * radius + _REACH_MARGIN_M
     keep = distance <= cutoff
     return replace(
         segments,
@@ -821,7 +837,17 @@ def build_region(
     # bar under a flyover belongs to the street it is painted on, not the deck.
     edges = [edge for edge in graph["edges"] if int(edge["elevation_level"]) == 0]
     segments = Segments.of(edges)
-    network = Network.of(segments, _drawn_widths(out_dir, city.id, region_id))
+    surface = read_document(
+        out_dir / SURFACE_MANIFEST_NAME,
+        SURFACE_MANIFEST_SCHEMA,
+        f"python -m pipeline.surface --city {city.id} --region {region_id}",
+    )
+    network = Network.of(segments, _drawn_widths(surface))
+    # The road as `surface.py` actually drew it (`Q92`) — the same level
+    # restriction as `edges` above, applied to the caps too. A stop line lives
+    # *at* a junction mouth, so more of this layer stands on cap tarmac than of
+    # any other, and the blend it replaced was furthest wrong exactly there.
+    drawn = DrawnSurface.of(segments, surface, level=0)
 
     builder = _Builder()
     report.import_quantum_m = round(_import_quantum_m(markings), 6)
@@ -845,14 +871,15 @@ def build_region(
             continue
 
         quads = band_quads(marking, spec)
-        near = _reachable(segments, marking, host, quads, spec.height_blend_m)
+        near = drawn.narrowed_to(_reachable(segments, marking, host, quads))
         heights: list[float] = []
         for quad in quads:
-            vertex_heights = [
-                blended_height(near, float(px), float(pz), spec.height_blend_m) for px, pz in quad
-            ]
+            drawn_here = [near.sample(float(px), float(pz)) for px, pz in quad]
+            vertex_heights = [sample.height_m for sample in drawn_here]
             builder.polygon(quad, np.asarray(vertex_heights) + spec.lift_m)
             heights.extend(vertex_heights)
+            report.vertices_drawn += len(drawn_here)
+            report.vertices_over_cap += sum(1 for s in drawn_here if s.cap_m is not None)
 
         report.drawn += 1
         report.drawn_by_id[marking.mark.id] = report.drawn_by_id.get(marking.mark.id, 0) + 1
@@ -949,6 +976,11 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Roa
         "underfill_m": report.measured(report.underfill_m),
         "mark_length_m": report.measured(report.mark_length_m),
         "height_spread_m": report.measured(report.height_spread_m),
+        # 🔴 The tripwire on the cap join (`Q92`) — see `RoadMarkReport`. Not a
+        # tautology: both are reachable at zero, and zero is what a stage that
+        # has gone back to guessing the road's height reads.
+        "vertices_drawn": report.vertices_drawn,
+        "vertices_over_cap": report.vertices_over_cap,
         # Fragments thinner than two cells of the engine's import lattice,
         # dropped before they could come back winding-flipped. The pitch is
         # published beside the count so the bar is checkable from a shipped

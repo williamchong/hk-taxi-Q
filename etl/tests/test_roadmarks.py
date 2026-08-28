@@ -17,7 +17,6 @@ import numpy as np
 import pytest
 import yaml
 
-from pipeline.boxjunctions import blended_height
 from pipeline.config import RoadMark, load_city
 from pipeline.fares import Segments
 from pipeline.roadmarks import (
@@ -31,7 +30,7 @@ from pipeline.roadmarks import (
     _runs,
     band_quads,
 )
-from pipeline.surface import downward_facing
+from pipeline.surface import DrawnSurface, downward_facing
 from tests.helpers import CITY_YAML
 
 # The block as `hong_kong.yaml` declares it. Held here rather than in
@@ -46,7 +45,6 @@ BLOCK: dict[str, Any] = {
     "proximity_weight_deg_per_m": 0.05,
     "station_m": 2.0,
     "lift_m": 0.016,
-    "height_blend_m": 4.0,
     "marks": [
         {
             "id": "stop_line",
@@ -393,7 +391,8 @@ class TestTheHeightJoin:
         # Stationing exists so a long bar samples the grade rather than chording
         # across it; on a bar drawn *across* the grade the heights agree, which
         # is what makes `height_spread_m` p50 0.021 m in region.
-        heights = [blended_height(segments, 0.0, z, spec.height_blend_m) for z in (-10.0, 10.0)]
+        drawn = DrawnSurface.of(segments, {"caps": []})
+        heights = [drawn.height_at(0.0, z) for z in (-10.0, 10.0)]
         assert heights[0] < heights[1]
 
 

@@ -246,6 +246,7 @@ rather than per tool; restating it here is how `CONTRIBUTING.md` drifted nine gr
 | `tools/overhang.py` | `Q22`/`Q23` — whether there is a deck beneath it at all, sampled *across the full drawn width*. A ribbon can pass the first and fail the second |
 | `tools/ground_clearance.py` | `Q18`/`Q24` — whether the drawn ground stands *in* the at-grade carriageway. Sizes `buildings.ground_sink_m`, and gates the sink separately from the road's own shape |
 | `tools/carriageway_occupancy.py` | `Q19` — whether anything **solid stands in the road at bumper height**, buildings and structure told apart by vertex colour. The only one that gates per *edge* rather than region-wide, because `RoadGraph` routes on edges and a share cannot tell a wall across the road from clutter beside it. ⚠️ **Fails today**. Since `Q51` it also grades a number the pipeline publishes for itself — `clearance.py`'s — which read 24 against this tool's 26, reconciled as plan cell size and ratcheted by `tools/clearance_reconcile.py`. ✅ **`--corridor-report`** (2026-08-21) prints the corridor profile per failing edge and asks what stands on the **centreline** at the binding station — `Q19`'s two decisive measurements, which lived in scratch scripts until then. ⚠️ Opt-in, and the default listing is byte-identical with it off; it reports and gates nothing |
+| `tools/paint_clearance.py` | `Q92` — whether the **painted layers are above the road they are painted on**, or inside it. The only one whose subject is a marking rather than the surface, and the one that catches what a top-down raster structurally cannot: a mesh complete in *plan* and wrong in *Y*. Splits a burial into a kerb top reached past the drawn ribbon (registration, never gated) and a wrong height on the road it is drawn on (gated) |
 | `tools/kerbside_error.py` | `Q54` — how much of the kerbside yellow the source supports. Reads the shipped `roads.glb`, clips every carriageway triangle against the shader's own yellow locus, and weighs the chord by the junction fade and `COLOR_0.a`. ⚠️ **It does not grade the join** — the truth side is what `roadgraph.json` publishes, so a restriction on the wrong centreline is agreed with. What it sees is the half nothing else can: the rail the extent is written on, whether the alpha survived glTF, and whether the runs slid by a junction trim. Reads the ETL out tree, because the trims travel in `roadsurface.json` and that does not ship |
 
 **`tools/narrowing.py` sits beside them and is not one of them.** It prices a *proposal* — what
@@ -1135,6 +1136,12 @@ lateral offset is a rigid move, bounded by `max_shift_m` and priced by `shift_m`
 SCHEMA` 4 → 5) — the ribbon-metre ranges where a side draws no kerb because a neighbour covers it.
 Only `surface.py` can know it, and without it 11.1% of the region's railings stand in merged tarmac.
 An intermediate, like `trim_m`; the game reads neither.
+
+⚠️ **And `caps` for the markings** (`SURFACE_MANIFEST_SCHEMA` 5 → 6, `Q92`) — each junction cap's
+hull ring in x/y/z, which with the ribbon heights is the whole of the drawn surface. Only
+`surface.py` can know it, for `kerb_hidden_m`'s reason restated: the ring depends on where every
+arriving ribbon actually ended. `surface.DrawnSurface` is the reader, and without it a marking guesses
+the road's height and sinks into it.
 
 ### `signs.glb` — the published traffic signs (`P3-16`)
 

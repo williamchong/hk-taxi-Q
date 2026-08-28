@@ -41,9 +41,9 @@ import argparse
 import logging
 from collections import defaultdict
 from collections.abc import Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 import numpy as np
 
@@ -56,12 +56,26 @@ from pipeline.config import (
     RoadSurface,
     load_city,
 )
-from pipeline.documents import write_document
+from pipeline.documents import round_position, write_document
 from pipeline.geometry import edge_distances, inside_polygon
 from pipeline.gltf import Bounds, MeshData, normalise, write_glb
 from pipeline.kerbside import NEARSIDE, OFFSIDE
 from pipeline.mesh import select_triangles
 from pipeline.roads import ROADGRAPH_NAME, plan_lengths, plan_steps, read_graph
+
+# ⚠️ **The barycentric point-in-triangle test is `terrain`'s, not a fourth copy.**
+# `deck_error.py` books its own copy as a known cost — importing the pipeline
+# would drag GDAL into a hand-run tool — and that argument does not reach here:
+# `pipeline.terrain` imports numpy and `pipeline.gltf` alone, and `pipeline.roads`
+# above already pulls it in. `Q58`'s rule is that a third copy should force it.
+from pipeline.terrain import _hits
+
+if TYPE_CHECKING:  # pragma: no cover - imported for the annotation alone
+    # ⚠️ **Guarded, not imported.** `pipeline.fares` reads sources, so importing
+    # it here would drag a source fetcher into every consumer of the ribbon —
+    # and `DrawnSurface` uses exactly one method of it. The annotation is still
+    # exact, which `Any` was not.
+    from pipeline.fares import Segments
 
 log = logging.getLogger(__name__)
 
@@ -85,7 +99,17 @@ SURFACE_MANIFEST_NAME = "roadsurface.json"
 # a kerb that is buried under the opposing carriageway, where a fence drawn on
 # the drawn kerb stands in the middle of merged tarmac. Intermediate, like
 # `trim_m`; the game reads neither.
-SURFACE_MANIFEST_SCHEMA = 5
+# 6 since `Q92`: `caps` publishes each junction cap's hull ring, in x/y/z, so a
+# marking stage can ask **how high the road it is painting on actually is**.
+# Only this stage knows it — the ring is the convex hull of every arriving
+# ribbon's end corners, and `_Builder.fan` interpolates it from the ring's own
+# centroid — and until now the markings guessed instead: `blended_height` blended
+# level-0 *centreline* heights, which is a different function, and **23.2% of
+# `boxjunctions.glb` shipped below the road it is painted on**. A reader that
+# keeps the old interpretation gets no caps at all and rebuilds that defect
+# silently, which is the case hard rule 5 exists for. An intermediate like every
+# field above it; the game reads none of them.
+SURFACE_MANIFEST_SCHEMA = 6
 
 # Godot's glTF importer reads node-name suffixes: `-col` gives the mesh a static
 # trimesh collider at import time and leaves it visible. Naming it here rather
@@ -241,6 +265,15 @@ _KERB_STATION_M = 0.25
 # a collision shape with holes in it.
 _MIN_TWICE_AREA_M2 = 1e-6
 
+# Plan grid `DrawnSurface` bins junction caps into. A cap is a junction's worth
+# of tarmac — tens of metres across at the interchange, a few in a back lane —
+# so this is sized to the *small* end: an oversized cell puts every cap in the
+# region's centre cell and turns the point query back into a linear scan, while
+# an undersized one only costs a few more dictionary entries. Its own constant
+# rather than `deck_error`'s 8 m, because that grid indexes triangles and this
+# one indexes whole caps.
+_CAP_CELL_M = 16.0
+
 # Column of `_Edge.points` carrying that station's half-width in metres, beside
 # the x/y/z it is measured at.
 #
@@ -297,6 +330,12 @@ class SurfaceReport:
     # decided, and a downstream re-derivation would be a second thing to keep in
     # step with the junction rule.
     trims_m: dict[int, tuple[float, float]] = field(default_factory=dict)
+    # Every junction cap's hull ring, as `(level, (k, 3) x/y/z)` (`Q92`).
+    # Recorded for the reason `_record_hidden_kerbs` gives about coverage: the
+    # ring depends on where *every* arriving ribbon ended, trims and clamps
+    # included, so a second derivation in a marking stage would disagree near
+    # the caps and tell nobody which answer was right.
+    cap_rings: list[tuple[int, np.ndarray]] = field(default_factory=list)
     junctions: int = 0
     # Edge **ends** that resolved to half of an opposed one-way pair — two per
     # pair, because each half publishes its own offset. Reported because it is
@@ -709,6 +748,202 @@ class _Builder:
         return kept
 
 
+class DrawnHeight(NamedTuple):
+    """One `DrawnSurface` query: the height drawn, and the two parts of it.
+
+    `cap_m` is `None` where no junction cap covers the point, which is how a
+    caller tells whether the caps were read at all — the counter that would
+    notice `roadsurface.json` silently losing them (`Q92`).
+    """
+
+    height_m: float
+    ribbon_m: float
+    cap_m: float | None
+
+
+@dataclass(frozen=True)
+class DrawnSurface:
+    """How high the road this stage drew stands, at any plan position (`Q92`).
+
+    🔴 **This exists because the markings were guessing, and 23.2% of the yellow
+    box junctions shipped under the asphalt.** `boxjunctions.blended_height`
+    gives a vertex a distance-weighted blend of level-0 *centreline* heights;
+    what is drawn at a junction is a convex-hull cap fanned from the ring's own
+    centroid. They are different functions and they diverge off the centreline —
+    the drawn surface stands up to **0.218 m** above the blend, against a
+    `lift_m` of 0.012 — so the paint sank into the road in patches, with clean
+    edges, and every counter in the stage read correctly throughout.
+
+    Two cases, and there are only two because the ribbon is flat across:
+
+    - **Inside a cap ring** → the fan height. `_Builder.fan` triangulates the
+      ring from its centroid, so the height at a point is the barycentric
+      interpolation over whichever fan triangle contains it. That is the drawn
+      height by construction rather than by approximation.
+    - **Anywhere else** → the nearest level-0 centreline's own height at the
+      projected station. `_lift(edge.left, points, 0.0)` puts both carriageway
+      rails on the centreline's height, so a ribbon has no cross-fall and every
+      point across it is at its station's height.
+
+    ⚠️ **Where both apply the cap wins**, because a cap is drawn over the arm it
+    overlaps — the 6,051 m² `Q53` measured — and the renderer shows the higher
+    surface.
+
+    🔴 **This does not re-open the cliff `blended_height` was written to close.**
+    That was a hard *nearest-edge* switch: two arms extrapolate their own grade
+    into the cap and disagree by up to 0.43 m where they meet, so a vertex taking
+    whichever arm won turned a seam into a step and produced **172 near-vertical
+    triangles**. Nothing here switches between arms. The cap ring passes through
+    every arriving ribbon's two end corners, and the carriageway is flat across,
+    so along an arm's mouth the cap boundary and the ribbon end carry the *same*
+    height and the two cases meet continuously. The blend approximated that
+    continuity; this reproduces it.
+
+    ⚠️ **`segments` is the caller's to choose and every caller passes level 0**,
+    the restriction `Segments.nearest` documents: a marking under a flyover takes
+    its height from the street it is painted on, never from the deck above. The
+    cap rings are filtered to the same level here.
+    """
+
+    # `Segments` over the level-0 edges — see the `TYPE_CHECKING` note above for
+    # why the import is guarded.
+    segments: Segments
+    # Each cap already triangulated as `_Builder.fan` emits it, `(k, 3, 3)`.
+    # ⚠️ **Built once in `of` and not per query, which is most of this class's
+    # cost**: the apex is the ring's own centroid and the fan pairs each corner
+    # with the next, so a query that re-derived them re-rolled the ring every
+    # time — measured at 0.712 s against 0.258 s over the region's 24,435 box
+    # junction vertices, for byte-identical output.
+    fans: tuple[np.ndarray, ...]
+    # Plan bounding box per cap as `(min_x, min_z, max_x, max_z)`. A cap is much
+    # smaller than the cell it is binned into, so rejecting on it first is what
+    # keeps the barycentric pass off the majority of queries that miss.
+    bounds: np.ndarray
+    # Plan cell to the caps whose bounding box touches it.
+    cells: dict[tuple[int, int], tuple[int, ...]]
+
+    @classmethod
+    def of(cls, segments: Segments, surface: dict[str, Any], *, level: int = 0) -> DrawnSurface:
+        """Read the caps out of a `roadsurface.json` and index them in plan."""
+        rings = [
+            np.asarray(cap["ring"], dtype=np.float64)
+            for cap in surface.get("caps", ())
+            if int(cap["level"]) == level and len(cap["ring"]) >= 3
+        ]
+        fans, bounds = [], []
+        binned: dict[tuple[int, int], list[int]] = {}
+        for ring in rings:
+            plan_low, plan_high = ring[:, [0, 2]].min(axis=0), ring[:, [0, 2]].max(axis=0)
+            fans.append(_fan_corners(ring))
+            bounds.append(np.concatenate([plan_low, plan_high]))
+            index = len(fans) - 1
+            low = np.floor(plan_low / _CAP_CELL_M).astype(np.int64)
+            high = np.floor(plan_high / _CAP_CELL_M).astype(np.int64)
+            for column in range(int(low[0]), int(high[0]) + 1):
+                for row in range(int(low[1]), int(high[1]) + 1):
+                    binned.setdefault((column, row), []).append(index)
+        return cls(
+            segments=segments,
+            fans=tuple(fans),
+            bounds=(np.vstack(bounds) if bounds else np.zeros((0, 4), dtype=np.float64)),
+            cells={key: tuple(value) for key, value in binned.items()},
+        )
+
+    def narrowed_to(self, segments: Segments) -> DrawnSurface:
+        """The same caps, over a subset of the centrelines.
+
+        A method rather than `dataclasses.replace` at the call site, so which
+        fields this class has stays this class's business. ⚠️ **The caps are
+        deliberately not narrowed with them** — they are already indexed in plan
+        and there are 429 of them, so narrowing would cost more than it saves;
+        `roadmarks.py` narrows only because `Segments.nearest` scans the whole
+        network on every call.
+        """
+        return replace(self, segments=segments)
+
+    def sample(self, x: float, z: float) -> DrawnHeight:
+        """The drawn road at this plan position, and what answered for it.
+
+        🔴 **One accessor, because two callers hand-rolling this diverged.** The
+        first version of `Q92` left `boxjunctions._place` taking the cap outright
+        where one existed while `height_at` below took the higher of cap and
+        ribbon, so on a region with a cap below its arm the two marking stages
+        would have placed paint at different heights — and each was documented as
+        doing what the other did. Returning both parts once also spares
+        `roadmarks.py` a second `cap_height_at` per vertex it only wanted for a
+        counter.
+        """
+        ribbon = float(self.segments.nearest(x, z).y)
+        cap = self.cap_height_at(x, z)
+        return DrawnHeight(
+            height_m=ribbon if cap is None else max(cap, ribbon),
+            ribbon_m=ribbon,
+            cap_m=cap,
+        )
+
+    def height_at(self, x: float, z: float) -> float:
+        """The height of the drawn road surface at this plan position.
+
+        ⚠️ **The higher of the two where a cap covers a ribbon, not the cap.**
+        A cap and the arm it overlaps are both drawn — the 6,051 m² `Q53`
+        measured — and the depth buffer shows whichever stands higher, so a
+        marking has to clear that one.
+
+        ⚠️ **This region does exercise it, and an earlier note here claiming
+        otherwise was measuring nothing.** That note said taking the cap outright
+        ships a byte-identical `boxjunctions.glb` — true only because `_place`
+        was calling `cap_height_at` directly and never reached this method at
+        all, so the experiment changed no code path. With both callers on
+        `sample` the difference is real: `height_spread_m` p90 **0.4260 →
+        0.4215**, p99 **0.5051 → 0.4965**, which is paint rising onto the ribbon
+        where a cap sits below the arm it overlaps.
+        """
+        return self.sample(x, z).height_m
+
+    def cap_height_at(self, x: float, z: float) -> float | None:
+        """The fan height where a junction cap covers this point, else `None`.
+
+        The highest where caps overlap in plan, which they do wherever two nodes
+        are closer together than their arms are wide — `surface.py` draws both
+        and the renderer shows the upper one, so this must agree with it rather
+        than take the first hit.
+        """
+        candidates = self.cells.get(
+            (int(np.floor(x / _CAP_CELL_M)), int(np.floor(z / _CAP_CELL_M)))
+        )
+        if candidates is None:
+            return None
+
+        best: float | None = None
+        for index in candidates:
+            low_x, low_z, high_x, high_z = self.bounds[index]
+            if not (low_x <= x <= high_x and low_z <= z <= high_z):
+                continue
+            hits = _hits(self.fans[index], x, z)
+            if len(hits) and (best is None or float(hits.max()) > best):
+                best = float(hits.max())
+        return best
+
+
+def _fan_corners(ring: np.ndarray) -> np.ndarray:
+    """`_Builder.fan`'s triangulation of one cap ring, as `(k, 3, 3)`.
+
+    Written from the same three indices the builder emits — apex, corner, next
+    corner — so a change to one is visibly a change to both, which is the whole
+    correctness of `DrawnSurface`.
+
+    ⚠️ **Degenerate fan triangles are dropped here rather than per query**, which
+    is `terrain.HeightField`'s placement of the same guard and for its reason:
+    the ring is fixed and the query is not. A collinear run in a published ring
+    contributes a zero-area triangle whose barycentric test is meaningless.
+    """
+    apex = np.broadcast_to(ring.mean(axis=0), ring.shape)
+    fan = np.stack([apex, ring, np.roll(ring, -1, axis=0)], axis=1)
+    edge_a, edge_b = fan[:, 1] - fan[:, 0], fan[:, 2] - fan[:, 0]
+    twice_area = edge_a[:, 0] * edge_b[:, 2] - edge_a[:, 2] * edge_b[:, 0]
+    return fan[np.abs(twice_area) > _MIN_TWICE_AREA_M2]
+
+
 def downward_facing(mesh: MeshData) -> tuple[int, float]:
     """How many triangles face downward, and how much ground they cover.
 
@@ -1001,6 +1236,11 @@ def build_region(
         if (ring := _cap_ring(group, edges, report)) is not None
     ]
     _hide_buried_kerbs(edges, caps, report)
+    # Held here rather than beside the `builder.fan` loop below, because that
+    # loop is the *drawing* and this is the record of what will be drawn. A cap
+    # refused by `_cap_ring` never reaches either, so the two populations are the
+    # same list by construction rather than by a predicate written twice.
+    report.cap_rings = [(cap.level, cap.ring) for cap in caps]
     _record_hidden_kerbs(graph["edges"], edges, report)
     _read_offside(graph["edges"], edges, report)
 
@@ -2004,6 +2244,11 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Sur
     `clearance.py`, which measures a cross-section per station and must not judge
     the ones the ribbon never reached. It stays an intermediate — the game reads
     the *result* of that measurement, never the trims.
+
+    `caps` is the third (`Q92`), and the one a *marking* stage needs: each
+    junction cap's hull ring in x/y/z, which with the ribbon heights is the whole
+    of the drawn surface. `DrawnSurface` is the reader; `SurfaceReport.cap_rings`
+    is why it is published rather than re-derived.
     """
     write_document(
         out_dir / SURFACE_MANIFEST_NAME,
@@ -2025,6 +2270,14 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Sur
                     "kerb_hidden_m": report.kerb_hidden_m.get(edge_id, {}),
                 }
                 for edge_id, halves in sorted(report.carriageway.items())
+            ],
+            # ⚠️ **Written open, exactly as `_Builder.fan` receives it** — no
+            # repeated closing vertex — because the consumer rebuilds the same
+            # fan, and a duplicated last corner is one collapsed triangle it
+            # would test against every query.
+            "caps": [
+                {"level": level, "ring": [round_position(tuple(corner)) for corner in ring]}
+                for level, ring in report.cap_rings
             ],
         },
     )

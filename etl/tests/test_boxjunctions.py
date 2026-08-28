@@ -22,15 +22,14 @@ from pipeline.boxjunctions import (
     BoxJunctionReport,
     _Builder,
     _place,
-    blended_height,
     border_polygons,
     hatch_polygons,
     long_axis_deg,
 )
 from pipeline.config import load_city
 from pipeline.fares import Segments
-from pipeline.surface import downward_facing
-from tests.helpers import CITY_YAML
+from pipeline.surface import DrawnSurface, downward_facing
+from tests.helpers import CITY_YAML, polygon_area
 
 # The block as `hong_kong.yaml` declares it. Held here rather than in
 # `helpers.py`'s `CITY_YAML` because the block is optional by contract, and the
@@ -52,7 +51,6 @@ BLOCK: dict[str, Any] = {
     "lift_m": 0.012,
     "border_lift_m": 0.002,
     "max_offset_m": 12.0,
-    "height_blend_m": 4.0,
 }
 
 
@@ -176,7 +174,7 @@ class TestTheGeometry:
         """
         square = np.array([[0.0, 0.0], [20.0, 0.0], [20.0, 20.0], [0.0, 20.0]])
         pieces = hatch_polygons(square, 45.0, spec)
-        area = sum(_polygon_area(piece) for piece in pieces)
+        area = sum(polygon_area(piece) for piece in pieces)
         expected = 400.0 * 2.0 * spec.hatch_width_m / spec.hatch_spacing_m
         assert area == pytest.approx(expected, rel=0.15)
 
@@ -241,20 +239,25 @@ class TestTheGeometry:
         segments = Segments.of([sloped])
         builder = _Builder()
         polygon = np.array([[2.0, -1.0], [18.0, -1.0], [18.0, 1.0], [2.0, 1.0]])
-        _place(builder, segments, polygon, spec.lift_m, spec.height_blend_m)
+        # No caps: the ribbon alone, which is the case this test is about.
+        drawn = DrawnSurface.of(segments, {"caps": []})
+        _place(builder, drawn, polygon, spec.lift_m, BoxJunctionReport())
         mesh = builder.build("boxjunctions")
         assert mesh is not None
         heights = mesh.positions[:, 1]
         assert heights.max() > heights.min() + 1.0
         assert heights.min() >= spec.lift_m - 1e-9
 
-    def test_the_height_join_has_no_cliff_where_two_arms_disagree(self, spec):
-        """⚠️ The regression the blend exists for. Two arms of one junction
-        disagree about the deck by up to a measured 0.43 m where they meet, and
-        a hard nearest-edge switch turned that seam into 172 near-vertical
-        triangles — caught by `verify_boxjunctions.gd`'s faces-up check while
-        the ETL's own `inverted` read 0, because a shard is steep, not upside
-        down. The blend must cross the disagreement as a grade, not a step."""
+    def test_the_paint_follows_the_cap_and_not_the_centrelines(self, spec):
+        """🔴 The defect `Q92` fixed, at the level this stage owns it.
+
+        Two arms of one junction extrapolate their own grade into the cap and
+        disagree where they meet — a measured 0.43 m in region. What is *drawn*
+        between them is `surface.py`'s cap, fanned from its ring's centroid, and
+        that fan stands above the centrelines it spans. Placing paint on the
+        blend of those centrelines put **23.2% of this mesh under the asphalt**,
+        so the vertices must take the cap's height and not the arms'.
+        """
         low = {
             "id": 0,
             "polyline": [[-10.0, 0.0, -4.0], [10.0, 0.0, -4.0]],
@@ -270,21 +273,72 @@ class TestTheGeometry:
             "elevation_level": 0,
         }
         segments = Segments.of([low, high])
-        transect = [
-            blended_height(segments, 0.0, z, spec.height_blend_m)
-            for z in np.arange(-4.0, 4.01, 0.1)
-        ]
-        # On either arm the blend is that arm's own height, exactly.
-        assert transect[0] == pytest.approx(0.0)
-        assert transect[-1] == pytest.approx(0.4)
-        # And the 0.4 m disagreement is crossed as a grade, never as a step.
-        steps = np.abs(np.diff(np.asarray(transect)))
-        assert steps.max() < 0.05
+        # A cap standing 0.5 m over both arms — higher than any blend of them
+        # could ever reach, so the two models cannot be confused here.
+        cap = {
+            "level": 0,
+            "ring": [
+                [-5.0, 0.5, -4.0],
+                [5.0, 0.5, -4.0],
+                [5.0, 0.5, 4.0],
+                [-5.0, 0.5, 4.0],
+            ],
+        }
+        drawn = DrawnSurface.of(segments, {"caps": [cap]})
+        builder = _Builder()
+        report = BoxJunctionReport()
+        polygon = np.array([[-2.0, -2.0], [2.0, -2.0], [2.0, 2.0], [-2.0, 2.0]])
+        _place(builder, drawn, polygon, spec.lift_m, report)
+        mesh = builder.build("boxjunctions")
+        assert mesh is not None
+        assert mesh.positions[:, 1] == pytest.approx(0.5 + spec.lift_m)
+        # And the tripwire says the cap was what answered.
+        assert report.vertices_drawn == 4
+        assert report.vertices_over_cap == 4
 
+    def test_a_stage_with_no_caps_falls_back_to_the_ribbon_and_says_so(self, spec):
+        """⚠️ The way this fix reverts silently, pinned.
 
-def _polygon_area(polygon: np.ndarray) -> float:
-    shifted = np.roll(polygon, -1, axis=0)
-    return 0.5 * abs(float(np.sum(polygon[:, 0] * shifted[:, 1] - shifted[:, 0] * polygon[:, 1])))
+        A `roadsurface.json` that stops publishing `caps` leaves every vertex on
+        the nearest centreline — which is what shipped before `Q92` — with both
+        partitions still closing and `inverted` still 0. `vertices_over_cap` is
+        the only thing that says so, which is why it must reach zero here rather
+        than being a count that cannot.
+        """
+        arm = {
+            "id": 0,
+            "polyline": [[-10.0, 1.0, 0.0], [10.0, 1.0, 0.0]],
+            "lanes": 2,
+            "direction": "both",
+            "elevation_level": 0,
+        }
+        drawn = DrawnSurface.of(Segments.of([arm]), {"caps": []})
+        builder = _Builder()
+        report = BoxJunctionReport()
+        _place(builder, drawn, np.array([[-2.0, -1.0], [2.0, -1.0], [0.0, 1.0]]), 0.012, report)
+        assert report.vertices_drawn == 3
+        assert report.vertices_over_cap == 0
+
+    def test_a_cap_on_another_level_is_not_the_road_under_this_paint(self, spec):
+        """⚠️ Level 0 only, the restriction every snap in the pipeline makes.
+
+        A flyover's cap sits directly over a street's junction in plan. Reading
+        it would put the box junction on the deck overhead.
+        """
+        arm = {
+            "id": 0,
+            "polyline": [[-10.0, 0.0, 0.0], [10.0, 0.0, 0.0]],
+            "lanes": 2,
+            "direction": "both",
+            "elevation_level": 0,
+        }
+        overhead = {
+            "level": 1,
+            "ring": [[-5.0, 9.0, -4.0], [5.0, 9.0, -4.0], [5.0, 9.0, 4.0], [-5.0, 9.0, 4.0]],
+        }
+        drawn = DrawnSurface.of(Segments.of([arm]), {"caps": [overhead]}, level=0)
+        assert drawn.cap_height_at(0.0, 0.0) is None
+        assert drawn.height_at(0.0, 0.0) == pytest.approx(0.0)
 
 
 class TestTheMeshContract:
@@ -355,8 +409,3 @@ class TestConfigRefusals:
     def test_a_zero_snap_bar_is_refused(self, tmp_path):
         with pytest.raises(ValueError, match="max_offset_m"):
             city_with(tmp_path, {**BLOCK, "max_offset_m": 0.0})
-
-    def test_a_zero_height_blend_is_refused(self, tmp_path):
-        """Zero is the nearest-edge cliff the field exists to remove."""
-        with pytest.raises(ValueError, match="cliffs"):
-            city_with(tmp_path, {**BLOCK, "height_blend_m": 0.0})

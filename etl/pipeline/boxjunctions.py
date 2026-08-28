@@ -19,13 +19,16 @@ Three decisions differ from arrows, and each is recorded where it bites:
   scaling it to the 1.6x-widened ribbon would be invented geometry in `Q54`'s
   sense. The honest cost is underfill at the arm mouths, where the drawn
   carriageway is wider than the real one the box was surveyed on.
-- **Heights come from a per-vertex join, not a host edge's polyline.** The
-  second snap arrows refused was a second opinion about one host; a box spans
-  several arms and has no host, so the join *is* the primary one. It is a
-  distance-weighted blend over every arm in range rather than the nearest
-  edge's own height, because a hard nearest-edge switch is a cliff — see
-  `blended_height` for the 172 near-vertical triangles that measured it.
-  `height_spread_m` publishes what the join actually moved.
+- **Heights come from a per-vertex query of the drawn road, not a host edge's
+  polyline.** The second snap arrows refused was a second opinion about one
+  host; a box spans several arms and has no host, so the query *is* the primary
+  join. 🔴 **`surface.DrawnSurface` since `Q92`, where this took a
+  distance-weighted blend of centreline heights.** The blend was a *model* of
+  the junction and the junction is a published convex-hull cap fanned from its
+  own centroid; off the centreline the two diverge by up to 0.218 m against a
+  `lift_m` of 0.012, and **23.2% of this mesh shipped underneath the road it is
+  painted on**. `height_spread_m` publishes what the join moved and
+  `vertices_over_cap` publishes that the caps are being read at all.
 - **The hatch direction is derived where the publisher is silent.** `ANGLE1` /
   `ANGLE2` are published on 4 of the region's 20 boxes and used where present;
   elsewhere the direction is the box's own min-area-rectangle long axis
@@ -50,13 +53,18 @@ import numpy as np
 from pipeline import gdb
 from pipeline.arrows import ArrowReport
 from pipeline.config import BoxJunctions, CityConfig, GameTransform, load_city
-from pipeline.documents import write_document
+from pipeline.documents import read_document, write_document
 from pipeline.fares import Segments
 from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData, write_glb
 from pipeline.mesh import select_triangles
 from pipeline.roads import JUNCTION, ROADGRAPH_NAME, read_graph
-from pipeline.surface import downward_facing
+from pipeline.surface import (
+    SURFACE_MANIFEST_NAME,
+    SURFACE_MANIFEST_SCHEMA,
+    DrawnSurface,
+    downward_facing,
+)
 
 log = logging.getLogger(__name__)
 
@@ -141,6 +149,18 @@ class BoxJunctionReport:
     # the per-vertex join actually moved, and the number that would say if two
     # arms ever disagreed under one box.
     height_spread_m: list[float] = field(default_factory=list)
+
+    # 🔴 **The tripwire on the cap join (`Q92`).** `vertices_over_cap` must be a
+    # large share of `vertices_drawn` — a box junction is at a junction, so most
+    # of its paint is on cap tarmac — and it goes to **zero** the moment
+    # `roadsurface.json` stops publishing `caps` or publishes them at the wrong
+    # level, which is the one way this fix reverts with every partition still
+    # closing. `over_cap_rise_m` is how far the cap stands above the centreline
+    # the old model would have used, so it also says whether the caps matter
+    # here rather than merely being read.
+    vertices_drawn: int = 0
+    vertices_over_cap: int = 0
+    over_cap_rise_m: list[float] = field(default_factory=list)
 
     ring_vertices: list[float] = field(default_factory=list)
     area_m2: list[float] = field(default_factory=list)
@@ -678,6 +698,19 @@ def build_region(
     # a box under a flyover must take its heights from the street it is painted
     # on, not the deck above it.
     segments = Segments.of([edge for edge in graph["edges"] if int(edge["elevation_level"]) == 0])
+    # The road as `surface.py` actually drew it — the ribbon heights above plus
+    # the junction caps it publishes (`Q92`). Same level restriction, applied to
+    # the caps as well: a cap on the deck overhead is not what a street marking
+    # is painted on.
+    drawn = DrawnSurface.of(
+        segments,
+        read_document(
+            out_dir / SURFACE_MANIFEST_NAME,
+            SURFACE_MANIFEST_SCHEMA,
+            f"python -m pipeline.surface --city {city.id} --region {region_id}",
+        ),
+        level=0,
+    )
     junctions = np.asarray(
         [node["pos"] for node in graph["nodes"] if node["kind"] == JUNCTION],
         dtype=np.float64,
@@ -717,17 +750,9 @@ def build_region(
 
         heights: list[float] = []
         for piece in hatch_polygons(box.ring, axis_deg, spec):
-            heights.extend(_place(builder, segments, piece, spec.lift_m, spec.height_blend_m))
+            heights.extend(_place(builder, drawn, piece, spec.lift_m, report))
         for quad in border_polygons(box.ring, spec, report):
-            heights.extend(
-                _place(
-                    builder,
-                    segments,
-                    quad,
-                    spec.lift_m + spec.border_lift_m,
-                    spec.height_blend_m,
-                )
-            )
+            heights.extend(_place(builder, drawn, quad, spec.lift_m + spec.border_lift_m, report))
 
         report.drawn += 1
         report.ring_vertices.append(float(len(box.ring)))
@@ -751,64 +776,45 @@ def build_region(
 
 
 def _place(
-    builder: _Builder, segments: Segments, polygon: np.ndarray, lift_m: float, blend_m: float
+    builder: _Builder,
+    drawn: DrawnSurface,
+    polygon: np.ndarray,
+    lift_m: float,
+    report: BoxJunctionReport,
 ) -> list[float]:
-    """One polygon onto the road under it, each vertex at its own blended height.
+    """One polygon onto the road under it, each vertex at its own drawn height.
 
     Returns the road heights so the caller can publish their spread.
     ⚠️ The join is per vertex on purpose — the opposite of `arrows._draw`'s
     host-edge interpolation, for the reason the module docstring gives: a box
-    spans several arms and has no host, so the snap is the primary join rather
-    than a second opinion about one.
+    spans several arms and has no host, so the query *is* the primary join
+    rather than a second opinion about one.
+
+    🔴 **`DrawnSurface.height_at` since `Q92`, where this took
+    `blended_height`.** The blend was a model of the road; this is the road.
+    Measured on the shipped bundle before the change, **2,161 of 9,315 box
+    triangles (23.2%) stood below the surface they were painted on**, p90 0.126 m
+    against a `lift_m` of 0.012 — the blend follows the arms' centrelines down
+    while the junction cap stays on its own fan, and the paint sinks into the
+    difference. Nothing in this stage could see it: the mesh is complete in plan
+    and wrong in Y, which is the projection `Q91` closed on.
+
+    🔴 **The counters recorded here are the ones that can see the caps stop being
+    read** — see `BoxJunctionReport`. There is deliberately **no** counter for
+    "placed height minus drawn height": that is `lift_m` by construction, no
+    reachable configuration makes it anything else, and it is `Q72`'s tautology
+    exactly.
     """
-    heights = [blended_height(segments, float(px), float(pz), blend_m) for px, pz in polygon]
+    heights: list[float] = []
+    for px, pz in polygon:
+        drawn_here = drawn.sample(float(px), float(pz))
+        heights.append(drawn_here.height_m)
+        report.vertices_drawn += 1
+        if drawn_here.cap_m is not None:
+            report.vertices_over_cap += 1
+            report.over_cap_rise_m.append(drawn_here.cap_m - drawn_here.ribbon_m)
     builder.polygon(polygon, np.asarray(heights) + lift_m)
     return heights
-
-
-def blended_height(segments: Segments, x: float, z: float, blend_m: float) -> float:
-    """The deck height under `(x, z)`, blended across every arm in range.
-
-    ⚠️ **Not `Segments.nearest(...).y`, and the difference was measured on the
-    first build.** Two arms of one junction each extrapolate their own grade
-    into the cap and disagree where they meet — by up to 0.43 m in region — so
-    a vertex taking the height of whichever arm happens to win turns a seam
-    into a cliff: **172 triangles** came out near-vertical, caught by
-    `verify_boxjunctions.gd`'s faces-up check while the ETL's own `inverted`
-    read 0 (a shard is steep, not upside down). Blending over every segment
-    within `nearest + blend_m`, weighted to zero exactly at that cutoff, is
-    continuous everywhere — and it is also the closer model of the road that
-    is actually drawn there, because `surface.py`'s cap fan interpolates
-    between the same arm ends. Far from a seam only one edge is in range and
-    this *is* the plain snap.
-
-    The projection arithmetic mirrors `Segments.nearest`; it reads the public
-    arrays rather than calling it because the blend needs every distance, not
-    the winner.
-
-    ⚠️ **Public since `P3-23`, which is its second caller.** `pipeline/roadmarks.py`
-    places stop and give-way lines across junction mouths — the same seam, and
-    the same 0.43 m — so it takes this rather than a second copy of forty lines
-    of numerics whose comment carries a measured finding.
-    """
-    offset_x = x - segments.start[:, 0]
-    offset_z = z - segments.start[:, 2]
-    step_x, step_z = segments.delta[:, 0], segments.delta[:, 2]
-    squared = step_x * step_x + step_z * step_z
-    projected = offset_x * step_x + offset_z * step_z
-    along = (projected / np.where(squared > 0.0, squared, 1.0)).clip(0.0, 1.0)
-    distance = np.hypot(offset_x - along * step_x, offset_z - along * step_z)
-
-    cutoff = float(distance.min()) + blend_m
-    near = distance <= cutoff
-    weights = np.square(cutoff - distance[near])
-    heights = segments.start[near, 1] + along[near] * segments.delta[near, 1]
-    total = float(weights.sum())
-    if total <= 0.0:
-        # Unreachable while `blend_m` is positive — the nearest segment always
-        # carries weight `blend_m ** 2` — but a divide is never left to luck.
-        return float(heights[int(np.argmin(distance[near]))])
-    return float((weights * heights).sum() / total)
 
 
 def _write_manifest(
@@ -849,6 +855,12 @@ def _write_manifest(
         # show that. To be gone and looked at, never tuned against.
         "nearest_node_m": report.measured(report.nearest_node_m),
         "height_spread_m": report.measured(report.height_spread_m),
+        # 🔴 The tripwire on the cap join (`Q92`) — see `BoxJunctionReport`.
+        # Neither is a tautology: both are reachable at zero, and zero is what a
+        # stage that has gone back to guessing the road's height reads.
+        "vertices_drawn": report.vertices_drawn,
+        "vertices_over_cap": report.vertices_over_cap,
+        "over_cap_rise_m": report.measured(report.over_cap_rise_m),
         "ring_vertices": report.measured(report.ring_vertices),
         "area_m2": report.measured(report.area_m2),
         "total_area_m2": round(report.total_area_m2, 4),

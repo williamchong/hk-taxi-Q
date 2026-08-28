@@ -21,9 +21,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from pipeline.fares import Segments
 from pipeline.gltf import read_glb
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA, plan_lengths
 from pipeline.surface import (
+    MARKING_CLASS_CAP,
     MARKING_CLASS_CARRIAGEWAY,
     MARKING_CLASS_KERB,
     MARKING_CODE_MAX,
@@ -35,10 +37,13 @@ from pipeline.surface import (
     SURFACE_MATERIAL,
     SURFACE_MESH_NAME,
     SURFACE_NAME,
+    DrawnSurface,
     SurfaceReport,
+    _Builder,
     _half_widths,
     _insert_stations,
     _kerbside,
+    _Marking,
     _on_structure_length_m,
     _rail_stations,
     boundary,
@@ -181,6 +186,143 @@ class TestHull:
         """A cap on a slope follows it rather than flattening the junction."""
         points = np.array([[0.0, 1.0, 0.0], [4.0, 2.0, 0.0], [4.0, 3.0, 4.0], [0.0, 4.0, 4.0]])
         assert set(np.round(hull(points)[:, 1], 3)) == {1.0, 2.0, 3.0, 4.0}
+
+
+class TestDrawnSurface:
+    """`Q92`: the height of the road this stage drew, asked for at a point.
+
+    🔴 **The tests that matter here are the two that would let the defect back
+    in.** A query that disagrees with `_Builder.fan` puts markings under the
+    asphalt again — that is what 23.2% of `boxjunctions.glb` was — and a query
+    that steps where the builder is continuous rebuilds the near-vertical shards
+    the old blend was written to prevent.
+    """
+
+    @staticmethod
+    def _fan_of(ring: np.ndarray) -> np.ndarray:
+        """The triangles `_Builder.fan` emits for this ring, as `(n, 3, 3)`."""
+        builder = _Builder()
+        builder.fan(
+            ring,
+            colour=(200, 200, 200),
+            marking=_Marking(float(MARKING_CLASS_CAP), 0.0),
+        )
+        mesh = builder.build("cap")
+        return mesh.positions[mesh.triangles]
+
+    def test_the_query_reproduces_the_fan_the_builder_emits(self) -> None:
+        """🔴 The one property that stops the reader drifting from the writer.
+
+        `DrawnSurface` rebuilds `_Builder.fan`'s triangulation from the published
+        ring rather than reading the mesh, so nothing but a test says the two
+        agree. A tilted, irregular ring, because a flat one agrees under any
+        interpolation at all and would pass while saying nothing.
+        """
+        ring = np.array(
+            [
+                [0.0, 1.0, 0.0],
+                [10.0, 1.4, 1.0],
+                [12.0, 2.2, 9.0],
+                [3.0, 0.6, 11.0],
+                [-2.0, 1.9, 5.0],
+            ]
+        )
+        triangles = self._fan_of(ring)
+        drawn = DrawnSurface.of(
+            Segments.of(
+                [
+                    {
+                        "id": 0,
+                        "polyline": [[-40.0, -50.0, -40.0], [-40.0, -50.0, -30.0]],
+                        "lanes": 2,
+                        "direction": "both",
+                        "elevation_level": 0,
+                    }
+                ]
+            ),
+            {"caps": [{"level": 0, "ring": [list(corner) for corner in ring]}]},
+        )
+        rng = np.random.default_rng(11)
+        checked = 0
+        for triangle in triangles:
+            for _ in range(20):
+                first, second = rng.random(2)
+                if first + second > 1.0:
+                    first, second = 1.0 - first, 1.0 - second
+                point = (
+                    triangle[0]
+                    + first * (triangle[1] - triangle[0])
+                    + second * (triangle[2] - triangle[0])
+                )
+                assert drawn.height_at(float(point[0]), float(point[2])) == pytest.approx(
+                    float(point[1]), abs=1e-9
+                )
+                checked += 1
+        assert checked == 20 * len(triangles)
+
+    def test_the_cap_meets_the_ribbon_without_a_step(self) -> None:
+        """⚠️ Why this needs no blend, where the model it replaced did.
+
+        The old height model blended centrelines because a hard nearest-edge
+        switch stepped by a measured 0.43 m at a junction seam and built **172
+        near-vertical triangles**. Nothing here switches between arms: the cap
+        ring passes through each arriving ribbon's own end corners and the
+        carriageway is flat across, so the two cases carry the same height where
+        they meet. Walked across the boundary rather than argued.
+        """
+        arm = {
+            "id": 0,
+            "polyline": [[0.0, 0.0, -20.0], [0.0, 0.0, -4.0]],
+            "lanes": 2,
+            "direction": "both",
+            "elevation_level": 0,
+        }
+        # A cap whose near edge sits on that arm's end height and whose far edge
+        # is 0.4 m up — the disagreement the old blend existed to smooth.
+        cap = {
+            "level": 0,
+            "ring": [[-5.0, 0.0, -4.0], [5.0, 0.0, -4.0], [5.0, 0.4, 4.0], [-5.0, 0.4, 4.0]],
+        }
+        drawn = DrawnSurface.of(Segments.of([arm]), {"caps": [cap]})
+        transect = [drawn.height_at(0.0, float(z)) for z in np.arange(-10.0, 4.01, 0.1)]
+        assert transect[0] == pytest.approx(0.0)
+        assert transect[-1] == pytest.approx(0.4)
+        assert np.abs(np.diff(np.asarray(transect))).max() < 0.05
+
+    def test_the_higher_of_a_cap_and_the_ribbon_it_covers_wins(self) -> None:
+        """A cap and the arm it overlaps are both drawn; the renderer shows the
+        upper one, so a marking has to clear that one."""
+        arm = {
+            "id": 0,
+            "polyline": [[-10.0, 3.0, 0.0], [10.0, 3.0, 0.0]],
+            "lanes": 2,
+            "direction": "both",
+            "elevation_level": 0,
+        }
+        sunken = {
+            "level": 0,
+            "ring": [[-5.0, 1.0, -4.0], [5.0, 1.0, -4.0], [5.0, 1.0, 4.0], [-5.0, 1.0, 4.0]],
+        }
+        drawn = DrawnSurface.of(Segments.of([arm]), {"caps": [sunken]})
+        assert drawn.cap_height_at(0.0, 0.0) == pytest.approx(1.0)
+        assert drawn.height_at(0.0, 0.0) == pytest.approx(3.0)
+
+    def test_a_manifest_without_caps_reads_as_no_caps(self) -> None:
+        """⚠️ The silent revert, pinned at the reader. A manifest that stops
+        publishing caps must leave the query on the ribbon rather than raise —
+        it is the *consumers'* counters that have to notice, and they can only do
+        that if this returns."""
+        arm = {
+            "id": 0,
+            "polyline": [[-10.0, 2.0, 0.0], [10.0, 2.0, 0.0]],
+            "lanes": 2,
+            "direction": "both",
+            "elevation_level": 0,
+        }
+        drawn = DrawnSurface.of(Segments.of([arm]), {})
+        assert drawn.fans == ()
+        assert drawn.cap_height_at(0.0, 0.0) is None
+        assert drawn.height_at(0.0, 0.0) == pytest.approx(2.0)
 
 
 class TestHalfWidths:

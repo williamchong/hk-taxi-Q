@@ -1537,18 +1537,6 @@ class BoxJunctions:
     # drawn. Beyond it the box is dropped rather than guessed at — its vertices
     # would take their heights from a road it is not on.
     max_offset_m: float
-    # How far past the nearest centreline the height join keeps listening. A
-    # vertex's height is a distance-weighted blend of every level-0 segment
-    # within `nearest + height_blend_m`, not the nearest edge's alone —
-    # ⚠️ **because a hard nearest-edge switch is a cliff.** Two arms of one
-    # junction disagree about the deck by up to a measured 0.43 m where they
-    # meet, and the first build took each vertex from whichever arm won: 172
-    # triangles came out near-vertical, caught by `verify_boxjunctions.gd`'s
-    # faces-up check while the ETL's own `inverted` read 0. The blend is also
-    # the closer model of the drawn cap, whose fan interpolates between those
-    # same arm ends. Far from a seam only one edge is in range, and the blend
-    # *is* the plain snap.
-    height_blend_m: float
 
     @property
     def tiled(self) -> bool:
@@ -1869,12 +1857,6 @@ class RoadMarks:
     # reach it. So where the two overlap the bar wins, on the same shape of
     # argument `boxjunctions.lift_m` uses to put arrows over box hatching.
     lift_m: float
-    # How far past the nearest centreline the height join keeps listening —
-    # `BoxJunctions.height_blend_m`, and here for the same measured reason. A
-    # stop line is drawn across a junction mouth, which is exactly the seam
-    # where two arms of one junction disagree about the deck by up to 0.43 m,
-    # and a hard nearest-edge switch across that seam is a cliff.
-    height_blend_m: float
     # One entry per published marking — see `RoadMark`.
     marks: tuple[RoadMark, ...]
 
@@ -4513,16 +4495,6 @@ def _boxjunctions(body: Any, where: str) -> BoxJunctions | None:
     max_offset_m = float(_require(body, "max_offset_m", where))
     if max_offset_m <= 0.0:
         raise ValueError(f"{where}:max_offset_m must be positive, got {max_offset_m}")
-    height_blend_m = float(_require(body, "height_blend_m", where))
-    if height_blend_m <= 0.0:
-        # Zero is the nearest-edge cliff the field exists to remove — two arms
-        # of one junction disagree by a measured 0.43 m where they meet, and a
-        # hard switch between them built 172 near-vertical triangles.
-        raise ValueError(
-            f"{where}:height_blend_m is {height_blend_m}; it must be positive, or the height "
-            f"join cliffs where two arms of one junction meet"
-        )
-
     lift_m = float(_require(body, "lift_m", where))
     if lift_m <= 0.0:
         raise ValueError(
@@ -4547,7 +4519,6 @@ def _boxjunctions(body: Any, where: str) -> BoxJunctions | None:
         lift_m=lift_m,
         border_lift_m=border_lift_m,
         max_offset_m=max_offset_m,
-        height_blend_m=height_blend_m,
     )
 
 
@@ -4687,7 +4658,7 @@ def _road_marks(body: Any, where: str) -> RoadMarks | None:
     measures = _measures(
         body,
         where,
-        ("host_radius_m", "bearing_tolerance_deg", "station_m", "lift_m", "height_blend_m"),
+        ("host_radius_m", "bearing_tolerance_deg", "station_m", "lift_m"),
         positive=True,
     )
     if measures["bearing_tolerance_deg"] >= 90.0:

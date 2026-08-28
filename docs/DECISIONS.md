@@ -120,6 +120,7 @@ wins.
 | `Q89` | **The low end needed the opposite correction, and tracking it was unstable** | ✅ Closed — `drift_rear_grip_scale_at_low` **0.44** and `drift_low_fade_kph` **41** deepen the cut as speed falls. ✅ **The drift now works 34–86 km/h**, dwell 0.42–0.98, where 42 and 49 km/h were 3.9° and 2.9° — inert. 🔴 **The yaw assist cannot substitute**: at 42 km/h slip *falls* 4.2° → 3.6° as torque goes 0 → 20000, the top of its range. 🔴 **A tracking taper is unstable below the knee** — a drift scrubs speed, so deepening the cut as speed falls is positive feedback, and it turned the design speed into a **165.0° spin**. Fixed by latching at engagement; the branch that is stable tracks, the one that is not latches, and the asymmetry is deliberate. 🔴 **Re-publishes the design-speed table** — 63 km/h 51.1° → 69.8°, tap 16.0° → 20.5° — because 63 sits inside the new taper by construction |
 | `Q90` | **Every hole in the structure is a touchdown, and the sampler clamps where it should descend** | ✅ Closed — `INFRASTRUCTURE` stops where a ramp reaches grade, and `_deck_heights` answered an *end* hole with `np.interp`'s clamp, so the ribbon hung level in the air to the node: **1.83 m** at node 175 `FLEMING ROAD`, a flyover visibly afloat over the street, **found by the user driving to it**. ✅ **8 ends descended, 1 refused**, every one landing at +0.00; mixed-node step median 0.184 → **0.000 m**, 24 → **29 of 36** inside 0.5 m, worst non-portal **1.83 → 0.67**. 🔴 **Zero interior holes region-wide**, so the interpolation the branch was written for never fired. 🔴 **`deck_error.py` cannot see this and never could** — an absent deck reads as *uncovered*, not wrong — so it owes `tools/touchdown_error.py`, which fails the pre-fix bundle. ⚠️ The grade is ribbon-to-ribbon: reading it off the deck top drops `clearance_m` and understated every row. ⚠️ **One refusal, not the two predicted** — the negative step descends fine, and that prediction confused the two ends of the ramp. ✅ **The refusal was then looked at**: the `MARSH ROAD` deck ends in a 0.65 m vertical face 1.8 m past node 269, so the missing descent is the 10 m of level-0 `e466` beyond it, and the region has **one** real residual rather than seven — every other stepped node is (deck above the street) + `clearance_m` inside `at_grade_m`. ⬜ **Closing it needs a node-level pass and is unassigned**: `e466` has structure under 0 of its 2 stations, so the height lives on the neighbouring edge |
 | `Q91` | **The markings were disappearing into the pixel grid, and no counter could see it** | ✅ Closed — `anti_aliasing/quality/msaa_3d` **2** (4x). The 0.1 m box junction hatch is **one pixel tall at 13.6 m** on the chase rig, and with MSAA off a sub-pixel line is lit only where a pixel centre lands inside it, so it broke into dashes and then vanished — **found by the user from the driving seat, twice**. 🔴 **Every ETL counter was correct throughout**: 20 of 20 boxes drawn, `inverted` 0, `slivers_dropped` 2,032 at the declared quantum, and a top-down raster of the shipped `boxjunctions.glb` is a complete grid. The defect existed only in the raster. ⚠️ **Coverage is conserved and only continuity is lost** (0.0580 vs 0.0574 of the same world area at two resolutions), so no lift, colour or width change could have reached it. ⚠️ **Verified on both renderers including a real web export in Chrome**; 8x refused because WebGL2 caps `MAX_SAMPLES` at 4. 🔴 **0 draw calls and 0 primitives**, so `ARCHITECTURE.md`'s budget cannot see this change at all. ⬜ Mobile cost **unmeasured and unmeasurable today** — no floor handset, `P0-3b` |
+| `Q92` | **The markings were drawn on a model of the road, not the road, and 23.2% of the box junctions shipped under the asphalt** | ✅ Closed — `surface.DrawnSurface`. `boxjunctions` and `roadmarks` took their heights from `blended_height`, a distance-weighted blend of level-0 **centreline** heights; what `surface.py` draws at a junction is a convex-hull cap fanned from its ring's centroid, a different function. Off the centreline the drawn road stands up to **0.218 m** above the blend against a `lift_m` of **0.012**, so the paint sank into the road in patches with clean edges — **found by the user from the driving seat**, reported as strips missing from a box junction. ✅ **`roadsurface.json` schema 5 → 6 publishes the cap rings** and the query rebuilds `_Builder.fan`'s own triangulation from them. **Box junctions: below the road 23.2% → **9.4%**, and in the carriageway itself 11.1% → **0.32%**; stop and give-way lines 20.0% → 5.8% and 11.3% → 0.71%.** Both meshes triangle-for-triangle identical — only Y moved. 🔴 **Every ETL counter was correct throughout and `Q91` closed on the projection that cannot see this**: "a top-down raster of the shipped `boxjunctions.glb` is a complete grid" is true, and the mesh is complete in **plan** and wrong in **Y**. ✅ Paid with `tools/paint_clearance.py`, which reads the shipped meshes and shares no code with the pipeline. ⚠️ **Raising `lift_m` was refused** — clearing p99 needs **0.158 m**, paint floating 16 cm over the road. ⬜ The **9.4%** that remains is paint covered by a *second* surface drawn over it — an overlapping ribbon's kerb lip, or a cap over an arm, the 6,051 m² `Q53` measured — reported, gated separately, and unassigned |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -8249,6 +8250,13 @@ continuous everywhere, the plain snap far from seams, and the closer model of th
 which interpolates between the same arm ends. `height_spread_m` publishes what the join moves
 (p50 0.11 m, max 0.43 m).
 
+🔴 **"The closer model of the drawn cap fan" was the wrong bar, and `Q92` measured the gap on
+2026-08-28.** Closer is not the same, and `lift_m` is 0.012: the drawn cap stands up to **0.218 m**
+above the blend, so **23.2% of this mesh shipped under the asphalt**. `blended_height` is deleted and
+`surface.DrawnSurface` reads the cap fan itself. The cliff this section is about does **not** return —
+the cap ring passes through each arriving ribbon's end corners, so the query is continuous by
+construction rather than by blending.
+
 ### The import lattice, a platform fact every thin mesh now inherits
 
 ⚠️ **Godot's scene importer quantises vertex positions to a 16-bit lattice over the mesh's own
@@ -9574,6 +9582,11 @@ hair, because the engine re-quantises Y on import too.
 same junction seam a box junction spans, so it takes `boxjunctions.py`'s distance-weighted blend
 rather than a second copy of forty lines of numerics whose comment carries a measured finding — the
 172 near-vertical triangles a hard nearest-edge switch built.
+
+🔴 **Superseded 2026-08-28 by `Q92`: `blended_height` is deleted and both callers read
+`surface.DrawnSurface` instead.** The blend was a *model* of the junction and the junction is a
+published cap; **20.0% of this mesh shipped under the road it is painted on**. The sharing argument
+above survives intact — one query, two callers — and only the thing being shared changed.
 
 **See.** `Q53` for the marking scope this closes another line of · `Q54` for the extent-is-read rule
 and the invented-marking debit · `Q58` for the self-grading pattern and the `drawn_gauge_m` trap
@@ -12696,3 +12709,147 @@ and `ART_DESIGN.md` — were measured on frames with no AA. The conclusions stan
 analytic alternative and why it stays available · `Q71` for the shared paint shader ·
 `Q82` for the value-pinning precedent · `Q75` for the setting that was lost this way before ·
 `Q54` for why the stripe width is not a dial · `Q62` for why the evidence is a frame
+
+
+## `Q92` — The markings were drawn on a model of the road, not the road
+
+**Status.** ✅ Closed 2026-08-28. `pipeline/surface.py` publishes its junction caps and answers a
+point query; `boxjunctions.py` and `roadmarks.py` read it. `tools/paint_clearance.py` grades it.
+
+### What the user saw
+
+A yellow box junction on the Expo Drive East gyratory with strips missing out of the middle of it.
+Reported twice: once as "why a part of road drawing is missing from grid", and again, after the
+first answer went to the roundabout island beside it, as "some part of yellow strip missing inside
+the big box of yellow strip".
+
+### What it was not
+
+A plan-view coverage diff of the shipped `boxjunctions.glb` against the hatch its own config
+specifies finds **96.0% present** — 0.874 m² absent of 22.106 m², all of it sub-centimetre slivers
+at stripe ends. Walked along every stripe centreline in all 20 boxes: 252 gaps totalling 22.64 m of
+2,990 m, **0.76%**, only four over half a metre. The mesh was fine.
+
+### What it was
+
+`lift_m` is **0.012 m**, and the height under it was a guess.
+
+`blended_height` gave each vertex a distance-weighted blend of the level-0 **centreline** heights in
+range. What `surface.py` actually draws at a junction is `hull()`'s convex ring fanned from its own
+centroid by `_Builder.fan` — a piecewise-linear interpolation over the arriving ribbons' end
+corners. They are different functions and they agree only near a single arm:
+
+```
+drawn road height − blended height    p50 +0.0006   p90 +0.0386   p99 +0.1579   max +0.2181 m
+lift_m                                                                                0.012 m
+```
+
+So the paint sank into the road wherever the cap stood proud of the arms it spans. Measured on the
+shipped bundle against `roads.glb`, triangle by triangle at its centroid:
+
+| layer | below the topmost road face | below the carriageway itself | depth p50 / p90 / max |
+|---|---|---|---|
+| `boxjunctions.glb` | **2,161 of 9,315 — 23.2%** | 1,030 — 11.1% | 0.018 / 0.126 / 0.206 m |
+| `roadmarks.glb` | 870 of 4,354 — 20.0% | 492 — 11.3% | 0.021 / 0.118 / 0.762 m |
+| `tram.glb` | 580 of 3,459 — 16.8% | 276 — 8.0% | 0.076 / 0.130 / 0.351 m |
+| `arrows.glb` | 190 of 3,235 — 5.9% | 42 — 1.3% | 0.045 / 0.240 / 1.129 m |
+
+Buried triangles sit a median **2.60 m** from the nearest centreline against **1.83 m** for the ones
+that survived, which is the mechanism stated as a distribution: the further off the centreline, the
+worse the blend's model of the cap.
+
+### The fix
+
+`roadsurface.json` **schema 5 → 6** publishes `caps` — each junction cap's hull ring in x/y/z.
+`documents.read_document` requires an exact match, and a stage reading a schema-5 manifest would get
+no caps and rebuild this defect silently, which is the case hard rule 5 exists for. The file does not
+ship, so this costs no bundle bytes.
+
+`surface.DrawnSurface.height_at` answers two cases, and there are only two because the carriageway is
+flat across (`_lift(edge.left, points, 0.0)` puts both rails on the centreline's height):
+
+- **Inside a cap ring** — the fan height, rebuilt from `_Builder.fan`'s own triangulation, so it is
+  the drawn height by construction rather than by approximation.
+- **Anywhere else** — the nearest level-0 centreline's height at the projected station.
+
+Where a cap covers a ribbon the **higher** of the two wins, because both are drawn and the depth
+buffer shows the upper one. 🔴 **Review caught that shipped twice over**: `_place` was calling
+`cap_height_at` directly and taking the cap outright while `height_at` documented the max, so the two
+marking stages disagreed about what "the drawn road" means — and an earlier note claiming the two
+readings were byte-identical here had measured nothing, because `_place` never reached the method it
+was testing. One `sample` accessor now answers both, and taking the higher is worth a further
+**12.8% → 9.4%** below the road and **0.54% → 0.32%** inside the carriageway.
+
+🔴 **This does not re-open the cliff `blended_height` was written to close.** That was a hard
+*nearest-edge* switch: two arms disagree by up to 0.43 m where they meet, and a vertex taking
+whichever arm won turned the seam into a step and built **172 near-vertical triangles**. Nothing here
+switches between arms. The cap ring passes through every arriving ribbon's two end corners, so along
+an arm's mouth the cap boundary and the ribbon end carry the *same* height and the two cases meet
+continuously. The blend approximated that continuity; this reproduces it. Pinned by
+`test_surface.py::test_the_cap_meets_the_ribbon_without_a_step`, and by
+`test_the_query_reproduces_the_fan_the_builder_emits` on a tilted irregular ring, because a flat one
+agrees under any interpolation at all and would pass while saying nothing.
+
+### What it bought
+
+```
+                       below the topmost face      inside the carriageway     deeper than 10 mm
+boxjunctions.glb          23.2%  ->   9.4%          11.1%  ->  0.32%              0.02%
+roadmarks.glb             20.0%  ->   5.8%          11.3%  ->  0.71%              0.30%
+```
+
+Both meshes are triangle-for-triangle identical — 10,165 and 4,512, `inverted` 0, `slivers_dropped`
+2,032 and 30, every partition closed. Only Y moved.
+
+**Build cost: `boxjunctions` 1.50 → 1.53 s and `roadmarks` 0.72 → 0.74 s**, on an 18.8 s region. The
+naive query cost four times that — the fans are triangulated once in `DrawnSurface.of` rather than
+re-rolled per vertex, and a per-cap plan bbox rejects before the barycentric pass, together 0.712 →
+0.258 s over the 24,435 box junction vertices for byte-identical output. **0.34 s of what is left is
+the `over_cap_rise_m` tripwire**, which needs the ribbon height at a point the cap already answered;
+that is a sixth of the stage, spent knowingly. `arrows.glb` and `tram.glb` are untouched and are
+the control.
+
+**The evidence is a frame** (`Q62`), because every counter read correctly while this shipped:
+`build/driver/q92_hz_before` and `q92_hz_after`, one fixed camera at `224,6.6,218` looking
+`241,5.2,201` with `--debug-view=off --hud=off`, **44,789 pixels of 2,073,600 changed** — strips that
+stop short in the before frame run through in the after.
+
+### Raising the lift was refused
+
+Clearing the p99 disagreement needs **0.158 m**. That is paint floating 16 cm over the road, visible
+from the driving seat, and worse than the gap it closes.
+
+### The counters that can see it revert
+
+🔴 **There is deliberately no "placed height minus drawn height" counter.** That is `lift_m` by
+construction, no reachable configuration makes it anything else, and it is `Q72`'s tautology exactly.
+What ships instead is `vertices_over_cap` against `vertices_drawn` — **12,300 of 24,435** on the box
+junctions and **4,527 of 9,084** on the road marks — which reads **0** the moment `roadsurface.json`
+stops publishing caps or publishes them at a level the stage does not read. That is the one way this
+fix reverts with every partition still closing, and it is reachable at zero, which a tautology is not.
+
+### What is left, and why it is a different question
+
+The **9.4%** that remains is paint that clears the carriageway and is covered by a *second* surface
+drawn over it — an overlapping ribbon's kerb lip, or a cap over an arm, the 6,051 m² overlap `Q53`
+measured. `paint_clearance.py` reports it in its own column and never gates it, because gating it
+would fail the tool on a defect it is not measuring and the only available response would be to raise
+the bar. Of the box junctions' remaining under-carriageway triangles, **179 of 209 stand on a kerb
+top** — the surveyed box reaching past the drawn ribbon, which is registration and which `Q54`
+refuses to fix by scaling a published extent. The last **30** are the chord residue: paint is a flat
+triangle over a road that creases at every fan edge and every ribbon station, p50 **0.0027 m**, and
+closing it means subdividing paint at the road's own creases. `surface.py::_hide_buried_kerbs` is
+where the kerb half would be answered. Unassigned.
+
+### The dead model went with it
+
+`blended_height` and both `height_blend_m` config keys are deleted rather than left calling nothing —
+its two callers went to zero in the same change, and a public function with a measured finding in its
+docstring and no caller is the next reader's trap.
+
+**See.** `Q91` for the projection that could not see this and the real second cause it did fix ·
+`Q53` for the cap overlap · `Q69` for the same shape of error on `underfill_m`, and for the
+`roadsurface.json` dependency this repeats · `Q58` for recording a distribution before its own guard ·
+`Q72` for the tautology this refuses to add · `Q62` for why the evidence is a frame · `Q54` for why a
+surveyed extent is not scaled onto the drawn ribbon
+

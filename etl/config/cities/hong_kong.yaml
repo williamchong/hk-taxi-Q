@@ -1672,18 +1672,6 @@ boxjunctions:
   # has drifted onto no road this build drives.
   max_offset_m: 12.0
 
-  # How far past the nearest centreline the height join keeps listening — each
-  # vertex's height is a distance-weighted blend of every level-0 segment
-  # within `nearest + height_blend_m`, weighted to zero exactly at that
-  # cutoff. ⚠️ Exists because a hard nearest-edge switch is a cliff: two arms
-  # of one junction disagree about the deck by up to a measured 0.43 m where
-  # they meet, and the first build — which took each vertex from whichever arm
-  # won — shipped 172 near-vertical triangles that verify_boxjunctions.gd
-  # caught while the ETL's own `inverted` read 0. At 4 m the worst seam
-  # spreads that step over an ~11% grade. Far from a seam only one edge is in
-  # range and the blend is the plain snap.
-  height_blend_m: 4.0
-
 # Published stop lines and give-way lines (P3-23).
 #
 # The markings under the GIVE WAY plates P3-20 put 讓 on: 74 posts told the
@@ -1819,14 +1807,6 @@ road_marks:
   # arrows over box hatching, and a clear 1 mm rather than a hair, because the
   # engine re-quantises Y on import too.
   lift_m: 0.016
-
-  # How far past the nearest centreline the per-vertex height join keeps
-  # listening — boxjunctions.height_blend_m's value and its measured reason. A
-  # transverse bar is drawn across a junction MOUTH, which is exactly the seam
-  # where two arms of one junction extrapolate their own grade and disagree by
-  # up to 0.43 m; taking each vertex from whichever arm won built 172
-  # near-vertical triangles there once already.
-  height_blend_m: 4.0
 
   marks:
     # ⚠️ No `lines_spacing_m`: a single line has no gap to declare, and the

@@ -407,3 +407,15 @@ CITY_YAML = textwrap.dedent(
             - {match: "DF", id: dropoff, pickup: false}
     """
 )
+
+
+def polygon_area(polygon: np.ndarray) -> float:
+    """Shoelace area of a plan polygon, unsigned.
+
+    Here because `test_arrows.py` and `test_boxjunctions.py` had it written out
+    identically. Unsigned on purpose: both callers ask "how much", and both have
+    a separate assertion about winding, which is the question a sign would
+    answer.
+    """
+    shifted = np.roll(polygon, -1, axis=0)
+    return 0.5 * abs(float(np.sum(polygon[:, 0] * shifted[:, 1] - shifted[:, 0] * polygon[:, 1])))

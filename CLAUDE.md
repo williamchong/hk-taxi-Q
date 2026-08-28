@@ -425,6 +425,25 @@ Common emoji for this project:
   `--debug-view=off --hud=off`, twice, and `cmp` them — a `minimal` pair differs in the fps readout
   alone. ⚠️ **`check.sh` cannot help**: both its `on_structure` assertions skip off-grade edges.
   Numbers in `Q90`.
+- **Any painted layer's height, `surface.py`'s cap construction, or any paint `lift_m`: also
+  `tools/paint_clearance.py`, and paste its table.** It asks the one question a marking stage cannot
+  ask from inside — **is the paint on top of the asphalt or inside it?** — because every counter
+  `boxjunctions.json` and `roadmarks.json` publish grades the ETL against its own intermediate
+  values. 🔴 **`Q91` closed the previous box-junction defect on "a top-down raster of the shipped
+  mesh is a complete grid", which is true and is exactly the projection that cannot see this**: the
+  mesh is complete in **plan** and wrong in **Y**, and 23.2% of it shipped under the road. ⚠️ **Four
+  columns, and only the last is gated** — `under hi` (what the depth buffer hides), `on kerb` (a
+  surveyed extent past the drawn ribbon, which is registration and `Q54` refuses to scale), `in c'way`
+  (the wrong height on the road it is drawn on) and `deep` (that, past `--accept-depth-m`). Pooling
+  them leaves nothing to do but raise the bar. ⚠️ **`tramway` and `arrows` are reported and never
+  gated**: `Q58` measured tram rails p50 3.26 m past the drawn kerb, so a third of them are over no
+  carriageway at all and gating that fails the tool on a fact. ⚠️ **The shallow residue is geometric,
+  not a defect** — paint is a flat triangle over a road that creases at every cap fan edge and every
+  ribbon station, so its chord dips below the crown it spans by millimetres however right its
+  vertices are. 🔴 **Do not answer a burial by raising `lift_m`**: clearing `Q92`'s p99 needed
+  **0.158 m**, paint floating 16 cm over the road. ⚠️ **`vertices_over_cap` is the in-stage tripwire
+  and there is deliberately no "placed minus drawn" counter** — that is `lift_m` by construction and
+  `Q72`'s tautology. Numbers in `Q92`.
 - Road-surface, deck-height or ground changes: also `tools/deck_error.py`, `tools/overhang.py`,
   `tools/ground_clearance.py` and `tools/carriageway_occupancy.py`, by hand after a build. They grade
   the *shipped* bundle and share no code with the pipeline — `check.sh` does not require a built
