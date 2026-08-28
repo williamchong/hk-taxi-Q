@@ -317,8 +317,8 @@ Common emoji for this project:
   manifest, or the sweep is right to delete it. ⚠️ **`signs.json`'s `bytes` is `signs.glb` alone**
   and `text_atlas_bytes` is the image — two numbers where there was one.
 - **`pipeline/arrows.py`, the `arrows` config block, or any turn-arrow change: paste `arrows.json`'s
-  two partitions (`symbols` and `candidates`), `axis_residual_deg`, `offset_m`, `against_one_way` and
-  `inverted`, before and after.** There is no separate grader and there should not be: the stage grades itself,
+  two partitions (`symbols` and `candidates`), `axis_residual_deg`, `offset_m`, `against_one_way`,
+  `stacked_pairs`, `stacked_disagreeing` and `inverted`, before and after.** There is no separate grader and there should not be: the stage grades itself,
   because **every way this breaks renders as a perfectly drawn arrow, or as nothing**. An arrow on
   the wrong street, turned 180°, or drawn from a mis-transcribed glyph table all look correct in a
   frame. ⚠️ **The residual distributions publish p90/p99/max, not a median** — the tail is where a
@@ -351,6 +351,16 @@ Common emoji for this project:
   4 m arrow, which `Q91` removes at any driving distance. Fidelity to the drawing and legibility on
   the road are not the same target on this layer. ⚠️ **The ahead head and the stem taper are measured
   and must stay so** — the overlay agrees on both. Numbers in `Q93`.
+  🔴 **`stacked_disagreeing` is `Q19`'s invented lane count arriving where a frame can show it, and
+  it is 51 of 747 today.** The registration snaps a published offset to one of `ribbon.lanes` slots;
+  the count is authored from the speed-limit table, so where the painted carriageway is wider two
+  symbols collapse into one slot and draw **one shaft wearing two branches** — found from the driving
+  seat, with every other counter correct and `inverted` 0. ⚠️ **Nothing is refused and nothing is
+  moved**: de-duplicating would discard a published instruction on the authority of an invented
+  width, which is `Q54` inverted. ⚠️ **A rising count is a finding, never a bar to retune** — and it
+  is reachable at zero, so mutation-check it rather than reading its value. ✅ **The arrows are also a
+  lane-count source** — a row across a carriageway is the count written down, 31 of 306 edges imply
+  more lanes than the graph has — which is the most direct lead `Q19` has. Numbers in `Q94`.
   ⚠️ **An arrows change is also a shader change** — `check.sh` exits 0 on a shader that fails to
   compile, so render and `grep -i "shader error"`. Numbers in `Q59`.
   🔴 **And a shader change is a change to THREE layers**: `marking_paint.gdshader` is shared by the

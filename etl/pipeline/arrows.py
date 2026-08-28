@@ -47,6 +47,7 @@ import logging
 import math
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 
@@ -162,6 +163,26 @@ class ArrowReport:
     # carriageway — but counted, because it is where the ribbon has no lane
     # coordinate and the count is the only sign of it.
     over_a_cap: int = 0
+
+    # 🔴 **Drawn arrows that landed on top of another one, and the counter this
+    # stage did not have (`Q94`).** The lane registration snaps a published
+    # offset to one of `ribbon.lanes` slots, and `roadgraph.json`'s lane count is
+    # *invented* — 720 of the region's edges carry the same 6.4 m, derived from
+    # the speed-limit table because `DATA_SOURCES.md` records no source for it.
+    # Where the real carriageway is wider than the graph says, two symbols with
+    # **different instructions** collapse into one slot and draw a shaft wearing
+    # both branches: an instruction the world does not contain, reported from the
+    # driving seat on STEWART ROAD.
+    #
+    # ⚠️ **Pairs, not arrows**, because a triple would otherwise be read as
+    # three separate faults. `stacked_disagreeing` is the load-bearing half:
+    # two `ahead` arrows in one lane are a duplicate, an `ahead` and a `right`
+    # are a contradiction.
+    #
+    # ⚠️ **Reachable at zero** — a graph with the right lane counts scores 0 —
+    # so this is a finding to go and look at, never a bar to retune.
+    stacked_pairs: int = 0
+    stacked_disagreeing: int = 0
 
     # `SYMBOL_SIZE` as published, which nothing here reads. Recorded so the
     # question "is it the arrow's length in metres?" can be answered from a
@@ -666,6 +687,7 @@ def build_region(
     lane_width_m = city.roads.lane_width_m
 
     builder = _Builder()
+    laid: list[_Laid] = []
     for symbol in symbols:
         snap = segments.nearest(symbol.x, symbol.z)
         if snap.distance_m > spec.max_offset_m:
@@ -756,6 +778,9 @@ def build_region(
         report.drawn += 1
         key = "+".join(glyph.movements)
         report.by_glyph[key] = report.by_glyph.get(key, 0) + 1
+        laid.append(_Laid(placed, int(snap.edge), lane, glyph.movements, glyph.length_m))
+
+    _count_stacked(laid, report)
 
     mesh = builder.build(ARROWS_MESH_NAME)
     if mesh is not None:
@@ -768,6 +793,43 @@ def build_region(
 
     _write_manifest(out_dir, city, region_id, report)
     return report
+
+
+class _Laid(NamedTuple):
+    """One arrow as it was actually placed, for the stacking check."""
+
+    at: np.ndarray
+    edge: int
+    lane: int
+    movements: tuple[str, ...]
+    length_m: float
+
+
+def _count_stacked(laid: list[_Laid], report: ArrowReport) -> None:
+    """Pairs of drawn arrows that landed on top of each other (`Q94`).
+
+    🔴 **The counter that would have caught what shipped.** Two published
+    symbols with different instructions, snapped to the same lane slot because
+    `roadgraph.json`'s lane count is narrower than the carriageway TD painted,
+    draw one shaft wearing two branches. Every partition in this stage closes
+    while that happens, `inverted` reads 0, and the only trace is a frame.
+
+    ⚠️ **The bar is derived, not authored**: half the shorter glyph's own
+    length, because two arrows whose centres are closer than that overlap for
+    certain whatever their headings. Same lane of the same edge, so arrows in
+    adjacent lanes and arrows repeated along a lane are not counted.
+    """
+    for first in range(len(laid)):
+        a = laid[first]
+        for second in range(first + 1, len(laid)):
+            b = laid[second]
+            if a.edge != b.edge or a.lane != b.lane:
+                continue
+            if float(np.hypot(*(a.at - b.at))) >= 0.5 * min(a.length_m, b.length_m):
+                continue
+            report.stacked_pairs += 1
+            if a.movements != b.movements:
+                report.stacked_disagreeing += 1
 
 
 def _draw(
@@ -841,6 +903,12 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Arr
         # against a number rather than against the prose.
         "lane_shift_m": report.measured(report.lane_shift_m),
         "over_a_cap": report.over_a_cap,
+        # 🔴 The pairs that landed on top of each other — see `ArrowReport`.
+        # `stacked_disagreeing` is the one to read: it is arrows giving
+        # different instructions from the same square metre of lane, and it is
+        # `Q19`'s invented lane count arriving where a frame can show it.
+        "stacked_pairs": report.stacked_pairs,
+        "stacked_disagreeing": report.stacked_disagreeing,
         # Published, unread. `SYMBOL_SIZE` may or may not be the arrow's length
         # in metres; the glyph table takes its lengths from the index plan
         # instead. Recorded here so the question is answerable from a shipped
@@ -877,12 +945,15 @@ def main(argv: list[str] | None = None) -> int:
     city = load_city(args.city)
     report = build_region(city, args.region, sources_root=args.sources_root, out_root=args.out_root)
     log.info(
-        "arrows: %d symbols -> %d turn arrows drawn (%d too far, %d off bearing), %d triangles",
+        "arrows: %d symbols -> %d turn arrows drawn (%d too far, %d off bearing), %d triangles; "
+        "%d pairs stacked in one lane, %d of them disagreeing",
         report.symbols,
         report.drawn,
         report.too_far,
         report.off_bearing,
         report.triangles,
+        report.stacked_pairs,
+        report.stacked_disagreeing,
     )
     return 0
 

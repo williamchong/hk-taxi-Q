@@ -122,6 +122,7 @@ wins.
 | `Q91` | **The markings were disappearing into the pixel grid, and no counter could see it** | ✅ Closed — `anti_aliasing/quality/msaa_3d` **2** (4x). The 0.1 m box junction hatch is **one pixel tall at 13.6 m** on the chase rig, and with MSAA off a sub-pixel line is lit only where a pixel centre lands inside it, so it broke into dashes and then vanished — **found by the user from the driving seat, twice**. 🔴 **Every ETL counter was correct throughout**: 20 of 20 boxes drawn, `inverted` 0, `slivers_dropped` 2,032 at the declared quantum, and a top-down raster of the shipped `boxjunctions.glb` is a complete grid. The defect existed only in the raster. ⚠️ **Coverage is conserved and only continuity is lost** (0.0580 vs 0.0574 of the same world area at two resolutions), so no lift, colour or width change could have reached it. ⚠️ **Verified on both renderers including a real web export in Chrome**; 8x refused because WebGL2 caps `MAX_SAMPLES` at 4. 🔴 **0 draw calls and 0 primitives**, so `ARCHITECTURE.md`'s budget cannot see this change at all. ⬜ Mobile cost **unmeasured and unmeasurable today** — no floor handset, `P0-3b` |
 | `Q92` | **The markings were drawn on a model of the road, not the road, and 23.2% of the box junctions shipped under the asphalt** | ✅ Closed — `surface.DrawnSurface`. `boxjunctions` and `roadmarks` took their heights from `blended_height`, a distance-weighted blend of level-0 **centreline** heights; what `surface.py` draws at a junction is a convex-hull cap fanned from its ring's centroid, a different function. Off the centreline the drawn road stands up to **0.218 m** above the blend against a `lift_m` of **0.012**, so the paint sank into the road in patches with clean edges — **found by the user from the driving seat**, reported as strips missing from a box junction. ✅ **`roadsurface.json` schema 5 → 6 publishes the cap rings** and the query rebuilds `_Builder.fan`'s own triangulation from them. **Box junctions: below the road 23.2% → **9.4%**, and in the carriageway itself 11.1% → **0.32%**; stop and give-way lines 20.0% → 5.8% and 11.3% → 0.71%.** Both meshes triangle-for-triangle identical — only Y moved. 🔴 **Every ETL counter was correct throughout and `Q91` closed on the projection that cannot see this**: "a top-down raster of the shipped `boxjunctions.glb` is a complete grid" is true, and the mesh is complete in **plan** and wrong in **Y**. ✅ Paid with `tools/paint_clearance.py`, which reads the shipped meshes and shares no code with the pipeline. ⚠️ **Raising `lift_m` was refused** — clearing p99 needs **0.158 m**, paint floating 16 cm over the road. ⬜ The **9.4%** that remains is paint covered by a *second* surface drawn over it — an overlapping ribbon's kerb lip, or a cap over an arm, the 6,051 m² `Q53` measured — reported, gated separately, and unassigned |
 | `Q93` | **The turn arrows were authored, not read, and the branch reused the ahead head's length** | ✅ Closed — `CT174/51-5(1)F` publishes `LENGTH` for `RM1017`-`RM1030` and **no other dimension**, so the shape can come from nowhere but TD's own pictogram; read at 700 dpi off two cells that agree, **every authored figure was wrong**. Ahead head **0.325 → 0.390** long and **0.235 → 0.122** across (nearly twice the drawing); the stem was a uniform 0.085 where the drawing **tapers 0.076 → 0.032**. 🔴 **One of them was a defect rather than a difference**: `shoulder = reach - head_length` with a reach of 0.28 against a head of 0.325 is **negative**, so the turn head's base landed 0.18 m past the *far* side of the stem and swallowed it — a blob on **416 of 747** drawn arrows, shipped since `P3-15`. ✅ `branch_head_length_frac`/`_width_frac` split it out and `config.py` refuses `branch_reach_frac <= branch_head_length_frac`. ✅ **The ratchet is dimension-independent**: a test asserts no head overlaps the stem, mutation-checked at 0.00 m² on the fix, **0.137 m²** on the reused length and **0.620 m²** on the exact pre-fix config. Every counter unchanged — `by_glyph` 331/99/1/46/173/8/89, `drawn` 747, `inverted` 0, 3,246 triangles. 🔴 **Amended the same day, from the driving seat: the branch is now AUTHORED and the measured figures are declined.** TD's branch head is genuinely wider than it is deep — its barbs do the work — so a plain triangle at 0.150/0.100/0.233 is a mushroom on the shaft, and a faithful six-point dart (overlay agreement 0.831 → **0.874**) is a detached diamond whose 0.09 m barbs `Q91`'s sub-pixel problem eats anyway. It ships as an arrowhead longer than it is wide, sized against the frame. ✅ **The sheet itself is vindicated**: `RM1016` publishes `SIZE = 5600(H) x 2000` and its pictogram measures **2.802** against 2.800, so NOT TO SCALE means no scale bar rather than stylised, and the ahead head and stem stay measured |
+| `Q94` | **Two arrows with different instructions land in one lane, because the lane count is invented** | 🟡 **Half closed 2026-08-28 — counted, not fixed.** The lane registration snaps a published offset to one of `ribbon.lanes` slots, and that count is authored from the speed-limit table; where the real carriageway is wider, two symbols collapse into one slot and draw **one shaft wearing two branches**, which is an instruction the world does not contain. Found from the driving seat on STEWART ROAD. **89 pairs stacked in one lane, 51 of them disagreeing**, of 747 drawn. On HENNESSY ROAD `e239` a `right` published 4.52 m out and an `ahead` published 1.63 m out both land at −2.56 m. ✅ `arrows.json` publishes `stacked_pairs` and `stacked_disagreeing`, reachable at zero and mutation-checked; every other counter was correct throughout and `inverted` read 0. 🔴 **The finding is that the arrows are themselves a lane-count source** — a row across a carriageway is the count, written down: **31 of 306** arrow-carrying edges imply more lanes than the graph has, nine of them four against two. That narrows `Q57`'s narrowing of `Q19` again, from a layer already in the bundle. ⬜ Sourcing the count is **unassigned**: it moves every ribbon, kerb, registered layer and clearance grader in the region |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -12949,3 +12950,83 @@ both identical** — the same polygon count in a different shape.
 **See.** `Q59` for the glyph-table rule and why the codes are read rather than inferred · `Q67` for
 the sign-face survey that caught this class on the other layer, and why it cannot reach here · `Q54`
 for sourced-not-invented · `Q60` and `P3-16` for the authored-dimension precedent
+
+
+## `Q94` — Two arrows in one lane, because the lane count is invented
+
+**Status.** 🟡 Half closed 2026-08-28. Counted in `arrows.json`; the lane count itself is unassigned.
+
+### What the user saw
+
+An arrow on STEWART ROAD, southbound, that "doesn't make much sense." It is two arrows.
+
+`DTAD_RD_MARK_SYM_PT` publishes `RM1027` **ahead-or-left** at 3.67 m off the centreline and `RM1025`
+**ahead-or-right** at 0.24 m off, a metre apart along the road. Both register into lane 0 of `e504`
+and land at the same drawn offset, **−2.56 m**. What renders is one shaft wearing both branches.
+
+### The mechanism
+
+`arrows.py` reads the published offset as a fraction across the carriageway — `Q54`'s
+use-it-as-data rule, and the step that survives the 1.6x widening — then snaps it to one of
+`ribbon.lanes` slots:
+
+```
+real_half_m = 0.5 * ribbon.lanes * lane_width_m
+lane        = int(0.5 * ribbon.lanes * (1 - offset / real_half_m))
+```
+
+With `lanes = 2` there are two slots. `roadgraph.json` gives 720 of the region's edges the same
+6.4 m and two lanes, **authored from the speed-limit table** because no source in the estate
+publishes a lane count (`Q57`). Where the carriageway TD painted is wider than that, the slots
+cannot hold what the publisher put on the road.
+
+Measured over the 747 drawn arrows:
+
+```
+pairs landing within half a glyph of each other, same lane of the same edge      89
+  of those, giving DIFFERENT instructions                                        51
+```
+
+`e239` HENNESSY ROAD carries a `right` published 4.52 m out and an `ahead` published 1.63 m out,
+both drawn at −2.56 m. `e174` FLEMING ROAD puts `ahead+left` and `ahead+right` in one slot. This is
+not a rare corner: it is 7% of everything this stage draws.
+
+### 🔴 The finding: the arrows are a lane-count source
+
+A **row of turn arrows across a carriageway is a lane count**, stated by the publisher rather than
+derived. `e505` STEWART ROAD carries three symbols at one station — left | left-or-right | right at
+offsets **+2.96 / −0.32 / −3.59** — which is a three-lane approach written down. Grouped by
+along-edge station and split at 1.6 m, **31 of the 306 arrow-carrying edges imply more lanes than the
+graph gives them**, nine of them four against two: `e201` MORRISON HILL ROAD, `e403` CANAL ROAD EAST,
+`e236` IRVING STREET, `e119` TONNOCHY ROAD, `e245` and `e239` HENNESSY ROAD, `e434` FLEMING ROAD,
+`e117` CAUSEWAY ROAD, `e659` EXPO DRIVE EAST.
+
+`Q57` narrowed `Q19`'s "lane counts exist in no layer" to "no source publishes a *count*; Traffic
+Aids publishes the lane *lines*, so a count is derivable from geometry." This narrows it again and
+more cheaply: the count is derivable from a **point layer already read by a shipped stage**, needing
+no new fetch and no new geometry. It is sparser — only 306 of 737 edges carry arrows — so it is a
+partial answer, not a replacement for the lane lines.
+
+### What ships, and what does not
+
+`arrows.json` publishes `stacked_pairs` **89** and `stacked_disagreeing` **51**.
+
+⚠️ **Pairs, not arrows**, so a triple is not read as three faults. ⚠️ **The bar is derived**: half the
+shorter glyph's own length, because two arrows whose centres are closer than that overlap for certain
+whatever their headings — not a number anyone may tune. ⚠️ **Reachable at zero and mutation-checked**
+(`Q72`): a graph whose lane counts match the painted carriageway puts every symbol in its own slot,
+so a 0 here would be evidence rather than a tautology.
+
+🔴 **Nothing is refused and nothing is moved.** De-duplicating the drawing was considered and
+rejected: it would discard a published instruction on the authority of a width this repo knows is
+invented, which is `Q54`'s rule inverted. The contradiction stays on the road until the lane count is
+sourced, and the counter is what says how much of it there is.
+
+⬜ **Sourcing the count is unassigned and is not small.** `lanes` moves `width_m`, which moves the
+ribbon, the kerbs, every layer registered onto the drawn kerb — signs, lamps, railings — and every
+clearance grader in the region. It is also the most direct lead `Q19` has had.
+
+**See.** `Q19` for the invented width and the invisible walls it causes · `Q57` for the previous
+narrowing and the lane lines · `Q54` for why a published extent is not overruled by a derived one ·
+`Q72` for the reachable-at-zero test this counter had to pass · `Q93` for the glyph these are drawn
+with

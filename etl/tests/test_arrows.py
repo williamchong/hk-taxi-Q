@@ -23,7 +23,9 @@ from pipeline.arrows import (
     ArrowReport,
     Symbol,
     _Builder,
+    _count_stacked,
     _draw,
+    _Laid,
     _place,
     axis_residual_deg,
     directed_residual_deg,
@@ -280,6 +282,85 @@ class TestTheGlyph:
         long = np.vstack(glyph_polygons(spec, ("ahead",), 6.0))
         assert long[:, 1].max() / short[:, 1].max() == pytest.approx(1.5)
         assert long[:, 0].max() / short[:, 0].max() == pytest.approx(1.5)
+
+
+class TestStackedArrows:
+    """`Q94`: drawn arrows that landed on top of one another.
+
+    🔴 **The counter that would have caught what shipped**, and the one this
+    stage did not have. The lane registration snaps a published offset to one of
+    `ribbon.lanes` slots; where the graph's *invented* lane count is narrower
+    than the carriageway TD painted, two symbols with different instructions
+    collapse into one slot and draw a shaft wearing both branches. Every
+    partition still closes, `inverted` still reads 0, and the only trace is a
+    frame — which is how it reached the driving seat on STEWART ROAD.
+    """
+
+    @staticmethod
+    def _laid(x, z, *, edge=0, lane=0, movements=("ahead",), length_m=4.0):
+        return _Laid(np.array([x, z], dtype=float), edge, lane, movements, length_m)
+
+    def test_two_instructions_in_one_lane_are_counted_and_named_a_disagreement(self):
+        report = ArrowReport()
+        _count_stacked(
+            [
+                self._laid(0.0, 0.0, movements=("ahead", "left")),
+                self._laid(0.0, 1.0, movements=("ahead", "right")),
+            ],
+            report,
+        )
+        assert (report.stacked_pairs, report.stacked_disagreeing) == (1, 1)
+
+    def test_the_same_instruction_twice_is_a_duplicate_and_not_a_disagreement(self):
+        """⚠️ The split is the point: two `ahead` arrows in one lane are a
+        duplicate, an `ahead` and a `right` are an instruction the world does not
+        contain. Pooling them would hide the second in the first."""
+        report = ArrowReport()
+        _count_stacked([self._laid(0.0, 0.0), self._laid(0.0, 1.0)], report)
+        assert (report.stacked_pairs, report.stacked_disagreeing) == (1, 0)
+
+    def test_arrows_in_adjacent_lanes_do_not_stack(self):
+        report = ArrowReport()
+        _count_stacked([self._laid(0.0, 0.0, lane=0), self._laid(0.0, 1.0, lane=1)], report)
+        assert report.stacked_pairs == 0
+
+    def test_arrows_repeated_along_a_lane_do_not_stack(self):
+        """A lane legitimately carries the same arrow every few tens of metres;
+        only symbols at one station are on top of each other."""
+        report = ArrowReport()
+        _count_stacked([self._laid(0.0, 0.0), self._laid(0.0, 14.0)], report)
+        assert report.stacked_pairs == 0
+
+    def test_the_bar_is_half_the_shorter_glyph(self):
+        """⚠️ Derived rather than authored — two arrows whose centres are closer
+        than half the shorter one's length overlap for certain, whatever their
+        headings. Pinned so a 6 m glyph is not judged by a 4 m bar."""
+        report = ArrowReport()
+        _count_stacked(
+            [self._laid(0.0, 0.0, length_m=6.0), self._laid(0.0, 1.9, length_m=4.0)], report
+        )
+        assert report.stacked_pairs == 1
+        clear = ArrowReport()
+        _count_stacked(
+            [self._laid(0.0, 0.0, length_m=6.0), self._laid(0.0, 2.1, length_m=4.0)], clear
+        )
+        assert clear.stacked_pairs == 0
+
+    def test_a_region_whose_lanes_hold_its_arrows_scores_zero(self):
+        """🔴 **Reachable at zero, which is the test of a counter** (`Q72`). A
+        graph whose lane counts match the carriageway TD painted puts every
+        symbol in its own slot, and this reads 0 — so a 0 here is evidence, not
+        a tautology."""
+        report = ArrowReport()
+        _count_stacked(
+            [
+                self._laid(0.0, 0.0, lane=0, movements=("left",)),
+                self._laid(0.0, 0.5, lane=1, movements=("ahead",)),
+                self._laid(0.0, 1.0, lane=2, movements=("right",)),
+            ],
+            report,
+        )
+        assert (report.stacked_pairs, report.stacked_disagreeing) == (0, 0)
 
 
 class TestDrawing:
