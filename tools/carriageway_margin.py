@@ -118,12 +118,15 @@ Run:  .venv/bin/python tools/carriageway_margin.py --city hong_kong --region wan
 from __future__ import annotations
 
 import argparse
+import json
 import logging
+import math
 import sys
 from collections import Counter, defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -196,14 +199,55 @@ class Station:
     # across a street — so crediting a width to `source` would attribute most of
     # them to the wrong publisher.
     width_source: str = ""
-    # The near and far ray of the *spanning* publisher, sorted, so the pair
-    # carries no side convention. `left_of`'s sign is irrelevant to a sum.
-    width_near_m: float = float("nan")
-    width_far_m: float = float("nan")
+    # The two rays of the *spanning* publisher, kept on `left_of`'s own sign
+    # rather than sorted.
+    #
+    # ⚠️ **Stored raw and sorted on read, rather than sorted on write.** A sum
+    # needs no side convention, which is why these were `(near, far)` with the
+    # sign discarded. Deriving the ordering instead keeps `width_m` and
+    # `off_centre` byte-identical while leaving the pair recoverable, which is
+    # one less thing a later reader can get wrong — the same argument
+    # `Report.spans` makes for the population. ⚠️ The decomposition does **not**
+    # use the side: `_partner_at` casts both ways, because a station whose two
+    # rays are near-equal has no far side to prefer and picking one is picking
+    # noise.
+    width_forward_m: float = float("nan")
+    width_backward_m: float = float("nan")
+
+    # ── the partner candidate (`Q95` follow-on), measured and NOT judged ────
+    #
+    # 🔴 **The angle is recorded and the bound is applied where the table is
+    # printed**, which is the same discipline `survey` follows for `width_bounds`
+    # and for the same reason: a tolerance applied here would confine the
+    # population to itself, so no sweep of it could ever report a refusal, and
+    # mutation-checking it would need a re-survey per row. `-1` and NaN mean neither
+    # ray reached a graph edge, or the station is one `_candidate` never reads.
+    partner_edge: int = -1
+    # Degrees off anti-parallel — 0.0 is a perfectly opposed centreline, 90.0 a
+    # perpendicular one. Never signed: which way it leans says nothing here.
+    partner_offset_deg: float = float("nan")
+
+    @property
+    def width_near_m(self) -> float:
+        """The shorter of the spanning publisher's two rays.
+
+        ⚠️ **Both rays are set together or neither is** — `width_published`
+        chooses a publisher only when it answers both sides — which is what makes
+        `min`/`max` safe here. Python's `min` is not NaN-symmetric
+        (`min(nan, 5.0)` is NaN, `min(5.0, nan)` is 5.0), so a hand-built station
+        with one ray would read its own near ray as its far one and double it
+        into a carriageway.
+        """
+        return min(self.width_forward_m, self.width_backward_m)
+
+    @property
+    def width_far_m(self) -> float:
+        """The longer — the one a junction mouth and a dual carriageway corrupt."""
+        return max(self.width_forward_m, self.width_backward_m)
 
     @property
     def width_m(self) -> float:
-        return self.width_near_m + self.width_far_m
+        return self.width_forward_m + self.width_backward_m
 
     @property
     def off_centre(self) -> float:
@@ -323,11 +367,24 @@ class _Index:
     covers that cell, so it is already in that bucket. Cell size is a lookup
     accelerator only — unlike the constants in `clearance.py`, which `Q51` found
     were deciding a published count, nothing reported here moves with it.
+
+    ⚠️ **`tramway.py`'s `_Rails` is this class's twin** — same cell size, same
+    bucket build, same solve, same owner array and self-exclusion — and it
+    already cites this file for the arithmetic. They are not shared because one
+    lives in `tools/` and one in `etl/pipeline/`; change either and read the
+    other, or promote both.
     """
 
-    def __init__(self, starts: np.ndarray, ends: np.ndarray) -> None:
+    def __init__(
+        self, starts: np.ndarray, ends: np.ndarray, owners: np.ndarray | None = None
+    ) -> None:
         self.starts = starts
         self.ends = ends
+        # Which object each segment came from, for an index built over something
+        # whose identity the caller needs back. The published-edge indexes do
+        # not — a kerb is a distance and nothing else — so this stays optional
+        # rather than making every caller invent an id.
+        self.owners = np.full(len(starts), -1, dtype=np.intp) if owners is None else owners
         buckets: dict[tuple[int, int], list[int]] = defaultdict(list)
         low = np.floor_divide(np.minimum(starts, ends), _INDEX_CELL_M).astype(np.intp)
         high = np.floor_divide(np.maximum(starts, ends), _INDEX_CELL_M).astype(np.intp)
@@ -355,6 +412,30 @@ class _Index:
         order the sheets were read, so taking the first hit would make the
         answer depend on which of six map sheets happened to load first.
         """
+        solved = self._solve(origin, direction, max_m)
+        if solved is None:
+            return None, None
+        _, along, on_segment = solved
+        forward = on_segment & (along >= 0.0) & (along <= max_m)
+        backward = on_segment & (along <= 0.0) & (along >= -max_m)
+        return (
+            float(along[forward].min()) if forward.any() else None,
+            float(-along[backward].max()) if backward.any() else None,
+        )
+
+    def _solve(
+        self, origin: np.ndarray, direction: np.ndarray, max_m: float
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
+        """Candidate rows, their ray parameter, and which of them are on segment.
+
+        🔴 **One arithmetic, every caller**, which is `cast_both`'s own argument
+        carried one level down. That docstring says the two directions share a
+        solve so it is impossible for the two sides of a station to be measured
+        by subtly different code; the same holds for the two *questions* asked at
+        a station — how far the kerb is, and which edge lies across the far ray.
+        A second copy of this would let a partner be found beyond a kerb that the
+        same station says was never crossed.
+        """
         near, far = origin - direction * max_m, origin + direction * max_m
         low = np.floor_divide(np.minimum(near, far), _INDEX_CELL_M).astype(np.intp)
         high = np.floor_divide(np.maximum(near, far), _INDEX_CELL_M).astype(np.intp)
@@ -365,11 +446,13 @@ class _Index:
             if (rows := self.cells.get((cx, cy))) is not None
         ]
         if not chunks:
-            return None, None
+            return None
 
         # A segment spanning several cells appears in several chunks. Left in:
         # a duplicate cannot change a minimum, and de-duplicating costs more
-        # than the arithmetic it would save.
+        # than the arithmetic it would save. ⚠️ Nor can it change an *argmin*'s
+        # answer, which `cast_hit` relies on: the duplicate rows are the same
+        # segment, so they carry the same owner and the same tangent.
         rows = chunks[0] if len(chunks) == 1 else np.concatenate(chunks)
         start = self.starts[rows]
         edge = self.ends[rows] - start
@@ -377,22 +460,62 @@ class _Index:
         denominator = direction[1] * edge[:, 0] - direction[0] * edge[:, 1]
         solvable = np.abs(denominator) >= 1e-12
         if not solvable.any():
-            return None, None
+            return None
 
         safe = np.where(solvable, denominator, 1.0)
         along = (offset[:, 1] * edge[:, 0] - offset[:, 0] * edge[:, 1]) / safe
         across = (direction[0] * offset[:, 1] - direction[1] * offset[:, 0]) / safe
         on_segment = solvable & (across >= -1e-9) & (across <= 1.0 + 1e-9)
-        forward = on_segment & (along >= 0.0) & (along <= max_m)
-        backward = on_segment & (along <= 0.0) & (along >= -max_m)
-        return (
-            float(along[forward].min()) if forward.any() else None,
-            float(-along[backward].max()) if backward.any() else None,
-        )
+        return rows, along, on_segment
 
     def cast(self, origin: np.ndarray, direction: np.ndarray, max_m: float) -> float | None:
         """`cast_both`'s forward half, for a caller measuring one direction."""
         return self.cast_both(origin, direction, max_m)[0]
+
+    def cast_hit(
+        self, origin: np.ndarray, direction: np.ndarray, max_m: float, *, exclude: int
+    ) -> tuple[tuple[float, int] | None, tuple[float, int] | None]:
+        """`cast_both`'s answer with the winning row, and `exclude`'s owner skipped.
+
+        A row per direction rather than a distance, because the caller wants both
+        what was hit and which way it runs, and `ends[row] - starts[row]` is the
+        only place the second lives.
+
+        🔴 **Both directions from one solve, for `cast_both`'s own reason.** The
+        first draft called this twice, once per heading, which made `_solve`'s
+        "one arithmetic, every caller" claim false in the same commit that wrote
+        it — negating `direction` negates `along` and leaves the cell set and
+        `across` untouched, so the second solve was a duplicate of the first.
+
+        ⚠️ **`exclude` is not an optimisation.** The origin sits on its own
+        polyline, so without it every cast returns that edge at zero distance and
+        no partner is ever found. It is passed rather than inferred because an
+        index does not know which of its owners the caller is standing on.
+        """
+        solved = self._solve(origin, direction, max_m)
+        if solved is None:
+            return None, None
+        rows, along, on_segment = solved
+        usable = on_segment & (self.owners[rows] != exclude)
+        return (
+            self._nearest(rows, along, usable & (along >= 0.0) & (along <= max_m), 1.0),
+            self._nearest(rows, along, usable & (along <= 0.0) & (along >= -max_m), -1.0),
+        )
+
+    @staticmethod
+    def _nearest(
+        rows: np.ndarray, along: np.ndarray, mask: np.ndarray, sign: float
+    ) -> tuple[float, int] | None:
+        """The masked hit nearest the origin, as a positive distance and its row.
+
+        `np.where` rather than compressing the arrays: the row index is what is
+        being asked for, so it may not be renumbered on the way.
+        """
+        if not mask.any():
+            return None
+        candidates = np.where(mask)[0]
+        winner = candidates[np.argmin(sign * along[candidates])]
+        return float(sign * along[winner]), int(rows[winner])
 
 
 def published_edges(
@@ -449,6 +572,119 @@ def published_edges(
     if not starts:
         return _Index(np.empty((0, 2)), np.empty((0, 2)))
     return _Index(np.vstack(starts), np.vstack(ends))
+
+
+def graph_edges(graph: dict[str, Any]) -> _Index:
+    """The graph's own level-0 centrelines, indexed so a ray can name one.
+
+    A second index over a different population from `published_edges`': that one
+    holds a publisher's kerbs, this one holds `roadgraph.json`'s own polylines,
+    and the decomposition needs to ask which *edge* lies across a station's far
+    ray. Owners carry `edge["id"]` so the answer comes back as a graph id.
+
+    ⚠️ **Level 0 only, matching the walk.** A ramp overhead shares plan position
+    with the street beneath it, and a flyover is nobody's opposed carriageway.
+    """
+    starts: list[np.ndarray] = []
+    ends: list[np.ndarray] = []
+    owners: list[np.ndarray] = []
+    for edge in graph["edges"]:
+        if int(edge["elevation_level"]) != 0:
+            continue
+        polyline = np.asarray(edge["polyline"], dtype=np.float64)
+        if len(polyline) < 2:
+            continue
+        head, tail = _segments(polyline[:, [0, 2]])
+        if not len(head):
+            continue
+        starts.append(head)
+        ends.append(tail)
+        owners.append(np.full(len(head), int(edge["id"]), dtype=np.intp))
+    if not starts:
+        return _Index(np.empty((0, 2)), np.empty((0, 2)))
+    return _Index(np.concatenate(starts), np.concatenate(ends), np.concatenate(owners))
+
+
+def opposed_offset_deg(here: np.ndarray, there: np.ndarray) -> float:
+    """Degrees off anti-parallel — 0 opposed, 90 perpendicular, 180 alongside.
+
+    🔴 **Anti-parallel and not merely parallel, and the graph is what makes that
+    readable.** `roads.py` normalises every one-way so the file "only ever says
+    `forward`", which means a one-way polyline is drawn in its own travel
+    direction. Two carriageways of a pair therefore run 180° apart, and a
+    service road running *with* its neighbour reads 0° apart — a distinction a
+    parallelism test throws away and this one keeps.
+
+    ⚠️ Unsigned. Which way the partner leans says nothing about whether it is
+    one.
+
+    ⚠️ **`arrows.directed_residual_deg` is the heading-space sibling** — this is
+    `180 - that`, exactly — and it is not reused because it takes *headings*,
+    and there is no shared vector-to-heading helper: `signs._heading_deg` is
+    already a knowing second copy of `fares.Snap.heading_deg`. Reusing it would
+    add a third copy of the atan2 convention to save a dot product. ⚠️ And the
+    `axis_residual_deg` family folds mod 180, which cannot tell parallel from
+    anti-parallel — the one distinction this function exists for.
+    """
+    a, b = np.hypot(*here), np.hypot(*there)
+    if a <= 0.0 or b <= 0.0:
+        return float("nan")
+    cosine = float(np.clip((here @ there) / (a * b), -1.0, 1.0))
+    return 180.0 - math.degrees(math.acos(cosine))
+
+
+def _partner_at(
+    centrelines: _Index,
+    origin: np.ndarray,
+    normal: np.ndarray,
+    tangent: np.ndarray,
+    max_ray_m: float,
+    *,
+    edge: int,
+) -> tuple[int, float]:
+    """The most opposed centreline within reach of one station, and by how much.
+
+    🔴 **Capped at the instrument's OWN ray cap, which REMOVES a knob rather
+    than adding one.** `Q72`'s NO ENTRY entry rejected a pairing rule built on a
+    free radius `R`, whose count ran 8 → 29 → 49 → 80 as `R` went 10 → 30 m.
+    `--max-ray-m` is not that: it is the distance at which this tool already
+    declares a station unmeasurable, it caps every other measurement here, and
+    `Q95` already swept it and published the result.
+
+    ⚠️ **It was the station's own far ray first, and the six pairs `surface.py`
+    already knows about are what refuted that.** All three LOCKHART ROAD pairs
+    came back unpaired: e86's span is 7.06 m while its partner's centreline is
+    6.82 m away, because the far ray stops at the far kerb of e86's *own*
+    carriageway around 3.5 m and never reaches across. A cap that cannot see a
+    known pair is measuring its own reach.
+
+    ⚠️ **Both directions, because a symmetric station has no far side.** Where
+    the two rays are near-equal — Lockhart again, 3.53 against 3.53 — picking
+    "the far one" is picking noise, and the per-station vote would then split a
+    real pair across both sides of the road.
+
+    Selecting the *most opposed* candidate is a measurement, not a judgement:
+    the bar it is measured against stays in `_candidate`, where the table is
+    printed, so a sweep of that bar re-reads this survey rather than re-walking
+    the region.
+
+    ⚠️ **`tramway.py`'s `_pair_rails` is this repo's other implementation of
+    cast-then-ballot-then-mutual, and the two differ deliberately.** That one
+    requires an agreement *fraction* before it accepts a ballot and keeps
+    one-way votes; this one takes a plurality and drops them. Neither is the
+    other's bug — but a change to the shape here should be read against it.
+    """
+    best, offset = -1, float("nan")
+    for hit in centrelines.cast_hit(origin, normal, max_ray_m, exclude=edge):
+        if hit is None:
+            continue
+        row = hit[1]
+        angle = opposed_offset_deg(tangent, centrelines.ends[row] - centrelines.starts[row])
+        if math.isnan(angle):
+            continue
+        if best < 0 or angle < offset:
+            best, offset = int(centrelines.owners[row]), angle
+    return best, offset
 
 
 def _sides(
@@ -522,18 +758,23 @@ def width_published(
     so it wins the overhang and loses the width. That is why the caller records
     `width_source` separately.
 
+    ⚠️ **Returns the rays on `left_of`'s sign, not sorted into (near, far).**
+    `Station` derives the ordering, so the near/far convention lives in exactly
+    one place — `Report.spans`' argument, applied to a pair rather than a
+    population. ⚠️ Nothing reads the *side*: `_partner_at` casts both ways.
+
     Returns an empty name and NaN distances when nobody spanned. The name is the
     presence test; a NaN width summed into a distribution is not.
     """
-    chosen, near, far = "", float("nan"), float("nan")
+    chosen, ahead, behind = "", float("nan"), float("nan")
     spread: list[float] = []
     for name, forward, backward in sides:
         if forward is None or backward is None:
             continue
         spread.append(forward + backward)
         if not chosen:
-            chosen, near, far = name, min(forward, backward), max(forward, backward)
-    return chosen, near, far, spread
+            chosen, ahead, behind = name, forward, backward
+    return chosen, ahead, behind, spread
 
 
 def survey(
@@ -567,6 +808,7 @@ def survey(
         indexes.append((entry.name, index))
 
     nodes = np.asarray([node["pos"] for node in graph["nodes"]], dtype=np.float64)[:, [0, 2]]
+    centrelines = graph_edges(graph)
 
     for edge in graph["edges"]:
         if int(edge["elevation_level"]) != 0:
@@ -591,7 +833,7 @@ def survey(
             # One solve, two readings. See `_sides`.
             sides = _sides(origin, normal, indexes, max_ray_m)
             chosen, nearest, spread = nearest_published(sides)
-            spanner, near, far, span_spread = width_published(sides)
+            spanner, ahead, behind, span_spread = width_published(sides)
 
             if spanner and len(span_spread) > 1:
                 report.width_agreement.append(max(span_spread) - min(span_spread))
@@ -601,16 +843,32 @@ def survey(
             if len(spread) > 1:
                 report.agreement.append(max(spread) - min(spread))
 
+            near_junction = bool(np.min(np.hypot(*(nodes - origin).T)) <= junction_m)
+            # ⚠️ **The skip mirrors `edge_widths`' own filter and must keep
+            # mirroring it.** `_candidate` votes over `report.spans` with junction
+            # stations dropped, so a partner found anywhere else is measured and
+            # never read — 6,604 of 12,502 stations on Wan Chai. `-1`/NaN is
+            # already the "reached no graph edge" sentinel, so no reader can tell
+            # a skipped station from an unanswered one. Widen that filter and this
+            # guard has to widen with it.
+            partner_edge, partner_offset = (
+                _partner_at(centrelines, origin, normal, along[[0, 2]], max_ray_m, edge=edge_id)
+                if spanner and not near_junction
+                else (-1, float("nan"))
+            )
+
             report.stations.append(
                 Station(
                     edge=edge_id,
                     nearest_m=nearest,
                     overhang_m=half_width_at(drawn_half_widths, vertex) - nearest,
                     source=chosen,
-                    near_junction=bool(np.min(np.hypot(*(nodes - origin).T)) <= junction_m),
+                    near_junction=near_junction,
                     width_source=spanner,
-                    width_near_m=near,
-                    width_far_m=far,
+                    width_forward_m=ahead,
+                    width_backward_m=behind,
+                    partner_edge=partner_edge,
+                    partner_offset_deg=partner_offset,
                 )
             )
             report.edges_measured.add(edge_id)
@@ -657,6 +915,46 @@ class EdgeWidth:
     source: str
     refused: bool
 
+    # ── the decomposition (`Q95` follow-on) ───────────────────────────────
+    #
+    # This edge's own carriageway, taken as twice the median NEAR ray: the
+    # centreline is read as the middle of the carriageway it is drawn in, and
+    # the far ray — the one that crosses the median and the opposed
+    # carriageway — takes no part in it.
+    #
+    # ⚠️ **An assumption, and the residual below is the only thing that can
+    # contradict it.** It is measured for every edge, paired or not, because a
+    # number recorded only where it survives is `Q58`'s `drawn_gauge_m` trap.
+    own_m: float = float("nan")
+    # The edge this one's own stations voted for, after the bearing bar.
+    candidate: int | None = None
+    # …and the same edge only where the vote is MUTUAL. `surface.py` measures
+    # its pair gap from both directions because a one-sided measure lets the
+    # two halves disagree, and the region's pairs did disagree, by up to 3.9 m.
+    # The same argument applies to the pairing itself.
+    partner: int | None = None
+    # Span minus both carriageways: what is left for the median, symmetric over
+    # the pair. 🔴 **Negative is the reachable failure** — the parts exceed the
+    # whole, which cannot be true, so `own = 2 x near` has failed on this pair.
+    median_gap_m: float = float("nan")
+    # How far the pair's two halves disagree about the span they both crossed.
+    # Reported, never gated: this tool grades rather than checks.
+    span_disagreement_m: float = float("nan")
+    # Whether `own_m` falls outside the manual's *dual* column. Separate from
+    # `refused` on purpose: a row may have a perfectly readable span and an
+    # unreadable half, and pooling the two flags would hide which failed.
+    own_refused: bool = True
+
+    @property
+    def decomposed(self) -> bool:
+        """Whether this row's `own_m` is a carriageway width that may be read.
+
+        Mutually paired, the residual non-negative, and the half inside the
+        manual's dual column — a different column from the span's, because a
+        decomposed half is by definition one carriageway of a pair.
+        """
+        return self.partner is not None and self.median_gap_m >= 0.0 and not self.own_refused
+
 
 def edge_widths(report: Report, bounds: WidthBounds, *, minimum_n: int = 3) -> list[EdgeWidth]:
     """Per-edge span: the median FIRST, then the refusal.
@@ -686,6 +984,7 @@ def edge_widths(report: Report, bounds: WidthBounds, *, minimum_n: int = 3) -> l
             continue
         widths = [s.width_m for s in stations]
         median = float(np.median(widths))
+        own = 2.0 * float(np.median([s.width_near_m for s in stations]))
         rows.append(
             EdgeWidth(
                 edge=edge_id,
@@ -695,9 +994,65 @@ def edge_widths(report: Report, bounds: WidthBounds, *, minimum_n: int = 3) -> l
                 off_centre=float(np.median([s.off_centre for s in stations])),
                 source=_dominant(s.width_source for s in stations),
                 refused=not bounds.hard_min_m <= median <= bounds.max_m,
+                own_m=own,
+                candidate=_candidate(stations, bounds),
+                own_refused=not bounds.hard_min_m <= own <= bounds.dual_max_m,
             )
         )
+    _pair_up(rows, report)
     return sorted(rows, key=lambda row: -row.median_m)
+
+
+def _candidate(stations: list[Station], bounds: WidthBounds) -> int | None:
+    """The edge this one's stations most often found within reach either side.
+
+    Modal rather than nearest-anything: an edge is walked at 4 m stations and a
+    junction mouth at one end can hand two or three of them a cross street, so
+    taking any single station's answer would let the shortest edges be paired by
+    their worst reading. `_dominant` makes the same argument for the publisher.
+
+    ⚠️ **This is where the bearing bar is applied, and it is applied to a
+    measurement `survey` already took.** The angle was recorded per station and
+    judged nowhere, so sweeping the bar re-reads the same survey rather than
+    re-walking the region — which is what makes it mutation-checkable at all.
+    """
+    votes = Counter(
+        station.partner_edge
+        for station in stations
+        if station.partner_edge >= 0
+        and station.partner_offset_deg <= bounds.pair_bearing_tolerance_deg
+    )
+    return votes.most_common(1)[0][0] if votes else None
+
+
+def _pair_up(rows: list[EdgeWidth], report: Report) -> None:
+    """Resolve mutual pairs and fill each half's residual, in place.
+
+    🔴 **Mutual, and one-way both ways.** `surface.py` measures its pair gap from
+    both directions and says why: a one-sided measure lets the two halves
+    disagree, and the region's pairs did disagree, by up to 3.9 m. The same holds
+    for the pairing itself — an edge that finds a neighbour on either side
+    has found *something*, and only the neighbour finding it back says the two
+    are halves of one road. A `direction=both` edge is excluded on the far
+    stronger ground that it is already a whole carriageway; pairing it would
+    decompose a street into itself.
+
+    ⚠️ **The residual is symmetric, `0.5 x (span_A + span_B)`**, for the reason
+    `_centreline_gap_m` gives: the two halves are supposed to name the same pair
+    of kerbs, so taking either edge's own span would publish two different
+    residuals for one median.
+    """
+    by_edge = {row.edge: row for row in rows}
+    for row in rows:
+        other = by_edge.get(row.candidate) if row.candidate is not None else None
+        if other is None or other.candidate != row.edge:
+            continue
+        ways = (report.directions.get(row.edge), report.directions.get(other.edge))
+        if ways != (FORWARD, FORWARD):
+            continue
+        row.partner = other.edge
+        row.span_disagreement_m = abs(row.median_m - other.median_m)
+        row.median_gap_m = 0.5 * (row.median_m + other.median_m) - row.own_m - other.own_m
 
 
 @dataclass
@@ -767,6 +1122,7 @@ def render(
     max_ray_m: float,
     junction_m: float,
     bounds: WidthBounds | None,
+    rows: list[EdgeWidth] | None = None,
 ) -> str:
     lines: list[str] = []
     lines.append("published carriageway edge, segments read in region:")
@@ -881,11 +1237,20 @@ def render(
             f"{report.names.get(edge_id, 'unnamed')}"
         )
     if bounds is not None:
-        lines.extend(_render_width(report, bounds, max_ray_m=max_ray_m))
+        lines.extend(
+            _render_width(
+                report,
+                bounds,
+                max_ray_m=max_ray_m,
+                rows=edge_widths(report, bounds) if rows is None else rows,
+            )
+        )
     return "\n".join(lines)
 
 
-def _render_width(report: Report, bounds: WidthBounds, *, max_ray_m: float) -> list[str]:
+def _render_width(
+    report: Report, bounds: WidthBounds, *, max_ray_m: float, rows: list[EdgeWidth]
+) -> list[str]:
     """The two-sided half (`Q95`), appended below the overhang report.
 
     Not behind a flag. CLAUDE.md already requires this tool's table pasted for a
@@ -970,7 +1335,6 @@ def _render_width(report: Report, bounds: WidthBounds, *, max_ray_m: float) -> l
             f"{_percentiles(values, (50,))[0]:>9.2f} {_share_over(values, bounds.max_m):>7.1%}"
         )
 
-    rows = edge_widths(report, bounds)
     published = [row for row in rows if not row.refused]
     lines.append("")
     lines.append("per edge: median over non-junction spanned stations, n >= 3, THEN the refusal")
@@ -1000,6 +1364,8 @@ def _render_width(report: Report, bounds: WidthBounds, *, max_ray_m: float) -> l
             f"{sum(1 for m in below if m < bounds.min_m)} of {len(below)} — "
             "reported, never refused (3.4.2.2)"
         )
+
+    lines.extend(_render_pairs(rows, report, bounds))
 
     lines.append("")
     lines.append(
@@ -1040,6 +1406,158 @@ def _render_width(report: Report, bounds: WidthBounds, *, max_ray_m: float) -> l
     return lines
 
 
+def _render_pairs(rows: list[EdgeWidth], report: Report, bounds: WidthBounds) -> list[str]:
+    """The decomposition: a one-way span split back into two carriageways.
+
+    🔴 **A third table with different rules, and it must not be pooled into the
+    one above.** That one publishes a *span* on a one-way edge and says so; this
+    one publishes a *width*, on the far smaller population where a partner was
+    found on both sides. Averaging the two would restate `Q57`'s own
+    generalisation — a property established on one population and quoted for
+    another — which is the error the span table was careful about.
+    """
+    one_way = [row for row in rows if report.directions.get(row.edge) == FORWARD]
+    # ⚠️ **Counted over `one_way`, not over every row, or the funnel lies.**
+    # `_candidate` never looks at direction, so a two-way edge with an
+    # anti-parallel neighbour votes and then cannot possibly be found back —
+    # `_pair_up` gates on `(FORWARD, FORWARD)`. Counted over all rows, the drop
+    # from voted to mutual conflates "the neighbour did not vote back" with "the
+    # edge was two-way all along", which is the one thing this line reports.
+    voted = [row for row in one_way if row.candidate is not None]
+    mutual = [row for row in rows if row.partner is not None]
+    decomposed = [row for row in rows if row.decomposed]
+
+    lines = ["", "pairs: a one-way span split in two, own = 2 x the near ray, resolved both ways"]
+    lines.append(
+        f"  {len(one_way)} of {len(rows)} edges with a median are one-way; "
+        f"{len(voted)} found a centreline within {bounds.pair_bearing_tolerance_deg:.0f} deg "
+        f"of anti-parallel inside the ray cap; {len(mutual)} were found back"
+    )
+    if not mutual:
+        lines.append("  no mutual pair — nothing to decompose")
+        return lines
+
+    residuals = [row.median_gap_m for row in mutual]
+    negative = sum(1 for value in residuals if value < 0.0)
+    p50, p90, top = _percentiles(residuals, (50, 90, 100))
+    lines.append(
+        f"  residual = span - both carriageways, over the {len(mutual)} mutual rows "
+        f"(n exceeds the {len(decomposed)} read)"
+    )
+    lines.append(f"    p50 {p50:>6.2f}  p90 {p90:>6.2f}  max {top:>6.2f}")
+    # 🔴 The reachable failure. The parts cannot exceed the whole, so a negative
+    # residual is `own = 2 x near` failing on that pair rather than a wide road.
+    lines.append(f"    negative — the split failing, not a finding about the city: {negative}")
+    lines.append(
+        f"    over {bounds.median_max_m:.1f} m, TD's widest transcribed separator (3.4.2.3): "
+        f"{sum(1 for value in residuals if value > bounds.median_max_m)} — reported, never refused"
+    )
+    lines.append(
+        f"    half outside TD's dual column ({bounds.hard_min_m:.1f}-{bounds.dual_max_m:.1f} m, "
+        f"Table 3.4.2.1): {sum(1 for row in mutual if row.own_refused)}"
+    )
+
+    # 🔴 **What the negatives ARE, rather than only how many.** A residual near
+    # minus the partner's own half is a span that never crossed the median: the
+    # ray stopped at the far kerb of the edge's own carriageway, so `span` is
+    # already one carriageway and there is nothing to split. That reads directly
+    # off `off_centre`, which is why it is reported as the two populations'
+    # distributions rather than as a new threshold — LOCKHART ROAD's three
+    # shared-endpoint pairs all land here.
+    for label, group in (
+        ("refused", [row for row in mutual if row.median_gap_m < 0.0]),
+        ("read", decomposed),
+    ):
+        if not group:
+            continue
+        centres = _percentiles([row.off_centre for row in group], (50, 90))
+        lines.append(
+            f"    off-centre of the {label:<8} rows: p50 {centres[0]:>5.2f}  p90 {centres[1]:>5.2f}"
+        )
+
+    spread = [row.span_disagreement_m for row in mutual]
+    p50, p90, top = _percentiles(spread, (50, 90, 100))
+    lines.append(
+        f"  the two halves disagree about the span they both crossed: "
+        f"p50 {p50:>5.2f}  p90 {p90:>5.2f}  max {top:>5.2f}"
+    )
+
+    if decomposed:
+        widths = [row.own_m for row in decomposed]
+        p50, p90 = _percentiles(widths, (50, 90))
+        lines.append(
+            f"  DECOMPOSED CARRIAGEWAY — a width, not a span   {len(decomposed):>4} edges  "
+            f"p50 {p50:>6.2f}  p90 {p90:>6.2f}"
+        )
+        gaps = [row.own_m - report.widths_authored.get(row.edge, 0.0) for row in decomposed]
+        p10, p50, p90 = _percentiles(gaps, (10, 50, 90))
+        lines.append(
+            f"    measured - authored width_m: p10 {p10:+.2f}  p50 {p50:+.2f}  p90 {p90:+.2f}; "
+            f"wider on {_share_over(gaps, 0.0):.0%}"
+        )
+
+    lines.append("")
+    lines.append(f"widest {_WORST} DECOMPOSED carriageways")
+    lines.append(f"  {'edge':>6} {'pair':>6} {'own':>7} {'span':>7} {'resid':>7} {'disag':>7} road")
+    for row in sorted(decomposed, key=lambda row: -row.own_m)[:_WORST]:
+        lines.append(
+            f"  {row.edge:>6} {row.partner:>6} {row.own_m:>7.2f} {row.median_m:>7.2f} "
+            f"{row.median_gap_m:>7.2f} {row.span_disagreement_m:>7.2f} "
+            f"{report.names.get(row.edge, 'unnamed')}"
+        )
+    return lines
+
+
+def write_widths(rows: list[EdgeWidth], report: Report, destination: Path) -> int:
+    """The per-edge rows as JSON, for the decision this tool cannot make.
+
+    ⚠️ **`etl/out/` is gitignored**, so this is a local artefact exactly as
+    `facade_lab.json` is — re-running the tool is the only way back, and no build
+    reads it. It exists because the assignment that follows needs a machine
+    readable answer, and pasting a table into a decision record is not one.
+
+    ⚠️ **Every row, decomposed or not, with the flags that say which.** Writing
+    only the readable rows would hand the next reader a file in which the
+    refusals never happened.
+
+    🔴 **Every float goes through `_number` and `allow_nan` is off.** A NaN is
+    reachable on more fields than the obviously-optional ones — `off_centre` is
+    NaN on a zero-width span, and a median over a list holding one is NaN too —
+    and `json.dumps` writes it as a bare `NaN` token that Python reads back and
+    every strict parser rejects. A file promising a machine-readable answer may
+    not be one Python alone can read; `allow_nan=False` is what makes a field
+    added later raise here rather than ship broken.
+    """
+
+    def _number(value: float) -> float | None:
+        return None if math.isnan(value) else round(value, 3)
+
+    payload = [
+        {
+            "edge": row.edge,
+            "road": report.names.get(row.edge, ""),
+            "direction": report.directions.get(row.edge, ""),
+            "n": row.n,
+            "span_m": _number(row.median_m),
+            "own_m": _number(row.own_m),
+            "off_centre": _number(row.off_centre),
+            "partner": row.partner,
+            "candidate": row.candidate,
+            "median_gap_m": _number(row.median_gap_m),
+            "span_disagreement_m": _number(row.span_disagreement_m),
+            "span_refused": row.refused,
+            "own_refused": row.own_refused,
+            "decomposed": row.decomposed,
+            "lanes_authored": report.lanes.get(row.edge),
+            "width_m_authored": report.widths_authored.get(row.edge),
+            "source": row.source,
+        }
+        for row in rows
+    ]
+    destination.write_text(json.dumps(payload, indent=1, sort_keys=True, allow_nan=False))
+    return len(payload)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     parser.add_argument("--city", required=True)
@@ -1071,6 +1589,21 @@ def main(argv: list[str] | None = None) -> int:
         # a ceiling nothing can move is not measuring anything (`Q72`).
         help="override the city's carriageway ceiling; above it a ray has crossed something",
     )
+    parser.add_argument(
+        "--pair-bearing-deg",
+        type=float,
+        # 🔴 The pairing rule's only free value, so it gets a flag for the reason
+        # `--max-width-m` has one: it must be swept from the command line rather
+        # than by editing the city file in a shell loop. `skidpad.sh` grew its
+        # `--sweep` after exactly that loop blanked the field it was sweeping and
+        # published a table of all-zero rows that read like a finding.
+        help="override how far off anti-parallel two centrelines may run and still pair",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="also write the per-edge rows to carriageway_width.json under the region's out dir",
+    )
     parser.add_argument("--sources-root", type=Path, help="override etl/sources")
     parser.add_argument("--out-root", type=Path, help="override etl/out")
     args = parser.parse_args(argv)
@@ -1089,6 +1622,42 @@ def main(argv: list[str] | None = None) -> int:
                 "carriageway_survey.width_bounds, so no span is graded."
             )
         bounds = replace(bounds, max_m=args.max_width_m)
+        if not bounds.hard_min_m < bounds.dual_max_m < bounds.max_m:
+            # `_width_bounds` enforces this ordering and `replace` goes round it.
+            # Left unchecked, `--max-width-m 10` keeps `dual_max_m` at 14.6 and
+            # the half of a pair is then bounded *looser* than the span that
+            # contains it — which retires the whole reason for reading TD's dual
+            # column instead of the single one.
+            raise SystemExit(
+                f"--max-width-m {args.max_width_m} leaves dual_max_m {bounds.dual_max_m} outside "
+                f"(hard_min_m {bounds.hard_min_m}, max_m {args.max_width_m}) — a carriageway of a "
+                "pair would be bounded looser than the span it sits in."
+            )
+    if args.json and bounds is None:
+        # Up here with the other two rather than beside the write, so a city with
+        # no bounds fails before the region is walked instead of after the whole
+        # report has printed.
+        raise SystemExit(
+            f"--json has nothing to write: city '{city.id}' declares no "
+            "carriageway_survey.width_bounds, so there are no per-edge rows."
+        )
+    if args.pair_bearing_deg is not None:
+        if bounds is None:
+            raise SystemExit(
+                f"--pair-bearing-deg has nothing to override: city '{city.id}' declares no "
+                "carriageway_survey.width_bounds, so no span is split."
+            )
+        if not 0.0 < args.pair_bearing_deg < 90.0:
+            # The config guard, repeated because an override goes round it. At 90
+            # a perpendicular side street reads as an opposed carriageway, which
+            # is the match the bar exists to refuse; at or below 0 nothing pairs
+            # and the sweep would report an empty table as a finding.
+            raise SystemExit(
+                f"--pair-bearing-deg {args.pair_bearing_deg} must lie in (0, 90): at 90 a "
+                "perpendicular centreline reads as an opposed carriageway, and at 0 nothing "
+                "pairs and the sweep reports an empty table as a finding."
+            )
+        bounds = replace(bounds, pair_bearing_tolerance_deg=args.pair_bearing_deg)
     if bounds is not None and 2.0 * args.max_ray_m <= bounds.max_m:
         # 🔴 The `drawn_gauge_m` trap, reachable from the command line. Two rays
         # capped at `max_ray_m` cannot sum past twice it, so a small enough cap
@@ -1112,6 +1681,11 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(
             "no station could be measured — is the region built and are the sources fetched?"
         )
+    # ⚠️ Computed once and handed to both readers. Printing one table and
+    # writing another from a second call would let the two drift — `_candidate`
+    # and `_dominant` both break ties on `Counter` insertion order, so agreement
+    # today is a property of the input rather than of the code.
+    rows = edge_widths(report, bounds) if bounds is not None else None
     print(
         render(
             report,
@@ -1119,8 +1693,16 @@ def main(argv: list[str] | None = None) -> int:
             max_ray_m=args.max_ray_m,
             junction_m=args.junction_m,
             bounds=bounds,
+            rows=rows,
         )
     )
+    if args.json and rows is not None:
+        destination = city.out_dir(args.region, args.out_root) / "carriageway_width.json"
+        log.info(
+            "%d edge rows -> %s (gitignored; re-run to rebuild)",
+            write_widths(rows, report, destination),
+            destination,
+        )
     # Grades, never checks. See the docstring, and CLAUDE.md's rule for the
     # sibling this follows.
     return 0

@@ -20,6 +20,8 @@ nothing shows up as a zero segment count in the first line of output.
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pytest
 from carriageway_margin import (
@@ -31,10 +33,12 @@ from carriageway_margin import (
     _segments,
     _sides,
     edge_widths,
+    graph_edges,
     lane_bracket,
     lane_verdict,
     main,
     nearest_published,
+    opposed_offset_deg,
     width_published,
 )
 
@@ -47,7 +51,15 @@ def _ask(indexes: list[tuple[str, _Index]]) -> list[tuple[str, float | None, flo
 
 
 def _bounds(**overrides: object) -> WidthBounds:
-    defaults = {"max_m": 16.5, "min_m": 7.3, "hard_min_m": 3.0, "lane_m": (3.0, 3.65)}
+    defaults = {
+        "max_m": 16.5,
+        "min_m": 7.3,
+        "hard_min_m": 3.0,
+        "lane_m": (3.0, 3.65),
+        "dual_max_m": 14.6,
+        "median_max_m": 5.5,
+        "pair_bearing_tolerance_deg": 30.0,
+    }
     return WidthBounds(**{**defaults, **overrides})  # type: ignore[arg-type]
 
 
@@ -301,18 +313,38 @@ class TestWidthPublished:
         assert near + far == pytest.approx(16.0)
         assert sorted(spread) == [pytest.approx(8.0), pytest.approx(16.0)]
 
-    def test_the_sides_are_sorted_so_the_pair_carries_no_convention(self) -> None:
-        """`left_of`'s sign is irrelevant to a sum, and `off_centre` reads the
-        pair as near-then-far rather than left-then-right."""
+    def test_the_rays_come_back_signed_rather_than_sorted(self) -> None:
+        """⚠️ **The sort moved to `Station` and the sign is now load-bearing.**
+        A sum needs no side convention, which is why this returned `(near, far)`
+        and threw the sign away. Splitting a span does need one: the partner
+        carriageway lies across the *far* ray specifically, so a search has to
+        know which way that is. Reading the pair back the other way round is
+        `TestSignedRays`."""
         index = _index([(-50.0, 2.0), (50.0, 2.0)], [(-50.0, -11.0), (50.0, -11.0)])
 
-        _, near, far, _ = width_published(_ask([("only", index)]))
+        _, ahead, behind, _ = width_published(_ask([("only", index)]))
         flipped = width_published(
             _sides(np.zeros(2), np.array([0.0, -1.0]), [("only", index)], 15.0)
         )
 
-        assert (near, far) == (pytest.approx(2.0), pytest.approx(11.0))
-        assert flipped[1:3] == (pytest.approx(2.0), pytest.approx(11.0))
+        assert (ahead, behind) == (pytest.approx(2.0), pytest.approx(11.0))
+        assert flipped[1:3] == (pytest.approx(11.0), pytest.approx(2.0))
+
+
+class TestSignedRays:
+    """The near/far ordering is derived, so it survives `left_of`'s sign."""
+
+    def test_a_station_reads_the_same_whichever_way_the_normal_points(self) -> None:
+        """`off_centre` and `width_m` are what the rest of the report is built
+        from, and neither may depend on which way the polyline happens to run."""
+        one = Station(1, 0.0, 0.0, "only", False, "only", 2.0, 11.0)
+        other = Station(1, 0.0, 0.0, "only", False, "only", 11.0, 2.0)
+
+        for station in (one, other):
+            assert station.width_near_m == pytest.approx(2.0)
+            assert station.width_far_m == pytest.approx(11.0)
+            assert station.width_m == pytest.approx(13.0)
+            assert station.off_centre == pytest.approx(9.0 / 13.0)
 
 
 class TestLaneBracket:
@@ -342,9 +374,21 @@ class TestLaneBracket:
 
 
 def _station(
-    edge: int, near: float, far: float, *, junction: bool = False, spanned: bool = True
+    edge: int,
+    near: float,
+    far: float,
+    *,
+    junction: bool = False,
+    spanned: bool = True,
+    partner: int = -1,
+    offset_deg: float = 0.0,
 ) -> Station:
-    """One station. `spanned=False` is the near side answering and no far ray."""
+    """One station. `spanned=False` is the near side answering and no far ray.
+
+    `near` and `far` go in on `left_of`'s own sign — forward and backward — and
+    `Station` sorts them. Passing them the other way round must produce the same
+    row, which `TestSignedRays` is the test of.
+    """
     return Station(
         edge=edge,
         nearest_m=near,
@@ -352,8 +396,10 @@ def _station(
         source="only",
         near_junction=junction,
         width_source="only" if spanned else "",
-        width_near_m=near if spanned else float("nan"),
-        width_far_m=far if spanned else float("nan"),
+        width_forward_m=near if spanned else float("nan"),
+        width_backward_m=far if spanned else float("nan"),
+        partner_edge=partner,
+        partner_offset_deg=offset_deg,
     )
 
 
@@ -538,6 +584,210 @@ class TestEdgeWidths:
 
         assert row.n == 3
         assert row.median_m == pytest.approx(8.0)
+
+
+def _graph(*edges: tuple[int, list[tuple[float, float]], int]) -> dict[str, Any]:
+    """A graph of level-0 centrelines, as `graph_edges` reads one."""
+    return {
+        "edges": [
+            {
+                "id": edge_id,
+                "elevation_level": level,
+                "polyline": [[x, 0.0, z] for x, z in points],
+            }
+            for edge_id, points, level in edges
+        ]
+    }
+
+
+class TestCastHit:
+    """The directional cast that names an edge, not just a distance."""
+
+    def test_the_owner_comes_back_with_the_distance(self) -> None:
+        index = graph_edges(_graph((7, [(-50.0, 6.0), (50.0, 6.0)], 0)))
+
+        ahead, behind = index.cast_hit(np.zeros(2), np.array([0.0, 1.0]), 15.0, exclude=1)
+
+        assert behind is None
+        assert ahead is not None
+        distance, row = ahead
+        assert distance == pytest.approx(6.0)
+        assert int(index.owners[row]) == 7
+
+    def test_both_directions_come_from_one_solve(self) -> None:
+        """🔴 `cast_both`'s argument one level down: negating the direction
+        negates `along` and leaves the cell set and `across` untouched, so
+        casting twice re-pays the whole gather to reuse half of it — and makes
+        `_solve`'s "one arithmetic, every caller" claim false. Both sides must
+        come back positive, and reading them from the flipped normal must agree."""
+        index = graph_edges(
+            _graph((4, [(-50.0, 5.0), (50.0, 5.0)], 0), (9, [(-50.0, -11.0), (50.0, -11.0)], 0))
+        )
+
+        ahead, behind = index.cast_hit(np.zeros(2), np.array([0.0, 1.0]), 15.0, exclude=1)
+        flipped = index.cast_hit(np.zeros(2), np.array([0.0, -1.0]), 15.0, exclude=1)
+
+        assert ahead is not None and behind is not None
+        assert (ahead[0], int(index.owners[ahead[1]])) == (pytest.approx(5.0), 4)
+        assert (behind[0], int(index.owners[behind[1]])) == (pytest.approx(11.0), 9)
+        assert (flipped[0][0], flipped[1][0]) == (pytest.approx(11.0), pytest.approx(5.0))
+
+    def test_the_caller_s_own_polyline_is_excluded(self) -> None:
+        """⚠️ Not an optimisation. The station sits *on* its own centreline, so
+        without this every cast returns that edge at zero distance and no
+        partner is ever found — a pairing rule that silently pairs nothing."""
+        index = graph_edges(
+            _graph((1, [(-50.0, 0.0), (50.0, 0.0)], 0), (2, [(-50.0, 6.0), (50.0, 6.0)], 0))
+        )
+
+        ahead, _ = index.cast_hit(np.zeros(2), np.array([0.0, 1.0]), 15.0, exclude=1)
+
+        assert ahead is not None
+        assert int(index.owners[ahead[1]]) == 2
+
+    def test_the_nearest_wins_rather_than_the_first_read(self) -> None:
+        """A bucket holds its segments in the order they were read, so a
+        first-hit rule would make the partner depend on graph ordering."""
+        index = graph_edges(
+            _graph((9, [(-50.0, 11.0), (50.0, 11.0)], 0), (4, [(-50.0, 5.0), (50.0, 5.0)], 0))
+        )
+
+        ahead, _ = index.cast_hit(np.zeros(2), np.array([0.0, 1.0]), 15.0, exclude=1)
+
+        assert ahead is not None
+        assert int(index.owners[ahead[1]]) == 4
+
+    def test_a_ramp_overhead_is_not_indexed(self) -> None:
+        """A flyover shares plan position with the street beneath it and is
+        nobody's opposed carriageway."""
+        index = graph_edges(_graph((3, [(-50.0, 6.0), (50.0, 6.0)], 2)))
+
+        assert index.cast_hit(np.zeros(2), np.array([0.0, 1.0]), 15.0, exclude=1) == (None, None)
+
+
+class TestOpposedOffset:
+    """Anti-parallel, not merely parallel — `roads.py` normalises one-ways to
+    `forward`, so a pair's two polylines are drawn 180 deg apart and a service
+    road running alongside its neighbour is drawn 0 deg apart."""
+
+    def test_an_opposed_centreline_reads_zero(self) -> None:
+        assert opposed_offset_deg(np.array([1.0, 0.0]), np.array([-1.0, 0.0])) == pytest.approx(0.0)
+
+    def test_a_centreline_running_alongside_reads_one_eighty(self) -> None:
+        assert opposed_offset_deg(np.array([1.0, 0.0]), np.array([1.0, 0.0])) == pytest.approx(
+            180.0
+        )
+
+    def test_a_perpendicular_centreline_reads_ninety(self) -> None:
+        """Which is why the config refuses a tolerance at 90: at that bar a side
+        street meeting a main road is its own carriageway's partner."""
+        assert opposed_offset_deg(np.array([1.0, 0.0]), np.array([0.0, 1.0])) == pytest.approx(90.0)
+
+
+def _pair_report(
+    near_a: float, far_a: float, near_b: float, far_b: float, **station: Any
+) -> Report:
+    """Two one-way edges, each voting for the other at every station."""
+    report = Report()
+    report.stations = [
+        *[_station(1, near_a, far_a, partner=2, **station) for _ in range(3)],
+        *[_station(2, near_b, far_b, partner=1, **station) for _ in range(3)],
+    ]
+    report.directions = {1: FORWARD, 2: FORWARD}
+    return report
+
+
+class TestPairing:
+    """The mutual, anti-parallel pairing that splits a span."""
+
+    def test_a_mutual_pair_decomposes(self) -> None:
+        rows = {row.edge: row for row in edge_widths(_pair_report(3.0, 10.0, 3.0, 10.0), _bounds())}
+
+        assert rows[1].partner == 2 and rows[2].partner == 1
+        assert rows[1].own_m == pytest.approx(6.0)
+        # 13.0 span, two 6.0 m carriageways, 1.0 m left for the median.
+        assert rows[1].median_gap_m == pytest.approx(1.0)
+        assert rows[1].decomposed is True
+
+    def test_a_one_sided_vote_does_not_pair(self) -> None:
+        """🔴 `surface.py` measures its pair gap from both directions because a
+        one-sided measure lets the two halves disagree, and the region's pairs
+        did disagree, by up to 3.9 m. The same holds for the pairing itself: an
+        edge that finds a neighbour has found *something*, and only the
+        neighbour finding it back says the two are halves of one road."""
+        report = _pair_report(3.0, 10.0, 3.0, 10.0)
+        for station in report.stations:
+            if station.edge == 2:
+                station.partner_edge = 99
+
+        rows = {row.edge: row for row in edge_widths(report, _bounds())}
+
+        assert rows[1].candidate == 2
+        assert rows[1].partner is None
+        assert rows[1].decomposed is False
+
+    def test_a_partner_past_the_bearing_bar_casts_no_vote(self) -> None:
+        """The angle is measured in `survey` and judged here, so the bar can be
+        swept without re-walking the region."""
+        report = _pair_report(3.0, 10.0, 3.0, 10.0, offset_deg=45.0)
+
+        rows = {row.edge: row for row in edge_widths(report, _bounds())}
+
+        assert rows[1].candidate is None
+        assert rows[1].partner is None
+        # …and the same survey pairs once the bar admits 45 deg. This is what
+        # makes the sweep a re-read rather than a re-measurement.
+        loose = edge_widths(report, _bounds(pair_bearing_tolerance_deg=60.0))
+        assert {row.edge: row for row in loose}[1].partner == 2
+
+    def test_a_two_way_edge_is_not_paired(self) -> None:
+        """It is already a whole carriageway; pairing it would decompose a
+        street into itself."""
+        report = _pair_report(3.0, 10.0, 3.0, 10.0)
+        report.directions = {1: BOTH, 2: FORWARD}
+
+        rows = {row.edge: row for row in edge_widths(report, _bounds())}
+
+        assert rows[1].partner is None and rows[2].partner is None
+
+
+class TestDecomposition:
+    """`own = 2 x near` is an assumption, and the residual is what can refuse it."""
+
+    def test_a_negative_residual_refuses_the_split_and_is_reachable(self) -> None:
+        """🔴 The parts cannot exceed the whole. Two 8 m carriageways inside a
+        13 m span is `own = 2 x near` failing on that pair, not a finding about
+        the city — and the counter is proven reachable here rather than read at
+        0, which is `Q72`'s test of a counter."""
+        rows = {row.edge: row for row in edge_widths(_pair_report(4.0, 9.0, 4.0, 9.0), _bounds())}
+
+        assert rows[1].median_gap_m == pytest.approx(-3.0)
+        assert rows[1].decomposed is False
+        assert sum(1 for row in rows.values() if row.median_gap_m < 0.0) == 2
+
+    def test_own_m_is_recorded_over_the_refusals_too(self) -> None:
+        """⚠️ `Q58`'s `drawn_gauge_m` trap. A half recorded only where it survives
+        is confined to the bar by construction, and the table would report a
+        clean split whatever the region did. `n` exceeding the rows read is the
+        tell, so an unpaired edge still carries its measured half."""
+        report = Report()
+        report.stations = [_station(1, 3.0, 10.0) for _ in range(3)]
+        report.directions = {1: FORWARD}
+
+        (row,) = edge_widths(report, _bounds())
+
+        assert row.partner is None
+        assert row.own_m == pytest.approx(6.0)
+
+    def test_a_half_outside_the_dual_column_is_refused_separately(self) -> None:
+        """A row may have a perfectly readable span and an unreadable half, so
+        the two flags do not pool. 16.0 m of span passes `max_m`; a 15.0 m half
+        of a pair is above Table 3.4.2.1's dual four-lane 14.6."""
+        rows = {row.edge: row for row in edge_widths(_pair_report(7.5, 8.5, 0.4, 0.5), _bounds())}
+
+        assert rows[1].refused is False
+        assert rows[1].own_refused is True
+        assert rows[1].decomposed is False
 
 
 class TestRayCapRefusal:

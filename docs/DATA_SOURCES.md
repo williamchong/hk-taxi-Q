@@ -492,7 +492,7 @@ filter: **796 centrelines, 529 intersections, 217 turns, 83 speed limits, 14 bus
 | Speed limits cover **under 10%** | 77 of 796 edges, all 70 or 80 km/h, as free text with units | Hong Kong signs only exceptions to the 50 km/h urban default, so the default must come from city config |
 | **`NSR` is the kerbside yellow lines, and `VEHICLE_TYPE` is the field that decides how many** | **579 features / 44,220 m** in region, **kerb-referenced** (median **2.76 m** off the nearest centreline, p99 8.24 m, 0% on it). ⚠️ **`VEHICLE_TYPE` decides which features are paint, and `Q56` corrected who is on that list.** `1` "all motor vehicles" (33,074 m) **and** `5` "Others" (8,323 m) are painted — the specification still names no class for `5`, but the Traffic Aids Drawings draw a line on **93.9%** of its metres in region, 96% of them single yellow. `2`/`3`/`4` (taxis, PLBs, goods vehicles, 2,822 m) are **refused, and not because they are signs** — the drawings paint those too (code 2 at 100%, code 4 at 90.2%, code 3 at 48.4%). They are refused because a class-specific restriction is not a plain yellow line and the codec cannot say which class. `TIME_ZONE` separates double from single outright: `1` is 24 hours (27,118 m, double), `2`–`5` are posted hours (5,956 m, single). `EFFECTIVE_DAY` is uniformly `1` in region and carries nothing. `REMARKS` is `None` for 31,919 m of the 33,074 and **never mentions taxis** within `VEHICLE_TYPE = 1`. `ONSTREETPARK` carries **607** bays as the complement | Ingested by `pipeline/kerbside.py` since `P3-13`, and it is the **one overlay that is not a key join**: `NSR` carries `ST_CODE_1..6` — street codes — where `SPEED_LIMIT` and `BUS_ONLY_LANE` carry `ROUTE_ID`, so it is linear-referenced onto the finished graph. **33,385 m over 722 edge sides** survive (26,065 m over 650 before `Q56` admitted code 5); overlapping features are deduped into 1 m cells rather than counted twice. ⚠️ The layer is a *Measured* MultiLineString and its M values are **not** a join — there is no route key to resolve them against |
 | **Lane counts do not exist *in this dataset*** | no lane attribute in any field of any layer | `roadgraph.json`'s `lanes` is authored policy keyed on speed limit, not published data. ⚠️ **`Q57` narrowed this claim on 2026-08-20 without refuting it.** No source in the estate publishes a lane *count*; Traffic Aids Drawings publishes the lane *lines* — `RM1101`/`RM1102` LANE LINES (212 features in region), `RM1103` CENTRE LINE, `RM1109` EDGE OF CARRIAGEWAY (317) — so a count is derivable per cross-section from geometry. It is authored today because nobody has counted them, not because the city withholds the number. 🔴 **Narrowed again on 2026-08-28 by `Q94`, and this time from a layer already in the bundle**: a *row of turn arrows across a carriageway is a lane count*, stated by the publisher and read by a shipped stage. `DTAD_RD_MARK_SYM_PT` puts three symbols side by side at one station on STEWART ROAD `e505` — left | left-or-right | right at offsets +2.96 / −0.32 / −3.59 — which is a three-lane approach written down. Grouped by along-edge station and split at 1.6 m, **31 of the 306 arrow-carrying edges imply more lanes than the graph gives them**, nine of them four against two. It is a *sparser* source than the lane lines — only 306 edges carry arrows — but it needs no new geometry and no new fetch, and it is what `Q94` measured the cost of ignoring |
-| Dual carriageways are **opposed one-way pairs** | 6 places where two one-way edges share both endpoints in opposite directions, **1.96–3.85 m** apart; three of them are Lockhart Road | Lockhart Road is two-way *modelled as two one-ways*. A **lower bound** — carriageways that do not share both endpoints are not counted |
+| Dual carriageways are **opposed one-way pairs** | 6 places where two one-way edges share both endpoints in opposite directions, **1.96–3.85 m** apart; three of them are Lockhart Road. ✅ **The lower bound is measured since 2026-08-29**: pairing geometrically instead of by shared endpoints, **110 of 352** one-way edges with a median find an anti-parallel partner that finds them back (`Q95`) | Lockhart Road is two-way *modelled as two one-ways*. A **lower bound** — carriageways that do not share both endpoints are not counted. ⚠️ **The six are the only ground truth this repo has for a pairing rule, and they are what caught the first one**: capping the partner search at the station's own far ray missed all three Lockhart pairs, because their spans (7.06–8.08 m) stop short of a partner centreline 6.82 m away. 5 of 6 recover under the ray cap; the sixth is 9.0 m long and has no station clear of a node |
 | Turn geometry is a **hint, not the truth** | `EDGE1END` names an end that touches the second edge in 213 of 217; in the other 4 the *opposite* end coincides exactly | Take the shared node; use the field only to break ties. All 217 then resolve |
 | The **null sentinel has four spellings** | `-99`, plus three using full-width digits with an en-dash or full-width hyphen (`–９９`, `－９９`, `-９９`) | Normalise NFKC *and* fold Unicode dashes before comparing. A raw string compare catches one of four |
 
@@ -784,9 +784,28 @@ of 9,531** spanned stations; the figures live in `hong_kong.yaml`'s
 `carriageway_survey.width_bounds`, not in the tool, per the city-specific note below.
 
 🔴 **It bounds plausibility and does NOT filter the confound, which is the thing to know before
-quoting a span.** 621 of the region's 737 level-0 edges are one-way and run as opposed pairs, so the
-ray spans both carriageways and two of them summing to 13 m pass 16.5 m as a legal four-lane single
-carriageway. `Q95` publishes those as a **kerb-to-kerb span**, never as a carriageway width.
+quoting a span.** 621 of the region's 737 level-0 edges are one-way, and where two of them run as an
+opposed pair the ray spans both carriageways — two summing to 13 m pass 16.5 m as a legal four-lane
+single carriageway. `Q95` publishes those as a **kerb-to-kerb span**, never as a carriageway width.
+
+⚠️ **"…and run as opposed pairs" was an assertion and it is now measured, 2026-08-29.** Of the 352
+one-way edges that carry a median, **142** find an anti-parallel centreline within the ray cap and
+**110** are found back by it. 🔴 **And the ray does not span both carriageways on most of those**: 96
+of the 110 refuse their own split, because the span turns out to be *one* carriageway — the ray stops
+at the far kerb of the edge it is walking and never crosses the median. All three LOCKHART ROAD pairs
+of the six in the Road Network v2 table behave that way. The population separates on `off_centre` (p50 **0.20** refused
+against **0.58** read), so a span is a two-carriageway crossing only at the high end of that column.
+`Q95` carries the numbers.
+
+✅ **Table 3.4.2.1's *dual* column and 3.4.2.3 are bounds now, not only prose.** A carriageway split
+out of a pair is by definition one half of a dual, so it is bounded by that column's widest figure
+(**14.6 m**, dual four-lane trunk) rather than by the single-carriageway 16.5 m the *span* is bounded
+by; and the separator between the two is bounded by the **5.5 m** double-track tram reserve, the
+widest thing transcribed here that may legitimately sit between them. Both live in
+`hong_kong.yaml`'s `carriageway_survey.width_bounds` as `dual_max_m` and `median_max_m`.
+⚠️ **`median_max_m` is reported and never refused**: a wide residual is ambiguous — a real median, or
+a centreline the instrument has mis-centred — where a *negative* one is not, and a distribution
+sitting above it is a finding about a central-reserve clause nobody has transcribed.
 
 ⚠️ **4.3.9.8's 3.0-3.65 m is the lane divisor, and `roads.lane_width_m` must never be.** 3.2 m is the
 authored constant the whole question is about; dividing by it makes the instrument agree with the

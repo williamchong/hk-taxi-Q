@@ -1851,6 +1851,44 @@ class TestCarriagewaySurvey:
 
         assert (bounds.max_m, bounds.min_m, bounds.hard_min_m) == (16.5, 7.3, 3.0)
         assert bounds.lane_m == (3.0, 3.65)
+        # The decomposition's three. `dual_max_m` is Table 3.4.2.1's dual
+        # column and deliberately not the single column `max_m` reads.
+        assert (bounds.dual_max_m, bounds.median_max_m) == (14.6, 5.5)
+        assert bounds.pair_bearing_tolerance_deg == 30.0
+
+    def test_a_dual_ceiling_at_or_above_the_span_ceiling_is_rejected(self, rewrite) -> None:
+        """One carriageway of a pair is part of a span, so its ceiling has to sit
+        under the span's. Equal or above, the tighter dual column — the entire
+        reason for reading a second column — stops applying and the decomposed
+        half is bounded by nothing the whole was not already bounded by."""
+
+        def wide(doc: dict[str, Any]) -> None:
+            doc["carriageway_survey"]["width_bounds"]["dual_max_m"] = 16.5
+
+        with pytest.raises(ValueError, match="hard_min_m < dual_max_m < max_m"):
+            load_city("hong_kong", cities_root=rewrite(wide))
+
+    def test_a_separator_wider_than_the_span_is_rejected(self, rewrite) -> None:
+        """The residual is what is left of the span after both carriageways, so a
+        bound above the span's own ceiling bounds nothing."""
+
+        def wide(doc: dict[str, Any]) -> None:
+            doc["carriageway_survey"]["width_bounds"]["median_max_m"] = 16.5
+
+        with pytest.raises(ValueError, match="cannot be wider than the span"):
+            load_city("hong_kong", cities_root=rewrite(wide))
+
+    def test_a_pairing_tolerance_at_ninety_is_rejected(self, rewrite) -> None:
+        """At 90 a perpendicular centreline reads as opposed, so a side street
+        meeting a main road becomes its own carriageway's partner — the match the
+        bar exists to refuse. `_roadmarks` refuses its own tolerance at 90 for
+        the mirror-image reason."""
+
+        def flat(doc: dict[str, Any]) -> None:
+            doc["carriageway_survey"]["width_bounds"]["pair_bearing_tolerance_deg"] = 90.0
+
+        with pytest.raises(ValueError, match="perpendicular centreline"):
+            load_city("hong_kong", cities_root=rewrite(flat))
 
     def test_the_bounds_are_optional(self, rewrite) -> None:
         """A city whose manual nobody has transcribed reports the near-side

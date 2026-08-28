@@ -663,6 +663,40 @@ class WidthBounds:
     # which is `Q72`'s tautology one dimension over.
     lane_m: tuple[float, float]
 
+    # ── Decomposing a one-way span back into two carriageways ──────────────
+    #
+    # `max_m` above bounds a *span*: both kerbs, one publisher, one station.
+    # Where the centreline is half of an opposed pair that span is two
+    # carriageways and a separator, so the three below bound the parts rather
+    # than the whole. They are read off the same table and the same chapter.
+
+    # The widest ONE carriageway of an opposed pair. Table 3.4.2.1's dual
+    # column, which is a different column from the single one `max_m` comes
+    # from — a decomposed half is by definition a dual carriageway, so it gets
+    # the tighter ceiling the manual already publishes for it.
+    dual_max_m: float
+    # The widest thing that may legitimately sit *between* two opposed
+    # carriageways.
+    #
+    # ⚠️ Reported, never refused. A wide residual is ambiguous — a real median,
+    # or a centreline this instrument has mis-centred — and refusing on it would
+    # delete the second case rather than report it. What it bounds is
+    # plausibility, and a distribution that sits above it is a finding about a
+    # clause nobody has transcribed.
+    median_max_m: float
+    # How far off anti-parallel two centrelines may run and still be read as an
+    # opposed pair.
+    #
+    # 🔴 This is the block's only value with no clause behind it, and it is
+    # therefore the one that must be swept rather than chosen. `Q72`'s sibling
+    # objection is recorded at `DECISIONS.md`'s NO ENTRY entry: a pairing rule
+    # built on a free radius ran 8 → 29 → 49 → 80 as that radius went 10 → 30 m
+    # and was rejected for it. The search *distance* here is the station's own
+    # measured far ray and so has no knob; this angle is what is left, and the
+    # published sweep is what says whether it behaves like a bound or like that
+    # radius.
+    pair_bearing_tolerance_deg: float
+
 
 @dataclass(frozen=True)
 class CarriagewaySurvey:
@@ -3847,8 +3881,25 @@ def _width_bounds(body: Any, where: str) -> WidthBounds | None:
     # `.inf`, and a NaN passes every sign test below while making false every
     # comparison it feeds. The ordering guard would catch a NaN by accident;
     # `.inf` in `max_m` it would not.
-    metres = _measures(body, where, ("max_m", "min_m", "hard_min_m"), positive=True)
-    max_m, min_m, hard_min_m = metres["max_m"], metres["min_m"], metres["hard_min_m"]
+    # ⚠️ The angle rides in the same tuple as the metres. `_measures` is
+    # unit-agnostic and `_roadmarks` reads `bearing_tolerance_deg` beside
+    # `host_radius_m` and `station_m` for exactly this reason.
+    values = _measures(
+        body,
+        where,
+        (
+            "max_m",
+            "min_m",
+            "hard_min_m",
+            "dual_max_m",
+            "median_max_m",
+            "pair_bearing_tolerance_deg",
+        ),
+        positive=True,
+    )
+    max_m, min_m, hard_min_m = values["max_m"], values["min_m"], values["hard_min_m"]
+    dual_max_m, median_max_m = values["dual_max_m"], values["median_max_m"]
+    tolerance_deg = values["pair_bearing_tolerance_deg"]
 
     lane = _require(body, "lane_m", where)
     if not (isinstance(lane, list) and len(lane) == 2):
@@ -3874,7 +3925,45 @@ def _width_bounds(body: Any, where: str) -> WidthBounds | None:
             f"{where}:lane_m starts at {lane_m[0]} m, above hard_min_m {hard_min_m} m — "
             "a kept width would then bracket to no lanes at all"
         )
-    return WidthBounds(max_m=max_m, min_m=min_m, hard_min_m=hard_min_m, lane_m=lane_m)
+
+    # One carriageway of a pair is part of a span, so its ceiling must sit under
+    # the span's. Equal or above, the decomposed half is bounded by nothing the
+    # whole was not already bounded by, and the tighter dual column — the entire
+    # reason for reading a second column — stops applying.
+    if not hard_min_m < dual_max_m < max_m:
+        raise ValueError(
+            f"{where} must satisfy hard_min_m < dual_max_m < max_m, "
+            f"got {hard_min_m} / {dual_max_m} / {max_m}"
+        )
+    # A separator is what is left of a span after both carriageways, so a bound
+    # at or above the span's own ceiling bounds nothing. ⚠️ Deliberately NOT the
+    # stronger `2 * hard_min_m + median_max_m <= max_m`: that would tie a
+    # reported-only figure to two refusing ones, and `median_max_m` is reported
+    # precisely because a wide residual is ambiguous.
+    if not median_max_m < max_m:
+        raise ValueError(
+            f"{where}:median_max_m is {median_max_m} m, at or above max_m {max_m} m — "
+            "a separator cannot be wider than the span that contains it"
+        )
+    if tolerance_deg >= 90.0:
+        # At 90 a *perpendicular* centreline reads as opposed, so a side street
+        # meeting a main road becomes its own carriageway's partner — which is
+        # exactly the match this bar exists to refuse. `_roadmarks` refuses its
+        # own tolerance at 90 for the mirror-image reason.
+        raise ValueError(
+            f"{where}:pair_bearing_tolerance_deg is {tolerance_deg}; at 90 or more a "
+            "perpendicular centreline reads as an opposed carriageway, which is what it "
+            "exists to refuse"
+        )
+    return WidthBounds(
+        max_m=max_m,
+        min_m=min_m,
+        hard_min_m=hard_min_m,
+        lane_m=lane_m,
+        dual_max_m=dual_max_m,
+        median_max_m=median_max_m,
+        pair_bearing_tolerance_deg=tolerance_deg,
+    )
 
 
 _TRAMWAY_ROLES = ("line_type",)

@@ -191,8 +191,27 @@ Common emoji for this project:
   its cap: coverage 54.7 → 81.8% and non-junction p50 7.40 → 9.15 m from 10 to 25 m. ✅ It saturates
   at the 15 m default — kept spans peak there at 8,204 and *fall* to 8,162 by 25 m — which is why
   there is one cap and not two. 🔴 **On a one-way edge the number is a KERB-TO-KERB SPAN and not a
-  carriageway width**, because 621 of 737 level-0 edges run as opposed pairs and the ray crosses
-  both; the TPDM ceiling cannot see that and `off_centre` is what does. The two coincide on 34 edges.
+  carriageway width** wherever the ray crosses an opposed pair; the TPDM ceiling cannot see that and
+  `off_centre` is what does. The two coincide on 34 edges.
+  🔴 **There is a THIRD table since the split, and it has different rules again — paste all three.**
+  It pairs each one-way edge with its opposed partner and reports `own = 2 x near` per half with the
+  leftover as the median. ⚠️ **Do not pool it into the span line**: that is `Q57`'s generalisation,
+  a property established on one population and quoted for another. 🔴 **The load-bearing counter is
+  the NEGATIVE residual, not the pairing count** — the parts exceeding the whole cannot be true, so
+  it is the split refusing itself, and it reads **96 of 110** mutual pairs today because on most of
+  the network *the ray never crossed the median at all*. All three LOCKHART ROAD pairs land there.
+  A fall towards zero is a finding to go and look at, never a bar to retune.
+  ⚠️ **"621 of 737 run as opposed pairs" was half asserted and is corrected**: 621 are one-way, and
+  **110 of 352** with a median pair mutually. Only **14** decompose to a width.
+  🔴 **The six shared-endpoint pairs in `surface.py` are the only ground truth for a pairing rule and
+  cost nothing to check — check them.** Capping the partner search at the station's own far ray
+  sounded principled and missed all three Lockhart pairs, whose partner centreline is 6.82 m away
+  behind a far ray that stops at 3.5 m. The cap is `--max-ray-m`, the tool's own; 5 of 6 recover and
+  the sixth is 9.0 m with no station clear of a node. ⚠️ **`--pair-bearing-deg` is the rule's one free
+  value, so sweep it and paste the table** — `Q72` rejected a divider test whose count ran
+  8 → 29 → 49 → 80 over a free radius, and this one is flat at 14 decomposed from 10° to 75°.
+  ⚠️ `--json` writes `carriageway_width.json` under `etl/out/`, which is **gitignored** — a local act
+  like `facade_lab.json`, and re-running is the only way back.
   🔴 **Lanes are a bracket from TPDM 4.3.9.8 (3.0-3.65 m) and never a division by `lane_width_m`** —
   dividing by the authored 3.2 makes the instrument agree with the value under test. ⚠️ **The bounds
   are config, not constants** (`carriageway_survey.width_bounds`), and the tool refuses to start

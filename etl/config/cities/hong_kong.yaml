@@ -802,6 +802,53 @@ carriageway_survey:
     # ambiguity is published rather than resolved by fiat.
     lane_m: [3.0, 3.65]
 
+    # ── Splitting a one-way span back into two carriageways (Q95 follow-on) ──
+    #
+    # Everything above bounds a SPAN. 621 of the region's 737 level-0 edges are
+    # one-way, so on most of the network the centreline sits inside one
+    # carriageway and the two-sided ray crosses the opposed one as well. The
+    # three below bound the PARTS: one carriageway, the thing between them, and
+    # how anti-parallel two centrelines must run to be read as a pair at all.
+
+    # Table 3.4.2.1, dual carriageway, four lanes, Trunk Road — the widest
+    # single carriageway of a pair the manual permits.
+    #
+    # 🔴 A DIFFERENT COLUMN from max_m's, and that is the point. max_m 16.5 is
+    # a four-lane *single* carriageway plus a parking strip; a decomposed half
+    # is by definition a *dual* carriageway, and the manual publishes a tighter
+    # ceiling for it. Reading the single column at both scales would bound the
+    # half by a figure it could never reach.
+    dual_max_m: 14.6
+
+    # 3.4.2.3 — a double-track tram reserve requires 5.5 m, the widest
+    # separator transcribed in DATA_SOURCES.md.
+    #
+    # ⚠️ REPORTED, never refused, and the reason is that a wide residual is
+    # AMBIGUOUS where a negative one is not. Negative means the two halves plus
+    # their separator exceed the span that contains them, which cannot be true
+    # and is the decomposition failing. Wide means either a real median or a
+    # centreline this instrument has mis-centred, and nothing here can tell
+    # those apart — so it is published as a distribution and read, not gated.
+    # ⚠️ A distribution sitting above this is a finding about a central-reserve
+    # clause nobody has transcribed, which is a DATA_SOURCES.md change and not
+    # a bar to raise.
+    median_max_m: 5.5
+
+    # How far off anti-parallel two centrelines may run and still pair.
+    #
+    # 🔴 The one value in this block with NO clause behind it, so it is swept
+    # rather than chosen and the sweep is published beside the table. That is
+    # not ceremony: DECISIONS.md's NO ENTRY entry rejected a pairing rule built
+    # on a free radius because its count ran 8 → 29 → 49 → 80 as the radius
+    # went 10 → 30 m. The search DISTANCE here carries no knob — it is the
+    # station's own measured far ray — and this angle is the only thing left
+    # that could behave the same way. A count that plateaus across the sweep is
+    # what says it does not.
+    #
+    # ⚠️ Refused at 90 and above in config.py, where a perpendicular side street
+    # would read as an opposed carriageway.
+    pair_bearing_tolerance_deg: 30.0
+
   edges:
     # Ordered by preference — the tool takes the first source that answers a
     # station. TD's own painted edge leads: it is semantically the edge of the

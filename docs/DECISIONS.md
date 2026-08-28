@@ -13240,6 +13240,88 @@ the genuinely wide streets, which is what makes the grader re-baseline affordabl
 ⚠️ **And it needs the 34/309 split above.** A one-way edge's span is two carriageways, so assigning it
 as that edge's width would draw both halves of Hennessy Road on each half of Hennessy Road.
 
+### The span was split, 2026-08-29 — and the premise above did not survive it
+
+`carriageway_margin.py` now pairs each one-way edge with its opposed partner and splits the span:
+`own = 2 x` the median near ray on each half, with the leftover as the median. ✅ **Both tables above
+are byte-identical** — the near-side overhang headline and the per-edge span — which is the ratchet
+on the change.
+
+```
+pairs: a one-way span split in two, own = 2 x the near ray, resolved both ways
+  352 of 387 edges with a median are one-way; 142 found a centreline within 30 deg
+    of anti-parallel inside the ray cap; 110 were found back
+  residual = span - both carriageways, over the 110 mutual rows (n exceeds the 14 read)
+    p50 -3.72  p90 0.22  max 4.98
+    negative — the split failing, not a finding about the city: 96
+    over 5.5 m, TD's widest transcribed separator (3.4.2.3): 0
+    half outside TD's dual column (3.0-14.6 m, Table 3.4.2.1): 0
+    off-centre of the refused rows: p50 0.20  p90 0.57
+    off-centre of the read    rows: p50 0.58  p90 0.69
+  the two halves disagree about the span they both crossed: p50 0.68  p90 6.40  max 8.47
+  DECOMPOSED CARRIAGEWAY — a width, not a span   14 edges  p50 6.05  p90 7.33
+    measured - authored width_m: p10 -2.72  p50 -0.35  p90 +0.93; wider on 43%
+```
+
+🔴 **"621 of 737 are one-way, run as opposed pairs" was half measured and half asserted, and the
+asserted half is wrong as stated.** `direction == forward` on 621 edges is reproducible. *Running as
+opposed pairs* had never been measured by anything — `surface.py`'s pairing needs both endpoints
+shared and finds **six pairs**, which `DATA_SOURCES.md` already flagged as a lower bound. Measured
+geometrically, **142 of 352** one-way edges with a median find an anti-parallel centreline at all and
+**110** are found back. The sentence is corrected wherever it appears.
+
+🔴 **And the sharper correction: the ray does NOT span both carriageways on most of them.** All three
+LOCKHART ROAD pairs — `e86`/`e89`, `e48`/`e205`, `e161`/`e243`, which `surface.py` knows share both
+endpoints — pair mutually here and then post residuals of **-6.53, -4.76, -5.26**. Their spans are
+7.06, 7.21 and 8.08 m against own halves of 6.74, 6.08 and 6.61: the span *is* one carriageway,
+because the ray stops at the far kerb of the edge's own carriageway and never crosses the median.
+The mechanism reads straight off `off_centre` — **p50 0.20** on the refused rows against **0.58** on
+the read ones — which corroborates this entry's own off-centre band table from a second direction.
+So `Q95`'s "a one-way number is a kerb-to-kerb span" is true of the *high* off-centre population and
+false of the low one, and the two were being quoted as one.
+
+✅ **The refusal is the instrument working, and it is measured rather than argued.** 96 of 110 mutual
+pairs refuse themselves: the parts exceed the whole, which cannot be true, so `own = 2 x near` has
+failed on that pair. It is reachable at zero (`test_a_mutual_pair_decomposes`) and non-zero on the
+region, which is `Q72`'s test of a counter passed in both directions.
+
+✅ **The pairing rule answers the rejected-radius objection with a sweep, not an argument.** `Q72`
+rejected a divider test built on a free radius `R` because its count ran **8 → 29 → 49 → 80** as `R`
+went 10 → 30 m. This rule's only free value is the anti-parallel tolerance, and over a 7.5x sweep it
+moves almost nothing:
+
+```
+  deg     voted   mutual   negative   decomposed
+   10       139      108         94           14
+   20       141      110         96           14
+   30       142      110         96           14
+   45       143      110         96           14
+   60       143      110         96           14
+   75       143      110         96           14
+```
+
+🔴 **The search distance was the station's own far ray first, and the six known pairs refuted it.**
+That cap sounded principled — the partner lies between the two kerbs of the span — and it is exactly
+wrong on a span that never crossed: Lockhart's partner centreline is 6.82 m away and its far ray
+stops around 3.5 m, so all three pairs came back **unpaired**. The cap is now `--max-ray-m`, the
+instrument's own, which *removes* a knob rather than adding one. ⚠️ **The cross-check against
+`surface.py` is what caught this and it cost nothing**: 5 of 6 recover, and the sixth (`e339`/`e340`,
+9.0 m) has no station further than `--junction-m` from either node, so it has no median to pair on.
+
+⬜ **What this does and does not unblock.** It answers **14 of 343** edges with a carriageway width
+rather than a span, so it does not unblock the assignment. What it does is correct the premise, give
+the split a counter that can fail, and locate the real answer: the 96 mutual-but-refused rows are
+evidence that on a low-off-centre one-way edge **the published span is already that edge's
+carriageway**, which is a stronger claim than this entry could previously make and needs the
+off-centre split to state safely. ⚠️ The negatives are a mixed population — TONNOCHY ROAD `e130`/`e142`
+refuses at -1.47 with a 16.7 m span and halves of 6.43 and 11.78, which is not a ray that stayed put
+— so they are **not** published as widths here.
+
+⚠️ **`carriageway_width.json` is written under `etl/out/`, which is gitignored**, so it is a local
+artefact exactly as `facade_lab.json` is: no build reads it, and re-running the tool is the only way
+back. It carries every row with its flags, refusals included, because a file holding only the
+readable rows would hand the next reader a survey in which nothing was refused.
+
 **See.** `Q94` for the arrows that made this visible and for the lane count they imply · `Q19` for the
 invisible walls the invented width causes · `Q57` for the previous narrowing and the instrument it
 scoped · `Q54` for why a published extent is not overruled by a derived one · `GAME_DESIGN.md` for the
