@@ -185,7 +185,19 @@ Common emoji for this project:
   whatever it finds; there is no bar, deliberately, and `Q19` records why.
   ⚠️ Quote the headline, not the two-source agreement: the headline is stable across
   the ray cap (p50 1.69 → 1.50 m from 10 to 25 m) and the agreement is not (p90 3.76 → 14.30 m over
-  the same sweep). ⚠️ Its truth is a **2D projection carrying the publishers' own registration
+  the same sweep).
+  🔴 **It also publishes a per-edge SPAN since `Q95`, and that is a second table with different
+  rules — paste both.** ⚠️ **The span is cap-sensitive where the overhang headline is not**, so quote
+  its cap: coverage 54.7 → 81.8% and non-junction p50 7.40 → 9.15 m from 10 to 25 m. ✅ It saturates
+  at the 15 m default — kept spans peak there at 8,204 and *fall* to 8,162 by 25 m — which is why
+  there is one cap and not two. 🔴 **On a one-way edge the number is a KERB-TO-KERB SPAN and not a
+  carriageway width**, because 621 of 737 level-0 edges run as opposed pairs and the ray crosses
+  both; the TPDM ceiling cannot see that and `off_centre` is what does. The two coincide on 34 edges.
+  🔴 **Lanes are a bracket from TPDM 4.3.9.8 (3.0-3.65 m) and never a division by `lane_width_m`** —
+  dividing by the authored 3.2 makes the instrument agree with the value under test. ⚠️ **The bounds
+  are config, not constants** (`carriageway_survey.width_bounds`), and the tool refuses to start
+  unless `2 × max_ray_m` exceeds the ceiling — otherwise the cap manufactures a clean sweep, which is
+  `Q58`'s `drawn_gauge_m` trap reachable from the command line. ⚠️ Its truth is a **2D projection carrying the publishers' own registration
   error**, which the bundle graders below do not inherit — that is the price of reading outside the
   bundle, not a defect to tune away.
 - **`pipeline/kerbside.py`, the `NSR` config block, or any kerbside-marking change: also

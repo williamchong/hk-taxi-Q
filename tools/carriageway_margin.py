@@ -22,6 +22,34 @@ confound rather than documenting it again, and it *raises* coverage, because a
 station needs one hit instead of two. Both distances are still reported, so a
 width is derivable; only the headline declines to depend on the weak half.
 
+**And since `Q95` the far ray is read too, because TD published the bound it
+was missing.** The Transport Planning & Design Manual Vol 2 Ch 3 says the widest
+urban carriageway in Hong Kong is 13.5 m, 15.8 m on a tight curve and ~16.5 m
+with a parking strip — so a two-sided ray above that has crossed a median, a
+tram reserve or a junction mouth, which is a *citable* refusal rather than the
+suspicion that kept the far side unread. The bounds live in the city file under
+hard rule 3; the second city has its own manual.
+
+🔴 **The ceiling is a plausibility bound and NOT a confound filter, and the
+difference is most of the network.** 621 of the region's 737 level-0 edges are
+one-way, and Hong Kong runs those as opposed pairs — so the centreline sits
+inside one carriageway and the ray legitimately spans both. Two carriageways
+summing to 13 m are a legal four-lane single carriageway and pass 16.5 m
+cleanly. What separates them is `off_centre`, because the near ray is then short
+and the far one long. ⚠️ **So the one-way number is reported as a kerb-to-kerb
+span and never as a carriageway width**; the two coincide only on the 34
+two-way edges.
+
+⚠️ **The span is cap-sensitive where the overhang headline is not, so quote its
+cap.** Measured over `--max-ray-m` 10 / 15 / 20 / 25: coverage 54.7 / 70.4 /
+78.4 / 81.8%, and the non-junction p50 drifts 7.40 / 8.18 / 8.93 / 9.15 m.
+✅ **The measurement saturates at the 15 m default** — kept spans peak there at
+8,204 and *fall* to 8,162 by 25 m, published edges 343 → 336, because above the
+default the extra stations are refusals. That is why there is one cap and not
+two: a second flag would advertise a sensitivity the kept population does not
+have, and casting a second pair of rays for the width would re-open the very
+failure `_Index.cast_both` exists to close.
+
 **Two publishers, and the second one is not belt-and-braces.** `Q57` traced four
 wrong "no source publishes that" claims to a single mechanism: a fact measured
 properly against one dataset, then generalised to the estate. An instrument that
@@ -72,6 +100,18 @@ What this implies for the sequel is in `Q19`: a fix for the building half has to
 work on stubs an 8 m ray cannot cross, which points at counting lanes *between*
 two published edges (`Q57` follow-on 1) rather than casting to the nearest one.
 
+⚠️ **What the width half does NOT reproduce, and that is a finding rather than a
+bar to tune.** `Q94` published three roads measured by a scratch script whose
+commit touched only the docs. Walked here at its stated 4 m stations and 12 m
+junction exclusion, the **p10 reproduces to 0.03 m on all three** — so the rays,
+the walk and the exclusion are the same instrument — while `HENNESSY ROAD`
+reproduces on every percentile (7.81 / 11.55 / 23.18 against 7.80 / 11.54 /
+23.17) only at a ray cap of **25 m or more**, which its prose never states.
+`STEWART ROAD` and `CANAL ROAD EAST` reproduce at no cap, and `STEWART ROAD` is
+cap-*insensitive* — 22 stations reading 16.67 m from 15 m to 40 m. So the
+record's stated method does not determine the record's numbers, which is the
+argument for this code existing rather than a reason to make it agree.
+
 Run:  .venv/bin/python tools/carriageway_margin.py --city hong_kong --region wan_chai
 """
 
@@ -81,7 +121,7 @@ import argparse
 import logging
 import sys
 from collections import Counter, defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import numpy as np
@@ -93,7 +133,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from carriageway_occupancy import road_names  # noqa: E402
 from overhang import half_width_at, half_widths, left_of, walk_width  # noqa: E402
 from pipeline import gdb  # noqa: E402
-from pipeline.config import CarriagewayEdge, CityConfig, load_city  # noqa: E402
+from pipeline.config import CarriagewayEdge, CityConfig, WidthBounds, load_city  # noqa: E402
 from pipeline.crs import GameTransform  # noqa: E402
 from pipeline.export import read_manifest  # noqa: E402
 from pipeline.fetch import source_reads  # noqa: E402
@@ -134,6 +174,38 @@ class Station:
     # Whether the station sits within `--junction-m` of a graph node.
     near_junction: bool
 
+    # ── the two-sided half (`Q95`), NaN and "" where no publisher spanned ──
+    #
+    # ⚠️ **`width_source` is not `source`.** The publisher that wins the near
+    # side and the publisher that spans the road are different sets — the
+    # drawings are the semantically better edge and are far too sparse to reach
+    # across a street — so crediting a width to `source` would attribute most of
+    # them to the wrong publisher.
+    width_source: str = ""
+    # The near and far ray of the *spanning* publisher, sorted, so the pair
+    # carries no side convention. `left_of`'s sign is irrelevant to a sum.
+    width_near_m: float = float("nan")
+    width_far_m: float = float("nan")
+
+    @property
+    def width_m(self) -> float:
+        return self.width_near_m + self.width_far_m
+
+    @property
+    def off_centre(self) -> float:
+        """How far off the middle of its own span the centreline sits, 0 to 1.
+
+        🔴 **The confounder detector, and the ceiling is not one.** 621 of the
+        region's 737 level-0 edges are one-way, and Hong Kong runs those as
+        opposed pairs — so the centreline sits *inside* one carriageway and the
+        two-sided ray legitimately spans both plus whatever lies between. Two
+        carriageways summing to 13 m are a legal four-lane single carriageway
+        and pass `max_m` cleanly; what separates them is that the near ray is
+        short and the far one long, which is this number.
+        """
+        width = self.width_m
+        return abs(self.width_far_m - self.width_near_m) / width if width > 0 else float("nan")
+
 
 @dataclass
 class Report:
@@ -154,6 +226,51 @@ class Report:
     # than extra return values, so `render` takes one argument.
     lengths: dict[int, float] = field(default_factory=dict)
     names: dict[int, str] = field(default_factory=dict)
+
+    # ── the two-sided half (`Q95`) ────────────────────────────────────────
+    #
+    # Every station walked, whether or not anything answered. The width's own
+    # denominator: `coverage` above is "one hit *either* side" and reads 92.3%,
+    # where a width needs both and is far sparser. Reporting one as the other
+    # would state a number for a measurement that was not made.
+    stations_walked: int = 0
+    # Stations no publisher spanned — zero rays or one, which are the same
+    # answer here. Counted BESIDE the distribution and never appended to it: a
+    # station with one ray has no width to record, and a placeholder would hold
+    # the identity true by never reaching the list. `touchdown_error.py`'s
+    # `ends_no_target` was found doing exactly that.
+    width_no_span: int = 0
+    # 🔴 Every candidate width, INCLUDING the ones the bounds refuse. Appended
+    # above the guard, so `n` exceeds the keeps and a reader can tell. Recorded
+    # below it, the distribution is confined to `max_m` by construction and
+    # reports a clean sweep whatever the region does — `Q58`'s `drawn_gauge_m`
+    # trap, which has since shipped in four other stages.
+    widths: list[float] = field(default_factory=list)
+    width_over_ceiling: int = 0
+    width_under_hard_min: int = 0
+    # How often each publisher spanned the road, against `segments` above.
+    width_spanned_by: Counter[str] = field(default_factory=Counter)
+    # Stations more than one publisher spanned, and by how much they differ.
+    # ⚠️ Reported separately from `agreement` rather than folded into it: the
+    # near-side cross-check is two orders of magnitude larger, and quoting one
+    # for the other would be `Q57`'s own generalisation in a new place.
+    width_agreement: list[float] = field(default_factory=list)
+    # `roadgraph.json`'s own `direction`, for the split `off_centre` explains.
+    directions: dict[int, str] = field(default_factory=dict)
+    lanes: dict[int, int] = field(default_factory=dict)
+    widths_authored: dict[int, float] = field(default_factory=dict)
+
+    @property
+    def width_measured(self) -> int:
+        return len(self.widths)
+
+    @property
+    def width_kept(self) -> int:
+        return self.width_measured - self.width_over_ceiling - self.width_under_hard_min
+
+    @property
+    def width_coverage(self) -> float:
+        return self.width_measured / self.stations_walked if self.stations_walked else 0.0
 
     @property
     def measured(self) -> int:
@@ -316,27 +433,51 @@ def published_edges(
     return _Index(np.vstack(starts), np.vstack(ends))
 
 
-def nearest_published(
+def _sides(
     origin: np.ndarray,
     normal: np.ndarray,
     indexes: list[tuple[str, _Index]],
     max_ray_m: float,
+) -> list[tuple[str, float | None, float | None]]:
+    """Every publisher's two ray hits at one station, in preference order.
+
+    🔴 **The only place `cast_both` is called per station**, and that is the
+    point rather than tidiness. Both readings below — the near-side overhang and
+    the two-sided width — consume this one list, so they cannot disagree about
+    what was hit. Casting a second, independent pair for the width would re-open
+    precisely the failure `cast_both`'s own docstring exists to close.
+
+    A row per configured publisher, including ones that hit nothing, because the
+    losers are the cross-check. Short-circuiting once one answers is the obvious
+    optimisation and it would delete both the spread and the width's preference
+    order in one move.
+    """
+    return [(name, *index.cast_both(origin, normal, max_ray_m)) for name, index in indexes]
+
+
+def nearest_published(
+    sides: list[tuple[str, float | None, float | None]],
 ) -> tuple[str, float, list[float]]:
     """The nearest published edge at one station, who published it, and the spread.
 
-    `indexes` is read as a preference order — the first publisher that answers
+    `sides` is read as a preference order — the first publisher that answers
     wins — which is the rule the whole two-source design rests on, so it lives
     in one named function with a test on it rather than inline in the walk.
     Every publisher is still asked: the losers do not decide the measurement but
     they are the cross-check, and `Q57`'s argument for reading two sources is
     exactly that their disagreement is a finding.
 
+    The nearer of a publisher's two rays wins, because the far one is what a
+    junction mouth and a dual carriageway corrupt. `width_published` below is
+    the reading that wants the far one, and it is a different question with a
+    different preference order.
+
     Returns an empty name and a NaN distance when nobody answered.
     """
     chosen, nearest = "", float("nan")
     spread: list[float] = []
-    for name, index in indexes:
-        hits = [hit for hit in index.cast_both(origin, normal, max_ray_m) if hit is not None]
+    for name, forward, backward in sides:
+        hits = [hit for hit in (forward, backward) if hit is not None]
         if not hits:
             continue
         closest = min(hits)
@@ -346,6 +487,37 @@ def nearest_published(
     return chosen, nearest, spread
 
 
+def width_published(
+    sides: list[tuple[str, float | None, float | None]],
+) -> tuple[str, float, float, list[float]]:
+    """The first publisher that spans the road, and the two rays it spanned with.
+
+    🔴 **Both rays must come from ONE publisher.** The drawings are TD's painted
+    carriageway edge and iB1000's `RM` is LandsD's surveyed margin; summing one
+    on the near side and the other on the far side adds a cartographic truth to
+    a topographic one, and the two disagree by metres where both answer. The sum
+    would still look like a road.
+
+    ⚠️ **A different preference order than `nearest_published`'s**, on the same
+    list. A publisher can answer the near side and not reach across the street —
+    which is the drawings' normal case, being two orders of magnitude sparser —
+    so it wins the overhang and loses the width. That is why the caller records
+    `width_source` separately.
+
+    Returns an empty name and NaN distances when nobody spanned. The name is the
+    presence test; a NaN width summed into a distribution is not.
+    """
+    chosen, near, far = "", float("nan"), float("nan")
+    spread: list[float] = []
+    for name, forward, backward in sides:
+        if forward is None or backward is None:
+            continue
+        spread.append(forward + backward)
+        if not chosen:
+            chosen, near, far = name, min(forward, backward), max(forward, backward)
+    return chosen, near, far, spread
+
+
 def survey(
     city: CityConfig,
     region_id: str,
@@ -353,6 +525,7 @@ def survey(
     spacing_m: float,
     max_ray_m: float,
     junction_m: float,
+    bounds: WidthBounds | None,
     sources_root: Path | None,
     out_root: Path | None,
 ) -> Report:
@@ -387,6 +560,9 @@ def survey(
         edge_id = int(edge["id"])
         report.edges_walked += 1
         report.lengths[edge_id] = float(plan_lengths(polyline)[-1])
+        report.directions[edge_id] = str(edge["direction"])
+        report.lanes[edge_id] = int(edge["lanes"])
+        report.widths_authored[edge_id] = float(edge["width_m"])
         edge_widths = widths.get(edge_id, [])
 
         for vertex, station in walk_width(polyline, spacing_m):
@@ -395,7 +571,29 @@ def survey(
             if not normal.any():
                 continue
             origin = station[[0, 2]]
-            chosen, nearest, spread = nearest_published(origin, normal, indexes, max_ray_m)
+            report.stations_walked += 1
+            # One solve, two readings. See `_sides`.
+            sides = _sides(origin, normal, indexes, max_ray_m)
+            chosen, nearest, spread = nearest_published(sides)
+            spanner, near, far, span_spread = width_published(sides)
+
+            if spanner:
+                # Appended ABOVE the bounds, so `n` exceeds the keeps. The
+                # refusals are counted here and the value is kept: a
+                # distribution recorded below its own guard cannot report the
+                # thing the guard is for.
+                report.widths.append(near + far)
+                report.width_spanned_by[spanner] += 1
+                if bounds is not None:
+                    if near + far > bounds.max_m:
+                        report.width_over_ceiling += 1
+                    elif near + far < bounds.hard_min_m:
+                        report.width_under_hard_min += 1
+                if len(span_spread) > 1:
+                    report.width_agreement.append(max(span_spread) - min(span_spread))
+            else:
+                report.width_no_span += 1
+
             if not chosen:
                 report.unmeasured += 1
                 continue
@@ -409,6 +607,9 @@ def survey(
                     overhang_m=half_width_at(edge_widths, vertex) - nearest,
                     source=chosen,
                     near_junction=bool(np.min(np.hypot(*(nodes - origin).T)) <= junction_m),
+                    width_source=spanner,
+                    width_near_m=near,
+                    width_far_m=far,
                 )
             )
             report.edges_measured.add(edge_id)
@@ -426,7 +627,104 @@ def _share_over(values: list[float], threshold: float) -> float:
     return float(np.mean(np.asarray(values) > threshold)) if values else 0.0
 
 
-def render(report: Report, *, spacing_m: float, max_ray_m: float, junction_m: float) -> str:
+def _share_under(values: list[float], threshold: float) -> float:
+    return float(np.mean(np.asarray(values) < threshold)) if values else 0.0
+
+
+@dataclass
+class EdgeWidth:
+    """One edge's measured span, and what it does and does not license."""
+
+    edge: int
+    median_m: float
+    n: int
+    # Share of this edge's stations the ceiling refuses. The column that tells a
+    # reader which rows are escapes rather than roads.
+    refused_share: float
+    off_centre: float
+    source: str
+    refused: bool
+
+
+def edge_widths(
+    report: Report, bounds: WidthBounds | None, *, minimum_n: int = 3
+) -> list[EdgeWidth]:
+    """Per-edge span: the median FIRST, then the refusal.
+
+    🔴 **Order matters, and the obvious order is the wrong one.** Refusing
+    stations at `max_m` and then taking a median manufactures a median just
+    under the ceiling for an edge most of whose stations escape through a
+    junction mouth — a number that looks like a careful reading of a wide street
+    and is an average of the crossings beside it. Taking the median over every
+    two-sided station and refusing the *edge* on that median cannot do this, and
+    it leaves `refused_share` to say how much of the edge was escaping.
+
+    That also gives the `n` exceeds keeps tell at edge level: the edges that have
+    a median outnumber the edges published.
+
+    Junction stations are dropped, as everywhere else in this report — a station
+    in a junction mouth has no far kerb to find, and it reads as a wide road.
+    """
+    per_edge: dict[int, list[Station]] = defaultdict(list)
+    for station in report.stations:
+        if not station.near_junction and station.width_source:
+            per_edge[station.edge].append(station)
+
+    rows: list[EdgeWidth] = []
+    for edge_id, stations in per_edge.items():
+        if len(stations) < minimum_n:
+            continue
+        widths = [s.width_m for s in stations]
+        median = float(np.median(widths))
+        answered: Counter[str] = Counter(s.width_source for s in stations)
+        rows.append(
+            EdgeWidth(
+                edge=edge_id,
+                median_m=median,
+                n=len(stations),
+                refused_share=(_share_over(widths, bounds.max_m) if bounds is not None else 0.0),
+                off_centre=float(np.median([s.off_centre for s in stations])),
+                source=answered.most_common(1)[0][0],
+                refused=bounds is not None and not (bounds.hard_min_m <= median <= bounds.max_m),
+            )
+        )
+    return sorted(rows, key=lambda row: -row.median_m)
+
+
+def lane_bracket(width_m: float, bounds: WidthBounds, *, two_way: bool) -> tuple[int, int]:
+    """How many through lanes a span could hold, as a range.
+
+    🔴 **Never `width / lane_width_m`.** 3.2 m is the authored constant this
+    whole question is about, and dividing by it would make the instrument agree
+    with the value under test by construction — `Q72`'s tautology, one dimension
+    over from the one it was written for. The divisor is TPDM 4.3.9.8's
+    published through-lane range instead, so the answer is a bracket and its
+    ambiguity is reported rather than resolved by fiat.
+
+    On a two-way edge 3.4.2.7 removes the odd counts from the bracket — a
+    two-way single carriageway may not be divided into three lanes, other than a
+    climbing lane on a gradient. ⚠️ That narrows an *ambiguous* bracket only. A
+    bracket that is unambiguously odd is left standing, because it is then a
+    finding about the measurement or the direction field rather than a reading
+    to be corrected into agreement.
+    """
+    low = int(width_m // bounds.lane_m[1])
+    high = int(width_m // bounds.lane_m[0])
+    if two_way and high > low:
+        allowed = [n for n in range(low, high + 1) if not (n >= 3 and n % 2)]
+        if allowed:
+            return min(allowed), max(allowed)
+    return low, high
+
+
+def render(
+    report: Report,
+    *,
+    spacing_m: float,
+    max_ray_m: float,
+    junction_m: float,
+    bounds: WidthBounds | None = None,
+) -> str:
     lines: list[str] = []
     lines.append("published carriageway edge, segments read in region:")
     for name, count in report.segments.items():
@@ -543,7 +841,172 @@ def render(report: Report, *, spacing_m: float, max_ray_m: float, junction_m: fl
             f"{p90:>7.2f} {max(values):>7.2f}  {source:<12} "
             f"{report.names.get(edge_id, 'unnamed')}"
         )
+    if bounds is not None:
+        lines.extend(_render_width(report, bounds, max_ray_m=max_ray_m))
     return "\n".join(lines)
+
+
+def _render_width(report: Report, bounds: WidthBounds, *, max_ray_m: float) -> list[str]:
+    """The two-sided half (`Q95`), appended below the overhang report.
+
+    Not behind a flag. CLAUDE.md already requires this tool's table pasted for a
+    `lane_width_m` or `widen_default` change, and behind a flag the pasted table
+    would silently omit the one section that grades exactly those values.
+    """
+    lines = ["", "measured span = BOTH published edges at one station, from ONE publisher"]
+    lines.append(
+        f"  {report.width_measured:,} of {report.stations_walked:,} stations were spanned "
+        f"({report.width_coverage:.1%}, {max_ray_m:.1f} m ray), against "
+        f"{report.measured:,} answered on the near side"
+    )
+    spanned = ", ".join(
+        f"{name} {count:,}" for name, count in report.width_spanned_by.most_common()
+    )
+    lines.append(f"  spanned by: {spanned or 'nobody'}")
+    if report.width_agreement:
+        spread = _percentiles(report.width_agreement, (50, 90))
+        lines.append(
+            f"  both spanned {len(report.width_agreement):,} stations, disagreeing by p50 "
+            f"{spread[0]:.2f} m, p90 {spread[1]:.2f} m — ⚠️ far fewer than the "
+            f"{len(report.agreement):,} above, so the near side's cross-check does NOT carry over"
+        )
+    lines.append(
+        f"  {report.width_no_span:,} stations no publisher spanned; partition "
+        f"{report.width_measured:,} + {report.width_no_span:,} = {report.stations_walked:,}"
+    )
+
+    lines.append("")
+    lines.append(
+        f"station span, recorded over the REFUSALS too — n {report.width_measured:,} exceeds the "
+        f"{report.width_kept:,} kept, and max must exceed {bounds.max_m:.1f} m"
+    )
+    lines.append(
+        f"  {'population':<24} {'n':>7} {'p50':>7} {'p90':>7} {'max':>7} "
+        f"{'> ' + format(bounds.max_m, '.1f'):>8} {'< ' + format(bounds.min_m, '.1f'):>8}"
+    )
+    spanning = [s for s in report.stations if s.width_source]
+    away = [s for s in spanning if not s.near_junction]
+    for label, population in (
+        ("all spanned", spanning),
+        ("  direction both", [s for s in spanning if report.directions.get(s.edge) == "both"]),
+        (
+            "  direction forward",
+            [s for s in spanning if report.directions.get(s.edge) == "forward"],
+        ),
+        ("junctions dropped", away),
+        ("junctions only", [s for s in spanning if s.near_junction]),
+    ):
+        values = [s.width_m for s in population]
+        if not values:
+            lines.append(f"  {label:<24} {0:>7}")
+            continue
+        p50, p90 = _percentiles(values, (50, 90))
+        lines.append(
+            f"  {label:<24} {len(values):>7,} {p50:>7.2f} {p90:>7.2f} {max(values):>7.2f} "
+            f"{_share_over(values, bounds.max_m):>7.1%} {_share_under(values, bounds.min_m):>7.1%}"
+        )
+    lines.append(
+        f"  refused: {report.width_over_ceiling:,} over {bounds.max_m:.1f} m, "
+        f"{report.width_under_hard_min:,} under one through lane ({bounds.hard_min_m:.1f} m); "
+        f"kept {report.width_kept:,}"
+    )
+
+    # 🔴 The confounder the ceiling cannot see. Kept its own table because the
+    # one-way population is most of the network and its number is not a
+    # carriageway width.
+    lines.append("")
+    lines.append(
+        "off-centre = |near - far| / span; a centreline inside ONE carriageway of an opposed pair"
+    )
+    lines.append(f"  {'band':<12} {'n':>7} {'span p50':>9} {'> ' + format(bounds.max_m, '.1f'):>8}")
+    for low, high in ((0.0, 0.10), (0.10, 0.25), (0.25, 0.50), (0.50, 1.01)):
+        values = [s.width_m for s in away if low <= s.off_centre < high]
+        if not values:
+            lines.append(f"  {f'{low:.2f}-{high:.2f}':<12} {0:>7}")
+            continue
+        lines.append(
+            f"  {f'{low:.2f}-{high:.2f}':<12} {len(values):>7,} "
+            f"{_percentiles(values, (50,))[0]:>9.2f} {_share_over(values, bounds.max_m):>7.1%}"
+        )
+
+    rows = edge_widths(report, bounds)
+    published = [row for row in rows if not row.refused]
+    lines.append("")
+    lines.append("per edge: median over non-junction spanned stations, n >= 3, THEN the refusal")
+    lines.append(
+        f"  {len(rows)} edges have a median; {len(rows) - len(published)} refused on it; "
+        f"{len(published)} published"
+    )
+    for label, want in (
+        ("two-way — a carriageway width", "both"),
+        ("one-way — a KERB-TO-KERB SPAN", "forward"),
+    ):
+        values = [row.median_m for row in published if report.directions.get(row.edge) == want]
+        if not values:
+            continue
+        p50, p90 = _percentiles(values, (50, 90))
+        lines.append(f"  {label:<32} {len(values):>4} edges  p50 {p50:>6.2f}  p90 {p90:>6.2f}")
+    if published:
+        gaps = [row.median_m - report.widths_authored.get(row.edge, 0.0) for row in published]
+        p10, p50, p90 = _percentiles(gaps, (10, 50, 90))
+        lines.append(
+            f"  measured - authored width_m: p10 {p10:+.2f}  p50 {p50:+.2f}  p90 {p90:+.2f}; "
+            f"wider on {_share_over(gaps, 0.0):.0%}"
+        )
+        below = [row.median_m for row in published]
+        lines.append(
+            f"  below TD's {bounds.min_m:.1f} m two-lane minimum: "
+            f"{round(_share_under(below, bounds.min_m) * len(below))} of {len(below)} — "
+            "reported, never refused (3.4.2.2)"
+        )
+
+    lines.append("")
+    lines.append(
+        f"lanes = span / a TPDM through lane, {bounds.lane_m[0]:.2f}-{bounds.lane_m[1]:.2f} m "
+        "(4.3.9.8) — never / lane_width_m"
+    )
+    outside = too_few = too_many = ambiguous = 0
+    findings: list[tuple[int, float]] = []
+    for row in published:
+        two_way = report.directions.get(row.edge) == "both"
+        low, high = lane_bracket(row.median_m, bounds, two_way=two_way)
+        authored = report.lanes.get(row.edge, 0)
+        if authored < low:
+            outside, too_few = outside + 1, too_few + 1
+        elif authored > high:
+            outside, too_many = outside + 1, too_many + 1
+        if high > low:
+            ambiguous += 1
+        elif two_way and low >= 3 and low % 2:
+            findings.append((row.edge, row.median_m))
+    lines.append(
+        f"  the graph's lanes fall outside the bracket on {outside} of {len(published)} "
+        f"({too_few} too few, {too_many} too many); ambiguous on {ambiguous}"
+    )
+    lines.append(f"  3.4.2.7 findings — two-way, unambiguously odd, >= 3 lanes: {len(findings)}")
+    for edge_id, median in findings[:_WORST]:
+        lines.append(f"    {edge_id:>6} {median:>7.2f} m  {report.names.get(edge_id, 'unnamed')}")
+
+    lines.append("")
+    lines.append(
+        f"widest {_WORST} PUBLISHED edges by median span, junction stations dropped "
+        f"({len(rows) - len(published)} refused rows not listed; they rank above every row here)"
+    )
+    lines.append(
+        f"  {'edge':>6} {'n':>5} {'span':>7} {'refus':>6} {'offctr':>7} {'dir':<8} "
+        f"{'source':<12} road"
+    )
+    # ⚠️ Published rows only. Ranked over everything, this listing is fifteen
+    # escapes: a ray through a junction mouth is wider than any road, so the
+    # refusals sweep the top and a reader never sees a street. `refused_share`
+    # stays as a column because a kept edge can still be part escape.
+    for row in published[:_WORST]:
+        lines.append(
+            f"  {row.edge:>6} {row.n:>5} {row.median_m:>7.2f} {row.refused_share:>5.0%} "
+            f"{row.off_centre:>7.2f} {report.directions.get(row.edge, '?'):<8} "
+            f"{row.source:<12} {report.names.get(row.edge, 'unnamed')}"
+        )
+    return lines
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -569,18 +1032,41 @@ def main(argv: list[str] | None = None) -> int:
         default=12.0,
         help="stations this close to a graph node are reported separately (see the docstring)",
     )
+    parser.add_argument(
+        "--max-width-m",
+        type=float,
+        # Defaults to the city's own `width_bounds.max_m`. A flag as well as a
+        # config value because the counter has to be shown reachable at zero —
+        # a ceiling nothing can move is not measuring anything (`Q72`).
+        help="override the city's carriageway ceiling; above it a ray has crossed something",
+    )
     parser.add_argument("--sources-root", type=Path, help="override etl/sources")
     parser.add_argument("--out-root", type=Path, help="override etl/out")
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     city = load_city(args.city)
+    survey_spec = city.carriageway_survey
+    bounds = survey_spec.width_bounds if survey_spec is not None else None
+    if bounds is not None and args.max_width_m is not None:
+        bounds = replace(bounds, max_m=args.max_width_m)
+    if bounds is not None and 2.0 * args.max_ray_m <= bounds.max_m:
+        # 🔴 The `drawn_gauge_m` trap, reachable from the command line. Two rays
+        # capped at `max_ray_m` cannot sum past twice it, so a small enough cap
+        # makes the ceiling unreachable and the report announces a clean sweep
+        # that the cap manufactured rather than the city earned.
+        raise SystemExit(
+            f"--max-ray-m {args.max_ray_m:.1f} caps a span at {2 * args.max_ray_m:.1f} m, which "
+            f"cannot reach the {bounds.max_m:.1f} m ceiling — every span would be kept by "
+            "construction. Raise the ray or lower the ceiling."
+        )
     report = survey(
         city,
         args.region,
         spacing_m=args.spacing_m,
         max_ray_m=args.max_ray_m,
         junction_m=args.junction_m,
+        bounds=bounds,
         sources_root=args.sources_root,
         out_root=args.out_root,
     )
@@ -594,6 +1080,7 @@ def main(argv: list[str] | None = None) -> int:
             spacing_m=args.spacing_m,
             max_ray_m=args.max_ray_m,
             junction_m=args.junction_m,
+            bounds=bounds,
         )
     )
     # Grades, never checks. See the docstring, and CLAUDE.md's rule for the

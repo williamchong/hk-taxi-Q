@@ -633,6 +633,38 @@ class CarriagewayEdge:
 
 
 @dataclass(frozen=True)
+class WidthBounds:
+    """What the city's own design manual permits a carriageway to be (`Q95`).
+
+    ⚠️ **A standard is not a survey**, and these numbers may only bound an
+    instrument — never assign a width. `DATA_SOURCES.md` says why at length: a
+    width taken from a road's class would be authoring policy with better
+    provenance, which is the move `lanes_by_min_speed_limit_kph` already makes
+    and the one `Q95` was opened about. What they are for is telling a
+    two-sided ray that has crossed a median from one that has measured a road.
+
+    Hong Kong's are read off TD's Transport Planning & Design Manual Vol 2
+    Ch 3; hard rule 3 keeps them here rather than in the tool, because the
+    second city has its own manual.
+    """
+
+    # The widest urban carriageway the manual permits. Above this a ray has
+    # crossed a median, a tram reserve or a junction mouth.
+    max_m: float
+    # The narrowest it *should* be. Reported, never refused — see the city file.
+    min_m: float
+    # Below one through lane the reading is not a carriageway at all.
+    hard_min_m: float
+    # The permitted through-lane range, as (narrowest, widest).
+    #
+    # 🔴 A bracket rather than one number, and never the pipeline's own
+    # `lane_width_m`. Dividing a measured width by the authored constant would
+    # make the instrument agree with the value under test by construction,
+    # which is `Q72`'s tautology one dimension over.
+    lane_m: tuple[float, float]
+
+
+@dataclass(frozen=True)
 class CarriagewaySurvey:
     """Every published carriageway edge the city can be measured against (`Q57`).
 
@@ -645,6 +677,9 @@ class CarriagewaySurvey:
     """
 
     edges: tuple[CarriagewayEdge, ...]
+    # Optional: absent means the tool reports the near-side overhang only, which
+    # is the honest answer for a city whose manual nobody has transcribed.
+    width_bounds: WidthBounds | None = None
 
 
 @dataclass(frozen=True)
@@ -3777,7 +3812,48 @@ def _carriageway_survey(body: Any, where: str) -> CarriagewaySurvey | None:
         # publishers' answers into one column and hide the disagreement that
         # is the entire reason for reading more than one.
         raise ValueError(f"{where}:edges has repeated names ({', '.join(sorted(names))})")
-    return CarriagewaySurvey(edges=edges)
+    return CarriagewaySurvey(
+        edges=edges, width_bounds=_width_bounds(body.get("width_bounds"), f"{where}:width_bounds")
+    )
+
+
+def _width_bounds(body: Any, where: str) -> WidthBounds | None:
+    """The design manual's carriageway bounds (`Q95`).
+
+    Checked at load for `_carriageway_survey`'s reason, and with one bound the
+    others do not have: the three metre figures must be *ordered*. An inverted
+    pair loads cleanly and produces a report in which every station is refused,
+    or none is — both of which read as a finding about the city.
+    """
+    if body is None:
+        return None
+    if not isinstance(body, dict):
+        raise ValueError(f"{where} must be a mapping, got {body!r}")
+
+    max_m = float(_require(body, "max_m", where))
+    min_m = float(_require(body, "min_m", where))
+    hard_min_m = float(_require(body, "hard_min_m", where))
+    lane = _require(body, "lane_m", where)
+    if not (isinstance(lane, list) and len(lane) == 2):
+        raise ValueError(f"{where}:lane_m must be a [narrowest, widest] pair, got {lane!r}")
+    lane_m = (float(lane[0]), float(lane[1]))
+
+    if not 0.0 < hard_min_m < min_m < max_m:
+        raise ValueError(
+            f"{where} must satisfy 0 < hard_min_m < min_m < max_m, "
+            f"got {hard_min_m} / {min_m} / {max_m}"
+        )
+    if not 0.0 < lane_m[0] < lane_m[1]:
+        raise ValueError(f"{where}:lane_m must be ascending and positive, got {lane_m}")
+    if lane_m[0] > hard_min_m:
+        # The hard refusal is "narrower than one through lane". A `lane_m` floor
+        # above it would make the two disagree about what one lane is, and the
+        # published bracket would start at zero lanes for a kept reading.
+        raise ValueError(
+            f"{where}:lane_m starts at {lane_m[0]} m, above hard_min_m {hard_min_m} m — "
+            "a kept width would then bracket to no lanes at all"
+        )
+    return WidthBounds(max_m=max_m, min_m=min_m, hard_min_m=hard_min_m, lane_m=lane_m)
 
 
 _TRAMWAY_ROLES = ("line_type",)

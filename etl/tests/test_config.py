@@ -1844,6 +1844,53 @@ class TestCarriagewaySurvey:
 
         assert city.carriageway_survey is None
 
+    def test_the_manual_bounds_load(self, rewrite) -> None:
+        """`Q95`. Hard rule 3 keeps them in the city file — the second city has
+        its own design manual — and hard rule 4 keeps them out of the tool."""
+        bounds = load_city("hong_kong").carriageway_survey.width_bounds
+
+        assert (bounds.max_m, bounds.min_m, bounds.hard_min_m) == (16.5, 7.3, 3.0)
+        assert bounds.lane_m == (3.0, 3.65)
+
+    def test_the_bounds_are_optional(self, rewrite) -> None:
+        """A city whose manual nobody has transcribed reports the near-side
+        overhang only, which is the honest answer rather than a default."""
+
+        def drop(doc: dict[str, Any]) -> None:
+            doc["carriageway_survey"].pop("width_bounds")
+
+        city = load_city("hong_kong", cities_root=rewrite(drop))
+
+        assert city.carriageway_survey.width_bounds is None
+
+    def test_bounds_out_of_order_are_rejected(self, rewrite) -> None:
+        """An inverted pair loads cleanly and produces a report in which every
+        station is refused, or none is — and both read as a finding about the
+        city rather than about the config."""
+
+        def inverted(doc: dict[str, Any]) -> None:
+            doc["carriageway_survey"]["width_bounds"]["min_m"] = 20.0
+
+        with pytest.raises(ValueError, match="hard_min_m < min_m < max_m"):
+            load_city("hong_kong", cities_root=rewrite(inverted))
+
+    def test_a_lane_range_that_is_not_ascending_is_rejected(self, rewrite) -> None:
+        def backwards(doc: dict[str, Any]) -> None:
+            doc["carriageway_survey"]["width_bounds"]["lane_m"] = [3.65, 3.0]
+
+        with pytest.raises(ValueError, match="ascending and positive"):
+            load_city("hong_kong", cities_root=rewrite(backwards))
+
+    def test_a_lane_floor_above_the_hard_minimum_is_rejected(self, rewrite) -> None:
+        """The two would then disagree about what one lane is, and a width the
+        hard minimum keeps would bracket to no lanes at all."""
+
+        def wide(doc: dict[str, Any]) -> None:
+            doc["carriageway_survey"]["width_bounds"]["lane_m"] = [4.0, 5.0]
+
+        with pytest.raises(ValueError, match="bracket to no lanes"):
+            load_city("hong_kong", cities_root=rewrite(wide))
+
     def test_an_empty_edge_list_is_rejected(self, rewrite) -> None:
         """It would report total coverage of nothing, which reads as agreement."""
 

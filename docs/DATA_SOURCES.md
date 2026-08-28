@@ -776,11 +776,21 @@ TD permits.
 It is reconcilable with no two-lane figure in the table. `Q94`'s arrows say the same thing
 independently — three symbols side by side at one station.
 
-✅ **The bound an instrument needs.** The widest urban carriageway here is 13.5 m, 15.8 m on a tight
-curve, ~16.5 m with a parking strip. So a two-sided ray returning **36.09 m on LUNG WO ROAD** or
-**35.26 m on FLEMING ROAD** has crossed a median, a tram reserve or a junction mouth — which is now a
-citable refusal rather than a suspicion, and is what `tools/carriageway_margin.py` would need to
-measure a *width* rather than a one-sided overhang.
+✅ **The bound an instrument needs, and it is now wired in.** The widest urban carriageway here is
+13.5 m, 15.8 m on a tight curve, ~16.5 m with a parking strip. So a two-sided ray above that has
+crossed a median, a tram reserve or a junction mouth — a citable refusal rather than a suspicion.
+`tools/carriageway_margin.py` reads the far ray on that basis since 2026-08-29 and refuses **1,269
+of 9,531** spanned stations; the figures live in `hong_kong.yaml`'s
+`carriageway_survey.width_bounds`, not in the tool, per the city-specific note below.
+
+🔴 **It bounds plausibility and does NOT filter the confound, which is the thing to know before
+quoting a span.** 621 of the region's 737 level-0 edges are one-way and run as opposed pairs, so the
+ray spans both carriageways and two of them summing to 13 m pass 16.5 m as a legal four-lane single
+carriageway. `Q95` publishes those as a **kerb-to-kerb span**, never as a carriageway width.
+
+⚠️ **4.3.9.8's 3.0-3.65 m is the lane divisor, and `roads.lane_width_m` must never be.** 3.2 m is the
+authored constant the whole question is about; dividing by it makes the instrument agree with the
+graph by construction. The lane count is therefore a bracket, ambiguous on 178 of 343 edges.
 
 ⚠️ **Read, not fetched.** Nothing in `etl/` downloads this and nothing should: it is one table, and
 the figures above are transcribed here the way `CT174/51-5(1)F`'s marking dimensions are. ⚠️ **It is

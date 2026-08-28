@@ -13065,7 +13065,9 @@ with
 
 ## `Q95` — The authored carriageway width is outside the range Hong Kong permits
 
-**Status.** 🟡 Open 2026-08-29. Measured, bounded and recorded; no value changed.
+**Status.** 🟡 Open 2026-08-29, **instrument built 2026-08-29**. The blocker below is cleared:
+`tools/carriageway_margin.py` now measures a per-edge span. Still no value changed — `lanes`,
+`lane_width_m` and `widen_default` are untouched.
 
 ### The question
 
@@ -13124,11 +13126,91 @@ points the other way: the extent is read, not derived. And the table is headed *
 Nothing is changed. `lane_width_m` stays 3.2 and the lane table stays authored, because moving either
 moves every ribbon, kerb, registered layer and clearance grader in the region.
 
-⬜ **The blocker is an instrument, not a decision.** `carriageway_margin.py` measures a *one-sided*
-overhang precisely because the two-sided ray is corrupted; a per-edge width needs that ray fixed, and
-TPDM now supplies the rejection bound it was missing. That is the work `Q57` scoped and never did, and
-it is the prerequisite for `Q94`'s lane count and for anything that would draw STEWART ROAD at its own
-width.
+✅ **The blocker is cleared — the instrument exists.** `carriageway_margin.py` reads the far ray as
+well as the near one and publishes a per-edge span, gated on the bound this entry established. The
+overhang headline it already published is **byte-identical**, which is the ratchet on the refactor.
+The bounds live in `hong_kong.yaml`'s `carriageway_survey.width_bounds` under hard rule 3.
+
+```
+measured span = BOTH published edges at one station, from ONE publisher
+  9,531 of 13,546 stations were spanned (70.4%, 15.0 m ray), against 12,502 on the near side
+  spanned by: ib1000 9,311, traffic_aids 220
+  both spanned 117 stations, disagreeing by p50 1.05 m, p90 11.06 m
+  4,015 stations no publisher spanned; partition 9,531 + 4,015 = 13,546
+
+station span, recorded over the REFUSALS too — n 9,531 exceeds the 8,204 kept
+  population                     n     p50     p90     max   > 16.5    < 7.3
+  all spanned                9,531    9.07   17.29   29.33   13.3%   34.0%
+    direction both             868    8.74   14.90   27.96    6.3%   29.8%
+    direction forward        8,663    9.13   17.38   29.33   14.0%   34.4%
+  junctions dropped          5,970    8.18   16.19   29.33    8.9%   38.8%
+  junctions only             3,561   11.20   18.79   28.66   20.6%   26.0%
+  refused: 1,269 over 16.5 m, 58 under one through lane (3.0 m); kept 8,204
+
+per edge: median over non-junction spanned stations, n >= 3, THEN the refusal
+  387 edges have a median; 44 refused on it; 343 published
+  two-way — a carriageway width      34 edges  p50   8.46  p90  11.58
+  one-way — a KERB-TO-KERB SPAN     309 edges  p50   7.71  p90  14.65
+  measured - authored width_m: p10 -0.91  p50 +1.32  p90 +7.65; wider on 73%
+  below TD's 7.3 m two-lane minimum: 141 of 343 — reported, never refused (3.4.2.2)
+```
+
+🔴 **The ceiling is a plausibility bound and NOT a confound filter, which this entry did not
+foresee.** **621 of the region's 737 level-0 edges are one-way**, run as opposed pairs, so the
+centreline sits inside one carriageway and the ray legitimately spans both. Two carriageways summing
+to 13 m are a legal four-lane single carriageway and pass 16.5 m cleanly. What separates them is
+`off_centre` = `|near − far| / span`, and it separates them sharply:
+
+```
+off-centre band       n   span p50   > 16.5
+  0.00-0.10       2,051      7.26     4.0%
+  0.10-0.25       1,836      7.45     5.9%
+  0.25-0.50       1,295     10.55    14.3%
+  0.50-1.01         788     14.41    19.9%
+```
+
+⚠️ **So the one-way number is published as a kerb-to-kerb SPAN, never as a carriageway width.** The
+two coincide only on the 34 two-way edges, and pooling them into one headline would restate `Q57`'s
+own generalisation — a property established on one population and assumed for another.
+
+🔴 **Lanes come out as a BRACKET, and dividing by `lane_width_m` was refused.** 3.2 m is the constant
+under test, so dividing by it would make the instrument agree with the graph by construction —
+`Q72`'s tautology one dimension over. The divisor is TPDM 4.3.9.8's published 3.0–3.65 m through
+lane, and the ambiguity is published rather than resolved:
+
+```
+  the graph's lanes fall outside the bracket on 147 of 343 (88 too few, 59 too many)
+  ambiguous on 178 of 343
+  3.4.2.7 findings — two-way, unambiguously odd, >= 3 lanes: 2
+    e529 MARSH ROAD 11.94 m · e10 TUNG LO WAN ROAD 11.91 m
+```
+
+⚠️ **The two-publisher cross-check does not carry over from the near side.** 117 stations are spanned
+by both publishers against 1,429 answered by both on the near side, and the drawings span the road
+only 220 times against 1,669 near-side wins — they are TD's painted edge and far too sparse to reach
+across a street. The report says so in the line rather than inheriting the near side's claim.
+
+🔴 **`Q94`'s three published roads do not reproduce, and that is the strongest argument for this
+code.** Its commit `0d049df` touched only the two docs. Walked at its stated 4 m stations and 12 m
+junction exclusion, the **p10 reproduces to 0.03 m on all three** — 10.55 against 10.56, 7.77 against
+7.80, 1.07 against 1.09 — so the rays, the walk and the exclusion are the same instrument. But
+`HENNESSY ROAD` reproduces on *every* percentile (7.81 / 11.55 / 23.18 against 7.80 / 11.54 / 23.17)
+only at a **ray cap of 25 m or more**, which its prose never states; and `STEWART ROAD` and
+`CANAL ROAD EAST` reproduce at no cap, `STEWART ROAD` being cap-*insensitive* at 22 stations reading
+16.67 m from 15 m through 40 m. ⚠️ **The stated method does not determine the stated numbers.**
+Nothing was tuned toward them, and the scratch figures in `Q94` should be read as provisional until
+someone re-derives them here.
+
+⚠️ **Mutation-checked rather than read** (`Q72`): the ceiling reaches **0** refusals at
+`--max-width-m 29.5`, and at 6.0 m it refuses 8,228 while `n` stays 9,531 against 1,245 kept — which
+is what says the distribution is recorded *above* its own guard and not below it. 🔴 **And the cap
+can manufacture a clean sweep**, so the tool now refuses to start unless `2 × max_ray_m` exceeds the
+ceiling: at `--max-ray-m 8` two rays cannot sum past 16 m, every span would be kept by construction,
+and the report would have announced a sweep the cap created. That is `Q58`'s `drawn_gauge_m` trap
+reachable from the command line.
+
+⬜ **What is still not done.** The width is measured and nothing consumes it. Assigning it is the next
+decision, and the widening is part of the same one.
 
 ⚠️ **When it is done, the widening is part of the same decision.** `widen_default: 1.6` is a
 *multiplier on a placeholder*. Applied to a real width it over-widens streets that are already wide
@@ -13136,6 +13218,9 @@ and under-widens the narrowest; the shape `GAME_DESIGN.md` actually asks for —
 roads" — is a **floor**, not a proportion. Expressed as `drawn = max(real_width, playable_floor)` with
 the floor at today's drawn value, most of the region is byte-identical and the change is confined to
 the genuinely wide streets, which is what makes the grader re-baseline affordable.
+
+⚠️ **And it needs the 34/309 split above.** A one-way edge's span is two carriageways, so assigning it
+as that edge's width would draw both halves of Hennessy Road on each half of Hennessy Road.
 
 **See.** `Q94` for the arrows that made this visible and for the lane count they imply · `Q19` for the
 invisible walls the invented width causes · `Q57` for the previous narrowing and the instrument it

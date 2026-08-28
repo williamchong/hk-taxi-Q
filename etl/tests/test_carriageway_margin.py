@@ -22,7 +22,31 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from carriageway_margin import _BANDS, _Index, _segments, nearest_published
+from carriageway_margin import (
+    _BANDS,
+    Report,
+    Station,
+    _Index,
+    _segments,
+    _sides,
+    edge_widths,
+    lane_bracket,
+    main,
+    nearest_published,
+    width_published,
+)
+
+from pipeline.config import WidthBounds
+
+
+def _ask(indexes: list[tuple[str, _Index]]) -> list[tuple[str, float | None, float | None]]:
+    """One station's rays, cast north from the origin — the readers' shared input."""
+    return _sides(np.zeros(2), np.array([0.0, 1.0]), indexes, 15.0)
+
+
+def _bounds(**overrides: object) -> WidthBounds:
+    defaults = {"max_m": 16.5, "min_m": 7.3, "hard_min_m": 3.0, "lane_m": (3.0, 3.65)}
+    return WidthBounds(**{**defaults, **overrides})  # type: ignore[arg-type]
 
 
 def _index(*lines: list[tuple[float, float]]) -> _Index:
@@ -135,7 +159,7 @@ class TestNearestPublished:
         nearer and make the config's ordering decorative."""
         indexes = self._pair(9.0, 2.0)
 
-        chosen, nearest, _ = nearest_published(np.zeros(2), np.array([0.0, 1.0]), indexes, 15.0)
+        chosen, nearest, _ = nearest_published(_ask(indexes))
 
         assert chosen == "first"
         assert nearest == pytest.approx(9.0)
@@ -143,7 +167,7 @@ class TestNearestPublished:
     def test_the_second_answers_when_the_first_cannot(self) -> None:
         indexes = self._pair(None, 2.0)
 
-        chosen, nearest, _ = nearest_published(np.zeros(2), np.array([0.0, 1.0]), indexes, 15.0)
+        chosen, nearest, _ = nearest_published(_ask(indexes))
 
         assert chosen == "second"
         assert nearest == pytest.approx(2.0)
@@ -151,7 +175,7 @@ class TestNearestPublished:
     def test_nobody_answering_is_reported_as_no_name(self) -> None:
         indexes = self._pair(None, None)
 
-        chosen, _, spread = nearest_published(np.zeros(2), np.array([0.0, 1.0]), indexes, 15.0)
+        chosen, _, spread = nearest_published(_ask(indexes))
 
         assert chosen == ""
         assert spread == []
@@ -163,7 +187,7 @@ class TestNearestPublished:
         more than one source."""
         indexes = self._pair(9.0, 2.0)
 
-        _, _, spread = nearest_published(np.zeros(2), np.array([0.0, 1.0]), indexes, 15.0)
+        _, _, spread = nearest_published(_ask(indexes))
 
         assert sorted(spread) == [pytest.approx(2.0), pytest.approx(9.0)]
 
@@ -173,9 +197,7 @@ class TestNearestPublished:
         corrupt."""
         index = _index([(-50.0, 6.0), (50.0, 6.0)], [(-50.0, -2.0), (50.0, -2.0)])
 
-        _, nearest, _ = nearest_published(
-            np.zeros(2), np.array([0.0, 1.0]), [("only", index)], 15.0
-        )
+        _, nearest, _ = nearest_published(_ask([("only", index)]))
 
         assert nearest == pytest.approx(2.0)
 
@@ -206,3 +228,236 @@ class TestCastBoth:
         reversed_pair = index.cast_both(np.zeros(2), np.array([0.0, -1.0]), 15.0)
 
         assert reversed_pair == (backward, forward)
+
+
+class TestSides:
+    """The one place a station's rays are cast, which is why it is named."""
+
+    def test_every_publisher_is_asked_even_after_one_spans_the_road(self) -> None:
+        """A row per configured publisher, including ones that hit nothing.
+        Short-circuiting once someone answers is the obvious optimisation, and
+        it would delete both `nearest_published`'s spread and the width's own
+        preference order in a single move."""
+        spans = _index([(-50.0, 4.0), (50.0, 4.0)], [(-50.0, -4.0), (50.0, -4.0)])
+        empty = _index([(999.0, 999.0), (1000.0, 999.0)])
+
+        sides = _ask([("first", spans), ("second", empty)])
+
+        assert [name for name, _, _ in sides] == ["first", "second"]
+        assert sides[1] == ("second", None, None)
+
+    def test_both_readers_consume_the_same_list(self) -> None:
+        """⚠️ If `_sides` ever becomes a generator, the second consumer sees an
+        exhausted iterator: width coverage drops to zero with no error, no
+        exception and a report that still prints."""
+        index = _index([(-50.0, 5.0), (50.0, 5.0)], [(-50.0, -6.0), (50.0, -6.0)])
+        sides = _ask([("only", index)])
+
+        chosen, nearest, _ = nearest_published(sides)
+        spanner, near, far, _ = width_published(sides)
+
+        assert (chosen, nearest) == ("only", pytest.approx(5.0))
+        assert (spanner, near, far) == ("only", pytest.approx(5.0), pytest.approx(6.0))
+
+
+class TestWidthPublished:
+    def test_a_publisher_reaching_one_side_only_supplies_no_width(self) -> None:
+        """Treating a missing far side as zero publishes half-widths as widths,
+        and a half-width lands squarely inside the plausible range."""
+        spanner, near, far, spread = width_published(
+            _ask([("only", _index([(-50.0, 4.0), (50.0, 4.0)]))])
+        )
+
+        assert spanner == ""
+        assert np.isnan(near) and np.isnan(far)
+        assert spread == []
+
+    def test_the_two_sides_come_from_one_publisher(self) -> None:
+        """🔴 The drawings are TD's painted edge and iB1000's `RM` is LandsD's
+        surveyed margin. Summing one on the near side and the other on the far
+        adds a cartographic truth to a topographic one, and the result still
+        looks like a road."""
+        near_only = _index([(-50.0, 3.0), (50.0, 3.0)])
+        spanning = _index([(-50.0, 5.0), (50.0, 5.0)], [(-50.0, -9.0), (50.0, -9.0)])
+
+        spanner, near, far, _ = width_published(
+            _ask([("near_only", near_only), ("spanning", spanning)])
+        )
+
+        assert spanner == "spanning"
+        assert near + far == pytest.approx(14.0)
+
+    def test_the_first_publisher_that_spans_wins_even_when_it_is_wider(self) -> None:
+        """Preference, not smallest — the same rule `nearest_published` follows,
+        so that config order stays the thing that decides."""
+        wide = _index([(-50.0, 8.0), (50.0, 8.0)], [(-50.0, -8.0), (50.0, -8.0)])
+        narrow = _index([(-50.0, 4.0), (50.0, 4.0)], [(-50.0, -4.0), (50.0, -4.0)])
+
+        spanner, near, far, spread = width_published(_ask([("wide", wide), ("narrow", narrow)]))
+
+        assert spanner == "wide"
+        assert near + far == pytest.approx(16.0)
+        assert sorted(spread) == [pytest.approx(8.0), pytest.approx(16.0)]
+
+    def test_the_sides_are_sorted_so_the_pair_carries_no_convention(self) -> None:
+        """`left_of`'s sign is irrelevant to a sum, and `off_centre` reads the
+        pair as near-then-far rather than left-then-right."""
+        index = _index([(-50.0, 2.0), (50.0, 2.0)], [(-50.0, -11.0), (50.0, -11.0)])
+
+        _, near, far, _ = width_published(_ask([("only", index)]))
+        flipped = width_published(
+            _sides(np.zeros(2), np.array([0.0, -1.0]), [("only", index)], 15.0)
+        )
+
+        assert (near, far) == (pytest.approx(2.0), pytest.approx(11.0))
+        assert flipped[1:3] == (pytest.approx(2.0), pytest.approx(11.0))
+
+
+class TestLaneBracket:
+    """`Q95`'s lane count, which must not be a division by the value under test."""
+
+    def test_the_bracket_comes_from_the_standard_not_from_lane_width_m(self) -> None:
+        """🔴 Dividing by `roads.lane_width_m` (3.2) would make the instrument
+        agree with the authored constant by construction — `Q72`'s tautology one
+        dimension over. 11.9 m holds three 3.65 m lanes and three 3.0 m ones;
+        at 3.2 it would read a single unambiguous 3 for the wrong reason."""
+        assert lane_bracket(11.9, _bounds(), two_way=False) == (3, 3)
+        assert lane_bracket(7.0, _bounds(), two_way=False) == (1, 2)
+        assert lane_bracket(14.14, _bounds(), two_way=False) == (3, 4)
+
+    def test_3_4_2_7_collapses_an_ambiguous_bracket_on_a_two_way_edge(self) -> None:
+        """A two-way single carriageway may not be divided into three lanes, so
+        an ambiguous (3, 4) is a four — which is how STEWART ROAD reads as
+        TPDM's 13.5 m four-lane rather than as an odd count."""
+        assert lane_bracket(14.14, _bounds(), two_way=True) == (4, 4)
+        assert lane_bracket(7.0, _bounds(), two_way=True) == (1, 2)
+
+    def test_an_unambiguously_odd_two_way_count_is_left_standing(self) -> None:
+        """⚠️ The collapse narrows an *ambiguous* bracket only. An unambiguous
+        three is a finding about the measurement or the direction field, and
+        correcting it into agreement would delete the finding."""
+        assert lane_bracket(11.9, _bounds(), two_way=True) == (3, 3)
+
+
+def _station(edge: int, near: float, far: float, *, junction: bool = False) -> Station:
+    return Station(
+        edge=edge,
+        nearest_m=near,
+        overhang_m=0.0,
+        source="only",
+        near_junction=junction,
+        width_source="only",
+        width_near_m=near,
+        width_far_m=far,
+    )
+
+
+class TestWidthPartition:
+    """The counters, and the trap CLAUDE.md records firing in four other stages."""
+
+    def test_the_distribution_is_recorded_over_the_refusals(self) -> None:
+        """The `drawn_gauge_m` trap. Appended below the ceiling guard the
+        distribution is confined to it by construction and reports a clean sweep
+        whatever the region does — so `n` must exceed the keeps and `max` must
+        exceed the bar. Both are checked, because either alone can be satisfied
+        by a distribution that never saw a refusal."""
+        report = Report()
+        report.widths = [8.0, 9.0, 40.0]
+        report.width_over_ceiling = 1
+
+        assert report.width_measured == 3
+        assert report.width_kept == 2
+        assert max(report.widths) > 16.5
+
+    def test_a_station_nobody_spanned_is_counted_beside_the_distribution(self) -> None:
+        """A station with one ray has no width to record. Appending a
+        placeholder would hold the identity true by never reaching the list,
+        which is what review found `touchdown_error.py`'s `ends_no_target`
+        doing. So the partition closes against the walk, not against itself."""
+        report = Report()
+        report.stations_walked = 10
+        report.widths = [8.0, 9.0, 40.0]
+        report.width_no_span = 7
+
+        assert report.width_measured + report.width_no_span == report.stations_walked
+        assert report.width_coverage == pytest.approx(0.3)
+
+    def test_width_coverage_is_not_the_near_side_coverage(self) -> None:
+        """`coverage` is "one hit *either* side". A width needs both and is far
+        sparser; reporting one as the other states a number for a measurement
+        that was not made."""
+        report = Report()
+        report.stations_walked = 100
+        report.unmeasured = 8
+        report.stations = [_station(1, 3.0, 4.0) for _ in range(92)]
+        report.widths = [7.0] * 50
+
+        assert report.coverage == pytest.approx(0.92)
+        assert report.width_coverage == pytest.approx(0.50)
+
+
+class TestEdgeWidths:
+    def test_an_edge_is_refused_on_its_median_not_by_trimming_its_stations(self) -> None:
+        """Gating stations at the ceiling and *then* taking a median
+        manufactures a median just under the ceiling for an edge most of whose
+        stations escape through a junction mouth — a number that reads as a
+        careful measurement of a wide street and is an average of the crossings
+        beside it. Here four of five stations escape, so the edge goes."""
+        report = Report()
+        report.stations = [
+            _station(1, 4.0, 4.0),
+            *[_station(1, 10.0, 15.0) for _ in range(4)],
+        ]
+
+        (row,) = edge_widths(report, _bounds())
+
+        assert row.refused is True
+        assert row.median_m == pytest.approx(25.0)
+        assert row.refused_share == pytest.approx(0.8)
+
+    def test_an_edge_below_one_through_lane_is_refused_too(self) -> None:
+        """Below `hard_min_m` the ray landed on a hatched island or a bay line
+        rather than the far kerb, and the reading is not a carriageway at all."""
+        report = Report()
+        report.stations = [_station(1, 0.5, 0.6) for _ in range(3)]
+
+        (row,) = edge_widths(report, _bounds())
+
+        assert row.refused is True
+
+    def test_an_edge_below_the_published_minimum_is_kept_not_refused(self) -> None:
+        """The asymmetry is the point. 3.4.2.2 lets widths fall below the
+        table's minimum "on economic or other grounds", and Wan Chai is full of
+        genuinely sub-standard back streets. Refusing at `min_m` would delete
+        them and publish a region that agrees with TD by construction — the
+        ceiling's own trap, inverted."""
+        report = Report()
+        report.stations = [_station(1, 2.5, 3.0) for _ in range(3)]
+
+        (row,) = edge_widths(report, _bounds())
+
+        assert row.median_m == pytest.approx(5.5)
+        assert row.refused is False
+
+    def test_junction_stations_do_not_reach_a_median(self) -> None:
+        """A station in a junction mouth has no far kerb to find, so its ray
+        crosses the mouth and the edge reads as a wide road."""
+        report = Report()
+        report.stations = [
+            *[_station(1, 4.0, 4.0) for _ in range(3)],
+            *[_station(1, 12.0, 14.0, junction=True) for _ in range(20)],
+        ]
+
+        (row,) = edge_widths(report, _bounds())
+
+        assert row.n == 3
+        assert row.median_m == pytest.approx(8.0)
+
+
+class TestRayCapRefusal:
+    def test_a_cap_that_cannot_reach_the_ceiling_is_refused(self) -> None:
+        """The `drawn_gauge_m` trap, reachable from the command line. Two rays
+        capped at 8 m cannot sum past 16, so a 16.5 m ceiling can never bind and
+        the report announces a clean sweep the cap manufactured."""
+        with pytest.raises(SystemExit, match="cannot reach"):
+            main(["--city", "hong_kong", "--region", "wan_chai", "--max-ray-m", "8.0"])

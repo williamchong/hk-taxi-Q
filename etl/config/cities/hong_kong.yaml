@@ -755,6 +755,53 @@ podiums:
 # is *Tramway* in one and *tactile warning strip* in the other. Every code the
 # tool matches on comes from this block, never from a literal in the tool.
 carriageway_survey:
+  # What TD's Transport Planning & Design Manual Vol 2 Ch 3 (March 2026) permits
+  # a carriageway to be. READ, not fetched — see DATA_SOURCES.md, which carries
+  # the table and the reason nothing in etl/ downloads it.
+  #
+  # 🔴 These bound the instrument. They never assign a width. A width taken from
+  # a road's class would be authoring policy with better provenance, which is
+  # the move `roads.lanes_by_min_speed_limit_kph` already makes and the one Q95
+  # was opened about.
+  width_bounds:
+    # The widest urban carriageway in the manual:
+    #   13.5 m  four-lane single carriageway         (Table 3.4.2.1)
+    # + 3.0 m   optional parking strip beside it     (3.4.2.6)
+    # = 16.5 m
+    # 3.4.4.1's curve widening (15.8 m under a 150 m radius) is inside this and
+    # needs no term of its own. Above it a two-sided ray has crossed a median, a
+    # 5.5 m tram reserve (3.4.2.3) or a junction mouth.
+    #
+    # ⚠️ It is a plausibility bound and NOT a confound filter. Two opposed
+    # carriageways summing to 13 m are a legal four-lane single carriageway and
+    # pass this cleanly; what separates them is the off-centre column, because
+    # 621 of the region's 737 level-0 edges are one-way.
+    max_m: 16.5
+
+    # Table 3.4.2.1's two-lane single-carriageway minimum.
+    #
+    # ⚠️ REPORTED, never refused. The table is headed *Minimum* and 3.4.2.2 lets
+    # widths fall below it "on economic or other grounds"; Wan Chai is full of
+    # genuinely sub-standard back streets. Refusing here would delete them and
+    # publish a region that agrees with TD's minimum by construction — the
+    # ceiling's trap, inverted.
+    min_m: 7.3
+
+    # One through lane, 4.3.9.8's narrow end. Below this the ray has landed on
+    # a hatched island or a bay line rather than the far kerb, and the reading
+    # is not a carriageway at all. This one IS a refusal, and it is safe to
+    # gate on precisely because it refuses almost nothing.
+    hard_min_m: 3.0
+
+    # 4.3.9.8 — a through traffic lane is 3.0-3.65 m, exclusive of hard strips.
+    #
+    # 🔴 A bracket, and deliberately NOT `roads.lane_width_m`. Dividing a
+    # measured width by the authored 3.2 would make this instrument agree with
+    # the constant under test by construction, which is Q72's tautology one
+    # dimension over. The bracket is ambiguous on much of the network and that
+    # ambiguity is published rather than resolved by fiat.
+    lane_m: [3.0, 3.65]
+
   edges:
     # Ordered by preference — the tool takes the first source that answers a
     # station. TD's own painted edge leads: it is semantically the edge of the
