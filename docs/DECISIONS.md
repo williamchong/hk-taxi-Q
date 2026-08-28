@@ -13007,6 +13007,36 @@ more cheaply: the count is derivable from a **point layer already read by a ship
 no new fetch and no new geometry. It is sparser — only 306 of 737 edges carry arrows — so it is a
 partial answer, not a replacement for the lane lines.
 
+### ✅ And the width is measurable today, on sources already on disk
+
+Asked why one street is drawn at two lanes when it is five wide, the two
+publishers `tools/carriageway_margin.py` already reads answer directly. Walked at
+4 m stations with 12 m skipped either side of every node, casting a perpendicular
+both ways and taking the first publisher that answers:
+
+| | graph | published carriageway width | implied lanes at 3.2 m |
+|---|---|---|---|
+| `STEWART ROAD` | 2 lanes / 6.4 m | p10 10.56, **p50 14.81**, p90 16.80 m | **4.6** |
+| `HENNESSY ROAD` | 2 lanes / 6.4 m | p10 7.80, **p50 11.54**, p90 23.17 m | **3.6** |
+| `CANAL ROAD EAST` | 2 lanes / 6.4 m | p10 1.09, **p50 16.15**, p90 21.92 m | **5.0** |
+
+`lanes` comes from a two-line table — `lanes_default: 2`, `70 kph → 3` — so all
+720 of the region's 50 kph edges carry the same 6.4 m whatever they are. Even
+after the 1.6x playability widening the drawn ribbon is 10.24 m, and STEWART ROAD
+is drawn **4.6 m narrower than its own carriageway**.
+
+⚠️ **The probe over-reads and `Q57` says why** — a perpendicular escapes through a
+junction mouth and crosses a dual carriageway, which is what HENNESSY ROAD's p90
+of 23.17 m is. It does not change this conclusion: STEWART ROAD's **p10** is
+10.56 m, so even the tenth percentile is three and a third lanes.
+
+🔴 **So "no lane attribute in any layer" is true and beside the point.** Nobody
+publishes a *count*; three sources publish the *width* — TD's painted edge,
+iB1000's surveyed margin, and the arrows above. ⚠️ **It is not a free win**:
+`carriageway_margin.py` reads the drawn ribbon *past* the published kerb at 75% of
+stations region-wide, so a measured width would narrow most edges and widen a few,
+and `Q19`'s occupancy moves in both directions.
+
 ### What ships, and what does not
 
 `arrows.json` publishes `stacked_pairs` **89** and `stacked_disagreeing` **51**.
