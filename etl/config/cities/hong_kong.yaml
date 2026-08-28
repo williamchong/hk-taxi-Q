@@ -978,31 +978,48 @@ arrows:
   #   ahead head width    0.122   (was 0.235 — nearly twice the drawing)
   #   stem, under head    0.032   (was a uniform 0.085; the drawing tapers)
   #   stem, at the tail   0.076
-  #   branch reach        0.150   (was 0.28)
-  #   branch barb span    0.233
-  #   branch drop         0.145   (was derived from the head width)
+  #   branch reach        0.150   (was 0.28)   — measured, then AUTHORED, below
+  #   branch barb span    0.233               — measured, then AUTHORED, below
+  #   branch drop         0.128   (was derived from the head width)
   #
-  # On a 4 m arrow that is a 1.56 m head 0.49 m across, a stem tapering 0.30 m
-  # to 0.13 m, and a turn head reaching 0.60 m out with a 0.93 m barb span.
+  # On a 4 m arrow that is a 1.56 m head 0.49 m across and a stem tapering 0.30 m
+  # to 0.13 m.
   #
-  # 🔴 **branch_head_length_frac is the one figure still authored, and it is the
-  # one that was the defect.** The drawn branch is a swept hook ending in a
-  # barbed dart whose rear is concave, so it has no single length to read; the
-  # code used to reuse `head_length_frac` for it, which made the head's base
-  # land 0.18 m past the FAR side of the stem and merged the two into a blob on
-  # 416 of the region's 747 arrows. It must stay below `branch_reach_frac`, and
-  # config.py refuses a city where it does not.
+  # ✅ **The sheet is drawn to proportion, and that was checked rather than
+  # assumed.** It is stamped NOT TO SCALE, which would ordinarily make a measured
+  # proportion worthless. RM1016 AUTOTOLL publishes its own `SIZE = 5600(H) x
+  # 2000` — a ratio of 2.800 — and its pictogram measures **2.802**. So the stamp
+  # means there is no scale bar, not that the symbols are stylised, and the
+  # figures above stand.
   #
-  # ⚠️ **The hook and the barbs are not modelled** — this draws a straight arm
-  # and a plain triangle. Recorded in DATA_SOURCES.md rather than hidden.
+  # 🔴 **The three branch figures are AUTHORED, and that is a reversal.** They
+  # were measured off RM1027 like everything above — reach 0.150, head 0.100
+  # long, barb span 0.233 — and the result was reported from the driving seat as
+  # not making sense. It is not a measurement error: TD's branch head is
+  # genuinely **wider than it is deep**, because what makes it read as a
+  # direction is a pair of thin barbs sweeping back from the tip, and a plain
+  # triangle at those proportions is a mushroom on the shaft. Drawn faithfully
+  # as a six-point dart it reads as a detached diamond instead, and its barbs
+  # are 0.09 m on a 4 m arrow — below a lane stripe, so Q91's sub-pixel problem
+  # eats them at any driving distance.
+  #
+  # So the branch is drawn as the ONE shape this model can say clearly: an
+  # arrowhead longer than it is wide, on a short arm. Sized against the frame
+  # rather than the sheet — 0.54 m long, 0.46 m across, tip 0.76 m out on a 4 m
+  # arrow — which is the debt Q60 records for railing height and P3-16 for plate
+  # dimensions, at a third layer. ⚠️ The hook and the barbs are not modelled.
+  #
+  # ⚠️ **The ahead head and the stem above are NOT authored** — those are
+  # measured, and an overlay against TD's own cell agrees on them. Do not let
+  # this note license re-authoring them.
   head_length_frac: 0.390
   head_width_frac: 0.122
   stem_width_nose_frac: 0.032
   stem_width_tail_frac: 0.076
-  branch_reach_frac: 0.150
-  branch_head_length_frac: 0.100
-  branch_head_width_frac: 0.233
-  branch_drop_frac: 0.145
+  branch_reach_frac: 0.190
+  branch_head_length_frac: 0.135
+  branch_head_width_frac: 0.115
+  branch_drop_frac: 0.128
 
   # ⚠️ **The ground and the level-0 carriageway are coplanar by construction**,
   # the same property tramway.bed_lift_m is lifted clear of. Paint laid at deck

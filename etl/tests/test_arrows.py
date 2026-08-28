@@ -58,10 +58,10 @@ BLOCK: dict[str, Any] = {
     "head_width_frac": 0.122,
     "stem_width_nose_frac": 0.032,
     "stem_width_tail_frac": 0.076,
-    "branch_reach_frac": 0.150,
-    "branch_head_length_frac": 0.100,
-    "branch_head_width_frac": 0.233,
-    "branch_drop_frac": 0.145,
+    "branch_reach_frac": 0.190,
+    "branch_head_length_frac": 0.135,
+    "branch_head_width_frac": 0.115,
+    "branch_drop_frac": 0.128,
     "lift_m": 0.015,
     "max_offset_m": 12.0,
     "bearing_tolerance_deg": 30.0,
@@ -398,7 +398,7 @@ class TestConfigRefusals:
         compared the two.
         """
         with pytest.raises(ValueError, match="far side of the stem"):
-            city_with(tmp_path, {**BLOCK, "branch_head_length_frac": 0.150})
+            city_with(tmp_path, {**BLOCK, "branch_head_length_frac": 0.200})
 
     def test_a_bearing_tolerance_past_a_right_angle_is_refused(self, tmp_path):
         """Past 90 degrees a symbol lying square across its edge passes, which

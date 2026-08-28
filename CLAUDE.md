@@ -342,9 +342,15 @@ Common emoji for this project:
   through a release and a green `check.sh`. `config.py` refuses that now, and
   `test_no_head_overlaps_the_stem_it_grows_from` catches the class whatever the numbers are —
   ⚠️ **mutation-check it rather than reading its pass**, the way `Q72` says a counter is tested.
-  ⚠️ **`branch_head_length_frac` is the one figure still authored** — the drawn branch is a swept
-  hook ending in a barbed dart and this is a straight arm and a plain triangle — so a change to it is
-  a `DATA_SOURCES.md` change too. Numbers in `Q93`.
+  ✅ **The sheet IS drawn to proportion despite the NOT TO SCALE stamp, and that is measured**:
+  `RM1016` publishes `SIZE = 5600(H) x 2000` and its pictogram reads **2.802** against 2.800. So a
+  proportion taken off a pictogram here is evidence — check a self-dimensioning code before assuming
+  otherwise. 🔴 **The turn branch is authored anyway, and the reason is the trap**: TD's branch head
+  is *wider than it is deep* because thin swept barbs do the work, so this model's plain triangle is
+  a mushroom on the shaft and the faithful dart is a detached diamond — and its barbs are 0.09 m on a
+  4 m arrow, which `Q91` removes at any driving distance. Fidelity to the drawing and legibility on
+  the road are not the same target on this layer. ⚠️ **The ahead head and the stem taper are measured
+  and must stay so** — the overlay agrees on both. Numbers in `Q93`.
   ⚠️ **An arrows change is also a shader change** — `check.sh` exits 0 on a shader that fails to
   compile, so render and `grep -i "shader error"`. Numbers in `Q59`.
   🔴 **And a shader change is a change to THREE layers**: `marking_paint.gdshader` is shared by the

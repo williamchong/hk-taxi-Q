@@ -616,11 +616,23 @@ comment claimed and was not: measured at 700 dpi off `RM1017` and `RM1027`, two 
 0.235 → **0.122** across, nearly twice the drawing, and a uniform 0.085 stem where the drawing tapers
 **0.076 → 0.032**. The branch reach is **0.150** and its barb span **0.233**.
 
-⚠️ **One arrow figure remains authored and cannot be read: `branch_head_length_frac`.** The published
-turn branch is a swept hook ending in a **barbed dart** whose rear is concave; `arrows.py` draws a
-straight arm and a plain triangle, so the head has no single length on the drawing to transcribe. The
-hook and the barbs are not modelled. This is `Q60`'s railing height and `P3-16`'s plate dimensions at
-a third layer — authored because nothing published it, and recorded here rather than in a comment.
+✅ **The sheet is drawn to proportion, and that is measured rather than assumed.** It is stamped
+**NOT TO SCALE**, which would ordinarily make any proportion read off it worthless. `RM1016` AUTOTOLL
+publishes its own `SIZE = 5600(H) x 2000` — a ratio of **2.800** — and its pictogram measures
+**2.802**. So the stamp means there is no scale bar on the sheet, not that the symbols are stylised,
+and a proportion taken off a pictogram here is evidence. That is what licenses the head and stem
+figures above, and it is worth knowing before the next glyph is transcribed.
+
+🔴 **The turn branch is nevertheless AUTHORED, and that reversal is the interesting half.** Measured,
+`RM1027`'s branch head is **wider than it is deep** — reach 0.150, barb span 0.233 — because what
+makes it read as a direction is a pair of thin barbs sweeping back from the tip. `arrows.py` draws a
+straight arm and a plain triangle, and at those proportions that is a mushroom on the shaft; drawn
+faithfully as a six-point dart it becomes a detached diamond instead. And the barbs are **0.09 m on a
+4 m arrow**, below a lane stripe, so `Q91`'s sub-pixel problem removes them at any driving distance.
+So the branch ships as the one shape this model can state clearly — an arrowhead longer than it is
+wide, sized against the frame rather than the sheet. `Q60`'s railing height and `P3-16`'s plate
+dimensions at a third layer, with the difference that here something *is* published and is declined
+rather than missing. The hook and the barbs are not modelled.
 
 ⚠️ **`Q67`'s rasterise-and-diff cannot grade any of it.** That tool compares a config face against the
 cell TD published the code in, and works because the TS sheets are vector DGN exports. This page is a
