@@ -764,7 +764,7 @@ class TestBuildRegion:
         assert kerb_to_kerb - 2 * city.roads.surface.kerb_width_m == pytest.approx(
             6.4 * 1.5, abs=0.01
         )
-        assert city.roads.surface.widen_for(70, elevation_level=0) == 1.2
+        assert city.roads.surface.floor_for(70, elevation_level=0) == 11.52
 
     def test_the_flyover_is_drawn_at_its_authored_width(self, testville, tmp_path) -> None:
         """The off-grade half of the same acceptance, measured in the mesh.
@@ -834,7 +834,7 @@ class TestBuildRegion:
         report = build_region(city, "middle", out_root=tmp_path / "out")
         mesh = _mesh(tmp_path)
 
-        half = 6.4 * city.roads.surface.widen_for(50, elevation_level=0) / 2.0
+        half = city.roads.surface.drawn_width_m(6.4, 50, elevation_level=0) / 2.0
         # Travel turns from +X to 60 degrees right of it, so the joint bisects
         # at 30 degrees and the mitre reaches `1 / cos(30)` half-widths out.
         normal = np.array([np.sin(np.radians(30.0)), -np.cos(np.radians(30.0))])
@@ -956,10 +956,14 @@ class TestBuildRegion:
         style = city.roads.surface
         off_grade = 0
         for edge in graph["edges"]:
-            factor = style.widen_for(
-                edge["speed_limit_kph"], elevation_level=edge["elevation_level"]
+            widened = (
+                style.drawn_width_m(
+                    edge["width_m"],
+                    edge["speed_limit_kph"],
+                    elevation_level=edge["elevation_level"],
+                )
+                / 2.0
             )
-            widened = edge["width_m"] * factor / 2.0
             # One value per station since `Q23`, and the game indexes it by the
             # graph's own vertex numbering — so a length that drifts from the
             # polyline reads the wrong station's width rather than failing.
@@ -967,9 +971,10 @@ class TestBuildRegion:
             assert published[edge["id"]] == pytest.approx(
                 [widened] * len(edge["polyline"]), abs=0.001
             )
-            # Stated against the authored width rather than against `widen_for`,
-            # which the line above already uses: an expectation computed by the
-            # function under test survives that function being reverted.
+            # Stated against the authored width rather than against
+            # `drawn_width_m`, which the line above already uses: an expectation
+            # computed by the function under test survives that function being
+            # reverted.
             #
             # At grade the drawn ribbon is wider than the authored street, so a
             # lane centre taken from the graph alone would sit short. Off-grade

@@ -8,7 +8,7 @@ tightest edges inside the un-widened width — and once `Q51` split the starved
 set by what actually blocks it, four of those eight turned out to be
 `INFRASTRUCTURE`, which no width rule was ever going to reach. The claim about
 *buildings* therefore rests on a sample of two. This sweeps the whole
-population, at every widening factor `GAME_DESIGN.md` allows.
+population, at every carriageway floor `GAME_DESIGN.md` allows.
 
 ⚠️ **This is not a fifth grader, and must not be quoted as one.** The four
 tools beside it read only the shipped bundle and share no code with the
@@ -29,15 +29,22 @@ directions rather than counting only the wins.
 geometry rather than a shortcut. Buildings do not move when the ribbon narrows,
 and `clearance.py` takes the deck height from the graph's own `polyline.y`, so
 the only thing a narrower widening changes is the corridor that is measured
-across. The factor is applied as `min(published_half, authored_half x factor)`,
-which is exactly what lowering `widen_default` does: `config.widen_for` resolves
-level, then structure, then the speed table, then the default — so a station
-already at 1.0x (on structure, or off-grade) or at 1.3x (expressway) stays where
-it is, and only the 1.6x population moves.
+across. The floor is applied as `min(published_half, max(authored, floor) / 2)`,
+which is exactly what lowering `floor_default_m` does: `config.floor_for` resolves
+level, then structure, then the speed table, then the default — so a station on
+structure or off-grade (floor 0.0 m) or on an expressway (12.48 m) stays where it
+is, and only the 10.24 m population moves.
 
-⚠️ **Valid only at 1.3x and above.** Below that the `min` above would narrow
-expressways too, which `widen_by_min_speed_limit_kph` holds at 1.3 whatever the
-default is. 1.3 is also `GAME_DESIGN.md`'s floor, so the sweep stops there.
+⚠️ **Valid only at 8.32 m and above.** Below that the `min` above would narrow
+expressways too, which `floor_by_min_speed_limit_kph` holds at 12.48 m whatever
+the default is. 8.32 m is what `GAME_DESIGN.md`'s 1.3x floor drew, so the sweep
+stops there.
+
+🔴 **A road wider than the floor is out of this sweep's reach entirely** (`Q95`).
+`max(own, floor)` cannot go below `own`, so the 37 edges the survey drew wider
+than 10.24 m hold their width in every column. That is not a gap in the
+instrument — it is the finding that narrowing can no longer reach them, where
+under the multiplier it appeared to.
 
 ⚠️ One approximation, recorded rather than hidden: inside `structure_taper_m`'s
 15 m blend the real taper would run from the new factor down to 1.0, where the
@@ -95,16 +102,26 @@ from pipeline.clearance import (  # noqa: E402
     walk,
     wears,
 )
-from pipeline.config import CityConfig, load_city  # noqa: E402
+from pipeline.config import CityConfig, RoadSurface, load_city  # noqa: E402
 from pipeline.documents import read_document  # noqa: E402
 
 log = logging.getLogger(__name__)
 
-# The widening factors to price, widest first so the first column is the shipped
-# city and every later one is a proposal against it. `GAME_DESIGN.md` fixes the
-# range at 1.3-1.8 and `widen_default` is 1.6, so this is the whole of what is
-# available downward.
-FACTORS: tuple[float, ...] = (1.60, 1.55, 1.50, 1.45, 1.40, 1.35, 1.30)
+# The carriageway floors to price, in metres, widest first so the first column
+# is the shipped city and every later one is a proposal against it.
+#
+# 🔴 **Metres since `Q95`, and these were widening *factors* before it.** The
+# widening is now `max(width_m, floor)` rather than `width_m x factor`, so a
+# factor no longer names a drawn width — 1.6x meant 10.24 m only while every
+# `width_m` was the same invented 6.4. The values below are what the old sweep
+# drew on that width (6.4 x 1.60 … 6.4 x 1.30), so the range priced is the same
+# range `GAME_DESIGN.md` fixes at 1.3-1.8, restated in the units the rule works
+# in and no longer silently dependent on a constant that has since moved.
+FLOORS_M: tuple[float, ...] = (10.24, 9.92, 9.60, 9.28, 8.96, 8.64, 8.32)
+
+# Half the last place `surface.py` rounds `half_width_m` to. A difference under
+# this is the document's own rounding rather than a narrowing.
+_ROUNDING_M = 5e-4
 
 # The taxi's body collider, in metres — `game/scenes/vehicle/taxi.tscn`. A
 # default rather than a hard-coded bar, so a wider car is a flag rather than an
@@ -135,8 +152,24 @@ def classes(city: CityConfig) -> tuple[str, ...]:
     return (structure, BUILDING, LANDMARK)
 
 
-def scaled(drawn: dict[int, dict], authored_half: dict[int, float], factor: float) -> dict:
-    """The carriageway table as `widen_default = factor` would have drawn it."""
+def scaled(
+    drawn: dict[int, dict],
+    authored_half: dict[int, float],
+    rules: dict[int, tuple[int, int]],
+    style: RoadSurface,
+    floor_m: float,
+) -> dict:
+    """The carriageway table as `surface.floor_default_m = floor_m` would have drawn it.
+
+    🔴 **A road already wider than the floor does not move, and that is the
+    substantive change `Q95` made to this sweep.** Under the multiplier every
+    at-grade edge was drawn at 1.6x an invented width, so lowering the factor
+    narrowed all of them together. Under a floor, an edge whose *measured*
+    carriageway exceeds the floor is drawn at its own width and no floor below
+    that touches it — `max(own, floor)` cannot go under `own`. So this sweep now
+    prices exactly the population it can still reach, which is the edges the
+    floor is currently holding open.
+    """
     table = {}
     for edge_id, entry in drawn.items():
         if edge_id not in authored_half:
@@ -146,10 +179,30 @@ def scaled(drawn: dict[int, dict], authored_half: dict[int, float], factor: floa
                 f"edge {edge_id} is in the carriageway table and not in the graph; "
                 "the two documents are from different runs"
             )
-        limit = authored_half[edge_id] * factor
+        # 🔴 **The edge's OWN rule, with only the default swept** — not the swept
+        # value applied to every edge. Under the multiplier that distinction was
+        # invisible because 1.60 was the *largest* factor, so clamping at the
+        # default never bound an expressway drawn at 1.30 or a deck at 1.00. A
+        # floor inverts it: 10.24 m sits *below* the 12.48 m expressway floor, so
+        # applying it everywhere narrows exactly the two populations
+        # `floor_by_min_speed_limit_kph` and `floor_by_elevation_level` exist to
+        # hold open. `check_baseline` is what caught this, on 42 edges.
+        limit_kph, level = rules[edge_id]
+        floor = replace(style, floor_default_m=floor_m).floor_for(limit_kph, elevation_level=level)
+        limit = max(authored_half[edge_id] * 2.0, floor) / 2.0
         table[edge_id] = {
             **entry,
-            "half_width_m": [min(half, limit) for half in entry["half_width_m"]],
+            # ⚠️ **Tolerant of the document's own rounding, and it has to be**
+            # (`Q95`). `surface.py` writes `half_width_m` to three decimals while
+            # this recomputes it from an unrounded `width_m`, so an edge drawn at
+            # its own measured width lands half a micron under its own limit and
+            # `min` "narrows" it by nothing at all — which `check_baseline` then
+            # reads as a broken simulation. It did, on six edges. Under the
+            # multiplier the limit always sat well clear of the published value,
+            # so no tolerance was needed and none existed.
+            "half_width_m": [
+                half if limit >= half - _ROUNDING_M else limit for half in entry["half_width_m"]
+            ],
         }
     return table
 
@@ -302,10 +355,10 @@ def owner(per_class: dict[str, float], clear: float) -> str:
 def check_baseline(out_dir: Path, city_id: str, region_id: str, baseline: dict[int, float]) -> None:
     """Refuse to publish a sweep whose first column is not the shipped city.
 
-    The whole table is read across its factors, and the 1.60x column is the only
+    The whole table is read across its floors, and the 10.24 m column is the only
     one that can be checked against something — `clearance.json`, written by the
     stage at the width the bundle was actually drawn at. If the two disagree the
-    factor simulation is wrong and no other column means anything, so this is a
+    floor simulation is wrong and no other column means anything, so this is a
     precondition rather than a diagnostic.
     """
     rebuild = f"python -m pipeline --city {city_id} --region {region_id}"
@@ -336,14 +389,14 @@ def _report_edges(
     owners: dict[int, str],
     names: dict[int, str],
 ) -> None:
-    baseline = results[FACTORS[0]]
+    baseline = results[FLOORS_M[0]]
     log.info("")
     log.info(
-        "  clear corridor per edge, by widening factor — %d ever below one lane:", len(watched)
+        "  clear corridor per edge, by carriageway floor — %d ever below one lane:", len(watched)
     )
-    log.info("    %-6s %-18s %s", "edge", "blocked by", "".join(f"{f:>7.2f}x" for f in FACTORS))
+    log.info("    %-6s %-18s %s", "edge", "blocked by", "".join(f"{f:>7.2f}m" for f in FLOORS_M))
     for edge_id in sorted(watched, key=lambda e: baseline[e]):
-        row = "".join(f"{results[factor][edge_id]:>8.2f}" for factor in FACTORS)
+        row = "".join(f"{results[floor][edge_id]:>8.2f}" for floor in FLOORS_M)
         log.info(
             "    e%-5d %-18s %s  %s",
             edge_id,
@@ -360,26 +413,26 @@ def _report_bar(
     owners: dict[int, str],
     order: tuple[str, ...],
 ) -> None:
-    baseline = results[FACTORS[0]]
+    baseline = results[FLOORS_M[0]]
     log.info("")
     log.info("  edges below %.2f m (%s), by class:", bar, label)
     log.info(
         "    %-8s %6s %s   %s",
-        "factor",
+        "floor",
         "total",
         "".join(f"{name:>18}" for name in order),
-        "vs the shipped 1.60x",
+        "vs the shipped 10.24 m",
     )
-    for factor in FACTORS:
-        starved = [edge_id for edge_id, width in results[factor].items() if width < bar]
+    for floor in FLOORS_M:
+        starved = [edge_id for edge_id, width in results[floor].items() if width < bar]
         counted = Counter(owners[edge_id] for edge_id in starved)
-        cleared, lost = moved(baseline, results[factor], bar)
+        cleared, lost = moved(baseline, results[floor], bar)
         log.info(
             "    %-8s %6d %s   %s",
-            f"{factor:.2f}x",
+            f"{floor:.2f} m",
             len(starved),
             "".join(f"{counted.get(name, 0):>18d}" for name in order),
-            "" if factor == FACTORS[0] else f"{len(cleared)} cleared, {len(lost)} lost",
+            "" if floor == FLOORS_M[0] else f"{len(cleared)} cleared, {len(lost)} lost",
         )
         if lost:
             # Named, never merely counted. An edge narrowing *breaks* is the
@@ -418,28 +471,35 @@ def main(argv: list[str] | None = None) -> int:
     lane_m = float(city.roads.lane_width_m)
 
     log.info(
-        "  sweeping %d factors over %d tiles and %d hero meshes; bars %.2f m (one lane) "
+        "  sweeping %d carriageway floors over %d tiles and %d hero meshes; bars %.2f m (one lane) "
         "and %.2f m (the car)",
-        len(FACTORS),
+        len(FLOORS_M),
         len(tiles),
         len(heroes),
         lane_m,
         args.car_width_m,
     )
 
-    tables = {factor: scaled(drawn, authored_half, factor) for factor in FACTORS}
-    results = {factor: sweep(city, graph, table, tiles, heroes) for factor, table in tables.items()}
-    baseline = results[FACTORS[0]]
-    # Every factor must measure the same population, or a column is quietly
+    rules = {
+        int(edge["id"]): (int(edge["speed_limit_kph"]), int(edge["elevation_level"]))
+        for edge in graph["edges"]
+    }
+    style = city.roads.surface
+    tables = {floor: scaled(drawn, authored_half, rules, style, floor) for floor in FLOORS_M}
+    results = {floor: sweep(city, graph, table, tiles, heroes) for floor, table in tables.items()}
+    baseline = results[FLOORS_M[0]]
+    # Every floor must measure the same population, or a column is quietly
     # comparing different edges. It holds by construction — the measured set
     # comes from the trims and the polylines, neither of which a width touches —
-    # and is asserted because every table below reads across the factors.
-    for factor, widths in results.items():
+    # and is asserted because every table below reads across the floors.
+    for floor, widths in results.items():
         if set(widths) != set(baseline):
-            raise SystemExit(f"{factor:.2f}x measured a different set of edges from the baseline")
+            raise SystemExit(
+                f"the {floor:.2f} m floor measured a different set of edges from the baseline"
+            )
 
     check_baseline(out_dir, city.id, args.region, baseline)
-    owners = attribute(city, graph, tables[FACTORS[0]], tiles, heroes)
+    owners = attribute(city, graph, tables[FLOORS_M[0]], tiles, heroes)
     watched = sorted({e for widths in results.values() for e, w in widths.items() if w < lane_m})
 
     _report_edges(watched, results, owners, names)

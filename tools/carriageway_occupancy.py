@@ -18,7 +18,7 @@ Two occupier classes, and they do not share a fix:
 
 - **`INFRASTRUCTURE`** — a genuine defect, and the half that shrank with `Q20`.
 - **Buildings** — ⚠️ **written here as the half this project *chose*, and that
-  is now known to be false.** The reading was that `widen_default`'s 1.6x eats
+  is now known to be false.** The reading was that the widening's 1.6x eats
   the pavement and then the ground-floor frontage, so the blockage lives in the
   widened fringe and is a playability trade rather than a bug. `Q19`'s
   2026-08-19 re-measurement killed it twice over: three `BUILDING` edges read
@@ -82,7 +82,7 @@ Run:  .venv/bin/python tools/carriageway_occupancy.py --city hong_kong
 says which edges fail and what is standing in them; the report says what the
 blockage is *shaped* like along the edge, and whether the occupier is on the
 **centreline** — which is the question that refused every width fix, because
-`lanes`, `width_m` and `widen_default` all move the ribbon's edges and none of
+`lanes`, `width_m` and the carriageway floor all move the ribbon's edges and none of
 them moves its centreline. Both measurements were computed by this tool from the
 day it shipped and thrown away unprinted, so `Q19` reversed itself three times
 on scratch scripts that were never committed (`Q37`'s debt, `Q55`'s). It is
@@ -401,7 +401,7 @@ class Centreline:
     """What stands on the centreline itself, at the station that condemned an edge.
 
     `Q19`'s building half turns entirely on this and nothing published could
-    answer it: `lanes`, `width_m` and `widen_default` all move the ribbon's
+    answer it: `lanes`, `width_m` and the carriageway floor all move the ribbon's
     *edges*, so if the occupier is on the centreline no width rule reaches it,
     however the corridor figure moves. That is the argument that refused both
     remaining width candidates without building either, and until now it lived
@@ -715,7 +715,7 @@ def walk_carriageway(
         if len(polyline) < 2:
             continue
 
-        # The width before `widen_default` multiplied it. `Q19` names the
+        # The width before the carriageway floor lifted it. `Q19` names the
         # widening as the cause of its building half, so the report separates a
         # blockage that reaches the real lanes from one that only eats the
         # frontage the widening took — those are not the same defect, and only
@@ -1447,7 +1447,7 @@ def corridor_report(
     log.info("")
     _centreline_summary(found, building_half, "building")
     _centreline_summary(found, structure_half, "structure")
-    log.info("    no width rule reaches a centreline: lanes, width_m and widen_default all move")
+    log.info("    no width rule reaches a centreline: lanes, width_m and the floor all move")
     log.info("    the ribbon's edges, which is why narrowing.py clears nothing at any factor")
     # ⚠️ Stated here rather than left to the reader: every metre above is a
     # bound. The widths are lower bounds at the plan bin (see INDEX_CELL_M) and

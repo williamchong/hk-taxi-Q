@@ -13445,6 +13445,111 @@ two-lane minimum, and the measured-minus-authored p50 is **+0.81 m** — so the 
 narrow on two thirds of the network and *too wide* on a real tail. A floor expressed as
 `max(real_width, playable_floor)` is still the shape this wants; it is now possible to price it.
 
+### The width is assigned and the widening is a floor, 2026-08-29
+
+The user's call, and it closes the `⬜` above. `roadgraph.json`'s `width_m` is now measured wherever
+two publishers license a reading, and `widen_default` is gone: the ribbon is `max(width_m, floor)`.
+
+```
+carriageway: 260 of 737 level-0 edges measured (225 one_way_uncrossed, 35 two_way_span)
+             127 spanned and unattributed; 140 under TD's 7.3 m minimum — reported, never refused
+             5,509 of 11,267 stations spanned by one publisher
+  width_m across all 797 edges: authored 537, one_way_uncrossed 225, two_way_span 35
+  measured width_m: p50 7.24, min 3.83, max 16.25 m
+  drawn half-width changed on 37 of 797 edges — 30 wider at the maximum, NONE narrower
+```
+
+🔴 **The measurement had to move into the pipeline, and that is the part of this that was not
+optional.** The widths lived in `carriageway_width.json` under `etl/out/`, which is *generated city
+data* — hard rule 7 says it is nobody's to relicense and is never committed — so no build could read
+a checked-in copy, and reading the tool's local output would make a clean clone unbuildable against
+hard rule 2. `pipeline/carriageway.py` is a **second, independent implementation**, on the user's
+explicit instruction, because `CLAUDE.md` records that the instrument "shares no code with what it
+grades" and sharing a core would retire the grader to save six hundred lines.
+
+✅ **And the two agree, which is the payoff.** Over the 259 edges both license, `|pipeline − tool|`
+reads **p50 0.005 m, p90 0.098, max 0.98**. The grader's own `measured − authored width_m` line
+collapsed from **p50 +0.81 m to p50 +0.00** (p10 −0.05, p90 +0.06). Two ray casts sharing no
+measurement code, one in game space and one walking the graph's own polylines, now describe the same
+city to within centimetres. ⚠️ **The tool licenses 276 and the pipeline assigns 260**, and the gap is
+named rather than averaged: 12 are `decomposed` — the mutual-pair split, which the pipeline
+deliberately does not implement — 5 are `one_way_uncrossed` border cases, and 1 goes the other way.
+
+### ✅ The floor landed on its own first, and moved no byte
+
+`drawn = max(width_m, floor)` with the floor set to what the multiplier drew — 6.4 × 1.6 = **10.24 m**,
+and 9.6 × 1.3 = **12.48 m** for the 70 kph table. The deck rules become a **0.0 m** floor, which is
+the floor's way of saying what `1.0x` said.
+
+**With the assignment disabled and the floor alone live, 0 of 797 half-widths differ.** That
+isolation is the ratchet on the refactor, and it is why the re-baseline below is affordable: the
+floor is inert on an authored width, so only the 37 streets the survey found wider than it move at
+all. `test_the_floor_is_inert_on_the_width_the_multiplier_was_tuned_against` pins it.
+
+🔴 **A floor is not a multiplier with the numbers changed, and two guards had to invert.**
+`_road_surface` refused any factor below **1.0** because narrowing a road was a typo; a floor of
+**0.0** is the meaningful statement "draw it at its own width", so the bar is now *below zero*.
+And `verify_road_graph` asserted the drawn ribbon was strictly **wider** than the authored width at
+grade — which is the multiplier's own claim, and it failed on `e10` TUNG LO WAN ROAD, an 11.9 m
+street drawn at exactly its own width. It now asserts **not narrower**, ⚠️ with a
+`widened` counter beside it so the weaker test cannot pass on a table that merely echoes the graph.
+**Mutation-checked rather than read** (`Q72`): rebuilt with every floor at 0.0 it reports
+*"no at-grade edge is drawn wider than its authored width across 50 checked"*.
+
+🔴 **`narrowing.py` needed the same inversion and its self-check caught it, twice.** Under a
+multiplier 1.60 was the *largest* factor, so clamping every edge at the default never bound an
+expressway drawn at 1.30 or a deck at 1.00. A floor inverts that — 10.24 m sits **below** the 12.48 m
+expressway floor — and applying the swept default everywhere narrowed exactly the two populations the
+per-speed and per-level tables exist to hold open. `check_baseline` refused to publish on **42
+edges**; it then refused again on **6** where an edge drawn at its own measured width lands half a
+micron under its own limit through the document's 3-decimal rounding. Both are fixed, and both were
+found by the tool declining to publish rather than by inspection.
+
+### What the re-baseline cost, grader by grader
+
+```
+✅ narrowing.py          IDENTICAL — 24 starved, 0 cleared at every floor, e207/e595 still lost
+✅ clearance_reconcile   IDENTICAL — 24 pipeline / 26 grader, the same 4 disagreements
+✅ deck_error, overhang, touchdown_error, paint_clearance   pass, sub-percent movement
+🔴 ground_clearance      FAIL — 87 → 89 edges carry ground proud past the car's 0.18 m travel
+⚠️ carriageway_occupancy FAIL at 26, unchanged — it failed before this and fails identically
+```
+
+🔴 **`ground_clearance` is the one real cost and it is the user's call, not a bar to retune.** Its
+message is explicit — *"Q24 is open, not licensed to widen"* — and it is a ratchet written for
+exactly this change. The two new edges are `e116` LEIGHTON ROAD (+0.35 m proud over 0.5% of its area)
+and `e643` GLOUCESTER ROAD (+0.19 m over 0.4%), and **both are edges this change widened**: 10.24 →
+12.63 m and 10.24 → 12.13 m. The causation is not inferred. Nothing was retuned to make it pass.
+
+The registered layers all moved, as `CLAUDE.md` warns a widening change makes them:
+
+```
+signs     drawn 681 -> 671 (in_carriageway 218 -> 227, over_shift 0 -> 1); the identity still
+          closes at 654, and plates_turned tracked the family exactly: 195 = TS115 177 + TS116 18
+lamps     drawn 897 -> 893, over_shift 149 -> 153, least kerb clearance 0.03 m, facing_away 0
+railings  drawn 9017.35 -> 8809.46 m, metres_on_buried_kerb 1011.23 -> 1185.82, facing_away 0
+kerbside  25,670 -> 25,534 m of restriction inside what the ribbon draws
+arrows    outside_drawn_ribbon 17 -> 9; inverted 0
+```
+
+⚠️ **`Q94` is untouched and that is not an oversight.** `stacked_pairs` **89** and
+`stacked_disagreeing` **51** are byte-identical, because `arrows.py` snaps to `ribbon.lanes` and
+**`lanes` is still authored**. Assigning the width does not fix two arrows in one slot; only a lane
+count does, and that is `Q94`'s to own.
+
+⚠️ **The schema bumped to 5 and a field was added.** `width_m` was `lanes × lane_width_m` on every
+edge — an identity a consumer could invert to recover a lane count — and on 260 edges it is now a
+measurement, so that inversion returns a number the graph never claimed. `width_source` says which
+of the two an edge carries. Hard rule 5's test is whether a consumer would be *wrong* to keep its old
+interpretation, and here it would.
+
+⚠️ **The evidence is a frame** (`Q62`): TONNOCHY ROAD at its measured 16.25 m, shot twice at one
+camera and `cmp`-identical — kerbs, railings, double yellow and turn arrows all sitting on the new
+ribbon edge, and no `SHADER ERROR` in the run.
+
+⬜ **What is still not done.** The 12 decomposed widths the tool licenses and the pipeline does not;
+the lane count (`Q94`); and `ground_clearance`'s two new edges, which belong to `Q24`.
+
 **See.** `Q94` for the arrows that made this visible and for the lane count they imply · `Q19` for the
 invisible walls the invented width causes · `Q57` for the previous narrowing and the instrument it
 scoped · `Q54` for why a published extent is not overruled by a derived one · `GAME_DESIGN.md` for the

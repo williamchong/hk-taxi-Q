@@ -2596,11 +2596,22 @@ roads:
     # pairs sit 1.49-6.82 m apart, and at 1.6x every one of them overlaps into a
     # single continuous surface. At 1.0x the widest pair leaves a 0.42 m slot
     # down the middle of Lockhart Road.
-    widen_default: 1.6
-    # Expressways are already drawn wide by their three lanes, and widening
-    # them the same amount pushes the deck through the buildings beside it.
-    widen_by_min_speed_limit_kph:
-      70: 1.3
+    # 🔴 A FLOOR in metres since Q95, not a multiplier on width_m. It was a
+    # multiplier while every width_m was the same invented 6.4 m; against a
+    # MEASURED width a multiplier is the wrong shape, because it over-widens the
+    # streets that are already wide and under-widens the narrowest. What
+    # GAME_DESIGN.md asks for is a minimum, and this is that minimum.
+    #
+    # ⚠️ 10.24 is exactly what the old 6.4 x 1.6 drew, so on an authored width
+    # this rule is INERT and the whole re-baseline is confined to the streets the
+    # survey found wider than it. That is what made the change affordable, and
+    # it is the ratchet: the floor landed on its own first and moved no byte.
+    floor_default_m: 10.24
+    # Expressways are already drawn wide by their three lanes, and lifting them
+    # to the same floor pushes the deck through the buildings beside it. 12.48 is
+    # what 9.6 x 1.3 drew.
+    floor_by_min_speed_limit_kph:
+      70: 12.48
     # Structure is drawn at its authored width, because both arguments above are
     # at-grade arguments and neither survives the trip onto a deck. The slot
     # argument: at grade a gap between opposed carriageways shows the void where
@@ -2613,8 +2624,10 @@ roads:
     # an upward face within +/-1.0 m: 20.1% of off-grade carriageway hung in air
     # before, 10.2% after, and the drawn area fell 31%. The remainder is a
     # separate defect and no width rule reaches it — Q22.
-    widen_by_elevation_level:
-      1: 1.0
+    # 0.0 is "draw it at its own width" — the floor's way of saying what the
+    # 1.0x multiplier used to say, and the same measured argument stands.
+    floor_by_elevation_level:
+      1: 0.0
 
     # Q23. The rule above is keyed on the edge, and a road does not become a
     # bridge at an edge boundary: P2-7 lifted 16 level-0 edge ends onto the
@@ -2625,7 +2638,7 @@ roads:
     # driver's seat before it was measured. Same value as the level rule and for
     # the same reason — a deck ends at a parapet — but applied per station,
     # where roads.py publishes `on_structure`.
-    widen_on_structure: 1.0
+    floor_on_structure_m: 0.0
     # How much of the approach the widening is given up over, so the ribbon is
     # already narrow when it reaches the deck. 15 m against a 10 m station
     # spacing (deck.resample_m) puts one or two stations inside the blend. At

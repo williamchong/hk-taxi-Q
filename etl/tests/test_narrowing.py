@@ -27,31 +27,62 @@ def _table(halves: list[float]) -> dict[int, dict]:
     return {7: {"edge": 7, "half_width_m": halves, "trim_m": [0.0, 0.0]}}
 
 
-class TestScaled:
-    """Simulating a lower `widen_default` without rebuilding the region."""
+# The edge's (speed limit, elevation level) — an ordinary at-grade street, so it
+# takes `floor_default_m` and the sweep can reach it.
+_RULES = {7: (50, 0)}
 
-    def test_a_widened_station_narrows_to_the_factor(self) -> None:
-        # 3.20 m authored half, drawn at 1.6x. At 1.3x it must be 3.2 x 1.3.
-        table = scaled(_table([5.12, 5.12]), {7: 3.2}, 1.3)
+
+class TestScaled:
+    """Simulating a lower `floor_default_m` without rebuilding the region.
+
+    🔴 **Floors in metres since `Q95`, where these were widening factors.** The
+    edge below is authored 6.4 m at 50 kph and level 0, so it takes the default
+    rule and the shipped 10.24 m floor draws it at a 5.12 m half.
+    """
+
+    def test_a_widened_station_narrows_to_the_floor(self, hong_kong) -> None:
+        # 6.4 m authored, drawn to the 10.24 m floor. At an 8.32 m floor the
+        # half must be 4.16 — what the old 1.3x factor drew.
+        table = scaled(_table([5.12, 5.12]), {7: 3.2}, _RULES, hong_kong.roads.surface, 8.32)
         assert table[7]["half_width_m"] == [4.16, 4.16]
 
-    def test_a_station_already_narrower_is_left_alone(self) -> None:
-        # On structure, `widen_on_structure` draws at 1.0x whatever the default
-        # is, so lowering the default must not touch it — and must never *widen*
-        # it, which is what a bare multiply would do.
-        table = scaled(_table([3.2, 5.12]), {7: 3.2}, 1.45)
+    def test_a_station_already_narrower_is_left_alone(self, hong_kong) -> None:
+        # On structure the floor is 0.0 m whatever the default is, so lowering
+        # the default must not touch that station — and must never *widen* it,
+        # which is what a bare multiply would do.
+        table = scaled(_table([3.2, 5.12]), {7: 3.2}, _RULES, hong_kong.roads.surface, 9.28)
         assert table[7]["half_width_m"] == [3.2, 4.64]
 
-    def test_the_baseline_factor_changes_nothing(self) -> None:
+    def test_the_baseline_floor_changes_nothing(self, hong_kong) -> None:
         # The sweep's first column is the shipped city, and every later one is a
         # proposal against it — so this is what makes the comparison a comparison.
         halves = [5.12, 4.32, 3.2]
-        assert scaled(_table(halves), {7: 3.2}, 1.6)[7]["half_width_m"] == halves
+        table = scaled(_table(halves), {7: 3.2}, _RULES, hong_kong.roads.surface, 10.24)
+        assert table[7]["half_width_m"] == halves
 
-    def test_the_rest_of_the_entry_survives(self) -> None:
+    def test_a_road_wider_than_the_floor_is_out_of_the_sweeps_reach(self, hong_kong) -> None:
+        """🔴 `Q95`'s substantive change to this instrument. `max(own, floor)`
+        cannot go below `own`, so an edge the survey measured at 14 m holds its
+        width in every column — narrowing can no longer reach it, where under
+        the multiplier it appeared to."""
+        table = scaled(_table([7.0, 7.0]), {7: 7.0}, _RULES, hong_kong.roads.surface, 8.32)
+        assert table[7]["half_width_m"] == [7.0, 7.0]
+
+    def test_an_edge_with_its_own_rule_is_not_clamped_to_the_default(self, hong_kong) -> None:
+        """🔴 The defect `check_baseline` caught on 42 edges. 10.24 m sits
+        *below* the 12.48 m expressway floor, so a sweep that applied the default
+        everywhere would narrow exactly the population
+        `floor_by_min_speed_limit_kph` exists to hold open. Under the multiplier
+        this was invisible: 1.60 was the largest factor and never bound."""
+        expressway = {7: (70, 0)}
+        table = scaled(_table([6.24, 6.24]), {7: 4.8}, expressway, hong_kong.roads.surface, 10.24)
+        assert table[7]["half_width_m"] == [6.24, 6.24]
+
+    def test_the_rest_of_the_entry_survives(self, hong_kong) -> None:
         # `walk` reads `trim_m` off the same entry, and a station the ribbon
-        # never reached must stay unjudged at every factor.
-        assert scaled(_table([5.12, 5.12]), {7: 3.2}, 1.3)[7]["trim_m"] == [0.0, 0.0]
+        # never reached must stay unjudged at every floor.
+        table = scaled(_table([5.12, 5.12]), {7: 3.2}, _RULES, hong_kong.roads.surface, 8.32)
+        assert table[7]["trim_m"] == [0.0, 0.0]
 
 
 class TestMoved:

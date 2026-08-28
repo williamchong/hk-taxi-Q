@@ -765,11 +765,20 @@ And four clauses this project touches directly:
   climbing lane on a gradient. A derived odd lane count on a `direction=both` edge is therefore a
   finding, not a reading.
 
-🔴 **What this says about what ships.** `roadgraph.json`'s `width_m` is `lanes × lane_width_m` =
-2 × 3.2 = **6.4 m** on 720 of the region's 737 edges. That is **below every figure in the table** —
-under the 7.3 m minimum for a two-lane single carriageway, and under even the 6.75 m allowed *per
-direction* on a dual carriageway. The authored width is not merely underived; it is outside the range
-TD permits.
+🔴 **What this said about what shipped, until 2026-08-29.** `roadgraph.json`'s `width_m` was
+`lanes × lane_width_m` = 2 × 3.2 = **6.4 m** on 720 of the region's 737 edges — **below every figure
+in the table**, under the 7.3 m minimum for a two-lane single carriageway and under even the 6.75 m
+allowed *per direction* on a dual. The authored width was not merely underived; it was outside the
+range TD permits.
+
+✅ **It is measured now, on 260 of the 737 level-0 edges** (`Q95`). `pipeline/carriageway.py` walks
+each centreline at 4 m stations, casts a perpendicular both ways and takes the span a *single*
+publisher answers on both sides — then reads it as that edge's carriageway only where TD's own bounds
+license it. The rest keep the authored value, and `width_source` on every edge says which it carries.
+⚠️ **A consumer may no longer invert `width_m / lane_width_m` to recover a lane count**, which is why
+the schema bumped to 5. ⚠️ **This is a second implementation of the survey
+`tools/carriageway_margin.py` performs, deliberately sharing no measurement code with it** — the two
+agree to a 5 mm median over the 259 edges both license, and that agreement is the check.
 
 ✅ **And STEWART ROAD's measured 14.81 m is corroborated rather than merely observed**: it matches a
 13.5 m four-lane urban carriageway with a parking strip, or a four-lane widened on a curve (15.8 m).

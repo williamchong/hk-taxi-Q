@@ -30,6 +30,12 @@ them without explicit instruction from the user.
    the second city is the business case.
 4. **All tuning values are data**, not constants in code. Handling curves, fare timers, road
    widths → Godot `.tres` resources or JSON.
+   🔴 **The carriageway width is DATA in a second sense since `Q95`: it is measured, not authored.**
+   `roadgraph.json`'s `width_m` comes from what TD and iB1000 drew on 260 of 737 level-0 edges, and
+   the playability widening is a **floor** (`surface.floor_default_m`, 10.24 m) rather than a
+   multiplier — `drawn = max(width_m, floor)`. A multiplier over-widens the streets that are already
+   wide. ⚠️ **`width_m != lanes x lane_width_m` any more**; `width_source` says which an edge carries,
+   and `lanes` is still authored (`Q94`).
 5. **Respect the data contract** in `docs/ARCHITECTURE.md`. ETL output and game input are a
    versioned interface; change both sides together and bump `schema_version`. Bump where a consumer
    would be **wrong** to keep its old interpretation — not wherever bytes change.
@@ -156,7 +162,7 @@ Common emoji for this project:
   estimate.** Held constant, 0.710 reads 44.9° at 105 kph; reached via the taper at that same entry
   speed it read **159.4°**, because the car decelerates below the knee inside the drift and the cut
   deepens underneath it. Sweep the taper dial itself (`Q88`).
-- **`widen_default`, any `roads.surface` widening change, or anything that moves the pipeline's
+- **`surface.floor_default_m`, any `roads.surface` widening change, or anything that moves the pipeline's
   starved population — `ALONG_M` included: also `tools/narrowing.py`, before and after.** It is what
   priced the current value: narrowing clears *no* blocked edge at any factor down to the 1.3x floor
   and loses two — `e207` and `e595` (`Q19`). A change that does not re-run it is re-opening a
@@ -176,7 +182,8 @@ Common emoji for this project:
   does not. ⚠️ **`ALONG_M` is still shipped behaviour, not a tuning knob**: moving it re-publishes
   `city.json` and changes what routing refuses, so it is the user's call. Numbers in `Q51`.
   ⚠️ **`tools/narrowing.py` is owed too** — see the bullet above for why that is not obvious.
-- **`widen_default`, `lanes_*`, `lane_width_m`, or the `carriageway_survey` config block: also
+- **`surface.floor_*`, `lanes_*`, `lane_width_m`, the `carriageway_survey` config block, or
+  `pipeline/carriageway.py`: also
   `tools/carriageway_margin.py`, and paste its table.** It measures the drawn ribbon against the
   carriageway edge **two publishers actually print** — TD's `RM1108`/`RM1109`, then iB1000's `RM` —
   so its truth side is one no build reads, as `kerbside_source_audit.py`'s is. Unlike that one it
@@ -234,6 +241,20 @@ Common emoji for this project:
   `Q58`'s `drawn_gauge_m` trap reachable from the command line. ⚠️ Its truth is a **2D projection carrying the publishers' own registration
   error**, which the bundle graders below do not inherit — that is the price of reading outside the
   bundle, not a defect to tune away.
+- **`pipeline/carriageway.py`, the `carriageway_survey` block, or anything that moves `width_m`:
+  paste the roads stage's `carriageway:` two lines before and after, run `tools/carriageway_margin.py`
+  and paste all four of its tables, and run EVERY grader in the widening bullet above.** 🔴 **This
+  stage is a SECOND implementation of the survey that tool performs and the duplication is
+  deliberate** — the tool "shares no code with what it grades", and sharing a core to save six
+  hundred lines would retire the only independent check on the reading. **They are expected to agree
+  and a divergence is a finding**: today `|pipeline − tool|` is p50 **0.005 m** over the 259 edges
+  both license, and the tool's own `measured − authored` line reads p50 **+0.00**. A drift there is
+  the thing to go and look at. ⚠️ **Do not "fix" it by importing one into the other.**
+  ⚠️ **The widths may never be read from `carriageway_width.json`** — it is gitignored generated city
+  data under hard rule 7, so a build that reads it cannot be cloned (hard rule 2). That is *why* this
+  stage exists. ⚠️ **`width_m` is no longer `lanes x lane_width_m`** and the schema is 5 because of
+  it; `lanes` is still authored, so ⚠️ **this does NOT fix `Q94`** — `stacked_disagreeing` is
+  byte-identical at 51 and only a lane count moves it. Numbers in `Q95`.
 - **`pipeline/kerbside.py`, the `NSR` config block, or any kerbside-marking change: also
   `tools/kerbside_error.py`, and paste its table.** It grades the shipped `roads.glb` against the runs
   `roadgraph.json` publishes, and it is the only instrument that can see the side convention flip —
@@ -277,7 +298,7 @@ Common emoji for this project:
   `arrows.py`. ⚠️ **`metres_bridged` is the one part of `drawn_m` the stage invents** — fence drawn
   across a gap the source never published, 322.88 m today — so a jump in it is `bridge_gap_m`
   reaching further, not more railing. ⚠️ **The metre counters do not form a partition**: the
-  refusals live in two frames, published and ribbon, which is why `metres_dropped` is two fields. ⚠️ **A widening change is a railing change**: `widen_default` moves the drawn kerb and
+  refusals live in two frames, published and ribbon, which is why `metres_dropped` is two fields. ⚠️ **A widening change is a railing change**: `surface.floor_default_m` moves the drawn kerb and
   therefore moves every fence, silently and plausibly. ⚠️ `facing_away` must be **0** and
   `railings.gdshader` must stay `cull_disabled` — it is the only generated mesh that is, a fence is
   one quad thick, and `cull_back` would delete half of them with a byte-identical mesh.
@@ -315,7 +336,7 @@ Common emoji for this project:
   explicit `--camera`/`--look`, never a driven frame, and shoot each side twice and `cmp` them.
   ⚠️ **`railings.py` and `signals.py` compute `shift_m` the same way and are deliberately NOT
   aligned**: a fence is a run and the bar is per sample, so a conditional push would zigzag it. Do
-  not "restore consistency". ⚠️ **A widening change is a sign-position change** — `widen_default`
+  not "restore consistency". ⚠️ **A widening change is a sign-position change** — `surface.floor_default_m`
   moves the drawn kerb and therefore moves every post, silently and plausibly. Numbers in `Q78`.
 - **`signs.faces_against_traffic`, `_facing_from_side` or `_plate_facing_deg`: paste `signs.json`'s
   `plates_turned`, `no_entry_against_flow`, `no_entry_on_two_way` and `facing_away`, before and
@@ -595,7 +616,7 @@ Common emoji for this project:
   ⚠️ **`shift_m` is recorded over refusals as well as keeps, and `n` exceeding `drawn` is how you
   tell** (`Q58`'s trap); `Q78`'s outward-only clamp applies here and deliberately **not** in
   `railings.py`/`signals.py` — a fence is a run, a lamp post is not.
-  ⚠️ **A widening change is a lamp-position change**: `widen_default` moves the drawn kerb and
+  ⚠️ **A widening change is a lamp-position change**: `surface.floor_default_m` moves the drawn kerb and
   therefore moves every column, silently and plausibly.
   ⚠️ **The spacing pair is this layer's own failure mode and no other layer here has it** — a lamp
   row's regularity *is* its content, so a refusal is a hole where a missing sign is invisible. Quote

@@ -51,7 +51,7 @@ its p50 is 1.34, which is a different question about the same layer.
 
 🔴 **The registration is `signs.py`'s and NOT `signals.py`'s, and the split is
 deliberate.** `Q78` clamped the sign move to **outward only** — the argument for
-moving a post at all is that `widen_default` draws the ribbon 1.6x the real
+moving a post at all is that the carriageway floor draws the ribbon past the real
 carriageway, and that argument runs outward and nowhere else. `CLAUDE.md` records
 that `railings.py` and `signals.py` are deliberately *not* aligned with it,
 because **a fence is a run and the bar is per sample, so a conditional push would
@@ -743,7 +743,7 @@ def _register(
     surveyed inside the drawn 1.6x ribbon, a median 1.46 m past the drawn kerb.
 
     🔴 **Clamped to one direction, `signs.py`'s shape since `Q78`.** The reason to
-    move a column at all is that `widen_default` draws the ribbon 1.6x the real
+    move a column at all is that the carriageway floor draws the ribbon past the real
     carriageway, so a column on the real kerb lands in the drawn lane. That
     argument runs **outward only**. Assigning the target unconditionally also
     *pulls* the columns already standing clear back toward the road, and no

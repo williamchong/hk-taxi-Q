@@ -375,7 +375,7 @@ class SignReport:
     # reach them (`Q78`). ⚠️ **They append a 0.0 to `shift_m` rather than being
     # skipped**, so the identity above still closes, and this is the only thing
     # that says how many of them there are. It is data-sensitive: it moves with
-    # the survey and with `widen_default`, so unlike a config-and-code ratchet it
+    # the survey and with the carriageway floor, so unlike a config-and-code ratchet it
     # can be read rather than mutated.
     # ⚠️ **They are not the ONLY zeros in `shift_m`, so do not recover this
     # number by counting them.** The threshold is a strict `>`, so a post
@@ -1574,7 +1574,7 @@ def _register(
     stand in the road.
 
     🔴 **And it is clamped to that one direction since `Q78`.** The reason to
-    move a post at all is that `widen_default` draws the ribbon 1.6x the real
+    move a post at all is that the carriageway floor draws the ribbon past the real
     carriageway, so a pole standing on the real kerb lands in the drawn lane.
     That argument runs **outward only**. Assigning the target unconditionally
     also *pulled* the posts already standing clear back toward the road — 95 of

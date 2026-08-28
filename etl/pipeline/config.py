@@ -1497,7 +1497,7 @@ class Lamps:
 
     🔴 **It follows `signs.py`'s registration and NOT `signals.py`'s, and the
     split is deliberate.** `Q78` clamped the sign move to **outward only**,
-    because the argument for moving a post at all — `widen_default` draws the
+    because the argument for moving a post at all — the carriageway floor draws the
     ribbon 1.6x the real carriageway — runs outward and nowhere else; an
     unconditional assignment also *pulls* posts that already stand clear back
     toward the road, invisibly, because `shift_m` is an absolute value.
@@ -2323,21 +2323,29 @@ class RoadSurface:
     change here never changes `roadgraph.json`.
     """
 
-    # Multiplier on the graph's `width_m`, for play rather than accuracy. Real
-    # Hong Kong street widths are unforgiving at arcade speeds; see
-    # `docs/GAME_DESIGN.md`, which fixes the range at roughly 1.3-1.8x.
-    widen_default: float
-    widen_by_min_speed_limit_kph: dict[int, float]
-    # Off-grade carriageway, by elevation level. Both *reasons* for widening are
+    # 🔴 **A FLOOR in metres, not a multiplier on `width_m` (`Q95`).** It was a
+    # multiplier while every `width_m` was the same invented 6.4 m, and against a
+    # *measured* width a multiplier is the wrong shape: it over-widens the
+    # streets that are already wide and under-widens the narrowest, where what
+    # `docs/GAME_DESIGN.md` actually asks for — "the genre needs wide roads" — is
+    # a minimum. A road already wider than this is drawn at its own width.
+    #
+    # ⚠️ **Set to what the multiplier drew, so the change is inert on an authored
+    # width**: 6.4 x 1.6 = 10.24. That is what makes the re-baseline affordable —
+    # only a street the survey found wider than the floor moves at all.
+    floor_default_m: float
+    floor_by_min_speed_limit_kph: dict[int, float]
+    # Off-grade carriageway, by elevation level. Both *reasons* for a floor are
     # at-grade reasons, and they are stated where the values are — see the table
-    # in `hong_kong.yaml`. `widen_for` explains only why this rule wins outright.
-    widen_by_elevation_level: dict[int, float]
+    # in `hong_kong.yaml`. `drawn_width_m` explains only why this rule wins
+    # outright. A floor of 0.0 means "draw it at its own width".
+    floor_by_elevation_level: dict[int, float]
     # `Q23`: the same claim made per *station* rather than per edge. A road does
     # not become a bridge at an edge boundary, so a level-0 edge can spend its
     # first 90 m on a ramp deck and the rest on the street — 1,070 m of the
     # region's level-0 centreline does exactly that. `roads.py` publishes which
     # stations those are; this is what they are drawn at.
-    widen_on_structure: float
+    floor_on_structure_m: float
     # How far back along the approach the widening is given up, so the ribbon
     # arrives at the deck already narrow. Zero would be the literal reading of
     # "stop widening at the structure" and it jogs the carriageway edge and its
@@ -2367,24 +2375,25 @@ class RoadSurface:
     surface_material: Material
     kerb_material: Material
 
-    def widen_for(
+    def floor_for(
         self, speed_limit_kph: int, *, elevation_level: int, on_structure: bool = False
     ) -> float:
-        """Widening factor for one station, by level if the level has a rule,
-        else by whether that station is on structure, else from the fastest
-        matching speed rule.
+        """Minimum drawn carriageway width for one station, in metres — by level
+        if the level has a rule, else by whether that station is on structure,
+        else from the fastest matching speed rule.
 
         Expressways are already drawn wide by their lane count and need less
-        help; a two-lane street is where the widening earns its keep.
+        help; a two-lane street is where the floor earns its keep.
 
         The level rule wins outright rather than combining, because the two are
         different kinds of claim. The speed table is a preference about how much
         room a fast road wants; a level rule is a statement about what the
         carriageway is sitting on. `P2-7` put the off-grade ribbon on its
         structure, and a viaduct deck does not get wider because the road on it
-        is signed at 70 — it ends at a parapet. A widened ribbon there overhangs
+        is signed at 70 — it ends at a parapet. A ribbon widened there overhangs
         into the air beside the deck, which is both wrong and, with a guardrail
-        drawn beyond it, unreadable.
+        drawn beyond it, unreadable. Those rules are a **0.0 m floor**: a deck is
+        drawn at its own width, whatever that width turns out to be.
 
         ⚠️ **The level rule is still checked first, and that ordering is load
         bearing rather than historical.** `on_structure` is a per-station fact
@@ -2395,12 +2404,38 @@ class RoadSurface:
         widened. Checking the level first leaves levels 1 and -1 exactly as
         `P2-7` measured them, so `Q23` moves level 0 and nothing else.
         """
-        if elevation_level in self.widen_by_elevation_level:
-            return float(self.widen_by_elevation_level[elevation_level])
+        if elevation_level in self.floor_by_elevation_level:
+            return float(self.floor_by_elevation_level[elevation_level])
         if on_structure:
-            return float(self.widen_on_structure)
+            return float(self.floor_on_structure_m)
         return float(
-            _by_fastest_rule(self.widen_by_min_speed_limit_kph, speed_limit_kph, self.widen_default)
+            _by_fastest_rule(
+                self.floor_by_min_speed_limit_kph, speed_limit_kph, self.floor_default_m
+            )
+        )
+
+    def drawn_width_m(
+        self,
+        width_m: float,
+        speed_limit_kph: int,
+        *,
+        elevation_level: int,
+        on_structure: bool = False,
+    ) -> float:
+        """How wide the ribbon is actually drawn: the road, or the floor if wider.
+
+        🔴 **`max`, not a multiplication, and that is `Q95`'s whole point.** A
+        multiplier applied to a *measured* width scales the streets that need it
+        least; a floor leaves a genuinely wide road alone and lifts only the
+        ones too narrow to drive at arcade speeds. On an authored 6.4 m width
+        with a 10.24 m floor the two agree exactly, which is what made the
+        change reviewable.
+        """
+        return max(
+            float(width_m),
+            self.floor_for(
+                speed_limit_kph, elevation_level=elevation_level, on_structure=on_structure
+            ),
         )
 
 
@@ -3115,11 +3150,11 @@ def _check_widening_levels_are_mapped(city: CityConfig, path: Path) -> None:
     Here rather than in `_road_surface` because it is a cross-section check, and
     `roads:` cannot see `elevation_levels` while it is being parsed.
     """
-    unknown = set(city.roads.surface.widen_by_elevation_level) - set(city.elevation_levels)
+    unknown = set(city.roads.surface.floor_by_elevation_level) - set(city.elevation_levels)
     if unknown:
         known = ", ".join(str(level) for level in sorted(city.elevation_levels))
         raise ValueError(
-            f"{path}:roads.surface.widen_by_elevation_level names level "
+            f"{path}:roads.surface.floor_by_elevation_level names level "
             f"{', '.join(str(level) for level in sorted(unknown))}, "
             f"which elevation_levels does not map ({known})"
         )
@@ -3777,27 +3812,31 @@ def _deck_sampling(body: dict[str, Any], where: str) -> DeckSampling:
 
 
 def _road_surface(body: dict[str, Any], where: str, table: _MaterialTable) -> RoadSurface:
-    widen_default = float(_require(body, "widen_default", where))
-    widen = {
-        int(threshold): float(factor)
-        for threshold, factor in (body.get("widen_by_min_speed_limit_kph") or {}).items()
+    floor_default_m = float(_require(body, "floor_default_m", where))
+    floors = {
+        int(threshold): float(metres)
+        for threshold, metres in (body.get("floor_by_min_speed_limit_kph") or {}).items()
     }
     by_level: dict[int, float] = {}
-    for level, factor in (body.get("widen_by_elevation_level") or {}).items():
+    for level, metres in (body.get("floor_by_elevation_level") or {}).items():
         # The YAML 1.1 boolean trap `elevation_levels` documents at length, and
         # this table is keyed on the same domain: a bare `on:` key resolves to
         # True, and True == 1 as a dict key, so it lands silently on the level-1
         # rule — the one rule this table currently carries.
         if isinstance(level, bool) or not isinstance(level, int):
-            raise ValueError(f"{where}:widen_by_elevation_level key {level!r} is not an integer")
-        by_level[level] = float(factor)
-    on_structure = float(_require(body, "widen_on_structure", where))
-    for factor in (widen_default, on_structure, *widen.values(), *by_level.values()):
-        # Narrowing a road is not a tuning choice, it is a typo: the graph's
-        # width already comes from an authored lane count, and a sub-1 factor
-        # would put the carriageway inside the buildings beside it.
-        if factor < 1.0:
-            raise ValueError(f"{where} widening factor {factor} is below 1.0")
+            raise ValueError(f"{where}:floor_by_elevation_level key {level!r} is not an integer")
+        by_level[level] = float(metres)
+    on_structure = float(_require(body, "floor_on_structure_m", where))
+    for metres in (floor_default_m, on_structure, *floors.values(), *by_level.values()):
+        # 🔴 **Zero is legal and negative is not** (`Q95`). Under the multiplier
+        # this guard refused anything below 1.0, because narrowing a road was a
+        # typo rather than a choice. A floor has a different bottom: 0.0 means
+        # "draw the road at its own width", which is exactly what a viaduct deck
+        # and an off-grade carriageway want and what those two rules now say. A
+        # *negative* floor is still meaningless — `max` would ignore it — so it
+        # is refused rather than silently doing nothing.
+        if metres < 0.0:
+            raise ValueError(f"{where} carriageway floor {metres} m is below zero")
 
     fraction = float(_require(body, "junction_trim_max_fraction", where))
     if not 0.0 < fraction < 0.5:
@@ -3820,10 +3859,10 @@ def _road_surface(body: dict[str, Any], where: str, table: _MaterialTable) -> Ro
     )
 
     return RoadSurface(
-        widen_default=widen_default,
-        widen_by_min_speed_limit_kph=widen,
-        widen_by_elevation_level=by_level,
-        widen_on_structure=on_structure,
+        floor_default_m=floor_default_m,
+        floor_by_min_speed_limit_kph=floors,
+        floor_by_elevation_level=by_level,
+        floor_on_structure_m=on_structure,
         structure_taper_m=measures["structure_taper_m"],
         kerb_height_m=measures["kerb_height_m"],
         kerb_width_m=measures["kerb_width_m"],

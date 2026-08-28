@@ -376,10 +376,10 @@ CITY_YAML = textwrap.dedent(
       tram_streets: [TRAM STREET]
       ground: datum
       surface:
-        widen_default: 1.5
-        widen_by_min_speed_limit_kph: {70: 1.2}
-        widen_by_elevation_level: {1: 1.0}
-        widen_on_structure: 1.0
+        floor_default_m: 9.6
+        floor_by_min_speed_limit_kph: {70: 11.52}
+        floor_by_elevation_level: {1: 0.0}
+        floor_on_structure_m: 0.0
         structure_taper_m: 15.0
         kerb_height_m: 0.15
         kerb_width_m: 0.5

@@ -611,85 +611,130 @@ class TestRoadNetwork:
             load_city("hong_kong", cities_root=rewrite(invert))
 
 
-class TestWidening:
-    """Which factor an edge takes, and which rule wins when two of them match.
+class TestCarriagewayFloor:
+    """Which floor an edge takes, and which rule wins when two of them match.
 
     The precedence is the part worth pinning. Nothing downstream would fail
     loudly if the tables were consulted in the other order — an expressway
-    flyover would simply be drawn 1.3x and hang over its parapet, which is the
-    defect `widen_by_elevation_level` exists to remove and which reads as
-    ordinary road until someone drives it.
+    flyover would simply be lifted to a 12.48 m floor and hang over its parapet,
+    which is the defect `floor_by_elevation_level` exists to remove and which
+    reads as ordinary road until someone drives it.
+
+    🔴 **These were widening *factors* until `Q95`.** The values below are the
+    metres the old multipliers drew — 6.4 x 1.6 = 10.24, 9.6 x 1.3 = 12.48 — so
+    the precedence they pin is the same precedence, restated in the units the
+    rule now works in.
     """
 
     def test_an_at_grade_road_takes_the_speed_rule(self, hong_kong) -> None:
         surface = hong_kong.roads.surface
-        assert surface.widen_for(50, elevation_level=0) == 1.6
-        assert surface.widen_for(70, elevation_level=0) == 1.3
+        assert surface.floor_for(50, elevation_level=0) == 10.24
+        assert surface.floor_for(70, elevation_level=0) == 12.48
 
     def test_structure_is_drawn_at_its_authored_width(self, hong_kong) -> None:
-        """1.0 is the narrowest the loader permits, and it means "as authored" —
-        the ribbon has to stay on the deck `P2-7` put it on."""
-        assert hong_kong.roads.surface.widen_for(50, elevation_level=1) == 1.0
+        """0.0 means "no floor, draw it at its own width" — the ribbon has to
+        stay on the deck `P2-7` put it on."""
+        assert hong_kong.roads.surface.floor_for(50, elevation_level=1) == 0.0
 
     def test_the_level_rule_beats_a_speed_rule_that_also_matches(self, hong_kong) -> None:
         """The Wan Chai Interchange is both: signed at 70 and up on structure.
-        A combined or speed-first reading would draw it 1.3x wide."""
-        assert hong_kong.roads.surface.widen_for(70, elevation_level=1) == 1.0
+        A combined or speed-first reading would lift it to a 12.48 m floor."""
+        assert hong_kong.roads.surface.floor_for(70, elevation_level=1) == 0.0
 
     def test_a_level_with_no_rule_falls_through_to_the_speed_rule(self, hong_kong) -> None:
         """Level -1 is deliberately unconfigured. A tunnel has no deck to
         overhang, so there is no measured defect to fix, and `Q21` asks whether
         it should be drawn at all — this pins that the fix left it alone."""
         surface = hong_kong.roads.surface
-        assert -1 not in surface.widen_by_elevation_level
-        assert surface.widen_for(70, elevation_level=-1) == 1.3
+        assert -1 not in surface.floor_by_elevation_level
+        assert surface.floor_for(70, elevation_level=-1) == 12.48
 
     def test_a_level_zero_station_on_structure_takes_the_authored_width(self, hong_kong) -> None:
         """`Q23`. The edge is level 0 and signed at 50, so both at-grade rules
         match — and the station is still standing on a ramp deck."""
         surface = hong_kong.roads.surface
-        assert surface.widen_for(50, elevation_level=0, on_structure=True) == 1.0
-        assert surface.widen_for(50, elevation_level=0, on_structure=False) == 1.6
+        assert surface.floor_for(50, elevation_level=0, on_structure=True) == 0.0
+        assert surface.floor_for(50, elevation_level=0, on_structure=False) == 10.24
 
     def test_the_level_rule_still_beats_the_station(self, hong_kong) -> None:
         """Ordering, and it is load bearing. `ISLAND EASTERN CORRIDOR`'s stub is
         level 1 with no structure found anywhere under it, so it takes the flat
         offset and reports every station as *off* structure. If the station won,
-        that edge would go back to 1.3x and hang over a deck that is not there.
+        that edge would go back to a 12.48 m floor and hang over a deck that is
+        not there.
         """
         surface = hong_kong.roads.surface
-        assert surface.widen_for(70, elevation_level=1, on_structure=False) == 1.0
+        assert surface.floor_for(70, elevation_level=1, on_structure=False) == 0.0
 
     def test_a_station_off_structure_is_the_default(self, hong_kong) -> None:
         """A city with no deck sampling publishes `on_structure` false
         everywhere, and must be drawn exactly as it was before `Q23`."""
         surface = hong_kong.roads.surface
-        assert surface.widen_for(50, elevation_level=0) == surface.widen_for(
+        assert surface.floor_for(50, elevation_level=0) == surface.floor_for(
             50, elevation_level=0, on_structure=False
         )
 
-    @pytest.mark.parametrize("table", ["widen_by_min_speed_limit_kph", "widen_by_elevation_level"])
-    def test_a_factor_below_one_is_rejected_in_either_table(self, rewrite, table: str) -> None:
-        """Narrowing below the authored width is a typo, not a tuning choice:
-        the graph's width already comes from a lane count, so a sub-1 factor
-        draws a carriageway narrower than its own lanes."""
+    def test_the_floor_is_inert_on_the_width_the_multiplier_was_tuned_against(
+        self, hong_kong
+    ) -> None:
+        """🔴 **The ratchet on the whole of `Q95`'s widening change.** The floor
+        replaced a multiplier and was set to what that multiplier drew, so on an
+        authored `lanes x lane_width_m` width it must produce the identical
+        number — which is what confines the re-baseline to the streets the survey
+        found wider than it."""
+        roads = hong_kong.roads
+        authored = roads.lanes_default * roads.lane_width_m
+        assert authored == 6.4
+        assert roads.surface.drawn_width_m(authored, 50, elevation_level=0) == 10.24
+        # …and the expressway's own rule, against its own authored width.
+        assert roads.surface.drawn_width_m(9.6, 70, elevation_level=0) == 12.48
+
+    def test_a_road_wider_than_its_floor_is_drawn_at_its_own_width(self, hong_kong) -> None:
+        """The point of a floor rather than a multiplier (`Q95`): a measured
+        14.81 m carriageway is drawn at 14.81, not at 14.81 x anything. A
+        multiplier scales the streets that need the help least."""
+        surface = hong_kong.roads.surface
+        assert surface.drawn_width_m(14.81, 50, elevation_level=0) == 14.81
+        # …and on structure, where there is no floor at all, the road is its own
+        # width however narrow it is.
+        assert surface.drawn_width_m(6.4, 50, elevation_level=0, on_structure=True) == 6.4
+
+    @pytest.mark.parametrize("table", ["floor_by_min_speed_limit_kph", "floor_by_elevation_level"])
+    def test_a_negative_floor_is_rejected_in_either_table(self, rewrite, table: str) -> None:
+        """A negative floor is meaningless rather than merely aggressive — `max`
+        would ignore it — so it is refused instead of silently doing nothing.
+
+        ⚠️ **Zero is legal here and 1.0 was the bar before `Q95`.** The old guard
+        refused anything under 1.0 because narrowing a road was a typo; a floor
+        of 0.0 is the meaningful statement "draw it at its own width", which is
+        what the deck rules now say."""
 
         def narrow(doc: dict[str, Any]) -> None:
-            doc["roads"]["surface"][table] = {1: 0.9}
+            doc["roads"]["surface"][table] = {1: -0.9}
 
-        with pytest.raises(ValueError, match=r"widening factor 0\.9 is below 1\.0"):
+        with pytest.raises(ValueError, match=r"carriageway floor -0\.9 m is below zero"):
             load_city("hong_kong", cities_root=rewrite(narrow))
+
+    def test_a_zero_floor_is_accepted_because_it_is_what_a_deck_asks_for(self, rewrite) -> None:
+        """The mirror of the test above, and the reason the bar moved from 1.0 to
+        0.0. Refusing zero would make the deck rules unexpressible."""
+
+        def flat(doc: dict[str, Any]) -> None:
+            doc["roads"]["surface"]["floor_default_m"] = 0.0
+
+        city = load_city("hong_kong", cities_root=rewrite(flat))
+        assert city.roads.surface.drawn_width_m(6.4, 50, elevation_level=0) == 6.4
 
     @pytest.mark.parametrize("key", [True, False, "1"])
     def test_a_key_that_is_not_a_plain_integer_is_rejected(self, rewrite, key) -> None:
         """PyYAML is YAML 1.1, where bare `on`/`off`/`yes`/`no` are booleans, and
-        `bool` subclasses `int` — so `off: 1.0` becomes level **0** and drops
+        `bool` subclasses `int` — so `off: 0.0` becomes level **0** and drops
         every at-grade road in the region to its authored width. The output
         loads and renders; only the road is wrong. `elevation_levels` refuses
         the same spellings, and these two tables are keyed on the same domain."""
 
         def odd_key(doc: dict[str, Any]) -> None:
-            doc["roads"]["surface"]["widen_by_elevation_level"] = {key: 1.0}
+            doc["roads"]["surface"]["floor_by_elevation_level"] = {key: 0.0}
 
         with pytest.raises(ValueError, match="is not an integer"):
             load_city("hong_kong", cities_root=rewrite(odd_key))
@@ -700,31 +745,31 @@ class TestWidening:
         like a city that never asked for the rule at all."""
 
         def unmapped(doc: dict[str, Any]) -> None:
-            doc["roads"]["surface"]["widen_by_elevation_level"] = {7: 1.0}
+            doc["roads"]["surface"]["floor_by_elevation_level"] = {7: 0.0}
 
         with pytest.raises(ValueError, match="elevation_levels does not map"):
             load_city("hong_kong", cities_root=rewrite(unmapped))
 
-    def test_a_city_that_declares_no_level_table_widens_everything_alike(self, rewrite) -> None:
+    def test_a_city_that_declares_no_level_table_floors_everything_alike(self, rewrite) -> None:
         """The pre-fix behaviour stays reachable, and the table stays optional
         for the second city, which may not have structure at all."""
 
         def drop(doc: dict[str, Any]) -> None:
-            doc["roads"]["surface"].pop("widen_by_elevation_level")
+            doc["roads"]["surface"].pop("floor_by_elevation_level")
 
         city = load_city("hong_kong", cities_root=rewrite(drop))
-        assert city.roads.surface.widen_by_elevation_level == {}
-        assert city.roads.surface.widen_for(70, elevation_level=1) == 1.3
+        assert city.roads.surface.floor_by_elevation_level == {}
+        assert city.roads.surface.floor_for(70, elevation_level=1) == 12.48
 
-    def test_widen_on_structure_below_one_is_rejected_like_the_tables(self, rewrite) -> None:
-        """It is a widening factor and shares their floor. Checked separately
-        because it is a scalar rather than a table, so the loop that guards the
-        tables would not have reached it."""
+    def test_the_structure_floor_is_guarded_like_the_tables(self, rewrite) -> None:
+        """It is a floor and shares their bottom. Checked separately because it
+        is a scalar rather than a table, so the loop that guards the tables would
+        not have reached it."""
 
         def narrow(doc: dict[str, Any]) -> None:
-            doc["roads"]["surface"]["widen_on_structure"] = 0.9
+            doc["roads"]["surface"]["floor_on_structure_m"] = -0.9
 
-        with pytest.raises(ValueError, match=r"widening factor 0\.9 is below 1\.0"):
+        with pytest.raises(ValueError, match=r"carriageway floor -0\.9 m is below zero"):
             load_city("hong_kong", cities_root=rewrite(narrow))
 
     def test_a_negative_taper_is_rejected(self, rewrite) -> None:

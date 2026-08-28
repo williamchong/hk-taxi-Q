@@ -31,7 +31,15 @@ const PATH: String = "res://assets/generated/roadgraph.json"
 ## measured along `polyline`. Nothing here draws them — the marking shader reads
 ## the extent off the road mesh — but `P3-3`'s traffic and `P3-9a`'s fares both
 ## want to know where a car may not stop, and that is a fact about the graph.
-const SCHEMA_VERSION: int = 4
+##
+## 5 since `Q95`, and it bumps because a reader would be *wrong* to keep its old
+## interpretation rather than merely see different bytes. `width_m` used to be
+## `lanes x lane_width_m` on every edge — an identity a consumer could invert to
+## recover a lane count — and on the edges two publishers span it is now a
+## measured carriageway, so that inversion silently returns a number the graph
+## never claimed. The new `width_source` says which of the two a given edge
+## carries; `lanes` itself is untouched and still authored.
+const SCHEMA_VERSION: int = 5
 
 
 ## The parsed graph, or an empty dictionary with a pushed message.

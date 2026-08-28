@@ -504,6 +504,9 @@ func _check_lanes(graph: RoadGraph, edges: Array) -> PackedStringArray:
 		return problems
 
 	var checked: int = 0
+	# At-grade edges the floor actually lifted. Asserted non-zero below, because
+	# a "never narrower" test alone passes on a table that echoes the graph.
+	var widened: int = 0
 	for edge: Dictionary in edges:
 		if int(edge.get("elevation_level", 0)) != 0 or checked >= 50:
 			continue
@@ -539,23 +542,29 @@ func _check_lanes(graph: RoadGraph, edges: Array) -> PackedStringArray:
 				)
 			)
 			break
-		# ⚠️ Conditional since `Q23`, and the condition is the finding. At grade
-		# the drawn ribbon is always wider than the authored street — that is the
-		# playability widening, and a lane centre taken from the graph alone
-		# would sit short of it. On structure the two are *equal*, because a deck
-		# ends at a parapet and a widened ribbon there hangs over air. So the
-		# claim only holds where the station says it is not on a bridge.
+		# ⚠️ Conditional since `Q23`, and 🔴 **NOT-NARROWER since `Q95`, where it
+		# used to be strictly wider.** The widening became a floor —
+		# `max(width_m, floor)` — rather than a multiplier, so an edge whose
+		# *measured* carriageway already exceeds the floor is drawn at exactly
+		# its own width and the two are equal at grade. Asserting "wider" there
+		# is asserting the multiplier, and it failed on `e10` TUNG LO WAN ROAD,
+		# an 11.9 m street the survey measured. What survives, and is the claim
+		# that actually matters, is that the ribbon is never drawn *narrower*
+		# than the road the graph publishes. On structure the two are equal for
+		# the older reason: a deck ends at a parapet, so its floor is 0.0 m.
 		var flags: Array = edge.get("on_structure", [])
 		var on_structure: bool = station < flags.size() and bool(flags[station])
-		if not on_structure and drawn_half <= graph.width_of(edge_id) * 0.5:
+		if not on_structure and drawn_half > graph.width_of(edge_id) * 0.5 + 0.001:
+			widened += 1
+		if drawn_half < graph.width_of(edge_id) * 0.5 - 0.001:
 			problems.append(
 				(
 					(
-						"edge %d's drawn half-width %.3f m is not wider than half its "
-						+ "authored width %.3f m at station %d, which is not on structure — "
-						+ "the widening did not travel"
+						"edge %d's drawn half-width %.3f m is NARROWER than half its "
+						+ "authored width %.3f m at station %d (on structure: %s) — "
+						+ "the ribbon does not cover the road it publishes"
 					)
-					% [edge_id, drawn_half, graph.width_of(edge_id) * 0.5, station]
+					% [edge_id, drawn_half, graph.width_of(edge_id) * 0.5, station, on_structure]
 				)
 			)
 			break
@@ -577,6 +586,23 @@ func _check_lanes(graph: RoadGraph, edges: Array) -> PackedStringArray:
 
 	if checked == 0:
 		problems.append("no multi-lane drivable edge was available to check lane placement")
+	# 🔴 **The positive half of the floor claim, and it is here because the test
+	# above had to be weakened to allow it** (`Q95`). "Never narrower" can be
+	# satisfied by a drawn half-width that simply echoes the authored one, which
+	# is exactly the failure the strict "wider" test used to catch — so something
+	# still has to show the floor travels. Most of the region is authored 6.4 m
+	# under a 10.24 m floor, so *some* at-grade edge must come back wider; zero
+	# means the drawn table has stopped being read.
+	if widened == 0:
+		problems.append(
+			(
+				(
+					"no at-grade edge is drawn wider than its authored width across %d checked — "
+					+ "the carriageway floor did not travel"
+				)
+				% checked
+			)
+		)
 	return problems
 
 

@@ -321,7 +321,7 @@ class SurfaceReport:
     # Drawn half-width per graph edge id, in metres, **one value per station of
     # that edge's published polyline**. Recorded rather than recomputed
     # downstream: `_prepare` is the one place the widening is applied, and a
-    # second evaluation of `widen_for` is a second thing to keep in step with
+    # second evaluation of `drawn_width_m` is a second thing to keep in step with
     # the config.
     carriageway: dict[int, list[float]] = field(default_factory=dict)
     # Metres held back from each end of an edge's ribbon so a junction cap can
@@ -1445,12 +1445,13 @@ def _half_widths(published: dict, style: RoadSurface) -> np.ndarray:
     """
     level = published["elevation_level"]
     limit = published["speed_limit_kph"]
-    at_grade = style.widen_for(limit, elevation_level=level)
-    on_deck = style.widen_for(limit, elevation_level=level, on_structure=True)
+    width = published["width_m"]
+    at_grade = style.drawn_width_m(width, limit, elevation_level=level)
+    on_deck = style.drawn_width_m(width, limit, elevation_level=level, on_structure=True)
 
     flags = np.asarray(published["on_structure"], dtype=bool)
     if at_grade == on_deck or not flags.any():
-        return np.full(len(flags), published["width_m"] * at_grade / 2.0)
+        return np.full(len(flags), at_grade / 2.0)
 
     along = plan_lengths(_polyline(published))
     gap = np.abs(along[:, None] - along[flags][None, :]).min(axis=1)
@@ -1459,7 +1460,11 @@ def _half_widths(published: dict, style: RoadSurface) -> np.ndarray:
     # because it is what a city with a hard kerb line beside its viaducts wants.
     blend = (gap <= 0.0) if style.structure_taper_m <= 0.0 else 1.0 - gap / style.structure_taper_m
     blend = np.clip(blend, 0.0, 1.0)
-    return published["width_m"] * (at_grade + (on_deck - at_grade) * blend) / 2.0
+    # ⚠️ **The blend runs between the two DRAWN widths, not between two floors.**
+    # Interpolating the floors and taking `max` once at the end would hold a road
+    # already wider than the floor at its own width for the whole taper and then
+    # step it, which is the jog `structure_taper_m` exists to remove.
+    return (at_grade + (on_deck - at_grade) * blend) / 2.0
 
 
 def _on_structure_length_m(published: dict) -> float:
@@ -2222,8 +2227,9 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Sur
 
     `carriageway` is the exception worth naming: it is the only thing here the
     *game* needs rather than the next stage. `roadgraph.json` publishes the
-    authored street width, `lanes x lane_width_m`, while the ribbon is drawn at
-    `width_m x widen_for(...)` — so a runtime asking "where is the nearside
+    the graph's own `width_m` — measured since `Q95` where the publishers licensed it —
+    while the ribbon is drawn at
+    `max(width_m, floor_for(...))` — so a runtime asking "where is the nearside
     lane?" from the graph alone lands short of the lane by a quarter of the
     widening. The factor stays on the surface style, where `config.py` says it
     belongs; the *result* travels, through `export.py`, into `city.json`.

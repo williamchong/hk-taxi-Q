@@ -1381,7 +1381,7 @@ def _render_width(
     """The two-sided half (`Q95`), appended below the overhang report.
 
     Not behind a flag. CLAUDE.md already requires this tool's table pasted for a
-    `lane_width_m` or `widen_default` change, and behind a flag the pasted table
+    `lane_width_m` or carriageway-floor change, and behind a flag the pasted table
     would silently omit the one section that grades exactly those values.
     """
     spans = report.spans

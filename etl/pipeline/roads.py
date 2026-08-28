@@ -29,14 +29,14 @@ import itertools
 import logging
 import re
 import unicodedata
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import numpy as np
 
-from pipeline import gdb, kerbside
+from pipeline import carriageway, gdb, kerbside
 from pipeline.buildings import Placement, read_sheet
 from pipeline.config import (
     BACKWARD,
@@ -74,7 +74,14 @@ ROADGRAPH_NAME = "roadgraph.json"
 # where one belongs, and no attribute already here stands in for it — the layer
 # joins by geometry rather than by key (`pipeline/kerbside.py`), so only a stage
 # holding both it and the finished edges can answer.
-ROADGRAPH_SCHEMA = 4
+# 5 closes the width half of `Q95`, and it bumps because a consumer would be
+# *wrong* to keep its old interpretation rather than merely see different bytes.
+# `width_m` was `lanes x lane_width_m` on every edge — an identity a reader
+# could invert to recover a lane count — and on the edges the publishers span it
+# is now a measurement, so that inversion silently returns a number the graph
+# never claimed. `width_source` is what says which of the two a given edge
+# carries; `lanes` itself is untouched and still authored (`Q94`).
+ROADGRAPH_SCHEMA = 5
 
 # `Node.kind` in the data contract. Degree three or more is somewhere a
 # driver can choose; anything else is a road continuing or stopping.
@@ -139,6 +146,13 @@ class Edge:
     # draw no line for. Filled after every edge exists, because the join is
     # geometric and an edge cannot find its own restriction alone.
     kerbside: tuple[kerbside.Restriction, ...] = ()
+    # How `width_m` was arrived at (`Q95`). `authored` is `lanes x lane_width_m`,
+    # what every edge carried before the survey; the others name the rule that
+    # licensed a measurement. ⚠️ **A consumer may no longer assume
+    # `width_m == lanes x lane_width_m`** — that is what this field exists to say,
+    # and why the schema bumps rather than the bytes changing under a reader that
+    # would go on deriving a lane count from a width it no longer matches.
+    width_source: str = "authored"
 
 
 @dataclass(frozen=True)
@@ -225,6 +239,9 @@ class RoadReport:
     # `P3-13`'s counters. `None` for a city whose sources carry no no-stopping
     # layer, which is not the same as one that carries an empty one.
     kerbside: kerbside.KerbsideReport | None = None
+    # `Q95`'s counters. `None` for a city whose file transcribes no design
+    # manual, which is not the same as one whose survey measured nothing.
+    carriageway: carriageway.CarriagewayReport | None = None
 
     @property
     def connectivity(self) -> float:
@@ -823,6 +840,7 @@ def build_region(
     )
     report.components = _components(len(nodes), report.edges)
     _kerbside(source, style, transform, region_high, report)
+    _carriageway(city, region_id, transform, report)
 
     _write(out_root, city, region_id, report)
     return report
@@ -893,6 +911,46 @@ def _kerbside(
     for item in found.restrictions:
         runs[item.edge].append(item)
     report.edges = [replace(edge, kerbside=tuple(runs.get(edge.id, ()))) for edge in report.edges]
+
+
+def _carriageway(
+    city: CityConfig,
+    region_id: str,
+    transform: GameTransform,
+    report: RoadReport,
+) -> None:
+    """Replace the authored `width_m` with what the publishers drew (`Q95`).
+
+    After `_kerbside` and for the same reason it is last: the survey is a
+    geometric join, and a station has to know which graph nodes are near it,
+    which needs every edge to exist. ⚠️ It also has to run **before** `_write`,
+    so `roadgraph.json` is published once carrying the final width rather than
+    written and then corrected by a later stage.
+
+    ⚠️ **The authored value stays wherever nothing licensed a measurement**, and
+    that is most of the region — a width is assigned only where a single
+    publisher spanned the road at three or more non-junction stations and the
+    span survived TD's own bounds. Silence is not evidence of a narrow street.
+    """
+    if city.carriageway_survey is None or city.carriageway_survey.width_bounds is None:
+        return
+    nodes = np.array([node.pos for node in report.nodes], dtype=np.float64)
+    found = carriageway.measure(
+        city,
+        region_id,
+        transform,
+        report.edges,
+        nodes[:, [0, 2]] if len(nodes) else np.empty((0, 2)),
+    )
+    report.carriageway = found
+    report.edges = [
+        replace(
+            edge, width_m=round(found.assigned_m[edge.id], 3), width_source=found.basis[edge.id]
+        )
+        if edge.id in found.assigned_m
+        else edge
+        for edge in report.edges
+    ]
 
 
 def _direction(style: RoadNetwork, code: int, layer: str) -> str:
@@ -1611,6 +1669,7 @@ def _write(out_root: Path | None, city: CityConfig, region_id: str, report: Road
                 "direction": edge.direction,
                 "lanes": edge.lanes,
                 "width_m": edge.width_m,
+                "width_source": edge.width_source,
                 "speed_limit_kph": edge.speed_limit_kph,
                 "bus_lane": edge.bus_lane,
                 "tram_tracks": edge.tram_tracks,
@@ -1778,6 +1837,27 @@ def main(argv: list[str] | None = None) -> int:
                 "    %d in-region samples found no edge within the offset guard",
                 found.samples_unassigned,
             )
+    if report.carriageway is not None:
+        width = report.carriageway
+        by_basis = ", ".join(
+            f"{count} {name}"
+            for name, count in sorted(Counter(width.basis.values()).items(), key=lambda kv: -kv[1])
+        )
+        log.info(
+            "  carriageway: %d of %d level-0 edges measured (%s); %d spanned and unattributed, "
+            "%d under TD's %s m minimum — reported, never refused",
+            width.measured,
+            width.edges_walked,
+            by_basis or "nothing",
+            width.unattributed,
+            width.under_minimum,
+            f"{city.carriageway_survey.width_bounds.min_m:.1f}",
+        )
+        log.info(
+            "    %d of %d stations spanned by one publisher; the rest keep the authored width",
+            width.stations_spanned,
+            width.stations_walked,
+        )
     log.info(
         "  largest component holds %d of %d nodes (%.1f%%), %d components in all",
         max(report.components, default=0),

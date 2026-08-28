@@ -391,7 +391,7 @@ class Network:
         ⚠️ **`drawn_width_m` comes from `roadsurface.json`, not from
         `roadgraph.json`.** The graph publishes the *authored* width,
         `lanes x lane_width_m`, while the ribbon is drawn at
-        `width_m x widen_for(...)` — `surface.py`'s own manifest docstring says
+        `max(width_m, floor_for(...))` — `surface.py`'s own manifest docstring says
         a consumer must read the surface table rather than assume, and that
         off-grade edges are the case where the two coincide. Reading the graph
         here made `underfill_m` p50 **0.22 m** where the drawn ribbon it claimed
@@ -714,7 +714,7 @@ def _drawn_widths(surface: dict) -> dict[int, float]:
 
     ⚠️ **Not `roadgraph.json`'s `width_m`, and the difference is 18x on the one
     number that reads it.** The graph publishes the *authored* width,
-    `lanes x lane_width_m`; the ribbon is drawn at `width_m x widen_for(...)`,
+    the graph's own `width_m`; the ribbon is drawn at `max(width_m, floor_for(...))`,
     and `surface.py`'s manifest docstring is explicit that a consumer must read
     the surface table rather than assume — off-grade edges being the case where
     the two coincide. `underfill_m` measures a drawn bar against a drawn kerb,

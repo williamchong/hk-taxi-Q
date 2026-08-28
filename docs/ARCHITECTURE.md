@@ -250,7 +250,7 @@ rather than per tool; restating it here is how `CONTRIBUTING.md` drifted nine gr
 | `tools/kerbside_error.py` | `Q54` — how much of the kerbside yellow the source supports. Reads the shipped `roads.glb`, clips every carriageway triangle against the shader's own yellow locus, and weighs the chord by the junction fade and `COLOR_0.a`. ⚠️ **It does not grade the join** — the truth side is what `roadgraph.json` publishes, so a restriction on the wrong centreline is agreed with. What it sees is the half nothing else can: the rail the extent is written on, whether the alpha survived glTF, and whether the runs slid by a junction trim. Reads the ETL out tree, because the trims travel in `roadsurface.json` and that does not ship |
 
 **`tools/narrowing.py` sits beside them and is not one of them.** It prices a *proposal* — what
-`Q19`'s clearances would read at a lower `widen_default` — rather than grading what shipped, and it
+`Q19`'s clearances would read at a lower `surface.floor_default_m` — rather than grading what shipped, and it
 does that by importing `pipeline.clearance` and reusing it whole. That is the opposite of the rule
 the four above keep, and deliberate: the question is not whether the measurement is right, which
 `carriageway_occupancy.py` answers, but what the same measurement says at a different width. A
@@ -481,10 +481,13 @@ Godot's virtual filesystem will not enumerate, so the same call returns nothing 
 empty **with no error**. `scripts/city/city_manifest.gd` is the only supported route.
 
 ⚠️ **`carriageway` is the drawn half-width, and the game cannot derive it.** `roadgraph.json`
-publishes the **authored** street (`lanes × lane_width_m`) while `surface.py` draws the ribbon at
-`width_m × widen_for(...)` — 1.6× by default and **1.0× on structure**, where the deck is a fixed
-width the ribbon must not overhang. So a consumer must read this table rather than assume the drawn
-width exceeds the authored one. The widening lives on the ETL's surface style, deliberately: *"the
+publishes the street itself — **measured** where two publishers license a reading and authored
+elsewhere (`Q95`, `width_source`) — while `surface.py` draws the ribbon at
+`max(width_m, floor_for(...))`: a **10.24 m** floor by default, 12.48 m at 70 kph, and **0.0 m on
+structure**, where the deck is a fixed width the ribbon must not overhang. So a consumer must read
+this table rather than assume the drawn width exceeds the authored one — 🔴 **since `Q95` it can be
+exactly equal at grade**, on any street already wider than its floor, which is what turned the
+engine's old "must be wider" assertion into "must not be narrower". The widening lives on the ETL's surface style, deliberately: *"the
 graph is a description of the city, this is how wide and how kerbed to draw it. A change here never
 changes `roadgraph.json`."* Without it a lane centre falls short by a quarter of the widening —
 0.96 m on a two-lane street — putting a car that much nearer the seam where opposed ribbons overlap

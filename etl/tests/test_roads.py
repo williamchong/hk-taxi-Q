@@ -208,6 +208,7 @@ class TestBuildRegion:
             "direction",
             "lanes",
             "width_m",
+            "width_source",
             "speed_limit_kph",
             "bus_lane",
             "tram_tracks",

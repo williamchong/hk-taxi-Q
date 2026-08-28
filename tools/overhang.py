@@ -34,7 +34,7 @@ Shares `deck_error`'s reading of the shipped bundle and nothing with the
 pipeline — same table as that module's docstring, same reason. What is new here
 is reconstructing the ribbon's *width*, which comes from `city.json`'s
 `carriageway` table: the number `surface.py` published, not a re-derivation of
-`widen_for`. A tool that recomputed the widening would agree with the config
+`floor_for`. A tool that recomputed the widening would agree with the config
 rather than with the mesh.
 
 **`left_of`, `cross_section`, `half_width_at` and `walk_width` are public
