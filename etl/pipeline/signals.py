@@ -101,17 +101,17 @@ import numpy as np
 # already takes. `AT_GRADE` is the source's own encoding of "no structure" and
 # is not config; `facing_away` asks whether winding agrees with the given
 # normal, which is the question a *vertical* surface needs; `nearside`,
-# `axis_residual_deg` and `ArrowReport.measured` are the canonical statements of
+# `ArrowReport.measured` is a canonical statement of
 # conventions this stage shares; and `facing_from_side` is the derivation
 # itself — a second copy of it is a second city, mirrored (`Q56`).
 from pipeline import gdb
-from pipeline.arrows import ArrowReport, Ribbon, axis_residual_deg, nearside, ribbons
+from pipeline.arrows import ArrowReport, Ribbon, nearside, ribbons
 from pipeline.config import SIGNAL_BODY_COLOUR, CityConfig, GameTransform, Signals, load_city
 from pipeline.documents import read_document, write_document
 from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData, write_glb
 from pipeline.mesh import select_triangles
-from pipeline.polyline import Segments, Snap
+from pipeline.polyline import Segments, Snap, axis_residual_deg, game_heading_deg
 from pipeline.railings import AT_GRADE, facing_away
 from pipeline.roads import ROADGRAPH_NAME, read_graph
 from pipeline.signs import disc, facing_from_side, plate_frame
@@ -359,7 +359,7 @@ def read_signals(
             bearing = float(bearings[owner]) if bearings[owner] is not None else float("nan")
 
             report.candidates += 1
-            signals.append(Signal(code=code, x=x, z=z, axis_deg=(90.0 - bearing) % 360.0))
+            signals.append(Signal(code=code, x=x, z=z, axis_deg=game_heading_deg(bearing)))
     return signals
 
 

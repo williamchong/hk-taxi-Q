@@ -57,7 +57,7 @@ from pipeline.documents import read_document, write_document
 from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData, write_glb
 from pipeline.mesh import select_triangles
-from pipeline.polyline import Segments
+from pipeline.polyline import Segments, game_heading_deg
 from pipeline.roads import JUNCTION, ROADGRAPH_NAME, read_graph
 from pipeline.surface import (
     SURFACE_MANIFEST_NAME,
@@ -272,7 +272,7 @@ def read_boxes(
                 # geodatabase, same convention, and `hatch_angle_residual_deg`
                 # is what holds it: a wrong reading here shows up as a large
                 # residual against the derived axis on every published pair.
-                hatch_deg = (90.0 - float(angle)) % 360.0
+                hatch_deg = game_heading_deg(float(angle))
             boxes.append(Box(ring=np.column_stack([game_x, game_z]), hatch_deg=hatch_deg))
     return boxes
 

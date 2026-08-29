@@ -39,7 +39,9 @@ from pipeline.carriageway import (
     _resolve_with_rows,
     _Segments,
     _stations,
+    _Symbol,
     _union_boundary,
+    _widest_rows,
 )
 from pipeline.config import BOTH, FORWARD, WidthBounds
 
@@ -377,11 +379,19 @@ class TestUnionBoundary:
         assert _union_boundary([], []) == ([], [])
 
 
-def _report(**brackets: tuple[int, int]) -> CarriagewayReport:
-    """A report carrying nothing but the brackets, keyed by integer edge id."""
+def _report(
+    published: dict[int, int] | None = None, **brackets: tuple[int, int]
+) -> CarriagewayReport:
+    """A report carrying the brackets, and optionally what the width published.
+
+    ⚠️ **`published` matters**: `_resolve_with_rows` calls a row that lands on the
+    already-published count agreement, so a fixture that leaves `lanes` empty is
+    testing a state `measure` never hands it.
+    """
     report = CarriagewayReport()
     for name, bracket in brackets.items():
         report.lanes_bracket[int(name.lstrip("e"))] = bracket
+    report.lanes.update(published or {})
     return report
 
 
@@ -428,19 +438,31 @@ class TestLaneRow:
     def test_a_row_above_its_bracket_is_reported_and_never_used(self) -> None:
         """A finding about one of the two readings — the width may under-read
         where HyD carves islands out — and never a licence to overrule TPDM."""
-        report = _report(e403=(2, 2))
+        report = _report({403: 2}, e403=(2, 2))
         _resolve_with_rows(report, {403: 4})
-        assert report.lanes == {}
+        assert report.lanes == {403: 2}, "the width's count stands"
+        assert report.lanes_basis == {}
         assert report.lanes_row_over_bracket == [403]
 
     def test_a_row_agreeing_with_a_resolved_bracket_publishes_nothing(self) -> None:
         """Two readings sharing no input landing on one integer. Counted,
         because it is the only free cross-check either has; not published,
         because the width already said it."""
-        report = _report(e1=(3, 3))
+        report = _report({1: 3}, e1=(3, 3))
         _resolve_with_rows(report, {1: 3})
-        assert report.lanes == {}
+        assert report.lanes_basis == {}, "the width had already published it"
         assert report.lanes_row_agreeing == [1]
+
+    def test_a_row_agreeing_with_a_FLOORED_count_is_agreement_not_a_finding(self) -> None:
+        """🔴 **Filed against the published count, not the bracket, and that is
+        3 edges.** A `(1, 1)` bracket publishes `LANES_FLOOR`, so a row of two on
+        one sits *above* its bracket while agreeing exactly with what shipped —
+        the floor doing its job, confirmed by an independent reading. Filed by
+        bracket it would read as the two instruments contradicting each other."""
+        report = _report({1: LANES_FLOOR}, e1=(1, 1))
+        _resolve_with_rows(report, {1: LANES_FLOOR})
+        assert report.lanes_row_agreeing == [1]
+        assert report.lanes_row_over_bracket == []
 
     def test_an_edge_with_no_bracket_is_never_given_a_count(self) -> None:
         """🔴 **`verify_road_graph.gd`'s invariant, pinned here rather than
@@ -461,3 +483,44 @@ class TestLaneRow:
         report = _report(e1=(2, 3))
         _resolve_with_rows(report, {1: 3, 2: 2, 505: 3})
         assert set(report.lane_rows) == {1, 2, 505}
+
+
+class TestWidestRow:
+    """The clustering half — the part duplicated from `arrows._count_rows`.
+
+    ⚠️ **Tested here because it is the half most able to drift.** The snap is a
+    shared primitive in `polyline.py`; this rule is written out twice on purpose,
+    and until now only `arrows.py`'s copy had tests.
+    """
+
+    @staticmethod
+    def _at(along: float, across: float) -> _Symbol:
+        return _Symbol(along_m=along, offset_m=across, length_m=4.0)
+
+    def test_three_arrows_abreast_are_one_row_of_three(self) -> None:
+        row = [self._at(10.0, -3.2), self._at(10.0, 0.0), self._at(10.0, 3.2)]
+        assert _widest_rows({1: row}) == {1: 3}
+
+    def test_arrows_strung_along_the_edge_are_separate_rows_of_one(self) -> None:
+        """The failure this guards is a whole street reading as one wide row."""
+        strung = [self._at(0.0, 0.0), self._at(40.0, 0.0), self._at(80.0, 0.0)]
+        assert _widest_rows({1: strung}) == {1: 1}
+
+    def test_an_edge_takes_its_widest_row_and_not_its_mean(self) -> None:
+        """A long edge with one marked junction must not average down to two."""
+        symbols = [
+            self._at(0.0, -3.2),
+            self._at(0.0, 0.0),
+            self._at(0.0, 3.2),
+            self._at(60.0, 0.0),
+        ]
+        assert _widest_rows({1: symbols}) == {1: 3}
+
+    def test_the_bar_is_half_a_glyph_so_the_two_variants_scale_together(self) -> None:
+        """`ArrowGlyph` carries a length per code — 4 m and 6 m variants of the
+        same marking — so the bar is derived from the glyph rather than authored.
+        1.9 m apart is one row at 4 m; the same pair is still one row at 6 m."""
+        near = [self._at(0.0, 0.0), self._at(0.0, 1.9)]
+        assert _widest_rows({1: near}) == {1: 1}
+        wide = [_Symbol(0.0, 0.0, 6.0), _Symbol(0.0, 2.9, 6.0)]
+        assert _widest_rows({1: wide}) == {1: 1}

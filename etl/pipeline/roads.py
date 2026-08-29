@@ -87,9 +87,10 @@ ROADGRAPH_NAME = "roadgraph.json"
 # 3.0-3.65 m through-lane range it is a *reading* rather than authored policy,
 # and a consumer treating every count as policy keyed on the speed limit would
 # be **wrong** — not merely looking at different bytes, which is hard rule 5's
-# test. `lanes_source` says which of `authored`, `measured` or `floored` an edge
-# carries. ⚠️ It is a strict subset of the measured widths: TD's range leaves
-# rather under half of them ambiguous, and those keep the authored count.
+# test. `lanes_source` says which of `authored`, `measured`, `floored` or
+# `arrows` an edge carries. ⚠️ It is a strict subset of the measured widths:
+# what neither TD's range nor a row of turn arrows resolves keeps the authored
+# count.
 # 7 adds `width_publisher`, and it bumps because schema 6 shipped a claim that
 # had quietly stopped being true. Through schema 5 every measured `width_m` was
 # kerb-to-kerb, read off a line publisher. Schema 6's third publisher draws the
@@ -175,9 +176,11 @@ class Edge:
     # count TD's own through-lane range resolves the measured width to; `floored`
     # is a resolved count of one lane published as `LANES_FLOOR` because the
     # ribbon under it is drawn at the playability floor and a one-lane road puts
-    # the runtime's lane centre on the centreline.
-    # ⚠️ **Not implied by `width_source`.** Over half the measured widths bracket
-    # ambiguously, so `width_source: one_way_uncrossed` with
+    # the runtime's lane centre on the centreline; `arrows` is a row of turn
+    # arrows across the carriageway resolving a bracket TD's range left
+    # ambiguous, which is the one reading here owing nothing to a width.
+    # ⚠️ **Not implied by `width_source`.** Many measured widths bracket
+    # ambiguously with no arrow row to settle them, so `width_source: one_way_uncrossed` with
     # `lanes_source: authored` is the commonest measured edge rather than a
     # contradiction.
     lanes_source: str = "authored"
@@ -1904,7 +1907,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         log.info(
             "    lane rows: %d edges carry turn arrows; %d resolved an ambiguous bracket, "
-            "%d agree with one the width resolved alone, %d state a single arrow — not a row",
+            "%d agree with the count the width published, %d state a single arrow — not a row",
             len(width.lane_rows),
             width.lanes_ambiguous - width.lanes_unresolved,
             len(width.lanes_row_agreeing),

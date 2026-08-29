@@ -691,7 +691,7 @@ def opposed_offset_deg(here: np.ndarray, there: np.ndarray) -> float:
     ⚠️ Unsigned. Which way the partner leans says nothing about whether it is
     one.
 
-    ⚠️ **`arrows.directed_residual_deg` is the heading-space sibling** — this is
+    ⚠️ **`polyline.directed_residual_deg` is the heading-space sibling** — this is
     `180 - that`, exactly — and it is not reused because it takes *headings*,
     and there is no shared vector-to-heading helper: `signs._heading_deg` is
     already a knowing second copy of `fares.Snap.heading_deg`. Reusing it would

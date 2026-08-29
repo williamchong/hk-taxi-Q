@@ -272,6 +272,24 @@ class Segments:
 # drifts, so the convention moved instead.
 
 
+def game_heading_deg(bearing: float) -> float:
+    """A publisher's `ANGLE` as a game heading, degrees clockwise from north.
+
+    🔴 **`ANGLE` is a mathematical angle — counter-clockwise from east — not a
+    compass bearing.** Measured on the 314 `RM1017` straight-ahead symbols within
+    4 m of a level-0 centreline, this reading lands **p50 0.9 deg** from the host
+    edge's own heading, against 52.0 for the raw value and 38.0 for `ANGLE + 90`.
+
+    ⚠️ **Here because five stages read a bearing and `Q94` made it five.** The
+    claim each of them carries — "converted on the way in, once" — stopped being
+    true of the region the moment a second stage read the same layer, and only
+    one of the copies was pinned by a test. `tests/test_arrows.py` asserts this
+    against the heading `Snap` publishes, which is `surface.mitres`' own frame,
+    rather than against any comment.
+    """
+    return (90.0 - bearing) % 360.0
+
+
 def directed_residual_deg(a: float, b: float) -> float:
     """How far heading `a` is from heading `b`, in `[0, 180]`.
 

@@ -34,7 +34,7 @@ import itertools
 import logging
 import math
 from collections import defaultdict
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -55,6 +55,7 @@ from pipeline.polyline import (
     Segments,
     axis_residual_deg,
     directed_residual_deg,
+    game_heading_deg,
     plan_lengths,
 )
 
@@ -150,22 +151,25 @@ class CarriagewayReport:
     # ── The lane row, and what it was allowed to resolve (`Q94`) ───────────
     #
     # Every arrow-carrying edge's stated count, whether or not this stage has a
-    # bracket for it. ⚠️ **Recorded over the edges no bracket covers as well**,
-    # because it is what `arrows.json`'s `implied_lanes` is graded against and a
-    # dict confined to bracketed edges could not see the two reads diverge on
-    # the rest. `Q58`'s trap, in its dict form.
+    # bracket for it — so what `roads.py` logs is the whole population this stage
+    # read, not the subset it could act on.
+    # ⚠️ **This is NOT what grades the two implementations against each other.**
+    # That is `arrows._grade_against_the_graph`, which reads `lanes_source` back
+    # out of `roadgraph.json` and so covers only the edges a row was published
+    # on. Nothing serialises this dict, so widening it buys no coverage until
+    # something does.
     lane_rows: dict[int, int] = field(default_factory=dict)
     # 🔴 **A row BELOW its bracket is an unpainted lane, not a narrower road.**
     # A lane carrying no turn arrow is invisible to the row, which makes the row
-    # a lower bound — so this is reported and never used. All five of the
-    # region's disagreements point this way today, which is what a real property
-    # looks like against noise.
+    # a lower bound — so this is reported and never used. **7** edges today.
     lanes_row_below_bracket: list[int] = field(default_factory=list)
     # 🔴 **A row ABOVE its bracket is a finding about one of the two readings.**
     # `e403` reads 7.70 m with four arrows abreast — 1.9 m a lane — so either the
     # width under-reads (HyD carves islands and run-ins out and publishes the
     # *trafficable* surface, p10 -3.39 m below iB1000's kerb-to-kerb) or the row
-    # over-counts. Reported; go and look; never retuned.
+    # over-counts. **6** edges today. Reported; go and look; never retuned.
+    # ⚠️ **A row agreeing with the published count is filed as agreement, not
+    # here**, even where it sits outside its bracket — see `_resolve_with_rows`.
     lanes_row_over_bracket: list[int] = field(default_factory=list)
     # Rows of a single arrow, which state a marking rather than a lane count.
     # See `_resolve_with_rows` for why they are refused rather than floored.
@@ -577,6 +581,20 @@ def _resolve_with_rows(report: CarriagewayReport, rows: dict[int, int]) -> None:
         if stated < _ROW_MIN:
             report.lanes_row_single.append(edge_id)
             continue
+        if stated == report.lanes.get(edge_id):
+            # The width already published this count and the row lands on it —
+            # two readings sharing no input agreeing on one integer, which is the
+            # only free cross-check either has. Nothing to publish.
+            #
+            # 🔴 **Tested against the PUBLISHED count, not against the bracket,
+            # and the difference is 3 edges.** A `(1, 1)` bracket publishes
+            # `LANES_FLOOR`, so a row of two on one of those sits *above* its
+            # bracket while agreeing exactly with what shipped: the floor doing
+            # its job, confirmed. Filed by bracket instead, those read as the two
+            # instruments contradicting each other, and `lanes_row_over_bracket`
+            # would be two populations wearing one name.
+            report.lanes_row_agreeing.append(edge_id)
+            continue
         if stated < low:
             report.lanes_row_below_bracket.append(edge_id)
             continue
@@ -584,15 +602,11 @@ def _resolve_with_rows(report: CarriagewayReport, rows: dict[int, int]) -> None:
             report.lanes_row_over_bracket.append(edge_id)
             continue
         if high == low:
-            # The width resolved this bracket on its own and the row agrees. A
-            # free cross-check between two readings sharing no input, and worth
-            # counting for exactly that reason — but nothing to publish.
-            report.lanes_row_agreeing.append(edge_id)
+            # Inside a bracket the width resolved, but not on the count it
+            # published — unreachable while `_lanes` publishes `low` for every
+            # resolved bracket at or above the floor, and kept so that a change
+            # there cannot silently start overwriting a resolved count.
             continue
-        # `_lanes`' floor cannot bite here: `_ROW_MIN` is `LANES_FLOOR`, so a
-        # published row is already at or above it. Asserted rather than applied,
-        # because applying it would let a refused row through as a floored one.
-        assert stated >= LANES_FLOOR, f"row of {stated} passed the {_ROW_MIN} bar"
         report.lanes[edge_id] = stated
         report.lanes_basis[edge_id] = "arrows"
 
@@ -649,6 +663,10 @@ def _license(edge, span: float, own: float, bounds: WidthBounds) -> tuple[float 
 # enumerable rather than a shrug. `CarriagewayReport.lane_rows` publishes this
 # side of it so the gap can be read rather than assumed.
 
+# ⚠️ **A private copy, and it cannot be the shared `railings.AT_GRADE`**:
+# `railings` imports `roads`, and `roads` imports this module — the same wall as
+# the clustering above, and the one `kerbside._plan_lengths` documents. Named so
+# the next reader does not delete it as an oversight.
 _AT_GRADE = ("", "none", "null", "<na>")
 
 
@@ -667,7 +685,7 @@ class _Symbol:
     length_m: float
 
 
-def _runs(symbols: list[_Symbol], key, spacing) -> Iterator[list[_Symbol]]:
+def _runs(symbols: list[_Symbol], key: Callable[[_Symbol], float]) -> Iterator[list[_Symbol]]:
     """Split symbols into runs, breaking wherever `key` jumps by half a glyph.
 
     ⚠️ **`arrows._runs`'s bar, restated rather than tuned.** `Q94` swept it
@@ -685,7 +703,7 @@ def _runs(symbols: list[_Symbol], key, spacing) -> Iterator[list[_Symbol]]:
         return
     run = [ordered[0]]
     for previous, symbol in itertools.pairwise(ordered):
-        if key(symbol) - key(previous) >= spacing(previous, symbol):
+        if key(symbol) - key(previous) >= 0.5 * min(previous.length_m, symbol.length_m):
             yield run
             run = []
         run.append(symbol)
@@ -708,7 +726,8 @@ def _read_lane_rows(
     🔴 **The count is a LOWER BOUND on lanes, never an equality**, because a lane
     carrying no turn arrow is invisible to it. That is the whole reason
     `_resolve_with_rows` may only read a row *inside* a bracket and never below
-    one, and it is what the five refusals in the region look like.
+    one: **7** edges in the region state fewer lanes than their own width
+    brackets.
     """
     spec = city.arrows
     if spec is None:
@@ -757,7 +776,7 @@ def _read_lane_rows(
             x, z, bearing = float(game_x[row]), float(game_z[row]), float(bearings[owner])
             if not (math.isfinite(x) and math.isfinite(z) and math.isfinite(bearing)):
                 continue
-            heading = (90.0 - bearing) % 360.0
+            heading = game_heading_deg(bearing)
 
             snap = hosts.nearest(x, z)
             if snap.distance_m > spec.max_offset_m:
@@ -778,14 +797,26 @@ def _read_lane_rows(
                 )
             )
 
-    counts: dict[int, int] = {}
-    for edge_id, symbols in rows.items():
-        widest = max(
-            len(list(_runs(row, _across, _half_glyph)))
-            for row in _runs(symbols, _along, _half_glyph)
-        )
-        counts[edge_id] = widest
-    return counts
+    return _widest_rows(rows)
+
+
+def _widest_rows(rows: dict[int, list[_Symbol]]) -> dict[int, int]:
+    """Each edge's widest row of arrows: along the edge first, then across it.
+
+    ⚠️ **An edge's count is the widest row it carries, not its rows averaged** —
+    `arrows._count_rows`' rule. A carriageway holding three arrows abreast has
+    three lanes at that station whatever the rest of it is painted with, and a
+    mean lets a long edge with one marked junction read as two.
+
+    Lifted out of `_read_lane_rows` so it can be tested without a build: it and
+    `_runs` are the half this module duplicates, so they are the half most able
+    to drift from `arrows.py`, and they were the only part with no test of their
+    own.
+    """
+    return {
+        edge_id: max(len(list(_runs(row, _across))) for row in _runs(symbols, _along))
+        for edge_id, symbols in rows.items()
+    }
 
 
 def _along(symbol: _Symbol) -> float:
@@ -794,10 +825,6 @@ def _along(symbol: _Symbol) -> float:
 
 def _across(symbol: _Symbol) -> float:
     return symbol.offset_m
-
-
-def _half_glyph(a: _Symbol, b: _Symbol) -> float:
-    return 0.5 * min(a.length_m, b.length_m)
 
 
 def _lane_bracket(width_m: float, bounds: WidthBounds, *, two_way: bool) -> tuple[int, int]:

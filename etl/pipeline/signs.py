@@ -177,6 +177,7 @@ from pipeline.polyline import (
     Snap,
     axis_residual_deg,
     directed_residual_deg,
+    game_heading_deg,
     plan_lengths,
 )
 from pipeline.railings import AT_GRADE, facing_away
@@ -664,7 +665,7 @@ def read_signs(
                     z=pole_z,
                     published_x=published_x,
                     published_z=published_z,
-                    axis_deg=(90.0 - bearing) % 360.0,
+                    axis_deg=game_heading_deg(bearing),
                 )
             )
     return signs
@@ -1998,7 +1999,7 @@ def _heading_deg(start: Sequence[float], end: Sequence[float]) -> float:
 
     ⚠️ **The same expression `Snap.heading_deg` is built from**, and it is a
     second copy rather than a first: `fares.py` computes it inline and scalar on
-    the segment a snap landed on. By the rule `arrows.directed_residual_deg`
+    the segment a snap landed on. By the rule `polyline.directed_residual_deg`
     states, that puts its home beside `Snap.heading_deg` in `fares.py`, where the
     convention is documented, with both callers importing it. Left here because
     moving it edits `Segments.nearest`, which every stage in the pipeline snaps

@@ -73,6 +73,7 @@ from pipeline.polyline import (
     Segments,
     axis_residual_deg,
     directed_residual_deg,
+    game_heading_deg,
     plan_lengths,
 )
 from pipeline.roads import ROADGRAPH_NAME, read_graph
@@ -341,7 +342,7 @@ def read_symbols(
             size = float(sizes[owner]) if sizes[owner] is not None else float("nan")
             if math.isfinite(size):
                 report.symbol_size.append(size)
-            symbols.append(Symbol(code=code, x=x, z=z, heading_deg=(90.0 - bearing) % 360.0))
+            symbols.append(Symbol(code=code, x=x, z=z, heading_deg=game_heading_deg(bearing)))
     return symbols
 
 

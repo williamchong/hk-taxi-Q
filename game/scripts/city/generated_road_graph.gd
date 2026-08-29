@@ -44,11 +44,13 @@ const PATH: String = "res://assets/generated/roadgraph.json"
 ## untouched. Where the measured `width_m` resolves under TPDM 4.3.9.8's
 ## 3.0-3.65 m through-lane range, the count is a *reading* rather than authored
 ## policy keyed on the speed limit, and a consumer treating every one as policy
-## would be **wrong**. `lanes_source` says which of `authored`, `measured` or
-## `floored` an edge carries. ⚠️ **It is a strict subset of the measured
-## widths** — TD's range leaves rather under half of them ambiguous, and those
-## keep the authored count — so a measured `width_source` beside an authored
-## `lanes_source` is the commonest measured edge rather than a contradiction.
+## would be **wrong**. `lanes_source` says which of `authored`, `measured`,
+## `floored` or `arrows` an edge carries — `arrows` being a row of turn arrows
+## across the carriageway settling a bracket TD's range left ambiguous.
+## ⚠️ **It is a strict subset of the measured widths** — what neither the range
+## nor a row resolves keeps the authored count — so a measured `width_source`
+## beside an authored `lanes_source` is still an ordinary measured edge rather
+## than a contradiction.
 ##
 ## 7 since `Q94` adds `width_publisher`, and it bumps because 6 shipped a claim
 ## that had quietly stopped being true. Through 5 every measured `width_m` was
