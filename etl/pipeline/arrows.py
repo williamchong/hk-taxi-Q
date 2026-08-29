@@ -47,6 +47,7 @@ import itertools
 import logging
 import math
 from collections import defaultdict
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple
@@ -185,6 +186,26 @@ class ArrowReport:
     # so this is a finding to go and look at, never a bar to retune.
     stacked_pairs: int = 0
     stacked_disagreeing: int = 0
+
+    # 🔴 **The lane count the arrows themselves state, per edge (`Q94`), and
+    # the only reading of one in this bundle that owes nothing to a width.**
+    # A row of turn arrows *across* a carriageway is the count written down by
+    # the publisher — `e505` STEWART ROAD carries left | left-or-right | right
+    # at one station — so where `roadgraph.json` derives `lanes` from a
+    # measured carriageway, this is what can grade it. Two publishers of kerb
+    # lines against one publisher of marking symbols; nothing is shared.
+    #
+    # ⚠️ **Sparser than the graph, so it is a grader and never a source.** Only
+    # the edges that carry arrows appear here, and an edge whose arrows all sit
+    # in one lane implies 1 rather than "no answer". A count derived from these
+    # and then graded against them would be `Q72`'s tautology.
+    #
+    # ⚠️ **`edges_implying_more_lanes` is one-sided on purpose.** An edge whose
+    # graph count *exceeds* the row is not evidence of anything — a three-lane
+    # approach may be painted with one arrow — where a row wider than the graph
+    # is a lane the graph does not have.
+    implied_lanes: dict[int, int] = field(default_factory=dict)
+    edges_implying_more_lanes: int = 0
 
     # `SYMBOL_SIZE` as published, which nothing here reads. Recorded so the
     # question "is it the arrow's length in metres?" can be answered from a
@@ -780,9 +801,20 @@ def build_region(
         report.drawn += 1
         key = "+".join(glyph.movements)
         report.by_glyph[key] = report.by_glyph.get(key, 0) + 1
-        laid.append(_Laid(placed, int(snap.edge), lane, glyph.movements, glyph.length_m))
+        laid.append(
+            _Laid(
+                placed,
+                int(snap.edge),
+                lane,
+                glyph.movements,
+                glyph.length_m,
+                along_m,
+                float(snap.offset_m),
+            )
+        )
 
     _count_stacked(laid, report)
+    _count_rows(laid, drawn, report)
 
     mesh = builder.build(ARROWS_MESH_NAME)
     if mesh is not None:
@@ -798,13 +830,22 @@ def build_region(
 
 
 class _Laid(NamedTuple):
-    """One arrow as it was actually placed, for the stacking check."""
+    """One arrow as it was actually placed, for the stacking and row checks.
+
+    ⚠️ **`at` and `lane` are where the arrow was DRAWN; `along_m` and
+    `offset_m` are where the publisher put it.** The two are different
+    populations and the row reading needs the second — see `_count_rows`.
+    """
 
     at: np.ndarray
     edge: int
     lane: int
     movements: tuple[str, ...]
     length_m: float
+    # Distance along the host edge, and the published offset across it. Both
+    # are the *unregistered* figures, before the lane snap.
+    along_m: float
+    offset_m: float
 
 
 def _count_stacked(laid: list[_Laid], report: ArrowReport) -> None:
@@ -837,6 +878,80 @@ def _count_stacked(laid: list[_Laid], report: ArrowReport) -> None:
             report.stacked_pairs += 1
             if a.movements != b.movements:
                 report.stacked_disagreeing += 1
+
+
+def _runs(arrows: list[_Laid], key: Callable[[_Laid], float]) -> Iterator[list[_Laid]]:
+    """Split arrows into runs whose neighbours sit within half a glyph of each other.
+
+    ⚠️ **The bar is derived, not authored**, and it is `_count_stacked`'s: half
+    the shorter glyph's own length, the distance at which two symbols would
+    overlap if they shared a lane. `Q94` read the region with an asserted 1.6 m
+    and nothing behind it. One bar serves both axes — along the road it separates
+    two *rows*, across it two *lanes* — so there is one free value here rather
+    than two, and it is not free.
+
+    ✅ **Swept rather than argued** (`Q72` rejected a pairing rule whose count ran
+    8 -> 29 -> 49 -> 80 over a free radius). Over the 4 m glyph:
+
+        bar    1.00 m  1.50  2.00  2.50  3.00  4.00
+        more       28    30    30    30    24     0
+        at four     9     9     9     9     3     0
+
+    Flat across 1.50-2.50 with the shipped 2.00 in the middle of it, and the
+    plateau ends exactly where the bar passes **3.0 m** — TPDM 4.3.9.8's
+    narrowest through lane — because past that it merges two real lanes into
+    one. The collapse is the bar meeting a published dimension, not a tuning
+    cliff.
+    """
+    ordered = sorted(arrows, key=key)
+    run = [ordered[0]]
+    for previous, arrow in itertools.pairwise(ordered):
+        if key(arrow) - key(previous) >= 0.5 * min(previous.length_m, arrow.length_m):
+            yield run
+            run = []
+        run.append(arrow)
+    yield run
+
+
+def _count_rows(laid: list[_Laid], ribbons: dict[int, Ribbon], report: ArrowReport) -> None:
+    """The lane count each edge's own arrows state (`Q94`).
+
+    A row of turn arrows *across* a carriageway is a lane count written down by
+    the publisher rather than derived from anything — `e505` STEWART ROAD
+    carries left | left-or-right | right at one station, which is a three-lane
+    approach stated. That makes this the one lane count in the bundle owing
+    nothing to a width, and therefore the only thing able to grade one.
+
+    🔴 **Clustered on the PUBLISHED offset, never on the placed one.** The lane
+    snap is the quantity under test; grouping on where an arrow was *drawn*
+    would report `ribbon.lanes` back to itself and read as agreement whatever
+    the graph said — `Q72`'s tautology, which certified a whole region's signs
+    as correct while every one faced the wrong way.
+
+    ⚠️ **An edge's count is the widest row it carries, not its rows averaged.**
+    A carriageway that holds three arrows abreast has three lanes at that
+    station whatever the rest of it is painted with, and a mean would let a long
+    edge with one marked junction read as two.
+    """
+    by_edge: dict[int, list[_Laid]] = defaultdict(list)
+    for arrow in laid:
+        by_edge[arrow.edge].append(arrow)
+
+    for edge, arrows in by_edge.items():
+        # Rows along the edge, then lanes across each row, on the same bar.
+        widest = max(len(list(_runs(row, _offset))) for row in _runs(arrows, _along))
+        report.implied_lanes[edge] = widest
+        ribbon = ribbons.get(edge)
+        if ribbon is not None and widest > ribbon.lanes:
+            report.edges_implying_more_lanes += 1
+
+
+def _along(arrow: _Laid) -> float:
+    return arrow.along_m
+
+
+def _offset(arrow: _Laid) -> float:
+    return arrow.offset_m
 
 
 def _draw(
@@ -916,6 +1031,17 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Arr
         # `Q19`'s invented lane count arriving where a frame can show it.
         "stacked_pairs": report.stacked_pairs,
         "stacked_disagreeing": report.stacked_disagreeing,
+        # 🔴 The lane count the publisher's own arrows state, per edge — see
+        # `ArrowReport.implied_lanes`. Published **per edge** rather than as a
+        # total, because a grader that can name no edge cannot be checked
+        # against a frame, and `Q94`'s figures came from a scratch script that
+        # named three roads and shipped none of them (`Q37`'s debt).
+        # ⚠️ Keys are edge ids as strings; JSON has no integer key.
+        "implied_lanes": {
+            str(edge): report.implied_lanes[edge] for edge in sorted(report.implied_lanes)
+        },
+        "edges_with_arrows": len(report.implied_lanes),
+        "edges_implying_more_lanes": report.edges_implying_more_lanes,
         # Published, unread. `SYMBOL_SIZE` may or may not be the arrow's length
         # in metres; the glyph table takes its lengths from the index plan
         # instead. Recorded here so the question is answerable from a shipped

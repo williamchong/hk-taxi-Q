@@ -21,8 +21,10 @@ import yaml
 from pipeline.arrows import (
     ARROWS_MATERIAL,
     ArrowReport,
+    Ribbon,
     Symbol,
     _Builder,
+    _count_rows,
     _count_stacked,
     _draw,
     _Laid,
@@ -295,7 +297,7 @@ class TestStackedArrows:
 
     @staticmethod
     def _laid(x, z, *, edge=0, lane=0, movements=("ahead",), length_m=4.0):
-        return _Laid(np.array([x, z], dtype=float), edge, lane, movements, length_m)
+        return _Laid(np.array([x, z], dtype=float), edge, lane, movements, length_m, x, z)
 
     def test_two_instructions_in_one_lane_are_counted_and_named_a_disagreement(self):
         report = ArrowReport()
@@ -527,3 +529,118 @@ def _clip(subject: np.ndarray, window: np.ndarray) -> np.ndarray:
                     clipped.append(here + (there - here) * (first / span))
         output = np.asarray(clipped) if clipped else np.zeros((0, 2))
     return output
+
+
+class TestArrowRows:
+    """`Q94`: the lane count the publisher's own arrows state.
+
+    🔴 **The grader for a width-derived lane count, and it must not be able to
+    agree by construction.** These pin the two things that would make it
+    worthless: that it reads the *published* offset rather than the lane it was
+    snapped into, and that its verdict is reachable in both directions.
+    """
+
+    @staticmethod
+    def _laid(along_m, offset_m, *, edge=0, lane=0, movements=("ahead",), length_m=4.0):
+        """One arrow, with its drawn position deliberately decoupled from its published one."""
+        return _Laid(
+            np.array([0.0, 0.0], dtype=float), edge, lane, movements, length_m, along_m, offset_m
+        )
+
+    @staticmethod
+    def _ribbon(lanes):
+        return Ribbon(
+            lanes=lanes,
+            one_way=True,
+            at=np.array([0.0, 1.0]),
+            half_width_m=np.array([5.12, 5.12]),
+            plan=np.zeros((2, 2)),
+            height_m=np.zeros(2),
+            trim_start_m=0.0,
+            trim_end_m=0.0,
+            length_m=100.0,
+        )
+
+    def test_a_row_of_three_across_a_carriageway_is_three_lanes(self):
+        """`e505` STEWART ROAD's left | left-or-right | right, at one station."""
+        report = ArrowReport()
+        _count_rows(
+            [
+                self._laid(10.0, 2.96, movements=("left",)),
+                self._laid(10.0, -0.32, movements=("left", "right")),
+                self._laid(10.0, -3.59, movements=("right",)),
+            ],
+            {0: self._ribbon(3)},
+            report,
+        )
+        assert report.implied_lanes == {0: 3}
+
+    def test_arrows_repeated_along_a_lane_are_one_lane(self):
+        report = ArrowReport()
+        _count_rows(
+            [self._laid(0.0, 0.0), self._laid(14.0, 0.0), self._laid(28.0, 0.0)],
+            {0: self._ribbon(2)},
+            report,
+        )
+        assert report.implied_lanes == {0: 1}
+
+    def test_the_widest_row_wins_rather_than_the_rows_averaged(self):
+        """A carriageway holding three abreast has three lanes there, whatever the rest carries."""
+        report = ArrowReport()
+        _count_rows(
+            [
+                self._laid(0.0, 3.0),
+                self._laid(0.0, 0.0),
+                self._laid(0.0, -3.0),
+                self._laid(40.0, 0.0),
+            ],
+            {0: self._ribbon(3)},
+            report,
+        )
+        assert report.implied_lanes == {0: 3}
+
+    def test_it_reads_the_published_offset_and_not_the_lane_it_was_snapped_into(self):
+        """🔴 The anti-tautology pin.
+
+        All three arrows are drawn at the same point in lane 0 — which is
+        exactly the defect `Q94` reported — and the row still reads 3. Grouping
+        on the placed position or on `lane` would return `ribbon.lanes` to
+        itself and report agreement with the count under test.
+        """
+        report = ArrowReport()
+        _count_rows(
+            [
+                self._laid(10.0, 3.0, lane=0),
+                self._laid(10.0, 0.0, lane=0),
+                self._laid(10.0, -3.0, lane=0),
+            ],
+            {0: self._ribbon(2)},
+            report,
+        )
+        assert report.implied_lanes == {0: 3}
+
+    def test_a_graph_whose_lanes_hold_its_arrows_implies_nothing_more(self):
+        """Reachable at zero (`Q72`), so a 0 here is evidence rather than construction."""
+        report = ArrowReport()
+        _count_rows(
+            [self._laid(10.0, 3.0), self._laid(10.0, -3.0)],
+            {0: self._ribbon(2)},
+            report,
+        )
+        assert (report.implied_lanes, report.edges_implying_more_lanes) == ({0: 2}, 0)
+
+    def test_and_the_same_arrows_against_a_narrower_graph_are_counted(self):
+        """The other half of the mutation check: one row, two verdicts, one edit."""
+        report = ArrowReport()
+        _count_rows(
+            [self._laid(10.0, 3.0), self._laid(10.0, -3.0)],
+            {0: self._ribbon(1)},
+            report,
+        )
+        assert (report.implied_lanes, report.edges_implying_more_lanes) == ({0: 2}, 1)
+
+    def test_an_edge_the_ribbons_do_not_cover_is_read_but_not_judged(self):
+        """`no_lane` refuses before `laid`, so this is defensive rather than reachable today."""
+        report = ArrowReport()
+        _count_rows([self._laid(10.0, 3.0), self._laid(10.0, -3.0)], {}, report)
+        assert (report.implied_lanes, report.edges_implying_more_lanes) == ({0: 2}, 0)
