@@ -29,11 +29,14 @@ import numpy as np
 import pytest
 
 from pipeline.carriageway import (
+    _ROW_MIN,
     LANES_FLOOR,
     MIN_STATIONS,
+    CarriagewayReport,
     _lane_bracket,
     _lanes,
     _license,
+    _resolve_with_rows,
     _Segments,
     _stations,
     _union_boundary,
@@ -372,3 +375,89 @@ class TestUnionBoundary:
 
     def test_nothing_drawn_is_nothing_kept(self) -> None:
         assert _union_boundary([], []) == ([], [])
+
+
+def _report(**brackets: tuple[int, int]) -> CarriagewayReport:
+    """A report carrying nothing but the brackets, keyed by integer edge id."""
+    report = CarriagewayReport()
+    for name, bracket in brackets.items():
+        report.lanes_bracket[int(name.lstrip("e"))] = bracket
+    return report
+
+
+class TestLaneRow:
+    """`Q94`: what a row of turn arrows across a carriageway is allowed to say.
+
+    🔴 **The row is a LOWER BOUND on lanes, never an equality**, because a lane
+    carrying no turn arrow is invisible to it. Every rule here follows from
+    that one fact, and the tests are written to fail if it is forgotten.
+    """
+
+    def test_a_row_of_one_arrow_is_refused_rather_than_floored(self) -> None:
+        """🔴 **The correctness of the whole rule.** A single arrow is a marking,
+        not a lane count — an ordinary two-lane approach carries one far more
+        often than not. The first build floored these to `LANES_FLOOR`, which
+        published 28 edges whose basis said `arrows` and whose count the arrows
+        had not chosen.
+        """
+        report = _report(e1=(1, 2))
+        _resolve_with_rows(report, {1: 1})
+        assert report.lanes == {}, "a row of one published a lane count"
+        assert report.lanes_row_single == [1]
+
+    def test_the_row_bar_is_tied_to_the_lane_floor(self) -> None:
+        """They answer the same question from opposite sides, so they may not
+        drift apart: a row under the floor could only ever be published by being
+        floored, which is what this refuses."""
+        assert _ROW_MIN == LANES_FLOOR
+
+    def test_a_row_inside_an_ambiguous_bracket_resolves_it(self) -> None:
+        report = _report(e119=(4, 5))
+        _resolve_with_rows(report, {119: 4})
+        assert report.lanes == {119: 4}
+        assert report.lanes_basis == {119: "arrows"}
+
+    def test_a_row_below_its_bracket_is_reported_and_never_used(self) -> None:
+        """An unpainted lane, not a narrower road. Publishing it would let a
+        marking crew's omission overrule a measured width."""
+        report = _report(e1=(4, 5))
+        _resolve_with_rows(report, {1: 2})
+        assert report.lanes == {}
+        assert report.lanes_row_below_bracket == [1]
+
+    def test_a_row_above_its_bracket_is_reported_and_never_used(self) -> None:
+        """A finding about one of the two readings — the width may under-read
+        where HyD carves islands out — and never a licence to overrule TPDM."""
+        report = _report(e403=(2, 2))
+        _resolve_with_rows(report, {403: 4})
+        assert report.lanes == {}
+        assert report.lanes_row_over_bracket == [403]
+
+    def test_a_row_agreeing_with_a_resolved_bracket_publishes_nothing(self) -> None:
+        """Two readings sharing no input landing on one integer. Counted,
+        because it is the only free cross-check either has; not published,
+        because the width already said it."""
+        report = _report(e1=(3, 3))
+        _resolve_with_rows(report, {1: 3})
+        assert report.lanes == {}
+        assert report.lanes_row_agreeing == [1]
+
+    def test_an_edge_with_no_bracket_is_never_given_a_count(self) -> None:
+        """🔴 **`verify_road_graph.gd`'s invariant, pinned here rather than
+        trusted.** A measured `lanes_source` must imply a measured
+        `width_source`, so a row may only ever resolve a bracket this stage
+        already licensed a width for. STEWART ROAD `e505` is the edge this
+        keeps out: it states three lanes over an *authored* 6.4 m width.
+        """
+        report = _report()
+        _resolve_with_rows(report, {505: 3})
+        assert report.lanes == {}
+        assert report.lane_rows == {505: 3}, "the row is still recorded, only not used"
+
+    def test_the_row_is_recorded_for_edges_it_cannot_resolve(self) -> None:
+        """⚠️ `Q58`'s trap in its dict form. `lane_rows` confined to bracketed
+        edges could not see the two implementations diverge on the rest, and
+        that diff is the only check either of them has."""
+        report = _report(e1=(2, 3))
+        _resolve_with_rows(report, {1: 3, 2: 2, 505: 3})
+        assert set(report.lane_rows) == {1, 2, 505}

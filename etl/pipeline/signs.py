@@ -125,13 +125,13 @@ from pipeline import gdb
 # asks whether winding agrees with the given normal, which is the question a
 # *vertical* surface needs and `surface.downward_facing` cannot answer; and
 # `ccw`, `axis_residual_deg` and `ArrowReport.measured` are the canonical
-# statements of conventions this stage shares with the arrows.
+# statements of conventions this stage shares with the arrows. ⚠️ The two
+# heading residuals moved to `polyline.py` in `Q94` — `carriageway.py` needs
+# them and cannot import `arrows` — so they arrive from there now.
 from pipeline.arrows import (
     ArrowReport,
     Ribbon,
-    axis_residual_deg,
     ccw,
-    directed_residual_deg,
     nearside,
     ribbons,
 )
@@ -172,7 +172,13 @@ from pipeline.documents import read_document, write_document
 from pipeline.fetch import cached_source, source_reads
 from pipeline.gltf import MeshData, Texture, write_glb
 from pipeline.mesh import select_triangles
-from pipeline.polyline import Segments, Snap, plan_lengths
+from pipeline.polyline import (
+    Segments,
+    Snap,
+    axis_residual_deg,
+    directed_residual_deg,
+    plan_lengths,
+)
 from pipeline.railings import AT_GRADE, facing_away
 from pipeline.roads import ROADGRAPH_NAME, read_graph
 from pipeline.sign_text import TextAtlas, build_atlas

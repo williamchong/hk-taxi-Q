@@ -258,3 +258,44 @@ class Segments:
         distance, _ = self._plan_distances(x, z)
         near = self.edge[distance <= radius_m]
         return int(np.count_nonzero(np.unique(near) != exclude))
+
+
+# --------------------------------------------------------------------------
+# Heading conventions
+# --------------------------------------------------------------------------
+# ⚠️ **Hoisted out of `arrows.py` by `Q94`, and the reason is the same one that
+# moved `Segments`.** Their docstrings already said these are "the canonical
+# statement of conventions more than one stage shares, so they are imported
+# rather than restated" — and `carriageway.py` became a fourth reader that
+# `arrows.py` cannot serve, because `arrows` imports `roads` and `roads` imports
+# `carriageway`. Restating a convention this file calls canonical is how it
+# drifts, so the convention moved instead.
+
+
+def directed_residual_deg(a: float, b: float) -> float:
+    """How far heading `a` is from heading `b`, in `[0, 180]`.
+
+    The signed question: *does this arrow point the way its edge is drawn?* Only
+    a one-way host may answer it, which is why `build_region` reads it and then
+    reads `axis_residual_deg` for the other one.
+
+    ⚠️ **Public because `pipeline/signs.py` reads it too.** These three — this,
+    `axis_residual_deg` and `ccw` — are the canonical statement of conventions
+    more than one stage shares, so they are imported rather than restated, the
+    way `railings.AT_GRADE` and `ArrowReport.measured` already are.
+    """
+    return abs((a - b + 180.0) % 360.0 - 180.0)
+
+
+def axis_residual_deg(a: float, b: float) -> float:
+    """How far two headings are from sharing an axis, in `[0, 90]`.
+
+    ⚠️ **Folded modulo 180 on purpose.** The question this answers is "did the
+    symbol match a road it is actually on", and an arrow on the far side of a
+    two-way street legitimately points the other way down the same axis.
+    Refusing on the *directed* residual would throw away half the arrows on
+    every two-way street; the region's `direction = both` hosts split 52/48
+    when it was measured.
+    """
+    gap = directed_residual_deg(a, b)
+    return min(gap, 180.0 - gap)

@@ -1899,8 +1899,22 @@ def main(argv: list[str] | None = None) -> int:
             city.carriageway_survey.width_bounds.lane_m[0],
             city.carriageway_survey.width_bounds.lane_m[1],
             _by_basis(width.lanes_basis.values()),
-            width.lanes_ambiguous,
+            width.lanes_unresolved,
             len(width.lanes_odd_two_way),
+        )
+        log.info(
+            "    lane rows: %d edges carry turn arrows; %d resolved an ambiguous bracket, "
+            "%d agree with one the width resolved alone, %d state a single arrow — not a row",
+            len(width.lane_rows),
+            width.lanes_ambiguous - width.lanes_unresolved,
+            len(width.lanes_row_agreeing),
+            len(width.lanes_row_single),
+        )
+        log.info(
+            "      %d state fewer lanes than the width brackets (an unpainted lane), %d state "
+            "more (a finding) — both reported, never used",
+            len(width.lanes_row_below_bracket),
+            len(width.lanes_row_over_bracket),
         )
     log.info(
         "  largest component holds %d of %d nodes (%.1f%%), %d components in all",

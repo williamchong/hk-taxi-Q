@@ -69,7 +69,12 @@ from pipeline.documents import read_document, write_document
 from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData, write_glb
 from pipeline.mesh import select_triangles
-from pipeline.polyline import Segments, plan_lengths
+from pipeline.polyline import (
+    Segments,
+    axis_residual_deg,
+    directed_residual_deg,
+    plan_lengths,
+)
 from pipeline.roads import ROADGRAPH_NAME, read_graph
 from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, downward_facing
 
@@ -205,6 +210,20 @@ class ArrowReport:
     # approach may be painted with one arrow — where a row wider than the graph
     # is a lane the graph does not have.
     implied_lanes: dict[int, int] = field(default_factory=dict)
+    # 🔴 **The two independent readings of the lane row, diffed (`Q94`).**
+    # `pipeline/carriageway.py` clusters the same published symbols at the roads
+    # stage, because it needs the count before a ribbon exists and cannot import
+    # this module — `arrows` imports `roads`, `roads` imports `carriageway`. So
+    # the region carries two implementations of one measurement, which is the
+    # arrangement `carriageway_margin.py` is already in, and this is what grades
+    # it: on every edge whose count that stage published from a row, the graph's
+    # `lanes` **is** the row it read, so anything but 0 means the two clusterings
+    # diverged.
+    # ⚠️ **It cannot be graded over all 306 arrow-carrying edges**, only the ones
+    # published from a row, because that stage refuses a row this one keeps — a
+    # single arrow, a row outside its bracket — and those disagree by design.
+    lanes_row_disagreement: int = 0
+    lanes_row_published: int = 0
     edges_implying_more_lanes: int = 0
 
     # `SYMBOL_SIZE` as published, which nothing here reads. Recorded so the
@@ -640,35 +659,6 @@ def ribbons(graph: dict, surface: dict) -> dict[int, Ribbon]:
     return drawn_ribbons
 
 
-def directed_residual_deg(a: float, b: float) -> float:
-    """How far heading `a` is from heading `b`, in `[0, 180]`.
-
-    The signed question: *does this arrow point the way its edge is drawn?* Only
-    a one-way host may answer it, which is why `build_region` reads it and then
-    reads `axis_residual_deg` for the other one.
-
-    ⚠️ **Public because `pipeline/signs.py` reads it too.** These three — this,
-    `axis_residual_deg` and `ccw` — are the canonical statement of conventions
-    more than one stage shares, so they are imported rather than restated, the
-    way `railings.AT_GRADE` and `ArrowReport.measured` already are.
-    """
-    return abs((a - b + 180.0) % 360.0 - 180.0)
-
-
-def axis_residual_deg(a: float, b: float) -> float:
-    """How far two headings are from sharing an axis, in `[0, 90]`.
-
-    ⚠️ **Folded modulo 180 on purpose.** The question this answers is "did the
-    symbol match a road it is actually on", and an arrow on the far side of a
-    two-way street legitimately points the other way down the same axis.
-    Refusing on the *directed* residual would throw away half the arrows on
-    every two-way street; the region's `direction = both` hosts split 52/48
-    when it was measured.
-    """
-    gap = directed_residual_deg(a, b)
-    return min(gap, 180.0 - gap)
-
-
 def build_region(
     city: CityConfig,
     region_id: str,
@@ -815,6 +805,7 @@ def build_region(
 
     _count_stacked(laid, report)
     _count_rows(laid, drawn, report)
+    _grade_against_the_graph(graph, report)
 
     mesh = builder.build(ARROWS_MESH_NAME)
     if mesh is not None:
@@ -954,6 +945,33 @@ def _count_rows(laid: list[_Laid], ribbons: dict[int, Ribbon], report: ArrowRepo
             report.edges_implying_more_lanes += 1
 
 
+def _grade_against_the_graph(graph: dict, report: ArrowReport) -> None:
+    """Diff this stage's lane row against `carriageway.py`'s (`Q94`).
+
+    🔴 **The only check on a measurement the region implements twice.** That
+    stage needs the row before any ribbon exists, and cannot import this module
+    — `arrows` imports `roads`, `roads` imports `carriageway` — so the
+    clustering is written out a second time there. `carriageway_margin.py`
+    against `pipeline/carriageway.py` is the same arrangement one dimension
+    over, and the rule is the same: **they are expected to agree and a
+    divergence is a finding**, never something to reconcile by importing one
+    into the other.
+
+    ⚠️ **Graded only where that stage PUBLISHED a row**, not across all 306
+    arrow-carrying edges. It refuses rows this stage keeps — a row of a single
+    arrow, a row falling outside its own width bracket — so the two disagree
+    there by design, and a counter spanning both populations would report that
+    design as a defect. On an edge it published, `lanes` **is** the row it read,
+    so anything but 0 here means the two clusterings diverged.
+    """
+    for edge in graph["edges"]:
+        if str(edge.get("lanes_source")) != "arrows":
+            continue
+        report.lanes_row_published += 1
+        if report.implied_lanes.get(int(edge["id"])) != int(edge["lanes"]):
+            report.lanes_row_disagreement += 1
+
+
 def _along(arrow: _Laid) -> float:
     return arrow.along_m
 
@@ -1049,6 +1067,8 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Arr
             str(edge): report.implied_lanes[edge] for edge in sorted(report.implied_lanes)
         },
         "edges_with_arrows": len(report.implied_lanes),
+        "lanes_row_published": report.lanes_row_published,
+        "lanes_row_disagreement": report.lanes_row_disagreement,
         "edges_implying_more_lanes": report.edges_implying_more_lanes,
         # Published, unread. `SYMBOL_SIZE` may or may not be the arrow's length
         # in metres; the glyph table takes its lengths from the index plan
@@ -1095,6 +1115,13 @@ def main(argv: list[str] | None = None) -> int:
         report.triangles,
         report.stacked_pairs,
         report.stacked_disagreeing,
+    )
+    log.info(
+        "  lane rows: %d edges, %d published as a lane count by the roads stage, "
+        "%d disagreeing with what it read — a divergence between two implementations",
+        len(report.implied_lanes),
+        report.lanes_row_published,
+        report.lanes_row_disagreement,
     )
     return 0
 
