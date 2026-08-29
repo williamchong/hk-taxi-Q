@@ -12955,7 +12955,7 @@ for sourced-not-invented · `Q60` and `P3-16` for the authored-dimension precede
 
 ## `Q94` — Two arrows in one lane, because the lane count is invented
 
-**Status.** 🟢 **Closed 2026-08-29.** Counted in `arrows.json` 2026-08-28; the count sourced, graded and assigned 2026-08-29 — see *The count is sourced* below.
+**Status.** 🟢 **Closed 2026-08-29, with a named residue.** Counted in `arrows.json` 2026-08-28; the count sourced, graded and assigned 2026-08-29 — see *The count is sourced*. ⚠️ **The road this question was opened about is not fixed**, and the reason is not this question's to solve: STEWART ROAD measures 16.7 m, 27 cm over a ceiling that may not move, because TD's painted carriageway edge does not cover it. See *STEWART ROAD is measured* below.
 
 ### What the user saw
 
@@ -13166,6 +13166,62 @@ to `authored` and watching it fail.
 
 ⬜ **Left.** The 118 ambiguous edges, the 28 that still imply more lanes than they have, and the 12
 decomposed widths `Q95` also left.
+
+### 🔴 STEWART ROAD is measured, and refused by 27 cm — 2026-08-29
+
+Asked to measure the street this question was opened about, after the close above. **It was never a
+data gap.** All three of its edges span cleanly at 7-8 stations; two are refused by TD's plausibility
+ceiling alone.
+
+```
+edge   dir       n    span     own   beyond  off_centre   published
+e503   both      7   10.54    8.85     1.72        0.16   two_way_span
+e504   both      7   16.77   14.99     1.78        0.10   REFUSED — over max_m 16.5
+e505   forward   8   16.69   15.52     1.17        0.07   REFUSED — over max_m 16.5
+```
+
+`max_m` is 13.5 m (four-lane single carriageway, Table 3.4.2.1) + 3.0 m (parking strip, 3.4.2.6).
+`e504` misses it by **27 cm** and `e505` by **19 cm**.
+
+✅ **Everything available says it is a genuine single carriageway rather than a ray that escaped.**
+The two independent implementations agree to under **3 mm** (16.768 / 16.685 against 16.77 / 16.69).
+The span is *stable* station to station — 16.77, 16.79, 16.77, 16.77 — where a junction-mouth escape
+grows erratically. `off_centre` **0.07-0.10** puts the centreline nearly dead-centre, so the ray did
+not cross an opposed pair, and `beyond` of **1.17-1.78 m** is under one through lane, so the crossing
+rule independently reads it as *one* carriageway. And the arrows — a third publisher that never saw a
+width — imply **3 lanes** on both, against 1 on the 10.5 m `e503`.
+
+🔴 **The caveat that matters: TD's own painted carriageway edge has ZERO coverage on all three
+edges.** Only iB1000 answers any station, and `hong_kong.yaml` warns its `RM` is a topographic line
+that "may follow a kerb, a wall or a lot boundary". Against that, the same publisher reads 10.5 m on
+the adjoining `e503`, so it is not following building lines systematically on this street.
+
+⚠️ **The tempting justification does not hold, and was checked rather than assumed.** 3.4.4.1 widens a
+13.5 m four-lane carriageway to 15.8 m under a 150 m radius, which would lift the composed ceiling to
+18.8 m. `e504` turns **7.2 degrees over 53 m** — a radius near 420 m. STEWART ROAD is not
+curve-widened and may not borrow that clause.
+
+🔴 **The ceiling must not move to admit it, and the refused population is why.** The 44 spans `max_m`
+refuses are a continuum with no break in it:
+
+```
+16.56 16.56 16.57 16.64 16.64 16.68 16.68 16.72 16.73 16.75 16.77 16.78 16.82 16.92 … 26.71
+
+  ceiling 16.5 -> admits  1 of 44      ceiling 18.0 -> admits 27 of 44
+  ceiling 16.8 -> admits 13 of 44      ceiling 20.0 -> admits 36 of 44
+```
+
+Raising it to 16.8 m to reach STEWART ROAD admits **thirteen** edges, and nothing distinguishes the
+16.82 next in line from the 17.10 after it. That is `Q95`'s `--dual-min-m` finding exactly — a bound
+with no plateau has stopped classifying while still printing a table — and this repo's rule that a
+grader's output is a finding to go and look at, never a bar to retune. Retuning here would be picking
+the answer for one street.
+
+⬜ **So `e504`/`e505` keep their authored 6.4 m, and their arrows keep contradicting each other.**
+What would resolve it is not a bound this project may move: it is **TD's `RM1108`/`RM1109` painted
+edge, which does not cover this street**. That is a data-coverage finding rather than a tuning one,
+and it is the strongest case yet for the HyD **Pavement Polygon** layer `Q19` lists as the second,
+unfetched source.
 
 **See.** `Q19` for the invented width and the invisible walls it causes · `Q57` for the previous
 narrowing and the lane lines · `Q54` for why a published extent is not overruled by a derived one ·
