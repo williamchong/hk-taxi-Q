@@ -671,10 +671,16 @@ interchange half became `Q22`/Phase 4's and `e702` `Q51`'s on 2026-08-20
 the round.** They stopped driving because they kept getting stuck on bridge rails — so the finding
 is no longer "5.17% of drawn carriageway", it is *the reason strangers put the build down*.
 ⚠️ **They named the object they could see, not the thing they hit**: `railings.glb` carries no
-collider by design, and the wall is the `INFRASTRUCTURE` geometry beneath it. Measured the same day:
-**7 of the 16** level-0 edges touching a structure keep less than one lane clear — **43.8%, against
-2.5% of the other 721** — all seven `INFRASTRUCTURE`-blocked, on WAN CHAI INTERCHANGE (`e233` at
-**0.00 m clear**), HUNG HING ROAD FLYOVER, CANAL ROAD FLYOVER and FLEMING ROAD. ✅ **The routing half
+collider by design, so the wall is `INFRASTRUCTURE`-class geometry. ✅ A railing *is* there to be
+blamed — nearest vertex **1.22-10.41 m** off those centrelines — but proximity is all that is
+established, not that it stands on the blocker. Measured the same day: **7 of the 16** level-0 edges
+touching a structure keep less than one lane clear — **43.8%, against 2.6% of the other 721, a 16.6x
+rate ratio** — and all seven are `INFRASTRUCTURE`-blocked: `e222`, `e256`, `e327` and `e485` (WAN
+CHAI INTERCHANGE), `e788` (HUNG HING ROAD FLYOVER), `e99` (FLEMING ROAD) and `e125` (unnamed).
+⚠️ **Bridge-*named* is not the same set as structure-*touching*, and conflating them overstates
+this**: `e233` (WAN CHAI INTERCHANGE, **0.00 m clear**) and `e781` (CANAL ROAD FLYOVER) are blocked
+and carry bridge names, but no station of either is flagged `on_structure`, so they sit in the wider
+blocked 26 rather than in the seven. ✅ **The routing half
 already refuses these** — `is_routable` will not send traffic onto a wall — **and nothing stops the
 player**, which this entry has said since `Q51` closed and which is now priced rather than
 predicted
@@ -14302,7 +14308,7 @@ it.
 
 The `P3-9a` rule is **a new name per cut, never an overwrite**, so that a round can be tied to a
 build. **This round cannot be, from the repo alone.** The freshest artefact on disk is
-`build/web/index.pck` at **2026-08-28 17:37**; there is no `r6` zip, and roughly **24 commits** have
+`build/web/index.pck` at **2026-08-28 17:37**; there is no `r6` zip, and **35 commits** have
 landed since — `Q91`, `Q92`, `Q93`, `Q24`, and the whole of `Q94`/`Q95`/`Q96`. `Q95` in particular
 re-baselined every published width and moved every registered layer (signs 681→671, lamps 897→893,
 railings 9017→8809 m), so "the city the drivers saw" and "the city in the tree" are not the same
@@ -14317,25 +14323,42 @@ had, and the round is the most expensive evidence the project buys.
 
 ⚠️ **They named the object they could see, not the thing they hit.** `railings.glb` carries **no
 collider** — `railings.py` records that as a deliberate design decision — so a railing cannot stop a
-car. What stops it is the `INFRASTRUCTURE` geometry the railing stands on, which
-`tools/carriageway_occupancy.py` has been failing on continuously.
+car. What stops it is `INFRASTRUCTURE`-class geometry, which `tools/carriageway_occupancy.py` has
+been failing on continuously and which that tool exists to find *because collision shipped*.
+
+✅ **And a railing really is there to be blamed, which was checked rather than assumed.** Measured
+off `railings.glb` against each blocked edge's own polyline, the nearest railing vertex is **1.22 m**
+(`e99` FLEMING ROAD) to **10.41 m** (`e327`) from the centreline — at or just past a drawn kerb on a
+ribbon whose half-width is around 5 m, which is exactly where a driver scraping to a halt is looking.
+⚠️ **Their proximity is all that is established.** Nothing here shows the railing stands *on* the
+blocking geometry, and saying so would be inventing the mechanism rather than reporting it.
 
 Measured on the shipped bundle, 2026-08-30:
 
 | | |
 |---|---|
 | drivable level-0 edges keeping less than one lane (3.20 m) clear | **26** — the tool's standing `FAIL` |
-| of the 25 it lists, blocked by `INFRASTRUCTURE` in whole or part | **11** |
+| of those, blocked by `INFRASTRUCTURE` in whole or part | **12** (11 alone, 1 with `BUILDING`) |
 | level-0 edges touching a structure at any station | **16 of 737 (2.2%)** |
 | **of those, blocked** | **7 of 16 — 43.8%** |
-| non-structure edges blocked | **18 of 721 — 2.5%** |
+| non-structure edges blocked | **19 of 721 — 2.6%** |
+| **rate ratio** | **16.6x** |
 
 🔴 **Nearly half of every edge that touches a structure is impassable, against one in forty of the
-rest.** All seven are `INFRASTRUCTURE`-blocked: `e125` and `e485` and `e327` and `e256` and `e222`
-(WAN CHAI INTERCHANGE), `e788` (HUNG HING ROAD FLYOVER), `e99` (FLEMING ROAD), with `e781` (CANAL
-ROAD FLYOVER) and `e233` (WAN CHAI INTERCHANGE, **0.00 m clear**) in the wider blocked set. That
-distribution is the whole of "they did not drive far": the interchange is what connects the region's
-halves, and it is the part that stops you.
+rest.** All seven are `INFRASTRUCTURE`-blocked, and **four of them are WAN CHAI INTERCHANGE** —
+`e222`, `e256`, `e327`, `e485` — with `e788` (HUNG HING ROAD FLYOVER), `e99` (FLEMING ROAD) and
+`e125` (unnamed) making up the rest.
+
+⚠️ **Bridge-*named* and structure-*touching* are different sets, and conflating them overstates
+this.** `e233` (WAN CHAI INTERCHANGE, **0.00 m clear**) and `e781` (CANAL ROAD FLYOVER) are blocked
+and carry bridge names, but no station of either is flagged `on_structure`, so they sit in the wider
+26 rather than in the seven. The distinction is worth keeping because the seven are what the rate
+ratio is computed over.
+
+That distribution is what "they did not drive far" is made of: more of the blocked structure edges
+are WAN CHAI INTERCHANGE than anything else, and it is the interchange the region is crossed by.
+⚠️ **That last clause is a reading of the map, not a measurement** — no route analysis here shows
+the region is disconnected by these edges, and `RoadGraph` would be the thing to ask.
 
 ✅ **So this is not a new question, it is `Q19` arriving where a player can feel it.** `Q19` has been
 🟡 half answered and **unassigned** since the routing half closed as `Q51` — the bundle publishes a
