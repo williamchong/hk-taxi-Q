@@ -13223,6 +13223,34 @@ edge, which does not cover this street**. That is a data-coverage finding rather
 and it is the strongest case yet for the HyD **Pavement Polygon** layer `Q19` lists as the second,
 unfetched source.
 
+#### ✅ Fetched, and a third publisher confirms the 16.7 m — 2026-08-29
+
+`Q19`'s "second, unfetched" source is fetched. HyD's Pavement Polygon gives the carriageway as an
+**area** rather than an edge line — the only source in the estate that does — and it agrees:
+
+```
+edge   pipeline (iB1000 ray)    HyD FEAT_TYPE=1 polygon    agreement
+e503   10.54 m  published       10.50 m                    4 cm
+e504   16.77 m  REFUSED         16.72 m                    5 cm
+e505   16.69 m  REFUSED         16.66 m                    3 cm
+```
+
+`e503` is the control: the pipeline publishes it, and HyD lands 4 cm away. On the same street and the
+same walk, `e504`/`e505` read **16.7 m** from a publisher with no relationship to iB1000. **The 16.7 m
+is not an artefact of one source**, and the refusal rests entirely on TD's 16.5 m ceiling.
+
+🔴 **This does not license moving the ceiling, and the reason has not changed.** The 44 refused spans
+are still a continuum to 26.71 m with no break, and 16.8 m still admits 13 of them. What HyD changes
+is the *kind* of instrument available, not the bound: it is an area, so it stops at a median by
+construction and cannot be fooled by the crossing confound the ceiling exists to catch. Reading the
+carriageway from it rather than bounding a ray with it is the real sequel, and it is unassigned.
+
+⚠️ **Read by point-in-UNION walking, never a ray to the nearest boundary** — HyD tiles the
+carriageway into 552 polygons in region, so an internal seam between two of them is not a kerb.
+⚠️ **The `FEAT_TYPE` domain that `DATA_SOURCES.md` said was undecoded is published in the layer's own
+metadata**, and the clip it said was owed is done: `FEAT_TYPE = 1` is **24.5%** of the envelope, not
+the 41% the unclipped sum implied. Both corrections are in `DATA_SOURCES.md`.
+
 **See.** `Q19` for the invented width and the invisible walls it causes · `Q57` for the previous
 narrowing and the lane lines · `Q54` for why a published extent is not overruled by a derived one ·
 `Q72` for the reachable-at-zero test this counter had to pass · `Q93` for the glyph these are drawn

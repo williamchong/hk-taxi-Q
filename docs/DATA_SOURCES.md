@@ -710,28 +710,85 @@ Recorded so the sweep is not repeated:
 ✅ **Both had that look, in `Q57`, 2026-08-20.** Fleet Taxi Stopping Places is under "Fares and
 points of interest" below; the pavement extents are next.
 
-### ✅ SURVEYED, not fetched — HyD Pavement Polygon
+### ✅ FETCHED — HyD Pavement Polygon (`Q94`, 2026-08-29)
 
 **`hyd_rcd_1632210918434_60749`** · Highways Department · CSDI Portal only, no DATA.GOV.HK package ·
-ArcGIS `MapServer` layer `INV_PG` and a WFS endpoint
+ArcGIS `MapServer` layer `INV_PG`, **native EPSG:2326** — the project's own projected CRS, so no
+reprojection is needed to read it.
 
 *"The data provides location information of types of pavement maintained by Highways Department"* —
-the maintained pavement as **polygons**, the second independent answer to the carriageway width
-`Q19` called unpublished until `Q57`. Queried over the Wan Chai envelope in EPSG:2326:
-**1,714 polygons**, carrying `FEAT_TYPE`, `SUR_TYPE_1`, `PAVER_TYPE`, and an **`LVL` of `0` / `1` /
-`-1`** that mirrors Road Network v2's `ELEVATION` convention.
+the maintained pavement as **polygons**. 🔴 **This is the only source in the estate that gives the
+carriageway as an AREA rather than an edge line**, which is what makes it a different kind of
+evidence from TD's `RM1108`/`RM1109` and iB1000's `RM`.
 
-| `FEAT_TYPE` | polygons | `Shape_Area` |
+**Two endpoints, and the size difference decides which to use:**
+
+| | payload | note |
 |---|---|---|
-| `1` | 552 | 599,162 m² |
-| `2` | 917 | 129,352 m² |
-| `6` | 85 | 10,763 m² |
-| others (`3`, `7`, `8`, `9`, `31`, `32`) | 160 | 19,842 m² |
+| `portal.csdi.gov.hk/csdi-webpage/file-api?dataset_id=…&format=geojson` | **317 MB** | whole territory, WGS84, one file |
+| `portal.csdi.gov.hk/server/rest/services/common/…/MapServer/0/query` | **3.0 MB** | bbox in EPSG:2326, `f=geojson`, 1,714 features in region |
 
-⚠️ **The `FEAT_TYPE` domain is not decoded and the areas are not clipped.** The envelope is 1.46 km²
-and the query is `intersects`, so a polygon reaching outside contributes its whole area — `1` at
-599,162 m² is not 41% carriageway, it is an unclipped sum. Anyone acting on this owes the HyD
-specification and a real clip first.
+⚠️ **The query endpoint pages at `maxRecordCount` 3000**; Wan Chai returns 1,714 in one request with
+`exceededTransferLimit` absent, so nothing is silently truncated — but a larger region must page.
+⚠️ **A bbox URL carries the region envelope**, which is the one thing hard rule 3 says lives in
+config and nowhere else, so wiring this in as a declared source is not simply pasting the URL used
+here. Nothing in `etl/` fetches it yet.
+
+✅ **The `FEAT_TYPE` domain is published, and the previous note that it "is not decoded" and that
+anyone acting on it "owes the HyD specification" is superseded.** The specification is *in the
+service*: the layer's own `?f=json` carries coded-value domains for all four attribute fields.
+
+```
+FEAT_TYPE   1 Carriageway   2 Footway   3 Other   5 Cycle Track   6 Side/Back Lane   7 Run-in
+            8 PTI-Carriageway   9 PTI-Footway   23 Carpark-Carriageway   24 Carpark-Footway
+           31 Traffic Island - Refuge Island    32 Traffic Island - Other
+SUR_TYPE_1  1 Flexible  2 Rigid  3 Pavers  7 Flexible w/ anti-skid  8 Rigid w/ anti-skid
+           10 Works In Progress
+PAVER_TYPE  A Artificial Granite · C Clay · E Recycle · G Granite · H High Quality Concrete
+            M Mixed Granite+Clay · N Mixed Granite+Concrete · R Concrete · S Concrete w/ glass
+LVL         3/2/1 above ground · 0 ground · -1/-2/-3 below — mirrors Road Network v2's ELEVATION
+```
+
+✅ **And the clip is done, which the previous entry said was owed.** `Shape_Area` reproduces the
+figure recorded before (599,162 m² for `FEAT_TYPE` 1) exactly; clipped to the 1.461 km² envelope and
+with 49 inner rings subtracted, the real answer is **24.5%**, not the 41% the unclipped sum implied.
+
+| `FEAT_TYPE` | n | `Shape_Area` (unclipped) | **clipped** | % of envelope |
+|---|---|---|---|---|
+| `1` Carriageway | 552 | 599,162 m² | **358,599 m²** | **24.5%** |
+| `2` Footway | 917 | 129,352 | 122,413 | 8.4% |
+| `6` Side/Back Lane | 85 | 10,763 | 9,999 | 0.7% |
+| `9` PTI - Footway | 32 | 6,879 | 6,176 | 0.4% |
+| `8` PTI - Carriageway | 2 | 6,098 | 6,099 | 0.4% |
+| `31` Traffic Island - Refuge | 98 | 3,192 | 3,192 | 0.2% |
+| `3` / `7` / `32` | 28 | 3,673 | 2,967 | 0.2% |
+| **total** | **1,714** | **759,118** | **509,446** | **34.9%** |
+
+`LVL` splits 1,665 ground / 33 above / 16 below, so the layer separates the flyovers the way the road
+graph does.
+
+🔴 **It settles STEWART ROAD, which is why it was fetched** (`Q94`). Walked at the pipeline's own 4 m
+stations against the `FEAT_TYPE = 1`, `LVL = 0` extent:
+
+| edge | pipeline | iB1000 ray | **HyD polygon** | agreement |
+|---|---|---|---|---|
+| `e503` | 10.54 m published | 10.57 | **10.50 m** | 4 cm |
+| `e504` | refused | 16.77 | **16.72 m** | 5 cm |
+| `e505` | refused | 16.69 | **16.66 m** | 3 cm |
+
+So the 16.7 m is real and a third publisher says so. `e504`/`e505` are refused by TD's 16.5 m
+plausibility ceiling and nothing else.
+
+🔴 **Read by walking point-in-UNION, never by casting a ray to the nearest polygon boundary.** HyD
+tiles the carriageway into 552 polygons over this envelope, so an internal seam between two of them
+is not a kerb; a ray would stop at the first seam it met. Walking outward until the point leaves
+*every* carriageway polygon steps through the seams and halts at the real edge. ⚠️ Stations within
+12 m of a node read the 15 m cap both ways (30.04 m) — the junction mouth, and the reason the
+pipeline's `JUNCTION_M` exclusion exists.
+
+⚠️ **Attribution.** Highways Department, via the CSDI Portal — both owed on the credits screen under
+hard rule 6, and this is a **CSDI-only** dataset with no DATA.GOV.HK package, so the CSDI half of
+that acknowledgement is load-bearing here rather than duplicated.
 
 ### ✅ READ, not fetched — TD's Transport Planning & Design Manual, Volume 2 (`Q95`)
 
