@@ -50,10 +50,10 @@ from pipeline import gdb
 from pipeline.arrows import ArrowReport
 from pipeline.config import CityConfig, GameTransform, RoadMark, RoadMarks, load_city
 from pipeline.documents import read_document, write_document
-from pipeline.fares import Segments
 from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData, write_glb
 from pipeline.mesh import select_triangles
+from pipeline.polyline import Segments, plan_lengths_2d
 
 # `AT_GRADE` rather than a fifth private copy — `railings.py` exports it
 # publicly to stop exactly that, and `signs.py` imports it for the same reason.
@@ -61,7 +61,7 @@ from pipeline.mesh import select_triangles
 # same geodatabase, not a threshold anyone may tune. 209 of the region's 211
 # parts are null.
 from pipeline.railings import AT_GRADE
-from pipeline.roads import ROADGRAPH_NAME, plan_lengths_2d, read_graph
+from pipeline.roads import ROADGRAPH_NAME, read_graph
 from pipeline.surface import (
     SURFACE_MANIFEST_NAME,
     SURFACE_MANIFEST_SCHEMA,

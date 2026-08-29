@@ -21,9 +21,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from pipeline.fares import Segments
 from pipeline.gltf import read_glb
-from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA, plan_lengths
+from pipeline.polyline import Segments, plan_lengths
+from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
 from pipeline.surface import (
     MARKING_CLASS_CAP,
     MARKING_CLASS_CARRIAGEWAY,

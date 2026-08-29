@@ -51,6 +51,7 @@ from pipeline.config import (
 from pipeline.crs import GameTransform
 from pipeline.documents import read_document, round_position, write_document
 from pipeline.fetch import cached_source
+from pipeline.polyline import plan_lengths_2d, plan_steps_2d
 from pipeline.terrain import HeightField
 
 log = logging.getLogger(__name__)
@@ -393,50 +394,6 @@ def simplify_mask(points: np.ndarray, tolerance_m: float) -> np.ndarray:
     return keep
 
 
-def plan_lengths(points: np.ndarray) -> np.ndarray:
-    """Cumulative plan distance along a polyline, starting at zero.
-
-    Plan rather than 3D: road widths, kerbs, junction radii and positions along
-    an edge are all measured on the ground, and a 6 m ramp would otherwise be
-    treated as longer than its own footprint.
-
-    Here rather than in either consumer because both `P1-4` and `P1-5` measure
-    along an edge, and two copies of this convention is two places for it to
-    drift.
-    """
-    return plan_lengths_2d(points[:, [0, 2]])
-
-
-def plan_steps(points: np.ndarray) -> np.ndarray:
-    """Length of each segment of a polyline, in plan."""
-    return _steps(points[:, [0, 2]])
-
-
-def _steps(plan: np.ndarray) -> np.ndarray:
-    """`plan_steps` for an array that is already two columns of `(x, z)`.
-
-    A separate name rather than a mode of the public one: inside this module a
-    run is plan-only from `clip` until its heights are decided, and column
-    indices that mean different things in different halves of a file are how a
-    road ends up measured against its own height. The public pair drops its
-    height column and calls through, so the arithmetic is written once.
-    """
-    return np.hypot(*np.diff(plan, axis=0).T)
-
-
-def plan_lengths_2d(plan: np.ndarray) -> np.ndarray:
-    """`plan_lengths` for two columns of `(x, z)`. See `_steps` for the split.
-
-    Public where `_steps` is private, because a caller outside this module can
-    already hold a plan-only line: `railings._run_uvs` measures along a *fence*
-    line, which never had a height column to drop. Exported rather than copied —
-    `kerbside._plan_lengths` is the third copy of this arithmetic and documents
-    why it cannot import (this module imports `kerbside`), which is a constraint
-    `railings` does not have.
-    """
-    return np.concatenate([[0.0], np.cumsum(_steps(plan))])
-
-
 def resample(plan: np.ndarray, spacing_m: float) -> np.ndarray:
     """A plan polyline with stations inserted until no two are `spacing_m` apart.
 
@@ -480,7 +437,7 @@ def resample_anchored(plan: np.ndarray, spacing_m: float) -> tuple[np.ndarray, n
     if spacing_m <= 0.0 or len(plan) < 2:
         return plan, np.arange(len(plan))
 
-    steps = _steps(plan)
+    steps = plan_steps_2d(plan)
     # At least one piece per segment, so a repeated vertex survives rather than
     # dividing by zero on its way to being dropped.
     pieces = np.maximum(np.ceil(steps / spacing_m).astype(np.int64), 1)
@@ -569,7 +526,7 @@ def _close(
     if len(current) < 2:
         return
     run = np.asarray(current)
-    if float(_steps(run).sum()) >= min_length_m:
+    if float(plan_steps_2d(run).sum()) >= min_length_m:
         runs.append(run)
 
 

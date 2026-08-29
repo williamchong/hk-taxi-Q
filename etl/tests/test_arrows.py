@@ -34,7 +34,7 @@ from pipeline.arrows import (
     glyph_polygons,
 )
 from pipeline.config import load_city
-from pipeline.fares import Segments
+from pipeline.polyline import Segments
 from pipeline.surface import downward_facing, mitres
 from tests.helpers import CITY_YAML, polygon_area
 

@@ -149,7 +149,8 @@ from pipeline.config import (  # noqa: E402
 from pipeline.crs import GameTransform  # noqa: E402
 from pipeline.export import read_manifest  # noqa: E402
 from pipeline.fetch import source_reads  # noqa: E402
-from pipeline.roads import ROADGRAPH_NAME, plan_lengths, read_graph  # noqa: E402
+from pipeline.polyline import plan_lengths  # noqa: E402
+from pipeline.roads import ROADGRAPH_NAME, read_graph  # noqa: E402
 
 log = logging.getLogger("carriageway_margin")
 

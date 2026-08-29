@@ -27,7 +27,7 @@ from pipeline.boxjunctions import (
     long_axis_deg,
 )
 from pipeline.config import load_city
-from pipeline.fares import Segments
+from pipeline.polyline import Segments
 from pipeline.surface import DrawnSurface, downward_facing
 from tests.helpers import CITY_YAML, polygon_area
 

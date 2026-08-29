@@ -40,7 +40,7 @@ from pipeline.config import (
     Signs,
     load_city,
 )
-from pipeline.fares import Segments
+from pipeline.polyline import Segments
 from pipeline.railings import facing_away
 from pipeline.sign_text import _bake, _bounds, _coverage, _livery, _plate_mask
 from pipeline.signs import (

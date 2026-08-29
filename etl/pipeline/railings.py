@@ -85,7 +85,8 @@ from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData, write_glb
 from pipeline.kerbside import NEARSIDE, OFFSIDE, SideIndex, merge_runs, resample
 from pipeline.mesh import select_triangles
-from pipeline.roads import ROADGRAPH_NAME, plan_lengths, plan_lengths_2d, read_graph
+from pipeline.polyline import plan_lengths, plan_lengths_2d
+from pipeline.roads import ROADGRAPH_NAME, read_graph
 from pipeline.surface import (
     SURFACE_MANIFEST_NAME,
     SURFACE_MANIFEST_SCHEMA,

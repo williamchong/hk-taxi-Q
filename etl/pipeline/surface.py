@@ -61,7 +61,8 @@ from pipeline.geometry import edge_distances, inside_polygon
 from pipeline.gltf import Bounds, MeshData, normalise, write_glb
 from pipeline.kerbside import NEARSIDE, OFFSIDE
 from pipeline.mesh import select_triangles
-from pipeline.roads import ROADGRAPH_NAME, plan_lengths, plan_steps, read_graph
+from pipeline.polyline import plan_lengths, plan_steps
+from pipeline.roads import ROADGRAPH_NAME, read_graph
 
 # ⚠️ **The barycentric point-in-triangle test is `terrain`'s, not a fourth copy.**
 # `deck_error.py` books its own copy as a known cost — importing the pipeline
@@ -75,7 +76,7 @@ if TYPE_CHECKING:  # pragma: no cover - imported for the annotation alone
     # it here would drag a source fetcher into every consumer of the ribbon —
     # and `DrawnSurface` uses exactly one method of it. The annotation is still
     # exact, which `Any` was not.
-    from pipeline.fares import Segments
+    from pipeline.polyline import Segments
 
 log = logging.getLogger(__name__)
 

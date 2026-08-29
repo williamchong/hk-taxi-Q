@@ -64,7 +64,8 @@ from pipeline.config import load_city  # noqa: E402
 from pipeline.documents import read_document  # noqa: E402
 from pipeline.fares import FARES_NAME, FARES_SCHEMA  # noqa: E402
 from pipeline.gltf import MeshData, read_glb  # noqa: E402
-from pipeline.roads import ROADGRAPH_NAME, plan_lengths, read_graph  # noqa: E402
+from pipeline.polyline import plan_lengths  # noqa: E402
+from pipeline.roads import ROADGRAPH_NAME, read_graph  # noqa: E402
 from pipeline.surface import (  # noqa: E402
     MARKING_CENTRE,
     MARKING_CLASS_CARRIAGEWAY,

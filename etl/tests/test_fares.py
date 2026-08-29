@@ -22,7 +22,8 @@ import pytest
 
 from pipeline.config import load_city
 from pipeline.crs import transformer
-from pipeline.fares import FARES_NAME, FARES_SCHEMA, Segments, build_region
+from pipeline.fares import FARES_NAME, FARES_SCHEMA, build_region
+from pipeline.polyline import Segments
 from pipeline.roads import ROADGRAPH_NAME, ROADGRAPH_SCHEMA
 from tests.helpers import CITY_YAML
 

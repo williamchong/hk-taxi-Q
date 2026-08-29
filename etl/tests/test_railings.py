@@ -28,6 +28,7 @@ import yaml
 
 from pipeline.config import RailingClass, Railings, SourceLayer, load_city
 from pipeline.kerbside import NEARSIDE, OFFSIDE
+from pipeline.polyline import plan_lengths
 from pipeline.railings import (
     ClassReport,
     RailingReport,
@@ -39,7 +40,6 @@ from pipeline.railings import (
     _visible,
     facing_away,
 )
-from pipeline.roads import plan_lengths
 from pipeline.surface import mitres
 from tests.helpers import CITY_YAML
 

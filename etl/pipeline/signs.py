@@ -169,12 +169,12 @@ from pipeline.config import (
     load_city,
 )
 from pipeline.documents import read_document, write_document
-from pipeline.fares import Segments, Snap
 from pipeline.fetch import cached_source, source_reads
 from pipeline.gltf import MeshData, Texture, write_glb
 from pipeline.mesh import select_triangles
+from pipeline.polyline import Segments, Snap, plan_lengths
 from pipeline.railings import AT_GRADE, facing_away
-from pipeline.roads import ROADGRAPH_NAME, plan_lengths, read_graph
+from pipeline.roads import ROADGRAPH_NAME, read_graph
 from pipeline.sign_text import TextAtlas, build_atlas
 from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA
 

@@ -66,11 +66,11 @@ from pipeline.config import (
     load_city,
 )
 from pipeline.documents import read_document, write_document
-from pipeline.fares import Segments
 from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData, write_glb
 from pipeline.mesh import select_triangles
-from pipeline.roads import ROADGRAPH_NAME, plan_lengths, read_graph
+from pipeline.polyline import Segments, plan_lengths
+from pipeline.roads import ROADGRAPH_NAME, read_graph
 from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, downward_facing
 
 log = logging.getLogger(__name__)

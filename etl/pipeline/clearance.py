@@ -74,7 +74,8 @@ from pipeline.config import (
 )
 from pipeline.documents import read_document, write_document
 from pipeline.landmarks import landmark_in_region
-from pipeline.roads import ROADGRAPH_NAME, plan_lengths, read_graph
+from pipeline.polyline import plan_lengths
+from pipeline.roads import ROADGRAPH_NAME, read_graph
 from pipeline.surface import SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA
 
 log = logging.getLogger(__name__)

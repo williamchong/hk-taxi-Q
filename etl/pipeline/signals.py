@@ -108,10 +108,10 @@ from pipeline import gdb
 from pipeline.arrows import ArrowReport, Ribbon, axis_residual_deg, nearside, ribbons
 from pipeline.config import SIGNAL_BODY_COLOUR, CityConfig, GameTransform, Signals, load_city
 from pipeline.documents import read_document, write_document
-from pipeline.fares import Segments, Snap
 from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData, write_glb
 from pipeline.mesh import select_triangles
+from pipeline.polyline import Segments, Snap
 from pipeline.railings import AT_GRADE, facing_away
 from pipeline.roads import ROADGRAPH_NAME, read_graph
 from pipeline.signs import disc, facing_from_side, plate_frame

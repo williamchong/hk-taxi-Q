@@ -18,7 +18,7 @@ import pytest
 import yaml
 
 from pipeline.config import RoadMark, load_city
-from pipeline.fares import Segments
+from pipeline.polyline import Segments
 from pipeline.roadmarks import (
     ROADMARKS_MATERIAL,
     Marking,

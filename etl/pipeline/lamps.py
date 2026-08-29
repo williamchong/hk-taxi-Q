@@ -122,10 +122,10 @@ from pipeline import gdb
 from pipeline.arrows import ArrowReport, Ribbon, nearside, ribbons
 from pipeline.config import CityConfig, GameTransform, Lamps, load_city
 from pipeline.documents import read_document, write_document
-from pipeline.fares import Segments, Snap
 from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData, write_glb
 from pipeline.mesh import select_triangles
+from pipeline.polyline import Segments, Snap
 from pipeline.railings import facing_away
 from pipeline.roads import ROADGRAPH_NAME, read_graph
 from pipeline.signs import disc
