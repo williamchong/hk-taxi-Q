@@ -13367,6 +13367,17 @@ rule 5's test. This is the correction.
 
 The 21 HyD-only widths run **3.12-11.46 m, p50 6.71**.
 
+✅ **And the engine asserts the two invariants the field creates**, which is what `Q95` did *not* do
+when it shipped `width_source` with no check at all. Both are mutation-checked rather than read:
+
+- **`width_source == "authored"` iff `width_publisher` is empty.** A measured width with no publisher
+  beside it is a width whose meaning cannot be recovered. Blanking three reports *"3 edges disagree
+  about whether their width was measured"*.
+- 🔴 **No measured lane count may stand over an authored width.** A bracket read off the 6.4 m
+  speed-limit table would be authored policy laundered into a reading — the exact move `Q95` was
+  opened about — and nothing else in the bundle can see it: every counter closes and every frame
+  renders. Faking two reports *"2 edges carry a measured lane count over an AUTHORED width"*.
+
 #### STEWART ROAD, re-checked with three publishers — 2026-08-29
 
 Unchanged, and now it is known that no publisher could have changed it.

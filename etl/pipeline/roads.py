@@ -190,6 +190,14 @@ class Edge:
     # ⚠️ **A set, not a winner**: the survey picks a publisher per *station* and
     # the mixture is common, so a dominant-publisher field would separate a 51%
     # edge from a 49% one over a single station.
+    #
+    # ⚠️ **Empty rather than `"authored"`, and that break with the two `_source`
+    # fields beside it is deliberate.** Those enumerate a *provenance kind*, and
+    # `authored` is a legitimate member of that vocabulary. This one enumerates
+    # *publisher names*, and `authored` is not a publisher — writing it here
+    # would hand a consumer splitting on `+` the token `authored` as though a
+    # fourth source had read the edge. An authored width was read by none of
+    # them, and the empty set is what says so.
     width_publisher: str = ""
 
 

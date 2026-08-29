@@ -656,11 +656,50 @@ func _check_lane_source(edges: Array) -> PackedStringArray:
 	var problems: PackedStringArray = []
 	var measured_widths: int = 0
 	var measured_lanes: int = 0
+	var unattributed: int = 0
+	var lanes_without_width: int = 0
 	for edge: Dictionary in edges:
-		if str(edge.get("width_source", "authored")) != "authored":
+		var width_source: String = str(edge.get("width_source", "authored"))
+		var lanes_source: String = str(edge.get("lanes_source", "authored"))
+		var publisher: String = str(edge.get("width_publisher", ""))
+		if width_source != "authored":
 			measured_widths += 1
-		if str(edge.get("lanes_source", "authored")) != "authored":
+		if lanes_source != "authored":
 			measured_lanes += 1
+		# 🔴 **A measured width names the publishers that read it, and an
+		# authored one names none.** Since `Q94` the three publishers do not
+		# measure the same quantity — HyD reads the trafficable carriageway
+		# where the two line sources read kerb to kerb — so a width with no
+		# publisher beside it is a width whose meaning cannot be recovered.
+		if (width_source == "authored") != publisher.is_empty():
+			unattributed += 1
+		# 🔴 **A lane count is bracketed off a MEASURED width.** One standing on
+		# an authored 6.4 m would be the speed-limit table laundered into a
+		# reading — the exact move `Q95` was opened about — and nothing else in
+		# the bundle can see it: every counter would close and every frame would
+		# render.
+		if lanes_source != "authored" and width_source == "authored":
+			lanes_without_width += 1
+	if unattributed > 0:
+		problems.append(
+			(
+				(
+					"%d edges disagree about whether their width was measured — `width_source` "
+					+ "and `width_publisher` must be authored-and-empty or neither"
+				)
+				% unattributed
+			)
+		)
+	if lanes_without_width > 0:
+		problems.append(
+			(
+				(
+					"%d edges carry a measured lane count over an AUTHORED width — the bracket "
+					+ "read the speed-limit table and called it a measurement"
+				)
+				% lanes_without_width
+			)
+		)
 	if measured_widths > 0 and measured_lanes == 0:
 		problems.append(
 			(
