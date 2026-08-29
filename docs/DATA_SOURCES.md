@@ -722,18 +722,28 @@ the maintained pavement as **polygons**. 🔴 **This is the only source in the e
 carriageway as an AREA rather than an edge line**, which is what makes it a different kind of
 evidence from TD's `RM1108`/`RM1109` and iB1000's `RM`.
 
-**Two endpoints, and the size difference decides which to use:**
+✅ **A declared build source since 2026-08-29** — `paged_sources.pavement_polygon`, the third source
+kind after `sources` and `tiled_sources`. **64,644 features over 22 requests, assembled into one
+163.2 MB file**, and `pipeline/fetch.py` walks it so nothing downstream knows it was paged.
 
-| | payload | note |
+| | payload | why not |
 |---|---|---|
-| `portal.csdi.gov.hk/csdi-webpage/file-api?dataset_id=…&format=geojson` | **317 MB** | whole territory, WGS84, one file |
-| `portal.csdi.gov.hk/server/rest/services/common/…/MapServer/0/query` | **3.0 MB** | bbox in EPSG:2326, `f=geojson`, 1,714 features in region |
+| `file-api?dataset_id=…&format=geojson` | 317 MB | whole territory but **WGS84**, and `gdb.read_layer` states plainly that it does no reprojection. The only format this dataset's file-api offers |
+| `MapServer/0/query` with a bbox | 3.0 MB | 🔴 **`sources` is per-CITY and an envelope is per-REGION.** A bbox URL either duplicates bounds hard rule 3 keeps in one place, or needs a per-region source block |
+| **`MapServer/0/query`, paged, whole territory** | **163 MB** | ✅ **shipped.** Native EPSG:2326, so `expect_crs` passes untouched and the region clip stays where it already is — `bbox` at read time, from config |
 
-⚠️ **The query endpoint pages at `maxRecordCount` 3000**; Wan Chai returns 1,714 in one request with
-`exceededTransferLimit` absent, so nothing is silently truncated — but a larger region must page.
-⚠️ **A bbox URL carries the region envelope**, which is the one thing hard rule 3 says lives in
-config and nowhere else, so wiring this in as a declared source is not simply pasting the URL used
-here. Nothing in `etl/` fetches it yet.
+⚠️ **`geometryPrecision=2` is centimetres, and it is a 41% cut for no measurable loss** — 19.79 MB a
+page against 11.71. Proven rather than assumed: the three STEWART ROAD edges read 10.500 / 16.720 /
+16.660 m at full precision and rounded, **to 0.000 m**. The source's own agreement with iB1000 is
+3-5 cm, an order coarser than the rounding.
+⚠️ **`orderByFields=OBJECTID`** because paging without a stable sort is undefined — a server may hand
+back one feature twice and never another.
+⚠️ **The walk stops on a short page**, the publisher's own statement that there are no more, rather
+than on a separate count request that could disagree with the pages themselves. `max_pages` 60 is the
+ceiling that catches a service ignoring `resultOffset`.
+🔴 **~163 MB is a real cost on every clean clone**, and it is the first source of that size any build
+*reads* — `CLAUDE.md` records the 218 MB Traffic Aids geodatabase as deliberately read by none. It
+was paid for the coverage below.
 
 ✅ **The `FEAT_TYPE` domain is published, and the previous note that it "is not decoded" and that
 anyone acting on it "owes the HyD specification" is superseded.** The specification is *in the
@@ -782,7 +792,17 @@ independence check, not a second opinion about the street. HyD is the second *pu
 | `e505` | refused | 16.69 | **16.66 m** | −0.03 m |
 
 So the 16.7 m is real: a second publisher, reading an area rather than a line, lands within 5 cm.
-`e504`/`e505` are refused by TD's 16.5 m plausibility ceiling and nothing else.
+`e504`/`e505` are refused by TD's 16.5 m plausibility ceiling and nothing else — and ⚠️ **they still
+are** now that HyD is a declared publisher, because the ceiling refuses a span before it asks which
+publisher drew it.
+
+✅ **What the third publisher did buy, measured 2026-08-29**: the pipeline licenses **292 of 737**
+level-0 edges against 260, and **153** lane counts against 142. 🔴 **Third in preference does NOT
+mean "only where the other two are silent"** — the publisher loop runs per *station*, so HyD also
+joins the sample of edges they had already licensed wherever they failed to span one. It adds **33**
+edges, **refines 50** (p50 0.019 m, p90 0.300, max 2.035 on `e134` HENNESSY ROAD) and **loses one**:
+`e373` GLOUCESTER ROAD's 15.00 m falls outside the bounds once its extra stations enter the median.
+What third *does* guarantee is that it never overrides a station the other two answered.
 
 🔴 **Second and not third, because TD's own painted edge has ZERO coverage on this street.** The
 estate holds three carriageway sources and only two of them answer here, which is the same

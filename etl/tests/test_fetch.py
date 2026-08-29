@@ -257,7 +257,18 @@ def offline(monkeypatch, tmp_path: Path):
         destination.write_bytes(payload)
         return len(payload), hashlib.sha256(payload).hexdigest()
 
+    def _download_paged(template: str, destination: Path, spec: Any, **_: Any) -> tuple[int, str]:
+        """The paged walk, stubbed on the same terms (`Q94`).
+
+        🔴 **Required, not tidiness.** `fetch_city` runs against the real Hong
+        Kong config, which declares a paged source since `Q94`; without this the
+        suite reaches the live CSDI service and hangs for however long 22 pages
+        and 163 MB take.
+        """
+        return _download(template.format(offset=0, count=spec.size), destination)
+
     monkeypatch.setattr(fetch, "download", _download)
+    monkeypatch.setattr(fetch, "download_paged", _download_paged)
     return fetched
 
 
@@ -479,3 +490,97 @@ def test_real_index_selects_the_six_documented_sheets(hong_kong) -> None:
         "11-SW-15B",
         "11-SW-9D",
     ]
+
+
+class TestDownloadPaged:
+    """`Q94`: walking a publisher that serves one page of records at a time.
+
+    Against a real socket, on `TestDownload`'s argument — the transport is part
+    of what is under test, and the walk's stop condition comes off the wire.
+    """
+
+    @staticmethod
+    def serve(pages: list[dict[str, Any]]) -> tuple[str, list[int]]:
+        """Serve `pages` in order, one per request. Returns (template, offsets seen)."""
+        seen: list[int] = []
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self) -> None:
+                offset = int(self.path.rsplit("offset=", 1)[1].split("&")[0])
+                seen.append(offset)
+                body = json.dumps(pages[min(len(seen) - 1, len(pages) - 1)]).encode()
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args: Any) -> None:
+                pass
+
+        server = HTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        port = server.server_address[1]
+        return f"http://127.0.0.1:{port}/q?offset={{offset}}&count={{count}}", seen
+
+    @staticmethod
+    def _page(n: int, crs: str = "EPSG:2326") -> dict[str, Any]:
+        return {
+            "type": "FeatureCollection",
+            "crs": {"type": "name", "properties": {"name": crs}},
+            "features": [{"type": "Feature", "properties": {"i": i}} for i in range(n)],
+        }
+
+    def test_it_walks_until_a_short_page_and_assembles_one_file(self, tmp_path: Path) -> None:
+        url, seen = self.serve([self._page(3), self._page(3), self._page(1)])
+        destination = tmp_path / "out.geojson"
+        size, digest = fetch.download_paged(url, destination, fetch.PageSpec(size=3, max_pages=10))
+        document = json.loads(destination.read_text())
+        assert len(document["features"]) == 7
+        assert seen == [0, 3, 6]
+        assert document["crs"]["properties"]["name"] == "EPSG:2326"
+        assert size == destination.stat().st_size
+        assert digest == hashlib.sha256(destination.read_bytes()).hexdigest()
+
+    def test_a_publisher_that_never_shortens_is_refused_rather_than_walked_forever(
+        self, tmp_path: Path
+    ) -> None:
+        """🔴 The failure `max_pages` exists for: a service ignoring `resultOffset`
+        returns page one every time, and without a ceiling the walk fills the disk
+        with duplicates and never ends."""
+        url, _ = self.serve([self._page(3)])
+        destination = tmp_path / "out.geojson"
+        with pytest.raises(ValueError, match="did not end within 4 pages"):
+            fetch.download_paged(url, destination, fetch.PageSpec(size=3, max_pages=4))
+        assert not destination.exists()
+        assert not list(tmp_path.glob("*.part"))
+
+    def test_a_CRS_change_mid_walk_is_refused(self, tmp_path: Path) -> None:
+        """A datum shift looks plausible and moves coordinates hundreds of metres."""
+        url, _ = self.serve([self._page(3), self._page(1, crs="EPSG:4326")])
+        with pytest.raises(ValueError, match="changed CRS mid-walk"):
+            fetch.download_paged(
+                url, tmp_path / "out.geojson", fetch.PageSpec(size=3, max_pages=10)
+            )
+
+    def test_an_error_payload_is_refused_rather_than_written(self, tmp_path: Path) -> None:
+        """ArcGIS answers 200 with an `error` body, so the status code says nothing."""
+        url, _ = self.serve([{"error": {"code": 400, "message": "Invalid where"}}])
+        with pytest.raises(ValueError, match="returned"):
+            fetch.download_paged(
+                url, tmp_path / "out.geojson", fetch.PageSpec(size=3, max_pages=10)
+            )
+
+    def test_an_empty_layer_still_writes_a_valid_collection(self, tmp_path: Path) -> None:
+        url, _ = self.serve([self._page(0)])
+        destination = tmp_path / "out.geojson"
+        fetch.download_paged(url, destination, fetch.PageSpec(size=3, max_pages=10))
+        assert json.loads(destination.read_text())["features"] == []
+
+    def test_an_interrupted_walk_leaves_no_half_file(self, tmp_path: Path) -> None:
+        """The `.part`-then-rename discipline, one level up from `download`'s."""
+        url, _ = self.serve([self._page(3), {"error": {"code": 500}}])
+        destination = tmp_path / "out.geojson"
+        with pytest.raises(ValueError):
+            fetch.download_paged(url, destination, fetch.PageSpec(size=3, max_pages=10))
+        assert not destination.exists()
+        assert not list(tmp_path.glob("*.part"))

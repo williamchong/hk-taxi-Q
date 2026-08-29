@@ -39,7 +39,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
-from pipeline.config import CityConfig, RegionConfig, TiledSource, load_city
+from pipeline.config import CityConfig, PagedSource, RegionConfig, TiledSource, load_city
 from pipeline.crs import GeodeticBounds, reproject_bounds
 
 log = logging.getLogger(__name__)
@@ -80,6 +80,27 @@ class ArtefactKind(StrEnum):
 
 
 @dataclass(frozen=True)
+class PageSpec:
+    """How to walk a publisher that serves one page of records at a time.
+
+    ⚠️ **The pages are assembled into ONE artefact on disk, not left as many.**
+    A reader names its layer, and `pyogrio` takes a GeoJSON layer's name from
+    the *filename stem* — so twenty-two page files are twenty-two layer names
+    and no `layer:` in city config can spell them. Assembling also keeps
+    `source_reads`, `cached_source` and every consumer unchanged: a paged
+    publisher is a fetch-time concern and nothing downstream should know.
+    """
+
+    # Records per request, from the publisher's own `maxRecordCount`. Asking for
+    # more is not an error — the server silently caps — which is why the walk
+    # stops on a short page rather than on a count it computed.
+    size: int
+    # A ceiling on requests, so a publisher that ignores `resultOffset` and
+    # returns page one forever fails loudly instead of filling the disk.
+    max_pages: int
+
+
+@dataclass(frozen=True)
 class Artefact:
     """One file to fetch, with the cache key that decides whether to skip it."""
 
@@ -92,6 +113,10 @@ class Artefact:
     # therefore fetched exactly once.
     version: str | None = None
     kind: ArtefactKind = ArtefactKind.SOURCE
+    # Set where `url` is a template to be walked rather than a file to be got.
+    # `_process` dispatches on it; everything else about the artefact — caching,
+    # the manifest entry, `--force`, `--dry-run` — is identical either way.
+    pages: PageSpec | None = None
 
     @property
     def tile_id(self) -> str:
@@ -280,6 +305,22 @@ def source_artefact(source_id: str, url: str) -> Artefact:
     return Artefact(key=source_id, url=url, path=Path(source_id) / _filename_for(url, source_id))
 
 
+def paged_artefact(source: PagedSource) -> Artefact:
+    """One paged source as the single artefact it assembles into.
+
+    The counterpart of `source_artefact`, and it exists for that function's own
+    reason: `cached_source` resolves the same path after the fact, and both go
+    through here so a later stage cannot disagree with the fetcher about where
+    the file landed.
+    """
+    return Artefact(
+        key=source.id,
+        url=source.url,
+        path=Path(source.id) / source.filename,
+        pages=PageSpec(size=source.page_size, max_pages=source.max_pages),
+    )
+
+
 def cached_source(city: CityConfig, source_id: str, *, root: Path | None = None) -> Path:
     """Path to a fixed-URL source an earlier fetch left on disk.
 
@@ -287,11 +328,16 @@ def cached_source(city: CityConfig, source_id: str, *, root: Path | None = None)
     exists for the same reason: a stage that needs a fetched file should ask
     where it is rather than rebuild the path from a URL it re-derives itself.
     """
-    if source_id not in city.sources:
-        known = ", ".join(sorted(city.sources)) or "none"
+    # ⚠️ A paged source resolves here too: it assembles into one file and is
+    # read exactly as a plain source is, which is the point of assembling it.
+    if source_id in city.paged_sources:
+        artefact = paged_artefact(city.paged_sources[source_id])
+    elif source_id in city.sources:
+        artefact = source_artefact(source_id, city.sources[source_id])
+    else:
+        known = ", ".join(sorted({*city.sources, *city.paged_sources})) or "none"
         raise KeyError(f"city '{city.id}' has no source '{source_id}'. Known: {known}")
 
-    artefact = source_artefact(source_id, city.sources[source_id])
     path = artefact_path(city.id, artefact, root=root)
     if not path.exists():
         raise FileNotFoundError(
@@ -589,6 +635,12 @@ def fetch_city(
             if only is None or name in only
         ]
 
+        artefacts.extend(
+            paged_artefact(source)
+            for source_id, source in sorted(city.paged_sources.items())
+            if only is None or source_id in only
+        )
+
         for source in city.tiled_sources.values():
             if only is not None and source.id not in only:
                 continue
@@ -716,6 +768,108 @@ def _check_source_names(city: CityConfig, only: set[str]) -> None:
         )
 
 
+def download_paged(
+    template: str,
+    destination: Path,
+    spec: PageSpec,
+    *,
+    context: ssl.SSLContext | None = None,
+) -> tuple[int, str]:
+    """Walk a paged publisher into one GeoJSON file. Returns (bytes, sha256).
+
+    `template` carries `{offset}` and `{count}`. The walk stops on the first
+    **short page** — fewer features than asked for — which is the publisher's
+    own statement that there are no more, and needs no separate count request
+    that could disagree with the pages themselves.
+
+    🔴 **One page is parsed at a time and its features written straight out**,
+    so peak memory is a page rather than the whole layer. The assembled file for
+    Hong Kong's pavement polygons is ~189 MB and 64,644 features; holding that
+    as Python objects to re-serialise it would cost gigabytes to save nothing.
+
+    ⚠️ **The `.part`-then-rename discipline is `download`'s and is kept for the
+    same reason**, one level up: a walk interrupted at page nineteen must not
+    leave a file that looks whole. It is not shared with `download` because that
+    streams bytes it never parses and this cannot — the short-page test needs
+    the features counted.
+    """
+    _check_scheme(template.format(offset=0, count=spec.size))
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    partial = destination.with_name(destination.name + ".part")
+
+    digest = hashlib.sha256()
+    written = 0
+    features = 0
+    crs: Any = None
+
+    def emit(handle: Any, text: str) -> None:
+        nonlocal written
+        handle.write(text)
+        digest.update(text.encode())
+        written += len(text.encode())
+
+    try:
+        with partial.open("w", encoding="utf-8") as handle:
+            emit(handle, '{"type":"FeatureCollection",')
+            body_started = False
+            for page in range(spec.max_pages):
+                url = template.format(offset=page * spec.size, count=spec.size)
+                payload = json.loads(_get(url, context=context))
+                if "error" in payload:
+                    raise ValueError(f"{redact(url)} returned {payload['error']}")
+                rows = payload.get("features") or []
+                if crs is None:
+                    # Taken from page one and written once. A publisher that
+                    # changed CRS mid-walk would be a defect, and asserting it
+                    # here is cheaper than discovering it as a datum shift.
+                    crs = payload.get("crs")
+                    if crs is not None:
+                        emit(handle, f'"crs":{json.dumps(crs)},')
+                elif payload.get("crs") != crs:
+                    raise ValueError(f"{redact(url)} changed CRS mid-walk")
+                if not body_started:
+                    emit(handle, '"features":[')
+                    body_started = True
+                for row in rows:
+                    emit(handle, ("," if features else "") + json.dumps(row, separators=(",", ":")))
+                    features += 1
+                log.info(
+                    "    page %d: %d features, %s", page + 1, len(rows), _progress(written, None)
+                )
+                if len(rows) < spec.size:
+                    break
+            else:
+                raise ValueError(
+                    f"{redact(template)} did not end within {spec.max_pages} pages of "
+                    f"{spec.size}; the publisher may be ignoring the offset"
+                )
+            if not body_started:
+                emit(handle, '"features":[')
+            emit(handle, "]}")
+        os.replace(partial, destination)
+    except BaseException:
+        partial.unlink(missing_ok=True)
+        raise
+    log.info("  assembled %d features from %d pages", features, page + 1)
+    return written, digest.hexdigest()
+
+
+def _get(url: str, *, context: ssl.SSLContext | None) -> bytes:
+    """One page, with `download`'s retry set and nothing else in common with it."""
+    last: Exception | None = None
+    for attempt in range(1, _ATTEMPTS + 1):
+        try:
+            request = Request(url, headers={"User-Agent": _USER_AGENT})
+            with urlopen(request, timeout=_TIMEOUT_S, context=context) as response:
+                return bytes(response.read())
+        except (HTTPError, URLError, TimeoutError, HTTPException, ConnectionError) as error:
+            last = error
+            if attempt < _ATTEMPTS:
+                log.warning("  attempt %d/%d failed (%s) — retrying", attempt, _ATTEMPTS, error)
+                time.sleep(_RETRY_BACKOFF_S * attempt)
+    raise RuntimeError(f"could not fetch {redact(url)}: {last}") from last
+
+
 def _process(
     artefact: Artefact,
     city: CityConfig,
@@ -746,7 +900,10 @@ def _process(
         return
 
     log.info("  fetching %s", manifest_key)
-    size, sha256 = download(artefact.url, destination, context=context)
+    if artefact.pages is not None:
+        size, sha256 = download_paged(artefact.url, destination, artefact.pages, context=context)
+    else:
+        size, sha256 = download(artefact.url, destination, context=context)
     manifest[manifest_key] = {
         # Redacted: see `redact`. Re-derived from config or the index each run,
         # so nothing depends on this being complete.

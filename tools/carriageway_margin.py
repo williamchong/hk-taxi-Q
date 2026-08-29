@@ -139,6 +139,7 @@ from overhang import half_width_at, half_widths, left_of, walk_width  # noqa: E4
 from pipeline import gdb  # noqa: E402
 from pipeline.config import (  # noqa: E402
     BOTH,
+    CARRIAGEWAY_AREA,
     FORWARD,
     CarriagewayEdge,
     CityConfig,
@@ -579,8 +580,30 @@ def published_edges(
         # iB1000. See the city file for the measurement behind the drawing
         # codes; it is the opposite of the obvious reading.
         levels = layer.column(elevation_field) if elevation_field else None
-        owners, parts = gdb.polylines(layer)
-        for owner, points in zip(owners, parts, strict=True):
+        # 🔴 **An AREA publisher is a different measurement, not a different
+        # reader** (`Q94`). HyD draws the maintained carriageway as polygons and
+        # tiles Wan Chai's into 552 of them, so the boundary between two is a
+        # maintenance division rather than a kerb — a ray stops at the first one
+        # and reports a plausible, short width. The outline of the *union* is
+        # what may be cast at, and a seam is the segment two polygons both draw.
+        #
+        # ⚠️ **Derived here rather than imported from `pipeline/carriageway.py`,
+        # on this tool's founding rule**: it shares no code with what it grades,
+        # and the two arriving at the same outline independently is the check.
+        area = spec.geometry == CARRIAGEWAY_AREA
+        if area:
+            owners, polygons = gdb.polygons(layer)
+            parts = [
+                (owner, ring)
+                for owner, rings in zip(owners, polygons, strict=True)
+                for ring in rings
+            ]
+        else:
+            owners, lines = gdb.polylines(layer)
+            parts = list(zip(owners, lines, strict=True))
+        drawn_starts: list[np.ndarray] = []
+        drawn_ends: list[np.ndarray] = []
+        for owner, points in parts:
             if str(codes[owner]) not in wanted:
                 continue
             if levels is not None and str(levels[owner]) in off_grade:
@@ -588,12 +611,39 @@ def published_edges(
             projected = np.asarray(points, dtype=np.float64)
             game_x, _, game_z = transform.to_game(projected[:, 0], projected[:, 1])
             part_starts, part_ends = _segments(np.column_stack([game_x, game_z]))
-            starts.append(part_starts)
-            ends.append(part_ends)
+            drawn_starts.append(part_starts)
+            drawn_ends.append(part_ends)
+        if area and drawn_starts:
+            drawn_starts, drawn_ends = _outline(drawn_starts, drawn_ends)
+        starts.extend(drawn_starts)
+        ends.extend(drawn_ends)
 
     if not starts:
         return _Index(np.empty((0, 2)), np.empty((0, 2)))
     return _Index(np.vstack(starts), np.vstack(ends))
+
+
+def _outline(
+    starts: list[np.ndarray], ends: list[np.ndarray]
+) -> tuple[list[np.ndarray], list[np.ndarray]]:
+    """Abutting polygons' own edge, with the seams between them removed.
+
+    A seam is drawn by both polygons that meet on it and so appears twice; the
+    outline appears once. Counting is enough, and it needs no adjacency graph.
+
+    ⚠️ **Written from the rule rather than from `pipeline/carriageway.py`'s
+    version of it**, which is this tool's whole standing: the two are expected
+    to agree and a divergence is a finding about one of them.
+    """
+    first, second = np.vstack(starts), np.vstack(ends)
+    a, b = np.round(first, 3), np.round(second, 3)
+    # Canonical per segment, so a seam its two owners traverse in opposite
+    # directions — the usual case for polygons wound the same way — matches.
+    flip = (a[:, 0] > b[:, 0]) | ((a[:, 0] == b[:, 0]) & (a[:, 1] > b[:, 1]))
+    key = np.hstack([np.where(flip[:, None], b, a), np.where(flip[:, None], a, b)])
+    _, inverse, counts = np.unique(key, axis=0, return_inverse=True, return_counts=True)
+    alone = counts[inverse.ravel()] == 1
+    return [first[alone]], [second[alone]]
 
 
 def graph_edges(graph: dict[str, Any]) -> _Index:

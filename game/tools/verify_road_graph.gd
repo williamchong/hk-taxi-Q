@@ -286,6 +286,9 @@ func _check_kerbside(edges: Array) -> PackedStringArray:
 func _check_structure_width(graph: RoadGraph, edges: Array) -> PackedStringArray:
 	var problems: PackedStringArray = PackedStringArray()
 	var examined: int = 0
+	# Mixed edges the floor actually lifted off structure. See the assertion at
+	# the foot of the loop for why a count is needed beside "never narrower".
+	var tapered: int = 0
 
 	for edge: Dictionary in edges:
 		if int(edge.get("elevation_level", 0)) != 0:
@@ -339,20 +342,46 @@ func _check_structure_width(graph: RoadGraph, edges: Array) -> PackedStringArray
 				)
 			)
 			break
-		# And off it the playability widening is still there. Without this the
-		# check passes on a build that narrowed the whole network.
-		if on_street <= authored_half + 0.01:
+		# And off it the ribbon is never NARROWER than the street it covers.
+		#
+		# 🔴 **Not-narrower since `Q94`, where it used to be strictly wider —
+		# `_check_lanes`'s inversion, arriving here a release late.** `Q95` made
+		# the widening a floor, so an edge whose own carriageway reaches the
+		# floor is drawn at its own width and the two are equal off structure as
+		# well as on it. That became reachable when a third publisher licensed
+		# `e522` at **10.232 m** against a 10.24 m floor: 4 mm of lift, inside
+		# this test's own tolerance, reported as "the widening was lost". The
+		# widening was not lost; there was nothing to lift.
+		if on_street < authored_half - 0.001:
 			problems.append(
 				(
 					(
-						"edge %d is off structure at station %d and still drawn at its authored "
-						+ "%.3f m — the widening was lost rather than tapered"
+						"edge %d is off structure at station %d and drawn %.3f m, NARROWER than "
+						+ "its authored %.3f m — the ribbon does not cover the road it publishes"
 					)
-					% [edge_id, off, authored_half]
+					% [edge_id, off, on_street, authored_half]
 				)
 			)
 			break
+		# ⚠️ **The positive half, and it is here because the test above had to be
+		# weakened to allow the equal case** — `_check_lanes` carries the same
+		# pair for the same reason. "Never narrower" is satisfied by a ribbon
+		# that merely echoes the graph, which is exactly what the strict test
+		# used to catch, so something still has to show the floor travels on a
+		# mixed edge. Asserted below over every edge examined, not per edge.
+		if on_street > authored_half + 0.01:
+			tapered += 1
 
+	if examined > 0 and tapered == 0:
+		problems.append(
+			(
+				(
+					"no mixed edge is drawn wider off structure than its authored width across "
+					+ "%d examined — the carriageway floor did not travel across a taper"
+				)
+				% examined
+			)
+		)
 	if examined == 0:
 		problems.append(
 			(

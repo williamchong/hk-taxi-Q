@@ -1833,10 +1833,10 @@ class TestCarriagewaySurvey:
     validated at load anyway — the alternative is an instrument that dies on a
     typo after reading a 218 MB geodatabase and six map sheets."""
 
-    def test_hong_kong_declares_both_publishers(self, hong_kong) -> None:
+    def test_hong_kong_declares_all_three_publishers(self, hong_kong) -> None:
         survey = hong_kong.carriageway_survey
         assert survey is not None
-        assert [edge.name for edge in survey.edges] == ["traffic_aids", "ib1000"]
+        assert [edge.name for edge in survey.edges] == ["traffic_aids", "ib1000", "hyd_pavement"]
 
     def test_the_drawings_lead_because_they_draw_the_carriageway(self, hong_kong) -> None:
         """Order is preference. TD paints the edge of the carriageway; iB1000's
@@ -1855,6 +1855,29 @@ class TestCarriagewaySurvey:
         assert second.member == "{tile}/{tile}.gdb"
         assert second.codes == ("RM",)
 
+    def test_the_maintained_surface_comes_last_and_is_read_as_an_AREA(self, hong_kong) -> None:
+        """`Q94`. 🔴 **Last on purpose, though it is the most authoritative of the
+        three.** Every width `Q95` published was measured against the two line
+        publishers; putting HyD ahead of them re-baselines the lot in the commit
+        that introduces it — measured, and it moved `e503` STEWART ROAD 10.536 ->
+        10.462 m and *lost* `e119` TONNOCHY ROAD's published 16.25 m outright.
+
+        ⚠️ **Third does not mean "only where the others are silent".** The
+        publisher loop runs per station, so this one still joins the sample of an
+        already-licensed edge wherever the other two failed to span a station —
+        33 new edges and 50 refined, p50 0.019 m. What third guarantees is that
+        it never overrides a station they answered."""
+        third = hong_kong.carriageway_survey.edges[2]
+
+        assert third.geometry == "area"
+        assert third.source == "pavement_polygon"
+        assert third.codes == ("1",)
+        # The two line publishers are unchanged, which is the claim that matters.
+        assert [edge.geometry for edge in hong_kong.carriageway_survey.edges[:2]] == [
+            "line",
+            "line",
+        ]
+
     def test_off_grade_is_stated_as_an_exclusion(self, hong_kong) -> None:
         """⚠️ The regression this pins. At-grade is the *unmarked* case in both
         files — a null relative level in the drawings, the plain `RM` code in
@@ -1863,7 +1886,7 @@ class TestCarriagewaySurvey:
         8 m of a level-1 edge 93% of the time: it is the elevated network, and
         an inclusion filter built on "commonest must mean normal" would have
         kept exactly the wrong 57% of the layer."""
-        drawings, topographic = hong_kong.carriageway_survey.edges
+        drawings, topographic, maintained = hong_kong.carriageway_survey.edges
 
         assert drawings.off_grade_codes == ("A01", "A03")
         assert drawings.elevation_field == "ELEVATION"
@@ -1873,11 +1896,24 @@ class TestCarriagewaySurvey:
         assert topographic.elevation_field is None
         assert topographic.off_grade_codes == ()
         assert "RMU" not in topographic.codes
+        # ⚠️ **HyD is the exception that could have been written the other way**
+        # and deliberately is not: its `LVL` domain is published and complete, so
+        # ground level *could* be an inclusion. Stating it as an exclusion keeps
+        # all three publishers reading the same way (`Q94`).
+        assert maintained.elevation_field == "LVL"
+        assert maintained.off_grade_codes == ("1", "2", "3", "-1", "-2", "-3")
+        assert "0" not in maintained.off_grade_codes
 
     def test_every_named_source_can_be_fetched(self, hong_kong) -> None:
         """A typo would surface as a missing file after a build's worth of work."""
         for edge in hong_kong.carriageway_survey.edges:
-            known = hong_kong.tiled_sources if edge.tiled else hong_kong.sources
+            # ⚠️ Three kinds since `Q94`: a paged source assembles into one file
+            # and is read exactly as a plain one, so it resolves the same way.
+            known = (
+                hong_kong.tiled_sources
+                if edge.tiled
+                else {**hong_kong.sources, **hong_kong.paged_sources}
+            )
             assert edge.source in known
 
     def test_the_block_is_optional(self, rewrite) -> None:

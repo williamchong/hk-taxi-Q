@@ -36,6 +36,7 @@ from pipeline.carriageway import (
     _license,
     _Segments,
     _stations,
+    _union_boundary,
 )
 from pipeline.config import BOTH, FORWARD, WidthBounds
 
@@ -308,3 +309,66 @@ class TestLaneBracket:
         assert int(14.67 // 3.2) == 4
         assert _lane_bracket(10.3, _bounds(), two_way=False) == (2, 3)
         assert int(10.3 // 3.2) == 3
+
+
+class TestUnionBoundary:
+    """`Q94`: an area publisher's outline, with the seams between its parts gone.
+
+    🔴 **The failure this prevents is a plausible number, not an error.** HyD
+    tiles Wan Chai's carriageway into 552 polygons; a ray that stops at the
+    boundary between two of them reports a width short by however far the
+    nearest maintenance division happens to lie.
+    """
+
+    @staticmethod
+    def _square(x: float, y: float, size: float = 1.0) -> tuple[np.ndarray, np.ndarray]:
+        """One closed square as (starts, ends), wound counter-clockwise."""
+        ring = np.array(
+            [[x, y], [x + size, y], [x + size, y + size], [x, y + size], [x, y]], dtype=float
+        )
+        return ring[:-1], ring[1:]
+
+    def test_a_lone_polygon_keeps_every_edge(self) -> None:
+        starts, ends = self._square(0.0, 0.0)
+        kept_starts, kept_ends = _union_boundary([starts], [ends])
+        assert len(kept_starts[0]) == 4
+        assert len(kept_ends[0]) == 4
+
+    def test_the_seam_between_two_abutting_polygons_is_dropped(self) -> None:
+        """Two unit squares side by side: 8 edges drawn, 6 on the outline."""
+        left, right = self._square(0.0, 0.0), self._square(1.0, 0.0)
+        kept_starts, kept_ends = _union_boundary([left[0], right[0]], [left[1], right[1]])
+        assert len(kept_starts[0]) == 6
+        # The shared edge runs x = 1 from y = 0 to y = 1, and neither copy survives.
+        survivors = np.hstack([kept_starts[0], kept_ends[0]])
+        on_seam = np.all(np.isclose(survivors[:, [0, 2]], 1.0), axis=1)
+        assert not on_seam.any()
+
+    def test_a_seam_drawn_in_OPPOSITE_directions_still_matches_itself(self) -> None:
+        """🔴 The usual case, and the reason the key is canonically ordered.
+
+        Two polygons wound the same way traverse their shared edge in opposite
+        directions, so a key built from `(start, end)` as drawn never matches
+        and every seam survives — leaving the seams in place while every
+        counter reads correctly.
+        """
+        starts = [np.array([[1.0, 0.0]]), np.array([[1.0, 1.0]])]
+        ends = [np.array([[1.0, 1.0]]), np.array([[1.0, 0.0]])]
+        kept_starts, _ = _union_boundary(starts, ends)
+        assert len(kept_starts[0]) == 0
+
+    def test_a_vertex_a_hair_apart_is_NOT_treated_as_shared(self) -> None:
+        """The assumption this rests on is the publisher's, so it is pinned.
+
+        Abutting polygons must share vertices *exactly* for a seam to cancel.
+        Where they do not, the seam survives and a ray stops on it — which is
+        why the agreement with point-in-union walking is measured rather than
+        assumed.
+        """
+        starts = [np.array([[1.0, 0.0]]), np.array([[1.0, 1.0]])]
+        ends = [np.array([[1.0, 1.0]]), np.array([[1.004, 0.0]])]
+        kept_starts, _ = _union_boundary(starts, ends)
+        assert len(kept_starts[0]) == 2
+
+    def test_nothing_drawn_is_nothing_kept(self) -> None:
+        assert _union_boundary([], []) == ([], [])

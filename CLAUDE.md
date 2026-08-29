@@ -187,6 +187,14 @@ Common emoji for this project:
   does not. ⚠️ **`ALONG_M` is still shipped behaviour, not a tuning knob**: moving it re-publishes
   `city.json` and changes what routing refuses, so it is the user's call. Numbers in `Q51`.
   ⚠️ **`tools/narrowing.py` is owed too** — see the bullet above for why that is not obvious.
+- 🔴 **`carriageway_survey.edges` is THREE publishers since `Q94`, and the third is an AREA.** TD's
+  painted edge and iB1000's margin are lines; HyD's Pavement Polygon draws the maintained carriageway
+  as polygons, so `geometry: area` and `_union_boundary` — HyD tiles the region into **552** of them
+  and a seam between two is not a kerb. ⚠️ **Preference order is load-bearing**: third, it adds 33
+  edges and refines 50 without overriding a station the lines answered; **second, it re-baselines
+  every published width**. ⚠️ **"Third" still does not mean "only where they are silent"** — the loop
+  runs per station. ⚠️ It arrives via `paged_sources`, the third source kind, at **~163 MB on every
+  clone** — the first source that size any build *reads*.
 - **`surface.floor_*`, `lanes_*`, `lane_width_m`, the `carriageway_survey` config block, or
   `pipeline/carriageway.py`: also
   `tools/carriageway_margin.py`, and paste its table.** It measures the drawn ribbon against the

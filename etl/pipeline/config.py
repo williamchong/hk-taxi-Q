@@ -66,6 +66,41 @@ class RegionConfig:
 
 
 @dataclass(frozen=True)
+class PagedSource:
+    """A dataset served a page of records at a time, from one fixed query.
+
+    The third shape after `sources` and `tiled_sources`, and it is not a variant
+    of either: a plain source is one request for one file, a tiled source is an
+    *index* that says which files a region needs, and this is one file the
+    publisher will only hand over in instalments.
+
+    🔴 **Whole-territory on purpose, never a bbox.** The obvious alternative is
+    to ask the publisher for the region and skip the paging entirely — it is one
+    request and a hundredth of the bytes. It is refused because `sources` is
+    per-**city** while an envelope is per-**region**, so a bbox URL cannot be
+    declared here without either duplicating bounds that hard rule 3 says live
+    in one place, or inventing a per-region source block. The region clip stays
+    where it already is: `bbox` at read time, from config.
+
+    ⚠️ **`url` is a template, not an address.** It carries `{offset}` and
+    `{count}`; `fetch.download_paged` walks it and assembles one file, so
+    nothing downstream knows this source was paged.
+    """
+
+    id: str
+    url: str
+    # The publisher's own `maxRecordCount`. Asking for more is silently capped,
+    # so this is read from the service rather than chosen.
+    page_size: int
+    # A ceiling on requests, so a publisher ignoring `resultOffset` fails loudly.
+    max_pages: int
+    # What the assembled file is called. ⚠️ **Load-bearing for GeoJSON**:
+    # `pyogrio` takes a layer's name from the filename stem, so this is what a
+    # `layer:` elsewhere in the file has to match.
+    filename: str
+
+
+@dataclass(frozen=True)
 class TiledSource:
     """A dataset published per map sheet, reachable only through an index.
 
@@ -620,6 +655,13 @@ class CarriagewayEdge:
     layer: SourceLayer
     codes: tuple[str, ...]
     off_grade_codes: tuple[str, ...]
+    # `line` for a published carriageway EDGE, `area` for a published carriageway
+    # SURFACE (`Q94`). 🔴 **Not a detail of the reader — a different measurement.**
+    # An edge layer is cast at directly; an area layer's own internal seams are
+    # not kerbs, so the boundary of the *union* is what a ray may stop at. HyD
+    # tiles Wan Chai's carriageway into 552 polygons and a naive ray stops at the
+    # first seam it meets.
+    geometry: str = "line"
 
     @property
     def tiled(self) -> bool:
@@ -2166,6 +2208,13 @@ def _pair(values: list[Any], where: str) -> tuple[float, float]:
 # is normalised away by reversing the polyline, so the game never has to know
 # the difference. Named here, next to the validation, so the stage that acts
 # on them cannot drift from the set that is accepted.
+# What kind of geometry a carriageway publisher draws (`Q94`). Named next to the
+# validation that accepts them, for the reason `MARKING_DIRECTIONS` gives: the
+# stage that acts on a vocabulary must not drift from the set that is accepted.
+CARRIAGEWAY_LINE = "line"
+CARRIAGEWAY_AREA = "area"
+CARRIAGEWAY_GEOMETRIES = frozenset({CARRIAGEWAY_LINE, CARRIAGEWAY_AREA})
+
 BOTH = "both"
 FORWARD = "forward"
 BACKWARD = "backward"
@@ -2718,6 +2767,8 @@ class CityConfig:
     sources: dict[str, str]
     # Datasets that must be selected per region via an index.
     tiled_sources: dict[str, TiledSource]
+    # Datasets served a page at a time and assembled at fetch (`Q94`).
+    paged_sources: dict[str, PagedSource]
     # Every colour the city ships, by name. ⚠️ **Top-level, a sibling of
     # `exposure_anchor` rather than a member of `buildings:`** — `roads:` draws
     # from it too, and burying it under one of its two consumers would make the
@@ -2794,8 +2845,8 @@ class CityConfig:
 
     @property
     def source_ids(self) -> set[str]:
-        """Every fetchable source name, of either kind."""
-        return set(self.sources) | set(self.tiled_sources)
+        """Every fetchable source name, of any of the three kinds."""
+        return set(self.sources) | set(self.tiled_sources) | set(self.paged_sources)
 
     def region(self, region_id: str) -> RegionConfig:
         if region_id not in self.regions:
@@ -2937,6 +2988,10 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
         tiled_sources={
             str(source_id): _tiled_source(str(source_id), body, path)
             for source_id, body in (document.get("tiled_sources") or {}).items()
+        },
+        paged_sources={
+            str(source_id): _paged_source(str(source_id), body, f"{path}:paged_sources")
+            for source_id, body in (document.get("paged_sources") or {}).items()
         },
         # Copied rather than aliased: `table` is load-scoped and mutable, and a
         # frozen config holding a live reference into it is a shape that only
@@ -3167,14 +3222,45 @@ def _check_widening_levels_are_mapped(city: CityConfig, path: Path) -> None:
         )
 
 
+def _paged_source(source_id: str, body: Any, where: str) -> PagedSource:
+    """One `paged_sources` entry, checked at load (`Q94`).
+
+    ⚠️ **The template is checked for its two placeholders here**, because a URL
+    missing `{offset}` fetches page one repeatedly and only fails at
+    `max_pages` — after twenty-two requests and a file of duplicates.
+    """
+    where = f"{where}:{source_id}"
+    if not isinstance(body, dict):
+        raise ValueError(f"{where} must be a mapping, got {body!r}")
+    url = str(_require(body, "url", where))
+    for placeholder in ("{offset}", "{count}"):
+        if placeholder not in url:
+            raise ValueError(f"{where}:url has no {placeholder} — it is a template, not an address")
+    page_size = int(_require(body, "page_size", where))
+    max_pages = int(_require(body, "max_pages", where))
+    if page_size < 1:
+        raise ValueError(f"{where}:page_size is {page_size}, which asks for nothing")
+    if max_pages < 1:
+        raise ValueError(f"{where}:max_pages is {max_pages}, which walks nowhere")
+    filename = str(_require(body, "filename", where))
+    if "/" in filename or "\\" in filename or filename in {".", ".."}:
+        raise ValueError(f"{where}:filename {filename!r} is not a plain filename")
+    return PagedSource(
+        id=source_id, url=url, page_size=page_size, max_pages=max_pages, filename=filename
+    )
+
+
 def _check_source_exists(city: CityConfig, source_id: str, where: str) -> None:
     """A stage that names a source it cannot fetch is a config error, not a run.
 
     Caught at load rather than at first use, so a typo fails before the
     pipeline has read 17 MB of geodatabase to discover it.
     """
-    if source_id not in city.sources:
-        known = ", ".join(sorted(city.sources)) or "none"
+    # ⚠️ **Paged sources count**, because they assemble to a single file and are
+    # read through `cached_source` exactly as a plain one is. The distinction is
+    # a fetch-time concern and a consumer must not have to know it (`Q94`).
+    if source_id not in city.sources and source_id not in city.paged_sources:
+        known = ", ".join(sorted({*city.sources, *city.paged_sources})) or "none"
         raise ValueError(f"{where} names '{source_id}', which is not in sources ({known})")
 
 
@@ -5129,6 +5215,10 @@ def _carriageway_edge(body: Any, where: str) -> CarriagewayEdge:
             "'elevation' role to read them from"
         )
 
+    geometry = str(body.get("geometry", "line"))
+    if geometry not in CARRIAGEWAY_GEOMETRIES:
+        allowed = ", ".join(sorted(CARRIAGEWAY_GEOMETRIES))
+        raise ValueError(f"{where}:geometry is {geometry!r}, not one of {allowed}")
     return CarriagewayEdge(
         name=str(_require(body, "name", where)),
         source=str(_require(body, "source", where)),
@@ -5136,6 +5226,7 @@ def _carriageway_edge(body: Any, where: str) -> CarriagewayEdge:
         layer=layer,
         codes=codes,
         off_grade_codes=off_grade,
+        geometry=geometry,
     )
 
 

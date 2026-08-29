@@ -417,6 +417,45 @@ sources:
 # The `Format_*` URLs in the index embed a shared public API key. It is never
 # copied here: fetch.py reads it from the index at run time, so a rotated key
 # costs nothing and no key ever reaches the repo. See DATA_SOURCES.md.
+# Datasets a publisher will only serve a page of records at a time (`Q94`).
+# `fetch.download_paged` walks the template and assembles ONE file, so nothing
+# downstream knows this source was paged.
+paged_sources:
+  # HyD's maintained pavement extents — the carriageway as an AREA, and the only
+  # source in the estate that draws it that way. CSDI only, no DATA.GOV.HK
+  # package. See DATA_SOURCES.md for the decoded FEAT_TYPE domain and the clip.
+  #
+  # 🔴 **Whole territory and not a bbox, deliberately.** Asking the service for
+  # the Wan Chai envelope is one request and 3 MB against 22 and ~189 MB — and it
+  # is refused, because `paged_sources` is per-CITY while an envelope is
+  # per-REGION. A bbox here would either duplicate bounds that hard rule 3 keeps
+  # in one place or need a per-region source block. The clip stays where it
+  # already is: `bbox` at read time, out of this same file.
+  #
+  # ⚠️ `geometryPrecision=2` is centimetres in EPSG:2326, and it is a **41% cut**
+  # to the payload (19.79 -> 11.71 MB a page) for no measurable loss: the three
+  # STEWART ROAD edges read 10.500 / 16.720 / 16.660 m at both full precision and
+  # rounded, to 0.000 m. The source's own agreement with iB1000 is 3-5 cm.
+  #
+  # ⚠️ `outSR=2326` so this lands in the projected CRS every other publisher is
+  # already in and `expect_crs` passes untouched. The file-api's whole-territory
+  # download is WGS84 GeoJSON at 317 MB and would need a reprojection path that
+  # `gdb.read_layer` explicitly declines to have.
+  #
+  # ⚠️ `orderByFields=OBJECTID` because paging without a stable sort is undefined
+  # — the server may return the same feature twice and never another.
+  pavement_polygon:
+    url: "https://portal.csdi.gov.hk/server/rest/services/common/hyd_rcd_1632210918434_60749/MapServer/0/query?where=1%3D1&outFields=FEAT_TYPE%2CLVL&returnGeometry=true&outSR=2326&geometryPrecision=2&orderByFields=OBJECTID&resultOffset={offset}&resultRecordCount={count}&f=geojson"
+    # The service's own maxRecordCount. Asking for more is silently capped.
+    page_size: 3000
+    # 64,644 features territory-wide is 22 pages; the ceiling is slack enough to
+    # survive the layer growing and tight enough to catch a server that ignores
+    # `resultOffset` and hands back page one forever.
+    max_pages: 60
+    # 🔴 Load-bearing: `pyogrio` names a GeoJSON layer after the filename stem,
+    # so this is what `carriageway_survey.edges[].layer` has to spell.
+    filename: INV_PG.geojson
+
 tiled_sources:
   buildings:
     index_url: https://portal.csdi.gov.hk/csdi-webpage/file-api?dataset_id=landsd_rcd_1742809441342_98380&format=geojson&layer_name=Nontextured_models
@@ -932,6 +971,52 @@ carriageway_survey:
       # listing codes against a column this layer does not have is refused at
       # load rather than silently filtering nothing.
       codes: [RM]
+
+    # 🔴 HyD's maintained carriageway, as an AREA (`Q94`). Third in preference
+    # and not first, though it is the most authoritative reading of the three:
+    # `Q95`'s figures were all measured against the two line publishers, and
+    # putting this ahead of them re-baselines the lot. Measured, with it second:
+    # `e503` STEWART ROAD moved 10.536 -> 10.462 m and `e119` TONNOCHY ROAD's
+    # published 16.25 m was lost outright.
+    #
+    # 🔴 **Third does NOT mean "only where the others are silent", and the
+    # difference is measured rather than assumed.** The publisher loop runs per
+    # STATION: where the two line publishers both fail to span a station and
+    # this one does, its reading joins that edge's sample — including on edges
+    # they have already licensed. So it adds 33 edges *and* refines 50, shifting
+    # their medians by p50 **0.019 m** (p90 0.300, max 2.035 on `e134` HENNESSY
+    # ROAD), and `e373` GLOUCESTER ROAD's 15.00 m falls out of the bounds
+    # entirely once its extra stations are in the median. What third *does*
+    # guarantee is that this publisher never OVERRIDES a station the other two
+    # answered — it only fills ones they left empty.
+    #
+    # ⚠️ **`geometry: area` is a different measurement, not a different reader.**
+    # HyD tiles Wan Chai's carriageway into 552 polygons and an internal seam
+    # between two of them is not a kerb, so `_union_boundary` drops every segment
+    # two polygons share. Without it a ray stops at the nearest seam and reports
+    # a plausible, wrong width.
+    - name: hyd_pavement
+      source: pavement_polygon
+      # `pyogrio` names a GeoJSON layer after the filename stem, so this tracks
+      # `paged_sources.pavement_polygon.filename`.
+      layer: INV_PG
+      fields:
+        edge_type: FEAT_TYPE
+        elevation: LVL
+      # `1 = Carriageway` in the layer's own coded-value domain, published in the
+      # service metadata rather than in a separate specification. The domain is
+      # transcribed in DATA_SOURCES.md; the other eleven codes are footway,
+      # traffic island, run-in and car park, none of which is a carriageway edge.
+      # ⚠️ Quoted because the field is a SmallInteger and the comparison is on
+      # `str()`, as it is for the two publishers above.
+      codes: ["1"]
+      # `LVL` 0 is ground level. ⚠️ Stated as an exclusion for the reason the two
+      # publishers above state theirs — but NOT for their reason that at-grade is
+      # the unmarked case. Here the domain is fully published and complete, so
+      # this is the one grade filter in the block that could have been written as
+      # an inclusion. It is not, so that all three read the same way.
+      off_grade_codes: ["1", "2", "3", "-1", "-2", "-3"]
+      geometry: area
 
 # The tramway, drawn by pipeline/tramway.py as tram.glb (P3-14, Q58).
 #

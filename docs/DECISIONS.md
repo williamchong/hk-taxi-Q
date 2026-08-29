@@ -13259,6 +13259,85 @@ carriageway into 552 polygons in region, so an internal seam between two of them
 metadata**, and the clip it said was owed is done: `FEAT_TYPE = 1` is **24.5%** of the envelope, not
 the 41% the unclipped sum implied. Both corrections are in `DATA_SOURCES.md`.
 
+#### ✅ Wired in as a third publisher — 2026-08-29
+
+`carriageway_survey.edges` reads three sources now. **292 of 737** level-0 edges carry a measured
+width against 260, and **153** lane counts resolve against 142.
+
+```
+                       widths measured   lanes resolved
+  two line publishers        260              142  (88 measured, 54 floored)
+  + HyD, third               292              153  (96 measured, 57 floored)
+```
+
+🔴 **"Third in preference" does NOT mean "only where the other two are silent", and assuming it did
+was wrong.** The publisher loop runs per **station**, so HyD joins the sample of an edge the line
+publishers already licensed wherever they failed to span one of its stations. Measured: it adds
+**33** edges, **refines 50** — p50 **0.019 m**, p90 0.300, max **2.035 m** on `e134` HENNESSY ROAD —
+and **loses one**, `e373` GLOUCESTER ROAD, whose 15.00 m falls outside the bounds once its extra
+stations enter the median. What third *does* guarantee is that it never overrides a station the
+other two answered; put second, it moved `e503` STEWART ROAD 10.536 → 10.462 m and destroyed
+`e119` TONNOCHY ROAD's published 16.25 m outright.
+
+⚠️ **`geometry: area` is a different measurement, not a different reader.** HyD tiles the region's
+carriageway into **552** polygons, so the boundary between two of them is a maintenance division and
+not a kerb — a ray stops at the first seam and reports a plausible, short width. `_union_boundary`
+drops every segment two polygons draw, leaving the outline. ✅ **Checked against the method that needs
+no such rule**: walking outward until the point leaves every polygon steps through seams by
+construction, and over 126 stations the two agree to a **max of 0.037 m**, all of it the walk's own
+0.02 m step.
+
+⚠️ **`tools/carriageway_margin.py` needed its own area reader**, written from the rule rather than
+imported — this tool's founding condition. Skipping the publisher instead would have made it
+disagree with the pipeline on 33 edges *by construction*, which destroys the check it exists to be.
+
+### The fetch, and what it costs
+
+`paged_sources` is a third source kind beside `sources` and `tiled_sources`: **64,644 features over
+22 requests, assembled into one 163.2 MB file** in EPSG:2326.
+
+🔴 **Whole territory and not a bbox.** The region query is one request and 3.0 MB; it is refused
+because `sources` is per-**city** while an envelope is per-**region**, so a bbox URL either
+duplicates bounds hard rule 3 keeps in one place or needs a per-region source block. The clip stays
+where it already was — `bbox` at read time, out of config.
+
+⚠️ **~163 MB now lands on every clean clone, and it is the first source of that size any build
+reads.** `CLAUDE.md` records the 218 MB Traffic Aids geodatabase as deliberately read by none.
+⚠️ **The estimate that decision was taken on was wrong and was corrected before the work**: ~113 MB
+extrapolated from Wan Chai, where urban polygons are far smaller than the territory-wide average;
+the real figure is ~319 MB, cut to 163 by `geometryPrecision=2`. ✅ That rounding is centimetres and
+**proven lossless here** — the three STEWART ROAD edges read identically at full precision and
+rounded, to **0.000 m**.
+
+### 🔴 It found a second copy of `Q95`'s inverted assertion
+
+`verify_road_graph._check_structure_width` asserted that a mixed edge is drawn **strictly wider**
+off structure than its authored width. That is the multiplier's claim, and `Q95` had already
+inverted the same assertion in `_check_lanes` — this one was missed and stayed a release.
+
+It became reachable when HyD licensed `e522` at **10.232 m** against a 10.24 m floor: **4 mm** of
+lift, inside the test's own 0.01 m tolerance, reported as *"the widening was lost rather than
+tapered"*. The widening was not lost; there was nothing to lift. Now **not-narrower**, with a
+`tapered` counter beside it so the weakened test cannot pass on a network drawn at authored width
+throughout — mutation-checked, and it reports *"no mixed edge is drawn wider off structure across 16
+examined"*.
+
+### What it did not buy
+
+⚠️ **STEWART ROAD is unchanged.** `e504`/`e505` still publish nothing: the ceiling refuses a span
+before it asks which publisher drew it, and HyD reads 16.72 / 16.66 m against `max_m` 16.5. The
+extra publisher was never going to move a bound.
+
+⚠️ **`stacked_disagreeing` is unchanged at 35**, because the 11 extra lane counts did not land on
+arrow-carrying edges that stack.
+
+**Graders, after:** overhang p50 **1.60** / p90 **3.25** over **13,020** stations, against 1.59 /
+3.24 over 12,502 — the ratchet holding while coverage grew. `measured − authored width_m` still p50
+**+0.00**. **0 of 94** pipeline-measured lane counts disagree with the tool's independent bracket
+(was 0 of 87). `ground_clearance` **89**, unmoved. `clearance_reconcile` and `narrowing` identical —
+*"both instruments still read what `Q51` recorded"*, baseline reproducing `clearance.json` on all 737
+edges, 0 cleared at any floor.
+
 **See.** `Q19` for the invented width and the invisible walls it causes · `Q57` for the previous
 narrowing and the lane lines · `Q54` for why a published extent is not overruled by a derived one ·
 `Q72` for the reachable-at-zero test this counter had to pass · `Q93` for the glyph these are drawn
