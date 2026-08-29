@@ -664,8 +664,10 @@ crisp edges at any cell size and a clean key for `collapse`.
 
 **Status.** 🟡 Half answered · **Owner.** 🔴 **THE NAMED NEXT TASK since 2026-08-30** (user's call),
 having been unassigned since the routing half closed — ⚠️ **and no longer "the carriageway-width
-question", which 2026-08-21 refused for the building half**; it is road-versus-footprint now. The
-interchange half became `Q22`/Phase 4's and `e702` `Q51`'s on 2026-08-20
+question", which 2026-08-21 refused for the building half**; it is road-versus-footprint now. `e702`
+became `Q51`'s on 2026-08-20. 🔴 **The interchange half came BACK from `Q22`/Phase 4 on 2026-08-30**,
+measured for the first time rather than described: it splits again, **4 of its 11 edges are a width
+defect after all**, and the trigger that fixes them is `Q23`'s, one flag short. See the last section
 
 🔴 **`P3-9a′`'s three drivers found this from the driving seat on 2026-08-30, and it is what ended
 the round.** They stopped driving because they kept getting stuck on bridge rails — so the finding
@@ -673,7 +675,11 @@ is no longer "5.17% of drawn carriageway", it is *the reason strangers put the b
 ⚠️ **They named the object they could see, not the thing they hit**: `railings.glb` carries no
 collider by design, so the wall is `INFRASTRUCTURE`-class geometry. ✅ A railing *is* there to be
 blamed — nearest vertex **1.22-10.41 m** off those centrelines — but proximity is all that is
-established, not that it stands on the blocker. Measured the same day: **7 of the 16** level-0 edges
+established, not that it stands on the blocker. 🔴 **Amended 2026-08-30 and this sentence is half
+wrong**: the `INFRASTRUCTURE` mass standing at bumper height beside these carriageways **is** a
+bridge rail — the tiled wall a railing is drawn along the top of — and the `e256` frame in the last
+section shows the two together. What was right is that the *collider* is the tile, never
+`railings.glb`. Measured the same day: **7 of the 16** level-0 edges
 touching a structure keep less than one lane clear — **43.8%, against 2.6% of the other 721, a 16.6x
 rate ratio** — and all seven are `INFRASTRUCTURE`-blocked: `e222`, `e256`, `e327` and `e485` (WAN
 CHAI INTERCHANGE), `e788` (HUNG HING ROAD FLYOVER), `e99` (FLEMING ROAD) and `e125` (unnamed).
@@ -1116,7 +1122,106 @@ and `e499` within 80 m around Leighton Road and Matheson Street, `e627` and `e62
 Great George Street — so a per-site reading is not fifteen sites. Still unassigned. The interchange
 half is `Q22`/Phase 4's. `e702` is `Q51`'s.
 
-**See.** `Q51` for what routes around this · `Q20` · `Q22` for the interchange's family · `Q24` · `P2-5` · `P3-6` for why the population moved, and for the piers · `Q57` for the mechanism this section is the fourth instance of
+### The structure half, measured for the first time — 2026-08-30
+
+🔴 **Everything above was measured on the *building* half, and the drivers hit the other one.** This
+entry has handed the structure half to "`Q20`/`Q22`/Phase 4" since 2026-08-19 on the strength of one
+sentence — *"one locality, at-grade ribbon drawn through flyover structure"* — which was never
+checked. Measured now, on the shipped bundle, it does not behave as that sentence assumes.
+
+**It splits in two, and only one half is a width defect.** `--corridor-report`'s centreline verdict
+has been published per failing edge since 2026-08-21 and this entry has only ever quoted the
+building rows. The structure rows read:
+
+| | |
+|---|---|
+| centreline **inside** `INFRASTRUCTURE` at the binding station | **7 of 11** — `e233` `e125` `e788` `e485` `e327` `e256` `e55` |
+| centreline **clear**, only the widened ribbon clips | **4 of 11** — `e222` 0.46 m · `e398` 0.50 m · `e781` 0.49 m · `e99` 1.46 m |
+
+⚠️ **The two do not share a fix, and this is the same shape as the building/structure split one
+level down.** No width rule reaches a centreline; a width rule is the whole of what reaches the
+other four.
+
+**The blocker is low, and it stands at carriageway level.** `INFRASTRUCTURE` vertices within 6 m of
+each binding station, against the ribbon's own `y`:
+
+| edge | road `y` | structure `y` | verts in the 0.3–2.0 m bumper band |
+|---|---|---|---|
+| `e233` | 4.43 | 4.22 – 6.21 | 95 |
+| `e55` | 5.74 | 4.65 – 6.99 | 40 |
+| `e485` | 3.87 | 4.35 – 11.97 | 106 |
+| `e788` | 4.01 | 3.92 – 5.58 | 97 |
+| `e327` | 3.87 | 3.49 – 5.39 | 75 |
+| `e125` | 3.37 | 3.61 – 12.76 | 366 |
+| `e398` | 4.26 | 3.39 – 6.00 | 78 |
+
+The structure's **bottom sits at or just below the road surface** and its top **1.5–2.0 m above it**.
+That is a ramp flank, an abutment or the wall a railing stands on — **not** a bridge soffit overhead
+and **not** a building frontage. ⚠️ **What is established is height and position, not identity**: no
+measurement here says *which* structure, and `P3-9a′` was corrected the same day for exactly that
+kind of over-reading.
+
+🔴 **So the drivers' words were accurate, and this entry's correction of them was half wrong.** It
+records that they *"named the object they could see, not the thing they hit"*, because
+`railings.glb` carries no collider. True of that layer, and beside the point: the thing standing at
+bumper height beside these carriageways **is a bridge rail** — the tiled `INFRASTRUCTURE` wall a
+railing is drawn on top of. Shot at `e256` (`build/driver/q19s/`) the railing is visible along the
+top of the very mass the ribbon runs into.
+
+**Every one of these edges is a ramp, and every one is drawn at roughly double its surveyed width.**
+
+| edge | `width_m` | `width_source` | kph → floor | grade | `on_structure` | name |
+|---|---|---|---|---|---|---|
+| `e233` | 5.42 | one_way_uncrossed | 50 → 10.24 | 2.1% | **0/17** | WAN CHAI INTERCHANGE |
+| `e55` | 5.57 | one_way_uncrossed | 70 → 12.48 | 2.3% | **0/36** | WAN CHAI INTERCHANGE |
+| `e398` | 6.66 | one_way_uncrossed | 70 → 12.48 | 1.0% | **0/35** | WAN CHAI INTERCHANGE |
+| `e485` | 4.80 | one_way_uncrossed | 50 → 10.24 | — | 3/22 | WAN CHAI INTERCHANGE |
+| `e256` | 3.84 | one_way_uncrossed | 70 → 12.48 | — | 10/20 | WAN CHAI INTERCHANGE |
+| `e327` | 5.45 | one_way_uncrossed | 50 → 10.24 | 4.1% | 7/11 | WAN CHAI INTERCHANGE |
+| `e788` | 7.20 | one_way_uncrossed | 50 → 10.24 | 4.3% | 9/16 | HUNG HING ROAD FLYOVER |
+| `e125` | 6.40 | **authored** | 50 → 10.24 | 5.6% | 6/9 | unnamed |
+| `e222` | 4.14 | one_way_uncrossed | 70 → 12.48 | — | 4/11 | WAN CHAI INTERCHANGE |
+
+⚠️ **`e125` and `e781` are `authored`**, so nothing measured stands behind their width; quoting them
+with the eight surveyed rows would be `Q57`'s generalisation again.
+
+✅ **`e256`'s corridor profile is the proof, and it is a coincidence of two numbers.** It reads
+`3.8 ×89 · … · 12.5 ×68`. Its `width_m` is **3.84** and its floor is **12.48**. The `3.8` run is its
+**on-structure** stations, where `Q23`'s `floor_on_structure_m: 0.0` already applies and the ribbon
+is drawn at its true width — and all 89 of them are **fully clear**. The `12.5` run is at-grade and
+also clear. The blockage is the **transition**, and `e256`'s binding station sits **0.0 m** from the
+`on_structure` flip.
+
+🔴 **The mechanism: `Q23` already contains the fix and cannot reach these edges.** Its suppression is
+keyed on `published["on_structure"]`, which `roads.py` defines as *"true where the height came from
+sampled structure"* — a **height-provenance** flag. A ramp whose height came from terrain never trips
+it however walled it is. `surface.py::_half_widths` then short-circuits on `not flags.any()`, so
+`e233` (0/17), `e55` (0/36), `e398` (0/35), `e207` (0/4) and `e781` (0/5) are drawn at the **full
+at-grade floor along their whole length**. Those five carry every long unbroken starve in the
+region — `e233` 42 m, `e55` 25 m, `e222` 24 m, `e398` 18 m — against 1–3 m for every building
+failure.
+
+⚠️ **This is NOT the narrowing `Q23` refused, and the distinction has to survive review.** `Q23`
+measured a *vertical* question — `overhang.py`'s upward face within 1 m **below** the ribbon — and
+concluded **"a street on an abutment is a street"**, leaving 546 m wide on purpose. The trigger owed
+here is *lateral*: whether solid structure stands **beside** the carriageway at bumper height. A
+street on an abutment is still a street; a street drawn 12.48 m wide between walls 3.8 m apart is
+not.
+
+✅ **Shot rather than argued** (`build/driver/q19s/`, `city_preview.tscn`, `--debug-view=off
+--hud=off`, every frame shot twice and `cmp`-identical):
+
+| edge | what the frame shows |
+|---|---|
+| `e233` | the camera at road height + 1.2 m is **inside a solid concrete mass** — no carriageway visible at all, which is the 42 m at 0.00 m |
+| `e55` | a broad concrete ramp mass filling the left of the frame, the ribbon running into its flank |
+| `e256` | a ramp flank rising out of the **left of the carriageway with a railing along its top** |
+
+⬜ **Assigned, not yet spent.** The lateral probe, a second per-station flag beside `on_structure`
+(never a widening of that flag's meaning), and the graders the widening bullet owes. The 7
+centreline-inside edges are **not** reachable by it and stay open.
+
+**See.** `Q51` for what routes around this · `Q20` · `Q22` for the interchange's family · `Q23` for the suppression this extends and for the narrowing it deliberately refused · `Q24` · `P2-5` · `P3-6` for why the population moved, and for the piers · `Q57` for the mechanism this section is the fourth instance of · `P3-9a′` for the round that re-prioritised this
 
 ## `Q20` — Deck heights are sampled from `INFRASTRUCTURE`
 
