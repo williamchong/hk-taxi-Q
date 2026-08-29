@@ -815,6 +815,28 @@ is not a kerb; a ray would stop at the first seam it met. Walking outward until 
 12 m of a node read the 15 m cap both ways (30.04 m) — the junction mouth, and the reason the
 pipeline's `JUNCTION_M` exclusion exists.
 
+🔴 **It does not measure the same quantity as iB1000, and the difference is systematic.** HyD carves
+traffic islands, run-ins and car parks out of `FEAT_TYPE = 1`, so its carriageway is the
+**trafficable** surface; iB1000's road margin runs on to the kerb. Region-wide over the 4,925
+stations both publishers span:
+
+```
+HyD minus iB1000   p10 -3.39   p50 -0.00   p90 +0.47 m      agree within 0.10 m: 57.3%
+                   narrower by over a metre: 15.6% (766)    wider: 6.2% (304)
+```
+
+They agree at the median and the tail is one-sided. Confirmed on the ground rather than inferred:
+`e504` STEWART ROAD's first non-junction station stops HyD's ray at **0.65 m** where iB1000 runs
+8.56 m, and two `FEAT_TYPE = 31` **Traffic Island — Refuge** polygons sit 1.38 and 2.13 m from where
+it stopped. Neither source is wrong; they answer different questions.
+
+⚠️ **So the 33 edges HyD licenses alone carry a slightly different measurement from the rest**, which
+is `Q57`'s generalisation waiting to happen — a property established on one population and quoted for
+another. It is reported here rather than corrected, because carving out an island is arguably the
+better answer for a carriageway a car must fit down. ✅ **HyD also reaches 880 stations neither line
+publisher spans**, against 526 that iB1000 reaches and it does not; that asymmetry is the coverage it
+was fetched for.
+
 ⚠️ **Attribution.** Highways Department, via the CSDI Portal — both owed on the credits screen under
 hard rule 6, and this is a **CSDI-only** dataset with no DATA.GOV.HK package, so the CSDI half of
 that acknowledgement is load-bearing here rather than duplicated.

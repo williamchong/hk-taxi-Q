@@ -13338,6 +13338,31 @@ arrow-carrying edges that stack.
 *"both instruments still read what `Q51` recorded"*, baseline reproducing `clearance.json` on all 737
 edges, 0 cleared at any floor.
 
+#### STEWART ROAD, re-checked with three publishers — 2026-08-29
+
+Unchanged, and now it is known that no publisher could have changed it.
+
+```
+edge   published            iB1000 alone            HyD alone
+e503   10.536 two_way_span  10.54 -> licensed       10.46 -> licensed
+e504    6.400 authored      16.77 -> REFUSED        16.69 -> REFUSED
+e505    6.400 authored      16.69 -> REFUSED        16.69 -> REFUSED
+```
+
+**HyD alone lands on the same verdict as iB1000 on all three edges.** It confirms the 16.7 m rather
+than rescuing it: both hit `max_m` 16.5, and a ceiling refuses a span before asking who drew it.
+⚠️ TD's painted edge still answers **0 stations** on all three, so the coverage gap this question
+named is untouched — HyD did not fill it, it read the same street the other way.
+
+⚠️ **Even a lifted ceiling would not finish the job**: 16.7 m brackets to **4-5** lanes under TPDM
+4.3.9.8, which is ambiguous, so `lanes_source` would stay `authored` and the arrows would keep
+contradicting each other. The arrows imply **3**.
+
+🔴 **The re-check found something else: the two publishers do not measure the same quantity.** See
+`DATA_SOURCES.md` — HyD carves traffic islands out of the carriageway and iB1000 does not, which is
+worth p10 **-3.39 m** across the region and is exactly what the 7.9 m outlier on `e504`'s first
+station turned out to be.
+
 #### Review of the above, same day
 
 🔴 **A real defect in `download_paged`: `crs is None` was doing two jobs.** It meant both "no page
