@@ -2901,6 +2901,62 @@ roads:
     # choice — a finer LOD0 cell would let this come back down.
     clearance_m: 0.20
 
+    # Q19's lateral probe: how far either side of the centreline to look for a
+    # wall standing at bumper height. The four values below answer "is this
+    # carriageway bounded by structure", which is a different question from
+    # every value above it — those all ask how HIGH the road sits.
+    #
+    # 6.5 is half the widest floor the surface stage can draw (12.48 at 70 kph)
+    # plus a little. A shorter reach cannot see the wall the widest ribbon runs
+    # into, which is the whole population this exists for; a longer one starts
+    # finding the far side of the next street.
+    #
+    # ⚠️ Deliberately NOT read from surface.floor_by_min_speed_limit_kph, even
+    # though that is where 12.48 comes from. The road stage publishes
+    # roadgraph.json and the surface stage consumes it, so reaching up for the
+    # floor would invert the dependency — and it would make a fact about the
+    # road ("there is a wall here") change when a playability value moved.
+    bound_reach_m: 6.5
+
+    # Probe spacing across the carriageway.
+    #
+    # 🔴 A resolution constant in the sense Q51 means, and it does NOT converge —
+    # so the published count is a LOWER BOUND at this step and no finer, exactly
+    # as Q19's own 26 is a bound at a 1.00 m occupier bin. Swept over the region:
+    #
+    #   step   1.0     0.5     0.25    0.125   0.0625
+    #   bound  285     384     426     439     453   stations
+    #
+    # It is still climbing at 0.0625 and there is no plateau to sit on, because a
+    # finer step keeps landing on narrower slivers of wall. 0.25 is the knee
+    # rather than a convergence: halving to it gains 11%, halving again gains 3%.
+    # ⚠️ Do not quote a bounded count without this step beside it, and do not
+    # read a rise on a finer step as more wall — it is more of the same wall.
+    bound_step_m: 0.25
+
+    # The band above the ribbon a structure top must fall in to count as a wall.
+    #
+    # 0.30 is the low bound and it is load-bearing. Q23 refused a narrowing on
+    # exactly this population — "a street on an abutment is a street" — and an
+    # abutment the road rests ON answers this probe at the ribbon's own height.
+    # Everything at or under 0.30 is that case. It is the same figure as
+    # carriageway_occupancy.py's BUMPER_LOW_M and for the same reason, but the
+    # two are independent: that tool grades the shipped bundle and this decides
+    # what to build, so pinning one to the other would let the grader agree with
+    # the pipeline by construction.
+    bound_low_m: 0.30
+
+    # 2.50 is the high bound. Measured at the binding station of every blocked
+    # INFRASTRUCTURE edge, the wall tops 1.5-2.0 m above the ribbon. A flyover
+    # crossing overhead answers with its DECK top — sample_lowest_above returns
+    # a slab top, not a soffit — at 5 m or more, so the gap between the two
+    # populations is wide and 2.50 sits in it.
+    #
+    # ⚠️ Raising this past a storey narrows every ordinary street that passes
+    # under a viaduct, and that defect renders perfectly: Gloucester Road would
+    # simply be drawn narrow under Canal Road Flyover with every counter closing.
+    bound_high_m: 2.50
+
 # How P1-5 turns published taxi points into fare nodes.
 fares:
   # Furthest a source point may sit from a road centreline and still be

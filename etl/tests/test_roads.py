@@ -30,6 +30,7 @@ from pipeline.roads import (
     _lifted_heights,
     _node_heights,
     _ramp_ends,
+    _structure_bounded,
     build_region,
     clean_text,
     clip,
@@ -206,6 +207,7 @@ class TestBuildRegion:
             "to",
             "polyline",
             "on_structure",
+            "structure_bounded",
             "direction",
             "lanes",
             "lanes_source",
@@ -445,6 +447,7 @@ class TestEdgeIdentity:
                 to_node=index + 1,
                 polyline=[(0.0, 0.0, 0.0), (1.0, 0.0, 0.0)],
                 on_structure=[False, False],
+                structure_bounded=[False, False],
                 direction="both",
                 lanes=2,
                 width_m=6.4,
@@ -700,6 +703,7 @@ class TestNodeHeights:
             to_node=nodes[1],
             polyline=[(0.0, y, 0.0), (10.0, y, 0.0)],
             on_structure=[False, False],
+            structure_bounded=[False, False],
             direction="forward",
             lanes=2,
             width_m=6.0,
@@ -755,6 +759,14 @@ THRESHOLDS = DeckSampling(
     at_grade_m=0.30,
     touchdown_max_grade_pct=10.0,
     clearance_m=0.0,
+    # `Q19`'s lateral probe. The height tests above share this fixture and none
+    # of them build a wall, so these values are inert for every one of them —
+    # which is the point: a probe that moved a height test would be reaching
+    # into the wrong question.
+    bound_reach_m=6.5,
+    bound_step_m=0.25,
+    bound_low_m=0.30,
+    bound_high_m=2.50,
 )
 
 
@@ -1085,6 +1097,7 @@ def _edge_at_level(level: int, from_node: int, to_node: int) -> Edge:
         to_node=to_node,
         polyline=[],
         on_structure=[],
+        structure_bounded=[],
         direction="forward",
         lanes=2,
         width_m=6.0,
@@ -1094,6 +1107,90 @@ def _edge_at_level(level: int, from_node: int, to_node: int) -> Edge:
         elevation_level=level,
         road_name={"en": None, "zh": None},
     )
+
+
+class TestStructureBounded:
+    """`Q19`'s lateral probe: is there a wall beside this station?
+
+    Every case here builds geometry the *height* samplers would answer
+    differently about, because the whole reason this flag exists is that
+    `on_structure` — height provenance — cannot see a walled ramp sampled off
+    the terrain.
+    """
+
+    # A straight run down the middle of the corridor at a constant height, which
+    # is what an at-grade approach ramp looks like to this query.
+    PLAN = np.array([[float(step) * 5.0, 0.0] for step in range(6)])
+    Y = np.full(6, 4.0)
+
+    def _wall(self, offset: float, top: float) -> MeshData:
+        """A parapet cap: a narrow horizontal face at `offset` across, `top` high.
+
+        Horizontal on purpose. `HeightField.from_meshes` drops near-vertical
+        triangles outright, so a fixture built as a wall's *side* would test
+        nothing — it would be absent from the index and the probe would
+        correctly report no wall for the wrong reason.
+        """
+        return _mesh(
+            [
+                [(-10.0, top, offset), (40.0, top, offset), (-10.0, top, offset + 0.4)],
+                [(40.0, top, offset), (40.0, top, offset + 0.4), (-10.0, top, offset + 0.4)],
+            ]
+        )
+
+    def test_a_parapet_beside_the_road_bounds_every_station(self) -> None:
+        bounded = _structure_bounded(_deck(self._wall(3.0, 5.5)), self.PLAN, self.Y)
+        assert bounded.all()
+
+    def test_a_wall_beyond_the_reach_bounds_nothing(self) -> None:
+        """`bound_reach_m` is 6.5, so the far side of the next street is not this
+        carriageway's wall."""
+        bounded = _structure_bounded(_deck(self._wall(9.0, 5.5)), self.PLAN, self.Y)
+        assert not bounded.any()
+
+    def test_a_flyover_overhead_bounds_nothing(self) -> None:
+        """🔴 The defect that would render perfectly. `sample_lowest_above`
+        returns a slab *top*, so a viaduct crossing above answers with its deck
+        several metres up — outside `bound_high_m`. If this ever starts passing
+        by accident, every ordinary street under a flyover is drawn narrow."""
+        bounded = _structure_bounded(_deck(self._wall(3.0, 11.0)), self.PLAN, self.Y)
+        assert not bounded.any()
+
+    def test_structure_at_the_ribbons_own_height_bounds_nothing(self) -> None:
+        """🔴 `Q23`'s refusal, held by construction rather than by a rule that
+        has to remember it. An abutment a road rests *on* answers at the
+        ribbon's own height, and that entry measured this population and
+        concluded "a street on an abutment is a street"."""
+        bounded = _structure_bounded(_deck(self._wall(3.0, 4.1)), self.PLAN, self.Y)
+        assert not bounded.any()
+
+    def test_it_is_reachable_at_zero_and_at_every_station(self) -> None:
+        """The mutation check `Q72` requires of any counter. A flag that cannot
+        be moved by a reachable configuration certifies nothing — which is how
+        a whole region's NO ENTRY signs were passed while every one faced the
+        wrong way."""
+        empty = _structure_bounded(_deck(self._wall(3.0, 40.0)), self.PLAN, self.Y)
+        full = _structure_bounded(_deck(self._wall(3.0, 5.5)), self.PLAN, self.Y)
+
+        assert not empty.any()
+        assert full.all()
+
+    def test_a_city_that_samples_no_structure_bounds_nothing(self) -> None:
+        """`deck` is None for a city that declares no structure class, and the
+        flag then means "nothing known" rather than raising."""
+        assert not _structure_bounded(None, self.PLAN, self.Y).any()
+
+    def test_the_centreline_itself_is_never_probed(self) -> None:
+        """A station is bounded by what stands *beside* it. Probing offset zero
+        would find the road's own deck on every off-grade edge in the region and
+        report the entire elevated network as walled."""
+        under_the_road = _mesh(
+            [
+                [(-10.0, 4.6, -0.2), (40.0, 4.6, -0.2), (-10.0, 4.6, 0.2)],
+                [(40.0, 4.6, -0.2), (40.0, 4.6, 0.2), (-10.0, 4.6, 0.2)],
+            ]
+        )
+        assert not _structure_bounded(_deck(under_the_road), self.PLAN, self.Y).any()
 
 
 class TestLevelsAtNode:
@@ -1114,6 +1211,7 @@ class TestLevelsAtNode:
                 to_node=1,
                 polyline=[],
                 on_structure=[],
+                structure_bounded=[],
                 direction="forward",
                 lanes=2,
                 width_m=6.0,
@@ -1130,6 +1228,7 @@ class TestLevelsAtNode:
                 to_node=2,
                 polyline=[],
                 on_structure=[],
+                structure_bounded=[],
                 direction="forward",
                 lanes=2,
                 width_m=6.0,

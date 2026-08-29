@@ -99,7 +99,17 @@ ROADGRAPH_NAME = "roadgraph.json"
 # surface instead — p10 **-3.39 m** apart across this region. A consumer reading
 # schema 6 as one homogeneous population is **wrong**, which is hard rule 5's
 # test; this field is what lets it separate them. ⚠️ Empty where authored.
-ROADGRAPH_SCHEMA = 7
+#
+# 8 closes half of `Q19`'s structure half, and adds `structure_bounded`, per
+# vertex. Schema 7 could say where a station's height came *from* and had no way
+# to say what stands *beside* it, and `on_structure` cannot stand in for the
+# second: it is height provenance, so an approach ramp walled on both sides but
+# sampled off the terrain reports every station off structure. `e233`, `e55` and
+# `e398` do exactly that, and `surface.py` drew them 10.24-12.48 m wide between
+# walls 3.8 m apart. Nor can `y`, `elevation_level` or `width_m` recover it. A
+# consumer that keeps reading `on_structure` as "is this carriageway bounded"
+# is **wrong** about the whole Wan Chai Interchange, which is hard rule 5's test.
+ROADGRAPH_SCHEMA = 8
 
 # `Node.kind` in the data contract. Degree three or more is somewhere a
 # driver can choose; anything else is a road continuing or stopping.
@@ -150,6 +160,17 @@ class Edge:
     # tell which stations those were from the graph alone. False everywhere for a
     # city that does not sample decks, which is what "no structure known" means.
     on_structure: list[bool]
+    # One flag per vertex of `polyline`: does structure stand *beside* this
+    # station, at the height a bumper meets it? `Q19`'s signal, and `surface.py`
+    # is again the consumer — a carriageway with a wall down each side is drawn
+    # at its own width, for the reason `Q23` already gives about a deck.
+    #
+    # ⚠️ **Not `on_structure`, and not implied by it either way.** That flag is
+    # height *provenance*; this is what is next to the road. They coincide on a
+    # viaduct and come apart on its approach ramp — `e233` is on structure at
+    # none of its 17 stations while being walled along most of them. A consumer
+    # reading one for the other gets the Wan Chai Interchange wrong both ways.
+    structure_bounded: list[bool]
     direction: str
     lanes: int
     width_m: float
@@ -285,6 +306,13 @@ class RoadReport:
     # *directly*, while this counts stations published as resting on it — which
     # includes everything an interpolated deck spans.
     vertices_on_structure: int = 0
+    # `Q19`'s counter, and the one `surface.py` narrows against since 2026-08-30.
+    # ⚠️ **Reachable at zero and at the full station count**, which is how it is
+    # tested: `Q72`'s tautology was a counter that read 0 because no
+    # configuration could make it anything else. Drop the probe and this reads 0;
+    # widen `bound_high_m` past a storey and it approaches every station in the
+    # region. Neither is a bar — a *moving* count is a finding to go and look at.
+    vertices_structure_bounded: int = 0
     components: list[int] = field(default_factory=list)
     # `P3-13`'s counters. `None` for a city whose sources carry no no-stopping
     # layer, which is not the same as one that carries an empty one.
@@ -311,6 +339,7 @@ class RoadReport:
         self.ends_no_target += counts.ends_no_target
         self.touchdown_grade_pct += counts.touchdown_grade_pct
         self.vertices_on_structure += counts.on_structure
+        self.vertices_structure_bounded += counts.bounded
         self.vertices_followed += counts.followed
         self.vertices_offered += counts.offered
         self.edges_followed += counts.edges_followed
@@ -337,6 +366,10 @@ class _Counts:
     ends_no_target: int = 0
     touchdown_grade_pct: list[float] = field(default_factory=list)
     on_structure: int = 0
+    # `Q19`'s counter. Kept apart from `on_structure` rather than folded in, for
+    # the reason the two flags are kept apart: one number covering both would
+    # report a walled ramp as a deck.
+    bounded: int = 0
     # `Q24`'s stations, kept apart from `added` rather than folded into it: the
     # two are added for different reasons on different edges, and one number
     # covering both would report the at-grade work as deck sampling.
@@ -815,6 +848,7 @@ def build_region(
                         to_node=nodes.id_for(run[-1, 0], run[-1, 1]),
                         polyline=[],
                         on_structure=[],
+                        structure_bounded=[],
                         direction=direction,
                         lanes=lanes,
                         width_m=round(lanes * style.lane_width_m, 3),
@@ -1134,7 +1168,15 @@ def _measured(
         else:
             y, counts = _heights(ground, item.plan, deck_m)
             plan = item.plan
-        return _shaped(item.edge, plan, y, np.zeros(len(plan), dtype=bool)), counts
+        # 🔴 **The probe runs on THIS branch too, and that is the whole point.**
+        # Every station here is off structure by construction — the branch is
+        # taken when no deck was sampled — so `Q23`'s flag is all-False and its
+        # suppression short-circuits. `e233`, `e55`, `e398`, `e207` and `e781`
+        # are all here, and between them they carry every long unbroken blockage
+        # in the region (`Q19`).
+        bounded = _structure_bounded(deck, plan, y)
+        counts.bounded = int(bounded.sum())
+        return _shaped(item.edge, plan, y, np.zeros(len(plan), dtype=bool), bounded), counts
 
     plan = resample(item.plan, deck.thresholds.resample_m)
     terrain = ground.sample(plan[:, 0], plan[:, 1])
@@ -1146,14 +1188,25 @@ def _measured(
     else:
         y, on_structure = _lifted_heights(deck, plan, terrain, fallback, ends, counts)
     counts.on_structure = int(on_structure.sum())
-    return _shaped(item.edge, plan, y, on_structure), counts
+    bounded = _structure_bounded(deck, plan, y)
+    counts.bounded = int(bounded.sum())
+    return _shaped(item.edge, plan, y, on_structure, bounded), counts
 
 
-def _shaped(edge: Edge, plan: np.ndarray, y: np.ndarray, on_structure: np.ndarray) -> Edge:
-    """The pending edge with its polyline and `on_structure` filled in.
+def _shaped(
+    edge: Edge,
+    plan: np.ndarray,
+    y: np.ndarray,
+    on_structure: np.ndarray,
+    structure_bounded: np.ndarray,
+) -> Edge:
+    """The pending edge with its polyline and its two structure flags filled in.
 
-    See `_Pending`. The two are filled together because they are one answer read
-    twice: a station's height and what that height was measured from.
+    See `_Pending`. Height and `on_structure` are filled together because they
+    are one answer read twice: a station's height and what that height was
+    measured from. `structure_bounded` is a **third** answer to a **different**
+    question — see `_structure_bounded` — and it is filled here only because
+    this is where a station stops moving.
     """
     return replace(
         edge,
@@ -1162,7 +1215,76 @@ def _shaped(edge: Edge, plan: np.ndarray, y: np.ndarray, on_structure: np.ndarra
             for x, height, z in zip(plan[:, 0], y, plan[:, 1], strict=True)
         ],
         on_structure=[bool(flag) for flag in on_structure],
+        structure_bounded=[bool(flag) for flag in structure_bounded],
     )
+
+
+def _structure_bounded(deck: _Deck | None, plan: np.ndarray, y: np.ndarray) -> np.ndarray:
+    """Whether structure stands beside each station, at the height a bumper meets.
+
+    Answers `Q19`'s structure half. ⚠️ **This is not `on_structure` and must not
+    be folded into it.** That flag says where a station's *height* came from;
+    this says what is standing next to it. They coincide on a viaduct and come
+    apart on its approach ramp, which is precisely the population that blocks:
+    `e233` (0 of 17 stations on structure), `e55` (0 of 36) and `e398` (0 of 35)
+    are walled ramps whose heights came from terrain, so `Q23`'s suppression
+    never fired and `surface.py` drew them 10.24-12.48 m wide between walls
+    3.8 m apart.
+
+    🔴 **A vertical ray cannot find a wall, and this does not try to.**
+    `HeightField.from_meshes` drops near-vertical triangles outright, so a
+    parapet's *side* is not in the index at all and a point-in-plan test would
+    hit it with probability zero — the trap `carriageway_occupancy.py`'s header
+    records against `Faces.heights_at`. What this finds is the parapet's **top**,
+    which is horizontal, indexed, and is why a viaduct being a closed volume is
+    load-bearing rather than incidental.
+
+    🔴 **The low bound is what keeps this off `Q23`'s refusal.** `Q23` measured
+    a vertical question and concluded *"a street on an abutment is a street"*,
+    leaving 546 m deliberately wide. An abutment a road rests **on** answers this
+    probe at the ribbon's own height, so `bound_low_m` excludes it by
+    construction rather than by a rule that has to remember to.
+
+    ⚠️ **`sample_lowest_above` returns a slab TOP.** A viaduct crossing overhead
+    therefore answers with its deck rather than its soffit, several metres up and
+    outside `bound_high_m` — which is what stops an ordinary street being
+    narrowed for passing under one.
+    """
+    if deck is None or len(plan) < 2:
+        return np.zeros(len(plan), dtype=bool)
+
+    thresholds = deck.thresholds
+    # Central differences, so an interior station's lateral follows the curve
+    # rather than one of the two segments meeting at it. A zero-length step —
+    # `dedupe` runs before this, but a resampled curve can still fold — leaves a
+    # zero normal, which probes the centreline repeatedly and finds the road it
+    # is already on rather than raising a divide-by-zero.
+    tangent = np.gradient(plan, axis=0)
+    length = np.hypot(tangent[:, 0], tangent[:, 1])
+    usable = length > 0.0
+    lateral = np.zeros_like(tangent)
+    lateral[usable, 0] = -tangent[usable, 1] / length[usable]
+    lateral[usable, 1] = tangent[usable, 0] / length[usable]
+
+    # Both signs, and the centreline itself is never probed: a station is
+    # bounded by what stands *beside* it, and the road it is on is not a wall.
+    steps = np.arange(thresholds.bound_step_m, thresholds.bound_reach_m, thresholds.bound_step_m)
+    offsets = np.concatenate([-steps[::-1], steps]) if len(steps) else np.array([])
+
+    bounded = np.zeros(len(plan), dtype=bool)
+    if not len(offsets):
+        return bounded
+
+    # One call for the whole edge rather than one per offset: `sample_lowest_above`
+    # loops per point in Python, and the loop is the cost whichever way it is fed.
+    x = (plan[:, 0][:, None] + lateral[:, 0][:, None] * offsets[None, :]).ravel()
+    z = (plan[:, 1][:, None] + lateral[:, 1][:, None] * offsets[None, :]).ravel()
+    floor = np.repeat(y + thresholds.bound_low_m, len(offsets))
+    tops = deck.field.sample_lowest_above(x, z, floor, slab_gap_m=thresholds.slab_gap_m)
+
+    ceiling = np.repeat(y + thresholds.bound_high_m, len(offsets))
+    hit = np.isfinite(tops) & (tops <= ceiling)
+    return hit.reshape(len(plan), len(offsets)).any(axis=1) & usable
 
 
 def _heights(
@@ -1688,6 +1810,7 @@ def _write(out_root: Path | None, city: CityConfig, region_id: str, report: Road
                 "to": edge.to_node,
                 "polyline": [round_position(point) for point in edge.polyline],
                 "on_structure": edge.on_structure,
+                "structure_bounded": edge.structure_bounded,
                 "direction": edge.direction,
                 "lanes": edge.lanes,
                 "lanes_source": edge.lanes_source,
@@ -1944,6 +2067,17 @@ def main(argv: list[str] | None = None) -> int:
         log.info(
             "  %d stations published as resting on structure, drawn at their authored width",
             report.vertices_on_structure,
+        )
+        # Both counts on one line, because the pair is the finding rather than
+        # either number: they measure different things and the gap between them
+        # is the population `Q23`'s flag could never reach.
+        log.info(
+            "  %d stations bounded by structure within %.2f m, in the %.2f-%.2f m band above "
+            "the ribbon (Q19) - a different question from the line above, not a subset",
+            report.vertices_structure_bounded,
+            city.roads.deck.bound_reach_m,
+            city.roads.deck.bound_low_m,
+            city.roads.deck.bound_high_m,
         )
     if report.touchdown_grade_pct and city.roads.deck is not None:
         # Both halves on one line, because the refusals are the reason the

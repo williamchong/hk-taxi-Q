@@ -2505,12 +2505,26 @@ def _by_fastest_rule(table: Mapping[int, float], speed_limit_kph: int, default: 
 
 @dataclass(frozen=True)
 class DeckSampling:
-    """How `P2-7` takes an off-grade carriageway's height from its structure.
+    """How the road stage reads the structure class — two questions, not one.
 
-    `elevation_levels` gives a level one flat offset, which `Q20` measured as
-    |error| p90 4.19 m against the real decks, with the ribbon sitting *below*
-    the deck — inside the structure — in 66% of samples. These values replace
-    that constant with a measurement of what the road is built on.
+    **Height** is `P2-7`'s: `elevation_levels` gives a level one flat offset,
+    which `Q20` measured as |error| p90 4.19 m against the real decks, with the
+    ribbon sitting *below* the deck — inside the structure — in 66% of samples.
+    The first six values replace that constant with a measurement of what the
+    road is built on.
+
+    **Bounding** is `Q19`'s, added 2026-08-30, and it is a different question of
+    the same field: is there structure standing *beside* this station, at the
+    height a bumper meets. `Q23` suppressed the widening where a road rests
+    **on** structure and keyed that on `on_structure` — which `roads.py` defines
+    as height *provenance* — so a ramp whose height came from terrain kept the
+    full at-grade floor however walled it was, and the Wan Chai Interchange
+    approaches were drawn 10.24-12.48 m wide between walls 3.8 m apart.
+
+    ⚠️ **The two questions must not be merged into one flag.** `on_structure`
+    has a published contract that `_descend`, `deck_error.py`, `overhang.py` and
+    `touchdown_error.py` all read; widening its meaning would move all four
+    without touching them.
 
     Tuning data rather than constants in code (CLAUDE.md hard rule 4), and none
     of it is derivable: every value here was measured on Wan Chai, and a city
@@ -2541,6 +2555,36 @@ class DeckSampling:
     # this is that layer. It also has to absorb the tile decimation, which is
     # what makes it a measured value rather than a nominal one.
     clearance_m: float
+
+    # `Q19`'s lateral probe. How far either side of the centreline to look for a
+    # wall. A fact about the road rather than about how wide we draw it, so it is
+    # a declared reach and **not** derived from `surface.floor_*`: the road stage
+    # publishes `roadgraph.json` and the surface stage consumes it, and reaching
+    # back up that dependency to ask how wide the ribbon will be drawn would
+    # invert the two.
+    bound_reach_m: float
+    # Probe spacing across the carriageway. A resolution constant in the sense
+    # `Q51` means, so it is config and sweepable: a parapet top is a few tens of
+    # centimetres wide in plan, and a step coarser than it steps over the wall
+    # and reports a clear road.
+    bound_step_m: float
+    # The band above the ribbon a structure top must fall in to bound it, low
+    # and high.
+    #
+    # 🔴 **The low bound is what keeps this off `Q23`'s refusal.** That entry
+    # measured a *vertical* question — `overhang.py`'s upward face within a metre
+    # below — and concluded **"a street on an abutment is a street"**, leaving
+    # 546 m deliberately wide. An abutment the road sits *on* returns a structure
+    # top at the ribbon's own height, so anything at or under this bound is that
+    # case and is not a wall.
+    #
+    # ⚠️ **The high bound is what keeps an ordinary street from being narrowed
+    # for passing under a flyover.** `sample_lowest_above` returns a slab *top*,
+    # so a viaduct overhead answers with its deck at 5 m or more; a parapet
+    # answers at 1.5-2.0 m. Widen this past a storey and Gloucester Road narrows
+    # under Canal Road Flyover, which would render perfectly.
+    bound_low_m: float
+    bound_high_m: float
 
 
 @dataclass(frozen=True)
@@ -3904,12 +3948,30 @@ def _deck_sampling(body: dict[str, Any], where: str) -> DeckSampling:
     # A touchdown grade of zero admits no descent at all, which is the
     # pre-`Q90` clamp wearing a config key — inert, and inert in the way
     # `_thresholds` exists to refuse.
+    # A probe reach or step of zero is degenerate in the same way a spacing is:
+    # the first asks about no point off the centreline at all, the second for
+    # infinitely many. Both are inert-in-disguise, which is what `_thresholds`
+    # refuses. `bound_low_m` is signed because a city may legitimately want the
+    # band to open at the ribbon itself.
     values = _thresholds(
         body,
         where,
-        positive=("resample_m", "slab_gap_m", "touchdown_max_grade_pct"),
-        signed=("max_below_terrain_m", "at_grade_m", "clearance_m"),
+        positive=(
+            "resample_m",
+            "slab_gap_m",
+            "touchdown_max_grade_pct",
+            "bound_reach_m",
+            "bound_step_m",
+            "bound_high_m",
+        ),
+        signed=("max_below_terrain_m", "at_grade_m", "clearance_m", "bound_low_m"),
     )
+    if values["bound_low_m"] >= values["bound_high_m"]:
+        raise ValueError(
+            f"{where}: bound_low_m {values['bound_low_m']} must sit below bound_high_m "
+            f"{values['bound_high_m']}, or the band admits nothing and Q19's probe is "
+            f"inert while reading as configured"
+        )
     return DeckSampling(
         resample_m=values["resample_m"],
         slab_gap_m=values["slab_gap_m"],
@@ -3917,6 +3979,10 @@ def _deck_sampling(body: dict[str, Any], where: str) -> DeckSampling:
         at_grade_m=values["at_grade_m"],
         touchdown_max_grade_pct=values["touchdown_max_grade_pct"],
         clearance_m=values["clearance_m"],
+        bound_reach_m=values["bound_reach_m"],
+        bound_step_m=values["bound_step_m"],
+        bound_low_m=values["bound_low_m"],
+        bound_high_m=values["bound_high_m"],
     )
 
 

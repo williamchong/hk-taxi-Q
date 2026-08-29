@@ -1221,6 +1221,74 @@ not.
 (never a widening of that flag's meaning), and the graders the widening bullet owes. The 7
 centreline-inside edges are **not** reachable by it and stay open.
 
+### The probe is built and the narrowing it licenses is REFUSED — 2026-08-30
+
+✅ **Built, and it works.** `roads.py::_structure_bounded` probes laterally either side of every
+station and asks `HeightField.sample_lowest_above` for a structure top in a band above the ribbon.
+`roadgraph.json` schema **7 → 8** gains `structure_bounded`, one flag per vertex. It reads **427
+stations** bounded against 872 on structure, and **1,192 m** of level-0 centreline against `Q23`'s
+**546 m** — so the population `Q23`'s flag cannot reach is **more than twice** the one it can.
+
+🔴 **The narrowing it licenses was measured and then refused, and the refusal is the finding.**
+Consuming the flag in `_half_widths` narrowed **43 edges, 0 widened**, and it made the city
+*less drivable*:
+
+| | before | after |
+|---|---|---|
+| `carriageway_occupancy` starved edges | 26 | **26** — `e99` and `e781` cleared, `e138` and `e36` newly failed |
+| `e55` clear | 2.00 m | **0.00 m** |
+| `e398` clear | 2.50 m | **0.00 m** |
+| `e788` clear | 0.48 m | **0.00 m** |
+| `e233` starved run | 42 m | 44 m |
+| `ground_clearance` edges proud | 89 | 88 |
+| `carriageway_margin` overhang p50 | 1.59 m | 1.55 m |
+
+🔴 **Why it goes backwards, and it is this entry's own 2026-08-21 conclusion arriving from the other
+side.** Where the centreline is inside the wall the clear asphalt is a strip *off* the centre —
+`e55`'s was **4.49 m** off it, inside a 12.48 m ribbon. Narrowing to the surveyed 5.57 m puts that
+strip **outside** the ribbon, so the corridor collapses to zero. **No width rule moves a
+centreline**, and that cuts both ways: it cannot clear a blocked edge, and it can delete the
+invented asphalt that was making one passable. ⚠️ **The 7/4 split above was too coarse to predict
+this** — `e398`'s centreline is *clear* at the binding station and it still went to 0.00, because
+clear **at a point** is not the same as the clear **run containing** that point.
+
+✅ **So the flag ships and the consumption does not** (user's call, 2026-08-30). `_half_widths` reads
+`on_structure` alone and carries the reason; the metres are still reported, so the population stays
+visible without being acted on. **Proved inert**: with the probe computing and publishing but
+unconsumed, `roads.glb` and `roadsurface.json` are **byte-identical** to the pre-change bundle —
+`Q95`'s own validation move, run before the consumption was measured rather than after.
+
+🔴 **`bound_step_m` does NOT converge, so the count is a lower bound.** Swept over the region:
+
+| step m | 1.0 | 0.5 | 0.25 | 0.125 | 0.0625 |
+|---|---|---|---|---|---|
+| stations bounded | 285 | 384 | **426** | 439 | 453 |
+
+Still climbing at 0.0625 with no plateau, because a finer step keeps landing on narrower slivers of
+wall. 0.25 is a **knee**, not a convergence — halving to it gains 11%, halving again gains 3%. This
+is `Q51`'s shape exactly, and `Q19`'s own 26 has the same property at a 1.00 m occupier bin.
+⚠️ **Never quote a bounded count without its step.** `bound_reach_m` does not plateau either
+(3.0/4.5/6.5/9.0/12.0 → 99/280/426/545/648), and should not: it is a declaration of how wide a
+ribbon we care about rather than a measurement.
+
+✅ **Mutation-checked rather than read** (`Q72`): over `bound_high_m` 0.35 → 12.0 the count runs
+**95 → 359 → 426 → 531 → 1041**, so it is reachable across its whole range and is not a counter that
+can only report what it was built to report.
+
+⚠️ **Published 427 against 426 recomputed, and the gap is understood rather than waved at.**
+`round_position` publishes the polyline at millimetres while the flag is computed at full precision,
+so recomputing from the published document flips one boundary station — `e208` FLEMING ROAD, level 1,
+4 against 3. The published flag is the authoritative one.
+
+⚠️ **`e125` and `e781` carry `width_source: authored`**, so on those two the narrowing would have
+been to an invented width; that is a second reason not to have shipped it, independent of the
+corridor result.
+
+⬜ **Still open, and now better posed.** The consumer this flag is waiting for is whatever moves or
+refuses a **centreline** — not another width rule. Candidates untouched: correcting the graph on the
+7, closing them to the player as the off-grade network already is, or authoring the interchange the
+way `P3-6` authored HKCEC.
+
 **See.** `Q51` for what routes around this · `Q20` · `Q22` for the interchange's family · `Q23` for the suppression this extends and for the narrowing it deliberately refused · `Q24` · `P2-5` · `P3-6` for why the population moved, and for the piers · `Q57` for the mechanism this section is the fourth instance of · `P3-9a′` for the round that re-prioritised this
 
 ## `Q20` — Deck heights are sampled from `INFRASTRUCTURE`

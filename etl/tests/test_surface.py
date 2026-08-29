@@ -401,11 +401,10 @@ class TestOnStructureLength:
         polyline = [[10.0 * step, 0.0, 0.0] for step in range(4)]
         flags = [True, True, True, True]
 
-        assert _on_structure_length_m(_edge(0, 0, 1, polyline, on_structure=flags)) == 30.0
-        assert (
-            _on_structure_length_m(_edge(0, 0, 1, polyline, on_structure=flags, elevation_level=1))
-            == 0.0
-        )
+        edge = _edge(0, 0, 1, polyline, on_structure=flags)
+        assert _on_structure_length_m(edge, "on_structure") == 30.0
+        lifted = _edge(0, 0, 1, polyline, on_structure=flags, elevation_level=1)
+        assert _on_structure_length_m(lifted, "on_structure") == 0.0
 
     def test_a_run_ending_mid_edge_counts_half_its_last_segment(self) -> None:
         """The trapezoid rule, stated so a change to it is visible rather than
@@ -413,11 +412,35 @@ class TestOnStructureLength:
         polyline = [[10.0 * step, 0.0, 0.0] for step in range(4)]
         published = _edge(0, 0, 1, polyline, on_structure=[True, True, False, False])
 
-        assert _on_structure_length_m(published) == pytest.approx(15.0)
+        assert _on_structure_length_m(published, "on_structure") == pytest.approx(15.0)
 
     def test_an_edge_never_on_structure_measures_nothing(self) -> None:
         polyline = [[10.0 * step, 0.0, 0.0] for step in range(4)]
-        assert _on_structure_length_m(_edge(0, 0, 1, polyline)) == 0.0
+        assert _on_structure_length_m(_edge(0, 0, 1, polyline), "on_structure") == 0.0
+
+    def test_the_same_rule_measures_Q19s_flag_and_the_two_are_independent(self) -> None:
+        """One function, two flags (`Q19`). The point of the shared reduction is
+        that the two lengths stay comparable; the point of this case is that
+        they are read off *different* keys, so an edge walled along its whole
+        length while resting on structure nowhere reports 30 m under one and
+        0 m under the other. That pairing is the whole finding — `Q23`'s flag
+        cannot see a ramp sampled off the terrain."""
+        polyline = [[10.0 * step, 0.0, 0.0] for step in range(4)]
+        walled = _edge(0, 0, 1, polyline, structure_bounded=[True] * 4)
+
+        assert _on_structure_length_m(walled, "structure_bounded") == 30.0
+        assert _on_structure_length_m(walled, "on_structure") == 0.0
+
+    def test_a_flag_absent_from_an_older_bundle_measures_nothing(self) -> None:
+        """Schema 7 and earlier published no `structure_bounded`, and the
+        reduction is asked for it unconditionally. Absent must read as "nothing
+        known" rather than raising, because the alternative is a stage that
+        cannot open a bundle one version old."""
+        polyline = [[10.0 * step, 0.0, 0.0] for step in range(4)]
+        older = _edge(0, 0, 1, polyline)
+        del older["structure_bounded"]
+
+        assert _on_structure_length_m(older, "structure_bounded") == 0.0
 
 
 # --------------------------------------------------------------------------
@@ -434,6 +457,11 @@ def _edge(edge_id: int, from_node: int, to_node: int, polyline, **overrides) -> 
         # Off structure unless a case says otherwise, which is what a city that
         # samples no decks publishes and what every edge here means.
         "on_structure": [False] * len(polyline),
+        # `Q19`'s second flag, schema 8. Published on every edge and read by
+        # nothing that draws — `_half_widths` records why the narrowing it would
+        # license was measured and refused — so it is here for the length
+        # measurement and for the fixtures that override it.
+        "structure_bounded": [False] * len(polyline),
         "direction": "both",
         "lanes": 2,
         "width_m": 6.4,

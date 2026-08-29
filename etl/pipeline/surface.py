@@ -397,6 +397,20 @@ class SurfaceReport:
     # of it widened. Reported here so the acceptance figure comes off the stage
     # that acted on it rather than only off `tools/overhang.py`.
     on_structure_m: float = 0.0
+    # `Q19`'s equivalent: metres of level-0 centreline with structure standing
+    # *beside* it.
+    #
+    # 🔴 **Measured and NOT acted on**, which is the difference between this and
+    # every other number in this block. `_half_widths` says why the narrowing it
+    # would license was built, measured and refused. Reported so the population
+    # stays visible while nothing draws on it — a flag published with no counter
+    # is a flag nobody can tell has stopped being computed.
+    #
+    # ⚠️ **Reported beside `on_structure_m` and never summed with it.** The two
+    # overlap — a deck station is usually walled as well — so a total would
+    # double-count the viaducts. What the pair is for is the *gap*: metres
+    # bounded but not on structure are exactly what `Q23`'s flag cannot reach.
+    structure_bounded_m: float = 0.0
     # `P3-13`'s cost and `P3-13`'s known error.
     #
     # ⚠️ `kerb_stations` is **stations, not vertices**: a station lands on the
@@ -1210,7 +1224,12 @@ def build_region(
         int(published["id"]): [round(float(half), 3) for half in prepared.published_half_widths]
         for published, prepared in zip(graph["edges"], edges, strict=True)
     }
-    report.on_structure_m = sum(_on_structure_length_m(edge) for edge in graph["edges"])
+    report.on_structure_m = sum(
+        _on_structure_length_m(edge, "on_structure") for edge in graph["edges"]
+    )
+    report.structure_bounded_m = sum(
+        _on_structure_length_m(edge, "structure_bounded") for edge in graph["edges"]
+    )
     ends = _ends_by_node_and_level(graph["edges"], edges)
     _assign_trims(ends, edges, style, report)
     # After the assignment, not beside `carriageway` above: the trims do not
@@ -1443,6 +1462,31 @@ def _half_widths(published: dict, style: RoadSurface) -> np.ndarray:
     source's own vertices in place, so consecutive stations are not evenly
     spaced and counting them would taper a densely drawn curve over a few metres
     and a straight over a hundred.
+
+    🔴 **`structure_bounded` is published and deliberately NOT read here, and
+    that is a measured decision rather than an omission (`Q19`, 2026-08-30).**
+    Schema 8 adds a second per-station flag saying a station has structure
+    standing *beside* it at bumper height — the case `on_structure` cannot see,
+    because it is height provenance and an approach ramp sampled off the terrain
+    reports every station off structure. Narrowing on the union was built,
+    validated and **measured**: 43 edges narrowed, 0 widened, and the region's
+    overhang p50 fell 1.59 → 1.55 m.
+
+    ⚠️ **It was refused because it made the city less drivable, not because it
+    was wrong.** Where the centreline is itself inside the wall, the clear
+    asphalt is a strip *off* the centre — `e55`'s was 4.49 m off it inside a
+    12.48 m ribbon — and narrowing to the surveyed 5.57 m puts that strip
+    outside the ribbon. `carriageway_occupancy.py` read `e55` 2.00 → **0.00 m**,
+    `e398` 2.50 → 0.00 and `e788` 0.48 → 0.00. Narrowing **exposes** `Q19`'s
+    centreline defect rather than fixing it, which is what that entry has said
+    since 2026-08-21 about `lanes`, `width_m` and the floor: no width rule moves
+    a centreline.
+
+    ⚠️ **So do not "finish the job" by reading the flag here.** The flag's
+    consumer is whatever moves or refuses a centreline; until that exists,
+    reading it trades invented asphalt for an impassable interchange. The
+    metres are still reported, from `_on_structure_length_m`, so the population
+    stays visible without being acted on.
     """
     level = published["elevation_level"]
     limit = published["speed_limit_kph"]
@@ -1468,22 +1512,25 @@ def _half_widths(published: dict, style: RoadSurface) -> np.ndarray:
     return (at_grade + (on_deck - at_grade) * blend) / 2.0
 
 
-def _on_structure_length_m(published: dict) -> float:
-    """Metres of this edge's centreline resting on structure, if it is level 0.
+def _on_structure_length_m(published: dict, key: str) -> float:
+    """Metres of this edge's centreline under one structure flag, if it is level 0.
 
-    `Q23`'s measurement, reproduced by the stage that acts on it. Level 0 only:
-    an off-grade edge is on structure along its whole length by definition and
-    counting it would bury the number this exists to report.
+    `Q23`'s measurement, reproduced by the stage that acts on it, and `Q19`'s
+    beside it — one function because the two are the same reduction over
+    different flags, and writing it twice would let the halves drift into
+    reporting incomparable lengths. Level 0 only: an off-grade edge is on
+    structure along its whole length by definition and counting it would bury
+    the number this exists to report.
 
     The trapezoid rule on the flag — a segment counts fully when both its ends
-    are on structure and half when one is. A flag is a property of a station and
+    are flagged and half when one is. A flag is a property of a station and
     length is a property of what lies between two of them, so some rule has to
     bridge the two; this one is symmetric, and it cannot report a length for an
     edge with no flag set at all.
     """
     if published["elevation_level"] != 0:
         return 0.0
-    flags = np.asarray(published["on_structure"], dtype=float)
+    flags = np.asarray(published.get(key) or [], dtype=float)
     if len(flags) < 2 or not flags.any():
         return 0.0
     steps = plan_steps(_polyline(published))
@@ -2335,6 +2382,13 @@ def main(argv: list[str] | None = None) -> int:
             "  %.0f m of level-0 carriageway sits on structure and is drawn at its authored "
             "width — Q23",
             report.on_structure_m,
+        )
+    if report.structure_bounded_m:
+        log.info(
+            "  %.0f m of level-0 carriageway has structure standing beside it at bumper height "
+            "and is drawn WIDE anyway — Q19 measured the narrowing and refused it; an "
+            "overlapping population, not a subset of the line above",
+            report.structure_bounded_m,
         )
     if report.kerb_stations:
         log.info(
