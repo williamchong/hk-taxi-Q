@@ -13445,10 +13445,106 @@ if regions multiply.
 ⚠️ **Declined:** `np.unique(axis=0)` in `_union_boundary` is 12 ms at today's 33k segments and ~2 s at
 a bigger city's 3M — a hand-rolled void-view sort is 1.4-2.3x faster and not worth the bit-packing.
 
+### The row was made to assign, 2026-08-29
+
+`Q94` built `implied_lanes` as a **grader** and closed without letting it assign anything, so the
+bundle shipped two independent lane readings and reconciled neither. The row now resolves the
+brackets `Q95`'s width leaves ambiguous: **`lanes` measured 153 → 210 of 737** (96 measured, 57
+floored, **57 arrows**), ambiguous-and-authored **139 → 82**, and `stacked_disagreeing` **35 → 24**
+with `stacked_pairs` 73 → 51. Against `Q94`'s own opening figure the visible defect has run
+**51 → 35 → 24**.
+
+🔴 **A row of ONE arrow is not a row, and that refusal is the whole correctness of the rule.** The
+row counts *painted* lanes, so it is a **lower bound** — a lane carrying no turn arrow is invisible
+to it. At two abreast that bound is a statement; at one it is a single marking, and an ordinary
+two-lane approach carries one far more often than not. **81** edges state a row of one, **26** of
+them on a `(1, 1)` bracket and **22** on a `(2, 2)`. ⚠️ **The first build floored those to
+`LANES_FLOOR` instead**, and published **28** edges whose `lanes_source` said `arrows` and whose
+count the arrows had not chosen — a basis field asserting a provenance it did not have, which is
+`Q72`'s tautology wearing the other hat. `_ROW_MIN` is tied to `LANES_FLOOR` rather than authored
+beside it, because the two answer one question from opposite ends and a row under the floor could
+only ever reach the graph by being floored.
+
+🔴 **Ambiguous brackets only, so the row is a tie-breaker between two readings of a measured width
+and never a standalone publisher.** That keeps `verify_road_graph.gd`'s invariant true *by
+construction* — a measured `lanes_source` implies a measured `width_source` — with no engine change
+and no relaxation, and `test_carriageway.py` pins it rather than trusting the paragraph.
+⚠️ **So STEWART ROAD `e505` is untouched**, and it is the edge this question was opened from: it
+states three lanes over an *authored* 6.4 m width, so there is no bracket to resolve. Ten edges are
+in that position. Reaching them means letting the row publish against no measurement at all, which
+is a different question about provenance and is **unassigned**.
+
+✅ **Three states, and the two that publish nothing are the informative ones.** **7** rows state
+fewer lanes than the width brackets — an unpainted lane, expected, reported. **9** state more, and
+those are findings about one of the two readings: `e403` reads **7.70 m with four arrows abreast**,
+1.9 m a lane, so either the width under-reads — HyD carves islands and run-ins out and publishes the
+*trafficable* surface, p10 −3.39 m below iB1000 — or the row over-counts. Neither is corrected.
+**30** more agree with a bracket the width resolved alone: two readings sharing no input landing on
+one integer, which is the only free cross-check either has.
+
+🔴 **The clustering is a second implementation and the duplication is FORCED, not chosen.**
+`arrows.py` imports `roads`, `roads` imports `carriageway`, so no import could be written even if it
+were wanted — and it lands on the right side of the house rule anyway, `carriageway.py` already
+being a second implementation of `carriageway_margin.py`'s survey. `arrows.py` now diffs the two and
+publishes `lanes_row_disagreement`: **0 of 57**. ⚠️ It is graded only where the roads stage
+*published* a row, not across all 306 arrow-carrying edges — that stage refuses rows this one keeps,
+so a counter spanning both populations would report the design as a defect.
+
+⚠️ **The two are not expected to agree everywhere, and the reason is structural**: `arrows.py`
+counts symbols that survived *registration*, after `max_offset_m`, `bearing_tolerance_deg`, the
+one-way test **and** the drawn ribbon. At the roads stage no ribbon exists, so the ribbon-dependent
+refusals cannot be applied. Everything else is, which is why the residual is enumerable rather than a
+shrug: `no_lane` is 0 and `against_one_way` is 9 arrows region-wide.
+
+♻️ **`Segments`, `Snap` and the two heading residuals moved to `pipeline/polyline.py`, a leaf.**
+They were in `fares.py` and `arrows.py`, both of which import `roads`; `carriageway.py` needed a
+nearest-edge snap and could not reach one. ⚠️ **A primitive, not a measurement** — the
+duplicate-deliberately rule does not reach it, and `axis_residual_deg`'s own docstring already
+called it "the canonical statement of conventions more than one stage shares, imported rather than
+restated". Restating a convention a file calls canonical is how it drifts. `roads._steps` became
+`polyline.plan_steps_2d`: its privacy was a statement about being inside `roads.py`, and `roads.py`
+is now a caller like any other.
+
+✅ **No schema bump, and the test is hard rule 5's own.** `lanes_source` exists at schema 7 and its
+*meaning* does not change — only which edges carry which value — so no consumer would be **wrong**
+to keep its old interpretation. `verify_road_graph.gd` reads it as an opaque string.
+
+✅ **Hard rule 4 held, and it was checked as a mechanical gate rather than asserted.** A lane count
+moves no geometry, so `narrowing`, `clearance_reconcile`, `ground_clearance`, `overhang`,
+`deck_error`, `carriageway_occupancy` and `paint_clearance` all had to come back **unchanged**, and
+did: narrowing 0 cleared at every factor with `e207`/`e595` still lost; reconcile 24/26 with the same
+4 disagreements; `ground_clearance` failing **identically at 89** — which is the point, it had to
+fail the same way, not improve; occupancy failing at the same 26. `carriageway_margin`'s overhang
+headline is byte-identical at p50 **1.60** / p90 **3.25** over 13,020 stations, and its
+`measured − authored` line stays p50 **+0.00**. What *did* move is paint: `lanes` feeds
+`TEXCOORD_1`'s marking codec, so `roads.glb` and `arrows.glb` both changed and `roadmarks.glb` did
+not.
+
+✅ **The tool's own lane check strengthened from `0 of 94` to `0 of 151`** — an independent ray over
+the same streets, agreeing with every count the pipeline publishes.
+
+⚠️ **The evidence is a frame** (`Q62`), and getting it took four attempts that were all wrong in the
+same way: `drive.sh` does **not** re-import changed assets, so three A/B pairs were pixel-identical
+because both sides rendered whichever mesh was last imported. `SKILL.md` records this; it was not
+read. The pair that counts is one fixed camera over the moved arrows — found by diffing
+`arrows.glb`'s vertices, 568 moved, max **3.61 m**, rather than by guessing where to point — with
+`godot --headless --import` between the syncs: **18,682 pixels differ**, the arrows spread into
+separate lanes and the extra lane dividers a 4-lane count draws. Shot twice and `cmp`-identical.
+
+⚠️ **A settings regression rode in on this work and was caught by `check.sh`, not by review.** An
+editor save rewrote `game/project.godot` from scratch mid-session — stripping every comment, three
+warning promotions and `renderer/rendering_method.web` — and a `git add -A` committed it. It is the
+same defect `78c077e` caused and `626f57b` fixed, arriving a third time. The tripwire works; `-A` in
+a repo carrying that hazard does not.
+
+⬜ **What is still not done.** The 10 edges with a row and no measured width, STEWART ROAD among
+them; the 82 brackets still ambiguous with no row to resolve them; and the 9 rows that contradict an
+unambiguous bracket.
+
 **See.** `Q19` for the invented width and the invisible walls it causes · `Q57` for the previous
 narrowing and the lane lines · `Q54` for why a published extent is not overruled by a derived one ·
 `Q72` for the reachable-at-zero test this counter had to pass · `Q93` for the glyph these are drawn
-with
+with · `Q95` for the measured width whose brackets this resolves
 
 
 ## `Q95` — The authored carriageway width is outside the range Hong Kong permits

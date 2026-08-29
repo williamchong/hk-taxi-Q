@@ -437,15 +437,28 @@ Common emoji for this project:
   the road are not the same target on this layer. ⚠️ **The ahead head and the stem taper are measured
   and must stay so** — the overlay agrees on both. Numbers in `Q93`.
   🔴 **`stacked_disagreeing` is `Q19`'s invented lane count arriving where a frame can show it, and
-  it is 51 of 747 today.** The registration snaps a published offset to one of `ribbon.lanes` slots;
-  the count is authored from the speed-limit table, so where the painted carriageway is wider two
+  it is 24 of 747 today** — 51 → 35 when the count became measured, 35 → 24 when the arrows' own
+  row was let resolve an ambiguous bracket (`Q94`). The registration snaps a published offset to one
+  of `ribbon.lanes` slots; the count came from the speed-limit table, so where the painted carriageway
+  is wider two
   symbols collapse into one slot and draw **one shaft wearing two branches** — found from the driving
   seat, with every other counter correct and `inverted` 0. ⚠️ **Nothing is refused and nothing is
   moved**: de-duplicating would discard a published instruction on the authority of an invented
   width, which is `Q54` inverted. ⚠️ **A rising count is a finding, never a bar to retune** — and it
   is reachable at zero, so mutation-check it rather than reading its value. ✅ **The arrows are also a
   lane-count source** — a row across a carriageway is the count written down, 31 of 306 edges imply
-  more lanes than the graph has — which is the most direct lead `Q19` has. Numbers in `Q94`.
+  more lanes than the graph has — which is the most direct lead `Q19` has — ✅ **and it now ASSIGNS,
+  not just grades**: a row resolves the brackets TPDM leaves ambiguous, `lanes` measured 153 → 210 of
+  737. 🔴 **A row of ONE arrow is not a row.** It counts *painted* lanes, so it is a **lower bound** —
+  an unpainted lane is invisible to it — and at one abreast it states a marking, not a count; 81 edges
+  do that. ⚠️ **Refused, never floored**: flooring them published 28 edges whose `lanes_source` said
+  `arrows` and whose count the arrows had not chosen, which is `Q72`'s tautology wearing the other hat.
+  🔴 **Ambiguous brackets only, so the row is never a standalone publisher** — that keeps
+  `verify_road_graph.gd`'s "measured lanes implies measured width" true by construction, and it is why
+  **STEWART ROAD `e505` is still not fixed**: it states three lanes over an authored width.
+  ⚠️ **The clustering is a SECOND implementation and the duplication is forced** — `arrows` imports
+  `roads` imports `carriageway`, so no import exists — and `arrows.json`'s `lanes_row_disagreement`
+  grades it at 0 of 57, over the rows the roads stage *published* and never all 306. Numbers in `Q94`.
   ⚠️ **An arrows change is also a shader change** — `check.sh` exits 0 on a shader that fails to
   compile, so render and `grep -i "shader error"`. Numbers in `Q59`.
   🔴 **And a shader change is a change to THREE layers**: `marking_paint.gdshader` is shared by the
