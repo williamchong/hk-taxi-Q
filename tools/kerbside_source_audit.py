@@ -35,10 +35,21 @@ to check what shipped. A stale graph is a stale answer, so the schema version is
 checked and the region's own out dir is read rather than the copy under
 `game/assets/generated/`.
 
-⚠️ **Not part of `check.sh`.** It needs a 218 MB source that no build reads and
-a built region that `check.sh` does not require. Like `skidpad.sh` it grades
-rather than checks: the number to act on is the table, and a gap that grows is a
-finding to go and look at, never a bar to retune against.
+⚠️ **Not part of `check.sh`.** It needs a built region that `check.sh` does not
+require. Like `skidpad.sh` it grades rather than checks: the number to act on is
+the table, and a gap that grows is a finding to go and look at, never a bar to
+retune against.
+
+⚠️ **The source is no longer one no build reads, and this docstring used to say
+it was.** `traffic_aids_drawings_gdb` (208 MB) was fetched for this tool alone
+when `Q56` wrote that line. Seven config blocks read it today — `roads`,
+`carriageway_survey`, `arrows`, `signs`, `boxjunctions`, `road_marks` and
+`railings` — so a built region already has it on disk and the `--only` fetch
+below is for a clone that has not built. 🔴 **That costs this tool none of its
+independence, and the reason is worth stating rather than assuming**: what makes
+it a second source is the *layer* — TD's drawn marking codes against `NSR`'s
+restriction register — and those two are as unrelated as they ever were. A
+source being unread was never the property this rested on.
 
 Fetch the source once:
   .venv/bin/python -m pipeline.fetch --city hong_kong --region wan_chai \

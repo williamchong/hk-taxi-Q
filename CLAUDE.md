@@ -280,8 +280,13 @@ Common emoji for this project:
   the Traffic Aids Drawings — a second, independently digitised source of the same restrictions —
   and diffs the two answers. It is **the only instrument that can grade the kind**: every consumer
   takes double-versus-single on trust from `NSR.TIME_ZONE`, so a wrong mapping renders perfectly
-  (`Q56`). ⚠️ It needs `traffic_aids_drawings_gdb`, a **218 MB** fetch no build reads; get it with
-  `--only`. ⚠️ It grades rather than checks — a widening gap is a finding to go and look at, never a
+  (`Q56`). ⚠️ It needs `traffic_aids_drawings_gdb`, a **208 MB** fetch; get it with `--only` on a
+  clone that has not built. ⚠️ **It is no longer "a fetch no build reads"** — that was true when
+  this bullet was written and stopped being true at `P3-12`/`P3-14`: **seven** config blocks read it
+  (`roads`, `carriageway_survey`, `arrows`, `signs`, `boxjunctions`, `road_marks`, `railings`), so it
+  is ordinary build input. 🔴 **The audit's second-source property never rested on that** — it
+  rests on the *layer*, TD's drawn marking codes against `NSR`'s restriction register.
+  ⚠️ It grades rather than checks — a widening gap is a finding to go and look at, never a
   bar to retune against — and it **cannot** see the side convention flip, because that mirrors both
   sources at once.
 - **`pipeline/tramway.py`, the `tramway` config block, or any tram-rail change: paste `tramway.json`'s
