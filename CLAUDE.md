@@ -403,7 +403,16 @@ Common emoji for this project:
   and `text_atlas_bytes` is the image — two numbers where there was one.
 - **`pipeline/arrows.py`, the `arrows` config block, or any turn-arrow change: paste `arrows.json`'s
   two partitions (`symbols` and `candidates`), `axis_residual_deg`, `offset_m`, `against_one_way`,
-  `stacked_pairs`, `stacked_disagreeing` and `inverted`, before and after.** There is no separate grader and there should not be: the stage grades itself,
+  `stacked_pairs`, `stacked_disagreeing`, `outside_carriageway` and `inverted`, before and after.**
+  🔴 **The lane snap's denominator is the SURVEYED `width_m` and never `lanes x lane_width_m`** (`Q96`).
+  That identity was `roadgraph.json`'s until `Q95` measured the width, and this stage went on rebuilding
+  it for itself on 292 of 737 edges — reading `e351` CANAL ROAD EAST's 16.11 m as 6.4. ⚠️ **A change here
+  is inert on the 445 authored rows by construction**, so force the old denominator region-wide first and
+  require a **byte-identical** `arrows.glb`; that is what separates the refactor from the fix.
+  ⚠️ **`outside_carriageway` is not `outside_drawn_ribbon`** — surveyed frame against drawn frame, 38
+  against 9 — so quote both or neither. ⚠️ **At `lanes == 2` the snap reduces to `sign(offset_m)` and no
+  width can reach it**, which is 670 of 737 edges, so a width change that moves nothing here is expected
+  rather than a failure. There is no separate grader and there should not be: the stage grades itself,
   because **every way this breaks renders as a perfectly drawn arrow, or as nothing**. An arrow on
   the wrong street, turned 180°, or drawn from a mis-transcribed glyph table all look correct in a
   frame. ⚠️ **The residual distributions publish p90/p99/max, not a median** — the tail is where a

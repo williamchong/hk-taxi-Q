@@ -14032,3 +14032,216 @@ the lane count, ✅ **since assigned by `Q94` on 2026-08-29** — the arrows' ow
 invisible walls the invented width causes · `Q57` for the previous narrowing and the instrument it
 scoped · `Q54` for why a published extent is not overruled by a derived one · `GAME_DESIGN.md` for the
 widening this would re-open
+
+---
+
+## `Q96` — The arrows still divided by the identity `Q95` severed
+
+**Status.** 🟢 **Closed 2026-08-30.** One denominator, 7 arrows of 747 moved, and a lane-count
+under-read on HENNESSY ROAD that had been masked rather than absent.
+
+### The question
+
+`Q95` severed `width_m = lanes x lane_width_m` and made the carriageway measured on 292 of 737
+level-0 edges. `Q94` made `lanes` measured on 210. Neither asked who still *reconstructed* the
+retired identity downstream, and `pipeline/arrows.py` did:
+
+```python
+real_half_m = 0.5 * ribbon.lanes * lane_width_m
+fraction = max(-1.0, min(1.0, snap.offset_m / real_half_m))
+```
+
+The variable is named `real_half_m` and it is the half-width of the **surveyed** carriageway — the
+denominator that turns a publisher's arrow offset into a fraction across the real road, before
+`drawn_offset_m` puts that fraction on the drawn ribbon. The module docstring makes that two-frame
+conversion the whole design: *"the published position is read as a fraction across the road, never
+as a position"*. It was correct until `Q95`, because `width_m` **was** `lanes x 3.2`.
+
+🔴 **Grepping for a retired field finds nothing; grepping for the retired FORMULA found this.**
+`width_m` was never removed, so no reference broke and no test failed. Nothing in `Q94`'s or `Q95`'s
+owed-grader lists could see it either: every counter `arrows.json` publishes grades this stage
+against its own intermediate values, which is `Q92`'s argument at a different layer.
+
+### What it was worth
+
+| | |
+|---|---|
+| level-0 edges where `width_m != lanes x 3.2` | **292 of 737** |
+| …by more than 0.5 m | **167** |
+| worst | `e351` CANAL ROAD EAST — **16.11 m** measured, **6.4 m** assumed (**+9.71**) |
+| authored-width rows where the identity still held exactly | **445 of 445** |
+
+✅ **The change validates itself for free, which is `Q95`'s "the floor landed inert" move.** On every
+`authored` row `width_m` is `round(lanes * lane_width_m, 3)` (`roads.py`), and `Q94` made a measured
+`lanes_source` imply a measured `width_source` by construction — so forcing the denominator back to
+`lanes * lane_width_m` for the whole region returns a **byte-identical `arrows.glb`**. That is what
+separates "the refactor changed something" from "the denominator changed something", and it was run
+before the real build rather than after.
+
+### 🔴 The reach is a twentieth of the population, and that is the finding
+
+`lane = int(0.5 * lanes * (1 - fraction))`. At `lanes == 2` this is `int(1 - fraction)` — a test of
+**`sign(offset_m)`** and nothing else. The denominator cancels. The graph calls **670 of 737**
+level-0 edges two-lane, so:
+
+| | |
+|---|---|
+| edges where the denominator can change a lane (`lanes >= 3`, identity broken) | **36** |
+| …carrying arrows | **27 of 306** |
+| denominator widens / narrows | **24 / 3** |
+| **arrows that actually changed lane** | **7 of 747, on 6 edges** |
+
+⚠️ **So `Q95`'s measured carriageway is inert on 91% of the network as far as this stage is
+concerned**, and not because the measurement is weak — because the lane count is 2 nearly
+everywhere and two slots cannot express a width. Recorded rather than chased. The lead it names is
+whether `lanes == 2` on 670 of 737 is itself an under-read: the measured widths span 3.12–16.25 m,
+and 670 of them bracketing to two lanes is a claim worth testing. Pinned by
+`test_a_two_lane_edge_is_insensitive_to_the_carriageway_width` so a change to the slot arithmetic
+has to face it rather than discover it.
+
+### 🔴 It made `stacked_disagreeing` WORSE, and that is the counter working
+
+`stacked_pairs` **51 → 53** and `stacked_disagreeing` **24 → 25**. The whole movement is **one
+edge**, `e114` HENNESSY ROAD, 0 → 2 pairs — reproduced by re-running the lane snap over the same
+`laid` arrows under both denominators, which returns 51/24 and 53/25 exactly.
+
+`e114` is **14.43 m** measured (`hyd_pavement+ib1000`, `one_way_uncrossed`) carrying `lanes = 3`
+from `lanes_source: arrows` — TPDM 4.3.9.8 brackets 14.43 m at **(3, 4)**, ambiguous, and `Q94`'s
+row resolved it to 3. Three lanes of **4.81 m**, which is wider than TPDM's own 3.65 m maximum
+through lane. The row at station 116 is three arrows abreast at offsets **+3.95, +1.06, −2.12** —
+spacings of 2.89 and 3.18 m, real lane widths — occupying the nearside 6.07 m of a 14.43 m
+carriageway.
+
+So the paint states three lanes of ~3.0 m and the model draws three of 4.81 m, and the `right` arrow
+at −2.12 falls inside the same ±2.405 m slot as the `ahead` at +1.06:
+
+| `right` arrow surveyed at | drawn, old denominator (9.6 m) | drawn, new (14.43 m) | distance from survey |
+|---|---|---|---|
+| −1.99 | lane 2, −4.81 m | lane 1, 0.00 m | **2.82 → 1.99 m** |
+| −2.12 | lane 2, −4.81 m | lane 1, 0.00 m | **2.69 → 2.12 m** |
+
+⚠️ **The two moved in OPPOSITE directions on accuracy, and quoting only the first would be a
+cherry-pick.** One lands 0.83 m closer to where it was surveyed and the other 0.43 m further away,
+because a 4.81 m slot centres both on the centreline whatever their offsets were. Region-wide
+`lane_shift_m` still improves (p90 2.3428 → 2.3275, p99 2.8387 → 2.8183); on this edge it is a wash.
+🔴 **The argument for the change is the frame of reference, not this edge's residual** — an offset
+read against a width nobody measured is wrong even where it lands closer.
+
+The appearance is the part that is not a wash: both arrows now draw at 0.00 m, on the `ahead` arrow
+at +1.06, as **one shaft wearing two heads**.
+
+🔴 **The wrong denominator was not hiding a bug, it was compensating for one.** Reading the offset
+against 9.6 m inflated the fraction, threw the arrow into lane 2, and produced a frame that looked
+right for a reason unrelated to the road. Correcting it puts the arrow 0.83 m closer to its surveyed
+position and lets the lane count's error show. ⚠️ **Reported, not retuned** — `Q94` fixed the rule
+that a rising `stacked_disagreeing` is a finding, and de-duplicating or re-widening here would be
+`Q54` inverted at one more remove: discarding a published instruction to protect an invented slot.
+
+⚠️ **`lanes_row_disagreement` cannot see this and is right not to.** It grades the two
+implementations of the row *clustering* against each other (0 of 57, unmoved). Nothing grades the
+row's **lateral span** against the width the row was used to resolve — a row of three spanning
+6.07 m on a 14.43 m carriageway is arithmetic nobody checks. That is the next lead this question
+leaves.
+
+### The new counter
+
+`outside_carriageway`: arrows whose published offset falls outside the carriageway the publishers
+**measured**, so the fraction clamped and the lane came from the bar rather than from the source.
+**58 under the old denominator, 38 under the new.**
+
+⚠️ `outside_drawn_ribbon` (9, unmoved) asks the same question of the ribbon `surface.py` drew, which
+is floored to `surface.floor_default_m` and therefore answers a different one — 9 against 58 is the
+gap between the two frames, and it is why one could not stand in for the other.
+
+⚠️ **Reachable in both directions**, which is `Q72`'s test for a counter: it fires where a measured
+width and an authored lane count contradict each other, and reads 0 where every arrow sits inside
+its own carriageway. Not a bar to retune. **No `ARROWS_MANIFEST_SCHEMA` bump** — `Q94` added four
+counters at schema 1, and hard rule 5 bumps where a consumer would be *wrong* to keep its old
+reading.
+
+### Measured
+
+| counter | before | after |
+|---|---|---|
+| `drawn` / `candidates` | 747 / 761 | **747 / 761** |
+| `triangles` / `vertices` / `bytes` | 3,246 / 7,394 / 197,968 | **identical** (content differs) |
+| `inverted` | 0 | **0** |
+| `stacked_pairs` / `stacked_disagreeing` | 51 / 24 | **53 / 25** |
+| `outside_carriageway` | — (58 under the old rule) | **38** |
+| `outside_drawn_ribbon` | 9 | 9 |
+| `lane_shift_m` p90 / p99 | 2.3428 / 2.8387 | **2.3275 / 2.8183** |
+| `edges_implying_more_lanes` | 16 | 16 |
+| `lanes_row_disagreement` | 0 of 57 | 0 of 57 |
+| `axis_residual_deg`, `offset_m` | — | byte-identical |
+
+⚠️ **`bytes` did not change and the prediction that it would was wrong.** The vertex count is
+identical and only float positions moved, so the container is the same size; `cmp` differs at byte
+2,537. A size comparison would have read this change as a no-op.
+
+⚠️ **This moves geometry, unlike `Q94`'s lane count.** `Q95` severed the identity so `lanes` is not
+an input to the ribbon, but it *is* an input to where an arrow is drawn.
+
+### Checked
+
+✅ Inertness build byte-identical · `pytest` 1,651 passing (+5) · `ruff` clean from the repo root ·
+`tools/check.sh` **exit 0** · `paint_clearance` arrows table **identical** before and after ·
+`ground_clearance` fails at **89**, exactly as `Q94` and `Q95` left it · only `arrows.glb` and
+`arrows.json` rewritten, so every grader reading `roadgraph.json` or `roadsurface.json` had
+byte-identical input.
+
+🔴 **The mutation check is the evidence the test is a test** (`Q72`): restoring
+`lanes * lane_width_m` as the denominator fails
+`test_the_denominator_is_the_measured_carriageway_and_not_lanes_x_lane_width` and **only** that one
+— had the two-lane degeneracy test also failed, it would have been testing the denominator rather
+than pinning insensitivity to it.
+
+🔴 **The frame is the evidence, and it disagreed with every counter** (`Q62`). All five partitions
+closed, `inverted` 0, and `lane_shift_m` *improved*; the collision on `e114` is visible only in a
+render. A/B at `--camera=1045,30,480 --look=1062,3.5,461 --debug-view=off --hud=off`, each side shot
+twice and `cmp`'d identical, before and after differing — which is how `Q94`'s four-attempt stale-import
+trap was avoided. `grep -i "shader error"` clean on both. Shots in `build/driver/q96_*`.
+
+### What review found, after the frame was already accepted
+
+🔴 **A NaN width fell through the guard and drew a confident arrow.** `if carriageway_m <= 0.0` is
+**False for NaN**, and `min(1.0, nan)` returns `1.0`, so a NaN on either input divided through to
+`fraction = 1.0` and placed the arrow neatly at the nearside kerb with **no counter firing** — the
+silent-agreement class every counter in this stage exists to prevent. `not x > 0.0` and `x != x` are
+the NaN-safe spellings and both are now used, with the case pinned by a test.
+
+🔴 **The zero-width branch pooled a contract break into a findings counter.** It returned `(0, True)`,
+incrementing `outside_carriageway` — whose whole meaning is *two published quantities disagree*. An
+absent width is not that. The refusal moved up into `ribbons()`, beside the contract break already
+there, where it lands in `no_lane` and has the edge id to name; `Q90`'s `ends_no_target` is the
+precedent for keeping the second population out of the first's count.
+
+🔴 **The extraction had split the U convention in half.** `_lane_of` was lifted behind a name and its
+exact inverse — `half_width_m * (1 - 2 * centre_u / lanes)` — was left inline twelve lines below, so
+a change to the side convention had to be made in two places, one documented and one not. That is
+`Q59`'s mirrored-city class, which renders perfectly. Now `_offset_of`, stated as the inverse, with
+the frame difference (surveyed in, drawn out) on both.
+
+⚠️ **Three stale or wrong statements, all inside the block being edited.** `outside_drawn_ribbon`
+still called the ribbon "**1.6x** the real carriageway", which `Q95` replaced with a floor;
+`stacked_pairs` still read "**720** of the region's edges carry the same 6.4 m", now **414** with
+`lanes` sourced on 210; and the local for the new flag was named `past_the_kerb`, which is
+`outside_drawn_ribbon`'s test, not this one.
+
+⚠️ **Both new fixtures had landed on an identity.** `test_arrows._ribbon` defaulted the carriageway to
+**10.24**, which is exactly `2 x half_width_m` beside it — the one value where the surveyed and drawn
+frames coincide, i.e. the conflation this question exists to break. `test_signs.edge` defaulted the
+same 10.24 against a drawn 6.4 m, describing a carriageway wider than the road drawn over it, which
+`drawn = max(width_m, floor)` cannot produce.
+
+✅ **A free ordering falls out and holds**: `drawn = max(width_m, floor)` is never narrower than the
+surveyed carriageway, so `outside_drawn_ribbon` is a strict **subset** of `outside_carriageway` —
+9 within 38. Observed rather than asserted, because `Q23`'s per-station adjustment has not been
+shown to preserve it at every station; if it ever inverts, that is the finding.
+
+⚠️ **Every one of these was invisible to the checks.** The mesh is **byte-identical** across all of
+them, `check.sh` was green before and after, and the mutation check still fails only its own test.
+
+**See.** `Q95` for the identity this stage outlived · `Q94` for the lane count, the row that assigns
+it, and the counter this moved · `Q92` for why a stage cannot grade its own frames · `Q72` for the
+counter test · `Q62` for why the evidence is a render · `Q59` for the convention `_offset_of` keeps
+in one place
