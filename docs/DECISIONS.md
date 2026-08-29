@@ -46,7 +46,7 @@ wins.
 | `Q16` | LOD0 does not ship | ✅ Closed |
 | `Q17` | CI runs `tools/check.sh` and cannot check the generated assets | ✅ Closed |
 | `Q18` | Ground colour sits under a chroma knee; the land-cover classifier is refused | ✅ Closed |
-| `Q19` | 5.17% of drawn carriageway has solid geometry standing in it at bumper height | 🟡 Half answered — routing closed as `Q51`. **Narrowing refused on the whole population**: no edge clears at any factor to the 1.3x floor and one is lost. The walls stand; 6 of the 8 severe ones are the WAN CHAI INTERCHANGE, and nobody owns moving them |
+| `Q19` | 5.17% of drawn carriageway has solid geometry standing in it at bumper height | 🟡 Half answered — routing closed as `Q51`. **Narrowing refused on the whole population**: no edge clears at any factor to the 1.3x floor and one is lost. The walls stand; 6 of the 8 severe ones are the WAN CHAI INTERCHANGE, and nobody owns moving them. ✅ **The cost of FENCING them is measured 2026-08-30**: refusing every wall in the region loses **1 ordered pair of 187,946** and 55.8 m of detour, and **nothing at all** at the player's own 1.80 m bar — so closing them to the player is admissible, at the **car's** bar and not the lane's. 🔴 The two starved populations agree on that and disagree on the cost — p50 12.0 m against 752.4 m — because `e207` CANAL ROAD EAST is worth **976.8 m** and only the occupancy grader starves it |
 | `Q20` | Deck heights are sampled from `INFRASTRUCTURE`, not invented | ✅ Closed |
 | `Q21` | Should level −1 carriageway be drawn at all? | 🟡 Open |
 | `Q22` | 10.2% of off-grade carriageway hangs past its structure | 🟡 Open |
@@ -1289,6 +1289,134 @@ corridor result.
 refuses a **centreline** — not another width rule. Candidates untouched: correcting the graph on the
 7, closing them to the player as the off-grade network already is, or authoring the interchange the
 way `P3-6` authored HKCEC.
+
+### The walls carry almost no through-route, and closing them is admissible — 2026-08-30
+
+The section above leaves three candidates and no way to choose between them. `P3-9a′` named the
+missing fact in its own words — *"no route analysis here shows the region is disconnected by these
+edges, and `RoadGraph` would be the thing to ask"* — and closing the blocked edges to the player is
+only honest if the region stays crossable. ✅ **It does.** `tools/reachability.py` measures it.
+
+⚠️ **`RoadGraph` could not in fact be asked, and that is worth recording.** `road_graph.gd` is a
+spatial index and an attribute table — `is_routable`, `is_passable`, `impassable_edge_ids` — with
+**no adjacency, no traversal and no router**; `turn_restrictions` is only counted. Nothing on either
+side of the contract could answer a routing question, so the traversal is built in the tool over
+`roadgraph.json` and `clearance.json`, and `is_routable` is reimplemented rather than called. 🔴 **A
+second implementation of a shipped predicate, deliberately**, on `carriageway_margin.py`'s
+arrangement with `carriageway.py`: a divergence is a finding, never a bar to retune.
+
+#### 🔴 The obvious instrument was wrong, and it was tried first
+
+Strongly connected components over the level-0 network are dominated by the **region clip**, not by
+the walls: largest 331 edges of 737, second 103, and the rest singletons — a street that leaves a
+1.5 km² clip has no way back into it. Refusing every starved edge leaves those sizes **unchanged**.
+An SCC headline would have reported "no effect" on a question it never asked, and it would have been
+the right number for the wrong reason. The headline is pairwise reachability instead.
+
+⚠️ **And the population is held fixed across the two worlds.** Refusing 24 edges and counting pairs
+over all 737 makes the count fall by construction — `Q58`'s `drawn_gauge_m` trap again.
+Every figure below is counted over the edges surviving in **both** worlds.
+
+#### Measured, on the shipped bundle
+
+Ordered edge pairs with a route, over the survivors of each refusal:
+
+| refused | edges | pairs | with a route | lost | share |
+|---|---|---|---|---|---|
+| nothing (control) | 0 | 542,432 | 196,439 | **0** | 0.00% |
+| starved at one lane, `clearance.json` | 24 | 507,656 | 187,946 | **1** | 0.00% |
+| starved at the car (1.80 m) | 19 | 514,806 | 189,181 | **0** | 0.00% |
+| starved **and** on structure | 6 | 533,630 | 195,443 | **0** | 0.00% |
+| starved, `carriageway_occupancy.py` | 26 | 504,810 | 186,872 | **1** | 0.00% |
+
+Detour on the routes that survive, in metres:
+
+| refused | pairs | p50 | p90 | p99 | max | over 200 m |
+|---|---|---|---|---|---|---|
+| starved at one lane (24) | 472 | 12.0 | 12.0 | 50.4 | **55.8** | 0 |
+| starved at the car (19) | 473 | 12.0 | 12.0 | 50.4 | **55.8** | 0 |
+| starved and on structure (6) | 0 | — | — | — | — | 0 |
+| occupancy grader (26) | 1,561 | 752.4 | 910.2 | 940.0 | **976.8** | 975 |
+
+✅ **Refusing every wall in the region costs one ordered pair of 187,946 and a 55.8 m worst detour.**
+At the player's own 1.80 m bar it costs **nothing at all** and 55.8 m. The blocked edges carry
+almost no through-route: only 472 of 187,946 pairs have a shortest route that gets longer at all.
+
+🔴 **The one pair is `e168` WAN CHAI INTERCHANGE → `e219` CROSS HARBOUR TUNNEL, and `e55` alone is
+what severs it.** Worth naming rather than counting: the cross-harbour stands are `P1-5`'s fare
+geometry and `B4`'s cross-harbour fare is a designed mechanic, so the one route this refusal costs
+is the one route into the thing `B4` is built around. ⚠️ It survives at the car's bar — `e55` keeps
+2.00 m, which is starved for a 3.20 m lane and not for a 1.80 m car — so it is a *traffic* routing
+loss and not a player one.
+
+#### 🔴 The two starved populations disagree about the COST, and this is the first time it mattered
+
+`Q51` reconciled 24 against 26 as plan cell size and the gap has been a bookkeeping note ever since.
+Here the two give the same reachability verdict and **wildly different detours** — p50 12.0 m against
+752.4 m, max 55.8 against 976.8 — because the occupancy grader starves **`e207` CANAL ROAD EAST** and
+`clearance.json` does not. Refused alone, `e207` disconnects nothing and diverts 1,561 pairs by up to
+**976.8 m**.
+
+⚠️ **The published difference was stated as two edges and is four.** occupancy − clearance is
+`e99`, `e207`, `e781`; clearance − occupancy is `e702`. 24 + 3 − 1 = 26.
+
+✅ **`e207` is not a new finding, it is an old one arriving with a price.** It is one of the two
+edges `Q19` records narrowing as *losing*, and `carriageway_occupancy.py` reads it as
+`BUILDING+INFRASTRUCTURE` at 1.95 m — the region's only mixed-class starvation. What is new is that
+it is the single most expensive wall in the region to route around, and that it sits **under the
+lane bar and over the car bar**, so it costs traffic 977 m and costs the player nothing.
+
+#### Where the walls stand, which reachability cannot say
+
+"No route lost" is counted over the survivors, so a dead-end stub and a street the player drives onto
+and cannot leave read the same. `reached by` is how many surviving edges can put a car onto the
+blocked one — how often a player arrives at the wall — and `reaches` is what refusing it would take
+away:
+
+| | edges | reading |
+|---|---|---|
+| reached by ~405 of 407 survivors | 11 | the player will meet these; 5 of them lead nowhere else anyway |
+| reached by 145-148 | 5 | `HARBOUR ROAD`, `EXPO DRIVE CENTRAL`, `CONVENTION AVENUE`, `HUNG HING ROAD FLYOVER`, `FLEMING ROAD` — ⚠️ calling them one pocket is a reading of the map, not a measurement |
+| reached by 8 or fewer | 11 | 6 of them WAN CHAI INTERCHANGE; `e222` and `e256` are reachable from **no** surviving edge at all |
+
+🔴 **Two of the four interchange edges the drivers hit cannot be reached from any unblocked street.**
+`e222` and `e256` are entered only by way of another blocked edge, which means a driver arriving
+there has already passed one wall. That is the shape of round 0's sessions in one line.
+
+#### Checked
+
+- ✅ **Mutation-checked rather than read** (`Q72`). The control row refuses nothing and loses 0. Refusing
+  12 HENNESSY ROAD edges by hand loses **14.87%** of pairs with detours to **1,849 m**; 12 GLOUCESTER
+  ROAD edges lose **12.54%** to **2,252 m**. The instrument is reachable across its range, which is
+  what makes the blocked population's 0.00% a finding rather than a construction.
+- ✅ The traversal is pinned by `etl/tests/test_reachability.py` — one-way direction, a turn
+  restriction banning exactly its movement, the U-turn exclusion, the fixed-population rule and a
+  detour whose length is arithmetic. A network that quietly forgets any of them publishes a full,
+  plausible table saying the walls cost nothing.
+- ⚠️ Percentiles are `np.percentile` at the same four points as `arrows.py`, not a rank convention of
+  this tool's own.
+
+#### 🔴 What this licenses, and what it does not
+
+✅ **Candidate 2 — closing the blocked edges to the player — is admissible on the evidence.** The
+region stays crossable, and at the player's own width the whole refusal costs 0 routes and 55.8 m.
+
+🔴 **But it must be graded at the CAR's bar and not at the lane bar, and those are different edge
+sets.** `is_routable` gates traffic at 3.20 m, which is right for `P3-3` and wrong here: it would
+close `e207` and `e55` to a player who fits down both, and `e207` is the one edge whose refusal is
+worth 977 m. The player population is **19 edges**, not 24 or 26.
+
+⚠️ **This says nothing about whether the walls are acceptable.** It prices *removing* the edges, not
+*standing* on them; three drivers stopped because of geometry that is still there. Candidates 1 and 3
+remain the only things that fix the city rather than fence it.
+
+⬜ Left: the user's call between fencing (candidate 2, now measured cheap) and fixing (candidates 1
+and 3, unpriced). And `e207`'s 977 m is a `P3-3` problem whichever is chosen, because traffic is
+gated at the lane bar.
+
+**See.** `Q51` for the 24/26 gap this re-opens with a cost attached · `Q19`'s sections above for the
+walls themselves · `P3-9a′` for the round that named this · `Q58` for the trap the fixed population
+avoids · `Q72` for why the control row is there · `P1-5` and `B4` for what `e219` is
 
 **See.** `Q51` for what routes around this · `Q20` · `Q22` for the interchange's family · `Q23` for the suppression this extends and for the narrowing it deliberately refused · `Q24` · `P2-5` · `P3-6` for why the population moved, and for the piers · `Q57` for the mechanism this section is the fourth instance of · `P3-9a′` for the round that re-prioritised this
 
@@ -14532,7 +14660,10 @@ ratio is computed over.
 That distribution is what "they did not drive far" is made of: more of the blocked structure edges
 are WAN CHAI INTERCHANGE than anything else, and it is the interchange the region is crossed by.
 ⚠️ **That last clause is a reading of the map, not a measurement** — no route analysis here shows
-the region is disconnected by these edges, and `RoadGraph` would be the thing to ask.
+the region is disconnected by these edges, and `RoadGraph` would be the thing to ask. ✅ **Measured
+2026-08-30, and it is not disconnected** (`Q19`): refusing every blocked edge costs **1 ordered pair
+of 187,946** and 55.8 m of detour. ⚠️ **`RoadGraph` turned out not to be the thing to ask** — it has no
+adjacency and no router, so `tools/reachability.py` builds the traversal from the documents instead.
 
 ✅ **So this is not a new question, it is `Q19` arriving where a player can feel it.** `Q19` has been
 🟡 half answered and **unassigned** since the routing half closed as `Q51` — the bundle publishes a
@@ -14565,7 +14696,7 @@ here would invent the finding.
 
 ### Left
 
-⬜ `Q19` — the blocked structure edges, now the named next task
+🟢 `Q19` — the blocked structure edges, now the named next task. **Fencing them is priced** (`Q19`, 2026-08-30): refusing every wall costs **1 ordered pair of 187,946** and 55.8 m, and nothing at all at the player's own bar — including the reading of the map this record flagged as unmeasured. ⬜ Left is the user's call between fencing and fixing
 ⬜ Name the cut this round drove, or accept that it cannot be tied to one
 ⬜ A round that asks the building question directly, if `Q26` is to move
 ⬜ `P3-9` proper — different drivers, on a handset, arrow disabled
