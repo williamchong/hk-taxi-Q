@@ -89,7 +89,15 @@ ROADGRAPH_NAME = "roadgraph.json"
 # test. `lanes_source` says which of `authored`, `measured` or `floored` an edge
 # carries. ⚠️ It is a strict subset of the measured widths: TD's range leaves
 # rather under half of them ambiguous, and those keep the authored count.
-ROADGRAPH_SCHEMA = 6
+# 7 adds `width_publisher`, and it bumps because schema 6 shipped a claim that
+# had quietly stopped being true. Through schema 5 every measured `width_m` was
+# kerb-to-kerb, read off a line publisher. Schema 6's third publisher draws the
+# maintained carriageway as an *area* and carves traffic islands, run-ins and
+# car parks out of it, so on the edges it answered `width_m` is the trafficable
+# surface instead — p10 **-3.39 m** apart across this region. A consumer reading
+# schema 6 as one homogeneous population is **wrong**, which is hard rule 5's
+# test; this field is what lets it separate them. ⚠️ Empty where authored.
+ROADGRAPH_SCHEMA = 7
 
 # `Node.kind` in the data contract. Degree three or more is somewhere a
 # driver can choose; anything else is a road continuing or stopping.
@@ -172,6 +180,17 @@ class Edge:
     # `lanes_source: authored` is the commonest measured edge rather than a
     # contradiction.
     lanes_source: str = "authored"
+    # Which publishers supplied the stations behind `width_m`, joined on `+` and
+    # empty where the width is authored (`Q94`). 🔴 **The three do not measure
+    # the same quantity**: HyD's `pavement_polygon` carves traffic islands and
+    # run-ins out of the carriageway, so it reads the trafficable surface where
+    # TD's and iB1000's lines run on to the kerb — p10 **-3.39 m** apart across
+    # this region. A consumer treating every measured width as one population is
+    # making `Q57`'s generalisation, and this is the field that lets it not.
+    # ⚠️ **A set, not a winner**: the survey picks a publisher per *station* and
+    # the mixture is common, so a dominant-publisher field would separate a 51%
+    # edge from a 49% one over a single station.
+    width_publisher: str = ""
 
 
 @dataclass(frozen=True)
@@ -980,6 +999,7 @@ def _reassign(edge: Edge, found: carriageway.CarriagewayReport) -> Edge:
     changes: dict[str, object] = {
         "width_m": round(found.assigned_m[edge.id], 3),
         "width_source": found.basis[edge.id],
+        "width_publisher": found.publishers[edge.id],
     }
     if edge.id in found.lanes:
         changes["lanes"] = found.lanes[edge.id]
@@ -1705,6 +1725,7 @@ def _write(out_root: Path | None, city: CityConfig, region_id: str, report: Road
                 "lanes_source": edge.lanes_source,
                 "width_m": edge.width_m,
                 "width_source": edge.width_source,
+                "width_publisher": edge.width_publisher,
                 "speed_limit_kph": edge.speed_limit_kph,
                 "bus_lane": edge.bus_lane,
                 "tram_tracks": edge.tram_tracks,
@@ -1900,6 +1921,10 @@ def main(argv: list[str] | None = None) -> int:
             "    %d of %d stations spanned by one publisher; the rest keep the authored width",
             width.stations_spanned,
             width.stations_walked,
+        )
+        log.info(
+            "    by publisher: %s — ⚠️ NOT one measurement, see `Edge.width_publisher`",
+            _by_basis(width.publishers[edge_id] for edge_id in width.assigned_m),
         )
         log.info(
             "    lanes: %d of %d measured widths resolve under TPDM %.2f-%.2f m (%s); "

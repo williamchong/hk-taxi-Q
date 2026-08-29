@@ -13338,6 +13338,35 @@ arrow-carrying edges that stack.
 *"both instruments still read what `Q51` recorded"*, baseline reproducing `clearance.json` on all 737
 edges, 0 cleared at any floor.
 
+#### ✅ The measured widths say which publisher read them — schema 7, 2026-08-29
+
+The re-check below found that the three publishers do not measure the same quantity, so
+`roadgraph.json` now says which of them each width came from: **`width_publisher`**, joined on `+`
+and empty where the width is authored.
+
+```
+  201  ib1000                              21  hyd_pavement
+   62  hyd_pavement+ib1000                  4  hyd_pavement+ib1000+traffic_aids
+    3  ib1000+traffic_aids                  1  traffic_aids
+```
+
+⚠️ **A set, not a winner, and not a partition of "the 33 HyD added" either.** The survey picks a
+publisher per *station*, so the mixture is the common case — 66 of the 292 measured edges are mixed.
+"Licensed by HyD alone" is not a per-edge property: the 33 edges that appeared when HyD was wired in
+are not the 21 whose stations are all HyD's. A dominant-publisher field would have separated a 51%
+edge from a 49% one over a single station; the set needs no threshold.
+
+⚠️ **It records who was *used*, not who could have answered.** The loop stops at the first publisher
+to span a station, so STEWART ROAD's `e503` reads `ib1000` even though HyD answers every station of
+it as well — and would have read 10.46 m against iB1000's 10.54.
+
+🔴 **Schema 6 → 7, and the bump is the point rather than the field.** Through schema 5 every measured
+`width_m` was kerb-to-kerb off a line publisher. Schema 6 introduced the area publisher and shipped a
+mixed population *without saying so* — a consumer reading it as homogeneous was wrong, which is hard
+rule 5's test. This is the correction.
+
+The 21 HyD-only widths run **3.12-11.46 m, p50 6.71**.
+
 #### STEWART ROAD, re-checked with three publishers — 2026-08-29
 
 Unchanged, and now it is known that no publisher could have changed it.

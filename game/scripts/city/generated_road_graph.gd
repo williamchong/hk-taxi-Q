@@ -49,7 +49,16 @@ const PATH: String = "res://assets/generated/roadgraph.json"
 ## widths** — TD's range leaves rather under half of them ambiguous, and those
 ## keep the authored count — so a measured `width_source` beside an authored
 ## `lanes_source` is the commonest measured edge rather than a contradiction.
-const SCHEMA_VERSION: int = 6
+##
+## 7 since `Q94` adds `width_publisher`, and it bumps because 6 shipped a claim
+## that had quietly stopped being true. Through 5 every measured `width_m` was
+## kerb-to-kerb, read off a line publisher. 6's third publisher draws the
+## maintained carriageway as an *area* and carves traffic islands, run-ins and
+## car parks out of it, so where it answered `width_m` is the **trafficable**
+## surface instead — p10 -3.39 m apart across this region. A reader treating
+## every measured width as one population is wrong, and this is the field that
+## lets it not. ⚠️ Empty where the width is authored.
+const SCHEMA_VERSION: int = 7
 
 
 ## The parsed graph, or an empty dictionary with a pushed message.

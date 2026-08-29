@@ -93,6 +93,20 @@ class CarriagewayReport:
     # from a one-way one that never crossed a median. They are different
     # measurements and pooling them is `Q57`'s generalisation.
     basis: dict[int, str] = field(default_factory=dict)
+    # 🔴 **Which publishers supplied the stations behind each median, and it is a
+    # SET rather than a winner** (`Q94`). The three do not measure the same
+    # quantity: HyD carves traffic islands, run-ins and car parks out of its
+    # carriageway, so it reads the *trafficable* surface where the two line
+    # publishers run on to the kerb — worth p10 **-3.39 m** across this region.
+    # Pooling those into one `width_m` without saying which is `Q57`'s
+    # generalisation, a property established on one population and quoted for
+    # another.
+    #
+    # ⚠️ **A set joined on `+`, never a dominant publisher**, because the loop
+    # picks per *station* and the mixture is the common case: 201 edges here are
+    # iB1000 alone, 21 are HyD alone, and **66 are mixed**. A "winner" would put
+    # a 51% edge and a 49% edge in different populations over one station.
+    publishers: dict[int, str] = field(default_factory=dict)
 
     stations_walked: int = 0
     stations_spanned: int = 0
@@ -410,6 +424,7 @@ def measure(
         plan = np.asarray(edge.polyline, dtype=np.float64)[:, [0, 2]]
         spans: list[float] = []
         nears: list[float] = []
+        answered: set[str] = set()
         for point, normal in _stations(plan, STATION_M):
             report.stations_walked += 1
             if len(nodes) and float(np.hypot(*(nodes - point).T).min()) < JUNCTION_M:
@@ -417,13 +432,14 @@ def measure(
                 # reads as a wide road. Dropped here rather than reported,
                 # because this stage assigns rather than grades.
                 continue
-            for _name, segments in publishers:
+            for name, segments in publishers:
                 ahead = segments.first_hit(point, normal, MAX_RAY_M)
                 behind = segments.first_hit(point, -normal, MAX_RAY_M)
                 if ahead is None or behind is None:
                     continue
                 spans.append(ahead + behind)
                 nears.append(min(ahead, behind))
+                answered.add(name)
                 report.stations_spanned += 1
                 break
 
@@ -433,6 +449,7 @@ def measure(
         own = 2.0 * float(np.median(nears))
         report.spans_m[edge.id] = span
         report.own_m[edge.id] = own
+        report.publishers[edge.id] = "+".join(sorted(answered))
 
         width, basis = _license(edge, span, own, bounds)
         if width is None:

@@ -830,10 +830,15 @@ They agree at the median and the tail is one-sided. Confirmed on the ground rath
 8.56 m, and two `FEAT_TYPE = 31` **Traffic Island — Refuge** polygons sit 1.38 and 2.13 m from where
 it stopped. Neither source is wrong; they answer different questions.
 
-⚠️ **So the 33 edges HyD licenses alone carry a slightly different measurement from the rest**, which
-is `Q57`'s generalisation waiting to happen — a property established on one population and quoted for
-another. It is reported here rather than corrected, because carving out an island is arguably the
-better answer for a carriageway a car must fit down. ✅ **HyD also reaches 880 stations neither line
+✅ **So `roadgraph.json` says which publishers each width came from, since schema 7** —
+`width_publisher`, joined on `+` and empty where the width is authored. ⚠️ **A set, not a winner**:
+the survey picks a publisher per *station* and the mixture is the common case. Over the 292 measured
+edges: **201** `ib1000`, **62** `hyd_pavement+ib1000`, **21** `hyd_pavement`, 4 all three, 3
+`ib1000+traffic_aids`, 1 `traffic_aids`. The 21 HyD-only widths run 3.12-11.46 m, p50 **6.71**.
+⚠️ It records who was *used*, not who could have answered — the loop stops at the first publisher
+that spans a station, so STEWART ROAD's `e503` reads `ib1000` although HyD answers every station of
+it too. Carving out an island is left as the reading rather than corrected, because it is arguably
+the better answer for a carriageway a car must fit down. ✅ **HyD also reaches 880 stations neither line
 publisher spans**, against 526 that iB1000 reaches and it does not; that asymmetry is the coverage it
 was fetched for.
 

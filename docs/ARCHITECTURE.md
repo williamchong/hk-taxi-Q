@@ -720,7 +720,7 @@ which the city renders see-through with no error. `TEXCOORD_0` has no such failu
 
 ```json
 {
-  "schema_version": 6,
+  "schema_version": 7,
   "nodes": [{ "id": 1, "pos": [120.5, 4.0, 300.2], "kind": "junction" }],
   "edges": [
     {
@@ -732,6 +732,7 @@ which the city renders see-through with no error. `TEXCOORD_0` has no such failu
       "lanes_source": "measured",
       "width_m": 11.0,
       "width_source": "two_way_span",
+      "width_publisher": "hyd_pavement+ib1000",
       "speed_limit_kph": 50,
       "bus_lane": false,
       "tram_tracks": false,
@@ -753,6 +754,7 @@ which the city renders see-through with no error. `TEXCOORD_0` has no such failu
 | `tram_tracks` | ⚠️ **Hand-authored.** Not in the source. A list of street names in city config |
 | `lanes` | 🔴 **Measured on 142 of the 260 surveyed edges since `Q94`**, and authored on the rest. Nobody publishes a lane *count* — Road Network v2 carries no lane field in any layer — but three sources publish the *width*, so `pipeline/carriageway.py` brackets its measured carriageway against TPDM 4.3.9.8's **3.0-3.65 m** through lane. ⚠️ **Never divided by `lane_width_m`**: 3.2 m is the authored constant the question is about, and dividing by it makes the instrument agree with the value under test. Where TD's range resolves to one integer the count is published (88 `measured`, plus 54 `floored` — see below); where it does not, **118** edges keep `lanes_for(speed_limit_kph)`. `lanes_source` says which. ✅ **Graded against a source that never saw a width**: a row of turn arrows across a carriageway is the count written down, and `arrows.json` publishes it per edge — **28 of 306** arrow-carrying edges still imply more lanes than they have, down from 30. ✅ And **0 of 87** measured counts disagree with `tools/carriageway_margin.py`'s independent bracket |
 | `width_m` | 🔴 **Measured on 260 of 737 level-0 edges since `Q95`**, from what TD's `RM1108`/`RM1109` and iB1000's `RM` drew; authored `lanes x lane_width_m` on the rest, with `width_source` saying which. ⚠️ **A consumer may no longer invert `width_m / lanes`** — that is why the schema bumped. The authored value it replaced was `2 x 3.2 = 6.4 m` on 720 of 737 edges, below TD's published **7.3 m** minimum for a two-lane single carriageway (6.75 m being allowed only *per direction* of a dual): invented *and* out of range. ⚠️ **This is the street, never the ribbon** — `surface.py` draws `max(width_m, floor)` |
+| `width_publisher` | 🔴 **Which publishers supplied the stations behind `width_m`, joined on `+`; empty where authored** (`Q94`, schema 7). The three do not measure the same quantity: HyD's `pavement_polygon` carves traffic islands, run-ins and car parks out of the carriageway, so it reads the **trafficable** surface where TD's and iB1000's lines run on to the kerb — p10 **-3.39 m** apart over the 4,925 stations both span. ⚠️ **A set, not a winner**: the survey picks a publisher per *station*, so 201 edges here read `ib1000`, 62 `hyd_pavement+ib1000` and 21 `hyd_pavement`. ⚠️ It records who was **used**, not who could have answered — the loop stops at the first publisher to span a station |
 | `elevation_level` | `ELEVATION` integer attribute (−1/0/1 in this region). An ordinal level, **not** a height, and never a height — it says which deck a road is on, not where that deck is. Since `P2-7` it is also **not** what decides `y` |
 | `polyline` / `pos` | Game-space metres, `y` measured **from ground level, not from the vertical datum**. Since schema 2 an off-grade edge's `y` is **sampled from the map sheets' `INFRASTRUCTURE` structure**, so it follows the real deck and varies along an edge — median grade 2.47%, p90 8.04%. Level-0 edges meeting a node another level also reaches are lifted onto the ramp they sit on, and off-grade ones are ramped **down** to such a node where the structure stops before reaching it (`Q90`). Where the structure covers nothing, `elevation_levels` in city config supplies the flat offset. A node's `y` is the **level nearest grade** among the edges meeting it, and the highest end on that level |
 | `on_structure` | ⚠️ **Derived, not published by any source.** One flag per vertex, added in schema 3: true where that station's height came from sampled structure. `elevation_level` says which deck an edge *belongs to*; this says which of its stations are *standing on one*, and the two differ because a road becomes a bridge partway along an edge. Only `roads.py` can produce it — `y` cannot stand in, since `ground: terrain` puts an at-grade hill road at 49 m. All-false for a city that samples no decks. ⚠️ **Also false where an off-grade station was ramped down to the node its structure stops short of** (`Q90`) — that station's height came from the street, not from a deck, and the field says so. **872 stations** in Wan Chai, **546 m** of level-0 centreline |

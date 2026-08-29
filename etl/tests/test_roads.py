@@ -211,6 +211,7 @@ class TestBuildRegion:
             "lanes_source",
             "width_m",
             "width_source",
+            "width_publisher",
             "speed_limit_kph",
             "bus_lane",
             "tram_tracks",
