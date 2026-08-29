@@ -398,9 +398,11 @@ def build_region(
         # drew it.
         "carriageway": _carriageway(surface, clearance),
         # The bar `clear_width_m` is read against, published once rather than
-        # left to the game to re-derive. `roadgraph.json`'s `width_m` is
-        # `lanes x lane_width_m` *hand-tuned upward for playability*, so
-        # dividing it back by `lanes` does not recover this number.
+        # left to the game to re-derive. ⚠️ `roadgraph.json` cannot stand in for
+        # it: `width_m` is a *measured* carriageway where two publishers span the
+        # road (`Q95`) and authored elsewhere, and the ribbon over it is
+        # `max(width_m, floor)`. Dividing any of the three by `lanes` recovers
+        # something, but not this number.
         "lane_width_m": city.roads.lane_width_m,
         "fares": FARES_NAME,
         # `null` where the city drew no tramway, which is the honest answer and

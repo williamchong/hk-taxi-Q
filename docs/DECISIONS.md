@@ -12955,7 +12955,7 @@ for sourced-not-invented · `Q60` and `P3-16` for the authored-dimension precede
 
 ## `Q94` — Two arrows in one lane, because the lane count is invented
 
-**Status.** 🟡 Half closed 2026-08-28. Counted in `arrows.json`; the lane count itself is unassigned.
+**Status.** 🟢 **Closed 2026-08-29.** Counted in `arrows.json` 2026-08-28; the count sourced, graded and assigned 2026-08-29 — see *The count is sourced* below.
 
 ### What the user saw
 
@@ -13066,6 +13066,106 @@ sourced, and the counter is what says how much of it there is.
 ⬜ **Sourcing the count is unassigned and is not small.** `lanes` moves `width_m`, which moves the
 ribbon, the kerbs, every layer registered onto the drawn kerb — signs, lamps, railings — and every
 clearance grader in the region. It is also the most direct lead `Q19` has had.
+
+### The count is sourced, 2026-08-29
+
+`Q95` made `width_m` a measurement and left this open, recording the cost: `stacked_disagreeing`
+byte-identical at 51, "because `arrows.py` snaps to `ribbon.lanes` and `lanes` is still authored".
+
+#### The grader was built first, and that was not ceremony
+
+The "31 of 306" above came from a scratch script whose commit touched only the docs — `Q37`'s debt,
+and the same shape `Q95` found in this entry's own width table ("the stated method does not determine
+the stated numbers"). A grader written *after* an assignment is a grader tuned to agree with it, so
+`arrows.py` published `implied_lanes` per edge before anything was assigned.
+
+It very nearly reproduces: **306** arrow-carrying edges exactly, "nine of them four against two"
+exactly and on an identical edge set, and **30** against the claimed 31 — a derived bar against an
+asserted 1.6 m.
+
+🔴 **Clustered on the published offset, never the placed one.** The lane snap is the quantity under
+test; grouping on where an arrow was *drawn* returns `ribbon.lanes` to itself and reads as agreement
+whatever the graph says. Six of the seven new tests fail under that mutation, which is how it is
+checked rather than read (`Q72`).
+
+✅ **The bar is swept, not argued** — 28 / 30 / 30 / 30 / 24 / 0 over 1.0-4.0 m, flat across
+1.50-2.50 with the shipped 2.00 mid-plateau. The collapse lands exactly where the bar passes TPDM
+4.3.9.8's **3.0 m** through lane, because past that it merges two real lanes: a published dimension,
+not a tuning cliff.
+
+#### The count, bracketed off the width
+
+`pipeline/carriageway.py` brackets its own measured carriageway against **3.0-3.65 m**. 🔴 **Never
+`lane_width_m`** — 3.2 m is the constant this whole question is about.
+
+```
+142 of 260 measured widths resolve  (88 measured, 54 floored)
+118 ambiguous keep the authored count      2 odd two-way — reported, never corrected
+```
+
+✅ **The bracket is validated against the manual it came from, and that costs nothing to check** —
+the six shared-endpoint pairs' argument at a second layer. It contains TD's own lane count on **9 of
+9** rows of Table 3.4.2.1. The obvious sharpening — requiring the width to partition exactly into
+legal lanes — excludes it on **two**: it calls TD's 10.3 m *two-lane* single carriageway three lanes,
+and finds no legal reading at all for the 11 m dual three-lane. A rule that contradicts the document
+it is derived from is not a sharper rule, and the permissive reading ships.
+
+🔴 **The floor is the design decision, and it is `Q95`'s at a second dimension.** The bracket reads
+54 narrow one-way streets as **one** lane. That is true of the street and false of what is drawn on
+it: the ribbon is floored at 10.24 m, and `RoadGraph.lane_offset(w, 1)` is **0** — the lane centre
+*on the centreline*, which `road_graph.gd` calls the one place a wheel must not go and where `P0-5`'s
+car crept at 0.8 m/s on three of four wheels. So the count is floored at 2 and `lanes_source` says
+`floored`. The reading is published beside what the drawing needed rather than edited to agree with
+it, and the 54 are byte-identical to what shipped before.
+
+#### 🔴 A lane count moves no geometry, and that is the whole shape of it
+
+`Q95` severed `width_m = lanes x lane_width_m`, so the ribbon is `max(width_m, floor)` and `lanes` is
+not an input to it. `roads.glb` came back **identical in size** — 31,864 triangles, 38,709 vertices,
+1,895,932 bytes — and different in content: the `TEXCOORD_0` lane coordinate and the packed codec, on
+9 edges. Every owed grader is unmoved:
+
+```
+carriageway_margin   overhang p50 1.59 / p90 3.24 over 12,502 stations — the ratchet across
+                     Q95's three refactors, unmoved; all four width tables byte-identical
+narrowing            26 ever below one lane, 0 cleared at any floor, baseline reproduces
+                     clearance.json on all 737 edges
+clearance_reconcile  24 pipeline / 26 grader, the same 4 disagreements — "both instruments
+                     still read what Q51 recorded over this bundle"
+ground_clearance     FAILS at 89, exactly as Q95 left it — not moved further
+```
+
+#### What it bought, and what it did not
+
+**`stacked_disagreeing` 51 → 35, `stacked_pairs` 89 → 73**, with `drawn` 747, **3,246 triangles and
+197,968 bytes identical** and `inverted` 0 — no arrow lost or moved off the road.
+
+⚠️ **`edges_implying_more_lanes` only moves 30 → 28 while the visible defect falls a third**, because
+the 9 edges that gained a lane are the arrow-dense ones. 🔴 **And it does not reach 0, for a reason
+that can be named**: `e504`/`e505` STEWART ROAD — this entry's own flagship — carry an **authored**
+6.4 m that brackets to an ambiguous 1-2, so nothing licenses a count there. The contradiction stays
+on that road until its width is measured.
+
+✅ **The two independent surveys agree on the count, not only the width.** `tools/carriageway_margin.py`
+brackets its own ray, and **0 of 87** pipeline-measured counts disagree with it. ⚠️ **The first
+reading of that line said 54 disagreed, and it was wrong** — all 54 were `floored` rows sitting above
+their own bracket *by construction*, which is the floor working rather than two surveys conflicting.
+Pooling them reported one number over an authored table, a second survey and a floor; the tool now
+splits the three, which is `Q57`'s generalisation caught in review.
+
+⚠️ **Both instruments independently find the same two 3.4.2.7 findings** — `e10` TUNG LO WAN ROAD and
+`e529` MARSH ROAD, two-way and unambiguously three lanes, which TD forbids other than as a climbing
+lane. Reported, never corrected into agreement (`Q54`).
+
+⚠️ **Schema 5 → 6.** `lanes` was authored policy a consumer could reason about as such; on 142 edges
+it is a reading, so keeping the old interpretation is *wrong* rather than merely stale — hard rule
+5's test. 🔴 **`verify_road_graph` gains the only lane-count assertion it can make**: every existing
+one re-derives its expectation from the same `lanes` it read, so a wrong count passes them all. The
+new one asserts the derivation *travelled*, and was mutation-checked by forcing every `lanes_source`
+to `authored` and watching it fail.
+
+⬜ **Left.** The 118 ambiguous edges, the 28 that still imply more lanes than they have, and the 12
+decomposed widths `Q95` also left.
 
 **See.** `Q19` for the invented width and the invisible walls it causes · `Q57` for the previous
 narrowing and the lane lines · `Q54` for why a published extent is not overruled by a derived one ·

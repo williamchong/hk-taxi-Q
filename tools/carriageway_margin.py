@@ -311,6 +311,12 @@ class Report:
     # `roadgraph.json`'s own `direction`, for the split `off_centre` explains.
     directions: dict[int, str] = field(default_factory=dict)
     lanes: dict[int, int] = field(default_factory=dict)
+    # ⚠️ **Which of the two a given count is** (`Q94`). Once part of the region
+    # carries a count the pipeline bracketed off its own survey, "the graph's
+    # lanes" is two populations and `LaneVerdict` has to say which it is
+    # reporting. Defaulted rather than required, so this tool still reads a
+    # graph built before schema 6.
+    lanes_source: dict[int, str] = field(default_factory=dict)
     widths_authored: dict[int, float] = field(default_factory=dict)
 
     @property
@@ -837,6 +843,7 @@ def survey(
         report.lengths[edge_id] = float(plan_lengths(polyline)[-1])
         report.directions[edge_id] = str(edge["direction"])
         report.lanes[edge_id] = int(edge["lanes"])
+        report.lanes_source[edge_id] = str(edge.get("lanes_source", "authored"))
         report.widths_authored[edge_id] = float(edge["width_m"])
         drawn_half_widths = widths.get(edge_id, [])
 
@@ -1184,11 +1191,40 @@ def _pair_up(rows: list[EdgeWidth], report: Report) -> None:
 
 @dataclass
 class LaneVerdict:
-    """How the graph's authored lane counts stand against the measured spans."""
+    """How the graph's lane counts stand against the spans THIS tool measured.
+
+    🔴 **Split by `lanes_source` since `Q94`, because it stopped being one
+    question.** The graph used to carry an authored count on every edge and
+    "outside the bracket" meant one thing. Now part of the region carries a
+    count the pipeline bracketed off its *own* measurement, and pooling the two
+    reports a single number over an authored table and an independent second
+    survey — `Q57`'s generalisation, a property established on one population
+    and quoted for another.
+
+    ⚠️ **And the two halves are read in opposite directions.** On an authored
+    edge, outside-the-bracket is the invented count failing against a
+    measurement, which is the finding `Q19` has been narrowing for weeks. On a
+    *measured* edge it is the two independent surveys disagreeing about the same
+    street — this tool's ray against `pipeline/carriageway.py`'s — which is a
+    much stronger statement and must not be diluted into the same total. It is
+    reported, never a bar to retune: `Q95` records that the two agree on the
+    width to a 5 mm median, so a lane disagreement here is where to go and look.
+    """
 
     too_few: int = 0
     too_many: int = 0
     ambiguous: int = 0
+    # The measured half of the two above: edges whose count the pipeline
+    # bracketed off its own survey and which this one brackets differently.
+    measured_total: int = 0
+    measured_disagreeing: int = 0
+    # 🔴 **Counted apart from the measured rows, and NOT as disagreement.** A
+    # floored count sits above its own bracket by construction — the floor is
+    # what puts it there — so folding these into `measured_disagreeing` reports
+    # the floor working as two surveys conflicting. Measured on the shipped
+    # region: 88 of 88 measured rows agree and all 54 "disagreements" were
+    # floored ones, which is the whole of the difference.
+    floored_total: int = 0
     # Two-way edges whose bracket is unambiguously odd and at least three, which
     # 3.4.2.7 forbids — a finding about the measurement or the direction field.
     findings: list[tuple[int, float]] = field(default_factory=list)
@@ -1204,11 +1240,18 @@ def lane_verdict(rows: list[EdgeWidth], report: Report, bounds: WidthBounds) -> 
     for row in rows:
         two_way = report.directions.get(row.edge) == BOTH
         low, high = lane_bracket(row.median_m, bounds, two_way=two_way)
-        authored = report.lanes.get(row.edge, 0)
-        if authored < low:
+        published = report.lanes.get(row.edge, 0)
+        outside = published < low or published > high
+        if published < low:
             verdict.too_few += 1
-        elif authored > high:
+        elif published > high:
             verdict.too_many += 1
+        source = report.lanes_source.get(row.edge, "authored")
+        if source == "floored":
+            verdict.floored_total += 1
+        elif source != "authored":
+            verdict.measured_total += 1
+            verdict.measured_disagreeing += int(outside)
         if high > low:
             verdict.ambiguous += 1
         elif two_way and low >= 3 and low % 2:
@@ -1500,6 +1543,16 @@ def _render_width(
         f"  the graph's lanes fall outside the bracket on {verdict.outside} of {len(published)} "
         f"({verdict.too_few} too few, {verdict.too_many} too many); "
         f"ambiguous on {verdict.ambiguous}"
+    )
+    lines.append(
+        f"  ⚠️ three populations, not one: {verdict.measured_disagreeing} of "
+        f"{verdict.measured_total} PIPELINE-measured counts disagree with this survey's own "
+        "bracket — two independent rays over one street, and a rise is where to go and look"
+    )
+    lines.append(
+        f"     {verdict.floored_total} more are floored, which sit above their bracket BY "
+        "CONSTRUCTION and are not disagreement; the remaining rows are authored, and those "
+        "are the invented count `Q19` has been narrowing"
     )
     lines.append(
         f"  3.4.2.7 findings — two-way, unambiguously odd, >= 3 lanes: {len(verdict.findings)}"
@@ -1817,7 +1870,11 @@ def write_widths(
             "span_refused": row.refused,
             "own_refused": row.own_refused,
             "decomposed": row.decomposed,
-            "lanes_authored": report.lanes.get(row.edge),
+            # ⚠️ Was `lanes_authored`, and the name stopped being true at
+            # schema 6 — part of the region carries a measured count now, so
+            # the source rides beside it (`Q94`).
+            "lanes_published": report.lanes.get(row.edge),
+            "lanes_source": report.lanes_source.get(row.edge, "authored"),
             "width_m_authored": report.widths_authored.get(row.edge),
             "source": row.source,
         }

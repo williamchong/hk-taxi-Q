@@ -903,7 +903,15 @@ def _runs(arrows: list[_Laid], key: Callable[[_Laid], float]) -> Iterator[list[_
     one. The collapse is the bar meeting a published dimension, not a tuning
     cliff.
     """
+    # ⚠️ **Guarded although no caller can reach it today.** `_count_rows` groups
+    # into a `defaultdict` it only ever appends to, and this function never
+    # yields an empty run, so both call sites hand it something. That is a
+    # caller's invariant rather than this function's, and the refactors that
+    # would break it are ordinary ones — filtering `laid` before grouping, or
+    # seeding a key per ribbon so arrow-less edges report 0.
     ordered = sorted(arrows, key=key)
+    if not ordered:
+        return
     run = [ordered[0]]
     for previous, arrow in itertools.pairwise(ordered):
         if key(arrow) - key(previous) >= 0.5 * min(previous.length_m, arrow.length_m):

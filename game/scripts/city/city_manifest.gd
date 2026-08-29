@@ -319,9 +319,11 @@ var carriageway_clear_width_m: Dictionary[int, PackedFloat32Array] = {}
 ## One lane, in metres, as the city config authored it — the bar
 ## `carriageway_clear_width_m` is read against.
 ##
-## Published rather than re-derived. `roadgraph.json`'s `width_m` is
-## `lanes x lane_width_m` **hand-tuned upward for playability**, so dividing it
-## back by `lanes` does not recover this number.
+## Published rather than re-derived, and ⚠️ **`roadgraph.json` cannot stand in
+## for it**: `width_m` is a *measured* carriageway on the edges two publishers
+## span (`Q95`) and an authored `lanes x lane_width_m` elsewhere, while the
+## ribbon over it is `max(width_m, floor)`. Dividing any of the three by
+## `lanes` recovers something, but not this number.
 var lane_width_m: float = 0.0
 
 

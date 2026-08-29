@@ -222,7 +222,12 @@ func is_one_way(edge_id: int) -> bool:
 	return _by_id.has(edge_id) and _one_way[_by_id[edge_id]] == 1
 
 
-## The **authored** street width the graph publishes — not what is drawn.
+## The street width the graph publishes — not what is drawn.
+##
+## ⚠️ **No longer always authored** (`Q95`): on the edges two publishers span,
+## this is a measured carriageway rather than `lanes x lane_width_m`, and
+## `width_source` on the edge says which. What it is never is the ribbon —
+## that is `drawn_half_width_of`.
 func width_of(edge_id: int) -> float:
 	return _widths[_by_id[edge_id]] if _by_id.has(edge_id) else 0.0
 
@@ -369,10 +374,11 @@ func turn_restriction_count() -> int:
 ## carriageway width.
 ##
 ## ⚠️ **The width must be the *drawn* carriageway, not `roadgraph.json`'s
-## `width_m`.** The graph publishes the authored street — `lanes x lane_width_m`
-## — while `P1-4` draws the ribbon at
-## `width_m x widen_for(speed_limit_kph, elevation_level)`, 1.6x by default and
-## 1.0x on structure, so it is not always wider than the authored street.
+## `width_m`.** The graph publishes the street — measured where two publishers
+## span it and authored elsewhere (`Q95`) — while `P1-4` draws the ribbon at
+## `max(width_m, floor_for(speed_limit_kph, elevation_level))`: a 10.24 m floor
+## by default and 0.0 m on structure, so it is not always wider than the street
+## it covers, and since `Q95` it can be exactly equal at grade.
 ## `etl/pipeline/config.py` keeps that factor on the surface
 ## style deliberately: "the graph is a description of the city, this is how wide
 ## and how kerbed to draw it. A change here never changes `roadgraph.json`."

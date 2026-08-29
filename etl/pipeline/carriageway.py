@@ -99,9 +99,51 @@ class CarriagewayReport:
     # construction.
     under_minimum: int = 0
 
+    # ── The lane count, bracketed off the width above (`Q94`) ──────────────
+    #
+    # 🔴 **The bracket for every assigned width, recorded before anything is
+    # read from it**, which is what lets every counter below be a property. The
+    # class docstring's rule is not decoration here: a `lanes_ambiguous`
+    # incremented beside the guard that refuses would count only the edges the
+    # rule declined, and could never say how much of the population that was.
+    lanes_bracket: dict[int, tuple[int, int]] = field(default_factory=dict)
+    # The count finally published, and why. A subset of `lanes_bracket`'s keys.
+    lanes: dict[int, int] = field(default_factory=dict)
+    lanes_basis: dict[int, str] = field(default_factory=dict)
+    # ⚠️ **A finding, not a counter.** TPDM 3.4.2.7 forbids dividing a two-way
+    # single carriageway into three lanes other than as a climbing lane, so an
+    # unambiguously odd bracket of three or more on a two-way edge is a
+    # statement about the measurement or the `direction` field — reported, and
+    # never corrected into agreement.
+    lanes_odd_two_way: list[int] = field(default_factory=list)
+
     @property
     def measured(self) -> int:
         return len(self.assigned_m)
+
+    @property
+    def lanes_resolved(self) -> int:
+        """Brackets that named one count, before the floor is applied."""
+        return sum(1 for low, high in self.lanes_bracket.values() if low == high)
+
+    @property
+    def lanes_ambiguous(self) -> int:
+        """Brackets TD's own range does not resolve. These keep the authored count."""
+        return sum(1 for low, high in self.lanes_bracket.values() if high > low)
+
+    @property
+    def lanes_floored(self) -> int:
+        """Resolved brackets under the floor, published as `LANES_FLOOR`. See `_lanes`.
+
+        ⚠️ **The predicate is `_lanes`'s own, not a restatement of it.** Writing
+        `low == high == 1` here would agree with the assignment only through
+        `config.py`'s guard that `lane_m[0] <= hard_min_m` — which is what makes
+        a zero-lane bracket unreachable — and would silently stop agreeing if
+        that guard ever moved.
+        """
+        return sum(
+            1 for low, high in self.lanes_bracket.values() if low == high and low < LANES_FLOOR
+        )
 
 
 @dataclass(frozen=True)
@@ -338,6 +380,16 @@ def measure(
         report.basis[edge.id] = basis
         if width < bounds.min_m:
             report.under_minimum += 1
+
+        bracket = _lane_bracket(width, bounds, two_way=edge.direction == BOTH)
+        report.lanes_bracket[edge.id] = bracket
+        low, high = bracket
+        if low == high and low >= 3 and low % 2 and edge.direction == BOTH:
+            report.lanes_odd_two_way.append(edge.id)
+        count, lanes_basis = _lanes(bracket)
+        if count is not None:
+            report.lanes[edge.id] = count
+            report.lanes_basis[edge.id] = lanes_basis
     return report
 
 
@@ -367,3 +419,78 @@ def _license(edge, span: float, own: float, bounds: WidthBounds) -> tuple[float 
     if span - own < bounds.hard_min_m:
         return span, "one_way_uncrossed"
     return None, ""
+
+
+def _lane_bracket(width_m: float, bounds: WidthBounds, *, two_way: bool) -> tuple[int, int]:
+    """How many through lanes a measured carriageway could hold, as a range.
+
+    🔴 **Never `width / lane_width_m`.** 3.2 m is the authored constant this
+    whole question is about, and dividing by it would make the answer agree with
+    the value under test by construction — `Q72`'s tautology. The divisor is
+    TPDM 4.3.9.8's published through-lane range, so the answer is a bracket and
+    its ambiguity is published rather than resolved by fiat.
+
+    ⚠️ **A second implementation of `carriageway_margin.py`'s `lane_bracket`,
+    and deliberately not an import.** The rule `Q95` set for this module holds:
+    the tool "shares no code with what it grades". The arithmetic here is three
+    lines and the duplication looks gratuitous — but the two run over
+    independently *measured* widths, and it is that agreement which means
+    something. Importing either into the other retires the only check there is.
+
+    ✅ **Validated against the manual it is read from, which costs nothing to
+    check** — the six shared-endpoint pairs' precedent. Over the nine carriageway
+    figures in Table 3.4.2.1 this bracket contains TD's own stated lane count on
+    **9 of 9**. A tighter reading requiring the width to partition exactly into
+    lanes (`3.0 <= w/n <= 3.65`) excludes it on two: it calls TD's 10.3 m
+    *two-lane* single carriageway three lanes, and returns nothing at all for
+    the 11 m dual three-lane. So the permissive reading is the correct one and
+    must not be "sharpened".
+
+    ⚠️ **There is no empty state.** `lane_m` is ascending, so `w // 3.0` is never
+    below `w // 3.65`, and `config.py` refuses a `lane_m` floor above
+    `hard_min_m` so that a kept width always brackets to at least one lane.
+
+    On a two-way edge 3.4.2.7 removes the odd counts — a two-way single
+    carriageway may not be divided into three lanes other than as a climbing
+    lane on a gradient. ⚠️ That narrows an *ambiguous* bracket only. An
+    unambiguously odd one is left standing and reported as
+    `lanes_odd_two_way`, because it is then a finding about the measurement or
+    the `direction` field rather than a reading to correct into agreement.
+    """
+    low = int(width_m // bounds.lane_m[1])
+    high = int(width_m // bounds.lane_m[0])
+    if two_way and high > low:
+        allowed = [n for n in range(low, high + 1) if not (n >= 3 and n % 2)]
+        if allowed:
+            return min(allowed), max(allowed)
+    return low, high
+
+
+# 🔴 **The floor on a published lane count, and it is `surface.floor_default_m`'s
+# argument at a second dimension.** The bracket reads a 5-7 m one-way street as
+# one lane, which is true of the street and false of what this project draws on
+# it: the ribbon is floored at 10.24 m so a car can use it, and a one-lane road
+# puts `RoadGraph.lane_offset` at **0** — the lane centre on the centreline,
+# which `road_graph.gd` calls the one place on the network a wheel must not go
+# and where `P0-5`'s car crept at 0.8 m/s on three of four wheels.
+#
+# ⚠️ **So the count is floored rather than the reading being suppressed**, and
+# `lanes_source` says `floored` where it bit. The measurement is not edited to
+# agree with the drawing; it is published alongside what the drawing needed.
+LANES_FLOOR = 2
+
+
+def _lanes(bracket: tuple[int, int]) -> tuple[int | None, str]:
+    """The lane count a bracket may be read as, and why (`Q94`).
+
+    Three states, the middle one publishing nothing — `_license`'s shape, for
+    `_license`'s reason. An ambiguous bracket is the honest answer for a width
+    TD's own range does not resolve, and resolving it by fiat would author a
+    count with better provenance, which is the move `Q95` was opened about.
+    """
+    low, high = bracket
+    if high > low:
+        return None, ""
+    if low < LANES_FLOOR:
+        return LANES_FLOOR, "floored"
+    return low, "measured"

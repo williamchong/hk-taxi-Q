@@ -603,6 +603,45 @@ func _check_lanes(graph: RoadGraph, edges: Array) -> PackedStringArray:
 				% checked
 			)
 		)
+	problems.append_array(_check_lane_source(edges))
+	return problems
+
+
+## 🔴 **The one thing about the lane COUNT this file can check, and it needs
+## saying why the rest of `_check_lanes` is not it.**
+##
+## Every assertion above re-derives its expectation from the same `lanes` it
+## read out of the edge dictionary, so a count that is simply wrong satisfies
+## all of them — they grade the width plumbing. Since `Q94` the count is a
+## *reading* on part of the region rather than authored policy throughout, and
+## a derivation that silently fell back to authored everywhere would leave this
+## whole function green. `widened` exists against the same weakness and `Q95`
+## records why it had to.
+##
+## ⚠️ **Conditional on the width survey having run**, not asserted outright: a
+## city whose file transcribes no design manual measures nothing and publishes
+## an authored count everywhere, which is correct rather than broken. What
+## cannot be true is a region with measured *widths* and no measured count
+## anywhere — TD's through-lane range resolves over half of them.
+func _check_lane_source(edges: Array) -> PackedStringArray:
+	var problems: PackedStringArray = []
+	var measured_widths: int = 0
+	var measured_lanes: int = 0
+	for edge: Dictionary in edges:
+		if str(edge.get("width_source", "authored")) != "authored":
+			measured_widths += 1
+		if str(edge.get("lanes_source", "authored")) != "authored":
+			measured_lanes += 1
+	if measured_widths > 0 and measured_lanes == 0:
+		problems.append(
+			(
+				(
+					"%d edges carry a measured width and not one carries a measured lane "
+					+ "count — the bracket did not travel"
+				)
+				% measured_widths
+			)
+		)
 	return problems
 
 

@@ -13,9 +13,11 @@ extends Node3D
 ##   * the **nearside lane centre**, in green — the placement target `P2-3`
 ##     spawns against and `P3-3` will route traffic along. It marks where a car
 ##     *belongs*, so it stays put on the kerbside lane while you drive around;
-##     it is not tracking which lane you are in. There is no runtime lane
-##     concept to track — `lanes` is authored config, not published by the
-##     source, and nothing routes by it.
+##     it is not tracking which lane you are in. There is still no runtime lane
+##     concept to track — nothing routes by `lanes` — but ⚠️ **it stopped being
+##     authored config on part of the region** (`Q94`): where the measured
+##     carriageway resolves under TPDM's through-lane range the count is a
+##     reading, and `lanes_source` says which an edge carries.
 ##   * the legal travel direction, as a chevron — a red chevron means the car is
 ##     pointing against the flow of a one-way street.
 ##   * every edge a car cannot fit down, in magenta, drawn once at load (`Q51`).

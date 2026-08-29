@@ -208,6 +208,7 @@ class TestBuildRegion:
             "on_structure",
             "direction",
             "lanes",
+            "lanes_source",
             "width_m",
             "width_source",
             "speed_limit_kph",

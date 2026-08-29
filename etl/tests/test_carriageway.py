@@ -22,10 +22,21 @@ The failures worth pinning are the quiet ones:
 
 from __future__ import annotations
 
+import math
+from typing import ClassVar
+
 import numpy as np
 import pytest
 
-from pipeline.carriageway import MIN_STATIONS, _license, _Segments, _stations
+from pipeline.carriageway import (
+    LANES_FLOOR,
+    MIN_STATIONS,
+    _lane_bracket,
+    _lanes,
+    _license,
+    _Segments,
+    _stations,
+)
 from pipeline.config import BOTH, FORWARD, WidthBounds
 
 
@@ -191,3 +202,109 @@ class TestStationFloor:
         """Documented rather than asserted elsewhere: three stations is what
         keeps a 6 m stub from carrying a width off one lucky ray."""
         assert MIN_STATIONS == 3
+
+
+class TestLaneBracket:
+    """`Q94`: how many through lanes a measured carriageway may be read as.
+
+    🔴 **The instrument must not agree with the value under test.** The divisor
+    is TPDM 4.3.9.8's published range and never `roads.lane_width_m`, so what
+    these pin first is that the answer is a *bracket* and that its ambiguity
+    survives rather than being resolved by fiat.
+    """
+
+    # Table 3.4.2.1's own rows: (carriageway width, the lane count TD gives it).
+    # ⚠️ **The truth side of the only validation this rule can have.** There is
+    # no published per-edge lane count anywhere to check against, so the manual
+    # the divisor came from is what is left — and it costs nothing to check,
+    # which is the six shared-endpoint pairs' argument at a second layer.
+    TABLE_3_4_2_1: ClassVar[list[tuple[float, int]]] = [
+        (7.3, 2),
+        (10.3, 2),
+        (13.5, 4),
+        (6.75, 2),
+        (11.0, 3),
+        (10.0, 3),
+        (14.6, 4),
+    ]
+
+    def test_the_bracket_contains_TDs_own_count_on_every_row_of_its_own_table(self) -> None:
+        for width_m, published in self.TABLE_3_4_2_1:
+            low, high = _lane_bracket(width_m, _bounds(), two_way=False)
+            assert low <= published <= high, (
+                f"{width_m} m brackets ({low}, {high}), TD says {published}"
+            )
+
+    def test_and_a_tighter_reading_would_exclude_it_which_is_why_this_one_is_permissive(
+        self,
+    ) -> None:
+        """🔴 The argument for the loose bracket, as a measurement rather than a preference.
+
+        Requiring the width to partition exactly into legal lanes —
+        `3.0 <= w / n <= 3.65` — is the obvious sharpening and it is wrong: it
+        calls TD's 10.3 m *two-lane* single carriageway three lanes, and finds
+        no legal reading at all for the 11 m dual three-lane. A rule that
+        contradicts the document it is derived from is not a sharper rule.
+        """
+        excluded = [
+            (width_m, published)
+            for width_m, published in self.TABLE_3_4_2_1
+            if not math.ceil(width_m / 3.65) <= published <= int(width_m // 3.0)
+        ]
+        assert [width_m for width_m, _ in excluded] == [10.3, 11.0]
+
+    def test_a_resolved_bracket_publishes_its_count(self) -> None:
+        assert _lanes(_lane_bracket(7.3, _bounds(), two_way=False)) == (2, "measured")
+
+    def test_a_width_TDs_range_does_not_resolve_publishes_nothing(self) -> None:
+        """The middle state, and it is most of the region — `_license`'s own shape."""
+        assert _lane_bracket(7.29, _bounds(), two_way=False) == (1, 2)
+        assert _lanes((1, 2)) == (None, "")
+
+    def test_one_lane_is_floored_because_the_ribbon_over_it_is_not(self) -> None:
+        """A 5 m one-way street holds one lane; what is drawn on it is 10.24 m wide."""
+        assert _lane_bracket(3.65, _bounds(), two_way=False) == (1, 1)
+        assert _lanes((1, 1)) == (LANES_FLOOR, "floored")
+
+    def test_no_licensed_width_can_bracket_to_no_lanes_at_all(self) -> None:
+        """🔴 The invariant `config.py` enforces, pinned where it is relied upon.
+
+        `_lanes` floors anything under `LANES_FLOOR`, so an unambiguous bracket
+        of **zero** would publish two lanes for a width that measured none. It
+        is unreachable because a licensed width is at least `hard_min_m` and
+        `config.py` refuses a `lane_m` floor above that — but the refusal lives
+        in another module, and this is the line that would break if it moved.
+        """
+        bounds = _bounds()
+        assert bounds.lane_m[0] <= bounds.hard_min_m
+        for step in range(300, 1651):
+            low, high = _lane_bracket(step / 100.0, bounds, two_way=False)
+            assert high >= 1
+            assert not (low == high == 0)
+
+    def test_3_4_2_7_removes_the_odd_counts_from_an_AMBIGUOUS_two_way_bracket(self) -> None:
+        """A two-way single carriageway may not be split into three lanes."""
+        assert _lane_bracket(11.5, _bounds(), two_way=False) == (3, 3)
+        assert _lane_bracket(12.5, _bounds(), two_way=True) == (4, 4)
+
+    def test_but_an_unambiguously_odd_one_stands_and_is_reported_instead(self) -> None:
+        """⚠️ Narrowing that would be correcting a reading into agreement (`Q54`).
+
+        Three lanes on a two-way edge is a finding about the measurement or the
+        `direction` field, and `measure` records it in `lanes_odd_two_way`. The
+        bracket is not edited to make the finding go away.
+        """
+        assert _lane_bracket(11.5, _bounds(), two_way=True) == (3, 3)
+
+    def test_the_divisor_is_the_manuals_and_never_the_authored_lane_width(self) -> None:
+        """🔴 `Q72`'s tautology, one dimension over.
+
+        `roads.lane_width_m` is 3.2 m and is the constant this whole question is
+        about. Dividing by it makes the instrument agree with the graph by
+        construction — and it gives a different answer, which is what says the
+        two are not interchangeable.
+        """
+        assert _lane_bracket(14.67, _bounds(), two_way=False) == (4, 4)
+        assert int(14.67 // 3.2) == 4
+        assert _lane_bracket(10.3, _bounds(), two_way=False) == (2, 3)
+        assert int(10.3 // 3.2) == 3

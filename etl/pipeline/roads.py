@@ -81,7 +81,15 @@ ROADGRAPH_NAME = "roadgraph.json"
 # is now a measurement, so that inversion silently returns a number the graph
 # never claimed. `width_source` is what says which of the two a given edge
 # carries; `lanes` itself is untouched and still authored (`Q94`).
-ROADGRAPH_SCHEMA = 5
+# 6 closes `Q94`, and it is 5's own sentence coming due: `lanes` is no longer
+# untouched. Where the measured `width_m` resolves under TPDM 4.3.9.8's
+# 3.0-3.65 m through-lane range it is a *reading* rather than authored policy,
+# and a consumer treating every count as policy keyed on the speed limit would
+# be **wrong** — not merely looking at different bytes, which is hard rule 5's
+# test. `lanes_source` says which of `authored`, `measured` or `floored` an edge
+# carries. ⚠️ It is a strict subset of the measured widths: TD's range leaves
+# rather under half of them ambiguous, and those keep the authored count.
+ROADGRAPH_SCHEMA = 6
 
 # `Node.kind` in the data contract. Degree three or more is somewhere a
 # driver can choose; anything else is a road continuing or stopping.
@@ -153,6 +161,17 @@ class Edge:
     # and why the schema bumps rather than the bytes changing under a reader that
     # would go on deriving a lane count from a width it no longer matches.
     width_source: str = "authored"
+    # How `lanes` was arrived at (`Q94`). `authored` is `lanes_for(speed_limit)`,
+    # the two-line table every edge carried before the survey; `measured` is the
+    # count TD's own through-lane range resolves the measured width to; `floored`
+    # is a resolved count of one lane published as `LANES_FLOOR` because the
+    # ribbon under it is drawn at the playability floor and a one-lane road puts
+    # the runtime's lane centre on the centreline.
+    # ⚠️ **Not implied by `width_source`.** Over half the measured widths bracket
+    # ambiguously, so `width_source: one_way_uncrossed` with
+    # `lanes_source: authored` is the commonest measured edge rather than a
+    # contradiction.
+    lanes_source: str = "authored"
 
 
 @dataclass(frozen=True)
@@ -943,14 +962,29 @@ def _carriageway(
         nodes[:, [0, 2]] if len(nodes) else np.empty((0, 2)),
     )
     report.carriageway = found
-    report.edges = [
-        replace(
-            edge, width_m=round(found.assigned_m[edge.id], 3), width_source=found.basis[edge.id]
-        )
-        if edge.id in found.assigned_m
-        else edge
-        for edge in report.edges
-    ]
+    report.edges = [_reassign(edge, found) for edge in report.edges]
+
+
+def _reassign(edge: Edge, found: carriageway.CarriagewayReport) -> Edge:
+    """Carry the survey's readings onto one edge, each field independently.
+
+    ⚠️ **The lane count is a strict SUBSET of the widths, not a second name for
+    them** (`Q94`). A width is licensed wherever a publisher spanned the road;
+    a count is published only where TD's 3.0-3.65 m through-lane range resolves
+    that width to one integer, which it does on rather over half of them. So an
+    edge may perfectly well carry a measured width and an authored count, and
+    the two `_source` fields are what say so.
+    """
+    if edge.id not in found.assigned_m:
+        return edge
+    changes: dict[str, object] = {
+        "width_m": round(found.assigned_m[edge.id], 3),
+        "width_source": found.basis[edge.id],
+    }
+    if edge.id in found.lanes:
+        changes["lanes"] = found.lanes[edge.id]
+        changes["lanes_source"] = found.lanes_basis[edge.id]
+    return replace(edge, **changes)
 
 
 def _direction(style: RoadNetwork, code: int, layer: str) -> str:
@@ -1668,6 +1702,7 @@ def _write(out_root: Path | None, city: CityConfig, region_id: str, report: Road
                 "on_structure": edge.on_structure,
                 "direction": edge.direction,
                 "lanes": edge.lanes,
+                "lanes_source": edge.lanes_source,
                 "width_m": edge.width_m,
                 "width_source": edge.width_source,
                 "speed_limit_kph": edge.speed_limit_kph,
@@ -1778,6 +1813,18 @@ def _field(
 # --------------------------------------------------------------------------
 
 
+def _by_basis(values: Iterable[str]) -> str:
+    """A basis histogram for one log line, commonest first.
+
+    Both the width and the lane count report which rule licensed each edge, and
+    a reader needs the split rather than the total — a two-way span and a
+    one-way one that never crossed a median are different measurements, and
+    pooling them is `Q57`'s generalisation.
+    """
+    counted = sorted(Counter(values).items(), key=lambda kv: -kv[1])
+    return ", ".join(f"{count} {name}" for name, count in counted) or "nothing"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     parser.add_argument("--city", required=True)
@@ -1839,16 +1886,12 @@ def main(argv: list[str] | None = None) -> int:
             )
     if report.carriageway is not None:
         width = report.carriageway
-        by_basis = ", ".join(
-            f"{count} {name}"
-            for name, count in sorted(Counter(width.basis.values()).items(), key=lambda kv: -kv[1])
-        )
         log.info(
             "  carriageway: %d of %d level-0 edges measured (%s); %d spanned and unattributed, "
             "%d under TD's %s m minimum — reported, never refused",
             width.measured,
             width.edges_walked,
-            by_basis or "nothing",
+            _by_basis(width.basis.values()),
             width.unattributed,
             width.under_minimum,
             f"{city.carriageway_survey.width_bounds.min_m:.1f}",
@@ -1857,6 +1900,17 @@ def main(argv: list[str] | None = None) -> int:
             "    %d of %d stations spanned by one publisher; the rest keep the authored width",
             width.stations_spanned,
             width.stations_walked,
+        )
+        log.info(
+            "    lanes: %d of %d measured widths resolve under TPDM %.2f-%.2f m (%s); "
+            "%d ambiguous keep the authored count, %d odd two-way — reported, never corrected",
+            len(width.lanes),
+            width.measured,
+            city.carriageway_survey.width_bounds.lane_m[0],
+            city.carriageway_survey.width_bounds.lane_m[1],
+            _by_basis(width.lanes_basis.values()),
+            width.lanes_ambiguous,
+            len(width.lanes_odd_two_way),
         )
     log.info(
         "  largest component holds %d of %d nodes (%.1f%%), %d components in all",

@@ -34,8 +34,13 @@ them without explicit instruction from the user.
    `roadgraph.json`'s `width_m` comes from what TD and iB1000 drew on 260 of 737 level-0 edges, and
    the playability widening is a **floor** (`surface.floor_default_m`, 10.24 m) rather than a
    multiplier — `drawn = max(width_m, floor)`. A multiplier over-widens the streets that are already
-   wide. ⚠️ **`width_m != lanes x lane_width_m` any more**; `width_source` says which an edge carries,
-   and `lanes` is still authored (`Q94`).
+   wide. ⚠️ **`width_m != lanes x lane_width_m` any more**; `width_source` says which an edge carries.
+   🔴 **And `lanes` is measured too since `Q94`** — bracketed off that width against TPDM 4.3.9.8's
+   3.0-3.65 m through lane, **never** divided by `lane_width_m`, which would make the instrument
+   agree with the constant under test. It resolves on **142 of the 260** measured edges (88
+   `measured`, 54 `floored`); the rest are ambiguous and keep the authored count, and `lanes_source`
+   says which. ⚠️ **A lane count moves no geometry** — the ribbon is `max(width_m, floor)` — so it
+   changes the `TEXCOORD_0` lane coordinate and the arrow slots, and nothing else.
 5. **Respect the data contract** in `docs/ARCHITECTURE.md`. ETL output and game input are a
    versioned interface; change both sides together and bump `schema_version`. Bump where a consumer
    would be **wrong** to keep its old interpretation — not wherever bytes change.

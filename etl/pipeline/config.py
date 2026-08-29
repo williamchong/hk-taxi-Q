@@ -2595,6 +2595,13 @@ class RoadNetwork:
         **Not a published attribute.** Road Network v2 carries no lane count in
         any layer, so this is authored policy keyed on what the source does
         carry. `P1-4` widens the result for play on top; see `docs/PLAN.md`.
+
+        ⚠️ **No longer the last word** (`Q94`). Nobody publishes a *count*, but
+        three sources publish the *width*, and `pipeline/carriageway.py` brackets
+        a measured carriageway against TPDM 4.3.9.8's through-lane range. Where
+        that resolves, it overrides this; where it does not — rather under half
+        the measured edges — this is still what an edge carries. `lanes_source`
+        on the edge is what says which.
         """
         return int(
             _by_fastest_rule(self.lanes_by_min_speed_limit_kph, speed_limit_kph, self.lanes_default)
