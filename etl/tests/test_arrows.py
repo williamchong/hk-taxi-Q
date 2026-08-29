@@ -28,6 +28,7 @@ from pipeline.arrows import (
     _count_stacked,
     _draw,
     _Laid,
+    _lane_of,
     _place,
     axis_residual_deg,
     directed_residual_deg,
@@ -548,9 +549,16 @@ class TestArrowRows:
         )
 
     @staticmethod
-    def _ribbon(lanes):
+    def _ribbon(lanes, carriageway_m=13.7):
+        # ⚠️ **In neither frame on purpose.** `_count_rows` clusters on the
+        # published offset and must not be able to read a width at all (`Q94`),
+        # so this is `lanes x lane_width_m` for no `lanes` — and it is also not
+        # `2 x half_width_m`, which 10.24 was: that is the one value where the
+        # surveyed and drawn frames coincide, i.e. the conflation `Q96` exists
+        # to break.
         return Ribbon(
             lanes=lanes,
+            carriageway_m=carriageway_m,
             one_way=True,
             at=np.array([0.0, 1.0]),
             half_width_m=np.array([5.12, 5.12]),
@@ -644,3 +652,72 @@ class TestArrowRows:
         report = ArrowReport()
         _count_rows([self._laid(10.0, 3.0), self._laid(10.0, -3.0)], {}, report)
         assert (report.implied_lanes, report.edges_implying_more_lanes) == ({0: 2}, 0)
+
+
+class TestLaneOf:
+    """`Q96`: the offset is read against the carriageway the publishers measured.
+
+    🔴 **The denominator is the whole of this defect.** `roadgraph.json`'s
+    `width_m` was `lanes x lane_width_m` until `Q95` measured it, and this stage
+    went on rebuilding that identity for itself — so these pin the denominator
+    against the mutation, rather than reading a number back.
+    """
+
+    def test_the_denominator_is_the_measured_carriageway_and_not_lanes_x_lane_width(self):
+        """`e381` GLOUCESTER ROAD: 15.35 m measured, read as 9.6 m for a release.
+
+        An arrow 2 m off the centreline of a three-lane carriageway is in the
+        **middle** lane. Against `lanes x lane_width_m` the fraction inflates
+        from 0.26 to 0.42 and it draws in the outer lane instead — which is the
+        centre lane going under-populated on every arterial in the region.
+        """
+        assert _lane_of(2.0, 15.35, 3) == (1, False)
+        # 🔴 The mutation, pinned rather than described: this is what shipped.
+        assert _lane_of(2.0, 3 * 3.2, 3) == (0, False)
+
+    def test_a_two_lane_edge_is_insensitive_to_the_carriageway_width(self):
+        """⚠️ **A finding pinned as behaviour, not an accident** (`Q96`).
+
+        `int(0.5 * 2 * (1 - fraction))` is `int(1 - fraction)`, which is a test
+        of `sign(offset_m)` and nothing else. The graph calls **670 of 737**
+        level-0 edges two-lane, so the measured width cannot reach 91% of the
+        network however right it is. Anything that changes this arithmetic has
+        to face that here rather than discover it in a frame.
+        """
+        for carriageway_m in (2 * 3.2, 16.11):
+            assert _lane_of(2.0, carriageway_m, 2) == (0, False)
+            assert _lane_of(-2.0, carriageway_m, 2) == (1, False)
+
+    def test_an_offset_past_the_surveyed_carriageway_is_clamped_and_says_so(self):
+        """`e309`: 6.52 m measured, three lanes authored — TPDM brackets it at two.
+
+        The clamp is not the finding; the *silence* was. Two published
+        quantities disagree here, and returning it lets `outside_carriageway`
+        name the edge instead of the lane arriving from the bar unremarked.
+        """
+        assert _lane_of(5.0, 6.52, 3) == (0, True)
+        assert _lane_of(1.0, 6.52, 3) == (1, False)
+
+    def test_a_width_that_is_not_a_positive_number_never_returns_a_confident_lane(self):
+        """🔴 **NaN is the case the arithmetic form of this guard lets through.**
+
+        `nan <= 0.0` is False, and `min(1.0, nan)` returns 1.0 — so a NaN width
+        divided through to a *confident* lane 0 with the flag clear, drawing the
+        arrow neatly at the nearside kerb with nothing counted. That is the
+        silent-agreement class every counter in this stage exists to prevent.
+        `not x > 0.0` and `x != x` are the NaN-safe spellings.
+
+        ⚠️ Unreachable from `build_region` — `ribbons()` refuses the edge first,
+        so it lands in `no_lane` rather than `outside_carriageway`. Pinned here
+        so the function stays honest for a direct caller.
+        """
+        nan = float("nan")
+        for carriageway_m in (0.0, -1.0, nan):
+            assert _lane_of(1.0, carriageway_m, 3) == (0, True)
+        assert _lane_of(nan, 10.0, 3) == (0, True)
+
+    def test_the_nearside_lane_is_zero_because_u_runs_from_the_nearside_kerb(self):
+        """⚠️ The sign convention `surface.mitres` sets, and the one thing here
+        that a mirrored city would render perfectly (`Q59`'s class)."""
+        assert _lane_of(7.0, 15.35, 3)[0] == 0
+        assert _lane_of(-7.0, 15.35, 3)[0] == 2

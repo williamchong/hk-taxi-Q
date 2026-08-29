@@ -157,11 +157,31 @@ class ArrowReport:
     offset_m: list[float] = field(default_factory=list)
     drawn_on_two_way: int = 0
     # Arrows drawn where the published offset puts them outside the ribbon that
-    # was actually drawn. Not a refusal — the drawn ribbon is 1.6x the real
-    # carriageway and still misses, which is `Q19`'s open question, not this
-    # stage's — but it is the number that says how much of the registration is
-    # being carried by the clamp rather than by the source.
+    # was actually drawn. Not a refusal — the drawn ribbon is floored to
+    # `surface.floor_default_m` and still misses, which is `Q19`'s open question,
+    # not this stage's — but it is the number that says how much of the
+    # registration is being carried by the clamp rather than by the source.
+    #
+    # ⚠️ **A floor since `Q95`, not the 1.6x multiplier this said until `Q96`.**
+    # `drawn = max(width_m, floor)`, so this is a strict subset of
+    # `outside_carriageway` below rather than a different slice.
     outside_drawn_ribbon: int = 0
+    # 🔴 **Arrows whose published offset falls outside the carriageway the
+    # publishers MEASURED, so the fraction clamped and the lane came from the bar
+    # rather than from the source (`Q96`).** `outside_drawn_ribbon` above asks
+    # the same question of the ribbon `surface.py` drew, which is floored to
+    # `surface.floor_default_m` and therefore answers a different one.
+    #
+    # It is the detector this stage was missing. Reading the offset against
+    # `lanes x lane_width_m` clamped constantly and silently, and no counter
+    # published here could see it.
+    #
+    # ⚠️ **Reachable in both directions**, which is the test `Q72` says a counter
+    # has to pass: it fires where a measured width and an authored lane count
+    # contradict each other — `e309` is 6.52 m wide with three lanes authored —
+    # and reads 0 where every arrow sits inside its own carriageway. A finding to
+    # go and look at, never a bar to retune.
+    outside_carriageway: int = 0
 
     # How far each arrow moved sideways to reach its lane's centre. The residue
     # of the registration decision at the top of this module, published so the
@@ -175,9 +195,15 @@ class ArrowReport:
 
     # 🔴 **Drawn arrows that landed on top of another one, and the counter this
     # stage did not have (`Q94`).** The lane registration snaps a published
-    # offset to one of `ribbon.lanes` slots, and `roadgraph.json`'s lane count is
-    # *invented* — 720 of the region's edges carry the same 6.4 m, derived from
-    # the speed-limit table because `DATA_SOURCES.md` records no source for it.
+    # offset to one of `ribbon.lanes` slots, and `roadgraph.json`'s lane count
+    # was *invented* — derived from the speed-limit table because
+    # `DATA_SOURCES.md` recorded no source for it.
+    #
+    # ⚠️ **Half retired, and the figure that stood here was stale.** It read "720
+    # of the region's edges carry the same 6.4 m"; `Q95` measured the width and
+    # `Q94` the count, so it is **414** of 737 at 6.4 m today, with `lanes`
+    # sourced on 210. The mechanism below is unchanged and so is the counter.
+    #
     # Where the real carriageway is wider than the graph says, two symbols with
     # **different instructions** collapse into one slot and draw a shaft wearing
     # both branches: an instruction the world does not contain, reported from the
@@ -569,9 +595,20 @@ class Ribbon:
     and after `Q23`'s per-station adjustment, so a second implementation of it
     would be a second join in `Q56`'s sense — disagreeing would tell us one was
     wrong and never which.
+
+    ⚠️ **`carriageway_m` is the exception to that first sentence**: it comes off
+    `roadgraph.json`, not off anything `surface.py` drew, and only the lane snap
+    reads it. `signs`, `signals` and `lamps` import this class and inherit a
+    field they never touch.
     """
 
     lanes: int
+    # ⚠️ **The SURVEYED carriageway (`roadgraph.json`'s `width_m`), not the drawn
+    # ribbon.** `half_width_m` below is what `surface.py` drew after
+    # `surface.floor_default_m`; this is what TD, iB1000 and HyD measured. The
+    # two frames meet in `_lane_of` and nowhere else, and conflating them is what
+    # `Q96` was — see that function for what it cost and on how many edges.
+    carriageway_m: float
     one_way: bool
     # Normalised distance along the published polyline at each station, and the
     # drawn half-width there. Per station rather than per edge because `Q23`
@@ -640,14 +677,25 @@ def ribbons(graph: dict, surface: dict) -> dict[int, Ribbon]:
         along = plan_lengths(points)
         total = float(along[-1])
         half = np.asarray(drawn["half_width_m"], dtype=np.float64)
-        if total <= 0.0 or len(half) != len(along):
+        carriageway_m = float(edge["width_m"])
+        if total <= 0.0 or len(half) != len(along) or not carriageway_m > 0.0:
             # A width list that does not match the polyline it was measured on
             # is a contract break, not a rounding problem. Skipped rather than
             # interpolated across, and visible as a symbol that found no lane.
+            #
+            # ⚠️ **A missing surveyed width is refused HERE and not in
+            # `_lane_of`**, so it lands in `no_lane` rather than in
+            # `outside_carriageway`. An absent width and an arrow past a kerb are
+            # two populations, and `Q90`'s `ends_no_target` is the precedent for
+            # keeping the second out of the first's count. This is also the only
+            # place with the edge id to name.
+            # ⚠️ **`not x > 0.0`, never `x <= 0.0`** — the second is False for
+            # NaN, which would divide through to a silent lane 0.
             continue
         trim = drawn.get("trim_m") or [0.0, 0.0]
         drawn_ribbons[int(edge["id"])] = Ribbon(
             lanes=int(edge["lanes"]),
+            carriageway_m=carriageway_m,
             one_way=str(edge["direction"]) != "both",
             at=along / total,
             half_width_m=half,
@@ -658,6 +706,87 @@ def ribbons(graph: dict, surface: dict) -> dict[int, Ribbon]:
             length_m=total,
         )
     return drawn_ribbons
+
+
+def _lane_of(offset_m: float, carriageway_m: float, lanes: int) -> tuple[int, bool]:
+    """Which drawn lane slot a surveyed offset falls in, and whether it fell outside.
+
+    ⚠️ **Outside the SURVEYED carriageway, which is not 'past the kerb'.** The
+    kerb is the edge of the ribbon `surface.py` drew, and that test is
+    `outside_drawn_ribbon` at the call site. Since `drawn = max(width_m, floor)`
+    the drawn ribbon is never narrower, so this fires on a strict superset —
+    38 against 9 — and the two names must not be traded for each other.
+
+    The published offset read as a fraction of the carriageway rather than as a
+    distance — the one step that survives the widening, because the ribbon is
+    drawn wider about the same centreline.
+
+    🔴 **The denominator is the SURVEYED carriageway and never
+    `lanes x lane_width_m`.** That identity was `roadgraph.json`'s until `Q95`
+    measured `width_m`, and this stage went on reconstructing it for itself on
+    292 of 737 level-0 edges — reading `e351` CANAL ROAD EAST's 16.11 m as 6.4.
+    Too small a denominator inflates the fraction, so arrows reach the clamp
+    early and pile into the outer lanes while the centre lane goes
+    under-populated. Dividing by `lane_width_m` would also be `Q94`'s refusal one
+    frame over: 3.2 m is the constant under test.
+
+    ⚠️ **`lanes` is the slot count on the DRAWN ribbon, and stays.** `U` is
+    `TEXCOORD_0`'s lane coordinate — 0 at the nearside kerb, `lanes` at the
+    offside — and `offset_m` is positive to the nearside, so the two run opposite
+    ways and `U = lanes * (1 - fraction) / 2` is the conversion.
+
+    ⚠️ **At `lanes == 2` this reduces to the SIDE of `offset_m` and no width can
+    reach it**: `int(1 - fraction)` is 1 below the centreline and 0 above it
+    whatever the denominator. ⚠️ Not `sign`, which is 0 at the centreline where
+    this returns 1 — every bucket boundary ties toward the higher index, so an
+    arrow digitised exactly on the centre of a two-lane road is offside.
+
+    The graph calls **670 of 737** level-0 edges two-lane,
+    leaving **67** with three or more — and of those, the **36** whose published
+    width is not `lanes x lane_width_m` are every edge this can move. Recorded
+    in `Q96` as a finding about how little the width buys downstream, and pinned
+    by a test so a change to this arithmetic has to face it rather than discover
+    it.
+
+    The clamp is returned rather than counted here, because an offset past the
+    surveyed carriageway is a disagreement between two published quantities —
+    `e309` is 6.52 m wide carrying an authored three lanes — and naming it is the
+    detector this stage did not have.
+    """
+    if not carriageway_m > 0.0 or offset_m != offset_m:
+        # ⚠️ **Unreachable from `build_region` — `ribbons()` refuses such an edge
+        # before a ribbon exists**, so this never reaches `outside_carriageway`
+        # and the counter stays one population. Kept so the function is honest
+        # standalone rather than returning a confident lane 0.
+        #
+        # 🔴 **`not x > 0.0` and `x != x`, never `x <= 0.0`.** Both
+        # comparisons are False for NaN, so the arithmetic form of this guard
+        # lets a NaN through, `min(1.0, nan)` returns 1.0, and the arrow draws
+        # neatly at the nearside kerb with no counter firing.
+        return 0, True
+    fraction = offset_m / (0.5 * carriageway_m)
+    clamped = abs(fraction) > 1.0
+    fraction = max(-1.0, min(1.0, fraction))
+    return max(0, min(lanes - 1, int(0.5 * lanes * (1.0 - fraction)))), clamped
+
+
+def _offset_of(lane: int, half_width_m: float, lanes: int) -> float:
+    """Where a lane slot's centre sits on the DRAWN ribbon, in the edge's frame.
+
+    🔴 **The exact inverse of `_lane_of`, and they must be read together.** One
+    rule — `U = 0` at the nearside kerb, `offset_m` positive to the nearside — is
+    expressed once each way, and a change to that convention is a change to both.
+    Split across a named function and an inline expression it was a change to one
+    of them, which is `Q59`'s mirrored-city class: the whole region renders
+    perfectly with every arrow on the wrong side.
+
+    ⚠️ **The two differ in FRAME and that is the entire point of `Q96`.**
+    `_lane_of` divides by the carriageway the publishers surveyed; this
+    multiplies by the half-width `surface.py` actually drew, which is floored.
+    Reading a published offset against the drawn ribbon would pull every arrow
+    toward the centre on a floored street.
+    """
+    return half_width_m * (1.0 - 2.0 * (lane + 0.5) / lanes)
 
 
 def build_region(
@@ -698,7 +827,6 @@ def build_region(
     # make: for 7% of the kerbside samples the nearest edge of *any* level was
     # elevated, and the street the marking is actually on was a median 4 m away.
     segments = Segments.of([edge for edge in graph["edges"] if int(edge["elevation_level"]) == 0])
-    lane_width_m = city.roads.lane_width_m
 
     builder = _Builder()
     laid: list[_Laid] = []
@@ -750,21 +878,13 @@ def build_region(
         if not ribbon.one_way:
             report.drawn_on_two_way += 1
 
-        # The published offset read as a fraction of the carriageway rather than
-        # as a distance — the one step that survives the 1.6x widening, because
-        # the ribbon is drawn wider about the same centreline.
-        real_half_m = 0.5 * ribbon.lanes * lane_width_m
-        fraction = max(-1.0, min(1.0, snap.offset_m / real_half_m))
-        # `U` is `TEXCOORD_0`'s lane coordinate: 0 at the nearside kerb, `lanes`
-        # at the offside. `offset_m` is positive to the nearside, so the two run
-        # opposite ways and `U = lanes * (1 - fraction) / 2` is the conversion.
-        lane = max(0, min(ribbon.lanes - 1, int(0.5 * ribbon.lanes * (1.0 - fraction))))
-        centre_u = lane + 0.5
-
+        lane, outside_carriageway = _lane_of(snap.offset_m, ribbon.carriageway_m, ribbon.lanes)
+        if outside_carriageway:
+            report.outside_carriageway += 1
         glyph = spec.glyphs[symbol.code]
         along_m = snap.t * ribbon.length_m
         half_width_m = ribbon.half_width_at(snap.t)
-        drawn_offset_m = half_width_m * (1.0 - 2.0 * centre_u / ribbon.lanes)
+        drawn_offset_m = _offset_of(lane, half_width_m, ribbon.lanes)
         report.lane_shift_m.append(abs(drawn_offset_m - snap.offset_m))
         if abs(snap.offset_m) > half_width_m:
             report.outside_drawn_ribbon += 1
@@ -1047,6 +1167,10 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Arr
         "offset_m": report.measured(report.offset_m),
         "drawn_on_two_way": report.drawn_on_two_way,
         "outside_drawn_ribbon": report.outside_drawn_ribbon,
+        # 🔴 The same question asked of the surveyed carriageway rather than the
+        # drawn ribbon, and a strict superset of the line above — see
+        # `ArrowReport`.
+        "outside_carriageway": report.outside_carriageway,
         # What the lane registration moved. The residue of the decision at the
         # top of `arrows.py`, published so that decision can be re-argued
         # against a number rather than against the prose.

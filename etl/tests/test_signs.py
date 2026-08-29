@@ -215,6 +215,7 @@ def edge(
     points: list[list[float]],
     *,
     lanes: int = 2,
+    width_m: float = 5.5,
     direction: str = "both",
     from_node: int | None = None,
     to_node: int | None = None,
@@ -232,6 +233,14 @@ def edge(
         "to": 2 * edge_id + 1 if to_node is None else to_node,
         "polyline": points,
         "lanes": lanes,
+        # ⚠️ The surveyed carriageway `arrows.ribbons` reads (`Q96`), and
+        # deliberately **not** `lanes x lane_width_m` — a fixture that encoded
+        # the identity `Q95` severed would teach it back to the next reader.
+        # ⚠️ Under the drawn `half_width_m` these tests supply (3.2, so a 6.4 m
+        # ribbon), it also has to be a width `drawn = max(width_m, floor)` could
+        # produce: 10.24 stood here and described a carriageway wider than the
+        # road drawn over it, which is not a road.
+        "width_m": width_m,
         "direction": direction,
         "elevation_level": 0,
     }
