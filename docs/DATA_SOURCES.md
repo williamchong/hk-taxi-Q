@@ -708,7 +708,8 @@ Recorded so the sweep is not repeated:
 `carriageway_occupancy`'s open failure and on the play widening.
 
 ✅ **Both had that look, in `Q57`, 2026-08-20.** Fleet Taxi Stopping Places is under "Fares and
-points of interest" below; the pavement extents are next.
+points of interest" below; the pavement extents are next — and ✅ **fetched 2026-08-29 under `Q94`**,
+so that entry is a description of data on disk rather than of a query.
 
 ### ✅ FETCHED — HyD Pavement Polygon (`Q94`, 2026-08-29)
 
@@ -770,14 +771,22 @@ graph does.
 🔴 **It settles STEWART ROAD, which is why it was fetched** (`Q94`). Walked at the pipeline's own 4 m
 stations against the `FEAT_TYPE = 1`, `LVL = 0` extent:
 
-| edge | pipeline | iB1000 ray | **HyD polygon** | agreement |
-|---|---|---|---|---|
-| `e503` | 10.54 m published | 10.57 | **10.50 m** | 4 cm |
-| `e504` | refused | 16.77 | **16.72 m** | 5 cm |
-| `e505` | refused | 16.69 | **16.66 m** | 3 cm |
+⚠️ **The first two columns are one publisher read twice** — `pipeline/carriageway.py` and
+`tools/carriageway_margin.py` both cast a ray at iB1000's `RM`, and their agreement is `Q95`'s
+independence check, not a second opinion about the street. HyD is the second *publisher*.
 
-So the 16.7 m is real and a third publisher says so. `e504`/`e505` are refused by TD's 16.5 m
-plausibility ceiling and nothing else.
+| edge | pipeline (iB1000) | tool (iB1000) | **HyD polygon** | HyD − pipeline |
+|---|---|---|---|---|
+| `e503` | 10.54 m published | 10.57 | **10.50 m** | −0.04 m |
+| `e504` | refused | 16.77 | **16.72 m** | −0.05 m |
+| `e505` | refused | 16.69 | **16.66 m** | −0.03 m |
+
+So the 16.7 m is real: a second publisher, reading an area rather than a line, lands within 5 cm.
+`e504`/`e505` are refused by TD's 16.5 m plausibility ceiling and nothing else.
+
+🔴 **Second and not third, because TD's own painted edge has ZERO coverage on this street.** The
+estate holds three carriageway sources and only two of them answer here, which is the same
+coverage gap that made STEWART ROAD unresolvable in the first place.
 
 🔴 **Read by walking point-in-UNION, never by casting a ray to the nearest polygon boundary.** HyD
 tiles the carriageway into 552 polygons over this envelope, so an internal seam between two of them

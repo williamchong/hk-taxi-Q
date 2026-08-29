@@ -877,8 +877,10 @@ is already on disk.** iB1000 `CartoTransLine` carries `TRANSPORTATIONLINETYPE = 
 in LandsD's own data dictionary — **56,286 segments** over the six sheets `P3-7a` has been
 downloading since 2026-08-10 for the podium join. Probed at 9,822 stations on 701 centrelines it
 reads p25 **7.02 m**, p50 **9.84 m**, p75 **15.36 m**, against this entry's two invented figures.
-HyD **Pavement Polygon** is the second, unfetched opinion — **1,714** polygons over the envelope
-with an `LVL` mirroring `ELEVATION`. ⚠️ **Still uncosted, and the probe is not a width to ship**:
+HyD **Pavement Polygon** is the second opinion — **1,714** polygons over the envelope with an `LVL`
+mirroring `ELEVATION` — ✅ **fetched 2026-08-29 under `Q94`**, where it agrees with the iB1000 ray to
+**3-5 cm** on three STEWART ROAD edges and gives the carriageway as an *area* rather than an edge
+line, the only source in the estate that does. ⚠️ **Still uncosted, and the probe is not a width to ship**:
 the perpendicular escapes through junction mouths and crosses both halves of a dual carriageway, so
 it over-reads at the top of the distribution. What has changed is that "there is nothing to go and
 read" is false — the reading is the work, not the search.
@@ -7338,7 +7340,7 @@ third opinion, and the pair above is the whole population. What else exists and 
 | `hk-td-tis_4` / `tis_5` parking distribution and vacancy | Real-time occupancy, not restriction |
 | `hk-td-tis_36` Pedestrian Streets | Area and effective hours; Road Network v2's `PEDESTRIAN_ZONE` already covers it |
 | `hk-td-tis_39` Fleet Taxi Stopping Places | New (Oct 2025). Bears on `fares.json`, not on yellow lines — **worth its own look** |
-| `hk-hyd-csdi-pavement-polygon` | Highways Department's maintained pavement extents. Bears on `carriageway_occupancy`'s open failure and on the widening, **not** on restrictions — **worth its own look** |
+| `hk-hyd-csdi-pavement-polygon` | Highways Department's maintained pavement extents. Bears on `carriageway_occupancy`'s open failure and on the widening, **not** on restrictions — ✅ **had its look in `Q57` and was fetched under `Q94`**, 2026-08-29; `DATA_SOURCES.md` carries the decoded domain and the clipped areas |
 | `hk-landsd-openmap-road-centreline` | LandsD's centreline, "primarily for approximate location query and map annotation labelling" by its own description. Not a second road graph |
 
 **And what else is inside the drawings, unclaimed.** `DTAD_YL_BOX_POLY` — **20 yellow box junctions
@@ -13223,7 +13225,7 @@ edge, which does not cover this street**. That is a data-coverage finding rather
 and it is the strongest case yet for the HyD **Pavement Polygon** layer `Q19` lists as the second,
 unfetched source.
 
-#### ✅ Fetched, and a third publisher confirms the 16.7 m — 2026-08-29
+#### ✅ Fetched, and a second publisher confirms the 16.7 m — 2026-08-29
 
 `Q19`'s "second, unfetched" source is fetched. HyD's Pavement Polygon gives the carriageway as an
 **area** rather than an edge line — the only source in the estate that does — and it agrees:
@@ -13238,6 +13240,12 @@ e505   16.69 m  REFUSED         16.66 m                    3 cm
 `e503` is the control: the pipeline publishes it, and HyD lands 4 cm away. On the same street and the
 same walk, `e504`/`e505` read **16.7 m** from a publisher with no relationship to iB1000. **The 16.7 m
 is not an artefact of one source**, and the refusal rests entirely on TD's 16.5 m ceiling.
+
+⚠️ **Second publisher, not third, and the distinction is this question's own point.** The estate
+holds three carriageway sources; TD's painted edge has **zero coverage** on all three STEWART ROAD
+edges, so only iB1000 and now HyD answer here. The pipeline and `carriageway_margin.py` are two
+*implementations* over the same iB1000 line, and their agreement is `Q95`'s independence check
+rather than a second opinion about the street.
 
 🔴 **This does not license moving the ceiling, and the reason has not changed.** The 44 refused spans
 are still a continuum to 26.71 m with no break, and 16.8 m still admits 13 of them. What HyD changes
