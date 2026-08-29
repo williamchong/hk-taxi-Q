@@ -51,6 +51,7 @@ from pipeline.config import (
 from pipeline.crs import GameTransform
 from pipeline.documents import read_document, round_position, write_document
 from pipeline.fetch import cached_source
+from pipeline.gltf import normalise
 from pipeline.polyline import plan_lengths_2d, plan_steps_2d
 from pipeline.terrain import HeightField
 
@@ -105,10 +106,11 @@ ROADGRAPH_NAME = "roadgraph.json"
 # to say what stands *beside* it, and `on_structure` cannot stand in for the
 # second: it is height provenance, so an approach ramp walled on both sides but
 # sampled off the terrain reports every station off structure. `e233`, `e55` and
-# `e398` do exactly that, and `surface.py` drew them 10.24-12.48 m wide between
-# walls 3.8 m apart. Nor can `y`, `elevation_level` or `width_m` recover it. A
-# consumer that keeps reading `on_structure` as "is this carriageway bounded"
-# is **wrong** about the whole Wan Chai Interchange, which is hard rule 5's test.
+# `e398` do exactly that, and `surface.py` drew them at the 10.24-12.48 m floor
+# over surveyed carriageways of 5.42, 5.57 and 6.66 m. Nor can `y`,
+# `elevation_level` or `width_m` recover it. A consumer that keeps reading
+# `on_structure` as "is this carriageway bounded" is **wrong** about the whole
+# Wan Chai Interchange, which is hard rule 5's test.
 ROADGRAPH_SCHEMA = 8
 
 # `Node.kind` in the data contract. Degree three or more is somewhere a
@@ -168,8 +170,8 @@ class Edge:
     # ⚠️ **Not `on_structure`, and not implied by it either way.** That flag is
     # height *provenance*; this is what is next to the road. They coincide on a
     # viaduct and come apart on its approach ramp — `e233` is on structure at
-    # none of its 17 stations while being walled along most of them. A consumer
-    # reading one for the other gets the Wan Chai Interchange wrong both ways.
+    # none of its 17 stations and bounded at 6 of them. A consumer reading one
+    # for the other gets the Wan Chai Interchange wrong in both directions.
     structure_bounded: list[bool]
     direction: str
     lanes: int
@@ -306,7 +308,9 @@ class RoadReport:
     # *directly*, while this counts stations published as resting on it — which
     # includes everything an interpolated deck spans.
     vertices_on_structure: int = 0
-    # `Q19`'s counter, and the one `surface.py` narrows against since 2026-08-30.
+    # `Q19`'s counter, and — unlike the one above — the one `surface.py`
+    # deliberately does **not** narrow against. `_half_widths` records why the
+    # narrowing this would license was built, measured and refused.
     # ⚠️ **Reachable at zero and at the full station count**, which is how it is
     # tested: `Q72`'s tautology was a counter that read 0 because no
     # configuration could make it anything else. Drop the probe and this reads 0;
@@ -1228,8 +1232,8 @@ def _structure_bounded(deck: _Deck | None, plan: np.ndarray, y: np.ndarray) -> n
     apart on its approach ramp, which is precisely the population that blocks:
     `e233` (0 of 17 stations on structure), `e55` (0 of 36) and `e398` (0 of 35)
     are walled ramps whose heights came from terrain, so `Q23`'s suppression
-    never fired and `surface.py` drew them 10.24-12.48 m wide between walls
-    3.8 m apart.
+    never fired and `surface.py` drew them at the 10.24-12.48 m floor over
+    surveyed carriageways of 5.42, 5.57 and 6.66 m.
 
     🔴 **A vertical ray cannot find a wall, and this does not try to.**
     `HeightField.from_meshes` drops near-vertical triangles outright, so a
@@ -1256,15 +1260,25 @@ def _structure_bounded(deck: _Deck | None, plan: np.ndarray, y: np.ndarray) -> n
     thresholds = deck.thresholds
     # Central differences, so an interior station's lateral follows the curve
     # rather than one of the two segments meeting at it. A zero-length step —
-    # `dedupe` runs before this, but a resampled curve can still fold — leaves a
-    # zero normal, which probes the centreline repeatedly and finds the road it
-    # is already on rather than raising a divide-by-zero.
-    tangent = np.gradient(plan, axis=0)
-    length = np.hypot(tangent[:, 0], tangent[:, 1])
-    usable = length > 0.0
-    lateral = np.zeros_like(tangent)
-    lateral[usable, 0] = -tangent[usable, 1] / length[usable]
-    lateral[usable, 1] = tangent[usable, 0] / length[usable]
+    # `dedupe` runs before this, but a resampled curve can still fold — normalises
+    # to zero rather than raising, and `usable` then drops it: an unrotated zero
+    # would probe the centreline and find the road the station is already on.
+    #
+    # ⚠️ Not `surface.mitres`, which is the repo's other centreline offset. That
+    # one returns a *mitre-joined* vector, extended at a corner so ribbon quads
+    # meet exactly; this wants a plain unit perpendicular. It would also close an
+    # import cycle — `surface.py` imports this module.
+    #
+    # ⚠️ **`carriageway._stations` takes the opposite choice and both are right.**
+    # It uses the *segment* normal, because "a ray cast off a smoothed direction
+    # can leave the carriageway at a bend and find the wrong kerb" — it measures
+    # one distance and a few degrees move it. This ORs a hit over 52 offsets on
+    # both sides, so an angle error shifts which offset lands on the wall rather
+    # than what is found; and it probes at the published vertices, where two
+    # segments meet and there is no single segment normal to take.
+    tangent = normalise(np.gradient(plan, axis=0))
+    usable = np.any(tangent != 0.0, axis=1)
+    lateral = np.column_stack([-tangent[:, 1], tangent[:, 0]])
 
     # Both signs, and the centreline itself is never probed: a station is
     # bounded by what stands *beside* it, and the road it is on is not a wall.

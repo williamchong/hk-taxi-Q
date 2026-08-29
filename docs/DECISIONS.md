@@ -1205,8 +1205,8 @@ failure.
 measured a *vertical* question — `overhang.py`'s upward face within 1 m **below** the ribbon — and
 concluded **"a street on an abutment is a street"**, leaving 546 m wide on purpose. The trigger owed
 here is *lateral*: whether solid structure stands **beside** the carriageway at bumper height. A
-street on an abutment is still a street; a street drawn 12.48 m wide between walls 3.8 m apart is
-not.
+street on an abutment is still a street; a street drawn at a 12.48 m floor on a surveyed 3.84 m
+carriageway is not.
 
 ✅ **Shot rather than argued** (`build/driver/q19s/`, `city_preview.tscn`, `--debug-view=off
 --hud=off`, every frame shot twice and `cmp`-identical):
@@ -1217,9 +1217,10 @@ not.
 | `e55` | a broad concrete ramp mass filling the left of the frame, the ribbon running into its flank |
 | `e256` | a ramp flank rising out of the **left of the carriageway with a railing along its top** |
 
-⬜ **Assigned, not yet spent.** The lateral probe, a second per-station flag beside `on_structure`
-(never a widening of that flag's meaning), and the graders the widening bullet owes. The 7
-centreline-inside edges are **not** reachable by it and stay open.
+⬜ **Assigned.** The lateral probe, a second per-station flag beside `on_structure` (never a widening
+of that flag's meaning). The 7 centreline-inside edges are **not** reachable by it and stay open.
+⚠️ **Spent the same day — see the next section**, which is also where the graders this paragraph
+expected to owe turn out not to be owed, because the geometry never moved.
 
 ### The probe is built and the narrowing it licenses is REFUSED — 2026-08-30
 

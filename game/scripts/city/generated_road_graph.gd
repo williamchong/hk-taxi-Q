@@ -66,11 +66,11 @@ const PATH: String = "res://assets/generated/roadgraph.json"
 ## whether structure stands *beside* it at the height a bumper meets. They
 ## coincide on a viaduct and come apart on its approach ramp, which is the
 ## population that blocks: `e233`, `e55` and `e398` report every station off
-## structure while being walled along most of their length, so the surface stage
-## drew them 10.24-12.48 m wide between walls 3.8 m apart. Nothing here can
-## recover it — not `y`, not `elevation_level`, not `width_m` — so a reader that
-## keeps taking `on_structure` for "is this carriageway bounded" is **wrong**
-## about the whole Wan Chai Interchange.
+## structure while being bounded at 6 of 17, 7 of 36 and 13 of 35, so the surface
+## stage drew them at the 10.24-12.48 m floor over surveyed carriageways of 5.42,
+## 5.57 and 6.66 m. Nothing here can recover it — not `y`, not `elevation_level`,
+## not `width_m` — so a reader that keeps taking `on_structure` for "is this
+## carriageway bounded" is **wrong** about the whole Wan Chai Interchange.
 const SCHEMA_VERSION: int = 8
 
 

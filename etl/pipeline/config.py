@@ -2519,12 +2519,23 @@ class DeckSampling:
     **on** structure and keyed that on `on_structure` — which `roads.py` defines
     as height *provenance* — so a ramp whose height came from terrain kept the
     full at-grade floor however walled it was, and the Wan Chai Interchange
-    approaches were drawn 10.24-12.48 m wide between walls 3.8 m apart.
+    approaches were drawn at the 10.24-12.48 m floor over surveyed carriageways
+    of 3.84-7.20 m.
 
     ⚠️ **The two questions must not be merged into one flag.** `on_structure`
     has a published contract that `_descend`, `deck_error.py`, `overhang.py` and
     `touchdown_error.py` all read; widening its meaning would move all four
     without touching them.
+
+    ⚠️ **Two questions and still one class, which review raised and this rejects.**
+    `GroundProfile` is the precedent for splitting a second question out, and the
+    `bound_*` prefix is doing a namespace's job. But the probe reads
+    `slab_gap_m` as well as its own four values — it asks
+    `sample_lowest_above` for a slab top, so it needs the same clustering
+    constant the height samplers do — and a nested type would either duplicate
+    that constant or reach back out to its parent for it. `GroundProfile` shares
+    nothing with `DeckSampling`; this shares the one value that decides what
+    counts as a structure.
 
     Tuning data rather than constants in code (CLAUDE.md hard rule 4), and none
     of it is derivable: every value here was measured on Wan Chai, and a city
