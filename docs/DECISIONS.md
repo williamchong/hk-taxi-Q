@@ -662,9 +662,22 @@ crisp edges at any cell size and a clean key for `collapse`.
 
 ## `Q19` — Solid geometry stands in the drawn carriageway
 
-**Status.** 🟡 Half answered · **Owner.** unassigned — ⚠️ **and no longer "the carriageway-width
+**Status.** 🟡 Half answered · **Owner.** 🔴 **THE NAMED NEXT TASK since 2026-08-30** (user's call),
+having been unassigned since the routing half closed — ⚠️ **and no longer "the carriageway-width
 question", which 2026-08-21 refused for the building half**; it is road-versus-footprint now. The
 interchange half became `Q22`/Phase 4's and `e702` `Q51`'s on 2026-08-20
+
+🔴 **`P3-9a′`'s three drivers found this from the driving seat on 2026-08-30, and it is what ended
+the round.** They stopped driving because they kept getting stuck on bridge rails — so the finding
+is no longer "5.17% of drawn carriageway", it is *the reason strangers put the build down*.
+⚠️ **They named the object they could see, not the thing they hit**: `railings.glb` carries no
+collider by design, and the wall is the `INFRASTRUCTURE` geometry beneath it. Measured the same day:
+**7 of the 16** level-0 edges touching a structure keep less than one lane clear — **43.8%, against
+2.5% of the other 721** — all seven `INFRASTRUCTURE`-blocked, on WAN CHAI INTERCHANGE (`e233` at
+**0.00 m clear**), HUNG HING ROAD FLYOVER, CANAL ROAD FLYOVER and FLEMING ROAD. ✅ **The routing half
+already refuses these** — `is_routable` will not send traffic onto a wall — **and nothing stops the
+player**, which this entry has said since `Q51` closed and which is now priced rather than
+predicted
 
 **Claim.** **5.17% of drawn carriageway has solid geometry standing in it at bumper height** —
 `BUILDING` 1.72% and `INFRASTRUCTURE` 1.60% at grade, plus a further 1.87% on off-grade ribbon nobody
@@ -1301,6 +1314,19 @@ number, not only the ones a checklist names.
 **Status.** ✅ **Closed 2026-08-17 — candidate `C` ships.** Accurate massing, flat per-building
 colour, no façade fabric and no surveyed verdicts. The user's call, on the configuration that had
 already been the working default since 2026-08-16 · **Owner.** `P3-9a`, which can reopen it
+
+⚠️ **`P3-9a′` ran on 2026-08-30 and the gate STAYS SHUT — half the condition, not the condition.**
+The pre-registered trigger is *the drivers reject the city* **and** *attribute it to flat surface*.
+Some drivers said buildings read as unfinished and wanting polish, which is the attribution half; but
+they **recognised the city**, which is the criterion the round exists to test, so the antecedent
+never fired. 🔴 **Recorded as a half-signal and not acted on** (user's call): loosening a
+pre-registered condition after seeing the data is what makes pre-registration worthless, and this
+project has refused the same shape twice before — `Q58`'s bar that could not read outside itself,
+`Q72`'s counter that could not reach a non-zero. ⚠️ **It is also the wrong instrument.** Nobody asked
+them about the buildings; they volunteered it, so it is a lead, not a measurement — and whether
+"unfinished" means this question's flat surface, `Q31`'s empty middle, LOD popping or the untextured
+façades is **not determined by what was said**. A round that means to settle this has to ask it
+directly. See `P3-9a′`
 
 ### ✅ The verdict — `C`, and what closing on it costs
 
@@ -14245,3 +14271,108 @@ them, `check.sh` was green before and after, and the mutation check still fails 
 it, and the counter this moved · `Q92` for why a stage cannot grade its own frames · `Q72` for the
 counter test · `Q62` for why the evidence is a render · `Q59` for the convention `_offset_of` keeps
 in one place
+
+---
+
+## `P3-9a′` — Round 0's verdict: the city is recognised, and it is not drivable far
+
+**Status.** 🟢 **Round run and closed 2026-08-30.** Three HK drivers, over the web link. The
+recognition question is **answered yes**; the round ended on two findings, one of which had already
+been measured for twelve days.
+
+### What was asked, and what came back
+
+`PLAN.md`'s question for `B2` is **"Does this read as Wan Chai?"** — recognition, before any game
+exists, which is why this round is in front of `P3-9` rather than folded into it.
+
+| | |
+|---|---|
+| ✅ **Recognised the city as Wan Chai** | the round's acceptance criterion, met |
+| 🔴 **Did not drive far — repeatedly stuck on bridge rails** | ended the sessions early |
+| ⚠️ **Some buildings read as unfinished, wanting polish** | attributed to the buildings themselves |
+
+🔴 **The recognition result is worth stating plainly, because it is the bet.** `Q8` closed on "the
+city itself is the fun" and the user's own word for it was *gimmick*; every fare, traffic and scoring
+task downstream rests on strangers recognising this place. Three did, from geometry alone — no HUD,
+no street plates in play, no fare arrow, because none of them exist in `B2`. That is the strongest
+evidence the project has for its central assumption, and it did not come from the person who built
+it.
+
+### ⚠️ What this record does NOT contain
+
+The `P3-9a` rule is **a new name per cut, never an overwrite**, so that a round can be tied to a
+build. **This round cannot be, from the repo alone.** The freshest artefact on disk is
+`build/web/index.pck` at **2026-08-28 17:37**; there is no `r6` zip, and roughly **24 commits** have
+landed since — `Q91`, `Q92`, `Q93`, `Q24`, and the whole of `Q94`/`Q95`/`Q96`. `Q95` in particular
+re-baselined every published width and moved every registered layer (signs 681→671, lamps 897→893,
+railings 9017→8809 m), so "the city the drivers saw" and "the city in the tree" are not the same
+object and the difference is not small.
+
+Also not captured, and not invented here: which of the three said what, which bridges, which
+buildings, how long each session ran, and what the drivers were told beforehand. 🔴 **The naming
+rule existing and being skipped is itself the finding** — it is the one process control this round
+had, and the round is the most expensive evidence the project buys.
+
+### The bridge rails are `Q19`, and the drivers found it from the seat
+
+⚠️ **They named the object they could see, not the thing they hit.** `railings.glb` carries **no
+collider** — `railings.py` records that as a deliberate design decision — so a railing cannot stop a
+car. What stops it is the `INFRASTRUCTURE` geometry the railing stands on, which
+`tools/carriageway_occupancy.py` has been failing on continuously.
+
+Measured on the shipped bundle, 2026-08-30:
+
+| | |
+|---|---|
+| drivable level-0 edges keeping less than one lane (3.20 m) clear | **26** — the tool's standing `FAIL` |
+| of the 25 it lists, blocked by `INFRASTRUCTURE` in whole or part | **11** |
+| level-0 edges touching a structure at any station | **16 of 737 (2.2%)** |
+| **of those, blocked** | **7 of 16 — 43.8%** |
+| non-structure edges blocked | **18 of 721 — 2.5%** |
+
+🔴 **Nearly half of every edge that touches a structure is impassable, against one in forty of the
+rest.** All seven are `INFRASTRUCTURE`-blocked: `e125` and `e485` and `e327` and `e256` and `e222`
+(WAN CHAI INTERCHANGE), `e788` (HUNG HING ROAD FLYOVER), `e99` (FLEMING ROAD), with `e781` (CANAL
+ROAD FLYOVER) and `e233` (WAN CHAI INTERCHANGE, **0.00 m clear**) in the wider blocked set. That
+distribution is the whole of "they did not drive far": the interchange is what connects the region's
+halves, and it is the part that stops you.
+
+✅ **So this is not a new question, it is `Q19` arriving where a player can feel it.** `Q19` has been
+🟡 half answered and **unassigned** since the routing half closed as `Q51` — the bundle publishes a
+clear width and `RoadGraph.is_routable` refuses to send *traffic* onto a wall, but nothing stops the
+*player*, and `Q19`'s own entry says exactly that. What the round adds is not a measurement; it is
+that three strangers independently hit it hard enough to stop driving. **Re-prioritised on the
+user's call 2026-08-30: `Q19` is the named next task.** Still unfixed here — the fix needs its own
+design, and this round's job was to price it, not to spend it.
+
+### The building comment does NOT open `Q26`'s gate, and that is deliberate
+
+`PLAN.md` pre-registers the condition: `P3-7a`'s remaining riders and `Q26`'s look decision reopen
+**if `P3-9a`'s drivers reject the city *and* attribute it to flat surface**. It is a conjunction, and
+it was written that way on purpose — `Q26` closed on candidate `C`, which ships `survey_apply = 0.0`,
+so every remaining rider renders nothing and none of them could have influenced this round.
+
+**The drivers met half of it.** "Some buildings feel unfinished" is attribution to the buildings.
+But they did not reject the city — they recognised it, which is the criterion the round exists to
+test. 🔴 **Recorded as a half-signal and the gate stays shut** (user's call, 2026-08-30): loosening a
+pre-registered condition after seeing the data is the move that makes pre-registration worthless,
+and this project has refused the same shape before (`Q58`'s trap, `Q72`'s tautology). ⚠️ **It is
+also the wrong instrument** — the drivers were never asked whether the buildings read as unfinished;
+they volunteered it, so it is a lead and not a measurement. A round that wants to settle `Q26` has
+to ask.
+
+⚠️ **`Q31` is the nearest measured neighbour** and is not the same claim: it is about the value range
+having an empty middle in a street frame. Whether "unfinished" is `Q31`, `Q26`'s flat surface, LOD
+popping, or the untextured façades is **not determined by what was said**, and guessing between them
+here would invent the finding.
+
+### Left
+
+⬜ `Q19` — the blocked structure edges, now the named next task
+⬜ Name the cut this round drove, or accept that it cannot be tied to one
+⬜ A round that asks the building question directly, if `Q26` is to move
+⬜ `P3-9` proper — different drivers, on a handset, arrow disabled
+
+**See.** `Q19` for the blocked carriageway and why routing already refuses it · `Q51` for the
+routing half · `Q26` and `P3-7a` for the gate and why it stays shut · `Q8` for the bet this round
+tested · `Q76` for the renderer the artefact does not share with the product
