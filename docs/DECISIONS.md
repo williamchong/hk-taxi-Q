@@ -13338,6 +13338,48 @@ arrow-carrying edges that stack.
 *"both instruments still read what `Q51` recorded"*, baseline reproducing `clearance.json` on all 737
 edges, 0 cleared at any floor.
 
+#### Review of the above, same day
+
+🔴 **A real defect in `download_paged`: `crs is None` was doing two jobs.** It meant both "no page
+read yet" and "that page carried no CRS". A first page without a `crs` member therefore left the
+sentinel unset, so every later page re-entered the first branch — the mid-walk change guard never
+fired, and the moment a page *did* carry a CRS its `"crs":…,` fragment was spliced into the middle of
+the already-open `features` array. **Invalid JSON, not a duplicate key.** Latent, because every
+synthetic page in the tests carried one. Fixed with a separate `crs_seen` flag and pinned by two
+tests, the first of which is **mutation-checked**: reverted to the old sentinel it reports *"DID NOT
+RAISE"*.
+
+✅ **Two validators were weaker than ones the repo already had.** `_paged_source` searched for
+`{offset}`/`{count}` as substrings, where `_tile_member` — the same job for `{tile}` — actually calls
+`.format()` and catches the error, which is what rejects a URL carrying a *third* placeholder at load
+rather than on the first of 22 requests. And its filename check omitted the null byte that
+`fetch._safe_segment`'s `_NAME_SEPARATORS` already carries, making it a strictly weaker path-escape
+guard than the one beside it. Both now mirror the originals; the import direction (`fetch` imports
+`config`) is why the second is restated rather than shared, and that is said in the comment.
+
+✅ **`_with_retries` extracted.** `_get` had reimplemented `download`'s retry loop verbatim — same
+exception set, same backoff, same message — which its own docstring admitted by calling it
+"`download`'s retry set". The two share nothing else and still do not: cleanup stays with the
+operation, so `download`'s `except BaseException` still unlinks its `.part` before the retry ever
+sees the error. ✅ **Checked against the wire, not only the tests**: a forced re-fetch of all 22 pages
+returns a file byte-identical to the pre-refactor one.
+
+⚠️ **`emit()` encoded every feature twice**, once for the digest and once for the length — 64,644
+redundant encodes. One line.
+⚠️ **`geometry`'s default was the bare literal `"line"`** in two places while `CARRIAGEWAY_LINE`
+existed below it in the file. Constants hoisted above the dataclass and both defaults now reference
+them, which is what the vocabulary comment beside `MARKING_DIRECTIONS` asks for.
+
+⚠️ **A tradeoff worth recording rather than fixing.** `hyd_pavement` is plain GeoJSON, which has no
+spatial index, so `bbox` cannot push down: every build parses the whole **163 MB** to keep the ~550
+in-region carriageway polygons. Measured at **2.43 s** per run. `topography` does not behave this way
+— it is tiled, so a region reads only the sheets it needs, each an indexed FileGDB. The asymmetry is
+the price of `paged_sources` being per-city, and it is paid once per region per build; worth watching
+if regions multiply.
+
+⚠️ **Declined:** `np.unique(axis=0)` in `_union_boundary` is 12 ms at today's 33k segments and ~2 s at
+a bigger city's 3M — a hand-rolled void-view sort is 1.4-2.3x faster and not worth the bit-packing.
+
 **See.** `Q19` for the invented width and the invisible walls it causes · `Q57` for the previous
 narrowing and the lane lines · `Q54` for why a published extent is not overruled by a derived one ·
 `Q72` for the reachable-at-zero test this counter had to pass · `Q93` for the glyph these are drawn

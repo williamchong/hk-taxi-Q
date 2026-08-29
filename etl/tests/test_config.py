@@ -15,7 +15,13 @@ from typing import Any
 import pytest
 import yaml
 
-from pipeline.config import CITIES_ROOT, SUPPORTED_SCHEMA, SurfaceClass, load_city
+from pipeline.config import (
+    CITIES_ROOT,
+    SUPPORTED_SCHEMA,
+    SurfaceClass,
+    _paged_source,
+    load_city,
+)
 
 
 @pytest.fixture
@@ -1826,6 +1832,60 @@ class TestKerbsideAudit:
 
         with pytest.raises(ValueError, match="grade every metre unknown"):
             load_city("hong_kong", cities_root=rewrite(empty))
+
+
+class TestPagedSources:
+    """`Q94`'s third source kind: a publisher that serves records a page at a time.
+
+    Checked at load for `_tile_member`'s reason — a malformed template would
+    otherwise surface on the first of twenty-two requests, deep into a 163 MB
+    fetch.
+    """
+
+    @staticmethod
+    def _body(**overrides):
+        body = {
+            "url": "https://example/q?offset={offset}&count={count}",
+            "page_size": 3000,
+            "max_pages": 60,
+            "filename": "INV_PG.geojson",
+        }
+        return {**body, **overrides}
+
+    def test_hong_kong_declares_the_pavement_polygon_source(self, hong_kong) -> None:
+        source = hong_kong.paged_sources["pavement_polygon"]
+
+        assert source.page_size == 3000
+        assert source.filename == "INV_PG.geojson"
+        # 🔴 The filename is what `carriageway_survey.edges[].layer` has to spell:
+        # `pyogrio` names a GeoJSON layer after the stem.
+        assert source.filename.startswith("INV_PG")
+        assert "pavement_polygon" in hong_kong.source_ids
+
+    def test_a_template_missing_a_placeholder_is_refused(self) -> None:
+        with pytest.raises(ValueError, match=r"has no \{count\}"):
+            _paged_source("s", self._body(url="https://example/q?offset={offset}"), "w")
+
+    def test_a_template_carrying_a_THIRD_placeholder_is_refused(self) -> None:
+        """⚠️ What a substring check misses, and why this mirrors `_tile_member`.
+
+        `{bogus}` contains both required placeholders and still cannot be
+        formatted, so a search-based check passes it at load and it fails on the
+        first request instead."""
+        with pytest.raises(ValueError, match="allows only"):
+            _paged_source("s", self._body(url="https://e/q?o={offset}&c={count}&z={bogus}"), "w")
+
+    def test_a_filename_that_could_escape_the_sources_tree_is_refused(self) -> None:
+        """The same rule as `fetch._safe_segment`'s, null byte included."""
+        for bad in ("../out.json", "a/b.json", "..", "a\x00b"):
+            with pytest.raises(ValueError, match="not a plain filename"):
+                _paged_source("s", self._body(filename=bad), "w")
+
+    def test_a_page_size_or_ceiling_that_walks_nowhere_is_refused(self) -> None:
+        with pytest.raises(ValueError, match="asks for nothing"):
+            _paged_source("s", self._body(page_size=0), "w")
+        with pytest.raises(ValueError, match="walks nowhere"):
+            _paged_source("s", self._body(max_pages=0), "w")
 
 
 class TestCarriagewaySurvey:

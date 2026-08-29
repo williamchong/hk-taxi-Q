@@ -562,6 +562,39 @@ class TestDownloadPaged:
                 url, tmp_path / "out.geojson", fetch.PageSpec(size=3, max_pages=10)
             )
 
+    def test_a_first_page_with_NO_crs_still_guards_the_pages_after_it(self, tmp_path: Path) -> None:
+        """🔴 The defect a sentinel doing two jobs caused.
+
+        `crs is None` cannot mean both "no page read yet" and "that page had no
+        CRS". Conflated, a first page without one left the sentinel unset, so
+        every later page re-entered the first branch: the change guard never
+        fired, and the moment a page *did* carry a CRS its `"crs":…,` fragment
+        was spliced into the middle of the already-open `features` array. That
+        is invalid JSON rather than a duplicate key, and no test caught it
+        because every synthetic page here carried a CRS.
+        """
+        headless = self._page(3)
+        del headless["crs"]
+        url, _ = self.serve([headless, self._page(1)])
+        with pytest.raises(ValueError, match="changed CRS mid-walk"):
+            fetch.download_paged(
+                url, tmp_path / "out.geojson", fetch.PageSpec(size=3, max_pages=10)
+            )
+
+    def test_a_layer_with_no_crs_at_all_assembles_valid_json(self, tmp_path: Path) -> None:
+        """The other half: absent throughout is legal, and must stay parseable."""
+        pages = []
+        for count in (3, 1):
+            page = self._page(count)
+            del page["crs"]
+            pages.append(page)
+        url, _ = self.serve(pages)
+        destination = tmp_path / "out.geojson"
+        fetch.download_paged(url, destination, fetch.PageSpec(size=3, max_pages=10))
+        document = json.loads(destination.read_text())
+        assert len(document["features"]) == 4
+        assert "crs" not in document
+
     def test_an_error_payload_is_refused_rather_than_written(self, tmp_path: Path) -> None:
         """ArcGIS answers 200 with an `error` body, so the status code says nothing."""
         url, _ = self.serve([{"error": {"code": 400, "message": "Invalid where"}}])

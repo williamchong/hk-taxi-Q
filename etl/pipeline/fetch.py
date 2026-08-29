@@ -28,13 +28,13 @@ import logging
 import os
 import ssl
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from http.client import HTTPException
 from pathlib import Path, PurePosixPath
-from typing import Any, Protocol
+from typing import Any, Protocol, TypeVar
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
@@ -43,6 +43,10 @@ from pipeline.config import CityConfig, PagedSource, RegionConfig, TiledSource, 
 from pipeline.crs import GeodeticBounds, reproject_bounds
 
 log = logging.getLogger(__name__)
+
+# `_with_retries` returns whatever its operation does — bytes for one caller,
+# a (size, digest) pair for the other.
+_T = TypeVar("_T")
 
 SOURCES_ROOT = Path(__file__).resolve().parent.parent / "sources"
 MANIFEST_NAME = "manifest.json"
@@ -540,8 +544,7 @@ def download(
     destination.parent.mkdir(parents=True, exist_ok=True)
     partial = destination.with_name(destination.name + ".part")
 
-    last_error: Exception | None = None
-    for attempt in range(1, _ATTEMPTS + 1):
+    def once() -> tuple[int, str]:
         try:
             digest = hashlib.sha256()
             written = 0
@@ -570,26 +573,42 @@ def download(
                 )
             os.replace(partial, destination)
             return written, digest.hexdigest()
-        except (HTTPError, URLError, TimeoutError, HTTPException, ConnectionError) as error:
-            # Deliberately *not* bare OSError. Disk failures — ENOSPC above all,
-            # very reachable at ~820 MB — are not transient, and retrying one
-            # three times before reporting it as a download failure sends the
-            # operator to look at the network.
-            last_error = error
-            partial.unlink(missing_ok=True)
-            if attempt < _ATTEMPTS:
-                # Restarting from zero rather than resuming with a Range header.
-                # Simpler, and these are build-time fetches on a good link; add
-                # resumption if a large source proves flaky in practice.
-                log.warning("  attempt %d/%d failed (%s) — retrying", attempt, _ATTEMPTS, error)
-                time.sleep(_RETRY_BACKOFF_S * attempt)
         except BaseException:
-            # Includes KeyboardInterrupt: leaving a `.part` behind is harmless,
-            # but leaving it behind is still worse than not.
+            # Every failure, transient or not, and KeyboardInterrupt with them:
+            # leaving a `.part` behind is harmless, but still worse than not.
+            # ⚠️ **The retry restarts from zero rather than resuming with a
+            # Range header.** Simpler, and these are build-time fetches on a
+            # good link; add resumption if a large source proves flaky.
             partial.unlink(missing_ok=True)
             raise
 
-    raise RuntimeError(f"failed to download {redact(url)} after {_ATTEMPTS} attempts: {last_error}")
+    return _with_retries(once, f"download {redact(url)}")
+
+
+def _with_retries(operation: Callable[[], _T], what: str) -> _T:
+    """Run `operation`, retrying only the failures a second attempt can fix.
+
+    Shared by `download` and `_get`, which have nothing else in common — one
+    streams bytes it never parses and the other must parse what it reads to know
+    whether to ask for another page. What they *did* share was this loop,
+    verbatim, down to the backoff and the message.
+
+    ⚠️ **Deliberately not bare `OSError`.** Disk failures — ENOSPC above all,
+    very reachable at ~820 MB — are not transient, and retrying one three times
+    before reporting it sends the operator to look at the network.
+    ⚠️ **Cleanup belongs to `operation`**, which is why the caller's own
+    `except BaseException` runs before this ever sees the error.
+    """
+    last_error: Exception | None = None
+    for attempt in range(1, _ATTEMPTS + 1):
+        try:
+            return operation()
+        except (HTTPError, URLError, TimeoutError, HTTPException, ConnectionError) as error:
+            last_error = error
+            if attempt < _ATTEMPTS:
+                log.warning("  attempt %d/%d failed (%s) — retrying", attempt, _ATTEMPTS, error)
+                time.sleep(_RETRY_BACKOFF_S * attempt)
+    raise RuntimeError(f"failed to {what} after {_ATTEMPTS} attempts: {last_error}")
 
 
 def _content_length(response: Any) -> int | None:
@@ -801,12 +820,23 @@ def download_paged(
     written = 0
     features = 0
     crs: Any = None
+    # 🔴 **A separate flag, because `crs is None` cannot mean both "no page yet"
+    # and "that page had no CRS".** Conflating them was a real defect: a first
+    # page without a `crs` member left the sentinel unset, so every later page
+    # re-entered the first branch — silently skipping the change guard, and then
+    # splicing a second `"crs":…,` fragment into the middle of the already-open
+    # `features` array the moment a page did carry one. That is invalid JSON,
+    # not a duplicate key.
+    crs_seen = False
 
     def emit(handle: Any, text: str) -> None:
         nonlocal written
+        # Encoded once. The digest and the byte count both need it, and there is
+        # one `emit` per feature — 64,644 of them on this region's source.
+        encoded = text.encode()
         handle.write(text)
-        digest.update(text.encode())
-        written += len(text.encode())
+        digest.update(encoded)
+        written += len(encoded)
 
     try:
         with partial.open("w", encoding="utf-8") as handle:
@@ -818,10 +848,11 @@ def download_paged(
                 if "error" in payload:
                     raise ValueError(f"{redact(url)} returned {payload['error']}")
                 rows = payload.get("features") or []
-                if crs is None:
+                if not crs_seen:
                     # Taken from page one and written once. A publisher that
                     # changed CRS mid-walk would be a defect, and asserting it
                     # here is cheaper than discovering it as a datum shift.
+                    crs_seen = True
                     crs = payload.get("crs")
                     if crs is not None:
                         emit(handle, f'"crs":{json.dumps(crs)},')
@@ -855,19 +886,14 @@ def download_paged(
 
 
 def _get(url: str, *, context: ssl.SSLContext | None) -> bytes:
-    """One page, with `download`'s retry set and nothing else in common with it."""
-    last: Exception | None = None
-    for attempt in range(1, _ATTEMPTS + 1):
-        try:
-            request = Request(url, headers={"User-Agent": _USER_AGENT})
-            with urlopen(request, timeout=_TIMEOUT_S, context=context) as response:
-                return bytes(response.read())
-        except (HTTPError, URLError, TimeoutError, HTTPException, ConnectionError) as error:
-            last = error
-            if attempt < _ATTEMPTS:
-                log.warning("  attempt %d/%d failed (%s) — retrying", attempt, _ATTEMPTS, error)
-                time.sleep(_RETRY_BACKOFF_S * attempt)
-    raise RuntimeError(f"could not fetch {redact(url)}: {last}") from last
+    """One page, whole. Nothing in common with `download` but `_with_retries`."""
+
+    def once() -> bytes:
+        request = Request(url, headers={"User-Agent": _USER_AGENT})
+        with urlopen(request, timeout=_TIMEOUT_S, context=context) as response:
+            return bytes(response.read())
+
+    return _with_retries(once, f"fetch {redact(url)}")
 
 
 def _process(

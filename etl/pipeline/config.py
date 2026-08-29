@@ -65,6 +65,14 @@ class RegionConfig:
     tile_size_m: float
 
 
+# What kind of geometry a carriageway publisher draws (`Q94`). Named next to the
+# validation that accepts them, for the reason `MARKING_DIRECTIONS` gives: the
+# stage that acts on a vocabulary must not drift from the set that is accepted.
+CARRIAGEWAY_LINE = "line"
+CARRIAGEWAY_AREA = "area"
+CARRIAGEWAY_GEOMETRIES = frozenset({CARRIAGEWAY_LINE, CARRIAGEWAY_AREA})
+
+
 @dataclass(frozen=True)
 class PagedSource:
     """A dataset served a page of records at a time, from one fixed query.
@@ -661,7 +669,7 @@ class CarriagewayEdge:
     # not kerbs, so the boundary of the *union* is what a ray may stop at. HyD
     # tiles Wan Chai's carriageway into 552 polygons and a naive ray stops at the
     # first seam it meets.
-    geometry: str = "line"
+    geometry: str = CARRIAGEWAY_LINE
 
     @property
     def tiled(self) -> bool:
@@ -2208,13 +2216,6 @@ def _pair(values: list[Any], where: str) -> tuple[float, float]:
 # is normalised away by reversing the polyline, so the game never has to know
 # the difference. Named here, next to the validation, so the stage that acts
 # on them cannot drift from the set that is accepted.
-# What kind of geometry a carriageway publisher draws (`Q94`). Named next to the
-# validation that accepts them, for the reason `MARKING_DIRECTIONS` gives: the
-# stage that acts on a vocabulary must not drift from the set that is accepted.
-CARRIAGEWAY_LINE = "line"
-CARRIAGEWAY_AREA = "area"
-CARRIAGEWAY_GEOMETRIES = frozenset({CARRIAGEWAY_LINE, CARRIAGEWAY_AREA})
-
 BOTH = "both"
 FORWARD = "forward"
 BACKWARD = "backward"
@@ -3233,6 +3234,16 @@ def _paged_source(source_id: str, body: Any, where: str) -> PagedSource:
     if not isinstance(body, dict):
         raise ValueError(f"{where} must be a mapping, got {body!r}")
     url = str(_require(body, "url", where))
+    # ⚠️ **Formatted rather than searched, on `_tile_member`'s precedent** — that
+    # validator makes the same check for `{tile}` and makes it this way. A
+    # substring test passes a URL carrying a *third* placeholder, which then
+    # fails inside `download_paged` on the first request rather than at load.
+    try:
+        url.format(offset=0, count=1)
+    except (KeyError, IndexError, ValueError) as error:
+        raise ValueError(
+            f"{where}:url {url!r} allows only the {{offset}} and {{count}} placeholders ({error})"
+        ) from error
     for placeholder in ("{offset}", "{count}"):
         if placeholder not in url:
             raise ValueError(f"{where}:url has no {placeholder} — it is a template, not an address")
@@ -3243,7 +3254,12 @@ def _paged_source(source_id: str, body: Any, where: str) -> PagedSource:
     if max_pages < 1:
         raise ValueError(f"{where}:max_pages is {max_pages}, which walks nowhere")
     filename = str(_require(body, "filename", where))
-    if "/" in filename or "\\" in filename or filename in {".", ".."}:
+    # ⚠️ **The same rule as `fetch._safe_segment`'s, restated because the import
+    # direction forbids sharing it**: `fetch` imports `config`, so `config`
+    # cannot reach back. Restated *exactly*, null byte included — an earlier
+    # version of this check omitted it and was a strictly weaker path-escape
+    # guard than the one the repo already had.
+    if filename in {".", ".."} or set(filename) & {"/", "\\", "\0"}:
         raise ValueError(f"{where}:filename {filename!r} is not a plain filename")
     return PagedSource(
         id=source_id, url=url, page_size=page_size, max_pages=max_pages, filename=filename
@@ -5215,7 +5231,7 @@ def _carriageway_edge(body: Any, where: str) -> CarriagewayEdge:
             "'elevation' role to read them from"
         )
 
-    geometry = str(body.get("geometry", "line"))
+    geometry = str(body.get("geometry", CARRIAGEWAY_LINE))
     if geometry not in CARRIAGEWAY_GEOMETRIES:
         allowed = ", ".join(sorted(CARRIAGEWAY_GEOMETRIES))
         raise ValueError(f"{where}:geometry is {geometry!r}, not one of {allowed}")
