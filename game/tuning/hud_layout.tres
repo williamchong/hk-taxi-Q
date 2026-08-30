@@ -4,7 +4,7 @@
 
 ; Midtown Madness 2's arrangement: speed bottom-left, map bottom-right, and the
 ; middle kept for what the player is reading now. See hud_layout.gd, and Q80 for
-; why the check grades `thumb_rest_*` and not `touch_steer_*`.
+; why the check grades `thumb_rest_*` and not `touch_zone_*`.
 ;
 ; ⚠️ BOTH DRAWN READOUTS SHARE A BASELINE AT y 860 — one clear band above
 ; `thumb_rest_*`, which is as low as the touch contract allows, and level with
@@ -30,7 +30,7 @@ wrong_way = Rect2(912, 40, 96, 96)
 minimap = Rect2(1632, 470, 240, 210)
 timer = Rect2(40, 40, 300, 110)
 meter = Rect2(1540, 40, 340, 120)
-touch_steer_left = Rect2(0, 480, 560, 600)
-touch_steer_right = Rect2(1360, 480, 560, 600)
+touch_zone_left = Rect2(0, 480, 560, 600)
+touch_zone_right = Rect2(1360, 480, 560, 600)
 thumb_rest_left = Rect2(0, 880, 280, 200)
 thumb_rest_right = Rect2(1640, 880, 280, 200)

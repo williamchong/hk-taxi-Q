@@ -52,7 +52,12 @@ VERIFY_TOOLS=(
 # verify_hud is here for a sharper version of that reason: what it protects is
 # P2-4's future screen space, and P2-4 is exactly the kind of work that lands on
 # a branch where nobody has built a city.
-ALWAYS_TOOLS=(verify_beam_budget verify_vehicle verify_mesh_contract verify_hud)
+#
+# verify_input is here for the sharpest version of it: P0-3b has no handset, so
+# until it lands that tool is the only thing that exercises the touch scheme at
+# all. Gating it on a built region would mean the input path went unchecked on
+# exactly the branches where input work happens.
+ALWAYS_TOOLS=(verify_beam_budget verify_vehicle verify_mesh_contract verify_hud verify_input)
 
 # Promotions docs/ARCHITECTURE.md "GDScript warnings" says project.godot must
 # carry. Named here so the number the settings check wants and the number its

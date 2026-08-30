@@ -14901,3 +14901,150 @@ here would invent the finding.
 **See.** `Q19` for the blocked carriageway and why routing already refuses it · `Q51` for the
 routing half · `Q26` and `P3-7a` for the gate and why it stays shut · `Q8` for the bet this round
 tested · `Q76` for the renderer the artefact does not share with the product
+
+---
+
+## `Q97` — Touch drives, on three of five actions, and the action map is where it could not go
+
+**Status.** 🟢 **Closed 2026-08-30** on the user's instruction ("basic touch control support, dont
+support drifting yet"). ⚠️ **`P2-4` does not close with it** — its review is "the user says whether
+touch steering is usable at all", and that still needs `P0-3b`'s handset.
+
+**Claim.** `InputRouter` reads touch. The **left** zone steers; the **right** zone is one bipolar
+longitudinal axis, `accelerate` above the touch origin and `brake_reverse` below. Both thumbs are
+relative, as `Q83` settled. `drift` and `look_back` have no touch home and thumb 2's vertical axis
+is read and discarded. Touch **overrides** the action map per axis and never replaces it.
+
+### Deferring the drift removed exactly the blocked part
+
+`Q83` closes by saying the drift's threshold distance and its hysteresis "are numbers, and no desk
+can pick them", blocked on `P0-3b`. So the instruction to leave the drift out did not trade
+completeness for simplicity: it drew the line in the same place the evidence already did. ✅ **The
+ramp `Q84` built is untouched and still there** — what is missing is the gesture, not the model.
+
+⚠️ **`look_back` is deferred for a different reason and the two should not be pooled**: it has never
+been *placed*. `Q83` lists thumb 1's horizontal axis as the standing candidate and nothing has
+chosen it. `verify_input.gd` asserts that axis moves nothing, so placing it is a test that changes
+rather than a silence that is discovered.
+
+### The action map cannot carry an analog thumb, and that is measured, not preferred
+
+The obvious implementation feeds touch through `Input.action_press(action, strength)` and leaves
+`InputRouter` untouched. 🔴 **It cannot work: `project.godot` gives all four axis actions
+`"deadzone": 0.2`, and `get_action_strength` returns 0 beneath it.** The first fifth of every
+thumb's travel would vanish, on a control whose whole design is that small travel is available
+because there is no room for a slider (`Q83`'s 20 px). So the values are merged in the router as
+typed floats, and `touch.tres`'s `jitter_deadzone_px` is a *distance* applied before any normalising
+— a different quantity from the action deadzone and much smaller.
+
+### Override, not replace — which is what protects every drive in the repo
+
+🔴 **A router that computed its axes from touch state unconditionally would read zero through every
+scripted run, and each would still exit `DRIVER OK`.** `driver.gd` drives `--hold=` through
+`Input.action_press`; that includes `Q81`'s wrong-way route, which is the only evidence the
+wrong-way layer has. So the rule is per axis and only while that axis's own finger is down, and
+`verify_input.gd` asserts it from **both** sides — the keyboard steers with no finger down, and
+loses to a centred thumb.
+
+### Left steers, and `Q83` left that open on purpose
+
+`Q83`'s table says "one outer corner" and "other outer corner" and never commits to a side. Chosen
+on the two touch racers `Q80` already cites. ⚠️ **It lives in `HudLayout.steer_zone()` /
+`drive_zone()`, not in the input code** — a handedness spread through the router as two literal rect
+names is a choice nobody can reverse, and `P3-5b`'s "one-handed layout" is where a player-facing
+toggle would replace those two functions.
+
+⚠️ **`touch_steer_*` is renamed `touch_zone_*`.** The old names date from before `Q83`, when both
+thumbs were spent on steering — so `touch_steer_right` was pointing at what is now the
+**longitudinal** control. No rect moved: the A/B frames below are byte-identical.
+
+### One placer, because two would differ by a notch
+
+`place`, `offsets`, `axis` and `inset_for_safe_area` moved from `hud.gd` onto `HudLayout`, which
+already described itself as having three readers — the HUD, the touch overlay and the check. The
+zones are two invisible `MOUSE_FILTER_IGNORE` Controls anchored exactly as the HUD's slots are.
+🔴 **A second copy of that arithmetic is the drift `verify_hud.gd` exists to prevent**: a zone and
+the thumb rest inside it resolved in different frames disagree by the width of a safe-area inset,
+which is invisible at a desk and wrong on exactly one device.
+
+⚠️ **The zones are on their own `CanvasLayer`, not the HUD's.** `--hud=off` frees the HUD outright,
+so a touch layer parented to it would take the player's steering with it — including on `P3-9`'s
+acceptance drive, which is a *driving* test that turns the HUD off.
+
+⚠️ **The containment is asserted in DESIGN space and the edges in RESOLVED space, and the split is
+a finding.** The headless viewport is **1920x1920**, a dummy-display artifact — and on any canvas
+taller than the 1080 design the thumb rests anchor to the bottom while the zones anchor to the
+centre, so the two genuinely separate. Landscape handsets expand in X and hold 1080 in Y, so this
+does not arise on a device; re-asserting containment against resolved rects would fail for a reason
+that has nothing to do with touch.
+
+### Two traps found by building it, both about tools rather than touch
+
+🔴 **An autoload identifier does not exist under `--script`, and naming one makes a script
+uncompilable outside a running game.** `input_router.gd` reached `DebugHud.cmdline_value` for its
+flag; `verify_input.gd` then failed to build the router, aborted mid-function, and **never reached
+its own `quit()`**. ⚠️ `preload`ing `debug_hud.gd` instead only moves it one script further away —
+that pulls in `vehicle_controller.gd`, which names the `InputRouter` autoload. What works is a
+runtime `get_node_or_null("/root/DebugHud")`, where absent legitimately means "not a game, so
+`--touch=mouse` is off".
+
+🔴 **A `SceneTree` tool that aborts before its `quit()` never exits.** That is worse than the
+green-run-over-an-empty-suite `verify_hud.gd` warns about: it **wedges** `check.sh` and CI rather
+than failing them, and no guard inside the run can help, because `new()` on a broken script aborts
+at the guard itself. `verify_input.gd` carries a 30 s watchdog on a separate coroutine for this, and
+it is the only verify tool that does — the others should gain one the first time they hang.
+
+🔴 **And a wedged run does not just sit there — it rewrites `project.godot`.** The hung instance from
+this entry's own first run was still alive **seven hours later**, holding the project open; on
+shutdown it rewrote `project.godot` and `export_presets.cfg` from scratch, stripping every comment
+and dropping three warning promotions (`native_method_override`,
+`get_node_default_without_onready`, `onready_with_export`) — `check.sh`'s `settings` step caught it
+at 18 against `WANT_PROMOTED` 21. ⚠️ **This is the 2026-08-28 incident that `project.godot`'s own
+header records, reached without ever opening the editor**, and it contradicts the run skill's note
+that driver runs never touch those files: a *hung* run is not a finished one. So the watchdog is not
+tidiness — it is what stops a compile error in an input script from silently deleting the project's
+warning promotions. ⚠️ **`ps aux | grep godot` after any hang**, and restore both files from git
+before committing.
+
+### What was measured
+
+| | HUD off | HUD on |
+|---|---|---|
+| Draw calls, before | 47 | 55 |
+| Draw calls, after | **47** | **55** |
+| Primitives, before | 713,312 | 713,376 |
+| Primitives, after | **713,312** | **713,376** |
+
+**0 draw calls and 0 primitives**, and the `t00.80` frames are **byte-identical before and after on
+both sides** — each side shot twice and `cmp`'d first, per the rule that one preview frame is not
+evidence. That is what an invisible zone layer and a rename that moves no rect should cost, measured
+rather than asserted.
+
+`verify_input.gd` runs **37 assertions** and is mutation-checked three ways: flipping the sign in
+`drive_from` fails the throttle rows, disabling the steering override fails the steer rows, and
+dropping the zone's `has_point` test fails "a finger outside every zone steers nothing" **and** the
+drive rows — because the steering zone is offered every finger first and swallows the driving thumb.
+⚠️ That cross-coupling is why the ordering in `_finger` carries a comment: with overlapping zones,
+which thumb a touch claims stops depending on where the player put it.
+
+### What is not settled here
+
+- ⬜ **Every number in `touch.tres` is a first guess.** `steer_travel_px` 140, `drive_travel_px` 110,
+  `jitter_deadzone_px` 6, in design units. Nothing has been measured against a thumb.
+- ⬜ **The drift and `look_back`**, above.
+- ⚠️ **`--touch=mouse` is one finger and can never be the review.** `driver.gd` presses the action
+  map and cannot move a pointer, so no scripted run reaches it; `verify_input.gd` covers its
+  plumbing by setting the flag directly. It exercises either thumb, never their interaction.
+- ⬜ **No visible touch chrome**, on the user's call. `Q83` wants the drift state readable at
+  `hud.gd`'s speed-chip `AccentBar`; that arrives with the drift.
+
+**Consequences.** `hud_layout.tres` gains no rect and loses none — `Q83` predicted that and it holds.
+`check.sh` gains `verify_input` in `ALWAYS_TOOLS`, on the same argument that put `verify_hud` there
+and a sharper version of it. `drive.sh` gains `--touch=mouse|off`, validated in `driver.gd` because
+the router's own fallback is to leave touch off and a typo would otherwise report success having
+driven with the keyboard.
+
+**See.** `Q83` for the scheme and the three rejected drifts · `Q80` for zone-versus-thumb and the
+references · `Q84` for the drift ramp that is built and waiting · `Q72` for why a counter is tested
+by mutation · `P0-5b/c/d` for why centre must coast · `PLAN.md` `P2-4` and `P0-3b` ·
+`ARCHITECTURE.md` "The three schemes"

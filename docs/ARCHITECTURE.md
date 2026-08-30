@@ -167,6 +167,7 @@ does. Running `--import` by hand tells you nothing unless you read the output.
 | `verify_beam_budget` | The spot-light cap — needs no built region, so CI can check it | yes |
 | `verify_mesh_contract` | That the no-texture contract still refuses what it should — needs no built region, so CI can check it | yes |
 | `verify_vehicle` | The taxi's shader binding, lamp channels, imported payload and beam aim — the taxi is committed, so this needs no built region either | yes |
+| `verify_input` | The touch scheme, driven by synthetic fingers — needs no built region, which matters more here than anywhere: `P0-3b` has no handset, so this is the only thing that exercises touch at all | yes |
 | `verify_city`, `verify_tiles`, `verify_road_surface`, `verify_road_graph`, `verify_city_streamer`, `verify_spawn`, `verify_landmarks`, `verify_tramway`, `verify_arrows`, `verify_boxjunctions`, `verify_railings`, `verify_signs`, `verify_roadmarks`, `verify_lamps` | The generated-asset contracts — one per asset the manifest names | **no** |
 
 The sweep is separate from `--import` because `--import` does not do the job: measured, an untyped
@@ -1451,7 +1452,7 @@ the second vehicle anyone built.
 | `scripts/ui/debug_hud.gd` | The one owner of dev chrome. Off by default |
 | `scripts/ui/fps_counter.gd` | Frame rate and frame time. Gated by `DebugHud`, and it stops counting while hidden |
 | `scripts/ui/hud.gd` | The player's HUD. Samples speed at 10 Hz and the road graph at 5 Hz, sets label text only on a change, and registers a raw-versus-displayed readout with `DebugHud` — the one thing that can see a wrong street plate |
-| `scripts/ui/hud_layout.gd` | Every HUD rect **and** `P2-4`'s touch geometry. ⚠️ Two touch families and the distinction is load-bearing: `touch_steer_*` is where taps are detected and the HUD may overlap it; `thumb_rest_*` is what a fingertip covers and the HUD may not (`Q80`) |
+| `scripts/ui/hud_layout.gd` | Every HUD rect **and** `P2-4`'s touch geometry. ⚠️ Two touch families and the distinction is load-bearing: `touch_zone_*` is where taps are detected and the HUD may overlap it; `thumb_rest_*` is what a fingertip covers and the HUD may not (`Q80`). Also holds the shared placer — `place`, `axis`, `inset_for_safe_area` — because the HUD and `P2-4`'s zones must resolve in the *same* frame (`Q97`) |
 | `scripts/ui/hud_style.gd` | The HUD's palette, chamfer and type scale. Deliberately **not** the road's paint constants (`Q53`). ⚠️ Declares **no `@export` defaults**, like `HandlingProfile` and `StreamingProfile` — a default is a second copy of the tuning table, and this one drifted (`Q80`) |
 | `scripts/ui/chamfer_panel.gd` | The HUD's one shape: a flat polygon with cut corners. Not a `StyleBox` — a chamfer is not a corner radius, and this bundle ships no UI textures |
 | `scripts/ui/accent_bar.gd` | A `ChamferPanel` that also carries one signed reading — the speed chip's acceleration bar. Split out so the plate and the reserved slots are not carrying five inert speedometer properties. `bar_span` is a pure static precisely so `verify_hud.gd` can grade the bar's **direction**, which is the one thing here that renders perfectly while being wrong |
@@ -1468,6 +1469,7 @@ the second vehicle anyone built.
 | `tools/verify_beam_budget.gd` | `BeamBudget` — the spot-light cap is never exceeded **or under-spent**, the nearest cars win when registered farthest-first, a beamless rig takes no slot, and a despawn hands its slot on. ⚠️ One of the three verify tools that need **no built region**: it builds its own stub rigs, so it runs whatever `VERIFY_GENERATED` says |
 | `tools/verify_hud.gd` | The HUD's contracts — the thumb-rest reservation (and that overlapping a tap *zone* stays legal), the style's light-plate/dark-chip rule, the plate's font and substitution table, and the street tracker's behaviour from both sides of its dwell. ⚠️ Needs **no built region**: the layout is committed tuning and the tracker takes synthetic samples, which matters because what it protects is `P2-4`'s future screen space |
 | `tools/verify_mesh_contract.gd` | The `Q63` amendment itself — an undeclared texture is refused, a declared one inside its budget is admitted, one over budget is refused, and a declared texture that **never arrives** is refused. ⚠️ It asserts the *failures*, because every other verify tool proves an asset conforms and the risk here is the opposite one: a check that has quietly stopped catching anything. ⚠️ Needs **no built region** — it builds its own one-triangle meshes — which matters because no shipped asset declares a texture, so nothing else exercises these branches at all |
+| `tools/verify_input.gd` | The touch scheme (`P2-4`) — zone geometry, both relative axes, two thumbs at once, and that touch **overrides** the action map per axis rather than replacing it. Drives the router's `_input` directly with invented fingers, so the events stay out of the real queue. ⚠️ Needs **no built region**, and unlike the others it is the *only* exercise the touch path gets until `P0-3b` lands a handset. ⚠️ It also covers `--touch=mouse`, which no scripted run can reach because `driver.gd` presses the action map and cannot move a pointer. 🔴 **It carries a watchdog and the others do not**: a `SceneTree` tool that aborts before its `quit()` never exits, so a depended script failing to compile wedges `check.sh` instead of failing it — which is worse than the green-over-nothing run `verify_hud.gd` warns about, and it happened here on the first run. ⚠️ **A wedged instance also rewrites `project.godot`**: the one from that first run was alive seven hours later and stripped every comment plus three warning promotions on shutdown, which is the editor incident this document records, reached with no editor (`Q97`) |
 | `tools/verify_vehicle.gd` | The taxi's engine-side wiring — the body renders with `vehicle_body.tres` through the import's name channel, the channels `vehicle_lamps.gd` writes are instance uniforms the renderer lists, the imported `UV` payload is integral and inside those channels on lens vertices only, the rig hangs where the script looks, and every beam is authored dark with its cone below horizontal. ⚠️ Needs **no built region** (the taxi is authored and committed), and ⚠️ **sees no frame** — it cannot tell you the shader compiled |
 | `tools/generated_scene_import.gd` | Import fixup — see `[importer_defaults]` above |
 
@@ -1480,15 +1482,31 @@ schemes feed it and no gameplay script knows which one is live.
 
 | Action | Router type | Keyboard | Gamepad | Touch (`P2-4`) |
 |---|---|---|---|---|
-| `steer` | `float`, −1…1 | `A` / `D`, ← / → | Left stick X (axis 0) | thumb 2, horizontal from touch origin |
-| `accelerate` | `float`, 0…1 | `W`, ↑ | RT (axis 5) | thumb 1, **above** touch origin |
-| `brake_reverse` | `float`, 0…1 | `S`, ↓ | LT (axis 4) | thumb 1, **below** touch origin |
-| `drift` | `bool` | `Space` | A / Cross (button 0) | thumb 2, held past the drift threshold |
+| `steer` | `float`, −1…1 | `A` / `D`, ← / → | Left stick X (axis 0) | ✅ thumb 2, horizontal from touch origin |
+| `accelerate` | `float`, 0…1 | `W`, ↑ | RT (axis 5) | ✅ thumb 1, **above** touch origin |
+| `brake_reverse` | `float`, 0…1 | `S`, ↓ | LT (axis 4) | ✅ thumb 1, **below** touch origin |
+| `drift` | `bool` | `Space` | A / Cross (button 0) | ⬜ thumb 2, held past the drift threshold |
 | `look_back` | `bool` | `C` | B / Circle (button 1) | ⬜ unplaced |
 
 Deadzones are **0.2** on the axes and **0.5** on the buttons, set in `project.godot`'s `[input]` map.
-⚠️ **Keyboard and gamepad ship; touch is `P2-4` and unbuilt** — the rects exist and nothing reads
-them yet.
+
+🔴 **Touch ships three of those five since `Q97`, and the two it does not are the two whose numbers
+need a handset.** `drift` wants a threshold and a hysteresis that `Q83` says no desk can pick, and
+`look_back` has never been placed at all — so thumb 2's vertical axis is **read and discarded**
+rather than lent to something else, because a control that borrows it now is a control that has to
+be taken away again.
+
+🔴 **The touch values are merged in `InputRouter` and never fed through the action map.** Both were
+tried. `Input.action_press(action, strength)` would have needed no router change and cannot work:
+the four axis actions carry the 0.2 deadzone above, and `get_action_strength` returns 0 beneath it,
+so the first fifth of every thumb's travel would vanish on a control whose whole design is that
+small travel is available.
+
+⚠️ **Touch OVERRIDES the action map per axis; it does not replace it.** An axis with no finger on it
+is still the keyboard's. That is not politeness — every scripted drive in this repo runs on
+`Input.action_press` (`drive.sh --hold=`), so a router that took its axes from touch state
+unconditionally would read zero through every regression run in the repo and each would still exit
+`DRIVER OK`.
 
 ### The three schemes
 
@@ -1507,8 +1525,17 @@ thumbs are used:
 
 | | Horizontal | Vertical |
 |---|---|---|
-| **thumb 1** (one outer corner) | free — `look_back` candidate | `accelerate` above origin, `brake_reverse` below |
-| **thumb 2** (other outer corner) | `steer` | `drift` while held past the threshold |
+| **thumb 1** (bottom **right**) | free — `look_back` candidate | `accelerate` above origin, `brake_reverse` below |
+| **thumb 2** (bottom **left**) | `steer` | `drift` while held past the threshold |
+
+🔴 **Left steers and right drives since `Q97`, and `Q83` deliberately left that open** — it says "one
+outer corner" and "other outer corner" and never commits. The side was chosen on the two touch
+racers `Q80` already cites as references, and it lives in `HudLayout.steer_zone()` /
+`drive_zone()` rather than in the input code, so swapping it is one edit to a `.tres` reader.
+
+⚠️ **The rects are `touch_zone_left` / `touch_zone_right` and were `touch_steer_*`.** The old names
+date from before `Q83`, when both thumbs steered — so `touch_steer_right` was pointing at what is
+now the *longitudinal* control, which is how a name gets a throttle wired to a steering axis.
 
 🔴 **Both thumbs are *relative*, not absolute.** The thumb lands anywhere in its zone, that point
 becomes the origin, and travel from it is the input. Absolute sliders were rejected because they
@@ -1534,9 +1561,16 @@ horizontal position depending on how far the thumb is extended, which would inje
 every drift entry.
 
 ⚠️ **The geometry of those zones already exists, in `tuning/hud_layout.tres`.** `P3-24` declared it
-so the HUD could be checked against it before `P2-4` is written; `P2-4` reads the same rects rather
-than choosing its own, and `verify_hud.gd` fails the day the two disagree. 🔴 **Read `Q80` before
-using them**: `touch_steer_*` is where a tap is *detected* and non-interactive UI may sit over it —
+so the HUD could be checked against it before `P2-4` was written; `P2-4` reads the same rects rather
+than choosing its own, and `verify_hud.gd` fails the day the two disagree. 🔴 **It reads them
+through `HudLayout`'s own placer, not by re-deriving them** — the zones are two invisible
+`MOUSE_FILTER_IGNORE` Controls anchored exactly as the HUD's slots are, so they inherit the same
+anchor rule and the same safe-area inset. A second copy of that arithmetic would put a zone and the
+thumb rest inside it a notch apart, which is invisible at a desk and wrong on exactly one device.
+⚠️ **On their own `CanvasLayer`, not the HUD's**: `--hud=off` frees the HUD outright, and a touch
+layer parented to it would take the player's steering with it — including on `P3-9`'s acceptance
+drive, which is a *driving* test that turns the HUD off. 🔴 **Read `Q80` before
+using them**: `touch_zone_*` is where a tap is *detected* and non-interactive UI may sit over it —
 every HUD Control is `MOUSE_FILTER_IGNORE` — while `thumb_rest_*` is what a fingertip *occludes* and
 is the only part the HUD must keep clear. Conflating the two reserves ten times the area that is
 actually at stake.

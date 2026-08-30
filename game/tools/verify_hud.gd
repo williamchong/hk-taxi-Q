@@ -15,7 +15,7 @@ extends SceneTree
 ##     draws may sit under one. Without the check, "we left room for touch" is
 ##     a claim tested for the first time on a handset, by hand, after both
 ##     halves are already written.
-##     ⚠️ **Against `thumb_rest_*`, NOT against `touch_steer_*`.** A tap zone is
+##     ⚠️ **Against `thumb_rest_*`, NOT against `touch_zone_*`.** A tap zone is
 ##     half the screen and a thumb is a fingertip; the HUD is `MOUSE_FILTER_
 ##     IGNORE` throughout, so it intercepts nothing it overlaps and occlusion is
 ##     the only real constraint. Checking the zones instead was this file's
@@ -181,7 +181,7 @@ func _check_layout() -> void:
 	# so handing the whole zone to this probe tests nothing and fails for the
 	# wrong reason. What must be permitted is a rect inside the zone and clear
 	# of the fingertip, which is exactly where the speed readout now sits.
-	var zone: Rect2 = over_zone.touch_steer_left
+	var zone: Rect2 = over_zone.touch_zone_left
 	over_zone.speed = Rect2(zone.position, Vector2(zone.size.x, zone.size.y * 0.5))
 	if over_zone.collisions().is_empty():
 		print("  layout: a rect over a tap zone is permitted, as it must be")
@@ -190,7 +190,7 @@ func _check_layout() -> void:
 			"layout",
 			(
 				(
-					"a rect over touch_steer_left was refused (%s) — the check has been "
+					"a rect over touch_zone_left was refused (%s) — the check has been "
 					+ "tightened onto tap zones, which bans the corners every reference uses"
 				)
 				% ", ".join(over_zone.collisions())

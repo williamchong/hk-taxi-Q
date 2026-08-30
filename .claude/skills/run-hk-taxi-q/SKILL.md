@@ -84,9 +84,15 @@ Everything after `drive.sh` goes to `driver.gd`.
 | `--camera=x,y,z` / `--look=x,y,z` | teleport the camera (preview scenes only) |
 | `--debug-view=off\|minimal\|full` | debug overlay. **`drive.sh` defaults to `minimal`** |
 | `--hud=off\|on` | the **player's** HUD — speed and street plate. On by default; this is not dev chrome |
+| `--touch=mouse\|off` | drive the **touch** scheme with the mouse as one finger (`P2-4`). Off by default |
 
 Actions are the `[input]` names in `game/project.godot`: `accelerate`, `brake_reverse`,
 `steer_left`, `steer_right`, `drift`, `look_back`. An unknown one fails rather than doing nothing.
+
+⚠️ **`--touch=mouse` is one finger, so it cannot press two thumbs.** Hold the left button in the
+lower-left of the window and drag sideways to steer; hold it in the lower-right and drag up or down
+for throttle and brake. It exercises either thumb, never their interaction — `game/tools/verify_input.gd`
+covers that — and it is a development aid, not the `P2-4` review, which needs `P0-3b`'s handset.
 
 ### The debug overlay
 

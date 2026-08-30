@@ -14,7 +14,7 @@ extends Resource
 ## own, and the check fails the day the two disagree.
 ##
 ## ⚠️ **A touch zone and a thumb are two different rects**, and this file learned
-## that the hard way — see the block above `touch_steer_left` for the reference
+## that the hard way — see the block above `touch_zone_left` for the reference
 ## that disproved the first version of the rule.
 ##
 ## ⚠️ **Data rather than constants, and that is hard rule 4 read carefully.**
@@ -164,10 +164,24 @@ extends Resource
 # check enforces. Keeping the old rule would have permanently pushed this HUD
 # away from the corners every shipped game in the genre uses.
 
-## Where taps are detected. Informational: `P2-4` reads these, and the HUD is
-## explicitly ALLOWED to overlap them.
-@export var touch_steer_left: Rect2
-@export var touch_steer_right: Rect2
+## Where taps are detected. Informational to this HUD, which is explicitly
+## ALLOWED to overlap them; `P2-4` reads them as the thumbs' homes.
+##
+## 🔴 **Named `touch_zone_*` and no longer `touch_steer_*`, because only one of
+## them steers.** The old names date from before `Q83`, when both thumbs were
+## spent on steering and three of five actions had nowhere to go — so
+## `touch_steer_right` was pointing at what is now the *longitudinal* control.
+## A rect whose name promises the wrong axis is how the next reader wires the
+## throttle to the steering, the way `meter` was renamed from `target` further
+## up this file.
+##
+## ⚠️ **Left steers, right drives, and `Q83` deliberately left that open.** It
+## says "one outer corner" and "other outer corner" and never commits to a side;
+## `Q97` chose, on the two touch racers `Q80` already cites as references. The
+## sides are named here rather than in `input_router.gd` so that swapping them
+## is one edit to a `.tres` reader and not a hunt through input code.
+@export var touch_zone_left: Rect2
+@export var touch_zone_right: Rect2
 
 ## Where a resting thumb actually covers the screen. **Nothing the HUD draws may
 ## intersect these.** Sized as a fingertip in each outer bottom corner.
@@ -226,7 +240,25 @@ func thumb_slots() -> Dictionary[String, Rect2]:
 ## The tap-detection zones. Recorded for `P2-4`; the HUD may overlap these and
 ## the check deliberately does not look at them.
 func zone_slots() -> Dictionary[String, Rect2]:
-	return {"touch_steer_left": touch_steer_left, "touch_steer_right": touch_steer_right}
+	return {"touch_zone_left": touch_zone_left, "touch_zone_right": touch_zone_right}
+
+
+## The zone thumb 2 steers in.
+##
+## 🔴 **Handedness lives in these two functions and nowhere else.** `Q83` left
+## the side open on purpose — "one outer corner", "other outer corner" — so
+## something had to choose, and a choice spread through `input_router.gd` as two
+## literal rect names is a choice nobody can reverse. Swapping the bodies of
+## these two swaps the scheme, and `P3-5b`'s "one-handed layout" is where a
+## player-facing toggle would replace them.
+func steer_zone() -> Rect2:
+	return touch_zone_left
+
+
+## The zone thumb 1 drives in: `accelerate` above its origin, `brake_reverse`
+## below, on one bipolar axis (`Q83`).
+func drive_zone() -> Rect2:
+	return touch_zone_right
 
 
 ## Every (hud, thumb) pair that overlaps, as `"hud_name/thumb_name"`.
@@ -259,3 +291,120 @@ func within_design() -> PackedStringArray:
 		if not screen.encloses(all[slot_name]):
 			outside.append(slot_name)
 	return outside
+
+
+# ---- placing a design-space rect on a real screen ----
+#
+# 🔴 **These live here rather than in `hud.gd` because there are two placers.**
+# `P2-4`'s touch zones must land in the *same* frame the rects above reserve —
+# same anchor derivation, same safe-area inset — or a thumb rest and the zone it
+# sits in disagree by the width of a notch, on the one device where it matters
+# and on no desk. A second copy of this arithmetic is exactly the drift
+# `verify_hud.gd` exists to prevent, so there is one copy and it is here, beside
+# the table it reads.
+
+
+## Put `control` where the layout says, converting a design-space rect into
+## anchors so the slot keeps its corner when the window is not 16:9.
+##
+## The anchor is **derived** from where the rect sits rather than passed in: a
+## slot in the left third holds the left edge, one in the right third holds the
+## right edge, and anything spanning the middle holds the centre. Per-slot
+## anchor arguments would be a second table to keep in step with the first.
+func place(parent: Control, control: Control, design: Rect2) -> void:
+	parent.add_child(control)
+	control.anchor_left = axis(design.position.x, design.end.x, design_size.x).x
+	control.anchor_right = control.anchor_left
+	control.anchor_top = axis(design.position.y, design.end.y, design_size.y).x
+	control.anchor_bottom = control.anchor_top
+	offsets(control, design, design)
+
+
+## Write `control`'s offsets so it covers `rect`, against the anchors that
+## `anchored_on` resolves to.
+##
+## The two rects differ only for the street plate, which is drawn smaller than
+## the slot it is anchored in — and the anchor must stay the slot's, or the
+## plate re-pins itself to the far edge the first time a short name shrinks it
+## across a screen third.
+func offsets(control: Control, rect: Rect2, anchored_on: Rect2) -> void:
+	var origin := Vector2(
+		axis(anchored_on.position.x, anchored_on.end.x, design_size.x).y,
+		axis(anchored_on.position.y, anchored_on.end.y, design_size.y).y
+	)
+	control.offset_left = rect.position.x - origin.x
+	control.offset_right = rect.end.x - origin.x
+	control.offset_top = rect.position.y - origin.y
+	control.offset_bottom = rect.end.y - origin.y
+
+
+## Returns `(anchor, the design coordinate that anchor sits at)` for one axis.
+static func axis(from: float, to: float, extent: float) -> Vector2:
+	if to <= extent * 0.35:
+		return Vector2(0.0, 0.0)
+	if from >= extent * 0.65:
+		return Vector2(1.0, extent)
+	return Vector2(0.5, extent * 0.5)
+
+
+## The full-screen Control everything anchored by `place` sits inside, already
+## pulled in by the safe area.
+##
+## 🔴 **Shared for the same reason the placer is.** The zones and the HUD must
+## resolve in one frame, and the frame is not only the inset — it is the root the
+## inset is applied to. Two copies of this drift the day someone changes the
+## anchor preset or the mouse filter in one of them, and the touch zones then
+## resolve a notch away from the rests the HUD is keeping clear, invisibly.
+##
+## ⚠️ **`parent` is a `Node`, not a `Control`**: `hud.gd` parents to itself and
+## the router to a `CanvasLayer` of its own, and neither is a `Control`.
+static func safe_root(parent: Node) -> Control:
+	var root := Control.new()
+	root.name = "Safe"
+	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(root)
+	inset_for_safe_area(root)
+	return root
+
+
+## Pull `root` in by the display's safe area, for a notch or a rounded corner.
+##
+## ⚠️ **Measured in screen pixels and applied in canvas units**, which are not
+## the same thing under `canvas_items` stretch — the ratio is what converts
+## them. Applying the raw pixel inset would over-inset by the stretch factor on
+## every device whose panel is not 1920 wide, which is all of them.
+static func inset_for_safe_area(root: Control) -> void:
+	var screen: Vector2i = DisplayServer.screen_get_size()
+	var window: Vector2i = DisplayServer.window_get_size()
+	if screen.x <= 0 or screen.y <= 0 or window.x <= 0 or window.y <= 0:
+		return
+
+	# 🔴 **The safe area is measured against the SCREEN, not against the window,
+	# and conflating the two deletes the whole HUD.** `get_display_safe_area()`
+	# returns a rect in display coordinates; on a handset the window fills the
+	# display and the two frames coincide, which is the case the API is for. In
+	# a desktop window they do not — the window is smaller than the screen — so
+	# `screen - window` came out *negative*, the root Control grew larger than
+	# the viewport instead of smaller, and everything anchored to an edge was
+	# pushed off it. The frame renders perfectly with no HUD on it, nothing is
+	# logged, and `check.sh` is green: this was found by looking at a screenshot
+	# and by nothing else.
+	#
+	# So the inset applies only where it means anything — a window that fills
+	# the display — and every side is clamped at zero so that no arithmetic here
+	# can ever make the HUD bigger than the screen again.
+	if window != screen:
+		return
+
+	var safe: Rect2i = DisplayServer.get_display_safe_area()
+	var canvas: Vector2 = root.get_viewport_rect().size
+	# Not `scale` — `CanvasLayer` already has one, and the warnings sweep
+	# promotes shadowing to an error. Naming it for what it is anyway. The ratio
+	# converts screen pixels into canvas units, which `canvas_items` stretch
+	# makes different numbers on every panel that is not 1920 wide.
+	var canvas_per_pixel := Vector2(canvas.x / float(screen.x), canvas.y / float(screen.y))
+	root.offset_left = maxf(0.0, float(safe.position.x)) * canvas_per_pixel.x
+	root.offset_top = maxf(0.0, float(safe.position.y)) * canvas_per_pixel.y
+	root.offset_right = -maxf(0.0, float(screen.x - safe.end.x)) * canvas_per_pixel.x
+	root.offset_bottom = -maxf(0.0, float(screen.y - safe.end.y)) * canvas_per_pixel.y

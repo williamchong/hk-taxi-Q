@@ -160,12 +160,7 @@ func _build() -> void:
 
 	# One root Control so the safe-area inset is applied once rather than per
 	# slot. Everything below anchors inside it.
-	var root := Control.new()
-	root.name = "Safe"
-	root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(root)
-	_inset_for_safe_area(root)
+	var root: Control = HudLayout.safe_root(self)
 
 	# ---- the street plate: the CITY's voice ----
 	#
@@ -182,7 +177,7 @@ func _build() -> void:
 	# Hidden until there is a street. On a clone with no generated city there
 	# never is one, and an empty white sign is worse than nothing.
 	_plate.visible = false
-	_place(root, _plate, _layout.street_plate)
+	_layout.place(root, _plate, _layout.street_plate)
 
 	_plate_lines = _lines(_plate, 0)
 
@@ -212,7 +207,7 @@ func _build() -> void:
 	_speed_chip.accent_negative = _style.accent_negative
 	_speed_chip.accent_track = _style.accent_track
 	_speed_chip.accent_px = _style.accent_px
-	_place(root, _speed_chip, _layout.speed)
+	_layout.place(root, _speed_chip, _layout.speed)
 
 	var speed_lines: VBoxContainer = _lines(_speed_chip, _style.speed_line_tighten)
 
@@ -238,7 +233,7 @@ func _build() -> void:
 	_warning.bar_length = _style.warn_bar_length
 	_warning.bar_thickness = _style.warn_bar_thickness
 	_warning.visible = false
-	_place(root, _warning, _layout.wrong_way)
+	_layout.place(root, _warning, _layout.wrong_way)
 
 	# ---- the reserved slots ----
 	#
@@ -254,7 +249,7 @@ func _build() -> void:
 		slot.fill = _style.slot_fill
 		slot.edge = _style.slot_edge
 		slot.edge_px = _style.slot_edge_px
-		_place(root, slot, reserved[slot_name])
+		_layout.place(root, slot, reserved[slot_name])
 		_slots.append(slot)
 	_show_slots()
 	DebugHud.view_changed.connect(_show_slots)
@@ -315,12 +310,12 @@ func _fit_plate() -> void:
 	# moving it in the `.tres` needs no code change here, which is the whole
 	# point of the layout being data.
 	#
-	# ⚠️ **The anchor comes from the FULL rect, not the shrunk one.** `_axis`
+	# ⚠️ **The anchor comes from the FULL rect, not the shrunk one.** `HudLayout.axis`
 	# picks its edge by which third of the screen the box falls in, and a plate
 	# cut down to a short name can land in a different third than the slot it
 	# was placed in — which would re-pin it to the opposite edge mid-drive.
-	var horizontal: Vector2 = _axis(box.position.x, box.end.x, _layout.design_size.x)
-	_offsets(
+	var horizontal: Vector2 = HudLayout.axis(box.position.x, box.end.x, _layout.design_size.x)
+	_layout.offsets(
 		_plate,
 		Rect2(
 			box.position.x + (box.size.x - width) * horizontal.x, box.end.y - height, width, height
@@ -335,94 +330,6 @@ func _show_slots() -> void:
 	var showing: bool = DebugHud.shows_readouts()
 	for slot: ChamferPanel in _slots:
 		slot.visible = showing
-
-
-## Put `control` where the layout says, converting a design-space rect into
-## anchors so the slot keeps its corner when the window is not 16:9.
-##
-## The anchor is **derived** from where the rect sits rather than passed in: a
-## slot in the left third holds the left edge, one in the right third holds the
-## right edge, and anything spanning the middle holds the centre. Per-slot
-## anchor arguments would be a second table to keep in step with the first.
-func _place(parent: Control, control: Control, design: Rect2) -> void:
-	parent.add_child(control)
-	var size: Vector2 = _layout.design_size
-	control.anchor_left = _axis(design.position.x, design.end.x, size.x).x
-	control.anchor_right = control.anchor_left
-	control.anchor_top = _axis(design.position.y, design.end.y, size.y).x
-	control.anchor_bottom = control.anchor_top
-	_offsets(control, design, design)
-
-
-## Write `control`'s offsets so it covers `rect`, against the anchors that
-## `anchored_on` resolves to.
-##
-## The two rects differ only for the street plate, which is drawn smaller than
-## the slot it is anchored in — and the anchor must stay the slot's, or the
-## plate re-pins itself to the far edge the first time a short name shrinks it
-## across a screen third.
-func _offsets(control: Control, rect: Rect2, anchored_on: Rect2) -> void:
-	var size: Vector2 = _layout.design_size
-	var origin := Vector2(
-		_axis(anchored_on.position.x, anchored_on.end.x, size.x).y,
-		_axis(anchored_on.position.y, anchored_on.end.y, size.y).y
-	)
-	control.offset_left = rect.position.x - origin.x
-	control.offset_right = rect.end.x - origin.x
-	control.offset_top = rect.position.y - origin.y
-	control.offset_bottom = rect.end.y - origin.y
-
-
-## Returns `(anchor, the design coordinate that anchor sits at)` for one axis.
-static func _axis(from: float, to: float, extent: float) -> Vector2:
-	if to <= extent * 0.35:
-		return Vector2(0.0, 0.0)
-	if from >= extent * 0.65:
-		return Vector2(1.0, extent)
-	return Vector2(0.5, extent * 0.5)
-
-
-## Pull the whole HUD in by the display's safe area, for a notch or a rounded
-## corner.
-##
-## ⚠️ **Measured in screen pixels and applied in canvas units**, which are not
-## the same thing under `canvas_items` stretch — the ratio is what converts
-## them. Applying the raw pixel inset would over-inset by the stretch factor on
-## every device whose panel is not 1920 wide, which is all of them.
-func _inset_for_safe_area(root: Control) -> void:
-	var screen: Vector2i = DisplayServer.screen_get_size()
-	var window: Vector2i = DisplayServer.window_get_size()
-	if screen.x <= 0 or screen.y <= 0 or window.x <= 0 or window.y <= 0:
-		return
-
-	# 🔴 **The safe area is measured against the SCREEN, not against the window,
-	# and conflating the two deletes the whole HUD.** `get_display_safe_area()`
-	# returns a rect in display coordinates; on a handset the window fills the
-	# display and the two frames coincide, which is the case the API is for. In
-	# a desktop window they do not — the window is smaller than the screen — so
-	# `screen - window` came out *negative*, the root Control grew larger than
-	# the viewport instead of smaller, and everything anchored to an edge was
-	# pushed off it. The frame renders perfectly with no HUD on it, nothing is
-	# logged, and `check.sh` is green: this was found by looking at a screenshot
-	# and by nothing else.
-	#
-	# So the inset applies only where it means anything — a window that fills
-	# the display — and every side is clamped at zero so that no arithmetic here
-	# can ever make the HUD bigger than the screen again.
-	if window != screen:
-		return
-
-	var safe: Rect2i = DisplayServer.get_display_safe_area()
-	var canvas: Vector2 = root.get_viewport_rect().size
-	# Not `scale` — `CanvasLayer` already has one, and the warnings sweep
-	# promotes shadowing to an error. Naming it for what it is anyway. The ratio
-	# converts screen pixels into canvas units, which `canvas_items` stretch
-	# makes different numbers on every panel that is not 1920 wide.
-	var canvas_per_pixel := Vector2(canvas.x / float(screen.x), canvas.y / float(screen.y))
-	root.offset_left = maxf(0.0, float(safe.position.x)) * canvas_per_pixel.x
-	root.offset_top = maxf(0.0, float(safe.position.y)) * canvas_per_pixel.y
-	root.offset_right = -maxf(0.0, float(screen.x - safe.end.x)) * canvas_per_pixel.x
-	root.offset_bottom = -maxf(0.0, float(screen.y - safe.end.y)) * canvas_per_pixel.y
 
 
 func _physics_process(delta: float) -> void:

@@ -465,6 +465,20 @@ func _parse_args() -> bool:
 				if not ["off", "on"].has(value):
 					_fail("--hud=%s is not off or on" % value)
 					return false
+			"--touch":
+				# `input_router.gd` reads this one itself, so this is validation
+				# and nothing else — the same shape as the two above, for the
+				# same reason: the router's fallback is to leave touch off, so a
+				# typo would run to completion and report success having driven
+				# the car with the keyboard the caller was trying not to use.
+				#
+				# ⚠️ **One finger.** It cannot press two thumbs at once, so it
+				# exercises steering or the throttle and never their interaction;
+				# `verify_input.gd` covers that, and `P0-3b`'s handset is what
+				# actually settles whether the scheme is usable.
+				if not ["mouse", "off"].has(value):
+					_fail("--touch=%s is not mouse or off" % value)
+					return false
 			_:
 				_fail("unknown argument: %s" % arg)
 				return false
