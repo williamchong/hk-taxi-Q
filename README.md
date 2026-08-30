@@ -3,17 +3,17 @@
 An arcade taxi game set in Hong Kong, built from Hong Kong government open geodata.
 
 Real road topology from the Transport Department's Road Network. Real building massing from the
-Lands Department's 3D Digital Map. Wan Chai and Causeway Bay, reconstructed to the point where a
+Lands Department's 3D Visualisation Map and iB1000 topographic map. Wan Chai and Causeway Bay, reconstructed to the point where a
 Hong Kong driver can navigate it from memory — then widened, ramped, and tuned until it's fun to
 drive badly.
 
-> **Status:** Phases 0 and 1 complete; Phase 2 is two hardware-blocked tasks from its gate, and
-> Phase 3's first build is shipped. One command turns six government map sheets and a road
-> geodatabase into a drivable city in **19 seconds**: 66 building tiles, 797 road edges with turn
-> restrictions, a drivable road surface, 48 fare nodes, and the markings, tram rails, railings and
-> traffic signs the government publishes. Godot streams it, the car drives it, the buildings and the
-> flyovers are solid, and it plays in a browser. Left before the Phase 2 gate: touch input and the
-> on-device performance pass, both of which need a handset. See
+> **Status:** Phases 0 and 1 complete; Phase 2 is its on-device review away from its gate, and
+> Phase 3's first build is shipped. One command turns nine government datasets from four publishers
+> into a drivable city in **19 seconds**: 66 building tiles, 797 road edges with turn
+> restrictions, a drivable road surface, 48 fare nodes, and the markings, tram rails, railings,
+> traffic signs and lamp posts the government publishes. Godot streams it, the car drives it, the
+> buildings and the flyovers are solid, and it plays in a browser. Left before the Phase 2 gate: the
+> on-device performance pass and touch input's on-device review, both of which need a handset. See
 > [`docs/PROGRESS.md`](docs/PROGRESS.md).
 
 ---
@@ -40,7 +40,7 @@ The design goal is narrow and testable:
 | | |
 |---|---|
 | Engine | Godot 4.7, GDScript, Jolt physics |
-| Pipeline | Python 3.11+ — `pyogrio` (ships its own GDAL), `pyproj`, `numpy` |
+| Pipeline | Python 3.11+ — `pyogrio` (ships its own GDAL), `pyproj`, `numpy`, `pillow`, `pypdfium2`, `pyyaml` — see `etl/pyproject.toml` |
 | Targets | iOS, Android, desktop/Steam; web export for a demo slice |
 | Region | Wan Chai → Causeway Bay, ~1.5 km² |
 
@@ -82,7 +82,7 @@ tools/sync_generated.sh          # copies exactly what city.json names
 **F3** cycles the debug overlay — off, then a position and frame-rate block, then the road graph's
 readout and chevrons. It starts off; see `docs/ARCHITECTURE.md` "The debug overlay".
 
-**Check it.** The ETL cannot assert engine-side facts about its own output, so sixteen headless tools
+**Check it.** The ETL cannot assert engine-side facts about its own output, so twenty headless tools
 do. The import step is required, not optional — it builds the gitignored `game/.godot/`, without
 which the freshly synced `.glb` files have no import sidecars:
 
@@ -90,19 +90,21 @@ which the freshly synced `.glb` files have no import sidecars:
 tools/check.sh
 ```
 
-That runs `gdformat`, the import (~8 s cold), a GDScript warnings sweep and the verify tools, and is
+That runs `gdformat`, the project-settings and tuning-rationale tripwires, the import (~8 s cold), a
+GDScript warnings sweep and the verify tools, and is
 the **only** route that fails on error. Godot exits `0` whatever happens — including when a script
 fails to parse — so the script reads its output and supplies the exit code the engine will not.
 Running the steps by hand and eyeballing them is how a broken check passes.
 
 The warnings sweep is the GDScript linter: engine warnings are set to *error* in `project.godot`,
 including untyped declarations. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the list —
-and for the three that an editor rewrite has silently dropped from the file.
+and for why an editor save can silently drop them (the `settings` step is what catches it).
 
 GitHub Actions runs the same script on every push and pull request, alongside `ruff` and `pytest`. It
 **skips the generated-asset verify tools** — a fresh checkout has no generated assets to check, and
-building them in CI would mean re-downloading the source data every push. The three that need no
-built region (`verify_beam_budget`, `verify_mesh_contract`, `verify_vehicle`) run there anyway. So
+building them in CI would mean re-downloading the source data every push. The five that need no
+built region (`verify_beam_budget`, `verify_mesh_contract`, `verify_vehicle`, `verify_hud`,
+`verify_input`) run there anyway. So
 the asset contracts are yours to run locally after a pipeline build; everything else CI catches for
 you.
 
@@ -156,7 +158,7 @@ COOP/COEP headers that it does not send.
 **Don't use the photogrammetry mesh.** The Lands Department also publishes a tile-based
 oblique-photogrammetry model. It has ground gaps, level discontinuities, and cars fused into the
 terrain — a prior public attempt concluded it suited flight simulation, not driving. Use the
-**non-textured** models and **3D-BIT00 Level 1** instead.
+**non-textured** models and **iB1000** instead.
 
 **The road centrelines are 2D — grade separation is an attribute, not a Z value.** Hong Kong drives on
 three levels in places, and a naive 2D graph turns every flyover into a junction that doesn't exist.
@@ -173,23 +175,26 @@ height source there is for off-grade roads. A tunnel is a void, so it has none a
 
 ## Data attribution
 
-Contains geospatial data from the Lands Department and the Transport Department of the Government of
-the Hong Kong Special Administrative Region, obtained via [DATA.GOV.HK](https://data.gov.hk) and the
+Contains geospatial data from the Lands Department, the Transport Department and the Highways
+Department of the Government of the Hong Kong Special Administrative Region, which own the
+intellectual property rights in that data, obtained via [DATA.GOV.HK](https://data.gov.hk) and the
 [Common Spatial Data Infrastructure Portal](https://portal.csdi.gov.hk). Used under the DATA.GOV.HK
-Terms and Conditions of Use. Data is provided "as is". The Government of the HKSAR does not endorse
-this product.
+and CSDI Portal Terms and Conditions of Use. Data is provided "as is". The Government of the HKSAR
+does not endorse this product.
 
 ---
 
 ## Licence
 
-Three kinds of thing, three answers, because they have three different owners:
+Three kinds of thing, three answers, because they have three different owners — plus one bundled
+exception (`Q79`):
 
 | What | Licence |
 |---|---|
 | **Code** — pipeline, engine scripts, tools, config, tuning | **GPL-3.0-or-later** ([`LICENSE`](LICENSE)) |
-| **Hand-authored assets** — hero buildings, vehicles, UI, shaders | **CC BY-SA 4.0** ([`game/assets/authored/LICENSE`](game/assets/authored/LICENSE)) |
-| **Generated city data** — tiles, road surface, road graph, fares | **Not relicensed by us.** Derived from HK government data under the DATA.GOV.HK Terms and Conditions of Use |
+| **Hand-authored assets** — hero buildings, vehicles, UI, shaders (`game/assets/authored/`, `game/assets/shaders/`) | **CC BY-SA 4.0** ([`game/assets/authored/LICENSE`](game/assets/authored/LICENSE)) |
+| **Generated city data** — tiles, road surface, road graph, fares | **Not relicensed by us.** Derived from HK government data under the DATA.GOV.HK and CSDI Portal Terms and Conditions of Use |
+| **Bundled typeface** — `game/assets/authored/fonts/` | **CC BY 4.0**, third party — see [`LICENSING.md`](LICENSING.md) |
 
 **This repository redistributes no government data** — `etl/sources/`, `etl/out/` and
 `game/assets/generated/` are all gitignored. You regenerate them from the government endpoints
