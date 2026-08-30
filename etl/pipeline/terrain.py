@@ -336,7 +336,7 @@ class HeightField:
         candidates = self.cell_triangles[self.cell_starts[key] : self.cell_starts[key + 1]]
         if not len(candidates):
             return _NO_HITS
-        return _hits(self.corners[candidates], x, z)
+        return hits(self.corners[candidates], x, z)
 
 
 def _spread(low: np.ndarray, high: np.ndarray, columns: int) -> tuple[np.ndarray, np.ndarray]:
@@ -387,7 +387,7 @@ def slab_tops(hits: np.ndarray, gap_m: float) -> np.ndarray:
     return ordered[np.concatenate([np.diff(ordered) > gap_m, [True]])]
 
 
-def _hits(corners: np.ndarray, x: float, z: float) -> np.ndarray:
+def hits(corners: np.ndarray, x: float, z: float) -> np.ndarray:
     """Interpolated height of every triangle covering `(x, z)`, in no order."""
     ax, az = corners[:, 0, 0], corners[:, 0, 2]
     bx, bz = corners[:, 1, 0] - ax, corners[:, 1, 2] - az

@@ -21,13 +21,14 @@ check bought. The precedent is `arrows.axis_residual_deg` and
 column deliberately. Two different frames in one module is how a road ends up
 measured against its own height — the split `_steps` already documents.
 
-⚠️ **`kerbside._plan_lengths` is a third copy of `plan_lengths_2d`** and says it
-cannot import because `roads` imports `kerbside`. That constraint is gone now
-this is a leaf, but retiring it is not part of `Q94` and is left alone.
+✅ **`kerbside._plan_lengths`, once a third copy of `plan_lengths_2d`, imports
+it now** — the constraint that forbade the import died when this module became
+a leaf (`Q94`), and the copy was retired by `Q100`.
 """
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -75,10 +76,9 @@ def plan_lengths_2d(plan: np.ndarray) -> np.ndarray:
 
     Public where `_steps` is private, because a caller outside this module can
     already hold a plan-only line: `railings._run_uvs` measures along a *fence*
-    line, which never had a height column to drop. Exported rather than copied —
-    `kerbside._plan_lengths` is the third copy of this arithmetic and documents
-    why it cannot import (this module imports `kerbside`), which is a constraint
-    `railings` does not have.
+    line, which never had a height column to drop. Exported rather than copied;
+    `kerbside` imports it too since `Q100` retired what was the third copy of
+    this arithmetic.
     """
     return np.concatenate([[0.0], np.cumsum(plan_steps_2d(plan))])
 
@@ -270,6 +270,21 @@ class Segments:
 # `arrows.py` cannot serve, because `arrows` imports `roads` and `roads` imports
 # `carriageway`. Restating a convention this file calls canonical is how it
 # drifts, so the convention moved instead.
+
+
+def frame(heading_deg: float) -> tuple[np.ndarray, np.ndarray]:
+    """Along and across unit vectors in game plan space, heading clockwise from north.
+
+    Along is `(sin h, -cos h)` and across is `(cos h, sin h)` — the frame
+    `game_heading_deg` below inverts. One definition (`Q100`): `arrows.py` and
+    `boxjunctions.py` each carried a private copy, the second saying it restated
+    the first only because it was private.
+    """
+    heading = math.radians(heading_deg)
+    return (
+        np.array([math.sin(heading), -math.cos(heading)]),
+        np.array([math.cos(heading), math.sin(heading)]),
+    )
 
 
 def game_heading_deg(bearing: float) -> float:

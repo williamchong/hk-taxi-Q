@@ -139,3 +139,19 @@ class ColouredBuilder:
         )
         twice_area = np.linalg.norm(mesh.triangle_cross(), axis=1)
         return select_triangles(mesh, twice_area > MIN_TWICE_AREA_M2)
+
+
+def import_quantum_m(points: np.ndarray) -> float:
+    """The plan pitch Godot's importer would quantise a region-spanning mesh to.
+
+    `span / 65535` — the 16-bit lattice the scene importer used to compress
+    vertex positions onto, about **17 mm** for Wan Chai. ✅ `Q82` turned
+    `meshes/force_disable_compression` on project-wide, so the lattice no longer
+    exists at import; the callers keep their guards anyway, and say why. Derived
+    from the features' own extent rather than authored, because the pitch is a
+    property of the region's size, not a number anyone should tune.
+    """
+    if len(points) == 0:
+        return 0.0
+    spans = points.max(axis=0) - points.min(axis=0)
+    return float(spans.max()) / 65535.0

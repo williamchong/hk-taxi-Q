@@ -55,9 +55,10 @@ from pipeline.arrows import ArrowReport
 from pipeline.config import BoxJunctions, Config, GameTransform, load_config
 from pipeline.documents import read_document, write_document
 from pipeline.fetch import source_reads
+from pipeline.geometry import twice_area, wound_up
 from pipeline.gltf import write_glb
-from pipeline.meshbuild import FlatBuilder
-from pipeline.polyline import Segments, game_heading_deg
+from pipeline.meshbuild import FlatBuilder, import_quantum_m
+from pipeline.polyline import Segments, frame, game_heading_deg
 from pipeline.roads import JUNCTION, ROADGRAPH_NAME, read_graph
 from pipeline.surface import (
     SURFACE_MANIFEST_NAME,
@@ -296,23 +297,6 @@ def _open_ring(ring: np.ndarray) -> np.ndarray | None:
 # arrows.
 
 
-def _twice_area(ring: np.ndarray) -> float:
-    """Shoelace sum in `(x, -z)` — positive when the ring faces `+Y`."""
-    shifted = np.roll(ring, -1, axis=0)
-    return float(np.sum(shifted[:, 0] * ring[:, 1] - ring[:, 0] * shifted[:, 1]))
-
-
-def _wound_up(ring: np.ndarray) -> np.ndarray:
-    """The ring, wound so its fan and ears face `+Y`.
-
-    Corrected rather than trusted per feature, for `arrows.ccw`'s reason: WKB
-    fixes outer-ring orientation only per its own convention, and a reversed
-    ring renders as **nothing** under `cull_back` rather than as anything a
-    frame would show.
-    """
-    return ring if _twice_area(ring) > 0.0 else ring[::-1]
-
-
 def _cross(o: np.ndarray, a: np.ndarray, b: np.ndarray) -> float:
     """Cross of `o->a` and `o->b` in the `(x, -z)` frame."""
     return float((a[0] - o[0]) * (o[1] - b[1]) - (o[1] - a[1]) * (b[0] - o[0]))
@@ -327,7 +311,7 @@ def _ear_clip(ring: np.ndarray) -> list[np.ndarray]:
     most convex candidate anyway rather than looping forever: the collapsed
     triangle it may emit is exactly what `select_triangles` removes.
     """
-    wound = _wound_up(ring)
+    wound = wound_up(ring)
     active = list(range(len(wound)))
     triangles: list[np.ndarray] = []
     while len(active) > 3:
@@ -480,23 +464,7 @@ def _import_quantum_m(boxes: list[Box]) -> float:
     """
     if not boxes:
         return 0.0
-    points = np.vstack([box.ring for box in boxes])
-    spans = points.max(axis=0) - points.min(axis=0)
-    return float(spans.max()) / 65535.0
-
-
-def _frame(heading_deg: float) -> tuple[np.ndarray, np.ndarray]:
-    """Along and across in game plan space for a heading clockwise from north.
-
-    `arrows._frame`'s expression, restated here rather than imported because
-    arrows' is private and one line — along is `(sin h, -cos h)`, across is
-    `(cos h, sin h)`.
-    """
-    heading = math.radians(heading_deg)
-    return (
-        np.array([math.sin(heading), -math.cos(heading)]),
-        np.array([math.cos(heading), math.sin(heading)]),
-    )
+    return import_quantum_m(np.vstack([box.ring for box in boxes]))
 
 
 def hatch_polygons(ring: np.ndarray, axis_deg: float, spec: BoxJunctions) -> list[np.ndarray]:
@@ -518,7 +486,7 @@ def hatch_polygons(ring: np.ndarray, axis_deg: float, spec: BoxJunctions) -> lis
     half = 0.5 * spec.hatch_width_m
     pieces: list[np.ndarray] = []
     for direction in (axis_deg, axis_deg + 90.0):
-        along, across = _frame(direction)
+        along, across = frame(direction)
         anchor = float(centroid @ across)
         for ear in ears:
             offsets = ear @ across - anchor
@@ -565,7 +533,7 @@ def border_polygons(
     vertex; it is dropped and counted, never repaired — the repair would be
     invented geometry on a ring the publisher drew.
     """
-    wound = _wound_up(ring)
+    wound = wound_up(ring)
     count = len(wound)
     edges = np.roll(wound, -1, axis=0) - wound
     lengths = np.hypot(edges[:, 0], edges[:, 1])
@@ -696,7 +664,7 @@ def build_region(
 
         report.drawn += 1
         report.ring_vertices.append(float(len(box.ring)))
-        area = 0.5 * abs(_twice_area(box.ring))
+        area = 0.5 * abs(twice_area(box.ring))
         report.area_m2.append(area)
         report.total_area_m2 += area
         if heights:

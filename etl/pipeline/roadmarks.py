@@ -51,8 +51,9 @@ from pipeline.arrows import ArrowReport
 from pipeline.config import Config, GameTransform, RoadMark, RoadMarks, load_config
 from pipeline.documents import read_document, write_document
 from pipeline.fetch import source_reads
+from pipeline.geometry import wound_up
 from pipeline.gltf import write_glb
-from pipeline.meshbuild import FlatBuilder
+from pipeline.meshbuild import FlatBuilder, import_quantum_m
 from pipeline.polyline import Segments, plan_lengths_2d
 
 # `AT_GRADE` rather than a fifth private copy — `railings.py` exports it
@@ -499,22 +500,6 @@ def _host(network: Network, marking: Marking, spec: RoadMarks) -> Host | None:
 # arrows and boxes.
 
 
-def _twice_area(ring: np.ndarray) -> float:
-    """Shoelace sum in `(x, -z)` — positive when the ring faces `+Y`."""
-    shifted = np.roll(ring, -1, axis=0)
-    return float(np.sum(shifted[:, 0] * ring[:, 1] - ring[:, 0] * shifted[:, 1]))
-
-
-def _wound_up(ring: np.ndarray) -> np.ndarray:
-    """The ring, wound so its fan faces `+Y`.
-
-    Corrected rather than trusted per quad, for `boxjunctions._wound_up`'s
-    reason: a reversed quad renders as **nothing** under `cull_back` rather than
-    as anything a frame would show.
-    """
-    return ring if _twice_area(ring) > 0.0 else ring[::-1]
-
-
 def _point_at(line: np.ndarray, along: np.ndarray, distance: float) -> np.ndarray:
     """The point `distance` metres along the polyline."""
     index = int(np.clip(np.searchsorted(along, distance, side="right") - 1, 0, len(line) - 2))
@@ -574,7 +559,7 @@ def _band_quad(
     the same marking.
     """
     centre = offset * across
-    return _wound_up(
+    return wound_up(
         np.array(
             [
                 first + centre - half * across,
@@ -648,9 +633,7 @@ def _import_quantum_m(markings: list[Marking]) -> float:
     """
     if not markings:
         return 0.0
-    points = np.vstack([marking.line for marking in markings])
-    spans = points.max(axis=0) - points.min(axis=0)
-    return float(spans.max()) / 65535.0
+    return import_quantum_m(np.vstack([marking.line for marking in markings]))
 
 
 def _drawn_widths(surface: dict) -> dict[int, float]:

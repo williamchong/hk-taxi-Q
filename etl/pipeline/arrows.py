@@ -74,6 +74,7 @@ from pipeline.polyline import (
     Snap,
     axis_residual_deg,
     directed_residual_deg,
+    frame,
     game_heading_deg,
     plan_lengths,
 )
@@ -495,7 +496,7 @@ def _place(polygon: np.ndarray, x: float, z: float, heading_deg: float) -> np.nd
     Heading is clockwise from north, and north is `-Z`: forward is
     `(sin h, -cos h)` and right is `(cos h, sin h)`.
     """
-    forward, right = _frame(heading_deg)
+    forward, right = frame(heading_deg)
     return np.array([x, z]) + polygon[:, :1] * right + polygon[:, 1:2] * forward
 
 
@@ -513,22 +514,7 @@ def nearside(heading_deg: float) -> np.ndarray:
     public. `tests/test_signs.py` pins it against `surface.mitres` itself rather
     than against this comment.
     """
-    return -_frame(heading_deg)[1]
-
-
-def _frame(heading_deg: float) -> tuple[np.ndarray, np.ndarray]:
-    """Forward and right in game plan space, for a heading clockwise from north.
-
-    The one place this module spells the `-Z`-is-north convention. It was
-    written out three times in the first draft — in `_place`, in `_draw`, and
-    once negated as the nearside in `build_region` — which is how a sign fix
-    lands in two of three places.
-    """
-    heading = math.radians(heading_deg)
-    return (
-        np.array([math.sin(heading), -math.cos(heading)]),
-        np.array([math.cos(heading), math.sin(heading)]),
-    )
+    return -frame(heading_deg)[1]
 
 
 # The accumulator is `meshbuild.FlatBuilder`; the channel decision is this

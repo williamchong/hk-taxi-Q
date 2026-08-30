@@ -56,6 +56,7 @@ import numpy as np
 from pipeline import gdb
 from pipeline.config import KerbsideRestrictions
 from pipeline.crs import GameTransform
+from pipeline.polyline import plan_lengths_2d
 
 log = logging.getLogger(__name__)
 
@@ -179,19 +180,6 @@ def build(
     return report
 
 
-def _plan_lengths(plan: np.ndarray) -> np.ndarray:
-    """Cumulative distance along two columns of `(x, z)`, starting at zero.
-
-    `roads.plan_lengths` is the same measurement and would be the import, but
-    `roads` imports this module to publish its runs, so the dependency only
-    runs one way. Written once here rather than left open in the sampler, the
-    segment index and the refusal tally: those three are what a restriction's
-    extent is measured against, and a drift between them is a run reported
-    against a length the edge does not have.
-    """
-    return np.concatenate([[0.0], np.cumsum(np.hypot(*np.diff(plan, axis=0).T))])
-
-
 def _lines(
     layer: gdb.Layer,
     spec: KerbsideRestrictions,
@@ -218,7 +206,7 @@ def _lines(
         source = np.asarray(points, dtype=np.float64)
         code = int(vehicle_type[owner])
         if code not in spec.painted_vehicle_types:
-            length = float(_plan_lengths(source[:, :2])[-1])
+            length = float(plan_lengths_2d(source[:, :2])[-1])
             report.metres_refused[code] = report.metres_refused.get(code, 0.0) + length
             continue
         painted.add(int(owner))
@@ -291,7 +279,7 @@ def resample(lines: list[tuple[np.ndarray, str]], step_m: float) -> tuple[np.nda
     for plan, kind in lines:
         if len(plan) < 2:
             continue
-        along = _plan_lengths(plan)
+        along = plan_lengths_2d(plan)
         if along[-1] < step_m:
             continue
         at = np.arange(step_m / 2.0, along[-1], step_m)
@@ -359,7 +347,7 @@ class SideIndex:
             plan = np.asarray(polyline, dtype=np.float64)[:, [0, 2]]
             if len(plan) < 2:
                 continue
-            along = _plan_lengths(plan)
+            along = plan_lengths_2d(plan)
             starts.append(plan[:-1])
             ends.append(plan[1:])
             edges.append(np.full(len(plan) - 1, edge))

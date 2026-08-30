@@ -70,7 +70,7 @@ from pipeline.roads import ROADGRAPH_NAME, read_graph
 # would drag GDAL into a hand-run tool — and that argument does not reach here:
 # `pipeline.terrain` imports numpy and `pipeline.gltf` alone, and `pipeline.roads`
 # above already pulls it in. `Q58`'s rule is that a third copy should force it.
-from pipeline.terrain import _hits
+from pipeline.terrain import hits
 
 if TYPE_CHECKING:  # pragma: no cover - imported for the annotation alone
     # ⚠️ **Guarded, not imported.** `pipeline.fares` reads sources, so importing
@@ -931,9 +931,9 @@ class DrawnSurface:
             low_x, low_z, high_x, high_z = self.bounds[index]
             if not (low_x <= x <= high_x and low_z <= z <= high_z):
                 continue
-            hits = _hits(self.fans[index], x, z)
-            if len(hits) and (best is None or float(hits.max()) > best):
-                best = float(hits.max())
+            found = hits(self.fans[index], x, z)
+            if len(found) and (best is None or float(found.max()) > best):
+                best = float(found.max())
         return best
 
 

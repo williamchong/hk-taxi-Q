@@ -142,3 +142,21 @@ def points_in_triangles(points: np.ndarray, corners: np.ndarray) -> np.ndarray:
     d1, d2, d3 = orient(a, b, p), orient(b, c, p), orient(c, a, p)
     inside = ((d1 > 0.0) & (d2 > 0.0) & (d3 > 0.0)) | ((d1 < 0.0) & (d2 < 0.0) & (d3 < 0.0))
     return inside.any(axis=1)
+
+
+def twice_area(ring: np.ndarray) -> float:
+    """Shoelace sum in `(x, -z)` — positive when the ring faces `+Y`."""
+    shifted = np.roll(ring, -1, axis=0)
+    return float(np.sum(shifted[:, 0] * ring[:, 1] - ring[:, 0] * shifted[:, 1]))
+
+
+def wound_up(ring: np.ndarray) -> np.ndarray:
+    """The ring, wound so a fan from it faces `+Y`.
+
+    Corrected rather than trusted per feature, for `arrows.ccw`'s reason: WKB
+    fixes outer-ring orientation only per its own convention, and a reversed
+    ring renders as **nothing** under `cull_back` rather than as anything a
+    frame would show. One definition (`Q100`): `boxjunctions.py` and
+    `roadmarks.py` each carried a byte-identical copy.
+    """
+    return ring if twice_area(ring) > 0.0 else ring[::-1]
