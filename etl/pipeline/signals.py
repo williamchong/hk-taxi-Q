@@ -1,5 +1,13 @@
 """Published traffic-signal heads, drawn as their own mesh (`P3-17`).
 
+🚫 **LATENT SINCE `Q77`, KEPT ON THE USER'S INSTRUCTION (`Q100`).** The city
+config declares no `signals:` block, so this stage writes an empty manifest and
+the bundle carries no `signals.glb` — an unlit head asserts a signal out of
+service, 415 times over, and nothing publishes the coordination that would let
+one be lit honestly. The route back is a real phase plan for `P3-3` traffic
+(`B3`), and `test_signals.py` asserts the block stays absent so re-declaring it
+is a deliberate act that fails a test first.
+
 The signal half of the dTAD estate, landing in `Q58`/`Q59`'s pattern: one
 primitive, one draw call, no collider, an optional `city.json` key, and counters
 the stage publishes about itself. It is `signs.py`'s smaller sibling — no

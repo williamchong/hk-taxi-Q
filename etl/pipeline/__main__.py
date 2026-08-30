@@ -113,6 +113,8 @@ STAGES: dict[str, Callable[[list[str]], int]] = {
     # quarters of the city's signals stand in the road. It needs `roads` for the
     # level-0 centrelines that give it a host edge, a height and the kerb side
     # that resolves its facing. Before `export`, which names the asset.
+    # 🚫 Latent: the config declares no `signals:` block (`Q77`, kept by `Q100`),
+    # so this stage writes an empty manifest and draws nothing.
     "signals": signals.main,
     # After `surface` and `roads`, the dependency `arrows`, `railings`, `signs`
     # and `signals` all have, and for `signs`' reason exactly: a published lamp

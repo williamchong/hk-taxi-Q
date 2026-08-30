@@ -625,3 +625,18 @@ class TestSignals:
         🔴 **This is the state Hong Kong itself is in since `Q77`**, so it is the
         path the shipping city takes rather than a hypothetical one."""
         assert city_with(tmp_path, None).signals is None
+
+
+class TestTheLayerStaysLatent:
+    """🚫 `Q77` un-shipped this layer by removing its config block, and `Q100`
+    kept the code on the user's instruction. This is the ratchet: re-declaring
+    a `signals:` block is a deliberate act that fails here first, and the
+    failure message says what has to be true before it may pass."""
+
+    def test_the_shipped_config_declares_no_signals_block(self) -> None:
+        assert load_config().signals is None, (
+            "the config declares a signals: block again. Q77 dropped the layer "
+            "because an unlit head asserts a signal out of service and nothing "
+            "publishes coordination; bringing it back needs a real phase plan "
+            "(B3) and a decision record superseding Q77"
+        )
