@@ -1412,11 +1412,166 @@ remain the only things that fix the city rather than fence it.
 
 ⬜ Left: the user's call between fencing (candidate 2, now measured cheap) and fixing (candidates 1
 and 3, unpriced). And `e207`'s 977 m is a `P3-3` problem whichever is chosen, because traffic is
-gated at the lane bar.
+gated at the lane bar. ✅ **Both are now priced — see the section below**, and candidate 1 is
+refuted rather than costed.
 
 **See.** `Q51` for the 24/26 gap this re-opens with a cost attached · `Q19`'s sections above for the
 walls themselves · `P3-9a′` for the round that named this · `Q58` for the trap the fixed population
 avoids · `Q72` for why the control row is there · `P1-5` and `B4` for what `e219` is
+
+### The centreline is where the publishers put it, so candidate 1 is refuted — 2026-08-30
+
+`tools/centreline_error.py`. The section above left the user choosing between fencing and fixing
+with one side blank. **Candidate 1 is not a thing that can be done**, and candidate 3 now has a
+number.
+
+#### 🔴 The two normals are opposite, and this is the first code that could notice
+
+`carriageway._stations` emits its station normal `[-unit[1], unit[0]]` — **right** of travel.
+`surface.mitres` emits `[direction[1], -direction[0]]` — **left**, and its comment calls that
+load-bearing, because `TEXCOORD_0` is a lane coordinate measured from the nearside kerb and Hong
+Kong drives on the left. `tools/overhang.py::left_of` agrees with `mitres`, and so do the offsets
+`carriageway_occupancy.py` prints in its centreline verdict.
+
+⚠️ **`carriageway.py` is not wrong** — it keeps `ahead + behind` and `min(ahead, behind)`, and
+**both are sign-free**. The convention starts deciding an answer at the exact moment a tool keeps
+the *difference*, which is this one. That is `Q78` one layer up: the quantity thrown away is the one
+carrying the direction.
+
+So the tool carries one named negation and closes the frame three ways — `_LEFT` at the point of
+use, a test asserting the two normals *stay* opposite so that a later "restore consistency" fails
+loudly, and a **signed** ladder whose result is re-measured. ✅ **The sign is settled by
+measurement, not by comment**: shifting by `+1.0x` and re-running the survey takes the region's
+`|off-centre|` p50 from **0.373 m to 0.000 m** and its max from **3.111 m to 0.628 m**. A flipped
+sign doubles that residual where a right one cancels it.
+
+#### The correction that is sourced, and it is under a metre
+
+Per station, the signed lateral offset of the published centreline from the middle of the
+carriageway a publisher actually spanned — the same rays, the same publisher-preference `break` and
+the same `_license` the pipeline uses, so this is the survey the build reads rather than a third one.
+
+| population | edges | stations | \|off\| p50 | p90 | p99 | max | signed p1 | p50 | p99 | left | right |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| all level-0 | 292 | 4,523 | 0.37 | 1.07 | 1.74 | 3.11 | −1.41 | −0.05 | +1.48 | 132 | 160 |
+
+🔴 **Both readings are published and neither replaces the other.** The magnitude median is 0.37 m
+and the signed median is −0.05 m: the first alone says "off by a third of a metre", the second alone
+says "centred", and the population is in fact **two-sided** — 132 left against 160 right. That is
+`Q78`'s failure at population scale, and `sides()` is what makes it visible.
+
+⚠️ **445 of the 737 level-0 rows carry a measurement the bounds refused**, and they are kept in the
+table rather than filtered into it — `CarriagewayReport`'s own rule after `Q58`'s `drawn_gauge_m`
+trap, so `n` exceeds what is kept and a reader can see by how much.
+
+#### The seven, and the gap between what is available and what is needed
+
+| edge | basis | sourced shift | sideways to the first clear cell | road |
+|---|---|---|---|---|
+| `e233` | one_way_uncrossed | **+0.05 m** | **the whole cross-section is blocked** | WAN CHAI INTERCHANGE |
+| `e55` | one_way_uncrossed | +0.02 m | 4.49 m | WAN CHAI INTERCHANGE |
+| `e788` | one_way_uncrossed | +0.88 m | 4.31 m | HUNG HING ROAD FLYOVER |
+| `e485` | one_way_uncrossed | +0.29 m | 3.87 m | WAN CHAI INTERCHANGE |
+| `e327` | one_way_uncrossed | +0.74 m | 1.46 m | WAN CHAI INTERCHANGE |
+| `e256` | one_way_uncrossed | +0.08 m | 1.43 m | WAN CHAI INTERCHANGE |
+| `e125` | **refused — crossed** | — | 3.80 m | unnamed |
+
+Right column from `carriageway_occupancy.py --corridor-report`; left from this tool.
+
+⚠️ **`e99`, `e125` and `e207` are refused because the ray crossed a median** (`beyond` 7.62, 5.35
+and 6.98 m against a 3.00 m `hard_min`), and their apparent offsets are the largest in the
+population — −3.81, +2.68 and +3.49 m — *because* of it. Shifting `e99` by 3.81 m would have driven
+it into the opposing carriageway. The `crossing` refusal is load-bearing, and this is what it
+catches.
+
+⚠️ **The offset also wanders on three of them** — `spread_m` p90 is **4.73 m** on `e485`, 2.85 on
+`e788` and 2.19 on `e233` — so on those "shift by the median" is not even a well-posed correction.
+A centreline off by a constant is a registration; one whose offset wanders is a different animal and
+must not be reported as the first.
+
+#### Moving it there clears nothing, and moving it the wrong way clears more
+
+The clearance measurement re-run on a shifted graph, over a signed ladder. ✅ The control reproduces
+`clearance.json` on all 737 edges, and the control world's edges are the graph's own objects.
+
+| shift | under 3.20 m (one lane) | cleared | under 1.80 m (the car) | cleared |
+|---|---|---|---|---|
+| −2.00x | 24 | 0 | 17 | **2** |
+| −1.00x | 24 | 0 | 18 | 1 |
+| **+0.00x (control)** | **24** | **0** | **19** | **0** |
+| **+1.00x sourced** | **24** | **0** | **19** | **0** |
+| +2.00x | 23 | 1 | 19 | 0 |
+| +3.00x | 23 | 1 | 18 | 1 |
+
+🔴 **The sourced correction clears not one edge at either bar**, tapered or rigid. And the negative
+arm — which is there as the mutation check, not as padding — clears **two**. Moving *away* from the
+surveyed middle helps, because the drivable strip on these ramps is the invented asphalt outside the
+published carriageway, which is this entry's 2026-08-30 narrowing result arriving from the third
+side.
+
+⚠️ **The taper is not what is hiding the result.** All eight licensed edges deliver ramp **1.00** at
+15 m, so the tapered and rigid sweeps agree; the rigid one is quoted because it is the upper bound
+and because it is what measures the endpoint cost — **3.1112 m**, exactly the region's own max
+offset, opened at a shared node. Plan node coincidence is exactly **0.000000 m** across all 797
+edges, so there is no slack: an untapered shift of `d` tears the graph by exactly `d`.
+
+#### 🔴 Candidate 3, priced: 143.2 m of published carriageway with a wall in it
+
+The same measurement at each edge's **surveyed** width instead of its drawn one, occupiers
+restricted to `INFRASTRUCTURE`.
+
+| edge | surveyed m | length m | under 1.80 m | share | road |
+|---|---|---|---|---|---|
+| `e233` | 5.41 | 123.77 | **50.60** | **40.9%** | WAN CHAI INTERCHANGE |
+| `e55` | 5.57 | 231.87 | 22.57 | 9.7% | WAN CHAI INTERCHANGE |
+| `e485` | 4.80 | 189.49 | 18.82 | 9.9% | WAN CHAI INTERCHANGE |
+| `e788` | 7.20 | 99.11 | 18.80 | 19.0% | HUNG HING ROAD FLYOVER |
+| `e398` | 6.66 | 225.39 | 14.50 | 6.4% | WAN CHAI INTERCHANGE |
+| `e256` | 3.84 | 152.67 | 9.11 | 6.0% | WAN CHAI INTERCHANGE |
+| `e327` | 5.45 | 85.54 | 8.81 | 10.3% | WAN CHAI INTERCHANGE |
+| `e222` | 4.14 | 70.97 | 0.00 | 0.0% | WAN CHAI INTERCHANGE |
+
+**143.2 m region-wide, over 7 of 292 priced edges** — every one of them in this entry's structure
+half, and a third of the total on `e233` alone.
+
+🔴 **These are centreline metres weighted per station, and the first version of this table was
+wrong by 14x.** `ClearanceReport.corridor_m` is indexed per *polyline vertex*, never per
+cross-section — `walk` samples at `ALONG_M` and folds each sample into the nearest vertex — so
+`stations_under × ALONG_M` published **3.50 m** on `e233` where the edge carries **50.60 m**, and it
+read like a length. Caught by noticing that a 239 m edge reported 34 stations.
+
+⚠️ **This prices geometry, not identity.** Nothing here says *which* structure stands in the road or
+whether an author could remove it; the column is `to author away`, never `cost`. `Q19` was corrected
+the same day for exactly that over-reading.
+
+⚠️ **`e99`, `e125`, `e207` and `e781` cannot be priced at all** — no publisher licensed them a
+width, so pricing them would be pricing a fix against an invented carriageway, which is `Q54`
+inverted. They are named in the table rather than dropped from the denominator. The two refusal
+counts are reported split — 445 level-0 edges with no licensed width, and 60 rows that are not level
+0 and never were in scope — because one number would hide the second inside the first.
+
+#### What this licenses
+
+🔴 **Candidate 1 is refused, and on the publishers' own evidence.** The graph is where TD, iB1000
+and HyD drew the carriageway, to within a metre on every edge in the population and within a
+decimetre on four of them. The wall is standing in the **published** carriageway, not in an invented
+one. There is no centreline rule to write, and the `structure_bounded` flag `b514c4d` shipped is
+still waiting for a consumer that does not exist.
+
+⬜ **So the call is between two, and both are measured**: fence them (candidate 2 — 1 ordered pair
+of 187,946, 0 at the player's bar) or author the structure back off the carriageway (candidate 3 —
+143.2 m, concentrated on seven ramps). ⚠️ **Fencing does not stop a driver hitting a wall** — it
+stops the game *sending* them there, which is spawn, fares and street naming; only candidate 3
+changes what `P3-9a`'s drivers actually ran into.
+
+✅ **Nothing shipped and nothing moved.** No file under `etl/pipeline/` or `game/` is in the diff, so
+`roads.glb`, `roadgraph.json` and `clearance.json` are untouched — `Q95`'s validation move, stated
+rather than implied.
+
+**See.** `Q78` for the absolute-value defect this file's sign discipline comes from · `Q58` for the
+refusal-recording rule · `Q72` for why the negative arm of the ladder exists · `Q54` for why an
+unlicensed width may not be priced against · `Q51` for the 24/26 gap that decides which edges are
+watched by default · `Q95` for the survey this reads
 
 **See.** `Q51` for what routes around this · `Q20` · `Q22` for the interchange's family · `Q23` for the suppression this extends and for the narrowing it deliberately refused · `Q24` · `P2-5` · `P3-6` for why the population moved, and for the piers · `Q57` for the mechanism this section is the fourth instance of · `P3-9a′` for the round that re-prioritised this
 

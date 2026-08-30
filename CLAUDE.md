@@ -268,6 +268,23 @@ Common emoji for this project:
   stage exists. ⚠️ **`width_m` is no longer `lanes x lane_width_m`** and the schema is 5 because of
   it; `lanes` is still authored, so ⚠️ **this does NOT fix `Q94`** — `stacked_disagreeing` is
   byte-identical at 51 and only a lane count moves it. Numbers in `Q95`.
+- 🔴 **The two station normals in this repo are OPPOSITE, and that is deliberate — do not "restore
+  consistency".** `pipeline/carriageway.py::_stations` emits `[-unit[1], unit[0]]`, **right** of
+  travel; `surface.mitres` and `tools/overhang.py::left_of` emit **left**, and `mitres` names its
+  frame load-bearing because `TEXCOORD_0` is a lane coordinate from the nearside kerb and Hong Kong
+  drives on the left. `carriageway.py` can hold the other convention because it keeps only
+  `ahead + behind` and `min(ahead, behind)`, **both sign-free**. ⚠️ **Anything that keeps the
+  DIFFERENCE inherits `Q78`'s defect** — an absolute value cannot report the direction of the move it
+  measures — so it needs a named negation and a mutation check, never a comment.
+  `tools/centreline_error.py` is the one consumer today and
+  `test_the_station_normal_is_the_negation_of_mitres` is what fails loudly if either side moves.
+- **`Q19`'s three candidates are all priced and candidate 1 is REFUSED — do not re-propose a
+  centreline rule.** `tools/centreline_error.py` registers the published centreline against the
+  middle of the carriageway a publisher spanned: the correction available is 0.02-0.88 m where
+  1.43-4.49 m is needed, it clears **0** edges at either bar, and `e233` has no clear cell in its
+  cross-section at any offset. ⚠️ **Run it again if `pipeline/carriageway.py`'s survey, `_stations`,
+  `surface.mitres` or `clearance.py` moves**; it grades and exits 0 whatever it finds. Numbers in
+  `Q19`.
 - **`pipeline/kerbside.py`, the `NSR` config block, or any kerbside-marking change: also
   `tools/kerbside_error.py`, and paste its table.** It grades the shipped `roads.glb` against the runs
   `roadgraph.json` publishes, and it is the only instrument that can see the side convention flip —
