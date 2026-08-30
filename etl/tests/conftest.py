@@ -47,10 +47,9 @@ def testville_config(tmp_path):
     pipeline: a fixture city that drifted between them would let the second
     stage pass against a city the first never built.
     """
-    cities = tmp_path / "cities"
-    cities.mkdir()
-    (cities / "testville.yaml").write_text(CITY_YAML, encoding="utf-8")
-    return load_config(cities / "testville.yaml")
+    path = tmp_path / "testville.yaml"
+    path.write_text(CITY_YAML, encoding="utf-8")
+    return load_config(path)
 
 
 @pytest.fixture

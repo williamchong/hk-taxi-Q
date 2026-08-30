@@ -61,7 +61,7 @@ ASSETS_SCHEMA = 1
 ASSET_DIR = "landmarks"
 
 # The sources-tree directory holding the individualised (`…A0`) sheet zips the
-# photo reference reads — `sources/<city>/individualised/<sheet>.zip`. Named
+# photo reference reads — `sources/individualised/<sheet>.zip`. Named
 # once for the same reason `buildings.SOURCE_ID` is: two spellings of a
 # directory is how they come to disagree.
 INDIVIDUALISED_SOURCE_ID = "individualised"

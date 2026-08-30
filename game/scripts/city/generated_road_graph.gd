@@ -83,6 +83,6 @@ static func load_graph() -> Dictionary:
 static func missing_hint() -> String:
 	return (
 		"No road graph at %s. Run the ETL and copy its output there:\n" % PATH
-		+ "  python -m pipeline.roads --city hong_kong --region wan_chai\n"
+		+ "  python -m pipeline.roads --region wan_chai\n"
 		+ "  cp etl/out/<city>/<region>/roadgraph.json game/assets/generated/"
 	)

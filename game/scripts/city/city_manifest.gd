@@ -444,7 +444,7 @@ func shipped() -> PackedStringArray:
 static func missing_hint() -> String:
 	return (
 		"No city manifest at %s. Build the region and sync it:\n" % PATH
-		+ "  python -m pipeline --city hong_kong --region wan_chai\n"
+		+ "  python -m pipeline --region wan_chai\n"
 		+ "  tools/sync_generated.sh hong_kong wan_chai"
 	)
 

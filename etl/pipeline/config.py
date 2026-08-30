@@ -1,9 +1,11 @@
 """City configuration loading.
 
-Every city specific — CRS codes, region bounds, deck heights, source URLs —
-lives in `config/hong_kong.yaml` and reaches the pipeline only through this
-module (CLAUDE.md hard rule 3). Pipeline logic that needs a Hong Kong fact asks
-the config for it; it never spells the fact out.
+A Hong Kong fact has one of two homes (CLAUDE.md hard rule 3, `Q100`): what is
+tunable or a publisher's vocabulary — region bounds, deck heights, source URLs,
+codes — lives in `config/hong_kong.yaml` and reaches the pipeline only through
+this module; the handful of constants that *are* the city live in
+`pipeline/hongkong.py`, which the `Config` properties re-export. A value lives
+in exactly one of the two, never both.
 
 Loading is strict and fails on the first problem rather than defaulting. A
 silently-defaulted CRS or bound produces output that looks plausible and is
@@ -598,7 +600,7 @@ class SourceLayer:
 
 
 @dataclass(frozen=True)
-class FurnitureSpec:
+class LayerSpec:
     """What every optional published-layer block begins with.
 
     A declared `source`, the tile member inside it where the source is per-sheet
@@ -607,7 +609,8 @@ class FurnitureSpec:
     street-furniture blocks, the carriageway-edge survey and the tramway all
     opened with these same three fields and an identical `tiled` property, and
     `Q77` records what half-fixing a run of identical shapes costs the next
-    reader.
+    reader. Named for what the trio is — a published layer's declaration — not
+    for the furniture that happens to be most of its subclasses.
     """
 
     source: str
@@ -645,7 +648,7 @@ class PodiumBlocks:
 
 
 @dataclass(frozen=True)
-class CarriagewayEdge(FurnitureSpec):
+class CarriagewayEdge(LayerSpec):
     """One published opinion on where the edge of the carriageway runs (`Q57`).
 
     ⚠️ **Read by the build since `Q95`** — `pipeline/carriageway.py` runs the
@@ -803,7 +806,7 @@ class CarriagewaySurvey:
 
 
 @dataclass(frozen=True)
-class Tramway(FurnitureSpec):
+class Tramway(LayerSpec):
     """The published tramway, and how `P3-14` draws it (`Q58`).
 
     ⚠️ **Unlike `CarriagewaySurvey` above, the pipeline reads this**: it is a
@@ -877,7 +880,7 @@ class ArrowGlyph:
 
 
 @dataclass(frozen=True)
-class Arrows(FurnitureSpec):
+class Arrows(LayerSpec):
     """Published turn arrows, and how `P3-15` draws them (`Q53`, `Q57`).
 
     ⚠️ **`glyphs` maps a publisher's code to a movement, and that mapping is the
@@ -1195,7 +1198,7 @@ class SignFace:
 
 
 @dataclass(frozen=True)
-class Signs(FurnitureSpec):
+class Signs(LayerSpec):
     """Published traffic signs, and how `P3-16` draws them.
 
     ⚠️ **The sign layer does not say where a sign is.** `DTAD_TS_ABV_PT` is the
@@ -1329,7 +1332,7 @@ class Signs(FurnitureSpec):
 
 
 @dataclass(frozen=True)
-class Signals(FurnitureSpec):
+class Signals(LayerSpec):
     """Published traffic-signal heads, drawn by `pipeline/signals.py` (`P3-17`).
 
     ⚠️ **This block asserts about as little as `Railings` does, and for the same
@@ -1492,7 +1495,7 @@ class Signals(FurnitureSpec):
 
 
 @dataclass(frozen=True)
-class Lamps(FurnitureSpec):
+class Lamps(LayerSpec):
     """Published lamp posts, drawn by `pipeline/lamps.py` (`P3-26`).
 
     ✅ **The vocabulary is PUBLISHED, and this is the first street-furniture
@@ -1626,7 +1629,7 @@ class Lamps(FurnitureSpec):
 
 
 @dataclass(frozen=True)
-class BoxJunctions(FurnitureSpec):
+class BoxJunctions(LayerSpec):
     """Published yellow box junctions, drawn by `pipeline/boxjunctions.py` (`P3-18`).
 
     The content is **read, not invented**, on `Q53`'s terms: `DTAD_YL_BOX_POLY`
@@ -1749,7 +1752,7 @@ class RailingClass:
 
 
 @dataclass(frozen=True)
-class Railings(FurnitureSpec):
+class Railings(LayerSpec):
     """Published pedestrian railings, drawn by `pipeline/railings.py` (`P3-19`).
 
     ⚠️ **This block asserts more than any other in this file, and the reason is
@@ -1915,7 +1918,7 @@ class RoadMark:
 
 
 @dataclass(frozen=True)
-class RoadMarks(FurnitureSpec):
+class RoadMarks(LayerSpec):
     """Published stop and give-way lines, drawn by `pipeline/roadmarks.py` (`P3-23`).
 
     The content is **read, not invented**, on `Q53`'s terms and
@@ -4026,7 +4029,7 @@ def _road_surface(body: dict[str, Any], where: str, table: _MaterialTable) -> Ro
 
 
 def _spec_header(body: dict[str, Any], where: str, roles: tuple[str, ...]) -> dict[str, Any]:
-    """The three constructor arguments every `FurnitureSpec` block begins with."""
+    """The three constructor arguments every `LayerSpec` block begins with."""
     return {
         "source": str(_require(body, "source", where)),
         "member": _tile_member(body, where),
@@ -5252,7 +5255,8 @@ def _carriageway_edge(body: Any, where: str) -> CarriagewayEdge:
     if not codes:
         raise ValueError(f"{where}:codes is empty; the source would match no feature")
 
-    layer = _source_layer(body, where, _CARRIAGEWAY_EDGE_ROLES)
+    header = _spec_header(body, where, _CARRIAGEWAY_EDGE_ROLES)
+    layer = header["layer"]
     off_grade = tuple(str(code) for code in (body.get("off_grade_codes") or ()))
     if off_grade and "elevation" not in layer.fields:
         # It would load, filter nothing, and report a level-0 figure computed
@@ -5269,9 +5273,7 @@ def _carriageway_edge(body: Any, where: str) -> CarriagewayEdge:
         raise ValueError(f"{where}:geometry is {geometry!r}, not one of {allowed}")
     return CarriagewayEdge(
         name=str(_require(body, "name", where)),
-        source=str(_require(body, "source", where)),
-        member=_tile_member(body, where),
-        layer=layer,
+        **header,
         codes=codes,
         off_grade_codes=off_grade,
         geometry=geometry,

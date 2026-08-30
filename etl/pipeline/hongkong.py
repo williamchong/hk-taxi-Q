@@ -51,16 +51,3 @@ NO_ENTRY = "TS115"
 # at or above 180 — which makes it the one class no threshold can get wrong. It
 # is 5 plates and it costs a dictionary row.
 TURN_PROHIBITIONS = {"TS131": "left", "TS132": "right", "TS133": "u"}
-
-# The white bar of a NO ENTRY plate, as a fraction of the disc's diameter.
-#
-# ⚠️ **Measured, not authored** (`Q67`). `TS115`'s cell reads a bar **0.868** of
-# the diameter long and **0.187** thick. The layer authored 0.66 by 0.22 — a
-# quarter short and a sixth too thick — on the region's commonest sign by a wide
-# margin, so it was the face the player saw wrong most often.
-#
-# 🔴 **The two bars are the same AREA to a tenth**, 0.145 against 0.162, and that
-# is the finding rather than the numbers: a grader that compared area alone would
-# have passed a visibly different bar. `sign_face_survey.py` grades extents for
-# this reason, and this is the defect it was written against.
-NO_ENTRY_BAR_THICKNESS = 0.187

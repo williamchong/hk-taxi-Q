@@ -66,6 +66,6 @@ static func position_of(node: Dictionary) -> Variant:
 static func missing_hint() -> String:
 	return (
 		"No fare nodes at %s. Run the ETL and copy its output there:\n" % PATH
-		+ "  python -m pipeline.fares --city hong_kong --region wan_chai\n"
+		+ "  python -m pipeline.fares --region wan_chai\n"
 		+ "  cp etl/out/<city>/<region>/fares.json game/assets/generated/"
 	)

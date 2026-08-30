@@ -119,6 +119,15 @@ from typing import Any
 import numpy as np
 
 from pipeline import gdb, hongkong
+
+# ⚠️ **Three imports from sibling stages rather than three copies.** `AT_GRADE`
+# is the source's own encoding of "no structure" and is not config; `facing_away`
+# asks whether winding agrees with the given normal, which is the question a
+# *vertical* surface needs and `surface.downward_facing` cannot answer; and
+# `ccw`, `axis_residual_deg` and `ArrowReport.measured` are the canonical
+# statements of conventions this stage shares with the arrows. ⚠️ The two
+# heading residuals moved to `polyline.py` in `Q94` — `carriageway.py` needs
+# them and cannot import `arrows` — so they arrive from there now.
 from pipeline.arrows import (
     ArrowReport,
     Ribbon,
@@ -162,17 +171,7 @@ from pipeline.documents import read_document, write_document
 from pipeline.fetch import cached_source, source_reads
 from pipeline.gltf import MeshData, Texture, write_glb
 from pipeline.mesh import select_triangles
-
-# ⚠️ **Three imports from sibling stages rather than three copies.** `AT_GRADE`
-# is the source's own encoding of "no structure" and is not config; `facing_away`
-# asks whether winding agrees with the given normal, which is the question a
-# *vertical* surface needs and `surface.downward_facing` cannot answer; and
-# `ccw`, `axis_residual_deg` and `ArrowReport.measured` are the canonical
-# statements of conventions this stage shares with the arrows. ⚠️ The two
-# heading residuals moved to `polyline.py` in `Q94` — `carriageway.py` needs
-# them and cannot import `arrows` — so they arrive from there now.
-from pipeline.meshbuild import MIN_TWICE_AREA_M2 as _MIN_TWICE_AREA_M2
-from pipeline.meshbuild import ColouredBuilder
+from pipeline.meshbuild import MIN_TWICE_AREA_M2, ColouredBuilder
 from pipeline.polyline import (
     Segments,
     Snap,
@@ -260,9 +259,23 @@ _SLASH_THICKNESS = 0.097
 
 # The white bar of a NO ENTRY plate, as a fraction of the disc's diameter — the
 # same "on a disc `half_height_m` is the radius" identity `_SLASH_THICKNESS`
-# uses, so this coefficient is the diameter fraction directly. Measured by
-# `Q67`; the number and its finding live with the city's other facts.
-_NO_ENTRY_BAR_THICKNESS = hongkong.NO_ENTRY_BAR_THICKNESS
+# uses, so this coefficient is the diameter fraction directly.
+#
+# ⚠️ **Measured, not authored** (`Q67`). `TS115`'s cell reads a bar **0.868** of
+# the diameter long and **0.187** thick. This layer authored 0.66 by 0.22 — a
+# quarter short and a sixth too thick — on the region's commonest sign by a wide
+# margin, so it is the face the player sees wrong most often.
+#
+# 🔴 **The two bars are the same AREA to a tenth**, 0.145 against 0.162, and that
+# is the finding rather than the numbers: a grader that compared area alone would
+# have passed a visibly different bar. `sign_face_survey.py` grades extents for
+# this reason, and this is the defect it was written against.
+#
+# ⚠️ A drawing coefficient of the plate, not a city constant: `Q100` moved it to
+# `hongkong.py` and review sent it back — it drives no branch, it is
+# `_SLASH_THICKNESS`'s sibling, and `CLAUDE.md`, `verify_hud.gd` and
+# `no_entry_icon.gd` all cite this module as its home.
+_NO_ENTRY_BAR_THICKNESS = 0.187
 
 
 @dataclass
@@ -1223,13 +1236,6 @@ def turned_plates_agree(spec: Signs, report: SignReport) -> bool:
     return report.plates_turned == expected_turned(spec, report)
 
 
-# The accumulator is `meshbuild.ColouredBuilder`; the channel decision is this
-# stage's and stays recorded here. ⚠️ **`COLOR_0` ships, and it is read**: a
-# plate is up to four colours and the whole layer is one draw call, so the
-# colour has to travel on the vertex and `signs.gdshader` takes it straight to
-# `ALBEDO`. `arrows.py` records the opposite decision for the opposite reason,
-# and `Q54`'s bar is the same in both directions. The normal is per polygon,
-# because every plate faces a different sideways.
 class _TextBuilder:
     """Accumulates the lettering quads: positions, normals, UVs, one colour.
 
@@ -1286,7 +1292,7 @@ class _TextBuilder:
         # `select_triangles` carries `uvs`, `texture` and `material` through, so
         # the textured mesh is no exception to the rule.
         twice_area = np.linalg.norm(mesh.triangle_cross(), axis=1)
-        return select_triangles(mesh, twice_area > _MIN_TWICE_AREA_M2)
+        return select_triangles(mesh, twice_area > MIN_TWICE_AREA_M2)
 
 
 def orphaned_supplementary(spec: Signs, codes: Sequence[str]) -> bool:
@@ -1701,6 +1707,13 @@ def build_region(
         stacks[(sign.group, sign.x, sign.z)].append(sign)
 
     posts = _merge_posts(stacks, spec.pole_merge_m, report)
+    # The accumulator is `meshbuild.ColouredBuilder`; the channel decision is this
+    # stage's and stays recorded here. ⚠️ **`COLOR_0` ships, and it is read**: a
+    # plate is up to four colours and the whole layer is one draw call, so the
+    # colour has to travel on the vertex and `signs.gdshader` takes it straight to
+    # `ALBEDO`. `arrows.py` records the opposite decision for the opposite reason,
+    # and `Q54`'s bar is the same in both directions. The normal is per polygon,
+    # because every plate faces a different sideways.
     builder = ColouredBuilder(SIGNS_MATERIAL)
     # ⚠️ **Baked before anything is drawn, and only for faces that ask.** A city
     # whose whitelist carries no `text` layer bakes nothing, ships no texture and
@@ -1918,7 +1931,6 @@ _TURN_U = "u"
 # there and it is not what the plate names.
 _TURN_OTHER = "other"
 _TURN_PROHIBITIONS = hongkong.TURN_PROHIBITIONS
-assert set(_TURN_PROHIBITIONS.values()) <= {_TURN_LEFT, _TURN_RIGHT, _TURN_U}
 
 
 def _heading_deg(start: Sequence[float], end: Sequence[float]) -> float:

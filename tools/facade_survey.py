@@ -807,8 +807,8 @@ def main(argv: list[str] | None = None) -> int:
         default=INDIVIDUALISED_DIR,
         help="where the individualised sheet archives live",
     )
-    # Resolved after parsing rather than as a default, because it depends on
-    # `source_dir` is the only thing that knows this tree's shape.
+    # Resolved after parsing rather than as an argparse default, so
+    # `source_dir` stays the only thing that knows this tree's shape.
     parser.add_argument(
         "--out-dir", type=Path, help="where to write facade_lab.<sheet>.json [the city's cache]"
     )

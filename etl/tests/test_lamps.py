@@ -92,10 +92,9 @@ def city_with(tmp_path, block: dict[str, Any] | None):
     if block is not None:
         document["lamps"] = block
         document["materials"]["galvanised_steel"] = COLUMN_MATERIAL
-    cities = tmp_path / "cities"
-    cities.mkdir(exist_ok=True)
-    (cities / "testville.yaml").write_text(yaml.safe_dump(document), encoding="utf-8")
-    return load_config(cities / "testville.yaml")
+    path = tmp_path / "testville.yaml"
+    path.write_text(yaml.safe_dump(document), encoding="utf-8")
+    return load_config(path)
 
 
 @pytest.fixture

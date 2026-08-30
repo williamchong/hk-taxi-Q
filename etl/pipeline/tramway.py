@@ -61,7 +61,7 @@ from pipeline.documents import write_document
 from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData, write_glb
 from pipeline.mesh import select_triangles
-from pipeline.meshbuild import MIN_TWICE_AREA_M2 as _MIN_TWICE_AREA_M2
+from pipeline.meshbuild import MIN_TWICE_AREA_M2
 from pipeline.polyline import Segments, plan_lengths, plan_steps
 from pipeline.roads import ROADGRAPH_NAME, read_graph
 from pipeline.surface import boundary, dedupe, downward_facing, mitres
@@ -351,7 +351,7 @@ class _Builder:
             material=TRAMWAY_MATERIAL,
         )
         twice_area = np.linalg.norm(mesh.triangle_cross(), axis=1)
-        return select_triangles(mesh, twice_area > _MIN_TWICE_AREA_M2)
+        return select_triangles(mesh, twice_area > MIN_TWICE_AREA_M2)
 
 
 def read_rails(

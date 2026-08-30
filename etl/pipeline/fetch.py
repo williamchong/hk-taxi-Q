@@ -906,7 +906,6 @@ def _process(
     dry_run: bool,
     context: ssl.SSLContext | None,
 ) -> None:
-    manifest_key = artefact.key
     destination = artefact_path(artefact, root=root)
 
     # `--force` overrides fetch-once, not the publisher's own version stamp.
@@ -914,22 +913,22 @@ def _process(
     # sheets after one was republished costs one sheet rather than 265 MB.
     # Unversioned artefacts have nothing to consult and always re-download.
     ignore_cache = force and artefact.version is None
-    if not ignore_cache and _is_cached(manifest.get(manifest_key), destination, artefact.version):
-        log.info("  cached   %s", manifest_key)
-        report.cached.append(manifest_key)
+    if not ignore_cache and _is_cached(manifest.get(artefact.key), destination, artefact.version):
+        log.info("  cached   %s", artefact.key)
+        report.cached.append(artefact.key)
         return
 
     if dry_run:
-        log.info("  would fetch %s  <- %s", manifest_key, redact(artefact.url))
-        report.downloaded.append(manifest_key)
+        log.info("  would fetch %s  <- %s", artefact.key, redact(artefact.url))
+        report.downloaded.append(artefact.key)
         return
 
-    log.info("  fetching %s", manifest_key)
+    log.info("  fetching %s", artefact.key)
     if artefact.pages is not None:
         size, sha256 = download_paged(artefact.url, destination, artefact.pages, context=context)
     else:
         size, sha256 = download(artefact.url, destination, context=context)
-    manifest[manifest_key] = {
+    manifest[artefact.key] = {
         # Redacted: see `redact`. Re-derived from config or the index each run,
         # so nothing depends on this being complete.
         "url": redact(artefact.url),
@@ -943,9 +942,9 @@ def _process(
         "fetched_at": datetime.now(UTC).isoformat(timespec="seconds"),
     }
     if artefact.kind is ArtefactKind.INDEX:
-        report.indexes.append(manifest_key)
+        report.indexes.append(artefact.key)
     else:
-        report.downloaded.append(manifest_key)
+        report.downloaded.append(artefact.key)
     report.total_bytes += size
 
 

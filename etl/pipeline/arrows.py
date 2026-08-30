@@ -517,13 +517,6 @@ def nearside(heading_deg: float) -> np.ndarray:
     return -frame(heading_deg)[1]
 
 
-# The accumulator is `meshbuild.FlatBuilder`; the channel decision is this
-# stage's and stays recorded here. ⚠️ **Position and normal only — no `COLOR_0`,
-# no `TEXCOORD_0`, no `TEXCOORD_1`.** The colour is authored in
-# `game/tuning/arrows.tres` beside the markings it matches (`Q53` deliberately
-# kept paint out of `materials:`), and the first draft's unread glyph-local
-# `TEXCOORD_0` cost 59 KB of a 257 KB asset — a channel earns its place when
-# something reads it (`Q54`).
 @dataclass(frozen=True)
 class Ribbon:
     """What `surface.py` drew for one edge, as a consumer needs to read it.
@@ -790,6 +783,13 @@ def build_region(
     # elevated, and the street the marking is actually on was a median 4 m away.
     segments = Segments.of([edge for edge in graph["edges"] if int(edge["elevation_level"]) == 0])
 
+    # The accumulator is `meshbuild.FlatBuilder`; the channel decision is this
+    # stage's and stays recorded here. ⚠️ **Position and normal only — no `COLOR_0`,
+    # no `TEXCOORD_0`, no `TEXCOORD_1`.** The colour is authored in
+    # `game/tuning/arrows.tres` beside the markings it matches (`Q53` deliberately
+    # kept paint out of `materials:`), and the first draft's unread glyph-local
+    # `TEXCOORD_0` cost 59 KB of a 257 KB asset — a channel earns its place when
+    # something reads it (`Q54`).
     builder = FlatBuilder(ARROWS_MATERIAL)
     laid: list[_Laid] = []
     for symbol in symbols:

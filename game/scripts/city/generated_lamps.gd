@@ -44,7 +44,7 @@ static func is_present() -> bool:
 static func missing_hint() -> String:
 	return (
 		"No lamp posts at %s. Run the ETL and copy its output there:\n" % PATH
-		+ "  python -m pipeline.lamps --city hong_kong --region wan_chai\n"
+		+ "  python -m pipeline.lamps --region wan_chai\n"
 		+ "  cp etl/out/<city>/<region>/lamps.glb game/assets/generated/\n"
 		+ "A city whose sources publish no utility point layer ships none, and that is not a failure."
 	)

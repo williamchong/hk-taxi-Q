@@ -62,6 +62,6 @@ static func excluded_bounds_of(entry: Dictionary) -> Variant:
 static func missing_hint() -> String:
 	return (
 		"No landmark placements at %s. Run the ETL and copy its output there:\n" % PATH
-		+ "  python -m pipeline.export --city hong_kong --region wan_chai\n"
+		+ "  python -m pipeline.export --region wan_chai\n"
 		+ "  tools/sync_generated.sh hong_kong wan_chai"
 	)

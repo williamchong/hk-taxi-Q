@@ -85,7 +85,7 @@ from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData, write_glb
 from pipeline.kerbside import NEARSIDE, OFFSIDE, SideIndex, merge_runs, resample
 from pipeline.mesh import select_triangles
-from pipeline.meshbuild import MIN_TWICE_AREA_M2 as _MIN_TWICE_AREA_M2
+from pipeline.meshbuild import MIN_TWICE_AREA_M2
 from pipeline.polyline import plan_lengths, plan_lengths_2d
 from pipeline.roads import ROADGRAPH_NAME, read_graph
 from pipeline.surface import (
@@ -401,7 +401,7 @@ def read_lines(
             # transform: a translation and a Z flip preserve length, and
             # measuring here keeps `source_m` comparable with the figures
             # `DATA_SOURCES.md` quotes for the layer.
-            length_m = float(np.hypot(*np.diff(source[:, :2], axis=0).T).sum())
+            length_m = float(plan_lengths_2d(source[:, :2])[-1])
             report.source_m += length_m
 
             code = str(types[owner])
@@ -651,7 +651,7 @@ class _Builder:
             material=name,
         )
         twice_area = np.linalg.norm(mesh.triangle_cross(), axis=1)
-        return select_triangles(mesh, twice_area > _MIN_TWICE_AREA_M2)
+        return select_triangles(mesh, twice_area > MIN_TWICE_AREA_M2)
 
 
 def facing_away(mesh: MeshData) -> int:

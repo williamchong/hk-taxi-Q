@@ -362,10 +362,11 @@ hk-taxi-Q/
 ├── CLAUDE.md                    # agent instructions — read first
 ├── docs/
 ├── etl/                         # Python: geodata → game assets (build time)
-│   ├── config/cities/
-│   │   └── hong_kong.yaml       # CRS, bounds, source URLs, tiling — ALL city specifics
+│   ├── config/
+│   │   └── hong_kong.yaml       # bounds, source URLs, tiling, vocabularies — the tunable city facts
 │   ├── pipeline/
-│   │   ├── config.py            # loads cities/*.yaml — the only route city facts take in
+│   │   ├── config.py            # loads hong_kong.yaml — the only route config facts take in
+│   │   ├── hongkong.py          # the constants that ARE the city: CRS pair, drive-on-left (Q100)
 │   │   ├── crs.py               # projected coords -> game space; codes from hongkong.py
 │   │   ├── fetch.py             # download from CSDI / data.gov.hk, cache to sources/
 │   │   ├── documents.py         # read/write a stage's JSON + its schema check; no policy

@@ -185,8 +185,8 @@ and press **F6** to look at the result, or `city_drive.tscn` to drive it.
 | `pipeline/export.py` | Stage outputs → `city.json`, plus the cross-document validation |
 | `pipeline/documents.py` | Read and write a versioned JSON document. Its own module because stages consume each other's output in both directions |
 | `pipeline/__main__.py` | `python -m pipeline` — every stage, in dependency order |
-| `sources/<city>/<source>/` | Raw downloads and `manifest.json` — gitignored |
-| `out/<city>/<region>/` | Pipeline output — gitignored |
+| `sources/<source>/` | Raw downloads and `manifest.json` — gitignored |
+| `out/<region>/` | Pipeline output — gitignored |
 
 ## Credentials
 

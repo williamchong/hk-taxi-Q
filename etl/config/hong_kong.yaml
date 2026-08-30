@@ -2409,7 +2409,7 @@ landmarks:
       # the same mesh) vetoes procedural ribbons where the elevation carries
       # no glazing — the roof sweeps and fasciae read uniform in the photo,
       # so the bands stop at the eave the way the real ones do. Needs
-      # sources/hong_kong/individualised/11-SW-9D.zip on disk.
+      # sources/individualised/11-SW-9D.zip on disk.
       reference_texture: true
 
   # iB1000 block 1103126797 (base 3.9 / roof 380.7 mPD, CERTAINTY 1, no P

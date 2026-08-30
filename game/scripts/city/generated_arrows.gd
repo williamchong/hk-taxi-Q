@@ -38,7 +38,7 @@ static func is_present() -> bool:
 static func missing_hint() -> String:
 	return (
 		"No turn arrows at %s. Run the ETL and copy its output there:\n" % PATH
-		+ "  python -m pipeline.arrows --city hong_kong --region wan_chai\n"
+		+ "  python -m pipeline.arrows --region wan_chai\n"
 		+ "  cp etl/out/<city>/<region>/arrows.glb game/assets/generated/\n"
 		+ "A city whose sources publish no marking symbols ships none, and that is not a failure."
 	)

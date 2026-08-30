@@ -231,7 +231,7 @@ class Input:
     # A module, not a description: the error message pastes into a shell.
     module: str
 
-    def read(self, out_dir: Path, city_id: str, region_id: str) -> dict:
+    def read(self, out_dir: Path, region_id: str) -> dict:
         rebuild = f"python -m pipeline.{self.module} --region {region_id}"
         return read_document(out_dir / self.name, self.schema, rebuild)
 
@@ -479,7 +479,7 @@ def _inputs(city: Config, region_id: str, out_root: Path | None) -> tuple[Path, 
     check of the files rather than of memory.
     """
     out_dir = city.out_dir(region_id, out_root)
-    return out_dir, {source.name: source.read(out_dir, city.id, region_id) for source in INPUTS}
+    return out_dir, {source.name: source.read(out_dir, region_id) for source in INPUTS}
 
 
 def _size(path: Path) -> int:
@@ -597,7 +597,7 @@ _LANDMARKS = Input(LANDMARKS_NAME, LANDMARKS_SCHEMA, "export")
 
 def read_manifest(city: Config, region_id: str, *, out_root: Path | None = None) -> dict:
     """The region's `city.json`, refusing a stale one by schema version."""
-    return _MANIFEST.read(city.out_dir(region_id, out_root), city.id, region_id)
+    return _MANIFEST.read(city.out_dir(region_id, out_root), region_id)
 
 
 def shipped(manifest: dict) -> list[str]:
@@ -663,7 +663,7 @@ def validate(city: Config, region_id: str, *, out_root: Path | None = None) -> l
         return [f"{CITY_NAME} is missing {', '.join(missing)}"]
 
     buildings = documents[BUILDINGS_MANIFEST_NAME]
-    landmarks = _LANDMARKS.read(out_dir, city.id, region_id)
+    landmarks = _LANDMARKS.read(out_dir, region_id)
     return [
         *_check_identity(manifest, {**documents, LANDMARKS_NAME: landmarks}),
         *_check_files(out_dir, manifest),

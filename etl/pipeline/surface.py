@@ -61,7 +61,7 @@ from pipeline.geometry import edge_distances, inside_polygon
 from pipeline.gltf import Bounds, MeshData, normalise, write_glb
 from pipeline.kerbside import NEARSIDE, OFFSIDE
 from pipeline.mesh import select_triangles
-from pipeline.meshbuild import MIN_TWICE_AREA_M2 as _MIN_TWICE_AREA_M2
+from pipeline.meshbuild import MIN_TWICE_AREA_M2
 from pipeline.polyline import plan_lengths, plan_steps
 from pipeline.roads import ROADGRAPH_NAME, read_graph
 
@@ -258,7 +258,7 @@ _OVERLAP_CELL_M = 60.0
 #
 # It is also the floor on how close an inserted station may come to one the
 # polyline already has, which is what keeps the extra quads out of
-# `_MIN_TWICE_AREA_M2`'s way.
+# `MIN_TWICE_AREA_M2`'s way.
 _KERB_STATION_M = 0.25
 
 # The collapse bar is shared: see `meshbuild.MIN_TWICE_AREA_M2`.
@@ -754,7 +754,7 @@ class _Builder:
             material=SURFACE_MATERIAL,
         )
         twice_area = np.linalg.norm(mesh.triangle_cross(), axis=1)
-        kept = select_triangles(mesh, twice_area > _MIN_TWICE_AREA_M2)
+        kept = select_triangles(mesh, twice_area > MIN_TWICE_AREA_M2)
         if kept is None:
             raise ValueError(f"'{name}': every triangle collapsed")
         return kept
@@ -953,7 +953,7 @@ def _fan_corners(ring: np.ndarray) -> np.ndarray:
     fan = np.stack([apex, ring, np.roll(ring, -1, axis=0)], axis=1)
     edge_a, edge_b = fan[:, 1] - fan[:, 0], fan[:, 2] - fan[:, 0]
     twice_area = edge_a[:, 0] * edge_b[:, 2] - edge_a[:, 2] * edge_b[:, 0]
-    return fan[np.abs(twice_area) > _MIN_TWICE_AREA_M2]
+    return fan[np.abs(twice_area) > MIN_TWICE_AREA_M2]
 
 
 def downward_facing(mesh: MeshData) -> tuple[int, float]:

@@ -45,6 +45,10 @@ from pipeline.polyline import Segments
 from pipeline.railings import facing_away
 from pipeline.sign_text import _bake, _bounds, _coverage, _livery, _plate_mask
 from pipeline.signs import (
+    _TURN_LEFT,
+    _TURN_PROHIBITIONS,
+    _TURN_RIGHT,
+    _TURN_U,
     SIGNS_MATERIAL,
     Sign,
     SignReport,
@@ -1785,3 +1789,14 @@ class TestWhichWayTheLetteringIsCutOut:
         }
         with pytest.raises(ValueError, match="more than one text layer"):
             city_with(tmp_path, block)
+
+
+class TestTheCityCodesSpeakThisModulesVocabulary:
+    """`hongkong.TURN_PROHIBITIONS` maps TD codes to `signs.py`'s movement
+    words. A value outside that vocabulary would match no movement and read as
+    a permanent disagreement. Guarded by a test rather than the module-scope
+    `assert` it replaces, because `python -O` strips asserts and this repo
+    explicitly codes for optimised runs (`fetch.py`'s `-OO` note)."""
+
+    def test_every_prohibition_names_a_known_movement(self) -> None:
+        assert set(_TURN_PROHIBITIONS.values()) <= {_TURN_LEFT, _TURN_RIGHT, _TURN_U}

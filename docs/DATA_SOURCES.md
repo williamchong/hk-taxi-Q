@@ -997,7 +997,7 @@ category *and*, in eight cases, an operating-time restriction after an embedded 
 | 21 | `Lantau Taxi Stand` | `lantau` |
 
 Matching is **first-hit-wins over substrings**, so rule order is load-bearing: `Urban and NT` must
-precede `NT Taxi Stand`, which must precede `Urban`. `load_city` refuses a table where an earlier
+precede `NT Taxi Stand`, which must precede `Urban`. `load_config` refuses a table where an earlier
 rule would always shadow a later one, and `test_config.py` pins all sixteen spellings — the Wan Chai
 region only ever exercises two of them.
 

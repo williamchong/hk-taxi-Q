@@ -22,6 +22,6 @@ static func load_surface() -> PackedScene:
 static func missing_hint() -> String:
 	return (
 		"No road surface at %s. Run the ETL and copy its output there:\n" % PATH
-		+ "  python -m pipeline.surface --city hong_kong --region wan_chai\n"
+		+ "  python -m pipeline.surface --region wan_chai\n"
 		+ "  cp etl/out/<city>/<region>/roads.glb game/assets/generated/"
 	)
