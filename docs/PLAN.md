@@ -588,6 +588,32 @@ trade.
   `B1` and `B3` turning out to be more urgent than the schedule assumed. **Record it either way**,
   including how long each driver lasted before stopping.
 
+### `Q19` implementation — the carve and the dressed fence — **named next, ahead of `B1`'s remainder**
+
+Called 2026-08-31 (`DECISIONS.md` `Q19`, last section): candidate 3 on the seven edges the survey
+licenses, candidate 2 on the four it cannot — dressed, never invisible. Round 0 ended on these
+walls, which is why this jumps `B1`'s queue (user, 2026-08-30/31). **The order is load-bearing**:
+the carve changes which edges remain starved, so the fence set is measured after it, not asserted
+before it.
+
+| ID | Deliverable | Accept |
+|---|---|---|
+| `P3-28` | **The carve** — a `landmarks.py`-shaped stage cuts the `INFRASTRUCTURE` objects back to the surveyed span on `e233`, `e55`, `e485`, `e788`, `e398`, `e256`, `e327`. The prism is the published centreline × the surveyed `width_m` (**never** the drawn floor — cutting at the 10.24/12.48 m floor removes published structure on an invented width's authority) × a config height band; cut faces are capped so the mass still reads solid — the cap *is* the retaining wall. Runs after `roads` in `STAGES`; touched tiles re-emitted, untouched tiles byte-identical; with the config block absent the whole bundle is byte-identical (`Q95`'s validation move) | `carriageway_occupancy.py` clears the seven or names the measured residual per edge; the `q19s` cameras re-shot (×2, `cmp`) show carriageway where the concrete stood; the full battery pasted — `carriageway_occupancy`, `deck_error`, `overhang`, `ground_clearance`, `clearance_reconcile`, `narrowing`; per-edge `carved_area_m2` published over refusals as well as keeps (`Q58`); carved-edge set equality both ways (`landmarks.py`'s `replaced` pattern); the tile **collider** is the carved mesh, verified rather than assumed |
+| `P3-29` | **The fence and its dressing, shipped together** — a car-bar predicate beside `is_passable` (the bar is data, not a code constant — hard rule 4), consumed by spawn, fares and street naming; and authored barrier props (committed, CC BY-SA, the authored lane) **with colliders** at the mouths of the post-carve fence set, `e222`/`e256` barred at the pocket mouth | The fence set is computed from the post-carve bundle, never hand-kept; `is_passable` unmoved at 3.20 m and a mutation check proves the new predicate is not it (re-pointing it at 1.80 m sends traffic down `e207`'s 1.95 m); a barrier is legible before it is hit at driving speed from every approach — A/B frames at fixed cameras, shot twice and `cmp`'d; driving each fenced approach ends at a visible barrier, not an invisible wall |
+
+- **Deps:** `P3-28` before `P3-29`; neither blocks on `P0-3b`.
+- ⚠️ The stage reads spans from the **published graph** after `roads` runs (`width_m` where
+  `width_source` is measured) — never from `carriageway_width.json`, which is gitignored generated
+  data (hard rules 2 and 7, the same refusal `Q95` records for the roads stage).
+- ⚠️ The cut keeps left/right halves about the centreline, so it inherits the station-normal trap:
+  `tools/centreline_error.py`'s named-negation discipline and the two-normals test apply (`Q78`).
+- ⚠️ The core geometric risk is that the source is a **surface, not a solid**: an uncapped cut opens
+  a hollow shell whose backfaces cull to nothing — the invisible wall back again, as a hole. The cap
+  faces are the mitigation and they are load-bearing, not cosmetic.
+- ⚠️ The barrier is the physical stop; the predicate only keeps the *game* from sending anyone
+  there. A fence with no collider is the invisible refusal `Q19`'s record forbids, one layer up.
+- ⚠️ `e207` is exempt from the player fence (it clears the car) and stays `P3-3`'s at the lane bar.
+
 ### Build `B1` — "One fare" — **runs second**
 
 | ID | Deliverable | Accept |

@@ -1665,9 +1665,10 @@ mouth, not on the edge. ⚠️ A barrier asserts a closure the real street does 
 game fiction on the diegetic-map-edge precedent, and it replaces the stronger false assertion
 already shipping: a wall that is not there to be seen.
 
-⬜ **Order of work, and it is load-bearing**: the carve first, because it changes which edges remain
-starved; the fence predicate and its consumers, measured over the post-carve bundle; the dressing
-last, placed on the fence set that survives. **What this deliberately does not decide**: the
+⬜ **Order of work, and it is load-bearing**: the carve first (`P3-28`), because it changes which
+edges remain starved; the fence predicate and its consumers, measured over the post-carve bundle,
+and the dressing placed on the fence set that survives (`P3-29`, shipped together — a fence without
+its dressing is the invisible refusal this section forbids). Acceptance criteria in `PLAN.md`. **What this deliberately does not decide**: the
 building half — its starves are 1–3 m crossings, not the walls that ended round 0, and nothing here
 licenses carving a building — and `Q22`'s off-grade family, untouched.
 
