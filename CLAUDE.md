@@ -35,15 +35,15 @@ them without explicit instruction from the user.
 4. **All tuning values are data**, not constants in code. Handling curves, fare timers, road
    widths → Godot `.tres` resources or JSON.
    🔴 **The carriageway width is DATA in a second sense since `Q95`: it is measured, not authored.**
-   `roadgraph.json`'s `width_m` comes from what TD and iB1000 drew on 260 of 737 level-0 edges, and
+   `roadgraph.json`'s `width_m` comes from what TD, iB1000 and HyD drew on 292 of 737 level-0 edges, and
    the playability widening is a **floor** (`surface.floor_default_m`, 10.24 m) rather than a
    multiplier — `drawn = max(width_m, floor)`. A multiplier over-widens the streets that are already
    wide. ⚠️ **`width_m != lanes x lane_width_m` any more**; `width_source` says which an edge carries.
    🔴 **And `lanes` is measured too since `Q94`** — bracketed off that width against TPDM 4.3.9.8's
    3.0-3.65 m through lane, **never** divided by `lane_width_m`, which would make the instrument
-   agree with the constant under test. It resolves on **142 of the 260** measured edges (88
-   `measured`, 54 `floored`); the rest are ambiguous and keep the authored count, and `lanes_source`
-   says which. ⚠️ **A lane count moves no geometry** — the ribbon is `max(width_m, floor)` — so it
+   agree with the constant under test. It resolves on **210 of the 292** measured edges (96
+   `measured`, 57 `floored`, 57 `arrows`); the rest are ambiguous and keep the authored count, and
+   `lanes_source` says which. ⚠️ **A lane count moves no geometry** — the ribbon is `max(width_m, floor)` — so it
    changes the `TEXCOORD_0` lane coordinate and the arrow slots, and nothing else.
 5. **Respect the data contract** in `docs/ARCHITECTURE.md`. ETL output and game input are a
    versioned interface; change both sides together and bump `schema_version`. Bump where a consumer
@@ -198,7 +198,7 @@ Common emoji for this project:
   edges and refines 50 without overriding a station the lines answered; **second, it re-baselines
   every published width**. ⚠️ **"Third" still does not mean "only where they are silent"** — the loop
   runs per station. ⚠️ It arrives via `paged_sources`, the third source kind, at **~163 MB on every
-  clone** — the first source that size any build *reads*.
+  clone** — second only to the 218 MB Traffic Aids geodatabase among sources a build reads.
 - **`surface.floor_*`, `lanes_*`, `lane_width_m`, the `carriageway_survey` config block, or
   `pipeline/carriageway.py`: also
   `tools/carriageway_margin.py`, and paste its table.** It measures the drawn ribbon against the
@@ -301,7 +301,7 @@ Common emoji for this project:
   the Traffic Aids Drawings — a second, independently digitised source of the same restrictions —
   and diffs the two answers. It is **the only instrument that can grade the kind**: every consumer
   takes double-versus-single on trust from `NSR.TIME_ZONE`, so a wrong mapping renders perfectly
-  (`Q56`). ⚠️ It needs `traffic_aids_drawings_gdb`, a **208 MB** fetch; get it with `--only` on a
+  (`Q56`). ⚠️ It needs `traffic_aids_drawings_gdb`, a **218 MB** fetch; get it with `--only` on a
   clone that has not built. ⚠️ **It is no longer "a fetch no build reads"** — that was true when
   this bullet was written and stopped being true at `P3-12`/`P3-14`: **seven** config blocks read it
   (`roads`, `carriageway_survey`, `arrows`, `signs`, `boxjunctions`, `road_marks`, `railings`), so it
@@ -386,8 +386,7 @@ Common emoji for this project:
   a counter here is not whether it reads 0 but whether **any reachable configuration makes it
   non-zero**. ⚠️ **`no_entry_against_flow` is a config-and-code ratchet and NOT data-sensitive** —
   no readable input moves it, only dropping the flag or the turn does — so mutate it rather than
-  reading its 0, and do not describe it as grading the city. ⚠️ **`plates_turned` must equal the drawn NO ENTRY family exactly** (197 = `TS115` 179
-  + `TS116` 18); a fall means the turn stopped happening, and a turn that stops renders perfectly.
+  reading its 0, and do not describe it as grading the city. ⚠️ **`plates_turned` must equal the drawn NO ENTRY family exactly** (195 = `TS115` 177 + `TS116` 18 today; the invariant is the equality, not the number); a fall means the turn stopped happening, and a turn that stops renders perfectly.
   ⚠️ **Which faces turn is config, never a code constant** — a second face quietly gaining the flag
   rotates a whole code across the region and renders perfectly (`Q64`'s class).
   ⚠️ **A facing change cannot be graded against anything published** (`Q62`), so the evidence is an
@@ -705,8 +704,8 @@ Common emoji for this project:
   display substitution table, which is the only thing standing between a data refresh and a tofu box
   on one street's plate. ⚠️ **Substitutions are a DISPLAY fix and `roadgraph.json` is never edited**
   — a street's name is the strongest case of `Q54`'s sourced-not-invented rule. ⚠️ The bundled font
-  is the **fourth** licence in a repo whose hard rule 7 says three; `LICENSING.md` and the credits
-  screen both carry it (`Q79`).
+  is the **fourth** licence in a repo whose hard rule 7 says three; `LICENSING.md` carries it, and
+  the credits screen must when it exists — it does not yet, a recorded licence gap (`Q79`).
 - Update `docs/PROGRESS.md` — task status, metrics, risks, and the questions index.
 - Record any new decision, or any question that closes, in `docs/DECISIONS.md`, keyed by its ID.
 - **Bundle size is measured from a PCK, never summed from source files.** That rule has been wrong
