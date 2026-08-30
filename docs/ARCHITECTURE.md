@@ -144,12 +144,15 @@ the text blocks overlays register with it, and — through `view_changed` — th
 | `minimal` | position block and frame counter | 27 |
 | `full` | plus registered readouts and 3D debug geometry | 38 |
 
-Measured on `city_drive.tscn` at 2.0 s into the standard driver run. Against the <150 budget that is
-affordable, but it is not free: left on, a fifth of the scene's draw calls go on debug text — and it
-sits over every screenshot anyone judges the city from. That second reason, more than the cost, is
-why the default is off.
+Measured on `city_drive.tscn` at 2.0 s into the standard driver run — ⚠️ **before the drawn layers
+from `P3-14` onward landed**, so the absolute numbers are stale (the HUD paragraph below was measured
+on a later build and starts from 44–45); the *deltas* between views are what the table is for, and
+`P2-6` re-measures the lot. Against the <150 budget that is affordable, but it is not free: left on,
+a fifth of the scene's draw calls go on debug text — and it sits over every screenshot anyone judges
+the city from. That second reason, more than the cost, is why the default is off.
 
-`drive.sh` is the exception: it appends `--debug-view=minimal` unless the caller names a view, on the
+`drive.sh` (`.claude/skills/run-hk-taxi-q/drive.sh`) is the exception: it appends
+`--debug-view=minimal` unless the caller names a view, on the
 grounds that a scripted run is someone debugging and a screenshot that cannot say where it was taken
 cannot be acted on.
 
@@ -176,7 +179,8 @@ does. Running `--import` by hand tells you nothing unless you read the output.
 
 | Step | Covers | In CI |
 |---|---|---|
-| `settings` | That `project.godot` still holds the 21 warning promotions, `untyped_declaration` by name, and both feature overrides (`rendering_method.web` at its value, `max_fps.mobile`) — what an editor save silently drops | yes |
+| `settings` | That `project.godot` still holds the 21 warning promotions, `untyped_declaration` by name, both feature overrides (`rendering_method.web` at its value, `max_fps.mobile`), `msaa_3d` and `meshes/force_disable_compression` — what an editor save silently drops | yes |
+| `tuning` | That every `game/tuning/*.tres` and `game/scenes/*.tscn` under watch still carries its rationale prose, and that `UNDOCUMENTED_OK` has not gone stale (`Q99`) | yes |
 | `gdformat --check` | Layout across all of `game/` | yes |
 | `--import` | Autoloads and what they reach; also builds `game/.godot/` | yes |
 | warnings sweep | `--check-only` per script, grepping for `treated as error` | yes |
@@ -184,7 +188,8 @@ does. Running `--import` by hand tells you nothing unless you read the output.
 | `verify_mesh_contract` | That the no-texture contract still refuses what it should — needs no built region, so CI can check it | yes |
 | `verify_vehicle` | The taxi's shader binding, lamp channels, imported payload and beam aim — the taxi is committed, so this needs no built region either | yes |
 | `verify_input` | The touch scheme, driven by synthetic fingers — needs no built region, which matters more here than anywhere: `P0-3b` has no handset, so this is the only thing that exercises touch at all | yes |
-| `verify_city`, `verify_tiles`, `verify_road_surface`, `verify_road_graph`, `verify_city_streamer`, `verify_spawn`, `verify_landmarks`, `verify_tramway`, `verify_arrows`, `verify_boxjunctions`, `verify_railings`, `verify_signs`, `verify_roadmarks`, `verify_lamps` | The generated-asset contracts — one per asset the manifest names | **no** |
+| `verify_hud` | The HUD layout against `hud_layout.tres`'s rects, both directions of the thumb-rest contract (`Q80`) — needs no built region | yes |
+| `verify_city`, `verify_tiles`, `verify_road_surface`, `verify_road_graph`, `verify_city_streamer`, `verify_spawn`, `verify_landmarks`, `verify_tramway`, `verify_arrows`, `verify_boxjunctions`, `verify_railings`, `verify_signs`, `verify_roadmarks`, `verify_signals`, `verify_lamps` | The generated-asset contracts — one per asset the manifest names (`verify_signals` runs against the null manifest key the latent layer leaves, `Q77`) | **no** |
 
 The sweep is separate from `--import` because `--import` does not do the job: measured, an untyped
 variable planted in `greybox_builder.gd` went unreported, because the import step compiles only
@@ -246,7 +251,7 @@ measured across an unrestored export is not a feature's cost**, and `--headless 
 was **not** what stripped the tree on 2026-08-27 — it left both files clean across all three runs.
 Some other Godot invocation did, so restore-and-verify before an export rather than after one.
 
-**Five grading tools sit beside the suite and are run by hand.** What makes them a set is not the
+**Six grading tools sit beside the suite and are run by hand.** What makes them a set is not the
 count: it is that each reads back what *shipped* and shares no code with the pipeline, because a
 stage cannot mark its own work — ask the ETL's own sampler about the ETL's own output and it reads
 |error| p90 0.02 m, which is the sampler agreeing with itself.
@@ -269,7 +274,7 @@ rather than per tool; restating it here is how `CONTRIBUTING.md` drifted nine gr
 **`tools/narrowing.py` sits beside them and is not one of them.** It prices a *proposal* — what
 `Q19`'s clearances would read at a lower `surface.floor_default_m` — rather than grading what shipped, and it
 does that by importing `pipeline.clearance` and reusing it whole. That is the opposite of the rule
-the four above keep, and deliberate: the question is not whether the measurement is right, which
+the graders above keep, and deliberate: the question is not whether the measurement is right, which
 `carriageway_occupancy.py` answers, but what the same measurement says at a different width. A
 second implementation would confound the two. Hand-run, reads the ETL out tree rather than the
 shipped bundle, and needs no rebuild — buildings do not move when the ribbon narrows. It **refuses
@@ -279,7 +284,8 @@ precondition rather than a diagnostic.
 
 `deck_error.py` owns the shared bundle reader (`bundle_arguments`, `load_bundle`, `log_bundle`,
 `Faces`, `wears`, `nearest`); `overhang.py` owns the shared width sweep (`walk_width`,
-`cross_section`, `left_of`, `half_width_at`) and the other two import it, because reimplementing
+`cross_section`, `left_of`, `half_width_at`), imported by `ground_clearance.py`,
+`carriageway_occupancy.py` and — outside this table — `carriageway_margin.py`, because reimplementing
 that walk means rediscovering its duplicated-vertex guard the hard way.
 
 ⚠️ **A tool that needs two passes over the carriageway must still *walk* it once.**
@@ -373,13 +379,16 @@ hk-taxi-Q/
 │   │   ├── gltf.py              # glTF read + GLB write; no dependency
 │   │   ├── gdb.py               # geodatabase layers + WKB → numpy; format only, no policy
 │   │   ├── geometry.py          # plan-space helpers shared by the drawing stages
+│   │   ├── polyline.py          # polyline walking/measure helpers
 │   │   ├── mesh.py              # merge, partition, LOD collapse — geometry, no policy
+│   │   ├── meshbuild.py         # the shared mesh accumulator the drawing stages feed (Q100)
 │   │   ├── colour.py            # the authored palette, resolved; no stage owns a colour
 │   │   ├── terrain.py           # terrain / structure mesh → sampleable height field
 │   │   ├── podiums.py           # iB1000 blocks → podiums.json, the tower↔block boundary
 │   │   ├── buildings.py         # sheets → vertex-coloured tiles + LOD tiers
 │   │   ├── landmarks.py         # hero-building placement → landmarks.json
 │   │   ├── roads.py             # Road Network geodatabase → roadgraph.json
+│   │   ├── carriageway.py       # the width/lane survey roads.py publishes (Q94/Q95)
 │   │   ├── kerbside.py          # NSR restrictions linear-referenced onto the graph
 │   │   ├── surface.py           # roadgraph.json → roads.glb; ribbon, kerbs, junctions
 │   │   ├── clearance.py         # what stands in the ribbon → clear width per station
@@ -392,17 +401,20 @@ hk-taxi-Q/
 │   │   ├── signs.py             # published traffic signs → signs.glb (P3-16)
 │   │   ├── sign_sheets.py       # TD's sign drawings, rasterised (P3-20)
 │   │   ├── sign_text.py         # sign lettering → signs_text.png (P3-20, Q68)
-│   │   ├── signals.py           # published signal heads → signals.glb (P3-17)
+│   │   ├── signals.py           # published signal heads → signals.glb (P3-17, latent — Q77)
+│   │   ├── lamps.py             # published lamp posts → lamps.glb (P3-26)
 │   │   ├── export.py            # → city.json, assembles and validates the stage outputs
 │   │   └── __main__.py          # `python -m pipeline` — 17 stages, in order
-│   ├── sources/<city>/<source>/ # raw downloads — GITIGNORED
-│   ├── out/<city>/<region>/     # pipeline output — GITIGNORED
+│   ├── sources/<source>/        # raw downloads — GITIGNORED
+│   ├── out/<region>/            # pipeline output — GITIGNORED
 │   └── tests/
 ├── game/                        # Godot project
 │   ├── project.godot
 │   ├── export_presets.cfg       # COMMITTED — never put signing credentials here
 │   ├── scenes/
-│   │   ├── dev/                 # grey-box circuit, city preview, city drive
+│   │   ├── main.tscn            # boot wrapper — hands off to the dev drive scene
+│   │   ├── dev/                 # grey-box circuit, skidpad, city preview, city drive
+│   │   ├── vehicle/             # taxi.tscn
 │   │   └── world/               # shared rigs: lighting, sky
 │   ├── scripts/
 │   │   ├── core/                # pure logic, minimal engine coupling
@@ -417,16 +429,15 @@ hk-taxi-Q/
 └── tools/                       # dev scripts: check, sync, export, grading
 ```
 
-⚠️ **`scenes/dev/` is not shipped — except that `run/main_scene` currently boots
-`scenes/dev/city_drive.tscn`.** A knowing placeholder: the scene needs the gitignored
+⚠️ **`scenes/dev/` is not shipped — except that `run/main_scene` boots `scenes/main.tscn`, a
+seven-line wrapper that instances `scenes/dev/city_drive.tscn`.** A knowing placeholder: the scene needs the gitignored
 `assets/generated/`, so a fresh clone boots to an empty world with only a `push_warning`. An export
 is a demo rather than a build until there is a real main scene — but since `P2-1` put `CityStreamer`
 on the boot path in place of `tile_preview.gd`, it is no longer a demo that blows the frame budget:
 268,709 primitives at the spawn against the 1.16 M the preview cost.
 
 **Why the ETL is a separate Python project:** it runs rarely, at build time, and needs GDAL — which
-has no good Godot equivalent. Keeping it out of the engine also keeps it reusable for the second
-city.
+has no good Godot equivalent.
 
 ---
 
@@ -444,13 +455,13 @@ The interface between ETL and game. **Versioned — change both sides together a
 
 ```json
 {
-  "schema_version": 18,
+  "schema_version": 19,
   "city_id": "hong_kong",
   "region_id": "wan_chai",
   "source_crs": "EPSG:2326",
   "origin": { "easting": 835765.0, "northing": 816125.0, "elevation": 0.0 },
   "city_offset": [38379.0, 0.0, 32826.0],
-  "bounds_game": { "min": [-11.343, -13.049, -18.802], "max": [1656.889, 378.532, 923.32] },
+  "bounds_game": { "min": [-32.0, -13.049, -73.571], "max": [1704.698, 378.532, 923.142] },
   "tile_size_m": 150,
   "tiles": [
     {
@@ -470,10 +481,11 @@ The interface between ETL and game. **Versioned — change both sides together a
   "tramway": "tram.glb",
   "arrows": "arrows.glb",
   "boxjunctions": "boxjunctions.glb",
-  "roadmarks": "roadmarks.glb",
+  "lamps": "lamps.glb",
   "railings": "railings.glb",
   "signs": "signs.glb",
   "signs_text_atlas": "signs_text.png",
+  "roadmarks": "roadmarks.glb",
   "signals": null,
   "landmarks": "landmarks.json",
   "landmark_assets": ["landmarks/hkcec.glb"],
@@ -489,7 +501,7 @@ puts a game-space position back on the source map.
 **The manifest names the other documents, it does not contain them.** The road graph is 0.65 MB on
 disk and ~6 MB parsed, and `RoadGraph` wants it at a different moment from when `CityStreamer` wants
 the tile list. Each of the three is separately versioned. A build ships exactly what the manifest
-names — **145 files and 56.8 MB** for Wan Chai, which the `export` stage prints on every run. The
+names — **146 files and 59.3 MB** for Wan Chai, which the `export` stage prints on every run. The
 PCK it exports to is a separate measurement and lives in `PROGRESS.md`'s Bundle-size metric, because
 it is measured from the PCK and never summed from these files.
 
@@ -526,8 +538,8 @@ cross-section, measured by `clearance.py` between 0.30 m and 2.00 m above the de
 because `surface.py` had held the ribbon back for a junction cap; negative rather than zero because
 no real clearance can be, and zero is the one value that would read as *blocked solid* on precisely
 the stations that are not. `lane_width_m` travels with it as the bar: `roadgraph.json`'s `width_m`
-is `lanes × lane_width_m` **hand-tuned upward for playability**, so dividing it back does not
-recover this number. `RoadGraph` reads the pair as `is_passable` / `is_routable` and — deliberately
+is a **survey** since `Q95` — measured where publishers license a reading, authored elsewhere,
+never `lanes × lane_width_m` — so dividing it back does not recover this number. `RoadGraph` reads the pair as `is_passable` / `is_routable` and — deliberately
 — does **not** fold either into `nearest_edge`. What a query does instead is **report** it:
 `Hit.clear_width_m` is the gap at the segment the hit landed on, so a consumer that must not put a
 car in a wall can guard itself without the index deciding for every other caller. `RoadSpawn` is
@@ -664,8 +676,10 @@ in the table above. Two things about what it cost:
 was out by more than the encoding.** Measured from PCKs with one variable changed: **32.36 → 36.37 MB,
 +4.01 MB**, against 937,889 vertices across both tiers — 7.50 MB of raw VEC2 that the pack compresses
 by 47%. Quantising to `unorm16` would halve the raw side and save perhaps 2 MB, at the price of a
-scale factor in the contract on both sides. **Not done, because the bundle budget is 200 MB and this
-build is at 36.37**; the note is here so a later region short of room knows where 2 MB is hiding.
+scale factor in the contract on both sides. **Not done, because the bundle budget is 200 MB and the
+build is nowhere near it** — `PROGRESS.md`'s Bundle-size row owns the current figure (the 36.37 here
+is the build as measured then); the note is here so a later region short of room knows where 2 MB is
+hiding.
 Peak ETL RSS went **800 → 900 MB** on the same machine, from materialising 8 bytes a vertex through
 the bucket phase where `colour_for` gets away with a broadcast view.
 
@@ -738,13 +752,14 @@ which the city renders see-through with no error. `TEXCOORD_0` has no such failu
 
 ```json
 {
-  "schema_version": 7,
+  "schema_version": 8,
   "nodes": [{ "id": 1, "pos": [120.5, 4.0, 300.2], "kind": "junction" }],
   "edges": [
     {
       "id": 1, "from": 1, "to": 2,
       "polyline": [[120.5, 4.0, 300.2], [180.0, 4.1, 305.0]],
       "on_structure": [false, false],
+      "structure_bounded": [false, false],
       "direction": "both",
       "lanes": 3,
       "lanes_source": "measured",
@@ -771,11 +786,12 @@ which the city renders see-through with no error. `TEXCOORD_0` has no such failu
 | `bus_lane` | `BUS_ONLY_LANE` layer, joined on `ROUTE_ID` |
 | `tram_tracks` | ⚠️ **Hand-authored.** Not in the source. A list of street names in city config |
 | `lanes` | 🔴 **Measured on 210 of the 292 surveyed edges since `Q94`**, and authored on the rest. Nobody publishes a lane *count* — Road Network v2 carries no lane field in any layer — but three sources publish the *width*, so `pipeline/carriageway.py` brackets its measured carriageway against TPDM 4.3.9.8's **3.0-3.65 m** through lane. ⚠️ **Never divided by `lane_width_m`**: 3.2 m is the authored constant the question is about, and dividing by it makes the instrument agree with the value under test. Where TD's range resolves to one integer the count is published (96 `measured`, plus 57 `floored` — see below). 🔴 **Where it does not, the arrows settle it**: a row of turn arrows across a carriageway is the count written down, and it is the one lane reading owing nothing to a width, so it resolves **57** ambiguous brackets as `arrows`. ⚠️ **A row of ONE arrow is refused** — the row counts *painted* lanes, so it is a lower bound and at one abreast it states a marking; 81 edges do that. ⚠️ **Ambiguous brackets only**, so a measured `lanes_source` implies a measured `width_source` by construction. The remaining **82** edges keep `lanes_for(speed_limit_kph)`; `lanes_source` says which of the four. ✅ **24 of 306** arrow-carrying edges still imply more lanes than they have, down from 30. ✅ And **0 of 151** measured counts disagree with `tools/carriageway_margin.py`'s independent bracket |
-| `width_m` | 🔴 **Measured on 260 of 737 level-0 edges since `Q95`**, from what TD's `RM1108`/`RM1109` and iB1000's `RM` drew; authored `lanes x lane_width_m` on the rest, with `width_source` saying which. ⚠️ **A consumer may no longer invert `width_m / lanes`** — that is why the schema bumped. The authored value it replaced was `2 x 3.2 = 6.4 m` on 720 of 737 edges, below TD's published **7.3 m** minimum for a two-lane single carriageway (6.75 m being allowed only *per direction* of a dual): invented *and* out of range. ⚠️ **This is the street, never the ribbon** — `surface.py` draws `max(width_m, floor)` |
-| `width_publisher` | 🔴 **Which publishers supplied the stations behind `width_m`, joined on `+`; empty where authored** (`Q94`, schema 7). The three do not measure the same quantity: HyD's `pavement_polygon` carves traffic islands, run-ins and car parks out of the carriageway, so it reads the **trafficable** surface where TD's and iB1000's lines run on to the kerb — p10 **-3.39 m** apart over the 4,925 stations both span. ⚠️ **A set, not a winner**: the survey picks a publisher per *station*, so 201 edges here read `ib1000`, 62 `hyd_pavement+ib1000` and 21 `hyd_pavement`. ⚠️ It records who was **used**, not who could have answered — the loop stops at the first publisher to span a station |
+| `width_m` | 🔴 **Measured on 292 of 737 level-0 edges since `Q95`** (260 at `Q95` itself; HyD's polygons then added and refined edges), from what the publishers drew; authored `lanes x lane_width_m` on the rest, with `width_source` saying which. ⚠️ **A consumer may no longer invert `width_m / lanes`** — that is why the schema bumped. The authored value it replaced was `2 x 3.2 = 6.4 m` on 720 of 737 edges, below TD's published **7.3 m** minimum for a two-lane single carriageway (6.75 m being allowed only *per direction* of a dual): invented *and* out of range. ⚠️ **This is the street, never the ribbon** — `surface.py` draws `max(width_m, floor)` |
+| `width_publisher` | 🔴 **Which publishers supplied the stations behind `width_m`, joined on `+`; empty where authored** (`Q94`, schema 7). The publishers do not measure the same quantity: HyD's `pavement_polygon` carves traffic islands, run-ins and car parks out of the carriageway, so it reads the **trafficable** surface where TD's and iB1000's lines run on to the kerb — p10 **-3.39 m** apart over the 4,925 stations both span. ⚠️ **A set, not a winner**: the survey picks a publisher per *station*, so 201 edges here read `ib1000`, 62 `hyd_pavement+ib1000`, 21 `hyd_pavement`, and 8 carry a `traffic_aids` combination. ⚠️ It records who was **used**, not who could have answered — the loop stops at the first publisher to span a station |
 | `elevation_level` | `ELEVATION` integer attribute (−1/0/1 in this region). An ordinal level, **not** a height, and never a height — it says which deck a road is on, not where that deck is. Since `P2-7` it is also **not** what decides `y` |
 | `polyline` / `pos` | Game-space metres, `y` measured **from ground level, not from the vertical datum**. Since schema 2 an off-grade edge's `y` is **sampled from the map sheets' `INFRASTRUCTURE` structure**, so it follows the real deck and varies along an edge — median grade 2.47%, p90 8.04%. Level-0 edges meeting a node another level also reaches are lifted onto the ramp they sit on, and off-grade ones are ramped **down** to such a node where the structure stops before reaching it (`Q90`). Where the structure covers nothing, `elevation_levels` in city config supplies the flat offset. A node's `y` is the **level nearest grade** among the edges meeting it, and the highest end on that level |
 | `on_structure` | ⚠️ **Derived, not published by any source.** One flag per vertex, added in schema 3: true where that station's height came from sampled structure. `elevation_level` says which deck an edge *belongs to*; this says which of its stations are *standing on one*, and the two differ because a road becomes a bridge partway along an edge. Only `roads.py` can produce it — `y` cannot stand in, since `ground: terrain` puts an at-grade hill road at 49 m. All-false for a city that samples no decks. ⚠️ **Also false where an off-grade station was ramped down to the node its structure stops short of** (`Q90`) — that station's height came from the street, not from a deck, and the field says so. **872 stations** in Wan Chai, **546 m** of level-0 centreline |
+| `structure_bounded` | 🔴 **Derived, per vertex, added in schema 8** — true where structure stands *beside* the carriageway at that station. `on_structure` cannot stand in: it is height provenance, so an approach ramp walled on both sides but sampled off the terrain reports every station off structure (`e233`, `e55`, `e398`). A consumer reading `on_structure` as "is this carriageway bounded" is **wrong** about the whole Wan Chai Interchange — that is why the schema bumped. **427 stations** in Wan Chai |
 | `road_name` | `STREET_ENAME` / `STREET_CNAME` — **bilingual names ship in the source.** The null sentinel has four spellings; normalise NFKC and fold dashes before comparing |
 | `kerbside` | `NSR`, added in schema 4 (`P3-13`, closes `Q54`). Runs of one kerb a published no-stopping restriction covers. ⚠️ **The only overlay here that is not a key join** — `NSR` carries street codes, not `ROUTE_ID`, so `pipeline/kerbside.py` linear-references it onto the finished graph. `side` is the ribbon's own, `near` at `TEXCOORD_0`'s `U = 0` and `off` at `U = lanes`; `from_m`/`to_m` are measured along **this** polyline, so a consumer drawing on the trimmed ribbon subtracts its own `trim_start_m`. `kind` is `double` (a 24-hour restriction) or `single` (posted hours), from `TIME_ZONE`. ⚠️ **Only `VEHICLE_TYPE = 1` is here** — a taxi, PLB or goods-vehicle restriction is a sign, and `5` "Others" names no class. Runs are ordered and disjoint per side. **26,065 m over 650 edge sides** in Wan Chai |
 
@@ -797,7 +813,7 @@ geometry break, and the source records those as intersections too.
 ### `roads.glb` — the drivable surface
 
 One vertex-coloured mesh for the whole region, generated from `roadgraph.json` by `surface.py`. Not
-tiled: at 35k triangles it is a fortieth of the massing, it is on screen whenever the player is, and
+tiled: at 32k triangles it is a small fraction of the massing, it is on screen whenever the player is, and
 splitting it would buy nothing but seams and draw calls.
 
 | Property | Value |
@@ -1459,11 +1475,11 @@ the second vehicle anyone built.
 | `scripts/city/road_graph.gd` | One parse per scene, nearest-edge and lane-centre queries over a plan grid. Refuses off-grade edges (`Q13`), and **expresses** — never enforces — passability on the rest (`Q51`) |
 | `scripts/city/road_spawn.gd` | `basis_facing` builds the rotation from a direction, which is what deleted the hand-written transform literal and its transpose trap; `Pose.blocked` is why a start line in a wall fails a check rather than reaching a driver (`Q52`) |
 | `scripts/city/generated_document.gd` | Parse and version-check a JSON document the ETL wrote. Shared by the locators and by `CityManifest`, so the stale-copy message exists once |
-| `scripts/city/generated_*.gd` | Locators — one definition per document the manifest names, two readers: `road_graph`, `road_surface`, `fares`, `landmarks`, `tramway`, `arrows`, `boxjunctions`, `roadmarks`, `railings`, `signs`, `lamps`. `generated_fares.gd` is the one place that knows that document's shape, and `generated_landmarks.gd::placement_of` is the one place the compass bearing becomes a Godot rotation |
+| `scripts/city/generated_*.gd` | Locators — one definition per document the manifest names, two readers: `road_graph`, `road_surface`, `fares`, `landmarks`, `tramway`, `arrows`, `boxjunctions`, `roadmarks`, `railings`, `signs`, `signals` (latent, `Q77`), `lamps`. `generated_fares.gd` is the one place that knows that document's shape, and `generated_landmarks.gd::placement_of` is the one place the compass bearing becomes a Godot rotation |
 | `scripts/city/landmarks.gd` | Places the authored heroes where `landmarks.json` puts them. ~2 models, always resident — no streaming, no LOD |
 | `scripts/city/mesh_contract.gd` | The mesh rules every generated asset is held to, plus `triangles` and `bounds`. Read by every verify tool that touches geometry, the previews, and `CityStreamer`. Also the two checks a payload-carrying asset needs — that it landed on the shader its material name asked for, and that the importer settings which would silently overwrite a `TEXCOORD_1` have not drifted — both hoisted here when `P3-12` gave the road surface a second copy of them |
 | `scripts/city/preview_draw.gd` | Flat ribbons and the unshaded vertex-colour material, shared by the dev previews |
-| `scripts/city/*_preview.gd` | Dev previews — one per drawn class: `tile`, `road_surface`, `road`, `fare`, `tramway`, `arrows`, `boxjunctions`, `roadmarks`, `railings`, `signs`, `lamps`. 🔴 **Adding a drawn layer means adding its node to `city_drive.tscn` AND `city_preview.tscn`, and no tool can see either omission.** `roadmarks` had everything else and no node at all (`Q73`); `lamps` then shipped into the preview scene only, so it was built, verified, and **invisible in the game** — found by driving it, not by a check (`Q82`). ⚠️ **Two nodes are deliberately preview-only and are NOT counterexamples**: `road` is `P1-3`'s graph diagnostic, kept hidden because it z-fights the surface, and `city_drive.tscn` carries `GraphOverlay` instead; `fare` is `P1-5`'s pins, and `P3-1a` has not started. Everything that draws a *generated mesh* is in both. They instantiate what the manifest names so a layer can be looked at on its own. **Not performance measurements** |
+| `scripts/city/*_preview.gd` | Dev previews — one per drawn class: `tile`, `road_surface`, `road`, `fare`, `tramway`, `arrows`, `boxjunctions`, `roadmarks`, `railings`, `signs`, `signals` (latent — the nodes are wired in both scenes, the manifest names no asset, `Q77`), `lamps`. 🔴 **Adding a drawn layer means adding its node to `city_drive.tscn` AND `city_preview.tscn`, and no tool can see either omission.** `roadmarks` had everything else and no node at all (`Q73`); `lamps` then shipped into the preview scene only, so it was built, verified, and **invisible in the game** — found by driving it, not by a check (`Q82`). ⚠️ **Two nodes are deliberately preview-only and are NOT counterexamples**: `road` is `P1-3`'s graph diagnostic, kept hidden because it z-fights the surface, and `city_drive.tscn` carries `GraphOverlay` instead; `fare` is `P1-5`'s pins, and `P3-1a` has not started. Everything that draws a *generated mesh* is in both. They instantiate what the manifest names so a layer can be looked at on its own. **Not performance measurements** |
 | `scripts/city/road_graph_overlay.gd` | Dev: the resolved edge, lane centre and legal travel direction under the moving car |
 | `scripts/city/drive_harness.gd` | Dev: place the car on the resolved start line, and return it there when it leaves the world. On the scene root so its `_ready` runs after the car's |
 | `scripts/camera/free_look_camera.gd` | Dev fly camera. Bypasses `InputRouter` so dev keys stay out of the shipped action map |
@@ -1475,7 +1491,7 @@ the second vehicle anyone built.
 | `scripts/ui/chamfer_panel.gd` | The HUD's one shape: a flat polygon with cut corners. Not a `StyleBox` — a chamfer is not a corner radius, and this bundle ships no UI textures |
 | `scripts/ui/accent_bar.gd` | A `ChamferPanel` that also carries one signed reading — the speed chip's acceleration bar. Split out so the plate and the reserved slots are not carrying five inert speedometer properties. `bar_span` is a pure static precisely so `verify_hud.gd` can grade the bar's **direction**, which is the one thing here that renders perfectly while being wrong |
 | `scripts/core/street_tracker.gd` | Pure: which street the plate should say you are on. Owns the dwell that stops it strobing at a junction, the rule that an unnamed edge is not evidence, and the `changes` counter that grades both |
-| `scenes/world/golden_hour.tscn` | The one lighting rig. Instance it rather than authoring a second Environment |
+| `scenes/world/golden_hour.tscn`, `scenes/world/clean_daylight.tscn` | The two lighting rigs — `clean_daylight.tscn` is the one both dev scenes instance (`clean_daylight.tres` carries the comparison between them). Instance a rig rather than authoring a second Environment |
 | `tools/verify_tiles.gd` | The mesh contract, per tier of every tile the manifest names |
 | `tools/verify_city.gd` | `city.json` — georeferencing, per-tier AABB containment, `bounds_game`, and that the named documents exist |
 | `tools/verify_road_surface.gd` | `roads.glb` — one draw call, UVs, trimesh collision |
@@ -1483,7 +1499,7 @@ the second vehicle anyone built.
 | `tools/verify_city_streamer.gd` | The streaming policy — band edges, hysteresis both ways, and a region-wide residency sweep against the draw-call budget |
 | `tools/verify_spawn.gd` | The start line — orientation against its edge vector, nearside-lane placement, drop height, the resolved edge against the fare node, and since `Q52` that a car **fits** where it is set down. **Builds the transposed basis and requires it to fail**, and builds five start lines whose clearances are known and requires each answer — nothing in the shipped city can fire the clearance guard, which stands in 9.00 m of a 3.20 m lane |
 | `tools/verify_landmarks.gd` | `landmarks.json` — assets load with mesh and `-col` collision, triangle budget, placed AABB near `bounds_game`, and no tier-0 tile triangle inside each excluded footprint's interior core |
-| `tools/verify_{tramway,arrows,boxjunctions,roadmarks,railings,signs}.gd` | One per drawn layer — the mesh contract, the draw-call and collider claims, and the per-class material dispatch. ⚠️ `verify_railings.gd` checks the dispatch **per class**, so a new railing class needs a row there, in `generated_scene_import.gd` and in the config, and `check.sh` fails if the three disagree |
+| `tools/verify_{tramway,arrows,boxjunctions,roadmarks,railings,signs,signals,lamps}.gd` | One per drawn layer — the mesh contract, the draw-call and collider claims, and the per-class material dispatch. ⚠️ `verify_railings.gd` checks the dispatch **per class**, so a new railing class needs a row there, in `generated_scene_import.gd` and in the config, and `check.sh` fails if the three disagree |
 | `tools/verify_beam_budget.gd` | `BeamBudget` — the spot-light cap is never exceeded **or under-spent**, the nearest cars win when registered farthest-first, a beamless rig takes no slot, and a despawn hands its slot on. ⚠️ One of the three verify tools that need **no built region**: it builds its own stub rigs, so it runs whatever `VERIFY_GENERATED` says |
 | `tools/verify_hud.gd` | The HUD's contracts — the thumb-rest reservation (and that overlapping a tap *zone* stays legal), the style's light-plate/dark-chip rule, the plate's font and substitution table, and the street tracker's behaviour from both sides of its dwell. ⚠️ Needs **no built region**: the layout is committed tuning and the tracker takes synthetic samples, which matters because what it protects is `P2-4`'s future screen space |
 | `tools/verify_mesh_contract.gd` | The `Q63` amendment itself — an undeclared texture is refused, a declared one inside its budget is admitted, one over budget is refused, and a declared texture that **never arrives** is refused. ⚠️ It asserts the *failures*, because every other verify tool proves an asset conforms and the risk here is the opposite one: a check that has quietly stopped catching anything. ⚠️ Needs **no built region** — it builds its own one-triangle meshes — which matters because no shipped asset declares a texture, so nothing else exercises these branches at all |
@@ -1633,7 +1649,8 @@ Key techniques, in order of what they buy:
    per tile — no atlas packing, no texture juggling. This is the main reason the untextured dataset
    was chosen.
 2. LOD via ETL-generated tiers, not runtime decimation.
-3. `MultiMeshInstance3D` for repeated props (lamp posts, railings, signage frames).
+3. One merged primitive per generated layer, built by the ETL — the region's lamp posts, railings
+   and signs are one draw call each, not instanced props.
 4. Occlusion is largely free — dense HK street canyons occlude naturally.
 
 ---
@@ -1642,14 +1659,14 @@ Key techniques, in order of what they buy:
 
 ```
 etl/  →  python -m pipeline --region wan_chai
-      →  etl/out/<city>/<region>/{city.json, roadgraph.json, roads.glb, fares.json, tiles/*.glb}
+      →  etl/out/<region>/{city.json, roadgraph.json, roads.glb, …, tiles/*.glb}
       →  tools/sync_generated.sh → game/assets/generated/
       →  Godot export presets → iOS / Android / desktop / web-demo
 ```
 
-Six stages in one dependency chain — `fetch`, `buildings`, `roads`, `surface`, `fares`, `export` —
-**3.0 s end to end** for Wan Chai against a warm source cache. Each stage also runs on its own
-against the same arguments, which is how they are developed:
+Seventeen stages in one dependency chain — `fetch` through the drawing stages to `export`, the list
+`__main__.py` owns — **~19 s end to end** for Wan Chai against a warm source cache. Each stage also
+runs on its own against the same arguments, which is how they are developed:
 
 ```sh
 python -m pipeline.buildings --region wan_chai
@@ -1671,7 +1688,7 @@ came from, never against the manifest itself — a stale `city.json` is perfectl
 The ETL is **not** run by CI. It runs when source data or pipeline logic changes, and its output is a
 versioned build artefact.
 
-**Getting a build into the game:** `tools/sync_generated.sh [city] [region]` copies exactly the files
+**Getting a build into the game:** `tools/sync_generated.sh <region>` copies exactly the files
 `city.json` names — asked of the ETL (`python -m pipeline.export … --list`), never inferred from a
 directory listing. That keeps the stage intermediates out of the bundle, and it removes tiles a
 previous build left behind, because nothing else would ever notice them: every check in the project
