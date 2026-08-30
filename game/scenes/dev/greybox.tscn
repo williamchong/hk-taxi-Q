@@ -1,8 +1,9 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/city/greybox_builder.gd" id="1_builder"]
 [ext_resource type="PackedScene" path="res://scenes/vehicle/taxi.tscn" id="2_taxi"]
 [ext_resource type="Script" path="res://scripts/camera/chase_camera.gd" id="3_camera"]
+[ext_resource type="Resource" path="res://tuning/camera.tres" id="4_cameratune"]
 
 [sub_resource type="Environment" id="Environment_greybox"]
 background_mode = 1
@@ -33,6 +34,7 @@ margin = 0.3
 script = ExtResource("3_camera")
 target_path = NodePath("../Taxi")
 camera_path = NodePath("Camera3D")
+profile = ExtResource("4_cameratune")
 
 [node name="Camera3D" type="Camera3D" parent="CameraRig"]
 far = 2000.0

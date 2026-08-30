@@ -1,4 +1,4 @@
-[gd_scene load_steps=17 format=3]
+[gd_scene load_steps=18 format=3]
 
 ; The first scene that puts the car on the real city (`P1-4` + `P0-5`).
 ;
@@ -29,6 +29,7 @@
 [ext_resource type="PackedScene" path="res://scenes/world/clean_daylight.tscn" id="3_light"]
 [ext_resource type="PackedScene" path="res://scenes/vehicle/taxi.tscn" id="4_taxi"]
 [ext_resource type="Script" path="res://scripts/camera/chase_camera.gd" id="5_camera"]
+[ext_resource type="Resource" path="res://tuning/camera.tres" id="18_cameratune"]
 [ext_resource type="Script" path="res://scripts/city/drive_harness.gd" id="6_harness"]
 [ext_resource type="Script" path="res://scripts/city/road_graph_overlay.gd" id="7_graph"]
 [ext_resource type="Script" path="res://scripts/city/landmarks.gd" id="9_landmarks"]
@@ -158,6 +159,7 @@ margin = 0.3
 script = ExtResource("5_camera")
 target_path = NodePath("../Taxi")
 camera_path = NodePath("Camera3D")
+profile = ExtResource("18_cameratune")
 
 ; 400 m, not the fly camera's 2 km. The region is only 1.66 km across, so a 2 km
 ; far plane culls nothing at all, and a chase camera 6.5 m behind a car in a Wan
