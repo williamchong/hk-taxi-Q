@@ -19,13 +19,13 @@ import pytest
 import yaml
 
 from pipeline.config import load_config
+from pipeline.meshbuild import ColouredBuilder
 from pipeline.railings import facing_away
 from pipeline.signals import (
     SIGNALS_MATERIAL,
     Signal,
     SignalReport,
     _assemble,
-    _Builder,
     _draw_head,
     _draw_post,
     _merge_placements,
@@ -164,7 +164,7 @@ class TestWhatIsBuiltIsWoundRight:
     """
 
     def test_a_head_agrees_with_its_normals(self, spec):
-        builder = _Builder()
+        builder = ColouredBuilder(SIGNALS_MATERIAL)
         for facing_deg in (0.0, 45.0, 180.0, 300.0):
             _draw_head(builder, spec, np.array([0.0, 3.0, 0.0]), facing_deg)
         mesh = builder.build("signals")
@@ -174,7 +174,7 @@ class TestWhatIsBuiltIsWoundRight:
 
     def test_a_post_agrees_with_its_normals(self, spec):
         """The regression this test exists for, held explicitly."""
-        builder = _Builder()
+        builder = ColouredBuilder(SIGNALS_MATERIAL)
         _draw_post(builder, spec, 4.0, -7.0, 0.0, 3.0)
         mesh = builder.build("signals")
 
@@ -190,7 +190,7 @@ class TestWhatIsBuiltIsWoundRight:
         Nothing saw it. `facing_away` was 0, both partitions closed,
         `verify_signals` was green, and the extra length points *downward* where
         opaque asphalt hides it from any camera above the road."""
-        builder = _Builder()
+        builder = ColouredBuilder(SIGNALS_MATERIAL)
         _draw_post(builder, spec, 0.0, 0.0, 6.5, 10.0)
         mesh = builder.build("signals")
 
@@ -202,7 +202,7 @@ class TestWhatIsBuiltIsWoundRight:
         """`facing_away` alone would pass a post wound inward *and* labelled so.
 
         It asks whether winding and normal agree, not whether either is right."""
-        builder = _Builder()
+        builder = ColouredBuilder(SIGNALS_MATERIAL)
         _draw_post(builder, spec, 0.0, 0.0, 0.0, 3.0)
         mesh = builder.build("signals")
 
@@ -219,7 +219,7 @@ class TestWhatIsBuiltIsWoundRight:
         ⚠️ It is not `signs`, although the *shader* is shared: the material name
         is what selects `signals.tres`, and a head handed `signs.tres` would be
         a signal head lit as painted aluminium and would render perfectly."""
-        builder = _Builder()
+        builder = ColouredBuilder(SIGNALS_MATERIAL)
         _draw_post(builder, spec, 0.0, 0.0, 0.0, 3.0)
         mesh = builder.build("signals")
 
@@ -228,7 +228,7 @@ class TestWhatIsBuiltIsWoundRight:
 
     def test_every_head_carries_vertex_colour(self, spec):
         """⚠️ The channel that makes one draw call carry four colours."""
-        builder = _Builder()
+        builder = ColouredBuilder(SIGNALS_MATERIAL)
         _draw_head(builder, spec, np.array([0.0, 3.0, 0.0]), 0.0)
         mesh = builder.build("signals")
 
@@ -244,7 +244,7 @@ class TestTheHeadGeometry:
 
         ⚠️ **This asserted only the two vertical normals until review caught
         it** — a head missing its back face passed. It counts the faces now."""
-        builder = _Builder()
+        builder = ColouredBuilder(SIGNALS_MATERIAL)
         _draw_head(builder, spec, np.array([0.0, 3.0, 0.0]), 0.0)
         mesh = builder.build("signals")
 
@@ -269,7 +269,7 @@ class TestTheHeadGeometry:
 
         The head's **back** must clear the post, so every part of the body lies
         at or beyond the post's front surface."""
-        builder = _Builder()
+        builder = ColouredBuilder(SIGNALS_MATERIAL)
         front = np.array([0.0, 3.0, 0.0]) + (spec.post_radius_m + spec.head_depth_m) * np.array(
             [0.0, 0.0, -1.0]
         )
@@ -281,7 +281,7 @@ class TestTheHeadGeometry:
         assert mesh.positions[:, 2].max() <= -spec.post_radius_m + 1e-9
 
     def test_every_aspect_is_drawn(self, spec):
-        builder = _Builder()
+        builder = ColouredBuilder(SIGNALS_MATERIAL)
         _draw_head(builder, spec, np.array([0.0, 3.0, 0.0]), 0.0)
         mesh = builder.build("signals")
 
@@ -294,7 +294,7 @@ class TestTheHeadGeometry:
     def test_the_aspects_are_stacked_top_to_bottom_in_order(self, spec):
         """🔴 Red on top. Reversed, it is a working signal head giving the
         opposite instruction, and nothing in a frame says so."""
-        builder = _Builder()
+        builder = ColouredBuilder(SIGNALS_MATERIAL)
         _draw_head(builder, spec, np.array([0.0, 3.0, 0.0]), 0.0)
         mesh = builder.build("signals")
 
@@ -309,7 +309,7 @@ class TestTheHeadGeometry:
 
     def test_the_aspects_sit_proud_of_the_face_they_are_on(self, spec):
         """Coplanar faces z-fight, which is what `lens_lift_m` is for."""
-        builder = _Builder()
+        builder = ColouredBuilder(SIGNALS_MATERIAL)
         _draw_head(builder, spec, np.array([0.0, 3.0, 0.0]), 0.0)
         mesh = builder.build("signals")
 
@@ -333,7 +333,7 @@ class TestTheHeadGeometry:
         The aspects are lifted along the head's outward normal, so where the
         lenses sit relative to the body *is* which way the head faces."""
         head_centre = np.array([0.0, 3.0, 0.0])
-        builder = _Builder()
+        builder = ColouredBuilder(SIGNALS_MATERIAL)
         _draw_head(builder, spec, head_centre, facing_deg)
         mesh = builder.build("signals")
 

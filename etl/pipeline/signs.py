@@ -119,15 +119,6 @@ from typing import Any
 import numpy as np
 
 from pipeline import gdb, hongkong
-
-# ⚠️ **Three imports from sibling stages rather than three copies.** `AT_GRADE`
-# is the source's own encoding of "no structure" and is not config; `facing_away`
-# asks whether winding agrees with the given normal, which is the question a
-# *vertical* surface needs and `surface.downward_facing` cannot answer; and
-# `ccw`, `axis_residual_deg` and `ArrowReport.measured` are the canonical
-# statements of conventions this stage shares with the arrows. ⚠️ The two
-# heading residuals moved to `polyline.py` in `Q94` — `carriageway.py` needs
-# them and cannot import `arrows` — so they arrive from there now.
 from pipeline.arrows import (
     ArrowReport,
     Ribbon,
@@ -172,6 +163,17 @@ from pipeline.documents import read_document, write_document
 from pipeline.fetch import cached_source, source_reads
 from pipeline.gltf import MeshData, Texture, write_glb
 from pipeline.mesh import select_triangles
+
+# ⚠️ **Three imports from sibling stages rather than three copies.** `AT_GRADE`
+# is the source's own encoding of "no structure" and is not config; `facing_away`
+# asks whether winding agrees with the given normal, which is the question a
+# *vertical* surface needs and `surface.downward_facing` cannot answer; and
+# `ccw`, `axis_residual_deg` and `ArrowReport.measured` are the canonical
+# statements of conventions this stage shares with the arrows. ⚠️ The two
+# heading residuals moved to `polyline.py` in `Q94` — `carriageway.py` needs
+# them and cannot import `arrows` — so they arrive from there now.
+from pipeline.meshbuild import MIN_TWICE_AREA_M2 as _MIN_TWICE_AREA_M2
+from pipeline.meshbuild import ColouredBuilder
 from pipeline.polyline import (
     Segments,
     Snap,
@@ -240,10 +242,6 @@ SIGNS_TEXT_MATERIAL = "signs_text"
 # ⚠️ **Not `signs_0.png`.** That is the name the importer would choose, and
 # colliding with it would put this file back in the path of whatever wrote it.
 SIGNS_TEXT_ATLAS_NAME = "signs_text.png"
-
-# Below this, twice a triangle's area means it has collapsed. The bar
-# `surface.py`, `tramway.py` and `arrows.py` all set.
-_MIN_TWICE_AREA_M2 = 1e-6
 
 # The prohibition bar's thickness as a fraction of a disc's diameter — on a disc
 # `half_height_m` *is* the radius, so this coefficient is that fraction directly.
@@ -904,7 +902,7 @@ def _chevrons(half_w: float, half_h: float) -> list[np.ndarray]:
     for index in range(count):
         tip = first + index * pitch
         # ⚠️ **Two quads, not one six-point outline, because a chevron is
-        # CONCAVE.** `_Builder.polygon` fans from vertex 0 and says it takes a
+        # CONCAVE.** `ColouredBuilder.polygon` fans from vertex 0 and says it takes a
         # convex polygon; fanning the notched outline emits triangles outside
         # the shape, half of them wound backwards. It cost `facing_away` **21**
         # on the first build — loudly, which is the one mercy: `signs.gdshader`
@@ -1226,60 +1224,13 @@ def turned_plates_agree(spec: Signs, report: SignReport) -> bool:
     return report.plates_turned == expected_turned(spec, report)
 
 
-class _Builder:
-    """Accumulates flat convex polygons, each with its own colour and normal.
-
-    Two things separate this from `arrows.py`'s builder, and both come from the
-    plate being **vertical and coloured** where an arrow is horizontal and one
-    paint:
-
-    - ⚠️ **`COLOR_0` ships, and it is read.** A plate is up to four colours and
-      the whole layer is one draw call, so the colour has to travel on the
-      vertex; `signs.gdshader` takes it straight to `ALBEDO`. `arrows.py` records
-      the opposite decision for the opposite reason, and `Q54`'s bar is the same
-      in both directions: a channel earns its place when something reads it.
-    - **The normal is per polygon**, because a sign faces sideways and every
-      plate faces a different sideways. `arrows.py` can tile one up-vector
-      because every arrow is on the ground.
-    """
-
-    def __init__(self) -> None:
-        self._positions: list[np.ndarray] = []
-        self._normals: list[np.ndarray] = []
-        self._colours: list[np.ndarray] = []
-        self._triangles: list[np.ndarray] = []
-        self._count = 0
-
-    def polygon(self, points: np.ndarray, normal: np.ndarray, colour: tuple[int, int, int]) -> None:
-        """One convex polygon in world space, already wound to face `normal`."""
-        span = len(points)
-        if span < 3:
-            return
-        base = self._count
-        fan = np.arange(1, span - 1)
-        self._triangles.append(
-            np.column_stack([np.zeros(len(fan), dtype=np.int64), fan, fan + 1]) + base
-        )
-        self._positions.append(points)
-        self._normals.append(np.tile(normal.astype(np.float32), (span, 1)))
-        self._colours.append(np.tile(np.array([*colour, 255], dtype=np.uint8), (span, 1)))
-        self._count += span
-
-    def build(self, name: str) -> MeshData | None:
-        if not self._triangles:
-            return None
-        mesh = MeshData(
-            name=name,
-            positions=np.vstack(self._positions),
-            normals=np.vstack(self._normals),
-            triangles=np.vstack(self._triangles).astype(np.uint32),
-            colours=np.vstack(self._colours),
-            material=SIGNS_MATERIAL,
-        )
-        twice_area = np.linalg.norm(mesh.triangle_cross(), axis=1)
-        return select_triangles(mesh, twice_area > _MIN_TWICE_AREA_M2)
-
-
+# The accumulator is `meshbuild.ColouredBuilder`; the channel decision is this
+# stage's and stays recorded here. ⚠️ **`COLOR_0` ships, and it is read**: a
+# plate is up to four colours and the whole layer is one draw call, so the
+# colour has to travel on the vertex and `signs.gdshader` takes it straight to
+# `ALBEDO`. `arrows.py` records the opposite decision for the opposite reason,
+# and `Q54`'s bar is the same in both directions. The normal is per polygon,
+# because every plate faces a different sideways.
 class _TextBuilder:
     """Accumulates the lettering quads: positions, normals, UVs, one colour.
 
@@ -1383,7 +1334,7 @@ def _mirrors(face: SignFace, side: float) -> bool:
 
 
 def _draw_plate(
-    builder: _Builder,
+    builder: ColouredBuilder,
     spec: Signs,
     face: SignFace,
     centre: np.ndarray,
@@ -1499,7 +1450,7 @@ def _draw_plate(
 
 
 def _draw_pole(
-    builder: _Builder, spec: Signs, x: float, z: float, base_y: float, top_y: float
+    builder: ColouredBuilder, spec: Signs, x: float, z: float, base_y: float, top_y: float
 ) -> None:
     """The post, as a closed prism with a cap.
 
@@ -1761,7 +1712,7 @@ def build_region(
         stacks[(sign.group, sign.x, sign.z)].append(sign)
 
     posts = _merge_posts(stacks, spec.pole_merge_m, report)
-    builder = _Builder()
+    builder = ColouredBuilder(SIGNS_MATERIAL)
     # ⚠️ **Baked before anything is drawn, and only for faces that ask.** A city
     # whose whitelist carries no `text` layer bakes nothing, ships no texture and
     # keeps `Texture memory` at 0 — the default `Q63` insisted stay the default.

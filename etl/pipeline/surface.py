@@ -61,6 +61,7 @@ from pipeline.geometry import edge_distances, inside_polygon
 from pipeline.gltf import Bounds, MeshData, normalise, write_glb
 from pipeline.kerbside import NEARSIDE, OFFSIDE
 from pipeline.mesh import select_triangles
+from pipeline.meshbuild import MIN_TWICE_AREA_M2 as _MIN_TWICE_AREA_M2
 from pipeline.polyline import plan_lengths, plan_steps
 from pipeline.roads import ROADGRAPH_NAME, read_graph
 
@@ -260,11 +261,7 @@ _OVERLAP_CELL_M = 60.0
 # `_MIN_TWICE_AREA_M2`'s way.
 _KERB_STATION_M = 0.25
 
-# Below this, a triangle has collapsed and is dropped. Compared against *twice*
-# the area, which is what the cross product's length gives — a square millimetre
-# of road is not road, and a collision shape built from degenerate triangles is
-# a collision shape with holes in it.
-_MIN_TWICE_AREA_M2 = 1e-6
+# The collapse bar is shared: see `meshbuild.MIN_TWICE_AREA_M2`.
 
 # Plan grid `DrawnSurface` bins junction caps into. A cap is a junction's worth
 # of tarmac — tens of metres across at the interchange, a few in a back lane —

@@ -67,8 +67,8 @@ from pipeline.config import (
 )
 from pipeline.documents import read_document, write_document
 from pipeline.fetch import source_reads
-from pipeline.gltf import MeshData, write_glb
-from pipeline.mesh import select_triangles
+from pipeline.gltf import write_glb
+from pipeline.meshbuild import FlatBuilder
 from pipeline.polyline import (
     Segments,
     axis_residual_deg,
@@ -94,10 +94,6 @@ ARROWS_MESH_NAME = "arrows"
 # `TRAMWAY_MATERIAL` use: `tools/generated_scene_import.gd` maps this string onto
 # `tuning/arrows.tres` and nothing else.
 ARROWS_MATERIAL = "arrows"
-
-# Below this, twice a triangle's area means it has collapsed. The bar
-# `surface.py` and `tramway.py` both set, for the same reason.
-_MIN_TWICE_AREA_M2 = 1e-6
 
 # What `ELEVATION` says when a symbol is at grade. The column is a structure
 # identifier — `A01`, `A03` — and null is the ground. 1,328 of the region's 1,365
@@ -534,58 +530,13 @@ def _frame(heading_deg: float) -> tuple[np.ndarray, np.ndarray]:
     )
 
 
-class _Builder:
-    """Accumulates flat convex polygons into one mesh.
-
-    Simpler again than `tramway.py`'s: every polygon is horizontal and convex,
-    so a fan from its first vertex triangulates it, and the normal is up.
-
-    ⚠️ **Position and normal only — no `COLOR_0`, no `TEXCOORD_0`, no
-    `TEXCOORD_1`.** The colour is authored in `game/tuning/arrows.tres` beside
-    the markings it matches, for the reason `config.Arrows` records: `Q53`
-    deliberately kept paint out of the `materials:` table. And there is no codec
-    to carry — `roads.glb` needs nine packed fields because a fragment there has
-    to work out which lane it is in, and every vertex here is already at the
-    position the stage decided.
-
-    ⚠️ **The first draft shipped a `TEXCOORD_0` of glyph-local metres that
-    `marking_paint.gdshader` never read**, on the reasoning that a later shader might
-    want it. That is precisely what `Q54` found `COLOR_0.a` had been doing —
-    broadcasting an unread 255 down the whole road mesh — and it cost 59 KB of a
-    257 KB asset. A channel earns its place when something reads it.
-    """
-
-    def __init__(self) -> None:
-        self._positions: list[np.ndarray] = []
-        self._triangles: list[np.ndarray] = []
-        self._count = 0
-
-    def polygon(self, plan: np.ndarray, height: np.ndarray) -> None:
-        span = len(plan)
-        if span < 3:
-            return
-        base = self._count
-        fan = np.arange(1, span - 1)
-        self._triangles.append(
-            np.column_stack([np.zeros(len(fan), dtype=np.int64), fan, fan + 1]) + base
-        )
-        self._positions.append(np.column_stack([plan[:, 0], height, plan[:, 1]]))
-        self._count += span
-
-    def build(self, name: str) -> MeshData | None:
-        if not self._triangles:
-            return None
-        mesh = MeshData(
-            name=name,
-            positions=np.vstack(self._positions),
-            normals=np.tile(np.array([0.0, 1.0, 0.0], dtype=np.float32), (self._count, 1)),
-            triangles=np.vstack(self._triangles).astype(np.uint32),
-            material=ARROWS_MATERIAL,
-        )
-        twice_area = np.linalg.norm(mesh.triangle_cross(), axis=1)
-        return select_triangles(mesh, twice_area > _MIN_TWICE_AREA_M2)
-
-
+# The accumulator is `meshbuild.FlatBuilder`; the channel decision is this
+# stage's and stays recorded here. ⚠️ **Position and normal only — no `COLOR_0`,
+# no `TEXCOORD_0`, no `TEXCOORD_1`.** The colour is authored in
+# `game/tuning/arrows.tres` beside the markings it matches (`Q53` deliberately
+# kept paint out of `materials:`), and the first draft's unread glyph-local
+# `TEXCOORD_0` cost 59 KB of a 257 KB asset — a channel earns its place when
+# something reads it (`Q54`).
 @dataclass(frozen=True)
 class Ribbon:
     """What `surface.py` drew for one edge, as a consumer needs to read it.
@@ -828,7 +779,7 @@ def build_region(
     # elevated, and the street the marking is actually on was a median 4 m away.
     segments = Segments.of([edge for edge in graph["edges"] if int(edge["elevation_level"]) == 0])
 
-    builder = _Builder()
+    builder = FlatBuilder(ARROWS_MATERIAL)
     laid: list[_Laid] = []
     for symbol in symbols:
         snap = segments.nearest(symbol.x, symbol.z)
@@ -1102,7 +1053,7 @@ def _offset(arrow: _Laid) -> float:
 
 
 def _draw(
-    builder: _Builder,
+    builder: FlatBuilder,
     spec: Arrows,
     symbol: Symbol,
     glyph: ArrowGlyph,

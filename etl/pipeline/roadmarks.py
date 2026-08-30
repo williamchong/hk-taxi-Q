@@ -51,8 +51,8 @@ from pipeline.arrows import ArrowReport
 from pipeline.config import Config, GameTransform, RoadMark, RoadMarks, load_config
 from pipeline.documents import read_document, write_document
 from pipeline.fetch import source_reads
-from pipeline.gltf import MeshData, write_glb
-from pipeline.mesh import select_triangles
+from pipeline.gltf import write_glb
+from pipeline.meshbuild import FlatBuilder
 from pipeline.polyline import Segments, plan_lengths_2d
 
 # `AT_GRADE` rather than a fifth private copy — `railings.py` exports it
@@ -87,9 +87,6 @@ ROADMARKS_MESH_NAME = "roadmarks"
 # same white paint and one material is one draw call.
 ROADMARKS_MATERIAL = "roadmarks"
 
-# Below this, twice a triangle's area means it has collapsed. The bar
-# `surface.py`, `tramway.py`, `arrows.py` and `boxjunctions.py` all set.
-_MIN_TWICE_AREA_M2 = 1e-6
 
 # Slack on `_reachable`'s narrowing, in metres. ⚠️ **Arbitrary, and deliberately
 # on the generous side** — `_reachable` proves `d_min + 2r` is already exact for
@@ -99,7 +96,7 @@ _MIN_TWICE_AREA_M2 = 1e-6
 _REACH_MARGIN_M = 3.0
 
 # Below this, a dash module's last painted run is rounding rather than paint.
-# The same shape of bar as `_MIN_TWICE_AREA_M2` and it exists for a measured
+# The same shape of bar as `meshbuild.MIN_TWICE_AREA_M2` and it exists for a measured
 # reason: `_runs` used to advance by `start += period`, which drifts a few ULPs
 # *below* the true multiple, so a give-way line whose length lands on a module
 # boundary emitted a final mark 3e-16 m long. It never rendered — the collapsed
@@ -632,64 +629,11 @@ def _cuts(start: float, stop: float, along: np.ndarray, station_m: float) -> np.
     return ordered[keep]
 
 
-class _Builder:
-    """Accumulates flat convex polygons into one mesh — `boxjunctions._Builder`,
-    with the material this stage dispatches on.
-
-    ⚠️ **Position and normal only — no `COLOR_0`, no `TEXCOORD_0`** — for the
-    reason arrows and boxes both record: the colour is authored in
-    `game/tuning/roadmarks.tres` (`Q53` kept paint out of `materials:`), and a
-    channel earns its place when something reads it.
-    """
-
-    def __init__(self) -> None:
-        self._positions: list[np.ndarray] = []
-        self._triangles: list[np.ndarray] = []
-        self._count = 0
-
-    def polygon(self, plan: np.ndarray, height: np.ndarray) -> None:
-        span = len(plan)
-        if span < 3:
-            return
-        base = self._count
-        fan = np.arange(1, span - 1)
-        self._triangles.append(
-            np.column_stack([np.zeros(len(fan), dtype=np.int64), fan, fan + 1]) + base
-        )
-        self._positions.append(np.column_stack([plan[:, 0], height, plan[:, 1]]))
-        self._count += span
-
-    def build(
-        self,
-        name: str,
-        thin_bar_m: float = 0.0,
-        report: RoadMarkReport | None = None,
-    ) -> MeshData | None:
-        """The mesh, minus collapsed triangles and sub-lattice slivers.
-
-        ⚠️ The sliver bar is judged **per triangle, not per polygon** —
-        `boxjunctions._Builder.build`'s finding, and this asset is the one most
-        exposed to it: a give-way dash is 600 mm by 200 mm, so its fan's long
-        diagonal is the needle the import lattice can flip.
-        """
-        if not self._triangles:
-            return None
-        mesh = MeshData(
-            name=name,
-            positions=np.vstack(self._positions),
-            normals=np.tile(np.array([0.0, 1.0, 0.0], dtype=np.float32), (self._count, 1)),
-            triangles=np.vstack(self._triangles).astype(np.uint32),
-            material=ROADMARKS_MATERIAL,
-        )
-        cross = mesh.triangle_cross()
-        twice_area = np.linalg.norm(cross, axis=1)
-        corners = mesh.positions[mesh.triangles][:, :, [0, 2]]
-        sides = np.roll(corners, -1, axis=1) - corners
-        longest = np.linalg.norm(sides, axis=2).max(axis=1)
-        thin = np.abs(cross[:, 1]) < thin_bar_m * np.where(longest > 0.0, longest, 1.0)
-        if report is not None:
-            report.slivers_dropped = int(thin.sum())
-        return select_triangles(mesh, (twice_area > _MIN_TWICE_AREA_M2) & ~thin)
+# The accumulator is `meshbuild.FlatBuilder` — `arrows.py`'s channel decision
+# (position and normal only; the colour is authored in
+# `game/tuning/roadmarks.tres`, `Q53`). This asset is the one most exposed to
+# the sliver bar: a give-way dash is 600 mm by 200 mm, so its fan's long
+# diagonal is the needle the import lattice can flip.
 
 
 def _import_quantum_m(markings: list[Marking]) -> float:
@@ -760,7 +704,7 @@ def _check_marks_clear_the_lattice(spec: RoadMarks, thinness_bar_m: float) -> No
     for mark in spec.marks:
         length = mark.line_width_m if mark.continuous else min(mark.mark_m, mark.line_width_m)  # type: ignore[type-var]
         span = mark.line_width_m if mark.continuous else mark.mark_m
-        # The bar `_Builder.build` applies: twice-area against the longest plan
+        # The bar `FlatBuilder.build` applies: twice-area against the longest plan
         # edge, which for a rectangle is twice its width.
         twice_area = span * mark.line_width_m  # type: ignore[operator]
         longest = math.hypot(span, mark.line_width_m)  # type: ignore[arg-type]
@@ -849,7 +793,7 @@ def build_region(
     # any other, and the blend it replaced was furthest wrong exactly there.
     drawn = DrawnSurface.of(segments, surface, level=0)
 
-    builder = _Builder()
+    builder = FlatBuilder(ROADMARKS_MATERIAL)
     report.import_quantum_m = round(_import_quantum_m(markings), 6)
     thinness_bar_m = 2.0 * report.import_quantum_m
     _check_marks_clear_the_lattice(spec, thinness_bar_m)

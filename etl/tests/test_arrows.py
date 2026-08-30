@@ -23,7 +23,6 @@ from pipeline.arrows import (
     ArrowReport,
     Ribbon,
     Symbol,
-    _Builder,
     _count_rows,
     _count_stacked,
     _draw,
@@ -35,6 +34,7 @@ from pipeline.arrows import (
     glyph_polygons,
 )
 from pipeline.config import load_config
+from pipeline.meshbuild import FlatBuilder
 from pipeline.polyline import Segments
 from pipeline.surface import downward_facing, mitres
 from tests.helpers import CITY_YAML, polygon_area
@@ -196,7 +196,7 @@ class TestTheGlyph:
         """
         glyph = spec.glyphs["1027"]
         for heading_deg in (0.0, 37.0, 90.0, 180.0, 271.0):
-            builder = _Builder()
+            builder = FlatBuilder(ARROWS_MATERIAL)
             for polygon in glyph_polygons(spec, glyph.movements, glyph.length_m):
                 plan = _place(polygon, 0.0, 0.0, heading_deg)
                 builder.polygon(plan, np.zeros(len(plan)))
@@ -368,7 +368,7 @@ class TestDrawing:
         `lift_m` is 15 mm, so a flat glyph on any real gradient has one end
         under the road — which reads as half an arrow rather than as an error.
         """
-        builder = _Builder()
+        builder = FlatBuilder(ARROWS_MATERIAL)
         symbol = Symbol(code="1017", x=0.0, z=5.0, heading_deg=0.0)
         _draw(builder, spec, symbol, spec.glyphs["1017"], np.array([0.0, 5.0]), 0.0, 1.0)
         mesh = builder.build("arrows")
@@ -400,7 +400,7 @@ class TestDrawing:
 
 
 def _built(spec, movements=("ahead",), length_m=4.0):
-    builder = _Builder()
+    builder = FlatBuilder(ARROWS_MATERIAL)
     for polygon in glyph_polygons(spec, movements, length_m):
         plan = _place(polygon, 0.0, 0.0, 0.0)
         builder.polygon(plan, np.zeros(len(plan)))

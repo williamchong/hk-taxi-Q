@@ -18,13 +18,13 @@ import pytest
 import yaml
 
 from pipeline.config import RoadMark, load_config
+from pipeline.meshbuild import FlatBuilder
 from pipeline.polyline import Segments
 from pipeline.roadmarks import (
     ROADMARKS_MATERIAL,
     Marking,
     Network,
     RoadMarkReport,
-    _Builder,
     _cuts,
     _host,
     _runs,
@@ -347,7 +347,7 @@ class TestTheGeometry:
         forward = np.array([math.sin(heading), -math.cos(heading)])
         line = np.array([-4.0 * forward, 4.0 * forward])
         quads = band_quads(Marking("RM1013", spec.mark_of("RM1013"), line), spec)
-        builder = _Builder()
+        builder = FlatBuilder(ROADMARKS_MATERIAL)
         for quad in quads:
             builder.polygon(quad, np.zeros(len(quad)))
         mesh = builder.build("roadmarks")
@@ -365,7 +365,7 @@ class TestTheGeometry:
 
     def test_the_mesh_names_the_material_the_engine_dispatches_on(self, spec):
         bar = marking(spec, "RM1011", [[-3.0, 0.0], [3.0, 0.0]])
-        builder = _Builder()
+        builder = FlatBuilder(ROADMARKS_MATERIAL)
         for quad in band_quads(bar, spec):
             builder.polygon(quad, np.zeros(len(quad)))
         # `tools/generated_scene_import.gd` maps this string and nothing else;

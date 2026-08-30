@@ -85,6 +85,7 @@ from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData, write_glb
 from pipeline.kerbside import NEARSIDE, OFFSIDE, SideIndex, merge_runs, resample
 from pipeline.mesh import select_triangles
+from pipeline.meshbuild import MIN_TWICE_AREA_M2 as _MIN_TWICE_AREA_M2
 from pipeline.polyline import plan_lengths, plan_lengths_2d
 from pipeline.roads import ROADGRAPH_NAME, read_graph
 from pipeline.surface import (
@@ -122,9 +123,7 @@ RAILINGS_MANIFEST_SCHEMA = 2
 # comes from config it is `config._railing_class`, which refuses an id ending in
 # `-col`, plus `verify_railings.gd` in the engine.
 
-# Below this, twice a triangle's area means it has collapsed. The bar
-# `surface.py`, `tramway.py`, `arrows.py` and `boxjunctions.py` all set.
-_MIN_TWICE_AREA_M2 = 1e-6
+# The collapse bar is shared: see `meshbuild.MIN_TWICE_AREA_M2`.
 
 # What `ELEVATION` says when a feature is at grade — the same column, on the
 # same geodatabase, that `arrows.py` and `boxjunctions.py` read, and the same

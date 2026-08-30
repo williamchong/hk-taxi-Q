@@ -40,6 +40,7 @@ from pipeline.config import (
     Signs,
     load_config,
 )
+from pipeline.meshbuild import ColouredBuilder
 from pipeline.polyline import Segments
 from pipeline.railings import facing_away
 from pipeline.sign_text import _bake, _bounds, _coverage, _livery, _plate_mask
@@ -47,7 +48,6 @@ from pipeline.signs import (
     SIGNS_MATERIAL,
     Sign,
     SignReport,
-    _Builder,
     _downstream_node,
     _draw_plate,
     _draw_pole,
@@ -433,7 +433,7 @@ class TestWhatIsBuiltIsWoundRight:
     """
 
     def test_a_plate_and_its_back_agree_with_their_normals(self, spec):
-        builder = _Builder()
+        builder = ColouredBuilder(SIGNS_MATERIAL)
         for facing_deg in (0.0, 45.0, 180.0, 300.0):
             _draw_plate(
                 builder, spec, spec.faces["TS115"], np.array([0.0, 3.0, 0.0]), facing_deg, 1.0
@@ -444,7 +444,7 @@ class TestWhatIsBuiltIsWoundRight:
 
     def test_a_pole_agrees_with_its_normals(self, spec):
         """The regression this test exists for, held explicitly."""
-        builder = _Builder()
+        builder = ColouredBuilder(SIGNS_MATERIAL)
         _draw_pole(builder, spec, 4.0, -7.0, 0.0, 3.0)
         mesh = builder.build("signs")
         assert mesh is not None
@@ -456,7 +456,7 @@ class TestWhatIsBuiltIsWoundRight:
         It asks whether winding and normal agree, not whether either is right —
         so this asserts the normals actually point away from the post's axis.
         """
-        builder = _Builder()
+        builder = ColouredBuilder(SIGNS_MATERIAL)
         _draw_pole(builder, spec, 0.0, 0.0, 0.0, 3.0)
         mesh = builder.build("signs")
         assert mesh is not None
@@ -468,7 +468,7 @@ class TestWhatIsBuiltIsWoundRight:
 
     def test_the_material_is_the_contract_name(self, spec):
         """The string `generated_scene_import.gd` dispatches the shader on."""
-        builder = _Builder()
+        builder = ColouredBuilder(SIGNS_MATERIAL)
         _draw_pole(builder, spec, 0.0, 0.0, 0.0, 3.0)
         mesh = builder.build("signs")
         assert mesh is not None
@@ -480,7 +480,7 @@ class TestWhatIsBuiltIsWoundRight:
         `arrows.glb` ships none on purpose; this one must, and
         `verify_signs.gd` passes `true` to `check_surface` to match.
         """
-        builder = _Builder()
+        builder = ColouredBuilder(SIGNS_MATERIAL)
         _draw_plate(builder, spec, spec.faces["TS107"], np.array([0.0, 3.0, 0.0]), 0.0, 1.0)
         mesh = builder.build("signs")
         assert mesh is not None
@@ -558,7 +558,7 @@ class TestTheFaceGeometry:
         assert face.mirror_by_side
 
         def drawn(side: float):
-            builder = _Builder()
+            builder = ColouredBuilder(SIGNS_MATERIAL)
             _draw_plate(builder, spec, face, np.zeros(3), 0.0, side)
             return builder.build("probe")
 
@@ -636,7 +636,7 @@ class TestTheFaceGeometry:
 
         meshes = []
         for side in (1.0, -1.0):
-            builder = _Builder()
+            builder = ColouredBuilder(SIGNS_MATERIAL)
             _draw_plate(builder, spec, face, np.zeros(3), 0.0, side)
             meshes.append(builder.build("probe").positions)
         assert np.allclose(meshes[0], meshes[1])
@@ -666,7 +666,7 @@ class TestTheFaceGeometry:
         assert len(tall) == 1 * 2
 
     def test_a_concave_glyph_is_split_into_convex_pieces(self, spec):
-        """⚠️ **`_Builder.polygon` fans from vertex 0 and takes a CONVEX polygon.**
+        """⚠️ **`ColouredBuilder.polygon` fans from vertex 0 and takes a CONVEX polygon.**
 
         A chevron and a T are both concave as outlines, and fanning one emits
         triangles outside the shape with half of them wound backwards — it read
@@ -1141,7 +1141,7 @@ class TestTheReportPartitions:
         failed to advance would draw every plate of an assembly inside the one
         below it — invisible, and heavier.
         """
-        builder = _Builder()
+        builder = ColouredBuilder(SIGNS_MATERIAL)
         centre_low = np.array([0.0, 2.4, 0.0])
         centre_high = np.array([0.0, 3.1, 0.0])
         _draw_plate(builder, spec, spec.faces["TS115"], centre_low, 0.0, 1.0)

@@ -28,7 +28,6 @@ from pipeline.config import _LAMP_MEASURES, load_config
 from pipeline.lamps import (
     LAMPS_MATERIAL,
     LampReport,
-    _Builder,
     _draw_lamp,
     _lantern,
     _merge,
@@ -37,6 +36,7 @@ from pipeline.lamps import (
     _spacing_m,
     _strut,
 )
+from pipeline.meshbuild import ColouredBuilder
 from pipeline.railings import facing_away
 from tests.helpers import CITY_YAML
 
@@ -237,7 +237,7 @@ class TestTheMeshFacesOutward:
     """
 
     def _mesh(self, spec, arm=(1.0, 0.0)):
-        builder = _Builder()
+        builder = ColouredBuilder(LAMPS_MATERIAL)
         _draw_lamp(
             builder,
             spec,
@@ -250,7 +250,7 @@ class TestTheMeshFacesOutward:
         `signals._draw_post` both reverse their ring and both are right to;
         inheriting that here inverted 70% of the layer. This pins the direction
         rather than the comment."""
-        builder = _Builder()
+        builder = ColouredBuilder(LAMPS_MATERIAL)
         _strut(
             builder,
             spec,
@@ -264,7 +264,7 @@ class TestTheMeshFacesOutward:
 
         # The same column with its ring the other way round, built by hand so
         # the assertion is about the geometry rather than about a flag.
-        flipped = _Builder()
+        flipped = ColouredBuilder(LAMPS_MATERIAL)
         for polygon, normal, colour in zip(
             [np.flipud(block) for block in _polygons(mesh)],
             _normals(mesh),
@@ -277,7 +277,7 @@ class TestTheMeshFacesOutward:
     def test_the_lantern_is_a_closed_box(self, spec):
         """⚠️ **Six faces, including the top.** A five-faced box reads as a hole
         from `ART_DESIGN.md`'s `overview` viewpoint."""
-        builder = _Builder()
+        builder = ColouredBuilder(LAMPS_MATERIAL)
         _lantern(builder, spec, np.array([0.0, 9.0, 0.0]), np.array([1.0, 0.0, 0.0]))
         mesh = builder.build("lantern")
 
@@ -286,7 +286,7 @@ class TestTheMeshFacesOutward:
 
     def test_the_lantern_faces_point_six_different_ways(self, spec):
         """A box whose faces share a normal is a box with a fold in it."""
-        builder = _Builder()
+        builder = ColouredBuilder(LAMPS_MATERIAL)
         _lantern(builder, spec, np.array([0.0, 9.0, 0.0]), np.array([1.0, 0.0, 0.0]))
         mesh = builder.build("lantern")
         unique = {tuple(np.round(normal, 6)) for normal in mesh.normals}
@@ -309,7 +309,7 @@ class TestTheColumnStandsOnTheDeck:
         `_draw_post` copied `signs._draw_pole` without its `base_y` and rooted
         every post at world y=0, running each 3-12 m down through the
         carriageway — where opaque asphalt hides it from any camera above."""
-        builder = _Builder()
+        builder = ColouredBuilder(LAMPS_MATERIAL)
         _draw_lamp(
             builder,
             spec,
@@ -330,7 +330,7 @@ class TestTheColumnStandsOnTheDeck:
     def test_the_lantern_hangs_at_the_far_end_of_the_arm(self, spec):
         """⚠️ **A horizontal arm plus a separately-dropped lantern was the first
         shape and it leaves the housing floating.** The arm slopes to meet it."""
-        builder = _Builder()
+        builder = ColouredBuilder(LAMPS_MATERIAL)
         _draw_lamp(
             builder,
             spec,
@@ -511,7 +511,7 @@ class TestTheShippedRegionReproducesItsPublishedNumbers:
     def test_a_lamp_costs_forty_triangles(self, spec):
         """⚠️ **Multiplied by 897, which is why it is pinned.** Column 12 sides
         + 4 cap, arm 12 sides and no cap, lantern 6 faces of 2."""
-        builder = _Builder()
+        builder = ColouredBuilder(LAMPS_MATERIAL)
         _draw_lamp(
             builder,
             spec,
@@ -524,7 +524,7 @@ class TestTheShippedRegionReproducesItsPublishedNumbers:
         """🔴 **The number `verify_lamps.gd`'s bar is derived from**, and the
         one its first version invented as 0.70. 20 of 40: column sides 12 plus
         the lantern's four vertical faces 8."""
-        builder = _Builder()
+        builder = ColouredBuilder(LAMPS_MATERIAL)
         _draw_lamp(
             builder,
             spec,

@@ -109,8 +109,8 @@ from pipeline.arrows import ArrowReport, Ribbon, nearside, ribbons
 from pipeline.config import SIGNAL_BODY_COLOUR, Config, GameTransform, Signals, load_config
 from pipeline.documents import read_document, write_document
 from pipeline.fetch import source_reads
-from pipeline.gltf import MeshData, write_glb
-from pipeline.mesh import select_triangles
+from pipeline.gltf import write_glb
+from pipeline.meshbuild import ColouredBuilder
 from pipeline.polyline import Segments, Snap, axis_residual_deg, game_heading_deg
 from pipeline.railings import AT_GRADE, facing_away
 from pipeline.roads import ROADGRAPH_NAME, read_graph
@@ -129,11 +129,6 @@ SIGNALS_MESH_NAME = "signals"
 # `game/tuning/signals.tres` sets, which is `Q61`'s rule for the railing classes
 # and `Q71`'s for the three paint layers — a layer is a parameterisation.
 SIGNALS_MATERIAL = "signals"
-
-# Degenerate triangles are dropped rather than shipped, `signs.py`'s constant
-# and its reason: a zero-area triangle has no normal, so `facing_away` cannot
-# grade it and it would sit in the count forever.
-_MIN_TWICE_AREA_M2 = 1e-6
 
 
 @dataclass
@@ -444,55 +439,14 @@ def _assemble(signals: list[Signal], merge_m: float) -> list[tuple[float, float,
 # --------------------------------------------------------------------------
 
 
-class _Builder:
-    """Accumulates flat convex polygons, each with its own colour and normal.
-
-    `signs._Builder`'s shape and for its reasons: a head is four colours — body
-    and three lens aspects — and the whole layer is one draw call, so the colour
-    has to travel on the vertex and `signs.gdshader` takes it straight to
-    `ALBEDO`. The normal is per polygon because a head faces sideways and every
-    head faces a different sideways.
-    """
-
-    def __init__(self) -> None:
-        self._positions: list[np.ndarray] = []
-        self._normals: list[np.ndarray] = []
-        self._colours: list[np.ndarray] = []
-        self._triangles: list[np.ndarray] = []
-        self._count = 0
-
-    def polygon(self, points: np.ndarray, normal: np.ndarray, colour: tuple[int, int, int]) -> None:
-        """One convex polygon in world space, already wound to face `normal`."""
-        span = len(points)
-        if span < 3:
-            return
-        base = self._count
-        fan = np.arange(1, span - 1)
-        self._triangles.append(
-            np.column_stack([np.zeros(len(fan), dtype=np.int64), fan, fan + 1]) + base
-        )
-        self._positions.append(points)
-        self._normals.append(np.tile(normal.astype(np.float32), (span, 1)))
-        self._colours.append(np.tile(np.array([*colour, 255], dtype=np.uint8), (span, 1)))
-        self._count += span
-
-    def build(self, name: str) -> MeshData | None:
-        if not self._triangles:
-            return None
-        mesh = MeshData(
-            name=name,
-            positions=np.vstack(self._positions),
-            normals=np.vstack(self._normals),
-            triangles=np.vstack(self._triangles).astype(np.uint32),
-            colours=np.vstack(self._colours),
-            material=SIGNALS_MATERIAL,
-        )
-        twice_area = np.linalg.norm(mesh.triangle_cross(), axis=1)
-        return select_triangles(mesh, twice_area > _MIN_TWICE_AREA_M2)
+# The accumulator is `meshbuild.ColouredBuilder` — `signs.py`'s channel
+# decision at a second layer: a head is four colours, body and three lens
+# aspects, and the whole layer is one draw call, so the colour rides the vertex
+# and the normal is per polygon.
 
 
 def _draw_post(
-    builder: _Builder, spec: Signals, x: float, z: float, base_y: float, top_y: float
+    builder: ColouredBuilder, spec: Signals, x: float, z: float, base_y: float, top_y: float
 ) -> None:
     """The post, as a closed prism with a cap.
 
@@ -537,7 +491,9 @@ def _draw_post(
     builder.polygon(cap, np.array([0.0, 1.0, 0.0]), body)
 
 
-def _draw_head(builder: _Builder, spec: Signals, front: np.ndarray, facing_deg: float) -> None:
+def _draw_head(
+    builder: ColouredBuilder, spec: Signals, front: np.ndarray, facing_deg: float
+) -> None:
     """One signal head: a closed box, with its aspects on the front face.
 
     ⚠️ **`front` is the centre of the FRONT FACE, not the centre of the box** —
@@ -704,7 +660,7 @@ def build_region(
         sizes[str(len(carried))] += 1
     report.assembly_size = dict(sorted(sizes.items(), key=lambda item: int(item[0])))
 
-    builder = _Builder()
+    builder = ColouredBuilder(SIGNALS_MATERIAL)
     placements: list[_Placed] = []
     for post_x, post_z, carried in posts:
         snap = segments.nearest(post_x, post_z)

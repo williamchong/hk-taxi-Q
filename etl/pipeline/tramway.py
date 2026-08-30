@@ -61,6 +61,7 @@ from pipeline.documents import write_document
 from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData, write_glb
 from pipeline.mesh import select_triangles
+from pipeline.meshbuild import MIN_TWICE_AREA_M2 as _MIN_TWICE_AREA_M2
 from pipeline.polyline import Segments, plan_lengths, plan_steps
 from pipeline.roads import ROADGRAPH_NAME, read_graph
 from pipeline.surface import boundary, dedupe, downward_facing, mitres
@@ -125,10 +126,7 @@ _PAIR_AGREEMENT = 0.5
 # drawn: a two-point rail whose points coincide has no normal to offset along.
 _MIN_PART_M = 1.0
 
-# Below this, twice a triangle's area means it has collapsed and it is dropped.
-# The same bar `surface.py` sets and for the same reason: a square millimetre of
-# tramway is not tramway.
-_MIN_TWICE_AREA_M2 = 1e-6
+# The collapse bar is shared: see `meshbuild.MIN_TWICE_AREA_M2`.
 
 
 @dataclass

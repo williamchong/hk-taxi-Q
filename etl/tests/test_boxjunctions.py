@@ -20,13 +20,13 @@ import yaml
 from pipeline.boxjunctions import (
     BOXJUNCTIONS_MATERIAL,
     BoxJunctionReport,
-    _Builder,
     _place,
     border_polygons,
     hatch_polygons,
     long_axis_deg,
 )
 from pipeline.config import load_config
+from pipeline.meshbuild import FlatBuilder
 from pipeline.polyline import Segments
 from pipeline.surface import DrawnSurface, downward_facing
 from tests.helpers import CITY_YAML, polygon_area
@@ -150,7 +150,7 @@ class TestTheGeometry:
         """
         for heading_deg in (0.0, 37.0, 90.0, 180.0, 271.0):
             ring = rotated(L_SHAPE, heading_deg)
-            builder = _Builder()
+            builder = FlatBuilder(BOXJUNCTIONS_MATERIAL)
             for piece in hatch_polygons(ring, heading_deg + 45.0, spec):
                 builder.polygon(piece, np.zeros(len(piece)))
             mesh = builder.build("boxjunctions")
@@ -198,7 +198,7 @@ class TestTheGeometry:
         for quad in quads:
             assert quad[:, 0].min() >= -1e-9 and quad[:, 0].max() <= 10.0 + 1e-9
             assert quad[:, 1].min() >= -1e-9 and quad[:, 1].max() <= 10.0 + 1e-9
-            builder = _Builder()
+            builder = FlatBuilder(BOXJUNCTIONS_MATERIAL)
             builder.polygon(quad, np.zeros(len(quad)))
             mesh = builder.build("boxjunctions")
             assert mesh is not None
@@ -237,7 +237,7 @@ class TestTheGeometry:
             "elevation_level": 0,
         }
         segments = Segments.of([sloped])
-        builder = _Builder()
+        builder = FlatBuilder(BOXJUNCTIONS_MATERIAL)
         polygon = np.array([[2.0, -1.0], [18.0, -1.0], [18.0, 1.0], [2.0, 1.0]])
         # No caps: the ribbon alone, which is the case this test is about.
         drawn = DrawnSurface.of(segments, {"caps": []})
@@ -285,7 +285,7 @@ class TestTheGeometry:
             ],
         }
         drawn = DrawnSurface.of(segments, {"caps": [cap]})
-        builder = _Builder()
+        builder = FlatBuilder(BOXJUNCTIONS_MATERIAL)
         report = BoxJunctionReport()
         polygon = np.array([[-2.0, -2.0], [2.0, -2.0], [2.0, 2.0], [-2.0, 2.0]])
         _place(builder, drawn, polygon, spec.lift_m, report)
@@ -313,7 +313,7 @@ class TestTheGeometry:
             "elevation_level": 0,
         }
         drawn = DrawnSurface.of(Segments.of([arm]), {"caps": []})
-        builder = _Builder()
+        builder = FlatBuilder(BOXJUNCTIONS_MATERIAL)
         report = BoxJunctionReport()
         _place(builder, drawn, np.array([[-2.0, -1.0], [2.0, -1.0], [0.0, 1.0]]), 0.012, report)
         assert report.vertices_drawn == 3
@@ -357,7 +357,7 @@ class TestTheMeshContract:
 
 
 def _built(spec):
-    builder = _Builder()
+    builder = FlatBuilder(BOXJUNCTIONS_MATERIAL)
     for piece in hatch_polygons(L_SHAPE, 45.0, spec):
         builder.polygon(piece, np.zeros(len(piece)))
     mesh = builder.build("boxjunctions")

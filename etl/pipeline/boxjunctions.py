@@ -55,8 +55,8 @@ from pipeline.arrows import ArrowReport
 from pipeline.config import BoxJunctions, Config, GameTransform, load_config
 from pipeline.documents import read_document, write_document
 from pipeline.fetch import source_reads
-from pipeline.gltf import MeshData, write_glb
-from pipeline.mesh import select_triangles
+from pipeline.gltf import write_glb
+from pipeline.meshbuild import FlatBuilder
 from pipeline.polyline import Segments, game_heading_deg
 from pipeline.roads import JUNCTION, ROADGRAPH_NAME, read_graph
 from pipeline.surface import (
@@ -82,9 +82,6 @@ BOXJUNCTIONS_MESH_NAME = "boxjunctions"
 # `tuning/boxjunctions.tres` and nothing else.
 BOXJUNCTIONS_MATERIAL = "boxjunctions"
 
-# Below this, twice a triangle's area means it has collapsed. The bar
-# `surface.py`, `tramway.py` and `arrows.py` all set, for the same reason.
-_MIN_TWICE_AREA_M2 = 1e-6
 
 # What `ELEVATION` says when a feature is at grade — the same column, on the
 # same geodatabase, that `arrows.py` reads, and the same reading: the column is
@@ -608,67 +605,10 @@ def border_polygons(
     return quads
 
 
-class _Builder:
-    """Accumulates flat convex polygons into one mesh — `arrows._Builder`,
-    with the material this stage dispatches on.
-
-    ⚠️ **Position and normal only — no `COLOR_0`, no `TEXCOORD_0`, no
-    `TEXCOORD_1`** — for the reason arrows records: the colour is authored in
-    `game/tuning/boxjunctions.tres` (`Q53` kept paint out of `materials:`),
-    and a channel earns its place when something reads it.
-    """
-
-    def __init__(self) -> None:
-        self._positions: list[np.ndarray] = []
-        self._triangles: list[np.ndarray] = []
-        self._count = 0
-
-    def polygon(self, plan: np.ndarray, height: np.ndarray) -> None:
-        span = len(plan)
-        if span < 3:
-            return
-        base = self._count
-        fan = np.arange(1, span - 1)
-        self._triangles.append(
-            np.column_stack([np.zeros(len(fan), dtype=np.int64), fan, fan + 1]) + base
-        )
-        self._positions.append(np.column_stack([plan[:, 0], height, plan[:, 1]]))
-        self._count += span
-
-    def build(
-        self,
-        name: str,
-        thin_bar_m: float = 0.0,
-        report: BoxJunctionReport | None = None,
-    ) -> MeshData | None:
-        """The mesh, minus collapsed triangles and sub-lattice slivers.
-
-        ⚠️ The sliver bar is judged **per triangle, not per polygon** — a
-        convex quad wider than the bar can still fan into one sound triangle
-        and one needle along its long diagonal, and the needle is what the
-        import lattice flips. Judged per polygon first, 37 of them survived to
-        fail the engine-side check; per triangle, none do.
-        """
-        if not self._triangles:
-            return None
-        mesh = MeshData(
-            name=name,
-            positions=np.vstack(self._positions),
-            normals=np.tile(np.array([0.0, 1.0, 0.0], dtype=np.float32), (self._count, 1)),
-            triangles=np.vstack(self._triangles).astype(np.uint32),
-            material=BOXJUNCTIONS_MATERIAL,
-        )
-        cross = mesh.triangle_cross()
-        twice_area = np.linalg.norm(cross, axis=1)
-        corners = mesh.positions[mesh.triangles][:, :, [0, 2]]
-        sides = np.roll(corners, -1, axis=1) - corners
-        longest = np.linalg.norm(sides, axis=2).max(axis=1)
-        # Plan twice-area over the longest plan edge — twice the width, for a
-        # rectangle — against the lattice bar `_import_quantum_m` explains.
-        thin = np.abs(cross[:, 1]) < thin_bar_m * np.where(longest > 0.0, longest, 1.0)
-        if report is not None:
-            report.slivers_dropped = int(thin.sum())
-        return select_triangles(mesh, (twice_area > _MIN_TWICE_AREA_M2) & ~thin)
+# The accumulator is `meshbuild.FlatBuilder` — `arrows.py`'s channel decision
+# (position and normal only; the colour is authored in
+# `game/tuning/boxjunctions.tres`, `Q53`), with the sliver bar this asset needed
+# first: see `FlatBuilder.build` for the per-triangle judgement.
 
 
 def build_region(
@@ -716,7 +656,7 @@ def build_region(
         dtype=np.float64,
     )
 
-    builder = _Builder()
+    builder = FlatBuilder(BOXJUNCTIONS_MATERIAL)
     # The pitch the engine will re-quantise this mesh to, and the thinness bar
     # that keeps every shipped fragment at least two lattice cells wide — see
     # `_import_quantum_m` for the 217 flipped triangles that priced it.
@@ -776,7 +716,7 @@ def build_region(
 
 
 def _place(
-    builder: _Builder,
+    builder: FlatBuilder,
     drawn: DrawnSurface,
     polygon: np.ndarray,
     lift_m: float,
