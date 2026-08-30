@@ -3,9 +3,9 @@
 An arcade taxi game set in Hong Kong, built from Hong Kong government open geodata.
 
 Real road topology from the Transport Department's Road Network. Real building massing from the
-Lands Department's 3D Visualisation Map and iB1000 topographic map. Wan Chai and Causeway Bay, reconstructed to the point where a
-Hong Kong driver can navigate it from memory — then widened, ramped, and tuned until it's fun to
-drive badly.
+Lands Department's 3D Visualisation Map and iB1000 topographic map. Wan Chai and Causeway Bay,
+reconstructed to the point where a Hong Kong driver can navigate it from memory — then widened,
+ramped, and tuned until it's fun to drive badly.
 
 > **Status:** Phases 0 and 1 complete; Phase 2 is its on-device review away from its gate, and
 > Phase 3's first build is shipped. One command turns nine government datasets from four publishers
@@ -90,9 +90,8 @@ which the freshly synced `.glb` files have no import sidecars:
 tools/check.sh
 ```
 
-That runs `gdformat`, the project-settings and tuning-rationale tripwires, the import (~8 s cold), a
-GDScript warnings sweep and the verify tools, and is
-the **only** route that fails on error. Godot exits `0` whatever happens — including when a script
+That runs `gdformat`, the project-settings and tuning-rationale tripwires, the import (~8 s cold),
+a GDScript warnings sweep and the verify tools, and is the **only** route that fails on error. Godot exits `0` whatever happens — including when a script
 fails to parse — so the script reads its output and supplies the exit code the engine will not.
 Running the steps by hand and eyeballing them is how a broken check passes.
 
@@ -104,9 +103,8 @@ GitHub Actions runs the same script on every push and pull request, alongside `r
 **skips the generated-asset verify tools** — a fresh checkout has no generated assets to check, and
 building them in CI would mean re-downloading the source data every push. The five that need no
 built region (`verify_beam_budget`, `verify_mesh_contract`, `verify_vehicle`, `verify_hud`,
-`verify_input`) run there anyway. So
-the asset contracts are yours to run locally after a pipeline build; everything else CI catches for
-you.
+`verify_input`) run there anyway. So the asset contracts are yours to run locally after a pipeline
+build; everything else CI catches for you.
 
 Grading tools sit beside the suite and are run by hand after a build, because they need a built
 region under `etl/out`. `CLAUDE.md` lists which change owes which; two of them:

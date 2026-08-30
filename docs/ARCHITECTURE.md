@@ -430,8 +430,9 @@ hk-taxi-Q/
 ```
 
 ⚠️ **`scenes/dev/` is not shipped — except that `run/main_scene` boots `scenes/main.tscn`, a
-seven-line wrapper that instances `scenes/dev/city_drive.tscn`.** A knowing placeholder: the scene needs the gitignored
-`assets/generated/`, so a fresh clone boots to an empty world with only a `push_warning`. An export
+seven-line wrapper that instances `scenes/dev/city_drive.tscn`.** A knowing placeholder: the scene
+needs the gitignored `assets/generated/`, so a fresh clone boots to an empty world with only a
+`push_warning`. An export
 is a demo rather than a build until there is a real main scene — but since `P2-1` put `CityStreamer`
 on the boot path in place of `tile_preview.gd`, it is no longer a demo that blows the frame budget:
 268,709 primitives at the spawn against the 1.16 M the preview cost.
@@ -539,7 +540,8 @@ because `surface.py` had held the ribbon back for a junction cap; negative rathe
 no real clearance can be, and zero is the one value that would read as *blocked solid* on precisely
 the stations that are not. `lane_width_m` travels with it as the bar: `roadgraph.json`'s `width_m`
 is a **survey** since `Q95` — measured where publishers license a reading, authored elsewhere,
-never `lanes × lane_width_m` — so dividing it back does not recover this number. `RoadGraph` reads the pair as `is_passable` / `is_routable` and — deliberately
+never `lanes × lane_width_m` — so dividing it back does not recover this number. `RoadGraph` reads
+the pair as `is_passable` / `is_routable` and — deliberately
 — does **not** fold either into `nearest_edge`. What a query does instead is **report** it:
 `Hit.clear_width_m` is the gap at the segment the hit landed on, so a consumer that must not put a
 car in a wall can guard itself without the index deciding for every other caller. `RoadSpawn` is

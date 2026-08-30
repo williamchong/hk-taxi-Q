@@ -35,8 +35,8 @@ project affordable:
 The art direction isn't a stylistic preference layered on top of the data. It *is* the data.
 
 ⚠️ **The bundle is no longer literally image-free, and the exception proves the second bullet rather
-than breaking it.** Since `P3-20` one atlas ships — 512 x 256, two cells since `TS101` joined on 2026-08-24: the
-lettering on the GIVE WAY and STOP plates (`Q68`). It costs nothing here because the argument above is about **`merge`** — a textured building
+than breaking it.** Since `P3-20` one atlas ships — 512 x 256, two cells since `TS101` joined on
+2026-08-24: the lettering on the GIVE WAY and STOP plates (`Q68`). It costs nothing here because the argument above is about **`merge`** — a textured building
 becomes its own draw call and 66 tiles become thousands — and the sign lettering is already its own
 primitive with its own material. `merge`'s refusal of textured meshes is untouched and is the rule
 doing the work. What changed is that "no textures" stopped being a habit and became a **declaration
