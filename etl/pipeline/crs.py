@@ -1,10 +1,11 @@
 """Source CRS to game space.
 
 This is the only module in the pipeline permitted to know how projected
-coordinates become Godot world metres. It is deliberately *not* permitted to
-know which CRS Hong Kong uses: every code arrives from `config/cities/*.yaml`,
-so adding a second city is a config file rather than a patch (CLAUDE.md hard
-rule 3). See `docs/ARCHITECTURE.md` for the conversion and the data contract.
+coordinates become Godot world metres. Which CRS that is comes from
+`pipeline/hongkong.py` through the config — every function here takes the
+codes as arguments rather than importing them, so the arithmetic stays testable
+against any pair (`Q100`). See `docs/ARCHITECTURE.md` for the conversion and
+the data contract.
 """
 
 from __future__ import annotations

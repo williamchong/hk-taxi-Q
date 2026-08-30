@@ -118,7 +118,7 @@ from typing import Any
 
 import numpy as np
 
-from pipeline import gdb
+from pipeline import gdb, hongkong
 
 # ⚠️ **Three imports from sibling stages rather than three copies.** `AT_GRADE`
 # is the source's own encoding of "no structure" and is not config; `facing_away`
@@ -263,18 +263,9 @@ _SLASH_THICKNESS = 0.097
 
 # The white bar of a NO ENTRY plate, as a fraction of the disc's diameter — the
 # same "on a disc `half_height_m` is the radius" identity `_SLASH_THICKNESS`
-# uses, so this coefficient is the diameter fraction directly.
-#
-# ⚠️ **Measured, not authored** (`Q67`). `TS115`'s cell reads a bar **0.868** of
-# the diameter long and **0.187** thick. This layer authored 0.66 by 0.22 — a
-# quarter short and a sixth too thick — on the region's commonest sign by a wide
-# margin, so it is the face the player sees wrong most often.
-#
-# 🔴 **The two bars are the same AREA to a tenth**, 0.145 against 0.162, and that
-# is the finding rather than the numbers: a grader that compared area alone would
-# have passed a visibly different bar. `sign_face_survey.py` grades extents for
-# this reason, and this is the defect it was written against.
-_NO_ENTRY_BAR_THICKNESS = 0.187
+# uses, so this coefficient is the diameter fraction directly. Measured by
+# `Q67`; the number and its finding live with the city's other facts.
+_NO_ENTRY_BAR_THICKNESS = hongkong.NO_ENTRY_BAR_THICKNESS
 
 
 @dataclass
@@ -1971,18 +1962,13 @@ def build_region(
 
 # The codes whose instruction the road graph independently carries. Kept small
 # and explicit: this is a **diff**, not a validator, so a code is here only when
-# the graph really does publish the same claim.
-_NO_ENTRY = "TS115"
+# the graph really does publish the same claim. The codes themselves are the
+# city's (`hongkong.py`, `Q100`); the movement vocabulary is this module's.
+_NO_ENTRY = hongkong.NO_ENTRY
 
 # The three turn prohibitions, and the movement each one bans. Same rule as
 # `_NO_ENTRY` and the same short list — the graph publishes 217 banned movements
 # and these are the signs that say the same thing on a post.
-#
-# ⚠️ **`TS133` is here although `Q62` named only the first two.** A U-turn leaves
-# by the edge it arrived on, so its two bearings come off one polyline in
-# opposite orders and the change is exactly 180 deg — and `turn_u_deg` is refused
-# at or above 180 — which makes it the one class no threshold can get wrong. It
-# is 5 plates and it costs a dictionary row.
 _TURN_LEFT = "left"
 _TURN_RIGHT = "right"
 _TURN_U = "u"
@@ -1991,7 +1977,8 @@ _TURN_U = "u"
 # reads as a disagreement — which is what it is. The graph bans *something*
 # there and it is not what the plate names.
 _TURN_OTHER = "other"
-_TURN_PROHIBITIONS = {"TS131": _TURN_LEFT, "TS132": _TURN_RIGHT, "TS133": _TURN_U}
+_TURN_PROHIBITIONS = hongkong.TURN_PROHIBITIONS
+assert set(_TURN_PROHIBITIONS.values()) <= {_TURN_LEFT, _TURN_RIGHT, _TURN_U}
 
 
 def _heading_deg(start: Sequence[float], end: Sequence[float]) -> float:

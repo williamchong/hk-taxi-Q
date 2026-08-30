@@ -2,8 +2,8 @@
 
 The reference values below are external facts about the HK1980 Grid System, not
 values read back out of this code, so these tests can actually fail if the
-conversion is wrong. Everything Hong Kong specific lives in this file rather
-than in the pipeline.
+conversion is wrong. The CRS codes are `pipeline/hongkong.py`'s (`Q100`); the
+reference coordinates are the grid's published definition.
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ import math
 import numpy as np
 import pytest
 
+from pipeline import hongkong
 from pipeline.crs import (
     GameTransform,
     GeodeticBounds,
@@ -22,12 +23,11 @@ from pipeline.crs import (
     transformer,
 )
 
-# The HK1980 Grid System's published definition (EPSG:2326). Its natural origin
-# is expressed on the HK1980 geodetic datum, EPSG:4611 — which is the whole
-# point of the datum test below.
-HK1980_GRID = "EPSG:2326"
+# The HK1980 Grid System's natural origin is expressed on the HK1980 geodetic
+# datum, EPSG:4611 — which is the whole point of the datum test below.
+HK1980_GRID = hongkong.PROJECTED_CRS
 HK1980_GEODETIC = "EPSG:4611"
-WGS84 = "EPSG:4326"
+WGS84 = hongkong.GEODETIC_CRS
 
 GRID_ORIGIN_LON = 114 + 10 / 60 + 42.80 / 3600
 GRID_ORIGIN_LAT = 22 + 18 / 60 + 43.68 / 3600
