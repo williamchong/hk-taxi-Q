@@ -802,7 +802,7 @@ def download_paged(
 
     🔴 **One page is parsed at a time and its features written straight out**,
     so peak memory is a page rather than the whole layer. The assembled file for
-    Hong Kong's pavement polygons is ~189 MB and 64,644 features; holding that
+    Hong Kong's pavement polygons is ~163 MB and 64,644 features; holding that
     as Python objects to re-serialise it would cost gigabytes to save nothing.
 
     ⚠️ **The `.part`-then-rename discipline is `download`'s and is kept for the

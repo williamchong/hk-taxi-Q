@@ -413,7 +413,7 @@ paged_sources:
   # package. See DATA_SOURCES.md for the decoded FEAT_TYPE domain and the clip.
   #
   # 🔴 **Whole territory and not a bbox, deliberately.** Asking the service for
-  # the Wan Chai envelope is one request and 3 MB against 22 and ~189 MB — and it
+  # the Wan Chai envelope is one request and 3 MB against 22 and ~163 MB — and it
   # is refused, because `paged_sources` is per-CITY while an envelope is
   # per-REGION. A bbox here would either duplicate bounds that hard rule 3 keeps
   # in one place or need a per-region source block. The clip stays where it
@@ -768,7 +768,8 @@ podiums:
     podium: P
 
 # Where the carriageway edge is *published*, for tools/carriageway_margin.py.
-# Read by no build. Q57 established that the width this project calls
+# Read by the build since Q95 — pipeline/carriageway.py runs the same survey to
+# publish width_m. Q57 established that the width this project calls
 # unpublished is published twice over, and both sources are already on disk.
 #
 # ⚠️ Two entries, and that is the point rather than belt-and-braces. Q57 traced
