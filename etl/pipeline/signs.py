@@ -123,7 +123,6 @@ from pipeline.arrows import (
     ArrowReport,
     Ribbon,
     ccw,
-    nearside,
     ribbons,
 )
 from pipeline.config import (
@@ -1535,11 +1534,7 @@ def _register(
     Returns the placed point and the kerb side, or `None` where `max_shift_m`
     refuses the move. The caller owns the plate-level counter.
     """
-    half_width_m = ribbon.half_width_at(snap.t)
-    # A post exactly on the centreline has no side to keep; the nearside is the
-    # one a left-driving city's traffic passes closest to.
-    side = 1.0 if snap.offset_m >= 0.0 else -1.0
-    target_m = side * (half_width_m + spec.outset_m)
+    side, half_width_m, target_m, placed = ribbon.kerb_target(snap, spec.outset_m)
     report.inside_ribbon_m.append(max(0.0, half_width_m - abs(snap.offset_m)))
 
     if abs(snap.offset_m) > half_width_m + spec.outset_m:
@@ -1565,15 +1560,9 @@ def _register(
         report.posts_over_shift += 1
         return None
 
-    # ⚠️ **The foot comes off the polyline, never from
-    # `point - offset_m * nearside`.** `Snap.offset_m` is `±distance_m` to the
-    # *clamped* projection, so a post past an edge's end has an along-edge
-    # component in that vector and the subtraction lands off the centreline.
-    # Measured: a post 5 m beyond an edge's end and dead on its axis
-    # reconstructs to 5 m off the road, and the 10.6 m move it then makes is
-    # published as 0.6 m — under `max_shift_m`, invisible to every counter.
-    # `Ribbon.foot_at` reads it instead.
-    return ribbon.foot_at(snap.t) + target_m * nearside(snap.heading_deg), side
+    # The foot-off-the-polyline trap, and the 10.6 m move it published as
+    # 0.6 m, are recorded on `Ribbon.kerb_target` and `Ribbon.foot_at`.
+    return placed, side
 
 
 def _merge_placements(

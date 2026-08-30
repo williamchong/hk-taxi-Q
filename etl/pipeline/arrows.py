@@ -71,6 +71,7 @@ from pipeline.gltf import write_glb
 from pipeline.meshbuild import FlatBuilder
 from pipeline.polyline import (
     Segments,
+    Snap,
     axis_residual_deg,
     directed_residual_deg,
     game_heading_deg,
@@ -605,6 +606,30 @@ class Ribbon:
                 float(np.interp(t, self.at, self.plan[:, 1])),
             ]
         )
+
+    def kerb_target(self, snap: Snap, outset_m: float) -> tuple[float, float, float, np.ndarray]:
+        """The registration target `outset_m` past the drawn kerb, and its frame.
+
+        Returns `(side, half_width_m, target_m, point)`: the kerb side (`+1`
+        nearside — a point exactly on the centreline has no side to keep, and
+        the nearside is the one a left-driving city's traffic passes closest
+        to), the drawn half-width at the snap, the signed across-edge target,
+        and the placed point.
+
+        ⚠️ **The point comes off the polyline (`foot_at`), never from
+        `point - offset_m * nearside`** — `Snap.offset_m` is `±distance_m` to
+        the *clamped* projection, so a post past an edge's end has an along-edge
+        component in that vector and the subtraction lands off the centreline;
+        `foot_at` carries the measurement. Only the arithmetic is shared
+        (`Q100`): whether to move at all, `Q78`'s outward-only clamp and every
+        counter stay with each stage, and `signals._register` deliberately does
+        not clamp.
+        """
+        half_width_m = self.half_width_at(snap.t)
+        side = 1.0 if snap.offset_m >= 0.0 else -1.0
+        target_m = side * (half_width_m + outset_m)
+        point = self.foot_at(snap.t) + target_m * nearside(snap.heading_deg)
+        return side, half_width_m, target_m, point
 
 
 def ribbons(graph: dict, surface: dict) -> dict[int, Ribbon]:

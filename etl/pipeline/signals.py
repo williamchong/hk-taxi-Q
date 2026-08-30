@@ -105,7 +105,7 @@ import numpy as np
 # conventions this stage shares; and `facing_from_side` is the derivation
 # itself — a second copy of it is a second city, mirrored (`Q56`).
 from pipeline import gdb
-from pipeline.arrows import ArrowReport, Ribbon, nearside, ribbons
+from pipeline.arrows import ArrowReport, Ribbon, ribbons
 from pipeline.config import SIGNAL_BODY_COLOUR, Config, GameTransform, Signals, load_config
 from pipeline.documents import read_document, write_document
 from pipeline.fetch import source_reads
@@ -812,11 +812,7 @@ def _register(
 
     The post keeps its along-edge position and its side and moves only across.
     """
-    half_width_m = ribbon.half_width_at(snap.t)
-    # A post exactly on the centreline has no side to keep; the nearside is the
-    # one a left-driving city's traffic passes closest to.
-    side = 1.0 if snap.offset_m >= 0.0 else -1.0
-    target_m = side * (half_width_m + spec.outset_m)
+    side, half_width_m, target_m, placed = ribbon.kerb_target(snap, spec.outset_m)
     report.inside_ribbon_m.append(max(0.0, half_width_m - abs(snap.offset_m)))
     shift_m = abs(target_m - snap.offset_m)
     # Recorded **before** the refusal, so the distribution can read outside its
@@ -826,14 +822,9 @@ def _register(
     if shift_m > spec.max_shift_m:
         return None
 
-    # ⚠️ **The foot comes off the polyline, never from
-    # `point - offset_m * nearside`.** `Snap.offset_m` is `±distance_m` to the
-    # *clamped* projection, so a post past an edge's end has an along-edge
-    # component in that vector and the subtraction lands off the centreline.
-    # `signs.py` measured it: a post 5 m beyond an edge's end and dead on its
-    # axis reconstructs to 5 m off the road, and the 10.6 m move it then makes is
-    # published as 0.6 m — under `max_shift_m`, invisible to every counter.
-    return ribbon.foot_at(snap.t) + target_m * nearside(snap.heading_deg), side
+    # The foot-off-the-polyline trap, and the 10.6 m move it published as
+    # 0.6 m, are recorded on `Ribbon.kerb_target` and `Ribbon.foot_at`.
+    return placed, side
 
 
 def _write_manifest(out_dir: Path, city: Config, region_id: str, report: SignalReport) -> int:

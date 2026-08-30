@@ -714,11 +714,7 @@ def _register(
     Returns the placed point and the kerb side, or `None` where `max_shift_m`
     refuses the move.
     """
-    half_width_m = ribbon.half_width_at(snap.t)
-    # A column exactly on the centreline has no side to keep; the nearside is the
-    # one a left-driving city's traffic passes closest to.
-    side = 1.0 if snap.offset_m >= 0.0 else -1.0
-    target_m = side * (half_width_m + spec.outset_m)
+    side, half_width_m, target_m, placed = ribbon.kerb_target(snap, spec.outset_m)
 
     if abs(snap.offset_m) > half_width_m + spec.outset_m:
         # ⚠️ **The published point, never a reconstruction** — see the foot note
@@ -739,15 +735,10 @@ def _register(
     if shift_m > spec.max_shift_m:
         return None
 
-    # ⚠️ **The foot comes off the polyline, never from
-    # `point - offset_m * nearside`.** `Snap.offset_m` is `±distance_m` to the
-    # *clamped* projection, so a column past an edge's end has an along-edge
-    # component in that vector and the subtraction lands off the centreline.
-    # `signs.py` measured it: a post 5 m beyond an edge's end and dead on its
-    # axis reconstructs to 5 m off the road, and the 10.6 m move it then makes is
-    # published as 0.6 m — under `max_shift_m`, invisible to every counter.
-    # `min_kerb_clearance_m` is what would catch it here.
-    return ribbon.foot_at(snap.t) + target_m * nearside(snap.heading_deg), side
+    # The foot-off-the-polyline trap, and the 10.6 m move it published as
+    # 0.6 m, are recorded on `Ribbon.kerb_target`; here
+    # `min_kerb_clearance_m` is what would catch it.
+    return placed, side
 
 
 def _merge(placements: list[_Placed], merge_m: float, report: LampReport) -> list[_Placed]:

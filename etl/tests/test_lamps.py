@@ -24,6 +24,7 @@ import numpy as np
 import pytest
 import yaml
 
+from pipeline.arrows import Ribbon
 from pipeline.config import _LAMP_MEASURES, load_config
 from pipeline.lamps import (
     LAMPS_MATERIAL,
@@ -155,6 +156,10 @@ class _Ribbon:
 
     def foot_at(self, t: float) -> np.ndarray:
         return np.array([0.0, 0.0])
+
+    # The real arithmetic, bound onto the stub — the method reads only
+    # `half_width_at` and `foot_at`, and copying it here would test a copy.
+    kerb_target = Ribbon.kerb_target
 
 
 class TestTheRegistrationRunsOutwardOnly:
