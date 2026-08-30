@@ -13,7 +13,7 @@ them without explicit instruction from the user.
 | Physics | **Jolt** (Godot default since 4.4), driving `VehicleBody3D` | Stable trimesh collision under the vehicle. ⚠️ **`Q50` reversed `P0-5a` on the user's explicit instruction (2026-08-18).** The car was a custom raycast controller until then, because `VehicleWheel3D` friction is isotropic and so cannot express a drift that breaks lateral grip while keeping traction. That is still true, and the way it was re-measured was wrong. ⚠️ **`Q84` corrected it**: the drift window is *not* 0.01–0.02 wide and `drift_slip_threshold_deg`'s 14° *is* reachable, at `drift_rear_grip_scale` **0.6695** — the cliff was a 0.02 sweep grid read through a `%.2f` label that could not resolve its own step. What survives is the cost, restated: peak slip and *dwell* pull opposite ways against speed, so 0.6695 holds 14° for **0.05 s** where the shipped 0.66 holds it for **0.57 s**, and landing the peak on the threshold is the wrong aim. The engine model ships anyway; `docs/DECISIONS.md` `Q50` and `Q84` are the record |
 | Language | **GDScript** (not C#) | C# web export is unsupported, and iOS/Android C# export is experimental. See `docs/ARCHITECTURE.md`. |
 | ETL | **Python 3.11+** (`pyogrio`, `pyproj`, `numpy`) | Best geodata tooling; runs offline at build time. `pyogrio` ships its own GDAL, so no system install. **No geopandas** — `gdb.py` wants coordinate arrays, and GeoDataFrames would add pandas to reach the same numpy underneath |
-| Building source | **3D Visualisation Map (non-textured)** + **3D-BIT00 Level 1** | Already flat-shaded extruded volumes — the low-poly look is native to this data |
+| Building source | **3D Visualisation Map (non-textured)** + **iB1000** for podium floors, tram rails and lamp posts | Already flat-shaded extruded volumes — the low-poly look is native to this data. ⚠️ **3D-BIT00 Level 1 was named here and never fetched** — iB1000, the map it is extruded from, took its place at `P3-7a`/`Q47` (`Q100`) |
 | Region (PoC) | **Wan Chai → Causeway Bay**, ~1.5 km² | Natural circuit, diegetic map edges, moderate Z-complexity |
 | Art direction | Low-poly flat-shaded; **accurate city, toy vehicles** | Recognisability requires accurate massing; charm comes from the cars |
 | Monetisation | Free download + one-time unlock IAP | Deferred to launch; affects only the free-slice boundary |
@@ -25,9 +25,13 @@ them without explicit instruction from the user.
    for driving. See `docs/DATA_SOURCES.md`.
 2. **ETL is build-time only.** The game makes zero network calls at runtime. Never couple the
    game to a government API.
-3. **ETL stays city-agnostic.** CRS, source schemas, and bounds live in
-   `etl/config/cities/*.yaml`. Never hardcode `EPSG:2326` or Hong Kong bounds in pipeline logic —
-   the second city is the business case.
+3. **Hong Kong is the only city (`Q100`).** Its facts live in **one** place each:
+   `etl/config/hong_kong.yaml` for anything that is tuning or a publisher's vocabulary (that is hard
+   rule 4 — codes, `fields:` role maps, bounds, `elevation_levels`), and `etl/pipeline/hongkong.py`
+   for the handful of constants that *are* the city (the CRS pair, drive-on-the-left, the branch
+   sign codes). Never a second copy of either. Multi-**region** support stays (`Q6`, `Q10`); there
+   is no second city and no `--city` flag. ⚠️ Records before `Q100` cite "the second city" as a
+   reason — each stands on its other reason.
 4. **All tuning values are data**, not constants in code. Handling curves, fare timers, road
    widths → Godot `.tres` resources or JSON.
    🔴 **The carriageway width is DATA in a second sense since `Q95`: it is measured, not authored.**
@@ -697,7 +701,7 @@ Common emoji for this project:
   sidecars and re-import, then re-measure. Do not "tighten" the bar toward a measured value either — it is a lay-flat detector.
   Numbers in `Q82`.
 - **Street-name or font changes — `street_plate.json`, the bundled typeface, or any new region:
-  also `tools/font_coverage.py --city <c> --region <r>`.** It exits non-zero on a character that is in neither the font nor the
+  also `tools/font_coverage.py --region <r>`.** It exits non-zero on a character that is in neither the font nor the
   display substitution table, which is the only thing standing between a data refresh and a tofu box
   on one street's plate. ⚠️ **Substitutions are a DISPLAY fix and `roadgraph.json` is never edited**
   — a street's name is the strongest case of `Q54`'s sourced-not-invented rule. ⚠️ The bundled font

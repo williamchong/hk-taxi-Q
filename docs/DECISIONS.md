@@ -126,6 +126,7 @@ wins.
 | `Q95` | **The authored carriageway width is outside the range Hong Kong permits** | 🟡 **Open — measured and bounded, nothing changed.** `width_m` is `lanes x lane_width_m` = **6.4 m** on 720 of 737 edges. TD's Transport Planning & Design Manual Vol 2 Table 3.4.2.1 (March 2026) gives a minimum two-lane single carriageway of **7.3 m** and allows 6.75 m only *per direction* of a dual carriageway — so the authored width is not merely underived, it is **below every figure TD publishes**. ✅ STEWART ROAD's measured **14.81 m** is corroborated by the same table: a 13.5 m four-lane carriageway plus a parking strip, reconcilable with no two-lane figure. ✅ **And the standard supplies the bound the width instrument lacks** — the widest urban carriageway is 13.5 m (15.8 on a tight curve), so a two-sided ray returning **36.09 m on LUNG WO ROAD** is a citable refusal rather than a suspicion. 🔴 **A standard is not a survey**: it says what a road should be, so it cannot give a per-edge width and using it to assign one would repeat the move `Q54` argues against. ⬜ Sourcing the width is **on hold behind the instrument** — `carriageway_margin.py` measures a one-sided overhang because the two-sided ray is corrupted, and that is the work `Q57` scoped and never did |
 | `Q98` | **The chase camera's yaw dial could not express lag, and the rig was rigid** | 🟢 **Closed 2026-08-31 — the law changed, not the number.** `rotate_toward` at a constant **7.0 rad/s (401°/s)** against a car whose steering can only turn it at **2.245 rad/s** (128.6°/s at 97 kph), so it closed any steering-induced error inside one tick: every input swung the world 1:1 and `yaw_lag` was inert in every reachable state. ✅ Exponential instead, `yaw_response` **6.0** — a sustained corner trails **11.9° at 30 kph and 22.4° at 105**, and the look-back flip is *faster* than the old law through 90% of its travel. 🔴 **The gate came first**: the dizziness was A/B'd against `--max-fps 60` before anything was touched, because desktop renders at 120 with physics at 60 and a camera tuned to hide judder would be tuned against an artifact `run/max_fps.mobile=60` means the phone never has. Unchanged at matched rates, so `physics_interpolation` stays off. ✅ Tuning moved to `camera.tres` — the last subsystem on code defaults, hard rule 4 in name only since none of its three scenes overrode a value. ⚠️ **The `taxi` audit rows move and their figures do not** (<0.01 pp), predicted identical and checked rather than assumed. ⬜ `verify_camera` deliberately not built; `P2-5` reopened | 🟢 Closed |
 | `Q99` | **An editor save stripped two files, and only one of them was watched** | 🟢 **Closed 2026-08-31 — the guard now covers the file class, not the file.** `Q98`'s own entry had already recorded the `project.godot` half — comments stripped, three warning promotions and `renderer/rendering_method.web` dropped, *"cause unestablished"* — and it was **still in the working tree** at the next session: seen, written down, never repaired. 🔴 **The same save also took `game/tuning/clean_daylight.tres`**, ~30 comment lines carrying `Q31`'s contrast measurement and the ambient/glow balance argument, and **nothing saw that at all** — `check.sh` mentioned `.tres` nowhere. ✅ **The two halves fail differently and it is measured, not reasoned**: `project.godot` lost behaviour, the `.tres` lost **0 differing stored properties** across the `Environment`, its `Sky` and its sky material, because the writer omits only what already equals the class default. So a `.tres` cannot lose a value that is doing work, and the new `tuning` step tests for **prose**, not values. ✅ **Presence, never a count** — comments die all at once, so "carried prose, now carries none" is a signature no honest edit produces, where a count fails on every rewording and teaches the reader to edit it down. ✅ **The default is inverted**: 20 of 25 `.tres` and 6 of 8 `.tscn` must carry rationale unless `UNDOCUMENTED_OK` names them, so a *new* resource cannot slip in unwatched — mutation-checked four ways, including that one. ⬜ **The cause is still unestablished** and this guards the symptom | 🟢 Closed |
+| `Q100` | **Hong Kong is the only city, and its config is the single source of truth** | 🟢 **Closed 2026-08-31 — the premise is retired, not refuted.** `etl/config/cities/` held one file for the project's whole life and nothing ever loaded a second CRS, schema or bounds; the city layer cost a `--city` flag on 17 stages and 22 tools and a path segment on every cache and output, and bought nothing anyone called. ✅ Collapsed: `etl/config/hong_kong.yaml`, `load_config()`, `etl/sources/<source>`, `etl/out/<region>`, `Config`; the constants that *are* the city — the CRS pair, drive-on-the-left, `TS115`/`TS131`–`TS133` and `Q67`'s 0.187 m bar — live in `pipeline/hongkong.py`. ⚠️ **Regions survive** (`Q6`, `Q10`) and **hard rule 4 survives**: vocabulary and tuning stay in the yaml, and every config-versus-code grader is unchanged. ✅ Every step graded byte-identical against the pre-work bundle (`Q96`); `city.json`'s `city_id`/`source_crs` still written, so no schema bump. 🚫 `signals.py` kept latent (`Q77`), guarded by a test. ⚠️ Fifteen records cite the second city as a reason; each stands on its other reason and none is rewritten | 🟢 Closed |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -497,6 +498,7 @@ An `at_grade:` boolean on the fare group was the obvious alternative and is refu
 restore the defect — the exact failure class `_check_categories_are_reachable` exists to prevent in
 this parser. And "the candidate set for a 2D point snap is the at-grade network" is a fact about the
 *join*, not about a place, so hard rule 3 does not reach it: three sibling stages already encode it
+⚠️ **Amended 2026-08-31 by `Q100`**: hard rule 3 no longer exists in that form — Hong Kong is the only city — and the join argument is now the ordinary reason rather than an exception.
 in code, and making `fares.py` the one where it is a config question would assert something untrue
 about the other three. A city where `off_grade_nearer` is large is the evidence that would justify
 the knob; there is none today.
@@ -11133,6 +11135,7 @@ identical shape and each declares "absence is not a warning" in its own docstrin
 seven left the next reader nothing to distinguish them by. ⚠️ **The five are latent for Hong Kong
 and the point is the second city** — hard rule 3's whole premise is that a region declares what it
 publishes, so a layer going absent is the ordinary case, not the exotic one.
+⚠️ **Amended 2026-08-31 by `Q100`**: there is no second city. The optional-block mechanism stands on its other reason — `Q77` itself un-shipped a layer by removing its block — and `signals.py` is kept latent under a test that asserts the block is absent.
 
 🔴 **`check.sh` cannot see this class of defect, and that is the transferable part.** The verify
 tools were the ones already guarding correctly, so the blind spot was precisely the nodes no
@@ -15261,3 +15264,109 @@ on the same run rather than a session later, and in whichever file it lands.
 whose gate saw half of this · `Q91` for the `msaa_3d` base-value argument · `Q82` for the importer
 default the same step pins · `Q72` for mutation-checking a guard · `Q31` for what
 `clean_daylight.tres`'s comments were carrying
+
+## `Q100` — Hong Kong is the only city, and its config is the single source of truth
+
+**Status.** 🟢 Closed 2026-08-31
+
+**Origin.** The user: *"we should fix our architecture around hong kong only, since we heavily
+relies on hong kong open data which has specific format, and hong kong is big enough for our game's
+forseeable development"* — with a review of the ETL for reuse and stale steps, and of what newer
+datasets re-open (`Q101`).
+
+### The premise is retired, not refuted
+
+Hard rule 3 read *"ETL stays city-agnostic … the second city is the business case"*, and
+`PROGRESS.md`'s risk register answered "TAM too small" with *"a second city is a YAML file"*.
+Nothing measured against it: `etl/config/cities/` held **one** file for the project's whole life,
+no second CRS, schema or bounds was ever loaded, and the abstraction was never exercised. What it
+cost is countable — a `--city` flag threaded through **17** stage entry points and **22** tools, a
+`cities_root` on the loader, a `<city_id>` segment on every cache and output path, and **17**
+records here whose stated reason is a city that does not exist. What it bought, nothing has ever
+called.
+
+⚠️ **The estate is the argument.** Nine datasets from four publishers, each read by its own column
+names, code vocabularies and sheet conventions — `RM` is a road margin in iB1000 and a marking
+prefix in TD's drawings (`DATA_SOURCES.md`); the sign atlas is cropped off a **scanned** TD index
+plan by grid arithmetic (`sign_sheets.py`); the lane bracket is TPDM 4.3.9.8. A second city would
+not be a YAML file; it would be a second pipeline behind the same stage names. Hong Kong, at
+~1,100 km² and 3,456 map sheets against one region of six, is more content than the plan reaches.
+
+### What survives, and why it is not the same thing
+
+- **Regions.** `Q6` (Central), Phase 5's Causeway Bay, `Q10`'s two frames and `city_offset`, and
+  *"a city's `bounds` must not change once a `city.json` has shipped"* — all of that is
+  multi-**region**, anchored on one city's declared extent, and stays untouched.
+- **Config as data.** Hard rule 4 is not hard rule 3. Everything that is tuning or a publisher's
+  vocabulary stays in the yaml — `signs.faces`, `railings.classes`, `lamps.kinds`,
+  `arrows.glyphs`, `carriageway_survey.width_bounds`, `elevation_levels`, every `fields:` role map —
+  and the graders that pin config against code (`test_no_colour_escapes_the_materials_table`,
+  `_check_exposure`, `_check_every_material_is_used`, `verify_railings.gd`'s per-class dispatch) are
+  unchanged. The reasons those records give still hold; only the *second city* clause in them is
+  historical.
+- **`city_id` and `source_crs` in every manifest.** Still written, from constants. A consumer is not
+  *wrong* to keep reading them (hard rule 5), so `CITY_SCHEMA` does not move and
+  `city_manifest.gd` is untouched. The `export.py` cross-check that every document names the same
+  city and region stays, because it catches a stale file from another region.
+
+### What is now allowed in code, and where
+
+One module, `etl/pipeline/hongkong.py`, holds the constants that *are* the city rather than a
+tuning of it: the CRS pair (`EPSG:2326` HK1980 Grid / `EPSG:4326`), the drive-on-the-left fact that
+`surface.mitres` and every `_register` already assume in the sign of an offset, and the sign codes
+`signs.py` already carried as module constants — `TS115` NO ENTRY (`Q72`), the `TS131`–`TS133` turn
+prohibitions, and the **0.187** bar thickness measured by `Q67`. ⚠️ **Those three were the last
+hard-rule-3 violations in pipeline logic**, and the fix is not to move them into the yaml but to
+declare them: a code that drives a branch is not a vocabulary entry, and a second copy in config
+would be `Q72`'s tautology with a longer path. `test_crs.py`'s 304 m datum canary stays, now
+against the constants — the datum was never a config question, it was a fact about Hong Kong.
+
+`Q15`'s *"hard rule 3 does not reach it"* exception is moot: the at-grade snap is in code because it
+is a fact about the join, which is now also the ordinary reason.
+
+### The collapse, and what proves it moved nothing
+
+`etl/config/cities/hong_kong.yaml` → `etl/config/hong_kong.yaml`, with its `id:`, `name:` and
+`crs:` blocks gone (`SUPPORTED_SCHEMA` **3 → 4**: a loader that still expects `crs:` would be
+wrong). `load_city(city_id, cities_root=)` → `load_config()`. `--city` is gone from every entry
+point; `etl/sources/hong_kong/<source>` → `etl/sources/<source>` and `etl/out/hong_kong/<region>` →
+`etl/out/<region>`, both gitignored, both a local `mv`. `CityConfig` → `Config`.
+
+✅ **Every step is graded by `Q96`'s refactor-then-fix rule**: the bundle built before the first
+commit is the snapshot, and after each one `diff -r` against it must show **only** the `rebuild`
+command string in the JSON manifests, which lost `--city hong_kong`. Not "the tests pass" — the
+tests are the same tests — but the same bytes.
+
+### The reuse review, and what it deliberately leaves duplicated
+
+Measured over `etl/pipeline/` at 31,221 lines before the work: `config.py` alone is **5,666**, of
+which the eight furniture-block loaders (`_arrows` … `_road_marks`) are ~950 near-identical lines
+and nine `tiled` properties are one definition; two `_Builder` families of three modules each carry
+a byte-identical `polygon()`; `signs`, `signals` and `lamps` each carry their own `_Placed`,
+`_register` and merge; `_write_manifest` exists **nine** times with one signature; and
+`_twice_area`/`_wound_up`, `_frame`, `_import_quantum_m` and `kerbside._plan_lengths` are copies
+whose own docstrings say so. Each is hoisted in its own commit under the same byte-identical rule.
+
+🔴 **Not merged, and not to be**: `pipeline/carriageway.py` against `tools/carriageway_margin.py`
+(the tool "shares no code with what it grades"); the arrows' lane-row clustering against the
+carriageway's (`arrows` imports `roads` imports `carriageway`, so no import exists); `railings` and
+`signals` *not* clamping outward where `signs` and `lamps` do (`Q78`) — the hoisted `_register`
+takes that as an explicit parameter so the difference is declared rather than a missing `if`; the
+two opposite station normals; the prism-ring reversal that `lamps._strut` does not share. Nor the
+five station walkers (each turned a per-stage finding — `Q78`, `Q90`) or the two `measured`
+percentile sets (`arrows.py` records why they differ).
+
+🚫 **`signals.py` stays, latent.** `Q77` un-shipped the layer by removing its config block, and the
+route back is a phase plan for `P3-3`. The user chose to keep the code; a test now asserts the
+config declares no `signals:` block, so re-declaring one is a deliberate act that fails a test
+first.
+
+### Records whose reason was the second city
+
+`Q15` · `Q33` · `Q34` · `P1-1` · `P3-16` · `P3-22` · `Q67` · `Q68` · `Q72` · `Q77` · `Q79` ·
+`Q81` · `Q90` · the iB1000 bbox refusal · `Q95`. Each stands on its other reason; the second-city
+clause in each is superseded by this record and none is rewritten.
+
+**See.** `Q101` for what the newer datasets re-open · `Q96` for the byte-identical rule ·
+`Q77` for the signals layer · `Q6` and `Q10` for what multi-region still means · `Q72` for why a
+branch code is not a vocabulary entry · `P0-4` for the datum
