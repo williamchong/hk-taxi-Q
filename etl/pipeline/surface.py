@@ -52,7 +52,7 @@ from pipeline.config import (
     FORWARD,
     KERB_DOUBLE,
     KERB_SINGLE,
-    CityConfig,
+    Config,
     RoadSurface,
     load_config,
 )
@@ -1203,7 +1203,7 @@ class _Edge:
 
 
 def build_region(
-    city: CityConfig,
+    city: Config,
     region_id: str,
     *,
     out_root: Path | None = None,
@@ -2266,7 +2266,7 @@ def _cap_ring(group: list[_End], edges: list[_Edge], report: SurfaceReport) -> n
 # --------------------------------------------------------------------------
 
 
-def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: SurfaceReport) -> None:
+def _write_manifest(out_dir: Path, city: Config, region_id: str, report: SurfaceReport) -> None:
     """An intermediate for `P1-6`, not the game-facing contract.
 
     Same reasoning as `buildings.json`: `city.json` is `export.py`'s to write,

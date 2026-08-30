@@ -101,7 +101,7 @@ def drew(report: RailingReport) -> ClassReport:
 
 
 class _City:
-    """The one thing `_assign` asks a `CityConfig` for."""
+    """The one thing `_assign` asks a `Config` for."""
 
     def region_high(self, region_id: str) -> tuple[float, float]:
         del region_id

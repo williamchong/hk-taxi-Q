@@ -43,7 +43,7 @@ from pipeline.colour import (  # noqa: E402
     lab_with_hue,
     srgb_to_lab,
 )
-from pipeline.config import BuildingStyle, CityConfig, load_config  # noqa: E402
+from pipeline.config import BuildingStyle, Config, load_config  # noqa: E402
 from ring_weights import heights, ramp_class  # noqa: E402
 
 log = logging.getLogger(__name__)
@@ -104,7 +104,7 @@ class Population:
     hue: np.ndarray
 
     @classmethod
-    def of(cls, city: CityConfig, *, root: Path | None = None) -> Population:
+    def of(cls, city: Config, *, root: Path | None = None) -> Population:
         """Which rows the pipeline trusts is `facade_hue`'s rule, called rather
         than restated; the height column is `ring_weights.heights`' for the same
         reason. Neither is this tool's to decide."""
@@ -170,9 +170,7 @@ def band_chroma(style: BuildingStyle) -> tuple[float, float]:
     return float(found.min()), float(found.max())
 
 
-def shipped(
-    city: CityConfig, region_id: str, *, root: Path | None = None
-) -> dict[float, np.ndarray]:
+def shipped(city: Config, region_id: str, *, root: Path | None = None) -> dict[float, np.ndarray]:
     """`(n, 3)` CIELAB every surveyed building actually receives, per strength.
 
     The whole pipeline path — material draw, `with_hue`, jitter and clamping —
@@ -230,7 +228,7 @@ def _row(strength: float, found: Spread, suffix: str = "") -> None:
     )
 
 
-def report(city: CityConfig, region_id: str | None, *, root: Path | None = None) -> int:
+def report(city: Config, region_id: str | None, *, root: Path | None = None) -> int:
     style = city.buildings
     people = Population.of(city, root=root)
     if not len(people):

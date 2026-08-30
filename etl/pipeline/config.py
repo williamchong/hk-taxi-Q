@@ -2804,7 +2804,7 @@ class Fares:
 
 
 @dataclass(frozen=True)
-class CityConfig:
+class Config:
     # Ordinal grade-separation level to authored deck height in metres. Road
     # Network v2 carries no Z; ELEVATION is a layer index, not a measurement.
     elevation_levels: dict[int, float]
@@ -3024,7 +3024,7 @@ class CityConfig:
         return self.elevation_levels[elevation_level]
 
 
-def load_config(path: Path | None = None) -> CityConfig:
+def load_config(path: Path | None = None) -> Config:
     """Read and validate the config, `etl/config/hong_kong.yaml` by default."""
     path = path or CONFIG_PATH
     document = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -3043,7 +3043,7 @@ def load_config(path: Path | None = None) -> CityConfig:
     # would otherwise fail on document order rather than on being absent.
     table = _MaterialTable(_materials(_require(document, "materials", path), f"{path}:materials"))
 
-    city = CityConfig(
+    city = Config(
         elevation_levels=_elevation_levels(_require(document, "elevation_levels", path), path),
         bounds=_bounds(_require(document, "bounds", path), f"{path}:bounds"),
         regions={region_id: _region(region_id, body, path) for region_id, body in regions.items()},
@@ -3127,7 +3127,7 @@ def load_config(path: Path | None = None) -> CityConfig:
     return city
 
 
-def _check_declared_source(city: CityConfig, spec: Any, where: str) -> None:
+def _check_declared_source(city: Config, spec: Any, where: str) -> None:
     """A block that names its own `source:` names one the city declares.
 
     The dispatch on `tiled` is the same five lines for every such block — three
@@ -3142,7 +3142,7 @@ def _check_declared_source(city: CityConfig, spec: Any, where: str) -> None:
         _check_source_exists(city, spec.source, where)
 
 
-def _check_landmarks_lie_within_a_region(city: CityConfig, path: Path) -> None:
+def _check_landmarks_lie_within_a_region(city: Config, path: Path) -> None:
     """Every landmark's position falls inside some declared region.
 
     A landmark outside every region would still have its source meshes
@@ -3165,7 +3165,7 @@ def _check_landmarks_lie_within_a_region(city: CityConfig, path: Path) -> None:
             )
 
 
-def _check_exposure(city: CityConfig, path: Path) -> None:
+def _check_exposure(city: Config, path: Path) -> None:
     """Every authored colour is `material reflectance x exposure_anchor` (`Q33`).
 
     The rule exists because the palette had no external referent. Colours were
@@ -3240,7 +3240,7 @@ def _check_every_material_is_used(table: _MaterialTable, path: Path) -> None:
         )
 
 
-def _check_deck_sampling_has_a_structure_class(city: CityConfig, path: Path) -> None:
+def _check_deck_sampling_has_a_structure_class(city: Config, path: Path) -> None:
     """Deck sampling names its thresholds, but not the geometry to apply them to.
 
     The two halves sit in different sections because each follows its own
@@ -3262,7 +3262,7 @@ def _check_deck_sampling_has_a_structure_class(city: CityConfig, path: Path) -> 
         )
 
 
-def _check_widening_levels_are_mapped(city: CityConfig, path: Path) -> None:
+def _check_widening_levels_are_mapped(city: Config, path: Path) -> None:
     """A widening rule for a level the city never maps is a rule that never fires.
 
     The same trap `class_materials` and `class_lod_cell_sizes_m` both refuse: the
@@ -3328,7 +3328,7 @@ def _paged_source(source_id: str, body: Any, where: str) -> PagedSource:
     )
 
 
-def _check_source_exists(city: CityConfig, source_id: str, where: str) -> None:
+def _check_source_exists(city: Config, source_id: str, where: str) -> None:
     """A stage that names a source it cannot fetch is a config error, not a run.
 
     Caught at load rather than at first use, so a typo fails before the
@@ -3360,14 +3360,14 @@ def _extra_cas(values: Any, path: Path) -> tuple[Path, ...]:
     return tuple(resolved)
 
 
-def _check_tiled_source_exists(city: CityConfig, source_id: str, where: str) -> None:
+def _check_tiled_source_exists(city: Config, source_id: str, where: str) -> None:
     """`_check_source_exists`, for a stage that reads a per-sheet dataset."""
     if source_id not in city.tiled_sources:
         known = ", ".join(sorted(city.tiled_sources)) or "none"
         raise ValueError(f"{where} names '{source_id}', which is not in tiled_sources ({known})")
 
 
-def _check_regions_lie_within_the_city(city: CityConfig, path: Path) -> None:
+def _check_regions_lie_within_the_city(city: Config, path: Path) -> None:
     """A region outside the declared city bounds is a config error, not a shift.
 
     It would still produce coordinates, just with a negative `city_offset` —

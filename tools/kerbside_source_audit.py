@@ -75,7 +75,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from carriageway_occupancy import road_names  # noqa: E402
 from pipeline import gdb, kerbside  # noqa: E402
-from pipeline.config import CityConfig, KerbsideAudit, SourceLayer, load_config  # noqa: E402
+from pipeline.config import Config, KerbsideAudit, SourceLayer, load_config  # noqa: E402
 from pipeline.fetch import cached_source  # noqa: E402
 from pipeline.roads import ROADGRAPH_NAME, read_graph  # noqa: E402
 
@@ -151,7 +151,7 @@ class Report:
         return self.agreed / self.both if self.both else 0.0
 
 
-def audit(city: CityConfig, region_id: str, *, sources_root: Path | None = None) -> Report:
+def audit(city: Config, region_id: str, *, sources_root: Path | None = None) -> Report:
     """Diff the published restrictions against the ones the drawings imply."""
     spec = city.roads.kerbside
     audit_spec = spec.audit if spec is not None else None
@@ -297,7 +297,7 @@ def _as_restriction_spec(
 
 
 def _as_restriction_layer(
-    city: CityConfig,
+    city: Config,
     audit_spec: KerbsideAudit,
     region_id: str,
     *,

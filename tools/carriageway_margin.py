@@ -142,7 +142,7 @@ from pipeline.config import (  # noqa: E402
     CARRIAGEWAY_AREA,
     FORWARD,
     CarriagewayEdge,
-    CityConfig,
+    Config,
     WidthBounds,
     load_config,
 )
@@ -543,7 +543,7 @@ class _Index:
 
 
 def published_edges(
-    city: CityConfig,
+    city: Config,
     spec: CarriagewayEdge,
     region_id: str,
     transform: GameTransform,
@@ -851,7 +851,7 @@ def width_published(
 
 
 def survey(
-    city: CityConfig,
+    city: Config,
     region_id: str,
     *,
     spacing_m: float,

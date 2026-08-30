@@ -48,7 +48,7 @@ import numpy as np
 
 from pipeline import gdb
 from pipeline.arrows import ArrowReport
-from pipeline.config import CityConfig, GameTransform, RoadMark, RoadMarks, load_config
+from pipeline.config import Config, GameTransform, RoadMark, RoadMarks, load_config
 from pipeline.documents import read_document, write_document
 from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData, write_glb
@@ -259,7 +259,7 @@ class Marking:
 
 
 def read_markings(
-    city: CityConfig,
+    city: Config,
     spec: RoadMarks,
     region_id: str,
     transform: GameTransform,
@@ -811,7 +811,7 @@ def _reachable(
 
 
 def build_region(
-    city: CityConfig,
+    city: Config,
     region_id: str,
     *,
     sources_root: Path | None = None,
@@ -906,7 +906,7 @@ def build_region(
     return report
 
 
-def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: RoadMarkReport) -> int:
+def _write_manifest(out_dir: Path, city: Config, region_id: str, report: RoadMarkReport) -> int:
     document = {
         "schema_version": ROADMARKS_MANIFEST_SCHEMA,
         "city_id": city.id,

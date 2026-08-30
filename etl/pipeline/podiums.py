@@ -41,7 +41,7 @@ import numpy as np
 
 from pipeline import gdb
 from pipeline.buildings import Placement, podium_blocks, read_sheet, stem
-from pipeline.config import CityConfig, PodiumBlocks, SurfaceClass, load_config
+from pipeline.config import Config, PodiumBlocks, SurfaceClass, load_config
 from pipeline.documents import write_document
 from pipeline.geometry import (
     edge_distances,
@@ -184,9 +184,7 @@ def blocks_from(sheet: str, layer: gdb.Layer, spec: PodiumBlocks) -> list[Block]
     ]
 
 
-def decode_blocks(
-    city: CityConfig, region_id: str, *, sources_root: Path | None = None
-) -> list[Block]:
+def decode_blocks(city: Config, region_id: str, *, sources_root: Path | None = None) -> list[Block]:
     """Every block the region's sheets hold, still one record per clip."""
     spec = city.podiums
     assert spec is not None  # `build_podiums` guards; direct callers must too
@@ -300,7 +298,7 @@ def tower_podium_pairs(
 
 
 def mesh_footprints(
-    city: CityConfig, region_id: str, *, sources_root: Path | None = None
+    city: Config, region_id: str, *, sources_root: Path | None = None
 ) -> dict[str, Footprint]:
     """Every shipped building's plan cloud, keyed by its cross-dataset stem.
 
@@ -417,7 +415,7 @@ def join(
 
 
 def build_podiums(
-    city: CityConfig,
+    city: Config,
     region_id: str,
     *,
     sources_root: Path | None = None,
@@ -449,7 +447,7 @@ def build_podiums(
 
 
 def _document(
-    city: CityConfig,
+    city: Config,
     region_id: str,
     blocks: list[Block],
     stitched: list[LogicalBlock],

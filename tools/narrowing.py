@@ -103,7 +103,7 @@ from pipeline.clearance import (  # noqa: E402
     walk,
     wears,
 )
-from pipeline.config import CityConfig, RoadSurface, load_config  # noqa: E402
+from pipeline.config import Config, RoadSurface, load_config  # noqa: E402
 from pipeline.documents import read_document  # noqa: E402
 
 log = logging.getLogger(__name__)
@@ -143,7 +143,7 @@ BUILDING = "BUILDING"
 UNOBSTRUCTED = "none — drawn narrow"
 
 
-def classes(city: CityConfig) -> tuple[str, ...]:
+def classes(city: Config) -> tuple[str, ...]:
     """The three occupier classes, in report order."""
     structure = city.buildings.structure_class
     if not structure:
@@ -234,7 +234,7 @@ def _picked(mesh: gltf.MeshData, keep: np.ndarray) -> gltf.MeshData | None:
     return replace(mesh, triangles=mesh.triangles[keep])
 
 
-def class_meshes(meshes: list[gltf.MeshData], city: CityConfig, name: str) -> list[gltf.MeshData]:
+def class_meshes(meshes: list[gltf.MeshData], city: Config, name: str) -> list[gltf.MeshData]:
     """The triangles of one class, out of tiles that merged every class into one.
 
     By vertex colour, because that is all a merged primitive keeps.
@@ -285,7 +285,7 @@ def unobstructed(graph: dict, drawn: dict[int, dict]) -> dict[int, float]:
 
 
 def sweep(
-    city: CityConfig,
+    city: Config,
     graph: dict,
     drawn: dict[int, dict],
     tiles: list[Path],
@@ -303,7 +303,7 @@ def sweep(
 
 
 def sweep_report(
-    city: CityConfig,
+    city: Config,
     graph: dict,
     drawn: dict[int, dict],
     tiles: list[Path],
@@ -338,7 +338,7 @@ def sweep_report(
 
 
 def attribute(
-    city: CityConfig,
+    city: Config,
     graph: dict,
     drawn: dict[int, dict],
     tiles: list[Path],

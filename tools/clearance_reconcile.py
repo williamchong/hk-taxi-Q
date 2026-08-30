@@ -77,7 +77,7 @@ from carriageway_occupancy import (  # noqa: E402
 from deck_error import bundle_arguments, drawn_surface, load_bundle, log_bundle  # noqa: E402
 from pipeline.clearance import ACROSS_M as PIPELINE_ACROSS_M  # noqa: E402
 from pipeline.clearance import CELL_M, NOT_MEASURED  # noqa: E402
-from pipeline.config import CityConfig, load_config  # noqa: E402
+from pipeline.config import Config, load_config  # noqa: E402
 
 log = logging.getLogger(__name__)
 
@@ -128,7 +128,7 @@ def published(manifest: dict[str, Any]) -> dict[int, float]:
 
 
 def grade(
-    city: CityConfig,
+    city: Config,
     generated: Path,
     manifest: dict[str, Any],
     tiles: list[Path],

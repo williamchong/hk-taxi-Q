@@ -45,7 +45,7 @@ from pipeline.config import (
     CARRIAGEWAY_AREA,
     FORWARD,
     CarriagewayEdge,
-    CityConfig,
+    Config,
     WidthBounds,
 )
 from pipeline.crs import GameTransform
@@ -309,7 +309,7 @@ class _Segments:
 
 
 def _read_publisher(
-    city: CityConfig,
+    city: Config,
     spec: CarriagewayEdge,
     region_id: str,
     transform: GameTransform,
@@ -442,7 +442,7 @@ def _median_or_none(values: list[float]) -> float | None:
 
 
 def measure(
-    city: CityConfig,
+    city: Config,
     region_id: str,
     transform: GameTransform,
     edges: list,
@@ -711,7 +711,7 @@ def _runs(symbols: list[_Symbol], key: Callable[[_Symbol], float]) -> Iterator[l
 
 
 def _read_lane_rows(
-    city: CityConfig,
+    city: Config,
     region_id: str,
     transform: GameTransform,
     edges: list,

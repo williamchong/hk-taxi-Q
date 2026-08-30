@@ -120,7 +120,7 @@ import numpy as np
 # recorded defect in two stages already.
 from pipeline import gdb
 from pipeline.arrows import ArrowReport, Ribbon, nearside, ribbons
-from pipeline.config import CityConfig, GameTransform, Lamps, load_config
+from pipeline.config import Config, GameTransform, Lamps, load_config
 from pipeline.documents import read_document, write_document
 from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData, write_glb
@@ -322,7 +322,7 @@ class _Placed:
 
 
 def read_lamps(
-    city: CityConfig,
+    city: Config,
     spec: Lamps,
     region_id: str,
     transform: GameTransform,
@@ -567,7 +567,7 @@ def _lantern(builder: _Builder, spec: Lamps, centre: np.ndarray, forward: np.nda
 
 
 def build_region(
-    city: CityConfig,
+    city: Config,
     region_id: str,
     *,
     sources_root: Path | None = None,
@@ -911,7 +911,7 @@ def _measure_placement(report: LampReport, kept: list[_Placed]) -> None:
     )
 
 
-def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: LampReport) -> int:
+def _write_manifest(out_dir: Path, city: Config, region_id: str, report: LampReport) -> int:
     document = {
         "schema_version": LAMPS_MANIFEST_SCHEMA,
         "city_id": city.id,

@@ -125,7 +125,7 @@ from deck_error import (  # noqa: E402
     wears,
 )
 from overhang import cross_section, half_width_at, half_widths, left_of, walk_width  # noqa: E402
-from pipeline.config import CityConfig, load_config  # noqa: E402
+from pipeline.config import Config, load_config  # noqa: E402
 from pipeline.gltf import read_glb  # noqa: E402
 
 log = logging.getLogger(__name__)
@@ -237,7 +237,7 @@ def _touches_band(
 
 
 def class_predicates(
-    city: CityConfig,
+    city: Config,
 ) -> tuple[str, Callable[[np.ndarray], np.ndarray], Callable[[np.ndarray], np.ndarray]]:
     """The structure class's name, and the two colour tests that select occupiers.
 
@@ -275,7 +275,7 @@ def class_predicates(
 
 
 def index_classes(
-    city: CityConfig,
+    city: Config,
     generated: Path,
     manifest: dict[str, Any],
     tiles: list[Path],

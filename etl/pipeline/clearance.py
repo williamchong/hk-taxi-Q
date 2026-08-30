@@ -69,7 +69,7 @@ from pipeline.config import (
     GAME_ROOT,
     LANDMARK_ASSET_ROOT,
     LANDMARK_GENERATED_ROOT,
-    CityConfig,
+    Config,
     load_config,
 )
 from pipeline.documents import read_document, write_document
@@ -739,7 +739,7 @@ def tile_meshes(out_dir: Path, buildings: dict) -> list[Path]:
     return paths
 
 
-def landmark_meshes(city: CityConfig, region_id: str, out_dir: Path) -> list[gltf.MeshData]:
+def landmark_meshes(city: Config, region_id: str, out_dir: Path) -> list[gltf.MeshData]:
     """Every hero building, placed where `export.py` will publish it.
 
     Derived from the config rather than read from `landmarks.json`, because that
@@ -837,7 +837,7 @@ def measure(corridor: Corridor, blocked: np.ndarray, report: ClearanceReport) ->
         widths[station] = width if standing == NOT_MEASURED else min(standing, width)
 
 
-def ground_colour(city: CityConfig) -> tuple[tuple[int, int, int], float]:
+def ground_colour(city: Config) -> tuple[tuple[int, int, int], float]:
     """The colour the ground wears, and how far it is jittered either side.
 
     The ground is excluded by its colour, so a city naming a `terrain_class` it
@@ -857,7 +857,7 @@ def ground_colour(city: CityConfig) -> tuple[tuple[int, int, int], float]:
 
 
 def open_region(
-    city: CityConfig, region_id: str, *, out_root: Path | None = None
+    city: Config, region_id: str, *, out_root: Path | None = None
 ) -> tuple[Path, dict, dict[int, dict], dict]:
     """A built region's out dir, road graph, carriageway table and tile manifest.
 
@@ -875,7 +875,7 @@ def open_region(
 
 
 def build_region(
-    city: CityConfig, region_id: str, *, out_root: Path | None = None, along_m: float = ALONG_M
+    city: Config, region_id: str, *, out_root: Path | None = None, along_m: float = ALONG_M
 ) -> ClearanceReport:
     """Measure the region already built in its out dir."""
     out_dir, graph, drawn, buildings = open_region(city, region_id, out_root=out_root)
@@ -925,7 +925,7 @@ def build_region(
     return report
 
 
-def _write(out_root: Path | None, city: CityConfig, region_id: str, report: ClearanceReport) -> int:
+def _write(out_root: Path | None, city: Config, region_id: str, report: ClearanceReport) -> int:
     """An intermediate for `P1-6`, not the game-facing contract.
 
     Same reasoning as `roadsurface.json` and `buildings.json`: `city.json` is

@@ -75,7 +75,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from carriageway_occupancy import road_names  # noqa: E402
 from pipeline.clearance import CLEARANCE_NAME, CLEARANCE_SCHEMA, NOT_MEASURED  # noqa: E402
-from pipeline.config import FORWARD, CityConfig, load_config  # noqa: E402
+from pipeline.config import FORWARD, Config, load_config  # noqa: E402
 from pipeline.documents import read_document  # noqa: E402
 from pipeline.polyline import plan_lengths  # noqa: E402
 from pipeline.roads import ROADGRAPH_NAME, read_graph  # noqa: E402
@@ -629,7 +629,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    city: CityConfig = load_config()
+    city: Config = load_config()
     region = city.region(args.region)
     out_dir = city.out_dir(args.region)
     rebuild = f"python -m pipeline --region {args.region}"

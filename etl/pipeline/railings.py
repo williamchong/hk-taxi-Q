@@ -79,7 +79,7 @@ import numpy as np
 
 from pipeline import gdb
 from pipeline.arrows import ArrowReport
-from pipeline.config import CityConfig, GameTransform, RailingClass, Railings, load_config
+from pipeline.config import Config, GameTransform, RailingClass, Railings, load_config
 from pipeline.documents import read_document, write_document
 from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData, write_glb
@@ -358,7 +358,7 @@ class Ribbon:
 
 
 def read_lines(
-    city: CityConfig,
+    city: Config,
     spec: Railings,
     region_id: str,
     transform: GameTransform,
@@ -672,7 +672,7 @@ def facing_away(mesh: MeshData) -> int:
 
 
 def build_region(
-    city: CityConfig,
+    city: Config,
     region_id: str,
     *,
     sources_root: Path | None = None,
@@ -757,7 +757,7 @@ def _assign(
     graph: dict,
     drawn: dict[int, Ribbon],
     spec: Railings,
-    city: CityConfig,
+    city: Config,
     region_id: str,
     report: RailingReport,
 ) -> dict[tuple[int, str, str], dict[int, dict[str, int]]]:
@@ -1026,7 +1026,7 @@ def _class_document(report: ClassReport) -> dict:
     }
 
 
-def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: RailingReport) -> int:
+def _write_manifest(out_dir: Path, city: Config, region_id: str, report: RailingReport) -> int:
     document = {
         "schema_version": RAILINGS_MANIFEST_SCHEMA,
         "city_id": city.id,

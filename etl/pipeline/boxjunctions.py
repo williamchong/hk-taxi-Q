@@ -52,7 +52,7 @@ import numpy as np
 
 from pipeline import gdb
 from pipeline.arrows import ArrowReport
-from pipeline.config import BoxJunctions, CityConfig, GameTransform, load_config
+from pipeline.config import BoxJunctions, Config, GameTransform, load_config
 from pipeline.documents import read_document, write_document
 from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData, write_glb
@@ -211,7 +211,7 @@ class Box:
 
 
 def read_boxes(
-    city: CityConfig,
+    city: Config,
     spec: BoxJunctions,
     region_id: str,
     transform: GameTransform,
@@ -672,7 +672,7 @@ class _Builder:
 
 
 def build_region(
-    city: CityConfig,
+    city: Config,
     region_id: str,
     *,
     sources_root: Path | None = None,
@@ -817,9 +817,7 @@ def _place(
     return heights
 
 
-def _write_manifest(
-    out_dir: Path, city: CityConfig, region_id: str, report: BoxJunctionReport
-) -> int:
+def _write_manifest(out_dir: Path, city: Config, region_id: str, report: BoxJunctionReport) -> int:
     document = {
         "schema_version": BOXJUNCTIONS_MANIFEST_SCHEMA,
         "city_id": city.id,

@@ -110,7 +110,7 @@ from pipeline.clearance import (  # noqa: E402
     open_region,
     tile_meshes,
 )
-from pipeline.config import CityConfig, WidthBounds, load_config  # noqa: E402
+from pipeline.config import Config, WidthBounds, load_config  # noqa: E402
 from pipeline.polyline import plan_lengths  # noqa: E402
 from pipeline.surface import mitres  # noqa: E402
 
@@ -276,7 +276,7 @@ def _station_offsets(
     return offsets, spans, nears, answered, walked, junction
 
 
-def read_publishers(city: CityConfig, region_id: str) -> list[tuple[str, _Segments]]:
+def read_publishers(city: Config, region_id: str) -> list[tuple[str, _Segments]]:
     """Every carriageway-edge publisher, read once.
 
     ⚠️ **Hoisted out of `offsets` because `main` measures twice** — once on the
@@ -292,7 +292,7 @@ def read_publishers(city: CityConfig, region_id: str) -> list[tuple[str, _Segmen
 
 
 def offsets(
-    city: CityConfig,
+    city: Config,
     region_id: str,
     graph: dict,
     bounds: WidthBounds,
@@ -839,7 +839,7 @@ def priced(
 
 
 def price_surveyed(
-    city: CityConfig,
+    city: Config,
     graph: dict,
     drawn: dict[int, dict],
     rows: dict[int, Offset],

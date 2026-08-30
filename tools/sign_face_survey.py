@@ -62,7 +62,7 @@ sys.path.insert(0, str(ROOT / "etl"))
 from pipeline.config import (  # noqa: E402
     SIGN_BACK_COLOUR,
     SIGN_TEXT,
-    CityConfig,
+    Config,
     SignFace,
     load_config,
 )
@@ -180,7 +180,7 @@ def _shares(
 
 
 def drawn(
-    city: CityConfig, face: SignFace, names: list[str]
+    city: Config, face: SignFace, names: list[str]
 ) -> tuple[Shares, dict[str, tuple[float, float]]]:
     """Colour shares and extents of the face this pipeline actually draws.
 
@@ -231,7 +231,7 @@ def drawn(
     return _shares(masks, raster > 0, names)
 
 
-def report(city: CityConfig, *, root: Path | None = None, contact: Path | None = None) -> int:
+def report(city: Config, *, root: Path | None = None, contact: Path | None = None) -> int:
     spec = city.signs
     if spec is None:
         log.info("city '%s' declares no signs block; nothing to survey", city.id)

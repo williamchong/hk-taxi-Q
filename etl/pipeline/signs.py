@@ -162,7 +162,7 @@ from pipeline.config import (
     SIGN_TEE_BAR,
     SIGN_TEXT,
     SIGN_TRIANGLE_DOWN,
-    CityConfig,
+    Config,
     GameTransform,
     SignFace,
     Signs,
@@ -556,7 +556,7 @@ class Sign:
 
 
 def read_signs(
-    city: CityConfig,
+    city: Config,
     spec: Signs,
     region_id: str,
     transform: GameTransform,
@@ -665,7 +665,7 @@ def read_signs(
 def _read_poles(
     path: Path,
     member: str | None,
-    city: CityConfig,
+    city: Config,
     spec: Signs,
     bbox: tuple[float, float, float, float],
     transform: GameTransform,
@@ -1711,7 +1711,7 @@ def _merge_posts(
 
 
 def build_region(
-    city: CityConfig,
+    city: Config,
     region_id: str,
     *,
     sources_root: Path | None = None,
@@ -2215,7 +2215,7 @@ def _record_semantics(
         report.turn_sign_disagreed += 1
 
 
-def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: SignReport) -> int:
+def _write_manifest(out_dir: Path, city: Config, region_id: str, report: SignReport) -> int:
     document = {
         "schema_version": SIGNS_MANIFEST_SCHEMA,
         "city_id": city.id,

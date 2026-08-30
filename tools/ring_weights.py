@@ -50,7 +50,7 @@ from pipeline.buildings import HUE_SOURCE_ID, facade_hue  # noqa: E402
 from pipeline.colour import chroma_and_hue  # noqa: E402
 from pipeline.config import (  # noqa: E402
     BuildingStyle,
-    CityConfig,
+    Config,
     MaterialAssignment,
     WeightedDraw,
     load_config,
@@ -169,7 +169,7 @@ def ramp_class(style: BuildingStyle) -> str:
     return plain[0]
 
 
-def heights(city: CityConfig, *, root: Path | None = None) -> dict[str, float]:
+def heights(city: Config, *, root: Path | None = None) -> dict[str, float]:
     """Every surveyed building's height, keyed by stem.
 
     ⚠️ **The height is the survey's own column, not the placed mesh's.** They are
@@ -189,7 +189,7 @@ def heights(city: CityConfig, *, root: Path | None = None) -> dict[str, float]:
     return {stem: float(row["height_m"]) for stem, row in table.items()}
 
 
-def population(city: CityConfig, *, root: Path | None = None) -> list[tuple[float, float, float]]:
+def population(city: Config, *, root: Path | None = None) -> list[tuple[float, float, float]]:
     """`(chroma, hue angle, ramp reflectance)` for every row the pipeline uses.
 
     The vegetation filter is `facade_hue`'s, called rather than copied: which
@@ -211,7 +211,7 @@ def population(city: CityConfig, *, root: Path | None = None) -> list[tuple[floa
     ]
 
 
-def report(city: CityConfig, rows: list[tuple[float, float, float]]) -> int:
+def report(city: Config, rows: list[tuple[float, float, float]]) -> int:
     """Every bin's target, its shipped weights and the re-derived ones."""
     assignment = city.buildings.material_assignment
     found = bins(assignment)

@@ -41,7 +41,7 @@ from pipeline.buildings import Placement, read_sheet
 from pipeline.config import (
     BACKWARD,
     FORWARD,
-    CityConfig,
+    Config,
     DeckSampling,
     GroundProfile,
     RoadNetwork,
@@ -775,7 +775,7 @@ class _Surfaces:
 
 
 def build_region(
-    city: CityConfig,
+    city: Config,
     region_id: str,
     *,
     sources_root: Path | None = None,
@@ -900,7 +900,7 @@ class _Source:
     """
 
     path: Path
-    city: CityConfig
+    city: Config
     bbox: gdb.Bbox
 
     def read(self, layer: SourceLayer) -> gdb.Layer:
@@ -958,7 +958,7 @@ def _kerbside(
 
 
 def _carriageway(
-    city: CityConfig,
+    city: Config,
     region_id: str,
     transform: GameTransform,
     report: RoadReport,
@@ -1807,7 +1807,7 @@ def read_graph(path: Path, city_id: str, region_id: str) -> dict:
     return read_document(path, ROADGRAPH_SCHEMA, rebuild)
 
 
-def _write(out_root: Path | None, city: CityConfig, region_id: str, report: RoadReport) -> int:
+def _write(out_root: Path | None, city: Config, region_id: str, report: RoadReport) -> int:
     out_dir = city.out_dir(region_id, out_root)
     document = {
         "schema_version": ROADGRAPH_SCHEMA,
@@ -1857,7 +1857,7 @@ def _write(out_root: Path | None, city: CityConfig, region_id: str, report: Road
 
 
 def _surfaces(
-    city: CityConfig,
+    city: Config,
     region_id: str,
     sources_root: Path | None,
     region_high: tuple[float, float],
@@ -1903,7 +1903,7 @@ def _field(
     place: Placement,
     region_high: tuple[float, float],
     class_name: str,
-    city: CityConfig,
+    city: Config,
     region_id: str,
 ) -> HeightField:
     """One sheet class, as a height field.

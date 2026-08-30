@@ -51,7 +51,7 @@ from pipeline.clearance import CLEARANCE_NAME, CLEARANCE_SCHEMA, NOT_MEASURED
 from pipeline.config import (
     LANDMARK_ASSET_ROOT,
     LANDMARK_GENERATED_ROOT,
-    CityConfig,
+    Config,
     load_config,
 )
 from pipeline.crs import GameTransform
@@ -305,7 +305,7 @@ class Box:
 
 
 def build_region(
-    city: CityConfig,
+    city: Config,
     region_id: str,
     *,
     out_root: Path | None = None,
@@ -470,9 +470,7 @@ def build_region(
     )
 
 
-def _inputs(
-    city: CityConfig, region_id: str, out_root: Path | None
-) -> tuple[Path, dict[str, dict]]:
+def _inputs(city: Config, region_id: str, out_root: Path | None) -> tuple[Path, dict[str, dict]]:
     """The region's out directory and every stage output in it.
 
     Both `build_region` and `validate` need all four — the second reads them
@@ -525,7 +523,7 @@ def _carriageway(surface: dict, clearance: dict) -> list[dict]:
 
 
 def _landmarks_document(
-    city: CityConfig, region_id: str, buildings: dict, transform: GameTransform
+    city: Config, region_id: str, buildings: dict, transform: GameTransform
 ) -> dict:
     """The hero-placement document (`P3-6`), from config plus what the
     building stage actually dropped.
@@ -597,7 +595,7 @@ _MANIFEST = Input(CITY_NAME, CITY_SCHEMA, "export")
 _LANDMARKS = Input(LANDMARKS_NAME, LANDMARKS_SCHEMA, "export")
 
 
-def read_manifest(city: CityConfig, region_id: str, *, out_root: Path | None = None) -> dict:
+def read_manifest(city: Config, region_id: str, *, out_root: Path | None = None) -> dict:
     """The region's `city.json`, refusing a stale one by schema version."""
     return _MANIFEST.read(city.out_dir(region_id, out_root), city.id, region_id)
 
@@ -637,7 +635,7 @@ def _graph_points(graph: dict) -> Iterable[Sequence[float]]:
 # --------------------------------------------------------------------------
 
 
-def validate(city: CityConfig, region_id: str, *, out_root: Path | None = None) -> list[str]:
+def validate(city: Config, region_id: str, *, out_root: Path | None = None) -> list[str]:
     """Everything wrong with the exported set, as human-readable lines.
 
     Scoped to what no single stage checks. Some of that crosses a document

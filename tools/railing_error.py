@@ -55,7 +55,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "etl"))
 
 from pipeline import gdb  # noqa: E402
-from pipeline.config import CityConfig, load_config  # noqa: E402
+from pipeline.config import Config, load_config  # noqa: E402
 from pipeline.fetch import source_reads  # noqa: E402
 from pipeline.gltf import read_glb  # noqa: E402
 from pipeline.railings import AT_GRADE, RAILINGS_NAME  # noqa: E402
@@ -148,7 +148,7 @@ def walk(mesh_positions: np.ndarray, triangles: np.ndarray) -> tuple[np.ndarray,
 
 
 def published(
-    city: CityConfig, region_id: str, sources_root: Path | None
+    city: Config, region_id: str, sources_root: Path | None
 ) -> dict[str, tuple[np.ndarray, float]]:
     """Every published feature, at grade, as sampled points **keyed by class**.
 
@@ -279,7 +279,7 @@ class _Centrelines:
 
 
 def survey(
-    city: CityConfig,
+    city: Config,
     region_id: str,
     klass_id: str,
     source: np.ndarray,

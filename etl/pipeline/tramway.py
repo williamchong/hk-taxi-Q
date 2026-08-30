@@ -55,7 +55,7 @@ from pathlib import Path
 import numpy as np
 
 from pipeline import gdb
-from pipeline.config import CityConfig, Tramway, load_config
+from pipeline.config import Config, Tramway, load_config
 from pipeline.crs import GameTransform
 from pipeline.documents import write_document
 from pipeline.fetch import source_reads
@@ -357,7 +357,7 @@ class _Builder:
 
 
 def read_rails(
-    city: CityConfig,
+    city: Config,
     spec: Tramway,
     region_id: str,
     transform: GameTransform,
@@ -618,7 +618,7 @@ def _draw(
 
 
 def build_region(
-    city: CityConfig,
+    city: Config,
     region_id: str,
     *,
     sources_root: Path | None = None,
@@ -716,7 +716,7 @@ def build_region(
     return report
 
 
-def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: TramwayReport) -> int:
+def _write_manifest(out_dir: Path, city: Config, region_id: str, report: TramwayReport) -> int:
     document = {
         "schema_version": TRAMWAY_MANIFEST_SCHEMA,
         "city_id": city.id,

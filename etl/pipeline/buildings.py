@@ -63,7 +63,7 @@ from numpy.typing import ArrayLike
 
 from pipeline import gdb
 from pipeline.colour import chroma_and_hue, with_hue
-from pipeline.config import BuildingStyle, CityConfig, Material, RegionConfig, load_config
+from pipeline.config import BuildingStyle, Config, Material, RegionConfig, load_config
 from pipeline.crs import GameTransform
 from pipeline.documents import write_document
 from pipeline.fetch import artefact_path, cached_tiles, source_dir
@@ -224,7 +224,7 @@ class Grid:
     max_z: float
 
     @classmethod
-    def for_region(cls, city: CityConfig, region: RegionConfig) -> Grid:
+    def for_region(cls, city: Config, region: RegionConfig) -> Grid:
         max_x, max_z = city.region_high(region.id)
         return cls(tile_size_m=region.tile_size_m, max_x=max_x, max_z=max_z)
 
@@ -357,7 +357,7 @@ def stem(name: str) -> str:
 
 
 def podium_blocks(
-    city: CityConfig, region_id: str, *, sources_root: Path | None = None
+    city: Config, region_id: str, *, sources_root: Path | None = None
 ) -> list[tuple[str, gdb.Layer]]:
     """The region's surveyed building blocks, one layer per fetched sheet (`Q47`).
 
@@ -838,7 +838,7 @@ class Placement:
 
     @classmethod
     def resolve(
-        cls, city: CityConfig, region_id: str, sources_root: Path | None, out_root: Path | None
+        cls, city: Config, region_id: str, sources_root: Path | None, out_root: Path | None
     ) -> Placement:
         region = city.region(region_id)
         tiles = cached_tiles(city, region, city.tiled_sources[SOURCE_ID], root=sources_root)
@@ -852,7 +852,7 @@ class Placement:
 
 
 def build_region(
-    city: CityConfig,
+    city: Config,
     region_id: str,
     *,
     sources_root: Path | None = None,
@@ -1184,7 +1184,7 @@ def _union(boxes: Iterable[Bounds]) -> Bounds:
 
 
 def _write_manifest(
-    out_dir: Path, city: CityConfig, region: RegionConfig, grid: Grid, report: BuildReport
+    out_dir: Path, city: Config, region: RegionConfig, grid: Grid, report: BuildReport
 ) -> None:
     """An intermediate for `P1-6`, not the game-facing contract.
 
@@ -1223,7 +1223,7 @@ def _write_manifest(
 
 
 def build_terrain(
-    city: CityConfig,
+    city: Config,
     region_id: str,
     *,
     sources_root: Path | None = None,

@@ -39,7 +39,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
-from pipeline.config import CityConfig, PagedSource, RegionConfig, TiledSource, load_config
+from pipeline.config import Config, PagedSource, RegionConfig, TiledSource, load_config
 from pipeline.crs import GeodeticBounds, reproject_bounds
 
 log = logging.getLogger(__name__)
@@ -325,7 +325,7 @@ def paged_artefact(source: PagedSource) -> Artefact:
     )
 
 
-def cached_source(city: CityConfig, source_id: str, *, root: Path | None = None) -> Path:
+def cached_source(city: Config, source_id: str, *, root: Path | None = None) -> Path:
     """Path to a fixed-URL source an earlier fetch left on disk.
 
     The counterpart of `cached_tiles` for the un-tiled half of `sources`, and it
@@ -352,7 +352,7 @@ def cached_source(city: CityConfig, source_id: str, *, root: Path | None = None)
 
 
 def cached_tiles(
-    city: CityConfig,
+    city: Config,
     region: RegionConfig,
     source: TiledSource,
     *,
@@ -391,7 +391,7 @@ class DeclaredSource(Protocol):
 
 
 def source_reads(
-    city: CityConfig,
+    city: Config,
     spec: DeclaredSource,
     region_id: str,
     *,
@@ -513,7 +513,7 @@ def _is_cached(entry: dict[str, Any] | None, path: Path, version: str | None) ->
 # --------------------------------------------------------------------------
 
 
-def _ssl_context(city: CityConfig) -> ssl.SSLContext | None:
+def _ssl_context(city: Config) -> ssl.SSLContext | None:
     """The default-verifying TLS context, extended with the city's extra CAs.
 
     `None` when the city declares none, so the common path stays exactly the
@@ -628,7 +628,7 @@ def _progress(written: int, expected: int | None) -> str:
 
 
 def fetch_city(
-    city: CityConfig,
+    city: Config,
     region_id: str,
     *,
     root: Path | None = None,
@@ -690,7 +690,7 @@ def fetch_city(
 
 def _tiles_for(
     source: TiledSource,
-    city: CityConfig,
+    city: Config,
     region: RegionConfig,
     root: Path,
     manifest: dict[str, Any],
@@ -771,7 +771,7 @@ def read_feature_collection(path: Path, where: str) -> dict[str, Any]:
     return document
 
 
-def _check_source_names(city: CityConfig, only: set[str]) -> None:
+def _check_source_names(city: Config, only: set[str]) -> None:
     """Reject an unknown `--only` name rather than fetching nothing.
 
     A typo would otherwise look exactly like a successful run with everything
@@ -897,7 +897,7 @@ def _get(url: str, *, context: ssl.SSLContext | None) -> bytes:
 
 def _process(
     artefact: Artefact,
-    city: CityConfig,
+    city: Config,
     root: Path,
     manifest: dict[str, Any],
     report: FetchReport,

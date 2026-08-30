@@ -49,7 +49,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from pipeline.config import TAXI_STAND, CityConfig, FareCategory, FareGroup, load_config
+from pipeline.config import TAXI_STAND, Config, FareCategory, FareGroup, load_config
 from pipeline.crs import transformer
 from pipeline.documents import round_position, write_document
 from pipeline.fetch import cached_source, read_feature_collection
@@ -134,7 +134,7 @@ class FareReport:
 
 
 def build_region(
-    city: CityConfig,
+    city: Config,
     region_id: str,
     *,
     sources_root: Path | None = None,
@@ -290,7 +290,7 @@ def _text(properties: dict[str, Any], name: str | None, null_values: Sequence[st
     return clean_text(properties.get(name), null_values)
 
 
-def _write(out_dir: Path, city: CityConfig, region_id: str, report: FareReport) -> int:
+def _write(out_dir: Path, city: Config, region_id: str, report: FareReport) -> int:
     document = {
         "schema_version": FARES_SCHEMA,
         "city_id": city.id,

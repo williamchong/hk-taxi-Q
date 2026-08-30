@@ -36,7 +36,7 @@ import numpy as np
 
 from pipeline.buildings import COLLISION_SUFFIX, Placement, resolver, stem
 from pipeline.colour import LUMA, srgb_to_linear
-from pipeline.config import CityConfig, Landmark, SourcePaint, load_config
+from pipeline.config import Config, Landmark, SourcePaint, load_config
 from pipeline.crs import GameTransform
 from pipeline.documents import write_document
 from pipeline.fetch import source_dir
@@ -87,7 +87,7 @@ def landmark_in_region(
 
 
 def build_assets(
-    city: CityConfig,
+    city: Config,
     region_id: str,
     *,
     sources_root: Path | None = None,
@@ -184,7 +184,7 @@ def build_assets(
 
 
 def _source_meshes(
-    sheets: list[tuple[str, Path]], stems: set[str], city: CityConfig
+    sheets: list[tuple[str, Path]], stems: set[str], city: Config
 ) -> tuple[list[MeshData], set[str]]:
     """Every non-terrain mesh in the sheets whose stem is in `stems`, and the
     ids of the sheets that matched — the same sheets the photo reference must

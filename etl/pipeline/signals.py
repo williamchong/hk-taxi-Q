@@ -106,7 +106,7 @@ import numpy as np
 # itself — a second copy of it is a second city, mirrored (`Q56`).
 from pipeline import gdb
 from pipeline.arrows import ArrowReport, Ribbon, nearside, ribbons
-from pipeline.config import SIGNAL_BODY_COLOUR, CityConfig, GameTransform, Signals, load_config
+from pipeline.config import SIGNAL_BODY_COLOUR, Config, GameTransform, Signals, load_config
 from pipeline.documents import read_document, write_document
 from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData, write_glb
@@ -287,7 +287,7 @@ class Signal:
 
 
 def read_signals(
-    city: CityConfig,
+    city: Config,
     spec: Signals,
     region_id: str,
     transform: GameTransform,
@@ -661,7 +661,7 @@ def _merge_placements(
 
 
 def build_region(
-    city: CityConfig,
+    city: Config,
     region_id: str,
     *,
     sources_root: Path | None = None,
@@ -880,7 +880,7 @@ def _register(
     return ribbon.foot_at(snap.t) + target_m * nearside(snap.heading_deg), side
 
 
-def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: SignalReport) -> int:
+def _write_manifest(out_dir: Path, city: Config, region_id: str, report: SignalReport) -> int:
     document = {
         "schema_version": SIGNALS_MANIFEST_SCHEMA,
         "city_id": city.id,

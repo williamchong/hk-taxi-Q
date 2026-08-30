@@ -61,7 +61,7 @@ from pipeline.config import (
     ARROW_RIGHT,
     ArrowGlyph,
     Arrows,
-    CityConfig,
+    Config,
     GameTransform,
     load_config,
 )
@@ -310,7 +310,7 @@ class Symbol:
 
 
 def read_symbols(
-    city: CityConfig,
+    city: Config,
     spec: Arrows,
     region_id: str,
     transform: GameTransform,
@@ -790,7 +790,7 @@ def _offset_of(lane: int, half_width_m: float, lanes: int) -> float:
 
 
 def build_region(
-    city: CityConfig,
+    city: Config,
     region_id: str,
     *,
     sources_root: Path | None = None,
@@ -1125,7 +1125,7 @@ def _draw(
         builder.polygon(plan, y_tail + ramp * (y_nose - y_tail) + spec.lift_m)
 
 
-def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: ArrowReport) -> int:
+def _write_manifest(out_dir: Path, city: Config, region_id: str, report: ArrowReport) -> int:
     document = {
         "schema_version": ARROWS_MANIFEST_SCHEMA,
         "city_id": city.id,
