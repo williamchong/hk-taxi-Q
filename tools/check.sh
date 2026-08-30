@@ -216,33 +216,64 @@ fi
 # unless UNDOCUMENTED_OK names it, so a newly added tuning resource cannot slip
 # in unwatched. 20 of 25 .tres and 6 of 8 .tscn carry prose today —
 # city_facade.tres is 83 comment lines of 160, and city_drive.tscn is 99.
+# ⚠️ Three guards here, and each is a false green rather than a style point.
+# `-type f`, because a directory named `*.tres` makes the grep fail with empty
+# stdout, and the old `grep -c` form compared that to 0, came out false and
+# dropped the file from the report. `grep -q` rather than `-c`, because the
+# question is existence and not a count — and its error status reads as "no
+# prose", which fails loudly instead. And `[@]+`, because bash 3.2 ships on
+# macOS and `"${arr[@]}"` on an EMPTY array under `set -u` aborts the whole
+# script: every check below this line would be skipped rather than failed, on a
+# list the comment above invites people to shorten.
 echo "==> tuning"
-stripped=""
-while IFS= read -r doc; do
-	rel="${doc#"$ROOT/"}"
-	exempt=0
-	for ok in "${UNDOCUMENTED_OK[@]}"; do
-		if [[ "$rel" == "$ok" ]]; then
-			exempt=1
-			break
-		fi
+stripped="$(
+	{
+		find "$ROOT/game/tuning" -type f -name '*.tres'
+		find "$ROOT/game/scenes" -type f -name '*.tscn'
+	} | sort | while IFS= read -r doc; do
+		rel="${doc#"$ROOT/"}"
+		exempt=0
+		for ok in "${UNDOCUMENTED_OK[@]+"${UNDOCUMENTED_OK[@]}"}"; do
+			if [[ "$rel" == "$ok" ]]; then
+				exempt=1
+				break
+			fi
+		done
+		((exempt)) && continue
+		grep -q '^;' "$doc" || echo "  $rel"
 	done
-	((exempt)) && continue
-	if [[ "$(grep -c '^;' "$doc" || true)" == 0 ]]; then
-		stripped+="  $rel"$'\n'
-	fi
-done < <({
-	find "$ROOT/game/tuning" -name '*.tres'
-	find "$ROOT/game/scenes" -name '*.tscn'
-} | sort)
+)"
 if [[ -n "$stripped" ]]; then
-	printf '%s' "$stripped"
+	echo "$stripped"
 	echo "  FAIL  tuning — the files above carry no rationale. Most likely an" >&2
 	echo "        editor save: Godot rewrites a .tres/.tscn from the resource" >&2
 	echo "        in memory and drops every comment. Restore them from git; do" >&2
 	echo "        NOT add them to UNDOCUMENTED_OK to quiet this." >&2
 	failed=1
-else
+fi
+
+# The exemption list is checked against the tree, not merely read. A renamed
+# file leaves a dead entry behind, and a file that GAINS rationale keeps an
+# exemption it no longer needs — the list shrinking the rule quietly, which is
+# exactly what its own comment says not to let happen. Publishing the refusals
+# is only worth something if the refusals are still true.
+stale="$(
+	for ok in "${UNDOCUMENTED_OK[@]+"${UNDOCUMENTED_OK[@]}"}"; do
+		if [[ ! -f "$ROOT/$ok" ]]; then
+			echo "  $ok — no such file"
+		elif grep -q '^;' "$ROOT/$ok"; then
+			echo "  $ok — carries rationale now, so the exemption is stale"
+		fi
+	done
+)"
+if [[ -n "$stale" ]]; then
+	echo "$stale"
+	echo "  FAIL  tuning — UNDOCUMENTED_OK no longer describes the tree. Drop" >&2
+	echo "        the entries above; each one is a hole in the check." >&2
+	failed=1
+fi
+
+if [[ -z "$stripped" && -z "$stale" ]]; then
 	echo "  ok    tuning"
 fi
 

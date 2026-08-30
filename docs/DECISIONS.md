@@ -15233,8 +15233,10 @@ new step's diagnostic says the same thing about `UNDOCUMENTED_OK`.
 ✅ **The default is inverted, and that is the load-bearing half.** Listing the 26 files that must
 carry prose would guard those 26 files. Failing *anything* in the two globs that carries none, unless
 `UNDOCUMENTED_OK` names it, guards the **class** — including the tuning resource nobody has written
-yet. Same move as `railings.py`'s `classes` and `signals.py`'s `refused_by_code`: publish the
-refusals, so the rule stays reviewable instead of quietly shrinking. Seven files are exempt today,
+yet. Same move as `railings.py`'s `classes` and `refused_m`: publish the refusals, so the rule
+stays reviewable instead of quietly shrinking. (`signals.py`'s `refused_by_code` is the
+fullest statement of the principle and is deliberately **not** cited as precedent here — `Q77`
+records that layer as unshipped, and a precedent should be code that runs.) Seven files are exempt today,
 each with its reason given at the list.
 
 ✅ **Mutation-checked four ways** (`Q72`'s rule — a guard is tested by making it fire, never by
