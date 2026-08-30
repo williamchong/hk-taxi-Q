@@ -648,11 +648,14 @@ class PodiumBlocks:
 class CarriagewayEdge(FurnitureSpec):
     """One published opinion on where the edge of the carriageway runs (`Q57`).
 
-    **Nothing in `pipeline/` reads this**, on the same terms as `KerbsideAudit`:
-    it is config rather than constants in `tools/carriageway_margin.py` because
-    the layer name, the field and the domain codes are the publisher's schema
-    (hard rule 3). A city with no such layer leaves the block out and cannot be
-    measured, which is the honest answer rather than a fabricated width.
+    ⚠️ **Read by the build since `Q95`** — `pipeline/carriageway.py` runs the
+    roads stage's own survey over these edges, deliberately as a second
+    implementation of `tools/carriageway_margin.py`'s (`CLAUDE.md`: the two are
+    expected to agree, and sharing a core would retire the only independent
+    check). It is config rather than constants because the layer name, the
+    field and the domain codes are the publisher's schema. A region with no
+    such layer leaves the block out and cannot be measured, which is the honest
+    answer rather than a fabricated width.
 
     Two of these are declared for Hong Kong on purpose. `Q57` traced four wrong
     "no source publishes that" claims to one mechanism — a fact established
@@ -2786,10 +2789,11 @@ class Config:
     # The surveyed building-block layer, when the city has one (`Q47`). Optional
     # with a default — a city without a topographic source builds as before.
     podiums: PodiumBlocks | None = None
-    # Published carriageway edges, read only by `tools/carriageway_margin.py`
-    # (`Q57`). Optional for the reason `KerbsideAudit` is: its absence changes
-    # nothing a build does, and a city with no such layer is honestly
-    # unmeasurable rather than measured against an invented width.
+    # Published carriageway edges (`Q57`) — read by `tools/carriageway_margin.py`
+    # AND, since `Q95`, by `pipeline/carriageway.py`, which measures `width_m`
+    # from them. Optional: absent, every edge keeps its authored width and the
+    # region is honestly unmeasurable rather than measured against an invented
+    # width.
     carriageway_survey: CarriagewaySurvey | None = None
     # The published tramway, drawn by `pipeline/tramway.py` (`Q58`). Optional
     # for the same reason `podiums` is, and with a sharper consequence: a city

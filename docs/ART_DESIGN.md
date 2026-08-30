@@ -48,9 +48,9 @@ check**: `mesh_contract.gd` admits an image only where a call site names a pixel
 
 **Every authored colour is `material reflectance × exposure_anchor`, and `config.py` refuses to load
 one that is not.** A `reflectance:` is *evidence* — a published diffuse albedo for asphalt or
-concrete or soil, portable to the second city unchanged, arguable against a source rather than
-against taste. The anchor is *art direction* — one number per city carrying the sun, the latitude and
-the mood, and the only thing that moves when the city wants a different time of day. It is the same
+concrete or soil, portable unchanged, arguable against a source rather than against taste. The
+anchor is *art direction* — one number carrying the sun, the latitude and the mood, and the only
+thing that moves when the city wants a different time of day. It is the same
 evidence/direction split `facade_hue.strength` already makes.
 
 Hong Kong ships `exposure_anchor: 0.520`, which is not chosen but measured: it is the linear scale

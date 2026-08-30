@@ -366,7 +366,7 @@ hk-taxi-Q/
 │   │   └── hong_kong.yaml       # CRS, bounds, source URLs, tiling — ALL city specifics
 │   ├── pipeline/
 │   │   ├── config.py            # loads cities/*.yaml — the only route city facts take in
-│   │   ├── crs.py               # ONLY module that knows about EPSG:2326
+│   │   ├── crs.py               # projected coords -> game space; codes from hongkong.py
 │   │   ├── fetch.py             # download from CSDI / data.gov.hk, cache to sources/
 │   │   ├── documents.py         # read/write a stage's JSON + its schema check; no policy
 │   │   ├── gltf.py              # glTF read + GLB write; no dependency
@@ -621,7 +621,7 @@ becomes exactly `3.0` — an unknown marker with a lost phase, on whichever viad
 
 ⚠️ **The marker is derived from the palette, not from a config key.** A class with a flat
 `class_materials` entry is one whose colour does not depend on its height, which is exactly the set
-with no floors to band; anything the height ramp colours is a façade. So a second city gets the right
+with no floors to band; anything the height ramp colours is a façade. So a later region gets the right
 answer from its own palette, and no class name reaches pipeline logic (hard rule 3).
 
 ⚠️ **Three places have to agree and only one of them can fail loudly.** The ETL names the material,
@@ -1362,8 +1362,9 @@ game_y =  (elevation - origin_elevation)
 game_z = -(northing  - origin_northing)
 ```
 
-**`etl/pipeline/crs.py` is the only module permitted to reference EPSG:2326.** Everything else reads
-the CRS from city config. This is what makes the second city cheap.
+**`etl/pipeline/hongkong.py` is the only module permitted to state EPSG:2326** (`Q100`); `crs.py`
+holds the arithmetic and takes the codes as arguments, so the conversion stays testable against any
+pair. Everything else reads the CRS through the config object.
 
 **The negation on `z` is forced, not chosen.** Godot is right-handed and Y-up, so rotating `+X` by
 90° counter-clockwise about `+Y` lands on `−Z`: if east is `+X` then north must be `−Z`. Flip it and
@@ -1723,5 +1724,7 @@ has edges, and level −1 runs under the terrain (`Q21`).
 
 1. No runtime network calls. The game is fully offline.
 2. No engine-specific formats out of the ETL — glTF and JSON only.
-3. No hardcoded Hong Kong specifics outside `etl/config/cities/`.
+3. Hong Kong facts live in `etl/config/hong_kong.yaml` (tuning, vocabularies) or
+   `etl/pipeline/hongkong.py` (the CRS pair, drive-on-the-left, branch sign codes) — one home
+   each, never both (`Q100`).
 4. Tuning values live in `game/tuning/*.tres`, never as constants in scripts.

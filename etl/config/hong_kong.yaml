@@ -356,20 +356,23 @@ sources:
   # field mapping under `roads:` below is verified against it.
   road_data_dictionary: https://static.data.gov.hk/td/road-network-v2/dataspec/rdnet_dataspec.zip
 
-  # Not read by the pipeline either — this one is the *audit* source (`Q56`),
-  # read only by `tools/kerbside_source_audit.py`. Traffic Aids Drawings 2nd
+  # Ordinary build input since `P3-12`/`P3-14`: seven blocks read it — `roads`
+  # (via `carriageway_survey`), `arrows`, `signs`, `boxjunctions`, `road_marks`,
+  # `railings` — and `tools/kerbside_source_audit.py` still runs `Q56`'s audit
+  # over its restriction layer (the audit's second-source property rests on the
+  # *layer*, not on the file being otherwise unread). Traffic Aids Drawings 2nd
   # generation: the Transport Department's drawing set as spatial features, 51
   # layers, monthly. ⚠️ **218 MB, the largest single fixed-URL source here**,
   # against the road network's 17 MB, because it carries the whole territory's
-  # markings, signs, railings and poles to reach one restriction layer. That is
-  # the price of a second opinion and it is paid at fetch time, once; a build
-  # that never runs the audit can skip it with `--only`.
+  # markings, signs, railings and poles.
   #
   # ⚠️ The 1st-generation dataset (`tis_8`) is being withdrawn and its only
   # remaining resource is a CSV pointing here. Do not go back to it.
   traffic_aids_drawings_gdb: https://static.data.gov.hk/td/traffic-aids-drawings-v2/dTAD_IRNP.gdb.zip
   # The drawings' own data specification, and the index plan that defines every
-  # RM marking code. `audit.kinds` above is verified against it.
+  # RM marking code. `audit.kinds` above is verified against it — and it is
+  # build input too since `P3-20`: `signs.text_source` names it, and
+  # `sign_sheets.py`/`sign_text.py` crop the lettering cells out of its PDFs.
   traffic_aids_data_dictionary: https://static.data.gov.hk/td/traffic-aids-drawings-v2/dataspec/tadrawings_dataspec.zip
 
   # The two fare-node datasets, both whole-territory point GeoJSON and both

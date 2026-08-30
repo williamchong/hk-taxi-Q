@@ -69,7 +69,12 @@ is published beyond a playtest link. `LICENSING.md`, `DECISIONS.md` `Q79`.
 - **Why:** flat-shaded extruded volumes are exactly the target art style.
 - ⚠️ **Decimation is needed after all** at 612 triangles per building — see the budget note below.
 
-### ✅ USE — 3D Spatial Data (3D-BIT00), Level 1
+### 🚫 NAMED AND NEVER ADOPTED — 3D Spatial Data (3D-BIT00), Level 1
+
+🚫 **`Q100`: this dataset was a locked decision and was never declared, fetched or read.** The
+cross-check role it was named for is filled by **iB1000** (below) — the map 3D-BIT Level 1 is
+extruded from — which `P3-7a`/`Q47` adopted for podium floors, tram rails and lamp posts. The
+evaluation stands; the ✅ that stood on this heading did not describe the build.
 
 - **Portal:** https://data.gov.hk/en-data/dataset/hk-landsd-openmap-development-hkms-digital-3d-bit00
 - **Formats:** MAX, 3DS, FBX, VRML.
@@ -349,7 +354,7 @@ a single building's `.gltf`/`.bin` pulled by byte range, leaving the JPEGs undow
 how the split above was measured. *(The `P3-6` amendment's photo reference weakens "never" to "one
 sheet": the HKCEC repaint samples the JPEGs too, so its build wants `11-SW-9D.zip` whole — 753 MB,
 once, cached. A member-range fetcher that pulls just the one building's directory would shrink that
-to ~80 MB and is the natural follow-up if a second city makes this routine.)*
+to ~80 MB and is the natural follow-up if a later region makes this routine.)*
 
 💡 **The "non-textured" download is itself 70–81% texture.** Each GLTF0 zip carries one terrain JPEG —
 32.5 MB of a 40 MB sheet. Actual building geometry is only ~7–15 MB per sheet.
@@ -948,7 +953,7 @@ graph by construction. The lane count is therefore a bracket, ambiguous on 178 o
 ⚠️ **Read, not fetched.** Nothing in `etl/` downloads this and nothing should: it is one table, and
 the figures above are transcribed here the way `CT174/51-5(1)F`'s marking dimensions are. ⚠️ **It is
 city-specific**, so any value taken from it belongs in `etl/config/hong_kong.yaml` under hard
-rule 3 — the second city has its own manual. ⚠️ **A standard is a floor, not a description**: the
+rule 3. ⚠️ **A standard is a floor, not a description**: the
 table is headed *Minimum*, and 3.4.2.2 lets trunk widths fall below it "on economic or other
 grounds".
 
@@ -1119,7 +1124,7 @@ Six 1:1000 sheets cover the region, ~44 MB each — **~280 MB** of source downlo
 ```
 
 **Do not hardcode this list.** `fetch.py` derives it by intersecting the region bounds with the
-fetched sheet index, so a bounds change or a second city re-derives it for free — and the derived set
+fetched sheet index, so a bounds change or a new region re-derives it for free — and the derived set
 matches these six exactly, which is the first end-to-end confirmation that the bounds, the datum and
 the index agree.
 

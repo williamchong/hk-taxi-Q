@@ -201,4 +201,4 @@ grant above, which sets no volume limit.
    most applications built on the portal.
 
 The government terms are revisable by the publisher. Re-read them before launch and before adding a
-second city.
+region (`Q100` retired the second city; the regions are the growth axis now).

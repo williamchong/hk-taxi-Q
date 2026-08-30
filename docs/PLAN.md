@@ -542,7 +542,7 @@ trade.
   today; read the exit code against its recorded baseline).
 - **Deliverables:** `etl/pipeline/kerbside.py` (new, `clearance.py`'s shape); a
   `roads.kerbside_restrictions:` block in the city yaml carrying both code vocabularies as data
-  (hard rule 3 — the second city's codes differ); `roadgraph.json` **schema 3 -> 4**;
+  (hard rule 3 — the codes are the publisher's vocabulary); `roadgraph.json` **schema 3 -> 4**;
   `tools/kerbside_error.py` to grade painted-against-restricted metres and the fare-node table;
   `etl/tests/test_kerbside.py`; the `surface.py`/shader/`verify_road_surface.gd` half; `Q54` closed.
 - ⚠️ **`Q54`'s harm argument needs correcting, not inheriting.** Tested against `fares.json`, roughly
