@@ -598,6 +598,29 @@ class SourceLayer:
 
 
 @dataclass(frozen=True)
+class FurnitureSpec:
+    """What every optional published-layer block begins with.
+
+    A declared `source`, the tile member inside it where the source is per-sheet
+    (`tiled_sources`) rather than fixed-URL (`sources`), and the publisher's
+    schema mapping. One definition rather than nine (`Q100`): the seven
+    street-furniture blocks, the carriageway-edge survey and the tramway all
+    opened with these same three fields and an identical `tiled` property, and
+    `Q77` records what half-fixing a run of identical shapes costs the next
+    reader.
+    """
+
+    source: str
+    member: str | None
+    layer: SourceLayer
+
+    @property
+    def tiled(self) -> bool:
+        """Whether `source` names `tiled_sources` rather than `sources`."""
+        return self.member is not None
+
+
+@dataclass(frozen=True)
 class PodiumBlocks:
     """The building-block layer of a per-sheet topographic source (`Q47`).
 
@@ -622,7 +645,7 @@ class PodiumBlocks:
 
 
 @dataclass(frozen=True)
-class CarriagewayEdge:
+class CarriagewayEdge(FurnitureSpec):
     """One published opinion on where the edge of the carriageway runs (`Q57`).
 
     **Nothing in `pipeline/` reads this**, on the same terms as `KerbsideAudit`:
@@ -659,9 +682,6 @@ class CarriagewayEdge:
     """
 
     name: str
-    source: str
-    member: str | None
-    layer: SourceLayer
     codes: tuple[str, ...]
     off_grade_codes: tuple[str, ...]
     # `line` for a published carriageway EDGE, `area` for a published carriageway
@@ -671,11 +691,6 @@ class CarriagewayEdge:
     # tiles Wan Chai's carriageway into 552 polygons and a naive ray stops at the
     # first seam it meets.
     geometry: str = CARRIAGEWAY_LINE
-
-    @property
-    def tiled(self) -> bool:
-        """Whether `source` names `tiled_sources` rather than `sources`."""
-        return self.member is not None
 
     @property
     def elevation_field(self) -> str | None:
@@ -785,7 +800,7 @@ class CarriagewaySurvey:
 
 
 @dataclass(frozen=True)
-class Tramway:
+class Tramway(FurnitureSpec):
     """The published tramway, and how `P3-14` draws it (`Q58`).
 
     ⚠️ **Unlike `CarriagewaySurvey` above, the pipeline reads this**: it is a
@@ -806,9 +821,6 @@ class Tramway:
     are here and not under an art heading. Everything below them is drawing.
     """
 
-    source: str
-    member: str | None
-    layer: SourceLayer
     codes: tuple[str, ...]
     # Published track gauge, and how far a neighbour may sit from it and still
     # be read as the other rail of the same track.
@@ -832,11 +844,6 @@ class Tramway:
     # string here would leave both materials looking unreferenced.
     rail_material: Material
     bed_material: Material
-
-    @property
-    def tiled(self) -> bool:
-        """Whether `source` names `tiled_sources` rather than `sources`."""
-        return self.member is not None
 
 
 # What an arrow may show. The vocabulary is the pipeline's, not a city's:
@@ -867,7 +874,7 @@ class ArrowGlyph:
 
 
 @dataclass(frozen=True)
-class Arrows:
+class Arrows(FurnitureSpec):
     """Published turn arrows, and how `P3-15` draws them (`Q53`, `Q57`).
 
     ⚠️ **`glyphs` maps a publisher's code to a movement, and that mapping is the
@@ -901,9 +908,6 @@ class Arrows:
     `TRAMWAY_MATERIAL` are.
     """
 
-    source: str
-    member: str | None
-    layer: SourceLayer
     # Publisher code -> what that code's arrow shows and how long it is.
     glyphs: dict[str, ArrowGlyph]
     # The proportions of an arrow, as fractions of its **own** published length,
@@ -969,11 +973,6 @@ class Arrows:
     # agree with the road would be an invented marking in `Q54`'s sense, and it
     # would render perfectly.
     bearing_tolerance_deg: float
-
-    @property
-    def tiled(self) -> bool:
-        """Whether `source` names `tiled_sources` rather than `sources`."""
-        return self.member is not None
 
 
 # What a sign face may be drawn from. The vocabulary is the pipeline's, not a
@@ -1193,7 +1192,7 @@ class SignFace:
 
 
 @dataclass(frozen=True)
-class Signs:
+class Signs(FurnitureSpec):
     """Published traffic signs, and how `P3-16` draws them.
 
     ⚠️ **The sign layer does not say where a sign is.** `DTAD_TS_ABV_PT` is the
@@ -1226,9 +1225,6 @@ class Signs:
     road mesh. The livery is a *city* fact besides (hard rule 3).
     """
 
-    source: str
-    member: str | None
-    layer: SourceLayer
     # The pole layer, in the same source. Its geometry is what a sign is drawn on.
     poles: SourceLayer
     # Publisher code -> the face drawn for it. A code absent here is refused.
@@ -1328,14 +1324,9 @@ class Signs:
     turn_straight_deg: float
     turn_u_deg: float
 
-    @property
-    def tiled(self) -> bool:
-        """Whether `source` names `tiled_sources` rather than `sources`."""
-        return self.member is not None
-
 
 @dataclass(frozen=True)
-class Signals:
+class Signals(FurnitureSpec):
     """Published traffic-signal heads, drawn by `pipeline/signals.py` (`P3-17`).
 
     ⚠️ **This block asserts about as little as `Railings` does, and for the same
@@ -1405,9 +1396,6 @@ class Signals:
     route for state is `P3-11d`'s `instance uniform` lamp circuit, wired in `B3`.
     """
 
-    source: str
-    member: str | None
-    layer: SourceLayer
     # 🔴 **The gate, and the weakest evidence in this block.** A `REFNAME` names
     # a signal head when it is one of these letters followed by digits, with an
     # optional `L`/`R` suffix — `P24`, `S07L`, `M54R`. Nothing published defines
@@ -1499,14 +1487,9 @@ class Signals:
     # AND its `GG_NAME` stack at once, which is the derived-grouping note above.
     assembly_merge_m: float
 
-    @property
-    def tiled(self) -> bool:
-        """Whether `source` names `tiled_sources` rather than `sources`."""
-        return self.member is not None
-
 
 @dataclass(frozen=True)
-class Lamps:
+class Lamps(FurnitureSpec):
     """Published lamp posts, drawn by `pipeline/lamps.py` (`P3-26`).
 
     ✅ **The vocabulary is PUBLISHED, and this is the first street-furniture
@@ -1580,9 +1563,6 @@ class Lamps:
     and neither is geometry.
     """
 
-    source: str
-    member: str | None
-    layer: SourceLayer
     # ✅ **A selection from a PUBLISHED domain**, unlike `Railings.classes` and
     # `Signals.head_prefixes` — see the class docstring. `lamps.json` publishes
     # `refused_by_kind` over the whole vocabulary anyway, on `railings.py`'s
@@ -1632,11 +1612,6 @@ class Lamps:
     # would move, and without this counter nobody would see it.
     gap_report_m: float
 
-    @property
-    def tiled(self) -> bool:
-        """Whether `source` names `tiled_sources` rather than `sources`."""
-        return self.member is not None
-
     def is_lamp(self, kind: str) -> bool:
         """Whether a published `UTILITYPOINTTYPE` names a lamp post.
 
@@ -1648,7 +1623,7 @@ class Lamps:
 
 
 @dataclass(frozen=True)
-class BoxJunctions:
+class BoxJunctions(FurnitureSpec):
     """Published yellow box junctions, drawn by `pipeline/boxjunctions.py` (`P3-18`).
 
     The content is **read, not invented**, on `Q53`'s terms: `DTAD_YL_BOX_POLY`
@@ -1676,9 +1651,6 @@ class BoxJunctions:
     `BOXJUNCTIONS_MATERIAL` in `pipeline/boxjunctions.py`.
     """
 
-    source: str
-    member: str | None
-    layer: SourceLayer
     # Which published `YELLOWBOX_TYPE` values are box junctions. The region's
     # layer is single-valued ("Yellow Box"), so today this filters nothing —
     # it exists so a second city whose publisher adds a type this stage has no
@@ -1711,11 +1683,6 @@ class BoxJunctions:
     # drawn. Beyond it the box is dropped rather than guessed at — its vertices
     # would take their heights from a road it is not on.
     max_offset_m: float
-
-    @property
-    def tiled(self) -> bool:
-        """Whether `source` names `tiled_sources` rather than `sources`."""
-        return self.member is not None
 
 
 @dataclass(frozen=True)
@@ -1779,7 +1746,7 @@ class RailingClass:
 
 
 @dataclass(frozen=True)
-class Railings:
+class Railings(FurnitureSpec):
     """Published pedestrian railings, drawn by `pipeline/railings.py` (`P3-19`).
 
     ⚠️ **This block asserts more than any other in this file, and the reason is
@@ -1825,9 +1792,6 @@ class Railings:
     glTF material name the engine dispatches on.
     """
 
-    source: str
-    member: str | None
-    layer: SourceLayer
     # Pitch the source lines are sampled at before being assigned to an edge and
     # a side. `kerbside.resample`'s parameter, and the cell size the same
     # stage's dedupe works in: two features drawn along one kerb collapse into
@@ -1853,11 +1817,6 @@ class Railings:
     # because it is one join onto one set of kerbs; everything below the join is
     # per class, because a bollard is not a short fence.
     classes: tuple[RailingClass, ...]
-
-    @property
-    def tiled(self) -> bool:
-        """Whether `source` names `tiled_sources` rather than `sources`."""
-        return self.member is not None
 
     @property
     def drawn_line_types(self) -> tuple[str, ...]:
@@ -1953,7 +1912,7 @@ class RoadMark:
 
 
 @dataclass(frozen=True)
-class RoadMarks:
+class RoadMarks(FurnitureSpec):
     """Published stop and give-way lines, drawn by `pipeline/roadmarks.py` (`P3-23`).
 
     The content is **read, not invented**, on `Q53`'s terms and
@@ -1998,9 +1957,6 @@ class RoadMarks:
     `pipeline/roadmarks.py`.
     """
 
-    source: str
-    member: str | None
-    layer: SourceLayer
     # ⚠️ **The transverse pick's search radius, and it is not a `max_offset_m`.**
     # `arrows.max_offset_m` bounds how far a symbol may be from its host; this
     # bounds which edges are *considered*, and the winner is then chosen on
@@ -2033,11 +1989,6 @@ class RoadMarks:
     lift_m: float
     # One entry per published marking — see `RoadMark`.
     marks: tuple[RoadMark, ...]
-
-    @property
-    def tiled(self) -> bool:
-        """Whether `source` names `tiled_sources` rather than `sources`."""
-        return self.member is not None
 
     def mark_of(self, code: str) -> RoadMark | None:
         """The entry admitting `code`, or None where none does.
@@ -4070,6 +4021,15 @@ def _road_surface(body: dict[str, Any], where: str, table: _MaterialTable) -> Ro
     )
 
 
+def _spec_header(body: dict[str, Any], where: str, roles: tuple[str, ...]) -> dict[str, Any]:
+    """The three constructor arguments every `FurnitureSpec` block begins with."""
+    return {
+        "source": str(_require(body, "source", where)),
+        "member": _tile_member(body, where),
+        "layer": _source_layer(body, where, roles),
+    }
+
+
 def _source_layer(body: dict[str, Any], where: str, roles: tuple[str, ...]) -> SourceLayer:
     return SourceLayer(
         layer=str(_require(body, "layer", where)),
@@ -4275,9 +4235,7 @@ def _tramway(body: Any, where: str, table: _MaterialTable) -> Tramway | None:
         )
 
     return Tramway(
-        source=str(_require(body, "source", where)),
-        member=_tile_member(body, where),
-        layer=_source_layer(body, where, _TRAMWAY_ROLES),
+        **_spec_header(body, where, _TRAMWAY_ROLES),
         codes=codes,
         gauge_m=gauge_m,
         pair_tolerance_m=tolerance_m,
@@ -4404,9 +4362,7 @@ def _arrows(body: Any, where: str) -> Arrows | None:
         )
 
     return Arrows(
-        source=str(_require(body, "source", where)),
-        member=_tile_member(body, where),
-        layer=_source_layer(body, where, _ARROW_ROLES),
+        **_spec_header(body, where, _ARROW_ROLES),
         glyphs=glyphs,
         head_length_frac=fractions["head_length_frac"],
         head_width_frac=fractions["head_width_frac"],
@@ -4641,9 +4597,7 @@ def _signs(body: Any, where: str) -> Signs | None:
         )
 
     return Signs(
-        source=str(_require(body, "source", where)),
-        member=_tile_member(body, where),
-        layer=_source_layer(body, where, _SIGN_ROLES),
+        **_spec_header(body, where, _SIGN_ROLES),
         poles=_source_layer(poles_body, f"{where}:poles", _SIGN_POLE_ROLES),
         faces=faces,
         colours=colours,
@@ -4853,9 +4807,7 @@ def _signals(body: Any, where: str) -> Signals | None:
         )
 
     return Signals(
-        source=str(_require(body, "source", where)),
-        member=_tile_member(body, where),
-        layer=_source_layer(body, where, _SIGNAL_ROLES),
+        **_spec_header(body, where, _SIGNAL_ROLES),
         head_prefixes=prefixes,
         refuse_codes=refuse_codes,
         colours=colours,
@@ -4957,9 +4909,7 @@ def _lamps(body: Any, where: str, table: _MaterialTable) -> Lamps | None:
         )
 
     return Lamps(
-        source=str(_require(body, "source", where)),
-        member=_tile_member(body, where),
-        layer=_source_layer(body, where, _LAMP_ROLES),
+        **_spec_header(body, where, _LAMP_ROLES),
         kinds=kinds,
         # 🔴 Through the materials table, so `_check_exposure` grades it.
         column_material=table.get(
@@ -5025,9 +4975,7 @@ def _boxjunctions(body: Any, where: str) -> BoxJunctions | None:
         )
 
     return BoxJunctions(
-        source=str(_require(body, "source", where)),
-        member=_tile_member(body, where),
-        layer=_source_layer(body, where, _BOXJUNCTION_ROLES),
+        **_spec_header(body, where, _BOXJUNCTION_ROLES),
         box_types=box_types,
         border_width_m=widths["border_width_m"],
         hatch_width_m=widths["hatch_width_m"],
@@ -5093,9 +5041,7 @@ def _railings(body: Any, where: str) -> Railings | None:
             admitted[code] = klass.id
 
     return Railings(
-        source=str(_require(body, "source", where)),
-        member=_tile_member(body, where),
-        layer=_source_layer(body, where, _RAILING_ROLES),
+        **_spec_header(body, where, _RAILING_ROLES),
         sample_m=measures["sample_m"],
         max_offset_m=measures["max_offset_m"],
         max_shift_m=measures["max_shift_m"],
@@ -5222,9 +5168,7 @@ def _road_marks(body: Any, where: str) -> RoadMarks | None:
             admitted[code] = mark.id
 
     return RoadMarks(
-        source=str(_require(body, "source", where)),
-        member=_tile_member(body, where),
-        layer=_source_layer(body, where, _ROAD_MARK_ROLES),
+        **_spec_header(body, where, _ROAD_MARK_ROLES),
         marks=marks,
         **measures,
         **weights,
