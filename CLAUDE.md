@@ -466,8 +466,8 @@ Common emoji for this project:
   the road are not the same target on this layer. ⚠️ **The ahead head and the stem taper are measured
   and must stay so** — the overlay agrees on both. Numbers in `Q93`.
   🔴 **`stacked_disagreeing` is `Q19`'s invented lane count arriving where a frame can show it, and
-  it is 24 of 747 today** — 51 → 35 when the count became measured, 35 → 24 when the arrows' own
-  row was let resolve an ambiguous bracket (`Q94`). The registration snaps a published offset to one
+  it is 25 of 747 today** — 51 → 35 when the count became measured, 35 → 24 when the arrows' own
+  row was let resolve an ambiguous bracket (`Q94`), 24 → 25 on 2026-08-30 (`e114` HENNESSY ROAD). The registration snaps a published offset to one
   of `ribbon.lanes` slots; the count came from the speed-limit table, so where the painted carriageway
   is wider two
   symbols collapse into one slot and draw **one shaft wearing two branches** — found from the driving
