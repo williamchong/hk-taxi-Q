@@ -87,6 +87,22 @@ project should state the renderer it wants rather than inherit one, and a future
 second web renderer would otherwise change this build silently. But do not describe its absence as a
 broken export — it was not, and the console line is the evidence.
 
+🔴 **`project.godot` is not the only file the editor rewrites, and until `Q99` it was the only one
+watched.** The same writer regenerates every `.tres` and `.tscn` from the resource in memory, so it
+drops their comments too — and **20 of 25** tuning resources and **6 of 8** scenes carry rationale in
+the file today, `city_facade.tres` at 83 comment lines of 160 and `city_drive.tscn` at 99. One editor
+save on 2026-08-31 took `project.godot` *and* `game/tuning/clean_daylight.tres`; the settings step
+caught the first and nothing at all saw the second.
+
+⚠️ **The two halves fail differently, and only one can lose behaviour.** `project.godot` loses real
+settings, because a hand-written feature override is a key the editor will not re-emit. A `.tres`
+cannot: the writer omits only what already equals the class default, so a value that is doing work
+is a value it keeps. Measured on the stripped `clean_daylight.tres` — **0 differing stored
+properties** across the `Environment`, its `Sky` and its `ProceduralSkyMaterial` — the loss there was
+**the argument for the numbers and never the numbers**. That is why `check.sh`'s `tuning` step tests
+for the presence of prose rather than pinning values: pinning values there would guard the half that
+is already safe. `Q99`.
+
 | Setting | Value | Why |
 |---|---|---|
 | `rendering/renderer/rendering_method` | `mobile` | Locked decision. Set as the **base** value, not only as a `.mobile` override, so the editor and desktop builds preview the renderer the phone will run |

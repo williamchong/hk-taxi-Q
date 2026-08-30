@@ -65,6 +65,31 @@ ALWAYS_TOOLS=(verify_beam_budget verify_vehicle verify_mesh_contract verify_hud 
 # someone editing one of them down to match a regression.
 WANT_PROMOTED=21
 
+# Tuning resources and scenes that carry no rationale in the file, and are
+# allowed not to. The `tuning` step below fails anything else that carries
+# none, so the default is inverted: a new .tres has to explain itself or be
+# named here deliberately. Reasons are given, because an unexplained exemption
+# is how a list like this rots into a way of silencing the check.
+#
+#   camera.tres       Q98 is three commits old and its argument is still in the
+#                     decision entry rather than in the file.
+#   handling.tres     The drift model's rationale is CLAUDE.md's and Q84-Q89's,
+#                     and it is far too long to mirror at the resource.
+#   golden_hour.tres  clean_daylight.tres carries the comparison for both rigs.
+#   streaming.tres    Three numbers, all of them in ARCHITECTURE.md's budget.
+#   beams.tres        Same, and verify_beam_budget states the contract in full.
+#   greybox.tscn      A P0-5 harness that predates the convention.
+#   main.tscn         Four lines that do nothing but hand off to city_drive.
+UNDOCUMENTED_OK=(
+	game/tuning/camera.tres
+	game/tuning/handling.tres
+	game/tuning/golden_hour.tres
+	game/tuning/streaming.tres
+	game/tuning/beams.tres
+	game/scenes/dev/greybox.tscn
+	game/scenes/main.tscn
+)
+
 # Godot reports a compile failure with any of these and still exits 0.
 FATAL='Parse Error|SCRIPT ERROR|Failed to load script|Failed to compile'
 
@@ -163,6 +188,62 @@ if [[ "$promoted" != "$WANT_PROMOTED" || "$untyped" != 1 || "$web_renderer" != 1
 	failed=1
 else
 	echo "  ok    settings"
+fi
+
+# Godot's .tres/.tscn writer regenerates a file from the resource in memory, so
+# it drops every comment — the same loss the settings step above catches in
+# project.godot, in a file class nothing was watching. On 2026-08-31 one editor
+# save took both: project.godot lost three warning promotions and
+# rendering_method.web, and clean_daylight.tres lost the ~30 lines carrying
+# Q31's contrast measurement and the ambient/glow balance argument.
+#
+# ⚠️ The two halves failed DIFFERENTLY, and the difference is what this step is
+# shaped by. Measured afterwards, the .tres lost no value at all — 0 differing
+# stored properties across the Environment, its Sky and its sky material —
+# because the writer omits only what already equals the class default, so it
+# cannot drop a value that is doing work. What is at risk in a .tres is the
+# argument for the numbers, never the numbers. This step therefore tests for
+# prose, and pinning values here would be guarding the half that is safe.
+#
+# 🔴 Presence, not a count. Comments die ALL AT ONCE — the writer never
+# preserves one — so "carried prose, now carries none" is a signature no honest
+# edit produces. A per-file count would fail on every legitimate rewording and
+# teach the reader to edit the number down, which is the failure the settings
+# step's own diagnostic exists to warn against; a noisy check is how you cause
+# it.
+#
+# The default is inverted: everything in these two globs must carry a comment
+# unless UNDOCUMENTED_OK names it, so a newly added tuning resource cannot slip
+# in unwatched. 20 of 25 .tres and 6 of 8 .tscn carry prose today —
+# city_facade.tres is 83 comment lines of 160, and city_drive.tscn is 99.
+echo "==> tuning"
+stripped=""
+while IFS= read -r doc; do
+	rel="${doc#"$ROOT/"}"
+	exempt=0
+	for ok in "${UNDOCUMENTED_OK[@]}"; do
+		if [[ "$rel" == "$ok" ]]; then
+			exempt=1
+			break
+		fi
+	done
+	((exempt)) && continue
+	if [[ "$(grep -c '^;' "$doc" || true)" == 0 ]]; then
+		stripped+="  $rel"$'\n'
+	fi
+done < <({
+	find "$ROOT/game/tuning" -name '*.tres'
+	find "$ROOT/game/scenes" -name '*.tscn'
+} | sort)
+if [[ -n "$stripped" ]]; then
+	printf '%s' "$stripped"
+	echo "  FAIL  tuning — the files above carry no rationale. Most likely an" >&2
+	echo "        editor save: Godot rewrites a .tres/.tscn from the resource" >&2
+	echo "        in memory and drops every comment. Restore them from git; do" >&2
+	echo "        NOT add them to UNDOCUMENTED_OK to quiet this." >&2
+	failed=1
+else
+	echo "  ok    tuning"
 fi
 
 echo "==> import"

@@ -125,6 +125,7 @@ wins.
 | `Q94` | **Two arrows with different instructions land in one lane, because the lane count is invented** | 🟢 **Closed 2026-08-29 — the count is sourced and the defect fell 51 → 35 → 24.** The lane registration snaps a published offset to one of `ribbon.lanes` slots, and that count is authored from the speed-limit table; where the real carriageway is wider, two symbols collapse into one slot and draw **one shaft wearing two branches**, which is an instruction the world does not contain. Found from the driving seat on STEWART ROAD. **89 pairs stacked in one lane, 51 of them disagreeing**, of 747 drawn. On HENNESSY ROAD `e239` a `right` published 4.52 m out and an `ahead` published 1.63 m out both land at −2.56 m. ✅ `arrows.json` publishes `stacked_pairs` and `stacked_disagreeing`, reachable at zero and mutation-checked; every other counter was correct throughout and `inverted` read 0. 🔴 **The finding is that the arrows are themselves a lane-count source** — a row across a carriageway is the count, written down: **31 of 306** arrow-carrying edges imply more lanes than the graph has, nine of them four against two. That narrows `Q57`'s narrowing of `Q19` again, from a layer already in the bundle. ✅ **The row was made to ASSIGN 2026-08-29**: it resolves the brackets `Q95`'s measured width leaves ambiguous, so `lanes` is measured on **210 of 737** edges (**57** from a row) and `stacked_disagreeing` reads **24**. 🔴 **A row of ONE arrow is refused, not floored** — the row is a *lower bound* on lanes, so at one abreast it states a marking. 🔴 **Ambiguous brackets only**, which keeps `verify_road_graph.gd`'s "measured lanes implies measured width" true by construction. ⬜ Left: the 10 edges with a row and no measured width, **STEWART ROAD among them** |
 | `Q95` | **The authored carriageway width is outside the range Hong Kong permits** | 🟡 **Open — measured and bounded, nothing changed.** `width_m` is `lanes x lane_width_m` = **6.4 m** on 720 of 737 edges. TD's Transport Planning & Design Manual Vol 2 Table 3.4.2.1 (March 2026) gives a minimum two-lane single carriageway of **7.3 m** and allows 6.75 m only *per direction* of a dual carriageway — so the authored width is not merely underived, it is **below every figure TD publishes**. ✅ STEWART ROAD's measured **14.81 m** is corroborated by the same table: a 13.5 m four-lane carriageway plus a parking strip, reconcilable with no two-lane figure. ✅ **And the standard supplies the bound the width instrument lacks** — the widest urban carriageway is 13.5 m (15.8 on a tight curve), so a two-sided ray returning **36.09 m on LUNG WO ROAD** is a citable refusal rather than a suspicion. 🔴 **A standard is not a survey**: it says what a road should be, so it cannot give a per-edge width and using it to assign one would repeat the move `Q54` argues against. ⬜ Sourcing the width is **on hold behind the instrument** — `carriageway_margin.py` measures a one-sided overhang because the two-sided ray is corrupted, and that is the work `Q57` scoped and never did |
 | `Q98` | **The chase camera's yaw dial could not express lag, and the rig was rigid** | 🟢 **Closed 2026-08-31 — the law changed, not the number.** `rotate_toward` at a constant **7.0 rad/s (401°/s)** against a car whose steering can only turn it at **2.245 rad/s** (128.6°/s at 97 kph), so it closed any steering-induced error inside one tick: every input swung the world 1:1 and `yaw_lag` was inert in every reachable state. ✅ Exponential instead, `yaw_response` **6.0** — a sustained corner trails **11.9° at 30 kph and 22.4° at 105**, and the look-back flip is *faster* than the old law through 90% of its travel. 🔴 **The gate came first**: the dizziness was A/B'd against `--max-fps 60` before anything was touched, because desktop renders at 120 with physics at 60 and a camera tuned to hide judder would be tuned against an artifact `run/max_fps.mobile=60` means the phone never has. Unchanged at matched rates, so `physics_interpolation` stays off. ✅ Tuning moved to `camera.tres` — the last subsystem on code defaults, hard rule 4 in name only since none of its three scenes overrode a value. ⚠️ **The `taxi` audit rows move and their figures do not** (<0.01 pp), predicted identical and checked rather than assumed. ⬜ `verify_camera` deliberately not built; `P2-5` reopened | 🟢 Closed |
+| `Q99` | **An editor save stripped two files, and only one of them was watched** | 🟢 **Closed 2026-08-31 — the guard now covers the file class, not the file.** `Q98`'s own entry had already recorded the `project.godot` half — comments stripped, three warning promotions and `renderer/rendering_method.web` dropped, *"cause unestablished"* — and it was **still in the working tree** at the next session: seen, written down, never repaired. 🔴 **The same save also took `game/tuning/clean_daylight.tres`**, ~30 comment lines carrying `Q31`'s contrast measurement and the ambient/glow balance argument, and **nothing saw that at all** — `check.sh` mentioned `.tres` nowhere. ✅ **The two halves fail differently and it is measured, not reasoned**: `project.godot` lost behaviour, the `.tres` lost **0 differing stored properties** across the `Environment`, its `Sky` and its sky material, because the writer omits only what already equals the class default. So a `.tres` cannot lose a value that is doing work, and the new `tuning` step tests for **prose**, not values. ✅ **Presence, never a count** — comments die all at once, so "carried prose, now carries none" is a signature no honest edit produces, where a count fails on every rewording and teaches the reader to edit it down. ✅ **The default is inverted**: 20 of 25 `.tres` and 6 of 8 `.tscn` must carry rationale unless `UNDOCUMENTED_OK` names them, so a *new* resource cannot slip in unwatched — mutation-checked four ways, including that one. ⬜ **The cause is still unestablished** and this guards the symptom | 🟢 Closed |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -15147,3 +15148,114 @@ settings step caught it, exactly as its comment promises. It did **not** reprodu
 **See.** `P2-5`, whose scope note this corrects · `Q96` for the refactor-then-fix rule · `Q84`-`Q89`
 for the drift the old rig hid · `Q62` for why the evidence is a frame · `Q72` for mutation-checking a
 guard
+
+## `Q99` — An editor save stripped two files, and only one of them was watched
+
+**Status.** 🟢 Closed 2026-08-31
+
+**Origin.** The working tree at the start of the session after `Q98`. `git status` showed
+`game/project.godot` and `game/tuning/clean_daylight.tres` modified, both bearing the same
+signature: every comment gone, keys reordered, hand-written entries missing.
+
+**It was already known, and that is the finding.** `Q98`'s own entry closes with a hazard note —
+*"`project.godot` was silently rewritten during this task's own gate … `check.sh`'s settings step
+caught it, exactly as its comment promises … Cause unestablished."* The ratchet did its job and the
+entry recorded it. What did not happen is the repair: the stripped file was **still in the working
+tree** one session later. This is `Q75`'s pattern with the last step missing — there, three
+restorations were made and evaporated before anyone committed them; here, none was made at all.
+
+⚠️ **And the note was incomplete, through no fault of its author.** The same save took
+`clean_daylight.tres`, and nothing in the repo could have said so: `check.sh` mentions `.tres`
+nowhere and there is no `verify_environment.gd`. A guard that watches one file reports one file.
+
+### What each half actually lost
+
+| | `project.godot` | `clean_daylight.tres` |
+|---|---|---|
+| Comments | all | ~30 lines — `Q31`'s contrast measurement, the ambient/glow balance argument |
+| Settings | 🔴 **3 warning promotions** (`native_method_override`, `get_node_default_without_onready`, `onready_with_export`) and `renderer/rendering_method.web` | ✅ **none** |
+| Survived | `anti_aliasing/quality/msaa_3d=2`, `run/max_fps.mobile=60` | every value |
+
+✅ **`msaa_3d` surviving is the mechanism confirming itself a second time.** The comment standing
+directly above it in `project.godot` predicted exactly this after the 2026-08-28 save: the editor
+re-persists a **base** value and drops a **feature override** it did not create itself. `msaa_3d`
+is a base value and lived; `rendering_method.web` is an override and died, for the second time.
+`run/max_fps.mobile` is also an override and survived both — which is why `check.sh` pins the two
+separately rather than counting them as a class.
+
+### The `.tres` lost no behaviour, and it was measured rather than assumed
+
+Godot's `.tres` writer omits any property equal to its class default, so the expectation was that the
+dropped keys — `glow_strength`, `glow_bloom`, `glow_hdr_threshold`, `glow_hdr_scale`,
+`glow_levels/1`, `adjustment_contrast` — were all defaults. ⚠️ **That theory did not survive its own
+evidence**: `glow_blend_mode = 1` was dropped while `glow_levels/3 = 1.0` was kept, and under one
+"omit the defaults" rule those cannot both be true. If `glow_blend_mode` had reverted Screen →
+Softlight, the whole city's bloom had changed and every art frame shot since would be off-look.
+
+Loaded both copies headless and diffed every stored property of the `Environment`, its `Sky` and its
+`ProceduralSkyMaterial`:
+
+```
+differing stored properties: 0
+glow_blend_mode:  HEAD=1  STRIPPED=1
+```
+
+✅ **Zero.** `glow_blend_mode` reads 1 on both sides, so Godot 4.7's default for it *is* Screen — the
+line was dropped because it was redundant. The asymmetry that broke the theory is not about defaults
+at all: `glow_levels/*` are exposed through `_get_property_list` as a group and do not follow the
+ordinary storage rule. **The theory was right and the test for it was the wrong test**, which is the
+reason to run one.
+
+🔴 **So the two file classes cannot fail the same way.** `project.godot` can lose a setting, because
+an override is a key the editor will not re-emit. A `.tres` cannot: a value that is doing work is,
+by definition, not equal to the default, and therefore is not a value the writer omits. **What is at
+risk in a `.tres` is the argument for the numbers, never the numbers.**
+
+### The restore is a discard, and `Q75`'s rule did not bind
+
+`git checkout --` on both files. ⚠️ **There was nothing to commit** — the loss never reached history,
+so `HEAD` was already correct and the tree matched it afterwards. `Q75`'s *"restore and commit in the
+same change"* addresses a regression that **is** committed (`78c077e`), where a working-tree
+restoration is fragile precisely because any later `checkout` re-applies the bad committed state.
+That is the opposite direction from this one. The hazard here was that a commit from this tree would
+have put the loss **into** history, where `Q75`'s rule would then bind.
+
+### The guard: `check.sh`'s `tuning` step
+
+Covers `game/tuning/*.tres` and `game/scenes/**/*.tscn`.
+
+🔴 **Presence, not a count.** The writer never preserves a single comment, so they die all at once:
+*carried prose, now carries none* is a signature no honest edit produces. A per-file count would go
+red on every legitimate rewording, and a check that cries wolf is how you get someone editing the
+number down — which is the failure the `settings` step's own diagnostic already warns against. The
+new step's diagnostic says the same thing about `UNDOCUMENTED_OK`.
+
+✅ **The default is inverted, and that is the load-bearing half.** Listing the 26 files that must
+carry prose would guard those 26 files. Failing *anything* in the two globs that carries none, unless
+`UNDOCUMENTED_OK` names it, guards the **class** — including the tuning resource nobody has written
+yet. Same move as `railings.py`'s `classes` and `signals.py`'s `refused_by_code`: publish the
+refusals, so the rule stays reviewable instead of quietly shrinking. Seven files are exempt today,
+each with its reason given at the list.
+
+✅ **Mutation-checked four ways** (`Q72`'s rule — a guard is tested by making it fire, never by
+reading its pass):
+
+| | Mutation | Result |
+|---|---|---|
+| M1 | strip `clean_daylight.tres` — the file that was actually stripped | 🔴 fails, names it |
+| M2 | strip `city_drive.tscn` — the half nothing watched | 🔴 fails, names it |
+| M3 | add a new comment-free `.tres` | 🔴 fails, names it — **the inverted default** |
+| M4 | exempt files left comment-free | ✅ green |
+
+⚠️ **M3 is the one that justifies the design.** A list-based guard passes M3, and M3 is how the next
+instance of this arrives.
+
+⬜ **The cause is still unestablished.** `Q98` could not reproduce it — `drive.sh`, `--import`,
+`check.sh` and a later interactive run all leave both files alone — and neither could this. This
+guards the symptom, at both files instead of one. What it buys is that the next occurrence is caught
+on the same run rather than a session later, and in whichever file it lands.
+
+**See.** `Q75` for the committed-regression case and why a loose restoration evaporates · `Q98`
+whose gate saw half of this · `Q91` for the `msaa_3d` base-value argument · `Q82` for the importer
+default the same step pins · `Q72` for mutation-checking a guard · `Q31` for what
+`clean_daylight.tres`'s comments were carrying
