@@ -29,7 +29,8 @@ section exists so an ETL change can be made without opening that file.
 
 ### Required credits-screen text (draft)
 
-> Contains geospatial data from the Lands Department and the Transport Department of the Government
+> Contains geospatial data from the Lands Department, the Transport Department and the Highways
+> Department of the Government
 > of the Hong Kong Special Administrative Region, obtained via DATA.GOV.HK and the Common Spatial
 > Data Infrastructure (CSDI) Portal. **The Government of the HKSAR and the relevant organisations own
 > the intellectual property rights in that data.** Used under the DATA.GOV.HK and CSDI Portal Terms
@@ -37,15 +38,15 @@ section exists so an ETL change can be made without opening that file.
 
 ⚠️ The ownership sentence is not optional padding — see the attribution note above.
 
-🔴 **A second attribution is now required and it is not the government's.** Since `P3-24` the build
+🔴 **A second attribution is now required and it is not the government's.** Since `P3-24` (decision `Q79`) the build
 bundles a third-party typeface under CC BY 4.0, whose attribution must travel with **every
 distributed copy** — not merely sit in the repository. Add to the same screen:
 
 > Street names are set in **Free HK Kai** (自由香港楷書) © 2016 Free Hong Kong Fonts, used under the
 > Creative Commons Attribution 4.0 International licence.
 
-⚠️ **This obligation is recorded and NOT yet discharged: there is no credits screen.** `game/scenes/`
-has no UI scene at all, so the text above exists only here and in
+⚠️ **This obligation is recorded and NOT yet discharged: there is no credits screen.** `game/scripts/ui/`
+holds only the driving HUD (`P3-24`) — no credits or menu scene exists — so the text above exists only here and in
 `game/assets/authored/fonts/LICENSE`. The font ships in the PCK today, which means **the build is
 currently distributing a CC BY work without its credit visible to the person running it.** That is a
 licence gap, not a to-do — it closes when the screen is built, and it should be built before anything
@@ -135,15 +136,16 @@ evaluation stands; the ✅ that stood on this heading did not describe the build
   boundary with mechanism-won provenance to `podiums.json` — a stage intermediate `export.py`
   never names. Contract argument under `Q47` in `DECISIONS.md`.
 
-#### ⚠️ The road layers of this file, surveyed by `Q57` (2026-08-20) and not in use
+#### ⚠️ The road layers of this file, surveyed by `Q57` (2026-08-20) — three now in use
 
-**These sheets are already on disk.** The pipeline reads one layer of ~71 — `Building` — for the
-podium join. The rest cost nothing to read, and two of them refute claims this project has been
+**These sheets are already on disk.** The pipeline reads three layers of ~71 — `Building` for the
+podium join, `CartoTransLine` (`TW` for the tramway, `RM` for the carriageway survey) and
+`UtilityPoint` for the lamps. The rest cost nothing to read, and two of them refute claims this project has been
 making. Domain codes are the data dictionary's own words, quoted, not inferred:
 
 | Layer / code | In Wan Chai (six sheets) | What it answers |
 |---|---|---|
-| **`CartoTransLine`, `TRANSPORTATIONLINETYPE = RM`** — *"RM - Road margin"* | **56,286 segments** | **The carriageway edge.** ⚠️ `Q19` and `PROGRESS.md` have said the carriageway width "no source publishes". It is published, and has been on disk since `P3-7a`. Probed by casting a perpendicular from each centreline station to the first road margin each side — 9,822 stations on 701 centrelines — the width reads p25 **7.02 m**, p50 **9.84 m**, p75 **15.36 m**, against a shipped `width_m` that takes exactly two values, 6.4 m on 720 edges and 9.6 m on 77. ⚠️ **That probe is not a shippable width** — the perpendicular escapes through junction mouths and crosses both halves of a dual carriageway, so it over-reads at the top of the distribution |
+| **`CartoTransLine`, `TRANSPORTATIONLINETYPE = RM`** — *"RM - Road margin"* | **56,286 segments** | **The carriageway edge.** ⚠️ `Q19` and `PROGRESS.md` have said the carriageway width "no source publishes". It is published, and has been on disk since `P3-7a`. Probed by casting a perpendicular from each centreline station to the first road margin each side — 9,822 stations on 701 centrelines — the width reads p25 **7.02 m**, p50 **9.84 m**, p75 **15.36 m**, against a `width_m` that then took exactly two values, 6.4 m on 720 edges and 9.6 m on 77 — since `Q95` it is measured on 292 of 737 edges and this margin is one of the survey's publishers (see the HyD and TPDM sections). ⚠️ **That probe is not a shippable width** — the perpendicular escapes through junction mouths and crosses both halves of a dual carriageway, so it over-reads at the top of the distribution |
 | `CartoTransLine`, `RMU` — *"Road margin under elevated structures"* | 415 features / 9,232 m | The same edge where a deck is overhead. Pairs with `elevation_level` |
 | **`CartoTransLine`, `TW`** — *"TW - Tramway"* | **168 parts / 12,292 m** (132 parts / 9,912 m clipped to region) | **The tram rails**, and `P3-14` draws them. `hong_kong.yaml` said "no dataset marks tram tracks" until `Q57`. `RailwayPolygon`, `RAILWAYTYPE = TW`, carries the same extent as **62 polygons**. 🔴 **This row said "the tram tracks" and meant centrelines, and that was wrong** — `Q58` measured it: **56.5%** of stations cast across a tram-flagged edge cross exactly **four** parts, and the perpendicular gap between neighbouring parts is sharply unimodal at **1.05-1.20 m** with essentially nothing at track separation. A part is **one rail**; the 1,067 mm gauge is what the modal gap is. Read as centrelines it draws a bed a lane wide down each rail |
 | Derived from `TW` by `Q58`, over 1,698 four-rail cross-sections | gauge p10 **1.066** / p50 **1.124** / p90 **1.221** m · track separation p10 **2.445** / p50 **2.597** / p90 **2.768** m | The published gauge is 1.067 m, so the low tail sits exactly on it and the median reads 5% over — digitising width, not a wider tramway. ⚠️ **The tramway is not on the drawn carriageway**: only **18.8%** of those cross-sections have both tracks on the ribbon (Hennessy **1.5%**, Yee Wo 0.0%, Causeway 0.0%, Johnston 54.4%), because 80 of the 86 `tram_streets` edges are one-way and the reserve runs *between* two ribbons. The outer rail sits a median **3.26 m** past the drawn kerb |
@@ -204,7 +206,8 @@ is **not** read by this stage.
 **Measured over the region (`P3-26`, and reproduced by the stage's own counters):** nearest-neighbour
 spacing p10 **7.09** / p50 **16.74** / p90 **27.63** m with **zero** coincident pairs under 0.05 m —
 alternating-side street lighting, and an independent agreement with the domain string. ⚠️ **64.1%
-(810 of 1,263) are surveyed inside the drawn 1.6x carriageway**, a median 1.46 m past the drawn kerb,
+(810 of 1,263) are surveyed inside the drawn 1.6x carriageway** (measured under the pre-`Q95`
+multiplier; the kerb registrations are re-opened as a measurement by `Q101`), a median 1.46 m past the drawn kerb,
 so drawn where published nearly two thirds of Wan Chai's lamp columns stand in the road.
 They are **registered onto the drawn kerb** — `Q60`'s move at a fourth layer. See `DECISIONS.md`
 `Q82`.
@@ -217,7 +220,7 @@ repaint now **consults** one sheet of it at build time: a landmark whose
 `source_paint` sets `reference_texture` samples the `…A0` variant's photo atlas
 to decide which ribbon strips the real elevation carries, per
 `pipeline/landmarks.py`. The stage expects the sheet zip at
-`etl/sources/<city>/individualised/<sheet>.zip`, downloaded by hand via the URL
+`etl/sources/individualised/<sheet>.zip`, downloaded by hand via the URL
 pattern below; the texture votes and is discarded, exactly the shape of read
 `P3-7`'s storey-pitch probe established.)*
 
@@ -271,8 +274,8 @@ from the cache; the whole scan is a `.gltf` parse and needs none of the imagery.
 ⚠️ **Six objects means one per sheet.** `GENERIC`, both `(TB)` classes and terrain are single welded
 blobs per map sheet. Only `BUILDING`, `INFRASTRUCTURE` and `WATERBODY` are per-object.
 
-❌ **`VEGETATION(TB)` is refused, and it is not close.** 1.52 M triangles is **3.5× the entire shipped
-city** (434,149 at LOD0) and 1.15× the whole 2,214-building stock — when trees outweigh every
+❌ **`VEGETATION(TB)` is refused, and it is not close.** 1.52 M triangles is **3.0× the entire shipped
+city** (506,045 at LOD0 today; 434,149 before the ground) and 1.15× the whole 2,214-building stock — when trees outweigh every
 building in Wan Chai, the mesh is photogrammetry, not modelled trees. It is one welded blob per sheet,
 so there is no per-tree object to instance, cull or LOD; it carries **no `COLOR_0`**, so the
 terrain trick of deriving a flat colour and discarding the image has nothing honest to derive (a
@@ -539,7 +542,7 @@ The CKAN API enumerates all 61 resources:
 
 ---
 
-### ✅ USE (audit only) — Traffic Aids Drawings (2nd Generation)
+### ✅ USE — Traffic Aids Drawings (2nd Generation)
 
 **`hk-td-tis_16-traffic-aids-drawings-v2`** · Transport Department · EPSG:2326 · **monthly** ·
 FGDB `dTAD_IRNP.gdb.zip`, **218 MB**, 51 layers · added by `Q56`, 2026-08-20
@@ -554,9 +557,10 @@ restricted, for whom, when), this is *cartographic* (what is painted, in what li
 what makes it a genuine second opinion and not a copy.
 
 ✅ **Built since `P3-15`, and it was "fetched, never built" for three weeks before that.**
-`traffic_aids_drawings_gdb` is now read by `pipeline/arrows.py` as well as by
+`traffic_aids_drawings_gdb` is ordinary build input: **seven** config blocks read it (`roads`,
+`carriageway_survey`, `arrows`, `signs`, `boxjunctions`, `road_marks`, `railings`), plus
 `tools/kerbside_source_audit.py` and `tools/carriageway_margin.py`, so a build **does** need it and
-`--only` can no longer skip it for a region declaring an `arrows:` block.
+`--only` can no longer skip it.
 🔴 **Since `P3-20` and `Q67` (2026-08-23), `traffic_aids_data_dictionary` is READ BY THE BUILD, not
 only by a human.** It was a reference document — a zip you opened to transcribe a glyph table from.
 Two things now open it programmatically:
@@ -579,12 +583,11 @@ code means, and `hong_kong.yaml`'s glyph table is transcribed from it. It is a *
 no text layer** — `pdftotext` returns nothing — so it has to be read by eye, and `Q59` records what
 reading the histogram instead would have painted.
 It is the **largest single fixed-URL source in the city file**, 13× the road network, because it
-carries the whole territory's markings, signs, railings and poles to reach one layer. A build that
-never runs the audit can skip it with `--only`.
+carries the whole territory's markings, signs, railings and poles to reach the eight layers in use.
 
 | Layer | In Wan Chai | What it is |
 |---|---|---|
-| **`DTAD_RST_ZONE_LINE`** | **1,763 features / 39,292 m**, `RM1040` 24,932 m + `RM1041` 14,164 m | **The kerbside yellow lines.** The only layer in use. `LINETYPE` carries the marking code; `COLOR = 6` is yellow on 1,559 of them. ⚠️ **`TIME_ZONE` is null on every feature in region** — the posted hours live in `NSR` and nowhere here |
+| **`DTAD_RST_ZONE_LINE`** | **1,763 features / 39,292 m**, `RM1040` 24,932 m + `RM1041` 14,164 m | **The kerbside yellow lines.** The only layer the *kerbside audit* reads. `LINETYPE` carries the marking code; `COLOR = 6` is yellow on 1,559 of them. ⚠️ **`TIME_ZONE` is null on every feature in region** — the posted hours live in `NSR` and nowhere here |
 | **`DTAD_YL_BOX_POLY`** | **20 polygons**, `YELLOWBOX_TYPE = "Yellow Box"` | Yellow box junctions, which `Q53` listed as an unsourced marking. ✅ **In use since `P3-18` (2026-08-22)** — `pipeline/boxjunctions.py` draws all 20 as `boxjunctions.glb`. `MultiPolygon`, **2D**, all single-ring with no holes in region, 5–106 vertices (four strongly concave), 20–469 m². ⚠️ **`ANGLE1`/`ANGLE2` — the two hatch directions, always 90° apart — are published on only 4 of the 20**; the stage derives the rest and grades the derivation against those pairs on every run. `ELEVATION` is null/empty on all 20 — at grade under the convention below. The 540 m of `RM1038` lines in `DTAD_RD_MARK_LINE` are a partial companion (6 features against 20 polygons) and stay unread |
 | **`DTAD_RD_MARK_LINE`** | 1,679 features / **4,162 parts** / 61,903 m | Every other marking: `RM1109` 25,204 m and `RM1001` 19,308 m dominate; yellow ones are `RM1043` hatched no-parking (560 m) and `RM1038` box junction (540 m). ✅ **`RM1108`/`RM1109` EDGE OF CARRIAGEWAY (317 features) in use since 2026-08-20** by `tools/carriageway_margin.py` — the preferred publisher of the carriageway edge, ahead of iB1000's topographic margin. ✅ **The transverse markings in use since `P3-23` (2026-08-24)** — `pipeline/roadmarks.py` draws `RM1011` STOP LINE ×**120** (775.6 m), `RM1012` STOP LINES ×**8** (156.8 m) and `RM1013` GIVE WAY LINES ×**83** (741.0 m) as `roadmarks.glb`, **191 of 211 drawn**. Geometry is plain `MultiLineString`, **2D**, so it needs none of the Z decoding iB1000's lines do, and the bars are straight to four decimal places — chord over length p50 **1.0000**, and **192 of 211** parts are two-vertex. `ELEVATION` is null on **209 of 211** (2 `RM1012` on `A01`), read as at grade like `arrows:` and `boxjunctions:`. 🔴 **The nearest-edge join every other consumer of this geodatabase uses is WRONG here, on 43% of the layer**: a stop line sits at a junction *mouth*, drawn across the minor road while lying p50 **1.10 m** from the major road's centreline, so proximity picks the road it is parallel to. `roadmarks.py` picks the host by transversality instead and publishes `host_disagreement` (**90 of 209**) as the counter that can see that regress. See `DECISIONS.md` `Q69`. ⚠️ **Features and parts differ by 2.5x on this layer** — 1,679 against 4,162 — so a count keyed on one is not the other |
 | `DTAD_CROSSING_LINE` | 121 features / 6,698 m | Crossings. **Not in use** |
@@ -594,8 +597,8 @@ never runs the audit can skip it with `--only`.
 | `DTAD_RD_MARK_LINE_C` | 1,413 features | The other marking half: `RM1104` warning line 409, `RM1101` lane lines 212, `RM1054` angled parking bays 169, `RM1007` bus-lane continuation 136. **Not in use** |
 | `DTAD_RD_MARK_SYM_LINE` | 173 features | `RM1047` bus-stop box ×82, `RM1051` motorcycle bay ×21, `RM1140` KEEP CLEAR ×19, `RM1176` taxi pick-up/drop-off ×5. **Not in use** |
 | `DTAD_TRAFFIC_LIGHT_PT` | 913 points, with `ANGLE` | The signal estate — **and not 913 heads**. 46 distinct `REFNAME`s: `P<n>` ×654, `S<n>` ×189, `M<n>` ×19, plus **51 features that are not heads at all** (`KLBOLL`/`KRBOLL` keep-left/right bollards ×27, `PBUTT` ×8, `PBOLL` ×6, `WIGWAG` ×4, `PTR01`/`PTR02`/`STR02` ×5, `TRAML`). 🔴 **`REFNAME` HAS NO PUBLISHED DOMAIN** — the fgdb spec gives it 8 characters of untyped text, no Index Plan sheet defines it (both Miscellaneous Details sheets were rendered and read: they are the `RS/S/` sign pictograms), and `signCatalogue.json` is `TS`-only. So the whitelist is read off code strings, `railings.py`'s situation rather than `arrows.py`'s, and changing it is a change to **this file** (`Q76`). ⚠️ **`ANGLE` is not a facing** — re-measured on this layer: p50 44.3° off the host axis, 21.3% along / 19.3% across against 22.2% uniform. ⚠️ **No `GG_NAME`**, so an assembly is derived from coincidence — 470 of 913 points are within 0.05 m of another. ⚠️ `ELEVATION` is null on **906 of 913**, so null is the normal value here. `_LINE` 53 and `_FILLED` 84 are the same objects drawn, and `_LINE` publishes `SIGNID` **null on all 53**, so it cannot be joined back. **Read by `pipeline/signals.py` (`P3-17`), but NOT SHIPPED** — the layer was built and dropped from the bundle (`Q77`) |
-| **`DTAD_TS_ABV_PT`** / **`DTAD_TS_POLE_PT`** | **3,276 signs / 2,227 poles**, both with `ANGLE` | **The traffic signs.** ✅ **In use since `P3-16` (2026-08-23)** — `pipeline/signs.py` draws **681 plates on 504 posts** as `signs.glb`, of which **84** carry lettering baked out of this same archive's own cells — `TS102` GIVE WAY / 讓 ×74 and `TS101` STOP / 停 ×10 (`P3-20`). `SIGNID` (`TS115` ×277, `TS182` ×155) resolves into the twenty `Index Plan/(TS …).pdf` sheets in the same `dataspec` zip; those sheets have **no text layer** (`pdftotext` returns nothing), so the shipped whitelist is transcribed by eye — `Q59`'s rule. 🔴 **And by eye is no longer the only check on it**: `tools/sign_face_survey.py` (`Q67`) rasterises each config face and diffs it against the published cell as area and extent per colour, which caught `TS414` drawn in negative, `TS735`'s border, `TS115`'s bar and `TS116`'s ring. It still cannot see a face on the wrong *code* — that is what its contact sheet is for. 🔴 **They are NOT scanned, which this row used to say**: `pdfinfo` reads `CT174_51_11.dgn` / PScript5.dll / Distiller and `pdffonts` returns no embedded font — a MicroStation DGN export whose ruling lines, digits and most pictograms are vector *paths*, with a handful of small indexed images. `P3-20` depends on the difference. 🔴 **The whitelist was shifted one row at `TS182`/`TS183` and shipped a mislabelled plate — `Q64`**, which is also why `~/hk-traffic-sign-map`'s `signCatalogue.json` may be read for its *crops* and not for its `desc`. 🔴 **`DTAD_TS_ABV_PT` IS NOT WHERE THE SIGN IS.** The fgdb spec calls it *"Traffic sign **abbreviation** point"* and calls the pole layer *"Traffic sign pole point"*. Measured: **zero** of the region's 3,276 abbreviation points sit on a pole, nearest pole p50 **2.63 m** (p90 8.25, max 115.5), and the offset direction is uncorrelated with `ANGLE`. It is a draughtsman's label placement — it says *which* sign, never *where*. ⚠️ **`GG_NAME` — *"Graphical group Name"* — is the join, and the only one there is**: it resolves **3,032 of 3,276 (92.6%)** to exactly one pole, 24 to more than one, 220 to none, and groups 1–7 signs per pole. `~/hk-traffic-sign-map` uses the same key for its signpost stacks. 🔴 **`ANGLE` IS NOT A FACING, and the publisher says so**: the spec's row reads *"Angle (For carto-rep feature, same as **Ustn** angle)"* — the MicroStation symbol-cell rotation. Measured in the frame `arrows.py` validated, it is flat against the road: p50 **44.2°** from the road axis, 19.2% within 20° of along and 18.1% of across, against 22.2% for uniform; `TS115` NO ENTRY reads 19.0/19.5. The pole layer's `ANGLE` is the same (26.4/17.6). `~/hk-traffic-sign-map` established this first — it fed `ANGLE` to `icon-rotate`, found **59% of same-code signs within 30 m share one**, and reverted (`fde0258` → `42c343a`). ⚠️ **The trap**: comparing `ANGLE` against a road bearing taken as a *grid* angle rather than a game heading appears to show 76.3% lying square across the road — an artefact of Wan Chai's strongly oriented grid, and it is enough to design a stage around. So the facing is **derived** from the host edge plus the kerb side plus drive-on-left. 🔴 **And so is the position across the road**: **77.3%** of the region's poles are surveyed *inside* the 1.6x drawn ribbon (p50 1.52 m past the drawn kerb, max 4.92), so drawn where published three quarters of the city's signs stand in the carriageway. They are registered onto the drawn kerb, `Q60`'s railing move at a second layer. 🔴 **Outward only, since `Q78`** — that reason covers a post the drawn kerb has moved past and no other, and the unconditional assignment was also dragging the **95 of 654** posts already standing clear back *toward* the carriageway (p50 0.69 m, max 4.51), invisibly, because `shift_m` is an absolute value. Those keep the point TD surveyed and are counted as `posts_kept_as_surveyed`. ⚠️ **No sign dimension is published anywhere**: every TS sheet is stamped **"NOT TO SCALE"** and refers dimensions to working drawings the `dataspec` bundle does not contain, so plate size, mount height and pole diameter are **authored** — the same debt `Q60` records for railing height. ⚠️ `ELEVATION` is null on 3,140 of 3,276 (`A01` ×123, `A03` ×13), read as at-grade like `arrows:` and `boxjunctions:`. ⚠️ **`DTAD_TS_PLATE_LINE` is not a plate outline** — 83,880 parts of median length **0.06 m**, cartographic ticks; it cannot serve as a second source for the facing. See `DECISIONS.md` `P3-16` |
-| **`DTAD_RAILING_LINE`** | **1,753 features / 1,763 parts / 20,273 m** | **Hong Kong's signature street railings — and, since `Q61`, its bollards and vehicle barriers.** ✅ **In use since `P3-19` (2026-08-22)** — `pipeline/railings.py` draws the layer as **three classes** into one `railings.glb`: `railings` **9,017 m** (`CRAIL1` `CRAIL2` `HCAIL2` `RAIL1` `RAILING1`), `bollards` **463 m** (`bollard0..3`), `barriers` **935 m** (`CBARRIER` `CRASHGATE`). ⚠️ **Split by class of object and never within one** — all five fence codes draw one fence, because nothing published says they differ. Geometry is plain `MultiLineString`, **2D**, so heights come from a join; `ELEVATION` is null on 1,737 and `A01` on 16. 🔴 **This row said four `LINETYPE` values and there are nineteen** — `CRAIL1` 10,499 m, `CRAIL2` 2,921 m, `HCAIL2` 2,073 m, `CBARRIER` 1,369 m, `SOLID` 511 m, `AMT1` 502 m, `RAIL1` 472 m, `AMT` 457 m, `CRASHGATE` 301 m, `bollard0` 285 m, `RAILING1` 283 m, `bollard2` 235 m, `bollard3` 153 m, `AMT2_1.5` 118 m, `EAG 3` 46 m, `MSB 5` 23 m, `AMT1.5_1.0` 17 m, `AMT-1.5` 4 m, `bollard1` 3 m. ⚠️ **And the counts it gave were features where the metres here are parts** — `CRAIL1` is 532 features and 535 parts. 🔴 **`LINETYPE` HAS NO PUBLISHED DOMAIN, and this is the only layer the pipeline reads of which that is true.** The fgdb specification gives the column the description *"Line Type"* and nothing else, and the index-plan bundle carries no railing sheet — both "Miscellaneous Details" drawings, `CT174/51-6(1)E` and `6(2)F`, are sign pictograms and lettering, checked by eye. So `Q59`'s glyph-table rule **cannot be satisfied** here and `hong_kong.yaml`'s `classes` table is a whitelist read off the code strings, which is the weakest claim in that file. No railing *dimension* is published either — height and post pitch are authored. 🔴 **And the rest of the layer's 42 columns are cartography, not description.** `SYMBOL_SIZE_*`/`SYMBOL_STEP_*` are the spec's own *"Symbol size of **marker symbol** in first layer"* — plot sizes in **inches**, not metres on the street: all 21 `RAILING1` features read 0.8503937 (**21.6 mm** on paper) at step 5.669300 (**144 mm**), and `RAIL1` carries two numbers, a dash pattern. They are **null on 0-of-196 bollard features** in all five slots, so the earlier claim that they carry bollard spacing and diameter was wrong on both the reading and the population. `COLOR` is populated and separates the classes (`CRAIL1` 7 on 509/532, `bollard0` 0 on 143/161) but the spec gives it only *"Color of Feature", Number* and the document has **no coded-value table for any column** — same wall as `LINETYPE`. `LINE_PATTERN_*`, `LINE_WIDTH_*` and `LINE_OFFSET_*` are entirely null in the region. See `DECISIONS.md` `Q60` |
+| **`DTAD_TS_ABV_PT`** / **`DTAD_TS_POLE_PT`** | **3,276 signs / 2,227 poles**, both with `ANGLE` | **The traffic signs.** ✅ **In use since `P3-16` (2026-08-23)** — `pipeline/signs.py` draws **671 plates on 497 posts** as `signs.glb` (681 on 504 before `Q95` re-baselined the drawn kerb), of which **83** carry lettering baked out of this same archive's own cells — `TS102` GIVE WAY / 讓 ×74 and `TS101` STOP / 停 ×9 (`P3-20`). `SIGNID` (`TS115` ×277, `TS182` ×155) resolves into the twenty `Index Plan/(TS …).pdf` sheets in the same `dataspec` zip; those sheets have **no text layer** (`pdftotext` returns nothing), so the shipped whitelist is transcribed by eye — `Q59`'s rule. 🔴 **And by eye is no longer the only check on it**: `tools/sign_face_survey.py` (`Q67`) rasterises each config face and diffs it against the published cell as area and extent per colour, which caught `TS414` drawn in negative, `TS735`'s border, `TS115`'s bar and `TS116`'s ring. It still cannot see a face on the wrong *code* — that is what its contact sheet is for. 🔴 **They are NOT scanned, which this row used to say**: `pdfinfo` reads `CT174_51_11.dgn` / PScript5.dll / Distiller and `pdffonts` returns no embedded font — a MicroStation DGN export whose ruling lines, digits and most pictograms are vector *paths*, with a handful of small indexed images. `P3-20` depends on the difference. 🔴 **The whitelist was shifted one row at `TS182`/`TS183` and shipped a mislabelled plate — `Q64`**, which is also why `~/hk-traffic-sign-map`'s `signCatalogue.json` may be read for its *crops* and not for its `desc`. 🔴 **`DTAD_TS_ABV_PT` IS NOT WHERE THE SIGN IS.** The fgdb spec calls it *"Traffic sign **abbreviation** point"* and calls the pole layer *"Traffic sign pole point"*. Measured: **zero** of the region's 3,276 abbreviation points sit on a pole, nearest pole p50 **2.63 m** (p90 8.25, max 115.5), and the offset direction is uncorrelated with `ANGLE`. It is a draughtsman's label placement — it says *which* sign, never *where*. ⚠️ **`GG_NAME` — *"Graphical group Name"* — is the join, and the only one there is**: it resolves **3,032 of 3,276 (92.6%)** to exactly one pole, 24 to more than one, 220 to none, and groups 1–7 signs per pole. `~/hk-traffic-sign-map` uses the same key for its signpost stacks. 🔴 **`ANGLE` IS NOT A FACING, and the publisher says so**: the spec's row reads *"Angle (For carto-rep feature, same as **Ustn** angle)"* — the MicroStation symbol-cell rotation. Measured in the frame `arrows.py` validated, it is flat against the road: p50 **44.2°** from the road axis, 19.2% within 20° of along and 18.1% of across, against 22.2% for uniform; `TS115` NO ENTRY reads 19.0/19.5. The pole layer's `ANGLE` is the same (26.4/17.6). `~/hk-traffic-sign-map` established this first — it fed `ANGLE` to `icon-rotate`, found **59% of same-code signs within 30 m share one**, and reverted (`fde0258` → `42c343a`). ⚠️ **The trap**: comparing `ANGLE` against a road bearing taken as a *grid* angle rather than a game heading appears to show 76.3% lying square across the road — an artefact of Wan Chai's strongly oriented grid, and it is enough to design a stage around. So the facing is **derived** from the host edge plus the kerb side plus drive-on-left. 🔴 **And so is the position across the road**: **77.3%** of the region's poles are surveyed *inside* the 1.6x drawn ribbon (p50 1.52 m past the drawn kerb, max 4.92 — measured under the pre-`Q95` multiplier; re-opened as a measurement by `Q101`), so drawn where published three quarters of the city's signs stand in the carriageway. They are registered onto the drawn kerb, `Q60`'s railing move at a second layer. 🔴 **Outward only, since `Q78`** — that reason covers a post the drawn kerb has moved past and no other, and the unconditional assignment was also dragging the **95 of 654** posts already standing clear back *toward* the carriageway (p50 0.69 m, max 4.51), invisibly, because `shift_m` is an absolute value. Those keep the point TD surveyed and are counted as `posts_kept_as_surveyed`. ⚠️ **No sign dimension is published anywhere**: every TS sheet is stamped **"NOT TO SCALE"** and refers dimensions to working drawings the `dataspec` bundle does not contain, so plate size, mount height and pole diameter are **authored** — the same debt `Q60` records for railing height. ⚠️ `ELEVATION` is null on 3,140 of 3,276 (`A01` ×123, `A03` ×13), read as at-grade like `arrows:` and `boxjunctions:`. ⚠️ **`DTAD_TS_PLATE_LINE` is not a plate outline** — 83,880 parts of median length **0.06 m**, cartographic ticks; it cannot serve as a second source for the facing. See `DECISIONS.md` `P3-16` |
+| **`DTAD_RAILING_LINE`** | **1,753 features / 1,763 parts / 20,273 m** | **Hong Kong's signature street railings — and, since `Q61`, its bollards and vehicle barriers.** ✅ **In use since `P3-19` (2026-08-22)** — `pipeline/railings.py` draws the layer as **three classes** into one `railings.glb`: `railings` **8,828 m** (9,017 before `Q95`; `CRAIL1` `CRAIL2` `HCAIL2` `RAIL1` `RAILING1`), `bollards` **463 m** (`bollard0..3`), `barriers` **925 m** (`CBARRIER` `CRASHGATE`). ⚠️ **Split by class of object and never within one** — all five fence codes draw one fence, because nothing published says they differ. Geometry is plain `MultiLineString`, **2D**, so heights come from a join; `ELEVATION` is null on 1,737 and `A01` on 16. 🔴 **This row said four `LINETYPE` values and there are nineteen** — `CRAIL1` 10,499 m, `CRAIL2` 2,921 m, `HCAIL2` 2,073 m, `CBARRIER` 1,369 m, `SOLID` 511 m, `AMT1` 502 m, `RAIL1` 472 m, `AMT` 457 m, `CRASHGATE` 301 m, `bollard0` 285 m, `RAILING1` 283 m, `bollard2` 235 m, `bollard3` 153 m, `AMT2_1.5` 118 m, `EAG 3` 46 m, `MSB 5` 23 m, `AMT1.5_1.0` 17 m, `AMT-1.5` 4 m, `bollard1` 3 m. ⚠️ **And the counts it gave were features where the metres here are parts** — `CRAIL1` is 532 features and 535 parts. 🔴 **`LINETYPE` HAS NO PUBLISHED DOMAIN, and this is the only layer the pipeline reads of which that is true.** The fgdb specification gives the column the description *"Line Type"* and nothing else, and the index-plan bundle carries no railing sheet — both "Miscellaneous Details" drawings, `CT174/51-6(1)E` and `6(2)F`, are sign pictograms and lettering, checked by eye. So `Q59`'s glyph-table rule **cannot be satisfied** here and `hong_kong.yaml`'s `classes` table is a whitelist read off the code strings, which is the weakest claim in that file. No railing *dimension* is published either — height and post pitch are authored. 🔴 **And the rest of the layer's 42 columns are cartography, not description.** `SYMBOL_SIZE_*`/`SYMBOL_STEP_*` are the spec's own *"Symbol size of **marker symbol** in first layer"* — plot sizes in **inches**, not metres on the street: all 21 `RAILING1` features read 0.8503937 (**21.6 mm** on paper) at step 5.669300 (**144 mm**), and `RAIL1` carries two numbers, a dash pattern. They are **null on 0-of-196 bollard features** in all five slots, so the earlier claim that they carry bollard spacing and diameter was wrong on both the reading and the population. `COLOR` is populated and separates the classes (`CRAIL1` 7 on 509/532, `bollard0` 0 on 143/161) but the spec gives it only *"Color of Feature", Number* and the document has **no coded-value table for any column** — same wall as `LINETYPE`. `LINE_PATTERN_*`, `LINE_WIDTH_*` and `LINE_OFFSET_*` are entirely null in the region. See `DECISIONS.md` `Q60` |
 | `DTAD_DROP_KERB_LINE` | 738 features | Dropped kerbs, `REFNAME` `MDK_L`/`MDK_R`/`MDK` — where a vehicle may legally mount. **Not in use** |
 | ⚠️ `DTAD_TW_STRIP_LINE` | 778 features, `REFNAME = TACW` | **Not tramway.** Tactile warning strips at dropped kerbs. Named here because `TW` reads as tramway and a `Q57` probe matched it to *every* street in the region before the join gave it away. The tramway is in iB1000, below |
 
@@ -719,7 +722,7 @@ Recorded so the sweep is not repeated:
 points of interest" below; the pavement extents are next — and ✅ **fetched 2026-08-29 under `Q94`**,
 so that entry is a description of data on disk rather than of a query.
 
-### ✅ FETCHED — HyD Pavement Polygon (`Q94`, 2026-08-29)
+### ✅ USE — HyD Pavement Polygon (`Q94`, 2026-08-29)
 
 **`hyd_rcd_1632210918434_60749`** · Highways Department · CSDI Portal only, no DATA.GOV.HK package ·
 ArcGIS `MapServer` layer `INV_PG`, **native EPSG:2326** — the project's own projected CRS, so no
@@ -737,7 +740,7 @@ kind after `sources` and `tiled_sources`. **64,644 features over 22 requests, as
 | | payload | why not |
 |---|---|---|
 | `file-api?dataset_id=…&format=geojson` | 317 MB | whole territory but **WGS84**, and `gdb.read_layer` states plainly that it does no reprojection. The only format this dataset's file-api offers |
-| `MapServer/0/query` with a bbox | 3.0 MB | 🔴 **`sources` is per-CITY and an envelope is per-REGION.** A bbox URL either duplicates bounds hard rule 3 keeps in one place, or needs a per-region source block |
+| `MapServer/0/query` with a bbox | 3.0 MB | 🔴 **A `sources:` block is whole-config and an envelope is per-REGION.** A bbox URL either duplicates bounds hard rule 3 keeps in one place, or needs a per-region source block |
 | **`MapServer/0/query`, paged, whole territory** | **163 MB** | ✅ **shipped.** Native EPSG:2326, so `expect_crs` passes untouched and the region clip stays where it already is — `bbox` at read time, from config |
 
 ⚠️ **`geometryPrecision=2` is centimetres, and it is a 41% cut for no measurable loss** — 19.79 MB a
@@ -749,9 +752,9 @@ back one feature twice and never another.
 ⚠️ **The walk stops on a short page**, the publisher's own statement that there are no more, rather
 than on a separate count request that could disagree with the pages themselves. `max_pages` 60 is the
 ceiling that catches a service ignoring `resultOffset`.
-🔴 **~163 MB is a real cost on every clean clone**, and it is the first source of that size any build
-*reads* — `CLAUDE.md` records the 218 MB Traffic Aids geodatabase as deliberately read by none. It
-was paid for the coverage below.
+🔴 **~163 MB is a real cost on every clean clone** — second only to the 218 MB Traffic Aids
+geodatabase among sources a build reads (that one stopped being "a fetch no build reads" at
+`P3-12`/`P3-14`; seven config blocks read it). It was paid for the coverage below.
 
 ✅ **The `FEAT_TYPE` domain is published, and the previous note that it "is not decoded" and that
 anyone acting on it "owes the HyD specification" is superseded.** The specification is *in the
@@ -892,7 +895,7 @@ in the table**, under the 7.3 m minimum for a two-lane single carriageway and un
 allowed *per direction* on a dual. The authored width was not merely underived; it was outside the
 range TD permits.
 
-✅ **It is measured now, on 260 of the 737 level-0 edges** (`Q95`). `pipeline/carriageway.py` walks
+✅ **It is measured now, on 292 of the 737 level-0 edges** (260 at `Q95` itself; HyD's polygons then added and refined edges, `Q94`). `pipeline/carriageway.py` walks
 each centreline at 4 m stations, casts a perpendicular both ways and takes the span a *single*
 publisher answers on both sides — then reads it as that edge's carriageway only where TD's own bounds
 license it. The rest keep the authored value, and `width_source` on every edge says which it carries.
@@ -1050,7 +1053,7 @@ Measured across the region's 29 points, and the reason no tie-breaking rule exis
 > **Region note:** Hong Kong Island uses **red urban taxis**. Green (NT) or blue (Lantau) livery in
 > this map would read as wrong to any local player.
 
-### ✅ SURVEYED, not fetched — four more point sets that bear on this section (`Q57`)
+### ✅ SURVEYED — four more point sets that bear on this section (`Q57`; one, the tram stops, since fetched and shipped by `P3-14`)
 
 The two above are what `P1-5` reads. These are the rest of what the estate publishes, all CSDI
 `file-api` GeoJSON on the same pattern and needing no key. Counted inside the region on 2026-08-20:
@@ -1119,7 +1122,7 @@ without an explicit datum.**
 
 ### Covering sheets
 
-Six 1:1000 sheets cover the region, ~44 MB each — **~280 MB** of source download:
+Six 1:1000 sheets cover the region, ~44 MB each — **~265 MB** of source download:
 
 ```
 11-SW-9D    11-SW-10C   11-SW-10D
