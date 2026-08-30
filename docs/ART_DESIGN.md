@@ -20,21 +20,24 @@ what it costs.
 
 ## Why the art style and the data choice are the same decision
 
-The source data — 3D Visualisation Map (non-textured) and 3D-BIT00 Level 1 — is **extruded footprints
+The source data — 3D Visualisation Map (non-textured) and iB1000 — is **extruded footprints
 with no textures**. That is already a flat-shaded low-poly building. Consequences that make the whole
 project affordable:
 
 - No texture atlas packing, no KTX2 transcoding, no texture memory pressure
 - Untextured meshes with vertex colours **merge into one mesh per tile**, which is what keeps draw
-  calls under budget — 53 against a 150 budget, measured
-- Geometry-only glTF quantises and compresses far better than textured assets
+  calls under budget — well inside the 150 bar; `PROGRESS.md` owns the figure and flags it
+  unmeasured since the drawn layers landed
+- Geometry-only glTF compresses far better than textured assets — though `Q82` turned Godot's
+  import-time mesh quantisation OFF project-wide (+958,720 B of PCK), because it corrupted the
+  ETL's exact geometry; the merge argument above is what stands
 
 The art direction isn't a stylistic preference layered on top of the data. It *is* the data.
 
 ⚠️ **The bundle is no longer literally image-free, and the exception proves the second bullet rather
-than breaking it.** Since `P3-20` one 256 x 256 atlas ships: the lettering on a GIVE WAY plate
-(`Q68`). It costs nothing here because the argument above is about **`merge`** — a textured building
-becomes its own draw call and 53 tiles become thousands — and the sign lettering is already its own
+than breaking it.** Since `P3-20` one atlas ships — 512 x 256, two cells since `TS101` joined on 2026-08-24: the
+lettering on the GIVE WAY and STOP plates (`Q68`). It costs nothing here because the argument above is about **`merge`** — a textured building
+becomes its own draw call and 66 tiles become thousands — and the sign lettering is already its own
 primitive with its own material. `merge`'s refusal of textured meshes is untouched and is the rule
 doing the work. What changed is that "no textures" stopped being a habit and became a **declaration
 check**: `mesh_contract.gd` admits an image only where a call site names a pixel budget, and
@@ -82,7 +85,9 @@ sitting beside it.
 ### Material is not a function of height (`Q34`)
 
 **A `materials:` table sits at the top level of the city config, and every colour the city ships is
-declared there and nowhere else.** `buildings:` and `roads:` reference entries by name.
+declared there and nowhere else.** (The palette table above lists the façade/ground/road subset;
+the config's full `materials:` set — `panel_pale`, `roof_grey`, `curtain_glass`, `concrete_pale`,
+`steel_rail`, `galvanised_steel` and the rest — is the authority.) `buildings:` and `roads:` reference entries by name.
 
 That shape is the point. **`colour` and `reflectance` must not be fields on `height_bands`**, because
 that makes the *schema* assert material is a function of height — a claim nobody would write down and
@@ -147,7 +152,9 @@ Hong Kong-specific, not generic-city:
 
 **Time of day: golden hour by default.** Low warm sun flatters flat shading, gives long readable
 shadows, and separates building faces without any texture work. Night (neon-forward) is a strong later
-variant — plan the emissive channel now, build the mode later.
+variant, and it is **blocked on `Q38`** — the exposure is baked into `COLOR_0` at build time, so a
+time-of-day change is a full tile rebuild — and `Q82` refused the lit lantern (`lit_window_share`
+ships 0.0; nothing in the city is lit). The emissive channel stays a reserved uniform, nothing more.
 
 🔴 **The table above is the authored palette and it is no longer the shipped one.** The five
 `height_bands` honour it — `C*` 1.92 to 13.84, which is "warm off-white, beige, pale grey-green" —
@@ -271,7 +278,8 @@ bytes — real memory through the bucket phase, for a result `smoothstep(0, h, U
 
 Windows must **not** appear on roofs or ground-level podium faces — mask by normal and by height above
 the building's own base. Both are in `assets/shaders/city_facade.gdshader`; the numbers are in
-`tuning/city_facade.tres`, because they are tuning data (hard rule 4) and retuning the city must not
+`tuning/city_facade_warm.tres` (⚠️ `tuning/city_facade.tres` binds the *clean* shader — candidate
+`C`, the one that ships), because they are tuning data (hard rule 4) and retuning the city must not
 be a rebuild.
 
 ### The clean/futuristic variant
@@ -381,7 +389,9 @@ dark glass in a concrete hole and does catch the sky; at zero the openings read 
 painted on. That split is what lets building *types* differ in material and not merely in window
 spacing, and it takes chroma back off the frame for free, because a matte reveal carries no sky.
 
-⚠️ **`band()` needs analytic antialiasing, not just `fwidth`.** Past about a quarter of a period per
+⚠️ **`band()` needs analytic antialiasing, not just `fwidth`.** (For *geometry* too thin to sample —
+the 0.1 m box-junction hatch, sign poles, lamp columns — the shipped answer is `msaa_3d=2` (4x),
+`Q91`; `check.sh` pins the value.) Past about a quarter of a period per
 pixel the smoothstep pair stops meaning anything and the grid turns into diagonal moire on any wall
 seen at a shallow angle — which in a street of towers is most of them. Converge on the band's own
 **duty cycle**, which is what infinite samples inside one pixel would average to. This is why the
@@ -450,7 +460,8 @@ same surface markers, and `tools/generated_scene_import.gd` maps the ETL's mater
 `tuning/city_facade.tres` and only that path. `tuning/city_facade_warm.tres` holds the measured
 values; `cp` it over and reimport. **Which look ships was `Q26`, and it closed on candidate `C` on
 2026-08-17** — flat per-building colour on accurate massing, the user's call. The argument that made
-it a verdict rather than a preference still stands and is why `P3-9a` can reopen it: the clean look
+it a verdict rather than a preference still stands — though `P3-9a` could **not** reopen it (`Q76`:
+the web renderer crushes the values the verdict was priced on) and its 2026-08-30 round did not: the clean look
 keeps the accurate massing and abandons the accurate surface, and recognition is the product.
 
 ### What buildings will *not* get
@@ -493,7 +504,7 @@ sun to shade a second time. `facade_hue.strength` scales the measured chroma and
 knob, kept separate so the two cannot be confused.
 
 ✅ **`COLOR_0` is authored in sRGB and every consumer must linearise it** — the two façade shaders and
-the road's `BaseMaterial3D`. Consumed as linear it puts **57%** of a lit façade pixel's luminance
+`road_markings.gdshader` (the road left `BaseMaterial3D` at `P3-12`). Consumed as linear it puts **57%** of a lit façade pixel's luminance
 into an albedo-*independent* term, so a per-building difference reaches the screen at a third of its
 size and the city reads pale. Converted, the share falls to **6%** at street level. `Q27`.
 
@@ -511,13 +522,14 @@ Distinctive silhouettes need hand-authored low-poly models, placed via `landmark
 |---|---|---|
 | **HK Convention & Exhibition Centre** | The curved "flying wing" roof | ✅ `P3-6` amendment — **the source mesh itself**, repainted: after three generator rounds converged on the source by measurement, the hero is now the building's own 41,273-triangle mesh, extracted by `pipeline/landmarks.py`, sliced at the photo-measured ribbon elevations (15 m + k·4.8 m, 1.5 m strips) and vertex-repainted pale-panels/dark-ribbons under a darker `roof_grey` (99,577 triangles shipped, generated output, never committed — `LICENSING.md`). Roof and soffit are crease-grown so the sweeps stay grey to their rolled edges, and each ribbon strip is kept only where the building's own aerial texture (the individualised `A0` atlas, consulted at build time and discarded) confirms glazing — bands follow the real elevation, not the band grid; Phase 2 only — Phase 1 and its four towers stay generated |
 | **Central Plaza** | Pyramid crown | ✅ `P3-6` — banded triangular shaft, arcade piers, pyramid, two-stage mast |
-| **Hopewell Centre** | Cylindrical tower | ⬜ |
+| **Hopewell Centre** | Cylindrical tower | ⬜ (`P3-6` is 🟡 — 2 of ~5 shipped, awaiting review; the ⬜ rows are unscheduled, not in flight) |
 | **Times Square** | Needs its signage identity — **massing and placement only, never rendered text** (`Q42`, hard rule 8) | ⬜ |
 | **Wan Chai government slabs** | Read fine as boxes, but the grouping needs composition | ⬜ |
 
 The ETL must exclude the source geometry these replace (`replaces_source_ids`) to prevent z-fighting.
-**Budget:** ~3–8k triangles for an *authored* hero — silhouette landmarks seen from a distance at
-speed, not hero props — generated by `tools/make_landmark.py` from surveyed dimensions, chamfered
+**Budget:** up to ~8k triangles for an *authored* hero — silhouette landmarks seen from a distance at
+speed, not hero props; the one shipped (Central Plaza) is **300** against a `triangle_budget: 8000`
+pin — generated by `tools/make_landmark.py` from surveyed dimensions, chamfered
 geometry, never smoothed (`P3-11`). A *mesh-sourced* hero carries its own measured ceiling instead,
 pinned as `triangle_budget` in the city config and enforced per entry by the stage and by
 `verify_landmarks.gd` (HKCEC: 99,577 measured against a 120k pin). The two budgets are different
@@ -547,6 +559,12 @@ authored features the source captures badly.
 
 ## Roads
 
+⚠️ **Three shipped layers postdate most of this section and have their art direction in their
+records rather than here**: the stop/give-way lines (`P3-23`, `Q69`, `marking_paint.gdshader`
+shared with the arrows and boxes per `Q71`), the traffic signs and their lettering (`P3-16`/`P3-20`/
+`P3-22`, `signs.gdshader` shared with the latent signals and the lamps), and the lamp posts
+(`P3-26`, `Q82` — colour under `Q33`'s `materials:` rule, and 🔴 never a lit lantern, `Q38`).
+
 - Ribbon mesh generated from road-graph polylines, vertex-coloured
 - Markings via **shader along the ribbon's UV** rather than a texture atlas — keeps the untextured
   pipeline intact. `P1-4` already ships the UVs the shader reads: **U is a lane coordinate**, 0 at
@@ -573,7 +591,8 @@ authored features the source captures badly.
   `DTAD_RD_MARK_ANNO` carries **274** road-text annotations; `DTAD_YL_BOX_POLY` carries **20** box
   junctions. `Q56`, `Q57`.
 - ✅ **The arrows are built (`P3-15`), and the registration objection was answered by measuring
-  it.** The ribbon is drawn **1.6×** wider than the carriageway (`Q18`/`Q36`), but it is wider about
+  it.** The ribbon is drawn wider than the carriageway — the 1.6× multiplier then, a 10.24 m floor since
+  `Q95` (`Q18`/`Q36`) — but it is wider about
   the *same centreline*, so it contains the real carriageway: **97.2%** of the region's symbols
   already fall inside the drawn ribbon, and their offset reads p50 **0.51** of the real half-width —
   where a lane centre belongs. So the published position is read as a **fraction across the road**,
@@ -590,8 +609,9 @@ authored features the source captures badly.
   the day `Q53`'s entry predicted — on `arrows.tres`'s terms. Judged at the fixed viewpoints plus
   box close-ups: the 100 mm hatch reads at street scale and the shipped widths are the index
   plan's, unwidened. `Q53`, `Q59`, `DECISIONS.md` `P3-18`.
-- ⚠️ **Road text is still held, on cost.** `DTAD_RD_MARK_ANNO`'s 274 annotations wait on `Q42`'s
-  never-rendered-text rule being squared with lettering that is geometry, not type. `Q53`, `Q59`.
+- ⚠️ **Road text is still held, on scope (`Q65`, reaffirmed `Q101`).** `DTAD_RD_MARK_ANNO`'s 274
+  annotations carry no instruction the graph does not give the player; the licence half of the old
+  refusal is gone since `Q79` bundled a face, and `P3-20` squared baked lettering with the contract. `Q53`, `Q59`.
 - 🔴 **The kerbside double yellow is invented, and it is the one marking here that asserts something
   rather than describing something.** A double yellow is not kerb trim — it means *no stopping at any
   time* — so painting it on every kerb makes a claim about roughly three times the kerb it actually
@@ -666,7 +686,8 @@ authored features the source captures badly.
   rule 4). Both halves are authored, because no sheet in the bundle publishes a railing dimension at
   all — `Q60`, strengthened to "without qualification" by the symbology correction.
   ⚠️ **Where the fence stands is not where it was surveyed.** 67.9% of the region's published
-  railing metres fall *inside* the 1.6x-widened ribbon, so they are registered onto the drawn kerb;
+  railing metres fall *inside* the widened ribbon (measured under the pre-`Q95` 1.6× multiplier;
+  re-opened as a measurement by `Q101`), so they are registered onto the drawn kerb;
   `Q60` has the measurement and the bar on the move.
 - ✅ **The same layer draws two more things, and a class is a parameterisation rather than a
   shader** (`Q61`). `railings.glb` carries three meshes — `railings` 9,017 m, `bollards` 463 m,
@@ -684,7 +705,7 @@ authored features the source captures badly.
   and separates the classes, but has no published domain, so the bollard grey and the barrier
   galvanised are authored the way `rail_colour` is. Hong Kong runs painted vehicle barriers too; a
   maroon would have been more recognisable and a much larger claim.
-  ⚠️ Three draw calls where `P3-19` had one, against a `<150` budget the drive scene reads 36 on.
+  ⚠️ Three draw calls where `P3-19` had one, against a `<150` budget the drive scene reads 44–45 on (`ARCHITECTURE.md`).
   Separate meshes are what let each class carry its own `.tres` and what let `railing_error.py`
   walk one class's feet without another's in the pile.
 
@@ -766,7 +787,7 @@ of work.
 
 ✅ **The class really does take none of the shader's surface treatment, and that part was read from
 the code rather than guessed.** `roof_darkness`, the grounding gradient and the jitter are all
-applied inside `if (is_facade)` at `city_facade_clean.gdshader:437`, and `is_facade` is
+applied inside `if (is_facade)` in `city_facade_clean.gdshader`, and `is_facade` is
 `marker < MARKER_FACADE + 0.5`. `MARKER_STRUCTURE` is `2.0`, so a flyover arrives as raw `#615f5a`
 and is lit, full stop.
 
@@ -830,8 +851,9 @@ counted geometry; the ground merges into the tier-0 mesh, so it also gets a
 `ConcavePolygonShape3D`. The split between the two was not separately measured — only the total,
 one variable changed. Worth knowing before predicting the next class's cost from geometry alone.
 
-**Resident triangles went 236,882 → 280,807** at the worst streaming sample, against a mobile budget
-of 300k *visible*. Those are different quantities and `verify_city_streamer.gd` refuses to gate one
+**Resident triangles went 236,882 → 280,807** at the worst streaming sample (**≈380,700** today —
+tile worst plus 99,877 of always-resident heroes since the `P3-6` amendment; `PROGRESS.md`), against
+a mobile budget of 300k *visible*. Those are different quantities and `verify_city_streamer.gd` refuses to gate one
 on the other — but the headroom is now thin enough that `P2-6` should not be surprised by it.
 
 ⚠️ **The ground collides, and "merged for +0 draw calls" and "visual only, no collider" were never
@@ -910,7 +932,7 @@ lightness a survey was nearly rebuilt to supply. `Q18` is still open on the tech
 **What is explicitly not done: shipping the orthophoto, resampled or otherwise.** It would cost a draw
 call per tile, since a textured surface cannot merge with a vertex-coloured one. And an orthophoto has
 the *real* roads baked into it at their real width, while the generated ribbon sits coplanar with the
-terrain and **1.6× wider** — so photographic asphalt and photographic lane markings would show from
+terrain and **widened for playability** — so photographic asphalt and photographic lane markings would show from
 under a wider synthetic road, along with parked cars and baked shadows.
 
 **The sink was guessed at 0.2 m and measured to 0.2 m.** The ground sits coplanar with the level-0
@@ -933,13 +955,13 @@ grazing angle.
 
 ⚠️ **The first column does not fall with it, because most of it is not the sink's to fix.** The road
 is a *plane* and the ground is not: interpolated along its length between the 2.0% of source
-vertices `simplify` kept, and flat across a width the playability widening made 1.6× too wide. On a
+vertices `simplify` kept, and flat across a width the playability widening over-draws (1.6× then; a floor since `Q95`). On a
 crest between two retained vertices the ground rises straight through a road that never sampled it —
 **0.35% of centreline points proud within a metre of a vertex against 5.78% at 15–40 m from one.**
 This was `P2-7`'s densification finding at grade, and `roads.ground_profile` closed the along-the-road
 half of it: the area with ground proud fell **3.289% → 1.898%**, and at the centreline 2.274% →
 0.712%. What is left is the across-the-road half — the ribbon is flat over a width the playability
-widening made 1.6× too wide, so it cuts into a cross-slope at the kerb, and the outer rim moved only
+widening over-draws, so it cuts into a cross-slope at the kerb, and the outer rim moved only
 5.393% → 4.360%. That is `Q19`'s trade, not the ground's.
 
 ---
@@ -1005,9 +1027,10 @@ across the nose and tail — the valance under the bumper — and dark along the
 rocker. That is a bumper meeting a sill panel, as the real car has. ⚠️ **The rocker is the third dark
 strip tried on this flank**; a box standing proud read as a stick and a continued bumper band read as
 a stripe painted on a toy, both recorded in `DECISIONS.md`. It is on trial: at 60 mm it falls inside
-the range `P3-11`'s review measured as sub-pixel at review distance, and the chase
-camera tracks the car's facing so it never shows the flank at all. `rocker_top_y_m = sill_y_m`
-removes it.
+the range `P3-11`'s review measured as sub-pixel at review distance, and under the pre-`Q98`
+rig the chase camera tracked the car's facing and never showed the flank — `Q98`'s lagged yaw now
+puts the flank in frame, so the strip is judgeable from the play camera for the first time.
+`rocker_top_y_m = sill_y_m` removes it.
 
 ✅ **Audited in situ and the split works — the taxi is the only chromatic object in the frame and it
 reads instantly.** On `build/driver/art_taxi` t04.50 the red bodywork is **`C*` 86.5** against a
@@ -1081,8 +1104,9 @@ black window every time the car coasts. Each was granted for a stated reason and
 recorded rather than enforced — but it is now the standing exception, not a one-off, and the table
 should either move or start being applied.
 
-**Vehicle roster for the slice:** player taxi, private car (2 variants), red taxi (AI), double-decker
-bus, green minibus, tram.
+**Vehicle roster planned for the slice** (only the player taxi is built — `P3-11`, 1,180 triangles;
+the rest belong to `B3`'s `P3-3`/`P3-4`/`P3-8`): player taxi, private car (2 variants), red taxi
+(AI), double-decker bus, green minibus, tram.
 
 **The player-side roster is real models, not generic cars**, because the **drive layout differs
 across them** — which makes it an architecture constraint rather than an art note. See
@@ -1184,15 +1208,15 @@ Generated by the ETL, not decimated at runtime.
 
 | Tier | Distance | Content | Cell size | Wan Chai triangles |
 |---|---|---|---|---|
-| LOD0 | 0–250 m | Merged massing, window shader, props | 1.5 m (infrastructure 0.5 m) | 434,149 |
-| LOD1 | 250–400 m | Silhouette-only merged block, flat colour | 4.0 m (infrastructure 1.0 m) | 222,375 |
+| LOD0 | 0–250 m | Merged massing, window shader, props | 1.5 m (infrastructure 0.5 m) | 506,045 |
+| LOD1 | 250–400 m | Silhouette-only merged block, flat colour | 4.0 m (infrastructure 1.0 m) | 245,145 |
 
 Desktop tier shifts these distances outward rather than adding a new tier.
 
 ⚠️ **There is no exact-weld tier, and that is a measured decision rather than an omission.** The table
 carried one at 0–150 m until `P2-1`'s review: driven side by side against a build that had none, the
 user could not tell them apart, because extruded massing is big boxes and a 1.5 m cell takes half the
-triangles while leaving the silhouette. Dropping it cost **30.5 MB of a 51.6 MB bundle** and **40% of
+triangles while leaving the silhouette. Dropping it cost **30.5 MB of the then-51.6 MB bundle** and **40% of
 worst-case visible triangles**, both measured from real exports rather than summed from source.
 Restoring it is one entry in `lod_cell_sizes_m` and a rebuild, so a later region or a desktop-only
 asset split can have it back.
@@ -1222,12 +1246,18 @@ mostly silhouette. Recorded because the opposite was written down first.
 
 ## UI
 
-**Visual language: Hong Kong road signage and the taxi meter.**
+**Visual language: Hong Kong road signage and the taxi meter.** ⚠️ **What shipped (`P3-24`, `Q80`)
+differs from the sketch below where they disagree — `game/tuning/hud_style.tres` and
+`hud_layout.tres` are the authority**: two readouts (dark speed chip bottom-left, white street plate
+right) on Midtown Madness 2's arrangement, flat chamfered panels, one fill and one keyline each,
+white for the city speaking and dark for the car; the CJK face is **Free HK Kai** (`Q79`), a
+calligraphic Kai rather than "a clean face"; and the wrong-way NO ENTRY disc carries the world
+sign's own measured proportions (`Q81`).
 
-- Typography: condensed grotesque for English, paired with a clean Traditional Chinese face.
-  **Bilingual throughout** — this is not a localisation afterthought, it is part of the art.
-- Fare display styled as a **taxi meter** — LCD segments, red digits
-- Direction arrow styled after HK directional road signs
+- **Bilingual throughout** — this is not a localisation afterthought, it is part of the art.
+- Fare display styled as a **taxi meter** — LCD segments, red digits (unbuilt; `P3-5a`'s slot is
+  reserved)
+- Direction arrow styled after HK directional road signs (unbuilt; `P3-5a`)
 - Colour: high-contrast, safe for outdoor phone use in daylight
 - Safe areas respected for notches and rounded corners; **resolution-independent** because desktop is
   a target

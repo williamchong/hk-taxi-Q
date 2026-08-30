@@ -6,7 +6,8 @@
    navigate by memory, not by minimap.
 2. **Arcade, not simulation.** Three-minute sessions, instant restart, forgiving collision,
    unrealistic grip. Fun outranks accuracy every time they conflict.
-3. **Readable at a glance.** Played one-handed on a phone, on a bus, in daylight.
+3. **Readable at a glance.** Played with two thumbs on a phone, on a bus, in daylight (`Q97`);
+   one-handed stays the deferred accessibility option (`auto_accelerate`, `P3-5b`).
 
 ## The central design tension
 
@@ -20,9 +21,9 @@ roads, ramps, shortcuts, and forgiving collision.
 
 | Use the real data for | Deliberately diverge on |
 |---|---|
-| Road topology and connectivity | Road **width** — widen ~1.3–1.8× at grade, but **1.0× on structure**: a viaduct is parapet-to-parapet in the real city, and a widened ribbon there hangs over the edge of its own deck |
+| Road topology and connectivity | Road **width** — a minimum drawn width at grade (10.24 m; 12.48 m on ≥70 kph roads — a floor, not a multiplier, since `Q95`), but **authored width on structure**: a viaduct is parapet-to-parapet in the real city, and a widened ribbon there hangs over the edge of its own deck |
 | One-way directions and turn restrictions (for **AI traffic**) | Player rule-breaking — always allowed |
-| Building massing and position | Pedestrian railings — omit or make breakable |
+| Building massing and position | Pedestrian railings — drawn, no collider (`P3-19`); breakaway and collision stay out until `B3` |
 | Landmark placement | Ramps, jumps, shortcuts — hand-added, and sparingly (see below) |
 | Street and place names | Kerb heights — flatten for mountability |
 
@@ -37,7 +38,7 @@ player knows, and every one is a debit against the acceptance test at the bottom
 **So prefer the shortcut that is there over the ramp that is not.** The region already holds the
 vertical beat and the alternate lines in its own geometry — the Canal Road Flyover, the elevated
 Gloucester approach, the plaza gaps, the alley grid. The ramps are real and they are in the source
-data; `P2-7` put the carriageway on them, and `P4-1` is what opens them to driving. **Invent a ramp
+data; `P2-7` put the carriageway on them, and `P4-1` is what opens them to driving — though `P3-9a`'s round found the blocker at grade first: `Q19`'s low structure at carriageway level is what actually stopped the drivers (2026-08-30). **Invent a ramp
 only where a specific stretch is demonstrably dead, and record it as a decision when you do.**
 
 ---
@@ -154,17 +155,30 @@ number both axes now come out of.
 | Collision | Glancing hits deflect; head-on hits cost speed, never control |
 | Recovery | Auto-righting if flipped, within ~1 s |
 | Reverse | Instant, no gear delay |
-| Braking | Strong (~0.8 g) and **as speed-uniform as the engine allows** — Godot's viscous `default_linear_damp` still costs 17% between 65 and 4 km/h, against 36% before `P0-5b/c/d`. Must also out-pull Wan Chai's ramps: `gravity_scale` 1.6 makes a slope pull 60% harder than its angle suggests |
+| Braking | Strong (~0.9 g — 8.75 m/s² since `Q50`) and **as speed-uniform as the engine allows**. ⚠️ The damp/decay figures here were measured on the pre-`Q50` raycast car; post-`Q50` the decay measured 0.100/s, exactly the engine default, and `handling_profile.gd` says to tune against a measurement, never against a number written here. Must also out-pull Wan Chai's ramps: `gravity_scale` 1.6 makes a slope pull 60% harder than its angle suggests |
 | Coasting | Sheds a similar speed per second at 5 km/h as at 50, and **comes to a stop**. One pedal serves brake and reverse, so a driver arriving at walking pace has to lift off — coasting is the only thing that can park the car (`P0-5b/c/d`) |
 
 All values live in `game/tuning/handling.tres`. **Expect to iterate on these more than any other part
 of the project** — vehicle feel is the single biggest determinant of whether this is fun.
 
 Two items were flagged during `P0-5d` and deliberately left for `P2-3`'s tuning pass. Sustained full
-lock still spins the car. The second — `brake_force` giving 3 m/s² of braking against 5.33 m/s² of
-acceleration, so **the car accelerated faster than it stopped** — was ✅ **closed 2026-08-17** at
-`brake_force` 2,400 N: braking is now 8.0 m/s² and the inequality is the right way round
-(`P0-5b/c/d`).
+lock spinning the car was never re-measured after `Q50` replaced the whole grip model — nothing owns
+it; re-grade on `tools/skidpad.sh` before citing it. The second — `brake_force` giving 3 m/s² of
+braking against 5.33 m/s² of acceleration, so **the car accelerated faster than it stopped** — was
+✅ **closed 2026-08-17** at 2,400 N (8.0 m/s²); ⚠️ **`Q50` then changed the unit**: the dial is
+**40** today and does not convert from the newton value it replaced, re-seeded against
+`tools/skidpad.sh` at **8.75 m/s²** (`handling_profile.gd` carries the warning). The inequality
+stays the right way round (`P0-5b/c/d`).
+
+⚠️ **Touch carries three of five actions (`Q97`)**: steer, accelerate, brake/reverse. The drift —
+the subject of the long row above — and `look_back` have no touch home until `P0-3b`'s handset can
+price the gesture; they stay keyboard/gamepad.
+
+✅ **The game now tells you when you are driving against a one-way (`Q81`, `P3-25`)**: a blinking NO
+ENTRY disc, raised by the car's **nose** (the velocity may only withhold it), a 120° bar and dwells
+against false alarms in a region 93.5% one-way by drivable length, blink under the 3 Hz WCAG
+ceiling, proportions the world sign's own. It informs; it does not penalise — the player may still
+break every traffic rule.
 
 ---
 
@@ -175,8 +189,8 @@ Ranked by impact-to-effort. The top four are where the "feels like HK" verdict i
 | Mechanic | Effort | Source |
 |---|---|---|
 | **Bilingual destination callouts** | Trivial | `fares.json` |
-| **Red urban taxi livery** | Trivial | Hand-authored. HK Island = red. Green or blue reads as *wrong* |
-| **Trams as moving walls** | Low | Hand-authored on Hennessy/Johnston. Slow, wide, unpassable |
+| **Red urban taxi livery** | Trivial | ✅ Shipped with `P3-11` — the player taxi is red with a silver roof, `C*` 86.5 in frame. HK Island = red. Green or blue reads as *wrong* |
+| **Trams as moving walls** | Low | The **rails** are published data since `P3-14` (`tram.glb`, on the surveyed positions); only the moving vehicle is outstanding (`P3-4`), and its route is no longer hand-authored |
 | **Bus lanes as penalty zones** | Low | `bus_lane` in `roadgraph.json` |
 | Double-decker buses as sight blockers | Low | Traffic AI vehicle type |
 | Bamboo scaffolding on buildings | Low | Prop instancing |
@@ -188,15 +202,16 @@ Ranked by impact-to-effort. The top four are where the "feels like HK" verdict i
 > way they do in reality, they are instantly recognisable, and they cost far less than modelling
 > another building.
 
-⚠️ **Nothing in the table above is built yet, and neon is the highest-value gap.** **Sleeping Dogs**
+⚠️ **Little in the table above is built yet — the taxi livery shipped and the tram rails are drawn — and neon is the highest-value gap.** **Sleeping Dogs**
 is the nearest commercial precedent for a recognisable Hong Kong, and the common reading of why it
 worked is signage density and overhanging shopfront light rather than street accuracy. Untested here
 — but it names a failure mode `P3-9` should be listened to for, because *"the streets are bare"* and
 *"the streets are wrong"* have completely different fixes.
 
-Cheap when it comes: `ART_DESIGN.md` already reserves the emissive channel for the night variant, and
-the signs are instanced props rather than anything the ETL derives. Not in the slice; first thing to
-reach for once `P3-9` reports.
+Cheap-ish when it comes — but the night variant is blocked on `Q38` (baked exposure) and `Q82`
+refused lit lanterns, so neon would have to be justified in the daylight rig, a separate and
+unpriced call; the signs are instanced props rather than anything the ETL derives. Not in the
+slice; first thing to price once `P3-9` reports.
 
 ---
 
@@ -240,7 +255,7 @@ Fleming / Fenwick (cross-connectors)
 ```
 
 Fast spine plus technical parallel is the contrast arcade driving lives on — and here it already
-exists in the real road layout. **The flyover half of that loop needs `P4-1`** before it is drivable.
+exists in the real road layout. **The flyover half of that loop needs `P4-1`** before it is drivable — and the at-grade half needs `Q19`'s walls cleared, which is the named next task.
 
 **Map edges are diegetic:** Victoria Harbour north, the escarpment toward Kennedy Road south,
 Admiralty west, Victoria Park east. No invisible walls needed.
@@ -273,6 +288,11 @@ If they need the minimap, the geometry is decorative and the pillar has failed. 
 *where* it fails, which side-by-side screenshot comparison never does.
 
 Run it at the end of every phase from Phase 3 onward, with at least three different drivers.
+
+✅ **Round 0 ran 2026-08-30 (`P3-9a`, the no-HUD free-roam variant): three HK drivers recognised
+Wan Chai from geometry alone — recognition met.** The sessions ended on `Q19`'s blocked bridges;
+which driver said what was not captured, and the build cannot be tied to a commit (`P3-9a′`).
+`P3-9` remains the handset test, with different drivers — that cohort has learnt the map.
 
 ---
 
