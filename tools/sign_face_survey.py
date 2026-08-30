@@ -64,7 +64,7 @@ from pipeline.config import (  # noqa: E402
     SIGN_TEXT,
     CityConfig,
     SignFace,
-    load_city,
+    load_config,
 )
 from pipeline.fetch import cached_source  # noqa: E402
 from pipeline.sign_sheets import enclosed_white, ink_masks, load_sheet  # noqa: E402
@@ -318,12 +318,11 @@ def _contact_sheet(cells: list[tuple[str, np.ndarray]], path: Path) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--city", default="hong_kong", help="city id under etl/config/cities")
     parser.add_argument("--sources-root", type=Path, help="override etl/sources")
     parser.add_argument("--contact", type=Path, help="write a contact sheet of every graded cell")
     arguments = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    return report(load_city(arguments.city), root=arguments.sources_root, contact=arguments.contact)
+    return report(load_config(), root=arguments.sources_root, contact=arguments.contact)
 
 
 if __name__ == "__main__":

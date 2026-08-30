@@ -44,7 +44,7 @@ walked across its width — `walk_width`'s duplicated-vertex guard most of all,
 which is a defect anyone reimplementing this would have to rediscover. Same
 argument as `deck_error` exporting its bundle reader to this module.
 
-Run:  .venv/bin/python tools/overhang.py --city hong_kong
+Run:  .venv/bin/python tools/overhang.py
 """
 
 from __future__ import annotations
@@ -74,7 +74,7 @@ from deck_error import (  # noqa: E402
     stations,
     structure_faces,
 )
-from pipeline.config import load_city  # noqa: E402
+from pipeline.config import load_config  # noqa: E402
 
 log = logging.getLogger(__name__)
 
@@ -368,8 +368,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    city = load_city(args.city)
-    manifest, tiles = load_bundle(args.generated, args.lod, args.city)
+    city = load_config()
+    manifest, tiles = load_bundle(args.generated, args.lod)
     log_bundle(manifest, args.lod)
 
     deck, structure_class = structure_faces(city, tiles)

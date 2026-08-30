@@ -1,6 +1,6 @@
 """What the blocked carriageway costs a driver who has to go round it.
 
-    .venv/bin/python tools/reachability.py --city hong_kong --region wan_chai
+    .venv/bin/python tools/reachability.py --region wan_chai
 
 `P3-9a` ended with three HK drivers stopping because the bridges are blocked,
 and `Q19` records the walls they hit. What no record contains is whether those
@@ -75,7 +75,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from carriageway_occupancy import road_names  # noqa: E402
 from pipeline.clearance import CLEARANCE_NAME, CLEARANCE_SCHEMA, NOT_MEASURED  # noqa: E402
-from pipeline.config import FORWARD, CityConfig, load_city  # noqa: E402
+from pipeline.config import FORWARD, CityConfig, load_config  # noqa: E402
 from pipeline.documents import read_document  # noqa: E402
 from pipeline.polyline import plan_lengths  # noqa: E402
 from pipeline.roads import ROADGRAPH_NAME, read_graph  # noqa: E402
@@ -600,7 +600,6 @@ def _ids(text: str) -> set[int]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    parser.add_argument("--city", required=True)
     parser.add_argument("--region", required=True)
     parser.add_argument(
         "--car-width-m",
@@ -630,10 +629,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    city: CityConfig = load_city(args.city)
+    city: CityConfig = load_config()
     region = city.region(args.region)
     out_dir = city.out_dir(args.region)
-    rebuild = f"python -m pipeline --city {city.id} --region {args.region}"
+    rebuild = f"python -m pipeline --region {args.region}"
     graph = read_graph(out_dir / ROADGRAPH_NAME, city.id, args.region)
     clearance = read_document(out_dir / CLEARANCE_NAME, CLEARANCE_SCHEMA, rebuild)
     check_documents(graph, clearance)

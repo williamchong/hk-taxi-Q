@@ -1,6 +1,6 @@
 """The whole pipeline, in order (`P1-6`).
 
-    python -m pipeline --city hong_kong --region wan_chai
+    python -m pipeline --region wan_chai
 
 Runs each stage by calling its own `main`, with the same arguments the
 documented per-stage command would pass. That is deliberate rather than
@@ -131,7 +131,6 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m pipeline", description=(__doc__ or "").splitlines()[0]
     )
-    parser.add_argument("--city", required=True)
     parser.add_argument("--region", required=True)
     parser.add_argument(
         "--from",
@@ -159,7 +158,7 @@ def main(argv: list[str] | None = None) -> int:
 
     started = time.perf_counter()
     for position, name in enumerate(names, start=1):
-        stage_argv = ["--city", args.city, "--region", args.region]
+        stage_argv = ["--region", args.region]
         if name == "fetch" and args.force:
             stage_argv.append("--force")
 
@@ -176,7 +175,7 @@ def main(argv: list[str] | None = None) -> int:
         log.info("   %s took %.1fs", name, time.perf_counter() - began)
 
     log.info("")
-    log.info("%s / %s complete in %.1fs", args.city, args.region, time.perf_counter() - started)
+    log.info("%s complete in %.1fs", args.region, time.perf_counter() - started)
     return 0
 
 

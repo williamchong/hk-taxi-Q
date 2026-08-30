@@ -30,7 +30,7 @@ government servers and caches it in `etl/sources/`; after that the whole region 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -e "etl/[dev]"
 
-cd etl && ../.venv/bin/python -m pipeline --city hong_kong --region wan_chai && cd ..
+cd etl && ../.venv/bin/python -m pipeline --region wan_chai && cd ..
 tools/sync_generated.sh
 ```
 

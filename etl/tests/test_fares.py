@@ -20,7 +20,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from pipeline.config import load_city
+from pipeline.config import load_config
 from pipeline.crs import transformer
 from pipeline.fares import FARES_NAME, FARES_SCHEMA, build_region
 from pipeline.polyline import Segments
@@ -163,7 +163,7 @@ class _Testville:
         The path has to match `fetch.source_artefact`'s layout, so it is built
         once here rather than at each call site.
         """
-        directory = self.sources / self.city.id / source_id
+        directory = self.sources / source_id
         directory.mkdir(parents=True, exist_ok=True)
         (directory / f"{source_id}.geojson").write_text(body, encoding="utf-8")
 
@@ -186,7 +186,7 @@ def testville(tmp_path):
     cities = tmp_path / "cities"
     cities.mkdir()
     (cities / "testville.yaml").write_text(CITY_YAML, encoding="utf-8")
-    city = load_city("testville", cities_root=cities)
+    city = load_config(cities / "testville.yaml")
 
     out_root = tmp_path / "out"
     out_dir = city.out_dir(REGION, out_root)
@@ -195,7 +195,7 @@ def testville(tmp_path):
         json.dumps(
             {
                 "schema_version": ROADGRAPH_SCHEMA,
-                "city_id": "testville",
+                "city_id": "hong_kong",
                 "region_id": REGION,
                 "nodes": [
                     {"id": 0, "pos": [100.0, 0.0, 300.0], "kind": "endpoint"},
@@ -324,7 +324,7 @@ class TestBuildRegion:
         document = _written(testville.out_dir)
 
         assert document["schema_version"] == FARES_SCHEMA
-        assert document["city_id"] == "testville"
+        assert document["city_id"] == "hong_kong"
         assert document["region_id"] == REGION
 
     def test_every_node_resolves_to_an_edge(self, testville) -> None:

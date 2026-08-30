@@ -1,6 +1,6 @@
 """Build the mesh-sourced hero landmarks: extract, slice, repaint, emit (`P3-6`).
 
-    python -m pipeline.landmarks --city hong_kong --region wan_chai
+    python -m pipeline.landmarks --region wan_chai
 
 A landmark with `source_paint` in the city config ships the building's own
 source mesh rather than an authored model: the P3-6 review rounds converged the
@@ -36,7 +36,7 @@ import numpy as np
 
 from pipeline.buildings import COLLISION_SUFFIX, Placement, resolver, stem
 from pipeline.colour import LUMA, srgb_to_linear
-from pipeline.config import CityConfig, Landmark, SourcePaint, load_city
+from pipeline.config import CityConfig, Landmark, SourcePaint, load_config
 from pipeline.crs import GameTransform
 from pipeline.documents import write_document
 from pipeline.fetch import source_dir
@@ -129,7 +129,7 @@ def build_assets(
 
         reference = None
         if spec.reference_texture:
-            directory = source_dir(city.id, INDIVIDUALISED_SOURCE_ID, root=sources_root)
+            directory = source_dir(INDIVIDUALISED_SOURCE_ID, root=sources_root)
             reference = _load_reference(directory, matched_sheets, stems, pieces, local)
             tagged, cursor = [], 0
             for piece in pieces:
@@ -636,13 +636,12 @@ def paint(mesh: MeshData, spec: SourcePaint, reference: Reference | None = None)
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    parser.add_argument("--city", required=True)
     parser.add_argument("--region", required=True)
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    city = load_city(args.city)
+    city = load_config()
     region = city.region(args.region)
     log.info("%s / %s", city.name, region.name)
 

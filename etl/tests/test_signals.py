@@ -18,7 +18,7 @@ import numpy as np
 import pytest
 import yaml
 
-from pipeline.config import load_city
+from pipeline.config import load_config
 from pipeline.railings import facing_away
 from pipeline.signals import (
     SIGNALS_MATERIAL,
@@ -76,7 +76,7 @@ def city_with(tmp_path, block: dict[str, Any] | None):
     cities = tmp_path / "cities"
     cities.mkdir(exist_ok=True)
     (cities / "testville.yaml").write_text(yaml.safe_dump(document), encoding="utf-8")
-    return load_city("testville", cities_root=cities)
+    return load_config(cities / "testville.yaml")
 
 
 @pytest.fixture

@@ -52,10 +52,10 @@ restriction register — and those two are as unrelated as they ever were. A
 source being unread was never the property this rested on.
 
 Fetch the source once:
-  .venv/bin/python -m pipeline.fetch --city hong_kong --region wan_chai \
+  .venv/bin/python -m pipeline.fetch --region wan_chai \
       --only traffic_aids_drawings_gdb
 
-Run:  .venv/bin/python tools/kerbside_source_audit.py --city hong_kong --region wan_chai
+Run:  .venv/bin/python tools/kerbside_source_audit.py --region wan_chai
 """
 
 from __future__ import annotations
@@ -75,7 +75,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from carriageway_occupancy import road_names  # noqa: E402
 from pipeline import gdb, kerbside  # noqa: E402
-from pipeline.config import CityConfig, KerbsideAudit, SourceLayer, load_city  # noqa: E402
+from pipeline.config import CityConfig, KerbsideAudit, SourceLayer, load_config  # noqa: E402
 from pipeline.fetch import cached_source  # noqa: E402
 from pipeline.roads import ROADGRAPH_NAME, read_graph  # noqa: E402
 
@@ -364,13 +364,12 @@ def render(report: Report, sample_m: float) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--city", required=True)
     parser.add_argument("--region", required=True)
     parser.add_argument("--sources-root", type=Path, help="override etl/sources")
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    city = load_city(args.city)
+    city = load_config()
     report = audit(city, args.region, sources_root=args.sources_root)
     assert city.roads.kerbside is not None  # audit() exits without one
     print(render(report, city.roads.kerbside.sample_m))

@@ -62,7 +62,7 @@ against it would report the height of every bridge as a burial. It is the one
 form `ground_clearance.py`'s "level 0 only" can take on a layer that publishes no
 level.
 
-Run:  .venv/bin/python tools/paint_clearance.py --city hong_kong
+Run:  .venv/bin/python tools/paint_clearance.py
 """
 
 from __future__ import annotations
@@ -457,7 +457,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    manifest, _ = load_bundle(args.generated, args.lod, args.city)
+    manifest, _ = load_bundle(args.generated, args.lod)
     log_bundle(manifest, args.lod)
     road = drawn_surface(args.generated, manifest)
     log.info("  %d near-horizontal faces in %s", len(road.corners), manifest["road_surface"])

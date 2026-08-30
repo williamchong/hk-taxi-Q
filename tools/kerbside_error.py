@@ -40,7 +40,7 @@ verbatim, so they are the same bytes — but `roadsurface.json` carries the
 junction trims and does not ship, and without those a published run cannot be
 converted into the V the ribbon is actually drawn at.
 
-Run:  .venv/bin/python tools/kerbside_error.py --city hong_kong --region wan_chai
+Run:  .venv/bin/python tools/kerbside_error.py --region wan_chai
 """
 
 from __future__ import annotations
@@ -60,7 +60,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from carriageway_occupancy import road_names  # noqa: E402
 from pipeline import kerbside  # noqa: E402
-from pipeline.config import load_city  # noqa: E402
+from pipeline.config import load_config  # noqa: E402
 from pipeline.documents import read_document  # noqa: E402
 from pipeline.fares import FARES_NAME, FARES_SCHEMA  # noqa: E402
 from pipeline.gltf import MeshData, read_glb  # noqa: E402
@@ -556,7 +556,6 @@ def tuning_from(path: Path) -> dict[str, float]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    parser.add_argument("--city", required=True)
     parser.add_argument("--region", required=True)
     parser.add_argument(
         "--out-root",
@@ -575,9 +574,9 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     tuning = tuning_from(args.tuning)
-    city = load_city(args.city)
+    city = load_config()
     out_dir = city.out_dir(args.region, args.out_root)
-    rebuild = f"python -m pipeline --city {city.id} --region {args.region}"
+    rebuild = f"python -m pipeline --region {args.region}"
     graph = read_graph(out_dir / ROADGRAPH_NAME, city.id, args.region)
     surface = read_document(out_dir / SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, rebuild)
     fares = read_document(out_dir / FARES_NAME, FARES_SCHEMA, rebuild)

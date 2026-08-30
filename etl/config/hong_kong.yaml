@@ -1,11 +1,12 @@
-# Hong Kong — every city specific the pipeline is allowed to know.
+# Hong Kong — every tuning value and publisher vocabulary the pipeline reads.
 #
-# Nothing in etl/pipeline/ may hardcode any value from this file (CLAUDE.md hard
-# rule 3). Facts here are verified in docs/DATA_SOURCES.md; correct them there
-# first if one turns out to be wrong.
-schema_version: 3
-id: hong_kong
-name: Hong Kong
+# This file and `pipeline/hongkong.py` are the two homes a Hong Kong fact may
+# have, and a value lives in exactly one of them (CLAUDE.md hard rule 3, `Q100`):
+# what could be tuned or is a publisher's vocabulary is here; what *is* the city
+# — the CRS pair, which side it drives on, the branch sign codes — is there.
+# Facts here are verified in docs/DATA_SOURCES.md; correct them there first if
+# one turns out to be wrong.
+schema_version: 4
 
 # The palette rule (`Q33`). **Every authored colour in this file is a real
 # material's diffuse albedo multiplied by this one number**, and `config.py`'s
@@ -293,23 +294,6 @@ materials:
     reflectance: 28.0
     source: "weathered hot-dip galvanised steel; fresh is 50-60% and dulls to 25-35%"
 
-crs:
-  # Every source dataset is published in the HK1980 Grid System — a Transverse
-  # Mercator projection in metres. All pipeline geometry stays in it until the
-  # final conversion to game space.
-  projected: EPSG:2326
-
-  # The datum the region bounds below are expressed in. This MUST be stated,
-  # never assumed.
-  #
-  # HK1980 and WGS84 differ by ~304 m on the ground in Hong Kong — measurably,
-  # not theoretically: the grid's own natural origin sits at 114-10-42.80 E,
-  # 22-18-43.68 N *on HK1980*, and feeding those same digits in as WGS84 lands
-  # 304 m away. That is a fifth of the width of the Wan Chai region.
-  #
-  # The bounds below were read off a consumer web map, which serves WGS84.
-  geodetic: EPSG:4326
-
 # Road Network v2 carries no Z ordinate. Its ELEVATION attribute is an ordinal
 # grade-separation level — the GIS equivalent of OSM's `layer` tag — so deck
 # heights are ours to author.
@@ -492,7 +476,7 @@ tiled_sources:
 # the Hongkong Post root already in the default store, so verification is
 # completed, never relaxed.
 extra_cas:
-  - ../certs/hongkong_post_ecert_ssl_ca_3-17.pem
+  - certs/hongkong_post_ecert_ssl_ca_3-17.pem
 
 # How P1-2 turns the source massing into vertex-coloured tiles. Every number
 # here is art direction, not pipeline logic — see docs/ART_DESIGN.md, which is

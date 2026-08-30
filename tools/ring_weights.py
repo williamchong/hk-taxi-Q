@@ -53,7 +53,7 @@ from pipeline.config import (  # noqa: E402
     CityConfig,
     MaterialAssignment,
     WeightedDraw,
-    load_city,
+    load_config,
 )
 from pipeline.fetch import source_dir  # noqa: E402
 
@@ -184,7 +184,7 @@ def heights(city: CityConfig, *, root: Path | None = None) -> dict[str, float]:
     style = city.buildings
     if style.facade_hue_source is None:
         return {}
-    path = source_dir(city.id, HUE_SOURCE_ID, root=root) / style.facade_hue_source
+    path = source_dir(HUE_SOURCE_ID, root=root) / style.facade_hue_source
     table = json.loads(path.read_text())
     return {stem: float(row["height_m"]) for stem, row in table.items()}
 
@@ -197,7 +197,7 @@ def population(city: CityConfig, *, root: Path | None = None) -> list[tuple[floa
     height is read separately, because that function returns hue and nothing else.
     """
     style = city.buildings
-    hues = facade_hue(style, city.id, root=root)
+    hues = facade_hue(style, root=root)
     if not hues:
         return []
     height = heights(city, root=root)
@@ -277,15 +277,14 @@ def report(city: CityConfig, rows: list[tuple[float, float, float]]) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--city", default="hong_kong", help="city id under etl/config/cities")
     parser.add_argument("--sources-root", type=Path, help="override etl/sources")
     arguments = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    city = load_city(arguments.city)
+    city = load_config()
     rows = population(city, root=arguments.sources_root)
     if not rows:
-        log.error("no facade survey for %s — there is nothing to derive against", arguments.city)
+        log.error("no facade survey — there is nothing to derive against")
         return 1
     log.info("")
     log.info("  %d surveyed buildings after the vegetation filter", len(rows))

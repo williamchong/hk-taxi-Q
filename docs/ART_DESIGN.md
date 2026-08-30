@@ -195,7 +195,7 @@ table, and the palette table should then be rewritten to describe the city that 
 - Flat/faceted shading, hard normals
 - Subtle per-building colour jitter so blocks don't read as uniform
 
-**The palette lives in `etl/config/cities/hong_kong.yaml` under the top-level `materials:` table**,
+**The palette lives in `etl/config/hong_kong.yaml` under the top-level `materials:` table**,
 not in code, and `buildings:` says which building gets which — a measured-hue draw where the survey
 has a row, and otherwise a five-step lightness ramp running warm beige for the low stock up to cool
 pale grey for commercial towers. `INFRASTRUCTURE` and the ground take flat materials that override
@@ -480,7 +480,7 @@ textures and joined to the massing by the building id's stem. 2,214 buildings, 1
 costs the runtime nothing: it lands in the `COLOR_0` the tiles already shipped, so there is no new
 attribute, no schema change, no shader change and no interaction with the LOD clustering. Where an
 atlas is unreadable a building falls back to its height band — and so does its *material*, which is
-the same contract stated once (`Q34`). `etl/config/cities/hong_kong.yaml` holds the switch;
+the same contract stated once (`Q34`). `etl/config/hong_kong.yaml` holds the switch;
 `etl/pipeline/colour.py` holds the conversion and the reasoning.
 
 ⚠️ **Hue is taken and lightness is refused, and that is a measurement rather than a preference.**

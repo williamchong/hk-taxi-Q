@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from pipeline.config import load_city
+from pipeline.config import load_config
 from tests.helpers import CITY_YAML, NULL_SENTINELS, line_wkb, write_layer
 
 
@@ -21,7 +21,7 @@ def hong_kong():
     The real one rather than a stub on purpose: a stub would drift out of step
     with the schema and keep passing while the shipped config broke.
     """
-    return load_city("hong_kong")
+    return load_config()
 
 
 @pytest.fixture
@@ -50,7 +50,7 @@ def testville_config(tmp_path):
     cities = tmp_path / "cities"
     cities.mkdir()
     (cities / "testville.yaml").write_text(CITY_YAML, encoding="utf-8")
-    return load_city("testville", cities_root=cities)
+    return load_config(cities / "testville.yaml")
 
 
 @pytest.fixture
@@ -75,7 +75,7 @@ def testville(tmp_path, testville_config):
         easting, northing, _ = transform.to_source(x, 0.0, z)
         return (easting, northing)
 
-    gpkg = tmp_path / "sources" / "testville" / "roads" / "roads.gpkg"
+    gpkg = tmp_path / "sources" / "roads" / "roads.gpkg"
     gpkg.parent.mkdir(parents=True)
 
     write_layer(

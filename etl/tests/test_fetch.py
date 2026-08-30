@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 
 from pipeline import fetch
-from pipeline.config import CITIES_ROOT, TiledSource, load_city
+from pipeline.config import TiledSource, load_config
 from pipeline.crs import GeodeticBounds
 
 # Wan Chai, per docs/DATA_SOURCES.md. Stated here rather than read from the
@@ -274,7 +274,7 @@ def offline(monkeypatch, tmp_path: Path):
 
 @pytest.fixture
 def city():
-    return load_city("hong_kong", cities_root=CITIES_ROOT)
+    return load_config()
 
 
 class TestFetchCity:
@@ -283,9 +283,9 @@ class TestFetchCity:
 
     def test_first_run_fetches_roads_index_and_selected_sheets(self, city, offline, tmp_path):
         report = fetch_once(city, tmp_path)
-        assert "hong_kong/buildings/OVERLAP" in report.downloaded
-        assert "hong_kong/buildings/DISTANT" not in report.downloaded
-        assert "hong_kong/road_network_gdb" in report.downloaded
+        assert "buildings/OVERLAP" in report.downloaded
+        assert "buildings/DISTANT" not in report.downloaded
+        assert "road_network_gdb" in report.downloaded
         assert not report.cached
 
     def test_second_run_downloads_nothing(self, city, offline, tmp_path):
@@ -308,18 +308,18 @@ class TestFetchCity:
         """
         fetch_once(city, tmp_path)
         report = fetch_once(city, tmp_path, force=True)
-        assert "hong_kong/road_network_gdb" in report.downloaded
-        assert "hong_kong/buildings/OVERLAP" in report.cached
+        assert "road_network_gdb" in report.downloaded
+        assert "buildings/OVERLAP" in report.cached
 
     def test_force_repulls_a_sheet_whose_revision_moved(self, city, offline, tmp_path):
         fetch_once(city, tmp_path)
         manifest_path = tmp_path / fetch.MANIFEST_NAME
         manifest = json.loads(manifest_path.read_text())
-        manifest["hong_kong/buildings/OVERLAP"]["version"] = "20200101"
+        manifest["buildings/OVERLAP"]["version"] = "20200101"
         manifest_path.write_text(json.dumps(manifest))
 
         report = fetch_once(city, tmp_path, force=True)
-        assert "hong_kong/buildings/OVERLAP" in report.downloaded
+        assert "buildings/OVERLAP" in report.downloaded
 
     def test_artefact_of_the_wrong_size_is_refetched(self, city, offline, tmp_path):
         """A file whose size disagrees with the manifest is not a cache hit.
@@ -329,8 +329,8 @@ class TestFetchCity:
         enforced before the file is committed rather than detected afterwards.
         """
         fetch_once(city, tmp_path)
-        (tmp_path / "hong_kong" / "road_data_dictionary" / "rdnet_dataspec.zip").write_bytes(b"cut")
-        assert "hong_kong/road_data_dictionary" in fetch_once(city, tmp_path).downloaded
+        (tmp_path / "road_data_dictionary" / "rdnet_dataspec.zip").write_bytes(b"cut")
+        assert "road_data_dictionary" in fetch_once(city, tmp_path).downloaded
 
     def test_a_failure_partway_through_keeps_what_already_succeeded(
         self, city, monkeypatch, tmp_path
@@ -363,7 +363,7 @@ class TestFetchCity:
         manifest = json.loads((tmp_path / fetch.MANIFEST_NAME).read_text())
         assert ok, "expected some artefacts to have downloaded before the failure"
         assert len(manifest) == len(ok)
-        assert "hong_kong/road_network_gdb" not in manifest
+        assert "road_network_gdb" not in manifest
 
     def test_new_revision_invalidates_one_sheet(self, city, offline, tmp_path):
         """REVISIONDATE is per sheet, so a republished sheet must not drag its
@@ -371,15 +371,15 @@ class TestFetchCity:
         fetch_once(city, tmp_path)
         manifest_path = tmp_path / fetch.MANIFEST_NAME
         manifest = json.loads(manifest_path.read_text())
-        manifest["hong_kong/buildings/OVERLAP"]["version"] = "20200101"
+        manifest["buildings/OVERLAP"]["version"] = "20200101"
         manifest_path.write_text(json.dumps(manifest))
 
         report = fetch_once(city, tmp_path)
-        assert report.downloaded == ["hong_kong/buildings/OVERLAP"]
+        assert report.downloaded == ["buildings/OVERLAP"]
 
     def test_only_limits_the_fetch(self, city, offline, tmp_path):
         report = fetch_once(city, tmp_path, only={"road_data_dictionary"})
-        assert report.downloaded == ["hong_kong/road_data_dictionary"]
+        assert report.downloaded == ["road_data_dictionary"]
 
     def test_unknown_only_name_is_rejected(self, city, offline, tmp_path):
         """Silently fetching nothing looks identical to a fully cached run."""
@@ -397,23 +397,23 @@ class TestDryRun:
         there are no tile names to report."""
         report = fetch_once(city, tmp_path, dry_run=True)
 
-        assert (tmp_path / "hong_kong" / "buildings" / "index.geojson").exists()
-        assert not (tmp_path / "hong_kong" / "buildings" / "OVERLAP.zip").exists()
-        assert not (tmp_path / "hong_kong" / "road_network_gdb").exists()
-        assert "hong_kong/buildings/OVERLAP" in report.downloaded
+        assert (tmp_path / "buildings" / "index.geojson").exists()
+        assert not (tmp_path / "buildings" / "OVERLAP.zip").exists()
+        assert not (tmp_path / "road_network_gdb").exists()
+        assert "buildings/OVERLAP" in report.downloaded
 
     def test_reports_the_index_as_fetched_not_as_hypothetical(self, city, offline, tmp_path):
         """It really did touch the disk; saying otherwise would be a lie."""
         report = fetch_once(city, tmp_path, dry_run=True)
-        assert report.indexes == ["hong_kong/buildings/index", "hong_kong/topography/index"]
-        assert "hong_kong/buildings/index" not in report.downloaded
+        assert report.indexes == ["buildings/index", "topography/index"]
+        assert "buildings/index" not in report.downloaded
 
     def test_a_later_real_run_reuses_the_index(self, city, offline, tmp_path):
         fetch_once(city, tmp_path, dry_run=True)
         offline.clear()
         report = fetch_once(city, tmp_path)
         assert not report.indexes
-        assert "hong_kong/buildings/index" in report.cached
+        assert "buildings/index" in report.cached
 
 
 class TestBadIndex:
@@ -445,8 +445,8 @@ class TestBadIndex:
             fetch_once(city, tmp_path)
 
         manifest = json.loads((tmp_path / fetch.MANIFEST_NAME).read_text())
-        assert "hong_kong/buildings/index" not in manifest
-        assert not (tmp_path / "hong_kong" / "buildings" / "index.geojson").exists()
+        assert "buildings/index" not in manifest
+        assert not (tmp_path / "buildings" / "index.geojson").exists()
 
     def test_unparseable_index_names_the_source(self, city, serving, tmp_path):
         serving(b"<html>503 Service Unavailable</html>")
@@ -466,7 +466,7 @@ def fetch_once(city, root: Path, **kwargs):
 
 
 @pytest.mark.skipif(
-    not (fetch.source_dir("hong_kong", "buildings") / fetch.INDEX_NAME).exists(),
+    not (fetch.source_dir("buildings") / fetch.INDEX_NAME).exists(),
     reason="requires a fetched sheet index",
 )
 def test_real_index_selects_the_six_documented_sheets(hong_kong) -> None:

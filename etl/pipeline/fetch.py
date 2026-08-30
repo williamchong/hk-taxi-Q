@@ -39,7 +39,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
-from pipeline.config import CityConfig, PagedSource, RegionConfig, TiledSource, load_city
+from pipeline.config import CityConfig, PagedSource, RegionConfig, TiledSource, load_config
 from pipeline.crs import GeodeticBounds, reproject_bounds
 
 log = logging.getLogger(__name__)
@@ -284,19 +284,19 @@ def select_tiles(
     return sorted(selected, key=lambda artefact: artefact.key)
 
 
-def source_dir(city_id: str, source_id: str, *, root: Path | None = None) -> Path:
+def source_dir(source_id: str, *, root: Path | None = None) -> Path:
     """Where a source's fetched artefacts live."""
-    return (root or SOURCES_ROOT) / city_id / source_id
+    return (root or SOURCES_ROOT) / source_id
 
 
-def artefact_path(city_id: str, artefact: Artefact, *, root: Path | None = None) -> Path:
+def artefact_path(artefact: Artefact, *, root: Path | None = None) -> Path:
     """Where one fetched artefact lives.
 
     The single definition of the sources-tree layout. Later stages resolve
-    through this rather than rebuilding `<root>/<city>/<path>` themselves, so
+    through this rather than rebuilding `<root>/<path>` themselves, so
     moving the tree is one edit.
     """
-    return (root or SOURCES_ROOT) / city_id / artefact.path
+    return (root or SOURCES_ROOT) / artefact.path
 
 
 def source_artefact(source_id: str, url: str) -> Artefact:
@@ -342,11 +342,11 @@ def cached_source(city: CityConfig, source_id: str, *, root: Path | None = None)
         known = ", ".join(sorted({*city.sources, *city.paged_sources})) or "none"
         raise KeyError(f"city '{city.id}' has no source '{source_id}'. Known: {known}")
 
-    path = artefact_path(city.id, artefact, root=root)
+    path = artefact_path(artefact, root=root)
     if not path.exists():
         raise FileNotFoundError(
             f"'{source_id}' has not been fetched to {path}. "
-            f"Run: python -m pipeline.fetch --city {city.id} --region <region> --only {source_id}"
+            f"Run: python -m pipeline.fetch --region <region> --only {source_id}"
         )
     return path
 
@@ -364,11 +364,11 @@ def cached_tiles(
     either re-deriving the selection rule or hardcoding sheet numbers — the
     thing `P0-1` explicitly warned against. Offline: the index is already local.
     """
-    index_path = source_dir(city.id, source.id, root=root) / INDEX_NAME
+    index_path = source_dir(source.id, root=root) / INDEX_NAME
     if not index_path.exists():
         raise FileNotFoundError(
             f"no index for '{source.id}' at {index_path}. "
-            f"Run: python -m pipeline.fetch --city {city.id} --region {region.id}"
+            f"Run: python -m pipeline.fetch --region {region.id}"
         )
     index = read_feature_collection(index_path, f"tiled source {source.id!r} index")
     return select_tiles(index, source, region_bounds=region.bounds, region_crs=city.geodetic_crs)
@@ -418,8 +418,7 @@ def source_reads(
     sheets = cached_tiles(city, region, city.tiled_sources[spec.source], root=root)
     member = spec.member or ""
     return [
-        (artefact_path(city.id, sheet, root=root), member.format(tile=sheet.tile_id))
-        for sheet in sheets
+        (artefact_path(sheet, root=root), member.format(tile=sheet.tile_id)) for sheet in sheets
     ]
 
 
@@ -637,7 +636,7 @@ def fetch_city(
     only: set[str] | None = None,
     dry_run: bool = False,
 ) -> FetchReport:
-    """Fetch every source the region needs into `<root>/<city id>/`."""
+    """Fetch every source the region needs into `<root>/`."""
     root = root or SOURCES_ROOT
     region = city.region(region_id)
     if only is not None:
@@ -715,13 +714,13 @@ def _tiles_for(
         index_artefact, city, root, manifest, report, force=force, dry_run=False, context=context
     )
 
-    index_path = artefact_path(city.id, index_artefact, root=root)
+    index_path = artefact_path(index_artefact, root=root)
     try:
         index = read_feature_collection(index_path, f"tiled source {source.id!r} index")
     except ValueError:
         # Evict it, or the bad index is a cache hit that fails identically on
         # every future run and `--force` becomes the only way out.
-        manifest.pop(f"{city.id}/{index_artefact.key}", None)
+        manifest.pop(index_artefact.key, None)
         index_path.unlink(missing_ok=True)
         raise
 
@@ -907,8 +906,8 @@ def _process(
     dry_run: bool,
     context: ssl.SSLContext | None,
 ) -> None:
-    manifest_key = f"{city.id}/{artefact.key}"
-    destination = artefact_path(city.id, artefact, root=root)
+    manifest_key = artefact.key
+    destination = artefact_path(artefact, root=root)
 
     # `--force` overrides fetch-once, not the publisher's own version stamp.
     # A versioned artefact still consults its stamp, so re-snapshotting six
@@ -953,7 +952,6 @@ def _process(
 def main(argv: list[str] | None = None) -> int:
     # `__doc__` is None under `python -OO`.
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    parser.add_argument("--city", required=True)
     parser.add_argument("--region", required=True)
     parser.add_argument(
         "--only",
@@ -978,7 +976,7 @@ def main(argv: list[str] | None = None) -> int:
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    city = load_city(args.city)
+    city = load_config()
     log.info("%s / %s", city.name, city.region(args.region).name)
     report = fetch_city(
         city,

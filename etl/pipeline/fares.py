@@ -37,7 +37,7 @@ Four measurements off the two sources decide the shape of this — see
   and 4 of the region's 15. Carried as `pickup`/`dropoff` rather than flattened.
 
 Nothing here knows a Hong Kong fact: dataset URLs, property names, category
-spellings and the snap limit all arrive from `config/cities/*.yaml`.
+spellings and the snap limit all arrive from `config/hong_kong.yaml`.
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from pipeline.config import TAXI_STAND, CityConfig, FareCategory, FareGroup, load_city
+from pipeline.config import TAXI_STAND, CityConfig, FareCategory, FareGroup, load_config
 from pipeline.crs import transformer
 from pipeline.documents import round_position, write_document
 from pipeline.fetch import cached_source, read_feature_collection
@@ -320,13 +320,12 @@ def _write(out_dir: Path, city: CityConfig, region_id: str, report: FareReport) 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    parser.add_argument("--city", required=True)
     parser.add_argument("--region", required=True)
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    city = load_city(args.city)
+    city = load_config()
     region = city.region(args.region)
     log.info("%s / %s", city.name, region.name)
 

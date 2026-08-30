@@ -39,7 +39,7 @@ one height, its own `y`, used *only* to decide which of several overlapping
 drawn surfaces belongs to an edge. It never scores one. `elevated_samples`
 argues that in full, because it is the seam where a defect could hide.
 
-Run:  .venv/bin/python tools/deck_error.py --city hong_kong
+Run:  .venv/bin/python tools/deck_error.py
 """
 
 from __future__ import annotations
@@ -59,7 +59,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "etl"))
 
-from pipeline.config import load_city  # noqa: E402
+from pipeline.config import load_config  # noqa: E402
 from pipeline.export import CITY_SCHEMA  # noqa: E402
 from pipeline.gltf import read_glb  # noqa: E402
 
@@ -235,7 +235,6 @@ def wears(colours: np.ndarray, base: tuple[int, int, int], jitter: float) -> np.
 def bundle_arguments() -> argparse.ArgumentParser:
     """The arguments every bundle-grading tool needs, as an argparse parent."""
     parent = argparse.ArgumentParser(add_help=False)
-    parent.add_argument("--city", required=True)
     parent.add_argument(
         "--generated",
         type=Path,
@@ -261,14 +260,14 @@ def bundle_arguments() -> argparse.ArgumentParser:
     return parent
 
 
-def load_bundle(generated: Path, lod: int, city_id: str) -> tuple[dict[str, Any], list[Path]]:
+def load_bundle(generated: Path, lod: int) -> tuple[dict[str, Any], list[Path]]:
     """The manifest and the tile paths for one tier, or a named exit."""
     try:
         manifest = json.loads((generated / "city.json").read_text())
     except FileNotFoundError:
         raise SystemExit(
             f"no city.json under {generated}. Build the region first:\n"
-            f"  cd etl && python -m pipeline --city {city_id} --region <region>"
+            f"  cd etl && python -m pipeline --region <region>"
         ) from None
 
     # Grading a stale bundle silently is the class of wrong answer the version
@@ -569,8 +568,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    city = load_city(args.city)
-    manifest, tiles = load_bundle(args.generated, args.lod, args.city)
+    city = load_config()
+    manifest, tiles = load_bundle(args.generated, args.lod)
     log_bundle(manifest, args.lod)
 
     deck, structure_class = structure_faces(city, tiles)

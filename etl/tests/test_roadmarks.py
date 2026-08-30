@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 import yaml
 
-from pipeline.config import RoadMark, load_city
+from pipeline.config import RoadMark, load_config
 from pipeline.polyline import Segments
 from pipeline.roadmarks import (
     ROADMARKS_MATERIAL,
@@ -82,7 +82,7 @@ def city_with(tmp_path, block: dict[str, Any] | None):
     cities = tmp_path / "cities"
     cities.mkdir(exist_ok=True)
     (cities / "testville.yaml").write_text(yaml.safe_dump(document), encoding="utf-8")
-    return load_city("testville", cities_root=cities)
+    return load_config(cities / "testville.yaml")
 
 
 @pytest.fixture

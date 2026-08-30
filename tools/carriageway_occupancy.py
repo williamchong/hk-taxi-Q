@@ -76,7 +76,7 @@ Nothing here is shared with the code it grades — same argument as
 tiles**, found by vertex colour, and the road from the **shipped `roads.glb`**
 rather than from the graph the ETL wrote.
 
-Run:  .venv/bin/python tools/carriageway_occupancy.py --city hong_kong
+Run:  .venv/bin/python tools/carriageway_occupancy.py
 
 ⚠️ **`--corridor-report` is where `Q19`'s argument now lives.** The listing above
 says which edges fail and what is standing in them; the report says what the
@@ -125,7 +125,7 @@ from deck_error import (  # noqa: E402
     wears,
 )
 from overhang import cross_section, half_width_at, half_widths, left_of, walk_width  # noqa: E402
-from pipeline.config import CityConfig, load_city  # noqa: E402
+from pipeline.config import CityConfig, load_config  # noqa: E402
 from pipeline.gltf import read_glb  # noqa: E402
 
 log = logging.getLogger(__name__)
@@ -986,8 +986,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    city = load_city(args.city)
-    manifest, tiles = load_bundle(args.generated, args.lod, args.city)
+    city = load_config()
+    manifest, tiles = load_bundle(args.generated, args.lod)
 
     # ⚠️ Named by the config, never guessed from `class_materials`' iteration
     # order. `terrain_class` is a **required** field (`pipeline/config.py`) and
@@ -997,7 +997,7 @@ def main(argv: list[str] | None = None) -> int:
     ground_class = city.buildings.terrain_class
 
     log_bundle(manifest, args.lod)
-    log.info("carriageway occupancy, %s, lod %d", args.city, args.lod)
+    log.info("carriageway occupancy, lod %d", args.lod)
     log.info(
         "  occupied means class surface %.2f-%.2f m above the drawn road, "
         "binned in %.2f m plan cells",

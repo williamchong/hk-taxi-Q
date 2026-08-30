@@ -166,7 +166,7 @@ class Fixture(NamedTuple):
 def _write_sources(tmp_path: Path, hong_kong):
     """A sources tree holding one synthetic sheet and an index that selects it."""
     root = tmp_path / "sources"
-    directory = root / hong_kong.id / SOURCE_ID
+    directory = root / SOURCE_ID
     directory.mkdir(parents=True)
 
     region = hong_kong.region("wan_chai")
@@ -664,8 +664,8 @@ class TestFacadeUv:
             assert colour[0][3] == 255
 
 
-def write_survey_table(root: Path, city: str, source_id: str, name: str, table: dict) -> None:
-    directory = root / city / source_id
+def write_survey_table(root: Path, source_id: str, name: str, table: dict) -> None:
+    directory = root / source_id
     directory.mkdir(parents=True, exist_ok=True)
     (directory / name).write_text(json.dumps(table))
 
@@ -746,12 +746,12 @@ class TestFacadeUv2:
         )
 
     def write_table(self, root: Path, source_id: str, name: str, table: dict) -> None:
-        write_survey_table(root, "testcity", source_id, name, table)
+        write_survey_table(root, source_id, name, table)
 
     def test_loaders_hold_the_missing_is_normal_contract(self, tmp_path: Path) -> None:
-        assert facade_survey_verdicts(self.survey_style(), "testcity", root=tmp_path) == {}
-        assert facade_glass_tint(self.survey_style(), "testcity", root=tmp_path) == {}
-        assert facade_survey_verdicts(style(), "testcity", root=tmp_path) == {}
+        assert facade_survey_verdicts(self.survey_style(), root=tmp_path) == {}
+        assert facade_glass_tint(self.survey_style(), root=tmp_path) == {}
+        assert facade_survey_verdicts(style(), root=tmp_path) == {}
 
     def test_loaders_refuse_malformed_tables_loudly(self, tmp_path: Path) -> None:
         self.write_table(
@@ -761,7 +761,7 @@ class TestFacadeUv2:
             {"B1": {"glazed": True, "grammar": "art-deco"}},
         )
         with pytest.raises(ValueError, match=r"facade_grammar\.json"):
-            facade_survey_verdicts(self.survey_style(), "testcity", root=tmp_path)
+            facade_survey_verdicts(self.survey_style(), root=tmp_path)
 
         # Both dark columns present, one unreadable — a corrupt row, not the
         # missing-mode refusal the loader is contracted to skip.
@@ -772,7 +772,7 @@ class TestFacadeUv2:
             {"B1": {"dark_L": "not a number", "dark_b": -7.18}},
         )
         with pytest.raises(ValueError, match=r"facade_glazing\.json"):
-            facade_glass_tint(self.survey_style(), "testcity", root=tmp_path)
+            facade_glass_tint(self.survey_style(), root=tmp_path)
 
     def test_a_row_without_a_dark_mode_is_a_tint_refusal_not_an_error(self, tmp_path: Path) -> None:
         self.write_table(
@@ -784,7 +784,7 @@ class TestFacadeUv2:
                 "B2": {"light_L": 60.0, "light_b": 2.0, "tex_per_m": 30.0},
             },
         )
-        tints = facade_glass_tint(self.survey_style(), "testcity", root=tmp_path)
+        tints = facade_glass_tint(self.survey_style(), root=tmp_path)
         assert tints == {"B1": (28.06, -7.18)}
 
 
@@ -834,7 +834,7 @@ class TestBuildRegion:
 
     def test_every_lod_tier_is_written(self, hong_kong, sources, tmp_path) -> None:
         report = self.build(hong_kong, sources, tmp_path)
-        out = tmp_path / "out" / "hong_kong" / "wan_chai"
+        out = tmp_path / "out" / "wan_chai"
         for tile in report.tiles:
             assert [Path(lod.path).name for lod in tile.lods] == [
                 f"{tile.id}_lod{level}.glb"
@@ -858,7 +858,7 @@ class TestBuildRegion:
         in the bundle for geometry 300 m away.
         """
         self.build(hong_kong, sources, tmp_path)
-        tiles = tmp_path / "out" / "hong_kong" / "wan_chai" / "tiles"
+        tiles = tmp_path / "out" / "wan_chai" / "tiles"
         levels = range(len(hong_kong.buildings.lod_cell_sizes_m))
 
         for level in levels:
@@ -870,14 +870,12 @@ class TestBuildRegion:
         """`P1-2` accepts under three draw calls per tile. Merging every
         building into one primitive is how the untextured dataset pays off."""
         self.build(hong_kong, sources, tmp_path)
-        path = tmp_path / "out" / "hong_kong" / "wan_chai" / "tiles" / "t_00_00_lod0.glb"
+        path = tmp_path / "out" / "wan_chai" / "tiles" / "t_00_00_lod0.glb"
         assert len(read_glb(path)) == 1
 
     def test_tiles_carry_vertex_colours_and_no_texture(self, hong_kong, sources, tmp_path) -> None:
         self.build(hong_kong, sources, tmp_path)
-        [tile] = read_glb(
-            tmp_path / "out" / "hong_kong" / "wan_chai" / "tiles" / "t_00_00_lod0.glb"
-        )
+        [tile] = read_glb(tmp_path / "out" / "wan_chai" / "tiles" / "t_00_00_lod0.glb")
         assert tile.colours is not None
         assert tile.texture is None
 
@@ -889,7 +887,7 @@ class TestBuildRegion:
         second city (or a fresh clone) is the refusal state by construction
         rather than a conditional channel shape."""
         self.build(hong_kong, sources, tmp_path)
-        tiles = tmp_path / "out" / "hong_kong" / "wan_chai" / "tiles"
+        tiles = tmp_path / "out" / "wan_chai" / "tiles"
         for level in range(len(hong_kong.buildings.lod_cell_sizes_m)):
             [tile] = read_glb(tiles / f"t_00_00_lod{level}.glb")
             assert tile.uv2 is not None
@@ -909,14 +907,12 @@ class TestBuildRegion:
         root = sources(fixtures)
         write_survey_table(
             root,
-            "hong_kong",
             "facade_grammar",
             "facade_grammar.json",
             {"S100": {"glazed": True, "grammar": "curtain", "sheet": "TEST-1"}},
         )
         write_survey_table(
             root,
-            "hong_kong",
             "facade_colour",
             "facade_glazing.json",
             {"S100": {"dark_L": 28.06, "dark_b": -7.18, "tex_per_m": 30.0}},
@@ -924,7 +920,7 @@ class TestBuildRegion:
 
         build_region(hong_kong, "wan_chai", sources_root=root, out_root=tmp_path / "out")
 
-        tiles = tmp_path / "out" / "hong_kong" / "wan_chai" / "tiles"
+        tiles = tmp_path / "out" / "wan_chai" / "tiles"
         for level in range(len(hong_kong.buildings.lod_cell_sizes_m)):
             [surveyed] = read_glb(tiles / f"t_00_00_lod{level}.glb")
             assert (surveyed.uv2[:, 0] == 1366.0).all()
@@ -937,9 +933,7 @@ class TestBuildRegion:
         into one primitive is what makes the tile one draw call — and the thing
         it must not cost is per-building colour."""
         self.build(hong_kong, sources, tmp_path)
-        [tile] = read_glb(
-            tmp_path / "out" / "hong_kong" / "wan_chai" / "tiles" / "t_00_00_lod0.glb"
-        )
+        [tile] = read_glb(tmp_path / "out" / "wan_chai" / "tiles" / "t_00_00_lod0.glb")
         assert len(set(map(tuple, tile.colours))) == 2
 
     def test_geometry_lands_in_the_region(self, hong_kong, sources, tmp_path) -> None:
@@ -1052,7 +1046,7 @@ class TestBuildRegion:
         regression this test exists to catch."""
         report = self.build(hong_kong, sources, tmp_path, self.ground())
 
-        out = tmp_path / "out" / "hong_kong" / "wan_chai"
+        out = tmp_path / "out" / "wan_chai"
         for lod in self.tile(report, "t_00_00").lods:
             meshes = read_glb(out / lod.path)
             assert len(meshes) == 1
@@ -1144,7 +1138,7 @@ class TestBuildRegion:
 
         def shades(city) -> int:
             report = self.build(city, sources, tmp_path, two_sheets, out=str(id(city)))
-            path = tmp_path / str(id(city)) / "hong_kong" / "wan_chai"
+            path = tmp_path / str(id(city)) / "wan_chai"
             colours = read_glb(path / self.tile(report, "t_00_00").lods[0].path)[0].colours
             return len(np.unique(colours[:, :3], axis=0))
 
@@ -1162,15 +1156,13 @@ class TestBuildRegion:
         from the engine side."""
         report = self.build(hong_kong, sources, tmp_path, self.thin_deck())
 
-        out = tmp_path / "out" / "hong_kong" / "wan_chai"
+        out = tmp_path / "out" / "wan_chai"
         for lod in self.tile(report, "t_00_00").lods:
             assert len(read_glb(out / lod.path)) == 1
 
     def test_the_manifest_describes_the_grid(self, hong_kong, sources, tmp_path) -> None:
         self.build(hong_kong, sources, tmp_path)
-        manifest = json.loads(
-            (tmp_path / "out" / "hong_kong" / "wan_chai" / BUILDINGS_MANIFEST_NAME).read_text()
-        )
+        manifest = json.loads((tmp_path / "out" / "wan_chai" / BUILDINGS_MANIFEST_NAME).read_text())
         assert manifest["grid"] == {"columns": 11, "rows": 6}
         assert manifest["tile_size_m"] == 150.0
         assert [tile["id"] for tile in manifest["tiles"]] == ["t_00_00", "t_02_02"]
@@ -1184,8 +1176,8 @@ class TestBuildRegion:
         build_region(hong_kong, "wan_chai", sources_root=root, out_root=first)
         build_region(hong_kong, "wan_chai", sources_root=root, out_root=second)
 
-        for path in sorted((first / "hong_kong" / "wan_chai" / "tiles").glob("*.glb")):
-            twin = second / "hong_kong" / "wan_chai" / "tiles" / path.name
+        for path in sorted((first / "wan_chai" / "tiles").glob("*.glb")):
+            twin = second / "wan_chai" / "tiles" / path.name
             assert path.read_bytes() == twin.read_bytes()
 
     def test_a_region_with_nothing_in_it_is_an_error(self, hong_kong, sources, tmp_path) -> None:
@@ -1274,9 +1266,7 @@ class TestLandmarkExclusion:
         city = replace(hong_kong, landmarks=(self.hero(hong_kong),))
         self.build(city, sources, tmp_path)
         manifest = json.loads(
-            (tmp_path / "out" / "hong_kong" / "wan_chai" / BUILDINGS_MANIFEST_NAME).read_text(
-                encoding="utf-8"
-            )
+            (tmp_path / "out" / "wan_chai" / BUILDINGS_MANIFEST_NAME).read_text(encoding="utf-8")
         )
         assert manifest["schema_version"] == BUILDINGS_MANIFEST_SCHEMA
         low, high = manifest["excluded"]["hero_a"]
@@ -1386,7 +1376,7 @@ class TestTileGround:
 
 
 @pytest.mark.skipif(
-    not (fetch.source_dir("hong_kong", "topography") / fetch.INDEX_NAME).exists(),
+    not (fetch.source_dir("topography") / fetch.INDEX_NAME).exists(),
     reason="requires a fetched topography index",
 )
 def test_real_blocks_reproduce_the_documented_counts(hong_kong) -> None:
@@ -1401,7 +1391,7 @@ def test_real_blocks_reproduce_the_documented_counts(hong_kong) -> None:
     region = hong_kong.region("wan_chai")
     source = hong_kong.tiled_sources["topography"]
     tiles = fetch.cached_tiles(hong_kong, region, source)
-    if not all(fetch.artefact_path("hong_kong", tile).exists() for tile in tiles):
+    if not all(fetch.artefact_path(tile).exists() for tile in tiles):
         pytest.skip("requires fetched topography sheets")
 
     sheets = podium_blocks(hong_kong, "wan_chai")

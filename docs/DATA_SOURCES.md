@@ -121,7 +121,7 @@ is published beyond a playtest link. `LICENSING.md`, `DECISIONS.md` `Q79`.
   means no distinct podium block was surveyed, not "no ground band".
 - ⚠️ Geometry is MultiPolygon **Z** (M ordinates exist and are dropped by GDAL with a warning).
   ✅ Ingested `P3-7a` (2026-08-10): `gdb.py` decodes polygon-Z, the sheets fetch to
-  `etl/sources/hong_kong/topography/` via the `topography` tiled source, and
+  `etl/sources/topography/` via the `topography` tiled source, and
   `buildings.podium_blocks` reads the `Building` layer per sheet. The verified counts above are
   reproduced from inside the pipeline by `test_real_blocks_reproduce_the_documented_counts`.
   Note the WKB arrives with GDAL's **wkb25D high-bit Z flag**, not the ISO 1000-offset codes —
@@ -947,7 +947,7 @@ graph by construction. The lane count is therefore a bracket, ambiguous on 178 o
 
 ⚠️ **Read, not fetched.** Nothing in `etl/` downloads this and nothing should: it is one table, and
 the figures above are transcribed here the way `CT174/51-5(1)F`'s marking dimensions are. ⚠️ **It is
-city-specific**, so any value taken from it belongs in `etl/config/cities/hong_kong.yaml` under hard
+city-specific**, so any value taken from it belongs in `etl/config/hong_kong.yaml` under hard
 rule 3 — the second city has its own manual. ⚠️ **A standard is a floor, not a description**: the
 table is headed *Minimum*, and 3.4.2.2 lets trunk widths fall below it "on economic or other
 grounds".
@@ -1202,7 +1202,7 @@ own download links do not** (verified 2026-08-10).
 - Read with pyogrio through `/vsizip/<zip path>/<SHEETNO>/<SHEETNO>.gdb`. The probe that verified
   this (`Q47`) is uncommitted per `P3-7`'s pattern; the *pipeline* ingestion that replaced it
   landed as `P3-7a` (2026-08-10) — `topography` tiled source, `podiums:` block, sheets cached
-  under `etl/sources/hong_kong/topography/`.
+  under `etl/sources/topography/`.
 - ⚠️ **`open.hkmapservice.gov.hk` serves its TLS chain without the issuing intermediate**
   (Hongkong Post e-Cert SSL CA 3 - 17) — leaf and root only. Browsers and curl chase the gap via
   the certificate's AIA URL; Python's OpenSSL does not, so a plain `urlopen` fails

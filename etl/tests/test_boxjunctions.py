@@ -26,7 +26,7 @@ from pipeline.boxjunctions import (
     hatch_polygons,
     long_axis_deg,
 )
-from pipeline.config import load_city
+from pipeline.config import load_config
 from pipeline.polyline import Segments
 from pipeline.surface import DrawnSurface, downward_facing
 from tests.helpers import CITY_YAML, polygon_area
@@ -63,7 +63,7 @@ def city_with(tmp_path, block: dict[str, Any] | None):
     cities = tmp_path / "cities"
     cities.mkdir(exist_ok=True)
     (cities / "testville.yaml").write_text(yaml.safe_dump(document), encoding="utf-8")
-    return load_city("testville", cities_root=cities)
+    return load_config(cities / "testville.yaml")
 
 
 @pytest.fixture

@@ -41,7 +41,7 @@ Sheets are read straight out of their zips. Unpacking six of them costs ~400 MB
 on disk to produce input that is read once.
 
 Nothing here knows anything about any particular city: sheet layout, palette and
-LOD cell sizes all arrive from `config/cities/*.yaml`.
+LOD cell sizes all arrive from `config/hong_kong.yaml`.
 """
 
 from __future__ import annotations
@@ -63,7 +63,7 @@ from numpy.typing import ArrayLike
 
 from pipeline import gdb
 from pipeline.colour import chroma_and_hue, with_hue
-from pipeline.config import BuildingStyle, CityConfig, Material, RegionConfig, load_city
+from pipeline.config import BuildingStyle, CityConfig, Material, RegionConfig, load_config
 from pipeline.crs import GameTransform
 from pipeline.documents import write_document
 from pipeline.fetch import artefact_path, cached_tiles, source_dir
@@ -384,7 +384,7 @@ def podium_blocks(
     layers: list[tuple[str, gdb.Layer]] = []
     for sheet in cached_tiles(city, region, city.tiled_sources[spec.source], root=sources_root):
         layer = gdb.read_layer(
-            artefact_path(city.id, sheet, root=sources_root),
+            artefact_path(sheet, root=sources_root),
             spec.blocks.layer,
             columns=spec.blocks.columns,
             bbox=bounds.bbox,
@@ -395,7 +395,7 @@ def podium_blocks(
     return layers
 
 
-def facade_hue(style: BuildingStyle, city_id: str, *, root: Path | None = None) -> dict[str, Hue]:
+def facade_hue(style: BuildingStyle, *, root: Path | None = None) -> dict[str, Hue]:
     """Per-building `(a*, b*)` from the photo survey, or empty if there is none.
 
     Keyed by `stem`, which is what joins the survey's models to this
@@ -418,7 +418,7 @@ def facade_hue(style: BuildingStyle, city_id: str, *, root: Path | None = None) 
     """
     if style.facade_hue_source is None:
         return {}
-    path = source_dir(city_id, HUE_SOURCE_ID, root=root) / style.facade_hue_source
+    path = source_dir(HUE_SOURCE_ID, root=root) / style.facade_hue_source
     try:
         text = path.read_text()
     except FileNotFoundError:
@@ -461,7 +461,7 @@ def facade_hue(style: BuildingStyle, city_id: str, *, root: Path | None = None) 
 
 
 def facade_survey_verdicts(
-    style: BuildingStyle, city_id: str, *, root: Path | None = None
+    style: BuildingStyle, *, root: Path | None = None
 ) -> dict[str, tuple[bool | None, str | None]]:
     """Per-building `(glazed, grammar)` from the vision reader, or empty.
 
@@ -474,7 +474,7 @@ def facade_survey_verdicts(
     """
     if style.facade_grammar_source is None:
         return {}
-    path = source_dir(city_id, GRAMMAR_SOURCE_ID, root=root) / style.facade_grammar_source
+    path = source_dir(GRAMMAR_SOURCE_ID, root=root) / style.facade_grammar_source
     try:
         text = path.read_text()
     except FileNotFoundError:
@@ -500,7 +500,7 @@ def facade_survey_verdicts(
 
 
 def facade_glass_tint(
-    style: BuildingStyle, city_id: str, *, root: Path | None = None
+    style: BuildingStyle, *, root: Path | None = None
 ) -> dict[str, tuple[float, float]]:
     """Per-building glass tint `(L*, b*)` from the glazing survey's dark mode.
 
@@ -512,7 +512,7 @@ def facade_glass_tint(
     """
     if style.facade_glazing_source is None:
         return {}
-    path = source_dir(city_id, HUE_SOURCE_ID, root=root) / style.facade_glazing_source
+    path = source_dir(HUE_SOURCE_ID, root=root) / style.facade_glazing_source
     try:
         text = path.read_text()
     except FileNotFoundError:
@@ -736,20 +736,18 @@ def facade_state(glazed: bool | None, grammar: str | None, tint: tuple[float, fl
     return code
 
 
-def facade_states(
-    style: BuildingStyle, city_id: str, *, root: Path | None = None
-) -> dict[str, int]:
+def facade_states(style: BuildingStyle, *, root: Path | None = None) -> dict[str, int]:
     """Every surveyed building's state code, keyed by stem; refusals omitted.
 
     Omitted rather than stored as `0` because `facade_uv2` already reads a
     missing stem as the sentinel — the dict carries information, not shape.
     """
-    verdicts = facade_survey_verdicts(style, city_id, root=root)
+    verdicts = facade_survey_verdicts(style, root=root)
     if not verdicts:
         # The tint is consumed only through a reader-glazed verdict, so with no
         # verdict table there is nothing to read the glazing survey for.
         return {}
-    tints = facade_glass_tint(style, city_id, root=root)
+    tints = facade_glass_tint(style, root=root)
     states = {}
     for key, (glazed, grammar) in verdicts.items():
         state = facade_state(glazed, grammar, tints.get(key))
@@ -849,9 +847,7 @@ class Placement:
             grid=Grid.for_region(city, region),
             offset=game_offset(city.game_transform(region_id)),
             out_dir=city.out_dir(region_id, out_root),
-            sheets=[
-                (sheet.tile_id, artefact_path(city.id, sheet, root=sources_root)) for sheet in tiles
-            ],
+            sheets=[(sheet.tile_id, artefact_path(sheet, root=sources_root)) for sheet in tiles],
         )
 
 
@@ -865,8 +861,8 @@ def build_region(
     """Write every tile of the region, at every LOD tier, and report on them."""
     style = city.buildings
     place = Placement.resolve(city, region_id, sources_root, out_root)
-    hue = facade_hue(style, city.id, root=sources_root)
-    states = facade_states(style, city.id, root=sources_root)
+    hue = facade_hue(style, root=sources_root)
+    states = facade_states(style, root=sources_root)
 
     report = BuildReport()
     # Stems a landmark replaces (`P3-6`), across the whole city config: a stem
@@ -1287,7 +1283,6 @@ def _clip_triangles(mesh: MeshData, grid: Grid) -> MeshData | None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    parser.add_argument("--city", required=True)
     parser.add_argument("--region", required=True)
     parser.add_argument(
         "--terrain",
@@ -1298,7 +1293,7 @@ def main(argv: list[str] | None = None) -> int:
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    city = load_city(args.city)
+    city = load_config()
     region = city.region(args.region)
     log.info("%s / %s", city.name, region.name)
 

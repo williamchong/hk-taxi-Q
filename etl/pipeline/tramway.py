@@ -40,7 +40,7 @@ on a 4 m cell and collapsed to cluster means (`P3-10`), so it is not the surface
 carriageways either side of it, not with the ground under them.
 
 Nothing here knows a Hong Kong fact: the layer, the domain code, the gauge and
-every drawn dimension arrive from `config/cities/*.yaml` (hard rule 3).
+every drawn dimension arrive from `config/hong_kong.yaml` (hard rule 3).
 """
 
 from __future__ import annotations
@@ -55,7 +55,7 @@ from pathlib import Path
 import numpy as np
 
 from pipeline import gdb
-from pipeline.config import CityConfig, Tramway, load_city
+from pipeline.config import CityConfig, Tramway, load_config
 from pipeline.crs import GameTransform
 from pipeline.documents import write_document
 from pipeline.fetch import source_reads
@@ -774,14 +774,13 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Tra
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--city", required=True)
     parser.add_argument("--region", required=True)
     parser.add_argument("--sources-root", type=Path, default=None)
     parser.add_argument("--out-root", type=Path, default=None)
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    city = load_city(args.city)
+    city = load_config()
     report = build_region(city, args.region, sources_root=args.sources_root, out_root=args.out_root)
     log.info(
         "tramway: %d rails (%.0f m) -> %d tracks (%.0f m), %d unpaired, %d triangles",

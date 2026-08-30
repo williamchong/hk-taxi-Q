@@ -54,7 +54,7 @@ from pipeline.config import (
     KERB_SINGLE,
     CityConfig,
     RoadSurface,
-    load_city,
+    load_config,
 )
 from pipeline.documents import round_position, write_document
 from pipeline.geometry import edge_distances, inside_polygon
@@ -2344,13 +2344,12 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Sur
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    parser.add_argument("--city", required=True)
     parser.add_argument("--region", required=True)
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    city = load_city(args.city)
+    city = load_config()
     region = city.region(args.region)
     log.info("%s / %s", city.name, region.name)
 

@@ -32,7 +32,7 @@ edge where the sheets still carry it; four of the region's ends show a one-stati
 tile gap the pipeline never saw. That is why a disagreement is reported rather
 than failed on, and why the bar below is one-sided.
 
-Run:  .venv/bin/python tools/touchdown_error.py --city hong_kong
+Run:  .venv/bin/python tools/touchdown_error.py
 """
 
 from __future__ import annotations
@@ -52,7 +52,7 @@ sys.path.insert(0, str(ROOT / "etl"))
 sys.path.insert(0, str(ROOT / "tools"))
 
 from deck_error import bundle_arguments, load_bundle, log_bundle, structure_faces  # noqa: E402
-from pipeline.config import load_city  # noqa: E402
+from pipeline.config import load_config  # noqa: E402
 
 log = logging.getLogger(__name__)
 
@@ -175,12 +175,12 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    city = load_city(args.city)
+    city = load_config()
     if city.roads.deck is None:
-        raise SystemExit(f"city '{args.city}' samples no decks — nothing to grade")
+        raise SystemExit("the config samples no decks — nothing to grade")
     cap = city.roads.deck.touchdown_max_grade_pct
 
-    manifest, tiles = load_bundle(args.generated, args.lod, args.city)
+    manifest, tiles = load_bundle(args.generated, args.lod)
     log_bundle(manifest, args.lod)
     deck, structure_class = structure_faces(city, tiles)
     graph = json.loads((args.generated / manifest["road_graph"]).read_text(encoding="utf-8"))

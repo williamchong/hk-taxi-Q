@@ -379,25 +379,25 @@ def entry_path(cache_dir: Path, custom_id: str) -> Path:
     return cache_path(cache_dir, key, fingerprint)
 
 
-def raw_root(city: str) -> Path:
+def raw_root() -> Path:
     """The response caches' root — also where the batch state file lives."""
-    return source_dir(city, SURVEY_SOURCE_ID) / "raw"
+    return source_dir(SURVEY_SOURCE_ID) / "raw"
 
 
-def batch_state_path(city: str) -> Path:
+def batch_state_path() -> Path:
     """The submission record for the current prompt. Submit and collect must
     agree on this path, or paid results are stranded in batches nothing will
     ever collect."""
-    return raw_root(city) / f"batch.{PROMPT_HASH}.json"
+    return raw_root() / f"batch.{PROMPT_HASH}.json"
 
 
-def batch_submit(sheets: list[str], city: str, zip_dir: Path) -> int:
+def batch_submit(sheets: list[str], zip_dir: Path) -> int:
     """Enumerate every un-cached face of the named sheets and submit them to
     the Batch API. Batch ids land in a state file beside the caches; nothing
     else is written until `--batch-collect`."""
     client = client_factory()()
-    out_root = raw_root(city)
-    state_path = batch_state_path(city)
+    out_root = raw_root()
+    state_path = batch_state_path()
     try:
         state = json.loads(state_path.read_text())
     except FileNotFoundError:
@@ -461,13 +461,13 @@ def batch_submit(sheets: list[str], city: str, zip_dir: Path) -> int:
     return 0
 
 
-def batch_collect(city: str) -> int:
+def batch_collect() -> int:
     """Write every ended batch's results into the response cache. Exit 0 once
     all batches are collected, 1 while any is still processing — an errored or
     expired face is left a cache miss, so any later run reads it again."""
     client = client_factory()()
-    out_root = raw_root(city)
-    state_path = batch_state_path(city)
+    out_root = raw_root()
+    state_path = batch_state_path()
     try:
         state = json.loads(state_path.read_text())
     except FileNotFoundError:
@@ -508,7 +508,7 @@ def batch_collect(city: str) -> int:
     return 1 if still_open else 0
 
 
-def survey_sheet(sheet: str, city: str, zip_dir: Path) -> dict[str, dict]:
+def survey_sheet(sheet: str, zip_dir: Path) -> dict[str, dict]:
     """Every face of every building on one sheet, keyed by the pipeline's stem.
 
     Beside the per-face response cache sits a per-building row cache, written
@@ -519,7 +519,7 @@ def survey_sheet(sheet: str, city: str, zip_dir: Path) -> dict[str, dict]:
     replayed while the code its images came from is the code on disk.
     """
     get_client = client_factory()
-    cache_dir = raw_root(city) / sheet
+    cache_dir = raw_root() / sheet
     rows: dict[str, dict] = {}
     with zipfile.ZipFile(zip_dir / f"{sheet}.zip") as bundle:
         documents = sheet_documents(bundle)
@@ -646,7 +646,7 @@ def score(results: list[tuple[dict, dict]]) -> list[tuple[str, int, int, float]]
     ]
 
 
-def validate(city: str, zip_dir: Path) -> int:
+def validate(zip_dir: Path) -> int:
     """Run the reader over the labelled 40 faces and grade it against the
     thresholds `Q41` fixed in advance. The exit code is the verdict."""
     get_client = client_factory()
@@ -660,7 +660,7 @@ def validate(city: str, zip_dir: Path) -> int:
         # The same cache namespace the sheet survey uses, deliberately: a
         # validation face's response is byte-identical to the survey's read of
         # that face, so the validation spend seeds the later full-sheet run.
-        cache_dir = raw_root(city) / sheet
+        cache_dir = raw_root() / sheet
         by_building: dict[str, list[dict]] = {}
         for label in sheet_labels:
             by_building.setdefault(label["building"], []).append(label)
@@ -752,7 +752,6 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="write ended batches into the response cache (exit 1 while any is processing)",
     )
-    parser.add_argument("--city", default="hong_kong")
     parser.add_argument(
         "--zip-dir",
         type=Path,
@@ -769,13 +768,13 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     if arguments.validate:
-        return validate(arguments.city, arguments.zip_dir)
+        return validate(arguments.zip_dir)
     if arguments.batch_collect:
-        return batch_collect(arguments.city)
+        return batch_collect()
     if arguments.batch_submit:
         if not arguments.sheets:
             parser.error("--batch-submit needs sheet ids")
-        return batch_submit(arguments.sheets, arguments.city, arguments.zip_dir)
+        return batch_submit(arguments.sheets, arguments.zip_dir)
     sheets = (
         sorted(archive.stem for archive in arguments.zip_dir.glob("*.zip"))
         if arguments.all
@@ -783,11 +782,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     if not sheets:
         parser.error("name at least one sheet, or pass --all or --validate")
-    out_dir = source_dir(arguments.city, SURVEY_SOURCE_ID)
+    out_dir = source_dir(SURVEY_SOURCE_ID)
     out_dir.mkdir(parents=True, exist_ok=True)
     tables: dict[str, dict[str, dict]] = {}
     for sheet in sheets:
-        rows = survey_sheet(sheet, arguments.city, arguments.zip_dir)
+        rows = survey_sheet(sheet, arguments.zip_dir)
         destination = out_dir / f"facade_grammar.{sheet}.json"
         destination.write_text(json.dumps(rows, indent=1, sort_keys=True))
         log.info("%s: %d buildings -> %s", sheet, len(rows), destination)

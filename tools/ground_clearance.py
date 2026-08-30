@@ -42,7 +42,7 @@ from the **shipped `roads.glb`** rather than from the graph the ETL wrote.
 ground, so measuring one would report the height of every flyover as a defect.
 Level -1 is under the terrain by definition (`Q21`).
 
-Run:  .venv/bin/python tools/ground_clearance.py --city hong_kong
+Run:  .venv/bin/python tools/ground_clearance.py
 """
 
 from __future__ import annotations
@@ -72,7 +72,7 @@ from deck_error import (  # noqa: E402
     nearest,
 )
 from overhang import cross_section, half_width_at, half_widths, left_of, walk_width  # noqa: E402
-from pipeline.config import load_city  # noqa: E402
+from pipeline.config import load_config  # noqa: E402
 
 log = logging.getLogger(__name__)
 
@@ -574,8 +574,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    city = load_city(args.city)
-    manifest, tiles = load_bundle(args.generated, args.lod, args.city)
+    city = load_config()
+    manifest, tiles = load_bundle(args.generated, args.lod)
     log_bundle(manifest, args.lod)
 
     ground, terrain_class = ground_faces(city, tiles)

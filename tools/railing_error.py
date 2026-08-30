@@ -38,7 +38,7 @@ verbatim — but `roadsurface.json` carries the junction trims and does not ship
 and the side of a fence cannot be named without the centreline it is offset
 from.
 
-Run:  .venv/bin/python tools/railing_error.py --city hong_kong --region wan_chai
+Run:  .venv/bin/python tools/railing_error.py --region wan_chai
 """
 
 from __future__ import annotations
@@ -55,7 +55,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "etl"))
 
 from pipeline import gdb  # noqa: E402
-from pipeline.config import CityConfig, load_city  # noqa: E402
+from pipeline.config import CityConfig, load_config  # noqa: E402
 from pipeline.fetch import source_reads  # noqa: E402
 from pipeline.gltf import read_glb  # noqa: E402
 from pipeline.railings import AT_GRADE, RAILINGS_NAME  # noqa: E402
@@ -303,7 +303,7 @@ def survey(
     if not path.exists():
         raise SystemExit(
             f"{path} does not exist. Run "
-            f"`python -m pipeline.railings --city {city.id} --region {region_id}` first. "
+            f"`python -m pipeline.railings --region {region_id}` first. "
             "A region whose sources publish no railing layer ships none, and that is not a failure."
         )
 
@@ -387,7 +387,6 @@ def render(report: Report, *, near_m: float) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    parser.add_argument("--city", required=True)
     parser.add_argument("--region", required=True)
     parser.add_argument(
         "--near-m",
@@ -403,7 +402,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    city = load_city(args.city)
+    city = load_config()
     if city.railings is None:
         raise SystemExit(f"city '{city.id}' declares no railings block; nothing to grade")
 

@@ -1,6 +1,6 @@
 """Whether `Q19`'s walls are a centreline error or a wall in the published road.
 
-    .venv/bin/python tools/centreline_error.py --city hong_kong --region wan_chai
+    .venv/bin/python tools/centreline_error.py --region wan_chai
 
 `Q19` leaves three candidates and a price on one of them. `tools/reachability.py`
 measured **candidate 2** — fencing the blocked edges costs 1 ordered pair of
@@ -110,7 +110,7 @@ from pipeline.clearance import (  # noqa: E402
     open_region,
     tile_meshes,
 )
-from pipeline.config import CityConfig, WidthBounds, load_city  # noqa: E402
+from pipeline.config import CityConfig, WidthBounds, load_config  # noqa: E402
 from pipeline.polyline import plan_lengths  # noqa: E402
 from pipeline.surface import mitres  # noqa: E402
 
@@ -942,7 +942,6 @@ def _ids(text: str) -> set[int]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    parser.add_argument("--city", required=True)
     parser.add_argument("--region", required=True)
     parser.add_argument(
         "--watch",
@@ -978,7 +977,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    city = load_city(args.city)
+    city = load_config()
     region = city.region(args.region)
     survey = city.carriageway_survey
     if survey is None or survey.width_bounds is None:

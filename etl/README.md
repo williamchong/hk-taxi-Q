@@ -30,8 +30,8 @@ project's rules to every Python file in the repo, including `tools/*.py`, which 
 ## Fetching sources
 
 ```sh
-../.venv/bin/python -m pipeline.fetch --city hong_kong --region wan_chai --dry-run
-../.venv/bin/python -m pipeline.fetch --city hong_kong --region wan_chai
+../.venv/bin/python -m pipeline.fetch --region wan_chai --dry-run
+../.venv/bin/python -m pipeline.fetch --region wan_chai
 ```
 
 Wan Chai pulls **~320 MB** across 11 artefacts, of which 299 MB is the six building sheets
@@ -54,7 +54,7 @@ region bounds with the publisher's sheet index. Move the bounds and the sheet se
 ## Building tiles
 
 ```sh
-../.venv/bin/python -m pipeline.buildings --city hong_kong --region wan_chai
+../.venv/bin/python -m pipeline.buildings --region wan_chai
 ```
 
 Reads the cached sheets — no network — and writes `out/hong_kong/wan_chai/tiles/*.glb`, one merged,
@@ -80,7 +80,7 @@ godot --headless --path ../game --script res://tools/verify_tiles.gd
 ## Road graph (`P1-3`)
 
 ```sh
-../.venv/bin/python -m pipeline.roads --city hong_kong --region wan_chai
+../.venv/bin/python -m pipeline.roads --region wan_chai
 ```
 
 Reads the cached geodatabase — no network, nothing unpacked, OGR opens it inside its zip — and
@@ -105,7 +105,7 @@ switches between direction, grade separation and speed limit. It ships hidden, b
 ## Road surface (`P1-4`)
 
 ```sh
-../.venv/bin/python -m pipeline.surface --city hong_kong --region wan_chai
+../.venv/bin/python -m pipeline.surface --region wan_chai
 ```
 
 Reads `roadgraph.json` — not the geodatabase — and writes `out/hong_kong/wan_chai/roads.glb`:
@@ -137,7 +137,7 @@ imported. None of it is visible from Python.
 ## The whole region (`P1-6`, `P1-7`)
 
 ```sh
-../.venv/bin/python -m pipeline --city hong_kong --region wan_chai
+../.venv/bin/python -m pipeline --region wan_chai
 ```
 
 Runs all six stages in dependency order — fetch, buildings, roads, surface, fares, export — in
@@ -149,7 +149,7 @@ The export stage also validates what it wrote, against the documents it was deri
 than against itself:
 
 ```sh
-../.venv/bin/python -m pipeline.export --city hong_kong --region wan_chai --check
+../.venv/bin/python -m pipeline.export --region wan_chai --check
 ```
 
 Then put it in front of the engine. This is the only supported way — it copies exactly the files
@@ -170,7 +170,7 @@ and press **F6** to look at the result, or `city_drive.tscn` to drive it.
 
 | Path | Contains |
 |---|---|
-| `config/cities/*.yaml` | **Every** city specific — CRS, bounds, deck heights, palette, source URLs |
+| `config/hong_kong.yaml` | **Every** city specific — CRS, bounds, deck heights, palette, source URLs |
 | `pipeline/config.py` | Loads and validates city config; nothing else reads the YAML |
 | `pipeline/crs.py` | The only module that converts projected coordinates to game space |
 | `pipeline/fetch.py` | Downloads and caches sources; derives tile sets from published indexes |

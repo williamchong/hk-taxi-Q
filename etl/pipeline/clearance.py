@@ -1,6 +1,6 @@
 """How much of each carriageway station a car can actually get through (`Q51`).
 
-    python -m pipeline.clearance --city hong_kong --region wan_chai
+    python -m pipeline.clearance --region wan_chai
 
 `Q19` measured that solid geometry stands in the drawn carriageway and stopped
 there, deliberately: it grades the shipped bundle and publishes nothing. But
@@ -49,7 +49,7 @@ trims travel in `roadsurface.json` since schema 4 and the stations outside them
 are published as `NOT_MEASURED` rather than as zero.
 
 Nothing here knows a Hong Kong fact: the bar, the classes and the region all
-arrive from `config/cities/*.yaml`.
+arrive from `config/hong_kong.yaml`.
 """
 
 from __future__ import annotations
@@ -70,7 +70,7 @@ from pipeline.config import (
     LANDMARK_ASSET_ROOT,
     LANDMARK_GENERATED_ROOT,
     CityConfig,
-    load_city,
+    load_config,
 )
 from pipeline.documents import read_document, write_document
 from pipeline.landmarks import landmark_in_region
@@ -866,7 +866,7 @@ def open_region(
     reading different builds and comparing the results.
     """
     out_dir = city.out_dir(region_id, out_root)
-    rebuild = f"python -m pipeline --city {city.id} --region {region_id}"
+    rebuild = f"python -m pipeline --region {region_id}"
     graph = read_graph(out_dir / ROADGRAPH_NAME, city.id, region_id)
     surface = read_document(out_dir / SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, rebuild)
     buildings = read_document(out_dir / BUILDINGS_MANIFEST_NAME, BUILDINGS_MANIFEST_SCHEMA, rebuild)
@@ -967,7 +967,6 @@ def _write(out_root: Path | None, city: CityConfig, region_id: str, report: Clea
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    parser.add_argument("--city", required=True)
     parser.add_argument("--region", required=True)
     parser.add_argument(
         "--along-m",
@@ -985,7 +984,7 @@ def main(argv: list[str] | None = None) -> int:
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    city = load_city(args.city)
+    city = load_config()
     region = city.region(args.region)
     log.info("%s / %s", city.name, region.name)
 

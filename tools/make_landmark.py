@@ -49,7 +49,7 @@ sys.path.insert(0, str(ROOT / "etl"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from pipeline.buildings import COLLISION_SUFFIX  # noqa: E402
-from pipeline.config import Material, check_material_exposure, load_city  # noqa: E402
+from pipeline.config import Material, check_material_exposure, load_config  # noqa: E402
 from pipeline.gltf import MeshData, write_glb  # noqa: E402
 
 # The one name the engine dispatches materials on — owned by the pipeline
@@ -257,7 +257,7 @@ def build_landmarks() -> list[tuple[str, MeshData]]:
 
 def write_landmarks(out_dir: Path) -> list[tuple[Path, int, MeshData]]:
     """Check the palette against the live anchor, then write one `.glb` each."""
-    check_palette(load_city("hong_kong").exposure_anchor)
+    check_palette(load_config().exposure_anchor)
     written = []
     for filename, mesh in build_landmarks():
         path = out_dir / filename

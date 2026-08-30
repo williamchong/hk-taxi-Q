@@ -26,7 +26,7 @@ import numpy as np
 import pytest
 import yaml
 
-from pipeline.config import RailingClass, Railings, SourceLayer, load_city
+from pipeline.config import RailingClass, Railings, SourceLayer, load_config
 from pipeline.kerbside import NEARSIDE, OFFSIDE
 from pipeline.polyline import plan_lengths
 from pipeline.railings import (
@@ -632,7 +632,7 @@ class TestClassTable:
         cities = tmp_path / "cities"
         cities.mkdir(exist_ok=True)
         (cities / "testville.yaml").write_text(yaml.safe_dump(document), encoding="utf-8")
-        return load_city("testville", cities_root=cities)
+        return load_config(cities / "testville.yaml")
 
     def test_a_code_in_two_classes_is_refused(self, tmp_path) -> None:
         """⚠️ Not tidiness: it would be drawn twice, and both would look right."""

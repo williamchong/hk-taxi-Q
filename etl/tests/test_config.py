@@ -16,11 +16,11 @@ import pytest
 import yaml
 
 from pipeline.config import (
-    CITIES_ROOT,
+    CONFIG_PATH,
     SUPPORTED_SCHEMA,
     SurfaceClass,
     _paged_source,
-    load_city,
+    load_config,
 )
 
 
@@ -38,15 +38,14 @@ def rewrite(tmp_path: Path):
     """
 
     def _rewrite(mutate) -> Path:
-        document = yaml.safe_load((CITIES_ROOT / "hong_kong.yaml").read_text(encoding="utf-8"))
+        document = yaml.safe_load((CONFIG_PATH).read_text(encoding="utf-8"))
         mutate(document)
-        cities = tmp_path / "cities"
-        cities.mkdir(exist_ok=True)
-        (cities / "hong_kong.yaml").write_text(yaml.safe_dump(document), encoding="utf-8")
-        certs = CITIES_ROOT.parent / "certs"
+        path = tmp_path / "hong_kong.yaml"
+        path.write_text(yaml.safe_dump(document), encoding="utf-8")
+        certs = CONFIG_PATH.parent / "certs"
         if certs.is_dir():
             shutil.copytree(certs, tmp_path / "certs", dirs_exist_ok=True)
-        return cities
+        return path
 
     return _rewrite
 
@@ -131,7 +130,7 @@ class TestCityOffset:
         was added, silently relocating every region already published against the
         old value. Anchoring on declared city bounds is what prevents that.
         """
-        before = load_city("hong_kong").city_transform()
+        before = load_config().city_transform()
 
         def add_region(doc: dict[str, Any]) -> None:
             doc["regions"]["kowloon_tsim_sha_tsui"] = {
@@ -140,7 +139,7 @@ class TestCityOffset:
                 "tile_size_m": 150.0,
             }
 
-        after = load_city("hong_kong", cities_root=rewrite(add_region)).city_transform()
+        after = load_config(rewrite(add_region)).city_transform()
         assert after == before
 
     def test_region_outside_the_city_bounds_is_rejected(self, rewrite) -> None:
@@ -151,13 +150,13 @@ class TestCityOffset:
             doc["regions"]["wan_chai"]["bounds"]["east"] = 120.0
 
         with pytest.raises(ValueError, match="outside the city bounds"):
-            load_city("hong_kong", cities_root=rewrite(move_region_out))
+            load_config(rewrite(move_region_out))
 
 
 def test_missing_city_bounds_is_rejected(rewrite) -> None:
     root = rewrite(lambda doc: doc.pop("bounds"))
     with pytest.raises(ValueError, match="bounds"):
-        load_city("hong_kong", cities_root=root)
+        load_config(root)
 
 
 class TestBuildingStyle:
@@ -221,7 +220,7 @@ class TestBuildingStyle:
             doc["buildings"]["structure_class"] = "VEGETATION"
 
         with pytest.raises(ValueError, match="which is not in classes"):
-            load_city("hong_kong", cities_root=rewrite(use_untiled))
+            load_config(rewrite(use_untiled))
 
     def test_unordered_height_bands_are_rejected(self, rewrite) -> None:
         """`colour_for` returns the first band a height fits, so an out-of-order
@@ -231,7 +230,7 @@ class TestBuildingStyle:
             doc["buildings"]["material_assignment"]["unsurveyed"]["by_height"].reverse()
 
         with pytest.raises(ValueError, match="ascending"):
-            load_city("hong_kong", cities_root=rewrite(shuffle))
+            load_config(rewrite(shuffle))
 
     def test_a_closed_last_band_is_rejected(self, rewrite) -> None:
         """Without an open-ended band there is no colour for a building taller
@@ -243,21 +242,21 @@ class TestBuildingStyle:
             )
 
         with pytest.raises(ValueError, match=r"\.inf"):
-            load_city("hong_kong", cities_root=rewrite(close_it))
+            load_config(rewrite(close_it))
 
     def test_a_malformed_colour_is_rejected(self, rewrite) -> None:
         def break_colour(doc: dict[str, Any]) -> None:
             doc["materials"]["render_warm"]["colour"] = "beige"
 
         with pytest.raises(ValueError, match="#rrggbb"):
-            load_city("hong_kong", cities_root=rewrite(break_colour))
+            load_config(rewrite(break_colour))
 
     def test_lod_cell_sizes_must_coarsen(self, rewrite) -> None:
         def invert(doc: dict[str, Any]) -> None:
             doc["buildings"]["lod_cell_sizes_m"] = [4.0, 1.5, 0.0]
 
         with pytest.raises(ValueError, match="coarsest last"):
-            load_city("hong_kong", cities_root=rewrite(invert))
+            load_config(rewrite(invert))
 
     def test_a_class_may_override_the_lod_cell_sizes(self, hong_kong) -> None:
         """Infrastructure is thinner than the cell that decimates a building, so
@@ -279,7 +278,7 @@ class TestBuildingStyle:
             doc["buildings"]["class_lod_cell_sizes_m"] = {"INFRASTRUCTUR": [0.0, 0.5, 1.0]}
 
         with pytest.raises(ValueError, match="not in classes"):
-            load_city("hong_kong", cities_root=rewrite(misspell))
+            load_config(rewrite(misspell))
 
     def test_class_lod_override_must_match_the_tier_count(self, rewrite) -> None:
         """A short table index-errors partway through a build, after the
@@ -292,21 +291,21 @@ class TestBuildingStyle:
             doc["buildings"]["class_lod_cell_sizes_m"] = {"INFRASTRUCTURE": short}
 
         with pytest.raises(ValueError, match="tiers"):
-            load_city("hong_kong", cities_root=rewrite(truncate))
+            load_config(rewrite(truncate))
 
     def test_class_lod_override_must_coarsen(self, rewrite) -> None:
         def invert(doc: dict[str, Any]) -> None:
             doc["buildings"]["class_lod_cell_sizes_m"] = {"INFRASTRUCTURE": [1.0, 0.5, 0.0]}
 
         with pytest.raises(ValueError, match="coarsest last"):
-            load_city("hong_kong", cities_root=rewrite(invert))
+            load_config(rewrite(invert))
 
     def test_jitter_outside_zero_to_one_is_rejected(self, rewrite) -> None:
         def overdo_it(doc: dict[str, Any]) -> None:
             doc["buildings"]["colour_jitter"] = 1.5
 
         with pytest.raises(ValueError, match="colour_jitter"):
-            load_city("hong_kong", cities_root=rewrite(overdo_it))
+            load_config(rewrite(overdo_it))
 
     def test_a_class_jitter_wins_over_the_default(self, hong_kong) -> None:
         style = hong_kong.buildings
@@ -323,7 +322,7 @@ class TestBuildingStyle:
             doc["buildings"]["class_colour_jitter"] = {"TERRAIN(TP)": 0.0}
 
         with pytest.raises(ValueError, match="not in classes"):
-            load_city("hong_kong", cities_root=rewrite(misspell))
+            load_config(rewrite(misspell))
 
     @pytest.mark.parametrize("value", [1.5, -0.1, float("nan"), float("inf")])
     def test_class_jitter_outside_zero_to_one_is_rejected(self, rewrite, value) -> None:
@@ -338,7 +337,7 @@ class TestBuildingStyle:
             doc["buildings"]["class_colour_jitter"] = {"BUILDING": value}
 
         with pytest.raises(ValueError, match=r"class_colour_jitter\.BUILDING"):
-            load_city("hong_kong", cities_root=rewrite(overdo_it))
+            load_config(rewrite(overdo_it))
 
     @pytest.mark.parametrize("value", [-0.1, 99.0, float("nan"), float("inf")])
     def test_facade_hue_strength_outside_its_bound_is_rejected(self, rewrite, value) -> None:
@@ -351,7 +350,7 @@ class TestBuildingStyle:
             doc["buildings"]["facade_hue"]["strength"] = value
 
         with pytest.raises(ValueError, match=r"facade_hue\.strength"):
-            load_city("hong_kong", cities_root=rewrite(overdo_it))
+            load_config(rewrite(overdo_it))
 
     @pytest.mark.parametrize("value", [-0.1, 1.1, float("nan"), float("inf")])
     def test_facade_hue_vegetation_max_outside_its_bound_is_rejected(self, rewrite, value) -> None:
@@ -362,7 +361,7 @@ class TestBuildingStyle:
             doc["buildings"]["facade_hue"]["vegetation_max"] = value
 
         with pytest.raises(ValueError, match=r"facade_hue\.vegetation_max"):
-            load_city("hong_kong", cities_root=rewrite(overdo_it))
+            load_config(rewrite(overdo_it))
 
     def test_facade_hue_needs_a_source(self, rewrite) -> None:
         """`strength` alone colours nothing, so the pair is refused rather than
@@ -372,27 +371,27 @@ class TestBuildingStyle:
             del doc["buildings"]["facade_hue"]["source"]
 
         with pytest.raises(ValueError, match="source"):
-            load_city("hong_kong", cities_root=rewrite(drop_source))
+            load_config(rewrite(drop_source))
 
     def test_facade_survey_block_is_optional_and_each_key_stands_alone(self, rewrite) -> None:
         """Same defaulted-is-the-contract rule as `facade_hue`: both tables are
         gitignored derived data, so a clone without the block — or with half of
         it — must still build, on the refusal sentinel."""
-        surveyed = load_city("hong_kong").buildings
+        surveyed = load_config().buildings
         assert surveyed.facade_glazing_source == "facade_glazing.json"
         assert surveyed.facade_grammar_source == "facade_grammar.json"
 
         def drop_block(doc: dict[str, Any]) -> None:
             del doc["buildings"]["facade_survey"]
 
-        stripped = load_city("hong_kong", cities_root=rewrite(drop_block)).buildings
+        stripped = load_config(rewrite(drop_block)).buildings
         assert stripped.facade_glazing_source is None
         assert stripped.facade_grammar_source is None
 
         def drop_grammar(doc: dict[str, Any]) -> None:
             del doc["buildings"]["facade_survey"]["grammar"]
 
-        partial = load_city("hong_kong", cities_root=rewrite(drop_grammar)).buildings
+        partial = load_config(rewrite(drop_grammar)).buildings
         assert partial.facade_glazing_source == "facade_glazing.json"
         assert partial.facade_grammar_source is None
 
@@ -416,7 +415,7 @@ class TestBuildingStyle:
                 doc["buildings"]["ground_sink_m"] = 0.0
 
         with pytest.raises(ValueError, match="ground_sink_m"):
-            load_city("hong_kong", cities_root=rewrite(spoil_it))
+            load_config(rewrite(spoil_it))
 
     def test_a_sink_without_a_tiled_ground_is_allowed(self, rewrite) -> None:
         """One direction only, on `structure_class`'s precedent. A city that
@@ -436,7 +435,7 @@ class TestBuildingStyle:
             # still being exposure-checked as though it ships.
             doc["materials"].pop("concrete_paving")
 
-        city = load_city("hong_kong", cities_root=rewrite(stop_tiling_it))
+        city = load_config(rewrite(stop_tiling_it))
         assert city.buildings.terrain_class not in city.buildings.classes
 
     @pytest.mark.parametrize("value", [-0.1, float("nan"), float("inf")])
@@ -445,11 +444,11 @@ class TestBuildingStyle:
             doc["buildings"]["ground_sink_m"] = value
 
         with pytest.raises(ValueError, match="ground_sink_m"):
-            load_city("hong_kong", cities_root=rewrite(spoil_it))
+            load_config(rewrite(spoil_it))
 
     def test_missing_buildings_block_is_rejected(self, rewrite) -> None:
         with pytest.raises(ValueError, match="buildings"):
-            load_city("hong_kong", cities_root=rewrite(lambda doc: doc.pop("buildings")))
+            load_config(rewrite(lambda doc: doc.pop("buildings")))
 
     def test_colour_comes_from_the_band_a_height_falls_in(self, hong_kong) -> None:
         style = hong_kong.buildings
@@ -486,14 +485,7 @@ def test_unknown_region_names_the_known_ones(hong_kong) -> None:
 def test_schema_version_mismatch_is_rejected(rewrite) -> None:
     root = rewrite(lambda doc: doc.__setitem__("schema_version", SUPPORTED_SCHEMA + 1))
     with pytest.raises(ValueError, match="schema_version"):
-        load_city("hong_kong", cities_root=root)
-
-
-def test_missing_geodetic_crs_is_rejected(rewrite) -> None:
-    """The datum of the bounds is exactly the thing that must never default."""
-    root = rewrite(lambda doc: doc["crs"].pop("geodetic"))
-    with pytest.raises(ValueError, match="geodetic"):
-        load_city("hong_kong", cities_root=root)
+        load_config(root)
 
 
 def test_string_keyed_elevation_levels_are_rejected(rewrite) -> None:
@@ -504,7 +496,7 @@ def test_string_keyed_elevation_levels_are_rejected(rewrite) -> None:
         doc["elevation_levels"] = {str(k): v for k, v in doc["elevation_levels"].items()}
 
     with pytest.raises(ValueError, match="not an integer"):
-        load_city("hong_kong", cities_root=rewrite(quote_keys))
+        load_config(rewrite(quote_keys))
 
 
 def test_boolean_elevation_level_keys_are_rejected(rewrite) -> None:
@@ -523,13 +515,13 @@ def test_boolean_elevation_level_keys_are_rejected(rewrite) -> None:
         doc["elevation_levels"] = levels
 
     with pytest.raises(ValueError, match="not an integer"):
-        load_city("hong_kong", cities_root=rewrite(add_bool_key))
+        load_config(rewrite(add_bool_key))
 
 
 def test_missing_ground_level_is_rejected(rewrite) -> None:
     root = rewrite(lambda doc: doc["elevation_levels"].pop(0))
     with pytest.raises(ValueError, match="level 0"):
-        load_city("hong_kong", cities_root=root)
+        load_config(root)
 
 
 class TestRoadNetwork:
@@ -556,7 +548,7 @@ class TestRoadNetwork:
             doc["roads"]["centrelines"]["fields"].pop("travel_direction")
 
         with pytest.raises(ValueError, match="travel_direction"):
-            load_city("hong_kong", cities_root=rewrite(drop_direction))
+            load_config(rewrite(drop_direction))
 
     def test_an_unknown_direction_word_is_rejected(self, rewrite) -> None:
         """`roadgraph.json` has a closed vocabulary. A typo here would ship a
@@ -566,7 +558,7 @@ class TestRoadNetwork:
             doc["roads"]["travel_directions"][3] = "one-way"
 
         with pytest.raises(ValueError, match="expected one of"):
-            load_city("hong_kong", cities_root=rewrite(misspell))
+            load_config(rewrite(misspell))
 
     def test_boolean_travel_direction_keys_are_rejected(self, rewrite) -> None:
         """The YAML 1.1 trap again: a bare `on:` key resolves to True, and
@@ -578,32 +570,32 @@ class TestRoadNetwork:
             doc["roads"]["travel_directions"] = codes
 
         with pytest.raises(ValueError, match="not an integer"):
-            load_city("hong_kong", cities_root=rewrite(add_bool_key))
+            load_config(rewrite(add_bool_key))
 
     def test_a_source_the_city_does_not_publish_is_rejected(self, rewrite) -> None:
         def rename(doc: dict[str, Any]) -> None:
             doc["roads"]["source"] = "not_fetched"
 
         with pytest.raises(ValueError, match="not in sources"):
-            load_city("hong_kong", cities_root=rewrite(rename))
+            load_config(rewrite(rename))
 
     def test_a_negative_simplify_tolerance_is_rejected(self, rewrite) -> None:
         def invert(doc: dict[str, Any]) -> None:
             doc["roads"]["simplify_tolerance_m"] = -1.0
 
         with pytest.raises(ValueError, match="simplify_tolerance_m"):
-            load_city("hong_kong", cities_root=rewrite(invert))
+            load_config(rewrite(invert))
 
     def test_an_unknown_ground_source_is_rejected(self, rewrite) -> None:
         def mistype(doc: dict[str, Any]) -> None:
             doc["roads"]["ground"] = "sea level"
 
         with pytest.raises(ValueError, match="expected one of terrain, datum"):
-            load_city("hong_kong", cities_root=rewrite(mistype))
+            load_config(rewrite(mistype))
 
     def test_a_missing_roads_block_is_rejected(self, rewrite) -> None:
         with pytest.raises(ValueError, match="'roads'"):
-            load_city("hong_kong", cities_root=rewrite(lambda doc: doc.pop("roads")))
+            load_config(rewrite(lambda doc: doc.pop("roads")))
 
     def test_a_negative_kerb_is_rejected(self, rewrite) -> None:
         """A negative kerb turns the lip inside out, inverting its winding so it
@@ -614,7 +606,7 @@ class TestRoadNetwork:
             doc["roads"]["surface"]["kerb_height_m"] = -0.15
 
         with pytest.raises(ValueError, match="kerb_height_m must not be negative"):
-            load_city("hong_kong", cities_root=rewrite(invert))
+            load_config(rewrite(invert))
 
 
 class TestCarriagewayFloor:
@@ -719,7 +711,7 @@ class TestCarriagewayFloor:
             doc["roads"]["surface"][table] = {1: -0.9}
 
         with pytest.raises(ValueError, match=r"carriageway floor -0\.9 m is below zero"):
-            load_city("hong_kong", cities_root=rewrite(narrow))
+            load_config(rewrite(narrow))
 
     def test_a_zero_floor_is_accepted_because_it_is_what_a_deck_asks_for(self, rewrite) -> None:
         """The mirror of the test above, and the reason the bar moved from 1.0 to
@@ -728,7 +720,7 @@ class TestCarriagewayFloor:
         def flat(doc: dict[str, Any]) -> None:
             doc["roads"]["surface"]["floor_default_m"] = 0.0
 
-        city = load_city("hong_kong", cities_root=rewrite(flat))
+        city = load_config(rewrite(flat))
         assert city.roads.surface.drawn_width_m(6.4, 50, elevation_level=0) == 6.4
 
     @pytest.mark.parametrize("key", [True, False, "1"])
@@ -743,7 +735,7 @@ class TestCarriagewayFloor:
             doc["roads"]["surface"]["floor_by_elevation_level"] = {key: 0.0}
 
         with pytest.raises(ValueError, match="is not an integer"):
-            load_city("hong_kong", cities_root=rewrite(odd_key))
+            load_config(rewrite(odd_key))
 
     def test_a_rule_for_a_level_the_city_never_maps_is_rejected(self, rewrite) -> None:
         """Inert rather than wrong, which is why it needs saying: the rule can
@@ -754,7 +746,7 @@ class TestCarriagewayFloor:
             doc["roads"]["surface"]["floor_by_elevation_level"] = {7: 0.0}
 
         with pytest.raises(ValueError, match="elevation_levels does not map"):
-            load_city("hong_kong", cities_root=rewrite(unmapped))
+            load_config(rewrite(unmapped))
 
     def test_a_city_that_declares_no_level_table_floors_everything_alike(self, rewrite) -> None:
         """The pre-fix behaviour stays reachable, and the table stays optional
@@ -763,7 +755,7 @@ class TestCarriagewayFloor:
         def drop(doc: dict[str, Any]) -> None:
             doc["roads"]["surface"].pop("floor_by_elevation_level")
 
-        city = load_city("hong_kong", cities_root=rewrite(drop))
+        city = load_config(rewrite(drop))
         assert city.roads.surface.floor_by_elevation_level == {}
         assert city.roads.surface.floor_for(70, elevation_level=1) == 12.48
 
@@ -776,7 +768,7 @@ class TestCarriagewayFloor:
             doc["roads"]["surface"]["floor_on_structure_m"] = -0.9
 
         with pytest.raises(ValueError, match=r"carriageway floor -0\.9 m is below zero"):
-            load_city("hong_kong", cities_root=rewrite(narrow))
+            load_config(rewrite(narrow))
 
     def test_a_negative_taper_is_rejected(self, rewrite) -> None:
         """It would run the blend backwards and widen the road onto the deck —
@@ -786,7 +778,7 @@ class TestCarriagewayFloor:
             doc["roads"]["surface"]["structure_taper_m"] = -5.0
 
         with pytest.raises(ValueError, match="structure_taper_m"):
-            load_city("hong_kong", cities_root=rewrite(backwards))
+            load_config(rewrite(backwards))
 
 
 class TestDeckSampling:
@@ -829,7 +821,7 @@ class TestDeckSampling:
         def drop(doc: dict[str, Any]) -> None:
             doc["roads"].pop("deck")
 
-        city = load_city("hong_kong", cities_root=rewrite(drop))
+        city = load_config(rewrite(drop))
         assert city.roads.deck is None
 
     @pytest.mark.parametrize("key", ["resample_m", "slab_gap_m"])
@@ -842,7 +834,7 @@ class TestDeckSampling:
             doc["roads"]["deck"][key] = 0.0
 
         with pytest.raises(ValueError, match=f"{key} must be positive"):
-            load_city("hong_kong", cities_root=rewrite(zero))
+            load_config(rewrite(zero))
 
     @pytest.mark.parametrize("key", ["max_below_terrain_m", "at_grade_m"])
     def test_a_negative_tolerance_is_rejected(self, rewrite, key: str) -> None:
@@ -853,7 +845,7 @@ class TestDeckSampling:
             doc["roads"]["deck"][key] = -1.0
 
         with pytest.raises(ValueError, match=f"{key} must not be negative"):
-            load_city("hong_kong", cities_root=rewrite(invert))
+            load_config(rewrite(invert))
 
     def test_deck_sampling_without_terrain_ground_is_rejected(self, rewrite) -> None:
         """Both the gate and the fallback are measured against the ground mesh,
@@ -863,7 +855,7 @@ class TestDeckSampling:
             doc["roads"]["ground"] = "datum"
 
         with pytest.raises(ValueError, match="deck needs ground 'terrain'"):
-            load_city("hong_kong", cities_root=rewrite(to_datum))
+            load_config(rewrite(to_datum))
 
     def test_deck_sampling_without_a_structure_class_is_rejected(self, rewrite) -> None:
         """The thresholds live under `roads:` and the geometry they apply to is
@@ -874,7 +866,7 @@ class TestDeckSampling:
             doc["buildings"].pop("structure_class")
 
         with pytest.raises(ValueError, match="structure_class names none"):
-            load_city("hong_kong", cities_root=rewrite(drop_class))
+            load_config(rewrite(drop_class))
 
     def test_an_empty_block_is_rejected_rather_than_read_as_absent(self, rewrite) -> None:
         """`deck:` with nothing under it parses as None, and would otherwise be
@@ -886,14 +878,14 @@ class TestDeckSampling:
             doc["roads"]["deck"] = None
 
         with pytest.raises(ValueError, match="deck is empty"):
-            load_city("hong_kong", cities_root=rewrite(empty))
+            load_config(rewrite(empty))
 
     def test_a_block_that_is_not_a_mapping_is_rejected(self, rewrite) -> None:
         def scalar(doc: dict[str, Any]) -> None:
             doc["roads"]["deck"] = 5
 
         with pytest.raises(ValueError, match="must be a mapping"):
-            load_city("hong_kong", cities_root=rewrite(scalar))
+            load_config(rewrite(scalar))
 
     @pytest.mark.parametrize("key", ["resample_m", "slab_gap_m", "max_below_terrain_m"])
     def test_a_non_finite_threshold_is_rejected(self, rewrite, key: str) -> None:
@@ -906,7 +898,7 @@ class TestDeckSampling:
             doc["roads"]["deck"][key] = float("nan")
 
         with pytest.raises(ValueError, match=f"{key} must be a finite number"):
-            load_city("hong_kong", cities_root=rewrite(not_a_number))
+            load_config(rewrite(not_a_number))
 
     def test_an_unbounded_slab_gap_is_rejected(self, rewrite) -> None:
         """`.inf` merges every stacked structure into one slab, and the measured
@@ -916,7 +908,7 @@ class TestDeckSampling:
             doc["roads"]["deck"]["slab_gap_m"] = float("inf")
 
         with pytest.raises(ValueError, match="slab_gap_m must be a finite number"):
-            load_city("hong_kong", cities_root=rewrite(unbounded))
+            load_config(rewrite(unbounded))
 
     def test_a_threshold_that_is_not_a_number_names_where_it_came_from(self, rewrite) -> None:
         """`float()` on its own reports the bad value and not its key, which in a
@@ -926,7 +918,7 @@ class TestDeckSampling:
             doc["roads"]["deck"]["resample_m"] = "ten"
 
         with pytest.raises(ValueError, match="deck:resample_m is 'ten'"):
-            load_city("hong_kong", cities_root=rewrite(text))
+            load_config(rewrite(text))
 
     def test_a_key_the_block_does_not_use_is_rejected(self, rewrite) -> None:
         """Misspelling one of the four is already caught by its absence, but
@@ -937,7 +929,7 @@ class TestDeckSampling:
             doc["roads"]["deck"]["max_above_terrain_m"] = 99.0
 
         with pytest.raises(ValueError, match="does not use max_above_terrain_m"):
-            load_city("hong_kong", cities_root=rewrite(extra))
+            load_config(rewrite(extra))
 
 
 class TestGroundProfile:
@@ -963,7 +955,7 @@ class TestGroundProfile:
         def drop(doc: dict[str, Any]) -> None:
             del doc["roads"]["ground_profile"]
 
-        assert load_city("hong_kong", cities_root=rewrite(drop)).roads.ground_profile is None
+        assert load_config(rewrite(drop)).roads.ground_profile is None
 
     def test_following_the_ground_without_terrain_ground_is_rejected(self, rewrite) -> None:
         """There is nothing to follow under `datum`, so the block could never
@@ -974,28 +966,28 @@ class TestGroundProfile:
             del doc["roads"]["deck"]
 
         with pytest.raises(ValueError, match="ground_profile needs ground 'terrain'"):
-            load_city("hong_kong", cities_root=rewrite(to_datum))
+            load_config(rewrite(to_datum))
 
     def test_an_empty_block_is_rejected_rather_than_read_as_absent(self, rewrite) -> None:
         def empty(doc: dict[str, Any]) -> None:
             doc["roads"]["ground_profile"] = None
 
         with pytest.raises(ValueError, match="ground_profile is empty"):
-            load_city("hong_kong", cities_root=rewrite(empty))
+            load_config(rewrite(empty))
 
     def test_a_block_that_is_not_a_mapping_is_rejected(self, rewrite) -> None:
         def scalar(doc: dict[str, Any]) -> None:
             doc["roads"]["ground_profile"] = 10.0
 
         with pytest.raises(ValueError, match="ground_profile must be a mapping"):
-            load_city("hong_kong", cities_root=rewrite(scalar))
+            load_config(rewrite(scalar))
 
     def test_a_key_the_block_does_not_use_is_rejected(self, rewrite) -> None:
         def extra(doc: dict[str, Any]) -> None:
             doc["roads"]["ground_profile"]["tolerance_mm"] = 100.0
 
         with pytest.raises(ValueError, match="does not use tolerance_mm"):
-            load_city("hong_kong", cities_root=rewrite(extra))
+            load_config(rewrite(extra))
 
     @pytest.mark.parametrize("value", [0.0, -1.0, float("nan"), float("inf")])
     def test_an_unusable_spacing_is_rejected(self, rewrite, value: float) -> None:
@@ -1006,7 +998,7 @@ class TestGroundProfile:
             doc["roads"]["ground_profile"]["resample_m"] = value
 
         with pytest.raises(ValueError, match="resample_m"):
-            load_city("hong_kong", cities_root=rewrite(spoil))
+            load_config(rewrite(spoil))
 
     @pytest.mark.parametrize("value", [-1.0, float("nan"), float("inf")])
     def test_an_unusable_tolerance_is_rejected(self, rewrite, value: float) -> None:
@@ -1018,7 +1010,7 @@ class TestGroundProfile:
             doc["roads"]["ground_profile"]["tolerance_m"] = value
 
         with pytest.raises(ValueError, match="tolerance_m"):
-            load_city("hong_kong", cities_root=rewrite(spoil))
+            load_config(rewrite(spoil))
 
 
 class TestFares:
@@ -1110,7 +1102,7 @@ class TestFares:
             group["categories"] = list(reversed(group["categories"]))
 
         with pytest.raises(ValueError, match="can therefore never be reached"):
-            load_city("hong_kong", cities_root=rewrite(reverse))
+            load_config(rewrite(reverse))
 
     def test_an_unmatched_category_names_the_rules_it_tried(self, hong_kong) -> None:
         stands = next(g for g in hong_kong.fares.groups if g.kind == "taxi_stand")
@@ -1123,25 +1115,25 @@ class TestFares:
             doc["fares"]["groups"][0]["kind"] = "bus_stop"
 
         with pytest.raises(ValueError, match="expected one of taxi_stand, pudo, poi"):
-            load_city("hong_kong", cities_root=rewrite(mistype))
+            load_config(rewrite(mistype))
 
     def test_a_source_the_city_does_not_publish_is_rejected(self, rewrite) -> None:
         def rename(doc: dict[str, Any]) -> None:
             doc["fares"]["groups"][0]["source"] = "not_fetched"
 
         with pytest.raises(ValueError, match="not in sources"):
-            load_city("hong_kong", cities_root=rewrite(rename))
+            load_config(rewrite(rename))
 
     def test_a_non_positive_snap_limit_is_rejected(self, rewrite) -> None:
         def zero(doc: dict[str, Any]) -> None:
             doc["fares"]["max_snap_m"] = 0.0
 
         with pytest.raises(ValueError, match="max_snap_m"):
-            load_city("hong_kong", cities_root=rewrite(zero))
+            load_config(rewrite(zero))
 
     def test_a_missing_fares_block_is_rejected(self, rewrite) -> None:
         with pytest.raises(ValueError, match="'fares'"):
-            load_city("hong_kong", cities_root=rewrite(lambda doc: doc.pop("fares")))
+            load_config(rewrite(lambda doc: doc.pop("fares")))
 
 
 class TestMaterialAssignment:
@@ -1166,21 +1158,21 @@ class TestMaterialAssignment:
         def drop(doc: dict[str, Any]) -> None:
             del doc["buildings"]["material_assignment"]["surveyed"]
 
-        city = load_city("hong_kong", cities_root=rewrite(drop))
+        city = load_config(rewrite(drop))
         assert city.buildings.material_assignment.rings == ()
         # Nothing else had to move, and that is worth asserting rather than
         # assuming: every material the draw names is also named by the ramp, so
         # deleting the draw strands none of them. An earlier version of this test
         # appended two junk bands to keep them referenced, on a guess that was
         # simply wrong — and the junk bands silently repainted every tower.
-        assert set(city.materials) == set(load_city("hong_kong").materials)
+        assert set(city.materials) == set(load_config().materials)
 
     def test_unordered_rings_are_rejected(self, rewrite) -> None:
         def invert(doc: dict[str, Any]) -> None:
             doc["buildings"]["material_assignment"]["surveyed"]["rings"].reverse()
 
         with pytest.raises(ValueError, match="ascending up_to_chroma"):
-            load_city("hong_kong", cities_root=rewrite(invert))
+            load_config(rewrite(invert))
 
     def test_a_closed_last_ring_is_rejected(self, rewrite) -> None:
         """Chroma has no ceiling, so a bounded last ring leaves the most
@@ -1190,7 +1182,7 @@ class TestMaterialAssignment:
             doc["buildings"]["material_assignment"]["surveyed"]["rings"][-1]["up_to_chroma"] = 40.0
 
         with pytest.raises(ValueError, match=r"\.inf"):
-            load_city("hong_kong", cities_root=rewrite(close_it))
+            load_config(rewrite(close_it))
 
     def test_a_ring_with_both_weights_and_sectors_is_rejected(self, rewrite) -> None:
         """Either would be silently dead. Refused rather than resolved by
@@ -1201,14 +1193,14 @@ class TestMaterialAssignment:
             ring["weights"] = {"panel_grey": 1.0}
 
         with pytest.raises(ValueError, match="exactly one of"):
-            load_city("hong_kong", cities_root=rewrite(both))
+            load_config(rewrite(both))
 
     def test_a_ring_with_neither_is_rejected(self, rewrite) -> None:
         def neither(doc: dict[str, Any]) -> None:
             del doc["buildings"]["material_assignment"]["surveyed"]["rings"][0]["weights"]
 
         with pytest.raises(ValueError, match="exactly one of"):
-            load_city("hong_kong", cities_root=rewrite(neither))
+            load_config(rewrite(neither))
 
     def test_unordered_sectors_are_rejected(self, rewrite) -> None:
         """The wrap only covers the circle if the boundaries ascend."""
@@ -1217,7 +1209,7 @@ class TestMaterialAssignment:
             doc["buildings"]["material_assignment"]["surveyed"]["rings"][-1]["sectors"].reverse()
 
         with pytest.raises(ValueError, match="ascending from_deg"):
-            load_city("hong_kong", cities_root=rewrite(invert))
+            load_config(rewrite(invert))
 
     @pytest.mark.parametrize(("index", "angle"), [(0, -10.0), (-1, 360.0), (-1, 400.0)])
     def test_a_sector_boundary_off_the_circle_is_rejected(self, rewrite, index, angle) -> None:
@@ -1230,7 +1222,7 @@ class TestMaterialAssignment:
             ] = angle
 
         with pytest.raises(ValueError, match=r"\[0, 360\)"):
-            load_city("hong_kong", cities_root=rewrite(move))
+            load_config(rewrite(move))
 
     def test_every_bin_expects_the_reflectance_the_ramp_already_gave_it(self, hong_kong) -> None:
         """⚠️ **The mitigation that makes this change gradeable**, asserted so it
@@ -1293,7 +1285,7 @@ class TestPaletteExposure:
             doc["materials"]["concrete_kerb"]["colour"] = "#9a968d"
 
         with pytest.raises(ValueError, match=r"materials\.concrete_kerb"):
-            load_city("hong_kong", cities_root=rewrite(restore))
+            load_config(rewrite(restore))
 
     def test_re_exposing_only_some_materials_is_rejected(self, rewrite) -> None:
         """`235aa4f` in the only miniature still available, which is the point.
@@ -1317,7 +1309,7 @@ class TestPaletteExposure:
                     entry["reflectance"] = entry["reflectance"] * 0.520 / 0.40
 
         with pytest.raises(ValueError, match=r"materials\.(asphalt_aged|concrete_kerb)"):
-            load_city("hong_kong", cities_root=rewrite(re_expose))
+            load_config(rewrite(re_expose))
 
     def test_a_reference_to_an_undeclared_material_is_rejected(self, rewrite) -> None:
         """The forward direction of the join. A name with no entry would
@@ -1329,7 +1321,7 @@ class TestPaletteExposure:
             )
 
         with pytest.raises(ValueError, match="which materials: does not declare"):
-            load_city("hong_kong", cities_root=rewrite(dangle))
+            load_config(rewrite(dangle))
 
     def test_a_material_nothing_references_is_rejected(self, rewrite) -> None:
         """The reverse direction, inherited from the `class_reflectance` stray
@@ -1348,7 +1340,7 @@ class TestPaletteExposure:
             }
 
         with pytest.raises(ValueError, match="roof_felt, which nothing references"):
-            load_city("hong_kong", cities_root=rewrite(stray))
+            load_config(rewrite(stray))
 
     def test_a_material_without_a_source_is_rejected(self, rewrite) -> None:
         """Unvalidated but required. The point is that somebody had to type an
@@ -1358,7 +1350,7 @@ class TestPaletteExposure:
             del doc["materials"]["concrete_paving"]["source"]
 
         with pytest.raises(ValueError, match="source"):
-            load_city("hong_kong", cities_root=rewrite(drop))
+            load_config(rewrite(drop))
 
     def test_a_zero_anchor_is_rejected(self, rewrite) -> None:
         """Zero would make every colour black and pass the check for any material.
@@ -1371,7 +1363,7 @@ class TestPaletteExposure:
             doc["exposure_anchor"] = 0.0
 
         with pytest.raises(ValueError, match=r"must be in \(0, 2\.0\]"):
-            load_city("hong_kong", cities_root=rewrite(zero))
+            load_config(rewrite(zero))
 
     @pytest.mark.parametrize("value", [0.0, -1.0, 101.0])
     def test_an_impossible_reflectance_is_rejected(self, rewrite, value) -> None:
@@ -1379,7 +1371,7 @@ class TestPaletteExposure:
             doc["materials"]["asphalt_aged"]["reflectance"] = value
 
         with pytest.raises(ValueError, match="reflectance"):
-            load_city("hong_kong", cities_root=rewrite(spoil))
+            load_config(rewrite(spoil))
 
     def test_no_colour_escapes_the_materials_table(self) -> None:
         """⚠️ **The check `_check_exposure` now depends on and cannot make.**
@@ -1427,7 +1419,7 @@ class TestPaletteExposure:
         So the exemption is narrow, by prefix, and deliberately not a general
         escape: any *other* new key authoring a colour still fails.
         """
-        document = yaml.safe_load((CITIES_ROOT / "hong_kong.yaml").read_text(encoding="utf-8"))
+        document = yaml.safe_load((CONFIG_PATH).read_text(encoding="utf-8"))
         declared = {entry["colour"] for entry in document["materials"].values()}
 
         def hex_colours(node: Any, path: str):
@@ -1469,7 +1461,7 @@ class TestPodiums:
     def test_the_block_is_optional(self, rewrite) -> None:
         """A city without a topographic source builds as before — the same
         defaulted-is-the-contract rule as the survey tables."""
-        city = load_city("hong_kong", cities_root=rewrite(lambda doc: doc.pop("podiums")))
+        city = load_config(rewrite(lambda doc: doc.pop("podiums")))
         assert city.podiums is None
 
     def test_a_source_that_is_not_tiled_is_rejected(self, rewrite) -> None:
@@ -1480,7 +1472,7 @@ class TestPodiums:
             doc["podiums"]["source"] = "road_network_gdb"
 
         with pytest.raises(ValueError, match="not in tiled_sources"):
-            load_city("hong_kong", cities_root=rewrite(rename))
+            load_config(rewrite(rename))
 
     @pytest.mark.parametrize("member", ["{sheet}/{sheet}.gdb", "{tile/{tile}.gdb"])
     def test_a_member_with_a_bad_placeholder_is_rejected(self, rewrite, member: str) -> None:
@@ -1491,14 +1483,14 @@ class TestPodiums:
             doc["podiums"]["member"] = member
 
         with pytest.raises(ValueError, match="placeholder"):
-            load_city("hong_kong", cities_root=rewrite(mistype))
+            load_config(rewrite(mistype))
 
     def test_a_missing_role_is_rejected(self, rewrite) -> None:
         def drop(doc: dict[str, Any]) -> None:
             del doc["podiums"]["blocks"]["fields"]["roof_level"]
 
         with pytest.raises(ValueError, match="roof_level"):
-            load_city("hong_kong", cities_root=rewrite(drop))
+            load_config(rewrite(drop))
 
     def test_a_missing_code_role_is_rejected(self, rewrite) -> None:
         """The join asks for the tower and podium domain values by role, so a
@@ -1508,7 +1500,7 @@ class TestPodiums:
             del doc["podiums"]["codes"]["podium"]
 
         with pytest.raises(ValueError, match="codes is missing podium"):
-            load_city("hong_kong", cities_root=rewrite(drop))
+            load_config(rewrite(drop))
 
     def test_the_real_config_maps_both_code_roles(self, hong_kong) -> None:
         assert hong_kong.podiums.code("tower") != hong_kong.podiums.code("podium")
@@ -1557,7 +1549,7 @@ class TestLandmarks:
             for name in ("panel_pale", "roof_grey", "curtain_glass", "concrete_pale"):
                 del doc["materials"][name]
 
-        city = load_city("hong_kong", cities_root=rewrite(drop))
+        city = load_config(rewrite(drop))
         assert city.landmarks == ()
 
     def test_a_reused_id_is_rejected(self, rewrite) -> None:
@@ -1565,7 +1557,7 @@ class TestLandmarks:
             doc["landmarks"].append(dict(doc["landmarks"][0]))
 
         with pytest.raises(ValueError, match="reuses id"):
-            load_city("hong_kong", cities_root=rewrite(duplicate))
+            load_config(rewrite(duplicate))
 
     def test_a_stem_claimed_twice_is_rejected(self, rewrite) -> None:
         """Two heroes over one building would fail export's set-equality check
@@ -1577,7 +1569,7 @@ class TestLandmarks:
             )
 
         with pytest.raises(ValueError, match="already claimed"):
-            load_city("hong_kong", cities_root=rewrite(share))
+            load_config(rewrite(share))
 
     def test_an_empty_replacement_list_is_rejected(self, rewrite) -> None:
         """A hero replacing nothing lands inside the source building it was
@@ -1587,7 +1579,7 @@ class TestLandmarks:
             doc["landmarks"][0]["replaces_source_ids"] = []
 
         with pytest.raises(ValueError, match="non-empty"):
-            load_city("hong_kong", cities_root=rewrite(strip))
+            load_config(rewrite(strip))
 
     def test_an_authored_asset_outside_the_authored_directory_is_rejected(self, rewrite) -> None:
         def relocate(doc: dict[str, Any]) -> None:
@@ -1595,7 +1587,7 @@ class TestLandmarks:
             doc["landmarks"][1]["asset"] = "res://assets/generated/central_plaza.glb"
 
         with pytest.raises(ValueError, match="authored/landmarks"):
-            load_city("hong_kong", cities_root=rewrite(relocate))
+            load_config(rewrite(relocate))
 
     def test_a_mesh_sourced_asset_must_be_its_derived_path(self, rewrite) -> None:
         """The stage writes `landmarks/<id>.glb`; any other asset spelling
@@ -1605,7 +1597,7 @@ class TestLandmarks:
             doc["landmarks"][0]["asset"] = "res://assets/authored/landmarks/hkcec.glb"
 
         with pytest.raises(ValueError, match="repainted source mesh"):
-            load_city("hong_kong", cities_root=rewrite(relocate))
+            load_config(rewrite(relocate))
 
     def test_a_mesh_sourced_bearing_is_rejected(self, rewrite) -> None:
         """The extracted mesh keeps its source orientation — a bearing on top
@@ -1615,7 +1607,7 @@ class TestLandmarks:
             doc["landmarks"][0]["rot_y_deg"] = 6.4
 
         with pytest.raises(ValueError, match="source orientation"):
-            load_city("hong_kong", cities_root=rewrite(rotate))
+            load_config(rewrite(rotate))
 
     def test_a_paint_material_missing_from_the_table_is_rejected(self, rewrite) -> None:
         """Paint surfaces resolve through the materials table — the invariant
@@ -1625,14 +1617,14 @@ class TestLandmarks:
             doc["landmarks"][0]["source_paint"]["materials"]["roof"] = "roof_gray"
 
         with pytest.raises(ValueError, match="materials: does not declare"):
-            load_city("hong_kong", cities_root=rewrite(mistype))
+            load_config(rewrite(mistype))
 
     def test_a_non_positive_triangle_budget_is_rejected(self, rewrite) -> None:
         def zero(doc: dict[str, Any]) -> None:
             doc["landmarks"][0]["triangle_budget"] = 0
 
         with pytest.raises(ValueError, match="positive integer"):
-            load_city("hong_kong", cities_root=rewrite(zero))
+            load_config(rewrite(zero))
 
     def test_an_out_of_range_normal_threshold_is_rejected(self, rewrite) -> None:
         """Above 1 nothing ever matches and the whole mesh silently paints as
@@ -1642,7 +1634,7 @@ class TestLandmarks:
             doc["landmarks"][0]["source_paint"]["roof_normal_y"] = 1.5
 
         with pytest.raises(ValueError, match="within"):
-            load_city("hong_kong", cities_root=rewrite(overshoot))
+            load_config(rewrite(overshoot))
 
     def test_an_out_of_range_crease_is_rejected(self, rewrite) -> None:
         """At 180 growth crosses every edge and the first seed's surface
@@ -1652,14 +1644,14 @@ class TestLandmarks:
             doc["landmarks"][0]["source_paint"]["crease_deg"] = 180.0
 
         with pytest.raises(ValueError, match="crease_deg"):
-            load_city("hong_kong", cities_root=rewrite(flood))
+            load_config(rewrite(flood))
 
     def test_a_non_boolean_reference_flag_is_rejected(self, rewrite) -> None:
         def mistype(doc: dict[str, Any]) -> None:
             doc["landmarks"][0]["source_paint"]["reference_texture"] = "yes"
 
         with pytest.raises(ValueError, match="reference_texture"):
-            load_city("hong_kong", cities_root=rewrite(mistype))
+            load_config(rewrite(mistype))
 
     def test_the_real_config_references_the_photo(self, hong_kong) -> None:
         paint = {landmark.id: landmark for landmark in hong_kong.landmarks}["hkcec"].source_paint
@@ -1675,14 +1667,14 @@ class TestLandmarks:
             doc["landmarks"][0]["pos"]["easting"] = 800000.0
 
         with pytest.raises(ValueError, match="inside no declared region"):
-            load_city("hong_kong", cities_root=rewrite(strand))
+            load_config(rewrite(strand))
 
     def test_a_missing_display_name_is_rejected(self, rewrite) -> None:
         def drop(doc: dict[str, Any]) -> None:
             del doc["landmarks"][0]["name"]["zh"]
 
         with pytest.raises(ValueError, match="zh"):
-            load_city("hong_kong", cities_root=rewrite(drop))
+            load_config(rewrite(drop))
 
     def test_the_tile_suffix_is_parsed_onto_the_source(self, hong_kong) -> None:
         assert hong_kong.tiled_sources["topography"].tile_suffix == ".zip"
@@ -1693,7 +1685,7 @@ class TestLandmarks:
             doc["tiled_sources"]["topography"]["tile_suffix"] = "zip"
 
         with pytest.raises(ValueError, match="tile_suffix"):
-            load_city("hong_kong", cities_root=rewrite(mistype))
+            load_config(rewrite(mistype))
 
 
 class TestExtraCas:
@@ -1706,7 +1698,7 @@ class TestExtraCas:
             assert certificate.is_file()
 
     def test_the_key_is_optional(self, rewrite) -> None:
-        city = load_city("hong_kong", cities_root=rewrite(lambda doc: doc.pop("extra_cas")))
+        city = load_config(rewrite(lambda doc: doc.pop("extra_cas")))
         assert city.extra_cas == ()
 
     def test_a_missing_certificate_is_rejected_at_load(self, rewrite) -> None:
@@ -1717,7 +1709,7 @@ class TestExtraCas:
             doc["extra_cas"] = ["../certs/nonexistent.pem"]
 
         with pytest.raises(ValueError, match="does not exist"):
-            load_city("hong_kong", cities_root=rewrite(mistype))
+            load_config(rewrite(mistype))
 
 
 class TestKerbsideRestrictions:
@@ -1741,9 +1733,7 @@ class TestKerbsideRestrictions:
     def test_the_block_is_optional(self, rewrite) -> None:
         """A city whose sources carry no such layer draws no kerbside line,
         which is the honest answer rather than the invented one."""
-        city = load_city(
-            "hong_kong", cities_root=rewrite(lambda doc: doc["roads"].pop("kerbside_restrictions"))
-        )
+        city = load_config(rewrite(lambda doc: doc["roads"].pop("kerbside_restrictions")))
         assert city.roads.kerbside is None
 
     def test_an_unmapped_time_zone_raises_rather_than_defaulting(self, hong_kong) -> None:
@@ -1757,14 +1747,14 @@ class TestKerbsideRestrictions:
             doc["roads"]["kerbside_restrictions"]["painted_vehicle_types"] = []
 
         with pytest.raises(ValueError, match="would paint nothing"):
-            load_city("hong_kong", cities_root=rewrite(empty))
+            load_config(rewrite(empty))
 
     def test_a_kind_outside_the_vocabulary_is_rejected(self, rewrite) -> None:
         def invent(doc: dict[str, Any]) -> None:
             doc["roads"]["kerbside_restrictions"]["kinds"][1] = "triple"
 
         with pytest.raises(ValueError, match="expected one of"):
-            load_city("hong_kong", cities_root=rewrite(invent))
+            load_config(rewrite(invent))
 
     def test_a_minimum_run_below_the_sampling_pitch_is_rejected(self, rewrite) -> None:
         """It could reject nothing: the shortest run the sampler can produce is
@@ -1774,7 +1764,7 @@ class TestKerbsideRestrictions:
             doc["roads"]["kerbside_restrictions"]["min_run_m"] = 0.5
 
         with pytest.raises(ValueError, match="would reject nothing"):
-            load_city("hong_kong", cities_root=rewrite(blunt))
+            load_config(rewrite(blunt))
 
 
 class TestKerbsideAudit:
@@ -1801,14 +1791,13 @@ class TestKerbsideAudit:
             doc["roads"]["kerbside_restrictions"]["audit"]["source"] = "no_such_source"
 
         with pytest.raises(ValueError, match="which is not in sources"):
-            load_city("hong_kong", cities_root=rewrite(rename))
+            load_config(rewrite(rename))
 
     def test_the_block_is_optional(self, rewrite) -> None:
         """A city with one source and no way to check it says so by leaving the
         block out, rather than by an audit that grades a source against itself."""
-        city = load_city(
-            "hong_kong",
-            cities_root=rewrite(lambda doc: doc["roads"]["kerbside_restrictions"].pop("audit")),
+        city = load_config(
+            rewrite(lambda doc: doc["roads"]["kerbside_restrictions"].pop("audit")),
         )
         assert city.roads.kerbside is not None
         assert city.roads.kerbside.audit is None
@@ -1821,7 +1810,7 @@ class TestKerbsideAudit:
             doc["roads"]["kerbside_restrictions"]["audit"]["kinds"]["RM1040"] = "triple"
 
         with pytest.raises(ValueError, match="expected one of"):
-            load_city("hong_kong", cities_root=rewrite(invent))
+            load_config(rewrite(invent))
 
     def test_an_empty_kind_table_is_rejected(self, rewrite) -> None:
         """It would map every marking code to nothing, grade the whole region as
@@ -1831,7 +1820,7 @@ class TestKerbsideAudit:
             doc["roads"]["kerbside_restrictions"]["audit"]["kinds"] = {}
 
         with pytest.raises(ValueError, match="grade every metre unknown"):
-            load_city("hong_kong", cities_root=rewrite(empty))
+            load_config(rewrite(empty))
 
 
 class TestPagedSources:
@@ -1981,14 +1970,14 @@ class TestCarriagewaySurvey:
         block out, and is then honestly unmeasurable rather than measured
         against an invented width."""
         cities = rewrite(lambda doc: doc.pop("carriageway_survey"))
-        city = load_city("hong_kong", cities_root=cities)
+        city = load_config(cities)
 
         assert city.carriageway_survey is None
 
     def test_the_manual_bounds_load(self, rewrite) -> None:
         """`Q95`. Hard rule 3 keeps them in the city file — the second city has
         its own design manual — and hard rule 4 keeps them out of the tool."""
-        bounds = load_city("hong_kong").carriageway_survey.width_bounds
+        bounds = load_config().carriageway_survey.width_bounds
 
         assert (bounds.max_m, bounds.min_m, bounds.hard_min_m) == (16.5, 7.3, 3.0)
         assert bounds.lane_m == (3.0, 3.65)
@@ -2010,7 +1999,7 @@ class TestCarriagewaySurvey:
             doc["carriageway_survey"]["width_bounds"]["dual_max_m"] = 16.5
 
         with pytest.raises(ValueError, match="hard_min_m < dual_max_m < max_m"):
-            load_city("hong_kong", cities_root=rewrite(wide))
+            load_config(rewrite(wide))
 
     def test_a_dual_floor_outside_its_own_column_is_rejected(self, rewrite) -> None:
         """The crossing rule reads the dual column's two ends as brackets around
@@ -2024,7 +2013,7 @@ class TestCarriagewaySurvey:
             doc["carriageway_survey"]["width_bounds"]["dual_min_m"] = 14.6
 
         with pytest.raises(ValueError, match="hard_min_m < dual_min_m < dual_max_m"):
-            load_city("hong_kong", cities_root=rewrite(wide))
+            load_config(rewrite(wide))
 
     def test_a_separator_wider_than_the_span_is_rejected(self, rewrite) -> None:
         """The residual is what is left of the span after both carriageways, so a
@@ -2034,7 +2023,7 @@ class TestCarriagewaySurvey:
             doc["carriageway_survey"]["width_bounds"]["median_max_m"] = 16.5
 
         with pytest.raises(ValueError, match="cannot be wider than the span"):
-            load_city("hong_kong", cities_root=rewrite(wide))
+            load_config(rewrite(wide))
 
     def test_a_pairing_tolerance_at_ninety_is_rejected(self, rewrite) -> None:
         """At 90 a perpendicular centreline reads as opposed, so a side street
@@ -2046,7 +2035,7 @@ class TestCarriagewaySurvey:
             doc["carriageway_survey"]["width_bounds"]["pair_bearing_tolerance_deg"] = 90.0
 
         with pytest.raises(ValueError, match="perpendicular centreline"):
-            load_city("hong_kong", cities_root=rewrite(flat))
+            load_config(rewrite(flat))
 
     def test_the_bounds_are_optional(self, rewrite) -> None:
         """A city whose manual nobody has transcribed reports the near-side
@@ -2055,7 +2044,7 @@ class TestCarriagewaySurvey:
         def drop(doc: dict[str, Any]) -> None:
             doc["carriageway_survey"].pop("width_bounds")
 
-        city = load_city("hong_kong", cities_root=rewrite(drop))
+        city = load_config(rewrite(drop))
 
         assert city.carriageway_survey.width_bounds is None
 
@@ -2068,14 +2057,14 @@ class TestCarriagewaySurvey:
             doc["carriageway_survey"]["width_bounds"]["min_m"] = 20.0
 
         with pytest.raises(ValueError, match="hard_min_m < min_m < max_m"):
-            load_city("hong_kong", cities_root=rewrite(inverted))
+            load_config(rewrite(inverted))
 
     def test_a_lane_range_that_is_not_ascending_is_rejected(self, rewrite) -> None:
         def backwards(doc: dict[str, Any]) -> None:
             doc["carriageway_survey"]["width_bounds"]["lane_m"] = [3.65, 3.0]
 
         with pytest.raises(ValueError, match="ascending and positive"):
-            load_city("hong_kong", cities_root=rewrite(backwards))
+            load_config(rewrite(backwards))
 
     def test_an_infinite_lane_width_is_rejected(self, rewrite) -> None:
         """YAML 1.1 resolves `.inf`, and this file relies on that for
@@ -2089,7 +2078,7 @@ class TestCarriagewaySurvey:
             doc["carriageway_survey"]["width_bounds"]["lane_m"] = [3.0, float("inf")]
 
         with pytest.raises(ValueError, match="finite and positive"):
-            load_city("hong_kong", cities_root=rewrite(unbounded))
+            load_config(rewrite(unbounded))
 
     def test_a_lane_floor_above_the_hard_minimum_is_rejected(self, rewrite) -> None:
         """The two would then disagree about what one lane is, and a width the
@@ -2099,7 +2088,7 @@ class TestCarriagewaySurvey:
             doc["carriageway_survey"]["width_bounds"]["lane_m"] = [4.0, 5.0]
 
         with pytest.raises(ValueError, match="bracket to no lanes"):
-            load_city("hong_kong", cities_root=rewrite(wide))
+            load_config(rewrite(wide))
 
     def test_an_empty_edge_list_is_rejected(self, rewrite) -> None:
         """It would report total coverage of nothing, which reads as agreement."""
@@ -2108,7 +2097,7 @@ class TestCarriagewaySurvey:
             doc["carriageway_survey"]["edges"] = []
 
         with pytest.raises(ValueError, match="is empty"):
-            load_city("hong_kong", cities_root=rewrite(empty))
+            load_config(rewrite(empty))
 
     def test_repeated_names_are_rejected(self, rewrite) -> None:
         """The report is keyed by name, so a duplicate merges two publishers into
@@ -2121,7 +2110,7 @@ class TestCarriagewaySurvey:
             ]
 
         with pytest.raises(ValueError, match="repeated names"):
-            load_city("hong_kong", cities_root=rewrite(collide))
+            load_config(rewrite(collide))
 
     def test_an_empty_code_list_is_rejected(self, rewrite) -> None:
         """It would match no feature and report the source as carrying nothing,
@@ -2131,14 +2120,14 @@ class TestCarriagewaySurvey:
             doc["carriageway_survey"]["edges"][0]["codes"] = []
 
         with pytest.raises(ValueError, match="codes is empty"):
-            load_city("hong_kong", cities_root=rewrite(empty))
+            load_config(rewrite(empty))
 
     def test_an_unfetchable_plain_source_is_rejected(self, rewrite) -> None:
         def rename(doc: dict[str, Any]) -> None:
             doc["carriageway_survey"]["edges"][0]["source"] = "no_such_source"
 
         with pytest.raises(ValueError, match="which is not in sources"):
-            load_city("hong_kong", cities_root=rewrite(rename))
+            load_config(rewrite(rename))
 
     def test_an_unfetchable_tiled_source_is_rejected(self, rewrite) -> None:
         """The per-sheet entry is checked against `tiled_sources`, not `sources`
@@ -2148,7 +2137,7 @@ class TestCarriagewaySurvey:
             doc["carriageway_survey"]["edges"][1]["source"] = "road_network_gdb"
 
         with pytest.raises(ValueError, match="which is not in tiled_sources"):
-            load_city("hong_kong", cities_root=rewrite(rename))
+            load_config(rewrite(rename))
 
     def test_a_malformed_member_placeholder_is_rejected(self, rewrite) -> None:
         """Otherwise it surfaces at first read, once per sheet, rather than at
@@ -2158,7 +2147,7 @@ class TestCarriagewaySurvey:
             doc["carriageway_survey"]["edges"][1]["member"] = "{sheet}/{sheet}.gdb"
 
         with pytest.raises(ValueError, match="placeholder"):
-            load_city("hong_kong", cities_root=rewrite(broken))
+            load_config(rewrite(broken))
 
     def test_off_grade_codes_without_a_column_to_read_them_from_is_rejected(self, rewrite) -> None:
         """⚠️ It would load, filter nothing, and publish a level-0 figure computed
@@ -2169,11 +2158,11 @@ class TestCarriagewaySurvey:
             doc["carriageway_survey"]["edges"][1]["off_grade_codes"] = ["RMU"]
 
         with pytest.raises(ValueError, match="no 'elevation' role"):
-            load_city("hong_kong", cities_root=rewrite(orphan))
+            load_config(rewrite(orphan))
 
     def test_a_missing_edge_type_role_is_rejected(self, rewrite) -> None:
         def drop(doc: dict[str, Any]) -> None:
             doc["carriageway_survey"]["edges"][0]["fields"].pop("edge_type")
 
         with pytest.raises(ValueError, match="missing edge_type"):
-            load_city("hong_kong", cities_root=rewrite(drop))
+            load_config(rewrite(drop))

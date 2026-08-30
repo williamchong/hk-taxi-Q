@@ -24,7 +24,7 @@ import numpy as np
 import pytest
 import yaml
 
-from pipeline.config import _LAMP_MEASURES, load_city
+from pipeline.config import _LAMP_MEASURES, load_config
 from pipeline.lamps import (
     LAMPS_MATERIAL,
     LampReport,
@@ -94,7 +94,7 @@ def city_with(tmp_path, block: dict[str, Any] | None):
     cities = tmp_path / "cities"
     cities.mkdir(exist_ok=True)
     (cities / "testville.yaml").write_text(yaml.safe_dump(document), encoding="utf-8")
-    return load_city("testville", cities_root=cities)
+    return load_config(cities / "testville.yaml")
 
 
 @pytest.fixture
@@ -477,7 +477,7 @@ class TestTheShippedRegionReproducesItsPublishedNumbers:
         bar, `PROGRESS.md`'s 35,880 and `Q82`'s per-lamp enumeration all go stale
         at once. Field-for-field, deliberately, rather than on a spot check.
         """
-        shipped = load_city("hong_kong").lamps
+        shipped = load_config().lamps
 
         assert shipped is not None
         assert shipped.kinds == tuple(BLOCK["kinds"])
@@ -491,12 +491,12 @@ class TestTheShippedRegionReproducesItsPublishedNumbers:
         """The design intent as arithmetic, and the value `lamps.json` publishes
         as `lantern_overhang_m.p50`: a column stands `outset_m` behind the kerb
         and its lantern reaches `arm_reach_m` back in."""
-        shipped = load_city("hong_kong").lamps
+        shipped = load_config().lamps
 
         assert shipped.arm_reach_m - shipped.outset_m == pytest.approx(1.0)
 
     def test_the_shipped_block_declares_the_published_domain_code(self):
-        spec = load_city("hong_kong").lamps
+        spec = load_config().lamps
 
         assert spec is not None
         assert spec.kinds == ("LPO",)
@@ -504,7 +504,7 @@ class TestTheShippedRegionReproducesItsPublishedNumbers:
     def test_the_shipped_block_takes_the_measured_shift_bar(self):
         """🔴 3.0 rather than `signs.py`'s 6.0, and the sweep in the config
         comment is the argument: 6.0 buys 68 posts for a 6 m lateral move."""
-        spec = load_city("hong_kong").lamps
+        spec = load_config().lamps
 
         assert spec.max_shift_m == pytest.approx(3.0)
 

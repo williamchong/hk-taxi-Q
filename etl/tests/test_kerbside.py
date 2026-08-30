@@ -225,9 +225,7 @@ class TestBuildRegion:
     def test_the_graph_carries_the_runs_it_joined(self, testville) -> None:
         city, root = testville
         report = build_region(city, "middle", sources_root=root / "sources", out_root=root / "out")
-        document = json.loads(
-            (root / "out" / "testville" / "middle" / "roadgraph.json").read_text()
-        )
+        document = json.loads((root / "out" / "middle" / "roadgraph.json").read_text())
 
         assert report.kerbside is not None
         assert report.kerbside.features_read == 4

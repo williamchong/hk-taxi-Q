@@ -23,8 +23,6 @@ from pipeline.colour import (
 from pipeline.config import BuildingStyle, HeightBand, Material, MaterialAssignment
 from tests.helpers import flat_mesh, style
 
-CITY = "testville"
-
 
 class TestConversion:
     def test_round_trip_is_exact_for_every_representable_colour(self) -> None:
@@ -154,7 +152,7 @@ def _style_with_hue(
     The survey lands under `source_dir`'s layout rather than beside `tmp_path`,
     because the layout is half of what these tests are pinning.
     """
-    path = tmp_path / CITY / "facade_colour" / "hue.json"
+    path = tmp_path / "facade_colour" / "hue.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(table))
     return replace(
@@ -190,40 +188,40 @@ class TestFacadeHue:
     """
 
     def test_a_city_without_a_survey_gets_an_empty_table(self) -> None:
-        assert facade_hue(style(), CITY) == {}
+        assert facade_hue(style()) == {}
 
     def test_a_missing_file_is_not_an_error(self, tmp_path: Path) -> None:
         """⚠️ The load-bearing case. The survey is gitignored build cache, so
         every fresh clone hits this path and must still build a city."""
         loaded = _style_with_hue(tmp_path, {})
-        (tmp_path / CITY / "facade_colour" / "hue.json").unlink()
-        assert facade_hue(loaded, CITY, root=tmp_path) == {}
+        (tmp_path / "facade_colour" / "hue.json").unlink()
+        assert facade_hue(loaded, root=tmp_path) == {}
 
     def test_only_the_two_hue_axes_are_read(self, tmp_path: Path) -> None:
         """Pins the parse itself, not what `colour_for` later does with it:
         `a*` and `b*` are taken and `L*` is dropped before anything else runs."""
         loaded = _style_with_hue(tmp_path, {"B1234": {"lab": [60.0, 4.0, 12.0]}})
-        assert facade_hue(loaded, CITY, root=tmp_path) == {"B1234": (4.0, 12.0)}
+        assert facade_hue(loaded, root=tmp_path) == {"B1234": (4.0, 12.0)}
 
     def test_a_malformed_survey_names_the_file(self, tmp_path: Path) -> None:
         """A partial write is the likely failure of a cache this expensive, and
         colouring the city from half a survey is what must not happen quietly."""
         loaded = _style_with_hue(tmp_path, {})
-        (tmp_path / CITY / "facade_colour" / "hue.json").write_text('{"B1234": {"lab": [60.0]}}')
+        (tmp_path / "facade_colour" / "hue.json").write_text('{"B1234": {"lab": [60.0]}}')
         with pytest.raises(ValueError, match="malformed"):
-            facade_hue(loaded, CITY, root=tmp_path)
+            facade_hue(loaded, root=tmp_path)
 
     def test_the_variant_suffix_is_stripped_to_reach_the_key(self, tmp_path: Path) -> None:
         """The survey reads `…A0` models and the pipeline reads `…C0` ones; the
         stem is what joins them."""
         loaded = _style_with_hue(tmp_path, {"B1234": {"lab": [60.0, 4.0, 12.0]}})
-        table = facade_hue(loaded, CITY, root=tmp_path)
+        table = facade_hue(loaded, root=tmp_path)
         rgba = colour_for(loaded, "BUILDING", flat_mesh("B1234C0", 40.0), hue=table)
         assert rgba[0].tolist() == [*with_hue((190, 200, 200), (4.0, 12.0), 1.0), 255]
 
     def test_an_unsurveyed_building_keeps_its_band(self, tmp_path: Path) -> None:
         loaded = _style_with_hue(tmp_path, {"B1234": {"lab": [60.0, 4.0, 12.0]}})
-        table = facade_hue(loaded, CITY, root=tmp_path)
+        table = facade_hue(loaded, root=tmp_path)
         mesh = flat_mesh("B9999C0", 40.0)
         assert colour_for(loaded, "BUILDING", mesh, hue=table)[0].tolist() == [190, 200, 200, 255]
 
@@ -231,7 +229,7 @@ class TestFacadeHue:
         """`hong_kong.yaml` ships `strength: 2.0`, so the knob has to survive the
         trip from config to vertex — not only work inside `with_hue`."""
         loaded = _style_with_hue(tmp_path, {"B1234": {"lab": [60.0, 4.0, 12.0]}}, strength=2.0)
-        table = facade_hue(loaded, CITY, root=tmp_path)
+        table = facade_hue(loaded, root=tmp_path)
         rgba = colour_for(loaded, "BUILDING", flat_mesh("B1234C0", 40.0), hue=table)
         assert rgba[0].tolist() == [*with_hue((190, 200, 200), (4.0, 12.0), 2.0), 255]
 
@@ -243,14 +241,14 @@ class TestFacadeHue:
             "B5678": {"lab": [60.0, 4.0, 12.0], "vegetation": 0.02},
         }
         loaded = _style_with_hue(tmp_path, table, vegetation_max=0.5)
-        assert facade_hue(loaded, CITY, root=tmp_path) == {"B5678": (4.0, 12.0)}
+        assert facade_hue(loaded, root=tmp_path) == {"B5678": (4.0, 12.0)}
 
     def test_a_row_exactly_at_the_threshold_is_kept(self, tmp_path: Path) -> None:
         """The comparison is `<=`, so the threshold names the worst sample still
         trusted rather than the best one rejected."""
         table = {"B1234": {"lab": [60.0, 4.0, 12.0], "vegetation": 0.5}}
         loaded = _style_with_hue(tmp_path, table, vegetation_max=0.5)
-        assert facade_hue(loaded, CITY, root=tmp_path) == {"B1234": (4.0, 12.0)}
+        assert facade_hue(loaded, root=tmp_path) == {"B1234": (4.0, 12.0)}
 
     def test_no_threshold_ignores_the_vegetation_column(self, tmp_path: Path) -> None:
         """The contract that keeps the filter optional. The mixed table is the
@@ -261,7 +259,7 @@ class TestFacadeHue:
             "B5678": {"lab": [60.0, 4.0, 12.0], "vegetation": 1.0},
         }
         loaded = _style_with_hue(tmp_path, table)
-        assert facade_hue(loaded, CITY, root=tmp_path) == {
+        assert facade_hue(loaded, root=tmp_path) == {
             "B1234": (4.0, 12.0),
             "B5678": (4.0, 12.0),
         }
@@ -273,7 +271,7 @@ class TestFacadeHue:
             tmp_path, {"B1234": {"lab": [60.0, 4.0, 12.0]}}, vegetation_max=1.0
         )
         with pytest.raises(ValueError, match="no `vegetation` column"):
-            facade_hue(loaded, CITY, root=tmp_path)
+            facade_hue(loaded, root=tmp_path)
 
     def test_a_threshold_without_the_column_names_the_config_key(self, tmp_path: Path) -> None:
         """⚠️ The failure worth being loud about, and worth being *specific*
@@ -284,22 +282,22 @@ class TestFacadeHue:
             tmp_path, {"B1234": {"lab": [60.0, 4.0, 12.0]}}, vegetation_max=0.5
         )
         with pytest.raises(ValueError, match=r"facade_hue\.vegetation_max"):
-            facade_hue(loaded, CITY, root=tmp_path)
+            facade_hue(loaded, root=tmp_path)
 
     def test_a_truncated_row_is_still_malformed(self, tmp_path: Path) -> None:
         """The other side of that split: a real partial write keeps the original
         message even while a threshold is set."""
         loaded = _style_with_hue(tmp_path, {}, vegetation_max=0.5)
-        path = tmp_path / CITY / "facade_colour" / "hue.json"
+        path = tmp_path / "facade_colour" / "hue.json"
         path.write_text('{"B1234": {"lab": [60.0], "vegetation": 0.1}}')
         with pytest.raises(ValueError, match="malformed"):
-            facade_hue(loaded, CITY, root=tmp_path)
+            facade_hue(loaded, root=tmp_path)
 
     def test_the_surveyed_lightness_is_not_used(self, tmp_path: Path) -> None:
         """⚠️ The rule the whole design rests on. The survey's L* is 20 here
         against the band's ~79; if it ever leaks through, this fails."""
         loaded = _style_with_hue(tmp_path, {"B1234": {"lab": [20.0, 3.0, 9.0]}})
-        table = facade_hue(loaded, CITY, root=tmp_path)
+        table = facade_hue(loaded, root=tmp_path)
         rgba = colour_for(loaded, "BUILDING", flat_mesh("B1234C0", 40.0), hue=table)
         lightness = srgb_to_lab(np.array([rgba[0, :3]]))[0, 0]
         band = srgb_to_lab(np.array([[190, 200, 200]]))[0, 0]

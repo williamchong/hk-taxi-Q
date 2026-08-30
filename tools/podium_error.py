@@ -39,7 +39,7 @@ The confessed deviation: per-face heights exist only at unwrap time, so each
 face's pitch divides the *building* height by that face's `storey_count` — the
 median over faces keeps the face-disagreement signal, the numerator does not.
 
-Run:  .venv/bin/python tools/podium_error.py --city hong_kong --region wan_chai
+Run:  .venv/bin/python tools/podium_error.py --region wan_chai
 """
 
 from __future__ import annotations
@@ -60,7 +60,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 from facade_grammar import SURVEY_SOURCE_ID, _majority  # noqa: E402
 from facade_survey import claim_stems  # noqa: E402
-from pipeline.config import load_city  # noqa: E402
+from pipeline.config import load_config  # noqa: E402
 from pipeline.documents import read_document  # noqa: E402
 from pipeline.fetch import source_dir  # noqa: E402
 from pipeline.podiums import PODIUMS_NAME, PODIUMS_SCHEMA  # noqa: E402
@@ -98,14 +98,14 @@ class Graded:
     error_m: float | None
 
 
-def survey_rows(city_id: str, root: Path | None = None) -> dict[str, dict]:
+def survey_rows(root: Path | None = None) -> dict[str, dict]:
     """Per-building face rows, merged from the per-sheet grammar tables.
 
     The per-sheet tables, not `facade_grammar.json`: the merged table reduces
     to the voted `glazed`/`grammar` verdicts and carries no podium fields.
     `claim_stems` keeps the merge honest the same way the survey writers do.
     """
-    directory = source_dir(city_id, SURVEY_SOURCE_ID, root=root)
+    directory = source_dir(SURVEY_SOURCE_ID, root=root)
     merged: dict[str, dict] = {}
     for path in sorted(directory.glob("facade_grammar.*.json")):
         rows = json.loads(path.read_text(encoding="utf-8"))
@@ -197,8 +197,7 @@ def pools(graded: list[Graded]) -> tuple[list[Graded], list[Graded], list[Graded
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    parser.add_argument("--city", required=True, help="city id under etl/config/cities")
-    parser.add_argument("--region", required=True, help="region id under etl/out/<city>")
+    parser.add_argument("--region", required=True, help="region id under etl/out")
     parser.add_argument("--sources-root", type=Path, help="override etl/sources")
     parser.add_argument("--out-root", type=Path, help="override etl/out")
     parser.add_argument(
@@ -245,8 +244,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    city = load_city(args.city)
-    rebuild = f"cd etl && python -m pipeline --city {args.city} --region {args.region}"
+    city = load_config()
+    rebuild = f"cd etl && python -m pipeline --region {args.region}"
     try:
         document = read_document(
             city.out_dir(args.region, args.out_root) / PODIUMS_NAME, PODIUMS_SCHEMA, rebuild
@@ -254,7 +253,7 @@ def main(argv: list[str] | None = None) -> int:
     except (FileNotFoundError, ValueError) as broken:
         raise SystemExit(str(broken)) from None
 
-    survey = survey_rows(args.city, root=args.sources_root)
+    survey = survey_rows(root=args.sources_root)
     graded, unmatched = grade(
         document["buildings"], survey, heights(city, root=args.sources_root), args.fallback_pitch_m
     )

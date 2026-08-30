@@ -45,8 +45,8 @@ so a bundle whose `clear_width_m` no longer matches what the pipeline would
 publish today is exactly the drift worth catching — re-running the stage here
 would hide it.
 
-Run:  .venv/bin/python tools/clearance_reconcile.py --city hong_kong
-      .venv/bin/python tools/clearance_reconcile.py --city hong_kong --sweep
+Run:  .venv/bin/python tools/clearance_reconcile.py
+      .venv/bin/python tools/clearance_reconcile.py --sweep
 """
 
 from __future__ import annotations
@@ -77,7 +77,7 @@ from carriageway_occupancy import (  # noqa: E402
 from deck_error import bundle_arguments, drawn_surface, load_bundle, log_bundle  # noqa: E402
 from pipeline.clearance import ACROSS_M as PIPELINE_ACROSS_M  # noqa: E402
 from pipeline.clearance import CELL_M, NOT_MEASURED  # noqa: E402
-from pipeline.config import CityConfig, load_city  # noqa: E402
+from pipeline.config import CityConfig, load_config  # noqa: E402
 
 log = logging.getLogger(__name__)
 
@@ -214,11 +214,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    city = load_city(args.city)
+    city = load_config()
     bar_m = float(city.roads.lane_width_m)
-    manifest, tiles = load_bundle(args.generated, args.lod, args.city)
+    manifest, tiles = load_bundle(args.generated, args.lod)
     log_bundle(manifest, args.lod)
-    log.info("clearance reconciliation, %s, lod %d", args.city, args.lod)
+    log.info("clearance reconciliation, lod %d", args.lod)
     log.info("  one lane is %.2f m. In plan both instruments over-block, and the plan", bar_m)
     log.info("  cell sets how much; along the edge the pipeline samples at its own cell")
     log.info("  pitch, so it no longer misses on axis — see the module docstring. A diagonal")

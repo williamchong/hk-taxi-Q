@@ -41,7 +41,7 @@ import numpy as np
 
 from pipeline import gdb
 from pipeline.buildings import Placement, podium_blocks, read_sheet, stem
-from pipeline.config import CityConfig, PodiumBlocks, SurfaceClass, load_city
+from pipeline.config import CityConfig, PodiumBlocks, SurfaceClass, load_config
 from pipeline.documents import write_document
 from pipeline.geometry import (
     edge_distances,
@@ -512,13 +512,12 @@ def _document(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    parser.add_argument("--city", required=True)
     parser.add_argument("--region", required=True)
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    city = load_city(args.city)
+    city = load_config()
     region = city.region(args.region)
     log.info("%s / %s", city.name, region.name)
 

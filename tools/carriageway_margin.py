@@ -112,7 +112,7 @@ cap-*insensitive* — 22 stations reading 16.67 m from 15 m to 40 m. So the
 record's stated method does not determine the record's numbers, which is the
 argument for this code existing rather than a reason to make it agree.
 
-Run:  .venv/bin/python tools/carriageway_margin.py --city hong_kong --region wan_chai
+Run:  .venv/bin/python tools/carriageway_margin.py --region wan_chai
 """
 
 from __future__ import annotations
@@ -144,7 +144,7 @@ from pipeline.config import (  # noqa: E402
     CarriagewayEdge,
     CityConfig,
     WidthBounds,
-    load_city,
+    load_config,
 )
 from pipeline.crs import GameTransform  # noqa: E402
 from pipeline.export import read_manifest  # noqa: E402
@@ -1937,7 +1937,6 @@ def write_widths(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    parser.add_argument("--city", required=True)
     parser.add_argument("--region", required=True)
     parser.add_argument(
         "--spacing-m", type=float, default=4.0, help="station spacing along an edge"
@@ -1996,7 +1995,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    city = load_city(args.city)
+    city = load_config()
     survey_spec = city.carriageway_survey
     bounds = survey_spec.width_bounds if survey_spec is not None else None
     if args.max_width_m is not None:

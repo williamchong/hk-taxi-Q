@@ -188,7 +188,7 @@ class TestLanes:
 
 
 def _graph(tmp_path: Path) -> dict:
-    return json.loads((tmp_path / "out" / "testville" / "middle" / "roadgraph.json").read_text())
+    return json.loads((tmp_path / "out" / "middle" / "roadgraph.json").read_text())
 
 
 class TestBuildRegion:
@@ -409,7 +409,7 @@ class TestBuildRegion:
         city, tmp_path = testville
         build_region(city, "middle", sources_root=tmp_path / "sources", out_root=tmp_path / "out")
 
-        raw = (tmp_path / "out" / "testville" / "middle" / "roadgraph.json").read_text()
+        raw = (tmp_path / "out" / "middle" / "roadgraph.json").read_text()
         assert "-0.0" not in raw
 
     def test_an_unmapped_travel_direction_is_an_error(self, testville, tmp_path) -> None:

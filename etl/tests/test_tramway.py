@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 import yaml
 
-from pipeline.config import load_city
+from pipeline.config import load_config
 from pipeline.surface import downward_facing
 from pipeline.tramway import (
     TRAMWAY_CLASS_BED,
@@ -65,7 +65,7 @@ def city_with(tmp_path, block: dict[str, Any] | None):
     cities = tmp_path / "cities"
     cities.mkdir(exist_ok=True)
     (cities / "testville.yaml").write_text(yaml.safe_dump(document), encoding="utf-8")
-    return load_city("testville", cities_root=cities)
+    return load_config(cities / "testville.yaml")
 
 
 def rail(x0: float, x1: float, z: float, *, step: float = 5.0) -> np.ndarray:

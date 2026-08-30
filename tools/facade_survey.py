@@ -801,7 +801,6 @@ def survey_sheet(archive: Path) -> dict[str, dict[str, Any]]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("sheets", nargs="*", help="sheet ids, e.g. 11-SW-9D")
-    parser.add_argument("--city", default="hong_kong")
     parser.add_argument(
         "--zip-dir",
         type=Path,
@@ -809,7 +808,7 @@ def main(argv: list[str] | None = None) -> int:
         help="where the individualised sheet archives live",
     )
     # Resolved after parsing rather than as a default, because it depends on
-    # --city. `source_dir` is the only thing that knows this tree's shape.
+    # `source_dir` is the only thing that knows this tree's shape.
     parser.add_argument(
         "--out-dir", type=Path, help="where to write facade_lab.<sheet>.json [the city's cache]"
     )
@@ -825,7 +824,7 @@ def main(argv: list[str] | None = None) -> int:
     arguments = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    out_dir = arguments.out_dir or source_dir(arguments.city, HUE_SOURCE_ID)
+    out_dir = arguments.out_dir or source_dir(HUE_SOURCE_ID)
     archives = (
         sorted(arguments.zip_dir.glob("*.zip"))
         if arguments.all

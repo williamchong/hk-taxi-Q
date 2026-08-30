@@ -1,6 +1,6 @@
 """What `Q19`'s building half would measure if the ribbon were drawn narrower.
 
-    .venv/bin/python tools/narrowing.py --city hong_kong --region wan_chai
+    .venv/bin/python tools/narrowing.py --region wan_chai
 
 `Q19` records that **narrowing would not clear** the edges where solid geometry
 stands in the carriageway. That conclusion comes from re-measuring the eight
@@ -103,7 +103,7 @@ from pipeline.clearance import (  # noqa: E402
     walk,
     wears,
 )
-from pipeline.config import CityConfig, RoadSurface, load_city  # noqa: E402
+from pipeline.config import CityConfig, RoadSurface, load_config  # noqa: E402
 from pipeline.documents import read_document  # noqa: E402
 
 log = logging.getLogger(__name__)
@@ -373,7 +373,7 @@ def owner(per_class: dict[str, float], clear: float) -> str:
     return min(blocking, key=lambda name: blocking[name]) if blocking else UNOBSTRUCTED
 
 
-def check_baseline(out_dir: Path, city_id: str, region_id: str, baseline: dict[int, float]) -> None:
+def check_baseline(out_dir: Path, region_id: str, baseline: dict[int, float]) -> None:
     """Refuse to publish a sweep whose first column is not the shipped city.
 
     The whole table is read across its floors, and the 10.24 m column is the only
@@ -382,7 +382,7 @@ def check_baseline(out_dir: Path, city_id: str, region_id: str, baseline: dict[i
     floor simulation is wrong and no other column means anything, so this is a
     precondition rather than a diagnostic.
     """
-    rebuild = f"python -m pipeline --city {city_id} --region {region_id}"
+    rebuild = f"python -m pipeline --region {region_id}"
     shipped = read_document(out_dir / CLEARANCE_NAME, CLEARANCE_SCHEMA, rebuild)
     published = {}
     for entry in shipped["clearance"]:
@@ -468,7 +468,6 @@ def _report_bar(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    parser.add_argument("--city", required=True)
     parser.add_argument("--region", required=True)
     parser.add_argument(
         "--car-width-m",
@@ -479,7 +478,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    city = load_city(args.city)
+    city = load_config()
     region = city.region(args.region)
     order = classes(city)
     log.info("%s / %s", city.name, region.name)
@@ -519,7 +518,7 @@ def main(argv: list[str] | None = None) -> int:
                 f"the {floor:.2f} m floor measured a different set of edges from the baseline"
             )
 
-    check_baseline(out_dir, city.id, args.region, baseline)
+    check_baseline(out_dir, args.region, baseline)
     owners = attribute(city, graph, tables[FLOORS_M[0]], tiles, heroes)
     watched = sorted({e for widths in results.values() for e, w in widths.items() if w < lane_m})
 

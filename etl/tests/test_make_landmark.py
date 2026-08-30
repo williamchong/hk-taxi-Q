@@ -36,7 +36,7 @@ from make_landmark import (
 )
 
 from pipeline.buildings import COLLISION_SUFFIX
-from pipeline.config import Material, load_city
+from pipeline.config import Material, load_config
 from pipeline.gltf import MeshData
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -123,7 +123,7 @@ class TestPalette:
     """`Q33` for the colours the ETL never sees."""
 
     def test_the_palette_obeys_the_live_anchor(self) -> None:
-        check_palette(load_city("hong_kong").exposure_anchor)
+        check_palette(load_config().exposure_anchor)
 
     def test_the_check_can_fail(self) -> None:
         """A guard written in the same round as its subject must show it can

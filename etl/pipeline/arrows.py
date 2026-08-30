@@ -63,7 +63,7 @@ from pipeline.config import (
     Arrows,
     CityConfig,
     GameTransform,
-    load_city,
+    load_config,
 )
 from pipeline.documents import read_document, write_document
 from pipeline.fetch import source_reads
@@ -820,7 +820,7 @@ def build_region(
     surface = read_document(
         out_dir / SURFACE_MANIFEST_NAME,
         SURFACE_MANIFEST_SCHEMA,
-        f"python -m pipeline.surface --city {city.id} --region {region_id}",
+        f"python -m pipeline.surface --region {region_id}",
     )
     drawn = ribbons(graph, surface)
     # Level 0 only, the same restriction `kerbside.py` and `tramway.py` both
@@ -1221,14 +1221,13 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Arr
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--city", required=True)
     parser.add_argument("--region", required=True)
     parser.add_argument("--sources-root", type=Path, default=None)
     parser.add_argument("--out-root", type=Path, default=None)
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    city = load_city(args.city)
+    city = load_config()
     report = build_region(city, args.region, sources_root=args.sources_root, out_root=args.out_root)
     log.info(
         "arrows: %d symbols -> %d turn arrows drawn (%d too far, %d off bearing), %d triangles; "

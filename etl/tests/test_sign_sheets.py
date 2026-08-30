@@ -26,14 +26,14 @@ import pypdfium2 as pdfium
 import pytest
 
 from pipeline import fetch
-from pipeline.config import load_city
+from pipeline.config import load_config
 from pipeline.sign_sheets import _RESIDENT, _index_plan, load_sheet, read_sheets
 
 # ⚠️ **The artefact, not its directory.** `download()` makes the parent before it
 # streams, so an interrupted fetch leaves the directory standing and the zip
 # absent — and `cached_source` raises `FileNotFoundError` on that, which would
 # *error* every test below where the point of the guard is to skip them.
-_CITY = load_city("hong_kong")
+_CITY = load_config()
 try:
     _ARCHIVE = fetch.cached_source(_CITY, _CITY.signs.text_source)
 except (FileNotFoundError, KeyError):
@@ -167,4 +167,4 @@ def _configured_codes() -> list[int]:
     `TS1000` sorts before `TS999` as text — see `_RESIDENT`'s note on why that
     matters to a single-slot cache.
     """
-    return sorted(int(code.removeprefix("TS")) for code in load_city("hong_kong").signs.faces)
+    return sorted(int(code.removeprefix("TS")) for code in load_config().signs.faces)

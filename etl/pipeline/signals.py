@@ -106,7 +106,7 @@ import numpy as np
 # itself — a second copy of it is a second city, mirrored (`Q56`).
 from pipeline import gdb
 from pipeline.arrows import ArrowReport, Ribbon, nearside, ribbons
-from pipeline.config import SIGNAL_BODY_COLOUR, CityConfig, GameTransform, Signals, load_city
+from pipeline.config import SIGNAL_BODY_COLOUR, CityConfig, GameTransform, Signals, load_config
 from pipeline.documents import read_document, write_document
 from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData, write_glb
@@ -694,7 +694,7 @@ def build_region(
     surface = read_document(
         out_dir / SURFACE_MANIFEST_NAME,
         SURFACE_MANIFEST_SCHEMA,
-        f"python -m pipeline.surface --city {city.id} --region {region_id}",
+        f"python -m pipeline.surface --region {region_id}",
     )
     drawn = ribbons(graph, surface)
 
@@ -955,14 +955,13 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Sig
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--city", required=True)
     parser.add_argument("--region", required=True)
     parser.add_argument("--sources-root", type=Path, default=None)
     parser.add_argument("--out-root", type=Path, default=None)
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    city = load_city(args.city)
+    city = load_config()
     report = build_region(city, args.region, sources_root=args.sources_root, out_root=args.out_root)
     # ⚠️ **`drawn` is features and `posts_drawn` is heads**, and the line says so
     # rather than calling both a count of signals — one head stands for every

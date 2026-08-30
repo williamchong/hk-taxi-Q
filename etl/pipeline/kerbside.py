@@ -41,7 +41,7 @@ fixture with a known side rather than trusting this paragraph.
 
 Nothing here knows a Hong Kong fact: the layer, its columns, which vehicle-type
 codes are a painted line and which time-zone codes are a double one all arrive
-from `config/cities/*.yaml`.
+from `config/hong_kong.yaml`.
 """
 
 from __future__ import annotations

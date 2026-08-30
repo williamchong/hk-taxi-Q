@@ -120,7 +120,7 @@ import numpy as np
 # recorded defect in two stages already.
 from pipeline import gdb
 from pipeline.arrows import ArrowReport, Ribbon, nearside, ribbons
-from pipeline.config import CityConfig, GameTransform, Lamps, load_city
+from pipeline.config import CityConfig, GameTransform, Lamps, load_config
 from pipeline.documents import read_document, write_document
 from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData, write_glb
@@ -609,7 +609,7 @@ def build_region(
     surface = read_document(
         out_dir / SURFACE_MANIFEST_NAME,
         SURFACE_MANIFEST_SCHEMA,
-        f"python -m pipeline.surface --city {city.id} --region {region_id}",
+        f"python -m pipeline.surface --region {region_id}",
     )
     ribbon_by_edge = ribbons(graph, surface)
 
@@ -989,14 +989,13 @@ def _write_manifest(out_dir: Path, city: CityConfig, region_id: str, report: Lam
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--city", required=True)
     parser.add_argument("--region", required=True)
     parser.add_argument("--sources-root", type=Path, default=None)
     parser.add_argument("--out-root", type=Path, default=None)
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    city = load_city(args.city)
+    city = load_config()
     report = build_region(city, args.region, sources_root=args.sources_root, out_root=args.out_root)
     log.info(
         "lamps: %d features -> %d columns "

@@ -1639,7 +1639,7 @@ Key techniques, in order of what they buy:
 ## Build pipeline
 
 ```
-etl/  →  python -m pipeline --city hong_kong --region wan_chai
+etl/  →  python -m pipeline --region wan_chai
       →  etl/out/<city>/<region>/{city.json, roadgraph.json, roads.glb, fares.json, tiles/*.glb}
       →  tools/sync_generated.sh → game/assets/generated/
       →  Godot export presets → iOS / Android / desktop / web-demo
@@ -1650,8 +1650,8 @@ Six stages in one dependency chain — `fetch`, `buildings`, `roads`, `surface`,
 against the same arguments, which is how they are developed:
 
 ```sh
-python -m pipeline.buildings --city hong_kong --region wan_chai
-python -m pipeline --city hong_kong --region wan_chai --from roads   # resume mid-chain
+python -m pipeline.buildings --region wan_chai
+python -m pipeline --region wan_chai --from roads   # resume mid-chain
 ```
 
 `python -m pipeline` invokes each stage through the *same* entry point those commands use, so a full

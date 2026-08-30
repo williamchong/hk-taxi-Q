@@ -27,7 +27,7 @@ const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 const SURFACES_PER_CLASS: int = 1
 
 ## The classes the ETL draws, and the material each must end up with. Mirrors
-## `classes:` in `etl/config/cities/hong_kong.yaml` and `SHADERS` in
+## `classes:` in `etl/config/hong_kong.yaml` and `SHADERS` in
 ## `tools/generated_scene_import.gd`; the key is the class `id`, which is the
 ## glTF mesh name, the node name and the material name all at once.
 ##

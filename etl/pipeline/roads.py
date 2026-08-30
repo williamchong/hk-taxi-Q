@@ -19,7 +19,7 @@ rather than assumed — see `docs/DATA_SOURCES.md`:
   a size optimisation.
 
 Nothing here knows a Hong Kong fact: layer names, column names, direction codes
-and lane policy all arrive from `config/cities/*.yaml`.
+and lane policy all arrive from `config/hong_kong.yaml`.
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ from pipeline.config import (
     GroundProfile,
     RoadNetwork,
     SourceLayer,
-    load_city,
+    load_config,
 )
 from pipeline.crs import GameTransform
 from pipeline.documents import read_document, round_position, write_document
@@ -762,7 +762,7 @@ class _Surfaces:
 
     All three are optional and independently so: a city may take its heights
     from the terrain without sampling decks or following the ground, and
-    `load_city` refuses either of the latter two without the first.
+    `load_config` refuses either of the latter two without the first.
 
     `profile` is thresholds rather than a field because it has no geometry of
     its own — it says how finely to ask `ground`, which is why it sits here
@@ -1803,7 +1803,7 @@ def read_graph(path: Path, city_id: str, region_id: str) -> dict:
     own exits on a missing argument, which is a second puzzle to solve while
     already stuck on the first.
     """
-    rebuild = f"python -m pipeline.roads --city {city_id} --region {region_id}"
+    rebuild = f"python -m pipeline.roads --region {region_id}"
     return read_document(path, ROADGRAPH_SCHEMA, rebuild)
 
 
@@ -1866,7 +1866,7 @@ def _surfaces(
     closely the at-grade ones follow the first of them.
 
     The terrain resolves `Q11`; the structure resolves `Q20`, and is read only
-    when the city asks for deck sampling. `load_city` refuses `roads.deck`
+    when the city asks for deck sampling. `load_config` refuses `roads.deck`
     without a `buildings.structure_class`, so the second half of the test below
     is a type narrowing rather than a case that can occur.
 
@@ -1877,7 +1877,7 @@ def _surfaces(
     memory note on `_field` is the reason not to.
     """
     if not city.roads.ground_from_terrain:
-        # `load_city` refuses either block without `ground: terrain`, so neither
+        # `load_config` refuses either block without `ground: terrain`, so neither
         # can survive into a city with no ground to measure against.
         return _Surfaces(ground=None, deck=None, profile=None)
 
@@ -1953,13 +1953,12 @@ def _by_basis(values: Iterable[str]) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    parser.add_argument("--city", required=True)
     parser.add_argument("--region", required=True)
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    city = load_city(args.city)
+    city = load_config()
     region = city.region(args.region)
     log.info("%s / %s", city.name, region.name)
 

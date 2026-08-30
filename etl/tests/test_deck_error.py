@@ -15,7 +15,7 @@ import pytest
 from deck_error import Faces, measure, nearest, stations, wears
 
 # `INFRASTRUCTURE`'s `class_materials` entry and `colour_jitter` from
-# `config/cities/hong_kong.yaml`. Copied rather than read through the `hong_kong`
+# `config/hong_kong.yaml`. Copied rather than read through the `hong_kong`
 # fixture on purpose: these test the *arithmetic* of the classifier, and they
 # should not start failing because someone repainted a deck. `test_config.py`
 # is where the shipped values are held to account.

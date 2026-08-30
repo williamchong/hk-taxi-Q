@@ -143,7 +143,7 @@ def style(jitter: float = 0.0) -> BuildingStyle:
 
     The `reflectance` values are plausible materials rather than values
     consistent with these colours, and deliberately so: `Q33`'s rule is enforced
-    by `load_city`, which a hand-built style never goes through. Made consistent
+    by `load_config`, which a hand-built style never goes through. Made consistent
     at any sane anchor these colours would need over 100% albedo, which is the
     honest signal that they are arbitrary test values and not a palette.
     """
@@ -289,9 +289,7 @@ def write_layer(
 # would let the second stage pass against a city the first never built.
 CITY_YAML = textwrap.dedent(
     """
-    schema_version: 3
-    id: testville
-    name: Testville
+    schema_version: 4
     # Deliberately 1.0 where Hong Kong ships 0.520, so the fixture proves the
     # palette rule (`Q33`) is portable rather than a Hong Kong constant. At a
     # unit anchor a declared reflectance *is* the colour's luminance, which
@@ -304,9 +302,6 @@ CITY_YAML = textwrap.dedent(
       facade: {colour: "#808080", reflectance: 21.59, source: "test fixture"}
       asphalt: {colour: "#3c3a37", reflectance: 4.26, source: "test fixture"}
       kerb: {colour: "#9a968d", reflectance: 30.61, source: "test fixture"}
-    crs:
-      projected: EPSG:2326
-      geodetic: EPSG:4326
     elevation_levels:
       -1: -8.0
       0: 0.0

@@ -485,13 +485,13 @@ def _write_graph(tmp_path: Path, nodes: list[dict], edges: list[dict]) -> None:
     `docs/ARCHITECTURE.md` and repeating it three times invites the copies to
     drift, leaving the graph — the only interesting part — buried in it.
     """
-    out_dir = tmp_path / "out" / "testville" / "middle"
+    out_dir = tmp_path / "out" / "middle"
     out_dir.mkdir(parents=True)
     (out_dir / ROADGRAPH_NAME).write_text(
         json.dumps(
             {
                 "schema_version": ROADGRAPH_SCHEMA,
-                "city_id": "testville",
+                "city_id": "hong_kong",
                 "region_id": "middle",
                 "nodes": nodes,
                 "edges": edges,
@@ -710,7 +710,7 @@ def dualville(tmp_path, testville_config):
 
 
 def _mesh(tmp_path: Path):
-    return read_glb(tmp_path / "out" / "testville" / "middle" / SURFACE_NAME)[0]
+    return read_glb(tmp_path / "out" / "middle" / SURFACE_NAME)[0]
 
 
 def _decode(code: float) -> dict[str, int]:
@@ -771,7 +771,7 @@ class TestBuildRegion:
         importer reads to build the static trimesh collision at import time."""
         report = build_region(testville[0], "middle", out_root=tmp_path / "out")
 
-        meshes = read_glb(tmp_path / "out" / "testville" / "middle" / SURFACE_NAME)
+        meshes = read_glb(tmp_path / "out" / "middle" / SURFACE_NAME)
         assert len(meshes) == 1
         assert meshes[0].name == SURFACE_MESH_NAME
         assert report.triangles == meshes[0].triangle_count
@@ -957,9 +957,7 @@ class TestBuildRegion:
     def test_it_writes_a_manifest_for_the_export_stage(self, testville, tmp_path) -> None:
         report = build_region(testville[0], "middle", out_root=tmp_path / "out")
 
-        manifest = json.loads(
-            (tmp_path / "out" / "testville" / "middle" / SURFACE_MANIFEST_NAME).read_text()
-        )
+        manifest = json.loads((tmp_path / "out" / "middle" / SURFACE_MANIFEST_NAME).read_text())
         assert manifest["mesh"] == SURFACE_NAME
         assert manifest["mesh_name"] == SURFACE_MESH_NAME
         assert manifest["triangles"] == report.triangles
@@ -975,7 +973,7 @@ class TestBuildRegion:
         city, _ = testville
         build_region(city, "middle", out_root=tmp_path / "out")
 
-        out = tmp_path / "out" / "testville" / "middle"
+        out = tmp_path / "out" / "middle"
         manifest = json.loads((out / SURFACE_MANIFEST_NAME).read_text())
         graph = json.loads((out / ROADGRAPH_NAME).read_text())
         published = {entry["edge"]: entry["half_width_m"] for entry in manifest["carriageway"]}
@@ -1032,7 +1030,7 @@ class TestBuildRegion:
         far end is on the street. Before this, the whole edge was drawn 1.5x.
         """
         city, _ = testville
-        graph_path = tmp_path / "out" / "testville" / "middle" / ROADGRAPH_NAME
+        graph_path = tmp_path / "out" / "middle" / ROADGRAPH_NAME
         document = json.loads(graph_path.read_text())
         # 60 m of straight running west from the junction, on structure for its
         # first 20 m — far enough that the taper has finished before the street.
@@ -1046,9 +1044,7 @@ class TestBuildRegion:
         graph_path.write_text(json.dumps(document), encoding="utf-8")
 
         build_region(city, "middle", out_root=tmp_path / "out")
-        manifest = json.loads(
-            (tmp_path / "out" / "testville" / "middle" / SURFACE_MANIFEST_NAME).read_text()
-        )
+        manifest = json.loads((tmp_path / "out" / "middle" / SURFACE_MANIFEST_NAME).read_text())
         widths = next(
             entry["half_width_m"] for entry in manifest["carriageway"] if entry["edge"] == 0
         )
@@ -1060,7 +1056,7 @@ class TestBuildRegion:
     def test_the_report_counts_the_metres_it_narrowed(self, testville, tmp_path) -> None:
         """`Q23`'s acceptance number, off the stage that acted on it."""
         city, _ = testville
-        graph_path = tmp_path / "out" / "testville" / "middle" / ROADGRAPH_NAME
+        graph_path = tmp_path / "out" / "middle" / ROADGRAPH_NAME
         document = json.loads(graph_path.read_text())
         document["edges"][0] = _edge(
             0,
@@ -1080,7 +1076,7 @@ class TestBuildRegion:
         """The contract is versioned, so a mismatch is a stale copy rather than
         something to parse optimistically."""
         city, _ = testville
-        graph = tmp_path / "out" / "testville" / "middle" / ROADGRAPH_NAME
+        graph = tmp_path / "out" / "middle" / ROADGRAPH_NAME
         document = json.loads(graph.read_text())
         document["schema_version"] = ROADGRAPH_SCHEMA + 1
         graph.write_text(json.dumps(document), encoding="utf-8")
@@ -1359,7 +1355,7 @@ class TestMarkingPayload:
         # Read off the document rather than through `read_glb`, which restores
         # geometry and drops the material name — the same reason
         # `test_gltf.py` reads the JSON to pin `city_facade`.
-        raw = (tmp_path / "out" / "testville" / "middle" / SURFACE_NAME).read_bytes()
+        raw = (tmp_path / "out" / "middle" / SURFACE_NAME).read_bytes()
         length, _ = struct.unpack_from("<II", raw, 12)
         document = json.loads(raw[20 : 20 + length])
         assert [material["name"] for material in document["materials"]] == [SURFACE_MATERIAL]
@@ -1635,9 +1631,7 @@ class TestKerbRailStations:
         city, root = dualville
         plain = build_region(city, "middle", out_root=root / "out")
 
-        graph = json.loads(
-            (root / "out" / "testville" / "middle" / ROADGRAPH_NAME).read_text(encoding="utf-8")
-        )
+        graph = json.loads((root / "out" / "middle" / ROADGRAPH_NAME).read_text(encoding="utf-8"))
         for edge in graph["edges"]:
             edge["kerbside"] = [{"side": "near", "from_m": 40.0, "to_m": 260.0, "kind": "double"}]
         painted_root = tmp_path / "painted"

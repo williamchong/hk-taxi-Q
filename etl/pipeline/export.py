@@ -52,7 +52,7 @@ from pipeline.config import (
     LANDMARK_ASSET_ROOT,
     LANDMARK_GENERATED_ROOT,
     CityConfig,
-    load_city,
+    load_config,
 )
 from pipeline.crs import GameTransform
 from pipeline.documents import read_document, round_position, write_document
@@ -232,7 +232,7 @@ class Input:
     module: str
 
     def read(self, out_dir: Path, city_id: str, region_id: str) -> dict:
-        rebuild = f"python -m pipeline.{self.module} --city {city_id} --region {region_id}"
+        rebuild = f"python -m pipeline.{self.module} --region {region_id}"
         return read_document(out_dir / self.name, self.schema, rebuild)
 
 
@@ -972,7 +972,6 @@ def _outside(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    parser.add_argument("--city", required=True)
     parser.add_argument("--region", required=True)
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
@@ -990,7 +989,7 @@ def main(argv: list[str] | None = None) -> int:
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    city = load_city(args.city)
+    city = load_config()
     region = city.region(args.region)
 
     if args.list_shipped:

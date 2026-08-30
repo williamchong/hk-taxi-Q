@@ -268,7 +268,7 @@ class TestDocument:
 
 
 @pytest.mark.skipif(
-    not (fetch.source_dir("hong_kong", "topography") / fetch.INDEX_NAME).exists(),
+    not (fetch.source_dir("topography") / fetch.INDEX_NAME).exists(),
     reason="requires a fetched topography index",
 )
 def test_real_join_reproduces_both_frames(hong_kong, tmp_path) -> None:
@@ -284,11 +284,11 @@ def test_real_join_reproduces_both_frames(hong_kong, tmp_path) -> None:
     region = hong_kong.region("wan_chai")
     topography = hong_kong.tiled_sources["topography"]
     tiles = fetch.cached_tiles(hong_kong, region, topography)
-    if not all(fetch.artefact_path("hong_kong", tile).exists() for tile in tiles):
+    if not all(fetch.artefact_path(tile).exists() for tile in tiles):
         pytest.skip("requires the six fetched topography sheets")
     buildings_source = hong_kong.tiled_sources["buildings"]
     sheets = fetch.cached_tiles(hong_kong, region, buildings_source)
-    if not all(fetch.artefact_path("hong_kong", sheet).exists() for sheet in sheets):
+    if not all(fetch.artefact_path(sheet).exists() for sheet in sheets):
         pytest.skip("requires the fetched building sheets")
 
     blocks = podiums.decode_blocks(hong_kong, "wan_chai")

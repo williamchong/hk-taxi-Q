@@ -34,7 +34,7 @@ same argument `pyproject.toml` makes about geopandas and about a glTF library.
 come from the region's own `roadgraph.json` and the table from the game's tuning.
 A second city brings its own variants and its own row in that table.
 
-Run:  .venv/bin/python tools/font_coverage.py --city hong_kong --region wan_chai
+Run:  .venv/bin/python tools/font_coverage.py --region wan_chai
 """
 
 from __future__ import annotations
@@ -50,7 +50,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "etl"))
 
-from pipeline.config import load_city  # noqa: E402
+from pipeline.config import load_config  # noqa: E402
 from pipeline.roads import ROADGRAPH_NAME, read_graph  # noqa: E402
 
 log = logging.getLogger(__name__)
@@ -175,13 +175,12 @@ def street_names(graph: dict) -> list[tuple[str, str]]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--city", required=True)
     parser.add_argument("--region", required=True)
     parser.add_argument("--out-root", type=Path, default=None, help="override the out tree")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    city = load_city(args.city)
+    city = load_config()
     out_dir = city.out_dir(args.region, args.out_root)
     # 🔴 **Through `read_graph`, never `json.loads`.** It is the one place
     # `ROADGRAPH_SCHEMA` is enforced, and it prints the rebuild command. Reading

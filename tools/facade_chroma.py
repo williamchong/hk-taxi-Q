@@ -43,7 +43,7 @@ from pipeline.colour import (  # noqa: E402
     lab_with_hue,
     srgb_to_lab,
 )
-from pipeline.config import BuildingStyle, CityConfig, load_city  # noqa: E402
+from pipeline.config import BuildingStyle, CityConfig, load_config  # noqa: E402
 from ring_weights import heights, ramp_class  # noqa: E402
 
 log = logging.getLogger(__name__)
@@ -109,7 +109,7 @@ class Population:
         than restated; the height column is `ring_weights.heights`' for the same
         reason. Neither is this tool's to decide."""
         style = city.buildings
-        hues = facade_hue(style, city.id, root=root)
+        hues = facade_hue(style, root=root)
         if not hues:
             return cls(np.empty((0, 3)), np.empty((0, 2)))
         height = heights(city, root=root)
@@ -191,7 +191,7 @@ def shipped(
     """
     style = city.buildings
     place = Placement.resolve(city, region_id, root, None)
-    hues = facade_hue(style, city.id, root=root)
+    hues = facade_hue(style, root=root)
     styles = {strength: replace(style, facade_hue_strength=strength) for strength in STRENGTHS}
     found: dict[float, list[np.ndarray]] = {strength: [] for strength in STRENGTHS}
     for _, sheet_path in place.sheets:
@@ -274,7 +274,6 @@ def report(city: CityConfig, region_id: str | None, *, root: Path | None = None)
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--city", default="hong_kong", help="city id under etl/config/cities")
     parser.add_argument("--sources-root", type=Path, help="override etl/sources")
     parser.add_argument(
         "--shipped",
@@ -289,7 +288,7 @@ def main(argv: list[str] | None = None) -> int:
     arguments = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    city = load_city(arguments.city)
+    city = load_config()
     region = arguments.shipped or next(iter(city.regions), None)
     return report(city, None if arguments.shipped is None else region, root=arguments.sources_root)
 

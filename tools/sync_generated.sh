@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Copy a built region from the ETL into the Godot project.
 #
-#   tools/sync_generated.sh                      # hong_kong / wan_chai
-#   tools/sync_generated.sh <city> <region>
+#   tools/sync_generated.sh                      # wan_chai
+#   tools/sync_generated.sh <region>
 #
 # Copies exactly the files city.json names, asked of the ETL rather than
 # guessed at (`export.py --list`). That is the point: two stage intermediates,
@@ -20,15 +20,14 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PYTHON="${PYTHON:-$ROOT/.venv/bin/python}"
 
-CITY="${1:-hong_kong}"
-REGION="${2:-wan_chai}"
+REGION="${1:-wan_chai}"
 
-SRC="$ROOT/etl/out/$CITY/$REGION"
+SRC="$ROOT/etl/out/$REGION"
 DST="$ROOT/game/assets/generated"
 
 if [[ ! -f "$SRC/city.json" ]]; then
 	echo "No manifest at $SRC/city.json. Build the region first:" >&2
-	echo "  cd etl && python -m pipeline --city $CITY --region $REGION" >&2
+	echo "  cd etl && python -m pipeline --region $REGION" >&2
 	exit 1
 fi
 
@@ -36,14 +35,14 @@ fi
 # name it cannot find and leaves everything after it uncopied, which would put
 # fresh tiles beside a stale manifest — a half-synced directory that every
 # check downstream would then read as authoritative.
-(cd "$ROOT/etl" && "$PYTHON" -m pipeline.export --city "$CITY" --region "$REGION" --check)
+(cd "$ROOT/etl" && "$PYTHON" -m pipeline.export --region "$REGION" --check)
 
 LIST="$(mktemp)"
 trap 'rm -f "$LIST"' EXIT
 
 # --list writes the paths to stdout and its logging to stderr, so this reads
 # cleanly. city.json leads the list; it names the others but not itself.
-(cd "$ROOT/etl" && "$PYTHON" -m pipeline.export --city "$CITY" --region "$REGION" --list) >"$LIST"
+(cd "$ROOT/etl" && "$PYTHON" -m pipeline.export --region "$REGION" --list) >"$LIST"
 if [[ ! -s "$LIST" ]]; then
 	echo "the manifest named no files — refusing to treat everything as stale" >&2
 	exit 1
@@ -74,4 +73,4 @@ done < <(cd "$DST" && find . -type f ! -name '*.import' ! -name '.gitkeep' \
 	| sed 's|^\./||' | grep -vxF -f "$LIST" || true)
 find "$DST" -type d -empty -delete
 
-echo "==> $CITY / $REGION -> ${DST#"$ROOT/"} ($(wc -l <"$LIST" | tr -d ' ') files)"
+echo "==> $REGION -> ${DST#"$ROOT/"} ($(wc -l <"$LIST" | tr -d ' ') files)"

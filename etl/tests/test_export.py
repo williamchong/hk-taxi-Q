@@ -319,7 +319,7 @@ class TestAssembly:
         manifest = region.manifest()
 
         assert manifest["schema_version"] == CITY_SCHEMA
-        assert manifest["city_id"] == "testville"
+        assert manifest["city_id"] == "hong_kong"
         assert manifest["region_id"] == REGION
         assert manifest["road_graph"] == ROADGRAPH_NAME
         assert manifest["road_surface"] == SURFACE_NAME
@@ -762,7 +762,7 @@ class TestValidation:
         region.documents[ROADGRAPH_NAME]["region_id"] = "elsewhere"
 
         assert region.check() == [
-            "roadgraph.json is for testville/elsewhere, city.json for testville/middle"
+            "roadgraph.json is for hong_kong/elsewhere, city.json for hong_kong/middle"
         ]
 
     def test_an_edge_with_no_node_at_its_end(self, region) -> None:
@@ -838,7 +838,7 @@ class TestOrchestrator:
         calls: list[tuple[str, list[str]]] = []
         self._stub(monkeypatch, calls)
 
-        status = orchestrator.main(["--city", "testville", "--region", REGION])
+        status = orchestrator.main(["--region", REGION])
 
         assert status == 0
         assert [name for name, _ in calls] == [
@@ -865,15 +865,15 @@ class TestOrchestrator:
         calls: list[tuple[str, list[str]]] = []
         self._stub(monkeypatch, calls)
 
-        orchestrator.main(["--city", "testville", "--region", REGION])
+        orchestrator.main(["--region", REGION])
 
-        assert all(argv == ["--city", "testville", "--region", REGION] for _, argv in calls)
+        assert all(argv == ["--region", REGION] for _, argv in calls)
 
     def test_force_reaches_fetch_and_nothing_else(self, monkeypatch) -> None:
         calls: list[tuple[str, list[str]]] = []
         self._stub(monkeypatch, calls)
 
-        orchestrator.main(["--city", "testville", "--region", REGION, "--force"])
+        orchestrator.main(["--region", REGION, "--force"])
 
         assert calls[0][1][-1] == "--force"
         assert not any("--force" in argv for _, argv in calls[1:])
@@ -882,7 +882,7 @@ class TestOrchestrator:
         calls: list[tuple[str, list[str]]] = []
         self._stub(monkeypatch, calls)
 
-        orchestrator.main(["--city", "testville", "--region", REGION, "--from", "surface"])
+        orchestrator.main(["--region", REGION, "--from", "surface"])
 
         assert [name for name, _ in calls] == [
             "surface",
@@ -904,9 +904,7 @@ class TestOrchestrator:
         self._stub(monkeypatch, calls)
 
         with pytest.raises(SystemExit):
-            orchestrator.main(
-                ["--city", "testville", "--region", REGION, "--from", "roads", "--force"]
-            )
+            orchestrator.main(["--region", REGION, "--from", "roads", "--force"])
 
         assert calls == []
 
@@ -916,7 +914,7 @@ class TestOrchestrator:
         calls: list[tuple[str, list[str]]] = []
         self._stub(monkeypatch, calls, failing="roads")
 
-        status = orchestrator.main(["--city", "testville", "--region", REGION])
+        status = orchestrator.main(["--region", REGION])
 
         assert status == 1
         assert [name for name, _ in calls] == [

@@ -73,7 +73,7 @@ source, so a fresh clone has none of it until you do this:
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -e "etl/[dev]"
 
-cd etl && ../.venv/bin/python -m pipeline --city hong_kong --region wan_chai && cd ..
+cd etl && ../.venv/bin/python -m pipeline --region wan_chai && cd ..
 tools/sync_generated.sh          # copies exactly what city.json names
 ```
 
@@ -110,8 +110,8 @@ Grading tools sit beside the suite and are run by hand after a build, because th
 region under `etl/out`. `CLAUDE.md` lists which change owes which; two of them:
 
 ```bash
-.venv/bin/python tools/deck_error.py --city hong_kong --generated etl/out/hong_kong/wan_chai
-.venv/bin/python tools/overhang.py   --city hong_kong --generated etl/out/hong_kong/wan_chai
+.venv/bin/python tools/deck_error.py --generated etl/out/wan_chai
+.venv/bin/python tools/overhang.py   --generated etl/out/wan_chai
 ```
 
 They measure the drawn carriageway against the *shipped* tiles and share no code with the pipeline

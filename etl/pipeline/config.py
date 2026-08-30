@@ -1,7 +1,7 @@
 """City configuration loading.
 
 Every city specific — CRS codes, region bounds, deck heights, source URLs —
-lives in `config/cities/*.yaml` and reaches the pipeline only through this
+lives in `config/hong_kong.yaml` and reaches the pipeline only through this
 module (CLAUDE.md hard rule 3). Pipeline logic that needs a Hong Kong fact asks
 the config for it; it never spells the fact out.
 
@@ -22,6 +22,7 @@ from typing import Any
 
 import yaml
 
+from pipeline import hongkong
 from pipeline.colour import reflectance
 from pipeline.crs import (
     GameTransform,
@@ -30,7 +31,7 @@ from pipeline.crs import (
     project_bounds,
 )
 
-SUPPORTED_SCHEMA = 3
+SUPPORTED_SCHEMA = 4
 # How far a shipped colour may sit from `reflectance x exposure_anchor`, in
 # percentage points of luminance. One 8-bit step at the lightest end of this
 # palette is worth ~0.4, so this is a round-trip through `#rrggbb` and no more —
@@ -43,7 +44,7 @@ EXPOSURE_ANCHOR_MAX = 2.0
 # authored decimals, and nothing else — see `WeightedDraw.build` for why they are
 # refused rather than normalised.
 WEIGHT_SUM_TOLERANCE = 1e-6
-CITIES_ROOT = Path(__file__).resolve().parent.parent / "config" / "cities"
+CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "hong_kong.yaml"
 # Where every stage writes its output. One definition, because two stages
 # writing into the same tree from two of them is how they end up disagreeing.
 OUT_ROOT = Path(__file__).resolve().parent.parent / "out"
@@ -213,7 +214,7 @@ class _MaterialTable:
     to a list.
 
     That is the whole reason this is a class rather than a dict. A hand-written
-    enumeration of reference sites in `load_city` would be a second copy of the
+    enumeration of reference sites in `load_config` would be a second copy of the
     join, and the copy that drifts is the one that quietly stops catching
     anything — which is exactly how `class_reflectance` could have failed.
     """
@@ -2723,7 +2724,7 @@ class FareCategory:
     strings collapse to five categories that way.
 
     Rules are tried in order and the first hit wins, so a city file orders them
-    most specific first — `load_city` refuses a table where a later rule could
+    most specific first — `load_config` refuses a table where a later rule could
     never be reached.
     """
 
@@ -2804,13 +2805,6 @@ class Fares:
 
 @dataclass(frozen=True)
 class CityConfig:
-    id: str
-    name: str
-    # CRS the source datasets are published in; all pipeline geometry lives here.
-    projected_crs: str
-    # Datum the region bounds above are expressed in. Stated rather than assumed
-    # because reading Hong Kong bounds on the wrong datum moves them ~304 m.
-    geodetic_crs: str
     # Ordinal grade-separation level to authored deck height in metres. Road
     # Network v2 carries no Z; ELEVATION is a layer index, not a measurement.
     elevation_levels: dict[int, float]
@@ -2948,15 +2942,36 @@ class CityConfig:
         )
         return (far_x, far_z)
 
+    # The city itself is not config (`Q100`): these four read `hongkong.py`, and
+    # are properties rather than fields so no caller can construct a config for
+    # a city that does not exist.
+    @property
+    def id(self) -> str:
+        return hongkong.CITY_ID
+
+    @property
+    def name(self) -> str:
+        return hongkong.CITY_NAME
+
+    @property
+    def projected_crs(self) -> str:
+        """CRS the source datasets are published in; all pipeline geometry lives here."""
+        return hongkong.PROJECTED_CRS
+
+    @property
+    def geodetic_crs(self) -> str:
+        """Datum the region bounds are expressed in — never assumed (`P0-4`)."""
+        return hongkong.GEODETIC_CRS
+
     def out_dir(self, region_id: str, root: Path | None = None) -> Path:
         """Where a region's build output goes.
 
         The single definition of the out-tree layout, as `fetch.artefact_path`
         is for the sources tree. Every stage resolves through this rather than
-        rebuilding `<root>/<city>/<region>`, so the three that write there
-        cannot disagree about it.
+        rebuilding `<root>/<region>`, so the three that write there cannot
+        disagree about it.
         """
-        return (root or OUT_ROOT) / self.id / region_id
+        return (root or OUT_ROOT) / region_id
 
     def city_transform(self) -> GameTransform:
         """The shared frame all regions are positioned in (`Q10`).
@@ -2983,7 +2998,7 @@ class CityConfig:
         streams neighbours applies it as a translation.
 
         Non-negative in X and Z whenever the city bounds actually contain the
-        region, which `load_city` checks.
+        region, which `load_config` checks.
         """
         region = self.game_transform(region_id)
         city = self.city_transform()
@@ -3009,9 +3024,9 @@ class CityConfig:
         return self.elevation_levels[elevation_level]
 
 
-def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
-    """Read and validate `<cities_root>/<city_id>.yaml`."""
-    path = (cities_root or CITIES_ROOT) / f"{city_id}.yaml"
+def load_config(path: Path | None = None) -> CityConfig:
+    """Read and validate the config, `etl/config/hong_kong.yaml` by default."""
+    path = path or CONFIG_PATH
     document = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(document, dict):
         raise ValueError(f"{path} is not a YAML mapping")
@@ -3019,10 +3034,6 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
     version = document.get("schema_version")
     if version != SUPPORTED_SCHEMA:
         raise ValueError(f"{path} declares schema_version {version!r}, expected {SUPPORTED_SCHEMA}")
-    if document.get("id") != city_id:
-        raise ValueError(f"{path} declares id {document.get('id')!r}, expected {city_id!r}")
-
-    crs = _require(document, "crs", path)
     regions = _require(document, "regions", path)
     if not regions:
         raise ValueError(f"{path} defines no regions")
@@ -3033,10 +3044,6 @@ def load_city(city_id: str, *, cities_root: Path | None = None) -> CityConfig:
     table = _MaterialTable(_materials(_require(document, "materials", path), f"{path}:materials"))
 
     city = CityConfig(
-        id=city_id,
-        name=str(_require(document, "name", path)),
-        projected_crs=str(_require(crs, "projected", f"{path}:crs")),
-        geodetic_crs=str(_require(crs, "geodetic", f"{path}:crs")),
         elevation_levels=_elevation_levels(_require(document, "elevation_levels", path), path),
         bounds=_bounds(_require(document, "bounds", path), f"{path}:bounds"),
         regions={region_id: _region(region_id, body, path) for region_id, body in regions.items()},

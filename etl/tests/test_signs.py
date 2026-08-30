@@ -38,7 +38,7 @@ from pipeline.config import (
     SignFace,
     SignLayer,
     Signs,
-    load_city,
+    load_config,
 )
 from pipeline.polyline import Segments
 from pipeline.railings import facing_away
@@ -191,7 +191,7 @@ def city_with(tmp_path, block: dict[str, Any] | None):
     cities = tmp_path / "cities"
     cities.mkdir(exist_ok=True)
     (cities / "testville.yaml").write_text(yaml.safe_dump(document), encoding="utf-8")
-    return load_city("testville", cities_root=cities)
+    return load_config(cities / "testville.yaml")
 
 
 @pytest.fixture

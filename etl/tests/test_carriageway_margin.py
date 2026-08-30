@@ -804,7 +804,7 @@ class TestRayCapRefusal:
         capped at 8 m cannot sum past 16, so a 16.5 m ceiling can never bind and
         the report announces a clean sweep the cap manufactured."""
         with pytest.raises(SystemExit, match="cannot reach"):
-            main(["--city", "hong_kong", "--region", "wan_chai", "--max-ray-m", "8.0"])
+            main(["--region", "wan_chai", "--max-ray-m", "8.0"])
 
 
 class TestCrossing:
@@ -965,8 +965,6 @@ class TestDualMinBound:
         with pytest.raises(SystemExit, match="must lie within"):
             main(
                 [
-                    "--city",
-                    "hong_kong",
                     "--region",
                     "wan_chai",
                     "--dual-min-m",
