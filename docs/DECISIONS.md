@@ -127,6 +127,7 @@ wins.
 | `Q98` | **The chase camera's yaw dial could not express lag, and the rig was rigid** | 🟢 **Closed 2026-08-31 — the law changed, not the number.** `rotate_toward` at a constant **7.0 rad/s (401°/s)** against a car whose steering can only turn it at **2.245 rad/s** (128.6°/s at 97 kph), so it closed any steering-induced error inside one tick: every input swung the world 1:1 and `yaw_lag` was inert in every reachable state. ✅ Exponential instead, `yaw_response` **6.0** — a sustained corner trails **11.9° at 30 kph and 22.4° at 105**, and the look-back flip is *faster* than the old law through 90% of its travel. 🔴 **The gate came first**: the dizziness was A/B'd against `--max-fps 60` before anything was touched, because desktop renders at 120 with physics at 60 and a camera tuned to hide judder would be tuned against an artifact `run/max_fps.mobile=60` means the phone never has. Unchanged at matched rates, so `physics_interpolation` stays off. ✅ Tuning moved to `camera.tres` — the last subsystem on code defaults, hard rule 4 in name only since none of its three scenes overrode a value. ⚠️ **The `taxi` audit rows move and their figures do not** (<0.01 pp), predicted identical and checked rather than assumed. ⬜ `verify_camera` deliberately not built; `P2-5` reopened | 🟢 Closed |
 | `Q99` | **An editor save stripped two files, and only one of them was watched** | 🟢 **Closed 2026-08-31 — the guard now covers the file class, not the file.** `Q98`'s own entry had already recorded the `project.godot` half — comments stripped, three warning promotions and `renderer/rendering_method.web` dropped, *"cause unestablished"* — and it was **still in the working tree** at the next session: seen, written down, never repaired. 🔴 **The same save also took `game/tuning/clean_daylight.tres`**, ~30 comment lines carrying `Q31`'s contrast measurement and the ambient/glow balance argument, and **nothing saw that at all** — `check.sh` mentioned `.tres` nowhere. ✅ **The two halves fail differently and it is measured, not reasoned**: `project.godot` lost behaviour, the `.tres` lost **0 differing stored properties** across the `Environment`, its `Sky` and its sky material, because the writer omits only what already equals the class default. So a `.tres` cannot lose a value that is doing work, and the new `tuning` step tests for **prose**, not values. ✅ **Presence, never a count** — comments die all at once, so "carried prose, now carries none" is a signature no honest edit produces, where a count fails on every rewording and teaches the reader to edit it down. ✅ **The default is inverted**: 20 of 25 `.tres` and 6 of 8 `.tscn` must carry rationale unless `UNDOCUMENTED_OK` names them, so a *new* resource cannot slip in unwatched — mutation-checked four ways, including that one. ⬜ **The cause is still unestablished** and this guards the symptom | 🟢 Closed |
 | `Q100` | **Hong Kong is the only city, and its config is the single source of truth** | 🟢 **Closed 2026-08-31 — the premise is retired, not refuted.** `etl/config/cities/` held one file for the project's whole life and nothing ever loaded a second CRS, schema or bounds; the city layer cost a `--city` flag on 17 stages and 22 tools and a path segment on every cache and output, and bought nothing anyone called. ✅ Collapsed: `etl/config/hong_kong.yaml`, `load_config()`, `etl/sources/<source>`, `etl/out/<region>`, `Config`; the constants that *are* the city — the CRS pair, drive-on-the-left, `TS115`/`TS131`–`TS133` and `Q67`'s 0.187 m bar — live in `pipeline/hongkong.py`. ⚠️ **Regions survive** (`Q6`, `Q10`) and **hard rule 4 survives**: vocabulary and tuning stay in the yaml, and every config-versus-code grader is unchanged. ✅ Every step graded byte-identical against the pre-work bundle (`Q96`); `city.json`'s `city_id`/`source_crs` still written, so no schema bump. 🚫 `signals.py` kept latent (`Q77`), guarded by a test. ⚠️ Fifteen records cite the second city as a reason; each stands on its other reason and none is rewritten | 🟢 Closed |
+| `Q101` | **Refusals made against one dataset, re-read against the estate that grew** | 🟢 **Closed 2026-08-31 — nine rows, one negative measured.** Five publishers now cover pedestrian crossings/footways (re-opened, the `P3-27` candidate); speed limits stay `Q65`'s HOLD on scope; road text stays NO-GO but its licence half fell with `Q79`; the three kerb registrations predate `Q95`'s measured width and are re-opened as a measurement; the rest defer to the tasks that consume them. 🔴 **The `.gdbtable` domain lead closes negative**: the scan that reads `LP - Lamp post` back out of iB1000's system tables finds no coded-domain content anywhere in dTAD, so `Q60` and `Q76` keep their written-vocabulary rules. Outbound data sharing closed as "not now" (`Q100`) | 🟢 Closed |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -15370,3 +15371,61 @@ clause in each is superseded by this record and none is rewritten.
 **See.** `Q101` for what the newer datasets re-open · `Q96` for the byte-identical rule ·
 `Q77` for the signals layer · `Q6` and `Q10` for what multi-region still means · `Q72` for why a
 branch code is not a vocabulary entry · `P0-4` for the datum
+
+## `Q101` — Refusals made against one dataset, re-read against the estate that grew
+
+**Status.** 🟢 Closed 2026-08-31 · **Owner.** `Q100`'s review
+
+**Origin.** The user, with `Q100`: *"also review if new dataset opened up previously banned idea
+or data sharing chances"*. `Q57` already retired four "no source publishes that" claims and named
+the mechanism — a fact established against Road Network v2, then generalised to the estate. This
+record re-reads every remaining refusal that stood on data availability against the sources adopted
+since (`Q94`'s HyD polygons, `P3-12`–`P3-26`'s dTAD and iB1000 layers), and closes each row as
+re-opened, still-refused-on-its-other-reason, or measured shut.
+
+### The rows
+
+| Refused as unsourced | Now published by | Standing |
+|---|---|---|
+| **Pedestrian crossings / footway extent** — never drawn, never formally refused | `DTAD_CROSSING_LINE` (121 features, 6,698 m), `RM1135`/`RM1136` 望右/望左 (127/123), iB1000 `CartoPedLine PA` (50,904 m), HyD `FEAT_TYPE=2` footway (917 polygons, 122,413 m²), `DTAD_DROP_KERB_LINE` (738) | 🟡 **Re-opened** — five publishers where there were none, all already fetched. Named in `PLAN.md`'s outline as the `P3-27` candidate; `PA` + HyD footway also bear on `carriageway_occupancy.py`'s open failure |
+| **Speed-limit signs `TS174`/`TS175`** | On disk since `P3-16` (37 + 28 points) | 🟡 **Still `Q65`'s HOLD, and the block is scope, not data** — a numeral set is the one text case the atlas serves cheaply, and the index calls it "the one item left open" |
+| **`LINETYPE` (`Q60`) / `REFNAME` (`Q76`) — "no published domain"** | The `.gdbtable` coded-domain read that answered `UTILITYPOINTTYPE` for `P3-26` | 🔴 **Checked, and the answer is NO — the lead closes negative.** See below |
+| **Road text** (`P3-21`, `DTAD_RD_MARK_ANNO`, 274 features) | Data existed all along; refused on scope **and** on needing an authored typeface | ❌ **Stays NO-GO on scope (`Q65`)** — but the licence half of the reason is gone: `Q79` bundles Free HK Kai and `LICENSING.md` already carries the fourth licence. Reopening now costs only the scope decision |
+| **Kerb registration of railings / signs / lamps** — 67.9 / 77.3 / 64.1 % surveyed inside the 1.6× ribbon (`Q60`, `Q78`, `Q82`) | `Q95`'s measured `width_m` + the floor widening postdate all three registrations | 🟡 **Re-opened as a measurement**: re-derive the three stages' `shift_m` against the measured kerb and paste the per-class tables before touching any code. The registrations were priced against a ribbon that is narrower now on the widest streets |
+| **Vehicle-type / part-time restrictions** (`EXC_VEH_TYPE`, `PART_TIME_REST`) — "read but does not emit" | Same geodatabase the graph is built from | 🟡 Deferred to `P3-3`/`P3-8`, where they matter; a schema change on both sides |
+| **Fare density** — 29 taxi points | Bus stops (70 in region), GMB termini (52), fleet taxi (2), iB1000 `BUILDINGNAME`/`ADDRESS` | 🟡 `Q57`'s follow-on, still unassigned; lands with `P3-1a`'s fare loop |
+| **Road elevation second opinion** (`Q13`, `Q21`) | iB1000 `FY`/`FYU`/`TUR` codes, HyD `LVL` | 🟡 Unread; bears on the five tunnel portals `Q13` left and `Q21`'s level −1 |
+| **`tram_streets` authored list** (`Q34′`-class) | `CartoTransLine TW`, already read by `tramway.py` | 🟡 `Q57`'s follow-on: derive the list from the layer that already ships and retire the authored copy |
+
+### The domain probe, and why its negative is trustworthy
+
+`DATA_SOURCES.md` recorded `UTILITYPOINTTYPE`'s coded-value domain living *inside* the iB1000
+geodatabase, and named `LINETYPE` and `REFNAME` as the two vocabularies this project had to guess
+at instead — the strongest open lead in the file, never re-tried. Tried now, both directions:
+
+- **Method.** Scan every `.gdbtable` member of the zip for old-style `GDB_CodedDomains` content —
+  runs of `CODE - description` pairs in the system tables — with no GDAL in the loop.
+- **Control first.** On iB1000 sheet `11-SW-10C` the scan finds the domain tables and reads the
+  pairs back (`BA - Balcony`, `OH - Overhanging Structure`, `FH - Fire hydrant (fresh water)`,
+  `LP - Lamp post`, 85 pairs in `a0000001b.gdbtable`), so a negative from the same scan means
+  absence, not blindness.
+- **Result.** `dTAD_IRNP.gdb.zip`: **no coded-domain content in any of its 58 tables**, and no
+  domain binding on `LINETYPE` or `REFNAME`. TD ships the drawings estate with no coded-value
+  domains at all.
+
+So `Q60`'s whitelist-off-code-strings and `Q76`'s spelling gate stay what they are — rules this
+project wrote, published with both halves of the vocabulary — and the "arguably stronger than the
+glyph table" hope is spent. ⚠️ The one publisher-defined vocabulary in the furniture estate remains
+iB1000's, which is `P3-26`'s recorded advantage.
+
+### Data sharing
+
+The user chose not to pursue outbound publication of derived data (`Q100`'s scoping). Closed as
+"not now" rather than left open: `LICENSING.md`'s reading stands — distributing derived bytes is
+within the granted acts only under the government terms with full attribution, sub-licensing is
+unaddressed and the indemnity runs one way — so an outbound-data policy would have to be written
+before any derived dataset leaves this repo, and none is.
+
+**See.** `Q57` for the mechanism and the first four retirements · `Q100` for the review that
+ordered this one · `Q65` for the sign-estate scope line · `Q95` for the measured width the
+registrations predate · `Q77` for what a re-opened layer must argue against

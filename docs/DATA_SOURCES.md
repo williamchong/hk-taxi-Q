@@ -176,7 +176,10 @@ and `TE - Tree` / `OVT - Old valuable tree` are coded-value domains (`dTreeType`
 stored in the `.gdbtable` bytes of every sheet. That is a **materially stronger** claim than the two
 layers this project has previously had to guess at: `DTAD_RAILING_LINE.LINETYPE` has no domain
 anywhere (`Q60`) and `DTAD_TRAFFIC_LIGHT_PT.REFNAME` has none either (`Q76`), which is part of why
-`Q77` was arguable at all. It is arguably stronger than `arrows.py`'s glyph table, which is
+`Q77` was arguable at all. ✅ **"None" is measured since `Q101`, not asserted from the spec**: the
+scan that reads `LP - Lamp post` back out of these system tables finds no coded-domain content in
+any of `dTAD_IRNP.gdb.zip`'s 58 tables — TD ships the drawings estate with no coded-value domains
+at all. It is arguably stronger than `arrows.py`'s glyph table, which is
 transcribed **by eye** off a drawing (`Q59`). ⚠️ So a change to which codes this pipeline draws is
 **not** `railings.py`'s situation — the publisher has already answered, and the answer is checkable
 without leaving the file.

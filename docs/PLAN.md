@@ -751,6 +751,13 @@ than discovering the rest of it from a bug report.
 
 ### Outline only — refine once Phase 3 lands
 
+- **`P3-27` (candidate, unscheduled) — Pedestrian crossings and footway extent.** Re-opened by
+  `Q101`: five already-fetched publishers cover what was never drawn — `DTAD_CROSSING_LINE` (121),
+  `RM1135`/`RM1136` (127/123), iB1000 `CartoPedLine PA` (50.9 km), HyD `FEAT_TYPE=2` footway
+  (917 polygons), `DTAD_DROP_KERB_LINE` (738). Also a lead on `carriageway_occupancy.py`'s open
+  failure. Scope it the way `P3-18` was: one primitive, one draw call, counters that publish both
+  partitions, and a `DATA_SOURCES.md` entry per layer read.
+
 - **Phase 5 — Content:** Causeway Bay, then Central. Full vehicle roster, audio pass, night mode.
 - **Phase 6 — Production polish:** menus, settings, save/progression, accessibility, localisation QA.
 - **Phase 7 — Ship:** free-slice boundary, one-time unlock IAP, store assets, web demo, HK press
