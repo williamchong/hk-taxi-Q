@@ -53,7 +53,13 @@ func _physics_process(delta: float) -> void:
 	# Look-back is a yaw flip rather than a second camera: it keeps the spring
 	# arm's collision behaviour and costs nothing to hold.
 	var desired_yaw: float = target.global_rotation.y + (PI if InputRouter.look_back else 0.0)
-	_yaw = rotate_toward(_yaw, desired_yaw, profile.yaw_lag * delta)
+	# Exponential rather than constant-rate, which is the whole of `Q98`: the
+	# rate is proportional to the error, so a small steering correction barely
+	# moves the rig while the look-back flip — a whole PI — still closes
+	# promptly. `rotate_toward` gave both the same 401°/s and could express
+	# neither. See chase_profile.gd for the arithmetic.
+	var yaw_error: float = angle_difference(_yaw, desired_yaw)
+	_yaw = wrapf(_yaw + yaw_error * (1.0 - exp(-profile.yaw_response * delta)), -PI, PI)
 
 	var anchor: Vector3 = target.global_position + Vector3.UP * profile.height
 	global_position = global_position.lerp(anchor, minf(profile.follow_lag * delta, 1.0))

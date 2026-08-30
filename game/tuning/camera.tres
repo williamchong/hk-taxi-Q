@@ -8,6 +8,6 @@ distance = 6.5
 height = 2.2
 pitch_deg = -10.3
 follow_lag = 12.0
-yaw_lag = 7.0
+yaw_response = 6.0
 fov_base = 70.0
 fov_boost = 18.0

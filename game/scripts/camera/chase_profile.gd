@@ -37,9 +37,22 @@ extends Resource
 
 @export_group("Yaw")
 
-## Angular rate, in radians per second, at which the rig swings to the car's
-## heading.
-@export_range(1.0, 30.0, 0.5) var yaw_lag: float
+## How fast the rig converges on the car's heading, as a first-order response
+## coefficient: it closes `1 - exp(-yaw_response * delta)` of the remaining angle
+## each tick, so its turn rate is proportional to how wrong it currently is.
+##
+## ⚠️ **Not an angular rate, and that difference is the whole of `Q98`.** This was
+## `yaw_lag`, a constant 7.0 rad/s handed to `rotate_toward` — 401°/s, against a
+## car whose kinematic yaw rate peaks at 2.245 rad/s (128.6°/s, at 97 kph, off a
+## 2.6 m wheelbase and a lock tapering 24° to 7°). At 3.12x the fastest the car
+## can rotate it closed every reachable heading error inside a single tick, so
+## the rig was rigid by construction and the dial named "lag" produced none.
+##
+## Steady-state lag in a sustained turn is `yaw rate / yaw_response`, so 6.0
+## trails by 11.4° at 30 kph and 21.3° at 105. ⚠️ Below about 3.0 the rig stops
+## being able to show the road through a corner, which is `P2-5`'s standing
+## acceptance criterion — "readable at speed".
+@export_range(0.5, 30.0, 0.1, "suffix:1/s") var yaw_response: float
 
 @export_group("Speed feel")
 
