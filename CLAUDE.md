@@ -278,8 +278,8 @@ Common emoji for this project:
   measures — so it needs a named negation and a mutation check, never a comment.
   `tools/centreline_error.py` is the one consumer today and
   `test_the_station_normal_is_the_negation_of_mitres` is what fails loudly if either side moves.
-- **`Q19`'s three candidates are all priced and candidate 1 is REFUSED — do not re-propose a
-  centreline rule.** `tools/centreline_error.py` registers the published centreline against the
+- **`Q19`'s three candidates are all priced and candidate 1 is REFUTED — do not re-propose a
+  centreline rule.** (Refuted, not refused: no rule declined it, a measurement disproved it.) `tools/centreline_error.py` registers the published centreline against the
   middle of the carriageway a publisher spanned: the correction available is 0.02-0.88 m where
   1.43-4.49 m is needed, it clears **0** edges at either bar, and `e233` has no clear cell in its
   cross-section at any offset. ⚠️ **Run it again if `pipeline/carriageway.py`'s survey, `_stations`,

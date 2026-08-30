@@ -92,6 +92,7 @@ from pipeline.clearance import (  # noqa: E402
     CLEARANCE_NAME,
     CLEARANCE_SCHEMA,
     NOT_MEASURED,
+    ClearanceReport,
     _Sections,
     ground_colour,
     landmark_meshes,
@@ -292,11 +293,31 @@ def sweep(
     *,
     only: str | None = None,
 ) -> dict[int, float]:
-    """One measurement pass, at whatever widths `drawn` carries.
+    """The narrowest measured station per edge, at whatever widths `drawn` carries.
 
     `only` restricts the occupiers to a single class, which is how an edge's
     blockage is attributed: the class that starves it furthest on its own is the
     class standing in it.
+    """
+    return sweep_report(city, graph, drawn, tiles, heroes, only=only).tightest()
+
+
+def sweep_report(
+    city: CityConfig,
+    graph: dict,
+    drawn: dict[int, dict],
+    tiles: list[Path],
+    heroes: list[gltf.MeshData],
+    *,
+    only: str | None = None,
+) -> ClearanceReport:
+    """One measurement pass, whole.
+
+    Split out of `sweep` rather than copied into the caller that wanted it
+    (`tools/centreline_error.py`, which needs the per-station corridor and not
+    only its tightest station). A second copy had already drifted: it dropped
+    both of the `LANDMARK` guards below, which `test_class_meshes` pins the
+    behaviour of. One body, two readings of it.
     """
     ground, jitter = ground_colour(city)
     corridor, report = walk(graph, drawn)
@@ -313,7 +334,7 @@ def sweep(
     if only in (None, LANDMARK):
         occupy(sections, heroes, ground, jitter)
     measure(corridor, sections.blocked, report)
-    return report.tightest()
+    return report
 
 
 def attribute(

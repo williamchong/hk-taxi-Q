@@ -1442,8 +1442,12 @@ So the tool carries one named negation and closes the frame three ways — `_LEF
 use, a test asserting the two normals *stay* opposite so that a later "restore consistency" fails
 loudly, and a **signed** ladder whose result is re-measured. ✅ **The sign is settled by
 measurement, not by comment**: shifting by `+1.0x` and re-running the survey takes the region's
-`|off-centre|` p50 from **0.373 m to 0.000 m** and its max from **3.111 m to 0.628 m**. A flipped
-sign doubles that residual where a right one cancels it.
+`|off-centre|` p50 from **0.376 m to 0.043 m** and its max from 3.111 m to 1.539 m, over the **289**
+edges licensed in both worlds. A flipped sign doubles that residual where a right one cancels it.
+⚠️ **Paired, and the pairing is the point**: `licensed` is `_license`'s verdict on the *re-cast*
+span, so a shift can de-license an edge — 3 of 292 here — and comparing the two full populations
+would publish an unpaired before-and-after as though it were a matched one. Rigidly (no taper) the
+same check reads **0.376 m → 0.000 m**, which is the shift landing exactly on the surveyed middle.
 
 #### The correction that is sourced, and it is under a metre
 
@@ -1453,12 +1457,28 @@ the same `_license` the pipeline uses, so this is the survey the build reads rat
 
 | population | edges | stations | \|off\| p50 | p90 | p99 | max | signed p1 | p50 | p99 | left | right |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| all level-0 | 292 | 4,523 | 0.37 | 1.07 | 1.74 | 3.11 | −1.41 | −0.05 | +1.48 | 132 | 160 |
+| all licensed | 292 | 4,523 | 0.37 | 1.07 | 1.74 | 3.11 | −1.41 | −0.05 | +1.48 | 132 | 160 |
+| `one_way_uncrossed` | 257 | 4,102 | 0.38 | 1.03 | 1.45 | **1.95** | −1.38 | −0.05 | +1.40 | 115 | 142 |
+| `two_way_span` | 35 | 421 | 0.33 | 1.45 | 2.70 | **3.11** | −1.76 | −0.05 | +2.58 | 17 | 18 |
+
+⚠️ **Split by basis, and the pooled row was hiding the tail.** A two-way edge's offset is measured
+from the whole carriageway's middle and a one-way uncrossed edge's from its own half's — they are
+two measurements, and `CLAUDE.md` already says of the sibling table that the `basis` column must be
+quoted with the number or it is `Q57`'s generalisation. It is doing work here: the 3.11 m maximum
+belongs entirely to the 35 two-way edges, and the population this question is about tops out at
+**1.95 m**.
 
 🔴 **Both readings are published and neither replaces the other.** The magnitude median is 0.37 m
 and the signed median is −0.05 m: the first alone says "off by a third of a metre", the second alone
 says "centred", and the population is in fact **two-sided** — 132 left against 160 right. That is
 `Q78`'s failure at population scale, and `sides()` is what makes it visible.
+
+✅ **The tool is reading the survey the BUILD reads, and that is checked rather than asserted.** It
+licenses **292** edges; `roadgraph.json`'s `width_source` marks **292** as measured; the two are the
+**same set exactly**, empty both ways. And its span agrees with the published `width_m` to p50
+**0.0003 m**, max **0.0005 m** — which is `round_position`'s millimetre rounding of the polyline and
+nothing else. So Part A's offsets come off the same rays that produced the shipped widths, and "the
+tool surveyed a different road" is ruled out rather than argued away.
 
 ⚠️ **445 of the 737 level-0 rows carry a measurement the bounds refused**, and they are kept in the
 table rather than filtered into it — `CarriagewayReport`'s own rule after `Q58`'s `drawn_gauge_m`
@@ -1478,11 +1498,19 @@ trap, so `n` exceeds what is kept and a reader can see by how much.
 
 Right column from `carriageway_occupancy.py --corridor-report`; left from this tool.
 
+⚠️ **Six of the seven, not seven.** `e125` licensed no correction at all — its ray crossed a median — so the 0.02-0.88 m range is over the six that did, and quoting it as the seven would be `Q57`'s generalisation on a population of one.
+
 ⚠️ **`e99`, `e125` and `e207` are refused because the ray crossed a median** (`beyond` 7.62, 5.35
 and 6.98 m against a 3.00 m `hard_min`), and their apparent offsets are the largest in the
 population — −3.81, +2.68 and +3.49 m — *because* of it. Shifting `e99` by 3.81 m would have driven
 it into the opposing carriageway. The `crossing` refusal is load-bearing, and this is what it
 catches.
+
+⚠️ **On the tightest edges the residual is noise around zero, not a registration.** `sign_mixed`
+counts stations falling on the far side from the edge's own median: `e55` reads **19 of 42**,
+`e222` 5 of 12, `e256` 6 of 27, `e233` 4 of 16. Nearly half on `e55` means its −0.02 m median is not
+a small offset but *no* offset — the publishers put the centreline dead in the middle of what they
+drew. A median alone could not have said that.
 
 ⚠️ **The offset also wanders on three of them** — `spread_m` p90 is **4.73 m** on `e485`, 2.85 on
 `e788` and 2.19 on `e233` — so on those "shift by the median" is not even a well-posed correction.
@@ -1500,8 +1528,14 @@ The clearance measurement re-run on a shifted graph, over a signed ladder. ✅ T
 | −1.00x | 24 | 0 | 18 | 1 |
 | **+0.00x (control)** | **24** | **0** | **19** | **0** |
 | **+1.00x sourced** | **24** | **0** | **19** | **0** |
-| +2.00x | 23 | 1 | 19 | 0 |
+| +2.00x | 24 | 0 | 19 | 0 |
 | +3.00x | 23 | 1 | 18 | 1 |
+
+⚠️ **The `+2.00x` lane row read `23 / 1 cleared` before review and is corrected here.** The
+cleared-and-lost counts were a plain set difference, which reports an edge measured at the control
+and *absent* at another rung as a win; `narrowing.moved` intersects the two rungs' edge sets first
+and is what the table computes now. The invented win was at an unsourced rung, so nothing below
+rests on it — but it was a win invented out of a missing measurement.
 
 🔴 **The sourced correction clears not one edge at either bar**, tapered or rigid. And the negative
 arm — which is there as the mutation check, not as padding — clears **two**. Moving *away* from the
@@ -1511,9 +1545,17 @@ side.
 
 ⚠️ **The taper is not what is hiding the result.** All eight licensed edges deliver ramp **1.00** at
 15 m, so the tapered and rigid sweeps agree; the rigid one is quoted because it is the upper bound
-and because it is what measures the endpoint cost — **3.1112 m**, exactly the region's own max
-offset, opened at a shared node. Plan node coincidence is exactly **0.000000 m** across all 797
-edges, so there is no slack: an untapered shift of `d` tears the graph by exactly `d`.
+and because it is what measures the endpoint cost — **4.0375 m** torn open at a shared node. Plan
+node coincidence is exactly **0.000000 m** across all 797 edges, so there is no slack.
+
+🔴 **That figure was published as 3.1112 m and was wrong, and the way it was wrong is worth keeping.**
+It had been the largest *per-edge* endpoint shift, maximised over edges, which is neither an upper
+nor a lower bound on the gap it claimed to report: two edges meeting head-to-tail and shifted the
+same way in world space open **nothing**, while two meeting head-to-head have opposed travel
+directions — so `mitres`' left-of-travel points to opposite world sides and the joint opens **twice**
+the shift. Measured per node it is 4.0375 m against a 3.111 m largest single offset, so the
+head-to-head case is not hypothetical in this region. ⚠️ **A one-edge test could not have caught
+it**, and the test that pins it now is a two-edge one.
 
 #### 🔴 Candidate 3, priced: 143.2 m of published carriageway with a wall in it
 
@@ -1553,8 +1595,8 @@ counts are reported split — 445 level-0 edges with no licensed width, and 60 r
 #### What this licenses
 
 🔴 **Candidate 1 is refused, and on the publishers' own evidence.** The graph is where TD, iB1000
-and HyD drew the carriageway, to within a metre on every edge in the population and within a
-decimetre on four of them. The wall is standing in the **published** carriageway, not in an invented
+and HyD drew the carriageway, to within a metre on all six that licensed a correction and
+within a decimetre on four of them. The wall is standing in the **published** carriageway, not in an invented
 one. There is no centreline rule to write, and the `structure_bounded` flag `b514c4d` shipped is
 still waiting for a consumer that does not exist.
 

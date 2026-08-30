@@ -21,10 +21,10 @@ correction is made of, and it is thrown away there because nothing needed it.
 measurement, on a graph whose polylines have been shifted by that offset, swept
 over a signed ladder.
 
-**Part C — what candidate 3 would cost.** How much `INFRASTRUCTURE` stands
-inside the *surveyed* carriageway, in metres and in square metres. If the
-sourced correction does not reach, that is the geometry a fix has to author
-away, and it is the first number that candidate has ever had.
+**Part C — what candidate 3 would cost.** How many centreline metres of the
+*surveyed* carriageway have `INFRASTRUCTURE` standing in them. If the sourced
+correction does not reach, that is the geometry a fix has to author away, and it
+is the first number that candidate has ever had.
 
 ⚠️ **This grades rather than checks and exits 0 whatever it finds.** There is no
 bar, deliberately. `clearance_reconcile.py` is a ratchet because it holds two
@@ -64,14 +64,15 @@ A dropped negation publishes "the sourced correction makes it worse" — plausib
 publishable and false. It is the largest risk in this file.
 
 ⚠️ **`off_centre_m` here is not `off_centre` in `carriageway_width.json`.** This
-is signed metres; that is an unsigned 0-1 ratio. They are one letter apart and
-`--widths-json` prints the conversion side by side so a reader who conflates them
-sees both.
+is signed metres; that is an unsigned 0-1 ratio, and they are one letter apart.
+The conversion is `|off_centre_m| == off_centre * span_m / 2`.
 
-⚠️ **`carriageway_width.json` is read only behind `--widths-json`, only to print
-an agreement table, and never to decide a number.** Hard rules 2 and 7 are
-untouched: it is gitignored generated city data, and a clone that has never run
-`carriageway_margin.py --json` reproduces every finding in this file without it.
+✅ **Nothing here reads `carriageway_width.json`**, which is gitignored generated
+city data — so hard rules 2 and 7 are untouched and a clone that has never run
+`carriageway_margin.py --json` reproduces every finding in this file. What it
+reads instead is `roadgraph.json`, and the agreement is exact: this licenses the
+same **292** edges the pipeline marks measured, same set both ways, with spans
+agreeing to p50 0.0003 m.
 """
 
 from __future__ import annotations
@@ -79,7 +80,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
@@ -89,7 +90,7 @@ sys.path.insert(0, str(ROOT / "etl"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from carriageway_occupancy import road_names  # noqa: E402
-from narrowing import check_baseline, class_meshes, classes  # noqa: E402
+from narrowing import check_baseline, classes, moved, sweep, sweep_report  # noqa: E402
 from pipeline import gltf  # noqa: E402
 from pipeline.carriageway import (  # noqa: E402
     JUNCTION_M,
@@ -98,20 +99,16 @@ from pipeline.carriageway import (  # noqa: E402
     STATION_M,
     _license,
     _read_publisher,
+    _Segments,
     _stations,
 )
 from pipeline.clearance import (  # noqa: E402
     ALONG_M,
     NOT_MEASURED,
     ClearanceReport,
-    _Sections,
-    ground_colour,
     landmark_meshes,
-    measure,
-    occupy,
     open_region,
     tile_meshes,
-    walk,
 )
 from pipeline.config import CityConfig, WidthBounds, load_city  # noqa: E402
 from pipeline.polyline import plan_lengths  # noqa: E402
@@ -198,7 +195,9 @@ class Offset:
     junction: int
     """Stations dropped for sitting in a junction mouth, where there is no far
     kerb to find and the road reads wide."""
-    off_centre_m: float
+    publishers: str
+    direction: str
+    off_centre_m: float = float("nan")
     """SIGNED, positive LEFT of travel, the median over signed stations.
 
     🔴 **The median of the signed stations, never `(median far - median near)/2`.**
@@ -206,17 +205,15 @@ class Offset:
     exactly the direction this file exists to publish. `sign_mixed` is what makes
     a swap visible instead of averaged away.
     """
-    spread_m: float
+    spread_m: float = float("nan")
     """p90 of |per-station offset - median|. The run-versus-point column: a
     centreline that is off by a constant is a registration, one whose offset
     wanders is a different animal and must not be reported as the first."""
-    sign_mixed: int
+    sign_mixed: int = 0
     """Stations whose offset falls on the other side from the median."""
-    span_m: float
-    own_m: float
-    publishers: str
-    direction: str
-    basis: str
+    span_m: float = float("nan")
+    own_m: float = float("nan")
+    basis: str = ""
     """`_license`'s own answer: `two_way_span`, `one_way_uncrossed`, or empty
     where the publishers licensed nothing."""
 
@@ -234,25 +231,9 @@ class Offset:
         return bool(self.basis)
 
 
-def _shim(direction: str):
-    """A stand-in carrying the one field `_license` reads.
-
-    `_license` is imported rather than restated so that admissibility here is
-    the pipeline's own rule byte for byte, and cannot drift from it. It reads
-    `edge.direction` and nothing else.
-    """
-
-    class _Edge:
-        pass
-
-    edge = _Edge()
-    edge.direction = direction  # type: ignore[attr-defined]
-    return edge
-
-
 def _station_offsets(
     plan: np.ndarray,
-    publishers: list[tuple[str, object]],
+    publishers: list[tuple[str, _Segments]],
     nodes: np.ndarray,
     *,
     spacing_m: float,
@@ -279,8 +260,8 @@ def _station_offsets(
             junction += 1
             continue
         for name, segments in publishers:
-            ahead = segments.first_hit(point, normal, max_ray_m)  # type: ignore[attr-defined]
-            behind = segments.first_hit(point, -normal, max_ray_m)  # type: ignore[attr-defined]
+            ahead = segments.first_hit(point, normal, max_ray_m)
+            behind = segments.first_hit(point, -normal, max_ray_m)
             if ahead is None or behind is None:
                 continue
             # The middle of the span sits at `(ahead - behind) / 2` from the
@@ -295,6 +276,21 @@ def _station_offsets(
     return offsets, spans, nears, answered, walked, junction
 
 
+def read_publishers(city: CityConfig, region_id: str) -> list[tuple[str, _Segments]]:
+    """Every carriageway-edge publisher, read once.
+
+    ⚠️ **Hoisted out of `offsets` because `main` measures twice** — once on the
+    published graph and once on the shifted one, to settle the sign — and the
+    publishers are identical geometry both times. Re-reading them costs 2.9 s of
+    a 33 s run, almost all of it HyD's 552 pavement polygons, and moves no
+    published number.
+    """
+    survey = city.carriageway_survey
+    assert survey is not None  # guarded in `main` before anything is walked
+    transform = city.game_transform(region_id)
+    return [(spec.name, _read_publisher(city, spec, region_id, transform)) for spec in survey.edges]
+
+
 def offsets(
     city: CityConfig,
     region_id: str,
@@ -305,14 +301,10 @@ def offsets(
     max_ray_m: float = MAX_RAY_M,
     junction_m: float = JUNCTION_M,
     min_stations: int = MIN_STATIONS,
+    publishers: list[tuple[str, _Segments]] | None = None,
 ) -> dict[int, Offset]:
     """Every level-0 edge's signed offset from the middle the publishers drew."""
-    survey = city.carriageway_survey
-    assert survey is not None  # guarded in `main` before anything is walked
-    transform = city.game_transform(region_id)
-    publishers = [
-        (spec.name, _read_publisher(city, spec, region_id, transform)) for spec in survey.edges
-    ]
+    publishers = read_publishers(city, region_id) if publishers is None else publishers
     nodes = np.array([node["pos"] for node in graph["nodes"]], dtype=np.float64)
     nodes = nodes[:, [0, 2]] if len(nodes) else np.empty((0, 2))
 
@@ -330,41 +322,36 @@ def offsets(
             junction_m=junction_m,
         )
         edge_id = int(published["id"])
-        direction = str(published["direction"])
-        if len(found) < min_stations:
-            rows[edge_id] = Offset(
-                edge=edge_id,
-                walked=walked,
-                n=len(found),
-                junction=junction,
-                off_centre_m=float("nan"),
-                spread_m=float("nan"),
-                sign_mixed=0,
-                span_m=float("nan"),
-                own_m=float("nan"),
-                publishers="+".join(sorted(answered)),
-                direction=direction,
-                basis="",
-            )
-            continue
-        median = float(np.median(found))
-        span = float(np.median(spans))
-        own = 2.0 * float(np.median(nears))
-        _, basis = _license(_shim(direction), span, own, bounds)
-        rows[edge_id] = Offset(
+        walked_row = Offset(
             edge=edge_id,
             walked=walked,
             n=len(found),
             junction=junction,
+            publishers="+".join(sorted(answered)),
+            direction=str(published["direction"]),
+        )
+        if len(found) < min_stations:
+            # Every field but the six above stays at its NaN default: an edge no
+            # publisher spanned has no measurement, and a row still exists for it
+            # so that `n` can exceed what is kept (`Q58`).
+            rows[edge_id] = walked_row
+            continue
+        median = float(np.median(found))
+        span = float(np.median(spans))
+        own = 2.0 * float(np.median(nears))
+        measured = replace(
+            walked_row,
             off_centre_m=median,
             spread_m=float(np.percentile(np.abs(np.asarray(found) - median), 90)),
             sign_mixed=sum(1 for value in found if value * median < 0.0),
             span_m=span,
             own_m=own,
-            publishers="+".join(sorted(answered)),
-            direction=direction,
-            basis=basis,
         )
+        # `_license` reads `edge.direction` and nothing else, so the row is its
+        # own argument — no stand-in object, and `direction` stops being a field
+        # nothing reads.
+        _, basis = _license(measured, span, own, bounds)
+        rows[edge_id] = replace(measured, basis=basis)
     return rows
 
 
@@ -386,7 +373,6 @@ _RESIDUAL_M = 0.10
 class World:
     """The graph at one signed multiple of each licensed edge's own shift."""
 
-    label: str
     scale: float
     taper_m: float
     graph: dict
@@ -394,10 +380,22 @@ class World:
     """The shift actually applied at each edge's own tightest station, which the
     taper can make much smaller than nominal."""
     node_gap_m: float
-    """The worst plan displacement opened at any shared node. Zero under a
-    taper, and exactly the shift without one."""
+    """The worst plan distance between two edges' endpoints at a shared node.
+
+    🔴 **Measured per NODE, not per edge, and the difference is a factor of two
+    in both directions.** The obvious reading — the largest endpoint shift over
+    all edges — is neither an upper nor a lower bound on the gap it claims to
+    report: two edges meeting head-to-tail and shifted the same way in world
+    space open *nothing*, while two meeting head-to-head have opposed travel
+    directions, so `mitres`' left-of-travel points to opposite world sides and
+    the joint opens *twice* the shift. `--no-taper` exists to read an upper
+    bound, and this is the number that prices it."""
     refused: tuple[int, ...]
     """Edges whose offset polyline runs backwards on some segment."""
+
+    @property
+    def label(self) -> str:
+        return f"{self.scale:+.2f}x sourced" if self.scale else "0.00 (control)"
 
 
 def ramp(along_m: np.ndarray, taper_m: float) -> np.ndarray:
@@ -453,85 +451,57 @@ def shift_graph(graph: dict, rows: dict[int, Offset], *, scale: float, taper_m: 
     """
     edges = []
     delivered: dict[int, float] = {}
-    node_gap = 0.0
     refused: list[int] = []
+    landing: dict[int, list[np.ndarray]] = {}
     for published in graph["edges"]:
         edge_id = int(published["id"])
         row = rows.get(edge_id)
-        if row is None or not row.licensed or scale == 0.0:
-            edges.append(published)
-            continue
-        points = np.asarray(published["polyline"], dtype=np.float64)
-        along = plan_lengths(points)
-        profile = row.shift_m * scale * ramp(along, taper_m)
-        moved = points.copy()
-        moved[:, [0, 2]] = points[:, [0, 2]] + mitres(points) * profile[:, None]
-        if runs_backwards(points, moved):
-            refused.append(edge_id)
-            edges.append(published)
-            continue
-        delivered[edge_id] = float(np.abs(profile).max())
-        node_gap = max(node_gap, abs(float(profile[0])), abs(float(profile[-1])))
-        edges.append({**published, "polyline": moved.tolist()})
+        kept = published
+        if row is not None and row.licensed and scale != 0.0:
+            points = np.asarray(published["polyline"], dtype=np.float64)
+            profile = row.shift_m * scale * ramp(plan_lengths(points), taper_m)
+            moved = points.copy()
+            moved[:, [0, 2]] = points[:, [0, 2]] + mitres(points) * profile[:, None]
+            if runs_backwards(points, moved):
+                refused.append(edge_id)
+            else:
+                delivered[edge_id] = float(np.abs(profile).max())
+                kept = {**published, "polyline": moved.tolist()}
+        edges.append(kept)
+        # Every edge lands at its two nodes, moved or not — an unmoved neighbour
+        # is exactly what a moved edge tears away from.
+        ends = np.asarray(kept["polyline"], dtype=np.float64)[:, [0, 2]]
+        landing.setdefault(int(published["from"]), []).append(ends[0])
+        landing.setdefault(int(published["to"]), []).append(ends[-1])
     return World(
-        label=f"{scale:+.2f}x sourced" if scale else "0.00 (control)",
         scale=scale,
         taper_m=taper_m,
         graph={**graph, "edges": edges},
         delivered_m=delivered,
-        node_gap_m=node_gap,
+        node_gap_m=_worst_node_gap(landing),
         refused=tuple(sorted(refused)),
     )
 
 
-def _pass(
-    city: CityConfig,
-    graph: dict,
-    drawn: dict[int, dict],
-    tiles: list[Path],
-    heroes: list[gltf.MeshData],
-    *,
-    only: str | None = None,
-) -> ClearanceReport:
-    """One clearance measurement, at whatever centreline and widths are handed in.
+def _worst_node_gap(landing: dict[int, list[np.ndarray]]) -> float:
+    """The widest a shared node has been pulled apart, over every node."""
+    worst = 0.0
+    for points in landing.values():
+        if len(points) < 2:
+            continue
+        stack = np.asarray(points)
+        spread = np.hypot(*(stack[:, None, :] - stack[None, :, :]).T)
+        worst = max(worst, float(spread.max()))
+    return worst
 
-    `narrowing.sweep`'s body, returning the whole report rather than
-    `tightest()`, because Part C needs the per-station corridor and `sweep`
-    discards it. Twelve lines, against editing a shipped grader that carries its
-    own test file.
+
+def _cell(width_m: float) -> str:
+    """One clear-width cell, or a dash where the ribbon never reached the station.
+
+    `NOT_MEASURED` is -1.0, so printing it raw would read as a road narrower than
+    nothing rather than as one that was not asked about.
     """
-    ground, jitter = ground_colour(city)
-    corridor, report = walk(graph, drawn)
-    sections = _Sections(corridor)
-    for path in tiles:
-        meshes = gltf.read_glb(path)
-        occupy(
-            sections,
-            meshes if only is None else class_meshes(meshes, city, only),
-            ground,
-            jitter,
-        )
-    if only is None:
-        occupy(sections, heroes, ground, jitter)
-    measure(corridor, sections.blocked, report)
-    return report
-
-
-def clears_at(
-    ladder: tuple[float, ...], results: dict[float, dict[int, float]], edge: int, bar_m: float
-) -> float:
-    """The FIRST rung at which this edge reaches `bar_m`, or NaN.
-
-    ⚠️ **First, not a threshold.** Moving sideways can clear one blocker and run
-    into the next, so the whole row is always printed beside this and a
-    non-monotonic edge stays visible rather than being reduced to a number that
-    implies monotonicity.
-    """
-    for rung in ladder:
-        width = results[rung].get(edge, NOT_MEASURED)
-        if width != NOT_MEASURED and width >= bar_m:
-            return rung
-    return float("nan")
+    return f"{'--':>9}" if width_m == NOT_MEASURED else f"{width_m:>9.2f}"
 
 
 def _report_sweep(
@@ -548,12 +518,7 @@ def _report_sweep(
     for edge in watched:
         row = rows.get(edge)
         shift = row.shift_m if row and row.licensed else float("nan")
-        cells = "".join(
-            f"{results[rung].get(edge, NOT_MEASURED):>9.2f}"
-            if results[rung].get(edge, NOT_MEASURED) != NOT_MEASURED
-            else f"{'--':>9}"
-            for rung in ladder
-        )
+        cells = "".join(_cell(results[rung].get(edge, NOT_MEASURED)) for rung in ladder)
         log.info("    e%-5d %+9.2f %s  %s", edge, shift, cells, names.get(edge, "unnamed"))
     log.info(
         "    columns past +1.00x are NOT sourced: no publisher puts the carriageway there, and a "
@@ -574,14 +539,16 @@ def _report_bar(
     clear one edge and starve another, so the losses are named rather than
     netted off against the wins.
     """
-    control = {edge for edge, width in results[0.0].items() if width < bar_m}
     log.info("")
     log.info("  edges under %.2f m (%s), per rung:", bar_m, label)
     log.info("    %10s %8s %9s %7s  %s", "shift", "below", "cleared", "lost", "worse")
     for rung in ladder:
         below = {edge for edge, width in results[rung].items() if width < bar_m}
-        cleared = control - below
-        lost = below - control
+        # ⚠️ **`narrowing.moved`, not a set difference.** It intersects the two
+        # rungs' edge sets first, so an edge measured at the control and absent
+        # at this rung is neither cleared nor lost. A plain difference reports it
+        # as **cleared**, which is a win invented out of a missing measurement.
+        cleared, lost = moved(results[0.0], results[rung], bar_m)
         log.info(
             "    %+10.2fx %8d %9d %7d  %s",
             rung,
@@ -770,6 +737,15 @@ class Priced:
         return self.along_m / self.length_m if self.length_m else 0.0
 
 
+# `roads.py` writes `width_source` as bare literals and exports no constant, so
+# these are restated rather than imported. 🔴 **Matched POSITIVELY on purpose.**
+# The obvious test is `!= "authored"`, and that vocabulary is open at the other
+# end: a fourth source meaning "not measured" would slip through it silently and
+# price every such edge against a width nobody measured, which is the exact
+# failure this function's own refusal exists to prevent.
+_MEASURED_SOURCES = frozenset({"one_way_uncrossed", "two_way_span"})
+
+
 def surveyed_table(
     drawn: dict[int, dict], rows: dict[int, Offset], graph: dict
 ) -> tuple[dict[int, dict], list[int]]:
@@ -790,7 +766,7 @@ def surveyed_table(
     for edge_id, entry in drawn.items():
         row = rows.get(edge_id)
         source = str(published.get(edge_id, {}).get("width_source", ""))
-        if row is None or not row.licensed or source == "authored":
+        if row is None or not row.licensed or source not in _MEASURED_SOURCES:
             # ⚠️ **Kept in the table at its DRAWN width, and refused from the
             # pricing instead.** `walk` requires a half-width row for every edge
             # it walks and raises naming both documents if one is missing, so
@@ -862,10 +838,33 @@ def priced(
     return out
 
 
+def price_surveyed(
+    city: CityConfig,
+    graph: dict,
+    drawn: dict[int, dict],
+    rows: dict[int, Offset],
+    tiles: list[Path],
+    heroes: list[gltf.MeshData],
+    bar_m: float,
+) -> tuple[dict[int, Priced], list[int]]:
+    """Part C, whole, so its three steps cannot be handed each other's inputs.
+
+    ⚠️ **The binding is the point.** `priced` needs a report measured at the
+    *surveyed* widths and a refusal list from the *same* `surveyed_table` call;
+    given a report built at the drawn widths it prices every edge against the
+    shipped ribbon instead and prints a complete, plausible table saying so.
+    Nothing in the types can catch that, so the three are not separately callable
+    from `main`.
+    """
+    table, refused = surveyed_table(drawn, rows, graph)
+    report = sweep_report(city, graph, table, tiles, heroes, only=classes(city)[0])
+    return priced(report, rows, graph, set(refused), bar_m), refused
+
+
 def _report_authoring(
     found: dict[int, Priced],
     refused: list[int],
-    level_0_refused: list[int],
+    graph: dict,
     names: dict[int, str],
     watched: list[int],
     bar_m: float,
@@ -919,12 +918,16 @@ def _report_authoring(
     # off-grade rows were never in scope — this question is about level 0 — while
     # a level-0 edge with no licensed width is a real hole in the pricing and
     # `Q19`'s own `e99`, `e125`, `e207` and `e781` are in it. One number would
-    # hide the second inside the first.
+    # hide the second inside the first. ⚠️ **Read off `elevation_level`, never
+    # off membership of the offsets table**: an edge with a one-vertex polyline
+    # is absent from that table and is level 0 all the same.
+    levels = {int(edge["id"]): int(edge["elevation_level"]) for edge in graph["edges"]}
+    at_grade = [edge for edge in refused if levels.get(edge) == 0]
     log.info(
         "    refused: %d level-0 edges the publishers licensed no width for, and %d rows that are "
         "not level 0 and never were in scope",
-        len(level_0_refused),
-        len(refused) - len(level_0_refused),
+        len(at_grade),
+        len(refused) - len(at_grade),
     )
     log.info(
         "    lengths are centreline metres, weighted per station — NOT a station count times the "
@@ -934,7 +937,7 @@ def _report_authoring(
 
 
 def _ids(text: str) -> set[int]:
-    return {int(part.lstrip("e")) for part in text.replace(",", " ").split() if part}
+    return {int(part.lstrip("e")) for part in text.replace(",", " ").split()}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -997,20 +1000,39 @@ def main(argv: list[str] | None = None) -> int:
     log.info("%s / %s", city.name, region.name)
     out_dir, graph, drawn, buildings = open_region(city, args.region)
     names = road_names(graph)
-    rows = offsets(
-        city,
-        args.region,
-        graph,
-        bounds,
-        spacing_m=args.spacing_m,
-        max_ray_m=args.max_ray_m,
-        junction_m=args.junction_m,
-        min_stations=args.min_stations,
-    )
+    # 🔴 **One binding for both measurements.** The sign check below compares a
+    # before and an after, and that comparison only means anything if the two
+    # were measured at identical settings — so there is one call shape rather
+    # than two that have to be kept in step by eye. The publishers are read once
+    # for the same reason and because it is 2.9 s of a 33 s run.
+    publishers = read_publishers(city, args.region)
+
+    def survey(of: dict) -> dict[int, Offset]:
+        return offsets(
+            city,
+            args.region,
+            of,
+            bounds,
+            spacing_m=args.spacing_m,
+            max_ray_m=args.max_ray_m,
+            junction_m=args.junction_m,
+            min_stations=args.min_stations,
+            publishers=publishers,
+        )
+
+    rows = survey(graph)
 
     watched = sorted(_ids(args.watch))
     _report_offsets(rows, names, watched, bounds)
-    _report_distribution(rows, {"all level-0": set(rows)})
+    by_basis: dict[str, set[int]] = {}
+    for edge, row in rows.items():
+        if row.licensed:
+            by_basis.setdefault(row.basis, set()).add(edge)
+    # 🔴 Split, never pooled. A two-way edge's offset is from the whole
+    # carriageway's middle and a one-way uncrossed edge's is from its own half's;
+    # one row over both is `Q57`'s generalisation, which `CLAUDE.md` names for
+    # the sibling table in the same words.
+    _report_distribution(rows, {"all licensed": set(rows), **by_basis})
     if args.offsets_only:
         return 0
 
@@ -1031,13 +1053,15 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     worlds = {scale: shift_graph(graph, rows, scale=scale, taper_m=taper_m) for scale in FRACTIONS}
-    # 🔴 The control must move nothing at all, byte for byte. A control row that
-    # differs means the two worlds differ for a reason that is not the shift,
-    # which would make every other row unreadable (`Q72`, `reachability.py`).
-    assert worlds[0.0].graph["edges"] == graph["edges"]
+    # 🔴 The control must have moved nothing (`Q72`, `reachability.py`'s control
+    # row). ⚠️ Comparing its edge list against the graph's would be a tautology —
+    # `shift_graph` appends the original objects at scale 0 — so this asserts the
+    # world's own claims about itself instead, and refuses rather than
+    # `assert`ing, which `python -O` would strip.
+    if worlds[0.0].delivered_m or worlds[0.0].refused or worlds[0.0].node_gap_m:
+        raise SystemExit("the control world moved something; every other rung is unreadable")
     results = {
-        scale: _pass(city, world.graph, drawn, tiles, heroes).tightest()
-        for scale, world in worlds.items()
+        scale: sweep(city, world.graph, drawn, tiles, heroes) for scale, world in worlds.items()
     }
     check_baseline(out_dir, city.id, args.region, results[0.0])
 
@@ -1048,44 +1072,34 @@ def main(argv: list[str] | None = None) -> int:
 
     # 🔴 The sign, closed by measurement rather than by comment. A `_LEFT` the
     # wrong way round doubles the residual offset where a right one cancels it.
-    moved = offsets(
-        city,
-        args.region,
-        worlds[1.0].graph,
-        bounds,
-        spacing_m=args.spacing_m,
-        max_ray_m=args.max_ray_m,
-        junction_m=args.junction_m,
-        min_stations=args.min_stations,
-    )
-    before = [abs(row.off_centre_m) for row in rows.values() if row.licensed]
-    after = [abs(moved[edge].off_centre_m) for edge in moved if moved[edge].licensed]
+    moved = survey(worlds[1.0].graph)
+    # ⚠️ **Paired, over the edges licensed in BOTH worlds.** `licensed` is
+    # `_license`'s verdict on the re-cast span, so a shift can license an edge or
+    # de-license one; comparing the two full populations would publish an
+    # unpaired before/after as though it were a matched one.
+    licensed_before = [edge for edge, row in rows.items() if row.licensed]
+    common = [edge for edge in licensed_before if moved[edge].licensed]
+    before = percentiles([abs(rows[edge].off_centre_m) for edge in common])
+    after = percentiles([abs(moved[edge].off_centre_m) for edge in common])
     log.info("")
     log.info(
-        "  the sign, re-measured on the shifted graph: |off-centre| p50 %.3f m -> %.3f m, "
-        "max %.3f m -> %.3f m",
-        percentiles(before)[0],
-        percentiles(after)[0],
-        percentiles(before)[3],
-        percentiles(after)[3],
+        "  the sign, re-measured on the shifted graph over the %d edges licensed in both "
+        "(%d de-licensed by the shift): |off-centre| p50 %.3f m -> %.3f m, max %.3f m -> %.3f m",
+        len(common),
+        len(licensed_before) - len(common),
+        before[0],
+        after[0],
+        before[3],
+        after[3],
     )
-    if percentiles(after)[0] > percentiles(before)[0] + _RESIDUAL_M:
+    if after[0] > before[0] + _RESIDUAL_M:
         log.info(
             "    ⚠ the residual GREW. A shift that moves the centreline away from the middle it "
             "was measured against is a flipped sign, not a finding"
         )
 
-    surveyed, refused = surveyed_table(drawn, rows, graph)
-    structure = classes(city)[0]
-    report = _pass(city, graph, surveyed, tiles, heroes, only=structure)
-    _report_authoring(
-        priced(report, rows, graph, set(refused), args.car_width_m),
-        refused,
-        [edge for edge in refused if edge in rows],
-        names,
-        watched,
-        args.car_width_m,
-    )
+    found, refused = price_surveyed(city, graph, drawn, rows, tiles, heroes, args.car_width_m)
+    _report_authoring(found, refused, graph, names, watched, args.car_width_m)
     return 0
 
 

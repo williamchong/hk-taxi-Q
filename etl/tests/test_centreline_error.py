@@ -31,7 +31,6 @@ import pytest
 from centreline_error import (
     Offset,
     Priced,
-    clears_at,
     percentiles,
     priced,
     ramp,
@@ -187,16 +186,44 @@ class TestShiftGraph:
         assert len(moved) == 3
         assert moved[:, 1].tolist() == pytest.approx([4.0, 4.0, 4.0])
 
-    def test_an_untapered_shift_opens_the_shared_node_by_the_shift(self):
+    def test_an_untapered_shift_tears_a_shared_node(self):
         """The node break as a measurement rather than an argument. Plan node
-        coincidence is exact in the shipped region, so there is no slack."""
-        graph = {"nodes": [], "edges": [_edge(0, _points((0.0, 0.0), (50.0, 0.0)))]}
+        coincidence is exact in the shipped region, so there is no slack: an
+        edge that moves and a neighbour that does not open the full shift."""
+        moving = _edge(0, _points((0.0, 0.0), (50.0, 0.0)))
+        still = _edge(9, _points((0.0, 0.0), (0.0, -50.0)))
+        still["from"], still["to"] = 0, 99
+        graph = {"nodes": [], "edges": [moving, still]}
         world = shift_graph(graph, {0: _offset(0, 2.0)}, scale=1.0, taper_m=0.0)
         assert world.node_gap_m == pytest.approx(2.0)
+
+    def test_two_edges_meeting_head_to_head_open_TWICE_the_shift(self):
+        """🔴 The case a per-edge maximum cannot see. Opposed travel directions
+        put `mitres`' left on opposite world sides, so a 2 m shift each way is a
+        4 m joint — and the obvious reading would have reported 2 m."""
+        east = _edge(0, _points((0.0, 0.0), (50.0, 0.0)))
+        west = _edge(1, _points((-50.0, 0.0), (0.0, 0.0)))
+        east["from"], east["to"] = 5, 6
+        west["from"], west["to"] = 7, 5
+        graph = {"nodes": [], "edges": [east, west]}
+        world = shift_graph(
+            graph, {0: _offset(0, 2.0), 1: _offset(1, -2.0)}, scale=1.0, taper_m=0.0
+        )
+        assert world.node_gap_m == pytest.approx(4.0)
 
     def test_a_tapered_shift_opens_nothing(self):
         graph = {"nodes": [], "edges": [_edge(0, _points((0.0, 0.0), (50.0, 0.0)))]}
         world = shift_graph(graph, {0: _offset(0, 2.0)}, scale=1.0, taper_m=15.0)
+        assert world.node_gap_m == pytest.approx(0.0)
+
+    def test_endpoints_that_still_coincide_open_nothing(self):
+        """Two edges shifted the same way in world space keep their joint."""
+        a = _edge(0, _points((0.0, 0.0), (50.0, 0.0)))
+        b = _edge(1, _points((50.0, 0.0), (100.0, 0.0)))
+        a["from"], a["to"] = 5, 6
+        b["from"], b["to"] = 6, 7
+        graph = {"nodes": [], "edges": [a, b]}
+        world = shift_graph(graph, {0: _offset(0, 2.0), 1: _offset(1, 2.0)}, scale=1.0, taper_m=0.0)
         assert world.node_gap_m == pytest.approx(0.0)
 
     def test_a_shift_that_runs_backwards_is_refused_rather_than_repaired(self):
@@ -241,6 +268,17 @@ class TestSurveyedTable:
         graph = {"edges": [_edge(0, _points((0.0, 0.0), (50.0, 0.0)))]}
         table, _ = surveyed_table(drawn, {0: _offset(0, 0.0)}, graph)
         assert table[0]["half_width_m"] == pytest.approx([1.0])
+
+    def test_an_unknown_width_source_is_refused_rather_than_priced(self):
+        """🔴 The allowlist is positive on purpose. A fourth `width_source`
+        meaning "not measured" must refuse, not slip through a `!= "authored"`
+        test and get priced against a width nobody measured."""
+        drawn = {0: {"edge": 0, "half_width_m": [5.12]}}
+        published = _edge(0, _points((0.0, 0.0), (50.0, 0.0)))
+        published["width_source"] = "some_future_rule"
+        table, refused = surveyed_table(drawn, {0: _offset(0, 0.0)}, {"edges": [published]})
+        assert refused == [0]
+        assert table[0]["half_width_m"] == pytest.approx([5.12])
 
     def test_an_authored_width_is_refused_and_kept_at_its_drawn_width(self):
         """🔴 Both halves matter. Refused, so nothing is priced against an
@@ -304,29 +342,6 @@ class TestPriced:
         found = priced(self._report([9.0, 9.0]), {0: _offset(0, 0.0)}, graph, set(), 1.8)
         assert found[0].along_m == 0.0
         assert found[0].share == 0.0
-
-
-class TestClearsAt:
-    def test_the_first_clearing_rung_is_reported(self):
-        results = {0.0: {7: 1.0}, 1.0: {7: 4.0}, 2.0: {7: 5.0}}
-        assert clears_at((0.0, 1.0, 2.0), results, 7, 3.2) == 1.0
-
-    def test_an_edge_that_clears_and_re_blocks_reports_the_first(self):
-        """⚠️ Moving sideways can clear one blocker and run into the next, which
-        is why the whole row is printed beside this number."""
-        results = {0.0: {7: 1.0}, 1.0: {7: 4.0}, 2.0: {7: 1.0}}
-        assert clears_at((0.0, 1.0, 2.0), results, 7, 3.2) == 1.0
-
-    def test_an_edge_that_never_clears_is_nan_not_the_end_of_the_ladder(self):
-        results = {0.0: {7: 1.0}, 1.0: {7: 1.0}}
-        assert np.isnan(clears_at((0.0, 1.0), results, 7, 3.2))
-
-    def test_an_unmeasured_edge_does_not_count_as_clear(self):
-        """`NOT_MEASURED` is -1.0, so a naive comparison would read it as narrow
-        rather than as absent; the failure worth pinning is the other one, an
-        unmeasured edge reported as having cleared."""
-        results = {0.0: {7: NOT_MEASURED}}
-        assert np.isnan(clears_at((0.0,), results, 7, 3.2))
 
 
 class TestPercentiles:
