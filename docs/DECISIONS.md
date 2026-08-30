@@ -46,7 +46,7 @@ wins.
 | `Q16` | LOD0 does not ship | ✅ Closed |
 | `Q17` | CI runs `tools/check.sh` and cannot check the generated assets | ✅ Closed |
 | `Q18` | Ground colour sits under a chroma knee; the land-cover classifier is refused | ✅ Closed |
-| `Q19` | 5.17% of drawn carriageway has solid geometry standing in it at bumper height | 🟡 Half answered — routing closed as `Q51`. **Narrowing refused on the whole population**: no edge clears at any factor to the 1.3x floor and one is lost. The walls stand; 6 of the 8 severe ones are the WAN CHAI INTERCHANGE, and nobody owns moving them. ✅ **The cost of FENCING them is measured 2026-08-30**: refusing every wall in the region loses **1 ordered pair of 187,946** and 55.8 m of detour, and **nothing at all** at the player's own 1.80 m bar — so closing them to the player is admissible, at the **car's** bar and not the lane's. 🔴 The two starved populations agree on that and disagree on the cost — p50 12.0 m against 752.4 m — because `e207` CANAL ROAD EAST is worth **976.8 m** and only the occupancy grader starves it |
+| `Q19` | 5.17% of drawn carriageway has solid geometry standing in it at bumper height | 🟡 Half answered — routing closed as `Q51`. **Narrowing refused on the whole population**: no edge clears at any factor to the 1.3x floor and one is lost. The walls stand; 6 of the 8 severe ones are the WAN CHAI INTERCHANGE, and nobody owns moving them. ✅ **The cost of FENCING them is measured 2026-08-30**: refusing every wall in the region loses **1 ordered pair of 187,946** and 55.8 m of detour, and **nothing at all** at the player's own 1.80 m bar — so closing them to the player is admissible, at the **car's** bar and not the lane's. 🔴 The two starved populations agree on that and disagree on the cost — p50 12.0 m against 752.4 m — because `e207` CANAL ROAD EAST is worth **976.8 m** and only the occupancy grader starves it. 🟢 **The call is MADE 2026-08-31** — carve the seven licensed edges back to the surveyed span (sourced, `P3-6`'s shape), fence and dress the four unlicensed at the car's bar; the building half stays open |
 | `Q20` | Deck heights are sampled from `INFRASTRUCTURE`, not invented | ✅ Closed |
 | `Q21` | Should level −1 carriageway be drawn at all? | 🟡 Open |
 | `Q22` | 10.2% of off-grade carriageway hangs past its structure | 🟡 Open |
@@ -669,7 +669,9 @@ crisp edges at any cell size and a clean key for `collapse`.
 
 ## `Q19` — Solid geometry stands in the drawn carriageway
 
-**Status.** 🟡 Half answered · **Owner.** 🔴 **THE NAMED NEXT TASK since 2026-08-30** (user's call),
+**Status.** 🟡 Half answered — 🟢 **the remaining call MADE 2026-08-31** (user): carve the seven the
+survey licenses, fence and dress the rest at the car's bar; the last section is the record, and
+implementation is unstarted · **Owner.** 🔴 **THE NAMED NEXT TASK since 2026-08-30** (user's call),
 having been unassigned since the routing half closed — ⚠️ **and no longer "the carriageway-width
 question", which 2026-08-21 refused for the building half**; it is road-versus-footprint now. `e702`
 became `Q51`'s on 2026-08-20. 🔴 **The interchange half came BACK from `Q22`/Phase 4 on 2026-08-30**,
@@ -1611,11 +1613,63 @@ still waiting for a consumer that does not exist.
 of 187,946, 0 at the player's bar) or author the structure back off the carriageway (candidate 3 —
 143.2 m, concentrated on seven ramps). ⚠️ **Fencing does not stop a driver hitting a wall** — it
 stops the game *sending* them there, which is spawn, fares and street naming; only candidate 3
-changes what `P3-9a`'s drivers actually ran into.
+changes what `P3-9a`'s drivers actually ran into. 🟢 **Called 2026-08-31 — both, split by the
+licence boundary; the last section is the record.**
 
 ✅ **Nothing shipped and nothing moved.** No file under `etl/pipeline/` or `game/` is in the diff, so
 `roads.glb`, `roadgraph.json` and `clearance.json` are untouched — `Q95`'s validation move, stated
 rather than implied.
+
+### 🟢 The call: carve the seven the survey licenses, fence and dress the four it cannot — 2026-08-31 (user)
+
+Neither candidate whole. The split follows the licence boundary the pricing above already drew, edge
+by edge — and it composes, because the two candidates turn out to cover different edges.
+
+🔴 **Candidate 3 on the seven edges carrying the 143.2 m** — `e233`, `e55`, `e485`, `e788`, `e398`,
+`e256`, `e327` — **implemented as a sourced procedural carve, never by-eye authoring.** A
+`landmarks.py`-shaped stage subtracts the carriageway prism from the `INFRASTRUCTURE` objects
+intersecting it: the lateral extent is the **surveyed span** per station — the same rays that
+produced the shipped `width_m`, so the candidate-3 table above is the carve spec — the output is
+generated data and never committed (hard rule 7, `P3-6`'s extract-and-re-emit shape), and the
+registration precedent is `Q60`: a published extent moved on another publisher's evidence, priced by
+a published counter. 🔴 **The prism is the surveyed span and never the drawn floor** — cutting at
+the 10.24/12.48 m floor would remove published structure on the authority of an invented width,
+which is `Q54` inverted a second way. ⚠️ **What the carve owes before it ships**: a per-edge
+carved-area counter recorded over refusals as well as keeps (`Q58`); the vertical band as config,
+not a constant (the occupancy grader's 0.3–2.0 m band is a starting point, not a decision); the
+full battery — `carriageway_occupancy`, `deck_error`, `overhang`, `ground_clearance`,
+`clearance_reconcile`, `narrowing` — because moving structure moves what four of them measure; and
+**a frame** (`Q62`, `Q90`): every counter in this entry has at some point read correctly while the
+city was wrong, so the evidence a wall is gone is the `q19s` cameras re-shot, twice and `cmp`'d.
+⚠️ **`e222` is priced at 0.0 m and the carve cannot help it**: its wall stands in the drawn fringe,
+not the published carriageway, so it is expected to fall to the fence side despite being in the
+priced table.
+
+🔴 **Candidate 2 on the four no publisher licensed** — `e99`, `e125`, `e207`, `e781` — because a
+carve extent there would be cut against an invented carriageway. **At the car's 1.80 m bar, never
+the lane bar** — ruled above, and it puts `e207` *outside* the player fence: it clears the car, and
+its 977 m stays `P3-3`'s at the lane bar whichever way this call went. ⚠️ **The fence set is
+measured after the carve, not asserted before it**: the starved-at-the-car members of the four,
+plus whatever of the seven the carve fails to clear. 🔴 **`is_passable` cannot be reused for it** —
+`road_graph.gd` gates it on `_lane_width_m` (3.20 m, the `P3-3` bar), so the player fence needs a
+car-bar predicate beside it, never a retune of the lane one: re-pointing `is_passable` at 1.80 m
+would send traffic down `e207`'s 1.95 m.
+
+🔴 **The fence is dressed, never invisible.** Round 0's session-ender was geometry the drivers could
+not read, and an invisible refusal repeats that with different plumbing. Authored barrier props —
+the project's first hand-authored street furniture (the authored tree today is fonts, vehicles and
+one landmark), committed under CC BY-SA per hard rule 7's authored lane — stand at the mouths of
+the closed edges, placed from the published blocked set rather than a hand-kept list. ⚠️ **`e222`
+and `e256` are entered only by way of another blocked edge**, so their barrier stands at the pocket
+mouth, not on the edge. ⚠️ A barrier asserts a closure the real street does not carry — accepted as
+game fiction on the diegetic-map-edge precedent, and it replaces the stronger false assertion
+already shipping: a wall that is not there to be seen.
+
+⬜ **Order of work, and it is load-bearing**: the carve first, because it changes which edges remain
+starved; the fence predicate and its consumers, measured over the post-carve bundle; the dressing
+last, placed on the fence set that survives. **What this deliberately does not decide**: the
+building half — its starves are 1–3 m crossings, not the walls that ended round 0, and nothing here
+licenses carving a building — and `Q22`'s off-grade family, untouched.
 
 **See.** `Q78` for the absolute-value defect this file's sign discipline comes from · `Q58` for the
 refusal-recording rule · `Q72` for why the negative arm of the ladder exists · `Q54` for why an
@@ -14902,7 +14956,7 @@ here would invent the finding.
 
 ### Left
 
-🟢 `Q19` — the blocked structure edges, now the named next task. **Fencing them is priced** (`Q19`, 2026-08-30): refusing every wall costs **1 ordered pair of 187,946** and 55.8 m, and nothing at all at the player's own bar — including the reading of the map this record flagged as unmeasured. ⬜ Left is the user's call between fencing and fixing
+🟢 `Q19` — the blocked structure edges, now the named next task. **Fencing them is priced** (`Q19`, 2026-08-30): refusing every wall costs **1 ordered pair of 187,946** and 55.8 m, and nothing at all at the player's own bar — including the reading of the map this record flagged as unmeasured. 🟢 **Called 2026-08-31 — both, split by licence**: carve the licensed seven, fence and dress the rest (`Q19`)
 ⬜ Name the cut this round drove, or accept that it cannot be tied to one
 ⬜ A round that asks the building question directly, if `Q26` is to move
 ⬜ `P3-9` proper — different drivers, on a handset, arrow disabled
