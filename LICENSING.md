@@ -8,13 +8,14 @@ down is a licence breach waiting to be discovered by someone else.
 
 | What | Where | Licence |
 |---|---|---|
-| **Code** — pipeline, engine scripts, tools, config, tuning | `etl/`, `game/scripts/`, `game/tools/`, `game/tuning/`, `tools/` | **GPL-3.0-or-later** — [`LICENSE`](LICENSE) |
-| **Hand-authored assets** — authored hero buildings, vehicles, UI, shaders | `game/assets/authored/` | **CC BY-SA 4.0** |
+| **Code** — pipeline, engine scripts, tools, config, tuning | `etl/`, `game/scripts/`, `game/scenes/`, `game/tools/`, `game/tuning/`, `tools/` | **GPL-3.0-or-later** — [`LICENSE`](LICENSE) |
+| **Hand-authored assets** — authored hero buildings, vehicles, UI, shaders | `game/assets/authored/` (except `fonts/`), `game/assets/shaders/` | **CC BY-SA 4.0** |
 | **Generated city data** — tiles, road surface, road graph, fare nodes, repainted hero meshes | `game/assets/generated/`, `etl/out/` — *gitignored* | **Not licensed by this project.** Governed by the DATA.GOV.HK and CSDI Portal Terms of Use |
 | **Bundled third-party assets** — the CJK typeface the street plate is set in | `game/assets/authored/fonts/` | **CC BY 4.0** — not ours, not the government's. [`fonts/LICENSE`](game/assets/authored/fonts/LICENSE) |
 
-> **Not legal advice.** This file records the project's position. Hard rule 6 requires a Hong Kong IP
-> lawyer to review before launch; the open questions at the end belong in that brief.
+> **Not legal advice.** This file records the project's position. `docs/DATA_SOURCES.md`'s legal note
+> requires a Hong Kong IP lawyer to review before launch; the open questions at the end belong in
+> that brief.
 
 ---
 
@@ -39,9 +40,10 @@ way to obtain the right retroactively if a contributor declines.
 
 ### Corresponding source
 
-For a distributed build, the source corresponding to the generated city assets is the ETL, the city
-config, and the public government sources — all either in this repository or freely downloadable.
-The build is reproducible from them by a single documented command.
+For a distributed build, the source corresponding to the generated city assets is the ETL, the
+region config (`etl/config/hong_kong.yaml`), and the public government sources — all either in this
+repository or freely downloadable. The build is reproducible from them by two documented commands
+(the pipeline, then `tools/sync_generated.sh`).
 
 ---
 
@@ -85,8 +87,10 @@ its letter.
 ### What CC BY 4.0 requires of us
 
 - **Attribution travels with the build.** Not with the repository — with every distributed copy. So
-  the in-game credits screen carries the font, alongside the government attribution hard rule 6
-  already requires. Same screen, same obligation, different owner.
+  the in-game credits screen must carry the font, alongside the government attribution hard rule 6
+  already requires. Same screen, same obligation, different owner. ⚠️ **That screen does not exist
+  yet** (`docs/DATA_SOURCES.md` records the gap), so any build distributed today ships a CC BY work
+  without its credit visible — a licence gap, not a to-do; it is open item 5 below.
 - **Indicate changes if we make any.** Nothing modifies the font today.
 - **No further restrictions**, which is the clause that matters against the store grant below.
 
@@ -111,7 +115,9 @@ does not. That is not exercised today and is the reason a subset stays cheap (`Q
 ## Generated city data — government terms, not ours
 
 `game/assets/generated/` and `etl/out/` are derived from the Lands Department's 3D Visualisation Map
-and the Transport Department's Road Network v2, obtained via DATA.GOV.HK and the CSDI Portal. That
+and iB1000 topographic map, the Transport Department's Road Network v2 and Traffic Aids Drawings,
+and the Highways Department's Pavement Polygon (CSDI-only), obtained via DATA.GOV.HK and the CSDI
+Portal. That
 includes the repainted hero meshes under `landmarks/` — a re-coloured government mesh is still the
 government's mesh, whatever it now wears.
 
@@ -154,7 +160,7 @@ Both portals grant the same six acts. Quoted from
    rights. A recipient following a CC notice alone would satisfy CC and breach the terms.
 
 **So the data is regenerated rather than redistributed.** Anyone who wants it runs the pipeline,
-which takes about three seconds and accepts the terms at the source.
+which takes about 19 seconds and accepts the terms at the source.
 
 ### What a shipped game contains
 
@@ -199,6 +205,10 @@ grant above, which sets no volume limit.
    Corroborating: the Government publishes 3D models for visualisation, CSDI's definition of Spatial
    Data reaches compilations, metadata and APIs, and a grant excluding derived works would prohibit
    most applications built on the portal.
+
+5. **The credits screen itself** — it does not exist yet, and until it does every distributed build
+   ships the font's CC BY attribution and the government acknowledgement nowhere the player can see
+   them. It must land before anything is distributed beyond testers.
 
 The government terms are revisable by the publisher. Re-read them before launch and before adding a
 region (`Q100` retired the second city; the regions are the growth axis now).

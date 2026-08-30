@@ -12,8 +12,10 @@ regardless of the licence the project distributes under.
 
 That asymmetry is deliberate and it is worth understanding before you contribute:
 
-- **Outbound**, this project is **GPL-3.0-or-later** (code) and **CC BY-SA 4.0** (authored assets).
-  That does not change, and your contribution reaches the public under those terms.
+- **Outbound**, this project is **GPL-3.0-or-later** (code) and **CC BY-SA 4.0** (authored assets),
+  and a distributed build also carries a third-party **CC BY 4.0** typeface whose attribution travels
+  with it (`LICENSING.md`, `Q79`). That does not change, and your contribution reaches the public
+  under those terms.
 - **Inbound is MIT** because GPLv3 cannot be distributed through the App Store, so mobile builds must
   ship under a separate proprietary grant — and a grant can only be given for code the project is
   free to relicense. A GPL-only patch would permanently close that route.
@@ -33,10 +35,11 @@ governed by (it is not ours to license).
 
 ```bash
 # Python
-ruff check . && ruff format --check .      # from the repo root, not etl/
+ruff check . && ruff format --check .      # from the repo root, not etl/ — the root
+                                           # ruff.toml extends the ETL rules to tools/*.py
 cd etl && pytest && cd ..
 
-# Godot — the only route that fails on error
+# Godot — the only route that fails on error; the target scene must also run
 tools/check.sh
 ```
 
