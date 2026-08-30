@@ -15355,7 +15355,14 @@ carriageway's (`arrows` imports `roads` imports `carriageway`, so no import exis
 takes that as an explicit parameter so the difference is declared rather than a missing `if`; the
 two opposite station normals; the prism-ring reversal that `lamps._strut` does not share. Nor the
 five station walkers (each turned a per-stage finding — `Q78`, `Q90`) or the two `measured`
-percentile sets (`arrows.py` records why they differ).
+percentile sets (`arrows.py` records why they differ). ⚠️ **Two more were reviewed in the work and
+left, against the plan's own estimate.** The nine `_write_manifest` functions share a *signature*
+and nothing else — each body is a per-layer documented contract, `documents.write_document` already
+single-sources the serialisation, and a hoisted header would only move `schema_version` away from
+the document it stamps. And `railings.Ribbon` is not `arrows.Ribbon` with fields missing: one is
+reconstructed with `surface.py`'s own `trim`/`dedupe`/`mitres`/`boundary` in ribbon-metres, the
+other interpolates `roadsurface.json`'s published stations in normalised `t` — they share a name,
+not a body, and merging them would be geometric risk for no measured duplication.
 
 🚫 **`signals.py` stays, latent.** `Q77` un-shipped the layer by removing its config block, and the
 route back is a phase plan for `P3-3`. The user chose to keep the code; a test now asserts the
