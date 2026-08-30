@@ -1,13 +1,14 @@
 [gd_resource type="Resource" script_class="ChaseProfile" format=3]
 
-[ext_resource type="Script" path="res://scripts/camera/chase_profile.gd" id="1_camera"]
+[ext_resource type="Script" uid="uid://c0hyyqr0ueicu" path="res://scripts/camera/chase_profile.gd" id="1_camera"]
 
 [resource]
 script = ExtResource("1_camera")
 distance = 6.5
 height = 2.2
 pitch_deg = -10.3
-follow_lag = 12.0
+follow_response = 13.388613
 yaw_response = 6.0
 fov_base = 70.0
 fov_boost = 18.0
+fov_full_kph = 140.0

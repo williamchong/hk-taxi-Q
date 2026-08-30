@@ -124,6 +124,7 @@ wins.
 | `Q93` | **The turn arrows were authored, not read, and the branch reused the ahead head's length** | ✅ Closed — `CT174/51-5(1)F` publishes `LENGTH` for `RM1017`-`RM1030` and **no other dimension**, so the shape can come from nowhere but TD's own pictogram; read at 700 dpi off two cells that agree, **every authored figure was wrong**. Ahead head **0.325 → 0.390** long and **0.235 → 0.122** across (nearly twice the drawing); the stem was a uniform 0.085 where the drawing **tapers 0.076 → 0.032**. 🔴 **One of them was a defect rather than a difference**: `shoulder = reach - head_length` with a reach of 0.28 against a head of 0.325 is **negative**, so the turn head's base landed 0.18 m past the *far* side of the stem and swallowed it — a blob on **416 of 747** drawn arrows, shipped since `P3-15`. ✅ `branch_head_length_frac`/`_width_frac` split it out and `config.py` refuses `branch_reach_frac <= branch_head_length_frac`. ✅ **The ratchet is dimension-independent**: a test asserts no head overlaps the stem, mutation-checked at 0.00 m² on the fix, **0.137 m²** on the reused length and **0.620 m²** on the exact pre-fix config. Every counter unchanged — `by_glyph` 331/99/1/46/173/8/89, `drawn` 747, `inverted` 0, 3,246 triangles. 🔴 **Amended the same day, from the driving seat: the branch is now AUTHORED and the measured figures are declined.** TD's branch head is genuinely wider than it is deep — its barbs do the work — so a plain triangle at 0.150/0.100/0.233 is a mushroom on the shaft, and a faithful six-point dart (overlay agreement 0.831 → **0.874**) is a detached diamond whose 0.09 m barbs `Q91`'s sub-pixel problem eats anyway. It ships as an arrowhead longer than it is wide, sized against the frame. ✅ **The sheet itself is vindicated**: `RM1016` publishes `SIZE = 5600(H) x 2000` and its pictogram measures **2.802** against 2.800, so NOT TO SCALE means no scale bar rather than stylised, and the ahead head and stem stay measured |
 | `Q94` | **Two arrows with different instructions land in one lane, because the lane count is invented** | 🟢 **Closed 2026-08-29 — the count is sourced and the defect fell 51 → 35 → 24.** The lane registration snaps a published offset to one of `ribbon.lanes` slots, and that count is authored from the speed-limit table; where the real carriageway is wider, two symbols collapse into one slot and draw **one shaft wearing two branches**, which is an instruction the world does not contain. Found from the driving seat on STEWART ROAD. **89 pairs stacked in one lane, 51 of them disagreeing**, of 747 drawn. On HENNESSY ROAD `e239` a `right` published 4.52 m out and an `ahead` published 1.63 m out both land at −2.56 m. ✅ `arrows.json` publishes `stacked_pairs` and `stacked_disagreeing`, reachable at zero and mutation-checked; every other counter was correct throughout and `inverted` read 0. 🔴 **The finding is that the arrows are themselves a lane-count source** — a row across a carriageway is the count, written down: **31 of 306** arrow-carrying edges imply more lanes than the graph has, nine of them four against two. That narrows `Q57`'s narrowing of `Q19` again, from a layer already in the bundle. ✅ **The row was made to ASSIGN 2026-08-29**: it resolves the brackets `Q95`'s measured width leaves ambiguous, so `lanes` is measured on **210 of 737** edges (**57** from a row) and `stacked_disagreeing` reads **24**. 🔴 **A row of ONE arrow is refused, not floored** — the row is a *lower bound* on lanes, so at one abreast it states a marking. 🔴 **Ambiguous brackets only**, which keeps `verify_road_graph.gd`'s "measured lanes implies measured width" true by construction. ⬜ Left: the 10 edges with a row and no measured width, **STEWART ROAD among them** |
 | `Q95` | **The authored carriageway width is outside the range Hong Kong permits** | 🟡 **Open — measured and bounded, nothing changed.** `width_m` is `lanes x lane_width_m` = **6.4 m** on 720 of 737 edges. TD's Transport Planning & Design Manual Vol 2 Table 3.4.2.1 (March 2026) gives a minimum two-lane single carriageway of **7.3 m** and allows 6.75 m only *per direction* of a dual carriageway — so the authored width is not merely underived, it is **below every figure TD publishes**. ✅ STEWART ROAD's measured **14.81 m** is corroborated by the same table: a 13.5 m four-lane carriageway plus a parking strip, reconcilable with no two-lane figure. ✅ **And the standard supplies the bound the width instrument lacks** — the widest urban carriageway is 13.5 m (15.8 on a tight curve), so a two-sided ray returning **36.09 m on LUNG WO ROAD** is a citable refusal rather than a suspicion. 🔴 **A standard is not a survey**: it says what a road should be, so it cannot give a per-edge width and using it to assign one would repeat the move `Q54` argues against. ⬜ Sourcing the width is **on hold behind the instrument** — `carriageway_margin.py` measures a one-sided overhang because the two-sided ray is corrupted, and that is the work `Q57` scoped and never did |
+| `Q98` | **The chase camera's yaw dial could not express lag, and the rig was rigid** | 🟢 **Closed 2026-08-31 — the law changed, not the number.** `rotate_toward` at a constant **7.0 rad/s (401°/s)** against a car whose steering can only turn it at **2.245 rad/s** (128.6°/s at 97 kph), so it closed any steering-induced error inside one tick: every input swung the world 1:1 and `yaw_lag` was inert in every reachable state. ✅ Exponential instead, `yaw_response` **6.0** — a sustained corner trails **11.9° at 30 kph and 22.4° at 105**, and the look-back flip is *faster* than the old law through 90% of its travel. 🔴 **The gate came first**: the dizziness was A/B'd against `--max-fps 60` before anything was touched, because desktop renders at 120 with physics at 60 and a camera tuned to hide judder would be tuned against an artifact `run/max_fps.mobile=60` means the phone never has. Unchanged at matched rates, so `physics_interpolation` stays off. ✅ Tuning moved to `camera.tres` — the last subsystem on code defaults, hard rule 4 in name only since none of its three scenes overrode a value. ⚠️ **The `taxi` audit rows move and their figures do not** (<0.01 pp), predicted identical and checked rather than assumed. ⬜ `verify_camera` deliberately not built; `P2-5` reopened | 🟢 Closed |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -15048,3 +15049,101 @@ driven with the keyboard.
 references · `Q84` for the drift ramp that is built and waiting · `Q72` for why a counter is tested
 by mutation · `P0-5b/c/d` for why centre must coast · `PLAN.md` `P2-4` and `P0-3b` ·
 `ARCHITECTURE.md` "The three schemes"
+
+## `Q98` — The chase camera's yaw dial could not express lag
+
+**Status.** 🟢 Closed 2026-08-31
+
+**Origin.** The user, driving: *"now the camera strictly follow the vehicle, which makes turning a
+little bit dizzy … in racing game, small turns don't always induce a camera rotation instantly, but
+the camera would lag behind and slowly interpolate back to neutral."*
+
+**The premise was provable from the code.** `rotate_toward(_yaw, desired_yaw, yaw_lag * delta)` is a
+**constant-rate** turn at 7.0 rad/s — 401°/s. The taxi's kinematic yaw rate `v·tan(δ)/L` peaks at
+**2.245 rad/s (128.6°/s) at 97 kph**, off the ±1.3 m wheel z in `taxi.tscn` and a lock lerping 24° to
+7° with speed. At **3.12x** the fastest steering alone can rotate the car, the rig closed any
+steering-induced error inside a single tick. It was rigid by construction, and the dial named "lag"
+produced none. ⚠️ That bound is **steering only**: `drift_yaw_torque_nm` acts on the chassis outside
+the bicycle model, and `Q88` records a 165.0° spin.
+
+🔴 **The gate ran first, and it is the part worth keeping.** There were two candidate causes and only
+one was proven: the rigid yaw, and the camera writing its transform in `_physics_process` at 60 Hz
+while desktop renders at 120 with no `physics_interpolation` — every transform held for exactly two
+frames. Measured, not assumed: 119-120 fps uncapped, a flat 60 under `--max-fps 60`, two drives, zero
+edits, because `--max-fps` is a runtime flag. **The dizziness was unchanged at matched rates**, so
+this is the yaw. Had it not been, softening the camera would have compensated for an artifact the
+ship target does not have — `run/max_fps.mobile=60` makes the phone run the way the capped test did.
+
+**The law, not the number.** Lowering `yaw_lag` is the obvious move and is wrong, because
+`desired_yaw` also carries the look-back π flip: one constant rate governs both, and a value low
+enough to trail in a corner drags the flip past a second. Exponential separates them for free, its
+rate being proportional to the error. At `yaw_response = 6.0` the flip is **faster** than the old law
+through 90% of its travel (0.384 s against 0.404) and trails only in the last 9°.
+
+Steady-state lag in a sustained turn is `ω·delta / (1 - exp(-k·delta))`, **11.9° at 30 kph and 22.4°
+at 105**. ⚠️ Those are the discrete figures: the `ω/k` continuous limit reads 5.1% low, and it was
+published as 11.4/21.3 in the fix commit before review caught it.
+
+⚠️ **Yaw still follows facing, never velocity.** Following velocity looks like the same idea and
+points the camera at the kerb you are sliding toward at `Q86` slip angles.
+
+**Evidence.** Every frame shot twice and `cmp`'d.
+
+- The refactor moved **nothing** — five frames over two routes byte-identical, `Q96`'s separation
+  rule applied before the fix.
+- The turn moves, visibly and correctly: a 63 kph right-hander on Expo Drive, the car angled into
+  the corner with the road ahead still readable. ✅ **Its flank enters frame**, which `P3-11`'s notes
+  record as structurally impossible under the old rig — so the rocker strip and red valance are
+  judgeable from the play camera for the first time.
+- 🔴 **The `taxi` audit rows move and their figures do not.** Predicted byte-identical because the
+  route has no steering input; **the prediction was wrong** — the road curves, so a small sustained
+  yaw rate is now a small sustained lag, and t04.50 moved 12.3% of its pixels. But `under L*10` and
+  `L* 10-30` both shift by **under 0.01 pp** at both shot times, so `ART_DESIGN.md`'s rows stand. The
+  plan said *checked, not assumed*, and that is the whole reason this is known.
+
+**Tuning became data.** The camera was the last subsystem on `@export` defaults. Its docstring argued
+that satisfied hard rule 4 because the inspector could reach them — but it is instanced in three
+scenes and **not one overrode a value**, so they were constants in a script with a property panel.
+`ChaseProfile` follows `HandlingProfile`: schema only, no defaults. ⚠️ **The failure that buys is the
+half-filled `.tres`, not the unassigned one** — an unassigned export is *null* and caught outright,
+while a hand-authored `.tres` missing a key reads **0.0** and renders perfectly. Four asserts cover
+the dials that may not be zero, each mutation-checked.
+
+🔴 **That half-filled `.tres` then happened, during this task, and `check.sh` passed over it.**
+Mutation-checking the first two asserts used `git checkout camera.tres` to restore between runs,
+which reverted the *uncommitted* rename as well: the schema said `follow_response`, the resource
+still said `follow_lag`, so the field read **0.0** and the camera's anchor would never have moved
+from the spawn. Every check was green — nothing in `check.sh` runs a camera — and it was caught by
+diffing the schema's field names against the resource's. Two lessons, both cheap: **restore from a
+backup file, never from `git`, while the working tree is the thing under test**, and `follow_response`
+is asserted today because it was the field that slipped.
+
+**What review found afterwards, with `check.sh` green and the frames identical.**
+
+- `_fov_full_kph = 140.0` sat in the script as a fallback — `handling.tres`'s `max_speed_kph`
+  **restated as a constant**, the exact violation this task set out to delete, left standing in the
+  file it rewrote. Now `ChaseProfile.fov_full_kph`.
+- The positional smoother still used `follow_lag * delta`, the linear form `hud.gd` already argues
+  against at length, one line below the exact form. Unified. `follow_response` **13.388613** is not
+  a tuned value: it is 12.0's old behaviour expressed exactly, which is why the change of law is
+  byte-identical.
+- `distance` was latched at `_ready` while the other six dials were read per tick, so a live edit
+  moved six of seven.
+- `city_drive.tscn` declared `load_steps=18` against 19 resources — off by two before this task and
+  preserved by its +1.
+
+**Refused.** A shared `1 - exp(-k·dt)` helper across `hud.gd` and `chase_camera.gd`: there is no util
+module in this repo, and touching `hud.gd` owes `verify_hud`, an A/B render and a draw-call delta for
+a two-line filter. ⚠️ The two also parameterise it **reciprocally** — `accel_smoothing_s` is a time
+constant and these are rates — which is recorded in `chase_profile.gd` rather than unified.
+`verify_camera.gd` was scoped out on the user's call, so `camera.tres` is the one tuning resource in
+`game/tuning/` with no verify coverage; the two asserts are what stand in.
+
+⚠️ **A hazard worth knowing.** `project.godot` was silently rewritten during this task's own gate —
+comments stripped, three warning promotions and `renderer/rendering_method.web` dropped. `check.sh`'s
+settings step caught it, exactly as its comment promises. It did **not** reproduce: `drive.sh`,
+`--import`, `check.sh` and a later interactive run all leave it alone. Cause unestablished.
+
+**See.** `P2-5`, whose scope note this corrects · `Q96` for the refactor-then-fix rule · `Q84`-`Q89`
+for the drift the old rig hid · `Q62` for why the evidence is a frame · `Q72` for mutation-checking a
+guard

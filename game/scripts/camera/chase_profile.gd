@@ -6,10 +6,13 @@ extends Resource
 ## script declares the schema and nothing else — the numbers live only in
 ## game/tuning/camera.tres.
 ##
-## Deliberately no defaults, following HandlingProfile: a profile that was never
-## assigned reads as all-zeroes, which is a zero-length spring arm sitting on the
-## car's own origin, and fails loudly rather than quietly framing the game from
-## values buried in a script.
+## Deliberately no defaults, following HandlingProfile. ⚠️ **The failure that
+## buys is the half-filled .tres, not the unassigned one.** An unassigned
+## `@export var profile` is *null*, which `chase_camera.gd` catches outright; a
+## hand-authored .tres missing a key reads **0.0** and renders perfectly — a rig
+## that never yaws, or a spring arm of zero length with the camera inside the
+## car. That is what the asserts in `ChaseCamera._ready` are for, on
+## `vehicle_controller.gd`'s precedent.
 ##
 ## ⚠️ **Every number here was an @export default on the camera node until Q98,
 ## and that was hard rule 4 in name only.** The old docstring argued the exports
@@ -31,35 +34,57 @@ extends Resource
 ## the horizon.
 @export_range(-60.0, 0.0, 0.5, "suffix:°") var pitch_deg: float
 
-## Fraction of the remaining positional gap closed per second, not a closing
-## speed.
-@export_range(1.0, 40.0, 0.5) var follow_lag: float
+@export_group("Follow")
 
-@export_group("Yaw")
+## Both dials below are first-order response coefficients in 1/s: the rig closes
+## `1 - exp(-k * delta)` of the remaining gap each tick, so its rate is
+## proportional to how wrong it currently is.
+##
+## ⚠️ **`hud_style.gd` parameterises the same filter the other way up** —
+## `accel_smoothing_s` is a time constant in seconds and `hud.gd` divides by it,
+## where these are rates and `chase_camera.gd` multiplies. Deliberate: the pair
+## here has to agree with each other before it agrees with another subsystem, and
+## a rate is the natural reading of "how hard the camera chases". Check the sign
+## of the exponent's argument before porting a number between the two.
 
-## How fast the rig converges on the car's heading, as a first-order response
-## coefficient: it closes `1 - exp(-yaw_response * delta)` of the remaining angle
-## each tick, so its turn rate is proportional to how wrong it currently is.
+## How fast the rig's anchor converges on the car's position.
+##
+## ⚠️ 13.388613 is not a tuned value — it is the exact `1/s` equivalent of the
+## 12.0 this shipped as under the old linear `follow_lag * delta`, chosen so
+## `Q98`'s change of law moved the framing by nothing measurable.
+@export_range(0.5, 40.0, 0.1, "suffix:1/s") var follow_response: float
+
+## How fast the rig converges on the car's heading.
 ##
 ## ⚠️ **Not an angular rate, and that difference is the whole of `Q98`.** This was
 ## `yaw_lag`, a constant 7.0 rad/s handed to `rotate_toward` — 401°/s, against a
-## car whose kinematic yaw rate peaks at 2.245 rad/s (128.6°/s, at 97 kph, off a
-## 2.6 m wheelbase and a lock tapering 24° to 7°). At 3.12x the fastest the car
-## can rotate it closed every reachable heading error inside a single tick, so
-## the rig was rigid by construction and the dial named "lag" produced none.
+## car whose *steering* can only turn it at 2.245 rad/s (128.6°/s, at 97 kph; the
+## kinematic `v·tan(δ)/L` off the ±1.3 m wheel z in taxi.tscn and
+## `steer_angle_max_deg`/`_at_top_deg`). At 3.12x the fastest steering alone can
+## rotate the car it closed any *steering-induced* error inside a single tick, so
+## the rig was rigid through every corner and the dial named "lag" produced none.
+## ⚠️ It is **not** a bound on body yaw: `drift_yaw_torque_nm` acts on the chassis
+## outside that model, and `Q88` records a 165.0° spin.
 ##
-## Steady-state lag in a sustained turn is `yaw rate / yaw_response`, so 6.0
-## trails by 11.4° at 30 kph and 21.3° at 105. ⚠️ Below about 3.0 the rig stops
-## being able to show the road through a corner, which is `P2-5`'s standing
-## acceptance criterion — "readable at speed".
-@export_range(0.5, 30.0, 0.1, "suffix:1/s") var yaw_response: float
+## Steady-state lag in a sustained turn is `ω · delta / (1 - exp(-k · delta))`,
+## which at 60 Hz is 5.1% above the `ω / k` continuous limit: **11.9° at 30 kph
+## and 22.4° at 105**. ⚠️ Below about 3.0 the rig should stop being able to show
+## the road through a corner — that is a prediction from the same arithmetic, not
+## a measurement, and `P2-5`'s "readable at speed" is settled by driving it.
+@export_range(0.5, 40.0, 0.1, "suffix:1/s") var yaw_response: float
 
 @export_group("Speed feel")
 
 ## Field of view at rest.
 @export_range(40.0, 120.0, 1.0, "suffix:°") var fov_base: float
 
-## Added to fov_base at max_speed_kph, ramped linearly from rest. The speed it
-## ramps against is read from the vehicle's own HandlingProfile rather than
-## restated here, so retuning top speed cannot silently desync the FOV.
+## Added to fov_base at fov_full_kph, ramped linearly from rest.
 @export_range(0.0, 50.0, 1.0, "suffix:°") var fov_boost: float
+
+## Speed at which fov_boost is fully applied — **the fallback only.** A
+## VehicleController target overrides it from that car's own
+## HandlingProfile.max_speed_kph, so retuning top speed cannot desync the ramp,
+## and all three shipped scenes take that path. It exists because ChaseCamera
+## follows a Node3D and a target without a HandlingProfile still needs a number
+## that came from somewhere.
+@export_range(10.0, 300.0, 1.0, "suffix:km/h") var fov_full_kph: float

@@ -135,7 +135,15 @@ a hard gate.
 - **Review:** a drive along Hennessy Road | web build | **Is this still the `P0-5` car?**
 - **Outcome:** *"car seems ok"* — a pass on the question asked, read no wider than it was said.
 
-### `P2-5` Chase camera ✅ — review passed
+### `P2-5` Chase camera ✅ — review passed, reopened once by `Q98`
+
+> ⚠️ **This task closed against code it never modified.** Its deliverable is *"speed-based
+> FOV and look-back"* and `git show 3aca85a` has both already in the `P0-5b` camera, whose
+> scope note read *"it is NOT the P2-5 deliverable"* — and survived the task that made it
+> false. `Q98` corrected the note and the camera's yaw law. ⚠️ **The review question was
+> narrow and the verdict held**: *"can you read the road at speed, and does the camera stay
+> out of the buildings?"* — comfort was never asked, and the rigid yaw came back later as a
+> user report.
 
 - **Deliverable:** speed-based FOV and look-back, on real geometry.
 - **Accept:** readable at speed; no clipping through buildings.
