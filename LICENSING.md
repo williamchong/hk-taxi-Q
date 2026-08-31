@@ -9,7 +9,7 @@ down is a licence breach waiting to be discovered by someone else.
 | What | Where | Licence |
 |---|---|---|
 | **Code** — pipeline, engine scripts, tools, config, tuning | `etl/`, `game/scripts/`, `game/scenes/`, `game/tools/`, `game/tuning/`, `tools/` | **GPL-3.0-or-later** — [`LICENSE`](LICENSE) |
-| **Hand-authored assets** — authored hero buildings, vehicles, UI, shaders | `game/assets/authored/` (except `fonts/`), `game/assets/shaders/` | **CC BY-SA 4.0** |
+| **Hand-authored assets** — authored hero buildings, vehicles, street furniture, UI, shaders | `game/assets/authored/` (except `fonts/`), `game/assets/shaders/` | **CC BY-SA 4.0** |
 | **Generated city data** — tiles, road surface, road graph, fare nodes, repainted hero meshes | `game/assets/generated/`, `etl/out/` — *gitignored* | **Not licensed by this project.** Governed by the DATA.GOV.HK and CSDI Portal Terms of Use |
 | **Bundled third-party assets** — the CJK typeface the street plate is set in | `game/assets/authored/fonts/` | **CC BY 4.0** — not ours, not the government's. [`fonts/LICENSE`](game/assets/authored/fonts/LICENSE) |
 
@@ -50,8 +50,16 @@ repository or freely downloadable. The build is reproducible from them by two do
 ## Hand-authored assets — CC BY-SA 4.0
 
 `game/assets/authored/` holds original creative work: authored hero building models, the vehicle
-roster, UI and shaders. These are **not** derived from government data — the ETL excludes the source
+roster, street furniture, UI and shaders. These are **not** derived from government data — the ETL excludes the source
 geometry each hero building replaces, via `replaces_source_ids` — so they are ours to license.
+
+⚠️ **Street furniture joined this list at `P3-29`**, and it is here for a different reason from
+the rest. Every other layer of furniture the game draws — railings, signs, lamps, arrows — is
+*read from what the government publishes* and therefore ships generated and gitignored. Nothing
+is published about where a road should be **closed**: the estate draws the carriageway, not the
+works. So the closure barrier (`tools/make_barrier.py` → `barriers/barrier.glb`) is the
+project's own invention, which is exactly what makes it ours to license — and exactly why it
+may never be derived from a published extent later without moving to the generated tree.
 
 ⚠️ **Not every hero is ours.** A mesh-sourced hero (HKCEC since the `P3-6` amendment) is the
 government's own building mesh, extracted and repainted by `etl/pipeline/landmarks.py`. That model

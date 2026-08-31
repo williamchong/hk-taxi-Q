@@ -405,7 +405,7 @@ hk-taxi-Q/
 │   │   ├── signals.py           # published signal heads → signals.glb (P3-17, latent — Q77)
 │   │   ├── lamps.py             # published lamp posts → lamps.glb (P3-26)
 │   │   ├── export.py            # → city.json, assembles and validates the stage outputs
-│   │   └── __main__.py          # `python -m pipeline` — 18 stages, in order
+│   │   └── __main__.py          # `python -m pipeline` — 19 stages, in order
 │   ├── sources/<source>/        # raw downloads — GITIGNORED
 │   ├── out/<region>/            # pipeline output — GITIGNORED
 │   └── tests/
@@ -457,7 +457,7 @@ The interface between ETL and game. **Versioned — change both sides together a
 
 ```json
 {
-  "schema_version": 20,
+  "schema_version": 21,
   "city_id": "hong_kong",
   "region_id": "wan_chai",
   "source_crs": "EPSG:2326",
@@ -479,6 +479,7 @@ The interface between ETL and game. **Versioned — change both sides together a
       "clear_width_m": [-1.0, 10.24, 8.5, 0.0] }
   ],
   "lane_width_m": 3.2,
+  "car_width_m": 1.8,
   "fares": "fares.json",
   "tramway": "tram.glb",
   "arrows": "arrows.glb",
@@ -490,11 +491,24 @@ The interface between ETL and game. **Versioned — change both sides together a
   "roadmarks": "roadmarks.glb",
   "signals": null,
   "landmarks": "landmarks.json",
+  "fence": "fence.json",
   "landmark_assets": ["landmarks/hkcec.glb"],
   "etl_version": "0.1.0",
   "generated_utc": "2026-07-30T20:04:03Z"
 }
 ```
+
+⚠️ **`lane_width_m` and `car_width_m` are two bars over one measurement, and merging them is the
+one thing `Q19` forbids here.** The first is what `P3-3`'s traffic is *routed* on (`RoadGraph.is_passable`,
+`Q51`); the second is what the **player** is fenced at (`RoadGraph.fits_car`, `P3-29`). Both read the
+same `carriageway[].clear_width_m`. At the car's bar the router would be sent down `e207`'s 1.95 m;
+at the lane's the player would be fenced out of `e781`'s 3.50 m. `car_width_m` is `null` where the
+city declares no `clearance:` block, which reads as "nothing is fenced" — a missing bar is not a bar
+of zero.
+
+⚠️ **`fence` is named unconditionally, unlike the optional assets.** `pipeline/fence.py` writes its
+document on every run, so an empty `barriers` list means the fence found nothing to close and a
+*missing file* means the stage never ran — two states a build has to be able to tell apart.
 
 `origin` is computed by the ETL from the region bounds, never authored — `floor(min_easting)` and
 `ceil(max_northing)`, i.e. the region's **north-west** corner. The game never needs it; it is what
@@ -503,7 +517,7 @@ puts a game-space position back on the source map.
 **The manifest names the other documents, it does not contain them.** The road graph is 0.65 MB on
 disk and ~6 MB parsed, and `RoadGraph` wants it at a different moment from when `CityStreamer` wants
 the tile list. Each of the three is separately versioned. A build ships exactly what the manifest
-names — **146 files and 54.1 MB** for Wan Chai, which the `export` stage prints on every run. The
+names — **147 files and 54.1 MB** for Wan Chai, which the `export` stage prints on every run. The
 PCK it exports to is a separate measurement and lives in `PROGRESS.md`'s Bundle-size metric, because
 it is measured from the PCK and never summed from these files.
 

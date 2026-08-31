@@ -600,7 +600,7 @@ before it.
 | ID | Deliverable | Accept |
 |---|---|---|
 | `P3-28` ✅ **built 2026-08-31** | **The carve** — a `landmarks.py`-shaped stage cuts the `INFRASTRUCTURE` objects back to the surveyed span on `e233`, `e55`, `e485`, `e788`, `e398`, `e256`, `e327`. The prism is the published centreline × the surveyed `width_m` (**never** the drawn floor — cutting at the 10.24/12.48 m floor removes published structure on an invented width's authority) × a config height band; cut faces are capped so the mass still reads solid — the cap *is* the retaining wall. Runs after `roads` in `STAGES`; touched tiles re-emitted, untouched tiles byte-identical; with the config block absent the whole bundle is byte-identical (`Q95`'s validation move) | `carriageway_occupancy.py` clears the seven or names the measured residual per edge; the `q19s` cameras re-shot (×2, `cmp`) show carriageway where the concrete stood; the full battery pasted — `carriageway_occupancy`, `deck_error`, `overhang`, `ground_clearance`, `clearance_reconcile`, `narrowing`; per-edge `carved_area_m2` published over refusals as well as keeps (`Q58`); carved-edge set equality both ways (`landmarks.py`'s `replaced` pattern); the tile **collider** is the carved mesh, verified rather than assumed |
-| `P3-29` | **The fence and its dressing, shipped together** — a car-bar predicate beside `is_passable`, **lateral AND vertical** (`Q19`, 2026-09-01) (the bar is data, not a code constant — hard rule 4), consumed by spawn, fares and street naming; and authored barrier props (committed, CC BY-SA, the authored lane) **with colliders** at the mouths of the post-carve fence set, `e222`/`e256` barred at the pocket mouth | The fence set is computed from the post-carve bundle, never hand-kept, and **catches `e99`** — a set computed on the lateral corridor alone is one edge, because three of the four pass the car bar; `is_passable` unmoved at 3.20 m and a mutation check proves the new predicate is not it (re-pointing it at 1.80 m sends traffic down `e207`'s 1.95 m); a barrier is legible before it is hit at driving speed from every approach — A/B frames at fixed cameras, shot twice and `cmp`'d; driving each fenced approach ends at a visible barrier, not an invisible wall |
+| `P3-29` ✅ **built 2026-09-01** | **The fence and its dressing, shipped together** — a car-bar predicate beside `is_passable` (the bar is data, `clearance.car_width_m`), consumed by the graph and the overlay; and authored barrier props (committed, CC BY-SA) **with colliders** at the mouths of the post-carve fence set | ✅ Fence set computed from the post-carve bundle, never hand-kept: **14** drivable level-0 edges, 15 mouths, 90 units, 0 ends behind another fence. ✅ `is_passable` unmoved at 3.20 m, and the mutation check proves the new predicate is not it — re-pointing `fits_car` at the lane fires both the per-edge disagreement and the merged-bars detector. ✅ Barrier legible before it is hit, A/B at a fixed camera shot twice and `cmp`'d. 🔴 **"Catches `e99`" is AMENDED, not met** — see below |
 
 - **Deps:** `P3-28` before `P3-29`; neither blocks on `P0-3b`.
 - ✅ **`P3-28` shipped, and it did not ship the cap this row specifies.** The estate is not
@@ -619,7 +619,19 @@ before it.
   faces are the mitigation and they are load-bearing, not cosmetic.
 - ⚠️ The barrier is the physical stop; the predicate only keeps the *game* from sending anyone
   there. A fence with no collider is the invisible refusal `Q19`'s record forbids, one layer up.
-- 🔴 **The predicate needs a VERTICAL term and the lateral one is not enough — measured from the
+- 🔴 **The vertical term this task was given was BUILT, MEASURED and WITHDRAWN (2026-09-01).**
+  It adds 3 edges region-wide — `e411`, `e522`, `e520`, all climbing ramps whose whole
+  cross-section reads stepped because the ribbon disagrees with the deck it rests on by
+  ~0.2 m — which is exactly what `Q23`'s 0.30 m bumper floor exists to suppress. And it does
+  **not** catch `e99`: that edge keeps a **4.50 m** clear channel between two structure lines
+  and passes the car bar honestly, failing only in the **1.75 m** strip beside one of them,
+  which `_longest_clear` cannot see because it takes the widest gap rather than the one the
+  car is in. Reading the kerb-adjacent run instead fences **222** edges. `e99` is a widening
+  defect — 3.84 m of its 10.24 m ribbon is paving with a wall on it — and belongs to `Q24`.
+  ⚠️ The "31 level-0 edges" figure below came from a scratch script and is superseded; the
+  band's measurement now belongs to `tools/ground_clearance.py`'s `structure_class`
+  extension, still owed. Numbers in `DECISIONS.md` `Q19`. The original reasoning follows.
+- 🔴 **What prompted it, and it still happened — measured from the
   driving seat, 2026-09-01.** A car stopped on `e99` FLEMING ROAD at a **0.356 m** `INFRASTRUCTURE`
   ledge, twice `handling.tres`' 0.18 m `suspension_travel_m`: you drive onto it and lose the wheels.
   `e99` reads **2.93 m** clear and passes every bar the bundle grades it against, because the corridor
@@ -635,10 +647,13 @@ before it.
   A structure step between 0.18 and 0.30 m is seen by neither, on **31 level-0 edges**. Extending
   `ground_clearance.py` to `structure_class` is the obvious grader and is **not** in this task —
   it would fail on day one and owes its own acceptance.
-- ⚠️ `e207` is exempt from the player fence (it clears the car **laterally**) and stays `P3-3`'s at
-  the lane bar — ⚠️ **that exemption is now weaker than when it was written**, because it rests on
-  exactly the lateral judgement this task has to stop trusting alone. It owes a vertical read before
-  it is left open.
+- ✅ **`e207`'s exemption is RETIRED (2026-09-01)** and it needed none: `fits_car` decides it like
+  every other edge, and it reads **3.25 m**, so it stays open on a measurement rather than on a
+  judgement. What that discharges, kept because the debt was real: the exemption rested on `e207`
+  clearing the car *laterally*, which is exactly the judgement this task set out to stop trusting
+  alone, and it owed a vertical read before being left open. The vertical read was built and
+  refuted (above), so the lateral one is what there is — but it is now the same rule every other
+  edge answers to rather than a carve-out for this one.
 
 ### Build `B1` — "One fare" — **runs second**
 

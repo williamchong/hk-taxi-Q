@@ -1798,6 +1798,170 @@ refusal-recording rule · `Q72` for why the negative arm of the ladder exists ·
 unlicensed width may not be priced against · `Q51` for the 24/26 gap that decides which edges are
 watched by default · `Q95` for the survey this reads
 
+
+### 🔴 The vertical term is REFUTED, and `Q23`'s floor is why — `P3-29`, 2026-09-01
+
+The section above prescribed a vertical term beside the lateral one: *"a step over
+`suspension_travel_m` inside the drawn carriageway"*, on the strength of `e99` FLEMING ROAD
+stranding the car on a 0.356 m ledge. **It was built, measured and withdrawn.** Refuted, not
+refused: no rule declined it, a measurement disproved it.
+
+**What was built.** `clearance.py` gained a second band — `[deck + suspension_travel_m,
+deck + BUMPER_LOW_M]`, exactly the gap nothing was looking at — filled in the **same** occupier pass
+as the first (a second `_Sections` band, not a second walk over 43 MB of tiles), and folded into the
+existing `measure()` as `blocked | stepped` to publish `drivable_width_m` beside `clear_width_m`.
+⚠️ **The band's two ends are forced, not chosen**: the floor is the car's suspension travel and the
+ceiling is `BUMPER_LOW_M`, because anything at or above that already cuts the lateral corridor. So
+there was no threshold to tune and no dial to accuse of `Q58`'s trap — which is what makes the
+result below an argument rather than a tuning failure.
+
+**What it measured, over all 737 level-0 edges at the car's 1.80 m bar:**
+
+| | edges under the bar |
+|---|---|
+| lateral corridor alone | **14** |
+| with the second band folded in | **17** |
+| added by the vertical term | **3** — `e411`, `e522`, `e520` |
+
+45 stations lost width to a step: p50 **1.00 m**, p90 5.00 m, p99 7.06 m, max 7.50 m.
+
+🔴 **It does not catch `e99`, the edge it was prescribed for.** That edge's `drivable_width_m` is
+identical to its `clear_width_m` at every station. The reason is not a fault in the band:
+
+```
+e99 st 2 drawn 10.24 m  ........XX..................XX...........
+e99 st 3 drawn  8.64 m  .......XX..................XX........
+```
+
+Two thin structure lines with a **4.50 m clear channel between them**, which is precisely what the
+stage publishes. `e99` does not pass the car bar by oversight — there are 4.50 m of genuinely clear
+road. What stranded the car is that the strip *left* of the first line is **1.75 m**, just under the
+1.80 m car bar, and `_longest_clear` takes the widest gap: right for routing, blind to which gap the
+car is in. ⚠️ **`Q19` above quotes `e99` at 2.93 m and this section at 4.50 m, and both are
+correct** — that is `Q51`'s reconciled gap, `e99` being one of the four grader-only rows.
+
+🔴 **And what the term *does* catch is `Q23`'s suppression re-caught.** A ledge occupies a **strip**
+of a cross-section; a ribbon that disagrees with the deck it rests on occupies **most** of one. Over
+the 11,546 cross-sections carrying a stepped sample, the share of the section that is stepped reads
+p50 **10%**, p90 20% — thin strips beside things already blocked, which change no published width at
+all. Only **73 sections (1%)** are more than half stepped, and **all three** newly fenced edges live
+in that tail:
+
+| edge | worst share of the width stepped | edge climbs |
+|---|---|---|
+| `e411` | **100%** | 4.06 m |
+| `e522` | 85% | 3.77 m |
+| `e520` | 84% | 1.08 m |
+
+All three are climbing edges. That is a graded ribbon resting on its own structure with ~0.2 m of
+registration error — **exactly what `Q23` put the 0.30 m bumper floor there to suppress**. The
+0.18-0.30 m band is not an empty gap waiting to be measured; it is the band that fact occupies, and
+any instrument reaching under the suppression re-catches what was suppressed. Knowable from `Q23`
+alone; the measurement is what makes it arguable rather than asserted.
+
+⚠️ **The obvious alternative is worse and was measured too.** Reading the run that touches a **kerb**
+instead of the widest run fences **222** edges against 14, because Wan Chai's widened ribbon runs
+into frontages across a third of the network. Not viable, and the same shape of error as a lower
+corridor bar: it moves a quantity that is not the one that stopped the car.
+
+✅ **Where the measurement went.** `hong_kong.yaml`'s `clearance:` block carries `car_width_m` and
+**deliberately no `suspension_travel_m`**; the block goes through `_thresholds`, so its closed-key-set
+check refuses one re-added without this argument being re-opened, and
+`test_a_vertical_bar_added_here_is_rejected` is the ratchet. The 0.18-0.30 m band is
+`tools/ground_clearance.py`'s to close — the `structure_class` extension `PLAN.md` already scoped as
+owing its own acceptance, and still owed. ⚠️ **The "31 level-0 edges carry samples in that band"
+figure above came from a scratch script and is superseded**: measured inside the corridor it is 14
+against 17 edges and 45 stations, and no committed tool reproduced the 31.
+
+🔴 **`e99` is a WIDENING defect and is deliberately not fenced.** Its ribbon is drawn at the
+10.24 m floor over an `authored` 6.4 m width, so 3.84 m of what the player reads as road is
+widening paving with a wall standing on it. No corridor bar can close it without also closing
+4.50 m of drivable road. It belongs to `Q19`'s refused width half and to `Q24`, and it is recorded
+here rather than fixed. ⚠️ **`PLAN.md`'s "catches `e99`" acceptance criterion is amended rather
+than met**, and saying so is the point.
+
+### ✅ The fence is built and dressed — `P3-29`, 2026-09-01
+
+**14 drivable level-0 edges** keep less than the car's own 1.80 m clear, and every one of them now
+ends at a barrier the player can see.
+
+🔴 **The scope is wider than this section called, on the user's decision (2026-09-01).** `Q19` named
+four edges for the fence; the bar applied region-wide names 14, and **every one carries an
+`authored` 6.4 m width** — so the population is dominated by the *building half* this section put
+out of scope. Fencing it was chosen deliberately: an edge a 1.80 m car cannot pass is one the player
+is stuck on whatever drew the obstruction, and `tools/reachability.py` prices the whole set at
+**0 of 189,753 ordered pairs lost** among survivors, 474 routes detoured, p50 12.0 m, worst
+**55.8 m**. ⚠️ Of the four this section named, only `e125` is in the set: `e207` reads 3.25 m,
+`e781` 3.50 m, `e222` 2.75 m. **`e207`'s exemption is therefore retired rather than kept** — the
+predicate decides it like every other edge, which discharges the debt `PLAN.md` recorded, and it
+stays open on a measurement rather than on a judgement.
+
+**The pieces.** `clearance.car_width_m` (1.80 m, mirrored from `taxi.tscn`) → `city.json` schema
+**21** beside `lane_width_m` → `RoadGraph.fits_car` and `fenced_edge_ids`, **beside** `is_passable`
+and never inside it → `pipeline/fence.py` (a new stage after `clearance`) → `fence.json` →
+`game/assets/authored/barriers/barrier.glb`, the project's first authored street furniture.
+
+🔴 **Two bars over one measurement, never two measurements.** `is_passable` stays at the lane
+(3.20 m) and `fits_car` reads the same `clear_width_m` at the car's. `verify_road_graph.gd`'s
+`_check_car_bar` re-derives the fence from `city.json`'s own arrays — never from the predicate,
+which would be `Q72`'s tautology — and asserts an edge exists **between** the two bars, because a
+region where every blocked edge is also fenced is what a merged pair looks like from the inside.
+Mutation-checked: pointing `fits_car` at `_lane_width_m` fires both that and the per-edge
+disagreement, naming `e132`, `e222`, `e256`, `e398`, `e499`.
+
+**A mouth is a node, not an edge end.** Fenced edges are grouped into components and closed at the
+**boundary**, so `Q19`'s pocket case cannot put a barrier behind a barrier. Today: **14 components,
+15 mouths, 90 barrier units, 0 ends behind another fence, 13 ends with no way in.**
+🔴 **The last two counters were one until the first run reported 13 pockets over 14 *disjoint*
+components** — arithmetically impossible, and the missing distinction was that a node with **no**
+other drivable arm is a dead end (a street clipped by the 1.5 km² region, the property
+`reachability.py` records) rather than a street behind a closure. ⚠️ `ends_behind_another_fence`
+counts fenced-edge **ends**, so a node shared by two fenced edges counts twice; pinned in
+`test_fence.py` rather than left to the name.
+
+⚠️ **The prop is a row of standard 2.0 m units and never one barrier scaled.** An x-scale from 2 m
+to a 10.24 m mouth stretches the posts to 0.55 m across with it, so the wider the street the more
+obviously wrong it looks. `fence.unit_width_m` must equal `make_barrier.UNIT_WIDTH_M` and a test
+binds the two — mismatched, the row tiles at the wrong pitch and both gapping and overlapping render
+as a barrier.
+
+🔴 **It collides, and it is the only thing in the barrier family that does.** Every generated
+railing class is deliberately collider-free and `verify_railings.gd` asserts exactly that;
+`game/tuning/barriers.tres`' "no collider, like every class in this layer" paragraph is about that
+*generated* class and stays true. Here the collision is the point — a barrier the car drives through
+is `Q19`'s invisible wall with a picture over it — so the prop carries the `-col` node-name suffix
+and `verify_fence.gd` asserts the opposite of its namesake. ⚠️ **Its material is `barrier_vertex`,
+not `barriers`**: that name already dispatches the railing class to `tuning/barriers.tres`, and
+sharing it would hand this prop a fence's shader and fail that tool, both halves rendering.
+
+**`verify_fence.gd` grades the two directions this can fail in**, and both are mutation-checked:
+a fenced edge with no barrier at or beside it (`Q19`'s invisible refusal — fired on dropping `e125`'s
+row) and a barrier on an edge the graph leaves open (a wall nobody asked for — fired on moving one to
+`e1`). The collider assertion fired on rebuilding the prop without `-col`.
+
+**The evidence is a frame** (`Q62`): `build/driver/p329_e627_{a,b}` — GREAT GEORGE STREET's mouth
+from the approach, `city_preview.tscn --camera=1446.1,5.1,367.1 --look=1450.6,4.2,380.4
+--debug-view=off --hud=off`, each shot twice and `cmp`-identical. The row spans the carriageway,
+reads red-and-white at distance, and stands on the road rather than in the junction.
+⚠️ **What no counter here can answer is legibility at speed from every approach**; that is still
+owed as a drive down each of the 15 mouths.
+
+🔴 **One draw call, and the obvious build cost 36.** Instantiating the prop per
+placement — `landmarks.gd`'s shape — measured **81-92 draws** on a driving route against a
+**55-57** baseline, on a layer every other generated class ships in one and against a <150 budget.
+The fix is a single `MultiMesh` over the 90 transforms with the collision split out into 90
+`StaticBody3D`s sharing **one** shape resource: `StaticBody3D` is not a `VisualInstance3D`, so the
+colliders cost no draw call at all. Re-measured **57-61**, and the two builds are **pixel-identical**
+at the `e627` camera — which is what proves the split changed only the cost. ⚠️ **The split opens a
+gap the asset check cannot see**: `verify_fence.gd` grades the `.glb`'s own `-col` import and would
+stay green if `fence.gd` stopped building bodies, which is a barrier the car drives through and
+renders perfectly — so the placer prints its own collider count (90), `railings_preview.gd`'s
+precedent inverted.
+
+**Battery.** `clearance_reconcile` **19 / 22 / 5, unchanged** — `clearance.py` is byte-identical to
+before this work, which is also what proves the withdrawn band left nothing behind. `pytest` 1755
+(from 1713), `check.sh` green.
+
 **See.** `Q51` for what routes around this · `Q20` · `Q22` for the interchange's family · `Q23` for the suppression this extends and for the narrowing it deliberately refused · `Q24` · `P2-5` · `P3-6` for why the population moved, and for the piers · `Q57` for the mechanism this section is the fourth instance of · `P3-9a′` for the round that re-prioritised this
 
 ## `Q20` — Deck heights are sampled from `INFRASTRUCTURE`
