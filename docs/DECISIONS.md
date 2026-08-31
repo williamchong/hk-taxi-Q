@@ -46,7 +46,7 @@ wins.
 | `Q16` | LOD0 does not ship | ✅ Closed |
 | `Q17` | CI runs `tools/check.sh` and cannot check the generated assets | ✅ Closed |
 | `Q18` | Ground colour sits under a chroma knee; the land-cover classifier is refused | ✅ Closed |
-| `Q19` | 5.17% of drawn carriageway has solid geometry standing in it at bumper height | 🟡 Half answered — routing closed as `Q51`. **Narrowing refused on the whole population**: no edge clears at any factor to the 1.3x floor and one is lost. The walls stand; 6 of the 8 severe ones are the WAN CHAI INTERCHANGE, and nobody owns moving them. ✅ **The cost of FENCING them is measured 2026-08-30**: refusing every wall in the region loses **1 ordered pair of 187,946** and 55.8 m of detour, and **nothing at all** at the player's own 1.80 m bar — so closing them to the player is admissible, at the **car's** bar and not the lane's. 🔴 The two starved populations agree on that and disagree on the cost — p50 12.0 m against 752.4 m — because `e207` CANAL ROAD EAST is worth **976.8 m** and only the occupancy grader starves it. 🟢 **The call is MADE 2026-08-31** — carve the seven licensed edges back to the surveyed span (sourced, `P3-6`'s shape), fence and dress the four unlicensed at the car's bar; the building half stays open |
+| `Q19` | 5.17% of drawn carriageway has solid geometry standing in it at bumper height | 🟡 Half answered — routing closed as `Q51`. **Narrowing refused on the whole population**: no edge clears at any factor to the 1.3x floor and one is lost. The walls stand; 6 of the 8 severe ones are the WAN CHAI INTERCHANGE, and nobody owns moving them. ✅ **The cost of FENCING them is measured 2026-08-30**: refusing every wall in the region loses **1 ordered pair of 187,946** and 55.8 m of detour, and **nothing at all** at the player's own 1.80 m bar — so closing them to the player is admissible, at the **car's** bar and not the lane's. 🔴 The two starved populations agree on that and disagree on the cost — p50 12.0 m against 752.4 m — because `e207` CANAL ROAD EAST is worth **976.8 m** and only the occupancy grader starves it. 🟢 **The call is MADE 2026-08-31** — carve the seven licensed edges back to the surveyed span, fence and dress the four unlicensed at the car's bar; the building half stays open. ✅ **`P3-28` BUILT the carve the same day: 4 of 7 cleared outright, occupancy 26 → 22, `INFRASTRUCTURE` 1.088% → 1.009% with `BUILDING` unmoved.** 🔴 The estate is **not watertight** (5.38% of edge slots open at source, 14-26% in tiles), so the cut face is a *constructed* retaining wall sized from removed geometry, not a derived cap — and carving at source rescues nothing. ⬜ `P3-29`'s fence is next |
 | `Q20` | Deck heights are sampled from `INFRASTRUCTURE`, not invented | ✅ Closed |
 | `Q21` | Should level −1 carriageway be drawn at all? | 🟡 Open |
 | `Q22` | 10.2% of off-grade carriageway hangs past its structure | 🟡 Open |
@@ -1672,6 +1672,84 @@ and the dressing placed on the fence set that survives (`P3-29`, shipped togethe
 its dressing is the invisible refusal this section forbids). Acceptance criteria in `PLAN.md`. **What this deliberately does not decide**: the
 building half — its starves are 1–3 m crossings, not the walls that ended round 0, and nothing here
 licenses carving a building — and `Q22`'s off-grade family, untouched.
+
+### ✅ The carve is built and the seven are measured — `P3-28`, 2026-08-31
+
+`pipeline/carve.py`, between `roads` and `surface`. **7 edges configured, 7 cut, 14 of 132 tile tiers
+re-emitted**; the other 118 are byte-identical because they are never opened. With the `carve:` block
+removed the stage writes its document and touches nothing — 52.0 MB against the carved 54.1 MB, so
+the retaining walls cost **2.1 MB**.
+
+| edge | `width_m` | stations | soffit-bounded | tris cut | area m² | wall m | clear before → after |
+|---|---|---|---|---|---|---|---|
+| `e233` | 5.42 | 66 | 7 | 1460 | 744.2 | 147.8 | **0.00 → cleared** |
+| `e55` | 5.57 | 121 | 3 | 2652 | 938.1 | 193.2 | **2.00 → cleared** |
+| `e788` | 7.20 | 52 | 0 | 1780 | 664.0 | 139.6 | **0.48 → cleared** |
+| `e327` | 5.45 | 46 | 0 | 1339 | 526.1 | 141.8 | **0.97 → cleared** |
+| `e485` | 4.80 | 98 | 12 | 487 | 168.7 | 60.0 | 0.48 → **2.90** |
+| `e256` | 3.84 | 80 | 4 | 823 | 373.4 | 178.9 | 1.43 → **1.92** |
+| `e398` | 6.66 | 116 | 15 | 1294 | 556.3 | 175.0 | 2.50 → 2.50 |
+
+**4 of 7 cleared outright; occupancy 26 → 22 failing edges.** `INFRASTRUCTURE` at level 0 falls
+**1.088% → 1.009%** while `BUILDING` is **unchanged at 1.204%** — the strongest evidence the carve is
+confined to the class it claims. ⚠️ **The three residuals are predicted, not a failure.** The grader
+bins occupiers at `INDEX_CELL_M` 1.0 m and a carved face blocks about a metre either side, so a
+surveyed width of `w` reads as roughly `w − 2`: 4.80 → ≈2.8 against 2.90 measured, 3.84 → ≈1.8
+against 1.92. 🔴 **Do not answer a residual by widening the prism** — that cuts published structure to
+an invented width, which is `Q54` inverted and the one thing this section forbids. `e398`'s corridor
+is unmoved but its starved run collapses **18 m → 1 m** and its blocker becomes
+`INFRASTRUCTURE+BUILDING`, so what is left there is the building half this section put out of scope.
+
+🔴 **The estate is NOT WATERTIGHT, and that changed the design.** The cut face was to be *derived* —
+after slicing, an edge walked by one triangle is an edge the removal opened. Measured, that premise
+is false: **5.38%** of edge slots are open across the 74 source `INFRASTRUCTURE` meshes (one sheet
+26.2%), and **14–26%** in the decimated tiles. Derived capping was built and returned **zero** closed
+loops on `e233`. ⚠️ **Carving at source rescues nothing** — that was checked next, because `roads`
+reads no tile and the stages could have been reordered, and the sheets are no more watertight than
+the tiles. So the cut face is **constructed**: a retaining wall per station whose height is measured
+from the structure removed there. ⚠️ **It publishes a face no publisher drew**, which is this stage's
+honest debit; what keeps it sourced is that its height and extent come from removed geometry.
+`buildings.py:830`'s "a viaduct is a closed volume" is true of intent and false of the bytes.
+
+🔴 **A second pass DEGRADES the first, so the stage refuses one.** The wall stands on the prism's own
+side planes, so a re-run reads it as wholly inside, removes it and rebuilds a shorter one — measured
+`e327` **141.8 → 75.8 m** of wall in one repeat, with every counter still closing. `buildings.json`
+carries a `carved_edges` marker and the stage raises on it. ⚠️ Reached by `--from roads`, not only by
+running this twice.
+
+⚠️ **The wall's class is load-bearing and was wrong once.** Taking its channels from the tile gives it
+the first vertex's class, usually `FACADE` — the window-band shader then draws storeys of glazing on
+concrete, and the share moves between the two gates: measured `BUILDING` 1.204 → **1.292%** with the
+wall mislabelled. It takes them from the removed structure instead.
+
+✅ **`facing_away` is 0, and it is reachable.** A cut face wound away from the road is invisible
+from it and solid from behind — this stage's own defect wearing the other sign. The counter is
+derived from centreline positions rather than from the offset `_retaining_wall` winds against, so
+it can fail rather than agreeing with the construction (`Q72`), and a test mirrors the wall to
+prove it moves.
+
+✅ **The soffit is read by ray PARITY, not by slab clustering** (`terrain.undersides`). A downward ray
+enters a closed volume at an underside and leaves at a top, so even indices are undersides exactly.
+`slab_gap_m` is calibrated on decks — gaps within one reach 2.57 m — so an 8 m ramp flank splits into
+two "slabs" whose upper one offers the **wall's own top** as a soffit, and a cut stopping there leaves
+a sliver of wall floating over the carriageway. Parity distinguishes them and needs no tuning value.
+
+**Battery, before → after.** `deck_error` pass → pass · `overhang` pass → pass · `ground_clearance`
+**FAIL 89 → FAIL 89**, unchanged and pre-existing (`Q24`) · `narrowing` baseline reproduces on all 737,
+24 → **21** ever below one lane, the remainder almost all `BUILDING` · `clearance_reconcile` **fails
+until its ratchet is moved**, which is the ratchet working: 24/26/4 → **19/22/5**, and `e485` joins the
+grader-only side because the pipeline reads its 2.90 m as clear at 0.5 m where the grader condemns it
+at 1.0 m — `Q51`'s gap on one more edge. `check.sh` green; 1713 tests; `city_facade` and the `-col`
+suffix verified in the written binaries. ⚠️ **A per-plan prefilter bounds the prisms to the band
+the ribbon crosses**: 88% of the per-prism calls were scanning a whole tile to find nothing, and
+removing that took the stage from 4.9 s to ~1.5 s with geometry identical triangle for triangle.
+
+**The evidence is a frame.** The four `q19s` cameras re-shot, each twice and `cmp`'d byte-identical.
+`e233` — recorded here as *"camera inside a solid concrete mass, no carriageway visible"* — now shows
+open carriageway with lane markings. `e256` shows the flank cut back with its railing intact **and the
+flyover deck overhead preserved**, which is the soffit bound doing its job. ⚠️ The camera invocations
+lived only in a session transcript; they are recoverable from the grader's binding-station
+coordinates and four of the seven edges still have none.
 
 **See.** `Q78` for the absolute-value defect this file's sign discipline comes from · `Q58` for the
 refusal-recording rule · `Q72` for why the negative arm of the ladder exists · `Q54` for why an

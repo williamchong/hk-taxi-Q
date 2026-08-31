@@ -397,6 +397,7 @@ hk-taxi-Q/
 │   │   ├── arrows.py            # published turn arrows → arrows.glb (P3-15)
 │   │   ├── boxjunctions.py      # published box junctions → boxjunctions.glb (P3-18)
 │   │   ├── roadmarks.py         # published stop / give-way lines → roadmarks.glb (P3-23)
+│   │   ├── carve.py            # INFRASTRUCTURE cut back to the surveyed carriageway (P3-28, Q19)
 │   │   ├── railings.py          # published railings → railings.glb (P3-19)
 │   │   ├── signs.py             # published traffic signs → signs.glb (P3-16)
 │   │   ├── sign_sheets.py       # TD's sign drawings, rasterised (P3-20)
@@ -404,7 +405,7 @@ hk-taxi-Q/
 │   │   ├── signals.py           # published signal heads → signals.glb (P3-17, latent — Q77)
 │   │   ├── lamps.py             # published lamp posts → lamps.glb (P3-26)
 │   │   ├── export.py            # → city.json, assembles and validates the stage outputs
-│   │   └── __main__.py          # `python -m pipeline` — 17 stages, in order
+│   │   └── __main__.py          # `python -m pipeline` — 18 stages, in order
 │   ├── sources/<source>/        # raw downloads — GITIGNORED
 │   ├── out/<region>/            # pipeline output — GITIGNORED
 │   └── tests/
@@ -502,7 +503,7 @@ puts a game-space position back on the source map.
 **The manifest names the other documents, it does not contain them.** The road graph is 0.65 MB on
 disk and ~6 MB parsed, and `RoadGraph` wants it at a different moment from when `CityStreamer` wants
 the tile list. Each of the three is separately versioned. A build ships exactly what the manifest
-names — **146 files and 59.3 MB** for Wan Chai, which the `export` stage prints on every run. The
+names — **146 files and 54.1 MB** for Wan Chai, which the `export` stage prints on every run. The
 PCK it exports to is a separate measurement and lives in `PROGRESS.md`'s Bundle-size metric, because
 it is measured from the PCK and never summed from these files.
 

@@ -67,7 +67,7 @@ You need [Godot 4.7](https://godotengine.org/) — on macOS, `brew install --cas
 Python 3.11+.
 
 **Build the city.** The first run downloads ~320 MB of source data and caches it; after that the
-whole region rebuilds in about 19 seconds across 17 stages. Output is gitignored build artefact, not
+whole region rebuilds in about 27 seconds across 18 stages. Output is gitignored build artefact, not
 source, so a fresh clone has none of it until you do this:
 
 ```bash

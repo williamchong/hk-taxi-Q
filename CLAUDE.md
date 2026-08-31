@@ -579,6 +579,30 @@ Common emoji for this project:
   `--debug-view=off --hud=off`, twice, and `cmp` them — a `minimal` pair differs in the fps readout
   alone. ⚠️ **`check.sh` cannot help**: both its `on_structure` assertions skip off-grade edges.
   Numbers in `Q90`.
+- **`pipeline/carve.py`, the `carve` config block, or any change to which edges are carved: paste
+  `carve.json`'s per-edge rows (`carved_area_m2`, `carved_volume_m3`, `wall_m`, `soffit_bounded`,
+  `triangles_removed`), `tiles_written` and `facing_away`, before and after — and run the whole
+  `Q19` battery:
+  `carriageway_occupancy`, `deck_error`, `overhang`, `ground_clearance`, `clearance_reconcile`,
+  `narrowing`.** 🔴 **The cut face is CONSTRUCTED, not derived, and that is measured rather than
+  chosen**: the estate is **not watertight** — 5.38% of edge slots open across the 74 source
+  `INFRASTRUCTURE` meshes, 14-26% in the decimated tiles — so a cap taken from "edges the removal
+  opened" returns **zero** closed loops. ⚠️ **Carving at source rescues nothing**: `roads` reads no
+  tile so the stages *could* be reordered, and the sheets are no more watertight than the tiles.
+  🔴 **A second pass DEGRADES the first and the stage refuses one** — the wall stands on the prism's
+  own side planes, so a re-run eats it and rebuilds it shorter (`e327` 141.8 → 75.8 m, every counter
+  still closing). `buildings.json` carries a `carved_edges` marker; ⚠️ this is reached by
+  `--from roads`, not only by running the stage twice, and the fix is always to rebuild from
+  `buildings`. 🔴 **The wall takes its colour and class from the structure REMOVED, never from the
+  tile** — a tile's first vertex is usually a building, and the window-band shader then draws storeys
+  of glazing on concrete while the share moves between two gates (`BUILDING` 1.204 → 1.292% when it
+  was wrong). ⚠️ **`carved_volume_m3` is accumulated per prism**, because one box over a whole edge's
+  removals spans the ramp's curve and reports many times what was taken. ⚠️ **The prism is the
+  surveyed `width_m` and never the drawn floor**, and a residual is never answered by widening it —
+  that is `Q54` inverted. The three residuals are the grader's 1.0 m plan bin, not a failed cut.
+  ⚠️ **`clearance_reconcile` fails until its ratchet is moved**, which is the ratchet working, not a
+  bar to retune. ⚠️ **The evidence is a frame** (`Q62`): the `q19s` cameras, shot twice and `cmp`'d.
+  Numbers in `Q19`.
 - **Any painted layer's height, `surface.py`'s cap construction, or any paint `lift_m`: also
   `tools/paint_clearance.py`, and paste its table.** It asks the one question a marking stage cannot
   ask from inside — **is the paint on top of the asphalt or inside it?** — because every counter
