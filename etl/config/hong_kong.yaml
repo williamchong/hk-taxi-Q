@@ -720,20 +720,6 @@ buildings:
     strength: 2.0
     vegetation_max: 0.5
 
-  # Per-building survey verdicts consumed into `TEXCOORD_1` (schema 6). Both
-  # are bare filenames resolved through `fetch.source_dir`, like `facade_hue`'s
-  # `source`, and both optional on the same contract: the tables are gitignored
-  # derived data, so a clone without them builds the same hash-driven city —
-  # absent, every building ships the refusal sentinel.
-  #
-  # `glazing` is `tools/facade_glazing.py --merge` — the dark-mode (L*, b*)
-  # glass tint, read only for buildings the reader called glazed (`Q40`).
-  # `grammar` is `tools/facade_grammar.py --merge` — the majority-voted glazed
-  # verdict and five-state grammar per building (`Q41`).
-  facade_survey:
-    glazing: facade_glazing.json
-    grammar: facade_grammar.json
-
   # Vertex-clustering cell size per LOD tier, in metres, coarsest last.
   #
   # No 0.0 entry, and that is the P2-1 review's verdict rather than an

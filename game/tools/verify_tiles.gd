@@ -35,16 +35,6 @@ const COLLISION_TIER: int = 0
 ## city looked like before `P3-7`. There is nothing to see and nothing to catch.
 const FACADE_MATERIAL: String = "res://tuning/city_facade.tres"
 
-## The `TEXCOORD_1` survey codec (schema 6), mirroring `facade_state` in
-## `etl/pipeline/buildings.py` and the `SURVEY_*` constants in
-## `city_facade_clean.gdshader` — `docs/ARCHITECTURE.md`'s channel table is the
-## tiebreak. Field maxima are the legal ceilings the scan holds every vertex to.
-const SURVEY_TINT_FIELD: float = 4.0
-const SURVEY_GRAMMAR_FIELD: float = 1024.0
-const SURVEY_GLAZED_MAX: float = 2.0
-const SURVEY_TINT_MAX: float = 240.0
-const SURVEY_GRAMMAR_MAX: float = 5.0
-
 
 func _init() -> void:
 	# The manifest rather than a directory listing, so this checks the shipped
@@ -108,7 +98,7 @@ func _check(path: String, tier: int) -> PackedStringArray:
 			var where: String = "%s surface %d" % [instance.name, surface]
 			problems.append_array(MeshContract.check_surface(mesh, surface, where))
 			problems.append_array(_check_facade_payload(mesh, surface, where))
-			problems.append_array(_check_survey_payload(mesh, surface, where))
+			problems.append_array(_check_no_survey_channel(mesh, surface, where))
 
 	# One draw call per surface. The budget is stated in draw calls because that
 	# is what the mobile tier runs out of first.
@@ -116,7 +106,15 @@ func _check(path: String, tier: int) -> PackedStringArray:
 		problems.append("%d surfaces, over the %d-surface budget" % [surfaces, MAX_SURFACES])
 
 	problems.append_array(_check_collision(scene_root, tier))
-	problems.append_array(MeshContract.check_uv2_import_settings(path, "survey payload"))
+	# Still pinned with no payload left to protect (`Q102`): Static Lightmaps
+	# would *create* the UV2 `_check_no_survey_channel` now requires to be
+	# absent, and catching it at the import setting names the fix, where the
+	# mesh check only names the symptom. ⚠️ The shared helper's sentence is an
+	# *overwrite* framing, so the noun has to be the empty slot rather than a
+	# payload — there is no payload here to overwrite.
+	problems.append_array(
+		MeshContract.check_uv2_import_settings(path, "UV2 slot the tiles must keep empty")
+	)
 
 	scene_root.free()
 	return problems
@@ -144,52 +142,31 @@ func _check_facade_payload(mesh: Mesh, surface: int, where: String) -> PackedStr
 	return problems
 
 
-## The survey payload holds the codec's invariants (schema 6, `Q40`/`Q41`).
+## No tile carries a TEXCOORD_1 at all (schema 20, `Q102`).
 ##
-## `TEXCOORD_1.x` must be a small exact integer whose decoded fields are in
-## range, and `y` must still be unwritten. Beyond the contract itself this is
-## the tripwire for both import hazards: a lightmap unwrap
-## (`meshes/light_baking = 2`) replaces the channel with fractions in [0, 1],
-## and 16-bit attribute compression corrupts large codes — either way the
-## exactness or range checks fail. A full scan rather than a sample, because
-## this is the offline verify tool and one wrong vertex is a wrong building.
-func _check_survey_payload(mesh: Mesh, surface: int, where: String) -> PackedStringArray:
-	if not (mesh.surface_get_format(surface) & Mesh.ARRAY_FORMAT_TEX_UV2):
+## ⚠️ **This check was inverted rather than deleted, and it still catches the
+## hazard it was written for.** Until `Q102` it decoded a packed facade-survey
+## payload here and held every vertex to the codec's field ceilings, which made
+## it the tripwire for a lightmap unwrap (`meshes/light_baking = 2`) or 16-bit
+## attribute compression rewriting the channel. The vision reader that filled
+## the payload was withdrawn on cost, so the ETL ships no UV2 — and a lightmap
+## unwrap *writes* UV2, so the presence of the channel is now the whole signal.
+## Cheaper and stricter than the codec scan it replaces: it needs no vertex
+## walk, and there is no legal value to be confused with a corrupted one.
+func _check_no_survey_channel(mesh: Mesh, surface: int, where: String) -> PackedStringArray:
+	if mesh.surface_get_format(surface) & Mesh.ARRAY_FORMAT_TEX_UV2:
 		return PackedStringArray(
-			["%s carries no TEXCOORD_1; the survey payload is missing" % where]
-		)
-
-	var uv2s: PackedVector2Array = mesh.surface_get_arrays(surface)[Mesh.ARRAY_TEX_UV2]
-	for uv2: Vector2 in uv2s:
-		if uv2 == Vector2.ZERO:
-			continue  # The refusal sentinel — most of every tile, trivially legal.
-		var code: float = uv2.x
-		var glazed: float = fmod(code, SURVEY_TINT_FIELD)
-		var tint: float = fmod(
-			floor(code / SURVEY_TINT_FIELD), SURVEY_GRAMMAR_FIELD / SURVEY_TINT_FIELD
-		)
-		var grammar: float = floor(code / SURVEY_GRAMMAR_FIELD)
-		if (
-			uv2.y != 0.0
-			or code != floor(code)
-			or code < 0.0
-			or glazed > SURVEY_GLAZED_MAX
-			or tint > SURVEY_TINT_MAX
-			or grammar > SURVEY_GRAMMAR_MAX
-			or (tint > 0.0 and glazed != 2.0)
-		):
-			return PackedStringArray(
-				[
+			[
+				(
 					(
-						(
-							"%s: TEXCOORD_1 (%f, %f) breaks the survey codec — the ETL and "
-							+ "shader disagree, or the importer rewrote the channel "
-							+ "(lightmap unwrap or attribute compression)"
-						)
-						% [where, uv2.x, uv2.y]
+						"%s carries a TEXCOORD_1; the ETL ships none since schema 20, so "
+						+ "the importer wrote it (lightmap unwrap or a stale .import "
+						+ "sidecar) or the bundle predates the survey's withdrawal"
 					)
-				]
-			)
+					% where
+				)
+			]
+		)
 	return PackedStringArray()
 
 

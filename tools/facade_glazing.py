@@ -14,9 +14,14 @@ Probe 1 itself was never committed, which is `Q37`'s ghost.
 region-scale calibration against `Q41`'s reader found the dip unable to
 predict glazing at any threshold (best Youden 0.100, sign-unstable across
 sheets) and *inverted* on blank-vs-windowed — `Q40` records the kill. The dip
-column stays as the contamination check's own measurement; what the pipeline
-consumes from this table is the tint, and only on buildings the reader says
-are glazed.
+column stays as the contamination check's own measurement.
+
+🔴 **Nothing consumes the tint either, since `Q102`.** It shipped only where the
+vision reader called a building glazed, and the reader was withdrawn on cost.
+The gate is what died, not the measurement: this tool still runs, still writes
+its table, and that table is now read by nobody. ⚠️ **Re-consuming the tint
+needs a new glazed verdict from somewhere**, and `Q40` already measured that the
+dip cannot be it.
 
 For every building on a sheet it computes the dip twice, from the two texel
 selections, and reports where the verdict moves:

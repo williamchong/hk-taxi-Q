@@ -247,9 +247,10 @@ def assigned_faces(mesh: MeshData) -> np.ndarray:
 def claim_stems(merged: dict, rows: dict, sheet: str) -> None:
     """Refuse a stem surveyed on two sheets, before `rows` joins `merged`.
 
-    Shared by both merge writers (`facade_glazing.py`, `facade_grammar.py`) so
-    the pipeline can rely on one error contract: a duplicate stem is a survey
-    defect to raise on, never a row to silently overwrite.
+    A duplicate stem is a survey defect to raise on, never a row to silently
+    overwrite. ⚠️ Lives here rather than in its one caller
+    (`facade_glazing.py`) because it is the *contract* every merge writer owes,
+    and it had two callers until `Q102` withdrew the second.
     """
     clash = merged.keys() & rows.keys()
     if clash:

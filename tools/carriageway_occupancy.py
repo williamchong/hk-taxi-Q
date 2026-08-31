@@ -64,8 +64,8 @@ the city config, held continuously along every drivable level-0 edge.
 
 Region shares are gated too, but as a ratchet against `Q19`'s own published
 figures rather than as the headline. Those numbers were fixed before this
-grader existed — the `podium_error.py` precedent for a bar the instrument
-cannot have been tuned to.
+grader existed — `Q47`'s precedent for a bar the instrument cannot have been
+tuned to.
 
 ⚠️ **Off-grade carriageway is reported and never gated.** `Q21` has not decided
 whether level -1 should be drawn at all and Phase 4 owns it; failing the build
@@ -955,9 +955,9 @@ def main(argv: list[str] | None = None) -> int:
         "--accept-building-share",
         type=float,
         default=0.0172,
-        # `Q19`'s own published figure, fixed before this grader existed. The
-        # `podium_error.py` precedent: a bar the instrument cannot have been
-        # tuned to, because it predates the instrument.
+        # `Q19`'s own published figure, fixed before this grader existed.
+        # `Q47`'s precedent: a bar the instrument cannot have been tuned to,
+        # because it predates the instrument.
         help="fail above this share of level-0 carriageway area occupied by buildings",
     )
     parser.add_argument(

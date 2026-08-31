@@ -373,27 +373,26 @@ class TestBuildingStyle:
         with pytest.raises(ValueError, match="source"):
             load_config(rewrite(drop_source))
 
-    def test_facade_survey_block_is_optional_and_each_key_stands_alone(self, rewrite) -> None:
-        """Same defaulted-is-the-contract rule as `facade_hue`: both tables are
-        gitignored derived data, so a clone without the block — or with half of
-        it — must still build, on the refusal sentinel."""
-        surveyed = load_config().buildings
-        assert surveyed.facade_glazing_source == "facade_glazing.json"
-        assert surveyed.facade_grammar_source == "facade_grammar.json"
+    @pytest.mark.parametrize("block", [{"grammar": "facade_grammar.json"}, {}, None])
+    def test_a_retired_facade_survey_block_is_refused_rather_than_ignored(
+        self, rewrite, block
+    ) -> None:
+        """`Q102`. The vision reader this block configured is gone, and so is
+        the `TEXCOORD_1` payload it fed, so there is nothing left for the keys
+        to name. Refusing is the point: silently ignoring a stale block in a
+        clone's config would be a no-op nobody sees.
 
-        def drop_block(doc: dict[str, Any]) -> None:
-            del doc["buildings"]["facade_survey"]
+        ⚠️ **Parametrised over the null spelling deliberately.** A bare
+        `facade_survey:` parses as `None`, so a truthiness test would wave
+        through the one form a half-deleted block most likely leaves behind —
+        which is the no-op this refusal exists to prevent, not an edge case.
+        """
 
-        stripped = load_config(rewrite(drop_block)).buildings
-        assert stripped.facade_glazing_source is None
-        assert stripped.facade_grammar_source is None
+        def restore_block(doc: dict[str, Any]) -> None:
+            doc["buildings"]["facade_survey"] = block
 
-        def drop_grammar(doc: dict[str, Any]) -> None:
-            del doc["buildings"]["facade_survey"]["grammar"]
-
-        partial = load_config(rewrite(drop_grammar)).buildings
-        assert partial.facade_glazing_source == "facade_glazing.json"
-        assert partial.facade_grammar_source is None
+        with pytest.raises(ValueError, match="facade_survey is retired"):
+            load_config(rewrite(restore_block))
 
     @pytest.mark.parametrize("spoil", ["drop", "zero"])
     def test_tiling_the_ground_without_a_sink_is_rejected(self, rewrite, spoil) -> None:

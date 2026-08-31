@@ -4,8 +4,13 @@
 analysable across 5,831 shredded charts) and that re-projecting texels through
 each wall triangle's position↔UV mapping into a grid whose axes are *metres
 across the face* and *metres up* produces legible elevations. The probe that
-proved it was never committed; this is that probe, rebuilt as a tool, because
-`Q41`'s reader survey and its validation set both consume these images.
+proved it was never committed; this is that probe, rebuilt as a tool.
+
+⚠️ **Nothing in a build consumes these images, and that is current** (`Q102`).
+They were rebuilt for `Q41`'s vision reader and its validation set, both
+withdrawn on cost. `tools/facade_glazing.py` is the one caller left, and it
+grades rather than ships. Kept because the probe was lost once already — which
+is `Q37`'s ghost, and the whole reason it became a committed tool.
 
 Two properties matter beyond the re-projection itself:
 

@@ -554,8 +554,8 @@ def main(argv: list[str] | None = None) -> int:
         # legitimate because it inherited `Q19`'s figures, "fixed before this
         # grader existed"; **this number is this instrument's own first reading**
         # (87 of 737 edges on the 2026-08-27 bundle) and is therefore exactly the
-        # bar-tuned-to-its-own-data the `podium_error.py` precedent warns about.
-        # It is set anyway because the alternative is worse: a hard bar at zero
+        # bar-tuned-to-its-own-data the `Q47` precedent warns about. It is set
+        # anyway because the alternative is worse: a hard bar at zero
         # fails 88 edges on a defect nobody has decided how to fix (`Q24` is
         # HOLD), and no bar at all lets the population grow unnoticed. **So it
         # fails a build that buries MORE edges and says nothing about the 88** —

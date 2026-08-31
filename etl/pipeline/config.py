@@ -482,15 +482,6 @@ class BuildingStyle:
     # survey's `vegetation` column required — one set against a survey that never
     # recorded it would filter nothing while looking like it filtered.
     facade_hue_vegetation_max: float | None = None
-    # Optional per-building survey verdicts consumed into `TEXCOORD_1`
-    # (schema 6): the glazing survey's tint table, resolved through
-    # `buildings.HUE_SOURCE_ID`, and the vision reader's merged verdict table,
-    # resolved through `buildings.GRAMMAR_SOURCE_ID`. **Defaulted on the same
-    # contract as `facade_hue_source`**: both are gitignored derived data, and
-    # a clone without them must build the same hash-driven city it always
-    # built — absent, every building ships the refusal sentinel.
-    facade_glazing_source: str | None = None
-    facade_grammar_source: str | None = None
 
     @property
     def height_bands(self) -> tuple[HeightBand, ...]:
@@ -3512,11 +3503,24 @@ def _building_style(body: dict[str, Any], where: str, table: _MaterialTable) -> 
         else _scale(vegetation_max, f"{where}:facade_hue.vegetation_max", 1.0)
     )
 
-    survey = body.get("facade_survey") or {}
-    if not isinstance(survey, dict):
-        raise ValueError(f"{where}:facade_survey must be a mapping")
-    glazing_source = survey.get("glazing")
-    grammar_source = survey.get("grammar")
+    # ⚠️ **Refused rather than ignored** (`Q102`). The vision reader this block
+    # configured is gone, and so is the `TEXCOORD_1` payload it fed. A stale
+    # `facade_survey:` in a clone's config would otherwise be a silent no-op.
+    #
+    # ⚠️ **This closes one literal key, not the class.** `_fields`' unknown-role
+    # check is the general version of the same idea, and `_building_style` has
+    # no equivalent — every other stale or misspelled key under `buildings:` is
+    # still a silent no-op. A general check would subsume this one and is the
+    # better fix if the class is ever worth closing.
+    #
+    # ⚠️ **Presence, not truthiness.** A bare `facade_survey:` parses as `None`,
+    # so `.get(...) is not None` would wave through the one spelling most likely
+    # to be left behind by half-deleting the block — the exact no-op this refuses.
+    if "facade_survey" in body:
+        raise ValueError(
+            f"{where}:facade_survey is retired — the vision reader it configured was "
+            "withdrawn (`Q102`). Remove the block."
+        )
 
     cells = _cell_sizes(_require(body, "lod_cell_sizes_m", where), f"{where}:lod_cell_sizes_m")
     if not cells:
@@ -3614,8 +3618,6 @@ def _building_style(body: dict[str, Any], where: str, table: _MaterialTable) -> 
         facade_hue_source=hue_source,
         facade_hue_strength=hue_strength,
         facade_hue_vegetation_max=hue_vegetation_max,
-        facade_glazing_source=None if glazing_source is None else str(glazing_source),
-        facade_grammar_source=None if grammar_source is None else str(grammar_source),
         lod_cell_sizes_m=cells,
         class_lod_cell_sizes_m=class_cells,
         ground_sink_m=sink,

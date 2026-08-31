@@ -35,9 +35,9 @@ each axis per 0.50 m step and can corner-cross a cell without landing in it, whi
 is the one edge (`e520` TONNOCHY ROAD, 4.50 m against 2.50 m) a 0.25 m walk finds
 and the shipped one does not. `pipeline.clearance.ALONG_M` carries the sweep.
 
-So this is a **ratchet**, on the `podium_error.py` precedent: the counts are fixed
-outside the instrument, from `Q51`, and any movement in either is a finding to go
-and look at rather than a threshold to retune.
+So this is a **ratchet**, on `Q47`'s precedent: the counts are fixed outside the
+instrument, from `Q51`, and any movement in either is a finding to go and look at
+rather than a threshold to retune.
 
 ⚠️ **It reads the shipped bundle for the pipeline's side, never re-runs the
 stage.** `city.json` is what the game loads and what `is_routable` answers from,

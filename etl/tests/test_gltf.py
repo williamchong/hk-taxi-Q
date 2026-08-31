@@ -304,9 +304,10 @@ class TestWriting:
             write_glb(tmp_path / "t.glb", [mesh])
 
     def test_uv2_round_trips_exactly_and_sits_beside_texcoord_0(self, tmp_path) -> None:
-        """Schema 6: the survey payload is integer state codes, so the file
-        must hand back the exact floats it was given — approx would hide the
-        one corruption that matters."""
+        """A UV2 payload is integer state codes, so the file must hand back the
+        exact floats it was given — approx would hide the one corruption that
+        matters. The literal below is an arbitrary large code, not any live
+        codec's value."""
         surveyed = replace(
             self.box(),
             uvs=np.zeros((6, 2), dtype=np.float32),

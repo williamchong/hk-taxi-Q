@@ -41,10 +41,11 @@ const NOT_MEASURED: float = -1.0
 ## so the importer gives it the window-band shader. A v4 reader would draw a v5
 ## tile blank and blame the shader.
 ##
-## 6 since `Q40`/`Q41`: every tile ships `TEXCOORD_1` — a packed per-building
+## 6 since `Q40`/`Q41`: every tile shipped `TEXCOORD_1` — a packed per-building
 ## facade-survey state in `x` (glazed / tint bin / grammar, 0 = refused, falling
 ## back to the hash) with `y` reserved for `Q42`'s riders. A v5 reader would
-## silently draw the hash city while the bundle claims the survey.
+## silently draw the hash city while the bundle claims the survey. Withdrawn
+## again at 20.
 ##
 ## 7 since `P3-6`: the manifest names `landmarks.json`, and the tiles no longer
 ## contain the buildings its heroes replace. The bump is for the removal: a v6
@@ -116,7 +117,13 @@ const NOT_MEASURED: float = -1.0
 ## the gate is a rule about spelling that nothing published grades (`P3-17`).
 ## `signs_text_atlas_path` is emptier still: it is null for all of those *and*
 ## for a region whose faces carry no lettering.
-const SCHEMA_VERSION: int = 19
+##
+## 20 since `Q102`: the tiles ship no `TEXCOORD_1` at all. The vision reader
+## that filled it was withdrawn on cost, and the sentinel it left behind was a
+## legal code meaning "refused" — so a v19 reader loading v20 tiles would read
+## a whole city refusing a survey it does not carry. The bump is for the
+## removal, on `P3-6`'s precedent at 7.
+const SCHEMA_VERSION: int = 20
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.

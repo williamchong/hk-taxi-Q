@@ -434,9 +434,9 @@ def main(argv: list[str] | None = None) -> int:
         # coincident triangle, not room for a defect.
         #
         # ⚠️ It is deliberately **not** set against the first reading. The
-        # `podium_error.py` precedent warns about a bar tuned to its own data,
-        # and `ground_clearance.py --accept-edges-over-travel` had to take that
-        # debt because `Q24` is open and unassigned. This one does not: the
+        # `Q47` precedent warns about a bar tuned to its own data, and
+        # `ground_clearance.py --accept-edges-over-travel` had to take that debt
+        # because `Q24` is open and unassigned. This one does not: the
         # defect it grades has a fix, and the bar is what says so.
         help="fail above this share of a gated layer's triangles buried in the carriageway",
     )

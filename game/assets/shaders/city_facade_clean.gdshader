@@ -28,14 +28,17 @@
 //      solid walls is what keeps a white city from reading as grey cardboard,
 //      and it cools the shadowed faces the way the reference art does.
 //
-// The inputs are `city_facade`'s, unchanged and documented there in full,
-// plus the survey channel this shader alone consumes (schema 6):
+// The inputs are `city_facade`'s, unchanged and documented there in full:
 //
 //   UV.x   metres above this object's own base
 //   UV.y   `floor()` is the surface marker, `fract()` is a per-object phase
-//   UV2.x  packed per-building survey state (`Q40`/`Q41`): glazed verdict,
-//          glass-tint bin and grammar, each field 0 = refused → the hash
-//   UV2.y  reserved for `Q42`'s riders, 0.0 in schema 6
+//
+// ⚠️ **There is no `UV2` since schema 20** (`Q102`). This shader alone used to
+// consume a packed per-building facade-survey state there — a glazed verdict,
+// a glass-tint bin and a grammar, each field 0 = refused → the hash. The
+// vision reader that produced it was withdrawn on cost, so every building now
+// takes the hashed treatment that was always the fallback. The four grammars
+// below are unaffected: the seed picked them before the survey existed.
 //
 // ⚠️ Like its sibling, this replaces a `BaseMaterial3D` that had
 // `vertex_color_use_as_albedo` set at import, so it must apply `COLOR` itself.
@@ -63,32 +66,6 @@ const float MARKER_STRUCTURE = 2.0;
 // integer seed round-trips exactly. Hashing the integer rather than the fraction
 // keeps neighbouring seeds far apart in every derived decision.
 const float PHASE_STEPS = 256.0;
-
-// The `TEXCOORD_1` survey codec (schema 6). ⚠️ **Contract constants, not
-// tuning** — mirrors of `facade_state` in `etl/pipeline/buildings.py`, recorded
-// in `docs/ARCHITECTURE.md`'s channel table, the same standing as `PHASE_STEPS`:
-// a one-sided change decodes every surveyed building silently wrong. The codes
-// are integers well under float32's 2^24 exact ceiling, so unlike the phase
-// there is no rounding case — decode still `floor(x + 0.5)`s first.
-const float SURVEY_TINT_FIELD = 4.0;
-const float SURVEY_GRAMMAR_FIELD = 1024.0;
-const float SURVEY_TINT_L_MIN = 5.0;
-const float SURVEY_TINT_L_STEP = 4.0;
-const float SURVEY_TINT_B_MIN = -16.0;
-const float SURVEY_TINT_B_STEP = 2.0;
-const float SURVEY_TINT_B_BINS = 16.0;
-// Grammar codes 1-5, pinned to `GRAMMAR_STATES` order in `buildings.py`.
-const float SURVEY_CURTAIN = 1.0;
-const float SURVEY_PUNCHED = 2.0;
-const float SURVEY_FIN = 3.0;
-const float SURVEY_BLANK = 4.0;
-const float SURVEY_MIXED = 5.0;
-// The `survey_debug` triage legend — a contract with the reviewer's eye of the
-// same standing as the codes above, recorded in `docs/DECISIONS.md` `Q46`.
-// Authored in linear space: legibility is the only requirement.
-const vec3 TRIAGE_REFUSED = vec3(1.0, 0.0, 1.0);
-const vec3 TRIAGE_CARVE_OUT = vec3(1.0, 0.55, 0.0);
-const vec3 TRIAGE_COMMITTED = vec3(0.0, 0.8, 0.2);
 
 // The CIELAB constants `lab_to_linear` and `linear_to_lab` share — D65 white,
 // the (6/29)³ knee and the 24389/27 linear-segment slope, exactly as
@@ -235,10 +212,10 @@ uniform vec3 glass_tint_c : source_color = vec3(0.44, 0.55, 0.63);
 // glass survey measured as carrying the real variation — plus a pull of the
 // pane's chromaticity (the full a*b* vector, not a hue rotation — see the
 // vertex block) toward the building's own measured `COLOR_0`, so a pane
-// relates to its building instead of to a city-wide lottery. Applied to the
-// **fallback pick only**: a surveyed tint is the answer for that building, and
-// jittering it would re-invent what `Q40` measured. All three ship from the
-// `.tres`; at 0.0 the fallback is the exact uniform value, no round trip.
+// relates to its building instead of to a city-wide lottery. It was the
+// **fallback pick only** while a surveyed tint could answer for a building;
+// since `Q102` there is no other pick. All three ship from the `.tres`; at 0.0
+// the pick is the exact uniform value, no round trip.
 // ⚠️ The bound is `Q35` in the opposite direction: panes should vary within a
 // frame without turning the skyline into salt-and-pepper glass.
 uniform float pane_l_jitter : hint_range(0.0, 20.0) = 0.0;
@@ -269,10 +246,10 @@ uniform float glass_reflect : hint_range(0.0, 1.0) = 0.85;
 uniform float fresnel_power : hint_range(1.0, 8.0) = 4.0;
 uniform float glass_roughness : hint_range(0.0, 1.0) = 0.12;
 // ⚠️ **An opening is not necessarily glass** — the sibling rule to "a mullion is
-// wall, not a dark line", and the second half of `Q43`. Where the survey says
-// glazing does not *dominate* — `punched` stock, which is most of the real
-// Hennessy Road — the openings are dark reveals in solid wall, and these two are
-// what they are made of.
+// wall, not a dark line", and the second half of `Q43`. Where glazing does not
+// *dominate* — `punched` stock, which is most of the real Hennessy Road — the
+// openings are dark reveals in solid wall, and these two are what they are made
+// of.
 //
 // ⚠️ **Authored, not measured.** `Q40` measured the tint of *glazing*; nothing has
 // measured a concrete reveal, and the `Q26` re-shoot is where these get judged.
@@ -341,41 +318,12 @@ group_uniforms distance_fade;
 uniform float fade_start_m : hint_range(0.0, 600.0) = 140.0;
 uniform float fade_end_m : hint_range(0.0, 800.0) = 244.0;
 
-group_uniforms survey;
-// The measured-survey overrides (`Q40`/`Q41`): at 1.0 a building whose
-// `TEXCOORD_1` state commits a verdict draws that verdict — glazed, grammar and
-// glass tint — and only refusals fall to the hash. **Ships at 1.0** (user's
-// call, 2026-08-09, from the `A‴` frames): the `.tres` enables the look by
-// default; 0.0 here stays the parked-`C` recipe's value.
-uniform float survey_apply : hint_range(0.0, 1.0) = 0.0;
-// The a* the tint encoding dropped — `Q40`'s PCA left 6.5% of the measured
-// glass variance on a*, so the reconstruction assumes one value for the city.
-// Slightly green, as HK curtain glass reads. Retuned, if at all, at `Q26`.
-uniform float glass_astar : hint_range(-12.0, 12.0) = -2.0;
-// The quiet tier (`Q46`): where the grammar *refused*, the hash fallback must
-// not assert confident fenestration — refusal is the survey's own small-or-
-// occluded signal, never a height gate (`Q34`). All five are inert at 0.0
-// (bit-exact `A‴`) and dead at `survey_apply = 0.0`; none touches a committed
-// verdict. Authored values and retune bounds live in `city_facade.tres`.
-uniform float quiet_shopfront : hint_range(0.0, 1.0) = 0.0;
-uniform float quiet_clamp : hint_range(0.0, 1.0) = 0.0;
-uniform float quiet_pier_ratio : hint_range(0.0, 0.9) = 0.0;
-uniform float quiet_solid : hint_range(0.0, 1.0) = 0.0;
-uniform float quiet_pane_mute : hint_range(0.0, 1.0) = 0.0;
-group_uniforms debug;
-// Survey-state triage tint: paints each facade with which mechanism owns its
-// look — magenta the quiet tier (grammar refused), orange a refusal whose
-// committed glazed axis re-raised fenestration on top of that tier (`Q46`'s
-// 46-building carve-out — a subset of the quiet tier, not an alternative),
-// green a committed grammar. A sighting of wrong fenestration then names its
-// fix — `quiet_*` retune, the carve-out, or the `W4` override table — instead
-// of guessing. The value is the tint's opacity, and it draws nothing unless
-// `survey_apply` is on: parked, no survey mechanism owns the look. ⚠️
-// **Dev-only: never authored on in the `.tres`** — the one uniform whose
-// number is a probe, not a verdict. ⚠️ Its evidence stops at the LOD switch:
-// past 250 m `TEXCOORD_1` is a cluster representative's, so one building's
-// attribution can paint its neighbours.
-uniform float survey_debug : hint_range(0.0, 1.0) = 0.0;
+// ⚠️ **The `survey` and `debug` uniform groups are gone** (`Q102`; the record
+// lists what each did). The one worth naming here is `Q46`'s `quiet_*` tier,
+// because it is the trap: it softened the facades the reader *refused*, and
+// with no reader **every** building is a refusal — so keeping it would have
+// muted the whole city rather than the small-or-occluded stock it was written
+// for.
 
 group_uniforms night;
 // Reserved and shipped at zero, as in the sibling. `ART_DESIGN.md` calls night a
@@ -395,20 +343,9 @@ varying float height_m;
 // full amplitude.
 varying flat float phase;
 varying flat float marker;
-// The decoded survey fields: x glazed (0 refused / 1 solid / 2 glazed), y tint
-// code (0 refused, else 1..240), z grammar (0 refused, else the codes above).
-// `flat` for `phase`'s reason exactly — a per-building value interpolated
-// across a cluster-spanning triangle would blend two codes into a third,
-// meaningless one.
-varying flat vec3 survey_state;
-// The surveyed pane colour, decoded once per vertex rather than per glazed
-// fragment — the tint is per-building constant, so the fragment stage would
-// re-run the whole CIELAB conversion for an answer that never varies within
-// the draw. Garbage when `survey_state.y` is 0; the fragment guards on that.
-varying flat vec3 survey_pane;
-// The hashed fallback pane, hoisted for `survey_pane`'s exact reason: the
-// `Q45` modulation is two CIELAB round trips, per-building constant, and the
-// fragment would re-run them for an answer that never varies within the draw.
+// The hashed pane, hoisted out of the fragment stage: the `Q45` modulation is
+// two CIELAB round trips, per-building constant, and the fragment would re-run
+// them for an answer that never varies within the draw.
 // `flat` for `phase`'s reason. Written only on facade-marker vertices — the
 // only ones whose fragments read it; with every `Q45` knob at zero it is the
 // raw hashed pick, bit-exact with what the fragment used to compute.
@@ -516,35 +453,14 @@ void vertex() {
 	marker = floor(UV.y);
 	phase = fract(UV.y);
 
-	// The packed survey verdicts (`Q40`/`Q41`). Bit fields by division: glazed
-	// in bits 0-1, tint in 2-9, grammar in 10-12. An absent channel reads as
-	// (0, 0), which decodes to all-refused — the correct state by construction.
-	float survey_code = floor(UV2.x + 0.5);
-	survey_state = vec3(
-		mod(survey_code, SURVEY_TINT_FIELD),
-		mod(floor(survey_code / SURVEY_TINT_FIELD), SURVEY_GRAMMAR_FIELD / SURVEY_TINT_FIELD),
-		floor(survey_code / SURVEY_GRAMMAR_FIELD)
-	);
-
-	// The measured glass (`Q40`): bin centres back to (L*, b*), with the a*
-	// the encoding dropped assumed from `glass_astar`. Linear out — no
-	// transfer curve, the shader works in linear.
-	float tint_code = survey_state.y - 1.0;
-	float tint_l = SURVEY_TINT_L_MIN
-		+ (floor(tint_code / SURVEY_TINT_B_BINS) + 0.5) * SURVEY_TINT_L_STEP;
-	float tint_b = SURVEY_TINT_B_MIN
-		+ (mod(tint_code, SURVEY_TINT_B_BINS) + 0.5) * SURVEY_TINT_B_STEP;
-	survey_pane = lab_to_linear(vec3(tint_l, glass_astar, tint_b));
-
-	// The hashed fallback pane (`Q45`), the same seed and draw slot the fragment
+	// The hashed pane (`Q45`), the same seed and draw slot the fragment
 	// always used. Modulated per building in CIELAB: `L*`/`b*` jitter on the
 	// pick, then its chromaticity pulled toward the building's own measured
 	// colour — `COLOR` is the ETL's sRGB bytes, so it goes through
-	// `vertex_srgb_to_linear` first (`Q27`, mandatory here as everywhere). The
-	// survey path above is deliberately not touched: the surveyed tint is a
-	// measurement, and only the fallback is ours to vary. Guarded twice: on the
-	// facade marker, because a ground or structure vertex can never show a pane
-	// and the two Lab round trips are this stage's heaviest work; and on the
+	// `vertex_srgb_to_linear` first (`Q27`, mandatory here as everywhere).
+	// Guarded twice: on the facade marker, because a ground or structure vertex
+	// can never show a pane and the two Lab round trips are this stage's
+	// heaviest work; and on the
 	// knobs, so that at zero amplitude the pick never round-trips through Lab —
 	// bit-exact with the un-modulated select, which is what keeps the parked
 	// look provable.
@@ -554,15 +470,8 @@ void vertex() {
 		fallback_pane = pane_tint < 0.34
 			? glass_colour
 			: (pane_tint < 0.67 ? glass_tint_b : glass_tint_c);
-		// `Q46`: the quiet tier mutes the fallback pane's chroma where the
-		// grammar refused — the fallback only, on the rule already stated
-		// above. The gate is the fragment's `refused_quiet`, re-derived here
-		// because stages cannot share it.
-		float pane_mute = (survey_apply > 0.5 && survey_state.z < 0.5)
-			? quiet_pane_mute
-			: 0.0;
-		vec4 knobs = vec4(pane_l_jitter, pane_b_jitter, pane_hue_pull, pane_mute);
-		if (any(greaterThan(knobs, vec4(0.0)))) {
+		vec3 knobs = vec3(pane_l_jitter, pane_b_jitter, pane_hue_pull);
+		if (any(greaterThan(knobs, vec3(0.0)))) {
 			vec3 pane_lab = linear_to_lab(fallback_pane);
 			pane_lab.x += (draw(pane_seed, 13.0) - 0.5) * 2.0 * pane_l_jitter;
 			pane_lab.z += (draw(pane_seed, 14.0) - 0.5) * 2.0 * pane_b_jitter;
@@ -577,10 +486,6 @@ void vertex() {
 				vec3 building_lab = linear_to_lab(vertex_srgb_to_linear(COLOR.rgb));
 				pane_lab.yz = mix(pane_lab.yz, building_lab.yz, pane_hue_pull);
 			}
-			// After the pull, so the final chroma is scaled whatever produced
-			// it (`Q46`). At 0.0 the multiplier is exactly 1.0, which keeps
-			// the parked look provable through this widened guard.
-			pane_lab.yz *= 1.0 - pane_mute;
 			fallback_pane = lab_to_linear(pane_lab);
 		}
 	}
@@ -678,61 +583,22 @@ void fragment() {
 			// one wallpapered surface.
 			// ⚠️ **Two questions, and they are not the same question** (`Q43`).
 			// `fenestrated` is geometry: whether this wall has openings at all.
-			// `glazed` is materiality: whether those openings are glass — and it is
-			// the reader's axis, defined in `tools/facade_grammar.py` as whether
-			// glazing *dominates* the façade area. `punched` is defined there as
-			// openings cut into a dominant solid wall, so `(glazed=false, punched)`
-			// is the coherent pair `building_verdicts` is right to keep. One float
+			// `glazed` is materiality: whether those openings are glass. One float
 			// doing both jobs is what zeroed the grid on 39.3% of the city's wall
 			// vertices — every punched building, by construction rather than by
 			// accident — with the punched treatment below written, shipped, and
 			// never having drawn a pixel.
 			//
-			// The hash cannot tell the two apart and does not need to: one draw
-			// answers both, exactly as it did before the split.
-			// The survey gate, hoisted above the draws (`Q46`): the quiet tier
-			// conditions the hash itself, so refusal has to be known before the
-			// first draw. Eligibility is the grammar's own refusal state, never
-			// geometry (`Q34`) — and `blank` is committed, so the one verdict
-			// that denies openings can never land here.
-			bool survey_on = survey_apply > 0.5;
-			bool refused_quiet = survey_on && survey_state.z < 0.5;
-
-			float glazed = step(
-				mix(solid_share, 1.0, refused_quiet ? quiet_solid : 0.0),
-				draw(seed, 1.0));
+			// ⚠️ **The two are IDENTICAL today and deliberately still two names.**
+			// Only the survey override ever drove them apart, and `Q102` removed
+			// it — but the split is `Q43`'s fix for a defect in the *hash* path,
+			// not an artefact of the survey, so collapsing them to one float
+			// re-opens it. A future materiality source assigns `glazed` here and
+			// leaves `fenestrated` alone; that is the seam this keeps open.
+			float glazed = step(solid_share, draw(seed, 1.0));
 			float fenestrated = glazed;
-			// A shopfront needs positive evidence (`Q46`): where the grammar
-			// refused, `quiet_shopfront` shrinks the draw — at 1.0 to never,
-			// since `draw` never reaches 1.0.
-			float has_shop = step(
-				mix(1.0 - shopfront_share, 1.0, refused_quiet ? quiet_shopfront : 0.0),
-				draw(seed, 10.0));
+			float has_shop = step(1.0 - shopfront_share, draw(seed, 10.0));
 			bool accented = draw(seed, 2.0) < accent_share;
-
-			// The survey overrides, applied *upstream* of the guard below on
-			// purpose: the reader's verdict replaces the hash draw where one was
-			// committed (`Q41`), and everything downstream — the guard included —
-			// reads the overridden value.
-			if (survey_on && survey_state.x > 0.5) {
-				glazed = survey_state.x > 1.5 ? 1.0 : 0.0;
-				// ⚠️ A committed `glazed` is positive evidence that openings exist;
-				// a committed *un*glazed is not evidence that they do not, because it
-				// says only that glazing does not dominate. So this axis may raise
-				// `fenestrated` and never lower it — the grammar is the one allowed
-				// to deny.
-				fenestrated = max(fenestrated, glazed);
-			}
-			// A surveyed `blank` wall is solid whatever the glazed axis refused, and
-			// `blank` is the only verdict that denies openings. Applied after the
-			// glazed override so it wins; the merge nulls a glazed-true blank, so the
-			// two cannot fight a committed verdict. Where the grammar *refused*,
-			// `fenestrated` keeps the hash: nothing the reader answers says "this
-			// wall is blank" except the grammar, and a refusal must not silently
-			// acquire a verdict the reader never gave.
-			if (survey_on && survey_state.z > 0.5) {
-				fenestrated = abs(survey_state.z - SURVEY_BLANK) < 0.5 ? 0.0 : 1.0;
-			}
 
 			// ⚠️ **Every element below is drawn *into* the albedo, so a tuning that
 			// zeroes all of them leaves a no-op that still runs.** `city_facade.tres`
@@ -751,18 +617,12 @@ void fragment() {
 			// invariant rather than an oversight — since `Q43` it reaches the albedo
 			// only through the pane material, which is multiplied by a mask that
 			// requires `fenestrated`, so `glazed > 0.5` with `fenestrated < 0.5`
-			// draws nothing. The survey overrides need no term either, and for the
-			// same reason — they are applied *above*, so these are already the
-			// overridden values, and the surveyed tint reaches albedo only through
-			// `opening_mask`. `unglazed_glassy` (`Q44`) is absent on `glazed`'s
-			// exact rule: it moves what an opening is made of, and an opening needs
-			// `fenestrated` or `has_shop` before it exists. The `quiet_*` five
-			// (`Q46`) earn no term either: each is subtractive or redirective —
-			// they lower `has_shop`, redirect `treatment`, floor `pier`, or
-			// recolour `fallback_pane`, which reaches albedo only through
-			// `opening_mask` — so none can reach the albedo while all five of
-			// these are off. At `survey_apply = 0.0` the predicate, and the
-			// parked look it guards, are byte-identical to schema 5.
+			// draws nothing. ⚠️ That state is unreachable while the two are equal
+			// (`Q102`); it is the invariant a materiality source would rely on,
+			// kept stated so `glazed` never acquires a term here by default.
+			// `unglazed_glassy` (`Q44`) is absent on `glazed`'s exact rule: it
+			// moves what an opening is made of, and an opening needs
+			// `fenestrated` or `has_shop` before it exists.
 			bool draws_detail = fenestrated > 0.5
 				|| has_shop > 0.5
 				|| accented
@@ -793,10 +653,7 @@ void fragment() {
 
 				// Which grammar this building is built in. One grid, four sets of
 				// ratios: 0 ribbon (the default), 1 fin, 2 curtain, 3 punched.
-				// Hashed by default; the reader's verdict replaces the draw where
-				// one was committed (`Q41`). `mixed` takes the ribbon — "two or
-				// more each covering a substantial share" names no single grammar
-				// to draw — and `blank` was already handled through `fenestrated`.
+				// Hashed.
 				float kind = draw(seed, 5.0);
 				float treatment = 0.0;
 				if (kind < fin_share) {
@@ -806,42 +663,19 @@ void fragment() {
 				} else if (kind < fin_share + curtain_share + punched_share) {
 					treatment = 3.0;
 				}
-				// `Q46`: a hash-drawn curtain, fin or ribbon asserts a
-				// confidently glazed skin the survey never committed.
-				// `quiet_clamp` of refused stock falls to punched instead; the
-				// committed override below rewrites `treatment` unconditionally,
-				// so this touches only what refusal left to the hash. A
-				// committed `glazed` without a grammar still clamps: that axis
-				// says how much glass, never which grammar, and a hash curtain
-				// would still assert one.
-				if (refused_quiet && draw(seed, 15.0) < quiet_clamp) {
-					treatment = 3.0;
-				}
-				if (survey_on && survey_state.z > 0.5) {
-					if (abs(survey_state.z - SURVEY_FIN) < 0.5) {
-						treatment = 1.0;
-					} else if (abs(survey_state.z - SURVEY_CURTAIN) < 0.5) {
-						treatment = 2.0;
-					} else if (abs(survey_state.z - SURVEY_PUNCHED) < 0.5) {
-						treatment = 3.0;
-					} else {
-						treatment = 0.0;
-					}
-				}
 				float h_ratio = glass_ratio;
 				float pier = mullion_ratio;
 				float horizontal = 1.0;
 				// ⚠️ **The fin and curtain ratios presume the opening is glass, and
 				// since `Q43` it need not be.** The fin's uncut band and the curtain's
 				// 92% are areas of *glazing* between slender members; handed to a
-				// recess they paint a dark slab rather than windows, on about 2% of
-				// the city's walls — a committed `fin` the survey calls unglazed
-				// (0.94%), plus whatever the hash draws as fin or curtain on a wall
-				// the reader called unglazed but left the grammar refused. So where
-				// materiality contradicts the grammar, the opening falls back to
+				// recess they paint a dark slab rather than windows. So where
+				// materiality contradicts the treatment, the opening falls back to
 				// punched proportions and the *pier* keeps the building's identity.
-				// (A committed unglazed `curtain` cannot arrive — `building_verdicts`
-				// nulls that pair — but the hashed treatment can.)
+				// ⚠️ **Reachable on the hash alone**, which is why `Q102` did not
+				// retire it with the reader: `glazed` and `treatment` are two
+				// independent draws, so the hash can pick a fin on an unglazed wall
+				// by itself.
 				if (treatment == 1.0) {
 					// Vertical fin: continuous piers the full height, no horizontal
 					// cut. Unglazed, the cut comes back: a fin tower with punched
@@ -858,12 +692,6 @@ void fragment() {
 					// Punched windows in solid wall — the older stock.
 					h_ratio = glass_ratio * 0.62;
 					pier = punched_pier_ratio;
-				}
-				// `Q46`: refused stock takes heavy piers — a floor, not a
-				// replacement, so 0.0 is inert and a committed grammar's own
-				// pier is never lowered by it.
-				if (refused_quiet) {
-					pier = max(pier, quiet_pier_ratio);
 				}
 
 				// --- the podium, which is the only part a driver ever meets ---------
@@ -996,29 +824,11 @@ void fragment() {
 				// floor is up, and at zero the mix below returns `recess_colour`
 				// whatever the pane is. The hashed pick itself moved to `vertex()`
 				// with the `Q45` modulation, so what the branch saves now is the
-				// survey test and the recess mix; the test is the *uniform*, not the
-				// per-fragment `glassy`, so it stays as coherent as `draws_detail`
-				// itself.
+				// recess mix; the test is the *uniform*, not the per-fragment
+				// `glassy`, so it stays as coherent as `draws_detail` itself.
 				vec3 opening_colour = recess_colour;
 				if (glazed > 0.5 || has_shop > 0.5 || unglazed_glassy > 0.0) {
-					vec3 pane_colour = fallback_pane;
-					if (survey_on && survey_state.y > 0.5) {
-						// The measured glass, decoded in `vertex()` — the hash pick
-						// above stays the refusal fallback. It reaches the albedo only
-						// through `glassy`, which is right: `Q40` measured the tint of
-						// *glazing*, and a concrete reveal is not glazing.
-						//
-						// ⚠️ **A punched pane can never take this tint** (`Q44`): on a
-						// punched building the measured dark mode is shadowed reveals
-						// and warm render, not glass, which is why `Q40` conditioned
-						// the measurement on `glazed`. The guard is upheld by the data,
-						// not just this test — the ETL writes a tint only when
-						// `glz = 2`, and `verify_tiles.gd` asserts tint > 0 → glazed —
-						// so the `Q44` floor widening the branch above cannot route it
-						// onto punched stock.
-						pane_colour = survey_pane;
-					}
-					opening_colour = mix(recess_colour, pane_colour, glassy);
+					opening_colour = mix(recess_colour, fallback_pane, glassy);
 				}
 				// At `glassy = 1.0` both of these are algebraically the line they
 				// replaced, which is what keeps a glazed building — and the parked
@@ -1058,23 +868,6 @@ void fragment() {
 	// reads as grey card wherever the sun is not directly on it. `fresnel` is
 	// zero off a facade, so it needs no marker test of its own.
 	albedo = mix(albedo, sky_reflection, fresnel * wall_sky_tint);
-
-	// The triage tint goes over everything, or an attribution could be read off
-	// a wall the shopfront band or sky bounce had already repainted. Facades
-	// only: markers other than facade carry no survey state to attribute. The
-	// `survey_apply` term mirrors every other `survey_state` reader — parked,
-	// there is nothing to attribute.
-	if (survey_debug > 0.0 && survey_apply > 0.5 && is_facade) {
-		vec3 triage;
-		if (survey_state.z >= 0.5) {
-			triage = TRIAGE_COMMITTED;
-		} else if (survey_state.x > 1.5) {
-			triage = TRIAGE_CARVE_OUT;
-		} else {
-			triage = TRIAGE_REFUSED;
-		}
-		albedo = mix(albedo, triage, survey_debug);
-	}
 
 	ALBEDO = albedo;
 	METALLIC = 0.0;

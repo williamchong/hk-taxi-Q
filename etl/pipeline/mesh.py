@@ -77,8 +77,8 @@ def merge(meshes: Sequence[MeshData], *, name: str) -> MeshData:
     mapped = [mesh.uvs is not None for mesh in meshes]
     if any(mapped) and not all(mapped):
         raise ValueError(f"'{name}': cannot merge meshes with and without UVs into one primitive")
-    surveyed = [mesh.uv2 is not None for mesh in meshes]
-    if any(surveyed) and not all(surveyed):
+    has_uv2 = [mesh.uv2 is not None for mesh in meshes]
+    if any(has_uv2) and not all(has_uv2):
         raise ValueError(f"'{name}': cannot merge meshes with and without UV2 into one primitive")
 
     # uint32 rather than the int64 a Python-list cumsum defaults to, which would
@@ -93,7 +93,7 @@ def merge(meshes: Sequence[MeshData], *, name: str) -> MeshData:
         ),
         colours=np.concatenate([mesh.colours for mesh in meshes]) if all(coloured) else None,
         uvs=np.concatenate([mesh.uvs for mesh in meshes]) if all(mapped) else None,
-        uv2=np.concatenate([mesh.uv2 for mesh in meshes]) if all(surveyed) else None,
+        uv2=np.concatenate([mesh.uv2 for mesh in meshes]) if all(has_uv2) else None,
     )
 
 
@@ -384,10 +384,13 @@ def collapse(mesh: MeshData, *, cell_m: float, height_field: bool = False) -> Me
         # third colour along the seam; taking one side's is invisible.
         colours=None if mesh.colours is None else mesh.colours[representative][used],
         uvs=None if mesh.uvs is None else mesh.uvs[representative][used],
-        # UV2 is per-building constant by construction (`facade_uv2`), so a
-        # representative cannot invent a state a source vertex did not carry —
-        # a per-face payload would not survive this pick, which is why the
-        # survey is reduced to one verdict per building before emission.
+        # ⚠️ **A UV2 payload must be constant across whatever this clusters**, or
+        # the representative invents a state no source vertex carried. That is a
+        # rule for every layer that ships the channel, not a property of one:
+        # the tiles' survey payload was reduced to a verdict per *building*
+        # before emission for exactly this reason, and it is why a per-face
+        # payload could never have ridden here. (Those tiles no longer ship a
+        # UV2 at all — `Q102` — but the constraint outlived them.)
         uv2=None if mesh.uv2 is None else mesh.uv2[representative][used],
         texture=mesh.texture,
         material=mesh.material,

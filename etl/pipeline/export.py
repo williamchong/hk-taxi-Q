@@ -86,11 +86,9 @@ CITY_NAME = "city.json"
 # a v4 reader would load a v5 tile happily, ignore the payload, and draw a blank
 # city that reads as a shader bug rather than as a version mismatch. The version
 # gates the asset set, not just the JSON.
-# 6 since `Q40`/`Q41`: every tile ships `TEXCOORD_1` — a packed per-building
+# 6 since `Q40`/`Q41`: every tile shipped `TEXCOORD_1` — a packed per-building
 # facade-survey state in `x` (glazed / tint bin / grammar, 0 = refused → hash)
-# with `y` reserved for `Q42`'s riders. Same rule as 5: a v5 reader would load
-# a v6 tile, ignore the payload, and silently draw the hash city while the
-# bundle claims the survey.
+# with `y` reserved for `Q42`'s riders. Withdrawn again at 20.
 # 7 since `P3-6`: the manifest names `landmarks.json`, and the tiles no longer
 # contain the buildings its heroes replace. The bump is for the *removal*: a
 # v6 reader would load v7 tiles happily and draw holes where the excluded
@@ -170,7 +168,14 @@ CITY_NAME = "city.json"
 # nullable like the seven before it: a city whose estate publishes no utility
 # point layer ships none, and so does one that publishes it and finds no kerb to
 # stand a column on.
-CITY_SCHEMA = 19
+# 20 since `Q102`: the tiles no longer ship `TEXCOORD_1` at all. The vision
+# reader that filled it was withdrawn on cost, and with it the only producer of
+# a committed verdict, so the channel could only ever have carried the refusal
+# sentinel. The bump is for the *removal*, on `P3-6`'s precedent at 7: a v19
+# reader loads v20 tiles happily and reads `UV2` as zero — which is a legal
+# code meaning "refused", so the wrong answer is silent and total, a whole city
+# claiming a survey it does not carry.
+CITY_SCHEMA = 20
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,

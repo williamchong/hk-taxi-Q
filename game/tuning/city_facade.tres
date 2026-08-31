@@ -3,7 +3,7 @@
 ; `tools/generated_scene_import.gd` maps the ETL's `city_facade` material name to
 ; this path and only this path, so this file *is* the switch. All three of
 ; `Q26`'s looks now have a file, and swapping is a copy and a reimport — never a
-; rebuild, because all three read the same `TEXCOORD_0`/`TEXCOORD_1` payload:
+; rebuild, because all three read the same `TEXCOORD_0` payload:
 ;
 ;   candidate `C`  this file             flat per-building colour, elements off
 ;   candidate `A‴` city_facade_elements  the clean look with its elements on
@@ -14,8 +14,8 @@
 ; judged under is tuned in the same directory. Loaded as **one** resource for all
 ; 66 tiles: retuning the city is this file.
 ;
-; ✅ **This file ships candidate `C`: accurate massing, flat per-building colour,
-; no facade fabric and no surveyed verdicts.** The user's call, 2026-08-16, to
+; ✅ **This file ships candidate `C`: accurate massing, flat per-building colour
+; and no facade fabric.** The user's call, 2026-08-16, to
 ; continue development on flat colour, and **`Q26`'s closing verdict on
 ; 2026-08-17** — `C` is the look that ships, not merely the one being developed
 ; against. It is the same configuration that shipped from 2026-08-06 to
@@ -30,37 +30,44 @@
 ; closed before running — is now what can **reopen** `Q26` rather than what
 ; decides it.
 ;
-; **Eight values separate this from `A‴`**, and `diff` against
-; `city_facade_elements.tres` should show exactly those eight lines:
+; **Seven values separate this from `A‴`**, and `diff` against
+; `city_facade_elements.tres` should show exactly those seven lines:
 ;
 ;   solid_share 1.0 · glass_ratio 0.0 · shopfront_share 0.0 · accent_share 0.0
 ;   cornice_darkness 0.0 · floor_line_darkness 0.0 · mullion_darkness 0.0
-;   survey_apply 0.0
 ;
-; ⚠️ **It takes all eight, and `solid_share` is a gate rather than a zero.**
+; ⚠️ **It takes all seven, and `solid_share` is a gate rather than a zero.**
 ; `glazed = step(solid_share, …)` in the shader, so at 1.0 no building is ever
 ; glazed and the curtain-wall, fin and punched types stop drawing — but
 ; shopfronts, cornices, floor lines and mullions draw *outside* that gate, and
-; with only the gate closed 86% of the frame still differed. The five `quiet_*`
-; values need no ninth zero: all of them sit behind `survey_apply`.
+; with only the gate closed 86% of the frame still differed.
 ;
-; ⚠️ **`survey_apply = 0.0` is the surveyed half, and it must not move alone.**
-; Since schema 6 every tile carries the measured facade verdicts in `TEXCOORD_1`
-; — reader-glazed, glass tint, grammar (`Q40`/`Q41`). Raising it against the
-; parked fabric here draws a half-look, which is what `A′` was: a defect, not a
-; look. Measured 2026-08-16: at 0.0 the payload costs the frame nothing —
-; today's `C` responds on **0.1%** of the `street` audit frame against the
-; archived pre-survey `C`, whole-frame `L*` unchanged.
+; ⚠️ **It was eight until `Q102`.** The eighth was `survey_apply 0.0`, the gate
+; on the vision reader's per-building verdicts, and the pair's headers argued at
+; length that it must never move alone. The reader was withdrawn on cost and the
+; `TEXCOORD_1` payload with it, so both files lost that line and the five
+; `quiet_*` values behind it. `A‴` did move, and its header records what it lost.
 ;
-; ⚠️ **This is "the city without the reader", not "the city without
-; measurement".** The per-building hue is `COLOR_0`, which the ETL picks from the
-; `materials:` table in `etl/config/cities/hong_kong.yaml`, and `Q37`'s glazing
-; dip/tint survey is local compute upstream of it. Neither is switched off here.
+; ⚠️ **`C` moved by compiler precision only, and that was measured rather than
+; argued.** The gate was already closed here, so the removal could not reach a
+; pixel by any path — and it did anyway: A/B at both `Q27` cameras puts **1.59%**
+; (`street`) and **1.61%** (`skyline`) of pixels **2 of 255** apart, whole-frame
+; `L*` +0.0003. Tile geometry is byte-identical and the sky and road do not move
+; at all, so it is interpolator allocation, not a look. 🔴 **Do not certify this
+; with the 0.1% figure from 2026-08-16** — that measured what the *payload* cost
+; the frame at schema 6, a different change, and borrowing it here would be
+; asserting a number nobody took of this one. `DECISIONS.md` `Q102`.
 ;
-; The dozens of uniforms the eight make inert — `bay_width_m`, `glass_colour`,
-; `pane_bow`, the fresnel and `quiet_*` terms — are left at their `A‴` values on
-; purpose. They are what makes the two files diffable, and they are the state a
-; future art idea starts from, not dead weight to be cleaned up.
+; ⚠️ **This was "the city without the reader" before there was no reader.** The
+; per-building hue is `COLOR_0`, which the ETL picks from the `materials:` table
+; in `etl/config/hong_kong.yaml`, and `Q37`'s glazing dip/tint survey is local
+; compute upstream of it. Neither was switched off here, and neither went with
+; the reader.
+;
+; The dozens of uniforms the seven make inert — `bay_width_m`, `glass_colour`,
+; `pane_bow` and the fresnel terms — are left at their `A‴` values on purpose.
+; They are what makes the two files diffable, and they are the state a future
+; art idea starts from, not dead weight to be cleaned up.
 ;
 ; ⚠️ **`base_wash` is 0.0 because the palette lives in the city config**, which
 ; is where the shader's header says it belongs. The `materials:` table in
@@ -151,10 +158,3 @@ shader_parameter/fade_end_m = 244.0
 shader_parameter/lit_window_colour = Color(1, 0.85, 0.55, 1)
 shader_parameter/lit_window_share = 0.0
 shader_parameter/emission_strength = 0.0
-shader_parameter/survey_apply = 0.0
-shader_parameter/glass_astar = -2.0
-shader_parameter/quiet_shopfront = 1.0
-shader_parameter/quiet_clamp = 1.0
-shader_parameter/quiet_pier_ratio = 0.68
-shader_parameter/quiet_solid = 0.55
-shader_parameter/quiet_pane_mute = 0.5

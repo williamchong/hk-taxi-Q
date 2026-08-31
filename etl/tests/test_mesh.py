@@ -91,11 +91,12 @@ class TestMerge:
                 name="tile",
             )
 
-    def test_uv2_merges_and_half_surveyed_is_rejected(self) -> None:
-        """Schema 6's channel obeys the same all-or-none rule as colours and
-        UVs: a tile half without UV2 would decode the missing half as state 0 —
-        which is a *legal* value (refused), so nothing downstream could tell
-        the defect from a refusal. Only this guard can."""
+    def test_uv2_merges_and_a_half_carrying_half_is_rejected(self) -> None:
+        """A UV2 payload obeys the same all-or-none rule as colours and UVs: a
+        primitive half without the channel decodes the missing half as code 0,
+        and every codec that ships one gives 0 a meaning — so nothing
+        downstream could tell the defect from that meaning. Only this guard
+        can. `roads.glb` and `tram.glb` are the layers this protects today."""
         first, second = box(), box(origin=(100, 0, 0))
         merged = merge(
             [
@@ -211,11 +212,12 @@ class TestCollapseDecimation:
         assert set(map(tuple, decimated.colours)) == {(200, 190, 180, 255)}
 
     def test_uv2_takes_a_representative_and_invents_no_state(self) -> None:
-        """Two buildings, two distinct constant codes, clustered coarsely
-        enough that cells span both: every surviving value must be one of the
-        two inputs. A mean would mint a third code that decodes as some other
-        building's verdicts — the failure the representative pick exists to
-        prevent, and the reason the payload is per-building constant at all."""
+        """Two objects, two distinct constant codes, clustered coarsely enough
+        that cells span both: every surviving value must be one of the two
+        inputs. A mean would mint a third code that decodes as something
+        neither object carried — the failure the representative pick exists to
+        prevent, and the reason a UV2 payload must be constant across whatever
+        this clusters."""
         first, second = box(), box(origin=(2.0, 0, 0))
         pair = merge(
             [

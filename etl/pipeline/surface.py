@@ -134,9 +134,16 @@ SURFACE_MATERIAL = "road_markings"
 # `tools/verify_road_surface.gd`, and `docs/ARCHITECTURE.md` is the tiebreak.
 # They do not belong in the city yaml: a codec has no per-city meaning.
 #
-# The layout follows `buildings.facade_state` exactly, for the same reasons —
-# one non-negative integer per vertex, every field's 0 meaning "absent", and the
-# whole code exact in float32 so a consumer can decode it with `floor(x + 0.5)`.
+# The layout followed the tiles' `facade_state` codec, for the same reasons —
+# one non-negative integer per vertex and the whole code exact in float32, so a
+# consumer decodes it with `floor(x + 0.5)`. ⚠️ That codec is gone with the
+# vision reader (`Q102`), which leaves this one the surviving example.
+#
+# ⚠️ **The "every field's 0 means absent" half did NOT carry over, and the
+# difference is load-bearing.** It held for every field of `facade_state`; here
+# it holds for `direction`, `bus_lane`, `tram`, `offside_kerb`, `centre` and
+# both kerb fields — but `class` 0 is `MARKING_CLASS_CARRIAGEWAY`, a real value
+# and the one the shader cannot do without, and `lanes` refuses 0 outright.
 #
 #   code = surface_class + 4*lanes + 64*direction + 256*bus_lane + 512*tram
 #        + 1024*offside_kerb + 2048*centre + 131072*kerb_near + 524288*kerb_off
@@ -614,7 +621,7 @@ class _Marking(NamedTuple):
 
         `_rgba`'s trick, for `_rgba`'s reason — the value is constant across the
         piece, and `_Builder.build` materialises it in the one `vstack` that
-        needs it. `buildings.facade_uv2` does the same for the tiles' channel.
+        needs it.
         """
         return np.broadcast_to(np.array(self, dtype=np.float32), (count, 2))
 
