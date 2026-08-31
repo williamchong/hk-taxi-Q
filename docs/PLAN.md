@@ -599,7 +599,7 @@ before it.
 
 | ID | Deliverable | Accept |
 |---|---|---|
-| `P3-28` ✅ **built 2026-08-31** | **The carve** — a `landmarks.py`-shaped stage cuts the `INFRASTRUCTURE` objects back to the surveyed span on `e233`, `e55`, `e485`, `e788`, `e398`, `e256`, `e327`. The prism is the published centreline × the surveyed `width_m` (**never** the drawn floor — cutting at the 10.24/12.48 m floor removes published structure on an invented width's authority) × a config height band; cut faces are capped so the mass still reads solid — the cap *is* the retaining wall. Runs after `roads` in `STAGES`; touched tiles re-emitted, untouched tiles byte-identical; with the config block absent the whole bundle is byte-identical (`Q95`'s validation move) | `carriageway_occupancy.py` clears the seven or names the measured residual per edge; the `q19s` cameras re-shot (×2, `cmp`) show carriageway where the concrete stood; the full battery pasted — `carriageway_occupancy`, `deck_error`, `overhang`, `ground_clearance`, `clearance_reconcile`, `narrowing`; per-edge `carved_area_m2` published over refusals as well as keeps (`Q58`); carved-edge set equality both ways (`landmarks.py`'s `replaced` pattern); the tile **collider** is the carved mesh, verified rather than assumed |
+| `P3-28` ✅ **built 2026-08-31, extended to `e99` 2026-09-01** | **The carve** — a `landmarks.py`-shaped stage cuts the `INFRASTRUCTURE` objects back to the surveyed span on `e233`, `e55`, `e485`, `e788`, `e398`, `e256`, `e327`. The prism is the published centreline × the surveyed `width_m` (**never** the drawn floor — cutting at the 10.24/12.48 m floor removes published structure on an invented width's authority) × a config height band; cut faces are capped so the mass still reads solid — the cap *is* the retaining wall. Runs after `roads` in `STAGES`; touched tiles re-emitted, untouched tiles byte-identical; with the config block absent the whole bundle is byte-identical (`Q95`'s validation move) | `carriageway_occupancy.py` clears the seven or names the measured residual per edge; the `q19s` cameras re-shot (×2, `cmp`) show carriageway where the concrete stood; the full battery pasted — `carriageway_occupancy`, `deck_error`, `overhang`, `ground_clearance`, `clearance_reconcile`, `narrowing`; per-edge `carved_area_m2` published over refusals as well as keeps (`Q58`); carved-edge set equality both ways (`landmarks.py`'s `replaced` pattern); the tile **collider** is the carved mesh, verified rather than assumed |
 | `P3-29` ✅ **built 2026-09-01** | **The fence and its dressing, shipped together** — a car-bar predicate beside `is_passable` (the bar is data, `clearance.car_width_m`), consumed by the graph and the overlay; and authored barrier props (committed, CC BY-SA) **with colliders** at the mouths of the post-carve fence set | ✅ Fence set computed from the post-carve bundle, never hand-kept: **14** drivable level-0 edges, 15 mouths, 90 units, 0 ends behind another fence. ✅ `is_passable` unmoved at 3.20 m, and the mutation check proves the new predicate is not it — re-pointing `fits_car` at the lane fires both the per-edge disagreement and the merged-bars detector. ✅ Barrier legible before it is hit, A/B at a fixed camera shot twice and `cmp`'d. 🔴 **"Catches `e99`" is AMENDED, not met** — see below |
 
 - **Deps:** `P3-28` before `P3-29`; neither blocks on `P0-3b`.
@@ -619,6 +619,14 @@ before it.
   faces are the mitigation and they are load-bearing, not cosmetic.
 - ⚠️ The barrier is the physical stop; the predicate only keeps the *game* from sending anyone
   there. A fence with no collider is the invisible refusal `Q19`'s record forbids, one layer up.
+- ✅ **`e99` was CARVED on 2026-09-01, after two further drives reported it stranding the car.**
+  It is the carve block's one exception: its `width_source` is `authored`, so its prism is cut at
+  an invented 6.40 m, which the block otherwise refuses. Taken because no width bar reaches the
+  defect — the obstruction is **interior**, with drivable road on both sides, and every rule that
+  catches it fences 59-67 edges including YEE WO STREET — while the class is certain (100%
+  `INFRASTRUCTURE`) and the containment measured (116 of 119 hits inside the authored width).
+  The carve **moves** the wall to the carriageway edge rather than deleting it, which is why the
+  corridor barely moves (4.50 → 5.00 m) while the defect goes. `DECISIONS.md` `Q19`.
 - 🔴 **The vertical term this task was given was BUILT, MEASURED and WITHDRAWN (2026-09-01).**
   It adds 3 edges region-wide — `e411`, `e522`, `e520`, all climbing ramps whose whole
   cross-section reads stepped because the ribbon disagrees with the deck it rests on by

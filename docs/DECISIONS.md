@@ -1962,6 +1962,76 @@ precedent inverted.
 before this work, which is also what proves the withdrawn band left nothing behind. `pytest` 1755
 (from 1713), `check.sh` green.
 
+
+### ✅ `e99` is carved, and the licence rule is knowingly bent for it — 2026-09-01 (user)
+
+The section above recorded `e99` as a widening defect and declined to fence it. The user then drove
+it twice more and reported **"car stuck here if entered in bad angle"**. That is the same
+session-ender `Q19` exists to remove, so the decision was reopened and every option priced.
+
+🔴 **No width bar can reach this defect, and that is measured rather than argued.** The obstruction
+is **interior** — drivable road on both sides — so the quantity that traps a car is the topology and
+not the gap:
+
+| rule — "how wide is the gap at…" | edges fenced | `e99` |
+|---|---|---|
+| widest gap anywhere (shipped) | **14** | out, 4.50 m |
+| lane centre on the **drawn** ribbon | 59-67 | **IN**, 0.00 m |
+| lane centre on the **surveyed** carriageway | 41-42 | out, 4.50 m |
+| widest run inside the surveyed carriageway | 18 | out, 4.50 m |
+
+⚠️ **The rules that catch it are the ones that test the widening rim, and they fence major roads.**
+`lane_offset` computed on the drawn 10.24 m ribbon puts the probe 2.56 m off centre, out where the
+widening meets a building: `e25` YEE WO STREET reads `......XXXXXXX....` there and 0.00 m in-lane
+while its real 6.40 m carriageway is clear. Computed on the surveyed width the probe lands in real
+road — and `e99` passes, because at its own lane centre it *is* clear at 4.50 m. The car beaches by
+leaving the lane centre into a 2.0 m pocket beyond a structure line 3.0 m off centre.
+
+✅ **What made the carve available is the class, and it was checked before anything was priced**:
+**119** bumper-band hits over `e99`'s 2,532 cross-section samples, **100% `INFRASTRUCTURE`**, no
+`BUILDING` at all, and **116 of the 119** already inside the authored 6.40 m.
+
+**The cut.** 24 stations, **1,249** triangles, **562.7 m²**, **1,318.9 m³**, **72.0 m** of retaining
+wall, **0** soffit-bounded. `tiles_written` 14 → **16** — the new tier is **`t_01_02`**, the tile this
+entry recorded the stranded car in and noted the carve "never opened". `facing_away` **0**. Bundle
+54.1 → **54.2 MB**. The other seven rows are byte-identical.
+
+🔴 **The carve MOVES the wall rather than deleting it, and that is why it works where a bar cannot.**
+
+```
+before   ........XX..................XX...........   walls interior, at -3.0 / +2.0 m
+after    ....XXXX........................XX.......   walls at the cut face, -4.0..-3.0 / +3.0..+3.3
+```
+
+The cut face is built at the prism boundary, so an obstacle a car can pass either side of becomes a
+**continuous kerb** at the carriageway edge with the widening rim walled off beyond it. `e99` leaves
+the interior-obstruction set (1,417 → 1,401 cross-sections region-wide) and the grader's starved
+table entirely, while its corridor barely moves — **4.50 → 5.00 m**. ⚠️ **A width instrument sees
+almost nothing happen here**; that is the signature of a topology fix and the reason this defect
+survived every counter in this entry.
+
+🔴 **The debit: `e99`'s `width_source` is `authored`, so its prism is cut at an invented 6.40 m.**
+That is what this section called *"the one thing this section forbids"* and it is bent knowingly, for
+one edge, on the grounds that the *class* and the *containment* are both measured even though the
+*width* is not. ⚠️ **It does not generalise**: `e125`, `e207` and `e781` stay `P3-29`'s fence, and
+`carve.json` publishes `width_source` per row so a reviewer reads `authored` on this row against
+`one_way_uncrossed` on the other seven. The config carries the argument beside the id.
+
+**Battery.** `carriageway_occupancy` **22 → 21** starved, `INFRASTRUCTURE` at level 0 **1.009% →
+1.004%** with `BUILDING` **unchanged at 1.204%** (the cut stayed in its class) · `deck_error` pass ·
+`overhang` pass · `ground_clearance` **FAIL 89, unchanged and pre-existing** (`Q24`) · `narrowing`
+baseline reproduces all 737, **21 ever below one lane, unchanged** — `e99` was never in that count,
+which is the same fact the pricing table records · `clearance_reconcile` **ratchet moved 22 → 21 and
+5 → 4, on the grader's side only**; `EXPECT_PIPELINE` stays 19 because `e99` never reached it.
+Set equality both ways over 8 edges, `buildings.json`'s marker agrees, LOD0 is `t_01_02-col` with
+2,946 `INFRASTRUCTURE` triangles. `check.sh` green, 1,759 tests.
+
+**The evidence is a frame.** `build/driver/q19_e99_after_{a,b}`, `city_preview.tscn
+--camera=266.5,7.4,412.0 --look=259,4.6,393 --debug-view=off --hud=off`, shot twice and
+`cmp`-identical: open carriageway with a kerb line along the left where the wall now stands.
+⚠️ **Still owed: the drive.** A frame cannot answer "does it strand the car at a bad angle", which is
+the report that reopened this, and only driving it can.
+
 **See.** `Q51` for what routes around this · `Q20` · `Q22` for the interchange's family · `Q23` for the suppression this extends and for the narrowing it deliberately refused · `Q24` · `P2-5` · `P3-6` for why the population moved, and for the piers · `Q57` for the mechanism this section is the fourth instance of · `P3-9a′` for the round that re-prioritised this
 
 ## `Q20` — Deck heights are sampled from `INFRASTRUCTURE`

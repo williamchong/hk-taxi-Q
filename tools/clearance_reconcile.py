@@ -88,17 +88,26 @@ log = logging.getLogger(__name__)
 # outright and narrowed the rest, so both counts fell by exactly the edges it
 # cut — the ratchet reporting the work, rather than a bar retuned to fit it,
 # which is the distinction the comment above exists to protect.
+#
+# ✅ **Moved again by `Q19`'s `e99` carve (2026-09-01), and only on the grader's
+# side.** `EXPECT_PIPELINE` does **not** move: `e99` read 4.50 m at the
+# pipeline's 0.5 m plan cell before the cut, so it was never in that count —
+# which is the whole reason a width bar could not reach the defect that stranded
+# the car there. The grader condemned it at 2.93 m on its 1.0 m cell and now
+# does not, so `EXPECT_GRADER` falls 22 → 21 and the disagreement 5 → 4 by
+# exactly that one edge. Both halves are `Q51`'s gap being read, not closed.
 EXPECT_PIPELINE = 19
-EXPECT_GRADER = 22
-# Edges the two disagree about: 4 the grader condemns and the pipeline clears
-# (`e99`, `e207`, `e485`, `e781`), plus `e702` the other way. ⚠️ **A single number
+EXPECT_GRADER = 21
+# Edges the two disagree about: 3 the grader condemns and the pipeline clears
+# (`e207`, `e485`, `e781`), plus `e702` the other way. ⚠️ `e99` left this list at
+# its own carve — it was the largest of the grader-only gaps at 1.57 m. ⚠️ **A single number
 # here hides a swap** — `Q51` first said "five" where the split was 6 + 1, so read
 # the per-side lists in the report rather than this total.
 # ⚠️ `e485` joined the grader-only side at `P3-28`: the carve took its corridor to
 # 2.90 m, which the pipeline reads as clear at its 0.5 m plan cell and the grader
 # still condemns at its 1.0 m one. That is `Q51`'s gap doing exactly what `Q51`
 # says it does, on one more edge.
-EXPECT_DISAGREEMENT = 5
+EXPECT_DISAGREEMENT = 4
 
 # Plan cells the sweep bins the grader's occupiers at: the grader's own shipped
 # cell first, then the pipeline's plan cell and its across resolution — so the

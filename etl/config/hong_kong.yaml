@@ -2938,17 +2938,44 @@ roads:
 # ramps, and a car meets it as an invisible wall. Q19 split the blocked
 # population on the licence boundary and called this half.
 #
-# 🔴 These are the SEVEN edges a publisher surveyed a width for — every one
+# 🔴 SEVEN of the eight are edges a publisher surveyed a width for — every one
 # carries `width_source: one_way_uncrossed` with a named `width_publisher`.
-# The four nobody licensed (e99, e125, e207, e781) are P3-29's fence, never
-# this stage's: carving them would cut published structure back to the
-# authored 6.40 m, which is an invented width and Q54 inverted.
 # ⚠️ e222 is in Q19's priced table at 0.00 m and is deliberately NOT here — its
 # wall stands in the drawn fringe rather than the published carriageway, so the
 # carve cannot reach it and it falls to the fence side.
-# ⚠️ Ids, not names: five of the seven are called WAN CHAI INTERCHANGE.
+# ⚠️ Ids, not names: five of them are called WAN CHAI INTERCHANGE.
+#
+# 🔴 **e99 is the EIGHTH and it is the exception, added 2026-09-01 on the user's
+# call after a drive stranded the car there.** Its `width_source` is `authored`,
+# so its prism is cut at an invented 6.40 m — which is exactly what the rest of
+# this block refuses, and what Q19 called "the one thing this section forbids".
+# It is taken anyway, for reasons that are measured rather than argued:
+#
+#   * what stands in it is **100% INFRASTRUCTURE** — 119 band hits, no BUILDING
+#     at all — so the class the carve is licensed to cut is certain here;
+#   * **116 of those 119** already lie inside the authored 6.40 m, so the width
+#     is not doing the work of deciding what to remove;
+#   * every alternative was priced and refused. A vertical bar re-catches Q23's
+#     own suppression (P3-29). A lane-centre bar on the drawn ribbon fences
+#     59-67 edges including YEE WO STREET; on the surveyed width it fences 41
+#     and misses e99, because at e99's lane centre the road IS clear at 4.50 m.
+#     No width bar reaches this defect: the obstruction is INTERIOR, with
+#     drivable road on both sides, so the quantity that traps a car is the
+#     topology and not the gap.
+#
+# ⚠️ **What the carve actually does here is move the wall, not delete it**: the
+# cut face is built at the prism boundary, so an obstacle you can pass either
+# side of becomes a continuous kerb at the carriageway edge with the widening
+# rim walled off beyond it. That is why the corridor barely moves (4.50 → 5.00 m)
+# while the defect goes.
+# ⚠️ **The debit is real and stays visible**: `carve.json` publishes
+# `width_source` per row, so a reviewer sees `authored` on this row and
+# `one_way_uncrossed` on the other seven. Do not generalise it — the remaining
+# unlicensed edges (e125, e207, e781) are P3-29's fence, and e99 earned its
+# exception by having its class and its containment measured, not by being
+# awkward. Numbers in DECISIONS.md Q19.
 carve:
-  edges: [233, 55, 485, 788, 398, 256, 327]
+  edges: [233, 55, 485, 788, 398, 256, 327, 99]
 
   # How finely the ribbon is walked; the prism is rebuilt per station, so this
   # is how closely the cut follows a ramp's curve. Half `carriageway`'s own 4 m
