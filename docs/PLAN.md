@@ -600,7 +600,7 @@ before it.
 | ID | Deliverable | Accept |
 |---|---|---|
 | `P3-28` ✅ **built 2026-08-31** | **The carve** — a `landmarks.py`-shaped stage cuts the `INFRASTRUCTURE` objects back to the surveyed span on `e233`, `e55`, `e485`, `e788`, `e398`, `e256`, `e327`. The prism is the published centreline × the surveyed `width_m` (**never** the drawn floor — cutting at the 10.24/12.48 m floor removes published structure on an invented width's authority) × a config height band; cut faces are capped so the mass still reads solid — the cap *is* the retaining wall. Runs after `roads` in `STAGES`; touched tiles re-emitted, untouched tiles byte-identical; with the config block absent the whole bundle is byte-identical (`Q95`'s validation move) | `carriageway_occupancy.py` clears the seven or names the measured residual per edge; the `q19s` cameras re-shot (×2, `cmp`) show carriageway where the concrete stood; the full battery pasted — `carriageway_occupancy`, `deck_error`, `overhang`, `ground_clearance`, `clearance_reconcile`, `narrowing`; per-edge `carved_area_m2` published over refusals as well as keeps (`Q58`); carved-edge set equality both ways (`landmarks.py`'s `replaced` pattern); the tile **collider** is the carved mesh, verified rather than assumed |
-| `P3-29` | **The fence and its dressing, shipped together** — a car-bar predicate beside `is_passable` (the bar is data, not a code constant — hard rule 4), consumed by spawn, fares and street naming; and authored barrier props (committed, CC BY-SA, the authored lane) **with colliders** at the mouths of the post-carve fence set, `e222`/`e256` barred at the pocket mouth | The fence set is computed from the post-carve bundle, never hand-kept; `is_passable` unmoved at 3.20 m and a mutation check proves the new predicate is not it (re-pointing it at 1.80 m sends traffic down `e207`'s 1.95 m); a barrier is legible before it is hit at driving speed from every approach — A/B frames at fixed cameras, shot twice and `cmp`'d; driving each fenced approach ends at a visible barrier, not an invisible wall |
+| `P3-29` | **The fence and its dressing, shipped together** — a car-bar predicate beside `is_passable`, **lateral AND vertical** (`Q19`, 2026-09-01) (the bar is data, not a code constant — hard rule 4), consumed by spawn, fares and street naming; and authored barrier props (committed, CC BY-SA, the authored lane) **with colliders** at the mouths of the post-carve fence set, `e222`/`e256` barred at the pocket mouth | The fence set is computed from the post-carve bundle, never hand-kept, and **catches `e99`** — a set computed on the lateral corridor alone is one edge, because three of the four pass the car bar; `is_passable` unmoved at 3.20 m and a mutation check proves the new predicate is not it (re-pointing it at 1.80 m sends traffic down `e207`'s 1.95 m); a barrier is legible before it is hit at driving speed from every approach — A/B frames at fixed cameras, shot twice and `cmp`'d; driving each fenced approach ends at a visible barrier, not an invisible wall |
 
 - **Deps:** `P3-28` before `P3-29`; neither blocks on `P0-3b`.
 - ✅ **`P3-28` shipped, and it did not ship the cap this row specifies.** The estate is not
@@ -619,7 +619,26 @@ before it.
   faces are the mitigation and they are load-bearing, not cosmetic.
 - ⚠️ The barrier is the physical stop; the predicate only keeps the *game* from sending anyone
   there. A fence with no collider is the invisible refusal `Q19`'s record forbids, one layer up.
-- ⚠️ `e207` is exempt from the player fence (it clears the car) and stays `P3-3`'s at the lane bar.
+- 🔴 **The predicate needs a VERTICAL term and the lateral one is not enough — measured from the
+  driving seat, 2026-09-01.** A car stopped on `e99` FLEMING ROAD at a **0.356 m** `INFRASTRUCTURE`
+  ledge, twice `handling.tres`' 0.18 m `suspension_travel_m`: you drive onto it and lose the wheels.
+  `e99` reads **2.93 m** clear and passes every bar the bundle grades it against, because the corridor
+  metric asks *is there a gap wide enough* and this failure is a step, not a gap.
+  🔴 **Three of the four fence edges pass the 1.80 m car bar** — `e99` 2.93, `e207` 1.95, `e781` 1.95,
+  against `e125`'s 0.48 — so a set computed on the corridor is **one edge** and leaves open the one
+  that stranded the car. ⚠️ **Do not answer it with a lower corridor bar**: that fences drivable
+  edges and still misses the ledge. The bar is data, not a constant (hard rule 4).
+- ⚠️ **The vertical read has no instrument yet, and that is the blind band.**
+  `carriageway_occupancy`/`clearance` read `INFRASTRUCTURE` but their bumper band starts at **0.30 m**
+  (`Q23`, so an abutment the road rests on does not read as an obstruction);
+  `tools/ground_clearance.py` uses the right **0.18 m** bar but reads `terrain_class` and only that.
+  A structure step between 0.18 and 0.30 m is seen by neither, on **31 level-0 edges**. Extending
+  `ground_clearance.py` to `structure_class` is the obvious grader and is **not** in this task —
+  it would fail on day one and owes its own acceptance.
+- ⚠️ `e207` is exempt from the player fence (it clears the car **laterally**) and stays `P3-3`'s at
+  the lane bar — ⚠️ **that exemption is now weaker than when it was written**, because it rests on
+  exactly the lateral judgement this task has to stop trusting alone. It owes a vertical read before
+  it is left open.
 
 ### Build `B1` — "One fare" — **runs second**
 

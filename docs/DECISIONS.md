@@ -46,7 +46,7 @@ wins.
 | `Q16` | LOD0 does not ship | ✅ Closed |
 | `Q17` | CI runs `tools/check.sh` and cannot check the generated assets | ✅ Closed |
 | `Q18` | Ground colour sits under a chroma knee; the land-cover classifier is refused | ✅ Closed |
-| `Q19` | 5.17% of drawn carriageway has solid geometry standing in it at bumper height | 🟡 Half answered — routing closed as `Q51`. **Narrowing refused on the whole population**: no edge clears at any factor to the 1.3x floor and one is lost. The walls stand; 6 of the 8 severe ones are the WAN CHAI INTERCHANGE, and nobody owns moving them. ✅ **The cost of FENCING them is measured 2026-08-30**: refusing every wall in the region loses **1 ordered pair of 187,946** and 55.8 m of detour, and **nothing at all** at the player's own 1.80 m bar — so closing them to the player is admissible, at the **car's** bar and not the lane's. 🔴 The two starved populations agree on that and disagree on the cost — p50 12.0 m against 752.4 m — because `e207` CANAL ROAD EAST is worth **976.8 m** and only the occupancy grader starves it. 🟢 **The call is MADE 2026-08-31** — carve the seven licensed edges back to the surveyed span, fence and dress the four unlicensed at the car's bar; the building half stays open. ✅ **`P3-28` BUILT the carve the same day: 4 of 7 cleared outright, occupancy 26 → 22, `INFRASTRUCTURE` 1.088% → 1.009% with `BUILDING` unmoved.** 🔴 The estate is **not watertight** (5.38% of edge slots open at source, 14-26% in tiles), so the cut face is a *constructed* retaining wall sized from removed geometry, not a derived cap — and carving at source rescues nothing. ⬜ `P3-29`'s fence is next |
+| `Q19` | 5.17% of drawn carriageway has solid geometry standing in it at bumper height | 🟡 Half answered — routing closed as `Q51`. **Narrowing refused on the whole population**: no edge clears at any factor to the 1.3x floor and one is lost. The walls stand; 6 of the 8 severe ones are the WAN CHAI INTERCHANGE, and nobody owns moving them. ✅ **The cost of FENCING them is measured 2026-08-30**: refusing every wall in the region loses **1 ordered pair of 187,946** and 55.8 m of detour, and **nothing at all** at the player's own 1.80 m bar — so closing them to the player is admissible, at the **car's** bar and not the lane's. 🔴 The two starved populations agree on that and disagree on the cost — p50 12.0 m against 752.4 m — because `e207` CANAL ROAD EAST is worth **976.8 m** and only the occupancy grader starves it. 🟢 **The call is MADE 2026-08-31** — carve the seven licensed edges back to the surveyed span, fence and dress the four unlicensed at the car's bar; the building half stays open. ✅ **`P3-28` BUILT the carve the same day: 4 of 7 cleared outright, occupancy 26 → 22, `INFRASTRUCTURE` 1.088% → 1.009% with `BUILDING` unmoved.** 🔴 The estate is **not watertight** (5.38% of edge slots open at source, 14-26% in tiles), so the cut face is a *constructed* retaining wall sized from removed geometry, not a derived cap — and carving at source rescues nothing. 🔴 **And a second failure mode, driven 2026-09-01**: `e99` strands the car on a **0.356 m** ledge — twice the 0.18 m suspension travel — while reading 2.93 m clear and passing every bar, because the corridor metric is lateral and a ledge is vertical. 3 of the 4 fence edges clear the car bar, so `P3-29`'s predicate needs a vertical term; folded into it (user) |
 | `Q20` | Deck heights are sampled from `INFRASTRUCTURE`, not invented | ✅ Closed |
 | `Q21` | Should level −1 carriageway be drawn at all? | 🟡 Open |
 | `Q22` | 10.2% of off-grade carriageway hangs past its structure | 🟡 Open |
@@ -1665,6 +1665,48 @@ and `e256` are entered only by way of another blocked edge**, so their barrier s
 mouth, not on the edge. ⚠️ A barrier asserts a closure the real street does not carry — accepted as
 game fiction on the diegetic-map-edge precedent, and it replaces the stronger false assertion
 already shipping: a wall that is not there to be seen.
+
+### 🔴 A ledge is not a wall, and the corridor metric cannot see one — 2026-09-01 (user, from the driving seat)
+
+The user drove `e99` FLEMING ROAD and **stopped at (256.48, 5.11, 395.66), hdg 188, 0 kph** — about
+2.5 m from the occupancy grader's own recorded binding station for that edge, (258.3, 393.9).
+
+**What is there.** Within 2 m of the car, `INFRASTRUCTURE` stands up to **0.356 m above the drawn
+carriageway** (road 4.19-4.27, structure to 4.54). `handling.tres`' `suspension_travel_m` is
+**0.18 m**, so it is a step twice what the suspension can absorb: the car climbs it and loses its
+wheels. ⚠️ Not attributable to `P3-28` — the car is in tile `t_01_02`, which that stage never opened,
+`e99` is one of the four unlicensed edges the carve deliberately excluded, and its corridor reads
+**2.93 m before and after**, unmoved.
+
+🔴 **`e99` PASSES every bar the bundle grades it against, and it strands the car.** The corridor
+metric is **lateral** — *is there a gap wide enough* — and this failure is **vertical**: a step low
+enough to drive onto and high enough to beach on. A 0.36 m ledge occupying part of the width leaves
+2.93 m of clear corridor, clears the 1.80 m car bar, and closes every counter.
+
+🔴 **Two instruments straddle this and neither covers it.** `carriageway_occupancy.py` and
+`clearance.py` read `INFRASTRUCTURE` but their bumper band **starts at 0.30 m** — `Q23` set that floor
+deliberately, so that an abutment the road rests *on* does not read as an obstruction.
+`tools/ground_clearance.py` uses the right bar, the **0.18 m** suspension travel, but reads
+`buildings.terrain_class` and **only** that, so it never sees structure. An `INFRASTRUCTURE` step
+between **0.18 and 0.30 m** therefore stops a car with nothing looking at all: **31 level-0 edges**
+carry samples in that band.
+
+🔴 **The consequence is `P3-29`'s, and it is a defect in the plan rather than in the build.**
+`PLAN.md` says the fence set is *"computed from the post-carve bundle, never hand-kept"* — and
+computed on the corridor at the car's bar it is **one edge**, because **three of the four `Q19` named
+for the fence pass that bar**: `e99` 2.93 m, `e207` 1.95 m, `e781` 1.95 m, against `e125`'s 0.48 m.
+A fence built to that rule would leave `e99` open. ✅ **So the fence predicate needs a vertical term
+beside the lateral one** — a step over `suspension_travel_m` inside the drawn carriageway — and the
+bar stays data, not a constant (hard rule 4). ⚠️ **Do not reach for a lower corridor bar instead**:
+that fences edges which are genuinely drivable and still misses the ledge, because the quantity it
+moves is not the one that stopped the car.
+
+⚠️ **`e207` keeps its exemption for a different reason and it is now weaker.** `Q19` exempted it
+because it clears the car at 1.95 m — a *lateral* judgement, which this section has just shown is not
+sufficient on its own. Whoever builds `P3-29` owes it a vertical read before leaving it open.
+
+**See.** `Q24` for the ground half of the same bar · `Q23` for why the 0.30 m floor is where it is ·
+`Q90` for the last defect found from the driving seat while every counter read correctly
 
 ⬜ **Order of work, and it is load-bearing**: the carve first (`P3-28`), because it changes which
 edges remain starved; the fence predicate and its consumers, measured over the post-carve bundle,
