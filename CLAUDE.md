@@ -605,7 +605,9 @@ Common emoji for this project:
   stranded the car there and no width bar can reach the defect: the obstruction is *interior*, with
   drivable road either side, so every rule that catches it fences 59-67 edges including major roads.
   What licensed it is that the **class** (100% `INFRASTRUCTURE`, 119 band hits, no `BUILDING`) and the
-  **containment** (116 of 119 inside the authored width) are both measured. ⚠️ **The carve MOVES the
+  **containment** (116 of 119 inside the authored width) were both measured — ⚠️ **pre-carve, and not
+  reproducible from the shipped bundle**, which reads 115 and 72 because the cut moved the mass those
+  figures describe. ⚠️ **The carve MOVES the
   wall to the carriageway edge rather than deleting it**, so a width instrument barely registers it
   (`e99` 4.50 → 5.00 m) while the interior obstruction goes — never read a small corridor delta as a
   small change. ⚠️ `e125`, `e207` and `e781` stay `P3-29`'s fence. Numbers in `Q19`.

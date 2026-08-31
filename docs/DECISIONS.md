@@ -1969,6 +1969,11 @@ The section above recorded `e99` as a widening defect and declined to fence it. 
 it twice more and reported **"car stuck here if entered in bad angle"**. That is the same
 session-ender `Q19` exists to remove, so the decision was reopened and every option priced.
 
+⚠️ **Every figure from here to "The cut" describes the PRE-CARVE bundle**, because it is the
+evidence the decision was taken on. Re-running any of it against what ships now gives different
+numbers — `e99` is no longer an interior obstruction, which is the whole point. The post-carve
+readings are in "The cut" and the battery below.
+
 🔴 **No width bar can reach this defect, and that is measured rather than argued.** The obstruction
 is **interior** — drivable road on both sides — so the quantity that traps a car is the topology and
 not the gap:
@@ -1990,6 +1995,12 @@ leaving the lane centre into a 2.0 m pocket beyond a structure line 3.0 m off ce
 ✅ **What made the carve available is the class, and it was checked before anything was priced**:
 **119** bumper-band hits over `e99`'s 2,532 cross-section samples, **100% `INFRASTRUCTURE`**, no
 `BUILDING` at all, and **116 of the 119** already inside the authored 6.40 m.
+
+⚠️ **Those two figures are PRE-CARVE and this bundle cannot reproduce them.** Re-measuring the
+shipped bundle reads **115 hits, 72 inside**, because the cut moved the very mass they describe: the
+band's offsets run **−3.25 … +2.88 m** before and **−3.75 … +3.25 m** after. They are a fact about
+what stood here, not a counter the bundle publishes — and the offsets moving outward is independent
+corroboration of the wall-moves-rather-than-vanishes finding below.
 
 **The cut.** 24 stations, **1,249** triangles, **562.7 m²**, **1,318.9 m³**, **72.0 m** of retaining
 wall, **0** soffit-bounded. `tiles_written` 14 → **16** — the new tier is **`t_01_02`**, the tile this

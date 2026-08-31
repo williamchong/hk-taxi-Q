@@ -2951,17 +2951,23 @@ roads:
 # this block refuses, and what Q19 called "the one thing this section forbids".
 # It is taken anyway, for reasons that are measured rather than argued:
 #
-#   * what stands in it is **100% INFRASTRUCTURE** — 119 band hits, no BUILDING
-#     at all — so the class the carve is licensed to cut is certain here;
-#   * **116 of those 119** already lie inside the authored 6.40 m, so the width
-#     is not doing the work of deciding what to remove;
+#   * what stood in it was **100% INFRASTRUCTURE** — 119 band hits, no BUILDING
+#     at all — so the class the carve is licensed to cut was certain here;
+#   * **116 of those 119** already lay inside the authored 6.40 m, so the width
+#     was not doing the work of deciding what to remove;
+#     ⚠️ **Both figures are PRE-CARVE and cannot be reproduced from this bundle.**
+#     Re-measuring today reads 115 hits and 72 inside, because the cut moved the
+#     mass it describes — the justification is a fact about what stood here, not
+#     a counter this bundle publishes. Q19 carries the method.
 #   * every alternative was priced and refused. A vertical bar re-catches Q23's
 #     own suppression (P3-29). A lane-centre bar on the drawn ribbon fences
 #     59-67 edges including YEE WO STREET; on the surveyed width it fences 41
 #     and misses e99, because at e99's lane centre the road IS clear at 4.50 m.
-#     No width bar reaches this defect: the obstruction is INTERIOR, with
+#     No width bar reaches this defect: the obstruction WAS interior, with
 #     drivable road on both sides, so the quantity that traps a car is the
 #     topology and not the gap.
+#     ⚠️ Those counts are all PRE-CARVE, like the two above — they are the
+#     evidence the call was made on, not a state this bundle is in.
 #
 # ⚠️ **What the carve actually does here is move the wall, not delete it**: the
 # cut face is built at the prism boundary, so an obstacle you can pass either
