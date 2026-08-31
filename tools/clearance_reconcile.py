@@ -83,13 +83,22 @@ log = logging.getLogger(__name__)
 
 # `Q51`'s two figures, fixed there and not derived here. The whole point of a
 # ratchet is that the instrument cannot move its own bar.
-EXPECT_PIPELINE = 24
-EXPECT_GRADER = 26
-# Edges the two disagree about: 3 the grader condemns and the pipeline clears
-# (`e99`, `e207`, `e781`), plus `e702` the other way. ⚠️ **A single number here
-# hides a swap** — `Q51` first said "five" where the split was 6 + 1, so read the
-# per-side lists in the report rather than this total.
-EXPECT_DISAGREEMENT = 4
+#
+# ✅ **Moved by `P3-28`.** The carve cleared four of `Q19`'s seven licensed edges
+# outright and narrowed the rest, so both counts fell by exactly the edges it
+# cut — the ratchet reporting the work, rather than a bar retuned to fit it,
+# which is the distinction the comment above exists to protect.
+EXPECT_PIPELINE = 19
+EXPECT_GRADER = 22
+# Edges the two disagree about: 4 the grader condemns and the pipeline clears
+# (`e99`, `e207`, `e485`, `e781`), plus `e702` the other way. ⚠️ **A single number
+# here hides a swap** — `Q51` first said "five" where the split was 6 + 1, so read
+# the per-side lists in the report rather than this total.
+# ⚠️ `e485` joined the grader-only side at `P3-28`: the carve took its corridor to
+# 2.90 m, which the pipeline reads as clear at its 0.5 m plan cell and the grader
+# still condemns at its 1.0 m one. That is `Q51`'s gap doing exactly what `Q51`
+# says it does, on one more edge.
+EXPECT_DISAGREEMENT = 5
 
 # Plan cells the sweep bins the grader's occupiers at: the grader's own shipped
 # cell first, then the pipeline's plan cell and its across resolution — so the
