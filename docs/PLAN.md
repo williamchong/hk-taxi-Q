@@ -257,7 +257,7 @@ trade.
 | `P3-10` | **Ground surface** — decimated terrain, vertex-coloured, merged into the tile primitive | Ground everywhere the region has terrain; **no texture ships**; one draw call per tile still; no z-fighting against the carriageway |
 | `P3-7` | Window-band shader, **and the `TEXCOORD_0` payload it reads** | Reads as HK density; no windows on roofs or podium faces. ETL ships height-above-own-base and a per-building seed; `schema_version` bumped in the same commit |
 | `P3-6` | Hero buildings (5) — authored or mesh-sourced (`source_paint`), placed via `landmarks.json` | Source geometry excluded; no z-fighting |
-| `P3-7a` | **Survey-driven façade variation** — the openings re-judged: punched windows are glass (`Q44`), panes vary per building (`Q45`), refusal drawn quietly (`W3`). ✅ **Closed as shipped at those three**; `Q42`'s riders are gated, not delivered | Met by what landed: everything dark behind `survey_apply`, parked look byte-identical at every step, each shipped step graded against a pre-fixed bar. ⚠️ **The remainder is gated on `P3-9a` reopening `Q26`** — `C` ships `survey_apply = 0.0`, so a rider built now renders nothing and cannot influence the round that would price it (`DECISIONS.md` `P3-7a`) |
+| `P3-7a` | **Survey-driven façade variation** — the openings re-judged: punched windows are glass (`Q44`), panes vary per building (`Q45`), refusal drawn quietly (`W3`). 🚫 **WITHDRAWN at `Q102`** with the vision reader it consumed | `Q44` and `Q45` **ship** and are unaffected — both run off the hash. `W3`'s five `quiet_*` values are gone: they conditioned on the grammar refusing, and with no reader every building refuses. `Q42`'s riders were never delivered and are now history rather than backlog (`DECISIONS.md` `Q102`) |
 | `P3-12` | **Road markings** — lane dividers, centre lines, kerbside double yellows and a bus-lane edge, drawn procedurally over the ribbon's lane coordinate, **and the `TEXCOORD_1` payload the shader reads**. Arrows, road text and box junctions deliberately out of scope | No texture ships and `mesh_contract.gd` still passes; one primitive, one material, no triangle moved; markings survive the playability widening because U is a lane coordinate; the junction fade is sized against the **measured** cap overlap rather than by eye; `schema_version` bumped on both sides in one commit |
 | `P3-13` | ✅ **Kerbside no-stopping from `NSR`** — done 2026-08-19 — the one shipped marking that is invented, sourced. A linear-referencing stage joins the layer to the graph as `(edge, side, V-range, kind)`; the ribbon carries the extent per rail and the codec carries the kind. Parking bays, box junctions and the `ONSTREETPARK` complement deliberately out of scope | Painted length matches the restricted length to within the join's own resolution — graded by `tools/kerbside_error.py`. ✅ **4%**, from 240%; no vehicle class is asserted that the source does not name; the side convention is asserted against `surface.mitres` itself rather than reasoned about; `roadgraph.json` and the shader moved in one commit each per hard rule 5 |
 | `P3-14` | ✅ **The tramway as published geometry** — `CartoTransLine TW` read as rails, paired back into tracks, drawn as `tram.glb`; and TD's 19 tram stops shipped as the `poi` kind the contract reserved. Platforms, stop markings and `RM1034` lettering deliberately out of scope | The rails sit where the estate prints them rather than in lane space, and the refusal of lane space is a **measurement** (18.8% of cross-sections on the ribbon, 1.5% on Hennessy) rather than an art call; drawn gauge matches the published 1,067 mm within the join's own resolution; one primitive, one draw call, **no collider**; `city.json` bumped and the manifest key optional, both sides one commit |
@@ -323,14 +323,19 @@ trade.
 
 #### `P3-7a` — how the survey becomes the look
 
-- ✅ **Closed as shipped.** `W1`, `W2` and `W3` landed, were graded against pre-fixed bars and were
-  accepted by the user on frames. **Everything below from `W4` onward is gated, not scheduled**:
-  `Q26` closed on candidate `C`, which ships `survey_apply = 0.0`, so every remaining rider renders
-  nothing in the build that reaches a player — and none of them can influence `P3-9a`, the round
-  that would price them, because `P3-9a` grades `C`. The gate reopens if `P3-9a`'s drivers reject
-  the city *and* attribute it to flat surface; the ground-band batch is then the **first** item, not
-  the last. The full argument, and what the remainder is worth, is `DECISIONS.md` `P3-7a`. **Read
-  the rest of this section as the plan that resumes, not as work in flight.**
+- 🚫 **WITHDRAWN at `Q102`, and nothing below resumes.** The vision reader every remaining item
+  consumes was dropped on cost, `TEXCOORD_1` went with it, and `schema_version` is 20. `W1`, `W2`
+  and `W3` had already landed, been graded against pre-fixed bars and been accepted by the user on
+  frames — ✅ **`W1` and `W2` still ship**, because `Q44`'s punched-openings-as-glass and `Q45`'s
+  per-building pane colour run off the hash and never read the survey. **`W3` is gone**: the five
+  `quiet_*` values conditioned on the grammar *refusing*, and with no reader every building refuses,
+  so keeping them would have muted the whole city instead of the small-or-occluded stock they were
+  written for.
+- ⚠️ **Kept rather than deleted, because the argument is the value.** `W4`'s override-table
+  reasoning, `Q42`'s reliability ordering and `R4`'s pre-fixed-bar failure are the record of what
+  was priced and why — read the rest of this section as **history**, not as a plan that resumes.
+  Re-proposing any of it means re-proposing the reader first, which is a cost decision and a
+  dependency decision (`etl/pyproject.toml` no longer declares an API client), not an art one.
 - **Deliverable:** the reliable half of `Q42`'s riders consumed end-to-end (merge vote →
   `TEXCOORD_1.y` → shader), plus the two corrections the user called from `A″`'s frames: punched
   openings behave as glass (`Q44`) and pane colour varies per building (`Q45`). Everything lands
@@ -396,9 +401,10 @@ trade.
      ("lowest floors forming a visibly distinct podium") against `podium_height_m` ("where the
      tower grid starts") as the next semantic-drift casualty, and the graded run proved it —
      floors × reconciled pitch, graded against the joined boundaries in `podiums.json`
-     (310 stems with data metres) on 2026-08-11 by `tools/podium_error.py`, **failed its
-     pre-fixed bar** (\|err\| p50 10.76 m against 2.8; Spearman ρ = 0.076, no per-building
-     signal). The re-call (`Q47`, same day): pack **data boundaries only**, converting against
+     (310 stems with data metres) on 2026-08-11 by `tools/podium_error.py` — deleted at
+     `Q102`, because its truth side was the reader — **failed its pre-fixed bar**
+     (\|err\| p50 10.76 m against 2.8; Spearman ρ = 0.076, no per-building signal). The
+     re-call (`Q47`, same day): pack **data boundaries only**, converting against
      the packed pitch at pack time — after `R2`, so the round-trip bound holds; survey floors
      never pack metres; the complement keeps the shader uniform, and the ground-band batch's
      prompt owes the correctly-worded boundary predicate. `podium_glazed` still informs
@@ -410,11 +416,12 @@ trade.
   `Q48` before its bar is fixed** — four instruments already measure pitch and the shipped constant
   (`floor_height_m` 2.8, from `P3-7`'s 2.77) is ~16% below the other three (3.38 / 3.32 / 3.28),
   unreconciled.
-- ⚠️ **Three places per rider, one commit:** the merge/pack (`tools/facade_grammar.py`,
-  `etl/pipeline/buildings.py`), the shader decode, and `game/tools/verify_tiles.gd` — which today
-  asserts `uv2.y != 0.0` is a codec break, so the first written rider fails the verifier unless its
-  range check moves in the same commit. No `schema_version` bump: filling a reserved field a
-  refusal-aware consumer already reads as "0 = refused" changes bytes, not meaning (`Q42`).
+- ⚠️ **"Three places per rider, one commit" no longer holds, and the fourth place is the point.**
+  It used to be the merge/pack (`tools/facade_grammar.py`, `etl/pipeline/buildings.py`), the shader
+  decode and `game/tools/verify_tiles.gd`, with **no** `schema_version` bump — filling a reserved
+  field a refusal-aware consumer already reads as "0 = refused" changes bytes, not meaning (`Q42`).
+  Since `Q102` there is no reserved field: the attribute is absent, `verify_tiles.gd` asserts that
+  absence, and re-adding one is a schema bump plus a new argument for the channel.
 - 🔴 **New reader fields: not paid for, and the bar to pay is now higher than "after `P3-9a`".**
   `Q26` closed on `C`, so a ground-band field bought today has no consumer in the shipped build and
   is a bet on `P3-9a` reopening the look. It is also the **only irreversible item** in the
@@ -477,15 +484,9 @@ trade.
     (`P3-7a`)**: the `podiums` stage stitches the clipped pieces and writes per-stem boundary
     metres with mechanism-won provenance to `podiums.json` (`Q47`'s record has the measured
     counts). The utility classes now cost only a config block when `W3`'s successor wants them.
-- **Accept:** `tools/check.sh` passes; ETL end-to-end on the Wan Chai config; parked `C` frames
-  byte-identical at `survey_apply = 0.0` after every step; each rider's pre-fixed bar met and
-  recorded; PCK re-measured per rider batch (`y` is all zeros today and pack-compresses at 97% —
-  writing riders spends real bytes, and the rule is measure, never estimate); `ring_weights.py` and
-  `facade_chroma.py` pastes on the survey-touching commits.
-- **Review:** the three audit cameras re-shot at `survey_apply = 1.0` after `W1`/`W2` and again
-  after the riders; the enriched candidate (`A‴`) replaces `A″` in `Q26`'s set | web build | **Do
-  punched windows read as windows, and do two adjacent towers still read as two buildings?**
-- **Deps:** `P3-7` ✅, the region survey ✅ (`Q41`). Independent of `P3-6`.
+- **Accept / Review / Deps:** 🚫 all three are moot at `Q102` and are kept for the record. The
+  acceptance rested on frames re-shot at `survey_apply = 1.0`, which no file now sets; the
+  dependency line read "the region survey ✅ (`Q41`)", which is the thing that was withdrawn.
 
 #### `P3-13` — how the kerbside restriction gets sourced
 

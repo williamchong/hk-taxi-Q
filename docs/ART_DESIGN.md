@@ -259,9 +259,11 @@ vertex are indistinguishable to the shader — and it has no seed at all, so nei
 share a window pattern. Buildings shipped **no UVs** when this was written, so `TEXCOORD_0` was free
 (shipped float32 rather than the "2 bytes quantised" predicted here — `ARCHITECTURE.md` has the
 measured cost), and it survives vertex clustering through the same representative-selection path that
-already carries colours. **`TEXCOORD_1` is spent now too** (schema 6): the `Q40`/`Q41` survey
-verdicts ride it as one packed per-building state code, with the second float reserved for `Q42`'s
-riders — the channel table in `ARCHITECTURE.md` is the contract.
+already carries colours. **`TEXCOORD_1` is free again** (schema 20): the `Q40`/`Q41` survey
+verdicts rode it from schema 6 as one packed per-building state code, with the second float
+reserved for `Q42`'s riders, and it was withdrawn with the vision reader at `Q102`. The channel
+table in `ARCHITECTURE.md` is the contract, and it now says the attribute must be **absent** —
+so a future payload here is a schema bump and a new argument, not a free slot to fill.
 
 ⚠️ **Not `COLOR_0.a`**, although it is free and currently a constant `255`: the project-wide import
 default sets `vertex_color_use_as_albedo`, and an opaque material ignores albedo alpha only until
@@ -285,11 +287,17 @@ be a rebuild.
 ### The clean/futuristic variant
 
 ⚠️ **This variant's elements are OFF in the shipped build: `city_facade.tres` carries candidate
-`C`** — accurate massing, flat per-building colour, no fabric and no surveyed verdicts. User's
-call, 2026-08-16, to continue development on flat colour. `A‴` — the seven fabric values, the
-surveyed verdicts at `survey_apply = 1.0`, and `P3-7a`'s two corrections (punched openings are
-glass, `Q44`; panes vary per building, `Q45`) — shipped from 2026-08-09 to that date and now lives
-in **`city_facade_elements.tres`**, one `cp` away.
+`C`** — accurate massing, flat per-building colour and no fabric. User's call, 2026-08-16, to
+continue development on flat colour. `A‴` — the seven fabric values plus `P3-7a`'s two corrections
+(punched openings are glass, `Q44`; panes vary per building, `Q45`) — shipped from 2026-08-09 to
+that date and now lives in **`city_facade_elements.tres`**, one `cp` away.
+
+🔴 **`A‴` lost its eighth value at `Q102` and is no longer what was accepted in 2026-08-09.** That
+value was `survey_apply = 1.0`, the gate on the vision reader's per-building verdicts, and
+`city_facade_elements.tres` was the only file in the repo that loaded them. The reader was withdrawn
+on cost, so the surveyed half of `A‴` is not restorable by a `cp` and the `q26_A3_422ee16` frames
+record a look no file now reproduces. The *elements* half is untouched and still the accepted
+argument for them.
 
 **All three of `Q26`'s looks are files now** — `city_facade.tres` is `C`, `city_facade_elements.tres`
 is `A‴`, `city_facade_warm.tres` is `B` — which discharges the reproducibility lesson `Q26` paid for

@@ -68,13 +68,13 @@ wins.
 | `Q37` | 10.0% of the façade survey is atlas filler, not a photograph | ✅ Closed |
 | `Q38` | `exposure_anchor` is baked into `COLOR_0` at build time | 🟡 Open, deliberately not fixed |
 | `Q39` | `wall_sky_tint` is uniform, so a canyon wall takes a parapet's sky bounce | 🟡 Open |
-| `Q40` | Can façade grammar be surveyed instead of hashed? | ✅ Closed — the surveyed verdicts ship in `TEXCOORD_1` (schema 6, +0.24 MB PCK); glazing and tint are the reader's, the dip gate is dead, and the overrides land dark behind `survey_apply = 0.0` until `Q26`. ⚠️ Rendering them at 1.0 for the first time found the consumer defect under `Q26` — the shader's `glazed` gate zeroes the punched grammar it also ships |
-| `Q41` | A vision reader recovers the grammar the statistic could not | ✅ Closed — reader validated, region surveyed, and the majority-voted verdicts consumed into `TEXCOORD_1` beside `Q40`'s; refusals fall to the hash |
-| `Q42` | The reader answers seven questions nobody consumes | 🟡 Open — `TEXCOORD_1.y` is reserved at a documented layout, so each rider now needs only its own validation, not a schema bump |
+| `Q40` | Can façade grammar be surveyed instead of hashed? | ✅ Closed, then 🚫 **unshipped by `Q102`** — the verdicts rode `TEXCOORD_1` from schema 6 (+0.24 MB PCK) and the channel was removed with the reader at schema 20. The findings stand: the dip gate is dead, and rendering the verdicts at 1.0 found the consumer defect under `Q26`. ⚠️ The glazing tint survives as a measurement with **no consumer** |
+| `Q41` | A vision reader recovers the grammar the statistic could not | 🚫 **WITHDRAWN on cost by `Q102`** — not refuted: the reader passed its held-out validation and surveyed the region. The tool, its labels, the verdicts and the channel are deleted; every building falls to the hash |
+| `Q42` | The reader answers seven questions nobody consumes | 🚫 **Moot at `Q102`** — there is no reader and no reserved field. The rider layout is kept in `PLAN.md` as history; re-adding a channel is a schema bump plus a fresh argument |
 | `Q43` | `glazed` is materiality; `fenestrated` is geometry | ✅ Closed — shipped in `city_facade_clean.gdshader`, graded as `A″` under `Q26` |
 | `Q44` | A punched opening is glass, not a black hole | ✅ Closed — the `unglazed_glassy` floor shipped (`P3-7a` W1), the `Q30` bar held, and the user accepted the `A‴` frames |
 | `Q45` | One pane palette across the city reads as wallpaper | ✅ Closed — the fallback modulation shipped (`P3-7a` W2) and the user accepted the `A‴` frames; `Q35` bounds any retune |
-| `Q46` | A grammar refusal draws a quiet tier, not invented fenestration | ✅ Closed — accepted in scope 2026-08-10 on a `survey_debug`-tinted drive test: refused stock reads quiet; the residual sightings sit on committed stock and open `Q47` |
+| `Q46` | A grammar refusal draws a quiet tier, not invented fenestration | 🚫 **Removed by `Q102`.** It was accepted in scope 2026-08-10 on a `survey_debug`-tinted drive test, but it conditions on the grammar *refusing* — with no reader every building refuses, so the five `quiet_*` values would have muted the whole city rather than the 771 they were written for |
 | `Q47` | A committed verdict is right about the tower, wrong about the ground band | 🟡 Route decided 2026-08-10, join landed 2026-08-11 — iB1000 `P`-block metres where a tower meets one (data > survey-inferred; 310 stems carry a data boundary in `podiums.json`, contract argued 2026-08-11), `R4`'s floors→metres conversion elsewhere graded against the joined boundaries before packing; closes when the shipped boundary is graded |
 | `Q48` | A contrast ratio measures banding where an `L*` profile could not | 🟡 Open as a **candidate only** — recorded 2026-08-13 from `P3-6`'s photo veto, nothing built and nothing scheduled; Probe 3 and mode 1 do not reach it, mode 4 does, and the evidence is one hero building graded by its author's eye |
 | `Q49` | A tyre spends one budget, and the handbrake that follows spins the car | 🟡 **Superseded in mechanism by `Q50`** — the friction ellipse it shipped is gone with the raycast model; its `B4` conclusion stands and is now the only route |
@@ -130,6 +130,7 @@ wins.
 | `Q99` | **An editor save stripped two files, and only one of them was watched** | 🟢 **Closed 2026-08-31 — the guard now covers the file class, not the file.** `Q98`'s own entry had already recorded the `project.godot` half — comments stripped, three warning promotions and `renderer/rendering_method.web` dropped, *"cause unestablished"* — and it was **still in the working tree** at the next session: seen, written down, never repaired. 🔴 **The same save also took `game/tuning/clean_daylight.tres`**, ~30 comment lines carrying `Q31`'s contrast measurement and the ambient/glow balance argument, and **nothing saw that at all** — `check.sh` mentioned `.tres` nowhere. ✅ **The two halves fail differently and it is measured, not reasoned**: `project.godot` lost behaviour, the `.tres` lost **0 differing stored properties** across the `Environment`, its `Sky` and its sky material, because the writer omits only what already equals the class default. So a `.tres` cannot lose a value that is doing work, and the new `tuning` step tests for **prose**, not values. ✅ **Presence, never a count** — comments die all at once, so "carried prose, now carries none" is a signature no honest edit produces, where a count fails on every rewording and teaches the reader to edit it down. ✅ **The default is inverted**: 20 of 25 `.tres` and 6 of 8 `.tscn` must carry rationale unless `UNDOCUMENTED_OK` names them, so a *new* resource cannot slip in unwatched — mutation-checked four ways, including that one. ⬜ **The cause is still unestablished** and this guards the symptom |
 | `Q100` | **Hong Kong is the only city, and its config is the single source of truth** | 🟢 **Closed 2026-08-31 — the premise is retired, not refuted.** `etl/config/cities/` held one file for the project's whole life and nothing ever loaded a second CRS, schema or bounds; the city layer cost a `--city` flag on 17 stages and 22 tools and a path segment on every cache and output, and bought nothing anyone called. ✅ Collapsed: `etl/config/hong_kong.yaml`, `load_config()`, `etl/sources/<source>`, `etl/out/<region>`, `Config`; the constants that *are* the city — the CRS pair, drive-on-the-left, `TS115`/`TS131`–`TS133` — live in `pipeline/hongkong.py`. ⚠️ **Regions survive** (`Q6`, `Q10`) and **hard rule 4 survives**: vocabulary and tuning stay in the yaml, and every config-versus-code grader is unchanged. ✅ Every step graded byte-identical against the pre-work bundle (`Q96`); `city.json`'s `city_id`/`source_crs` still written, so no schema bump. 🚫 `signals.py` kept latent (`Q77`), guarded by a test. ⚠️ Fifteen records cite the second city as a reason; each stands on its other reason and none is rewritten |
 | `Q101` | **Refusals made against one dataset, re-read against the estate that grew** | 🟢 **Closed 2026-08-31 — nine rows, one negative measured.** Five publishers now cover pedestrian crossings/footways (re-opened, the `P3-27` candidate); speed limits stay `Q65`'s HOLD on scope; road text stays NO-GO but its licence half fell with `Q79`; the three kerb registrations predate `Q95`'s measured width and are re-opened as a measurement; the rest defer to the tasks that consume them. 🔴 **The `.gdbtable` domain lead closes negative**: the scan that reads `LP - Lamp post` back out of iB1000's system tables finds no coded-domain content anywhere in dTAD, so `Q60` and `Q76` keep their written-vocabulary rules. Outbound data sharing closed as "not now" (`Q100`) | 🟢 Closed |
+| `Q102` | **The vision reader is withdrawn on cost, and the channel goes with it** | 🟢 **Closed 2026-08-31 — the user's call, and withdrawn rather than refuted.** `tools/facade_grammar.py` was the only API caller in the repo; it, `podium_error.py`, the `facade_survey:` block, the shader's survey half and `anthropic` are gone. 🔴 **`TEXCOORD_1` was removed, not shipped all-zero** — zero was a legal code meaning "refused", so an all-sentinel tile is indistinguishable from a survey that declined every building; `schema_version` 19 → **20**. ⚠️ `Q46`'s `quiet_*` tier had to go with it or it would have muted the whole city. ✅ `Q44`, `Q45`, `Q43`'s split and the hue survey all survive — they run off the hash. ⚠️ A/B refuted "byte-identical": **1.59%/1.61%** of pixels move by **≤2 of 255**, whole-frame `L*` **+0.0003**, geometry byte-identical, sky and road untouched — compiler precision, measured rather than argued |
 
 | ID | Decision | Status |
 |---|---|---|
@@ -15496,3 +15497,115 @@ before any derived dataset leaves this repo, and none is.
 **See.** `Q57` for the mechanism and the first four retirements · `Q100` for the review that
 ordered this one · `Q65` for the sign-estate scope line · `Q95` for the measured width the
 registrations predate · `Q77` for what a re-opened layer must argue against
+
+---
+
+## `Q102` — The vision reader is withdrawn on cost, and the channel goes with it
+
+**Status.** 🟢 Closed 2026-08-31 — the user's call. `tools/facade_grammar.py` was the only thing in
+this repo that ever called an inference API, and per-building façade grammar is not worth what it
+costs to survey. **Withdrawn, not refuted**: `Q41`'s reader passed its held-out validation, and
+`Q40`'s claim that a per-pixel statistic cannot reach fin-versus-curtain-versus-punched stands.
+Nothing measured here says the reader was wrong. It says nobody is paying for it.
+
+**Supersedes.** `Q41` (the reader) · `Q46` (the quiet tier) · `Q42`'s unbuilt riders · `P3-7a`'s
+`W4`–`R4` continuation. **Amends.** `Q40` (the tint survives as a measurement with no consumer) ·
+`Q26` (candidate `A‴` is no longer what was accepted) · `Q47` (`R4` loses its survey side).
+
+### What went, and the one thing that decided the shape
+
+Deleted: `tools/facade_grammar.py`, `tools/facade_grammar_labels.json`, `tools/podium_error.py` and
+their tests; `buildings.facade_survey_verdicts` / `facade_glass_tint` / `facade_state` /
+`facade_states` / `facade_uv2` and the `GRAMMAR_STATES` / `TINT_*` codec; the `facade_survey:`
+config block and its two `BuildingStyle` fields; the shader's `SURVEY_*` constants, its `TRIAGE_*`
+legend, `survey_apply`, `glass_astar`, `survey_debug`, the five `quiet_*` uniforms, the
+`survey_state` and `survey_pane` varyings and every branch reading them; those eight `.tres`
+parameters in all three looks; `etl/pyproject.toml`'s `survey` extra, so **no `anthropic`
+dependency remains anywhere**.
+
+🔴 **The load-bearing decision is that `TEXCOORD_1` was REMOVED rather than shipped all-zero, and
+the reason is that zero was a legal code.** Every field's `0` meant "refused — fall back to the
+hash", so an all-sentinel tile is byte-indistinguishable from a survey that ran and declined every
+building in the region. Left in place, the bundle would assert a survey it does not carry, and no
+consumer could tell. Absence is the only state that cannot be misread, which is why
+`schema_version` bumps 19 → **20** on `P3-6`'s removal precedent rather than staying put on "the
+bytes did not change meaning".
+
+⚠️ **The `quiet_*` tier had to go with the reader, and this is the trap in the removal.** `Q46`'s
+five values conditioned on the grammar *refusing*. With no reader every building refuses, so leaving
+them enabled would have applied the small-or-occluded treatment — heavy piers, muted panes,
+suppressed shopfronts, a curtain clamped to punched — to the **whole city** rather than to the 771
+buildings it was written for. A "harmless" leftover uniform, in the exact configuration that makes
+it maximally harmful.
+
+### What survives, and what is now orphaned
+
+✅ **The hash path is untouched and was always the whole look.** `fract(UV.y)` picked
+curtain/fin/punched before the survey existed; the survey only *overrode* that pick behind
+`survey_apply`. ✅ `Q44` (punched openings are glass) and `Q45` (per-building pane colour) **ship**
+— both run off the hash. ✅ `Q43`'s `glazed`-versus-`fenestrated` split **stays split**: it was the
+fix for a real hash-path defect that zeroed the grid on 39.3% of wall vertices, and the survey
+merely gave the two axes independent values. Re-merging them re-opens the defect.
+
+✅ **The colour survey is not this survey.** `facade_survey.py`'s per-building `(a*, b*)` hue feeds
+`COLOR_0` through the `materials:` table and is local compute; `Q30`, `Q34`, `Q37` and `Q55` are
+untouched.
+
+⚠️ **Two tools are kept with no consumer, deliberately.** `tools/facade_unwrap.py` and
+`tools/facade_glazing.py` cost nothing but local compute. The glazing tint shipped *only* through a
+reader-glazed verdict — `Q40`'s contract, "only where the reader says it is glass does that mode
+mean glass" — so the gate died and the measurement did not. Re-consuming the tint needs a new glazed
+verdict from somewhere, and `Q40` already measured that the dip cannot be it (best Youden 0.100,
+sign-unstable, inverted on blank-vs-windowed). Kept because the unwrap probe was lost once already,
+which is `Q37`'s ghost and the reason it became a committed tool.
+
+⚠️ **A stale `facade_survey:` block is REFUSED, not ignored.** `config.py` raises on it, because
+silently dropping the key would make a clone's stale config a no-op nobody sees. 🔴 **The guard
+tests presence, never truthiness** — a bare `facade_survey:` parses as `None`, so `.get(…) is not
+None` waves through the one spelling a half-deleted block most likely leaves behind, which is the
+no-op the guard exists to prevent. It was written that way first and review caught it; the test is
+parametrised over all three spellings and mutation-checked. ⚠️ It closes one literal key and not
+the class: `_building_style` has no general unknown-key check, so every other stale key under
+`buildings:` is still silent.
+
+### The evidence, and where the argument was wrong
+
+`check.sh` exits 0; ETL end-to-end on Wan Chai; 1,678 ETL tests pass. Two ratchets replace what was
+deleted: `test_tiles_ship_no_survey_channel_at_all` on the ETL side, and `verify_tiles.gd`'s
+`_check_survey_payload` **inverted** to assert the attribute's absence on the engine side.
+
+⚠️ **The inverted check is stronger than the codec scan it replaces, not a weakened leftover.** That
+scan's second job was catching `meshes/light_baking = 2`, which makes Godot's importer synthesise
+a UV2; it used to overwrite the payload, and now it would fabricate a channel the contract forbids.
+The absence test costs no vertex walk and has no legal value to be confused with a corrupt one.
+
+🔴 **"Byte-identical" was the obvious claim and the render refuted it.** Every deleted branch sat
+behind `survey_apply`, which candidate `C` ships at 0.0, and `C` closes `draws_detail` outright at
+`solid_share = 1.0` — so the logic could not reach a pixel. It reached the pixels anyway. A/B at
+both `Q27` viewpoints, each shot twice and `cmp`'d:
+
+| Viewpoint | pixels differing | max channel delta | whole-frame `L*` |
+|---|---|---|---|
+| `street` | 32,875 of 2,073,600 (**1.59%**) | **2** of 255 | 43.0579 → 43.0582 (**+0.0003**) |
+| `skyline` | 33,399 of 2,073,600 (**1.61%**) | **2** of 255 | 60.4708 → 60.4712 (**+0.0004**) |
+
+✅ **Isolated rather than waved away.** Tile geometry is *byte-identical* across the rebuild —
+positions, normals, colours, `TEXCOORD_0` and indices all equal on every mesh checked, with `uv2`
+the only difference — and the sky (0 of 5,000 sampled pixels) and the near road surface (0 of
+140,000) do not move at all. The residue is confined to facade walls and is shader-compiler
+precision: dropping two `flat vec3` varyings and the dead code changes interpolator allocation and
+float reassociation. ⚠️ **The lesson is the method, not the number.** The reasoning about the gate
+was correct and still did not predict the pixels; only the A/B could establish that ±2 of 255 is
+compiler noise rather than a verdict flip.
+
+### What re-proposing this costs
+
+A re-proposal is three decisions, not one: the survey (cost), the dependency (`anthropic` is no
+longer declared), and the channel (`TEXCOORD_1` must be re-added with a schema bump and a fresh
+argument — it is no longer a reserved slot to fill). ⚠️ `Q42`'s rider layout is kept in `PLAN.md`
+as **history**, and `ARCHITECTURE.md`'s channel table now records the attribute as forbidden rather
+than reserved.
+
+**See.** `Q40` for what the statistic could not reach · `Q41` for the reader that could · `Q46` for
+the quiet tier · `Q26` for the look that ships and why `A‴` moved · `Q47` for `R4`'s data half,
+which survives · `Q77` for how a withdrawn layer is kept re-declarable
