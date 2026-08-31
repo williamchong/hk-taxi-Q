@@ -14,8 +14,8 @@ import numpy as np
 import pytest
 
 from pipeline.gltf import MeshData, Texture, normalise, triangle_cross
-from pipeline.mesh import collapse, merge, select_triangles
-from tests.helpers import box, covered, soup
+from pipeline.mesh import collapse, merge, select_triangles, slice_horizontal, slice_plane
+from tests.helpers import area, box, covered, soup
 
 
 class TestMerge:
@@ -348,3 +348,102 @@ class TestSelectTriangles:
 
         assert select_triangles(named, np.ones(12, dtype=bool)).material == "city_facade"
         assert collapse(named, cell_m=0.5).material == "city_facade"
+
+
+def _edge_counts(mesh: MeshData) -> dict[tuple, int]:
+    """How many triangles walk each undirected edge, keyed on exact positions.
+
+    Exact rather than rounded, deliberately: `slice_plane` claims neighbouring
+    triangles compute bit-identical cut points, and a tolerance here would
+    accept the crack that claim exists to rule out.
+    """
+    counts: dict[tuple, int] = {}
+    for triangle in mesh.triangles:
+        points = [tuple(mesh.positions[index]) for index in triangle]
+        for first, second in ((0, 1), (1, 2), (2, 0)):
+            key = tuple(sorted((points[first], points[second])))
+            counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
+class TestSlicePlane:
+    """`slice_horizontal` off the Y axis, for `carve.py`'s prism walls.
+
+    The invariant that matters is not the triangle count — it is that the
+    surface stays *closed*. `carve.py` removes the inside of a cut volume, so a
+    crack left here becomes an open shell whose backfaces cull to nothing, which
+    is the invisible wall `Q19` exists to remove, returning as a hole.
+    """
+
+    def test_a_slanted_cut_leaves_the_surface_closed(self) -> None:
+        """Every edge walked by exactly two triangles, on exact positions."""
+        cut = slice_plane(box(size=10.0), (1.0, 1.0, 0.0), 7.0)
+
+        assert set(_edge_counts(cut).values()) == {2}
+
+    def test_it_conservesarea(self) -> None:
+        """Subdividing is not clipping: nothing is discarded here."""
+        source = box(size=10.0)
+        cut = slice_plane(source, (1.0, 0.4, -0.3), 4.0)
+
+        assert area(cut) == pytest.approx(area(source))
+        assert cut.triangle_count > source.triangle_count
+
+    def test_no_triangle_spans_the_plane_afterwards(self) -> None:
+        """What makes a whole-triangle selection afterwards abut the cut
+        exactly, with no seam to close between the two halves."""
+        normal = normalise(np.array([[1.0, 1.0, 0.0]]))[0]
+        cut = slice_plane(box(size=10.0), normal, 7.0)
+        distance = (cut.positions @ normal - 7.0)[cut.triangles]
+
+        assert not ((distance > 1e-6).any(axis=1) & (distance < -1e-6).any(axis=1)).any()
+
+    def test_the_two_halves_partition_the_originalarea(self) -> None:
+        """The pairing `carve.py` actually uses: slice, then select by side."""
+        source = box(size=10.0)
+        normal = normalise(np.array([[1.0, 1.0, 0.0]]))[0]
+        cut = slice_plane(source, normal, 7.0)
+        outside = cut.triangle_centroids() @ normal > 7.0
+
+        kept = select_triangles(cut, outside)
+        dropped = select_triangles(cut, ~outside)
+        assert area(kept) + area(dropped) == pytest.approx(area(source))
+
+    def test_winding_survives_the_cut(self) -> None:
+        """A reversed piece renders as a hole under `cull_back` and as nothing
+        else — the same class `arrows.py` and `tramway.py` count `inverted` for."""
+        source = box(size=10.0)
+        cut = slice_plane(source, (1.0, 1.0, 0.0), 7.0)
+        outward = cut.triangle_centroids() - np.array([5.0, 5.0, 5.0])
+
+        assert (np.sum(triangle_cross(cut.positions, cut.triangles) * outward, axis=1) > 0).all()
+
+    def test_a_plane_that_misses_returns_the_mesh_unchanged(self) -> None:
+        source = box(size=10.0)
+
+        assert slice_plane(source, (1.0, 0.0, 0.0), 99.0).triangle_count == source.triangle_count
+
+    def test_colour_interpolates_across_a_cut(self) -> None:
+        """A channel left behind is a cut vertex wearing its neighbour's colour,
+        which renders as a plausible smudge rather than as an error."""
+        source = box(size=10.0)
+        cut = slice_plane(source, (1.0, 0.0, 0.0), 5.0)
+
+        assert cut.colours is not None
+        assert set(map(tuple, cut.colours)) == set(map(tuple, source.colours))
+
+    def test_a_zero_normal_is_refused(self) -> None:
+        """It would divide by its own length and return NaN geometry, which
+        writes a glTF full of NaN and imports as an empty tile."""
+        with pytest.raises(ValueError, match="non-zero normal"):
+            slice_plane(box(), (0.0, 0.0, 0.0), 1.0)
+
+    def test_a_horizontal_plane_agrees_with_slice_horizontal(self) -> None:
+        """The two share their topology and keep their own arithmetic, so this
+        pins that the split itself did not drift between them."""
+        source = box(size=10.0)
+        general = slice_plane(source, (0.0, 1.0, 0.0), 4.0)
+        special = slice_horizontal(source, [4.0])
+
+        assert general.triangle_count == special.triangle_count
+        assert general.positions == pytest.approx(special.positions)

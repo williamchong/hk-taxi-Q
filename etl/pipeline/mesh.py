@@ -7,11 +7,16 @@ supplies the arithmetic.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 import numpy as np
 
 from pipeline.gltf import MeshData, normalise
+
+# How a slicer lands a point on its plane, given the two endpoints of an edge
+# that strictly straddles it. Passed rather than derived so each slicer keeps
+# its own arithmetic — see `_slice_corners`.
+_Cut = Callable[[np.ndarray, np.ndarray], np.ndarray]
 
 
 class EmptyMeshError(ValueError):
@@ -150,36 +155,82 @@ def slice_horizontal(mesh: MeshData, heights: Sequence[float]) -> MeshData:
     inside an edge (the endpoints are strictly on opposite sides), so no
     degenerate triangle is created and nothing needs dropping afterwards.
     """
+    corners, widths = _unpack(mesh)
+
+    for height in sorted(set(float(h) for h in heights)):
+        y = corners[:, :, 1]
+        if height <= y.min() + _ON_PLANE_M or height >= y.max() - _ON_PLANE_M:
+            continue
+        # ⚠️ Written as a comparison against a shifted plane rather than against
+        # a signed distance, and `slice_plane` below does the opposite. The two
+        # are not bit-identical near the tolerance, and this is the form that
+        # published `landmarks/*.glb`; keeping it is what lets the topology be
+        # shared without moving a single hero vertex.
+        side = np.zeros(y.shape, dtype=np.int8)
+        side[y > height + _ON_PLANE_M] = 1
+        side[y < height - _ON_PLANE_M] = -1
+        corners = _slice_corners(corners, side, lambda a, b, h=height: _cut_edge(a, b, h))
+
+    return _rebuild(mesh, corners, widths)
+
+
+def slice_plane(mesh: MeshData, normal: Sequence[float], offset: float) -> MeshData:
+    """Cut every triangle that crosses an arbitrary plane; move no vertex.
+
+    `slice_horizontal` generalised off the Y axis, for `carve.py`, whose cutting
+    prism has two vertical walls at whatever bearing the centreline runs and two
+    end planes square to it. The plane is `dot(p, normal) == offset` with
+    `normal` unit-length after normalisation; the half-space `dot(p, normal) >
+    offset` is the *outside*, so a caller wanting to keep the outside pairs this
+    with `select_triangles` on the same test.
+
+    This **subdivides and keeps everything**, exactly as `slice_horizontal`
+    does. It is not a clip: nothing is discarded here, and after slicing no
+    triangle spans the plane, so a whole-triangle selection afterwards abuts it
+    exactly and leaves no seam.
+
+    ⚠️ **Cutting alone opens a shell.** The source meshes are surfaces, not
+    solids, so removing the inside of a closed volume leaves backfaces that cull
+    to nothing — an invisible hole. Capping the cut is the caller's job and it
+    is load-bearing, not cosmetic.
+    """
+    unit = np.asarray(normal, dtype=np.float64).reshape(3)
+    length = float(np.sqrt(unit @ unit))
+    if length <= 0.0:
+        raise ValueError(f"slice_plane needs a non-zero normal, got {normal!r}")
+    unit = unit / length
+    offset = float(offset)
+
+    corners, widths = _unpack(mesh)
+    distance = corners[:, :, :3] @ unit - offset
+    if distance.min() >= -_ON_PLANE_M or distance.max() <= _ON_PLANE_M:
+        return _rebuild(mesh, corners, widths)
+
+    side = np.zeros(distance.shape, dtype=np.int8)
+    side[distance > _ON_PLANE_M] = 1
+    side[distance < -_ON_PLANE_M] = -1
+    corners = _slice_corners(corners, side, lambda a, b: _cut_edge_on_plane(a, b, unit, offset))
+    return _rebuild(mesh, corners, widths)
+
+
+def _unpack(mesh: MeshData) -> tuple[np.ndarray, list[int]]:
+    """Every channel widened to float64 and gathered per triangle corner.
+
+    One array rather than several so a cut interpolates position, normal, colour
+    and both UV sets in the same expression — a channel left behind is a cut
+    vertex carrying its neighbour's colour, which renders as a plausible smudge.
+    """
     channels = [mesh.positions, mesh.normals.astype(np.float64)]
     widths = [3, 3]
     for values in (mesh.colours, mesh.uvs, mesh.uv2):
         if values is not None:
             channels.append(values.astype(np.float64))
             widths.append(values.shape[1])
-    corners = np.concatenate(channels, axis=1)[mesh.triangles]
+    return np.concatenate(channels, axis=1)[mesh.triangles], widths
 
-    for height in sorted(set(float(h) for h in heights)):
-        y = corners[:, :, 1]
-        if height <= y.min() + _ON_PLANE_M or height >= y.max() - _ON_PLANE_M:
-            continue
-        side = np.zeros(y.shape, dtype=np.int8)
-        side[y > height + _ON_PLANE_M] = 1
-        side[y < height - _ON_PLANE_M] = -1
-        crossing = (side == 1).any(axis=1) & (side == -1).any(axis=1)
-        if not crossing.any():
-            continue
-        pieces = [corners[~crossing]]
-        # A crossing triangle has at most one on-plane corner: two would leave
-        # a single strict side, which is not a crossing.
-        on_plane = side == 0
-        split_two = crossing & on_plane.any(axis=1)
-        split_three = crossing & ~on_plane.any(axis=1)
-        if split_two.any():
-            pieces.extend(_split_at_on_corner(corners[split_two], side[split_two], height))
-        if split_three.any():
-            pieces.extend(_split_at_lone_corner(corners[split_three], side[split_three], height))
-        corners = np.concatenate(pieces)
 
+def _rebuild(mesh: MeshData, corners: np.ndarray, widths: list[int]) -> MeshData:
+    """`_unpack`'s inverse: unshared triangles, every channel narrowed back."""
     parts = np.split(corners.reshape(-1, corners.shape[2]), np.cumsum(widths)[:-1], axis=1)
     optional = iter(parts[2:])
     return MeshData(
@@ -195,6 +246,35 @@ def slice_horizontal(mesh: MeshData, heights: Sequence[float]) -> MeshData:
         texture=mesh.texture,
         material=mesh.material,
     )
+
+
+def _slice_corners(corners: np.ndarray, side: np.ndarray, cut: _Cut) -> np.ndarray:
+    """One plane's worth of cutting, given each corner's side of it.
+
+    Shared by `slice_horizontal` and `slice_plane` because the topology — which
+    triangles cross, which corner is alone on its side, and the winding each
+    piece inherits — is the whole subtlety here and does not depend on which
+    plane is being cut.
+
+    🔴 **The side array and the cut arithmetic are the caller's, deliberately.**
+    Both differ between the two in their last bits, and the horizontal case
+    already published `landmarks/*.glb`. Deriving either here would make one of
+    them agree with the other rather than with what it shipped.
+    """
+    crossing = (side == 1).any(axis=1) & (side == -1).any(axis=1)
+    if not crossing.any():
+        return corners
+    pieces = [corners[~crossing]]
+    # A crossing triangle has at most one on-plane corner: two would leave
+    # a single strict side, which is not a crossing.
+    on_plane = side == 0
+    split_two = crossing & on_plane.any(axis=1)
+    split_three = crossing & ~on_plane.any(axis=1)
+    if split_two.any():
+        pieces.extend(_split_at_on_corner(corners[split_two], side[split_two], cut))
+    if split_three.any():
+        pieces.extend(_split_at_lone_corner(corners[split_three], side[split_three], cut))
+    return np.concatenate(pieces)
 
 
 def _rotate_corners(corners: np.ndarray, pivot: np.ndarray) -> np.ndarray:
@@ -220,15 +300,45 @@ def _cut_edge(a: np.ndarray, b: np.ndarray, height: float) -> np.ndarray:
     return cut
 
 
-def _split_at_on_corner(corners: np.ndarray, side: np.ndarray, height: float) -> list[np.ndarray]:
+def _cut_edge_on_plane(
+    a: np.ndarray, b: np.ndarray, normal: np.ndarray, offset: float
+) -> np.ndarray:
+    """Where edge a-b meets an arbitrary plane, interpolated from the low side.
+
+    `_cut_edge`'s discipline off the Y axis: order the endpoints by signed
+    distance before interpolating, so the neighbouring triangle walking the same
+    edge the other way does identical arithmetic and produces a bit-identical
+    cut point. The endpoints are strictly on opposite sides, so the denominator
+    cannot vanish and the ordering is unambiguous.
+
+    ⚠️ The result is **projected** onto the plane rather than having one
+    component assigned. `_cut_edge` can assign because a horizontal plane fixes
+    exactly one coordinate; here all three move, and the projection is what
+    guarantees the point satisfies the plane equation rather than merely coming
+    close to it.
+    """
+    da = a[:, :3] @ normal - offset
+    db = b[:, :3] @ normal - offset
+    swap = da > db
+    low = np.where(swap[:, None], b, a)
+    high = np.where(swap[:, None], a, b)
+    low_d = np.where(swap, db, da)
+    high_d = np.where(swap, da, db)
+    t = -low_d / (high_d - low_d)
+    cut = low + t[:, None] * (high - low)
+    cut[:, :3] -= (cut[:, :3] @ normal - offset)[:, None] * normal
+    return cut
+
+
+def _split_at_on_corner(corners: np.ndarray, side: np.ndarray, cut: _Cut) -> list[np.ndarray]:
     """(O, B, C) with O on the plane: cut B-C at D, yield (O, B, D), (O, D, C)."""
     rotated = _rotate_corners(corners, np.argmax(side == 0, axis=1))
     o, b, c = rotated[:, 0], rotated[:, 1], rotated[:, 2]
-    d = _cut_edge(b, c, height)
+    d = cut(b, c)
     return [np.stack([o, b, d], axis=1), np.stack([o, d, c], axis=1)]
 
 
-def _split_at_lone_corner(corners: np.ndarray, side: np.ndarray, height: float) -> list[np.ndarray]:
+def _split_at_lone_corner(corners: np.ndarray, side: np.ndarray, cut: _Cut) -> list[np.ndarray]:
     """(A, B, C) with A alone on its side: cut A-B at D and A-C at E, yield
     the tip (A, D, E) and the far quad as (D, B, C), (D, C, E).
 
@@ -239,8 +349,8 @@ def _split_at_lone_corner(corners: np.ndarray, side: np.ndarray, height: float) 
     majority = side.sum(axis=1, dtype=np.int8)
     rotated = _rotate_corners(corners, np.argmax(side == -majority[:, None], axis=1))
     a, b, c = rotated[:, 0], rotated[:, 1], rotated[:, 2]
-    d = _cut_edge(a, b, height)
-    e = _cut_edge(a, c, height)
+    d = cut(a, b)
+    e = cut(a, c)
     return [
         np.stack([a, d, e], axis=1),
         np.stack([d, b, c], axis=1),
@@ -480,3 +590,71 @@ def _drop_duplicates(triangles: np.ndarray) -> np.ndarray:
     """
     _, first = np.unique(np.sort(triangles, axis=1), axis=0, return_index=True)
     return triangles[np.sort(first)]
+
+
+def subtract_prism(
+    mesh: MeshData, planes: Sequence[tuple[np.ndarray, float]]
+) -> tuple[MeshData | None, MeshData | None]:
+    """`mesh` split by a convex prism into the part outside it and the part in.
+
+    Each plane is `(normal, offset)` with the prism on the `dot(p, normal) <=
+    offset` side, so the prism is the intersection of the half-spaces. Slicing
+    first means the two halves abut exactly and no triangle straddles the
+    boundary; either half is `None` where it is empty.
+
+    🔴 **This removes and does not cap, and the caller owes the cut face.** The
+    published estate is **not watertight** — measured 5.38% of edge slots open
+    across the 74 source `INFRASTRUCTURE` meshes, and 14-26% in the decimated
+    tiles — so a cut face cannot be derived from "edges the removal opened":
+    a quarter of the edges were already open. Deriving one was tried and
+    returned **zero** closed loops on `e233`. `carve.py` builds its cut face
+    instead, sized from the `removed` half this returns, which is why that half
+    is returned rather than discarded.
+
+    ⚠️ **An uncapped removal is an open shell**, whose backfaces cull to
+    nothing — the invisible wall `Q19` exists to remove, wearing the opposite
+    sign. Nothing here can check that the caller capped it.
+    """
+    planes = [
+        (np.asarray(normal, dtype=np.float64).reshape(3), float(offset))
+        for normal, offset in planes
+    ]
+    if not planes:
+        return mesh, None
+
+    # 🔴 **Only triangles that straddle the boundary are sliced**, and this is
+    # the difference between the stage finishing and not. A triangle wholly
+    # beyond any one plane cannot meet a convex prism, and one satisfying every
+    # plane is wholly inside it; neither needs cutting. Slicing everything that
+    # was not wholly outside instead re-cut the whole ramp once per segment —
+    # a 232 m edge is 115 of them, and one tile reached 2.5 million vertices.
+    corners = mesh.positions[mesh.triangles]
+    outside = np.zeros(len(mesh.triangles), dtype=bool)
+    inside = np.ones(len(mesh.triangles), dtype=bool)
+    for normal, offset in planes:
+        beyond = corners @ normal > offset
+        outside |= beyond.all(axis=1)
+        inside &= ~beyond.any(axis=1)
+    straddle = ~outside & ~inside
+    if not (inside.any() or straddle.any()):
+        return mesh, None
+
+    keep = [select_triangles(mesh, outside)]
+    take = [select_triangles(mesh, inside)]
+    if straddle.any():
+        cut = select_triangles(mesh, straddle)
+        for normal, offset in planes:
+            cut = slice_plane(cut, normal, offset)
+        centroids = cut.triangle_centroids()
+        within = np.ones(len(centroids), dtype=bool)
+        for normal, offset in planes:
+            within &= centroids @ normal <= offset
+        keep.append(select_triangles(cut, ~within))
+        take.append(select_triangles(cut, within))
+
+    kept = [part for part in keep if part is not None]
+    taken = [part for part in take if part is not None]
+    return (
+        (merge(kept, name=mesh.name) if len(kept) > 1 else kept[0]) if kept else None,
+        (merge(taken, name=mesh.name) if len(taken) > 1 else taken[0]) if taken else None,
+    )

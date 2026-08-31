@@ -2931,6 +2931,54 @@ roads:
     # simply be drawn narrow under Canal Road Flyover with every counter closing.
     bound_high_m: 2.50
 
+# Which edges P3-28 cuts INFRASTRUCTURE massing back from, and how (Q19).
+#
+# P3-9a' ended when three HK drivers all stopped at blocked bridges: solid
+# structure stands in the published carriageway on the Wan Chai Interchange
+# ramps, and a car meets it as an invisible wall. Q19 split the blocked
+# population on the licence boundary and called this half.
+#
+# 🔴 These are the SEVEN edges a publisher surveyed a width for — every one
+# carries `width_source: one_way_uncrossed` with a named `width_publisher`.
+# The four nobody licensed (e99, e125, e207, e781) are P3-29's fence, never
+# this stage's: carving them would cut published structure back to the
+# authored 6.40 m, which is an invented width and Q54 inverted.
+# ⚠️ e222 is in Q19's priced table at 0.00 m and is deliberately NOT here — its
+# wall stands in the drawn fringe rather than the published carriageway, so the
+# carve cannot reach it and it falls to the fence side.
+# ⚠️ Ids, not names: five of the seven are called WAN CHAI INTERCHANGE.
+carve:
+  edges: [233, 55, 485, 788, 398, 256, 327]
+
+  # How finely the ribbon is walked; the prism is rebuilt per station, so this
+  # is how closely the cut follows a ramp's curve. Half `carriageway`'s own 4 m
+  # survey pitch, because a cut that strides over a bend leaves concrete in it.
+  station_m: 2.0
+
+  # How far below the carriageway the cut reaches. Q19 measured the blocking
+  # mass starting at or just below road level on all seven (structure y 3.39-4.65
+  # against ribbon 3.37-5.74), so a cut beginning at the ribbon would leave a lip
+  # along the kerb line.
+  floor_below_m: 2.0
+
+  # Clear height a structure must leave above the ribbon before it counts as
+  # something to drive *under* rather than something in the way. Below this a
+  # ramp flank answers, is not a soffit, and is cut away to the sky; above it a
+  # deck answers and bounds the cut. 5.1 m is Hong Kong's headroom for a
+  # vehicular underpass, and it sits in the gap Q19 measured: the walls top
+  # 1.5-2.0 m above the ribbon and a flyover deck answers at 5 m or more.
+  #
+  # ⚠️ Deliberately NOT pinned to carriageway_occupancy.py's 0.30-2.00 m bumper
+  # band, on the same reasoning as roads.bound_low_m: that tool grades the
+  # shipped bundle and this decides what to build, so tying them would let the
+  # grader agree with the pipeline by construction.
+  headroom_m: 5.1
+
+  # How far under a soffit the cut stops, so a deck keeps its own thickness
+  # rather than being shaved by the ramp beneath it.
+  soffit_clearance_m: 0.3
+
+
 # How P1-5 turns published taxi points into fare nodes.
 fares:
   # Furthest a source point may sit from a road centreline and still be

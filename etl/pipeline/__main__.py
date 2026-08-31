@@ -31,6 +31,7 @@ from pipeline import (
     arrows,
     boxjunctions,
     buildings,
+    carve,
     clearance,
     export,
     fares,
@@ -59,6 +60,14 @@ STAGES: dict[str, Callable[[list[str]], int]] = {
     "buildings": buildings.main,
     "landmarks": landmarks.main,
     "roads": roads.main,
+    # After `roads` because the prism is the `width_m` that stage surveys,
+    # and that is forced rather than tidy. Before `clearance`, which re-reads
+    # the LOD0 tiles this rewrites and is how a carve reaches `city.json` —
+    # run it after and the bundle would publish clearances for structure that
+    # is no longer there. ⚠️ Nothing upstream reads a carved tile: `roads`
+    # samples deck heights from the source sheets (`read_sheet`), not from
+    # tiles, so the chain stays acyclic and a re-run is deterministic.
+    "carve": carve.main,
     "surface": surface.main,
     # After `surface` because it measures the ribbon that stage drew, and before
     # `export` because `city.json` carries the result. It reads the building

@@ -2789,6 +2789,10 @@ class Config:
     # region is honestly unmeasurable rather than measured against an invented
     # width.
     carriageway_survey: CarriagewaySurvey | None = None
+    # Which edges `pipeline/carve.py` cuts structure back from (`P3-28`).
+    # Optional: absent, that stage writes its document and touches no tile,
+    # so the bundle is byte-identical to a build without it.
+    carve: Carve | None = None
     # The published tramway, drawn by `pipeline/tramway.py` (`Q58`). Optional
     # for the same reason `podiums` is, and with a sharper consequence: a city
     # without the block ships no `tram.glb` and the manifest names none, where
@@ -3025,6 +3029,7 @@ def load_config(path: Path | None = None) -> Config:
         carriageway_survey=_carriageway_survey(
             document.get("carriageway_survey"), f"{path}:carriageway_survey"
         ),
+        carve=_carve(document.get("carve"), f"{path}:carve"),
         tramway=_tramway(document.get("tramway"), f"{path}:tramway", table),
         arrows=_arrows(document.get("arrows"), f"{path}:arrows"),
         signs=_signs(document.get("signs"), f"{path}:signs"),
@@ -4047,6 +4052,76 @@ def _source_layer(body: dict[str, Any], where: str, roles: tuple[str, ...]) -> S
 
 
 _CARRIAGEWAY_EDGE_ROLES = ("edge_type",)
+
+
+@dataclass(frozen=True)
+class Carve:
+    """Which edges `pipeline/carve.py` cuts road structure back from (`Q19`).
+
+    🔴 **`edges` is a list a person wrote, and that is the point.** `Q19` split
+    the blocked population on the licence boundary: the seven edges a publisher
+    surveyed a width for are carved, and the four nobody licensed are fenced by
+    `P3-29` instead, because carving one would cut published structure to an
+    invented width. Deriving this list from `width_source` would quietly carve
+    any edge a later source refresh happens to license, which is a decision
+    rather than a query.
+
+    ⚠️ **Absent, the stage is a no-op and the bundle is byte-identical**
+    (`Q95`'s validation move) — which is how a carve is proved to have changed
+    only what it claims.
+    """
+
+    edges: tuple[int, ...]
+    # How finely the ribbon is walked. The prism is rebuilt per station, so this
+    # sets how closely the cut follows a ramp's curve; 2 m is half `carriageway`'s
+    # own 4 m survey pitch, because a cut that misses a bend leaves concrete.
+    station_m: float
+    # How far below the carriageway the cut reaches. The blocking mass starts at
+    # or just below road level on all seven edges (`Q19`), so a cut that began at
+    # the ribbon would leave a lip along the kerb line.
+    floor_below_m: float
+    # Clear height a structure must leave above the ribbon before it counts as
+    # something to pass *under* rather than something in the way. A ramp flank
+    # answers below this and is cut away to the sky; a deck answers above it and
+    # bounds the cut. ⚠️ Not pinned to the occupancy grader's 0.30-2.00 m bumper
+    # band, deliberately: that tool grades the shipped bundle and this decides
+    # what to build, so tying them lets the grader agree by construction.
+    headroom_m: float
+    # How far under a soffit the cut stops, so the deck keeps its own thickness.
+    soffit_clearance_m: float
+
+
+def _carve(body: Any, where: str) -> Carve | None:
+    """The optional carve block (`P3-28`).
+
+    An empty `edges` is refused rather than treated as absent, on
+    `_carriageway_survey`'s reasoning: a carve declaring no edges would report a
+    clean run over nothing, which reads like success.
+    """
+    if body is None:
+        return None
+    if not isinstance(body, dict):
+        raise ValueError(f"{where} must be a mapping, got {body!r}")
+
+    entries = _require(body, "edges", where)
+    if not isinstance(entries, list) or not entries:
+        raise ValueError(f"{where}:edges is empty; leave the block out instead")
+    edges = []
+    for index, entry in enumerate(entries):
+        if not isinstance(entry, int) or isinstance(entry, bool):
+            raise ValueError(f"{where}:edges[{index}] is {entry!r}, expected an edge id")
+        edges.append(int(entry))
+    if len(set(edges)) != len(edges):
+        # Two prisms over one edge would double every metre it reports.
+        raise ValueError(f"{where}:edges repeats an id")
+
+    measures = _measures(
+        body,
+        where,
+        ("station_m", "floor_below_m", "headroom_m", "soffit_clearance_m"),
+        positive=True,
+    )
+    return Carve(edges=tuple(edges), **measures)
 
 
 def _carriageway_survey(body: Any, where: str) -> CarriagewaySurvey | None:

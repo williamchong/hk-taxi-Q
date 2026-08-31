@@ -17,7 +17,8 @@ import numpy as np
 import pytest
 
 from pipeline.gltf import MeshData
-from pipeline.terrain import HeightField, slab_tops
+from pipeline.terrain import HeightField, slab_tops, undersides
+from tests.helpers import box
 
 # Wide enough apart that the two faces of one slab never read as two structures.
 GAP_M = 3.0
@@ -177,6 +178,83 @@ class TestSlabs:
         the walk would carry it down the rest of the path."""
         hits = np.array([5.0, 6.0, 20.0, np.nan])
         np.testing.assert_allclose(slab_tops(hits, GAP_M), [6.0, 20.0])
+
+    def test_undersides_are_read_by_parity_not_by_clustering(self) -> None:
+        """A downward ray enters at an underside and leaves at a top, so the even
+        indices are the undersides exactly."""
+        np.testing.assert_allclose(undersides(np.array([18.5, 4.5, 20.0, 6.0])), [4.5, 18.5])
+
+    def test_a_tall_wall_offers_no_soffit_where_clustering_would_offer_its_top(self) -> None:
+        """\U0001f534 The case that chose parity. An 8 m flank splits into two runs at
+        any deck-calibrated `gap_m`, and the upper one's "top" reads as a soffit
+        — a cut stopping there leaves a sliver of wall over the carriageway."""
+        wall = np.array([3.5, 11.5])
+
+        np.testing.assert_allclose(undersides(wall), [3.5])
+        np.testing.assert_allclose(slab_tops(wall, GAP_M), [3.5, 11.5])  # two, and both wrong here
+
+    def test_a_shared_diagonal_hit_twice_does_not_shift_every_parity(self) -> None:
+        """A quad is two triangles and a query on their seam is covered by both."""
+        np.testing.assert_allclose(undersides(np.array([4.0, 4.0, 9.0])), [4.0])
+
+    def test_an_unclosed_shell_reports_nothing_rather_than_guessing(self) -> None:
+        """Parity says nothing about an odd count, and \"nothing overhead\" is the
+        safe direction: it licenses cutting, where a wrong soffit would leave
+        structure standing in the road."""
+        assert not len(undersides(np.array([4.0, 9.0, 14.0])))
+
+    def test_a_nan_hit_is_dropped_from_undersides_too(self) -> None:
+        """NaN sorts last, so it would make an even count odd and blank the point."""
+        np.testing.assert_allclose(undersides(np.array([5.0, 20.0, np.nan])), [5.0])
+
+
+class TestLowestSoffitAbove:
+    """`P3-28`'s query: what does a car have to pass under here?"""
+
+    @staticmethod
+    def _field() -> HeightField:
+        """A ramp flank beside the road, and a deck crossing overhead at 10 m."""
+        return HeightField.from_meshes(
+            [
+                box(origin=(0.0, 3.5, 0.0), size=8.0),  # flank, spans 3.5-11.5
+                box(origin=(40.0, 10.0, 0.0), size=4.0),  # deck, spans 10.0-14.0
+            ]
+        )
+
+    def test_a_deck_overhead_answers_with_its_underside(self) -> None:
+        """The whole point: a slab top would report 14.0 and cut the deck away."""
+        got = self._field().sample_lowest_soffit_above([42.0], [2.0], [9.0])
+
+        np.testing.assert_allclose(got, [10.0])
+
+    def test_a_ramp_flank_does_not_answer_and_the_point_reads_nan(self) -> None:
+        """`Q19` measured every blocked edge's structure starting at or just
+        below road level, so the flank's only underside is under the floor. NaN
+        is `carve.py`'s licence to cut the wall away to the sky."""
+        got = self._field().sample_lowest_soffit_above([4.0], [4.0], [9.0])
+
+        assert np.isnan(got).all()
+
+    def test_a_floor_under_the_flank_would_have_matched_it(self) -> None:
+        """The negative control: without it the test above passes for any field
+        with nothing over the point at all."""
+        got = self._field().sample_lowest_soffit_above([4.0], [4.0], [0.0])
+
+        np.testing.assert_allclose(got, [3.5])
+
+    def test_a_nan_floor_admits_nothing(self) -> None:
+        got = self._field().sample_lowest_soffit_above([42.0], [2.0], [np.nan])
+
+        assert np.isnan(got).all()
+
+    def test_a_point_off_the_grid_reads_nan_rather_than_an_answer(self) -> None:
+        got = self._field().sample_lowest_soffit_above([-500.0], [-500.0], [0.0])
+
+        assert np.isnan(got).all()
+
+    def test_a_floor_of_the_wrong_length_is_refused(self) -> None:
+        with pytest.raises(ValueError, match="floor has"):
+            self._field().sample_lowest_soffit_above([1.0, 2.0], [1.0, 2.0], [0.0])
 
 
 class TestSamplingAlongAPath:

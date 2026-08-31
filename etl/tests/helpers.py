@@ -414,3 +414,21 @@ def polygon_area(polygon: np.ndarray) -> float:
     """
     shifted = np.roll(polygon, -1, axis=0)
     return 0.5 * abs(float(np.sum(polygon[:, 0] * shifted[:, 1] - shifted[:, 0] * polygon[:, 1])))
+
+
+def line(*points: tuple[float, float, float]) -> np.ndarray:
+    """A game-space polyline from corner triples.
+
+    Hoisted on `polygon_area`'s precedent — `test_surface.py` and
+    `test_carve.py` had it written out identically.
+    """
+    return np.array(points, dtype=np.float64)
+
+
+def area(mesh: MeshData) -> float:
+    """Total surface area of a mesh, through `triangle_cross`.
+
+    Hoisted for the same reason: `test_landmarks.py`, `test_mesh.py` and
+    `test_make_vehicle.py` each had this expression.
+    """
+    return float(np.linalg.norm(mesh.triangle_cross(), axis=1).sum() / 2.0)

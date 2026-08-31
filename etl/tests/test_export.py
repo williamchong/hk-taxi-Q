@@ -847,6 +847,7 @@ class TestOrchestrator:
             "buildings",
             "landmarks",
             "roads",
+            "carve",
             "surface",
             "clearance",
             "fares",

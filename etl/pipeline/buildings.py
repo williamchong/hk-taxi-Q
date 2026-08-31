@@ -100,6 +100,13 @@ BUILDINGS_MANIFEST_NAME = "buildings.json"
 # it. A v2 reader would not know an exclusion had happened at all.
 BUILDINGS_MANIFEST_SCHEMA = 3
 
+# Set by `pipeline/carve.py` on a manifest whose tiles it has cut (`P3-28`).
+# Not a schema field — nothing here writes or reads it, and its absence is what
+# a freshly built tile set looks like, which is why a `--from buildings` rebuild
+# clears it for free. It lives here rather than in `carve.py` because this
+# module owns the document, and `export.py` and `clearance.py` read it too.
+CARVED_EDGES_KEY = "carved_edges"
+
 # Godot's glTF importer reads node-name suffixes: `-col` gives the mesh a static
 # trimesh collider at import time and leaves it visible. `write_glb` writes the
 # mesh name as the node name, which is where the importer looks. The same
@@ -751,7 +758,7 @@ def build_region(
                     tuple(value + offset for value, offset in zip(high, place.offset, strict=True)),
                 )
                 previous = report.excluded.get(key)
-                report.excluded[key] = box if previous is None else _union([previous, box])
+                report.excluded[key] = box if previous is None else union([previous, box])
                 report.replaced += 1
                 continue
             placed = mesh.translated(place.offset)
@@ -999,12 +1006,12 @@ def _write_tile(
         # coarser tier sits inside a finer one — a cluster mean can move a vertex
         # outward — and a box that fails to contain a tier would cull geometry
         # that is about to be drawn.
-        aabb=_union(boxes),
+        aabb=union(boxes),
         lods=lods,
     )
 
 
-def _union(boxes: Iterable[Bounds]) -> Bounds:
+def union(boxes: Iterable[Bounds]) -> Bounds:
     lows, highs = zip(*boxes, strict=True)
     return (
         (min(c[0] for c in lows), min(c[1] for c in lows), min(c[2] for c in lows)),

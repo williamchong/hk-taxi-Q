@@ -13,7 +13,7 @@ never rendered; `P3-10` draws it as well, from the same geometry, which is what
 stops the height a road thinks it sits at drifting from the ground drawn under
 it. See the `P1-2` terrain decision in `docs/DECISIONS.md`.
 
-Three queries. They share their machinery and differ only in how they pick among
+Four queries. They share their machinery and differ only in how they pick among
 the surfaces found at one point, which is the whole of what separates them:
 
 `sample` answers *how high is the ground here*, one height per point, the
@@ -36,8 +36,16 @@ sits directly on rather than whatever passes overhead. `P2-7` uses it from a
 node where two levels meet, walking until the answer comes back down to the
 ground.
 
-Nothing here knows what is being placed on the surface. `roads.py` supplies the
-points and decides what an uncovered one means.
+`sample_lowest_soffit_above` answers *is there anything overhead here a car has
+to pass under*. `P3-28` cuts road structure back to the surveyed carriageway and
+needs to know where to stop, and a slab top is the wrong answer — stopping there
+removes the deck instead of passing beneath it. 🔴 **It is the one query that
+does not go through the clustering**, because clustering cannot tell a deck's
+underside from a tall wall's top and reports both alike; it reads parity off the
+raw hits instead. See `undersides`.
+
+Nothing here knows what is being placed on the surface. `roads.py` and
+`carve.py` supply the points and decide what an uncovered one means.
 """
 
 from __future__ import annotations
@@ -64,6 +72,11 @@ _MIN_PLAN_CROSS = 1e-9
 # would be writing to every other one.
 _NO_HITS = np.zeros(0)
 _NO_HITS.flags.writeable = False
+
+# Hits nearer than this are one surface met twice. A quad is two triangles
+# and a query on their shared diagonal is covered by both, which would shift
+# every parity above it by one. Far below any real slab thickness.
+_COINCIDENT_M = 1e-6
 
 
 def _within(corners: np.ndarray, region_high: tuple[float, float] | None) -> np.ndarray:
@@ -286,6 +299,68 @@ class HeightField:
                 chosen[index] = above[0]
         return chosen
 
+    def sample_lowest_soffit_above(
+        self,
+        x: Sequence[float] | np.ndarray,
+        z: Sequence[float] | np.ndarray,
+        floor: Sequence[float] | np.ndarray,
+    ) -> np.ndarray:
+        """Lowest downward-facing surface at or above `floor`, per point, or NaN.
+
+        `sample_lowest_above`'s mirror, and `P3-28`'s question: *is there
+        something overhead a car has to pass under here?* That stage cuts road
+        structure back to the surveyed carriageway, and what bounds the cut from
+        above is a soffit — so this returns the face a driver would look up at,
+        not the one a road would rest on.
+
+        🔴 **Do not substitute `sample_lowest_above` for this.** It returns a
+        slab *top*, and cutting to a slab top removes the deck instead of
+        stopping under it. Both warnings in `roads.py` say so about the other
+        direction; this is the query they were missing.
+
+        🔴 **And do not route it through `_slabs`.** Clustering is calibrated on
+        decks and an 8 m ramp flank splits into two, whose upper "slab" offers
+        the wall's own **top** as a soffit — a cut stopping there leaves a sliver
+        of wall floating over the carriageway. `undersides` reads parity instead,
+        which distinguishes the two exactly and needs no tuning value.
+
+        ⚠️ **The caller passes the ribbon plus its headroom, not the ribbon.** A
+        ramp flank's mass begins at or just below road level — `Q19` measured
+        exactly that on all seven blocked edges — so its only underside is
+        *below* the floor, it answers NaN, and that is `carve.py`'s licence to
+        cut to the sky. A deck genuinely overhead answers with its soffit.
+
+        A NaN floor admits nothing, for the reason `sample_lowest_above` gives.
+        """
+        floor = np.asarray(floor, dtype=np.float64).reshape(-1)
+        faces = self._faces(x, z)
+        if len(floor) != len(faces):
+            raise ValueError(f"floor has {len(floor)} values for {len(faces)} points")
+
+        chosen = np.full(len(faces), np.nan)
+        for index, downward in enumerate(faces):
+            above = downward[downward >= floor[index]]
+            if len(above):
+                # Ascending, so the first is the lowest thing overhead.
+                chosen[index] = above[0]
+        return chosen
+
+    def _faces(
+        self, x: Sequence[float] | np.ndarray, z: Sequence[float] | np.ndarray
+    ) -> list[np.ndarray]:
+        """Downward-facing surfaces over each point, ascending, empty where none.
+
+        `_slabs`' sibling, and separate for the reason that one gives: the gather
+        is shared and only the choice made afterwards differs, so each keeps its
+        own loop. This one reads parity rather than clustering — see `undersides`
+        for why no amount of clustering can stand in.
+        """
+        x, z, cells = self._cells(x, z)
+        faces: list[np.ndarray] = [_NO_HITS] * len(x)
+        for index, key in cells:
+            faces[index] = undersides(self._hits_at(key, x[index], z[index]))
+        return faces
+
     def _slabs(
         self,
         x: Sequence[float] | np.ndarray,
@@ -298,6 +373,10 @@ class HeightField:
         raw hits. Clustering is the expensive half and it is identical for both;
         only the choice made afterwards differs, and keeping that difference to
         one loop each is what makes the two comparable.
+
+        ⚠️ `sample_lowest_soffit_above` deliberately does **not** come through
+        here — it reads parity off the raw hits, which no amount of clustering
+        can reproduce, so it has `_faces` above as its own sibling.
         """
         x, z, cells = self._cells(x, z)
         slabs: list[np.ndarray] = [_NO_HITS] * len(x)
@@ -385,6 +464,39 @@ def slab_tops(hits: np.ndarray, gap_m: float) -> np.ndarray:
     # Keep the last of each run, so the sentinel goes at the end — the mirror of
     # `surface.dedupe`, which keeps the first and puts it at the front.
     return ordered[np.concatenate([np.diff(ordered) > gap_m, [True]])]
+
+
+def undersides(hits: np.ndarray, coincident_m: float = _COINCIDENT_M) -> np.ndarray:
+    """The downward-facing surfaces among `hits`, ascending.
+
+    🔴 **By parity, not by clustering, and that is the whole correctness of this
+    function.** A downward ray through a closed volume enters at an underside
+    and leaves at a top, so sorted hits alternate underside, top, underside,
+    top — the even indices *are* the undersides, exactly. `slab_tops`'
+    `gap_m` cannot answer this: it is calibrated on decks, where gaps within one
+    reach 2.57 m, and an 8 m ramp flank therefore splits into two "slabs" whose
+    upper one reports the wall's **top** as if it were a soffit. Cutting to that
+    leaves a sliver of wall floating over the carriageway, which is the defect
+    `P3-28`'s "cut to the sky" policy exists to make unreachable.
+
+    Hits closer together than `coincident_m` are merged first. A quad is two
+    triangles and a query on their shared diagonal is covered by both, which
+    would otherwise shift every parity above it by one.
+
+    ⚠️ **An odd count after merging means the shell is not closed** — a dropped
+    near-vertical triangle, or a source that was never a solid — and parity says
+    nothing at all in that case. Such a point returns *no* undersides, so a
+    caller reads "nothing overhead". That is the safe direction for `P3-28`: it
+    licenses cutting, where a wrong soffit would silently leave structure
+    standing in the road.
+    """
+    hits = np.sort(hits[np.isfinite(hits)])
+    if not len(hits):
+        return hits
+    hits = hits[np.concatenate([[True], np.diff(hits) > coincident_m])]
+    if len(hits) % 2:
+        return _NO_HITS
+    return hits[0::2]
 
 
 def hits(corners: np.ndarray, x: float, z: float) -> np.ndarray:
