@@ -35,6 +35,7 @@ from pipeline import (
     clearance,
     export,
     fares,
+    fence,
     fetch,
     lamps,
     landmarks,
@@ -73,6 +74,12 @@ STAGES: dict[str, Callable[[list[str]], int]] = {
     # `export` because `city.json` carries the result. It reads the building
     # tiles too, which is why it cannot run any earlier than this.
     "clearance": clearance.main,
+    # After `clearance`, and forced rather than tidy: the fenced set is read
+    # off `clearance.json` against the car's own width, so this cannot run
+    # before the measurement it fences on. Before `export`, which names the
+    # document. ⚠️ It reads no tile and moves no geometry — the barrier is a
+    # committed authored prop and this stage publishes only where it stands.
+    "fence": fence.main,
     "fares": fares.main,
     # After `roads` because every rail takes its height from the nearest level-0
     # centreline that stage published, and before `export` because `city.json`

@@ -1,4 +1,4 @@
-[gd_scene load_steps=20 format=3]
+[gd_scene load_steps=21 format=3]
 
 ; The first scene that puts the car on the real city (`P1-4` + `P0-5`).
 ;
@@ -33,6 +33,7 @@
 [ext_resource type="Script" path="res://scripts/city/drive_harness.gd" id="6_harness"]
 [ext_resource type="Script" path="res://scripts/city/road_graph_overlay.gd" id="7_graph"]
 [ext_resource type="Script" path="res://scripts/city/landmarks.gd" id="9_landmarks"]
+[ext_resource type="Script" path="res://scripts/city/fence.gd" id="20_fence"]
 [ext_resource type="Script" path="res://scripts/ui/hud.gd" id="17_hud"]
 
 [node name="CityDrive" type="Node3D"]
@@ -122,6 +123,14 @@ script = ExtResource("14_signs")
 ; always resident.
 [node name="Landmarks" type="Node3D" parent="."]
 script = ExtResource("9_landmarks")
+
+; The barriers dressing P3-29's fence, placed from `fence.json`. 🔴 Not
+; optional chrome: `RoadGraph.fits_car` refuses 14 drivable edges, and Q19
+; forbids a refusal the player cannot see — round 0 of P3-9a ended with three
+; drivers stopping at geometry they could not read. The prop is the only thing
+; in the barrier family that collides, and that is the point of it.
+[node name="Fence" type="Node3D" parent="."]
+script = ExtResource("20_fence")
 
 [node name="Lighting" parent="." instance=ExtResource("3_light")]
 

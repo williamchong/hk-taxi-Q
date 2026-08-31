@@ -57,6 +57,7 @@ from pipeline.config import (
 from pipeline.crs import GameTransform
 from pipeline.documents import read_document, round_position, write_document
 from pipeline.fares import FARES_NAME, FARES_SCHEMA
+from pipeline.fence import FENCE_NAME, FENCE_SCHEMA
 from pipeline.gltf import Bounds
 from pipeline.lamps import LAMPS_MANIFEST_NAME, LAMPS_MANIFEST_SCHEMA
 from pipeline.landmarks import ASSETS_NAME, ASSETS_SCHEMA, landmark_in_region
@@ -175,7 +176,15 @@ CITY_NAME = "city.json"
 # reader loads v20 tiles happily and reads `UV2` as zero — which is a legal
 # code meaning "refused", so the wrong answer is silent and total, a whole city
 # claiming a survey it does not carry.
-CITY_SCHEMA = 20
+# 21 since `P3-29`: `car_width_m` — the bar the **player** fence is set at, as
+# opposed to `lane_width_m`, which is the bar traffic is *routed* on (`Q51`).
+# A v20 reader has one bar where there are two and can only fence at the lane,
+# which sends the player down `e207`'s 1.95 m or closes `e781`'s 3.50 m
+# depending on which way it guesses — and `Q19` ruled the two may never be
+# merged. ⚠️ Nullable like the optional assets: a city that declares no
+# `clearance:` block fences nothing, and the game must be able to tell that from
+# a city whose fence found nothing to do.
+CITY_SCHEMA = 21
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -195,7 +204,7 @@ LANDMARKS_SCHEMA = 2
 # at each use, because `shipped` reads them and `REQUIRED_KEYS` guards them:
 # a fourth document added to one and not the other is a `KeyError` raised from
 # inside the validator instead of a finding reported by it.
-DOCUMENT_KEYS = ("road_graph", "road_surface", "fares", "landmarks")
+DOCUMENT_KEYS = ("road_graph", "road_surface", "fares", "landmarks", "fence")
 
 # Manifest keys naming an asset that ships **when the region has one**, in the
 # order `shipped()` lists them. Optional and nullable every one: a city whose
@@ -246,6 +255,7 @@ INPUTS: tuple[Input, ...] = (
     Input(ASSETS_NAME, ASSETS_SCHEMA, "landmarks"),
     Input(SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, "surface"),
     Input(CLEARANCE_NAME, CLEARANCE_SCHEMA, "clearance"),
+    Input(FENCE_NAME, FENCE_SCHEMA, "fence"),
     Input(ROADGRAPH_NAME, ROADGRAPH_SCHEMA, "roads"),
     Input(FARES_NAME, FARES_SCHEMA, "fares"),
     Input(TRAMWAY_MANIFEST_NAME, TRAMWAY_MANIFEST_SCHEMA, "tramway"),
@@ -409,6 +419,13 @@ def build_region(
         # `max(width_m, floor)`. Dividing any of the three by `lanes` recovers
         # something, but not this number.
         "lane_width_m": city.roads.lane_width_m,
+        # 🔴 The **second** bar, and the whole point is that it is not the first.
+        # `lane_width_m` above is whether traffic should be routed down an edge
+        # (`Q51`); this is whether the player can get down it at all (`Q19`).
+        # `null` where the city declares no `clearance:` block, which the game
+        # reads as "nothing is fenced" — distinguishable from a fence that found
+        # nothing, exactly as a missing lane bar is from a measured zero.
+        "car_width_m": None if city.clearance is None else city.clearance.car_width_m,
         "fares": FARES_NAME,
         # `null` where the city drew no tramway, which is the honest answer and
         # not an omission — see `pipeline/tramway.py`. The asset is named from
@@ -451,6 +468,12 @@ def build_region(
         # whose codes are spelled differently draws none and is correct to.
         "signals": signals["asset"],
         "landmarks": LANDMARKS_NAME,
+        # Where P3-29 stands a barrier, one placement per unit. Named
+        # unconditionally rather than as an optional asset: `fence.py` writes
+        # its document on every run, so a missing file means the stage never
+        # ran and an empty `barriers` list means it found nothing to close —
+        # two states a build has to be able to tell apart.
+        "fence": FENCE_NAME,
         # The mesh-sourced hero models `pipeline/landmarks.py` built — shipped
         # files like the tile GLBs, unlike the committed authored heroes,
         # which the manifest never names (`P3-6` amendment).

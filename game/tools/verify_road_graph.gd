@@ -182,6 +182,9 @@ func _check(graph: RoadGraph, document: Dictionary, manifest: CityManifest) -> P
 	# --- Q51: passability is expressed, and not enforced --------------------
 	problems.append_array(_check_clearance(graph, edges, manifest))
 
+	# --- Q19: the player's fence is a second bar, not a retuned first one ---
+	problems.append_array(_check_car_bar(graph, edges, manifest))
+
 	# --- Q54: the kerbside restrictions are well formed ---------------------
 	problems.append_array(_check_kerbside(edges))
 
@@ -199,6 +202,12 @@ func _check(graph: RoadGraph, document: Dictionary, manifest: CityManifest) -> P
 			(
 				"  clearance: %d drivable edges keep under one lane (%.2f m) clear"
 				% [graph.impassable_edge_ids().size(), graph.lane_width_m()]
+			)
+		)
+		print(
+			(
+				"  fence: %d of those keep under the car's own %.2f m"
+				% [graph.fenced_edge_ids().size(), graph.car_width_m()]
 			)
 		)
 	return problems
@@ -801,4 +810,121 @@ func _check_clearance(graph: RoadGraph, edges: Array, manifest: CityManifest) ->
 					% [edge_id, graph.is_routable(edge_id), expected, CityManifest.PATH]
 				)
 			)
+	return problems
+
+
+## The player's fence is a **second** bar over the same measurement (`Q19`).
+##
+## Four claims, and the third is the one a later change is most likely to undo:
+##
+## 1. **Both bars are published.** A fence with no bar leaves every edge open,
+##    which is the honest fallback but not a shipped state — so a bundle that
+##    names a clearance table and no car width is a finding.
+## 2. **The fence agrees with the published widths.** Re-derived from the
+##    manifest's own arrays, never from `fenced_edge_ids`, for the reason
+##    `_check_clearance` gives at length: comparing a set built out of
+##    `fits_car` against `fits_car` is a tautology no bug could fail.
+## 3. **The two bars have not been merged.** `is_passable` must still read the
+##    lane and `fits_car` the car. `Q19` forbids merging them in either
+##    direction: at the car's bar the router is sent down `e207`'s 1.95 m, at
+##    the lane's the player is fenced out of road that fits. The bar *ordering*
+##    is asserted; how many edges fall between the bars is **printed, not
+##    asserted**, because a region could honestly have none and failing the
+##    build on a fact about Hong Kong is a finding turned into a bar.
+##
+## ⚠️ **What is deliberately NOT here**: "a fenced edge must not be routable".
+## The guard below returns early unless `car_width_m < lane_width_m`, so
+## `fenced` already implies `not is_passable` implies `not is_routable` — that
+## test would be proved by the guard rather than by the data, and a check no
+## input can fail is `Q72`'s tautology.
+##
+## Refuses to pass vacuously, and — as in `_check_clearance` — **not** by
+## requiring the fence to be non-empty: a build that finally clears every edge
+## has to pass. What is asserted instead is that the two bars are different
+## numbers in the right order.
+func _check_car_bar(graph: RoadGraph, edges: Array, manifest: CityManifest) -> PackedStringArray:
+	var problems := PackedStringArray()
+	if not graph.has_clearances():
+		# Already reported by `_check_clearance`; saying it twice would double
+		# every message on a bundle with no measurement at all.
+		return problems
+	if manifest.car_width_m <= 0.0:
+		problems.append(
+			(
+				"%s names a clearance table but no car_width_m, so nothing is fenced"
+				% CityManifest.PATH
+			)
+		)
+		return problems
+	if manifest.car_width_m >= manifest.lane_width_m:
+		# The order is what makes the fence a subset of the blocked set. Reversed
+		# or equal, claims 3 and 4 are unreachable and this whole function passes
+		# by construction — `Q72`'s tautology, caught before it can certify.
+		problems.append(
+			(
+				(
+					"car_width_m %.2f m is not under lane_width_m %.2f m; the player fence"
+					+ " and the routing bar have converged (Q19)"
+				)
+				% [manifest.car_width_m, manifest.lane_width_m]
+			)
+		)
+		return problems
+
+	var between: int = 0
+	for edge: Dictionary in edges:
+		var edge_id: int = int(edge.get("id", -1))
+		var published: PackedFloat32Array = manifest.carriageway_clear_width_m.get(
+			edge_id, PackedFloat32Array()
+		)
+		var tightest: float = INF
+		for width: float in published:
+			if width != CityManifest.NOT_MEASURED:
+				tightest = minf(tightest, width)
+		# ⚠️ Expressed as expected-**fenced** and compared with `!=`, exactly as
+		# `_check_clearance` expresses expected-routable. Deriving "fits" and
+		# comparing it against "fenced" reads naturally and is wrong on every
+		# off-grade edge, where both are false because neither is drivable —
+		# which is how this first ran, failing on five flyover edges.
+		#
+		# `tightest` is `INF` on an edge whose stations were all swallowed by the
+		# junction caps, and `INF < bar` is false: unmeasured is unfenced, on
+		# `min_clear_width_of`'s own "nothing is known to stand here" terms.
+		var expected: bool = graph.is_drivable(edge_id) and tightest < manifest.car_width_m
+		var fenced: bool = graph.is_drivable(edge_id) and not graph.fits_car(edge_id)
+		if fenced != expected:
+			problems.append(
+				(
+					"edge %d reads fenced=%s from the graph against %s from %s"
+					% [edge_id, fenced, expected, CityManifest.PATH]
+				)
+			)
+		if fenced and graph.is_routable(edge_id):
+			problems.append(
+				(
+					"edge %d is fenced against the car and still routable; the bars have crossed"
+					% edge_id
+				)
+			)
+		# Claim 3's evidence, counted rather than asserted per edge: an edge
+		# wider than the car and narrower than a lane can only exist while the
+		# two bars are still two.
+		if (
+			graph.is_drivable(edge_id)
+			and not graph.is_passable(edge_id)
+			and graph.fits_car(edge_id)
+		):
+			between += 1
+	# ⚠️ **Printed, never appended.** A region could honestly have no edge between
+	# the two bars — that is a fact about Hong Kong, and failing the build on it
+	# is a finding turned into a bar. The merge this was written to catch is
+	# already caught twice over: by the `car_width_m >= lane_width_m` guard above
+	# for a config merge, and by the per-edge re-derivation for a code one, which
+	# a mutation pointing `fits_car` at `_lane_width_m` fails by name.
+	print(
+		(
+			"  bars: %d drivable edges blocked at the lane (%.2f m), clear at the car (%.2f m)"
+			% [between, manifest.lane_width_m, manifest.car_width_m]
+		)
+	)
 	return problems

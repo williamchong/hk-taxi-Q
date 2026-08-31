@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/city/tile_preview.gd" id="1_tiles"]
 [ext_resource type="Script" path="res://scripts/city/landmarks.gd" id="7_landmarks"]
+[ext_resource type="Script" path="res://scripts/city/fence.gd" id="16_fence"]
 [ext_resource type="Script" path="res://scripts/camera/free_look_camera.gd" id="2_camera"]
 [ext_resource type="PackedScene" path="res://scenes/world/clean_daylight.tscn" id="3_light"]
 [ext_resource type="Script" path="res://scripts/city/road_preview.gd" id="4_roads"]
@@ -92,6 +93,14 @@ script = ExtResource("15_signs")
 ; frames the heroes exist to be judged in.
 [node name="Landmarks" type="Node3D" parent="."]
 script = ExtResource("7_landmarks")
+
+; The barriers dressing P3-29's fence, placed from `fence.json`. 🔴 Not
+; optional chrome: `RoadGraph.fits_car` refuses 14 drivable edges, and Q19
+; forbids a refusal the player cannot see — round 0 of P3-9a ended with three
+; drivers stopping at geometry they could not read. The prop is the only thing
+; in the barrier family that collides, and that is the point of it.
+[node name="Fence" type="Node3D" parent="."]
+script = ExtResource("16_fence")
 
 ; `P1-5`'s fare nodes. Visible by default, unlike the graph diagnostic below,
 ; because nothing else in this scene draws them and they do not z-fight anything

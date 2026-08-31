@@ -2793,6 +2793,14 @@ class Config:
     # Optional: absent, that stage writes its document and touches no tile,
     # so the bundle is byte-identical to a build without it.
     carve: Carve | None = None
+    # The bar `P3-29`'s player fence is set at (the car's own width), as opposed
+    # to `roads.lane_width_m`, which is what traffic is routed on. Optional:
+    # absent, nothing is fenced and the bundle is byte-identical.
+    clearance: Clearance | None = None
+    # How `pipeline/fence.py` dresses the edges `clearance` fences (`P3-29`).
+    # Optional: absent, the fenced set is still published and no barrier stands
+    # at it — which `Q19` forbids shipping, and which a build can still be in.
+    fence: Fence | None = None
     # The published tramway, drawn by `pipeline/tramway.py` (`Q58`). Optional
     # for the same reason `podiums` is, and with a sharper consequence: a city
     # without the block ships no `tram.glb` and the manifest names none, where
@@ -3030,6 +3038,8 @@ def load_config(path: Path | None = None) -> Config:
             document.get("carriageway_survey"), f"{path}:carriageway_survey"
         ),
         carve=_carve(document.get("carve"), f"{path}:carve"),
+        clearance=_clearance(document.get("clearance"), f"{path}:clearance"),
+        fence=_fence(document.get("fence"), f"{path}:fence"),
         tramway=_tramway(document.get("tramway"), f"{path}:tramway", table),
         arrows=_arrows(document.get("arrows"), f"{path}:arrows"),
         signs=_signs(document.get("signs"), f"{path}:signs"),
@@ -4122,6 +4132,95 @@ def _carve(body: Any, where: str) -> Carve | None:
         positive=True,
     )
     return Carve(edges=tuple(edges), **measures)
+
+
+@dataclass(frozen=True)
+class Clearance:
+    """The bar `P3-29`'s player fence is set at — the car's own width.
+
+    🔴 **This number describes the taxi, not Hong Kong, and it is mirrored
+    rather than shared.** It is `taxi.tscn`'s box collider, which the ETL cannot
+    read; `tools/ground_clearance.py` documents the same mirror of
+    `handling.tres` for the same reason. It lives in the city config because the
+    pipeline is what has to measure against it (hard rule 4: a bar is data), and
+    the duplication is the price of the ETL never importing the game.
+
+    🔴 **A player fence and a routing bar are two bars.** `roads.lane_width_m`
+    (3.20 m) is whether traffic should be *routed* down an edge, which is what
+    `Q51` gates on; this is whether the **player** is stuck. Re-pointing
+    `RoadGraph.is_passable` at this value would send traffic down `e207`'s
+    1.95 m, which is why `Q19` ruled they may never be merged.
+
+    ⚠️ **There is deliberately no vertical companion here, and that is a
+    measured refusal rather than an omission.** `Q19` prescribed a step bar
+    beside this one — a step over `handling.tres`' 0.18 m suspension travel
+    inside the drawn carriageway — and `P3-29` built it, measured it and
+    withdrew it: it fences three climbing edges whose ribbon merely disagrees
+    with the deck it rests on by ~0.2 m, and it does not catch `e99` FLEMING
+    ROAD, the edge it was prescribed for. The 0.18-0.30 m band is not an empty
+    gap; it is the band `Q23`'s bumper floor exists to suppress. The
+    measurement lives in `tools/ground_clearance.py` instead. See `Q19`.
+    """
+
+    # What a station has to keep clear for the player to get through at all.
+    car_width_m: float
+
+
+def _clearance(body: Any, where: str) -> Clearance | None:
+    """The optional car-bar block (`P3-29`).
+
+    Through `_thresholds` rather than `_measures`, so the closed-key-set check
+    applies: `_carve` above skips it and would silently ignore a spare key,
+    which on a block this small is most of the ways to get it wrong. It is also
+    what refuses a `suspension_travel_m` re-added here without the argument
+    above being re-opened.
+    """
+    if body is None:
+        return None
+    if not isinstance(body, dict):
+        raise ValueError(f"{where} must be a mapping, got {body!r}")
+
+    values = _thresholds(body, where, positive=("car_width_m",), signed=())
+    return Clearance(**values)
+
+
+@dataclass(frozen=True)
+class Fence:
+    """How `pipeline/fence.py` stands barriers at the mouths it closes (`P3-29`).
+
+    ⚠️ **Both values are authored, and there is no sheet to cite.** Nothing
+    published says where a road closure should be — the government draws the
+    carriageway, not the works — so what these answer to is the acceptance
+    criterion instead: *legible before it is hit at driving speed from every
+    approach*.
+
+    ⚠️ **Absent, no barrier is placed and the fenced set is still published**, so
+    a build with no dressing is distinguishable from one whose fence found
+    nothing to close. `Q19` forbids shipping the first: a refusal the player
+    cannot see is the defect the fence exists to fix.
+    """
+
+    # How far into the closed street the barrier stands, measured from the node.
+    # ⚠️ Not zero: a barrier *on* the node stands in the junction the street is
+    # entered from and blocks every other arm of it.
+    inset_m: float
+    # Width of one standard barrier unit, spanned in a row across the mouth.
+    # 🔴 **Must match `tools/make_barrier.py`'s `UNIT_WIDTH_M`**, which is the
+    # width the committed prop is actually authored at — a mismatch tiles the
+    # row at the wrong pitch and either gaps it or overlaps it, and both render
+    # as a barrier. `etl/tests/test_fence.py` binds the two.
+    unit_width_m: float
+
+
+def _fence(body: Any, where: str) -> Fence | None:
+    """The optional barrier-placement block (`P3-29`)."""
+    if body is None:
+        return None
+    if not isinstance(body, dict):
+        raise ValueError(f"{where} must be a mapping, got {body!r}")
+
+    values = _thresholds(body, where, positive=("inset_m", "unit_width_m"), signed=())
+    return Fence(**values)
 
 
 def _carriageway_survey(body: Any, where: str) -> CarriagewaySurvey | None:

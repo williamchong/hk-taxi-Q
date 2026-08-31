@@ -2979,6 +2979,62 @@ carve:
   soffit_clearance_m: 0.3
 
 
+# The bar P3-29's player fence is set at. 🔴 This is not a Hong Kong fact: it
+# describes the taxi, and it is MIRRORED from taxi.tscn rather than read from it,
+# because the ETL never imports the game. tools/ground_clearance.py documents
+# the same mirror at its own SUSPENSION_TRAVEL_M.
+#
+# ⚠️ Leave the block out and nothing is fenced; the bundle is byte-identical.
+clearance:
+  # The player's own width, from taxi.tscn's box collider. 🔴 The player fence is
+  # set at the car and NEVER at the lane (roads.lane_width_m, 3.20 m) — Q19 ruled
+  # that, and re-pointing is_passable at 1.80 m would send traffic down e207's
+  # 1.95 m. tools/reachability.py priced fencing at this bar: 0 ordered pairs of
+  # 187,946 lost.
+  car_width_m: 1.8
+
+  # ⚠️ There is deliberately NO suspension_travel_m beside it, and that is a
+  # measured refusal rather than an omission. Q19 prescribed a vertical term
+  # here — a step over handling.tres' 0.18 m inside the drawn carriageway — and
+  # P3-29 built it, measured it and withdrew it:
+  #
+  #   * it does NOT catch e99 FLEMING ROAD, the edge it was prescribed for,
+  #     which keeps 4.50 m of genuinely clear channel between two structure
+  #     lines and passes the car bar honestly; and
+  #   * its only effect is to fence e411, e522 and e520 — climbing edges whose
+  #     whole cross-section reads stepped because the ribbon disagrees with the
+  #     deck it rests on by ~0.2 m, which is exactly what Q23 put the 0.30 m
+  #     bumper floor there to suppress. 99% of stepped sections are thin strips
+  #     that change no published width at all.
+  #
+  # The 0.18-0.30 m band is not an empty gap waiting to be measured; it is the
+  # band that fact occupies. The measurement lives in tools/ground_clearance.py.
+  # Q19 carries the numbers. The closed-key-set check on this block is what
+  # refuses a suspension_travel_m re-added without re-opening that argument.
+
+
+# How P3-29 dresses the edges the bar above fences. 🔴 Q19 forbids an invisible
+# refusal: round 0 of P3-9a ended with three drivers stopping at geometry they
+# could not read, and a predicate the player cannot see repeats that with
+# different plumbing. ⚠️ Both numbers are AUTHORED — nothing published says
+# where a road closure goes — so what they answer to is "legible before it is
+# hit at driving speed", not a sheet.
+fence:
+  # How far into the closed street the barrier stands, from the node.
+  # ⚠️ Not zero: a barrier on the node stands in the junction the street is
+  # entered from and blocks every other arm of it. Far enough in that the
+  # closure reads as belonging to this street, near enough that a driver sees
+  # it before committing to the turn.
+  inset_m: 4.0
+
+  # Width of one standard unit, laid in a row across the mouth.
+  # 🔴 MUST match tools/make_barrier.py's UNIT_WIDTH_M, which is the width the
+  # committed prop is authored at — mismatch it and the row is tiled at the
+  # wrong pitch, gapping or overlapping, and both render as a barrier.
+  # etl/tests/test_fence.py binds the two so this cannot drift silently.
+  unit_width_m: 2.0
+
+
 # How P1-5 turns published taxi points into fare nodes.
 fares:
   # Furthest a source point may sit from a road centreline and still be

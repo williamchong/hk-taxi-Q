@@ -2165,3 +2165,52 @@ class TestCarriagewaySurvey:
 
         with pytest.raises(ValueError, match="missing edge_type"):
             load_config(rewrite(drop))
+
+
+class TestClearance:
+    """`P3-29`'s player bar: the car's own width, beside the lane the router uses."""
+
+    def test_the_shipped_bar_is_the_car_and_not_the_lane(self, hong_kong) -> None:
+        """The two must never converge. `Q19` ruled the player fence is set at the
+        car; re-pointing `RoadGraph.is_passable` at this value would send traffic
+        down `e207`'s 1.95 m, which is why they are two numbers and not one."""
+        assert hong_kong.clearance is not None
+        assert hong_kong.clearance.car_width_m == 1.8
+        assert hong_kong.clearance.car_width_m < hong_kong.roads.lane_width_m
+
+    def test_the_block_is_optional(self, rewrite) -> None:
+        """Absent, nothing is fenced and the bundle is byte-identical — the same
+        shape `carve` has, and how a fence is proved to move only what it claims."""
+
+        def drop(doc: dict[str, Any]) -> None:
+            doc.pop("clearance")
+
+        assert load_config(rewrite(drop)).clearance is None
+
+    def test_a_vertical_bar_added_here_is_rejected(self, rewrite) -> None:
+        """🔴 The ratchet on `Q19`'s withdrawn vertical term, and the reason this
+        block goes through `_thresholds` rather than `_measures`.
+
+        `Q19` prescribed a `suspension_travel_m` beside the width; `P3-29` built
+        it, measured it and withdrew it — it fences three climbing edges whose
+        ribbon merely disagrees with the deck it rests on, and misses `e99`, the
+        edge it was prescribed for. Re-added here it would parse, load and tune
+        nothing while reading as configured, which is exactly how the argument
+        would be lost rather than re-opened."""
+
+        def revive(doc: dict[str, Any]) -> None:
+            doc["clearance"]["suspension_travel_m"] = 0.18
+
+        with pytest.raises(ValueError, match="does not use suspension_travel_m"):
+            load_config(rewrite(revive))
+
+    def test_a_bar_of_zero_is_rejected(self, rewrite) -> None:
+        """Zero is degenerate rather than merely strict here: every edge would
+        clear it, the fence would be empty, and a build with no fence at all
+        reads exactly like a build whose fence found nothing to do."""
+
+        def flatten(doc: dict[str, Any]) -> None:
+            doc["clearance"]["car_width_m"] = 0.0
+
+        with pytest.raises(ValueError, match="car_width_m"):
+            load_config(rewrite(flatten))

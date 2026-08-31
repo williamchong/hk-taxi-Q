@@ -39,6 +39,7 @@ from pipeline.export import (
     validate,
 )
 from pipeline.fares import FARES_NAME, FARES_SCHEMA
+from pipeline.fence import FENCE_NAME, FENCE_SCHEMA
 from pipeline.lamps import LAMPS_MANIFEST_NAME, LAMPS_MANIFEST_SCHEMA
 from pipeline.landmarks import ASSETS_NAME, ASSETS_SCHEMA
 from pipeline.railings import RAILINGS_MANIFEST_NAME, RAILINGS_MANIFEST_SCHEMA
@@ -134,6 +135,24 @@ class _Region:
                     {"edge": _EDGE_ID, "clear_width_m": [10.24, 10.24]},
                     {"edge": _EDGE_ID + 1, "clear_width_m": [10.24, 2.0]},
                 ],
+            },
+            FENCE_NAME: {
+                "schema_version": FENCE_SCHEMA,
+                "city_id": city.id,
+                "region_id": REGION,
+                # `P3-29` writes this document on every run, so the fixture
+                # carries it unconditionally too: an absent file means the stage
+                # never ran, which is a different state from a fence with
+                # nothing to close.
+                "asset": "res://assets/authored/barriers/barrier.glb",
+                "fenced_edges": [],
+                "components": 0,
+                "mouths": 0,
+                "ends_behind_another_fence": 0,
+                "ends_with_no_way_in": 0,
+                "mouths_no_width": 0,
+                "span_m": [],
+                "barriers": [],
             },
             ROADGRAPH_NAME: {
                 "schema_version": ROADGRAPH_SCHEMA,
@@ -850,6 +869,7 @@ class TestOrchestrator:
             "carve",
             "surface",
             "clearance",
+            "fence",
             "fares",
             "tramway",
             "arrows",
@@ -888,6 +908,7 @@ class TestOrchestrator:
         assert [name for name, _ in calls] == [
             "surface",
             "clearance",
+            "fence",
             "fares",
             "tramway",
             "arrows",

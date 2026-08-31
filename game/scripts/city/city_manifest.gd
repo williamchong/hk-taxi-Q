@@ -123,7 +123,23 @@ const NOT_MEASURED: float = -1.0
 ## legal code meaning "refused" — so a v19 reader loading v20 tiles would read
 ## a whole city refusing a survey it does not carry. The bump is for the
 ## removal, on `P3-6`'s precedent at 7.
-const SCHEMA_VERSION: int = 20
+##
+## 21 since `P3-29`: two things, and either alone would have bumped it.
+##
+## `car_width_m` — the bar the **player** fence is set at, beside
+## `lane_width_m`, which is the bar `P3-3`'s traffic is *routed* on. A v20 reader
+## has one bar where there are two, so it can only fence at the lane: either it
+## sends the player down `e207`'s 1.95 m or it closes `e781`'s 3.50 m, and `Q19`
+## ruled the two may never be merged. Zero where the city declares no
+## `clearance:` block, on `lane_width_m`'s own "a missing bar is not a bar of
+## zero" terms.
+##
+## And the manifest names `fence.json`, where the barriers dressing that fence
+## stand. The `landmark_assets` argument again — a v20 reader computes a shipped
+## set missing a bundle file — with a sharper edge than usual: what it would
+## *also* do is refuse edges the player can still reach and leave nothing there
+## to see, which is precisely the invisible wall `Q19` exists to remove.
+const SCHEMA_VERSION: int = 21
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -184,6 +200,12 @@ var road_graph_path: String
 var road_surface_path: String
 var fares_path: String
 var landmarks_path: String
+## Where P3-29 stands a barrier. Named unconditionally like the four
+## above rather than as an optional asset: `fence.py` writes its document
+## on every run, so an empty `barriers` list means the fence found nothing
+## to close and a *missing file* means the stage never ran — two states a
+## build has to be able to tell apart.
+var fence_path: String
 
 ## The tramway mesh (`P3-14`), or **empty** where the region ships none.
 ##
@@ -333,6 +355,19 @@ var carriageway_clear_width_m: Dictionary[int, PackedFloat32Array] = {}
 ## `lanes` recovers something, but not this number.
 var lane_width_m: float = 0.0
 
+## The car's own width, in metres — the bar the **player** fence is set at.
+##
+## 🔴 **Two bars, and merging them is the one thing `Q19` forbids here.**
+## `lane_width_m` above answers "should traffic be routed down this edge"
+## (`Q51`); this answers "can the player get down it at all". Re-pointing
+## `RoadGraph.is_passable` at 1.80 m would send traffic down `e207`'s 1.95 m,
+## and fencing the player at 3.20 m would close `e781`'s 3.50 m against them.
+##
+## Zero where the bundle declares none, on exactly `lane_width_m`'s terms: a
+## missing bar is not a bar of zero, and with nothing to compare against the
+## honest reading is that no edge is fenced rather than that every one is.
+var car_width_m: float = 0.0
+
 
 ## The manifest, or null with a pushed message.
 static func load_manifest() -> CityManifest:
@@ -354,6 +389,7 @@ static func load_manifest() -> CityManifest:
 	manifest.road_surface_path = _resolve(document.get("road_surface", ""))
 	manifest.fares_path = _resolve(document.get("fares", ""))
 	manifest.landmarks_path = _resolve(document.get("landmarks", ""))
+	manifest.fence_path = _resolve(document.get("fence", ""))
 	# A **null** `tramway` is the "this region has no tramway" state, and
 	# `_resolve` maps it to empty. Not a branch here on purpose: `str(null)` is
 	# `"<null>"`, which would resolve to a plausible-looking path that loads
@@ -374,6 +410,12 @@ static func load_manifest() -> CityManifest:
 		manifest.carriageway_half_width_m[edge] = _floats(entry, "half_width_m")
 		manifest.carriageway_clear_width_m[edge] = _floats(entry, "clear_width_m")
 	manifest.lane_width_m = float(document.get("lane_width_m", 0.0))
+	# `null` where the city declares no `clearance:` block. Read through a
+	# variable rather than `float(document.get(...))` because `float(null)` is a
+	# runtime error in GDScript, and the null case has to land on the same 0.0
+	# the var defaults to — "no bar", not "a bar of zero".
+	var bar: Variant = document.get("car_width_m")
+	manifest.car_width_m = 0.0 if bar == null else float(bar)
 
 	var extent: Dictionary = document.get("bounds_game", {})
 	manifest.bounds = box(point(extent.get("min")), point(extent.get("max")))
@@ -417,7 +459,9 @@ static func bearing_deg(forward: Vector3) -> float:
 ## in the list, because it names the others and not itself. A caller copying a
 ## region wants this plus `PATH`, which is what `tools/sync_generated.sh` does.
 func shipped() -> PackedStringArray:
-	var paths: PackedStringArray = [road_graph_path, road_surface_path, fares_path, landmarks_path]
+	var paths: PackedStringArray = [
+		road_graph_path, road_surface_path, fares_path, landmarks_path, fence_path
+	]
 	# ⚠️ **One list rather than seven `if`s, in `OPTIONAL_ASSET_KEYS`' order** —
 	# `etl/pipeline/export.py`'s `shipped()` holds the same names in the same
 	# order, so the two can be read side by side as the mirrors they are. It was

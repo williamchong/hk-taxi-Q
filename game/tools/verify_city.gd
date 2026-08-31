@@ -17,6 +17,7 @@
 extends SceneTree
 
 const GeneratedFares = preload("res://scripts/city/generated_fares.gd")
+const GeneratedFence = preload("res://scripts/city/generated_fence.gd")
 const GeneratedLandmarks = preload("res://scripts/city/generated_landmarks.gd")
 const GeneratedRoadGraph = preload("res://scripts/city/generated_road_graph.gd")
 const GeneratedRoadSurface = preload("res://scripts/city/generated_road_surface.gd")
@@ -82,7 +83,7 @@ func _init() -> void:
 	quit(1 if not problems.is_empty() else 0)
 
 
-## The manifest names four documents. Each must be there, and each must be the
+## The manifest names five documents. Each must be there, and each must be the
 ## file the dev locators point at — they carry their own constant until `P2-2`
 ## and `P3-1` take the path from the manifest, and this is what stops the two
 ## definitions drifting in the meantime.
@@ -98,6 +99,10 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 	problems.append_array(
 		_check_document("landmarks", manifest.landmarks_path, GeneratedLandmarks.PATH)
 	)
+	# Unguarded, alongside the other four: `pipeline/fence.py` writes its document
+	# on every run, so a region with nothing to close names it and carries an
+	# empty `barriers` list. A missing file means the stage never ran (`P3-29`).
+	problems.append_array(_check_document("fence", manifest.fence_path, GeneratedFence.PATH))
 	# ⚠️ **Guarded, because this one is optional and the others are not.** A city
 	# whose estate publishes no tramway names `null` and ships none (`P3-14`),
 	# so an empty path is the honest answer rather than a missing file. What the

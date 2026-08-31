@@ -133,6 +133,13 @@ var _clear: Array[PackedFloat32Array] = []
 # One lane, from `city.json`. The bar `is_passable` reads `_clear` against, and
 # not derivable here: `width_m` is `lanes x lane_width_m` hand-tuned upward.
 var _lane_width_m: float = 0.0
+# The car's own width, from `city.json`. The bar `fits_car` reads the *same*
+# `_clear` against — 🔴 two bars over one measurement, never two measurements.
+# `_lane_width_m` is what `P3-3`'s traffic is routed on and this is what the
+# player is fenced at, and `Q19` ruled they may never be merged: at 1.80 m the
+# router would send traffic down `e207`'s 1.95 m, and at 3.20 m the fence would
+# close `e781`'s 3.50 m against a car that fits.
+var _car_width_m: float = 0.0
 
 # Cumulative **plan** length to each vertex of an edge. Turns `t` into a prefix
 # lookup instead of a walk, and `t` is plan-parameterised because that is what
@@ -275,6 +282,15 @@ func lane_width_m() -> float:
 	return _lane_width_m
 
 
+## The car's own width, in metres — the bar `fits_car` uses (`P3-29`).
+##
+## Zero where the bundle published none, which leaves every edge unfenced. Same
+## fallback and same reason as `lane_width_m` above: a preview opened without a
+## built city should still show a graph, and a missing bar is not a bar of zero.
+func car_width_m() -> float:
+	return _car_width_m
+
+
 ## Widest gap a car could get through at one station, in metres (`Q51`).
 ##
 ## `station` is a vertex index into `polyline_of(edge_id)`, clamped, and it has
@@ -344,6 +360,47 @@ func impassable_edge_ids() -> PackedInt32Array:
 		if is_drivable(edge_id) and not is_passable(edge_id):
 			blocked.append(edge_id)
 	return blocked
+
+
+## True where every measured station keeps the **car's own width** clear (`Q19`).
+##
+## 🔴 **Beside `is_passable`, never inside it.** The two read the same `_clear`
+## against different bars because they answer different questions: `is_passable`
+## is `P3-3`'s routing gate at one lane, this is whether the player is stuck.
+## Merging them breaks whichever way it is merged — at 1.80 m traffic is routed
+## down `e207`'s 1.95 m, at 3.20 m the player is fenced out of `e781`'s 3.50 m.
+##
+## A missing bar is not a bar of zero, exactly as in `is_passable`: with nothing
+## published to compare against, the honest reading is that no edge is fenced
+## rather than that every one is.
+##
+## ⚠️ **Lateral only, and that is measured rather than left undone.** `Q19`
+## prescribed a vertical term beside this one and `P3-29` withdrew it: the
+## 0.18-0.30 m band it would read is the band `Q23`'s bumper floor exists to
+## suppress, so it fences climbing ramps and still misses `e99` FLEMING ROAD,
+## which keeps 4.50 m of genuinely clear channel and passes this bar honestly.
+func fits_car(edge_id: int) -> bool:
+	if not _by_id.has(edge_id):
+		return false
+	if _car_width_m <= 0.0:
+		return true
+	return min_clear_width_of(edge_id) >= _car_width_m
+
+
+## Every drivable edge the player is fenced out of, in document order (`P3-29`).
+##
+## Mirrors `impassable_edge_ids` in shape and is deliberately a different set:
+## the fence is what `pipeline/fence.py` stands a barrier at, where the blocked
+## set is what the router avoids. ⚠️ The fence is a **subset** of the blocked
+## set by construction — the car is narrower than a lane — so a build where it
+## is not is a build where the two bars have crossed.
+func fenced_edge_ids() -> PackedInt32Array:
+	var fenced := PackedInt32Array()
+	for slot: int in _ids.size():
+		var edge_id: int = _ids[slot]
+		if is_drivable(edge_id) and not fits_car(edge_id):
+			fenced.append(edge_id)
+	return fenced
 
 
 ## True when **every** edge has a clearance measurement behind it.
@@ -461,6 +518,9 @@ func _build(document: Dictionary, manifest: CityManifest = null) -> void:
 		half_widths = manifest.carriageway_half_width_m
 		clearances = manifest.carriageway_clear_width_m
 		_lane_width_m = manifest.lane_width_m
+		# No second table: `fits_car` reads the same `clearances` against its own
+		# bar, so there is nothing here that can fall out of step with the widths.
+		_car_width_m = manifest.car_width_m
 	var edges: Array = document.get("edges", [])
 	if not edges.is_empty() and half_widths.is_empty():
 		# Warned rather than tolerated. Without the table every lane centre is
