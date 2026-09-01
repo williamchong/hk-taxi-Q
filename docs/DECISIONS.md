@@ -16180,10 +16180,11 @@ them, not because they are narrow.
 | barriers | 90 | 253 |
 | draw calls / primitives (one camera) | 87 / 956,501 | 89 / 1,102,229 |
 
-✅ **The population is the same 36 transition nodes `P4-3` measures its ramp steps at**, which is
-the check that it is the right set: `roads._descend` gates on "a level-0 edge at the node", so a
-touchdown is a node the two share, and closing all of them closes the whole off-grade subgraph
-because an interior ramp can only be entered through one.
+✅ **The population is 36 transition nodes, matching the 36 `P4-3` measures its ramp steps at** —
+a corroboration rather than a proof of identity, and the reason it is the right set is structural:
+`roads._descend` gates on "a level-0 edge at the node", so a touchdown *is* a node the two share, and
+closing all of them closes the whole off-grade subgraph because an interior ramp can only be entered
+through one.
 
 ✅ **Proved inert with the key absent**: all 90 barriers and every pre-`Q103` key reproduce the
 previous build exactly. ✅ **`reachability.py` finds 0 of the 30 in its level-0 graph** — which is

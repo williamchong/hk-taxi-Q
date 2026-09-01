@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import math
 from bisect import bisect_right
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import IntEnum
 from pathlib import Path
@@ -3248,14 +3248,12 @@ def _check_widening_levels_are_mapped(city: Config, path: Path) -> None:
     Here rather than in `_road_surface` because it is a cross-section check, and
     `roads:` cannot see `elevation_levels` while it is being parsed.
     """
-    unknown = set(city.roads.surface.floor_by_elevation_level) - set(city.elevation_levels)
-    if unknown:
-        known = ", ".join(str(level) for level in sorted(city.elevation_levels))
-        raise ValueError(
-            f"{path}:roads.surface.floor_by_elevation_level names level "
-            f"{', '.join(str(level) for level in sorted(unknown))}, "
-            f"which elevation_levels does not map ({known})"
-        )
+    _refuse_unmapped_levels(
+        city.roads.surface.floor_by_elevation_level,
+        city,
+        path,
+        "roads.surface.floor_by_elevation_level",
+    )
 
 
 def _check_touchdown_levels_are_mapped(city: Config, path: Path) -> None:
@@ -3272,14 +3270,26 @@ def _check_touchdown_levels_are_mapped(city: Config, path: Path) -> None:
     """
     if city.fence is None:
         return
-    unknown = set(city.fence.touchdown_levels) - set(city.elevation_levels)
-    if unknown:
-        known = ", ".join(str(level) for level in sorted(city.elevation_levels))
-        raise ValueError(
-            f"{path}:fence.touchdown_levels names level "
-            f"{', '.join(str(level) for level in sorted(unknown))}, "
-            f"which elevation_levels does not map ({known})"
-        )
+    _refuse_unmapped_levels(city.fence.touchdown_levels, city, path, "fence.touchdown_levels")
+
+
+def _refuse_unmapped_levels(levels: Iterable[int], city: Config, path: Path, key: str) -> None:
+    """The refusal both level-joined keys make, written once.
+
+    Shared for `_measures`' reason rather than to save lines: the message names
+    the offending level *and* what the city does map, and two copies of that
+    wording drift apart silently. The two callers' docstrings say why each key
+    needs it, which is the part that differs.
+    """
+    unknown = set(levels) - set(city.elevation_levels)
+    if not unknown:
+        return
+    known = ", ".join(str(level) for level in sorted(city.elevation_levels))
+    raise ValueError(
+        f"{path}:{key} names level "
+        f"{', '.join(str(level) for level in sorted(unknown))}, "
+        f"which elevation_levels does not map ({known})"
+    )
 
 
 def _paged_source(source_id: str, body: Any, where: str) -> PagedSource:
@@ -4246,16 +4256,11 @@ class Fence:
     # Elevation levels whose touchdowns onto the open network are closed
     # (`Q103`). Empty leaves them open, which is the pre-`Q103` behaviour.
     #
-    # 🔴 **A SECOND POPULATION, and not a second bar.** Everything else in this
-    # block dresses `clearance.py`'s starved set — edges too narrow for the car.
-    # This closes edges that are wide enough and simply are not *graded*:
-    # `Q13`'s refusal is a graph refusal, `surface.py` still draws the ribbon
-    # and it still collides, so ramping the touchdowns made 39 off-grade edge
-    # ends physically reachable while every instrument in the bundle gates on
-    # level 0. The two sets are published separately and must stay that way —
-    # `fenced_edges` is what `RoadGraph.fenced_edge_ids` re-derives, and a
-    # ramp swept into it would tell the engine a 6.40 m deck is too narrow
-    # for the car.
+    # 🔴 **A SECOND POPULATION, and not a second bar** — `pipeline/fence.py`'s
+    # module docstring carries the argument, and `hong_kong.yaml` carries it for
+    # whoever sets the value. In short: these edges are closed because nothing
+    # *grades* them, never because they are narrow, so they may never join
+    # `fenced_edges`.
     #
     # ⚠️ **Level 0 is refused rather than ignored.** It names the open network
     # itself, so admitting it would fence every junction in the region — the
@@ -4297,8 +4302,13 @@ def _touchdown_levels(body: Any, where: str) -> tuple[int, ...]:
 
     levels: list[int] = []
     for index, value in enumerate(body):
-        # `bool` is an `int` in Python, and `true` here would close level 1 by
-        # accident — the same trap `_measures` guards on its own numbers.
+        # 🔴 **The bool guard is not pedantry, it is the YAML 1.1 trap
+        # `_elevation_levels` documents at the matching key.** PyYAML resolves
+        # bare `on`/`yes` to `True`, and `bool` subclasses `int`, so
+        # `touchdown_levels: [on]` would pass a plain `isinstance(value, int)`
+        # and silently close level **1** — a real level in this city.
+        # ⚠️ Not `_measures`' trap: that one calls `float()`, which takes a bool
+        # without complaint, so it is no precedent for this.
         if not isinstance(value, int) or isinstance(value, bool):
             raise ValueError(f"{where}[{index}] is not an integer, got {value!r}")
         if value == 0:

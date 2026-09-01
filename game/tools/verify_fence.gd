@@ -103,8 +103,16 @@ func _check(manifest: Manifest, document: Dictionary) -> PackedStringArray:
 			levels.append(int(level))
 		print(
 			(
-				"  fence: %d touchdowns closed over %d off-grade edges at level(s) %s"
-				% [int(document.get("touchdowns", 0)), touchdowns.size(), str(levels)]
+				"  fence: %d touchdown ends dressed of %d seen, over %d off-grade edges at level(s) %s"
+				% [
+					(
+						int(document.get("touchdowns", 0))
+						- int(document.get("touchdowns_no_width", 0))
+					),
+					int(document.get("touchdowns", 0)),
+					touchdowns.size(),
+					str(levels)
+				]
 			)
 		)
 	return problems
@@ -222,17 +230,22 @@ func _check_against_the_graph(
 	# with separate filters, so nothing but this asserts they stayed apart.
 	var closed: Dictionary[int, bool] = published.duplicate()
 	for edge_id: int in touchdowns:
-		var touchdown: int = int(edge_id)
-		if published.has(touchdown):
+		if published.has(edge_id):
 			problems.append(
 				(
 					"edge %d is published as both fenced and a touchdown (Q103: two populations)"
-					% touchdown
+					% edge_id
 				)
 			)
-		if graph.level_of(touchdown) == 0:
-			problems.append("edge %d is closed as a touchdown and sits at level 0" % touchdown)
-		closed[touchdown] = true
+		# ⚠️ **Worded for what `level_of` can actually tell us.** It returns 0 both
+		# for a genuine level-0 edge and for an id the graph has never heard of
+		# (`road_graph.gd`), so "sits at level 0" would be a true failure carrying
+		# a false reason whenever the document is stale.
+		if graph.level_of(edge_id) == 0:
+			problems.append(
+				"edge %d is closed as a touchdown and is not off-grade in the graph" % edge_id
+			)
+		closed[edge_id] = true
 
 	# A barrier may only stand on an edge the graph closes — the second failure
 	# direction, a wall nobody asked for.

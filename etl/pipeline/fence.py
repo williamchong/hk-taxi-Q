@@ -56,6 +56,14 @@ is a mouth.
 
 ⚠️ **This is a closure, not a fix.** It restores *reachable ⟺ graded* and buys
 the time to open the network properly; `PLAN.md` `P4-1` owns the other ending.
+
+⚠️ **The prop is 192 triangles and the row is the layer's whole cost**, so the
+unit count is the number to watch: 90 → 253 units is 17,280 → **48,576**
+triangles. That is 4.9% of the desktop `< 1M` budget and **16.2% of the mobile
+`< 300k`** one (`ARCHITECTURE.md`). Mobile is unbuilt and blocked on `P0-3b`, so
+nothing ships against that row today — but a static barrier layer taking a sixth
+of it is the figure to have on hand when it is. Draw calls are unaffected: the
+whole row is one `MultiMesh` (`fence.gd`), measured 87 → 89 for the layer.
 """
 
 from __future__ import annotations
@@ -137,14 +145,11 @@ class FenceReport:
 
     # ---- the touchdown population (`Q103`), counted apart from the one above --
     #
-    # 🔴 **Separate counters because they are separate populations, and pooling
-    # them would make both unreadable.** Everything above closes `clearance.py`'s
-    # starved set — streets too narrow for the car. Everything here closes
-    # off-grade edges that are wide enough and simply ungraded: `Q13`'s refusal
-    # is a *graph* refusal, so the ribbon still collides and the ramps are
-    # climbable. A single `mouths` total would move when either moved and say
-    # which neither, which is the mistake `ends_behind_another_fence` and
-    # `ends_with_no_way_in` were split to avoid.
+    # 🔴 **Separate counters because they are separate populations** — the module
+    # docstring says why the two sets are separate at all. The counting rule is
+    # the part that belongs here: a single `mouths` total would move when either
+    # population moved and say which neither, which is exactly the mistake
+    # `ends_behind_another_fence` and `ends_with_no_way_in` were split to avoid.
     #
     # The levels asked for, published so the document says what it closed rather
     # than leaving a reader to infer it from the edges that happen to appear.
@@ -255,8 +260,8 @@ def _components(fenced: list[int], ends: dict[int, tuple[int, int]]) -> list[lis
     return sorted(groups)
 
 
-def touchdown_mouths(graph: dict, levels: tuple[int, ...]) -> list[tuple[int, int]]:
-    """`(edge, node)` for every off-grade edge end that meets the open network (`Q103`).
+def touchdown_mouths(graph: dict, levels: tuple[int, ...]) -> list[tuple[int, int, bool]]:
+    """`(edge, node, at_start)` for every off-grade end meeting the open network (`Q103`).
 
     🔴 **The population is topological, and that is the claim worth stating.**
     An off-grade edge is reachable because its ramp touches down onto a street,
@@ -280,15 +285,22 @@ def touchdown_mouths(graph: dict, levels: tuple[int, ...]) -> list[tuple[int, in
         return []
 
     open_network: set[int] = set()
-    off_grade: list[tuple[int, int]] = []
+    off_grade: list[tuple[int, int, bool]] = []
     for edge in graph["edges"]:
         level = int(edge.get("elevation_level", 0))
         nodes = (int(edge["from"]), int(edge["to"]))
         if level == 0:
             open_network.update(nodes)
         elif level in wanted:
-            off_grade.extend((int(edge["id"]), node) for node in nodes)
-    return sorted((edge_id, node) for edge_id, node in off_grade if node in open_network)
+            # ⚠️ **Which end is carried out rather than recovered.** The caller
+            # needs it to read the ribbon's half-width at the right end, and
+            # rebuilding an edge-to-nodes map over the whole graph to recover
+            # what this loop already has in `nodes` is the redundant half of a
+            # fact, which drifts the day either side changes.
+            off_grade.extend(
+                (int(edge["id"]), node, index == 0) for index, node in enumerate(nodes)
+            )
+    return sorted(row for row in off_grade if row[1] in open_network)
 
 
 @dataclass(frozen=True)
@@ -405,20 +417,21 @@ def place(
     *,
     inset_m: float,
     unit_width_m: float,
-    touchdowns: list[tuple[int, int]] | None = None,
+    touchdown_levels: tuple[int, ...] = (),
 ) -> tuple[list[Placement], FenceReport]:
-    """Every barrier unit the two closed populations need, and what they came to."""
-    report = FenceReport(fenced=list(fenced))
+    """Every barrier unit the two closed populations need, and what they came to.
+
+    ⚠️ **The levels rather than the mouths, so the report cannot be half-filled.**
+    Handed a mouth list, this function could publish `touchdown_edges` while its
+    caller forgot to set `touchdown_levels` beside it — a document saying which
+    ramps it closed and refusing to say under what rule. Owning the call makes
+    that state unreachable rather than merely unlikely.
+    """
+    report = FenceReport(fenced=list(fenced), touchdown_levels=list(touchdown_levels))
     at_node, ends = _adjacency(graph)
     points = {
         int(edge["id"]): np.asarray(edge["polyline"], dtype=np.float64) for edge in graph["edges"]
     }
-    # Node pairs over EVERY edge, where `ends` above holds level-0 edges alone.
-    # The touchdown pass needs which end of an off-grade ramp it is closing, and
-    # `_adjacency`'s level filter is load-bearing for the starved boundary rule
-    # (an off-grade arm is not a way in), so it is read separately rather than
-    # widened.
-    graph_ends = {int(edge["id"]): (int(edge["from"]), int(edge["to"])) for edge in graph["edges"]}
     blocked = set(fenced)
     # ⚠️ Grouping is for the published counter and nothing else. The boundary rule
     # below is decided entirely by `blocked` and `at_node`, so iterating the
@@ -466,8 +479,7 @@ def place(
     # through another fenced street (`Q19`'s `e222`/`e256`), so a barrier there
     # would stand behind a barrier. A touchdown is by construction a node where
     # the *open* network arrives, so every one of them is a way in.
-    for edge_id, node in touchdowns or []:
-        at_start = int(graph_ends[edge_id][0]) == node
+    for edge_id, node, at_start in touchdown_mouths(graph, touchdown_levels):
         half = _half_width_at_end(drawn, edge_id, at_start)
         if half is None or half <= 0.0:
             report.touchdowns_no_width += 1
@@ -507,13 +519,8 @@ def _document(
         "ends_behind_another_fence": report.ends_behind_another_fence,
         "ends_with_no_way_in": report.ends_with_no_way_in,
         "mouths_no_width": report.mouths_no_width,
-        # 🔴 **Published apart from `fenced_edges`, and the separation is the
-        # contract.** `fenced_edges` is the set `RoadGraph.fenced_edge_ids`
-        # re-derives from `clearance.json` against the car's width, and
-        # `verify_fence.gd` joins the two; an off-grade ramp swept in here would
-        # tell the engine a 6.40 m deck is too narrow to drive on and break that
-        # join in the one direction it cannot detect. These edges are closed
-        # because they are ungraded, not because they are narrow (`Q103`).
+        # Published apart from `fenced_edges` — the module docstring carries why
+        # that separation is the contract rather than a layout choice.
         "touchdown_levels": report.touchdown_levels,
         "touchdown_edges": sorted(report.touchdown_edges),
         "touchdowns": report.touchdowns,
@@ -539,16 +546,21 @@ def build_region(city: Config, region_id: str, *, out_root: Path | None = None) 
     surface = read_document(out_dir / SURFACE_MANIFEST_NAME, SURFACE_MANIFEST_SCHEMA, rebuild)
     drawn = {int(entry["edge"]): entry for entry in surface.get("carriageway", [])}
 
-    if city.clearance is None:
-        # Nothing to fence against. The document is still written, so a build
-        # without a `clearance:` block is distinguishable from one where this
-        # stage never ran.
-        log.info("  no clearance block, so nothing is fenced")
-        return write_document(out_dir / FENCE_NAME, _document(city, region_id, [], FenceReport()))
+    # 🔴 **The starved set needs `clearance:` and the touchdown closure does NOT,
+    # so this is a branch rather than an early return (`Q103`).** It was written
+    # as a return, and that silently skipped a declared `touchdown_levels` on any
+    # city without a clearance block — publishing an empty closure, and not even
+    # reaching the loud warning below, which is precisely the open-and-ungraded
+    # state the key exists to end. The closure is topological: it reads the
+    # graph's levels and nodes and no measurement at all.
+    fenced: list[int] = []
+    bar_m = float(city.clearance.car_width_m) if city.clearance is not None else None
+    if bar_m is None:
+        log.info("  no clearance block, so no starved edge is fenced")
+    else:
+        clearance = read_document(out_dir / CLEARANCE_NAME, CLEARANCE_SCHEMA, rebuild)
+        fenced = fenced_edges(graph, clearance, bar_m)
 
-    clearance = read_document(out_dir / CLEARANCE_NAME, CLEARANCE_SCHEMA, rebuild)
-    bar_m = float(city.clearance.car_width_m)
-    fenced = fenced_edges(graph, clearance, bar_m)
     if city.fence is None:
         # 🔴 **The bar without the dressing, and it is a real state rather than a
         # half-configured one.** `clearance:` decides which edges the *predicate*
@@ -557,41 +569,40 @@ def build_region(city: Config, region_id: str, *, out_root: Path | None = None) 
         # still works and the player still meets an undressed wall. `Q19` forbids
         # *shipping* that, which is a review question rather than a build one, so
         # this is logged loudly and published rather than refused.
-        log.warning(
-            "  %d edges fenced at the car's %.2f m and NO fence block to dress them"
-            " — Q19 forbids shipping an undressed refusal",
-            len(fenced),
-            bar_m,
-        )
+        if fenced:
+            log.warning(
+                "  %d edges fenced at the car's %.2f m and NO fence block to dress them"
+                " — Q19 forbids shipping an undressed refusal",
+                len(fenced),
+                bar_m,
+            )
         return write_document(
             out_dir / FENCE_NAME, _document(city, region_id, [], FenceReport(fenced=fenced))
         )
 
-    touchdowns = touchdown_mouths(graph, city.fence.touchdown_levels)
     placements, report = place(
         graph,
         drawn,
         fenced,
         inset_m=city.fence.inset_m,
         unit_width_m=city.fence.unit_width_m,
-        touchdowns=touchdowns,
+        touchdown_levels=city.fence.touchdown_levels,
     )
-    report.touchdown_levels = list(city.fence.touchdown_levels)
     if not report.closes(city.fence.unit_width_m):
         # The identity that says every mouth is accounted for. Raised rather
         # than logged: a stage whose own partition does not close is publishing
         # a number nobody can read.
         raise ValueError(
             f"{report.barriers} barrier units against {len(report.span_m)} spans over "
-            f"{report.mouths_dressed} dressed mouths — the row width and the published "
-            f"spans disagree"
+            f"{report.mouths_dressed} dressed mouths and {report.touchdowns_dressed} dressed "
+            f"touchdowns — the row width and the published spans disagree"
         )
 
     log.info(
-        "  %d edges fenced at the car's %.2f m, in %d component(s); %d mouths,"
+        "  %d edges fenced at the car's %s, in %d component(s); %d mouths,"
         " %d behind another fence, %d with no way in",
         len(fenced),
-        bar_m,
+        "no bar" if bar_m is None else f"{bar_m:.2f} m",
         report.components,
         report.mouths,
         report.ends_behind_another_fence,

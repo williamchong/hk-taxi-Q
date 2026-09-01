@@ -356,13 +356,17 @@ class TestTouchdowns:
         }
 
     def test_a_ramp_meeting_the_open_network_is_a_touchdown(self) -> None:
-        assert touchdown_mouths(self._ramp(), (1,)) == [(2, 2)]
+        """The end is carried out with the mouth — `at_start` True here, because
+        node 2 is edge 2's `from`. The caller reads the ribbon's half-width at
+        that end, and recovering it from a second pass over the graph is the
+        redundant half of a fact this return already holds."""
+        assert touchdown_mouths(self._ramp(), (1,)) == [(2, 2, True)]
 
     def test_an_interior_ramp_is_not_a_touchdown(self) -> None:
         """Edge 3 is off-grade and reachable only through edge 2, so closing the
         touchdown closes it too. Dressing it as well would stand a barrier in
         the middle of a viaduct."""
-        assert 3 not in [edge for edge, _ in touchdown_mouths(self._ramp(), (1,))]
+        assert 3 not in [edge for edge, _, _ in touchdown_mouths(self._ramp(), (1,))]
 
     def test_a_level_not_asked_for_is_left_open(self) -> None:
         """The levels are config, so a tunnel is closed only where the city says
@@ -382,7 +386,7 @@ class TestTouchdowns:
                 _edge(4, [[0, 0, 60], [0, 0, 80]], 4, 5),
             ]
         }
-        assert touchdown_mouths(graph, (1,)) == [(2, 2), (3, 4)]
+        assert touchdown_mouths(graph, (1,)) == [(2, 2, True), (3, 4, False)]
 
     def test_the_two_populations_stay_disjoint_and_the_identity_closes(self) -> None:
         """🔴 The contract `verify_fence.gd` joins on. A ramp swept into
@@ -397,9 +401,10 @@ class TestTouchdowns:
             [1],
             inset_m=4.0,
             unit_width_m=2.0,
-            touchdowns=touchdown_mouths(graph, (1,)),
+            touchdown_levels=(1,),
         )
         assert report.touchdown_edges == [2]
+        assert report.touchdown_levels == [1]
         assert not set(report.touchdown_edges) & set(report.fenced)
         assert report.touchdowns_dressed == 1
         # Both populations under one identity — every span owes its row.
@@ -413,7 +418,7 @@ class TestTouchdowns:
         drawn = _drawn({1: [0.9, 0.9], 2: [3.2, 3.2], 3: [3.2, 3.2]})
         without, report_without = place(graph, drawn, [1], inset_m=4.0, unit_width_m=2.0)
         with_none, report_none = place(
-            graph, drawn, [1], inset_m=4.0, unit_width_m=2.0, touchdowns=[]
+            graph, drawn, [1], inset_m=4.0, unit_width_m=2.0, touchdown_levels=()
         )
         assert without == with_none
         assert report_without.touchdown_edges == report_none.touchdown_edges == []
@@ -430,7 +435,7 @@ class TestTouchdowns:
             [],
             inset_m=4.0,
             unit_width_m=2.0,
-            touchdowns=touchdown_mouths(graph, (1,)),
+            touchdown_levels=(1,),
         )
         assert report.touchdowns_no_width == 1
         assert report.touchdowns_dressed == 0
@@ -486,3 +491,61 @@ class TestTouchdownLevelsConfig:
         stray = _replace(city.fence, touchdown_levels=(7,))
         with pytest.raises(ValueError, match="elevation_levels does not map"):
             _check_touchdown_levels_are_mapped(_replace(city, fence=stray), Path("cfg"))
+
+
+class TestTheClosureDoesNotDependOnClearance:
+    """🔴 The closure is topological — it reads levels and nodes and no
+    measurement — so it must not sit behind the `clearance:` guard.
+
+    It did. `build_region` returned early where a city had no `clearance:`
+    block, which silently skipped a declared `touchdown_levels`, published an
+    empty closure, and did not even reach the loud "stays open and ungraded"
+    warning — the exact state the key exists to end, wearing a green build.
+    """
+
+    def _ramp(self) -> dict:
+        return {
+            "edges": [
+                _edge(1, [[0, 0, 0], [0, 0, 20]], 1, 2),
+                _edge(2, [[0, 0, 20], [0, 6, 40]], 2, 3, level=1),
+            ]
+        }
+
+    def test_a_declared_closure_survives_a_city_with_no_clearance_block(self) -> None:
+        # An empty `fenced` is what a missing `clearance:` block leaves behind.
+        placements, report = place(
+            self._ramp(),
+            _drawn({1: [3.2, 3.2], 2: [3.2, 3.2]}),
+            [],
+            inset_m=4.0,
+            unit_width_m=2.0,
+            touchdown_levels=(1,),
+        )
+        assert report.fenced == []
+        assert report.touchdown_edges == [2]
+        assert report.touchdowns_dressed == 1
+        assert placements
+        assert report.closes(2.0)
+
+    def test_place_cannot_publish_edges_without_the_levels_that_closed_them(self) -> None:
+        """`touchdown_levels` is set by `place` from its own argument, so a
+        document naming closed ramps under no rule is unreachable rather than
+        merely unlikely."""
+        _, report = place(
+            self._ramp(),
+            _drawn({1: [3.2, 3.2], 2: [3.2, 3.2]}),
+            [],
+            inset_m=4.0,
+            unit_width_m=2.0,
+            touchdown_levels=(1,),
+        )
+        assert bool(report.touchdown_edges) == bool(report.touchdown_levels)
+
+
+class TestClosesReportsBothPopulations:
+    def test_the_failure_message_names_both_dressed_counters(self) -> None:
+        """The identity spans both populations, so a message quoting only the
+        starved half reports an apparent mismatch of exactly
+        `touchdowns_dressed` on every failure and points at the wrong one."""
+        report = FenceReport(span_m=[6.4], mouths_dressed=0, touchdowns_dressed=1, barriers=99)
+        assert not report.closes(2.0)
