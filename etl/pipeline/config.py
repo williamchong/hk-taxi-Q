@@ -794,6 +794,19 @@ class CarriagewaySurvey:
     # Optional: absent means the tool reports the near-side overhang only, which
     # is the honest answer for a city whose manual nobody has transcribed.
     width_bounds: WidthBounds | None = None
+    # Elevation levels the width survey walks. 🔴 **`(0,)` and the default must
+    # stay there** — `clearance.walk(levels=...)`'s rule at a second key, and for
+    # the same reason: widening it re-publishes `roadgraph.json` for 60 edges, so
+    # it is a bundle change and the user's call rather than a tuning knob.
+    #
+    # ⚠️ **Off-grade, these publishers fail UNSAFELY rather than merely weakly**
+    # (`Q103`). Their lines are a 2D plan projection, so a ray cast from a deck
+    # centreline finds the kerb of the street *underneath*: they license 5 of 45
+    # level-1 edges and 2 of those 5 would publish a width **wider** than the
+    # deck, making the overhang worse on the very population a widening exists to
+    # fix. Anything that turns this on off-grade owes the deck as its truth side,
+    # not these lines.
+    levels: tuple[int, ...] = (0,)
 
 
 @dataclass(frozen=True)
@@ -4349,9 +4362,36 @@ def _carriageway_survey(body: Any, where: str) -> CarriagewaySurvey | None:
         # publishers' answers into one column and hide the disagreement that
         # is the entire reason for reading more than one.
         raise ValueError(f"{where}:edges has repeated names ({', '.join(sorted(names))})")
+    levels = body.get("levels")
     return CarriagewaySurvey(
-        edges=edges, width_bounds=_width_bounds(body.get("width_bounds"), f"{where}:width_bounds")
+        edges=edges,
+        width_bounds=_width_bounds(body.get("width_bounds"), f"{where}:width_bounds"),
+        # ⚠️ Absent keeps `(0,)`, which is the shipped bundle. An explicit empty
+        # list is refused rather than read as "walk nothing": a survey that walks
+        # no edge reports total coverage of nothing, which reads as agreement —
+        # the same trap `edges` is refused empty for, two fields up.
+        levels=(0,) if levels is None else _survey_levels(levels, f"{where}:levels"),
     )
+
+
+def _survey_levels(body: Any, where: str) -> tuple[int, ...]:
+    """Which elevation levels the width survey walks (`Q103`)."""
+    if not isinstance(body, list):
+        raise ValueError(f"{where} must be a list of elevation levels, got {body!r}")
+    if not body:
+        raise ValueError(f"{where} is empty; leave the key out to walk level 0")
+
+    levels: list[int] = []
+    for index, value in enumerate(body):
+        # `_elevation_levels`' YAML 1.1 trap: PyYAML resolves bare `on`/`yes` to
+        # `True`, and `bool` subclasses `int`, so `[on]` would pass a plain
+        # `isinstance` check and silently survey level 1.
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise ValueError(f"{where}[{index}] is not an integer, got {value!r}")
+        if value in levels:
+            raise ValueError(f"{where} names level {value} twice")
+        levels.append(value)
+    return tuple(sorted(levels))
 
 
 def _width_bounds(body: Any, where: str) -> WidthBounds | None:

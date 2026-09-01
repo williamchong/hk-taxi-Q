@@ -475,10 +475,17 @@ def measure(
         (spec.name, _read_publisher(city, spec, region_id, transform)) for spec in survey.edges
     ]
     report = CarriagewayReport()
-    level_0 = [edge for edge in edges if edge.elevation_level == 0 and len(edge.polyline) > 1]
-    report.edges_walked = len(level_0)
+    # 🔴 **Config, not a constant, and it defaults to level 0 alone (`Q103`).**
+    # `clearance.walk(levels=...)`'s rule at a second key: the knob exists so an
+    # off-grade measurement is *reachable* without the bundle changing, and
+    # moving the default re-publishes `roadgraph.json` for 60 edges. See
+    # `CarriagewaySurvey.levels` for why these publishers fail unsafely up there.
+    walked = [
+        edge for edge in edges if edge.elevation_level in survey.levels and len(edge.polyline) > 1
+    ]
+    report.edges_walked = len(walked)
 
-    for edge in level_0:
+    for edge in walked:
         plan = np.asarray(edge.polyline, dtype=np.float64)[:, [0, 2]]
         spans: list[float] = []
         nears: list[float] = []
@@ -533,7 +540,7 @@ def measure(
     # depend on the arrows: keeping the two apart is what lets the row be tested
     # on its own, and what keeps a failure to read the arrows from moving a
     # width.
-    _resolve_with_rows(report, _read_lane_rows(city, region_id, transform, level_0))
+    _resolve_with_rows(report, _read_lane_rows(city, region_id, transform, walked))
     return report
 
 
