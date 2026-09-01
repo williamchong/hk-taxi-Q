@@ -207,6 +207,26 @@ class TestWalk:
         # `Q13` keeps a car off it, so its clearance is a Phase 4 question.
         assert report.corridor_m[2] == [NOT_MEASURED, NOT_MEASURED]
 
+    def test_the_level_gate_is_a_knob_a_tool_can_widen(self) -> None:
+        # `P4-1`'s measurement has to be reachable without the bundle changing,
+        # so `levels` opens the gate. Asserted as a *pair* with the default
+        # above: what is being pinned is that the shipped default stays level 0
+        # while a tool can ask for more, and a single test of either half would
+        # pass with the two silently merged.
+        graph = {
+            "edges": [
+                _edge(1, [[0.0, 0.0, 0.0], [0.0, 0.0, 20.0]]),
+                _edge(2, [[9.0, 6.0, 0.0], [9.0, 6.0, 20.0]], level=1),
+            ]
+        }
+        drawn = {**_drawn(1, [3.2, 3.2], (2.0, 2.0)), **_drawn(2, [3.2, 3.2], (2.0, 2.0))}
+        corridor, report = walk(graph, drawn, levels=(0, 1))
+        assert report.edges == 2
+        # Read off the sections themselves, not off `corridor_m`: `walk` leaves
+        # that at `NOT_MEASURED` for every edge until `measure` fills it, so an
+        # assertion there would pass for the level-0 edge too and prove nothing.
+        assert 2 in set(corridor.section_edge.tolist())
+
     def test_a_graph_out_of_step_with_the_manifest_is_refused(self) -> None:
         graph = {"edges": [_edge(1, [[0.0, 0.0, 0.0], [0.0, 0.0, 10.0], [0.0, 0.0, 20.0]])]}
         with pytest.raises(SystemExit, match="different runs"):

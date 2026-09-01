@@ -302,15 +302,25 @@ def offsets(
     junction_m: float = JUNCTION_M,
     min_stations: int = MIN_STATIONS,
     publishers: list[tuple[str, _Segments]] | None = None,
+    levels: tuple[int, ...] = (0,),
 ) -> dict[int, Offset]:
-    """Every level-0 edge's signed offset from the middle the publishers drew."""
+    """Every edge's signed offset from the middle the publishers drew, by level.
+
+    ⚠️ **`levels` defaults to level 0 and that is the only population `Q19`'s
+    refutation covers.** The correction it measured — 0.02-0.88 m available where
+    1.43-4.49 m was needed — was established here, on streets, against a
+    carriageway edge TD, iB1000 and HyD *print*. Off-grade there is no such
+    edge: no publisher draws a viaduct deck, so `--levels 1` asks the publishers
+    about a road they did not survey and a low `answered` count is the finding
+    rather than a failure. `tools/deck_margin.py` is what reads the deck itself.
+    """
     publishers = read_publishers(city, region_id) if publishers is None else publishers
     nodes = np.array([node["pos"] for node in graph["nodes"]], dtype=np.float64)
     nodes = nodes[:, [0, 2]] if len(nodes) else np.empty((0, 2))
 
     rows: dict[int, Offset] = {}
     for published in graph["edges"]:
-        if int(published["elevation_level"]) != 0 or len(published["polyline"]) < 2:
+        if int(published["elevation_level"]) not in levels or len(published["polyline"]) < 2:
             continue
         plan = np.asarray(published["polyline"], dtype=np.float64)[:, [0, 2]]
         found, spans, nears, answered, walked, junction = _station_offsets(
@@ -691,7 +701,7 @@ def _report_distribution(rows: dict[int, Offset], populations: dict[str, set[int
         )
     licensed = [row for row in rows.values() if row.licensed]
     log.info(
-        "    %d level-0 edges walked, %d licensed a width, so %d rows carry a measurement the "
+        "    %d edges walked, %d licensed a width, so %d rows carry a measurement the "
         "bounds refused",
         len(rows),
         len(licensed),
@@ -953,6 +963,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--junction-m", type=float, default=JUNCTION_M)
     parser.add_argument("--min-stations", type=int, default=MIN_STATIONS)
     parser.add_argument(
+        "--levels",
+        default="0",
+        help="comma-separated elevation levels to measure (default: 0, the only one Q19 covers)",
+    )
+    parser.add_argument(
         "--car-width-m",
         type=float,
         default=CAR_WIDTH_M,
@@ -1005,6 +1020,7 @@ def main(argv: list[str] | None = None) -> int:
     # than two that have to be kept in step by eye. The publishers are read once
     # for the same reason and because it is 2.9 s of a 33 s run.
     publishers = read_publishers(city, args.region)
+    levels = tuple(int(value) for value in args.levels.split(","))
 
     def survey(of: dict) -> dict[int, Offset]:
         return offsets(
@@ -1017,6 +1033,7 @@ def main(argv: list[str] | None = None) -> int:
             junction_m=args.junction_m,
             min_stations=args.min_stations,
             publishers=publishers,
+            levels=levels,
         )
 
     rows = survey(graph)

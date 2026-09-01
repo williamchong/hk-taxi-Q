@@ -22,6 +22,8 @@ import numpy as np
 import pytest
 from overhang import Tally, cross_section, half_width_at, left_of, walk_width
 
+from pipeline.surface import mitres
+
 
 class TestCrossSection:
     """Cells across the ribbon, and the area each stands for.
@@ -85,6 +87,24 @@ class TestLeftOf:
         by zero and put NaN into every cell position downstream, where it reads
         as 'no structure here' rather than as an error."""
         assert np.hypot(*left_of(np.zeros(2))) == 0.0
+
+    def test_left_of_agrees_with_mitres(self) -> None:
+        """🔴 The SIGN, which the two tests above cannot see.
+
+        `overhang.py` uses this normal symmetrically, so its own output survives
+        a flip — which is why its docstring used to say a flip "would change
+        nothing it reports". `tools/deck_margin.py` then imported it and
+        published a **signed** `off_centre_m` in this frame, and a flip there is
+        `Q78`: a quantity that cannot report the direction of the move it
+        measures, printing a full and plausible table either way.
+
+        Pinned against `surface.mitres` rather than against a literal, because
+        `mitres` is where the convention is decided and its comment calls the
+        frame load-bearing — `TEXCOORD_0` is a lane coordinate from the nearside
+        kerb, and Hong Kong drives on the left.
+        """
+        points = np.array([[0.0, 0.0, 0.0], [10.0, 0.0, 0.0]])
+        assert left_of(np.array([1.0, 0.0])) == pytest.approx(mitres(points)[0])
 
 
 class TestWalk:

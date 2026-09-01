@@ -271,9 +271,24 @@ def _spread(counts: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 
 
 def walk(
-    graph: dict, drawn: dict[int, dict], *, along_m: float = ALONG_M
+    graph: dict,
+    drawn: dict[int, dict],
+    *,
+    along_m: float = ALONG_M,
+    levels: tuple[int, ...] = (0,),
 ) -> tuple[Corridor, ClearanceReport]:
     """Every cross-section of every drivable level-0 edge, at `along_m` spacing.
+
+    🔴 **`levels` exists so a TOOL can measure off-grade without the bundle
+    changing, and the default must stay `(0,)`.** What ships is level 0, because
+    `Q13` closed the off-grade network to driving and its clearance is `P4-1`'s
+    question. Moving this default re-publishes `city.json` and changes what
+    `roadgraph.json` carries for 60 edges, which is the user's call and not a
+    parameter's — so the parameter buys the measurement without buying the
+    republish. ⚠️ **A wider `levels` is still not a runtime change on its own**:
+    `RoadGraph.is_drivable` is level 0 too, and both `impassable_edge_ids` and
+    `fenced_edge_ids` filter through it, so an off-grade clearance is inert
+    until `P4-1` reverses that as well.
 
     ⚠️ **`along_m` is the one dimension this stage can be *wrong* in rather than
     merely coarse** — everything else over-blocks, where a spacing too coarse to
@@ -312,7 +327,7 @@ def walk(
         entry = drawn.get(edge_id)
         halves = np.asarray((entry or {}).get("half_width_m", []), dtype=np.float64)
         report.corridor_m[edge_id] = [NOT_MEASURED] * len(points)
-        if int(published.get("elevation_level", 0)) != 0 or len(points) < 2:
+        if int(published.get("elevation_level", 0)) not in levels or len(points) < 2:
             continue
         if len(halves) != len(points):
             # The manifest and the graph disagree about this edge. Refused rather
@@ -875,16 +890,25 @@ def open_region(
 
 
 def build_region(
-    city: Config, region_id: str, *, out_root: Path | None = None, along_m: float = ALONG_M
+    city: Config,
+    region_id: str,
+    *,
+    out_root: Path | None = None,
+    along_m: float = ALONG_M,
+    levels: tuple[int, ...] = (0,),
 ) -> ClearanceReport:
-    """Measure the region already built in its out dir."""
+    """Measure the region already built in its out dir.
+
+    ⚠️ `levels` is a measurement knob and never a shipped one; see `walk`.
+    """
     out_dir, graph, drawn, buildings = open_region(city, region_id, out_root=out_root)
-    corridor, report = walk(graph, drawn, along_m=along_m)
+    corridor, report = walk(graph, drawn, along_m=along_m, levels=levels)
     report.along_m = along_m
     log.info(
-        "  %d level-0 edges, %d cross-sections to judge, %d left to their junction caps"
+        "  %d level %s edges, %d cross-sections to judge, %d left to their junction caps"
         " at %.2f m spacing",
         report.edges,
+        "/".join(str(level) for level in levels),
         report.sections_measured,
         report.sections_trimmed,
         report.along_m,

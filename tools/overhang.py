@@ -145,10 +145,15 @@ class Widened:
 def left_of(along: np.ndarray) -> np.ndarray:
     """The plan normal one metre to the left of travel.
 
-    Hong Kong drives on the left and `surface.py` offsets the same way, but this
+    Hong Kong drives on the left and `surface.py` offsets the same way. This
     tool only ever uses the normal symmetrically — both rails, both signs — so a
-    flipped sign here would change nothing it reports. Written out anyway, since
-    a reader comparing this against `mitres` will look for it.
+    flipped sign changes nothing *it* reports.
+
+    🔴 **That is no longer true of the function.** `tools/deck_margin.py`
+    imports it and publishes a **signed** `off_centre_m` in this frame, so a
+    flip there is `Q78`'s defect — a quantity that cannot report the direction
+    of the move it measures. The frame is pinned by
+    `test_left_of_agrees_with_mitres`; do not "simplify" the sign out.
     """
     length = float(np.hypot(along[0], along[1]))
     if length <= 0.0:
