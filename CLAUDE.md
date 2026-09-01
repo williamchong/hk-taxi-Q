@@ -633,6 +633,32 @@ Common emoji for this project:
   **0.158 m**, paint floating 16 cm over the road. ⚠️ **`vertices_over_cap` is the in-stage tripwire
   and there is deliberately no "placed minus drawn" counter** — that is `lift_m` by construction and
   `Q72`'s tautology. Numbers in `Q92`.
+- **Anything that moves an OFF-GRADE ribbon — `surface.floor_by_elevation_level`,
+  `floor_on_structure_m`, or an off-grade width: also `tools/deck_margin.py`, and paste its per-edge
+  table and its pooled distributions.** It decomposes `overhang.py`'s `Q22` figure into the deck's
+  own span, the **signed** offset of the centreline from it, and the metres of ribbon with nothing
+  under them — which is the difference between a ribbon that is too *wide* and one that is
+  *registered wrong*, and those need opposite fixes. ⚠️ **It is NOT an independent check of
+  `overhang.py`** — same faces, same class, same tiles — so a divergence is a bug in one of them,
+  never a second source. They read **10.4%** against **10.3%**. 🔴 **`--bridge-m` is load-bearing and
+  its default is sourced, not chosen**: `Q19`'s estate is not watertight, so a contiguous deck run
+  terminates at the first hole and 921 of 1,948 stations read two or more runs; the gap distribution
+  is bimodal (p50 0.40 m, then p90 3.37 m) and 1.0 sits between the clusters. Without it the tool is
+  a hole detector reading 14.1%. ⚠️ **The plausible explanation for that gap was the junction
+  refusal and it is measured FALSE** — `--junction-m 0` moves it 14.0 → 14.3%, the wrong way.
+  ✅ **The overhang headline is cap-stable where the span is not**, so quote `--max-lateral-m` with a
+  span and never with an overhang. ⚠️ It **grades rather than checks** and exits 0 whatever it finds.
+  🔴 **Do not answer a hanging ribbon by extending `Q95`'s survey off-grade** — measured and refused:
+  the publishers license 5 of 45 level-1 edges and their lines are a **2D plan projection**, so a ray
+  from a deck centreline finds the street *underneath* and 2 of the 5 publish a width **wider** than
+  the deck. Numbers in `Q103`.
+- 🔴 **`clearance.walk(levels=...)` and `tools/centreline_error.py --levels` both default to `(0,)`
+  and the clearance default must stay there.** They exist so `P4-1`'s measurement is reachable
+  *without* the bundle changing; moving the pipeline default re-publishes `city.json` for 60 edges.
+  ⚠️ **A wider `levels` is inert at runtime anyway** — `RoadGraph.is_drivable` is level 0 and both
+  `impassable_edge_ids` and `fenced_edge_ids` filter through it — so publishing off-grade clearance
+  changes numbers nothing reads until `P4-1` reverses that too. ⚠️ Prove a change to the walk inert
+  the way `Q96` says: the default must reproduce the shipped `clearance.json` byte-for-byte.
 - Road-surface, deck-height or ground changes: also `tools/deck_error.py`, `tools/overhang.py`,
   `tools/ground_clearance.py` and `tools/carriageway_occupancy.py`, by hand after a build. They grade
   the *shipped* bundle and share no code with the pipeline — `check.sh` does not require a built

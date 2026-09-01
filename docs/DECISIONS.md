@@ -413,6 +413,13 @@ question's own attribute flip, at the one node where no per-edge sampler can rea
 **Consequences.** The network is still *closed to driving*: `nearest_edge` refuses all 60 off-grade
 edges. Opening it is `P4-1`, which reverses `P2-2`'s refusal.
 
+🔴 **That refusal is a GRAPH refusal and the premise behind it expired (`Q103`, 2026-09-02).** The
+ribbon is still built and still collides, and *"geometrically unreachable — a flat deck with a cliff
+at each end"* stopped being true once the touchdowns were ramped: **39 of the 60 reach street
+height**, and a user drove one. So 23.3% of carriageway area is reachable while `clearance.py`,
+`fence.py`, `centreline_error.py`, `street_tracker.gd` and the wrong-way monitor all gate on level 0.
+`P4-1`'s job is no longer "open the network" but "the network is open and ungraded".
+
 **Scope correction.** `Q13` was first written as "a third of the region's road area cannot be driven
 onto". Measured: **60 of 797 edges (7.5%), 19.6% by length, 23.3% by carriageway area.**
 
@@ -2087,6 +2094,12 @@ structure to sample — and **11 of their 30 ends are clipped at the region boun
 Cross-Harbour portals ~42 m of run for an 8 m descent. It resolves only if the region grows east
 (`Q6`).
 
+✅ **The widths ARE improved (`Q103`, 2026-09-02).** All 15 were drawn at `floor_default_m` because
+`floor_by_elevation_level` had no `-1` key, so a 6.40 m bore carried a 10.24 m ribbon and `e489` kept
+**0.25 m** clear of its own walls. They are now drawn at their authored width, `e489` 0.25 → 6.40 m.
+⚠️ **It buys no triangles** — the mesh grew 47 of them, because narrowing changes the cap fans — so
+this question's cost argument stands undiminished and only its *correctness* half is answered.
+
 **See.** `Q13` · `Q20` · `Q6`
 
 ## `Q22` — Off-grade carriageway hangs past its structure
@@ -2099,6 +2112,16 @@ hand.
 
 **Why no width rule reaches the rest.** A single-lane ramp is drawn at the two-lane default; a source
 centreline is not always centred on its deck; and `P2-1` decimates `INFRASTRUCTURE` on a 0.5 m cell.
+
+✅ **Those first two now have numbers, per edge (`Q103`, 2026-09-02).** `tools/deck_margin.py`
+decomposes this figure into deck span, signed centreline offset and hanging metres: **11 of 35**
+readable level-1 edges hang, and **every one of the ten worst is `lanes = 3`** — an authored
+`3 × 3.20 = 9.60 m` on decks measuring 5.90–8.30 m, worst `e306` CANAL ROAD FLYOVER at 9.60 on
+**5.90**. So the first cause is `Q94`'s invented lane count, still live because `Q94` and `Q95` both
+measured level 0 only. 🔴 **Extending that survey off-grade is refuted**: the publishers license 5 of
+45 and their 2D lines find the street *under* the deck, so two of the five would publish a width
+wider than the deck. The only source that knows where a deck is, is the model — which is a new stage
+and a scope call, not a fix.
 
 **Impact.** Cosmetic while nothing off-grade is drivable. It stops being cosmetic in Phase 4: a wheel
 leaving the deck finds air, not a parapet.
@@ -15974,3 +15997,147 @@ than reserved.
 **See.** `Q40` for what the statistic could not reach · `Q41` for the reader that could · `Q46` for
 the quiet tier · `Q26` for the look that ships and why `A‴` moved · `Q47` for `R4`'s data half,
 which survives · `Q77` for how a withdrawn layer is kept re-declarable
+
+## `Q103` — The off-grade network is drivable and no instrument grades it
+
+**Status.** 🟡 Half answered — the tunnels are fixed, the flyovers are measured and open ·
+**Owner.** `P4-1`
+
+**Trigger.** The user drove the FLEMING ROAD ramp and asked *"why the fence is in middle of a
+lane?"* — a frame, as `Q62` says the evidence has to be. It is not a fence: no `P3-29` barrier
+stands within **230 m** and no railing within **21.5 m**. It is the flyover's own parapet, drawn
+correctly from `INFRASTRUCTURE`, standing **1.08 m** from the published centreline of `e208`
+inside a ribbon that spans ±3.20 m.
+
+### 🔴 The finding is that `Q13`'s premise expired and nothing noticed
+
+`Q13` closes the off-grade network to driving and its consequence clause reads *"the network is
+still closed to driving: `nearest_edge` refuses all 60 off-grade edges"*. That is a **graph**
+refusal. `surface.py` still builds the ribbon, `roads.glb` still carries its collider, and the
+premise that made a graph refusal sufficient — *"topologically connected to the streets and
+geometrically unreachable … a flat deck at `terrain + 6.0` with a cliff at each end"* — stopped
+being true when the touchdowns were ramped. Measured: **39 of the 60 off-grade edges now reach
+street height**, `e208` and `e118` FLEMING ROAD among them at 3.50 m.
+
+So a player can reach **23.3% of the region's carriageway area** on which *no* instrument runs.
+`clearance.py:315`, `fence.py:163`, `centreline_error.py:313` and `carriageway_occupancy.py` all
+gate on level 0, and so do `RoadGraph.is_drivable`, `street_tracker.gd` and the wrong-way monitor —
+which is why the plate in the user's frame said JAFFE ROAD while the car was on Fleming.
+
+⚠️ **This is `Q15`'s shape, not a new class**: a decision that was true when written, falsified by a
+*different* stage gaining capability, and never re-checked. Nothing fails when it expires — the
+checks simply stop covering the map.
+
+### What was measured, none of it shipping
+
+`tools/deck_margin.py` is new: it decomposes `overhang.py`'s `Q22` figure into the two things that
+can cause it — the deck's own span, the signed offset of the centreline from it, and the metres of
+ribbon with nothing under them. ⚠️ **It is not an independent check of `overhang.py`** — same
+faces, same class, same tiles — and it reads **10.4%** of drawn area hanging against that tool's
+published **10.3%**.
+
+🔴 **Reaching that agreement required a correction to the instrument, and the plausible explanation
+was the wrong one.** The first reading was 14.0%, and the first guess was the junction refusal
+biasing the kept population; at `--junction-m 0` the fraction moves **14.0% → 14.3%**, the wrong
+way. The real cause is `Q19`'s own finding: the estate is **not watertight**, so a contiguous run of
+"structure at ribbon height" terminates at the first hole and **921 of 1,948 stations read two or
+more runs**. The gap distribution is bimodal — p50 **0.40 m** with 760 of 1,064 under 0.5 m, then a
+separate tail at p90 **3.37 m** — so `--bridge-m` takes its default from where the two clusters
+part, not from caution. ✅ It saturates: 0.5 → 1.0 → 2.0 reads 10.6 → 10.4 → 10.1%.
+
+✅ **And as in `carriageway_margin.py`, the overhang headline is cap-STABLE where the span is not.**
+Over `--max-lateral-m` 8/10/12/16 the hanging fraction runs 11.8 / 11.1 / 10.4 / 11.0% while the
+span's p90 balloons 9.70 / 12.40 / 15.00 / 16.90 as runs merge across a whole interchange. **Quote
+the cap with a span, never with an overhang.**
+
+`clearance.walk(levels=...)` and `centreline_error.py --levels` are knobs, both defaulting to
+`(0,)`. ✅ **The clearance default is proved inert**: the walk reproduces the shipped
+`clearance.json` byte-for-byte after the change.
+
+### ✅ Level −1 is fixed, and the reason it was left alone was refuted rather than outvoted
+
+`floor_by_elevation_level` carried a key for `1` and none for `-1`, so 15 tunnel edges fell through
+to `floor_default_m` and were drawn at 10.24 / 12.48 m **inside their own bores**. `e489`
+CENTRAL-WAN CHAI BYPASS TUNNEL kept **0.25 m** clear of a 10.24 m ribbon.
+
+⚠️ **It was a decision, not an oversight, and the decision's reason does not survive measurement.**
+`test_a_level_with_no_rule_falls_through_to_the_speed_rule` pinned it as *"a tunnel has no deck to
+overhang, so there is no measured defect to fix"* — which is about **overhang**, where the defect is
+**intrusion**. A bore has no deck to hang over and it does have walls to hang into. ⚠️ Meanwhile
+`Config.floor_for`'s own docstring claimed *"leaves levels 1 and -1 exactly as `P2-7` measured
+them"*, so the code and its account of itself had disagreed all along.
+
+**After: every tunnel is clear of its bore, `e489` 0.25 → 6.40 m.** Priced across the whole bundle:
+**15 edges** move, **all level −1**, and the only stage counter that moves at all is
+`roadsurface.json`'s geometry. Railings, lamps, signs, arrows, roadmarks, fence, carve, clearance
+and fares are **byte-identical** — a widening change usually drags every kerb-registered layer with
+it, and here it drags none, because tunnels carry none. ⚠️ **It buys no bytes**: triangles go
+31,860 → **31,907** and the mesh grows 3.6 kB, because narrowing changes the cap fans. The value is
+that the measurement down there is now honest and `Q21`'s open question is asked of a ribbon drawn
+at its own width. ⚠️ Level 2 is declared and unused, so it is deliberately left without a rule —
+this file's floors are all measured, and there is nothing yet to measure.
+
+### 🔴 Level 1 is REFUTED for the planned fix, in `Q19` candidate 1's own shape
+
+`Q22` already names both causes qualitatively — *"a single-lane ramp is drawn at the two-lane
+default; a source centreline is not always centred on its deck"*. What was missing was a number per
+edge, and `deck_margin.py` supplies it. **11 of 35 readable level-1 edges hang**, and the ordering
+is unmistakable — every one of the ten worst is `lanes = 3`, i.e. an authored `3 × 3.20 = 9.60 m`:
+
+```
+  edge   road                        lanes  authored  deck p50  over p50  over max
+  e306   CANAL ROAD FLYOVER            3      9.60      5.90      3.70      4.20
+  e62    WAN CHAI INTERCHANGE          3      9.60      6.10      3.50      4.30
+  e450   CANAL ROAD FLYOVER            3      9.60      6.15      3.45      3.70
+  e337   CANAL ROAD FLYOVER            3      9.60     11.95      3.30      3.40
+  e266   WONG NAI CHUNG GAP FLYOVER    3      9.60      6.50      3.10      3.50
+  ...
+  e208   FLEMING ROAD                  2      6.40      6.60      1.10      5.70   <- the user's frame
+```
+
+So `Q94`'s invented lane count is still fully live off-grade — `Q94` and `Q95` both measured
+**level 0 only** — and up here it costs more, because at grade a too-wide ribbon lands on tarmac and
+here it lands on air.
+
+🔴 **But extending that survey off-grade is refuted, and it fails unsafely rather than merely
+weakly.** The publishers license **5 of 45** level-1 edges, and their lines are a **2D plan
+projection**, so a ray cast from a deck centreline finds the kerb of the street *underneath*:
+
+```
+  edge   authored   publishers' own m   deck measures   
+  e104       6.40         11.04             7.50        <- +3.5 m, crossed the deck
+  e258       9.60          8.78             7.10        <- +1.7 m
+  e248       6.40          6.37             7.80
+  e338       9.60         11.40            11.10
+  e365       6.40          7.74             7.25
+```
+
+Two of the five would publish a width **wider than the deck**, making the overhang worse on the
+population the change exists to fix — and none of the 11 worst edges is licensed at all. It is
+`Q15`'s 2D-snap defect wearing a width instead of a height.
+
+⚠️ **The registration half is refuted too, and for a stronger reason than at grade.** At level 0
+`Q19` candidate 1 died because the sourced correction was 0.02–0.88 m where 1.43–4.49 m was needed.
+Off-grade the correction largely **does not exist**: `centreline_error.py --levels 1` licenses 5 of
+45 and reads |off| p50 **0.42 m**, max **1.15 m**, against offsets `deck_margin.py` measures in
+magnitude at p50 **0.75 m**, p90 **2.60 m** and max **4.90 m**. No publisher draws a viaduct
+deck edge.
+
+**So the only thing that knows where a deck is, is the model.** That is a legitimate source — a
+fourth government dataset, not an invention, so `Q54` is not the objection — but reading it into a
+road width means a stage after `buildings` that publishes back into the graph, on `clearance.py`'s
+precedent. **That is a new stage and a schema change, and it is a scope call rather than a fix.**
+
+### What is left
+
+- 🔴 **The scope call**: author an off-grade width from the deck (new stage, schema bump), or leave
+  `Q22` open with the numbers it now has. **Unmade — the user's.**
+- ⬜ The clearance default stays `(0,)`. Flipping it publishes 60 edges of `clear_width_m` that
+  nothing reads, because `RoadGraph.is_drivable` gates `impassable_edge_ids` and `fenced_edge_ids`
+  alike. It belongs with `P4-1`, when a consumer exists.
+- ⬜ `P4-1` now has a second reason to exist: not "open the network" but "the network is already
+  open and ungraded". Either open it properly or stop the ramps at the touchdown.
+
+**See.** `Q13` for the premise that expired · `Q21` for what the tunnels cost · `Q22` for the
+mechanism this measured · `Q94` / `Q95` for the level-0 half that is done · `Q19` for the estate's
+holes and for candidate 1's shape · `Q15` for the 2D-projection defect this repeats

@@ -823,6 +823,20 @@ than discovering the rest of it from a bug report.
 - **Note:** `P4-1` reverses an acceptance criterion this project measured and proved over 505 probes.
   That is not a mistake being corrected — `Q13`'s refusal was the right call for a slice with no
   ramps. **Record it as a scope change, not a bug fix**, or the history stops making sense.
+- 🔴 **The premise has since expired and this is no longer only a scope change (`Q103`, 2026-09-02).**
+  `Q13`'s refusal is a *graph* refusal; `surface.py` still builds the ribbon and it still collides.
+  Once the touchdowns were ramped, **39 of the 60 off-grade edges reached street height** — a user
+  drove `e208` FLEMING ROAD into a parapet standing 1.08 m from its own centreline. So the network is
+  **already open and ungraded**: `clearance.py`, `fence.py`, `centreline_error.py`,
+  `carriageway_occupancy.py`, `street_tracker.gd` and the wrong-way monitor all gate on level 0.
+  `P4-1` now has two admissible endings — open it properly, or stop the ramps at the touchdown — and
+  the second is not a smaller version of the first.
+  ⚠️ **`P4-1` also inherits a measured width defect**: 11 of 35 readable level-1 edges carry a ribbon
+  wider than their deck, all ten worst at an authored `lanes = 3`. 🔴 **The obvious fix is refuted** —
+  the carriageway publishers license 5 of 45 off-grade edges and their 2D lines find the street
+  *under* the deck, so 2 of those 5 would publish a width wider than the deck. A deck-sourced width
+  means a new stage reading tiles after `buildings`, on `clearance.py`'s precedent, plus a schema
+  bump. **Unscoped and unowned — the call is the user's.** `DECISIONS.md` `Q103`.
 
 ### Outline only — refine once Phase 3 lands
 
