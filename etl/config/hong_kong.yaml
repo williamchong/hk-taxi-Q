@@ -2685,7 +2685,24 @@ roads:
     # separate defect and no width rule reaches it — Q22.
     # 0.0 is "draw it at its own width" — the floor's way of saying what the
     # 1.0x multiplier used to say, and the same measured argument stands.
+    #
+    # -1 carries the same argument and was left out until 2026-09-02, when a
+    # drive up the FLEMING ROAD ramp turned into a sweep of the whole off-grade
+    # network. A tunnel bore is a fixed width in the real city exactly as a
+    # viaduct is, and more so: there is no verge to spill onto. The omission was
+    # never a decision — `Config.floor_for`'s own docstring already claimed
+    # "levels 1 and -1 exactly as P2-7 measured them" while -1 fell through to
+    # `floor_default_m` and 15 tunnel edges were drawn at 10.24 / 12.48 m.
+    # Measured before the change with the clearance walk opened to off-grade
+    # (`clearance.walk(levels=...)`, which ships nothing): `e489`
+    # CENTRAL-WAN CHAI BYPASS TUNNEL kept **0.25 m** clear of a 10.24 m ribbon.
+    #
+    # ⚠️ Level 2 is declared in `elevation_levels` and no edge in this region
+    # uses it, so it is deliberately NOT given a rule here: the argument would
+    # be the same and the measurement does not exist, and this file's floors are
+    # all measured. A second deck arriving is what should add it, with a number.
     floor_by_elevation_level:
+      -1: 0.0
       1: 0.0
 
     # Q23. The rule above is keyed on the edge, and a road does not become a

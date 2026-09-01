@@ -2402,6 +2402,14 @@ class RoadSurface:
         offset precisely because nothing is under it, would go back to being
         widened. Checking the level first leaves levels 1 and -1 exactly as
         `P2-7` measured them, so `Q23` moves level 0 and nothing else.
+
+        ⚠️ **That last sentence was aspirational until 2026-09-02**: level -1
+        had no rule, so it fell through to `floor_default_m` and 15 tunnel edges
+        were drawn at 10.24 / 12.48 m inside their own bores — `e489` kept
+        0.25 m clear of a 10.24 m ribbon. The config now carries the rule this
+        describes; `hong_kong.yaml` has the measurement, and
+        `test_a_tunnel_is_drawn_at_its_authored_width` has the refuted reason it
+        replaced.
         """
         if elevation_level in self.floor_by_elevation_level:
             return float(self.floor_by_elevation_level[elevation_level])

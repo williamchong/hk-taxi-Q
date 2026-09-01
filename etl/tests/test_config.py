@@ -638,13 +638,36 @@ class TestCarriagewayFloor:
         A combined or speed-first reading would lift it to a 12.48 m floor."""
         assert hong_kong.roads.surface.floor_for(70, elevation_level=1) == 0.0
 
-    def test_a_level_with_no_rule_falls_through_to_the_speed_rule(self, hong_kong) -> None:
-        """Level -1 is deliberately unconfigured. A tunnel has no deck to
-        overhang, so there is no measured defect to fix, and `Q21` asks whether
-        it should be drawn at all — this pins that the fix left it alone."""
+    def test_a_tunnel_is_drawn_at_its_authored_width(self, hong_kong) -> None:
+        """🔴 **This test used to pin the opposite, and the reason it gave was
+        refuted rather than outvoted.**
+
+        It read: *"Level -1 is deliberately unconfigured. A tunnel has no deck
+        to overhang, so there is no measured defect to fix."* The first sentence
+        is about **overhang** and the defect is **intrusion** — a bore has no
+        deck to hang over and it does have walls to hang into. Measured
+        2026-09-02 with the clearance walk opened off-grade: `e489`
+        CENTRAL-WAN CHAI BYPASS TUNNEL kept **0.25 m** clear of a 10.24 m
+        ribbon, and **6.40 m** after. Every one of the 15 is now clear of its
+        own bore.
+
+        `Config.floor_for`'s docstring had already claimed this behaviour —
+        "leaves levels 1 and -1 exactly as `P2-7` measured them" — while -1 fell
+        through to `floor_default_m`, so the code and its own account of itself
+        disagreed for as long as this stood.
+        """
         surface = hong_kong.roads.surface
-        assert -1 not in surface.floor_by_elevation_level
-        assert surface.floor_for(70, elevation_level=-1) == 12.48
+        assert surface.floor_by_elevation_level[-1] == 0.0
+        assert surface.floor_for(70, elevation_level=-1) == 0.0
+
+    def test_a_level_with_no_rule_falls_through_to_the_speed_rule(self, hong_kong) -> None:
+        """Level 2 is declared in `elevation_levels` and no edge in the region
+        uses it, so it is deliberately unconfigured — this file's floors are all
+        measured and there is nothing to measure. A second deck arriving is what
+        should add the rule, with a number behind it."""
+        surface = hong_kong.roads.surface
+        assert 2 not in surface.floor_by_elevation_level
+        assert surface.floor_for(70, elevation_level=2) == 12.48
 
     def test_a_level_zero_station_on_structure_takes_the_authored_width(self, hong_kong) -> None:
         """`Q23`. The edge is level 0 and signed at 50, so both at-grade rules
