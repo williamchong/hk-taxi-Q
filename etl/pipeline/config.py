@@ -3067,6 +3067,7 @@ def load_config(path: Path | None = None) -> Config:
     _check_exposure(city, path)
     _check_deck_sampling_has_a_structure_class(city, path)
     _check_widening_levels_are_mapped(city, path)
+    _check_touchdown_levels_are_mapped(city, path)
     _check_source_exists(city, city.roads.source, f"{path}:roads.source")
     if city.roads.kerbside is not None and city.roads.kerbside.audit is not None:
         _check_source_exists(
@@ -3252,6 +3253,30 @@ def _check_widening_levels_are_mapped(city: Config, path: Path) -> None:
         known = ", ".join(str(level) for level in sorted(city.elevation_levels))
         raise ValueError(
             f"{path}:roads.surface.floor_by_elevation_level names level "
+            f"{', '.join(str(level) for level in sorted(unknown))}, "
+            f"which elevation_levels does not map ({known})"
+        )
+
+
+def _check_touchdown_levels_are_mapped(city: Config, path: Path) -> None:
+    """A touchdown closure for a level the city never maps closes nothing (`Q103`).
+
+    `_check_widening_levels_are_mapped`'s trap at a second key, and worse here:
+    a widening rule that never fires draws the ribbon at the wrong width, which
+    at least a grader can see. A closure that never fires leaves the network
+    *open*, and open is exactly the state this key exists to end — so it would
+    read as a fence that is working while the player drives straight past it.
+
+    Here rather than in `_fence` because it is a cross-section check, and
+    `fence:` cannot see `elevation_levels` while it is being parsed.
+    """
+    if city.fence is None:
+        return
+    unknown = set(city.fence.touchdown_levels) - set(city.elevation_levels)
+    if unknown:
+        known = ", ".join(str(level) for level in sorted(city.elevation_levels))
+        raise ValueError(
+            f"{path}:fence.touchdown_levels names level "
             f"{', '.join(str(level) for level in sorted(unknown))}, "
             f"which elevation_levels does not map ({known})"
         )
@@ -4218,17 +4243,73 @@ class Fence:
     # row at the wrong pitch and either gaps it or overlaps it, and both render
     # as a barrier. `etl/tests/test_fence.py` binds the two.
     unit_width_m: float
+    # Elevation levels whose touchdowns onto the open network are closed
+    # (`Q103`). Empty leaves them open, which is the pre-`Q103` behaviour.
+    #
+    # 🔴 **A SECOND POPULATION, and not a second bar.** Everything else in this
+    # block dresses `clearance.py`'s starved set — edges too narrow for the car.
+    # This closes edges that are wide enough and simply are not *graded*:
+    # `Q13`'s refusal is a graph refusal, `surface.py` still draws the ribbon
+    # and it still collides, so ramping the touchdowns made 39 off-grade edge
+    # ends physically reachable while every instrument in the bundle gates on
+    # level 0. The two sets are published separately and must stay that way —
+    # `fenced_edges` is what `RoadGraph.fenced_edge_ids` re-derives, and a
+    # ramp swept into it would tell the engine a 6.40 m deck is too narrow
+    # for the car.
+    #
+    # ⚠️ **Level 0 is refused rather than ignored.** It names the open network
+    # itself, so admitting it would fence every junction in the region — the
+    # one value here whose mistake is catastrophic rather than inert.
+    touchdown_levels: tuple[int, ...]
 
 
 def _fence(body: Any, where: str) -> Fence | None:
-    """The optional barrier-placement block (`P3-29`)."""
+    """The optional barrier-placement block (`P3-29`, `Q103`)."""
     if body is None:
         return None
     if not isinstance(body, dict):
         raise ValueError(f"{where} must be a mapping, got {body!r}")
 
-    values = _thresholds(body, where, positive=("inset_m", "unit_width_m"), signed=())
-    return Fence(**values)
+    # Lifted out before `_thresholds`, which is a closed key set over *measures*
+    # and would refuse a list. The closure still holds: anything else unknown
+    # reaches `_thresholds` and is rejected there.
+    levels = _touchdown_levels(body.get("touchdown_levels"), f"{where}:touchdown_levels")
+    measures = {key: value for key, value in body.items() if key != "touchdown_levels"}
+    values = _thresholds(measures, where, positive=("inset_m", "unit_width_m"), signed=())
+    return Fence(touchdown_levels=levels, **values)
+
+
+def _touchdown_levels(body: Any, where: str) -> tuple[int, ...]:
+    """Which off-grade levels get their touchdowns closed (`Q103`).
+
+    Absent is the pre-`Q103` state — nothing off-grade is closed — rather than a
+    default, because closing a touchdown is a decision about what the slice
+    ships and not a threshold to tune.
+    """
+    if body is None:
+        return ()
+    if not isinstance(body, list):
+        raise ValueError(f"{where} must be a list of elevation levels, got {body!r}")
+    if not body:
+        # An empty list reads as "close nothing" and so does an absent key;
+        # two spellings of one state is one of them meaning nothing.
+        raise ValueError(f"{where} is empty; leave the key out instead")
+
+    levels: list[int] = []
+    for index, value in enumerate(body):
+        # `bool` is an `int` in Python, and `true` here would close level 1 by
+        # accident — the same trap `_measures` guards on its own numbers.
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise ValueError(f"{where}[{index}] is not an integer, got {value!r}")
+        if value == 0:
+            raise ValueError(
+                f"{where} names level 0, which is the open network itself — "
+                "closing its touchdowns would fence every junction in the region"
+            )
+        if value in levels:
+            raise ValueError(f"{where} names level {value} twice")
+        levels.append(value)
+    return tuple(sorted(levels))
 
 
 def _carriageway_survey(body: Any, where: str) -> CarriagewaySurvey | None:

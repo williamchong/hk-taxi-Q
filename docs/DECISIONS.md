@@ -16128,10 +16128,90 @@ fourth government dataset, not an invention, so `Q54` is not the objection — b
 road width means a stage after `buildings` that publishes back into the graph, on `clearance.py`'s
 precedent. **That is a new stage and a schema change, and it is a scope call rather than a fix.**
 
+### ✅ The network is closed at its touchdowns, 2026-09-02 — a closure, not a fix
+
+**A second frame settled the scope call, and it settled it against the plan `Q103` first wrote.**
+The user drove `e208` again and stopped against structure at grid 836036.9E 815576.5N, Y 9.26. The
+plate read JAFFE ROAD because `e29` is the nearest **level-0** edge, 4.06 m away in plan and 5.81 m
+below. Measured at that station, the ribbon against the deck under it:
+
+```
+  lateral   ribbon    deck            lateral   ribbon    deck
+   -3.2      ---       ---             +0.4      8.58     8.39
+   -2.0      ---       ---             +3.6      8.58     8.39
+   -1.6      8.73      ---   <- taxi   +7.2      8.58     8.39
+   -0.4      8.58     8.39             +7.6      ---       ---
+```
+
+🔴 **The deck is 7.6 m wide and the ribbon is 6.40 m, so a deck-sourced WIDTH would have widened
+`e208` and made the frame worse.** The car stood on 1.4 m of carriageway with no deck under it,
+0.30 m from a near-vertical `INFRASTRUCTURE` face rising 0.76 m above the deck. The defect here is
+**registration**, not size — the ribbon sits about 1.6 m right of its own deck.
+
+⚠️ **And that is the majority case, not one unlucky edge.** `deck_margin.py`'s own pooled table
+reads `drawn − deck` p50 **−1.00 m**, with **1,042 of 1,334** stations carrying a ribbon *narrower*
+than its deck against 277 wider and 15 equal, while **713** stations hang. Even if every
+wider-or-equal station hangs, **at least 421 of the 713 (59%) hang with a ribbon narrower than the
+deck they hang off** — a population no width rule of any kind can reach. Six of the twelve worst
+edges sit there too, `e208` among them. So the planned fix buys at most half of `Q22` and
+specifically not the edge that opened this question.
+
+✅ **The "new stage after `buildings`" premise is also softer than this file first recorded.**
+`roads.py` already reads `INFRASTRUCTURE` through `buildings.read_sheet` as a `HeightField`, to
+sample deck heights — `__main__.py` states it as load-bearing (*"`roads` samples deck heights from
+the source sheets, not from tiles, so the chain stays acyclic"*). The model is already an input to
+the stage that already surveys `width_m`, and a lateral walk on that field yields span and centre
+together. That is an extension to `pipeline/carriageway.py`, not a new stage.
+
+**So the closure shipped first, alone.** `fence.touchdown_levels` closes the off-grade network at
+the nodes where it meets the open one, restoring *reachable ⟺ graded* while the geometry is fixed
+properly. 🔴 **A second population in `fence.py`, published apart from `fenced_edges`**: that set is
+what `RoadGraph.fenced_edge_ids` re-derives from the car bar, and a ramp swept into it would assert
+that a 6.40 m deck is too narrow for a 1.80 m car. These edges are closed because nothing *grades*
+them, not because they are narrow.
+
+| | before | after |
+|---|---|---|
+| `fenced_edges` | 14 | **14, byte-identical** |
+| `components` / `mouths` / `ends_behind_another_fence` / `ends_with_no_way_in` | 14 / 15 / 0 / 13 | **all identical** |
+| `touchdowns` (ends) | — | **39** — 34 at level 1, 5 at level −1 |
+| `touchdown_edges` | — | **30**, disjoint from `fenced_edges` |
+| `touchdowns_no_width` | — | 0 |
+| barriers | 90 | 253 |
+| draw calls / primitives (one camera) | 87 / 956,501 | 89 / 1,102,229 |
+
+✅ **The population is the same 36 transition nodes `P4-3` measures its ramp steps at**, which is
+the check that it is the right set: `roads._descend` gates on "a level-0 edge at the node", so a
+touchdown is a node the two share, and closing all of them closes the whole off-grade subgraph
+because an interior ramp can only be entered through one.
+
+✅ **Proved inert with the key absent**: all 90 barriers and every pre-`Q103` key reproduce the
+previous build exactly. ✅ **`reachability.py` finds 0 of the 30 in its level-0 graph** — which is
+itself the statement that `RoadGraph` never routed on them, so the closure costs the open network
+**0 pairs**. ✅ Mutation-checked rather than read: a level-0 edge in `touchdown_edges`, an edge in
+both lists, and an emptied `touchdown_edges` each fail `verify_fence.gd` (163 failures for the
+third, exactly the touchdown barrier count). ✅ **The evidence is a frame** — one fixed camera at
+the FLEMING ROAD touchdown, node 175, shot twice per side and `cmp`'d identical within each side and
+different across.
+
+⚠️ **Both off-grade levels, not just the flyovers.** A tunnel portal is reachable and ungraded by
+the same argument; fixing the 15 tunnel *widths* earlier in this question is a different matter from
+whether anything grades them. Level 2 is declared and unused.
+
+⚠️ **This is a closure, not a fix, and removing the key reverses it.** `Q22` stays open with the
+numbers it now has.
+
 ### What is left
 
-- 🔴 **The scope call**: author an off-grade width from the deck (new stage, schema bump), or leave
-  `Q22` open with the numbers it now has. **Unmade — the user's.**
+- ⬜ **The geometry**: extend `carriageway.py`'s survey off-grade behind a `levels` default of
+  `[0]` (prove it byte-identical first), then publish **width and a signed offset** together. 🔴 The
+  offset is the half that reaches `e208`, and `Q78` applies verbatim — an absolute value cannot
+  report the direction of the move it measures. The graph centreline does not move (`Q54`); this is
+  a drawing offset on `railings.py`'s registered-extent precedent. Schema bump on the offset, not on
+  a new `width_source` string.
+- ⬜ Cheapest **now**, while nothing consumes off-grade geometry. Once `P4-1` lands `RoadGraph`,
+  level-aware nearest-edge, traffic and the wrong-way monitor onto these edges, an offset stops
+  being a drawing change and becomes a change to lane centres, fare snapping and AI paths.
 - ⬜ The clearance default stays `(0,)`. Flipping it publishes 60 edges of `clear_width_m` that
   nothing reads, because `RoadGraph.is_drivable` gates `impassable_edge_ids` and `fenced_edge_ids`
   alike. It belongs with `P4-1`, when a consumer exists.

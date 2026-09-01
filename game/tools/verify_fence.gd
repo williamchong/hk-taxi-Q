@@ -74,10 +74,15 @@ func _check(manifest: Manifest, document: Dictionary) -> PackedStringArray:
 	# had the path half and not the existence half, which is the weaker of the two.
 	var barriers: Array = document.get("barriers", []) as Array
 	var fenced: Array = document.get("fenced_edges", []) as Array
+	# 🔴 **A second closed population, read separately on purpose (`Q103`).**
+	# `fenced_edges` is what `RoadGraph.fenced_edge_ids` re-derives from the car
+	# bar; these are off-grade edges closed because nothing *grades* them, not
+	# because they are narrow. Pooling the two here would defeat the join below.
+	var touchdowns: Array = document.get("touchdown_edges", []) as Array
 
 	problems.append_array(_check_the_prop(document, barriers.size()))
 	problems.append_array(_check_placements(manifest, barriers))
-	problems.append_array(_check_against_the_graph(manifest, fenced, barriers))
+	problems.append_array(_check_against_the_graph(manifest, fenced, touchdowns, barriers))
 
 	if problems.is_empty():
 		print(
@@ -89,6 +94,17 @@ func _check(manifest: Manifest, document: Dictionary) -> PackedStringArray:
 					fenced.size(),
 					int(document.get("ends_behind_another_fence", 0))
 				]
+			)
+		)
+		# ⚠️ Re-typed to int for the print: JSON has one number type, so the
+		# levels arrive as floats and would read "level(s) [-1.0, 1.0]".
+		var levels: PackedInt32Array = PackedInt32Array()
+		for level: float in document.get("touchdown_levels", []) as Array:
+			levels.append(int(level))
+		print(
+			(
+				"  fence: %d touchdowns closed over %d off-grade edges at level(s) %s"
+				% [int(document.get("touchdowns", 0)), touchdowns.size(), str(levels)]
 			)
 		)
 	return problems
@@ -169,7 +185,7 @@ func _check_placements(manifest: Manifest, barriers: Array) -> PackedStringArray
 
 ## The two directions the fence can disagree with the graph it dresses.
 func _check_against_the_graph(
-	manifest: Manifest, fenced: Array, barriers: Array
+	manifest: Manifest, fenced: Array, touchdowns: Array, barriers: Array
 ) -> PackedStringArray:
 	var problems: PackedStringArray = []
 	var document: Dictionary = GeneratedRoadGraph.load_graph()
@@ -197,14 +213,40 @@ func _check_against_the_graph(
 				"edge %d is fenced in %s and open in the graph" % [edge_id, GeneratedFence.PATH]
 			)
 
+	# 🔴 **The touchdown set must be off-grade and disjoint from the fenced one.**
+	# Both directions are falsifiable and both are the mistake worth catching: a
+	# level-0 edge here would close a street nobody asked to close, and an edge
+	# in both lists is the ETL having swept a ramp into `fenced_edges`, which
+	# would tell `fits_car` that a 6.40 m deck is too narrow for a 1.80 m car.
+	# ⚠️ Neither is a tautology — the ETL builds the two sets in separate passes
+	# with separate filters, so nothing but this asserts they stayed apart.
+	var closed: Dictionary[int, bool] = published.duplicate()
+	for edge_id: int in touchdowns:
+		var touchdown: int = int(edge_id)
+		if published.has(touchdown):
+			problems.append(
+				(
+					"edge %d is published as both fenced and a touchdown (Q103: two populations)"
+					% touchdown
+				)
+			)
+		if graph.level_of(touchdown) == 0:
+			problems.append("edge %d is closed as a touchdown and sits at level 0" % touchdown)
+		closed[touchdown] = true
+
 	# A barrier may only stand on an edge the graph closes — the second failure
 	# direction, a wall nobody asked for.
 	var dressed: Dictionary[int, bool] = {}
 	for entry: Dictionary in barriers:
 		var edge_id: int = int(entry.get("edge", -1))
-		dressed[edge_id] = true
-		if not published.has(edge_id):
-			problems.append("a barrier stands on edge %d, which is not fenced" % edge_id)
+		# ⚠️ Only the starved half seeds the reachability walk below, which reads
+		# over the fenced set alone; a touchdown edge is not in it and would be
+		# filtered there anyway, but keeping `dressed` to one population keeps
+		# the two checks saying what their names say.
+		if published.has(edge_id):
+			dressed[edge_id] = true
+		if not closed.has(edge_id):
+			problems.append("a barrier stands on edge %d, which is not closed" % edge_id)
 
 	# ⚠️ **And the direction that is the whole point.** An edge the graph refuses
 	# with nothing standing there is the invisible wall. Not every fenced edge

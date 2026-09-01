@@ -3084,6 +3084,29 @@ fence:
   # etl/tests/test_fence.py binds the two so this cannot drift silently.
   unit_width_m: 2.0
 
+  # Elevation levels whose touchdowns onto the open network are closed (Q103).
+  #
+  # 🔴 A SECOND POPULATION, not a second bar. Everything above dresses the
+  # starved set — streets too narrow for the car. These edges are wide enough
+  # and simply are not GRADED: Q13's refusal is a graph refusal, so surface.py
+  # still draws the off-grade ribbon and roads.glb still collides with it. Once
+  # Q90 ramped the touchdowns, 39 off-grade edge ends became reachable by
+  # driving at them, while clearance.py, centreline_error.py,
+  # carriageway_occupancy.py, street_tracker.gd and the wrong-way monitor all
+  # went on gating at level 0 — so 23.3% of the region's carriageway area is
+  # drivable and no instrument runs on it.
+  #
+  # ⚠️ BOTH off-grade levels, not just the flyovers. The trigger was a flyover
+  # ramp (e208 FLEMING ROAD), but a tunnel portal is reachable and ungraded by
+  # exactly the same argument — Q103 fixed the 15 tunnel WIDTHS and that is a
+  # different question from whether anything grades them. Level 2 is declared
+  # and unused, so there is nothing there to close.
+  #
+  # ⚠️ This is a closure, not a fix. It restores "reachable implies graded" and
+  # buys the time to open the network properly; PLAN.md P4-1 owns that ending
+  # and removing this key is what reverses it.
+  touchdown_levels: [-1, 1]
+
 
 # How P1-5 turns published taxi points into fare nodes.
 fares:

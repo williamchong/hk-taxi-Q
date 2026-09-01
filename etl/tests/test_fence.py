@@ -15,6 +15,7 @@ components, which is arithmetically impossible) and
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 import make_barrier
 import numpy as np
@@ -27,6 +28,7 @@ from pipeline.fence import (
     _mouth_frame,
     fenced_edges,
     place,
+    touchdown_mouths,
 )
 
 
@@ -331,3 +333,156 @@ class TestOptionalBlocks:
         graph = {"edges": [_edge(1, [[0, 0, 0], [0, 0, 10]], 1, 2)]}
         fenced = fenced_edges(graph, _clearance({1: [1.0, 1.0]}), city.clearance.car_width_m)
         assert fenced == [1]
+
+
+class TestTouchdowns:
+    """The second closed population (`Q103`).
+
+    ⚠️ **Every one of these fails silently in a frame.** A touchdown left open
+    is a ramp the player drives up into ungraded geometry — which is the state
+    that shipped — and a touchdown closed on the wrong edge is a barrier across
+    a street, which renders as a perfectly good barrier.
+    """
+
+    def _ramp(self) -> dict:
+        """A level-0 street meeting a level-1 ramp at node 2, and an interior
+        ramp beyond it that shares no node with the open network."""
+        return {
+            "edges": [
+                _edge(1, [[0, 0, 0], [0, 0, 20]], 1, 2),
+                _edge(2, [[0, 0, 20], [0, 6, 40]], 2, 3, level=1),
+                _edge(3, [[0, 6, 40], [0, 6, 60]], 3, 4, level=1),
+            ]
+        }
+
+    def test_a_ramp_meeting_the_open_network_is_a_touchdown(self) -> None:
+        assert touchdown_mouths(self._ramp(), (1,)) == [(2, 2)]
+
+    def test_an_interior_ramp_is_not_a_touchdown(self) -> None:
+        """Edge 3 is off-grade and reachable only through edge 2, so closing the
+        touchdown closes it too. Dressing it as well would stand a barrier in
+        the middle of a viaduct."""
+        assert 3 not in [edge for edge, _ in touchdown_mouths(self._ramp(), (1,))]
+
+    def test_a_level_not_asked_for_is_left_open(self) -> None:
+        """The levels are config, so a tunnel is closed only where the city says
+        so — and an empty tuple is the pre-`Q103` state rather than a default."""
+        assert touchdown_mouths(self._ramp(), ()) == []
+        assert touchdown_mouths(self._ramp(), (-1,)) == []
+
+    def test_a_ramp_touching_down_at_both_ends_is_two_mouths(self) -> None:
+        """Counted per END like every other counter on this stage, so a flyover
+        that lands at both ends is closed twice and appears once in
+        `touchdown_edges`."""
+        graph = {
+            "edges": [
+                _edge(1, [[0, 0, 0], [0, 0, 20]], 1, 2),
+                _edge(2, [[0, 0, 20], [0, 6, 40]], 2, 3, level=1),
+                _edge(3, [[0, 6, 40], [0, 0, 60]], 3, 4, level=1),
+                _edge(4, [[0, 0, 60], [0, 0, 80]], 4, 5),
+            ]
+        }
+        assert touchdown_mouths(graph, (1,)) == [(2, 2), (3, 4)]
+
+    def test_the_two_populations_stay_disjoint_and_the_identity_closes(self) -> None:
+        """🔴 The contract `verify_fence.gd` joins on. A ramp swept into
+        `fenced_edges` would tell `RoadGraph.fits_car` that a wide deck is too
+        narrow for the car, and the sets are built by two passes with two
+        filters, so nothing but this holds them apart."""
+        graph = self._ramp()
+        drawn = _drawn({1: [0.9, 0.9], 2: [3.2, 3.2], 3: [3.2, 3.2]})
+        placements, report = place(
+            graph,
+            drawn,
+            [1],
+            inset_m=4.0,
+            unit_width_m=2.0,
+            touchdowns=touchdown_mouths(graph, (1,)),
+        )
+        assert report.touchdown_edges == [2]
+        assert not set(report.touchdown_edges) & set(report.fenced)
+        assert report.touchdowns_dressed == 1
+        # Both populations under one identity — every span owes its row.
+        assert report.closes(2.0)
+        assert len(placements) == sum(max(1, math.ceil(span / 2.0)) for span in report.span_m)
+
+    def test_closing_no_touchdown_leaves_the_starved_half_untouched(self) -> None:
+        """The inertness proof, in the small: the key absent must reproduce the
+        pre-`Q103` build exactly, or `touchdown_levels` is not a switch."""
+        graph = self._ramp()
+        drawn = _drawn({1: [0.9, 0.9], 2: [3.2, 3.2], 3: [3.2, 3.2]})
+        without, report_without = place(graph, drawn, [1], inset_m=4.0, unit_width_m=2.0)
+        with_none, report_none = place(
+            graph, drawn, [1], inset_m=4.0, unit_width_m=2.0, touchdowns=[]
+        )
+        assert without == with_none
+        assert report_without.touchdown_edges == report_none.touchdown_edges == []
+        assert report_without.touchdowns == 0
+
+    def test_a_touchdown_with_no_published_ribbon_is_counted_not_padded(self) -> None:
+        """`mouths_no_width`'s rule at the second population: an end with no span
+        has no span to record, and a padded zero would be filtered back out
+        before every percentile anyway."""
+        graph = self._ramp()
+        placements, report = place(
+            graph,
+            _drawn({1: [0.9, 0.9]}),
+            [],
+            inset_m=4.0,
+            unit_width_m=2.0,
+            touchdowns=touchdown_mouths(graph, (1,)),
+        )
+        assert report.touchdowns_no_width == 1
+        assert report.touchdowns_dressed == 0
+        assert report.span_m == []
+        assert placements == []
+
+    def test_touchdowns_is_derived_from_the_two_outcomes(self) -> None:
+        report = FenceReport(touchdowns_dressed=5, touchdowns_no_width=2)
+        assert report.touchdowns == 7
+
+
+class TestTouchdownLevelsConfig:
+    """The key is a decision about what the slice ships, so the ways it can be
+    wrong are refused at load rather than discovered in a frame."""
+
+    def test_level_zero_is_refused(self) -> None:
+        """🔴 The one value here whose mistake is catastrophic rather than
+        inert: level 0 names the open network, so it would fence every junction
+        in the region."""
+        from pipeline.config import _touchdown_levels
+
+        with pytest.raises(ValueError, match="level 0"):
+            _touchdown_levels([0], "where")
+
+    def test_a_bool_is_not_a_level(self) -> None:
+        """`bool` is an `int` in Python, so `true` would close level 1."""
+        from pipeline.config import _touchdown_levels
+
+        with pytest.raises(ValueError, match="not an integer"):
+            _touchdown_levels([True], "where")
+
+    def test_an_empty_list_is_refused_because_absent_already_means_that(self) -> None:
+        from pipeline.config import _touchdown_levels
+
+        with pytest.raises(ValueError, match="empty"):
+            _touchdown_levels([], "where")
+
+    def test_absent_is_the_pre_q103_state(self) -> None:
+        from pipeline.config import _touchdown_levels
+
+        assert _touchdown_levels(None, "where") == ()
+
+    def test_a_level_the_city_never_maps_is_refused(self) -> None:
+        """`_check_widening_levels_are_mapped`'s trap at a second key, and worse:
+        a closure that never fires leaves the network open, which is the state
+        the key exists to end."""
+        from dataclasses import replace as _replace
+
+        from pipeline.config import _check_touchdown_levels_are_mapped, load_config
+
+        city = load_config()
+        assert city.fence is not None
+        stray = _replace(city.fence, touchdown_levels=(7,))
+        with pytest.raises(ValueError, match="elevation_levels does not map"):
+            _check_touchdown_levels_are_mapped(_replace(city, fence=stray), Path("cfg"))

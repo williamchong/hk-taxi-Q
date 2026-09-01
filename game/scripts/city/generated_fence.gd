@@ -14,7 +14,7 @@ const GeneratedDocument = preload("res://scripts/city/generated_document.gd")
 const PATH: String = "res://assets/generated/fence.json"
 
 ## Schema this understands, matching `FENCE_SCHEMA` in `etl/pipeline/fence.py`.
-const SCHEMA_VERSION: int = 1
+const SCHEMA_VERSION: int = 2
 
 
 ## The parsed fence document, or an empty dictionary with a pushed message.
