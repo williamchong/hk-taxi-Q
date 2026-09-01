@@ -884,7 +884,7 @@ def build_region(
     )
     report.components = _components(len(nodes), report.edges)
     _kerbside(source, style, transform, region_high, report)
-    _carriageway(city, region_id, transform, report)
+    _carriageway(city, region_id, transform, report, surfaces.deck)
 
     _write(out_root, city, region_id, report)
     return report
@@ -962,6 +962,7 @@ def _carriageway(
     region_id: str,
     transform: GameTransform,
     report: RoadReport,
+    deck: _Deck | None = None,
 ) -> None:
     """Replace the authored `width_m` with what the publishers drew (`Q95`).
 
@@ -985,6 +986,14 @@ def _carriageway(
         transform,
         report.edges,
         nodes[:, [0, 2]] if len(nodes) else np.empty((0, 2)),
+        # ⚠️ **The same field this stage already built for the polyline's own
+        # height** (`_deck_heights`), handed on rather than re-read. It is the
+        # only source that knows where a viaduct deck is, and re-indexing 74
+        # source meshes to ask it a second question would cost the build for
+        # nothing (`Q103`).
+        deck=(deck.field, deck.thresholds.slab_gap_m, deck.thresholds.clearance_m)
+        if deck is not None
+        else None,
     )
     report.carriageway = found
     report.edges = [_reassign(edge, found) for edge in report.edges]
@@ -2012,7 +2021,7 @@ def main(argv: list[str] | None = None) -> int:
     if report.carriageway is not None:
         width = report.carriageway
         log.info(
-            "  carriageway: %d of %d level-0 edges measured (%s); %d spanned and unattributed, "
+            "  carriageway: %d of %d edges measured (%s); %d spanned and unattributed, "
             "%d under TD's %s m minimum — reported, never refused",
             width.measured,
             width.edges_walked,
@@ -2030,6 +2039,27 @@ def main(argv: list[str] | None = None) -> int:
             "    by publisher: %s — ⚠️ NOT one measurement, see `Edge.width_publisher`",
             _by_basis(width.publishers[edge_id] for edge_id in width.assigned_m),
         )
+        if width.deck_span_m:
+            # ⚠️ **Measured and published nowhere.** A different truth side from
+            # every line above — the model rather than a publisher's plan line —
+            # so it is logged apart rather than folded into the coverage figures.
+            spans = np.array(list(width.deck_span_m.values()))
+            offsets = np.array(list(width.deck_offset_m.values()))
+            log.info(
+                "    deck: %d off-grade edges measured against their own structure; "
+                "span p50 %.2f m, offset p50 %+.2f m (right of travel), |offset| max %.2f m",
+                len(spans),
+                float(np.median(spans)),
+                float(np.median(offsets)),
+                float(np.abs(offsets).max()),
+            )
+            log.info(
+                "      %d stations on a deck, %d with the centreline off it entirely, "
+                "%d edges unsampled — RECORDED, PUBLISHED NOWHERE (Q103)",
+                width.deck_stations_on,
+                width.deck_stations_off,
+                width.deck_edges_unsampled,
+            )
         log.info(
             "    lanes: %d of %d measured widths resolve under TPDM %.2f-%.2f m (%s); "
             "%d ambiguous keep the authored count, %d odd two-way — reported, never corrected",

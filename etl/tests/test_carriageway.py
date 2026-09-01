@@ -30,9 +30,14 @@ import pytest
 
 from pipeline.carriageway import (
     _ROW_MIN,
+    DECK_ACROSS_M,
+    DECK_BRIDGE_M,
+    DECK_TOLERANCE_M,
     LANES_FLOOR,
     MIN_STATIONS,
     CarriagewayReport,
+    _along_at,
+    _deck_reach,
     _lane_bracket,
     _lanes,
     _license,
@@ -524,3 +529,126 @@ class TestWidestRow:
         assert _widest_rows({1: near}) == {1: 1}
         wide = [_Symbol(0.0, 0.0, 6.0), _Symbol(0.0, 2.9, 6.0)]
         assert _widest_rows({1: wide}) == {1: 1}
+
+
+class _FlatDeck:
+    """A `HeightField` stand-in: one slab height over a plan window.
+
+    A fake rather than a built field, because what these tests pin is the walk's
+    *rules* — where a run stops, what bridges, which way positive points — and a
+    real mesh would make each of those depend on geometry nobody reads here.
+    """
+
+    def __init__(self, spans: list[tuple[float, float, float]]) -> None:
+        # (low_x, high_x, height); anything outside every span is NaN.
+        self.spans = spans
+
+    def sample_along(self, x: np.ndarray, z: np.ndarray, *, slab_gap_m: float) -> np.ndarray:
+        out = np.full(len(np.asarray(x)), np.nan)
+        for index, value in enumerate(np.asarray(x)):
+            for low, high, height in self.spans:
+                if low <= value <= high:
+                    out[index] = height
+                    break
+        return out
+
+
+class TestDeckReach:
+    """The lateral deck walk (`Q103`).
+
+    ⚠️ **Every rule here fails silently in a frame.** A run that stops early
+    reports a narrow deck and a run that leaks reports a wide one, and both
+    render as a perfectly ordinary flyover.
+    """
+
+    # A station at the origin, walking along +x, so the normal is +x.
+    POINT: ClassVar[np.ndarray] = np.array([0.0, 0.0])
+    NORMAL: ClassVar[np.ndarray] = np.array([1.0, 0.0])
+
+    def test_the_run_stops_at_the_deck_edge(self) -> None:
+        deck = _FlatDeck([(-3.0, 4.0, 10.0)])
+        assert _deck_reach(deck, 0.5, self.POINT, self.NORMAL, +1.0, 10.0) == pytest.approx(
+            4.0, abs=DECK_ACROSS_M
+        )
+        assert _deck_reach(deck, 0.5, self.POINT, self.NORMAL, -1.0, 10.0) == pytest.approx(
+            3.0, abs=DECK_ACROSS_M
+        )
+
+    def test_a_centreline_off_the_deck_measures_nothing(self) -> None:
+        """🔴 Refused, never scored as a zero-width deck. That station is the
+        defect being sized, so folding it in would measure it away."""
+        deck = _FlatDeck([(2.0, 6.0, 10.0)])
+        assert _deck_reach(deck, 0.5, self.POINT, self.NORMAL, +1.0, 10.0) is None
+
+    def test_a_slab_at_another_height_is_not_this_deck(self) -> None:
+        """The interchange case: a deck overhead must not extend this one."""
+        deck = _FlatDeck([(-3.0, 2.0, 10.0), (2.0, 9.0, 10.0 + 5.0)])
+        assert _deck_reach(deck, 0.5, self.POINT, self.NORMAL, +1.0, 10.0) == pytest.approx(
+            2.0, abs=DECK_ACROSS_M
+        )
+
+    def test_camber_inside_the_tolerance_stays_one_deck(self) -> None:
+        deck = _FlatDeck([(-3.0, 2.0, 10.0), (2.0, 6.0, 10.0 + DECK_TOLERANCE_M * 0.5)])
+        assert _deck_reach(deck, 0.5, self.POINT, self.NORMAL, +1.0, 10.0) == pytest.approx(
+            6.0, abs=DECK_ACROSS_M
+        )
+
+    def test_a_hole_narrower_than_the_bridge_is_closed(self) -> None:
+        """🔴 Without this the walk is a hole detector, not a deck measurement —
+        `Q19`'s estate is not watertight. Measured: unbridged, this walk read
+        p50 -3.65 m against `tools/deck_margin.py`."""
+        gap = DECK_BRIDGE_M * 0.5
+        deck = _FlatDeck([(-3.0, 2.0, 10.0), (2.0 + gap, 7.0, 10.0)])
+        assert _deck_reach(deck, 0.5, self.POINT, self.NORMAL, +1.0, 10.0) == pytest.approx(
+            7.0, abs=DECK_ACROSS_M
+        )
+
+    def test_a_void_wider_than_the_bridge_is_not_closed(self) -> None:
+        """The other half of the same rule, and the one that keeps two decks two
+        decks. Without it the bridge would span a real void and report a single
+        carriageway across an interchange."""
+        gap = DECK_BRIDGE_M * 2.0
+        deck = _FlatDeck([(-3.0, 2.0, 10.0), (2.0 + gap, 7.0, 10.0)])
+        assert _deck_reach(deck, 0.5, self.POINT, self.NORMAL, +1.0, 10.0) == pytest.approx(
+            2.0, abs=DECK_ACROSS_M
+        )
+
+
+class TestTheDeckOffsetSign:
+    """🔴 The one thing here that renders perfectly when it is backwards.
+
+    `_stations` emits the **right** normal and `surface.mitres` the **left**
+    one, and `CLAUDE.md` says the two are opposite on purpose. So the offset
+    this stage records is right-of-travel, and whatever finally draws with it
+    owes a *named* negation — pinned here rather than described in a comment,
+    which is what `Q78` says a sign needs.
+    """
+
+    def test_positive_means_the_deck_lies_right_of_the_centreline(self) -> None:
+        # Travel along +x in plan, so `_stations`' normal is (-0, 1) — +z, the
+        # right hand. A deck hanging further to +z must read positive.
+        (_, normal), *_ = _stations(np.array([[0.0, 0.0], [20.0, 0.0]]), 4.0)
+        assert normal == pytest.approx([0.0, 1.0])
+
+        deck = _FlatDeck([(-2.0, 8.0, 10.0)])
+        # `_FlatDeck` keys on the first coordinate, so walk it in that frame:
+        # +1.0 reaches 8 m and -1.0 reaches 2 m, a deck centred 3 m to the right.
+        right = _deck_reach(deck, 0.5, np.array([0.0, 0.0]), np.array([1.0, 0.0]), +1.0, 10.0)
+        left = _deck_reach(deck, 0.5, np.array([0.0, 0.0]), np.array([1.0, 0.0]), -1.0, 10.0)
+        assert right is not None and left is not None
+        assert 0.5 * (right - left) == pytest.approx(3.0, abs=DECK_ACROSS_M)
+
+
+class TestAlongAt:
+    def test_a_station_between_vertices_is_projected_not_snapped(self) -> None:
+        """⚠️ Snapping would quantise every deck height to the source's own
+        drawing density — coarsest on a long straight, which is exactly where a
+        ramp's height changes fastest."""
+        plan = np.array([[0.0, 0.0], [100.0, 0.0]])
+        along = np.array([0.0, 100.0])
+        assert _along_at(plan, along, np.array([37.0, 0.0])) == pytest.approx(37.0)
+
+    def test_it_walks_the_second_segment_too(self) -> None:
+        plan = np.array([[0.0, 0.0], [10.0, 0.0], [10.0, 10.0]])
+        along = np.array([0.0, 10.0, 20.0])
+        assert _along_at(plan, along, np.array([10.0, 4.0])) == pytest.approx(14.0)

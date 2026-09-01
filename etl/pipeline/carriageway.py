@@ -58,6 +58,7 @@ from pipeline.polyline import (
     game_heading_deg,
     plan_lengths,
 )
+from pipeline.terrain import HeightField
 
 log = logging.getLogger(__name__)
 
@@ -178,6 +179,34 @@ class CarriagewayReport:
     # readings sharing no input, landing on the same integer. Nothing to
     # publish; counted because it is the only free cross-check either has.
     lanes_row_agreeing: list[int] = field(default_factory=list)
+
+    # ── The deck a ribbon is drawn on (`Q103`) ─────────────────────────────
+    #
+    # 🔴 **A different truth side from everything above, and the reason is
+    # measured.** Every field above reads what a *publisher* drew. Off-grade
+    # those lines are a 2D plan projection, so a ray from a deck centreline
+    # finds the kerb of the street underneath — they license 5 of 45 level-1
+    # edges and 2 of the 5 would publish a width wider than the deck. The only
+    # source that knows where a viaduct deck is, is the model, and `roads.py`
+    # already reads it as a `HeightField` for the polyline's own height.
+    #
+    # ⚠️ **Recorded and published NOWHERE yet.** Nothing downstream reads these,
+    # which is what lets the walk be added and graded before the bundle moves.
+    deck_span_m: dict[int, float] = field(default_factory=dict)
+    # 🔴 **SIGNED, in `_stations`' RIGHT-of-travel frame, and that is not the
+    # frame `surface.mitres` draws in.** The two normals in this repo are
+    # opposite on purpose (`CLAUDE.md`), so whatever finally consumes this owes
+    # a *named* negation and a mutation check — `Q78`'s defect is precisely an
+    # unsigned magnitude that could not report the direction of its own move.
+    # Positive means the deck's centre lies right of the published centreline.
+    deck_offset_m: dict[int, float] = field(default_factory=dict)
+    # Stations whose centreline stood on no deck at all — the ribbon is off its
+    # own structure there, which is the defect this exists to size.
+    deck_stations_off: int = 0
+    # Stations where the walk found a deck and measured it.
+    deck_stations_on: int = 0
+    # Edges walked at a non-zero level with no deck field to walk against.
+    deck_edges_unsampled: int = 0
 
     @property
     def measured(self) -> int:
@@ -441,12 +470,151 @@ def _median_or_none(values: list[float]) -> float | None:
     return float(np.median(values)) if len(values) >= MIN_STATIONS else None
 
 
+# How far either side of a centreline the deck walk looks, and how finely. The
+# reach clears the widest authored off-grade ribbon (9.60 m, so 4.80 m a side)
+# with room for a deck wider than the paint, which is the common case; the step
+# is the resolution every number below is quantised to.
+DECK_MAX_LATERAL_M = 12.0
+DECK_ACROSS_M = 0.10
+# How far a lateral sample may sit from the station's own slab height and still
+# be the same deck. A deck is not level across its width — it is cambered, and
+# it is drawn as a decimated mesh — so this cannot be zero; and it must stay
+# well under a storey or the walk steps onto the deck above at an interchange.
+#
+# 🔴 **0.40 m because that is `tools/deck_margin.py`'s `--attribute-within-m`,
+# and the two are REQUIRED to agree.** They are two implementations of one
+# measurement (`CLAUDE.md`), so a tolerance chosen independently here would make
+# every divergence between them unreadable — is it the reading, or is it the
+# bar? Measured: at 0.75 m this walk read p50 **+2.38 m** wider than that tool
+# over the 8 edges both license, against the width survey's own p50 0.005 m.
+DECK_TOLERANCE_M = 0.40
+
+# How wide an interior hole may be before it stops being a hole in the model and
+# starts being a real void between two decks. 🔴 **Sourced, not chosen, and
+# shared with `tools/deck_margin.py` for `DECK_TOLERANCE_M`'s reason** — that
+# tool measured the gap distribution as bimodal (p50 0.40 m, then a separate
+# tail at p90 3.37 m), and 1.0 sits between the two clusters.
+DECK_BRIDGE_M = 1.0
+
+# 🔴 **The comparison is SLAB to SLAB, and the ribbon is not the slab.**
+# `roads._deck_heights` publishes `polyline.y` as the sampled structure *plus*
+# `deck.clearance_m`, so the road surface floats above the deck it rests on by
+# design. Comparing a lateral structure sample against that height spends the
+# whole tolerance on a constant offset before the camber is even reached —
+# which is half of the divergence above, and it is subtracted rather than
+# absorbed into a wider bar.
+
+
+def _deck_reach(
+    field: HeightField,
+    slab_gap_m: float,
+    point: np.ndarray,
+    normal: np.ndarray,
+    sign: float,
+    deck_y: float,
+) -> float | None:
+    """How far the deck under a station continues in one direction, or None.
+
+    ⚠️ **A walk outward from the centreline, not a hit test.** The question is
+    which deck *this station stands on*, so the run has to be contiguous from
+    the centre out: a hit test would find the deck on the far side of a gap and
+    report a span across thin air. `sample_along` is handed the walk in order
+    for the same reason it is handed the polyline in `roads._deck_heights` —
+    consecutive samples resolve a stack by continuity rather than by a seed.
+    """
+    offsets = np.arange(0.0, DECK_MAX_LATERAL_M + DECK_ACROSS_M, DECK_ACROSS_M)
+    heights = field.sample_along(
+        point[0] + sign * normal[0] * offsets,
+        point[1] + sign * normal[1] * offsets,
+        slab_gap_m=slab_gap_m,
+    )
+    on = np.isfinite(heights) & (np.abs(heights - deck_y) <= DECK_TOLERANCE_M)
+    if not on[0]:
+        # The centreline itself is not on this deck, so there is no run to walk.
+        return None
+
+    # 🔴 **Interior gaps up to `DECK_BRIDGE_M` are closed first, and without this
+    # the walk is a hole detector rather than a deck measurement.** `Q19`
+    # measured this estate as *not watertight*, so a contiguous run of structure
+    # at slab height terminates at the first hole. Measured here: unbridged, this
+    # walk read p50 **-3.65 m** against `tools/deck_margin.py` over the edges
+    # both license — systematically narrow, which is the signature that tool
+    # documents for its own unbridged form.
+    hits = np.flatnonzero(on)
+    max_gap = round(DECK_BRIDGE_M / DECK_ACROSS_M)
+    for low, high in itertools.pairwise(hits):
+        if 1 <= high - low - 1 <= max_gap:
+            on[low + 1 : high] = True
+
+    ends = np.flatnonzero(~on)
+    return float(offsets[ends[0] - 1] if len(ends) else offsets[-1])
+
+
+def _walk_the_deck(
+    report: CarriagewayReport,
+    deck: tuple[HeightField, float, float],
+    point: np.ndarray,
+    normal: np.ndarray,
+    plan: np.ndarray,
+    along_edge: np.ndarray,
+    heights: np.ndarray,
+    spans: list[float],
+    offsets: list[float],
+) -> None:
+    """One station's deck span and the centreline's signed offset from it.
+
+    ⚠️ **The reference height is the ribbon's own `y`, interpolated along the
+    edge** — not the deck's, which is the quantity being looked for. `roads.py`
+    has already sampled the structure to build that `y` and added
+    `deck.clearance_m` on top of it, so the road surface sits just above the
+    slab it rests on and `DECK_TOLERANCE_M` has to cover that lift as well as
+    the camber.
+
+    ⚠️ **A station is dropped, never defaulted, where the centreline stands on
+    no deck.** That is the defect being sized, so scoring it as a zero-width
+    deck would fold the thing being measured into the measurement.
+    """
+    field, slab_gap_m, clearance_m = deck
+    deck_y = float(np.interp(_along_at(plan, along_edge, point), along_edge, heights)) - clearance_m
+    right = _deck_reach(field, slab_gap_m, point, normal, +1.0, deck_y)
+    left = _deck_reach(field, slab_gap_m, point, normal, -1.0, deck_y)
+    if right is None or left is None:
+        report.deck_stations_off += 1
+        return
+    report.deck_stations_on += 1
+    spans.append(right + left)
+    # 🔴 **Positive is RIGHT of travel**, because `_stations` emits the right
+    # normal. `surface.mitres` is the left one and the two are opposite on
+    # purpose, so a consumer owes a named negation (`CLAUDE.md`, `Q78`).
+    offsets.append(0.5 * (right - left))
+
+
+def _along_at(plan: np.ndarray, along_edge: np.ndarray, point: np.ndarray) -> float:
+    """Arc length of a station that lies on this polyline.
+
+    ⚠️ **Projected onto the segment, never snapped to the nearest vertex.**
+    `_stations` places points *between* vertices by construction, so a nearest-
+    vertex reading would quantise every height to the source's own drawing
+    density — coarse on a long straight, which is exactly where a ramp's height
+    is changing fastest.
+    """
+    starts, ends = plan[:-1], plan[1:]
+    steps = ends - starts
+    lengths_sq = (steps * steps).sum(axis=1)
+    safe = np.where(lengths_sq > 0.0, lengths_sq, 1.0)
+    t = np.clip(((point - starts) * steps).sum(axis=1) / safe, 0.0, 1.0)
+    feet = starts + steps * t[:, None]
+    index = int(np.hypot(*(feet - point).T).argmin())
+    return float(along_edge[index] + t[index] * np.sqrt(lengths_sq[index]))
+
+
 def measure(
     city: Config,
     region_id: str,
     transform: GameTransform,
     edges: list,
     nodes: np.ndarray,
+    deck: tuple[HeightField, float, float] | None = None,
 ) -> CarriagewayReport:
     """Per-edge carriageway width, or nothing where the publishers do not license one.
 
@@ -487,6 +655,10 @@ def measure(
 
     for edge in walked:
         plan = np.asarray(edge.polyline, dtype=np.float64)[:, [0, 2]]
+        heights = np.asarray(edge.polyline, dtype=np.float64)[:, 1]
+        along_edge = plan_lengths(np.asarray(edge.polyline, dtype=np.float64))
+        deck_spans: list[float] = []
+        deck_offsets: list[float] = []
         spans: list[float] = []
         nears: list[float] = []
         answered: set[str] = set()
@@ -496,7 +668,19 @@ def measure(
                 # A station in a junction mouth has no far kerb to find and
                 # reads as a wide road. Dropped here rather than reported,
                 # because this stage assigns rather than grades.
+                #
+                # ⚠️ **The deck walk is refused here too, and must stay below
+                # this line.** At a junction mouth a deck runs into the ramp it
+                # joins, so the contiguous run is the whole interchange rather
+                # than this edge's deck — `tools/deck_margin.py` refuses for the
+                # same reason and the two populations have to match to be
+                # comparable. Walked above this guard, CANAL ROAD FLYOVER's
+                # `e337` reads a 14.05 m deck against that tool's 11.95.
                 continue
+            if deck is not None and edge.elevation_level != 0:
+                _walk_the_deck(
+                    report, deck, point, normal, plan, along_edge, heights, deck_spans, deck_offsets
+                )
             for name, segments in publishers:
                 ahead = segments.first_hit(point, normal, MAX_RAY_M)
                 behind = segments.first_hit(point, -normal, MAX_RAY_M)
@@ -507,6 +691,17 @@ def measure(
                 answered.add(name)
                 report.stations_spanned += 1
                 break
+
+        # ⚠️ Recorded before the publishers' `continue` below, because the deck
+        # and the published lines are different truth sides — an edge no
+        # publisher licensed can still have been measured against its own deck,
+        # and that is most of the off-grade network.
+        deck_span = _median_or_none(deck_spans)
+        if deck_span is not None:
+            report.deck_span_m[edge.id] = deck_span
+            report.deck_offset_m[edge.id] = float(np.median(deck_offsets))
+        elif deck is not None and edge.elevation_level != 0:
+            report.deck_edges_unsampled += 1
 
         span = _median_or_none(spans)
         if span is None:
