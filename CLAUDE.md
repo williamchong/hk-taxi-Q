@@ -614,6 +614,31 @@ Common emoji for this project:
   ⚠️ **`clearance_reconcile` fails until its ratchet is moved**, which is the ratchet working, not a
   bar to retune. ⚠️ **The evidence is a frame** (`Q62`): the `q19s` cameras, shot twice and `cmp`'d.
   Numbers in `Q19`.
+- **`pipeline/boxjunctions.py`, the `boxjunctions` config block, or anything that moves the drawn
+  ribbon's EXTENT — `surface.floor_default_m` included: also `tools/box_extent.py`, and paste its
+  per-box table and its `--ray-m` sweep.** 🔴 **A yellow box cannot be painted on a pavement**, so
+  each one is a published statement that the ground beneath it is carriageway — a **fourth extent
+  publisher** beside `Q94`'s three, and the only one covering junctions, where `Q95`'s ray survey
+  refuses to station. Today **6.71%** of box paint area (38.75 m² of 577.83) has no drawn
+  carriageway under it. 🔴 **Quote the BASIS and quote the RADIUS or the number means nothing.**
+  The three-way split reads **55.7 / 40.3 / 4.0 by triangle count** and **43.6 / 48.0 / 8.4 by
+  area** over the same paint — twelve points apart, because a void triangle is small and there are
+  many of them — and `Q104` first published the count split beside an area headline. The void share
+  also runs **5.1% → 77.8%** over `--ray-m` 1 → 8, against a constant off-road population.
+  🔴 **The two classes want OPPOSITE fixes and must never share an acceptance number** (`Q57`):
+  `void` is the gap between two ribbons that never meet and is `P3-31`'s; `past kerb` is a ribbon
+  genuinely narrower than the paint and is `P3-32`'s. ⚠️ **Do not add a mutation check asking a
+  widening to move one and not the other** — it was written into `PLAN.md`, and a widening closes
+  voids *and* kerb overhangs, so only a broken classifier could pass it (`Q72` inverted). What holds
+  disjointness is the partition asserted at runtime and the 256 ray patterns in
+  `test_the_three_classes_are_exhaustive_and_disjoint` — mutation-check that rather than reading its
+  pass. ⚠️ **`--ray-m` and `--reach-m` are two values on purpose**: the overrun runs past the
+  classification radius, so one value would confine the distribution to the bar by construction
+  (`Q58`'s trap), and a reach under the radius is refused at startup. ⚠️ **Identity is
+  point-in-polygon on the source rings, never a cluster of the shipped mesh** — clustering returns
+  **18 of 20** boxes and is flat from 1.5 m to 15 m, so a sweep cannot see the undercount;
+  `unattributed` must stay **0**. ⚠️ It **grades rather than checks** and exits 0 whatever it finds.
+  Numbers in `Q104`.
 - **Any painted layer's height, `surface.py`'s cap construction, or any paint `lift_m`: also
   `tools/paint_clearance.py`, and paste its table.** It asks the one question a marking stage cannot
   ask from inside — **is the paint on top of the asphalt or inside it?** — because every counter

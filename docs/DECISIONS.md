@@ -16479,8 +16479,11 @@ survey refuses junction stations, and a box only ever occurs at a junction. This
 at a second layer — the arrow rows went from *grading* the lane count to *assigning* it.
 ⚠️ **Coverage is 20 boxes**, so it is thin as a width source and immediately useful as a grader.
 
-**Measured on the shipped bundle.** **6.7%** of box paint area — **38.7 m² of 577.8** — has no drawn
-carriageway under it, overrunning the drawn edge by p50 **1.63 m**, p90 **2.94 m**, max **4.93 m**.
+**Measured on the shipped bundle**, by the scratch script this entry was opened on. **6.7%** of box
+paint area — **38.7 m² of 577.8** — has no drawn carriageway under it, overrunning the drawn edge by
+p50 **1.63 m**, p90 **2.94 m**, max **4.93 m**. ⚠️ **`P3-30` reproduces the area exactly and the
+distance only in the tail** — see its subsection below; the figures in this paragraph are what was
+believed on 2026-09-02, kept because the difference between them is the record.
 ✅ `paint_clearance.py` already reports the same set from its own implementation — **690 of 10,165
 triangles, 45.3 m², coverage 93.2%** — and deliberately does **not** gate it, because `Q54` refuses
 to scale a surveyed extent against an invented width. Two implementations agreeing is what makes
@@ -16492,11 +16495,27 @@ where this is a plan-coverage one. Quoting them together is `Q57`'s generalisati
 🔴 **It is TWO defects wanting opposite fixes, and pooling them leaves nothing to do but widen.**
 Eight rays per off-road triangle, drawn road hit within 4 m:
 
-| what surrounds the off-road paint | share | what it is |
-|---|---|---|
-| road on **both opposed sides** | **55.5%** | the paint crosses the **void between two ribbons that never meet** |
-| road on **one side only** | **40.3%** | the ribbon really is narrower than the painted carriageway |
-| nothing within 4 m | 4.2% | — |
+| what surrounds the off-road paint | of off-road **triangles** | of off-road **area** | what it is |
+|---|---|---|---|
+| road on **both opposed sides** | **55.7%** | **43.6%** | the paint crosses the **void between two ribbons that never meet** |
+| road on **one side only** | **40.3%** | **48.0%** | the ribbon really is narrower than the painted carriageway |
+| nothing within 4 m | 4.0% | 8.4% | — |
+
+🔴 **The split first published here was a triangle-COUNT share quoted beside an AREA headline, and
+`P3-30` corrected it.** The scratch figures were 55.5 / 40.3 / 4.2; the instrument reproduces them at
+**55.7 / 40.3 / 4.0** by count and reads **43.6 / 48.0 / 8.4** by area over the same paint. The two
+disagree by twelve points because a void triangle is small and there are many of them — hatch stripe
+ends crossing a median gap — where a past-kerb triangle is larger. ⚠️ **So a reader who sized
+`P3-31` at "55.5% of 38.7 m²" was out by 4.6 m².** `paint_clearance.py`'s rule earning its keep:
+both are published and neither is derived from the other. Quote which one.
+
+🔴 **And the split is a function of the 4 m radius, which the first publication did not say.** Over
+`--ray-m` 1 → 8 the void share runs **5.1% → 77.8%** by count and 4.0% → 62.6% by area, against a
+*constant* off-road population — the radius reclassifies and never reclaims. That is close to the
+shape `Q72` rejected a divider test for, and the difference is exactly that the denominator here
+cannot move. ⚠️ **The 55.7 / 40.3 split is therefore never quotable without its radius.** What it is
+not is a reason to doubt the two-defect finding: the two named sites are 99.4% and 80.2% at the
+shipped bar, and they stay on opposite sides of it across the whole sweep.
 
 ⚠️ **The two frames separate almost perfectly along that line**, which is why one read as a kerb in
 the wrong place and the other as a narrowing:
@@ -16522,6 +16541,73 @@ the painted box still overruns.
 only the grader publishes and this entry has already had to correct an asserted framing twice.
 ⚠️ **The two arms are graded separately or it is `Q57`'s generalisation** — one population's property
 quoted for another.
+
+### `P3-30` — the instrument, built 2026-09-02
+
+✅ **`tools/box_extent.py` ships and the scratch figures survive it.** The area headline reproduces
+to the centimetre — **38.75 m² of 577.83 (6.71%)** against the recorded 38.7 of 577.8 — and the two
+named sites reproduce on the axis they were quoted on: the HKCEC box (index 16, nearest street EXPO
+DRIVE EAST) is **99.4% void** against 99%, and CONVENTION AVENUE east (index 7) is **80.2% past a
+kerb** against 79%. **20 rows publish, 15 of them with zero off-road paint** (`Q58`'s rule). It
+grades and does not gate; exit 0 whatever it finds. Runs in ~4 s.
+
+🔴 **Only five of the twenty boxes have any off-road paint at all**, which the pooled share hid:
+`e591`'s CONVENTION AVENUE box (12.43 m² off), HUNG HING ROAD (10.92), LOCKHART ROAD (10.24), the
+HKCEC box (5.04) and one EXPO DRIVE EAST box at 0.12. So `P3-31` and `P3-32` are each aimed at a
+handful of named junctions rather than at a region-wide property — thin as a width source, exactly
+as this entry said, and thinner than "6.7% of the layer" sounds.
+
+🔴 **Identity comes from the source polygons because clustering the shipped mesh is measurably
+wrong.** Plan-space single-linkage over the paint triangles returns **18** boxes where the stage
+drew 20 — two abut — and returns 18 flat from a **1.5 m to a 15 m** radius, so a sweep cannot see
+the undercount. That is `Q58`'s `drawn_gauge_m` trap in a new place: a quantity stable across its
+own free value, read as correct. The replacement is point-in-polygon against `DTAD_YL_BOX_POLY`
+re-read through `gdb`, and `unattributed` is what holds it — **0** today, and a triangle inside no
+published ring is a finding rather than a rounding. ⚠️ It is never pooled into a nearest box.
+
+🔴 **Two free values, deliberately not one.** The overrun runs past the classification radius, so
+marching the distance along the classification rays would confine the distribution to `--ray-m` by
+construction — `Q58`'s trap, reachable from the command line. `--ray-m` (4.0) classifies;
+`--reach-m` (10.0) measures; a reach under the radius is refused at startup.
+
+⚠️ **The distance distribution does not fully reproduce and the gap is a definition, not a defect.**
+The instrument reads p50 **1.05** / p90 **2.98** / p99 4.45 / max **4.80 m** over all 544 off-road
+triangles, against the scratch script's p50 1.63 / p90 2.94 / max 4.93. **The tail agrees and the
+middle does not**, and ray count is not the cause — 4, 8 and 16 rays give p50 1.10 / 1.05 / 1.00.
+The scratch definition was never written down, which is the whole argument for building this. What
+ships is stated: the minimum over eight rays from the triangle's centroid, marched to `--reach-m` in
+`--step-m` steps, so it is an **upper bound twice over** — 45° of direction and one step of range.
+The p50 over `past kerb` alone is 1.55 m, which is the nearest thing to the old figure and is a
+different population.
+
+⚠️ **Review found one defect in the instrument and one in its tests, both fixed before it was
+believed.** `march`'s step count *rounded*, so a reach that the step does not divide was marched
+**past** — 10.0 m in 0.6 m steps reaching 10.2 — and a `max(1, …)` floor under it made the overshoot
+unbounded. Inert at the shipped 10.0/0.05, so no published figure moves; the point is that the
+column had no bound where the docstring claims two. The test that now holds it puts its slab at
+**10.1 m**, between the true reach and the overshoot: a fixture further out passes under the bug
+too. ⚠️ **Every new test here was mutation-checked rather than read** (`Q72`) — the tie-break test
+first written on *abutting* rings passed with the tie-break deleted, because `inside_polygon` is
+half-open and already places an axis-aligned seam once; only genuinely *overlapping* rings observe
+the rule. And the four-class test claimed to exercise all four while producing two.
+
+✅ **The naming join was wrong and is now `polyline.Segments.nearest`.** Hand-rolled it measured to
+the nearest polyline **vertex**, so a box mid-block on a long two-vertex edge lost to a
+denser-vertexed side street: `FLEMING ROAD` at 10.53 m beat the true 1.06 m, and one box was named
+after `WAN CHAI INTERCHANGE` — an *elevated* road — at 7.82 m against `GLOUCESTER ROAD` at 0.20 m.
+Six of twenty names changed and **none of the five off-road boxes did**, so every figure above is
+unaffected. ⚠️ Level 0 only, as every other caller of that join passes.
+
+🔴 **`PLAN.md`'s mutation criterion was withdrawn, because no instrument could pass it.** It asked
+that a config widening move the past-kerb count and *not* move the void count. A widening closes
+voids as well as kerb overhangs — median paint becomes on-road once the two ribbons reach it — so
+both shares fall under any global widening, and only a broken classifier could do otherwise. That is
+`Q72`'s tautology from the other side: a check whose passing state is unreachable certifies nothing.
+✅ **What replaced it**: disjointness is *structural* — the opposed-pair predicate is a boolean over a
+set that is either empty or not — asserted as a partition identity at runtime and checked over all
+**256** reachable ray patterns in `test_the_three_classes_are_exhaustive_and_disjoint`; and the
+sensitivity that is real, `--ray-m`, is swept and published. The directional prediction moves to
+`P3-31` / `P3-32`, where it means something.
 
 **See.** `Q19` for the carve and its non-watertight estate · `Q23` for `floor_on_structure_m` and
 the 1.9 m jog · `Q37` for the disjoint-axes rule the classification owes · `Q54` for why the prism

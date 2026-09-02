@@ -675,34 +675,47 @@ carved edges. A second drive found the same disagreement with an *external witne
 boxes are painted past the drawn kerb, and a box cannot lie on a pavement, so each one is a
 published statement that the ground beneath it is carriageway.
 
-**Measured on the shipped bundle before any of this is built:** **6.7%** of box paint area
-(**38.7 m² of 577.8**) has no drawn carriageway under it, overrunning the drawn edge by p50 1.63 m
-to **max 4.93 m**; `paint_clearance.py` reads the same set independently and deliberately does not
-gate it.
+**Measured on the shipped bundle by `tools/box_extent.py` (`P3-30`):** **6.71%** of box paint area
+(**38.75 m² of 577.83**) has no drawn carriageway under it, overrunning the drawn edge by p50
+**1.05 m** / p90 2.98 / **max 4.80 m** over 544 triangles, measured to a 10 m reach;
+`paint_clearance.py` reads the same set independently and deliberately does not gate it.
+⚠️ **The scratch figures this task was opened on read p50 1.63 / max 4.93** — the tail agrees and
+the middle does not, because the scratch definition was never written down. `Q104`.
 
 🔴 **It is TWO defects wanting opposite fixes — do not pool them, and do not share an acceptance
 number.** Eight rays per off-road triangle, drawn road hit within 4 m:
 
-| what surrounds the off-road paint | share | what it is | owned by |
-|---|---|---|---|
-| road on **both opposed sides** | **55.5%** | the **void between two ribbons that never meet** | `P3-31` |
-| road on **one side only** | **40.3%** | the ribbon really is narrower than the painted carriageway | `P3-32` |
-| nothing within 4 m | 4.2% | — | unassigned |
+| what surrounds the off-road paint | of **triangles** | of **area** | what it is | owned by |
+|---|---|---|---|---|
+| road on **both opposed sides** | **55.7%** | **43.6%** | the **void between two ribbons that never meet** | `P3-31` |
+| road on **one side only** | **40.3%** | **48.0%** | the ribbon really is narrower than the painted carriageway | `P3-32` |
+| nothing within 4 m | 4.0% | 8.4% | — | unassigned |
 
-⚠️ **The two drives separate almost perfectly along that line** — the HKCEC junction is **99%** void
-and CONVENTION AVENUE east is **79%** past a kerb — which is why one read as a kerb in the wrong
-place and the other as a narrowing. ⚠️ **The spill is not a junction-mouth flare and a mouth rule
+🔴 **Two bases, because they disagree by twelve points and the first publication mixed them** — a
+count split quoted beside an area headline (`Q104`). Quote which one. 🔴 **And quote the radius**:
+the void share runs 5.1% → 77.8% by count over `--ray-m` 1 → 8, against a constant off-road
+population. The two named sites stay on opposite sides of the split across that whole sweep, which
+is what the two-defect finding actually rests on.
+
+⚠️ **The two drives separate almost perfectly along that line** — the HKCEC junction (box 16) is
+**99.4%** void and CONVENTION AVENUE east (box 7) is **80.2%** past a kerb, measured — which is why
+one read as a kerb in the wrong place and the other as a narrowing. ⚠️ **The spill is not a junction-mouth flare and a mouth rule
 would not reach it**, and it is not the authored-width fallback failing: the worst site's nearest
 edge is a *measured* 10.55 m that the paint still overruns. `Q104` carries both figures.
 
 | ID | Deliverable | Accept |
 |---|---|---|
-| `P3-30` | **A box-junction extent grader** — `tools/box_extent.py`, per box: paint area, area with no drawn carriageway under it, distance past the drawn edge, and the **three-way classification** above. Reads the shipped bundle and shares no code with `boxjunctions.py`, on `carriageway_margin.py`'s precedent. **Grades, never gates** — exits 0 whatever it finds | Reproduces the figures above on today's bundle (6.7%, 38.7 m², 55.5/40.3/4.2); the classification is **mutation-checked** — a ribbon widened in config must move the "past a kerb" count and must **not** move the "gap between ribbons" count, or the two axes are not disjoint (`Q37`'s rule); per-box rows published over boxes with **zero** off-road area as well as those with some (`Q58`); the HKCEC junction and CONVENTION AVENUE east appear as named rows, at their measured 99% / 79% |
-| `P3-31` | **Close the median void** — opposed ribbons meet, or the gap between them is filled, so a box painted across a junction has road under all of it. `surface.py` | The 55.5% share falls and the 40.3% share does **not** — measured with `P3-30`, which is why that runs first; ⚠️ **a widening change, so the whole widening battery is owed**: `narrowing.py`, `carriageway_margin.py` (all four tables), `carriageway_occupancy`, `deck_error`, `overhang`, `ground_clearance`, `clearance_reconcile`, plus `railings`, `lamps`, `signs` and `kerbside` counters, because every position registered against the drawn kerb moves; A/B at the HKCEC junction camera, shot twice and `cmp`'d |
-| `P3-32` | **Neck the ribbon to the corridor, or widen it to the paint** — `Q104`'s open item and the 40.3% share, one question with two arms: where a carve wall stands the *invented* width yields (the carve may never cut at the floor, `Q54` inverted); where a publisher painted past the ribbon the ribbon yields. `structure_taper_m` is the existing machinery and its own comment describes the identical 1.9 m jog | Carve-wall inset falls from 1.52-4.32 m toward 0 on the eight carved edges; `P3-30`'s "past a kerb" share falls; ⚠️ **the two arms are graded separately or this is `Q57`'s generalisation** — one population's property quoted for another; same widening battery as `P3-31`; the `q19s` cameras re-shot |
+| `P3-30` | ✅ **Done 2026-09-02** — `tools/box_extent.py`, per box: paint area, area with no drawn carriageway under it, distance past the drawn edge, and the **three-way classification** above. Reads the shipped bundle and shares no code with `boxjunctions.py`, on `carriageway_margin.py`'s precedent; identity comes from the source polygons, because clustering the mesh returns 18 boxes of 20 and is flat over a 10x radius sweep. **Grades, never gates** — exits 0 whatever it finds | ✅ Reproduces the area headline exactly (**38.75 m² of 577.83, 6.71%**) and the split on the axis it was quoted on (**55.7/40.3/4.0** by count); **20 rows**, 15 of them with zero off-road area (`Q58`); the HKCEC box reads **99.4%** void and CONVENTION AVENUE east **80.2%** past a kerb, against 99% / 79%. 🔴 **The mutation criterion was withdrawn as unpassable** — a widening closes voids *and* kerb overhangs, so demanding one move without the other is `Q72`'s tautology inverted. Replaced by a structural partition asserted at runtime, all **256** ray patterns checked in test, and a published `--ray-m` sweep. ⚠️ The distance middle does not reproduce (p50 1.05 against 1.63) and the tail does (p90 2.98 against 2.94) — a definition the scratch script never wrote down, which is what this task existed to fix. `DECISIONS.md` `Q104` |
+| `P3-31` | **Close the median void** — opposed ribbons meet, or the gap between them is filled, so a box painted across a junction has road under all of it. `surface.py` | The void share falls and the past-kerb share does **not**, measured with `P3-30` at a stated `--ray-m` and on a stated basis — **55.7% / 43.6%** and **40.3% / 48.0%** today, count and area. 🔴 **Grade it per box, not pooled**: only 5 of 20 boxes carry off-road paint, and the HKCEC box (16) is the one this task is aimed at, at 99.4% void; ⚠️ **a widening change, so the whole widening battery is owed**: `narrowing.py`, `carriageway_margin.py` (all four tables), `carriageway_occupancy`, `deck_error`, `overhang`, `ground_clearance`, `clearance_reconcile`, plus `railings`, `lamps`, `signs` and `kerbside` counters, because every position registered against the drawn kerb moves; A/B at the HKCEC junction camera, shot twice and `cmp`'d |
+| `P3-32` | **Neck the ribbon to the corridor, or widen it to the paint** — `Q104`'s open item and the past-kerb share (**40.3%** by count, **48.0%** by area), one question with two arms: where a carve wall stands the *invented* width yields (the carve may never cut at the floor, `Q54` inverted); where a publisher painted past the ribbon the ribbon yields. `structure_taper_m` is the existing machinery and its own comment describes the identical 1.9 m jog | Carve-wall inset falls from 1.52-4.32 m toward 0 on the eight carved edges; `P3-30`'s past-kerb share falls, quoted on a stated basis and at a stated `--ray-m`, and **per box** — CONVENTION AVENUE east (box 7) at 80.2% is the site this arm is aimed at; ⚠️ **the two arms are graded separately or this is `Q57`'s generalisation** — one population's property quoted for another; same widening battery as `P3-31`; the `q19s` cameras re-shot |
 
 - **Deps:** `P3-30` before `P3-31` and `P3-32` — both are graded on shares only `P3-30` publishes,
   and asserting them before the instrument exists is what `Q104` had to correct twice.
+  ✅ **Discharged 2026-09-02**: the instrument ships, so both are unblocked.
+  🔴 **And it changed the target.** Only **five of twenty** boxes carry any off-road paint —
+  CONVENTION AVENUE `e591` (12.43 m² off), HUNG HING ROAD (10.92), LOCKHART ROAD (10.24), the HKCEC
+  box (5.04) and one EXPO DRIVE EAST box at 0.12 — so these are two handfuls of named junctions, not
+  a region-wide property. Grade them per box; the pooled share is what hid that.
 - ⚠️ **`P3-31` and `P3-32` are independent of each other** and may run in either order; what they
   must not do is share an acceptance number, because they move different halves of the same total.
 - 🔴 **Neither may be answered by widening the carve prism.** Cutting at the drawn floor removes
