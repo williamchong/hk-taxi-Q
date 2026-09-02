@@ -677,13 +677,26 @@ Common emoji for this project:
   the publishers license 5 of 45 level-1 edges and their lines are a **2D plan projection**, so a ray
   from a deck centreline finds the street *underneath* and 2 of the 5 publish a width **wider** than
   the deck. Numbers in `Q103`.
-- 🔴 **`clearance.walk(levels=...)` and `tools/centreline_error.py --levels` both default to `(0,)`
-  and the clearance default must stay there.** They exist so `P4-1`'s measurement is reachable
-  *without* the bundle changing; moving the pipeline default re-publishes `city.json` for 60 edges.
+- 🔴 **`clearance.walk(levels=...)`, `tools/centreline_error.py --levels` and
+  `tools/carriageway_occupancy.py --levels` all default to `(0,)` and the clearance default must
+  stay there.** They exist so `P4-1`'s measurement is reachable *without* the bundle changing;
+  moving the pipeline default re-publishes `city.json` for 60 edges.
   ⚠️ **A wider `levels` is inert at runtime anyway** — `RoadGraph.is_drivable` is level 0 and both
   `impassable_edge_ids` and `fenced_edge_ids` filter through it — so publishing off-grade clearance
   changes numbers nothing reads until `P4-1` reverses that too. ⚠️ Prove a change to the walk inert
   the way `Q96` says: the default must reproduce the shipped `clearance.json` byte-for-byte.
+  🔴 **The occupancy flag is strictly ADDITIVE and a set omitting 0 is refused** — the corridor gate
+  reads the level-0 rows alone, so `--levels 1` left it an empty population and printed *"Within the
+  accepted bounds."* on a bundle with 21 starved edges. The unmapped-level guard cannot catch that,
+  because level 1 *is* mapped. ⚠️ **Widening moves no share**: that tool's area half always walked
+  every level and reported per level, and only its corridor was bound to 0 — so an inertness proof
+  here is the corridor table, not the shares. 🚫 **Negative levels are refused deliberately**:
+  `walk_carriageway` skips them and folding them in would add their area to `drawn_share`'s
+  all-level denominator, loosening the two gated bars by a choice of divisor. So this tool **cannot**
+  corroborate `e489`, whose 0.00 m is a **headroom** defect a horizontal-corridor instrument can only
+  publish as zero *width* (`Q103`). ⚠️ **Do not import the parse from `pipeline.clearance`** — that
+  module's bumper bounds are `ground_clearance.py`'s deliberate exception and no second import comes
+  in on it.
 - Road-surface, deck-height or ground changes: also `tools/deck_error.py`, `tools/overhang.py`,
   `tools/ground_clearance.py` and `tools/carriageway_occupancy.py`, by hand after a build. They grade
   the *shipped* bundle and share no **method** with the pipeline — `check.sh` does not require a built

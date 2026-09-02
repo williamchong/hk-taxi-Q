@@ -138,6 +138,25 @@ log = logging.getLogger(__name__)
 BUMPER_LOW_M = 0.30
 BUMPER_HIGH_M = 2.00
 
+# The elevation levels the corridor half judges. 🔴 **`(0,)`, and the default
+# must stay there.** `--levels` is `pipeline/clearance.py`'s knob at the second
+# instrument, and it exists for the same reason: `P4-1` needs the off-grade
+# corridor measured *before* the bundle carries it, and `Q103` deferred exactly
+# that. The area half above has always walked every level and reported per
+# level; only this half was bound to 0.
+#
+# ⚠️ **Moving the default moves `clearance_reconcile.py`'s `EXPECT_GRADER`**,
+# and `Q51`'s ratchet is what keeps the pipeline's count and this tool's count
+# describing one bundle — so a default flipped here and not there stops the two
+# figures being about the same thing.
+#
+# ⚠️ **The parse below is written out rather than imported from
+# `pipeline.clearance`.** `ground_clearance.py` imports that module's bumper
+# *bounds* deliberately and the rule attached to it is explicit: a shared bound
+# is not a shared reading, and no second import comes in on that precedent. The
+# whole value of this tool is that it shares no method with what it grades.
+CORRIDOR_LEVELS = (0,)
+
 # Plan cell for the occupier index, and **the dominant error term in every
 # corridor width below** — not `--across-m`, which only quantises the answer.
 # A cell blocks in full as soon as one surface sample lands in it, so a wall
@@ -447,9 +466,16 @@ class Survey:
     # does — a narrow ramp and a wide arterial are not equals.
     area_m2: dict[int, float] = field(default_factory=dict)
     occupied_m2: dict[tuple[int, str], float] = field(default_factory=dict)
-    # The narrowest clear corridor found on each drivable level-0 edge, and where.
+    # The narrowest clear corridor found on each drivable judged edge, and where.
     corridor_m: dict[int, float] = field(default_factory=dict)
     corridor_at: dict[int, tuple[float, float]] = field(default_factory=dict)
+    # The elevation level each judged edge was walked at. Recorded here rather
+    # than re-derived in `main` because `close_station` already holds it: a
+    # second pass over `graph["edges"]` would be a *different* derivation of the
+    # same fact, free to drift from the one that decided the population, and it
+    # would put `elevation_level`'s spelling in two places. `Q57`'s split — the
+    # level-0 rows gate, the rest are reported — reads off this.
+    corridor_level: dict[int, int] = field(default_factory=dict)
     # The same corridor measured only inside the authored width, at the same
     # worst station — how much of the blockage the playability widening owns.
     corridor_authored_m: dict[int, float] = field(default_factory=dict)
@@ -790,8 +816,19 @@ def band_map(lattice: Lattice) -> dict[tuple[int, int], tuple[float, float]]:
     return coarse
 
 
-def survey(lattice: Lattice, classes: dict[str, Occupied]) -> Survey:
-    """Ask every drawn carriageway cell what stands in it."""
+def survey(
+    lattice: Lattice,
+    classes: dict[str, Occupied],
+    *,
+    corridor_levels: tuple[int, ...] = CORRIDOR_LEVELS,
+) -> Survey:
+    """Ask every drawn carriageway cell what stands in it.
+
+    ⚠️ `corridor_levels` reaches the corridor half alone. The area half folds
+    every walked level in regardless and always has — `Survey.add` is keyed by
+    level — so widening this changes which edges get a *corridor* and changes
+    no share.
+    """
     found = Survey()
     found.asked = lattice.asked
 
@@ -817,9 +854,11 @@ def survey(lattice: Lattice, classes: dict[str, Occupied]) -> Survey:
     seen_offset = float("inf")
 
     def close_station() -> None:
-        # The corridor is a level-0 question. An off-grade ribbon nobody can
-        # reach cannot strand a traffic car, and `Q21`/`Q22` own its defects.
-        if current_level != 0 or not standing_at:
+        # The corridor is a level-0 question *by default*. An off-grade ribbon
+        # nobody can reach cannot strand a traffic car, and `Q21`/`Q22` own its
+        # defects — but `P4-1` opens that network, and `--levels` is how the
+        # corridor up there is measured before it does (`Q103`).
+        if current_level not in corridor_levels or not standing_at:
             return
         found.corridor_stations += 1
 
@@ -836,6 +875,7 @@ def survey(lattice: Lattice, classes: dict[str, Occupied]) -> Survey:
         blocked = [name is not None for name in standing_at]
         clear = _clear_run(blocked, station_span)
         found.corridor_profile.setdefault(current_edge, []).append(clear)
+        found.corridor_level[current_edge] = current_level
         if clear < found.corridor_m.get(current_edge, float("inf")):
             found.corridor_m[current_edge] = clear
             found.corridor_at[current_edge] = (seen_x, seen_z)
@@ -911,6 +951,69 @@ def survey(lattice: Lattice, classes: dict[str, Occupied]) -> Survey:
     return found
 
 
+def _levels_label(levels: tuple[int, ...]) -> str:
+    """The levels as one token, so a log line and a refusal spell them alike.
+
+    Signed, because an elevation level's sign is its whole meaning here. Written
+    out for `_levels_argument`'s reason rather than to save four joins: the same
+    run was printing `+0,+1` in one line and `0,1` in another.
+    """
+    return ",".join(f"{level:+d}" for level in levels)
+
+
+def _levels_argument(text: str) -> tuple[int, ...]:
+    """`--levels 0,1` as a tuple, refusing what would measure nothing.
+
+    ⚠️ **Negative levels are refused, and not because they are uninteresting.**
+    `walk_carriageway` skips them, and pulling them in would add their area to
+    `drawn_share`'s denominator — which is `sum(area_m2.values())` across every
+    level — so the two *gated* level-0 bars would read looser for no reason but
+    a choice of divisor. That is the move `drawn_share`'s own docstring exists
+    to refuse. Measuring under the terrain needs the denominator separated from
+    the walked population first, which is a change to a gated instrument and
+    wants its own argument; `Q21` owns the question meanwhile.
+    """
+    levels: list[int] = []
+    for piece in text.split(","):
+        piece = piece.strip()
+        if not piece:
+            # This is also what catches `--levels ""`: `"".split(",")` is `[""]`,
+            # so an empty set never survives to be checked for afterwards. An
+            # empty one would judge no corridor and then report that every edge
+            # keeps a lane clear — the empty set reading as agreement, which is
+            # the trap `pipeline/clearance.py` refuses at the sibling flag.
+            raise argparse.ArgumentTypeError("--levels takes comma-separated integers")
+        try:
+            level = int(piece)
+        except ValueError:
+            raise argparse.ArgumentTypeError(f"--levels: '{piece}' is not an integer") from None
+        if level < 0:
+            raise argparse.ArgumentTypeError(
+                f"--levels: {level} is below the terrain, which this tool's walk does not "
+                "cover and whose area would move the gated shares' denominator — see "
+                "_levels_argument"
+            )
+        if level not in levels:
+            levels.append(level)
+    if 0 not in levels:
+        # 🔴 **The flag is strictly ADDITIVE, and this is why.** The corridor
+        # gate reads the level-0 rows alone — an off-grade edge is graded and
+        # never gated (`Q57`) — so a set that omits 0 leaves that gate with an
+        # empty population and it passes for having stopped looking. Measured,
+        # not argued: `--levels 1` on this bundle printed "Within the accepted
+        # bounds." while 21 level-0 edges were starved. That is the empty set
+        # reading as agreement again, reachable past the unmapped-level guard
+        # because level 1 *is* mapped, and `deck_error`'s fourth defect is the
+        # same shape — a denominator that shrinks when the thing it measures
+        # breaks. Widening the corridor is a measurement; narrowing it below
+        # what the bars were written against is a way to get a green run.
+        raise argparse.ArgumentTypeError(
+            "--levels must include 0: the corridor gate is written against level 0 and "
+            "judges nothing without it, so omitting it would pass by not looking"
+        )
+    return tuple(sorted(levels))
+
+
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser(
@@ -952,6 +1055,19 @@ def main(argv: list[str] | None = None) -> int:
         help="print Q19's corridor profile and centreline query per failing edge",
     )
     parser.add_argument(
+        "--levels",
+        type=_levels_argument,
+        default=CORRIDOR_LEVELS,
+        # The corridor half only, and report-only off the default: an off-grade
+        # edge is graded, never gated, for the reason the gate block below
+        # gives. `pipeline/clearance.py`'s `--levels` is the same knob at the
+        # other instrument and `Q51`'s ratchet is why they move together.
+        help=(
+            "comma-separated elevation levels to judge a corridor on "
+            "(default: 0; others are reported, never gated)"
+        ),
+    )
+    parser.add_argument(
         "--accept-building-share",
         type=float,
         default=0.0172,
@@ -987,6 +1103,19 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     city = load_config()
+
+    unmapped = sorted(set(args.levels) - set(city.elevation_levels))
+    if unmapped:
+        # 🔴 **An unmapped level judges no edge and then reports a clear region.**
+        # Every counter closes, the corridor listing is empty and the run ends
+        # "every drivable level-0 edge keeps a lane clear" — the empty set
+        # reading as agreement. `pipeline/clearance.py` refuses this at the
+        # sibling flag and the trap is the same one here.
+        raise SystemExit(
+            f"--levels names level {_levels_label(tuple(unmapped))}, which "
+            f"{city.name}'s elevation_levels does not map "
+            f"({_levels_label(tuple(sorted(city.elevation_levels)))})"
+        )
     manifest, tiles = load_bundle(args.generated, args.lod)
 
     # ⚠️ Named by the config, never guessed from `class_materials`' iteration
@@ -1052,7 +1181,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     log.info("    %-16s excluded — that is Q24, and ground_clearance.py grades it", ground_class)
 
-    found = survey(lattice, classes)
+    found = survey(lattice, classes, corridor_levels=args.levels)
 
     lane_m = float(city.roads.lane_width_m)
     corridor_bar_m = lane_m * args.accept_corridor_lanes
@@ -1091,7 +1220,8 @@ def main(argv: list[str] | None = None) -> int:
 
     log.info("")
     log.info(
-        "  narrowest clear corridor per drivable level-0 edge, against %.2f m (%.1f lane):",
+        "  narrowest clear corridor per drivable edge on level(s) %s, against %.2f m (%.1f lane):",
+        _levels_label(args.levels),
         corridor_bar_m,
         args.accept_corridor_lanes,
     )
@@ -1112,10 +1242,24 @@ def main(argv: list[str] | None = None) -> int:
     # could only ever see the top of — "the building half is uniformly mild" was
     # a reading of the first rows of this table, and it was false. The fix
     # families the entry now needs cannot be told apart from a sample.
-    starved = sorted(
+    below_bar = sorted(
         ((edge_id, clear) for edge_id, clear in found.corridor_m.items() if clear < corridor_bar_m),
         key=lambda item: item[1],
     )
+    # 🔴 **Two populations, and they are never pooled** (`Q57`). Level 0 is what
+    # the acceptance bars were written against and is what `problems` gates on;
+    # an off-grade edge is a deck, not a street, and is *graded* — the same call
+    # `paint_clearance.py` makes for the tramway, and for the same reason a
+    # figure read against a bar it was not written for is one population's
+    # number on another's.
+    starved: list[tuple[int, float]] = []
+    off_grade: list[tuple[int, float]] = []
+    for row in below_bar:
+        # Indexed, never `.get`: every key here was put in `corridor_m` by the
+        # same `close_station` that set the level, so a missing one is an
+        # inconsistency to hear about rather than to default into the gated
+        # population.
+        (starved if found.corridor_level[row[0]] == 0 else off_grade).append(row)
     # `starved` is how much of the edge is below the bar and `worst run` is the
     # longest unbroken stretch of it — the pair that separates `Q19`'s two fix
     # families. A wall crossing the street blocks a metre or two and clears
@@ -1123,8 +1267,9 @@ def main(argv: list[str] | None = None) -> int:
     # frontage standing in the carriageway blocks a continuous run. They do not
     # share a fix, and the corridor figure alone cannot tell them apart.
     log.info(
-        "    %-6s %7s %9s %6s  %-22s %8s %9s  %-18s  %s",
+        "    %-6s %3s %7s %9s %6s  %-22s %8s %9s  %-18s  %s",
         "edge",
+        "lvl",
         "clear",
         "authored",
         "step",
@@ -1134,14 +1279,15 @@ def main(argv: list[str] | None = None) -> int:
         "station",
         "road",
     )
-    for edge_id, clear in starved:
+    for edge_id, clear in below_bar:
         x, z = found.corridor_at[edge_id]
         starved_m, worst_run_m = _starved_shape(
             found.corridor_profile[edge_id], corridor_bar_m, lattice.spacing_m
         )
         log.info(
-            "    e%-5d %7.2f %9.2f %6.2f  %-22s %6.0f m %7.0f m  (%7.1f, %7.1f)  %s",
+            "    e%-5d %+3d %7.2f %9.2f %6.2f  %-22s %6.0f m %7.0f m  (%7.1f, %7.1f)  %s",
             edge_id,
+            found.corridor_level[edge_id],
             clear,
             found.corridor_authored_m.get(edge_id, float("nan")),
             found.corridor_span_m.get(edge_id, float("nan")),
@@ -1154,8 +1300,18 @@ def main(argv: list[str] | None = None) -> int:
         )
     if not starved:
         log.info("    every drivable level-0 edge keeps a lane clear")
+    if args.levels != CORRIDOR_LEVELS:
+        # Said out loud rather than left to the `lvl` column, because the whole
+        # risk of a widened run is a reader carrying an off-grade figure to a
+        # level-0 bar.
+        log.info(
+            "    of those, %d are off-grade — REPORTED, never gated: level %s was asked for, "
+            "and only level 0 is judged against --accept-corridor-lanes",
+            len(off_grade),
+            _levels_label(tuple(level for level in args.levels if level != 0)),
+        )
     log.info(
-        "    %d level-0 edges judged from %d stations; %d stations too trimmed to judge",
+        "    %d edges judged from %d stations; %d stations too trimmed to judge",
         len(found.corridor_m),
         found.corridor_stations,
         found.corridor_skipped,
@@ -1166,6 +1322,11 @@ def main(argv: list[str] | None = None) -> int:
             found,
             graph,
             names,
+            # 🔴 **`starved`, not `below_bar`** — `Q19`'s report is a level-0
+            # question end to end: its header says "starved edges", its length
+            # line says "all judged level-0", and its building/structure split
+            # is `Q19`'s own two fix families. Handing it the widened population
+            # pools the two (`Q57`) and makes three of its labels false.
             starved,
             spacing_m=args.spacing_m,
             index_cell_m=args.index_cell_m,
@@ -1389,7 +1550,16 @@ def corridor_report(
             shortest,
             tightest,
         )
-    judged = [lengths[edge_id] for edge_id in found.corridor_m if edge_id in lengths]
+    # ⚠️ **Filtered to level 0, because the two halves above are.** `starved` is
+    # the level-0 population by construction, so pooling every walked level into
+    # the denominator they are read against compares `Q19`'s two fix families to
+    # a population that contains decks (`Q57`). Under `--levels 0,1` this read
+    # `n 782` beneath a label saying "all judged level-0"; it is 737.
+    judged = [
+        lengths[edge_id]
+        for edge_id, level in found.corridor_level.items()
+        if level == 0 and edge_id in lengths
+    ]
     log.info(
         "    length    all judged level-0  n %3d  p50 %6.1f m   — what the two read against",
         len(judged),

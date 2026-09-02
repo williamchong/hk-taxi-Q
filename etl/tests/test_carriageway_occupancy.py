@@ -37,19 +37,25 @@ region run is the only thing that provides one.
 
 from __future__ import annotations
 
+import argparse
+
 import numpy as np
 import pytest
 from carriageway_occupancy import (
     BUMPER_HIGH_M,
     BUMPER_LOW_M,
+    CORRIDOR_LEVELS,
     INDEX_CELL_M,
+    Lattice,
     Occupied,
     Survey,
     _barycentric,
     _centreline_verdict,
     _clear_run,
+    _levels_argument,
     _profile_runs,
     _starved_shape,
+    survey,
 )
 
 
@@ -390,3 +396,116 @@ class TestMissesStayCounted:
         """An empty survey has measured nothing, and must not read as complete
         coverage — that is the shape a missing road mesh would take."""
         assert Survey().coverage == 0.0
+
+
+class TestCorridorLevels:
+    """`--levels` is `P4-1`'s knob, and every way it could flatter the gate.
+
+    The corridor gate reads the level-0 rows alone, because an off-grade edge is
+    graded and never gated (`Q57`). That split is what makes the *shape* of this
+    flag load-bearing: widening the corridor is a measurement, and narrowing it
+    below the population the bars were written against is a way to get a green
+    run out of a red bundle.
+    """
+
+    def test_the_default_is_level_zero_alone(self) -> None:
+        """🔴 Moving this moves `clearance_reconcile.py`'s `EXPECT_GRADER`, and
+        `Q51`'s ratchet is what keeps the pipeline's count and this tool's count
+        describing one bundle."""
+        assert CORRIDOR_LEVELS == (0,)
+
+    def test_a_set_without_level_zero_is_refused(self) -> None:
+        """🔴 **The defect this flag shipped with, for one run.** `--levels 1`
+        leaves the gate an empty population and it passes for having stopped
+        looking: it printed "Within the accepted bounds." on a bundle with 21
+        starved level-0 edges. The unmapped-level guard cannot catch it, because
+        level 1 *is* mapped."""
+        with pytest.raises(argparse.ArgumentTypeError, match="must include 0"):
+            _levels_argument("1")
+
+    def test_a_level_below_the_terrain_is_refused(self) -> None:
+        """`walk_carriageway` skips them, and folding them in would add their
+        area to `drawn_share`'s denominator — which sums every level — so the two
+        gated bars would read looser for no reason but a choice of divisor."""
+        with pytest.raises(argparse.ArgumentTypeError, match="below the terrain"):
+            _levels_argument("0,-1")
+
+    def test_an_empty_set_is_refused(self) -> None:
+        """The empty set reading as agreement, which `pipeline/clearance.py`
+        refuses at the sibling flag.
+
+        ⚠️ **Pinned by message, because the branch that catches this is not the
+        obvious one.** `"".split(",")` is `[""]`, so an empty argument is caught
+        by the empty-*piece* guard inside the loop and never by a check for an
+        empty set afterwards — one was written and was unreachable. A bare
+        `pytest.raises` passed while covering nothing."""
+        with pytest.raises(argparse.ArgumentTypeError, match="comma-separated integers"):
+            _levels_argument("")
+        with pytest.raises(argparse.ArgumentTypeError, match="comma-separated integers"):
+            _levels_argument(",")
+
+    def test_levels_are_deduplicated_and_sorted(self) -> None:
+        """So a run's log line and its refusals spell the same set, however it
+        was typed."""
+        assert _levels_argument("1,0,1") == (0, 1)
+
+    def test_widening_is_permitted(self) -> None:
+        """The measurement `Q103` deferred and `P4-1` needs."""
+        assert _levels_argument("0,1") == (0, 1)
+
+    @staticmethod
+    def _lattice(levels: list[int]) -> Lattice:
+        """One two-cell cross-section per level, all road drawn, nothing standing.
+
+        Small enough to write out, which is the point: the gate's population is
+        decided by `survey`, and nothing else in this file can reach it without
+        a shipped bundle.
+        """
+        n = len(levels) * 2
+        return Lattice(
+            edge=np.repeat(np.arange(len(levels), dtype=np.int32), 2),
+            level=np.repeat(np.asarray(levels, dtype=np.int8), 2),
+            station=np.repeat(np.arange(len(levels), dtype=np.int32), 2),
+            x=np.zeros(n),
+            z=np.zeros(n),
+            span=np.full(n, 0.5),
+            offset=np.tile([-0.25, 0.25], len(levels)),
+            authored_half=np.full(n, 1.0),
+            surface_y=np.zeros(n),
+            spacing_m=1.0,
+        )
+
+    def test_an_off_grade_edge_gets_no_corridor_at_the_default(self) -> None:
+        """The level-0 population the acceptance bars were written against."""
+        found = survey(self._lattice([0, 1]), {})
+        assert set(found.corridor_m) == {0}
+
+    def test_the_level_is_recorded_where_the_population_is_decided(self) -> None:
+        """🔴 `main` splits the gated rows from the reported ones off this, and
+        it must not re-derive them from `graph["edges"]`: a second derivation of
+        the same fact is free to drift from the one that chose the population,
+        and it spells `elevation_level` in a second place."""
+        found = survey(self._lattice([0, 1]), {}, corridor_levels=(0, 1))
+        assert found.corridor_level == {0: 0, 1: 1}
+        assert set(found.corridor_level) == set(found.corridor_m)
+
+    def test_the_gated_population_is_invariant_under_widening(self) -> None:
+        """🔴 **`Q19`'s report and the gate must read the same rows however wide
+        the walk is.** Both select on level 0 out of `corridor_level`, so asking
+        for more levels adds reported rows and moves no gated one. This is what
+        `--levels 0,1 --corridor-report` printing `n 782` under a label reading
+        "all judged level-0" looked like before it was filtered."""
+        narrow = survey(self._lattice([0, 1]), {})
+        wide = survey(self._lattice([0, 1]), {}, corridor_levels=(0, 1))
+        gated = {
+            edge: clear for edge, clear in wide.corridor_m.items() if wide.corridor_level[edge] == 0
+        }
+        assert gated == narrow.corridor_m
+
+    def test_widening_admits_the_off_grade_edge(self) -> None:
+        """🔴 **The mutation this exists for.** Reverting the gate to a bare
+        `!= 0` leaves every counter closing and every other test passing, and
+        the flag silently measures nothing — which is the shape `P4-1` would
+        then plan against."""
+        found = survey(self._lattice([0, 1]), {}, corridor_levels=(0, 1))
+        assert set(found.corridor_m) == {0, 1}

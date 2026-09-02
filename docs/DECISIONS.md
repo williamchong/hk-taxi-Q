@@ -2221,7 +2221,14 @@ Cross-Harbour portals ~42 m of run for an 8 m descent. It resolves only if the r
 ⚠️ **It buys no triangles** — the mesh grew 47 of them, because narrowing changes the cap fans — so
 this question's cost argument stands undiminished and only its *correctness* half is answered.
 
-**See.** `Q13` · `Q20` · `Q6`
+🔴 **`0.25 → 6.40 m` is a WIDTH the ribbon was redrawn at, and `e489` is not clear (`Q103`,
+2026-09-03).** The first direct clearance walk of level −1 reads it at **0.00 m**, and the cause is
+vertical rather than lateral: the bore wall stands correctly outside the ±3.20 m ribbon — 0 of 345
+blocking corners inside it — while the road rides a flat `terrain − 8.00 m` up into the tunnel box's
+own slabs, **0.22 m** of headroom at its worst station. The other 14 bores clear the lane bar. So
+this row's claim is true as written and must not be read as "every tunnel is clear of its bore".
+
+**See.** `Q13` · `Q20` · `Q6` · `Q103` for `e489`'s headroom
 
 ## `Q22` — Off-grade carriageway hangs past its structure
 
@@ -16129,7 +16136,7 @@ which survives · `Q77` for how a withdrawn layer is kept re-declarable
 ## `Q103` — The off-grade network is drivable and no instrument grades it
 
 **Status.** 🟡 Half answered — the tunnels are fixed, the flyovers are measured and open ·
-**Owner.** `P4-1`
+`e489`'s cause and the `levels` knob closed 2026-09-03 · **Owner.** `P4-1`
 
 **Trigger.** The user drove the FLEMING ROAD ramp and asked *"why the fence is in middle of a
 lane?"* — a frame, as `Q62` says the evidence has to be. It is not a fence: no `P3-29` barrier
@@ -16438,9 +16445,11 @@ can see.
   the ribbon was redrawn at**, and no clearance measurement stood behind it, because the walk
   defaulted to level 0 and had never visited `e489` at all. This is the first direct reading, and it
   is **0.00 m** at the tunnel's tightest station; the edge is the whole of the off-grade car-bar
-  count, while the other 14 tunnels clear the lane bar. ⚠️ **The cause is not known and is not
+  count, while the other 14 tunnels clear the lane bar. ⚠️ **The cause was not known and was not
   guessed here** — residual intrusion the width fix did not clear, or the walk meeting the bore's
-  own lining, and the two want opposite responses. A finding to go and look at, and `P4-1`'s.
+  own lining, and the two want opposite responses. ✅ **Measured 2026-09-03 and it is neither**: the
+  road rides a flat `terrain − 8.00 m` into a tunnel box built to its own fixed levels, leaving
+  **0.22 m** of headroom. See *`e489`'s cause* below.
 
   🔴 **`structure_bounded` looks like the instrument for this and is not — it was tried.**
   `roads._structure_bounded` finds a parapet's **top**, because `HeightField.from_meshes` drops
@@ -16465,6 +16474,111 @@ can see.
 - ✅ `P4-1`'s second reason is **discharged**: the network is no longer open and ungraded, because
   the ramps stop at the touchdown. Removing `fence.touchdown_levels` is now the whole of "open it
   properly", and it opens onto a ribbon drawn where its deck is.
+
+### ✅ `e489`'s cause, measured 2026-09-03 — and it is neither candidate
+
+The two responses above were *residual intrusion* and *the bore's own lining*. **Both are refuted,
+and the answer is a third thing: the road's own vertical alignment.**
+
+- 🔴 **The profile is the finding, not the minimum.** `corridor_m` is a list per station and only
+  its `min` was ever read. `e489` reads `6.40 6.40 0.00 0.00 0.00 0.00 6.40 6.40` — four contiguous
+  blocked stations in the **middle**, fully clear at both ends. Every one of the other 14 tunnels is
+  uniformly clear at its full drawn width. A lining blocks along the run or at the rims; this does
+  neither.
+- ❌ **Not residual intrusion.** The blocking geometry is 100% `INFRASTRUCTURE`, **115** triangles
+  from one tile — the slice reaching the blocked stations' band, against **509** along the whole
+  edge — and **0 of 345 corners lie inside the ±3.20 m ribbon**. Their lateral offsets are
+  cleanly bimodal — a cluster at −4.91…−3.0 m and one at +4.0…+5.33 m with an **empty centre**. That
+  is the bore wall, and it stands outside the carriageway exactly as it should.
+- ❌ **Not the lining either.** Driven one triangle at a time through `occupy`, **8 of the 115** do
+  all the blocking, and they are not the wall panels: each spans **6–11 m in plan** across the whole
+  bore with a **narrow 0.4–0.7 m** height range. They are the slabs that bridge the two walls.
+- 🔴 **The road climbs into them.** `e489`'s height is **terrain − 8.00 m at every station** —
+  `elevation_levels[-1]`, a flat offset — while the modelled box keeps its own fixed levels. The
+  terrain runs 5.77 → **9.09** → 5.40 m, so the ribbon humps 3.3 m and back through structure that
+  does not. Headroom over the centreline: station 1 **3.85 m**, station 2 **2.29 m**, station 3
+  **0.22 m**, station 4 **1.27 m**.
+  ⚠️ **The centreline probe explains stations 3 and 4 and NOT all four**, and the difference
+  matters: station 2's centreline headroom is 2.29 m — *above* the 2.00 m band top — and station 5
+  has no slab over its centreline at all, so both are blocked by geometry off the centreline, which
+  a single ray down the middle cannot see. ⚠️ **Nor is it simply "the highest stations"**: station 6
+  sits at −0.22 m, higher than blocked station 3 at −0.33 m, and is clear, because the box has ended
+  by there. Height is the mechanism, not the selector.
+- 🔴 **`roads.py` states the assumption that fails, in its own comment.** The level ≤ 0 branch
+  reads *"a tunnel has no drawn surface to fight"*, which is why every non-zero level rides a flat
+  offset and never follows anything. For `e489` there are **509** `INFRASTRUCTURE` triangles to
+  fight. ⚠️ The comment is right about the other 14 bores and wrong about this one; it is a claim
+  about the estate, not about the rule, and the estate changed under it.
+- ⚠️ **It is a HEADROOM defect reported as a WIDTH.** `clearance.py` measures a horizontal corridor
+  in a band 0.30–2.00 m above the road, so a slab spanning the bore inside that band can only be
+  published as 0.00 m of *clear width*. The quantity actually short is **height**, and no instrument
+  in the repo publishes one. Reading the 0.00 as a width is `Q57`'s error — two classes, one number.
+- ⬜ **Unassigned, and it is `P4-1`'s.** The fix is a vertical one — sample the bore, or descend the
+  ramp — and it is a `roads.py` height-rule change, so it owes `touchdown_error.py` and the whole
+  height battery. **Not** a width change, and widening would make it worse.
+
+### ✅ `carriageway_occupancy.py` has the `levels` knob, 2026-09-03
+
+The blocker named above — *"publishing owes `carriageway_occupancy.py` a `levels` knob first"* — is
+built. `--levels` judges the corridor half on the levels named; the area half always walked every
+level and always reported per level, so **only the corridor was ever bound to 0**.
+
+- ✅ **Proved inert at the default.** Every measured value byte-identical over the shipped bundle:
+  the same **21** starved edges, the same widths, blockers, stations and extents. Three lines of
+  presentation move (a `lvl` column, the header, one count's wording). `clearance_reconcile.py`
+  **unmoved at 19 / 21 / 4, exit 0**.
+- ✅ **The off-grade corridor, reported and never gated** (`Q57`) — 4 level-1 edges under the lane
+  bar, all `INFRASTRUCTURE`, 3 of 4 on `CANAL ROAD FLYOVER`:
+
+  | edge | clear | starved | worst run | road |
+  |---|---|---|---|---|
+  | `e208` | 2.33 m | 17 m | 12 m | `FLEMING ROAD` |
+  | `e306` | 2.42 m | 22 m | 11 m | `CANAL ROAD FLYOVER` |
+  | `e257` | 2.86 m | 5 m | 1 m | `CANAL ROAD FLYOVER` |
+  | `e450` | 2.98 m | 2 m | 1 m | `CANAL ROAD FLYOVER` |
+
+  ⚠️ **The two instruments agree in shape and differ in count**, as they do at level 0: the pipeline
+  reads 2 starved (`e208` 2.50, `e306` 3.00), this grader reads 4, and it is the more pessimistic
+  one for `INDEX_CELL_M`'s documented reason. `e208` reads **2.33 against 2.50** — both clear of the
+  1.80 m car bar, which corroborates *registration, not size* a third time.
+  ⚠️ Level 1's own-area share is **`INFRASTRUCTURE` 14.579%**, against level 0's 1.104%. That is a
+  deck reading as its own parapet and is not comparable to a street's number.
+- 🔴 **The flag is strictly ADDITIVE, and that is a defect it shipped with for one run.** With
+  `--levels 1` the gate reads a level-0 population that is now empty and printed **"Within the
+  accepted bounds."** on a bundle with 21 starved level-0 edges — the empty set reading as
+  agreement, reachable *past* the unmapped-level guard because level 1 is mapped. A set omitting 0
+  is refused, and `test_a_set_without_level_zero_is_refused` holds it.
+- 🚫 **Negative levels are refused, deliberately.** `walk_carriageway` skips them, and folding them
+  in would add their area to `drawn_share`'s denominator — which sums **every** level — so the two
+  gated bars would read looser for no reason but a choice of divisor, the move that docstring exists
+  to refuse. Measuring under the terrain needs the denominator separated from the walked population
+  first, which is a change to a gated instrument and wants its own argument. ⚠️ **So this tool
+  cannot corroborate `e489`**, and the finding above was measured without it.
+- ⚠️ **The parse is written out, not imported from `pipeline.clearance`.** `ground_clearance.py`
+  imports that module's bumper *bounds* deliberately, and the rule attached to that precedent is
+  that no second import comes in on it — the whole value of this tool is sharing no method with what
+  it grades.
+- ✅ Five mutations checked rather than five passes read (`Q72`): dropping the additive guard,
+  moving `CORRIDOR_LEVELS`, reverting the gate to `!= 0`, widening `survey`'s default, and pinning
+  the recorded level to 0. Each fails a named test. Three need a `Lattice`, so one is written out
+  synthetically — nothing else in that file can reach the gate without a shipped bundle.
+- 🔴 **Review caught the split being made in one place and not the other.** `--corridor-report`
+  was handed the widened population, and `Q19`'s report is a level-0 question end to end — its
+  header counts "starved edges", its length line says "all judged level-0", its split is `Q19`'s own
+  two fix families. It read **`n 782`** under that label. Both now select level 0 out of
+  `Survey.corridor_level`, and the whole report is **byte-identical between `--levels 0` and
+  `--levels 0,1`** — the invariant a level-0 report should have, pinned by
+  `test_the_gated_population_is_invariant_under_widening`. ⚠️ Making the `Q57` split at the listing
+  and not at the report is the shape to watch for: one call site carried the old population.
+- ⚠️ **The level is recorded where the population is decided, not re-derived.** `close_station`
+  already holds `current_level`, so `main` reading `elevation_level` back off `graph["edges"]` was a
+  second derivation of the same fact — free to drift from the one that chose the rows, and a second
+  place spelling the field. ⚠️ It is indexed rather than `.get(..., 0)`: defaulting a missing edge
+  into the **gated** population is the wrong direction to fail in.
+- ⚠️ **An unreachable guard was written and removed.** `"".split(",")` is `[""]`, so the empty-piece
+  check inside the loop always fires first and a post-loop empty-set check can never run —
+  `pipeline/clearance.py` omits one for the same reason. Its test passed while covering nothing,
+  because `pytest.raises` without `match=` cannot tell which branch raised.
 
 **See.** `Q13` for the premise that expired · `Q21` for what the tunnels cost · `Q22` for the
 mechanism this measured · `Q94` / `Q95` for the level-0 half that is done · `Q19` for the estate's
