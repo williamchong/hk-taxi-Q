@@ -16743,6 +16743,87 @@ and **one** deck-derived centreline offset and both are constant along it.
 cannot be graded against anything published · `Q58` for the trap the in-band pair would be if it
 were read as an extent
 
+### ✅ The blockage is priced against the instrument's own plan bin, and that re-cuts the population a THIRD time, 2026-09-03
+
+The entry above named the mechanism and split the four edges 2–2 on `centreline occupied`. Both
+readings were taken at `INDEX_CELL_M` 1.0 m, and **the split is an artefact of that bin.** Swept,
+`centreline occupied` reads 8 → 1 → **0** on `e208` and 10 → 0 → **0** on `e306`, and two of the
+four edges leave the table altogether. Nothing is published, nothing is gated, and the shipped
+default does not move.
+
+🔴 **The point of the sweep is to price the reading, never to clear the edges.** A finer bin makes
+this grader less pessimistic, which is the direction that flatters, so a number from it is evidence
+about the *instrument* and not about the bundle. The four edges are still `P4-1`'s.
+
+| bin | starved, all levels | lvl 0 | lvl +1 | `e208` | `e306` | `e257` | `e450` |
+|---|---|---|---|---|---|---|---|
+| **1.00 m** (shipped) | 25 | 21 | **4** | 2.33 m | 2.42 m | 2.86 m | 2.98 m |
+| 0.50 m | 16 | 14 | **2** | 2.33 m | 2.90 m | ✅ clear | ✅ clear |
+| 0.25 m | 4 | 2 | **2** | 2.80 m | 2.90 m | ✅ clear | ✅ clear |
+
+Starved metres fall with it — `e208` 17 → 10 → 7, `e306` 22 → 12 → 2, worst run 12 → 7 → 4 and
+11 → 3 → 1 — and `e257` and `e450` lose the lane bar at **no** bin below 1.0 m.
+
+🔴 **The band thickness is the direct read on the smear, and it halves once and then FLOORS.** p50
+occupied-stretch thickness runs **0.93 / 0.97 / 0.95 / 0.99 m** at 1.0 m and **0.47 / 0.48 / 0.48 /
+0.50 m** at both 0.5 and 0.25; the maxima fall 1.87 → 1.40 → 0.47 on `e208`. Halving with the bin
+is what "it was the bin" predicts. ⚠️ **The floor is `ACROSS_M`, not the object** — a stretch cannot
+be thinner than one across cell, so below a 0.5 m plan bin this tool can say the occupier is under
+0.47 m thick and **nothing finer** without `--across-m` moving too. The widths keep improving at
+0.25 m because fewer cells light, while the thickness column has already saturated; do not read the
+two as one measurement.
+
+- ✅ **The control the sweep needs is `--sample-m`, and it was the whole risk.** Occupancy falls
+  hard at the fine bin (`e208` 184 → 130, `e306` 209 → 76, `e257` 240 → 138, `e450` 129 → 84), which
+  is equally consistent with the smear going away and with the **index developing holes** — at
+  `--index-cell-m 0.25` the bin has reached `SAMPLE_M`, which is the aliasing the constant's comment
+  says the coarse bin exists to prevent, and `index_corners` clips at 64 steps so a long deck
+  triangle cannot be rescued by sampling alone. Sampling four times finer moves the counts to
+  131 / 87 / 142 / 96 and changes **no** headline. 🔴 **It is smear, not holes** — and a sweep of
+  this knob without that control cannot tell the two apart, which is the reading `Q51` never had to
+  make because it brute-forced `e132` from its own geometry.
+- ✅ **The pipeline corroborates, and it reproduces `Q103`'s own published figures exactly.**
+  `clearance.walk(levels=(0,1))` reads `e208` **2.50**, `e306` **3.00**, `e257` **3.75**, `e450`
+  **4.00**, 21 starved. So the two instruments **agree on membership at 0.5 m and finer** — both
+  name `e208` and `e306` and neither names `e257` or `e450` — and the published 4-against-2 gap is
+  the 1.0 m bin in its entirety. That is `Q51`'s `e132` shape at a second population: the grader
+  converges on the pipeline as its plan bin approaches `CELL_M`.
+- 🔴 **What this overturns is the entry above's conclusion, not its membership.** `e208` and `e306`
+  are still the two that keep a pinch at every bin, and `e257` and `e450` are still the two that do
+  not — the 2–2 split names the right pair. What is refuted is what the split was said to be
+  *about*: at 0.5 m and finer **nothing stands on either centreline**, so "a migrating occupier is
+  reachable by neither a width nor a constant offset" rests on a column that reads 0 as soon as the
+  bin stops smearing. ⚠️ **The registration fix is therefore NOT spent**, and the sentence saying it
+  is should be read against this. ⚠️ Equally, this does not establish that a width or an offset
+  *does* reach them — it removes the argument that refused them, and pricing either is still
+  `P4-1`'s.
+- ⚠️ **`the occupier comes within 0.00 m` stays 0.00 on both while `centreline occupied` goes to 0**,
+  and the pair is not contradictory: `_closest_approach` reports a band *edge* landing on the
+  centreline, `_covers_centreline` asks whether a band *contains* it. An occupier abutting the
+  middle is exactly what a parapet whose smear has just been removed should look like.
+- 🔴 **The default stays 1.0 m, and the reason is a number rather than an argument.** The finer bin
+  does not slightly flatter the gated half — it retires it: level-0 occupied share reads
+  `BUILDING` **1.324% → 0.625% → 0.286%** and `INFRASTRUCTURE` **1.104% → 0.715% → 0.499%** against
+  bars of 1.72% and 1.60%, and the whole starved population collapses **25 → 4**. Adopting the sweep
+  value would pass a gate on 19 level-0 edges nobody re-examined. Level +1's own-area
+  `INFRASTRUCTURE` share runs 14.579 → 7.976 → **4.396%** over the same sweep, which is a deck
+  reading as its own parapet and is still not comparable to a street's number.
+- ⚠️ **The cost premise this was planned under was wrong and is corrected**: the sweep is not 4x and
+  16x the work. `index_corners` samples every kept triangle at `SAMPLE_M` *before* binning, so
+  `cell_m` changes the dict key and not the sample count — **27.2 / 28.9 / 31.2 s** at 1.0 / 0.5 /
+  0.25, and 38.4 s at 0.25 with four-times-finer sampling. There is no staging decision; run the
+  endpoints.
+- ✅ **No source moved and no grader is owed.** `--index-cell-m` and `--probe-edges` are the tool's
+  own documented flags, `git status` is clean, and no resolution constant changed in the repo — so
+  neither `clearance_reconcile.py --sweep` nor `tools/narrowing.py` is triggered, on the precedent
+  the entry above set for the same reason. `clearance.py`'s `_write` refused the widened walk as
+  designed: *"reporting, not writing clearance.json"*.
+
+**See.** `Q51` for the gap this prices and for `e132`'s 0.98 / 4.00 · `Q57` for why the two pairs
+still do not share an acceptance number · `Q58` for the trap a bound swept in the flattering
+direction would be if a bar moved with it · `Q19` for "no width rule reaches a centreline", which
+this removes the off-grade instance of
+
 ## `Q104` — The cut face had no back, and the ribbon is drawn wider than the corridor that was cleared
 
 **Status.** 🟡 Half answered — the back face ships, the width disagreement is measured and open ·
