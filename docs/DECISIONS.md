@@ -1698,6 +1698,13 @@ deliberately, so that an abutment the road rests *on* does not read as an obstru
 between **0.18 and 0.30 m** therefore stops a car with nothing looking at all: **31 level-0 edges**
 carry samples in that band.
 
+⚠️ **Both present-tense claims in that paragraph expired on 2026-09-02** and it is kept as the
+argument that prompted the work. `ground_clearance.py` does see structure now — a second class over
+the same walk, `Q57`-separate from the ground — and the **31 is superseded twice over**: 14 of 17
+edges and 45 stations measured inside the corridor, **25 edges** over the whole drawn ribbon. Three
+populations, none of them interchangeable. The instrument and its numbers are further down this
+entry.
+
 🔴 **The consequence is `P3-29`'s, and it is a defect in the plan rather than in the build.**
 `PLAN.md` says the fence set is *"computed from the post-carve bundle, never hand-kept"* — and
 computed on the corridor at the car's bar it is **one edge**, because **three of the four `Q19` named
@@ -1875,10 +1882,124 @@ corridor bar: it moves a quantity that is not the one that stopped the car.
 **deliberately no `suspension_travel_m`**; the block goes through `_thresholds`, so its closed-key-set
 check refuses one re-added without this argument being re-opened, and
 `test_a_vertical_bar_added_here_is_rejected` is the ratchet. The 0.18-0.30 m band is
-`tools/ground_clearance.py`'s to close — the `structure_class` extension `PLAN.md` already scoped as
-owing its own acceptance, and still owed. ⚠️ **The "31 level-0 edges carry samples in that band"
-figure above came from a scratch script and is superseded**: measured inside the corridor it is 14
-against 17 edges and 45 stations, and no committed tool reproduced the 31.
+`tools/ground_clearance.py`'s to close, and ✅ **it is closed as an instrument on 2026-09-02** — see
+the section below. ⚠️ **The "31 level-0 edges carry samples in that band" figure above came from a
+scratch script and is superseded**: measured inside the corridor it is 14 against 17 edges and 45
+stations, and no committed tool reproduced the 31. The committed tool now reads **25 edges** over a
+third population again — its own, and labelled.
+
+### ✅ The blind band has an instrument — `ground_clearance.py`'s second class, 2026-09-02
+
+`carriageway_occupancy` and `clearance` read `INFRASTRUCTURE` but their bumper band starts at
+`BUMPER_LOW_M` **0.30 m** (`Q23`, so an abutment the road rests on does not read as an obstruction);
+`ground_clearance.py` used the car's own **0.18 m** and read `terrain_class` and nothing else. A
+structure step between the two was seen by no committed instrument. It is now this tool's second
+class, measured over the same walk and **never pooled with the first** (`Q57`): ground proud of the
+road is the sink and the flat cross-section and belongs to `Q24`; structure proud of it is a wall in
+the drawn carriageway and belongs here.
+
+**Measured on the 2026-09-02 bundle, over the whole drawn ribbon at level 0:**
+
+| band above the drawn road | cells | area | edges |
+|---|---|---|---|
+| 0.00-0.18 m — the car rides over it | 1,025 | 1,001.7 m² | 36 |
+| **0.18-0.30 m — seen by no other instrument** | **330** | **323.4 m²** | **25** |
+| 0.30-2.00 m — already `carriageway_occupancy`'s | 1,619 | 1,590.5 m² | 50 |
+| over 2.00 m — refused, a deck over the street | 31,238 | 2.00-13.27 m up | — |
+
+3,989 cells rest on structure at or below the road and 495,598 have none at all — **92.8%** of the
+533,799 road-drawn cells. 🔴 **Absence is the normal answer here and is not a coverage miss**, which
+is why the structure half has deliberately no `--accept-coverage`; gating that share would fail the
+tool on a fact, `paint_clearance.py`'s reason for not gating the tram rails.
+
+🔴 **The terrain rule could not be reused, and that is measured rather than asserted.**
+`ground_above` takes the *nearest* height in a symmetric 3 m window, which is right because terrain
+is single-valued wherever a car can be. Structure is a volume in a stack and `Faces.from_tiles`
+keeps upward-wound faces, so a flyover's **deck top** is a candidate for the street underneath: read
+the terrain way, the interchange reports structure standing **+13.27 m proud** of GLOUCESTER ROAD,
+on **210 of 737 edges** and 30,352 m² of ribbon. `structure_above` takes the **lowest face strictly
+above the road** instead. ⚠️ **Both wrong rules delete the finding rather than corrupting it** —
+nearest reports a ledge as the deck beneath the ribbon, highest reports a ledge *under a flyover* as
+overhead — so both have a test, and both were mutation-checked rather than read.
+
+✅ **The bounds are imported from `pipeline.clearance`, not chosen**: `BUMPER_LOW_M` is where the
+other instrument starts looking and `BUMPER_HIGH_M` is the refusal window. A shared *bound*, never a
+shared method — nothing about how either surface is read arrives with it, so `deck_error.py`'s
+"nothing here is shared with the code it grades" is untouched.
+
+✅ **The finding is window-independent, and the sweep proves it rather than asserting it.** Over
+`--structure-within-m` 0.50 → 8.00 the band is flat at **330 cells / 323.4 m² / 25 edges** while the
+row above it runs **382 → 21,289 cells** — the overhead leaking in, which is what the window is for.
+A refusal whose bound cannot be swept is `Q58`'s `drawn_gauge_m` trap, so what it refuses is
+published beside it and every `worst_m` is an honest lower bound.
+
+✅ **`Q19`'s discriminator reproduces.** Of the 537 cross-sections carrying a step, the share of the
+section stepped reads **p50 14% / p90 32% / max 82%**, and **14** are more than half stepped — the
+shape `Q19` measured at p50 10% / p90 20% with 73 sections in the tail, on the corridor population.
+A ledge takes a strip of a section; a ribbon disagreeing with the deck it rests on takes most of
+one, and they do not share a fix. ⚠️ **The denominator is every cell of the section with a road
+drawn, never the cells that found structure** — taken the second way a scratch run of this read p50
+**0.83**, because a thin ledge is most of the structure in its own section and almost none of the
+road. `test_the_share_is_over_the_cells_with_a_road_not_the_cells_with_structure` is the ratchet.
+
+**The band, by edge** (`in band` is the finding; `past bumper` is the same edge over 0.30 m, already
+`carriageway_occupancy`'s and **never added to it**):
+
+| edge | street | worst | in band | of ribbon | past bumper | sections @ worst | over window |
+|---|---|---|---|---|---|---|---|
+| `e402` | WAN CHAI INTERCHANGE | +1.97 m | 70.2 m² | 5.5% | 104.6 m² | 26/55 @64% | 24 to +2.16 m |
+| `e233` | WAN CHAI INTERCHANGE | +1.11 m | 45.8 m² | 3.2% | 141.4 m² | 33/71 @38% | 175 to +6.67 m |
+| `e55` | WAN CHAI INTERCHANGE | +0.71 m | 39.9 m² | 1.1% | 64.9 m² | 36/143 @20% | 210 to +6.57 m |
+| `e411` | VICTORIA PARK ROAD | +1.16 m | 23.4 m² | 1.0% | 6.8 m² | 7/128 @70% | — |
+| `e168` | WAN CHAI INTERCHANGE | +0.42 m | 19.3 m² | **9.1%** | 7.7 m² | 5/10 @52% | — |
+| … | 20 more | | | | | | |
+
+⚠️ **`of ribbon` and the section share are why the m² ranking is not the reading.** `e168` is fifth
+by area and **first by share of its own street** — ten stations, half of them stepped — while `e402`
+leads the table at 5.5% of a much longer edge. And the worst-section column separates the modes on
+sight: `e125` **82%**, `e411` 70%, `e781` 62% are ribbon-versus-deck; `e393` **32%** with **763**
+cells refused overhead is a street under the interchange whose `worst` is a bound with a great deal
+excluded.
+
+🔴 **All three of `P3-29`'s withdrawn-fence edges are in it** — `e411` 23.4 m², `e522` 7.8 m²,
+`e520` 3.0 m² — which is `Q23`'s suppression re-caught, exactly as predicted above. That is the
+instrument working, not a defect it found: the band is where that fact lives, and the section share
+is what separates it from a ledge.
+
+🔴 **`e99` reads worst −0.18 m and is not in the table**, because the carve moved its wall to the
+carriageway edge on 2026-09-01. ⚠️ **So the edge this instrument was prescribed for is no longer
+available as its known positive** — the anchors are a synthetic step in the unit tests and the three
+ramps above, and reproducing the 0.356 m ledge would need a rebuild `--from buildings` with the
+carve disabled.
+
+🔴 **It GRADES and does not gate, and that is a decision rather than an omission.**
+`--accept-edges-over-travel` already carries an apology for being a bar tuned to its own first
+reading (`Q47`); a second one set the same way, on a population nobody has decided how to fix, would
+be that mistake made knowingly. The exit code stays the ground half's — which still reads
+**FAIL 89 against 87**, unchanged and pre-existing (`Q24`).
+
+✅ **The ground half is byte-identical across the change**, which is the `Q96` inertness proof: the
+full report diffs to the two added sections and one added faces line, nothing else.
+
+### Two corrections from the review pass, same day
+
+🔴 **The structure half could abort the GROUND gate, which contradicted the sentence above it.**
+`structure_faces` raises `SystemExit` twice — a city declaring no `structure_class`, and a region
+whose tiles carry none of it — and it was called unconditionally before the walk. Both are
+reachable: `Q6`/`Q10` keep multi-region support, and a region with no flyover is an ordinary region.
+`optional_structure_faces` degrades to an empty index instead, which books every cell as `absent` —
+already the documented normal answer for 92.8% of them — and logs that it did. ⚠️ **Deliberately
+unlike `ground_faces` beside it, which still exits**: the ground is named by every city and a region
+shipping none is a defect.
+
+🔴 **`Structure.check` was grading the caller against itself.** `survey`'s loop incremented
+`on_road` *and* three of the four outcome buckets by hand, so the identity could not fail for any
+decode, and no test could reach the decode at all — which is how two write-only per-edge counters
+(`overhead`, `overhead_min_m`) survived into a published build. The decode moved into
+`Structure.observe`, `on_road` into `saw_road_cell`, and `check` now compares two things the class
+counts. ⚠️ **That is what the extra columns above are**: the counters exist, so they are printed.
+`test_every_outcome_books_exactly_one_bucket` fires on a doubled `on_road`, which the old shape
+could not.
 
 🔴 **`e99` is a WIDENING defect and is deliberately not fenced.** Its ribbon is drawn at the
 10.24 m floor over an `authored` 6.4 m width, so 3.84 m of what the player reads as road is
@@ -2227,6 +2348,13 @@ makes every `worst_m` an honest lower bound.
 per-edge population and the authored/rim split, and gates on the edge count as a regression ratchet.
 Which mechanism to buy is undecided — see the three above, and note that the region shares this
 entry is written in cannot grade any of them.
+
+⚠️ **The tool grew a SECOND class on 2026-09-02 and it is not this question's** (`Q19`). Everything
+above is the ground standing over the road — the sink, the chord and the flat cross-section. The
+structure table beneath it is a wall standing *in* the carriageway, and the two want opposite fixes,
+so they share the walk and no number (`Q57`). ⚠️ **Only the ground half gates**; a structure figure
+quoted against `--accept-share` or `--accept-edges-over-travel` is reading one population's number
+off the other's bar.
 
 **See.** `Q19` · `Q21` · `P3-10`
 

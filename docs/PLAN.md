@@ -637,8 +637,9 @@ before it.
   car is in. Reading the kerb-adjacent run instead fences **222** edges. `e99` is a widening
   defect — 3.84 m of its 10.24 m ribbon is paving with a wall on it — and belongs to `Q24`.
   ⚠️ The "31 level-0 edges" figure below came from a scratch script and is superseded; the
-  band's measurement now belongs to `tools/ground_clearance.py`'s `structure_class`
-  extension, still owed. Numbers in `DECISIONS.md` `Q19`. The original reasoning follows.
+  band's measurement is `tools/ground_clearance.py`'s `structure_class` extension, ✅ **shipped
+  2026-09-02** and reading **25 level-0 edges** over its own population. Numbers in
+  `DECISIONS.md` `Q19`. The original reasoning follows.
 - 🔴 **What prompted it, and it still happened — measured from the
   driving seat, 2026-09-01.** A car stopped on `e99` FLEMING ROAD at a **0.356 m** `INFRASTRUCTURE`
   ledge, twice `handling.tres`' 0.18 m `suspension_travel_m`: you drive onto it and lose the wheels.
@@ -648,13 +649,18 @@ before it.
   against `e125`'s 0.48 — so a set computed on the corridor is **one edge** and leaves open the one
   that stranded the car. ⚠️ **Do not answer it with a lower corridor bar**: that fences drivable
   edges and still misses the ledge. The bar is data, not a constant (hard rule 4).
-- ⚠️ **The vertical read has no instrument yet, and that is the blind band.**
+- ✅ **The vertical read HAS an instrument since 2026-09-02, and the blind band is measured.**
   `carriageway_occupancy`/`clearance` read `INFRASTRUCTURE` but their bumper band starts at **0.30 m**
   (`Q23`, so an abutment the road rests on does not read as an obstruction);
-  `tools/ground_clearance.py` uses the right **0.18 m** bar but reads `terrain_class` and only that.
-  A structure step between 0.18 and 0.30 m is seen by neither, on **31 level-0 edges**. Extending
-  `ground_clearance.py` to `structure_class` is the obvious grader and is **not** in this task —
-  it would fail on day one and owes its own acceptance.
+  `tools/ground_clearance.py` used the right **0.18 m** bar and read `terrain_class` and only that.
+  It now carries `structure_class` as a **second class over the same walk**, never pooled with the
+  first (`Q57`): **330 cells / 323.4 m² / 25 level-0 edges** stand in the 0.18-0.30 m band, flat
+  across a 16x sweep of the refusal window. ⚠️ **The superseded "31 edges" is retired and this is a
+  THIRD population** — the whole drawn ribbon, in the drawn frame, against `Q19`'s corrected
+  14-of-17 edges and 45 stations measured inside the *corridor*. 🔴 **It GRADES and does not gate**,
+  which is the acceptance this was scoped as owing: `--accept-edges-over-travel` already apologises
+  for being a bar tuned to its own first reading (`Q47`), and a second one on a population nobody
+  has decided how to fix would be that mistake made knowingly. `DECISIONS.md` `Q19`.
 - ✅ **`e207`'s exemption is RETIRED (2026-09-01)** and it needed none: `fits_car` decides it like
   every other edge, and it reads **3.25 m**, so it stays open on a measurement rather than on a
   judgement. What that discharges, kept because the debt was real: the exemption rested on `e207`

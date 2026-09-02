@@ -686,12 +686,44 @@ Common emoji for this project:
   the way `Q96` says: the default must reproduce the shipped `clearance.json` byte-for-byte.
 - Road-surface, deck-height or ground changes: also `tools/deck_error.py`, `tools/overhang.py`,
   `tools/ground_clearance.py` and `tools/carriageway_occupancy.py`, by hand after a build. They grade
-  the *shipped* bundle and share no code with the pipeline — `check.sh` does not require a built
-  region and should not start requiring one. Moving the road moves what `ground_clearance.py`
+  the *shipped* bundle and share no **method** with the pipeline — `check.sh` does not require a built
+  region and should not start requiring one. ⚠️ **"No code" was true until 2026-09-02 and is now one
+  step weaker**: `ground_clearance.py` imports `BUMPER_LOW_M`/`BUMPER_HIGH_M` from
+  `pipeline.clearance`, deliberately, because the band it publishes is the *gap* in that instrument's
+  reach and must move when it does. A shared **bound** is not a shared reading; do not let a second
+  import in on this precedent. Moving the road moves what `ground_clearance.py`
   measures, so it is not only a ground check — and **widening, building footprints and landmark
   placement move `carriageway_occupancy.py`'s answer** without touching the road at all, so that one
   is owed for those too. It gates per *edge*, because `RoadGraph` routes on edges. ⚠️ It **fails
   today**; read the exit code rather than the table, and see `PROGRESS.md` for what it is failing on.
+- **`ground_clearance.py`'s STRUCTURE half — `structure_above`, `Structure`, `--structure-within-m`,
+  `buildings.structure_class`, `BUMPER_LOW_M`/`BUMPER_HIGH_M`, or anything that CARVES: paste the
+  band table, the section-share line and the per-edge band table, before and after.** 🔴 **It is a
+  second class over the same walk and it is NEVER pooled with the ground** (`Q57`): ground proud of
+  the road is the sink and the flat cross-section (`Q24`), structure proud of it is a wall in the
+  carriageway (`Q19`), and they want opposite fixes. ⚠️ **Only the ground half gates** — a structure
+  figure read against `--accept-share` or `--accept-edges-over-travel` is one population's number on
+  the other's bar. 🔴 **The terrain rule may not be reused and that is measured**: `ground_above`
+  takes the *nearest* height because terrain is single-valued where a car can be, but structure is a
+  volume in a stack and upward-wound faces include a flyover's **deck top**, so read that way the
+  interchange reports **+13.27 m** of structure proud on 210 of 737 edges. `structure_above` takes
+  the **lowest face strictly above the road**; ⚠️ *both* wrong rules — nearest, and highest — delete
+  the finding rather than corrupting it, so both have a test and both are mutation-checked.
+  ⚠️ **Absence is the normal answer, not a coverage miss** — 92.8% of the region's road-drawn cells
+  have no structure at all — which is why there is deliberately no coverage gate on this half.
+  ⚠️ **The band is the finding and the row above it is not**: anything past `BUMPER_LOW_M` is already
+  `carriageway_occupancy`'s population, so summing the two republishes `Q19`'s own count as this
+  tool's discovery. ⚠️ **Sweep `--structure-within-m`** — it decides a refusal, and a bound that
+  cannot be swept is `Q58`'s trap; the band is flat at 330 cells over 0.50-8.00 m while the row above
+  runs 382 → 21,289, which is what proves the finding is not the window's. ⚠️ **A CARVE is a change
+  here** — it moves structure to the carriageway edge, which is exactly what this measures — and
+  `e99` now reads worst **−0.18 m**, so the edge this was prescribed for is no longer its own known
+  positive. 🔴 **`optional_structure_faces` exists so this half can never abort the GROUND gate** —
+  `structure_faces` exits on a city with no `structure_class` and on a region whose tiles carry none,
+  both reachable, so it degrades to an empty index and every cell books `absent`. Do not "simplify"
+  it back to a direct call. ⚠️ **`Structure.observe` owns the four-way decode and `check` grades it**;
+  moving that decode back into `survey`'s loop makes the identity the caller checked against itself,
+  which is how two write-only counters shipped. Numbers in `Q19`.
 - **HUD changes — `hud.gd`, `hud_layout.tres`, `hud_style.tres`, `chamfer_panel.gd` or
   `street_tracker.gd`: `tools/check.sh` (which runs `verify_hud`), plus an A/B render at one camera
   with `--debug-view=off --hud=off` and again with the HUD on, and the draw-call delta pasted.**
@@ -821,8 +853,9 @@ Common emoji for this project:
   built, measured and withdrew it — the 0.18-0.30 m band is the one `Q23`'s bumper floor exists to
   suppress, so it fences three climbing ramps and misses `e99`, the edge it was prescribed for. The
   block's closed-key-set check refuses it and `test_a_vertical_bar_added_here_is_rejected` is the
-  ratchet. That band's measurement belongs to `tools/ground_clearance.py`'s `structure_class`
-  extension, which is **still owed**. Numbers in `Q19`.
+  ratchet. ✅ That band's measurement is `tools/ground_clearance.py`'s `structure_class` extension,
+  **shipped 2026-09-02** and graded rather than gated — 330 cells / 323.4 m² / 25 level-0 edges. See
+  its own bullet above. Numbers in `Q19`.
 - **Street-name or font changes — `street_plate.json`, the bundled typeface, or any new region:
   also `tools/font_coverage.py --region <r>`.** It exits non-zero on a character that is in neither the font nor the
   display substitution table, which is the only thing standing between a data refresh and a tofu box
