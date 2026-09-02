@@ -16202,17 +16202,82 @@ whether anything grades them. Level 2 is declared and unused.
 ⚠️ **This is a closure, not a fix, and removing the key reverses it.** `Q22` stays open with the
 numbers it now has.
 
+### ✅ The geometry, 2026-09-02 — the ribbon is drawn on its deck, `schema_version` 9
+
+Done in three commits so the risky half could be proved inert before it published anything.
+
+**1. The survey's levels became config, defaulting to `(0,)`** — `clearance.walk(levels=...)`'s rule
+at a second key. `roadgraph.json` rebuilt **byte-identical** (md5 `bc2a4a27…`), and the switch was
+mutation-checked rather than read: 737 edges walked at `(0,)`, 782 at `(0, 1)`, 797 at `(0, 1, -1)`.
+
+**2. The deck walk was added and published nothing.** `roads.py` already reads `INFRASTRUCTURE` as a
+`HeightField` for the polyline's own height, so the lateral walk rides on it and no new stage was
+needed — the "new stage after `buildings`" premise this file first recorded was **softer than
+stated**. Off-grade it reaches **36** edges where the publishers reach 5.
+
+🔴 **Graded against `deck_margin.py`, and the first two readings were wrong in opposite
+directions.** This is what a second implementation is for:
+
+| reading | cause |
+|---|---|
+| **+2.38 m** | walked junction stations, which that tool refuses because a deck runs into the ramp it joins there |
+| **−3.65 m** | compared a *road* height to a *slab* height, at a tolerance chosen here rather than shared, and did not bridge `Q19`'s holes |
+| **+0.00 m** | slab-to-slab at that tool's own 0.40 m attribution and 1.0 m bridge — \|diff\| p50 **0.60 m**, 22 of 33 within a metre |
+
+⚠️ **Both constants are now shared values rather than independent choices**, because a bar chosen
+twice makes every divergence unreadable: is it the reading, or is it the bar?
+
+**3. Width and a signed offset published, `schema_version` 8 → 9.** The bump is hard rule 5's test,
+not bytes: the drawn ribbon is no longer centred on the published centreline, so a consumer
+reconstructing a kerb as `polyline ± width_m / 2` is now **wrong** about the whole elevated network
+and nothing else in the document says so. ⚠️ **The centreline itself does not move** (`Q54`); what
+changed is the claim that the paint is centred on it.
+
+| | before | after |
+|---|---|---|
+| `overhang.py`, level +1 | 10.3% hanging | **5.6%** |
+| hanging area | 5,449 m² | **3,326 m²** (−39%) |
+| drawn area | 52,661 m² | 59,286 m² |
+| `deck_margin` \|drawn − deck\| p50 | 2.50 m | **0.81 m** |
+
+🔴 **The result is split, and the other half is recorded rather than buried.** `deck_margin`'s
+per-edge `over p50` got **worse on 22 of 35** edges (sum 33.50 → 41.59 m) and its
+stations-with-some-hang rose **53.4% → 75.0%**. One number per edge cannot fit a deck that varies
+along its own length, and the authored 6.40 m ribbon fits inside most decks *precisely because it is
+too narrow to be the road*. The **area** is the metric that moved.
+
+⚠️ **`DECK_WIDTH_PERCENTILE` is p10, not a median, and the asymmetry is the reason**: at grade a
+too-wide ribbon lands on tarmac, off-grade it lands on air. Swept, **with no plateau** — p0 5.3% /
+p10 5.6% / p25 6.2% / p50 7.0% — so it is a judgement on a trade curve and the table is the whole
+argument. p0 is 0.3 points better and is **rejected**: it is an extremum, so one unbridged hole
+shrinks the entire ribbon.
+
+🔴 **The offset is SIGNED and the two station normals in this repo are opposite.**
+`carriageway._stations` is right of travel, `surface.mitres` is left; `_reassign` negates **once, by
+name**, and a test pins it — a ribbon shifted the wrong way renders as a ribbon.
+
+**Two things the graders caught that the counters did not.** Handing the arrow-row reader the walked
+set let a turn arrow host to the flyover *above* the road it is painted on, moving `e263`'s lane
+count 3 → 2 and `ground_clearance.py` 87 → 89 — a **level-0 regression out of an off-grade change**.
+The row is a level-0 instrument and stays one. And `verify_road_graph.gd` asserted that a measured
+width names its publisher; `deck` is a **third state** — measured, but read from the model, which is
+not one of the three names that field enumerates — so the invariant was widened deliberately and
+mutation-checked both ways.
+
+⚠️ **The evidence is a frame** (`Q62`), and the re-import is not optional: two A/B pairs came back
+identical because Godot renders the cached mesh, which `SKILL.md` warns about and which no counter
+can see.
+
 ### What is left
 
-- ⬜ **The geometry**: extend `carriageway.py`'s survey off-grade behind a `levels` default of
-  `[0]` (prove it byte-identical first), then publish **width and a signed offset** together. 🔴 The
-  offset is the half that reaches `e208`, and `Q78` applies verbatim — an absolute value cannot
-  report the direction of the move it measures. The graph centreline does not move (`Q54`); this is
-  a drawing offset on `railings.py`'s registered-extent precedent. Schema bump on the offset, not on
-  a new `width_source` string.
-- ⬜ Cheapest **now**, while nothing consumes off-grade geometry. Once `P4-1` lands `RoadGraph`,
-  level-aware nearest-edge, traffic and the wrong-way monitor onto these edges, an offset stops
-  being a drawing change and becomes a change to lane centres, fare snapping and AI paths.
+- ⬜ **The residual divergence**: \|pipeline − `deck_margin`\| p50 0.60 m, max 3.80 m, against the
+  level-0 survey's own p50 **0.005 m**. Same-direction now, so it is spread rather than bias, and it
+  is why some edges' ribbons are still too wide. A finding to go and look at.
+- ⬜ **`deck_margin.py`'s `authored` column is mislabelled** since this shipped — it prints
+  `width_m`, which off-grade is now a deck reading rather than `lanes × lane_width_m`.
+- ⬜ Level 2 is declared and unused; level −1 is deliberately out of the walk, because a bore has no
+  deck to find.
+- ⬜ `P4-1` still owns opening the network. The touchdown closure holds until it does.
 - ⬜ The clearance default stays `(0,)`. Flipping it publishes 60 edges of `clear_width_m` that
   nothing reads, because `RoadGraph.is_drivable` gates `impassable_edge_ids` and `fenced_edge_ids`
   alike. It belongs with `P4-1`, when a consumer exists.

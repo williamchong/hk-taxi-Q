@@ -835,13 +835,19 @@ than discovering the rest of it from a bug report.
   wider than their deck, all ten worst at an authored `lanes = 3`. 🔴 **The obvious fix is refuted** —
   the carriageway publishers license 5 of 45 off-grade edges and their 2D lines find the street
   *under* the deck, so 2 of those 5 would publish a width wider than the deck.
-  🔴 **A width-only fix is now refuted outright, by the edge that opened the question** (`Q103`,
+  🔴 **A width-only fix was refuted outright, by the edge that opened the question** (`Q103`,
   2026-09-02): at `e208`'s station the deck is **7.6 m** and the ribbon **6.40 m**, so a deck-sourced
   width would *widen* it. `deck_margin.py`'s pooled table puts **at least 421 of the 713** hanging
   stations (59%) on a ribbon already narrower than its deck — registration, which no width rule can
-  reach. ✅ **The stage cost is lower than recorded too**: `roads.py` already reads `INFRASTRUCTURE`
-  through `buildings.read_sheet`, so the survey extends `carriageway.py` rather than adding a stage.
-  What is owed is a **signed offset** beside the width. `DECISIONS.md` `Q103`.
+  reach.
+  ✅ **Both shipped 2026-09-02, `schema_version` 9**: 36 of 45 level-1 edges take a width **and a
+  signed offset** from the deck they stand on, and `surface.py` draws the ribbon there. Overhang
+  **10.3% → 5.6%**, hanging area 5,449 → **3,326 m²**, `|drawn − deck|` p50 2.50 → **0.81 m**.
+  ✅ The stage cost was lower than recorded: `roads.py` already reads `INFRASTRUCTURE` through
+  `buildings.read_sheet`, so this extended `carriageway.py` rather than adding a stage.
+  ⚠️ **Half the result went the other way and is recorded, not buried**: per-edge `over p50` worsened
+  on 22 of 35 edges, because one number per edge cannot fit a deck that varies along its length.
+  `DECISIONS.md` `Q103`.
 
 ### Outline only — refine once Phase 3 lands
 

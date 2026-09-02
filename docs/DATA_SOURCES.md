@@ -287,6 +287,27 @@ suffix is not an automatic ban** — `TERRAIN(TB)` ships — but terrain gets aw
 `GENERIC` (3.95 M triangles) and `INFRASTRUCTURE(TB)` (1.55 M) fail the same way, and the
 non-textured set already ships 77 per-object `INFRASTRUCTURE` items.
 
+🔴 **`INFRASTRUCTURE` is a MEASUREMENT SOURCE as well as geometry since `Q103` (2026-09-02), and
+that is a new use of this dataset rather than a new read of it.** It has been sampled for a height
+since `P2-7` — an off-grade centreline takes its `y` from the deck under it — and `pipeline/roads.py`
+now also walks it *laterally*, so the deck's own span and the centreline's offset from it become the
+published `width_m` and `offset_m` of every level-1 edge the walk can measure (36 of 45).
+
+⚠️ **The reason is that the carriageway publishers fail unsafely up there, not that they are
+silent.** TD's `RM1108`/`RM1109`, iB1000's `RM` and HyD's pavement polygons are all **2D plan
+projections**, so a ray cast from a deck centreline finds the kerb of the street *underneath*: they
+license 5 of 45 level-1 edges and **2 of those 5 publish a width wider than the deck**. No publisher
+in this estate draws a viaduct deck edge at all. The model is the only source that knows where a
+deck is, and it is a fourth government dataset rather than an invention — so `Q54`'s sourced-not-
+invented rule is satisfied, which is the whole licence for reading it this way.
+
+⚠️ **It inherits this class's known defects and they bound the reading.** The estate is **not
+watertight** (`Q19`: 5.38% of edge slots open in the source meshes, 14-26% in the decimated tiles),
+so a lateral walk terminates at the first hole and has to bridge gaps under 1.0 m or it is a hole
+detector; and the tiles are decimated, so the deck edge is quantised to whatever `collapse` left.
+Both are why the published width is a low percentile of an edge's stations and never a single
+reading.
+
 💡 **`WATERBODY` is the only cheap one — 605 triangles for all 22 objects across the region — and it
 is not the harbour.** They are small inland features, 2–137 triangles each, extents of 3–44 m, and
 several sit at origin heights of **24.6, 62.4 and 113.6 m**: nullahs, catchwaters and service
