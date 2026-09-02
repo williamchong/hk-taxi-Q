@@ -16584,6 +16584,63 @@ level and always reported per level, so **only the corridor was ever bound to 0*
 mechanism this measured · `Q94` / `Q95` for the level-0 half that is done · `Q19` for the estate's
 holes and for candidate 1's shape · `Q15` for the 2D-projection defect this repeats
 
+### ✅ The off-grade corridor is diagnosed per station, 2026-09-03
+
+The four blocked level-1 edges now have a report of their own —
+`off_grade_report`, a **separate function** from `corridor_report` rather than a second section
+inside it. That one's header counts "starved edges", its length line says "all judged level-0" and
+its halves are `Q19`'s two level-0 fix families; handing it this population makes three of its
+labels false, which is the defect review caught an hour before. Keeping them apart structurally is
+what stops the next edit re-merging them on the grounds that they print similar lines (`Q57`).
+
+🔴 **The leading hypothesis was the parapet, and the profile refutes it.** A parapet runs the length
+of a deck, so it predicts a *uniform* narrowing. Every one of the four instead has stretches at its
+full published width — `e257` opens `6.2 x11` against a 6.20 m deck, `e450` opens `6.0 x14` against
+5.96, `e208` *ends* `5.6 x17` against 5.60 — and loses the lane bar only in a short pinch:
+
+| edge | clear | starved | of length | centreline at the binding station | road |
+|---|---|---|---|---|---|
+| `e208` | 2.33 m | 17 m | 197.3 m | 🔴 `INFRASTRUCTURE` at **−0.23 m**, first clear 0.47 m away | `FLEMING ROAD` |
+| `e306` | 2.42 m | 22 m | 217.8 m | 🔴 `INFRASTRUCTURE` at **−0.24 m**, first clear 0.48 m away | `CANAL ROAD FLYOVER` |
+| `e257` | 2.86 m | 5 m | 254.6 m | ✅ clear at +0.00 m, occupier 0.95 m away | `CANAL ROAD FLYOVER` |
+| `e450` | 2.98 m | 2 m | 140.4 m | ✅ clear at +0.25 m, occupier 1.49 m away | `CANAL ROAD FLYOVER` |
+
+So **`Q103`'s deck-sourced width is broadly right** and what is left is localised — 8.6% of `e208`,
+10.1% of `e306`, 2.0% of `e257`, 1.4% of `e450`.
+
+🔴 **And the population splits 2–2 on the decisive column, so there is no single fix and no single
+acceptance number** (`Q57`). `e257` and `e450` are clear on the centreline with the occupier 0.95 and
+1.49 m off, which a width rule can reach. `e208` and `e306` are **condemned on the centreline
+itself** — and `offset_source` reads `deck` on all four, so `Q103` already moved these centrelines
+onto their decks' centres. ⚠️ **The registration fix is therefore spent**: what stands on `e208`'s
+centreline is standing in the middle of its own deck, which is `Q19`'s "no width rule reaches a
+centreline" arriving off-grade. ⚠️ **The mechanism is not measured and is not guessed here** — the
+blocker is roughly one plan bin wide at the centre and both pinches sit near an end of their edge,
+which is consistent with several things this report cannot tell apart. `P4-1` owns it.
+
+- ✅ **The `authored` column is a TAUTOLOGY on this population, and the shipped listing was printing
+  it as though it were not.** `floor_by_elevation_level` gives level +1 no widening, so the drawn
+  half-width *is* half the published width and the authored reading can only reproduce the clear
+  one: **4 of 4** rows read `authored == clear` to the digit, against level-0 rows that do not
+  (`e405` 1.46/0.49, `e398` 2.50/0.00, `e636` 2.93/0.98). The section prints that count rather than
+  asserting it in a comment — a level gaining a floor moves it, which is the test a counter here has
+  to pass (`Q72`) — and does not repeat the column.
+- ✅ **`split_by_level` is now a named function with tests.** It was four lines in `main`, where
+  nothing could reach it without a shipped bundle, and it is the one place a widened walk could
+  reach the gate. Its mutations all leave every counter closing: a `.get(edge, 0)` lookup defaults
+  an unrecorded edge *into* the gated half, and an inverted arm gates the decks and reports the
+  streets. `TestSplitByLevel` fails on both.
+- ✅ **The default run is byte-identical**, md5 `a59ef0af…` before and after over the whole
+  `--corridor-report` output — the profile, centre and summary lines now print through a shared
+  `_edge_verdict`, so a format change there would have shown up. `clearance_reconcile.py` **unmoved
+  at 19 / 21 / 4, exit 0**.
+- ⚠️ **`_edge_verdict` is presentation sharing and not the kind `Q57` forbids**: it pools no number,
+  no denominator and no bar, and every line it prints is about the single edge it was handed. The
+  separation that matters lives in the two callers' populations, headers and framing.
+- ⚠️ **Nothing here is gated and there is deliberately no bar** — the section says so in its own
+  last line. A figure off a deck read against `--accept-corridor-lanes` is one population's number
+  on another's, which is the call `paint_clearance.py` makes for the tramway.
+
 ## `Q104` — The cut face had no back, and the ribbon is drawn wider than the corridor that was cleared
 
 **Status.** 🟡 Half answered — the back face ships, the width disagreement is measured and open ·

@@ -197,6 +197,13 @@ SAMPLE_M = 0.25
 BUILDING = "BUILDING"
 LANDMARK = "LANDMARK"
 
+# `roads.py` writes `width_source` and `offset_source` as bare literals and
+# exports no constant, so this is **restated rather than imported** — the same
+# call `tools/centreline_error.py` makes, and for its reason: these graders
+# share no code with the pipeline they grade, and an import would be the first
+# one. A drift here is caught by the counters reading 0 of 4.
+_DECK_SOURCE = "deck"
+
 
 @dataclass(frozen=True)
 class Occupied:
@@ -1185,7 +1192,11 @@ def main(argv: list[str] | None = None) -> int:
 
     lane_m = float(city.roads.lane_width_m)
     corridor_bar_m = lane_m * args.accept_corridor_lanes
+    # Both derived from `graph` once and handed to both reports, rather than
+    # each rebuilding its own: `road_names` was already hoisted, and a second
+    # report made `plan_lengths` the odd one out.
     names = road_names(graph)
+    lengths = plan_lengths(graph)
 
     log.info("")
     log.info("  share of ALL drawn carriageway with geometry standing in it — Q19's frame,")
@@ -1246,20 +1257,10 @@ def main(argv: list[str] | None = None) -> int:
         ((edge_id, clear) for edge_id, clear in found.corridor_m.items() if clear < corridor_bar_m),
         key=lambda item: item[1],
     )
-    # 🔴 **Two populations, and they are never pooled** (`Q57`). Level 0 is what
-    # the acceptance bars were written against and is what `problems` gates on;
-    # an off-grade edge is a deck, not a street, and is *graded* — the same call
-    # `paint_clearance.py` makes for the tramway, and for the same reason a
-    # figure read against a bar it was not written for is one population's
-    # number on another's.
-    starved: list[tuple[int, float]] = []
-    off_grade: list[tuple[int, float]] = []
-    for row in below_bar:
-        # Indexed, never `.get`: every key here was put in `corridor_m` by the
-        # same `close_station` that set the level, so a missing one is an
-        # inconsistency to hear about rather than to default into the gated
-        # population.
-        (starved if found.corridor_level[row[0]] == 0 else off_grade).append(row)
+    # 🔴 **Two populations, and they are never pooled** (`Q57`) — see
+    # `split_by_level`, which is a named function rather than four lines here so
+    # that the one place a widened walk could reach the gate has tests.
+    starved, off_grade = split_by_level(below_bar, found.corridor_level)
     # `starved` is how much of the edge is below the bar and `worst run` is the
     # longest unbroken stretch of it — the pair that separates `Q19`'s two fix
     # families. A wall crossing the street blocks a metre or two and clears
@@ -1320,7 +1321,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.corridor_report:
         corridor_report(
             found,
-            graph,
+            lengths,
             names,
             # 🔴 **`starved`, not `below_bar`** — `Q19`'s report is a level-0
             # question end to end: its header says "starved edges", its length
@@ -1328,6 +1329,19 @@ def main(argv: list[str] | None = None) -> int:
             # is `Q19`'s own two fix families. Handing it the widened population
             # pools the two (`Q57`) and makes three of its labels false.
             starved,
+            spacing_m=args.spacing_m,
+            index_cell_m=args.index_cell_m,
+            structure_class=structure_class,
+        )
+        # Its own function and its own population, for the reason that one
+        # states in red — and silent unless `--levels` asked for a second one,
+        # which is what keeps the default run's output unchanged.
+        off_grade_report(
+            found,
+            graph,
+            lengths,
+            names,
+            off_grade,
             spacing_m=args.spacing_m,
             index_cell_m=args.index_cell_m,
             structure_class=structure_class,
@@ -1482,9 +1496,148 @@ def _median_and_min(values: list[float]) -> tuple[float, float]:
     return float(np.median(values)), min(values)
 
 
+def split_by_level(
+    below_bar: list[tuple[int, float]], levels: dict[int, int]
+) -> tuple[list[tuple[int, float]], list[tuple[int, float]]]:
+    """The failing rows split into the population that is gated and the one that
+    is only reported.
+
+    🔴 **Two populations, and they are never pooled** (`Q57`). Level 0 is what
+    the acceptance bars were written against and is what `main` gates on; an
+    off-grade edge is a deck, not a street, and is *graded* — the same call
+    `paint_clearance.py` makes for the tramway, and for the same reason a figure
+    read against a bar it was not written for is one population's number on
+    another's.
+
+    ⚠️ **Lifted out of `main` so the partition can be tested without a bundle.**
+    It is the one place a widened walk could reach the gate, and its mutations
+    all leave every counter closing. `TestSplitByLevel` enumerates them.
+
+    `levels` is `Survey.corridor_level`, and it is **indexed rather than
+    `.get`**: every key here was put in `corridor_m` by the same `close_station`
+    that set the level, so a missing one is an inconsistency to hear about
+    rather than one to default into the gated population.
+    """
+    starved: list[tuple[int, float]] = []
+    off_grade: list[tuple[int, float]] = []
+    for row in below_bar:
+        (starved if levels[row[0]] == 0 else off_grade).append(row)
+    return starved, off_grade
+
+
+def _edge_verdict(
+    found: Survey,
+    edge_id: int,
+    name: str,
+    length_m: float,
+    *,
+    note: str = "",
+) -> None:
+    """One edge's station profile and its centreline verdict.
+
+    Shared by both reports below, and **this is presentation sharing, not the
+    kind `Q57` forbids**: it pools no number, no denominator and no bar — every
+    line it prints is about the single edge it was handed. The two callers keep
+    their own populations, headers and framing, which is where the separation
+    has to live.
+
+    ⚠️ Trimmed stations are absent from the profile rather than recorded as
+    clear — `corridor_profile`'s own declaration says so — so a short profile on
+    a long edge is a junction trim, not a short street. `n` beside the length is
+    what makes that visible instead of leaving it to be assumed.
+    """
+    profile = found.corridor_profile[edge_id]
+    log.info(
+        "    e%-5d %-28s %6.1f m over %3d judged stations%s",
+        edge_id,
+        name[:28],
+        length_m,
+        len(profile),
+        note,
+    )
+    log.info(
+        "      profile  %s",
+        " · ".join(
+            f"{clear:.1f}" + (f" x{count}" if count > 1 else "")
+            for clear, count in _profile_runs(profile)
+        ),
+    )
+    centre = found.corridor_centre.get(edge_id)
+    if centre is None:
+        log.info("      centre   no judged cell at the binding station")
+    elif centre.occupier is None:
+        log.info(
+            "      centre   clear at offset %+.2f m; nearest occupier %.2f m away, %s",
+            centre.centre_offset_m,
+            centre.to_occupier_m,
+            _side(centre.occupier_offset_m),
+        )
+    elif not np.isfinite(centre.to_clear_m):
+        log.info(
+            "      centre   %s at offset %+.2f m; the whole cross-section is blocked",
+            centre.occupier,
+            centre.centre_offset_m,
+        )
+    else:
+        log.info(
+            "      centre   %s at offset %+.2f m; first clear cell %.2f m away, %s",
+            centre.occupier,
+            centre.centre_offset_m,
+            centre.to_clear_m,
+            _side(centre.clear_offset_m),
+        )
+
+
+def _verdict_legend() -> None:
+    """The two lines that say how to read `_edge_verdict`'s output.
+
+    Beside the printer they describe, because they were byte-identical in both
+    reports and a reworded legend over an unchanged format is the drift that
+    costs a reader the table.
+    """
+    log.info("    profile is every judged station's clear run in walk order, run-length encoded;")
+    log.info("    'centre' is what stood on the centreline at the binding station, and its way out")
+
+
+def _resolution_note(index_cell_m: float, spacing_m: float) -> None:
+    """Both reports' closing line: every metre above is a bound, and how loose.
+
+    Each caller keeps its own comment saying why it restates this; what they
+    share is the sentence, which was duplicated verbatim down to its arguments.
+    """
+    log.info(
+        "    widths are lower bounds at the %.2f m plan bin; the walk pitch is %.2f m",
+        index_cell_m,
+        spacing_m,
+    )
+
+
+def _blocker_split(found: Survey, rows: list[tuple[int, float]], structure_class: str) -> None:
+    """What stood in one population's edges, tallied at their binding stations.
+
+    ⚠️ Counted from `corridor_blockers`, so this is **the grader's own**
+    population. `Q19` published a `1 LANDMARK` here that belongs to
+    `tools/narrowing.py`'s — a different population, whose `e702` this grader
+    passes at 3.41 m. An empty class is printed as 0 rather than omitted, or the
+    next reader fills the gap from whichever table is to hand.
+
+    Shared on `_edge_verdict`'s argument rather than `Q57`'s: it pools nothing
+    between the two callers, it is handed one population at a time, and the
+    three class names defaulting to 0 are the part most likely to drift if a
+    fourth class is added to one report and not the other.
+    """
+    tally = Counter(" + ".join(found.corridor_blockers[edge_id]) for edge_id, _ in rows)
+    for name in (BUILDING, LANDMARK, structure_class):
+        tally.setdefault(name, 0)
+    log.info(
+        "    split     %s",
+        " · ".join(f"{count} {name}" for name, count in sorted(tally.items())),
+    )
+
+
 def corridor_report(
     found: Survey,
-    graph: dict[str, Any],
+    lengths: dict[int, float],
     names: dict[int, str],
     starved: list[tuple[int, float]],
     *,
@@ -1507,25 +1660,12 @@ def corridor_report(
     listing's own population rather than a second selection over the same
     dictionary, so the two can never come to disagree about which edges fail.
     """
-    lengths = plan_lengths(graph)
-
     log.info("")
     log.info(
         "  Q19 corridor report — %d starved edges, reporting only, nothing gated", len(starved)
     )
 
-    # ⚠️ Counted from `corridor_blockers`, so this is **the grader's own**
-    # population. `Q19` published a `1 LANDMARK` here that belongs to
-    # `tools/narrowing.py`'s — a different population, whose `e702` this grader
-    # passes at 3.41 m. An empty class is printed as 0 rather than omitted, or
-    # the next reader fills the gap from whichever table is to hand.
-    tally = Counter(" + ".join(found.corridor_blockers[edge_id]) for edge_id, _ in starved)
-    for name in (BUILDING, LANDMARK, structure_class):
-        tally.setdefault(name, 0)
-    log.info(
-        "    split     %s",
-        " · ".join(f"{count} {name}" for name, count in sorted(tally.items())),
-    )
+    _blocker_split(found, starved, structure_class)
 
     # The two halves separate by length, and `Q19` had that as a tendency when
     # it is a partition. Grouped by whether a *building* stands in the edge at
@@ -1567,52 +1707,11 @@ def corridor_report(
     )
 
     log.info("")
-    log.info("    profile is every judged station's clear run in walk order, run-length encoded;")
-    log.info("    'centre' is what stood on the centreline at the binding station, and its way out")
-    # ⚠️ Trimmed stations are absent from the profile rather than recorded as
-    # clear — `corridor_profile`'s own declaration says so — so a short profile
-    # on a long edge is a junction trim, not a short street. `n` beside the
-    # length is what makes that visible instead of leaving it to be assumed.
+    _verdict_legend()
     for edge_id, _ in starved:
-        profile = found.corridor_profile[edge_id]
-        log.info(
-            "    e%-5d %-28s %6.1f m over %3d judged stations",
-            edge_id,
-            names.get(edge_id, "unnamed")[:28],
-            lengths.get(edge_id, float("nan")),
-            len(profile),
+        _edge_verdict(
+            found, edge_id, names.get(edge_id, "unnamed"), lengths.get(edge_id, float("nan"))
         )
-        log.info(
-            "      profile  %s",
-            " · ".join(
-                f"{clear:.1f}" + (f" x{count}" if count > 1 else "")
-                for clear, count in _profile_runs(profile)
-            ),
-        )
-        centre = found.corridor_centre.get(edge_id)
-        if centre is None:
-            log.info("      centre   no judged cell at the binding station")
-        elif centre.occupier is None:
-            log.info(
-                "      centre   clear at offset %+.2f m; nearest occupier %.2f m away, %s",
-                centre.centre_offset_m,
-                centre.to_occupier_m,
-                _side(centre.occupier_offset_m),
-            )
-        elif not np.isfinite(centre.to_clear_m):
-            log.info(
-                "      centre   %s at offset %+.2f m; the whole cross-section is blocked",
-                centre.occupier,
-                centre.centre_offset_m,
-            )
-        else:
-            log.info(
-                "      centre   %s at offset %+.2f m; first clear cell %.2f m away, %s",
-                centre.occupier,
-                centre.centre_offset_m,
-                centre.to_clear_m,
-                _side(centre.clear_offset_m),
-            )
 
     log.info("")
     _centreline_summary(found, building_half, "building")
@@ -1622,11 +1721,7 @@ def corridor_report(
     # ⚠️ Stated here rather than left to the reader: every metre above is a
     # bound. The widths are lower bounds at the plan bin (see INDEX_CELL_M) and
     # the extents are upper bounds at the walk pitch (see `_starved_shape`).
-    log.info(
-        "    widths are lower bounds at the %.2f m plan bin; the walk pitch is %.2f m",
-        index_cell_m,
-        spacing_m,
-    )
+    _resolution_note(index_cell_m, spacing_m)
 
 
 def _centreline_summary(found: Survey, group: list[int], label: str) -> None:
@@ -1655,6 +1750,128 @@ def _centreline_summary(found: Survey, group: list[int], label: str) -> None:
             len(escaped),
             " and ".join(escaped),
         )
+
+
+def off_grade_report(
+    found: Survey,
+    graph: dict[str, Any],
+    lengths: dict[int, float],
+    names: dict[int, str],
+    off_grade: list[tuple[int, float]],
+    *,
+    spacing_m: float,
+    index_cell_m: float,
+    structure_class: str,
+) -> None:
+    """The same per-station diagnosis for the edges that are graded, not gated.
+
+    🔴 **A separate function, not a second section inside `corridor_report`.**
+    That one's header says "starved edges", its length line says "all judged
+    level-0" and its halves are `Q19`'s two level-0 fix families; handing it
+    this population makes three of its labels false, which is why `main`'s call
+    site says so in red. Keeping the two apart *structurally* is what stops the
+    next edit re-merging them on the grounds that they print similar lines
+    (`Q57`) — a deck's parapet is neither a shopfront in the carriageway nor a
+    wall across it, and none of the three share a fix.
+
+    ⚠️ **Reporting only, and there is deliberately no bar here.** An off-grade
+    ribbon is `Q21`/`Q22`'s and `P4-1`'s; a figure from it read against
+    `--accept-corridor-lanes` would be one population's number on another's.
+    """
+    if not off_grade:
+        return
+    # Indexed by id and read by field name, `centreline_error.py`'s shape. Every
+    # id below came from `corridor_level`, which was built from these same
+    # edges, so a miss is `split_by_level`'s "inconsistency to hear about"
+    # rather than something to default past — and `load_bundle` refuses a
+    # bundle whose schema could be missing the fields.
+    published = {int(edge["id"]): edge for edge in graph["edges"]}
+    # ⚠️ The levels that actually carry a failing row, which is **not** what
+    # `main`'s line above spells: that one names the levels that were *asked
+    # for*. `--levels 0,1,2` with failures on 1 alone prints both, honestly, and
+    # this prints the one. Two different statements, deliberately.
+    levels = tuple(sorted({found.corridor_level[edge_id] for edge_id, _ in off_grade}))
+
+    log.info("")
+    log.info(
+        "  off-grade corridor report — %d edges below the lane bar on level %s, "
+        "reporting only, nothing gated",
+        len(off_grade),
+        _levels_label(levels),
+    )
+
+    # Over **this** population, never the level-0 one.
+    _blocker_split(found, off_grade, structure_class)
+
+    # 🔴 What makes this population a different question from `Q19`'s. `Q103`
+    # gave 36 of 45 level-1 edges a width from their own deck **and** a signed
+    # offset onto its centre, so a residual on one of these is not the
+    # registration that fix already made — it is something inside the deck's own
+    # span, and a parapet stands on the deck.
+    from_deck = sum(
+        1 for edge_id, _ in off_grade if published[edge_id]["width_source"] == _DECK_SOURCE
+    )
+    centred_on_deck = sum(
+        1 for edge_id, _ in off_grade if published[edge_id]["offset_source"] == _DECK_SOURCE
+    )
+    log.info(
+        "    source    %d of %d width_source=deck · %d of %d offset_source=deck — Q103 already "
+        "drew these at their deck's span and centred them on it",
+        from_deck,
+        len(off_grade),
+        centred_on_deck,
+        len(off_grade),
+    )
+
+    # ⚠️ **The listing's `authored` column carries no information here, and this
+    # counter is what says so rather than a comment.** `floor_by_elevation_level`
+    # gives an off-grade ribbon no widening, so the drawn half-width *is* half
+    # the published width and the authored reading can only reproduce the clear
+    # one. It is not asserted by construction — a level gaining a floor would
+    # move this count, which is the test a counter here has to pass (`Q72`).
+    degenerate = sum(
+        1 for edge_id, clear in off_grade if abs(found.corridor_authored_m[edge_id] - clear) < 1e-9
+    )
+    log.info(
+        "    authored  %d of %d rows read authored == clear, so the listing's authored column "
+        "says nothing on this population and is not repeated below",
+        degenerate,
+        len(off_grade),
+    )
+
+    # Read against the edges at these levels, never against the 737 level-0 ones
+    # `corridor_report` uses — that pooling is the defect the level filter there
+    # exists to prevent, arriving from the other side.
+    judged = [
+        lengths[edge_id]
+        for edge_id, level in found.corridor_level.items()
+        if level in levels and edge_id in lengths
+    ]
+    log.info(
+        "    length    all judged level %-6s n %3d  p50 %6.1f m   — what these read against",
+        _levels_label(levels),
+        len(judged),
+        _median_and_min(judged)[0],
+    )
+
+    log.info("")
+    _verdict_legend()
+    for edge_id, _ in off_grade:
+        edge = published[edge_id]
+        _edge_verdict(
+            found,
+            edge_id,
+            names.get(edge_id, "unnamed"),
+            lengths.get(edge_id, float("nan")),
+            note=f"  ·  {edge['width_source']} width {float(edge['width_m']):.2f} m",
+        )
+
+    log.info("")
+    # Restated rather than inherited from the block above by adjacency: these
+    # are the same two resolutions, and a reader who scrolled to this section
+    # has not necessarily read that one.
+    _resolution_note(index_cell_m, spacing_m)
+    log.info("    no bar is applied above — P4-1 owns what an off-grade corridor has to clear")
 
 
 def road_names(graph: dict[str, Any]) -> dict[int, str]:

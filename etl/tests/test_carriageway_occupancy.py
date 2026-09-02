@@ -38,6 +38,7 @@ region run is the only thing that provides one.
 from __future__ import annotations
 
 import argparse
+from typing import ClassVar
 
 import numpy as np
 import pytest
@@ -55,6 +56,7 @@ from carriageway_occupancy import (
     _levels_argument,
     _profile_runs,
     _starved_shape,
+    split_by_level,
     survey,
 )
 
@@ -509,3 +511,81 @@ class TestCorridorLevels:
         then plan against."""
         found = survey(self._lattice([0, 1]), {}, corridor_levels=(0, 1))
         assert set(found.corridor_m) == {0, 1}
+
+
+class TestSplitByLevel:
+    """🔴 **The one place a widened walk could reach the gate.**
+
+    `--levels` is additive, so every level named beyond 0 adds rows to the
+    listing — and exactly one line decides which of those rows the acceptance
+    bars are then applied to. It lived inside `main` until the off-grade report
+    was written, where nothing could reach it without a shipped bundle; the
+    reason it is a function is that the mutations below all leave every counter
+    closing and every other test in this file passing.
+
+    ⚠️ These are about the **partition**, not about the widths. `survey` decides
+    which edges get a corridor at all and `TestCorridorLevels` holds that; this
+    decides which of the failures are `Q19`'s and which are `P4-1`'s.
+    """
+
+    # Sorted by clear width, the way `main` builds it.
+    ROWS: ClassVar[list[tuple[int, float]]] = [
+        (405, 1.46),
+        (208, 2.33),
+        (306, 2.42),
+        (315, 2.44),
+        (450, 2.98),
+    ]
+    LEVELS: ClassVar[dict[int, int]] = {405: 0, 208: 1, 306: 1, 315: 0, 450: 1}
+
+    def test_the_split_is_disjoint_and_exhaustive(self) -> None:
+        """Every failing row is judged exactly once. A row in both halves is
+        counted against the gate *and* reported as exempt from it; a row in
+        neither leaves the listing silently."""
+        starved, off_grade = split_by_level(self.ROWS, self.LEVELS)
+        assert not set(starved) & set(off_grade)
+        assert sorted(starved + off_grade) == sorted(self.ROWS)
+
+    def test_every_level_zero_row_is_gated(self) -> None:
+        """🔴 **The direction that must never fail.** An off-grade row escaping
+        into `starved` reads as a defect on a street that has none; a level-0
+        row escaping into `off_grade` is a starved street the gate stops seeing,
+        and that one ships."""
+        starved, off_grade = split_by_level(self.ROWS, self.LEVELS)
+        assert [edge for edge, _ in starved] == [405, 315]
+        assert all(self.LEVELS[edge] != 0 for edge, _ in off_grade)
+
+    def test_nothing_is_off_grade_at_the_default(self) -> None:
+        """Which is what keeps the default run's output byte-identical: the
+        report below returns immediately on an empty population, so the section
+        cannot appear unless `--levels` asked for it."""
+        rows = [row for row in self.ROWS if self.LEVELS[row[0]] == 0]
+        starved, off_grade = split_by_level(rows, self.LEVELS)
+        assert starved == rows
+        assert off_grade == []
+
+    def test_walk_order_is_preserved_in_both_halves(self) -> None:
+        """Both listings are printed in the order `main` sorted them — tightest
+        first — so a stable partition is what makes two dated runs diffable.
+        `Q19`'s history is a record of readers diffing exactly that table."""
+        starved, off_grade = split_by_level(self.ROWS, self.LEVELS)
+        assert [clear for _, clear in starved] == sorted(clear for _, clear in starved)
+        assert [edge for edge, _ in off_grade] == [208, 306, 450]
+
+    def test_an_unknown_edge_raises_rather_than_being_gated(self) -> None:
+        """⚠️ **The mutation this exists for**, and it is `.get(edge, 0)`.
+
+        Written that way the lookup is total, so an edge whose level was never
+        recorded defaults into the *gated* population and is scored against a
+        bar it was never measured for — while the run reports one more starved
+        edge and looks like a finding. Every key here was put in `corridor_m` by
+        the same `close_station` that set the level, so a miss is an
+        inconsistency to hear about.
+        """
+        with pytest.raises(KeyError):
+            split_by_level([(999, 1.0)], self.LEVELS)
+
+    def test_an_empty_listing_splits_into_two_empty_halves(self) -> None:
+        """A region with nothing below the bar, which is the state the gate is
+        trying to reach."""
+        assert split_by_level([], self.LEVELS) == ([], [])
