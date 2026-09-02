@@ -16827,6 +16827,90 @@ still do not share an acceptance number · `Q58` for the trap a bound swept in t
 direction would be if a bar moved with it · `Q19` for "no width rule reaches a centreline", which
 this removes the off-grade instance of
 
+### ✅ The across cell is swept, 2026-09-03 — the two edges SURVIVE on a corrected reading
+
+`ACROSS_M` was the one resolution knob in this tool never swept, and the entry above named it as the
+floor the band-thickness column had landed on. It is swept now, against `--index-cell-m` at both
+ends, and it does **not** clear `e208` or `e306`. What it does instead is find a defect in the
+instrument.
+
+🔴 **`--across-m` must be ≤ `--index-cell-m`, and nothing enforces it.** `cross_section` returns one
+**centre point** per across cell and occupancy is a point lookup into the `INDEX_CELL_M` grid, so
+the across cell is a *probe*, not an interval test. Probe coarser than bin and the walk steps over
+its own index: at `--across-m 0.5 --index-cell-m 0.25` the occupier is found at **130 of 206**
+stations on `e208` and **76 of 230** on `e306`, against **187** and **218** once the probe is
+matched to the bin. That corner missed 57 and 142 stations of occupancy — and it is the corner
+every fine-bin figure in the entry above was measured in.
+
+| across | index | lvl-0 `BUILDING` / `INFRA` | starved lvl 0 | rows | `e208` | `e306` | `e257` | `e450` | s |
+|---|---|---|---|---|---|---|---|---|---|
+| 0.500 | 1.00 | 1.324 / 1.104% | 21 | 25 | 2.33 | 2.42 | 2.86 | 2.98 | 28.6 |
+| 0.250 | 1.00 | 1.327 / 1.102% | 21 | 24 | 2.19 | 2.17 | 2.98 | ✅ clear | 50.4 |
+| 0.125 | 1.00 | 1.329 / 1.102% | 20 | 23 | 2.24 | 2.22 | 3.10 | ✅ clear | 97.0 |
+| 🚫 0.500 | 0.25 | 0.286 / 0.499% | 2 | 4 | 2.80 | 2.90 | clear | clear | 31.9 |
+| 0.250 | 0.25 | 0.287 / 0.513% | 4 | 6 | **2.68** | **3.14** | ✅ clear | ✅ clear | 54.7 |
+| 0.125 | 0.25 | 0.288 / 0.513% | 5 | 7 | **2.74** | **3.09** | ✅ clear | ✅ clear | 102.0 |
+
+🚫 marks the under-sampled corner — probe coarser than bin — kept because it is what the entry
+above published. Its numbers are real readings of an invalid configuration, not arithmetic errors.
+🔴 **Its three headline numbers all move once the probe is matched**: the starved level-0 population
+is **4-5**, not 2 — the collapse is `25 → 6-7` all-level rather than `25 → 4` — and `centreline
+occupied` on `e208` is **2 of 206**, not 0, so the 0-against-0 that carried "nothing stands on
+either centreline" was partly the probe not looking. ✅ **The level-1 half is stable at 2
+throughout**, so what moved is the level-0 count and never the membership of the population under
+discussion.
+
+- 🔴 **The knob runs the *unflattering* way and then converges.** A coarse across cell rounds the
+  **clear** run up exactly as it rounds the blocked run up, because a cell straddling the occupier
+  reads clear whenever its centre does. So refining it cost `e208` 2.33 → 2.19 at the coarse bin and
+  2.80 → 2.68 at the fine one, and both edges settle around **2.7** and **3.1** against the 3.20 m
+  lane bar. ⚠️ This is the opposite of the plan bin, and the two must not be described as one
+  "resolution" story: `--index-cell-m` flatters and `--across-m` does not.
+- ✅ **The band-thickness floor was `ACROSS_M`, exactly as the entry above predicted, and it is now
+  spent.** Minimum stretch thickness tracks the across cell 1:1 — 0.47 → 0.24 → 0.12 — and the
+  0.47 m the column floored on is literally these two edges' own `corridor_span_m` (5.60/12 =
+  0.4667, 5.80/12 = 0.4833). Below a matched probe the p50 floors on the **index** cell at 0.25 m
+  instead, so both error dimensions are now measured out and there is no third.
+- ✅ **`--across-m` is nearly inert on the gated half, which is what makes this sweep safe to read.**
+  Level-0 `BUILDING` moves 1.324 → 1.329% and `INFRASTRUCTURE` 1.104 → 1.102% across the whole
+  range, against `--index-cell-m`'s 1.324 → 0.286%. So unlike the plan bin this knob does not retire
+  the gate it is swept under, and the level-0 starved count is flat at 21 / 21 / 20.
+- ✅ **The `--sample-m` control was run again at the finest setting and changes nothing** — 0.0625 m
+  reproduces `e208` **2.74** and `e306` **3.09** to the digit, occupancy 188 → 188 and 222 → 223.
+  Smear and probe geometry, not holes, for the second time.
+- ⚠️ **Cost premise corrected in the other direction from last time.** The plan-bin sweep was free
+  because `cell_m` only changes a dict key; `--across-m` changes the **lattice size**, so it runs
+  **28.6 / 50.4 / 97.0 s** — 3.4x from end to end, not the ~30 s per run this was planned at.
+- 🔴 **What is standing there is measured, and the shape refutes "a parapet" as the whole story
+  again.** At 0.125 / 0.25 `e208`'s typical cross-section is two thin bands, `−2.80..−2.68` and
+  `+2.30..+2.55` — 0.12-0.25 m thick on a 5.60 m deck, with 4.2-5.5 m clear between them for most of
+  the walk. The corridor figure is a **localised pinch at one end**: 11 m starved in one unbroken
+  run, approached by a decline from about 4.5 m to the 2.7 m minimum, recovering unevenly to 3.4 m
+  and only then jumping to `5.6 x18` where the occupier leaves the ribbon. ⚠️ The decline is not
+  monotonic — it wobbles `4.4 · 4.2 · 4.4 · 4.2` and `3.6 · 3.7 · 3.6` on the way down — so it is a
+  narrowing rather than a clean ramp, and quoting it as a smooth run would be a reconstruction
+  rather than a reading. `e306` is **3 m starved in three 1 m spots** — a different shape, so `Q57`
+  applies and the two still do not share a fix.
+- ⬜ **Assigned, not taken: refuse `--across-m` > `--index-cell-m` at startup.** It is
+  `carriageway_margin.py`'s guard at a second tool — it refuses to start unless `2 x max_ray_m`
+  exceeds the width ceiling, for the same reason: a bound that silently manufactures a clean reading
+  is `Q58`'s trap reachable from the command line. The shipped defaults (0.5 / 1.0) satisfy it, so
+  the guard is inert on every published figure and changes nothing but what a sweeper can ask for.
+- ✅ **No source moved and no grader is owed.** `--across-m`, `--index-cell-m` and `--sample-m` are
+  the tool's own documented flags, no repo constant changed, `git status` clean — so neither
+  `clearance_reconcile.py --sweep` nor `tools/narrowing.py` is triggered, on the precedent the two
+  entries above set. The shipped `ACROSS_M` stays **0.5** whatever the sweep says.
+
+🔴 **So the bridge blockage does NOT close as an instrument finding.** `e208` and `e306` hold a
+pinch under the lane bar at every setting where the probe can see its own index, the plan bin and
+the across cell are both now priced, and what is left is geometry. `P4-1` inherits two edges, and
+the sweep has told it exactly where to aim: one 11 m pinch near one end of `e208`, and three
+isolated metres on `e306`.
+
+**See.** The two entries above for the plan bin and the mechanism this refines · `Q51` for the
+`e132` shape both sweeps reproduce · `Q57` for why the two edges still do not share an acceptance
+number · `Q58` for the trap the assigned startup guard closes
+
 ## `Q104` — The cut face had no back, and the ribbon is drawn wider than the corridor that was cleared
 
 **Status.** 🟡 Half answered — the back face ships, the width disagreement is measured and open ·
