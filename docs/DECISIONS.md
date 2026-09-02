@@ -16285,9 +16285,55 @@ can see.
   `deck_edges_unmeasured` (9 edges today), and `test_no_off_grade_edge_is_licensed_by_a_publisher`
   now pins it.
 - ⬜ `P4-1` still owns opening the network. The touchdown closure holds until it does.
-- ⬜ The clearance default stays `(0,)`. Flipping it publishes 60 edges of `clear_width_m` that
-  nothing reads, because `RoadGraph.is_drivable` gates `impassable_edge_ids` and `fenced_edge_ids`
-  alike. It belongs with `P4-1`, when a consumer exists.
+- ⬜ **The clearance default stays `(0,)` — and the off-grade measurement is now REACHABLE without
+  it (2026-09-02).** `clearance.walk`'s knob became a named `LEVELS` plus a `--levels` CLI flag, on
+  `ALONG_M`'s exact precedent: report-only, with `_write` refusing anything but the shipped set.
+  🔴 **The guard is the change, not the flag.** `along_m` had one and `levels` did not, so a public
+  `build_region` could have published 60 off-grade edges *at the shipped spacing* and nothing in the
+  document, the counters or `check.sh` would have said the bundle had stopped being a level-0
+  measurement. ✅ `clearance.json` rebuilt **byte-identical** (md5 `8cb8cafa…`), `clearance_reconcile`
+  unmoved at **19 / 21 / 4**, `narrowing.py` byte-identical, `check.sh` green, 1,802 tests pass.
+
+  | walk | edges | cross-sections | starved at the lane (3.20 m) | under the car (1.80 m) |
+  |---|---|---|---|---|
+  | `0` — shipped | 737 | 76,949 | 19 | 14 |
+  | `-1,1` | 60 | 21,181 | **3** | **1** |
+  | `-1,0,1` | 797 | 98,130 | 22 | 15 |
+
+  ✅ **Additive on every column, and that is the finding rather than the arithmetic**: walking the
+  off-grade network does not perturb the shipped level-0 answers, which survive a 797-edge walk
+  exactly. The three starved are `e489` **0.00 m**, `e208` **2.50 m**, `e306` **3.00 m**.
+
+  🔴 **`e489` CENTRAL-WAN CHAI BYPASS TUNNEL reads 0.00 m, and this question asserted the
+  opposite earlier the same day.** Above:
+  *"every tunnel is clear of its bore, `e489` 0.25 → 6.40 m"* — but 6.40 m is the **authored width
+  the ribbon was redrawn at**, and no clearance measurement stood behind it, because the walk
+  defaulted to level 0 and had never visited `e489` at all. This is the first direct reading, and it
+  is **0.00 m** at the tunnel's tightest station; the edge is the whole of the off-grade car-bar
+  count, while the other 14 tunnels clear the lane bar. ⚠️ **The cause is not known and is not
+  guessed here** — residual intrusion the width fix did not clear, or the walk meeting the bore's
+  own lining, and the two want opposite responses. A finding to go and look at, and `P4-1`'s.
+
+  🔴 **`structure_bounded` looks like the instrument for this and is not — it was tried.**
+  `roads._structure_bounded` finds a parapet's **top**, because `HeightField.from_meshes` drops
+  near-vertical triangles outright, so a bore's wall is invisible to it by construction: it reads
+  **1 of 75** level −1 stations whether or not the tunnel is modelled. `clearance.py` rasterises
+  triangles instead and does not inherit that blindness, which is why the walk is the instrument
+  here and that flag is not. ⚠️ **This was reached for first and refused**: the 1-of-75 reads as
+  evidence that the bores are unmodelled, and is evidence of nothing but the flag's own question.
+
+  ⚠️ **`e208` reads 2.50 m: starved at the lane, clear at the car.** That is the edge the user
+  stopped against structure on, and it is `e99`'s class exactly — the obstruction is *interior* and
+  no width bar reaches it — which corroborates "the defect is **registration**, not size" above from
+  a second instrument.
+
+  🔴 **Flipping the default would also break `clearance_reconcile`'s premise, not merely its
+  constants.** `published()` reads every `carriageway` row in `city.json` unfiltered, while the
+  grader it ratchets against refuses off-grade twice over (`level < 0` at lattice build,
+  `current_level != 0` in the corridor walk). `EXPECT_PIPELINE` would move against an
+  `EXPECT_GRADER` that *structurally cannot follow*, and the ratchet would stop describing one
+  bundle — which is the one thing `Q51` built it to do. **Publishing owes `carriageway_occupancy.py`
+  a `levels` knob first.** It still belongs with `P4-1`, and now it has numbers to decide on.
 - ✅ `P4-1`'s second reason is **discharged**: the network is no longer open and ungraded, because
   the ramps stop at the touchdown. Removing `fence.touchdown_levels` is now the whole of "open it
   properly", and it opens onto a ribbon drawn where its deck is.

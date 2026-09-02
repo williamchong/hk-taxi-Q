@@ -29,22 +29,28 @@ it changed no published number, which is evidence rather than a test.
 
 from __future__ import annotations
 
+import argparse
+from typing import Any, cast
+
 import numpy as np
 import pytest
 
 from pipeline.clearance import (
     ACROSS_M,
     ALONG_M,
+    LEVELS,
     MAX_SUBDIVISIONS,
     NOT_MEASURED,
     PIECE_BUDGET,
     SUBDIVIDE_M,
     ClearanceReport,
     _batches,
+    _levels_argument,
     _longest_clear,
     _plan_steps,
     _spread,
     _subdivide,
+    _write,
     measure,
     walk,
     wears,
@@ -267,6 +273,102 @@ class TestAlongSpacing:
         along = np.unique(np.round(corridor.z, 3))
         assert along.min() >= 5.0 - 0.25
         assert along.max() <= 16.0 + 0.25
+
+
+class TestPublishingASweep:
+    """`_write` is the one place a measurement becomes the bundle.
+
+    ⚠️ **`along_m` had a guard here and `levels` did not, and that asymmetry was
+    the hole.** `build_region` is public and takes both, so a caller could walk
+    the off-grade network *at the shipped spacing* and publish 60 edges of
+    `clear_width_m` that every pre-`P4-1` consumer hides behind `is_drivable` —
+    a bundle change nobody decided, arriving as a silently different document.
+    `Q103` records that flipping the level is the user's call.
+    """
+
+    def test_the_shipped_levels_are_level_zero_alone(self) -> None:
+        # Pinned by value because of what it encodes rather than for tidiness:
+        # `Q13` closed the off-grade network to driving, and this constant is
+        # that refusal expressed where the walk can read it.
+        assert LEVELS == (0,)
+
+    def test_the_report_says_what_it_was_actually_walked_over(self) -> None:
+        # 🔴 The guard above is only worth having if the field is true. `walk` is
+        # public — `tools/narrowing.py` calls it directly — so a report built
+        # with the defaults and corrected by `build_region` two frames later
+        # would hand every other caller a level-0 claim over an off-grade walk,
+        # and `_write` would publish it without complaint.
+        graph = {
+            "edges": [
+                _edge(1, [[0.0, 0.0, 0.0], [0.0, 0.0, 20.0]]),
+                _edge(2, [[9.0, 6.0, 0.0], [9.0, 6.0, 20.0]], level=1),
+            ]
+        }
+        drawn = {**_drawn(1, [3.2, 3.2], (2.0, 2.0)), **_drawn(2, [3.2, 3.2], (2.0, 2.0))}
+        assert walk(graph, drawn, levels=(0, 1))[1].levels == (0, 1)
+        assert walk(graph, drawn, along_m=ALONG_M / 2.0)[1].along_m == ALONG_M / 2.0
+        # And a list is coerced, because the annotation does not stop one and the
+        # guard compares with `!=` against a tuple.
+        assert walk(graph, drawn, levels=[0, 1])[1].levels == (0, 1)
+
+    def test_a_widened_walk_cannot_publish(self) -> None:
+        with pytest.raises(SystemExit, match="level"):
+            # ⚠️ `city` is never reached, and that is pinned as much as the
+            # refusal: a guard standing *after* `out_dir` would already have
+            # resolved where to write the document it is refusing.
+            _write(None, cast(Any, None), "wan_chai", ClearanceReport(levels=(0, 1)))
+
+    def test_a_swept_spacing_still_cannot_publish(self) -> None:
+        # The older guard, kept under test beside the new one: they share a
+        # message and a reason, and a refactor that reached one would reach both.
+        with pytest.raises(SystemExit, match="sweep reports"):
+            _write(None, cast(Any, None), "wan_chai", ClearanceReport(along_m=ALONG_M / 2.0))
+
+    def test_the_shipped_measurement_still_gets_through(self) -> None:
+        # 🔴 **Mutation-checked rather than read** (`Q72`). Two refusals that
+        # always fired would pass both tests above while publishing nothing ever,
+        # and every counter in this stage would go on closing. What says the
+        # guards are reachable at zero is that a default report gets past them —
+        # here, into the `city` dereference they stand in front of.
+        # ⚠️ **`match` is load-bearing.** A bare `AttributeError` is also what a
+        # renamed `report.along_m` raises *before* either guard runs, so this
+        # would go on passing with both of them dead — certifying the wrong
+        # state, which is the failure this class is written against.
+        with pytest.raises(AttributeError, match="out_dir"):
+            _write(None, cast(Any, None), "wan_chai", ClearanceReport())
+
+
+class TestLevelsArgument:
+    """`--levels` is how `P4-1` reads the off-grade network before it exists.
+
+    Only the refusals are worth a test: a parse that returned the wrong levels
+    would show up in the very next log line, which names them.
+    """
+
+    def test_a_list_becomes_a_sorted_tuple(self) -> None:
+        # Sorted rather than as typed, so one level set has one label —
+        # `config._survey_levels`' rule at the CLI. `_write` quotes that label.
+        assert _levels_argument("0,1,-1") == (-1, 0, 1)
+        assert _levels_argument("1,-1,0") == (-1, 0, 1)
+
+    def test_spacing_is_tolerated(self) -> None:
+        assert _levels_argument(" 0 , 1 ") == (0, 1)
+
+    def test_a_repeat_is_refused(self) -> None:
+        # `walk` tests membership, so `0,0` walks what `0` walks and prints
+        # differently — and the printed form is what `_write`'s refusal quotes.
+        with pytest.raises(argparse.ArgumentTypeError, match="twice"):
+            _levels_argument("0,1,0")
+
+    def test_an_empty_token_is_refused(self) -> None:
+        # Which is also how `--levels ""` is caught: it splits to one empty
+        # token, so the walk cannot be handed a level set that measures nothing.
+        with pytest.raises(argparse.ArgumentTypeError, match="empty"):
+            _levels_argument("0,,1")
+
+    def test_a_non_integer_is_refused(self) -> None:
+        with pytest.raises(argparse.ArgumentTypeError, match="not an elevation level"):
+            _levels_argument("0,ground")
 
 
 class TestSubdivisionCap:

@@ -140,6 +140,18 @@ CELL_M = SUBDIVIDE_M
 # residue can go quiet.
 ALONG_M = CELL_M
 
+# The elevation levels the shipped walk covers. 🔴 **`(0,)`, and the default must
+# stay there** — `Q13` closed the off-grade network to driving, so its clearance
+# is `P4-1`'s question and not this stage's. Named as a constant for `ALONG_M`'s
+# own reason: `walk`, `build_region`, `_write` and the CLI all need to say
+# "the shipped value" and three literals would be three things to forget.
+#
+# ⚠️ **The knob is a measurement, never a publication.** Widening it is what lets
+# `P4-1` read the off-grade network *before* the bundle carries it; `_write`
+# refuses anything but this value for the same reason it refuses a swept
+# `ALONG_M`, and `CarriagewaySurvey.levels` is the same rule at a second key.
+LEVELS = (0,)
+
 # Plan cell of the coarse occupancy grid the prune tests against. Coarser than
 # `CELL_M` because it only has to answer "could this triangle be near any
 # carriageway at all", and a road is a small share of a city's plan area — the
@@ -203,6 +215,12 @@ class ClearanceReport:
     # to publish a sweep — see `ALONG_M` — rather than trusting every caller of
     # `build_region` to remember that only the shipped value may reach the bundle.
     along_m: float = ALONG_M
+    # The elevation levels the walk covered, carried for exactly `along_m`'s
+    # reason. ⚠️ **Without it that guard is half a guard**: `build_region` is
+    # public and takes `levels` too, so a caller could publish 60 edges of
+    # off-grade clearance *at the shipped spacing* and nothing in the document
+    # or the code would say it had stopped being a level-0 measurement.
+    levels: tuple[int, ...] = LEVELS
 
     def count(self, occupancy: _Occupancy) -> None:
         """Fold one `occupy` pass into the running totals."""
@@ -275,12 +293,12 @@ def walk(
     drawn: dict[int, dict],
     *,
     along_m: float = ALONG_M,
-    levels: tuple[int, ...] = (0,),
+    levels: tuple[int, ...] = LEVELS,
 ) -> tuple[Corridor, ClearanceReport]:
     """Every cross-section of every drivable level-0 edge, at `along_m` spacing.
 
     🔴 **`levels` exists so a TOOL can measure off-grade without the bundle
-    changing, and the default must stay `(0,)`.** What ships is level 0, because
+    changing, and the default must stay `LEVELS`.** What ships is level 0, because
     `Q13` closed the off-grade network to driving and its clearance is `P4-1`'s
     question. Moving this default re-publishes `city.json` and changes what
     `roadgraph.json` carries for 60 edges, which is the user's call and not a
@@ -308,7 +326,16 @@ def walk(
     the stretch the junction trims remove. That version measured nothing at all
     on every two-vertex edge while reporting a full table.
     """
-    report = ClearanceReport()
+    # 🔴 **Stamped here and not by the caller.** `walk` is public — `narrowing.py`
+    # imports and calls it directly — and it is the only frame that knows what it
+    # was asked to walk, so a report built with the defaults and corrected two
+    # frames later *lies* to every other caller: one handed `levels=(0, 1)`
+    # returned a report claiming level 0, which `_write` would then publish
+    # without complaint. `along_m` carried that hole from the day it was added.
+    # ⚠️ `tuple` is the one coercion here, and only `levels` needs it: an
+    # annotation does not stop a caller passing a list, and `report.levels` is
+    # compared with `!=` against a tuple constant.
+    report = ClearanceReport(along_m=along_m, levels=tuple(levels))
     xs: list[np.ndarray] = []
     zs: list[np.ndarray] = []
     ys: list[np.ndarray] = []
@@ -889,13 +916,18 @@ def open_region(
     return out_dir, graph, drawn, buildings
 
 
+def _levels_label(levels: tuple[int, ...]) -> str:
+    """The levels as one token, so a log line and a refusal spell them alike."""
+    return "/".join(str(level) for level in levels)
+
+
 def build_region(
     city: Config,
     region_id: str,
     *,
     out_root: Path | None = None,
     along_m: float = ALONG_M,
-    levels: tuple[int, ...] = (0,),
+    levels: tuple[int, ...] = LEVELS,
 ) -> ClearanceReport:
     """Measure the region already built in its out dir.
 
@@ -903,12 +935,11 @@ def build_region(
     """
     out_dir, graph, drawn, buildings = open_region(city, region_id, out_root=out_root)
     corridor, report = walk(graph, drawn, along_m=along_m, levels=levels)
-    report.along_m = along_m
     log.info(
         "  %d level %s edges, %d cross-sections to judge, %d left to their junction caps"
         " at %.2f m spacing",
         report.edges,
-        "/".join(str(level) for level in levels),
+        _levels_label(levels),
         report.sections_measured,
         report.sections_trimmed,
         report.along_m,
@@ -949,6 +980,20 @@ def build_region(
     return report
 
 
+def _refuse_a_sweep(measured: str, shipped: str) -> SystemExit:
+    """The refusal both publish guards make, written once.
+
+    Shared for `config._refuse_unmapped_levels`' reason rather than to save
+    lines: two copies of *"a sweep reports, it does not publish"* drift apart
+    silently, and that clause is the whole distinction between a measurement and
+    a failed run. What differs is the quantity, so the callers format that.
+    """
+    return SystemExit(
+        f"{CLEARANCE_NAME} was measured {measured} rather than the shipped {shipped}"
+        f" — a sweep reports, it does not publish"
+    )
+
+
 def _write(out_root: Path | None, city: Config, region_id: str, report: ClearanceReport) -> int:
     """An intermediate for `P1-6`, not the game-facing contract.
 
@@ -962,9 +1007,17 @@ def _write(out_root: Path | None, city: Config, region_id: str, report: Clearanc
     nobody can reproduce, and `RoadGraph.is_routable` would route on it.
     """
     if report.along_m != ALONG_M:
-        raise SystemExit(
-            f"{CLEARANCE_NAME} was measured at {report.along_m:.2f} m rather than the "
-            f"shipped {ALONG_M:.2f} m — a sweep reports, it does not publish"
+        raise _refuse_a_sweep(f"at {report.along_m:.2f} m", f"{ALONG_M:.2f} m")
+    if report.levels != LEVELS:
+        # The same refusal at the other knob, and it is the one with a consumer
+        # waiting: an off-grade row is `NOT_MEASURED` today, and a bundle that
+        # quietly started carrying real widths there would change what
+        # `RoadGraph` answers for 60 edges the moment `P4-1` opens them —
+        # without the level having been anybody's decision. Publishing them is a
+        # bundle change, and `Q103` records that it is the user's call.
+        raise _refuse_a_sweep(
+            f"over level(s) {_levels_label(report.levels)}",
+            f"level(s) {_levels_label(LEVELS)}",
         )
     return write_document(
         city.out_dir(region_id, out_root) / CLEARANCE_NAME,
@@ -989,6 +1042,32 @@ def _write(out_root: Path | None, city: Config, region_id: str, report: Clearanc
 # --------------------------------------------------------------------------
 
 
+def _levels_argument(text: str) -> tuple[int, ...]:
+    """`--levels 0,1,-1` as a tuple, refusing what would measure nothing.
+
+    Sorted, and a repeat refused, for one reason: `walk` tests *membership*, so
+    `0,0` and `1,0` and `0,1` all walk what `0,1` walks while printing
+    differently — and the printed form is what `_write`'s refusal quotes and what
+    a reader of the log compares against the shipped `LEVELS`. Two spellings of
+    one measurement is one too many when the label's whole job is to say which
+    measurement it was. ⚠️ `config._survey_levels` sorts for the same reason at
+    the sibling key; this stays aligned with it deliberately.
+    """
+    levels: list[int] = []
+    for token in text.split(","):
+        stripped = token.strip()
+        if not stripped:
+            raise argparse.ArgumentTypeError(f"{text!r} names an empty level")
+        try:
+            level = int(stripped)
+        except ValueError:
+            raise argparse.ArgumentTypeError(f"{stripped!r} is not an elevation level") from None
+        if level in levels:
+            raise argparse.ArgumentTypeError(f"level {level} is named twice")
+        levels.append(level)
+    return tuple(sorted(levels))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     parser.add_argument("--region", required=True)
@@ -1004,6 +1083,20 @@ def main(argv: list[str] | None = None) -> int:
         # instrument's own error dimension.
         help="cross-section spacing along an edge; off the default it reports without writing",
     )
+    parser.add_argument(
+        "--levels",
+        type=_levels_argument,
+        default=LEVELS,
+        # `--along-m`'s sibling and report-only for the same reason: this one
+        # decides *which edges* the document covers rather than how finely, so a
+        # bundle measured over a level the stage does not ship would be a
+        # document nobody could reproduce from a clone. `P4-1` is what this
+        # exists for — it needs the off-grade numbers before the bundle carries
+        # them, which is exactly what `Q103` deferred.
+        help=(
+            "comma-separated elevation levels to walk; off the default it reports without writing"
+        ),
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -1012,16 +1105,35 @@ def main(argv: list[str] | None = None) -> int:
     region = city.region(args.region)
     log.info("%s / %s", city.name, region.name)
 
-    report = build_region(city, args.region, along_m=args.along_m)
-    if report.along_m == ALONG_M:
+    unmapped = sorted(set(args.levels) - set(city.elevation_levels))
+    if unmapped:
+        # 🔴 **An unmapped level walks no edge and reports a clear region.** With
+        # `--levels 7` every counter closes, `0 edges measured` prints, and the
+        # run ends "every measured edge keeps a lane clear" — the empty set
+        # reading as agreement, which is the trap `config._survey_levels` refuses
+        # an empty list for and `_check_survey_levels_are_mapped` covers at the
+        # sibling key. ⚠️ **Not `config._refuse_unmapped_levels` itself**: that
+        # one raises `ValueError` keyed by `path:key`, and this failure is a flag
+        # somebody typed rather than a document somebody wrote.
+        raise SystemExit(
+            f"--levels names level {_levels_label(tuple(unmapped))}, which "
+            f"{city.name}'s elevation_levels does not map "
+            f"({_levels_label(tuple(sorted(city.elevation_levels)))})"
+        )
+
+    report = build_region(city, args.region, along_m=args.along_m, levels=args.levels)
+    if report.along_m == ALONG_M and report.levels == LEVELS:
         _write(None, city, args.region, report)
     else:
         # `_write` would refuse this anyway; saying so here is what makes a sweep
         # read as a measurement rather than as a failed run.
         log.warning(
-            "  measured at %.2f m rather than the shipped %.2f m — reporting, not writing %s",
+            "  measured at %.2f m over level(s) %s rather than the shipped %.2f m over %s"
+            " — reporting, not writing %s",
             report.along_m,
+            _levels_label(report.levels),
             ALONG_M,
+            _levels_label(LEVELS),
             CLEARANCE_NAME,
         )
 
@@ -1038,6 +1150,25 @@ def main(argv: list[str] | None = None) -> int:
             log.warning("    e%-5d %5.2f m", edge_id, width)
     else:
         log.info("  every measured edge keeps a lane clear")
+
+    if city.clearance is not None:
+        # 🔴 **The second bar, and `Q19` forbids collapsing it into the first.**
+        # `is_passable` reads the lane and `fits_car` reads the car, so the two
+        # counts bracket the edges a player may drive down and traffic may not be
+        # routed along. Reported here because a widened `--levels` has to answer
+        # *both* questions in one pass: an off-grade edge nothing routes on is
+        # still one the player is handed the moment `P4-1` opens it, and the
+        # lane count alone cannot say whether the car would fit.
+        # ⚠️ Filtered from the lane-bar list rather than re-folding the corridor,
+        # which is what makes "of those" true by construction instead of true
+        # while `car_width_m < lane_width_m` — an ordering `verify_road_graph.gd`
+        # enforces on the bundle and nothing enforces here.
+        car_m = float(city.clearance.car_width_m)
+        log.info(
+            "  %d of those keep less than the car's own %.2f m",
+            sum(1 for _, width in starved if width < car_m),
+            car_m,
+        )
     return 0
 
 
