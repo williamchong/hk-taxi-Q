@@ -768,6 +768,20 @@ podiums:
 # is *Tramway* in one and *tactile warning strip* in the other. Every code the
 # tool matches on comes from this block, never from a literal in the tool.
 carriageway_survey:
+  # Which elevation levels the width survey walks (Q103).
+  #
+  # 🔴 Level 1 reads its width from the DECK, never from the publishers below.
+  # Their lines are a 2D plan projection, so a ray from a deck centreline finds
+  # the kerb of the street underneath: they license 5 of 45 level-1 edges and 2
+  # of those 5 would publish a width WIDER than the deck, making the overhang
+  # worse on the very population a widening exists to fix. The model is the only
+  # source that knows where a viaduct deck is, and roads.py already reads it.
+  #
+  # ⚠️ Level -1 is left out. Q103 measured the tunnels clear of their bores
+  # after floor_by_elevation_level gained a -1 key, and a bore has no deck for
+  # this walk to find — sampling one would read the tunnel roof or nothing.
+  levels: [0, 1]
+
   # What TD's Transport Planning & Design Manual Vol 2 Ch 3 (March 2026) permits
   # a carriageway to be. READ, not fetched — see DATA_SOURCES.md, which carries
   # the table and the reason nothing in etl/ downloads it.

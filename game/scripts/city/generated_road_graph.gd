@@ -71,7 +71,14 @@ const PATH: String = "res://assets/generated/roadgraph.json"
 ## 5.57 and 6.66 m. Nothing here can recover it — not `y`, not `elevation_level`,
 ## not `width_m` — so a reader that keeps taking `on_structure` for "is this
 ## carriageway bounded" is **wrong** about the whole Wan Chai Interchange.
-const SCHEMA_VERSION: int = 8
+##
+## 9 adds `offset_m` / `offset_source` (`Q103`). The drawn ribbon is no longer
+## centred on the published centreline: off-grade it is shifted onto the deck it
+## is built on, by up to 4.90 m. Anything reconstructing a kerb as
+## `polyline ± width_m / 2` is now wrong about the whole elevated network, and
+## nothing else in the document says so — `width_m` gives the size, this gives
+## the place. Positive is left of travel, `surface.mitres`' frame.
+const SCHEMA_VERSION: int = 9
 
 
 ## The parsed graph, or an empty dictionary with a pushed message.

@@ -652,3 +652,63 @@ class TestAlongAt:
         plan = np.array([[0.0, 0.0], [10.0, 0.0], [10.0, 10.0]])
         along = np.array([0.0, 10.0, 20.0])
         assert _along_at(plan, along, np.array([10.0, 4.0])) == pytest.approx(14.0)
+
+
+def _road_edge(edge_id: int):
+    """A minimal `roads.Edge` for the reassignment tests."""
+    from pipeline.roads import Edge
+
+    return Edge(
+        id=edge_id,
+        source_id=edge_id,
+        from_node=0,
+        to_node=1,
+        polyline=[(0.0, 0.0, 0.0), (10.0, 0.0, 0.0)],
+        on_structure=[False, False],
+        structure_bounded=[False, False],
+        direction=FORWARD,
+        lanes=2,
+        width_m=6.4,
+        speed_limit_kph=50,
+        bus_lane=False,
+        tram_tracks=False,
+        elevation_level=1,
+        road_name={"en": "TEST", "zh": ""},
+    )
+
+
+class TestThePublishedOffsetIsTheNegationOfTheSurvey:
+    """🔴 The one place the two station normals in this repo have to be paid.
+
+    `carriageway._stations` emits the **right** normal; `surface.mitres` emits
+    the **left** one, and `CLAUDE.md` says they are opposite on purpose. So the
+    survey measures the deck offset in one frame and `roads.Edge.offset_m`
+    publishes it in the other, with `_reassign` negating once by name.
+
+    ⚠️ **Asserted rather than commented, because a sign renders perfectly when
+    it is backwards** — a ribbon shifted the wrong way is a ribbon, just further
+    off its deck. This is `Q78`'s rule: a negation gets a test, not a paragraph.
+    """
+
+    def test_reassign_flips_the_sign_the_survey_measured(self) -> None:
+        from pipeline.roads import _reassign
+
+        found = CarriagewayReport()
+        found.deck_span_m[7] = 8.0
+        found.deck_offset_m[7] = 1.25  # right of travel, the survey's frame
+
+        out = _reassign(_road_edge(7), found)
+
+        assert out.offset_m == -1.25, "published offset must be mitres' left-of-travel frame"
+        assert out.offset_source == "deck"
+        assert out.width_m == 8.0
+        assert out.width_source == "deck"
+
+    def test_an_edge_the_deck_never_answered_keeps_a_zero_offset(self) -> None:
+        """`none` rather than a deck offset of 0.0 — the two are different
+        claims, and every level-0 edge makes the first."""
+        from pipeline.roads import _reassign
+
+        out = _reassign(_road_edge(9), CarriagewayReport())
+        assert out.offset_m == 0.0
+        assert out.offset_source == "none"

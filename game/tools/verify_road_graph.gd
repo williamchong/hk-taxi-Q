@@ -675,12 +675,21 @@ func _check_lane_source(edges: Array) -> PackedStringArray:
 			measured_widths += 1
 		if lanes_source != "authored":
 			measured_lanes += 1
-		# 🔴 **A measured width names the publishers that read it, and an
-		# authored one names none.** Since `Q94` the three publishers do not
+		# 🔴 **A width read from a LINE PUBLISHER names which ones read it, and
+		# nothing else names any.** Since `Q94` the three publishers do not
 		# measure the same quantity — HyD reads the trafficable carriageway
-		# where the two line sources read kerb to kerb — so a width with no
+		# where the two line sources read kerb to kerb — so such a width with no
 		# publisher beside it is a width whose meaning cannot be recovered.
-		if (width_source == "authored") != publisher.is_empty():
+		#
+		# ⚠️ **`deck` is a third state and not a loophole (`Q103`).** It is
+		# measured — off-grade the line publishers are not merely silent but
+		# WRONG, because their 2D lines find the street under the deck — and it
+		# is read from the model, which is not one of the names this field
+		# enumerates. Writing one here would hand a consumer splitting on `+` a
+		# fourth source that never read a line, which is the exact confusion the
+		# field exists to prevent. `width_source` already says `deck`.
+		var names_a_publisher: bool = width_source != "authored" and width_source != "deck"
+		if names_a_publisher == publisher.is_empty():
 			unattributed += 1
 		# 🔴 **A lane count is bracketed off a MEASURED width.** One standing on
 		# an authored 6.4 m would be the speed-limit table laundered into a
@@ -693,8 +702,9 @@ func _check_lane_source(edges: Array) -> PackedStringArray:
 		problems.append(
 			(
 				(
-					"%d edges disagree about whether their width was measured — `width_source` "
-					+ "and `width_publisher` must be authored-and-empty or neither"
+					"%d edges disagree about where their width was read — `width_publisher` "
+					+ "is named exactly when `width_source` is a line publisher, and empty "
+					+ "for `authored` and for `deck`"
 				)
 				% unattributed
 			)

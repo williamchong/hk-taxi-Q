@@ -470,6 +470,55 @@ def _median_or_none(values: list[float]) -> float | None:
     return float(np.median(values)) if len(values) >= MIN_STATIONS else None
 
 
+# Which percentile of an edge's deck spans becomes its published width.
+#
+# 🔴 **Not the median, and the asymmetry is the whole reason** (`Q103`). Every
+# other width in this stage is a median, because at grade a ribbon drawn too
+# wide lands on **tarmac** — the error is invisible and costs nothing. Off-grade
+# the same error lands on **air**, and a deck's span varies along its own edge
+# (a ramp tapers), so one number per edge cannot fit all of it. A median splits
+# the difference and hangs at every station below it: measured, it took
+# `deck_margin.py`'s stations-with-some-hang from 53.4% to **85.5%** even as it
+# took the hanging *area* down. A low percentile buys the incidence back by
+# giving up drawn width where the deck narrows, which is the side of the trade
+# a player can survive.
+#
+# ⚠️ **Swept, and there is no plateau — this is a position on a trade curve
+# rather than an optimum**, so it is a judgement and the numbers are the whole
+# argument. `overhang.py`'s hanging fraction and `deck_margin.py`'s
+# stations-with-some-hang, over the shipped bundle:
+#
+#     percentile   drawn m2   hanging   hang m2   stations hanging
+#     authored        52661     10.3%      5449         53.4%
+#     p0  (min)       56574      5.3%      3007         66.0%
+#     p10             59286      5.6%      3326         75.0%
+#     p25             60885      6.2%      3796         80.7%
+#     p50 (median)    62808      7.0%      4380         85.5%
+#
+# 🔴 **p0 is 0.3 points better and is rejected: it is an extremum, not a
+# statistic.** The minimum span is whatever the single worst station on the edge
+# read, so one unbridged hole or one station at a taper shrinks the whole
+# ribbon — the failure mode `_median_or_none` exists to avoid everywhere else in
+# this stage. p10 buys robustness for 0.3 points.
+# ⚠️ **Stations-with-some-hang is worse than authored at every percentile, and
+# that is not a regression being hidden**: the authored 6.40 m ribbon fits
+# inside most decks *because it is too narrow to be the road*, which is the
+# defect. The area is the metric that moved — 5449 to 3326 m2, down 39%.
+DECK_WIDTH_PERCENTILE = 10.0
+
+
+def _deck_width_or_none(values: list[float]) -> float | None:
+    """One edge's published deck width, or None below `MIN_STATIONS`.
+
+    ⚠️ **`MIN_STATIONS` is shared with the publishers' own reduction above**, so
+    the two licences stay comparable — an edge measured on two stations is not
+    measured, whichever source answered.
+    """
+    if len(values) < MIN_STATIONS:
+        return None
+    return float(np.percentile(values, DECK_WIDTH_PERCENTILE))
+
+
 # How far either side of a centreline the deck walk looks, and how finely. The
 # reach clears the widest authored off-grade ribbon (9.60 m, so 4.80 m a side)
 # with room for a deck wider than the paint, which is the common case; the step
@@ -696,7 +745,7 @@ def measure(
         # and the published lines are different truth sides — an edge no
         # publisher licensed can still have been measured against its own deck,
         # and that is most of the off-grade network.
-        deck_span = _median_or_none(deck_spans)
+        deck_span = _deck_width_or_none(deck_spans)
         if deck_span is not None:
             report.deck_span_m[edge.id] = deck_span
             report.deck_offset_m[edge.id] = float(np.median(deck_offsets))
@@ -735,7 +784,19 @@ def measure(
     # depend on the arrows: keeping the two apart is what lets the row be tested
     # on its own, and what keeps a failure to read the arrows from moving a
     # width.
-    _resolve_with_rows(report, _read_lane_rows(city, region_id, transform, walked))
+    # 🔴 **Level 0 only, and NOT the walked set (`Q103`).** The row's hosting
+    # rule is written for the street — `_read_lane_rows` says the nearest
+    # level-0 edge to a symbol on a deck *is* the street — so offering it
+    # off-grade edges lets an arrow host to the flyover above the road it is
+    # painted on. Measured: handed `walked`, it moved `e263`'s count 3 -> 2 and
+    # `tools/ground_clearance.py` went 87 -> 89 level-0 edges, a level-0
+    # regression out of an off-grade change.
+    # ⚠️ Off-grade needs nothing from it: the deck licenses a *width*, and
+    # `lanes` stays authored up there.
+    rows = _read_lane_rows(
+        city, region_id, transform, [edge for edge in walked if edge.elevation_level == 0]
+    )
+    _resolve_with_rows(report, rows)
     return report
 
 

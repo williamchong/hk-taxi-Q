@@ -111,7 +111,17 @@ ROADGRAPH_NAME = "roadgraph.json"
 # `elevation_level` or `width_m` recover it. A consumer that keeps reading
 # `on_structure` as "is this carriageway bounded" is **wrong** about the whole
 # Wan Chai Interchange, which is hard rule 5's test.
-ROADGRAPH_SCHEMA = 8
+#
+# 9 adds `offset_m` and `offset_source` (`Q103`), and it bumps on hard rule 5's
+# test rather than because bytes moved. 🔴 **The drawn ribbon is no longer
+# centred on the published centreline.** Off-grade it is shifted onto the deck
+# it is actually built on, by up to 4.90 m, so a consumer reconstructing a kerb
+# as `polyline ± width_m / 2` — which is what every reader could do through
+# schema 8 — is now **wrong** about the whole elevated network. Nothing else in
+# the document says so: `width_m` gives the size and only this gives the place.
+# ⚠️ The centreline itself is untouched (`Q54`); what changed is the claim that
+# the paint is centred on it.
+ROADGRAPH_SCHEMA = 9
 
 # `Node.kind` in the data contract. Degree three or more is somewhere a
 # driver can choose; anything else is a road continuing or stopping.
@@ -226,6 +236,25 @@ class Edge:
     # fourth source had read the edge. An authored width was read by none of
     # them, and the empty set is what says so.
     width_publisher: str = ""
+    # 🔴 **How far the DRAWN ribbon is shifted off this centreline, and it is
+    # SIGNED (`Q103`).** Positive is left of travel — `surface.mitres`' frame,
+    # which is the frame the ribbon is actually built in, because a consumer
+    # that has to negate a published number to use it is `Q78` waiting to
+    # happen. ⚠️ **The station survey measures in the OPPOSITE frame**
+    # (`carriageway._stations` is right of travel), so `_reassign` negates once,
+    # by name, and `test_the_published_offset_is_the_negation_of_the_survey`
+    # fails if either side moves.
+    #
+    # ⚠️ **The centreline itself does NOT move.** It is a published government
+    # geometry and `Q54` forbids editing one; this says the *paint* is not
+    # centred on it, which is a different claim and the true one. Off-grade the
+    # ribbon and the deck disagree by p50 0.75 m and up to 4.90 m, and no
+    # publisher draws a viaduct deck edge to correct it against.
+    offset_m: float = 0.0
+    # How `offset_m` was arrived at. `none` is a ribbon centred on its
+    # centreline, which is every level-0 edge and every off-grade edge the deck
+    # walk could not measure; `deck` is the structure the ribbon is drawn on.
+    offset_source: str = "none"
 
 
 @dataclass(frozen=True)
@@ -1009,16 +1038,34 @@ def _reassign(edge: Edge, found: carriageway.CarriagewayReport) -> Edge:
     edge may perfectly well carry a measured width and an authored count, and
     the two `_source` fields are what say so.
     """
-    if edge.id not in found.assigned_m:
+    changes: dict[str, object] = {}
+    if edge.id in found.assigned_m:
+        changes = {
+            "width_m": round(found.assigned_m[edge.id], 3),
+            "width_source": found.basis[edge.id],
+            "width_publisher": found.publishers[edge.id],
+        }
+        if edge.id in found.lanes:
+            changes["lanes"] = found.lanes[edge.id]
+            changes["lanes_source"] = found.lanes_basis[edge.id]
+
+    # ⚠️ **A separate licence from the publishers' above, not a fallback to
+    # them.** The deck answers where they are silent *and* where they are
+    # wrong — off-grade their 2D lines find the street underneath — so an edge
+    # may carry a deck width having been spanned by nobody, which is most of the
+    # off-grade network (36 edges against their 5).
+    if edge.id in found.deck_span_m:
+        changes["width_m"] = round(found.deck_span_m[edge.id], 3)
+        changes["width_source"] = "deck"
+        changes["width_publisher"] = ""
+        # 🔴 **The one negation, by name.** `carriageway._stations` emits the
+        # RIGHT normal and `surface.mitres` the LEFT one; the two are opposite
+        # on purpose (`CLAUDE.md`) and this is where the difference is paid,
+        # once, rather than by every reader.
+        changes["offset_m"] = round(-found.deck_offset_m[edge.id], 3)
+        changes["offset_source"] = "deck"
+    if not changes:
         return edge
-    changes: dict[str, object] = {
-        "width_m": round(found.assigned_m[edge.id], 3),
-        "width_source": found.basis[edge.id],
-        "width_publisher": found.publishers[edge.id],
-    }
-    if edge.id in found.lanes:
-        changes["lanes"] = found.lanes[edge.id]
-        changes["lanes_source"] = found.lanes_basis[edge.id]
     return replace(edge, **changes)
 
 
@@ -1840,6 +1887,8 @@ def _write(out_root: Path | None, city: Config, region_id: str, report: RoadRepo
                 "width_m": edge.width_m,
                 "width_source": edge.width_source,
                 "width_publisher": edge.width_publisher,
+                "offset_m": edge.offset_m,
+                "offset_source": edge.offset_source,
                 "speed_limit_kph": edge.speed_limit_kph,
                 "bus_lane": edge.bus_lane,
                 "tram_tracks": edge.tram_tracks,
@@ -2040,9 +2089,10 @@ def main(argv: list[str] | None = None) -> int:
             _by_basis(width.publishers[edge_id] for edge_id in width.assigned_m),
         )
         if width.deck_span_m:
-            # ⚠️ **Measured and published nowhere.** A different truth side from
-            # every line above — the model rather than a publisher's plan line —
-            # so it is logged apart rather than folded into the coverage figures.
+            # ⚠️ **A different truth side from every line above** — the model
+            # rather than a publisher's plan line — so it is logged apart rather
+            # than folded into the coverage figures, which count only the edges
+            # a publisher spanned.
             spans = np.array(list(width.deck_span_m.values()))
             offsets = np.array(list(width.deck_offset_m.values()))
             log.info(
@@ -2055,7 +2105,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             log.info(
                 "      %d stations on a deck, %d with the centreline off it entirely, "
-                "%d edges unsampled — RECORDED, PUBLISHED NOWHERE (Q103)",
+                "%d edges unsampled — published as width_source `deck` (Q103)",
                 width.deck_stations_on,
                 width.deck_stations_off,
                 width.deck_edges_unsampled,

@@ -1112,6 +1112,19 @@ class _Edge:
     tram_tracks: bool
     level: int
     length_m: float
+    # 🔴 **How far this ribbon is drawn off its own centreline, in `mitres`'
+    # LEFT-of-travel frame (`Q103`).** Off-grade the published centreline is not
+    # the middle of the deck the road is built on — measured p50 0.75 m out and
+    # up to 4.90 m — and no publisher draws a viaduct deck edge to correct it
+    # against, so the structure itself is the only source. Zero everywhere the
+    # graph publishes no offset, which is every level-0 edge.
+    #
+    # ⚠️ **Added to BOTH boundaries rather than moving `points`.** Shifting the
+    # centreline would move everything registered against it — the kerbside
+    # runs, the lane coordinate's origin, the junction mitres meeting the
+    # neighbouring arm — and all of those belong on the published geometry.
+    # What moved is the paint.
+    shift_m: float = 0.0
     trim_start_m: float = 0.0
     trim_end_m: float = 0.0
     # Filled by `_shape`, once the trims are known. The two carriageway
@@ -1308,6 +1321,7 @@ def _prepare(published: dict, style: RoadSurface, report: SurfaceReport) -> _Edg
     report.kerb_minority_m += minority_m
     return _Edge(
         points=points,
+        shift_m=float(published.get("offset_m", 0.0)),
         published_half_widths=half_widths,
         lanes=published["lanes"],
         direction=published["direction"],
@@ -1553,10 +1567,16 @@ def _shape(edge: _Edge, style: RoadSurface) -> None:
     edge.ribbon = points
     edge.offsets = mitres(points)
     half = points[:, _WIDTH]
-    edge.left = boundary(points, edge.offsets, half)
-    edge.right = boundary(points, edge.offsets, -half)
-    edge.lip_left = boundary(points, edge.offsets, half + style.kerb_width_m)
-    edge.lip_right = boundary(points, edge.offsets, -(half + style.kerb_width_m))
+    # `mitres` is left of travel and `shift_m` is published in that same frame
+    # (`roads.Edge.offset_m`), so it adds to both sides — carrying the ribbon
+    # bodily across without changing its width. `boundary` takes a signed
+    # distance, so the right-hand side is `-half + shift` rather than
+    # `-(half + shift)`; the kerb lips ride along with the sides they belong to.
+    shift = edge.shift_m
+    edge.left = boundary(points, edge.offsets, half + shift)
+    edge.right = boundary(points, edge.offsets, -half + shift)
+    edge.lip_left = boundary(points, edge.offsets, half + style.kerb_width_m + shift)
+    edge.lip_right = boundary(points, edge.offsets, -(half + style.kerb_width_m) + shift)
 
 
 def _ends_by_node_and_level(

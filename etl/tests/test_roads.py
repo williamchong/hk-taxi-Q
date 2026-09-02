@@ -214,6 +214,8 @@ class TestBuildRegion:
             "width_m",
             "width_source",
             "width_publisher",
+            "offset_m",
+            "offset_source",
             "speed_limit_kph",
             "bus_lane",
             "tram_tracks",
