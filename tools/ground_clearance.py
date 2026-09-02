@@ -42,6 +42,51 @@ from the **shipped `roads.glb`** rather than from the graph the ETL wrote.
 ground, so measuring one would report the height of every flyover as a defect.
 Level -1 is under the terrain by definition (`Q21`).
 
+## The second class, and why it is not a second copy of the first
+
+🔴 **Structure is measured here too, and the two are never pooled.** `Q19`
+prescribed a vertical bar inside the carriageway, `P3-29` built it and withdrew
+it, and what that left is a **blind band**: `carriageway_occupancy` and
+`clearance` read `INFRASTRUCTURE` but their bumper band starts at
+`BUMPER_LOW_M` **0.30 m** — `Q23`, so an abutment the road rests on does not read
+as an obstruction — while this tool uses the car's own **0.18 m** and read
+`terrain_class` and nothing else. A structure step between the two was seen by
+no committed instrument, which is how a car came to stop on `e99` FLEMING ROAD
+at a 0.356 m ledge with every bar in the bundle green.
+
+⚠️ **Ground proud and structure proud want OPPOSITE fixes, so they get separate
+tables and share no number** (`Q57`). Ground standing over the road is the sink
+and the cross-slope, and belongs to `Q24`. Structure standing over it is a wall
+inside the drawn carriageway, and belongs to `Q19`.
+
+🔴 **The terrain rule cannot be reused, and that is measured rather than
+asserted.** `ground_above` takes the *nearest* terrain height within a
+symmetric 3 m window, which is right because terrain is single-valued wherever a
+car can be. Structure is a volume in a stack: `Faces.from_tiles` keeps
+upward-wound faces, so a flyover's **deck top** is a candidate for the street
+running underneath it. Read the same way, the Wan Chai interchange reports as
+structure standing **+13.27 m proud** of GLOUCESTER ROAD, on 210 of 737 edges
+and 30,352 m² of ribbon. So `structure_above` takes the **lowest face strictly
+above the road** instead, and everything past the window is refused.
+
+⚠️ **The bounds are imported from `pipeline.clearance`, not chosen here.** The
+band this exists to close is `[SUSPENSION_TRAVEL_M, BUMPER_LOW_M]` and the
+refusal window is `BUMPER_HIGH_M`, so if the other instrument's band moves, the
+gap this reports moves with it. That is a shared *bound*, never a shared method
+— nothing about how either surface is read is imported, and the argument in
+`deck_error.py`'s docstring is untouched.
+
+⚠️ **Absence is the normal answer here and is NOT a coverage miss.** 92.5% of
+this region's level-0 carriageway has no structure under it at all. Reusing
+`--accept-coverage` on that population would fail the tool on a fact, which is
+`paint_clearance.py`'s reason for not gating the tram rails.
+
+🔴 **The structure half GRADES and does not gate**, and it says so where the
+gates are. `--accept-edges-over-travel` already carries an apology for being a
+bar tuned to its own first reading (`Q47`); a second one set the same way, on a
+population `Q19` has not decided how to fix, would be that mistake made
+knowingly. The exit code stays the ground half's.
+
 Run:  .venv/bin/python tools/ground_clearance.py
 """
 
@@ -70,8 +115,14 @@ from deck_error import (  # noqa: E402
     load_bundle,
     log_bundle,
     nearest,
+    structure_faces,
 )
 from overhang import cross_section, half_width_at, half_widths, left_of, walk_width  # noqa: E402
+
+# The band the other instrument cannot see, taken from the instrument itself
+# rather than mirrored — see the module docstring. A *bound*, not a method: no
+# part of how `clearance.py` reads a cross-section arrives with it.
+from pipeline.clearance import BUMPER_HIGH_M, BUMPER_LOW_M  # noqa: E402
 from pipeline.config import load_config  # noqa: E402
 
 log = logging.getLogger(__name__)
@@ -226,7 +277,7 @@ class Survey:
         Derived rather than counted alongside them, so the coverage line and the
         split beneath it cannot report different totals for the same cells.
         """
-        # Three causes, not two — see `_Probe`.
+        # Three causes, not two — see `Probe`.
         return self.above_window + self.below_window + self.no_terrain
 
     @property
@@ -315,6 +366,271 @@ class Survey:
         return float((np.asarray(self.sampled_m) > threshold_m).mean())
 
 
+@dataclass
+class StructureEdge:
+    """One level-0 edge's ribbon, and what structure stands over it.
+
+    🔴 **Not `EdgeCells` with more fields, and the separation is the point.**
+    `Q57` is what pooling two populations into one number costs, and these two
+    want opposite repairs: ground proud of the road is the sink and the flat
+    cross-section (`Q24`), structure proud of it is a wall inside the drawn
+    carriageway (`Q19`). One column able to hold either would be read as one
+    quantity by the next person to open the table.
+
+    ⚠️ **`ribbon_m2` counts every cell with a ROAD drawn, not every cell with
+    structure found**, and that is the difference between a share and a
+    tautology. Structure is absent under 92.5% of this region's level-0
+    carriageway; a denominator taken over the cells that found some would read
+    100% on an edge carrying a single ledge and nothing else.
+
+    ⚠️ **`band_m2` and `over_bumper_m2` are separate because only the first is
+    NEW information.** Anything past `BUMPER_LOW_M` is already inside
+    `carriageway_occupancy`'s reach and already counted there; the band beneath
+    it is what no committed tool could see. Summing them would republish
+    `Q19`'s population as though it were this one's finding.
+    """
+
+    name: str = ""
+    ribbon_m2: float = 0.0
+    band_m2: float = 0.0
+    over_bumper_m2: float = 0.0
+    worst_m: float = -np.inf
+    # Stations carrying at least one measurable cell, and those carrying at
+    # least one step. The pair is `Q19`'s discriminator arriving in a committed
+    # tool: a ledge occupies a strip of a cross-section and a ribbon disagreeing
+    # with the deck it rests on occupies most of one.
+    stations: int = 0
+    stepped_stations: int = 0
+    worst_section_share: float = 0.0
+    # Cells whose lowest face above the road sat past the window — a flyover
+    # overhead, refused. Published rather than dropped, for `Survey`'s reason:
+    # a refusal nobody can see is a denominator chosen by the geometry.
+    overhead: int = 0
+    overhead_min_m: float = np.inf
+
+    @property
+    def band_share(self) -> float:
+        """Band area over the edge's whole ribbon — what makes two streets comparable.
+
+        ⚠️ A raw m² is not comparable across edges, which is the argument
+        `EdgeCells` makes for its own shares: 19.3 m² on `e168`'s ten stations
+        and 70.2 m² on `e402`'s fifty-five are not the same amount of street.
+        Printed for that reason rather than kept for a caller that might want
+        it — the review that found three write-only members here is why the
+        distinction is worth stating.
+        """
+        return self.band_m2 / self.ribbon_m2 if self.ribbon_m2 else 0.0
+
+
+@dataclass
+class Structure:
+    """Every level-0 carriageway cell, asked what structure stands over it.
+
+    ⚠️ **The four outcomes are counted, never skipped**, which is `Survey`'s
+    rule and `deck_error`'s fourth defect behind it — but the meanings differ
+    and reading them as `Survey`'s would be wrong in the flattering direction:
+
+    - `measured` — a face above the road, inside the window. The population.
+    - `absent` — no structure at this plan position at all. 🔴 **The normal
+      answer, not a miss.** Gating a coverage share over it would fail the tool
+      on a fact, which is why there is deliberately no `--accept-coverage` here.
+    - `resting` — structure found, all of it at or below the road. The deck the
+      ribbon sits on, which is geometry working.
+    - `overhead` — a face above the road but past the window: a flyover deck
+      over a street, not a step in it. Refused *and published*, so every
+      `worst_m` below is an honest lower bound.
+
+    🔴 **The identity is asserted at run time**, not asserted in a comment:
+    `on_road == measured + absent + resting + overhead`. A fifth outcome added
+    without a counter would otherwise leave every share divided by a number
+    that no longer describes its own parts.
+    """
+
+    rise_m: list[float] = field(default_factory=list)
+    area_m2: list[float] = field(default_factory=list)
+    # Which edge each measured cell came from, so the per-band edge counts below
+    # are taken from the same pass as the cells they count. Held beside the
+    # measurement rather than derived from the per-edge records, which keep only
+    # the two coarse buckets an edge is listed by.
+    edge_of: list[int] = field(default_factory=list)
+    # One value per station that carries at least one step — `Q19`'s conditioning,
+    # kept so the two are comparable. ⚠️ The denominator is every cell of the
+    # section with a road drawn, NOT the cells that found structure; taken the
+    # second way a scratch run of this read p50 0.83 where `Q19` reads 0.10,
+    # because a thin ledge is most of the structure in its own section and
+    # almost none of the road.
+    section_share: list[float] = field(default_factory=list)
+    overhead_m: list[float] = field(default_factory=list)
+    on_road: int = 0
+    absent: int = 0
+    resting: int = 0
+    edges: dict[int, StructureEdge] = field(default_factory=dict)
+
+    @property
+    def measured(self) -> int:
+        return len(self.rise_m)
+
+    @property
+    def overhead(self) -> int:
+        """The list IS the counter, so the two cannot report different totals."""
+        return len(self.overhead_m)
+
+    def check(self) -> None:
+        """The partition, at run time. See the class docstring."""
+        parts = self.measured + self.absent + self.resting + self.overhead
+        if parts != self.on_road:
+            raise AssertionError(
+                f"structure outcomes do not partition the road-drawn cells: "
+                f"{parts} against {self.on_road}"
+            )
+
+    def begin(self, edge_id: int, name: str) -> StructureEdge:
+        """The record for one edge, created on first sight — `Survey.begin`'s rule.
+
+        An edge walked and never stepped on still has to appear, or the count of
+        edges carrying nothing is the count of edges this happened to look at.
+        """
+        edge = self.edges.setdefault(edge_id, StructureEdge())
+        edge.name = name
+        return edge
+
+    def saw_road_cell(self, edge_id: int, area_m2: float) -> None:
+        """One cell of ribbon with a road drawn under it — the population to partition.
+
+        Separate from `observe` because it is a different fact: this is what was
+        *asked*, and the four outcomes are what came back. Booked through a
+        method rather than by the caller so `check` compares two things this
+        class counts, instead of comparing the caller against itself.
+        """
+        self.on_road += 1
+        self.edges[edge_id].ribbon_m2 += area_m2
+
+    def observe(self, edge_id: int, step: Step, area_m2: float) -> bool:
+        """Book one cell's structure outcome, and say whether it is a step.
+
+        🔴 **The decode lives here and not in `survey`'s loop, which is what
+        makes `check` mean anything.** With the caller incrementing `on_road`
+        and three of the four buckets by hand, the identity was the caller
+        checked against itself and no test could reach the decode at all — which
+        is exactly how two write-only per-edge counters survived review.
+
+        Returns whether the cell is a step past the car's travel, so the
+        threshold stays in this class with the others rather than being applied
+        a second time at the call site.
+        """
+        edge = self.edges[edge_id]
+        if step.rise_m is not None:
+            self.add(edge_id, step.rise_m, area_m2)
+            return step.rise_m > SUSPENSION_TRAVEL_M
+        if step.overhead_m is not None:
+            # The list IS the region counter — `Structure.overhead` reads its
+            # length — and the per-edge pair beside it is what makes an edge's
+            # `worst_m` an honest bound in the table rather than only in the
+            # region row.
+            self.overhead_m.append(step.overhead_m)
+            edge.overhead += 1
+            edge.overhead_min_m = min(edge.overhead_min_m, step.overhead_m)
+        elif step.has_structure:
+            self.resting += 1
+        else:
+            self.absent += 1
+        return False
+
+    def add(self, edge_id: int, rise_m: float, area_m2: float) -> None:
+        """One cell with structure above the road, inside the window.
+
+        ⚠️ Takes the rise rather than a decided band, so the two thresholds stay
+        here — where they are documented, and where a test can reach them
+        without a shipped bundle.
+        """
+        self.rise_m.append(rise_m)
+        self.area_m2.append(area_m2)
+        self.edge_of.append(edge_id)
+        edge = self.edges[edge_id]
+        edge.worst_m = max(edge.worst_m, rise_m)
+        if rise_m > BUMPER_LOW_M:
+            edge.over_bumper_m2 += area_m2
+        elif rise_m > SUSPENSION_TRAVEL_M:
+            edge.band_m2 += area_m2
+
+    def add_section(self, edge_id: int, stepped: int, cells: int) -> None:
+        """One cross-section: how much of it was measurable, and how much stepped.
+
+        ⚠️ **Two bookings, and the order matters.** A section with any
+        measurable cell counts toward the edge's `stations` whether or not it is
+        stepped — that is the denominator of the `stepped/stations` column —
+        while the *share* is recorded only where a step was found, which is
+        `Q19`'s conditioning: the question is what shape a defect takes, and a
+        clean section has no shape. Pooling the two returns would drive every
+        percentile to zero and make the two failure modes indistinguishable.
+        """
+        if not cells:
+            return
+        edge = self.edges[edge_id]
+        edge.stations += 1
+        if not stepped:
+            return
+        share = stepped / cells
+        self.section_share.append(share)
+        edge.stepped_stations += 1
+        edge.worst_section_share = max(edge.worst_section_share, share)
+
+    def band_area(self) -> float:
+        """The band's total area, from `cells_in` and never from the per-edge buckets.
+
+        🔴 **Two paths reach this number and only one may print it.** `add`
+        buckets a rise per edge and `cells_in` masks the flat list; they agree
+        today, and summing the buckets here put both readings in one report
+        where a changed comparison would make two lines disagree with nothing to
+        catch it. The per-edge buckets still feed the table, so a divergence
+        shows up as the table disagreeing with this row — visible, rather than
+        two totals quietly describing different bands.
+        """
+        return self.cells_in(SUSPENSION_TRAVEL_M, BUMPER_LOW_M)[1]
+
+    def ribbon_area(self) -> float:
+        return sum(edge.ribbon_m2 for edge in self.edges.values())
+
+    def cells_in(self, low_m: float, high_m: float) -> tuple[int, float, int]:
+        """Cells, area and distinct edges with a rise in `(low, high]`.
+
+        Over the flat lists rather than the per-edge records, because the bands
+        reported are finer than the two coarse buckets an edge keeps — and the
+        edge count has to come from the same pass as the cells or the two can
+        disagree about the same band.
+        """
+        if not self.rise_m:
+            return 0, 0.0, 0
+        rise = np.asarray(self.rise_m)
+        within = (rise > low_m) & (rise <= high_m)
+        area = np.asarray(self.area_m2)[within]
+        edges = {edge_id for edge_id, keep in zip(self.edge_of, within, strict=True) if keep}
+        return int(within.sum()), float(area.sum()), len(edges)
+
+
+def optional_structure_faces(city: Any, tiles: list[Path]) -> tuple[Faces, str | None]:
+    """Upward-facing structure, or an empty index where the region ships none.
+
+    🔴 **The structure half may not decide this tool's exit code, and calling
+    `structure_faces` directly let it.** That function raises `SystemExit`
+    twice — for a city declaring no `structure_class`, and for a region whose
+    tiles carry none of it — and both are reachable: `Q6`/`Q10` keep multi-region
+    support, and a region with no flyover is an ordinary region, not a broken
+    build. Either would have aborted before the **ground** gate ran, which is
+    the one thing this tool is not allowed to skip.
+
+    ⚠️ Deliberately unlike `ground_faces` beside it, which *does* exit: the
+    ground is named by every city and a region shipping none is a defect. An
+    empty index here books every cell as `absent`, which is already the
+    documented normal answer for 92.8% of them.
+    """
+    try:
+        return structure_faces(city, tiles)
+    except SystemExit as absent:
+        log.warning("  no structure to measure — the ground half still grades: %s", absent)
+        return Faces.of(np.zeros((0, 3, 3)), signed=True), None
+
+
 def ground_faces(city: Any, tiles: list[Path]) -> tuple[Faces, str]:
     """Upward-facing terrain across the shipped tiles, and the class it came from.
 
@@ -333,41 +649,134 @@ def ground_faces(city: Any, tiles: list[Path]) -> tuple[Faces, str]:
     return class_faces(city, tiles, terrain_class), terrain_class
 
 
-class _Probe(NamedTuple):
-    """What one plan position had under it, named rather than positional.
+class Probe(NamedTuple):
+    """What terrain one plan position had under it, named rather than positional.
 
-    ⚠️ **Four values because a miss has three causes, and they are not the same
+    ⚠️ **Three values because a miss has three causes, and they are not the same
     finding.** Terrain refused for standing *above* the window is a burial this
     tool declines to measure; terrain below it is a road drawn metres over the
     ground; no terrain at all is a hole in the tiles. Returned as one tuple of
     bare values, the caller decoded them across nested `if`s and the last two
     were reported as one number — which is the conflation `Survey.no_ground` was
     split up to end, arriving one level down.
+
+    ⚠️ **`on_road` used to be a fourth field and has moved to `road_height`**,
+    which is now the one place that decides it. It was here because a single
+    closure did both lookups; with the road height wanted by two readers it is
+    asked once, and a flag restating the caller's own branch is a second copy of
+    a fact.
     """
 
     proud_m: float | None
-    on_road: bool
     above_window_m: float | None
     has_terrain: bool
+
+
+class Step(NamedTuple):
+    """What structure one plan position had over it.
+
+    ⚠️ **Four outcomes, decoded in this order and never nested**: a rise inside
+    the window; a face past it (overhead, refused); structure found only at or
+    below the road (the deck the ribbon rests on); nothing at all. `Probe`'s
+    docstring above records what conflating two of these cost the ground half.
+    """
+
+    rise_m: float | None
+    overhead_m: float | None
+    has_structure: bool
+
+
+def road_height(
+    drawn: Faces, x: float, z: float, station_y: float, within_m: float
+) -> float | None:
+    """The drawn carriageway's height here, or `None` where none was drawn.
+
+    🔴 **The drawn road, never the graph's own `y`.** The question is what the
+    player's wheels meet, and the ribbon that shipped is what they meet — the
+    graph holds what it was built from.
+
+    Both readers below take the answer rather than the mesh, so the two windows
+    cannot drift and the road is looked up once per cell. `None` is the
+    `no_road` outcome and the callers book it; junction trims and the cap's own
+    height cause it, and it is not evidence about anything underneath.
+    """
+    return nearest(drawn.heights_at(x, z), station_y, within_m)
+
+
+def ground_above(ground: Faces, x: float, z: float, road_y: float, within_m: float) -> Probe:
+    """How far the terrain stands above the drawn road here.
+
+    Nearest, not highest — `deck_error.nearest`'s rule. Highest would attribute
+    the top of a sea wall or a cutting face to the road running below it and
+    report several metres of "proud" where the geometry is right.
+    """
+    heights = ground.heights_at(x, z)
+    ground_y = nearest(heights, road_y, within_m)
+    if ground_y is not None:
+        return Probe(ground_y - road_y, None, True)
+    # 🔴 The window rejected it, and "no terrain here" and "terrain so far above
+    # the road that this refuses to call it the ground" are opposite findings
+    # that used to share one counter. The nearest rejected face *above* the road
+    # is the one worth reporting: it is a lower bound on a burial this tool has
+    # decided not to measure.
+    above = heights[heights - road_y > within_m]
+    return Probe(None, float(above.min() - road_y) if len(above) else None, bool(len(heights)))
+
+
+def structure_above(structure: Faces, x: float, z: float, road_y: float, within_m: float) -> Step:
+    """How far the lowest structure standing over the drawn road is above it.
+
+    🔴 **Lowest above, where the ground reader takes nearest — and the
+    difference is the whole reason this is a separate function.** Terrain is
+    single-valued wherever a car can be; structure is a volume in a stack, and
+    `Faces.from_tiles` keeps upward-wound faces, so a flyover's deck top is a
+    candidate for the street underneath. Read the terrain way, this region's
+    interchange reports +13.27 m of "structure proud" on the road beneath it.
+    The lowest face above the road is the first thing a climbing wheel would
+    meet, which is the question the band exists to ask.
+
+    ⚠️ **A face past `within_m` is refused and returned, never dropped.** That
+    is `Probe`'s `above_window_m` at a second layer, and it is what keeps a
+    `worst_m` an honest lower bound rather than a number the window chose.
+    """
+    heights = structure.heights_at(x, z)
+    if not len(heights):
+        return Step(None, None, False)
+    above = heights[heights > road_y]
+    if not len(above):
+        # Structure found, all of it at or below the road: the deck the ribbon
+        # rests on. Geometry working, and deliberately not a miss.
+        return Step(None, None, True)
+    rise = float(above.min() - road_y)
+    if rise > within_m:
+        return Step(None, rise, True)
+    return Step(rise, None, True)
 
 
 def survey(
     generated: Path,
     manifest: dict[str, Any],
     ground: Faces,
+    structure: Faces,
     *,
     spacing_m: float,
     across_m: float,
     attribute_within_m: float,
     ground_within_m: float,
-) -> Survey:
-    """Every level-0 carriageway cell, asked how far the ground stands above it.
+    structure_within_m: float,
+) -> tuple[Survey, Structure]:
+    """Every level-0 carriageway cell, asked what the ground and the structure do at it.
 
     ⚠️ **Across the full drawn width, not down the centreline**, which is
     `overhang`'s sampling rather than `deck_error`'s and is not a detail. The
     kerb runs along the *edge* of the ribbon, so the centreline is the one place
     on the carriageway where a poke-through cannot be seen — and the outer metre,
     where the ground is nearest, is the half this exists to check.
+
+    🔴 **Two surveys from one walk, and they are never merged.** The classes want
+    opposite fixes (`Q57`), so they are returned as two records with no shared
+    counter; what they share is the walk and the road height, which is the half
+    that must not differ between them.
     """
     graph = json.loads((generated / manifest["road_graph"]).read_text())
     widths = half_widths(manifest)
@@ -378,40 +787,8 @@ def survey(
     # in Chinese is hard rule 3's whole point.
     names = road_names(graph)
 
-    def probe(x: float, z: float, station_y: float) -> _Probe:
-        """How far the ground stands above the drawn road here, whether a road
-        was drawn at all — which is what separates the two kinds of miss — and,
-        where the window refused, how far above the road the terrain it refused
-        actually sits.
-
-        One function for both populations so the two windows cannot drift: the
-        width sweep and the centreline probe have to stay comparable, and the
-        whole report turns on comparing them.
-        """
-        # The drawn road first: the question is what the player's wheels meet,
-        # and the graph's own `y` is what the ribbon was built from rather than
-        # what shipped.
-        road_y = nearest(drawn.heights_at(x, z), station_y, attribute_within_m)
-        if road_y is None:
-            return _Probe(None, False, None, False)
-        # Nearest, not highest — `deck_error.nearest`'s rule again. Highest would
-        # attribute the top of a sea wall or a cutting face to the road running
-        # below it and report several metres of "proud" where geometry is right.
-        heights = ground.heights_at(x, z)
-        ground_y = nearest(heights, road_y, ground_within_m)
-        if ground_y is not None:
-            return _Probe(ground_y - road_y, True, None, True)
-        # 🔴 The window rejected it, and "no terrain here" and "terrain so far
-        # above the road that this refuses to call it the ground" are opposite
-        # findings that used to share one counter. The nearest rejected face
-        # *above* the road is the one worth reporting: it is a lower bound on a
-        # burial this tool has decided not to measure.
-        above = heights[heights - road_y > ground_within_m]
-        return _Probe(
-            None, True, (float(above.min() - road_y) if len(above) else None), bool(len(heights))
-        )
-
     found = Survey()
+    standing = Structure()
     for edge in graph["edges"]:
         # Level 0 only — see the module docstring.
         if int(edge["elevation_level"]) != 0:
@@ -421,12 +798,14 @@ def survey(
         if len(polyline) < 2:
             continue
         edge_widths = widths.get(edge_id, [])
+        name = names.get(edge_id, "unnamed")
         # `width_m` is the *authored* carriageway — the un-widened figure the
         # graph publishes — and `carriageway_occupancy.py` halves exactly this
         # for its own `authored` column. `Q19` records that the value is itself
         # invented from the speed-limit table; that is a fact about the split,
         # not a reason to measure against something else.
-        record = found.begin(edge_id, names.get(edge_id, "unnamed"), float(edge["width_m"]))
+        record = found.begin(edge_id, name, float(edge["width_m"]))
+        standing.begin(edge_id, name)
 
         seen = -1
         for vertex, station in walk_width(polyline, spacing_m):
@@ -445,15 +824,38 @@ def survey(
             # ⚠️ Not a cell of the sweep, which is why it is asked separately:
             # `cross_section` returns cell *centres*, so offset zero is only
             # visited when the width happens to divide into an odd number.
+            #
+            # ⚠️ Structure is deliberately NOT read here. This population grades
+            # the sink, and the sink is a fact about the terrain; asking it about
+            # a wall would put two questions in one distribution.
             if vertex != seen:
                 seen = vertex
-                found.add_sampled(probe(float(station[0]), float(station[2]), station_y).proud_m)
+                centre_x, centre_z = float(station[0]), float(station[2])
+                centre_y = road_height(drawn, centre_x, centre_z, station_y, attribute_within_m)
+                found.add_sampled(
+                    None
+                    if centre_y is None
+                    else ground_above(ground, centre_x, centre_z, centre_y, ground_within_m).proud_m
+                )
 
+            # This station's own shape, for the discriminator `StructureEdge`
+            # documents. Counted over the cells with a road drawn, never over the
+            # cells that found structure.
+            section_cells = 0
+            section_stepped = 0
             for index, (x, z, span) in enumerate(
                 cross_section(station[[0, 2]], normal, half, across_m)
             ):
                 found.asked += 1
-                cell = probe(x, z, station_y)
+                area = span * spacing_m
+                road_y = road_height(drawn, x, z, station_y, attribute_within_m)
+                if road_y is None:
+                    found.no_road += 1
+                    continue
+                section_cells += 1
+                standing.saw_road_cell(edge_id, area)
+
+                cell = ground_above(ground, x, z, road_y, ground_within_m)
                 if cell.proud_m is not None:
                     # ⚠️ **Reconstructed from the walk, not from the returned
                     # position.** `cross_section` steps in from the left rim in
@@ -468,11 +870,9 @@ def survey(
                     found.add(
                         edge_id,
                         cell.proud_m,
-                        span * spacing_m,
+                        area,
                         offset_m=-half + span * (index + 0.5),
                     )
-                elif not cell.on_road:
-                    found.no_road += 1
                 elif cell.above_window_m is not None:
                     # The list IS the counter — `Survey.above_window` reads its
                     # length, so the two cannot report different totals.
@@ -484,7 +884,146 @@ def survey(
                 else:
                     found.no_terrain += 1
 
-    return found
+                # The second class. `Structure.observe` owns the four-way decode
+                # and both thresholds, so this loop books a station's shape and
+                # nothing else.
+                step = structure_above(structure, x, z, road_y, structure_within_m)
+                section_stepped += standing.observe(edge_id, step, area)
+
+            standing.add_section(edge_id, section_stepped, section_cells)
+
+    standing.check()
+    return found, standing
+
+
+def report_structure(standing: Structure, within_m: float) -> None:
+    """The second class's tables, which share no number with the ground's.
+
+    🔴 **A separate table on purpose** (`Q57`). Everything `main` prints above
+    this grades the ground and belongs to `Q24`; everything here grades
+    structure standing in the carriageway and belongs to `Q19`. They share the
+    walk and the road height and nothing else — and this reports rather than
+    gates, so it returns nothing for `main` to weigh.
+    """
+    log.info("")
+    log.info("  STRUCTURE standing over the drawn carriageway — Q19's half, and it does NOT gate:")
+    log.info("    %-15s %-34s %8s %11s %7s", "band", "what it is", "cells", "area", "edges")
+    bands = (
+        (0.0, SUSPENSION_TRAVEL_M, "the car rides over it"),
+        (SUSPENSION_TRAVEL_M, BUMPER_LOW_M, "Q19's BAND - no other instrument"),
+        (BUMPER_LOW_M, within_m, "already carriageway_occupancy's"),
+    )
+    for low, high, label in bands:
+        cells, area, edges = standing.cells_in(low, high)
+        log.info(
+            "    %-15s %-34s %8d %8.1f m2 %7d",
+            f"{low:.2f} - {high:.2f} m",
+            label,
+            cells,
+            area,
+            edges,
+        )
+    if standing.overhead:
+        overhead = np.asarray(standing.overhead_m)
+        log.info(
+            "    %-15s %-34s %8d %11s",
+            f"over {within_m:.2f} m",
+            "refused - a deck over the street",
+            standing.overhead,
+            f"{overhead.min():.2f}-{overhead.max():.2f} m",
+        )
+    log.info(
+        "    %d cells rest on structure at or below the road, %d have no structure at all"
+        " (%.1f%% of %d)",
+        standing.resting,
+        standing.absent,
+        100.0 * standing.absent / standing.on_road if standing.on_road else 0.0,
+        standing.on_road,
+    )
+    # ⚠️ **The band is the finding; the row above it is not.** Anything past
+    # `BUMPER_LOW_M` is already counted by `carriageway_occupancy`, so summing
+    # the two would republish `Q19`'s own population as this instrument's
+    # discovery. Both are printed so the comparison is possible and neither is
+    # totalled.
+
+    if standing.section_share:
+        share = np.asarray(standing.section_share)
+        log.info("")
+        log.info(
+            "    of the %d cross-sections carrying a step, the share of the section stepped reads",
+            len(share),
+        )
+        log.info(
+            "    p50 %.0f%% / p90 %.0f%% / max %.0f%%, and %d are more than half stepped —",
+            100.0 * float(np.median(share)),
+            100.0 * float(np.percentile(share, 90.0)),
+            100.0 * float(share.max()),
+            int((share > 0.5).sum()),
+        )
+        log.info(
+            "    Q19's discriminator: a ledge takes a strip of a section, a ribbon disagreeing"
+        )
+        log.info("    with the deck it rests on takes most of one. See Q23 for the suppression")
+
+    stepped_edges = sorted(
+        ((edge_id, edge) for edge_id, edge in standing.edges.items() if edge.band_m2 > 0.0),
+        key=lambda item: -item[1].band_m2,
+    )
+    log.info("")
+    log.info(
+        "  level-0 edges carrying structure in the %.2f-%.2f m band, by area of it:",
+        SUSPENSION_TRAVEL_M,
+        BUMPER_LOW_M,
+    )
+    log.info(
+        "    'past bumper' is the same edge's area over %.2f m — already occupancy's, never"
+        " added to the band",
+        BUMPER_LOW_M,
+    )
+    log.info(
+        "    'sections' is stepped/measured with the worst section's own share; 'over window' is"
+        " cells refused"
+    )
+    log.info(
+        "    past --structure-within-m %.2f m, so every 'worst' is a bound and that column says"
+        " by how much",
+        within_m,
+    )
+    log.info(
+        "    %-6s %-26s %8s %10s %8s %11s %11s %13s",
+        "edge",
+        "street",
+        "worst",
+        "in band",
+        "of ribbon",
+        "past bumper",
+        "sections",
+        "over window",
+    )
+    for edge_id, edge in stepped_edges:
+        log.info(
+            "    e%-5d %-26s %+7.2fm %7.1f m2 %7.1f%% %8.1f m2 %11s %13s",
+            edge_id,
+            edge.name[:26],
+            edge.worst_m,
+            edge.band_m2,
+            100.0 * edge.band_share,
+            edge.over_bumper_m2,
+            f"{edge.stepped_stations}/{edge.stations} @{100.0 * edge.worst_section_share:.0f}%",
+            f"{edge.overhead} to {edge.overhead_min_m:+.2f}m" if edge.overhead else "",
+        )
+    log.info(
+        "    %d of %d level-0 edges, %.1f m2 of %.1f m2 of measured ribbon",
+        len(stepped_edges),
+        len(standing.edges),
+        standing.band_area(),
+        standing.ribbon_area(),
+    )
+    log.info("    note this is a THIRD population: the whole drawn ribbon, in the drawn frame.")
+    log.info(
+        "    Q19's corrected 14-of-17 edges and 45 stations were measured inside the CORRIDOR,"
+    )
+    log.info("    and the superseded 31 came from a scratch script. Do not quote one for another")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -505,6 +1044,20 @@ def main(argv: list[str] | None = None) -> int:
         # wherever a vehicle can be, so on this region almost every cell has one
         # candidate and the window never chooses.
         help="how far terrain may sit from the drawn road and still be the ground under it",
+    )
+    parser.add_argument(
+        "--structure-within-m",
+        type=float,
+        default=BUMPER_HIGH_M,
+        # 🔴 **Sourced, not chosen.** `BUMPER_HIGH_M` is the top of the band
+        # `clearance.py` treats as an obstruction; structure above it is
+        # overhead that no instrument in this bundle calls a wall. A number
+        # picked here instead would be a second opinion about the same fact.
+        #
+        # ⚠️ A flag rather than a constant because it decides a refusal, and a
+        # refusal whose bound cannot be swept is `Q58`'s `drawn_gauge_m` trap —
+        # which is also why what it refuses is published rather than dropped.
+        help="how far above the road a structure face may sit and still be a step, not a flyover",
     )
     parser.add_argument(
         "--accept-proud-m",
@@ -579,14 +1132,17 @@ def main(argv: list[str] | None = None) -> int:
     log_bundle(manifest, args.lod)
 
     ground, terrain_class = ground_faces(city, tiles)
-    found = survey(
+    structure, structure_class = optional_structure_faces(city, tiles)
+    found, standing = survey(
         args.generated,
         manifest,
         ground,
+        structure,
         spacing_m=args.spacing_m,
         across_m=args.across_m,
         attribute_within_m=args.attribute_within_m,
         ground_within_m=args.ground_within_m,
+        structure_within_m=args.structure_within_m,
     )
     log.info(
         "  %d upward faces of '%s' across %d tiles, sampled on a %.1f x %.1f m grid",
@@ -596,6 +1152,12 @@ def main(argv: list[str] | None = None) -> int:
         args.spacing_m,
         args.across_m,
     )
+    if structure_class is not None:
+        log.info(
+            "  %d upward faces of '%s' across the same tiles",
+            len(structure.corners),
+            structure_class,
+        )
     log.info("  sink declared in config: %.3f m", city.buildings.ground_sink_m)
 
     if not found.measured:
@@ -755,6 +1317,8 @@ def main(argv: list[str] | None = None) -> int:
         sum(1 for _, edge in over_travel if edge.over_share > 0.10),
         len(found.edges) - len(measured_edges),
     )
+
+    report_structure(standing, args.structure_within_m)
 
     problems = []
     sampled = found.sampled_share_above(args.accept_proud_m)
