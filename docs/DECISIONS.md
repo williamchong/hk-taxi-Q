@@ -16136,7 +16136,8 @@ which survives · `Q77` for how a withdrawn layer is kept re-declarable
 ## `Q103` — The off-grade network is drivable and no instrument grades it
 
 **Status.** 🟡 Half answered — the tunnels are fixed, the flyovers are measured and open ·
-`e489`'s cause and the `levels` knob closed 2026-09-03 · **Owner.** `P4-1`
+`e489`'s cause and the `levels` knob closed 2026-09-03 · the open flyover population is **`e208`
+and `e306`**, halved from four when the plan bin was swept · **Owner.** `P4-1`
 
 **Trigger.** The user drove the FLEMING ROAD ramp and asked *"why the fence is in middle of a
 lane?"* — a frame, as `Q62` says the evidence has to be. It is not a fence: no `P3-29` barrier
@@ -16539,8 +16540,10 @@ level and always reported per level, so **only the corridor was ever bound to 0*
 
   ⚠️ **The two instruments agree in shape and differ in count**, as they do at level 0: the pipeline
   reads 2 starved (`e208` 2.50, `e306` 3.00), this grader reads 4, and it is the more pessimistic
-  one for `INDEX_CELL_M`'s documented reason. `e208` reads **2.33 against 2.50** — both clear of the
-  1.80 m car bar, which corroborates *registration, not size* a third time.
+  one for `INDEX_CELL_M`'s documented reason. ✅ **That reason is measured rather than cited from
+  2026-09-03** — swept, this grader reads 2 as well, and the gap is the bin in its entirety; see
+  the plan-bin subsection at the end of this entry. `e208` reads **2.33 against 2.50** — both
+  clear of the 1.80 m car bar, which corroborates *registration, not size* a third time.
   ⚠️ Level 1's own-area share is **`INFRASTRUCTURE` 14.579%**, against level 0's 1.104%. That is a
   deck reading as its own parapet and is not comparable to a street's number.
 - 🔴 **The flag is strictly ADDITIVE, and that is a defect it shipped with for one run.** With
@@ -16743,7 +16746,7 @@ and **one** deck-derived centreline offset and both are constant along it.
 cannot be graded against anything published · `Q58` for the trap the in-band pair would be if it
 were read as an extent
 
-### ✅ The blockage is priced against the instrument's own plan bin, and that re-cuts the population a THIRD time, 2026-09-03
+### ✅ Two of the four edges were the plan bin, 2026-09-03 — the population re-cuts a THIRD time
 
 The entry above named the mechanism and split the four edges 2–2 on `centreline occupied`. Both
 readings were taken at `INDEX_CELL_M` 1.0 m, and **the split is an artefact of that bin.** Swept,
@@ -16762,7 +16765,7 @@ about the *instrument* and not about the bundle. The four edges are still `P4-1`
 | 0.25 m | 4 | 2 | **2** | 2.80 m | 2.90 m | ✅ clear | ✅ clear |
 
 Starved metres fall with it — `e208` 17 → 10 → 7, `e306` 22 → 12 → 2, worst run 12 → 7 → 4 and
-11 → 3 → 1 — and `e257` and `e450` lose the lane bar at **no** bin below 1.0 m.
+11 → 3 → 1 — and `e257` and `e450` hold the lane bar at every bin below 1.0 m.
 
 🔴 **The band thickness is the direct read on the smear, and it halves once and then FLOORS.** p50
 occupied-stretch thickness runs **0.93 / 0.97 / 0.95 / 0.99 m** at 1.0 m and **0.47 / 0.48 / 0.48 /
