@@ -32,6 +32,7 @@ from pipeline.carriageway import (
     _ROW_MIN,
     DECK_ACROSS_M,
     DECK_BRIDGE_M,
+    DECK_MAX_LATERAL_M,
     DECK_TOLERANCE_M,
     LANES_FLOOR,
     MIN_STATIONS,
@@ -553,6 +554,16 @@ class _FlatDeck:
         return out
 
 
+def _reach(deck, point, normal, sign, deck_y: float = 10.0) -> float | None:
+    """`_deck_reach`'s distance alone, dropping the saturation flag.
+
+    The flag has its own test; unwrapping it at every call site would bury the
+    rule each of these is actually pinning.
+    """
+    out = _deck_reach(deck, 0.5, point, normal, sign, deck_y)
+    return None if out is None else out[0]
+
+
 class TestDeckReach:
     """The lateral deck walk (`Q103`).
 
@@ -567,31 +578,23 @@ class TestDeckReach:
 
     def test_the_run_stops_at_the_deck_edge(self) -> None:
         deck = _FlatDeck([(-3.0, 4.0, 10.0)])
-        assert _deck_reach(deck, 0.5, self.POINT, self.NORMAL, +1.0, 10.0) == pytest.approx(
-            4.0, abs=DECK_ACROSS_M
-        )
-        assert _deck_reach(deck, 0.5, self.POINT, self.NORMAL, -1.0, 10.0) == pytest.approx(
-            3.0, abs=DECK_ACROSS_M
-        )
+        assert _reach(deck, self.POINT, self.NORMAL, +1.0) == pytest.approx(4.0, abs=DECK_ACROSS_M)
+        assert _reach(deck, self.POINT, self.NORMAL, -1.0) == pytest.approx(3.0, abs=DECK_ACROSS_M)
 
     def test_a_centreline_off_the_deck_measures_nothing(self) -> None:
         """🔴 Refused, never scored as a zero-width deck. That station is the
         defect being sized, so folding it in would measure it away."""
         deck = _FlatDeck([(2.0, 6.0, 10.0)])
-        assert _deck_reach(deck, 0.5, self.POINT, self.NORMAL, +1.0, 10.0) is None
+        assert _reach(deck, self.POINT, self.NORMAL, +1.0) is None
 
     def test_a_slab_at_another_height_is_not_this_deck(self) -> None:
         """The interchange case: a deck overhead must not extend this one."""
         deck = _FlatDeck([(-3.0, 2.0, 10.0), (2.0, 9.0, 10.0 + 5.0)])
-        assert _deck_reach(deck, 0.5, self.POINT, self.NORMAL, +1.0, 10.0) == pytest.approx(
-            2.0, abs=DECK_ACROSS_M
-        )
+        assert _reach(deck, self.POINT, self.NORMAL, +1.0) == pytest.approx(2.0, abs=DECK_ACROSS_M)
 
     def test_camber_inside_the_tolerance_stays_one_deck(self) -> None:
         deck = _FlatDeck([(-3.0, 2.0, 10.0), (2.0, 6.0, 10.0 + DECK_TOLERANCE_M * 0.5)])
-        assert _deck_reach(deck, 0.5, self.POINT, self.NORMAL, +1.0, 10.0) == pytest.approx(
-            6.0, abs=DECK_ACROSS_M
-        )
+        assert _reach(deck, self.POINT, self.NORMAL, +1.0) == pytest.approx(6.0, abs=DECK_ACROSS_M)
 
     def test_a_hole_narrower_than_the_bridge_is_closed(self) -> None:
         """🔴 Without this the walk is a hole detector, not a deck measurement —
@@ -599,9 +602,7 @@ class TestDeckReach:
         p50 -3.65 m against `tools/deck_margin.py`."""
         gap = DECK_BRIDGE_M * 0.5
         deck = _FlatDeck([(-3.0, 2.0, 10.0), (2.0 + gap, 7.0, 10.0)])
-        assert _deck_reach(deck, 0.5, self.POINT, self.NORMAL, +1.0, 10.0) == pytest.approx(
-            7.0, abs=DECK_ACROSS_M
-        )
+        assert _reach(deck, self.POINT, self.NORMAL, +1.0) == pytest.approx(7.0, abs=DECK_ACROSS_M)
 
     def test_a_void_wider_than_the_bridge_is_not_closed(self) -> None:
         """The other half of the same rule, and the one that keeps two decks two
@@ -609,9 +610,30 @@ class TestDeckReach:
         carriageway across an interchange."""
         gap = DECK_BRIDGE_M * 2.0
         deck = _FlatDeck([(-3.0, 2.0, 10.0), (2.0 + gap, 7.0, 10.0)])
-        assert _deck_reach(deck, 0.5, self.POINT, self.NORMAL, +1.0, 10.0) == pytest.approx(
-            2.0, abs=DECK_ACROSS_M
+        assert _reach(deck, self.POINT, self.NORMAL, +1.0) == pytest.approx(2.0, abs=DECK_ACROSS_M)
+
+
+class TestDeckReachSaturation:
+    """A deck wider than the walk is a LOWER BOUND, and it says so.
+
+    ⚠️ Reported rather than refused: about a tenth of directions reach the cap
+    on this region's widest interchanges, so refusing them would throw away the
+    decks the walk exists to find. But a clamp that never says it clamped is a
+    measurement reporting a constant, which is `Q58`'s trap.
+    """
+
+    def test_a_deck_wider_than_the_walk_is_flagged(self) -> None:
+        deck = _FlatDeck([(-100.0, 100.0, 10.0)])
+        reach, capped = _deck_reach(
+            deck, 0.5, np.array([0.0, 0.0]), np.array([1.0, 0.0]), +1.0, 10.0
         )
+        assert capped is True
+        assert reach == pytest.approx(DECK_MAX_LATERAL_M, abs=DECK_ACROSS_M)
+
+    def test_a_deck_inside_the_walk_is_not_flagged(self) -> None:
+        deck = _FlatDeck([(-3.0, 4.0, 10.0)])
+        _, capped = _deck_reach(deck, 0.5, np.array([0.0, 0.0]), np.array([1.0, 0.0]), +1.0, 10.0)
+        assert capped is False
 
 
 class TestTheDeckOffsetSign:
@@ -633,8 +655,8 @@ class TestTheDeckOffsetSign:
         deck = _FlatDeck([(-2.0, 8.0, 10.0)])
         # `_FlatDeck` keys on the first coordinate, so walk it in that frame:
         # +1.0 reaches 8 m and -1.0 reaches 2 m, a deck centred 3 m to the right.
-        right = _deck_reach(deck, 0.5, np.array([0.0, 0.0]), np.array([1.0, 0.0]), +1.0, 10.0)
-        left = _deck_reach(deck, 0.5, np.array([0.0, 0.0]), np.array([1.0, 0.0]), -1.0, 10.0)
+        right = _reach(deck, np.array([0.0, 0.0]), np.array([1.0, 0.0]), +1.0)
+        left = _reach(deck, np.array([0.0, 0.0]), np.array([1.0, 0.0]), -1.0)
         assert right is not None and left is not None
         assert 0.5 * (right - left) == pytest.approx(3.0, abs=DECK_ACROSS_M)
 
@@ -712,3 +734,61 @@ class TestThePublishedOffsetIsTheNegationOfTheSurvey:
         out = _reassign(_road_edge(9), CarriagewayReport())
         assert out.offset_m == 0.0
         assert out.offset_source == "none"
+
+
+class TestTheDeckTolerancesAreBoundToTheirGrader:
+    """🔴 `DECK_TOLERANCE_M`'s own comment says it is REQUIRED to agree with
+    `tools/deck_margin.py`'s attribution, and nothing enforced it.
+
+    `test_fence.py`'s precedent: `fence.unit_width_m` is bound to
+    `make_barrier.UNIT_WIDTH_M` by a test, because two files holding one number
+    drift silently. Here the cost of drift is worse than a drawing error — the
+    two are separate implementations of one measurement, so a tolerance that
+    stops matching makes every divergence between them unreadable: is it the
+    reading, or is it the bar?
+
+    ⚠️ The three walk constants need no test — `deck_margin.py` *imports* them,
+    which is stronger. This one cannot be imported: it is an argparse default in
+    a third tool.
+    """
+
+    def test_the_attribution_matches_deck_errors_default(self) -> None:
+        import deck_error
+
+        parser = deck_error.bundle_arguments()
+        default = parser.get_default("attribute_within_m")
+        assert default == DECK_TOLERANCE_M, (
+            f"deck_error --attribute-within-m defaults to {default} and the deck walk "
+            f"uses {DECK_TOLERANCE_M}; they grade the same question and must agree"
+        )
+
+
+class TestThePublishersAreKeptOffGrade:
+    """🔴 `hong_kong.yaml` says level 1 reads its width from the deck and never
+    from the publishers; this is what makes that true of the code.
+
+    ⚠️ **A latent hole, not a defect that shipped.** `roads._reassign` applies
+    the deck after the publishers, so a publisher's off-grade width was
+    overridden wherever the deck measured that edge — all five of them, in this
+    region. What nothing kept empty is the intersection: an off-grade edge a
+    publisher licenses and the deck cannot measure. Pinned here because that
+    intersection being empty is data, and data moves.
+    """
+
+    def test_no_off_grade_edge_is_licensed_by_a_publisher(self) -> None:
+        import json
+        from pathlib import Path
+
+        out = Path(__file__).resolve().parents[1] / "out" / "wan_chai" / "roadgraph.json"
+        if not out.exists():
+            pytest.skip("region not built")
+        graph = json.loads(out.read_text())
+        leaked = [
+            edge["id"]
+            for edge in graph["edges"]
+            if edge["elevation_level"] != 0 and edge["width_source"] not in ("authored", "deck")
+        ]
+        assert leaked == [], (
+            f"edges {leaked} are off-grade and carry a line-publisher width; their 2D lines "
+            "find the street under the deck"
+        )

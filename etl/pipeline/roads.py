@@ -2104,11 +2104,12 @@ def main(argv: list[str] | None = None) -> int:
                 float(np.abs(offsets).max()),
             )
             log.info(
-                "      %d stations on a deck, %d with the centreline off it entirely, "
-                "%d edges unsampled — published as width_source `deck` (Q103)",
+                "      %d stations on a deck (%d clipped by the walk), %d with the centreline "
+                "off it entirely, %d edges unmeasured and left authored (Q103)",
                 width.deck_stations_on,
+                width.deck_stations_saturated,
                 width.deck_stations_off,
-                width.deck_edges_unsampled,
+                width.deck_edges_unmeasured,
             )
         log.info(
             "    lanes: %d of %d measured widths resolve under TPDM %.2f-%.2f m (%s); "

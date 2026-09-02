@@ -16270,19 +16270,27 @@ can see.
 
 ### What is left
 
-- ⬜ **The residual divergence**: \|pipeline − `deck_margin`\| p50 0.60 m, max 3.80 m, against the
+- ⬜ **The residual divergence**: `|pipeline − deck_margin|` p50 0.60 m, max 3.80 m, against the
   level-0 survey's own p50 **0.005 m**. Same-direction now, so it is spread rather than bias, and it
   is why some edges' ribbons are still too wide. A finding to go and look at.
-- ⬜ **`deck_margin.py`'s `authored` column is mislabelled** since this shipped — it prints
-  `width_m`, which off-grade is now a deck reading rather than `lanes × lane_width_m`.
 - ⬜ Level 2 is declared and unused; level −1 is deliberately out of the walk, because a bore has no
   deck to find.
+- ⬜ **155 of 1,556 walk directions reach `DECK_MAX_LATERAL_M`**, so those spans are lower bounds.
+  Counted as `deck_stations_saturated` rather than refused — refusing a tenth of the widest
+  interchanges' directions would discard the decks the walk exists to find — but a rising count means
+  the cap has stopped clearing what it is sized for.
+- ✅ **The publishers are gated off-grade** rather than trusted to be overridden. A latent hole, not
+  a defect that shipped: `_reassign` applies the deck last, so all five publisher-licensed level-1
+  edges were already overridden. What nothing kept empty is the intersection with
+  `deck_edges_unmeasured` (9 edges today), and `test_no_off_grade_edge_is_licensed_by_a_publisher`
+  now pins it.
 - ⬜ `P4-1` still owns opening the network. The touchdown closure holds until it does.
 - ⬜ The clearance default stays `(0,)`. Flipping it publishes 60 edges of `clear_width_m` that
   nothing reads, because `RoadGraph.is_drivable` gates `impassable_edge_ids` and `fenced_edge_ids`
   alike. It belongs with `P4-1`, when a consumer exists.
-- ⬜ `P4-1` now has a second reason to exist: not "open the network" but "the network is already
-  open and ungraded". Either open it properly or stop the ramps at the touchdown.
+- ✅ `P4-1`'s second reason is **discharged**: the network is no longer open and ungraded, because
+  the ramps stop at the touchdown. Removing `fence.touchdown_levels` is now the whole of "open it
+  properly", and it opens onto a ribbon drawn where its deck is.
 
 **See.** `Q13` for the premise that expired · `Q21` for what the tunnels cost · `Q22` for the
 mechanism this measured · `Q94` / `Q95` for the level-0 half that is done · `Q19` for the estate's

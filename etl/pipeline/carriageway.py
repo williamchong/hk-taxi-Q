@@ -57,6 +57,7 @@ from pipeline.polyline import (
     directed_residual_deg,
     game_heading_deg,
     plan_lengths,
+    plan_lengths_2d,
 )
 from pipeline.terrain import HeightField
 
@@ -190,8 +191,10 @@ class CarriagewayReport:
     # source that knows where a viaduct deck is, is the model, and `roads.py`
     # already reads it as a `HeightField` for the polyline's own height.
     #
-    # ⚠️ **Recorded and published NOWHERE yet.** Nothing downstream reads these,
-    # which is what lets the walk be added and graded before the bundle moves.
+    # ⚠️ **`roads._reassign` publishes both** as `width_m` / `offset_m` with
+    # `width_source: deck`, and `schema_version` 9 exists because of it. They
+    # were recorded and unread for exactly one commit, which is what let the
+    # walk be graded against `deck_margin.py` before the bundle moved.
     deck_span_m: dict[int, float] = field(default_factory=dict)
     # 🔴 **SIGNED, in `_stations`' RIGHT-of-travel frame, and that is not the
     # frame `surface.mitres` draws in.** The two normals in this repo are
@@ -203,10 +206,19 @@ class CarriagewayReport:
     # Stations whose centreline stood on no deck at all — the ribbon is off its
     # own structure there, which is the defect this exists to size.
     deck_stations_off: int = 0
-    # Stations where the walk found a deck and measured it.
     deck_stations_on: int = 0
-    # Edges walked at a non-zero level with no deck field to walk against.
-    deck_edges_unsampled: int = 0
+    # Off-grade edges the walk could not reduce to a width — too few stations
+    # survived the junction guard, or too few found a deck at all.
+    # ⚠️ **Named for what it counts.** It was `deck_edges_unsampled`, which
+    # reads as "no deck field", and that case never reaches this counter: it is
+    # only touched where a field *is* present. These edges keep their authored
+    # width, never a publisher's.
+    deck_edges_unmeasured: int = 0
+    # Stations where the walk hit `DECK_MAX_LATERAL_M` before the deck ended, so
+    # the span is a lower bound. ⚠️ Kept as a measurement rather than refused —
+    # a tenth of directions reach the cap on the widest interchanges — but a
+    # rising count means the cap has stopped clearing the decks it is sized for.
+    deck_stations_saturated: int = 0
 
     @property
     def measured(self) -> int:
@@ -561,8 +573,10 @@ def _deck_reach(
     normal: np.ndarray,
     sign: float,
     deck_y: float,
-) -> float | None:
-    """How far the deck under a station continues in one direction, or None.
+) -> tuple[float, bool] | None:
+    """How far the deck continues one way, and whether the walk clipped it.
+
+    `None` where the centreline is not on a deck at all.
 
     ⚠️ **A walk outward from the centreline, not a hit test.** The question is
     which deck *this station stands on*, so the run has to be contiguous from
@@ -595,8 +609,17 @@ def _deck_reach(
         if 1 <= high - low - 1 <= max_gap:
             on[low + 1 : high] = True
 
+    # `on[0]` is True above and the bridging only ever assigns True, so
+    # `ends[0]` is never 0 and `ends[0] - 1` cannot wrap to the far end.
     ends = np.flatnonzero(~on)
-    return float(offsets[ends[0] - 1] if len(ends) else offsets[-1])
+    if not len(ends):
+        # The deck ran past the walk, so this reach is a LOWER BOUND rather than
+        # a measurement. ⚠️ Reported through `saturated` rather than refused:
+        # roughly a tenth of directions reach the cap on this region's widest
+        # interchanges, and refusing them would throw away the decks the walk
+        # exists to find. The caller counts it; nothing here retunes on it.
+        return float(offsets[-1]), True
+    return float(offsets[ends[0] - 1]), False
 
 
 def _walk_the_deck(
@@ -625,12 +648,14 @@ def _walk_the_deck(
     """
     field, slab_gap_m, clearance_m = deck
     deck_y = float(np.interp(_along_at(plan, along_edge, point), along_edge, heights)) - clearance_m
-    right = _deck_reach(field, slab_gap_m, point, normal, +1.0, deck_y)
-    left = _deck_reach(field, slab_gap_m, point, normal, -1.0, deck_y)
-    if right is None or left is None:
+    reaches = [_deck_reach(field, slab_gap_m, point, normal, sign, deck_y) for sign in (+1.0, -1.0)]
+    if any(reach is None for reach in reaches):
         report.deck_stations_off += 1
         return
+    (right, right_capped), (left, left_capped) = reaches
     report.deck_stations_on += 1
+    if right_capped or left_capped:
+        report.deck_stations_saturated += 1
     spans.append(right + left)
     # 🔴 **Positive is RIGHT of travel**, because `_stations` emits the right
     # normal. `surface.mitres` is the left one and the two are opposite on
@@ -703,9 +728,27 @@ def measure(
     report.edges_walked = len(walked)
 
     for edge in walked:
-        plan = np.asarray(edge.polyline, dtype=np.float64)[:, [0, 2]]
-        heights = np.asarray(edge.polyline, dtype=np.float64)[:, 1]
-        along_edge = plan_lengths(np.asarray(edge.polyline, dtype=np.float64))
+        polyline = np.asarray(edge.polyline, dtype=np.float64)
+        plan = polyline[:, [0, 2]]
+        # 🔴 **Off-grade is the deck's to answer and the publishers' to keep out
+        # of (`Q103`).** Their lines are a 2D plan projection, so a ray from a
+        # deck centreline finds the kerb of the street underneath — 2 of the 5
+        # level-1 edges they license read *wider* than the deck.
+        # `hong_kong.yaml` states this as the rule and this is where it holds.
+        #
+        # ⚠️ **A latent hole rather than a defect that shipped, and the
+        # difference is worth stating.** `roads._reassign` applies the deck
+        # after the publishers, so a publisher's off-grade width is overridden
+        # wherever the deck measured that edge — which today is all five of
+        # them. What was unguarded is the intersection nothing keeps empty: an
+        # off-grade edge a publisher licenses and the deck **cannot** measure
+        # (`deck_edges_unmeasured`, 9 today) would have shipped the publisher's.
+        # Gating here rather than trusting the override also stops
+        # `report.measured` counting five edges it never published.
+        off_grade = edge.elevation_level != 0
+        walk_deck = deck is not None and off_grade
+        heights = polyline[:, 1] if walk_deck else None
+        along_edge = plan_lengths_2d(plan) if walk_deck else None
         deck_spans: list[float] = []
         deck_offsets: list[float] = []
         spans: list[float] = []
@@ -726,10 +769,15 @@ def measure(
                 # comparable. Walked above this guard, CANAL ROAD FLYOVER's
                 # `e337` reads a 14.05 m deck against that tool's 11.95.
                 continue
-            if deck is not None and edge.elevation_level != 0:
+            if walk_deck:
                 _walk_the_deck(
                     report, deck, point, normal, plan, along_edge, heights, deck_spans, deck_offsets
                 )
+            if off_grade:
+                # No publisher ray off-grade at all — see `off_grade` above. An
+                # edge the deck could not measure keeps its authored width,
+                # which is the safe fallback; a publisher's is not.
+                continue
             for name, segments in publishers:
                 ahead = segments.first_hit(point, normal, MAX_RAY_M)
                 behind = segments.first_hit(point, -normal, MAX_RAY_M)
@@ -749,8 +797,8 @@ def measure(
         if deck_span is not None:
             report.deck_span_m[edge.id] = deck_span
             report.deck_offset_m[edge.id] = float(np.median(deck_offsets))
-        elif deck is not None and edge.elevation_level != 0:
-            report.deck_edges_unsampled += 1
+        elif walk_deck:
+            report.deck_edges_unmeasured += 1
 
         span = _median_or_none(spans)
         if span is None:

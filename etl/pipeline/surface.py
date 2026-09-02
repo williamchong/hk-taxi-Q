@@ -1321,7 +1321,12 @@ def _prepare(published: dict, style: RoadSurface, report: SurfaceReport) -> _Edg
     report.kerb_minority_m += minority_m
     return _Edge(
         points=points,
-        shift_m=float(published.get("offset_m", 0.0)),
+        # `published["offset_m"]`, never a `.get` default: `read_graph` pins the
+        # schema exactly, so any graph this can open carries the field. A
+        # default could not fire on valid input and would silently draw every
+        # off-grade ribbon back at zero shift on invalid input, which is the one
+        # failure it would ever meet.
+        shift_m=float(published["offset_m"]),
         published_half_widths=half_widths,
         lanes=published["lanes"],
         direction=published["direction"],

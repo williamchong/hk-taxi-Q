@@ -18,10 +18,15 @@ This decomposes that same quantity into the two things that can cause it:
     off_centre_m  signed offset of the published centreline from that deck's middle
     overhang_m    metres of drawn ribbon with no deck under them, per station
 
-A ribbon can hang because it is **too wide** for the deck (`width_m`, which
-off-grade is still `lanes x lane_width_m` with an authored `lanes`) or because it
-is **registered wrong** (the centreline sits off the deck). Those need opposite
-fixes and `overhang.py` reports one number for both.
+A ribbon can hang because it is **too wide** for the deck (`width_m`) or because
+it is **registered wrong** (the centreline sits off the deck). Those need
+opposite fixes and `overhang.py` reports one number for both.
+
+⚠️ **Off-grade `width_m` stopped being `lanes x lane_width_m` at `Q103`** — it is
+a reading of the deck itself where `width_source` says `deck`, so the `graph`
+column below is the graph's *published* width whatever licensed it, and `lanes`
+beside it is still authored up there. It was labelled `authored`, which was true
+when this tool was written and is not now.
 
 ⚠️ **This is NOT an independent check of `overhang.py`.** Its truth side is the
 same `INFRASTRUCTURE` class in the same shipped tiles, read through the same
@@ -133,7 +138,13 @@ from deck_error import (  # noqa: E402
     structure_faces,
 )
 from overhang import half_width_at, half_widths, left_of, walk_width  # noqa: E402
-from pipeline.carriageway import JUNCTION_M, MIN_STATIONS  # noqa: E402
+from pipeline.carriageway import (  # noqa: E402
+    DECK_ACROSS_M,
+    DECK_BRIDGE_M,
+    DECK_MAX_LATERAL_M,
+    JUNCTION_M,
+    MIN_STATIONS,
+)
 from pipeline.config import load_config  # noqa: E402
 
 log = logging.getLogger(__name__)
@@ -147,15 +158,16 @@ STATION_M = 2.0
 # an overhang is quantised to it. 0.10 m keeps that below the 0.13 m parapets
 # measured on CANAL ROAD FLYOVER without making a station cost more than a
 # few hundred point queries.
-ACROSS_M = 0.10
+ACROSS_M = DECK_ACROSS_M
 
 # Half-width of the cross-section walk. 12 m reaches past the widest authored
 # off-grade ribbon (9.60 m, so 4.80 m of half-width) with room for the deck to
 # be wider than the paint, which is the common case.
-MAX_LATERAL_M = 12.0
+MAX_LATERAL_M = DECK_MAX_LATERAL_M
 
-# ⚠️ `JUNCTION_M` and `MIN_STATIONS` are imported from `pipeline.carriageway`,
-# not restated. At a junction mouth the deck runs into the ramp it joins, so the
+# ⚠️ `JUNCTION_M`, `MIN_STATIONS` and the three walk constants below are
+# imported from `pipeline.carriageway`, not restated. At a junction mouth the
+# deck runs into the ramp it joins, so the
 # contiguous run is the whole interchange rather than this edge's deck — the
 # same reason `carriageway_margin.py` refuses there, and the two are *required*
 # to agree for the populations to be comparable. Restating the numbers here
@@ -166,7 +178,7 @@ MAX_LATERAL_M = 12.0
 # starts being a void between two decks. Sourced from the gap distribution's own
 # bimodality rather than chosen — see `deck_run` for the numbers and `Q19` for
 # why this estate has holes at all.
-BRIDGE_M = 1.0
+BRIDGE_M = DECK_BRIDGE_M
 
 
 @dataclass
@@ -188,7 +200,10 @@ class Row:
     """One edge's stations, kept and refused."""
 
     edge: int
-    authored_m: float
+    # The graph's published `width_m`, whatever licensed it. ⚠️ Named for what it
+    # is rather than where it came from: off-grade it is a deck reading since
+    # `Q103`, and `authored_m` had become a lie.
+    graph_m: float
     lanes: int
     lanes_source: str
     span_m: list[float] = field(default_factory=list)
@@ -366,7 +381,7 @@ def survey(
         edge_id = int(edge["id"])
         row = Row(
             edge=edge_id,
-            authored_m=float(edge["width_m"]),
+            graph_m=float(edge["width_m"]),
             lanes=int(edge["lanes"]),
             lanes_source=str(edge.get("lanes_source", "")),
         )
@@ -446,7 +461,7 @@ def report(
         "road",
         "lanes",
         "from",
-        "authored",
+        "graph",
         "drawn",
         "deck p50",
         "over p50",
@@ -464,7 +479,7 @@ def report(
             names.get(row.edge, "unnamed")[:26],
             row.lanes,
             row.lanes_source[:9],
-            row.authored_m,
+            row.graph_m,
             percentiles(row.drawn_m)[0],
             deck_p50,
             over_p50,

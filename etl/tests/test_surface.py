@@ -465,6 +465,13 @@ def _edge(edge_id: int, from_node: int, to_node: int, polyline, **overrides) -> 
         "direction": "both",
         "lanes": 2,
         "width_m": 6.4,
+        # Schema 9. Zero is a ribbon centred on its own centreline, which is
+        # every level-0 edge and so every fixture here that does not say
+        # otherwise. ⚠️ Present rather than absent: `_prepare` reads it with
+        # `[]` on purpose, because `read_graph` pins the schema and a `.get`
+        # default could only ever fire on a document that had stopped
+        # publishing it — silently drawing every off-grade ribbon unshifted.
+        "offset_m": 0.0,
         "speed_limit_kph": 50,
         "bus_lane": False,
         "tram_tracks": False,

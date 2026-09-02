@@ -817,9 +817,11 @@ than discovering the rest of it from a bug report.
 - **Deps:** `P2-7`, `P3-3`. `P4-3` follows `P4-1`.
 - **Review:** drive the Wan Chai Interchange from Gloucester Road onto the deck and back down |
   web build | **Can you get up there, and does it feel like a road rather than a ramp-shaped bug?**
-- ⚠️ **Also inherits `Q22`** — 10.2% of off-grade carriageway hangs past its structure, which is
-  cosmetic only while nothing off-grade is drivable. Opening the network puts a player on a ribbon
-  whose outer metre has nothing under it.
+- ⚠️ **Also inherits `Q22`, now at 5.6%** — off-grade carriageway hanging past its structure was
+  10.3% and the deck-sourced width took it to **5.6%** (`Q103`, 2026-09-02). Still cosmetic only
+  while nothing off-grade is drivable; opening the network is what makes the remainder a ribbon a
+  player stands on. ⚠️ **Not closed** — one width per edge cannot fit a deck that varies along its
+  length, and the residual is recorded in `Q103`.
 - **Note:** `P4-1` reverses an acceptance criterion this project measured and proved over 505 probes.
   That is not a mistake being corrected — `Q13`'s refusal was the right call for a slice with no
   ramps. **Record it as a scope change, not a bug fix**, or the history stops making sense.
@@ -831,8 +833,11 @@ than discovering the rest of it from a bug report.
   `carriageway_occupancy.py`, `street_tracker.gd` and the wrong-way monitor all gate on level 0.
   `P4-1` now has two admissible endings — open it properly, or stop the ramps at the touchdown — and
   the second is not a smaller version of the first.
-  ⚠️ **`P4-1` also inherits a measured width defect**: 11 of 35 readable level-1 edges carry a ribbon
-  wider than their deck, all ten worst at an authored `lanes = 3`. 🔴 **The obvious fix is refuted** —
+  ✅ **The second shipped 2026-09-02 and the first is still `P4-1`'s** — the ramps stop at the
+  touchdown (`fence.touchdown_levels`), so removing that key is now the whole of "open it properly".
+  ⚠️ **`P4-1` inherited a measured width defect and it is FIXED** (kept for the shape of the
+  argument, which `P4-1` will meet again): 11 of 35 readable level-1 edges carried a ribbon wider
+  than their deck, all ten worst at an authored `lanes = 3`. 🔴 **The obvious fix was refuted** —
   the carriageway publishers license 5 of 45 off-grade edges and their 2D lines find the street
   *under* the deck, so 2 of those 5 would publish a width wider than the deck.
   🔴 **A width-only fix was refuted outright, by the edge that opened the question** (`Q103`,

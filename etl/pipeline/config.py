@@ -3081,6 +3081,7 @@ def load_config(path: Path | None = None) -> Config:
     _check_deck_sampling_has_a_structure_class(city, path)
     _check_widening_levels_are_mapped(city, path)
     _check_touchdown_levels_are_mapped(city, path)
+    _check_survey_levels_are_mapped(city, path)
     _check_source_exists(city, city.roads.source, f"{path}:roads.source")
     if city.roads.kerbside is not None and city.roads.kerbside.audit is not None:
         _check_source_exists(
@@ -3303,6 +3304,18 @@ def _refuse_unmapped_levels(levels: Iterable[int], city: Config, path: Path, key
         f"{', '.join(str(level) for level in sorted(unknown))}, "
         f"which elevation_levels does not map ({known})"
     )
+
+
+def _check_survey_levels_are_mapped(city: Config, path: Path) -> None:
+    """The third level-joined key, and the trap is the same (`Q103`).
+
+    A survey level the city never maps walks no edge and reports total coverage
+    of nothing — which reads as agreement, the same reason `edges` is refused
+    empty two fields up rather than treated as absent.
+    """
+    if city.carriageway_survey is None:
+        return
+    _refuse_unmapped_levels(city.carriageway_survey.levels, city, path, "carriageway_survey.levels")
 
 
 def _paged_source(source_id: str, body: Any, where: str) -> PagedSource:
@@ -4297,6 +4310,21 @@ def _fence(body: Any, where: str) -> Fence | None:
     return Fence(touchdown_levels=levels, **values)
 
 
+def _elevation_level_int(value: Any, where: str, index: int) -> int:
+    """One entry of a levels list, with the trap that makes the guard necessary.
+
+    🔴 **Not pedantry — it is `_elevation_levels`' YAML 1.1 trap at the two
+    keys that name levels in a list.** PyYAML resolves bare `on`/`yes` to
+    `True`, and `bool` subclasses `int`, so `[on]` passes a plain
+    `isinstance(value, int)` and silently names level **1**, a real level in
+    this city. ⚠️ Not `_measures`' trap: that one calls `float()`, which takes a
+    bool without complaint, so it is no precedent for this.
+    """
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ValueError(f"{where}[{index}] is not an integer, got {value!r}")
+    return value
+
+
 def _touchdown_levels(body: Any, where: str) -> tuple[int, ...]:
     """Which off-grade levels get their touchdowns closed (`Q103`).
 
@@ -4315,15 +4343,7 @@ def _touchdown_levels(body: Any, where: str) -> tuple[int, ...]:
 
     levels: list[int] = []
     for index, value in enumerate(body):
-        # 🔴 **The bool guard is not pedantry, it is the YAML 1.1 trap
-        # `_elevation_levels` documents at the matching key.** PyYAML resolves
-        # bare `on`/`yes` to `True`, and `bool` subclasses `int`, so
-        # `touchdown_levels: [on]` would pass a plain `isinstance(value, int)`
-        # and silently close level **1** — a real level in this city.
-        # ⚠️ Not `_measures`' trap: that one calls `float()`, which takes a bool
-        # without complaint, so it is no precedent for this.
-        if not isinstance(value, int) or isinstance(value, bool):
-            raise ValueError(f"{where}[{index}] is not an integer, got {value!r}")
+        value = _elevation_level_int(value, where, index)
         if value == 0:
             raise ValueError(
                 f"{where} names level 0, which is the open network itself — "
@@ -4383,11 +4403,7 @@ def _survey_levels(body: Any, where: str) -> tuple[int, ...]:
 
     levels: list[int] = []
     for index, value in enumerate(body):
-        # `_elevation_levels`' YAML 1.1 trap: PyYAML resolves bare `on`/`yes` to
-        # `True`, and `bool` subclasses `int`, so `[on]` would pass a plain
-        # `isinstance` check and silently survey level 1.
-        if not isinstance(value, int) or isinstance(value, bool):
-            raise ValueError(f"{where}[{index}] is not an integer, got {value!r}")
+        value = _elevation_level_int(value, where, index)
         if value in levels:
             raise ValueError(f"{where} names level {value} twice")
         levels.append(value)
