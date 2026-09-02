@@ -693,8 +693,15 @@ Common emoji for this project:
   here is the corridor table, not the shares. 🚫 **Negative levels are refused deliberately**:
   `walk_carriageway` skips them and folding them in would add their area to `drawn_share`'s
   all-level denominator, loosening the two gated bars by a choice of divisor. So this tool **cannot**
-  corroborate `e489`, whose 0.00 m is a **headroom** defect a horizontal-corridor instrument can only
-  publish as zero *width* (`Q103`). ⚠️ **Do not import the parse from `pipeline.clearance`** — that
+  corroborate `e489`: that refusal puts level −1 out of its reach, and no height reading changes it
+  (`Q103`).
+  ⚠️ **`--probe-edges` DOES read heights, and its two bounds are one-sided in OPPOSITE directions** —
+  `index_corners` prunes any triangle that misses the bumper band, so `base` is an **upper** bound
+  (a negative reading is *proof* geometry reaches the road, which is how the four level-1 edges were
+  cleared of `e489`'s headroom defect) and `top` is a **lower** one (a short reading is never
+  evidence of clear air above). Reading `top` as headroom is the trap. It reports for named edges
+  only, gates nothing, and the corridor half above is still the horizontal instrument it was.
+  ⚠️ **Do not import the parse from `pipeline.clearance`** — that
   module's bumper bounds are `ground_clearance.py`'s deliberate exception and no second import comes
   in on it.
 - Road-surface, deck-height or ground changes: also `tools/deck_error.py`, `tools/overhang.py`,

@@ -16663,8 +16663,8 @@ counter-example — is the stations after the occupier has walked off the far si
 |---|---|---|---|---|
 | `e208` | 184 of 206 | 🔴 **8 of 206** | **0.00 m** | `+2.80` at the right rim → `−1.40`, then off the ribbon for the last 17 stations |
 | `e306` | 209 of 230 | 🔴 **10 of 230** | **0.00 m** | `+2.90` → `−0.48` by station 195 → back out to `+2.90` by 227 |
-| `e257` | 241 of 266 | ✅ **0 of 266** | 0.24 m | both rims throughout, `±1.67 … ±3.10` |
-| `e450` | 130 of 150 | ✅ **0 of 150** | 0.99 m | both rims throughout, `±1.49 … ±2.98` |
+| `e257` | 240 of 265 | ✅ **0 of 265** | 0.72 m | both rims throughout, `±1.67 … ±3.10` |
+| `e450` | 129 of 149 | ✅ **0 of 149** | 0.99 m | both rims throughout, `±1.49 … ±2.98` |
 
 🔴 **`centreline occupied at N of M` is the column that re-cuts the population, and `Centreline`
 could not have found it.** That one reads the *binding station*, which is one cross-section; whether
@@ -16685,8 +16685,8 @@ and **one** deck-derived centreline offset and both are constant along it.
   negative reading is proof rather than an estimate.
 - ⚠️ **`top` is a LOWER bound and carries no such claim.** Same prune, other direction: geometry
   wholly above the band is absent before this can see it, so a short `top` is weak evidence of a low
-  object and never evidence of clear air above it. It runs `+0.44 … +2.69` on `e208` and reaches
-  `+15.03` on three of the four where something taller shares the plan cell.
+  object and never evidence of clear air above it. It runs `+0.44 … +2.69` on `e208`, and on the
+  other three reaches `+14.99` / `+15.03` / `+15.08` where something taller shares the plan cell.
 - ⚠️ **The occupier is 100% `INFRASTRUCTURE` on all four**, so no part of this is `Q19`'s building
   half arriving off-grade.
 - ⚠️ **`deck_margin.py` is consistent with the divergence on `e208` and cannot settle any single
@@ -16699,6 +16699,13 @@ and **one** deck-derived centreline offset and both are constant along it.
   by station 227 there, where `e208`'s leaves and does not come back. A lateral divergence between
   ribbon and deck explains `e208`; it does not explain an excursion that reverses, and what does is
   not measured here.
+- ⚠️ **Every counter above reads the JUDGED stations, and taking that set once is what holds it.**
+  A trimmed cross-section can still have found an occupier — the walk records what it saw rather
+  than blanking it — so a counter over the whole walk books a station as occupied *and* unjudged at
+  once. Fixed at one counter and not the two beneath it first, which left two adjacent denominators
+  (`of 265` and `of 266`) for one walk with nothing saying why. ⚠️ **It moved a published figure**:
+  `e257`'s closest approach read **0.24 m** at a station too trimmed to judge, and is **0.72 m** over
+  the ones that were.
 - ⚠️ **Nothing is published and no bar moves.** The report is behind a flag, prints for named edges
   only, and states in its own last line that it names a mechanism rather than pricing a fix. `P4-1`
   still owns the fix, and a per-station registration on an off-grade centreline is a change to a

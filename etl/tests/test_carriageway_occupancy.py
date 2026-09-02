@@ -650,21 +650,19 @@ class TestBandExtent:
             extent = index.band_extent(0.5, 0.5, BUMPER_LOW_M, BUMPER_HIGH_M)
             assert (extent is not None) == index.in_band(0.5, 0.5, BUMPER_LOW_M, BUMPER_HIGH_M)
 
-    def test_the_in_band_pair_is_clipped_to_the_band(self) -> None:
-        """⚠️ Which is why it can never be a finding — `Q58`'s `drawn_gauge_m`
-        trap in miniature, a value confined to the bar by the thing producing
-        it. A wall running from the pavement to the roof reports the band's own
-        edges, and reading that as the object's extent is the mistake."""
-        wall = _occupied([0.0, 0.1, 0.31, 1.5, 1.99, 8.0, 30.0])
-        in_low, in_high, _, _ = wall.band_extent(0.5, 0.5, BUMPER_LOW_M, BUMPER_HIGH_M)
-        assert BUMPER_LOW_M <= in_low <= in_high <= BUMPER_HIGH_M
+    def test_it_returns_the_column_and_not_the_part_inside_the_band(self) -> None:
+        """The two bounds that carry the reading, and only those.
 
-    def test_the_column_reaches_outside_the_band_in_both_directions(self) -> None:
-        """The columns that carry the reading. `base` at -1.6 m and `top` at
-        8.0 m are what say this is a wall standing on the deck rather than
-        something hanging over it."""
+        ⚠️ Where the surface sits *within* the band is clipped to the band by
+        construction — `Q58`'s `drawn_gauge_m` trap in miniature — so it could
+        never be a finding, and it is deliberately not returned. A wall running
+        from the pavement to the roof would report the band's own edges, and
+        reading that as the object's extent is the mistake. `base` at -1.6 m and
+        `top` at 8.0 m are what say this is a wall standing on the deck rather
+        than something hanging over it.
+        """
         wall = _occupied([-1.6, 0.5, 1.0, 8.0])
-        _, _, base, top = wall.band_extent(0.5, 0.5, BUMPER_LOW_M, BUMPER_HIGH_M)
+        base, top = wall.band_extent(0.5, 0.5, BUMPER_LOW_M, BUMPER_HIGH_M)
         assert base == pytest.approx(-1.6)
         assert top == pytest.approx(8.0)
 
@@ -806,6 +804,60 @@ class TestStandingRuns:
             [_standing([(1.9, 2.8)]), _standing([(1.9, 2.8)], occupier="BUILDING")]
         )
         assert [station.occupier for station, _ in runs] == ["INFRASTRUCTURE", "BUILDING"]
+
+    def test_a_trimmed_station_is_not_a_clear_one(self) -> None:
+        """🔴 **The rule is `_trimmed`, the corridor half's own guard.**
+
+        The reader lines these rows up against the `profile` printed directly
+        above them, and that list omits exactly the stations `survey` refused to
+        judge. A weaker test here — "no road drawn at all" — calls a station
+        judged that the profile skipped, and the two lists then differ in length
+        with no row saying why: measured before they were shared, `e257` walked
+        266 stations against the profile's 265. A trimmed station reading as
+        clear is also the direction this tool must never flatter.
+        """
+        assert _standing([(1.9, 2.8)], cells=20, judged=1).trimmed
+        assert not _standing([(1.9, 2.8)], cells=20, judged=20).trimmed
+        runs = _standing_runs(
+            [_standing([], cells=20, judged=20), _standing([], cells=20, judged=1)]
+        )
+        assert [station.trimmed for station, _ in runs] == [False, True]
+
+    def test_a_station_exactly_at_the_bar_is_judged(self) -> None:
+        """🔴 **The mutation this exists for: `<` becoming `<=` in `_trimmed`.**
+
+        That rule is now called from both `survey.close_station` and
+        `Standing.trimmed`, and the point of sharing it was that a flipped
+        operator would otherwise drift between the profile and the probe. Only a
+        station *at* the bar can see the flip — `18` of `20` cells at
+        `_CORRIDOR_MEASURED` 0.90 is exactly 18.0 in floating point, so it is a
+        reachable boundary and not an artefact. `_starved_shape`'s
+        `test_the_bar_is_the_bar_the_gate_uses` is the same test one bar over.
+        """
+        assert not _standing([(1.9, 2.8)], cells=20, judged=18).trimmed
+        assert _standing([(1.9, 2.8)], cells=20, judged=17).trimmed
+
+    def test_a_run_keeps_the_trimmed_verdict_its_key_grouped_on(self) -> None:
+        """🔴 **The mutation this exists for: reducing `cells` and `judged`
+        across the run** — `max(cells)` beside `min(judged)`, which reads as the
+        conservative choice and is not one.
+
+        `trimmed` is a *ratio* over those two and it is in the key, so every
+        member of a run already shares its verdict. Reducing them independently
+        invents a third ratio belonging to no station: stations of 19/20 and
+        24/25 — neither trimmed — merge to 19/25, which is, and the run then
+        prints "not judged" over cross-sections that were judged. It also splits
+        the run, because the next station no longer matches the head.
+        """
+        walk = [
+            _standing([(1.9, 2.8)], cells=20, judged=19),
+            _standing([(1.9, 2.8)], cells=25, judged=24),
+            _standing([(1.9, 2.8)], cells=25, judged=24),
+        ]
+        assert [station.trimmed for station in walk] == [False, False, False]
+        runs = _standing_runs(walk)
+        assert [count for _, count in runs] == [3]
+        assert not runs[0][0].trimmed
 
 
 class TestEdgesArgument:
