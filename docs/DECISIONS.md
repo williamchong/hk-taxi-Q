@@ -16341,3 +16341,192 @@ can see.
 **See.** `Q13` for the premise that expired · `Q21` for what the tunnels cost · `Q22` for the
 mechanism this measured · `Q94` / `Q95` for the level-0 half that is done · `Q19` for the estate's
 holes and for candidate 1's shape · `Q15` for the 2D-projection defect this repeats
+
+## `Q104` — The cut face had no back, and the ribbon is drawn wider than the corridor that was cleared
+
+**Status.** 🟡 Half answered — the back face ships, the width disagreement is measured and open ·
+**Owner.** `P3-28` / `Q19`
+
+**Trigger.** The user drove `e99` FLEMING ROAD — `Q19`'s owed drive — and reported three things
+from the seat: *"strange fence which is like 1px thin and invisible in certain angle, also a wild
+kerb"*, and *"the wall seems to extended a little bit too much, but invisible from another angle"*.
+Every counter in `carve.json` was correct at the time, `facing_away` read **0**, and `check.sh` was
+green. `Q62` again: the evidence was a frame, and no number was going to raise it.
+
+### 🔴 The cut face was one quad thick and single-sided, under a `cull_back` tile
+
+`_retaining_wall` winds each quad against `inward` — *"Wound to face the carriageway: the driver
+has to see it"* — and emits **two triangles per station per side and nothing else**. The wall is
+merged into the tile, and every tile shader (`city_facade`, `city_facade_clean`) is `cull_back`. So
+from behind it drew **nothing**: an invisible cut face, which is the hole this stage exists to
+remove wearing the other sign. `Q19`'s estate is not watertight — 5.38% of edge slots open, 14-26%
+in the decimated tiles — so behind is reachable.
+
+Measured out of the shipped tiles rather than argued (`t_01_02_lod0.glb`, near-vertical faces
+projected onto the published centreline): **134 triangles at |offset| 3.128-3.267 m, median
+3.200 m** — the prism rail exactly — running **2 triangles per 2 m station per side** from along
+16 m to 45 m, with the left side reading **35 triangles, 35 facing the carriageway and 0 facing
+away**. Single-sided, confirmed from the asset.
+
+✅ **Fixed by geometry, not by a render mode.** `railings.gdshader` met the same shape and answered
+it with `cull_disabled`; that is unavailable here, because the wall rides in the tile and the tile
+is every building in the region — `cull_disabled` there turns the whole city double-sided.
+`_double_side` emits one reversed triangle per drawn triangle, **coincident and never offset**, so
+exactly one of the pair survives `cull_back` from any viewpoint and there is nothing to z-fight
+with. A thickness instead would push the back face into structure the carve deliberately retained.
+
+🔴 **The mirror happens at emission and `_facing_away` is taken before it, and the order is
+load-bearing.** Half a double-sided wall faces away *by construction*, so the counter graded after
+the mirror reads half the wall whatever the geometry does — `Q72`'s tautology arriving from the
+other side, on the one counter `CarveReport` says must stay 0.
+`test_the_mirror_is_why_the_counter_is_taken_first` pins both numbers, and a no-op mirror fails 3
+of the 4 new tests. ⚠️ **The back face inherits its channels from the removed structure too**, or
+the window-band shader draws storeys of glazing on a concrete wall from one side only.
+
+**Cost and inertness.** Tile triangles **767,177 → 769,409** (+2,232, +0.291%), tile bytes +254,456
+(+0.642%). Every per-edge row in `carve.json` is **byte-identical**, `facing_away` stays **0**, and
+`widest_tier_vertices` 21,142 → 22,486. Of the whole bundle only the **16 carved tile files** and
+`carve.json` moved; `city.json` changed its timestamp and nothing else; `clearance.json`,
+`roadgraph.json`, `roadsurface.json` and every other document are byte-identical. Battery:
+`deck_error` pass · `overhang` pass (`Q22` 10.2%, `Q23` 139 m) · `carriageway_occupancy` FAIL 21,
+pre-existing · `ground_clearance` FAIL 89, pre-existing and `Q24`'s · `narrowing` 14 at 10.24 m ·
+`clearance_reconcile` **exit 0 at 19/21/4 — its ratchet did not need moving**, which is the
+strongest statement of inertness available here and is what a coincident-geometry change predicts.
+1,807 tests, `check.sh` green.
+
+⚠️ **The evidence is a frame and the first camera lied.** A camera 4.6 m outside the rail renders
+**byte-identical** before and after, because retained structure occludes the wall from there —
+shot, and nearly published as "no visible change". Across six cameras behind the cut face **five
+differ**; each pair shot twice and `cmp`-identical. ⚠️ **Two `cmp` runs disagreed with a later
+`md5`**, because the comparison caught a PNG mid-write: compare after both runs have exited, never
+between them.
+
+### 🔴 The wall is not mispositioned — the ribbon is drawn wider than the corridor
+
+The user asked whether the trouble was *"the strange narrowing at the end of each road
+segment/junction"*, and that is the key. It is not a junction rule: it is `on_structure`.
+`floor_on_structure_m: 0.0` means *draw it at its own width* and `structure_taper_m: 15.0` blends
+the widening away before the deck, so on `e99` — `on_structure` `[F,F,F,F,T,T,T]` at along
+`[0, 5.1, 10.2, 18.9, 27.7, 36.4, 45.1]` — the drawn ribbon measures **−5.120 m** at along 3-12,
+**−4.318** at 18-21 and **−3.200** from 27 m on. `Q23` working exactly as written.
+
+Which means the two rules **agree perfectly where the road is on structure**, both using the
+authored width, and part only where the *playability floor* applies:
+
+| where | ribbon half-width | carve prism | the wall lands |
+|---|---|---|---|
+| on structure | authored 6.40/2 = 3.20 | 3.20 | on the kerb — correct |
+| at grade | floor 10.24/2 = 5.12 | 3.20 | **1.92 m inside the carriageway** |
+
+🔴 **And it is region-wide, not an `e99` quirk — `e99` is the mildest case.** Measured across the
+eight carved edges, drawn half-width against prism half-width:
+
+| edge | road | drawn/2 | prism/2 | wall inside the kerb | at grade |
+|---|---|---|---|---|---|
+| `e256` | WAN CHAI INTERCHANGE | 6.24 | 1.921 | **4.319 m** | 50% |
+| `e55` | WAN CHAI INTERCHANGE | 6.24 | 2.785 | 3.455 m | **100%** |
+| `e398` | WAN CHAI INTERCHANGE | 6.24 | 3.332 | 2.909 m | **100%** |
+| `e485` | WAN CHAI INTERCHANGE | 5.12 | 2.402 | 2.718 m | 86% |
+| `e233` | WAN CHAI INTERCHANGE | 5.12 | 2.708 | 2.413 m | **100%** |
+| `e327` | WAN CHAI INTERCHANGE | 5.12 | 2.724 | 2.396 m | 36% |
+| `e99` | FLEMING ROAD | 5.12 | 3.200 | 1.920 m | 57% |
+| `e788` | HUNG HING ROAD FLYOVER | 5.12 | 3.600 | 1.520 m | 44% |
+
+Three of the eight are 100% at grade, so their wall stands inside the carriageway for their entire
+length. The wall's top is **0.7-1.0 m above the road** (tops 4.97 → 7.19 m against a road running
+4.28 → 6.56 m), which is what makes it read as *a wild kerb* rather than as a wall.
+
+⬜ **Assigned, not taken: neck the ribbon to the corridor, never widen the prism.** The carve may
+not cut at the drawn floor — that removes published structure on an invented width's authority,
+`Q54` inverted, and this stage's own header says so. The symmetric move is that the **invented**
+width yields, and the machinery already exists and is named: `structure_taper_m`'s comment says
+that at 0 the kerb *"jogs ~1.9 m sideways in one station, which reads as a modelling error rather
+than as a bridge"*. That is the same 1.9 m, now jogging at a carve wall instead of a deck. So the
+shape of the fix is *treat a carved corridor the way a deck is treated*. ⚠️ **It is a `surface.py`
+change and therefore a widening change**: it moves lamps, railings, signs, kerbside and every
+position registered against the drawn kerb, so it owes the whole widening battery and it is the
+user's call, not this entry's.
+
+### ⬜ The railing is a second instance and is measured, not fixed
+
+*"1px thin and invisible in certain angle"* is not the wall. `railings.glb`'s `barriers` class
+stands at offset **+5.26…+5.72 m** along 5.1-10.2 m of `e99` — **8 vertices**, two quads, one quad
+thick. `cull_disabled` already fixes its *from-behind* case and cannot fix the *edge-on* case: a
+zero-thickness quad viewed along its own plane is one pixel and then nothing, whichever way it is
+culled. `railings.gdshader`'s header rejects the cure — *"two quads per station and twice the
+triangles for a surface 40 mm thick, **which buys nothing a driver can see**"* — and that is a
+claim about what a driver can see which **a driver has now falsified from the seat**. ⚠️ Left open
+deliberately: it roughly doubles a 460,940-byte mesh and interacts with `ALPHA`-as-coverage, so it
+needs its own budget argument rather than being folded into a carve fix.
+
+⚠️ **`project.godot` was stripped once during this work** and restored from git — `Q99`'s failure,
+recurring. Neither `drive.sh` nor `sync_generated.sh` reproduces it afterwards, so it was the first
+Godot launch of the session normalising the file. **Check `git diff -- game/project.godot` after any
+session that launches the engine**; three warning promotions and the whole `[importer_defaults]`
+block go silently, and `check.sh` pins that block for a reason.
+
+### 🔴 A second drive found the same disagreement with a PUBLISHED witness
+
+The user drove CONVENTION AVENUE and reported the yellow box junctions painted over the kerb —
+*"the yellow box overlapping with kerb is supposed also to be road"* — first at the HKCEC junction
+(X 241.40, Z 210.63) and then 240 m east (X 484.45, Z 209.96).
+
+🔴 **They are right, and the witness is the finding.** A yellow box is painted on carriageway by
+definition; it cannot lie on a pavement. So each box is a **published statement that the ground
+beneath it is road** — a fourth extent publisher beside `Q94`'s three (TD's painted edge, iB1000's
+margin, HyD's Pavement Polygon), and it is strongest exactly where those are weakest: `Q95`'s ray
+survey refuses junction stations, and a box only ever occurs at a junction. This is `Q94`'s own move
+at a second layer — the arrow rows went from *grading* the lane count to *assigning* it.
+⚠️ **Coverage is 20 boxes**, so it is thin as a width source and immediately useful as a grader.
+
+**Measured on the shipped bundle.** **6.7%** of box paint area — **38.7 m² of 577.8** — has no drawn
+carriageway under it, overrunning the drawn edge by p50 **1.63 m**, p90 **2.94 m**, max **4.93 m**.
+✅ `paint_clearance.py` already reports the same set from its own implementation — **690 of 10,165
+triangles, 45.3 m², coverage 93.2%** — and deliberately does **not** gate it, because `Q54` refuses
+to scale a surveyed extent against an invented width. Two implementations agreeing is what makes
+this a finding rather than a bug in one. ⚠️ **Its `on kerb` column is a DIFFERENT population and
+must not be pooled with this one**: 185 triangles on a kerb top with carriageway beside them are a
+subset of the 216 that *do* have road under them and sit below its lowest face — a height question,
+where this is a plan-coverage one. Quoting them together is `Q57`'s generalisation.
+
+🔴 **It is TWO defects wanting opposite fixes, and pooling them leaves nothing to do but widen.**
+Eight rays per off-road triangle, drawn road hit within 4 m:
+
+| what surrounds the off-road paint | share | what it is |
+|---|---|---|
+| road on **both opposed sides** | **55.5%** | the paint crosses the **void between two ribbons that never meet** |
+| road on **one side only** | **40.3%** | the ribbon really is narrower than the painted carriageway |
+| nothing within 4 m | 4.2% | — |
+
+⚠️ **The two frames separate almost perfectly along that line**, which is why one read as a kerb in
+the wrong place and the other as a narrowing:
+
+| site | off-road triangles | gap between ribbons | past a kerb |
+|---|---|---|---|
+| HKCEC junction (X 241) | 161 | **160 (99%)** | 1 (1%) |
+| CONVENTION AVENUE east (X 484) | 116 | 8 (7%) | **92 (79%)** |
+
+So the first frame is **not** a narrowing at all: `surface.py` draws one ribbon per edge, two opposed
+carriageways leave a median with nothing in it, and what reads as a kerb through the box is
+kerb-lip / ground / kerb-lip. `Q103` cites this very void as the argument *for* the widening floor —
+*"at grade a gap between opposed carriageways shows the void where unshipped terrain would be"* — and
+the box paint is what makes it visible from the seat.
+
+⚠️ **Not a junction-mouth flare, and a mouth rule would not reach it.** Off-road paint sits p50
+**8.61 m** from the nearest graph node against **5.47 m** for on-road paint — further out, not closer
+in. ⚠️ **And not the authored-width fallback failing**: the worst site's nearest edge is `e591`
+CONVENTION AVENUE at **10.55 m `one_way_uncrossed`, 3 lanes from `arrows`** — a *measured* width that
+the painted box still overruns.
+
+⬜ **Assigned as `P3-30` / `P3-31` / `P3-32`**, grader first, because both fixes are graded on shares
+only the grader publishes and this entry has already had to correct an asserted framing twice.
+⚠️ **The two arms are graded separately or it is `Q57`'s generalisation** — one population's property
+quoted for another.
+
+**See.** `Q19` for the carve and its non-watertight estate · `Q23` for `floor_on_structure_m` and
+the 1.9 m jog · `Q37` for the disjoint-axes rule the classification owes · `Q54` for why the prism
+may not be widened · `Q57` for the generalisation the two arms must avoid · `Q58` for the
+record-above-the-guard trap · `Q62` for why the evidence is a frame · `Q72` for the tautology the
+mirror order avoids · `Q94` for the three publishers this adds a fourth to and for the
+grade-then-assign move · `Q95` for the survey that refuses junction stations · `Q99` for the
+stripped `project.godot` · `Q103` for the drive that found it and for the median void

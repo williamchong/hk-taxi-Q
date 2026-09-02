@@ -313,6 +313,56 @@ def _retaining_wall(
     )
 
 
+def _double_side(wall: MeshData) -> MeshData:
+    """The wall with a back face — one reversed triangle per drawn triangle.
+
+    🔴 **The tile shader is `cull_back` and the wall is one quad thick, so from
+    behind it draws nothing.** That is an invisible cut face: the hole this stage
+    exists to remove, wearing the other sign, and `Q19`'s estate is not watertight
+    (5.38% of edge slots open) so there are holes to see it through. Measured on
+    `e99` FLEMING ROAD from the driving seat — the wall is there from the
+    carriageway and gone from four metres the other side of it.
+
+    ⚠️ **A render mode cannot fix this here.** `railings.gdshader` met the same
+    shape and answered it with `cull_disabled`; the wall is merged into the tile,
+    and the tile is every building in the region, so `cull_disabled` there would
+    turn the whole city double-sided. The back face has to be geometry.
+
+    ⚠️ **Coincident, never offset.** The pair shares its vertex positions exactly,
+    so from any viewpoint exactly one of the two survives `cull_back` and there is
+    nothing to z-fight with. Giving the wall a thickness instead would push its
+    back face into the structure the carve deliberately retained.
+
+    🔴 **The free version was refused, and the reason is lighting.** Appending
+    `triangles[:, ::-1]` alone doubles the faces at **zero** added vertices and
+    needs nothing else — but the back face would then share the front's outward
+    `NORMAL`, and `city_facade.gdshader` consumes it for real (`MODEL_NORMAL_MATRIX
+    * NORMAL`, the faceted-shading dot, and `city_facade_clean`'s fresnel), so the
+    back of the wall would be lit as though it faced the road. Splitting the
+    vertices to carry a negated normal is what buys correct shading; 6 vertices
+    per quad is forced, not sloppy. `test_the_back_face_carries_its_own_negated_normal`
+    is the ratchet.
+
+    ⚠️ **Reversed by index and merged, rather than by rebuilding the buffers.**
+    `merge` carries every attribute through by concatenation, so this stays
+    correct for a mesh whose colours or UVs vary per vertex. Reconstructing them
+    instead means tiling vertex 0's value, and `TEXCOORD_0.y` is the
+    `SurfaceClass` channel `_structure` cuts on — so that spelling would
+    misclassify the wall silently, which is the failure `_retaining_wall`'s own
+    channel comment exists to prevent. ⚠️ `merge` drops `material` deliberately
+    (many in, one out); it is restored here rather than left to `_carve_tile`'s
+    later rename, so this function returns a whole mesh on its own terms.
+
+    🔴 **Applied at emission, never inside `_retaining_wall`.** `_facing_away`
+    grades what that function wound, and half of a double-sided wall faces away
+    *by construction* — graded after the mirror the counter reads half the wall
+    whatever the geometry does, which is `Q72`'s tautology arriving from the
+    other side. `test_the_mirror_is_why_the_counter_is_taken_first` is the ratchet.
+    """
+    back = replace(wall, triangles=wall.triangles[:, ::-1], normals=-wall.normals)
+    return replace(merge([wall, back], name=wall.name), material=wall.material)
+
+
 @dataclass
 class EdgePlan:
     """One edge's stations, prisms and the row they will be reported on."""
@@ -432,7 +482,10 @@ def _carve_tile(out_dir: Path, tile: dict, plans: list[EdgePlan], report: CarveR
         if not removed_any:
             continue
 
-        walls = [wall for wall, _ in built]
+        # 🔴 `built` keeps the inward-only wall; the mirror happens here so that
+        # `_facing_away` below still grades a mesh whose every triangle should
+        # face the road. See `_double_side`.
+        walls = [_double_side(wall) for wall, _ in built]
         parts = [part for part in (rest, structure, *walls) if part is not None]
         if not parts:
             continue

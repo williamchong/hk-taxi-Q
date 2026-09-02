@@ -27,6 +27,7 @@ from pipeline.buildings import (
 from pipeline.carve import (
     EdgeCarve,
     EdgePlan,
+    _double_side,
     _facing_away,
     _prisms,
     _retaining_wall,
@@ -202,6 +203,66 @@ class TestRetainingWall:
         reversed_wall = replace(wall, triangles=wall.triangles[:, ::-1])
 
         assert _facing_away(reversed_wall, plan.points) == wall.triangle_count
+
+    def test_the_back_face_is_coincident_with_the_front(self) -> None:
+        """⚠️ Coincident and not offset: exactly one of the pair survives
+        `cull_back` from any viewpoint, so there is nothing to z-fight. A
+        thickness instead would push the back face into retained structure."""
+        cut, plan = self._cut(4.0)
+        wall, _ = _retaining_wall(cut, plan, cut)
+
+        both = _double_side(wall)
+        faces = both.positions[both.triangles]
+        front, back = faces[: wall.triangle_count], faces[wall.triangle_count :]
+
+        assert both.triangle_count == 2 * wall.triangle_count
+        assert np.array_equal(front, back[:, ::-1, :])
+
+    def test_the_back_face_carries_its_own_negated_normal(self) -> None:
+        """🔴 This is what the free version costs. Appending `triangles[:, ::-1]`
+        alone doubles the faces at zero added vertices, but the back face then
+        shares the front's outward `NORMAL` — and `city_facade.gdshader` shades
+        from it, so the back of the wall would be lit as though it faced the road.
+        Nothing else here can see that: the geometry, the counters and every other
+        assertion are identical either way."""
+        cut, plan = self._cut(4.0)
+        wall, _ = _retaining_wall(cut, plan, cut)
+
+        both = _double_side(wall)
+        front, back = both.normals[: len(wall.normals)], both.normals[len(wall.normals) :]
+
+        assert np.array_equal(front, -back)
+        assert not np.allclose(front, 0.0)
+
+    def test_the_mirror_is_why_the_counter_is_taken_first(self) -> None:
+        """🔴 Half a double-sided wall faces away *by construction*, so
+        `_facing_away` graded after the mirror reads half the wall whatever the
+        geometry does — `Q72`'s tautology from the other side. This pins the
+        number the build would get if the two were ever reordered."""
+        cut, plan = self._cut(4.0)
+        wall, _ = _retaining_wall(cut, plan, cut)
+
+        assert _facing_away(wall, plan.points) == 0
+        assert _facing_away(_double_side(wall), plan.points) == wall.triangle_count
+
+    def test_the_mirror_carries_per_vertex_attributes_rather_than_tiling_one(self) -> None:
+        """🔴 The spelling that rebuilds the buffers has to tile vertex 0's value,
+        and `TEXCOORD_0.y` is the `SurfaceClass` channel `_structure` cuts on — so
+        that spelling misclassifies a wall silently. Nothing about the wall's own
+        geometry can catch it, because `_retaining_wall` happens to emit constant
+        attributes; this hands it varying ones and checks both halves survive."""
+        cut, plan = self._cut(4.0)
+        wall, _ = _retaining_wall(_uv(cut, "INFRASTRUCTURE"), plan, cut)
+        assert wall is not None and wall.uvs is not None
+        varied = wall.uvs.copy()
+        varied[:, 0] = np.arange(len(varied), dtype=varied.dtype)
+
+        both = replace(wall, uvs=varied)
+        both = _double_side(both)
+
+        assert both.uvs is not None
+        assert np.array_equal(both.uvs[: len(varied)], varied)
+        assert np.array_equal(both.uvs[len(varied) :], varied)
 
 
 class TestStructureSelection:

@@ -663,6 +663,68 @@ before it.
   refuted (above), so the lateral one is what there is — but it is now the same rule every other
   edge answers to rather than a carve-out for this one.
 
+### `Q104` follow-on — the drawn ribbon against what the publishers painted
+
+Opened 2026-09-02 from two drives (`DECISIONS.md` `Q104`). `Q104` fixed the carve's cut face and
+left the reason it stands in the road **measured and unfixed**: at grade the ribbon is drawn at the
+10.24/12.48 m playability floor while the carve prism is the surveyed width, so the wall lands
+**1.52-4.32 m inside the carriageway** on all eight carved edges. A second drive then found the
+same disagreement with an *external witness*: TD's yellow box junctions are painted past the drawn
+kerb.
+
+🔴 **The witness is the point, and it is new.** A yellow box is painted on carriageway by
+definition — it cannot lie on a pavement — so each box is a **published statement that the ground
+beneath it is road**. That makes it a fourth extent publisher beside `Q94`'s three (TD's painted
+edge, iB1000's margin, HyD's pavement polygon), and it is strongest exactly where they are weakest:
+`Q95`'s ray survey refuses junction stations, and a box only ever occurs at a junction. Same shape
+as `Q94` promoting the arrow rows from grading the lane count to assigning it. ⚠️ **Coverage is
+20 boxes**, so it is thin as a *width* source and useful immediately as a *grader*.
+
+**Measured before any of this is built** (shipped bundle, 2026-09-02): **6.7%** of box paint area
+(38.7 m² of 577.8) has no drawn carriageway under it, overrunning the drawn edge by p50 1.63 m,
+p90 2.94 m, **max 4.93 m**. `paint_clearance.py` sees the same set from its own implementation
+(690 triangles, 45.3 m², coverage 93.2%) and deliberately does not gate it.
+
+🔴 **It is TWO defects and they need opposite fixes — do not pool them.** Eight rays per off-road
+triangle, drawn road hit within 4 m:
+
+| what surrounds the off-road paint | share | what it is |
+|---|---|---|
+| road on **both opposed sides** | **55.5%** | the paint crosses the **void between two ribbons that never meet** |
+| road on **one side only** | **40.3%** | the ribbon really is narrower than the painted carriageway |
+| nothing within 4 m | 4.2% | — |
+
+⚠️ **The two user frames separate almost perfectly along that line**, which is why one read as a
+kerb in the wrong place and the other as a narrowing:
+
+| site | off-road triangles | gap between ribbons | past a kerb |
+|---|---|---|---|
+| HKCEC junction (X 241) | 161 | **160 (99%)** | 1 (1%) |
+| CONVENTION AVENUE east (X 484) | 116 | 8 (7%) | **92 (79%)** |
+
+⚠️ **`P3-30` is not a junction-mouth flare and a mouth rule would not reach it**: off-road paint
+sits p50 **8.61 m** from the nearest graph node against **5.47 m** for on-road paint — further out,
+not closer in. ⚠️ **And it is not the authored-width fallback failing**: the worst site's nearest
+edge is `e591` CONVENTION AVENUE at **10.55 m `one_way_uncrossed`, 3 lanes from `arrows`** — a
+*measured* width that the painted box still overruns.
+
+| ID | Deliverable | Accept |
+|---|---|---|
+| `P3-30` | **A box-junction extent grader** — `tools/box_extent.py`, per box: paint area, area with no drawn carriageway under it, distance past the drawn edge, and the **three-way classification** above. Reads the shipped bundle and shares no code with `boxjunctions.py`, on `carriageway_margin.py`'s precedent. **Grades, never gates** — exits 0 whatever it finds | Reproduces the figures above on today's bundle (6.7%, 38.7 m², 55.5/40.3/4.2); the classification is **mutation-checked** — a ribbon widened in config must move the "past a kerb" count and must **not** move the "gap between ribbons" count, or the two axes are not disjoint (`Q37`'s rule); per-box rows published over boxes with **zero** off-road area as well as those with some (`Q58`); the two sites above appear as named rows |
+| `P3-31` | **Close the median void** — opposed ribbons meet, or the gap between them is filled, so a box painted across a junction has road under all of it. `surface.py` | The 55.5% share falls and the 40.3% share does **not** — measured with `P3-30`, which is why that runs first; ⚠️ **a widening change, so the whole widening battery is owed**: `narrowing.py`, `carriageway_margin.py` (all four tables), `carriageway_occupancy`, `deck_error`, `overhang`, `ground_clearance`, `clearance_reconcile`, plus `railings`, `lamps`, `signs` and `kerbside` counters, because every position registered against the drawn kerb moves; A/B at the HKCEC junction camera, shot twice and `cmp`'d |
+| `P3-32` | **Neck the ribbon to the corridor, or widen it to the paint** — `Q104`'s open item and the 40.3% share, one question with two arms: where a carve wall stands the *invented* width yields (the carve may never cut at the floor, `Q54` inverted); where a publisher painted past the ribbon the ribbon yields. `structure_taper_m` is the existing machinery and its own comment describes the identical 1.9 m jog | Carve-wall inset falls from 1.52-4.32 m toward 0 on the eight carved edges; `P3-30`'s "past a kerb" share falls; ⚠️ **the two arms are graded separately or this is `Q57`'s generalisation** — one population's property quoted for another; same widening battery as `P3-31`; the `q19s` cameras re-shot |
+
+- **Deps:** `P3-30` before `P3-31` and `P3-32` — both are graded on shares only `P3-30` publishes,
+  and asserting them before the instrument exists is what `Q104` had to correct twice.
+- ⚠️ **`P3-31` and `P3-32` are independent of each other** and may run in either order; what they
+  must not do is share an acceptance number, because they move different halves of the same total.
+- 🔴 **Neither may be answered by widening the carve prism.** Cutting at the drawn floor removes
+  published structure on an invented width's authority — `Q54` inverted, and `carve.py`'s own header
+  refuses it. The invented width is the one that yields.
+- ⬜ **Still open and not scheduled here:** the `barriers` railing's edge-on collapse (`Q104`) —
+  one quad thick, `cull_disabled` fixes from-behind and cannot fix edge-on, and the cure roughly
+  doubles a 460,940-byte mesh. It needs its own budget argument, not a rider on a width task.
+
 ### Build `B1` — "One fare" — **runs second**
 
 | ID | Deliverable | Accept |
