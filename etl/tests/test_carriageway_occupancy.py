@@ -49,12 +49,17 @@ from carriageway_occupancy import (
     INDEX_CELL_M,
     Lattice,
     Occupied,
+    Standing,
     Survey,
     _barycentric,
     _centreline_verdict,
     _clear_run,
+    _closest_approach,
+    _covers_centreline,
+    _edges_argument,
     _levels_argument,
     _profile_runs,
+    _standing_runs,
     _starved_shape,
     split_by_level,
     survey,
@@ -589,3 +594,244 @@ class TestSplitByLevel:
         """A region with nothing below the bar, which is the state the gate is
         trying to reach."""
         assert split_by_level([], self.LEVELS) == ([], [])
+
+
+def _standing(
+    bands: list[tuple[float, float]],
+    *,
+    cells: int = 10,
+    judged: int = 10,
+    occupier: str | None = "INFRASTRUCTURE",
+    base_m: float = -0.2,
+    top_m: float = 0.7,
+) -> Standing:
+    """One station's occupier reading, written out."""
+    return Standing(
+        cells=cells,
+        judged=judged,
+        occupier=occupier if bands else None,
+        bands=tuple(bands),
+        base_m=base_m if bands else float("nan"),
+        top_m=top_m if bands else float("nan"),
+    )
+
+
+class TestBandExtent:
+    """The heights behind `in_band`, and the two ways they could be over-read.
+
+    `Q103` stopped at "the mechanism is not measured and is not guessed", having
+    only plan columns to read; this is what added the vertical one. Its failure
+    modes are silent in the way that matters — a probe that disagreed with the
+    corridor half about *whether* a cell is occupied would diagnose a different
+    city, and a bound read in the wrong direction would refute or confirm
+    headroom on evidence that cannot carry it.
+    """
+
+    def test_band_extent_agrees_with_in_band(self) -> None:
+        """🔴 **The one property that must hold, and the reason it is a test
+        rather than a comment.** They are deliberately two queries — `in_band`
+        is on the 1.1 M-call path and returns the moment it can — so nothing
+        structural keeps them together. A probe naming an occupier the corridor
+        half never saw is a diagnosis of a different bundle.
+        """
+        columns = [
+            [],
+            [0.0],
+            [0.1, 0.2],
+            [BUMPER_LOW_M],
+            [BUMPER_HIGH_M],
+            [1.0],
+            [6.0, 30.0],
+            [0.0, 0.1, 1.2, 8.0],
+            [0.29, 2.01],
+        ]
+        for heights in columns:
+            index = _occupied(heights) if heights else Occupied({}, 0, 0, 0)
+            extent = index.band_extent(0.5, 0.5, BUMPER_LOW_M, BUMPER_HIGH_M)
+            assert (extent is not None) == index.in_band(0.5, 0.5, BUMPER_LOW_M, BUMPER_HIGH_M)
+
+    def test_the_in_band_pair_is_clipped_to_the_band(self) -> None:
+        """⚠️ Which is why it can never be a finding — `Q58`'s `drawn_gauge_m`
+        trap in miniature, a value confined to the bar by the thing producing
+        it. A wall running from the pavement to the roof reports the band's own
+        edges, and reading that as the object's extent is the mistake."""
+        wall = _occupied([0.0, 0.1, 0.31, 1.5, 1.99, 8.0, 30.0])
+        in_low, in_high, _, _ = wall.band_extent(0.5, 0.5, BUMPER_LOW_M, BUMPER_HIGH_M)
+        assert BUMPER_LOW_M <= in_low <= in_high <= BUMPER_HIGH_M
+
+    def test_the_column_reaches_outside_the_band_in_both_directions(self) -> None:
+        """The columns that carry the reading. `base` at -1.6 m and `top` at
+        8.0 m are what say this is a wall standing on the deck rather than
+        something hanging over it."""
+        wall = _occupied([-1.6, 0.5, 1.0, 8.0])
+        _, _, base, top = wall.band_extent(0.5, 0.5, BUMPER_LOW_M, BUMPER_HIGH_M)
+        assert base == pytest.approx(-1.6)
+        assert top == pytest.approx(8.0)
+
+    def test_geometry_wholly_outside_the_band_reports_nothing_at_all(self) -> None:
+        """🔴 **The mutation this exists for: returning the column anyway.**
+
+        Written that way — `heights is None` as the only refusal — a cell holding
+        nothing but a soffit 6 m up would hand back a base and a top, and the
+        report would print a height range for a station with nothing standing in
+        it. Read as headroom that is exactly backwards: the pruning in
+        `index_corners` drops any triangle that misses the band, so what is
+        returned here is never a survey of what is overhead. `None` is the only
+        honest answer, and it is what keeps `top_m` a lower bound.
+        """
+        assert _occupied([6.0, 30.0]).band_extent(0.5, 0.5, BUMPER_LOW_M, BUMPER_HIGH_M) is None
+        assert _occupied([0.0, 0.1]).band_extent(0.5, 0.5, BUMPER_LOW_M, BUMPER_HIGH_M) is None
+
+    def test_an_empty_cell_is_clear_rather_than_an_error(self) -> None:
+        assert _occupied([1.0]).band_extent(99.5, 99.5, BUMPER_LOW_M, BUMPER_HIGH_M) is None
+
+    def test_it_uses_the_cell_the_heights_were_binned_at(self) -> None:
+        """`TestPlanBin`'s property at the second query. A mismatch looks for
+        walls where they were never filed, and every such lookup reads clear."""
+        assert _occupied([1.0], 1.0).band_extent(0.5, 0.5, BUMPER_LOW_M, BUMPER_HIGH_M)
+        assert _occupied([1.0], 0.25).band_extent(0.5, 0.5, BUMPER_LOW_M, BUMPER_HIGH_M) is None
+
+
+class TestCentrelineCoverage:
+    """Whether an occupier reaches the middle — over the walk, not at one station.
+
+    🔴 **This is what separates `Q103`'s 2-2 split into a measurement.** A
+    parapet standing at the rims for a whole edge and a parapet the ribbon
+    *crosses* need opposite fixes, and the binding station alone cannot tell
+    them apart: `Centreline` reads one cross-section, and the crossing happens
+    somewhere else along the edge.
+    """
+
+    def test_the_hull_of_two_rims_does_not_cover_the_centreline(self) -> None:
+        """🔴 **The mutation this exists for, and it is the obvious way to write
+        it.** Summarised as `min(offsets) .. max(offsets)`, a cross-section
+        blocked at both rims and wide open down the middle spans the centreline
+        and reads as standing on it — so `e257` and `e450` would report their
+        every occupied station as a crossing, the 0 of 266 that makes them
+        different from `e208` would vanish, and the population would stop being
+        split at all.
+        """
+        assert not _covers_centreline(_standing([(-2.8, -1.9), (1.9, 2.8)]))
+
+    def test_a_stretch_containing_the_centreline_covers_it(self) -> None:
+        assert _covers_centreline(_standing([(-0.47, 0.47)]))
+
+    def test_a_stretch_touching_the_centreline_covers_it(self) -> None:
+        """Inclusive at both ends, on `TestInBand`'s rule: a surface exactly at
+        the centreline is a surface the centreline meets."""
+        assert _covers_centreline(_standing([(-0.93, 0.0)]))
+        assert _covers_centreline(_standing([(0.0, 0.93)]))
+
+    def test_a_clear_station_covers_nothing(self) -> None:
+        assert not _covers_centreline(_standing([]))
+
+    def test_the_approach_is_the_nearest_edge_of_the_nearest_stretch(self) -> None:
+        walk = [_standing([(1.9, 2.8)]), _standing([(0.93, 1.87)]), _standing([(2.33, 2.8)])]
+        assert _closest_approach(walk) == pytest.approx(0.93)
+
+    def test_a_covered_centreline_approaches_to_zero(self) -> None:
+        assert _closest_approach([_standing([(-0.47, 0.47)])]) == 0.0
+
+    def test_an_edge_with_nothing_standing_on_it_has_no_distance(self) -> None:
+        """⚠️ `inf`, never 0.0 — `Centreline.nearest`'s rule. The reading that
+        matters most is the one at 0.00 m, so an absence must not manufacture
+        it. The report prints a sentence there rather than a number."""
+        assert _closest_approach([_standing([]), _standing([])]) == float("inf")
+        assert _closest_approach([]) == float("inf")
+
+
+class TestStandingRuns:
+    """The run-length encoding, and the station accounting under it."""
+
+    def test_stations_reading_alike_group(self) -> None:
+        runs = _standing_runs([_standing([(1.9, 2.8)])] * 3)
+        assert [count for _, count in runs] == [3]
+
+    def test_a_moved_occupier_starts_a_new_run(self) -> None:
+        """Which is the whole finding on `e208`: the stretch marches from one
+        rim across the centreline, and a grouping that folded that away would
+        print a single run and say nothing."""
+        runs = _standing_runs([_standing([(1.9, 2.8)]), _standing([(0.93, 1.87)])])
+        assert [count for _, count in runs] == [1, 1]
+
+    def test_the_height_columns_do_not_split_runs(self) -> None:
+        """⚠️ They drift by centimetres between neighbouring stations — the deck
+        is not flat — so folding them into the key prints one line per station
+        and buries the reading. Reduced over the run instead, worst either
+        way."""
+        runs = _standing_runs(
+            [
+                _standing([(1.9, 2.8)], base_m=-0.2, top_m=0.7),
+                _standing([(1.9, 2.8)], base_m=-1.6, top_m=0.9),
+            ]
+        )
+        assert len(runs) == 1
+        assert runs[0][0].base_m == pytest.approx(-1.6)
+        assert runs[0][0].top_m == pytest.approx(0.9)
+
+    def test_a_clear_station_never_groups_with_an_occupied_one(self) -> None:
+        """Which is what makes the plain `min`/`max` reduction safe: an
+        unoccupied station carries NaN, `min(nan, x)` is whichever argument came
+        first, and the two never meet because an empty `bands` cannot share a
+        key with a non-empty one.
+
+        ⚠️ **A guard on the reduction was written and removed.** `np.fmin`/`fmax`
+        there could not be made to fail a test, because the mixed case is
+        unreachable — and an unreachable guard reads as a hazard someone has
+        handled. This is the property that actually holds it.
+        """
+        runs = _standing_runs([_standing([(1.9, 2.8)]), _standing([]), _standing([(1.9, 2.8)])])
+        assert [station.occupier for station, _ in runs] == [
+            "INFRASTRUCTURE",
+            None,
+            "INFRASTRUCTURE",
+        ]
+        assert np.isnan(runs[1][0].base_m)
+        assert runs[0][0].base_m == pytest.approx(-0.2)
+
+    def test_two_classes_at_the_same_offsets_are_two_runs(self) -> None:
+        """🔴 **The mutation this exists for: dropping `occupier` from the key.**
+
+        The offsets alone do not identify what is standing there. A station where
+        a building takes over from a parapet at the same distance off the
+        centreline would fold into the run above it and be reported as that run's
+        class — a silent misattribution, on the one column that says which of
+        `Q19`'s fix families an edge belongs to.
+
+        ⚠️ It is the *bands* that keep a clear station out of an occupied run, so
+        a test built from those two cannot see this: they differ whatever the key
+        does.
+        """
+        runs = _standing_runs(
+            [_standing([(1.9, 2.8)]), _standing([(1.9, 2.8)], occupier="BUILDING")]
+        )
+        assert [station.occupier for station, _ in runs] == ["INFRASTRUCTURE", "BUILDING"]
+
+
+class TestEdgesArgument:
+    """`--probe-edges`, whose failure would be a report that says nothing."""
+
+    def test_both_spellings_are_accepted(self) -> None:
+        """Half the listings here print `e208` and the graph's own field is
+        `208`; a reader retyping one from the other should not have to know."""
+        assert _edges_argument("e208,306") == (208, 306)
+
+    def test_the_order_the_reader_chose_is_kept(self) -> None:
+        """⚠️ Unlike `--levels`, which is a set. This is a listing, and sorting
+        it would rearrange a comparison someone lined up deliberately."""
+        assert _edges_argument("e450,e208,e306") == (450, 208, 306)
+
+    def test_duplicates_collapse(self) -> None:
+        assert _edges_argument("e208,e208") == (208,)
+
+    def test_an_empty_argument_is_refused(self) -> None:
+        """`_levels_argument`'s note applies: `"".split(",")` is `[""]`, so this
+        is caught by the empty-piece guard inside the loop, and a post-loop
+        check for an empty set would be unreachable. Pinned by message so the
+        test cannot pass on the wrong branch."""
+        with pytest.raises(argparse.ArgumentTypeError, match="comma-separated edge ids"):
+            _edges_argument("")
+
+    def test_something_that_is_not_an_edge_id_is_refused(self) -> None:
+        with pytest.raises(argparse.ArgumentTypeError, match="write e208 or 208"):
+            _edges_argument("FLEMING ROAD")

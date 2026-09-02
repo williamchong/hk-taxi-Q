@@ -16641,6 +16641,101 @@ which is consistent with several things this report cannot tell apart. `P4-1` ow
   last line. A figure off a deck read against `--accept-corridor-lanes` is one population's number
   on another's, which is the call `paint_clearance.py` makes for the tramway.
 
+### ✅ The mechanism is measured — the occupier MOVES, and that re-cuts the population, 2026-09-03
+
+The entry above stopped at *"the mechanism is not measured and is not guessed here"*. It is measured
+now, and it changes what the entry above concluded.
+
+`Occupied.band_extent` answers `in_band`'s question with **heights** instead of a boolean, and
+`--probe-edges e208,e306,…` walks a named edge station by station through `occupier_report` —
+a **third** report and its own function, on the same argument the second one was split out under
+(`Q57`): the other two answer for populations this tool decided, and this answers for edges the
+reader names on the command line. Folding it into either would hand that one a population nobody
+measured.
+
+🔴 **The parapet hypothesis is REINSTATED, and the refutation above was reading the right evidence
+the wrong way.** It argued that a parapet predicts a *uniform* narrowing, and that stretches at full
+published width therefore refute one. Both halves are true and the conclusion does not follow: the
+occupier **leaves the ribbon**. `e208`'s `5.6 x17` tail — quoted above as the strongest single
+counter-example — is the stations after the occupier has walked off the far side.
+
+| edge | occupier at | centreline occupied | closest approach | across-position along the edge |
+|---|---|---|---|---|
+| `e208` | 184 of 206 | 🔴 **8 of 206** | **0.00 m** | `+2.80` at the right rim → `−1.40`, then off the ribbon for the last 17 stations |
+| `e306` | 209 of 230 | 🔴 **10 of 230** | **0.00 m** | `+2.90` → `−0.48` by station 195 → back out to `+2.90` by 227 |
+| `e257` | 241 of 266 | ✅ **0 of 266** | 0.24 m | both rims throughout, `±1.67 … ±3.10` |
+| `e450` | 130 of 150 | ✅ **0 of 150** | 0.99 m | both rims throughout, `±1.49 … ±2.98` |
+
+🔴 **`centreline occupied at N of M` is the column that re-cuts the population, and `Centreline`
+could not have found it.** That one reads the *binding station*, which is one cross-section; whether
+an occupier ever reaches the middle is a property of the **whole edge**, and the two answers are
+different. The 2–2 split above is real and its membership is right; what it is a split *about* is
+not the centreline at one station but whether the obstruction **moves**. An occupier that stands at
+the rims for a whole edge is reachable by a width; one that migrates across the ribbon is reachable
+by neither a width nor a constant offset, because `Q103` gives each edge **one** deck-derived width
+and **one** deck-derived centreline offset and both are constant along it.
+
+- ✅ **Headroom is refuted on all four, at every occupied station, and this is the reading `e489`
+  needed.** `base` is the lowest surface over the drawn road and it is **negative on every occupied
+  run of every edge** — worst case `−0.15 m` on `e208`, `−0.17` `e306`, `−0.20` `e257`, `−1.19`
+  `e450`. Solid geometry reaches below the road surface wherever anything is standing, so none of
+  these is `e489`'s defect, where the obstruction is overhead and a horizontal instrument can only
+  publish it as 0.00 m of *width*. 🔴 **The bound leans the right way for exactly this claim**:
+  `index_corners` prunes any triangle that misses the band, so `base` is an **upper** bound and a
+  negative reading is proof rather than an estimate.
+- ⚠️ **`top` is a LOWER bound and carries no such claim.** Same prune, other direction: geometry
+  wholly above the band is absent before this can see it, so a short `top` is weak evidence of a low
+  object and never evidence of clear air above it. It runs `+0.44 … +2.69` on `e208` and reaches
+  `+15.03` on three of the four where something taller shares the plan cell.
+- ⚠️ **The occupier is 100% `INFRASTRUCTURE` on all four**, so no part of this is `Q19`'s building
+  half arriving off-grade.
+- ⚠️ **`deck_margin.py` is consistent with the divergence on `e208` and cannot settle any single
+  station.** It reads that edge at `over max 4.90 m` with **1** station's centreline off its deck —
+  much the worst of the four, the others 0.70 / 0.70 / 0.48 and 0 — but it keeps only **27 of 206**
+  stations there (18–46 of 149–265 across the four), so its silence on the rest is coverage and not
+  evidence. It is also the same class in the same tiles read through the same index, so it was never
+  going to be a second source in `kerbside_source_audit.py`'s sense.
+- ⚠️ **`e306` is not `e208` and the two must not be handed one fix.** The occupier returns to the rim
+  by station 227 there, where `e208`'s leaves and does not come back. A lateral divergence between
+  ribbon and deck explains `e208`; it does not explain an excursion that reverses, and what does is
+  not measured here.
+- ⚠️ **Nothing is published and no bar moves.** The report is behind a flag, prints for named edges
+  only, and states in its own last line that it names a mechanism rather than pricing a fix. `P4-1`
+  still owns the fix, and a per-station registration on an off-grade centreline is a change to a
+  published bundle.
+
+**How it was held.**
+
+- ✅ **Both report paths proved inert.** `--corridor-report` is byte-identical at md5
+  `a59ef0af55d535be2c7f085d442f0c33`, the same digest the entry above recorded, and
+  `--corridor-report --levels 0,1` is byte-identical to the pre-change run in full.
+  `clearance_reconcile.py` **unmoved at 19 / 21 / 4, exit 0**. No resolution constant moved, so
+  neither `--sweep` nor `tools/narrowing.py` is owed.
+- 🔴 **`_covers_centreline` asks the occupied stretches, never their hull, and that is the whole
+  split.** Summarised as `min(offset) .. max(offset)`, a cross-section blocked at both rims and wide
+  open down the middle spans the centreline and reads as standing on it — so `e257` and `e450` would
+  report **every** occupied station as a crossing, the 0 of 266 would vanish, and the population
+  would stop being split at all. `Standing.bands` is a tuple of contiguous runs for that reason and
+  the mutation fails a named test.
+- 🔴 **Two of the four mutation checks initially PASSED, which means two tests were covering
+  nothing.** One guarded `min(nan, x)` in the run reduction — unreachable, because an unoccupied
+  station has empty `bands` and cannot share a key with an occupied one — and was removed on the
+  precedent this entry set an hour earlier for an unreachable `--levels` guard; an unreachable guard
+  reads as a hazard someone has handled. The other asserted a property the `bands` already forced.
+  What replaced them is the reachable defect: **two classes at the same offsets are two runs**, and
+  dropping `occupier` from the key mislabels the second as the first. ⚠️ **Written, not run, both
+  would have shipped green** — `Q72`'s rule is that a counter is tested by mutating it, and a test
+  is no different.
+- ✅ `Standing.trimmed` uses `_CORRIDOR_MEASURED`, **the corridor half's own guard**, because the
+  reader lines these stations up against the `profile` printed directly above them. Measured before
+  they were shared: `e257` walked 266 stations against that profile's 265.
+- ✅ 80 tests in `test_carriageway_occupancy.py`, 1,886 in the suite, `ruff` clean from the root.
+
+**See.** `Q19` for "no width rule reaches a centreline", which this is the off-grade case of ·
+`Q57` for why the four do not share an acceptance number · `Q62` for why a facing or a position
+cannot be graded against anything published · `Q58` for the trap the in-band pair would be if it
+were read as an extent
+
 ## `Q104` — The cut face had no back, and the ribbon is drawn wider than the corridor that was cleared
 
 **Status.** 🟡 Half answered — the back face ships, the width disagreement is measured and open ·

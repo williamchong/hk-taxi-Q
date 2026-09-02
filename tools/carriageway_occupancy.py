@@ -230,6 +230,54 @@ class Occupied:
         index = int(np.searchsorted(heights, low, side="left"))
         return index < len(heights) and bool(heights[index] <= high)
 
+    def band_extent(
+        self, x: float, z: float, low: float, high: float
+    ) -> tuple[float, float, float, float] | None:
+        """`in_band`'s question answered with *heights* — what is standing here,
+        and how far up and down its column reaches. `None` where nothing is.
+
+        ⚠️ **Not a replacement for `in_band` and deliberately a second query.**
+        That one is asked ~1.1 M times a run and returns the moment it can; this
+        one is asked for a handful of named edges. What they must never do is
+        disagree about *whether* a cell is occupied — a probe reporting an
+        occupier the corridor half never saw would be diagnosing a different
+        city — so `test_band_extent_agrees_with_in_band` pins the two together
+        rather than a comment claiming they share a rule.
+
+        🔴 **Both column bounds are ONE-SIDED, and which side is the whole
+        reading.** `index_corners` keeps a triangle only where its own height
+        range overlaps the band, so geometry lying entirely above or below is
+        absent:
+
+        - `column_high` is a **lower** bound. A short reading is weak evidence of
+          a low object and never proof of headroom above it.
+        - `column_low` is an **upper** bound, which is the safe direction for the
+          question that matters here: a value at or under `low` is proof that
+          solid geometry reaches down to the road, and so refutes headroom
+          outright. That is the reading `Q103` could not get for `e489`.
+
+        ⚠️ **The in-band pair is clipped to `[low, high]` by construction** and
+        is therefore the one number here that cannot be a finding — `Q58`'s
+        `drawn_gauge_m` trap in miniature. It is returned so a caller can show
+        where in the bumper band the surface actually sits, never as evidence
+        about the object's extent.
+        """
+        heights = self.cells.get((int(np.floor(x / self.cell_m)), int(np.floor(z / self.cell_m))))
+        if heights is None:
+            return None
+        # The same `searchsorted` and the same comparison as `in_band` above,
+        # so the two cannot answer the occupancy question differently.
+        first = int(np.searchsorted(heights, low, side="left"))
+        if first >= len(heights) or not heights[first] <= high:
+            return None
+        last = int(np.searchsorted(heights, high, side="right")) - 1
+        return (
+            float(heights[first]),
+            float(heights[last]),
+            float(heights[0]),
+            float(heights[-1]),
+        )
+
 
 def _barycentric(steps: int) -> np.ndarray:
     """Weights for a triangle sampled `steps` times along its longest edge."""
@@ -452,6 +500,51 @@ class Centreline:
     clear_offset_m: float
     to_occupier_m: float
     occupier_offset_m: float
+
+
+@dataclass(frozen=True)
+class Standing:
+    """What occupied one cross-section of a probed edge, across and in height.
+
+    One of these per station, in walk order, so the reader can watch an occupier
+    *move* along an edge. `Centreline` above answers the same question at the
+    one station that condemned the edge; this answers it everywhere, which is
+    what tells a fixed obstruction from one the ribbon crosses obliquely.
+
+    ⚠️ **`bands` is the occupied runs, never their hull.** A `min .. max` over
+    the occupied cells reads `-2.57 .. +2.57` for a cross-section blocked at both
+    rims and wide open down the middle — the exact opposite of what it says.
+    Each entry is one contiguous occupied stretch, so the gaps between them are
+    the clear ones `corridor_profile` measures.
+    """
+
+    # Cells walked at this station, and how many of them had road drawn.
+    # **A short station is not "clear"** — it is a junction trim with nothing to
+    # judge, and the two must stay distinguishable for `Survey.no_road`'s reason
+    # one class up.
+    cells: int
+    judged: int
+    occupier: str | None
+    bands: tuple[tuple[float, float], ...]
+    # Column bottom and top over the drawn road. One-sided bounds in opposite
+    # directions — see `Occupied.band_extent`, which says which way each leans
+    # and why only the bottom can carry the headroom reading.
+    base_m: float
+    top_m: float
+
+    @property
+    def trimmed(self) -> bool:
+        """Too little road drawn here for `survey` to have judged a corridor.
+
+        🔴 **`_CORRIDOR_MEASURED`, the corridor half's own guard, and not a
+        weaker test of this report's own.** The reader lines these stations up
+        against the `profile` line printed directly above them, so a station
+        this calls judged and that one skipped is a row with no counterpart —
+        and the discrepancy reads as a missing obstruction rather than as two
+        rules. Measured before this was shared: `e257` walked 266 stations
+        against the profile's 265.
+        """
+        return self.judged < _CORRIDOR_MEASURED * self.cells
 
 
 @dataclass
@@ -958,6 +1051,173 @@ def survey(
     return found
 
 
+def occupier_walk(
+    lattice: Lattice,
+    classes: dict[str, Occupied],
+    edge_id: int,
+) -> list[Standing]:
+    """Re-ask one edge's cells what stands in them, keeping the heights.
+
+    ⚠️ **A second reading of the same cells, and not a second walk.** It indexes
+    the `Lattice` the survey consumed and queries the same pruned `classes`, so
+    it cannot reach a cell the corridor half did not, and the occupancy test is
+    `band_extent(...) is not None` — pinned equal to `in_band` by test. What is
+    new is the *heights*, which `Survey` has no field for because the corridor
+    question is answered in plan.
+
+    ⚠️ Asked only for edges the reader names on the command line, which is why
+    looping the whole lattice per edge is affordable — `np.flatnonzero` cuts it
+    to that edge's few thousand cells before any Python runs.
+    """
+    rows: list[Standing] = []
+    cells = judged = 0
+    names: set[str] = set()
+    occupied: list[tuple[float, float]] = []
+    base = float("inf")
+    top = float("-inf")
+    current = -1
+
+    def close() -> None:
+        if current < 0:
+            return
+        # Contiguous occupied runs, in walk order across the section. The list
+        # is already ordered because `cross_section` emits left rim inward, so
+        # neighbouring cells are adjacent by construction.
+        rows.append(
+            Standing(
+                cells=cells,
+                judged=judged,
+                occupier=" + ".join(sorted(names)) if names else None,
+                bands=tuple(occupied),
+                base_m=base if names else float("nan"),
+                top_m=top if names else float("nan"),
+            )
+        )
+
+    for i in np.flatnonzero(lattice.edge == edge_id):
+        station = int(lattice.station[i])
+        if station != current:
+            close()
+            cells = judged = 0
+            names = set()
+            occupied = []
+            base, top = float("inf"), float("-inf")
+            current = station
+
+        cells += 1
+        surface_y = lattice.surface_y[i]
+        if not np.isfinite(surface_y):
+            continue
+        judged += 1
+        x, z = float(lattice.x[i]), float(lattice.z[i])
+        low, high = float(surface_y) + BUMPER_LOW_M, float(surface_y) + BUMPER_HIGH_M
+        offset, span = float(lattice.offset[i]), float(lattice.span[i])
+
+        found = next(
+            (
+                (name, extent)
+                for name, index in classes.items()
+                if (extent := index.band_extent(x, z, low, high)) is not None
+            ),
+            None,
+        )
+        if found is None:
+            continue
+        name, (_, _, column_low, column_high) = found
+        names.add(name)
+        base = min(base, column_low - float(surface_y))
+        top = max(top, column_high - float(surface_y))
+
+        # Extended rather than appended where this cell continues the last run.
+        # The rim-inward walk means "continues" is decidable from the offsets
+        # alone — no cell can arrive out of order.
+        left, right = offset - 0.5 * span, offset + 0.5 * span
+        if occupied and abs(occupied[-1][1] - left) < 1e-9:
+            occupied[-1] = (occupied[-1][0], right)
+        else:
+            occupied.append((left, right))
+    close()
+
+    return rows
+
+
+def _standing_runs(walk: list[Standing]) -> list[tuple[Standing, int]]:
+    """Consecutive stations that read alike, run-length encoded in walk order.
+
+    ⚠️ **Grouped on the occupier and its across-position, never on the height
+    columns.** Those drift by centimetres between neighbouring stations — the
+    deck is not flat — so folding them into the key prints one line per station
+    and buries the reading. They are reduced over each run instead, which is
+    `_profile_runs`' round-then-group rule meeting a tuple.
+    """
+
+    def key(station: Standing) -> tuple[Any, ...]:
+        return (
+            station.trimmed,
+            station.occupier,
+            tuple((round(low, 2), round(high, 2)) for low, high in station.bands),
+        )
+
+    runs: list[tuple[Standing, int]] = []
+    for station in walk:
+        if runs and key(runs[-1][0]) == key(station):
+            last, count = runs[-1]
+            runs[-1] = (
+                Standing(
+                    # Reduced the way a trimmed run has to be: `trimmed` is a
+                    # ratio, so carrying the worse of each side keeps a run that
+                    # groups as trimmed reading as trimmed.
+                    cells=max(last.cells, station.cells),
+                    judged=min(last.judged, station.judged),
+                    occupier=last.occupier,
+                    bands=last.bands,
+                    # ⚠️ Plain `min`/`max`, and that is safe **because an
+                    # unoccupied station has empty `bands`**: it can never share
+                    # a key with an occupied one, so these never see a real
+                    # number beside its NaN. `np.fmin`/`fmax` were written here
+                    # to guard that mix and the mutation could not be made to
+                    # fail a test — the state is unreachable twice over, and an
+                    # unreachable guard reads as a hazard someone has handled.
+                    # `occupier` is in the key for a different reason: two
+                    # classes standing at the same offsets are two runs.
+                    base_m=min(last.base_m, station.base_m),
+                    top_m=max(last.top_m, station.top_m),
+                ),
+                count + 1,
+            )
+        else:
+            runs.append((station, 1))
+    return runs
+
+
+def _covers_centreline(station: Standing) -> bool:
+    """Does an occupied stretch of this cross-section contain the centreline?
+
+    ⚠️ **Asked of the stretches, never of their hull.** `Standing.bands` says why
+    a `min .. max` is the wrong shape, and this is the reading that would be
+    wrongest under it: a cross-section blocked at both rims spans the centreline
+    without anything standing on it.
+    """
+    return any(low <= 0.0 <= high for low, high in station.bands)
+
+
+def _closest_approach(walk: list[Standing]) -> float:
+    """How near the centreline the occupier gets anywhere along the edge.
+
+    `inf` where nothing stands on the edge at all, on `Centreline.nearest`'s
+    rule: 0.0 would read as "it is right here", which is the one answer that
+    must not be manufactured.
+    """
+    return min(
+        (
+            0.0 if low <= 0.0 <= high else min(abs(low), abs(high))
+            for station in walk
+            for low, high in station.bands
+        ),
+        default=float("inf"),
+    )
+
+
 def _levels_label(levels: tuple[int, ...]) -> str:
     """The levels as one token, so a log line and a refusal spell them alike.
 
@@ -966,6 +1226,15 @@ def _levels_label(levels: tuple[int, ...]) -> str:
     run was printing `+0,+1` in one line and `0,1` in another.
     """
     return ",".join(f"{level:+d}" for level in levels)
+
+
+def _edges_label(edges: tuple[int, ...]) -> str:
+    """Edge ids as one token, in the `e208` spelling every listing here prints.
+
+    `_levels_label`'s reason: a refusal and a log line spelling the same set two
+    ways costs the reader the match.
+    """
+    return ",".join(f"e{edge_id}" for edge_id in edges)
 
 
 def _levels_argument(text: str) -> tuple[int, ...]:
@@ -1021,6 +1290,35 @@ def _levels_argument(text: str) -> tuple[int, ...]:
     return tuple(sorted(levels))
 
 
+def _edges_argument(text: str) -> tuple[int, ...]:
+    """`--probe-edges e208,e306` as a tuple, in the spelling the listings print.
+
+    A bare integer is accepted too, because half the tables in this repo print
+    `e208` and the graph's own field is `208`, and a reader retyping one from
+    the other should not have to know which.
+
+    ⚠️ Order is **kept**, unlike `--levels`. The reader chose it, the report is
+    a listing rather than a set, and sorting it would silently rearrange a
+    comparison someone lined up deliberately.
+    """
+    edges: list[int] = []
+    for piece in text.split(","):
+        piece = piece.strip()
+        if not piece:
+            # `"".split(",")` is `[""]`, so this is also what catches an empty
+            # flag — `_levels_argument` says more about why that matters.
+            raise argparse.ArgumentTypeError("--probe-edges takes comma-separated edge ids")
+        try:
+            edge_id = int(piece.removeprefix("e"))
+        except ValueError:
+            raise argparse.ArgumentTypeError(
+                f"--probe-edges: '{piece}' is not an edge id — write e208 or 208"
+            ) from None
+        if edge_id not in edges:
+            edges.append(edge_id)
+    return tuple(edges)
+
+
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser(
@@ -1072,6 +1370,18 @@ def main(argv: list[str] | None = None) -> int:
         help=(
             "comma-separated elevation levels to judge a corridor on "
             "(default: 0; others are reported, never gated)"
+        ),
+    )
+    parser.add_argument(
+        "--probe-edges",
+        type=_edges_argument,
+        default=(),
+        # Named edges, never a filter over a population this tool decided: see
+        # `occupier_report`, which says in red why a third report gets its own
+        # function rather than a section inside either of the two above.
+        help=(
+            "comma-separated edge ids to walk station by station, reporting what stands "
+            "in each cross-section and how high (default: none)"
         ),
     )
     parser.add_argument(
@@ -1346,6 +1656,22 @@ def main(argv: list[str] | None = None) -> int:
             index_cell_m=args.index_cell_m,
             structure_class=structure_class,
         )
+
+    # Independent of `--corridor-report`: that flag prints `Q19`'s two reports
+    # over populations this tool chose, and this one answers for edges the
+    # reader named. Gating it behind that would make a diagnostic depend on a
+    # listing it has nothing to do with.
+    occupier_report(
+        found,
+        lattice,
+        classes,
+        graph,
+        lengths,
+        names,
+        args.probe_edges,
+        levels=args.levels,
+        index_cell_m=args.index_cell_m,
+    )
 
     log.info("")
     log.info(
@@ -1872,6 +2198,165 @@ def off_grade_report(
     # has not necessarily read that one.
     _resolution_note(index_cell_m, spacing_m)
     log.info("    no bar is applied above — P4-1 owns what an off-grade corridor has to clear")
+
+
+def occupier_report(
+    found: Survey,
+    lattice: Lattice,
+    classes: dict[str, Occupied],
+    graph: dict[str, Any],
+    lengths: dict[int, float],
+    names: dict[int, str],
+    edges: tuple[int, ...],
+    *,
+    levels: tuple[int, ...],
+    index_cell_m: float,
+) -> None:
+    """What is standing on a named edge, station by station, across and in height.
+
+    🔴 **A third report and its own function, on the two above's argument one
+    level down.** Those answer a question about a *population* the tool decided —
+    `corridor_report` the gated one, `off_grade_report` the graded one — and each
+    prints one verdict per edge. This answers a question about the **stations of
+    edges the reader named on the command line**, and prints many rows per edge.
+    Folding it into either would give that one a population nobody measured
+    (`Q57`), so the edges arrive through a flag and never through a filter.
+
+    🔴 **Why it exists.** `Q103` diagnosed four blocked level-1 edges down to
+    their binding station and stopped: *"the mechanism is not measured and is not
+    guessed here"*. Every column it had was in **plan** — a corridor width, a
+    centreline offset, a class — and the four candidate mechanisms it could not
+    separate (a pier, a merge artefact, an adjacent deck, headroom) differ in
+    **height** and in how the blockage **moves along the edge**. Both are read
+    here, and `Q19`'s `e489` is the standing reminder that a horizontal
+    instrument reports a headroom defect as 0.00 m of width and looks right.
+
+    ⚠️ **Reporting only, and there is no bar** — the same last line both reports
+    above carry. Nothing here is gated, nothing here is published, and an edge
+    named on the command line is not a population anything could be graded
+    against.
+    """
+    if not edges:
+        return
+    published = {int(edge["id"]): edge for edge in graph["edges"]}
+
+    # 🔴 **Refused, never skipped.** An edge id with nothing to print would
+    # leave a report that is silent about it, and silence here reads as "nothing
+    # is standing there" — the empty set reading as agreement, which is the trap
+    # `--levels` is refused for at the flag above.
+    missing = [edge_id for edge_id in edges if edge_id not in published]
+    if missing:
+        raise SystemExit(
+            f"--probe-edges names {_edges_label(tuple(missing))}, which this region's "
+            "road graph does not carry"
+        )
+    unjudged = [
+        edge_id for edge_id in edges if int(published[edge_id]["elevation_level"]) not in levels
+    ]
+    if unjudged:
+        raise SystemExit(
+            f"--probe-edges names {_edges_label(tuple(unjudged))}, whose level --levels "
+            f"{_levels_label(levels)} does not judge — the walk would print stations with no "
+            "corridor to explain them"
+        )
+    # ⚠️ A *third* reason an edge can have nothing to print, and not the same as
+    # either above: its level was asked for and every station was still too
+    # trimmed to judge, so `survey` recorded no profile and `_edge_verdict`
+    # would raise on the lookup rather than say so. Short edges inside a
+    # junction reach this.
+    unprofiled = [edge_id for edge_id in edges if edge_id not in found.corridor_profile]
+    if unprofiled:
+        raise SystemExit(
+            f"--probe-edges names {_edges_label(tuple(unprofiled))}, which has no judged "
+            "station — every cross-section was too trimmed for a corridor, so there is "
+            "nothing for this walk to be read against"
+        )
+
+    log.info("")
+    log.info(
+        "  occupier walk — %d edge(s) named on the command line, reporting only, nothing gated",
+        len(edges),
+    )
+    log.info("    across  the occupied stretches of each cross-section, signed off the centreline;")
+    log.info("            the gaps between them are the clear runs the profile above measures")
+    log.info(
+        "    base    lowest surface over the drawn road — an UPPER bound, so <= %.2f m proves "
+        "geometry reaches the road and refutes headroom",
+        BUMPER_LOW_M,
+    )
+    log.info(
+        "    top     highest surface over it — a LOWER bound: anything wholly above %.2f m was "
+        "pruned before this could see it",
+        BUMPER_HIGH_M,
+    )
+
+    for edge_id in edges:
+        edge = published[edge_id]
+        log.info("")
+        _edge_verdict(
+            found,
+            edge_id,
+            names.get(edge_id, "unnamed"),
+            lengths.get(edge_id, float("nan")),
+            note=f"  ·  {edge['width_source']} width {float(edge['width_m']):.2f} m",
+        )
+        walk = occupier_walk(lattice, classes, edge_id)
+        occupied = sum(1 for station in walk if station.occupier is not None)
+        log.info(
+            "      occupier at %d of %d walked stations, %d too trimmed to judge",
+            occupied,
+            len(walk),
+            sum(1 for station in walk if station.trimmed),
+        )
+        # 🔴 **`Centreline` answers this at ONE station and that is what made
+        # `Q103`'s population split 2-2.** Over the whole walk it is a different
+        # statement: an occupier that only ever stands at the rims is a parapet,
+        # and one that reaches the middle somewhere along the edge is a parapet
+        # the ribbon **crosses**. Those want opposite fixes and one station
+        # cannot tell them apart.
+        #
+        # ⚠️ Reachable at 0 on real data — `e257` and `e450` read it — which is
+        # the test a counter here has to pass (`Q72`), and it is why the pair is
+        # printed rather than asserted.
+        crossed = sum(1 for station in walk if _covers_centreline(station))
+        approach = _closest_approach(walk)
+        log.info(
+            "      centreline occupied at %d of %d stations; the occupier comes within %s of it",
+            crossed,
+            len(walk),
+            "no distance — nothing stands on this edge"
+            if not np.isfinite(approach)
+            else f"{approach:.2f} m",
+        )
+        log.info("      %-11s %-30s %7s %7s  %s", "stations", "across", "base", "top", "standing")
+        first = 0
+        for station, count in _standing_runs(walk):
+            span = f"{first}" if count == 1 else f"{first}-{first + count - 1}"
+            first += count
+            if station.trimmed:
+                log.info(
+                    "      %-11s %s", span, "not judged — too little road drawn at these stations"
+                )
+                continue
+            if station.occupier is None:
+                log.info("      %-11s %s", span, "clear across the whole drawn width")
+                continue
+            log.info(
+                "      %-11s %-30s %+7.2f %+7.2f  %s",
+                span,
+                " · ".join(f"{low:+.2f}..{high:+.2f}" for low, high in station.bands),
+                station.base_m,
+                station.top_m,
+                station.occupier,
+            )
+
+    log.info("")
+    log.info(
+        "    across is quantised to the walk's own cell and every stretch is smeared by up to "
+        "the %.2f m plan bin, either side",
+        index_cell_m,
+    )
+    log.info("    no bar is applied above — this names a mechanism, it does not price a fix")
 
 
 def road_names(graph: dict[str, Any]) -> dict[int, str]:
