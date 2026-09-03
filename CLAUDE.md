@@ -665,7 +665,12 @@ Common emoji for this project:
   under them — which is the difference between a ribbon that is too *wide* and one that is
   *registered wrong*, and those need opposite fixes. ⚠️ **It is NOT an independent check of
   `overhang.py`** — same faces, same class, same tiles — so a divergence is a bug in one of them,
-  never a second source. They read **10.4%** against **10.3%**. 🔴 **`--bridge-m` is load-bearing and
+  never a second source. They read **7.6%** against **4.3%**, and the gap is the run-versus-cell
+  model (this one is an upper bound; see `--bridge-m` below).
+  🔴 **The pair recorded here was 10.4 / 10.3 and was STALE, which is how `Q106` went unseen for a
+  release** — on the shipped bundle it was 10.7 against 5.6, nearly 2×, because both tools
+  reconstructed the ribbon about the centreline while `surface._shape` draws it at
+  `±half + offset_m`. If the two numbers here ever drift apart again, that is the finding. 🔴 **`--bridge-m` is load-bearing and
   its default is sourced, not chosen**: `Q19`'s estate is not watertight, so a contiguous deck run
   terminates at the first hole and 921 of 1,948 stations read two or more runs; the gap distribution
   is bimodal (p50 0.40 m, then p90 3.37 m) and 1.0 sits between the clusters. Without it the tool is
@@ -678,9 +683,9 @@ Common emoji for this project:
   from a deck centreline finds the street *underneath* and 2 of the 5 publish a width **wider** than
   the deck. Numbers in `Q103`.
   🔴 **The THIRD table is a COUNTERFACTUAL and not a reading (`Q105`)** — it cuts each station's
-  ribbon back to its deck's own two rims and prices only what that costs: **2 of 1,326 priced**
-  stations under `is_passable`'s lane bar, **none** under `fits_car`'s, **8** with a *negative* half
-  and priced apart.
+  ribbon back to its deck's own two rims and prices only what that costs: **2 of 1,327 priced**
+  stations under `is_passable`'s lane bar, **1** under `fits_car`'s, **7** with a *negative* half
+  and priced apart (`Q106`-corrected — the first reading was taken in the wrong frame).
   ⚠️ **There is deliberately no "stations on deck after the clamp" counter** — it is 1,334 of 1,334
   **by construction**, because a half cut to its own rim cannot overhang it, and printing it would
   put `Q58`'s trap in the one number a reader takes as the case for building this. The **benefit** is
@@ -697,8 +702,10 @@ Common emoji for this project:
   from one contiguous run of structure, which at `e208` is the interchange's — so a build clamps the
   **drawn ribbon** and leaves the published width alone, or it meets `Q103`'s own refutation of the
   per-vertex offset. ✅ **Cap-stable like the overhang and unlike the span, for its own reason**:
-  `min(half, rim)` is bounded by the ribbon, not the cap, so the lane-bar count holds at 2 while the
-  deck span's max runs 19.00 → 36.20 m. Quote `--max-lateral-m` with a span and with neither of the
+  `min(half, rim)` is bounded by the ribbon, not the cap, so the lane-bar count held at 2 across
+  `--max-lateral-m` 11-20 while the deck span's max ran 19.00 → 36.20 m. ⚠️ **That sweep predates
+  `Q106` and has not been re-run in the corrected frame**; the argument is structural and the
+  numbers are the old frame's. Quote `--max-lateral-m` with a span and with neither of the
   other two. Numbers in `Q105`.
 - 🔴 **`clearance.walk(levels=...)`, `tools/centreline_error.py --levels` and
   `tools/carriageway_occupancy.py --levels` all default to `(0,)` and the clearance default must
@@ -727,6 +734,16 @@ Common emoji for this project:
   ⚠️ **Do not import the parse from `pipeline.clearance`** — that
   module's bumper bounds are `ground_clearance.py`'s deliberate exception and no second import comes
   in on it.
+- 🔴 **The drawn ribbon is `[-half + offset_m, +half + offset_m]`, NEVER `±half` about the
+  centreline (`Q106`).** `surface._shape` offsets both rails by the graph's `offset_m`, and `Q103`
+  set it on 36 of 45 off-grade edges — up to **4.95 m** — so anything reconstructing the road from a
+  centreline must pass it to `overhang.cross_section`. ⚠️ **`roadsurface.json` publishes no offset**,
+  so the manifest alone is not enough to rebuild the ribbon; read `roadgraph.json`. Four tools got
+  this wrong at once and **failed in opposite directions**: `overhang.py` drops a sample with no road
+  under it, so it read the *intersection* and was grading 92% of the off-grade road; `deck_margin.py`
+  keeps every sample, so it counted ribbon that is not there. ⚠️ **Index the key, never `.get(…, 0.0)`**
+  — a default restores the defect silently. ✅ **It is 0.0 on all 737 level-0 edges**, which is what
+  makes the parameter safe to default and every gated figure inert. Numbers in `Q106`.
 - Road-surface, deck-height or ground changes: also `tools/deck_error.py`, `tools/overhang.py`,
   `tools/ground_clearance.py` and `tools/carriageway_occupancy.py`, by hand after a build. They grade
   the *shipped* bundle and share no **method** with the pipeline — `check.sh` does not require a built

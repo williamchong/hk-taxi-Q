@@ -162,25 +162,47 @@ def left_of(along: np.ndarray) -> np.ndarray:
 
 
 def cross_section(
-    point: np.ndarray, normal: np.ndarray, half_width_m: float, across_m: float
+    point: np.ndarray,
+    normal: np.ndarray,
+    half_width_m: float,
+    across_m: float,
+    offset_m: float = 0.0,
 ) -> list[tuple[float, float, float]]:
     """Plan positions across one station's full drawn width, and each one's share.
 
     Returned with the *area* each stands for rather than as bare points, so a
     ribbon whose width varies along its length weights its wide half correctly.
     A count of cells would report a narrow ramp and a wide arterial as equals.
+
+    🔴 **`offset_m` is where the ribbon is actually DRAWN, and omitting it read
+    the road in the wrong place on 36 edges (`Q106`).** `surface._shape` builds
+    the two rails at `+half + shift` and `-half + shift` with `shift` the
+    graph's `offset_m` — `Q103` moved every off-grade ribbon onto the middle of
+    its own deck, up to **4.95 m** on `e337` — and this walked `[-half, +half]`
+    about the published centreline regardless. It is in `left_of`'s frame,
+    which is `surface.mitres`' frame, and it is **0.0 on every level-0 edge**,
+    so a caller that does not pass it is unchanged everywhere the offset does
+    not exist.
+
+    ⚠️ **The two consumers failed in OPPOSITE directions and neither said so.**
+    `overhang.py` drops a sample with no drawn road under it, so it silently
+    measured the *intersection* of this window and the real ribbon and read
+    low; `tools/deck_margin.py` keeps every sample, so it counted ribbon that
+    is not there and read high — 5.6% against 10.7% on the same bundle, where
+    that file's own docstring says a divergence is a bug in one of them.
     """
     if half_width_m <= 0.0:
         return []
     steps = max(1, int(np.ceil(2.0 * half_width_m / across_m)))
     span = 2.0 * half_width_m / steps
+    near = offset_m - half_width_m
     return [
         (
             float(point[0] + normal[0] * offset),
             float(point[1] + normal[1] * offset),
             span,
         )
-        for offset in (-half_width_m + span * (step + 0.5) for step in range(steps))
+        for offset in (near + span * (step + 0.5) for step in range(steps))
     ]
 
 
@@ -264,6 +286,13 @@ def survey(
         if level < 0:
             continue
         edge_id = int(edge["id"])
+        # 🔴 **Where the ribbon is DRAWN, not where the centreline runs
+        # (`Q106`).** `surface._shape` offsets both rails by this, so a walk
+        # about the centreline reads the road in the wrong place on the 36
+        # off-grade edges `Q103` moved onto their decks. Indexed rather than
+        # `.get`: schema 9 publishes it on every edge and a missing key is a
+        # stale bundle, which should say so rather than silently reading 0.
+        offset_m = float(edge["offset_m"])
         polyline = np.asarray(edge["polyline"], dtype=np.float64)
         if len(polyline) < 2:
             continue
@@ -283,7 +312,7 @@ def survey(
             # mesh, at a junction trim or against a stale width table, inflate
             # the `overhanging_m` headline.
             rim: list[bool] = []
-            for x, z, span in cross_section(station[[0, 2]], normal, half, across_m):
+            for x, z, span in cross_section(station[[0, 2]], normal, half, across_m, offset_m):
                 # The drawn road first, because the question is whether *what is
                 # drawn* is held up. Falling back to the graph's own y would
                 # measure a surface that may not have been built.

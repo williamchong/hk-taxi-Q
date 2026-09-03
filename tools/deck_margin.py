@@ -477,6 +477,9 @@ def survey(
         rows[edge_id] = row
 
         walked = trace.get(edge_id) if trace is not None else None
+        # Indexed rather than `.get`: schema 9 publishes `offset_m` on every
+        # edge, so a missing key is a stale bundle and should say so.
+        shift = float(edge["offset_m"])
 
         def record(
             vertex: int,
@@ -547,20 +550,29 @@ def survey(
                 row.refused.clipped += 1
                 record(vertex, station, "clipped", drawn_m=2.0 * half)
                 continue
-            off_deck = not low <= 0.0 <= high
+            # 🔴 **The rims are taken about the ribbon's own CENTRE, not the
+            # published centreline (`Q106`).** `surface._shape` draws both rails
+            # at `±half + shift`, so a walk ignoring `shift` measures a ribbon
+            # that is not drawn — up to 4.95 m out on `e337` — and read the
+            # region 10.7% hanging where the drawn road is 4.3%. `shift` is 0.0
+            # on every level-0 edge, so this reduces to what it was.
+            left_rim = high - shift
+            right_rim = shift - low
+            off_deck = left_rim < 0.0 or right_rim < 0.0
             if off_deck:
                 row.centre_off_deck += 1
-            row.span_m.append(high - low)
-            # Negated: `low` and `high` locate the deck in the centreline's
-            # frame, so their midpoint is the deck's middle relative to the
-            # road. What is published is the other way round — the centreline
-            # relative to the deck — which is the sense `centreline_error.py`
-            # already gives a field of this name, and the sense in which the
-            # value is the correction to apply.
-            row.off_centre_m.append(-0.5 * (low + high))
+            row.span_m.append(left_rim + right_rim)
+            # Signed, and the sense is the RIBBON's centre relative to the
+            # deck's — positive is left of travel — which is the sense
+            # `centreline_error.py` already gives a field of this name, and the
+            # sense in which the value is the correction to apply. It is the
+            # residual `Q103`'s per-edge `offset_m` did not remove; with `shift`
+            # zero it is the published centreline against the deck, which is
+            # what this column meant before `Q106`.
+            row.off_centre_m.append(0.5 * (right_rim - left_rim))
             row.drawn_m.append(2.0 * half)
             row.bridged_m.append(bridged)
-            row.overhang_m.append(max(0.0, low + half) + max(0.0, half - high))
+            row.overhang_m.append(max(0.0, half - left_rim) + max(0.0, half - right_rim))
             record(
                 vertex,
                 station,

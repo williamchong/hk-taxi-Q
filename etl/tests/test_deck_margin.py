@@ -86,7 +86,13 @@ def _deck(x_from: float, x_to: float, z_half: float = 3.0) -> Faces:
     return _deck_band(x_from, x_to, -z_half, z_half)
 
 
-def _graph(polyline: list[list[float]], nodes: list[list[float]]) -> dict:
+def _graph(polyline: list[list[float]], nodes: list[list[float]], offset_m: float = 0.0) -> dict:
+    """One off-grade edge. `offset_m` is where `surface.py` draws its ribbon.
+
+    ⚠️ **Present on every edge, because `survey` indexes it rather than
+    defaulting it** — a bundle without the key is a stale one and should say so
+    (`Q106`). Zero is the ordinary case and every level-0 edge.
+    """
     return {
         "nodes": [{"pos": pos} for pos in nodes],
         "edges": [
@@ -97,6 +103,7 @@ def _graph(polyline: list[list[float]], nodes: list[list[float]]) -> dict:
                 "width_m": 4.0,
                 "lanes": 2,
                 "lanes_source": "authored",
+                "offset_m": offset_m,
             }
         ],
     }
@@ -319,6 +326,7 @@ class TestTheTraceDoesNotDisturbTheWalk:
                 "width_m": 4.0,
                 "lanes": 2,
                 "lanes_source": "authored",
+                "offset_m": 0.0,
             }
         )
         trace: dict[int, list[Station]] = {1: [], 2: []}
@@ -548,3 +556,60 @@ class TestPricedWidths:
         ]
         assert not any(clamp.undrawable for clamp in series)
         assert len(priced_widths({1: series})[1]) == 3
+
+
+class TestTheWalkMeasuresTheRibbonThatIsDRAWN:
+    """🔴 `surface.py` offsets both rails by `offset_m`, so the walk must too.
+
+    `Q106`. `surface._shape` builds the ribbon at `+half + shift` and
+    `-half + shift`, and `Q103` moved 36 off-grade edges onto the middle of
+    their own decks — up to 4.95 m. A walk about the published centreline
+    therefore measured a ribbon that is not drawn, and it did so **silently**:
+    every counter closed, the partition held, and the region read 10.7% hanging
+    where the drawn road is 4.3%.
+
+    ⚠️ **`shift` is 0.0 on every level-0 edge**, so the whole level-0 half of
+    this repo's instruments is untouched — which is the property that makes the
+    change safe, and the one asserted first below.
+    """
+
+    # Ribbon half-width 2.0 (`_manifest`), deck 3.0 either side of the
+    # centreline (`_deck`), so unshifted the ribbon is comfortably on the deck.
+    def _spans(self, offset_m: float) -> tuple[list[float], list[float], list[float]]:
+        rows, _ = _walk(_graph(POLYLINE, [], offset_m), _deck(0.0, 20.0))
+        return rows[1].span_m, rows[1].off_centre_m, rows[1].overhang_m
+
+    def test_a_zero_offset_reproduces_the_walk_it_replaced(self) -> None:
+        """The inertness proof: level 0 publishes no offset and must not move."""
+        spans, offs, overs = self._spans(0.0)
+        assert spans, "the walk kept nothing"
+        assert offs == pytest.approx([0.0] * len(offs))
+        assert overs == pytest.approx([0.0] * len(overs))
+
+    def test_the_offset_moves_the_ribbon_and_not_the_deck(self) -> None:
+        """A 2.0 m shift puts the 2.0 m half-width ribbon's rail on the deck rim.
+
+        The deck is unmoved, so its span is unchanged; what moves is where the
+        ribbon sits inside it, which is exactly the distinction `off_centre_m`
+        exists to report.
+        """
+        base_spans, _, base_overs = self._spans(0.0)
+        spans, offs, overs = self._spans(1.0)
+        assert spans == pytest.approx(base_spans), "the deck must not move"
+        assert offs == pytest.approx([1.0] * len(offs))
+        # Still inside: rims are 3.0 - 1.0 = 2.0 left and 3.0 + 1.0 = 4.0 right,
+        # against a 2.0 m half-width, so nothing hangs — as at zero.
+        assert overs == pytest.approx(base_overs)
+
+    def test_a_shift_past_the_rim_hangs_where_the_unshifted_ribbon_did_not(self) -> None:
+        _, _, base_overs = self._spans(0.0)
+        _, offs, overs = self._spans(2.0)
+        assert max(base_overs) == pytest.approx(0.0)
+        # Left rim 3.0 - 2.0 = 1.0 against a 2.0 m half: 1.0 m of ribbon in air.
+        assert overs == pytest.approx([1.0] * len(overs))
+        assert offs == pytest.approx([2.0] * len(offs))
+
+    def test_a_shift_off_the_deck_entirely_is_counted_as_such(self) -> None:
+        rows, _ = _walk(_graph(POLYLINE, [], 4.0), _deck(0.0, 20.0))
+        assert rows[1].span_m, "the walk kept nothing"
+        assert rows[1].centre_off_deck == len(rows[1].span_m)

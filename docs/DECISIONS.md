@@ -17356,18 +17356,24 @@ column looks wrong. `priced_widths` is now its own function so the exclusion is 
 
 ### ✅ The cost, at `--max-lateral-m` 12 and `--bridge-m` 1.0
 
-Over the **1,326 priced stations** — the 1,334 kept, less the 8 with no second rim:
+🔴 **Every figure in this section was re-measured by `Q106` and the ones below are the corrected
+ones.** As first published they were taken against a ribbon centred on the graph's centreline, which
+is not where `surface.py` draws it — see that entry. The shape of the result survived; the membership
+did not.
+
+Over the **1,327 priced stations** — the 1,334 kept, less the 7 with no second rim:
 
 | | p1 | p10 | p50 | p90 | p99 |
 |---|---|---|---|---|---|
-| clamped width m | 4.73 | 5.50 | 6.81 | 10.72 | 15.92 |
+| clamped width m | 4.38 | 5.65 | 6.95 | 11.22 | 16.50 |
 
-**2 of 1,326 stations (0.2%)** fall under `is_passable`'s 3.20 m lane bar and **none at all** under
+**2 of 1,327 stations (0.2%)** fall under `is_passable`'s 3.20 m lane bar and **1** under
 `fits_car`'s 1.80 m. ⚠️ **Two bars, counted apart** — `Q19` — and read from the city rather than
 restated, so a config move cannot leave this file printing 3.20 and 1.80 for ever. **The whole cost
-is on one edge**: `e208` FLEMING ROAD, clamp p50 5.20 m and minimum **2.90 m** over 26 priced
-stations. `e104`'s true minimum is 6.51 m and `e729`'s is 6.40 — both were pinch cases only in the
-defective reading above.
+is on one edge**: `e208` FLEMING ROAD, clamp p50 5.15 m and minimum **0.70 m** over 27 priced
+stations. ⚠️ **That 0.70 m station was `undrawable` in the pre-`Q106` frame and is drawable in the
+true one**, which is why the car bar is no longer clear — the correction moved a station between the
+two classes rather than between two widths.
 
 ⚠️ **The paint given up is NOT reported, and that is a result rather than a gap.** It is
 `overhang_m` **exactly and unconditionally** — `half - min(half, high)` is `max(0, half - high)` on
@@ -17399,6 +17405,11 @@ count reads 5 / 2 / 2 / 2 / 2, the car bar 2 / 0 / 0 / 0 / 0 and the negative ha
 manufactures three pinches and a negative half of its own.
 
 ### ✅ The cap sensitivity was predicted backwards, and the measurement corrected it
+
+⚠️ **Both sweeps below were run before `Q106` and their counts are the pre-correction frame's.**
+They are kept because what they establish is *structural* — `min(half, rim)` is bounded by the
+ribbon rather than by the cap, and an unbridged walk is a hole detector — and neither argument
+depends on where the ribbon's centre was taken to be. The absolute counts do.
 
 The plan argued the clamp must inherit `span_m`'s cap sensitivity because it is derived from it, and
 that every figure must therefore be quoted with `--max-lateral-m`. **False.** The clamp is
@@ -17488,3 +17499,97 @@ per-vertex offset it refuses · `Q57` for why a negative half and a narrow road 
 number · `Q58` for the confined-to-the-bar trap the missing counter avoids · `Q72` for the standard
 the mutation checks meet · `Q78` for the sign an absolute value cannot report · `Q19` for the two
 bars that stay apart · `P4-1` for what still owns the fix
+
+## `Q106` — Four instruments measured a ribbon that is not drawn
+
+`Q105` set out to build the asymmetric clamp it had priced. It could not, because the rims it was
+priced against were measured in the wrong place.
+
+🔴 **`surface._shape` draws the two rails at `+half + shift` and `-half + shift`.** `shift` is the
+graph's `offset_m`, and `Q103` set it on **36 of 45** off-grade edges to put each ribbon on the
+middle of its own deck — as much as **4.95 m** on `e337` CANAL ROAD FLYOVER, 4.45 on `e272`, 3.53 on
+`e726`. `_Edge.shift_m`'s own comment says what it did: *"What moved is the paint."*
+
+🔴 **`roadsurface.json` publishes `half_width_m` and no offset**, so every instrument that
+reconstructs the ribbon from the centreline outward has been walking `[-half, +half]` about a
+centreline the paint left. The reconstruction is one shared primitive — `overhang.cross_section` —
+and **four tools** use it.
+
+### 🔴 The two off-grade graders failed in OPPOSITE directions, and neither could say so
+
+- **`overhang.py` read LOW.** It drops a sample with no drawn road under it (`surface_y is None →
+  continue`), so it silently measured the *intersection* of its window and the real ribbon, and
+  never sampled the strip the ribbon had moved onto at all. Corrected, the drawn area it can see
+  rises **59,286 → 64,364 m² (+5,078, +8.6%)**: it was grading 92% of the off-grade road and
+  reporting a share of the rest.
+- **`tools/deck_margin.py` read HIGH.** It keeps every sample, so it counted as hanging a strip of
+  ribbon that is not there — **10.7%** against the drawn road's 7.6%.
+
+⚠️ **The divergence was visible and was read as a model difference.** `deck_margin.py`'s docstring
+says *"a divergence would be a bug in one of them, not a finding"*, and `CLAUDE.md` recorded the two
+at **10.4% against 10.3%**. On the shipped bundle they were **10.7% against 5.6%** — nearly 2× — and
+the stale pair in `CLAUDE.md` is why nobody looked.
+
+| | before | after |
+|---|---|---|
+| `overhang.py` off-grade drawn area | 59,286 m² | **64,364 m²** |
+| `overhang.py` hanging | 5.6% (3,326 m²) | **4.3% (2,748 m²)** |
+| `deck_margin.py` hanging | 10.7% (2,409 m²) | **7.6% (1,702 m²)** |
+| `deck_margin.py` hanging stations | 1,001 of 1,334 (75.0%) | **734 of 1,334 (55.0%)** |
+| `deck_margin.py` `off centre m` p50 | +0.05 | **−0.05** |
+
+### 🔴 It overturns `Q103`'s off-grade corridor readings, and they get worse
+
+`carriageway_occupancy.py --levels 0,1` reads the same reconstruction, so the four blocked off-grade
+edges were graded on the wrong ribbon too:
+
+| edge | `Q103` published | corrected |
+|---|---|---|
+| `e208` FLEMING ROAD | 2.33 m | **1.87 m** |
+| `e306` CANAL ROAD FLYOVER | 3.09 m | **1.93 m** |
+| `e257` CANAL ROAD FLYOVER | 3.75 m | **2.86 m** |
+| `e450` CANAL ROAD FLYOVER | 4.00 m | **2.98 m** |
+
+🔴 **So `Q103`'s population re-cut a fourth time, and this one runs against the flattering
+direction.** That entry sweeps `--index-cell-m` and `--across-m` and concludes *"`e257` and `e450`
+clear the lane bar at every bin below 1.0 m"*, leaving two survivors. Measured on the ribbon that is
+drawn, **all four are under the 3.20 m bar** and `e208` is at 1.87 m. The resolution sweeps were
+real; they were taken in the wrong frame.
+
+### ✅ Level 0 cannot move, and that is structural rather than observed
+
+`offset_m` is **exactly 0.0 on all 737 level-0 edges** (`offset_source` is `none` on every one), and
+`cross_section`'s new parameter defaults to `0.0`. So every gated figure in the repo is
+arithmetically unchanged, and the runs confirm it: `overhang.py`'s `Q23` half is byte-identical
+(459 m / 158 / 139 across the same 8 edge ids), `carriageway_occupancy.py` still fails on the same
+**21** starved level-0 edges with the same worst readings, and `ground_clearance.py` is unmoved at
+**89 against 87** with its structure half at **25 edges / 323.4 m²**.
+
+⚠️ **`ground_clearance.py` needed a second correction the others did not.** It already had an
+`offset_m` — a *cell's* own distance from the centreline, which `Section.is_inside` tests against
+the authored half-width to split `Q19`'s two populations. That one must stay measured from the
+centreline the authored width is about, so the drawn offset is a separate name and is **added** to
+it. Threading the new value into the old name would have silently re-split every row.
+
+### ✅ The clamp, re-priced on the ribbon that is drawn
+
+**2 of 1,327 priced stations (0.2%)** under `is_passable`'s lane bar, **1** under `fits_car`'s, and
+**7** with a negative half (3 left, 4 right). Clamped width p1 **4.38** / p50 **6.95** m. The
+membership moved with the frame — `e730` now carries 4 of the 7 negative halves where it carried 1,
+and `e208`'s 0.70 m station is now *drawable* rather than undrawable — which is the point: `Q105`'s
+figures described a counterfactual over a ribbon nobody draws.
+
+- ✅ **Report-only, nothing published, `schema_version` unmoved.** No stage changed; the offset was
+  already on the graph at schema 9 and no tool was reading it. `roadsurface.json` needs no new field
+  for the same reason — ⚠️ though it is worth saying that a consumer *cannot* reconstruct the drawn
+  ribbon from `roadsurface.json` alone, and four of them tried.
+- ✅ **Indexed, never `.get`-with-a-default.** A bundle without `offset_m` is a stale one and should
+  say so; a `0.0` default would restore exactly the defect this closes, silently.
+- ✅ **Mutation-checked** (`Q72`): ignoring the shift fails 3 tests, flipping its sign fails 2 — the
+  sign matters because `off_centre_m` is published signed and `Q78` is what an unsigned one costs.
+  `TestTheWalkMeasuresTheRibbonThatIsDRAWN` asserts the zero-offset case *first*, because that is the
+  level-0 inertness the whole change rests on.
+
+**See.** `Q103` for the offset this reads and for the four corridor readings it corrects · `Q105`
+for the clamp it re-prices · `Q22` for the overhang headline it moves · `Q19` for the two
+populations `ground_clearance.py` keeps apart · `Q78` for the sign · `Q72` for the mutation standard

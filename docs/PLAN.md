@@ -923,8 +923,8 @@ than discovering the rest of it from a bug report.
   `DECISIONS.md` `Q103`.
   ✅ **The remaining candidate — a per-station ASYMMETRIC ribbon — is priced and it is cheap
   (`Q105`, 2026-09-04).** `deck_margin.py`'s counterfactual cuts each station's ribbon to its deck's
-  own two rims: **2 of 1,326 priced** stations then fall under `is_passable`'s lane bar and **none**
-  under `fits_car`'s, flat across both resolution dials, and `e208`'s rim is byte-identical over a
+  own two rims: **2 of 1,327 priced** stations then fall under `is_passable`'s lane bar and **1**
+  under `fits_car`'s (`Q106`-corrected), and `e208`'s rim is byte-identical over a
   `--bridge-m` 0-4 sweep so it is real structure and not a hole. 🚫 **But it licenses PAINT and not a
   width** — the rims are one contiguous run, the interchange's at `e208` — so the build clamps the
   **drawn ribbon** and leaves `width_m` alone, or it meets this task's own refutation above at a
