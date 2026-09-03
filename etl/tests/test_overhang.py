@@ -39,22 +39,39 @@ class TestCrossSection:
 
     def test_the_cells_span_the_full_drawn_width(self) -> None:
         cells = self._cells(5.0)
-        assert sum(span for _, _, span in cells) == pytest.approx(10.0)
+        assert sum(span for _, _, span, _ in cells) == pytest.approx(10.0)
 
     def test_they_stay_inside_the_carriageway(self) -> None:
         """A cell centre outside the ribbon would ask whether a piece of road
         that is not drawn is supported, and count the answer."""
-        for _, offset, _ in self._cells(5.0):
-            assert abs(offset) < 5.0
+        for _, position, _, _ in self._cells(5.0):
+            assert abs(position) < 5.0
 
     def test_a_width_that_is_not_a_multiple_of_the_cell_still_spans_it(self) -> None:
         """3.2 m of authored ramp against a 0.5 m cell. Truncating instead would
         leave the outermost strip — the one that overhangs — unmeasured."""
         cells = self._cells(1.6)
-        assert sum(span for _, _, span in cells) == pytest.approx(3.2)
+        assert sum(span for _, _, span, _ in cells) == pytest.approx(3.2)
 
     def test_a_zero_width_edge_contributes_nothing(self) -> None:
         assert self._cells(0.0) == []
+
+    def test_each_cell_carries_its_own_offset_from_the_centreline(self) -> None:
+        """🔴 Returned, so no caller re-derives it (`Q107`).
+
+        Two did, as `-half + span * (index + 0.5)`, which was right while the
+        walk started at `-half`. With `offset_m` it takes two terms, and a
+        caller rebuilding one of them reads `offset == 0` wherever the paint
+        actually is — `Q106`'s defect at the seam between this function and its
+        callers.
+        """
+        cells = cross_section(np.zeros(2), np.array([0.0, 1.0]), 1.0, 0.5)
+        assert [offset for _, _, _, offset in cells] == pytest.approx([-0.75, -0.25, 0.25, 0.75])
+
+    def test_the_offsets_move_with_the_drawn_centre(self) -> None:
+        """And they are measured from the CENTRELINE, not from the ribbon."""
+        cells = cross_section(np.zeros(2), np.array([0.0, 1.0]), 1.0, 0.5, 2.0)
+        assert [offset for _, _, _, offset in cells] == pytest.approx([1.25, 1.75, 2.25, 2.75])
 
 
 class TestHalfWidthAt:

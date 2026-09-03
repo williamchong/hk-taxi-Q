@@ -816,21 +816,19 @@ def survey(
         # not a reason to measure against something else.
         record = found.begin(edge_id, name, float(edge["width_m"]))
         standing.begin(edge_id, name)
-        # 🔴 **Where the ribbon is DRAWN, in `left_of`'s frame (`Q106`).**
-        # `surface._shape` offsets both rails by this, so a walk about the
-        # centreline reads the road in the wrong place on the 36 off-grade edges
-        # `Q103` moved onto their decks. ⚠️ **Named apart from the `offset_m`
-        # below, which is a different quantity** — that one is a *cell's* own
-        # distance from the centreline, which `Section.is_inside` tests against
-        # the authored half-width, and it has to be measured from the centreline
-        # the authored width is about rather than from the ribbon's centre.
-        # ⚠️ 0.0 on every level-0 edge, so the gated ground half cannot move.
 
         seen = -1
         for vertex, station in walk_width(polyline, spacing_m):
             along = polyline[vertex + 1] - polyline[vertex]
             normal = left_of(along[[0, 2]])
             half = half_width_at(edge_widths, vertex)
+            # 🔴 **Where the ribbon is DRAWN, in `left_of`'s frame (`Q106`).**
+            # `surface._shape` offsets both rails by this and cuts them to the
+            # deck, so a walk about the centreline reads the road in the wrong
+            # place on every off-grade edge. ⚠️ **Named apart from the cell
+            # offset below**, which is a different quantity: that one is a
+            # *cell's* distance from the centreline, which `Section.is_inside`
+            # tests against the authored half-width.
             drawn_offset_m = offset_at(edge_offsets, vertex)
             station_y = float(station[1])
 
@@ -863,8 +861,8 @@ def survey(
             # cells that found structure.
             section_cells = 0
             section_stepped = 0
-            for index, (x, z, span) in enumerate(
-                cross_section(station[[0, 2]], normal, half, across_m, drawn_offset_m)
+            for x, z, span, cell_offset_m in cross_section(
+                station[[0, 2]], normal, half, across_m, drawn_offset_m
             ):
                 found.asked += 1
                 area = span * spacing_m
@@ -891,10 +889,12 @@ def survey(
                         edge_id,
                         cell.proud_m,
                         area,
-                        # From the CENTRELINE, which is what the authored
-                        # width is about — so the ribbon's own offset is part
-                        # of where this cell actually lies (`Q106`).
-                        offset_m=drawn_offset_m - half + span * (index + 0.5),
+                        # 🔴 **From `cross_section`, never rebuilt here.** It
+                        # is the distance from the CENTRELINE, which is what
+                        # `Section.is_inside`'s authored width is about, and it
+                        # has two terms since `Q107` — a caller re-deriving one
+                        # of them re-creates `Q106` at this seam.
+                        offset_m=cell_offset_m,
                     )
                 elif cell.above_window_m is not None:
                     # The list IS the counter — `Survey.above_window` reads its

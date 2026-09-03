@@ -671,9 +671,10 @@ def _rims_at_vertices(
     """
     if not rims:
         return []
-    alongs = np.asarray([row[0] for row in rims], dtype=np.float64)
-    lefts = np.asarray([row[1] for row in rims], dtype=np.float64)
-    rights = np.asarray([row[2] for row in rims], dtype=np.float64)
+    # Column slices of one array, as `surface._deck_rims` reads the published
+    # pairs, so the two rim readers look alike.
+    walked = np.asarray(rims, dtype=np.float64)
+    alongs, lefts, rights = walked[:, 0], walked[:, 1], walked[:, 2]
     # `np.interp` needs its sample points ascending; `_stations` walks forward,
     # but a polyline that doubles back can emit two stations at the same
     # along-distance, so the sort is not decoration.
@@ -693,7 +694,7 @@ def _walk_the_deck(
     heights: np.ndarray,
     spans: list[float],
     offsets: list[float],
-    rims: list[tuple[float, float, float]] | None = None,
+    rims: list[tuple[float, float, float]],
 ) -> None:
     """One station's deck span and the centreline's signed offset from it.
 
@@ -717,7 +718,11 @@ def _walk_the_deck(
     deck would fold the thing being measured into the measurement.
     """
     field, slab_gap_m, clearance_m = deck
-    deck_y = float(np.interp(_along_at(plan, along_edge, point), along_edge, heights)) - clearance_m
+    # Bound once: `_along_at` is a per-segment projection over the whole
+    # polyline, and both readers below want the same answer by construction
+    # rather than by two calls agreeing.
+    along_m = _along_at(plan, along_edge, point)
+    deck_y = float(np.interp(along_m, along_edge, heights)) - clearance_m
     reaches = [_deck_reach(field, slab_gap_m, point, normal, sign, deck_y) for sign in (+1.0, -1.0)]
     if any(reach is None for reach in reaches):
         report.deck_stations_off += 1
@@ -731,13 +736,12 @@ def _walk_the_deck(
     # normal. `surface.mitres` is the left one and the two are opposite on
     # purpose, so a consumer owes a named negation (`CLAUDE.md`, `Q78`).
     offsets.append(0.5 * (right - left))
-    if rims is not None:
-        # ⚠️ **Recorded only where BOTH reaches were found**, which is above the
-        # `deck_stations_off` return: a station with one rim has no span and
-        # must not contribute half of one. The along-distance is what lets these
-        # be interpolated onto the published vertices, which are not these
-        # stations — `_stations` walks at `STATION_M` and the polyline does not.
-        rims.append((_along_at(plan, along_edge, point), left, right))
+    # ⚠️ **Recorded only where BOTH reaches were found**, which is below the
+    # `deck_stations_off` return: a station with one rim has no span and must
+    # not contribute half of one. The along-distance is what lets these be
+    # interpolated onto the published vertices, which are not these stations —
+    # `_stations` walks at `STATION_M` and the polyline does not.
+    rims.append((along_m, left, right))
 
 
 def _along_at(plan: np.ndarray, along_edge: np.ndarray, point: np.ndarray) -> float:

@@ -1297,14 +1297,16 @@ def build_region(
     # *published* widths, not the ribbon's — `dedupe` has already dropped
     # stations from the latter, and the game indexes this table by
     # `roadgraph.json`'s own vertex numbering.
-    report.carriageway = {
-        int(published["id"]): [round(float(half), 3) for half in prepared.published_half_widths]
-        for published, prepared in zip(graph["edges"], edges, strict=True)
-    }
-    report.carriageway_offset = {
-        int(published["id"]): [round(float(at), 3) for at in prepared.published_offsets]
-        for published, prepared in zip(graph["edges"], edges, strict=True)
-    }
+    # One pass filling both, because every consumer indexes them together and a
+    # second zip is a second place for a filter or a rounding change to land.
+    for published, prepared in zip(graph["edges"], edges, strict=True):
+        edge_id = int(published["id"])
+        report.carriageway[edge_id] = [
+            round(float(half), 3) for half in prepared.published_half_widths
+        ]
+        report.carriageway_offset[edge_id] = [
+            round(float(at), 3) for at in prepared.published_offsets
+        ]
     report.on_structure_m = sum(
         _on_structure_length_m(edge, "on_structure") for edge in graph["edges"]
     )
@@ -1697,8 +1699,11 @@ def _clamped_rails(
     the fallback `Q105` said any build owes: where the drawn ribbon lies wholly
     off its own deck the clamp has no answer — `upper < lower` is a carriageway
     of negative width — and inventing one by collapsing to zero would put a hole
-    in the road. Seven stations in the region are in that state and they are
-    counted, never silently repaired.
+    in the road. It reads **0 in this region**, which is a measurement and not a
+    construction: the shift is a per-edge median while the rims are local, so a
+    station can reach it, and
+    `test_crossing_rails_keep_the_unclamped_ribbon_and_are_counted` is what says
+    the counter is not stuck. A rise is a finding to go and look at.
 
     ⚠️ **Absence of a deck is `inf`** (see `_RIM_LEFT`), so every level-0 edge
     takes the untouched branch by arithmetic rather than by a test.
@@ -1709,6 +1714,25 @@ def _clamped_rails(
     polylines (`dedupe` drops stations, `_add_kerb_stations` inserts them), and
     a second expression of this arithmetic for the manifest is a second thing to
     drift from the road it claims to describe.
+
+    🔴 **THREE things it deliberately does not reach, recorded rather than
+    quietly left (`Q107`).** Each needs rim data at a station the deck walk
+    refuses, so none is fixable by moving this function:
+
+    * **The junction caps.** `end_half_width_m` reads the unclamped `_WIDTH`, so
+      `_assign_trims`' radius and `_through_corners`' arms are sized before the
+      cut and the cap hull can re-draw paint the clamp removed. The hull only
+      ever grows, so it will.
+    * **The ends of every clamped edge.** `carriageway._stations` skips stations
+      within `JUNCTION_M` of a node, so an edge's first and last few metres
+      publish no rim and `np.interp` flat-extrapolates the nearest one inward —
+      and a deck normally *flares* at a junction, so the ends are over-cut in
+      exactly the place the caps are drawn uncut.
+    * **The kerb and its lip**, drawn at `± kerb_width_m` outside the clamped
+      rails, so 0.5 m of kerb block still overhangs at every clamped station.
+      ⚠️ **No instrument can see it**: `overhang.py` and `deck_margin.py` both
+      read the carriageway half-width from the manifest, which is now the
+      clamped one.
     """
     upper = np.minimum(shift + half, rim_left)
     lower = np.maximum(shift - half, -rim_right)

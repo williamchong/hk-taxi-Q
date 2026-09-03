@@ -873,8 +873,8 @@ def walk_carriageway(
             normal = left_of(along[[0, 2]])
             half = half_width_at(widths.get(edge_id, []), vertex)
             drawn_offset_m = offset_at(drawn_offset_by_edge.get(edge_id, []), vertex)
-            for index, (x, z, span) in enumerate(
-                cross_section(station[[0, 2]], normal, half, across_m, drawn_offset_m)
+            for x, z, span, cell_offset_m in cross_section(
+                station[[0, 2]], normal, half, across_m, drawn_offset_m
             ):
                 # The drawn road first, because the question is what stands in
                 # *what is drawn*. Falling back to the graph's own y would ask
@@ -886,15 +886,13 @@ def walk_carriageway(
                 xs.append(x)
                 zs.append(z)
                 spans.append(span)
-                # `cross_section` walks from the near rim inward in even
-                # steps, so the offset is recoverable without it having to
-                # return one. ⚠️ **From the CENTRELINE, which is what
-                # `authored_half` is about and what "the centreline cell" below
-                # means** — so the ribbon's own drawn offset is part of where
-                # this cell lies, and omitting it would put `offset == 0`
+                # 🔴 **Taken from `cross_section` rather than rebuilt.** It is
+                # the distance from the CENTRELINE — the frame `authored_half`
+                # and "the centreline cell" below are in — and it now has two
+                # terms, so a caller re-deriving one of them puts `offset == 0`
                 # wherever the paint happens to be rather than on the road's
-                # published centre (`Q106`, `Q107`).
-                offsets.append(drawn_offset_m - half + span * (index + 0.5))
+                # published centre. That is `Q106`'s defect at this seam.
+                offsets.append(cell_offset_m)
                 authored.append(authored_half)
                 # NaN, not a sentinel height: "no road drawn here" is a junction
                 # trim or a stale width table, and it has to stay distinguishable

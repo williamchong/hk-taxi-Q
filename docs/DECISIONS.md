@@ -17699,6 +17699,57 @@ near-identical, which is `Q104`'s *"one camera is not an A/B"* restated.
   rather than a nuisance; the export fixture's offset is deliberately **asymmetric**, because a
   fixture at zero cannot tell a carried field from a dropped one.
 
+### ⬜ Three things the clamp does not reach, found by review and recorded rather than papered over
+
+Each needs rim data at a station the deck walk **refuses**, so none is fixable inside
+`_clamped_rails` and none is claimed as done:
+
+* 🔴 **The junction caps.** `end_half_width_m` reads the unclamped `_WIDTH`, so `_assign_trims`'
+  radius and `_through_corners`' arms are sized before the cut, and the cap hull — which only ever
+  grows — can re-draw paint the clamp removed. ⚠️ `overhang.py` walks edges, not caps, so no
+  instrument reports it.
+* 🔴 **The ends of every clamped edge.** `carriageway._stations` skips stations within `JUNCTION_M`
+  of a node, so an edge's first and last metres publish no rim and `np.interp` flat-extrapolates the
+  nearest one outward. A deck normally *flares* at a junction, so the ends are systematically
+  **over**-cut in exactly the place the caps are drawn **un**-cut.
+* 🔴 **The kerb and its lip**, drawn `kerb_width_m` outside the clamped rails, so 0.5 m of kerb still
+  overhangs at every clamped station. ⚠️ **No instrument can see it**: both graders read the
+  carriageway half-width from the manifest, which is now the clamped one.
+
+### 🔴 `deck_run` was selecting the deck nearest the CENTRELINE, not the ribbon
+
+Found by review after the build. `deck_margin.deck_run` walks outward from the published centreline
+and keeps the run nearest it; the rim arithmetic was then re-based on `shift` six lines later. With
+offsets up to **4.95 m** and more than one run across the walk at an interchange, the run nearest the
+centreline need not be the run the ribbon is drawn on — so the rims could be differences against the
+wrong structure. `nearest_to_m` now carries the ribbon's own centre into the selection, read **before**
+`deck_run` rather than after it. ⚠️ **It moves real readings**: hanging 1,452 → **1,446 m²** and
+`centre_off_deck` 8 → **7**, so the two runs did differ at a handful of stations. This is `Q106`'s
+class again — an instrument measuring one thing and reporting it as another — caught at review rather
+than by a counter.
+
+### ✅ What else review changed
+
+- 🔴 **`cross_section` now RETURNS the signed cell offset instead of two callers rebuilding it.**
+  `-half + span * (index + 0.5)` was right while the walk started at `-half`; with `offset_m` it
+  takes two terms, and a caller reconstructing one of them reads `offset == 0` wherever the paint
+  actually is — `Q106`'s defect re-created at the seam between this function and its callers.
+  Behaviour-neutral: `overhang.py` reads 62,925 m² / 3.3% / 2,061 m² and `ground_clearance.py` 89
+  against 87, both unchanged across the refactor.
+- ✅ **`half_width_at` and `offset_at` were character-identical** and now share `at_vertex`. Not the
+  cross-file restatement this repo licenses — they were adjacent in one file and could only drift.
+- ✅ **The clamp had no end-to-end test**: nothing but the unit tests published a rim, so the stage
+  could have stopped threading them with everything green. `_edge()` carries `deck_rim_m` and
+  `TestTheClampReachesTheBuiltRibbon` asserts the published half-width and centre; mutation-checked.
+- ✅ `_along_at` was computed twice per deck station; `rims` had a `None` default no call site used;
+  `report.carriageway` and `report.carriageway_offset` were two zips over one list.
+- 🔴 **`_clamped_rails`' docstring claimed "seven stations" are refused. It is 0**, which is what the
+  build, `Q107` and `PROGRESS.md` all say — the seven was `Q105`'s pre-build negative-half count
+  surviving into the one place a reader would look for the fallback's own number.
+- 🔴 **Four `deck_margin.py` docstrings still described `off_centre_m` as the published centreline's
+  offset and named a negation the code no longer performs.** It is the *ribbon's* centre now, and the
+  sign falls out of `high - shift` / `shift - low`.
+
 **See.** `Q105` for the pricing and the paint-not-width licence · `Q106` for the frame this is
 measured in · `Q103` for the median it decomposes · `Q54` for why it may only cut · `Q57` for the
 two populations · `Q62` for the frame · `Q19` for the cell offset the two tools keep

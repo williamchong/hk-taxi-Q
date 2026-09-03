@@ -474,6 +474,12 @@ def _edge(edge_id: int, from_node: int, to_node: int, polyline, **overrides) -> 
         # default could only ever fire on a document that had stopped
         # publishing it — silently drawing every off-grade ribbon unshifted.
         "offset_m": 0.0,
+        # Schema 10. The deck's two edges per vertex, and **empty is the
+        # ordinary case** — every level-0 edge, and every off-grade edge the
+        # deck walk could not measure. `_deck_rims` turns an empty or
+        # length-mismatched list into an infinite reach, which is no constraint,
+        # so a fixture that says nothing here draws the ribbon it always drew.
+        "deck_rim_m": [],
         "speed_limit_kph": 50,
         "bus_lane": False,
         "tram_tracks": False,
@@ -1776,3 +1782,56 @@ class TestDeckRimsFallBackToNoConstraint:
         left, right = _deck_rims({"deck_rim_m": [[1.0, 2.0], [3.0, 4.0]]}, 2)
         assert left == pytest.approx([1.0, 3.0])
         assert right == pytest.approx([2.0, 4.0])
+
+
+class TestTheClampReachesTheBuiltRibbon:
+    """The clamp end to end, through `build_region` and out to the manifest.
+
+    ⚠️ **The unit tests above exercise `_clamped_rails` and `_deck_rims`
+    directly; nothing else in this file publishes a rim**, so without this the
+    stage could stop threading them and every one of those would still pass.
+    """
+
+    def _built(self, testville_config, tmp_path: Path, **overrides) -> dict:
+        _write_graph(
+            tmp_path,
+            [{"id": 0, "pos": [0.0, 0.0, 0.0]}, {"id": 1, "pos": [40.0, 0.0, 0.0]}],
+            [_edge(1, 0, 1, [[0.0, 0.0, 0.0], [40.0, 0.0, 0.0]], **overrides)],
+        )
+        build_region(testville_config, "middle", out_root=tmp_path / "out")
+        manifest = json.loads((tmp_path / "out" / "middle" / SURFACE_MANIFEST_NAME).read_text())
+        return manifest["carriageway"][0]
+
+    def test_an_edge_without_rims_publishes_a_centred_ribbon(
+        self, testville_config, tmp_path: Path
+    ) -> None:
+        """The at-grade case, and what every other fixture in this file relies on."""
+        entry = self._built(testville_config, tmp_path)
+        assert entry["offset_m"] == pytest.approx([0.0] * len(entry["offset_m"]))
+        assert min(entry["half_width_m"]) > 0.0
+
+    def test_a_narrow_deck_cuts_the_ribbon_and_moves_its_centre(
+        self, testville_config, tmp_path: Path
+    ) -> None:
+        """🔴 The whole point, asserted on what SHIPS rather than on a local.
+
+        A deck reaching 1.0 m left and 3.0 m right of the centreline, under a
+        ribbon the config draws wider: the published half-width falls to 2.0 and
+        the centre moves to -1.0. That asymmetry is what `Q107` exists for and
+        what no symmetric width could produce.
+        """
+        entry = self._built(testville_config, tmp_path, deck_rim_m=[[1.0, 3.0], [1.0, 3.0]])
+        assert entry["half_width_m"] == pytest.approx([2.0] * len(entry["half_width_m"]))
+        assert entry["offset_m"] == pytest.approx([-1.0] * len(entry["offset_m"]))
+
+    def test_a_deck_wider_than_the_ribbon_publishes_it_unchanged(
+        self, testville_config, tmp_path: Path
+    ) -> None:
+        """It cuts and never extends (`Q54`) — through the stage, not just the
+        function."""
+        wide = self._built(testville_config, tmp_path / "a")
+        entry = self._built(
+            testville_config, tmp_path / "b", deck_rim_m=[[40.0, 40.0], [40.0, 40.0]]
+        )
+        assert entry["half_width_m"] == pytest.approx(wide["half_width_m"])
+        assert entry["offset_m"] == pytest.approx(wide["offset_m"])

@@ -15,7 +15,7 @@ Q22."*
 This decomposes that same quantity into the two things that can cause it:
 
     span_m        the deck the model draws, parapet to parapet
-    off_centre_m  signed offset of the published centreline from that deck's middle
+    off_centre_m  signed offset of the DRAWN ribbon's centre from that deck's middle
     overhang_m    metres of drawn ribbon with no deck under them, per station
 
 A ribbon can hang because it is **too wide** for the deck (`width_m`) or because
@@ -81,6 +81,15 @@ sense of a field of the same name and the sense in which the number is the
 correction to apply. An absolute value here would inherit `Q78`'s defect, where
 a registration that ran the wrong way survived three published distributions
 because the counter could not report a direction.
+
+🔴 **There is no negation in this file, and there used to be (`Q106`, `Q107`).**
+The walk located the deck in the centreline's frame and published the negation —
+the centreline in the deck's. It now takes the ribbon's own rims, `high - shift`
+and `shift - low`, so what is published is the **ribbon's centre** in the deck's
+frame and the sign falls out of the subtraction. That is still the sense in which
+the value is the correction to apply, and still `centreline_error.py`'s sense of
+a field of this name; what changed is *whose* centre it is, because since `Q107`
+the paint is neither centred on the centreline nor symmetric about it.
 
 ⚠️ **Level -1 is excluded**, for `overhang.py`'s reason restated: a tunnel is a
 void with nothing to stand on, so every station would read as hanging in air.
@@ -276,9 +285,10 @@ class Row:
     drawn_m: list[float] = field(default_factory=list)
     bridged_m: list[float] = field(default_factory=list)
     refused: Refusals = field(default_factory=Refusals)
-    # Stations whose centreline fell outside the deck run entirely. The
-    # strongest single reading here: the paint is not merely wider than the
-    # deck, its middle is off it.
+    # Stations whose RIBBON fell outside the deck run entirely — its own
+    # centre, not the published centreline (`Q107`). The strongest single
+    # reading here, and stronger than it was: the paint is not merely wider than
+    # the deck, the middle of the paint is off it.
     centre_off_deck: int = 0
 
 
@@ -332,6 +342,7 @@ def deck_run(
     across_m: float,
     attribute_within_m: float,
     bridge_m: float,
+    nearest_to_m: float = 0.0,
 ) -> tuple[float, float, bool, float] | None:
     """The deck's lateral extent at this station, and whether the walk clipped it.
 
@@ -339,10 +350,18 @@ def deck_run(
     `None` where no structure carries this station's height anywhere across the
     walk.
 
-    The run kept is the one **nearest the centreline**, not the widest and not
-    the one containing zero: a badly registered edge has its centreline off the
-    deck altogether, and refusing those would drop exactly the stations worth
+    The run kept is the one nearest `nearest_to_m`, not the widest and not the
+    one containing it: a badly registered edge has its ribbon off the deck
+    altogether, and refusing those would drop exactly the stations worth
     reporting. `centre_off_deck` counts them instead.
+
+    🔴 **`nearest_to_m` is the RIBBON's centre and not the centreline (`Q107`).**
+    `surface._shape` draws the ribbon at `offset_m` from the centreline — up to
+    **4.95 m** on `e337` — and at an interchange there is more than one run
+    across the walk, so selecting on the centreline can return the deck the
+    ribbon is *not* drawn on and every figure derived from it then describes the
+    wrong structure. It defaults to 0.0 because that is the at-grade case and
+    every level-0 edge, not because the centreline is the right question.
 
     🔴 **Interior gaps up to `bridge_m` are closed first, and that is not
     tidying — without it the measurement is a hole detector.** `Q19` measured
@@ -395,13 +414,13 @@ def deck_run(
     if start is not None:
         runs.append((start, len(hits) - 1))
 
-    def distance_to_centre(run: tuple[int, int]) -> float:
+    def distance_to_ribbon(run: tuple[int, int]) -> float:
         low, high = offsets[run[0]], offsets[run[1]]
-        if low <= 0.0 <= high:
+        if low <= nearest_to_m <= high:
             return 0.0
-        return float(min(abs(low), abs(high)))
+        return float(min(abs(low - nearest_to_m), abs(high - nearest_to_m)))
 
-    low_index, high_index = min(runs, key=distance_to_centre)
+    low_index, high_index = min(runs, key=distance_to_ribbon)
     clipped = low_index == 0 or high_index == len(hits) - 1
     # Only the gaps inside the run that was kept — bridging elsewhere across the
     # walk is not this station's deck, and counting it would inflate the figure
@@ -485,6 +504,11 @@ def survey(
         rows[edge_id] = row
 
         walked = trace.get(edge_id) if trace is not None else None
+        # Hoisted beside the polyline rather than looked up per station, which
+        # is what `ground_clearance.py` already does and what makes the four
+        # walks read alike.
+        edge_widths = widths.get(edge_id, [])
+        edge_offsets = offsets.get(edge_id, [])
 
         def record(
             vertex: int,
@@ -528,12 +552,17 @@ def survey(
                 row.refused.junction += 1
                 record(vertex, station, "junction")
                 continue
-            half = half_width_at(widths.get(edge_id, []), vertex)
+            half = half_width_at(edge_widths, vertex)
             if half <= 0.0:
                 row.refused.no_ribbon += 1
                 record(vertex, station, "no_ribbon")
                 continue
             normal = left_of((polyline[vertex + 1] - polyline[vertex])[[0, 2]])
+            # 🔴 **Read BEFORE the run is chosen (`Q107`).** The ribbon's centre
+            # decides which deck this station is standing on, so a `shift` read
+            # after `deck_run` would let the walk pick one run and the arithmetic
+            # measure against another.
+            shift = offset_at(edge_offsets, vertex)
             found = deck_run(
                 structure,
                 station,
@@ -542,6 +571,7 @@ def survey(
                 across_m=across_m,
                 attribute_within_m=attribute_within_m,
                 bridge_m=bridge_m,
+                nearest_to_m=shift,
             )
             if found is None:
                 row.refused.no_deck += 1
@@ -561,10 +591,6 @@ def survey(
             # that is not drawn — up to 4.95 m out on `e337` — and read the
             # region 10.7% hanging where the drawn road is 4.3%. `shift` is 0.0
             # on every level-0 edge, so this reduces to what it was.
-            # 🔴 **Per STATION since the clamp (`Q107`)** — the two rails are
-            # cut to the deck independently, so one number per edge no longer
-            # says where the ribbon is even on one edge.
-            shift = offset_at(offsets.get(edge_id, []), vertex)
             left_rim = high - shift
             right_rim = shift - low
             off_deck = left_rim < 0.0 or right_rim < 0.0

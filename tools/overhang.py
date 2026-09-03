@@ -167,8 +167,8 @@ def cross_section(
     half_width_m: float,
     across_m: float,
     offset_m: float = 0.0,
-) -> list[tuple[float, float, float]]:
-    """Plan positions across one station's full drawn width, and each one's share.
+) -> list[tuple[float, float, float, float]]:
+    """Plan positions across one station's width, each one's share, and its offset.
 
     Returned with the *area* each stands for rather than as bare points, so a
     ribbon whose width varies along its length weights its wide half correctly.
@@ -190,6 +190,15 @@ def cross_section(
     low; `tools/deck_margin.py` keeps every sample, so it counted ribbon that
     is not there and read high — 5.6% against 10.7% on the same bundle, where
     that file's own docstring says a divergence is a bug in one of them.
+
+    🔴 **The signed offset is RETURNED and never re-derived by the caller.**
+    Two callers used to rebuild it as `-half + span * (index + 0.5)`, which was
+    right while the walk started at `-half`; with `offset_m` it takes two terms,
+    and a caller that reconstructs one of them gets `offset == 0` wherever the
+    paint actually is — `Q106`'s defect exactly, reintroduced at the seam
+    between this function and its callers. It is the distance from the
+    **centreline**, which is the frame `authored_width_m` and "the centreline
+    cell" are in, and not from the ribbon's own centre.
     """
     if half_width_m <= 0.0:
         return []
@@ -201,6 +210,7 @@ def cross_section(
             float(point[0] + normal[0] * offset),
             float(point[1] + normal[1] * offset),
             span,
+            offset,
         )
         for offset in (near + span * (step + 0.5) for step in range(steps))
     ]
@@ -248,13 +258,13 @@ def drawn_offsets(manifest: dict[str, Any]) -> dict[int, list[float]]:
 def offset_at(offsets: list[float], vertex: int) -> float:
     """The drawn ribbon's centre at one polyline vertex, in `left_of`'s frame.
 
-    Indexed by vertex exactly as `half_width_at` is, and **0.0 for an edge that
-    published none** — every level-0 edge, and every bundle older than the
-    clamp.
+    ⚠️ **The fallback is for a PRE-SCHEMA-7 manifest and not for level 0.**
+    Every edge publishes `offset_m` now — all 797 of them, 36 of them non-zero —
+    so a level-0 edge takes the ordinary indexed path and reads a real 0.0. A
+    reader who thinks the at-grade network runs through the untested branch has
+    it backwards.
     """
-    if not offsets:
-        return 0.0
-    return float(offsets[min(vertex, len(offsets) - 1)])
+    return at_vertex(offsets, vertex)
 
 
 def half_width_at(widths: list[float], vertex: int) -> float:
@@ -265,9 +275,24 @@ def half_width_at(widths: list[float], vertex: int) -> float:
     a constant so the tool can grade an older build — which is the whole reason
     `deck_error` has a `--clearance-m` override.
     """
-    if not widths:
+    return at_vertex(widths, vertex)
+
+
+def at_vertex(values: list[float], vertex: int) -> float:
+    """One per-station table read at a polyline vertex, clamped to its end.
+
+    The shared body of `half_width_at` and `offset_at`, which were
+    character-identical. ⚠️ **Not the cross-file restatement this repo
+    licenses** — `percentiles` and `pipeline/carriageway.py`'s second survey are
+    two implementations kept apart on purpose; these two were adjacent in one
+    file and could only ever drift.
+
+    A short table is read as a constant, which is how `city.json` published
+    widths before `Q23` and offsets before `Q107`.
+    """
+    if not values:
         return 0.0
-    return float(widths[min(vertex, len(widths) - 1)])
+    return float(values[min(vertex, len(values) - 1)])
 
 
 def walk_width(polyline: np.ndarray, spacing_m: float) -> Iterator[tuple[int, np.ndarray]]:
@@ -346,7 +371,7 @@ def survey(
             # mesh, at a junction trim or against a stale width table, inflate
             # the `overhanging_m` headline.
             rim: list[bool] = []
-            for x, z, span in cross_section(station[[0, 2]], normal, half, across_m, offset_m):
+            for x, z, span, _ in cross_section(station[[0, 2]], normal, half, across_m, offset_m):
                 # The drawn road first, because the question is whether *what is
                 # drawn* is held up. Falling back to the graph's own y would
                 # measure a surface that may not have been built.
