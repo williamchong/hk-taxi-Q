@@ -660,7 +660,7 @@ Common emoji for this project:
   `Q72`'s tautology. Numbers in `Q92`.
 - **Anything that moves an OFF-GRADE ribbon — `surface.floor_by_elevation_level`,
   `floor_on_structure_m`, or an off-grade width: also `tools/deck_margin.py`, and paste its per-edge
-  table and its pooled distributions.** It decomposes `overhang.py`'s `Q22` figure into the deck's
+  table, its pooled distributions and its counterfactual.** It decomposes `overhang.py`'s `Q22` figure into the deck's
   own span, the **signed** offset of the centreline from it, and the metres of ribbon with nothing
   under them — which is the difference between a ribbon that is too *wide* and one that is
   *registered wrong*, and those need opposite fixes. ⚠️ **It is NOT an independent check of
@@ -677,6 +677,29 @@ Common emoji for this project:
   the publishers license 5 of 45 level-1 edges and their lines are a **2D plan projection**, so a ray
   from a deck centreline finds the street *underneath* and 2 of the 5 publish a width **wider** than
   the deck. Numbers in `Q103`.
+  🔴 **The THIRD table is a COUNTERFACTUAL and not a reading (`Q105`)** — it cuts each station's
+  ribbon back to its deck's own two rims and prices only what that costs: **2 of 1,326 priced**
+  stations under `is_passable`'s lane bar, **none** under `fits_car`'s, **8** with a *negative* half
+  and priced apart.
+  ⚠️ **There is deliberately no "stations on deck after the clamp" counter** — it is 1,334 of 1,334
+  **by construction**, because a half cut to its own rim cannot overhang it, and printing it would
+  put `Q58`'s trap in the one number a reader takes as the case for building this. The **benefit** is
+  the hanging population the table above already prints. 🔴 **The two halves are published APART and
+  their sum is not a width wherever either is negative**: `left + right` stays positive at all 8, and
+  the pricing run counted *"0 undrawable"* over every one of them, so the tool refuses to print
+  unless that count equals `centre_off_deck`. 🔴 **And the priced population EXCLUDES them, which the
+  first build did not** — medians, minima, the sort key and both bar counts all ran over the eight,
+  publishing `e208` at **0.70 m** where it is 2.90; `priced_widths` is the function that owns the
+  exclusion and `TestPricedWidths` mutation-fails without it. ⚠️ **The paint given up is `overhang_m`
+  exactly and unconditionally**, so it is deliberately not a column — `over p50` / `over max` above
+  are the same numbers, and the table's only new content is the left/right split. ⚠️ **`e104` carries 5 of the 8 in one run**, so a
+  fallback rule is part of any build. 🚫 **It licenses PAINT and never a `width_m`** — the rims come
+  from one contiguous run of structure, which at `e208` is the interchange's — so a build clamps the
+  **drawn ribbon** and leaves the published width alone, or it meets `Q103`'s own refutation of the
+  per-vertex offset. ✅ **Cap-stable like the overhang and unlike the span, for its own reason**:
+  `min(half, rim)` is bounded by the ribbon, not the cap, so the lane-bar count holds at 2 while the
+  deck span's max runs 19.00 → 36.20 m. Quote `--max-lateral-m` with a span and with neither of the
+  other two. Numbers in `Q105`.
 - 🔴 **`clearance.walk(levels=...)`, `tools/centreline_error.py --levels` and
   `tools/carriageway_occupancy.py --levels` all default to `(0,)` and the clearance default must
   stay there.** They exist so `P4-1`'s measurement is reachable *without* the bundle changing;

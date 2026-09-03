@@ -575,6 +575,22 @@ def survey(
     return rows
 
 
+def kept_rows(rows: dict[int, Row], min_stations: int) -> dict[int, Row]:
+    """The edges both tables describe — one predicate, called twice.
+
+    🔴 **Shared because a divergence here is SILENT.** `clamp_report`'s ratchet
+    compares its negative halves against `centre_off_deck` summed over its own
+    `kept`, so two copies of this comprehension drifting apart would leave the
+    two tables describing different populations with the ratchet still passing.
+    ⚠️ Not one of this repo's deliberate duplications — those are second
+    *measurements* across files (`carriageway.py` against `carriageway_margin.py`),
+    and this is one filter twice in one file.
+    """
+    return {
+        edge: row for edge, row in rows.items() if row.span_m and len(row.span_m) >= min_stations
+    }
+
+
 def report(
     rows: dict[int, Row],
     names: dict[int, str],
@@ -584,9 +600,7 @@ def report(
     across_m: float,
 ) -> None:
     """The per-edge table, the pooled distributions, and the refusals."""
-    kept = {
-        edge: row for edge, row in rows.items() if row.span_m and len(row.span_m) >= min_stations
-    }
+    kept = kept_rows(rows, min_stations)
     log.info("")
     log.info(
         "  %d off-grade edges walked, %d with at least %d kept stations",
@@ -739,6 +753,340 @@ def report(
         total.clipped,
         total.total,
     )
+
+
+@dataclass(frozen=True)
+class Clamp:
+    """One station's ribbon cut back to the deck's own two rims (`Q105`).
+
+    The counterfactual `Q103` left open: `carriageway.py` publishes **one**
+    deck-derived width and **one** deck-derived offset per edge, both symmetric,
+    so a ribbon centred on a deck that is not centred under it hangs on one side
+    and stops short on the other. This asks what each station would be if the
+    two halves were allowed to differ.
+
+    🔴 **`left_m` and `right_m` are published APART and their sum is not a width
+    whenever either is negative.** A negative half is not a narrow road, it is a
+    centreline lying outside its own deck — there is no rim on that side to cut
+    back to — and the two want opposite responses. Summed, the second vanishes
+    into the first: the pricing run that opened this counted "0 undrawable" over
+    **8** stations with a negative half, because `left + right` stayed positive
+    at every one of them. That is `Q57` in miniature and `Q78`'s defect in a new
+    column, so `undrawable` is a property of the two halves and never of the sum.
+
+    ⚠️ **`width_m` is a PAINT extent and not a carriageway width.** The rims come
+    from one contiguous run of structure at ribbon height, and `Q103` measured
+    that at `e208` the run is the interchange's — 7.9 m against a 5.60 m ribbon,
+    with 20 `clipped` stations upstream — so its middle is not this
+    carriageway's. Cutting paint back to structure is the reading this file's
+    own truth side licenses (*"the right truth for is-the-paint-on-the-deck"*);
+    publishing the result as `width_m` would be `Q57`'s generalisation with a
+    deck for a population, and is exactly what `Q103` refused for the offset.
+    """
+
+    left_m: float
+    right_m: float
+    drawn_m: float
+
+    @property
+    def width_m(self) -> float:
+        return self.left_m + self.right_m
+
+    @property
+    def given_up_m(self) -> float:
+        """Paint this station would give up — which is `overhang_m` EXACTLY.
+
+        🔴 **An identity, not a correlation, and unconditional.**
+        `half - min(half, high) == max(0, half - high)` and
+        `half - min(half, -low) == max(0, half + low)` for every input, so this
+        is `survey`'s own overhang formula rearranged — checked at 3.6e-15 over
+        200,000 random triples. **So the clamp gives up precisely the metres
+        that had no deck under them and not one more**, which is what makes it
+        a cut back to structure rather than a narrowing.
+
+        ⚠️ **It is therefore NOT published as a column**: `over p50` and
+        `over max` in the table above are the same numbers, and printing them
+        twice under a second name would be the fourth table claiming
+        information it does not add. It stays as the assertion that ties this
+        arithmetic to the walk's own recorded value — see
+        `test_it_reproduces_the_overhang_the_walk_ALREADY_recorded`.
+        """
+        return self.drawn_m - self.width_m
+
+    @property
+    def undrawable(self) -> bool:
+        """Either half negative — the centreline is off the deck it stands on."""
+        return self.left_m < 0.0 or self.right_m < 0.0
+
+
+def clamp_station(span_m: float, off_centre_m: float, drawn_m: float) -> Clamp:
+    """Cut one station's half-widths back to the deck's left and right rims.
+
+    Arithmetic on two columns `survey` already records, and deliberately not a
+    second walk: `span_m` and `off_centre_m` locate both rims exactly —
+    `high = span / 2 - off_centre`, `low = -span / 2 - off_centre` — because
+    the published offset is the negation of the deck's middle. A walk that
+    re-found them would be a second reading of the same faces that could only
+    ever disagree with this one by drifting.
+
+    ⚠️ **`overhang_m` is already the SUM of the two sides this separates.**
+    `survey` records `max(0, low + half) + max(0, half - high)`; the right term
+    is the left rim's and the left term is the right rim's. So the clamp is not
+    a new measurement, it is a refusal to add those two together.
+    """
+    half = 0.5 * drawn_m
+    return Clamp(
+        left_m=min(half, 0.5 * span_m - off_centre_m),
+        right_m=min(half, 0.5 * span_m + off_centre_m),
+        drawn_m=drawn_m,
+    )
+
+
+def priced_widths(clamps: dict[int, list[Clamp]]) -> dict[int, list[float]]:
+    """Per edge, the clamped widths that ARE widths — undrawable ones dropped.
+
+    🔴 **The exclusion this function exists for was the fourth table's own first
+    defect.** `Clamp` says in red that `left + right` is not a width where
+    either half is negative, and the first build then computed every median,
+    every minimum, the sort key and both bar counts over a population that
+    included them — reading `e208` at **0.70 m**, which is a station with a
+    -0.10 m half counted as a narrow carriageway. `Q57` inside the one class
+    written to prevent it.
+
+    ⚠️ **An edge whose every station is undrawable prices nothing and is
+    dropped**, rather than left in for `min` to raise on. The caller reports how
+    many, because a silently absent edge is the same defect one level up.
+    """
+    priced = {
+        edge: [clamp.width_m for clamp in series if not clamp.undrawable]
+        for edge, series in clamps.items()
+    }
+    return {edge: values for edge, values in priced.items() if values}
+
+
+def clamp_report(
+    rows: dict[int, Row],
+    names: dict[int, str],
+    *,
+    min_stations: int,
+    max_lateral_m: float,
+    lane_bar_m: float,
+    car_bar_m: float | None,
+) -> None:
+    """What an asymmetric ribbon would cost, per edge and pooled (`Q105`).
+
+    🔴 **There is deliberately NO "stations on deck after the clamp" counter,
+    and that number is the reason this function exists rather than the reason it
+    is trusted.** It is every kept station, by construction: if `-low >= half`
+    then `right = half` and `low + right <= 0`, and otherwise `right = -low` and
+    `low + right = 0` exactly — the overhang term is identically zero either
+    way, and the same on the left. Printing it would report the algebra as a
+    result, which is `Q58`'s confined-to-the-bar trap arriving in the one number
+    a reader would take as the case for building this. **The benefit is the
+    hanging population the table above already prints** — a rim inside the
+    ribbon is a parapet standing in the paint, read from the other side — and
+    what is priced here is only the cost.
+
+    🔴 **The UNDRAWABLE stations are excluded from every priced figure, and
+    leaving them in was this table's own first defect.** A station with a
+    negative half has no rim on that side, so `left + right` is not a width —
+    `Clamp` says so in red — and the first build then computed the medians, the
+    minima, the sort key and both bar counts over a population that included
+    them. It read `e208` at **0.70 m**, `e729` at 1.30 and `e104` at 2.81, and
+    every one of those three is a station with a negative half being counted as
+    a narrow carriageway: `Q57` inside the one class written to prevent it.
+    Excluded, the same edges read **2.90**, **6.40** and **6.51 m** and the
+    whole cost collapses from 6 stations on three edges to **2 on one**, with
+    the car bar clear. They are counted and listed on their own below, which is
+    the only honest place for them.
+
+    ⚠️ **The paint given up is NOT a column here.** It is `overhang_m` exactly
+    and unconditionally — see `Clamp.given_up_m` — so `over p50` and `over max`
+    in the table above already publish it. What this table adds that nothing
+    else does is the **left/right split**: the clamped width, the two bar counts
+    over it, and the stations where the split has no answer at all.
+
+    ⚠️ **The two bars are `fence.py`'s and stay apart.** `is_passable` reads the
+    lane and `fits_car` reads the car, and `Q19` says re-pointing either at the
+    other sends traffic down a 1.95 m edge or fences the player out of a 3.50 m
+    one. They are counted as two columns for that reason and never as one
+    "too narrow". ⚠️ **The car bar is read from `clearance.car_width_m` where
+    `narrowing.py`, `reachability.py` and `centreline_error.py` each hold their
+    own `CAR_WIDTH_M = 1.8` behind a `--car-width-m` flag.** The config's comment
+    says that constant is the same fact — the taxi's own box collider — so the
+    figures are comparable while the two agree and this side is the one that
+    moves with the city. A city declaring no `clearance:` block loses the column
+    and keeps the table, which is `fence.py`'s own degrade.
+
+    ✅ **The cost counters are cap-STABLE, and that was predicted the wrong way
+    round.** The plan for this work argued the clamp must inherit `span_m`'s cap
+    sensitivity because it is derived from it. It does not, and the reason is
+    structural: the clamp is `min(half, rim)`, **bounded above by the ribbon's
+    own half-width**, so a deck that grows past the ribbon as the cap widens
+    cannot move it. The cap reaches only stations whose deck is *narrower* than
+    the ribbon — exactly the stations it was never clipping. Measured over
+    `--max-lateral-m` 11 / 12 / 14 / 16 / 20 the deck span's p90 runs
+    14.50 -> 18.80 m and its max 19.00 -> 36.20, while the stations under the
+    lane bar hold at **2**, under the car bar at **0** and the negative halves
+    at **8** throughout. ⚠️ **A drifting p50 is the population and not the
+    clamp** — 6.75 -> 7.10 m as priced stations grow 1,295 -> 1,663 with the
+    clipping refusal falling away. So quote the cap with a span, and not with
+    this; the same rule as the overhang headline above, arrived at differently.
+
+    ⚠️ **`--bridge-m` is the dial that does move it, and only at zero.** Over
+    0 / 0.5 / 1 / 2 / 4 the lane-bar count reads 5 / 2 / 2 / 2 / 2, the car bar
+    2 / 0 / 0 / 0 / 0 and the negative halves 9 / 8 / 8 / 7 / 7: unbridged, the
+    walk is the hole detector the module docstring describes and it manufactures
+    three pinches and a negative half of its own. Above 0.5 m the pricing is
+    flat.
+    """
+    kept = kept_rows(rows, min_stations)
+    if not kept:
+        return
+
+    clamps = {
+        edge: [
+            clamp_station(span, off, drawn)
+            for span, off, drawn in zip(row.span_m, row.off_centre_m, row.drawn_m, strict=True)
+        ]
+        for edge, row in kept.items()
+    }
+    # Collected where the predicate is first evaluated, so the count, the two
+    # side tallies and the listing below all read one list and the population
+    # cannot be re-derived differently for the table than for the ratchet.
+    undrawable = [
+        (edge, clamp, span)
+        for edge, series in clamps.items()
+        for clamp, span in zip(series, kept[edge].span_m, strict=True)
+        if clamp.undrawable
+    ]
+    priced = priced_widths(clamps)
+
+    log.info("")
+    log.info(
+        "  COUNTERFACTUAL — the ribbon cut back to its deck's own two rims, "
+        "at --max-lateral-m %.1f",
+        max_lateral_m,
+    )
+    log.info("    nothing here is published and nothing is gated; it prices a fix, it is not one")
+    log.info(
+        "    clamp    left + right, over the stations where BOTH halves exist — an undrawable "
+        "station is not a narrow road and is counted apart below"
+    )
+    log.info(
+        "    %s  stations the clamp would put under fence.py's %s",
+        f"<{lane_bar_m:.2f}/<{car_bar_m:.2f}" if car_bar_m is not None else f"<{lane_bar_m:.2f}",
+        (
+            "lane bar / car bar — two bars, never one"
+            if car_bar_m is not None
+            else "lane bar; the city declares no `clearance:` block, so there is no car bar"
+        ),
+    )
+    log.info(
+        "    neg      stations with a NEGATIVE half — no rim on that side to cut back to; "
+        "must equal the `off` column above"
+    )
+    log.info(
+        "    ⚠ the paint given up is `overhang_m` exactly, so it is `over p50` / `over max` "
+        "above and is not repeated here"
+    )
+    log.info(
+        "    %-6s %-26s %8s %8s %8s %6s %6s %5s %5s",
+        "edge",
+        "road",
+        "drawn",
+        "clamp50",
+        "clamp mn",
+        f"<{lane_bar_m:.2f}",
+        f"<{car_bar_m:.2f}" if car_bar_m is not None else "<—",
+        "neg",
+        "n",
+    )
+    for edge in sorted(priced, key=lambda edge: min(priced[edge])):
+        values = priced[edge]
+        log.info(
+            # 🔴 The car-bar cell is a STRING so an absent bar prints "-" rather
+            # than 0. A zero there reads as "no station is under the car bar",
+            # which is a measurement, where the truth is that nothing was
+            # measured — `Q72`'s unreachable-counter trap in a single cell.
+            "    e%-5d %-26s %8.2f %8.2f %8.2f %6d %6s %5d %5d",
+            edge,
+            names.get(edge, "unnamed")[:26],
+            percentiles(kept[edge].drawn_m)[0],
+            percentiles(values)[0],
+            min(values),
+            sum(1 for value in values if value < lane_bar_m),
+            sum(1 for value in values if value < car_bar_m) if car_bar_m is not None else "-",
+            sum(1 for clamp in clamps[edge] if clamp.undrawable),
+            len(values),
+        )
+    if len(priced) != len(clamps):
+        log.info(
+            "    %d edge(s) price nothing — every kept station undrawable",
+            len(clamps) - len(priced),
+        )
+
+    pooled = [value for values in priced.values() for value in values]
+    log.info("")
+    log.info("  pooled over %d priced stations — the LOW tail is the finding", len(pooled))
+    log.info("    %-22s %8s %8s %8s %8s %8s", "", "p1", "p10", "p50", "p90", "p99")
+    # 🔴 The signed five points and not the four-point magnitude table, for
+    # `signed_percentiles`' reason arriving at a one-sided column: what matters
+    # about a clamped width is its **bottom**, and p50/p90/p99/max reports the
+    # top of it. A width has no negative half to make it two-sided; it is the
+    # tail of interest that decides which convention applies, not the sign.
+    log.info(
+        "    %-22s %8.2f %8.2f %8.2f %8.2f %8.2f", "clamped width m", *signed_percentiles(pooled)
+    )
+
+    under_lane = sum(1 for value in pooled if value < lane_bar_m)
+    log.info("")
+    log.info(
+        "    %d of %d priced stations fall under the %.2f m lane bar (%.1f%%); %s",
+        under_lane,
+        len(pooled),
+        lane_bar_m,
+        100.0 * under_lane / len(pooled),
+        (
+            f"{sum(1 for value in pooled if value < car_bar_m)} under the {car_bar_m:.2f} m "
+            "car bar — fence.py's two bars, counted apart"
+            if car_bar_m is not None
+            else "the car bar is not counted — the city declares no `clearance:` block"
+        ),
+    )
+
+    # 🔴 The ratchet on the sign. These are the same stations by construction —
+    # a half goes negative exactly when the centreline falls outside the run —
+    # so an inequality means one of the two stopped measuring what it says, and
+    # the silent direction is `undrawable` reading 0 because the sum stayed
+    # positive. Asserted rather than commented, `Q72`'s standard for a counter.
+    off_deck = sum(row.centre_off_deck for row in kept.values())
+    if len(undrawable) != off_deck:
+        raise SystemExit(
+            f"{len(undrawable)} stations have a negative half-width but {off_deck} were recorded "
+            "with the centreline off the deck. These are the same stations; one of the two "
+            "has stopped measuring what it says."
+        )
+    log.info(
+        "    %d have a NEGATIVE half — %d left, %d right — which is the `off` column above; "
+        "the clamp is undefined at every one and none is priced above",
+        len(undrawable),
+        sum(1 for _, clamp, _ in undrawable if clamp.left_m < 0.0),
+        sum(1 for _, clamp, _ in undrawable if clamp.right_m < 0.0),
+    )
+    if undrawable:
+        log.info("    %-6s %-26s %8s %8s %8s %8s", "edge", "road", "left", "right", "span", "drawn")
+        for edge, clamp, span in undrawable:
+            log.info(
+                "    e%-5d %-26s %8.2f %8.2f %8.2f %8.2f",
+                edge,
+                names.get(edge, "unnamed")[:26],
+                clamp.left_m,
+                clamp.right_m,
+                span,
+                clamp.drawn_m,
+            )
+    log.info("    a clamp cuts paint back to structure; it does NOT license a width — see `Clamp`")
 
 
 def occupancy_indices(polyline: np.ndarray, alongs: list[float], spacing_m: float) -> list[int]:
@@ -1027,6 +1375,16 @@ def main(argv: list[str] | None = None) -> int:
 
     graph = json.loads((args.generated / manifest["road_graph"]).read_text())
     names = road_names(graph)
+    # 🔴 **Both bars read here, and the missing one DEGRADES rather than
+    # aborting.** `clearance:` is an optional block; `fence.py` guards the same
+    # read with `if city.clearance is not None`, logs that nothing is fenced and
+    # carries on. Refusing to start instead would kill the per-edge and pooled
+    # tables — neither of which knows what a car is — over one absent column, on
+    # a tool whose docstring says it grades rather than checks. `None` is the
+    # absence of a bar and never a zero, which would silently price every
+    # station as clearing it.
+    lane_bar_m = float(city.roads.lane_width_m)
+    car_bar_m = float(city.clearance.car_width_m) if city.clearance is not None else None
     # Measured off the DRAWN ribbon, not the graph's `width_m`. The two coincide
     # only while `floor_by_elevation_level` exempts off-grade from the widening;
     # a floor added there would widen the walk's subject without moving
@@ -1088,6 +1446,18 @@ def main(argv: list[str] | None = None) -> int:
                 min_stations=args.min_stations,
                 spacing_m=args.spacing_m,
                 across_m=args.across_m,
+            )
+            # The two bars are `fence.py`'s own pair — `roads.lane_width_m` for
+            # `is_passable`, `clearance.car_width_m` for `fits_car` — read from
+            # the city above rather than restated, so a config move cannot leave
+            # this file printing 3.20 and 1.80 for ever.
+            clamp_report(
+                rows,
+                names,
+                min_stations=args.min_stations,
+                max_lateral_m=cap,
+                lane_bar_m=lane_bar_m,
+                car_bar_m=car_bar_m,
             )
             probe(
                 walked,

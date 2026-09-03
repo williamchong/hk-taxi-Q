@@ -37,7 +37,9 @@ from deck_margin import (
     Refusals,
     Station,
     along_metres,
+    clamp_station,
     occupancy_indices,
+    priced_widths,
     refuse_unprobeable,
     survey,
 )
@@ -48,24 +50,40 @@ from overhang import walk_width
 # miss rather than coincidentally landing on the deck.
 DECK_Y = 10.0
 
+# One straight run with a vertex in the middle, shared by every class that walks
+# a whole edge. Hoisted rather than copied: two classes reached across into
+# `TestTheTraceIsAPartition` for it and a third had a byte-identical copy, so
+# the constant was already being treated as common.
+POLYLINE = [[0.0, DECK_Y, 0.0], [10.0, DECK_Y, 0.0], [20.0, DECK_Y, 0.0]]
 
-def _deck(x_from: float, x_to: float, z_half: float = 3.0) -> Faces:
+
+def _deck_band(x_from: float, x_to: float, z_from: float, z_to: float) -> Faces:
     """A flat quad of upward-wound triangles, indexed as `survey` expects.
 
     Wound `(a, +z, +x)` because `Faces.of(..., signed=True)` keeps only faces
     whose normal points up, and the opposite winding indexes **nothing** — which
     would make every assertion below pass by there being no deck at all.
+
+    ⚠️ **The band is asymmetric on purpose.** A deck that does not straddle
+    `z = 0` is the only way to reach a station whose centreline is off its own
+    deck, which is the state `TestClampStation` exists for and which the
+    symmetric `_deck` below cannot produce at any width.
     """
     corners = np.array(
         [
-            [[x_from, DECK_Y, -z_half], [x_from, DECK_Y, z_half], [x_to, DECK_Y, -z_half]],
-            [[x_to, DECK_Y, -z_half], [x_from, DECK_Y, z_half], [x_to, DECK_Y, z_half]],
+            [[x_from, DECK_Y, z_from], [x_from, DECK_Y, z_to], [x_to, DECK_Y, z_from]],
+            [[x_to, DECK_Y, z_from], [x_from, DECK_Y, z_to], [x_to, DECK_Y, z_to]],
         ],
         dtype=np.float64,
     )
     faces = Faces.of(corners, signed=True)
     assert len(faces.corners) == 2, "both triangles must survive the upward filter"
     return faces
+
+
+def _deck(x_from: float, x_to: float, z_half: float = 3.0) -> Faces:
+    """The band centred on the centreline — every test here that predates it."""
+    return _deck_band(x_from, x_to, -z_half, z_half)
 
 
 def _graph(polyline: list[list[float]], nodes: list[list[float]]) -> dict:
@@ -202,19 +220,14 @@ class TestTheTraceIsAPartition:
 
     # A node at each end, so the junction refusal fires; a deck under the middle
     # only, so `no_deck` fires too. Both halves non-empty is the point.
-    POLYLINE: ClassVar[list[list[float]]] = [
-        [0.0, DECK_Y, 0.0],
-        [10.0, DECK_Y, 0.0],
-        [20.0, DECK_Y, 0.0],
-    ]
     NODES: ClassVar[list[list[float]]] = [[0.0, DECK_Y, 0.0], [20.0, DECK_Y, 0.0]]
 
     def _run(self) -> tuple[dict, list[Station]]:
-        return _walk(_graph(self.POLYLINE, self.NODES), _deck(0.0, 12.0))
+        return _walk(_graph(POLYLINE, self.NODES), _deck(0.0, 12.0))
 
     def test_it_records_one_row_per_walked_station(self) -> None:
         _, series = self._run()
-        walked = len(list(walk_width(np.asarray(self.POLYLINE, dtype=np.float64), 2.0)))
+        walked = len(list(walk_width(np.asarray(POLYLINE, dtype=np.float64), 2.0)))
         assert len(series) == walked
 
     def test_the_kept_and_refused_halves_are_both_reached(self) -> None:
@@ -265,7 +278,7 @@ class TestTheTraceDoesNotDisturbTheWalk:
     """The default path is the shipped one, and a second edge is its own edge."""
 
     def test_the_row_is_identical_with_and_without_a_trace(self) -> None:
-        graph = _graph(TestTheTraceIsAPartition.POLYLINE, TestTheTraceIsAPartition.NODES)
+        graph = _graph(POLYLINE, TestTheTraceIsAPartition.NODES)
         structure = _deck(0.0, 12.0)
         untraced = _survey(graph, structure)[1]
         traced = _survey(graph, structure, trace={1: []})[1]
@@ -281,7 +294,7 @@ class TestTheTraceDoesNotDisturbTheWalk:
         refusal, rather than printing an empty series as though it had been
         walked and found bare.
         """
-        graph = _graph(TestTheTraceIsAPartition.POLYLINE, TestTheTraceIsAPartition.NODES)
+        graph = _graph(POLYLINE, TestTheTraceIsAPartition.NODES)
         trace: dict[int, list[Station]] = {}
         _survey(graph, _deck(0.0, 12.0), trace=trace)
         assert trace == {}
@@ -296,7 +309,7 @@ class TestTheTraceDoesNotDisturbTheWalk:
         `B023` complains. A test that passes with the thing it names removed is
         covering nothing (`Q72`), so what it is named for is the keying.
         """
-        graph = _graph(TestTheTraceIsAPartition.POLYLINE, TestTheTraceIsAPartition.NODES)
+        graph = _graph(POLYLINE, TestTheTraceIsAPartition.NODES)
         # A second edge, half as long and elsewhere, walked in the same pass.
         graph["edges"].append(
             {
@@ -369,3 +382,169 @@ class TestRefuseUnprobeable:
 
     def test_naming_nothing_refuses_nothing(self) -> None:
         refuse_unprobeable(self.GRAPH, ())
+
+
+class TestClampStation:
+    """The counterfactual half-widths (`Q105`), whose failure modes are all silent.
+
+    🔴 **Every one of these renders as a perfectly drawn ribbon.** A clamp with
+    an inverted sign narrows the wrong side and draws a road; a clamp that reads
+    a negative half as a narrow one prints a plausible width in a table nobody
+    can check against a frame. There is no picture to catch either.
+    """
+
+    # Ribbon half-width 2.0 throughout, from `_manifest`.
+    HALF: ClassVar[float] = 2.0
+
+    def test_it_reproduces_the_overhang_the_walk_ALREADY_recorded(self) -> None:
+        """The anti-drift assertion, and the reason this is not a second walk.
+
+        `survey` records `max(0, low + half) + max(0, half - high)` — the sum of
+        the two sides the clamp separates — and the paint the clamp gives up is
+        that column **exactly and unconditionally**, negative halves included:
+        `half - min(half, high) == max(0, half - high)` for every input. A clamp
+        that re-derived the rims some other way would agree here at first and
+        drift as one of the two changed.
+        """
+        rows, series = _walk(
+            _graph(
+                POLYLINE,
+                TestTheTraceIsAPartition.NODES,
+            ),
+            # 🔴 **One rim inside the ribbon and one outside, and neither
+            # half of that is decoration.** Where the clamp cuts on BOTH sides
+            # the paint given up is `drawn - span` and the offset cancels out
+            # of it entirely — so over a centred deck, and over any deck
+            # narrower than the ribbon, this test passes unchanged with the
+            # offset term deleted outright. That is the covering-nothing state
+            # `Q103` caught two of its own tests in. Only a station cut on one
+            # side can see it, and the guard below is what says one was reached.
+            _deck_band(0.0, 20.0, -4.0, 0.5),
+        )
+        kept = [station for station in series if not station.refused]
+        assert kept, "a walk that kept nothing satisfies every equality below"
+        clamps = [
+            clamp_station(station.span_m, station.off_centre_m, station.drawn_m) for station in kept
+        ]
+        assert any(clamp.left_m != pytest.approx(clamp.right_m) for clamp in clamps), (
+            "a deck cut on both sides cannot see an offset defect — see the band above"
+        )
+        for clamp, station in zip(clamps, kept, strict=True):
+            assert not clamp.undrawable
+            assert clamp.given_up_m == pytest.approx(station.overhang_m)
+        assert rows[1].overhang_m
+
+    def test_a_positive_off_centre_narrows_the_LEFT_half(self) -> None:
+        """The direction, which an absolute value could not report (`Q78`).
+
+        `off_centre_m` is the centreline in the deck's frame, positive left of
+        travel — so a positive reading means the deck lies to the RIGHT and the
+        left half is the short one. Inverting the sign inside `clamp_station`
+        swaps which side of every ribbon in the region gets cut, and the region
+        still renders.
+        """
+        left_short = clamp_station(span_m=6.0, off_centre_m=+2.0, drawn_m=2.0 * self.HALF)
+        assert left_short.left_m < left_short.right_m
+        right_short = clamp_station(span_m=6.0, off_centre_m=-2.0, drawn_m=2.0 * self.HALF)
+        assert right_short.right_m < right_short.left_m
+        centred = clamp_station(span_m=6.0, off_centre_m=0.0, drawn_m=2.0 * self.HALF)
+        assert centred.left_m == pytest.approx(centred.right_m)
+
+    def test_a_negative_half_hides_under_a_POSITIVE_sum(self) -> None:
+        """🔴 The load-bearing one: the sum is not the detector.
+
+        A deck at `+1 .. +3` under a ribbon at `-2 .. +2` leaves the right half
+        at **-1.0** and the left at **+2.0**, so `width_m` is a perfectly
+        ordinary **+1.0 m** while the station has no rim on one side at all.
+        The pricing run that opened `Q105` counted "0 undrawable" over eight
+        such stations for exactly this reason, so `undrawable` reads the two
+        halves and never their sum.
+        """
+        clamp = clamp_station(span_m=2.0, off_centre_m=-2.0, drawn_m=2.0 * self.HALF)
+        assert clamp.right_m == pytest.approx(-1.0)
+        assert clamp.left_m == pytest.approx(2.0)
+        assert clamp.width_m > 0.0
+        assert clamp.undrawable
+
+    def test_the_clamp_leaves_no_overhang_at_all(self) -> None:
+        """Why `clamp_report` prints no "on deck after the clamp" counter.
+
+        ⚠️ **This pins a claim, not a result.** The property is algebra — a half
+        cut to its own rim cannot pass it — and the counter it justifies
+        omitting would report that algebra as a finding, which is `Q58`'s trap.
+        The test earns its place by failing if `clamp_station` ever stops having
+        the property, at which point the omission would need re-arguing.
+        """
+        for span_m, off_centre_m in ((6.0, 0.0), (2.0, +1.5), (9.0, -3.0), (1.0, 0.0)):
+            clamp = clamp_station(span_m, off_centre_m, 2.0 * self.HALF)
+            high = 0.5 * span_m - off_centre_m
+            low = -0.5 * span_m - off_centre_m
+            assert max(0.0, low + clamp.right_m) == pytest.approx(0.0)
+            assert max(0.0, clamp.left_m - high) == pytest.approx(0.0)
+
+    def test_a_deck_wider_than_the_ribbon_gives_the_ribbon_back_unchanged(self) -> None:
+        """The control row. A clamp that always cuts would fail nothing above."""
+        clamp = clamp_station(span_m=40.0, off_centre_m=+1.0, drawn_m=2.0 * self.HALF)
+        assert clamp.left_m == pytest.approx(self.HALF)
+        assert clamp.right_m == pytest.approx(self.HALF)
+        assert clamp.given_up_m == pytest.approx(0.0)
+        assert not clamp.undrawable
+
+
+class TestTheClampAgreesWithTheWalkAboutTheSameStations:
+    """`clamp_report`'s ratchet: a negative half IS a centreline off the deck.
+
+    The two are the same geometry read from two sides, so `clamp_report` refuses
+    to print when the counts differ. Pinned here against a walk that actually
+    reaches the state, because the identity holds trivially over a population
+    where neither ever fires.
+    """
+
+    def test_the_two_counters_find_the_same_stations(self) -> None:
+        rows, series = _walk(
+            _graph(POLYLINE, []),
+            # Off to one side, so the centreline misses the deck entirely.
+            _deck_band(0.0, 20.0, 1.0, 3.0),
+        )
+        kept = [station for station in series if not station.refused]
+        assert kept
+        negative = [
+            station
+            for station in kept
+            if clamp_station(station.span_m, station.off_centre_m, station.drawn_m).undrawable
+        ]
+        assert negative, "the walk never reached the state this test is about"
+        assert len(negative) == rows[1].centre_off_deck
+
+
+class TestPricedWidths:
+    """🔴 An undrawable station may not be priced as a narrow road (`Q105`).
+
+    The defect this pins **shipped in the first build of the table it grades**:
+    every median, every minimum, the sort key and both bar counts were computed
+    over a population that still contained the negative halves, so `e208` was
+    published at 0.70 m — a station with a -0.10 m half read as a carriageway.
+    Nothing about that output looks wrong; it is a plausible number in a
+    plausible column, which is why it is a test and not a comment.
+    """
+
+    def test_an_undrawable_station_contributes_no_width(self) -> None:
+        drawn, span = 4.0, 2.0
+        # `off_centre_m` -2.0 puts the deck at +1 .. +3 under a ribbon at ±2, so
+        # the right half is -1.0 while `left + right` is a respectable +1.0.
+        bad = clamp_station(span_m=span, off_centre_m=-2.0, drawn_m=drawn)
+        good = clamp_station(span_m=6.0, off_centre_m=0.0, drawn_m=drawn)
+        assert bad.undrawable and bad.width_m > 0.0, "the fixture must reach the state"
+        assert priced_widths({1: [good, bad]}) == {1: [pytest.approx(good.width_m)]}
+
+    def test_an_edge_that_prices_nothing_is_dropped_rather_than_left_to_raise(self) -> None:
+        bad = clamp_station(span_m=2.0, off_centre_m=-2.0, drawn_m=4.0)
+        assert priced_widths({1: [bad]}) == {}
+
+    def test_it_keeps_every_station_where_both_halves_exist(self) -> None:
+        """The control. A filter that dropped everything would pass the two above."""
+        series = [
+            clamp_station(span_m=6.0, off_centre_m=off, drawn_m=4.0) for off in (-1.0, 0.0, +1.0)
+        ]
+        assert not any(clamp.undrawable for clamp in series)
+        assert len(priced_widths({1: series})[1]) == 3

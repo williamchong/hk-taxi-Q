@@ -921,6 +921,17 @@ than discovering the rest of it from a bug report.
   ⚠️ **Half the result went the other way and is recorded, not buried**: per-edge `over p50` worsened
   on 22 of 35 edges, because one number per edge cannot fit a deck that varies along its length.
   `DECISIONS.md` `Q103`.
+  ✅ **The remaining candidate — a per-station ASYMMETRIC ribbon — is priced and it is cheap
+  (`Q105`, 2026-09-04).** `deck_margin.py`'s counterfactual cuts each station's ribbon to its deck's
+  own two rims: **2 of 1,326 priced** stations then fall under `is_passable`'s lane bar and **none**
+  under `fits_car`'s, flat across both resolution dials, and `e208`'s rim is byte-identical over a
+  `--bridge-m` 0-4 sweep so it is real structure and not a hole. 🚫 **But it licenses PAINT and not a
+  width** — the rims are one contiguous run, the interchange's at `e208` — so the build clamps the
+  **drawn ribbon** and leaves `width_m` alone, or it meets this task's own refutation above at a
+  second elevation. ⚠️ **8 stations have a NEGATIVE half**, where the centreline lies outside its own
+  deck and the clamp is undefined; `e104` carries 5 of them in one run, so a fallback rule is part of
+  the work rather than an edge case. ⬜ **What would lift the restriction is unchanged**: attribute
+  deck extent to *this edge's* carriageway rather than to a contiguous run. `DECISIONS.md` `Q105`.
 
 ### Outline only — refine once Phase 3 lands
 

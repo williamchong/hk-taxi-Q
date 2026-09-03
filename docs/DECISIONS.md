@@ -17291,3 +17291,200 @@ record-above-the-guard trap · `Q62` for why the evidence is a frame · `Q72` fo
 mirror order avoids · `Q94` for the three publishers this adds a fourth to and for the
 grade-then-assign move · `Q95` for the survey that refuses junction stations · `Q99` for the
 stripped `project.godot` · `Q103` for the drive that found it and for the median void
+
+## `Q105` — The asymmetric ribbon is priced, and it buys paint rather than width
+
+`Q103` closed with `P4-1` owning two edges and a mechanism it could name but not fix:
+`carriageway.py` publishes **one** deck-derived width and **one** deck-derived offset per off-grade
+edge, both symmetric, so a ribbon centred on a deck that is not centred under it hangs on one side
+and stops short on the other. At `e208` FLEMING ROAD occ 179 the deck runs **−7.70 .. +0.10** in the
+centreline's frame, so a ±2.80 m ribbon puts 2.70 m over air on the left and stands the flyover's
+own parapet inside the drawn lane — the user's *"why the fence is in middle of a lane?"*, restated
+as geometry. This prices the obvious counterfactual: let the two half-widths differ.
+
+**Nothing is published, `schema_version` does not move, and no grader is owed.**
+`tools/deck_margin.py` gains a fourth table, report-only, exit 0.
+
+### 🔴 The decisive number the plan asked for is a tautology, and it was caught by working the algebra
+
+The plan opened with *"report how many of the 1,001 hanging stations would sit entirely on deck
+under `left = min(half, deck_left)` / `right = min(half, deck_right)` — that single number decides
+whether this is worth building."* It is **1,334 of 1,334, by construction**. If `−low ≥ half` then
+`right = half` and `low + half ≤ 0`; otherwise `right = −low` and `low + right = 0` exactly. The
+overhang term is identically zero either way, and the same on the left. Printing it would report
+the algebra as a finding, which is `Q58`'s confined-to-the-bar trap arriving in the one number a
+reader would take as the case for building this — so `clamp_report` prints **no such counter**, and
+says in red why. What is priced instead is only the cost; the *benefit* is the hanging population
+the existing table already prints, because a rim inside the ribbon and a parapet standing in the
+paint are the same geometry read from two sides.
+
+### 🔴 The sum hides the sign, and the pricing run made that exact error first
+
+Eight stations produce a **negative half-width** — the centreline lies outside its own deck, so
+there is no rim on that side to cut back to. `left + right` stays positive at every one of them, and
+the first pricing script counted **"0 undrawable"** over all eight. A negative half is not a narrow
+road; it is a road that cannot be drawn on its own centreline, and the two want opposite responses
+(`Q57` at station scale, `Q78`'s defect in a new column). So `Clamp.undrawable` reads the two halves
+and never their sum, and `clamp_report` **refuses to print** unless the count equals the walk's own
+`centre_off_deck` — the two are the same geometry, so an inequality means one of them has stopped
+measuring what it says.
+
+| edge | road | left | right | span | drawn |
+|---|---|---|---|---|---|
+| `e104` | HUNG HING ROAD FLYOVER | −0.40 | 3.61 | 5.60 | 7.22 |
+| `e104` | HUNG HING ROAD FLYOVER | −0.70 | 3.61 | 5.90 | 7.22 |
+| `e104` | HUNG HING ROAD FLYOVER | −0.80 | 3.61 | 6.00 | 7.22 |
+| `e104` | HUNG HING ROAD FLYOVER | −0.10 | 3.61 | 8.80 | 7.22 |
+| `e104` | HUNG HING ROAD FLYOVER | −0.20 | 3.61 | 9.30 | 7.22 |
+| `e208` | FLEMING ROAD | −0.10 | 0.80 | 0.70 | 5.60 |
+| `e729` | WAN CHAI INTERCHANGE | −1.90 | 3.20 | 2.30 | 6.40 |
+| `e730` | WAN CHAI INTERCHANGE | 5.17 | −0.30 | 9.10 | 10.35 |
+
+⚠️ **`e104` carries five of the eight over eight consecutive metres**, so this is a run and not
+noise — a fallback rule for it is part of any build, not an edge case to leave to the clamp.
+
+🔴 **And the same error was made a SECOND time, inside the table that reports them.** `Clamp` was
+written with the rule in red at the top, and `clamp_report` then computed every median, every
+minimum, the sort key and both bar counts over a population that still contained the eight. The
+first published figures — `e208` **0.70 m**, `e729` 1.30, `e104` 2.81, and **6 of 1,334** under the
+lane bar — were four-fifths an artefact of that: each of those three minima *is* an undrawable
+station wearing a plausible width. Excluded, the same edges read **2.90**, **6.40** and **6.51 m**,
+the cost collapses to **2 stations on one edge**, and the car bar comes back clear.
+⚠️ **Found by review, not by the counters**, which is the point — nothing about `0.70` in a width
+column looks wrong. `priced_widths` is now its own function so the exclusion is testable, and
+`TestPricedWidths` mutation-fails when it is removed.
+
+### ✅ The cost, at `--max-lateral-m` 12 and `--bridge-m` 1.0
+
+Over the **1,326 priced stations** — the 1,334 kept, less the 8 with no second rim:
+
+| | p1 | p10 | p50 | p90 | p99 |
+|---|---|---|---|---|---|
+| clamped width m | 4.73 | 5.50 | 6.81 | 10.72 | 15.92 |
+
+**2 of 1,326 stations (0.2%)** fall under `is_passable`'s 3.20 m lane bar and **none at all** under
+`fits_car`'s 1.80 m. ⚠️ **Two bars, counted apart** — `Q19` — and read from the city rather than
+restated, so a config move cannot leave this file printing 3.20 and 1.80 for ever. **The whole cost
+is on one edge**: `e208` FLEMING ROAD, clamp p50 5.20 m and minimum **2.90 m** over 26 priced
+stations. `e104`'s true minimum is 6.51 m and `e729`'s is 6.40 — both were pinch cases only in the
+defective reading above.
+
+⚠️ **The paint given up is NOT reported, and that is a result rather than a gap.** It is
+`overhang_m` **exactly and unconditionally** — `half - min(half, high)` is `max(0, half - high)` on
+each side, checked at 3.6e-15 over 200,000 random triples — so `over p50` and `over max` in the
+existing table already publish it. ✅ **What that identity says is that the clamp gives up precisely
+the metres which had no deck under them and not one more**, which is what makes it a cut back to
+structure rather than a narrowing. The only irreducibly new content in the table is the
+**left/right split**.
+
+⚠️ **The five points are the SIGNED convention** even though a width is one-sided, because what
+matters here is the **bottom** of the distribution and the four-point magnitude table reports its
+top.
+
+🔴 **The low tail is one-sided and must not be read as an unblock.** `e208` occ 179 becomes an
+honest **2.90 m** of solid deck in place of 5.60 m of paint with a parapet through it — better
+geometry and still under the lane bar. The clamp removes a defect; it does not open a road.
+
+### ✅ `e208`'s rim is not a hole artefact — the bridge sweep is byte-identical
+
+The one test that could have voided the pricing before it started. Over `--bridge-m`
+**0 / 0.5 / 1.0 / 2.0 / 4.0** every row of `e208`'s drift band is **identical to the digit** — the
+left rim runs `+1.20 → +0.10 → −0.10` at every setting, `brdg` 0.00 throughout, clamp
+`4.00 / 4.00 / 4.10 / 3.90 / 3.70 / 3.40 / 3.10 / 2.90 / 0.70`. So the walk is finding a real
+structure edge and not a run stopped at a gap.
+
+⚠️ **The dial does move the pooled figures, and only at zero**: over the same sweep the lane-bar
+count reads 5 / 2 / 2 / 2 / 2, the car bar 2 / 0 / 0 / 0 / 0 and the negative halves
+9 / 8 / 8 / 7 / 7. Unbridged, the walk is the hole detector this module's docstring describes and it
+manufactures three pinches and a negative half of its own.
+
+### ✅ The cap sensitivity was predicted backwards, and the measurement corrected it
+
+The plan argued the clamp must inherit `span_m`'s cap sensitivity because it is derived from it, and
+that every figure must therefore be quoted with `--max-lateral-m`. **False.** The clamp is
+`min(half, rim)`, bounded above by the ribbon's own half-width, so a deck that grows past the ribbon
+as the cap widens cannot move it; the cap reaches only stations whose deck is *narrower* than the
+ribbon, which are exactly the ones it was never clipping.
+
+| `--max-lateral-m` | 11 | 12 | 14 | 16 | 20 |
+|---|---|---|---|---|---|
+| deck span p90 / max m | 14.50 / 19.00 | 15.00 / 22.70 | 16.50 / 23.20 | 16.90 / 25.00 | 18.80 / 36.20 |
+| clamped width p50 m | 6.75 | 6.81 | 6.95 | 7.05 | 7.10 |
+| under the lane bar | **2** | **2** | **2** | **2** | **2** |
+| under the car bar | **0** | **0** | **0** | **0** | **0** |
+| negative halves | **8** | **8** | **8** | **8** | **8** |
+| priced stations | 1,295 | 1,326 | 1,444 | 1,582 | 1,663 |
+
+⚠️ **The p50 drift is the population and not the clamp** — priced stations grow 1,295 → 1,663 as
+clipping falls. So quote the cap with a span and not with this: the same rule the overhang headline
+already has, reached by a different route.
+
+⚠️ **The docstring's own recorded 8 / 10 / 12 / 16 sweep is no longer runnable on this bundle** and
+that is the `Q58` guard working, not a regression: the widest off-grade ribbon is now **20.30 m**
+after `Q103`'s deck widths, so `--max-lateral-m 8` walks 16.00 m and the tool refuses to start.
+
+### 🔴 What this licenses, and what it does not
+
+✅ **Licensed: cutting paint back to structure.** This file's truth side is the model's own deck,
+which is *"the right truth for is-the-paint-on-the-deck"* and what `clearance.py` blocks against.
+
+🚫 **Not licensed: publishing the result as `width_m`.** The rims come from **one contiguous run of
+structure at ribbon height**, and `Q103` measured that at `e208` the run is the *interchange's* —
+7.9 m against a 5.60 m ribbon, with 20 consecutive `clipped` stations upstream putting ≥24 m of
+structure at that height. Its middle is not this carriageway's middle and neither is its edge, so
+"this street is 2.90 m wide here" is `Q57`'s generalisation with a deck for a population — which is
+precisely what `Q103` refused for the per-vertex *offset*, and the refusal transfers. A build must
+therefore clamp the **drawn ribbon** without moving `width_m`, or it meets the same refutation.
+⚠️ The thing that would lift this is unchanged and is still `P4-1`'s: attributing deck extent to
+*this edge's* carriageway rather than to a contiguous run, which is `Q19` candidate 1's shape at a
+second elevation.
+
+### ✅ How the counters are tested
+
+⚠️ **Mutation-checked rather than read** (`Q72`), and one test was covering nothing until it was:
+
+- **swap the two halves** — the `Q78` sign, which narrows the wrong side of every ribbon in the
+  region and renders perfectly → 3 tests fail.
+- **drop the offset term** → 5 fail, but only after the agreement test was rebuilt. It first ran
+  over a **centred** deck, where `off_centre_m` is 0 and the arithmetic reduces to `span / 2` on
+  both sides. Worse, the obvious repair does not work either: wherever the clamp cuts on **both**
+  sides the paint given up is `drawn − span` and the offset **cancels out of it algebraically**. It
+  takes a station clamped on *one* side to see the defect at all, and the test now asserts it
+  reached one.
+- **`undrawable` reads the sum** — the exact error the pricing run made → 2 tests fail, and the
+  tool's runtime ratchet exits 1 with `neg` reading 0 where it should read 8.
+- **`priced_widths` keeps the undrawable stations** — the error the *table* made → 2 tests fail.
+  This one is new: the exclusion had no test at all until review found the defect, and a printing
+  function is not testable in this suite (nothing here uses `caplog`), so the population became its
+  own pure function to make it so.
+
+⚠️ **A restore inside the same filesystem second silently loads the mutated `.pyc`** — CPython
+compares the source mtime for **equality**, not recency — which made a restored file fail three
+tests it passes. Every mutation run here clears `__pycache__` first, and any future one must.
+
+- ✅ Report-only, exit 0, nothing published, `schema_version` unmoved. `ruff` clean from the root,
+  **1,917** tests pass.
+- ✅ **A missing `clearance:` block DEGRADES rather than aborting.** The first build raised
+  `SystemExit`, which would have killed the per-edge and pooled tables — neither of which knows what
+  a car is — over one absent column, on a tool whose own docstring says it grades rather than checks.
+  `fence.py`, cited as the precedent, does the opposite: it guards the read, says nothing is fenced
+  and carries on. `car_bar_m` is now `float | None`, and `None` is the absence of a bar rather than
+  a zero, which would silently price every station as clearing it.
+- ✅ **One `kept` predicate, not two.** `report` and `clamp_report` held character-identical
+  comprehensions; the ratchet compares the clamp's negative halves against `centre_off_deck` summed
+  over `clamp_report`'s **own** `kept`, so a divergence would have left the two tables describing
+  different populations with the ratchet still passing. ⚠️ Not one of this repo's deliberate
+  duplications — those are second *measurements* across files — this was one filter twice in one
+  file. No `.tres`, no shader, no Godot change, so no `check.sh` and no frame is
+  owed — nothing this change touches can appear in one.
+- ✅ **The clamp is arithmetic on two columns `survey` already records** and deliberately not a
+  second walk: `high = span / 2 − off_centre`, `low = −span / 2 − off_centre`. A second reading of
+  the same faces could only ever disagree with this one by drifting. And `overhang_m` is already the
+  **sum** of the two sides this separates, so the clamp is not a new measurement — it is a refusal
+  to add them together.
+
+**See.** `Q103` for the deck-sourced width and the per-station probe this builds on, and for the
+per-vertex offset it refuses · `Q57` for why a negative half and a narrow road may not share a
+number · `Q58` for the confined-to-the-bar trap the missing counter avoids · `Q72` for the standard
+the mutation checks meet · `Q78` for the sign an absolute value cannot report · `Q19` for the two
+bars that stay apart · `P4-1` for what still owns the fix
