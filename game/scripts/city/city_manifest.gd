@@ -33,6 +33,10 @@ const NOT_MEASURED: float = -1.0
 
 ## Schema this understands, matching `CITY_SCHEMA` in `etl/pipeline/export.py`.
 ##
+## 22 since `Q107`: `carriageway[].offset_m` is an array beside the half-width,
+## one value per station, saying where the drawn ribbon is centred left of
+## travel. A reader that keeps taking `half_width_m` as a half-width about the
+## centreline is wrong about every off-grade edge.
 ## 4 since `Q23`: `carriageway[].half_width_m` is an array, one value per station
 ## of that edge's polyline, where it was one number for the whole edge.
 ##
@@ -139,7 +143,7 @@ const NOT_MEASURED: float = -1.0
 ## set missing a bundle file — with a sharper edge than usual: what it would
 ## *also* do is refuse edges the player can still reach and leave nothing there
 ## to see, which is precisely the invisible wall `Q19` exists to remove.
-const SCHEMA_VERSION: int = 21
+const SCHEMA_VERSION: int = 22
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -329,6 +333,24 @@ var signs_text_atlas_path: String
 ## table exists to prevent.
 var carriageway_half_width_m: Dictionary[int, PackedFloat32Array] = {}
 
+## Where each station's drawn ribbon is **centred**, in metres left of travel,
+## keyed by road-graph edge id — one value per station, indexed exactly as the
+## half-width above.
+##
+## 🔴 **The ribbon is no longer symmetric about the published centreline
+## (`Q107`).** Off-grade its two rails are cut to the deck it stands on
+## independently, so `half_width_m` is half the distance *between the rails* and
+## this says where that span sits. A lane centre taken as `centreline +
+## half_width` alone is out by this much — up to several metres on the
+## interchange — and `Q106` is what that costs: four ETL-side instruments made
+## exactly that assumption and every one was wrong about the whole elevated
+## network, in two directions, for a release.
+##
+## ⚠️ **0.0 on every level-0 edge**, which is the entire drivable network until
+## `P4-1` opens the rest — so this changes no lane centre the game places today
+## and is plumbed so that it will not have to be discovered again when it does.
+var carriageway_offset_m: Dictionary[int, PackedFloat32Array] = {}
+
 ## Width of the widest gap a car could get through, in metres, keyed by
 ## road-graph edge id — **one value per station**, like the half-width above and
 ## indexed the same way, so both come off one station.
@@ -408,6 +430,7 @@ static func load_manifest() -> CityManifest:
 	for entry: Dictionary in document.get("carriageway", []):
 		var edge: int = int(entry.get("edge", -1))
 		manifest.carriageway_half_width_m[edge] = _floats(entry, "half_width_m")
+		manifest.carriageway_offset_m[edge] = _floats(entry, "offset_m")
 		manifest.carriageway_clear_width_m[edge] = _floats(entry, "clear_width_m")
 	manifest.lane_width_m = float(document.get("lane_width_m", 0.0))
 	# `null` where the city declares no `clearance:` block. Read through a

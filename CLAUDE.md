@@ -734,16 +734,34 @@ Common emoji for this project:
   ⚠️ **Do not import the parse from `pipeline.clearance`** — that
   module's bumper bounds are `ground_clearance.py`'s deliberate exception and no second import comes
   in on it.
-- 🔴 **The drawn ribbon is `[-half + offset_m, +half + offset_m]`, NEVER `±half` about the
-  centreline (`Q106`).** `surface._shape` offsets both rails by the graph's `offset_m`, and `Q103`
-  set it on 36 of 45 off-grade edges — up to **4.95 m** — so anything reconstructing the road from a
-  centreline must pass it to `overhang.cross_section`. ⚠️ **`roadsurface.json` publishes no offset**,
-  so the manifest alone is not enough to rebuild the ribbon; read `roadgraph.json`. Four tools got
-  this wrong at once and **failed in opposite directions**: `overhang.py` drops a sample with no road
-  under it, so it read the *intersection* and was grading 92% of the off-grade road; `deck_margin.py`
-  keeps every sample, so it counted ribbon that is not there. ⚠️ **Index the key, never `.get(…, 0.0)`**
-  — a default restores the defect silently. ✅ **It is 0.0 on all 737 level-0 edges**, which is what
-  makes the parameter safe to default and every gated figure inert. Numbers in `Q106`.
+- 🔴 **The drawn ribbon is `[offset − half, offset + half]` PER STATION, never `±half` about the
+  centreline (`Q106`, `Q107`).** Read both from `city.json`'s `carriageway[]` — `half_width_m` and
+  `offset_m`, via `overhang.half_width_at` and `overhang.offset_at` — and pass the offset to
+  `overhang.cross_section`. 🔴 **`half_width_m` is half the distance BETWEEN the rails and not a
+  half-width about anything**: since `Q107` the two rails are cut to the deck independently, so
+  off-grade the ribbon is asymmetric and a half-width alone does not say where the road is.
+  ⚠️ **Four tools got this wrong at once and failed in OPPOSITE directions** — `overhang.py` drops a
+  sample with no road under it, so it read the *intersection* and was grading 92% of the off-grade
+  road; `deck_margin.py` keeps every sample, so it counted ribbon that is not there; they read 5.6%
+  against 10.7% and it was taken for a model difference. ⚠️ **A tool that already has an `offset_m`
+  meaning a CELL's distance from the centreline must ADD the drawn offset, never replace it** —
+  `carriageway_occupancy.py` and `ground_clearance.py` both do, because `Section.is_inside` and "the
+  centreline cell" are about the published centreline. ✅ **0.0 on all 737 level-0 edges**, which is
+  what makes every gated figure inert. Numbers in `Q106` and `Q107`.
+- 🔴 **`surface.py` cuts the off-grade ribbon to its deck, per station and per side (`Q107`) —
+  `_clamped_rails` is the one place, and it may only CUT.** `upper = min(shift + half, left_rim)`,
+  `lower = max(shift − half, −right_rim)`, with the rims from `roadgraph.json`'s `deck_rim_m`.
+  A deck wider than the paint changes nothing, because extending would invent carriageway (`Q54`)
+  and `Q105` licensed a deck rim as **paint and not a width** — so ⚠️ **`width_m` must not move
+  here**. ⚠️ **Absence of a deck is `inf`, never 0.0**: that is what makes the whole at-grade
+  network inert by arithmetic rather than by a branch, and a 0.0 default collapses 737 edges to
+  nothing. ⚠️ **A station whose rails cross keeps the ribbon it had and is counted** — 0 in this
+  region and *reachable*, so mutation-check it rather than reading its value. ⚠️ **Prove inertness
+  by neutralising the clamp and rebuilding**: it must reproduce **32,177 triangles / 39,078
+  vertices**, the pre-`Q107` bundle exactly. 🔴 **The evidence is a frame and the cache will lie to
+  you** — delete `game/.godot/imported/roads.glb-*` and re-import before *each* shot, or the pair
+  comes back identical over a 2.16 m change; and aim at `e337`, not `e208`, whose cut is under
+  0.5 m. Numbers in `Q107`.
 - Road-surface, deck-height or ground changes: also `tools/deck_error.py`, `tools/overhang.py`,
   `tools/ground_clearance.py` and `tools/carriageway_occupancy.py`, by hand after a build. They grade
   the *shipped* bundle and share no **method** with the pipeline — `check.sh` does not require a built

@@ -102,6 +102,14 @@ CITY_NAME = "city.json"
 # reader ignoring those would be right — but for the asset set again: a v7
 # generated directory would place a hero from a path that now loads nothing,
 # and draw the hole the v7 bump itself was written against.
+# 22 since `Q107`: `carriageway[].offset_m` is a list, one value per station,
+# saying where the drawn ribbon is CENTRED in `surface.mitres`' LEFT-of-travel
+# frame. 🔴 **A reader that keeps taking `half_width_m` as a half-width about
+# the centreline is wrong about every off-grade edge** — the rails are cut to
+# the deck independently now, so the ribbon is asymmetric and `half_width_m` is
+# half the distance *between* them. That is hard rule 5's test, and `Q106` is
+# the cost of not publishing it: four tools reconstructed the road without it
+# and every one was wrong, in two directions, for a release.
 # 9 since `Q51`: `carriageway[]` carries `clear_width_m` beside the drawn width,
 # and the manifest publishes `lane_width_m` as the bar it is read against. The
 # silent wrong answer again, and the worst-shaped one yet: a v8 reader would
@@ -184,7 +192,7 @@ CITY_NAME = "city.json"
 # merged. ⚠️ Nullable like the optional assets: a city that declares no
 # `clearance:` block fences nothing, and the game must be able to tell that from
 # a city whose fence found nothing to do.
-CITY_SCHEMA = 21
+CITY_SCHEMA = 22
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -546,7 +554,21 @@ def _carriageway(surface: dict, clearance: dict) -> list[dict]:
             )
         if any(width < 0.0 and width != NOT_MEASURED for width in clear):
             raise ValueError(f"edge {edge_id} publishes a negative clearance that is not a refusal")
-        table.append({"edge": edge_id, "half_width_m": halves, "clear_width_m": clear})
+        table.append(
+            {
+                "edge": edge_id,
+                "half_width_m": halves,
+                # 🔴 **Where each station's ribbon is CENTRED (`Q107`).** The
+                # two rails are cut to their deck independently, so the ribbon
+                # is not symmetric about the published centreline and a
+                # half-width alone does not say where it is. `Q106` is what
+                # dropping it costs: four instruments rebuilt the road from
+                # `half_width_m` about a centreline the paint had left, and all
+                # four were wrong about the whole off-grade network.
+                "offset_m": entry["offset_m"],
+                "clear_width_m": clear,
+            }
+        )
     return table
 
 

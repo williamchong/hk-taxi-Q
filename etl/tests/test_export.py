@@ -118,8 +118,22 @@ class _Region:
                 # The drawn half-width per edge, which `export.py` carries into
                 # `city.json` so the game can place a car in the nearside lane.
                 "carriageway": [
-                    {"edge": _EDGE_ID, "half_width_m": [5.12, 5.12], "trim_m": [0.0, 0.0]},
-                    {"edge": _EDGE_ID + 1, "half_width_m": [5.12, 5.12], "trim_m": [0.0, 0.0]},
+                    {
+                        "edge": _EDGE_ID,
+                        "half_width_m": [5.12, 5.12],
+                        # ⚠️ Asymmetric on purpose: a ribbon centred on its
+                        # centreline is the value a dropped field would fake, so
+                        # a fixture at zero could not tell the two apart
+                        # (`Q107`).
+                        "offset_m": [0.0, 0.25],
+                        "trim_m": [0.0, 0.0],
+                    },
+                    {
+                        "edge": _EDGE_ID + 1,
+                        "half_width_m": [5.12, 5.12],
+                        "offset_m": [0.0, 0.0],
+                        "trim_m": [0.0, 0.0],
+                    },
                 ],
             },
             CLEARANCE_NAME: {
@@ -407,6 +421,9 @@ class TestAssembly:
         region.build()
         surface = region.documents[SURFACE_MANIFEST_NAME]
         table = region.manifest()["carriageway"]
+        assert [entry["offset_m"] for entry in table] == [
+            entry["offset_m"] for entry in surface["carriageway"]
+        ], "the drawn centre must survive the join, or the ribbon cannot be rebuilt"
         assert [entry["half_width_m"] for entry in table] == [
             entry["half_width_m"] for entry in surface["carriageway"]
         ]

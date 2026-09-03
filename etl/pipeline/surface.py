@@ -83,6 +83,14 @@ log = logging.getLogger(__name__)
 
 SURFACE_NAME = "roads.glb"
 SURFACE_MANIFEST_NAME = "roadsurface.json"
+# 7 since `Q107`: `carriageway[].offset_m` is a **list**, one value per station
+# of that edge's published polyline, saying where the drawn ribbon is centred in
+# `mitres`' LEFT-of-travel frame. 🔴 **A reader that keeps taking
+# `half_width_m` as a half-width about the centreline is wrong about every
+# off-grade edge** — the two rails are now cut to the deck independently, so the
+# ribbon is asymmetric and `half_width_m` is half the distance *between the
+# rails*. That is hard rule 5's test, and `Q106` is what it costs: four tools
+# reconstructed the road from a half-width alone and all four were wrong.
 # 3 since `Q23`: `carriageway[].half_width_m` is a **list**, one value per
 # station of that edge's published polyline, where it used to be one number for
 # the whole edge. A reader that keeps the old interpretation gets a list where
@@ -111,7 +119,7 @@ SURFACE_MANIFEST_NAME = "roadsurface.json"
 # keeps the old interpretation gets no caps at all and rebuilds that defect
 # silently, which is the case hard rule 5 exists for. An intermediate like every
 # field above it; the game reads none of them.
-SURFACE_MANIFEST_SCHEMA = 6
+SURFACE_MANIFEST_SCHEMA = 7
 
 # Godot's glTF importer reads node-name suffixes: `-col` gives the mesh a static
 # trimesh collider at import time and leaves it visible. Naming it here rather
@@ -308,6 +316,25 @@ _WIDTH = 3
 # station is exactly 0.0 or 1.0 and the equality is doing no float work.
 _INSERTED = 4
 
+# Columns of `_Edge.points` holding the deck's two edges at that station, in
+# `mitres`' LEFT-of-travel frame and measured from the published centreline — so
+# the structure occupies `[-points[_RIM_RIGHT], +points[_RIM_LEFT]]`. From
+# `roadgraph.json`'s `deck_rim_m` (schema 10, `Q107`).
+#
+# Columns for `_WIDTH`'s reason, and the reason bites hardest here: the clamp
+# below is per station, so a rim that failed to follow a trim or an inserted
+# station would cut the ribbon at the wrong place — which draws a perfectly
+# good carriageway one station to the side of where the deck is.
+#
+# 🔴 **Absence is `inf`, never 0.0, and that is what makes the clamp inert.**
+# Every level-0 edge and every off-grade edge the deck walk could not measure
+# publishes no rims; an infinite reach is "no constraint", so `min(shift + half,
+# inf)` is exactly the unclamped ribbon and the whole at-grade network is
+# untouched by construction rather than by a branch. A 0.0 default would collapse
+# every one of them to nothing.
+_RIM_LEFT = 5
+_RIM_RIGHT = 6
+
 # How far a station may sit off the line between its neighbours and still be
 # dropped from a kerb rail, in metres. 0.1 mm: a hair over float noise on
 # coordinates of this magnitude, and it is a *crack* threshold rather than a
@@ -329,6 +356,14 @@ class SurfaceReport:
     # second evaluation of `drawn_width_m` is a second thing to keep in step with
     # the config.
     carriageway: dict[int, list[float]] = field(default_factory=dict)
+    # 🔴 **Where each station's ribbon is CENTRED, beside how wide it is
+    # (`Q107`).** Since the clamp the two rails are cut to the deck
+    # independently, so the ribbon is not symmetric about the published
+    # centreline and `carriageway` alone cannot describe it. `Q106` is what a
+    # missing offset costs: four instruments rebuilt the road from a half-width
+    # about a centreline the paint had left, and every one was wrong about the
+    # off-grade network.
+    carriageway_offset: dict[int, list[float]] = field(default_factory=dict)
     # Metres held back from each end of an edge's ribbon so a junction cap can
     # fill the middle, keyed by graph edge id as `(start, end)`. Recorded for the
     # same reason as `carriageway`: `_assign_trims` is the one place the trim is
@@ -432,6 +467,22 @@ class SurfaceReport:
     kerb_stations: int = 0
     kerb_rail_stations: int = 0
     kerb_rail_offset_m: float = 0.0
+    # `Q107`. Edges that carried a deck rim at all — the population the clamp
+    # can reach, and every other edge is untouched by arithmetic.
+    deck_rim_edges: int = 0
+    # Published stations where the clamp actually cut the ribbon. ⚠️ **Counted
+    # against the published width, not against the rim**, so it says how often
+    # the deck was narrower than the paint rather than how often a rim existed —
+    # the second is `deck_rim_edges` and reads as the flag rather than the
+    # finding (`Q58`).
+    clamped_stations: int = 0
+    # 🔴 **Stations where the two rails would have crossed and the ribbon was
+    # left as it was.** The fallback `Q105` said any build owes: the drawn
+    # ribbon lies wholly off its own deck there, so the clamp has no answer, and
+    # collapsing to zero would put a hole in the road rather than a narrow one.
+    # ⚠️ **A rise here is a finding to go and look at, never a bar to retune** —
+    # it means more of the network is drawn off its own structure.
+    clamp_refused_stations: int = 0
     kerb_minority_m: float = 0.0
 
     @property
@@ -1102,6 +1153,15 @@ class _Edge:
     # the one place the widening is applied, and a second evaluation of it is a
     # second thing to keep in step with the config.
     published_half_widths: np.ndarray
+    # 🔴 **The DRAWN ribbon's centre per published vertex, in `mitres`' frame
+    # (`Q107`).** Since the clamp, half a width no longer describes the road:
+    # the two rails are cut to the deck independently, so the ribbon is
+    # asymmetric about its own centreline and `published_half_widths` is half
+    # the *distance between the rails* rather than half a width about zero.
+    # Published beside it so a consumer can rebuild the ribbon from
+    # `roadsurface.json` alone — which `Q106` found four tools could not do, and
+    # all four were wrong about the off-grade network for it.
+    published_offsets: np.ndarray
     lanes: int
     # Read straight off the published edge and carried only so `TEXCOORD_1` can
     # say them. Nothing about the ribbon's shape depends on any of the three —
@@ -1241,6 +1301,10 @@ def build_region(
         int(published["id"]): [round(float(half), 3) for half in prepared.published_half_widths]
         for published, prepared in zip(graph["edges"], edges, strict=True)
     }
+    report.carriageway_offset = {
+        int(published["id"]): [round(float(at), 3) for at in prepared.published_offsets]
+        for published, prepared in zip(graph["edges"], edges, strict=True)
+    }
     report.on_structure_m = sum(
         _on_structure_length_m(edge, "on_structure") for edge in graph["edges"]
     )
@@ -1314,20 +1378,39 @@ def _prepare(published: dict, style: RoadSurface, report: SurfaceReport) -> _Edg
     which is the contract the game reads them under.
     """
     half_widths = _half_widths(published, style)
+    rim_left, rim_right = _deck_rims(published, len(half_widths))
+    # `published["offset_m"]`, never a `.get` default: `read_graph` pins the
+    # schema exactly, so any graph this can open carries the field. A default
+    # could not fire on valid input and would silently draw every off-grade
+    # ribbon back at zero shift on invalid input, which is the one failure it
+    # would ever meet.
+    shift_m = float(published["offset_m"])
     points = dedupe(
-        np.column_stack([_polyline(published), half_widths, np.zeros(len(half_widths))])
+        np.column_stack(
+            [_polyline(published), half_widths, np.zeros(len(half_widths)), rim_left, rim_right]
+        )
     )
     restrictions, kinds, minority_m = _kerbside(published)
     report.kerb_minority_m += minority_m
+    # The same clamp the geometry gets, in the frame the manifest publishes.
+    # ⚠️ **`half_widths` itself stays UNCLAMPED** — it is the `_WIDTH` column,
+    # and `_shape` clamps it against the rims that travel beside it. Clamping it
+    # here as well would apply the cut twice, the second time about a centre
+    # that is no longer `shift`.
+    drawn_upper, drawn_lower, refused = _clamped_rails(half_widths, rim_left, rim_right, shift_m)
+    if np.isfinite(rim_left).any():
+        report.deck_rim_edges += 1
+        # ⚠️ Counted here and not in `_shape`, because these are the *published*
+        # stations — the frame both counters and the manifest are quoted in, and
+        # the only one a reader can join against `roadgraph.json`.
+        cut = (drawn_upper - drawn_lower) < 2.0 * half_widths - _MIN_SEGMENT_M
+        report.clamped_stations += int(cut.sum())
+        report.clamp_refused_stations += refused
     return _Edge(
         points=points,
-        # `published["offset_m"]`, never a `.get` default: `read_graph` pins the
-        # schema exactly, so any graph this can open carries the field. A
-        # default could not fire on valid input and would silently draw every
-        # off-grade ribbon back at zero shift on invalid input, which is the one
-        # failure it would ever meet.
-        shift_m=float(published["offset_m"]),
-        published_half_widths=half_widths,
+        shift_m=shift_m,
+        published_half_widths=0.5 * (drawn_upper - drawn_lower),
+        published_offsets=0.5 * (drawn_upper + drawn_lower),
         lanes=published["lanes"],
         direction=published["direction"],
         bus_lane=bool(published["bus_lane"]),
@@ -1338,6 +1421,33 @@ def _prepare(published: dict, style: RoadSurface, report: SurfaceReport) -> _Edg
         kerb_off=kinds[OFFSIDE],
         restrictions=restrictions,
     )
+
+
+def _deck_rims(published: dict, count: int) -> tuple[np.ndarray, np.ndarray]:
+    """One published edge's deck rims per vertex, or an unconstrained pair.
+
+    `Q107`. `[left_m, right_m]` in `mitres`' own frame, straight off the graph —
+    `roads._reassign` publishes them without a negation because they are
+    unsigned reaches already named for their side of travel, and
+    `carriageway._rims_at_vertices` says in full why that is not the same
+    question as `offset_m`'s sign.
+
+    🔴 **A missing or short list becomes `inf`, which is no constraint at all.**
+    Level 0 publishes none and neither do the nine off-grade edges the deck walk
+    could not measure, so this is the ordinary case rather than the exceptional
+    one. ⚠️ **A LENGTH mismatch takes the same branch rather than raising**, and
+    that is deliberate: the rims are per published vertex and so are the
+    half-widths, so a disagreement means the graph and this stage disagree about
+    the polyline — a state that should draw the ribbon it always drew rather
+    than a clamped one built on a mis-aligned array. The count is reported by
+    `SurfaceReport.deck_rim_edges`, so it cannot be silent.
+    """
+    rims = published.get("deck_rim_m") or []
+    if len(rims) != count:
+        unbounded = np.full(count, np.inf)
+        return unbounded, unbounded.copy()
+    pairs = np.asarray(rims, dtype=np.float64)
+    return pairs[:, 0], pairs[:, 1]
 
 
 def _add_kerb_stations(edge: _Edge) -> int:
@@ -1564,6 +1674,54 @@ def _polyline(published: dict) -> np.ndarray:
     return np.asarray(published["polyline"], dtype=np.float64)
 
 
+def _clamped_rails(
+    half: np.ndarray, rim_left: np.ndarray, rim_right: np.ndarray, shift: float
+) -> tuple[np.ndarray, np.ndarray, int]:
+    """The two rails, cut back to the deck's own edges where there is one.
+
+    `Q107`. The ribbon wants to run `[shift - half, shift + half]`; the deck
+    runs `[-right, +left]`. Where the paint reaches past the structure it is cut
+    to it, per station, on each side independently — which is the whole of the
+    fix, because `width_m` and `offset_m` are one number each for a deck that
+    changes width along its length (`Q103` measured per-edge `over p50` getting
+    *worse* on 22 of 35 edges for exactly that reason).
+
+    🔴 **It cuts and never extends.** `min`/`max` against the ribbon's own rails
+    means a deck WIDER than the paint changes nothing — the clamp cannot invent
+    carriageway, which is `Q54`'s rule and the reason this is licensed at all.
+    `Q105` priced it as paint and explicitly not as a width: `width_m` does not
+    move here, and a deck rim is one contiguous run of structure that at an
+    interchange is not this carriageway's.
+
+    🔴 **A station whose rails would cross keeps the ribbon it had.** That is
+    the fallback `Q105` said any build owes: where the drawn ribbon lies wholly
+    off its own deck the clamp has no answer — `upper < lower` is a carriageway
+    of negative width — and inventing one by collapsing to zero would put a hole
+    in the road. Seven stations in the region are in that state and they are
+    counted, never silently repaired.
+
+    ⚠️ **Absence of a deck is `inf`** (see `_RIM_LEFT`), so every level-0 edge
+    takes the untouched branch by arithmetic rather than by a test.
+
+    ⚠️ **Plain arrays rather than the points matrix, because it is applied
+    TWICE** — to the ribbon's own stations for the geometry, and to the
+    published vertices for `roadsurface.json`'s table. Those are different
+    polylines (`dedupe` drops stations, `_add_kerb_stations` inserts them), and
+    a second expression of this arithmetic for the manifest is a second thing to
+    drift from the road it claims to describe.
+    """
+    upper = np.minimum(shift + half, rim_left)
+    lower = np.maximum(shift - half, -rim_right)
+    # ⚠️ **`_MIN_SEGMENT_M` and not zero.** Rails that merely touch leave a
+    # zero-width quad, which `_Builder.build` collapses and which reads as a
+    # gap in the collider rather than as a narrow road.
+    crossed = (upper - lower) <= _MIN_SEGMENT_M
+    if crossed.any():
+        upper = np.where(crossed, shift + half, upper)
+        lower = np.where(crossed, shift - half, lower)
+    return upper, lower, int(crossed.sum())
+
+
 def _shape(edge: _Edge, style: RoadSurface) -> None:
     """Trim the edge back from its junctions and offset what is left."""
     points = dedupe(trim(edge.points, edge.trim_start_m, edge.trim_end_m))
@@ -1578,10 +1736,15 @@ def _shape(edge: _Edge, style: RoadSurface) -> None:
     # distance, so the right-hand side is `-half + shift` rather than
     # `-(half + shift)`; the kerb lips ride along with the sides they belong to.
     shift = edge.shift_m
-    edge.left = boundary(points, edge.offsets, half + shift)
-    edge.right = boundary(points, edge.offsets, -half + shift)
-    edge.lip_left = boundary(points, edge.offsets, half + style.kerb_width_m + shift)
-    edge.lip_right = boundary(points, edge.offsets, -(half + style.kerb_width_m) + shift)
+    # ⚠️ The refusal count is dropped here on purpose: `_prepare` already
+    # counted it over the published stations, and adding the ribbon's own — a
+    # different polyline, after `dedupe` and `_add_kerb_stations` — would report
+    # one quantity twice under one name.
+    upper, lower, _ = _clamped_rails(half, points[:, _RIM_LEFT], points[:, _RIM_RIGHT], shift)
+    edge.left = boundary(points, edge.offsets, upper)
+    edge.right = boundary(points, edge.offsets, lower)
+    edge.lip_left = boundary(points, edge.offsets, upper + style.kerb_width_m)
+    edge.lip_right = boundary(points, edge.offsets, lower - style.kerb_width_m)
 
 
 def _ends_by_node_and_level(
@@ -2202,8 +2365,13 @@ def _through_corners(group: list[_End], edges: list[_Edge]) -> list[list[np.ndar
     arms: list[_Arm] = []
     for end in group:
         points = edges[end.edge].points
-        step = points[1] - points[0] if end.at_start else points[-1] - points[-2]
-        plan = step[[0, 2]]
+        # ⚠️ **The plan columns only, not the whole row.** `points` carries the
+        # half-width, the inserted flag and the two deck rims besides x/y/z, and
+        # the rims are `inf` wherever no deck was measured — so a row-wise
+        # difference is `inf - inf` and lands a NaN in a variable this function
+        # only ever wanted two components of.
+        near, far = (1, 0) if end.at_start else (-1, -2)
+        plan = points[near, [0, 2]] - points[far, [0, 2]]
         length = float(np.hypot(*plan))
         if length <= _MIN_SEGMENT_M:
             continue
@@ -2349,6 +2517,7 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: Surface
                 {
                     "edge": edge_id,
                     "half_width_m": halves,
+                    "offset_m": report.carriageway_offset[edge_id],
                     "trim_m": list(report.trims_m.get(edge_id, (0.0, 0.0))),
                     "kerb_hidden_m": report.kerb_hidden_m.get(edge_id, {}),
                 }
@@ -2395,6 +2564,17 @@ def main(argv: list[str] | None = None) -> int:
         "  %d ends trimmed back from a junction, %d of them clamped by edge length",
         report.trimmed_ends,
         report.clamped_trims,
+    )
+    # `Q107`. ⚠️ **The refusals are named in the same line as the cuts**, because
+    # they are the same population split two ways — a station the deck could
+    # reach and a station the deck could not answer for — and quoting the first
+    # alone reads as a clean sweep.
+    log.info(
+        "  %d off-grade edges carry a deck rim: %d stations cut back to it, "
+        "%d refused with the ribbon wholly off its deck and left as drawn (Q107)",
+        report.deck_rim_edges,
+        report.clamped_stations,
+        report.clamp_refused_stations,
     )
     log.info(
         "  %d movements run through a node and were mitred into its cap",

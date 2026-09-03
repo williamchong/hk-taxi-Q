@@ -16,6 +16,18 @@ const PATH: String = "res://assets/generated/roadgraph.json"
 ## Schema this understands, matching `ROADGRAPH_SCHEMA` in
 ## `etl/pipeline/roads.py`.
 ##
+## 10 since `Q107`, and it adds a field this reader deliberately does not read:
+## `deck_rim_m`, per vertex, how far the deck reaches either side of the
+## centreline. It is what `surface.py` cuts the off-grade ribbon back to, and
+## the *result* of that cut ships in `city.json`'s `carriageway[].offset_m`,
+## which is where a lane centre should come from. Read the rims here and the
+## game would be re-deriving the ribbon from the same inputs the ETL already
+## reduced — two implementations of one geometry, which is the split `Q106`
+## showed is not survivable: four ETL-side tools rebuilt the road from partial
+## inputs and every one was wrong. The bump is because a consumer that ignores
+## the distinction is wrong about where the off-grade carriageway is, which is
+## hard rule 5's test.
+##
 ## 2 since `P2-7`: an off-grade polyline's `y` now follows the structure the
 ## road is built on rather than sitting at one flat offset per elevation level.
 ## The shape of the document did not change, which is why this had to — a reader
@@ -78,7 +90,7 @@ const PATH: String = "res://assets/generated/roadgraph.json"
 ## `polyline ± width_m / 2` is now wrong about the whole elevated network, and
 ## nothing else in the document says so — `width_m` gives the size, this gives
 ## the place. Positive is left of travel, `surface.mitres`' frame.
-const SCHEMA_VERSION: int = 9
+const SCHEMA_VERSION: int = 10
 
 
 ## The parsed graph, or an empty dictionary with a pushed message.

@@ -223,6 +223,40 @@ def half_widths(manifest: dict[str, Any]) -> dict[int, list[float]]:
     }
 
 
+def drawn_offsets(manifest: dict[str, Any]) -> dict[int, list[float]]:
+    """Where each station's ribbon is CENTRED, per edge (`Q107`).
+
+    🔴 **Paired with `half_widths`, and neither is enough alone.** Since the
+    clamp the two rails are cut to the deck independently, so a ribbon is not
+    symmetric about the published centreline and a half-width does not say where
+    it is. `Q106` is what reading one without the other costs: four tools
+    rebuilt the road from `half_width_m` about a centreline the paint had left,
+    and every one was wrong about the whole off-grade network — in opposite
+    directions, so they disagreed by 2x and it read as a model difference.
+
+    ⚠️ **Missing on a pre-schema-7 manifest, and absent means zero** — a bundle
+    from before the clamp drew every ribbon centred, so that is the true reading
+    rather than a fallback, and it is the same compatibility rule
+    `half_widths` keeps for pre-`Q23` bundles.
+    """
+    return {
+        int(entry["edge"]): [float(at) for at in entry.get("offset_m", ())]
+        for entry in manifest["carriageway"]
+    }
+
+
+def offset_at(offsets: list[float], vertex: int) -> float:
+    """The drawn ribbon's centre at one polyline vertex, in `left_of`'s frame.
+
+    Indexed by vertex exactly as `half_width_at` is, and **0.0 for an edge that
+    published none** — every level-0 edge, and every bundle older than the
+    clamp.
+    """
+    if not offsets:
+        return 0.0
+    return float(offsets[min(vertex, len(offsets) - 1)])
+
+
 def half_width_at(widths: list[float], vertex: int) -> float:
     """The published half-width at one polyline vertex.
 
@@ -274,6 +308,7 @@ def survey(
     """Every drawn carriageway cell, asked whether structure lies under it."""
     graph = json.loads((generated / manifest["road_graph"]).read_text())
     widths = half_widths(manifest)
+    offsets = drawn_offsets(manifest)
     drawn = drawn_surface(generated, manifest)
 
     tallies: dict[int, Tally] = {}
@@ -286,13 +321,6 @@ def survey(
         if level < 0:
             continue
         edge_id = int(edge["id"])
-        # 🔴 **Where the ribbon is DRAWN, not where the centreline runs
-        # (`Q106`).** `surface._shape` offsets both rails by this, so a walk
-        # about the centreline reads the road in the wrong place on the 36
-        # off-grade edges `Q103` moved onto their decks. Indexed rather than
-        # `.get`: schema 9 publishes it on every edge and a missing key is a
-        # stale bundle, which should say so rather than silently reading 0.
-        offset_m = float(edge["offset_m"])
         polyline = np.asarray(edge["polyline"], dtype=np.float64)
         if len(polyline) < 2:
             continue
@@ -304,6 +332,12 @@ def survey(
             along = polyline[vertex + 1] - polyline[vertex]
             normal = left_of(along[[0, 2]])
             half = half_width_at(widths.get(edge_id, []), vertex)
+            # 🔴 **Where the ribbon is DRAWN, per station (`Q106`, `Q107`).**
+            # Both rails are offset by this and cut to the deck independently,
+            # so a walk about the centreline reads the road in the wrong place
+            # on every off-grade edge — and this tool DROPS a sample with no
+            # road under it, so it read the intersection and said nothing.
+            offset_m = offset_at(offsets.get(edge_id, []), vertex)
 
             # `None` means "no road is drawn at this cell" and is not evidence
             # either way, so it is left out of both the tally and the rim. They

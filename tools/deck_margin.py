@@ -156,7 +156,14 @@ from deck_error import (  # noqa: E402
     nearest,
     structure_faces,
 )
-from overhang import half_width_at, half_widths, left_of, walk_width  # noqa: E402
+from overhang import (  # noqa: E402
+    drawn_offsets,
+    half_width_at,
+    half_widths,
+    left_of,
+    offset_at,
+    walk_width,
+)
 from pipeline.carriageway import (  # noqa: E402
     DECK_ACROSS_M,
     DECK_BRIDGE_M,
@@ -454,6 +461,7 @@ def survey(
     appends nothing and prints the same bytes it always did.
     """
     widths = half_widths(manifest)
+    offsets = drawn_offsets(manifest)
     nodes = np.asarray([node["pos"] for node in graph["nodes"]], dtype=np.float64)
     nodes = nodes[:, [0, 2]] if len(nodes) else np.empty((0, 2))
 
@@ -477,9 +485,6 @@ def survey(
         rows[edge_id] = row
 
         walked = trace.get(edge_id) if trace is not None else None
-        # Indexed rather than `.get`: schema 9 publishes `offset_m` on every
-        # edge, so a missing key is a stale bundle and should say so.
-        shift = float(edge["offset_m"])
 
         def record(
             vertex: int,
@@ -556,6 +561,10 @@ def survey(
             # that is not drawn — up to 4.95 m out on `e337` — and read the
             # region 10.7% hanging where the drawn road is 4.3%. `shift` is 0.0
             # on every level-0 edge, so this reduces to what it was.
+            # 🔴 **Per STATION since the clamp (`Q107`)** — the two rails are
+            # cut to the deck independently, so one number per edge no longer
+            # says where the ribbon is even on one edge.
+            shift = offset_at(offsets.get(edge_id, []), vertex)
             left_rim = high - shift
             right_rim = shift - low
             off_deck = left_rim < 0.0 or right_rim < 0.0

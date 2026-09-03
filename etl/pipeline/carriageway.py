@@ -203,6 +203,19 @@ class CarriagewayReport:
     # unsigned magnitude that could not report the direction of its own move.
     # Positive means the deck's centre lies right of the published centreline.
     deck_offset_m: dict[int, float] = field(default_factory=dict)
+    # 🔴 **The same deck, per published VERTEX and not collapsed (`Q107`).**
+    # `(left_m, right_m)` per vertex in `surface.mitres`' LEFT-of-travel frame,
+    # already negated out of `_stations`' right one — so the deck occupies
+    # `[-right_m, +left_m]` about the published centreline and a consumer owes
+    # no further sign work. `deck_span_m` and `deck_offset_m` are the median of
+    # the sum and of the difference of these, which is what `Q103` shipped and
+    # what could not fit a deck that changes width along its length.
+    #
+    # ⚠️ **Interpolated onto the vertices, never one value per station.** The
+    # walk runs at `STATION_M` and the polyline's vertices are wherever the
+    # publisher put them; `surface.py` needs the latter, because its ribbon is
+    # built from `published_half_widths`, which is per vertex.
+    deck_rim_m: dict[int, list[tuple[float, float]]] = field(default_factory=dict)
     # Stations whose centreline stood on no deck at all — the ribbon is off its
     # own structure there, which is the defect this exists to size.
     deck_stations_off: int = 0
@@ -622,6 +635,54 @@ def _deck_reach(
     return float(offsets[ends[0] - 1]), False
 
 
+def _rims_at_vertices(
+    rims: list[tuple[float, float, float]], along_edge: np.ndarray
+) -> list[tuple[float, float]]:
+    """The walk's per-station rims, interpolated onto the published vertices.
+
+    🔴 **No negation arises here, and saying why is the point (`Q107`).** The
+    frame difference between `_stations`' RIGHT normal and `surface.mitres`'
+    LEFT one is paid once, by `roads._reassign`, on `offset_m` — a **signed**
+    quantity, where a frame flip changes the answer. These two are *unsigned
+    reaches already named for their side of travel*: `_deck_reach` with
+    `sign=-1.0` runs against the right normal and is therefore the LEFT reach,
+    which is the variable `_walk_the_deck` calls `left`. So the pair carries its
+    own frame in its names, and the deck occupies `[-right_m, +left_m]` about
+    the centreline in the left frame with no arithmetic applied.
+
+    ⚠️ **Do not "restore consistency" by negating one of them here.** A second
+    negation on top of `roads._reassign`'s would mirror every off-grade
+    carriageway, and it would render as a city.
+    `test_the_rims_reconstruct_the_span_and_the_offset` pins the pair against
+    the two aggregates it decomposes, which is what fails if either moves.
+
+    ⚠️ **Interpolation, not nearest.** A deck edge is a line, and the vertices
+    are not the stations — `_stations` walks at `STATION_M` while the polyline's
+    vertices are wherever the publisher put them, as close as 0.45 m apart
+    (`Q103`). Nearest-station would step the rim and put a visible notch in the
+    ribbon at every vertex that fell between two stations.
+
+    ⚠️ **Refused stations leave no gap marker and the interpolation spans
+    them.** A station off the deck contributes nothing here — it is the defect
+    being sized, not a zero-width deck — so a run of them is bridged by the two
+    good stations either side. That is the same reading `DECK_BRIDGE_M` already
+    takes of a hole inside one station's reach, and the alternative is a ribbon
+    that collapses to nothing wherever the model has a gap.
+    """
+    if not rims:
+        return []
+    alongs = np.asarray([row[0] for row in rims], dtype=np.float64)
+    lefts = np.asarray([row[1] for row in rims], dtype=np.float64)
+    rights = np.asarray([row[2] for row in rims], dtype=np.float64)
+    # `np.interp` needs its sample points ascending; `_stations` walks forward,
+    # but a polyline that doubles back can emit two stations at the same
+    # along-distance, so the sort is not decoration.
+    order = np.argsort(alongs, kind="stable")
+    at_left = np.interp(along_edge, alongs[order], lefts[order])
+    at_right = np.interp(along_edge, alongs[order], rights[order])
+    return [(float(left), float(right)) for left, right in zip(at_left, at_right, strict=True)]
+
+
 def _walk_the_deck(
     report: CarriagewayReport,
     deck: tuple[HeightField, float, float],
@@ -632,8 +693,17 @@ def _walk_the_deck(
     heights: np.ndarray,
     spans: list[float],
     offsets: list[float],
+    rims: list[tuple[float, float, float]] | None = None,
 ) -> None:
     """One station's deck span and the centreline's signed offset from it.
+
+    🔴 **`rims` records the two reaches SEPARATELY, and that is the whole of
+    `Q107`.** `spans` and `offsets` are a sum and a difference, and a per-edge
+    median of each is what `Q103` published — one width and one offset for a
+    deck that varies along its length. The pair kept here is
+    `(along_m, left, right)` per station, in this walk's own RIGHT-of-travel
+    frame, so `roads.py` can publish where the deck's two edges actually are and
+    `surface.py` can stop the paint at them.
 
     ⚠️ **The reference height is the ribbon's own `y`, interpolated along the
     edge** — not the deck's, which is the quantity being looked for. `roads.py`
@@ -661,6 +731,13 @@ def _walk_the_deck(
     # normal. `surface.mitres` is the left one and the two are opposite on
     # purpose, so a consumer owes a named negation (`CLAUDE.md`, `Q78`).
     offsets.append(0.5 * (right - left))
+    if rims is not None:
+        # ⚠️ **Recorded only where BOTH reaches were found**, which is above the
+        # `deck_stations_off` return: a station with one rim has no span and
+        # must not contribute half of one. The along-distance is what lets these
+        # be interpolated onto the published vertices, which are not these
+        # stations — `_stations` walks at `STATION_M` and the polyline does not.
+        rims.append((_along_at(plan, along_edge, point), left, right))
 
 
 def _along_at(plan: np.ndarray, along_edge: np.ndarray, point: np.ndarray) -> float:
@@ -751,6 +828,7 @@ def measure(
         along_edge = plan_lengths_2d(plan) if walk_deck else None
         deck_spans: list[float] = []
         deck_offsets: list[float] = []
+        deck_rims: list[tuple[float, float, float]] = []
         spans: list[float] = []
         nears: list[float] = []
         answered: set[str] = set()
@@ -771,7 +849,16 @@ def measure(
                 continue
             if walk_deck:
                 _walk_the_deck(
-                    report, deck, point, normal, plan, along_edge, heights, deck_spans, deck_offsets
+                    report,
+                    deck,
+                    point,
+                    normal,
+                    plan,
+                    along_edge,
+                    heights,
+                    deck_spans,
+                    deck_offsets,
+                    deck_rims,
                 )
             if off_grade:
                 # No publisher ray off-grade at all — see `off_grade` above. An
@@ -797,6 +884,12 @@ def measure(
         if deck_span is not None:
             report.deck_span_m[edge.id] = deck_span
             report.deck_offset_m[edge.id] = float(np.median(deck_offsets))
+            # ⚠️ **Gated on the same condition as the two medians**, so an edge
+            # publishes all three or none. An edge whose deck was too sparse to
+            # reduce to a width has no business publishing rims either, and a
+            # consumer that found rims without a width would be reading a deck
+            # this stage refused.
+            report.deck_rim_m[edge.id] = _rims_at_vertices(deck_rims, along_edge)
         elif walk_deck:
             report.deck_edges_unmeasured += 1
 

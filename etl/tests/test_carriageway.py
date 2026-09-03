@@ -43,6 +43,7 @@ from pipeline.carriageway import (
     _lanes,
     _license,
     _resolve_with_rows,
+    _rims_at_vertices,
     _Segments,
     _stations,
     _Symbol,
@@ -718,6 +719,12 @@ class TestThePublishedOffsetIsTheNegationOfTheSurvey:
         found = CarriagewayReport()
         found.deck_span_m[7] = 8.0
         found.deck_offset_m[7] = 1.25  # right of travel, the survey's frame
+        # ⚠️ **All three or none.** `_survey_edge` gates the rims on the same
+        # condition as the two aggregates, and `_reassign` *indexes* rather than
+        # defaulting — a report carrying a deck width but no rims is a state the
+        # pipeline cannot produce, and it should raise rather than publish an
+        # edge whose three deck fields disagree about whether a deck was found.
+        found.deck_rim_m[7] = [(5.25, 2.75), (5.25, 2.75)]
 
         out = _reassign(_road_edge(7), found)
 
@@ -792,3 +799,63 @@ class TestThePublishersAreKeptOffGrade:
             f"edges {leaked} are off-grade and carry a line-publisher width; their 2D lines "
             "find the street under the deck"
         )
+
+
+class TestTheDeckRimsDecomposeTheAggregates:
+    """🔴 `width_m` and `offset_m` are the median sum and difference of these.
+
+    `Q107`. The rims are the un-collapsed reading `Q103` published a median of,
+    so the relationship between them is the only thing that says they are the
+    same measurement — and every way it can break is silent. Rims mirrored
+    against the aggregates draw a carriageway on the wrong side of its own deck
+    and render as a city.
+    """
+
+    def test_the_rims_reconstruct_the_span_and_the_offset(self) -> None:
+        """The span is their sum and the survey's offset is their difference.
+
+        🔴 **Stated in `_stations`' own RIGHT-of-travel frame**, which is the
+        frame `_walk_the_deck` appends `offsets` in — so this pins the pair
+        against the two aggregates *before* `roads._reassign` negates one of
+        them, and a negation wrongly added inside `_rims_at_vertices` fails here.
+        """
+        left, right = 5.25, 2.75
+        rims = _rims_at_vertices([(0.0, left, right), (10.0, left, right)], np.array([0.0, 10.0]))
+        assert rims == [(left, right), (left, right)]
+        for at_left, at_right in rims:
+            assert at_left + at_right == pytest.approx(left + right)
+            assert 0.5 * (at_right - at_left) == pytest.approx(0.5 * (right - left))
+
+    def test_the_pair_is_not_symmetric_so_a_swap_is_visible(self) -> None:
+        """The control. Equal reaches would let a mirrored pair pass everything."""
+        rims = _rims_at_vertices([(0.0, 5.25, 2.75)], np.array([0.0]))
+        assert rims[0][0] != pytest.approx(rims[0][1])
+
+    def test_it_interpolates_between_stations_rather_than_stepping(self) -> None:
+        """A vertex between two stations takes the line, not the nearer station.
+
+        Nearest-station would put a visible notch in the ribbon at every vertex
+        that fell between two walked stations, and the polyline's vertices are
+        wherever the publisher put them — as close as 0.45 m apart.
+        """
+        rims = _rims_at_vertices([(0.0, 4.0, 2.0), (10.0, 6.0, 4.0)], np.array([0.0, 2.5, 10.0]))
+        assert rims[1] == (pytest.approx(4.5), pytest.approx(2.5))
+
+    def test_stations_out_of_order_are_sorted_rather_than_folded(self) -> None:
+        """A polyline that doubles back can walk two stations to one distance.
+
+        `np.interp` requires ascending sample points and returns nonsense
+        without complaining otherwise, so the sort is load-bearing rather than
+        defensive.
+        """
+        rims = _rims_at_vertices([(10.0, 6.0, 4.0), (0.0, 4.0, 2.0)], np.array([2.5]))
+        assert rims[0] == (pytest.approx(4.5), pytest.approx(2.5))
+
+    def test_no_stations_publishes_no_rims(self) -> None:
+        """An edge the walk never landed on must not publish a flat zero deck.
+
+        A zero-width deck reads as a measured absence of structure; there is no
+        measurement at all, and `_survey_edge` gates this on the same condition
+        as the two aggregates so the three cannot disagree.
+        """
+        assert _rims_at_vertices([], np.array([0.0, 10.0])) == []

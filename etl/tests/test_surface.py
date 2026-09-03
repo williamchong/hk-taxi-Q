@@ -40,6 +40,8 @@ from pipeline.surface import (
     DrawnSurface,
     SurfaceReport,
     _Builder,
+    _clamped_rails,
+    _deck_rims,
     _half_widths,
     _insert_stations,
     _kerbside,
@@ -1670,3 +1672,107 @@ def _covered(points: np.ndarray, triangles: np.ndarray) -> np.ndarray:
             | ((first <= 0) & (second <= 0) & (third <= 0))
         ).any()
     return covered
+
+
+class TestTheRibbonIsClampedToItsDeck:
+    """🔴 The paint stops at the structure, per station and per side (`Q107`).
+
+    Every way this breaks draws a perfectly good carriageway. A clamp applied
+    with the two rims swapped puts the ribbon on the wrong side of its own deck;
+    one applied where no deck was measured collapses the whole at-grade network;
+    one that extends rather than cuts invents carriageway, which is `Q54`. None
+    of the three is visible in a counter, and the first two are not visible in a
+    frame either unless you already know where the deck is.
+    """
+
+    HALF = np.array([2.0, 2.0, 2.0])
+    WIDE = np.full(3, np.inf)
+
+    def test_no_deck_leaves_the_ribbon_exactly_where_it_was(self) -> None:
+        """The inertness the whole at-grade network rests on.
+
+        ⚠️ Asserted first and against an **`inf`** rim, because that is what
+        `_deck_rims` returns for every level-0 edge — the ordinary case, not the
+        exceptional one. A 0.0 default here would collapse 737 edges to nothing.
+        """
+        upper, lower, refused = _clamped_rails(self.HALF, self.WIDE, self.WIDE, 0.0)
+        assert upper == pytest.approx(self.HALF)
+        assert lower == pytest.approx(-self.HALF)
+        assert refused == 0
+
+    def test_a_shift_carries_the_ribbon_without_changing_its_width(self) -> None:
+        upper, lower, _ = _clamped_rails(self.HALF, self.WIDE, self.WIDE, 1.5)
+        assert upper == pytest.approx(self.HALF + 1.5)
+        assert lower == pytest.approx(-self.HALF + 1.5)
+
+    def test_a_deck_wider_than_the_paint_changes_nothing(self) -> None:
+        """🔴 It cuts and never extends — `Q54`'s rule, and why this is licensed.
+
+        A clamp that took the rim whenever it differed would widen the ribbon
+        onto structure no publisher called carriageway, which is precisely the
+        move `Q54` refuses and `Q105` was careful not to make.
+        """
+        upper, lower, _ = _clamped_rails(self.HALF, np.full(3, 9.0), np.full(3, 9.0), 0.0)
+        assert upper == pytest.approx(self.HALF)
+        assert lower == pytest.approx(-self.HALF)
+
+    def test_each_side_is_cut_independently(self) -> None:
+        """The whole point: one number per edge cannot fit a varying deck."""
+        upper, lower, _ = _clamped_rails(self.HALF, np.array([0.5, 2.0, 9.0]), np.full(3, 9.0), 0.0)
+        assert upper == pytest.approx([0.5, 2.0, 2.0])
+        assert lower == pytest.approx([-2.0, -2.0, -2.0]), "the right rail must not move"
+
+    def test_the_two_rims_are_not_interchangeable(self) -> None:
+        """A swap draws the carriageway on the wrong side and renders fine."""
+        left, right = np.full(3, 0.5), np.full(3, 9.0)
+        upper, lower, _ = _clamped_rails(self.HALF, left, right, 0.0)
+        swapped_upper, swapped_lower, _ = _clamped_rails(self.HALF, right, left, 0.0)
+        assert upper != pytest.approx(swapped_upper)
+        assert lower != pytest.approx(swapped_lower)
+
+    def test_crossing_rails_keep_the_unclamped_ribbon_and_are_counted(self) -> None:
+        """🔴 `Q105`'s fallback: no answer is not the same as a zero-width road.
+
+        The ribbon lies wholly off its own deck here, so the clamp has none —
+        and collapsing to zero would put a hole in the collider rather than a
+        narrow road.
+        """
+        # Deck entirely to the left of a ribbon shifted hard right.
+        upper, lower, refused = _clamped_rails(self.HALF, np.full(3, -5.0), np.full(3, 9.0), 0.0)
+        assert refused == 3
+        assert upper == pytest.approx(self.HALF)
+        assert lower == pytest.approx(-self.HALF)
+
+    def test_rails_that_merely_touch_are_refused_too(self) -> None:
+        """A zero-width quad collapses in `_Builder.build` and reads as a gap."""
+        _, _, refused = _clamped_rails(np.array([2.0]), np.array([-2.0]), np.array([2.0]), 0.0)
+        assert refused == 1
+
+
+class TestDeckRimsFallBackToNoConstraint:
+    """A missing, empty or mis-aligned rim list must not cut anything."""
+
+    def test_an_edge_without_rims_is_unconstrained(self) -> None:
+        left, right = _deck_rims({"deck_rim_m": []}, 3)
+        assert np.isinf(left).all() and np.isinf(right).all()
+        assert len(left) == len(right) == 3
+
+    def test_a_missing_key_is_unconstrained(self) -> None:
+        left, _ = _deck_rims({}, 2)
+        assert np.isinf(left).all()
+
+    def test_a_length_mismatch_is_unconstrained_rather_than_raising(self) -> None:
+        """🔴 The graph and this stage disagreeing about the polyline.
+
+        Deliberately not an exception: the rims are per published vertex and so
+        are the half-widths, so a mismatch means the two documents disagree —
+        and the ribbon it always drew is a better answer than a clamped one
+        built on a mis-aligned array.
+        """
+        left, right = _deck_rims({"deck_rim_m": [[1.0, 2.0]]}, 3)
+        assert np.isinf(left).all() and np.isinf(right).all()
+
+    def test_a_matching_list_is_read_in_order(self) -> None:
+        left, right = _deck_rims({"deck_rim_m": [[1.0, 2.0], [3.0, 4.0]]}, 2)
+        assert left == pytest.approx([1.0, 3.0])
+        assert right == pytest.approx([2.0, 4.0])

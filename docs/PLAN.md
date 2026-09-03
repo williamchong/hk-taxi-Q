@@ -921,7 +921,13 @@ than discovering the rest of it from a bug report.
   ⚠️ **Half the result went the other way and is recorded, not buried**: per-edge `over p50` worsened
   on 22 of 35 edges, because one number per edge cannot fit a deck that varies along its length.
   `DECISIONS.md` `Q103`.
-  ✅ **The remaining candidate — a per-station ASYMMETRIC ribbon — is priced and it is cheap
+  ✅ **BUILT 2026-09-04 (`Q107`).** The ribbon is cut to its own deck per station and per side:
+  346 stations across 36 edges, `overhang.py` hanging **4.3% → 3.3%**, `deck_margin.py` 7.6% →
+  **6.6%**, 0 of 737 level-0 edges moved. `width_m` did not move — the rims license paint, not a
+  width — so what `P4-1` still owns is unchanged: attribute deck extent to *this edge's*
+  carriageway. ⬜ The residual 3.3% is where the two deck models differ (the estate is not
+  watertight) and is not reachable by this cut.
+  ✅ **The remaining candidate — a per-station ASYMMETRIC ribbon — was priced first and it was cheap
   (`Q105`, 2026-09-04).** `deck_margin.py`'s counterfactual cuts each station's ribbon to its deck's
   own two rims: **2 of 1,327 priced** stations then fall under `is_passable`'s lane bar and **1**
   under `fits_car`'s (`Q106`-corrected), and `e208`'s rim is byte-identical over a

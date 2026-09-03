@@ -117,7 +117,15 @@ from deck_error import (  # noqa: E402
     nearest,
     structure_faces,
 )
-from overhang import cross_section, half_width_at, half_widths, left_of, walk_width  # noqa: E402
+from overhang import (  # noqa: E402
+    cross_section,
+    drawn_offsets,
+    half_width_at,
+    half_widths,
+    left_of,
+    offset_at,
+    walk_width,
+)
 
 # The band the other instrument cannot see, taken from the instrument itself
 # rather than mirrored — see the module docstring. A *bound*, not a method: no
@@ -780,6 +788,7 @@ def survey(
     """
     graph = json.loads((generated / manifest["road_graph"]).read_text())
     widths = half_widths(manifest)
+    offsets = drawn_offsets(manifest)
     drawn = drawn_surface(generated, manifest)
     # `road_names` falls back en -> zh -> "unnamed", which is the difference
     # between a street column and a second copy of the edge id: 74 of this
@@ -798,6 +807,7 @@ def survey(
         if len(polyline) < 2:
             continue
         edge_widths = widths.get(edge_id, [])
+        edge_offsets = offsets.get(edge_id, [])
         name = names.get(edge_id, "unnamed")
         # `width_m` is the *authored* carriageway — the un-widened figure the
         # graph publishes — and `carriageway_occupancy.py` halves exactly this
@@ -815,13 +825,13 @@ def survey(
         # the authored half-width, and it has to be measured from the centreline
         # the authored width is about rather than from the ribbon's centre.
         # ⚠️ 0.0 on every level-0 edge, so the gated ground half cannot move.
-        drawn_offset_m = float(edge["offset_m"])
 
         seen = -1
         for vertex, station in walk_width(polyline, spacing_m):
             along = polyline[vertex + 1] - polyline[vertex]
             normal = left_of(along[[0, 2]])
             half = half_width_at(edge_widths, vertex)
+            drawn_offset_m = offset_at(edge_offsets, vertex)
             station_y = float(station[1])
 
             # `stations` walks each segment from its start vertex, so the first

@@ -86,12 +86,13 @@ def _deck(x_from: float, x_to: float, z_half: float = 3.0) -> Faces:
     return _deck_band(x_from, x_to, -z_half, z_half)
 
 
-def _graph(polyline: list[list[float]], nodes: list[list[float]], offset_m: float = 0.0) -> dict:
-    """One off-grade edge. `offset_m` is where `surface.py` draws its ribbon.
+def _graph(polyline: list[list[float]], nodes: list[list[float]]) -> dict:
+    """One off-grade edge.
 
-    ⚠️ **Present on every edge, because `survey` indexes it rather than
-    defaulting it** — a bundle without the key is a stale one and should say so
-    (`Q106`). Zero is the ordinary case and every level-0 edge.
+    ⚠️ **The ribbon's offset is NOT here.** It rides on the surface manifest
+    beside the half-width, per station, because the clamp cuts the two rails
+    independently and a per-edge number cannot say where the ribbon is even on
+    one edge (`Q107`). See `_manifest`.
     """
     return {
         "nodes": [{"pos": pos} for pos in nodes],
@@ -103,18 +104,31 @@ def _graph(polyline: list[list[float]], nodes: list[list[float]], offset_m: floa
                 "width_m": 4.0,
                 "lanes": 2,
                 "lanes_source": "authored",
-                "offset_m": offset_m,
             }
         ],
     }
 
 
-def _manifest(*edges: int) -> dict:
-    return {"carriageway": [{"edge": edge, "half_width_m": [2.0, 2.0, 2.0]} for edge in edges]}
+def _manifest(*edges: int, offset_m: float = 0.0) -> dict:
+    """The surface manifest. `offset_m` is where `surface.py` centres the ribbon.
+
+    Per station in the real thing (`Q107`); constant here, which the readers
+    handle by index — one value is read for every vertex past the first.
+    """
+    return {
+        "carriageway": [
+            {"edge": edge, "half_width_m": [2.0, 2.0, 2.0], "offset_m": [offset_m] * 3}
+            for edge in edges
+        ]
+    }
 
 
 def _survey(
-    graph: dict, structure: Faces, *, trace: dict[int, list[Station]] | None = None
+    graph: dict,
+    structure: Faces,
+    *,
+    trace: dict[int, list[Station]] | None = None,
+    offset_m: float = 0.0,
 ) -> dict:
     """`survey` with the walk constants fixed, so four tests state them once.
 
@@ -124,7 +138,7 @@ def _survey(
     """
     return survey(
         graph,
-        _manifest(*(int(edge["id"]) for edge in graph["edges"])),
+        _manifest(*(int(edge["id"]) for edge in graph["edges"]), offset_m=offset_m),
         structure,
         spacing_m=2.0,
         across_m=0.1,
@@ -136,9 +150,9 @@ def _survey(
     )
 
 
-def _walk(graph: dict, structure: Faces) -> tuple[dict, list[Station]]:
+def _walk(graph: dict, structure: Faces, offset_m: float = 0.0) -> tuple[dict, list[Station]]:
     trace: dict[int, list[Station]] = {1: []}
-    return _survey(graph, structure, trace=trace), trace[1]
+    return _survey(graph, structure, trace=trace, offset_m=offset_m), trace[1]
 
 
 class TestAlongMetres:
@@ -326,7 +340,6 @@ class TestTheTraceDoesNotDisturbTheWalk:
                 "width_m": 4.0,
                 "lanes": 2,
                 "lanes_source": "authored",
-                "offset_m": 0.0,
             }
         )
         trace: dict[int, list[Station]] = {1: [], 2: []}
@@ -576,7 +589,7 @@ class TestTheWalkMeasuresTheRibbonThatIsDRAWN:
     # Ribbon half-width 2.0 (`_manifest`), deck 3.0 either side of the
     # centreline (`_deck`), so unshifted the ribbon is comfortably on the deck.
     def _spans(self, offset_m: float) -> tuple[list[float], list[float], list[float]]:
-        rows, _ = _walk(_graph(POLYLINE, [], offset_m), _deck(0.0, 20.0))
+        rows, _ = _walk(_graph(POLYLINE, []), _deck(0.0, 20.0), offset_m)
         return rows[1].span_m, rows[1].off_centre_m, rows[1].overhang_m
 
     def test_a_zero_offset_reproduces_the_walk_it_replaced(self) -> None:
@@ -610,6 +623,6 @@ class TestTheWalkMeasuresTheRibbonThatIsDRAWN:
         assert offs == pytest.approx([2.0] * len(offs))
 
     def test_a_shift_off_the_deck_entirely_is_counted_as_such(self) -> None:
-        rows, _ = _walk(_graph(POLYLINE, [], 4.0), _deck(0.0, 20.0))
+        rows, _ = _walk(_graph(POLYLINE, []), _deck(0.0, 20.0), 4.0)
         assert rows[1].span_m, "the walk kept nothing"
         assert rows[1].centre_off_deck == len(rows[1].span_m)

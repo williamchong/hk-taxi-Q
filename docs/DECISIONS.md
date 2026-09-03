@@ -17593,3 +17593,112 @@ figures described a counterfactual over a ribbon nobody draws.
 **See.** `Q103` for the offset this reads and for the four corridor readings it corrects · `Q105`
 for the clamp it re-prices · `Q22` for the overhang headline it moves · `Q19` for the two
 populations `ground_clearance.py` keeps apart · `Q78` for the sign · `Q72` for the mutation standard
+
+## `Q107` — The off-grade ribbon is cut to its own deck, per station and per side
+
+`Q105` priced the asymmetric clamp and `Q106` cleared its blocking defect. This builds it.
+
+🔴 **What was wrong.** `Q103` gave each off-grade edge **one** deck-derived width and **one**
+deck-derived offset — the median sum and the median difference of a per-station walk. A median
+cannot fit a deck that changes width along its length, and that entry recorded the cost in its own
+results: per-edge `over p50` got **worse on 22 of 35 edges**. So the paint ran past the structure on
+one side and stopped short on the other, which is the shape of the user's original *"why the fence
+is in middle of a lane?"*.
+
+🔴 **What ships.** `carriageway._walk_the_deck` already found both reaches per station and threw the
+pair away into a sum and a difference; it now keeps them, `_rims_at_vertices` interpolates them onto
+the published vertices, `roads.py` publishes them as `deck_rim_m` (schema **10**), and
+`surface._clamped_rails` cuts each rail to its own rim:
+
+    upper = min(shift + half, left_rim)      lower = max(shift - half, -right_rim)
+
+| | before | after |
+|---|---|---|
+| `overhang.py` hanging | 4.3% (2,748 m²) | **3.3% (2,061 m²)** |
+| `deck_margin.py` hanging | 7.6% (1,702 m²) | **6.6% (1,452 m²)** |
+| `deck_margin.py` hanging stations | 734 of 1,334 (55.0%) | **538 (40.3%)** |
+| surface triangles | 32,177 | 32,254 |
+| off-grade half-width, summed | 4,217.4 m | **4,128.9 m (−2.10%)** |
+
+**346 stations cut back across 36 edges**, and `e337` CANAL ROAD FLYOVER is the worst at **2.16 m**
+off each half.
+
+### 🔴 It cuts and never extends, and that is what licenses it
+
+`min`/`max` against the ribbon's own rails, so a deck **wider** than the paint changes nothing. The
+clamp cannot invent carriageway, which is `Q54`'s rule; `Q105` established that a deck rim licenses
+**paint** and not a width, because one contiguous run of structure at an interchange is not this
+carriageway's. ✅ **`width_m` does not move here** — `roadgraph.json`'s widths and offsets are
+byte-identical and only the new field is added.
+
+### ✅ Level 0 is untouched, and it is arithmetic rather than a branch
+
+Absence of a deck is **`inf`**, not `0.0`, so `min(shift + half, inf)` *is* the unclamped ribbon and
+every level-0 edge takes the old path without a test. Measured: **0 of 737** level-0 edges changed
+their drawn width or centre. And with the clamp neutralised the stage rebuilds **32,177 triangles /
+39,078 vertices**, which is the pre-change bundle exactly — so the whole delta is the clamp.
+
+Gated graders unmoved: `carriageway_occupancy.py` still fails on the same **21** starved level-0
+edges with the same worst readings; `ground_clearance.py` at **89 against 87**; `clearance_reconcile`
+*"still reads what `Q51` recorded"*; `deck_error` P2-7 met; `touchdown_error` PASS; `box_extent`
+reproduces `Q104` to the digit (55.7/40.3 by count, 43.6/48.0 by area, 577.83 m²); `paint_clearance`
+within bounds; `kerbside_error` exit 0; `narrowing` 0 cleared / 2 lost. Every dependent stage
+counter — railings, lamps, signs, arrows, roadmarks, boxjunctions, fence — is **unchanged**.
+
+### 🔴 The fallback, which `Q105` said any build owes
+
+A station whose two rails would **cross** keeps the ribbon it had, and is counted. The drawn ribbon
+lies wholly off its own deck there, so the clamp has no answer, and collapsing to zero would put a
+hole in the road rather than a narrow one. ⚠️ **It reads 0 in this region and is reachable**, pinned
+by `test_crossing_rails_keep_the_unclamped_ribbon_and_are_counted`; it is not 0 by construction,
+because the shift is a per-edge median and the rims are local. ⚠️ **The bar is `_MIN_SEGMENT_M` and
+not zero** — rails that merely touch leave a quad `_Builder.build` collapses, which reads as a gap in
+the collider rather than as a narrow road.
+
+### 🔴 A half-width alone can no longer describe the road, so the offset ships too
+
+The ribbon is now asymmetric about its centreline, so `half_width_m` is half the distance *between
+the rails* and says nothing about where they are. `roadsurface.json` gains `carriageway[].offset_m`
+(schema **7**), `city.json` carries it through (schema **22**), and `overhang.drawn_offsets` /
+`offset_at` are what the four instruments read. ⚠️ **This is `Q106`'s hole closed properly**: that
+entry patched the tools to read the graph's per-edge offset, which the clamp immediately made
+insufficient — a per-station ribbon needs a per-station centre.
+
+⚠️ **`carriageway_occupancy.py` and `ground_clearance.py` each needed a second correction**, because
+each already had an `offset_m` meaning a *cell's* own distance from the centreline — the quantity
+`Section.is_inside` and *"the centreline cell"* are about. The drawn offset is **added** to those
+rather than replacing them; threading it into the old name would have silently re-split every `Q19`
+row. In `carriageway_occupancy.py` the new table also collided by name with a local list and the
+walk raised on the first run, which is the loud half of the same mistake.
+
+### ✅ The evidence is a frame, and the first pair was stale
+
+🔴 **A/B at `e337`, the worst-cut edge, shot twice a side and `cmp`'d — and the first attempt read
+"identical" because Godot served the cached mesh.** Deleting `roads.glb`'s import sidecar and
+re-importing changed the frame, so the earlier pair proved nothing. Corrected, each side is stable
+across two forced-reimport shots and the two sides differ: **0.286% of pixels (5,922 of 2,073,600),
+max channel delta 149**, confined to the flyover deck between x 160-1919, y 328-965. ⚠️ **The
+first camera, at `e208`, was also a bad choice** — the cut there is under 0.5 m and the frames are
+near-identical, which is `Q104`'s *"one camera is not an A/B"* restated.
+
+- ✅ **Both readers on the game side moved with the data** (hard rule 5): `city_manifest.gd` to 22 —
+  reading `carriageway_offset_m`, though every level-0 value is 0.0 so no lane centre the game
+  places today changes — and `generated_road_graph.gd` to 10. 🔴 **That one deliberately does NOT
+  read `deck_rim_m`**: the rims are the ETL's input to the cut and the *result* ships in
+  `city.json`, so reading them in the engine would be a second implementation of one geometry,
+  which is the split `Q106` showed is not survivable. `check.sh` exits 0.
+- ✅ **`_rims_at_vertices` applies no negation, and says why.** The frame difference between
+  `_stations`' RIGHT normal and `mitres`' LEFT one is paid once, by `roads._reassign`, on the
+  **signed** `offset_m`. The rims are unsigned reaches already named for their side of travel, so a
+  second negation here would mirror every off-grade carriageway and render as a city.
+- ✅ **The rims ride as columns of `_Edge.points`**, so `trim`, `dedupe` and `_add_kerb_stations`
+  carry them without knowing — `_at` interpolates every column, which is the property `_WIDTH`
+  already relied on. ⚠️ One latent bug fell out: `_arms` differenced whole rows, so `inf - inf` put
+  a NaN in a variable that only ever wanted x and z.
+- ✅ Four test fixtures had to publish the new fields, which is the strict-index contract working
+  rather than a nuisance; the export fixture's offset is deliberately **asymmetric**, because a
+  fixture at zero cannot tell a carried field from a dropped one.
+
+**See.** `Q105` for the pricing and the paint-not-width licence · `Q106` for the frame this is
+measured in · `Q103` for the median it decomposes · `Q54` for why it may only cut · `Q57` for the
+two populations · `Q62` for the frame · `Q19` for the cell offset the two tools keep

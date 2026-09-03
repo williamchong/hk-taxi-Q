@@ -216,6 +216,7 @@ class TestBuildRegion:
             "width_publisher",
             "offset_m",
             "offset_source",
+            "deck_rim_m",
             "speed_limit_kph",
             "bus_lane",
             "tram_tracks",

@@ -121,7 +121,20 @@ ROADGRAPH_NAME = "roadgraph.json"
 # the document says so: `width_m` gives the size and only this gives the place.
 # ⚠️ The centreline itself is untouched (`Q54`); what changed is the claim that
 # the paint is centred on it.
-ROADGRAPH_SCHEMA = 9
+# 10 adds `deck_rim_m` (`Q107`): per **vertex**, `[left_m, right_m]`, how far
+# the deck reaches either side of the published centreline in
+# `surface.mitres`' LEFT-of-travel frame — so the structure occupies
+# `[-right_m, +left_m]` there. 🔴 **`width_m` and `offset_m` are the median of
+# the sum and of the difference of exactly these**, and a median cannot fit a
+# deck that changes width along its length: `Q103` measured per-edge `over p50`
+# getting *worse* on 22 of 35 edges for that reason. A consumer that keeps
+# reading `width_m` as the whole story is not wrong about the size, it is wrong
+# about where the structure ENDS — which is hard rule 5's test, and it is the
+# difference between paint on a deck and paint over air.
+# ⚠️ Present only on the off-grade edges the deck walk measured, and `[]`
+# elsewhere; a reader must fall back to `width_m` / `offset_m`, which is what
+# every edge without it has always been.
+ROADGRAPH_SCHEMA = 10
 
 # `Node.kind` in the data contract. Degree three or more is somewhere a
 # driver can choose; anything else is a road continuing or stopping.
@@ -255,6 +268,14 @@ class Edge:
     # centreline, which is every level-0 edge and every off-grade edge the deck
     # walk could not measure; `deck` is the structure the ribbon is drawn on.
     offset_source: str = "none"
+    # 🔴 **The deck's two edges per vertex, in the LEFT-of-travel frame
+    # (`Q107`).** `[(left_m, right_m), ...]`, one pair per polyline vertex, so
+    # the structure occupies `[-right_m, +left_m]` about the centreline there.
+    # Empty everywhere the deck walk published nothing, which is every level-0
+    # edge. ⚠️ **`width_m` and `offset_m` are aggregates OF this** — the median
+    # sum and the median difference — so the three can disagree along an edge
+    # and that disagreement is the point rather than an inconsistency.
+    deck_rim_m: tuple[tuple[float, float], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -1064,6 +1085,15 @@ def _reassign(edge: Edge, found: carriageway.CarriagewayReport) -> Edge:
         # once, rather than by every reader.
         changes["offset_m"] = round(-found.deck_offset_m[edge.id], 3)
         changes["offset_source"] = "deck"
+        # ⚠️ **No negation here, deliberately, where the line above needs one.**
+        # `offset_m` is signed and crosses between two opposite normals;
+        # `deck_rim_m` is a pair of unsigned reaches already named for their
+        # side of travel, so it carries its own frame — `_rims_at_vertices` says
+        # so in full. A second negation applied here would mirror every
+        # off-grade carriageway and render as a city.
+        changes["deck_rim_m"] = tuple(
+            (round(left, 3), round(right, 3)) for left, right in found.deck_rim_m[edge.id]
+        )
     if not changes:
         return edge
     return replace(edge, **changes)
@@ -1889,6 +1919,7 @@ def _write(out_root: Path | None, city: Config, region_id: str, report: RoadRepo
                 "width_publisher": edge.width_publisher,
                 "offset_m": edge.offset_m,
                 "offset_source": edge.offset_source,
+                "deck_rim_m": [list(pair) for pair in edge.deck_rim_m],
                 "speed_limit_kph": edge.speed_limit_kph,
                 "bus_lane": edge.bus_lane,
                 "tram_tracks": edge.tram_tracks,

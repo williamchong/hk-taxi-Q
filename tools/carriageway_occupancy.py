@@ -124,7 +124,15 @@ from deck_error import (  # noqa: E402
     nearest,
     wears,
 )
-from overhang import cross_section, half_width_at, half_widths, left_of, walk_width  # noqa: E402
+from overhang import (  # noqa: E402
+    cross_section,
+    drawn_offsets,
+    half_width_at,
+    half_widths,
+    left_of,
+    offset_at,
+    walk_width,
+)
 from pipeline.config import Config, load_config  # noqa: E402
 from pipeline.gltf import read_glb  # noqa: E402
 
@@ -830,6 +838,7 @@ def walk_carriageway(
 ) -> Lattice:
     """Walk every drawn carriageway cell once, recording what both passes need."""
     widths = half_widths(manifest)
+    drawn_offset_by_edge = drawn_offsets(manifest)
 
     edges: list[int] = []
     levels: list[int] = []
@@ -859,21 +868,13 @@ def walk_carriageway(
         # frontage the widening took — those are not the same defect, and only
         # the first one strands a car that drives where the street actually is.
         authored_half = float(edge["width_m"]) / 2.0
-        # 🔴 **Where the ribbon is DRAWN (`Q106`).** `surface._shape` offsets
-        # both rails by this, so a walk about the centreline reads the road in
-        # the wrong place on the 36 off-grade edges `Q103` moved onto their
-        # decks. ⚠️ **0.0 on every level-0 edge**, so the gated half of this
-        # tool — which is level 0 by construction — cannot move; what it
-        # corrects is the `--levels` reporting half, which is where `Q103`'s
-        # own `e208` corridor readings came from.
-        offset_m = float(edge["offset_m"])
-
         for vertex, station in walk_width(polyline, spacing_m):
             along = polyline[vertex + 1] - polyline[vertex]
             normal = left_of(along[[0, 2]])
             half = half_width_at(widths.get(edge_id, []), vertex)
+            drawn_offset_m = offset_at(drawn_offset_by_edge.get(edge_id, []), vertex)
             for index, (x, z, span) in enumerate(
-                cross_section(station[[0, 2]], normal, half, across_m, offset_m)
+                cross_section(station[[0, 2]], normal, half, across_m, drawn_offset_m)
             ):
                 # The drawn road first, because the question is what stands in
                 # *what is drawn*. Falling back to the graph's own y would ask
@@ -885,10 +886,15 @@ def walk_carriageway(
                 xs.append(x)
                 zs.append(z)
                 spans.append(span)
-                # `cross_section` walks from the left rim inward in even steps,
-                # so the offset from the centreline is recoverable without it
-                # having to return one.
-                offsets.append(-half + span * (index + 0.5))
+                # `cross_section` walks from the near rim inward in even
+                # steps, so the offset is recoverable without it having to
+                # return one. ⚠️ **From the CENTRELINE, which is what
+                # `authored_half` is about and what "the centreline cell" below
+                # means** — so the ribbon's own drawn offset is part of where
+                # this cell lies, and omitting it would put `offset == 0`
+                # wherever the paint happens to be rather than on the road's
+                # published centre (`Q106`, `Q107`).
+                offsets.append(drawn_offset_m - half + span * (index + 0.5))
                 authored.append(authored_half)
                 # NaN, not a sentinel height: "no road drawn here" is a junction
                 # trim or a stale width table, and it has to stay distinguishable
