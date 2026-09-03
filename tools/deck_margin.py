@@ -105,6 +105,18 @@ seconds on a tool nobody runs in CI. `--sweep-bridge` likewise re-walks where
 per cap — same trade. Both stay available if this ever grows a real sweep grid;
 neither is worth the surface area today.
 
+⚠️ **`--probe-edges` prints one named edge station by station**, so the series
+can be laid against `carriageway_occupancy.py`'s occupier walk of the same edge
+and `Q103`'s remaining question answered: does the ribbon drift under a fixed
+rim, or does a diagonal object move under a fixed ribbon? Those need opposite
+fixes — a per-vertex `half_width_m` against `P4-1` geometry — and no column
+published today separates them. 🔴 **The join is `along_m` and never the station
+index**: the two walks run at different pitches (2.0 m here, 1.0 m there) and
+neither pitch is constant, for the reason `along_metres` gives. ⚠️ **A refused
+station prints its reason in place rather than being skipped**, because refusals
+outnumber keeps here and a series printed from `Row`'s dense lists alone would
+run smoothly across the hole that is the finding.
+
 ⚠️ **This grades rather than checks and exits 0 whatever it finds.** There is no
 bar, deliberately, for `carriageway_margin.py`'s reason: the overhang it reports
 is a cost this project has already decided to carry once (`Q22`), and a bar on it
@@ -128,7 +140,14 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "etl"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from carriageway_occupancy import road_names  # noqa: E402
+from carriageway_occupancy import (  # noqa: E402
+    SPACING_M as OCCUPANCY_SPACING_M,
+)
+from carriageway_occupancy import (  # noqa: E402
+    edges_argument,
+    edges_label,
+    road_names,
+)
 from deck_error import (  # noqa: E402
     Faces,
     bundle_arguments,
@@ -146,6 +165,7 @@ from pipeline.carriageway import (  # noqa: E402
     MIN_STATIONS,
 )
 from pipeline.config import load_config  # noqa: E402
+from pipeline.polyline import plan_lengths  # noqa: E402
 
 log = logging.getLogger(__name__)
 
@@ -179,6 +199,43 @@ MAX_LATERAL_M = DECK_MAX_LATERAL_M
 # bimodality rather than chosen — see `deck_run` for the numbers and `Q19` for
 # why this estate has holes at all.
 BRIDGE_M = DECK_BRIDGE_M
+
+
+@dataclass(frozen=True)
+class Station:
+    """One walked station of a probed edge, kept **or** refused.
+
+    🔴 **A refusal is a row here, not a gap.** `Row`'s lists are dense and carry
+    no positional marker, so a series printed from them alone runs continuously
+    across a hole — and refusals are the larger population on this tool, junction
+    trims most of all. A probe that skipped them would draw a smooth drift
+    through the very stations it could not read, which is the reading `Q103` came
+    here to avoid making.
+
+    ⚠️ **The DECK columns are NaN on a refusal, never 0.0** — `span_m`,
+    `off_centre_m` and `overhang_m`. A zero span reads as a measured absence of
+    deck; there is no measurement at all. ⚠️ `drawn_m` is the exception and is
+    recorded on `no_deck` and `clipped`, because the ribbon's width is known at
+    a station whose deck is not.
+    """
+
+    vertex: int
+    along_m: float
+    # "" when the station was kept; otherwise the `Refusals` field that took it.
+    refused: str
+    span_m: float
+    off_centre_m: float
+    overhang_m: float
+    drawn_m: float
+    # 🔴 **The column that separates a wide deck from two bridged ones.** A span
+    # that widens under a drifting centreline reads as registration, and reads
+    # exactly the same when `deck_run` has closed a hole between two decks and
+    # published their combined extent — in which case the centreline may be
+    # correctly on its own carriageway and the offset is against a middle that
+    # is not a deck's. `bridge_m` is the dial, so the metres it closed belong
+    # beside every span it closed them into.
+    bridged_m: float
+    centre_off_deck: bool
 
 
 @dataclass
@@ -351,6 +408,30 @@ def deck_run(
     )
 
 
+def along_metres(polyline: np.ndarray, vertex: int, station: np.ndarray) -> float:
+    """Plan distance from the edge's start to a station, in metres.
+
+    🔴 **The join key between this walk and `carriageway_occupancy.py`'s, and the
+    station INDEX is not.** `deck_error.stations` cuts each segment into
+    `ceil(L / spacing)` equal pieces, so the real pitch is `L / ceil(L / spacing)`
+    and lands anywhere in `(spacing / 2, spacing]` — `_starved_shape` measures the
+    length-weighted mean at **0.968 m against a nominal 1.0** on the shipped
+    graph, with the shortest segment running at 0.451 m. So `index x spacing` is
+    not a distance in either tool, and the two walks run at different pitches
+    besides (2.0 m here, 1.0 m there). Metres are the only frame they share.
+
+    Plan distance, because that is the frame every length in both tools is
+    already quoted in — and through `plan_lengths` rather than restated, because
+    that module calls itself a **primitive the duplicate-deliberately rule does
+    not reach**: it grades nothing, so a second copy buys no check. Six tools
+    already import it. ⚠️ Not `deck_error.stations`' case, which is licensed
+    because it adds height interpolation; this adds only the residual from the
+    vertex.
+    """
+    behind = float(plan_lengths(polyline)[vertex])
+    return behind + float(np.hypot(*(station[[0, 2]] - polyline[vertex][[0, 2]])))
+
+
 def survey(
     graph: dict[str, Any],
     manifest: dict[str, Any],
@@ -362,8 +443,16 @@ def survey(
     junction_m: float,
     attribute_within_m: float,
     bridge_m: float,
+    trace: dict[int, list[Station]] | None = None,
 ) -> dict[int, Row]:
-    """Every off-grade station, asked where the deck under it starts and stops."""
+    """Every off-grade station, asked where the deck under it starts and stops.
+
+    ⚠️ `trace`, when given, is filled per station for the edges it already has
+    keys for — recorded **by the loop that makes each decision**, rather than by
+    a second walk that would agree with this one only until one of them changed.
+    It is read-only as far as this function's own counters go: the default path
+    appends nothing and prints the same bytes it always did.
+    """
     widths = half_widths(manifest)
     nodes = np.asarray([node["pos"] for node in graph["nodes"]], dtype=np.float64)
     nodes = nodes[:, [0, 2]] if len(nodes) else np.empty((0, 2))
@@ -387,13 +476,54 @@ def survey(
         )
         rows[edge_id] = row
 
+        walked = trace.get(edge_id) if trace is not None else None
+
+        def record(
+            vertex: int,
+            station: np.ndarray,
+            refused: str,
+            *,
+            span_m: float = float("nan"),
+            off_centre_m: float = float("nan"),
+            overhang_m: float = float("nan"),
+            drawn_m: float = float("nan"),
+            bridged_m: float = float("nan"),
+            centre_off_deck: bool = False,
+            _walked: list[Station] | None = walked,
+            _polyline: np.ndarray = polyline,
+        ) -> None:
+            # Bound as defaults rather than read from the enclosing scope.
+            # ⚠️ **Not the late-binding fix it looks like**: every call is inside
+            # the same iteration that defines this, so a plain closure reads the
+            # current edge either way — mutation-checked, and the two-edge test
+            # below passes with the binding removed. What it actually buys is
+            # `B023` staying quiet without a `noqa`, and correctness if a call is
+            # ever deferred. Do not describe it as fixing a reachable bug.
+            if _walked is None:
+                return
+            _walked.append(
+                Station(
+                    vertex=vertex,
+                    along_m=along_metres(_polyline, vertex, station),
+                    refused=refused,
+                    span_m=span_m,
+                    off_centre_m=off_centre_m,
+                    overhang_m=overhang_m,
+                    drawn_m=drawn_m,
+                    bridged_m=bridged_m,
+                    centre_off_deck=centre_off_deck,
+                )
+            )
+
         for vertex, station in walk_width(polyline, spacing_m):
             if len(nodes) and float(np.hypot(*(nodes - station[[0, 2]]).T).min()) < junction_m:
                 row.refused.junction += 1
+                record(vertex, station, "junction")
                 continue
             half = half_width_at(widths.get(edge_id, []), vertex)
             if half <= 0.0:
                 row.refused.no_ribbon += 1
+                record(vertex, station, "no_ribbon")
                 continue
             normal = left_of((polyline[vertex + 1] - polyline[vertex])[[0, 2]])
             found = deck_run(
@@ -407,6 +537,7 @@ def survey(
             )
             if found is None:
                 row.refused.no_deck += 1
+                record(vertex, station, "no_deck", drawn_m=2.0 * half)
                 continue
             low, high, clipped, bridged = found
             if clipped:
@@ -414,8 +545,10 @@ def survey(
                 # clipped run's span is `2 x max_lateral_m` whatever the deck
                 # does, and a percentile over those reports the flag.
                 row.refused.clipped += 1
+                record(vertex, station, "clipped", drawn_m=2.0 * half)
                 continue
-            if not low <= 0.0 <= high:
+            off_deck = not low <= 0.0 <= high
+            if off_deck:
                 row.centre_off_deck += 1
             row.span_m.append(high - low)
             # Negated: `low` and `high` locate the deck in the centreline's
@@ -428,6 +561,17 @@ def survey(
             row.drawn_m.append(2.0 * half)
             row.bridged_m.append(bridged)
             row.overhang_m.append(max(0.0, low + half) + max(0.0, half - high))
+            record(
+                vertex,
+                station,
+                "",
+                span_m=row.span_m[-1],
+                off_centre_m=row.off_centre_m[-1],
+                overhang_m=row.overhang_m[-1],
+                drawn_m=row.drawn_m[-1],
+                bridged_m=row.bridged_m[-1],
+                centre_off_deck=off_deck,
+            )
     return rows
 
 
@@ -597,6 +741,239 @@ def report(
     )
 
 
+def occupancy_indices(polyline: np.ndarray, alongs: list[float], spacing_m: float) -> list[int]:
+    """Each station's counterpart index in `carriageway_occupancy.py`'s walk.
+
+    That tool's `--probe-edges` prints station index ranges and no distance, so
+    without this column the join is arithmetic a reader cannot do by hand —
+    `along_metres` says why `along_m / spacing` is not the answer.
+
+    ⚠️ **Derived by re-walking, never computed from the pitch.** The index is
+    the nearest station of `walk_width(polyline, spacing_m)` at that tool's own
+    spacing, found in metres. That is the same generator over the same polyline,
+    so the mapping is exact up to the two walks' resolutions rather than assumed.
+
+    ⚠️ **It is only true for a run of that tool at this `spacing_m`.** The pitch
+    is a flag there too, which is why it is one here — a default silently
+    borrowed from the other tool's constant would go on printing indices after
+    someone swept it.
+    """
+    occupancy = [
+        along_metres(polyline, vertex, station)
+        for vertex, station in walk_width(polyline, spacing_m)
+    ]
+    if not occupancy and alongs:
+        # Unreachable behind `refuse_unprobeable`, and raised rather than
+        # sentinelled for that reason: a `-1` here reaches the row formatter and
+        # prints as a station number the occupier walk does not have.
+        raise SystemExit(
+            "occupancy_indices: the polyline walks no station, so there is nothing "
+            "for these stations to be joined against"
+        )
+    grid = np.asarray(occupancy, dtype=np.float64)
+    return [int(np.abs(grid - along).argmin()) for along in alongs]
+
+
+def refuse_unprobeable(graph: dict[str, Any], edges: tuple[int, ...]) -> None:
+    """Refuse a `--probe-edges` id that this walk could never print a row for.
+
+    🔴 **Refused, never skipped.** An edge with nothing to print leaves the
+    report silent about it, and silence here reads as "the deck is fine there" —
+    the empty set as agreement, which is what `carriageway_occupancy`'s own
+    `refuse_unprobeable` is written against.
+
+    ⚠️ **Called from `main` before the walk, not from `probe` after it**, that
+    tool's reason at this one: both conditions need only the graph, and left at
+    the report they cost a mistyped id the whole walk and index before saying
+    so — once per `--sweep` cap, here, because the walk runs inside that loop.
+
+    The conditions are `survey`'s own admission rule restated in the order a
+    reader would ask them, and a graph edge satisfying both is in `rows` by
+    construction, which is what lets `probe` index rather than `.get`.
+    """
+    published = {int(edge["id"]): edge for edge in graph["edges"]}
+    missing = [edge_id for edge_id in edges if edge_id not in published]
+    if missing:
+        raise SystemExit(
+            f"--probe-edges names {edges_label(tuple(missing))}, which this region's "
+            "road graph does not carry"
+        )
+    at_grade = [edge_id for edge_id in edges if int(published[edge_id]["elevation_level"]) <= 0]
+    if at_grade:
+        raise SystemExit(
+            f"--probe-edges names {edges_label(tuple(at_grade))}, which is at or below "
+            "grade — this walk reads level 1 and above, and `carriageway_margin.py` is "
+            "what reads a carriageway edge a publisher printed"
+        )
+    stubs = [edge_id for edge_id in edges if len(published[edge_id]["polyline"]) < 2]
+    if stubs:
+        raise SystemExit(
+            f"--probe-edges names {edges_label(tuple(stubs))}, whose polyline is a single "
+            "point — there is no direction to take a cross-section against"
+        )
+
+
+def _cell(value: float, *, signed: bool = False) -> str:
+    """One numeric column, or a dash where there is no measurement.
+
+    Here rather than inline so the refused row and the kept row cannot drift:
+    they shared a column layout across three hand-synced format strings, and a
+    width changed in one of them lines a table up against nothing.
+    """
+    if np.isnan(value):
+        return "-"
+    return f"{value:+.2f}" if signed else f"{value:.2f}"
+
+
+# The one place the probe's column widths are written down. ⚠️ All `%s`: the
+# numbers arrive pre-formatted from `_cell`, because a `%7.2f` cannot render the
+# dash a refusal needs and a second format string is how the two rows drift.
+_PROBE_ROW = "      %3s %4s %8s %6s %7s %8s %7s %7s %6s  %s"
+
+
+def probe(
+    walked: dict[int, list[Station]],
+    rows: dict[int, Row],
+    names: dict[int, str],
+    graph: dict[str, Any],
+    edges: tuple[int, ...],
+    *,
+    spacing_m: float,
+    max_lateral_m: float,
+    bridge_m: float,
+    occupancy_spacing_m: float,
+) -> None:
+    """One named edge's stations in walk order, for reading against the occupier.
+
+    🔴 **A third report and its own function**, on `carriageway_occupancy`'s
+    argument for the same flag: the two tables above answer a question about a
+    *population this tool decided* and print one verdict per edge, and this
+    answers a question about the **stations of edges the reader named**, printing
+    many rows per edge. Folding it into either would hand that one a population
+    nobody measured (`Q57`), so the edges arrive through a flag and never a
+    filter.
+
+    🔴 **Why it exists.** `Q103` left the four blocked level-1 edges at a
+    mechanism it could not name, and the occupier probe answered *what stands
+    there and how high* without being able to say whether the **ribbon** moves
+    underneath it. `off_centre_m` is that missing column, and it separates the
+    two fixes this whole file exists to keep apart: a ribbon drifting under a
+    fixed rim is registration, a rim drifting under a fixed ribbon is geometry.
+    A per-edge median cannot show either — `e208` runs 0.70 m to 8.10 m of span
+    across its own kept stations — so the series is what is printed.
+
+    ⚠️ **Reporting only, and there is no bar.** Nothing here is gated and
+    nothing published; an edge named on the command line is not a population
+    anything could be graded against.
+    """
+    if not edges:
+        return
+    # Indexed rather than `.get`, because `refuse_unprobeable` has already run
+    # against this same graph in `main` — a miss here is an inconsistency to
+    # hear about, which is the call `carriageway_occupancy`'s probe makes too.
+    polylines = {
+        int(edge["id"]): np.asarray(edge["polyline"], dtype=np.float64) for edge in graph["edges"]
+    }
+
+    log.info("")
+    log.info(
+        "  station walk — %d edge(s) named on the command line, reporting only, nothing gated",
+        len(edges),
+    )
+    log.info(
+        "    along    metres down the centreline — the join key to carriageway_occupancy.py, "
+        "whose station index is NOT one"
+    )
+    log.info(
+        "    occ      that tool's own station index at its --spacing-m %.2f, found in metres "
+        "rather than by arithmetic",
+        occupancy_spacing_m,
+    )
+    log.info(
+        "    off_ctr  SIGNED offset of the centreline from the deck's middle, positive LEFT of "
+        "travel (overhang.left_of)"
+    )
+    log.info(
+        "    span     the deck parapet to parapet, quantised to the across cell and bounded by "
+        "--max-lateral-m %.1f",
+        max_lateral_m,
+    )
+    log.info(
+        "    hang     drawn ribbon with no deck under it at this station; drawn is the ribbon's "
+        "own width there"
+    )
+    log.info(
+        "    brdg     metres of hole inside that span closed by --bridge-m %.2f — a span with "
+        "this set spans TWO decks, so its middle is not one deck's and off_ctr against it is "
+        "not a registration reading",
+        bridge_m,
+    )
+    log.info(
+        "    ⚠ a refused station prints its reason in place — the series has holes and they are "
+        "the finding, not a gap to read across"
+    )
+
+    for edge_id in edges:
+        row = rows[edge_id]
+        series = walked[edge_id]
+        log.info("")
+        log.info(
+            "    e%d %s — %d stations walked at %.2f m, %d kept, %d refused "
+            "(%d junction, %d no_ribbon, %d no_deck, %d clipped)",
+            edge_id,
+            names.get(edge_id, "unnamed"),
+            len(series),
+            spacing_m,
+            len(row.span_m),
+            row.refused.total,
+            row.refused.junction,
+            row.refused.no_ribbon,
+            row.refused.no_deck,
+            row.refused.clipped,
+        )
+        indices = occupancy_indices(
+            polylines[edge_id], [station.along_m for station in series], occupancy_spacing_m
+        )
+        log.info(
+            _PROBE_ROW,
+            "st",
+            "vtx",
+            "along",
+            "occ",
+            "span",
+            "off_ctr",
+            "hang",
+            "drawn",
+            "brdg",
+            "note",
+        )
+        for index, (station, occupancy) in enumerate(zip(series, indices, strict=True)):
+            note = (
+                f"refused: {station.refused}"
+                if station.refused
+                else ("centreline off the deck" if station.centre_off_deck else "")
+            )
+            log.info(
+                _PROBE_ROW,
+                index,
+                station.vertex,
+                f"{station.along_m:.2f}",
+                occupancy,
+                _cell(station.span_m),
+                _cell(station.off_centre_m, signed=True),
+                _cell(station.overhang_m),
+                _cell(station.drawn_m),
+                _cell(station.bridged_m),
+                note,
+            )
+
+    log.info("")
+    log.info(
+        "    no bar is applied above — this reads a mechanism station by station, "
+        "it does not price a fix"
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, parents=[bundle_arguments()])
     parser.add_argument("--spacing-m", type=float, default=STATION_M)
@@ -605,6 +982,28 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--junction-m", type=float, default=JUNCTION_M)
     parser.add_argument("--bridge-m", type=float, default=BRIDGE_M)
     parser.add_argument("--min-stations", type=int, default=MIN_STATIONS)
+    parser.add_argument(
+        "--probe-edges",
+        type=edges_argument,
+        default=(),
+        # The parser is imported rather than restated, so the flag is spelled the
+        # same in both tools and `Q103`'s "order is kept, unlike --levels" rule
+        # travels with it. Named edges, never a filter over a population this
+        # tool decided — `probe` says in red why that is a third function.
+        help=(
+            "comma-separated edge ids to print station by station, for reading against "
+            "carriageway_occupancy.py's walk of the same edges (default: none)"
+        ),
+    )
+    parser.add_argument(
+        "--probe-occupancy-spacing-m",
+        type=float,
+        default=OCCUPANCY_SPACING_M,
+        # A flag and not the imported constant used directly: the `occ` column is
+        # only true for a run of that tool at this pitch, and that pitch is a
+        # flag there.
+        help="the --spacing-m carriageway_occupancy.py was run at, for the probe's occ column",
+    )
     parser.add_argument(
         "--sweep",
         default="",
@@ -655,6 +1054,8 @@ def main(argv: list[str] | None = None) -> int:
                 f"widest off-grade ribbon ({widest:.2f} m). The measurement would be the cap."
             )
 
+    refuse_unprobeable(graph, args.probe_edges)
+
     bridges = [args.bridge_m]
     if args.sweep_bridge:
         bridges = [float(value) for value in args.sweep_bridge.split(",")]
@@ -664,6 +1065,11 @@ def main(argv: list[str] | None = None) -> int:
             if args.sweep or args.sweep_bridge:
                 log.info("")
                 log.info("=== --max-lateral-m %.1f --bridge-m %.2f ===", cap, bridge)
+            # Keyed before the walk, because `survey` fills the edges it
+            # already has keys for and never invents one — an edge named on the
+            # command line that it never reaches must reach `probe`'s own
+            # refusal rather than quietly printing an empty series.
+            walked: dict[int, list[Station]] = {edge: [] for edge in args.probe_edges}
             rows = survey(
                 graph,
                 manifest,
@@ -674,6 +1080,7 @@ def main(argv: list[str] | None = None) -> int:
                 junction_m=args.junction_m,
                 attribute_within_m=args.attribute_within_m,
                 bridge_m=bridge,
+                trace=walked,
             )
             report(
                 rows,
@@ -681,6 +1088,17 @@ def main(argv: list[str] | None = None) -> int:
                 min_stations=args.min_stations,
                 spacing_m=args.spacing_m,
                 across_m=args.across_m,
+            )
+            probe(
+                walked,
+                rows,
+                names,
+                graph,
+                args.probe_edges,
+                spacing_m=args.spacing_m,
+                max_lateral_m=cap,
+                bridge_m=bridge,
+                occupancy_spacing_m=args.probe_occupancy_spacing_m,
             )
     return 0
 

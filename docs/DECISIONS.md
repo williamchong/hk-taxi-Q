@@ -16911,6 +16911,112 @@ isolated metres on `e306`.
 `e132` shape both sweeps reproduce · `Q57` for why the two edges still do not share an acceptance
 number · `Q58` for the trap the assigned startup guard closes
 
+### ✅ The ribbon is registered against the deck per station, 2026-09-04 — and the drift is NEITHER reading
+
+The entry above left `P4-1` two edges and *"what is left is geometry"*. The two candidate mechanisms
+were never separated, and they want opposite fixes (`Q57`): a ribbon drifting under a fixed rim is
+**registration**, and a diagonal object under a fixed ribbon is **geometry**. `tools/deck_margin.py`
+now takes `--probe-edges` and prints one row per walked station, so the two walks can be laid against
+each other. The answer is that **both readings are wrong**, and the third one is why `Q103`'s width
+was deck-sourced in the first place.
+
+🔴 **The join key is `along_m` and the station index is NOT one, in either tool.**
+`deck_error.stations` cuts each segment into `ceil(L / spacing)` equal pieces, so the real pitch is
+`L / ceil(L / spacing)` and lands anywhere in `(spacing / 2, spacing]` — `_starved_shape` already
+measures the length-weighted mean at **0.968 m against a nominal 1.0**, with the shortest segment at
+0.451 m. The two walks also run at different pitches, **2.0 m here against 1.0 m there**, and the
+plan for this work asserted they matched. Metres are the only frame they share, so `occupancy_indices`
+finds the counterpart index by **re-walking** and never by division;
+`test_a_short_final_segment_moves_the_index_off_the_arithmetic_answer` pins a polyline where the
+arithmetic answer is a whole station short.
+
+🔴 **A refused station prints its reason in place and is never skipped.** `Row`'s lists are dense
+and carry no positional marker, and on this tool refusals **outnumber keeps** — 1,637 junction, 390
+clipped and 30 no-deck against 1,334 kept. A series printed from the kept stations alone runs
+smoothly across the hole that is the finding. `e208` keeps **27 of 106** walked stations.
+
+**`e208` FLEMING ROAD, the drift band, at the default 2.0 m pitch and `--max-lateral-m` 12:**
+
+| st | along | occ | span | off_ctr | hang | drawn | brdg | left rim = span/2 − off_ctr |
+|---|---|---|---|---|---|---|---|---|
+| 85 | 159.42 | 166 | 7.80 | **+2.70** | 1.60 | 5.60 | 0.00 | +1.20 |
+| 87 | 162.43 | 169 | 8.00 | +2.70 | 1.50 | 5.60 | 0.00 | +1.30 |
+| 89 | 166.43 | 173 | 8.10 | +3.15 | 1.90 | 5.60 | 0.00 | +0.90 |
+| 91 | 170.43 | 177 | 7.90 | +3.65 | 2.50 | 5.60 | 0.00 | +0.30 |
+| 92 | 172.41 | 179 | 7.80 | **+3.80** | 2.70 | 5.60 | 0.00 | +0.10 |
+| 93 | 174.39 | 181 | 0.70 | +0.45 | 4.90 | 5.60 | 0.00 | 🔴 centreline off the deck |
+
+- ✅ **The occupier is the deck's own left rim, not an object standing in the carriageway.** Over
+  `occ` 166 → 179 the occupier's outer edge runs `+1.40 → +0.47` and the deck's left rim runs
+  `+1.20 → +0.10` — the same direction, **−0.93 m against −1.10 m**, agreeing station by station to
+  a worst **0.57 m** against an occupancy across cell of 0.5 m smeared by up to ±1.0 m of plan bin
+  (the other seven pairs run 0.03–0.37). So the
+  "diagonal object" reading is **out**: nothing crosses the ribbon, the ribbon and the deck separate.
+- ✅ **The vanished rim band is explained, and nothing moved to explain it.** At `st` 7–17 the deck
+  is 5.70–5.90 m at `off_ctr ≈ +0.05`, so both parapets sit at `±2.8`–`2.9`, inside the 5.60 m
+  ribbon window — two bands. By `st` 85 the rims are `+1.20` and **`−6.60`**, and the right one is
+  simply outside the window. Two bands becomes one because the deck left the ribbon, not because an
+  occupier walked.
+- 🔴 **But `off_ctr` here is NOT a registration reading, and the tool's own docstring says why.**
+  It is the right truth for *"is the paint on the deck"* and the wrong truth for *"is the centreline
+  correct"*. The deck it finds is **7.9 m** against a 5.60 m ribbon and against `e306`'s 5.4–6.0 m,
+  and immediately upstream **20 consecutive stations are `clipped`** — the structure at ribbon
+  height reaches past a 12 m half-walk, so ≥24 m wide. This is the interchange, where the model's
+  deck spans more than this edge's carriageway. The "deck's middle" there is not this carriageway's
+  middle, and an offset measured against it is `Q57`'s generalisation with a deck for a population.
+- ✅ **`brdg` is 0.00 at every station in the band**, which rules out the specific artefact of two
+  decks joined across a hole by `--bridge-m`. ⚠️ It does **not** rule out a continuously modelled
+  two-carriageway deck, which needs no bridging — so the column narrows the reading and does not
+  close it.
+- ✅ **`e306` CANAL ROAD FLYOVER is the control and it is clean**: `off_ctr` within **±0.50 m**
+  across 46 kept stations, span 5.40–6.00, `hang` ≤ 0.70. The drift is `e208`'s, not the walk's.
+
+🔴 **So a per-vertex `half_width_m`-style offset is NOT licensed by this, and that was the fix this
+probe was built to price.** `Q103` gives each edge one deck-derived width and one deck-derived
+offset; making the offset per-vertex would fit a centreline to the middle of whatever contiguous
+structure lies at ribbon height, which at an interchange is not this carriageway. What would settle
+it is attributing deck extent to **this edge's** carriageway rather than to a contiguous run — a
+`P4-1` question, and the same shape as `Q19` candidate 1, which was refuted at grade.
+
+⚠️ **A comment in `carriageway_occupancy.py` is wrong about which rim its walk starts at**, found
+while joining against it and **not fixed here**. `cross_section` places points at
+`point + normal x offset` from `−half` upward with `normal = left_of`, so step 0 is the **right**
+rim; two comments call it "the left rim inward". The signs it prints are correct and nothing
+computes from the label, so this is a doc defect — but it is a doc defect in the legend of the one
+signed column a reader joins against.
+
+- ✅ **Nothing publishes and no grader is owed.** Report-only, exits 0, default `()`; the tool's
+  existing output is **byte-identical** with the flag absent, checked against `HEAD` on the shipped
+  bundle. `schema_version` does not move, no repo constant changed. `carriageway_occupancy`'s
+  `_edges_argument` became `edges_argument` and is imported rather than restated, so the flag is
+  spelled the same in both tools and `Q103`'s "order is kept, unlike `--levels`" rule travels with it.
+- ✅ **`etl/tests/test_deck_margin.py` is new** — 20 tests, and the partition asserts **both halves
+  non-empty** before it asserts any equality, because a partition of nothing holds and a trace that
+  never appended is exactly the defect.
+- ✅ **Three things are imported rather than restated, and one of them was a real second copy.**
+  `along_metres` delegates to `pipeline.polyline.plan_lengths` — that module calls itself *"a
+  primitive, and the repo's duplicate-deliberately rule does not reach it"*, six tools already
+  import it, and the restated body was character-identical to `plan_steps_2d` (agreement 1.1e-13
+  over 500 random polylines). ⚠️ **Not `deck_error.stations`' case**, which is licensed because it
+  adds height interpolation; this added only the residual from the vertex. `edges_label` came
+  across beside the parser it inverts, so the two tools spell a refused set one way. And the
+  probe's own refusal is hoisted into a `refuse_unprobeable` called from `main` **before** the
+  walk, `carriageway_occupancy`'s reason at this tool: left at the report it cost a mistyped id the
+  whole walk first — once per `--sweep` cap, here, because the walk runs inside that loop.
+- 🔴 **A comment claimed a defect the code cannot reach, and the test named after it pinned
+  nothing** — caught by review and settled by mutation, which is `Q72` at this change's own
+  expense. `record`'s `_walked` / `_polyline` default binding was described as the late-binding
+  fix; every call is inside the iteration that defines it, so a plain closure reads the current
+  edge too. Removed, the two-edge test **still passes** and only `B023` complains — so the binding
+  stays, because what it actually buys is lint without a `noqa`, and the *claim* is what was wrong.
+  ⚠️ The `Station` docstring's "the numeric fields are NaN on a refusal" was wrong the same way:
+  `drawn_m` is recorded on `no_deck` and `clipped`, because a ribbon's width is known at a station
+  whose deck is not. ✅ Three hand-synced row formats became one `_PROBE_ROW` plus `_cell`, and the
+  probe's output is **byte-identical** across that refactor as well as the default table's.
+
+**See.** The entry above for the sweep this refines · `Q57` for why the two readings may not share
+a number · `Q22` for the overhang this decomposes · `Q19` candidate 1 for the same shape at grade
+
 ## `Q104` — The cut face had no back, and the ribbon is drawn wider than the corridor that was cleared
 
 **Status.** 🟡 Half answered — the back face ships, the width disagreement is measured and open ·

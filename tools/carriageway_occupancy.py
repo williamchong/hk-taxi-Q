@@ -1247,7 +1247,7 @@ def _levels_label(levels: tuple[int, ...]) -> str:
     return ",".join(f"{level:+d}" for level in levels)
 
 
-def _edges_label(edges: tuple[int, ...]) -> str:
+def edges_label(edges: tuple[int, ...]) -> str:
     """Edge ids as one token, in the `e208` spelling every listing here prints.
 
     `_levels_label`'s reason: a refusal and a log line spelling the same set two
@@ -1309,7 +1309,7 @@ def _levels_argument(text: str) -> tuple[int, ...]:
     return tuple(sorted(levels))
 
 
-def _edges_argument(text: str) -> tuple[int, ...]:
+def edges_argument(text: str) -> tuple[int, ...]:
     """`--probe-edges e208,e306` as a tuple, in the spelling the listings print.
 
     A bare integer is accepted too, because half the tables in this repo print
@@ -1393,7 +1393,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--probe-edges",
-        type=_edges_argument,
+        type=edges_argument,
         default=(),
         # Named edges, never a filter over a population this tool decided: see
         # `occupier_report`, which says in red why a third report gets its own
@@ -2253,7 +2253,7 @@ def refuse_unprobeable(
     missing = [edge_id for edge_id in edges if edge_id not in published]
     if missing:
         raise SystemExit(
-            f"--probe-edges names {_edges_label(tuple(missing))}, which this region's "
+            f"--probe-edges names {edges_label(tuple(missing))}, which this region's "
             "road graph does not carry"
         )
     unjudged = [
@@ -2261,7 +2261,7 @@ def refuse_unprobeable(
     ]
     if unjudged:
         raise SystemExit(
-            f"--probe-edges names {_edges_label(tuple(unjudged))}, whose level --levels "
+            f"--probe-edges names {edges_label(tuple(unjudged))}, whose level --levels "
             f"{_levels_label(levels)} does not judge — the walk would print stations with no "
             "corridor to explain them"
         )
@@ -2318,7 +2318,7 @@ def occupier_report(
     unprofiled = [edge_id for edge_id in edges if edge_id not in found.corridor_profile]
     if unprofiled:
         raise SystemExit(
-            f"--probe-edges names {_edges_label(tuple(unprofiled))}, which has no judged "
+            f"--probe-edges names {edges_label(tuple(unprofiled))}, which has no judged "
             "station — every cross-section was too trimmed for a corridor, so there is "
             "nothing for this walk to be read against"
         )

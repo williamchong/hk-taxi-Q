@@ -56,11 +56,11 @@ from carriageway_occupancy import (
     _clear_run,
     _closest_approach,
     _covers_centreline,
-    _edges_argument,
     _levels_argument,
     _profile_runs,
     _standing_runs,
     _starved_shape,
+    edges_argument,
     split_by_level,
     survey,
 )
@@ -866,15 +866,15 @@ class TestEdgesArgument:
     def test_both_spellings_are_accepted(self) -> None:
         """Half the listings here print `e208` and the graph's own field is
         `208`; a reader retyping one from the other should not have to know."""
-        assert _edges_argument("e208,306") == (208, 306)
+        assert edges_argument("e208,306") == (208, 306)
 
     def test_the_order_the_reader_chose_is_kept(self) -> None:
         """⚠️ Unlike `--levels`, which is a set. This is a listing, and sorting
         it would rearrange a comparison someone lined up deliberately."""
-        assert _edges_argument("e450,e208,e306") == (450, 208, 306)
+        assert edges_argument("e450,e208,e306") == (450, 208, 306)
 
     def test_duplicates_collapse(self) -> None:
-        assert _edges_argument("e208,e208") == (208,)
+        assert edges_argument("e208,e208") == (208,)
 
     def test_an_empty_argument_is_refused(self) -> None:
         """`_levels_argument`'s note applies: `"".split(",")` is `[""]`, so this
@@ -882,8 +882,8 @@ class TestEdgesArgument:
         check for an empty set would be unreachable. Pinned by message so the
         test cannot pass on the wrong branch."""
         with pytest.raises(argparse.ArgumentTypeError, match="comma-separated edge ids"):
-            _edges_argument("")
+            edges_argument("")
 
     def test_something_that_is_not_an_edge_id_is_refused(self) -> None:
         with pytest.raises(argparse.ArgumentTypeError, match="write e208 or 208"):
-            _edges_argument("FLEMING ROAD")
+            edges_argument("FLEMING ROAD")
