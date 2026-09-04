@@ -18266,3 +18266,137 @@ brute force this generalises and for the plan-cell mechanism · `Q108` for the p
 `Q107` for the clamp this prices · `Q106` for the frame · `Q57` for why the lane bar and the car bar
 never share an acceptance number · `Q58` for why a bound that cannot be swept is a trap · `Q37` for
 the scratch-script debt this pays
+
+---
+
+## `Q111` — The elevated network opens, exactly where it is measured
+
+`P4-1`'s first ending. `Q13` refused to hand a car an off-grade edge and that was right for a slice
+with no ramps; `P2-7` ramped the touchdowns, `Q103` found **39 of 60** off-grade edges physically
+reachable while every instrument gated on level 0, and `P3-29` shut the network at its touchdowns to
+buy the time to open it properly. `Q108` then published a level-1 clearance and `Q110` settled the
+car bar on it by exact measurement. This opens it.
+
+🔴 **Recorded as a SCOPE CHANGE against `Q13`, not a bug fix** — `PLAN.md` asks for that in as many
+words, and `Q13`'s refusal was the right call for what it was deciding. What expired is its premise,
+not its reasoning.
+
+### 🔴 The invariant is stated rather than chosen: open exactly where MEASURED
+
+`PLAN.md` said *"removing that key is the whole of it"*, and `Q110` found that wrong as written.
+Emptying `fence.touchdown_levels` opens the tunnels too, and the bundle measures **45 of 45**
+level-1 edges and **0 of 15** level-−1 edges — `Q108` refused the bores deliberately, because
+`e489`'s defect is 0.22 m of *headroom* that a horizontal instrument cannot express at any width.
+
+So the key reverses to `[-1, 2]` and the rule behind it is written down and pinned:
+
+    every mapped level that clearance.LEVELS does not measure is closed
+    every level it does measure is open
+
+`test_the_open_levels_are_the_measured_levels` is the ratchet, and it **refuses all three** of the
+values that were plausible: the old `[-1, 1]`, the naive reversal `[-1]`, and the empty `[]`.
+⚠️ **Level 2 is listed and is inert** — `elevation_levels` maps it, no Wan Chai edge carries it, and
+`touchdown_mouths` returns nothing for it. It is there so the invariant is **total**: a level-2 edge
+arriving in a later region is closed until something measures it, rather than opening by omission.
+That is also why the ratchet is stated over `elevation_levels` and not over the edges that exist — a
+check written against the built bundle passes with level 2 open and nobody the wiser.
+
+### ✅ `is_drivable` follows the measurement, not a level
+
+    _levels[slot] == 0 or _measured[slot] == 1
+
+⚠️ **The level-0 arm is not belt-and-braces.** An edge whose every station falls inside a junction
+trim publishes no corridor at all, and dropping a street out of the network for that is a hole
+nothing else would report. Off-grade there is deliberately no such fallback — that *is* the refusal,
+and it is `Q108`'s rather than a literal maintained beside `fence.touchdown_levels`.
+
+### 🔴 `fenced_edges`' level filter was a literal whose reason had expired
+
+It read `== 0`, justified by *"the off-grade network is closed ALREADY, at its touchdowns"* — true
+until `touchdown_levels` stopped closing level 1, and silently false afterwards. It now takes the
+**closed levels** and fences every level the touchdown closure leaves open. ⚠️ **0 of 45 open
+off-grade edges reach the car bar on this bundle**, so the count cannot distinguish the two rules;
+`test_an_off_grade_edge_on_an_OPEN_level_IS_fenced` and its closed-level twin are what do, and they
+are the mutation check `Q72` asks for rather than a reading.
+
+### 🔴 `P2-2`'s criterion is reversed, and the verifier asserts BOTH halves
+
+*"`nearest_edge` never returns an off-grade edge"* becomes: a **closed** level may never leak into a
+query, and an **open** deck must be served by one at its own height. `verify_road_graph` keeps the
+old rule where the network is still shut and asserts the new one where it is open, so it fails in
+both directions — and it refuses to pass vacuously if no off-grade edge is drivable at all.
+**825 of 900** off-grade probes now stand on an open deck.
+
+### ✅ The height rule is a PREFERENCE and never a rank, and its bar is measured
+
+`Hit.distance` stays plan distance for the reason it always had — a 3D rank orders edges by
+suspension travel. So `nearest_edge` prefers a road within `LEVEL_REACH_M` of the query's own height
+and falls back to the nearest at any height when there is none, which keeps a car in the air over a
+parapet reading the street below instead of blanking the HUD.
+
+⚠️ **Without it, opening the index puts the Canal Road Flyover under the wheels of a car on Canal
+Road**: **318 of 825** level-1 vertices sit within 5 m in plan of a level-0 edge.
+
+✅ **The value is not load-bearing and that is measured.** Of the **263** of those that share no node
+with the level-0 edge they are nearest to — genuinely different roads rather than a ramp meeting its
+own street — the vertical separation is p10 **7.07 m**, and the count still ambiguous under the bar
+is **1 of 263, flat from 1.0 m to 5.0 m**. 2.5 m sits between a car's ride height and that 7.07.
+
+🔴 **The ring early-out is tested against the on-level best only**, which is what keeps both answers
+exact: breaking on the fallback could stop one ring short of an on-level road slightly further out
+and hand back a deck overhead, and where no on-level road exists the loop never breaks, so the
+fallback is scanned to the full radius and is the true nearest.
+
+### ✅ What moved, and what provably did not
+
+| counter | before | after |
+|---|---|---|
+| touchdown ends dressed | 39 over 30 edges | **5 over 5** (the tunnel portals) |
+| barrier units | 253 | **113** |
+| indexed segments | 2,959 | **3,739** |
+| `fenced_edges` | 14 | ✅ **14** |
+| impassable, at grade | 19 | ✅ **19** |
+| impassable, off grade | — | **2** (`e208`, `e306`) |
+| fenced, off grade | — | ✅ **0** |
+
+✅ **3,739 is 2,959 + 780 exactly** — level 0 plus level 1, with level −1's 60 segments excluded, so
+the index opened to precisely what the measurement licenses. ✅ **The at-grade halves are unchanged
+at 19 and 14**, derived from the bundle independently of the change, which is `Q108`'s own shape for
+proving a level arrived rather than a bar moved. ✅ `e208` and `e306` — `Q110`'s two starved bridges —
+now reach `impassable_edge_ids`, so the router refuses them and the overlay draws them: **open and
+graded**, which is the state `Q103` said did not exist.
+
+🔴 **The counters are split by level in `verify_road_graph` and must not be pooled** (`Q57`). Ground
+proud of a street and a parapet on a viaduct want opposite fixes, and a single total hides which one
+moved — it is also the only place a reader can see that the off-grade rows reach the counters at all.
+
+### ✅ Held
+
+- `tools/check.sh` **exit 0**, `pytest` 1,998 passing, `ruff` clean.
+- `tools/reachability.py --refuse <the 14>`: **0 pairs lost, 0.00%**, detour p50 12.0 m — unmoved,
+  as it must be on an unmoved fence set.
+- 🔴 **The evidence is a frame** (`Q62`): `city_preview.tscn` at one fixed camera on the FLEMING ROAD
+  touchdown, node 175, `--debug-view=off --hud=off`. Each side shot **twice and `cmp`'d identical**;
+  the pair differs, and what differs is the barrier row across the ramp mouth — present before, gone
+  after, with the railings, the box junction, the NO ENTRY plate and the lamps unchanged.
+
+### ⬜ What this does NOT do
+
+- 🚫 **The tunnels stay shut**, and opening them needs a *vertical* instrument rather than a wider
+  `levels` (`Q103`, `Q108`). The ratchet makes that the only way in.
+- ⬜ **`P4-2` still owns the reverse case** — a point that genuinely belongs *on* a deck but is asked
+  from 2D, which no candidate filter can place (`Q15`'s remaining half). The preference above is the
+  near half only.
+- ⬜ **`P4-3`, `P4-4`, `P4-5` are untouched.** There is no traffic on the elevated network (`P3-3` is
+  not started), the ramp step at MARSH ROAD `e248` is a 35.8% lip that is now reachable, and the
+  streamer's bands were tuned without 23.3% more drivable area resident.
+- 🔴 **The human review point stands and this does not substitute for it**: *"drive the Wan Chai
+  Interchange from Gloucester Road onto the deck and back down — can you get up there, and does it
+  feel like a road rather than a ramp-shaped bug?"* Phase 4 is also behind the Phase 3 go/no-go,
+  which is the user's.
+
+**See.** `Q13` for the refusal this reverses · `Q103` for the reachable-and-ungraded finding that
+forced it · `Q108` for the published level-1 clearance and the refused level −1 · `Q110` for the
+exact corridor that settled the car bar · `Q57` for why the two levels never share a counter ·
+`Q72` for why the fence filter is mutation-checked rather than read · `Q62` for why the evidence is
+a frame

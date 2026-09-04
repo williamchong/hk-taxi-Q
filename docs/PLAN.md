@@ -876,7 +876,7 @@ than discovering the rest of it from a bug report.
 
 | ID | Deliverable | Accept |
 |---|---|---|
-| `P4-1` | `RoadGraph` serves off-grade edges — nearest-edge, lane centres and travel direction across all three levels | The `P2-2` criterion "nearest-edge never returns an off-grade edge" is **deliberately reversed**, its test rewritten to assert the new rule, and the reversal recorded against `Q13` |
+| `P4-1` ✅ **built 2026-09-04 (`Q111`)** | `RoadGraph` serves off-grade edges — nearest-edge, lane centres and travel direction across all three levels | ✅ The `P2-2` criterion is **deliberately reversed** and `verify_road_graph` asserts **both** halves — a closed level may never leak into a query, an open deck must be served by one at its own height, and it refuses to pass vacuously; **825 of 900** off-grade probes stand on an open deck. ✅ Reversal recorded against `Q13` as a **scope change**. 🔴 **Not all three levels: exactly the measured ones.** `fence.touchdown_levels` reverses to `[-1, 2]` and the rule is pinned — *open exactly where `clearance.LEVELS` measures* — so the tunnels stay shut on `Q108`'s own refusal and the ratchet rejects `[-1, 1]`, `[-1]` and `[]` alike. ✅ Touchdowns 39 → **5**, barriers 253 → **113**, indexed segments 2,959 → **3,739** = level 0 + level 1 exactly. ✅ `fenced_edges` unmoved at **14** and the at-grade impassable half unmoved at **19**, with `e208`/`e306` arriving as the two off-grade rows — open **and** graded. ✅ `reachability.py` loses **0.00%**; `check.sh` exit 0; A/B frame at node 175 shot twice a side. ⬜ Review point stands |
 | `P4-2` | Level-aware nearest-edge — a query resolves by 3D proximity, not plan distance | A query beside an elevated deck resolves to the deck when it carries height, and to the street when it does not. ⚠️ **The ETL half is already done**: a fare point under a flyover taking the deck's height was `Q15`, fixed 2026-08-21 by restricting the snap to level 0. What remains is the runtime query and the reverse case — a point that genuinely belongs *on* a deck, which no candidate filter can place. **Closes the remaining half of `Q15`** |
 | `P4-3` | Ramp traversal — the car drives grade → deck → grade without leaving the surface | No step over 0.15 m at any of the 36 nodes, measured; the kerb height is the tolerance because it is what the suspension already survives |
 | `P4-4` | Traffic across levels — extends `P3-3` onto the elevated network | AI obeys direction and turn restrictions on ramps; density scales by tier |
@@ -1009,9 +1009,17 @@ than discovering the rest of it from a bug report.
   cannot express at all — which is the precise thing `Q108` says opening `is_drivable` without a
   published clearance would do. The flyovers are measured and may open; the bores need the vertical
   instrument first (`Q103`, `Q108`), and until it exists `[-1]` is what keeps them shut.
-  ⚠️ **This task's dependencies are UNMET and it sits behind the Phase 3 gate**: `P3-3` is not
-  started, so opening the network hands the player 23.3% more carriageway with no traffic on it, and
-  the go/no-go above is the user's. Flagged rather than started, per the working agreements.
+  ✅ **DONE 2026-09-04 (`Q111`) — the network is open, at `[-1, 2]`.** The invariant shipped with it:
+  *open exactly where `clearance.LEVELS` measures*, pinned by
+  `test_the_open_levels_are_the_measured_levels`, which refuses `[-1, 1]`, `[-1]` and `[]` alike.
+  `is_drivable` follows that measurement rather than a level literal, so the bores stay out because
+  nothing has measured them.
+  ⚠️ **The dependencies remain UNMET and the Phase 3 gate is still the user's**: `P3-3` is not
+  started, so the elevated network is open with no traffic on it; MARSH ROAD `e248`'s 35.8% lip is
+  now reachable (`P4-3`); and the streamer's bands were tuned without 23.3% more drivable area
+  resident (`P4-5`). 🔴 **The human review point is not met by any of this** — *"can you get up
+  there, and does it feel like a road rather than a ramp-shaped bug?"* is a drive, and it is the
+  user's.
 
 ### Outline only — refine once Phase 3 lands
 

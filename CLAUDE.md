@@ -718,10 +718,19 @@ Common emoji for this project:
   horizontal corridor cannot express. ⚠️ **Keep `clearance.LEVELS == carriageway_survey.levels`** —
   a corridor across a width nothing surveyed is the failure — and
   `test_the_shipped_levels_match_the_width_surveys` is the ratchet.
-  ⚠️ **A wider `levels` is inert at runtime** — `RoadGraph.is_drivable` is level 0 and both
-  `impassable_edge_ids` and `fenced_edge_ids` filter through it — so the level-1 widths change
-  numbers nothing reads until `P4-1` reverses that too. That is the point: the refusal is measured
-  before the network opens, not after. ⚠️ Prove a change to the walk inert
+  🔴 **NO LONGER INERT — `P4-1` reversed it 2026-09-04 (`Q111`), and the invariant is now
+  `open exactly where clearance.LEVELS measures`.** `fence.touchdown_levels` is `[-1, 2]`,
+  `RoadGraph.is_drivable` is `level == 0 or the bundle measured a corridor here`, and
+  `test_the_open_levels_are_the_measured_levels` pins the two together — it refuses `[-1, 1]`,
+  `[-1]` and `[]` alike. ⚠️ **So moving `LEVELS` now moves what a player can drive on**, not just
+  what a number says: widening it without opening the matching level fails that ratchet, which is
+  the point. ⚠️ **Level 2 is listed in `touchdown_levels` and is inert** — it makes the invariant
+  total, so a level-2 edge in a later region is closed until something measures it. 🚫 **Level −1
+  stays shut and a wider `levels` is not the way in**: `e489`'s defect is 0.22 m of headroom and
+  needs a vertical instrument. ⚠️ **`fenced_edges` takes the CLOSED levels, never the literal 0** —
+  that literal's stated reason ("the off-grade network is closed already, at its touchdowns")
+  expired the moment level 1 opened — and it is 0 of 45 today, so mutation-check the paired tests
+  rather than reading the count. ⚠️ Prove a change to the walk inert
   the way `Q96` says, in **two** steps, because only the first can be byte-for-byte: hold the
   levels and reproduce `clearance.json` exactly (`Q108`'s frame fix did, at `fa5bcf39…`), then
   move the level and check that every row that moved is one the old default never walked — **45
