@@ -1773,6 +1773,27 @@ side planes, so a re-run reads it as wholly inside, removes it and rebuilds a sh
 carries a `carved_edges` marker and the stage raises on it. ⚠️ Reached by `--from roads`, not only by
 running this twice.
 
+🔴 **And the test of that refusal reached it through a FETCH, which is why CI was red for five
+days — fixed 2026-09-05.** `carve.build_region` opened with `Placement.resolve`, inherited from
+`buildings.build_region`, and used **one** of its five fields: `out_dir`. Of the four it did not
+use, one — `sheets` — costs a `cached_tiles` call, so a stage whose input is the *shipped* tiles
+(`_structure_field` says why) needed `etl/sources/buildings/index.geojson` to raise a refusal
+about a file in `etl/out/`. ⚠️ **The shape is the house one** and this stage was the outlier:
+`surface`, `clearance`, `export` and `fence` all resolve `city.out_dir` and take no `sources_root`.
+⚠️ **The failure mode is the one that hides**: `test_carving_carved_tiles_is_refused` passes on any
+clone that has built and fails on every clone that has not, and `ci.yml` deliberately never fetches
+("both slow and impolite"). Red from `1b5e1b5` on 2026-08-31 to `c7171f2`, **8 consecutive runs on
+the same single test**, across 47 commits. ⚠️ **The cost is the badge and not the log** — a
+standing failure makes red the normal colour, so a second one reads the same from outside.
+The stage resolves `city.out_dir(region_id, out_root)` now and takes no `sources_root`, which no
+caller ever passed. ⚠️ **Proved inert against the shipped bundle**: `buildings` rebuilt and
+re-carved into a copied out-tree reproduces `carve.json`, `buildings.json` and all **16** re-emitted
+tiles byte-for-byte, with `e327` reading its first-pass **141.8 m** rather than the degraded 75.8.
+⚠️ **The general shape is worth the next stage's attention**: `buildings.Placement` is the sources
+tree and the out tree in one object — `fence.py` has an unrelated dataclass of the same name — so
+taking one where only the out tree is wanted couples a stage to a fetch silently, and nothing but
+CI can see it.
+
 ⚠️ **The wall's class is load-bearing and was wrong once.** Taking its channels from the tile gives it
 the first vertex's class, usually `FACADE` — the window-band shader then draws storeys of glazing on
 concrete, and the share moves between the two gates: measured `BUILDING` 1.204 → **1.292%** with the

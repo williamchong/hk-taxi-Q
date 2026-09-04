@@ -47,6 +47,27 @@ tools/check.sh
 fails to parse, so only `tools/check.sh`'s exit code means anything. This has produced a green check
 that checked nothing more than once.
 
+⚠️ **`pytest` passes more on your machine than it does in CI, and the difference is `etl/sources/`.**
+That tree is gitignored and `.github/workflows/ci.yml` deliberately never fetches, so a test that
+reaches a fetched artefact passes for you and fails for everyone else. The convention is that such a
+test skips itself — `requires a fetched sheet index` — and the trap is a test that reaches one
+*through a stage* without meaning to. Run the CI condition before you push:
+
+```bash
+cd etl && python -c "
+import pathlib, sys, tempfile
+import pytest
+import pipeline.fetch as fetch
+fetch.SOURCES_ROOT = pathlib.Path(tempfile.mkdtemp())
+sys.exit(pytest.main(['-q']))
+"
+```
+
+It should pass exactly as a plain run does, bar the handful that skip themselves; a **failure** there
+is a test coupled to your own build. `carve.build_region` took a whole `Placement` for its `out_dir`
+alone, so refusing to carve an already-carved bundle needed a fetched sheet index — which left CI red
+for eight runs, and nobody running the suite locally could see it (`docs/DECISIONS.md` `Q19`).
+
 If you changed the ETL, the pipeline must run end to end on the Wan Chai config.
 
 **Then there are the graders, and `CLAUDE.md`'s "Before marking work done" is the list** — kept per

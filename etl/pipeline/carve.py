@@ -51,7 +51,6 @@ from pipeline.buildings import (
     BUILDINGS_MANIFEST_SCHEMA,
     CARVED_EDGES_KEY,
     FACADE_MATERIAL,
-    Placement,
     union,
 )
 from pipeline.config import Carve, Config, SurfaceClass, load_config
@@ -673,25 +672,33 @@ def build_region(
     city: Config,
     region_id: str,
     *,
-    sources_root: Path | None = None,
     out_root: Path | None = None,
 ) -> CarveReport:
     """Carve every configured edge out of the tiles it touches, and re-emit them.
 
-    ⚠️ **Only the touched tiles are opened at all.** The untouched ones are not
-    read, not rewritten and not compared — which is what makes them
-    byte-identical, rather than a `cmp` afterwards saying they happen to be.
+    ⚠️ **Only the touched tiles are re-emitted.** The untouched ones are not
+    rewritten and not compared — which is what makes them byte-identical, rather
+    than a `cmp` afterwards saying they happen to be. ⚠️ They are **read**,
+    though: `_structure_field` opens every tile's LOD0 for the soffit, 66 against
+    the 14 touched, so this is a claim about writes and never about reads.
+
+    🔴 **No `sources_root` and no `buildings.Placement`** — the shape `surface`,
+    `clearance` and `fence` already have, for the same reason. This opened with
+    one for its `out_dir` alone, and of the four other fields `sheets` reads the
+    tile index a *fetch* leaves on disk. That coupled a bundle-only stage to
+    `etl/sources/`, which CI never populates, and left it red for eight runs on
+    a test about a file in `etl/out/` (`Q19`).
     """
-    place = Placement.resolve(city, region_id, sources_root, out_root)
+    out_dir = city.out_dir(region_id, out_root)
     report = CarveReport()
     spec = city.carve
     if spec is None:
         log.info("  no carve configured; the bundle is unchanged")
-        write_document(place.out_dir / CARVE_NAME, _document(city, region_id, report))
+        write_document(out_dir / CARVE_NAME, _document(city, region_id, report))
         return report
 
     manifest = read_document(
-        place.out_dir / BUILDINGS_MANIFEST_NAME,
+        out_dir / BUILDINGS_MANIFEST_NAME,
         BUILDINGS_MANIFEST_SCHEMA,
         f"python -m pipeline --region {region_id} --from buildings",
     )
@@ -714,10 +721,10 @@ def build_region(
             f"tiles first: python -m pipeline --region {region_id} --from buildings"
         )
 
-    graph = read_graph(place.out_dir / ROADGRAPH_NAME, city.id, region_id)
+    graph = read_graph(out_dir / ROADGRAPH_NAME, city.id, region_id)
     by_id = {edge["id"]: edge for edge in graph["edges"]}
     tiles = {tile["id"]: tile for tile in manifest["tiles"]}
-    overhead = _structure_field(place.out_dir, manifest)
+    overhead = _structure_field(out_dir, manifest)
 
     plans: dict[str, list[EdgePlan]] = {}
     for edge_id in spec.edges:
@@ -734,14 +741,14 @@ def build_region(
             plan.row.tiles_considered.append(tile_id)
 
     for tile_id in sorted(plans):
-        _carve_tile(place.out_dir, tiles[tile_id], plans[tile_id], report)
+        _carve_tile(out_dir, tiles[tile_id], plans[tile_id], report)
 
     _log(report)
     if report.tiles_written:
         manifest[CARVED_EDGES_KEY] = sorted(row.edge for row in report.carved)
 
-    write_document(place.out_dir / BUILDINGS_MANIFEST_NAME, manifest)
-    write_document(place.out_dir / CARVE_NAME, _document(city, region_id, report))
+    write_document(out_dir / BUILDINGS_MANIFEST_NAME, manifest)
+    write_document(out_dir / CARVE_NAME, _document(city, region_id, report))
     return report
 
 
