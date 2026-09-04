@@ -16,6 +16,17 @@ const PATH: String = "res://assets/generated/roadgraph.json"
 ## Schema this understands, matching `ROADGRAPH_SCHEMA` in
 ## `etl/pipeline/roads.py`.
 ##
+## 11 since `Q114`, and it adds no field at all — it withdraws a guarantee and
+## widens a vocabulary. `lanes` may now be **1**, where every schema before it
+## floored a measured single lane to two. This reader passes the count straight
+## through, and the one place it mattered is `RoadGraph.lane_offset`, which
+## returns 0 at a count of one — the lane centre on the centreline. The floor
+## lives there now as `LANE_FLOOR`, so nothing in this file changes and a reader
+## that skipped the bump would still drive correctly *only because* that
+## constant exists. ⚠️ `lanes_source` loses `floored` and gains `deck_capped`,
+## which is an off-grade count cut to what its own deck can hold — a refusal,
+## never a reading: `authored`, `measured`, `arrows` or `deck_capped`.
+##
 ## 10 since `Q107`, and it adds a field this reader deliberately does not read:
 ## `deck_rim_m`, per vertex, how far the deck reaches either side of the
 ## centreline. It is what `surface.py` cuts the off-grade ribbon back to, and
@@ -90,7 +101,7 @@ const PATH: String = "res://assets/generated/roadgraph.json"
 ## `polyline ± width_m / 2` is now wrong about the whole elevated network, and
 ## nothing else in the document says so — `width_m` gives the size, this gives
 ## the place. Positive is left of travel, `surface.mitres`' frame.
-const SCHEMA_VERSION: int = 10
+const SCHEMA_VERSION: int = 11
 
 
 ## The parsed graph, or an empty dictionary with a pushed message.

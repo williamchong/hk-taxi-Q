@@ -134,7 +134,29 @@ ROADGRAPH_NAME = "roadgraph.json"
 # ⚠️ Present only on the off-grade edges the deck walk measured, and `[]`
 # elsewhere; a reader must fall back to `width_m` / `offset_m`, which is what
 # every edge without it has always been.
-ROADGRAPH_SCHEMA = 10
+# 11 is `Q114`, and it changes no field at all — it withdraws a guarantee and
+# widens a vocabulary. Both halves are about `lanes`.
+# 🔴 **`lanes` can be 1.** Through schema 10 a measured single lane was
+# published as **two**, so every consumer could take `lanes >= 2` for granted —
+# and one did: `RoadGraph.lane_offset` returns 0 at a count of one, which puts
+# the nearside lane centre on the centreline, the one place on the network a
+# wheel must not go. A reader keeping schema 10's assumption is not looking at
+# different bytes, it is driving down the seam, which is hard rule 5's test. The
+# floor now lives in that consumer as `LANE_FLOOR`, so the driving line is
+# unchanged and the published count is the measurement. `lanes_source` loses
+# `floored` with it and those 57 edges read `measured`.
+# 🔴 **And `lanes` is capped by the deck an off-grade edge stands on**, with
+# `lanes_source: deck_capped` saying where that bit — a fourth value a consumer
+# enumerating schema 10's set would not know. ⚠️ **A refusal and never a
+# reading**: no turn arrows are painted on a bridge deck and the line
+# publishers' 2D rays find the street underneath, so the deck licenses no lane
+# count — only the ceiling that paint cannot be wider than the structure it is
+# painted on, which is `Q107`'s own licence for cutting the ribbon to
+# `deck_rim_m`. A count the deck can hold is left exactly as authored, and 8 of
+# this region's 36 deck edges sit *below* their ceiling untouched.
+# ⚠️ **`width_m` does NOT move in either half.** A lane count is not a width
+# (hard rule 4), and the drawn ribbon is `max(width_m, floor)` either way.
+ROADGRAPH_SCHEMA = 11
 
 # `Node.kind` in the data contract. Degree three or more is somewhere a
 # driver can choose; anything else is a road continuing or stopping.
@@ -219,12 +241,22 @@ class Edge:
     width_source: str = "authored"
     # How `lanes` was arrived at (`Q94`). `authored` is `lanes_for(speed_limit)`,
     # the two-line table every edge carried before the survey; `measured` is the
-    # count TD's own through-lane range resolves the measured width to; `floored`
-    # is a resolved count of one lane published as `LANES_FLOOR` because the
-    # ribbon under it is drawn at the playability floor and a one-lane road puts
-    # the runtime's lane centre on the centreline; `arrows` is a row of turn
-    # arrows across the carriageway resolving a bracket TD's range left
-    # ambiguous, which is the one reading here owing nothing to a width.
+    # count TD's own through-lane range resolves the measured width to; `arrows`
+    # is a row of turn arrows across the carriageway resolving a bracket TD's
+    # range left ambiguous, which is the one reading here owing nothing to a
+    # width.
+    # 🔴 **There was a fourth, `floored`, and `Q114` removed it.** A resolved
+    # bracket of one lane was published as two because `RoadGraph.lane_offset`
+    # puts a one-lane road's lane centre on the centreline. That is one
+    # consumer's constraint, enforced in that consumer now — because a second
+    # consumer, `road_markings.gdshader`, cuts the drawn ribbon into `lanes`
+    # strips and was painting the floored lane onto the road.
+    # 🔴 **`deck_capped` is a REFUSAL and not a reading** (`Q114`). Off-grade
+    # nothing publishes a lane count at all, so `lanes` is the speed-limit
+    # table; where that names more lanes than the edge's own deck could hold
+    # under TPDM 4.3.9.8, the count is cut to the deck's ceiling and this says
+    # so. ⚠️ **It never raises a count** — 8 of the region's 36 deck edges are
+    # authored below their ceiling and none of them moves.
     # ⚠️ **Not implied by `width_source`.** Many measured widths bracket
     # ambiguously with no arrow row to settle them, so `width_source: one_way_uncrossed` with
     # `lanes_source: authored` is the commonest measured edge rather than a
@@ -1094,6 +1126,25 @@ def _reassign(edge: Edge, found: carriageway.CarriagewayReport) -> Edge:
         changes["deck_rim_m"] = tuple(
             (round(left, 3), round(right, 3)) for left, right in found.deck_rim_m[edge.id]
         )
+        # 🔴 **The deck is a CEILING on the lane count, never a source of one**
+        # (`Q114`). Off-grade there is no lane-count evidence — no turn arrows
+        # are painted on a bridge deck and the line publishers' 2D rays find the
+        # street underneath — so `lanes` is `lanes_for(speed_limit)`, and that
+        # table read `e306` CANAL ROAD FLYOVER's 70 kph as three lanes over a
+        # 5.80 m deck, which `road_markings.gdshader` painted as 1.15 m strips.
+        # What is licensed here is only the refusal: paint cannot be wider than
+        # the structure under it, which is the licence `Q107` already took to
+        # cut the ribbon to `deck_rim_m`.
+        #
+        # ⚠️ **Composed with whatever stands, not with `edge.lanes`.** A ray
+        # licence above may already have published a count for this edge; the
+        # cap has to apply to that rather than to the authored number it
+        # replaced, or the two rules would fight over which ran last.
+        ceiling = found.deck_lane_ceiling[edge.id]
+        standing = int(changes.get("lanes", edge.lanes))
+        if standing > ceiling:
+            changes["lanes"] = ceiling
+            changes["lanes_source"] = "deck_capped"
     if not changes:
         return edge
     return replace(edge, **changes)
@@ -2153,6 +2204,23 @@ def main(argv: list[str] | None = None) -> int:
             width.lanes_unresolved,
             len(width.lanes_odd_two_way),
         )
+        # 🔴 **Logged rather than merely computed, which is why the property
+        # exists at all** (`Q114`): its predecessor `lanes_floored` was defined
+        # and read by nothing. These are the edges `RoadGraph.lane_offset`'s own
+        # floor now stands over, and the only place a reader sees how many.
+        log.info(
+            "      %d measured widths resolve to a SINGLE lane — no lane line is drawn down "
+            "them, and RoadGraph.lane_offset floors the driving line off their centreline "
+            "(Q114)",
+            width.lanes_single,
+        )
+        if width.deck_lane_ceiling:
+            log.info(
+                "      deck ceiling: %d of %d measured decks hold fewer lanes than the "
+                "speed-limit table authored, and are cut to it (Q114)",
+                len(width.deck_lanes_capped),
+                len(width.deck_lane_ceiling),
+            )
         log.info(
             "    lane rows: %d edges carry turn arrows; %d resolved an ambiguous bracket, "
             "%d agree with the count the width published, %d state a single arrow — not a row",

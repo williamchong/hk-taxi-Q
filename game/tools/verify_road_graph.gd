@@ -630,8 +630,18 @@ func _check_lanes(graph: RoadGraph, edges: Array) -> PackedStringArray:
 	var offset: float = RoadGraph.lane_offset(6.4, 2)
 	if absf(offset - 1.6) > 0.001:
 		problems.append("lane_offset(6.4, 2) is %.3f m, expected 1.600 m" % offset)
-	if RoadGraph.lane_offset(6.4, 1) != 0.0:
-		problems.append("a single-lane road's nearside centre is its centreline")
+	# 🔴 **REVERSED at `Q114`, and it used to assert the opposite** — that a
+	# one-lane road's nearside centre *is* its centreline. That was a true
+	# statement about the formula and a description of the hazard, not of a
+	# requirement: the ETL kept it unreachable by publishing two lanes wherever
+	# it measured one, and the price was a lane line painted down 57 edges that
+	# have no lane line. The floor moved into `lane_offset` as `LANE_FLOOR`, so
+	# a single-lane road is now driven exactly where a two-lane one of the same
+	# width is, and this is the line that says so.
+	if RoadGraph.lane_offset(6.4, 1) != RoadGraph.lane_offset(6.4, 2):
+		problems.append("a single-lane road is not floored to LANE_FLOOR's driving line")
+	if RoadGraph.lane_offset(6.4, 1) <= 0.0:
+		problems.append("a single-lane road's nearside centre is on its centreline")
 
 	# The published table is the whole reason the lane centre is right, so its
 	# absence is a failure rather than a fallback. `RoadGraph` degrades to the
@@ -650,11 +660,28 @@ func _check_lanes(graph: RoadGraph, edges: Array) -> PackedStringArray:
 	# At-grade edges the floor actually lifted. Asserted non-zero below, because
 	# a "never narrower" test alone passes on a table that echoes the graph.
 	var widened: int = 0
+	# 🔴 **Single-lane edges get their OWN budget, and the guard that used to
+	# skip them is gone** (`Q114`). It read `lanes < 2` and was unreachable while
+	# the ETL floored a measured single lane to two — so removing the floor
+	# without this would have handed 57 at-grade edges to a verifier that steps
+	# over them, and they are precisely the population `LANE_FLOOR` exists for.
+	# A shared cap in document order is not enough either: the general one fills
+	# from `e0` and never reaches them.
+	var single: int = 0
+	var single_available: int = 0
 	for edge: Dictionary in edges:
-		if int(edge.get("elevation_level", 0)) != 0 or checked >= 50:
+		if int(edge.get("elevation_level", 0)) != 0:
 			continue
 		var points: Array = edge.get("polyline", [])
-		if points.size() < 2 or int(edge.get("lanes", 2)) < 2:
+		if points.size() < 2:
+			continue
+		var lanes: int = int(edge.get("lanes", 2))
+		var is_single: bool = lanes < 2
+		if is_single:
+			single_available += 1
+			if single >= 10:
+				continue
+		elif checked >= 50:
 			continue
 		# The station is sampled as well as the point, because since `Q23` the
 		# drawn width varies along an edge and "the drawn half-width" is not a
@@ -664,13 +691,15 @@ func _check_lanes(graph: RoadGraph, edges: Array) -> PackedStringArray:
 		var hit: RoadGraph.Hit = graph.nearest_edge(Vector3(mid[0], mid[1], mid[2]))
 		if not hit.hit():
 			continue
-		checked += 1
+		if is_single:
+			single += 1
+		else:
+			checked += 1
 
 		# The claim under test: the lane centre comes off the *drawn* carriageway,
 		# not the authored width the graph publishes. On a two-lane street those
 		# differ by a quarter of the widening.
 		var edge_id: int = int(edge.get("id", -1))
-		var lanes: int = int(edge.get("lanes", 2))
 		var drawn_half: float = graph.drawn_half_width_of(edge_id, station)
 		var expected: float = RoadGraph.lane_offset(drawn_half * 2.0, lanes)
 		var actual: float = hit.lane_centre.distance_to(hit.point)
@@ -729,6 +758,20 @@ func _check_lanes(graph: RoadGraph, edges: Array) -> PackedStringArray:
 
 	if checked == 0:
 		problems.append("no multi-lane drivable edge was available to check lane placement")
+	# ⚠️ **Conditional on the region and not on this file** (`Q114`). A region
+	# whose every measured width brackets to two or more lanes has none of these
+	# and is not defective; a region that *has* them and checked none has a
+	# verifier stepping over the population its own floor was written for.
+	if single_available > 0 and single == 0:
+		problems.append(
+			(
+				(
+					"%d at-grade single-lane edges exist and none was checked — "
+					+ "LANE_FLOOR's population is ungraded"
+				)
+				% single_available
+			)
+		)
 	# 🔴 **The positive half of the floor claim, and it is here because the test
 	# above had to be weakened to allow it** (`Q95`). "Never narrower" can be
 	# satisfied by a drawn half-width that simply echoes the authored one, which
@@ -746,6 +789,20 @@ func _check_lanes(graph: RoadGraph, edges: Array) -> PackedStringArray:
 				% checked
 			)
 		)
+	# Printed rather than only asserted, on `bars:`' precedent: `Q114` opened a
+	# population that did not exist before, and a reader has to be able to see it
+	# arrive. ⚠️ **The count is not the test** — a region can legitimately have
+	# none — so the assertion above is what fails and this is what a reader
+	# checks against `roads.py`'s own single-lane line.
+	print(
+		(
+			(
+				"  Q114: %d of %d at-grade single-lane edges checked — LANE_FLOOR holds their "
+				+ "driving line off the centreline"
+			)
+			% [single, single_available]
+		)
+	)
 	problems.append_array(_check_lane_source(edges))
 	return problems
 

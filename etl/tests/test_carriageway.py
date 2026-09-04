@@ -34,10 +34,10 @@ from pipeline.carriageway import (
     DECK_BRIDGE_M,
     DECK_MAX_LATERAL_M,
     DECK_TOLERANCE_M,
-    LANES_FLOOR,
     MIN_STATIONS,
     CarriagewayReport,
     _along_at,
+    _deck_lane_ceiling,
     _deck_reach,
     _lane_bracket,
     _lanes,
@@ -274,19 +274,43 @@ class TestLaneBracket:
         assert _lane_bracket(7.29, _bounds(), two_way=False) == (1, 2)
         assert _lanes((1, 2)) == (None, "")
 
-    def test_one_lane_is_floored_because_the_ribbon_over_it_is_not(self) -> None:
-        """A 5 m one-way street holds one lane; what is drawn on it is 10.24 m wide."""
+    def test_one_lane_is_published_as_one_lane(self) -> None:
+        """🔴 **`Q114` — and it published `(2, "floored")` until then.**
+
+        A 5 m one-way street holds one lane. What is drawn on it is 10.24 m
+        wide, and that used to be the argument for publishing two: a one-lane
+        road puts `RoadGraph.lane_offset` on the centreline. The floor moved
+        into that consumer, so the reading ships as the reading — and the
+        second consumer, `road_markings.gdshader`, stops painting a lane line
+        down a road that has none.
+        """
         assert _lane_bracket(3.65, _bounds(), two_way=False) == (1, 1)
-        assert _lanes((1, 1)) == (LANES_FLOOR, "floored")
+        assert _lanes((1, 1)) == (1, "measured")
+
+    def test_no_basis_says_floored_any_more(self) -> None:
+        """The vocabulary contracted, which is why `ROADGRAPH_SCHEMA` bumped.
+
+        Swept rather than asserted at one width: a floor reintroduced anywhere
+        in the resolved range would be invisible to a single-point test.
+        """
+        bounds = _bounds()
+        for step in range(300, 1651):
+            count, basis = _lanes(_lane_bracket(step / 100.0, bounds, two_way=False))
+            assert basis in ("", "measured")
+            assert count is None or count >= 1
 
     def test_no_licensed_width_can_bracket_to_no_lanes_at_all(self) -> None:
         """🔴 The invariant `config.py` enforces, pinned where it is relied upon.
 
-        `_lanes` floors anything under `LANES_FLOOR`, so an unambiguous bracket
-        of **zero** would publish two lanes for a width that measured none. It
-        is unreachable because a licensed width is at least `hard_min_m` and
+        Since `Q114` `_lanes` publishes a resolved bracket as it stands, so an
+        unambiguous bracket of **zero** would publish a road with no lanes at
+        all — which `surface.MarkingCode` refuses outright and which would
+        divide by zero in `road_markings.gdshader`'s own arithmetic. It is
+        unreachable because a licensed width is at least `hard_min_m` and
         `config.py` refuses a `lane_m` floor above that — but the refusal lives
         in another module, and this is the line that would break if it moved.
+        ⚠️ **The floor used to make this survivable and no longer does**, so the
+        assertion below is load-bearing where it was belt-and-braces.
         """
         bounds = _bounds()
         assert bounds.lane_m[0] <= bounds.hard_min_m
@@ -422,11 +446,23 @@ class TestLaneRow:
         assert report.lanes == {}, "a row of one published a lane count"
         assert report.lanes_row_single == [1]
 
-    def test_the_row_bar_is_tied_to_the_lane_floor(self) -> None:
-        """They answer the same question from opposite sides, so they may not
-        drift apart: a row under the floor could only ever be published by being
-        floored, which is what this refuses."""
-        assert _ROW_MIN == LANES_FLOOR
+    def test_the_row_bar_is_NOT_tied_to_a_publishing_floor(self) -> None:
+        """🔴 **The decoupling `Q114` had to make deliberately.**
+
+        This read `_ROW_MIN == LANES_FLOOR` on the argument that the two
+        "answer the same question from opposite sides". They do not: the
+        publishing floor was about `RoadGraph.lane_offset` putting a lane centre
+        on the centreline, which says nothing about what a row of painted
+        arrows is evidence of. When that floor moved into the runtime, a bar
+        that followed it would have dropped to 1 and made a single arrow a lane
+        count — republishing the 28-edge defect `_resolve_with_rows` records.
+
+        So the bar keeps its value on its own evidence — two abreast is the
+        narrowest painted row that states a count — and this is the line that
+        fails if somebody re-derives it from a floor again.
+        """
+        assert _ROW_MIN == 2
+        assert _lanes((1, 1)) == (1, "measured"), "no floor is left to tie it to"
 
     def test_a_row_inside_an_ambiguous_bracket_resolves_it(self) -> None:
         report = _report(e119=(4, 5))
@@ -460,16 +496,26 @@ class TestLaneRow:
         assert report.lanes_basis == {}, "the width had already published it"
         assert report.lanes_row_agreeing == [1]
 
-    def test_a_row_agreeing_with_a_FLOORED_count_is_agreement_not_a_finding(self) -> None:
-        """🔴 **Filed against the published count, not the bracket, and that is
-        3 edges.** A `(1, 1)` bracket publishes `LANES_FLOOR`, so a row of two on
-        one sits *above* its bracket while agreeing exactly with what shipped —
-        the floor doing its job, confirmed by an independent reading. Filed by
-        bracket it would read as the two instruments contradicting each other."""
-        report = _report({1: LANES_FLOOR}, e1=(1, 1))
-        _resolve_with_rows(report, {1: LANES_FLOOR})
-        assert report.lanes_row_agreeing == [1]
-        assert report.lanes_row_over_bracket == []
+    def test_a_row_of_two_over_a_single_lane_bracket_is_now_a_FINDING(self) -> None:
+        """🔴 **The state `Q114` moved, recorded rather than deleted.**
+
+        While a `(1, 1)` bracket published two lanes, a row of two on one agreed
+        with what shipped and was filed as agreement — 3 edges, the floor
+        confirmed by an independent reading. With the floor gone the bracket
+        publishes one, so the same row now sits above the count as well as above
+        the bracket, and it is what it always was underneath: two instruments
+        disagreeing about a narrow street. Reported, never used.
+
+        ⚠️ **The rule that filed it did not change** — agreement is still tested
+        against the *published* count and not against the bracket — and
+        `test_a_row_agreeing_with_a_resolved_bracket_publishes_nothing` is where
+        that rule is still exercised.
+        """
+        report = _report({1: 1}, e1=(1, 1))
+        _resolve_with_rows(report, {1: 2})
+        assert report.lanes == {1: 1}, "the width's count stands"
+        assert report.lanes_row_over_bracket == [1]
+        assert report.lanes_row_agreeing == []
 
     def test_an_edge_with_no_bracket_is_never_given_a_count(self) -> None:
         """🔴 **`verify_road_graph.gd`'s invariant, pinned here rather than
@@ -677,7 +723,7 @@ class TestAlongAt:
         assert _along_at(plan, along, np.array([10.0, 4.0])) == pytest.approx(14.0)
 
 
-def _road_edge(edge_id: int):
+def _road_edge(edge_id: int, *, lanes: int = 2):
     """A minimal `roads.Edge` for the reassignment tests."""
     from pipeline.roads import Edge
 
@@ -690,7 +736,7 @@ def _road_edge(edge_id: int):
         on_structure=[False, False],
         structure_bounded=[False, False],
         direction=FORWARD,
-        lanes=2,
+        lanes=lanes,
         width_m=6.4,
         speed_limit_kph=50,
         bus_lane=False,
@@ -698,6 +744,22 @@ def _road_edge(edge_id: int):
         elevation_level=1,
         road_name={"en": "TEST", "zh": ""},
     )
+
+
+def _deck_report(edge_id: int, span_m: float, ceiling: int) -> CarriagewayReport:
+    """A report carrying one measured deck, with all FOUR of its fields.
+
+    ⚠️ **Four since `Q114`**, and the count matters: `_survey_edge` gates the
+    rims and the lane ceiling on the same condition as the two aggregates, and
+    `_reassign` *indexes* rather than defaulting, so a fixture that publishes
+    three of them is describing a state the pipeline cannot produce.
+    """
+    found = CarriagewayReport()
+    found.deck_span_m[edge_id] = span_m
+    found.deck_offset_m[edge_id] = 0.0
+    found.deck_rim_m[edge_id] = [(span_m / 2.0, span_m / 2.0), (span_m / 2.0, span_m / 2.0)]
+    found.deck_lane_ceiling[edge_id] = ceiling
+    return found
 
 
 class TestThePublishedOffsetIsTheNegationOfTheSurvey:
@@ -716,14 +778,14 @@ class TestThePublishedOffsetIsTheNegationOfTheSurvey:
     def test_reassign_flips_the_sign_the_survey_measured(self) -> None:
         from pipeline.roads import _reassign
 
-        found = CarriagewayReport()
-        found.deck_span_m[7] = 8.0
+        found = _deck_report(7, 8.0, ceiling=2)
         found.deck_offset_m[7] = 1.25  # right of travel, the survey's frame
-        # ⚠️ **All three or none.** `_survey_edge` gates the rims on the same
-        # condition as the two aggregates, and `_reassign` *indexes* rather than
-        # defaulting — a report carrying a deck width but no rims is a state the
-        # pipeline cannot produce, and it should raise rather than publish an
-        # edge whose three deck fields disagree about whether a deck was found.
+        # ⚠️ **All four or none.** `_survey_edge` gates the rims and the lane
+        # ceiling on the same condition as the two aggregates, and `_reassign`
+        # *indexes* rather than defaulting — a report carrying a deck width but
+        # no rims is a state the pipeline cannot produce, and it should raise
+        # rather than publish an edge whose deck fields disagree about whether a
+        # deck was found.
         found.deck_rim_m[7] = [(5.25, 2.75), (5.25, 2.75)]
 
         out = _reassign(_road_edge(7), found)
@@ -741,6 +803,145 @@ class TestThePublishedOffsetIsTheNegationOfTheSurvey:
         out = _reassign(_road_edge(9), CarriagewayReport())
         assert out.offset_m == 0.0
         assert out.offset_source == "none"
+
+
+class TestTheDeckIsACeilingOnLanesAndNeverASource:
+    """`Q114`: what an off-grade deck is allowed to say about a lane count.
+
+    🔴 **It may only ever REFUSE one.** No turn arrows are painted on a bridge
+    deck in this region and the line publishers' 2D rays find the street
+    underneath, so off-grade there is no lane-count evidence at all — `lanes` is
+    `lanes_for(speed_limit)`. What licenses the cut is not a measurement of the
+    lanes but the fact that paint cannot be wider than the structure it is
+    painted on, which is the licence `Q107` already took for the ribbon.
+
+    ⚠️ **So every test here is about the ASYMMETRY.** A rule that also raised a
+    count would be assigning lanes from a deck span, which `Q113` refused and
+    which would give `lanes` a provenance `width_source: deck` does not have.
+    """
+
+    def test_a_count_the_deck_cannot_hold_is_cut_to_it(self) -> None:
+        from pipeline.roads import _reassign
+
+        out = _reassign(_road_edge(7, lanes=3), _deck_report(7, 5.8, ceiling=1))
+
+        assert out.lanes == 1
+        assert out.lanes_source == "deck_capped"
+        assert out.width_source == "deck"
+
+    def test_a_count_the_deck_CAN_hold_is_left_exactly_as_authored(self) -> None:
+        """🔴 **The one-sidedness, and it is 8 of this region's 36 deck edges.**
+
+        `e726` HUNG HING ROAD FLYOVER is authored two lanes over a 12.17 m deck
+        that brackets to three or four. Raising it would be the deck assigning a
+        count, which is the thing this rule is not.
+        """
+        from pipeline.roads import _reassign
+
+        out = _reassign(_road_edge(7, lanes=2), _deck_report(7, 12.17, ceiling=4))
+
+        assert out.lanes == 2
+        assert out.lanes_source == "authored", "the deck may not raise a count"
+
+    def test_a_count_equal_to_the_ceiling_is_not_relabelled(self) -> None:
+        """The boundary case, because `>` and `>=` are one character apart.
+
+        Relabelling it would publish `deck_capped` on an edge nothing was cut
+        on, and the counter behind it would then describe a population the code
+        did not act on.
+        """
+        from pipeline.roads import _reassign
+
+        out = _reassign(_road_edge(7, lanes=2), _deck_report(7, 7.3, ceiling=2))
+
+        assert out.lanes == 2
+        assert out.lanes_source == "authored"
+
+    def test_the_ceiling_composes_with_a_count_a_RAY_published(self) -> None:
+        """🔴 It caps what STANDS, not what was authored.
+
+        An edge may carry a ray-licensed count from the publishers' pass before
+        the deck pass overwrites its width. Capping `edge.lanes` instead would
+        let the two rules disagree about which ran last, and publish a measured
+        count over a deck that cannot hold it.
+
+        ⚠️ **The authored count is deliberately UNDER the ceiling here**, so the
+        two readings pull opposite ways: capping `edge.lanes` would leave the
+        ray's three lanes standing over a deck that holds two. An authored count
+        above the ceiling passes both rules and tests neither — which is what the
+        first draft of this test did, and a mutation walked straight through it.
+        """
+        from pipeline.roads import _reassign
+
+        # ⚠️ **A ray licence is a width AND a count**: `_reassign` only reads
+        # `found.lanes` inside the `assigned_m` branch, so a fixture setting the
+        # count alone exercises nothing. `Q103` measured 5 of 45 off-grade edges
+        # licensed by a publisher, which is how an edge reaches the deck branch
+        # already carrying one.
+        found = _deck_report(7, 7.3, ceiling=2)
+        found.assigned_m[7] = 11.0
+        found.basis[7] = "one_way_uncrossed"
+        found.publishers[7] = "ib1000"
+        found.lanes[7] = 3
+        found.lanes_basis[7] = "measured"
+
+        out = _reassign(_road_edge(7, lanes=1), found)
+
+        assert out.lanes == 2, "the ray's count was capped, not the authored one"
+        assert out.lanes_source == "deck_capped"
+
+    def test_the_ceiling_is_floored_at_one_lane(self) -> None:
+        """A deck narrower than TPDM's own through lane brackets to ZERO.
+
+        `surface.MarkingCode` refuses a zero-lane edge outright and
+        `road_markings.gdshader` divides by the count, so the ceiling is floored
+        rather than letting an arithmetic hole reach the bundle.
+
+        ⚠️ **Asserted against the function and not against `max(1, ...)`.** The
+        first draft restated the expression at the call site, which a mutation
+        removing the floor passed unchanged — the reason `_deck_lane_ceiling`
+        exists as a name at all.
+        """
+        assert _lane_bracket(2.9, _bounds(), two_way=False) == (0, 0)
+        assert _deck_lane_ceiling(2.9, _bounds(), two_way=False) == 1
+
+    def test_the_ceiling_is_the_TOP_of_the_bracket(self) -> None:
+        """An ambiguous deck refuses only what even its widest reading cannot hold.
+
+        `(1, 2)` caps at two, not at one: the deck is a ceiling on the count and
+        not a reading of it, so the ambiguity has to fall on the permissive side
+        or the refusal starts assigning.
+        """
+        assert _lane_bracket(6.4, _bounds(), two_way=False) == (1, 2)
+        assert _deck_lane_ceiling(6.4, _bounds(), two_way=False) == 2
+
+
+class TestTheSingleLaneCounterIsRead:
+    """`Q114`: `lanes_single` replaced a counter that nothing read.
+
+    ⚠️ **The point is not the arithmetic, it is that the number has a
+    consumer.** `lanes_floored` was defined on the report and read by nothing —
+    the class of defect this repo's own rules say to go looking for — and what
+    makes this one different is the log line in `roads.py`. The value is
+    asserted here; that it is printed is asserted by the region build.
+    """
+
+    def test_it_counts_the_edges_published_as_one_lane(self) -> None:
+        report = CarriagewayReport()
+        report.lanes.update({1: 1, 2: 2, 3: 1, 4: 3})
+        assert report.lanes_single == 2
+
+    def test_it_reads_the_PUBLISHED_count_and_not_the_bracket(self) -> None:
+        """A bracket of one that published nothing is not a single-lane edge.
+
+        An ambiguous `(1, 2)` never reaches `lanes`, and counting brackets
+        instead would report a population `RoadGraph.lane_offset`'s floor does
+        not stand over.
+        """
+        report = CarriagewayReport()
+        report.lanes_bracket.update({1: (1, 2), 2: (1, 1)})
+        report.lanes[2] = 1
+        assert report.lanes_single == 1
 
 
 class TestTheDeckTolerancesAreBoundToTheirGrader:

@@ -521,8 +521,24 @@ func turn_restriction_count() -> int:
 ## suspension ray finds two coplanar triangles centimetres apart and hunts
 ## between them. `P0-5`'s car crept at 0.8 m/s on 3 of 4 wheels until it moved
 ## off it.
+##
+## 🔴 **That is why `LANE_FLOOR` is here and NOT in the ETL, since `Q114`.** The
+## expression above puts the lane centre at exactly 0 for a one-lane road, and
+## the ETL used to avoid reaching it by publishing two lanes wherever it
+## measured one. But `lanes` has a second consumer — `road_markings.gdshader`
+## cuts the drawn ribbon into `lanes` equal strips — so that floor was painting
+## a lane line down 57 of the region's edges that have no lane line, and on the
+## interchange ramps it drew strips of 1.92 m (`Q113` B). The measurement now
+## ships as measured and the floor stands where the hazard is.
+##
+## ⚠️ **It floors the DIVISOR and never the published count.** Nothing here
+## writes back: `_lanes[slot]` stays whatever the graph said, so the markings,
+## the arrows and every reader of `lanes` see the one lane that is there.
+const LANE_FLOOR: int = 2
+
+
 static func lane_offset(width_m: float, lanes: int) -> float:
-	var count: int = maxi(lanes, 1)
+	var count: int = maxi(lanes, LANE_FLOOR)
 	return maxf(width_m, 0.0) * float(count - 1) / (2.0 * float(count))
 
 

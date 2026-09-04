@@ -216,6 +216,32 @@ class CarriagewayReport:
     # publisher put them; `surface.py` needs the latter, because its ribbon is
     # built from `published_half_widths`, which is per vertex.
     deck_rim_m: dict[int, list[tuple[float, float]]] = field(default_factory=dict)
+    # ── The most lanes a deck can hold, as a CEILING and never an assignment ──
+    #
+    # 🔴 **`Q114`. It refuses a count and never publishes one.** No turn arrows
+    # are painted on any bridge deck in this region and the line publishers'
+    # 2D rays find the street underneath, so off-grade there is no lane-count
+    # evidence at all and `lanes` is `lanes_for(speed_limit)` — the speed-limit
+    # table, which reads a 70 kph slip road as three lanes and drew 1.15 m
+    # strips on `e306` CANAL ROAD FLYOVER (`Q113` B).
+    #
+    # ⚠️ **Bracketing the deck width and PUBLISHING the result is refused**, and
+    # `Q113` refused it first: a deck span is a reading `Q103` took off the
+    # structure, not a carriageway a publisher surveyed, so assigning a count
+    # from it would give `lanes` a provenance the width does not have. What is
+    # licensed is the other direction — paint cannot be wider than the structure
+    # it is painted on, which is the same licence `Q107` already took to cut the
+    # ribbon to `deck_rim_m` — so a count the deck cannot hold is refused and a
+    # count it can hold is left exactly as authored. 🔴 **One-sided on purpose**:
+    # 8 of this region's 36 deck edges are authored *below* their deck bracket
+    # and not one of them moves.
+    #
+    # ⚠️ **Floored at 1**, because a deck narrower than TPDM's own through lane
+    # brackets to zero and a road with no lanes cannot be drawn at all.
+    deck_lane_ceiling: dict[int, int] = field(default_factory=dict)
+    # The edges the ceiling actually bit on — the load-bearing counter, because
+    # the dict above is published for every measured deck and is mostly inert.
+    deck_lanes_capped: list[int] = field(default_factory=list)
     # Stations whose centreline stood on no deck at all — the ribbon is off its
     # own structure there, which is the defect this exists to size.
     deck_stations_off: int = 0
@@ -265,18 +291,28 @@ class CarriagewayReport:
         )
 
     @property
-    def lanes_floored(self) -> int:
-        """Resolved brackets under the floor, published as `LANES_FLOOR`. See `_lanes`.
+    def lanes_single(self) -> int:
+        """Measured widths resolving to ONE lane — a population, not a leftover.
 
-        ⚠️ **The predicate is `_lanes`'s own, not a restatement of it.** Writing
-        `low == high == 1` here would agree with the assignment only through
-        `config.py`'s guard that `lane_m[0] <= hard_min_m` — which is what makes
-        a zero-lane bracket unreachable — and would silently stop agreeing if
-        that guard ever moved.
+        ⚠️ **Not every single-lane edge in the finished graph**, and the two
+        differ by exactly the deck cap: `roads.py` may cut an off-grade count to
+        1 after this report is written, and it does on 3 of this region's edges
+        — 57 here against 60 published. Widening the wording to "edges published
+        as one lane" would make this report claim something about a document it
+        does not write, which is a claim it cannot keep.
+
+        🔴 **It replaces `lanes_floored`, and that counter was WRITE-ONLY** —
+        defined here and read by nothing, in a repo whose own rule is that a
+        counter describing a population the code did not act on is the thing to
+        go looking for. What it counted no longer exists: since `Q114` a
+        resolved bracket of one is published as one.
+
+        ⚠️ **This one is read** — `roads.py` logs it — and it has to be, because
+        it is exactly the population `RoadGraph.lane_offset`'s floor now stands
+        over. At zero the floor has stopped mattering; growing, more of the
+        region is drawn with no lane line down the middle of it.
         """
-        return sum(
-            1 for low, high in self.lanes_bracket.values() if low == high and low < LANES_FLOOR
-        )
+        return sum(1 for count in self.lanes.values() if count == 1)
 
 
 @dataclass(frozen=True)
@@ -894,6 +930,10 @@ def measure(
             # consumer that found rims without a width would be reading a deck
             # this stage refused.
             report.deck_rim_m[edge.id] = _rims_at_vertices(deck_rims, along_edge)
+            ceiling = _deck_lane_ceiling(deck_span, bounds, two_way=edge.direction == BOTH)
+            report.deck_lane_ceiling[edge.id] = ceiling
+            if edge.lanes > ceiling:
+                report.deck_lanes_capped.append(edge.id)
         elif walk_deck:
             report.deck_edges_unmeasured += 1
 
@@ -957,10 +997,11 @@ def _resolve_with_rows(report: CarriagewayReport, rows: dict[int, int]) -> None:
     row of one, and **26** of them sit on a bracket of `(1, 1)` and **22** on
     `(2, 2)` — reading those as "one lane" would publish a one-lane road from a
     marking that says nothing about width.
-    ⚠️ **The first build of this rule floored them to `LANES_FLOOR` instead**,
-    which published 28 edges whose basis said `arrows` and whose count the
-    arrows had not chosen. The floor is not reachable from here now, and the
-    assertion below is what says so rather than a comment.
+    ⚠️ **The first build of this rule floored them to the old `LANES_FLOOR`
+    instead**, which published 28 edges whose basis said `arrows` and whose
+    count the arrows had not chosen. `Q114` removed that floor from this module
+    altogether, so the mistake is unreachable by construction as well as by
+    rule.
 
     🔴 **Ambiguous brackets ONLY, and the restriction is the design.** The row is
     a tie-breaker between two readings of a *measured* width, never a standalone
@@ -994,13 +1035,17 @@ def _resolve_with_rows(report: CarriagewayReport, rows: dict[int, int]) -> None:
             # two readings sharing no input agreeing on one integer, which is the
             # only free cross-check either has. Nothing to publish.
             #
-            # 🔴 **Tested against the PUBLISHED count, not against the bracket,
-            # and the difference is 3 edges.** A `(1, 1)` bracket publishes
-            # `LANES_FLOOR`, so a row of two on one of those sits *above* its
-            # bracket while agreeing exactly with what shipped: the floor doing
-            # its job, confirmed. Filed by bracket instead, those read as the two
-            # instruments contradicting each other, and `lanes_row_over_bracket`
-            # would be two populations wearing one name.
+            # 🔴 **Tested against the PUBLISHED count, not against the
+            # bracket.** The two were 3 edges apart while a `(1, 1)` bracket
+            # published two lanes: a row of two on one of those sat *above* its
+            # bracket while agreeing exactly with what shipped. `Q114` removed
+            # the floor, so a resolved bracket and the count it publishes now
+            # coincide and that gap closes — ⚠️ **kept anyway, because the
+            # distinction is about which reading a row contradicts and not about
+            # the floor that made it visible.** Filed by bracket, an agreement
+            # would read as the two instruments contradicting each other and
+            # `lanes_row_over_bracket` would be two populations wearing one
+            # name.
             report.lanes_row_agreeing.append(edge_id)
             continue
         if stated < low:
@@ -1280,41 +1325,75 @@ def _lane_bracket(width_m: float, bounds: WidthBounds, *, two_way: bool) -> tupl
     return low, high
 
 
-# 🔴 **The floor on a published lane count, and it is `surface.floor_default_m`'s
-# argument at a second dimension.** The bracket reads a 5-7 m one-way street as
-# one lane, which is true of the street and false of what this project draws on
-# it: the ribbon is floored at 10.24 m so a car can use it, and a one-lane road
-# puts `RoadGraph.lane_offset` at **0** — the lane centre on the centreline,
-# which `road_graph.gd` calls the one place on the network a wheel must not go
-# and where `P0-5`'s car crept at 0.8 m/s on three of four wheels.
+# 🔴 **There is NO floor on a published lane count, and there was one until
+# `Q114`.** The bracket reads a 5-7 m one-way street as one lane, which is true
+# of the street; a floor of two was applied here because a one-lane road puts
+# `RoadGraph.lane_offset` at **0** — the lane centre on the centreline, which
+# `road_graph.gd` calls the one place on the network a wheel must not go and
+# where `P0-5`'s car crept at 0.8 m/s on three of four wheels.
 #
-# ⚠️ **So the count is floored rather than the reading being suppressed**, and
-# `lanes_source` says `floored` where it bit. The measurement is not edited to
-# agree with the drawing; it is published alongside what the drawing needed.
-LANES_FLOOR = 2
+# ⚠️ **That reason is ONE CONSUMER'S and it is now enforced in that consumer.**
+# The floor lives in `RoadGraph.lane_offset` as `LANE_FLOOR`, so the driving
+# line is unchanged and nothing here edits a measurement to suit a drawing —
+# which is what the constant's own comment claimed it was not doing while doing
+# it. What made that visible is the SECOND consumer:
+# `road_markings.gdshader` cuts the **drawn** ribbon into `lanes` equal strips,
+# so a floored count paints a lane that is not there — 105 vertices under
+# 2.50 m across the region (`Q113` B, `tools/lane_paint.py`).
 
-# 🔴 **The narrowest row that is evidence, and it is `LANES_FLOOR` on purpose.**
-# Two abreast is the narrowest painted row that states a lane count; one arrow
-# states a marking. Tied to the floor rather than authored separately because
-# the two answer the same question from opposite sides — the floor is the
-# narrowest count this project will publish, and a row under it could only ever
-# be published by being floored, which is the defect `_resolve_with_rows`
-# records. If one moves the other has to, and a second constant is how that
-# stops happening.
-_ROW_MIN = LANES_FLOOR
+# 🔴 **The narrowest row of arrows that STATES a lane count.**
+# Two abreast is the narrowest painted row that states one; one arrow states a
+# marking, and an ordinary two-lane approach carries one far more often than
+# not — measured at 81 edges in this region, 26 of them on a `(1, 1)` bracket.
+#
+# ⚠️ **It read `_ROW_MIN = LANES_FLOOR` on the argument that the two "answer the
+# same question from opposite sides", and `Q114` is that argument expiring**:
+# the publishing floor moved for a reason about `lane_offset`, which has nothing
+# to say about what a row of arrows is evidence of. Following it down to 1 would
+# make a single arrow a lane count and republish the 28-edge defect
+# `_resolve_with_rows` records. The value is unchanged and the reason is now its
+# own; `test_a_row_of_one_arrow_is_refused_rather_than_floored` is what holds it
+# rather than this paragraph.
+_ROW_MIN = 2
+
+
+def _deck_lane_ceiling(span_m: float, bounds: WidthBounds, *, two_way: bool) -> int:
+    """The most lanes an off-grade edge's own deck could hold (`Q114`).
+
+    ⚠️ **`high` and not the whole bracket**: this is a ceiling, so the question
+    is the most the deck could hold and the ambiguity below it is somebody
+    else's. ⚠️ **The two-way narrowing can only lower it** — 3.4.2.7 strikes odd
+    counts out of an *ambiguous* bracket — which is the conservative direction
+    for a cap.
+
+    🔴 **Floored at one lane, and a function rather than a `max(1, ...)` at the
+    call site so that the floor can be TESTED.** A deck narrower than TPDM's own
+    3.0 m through lane brackets to `(0, 0)`; a ceiling of zero would cut an
+    edge to no lanes at all, which `surface.MarkingCode` refuses outright and
+    which `road_markings.gdshader` divides by. Written inline it was covered
+    only by a test that restated the expression, which is no cover at all.
+    """
+    return max(1, _lane_bracket(span_m, bounds, two_way=two_way)[1])
 
 
 def _lanes(bracket: tuple[int, int]) -> tuple[int | None, str]:
     """The lane count a bracket may be read as, and why (`Q94`).
 
-    Three states, the middle one publishing nothing — `_license`'s shape, for
+    Two states, the second publishing nothing — `_license`'s shape, for
     `_license`'s reason. An ambiguous bracket is the honest answer for a width
     TD's own range does not resolve, and resolving it by fiat would author a
     count with better provenance, which is the move `Q95` was opened about.
+
+    🔴 **There were three states and a `floored` basis until `Q114`.** A
+    resolved bracket of one published two lanes instead, so 57 of this region's
+    edges said two where the measurement said one. The floor is now
+    `RoadGraph.lane_offset`'s, which is the only consumer that ever needed it;
+    the constant above says why. ⚠️ A resolved bracket of **zero** is unreachable
+    rather than guarded — `_license` refuses a span under `hard_min_m` and
+    `config.py` refuses a `lane_m` floor above it — and
+    `test_no_licensed_width_can_bracket_to_no_lanes_at_all` is what says so.
     """
     low, high = bracket
     if high > low:
         return None, ""
-    if low < LANES_FLOOR:
-        return LANES_FLOOR, "floored"
     return low, "measured"
