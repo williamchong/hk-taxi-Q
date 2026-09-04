@@ -18586,6 +18586,16 @@ rather than the playability floor — so the baseline had to declare it too.
 structure.** Every remaining cut is on a deck that is really there — `e337` CANAL ROAD FLYOVER is
 the worst at **4.32 m**, which is `Q107` working. `Q113`'s class is empty.
 
+✅ **B IS CLOSED — `Q114`, 2026-09-05.** The floor under `lanes` moved into
+`RoadGraph.lane_offset`, where its one consumer's need actually lives, and the deck became a
+ceiling on an off-grade count rather than a source of one: **10 edges / 105 vertices / 764 m → 1 / 6
+/ 41 m**, narrowest painted strip **1.15 → 2.45 m**, and nothing under 2.00 m anywhere. ⚠️ **Two
+readings in the table below are corrected there**: `e222`'s arrow row is a row of *one*, which
+`_ROW_MIN` refuses for a measured reason, so it was never the actionable evidence — its width
+bracket was, and that is true of **57** edges rather than one; and the deck bracket does help
+off-grade, in the one direction (refusing, never assigning) `Q107`'s own licence already covers.
+The sweep itself is now `tools/lane_paint.py` rather than a scratch script.
+
 🔴 **B. A second family the fix does not touch: `lanes` too high for the width.** Sweeping every
 vertex in the region for the lane the markings shader actually paints — the drawn ribbon divided by
 `lanes` — **105 vertices over 10 edges paint a lane under 2.50 m**, 88 off-grade and 17 at grade:
@@ -18671,3 +18681,181 @@ a gap rather than a restatement.
 
 **See.** `Q107` for the clamp · `Q110` for the cross-section and the parapet face · `Q103` for the
 first report of the same geometry · `Q109` for why a paint change is a corridor change
+
+---
+
+## `Q114` — The lane count invented lanes the road has not got
+
+`Q113` fixed the *width* half of a thin-lane report from the driving seat and swept the region for
+the rest, from a scratch script. What it found is the ⬜ **B** it left open: `lanes` too high for
+the drawn ribbon on **105 vertices over 10 edges**, painting a strip under 2.50 m, worst `e306`
+CANAL ROAD FLYOVER at **1.15 m**.
+
+`road_markings.gdshader` runs `UV.x` from 0 at the nearside kerb to `lanes` at the offside, so it
+cuts the **drawn** ribbon into `lanes` equal strips whatever that ribbon turned out to be. The
+strip a driver sees is therefore a quotient of two numbers no stage computes together: `lanes` is
+`pipeline/carriageway.py`'s and the drawn half-width is `pipeline/surface.py`'s.
+
+### 🔴 First, the sweep is committed — it was a scratch script (`tools/lane_paint.py`)
+
+`Q37`'s debt at a second layer: `Q113`'s table cannot be re-derived by anyone. The tool reproduces
+it exactly at `--min-lane-m 2.5` and adds three things the scratch script had no room for.
+
+- **A sourced bar.** 2.50 m was an unsourced round number. The default is TPDM 4.3.9.8's own narrow
+  end read from `carriageway_survey.width_bounds.lane_m` — **3.00 m** — because a strip narrower
+  than the narrowest through lane TD publishes is not a lane, and that is a statement with a
+  publisher behind it. ⚠️ **The headline is the bar's as much as the city's, and the sweep says so**:
+  before the fix the population ran 5 / 10 / 16 / 37 / 66 edges over bars 2.00 / 2.50 / 3.00 / 3.20 /
+  3.65 m. A bound that cannot be swept is `Q58`'s trap.
+- **Metres beside the vertex count**, because a vertex count is a property of `deck.resample_m` and
+  metres are a property of the city. 105 vertices is **764 m**.
+- **The width's own verdict on the count**, from `carriageway_margin.lane_bracket` — imported rather
+  than restated, because the two implementations that exist are kept apart on purpose and a third
+  would be a third thing to drift.
+
+🔴 **The verdict is THREE states and not a boolean.** Collapsed, a missing bracket reads as
+agreement and the split line prints `0 over the bracket` on a population nothing graded — `Q58`'s
+trap reachable from a config file that simply omits the block.
+
+🔴 **`narrow_points` is min/p1/p10/p50 and deliberately NOT the house p50/p90/p99/max table.** That
+convention reports the tail of a *magnitude*, where large values are the finding; a painted lane
+fails at its narrow end. On the region's own population the house table reads **5.12 on all four
+points** over a 1.15 m lane.
+
+### 🔴 Two corrections to `Q113`'s reading of its own table
+
+**`e222`'s arrow evidence is evidence the pipeline deliberately refuses.** `arrows.json`'s
+`implied_lanes["222"]` is **1** — a row of *one* arrow — and `_resolve_with_rows` refuses that at
+`_ROW_MIN` for a measured reason: 81 edges in this region state a row of one, 26 of them on a
+`(1, 1)` bracket, and a junction approach on an ordinary two-lane street carries one arrow far more
+often than not. So *"the painted arrows say 1, a published disagreement"* is a row that states a
+marking, not a count.
+
+**What makes `e222` actionable is its width bracket, and that is true of 56 other edges.** All
+**57** `floored` edges bracket to `(1, 1)`, and 53 of the 57 are one-way. They surface in the sweep
+only because they are also `on_structure` at grade, so `Q23` draws them at `width_m` instead of the
+10.24 m floor; the other 54 were hidden behind the widening, painting a 5.12 m "lane".
+
+### 🔴 At grade: `LANES_FLOOR` was editing a measurement to suit ONE consumer
+
+`RoadGraph.lane_offset` returns **0** at a count of one — the lane centre on the centreline, which
+`road_graph.gd` calls the one place on the network a wheel must not go and where `P0-5`'s car crept
+at 0.8 m/s on three of four wheels. The ETL kept that unreachable by publishing two lanes wherever
+it measured one, and the constant's own comment said *"the count is floored rather than the reading
+being suppressed"* — which is the thing it was doing.
+
+✅ **The floor moves into the consumer that needs it**, as `LANE_FLOOR` in `lane_offset`. The
+driving line is unchanged — `lane_offset(w, 1) == lane_offset(w, 2)` — and the published count is
+the measurement. On `e222` that puts the line 1.035 m off centre inside a 2.07 m half-ribbon, so a
+0.9 m half-width car clears the rail by 0.135 m, exactly as before.
+
+🔴 **`_ROW_MIN` did NOT follow it down, and that break had to be deliberate.** It read
+`_ROW_MIN = LANES_FLOOR` on the argument that the two *"answer the same question from opposite
+sides"*. They do not: the publishing floor was about `lane_offset`, which has nothing to say about
+what a row of painted arrows is evidence of. Following it to 1 would make a single arrow a lane
+count and republish the 28-edge defect `_resolve_with_rows` records. It keeps its value on its own
+evidence, and `test_the_row_bar_is_NOT_tied_to_a_publishing_floor` is what fails if anybody
+re-derives it from a floor again.
+
+⚠️ **`lanes_floored` was WRITE-ONLY** — defined on the report, read by nothing. Replaced by
+`lanes_single`, which `roads.py` logs, because it is exactly the population `LANE_FLOOR` now stands
+over.
+
+### 🔴 Off grade: the deck is a CEILING and never a source
+
+All seven off-grade rows are `lanes_source: authored`, and that is measured rather than assumed: no
+turn arrows are painted on any bridge deck in this region, and the line publishers' 2D rays find the
+street *underneath*. So `lanes` is `lanes_for(speed_limit)` — which read `e306`'s 70 kph as three
+lanes over a 5.80 m deck.
+
+⚠️ **`Q113` ruled the width bracket out for these, and it was right about the direction it
+refused.** A deck span is a reading `Q103` took off the structure, not a carriageway a publisher
+surveyed, so *assigning* a count from it would give `lanes` a provenance `width_source: deck` does
+not have. What is licensed is the other direction: **paint cannot be wider than the structure it is
+painted on**, which is the identical licence `Q107` already took to cut the ribbon to `deck_rim_m`.
+
+So the deck refuses a count and never publishes one. 🔴 **One-sided on purpose, and it is measured
+that this matters**: of the 36 deck-width edges, **6** are authored above their ceiling and cut,
+**22** sit inside it, and **8 are authored BELOW it and not one of them moves**. A rule that also
+raised a count would be the deck assigning lanes.
+
+| | |
+|---|---|
+| deck edges authored above their ceiling | **6** — `e146`, `e208`, `e258`, `e266`, `e306`, `e450` |
+| inside | 22 |
+| below, untouched | 8 |
+
+### ✅ What moved
+
+| reading | before | after |
+|---|---|---|
+| painted lane under 2.50 m | 10 edges / 105 vertices / 764 m | ✅ **1 / 6 / 41 m** |
+| painted lane under 2.00 m | 5 edges | ✅ **0** |
+| narrowest painted strip in the region | 1.15 m | ✅ **2.45 m** |
+| strip p1 over all 4,596 drawn stations | 1.99 m | ✅ **2.98 m** |
+| `lanes` basis | 96 measured, 57 floored, 57 arrows | **153 measured, 57 arrows, 6 deck_capped** |
+| edges publishing one lane | 0 | **60** (57 measured + 3 deck-capped) |
+| `ROADGRAPH_SCHEMA` | 10 | **11** |
+
+🔴 **No geometry moves, and that is PROVED rather than asserted.** `roads.glb`'s positions,
+normals, colours and indices are byte-identical and only `TEXCOORD_0` and `TEXCOORD_1` differ;
+`city.json`'s whole `carriageway[]` table, `roadsurface.json`, `clearance.json`, every tile and
+every other document are byte-identical; `width_m` is identical on all 797 edges. Exactly **63**
+edges move, in exactly **two** fields. That is hard rule 4's *"a lane count moves no geometry"*
+demonstrated. `arrows.glb` moves positions alone — max **2.56 m**, the lane snap — with counts,
+normals and winding unchanged.
+
+✅ **An instrument that shares no code agrees.** `tools/carriageway_margin.py` measures the width
+from the sources itself and brackets it itself: **0 of 208** pipeline-measured counts disagree
+(was 0 of 151, and the 57 arrived without one disagreement), its floored carve-out is empty, and
+lanes outside the bracket run 138 → **81 of 387** — the *too many* column **65 → 8**, which is the
+57 exactly.
+
+✅ `narrowing.py` byte-identical · `clearance_reconcile.py` unmoved at **21 / 25 / 6**, exit 0 ·
+`paint_clearance.py` exit 0, with buried-arrow depth p99 **1.075 → 0.493 m** as the lane snap puts
+symbols on the slot of the road they are actually on.
+
+### 🔴 The floor was hiding a real disagreement on three edges
+
+`lanes_row_over_bracket` **6 → 9** and `edges_implying_more_lanes` **16 → 19**. The three are
+MARSH ROAD `e36` (4.35 m), MATHESON STREET `e163` (5.88 m) and GLOUCESTER ROAD `e642` (5.48 m) —
+each carrying **two arrows abreast** over a width that brackets to one lane. They agreed with the
+floored 2 and were filed as agreement; with the floor gone they are what they always were
+underneath, two independent instruments disagreeing about a narrow street. **Reported, never used.**
+
+⚠️ **`stacked_disagreeing` 25 → 29 and `stacked_pairs` 53 → 58**, for the same reason: on a one-lane
+edge there is one slot, so two differently-instructed arrows share it. `Q19`'s own rule holds — a
+rising count is a finding, never a bar to retune — and it is now a finding about a *measured* count
+rather than an invented one.
+
+### ✅ Held
+
+`tools/check.sh` exit 0 · **2,034** tests · `ruff` clean · **0** `SHADER ERROR` · drive OK at
+63-65 draw calls. **Fourteen mutations, fourteen failures** — five on the new tool, seven on the
+ETL, two on the engine. 🔴 **Two of them survived the first attempt and both were real gaps**: a
+compose test whose authored count was above the ceiling passed either way, and a floor test that
+restated `max(1, ...)` at the call site rather than exercising it — which is why
+`_deck_lane_ceiling` exists as a name.
+
+🔴 **The evidence is a frame** (`Q62`), and the cache lies: each side was shot only after a forced
+re-import, and **the first several runs after any re-import do not reproduce** — settled, `e222`
+repeated 5× and `e306` 4×, before and after. `e222` WAN CHAI INTERCHANGE loses the dashed lane line
+down a 4.14 m slip road; `e306` CANAL ROAD FLYOVER loses **two** of them off a 5.80 m deck. **0.13%
+and 0.096%** of the frame moved, and it is the lane lines and one re-snapped arrow.
+
+### ⬜ What is left
+
+- **`e257` CANAL ROAD FLYOVER at 2.45 m**, inside its own `(1, 2)` bracket. A genuinely narrow lane
+  on a genuinely narrow deck, not a defect — the one row of ten the fix does not reach.
+- **At the sourced 3.00 m bar there are still 7 edges / 52 vertices / 352 m**, all off-grade and all
+  inside their brackets. Whether TPDM's narrow end is the right bar for a *painted strip* on a slip
+  road is a question this repo has not asked.
+- 🔴 **`lanes` is still one number per edge**, so `Q113`'s Street View reading — *2 lanes on the
+  bridge, splitting to 2+1 on landing* — remains unpublishable. It needs an edge split or a
+  per-station count, and neither is scoped.
+- ⚠️ **STEWART ROAD `e505` is untouched**, as `Q94` said: three arrows over an authored width, so
+  there is no bracket for the row to resolve.
+
+**See.** `Q113` for the width half and the sweep · `Q94` for the bracket and the arrow row ·
+`Q95` for the measured width · `Q107` for the licence the deck ceiling borrows · `Q103` for why the
+deck is a reading and not a survey · `Q72` for why a counter is mutation-checked rather than read

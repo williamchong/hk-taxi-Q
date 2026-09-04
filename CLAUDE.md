@@ -41,10 +41,14 @@ them without explicit instruction from the user.
    wide. ⚠️ **`width_m != lanes x lane_width_m` any more**; `width_source` says which an edge carries.
    🔴 **And `lanes` is measured too since `Q94`** — bracketed off that width against TPDM 4.3.9.8's
    3.0-3.65 m through lane, **never** divided by `lane_width_m`, which would make the instrument
-   agree with the constant under test. It resolves on **210 of the 292** measured edges (96
-   `measured`, 57 `floored`, 57 `arrows`); the rest are ambiguous and keep the authored count, and
+   agree with the constant under test. It resolves on **210 of the 292** measured edges (153
+   `measured`, 57 `arrows`); the rest are ambiguous and keep the authored count, and
    `lanes_source` says which. ⚠️ **A lane count moves no geometry** — the ribbon is `max(width_m, floor)` — so it
    changes the `TEXCOORD_0` lane coordinate and the arrow slots, and nothing else.
+   🔴 **`lanes` CAN BE 1 since `Q114` and there is no floor under it here** — 60 edges publish one,
+   `lanes_source` has lost `floored` and gained `deck_capped`, and the floor a one-lane road needs
+   lives in `RoadGraph.lane_offset` because only the driving line needed it. The markings shader is
+   the second consumer, and flooring the count painted it a lane that is not there.
 5. **Respect the data contract** in `docs/ARCHITECTURE.md`. ETL output and game input are a
    versioned interface; change both sides together and bump `schema_version`. Bump where a consumer
    would be **wrong** to keep its old interpretation — not wherever bytes change.
@@ -171,6 +175,38 @@ Common emoji for this project:
   estimate.** Held constant, 0.710 reads 44.9° at 105 kph; reached via the taper at that same entry
   speed it read **159.4°**, because the car decelerates below the knee inside the drift and the cut
   deepens underneath it. Sweep the taper dial itself (`Q88`).
+- 🔴 **Anything that moves `lanes`, `lanes_source`, `LANE_FLOOR`, `_ROW_MIN`, `_deck_lane_ceiling`
+  or the drawn ribbon's WIDTH: also `tools/lane_paint.py`, before and after, with `--sweep`.** It
+  asks the one question no stage can ask from inside — **is the strip the markings shader paints
+  wide enough to be a lane?** — because that strip is a quotient of `carriageway.py`'s `lanes` and
+  `surface.py`'s drawn half-width, and neither stage can see the other's answer (`Q114`).
+  ⚠️ **The bar is config and the headline is the bar's**: it defaults to TPDM 4.3.9.8's own narrow
+  end from `width_bounds.lane_m` (3.00 m), `Q113` swept at an unsourced 2.50, and the population runs
+  5 / 10 / 16 / 37 / 66 edges over 2.00-3.65 m — so quote the bar, and sweep it.
+  ⚠️ **Edges, vertices AND metres are three readings**: a vertex count is a property of
+  `deck.resample_m` and metres are a property of the city. ⚠️ Its distribution is **min/p1/p10/p50**
+  and deliberately not the house p50/p90/p99/max, which on this region reads 5.12 on all four points
+  over a 1.15 m lane — do not "restore consistency". ⚠️ Its verdict column is **three** states; a
+  boolean reads a missing bracket as agreement. It grades rather than checks and exits 0.
+  🔴 **The floor under `lanes` lives in `RoadGraph.lane_offset` as `LANE_FLOOR` and NOT in the ETL,
+  and that is not tidiness.** `lanes` has two consumers — the driving line, which needs a count of at
+  least two to stay off the centreline, and `road_markings.gdshader`, which cuts the drawn ribbon
+  into `lanes` strips. Flooring the published count served the first and made the second paint a lane
+  that is not there. 🔴 **`_ROW_MIN` must NOT be re-tied to it**: it was `_ROW_MIN = LANES_FLOOR` on
+  an argument that expired, and following the floor to 1 makes a **single arrow** a lane count, which
+  is a defect this repo has already shipped once.
+  🔴 **Off-grade, the deck is a CEILING on `lanes` and never a source of one.** No turn arrows are
+  painted on any bridge deck in this region and the publishers' 2D rays find the street underneath,
+  so nothing licenses *assigning* a count from a deck span — only refusing one paint cannot fit on,
+  which is `Q107`'s own licence for cutting the ribbon to `deck_rim_m`. ⚠️ **One-sided on purpose**:
+  6 of 36 deck edges are cut and **8 authored below their ceiling do not move**. A rule that raised a
+  count would be the deck assigning lanes.
+  ⚠️ **A lane count moves NO geometry, and that is the inertness proof** — `roads.glb`'s positions,
+  normals, colours and indices must be byte-identical with only `TEXCOORD_0`/`TEXCOORD_1` differing,
+  and `carriageway[]`, `roadsurface.json`, `clearance.json` and every tile byte-identical. `arrows.glb`
+  *does* move, positions only (the lane snap), so its counters are owed.
+  ⚠️ **The evidence is a frame and the cache lies**: force a re-import, and expect the first several
+  runs after one **not to reproduce** — shoot until a hash repeats, each side. Numbers in `Q114`.
 - **`surface.floor_default_m`, any `roads.surface` widening change, or anything that moves the pipeline's
   starved population — `ALONG_M` included: also `tools/narrowing.py`, before and after.** It is what
   priced the current value: narrowing clears *no* blocked edge at any factor down to the 1.3x floor
@@ -473,7 +509,10 @@ Common emoji for this project:
   and must stay so** — the overlay agrees on both. Numbers in `Q93`.
   🔴 **`stacked_disagreeing` is `Q19`'s invented lane count arriving where a frame can show it, and
   it is 25 of 747 today** — 51 → 35 when the count became measured, 35 → 24 when the arrows' own
-  row was let resolve an ambiguous bracket (`Q94`), 24 → 25 on 2026-08-30 (`e114` HENNESSY ROAD). The registration snaps a published offset to one
+  row was let resolve an ambiguous bracket (`Q94`), 24 → 25 on 2026-08-30 (`e114` HENNESSY ROAD), 25 → **29** on 2026-09-05 when the floor came off
+  the lane count (`Q114`) — on a one-lane edge there is one slot, so two differently-instructed
+  arrows share it, and the count is now a finding about a *measured* lane count rather than an
+  invented one. The registration snaps a published offset to one
   of `ribbon.lanes` slots; the count came from the speed-limit table, so where the painted carriageway
   is wider two
   symbols collapse into one slot and draw **one shaft wearing two branches** — found from the driving
