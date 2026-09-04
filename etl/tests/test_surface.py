@@ -1793,6 +1793,14 @@ class TestTheClampReachesTheBuiltRibbon:
     """
 
     def _built(self, testville_config, tmp_path: Path, **overrides) -> dict:
+        # 🔴 **A rim implies `on_structure` (`Q113`).** `_edge` defaults every
+        # vertex to off structure, which is right for the at-grade fixtures and
+        # is a contradiction for a decked one — and since `Q113` the stage reads
+        # it that way and refuses the clamp. Set here rather than in each case
+        # so the coupling is stated once; `TestRimsOffStructure` is what pins
+        # the refusal itself.
+        if "deck_rim_m" in overrides and "on_structure" not in overrides:
+            overrides["on_structure"] = [True] * len(overrides["deck_rim_m"])
         _write_graph(
             tmp_path,
             [{"id": 0, "pos": [0.0, 0.0, 0.0]}, {"id": 1, "pos": [40.0, 0.0, 0.0]}],
@@ -1824,14 +1832,64 @@ class TestTheClampReachesTheBuiltRibbon:
         assert entry["half_width_m"] == pytest.approx([2.0] * len(entry["half_width_m"]))
         assert entry["offset_m"] == pytest.approx([-1.0] * len(entry["offset_m"]))
 
+    def test_a_rim_on_a_vertex_that_is_not_on_structure_is_ignored(
+        self, testville_config, tmp_path: Path
+    ) -> None:
+        """🔴 `Q113`, end to end: a ramp on the ground has no deck to be cut to.
+
+        `carriageway._deck_reach` walks outward from the centreline and reports
+        whatever contiguous slab it finds, and where a ramp descends to grade it
+        finds the structure petering out — `e208` FLEMING ROAD published a left
+        rim of **0.100 m**, `DECK_ACROSS_M` exactly, and the clamp cut the drawn
+        ribbon 5.60 -> 3.15 m on the strength of it. The graph already says
+        which vertices stand on structure, so the rim is discarded where they do
+        not.
+
+        The same rim as the case above, which cuts to 2.0; off structure it must
+        publish the ribbon the config draws.
+        """
+        entry = self._built(
+            testville_config,
+            tmp_path,
+            deck_rim_m=[[1.0, 3.0], [1.0, 3.0]],
+            on_structure=[False, False],
+        )
+        assert min(entry["half_width_m"]) > 2.0
+        assert entry["offset_m"] == pytest.approx([0.0] * len(entry["offset_m"]))
+
+    def test_one_vertex_off_structure_keeps_the_other_clamped(
+        self, testville_config, tmp_path: Path
+    ) -> None:
+        """⚠️ Per vertex, not per edge — a ramp goes off structure partway down.
+
+        `np.interp` carries `inf` across the segment between them, so the
+        clamped end keeps its cut exactly at its own vertex and the ribbon
+        flares back to full width toward the deckless one. On `e208` that flare
+        runs over an 8 m segment, which is the landing opening out.
+        """
+        entry = self._built(
+            testville_config,
+            tmp_path,
+            deck_rim_m=[[1.0, 3.0], [1.0, 3.0]],
+            on_structure=[True, False],
+        )
+        assert min(entry["half_width_m"]) == pytest.approx(2.0)
+        assert max(entry["half_width_m"]) > 2.0
+
     def test_a_deck_wider_than_the_ribbon_publishes_it_unchanged(
         self, testville_config, tmp_path: Path
     ) -> None:
         """It cuts and never extends (`Q54`) — through the stage, not just the
         function."""
-        wide = self._built(testville_config, tmp_path / "a")
+        # ⚠️ **Both sides declare the same `on_structure`.** It is not only the
+        # clamp's gate since `Q113` — `Q23` draws an on-structure edge at its
+        # authored width instead of the playability floor — so a baseline that
+        # left it at the fixture's default would differ from the rimmed build
+        # for a reason that has nothing to do with the rim.
+        on = {"on_structure": [True, True]}
+        wide = self._built(testville_config, tmp_path / "a", **on)
         entry = self._built(
-            testville_config, tmp_path / "b", deck_rim_m=[[40.0, 40.0], [40.0, 40.0]]
+            testville_config, tmp_path / "b", deck_rim_m=[[40.0, 40.0], [40.0, 40.0]], **on
         )
         assert entry["half_width_m"] == pytest.approx(wide["half_width_m"])
         assert entry["offset_m"] == pytest.approx(wide["offset_m"])

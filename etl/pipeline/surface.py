@@ -470,6 +470,12 @@ class SurfaceReport:
     # `Q107`. Edges that carried a deck rim at all — the population the clamp
     # can reach, and every other edge is untouched by arithmetic.
     deck_rim_edges: int = 0
+    # `Q113`. Published vertices whose rim was discarded because the edge is not
+    # on structure there — a descending ramp standing on the ground, whose deck
+    # walk still found a sliver of slab. Counted rather than assumed silent: it
+    # is the population the fix reaches, and a jump in it means the deck walk or
+    # `on_structure` has moved rather than the roads having.
+    deck_rim_off_structure: int = 0
     # Published stations where the clamp actually cut the ribbon. ⚠️ **Counted
     # against the published width, not against the rim**, so it says how often
     # the deck was narrower than the paint rather than how often a rim existed —
@@ -1400,6 +1406,11 @@ def _prepare(published: dict, style: RoadSurface, report: SurfaceReport) -> _Edg
     # here as well would apply the cut twice, the second time about a centre
     # that is no longer `shift`.
     drawn_upper, drawn_lower, refused = _clamped_rails(half_widths, rim_left, rim_right, shift_m)
+    published_rims = published.get("deck_rim_m") or []
+    if len(published_rims) == len(half_widths):
+        report.deck_rim_off_structure += int(
+            sum(1 for on in published.get("on_structure") or [] if not on)
+        )
     if np.isfinite(rim_left).any():
         report.deck_rim_edges += 1
         # ⚠️ Counted here and not in `_shape`, because these are the *published*
@@ -1449,7 +1460,33 @@ def _deck_rims(published: dict, count: int) -> tuple[np.ndarray, np.ndarray]:
         unbounded = np.full(count, np.inf)
         return unbounded, unbounded.copy()
     pairs = np.asarray(rims, dtype=np.float64)
-    return pairs[:, 0], pairs[:, 1]
+    left, right = pairs[:, 0].copy(), pairs[:, 1].copy()
+    # 🔴 **A vertex that is not ON structure has no deck to be cut to (`Q113`).**
+    # `carriageway._deck_reach` walks outward from the centreline and reports
+    # whatever contiguous slab it finds, and where a ramp descends to grade it
+    # finds the last few centimetres of the structure petering out: `e208`
+    # FLEMING ROAD's final four vertices published a left rim of **0.100 m**,
+    # which is `carriageway.DECK_ACROSS_M` exactly — the smallest non-zero reach
+    # that walk can return, meaning the deck was there at the centreline and
+    # gone one step later. The clamp took it for a narrow deck and cut the drawn
+    # ribbon **5.60 -> 3.15 m**, which `road_markings.gdshader` then painted as
+    # two **1.57 m** lanes. Found from the driving seat, twice.
+    #
+    # ⚠️ **This is `_RIM_LEFT`'s own rule applied to a case it did not
+    # anticipate**: absence of a deck is `inf`. A road resting on the ground is
+    # as deckless as a road nobody measured, and the graph already says which is
+    # which per vertex. It reaches **15 vertices over 4 edges** on this region.
+    #
+    # ⚠️ **A length mismatch is ignored rather than raised**, for the reason the
+    # branch above gives: the two arrays are per published vertex, so a
+    # disagreement means the graph and this stage disagree about the polyline,
+    # and the honest response is the ribbon that was always drawn.
+    on_structure = published.get("on_structure") or []
+    if len(on_structure) == count:
+        adrift = ~np.asarray(on_structure, dtype=bool)
+        left[adrift] = np.inf
+        right[adrift] = np.inf
+    return left, right
 
 
 def _add_kerb_stations(edge: _Edge) -> int:
@@ -2600,6 +2637,11 @@ def main(argv: list[str] | None = None) -> int:
         report.clamped_stations,
         report.clamp_refused_stations,
     )
+    if report.deck_rim_off_structure:
+        log.info(
+            "  %d of those vertices are not on structure and keep the ribbon they had (Q113)",
+            report.deck_rim_off_structure,
+        )
     log.info(
         "  %d movements run through a node and were mitred into its cap",
         report.through_movements,
