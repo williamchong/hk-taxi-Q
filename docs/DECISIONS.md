@@ -18086,3 +18086,183 @@ thing that can see this.
 offset · `Q107` for the clamp whose corridor cost this is · `Q108` for the published `2.00 m` and
 the ratchet · `Q51` for what that ratchet does and does not grade · `Q57` for why the four never
 share an acceptance number · `Q58` for why a bound that cannot be swept is a trap
+
+---
+
+## `Q110` — The corridor measured exactly, and the disagreement `Q109` left open
+
+`Q109` closed with one question and named it *"the next thing to settle, and it is not settled by
+moving a bar"*: on the shipped bundle `e208` FLEMING ROAD reads **1.35 m** in
+`tools/carriageway_occupancy.py` and **2.00 m** in `pipeline/clearance.py`, either side of
+`fits_car`'s **1.80 m**, so the two instruments disagree about whether `fence.py` stands a barrier
+in front of the player.
+
+Neither can answer it, and that is structural rather than a defect in either. Both rasterise
+occupiers onto a plan grid, a cell blocks in full as soon as one sample lands in it, and the bins
+differ — 0.5 m in the pipeline, 1.0 m in the grader. `Q51` settled the same disagreement on `e132`
+by brute-forcing that edge from its own geometry and threw the script away, which is `Q37`'s debt.
+This is that instrument, **committed**: `tools/corridor_truth.py`, with
+`etl/tests/test_corridor_truth.py`.
+
+**Report-only: no source moved, nothing is published, no bar moved, and every shipped counter is
+untouched.** Bundle `generated_utc 2026-09-04T10:45:15Z`, the one `Q109` read.
+
+### 🔴 It can CLEAR an edge and can never CONDEMN one, and that asymmetry is the whole argument
+
+The blocked span across a station is computed by clipping each triangle against the station's slab
+and the bumper band and taking the extent of what survives, in closed form — no plan cell, no across
+cell, no surface sampling. And **every triangle in the shipped tiles blocks, with no colour
+classification at all**. So the reading is a *lower bound on the true corridor* from two directions
+at once: it cannot miss an occupier the graders' colour rules would have caught, and it cannot smear
+one wider than it is.
+
+That is exactly the right shape for the question in front of it. A reading above a bar is proof; a
+reading below one is not evidence of anything, because unclassified geometry includes classes both
+instruments exclude. ⚠️ **So the level-0 rows below are a control on the machinery and NOT a
+reconciliation** — see the last section.
+
+### ✅ The ladder is monotone in the bin, and the exact reading is above all of them
+
+| edge | grader, 1.0 m bin | grader, matched 0.5 m | pipeline, 0.5 m bin | **exact** |
+|---|---|---|---|---|
+| `e208` FLEMING ROAD | 1.35 m | 1.90 m | 2.00 m | ✅ **2.37 m** |
+| `e306` CANAL ROAD FLYOVER | 1.86 m | 2.50 m | 2.50 m | ✅ **3.06 m** |
+| `e257` CANAL ROAD FLYOVER | 2.81 m | *cleared the bar* | 3.75 m | ✅ **4.21 m** |
+| `e450` CANAL ROAD FLYOVER | 2.98 m | *cleared the bar* | 4.00 m | ✅ **5.04 m** |
+
+**Neither instrument was wrong about the city** — `Q51`'s own sentence, reproduced at a second
+population. Every published width is a lower bound at its own bin, the ordering is the ordering of
+the bins, and running the grader at the pipeline's own resolution (`--across-m 0.25
+--index-cell-m 0.5 --spacing-m 0.5`) closes `Q109`'s 0.65 m gap to **0.10 m** before this tool is
+brought in at all. At that setting the grader's off-grade table falls **4 edges → 2**, which is the
+membership `clearance.py` publishes.
+
+### 🔴 So the answer to `Q109` is the pipeline's, and `fence.py` owes no barrier on any of the four
+
+`e208`'s exact corridor is **2.37 m against a 1.80 m car bar** — 0.57 m of margin, on a reading that
+blocks unconditionally. All four clear `fits_car` by 0.57 / 1.26 / 2.41 / 3.24 m. `Q108`'s
+conclusion — *"the right answer on both bars"* — **stands**, and it stands on a third measurement
+rather than on a preference between two.
+
+⚠️ **`is_passable`'s lane bar is a different verdict and the two must not be pooled** (`Q57`):
+`e208` and `e306` are still under 3.20 m and still refused traffic; `e257` and `e450` clear it. The
+grader's *four* was its 1.0 m bin.
+
+### ✅ `Q107`'s clamp is priced, which is the reading `Q109` says a clamp owes
+
+Same geometry read in the pre-clamp frame — `roadgraph.json`'s own `width_m` and `offset_m`,
+constant along the edge, which is what `surface._shape` built the rails from before
+`_clamped_rails` existed:
+
+| edge | shipped | pre-`Q107` | cost of the clamp |
+|---|---|---|---|
+| `e208` | 2.37 m | 2.78 m | 🔴 **−0.41 m** |
+| `e306` | 3.06 m | 3.06 m | ✅ 0.00 |
+| `e257` | 4.21 m | 4.21 m | ✅ 0.00 |
+| `e450` | 5.04 m | 5.04 m | ✅ 0.00 |
+
+So the clamp cost **one edge, 0.41 m**, and **moved no bar**: `e208` is starved at the lane and
+clear at the car in both frames. ⚠️ That is much smaller than the shipped instruments implied —
+the grader read the same move as 1.87 → 1.35 — because a narrower ribbon also narrows the smear.
+
+### 🔴 The blockage is ONE face 2 cm wide, and the ribbon is drawn ACROSS it
+
+`--section-at` prints a whole cross-section. At `e208`'s binding station the entire obstruction is a
+**single triangle spanning `[−0.68, −0.66]`**, and the picture repeats along the edge:
+
+| station | deck rims | drawn ribbon | the one face | widest clear |
+|---|---|---|---|---|
+| `e208` @ 172.9 m | 0.28 / 7.88 | `[−3.05, +0.28]` | `[−0.27, −0.22]` | 2.78 m |
+| `e208` @ 180.6 m | 0.10 / 8.00 | `[−3.05, +0.10]` | `[−0.68, −0.66]` | 2.37 m |
+| `e306` @ 186.7 m | 1.04 / 12.00 | `[−2.65, +1.04]` | `[+0.41, +0.43]` | 3.06 m |
+
+🔴 **On every one the ribbon's outer rail sits exactly on `deck_rim_m`, and the face stands 0.6–0.8 m
+INBOARD of it.** `Q107` cut the paint back to the deck; the deck's rim is the *structure's* outer
+edge, so it includes the parapet — and the drawn carriageway therefore runs over the top of one.
+This is not "an obstruction in a lane": it is **0.77 m of paint on a wall**, and `Q57` is the rule
+that the two want opposite fixes. ⚠️ Cutting the ribbon to the *inboard* face would move no corridor
+number — `e208` would read 2.37 m clear of a 2.37 m ribbon — and would make the paint honest.
+
+⚠️ **What lies beyond the paint is NOT settled here and this tool cannot settle it.** Across ±12 m
+at `e208`'s binding station only two faces stand in the band, at `−0.67` and `+7.55`; but this
+instrument asks what stands *in* the band and never whether deck stands *under* it, so open air
+beside a viaduct reads clear and reads wide. Whether the metres to the right belong to `e208`'s
+carriageway or to the interchange's is `P4-1`'s attribution question, exactly as `Q103` and `Q109`
+left it, and `deck_margin.py` is what answers that half.
+
+### ✅ The two free parameters are swept and neither is live
+
+- **`--window-m` 0 → 0.25 → 0.5 → 1.0 → 2.0: flat on all four edges.** 🔴 **The reason it exists
+  was wrong and is corrected.** The expected pathology was a vertical parapet meeting a
+  zero-thickness cross-section in a line and reading as zero blockage — true about the *extent*,
+  and irrelevant, because a zero-width block still partitions the run. What a zero window actually
+  loses is an obstruction standing *between* two stations, which is the aliasing
+  `pipeline/clearance.py` pins `ALONG_M == CELL_M` against. The docstring and
+  `test_a_vertical_wall_in_a_zero_window_reports_zero_thickness` both say the corrected thing.
+- **Station pitch 0.25 m**, finer than either instrument, with nothing binned along the edge either.
+
+### ✅ Held, and mutation-checked rather than read
+
+- `e0` HENNESSY ROAD reads **10.24 m of a 10.24 m ribbon** against the pipeline's published 10.24 —
+  an unobstructed edge reproduced to the digit, which is the control that the frame, the walk and
+  the clip are all pointed at the right road.
+- **Ten mutations, ten failures**, over **44 tests**: the band floor dropped from the clip; the
+  extent taken over the *unclipped* corners (which over-blocks, and so condemns an edge that is
+  fine); `widest_clear` summing the unblocked total instead of taking the widest run; the across
+  axis read as the along axis; `left_of` flipped, which mirrors the city and renders perfectly; the
+  along distance taken per segment rather than cumulatively; the shared-vertex guard dropped; `_at`'s
+  empty-table guard removed; `merged` overwriting rather than maxing; and `deck_rims` defaulting an
+  absent deck to 0.0 where `surface._clamped_rails` requires `inf`.
+- ✅ **Reviewed before it was committed, and three real defects came out of it**: `_at` raised
+  `IndexError` on a bundle published before `offset_m` existed, where `overhang.at_vertex` returns
+  0.0; `--window-m` and `--spacing-m` were hand-parsed after `argparse` and crashed on an empty list
+  and on a zero pitch; and `--section-at` re-walked an edge the sweep had already walked, which the
+  class holding the intervals exists to avoid. The clip also moved off numpy onto plain tuples —
+  **8.0 s → 3.1 s** with every station's reading byte-identical, because at three vertices the array
+  wrapper *is* the cost. ⚠️ **The exactness claim is about the closed form and not about numpy**,
+  and the docstring says so where a later reader would otherwise "restore" the array version.
+- ⚠️ **Independent in method, NOT in frame — deliberately.** The ribbon comes from `city.json`'s
+  `carriageway[]` through `overhang.py`'s helpers, which is what `CLAUDE.md` requires of anything
+  that reads it; `Q106` cost this repo four tools reading the road in the wrong place at once and a
+  third hand-rolled frame here would be the fifth. ⚠️ `BUMPER_LOW_M`/`BUMPER_HIGH_M` are
+  **restated**, on `carriageway_occupancy.py`'s precedent — `ground_clearance.py`'s import is the
+  named exception and no second one comes in on it.
+- ⚠️ **The ribbon is interpolated between vertices where `overhang.at_vertex` takes the nearest**,
+  because `surface._shape` builds the rails at the vertices and the mesh spans them. On `e208` the
+  half-width falls 2.198 → 1.709 → 1.575 m over the two segments carrying the pinch, so a
+  nearest-vertex reading is half a metre out exactly where the answer is.
+
+### ⚠️ The level-0 rows are a control on the machinery and NOT a reconciliation
+
+| edge | pipeline | grader, 1.0 m bin | exact, unclassified |
+|---|---|---|---|
+| `e0` | 10.24 | 10.2 | ✅ **10.24** |
+| `e125` | 0.00 | 0.48 | 0.32 |
+| `e132` | 2.00 | 0.98 | 0.89 |
+| `e207` | 3.25 | 2.00 | 3.75 |
+| `e314` | 0.25 | 0.49 | 1.80 |
+| `e781` | 3.50 | 2.00 | 3.80 |
+
+🔴 **They do not form a ladder and they were never going to.** At grade the unclassified reading
+blocks on classes both instruments exclude — terrain among them — so `e132` reads *below* both. That
+is the asymmetry above doing its job rather than a contradiction: the three numbers bound different
+quantities and only the exact one is a bound on all geometry. Off-grade the question does not arise,
+`Q109` having measured the occupier **100% `INFRASTRUCTURE`** on all four, and the conclusion holds
+whatever the class is, because blocking on everything can only read narrower.
+
+### ⬜ What this leaves `P4-1`
+
+- The fence question is **settled**: no barrier is owed on any of the four, and the network can be
+  opened without one. `Q109`'s open item closes.
+- The starved membership at the lane bar is **two**, `e208` and `e306`, which is what the pipeline
+  already publishes.
+- 🔴 **The lead is new and it is a paint lead, not an obstruction lead**: `deck_rim_m` is the
+  structure's outer edge and the drawn ribbon runs over the parapet it includes. A rim that stopped
+  at the drivable face would cost no corridor and would stop the paint lying.
+- ⬜ Unchanged: attribute deck extent to *this edge's* carriageway rather than to a contiguous run.
+
+**See.** `Q109` for the question this answers and the readings it re-reads · `Q51` for the `e132`
+brute force this generalises and for the plan-cell mechanism · `Q108` for the published `2.00 m` ·
+`Q107` for the clamp this prices · `Q106` for the frame · `Q57` for why the lane bar and the car bar
+never share an acceptance number · `Q58` for why a bound that cannot be swept is a trap · `Q37` for
+the scratch-script debt this pays

@@ -757,6 +757,22 @@ Common emoji for this project:
   ⚠️ **Do not import the parse from `pipeline.clearance`** — that
   module's bumper bounds are `ground_clearance.py`'s deliberate exception and no second import comes
   in on it.
+- **When `clearance.py` and `carriageway_occupancy.py` disagree about one edge, the answer is
+  `tools/corridor_truth.py` and never a preference between them (`Q110`).** Both bin occupiers in
+  plan and both over-block at their own bin — 0.5 m against 1.0 m — so the published widths are
+  lower bounds that differ by the bins, and the first move is always to re-run the grader at the
+  pipeline's own resolution (`--across-m 0.25 --index-cell-m 0.5 --spacing-m 0.5`), which closed
+  `Q109`'s 0.65 m gap to 0.10 m on its own. 🔴 **The exact tool can CLEAR an edge and can never
+  CONDEMN one**: the clip is closed-form with no plan cell, no across cell and no sampling, and
+  **every** tile triangle blocks with no colour filter, so its reading is a lower bound on the true
+  corridor and a figure *above* a bar is proof while a figure below one is evidence of nothing.
+  ⚠️ **So its level-0 rows are a control on the machinery, not a reconciliation** — unclassified
+  geometry includes classes both instruments exclude, and `e132` reads below both. ⚠️ It asks what
+  stands *in* the bumper band and never whether deck stands *under* it, so beyond the ribbon's rails
+  air reads clear; `deck_margin.py` and `overhang.py` are what answer that half. ⚠️ Its frame comes
+  from `overhang.py`'s helpers deliberately (a third hand-rolled frame would be `Q106`'s fifth tool)
+  and its bumper bounds are **restated**, on `carriageway_occupancy.py`'s precedent. It grades rather
+  than checks and exits 0 whatever it finds. Numbers in `Q110`.
 - 🔴 **The drawn ribbon is `[offset − half, offset + half]` PER STATION, never `±half` about the
   centreline (`Q106`, `Q107`).** Read both from `city.json`'s `carriageway[]` — `half_width_m` and
   `offset_m`, via `overhang.half_width_at` and `overhang.offset_at` — and pass the offset to

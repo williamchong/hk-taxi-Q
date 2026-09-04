@@ -969,11 +969,37 @@ than discovering the rest of it from a bug report.
   did, and the corridor is measured inside the paint. ⚠️ **A paint clamp is a corridor change**, so
   anything this task does off-grade owes the four corridor readings and the starved runs before and
   after.
+  ✅ **SETTLED 2026-09-04 (`Q110`), and in the pipeline's favour — see below.**
   🔴 **`e208` now crosses `fits_car`'s bar in ONE instrument only**, which is this task's next
   question and is not answered by moving a bar: the grader reads **1.35 m** at the shipped plan bin
   and **1.80 m** matched, against the **2.00 m** the bundle publishes and the line above calls *"the
   right side of both bars"*. ⚠️ **`clearance_reconcile.py` cannot see it** — it grades the lane bar,
   reads 21 / 25 / 6 unmoved, and books `e208` as `agree` at a +0.65 m gap. `DECISIONS.md` `Q109`.
+  ✅ **The corridor is measured EXACTLY 2026-09-04 (`Q110`), the disagreement is settled and the
+  fence question closes.** `tools/corridor_truth.py` clips each triangle against the station's slab
+  and the bumper band in closed form — no plan cell, no across cell, no sampling — and blocks on
+  **every** tile triangle with no colour filter, so 🔴 **it can clear an edge and can never condemn
+  one**, which is exactly the shape the question needed. The ladder is monotone in the bin and the
+  exact reading is above all of them: `e208` 1.35 / 1.90 / 2.00 / **2.37 m**, `e306` 1.86 / 2.50 /
+  2.50 / **3.06**, `e257` 2.81 / — / 3.75 / **4.21**, `e450` 2.98 / — / 4.00 / **5.04**. So *neither
+  instrument was wrong about the city* (`Q51`'s sentence at a second population), the answer is the
+  pipeline's, and **no barrier is owed on any of the four** — all clear the 1.80 m car bar by
+  0.57–3.24 m. ⚠️ The lane bar is a different verdict and is not pooled (`Q57`): `e208` and `e306`
+  stay under 3.20 m, which is the membership `clearance.py` already publishes; the grader's *four*
+  was its 1.0 m bin, and at the pipeline's own resolution its table falls **4 → 2**.
+  ✅ **`Q107`'s clamp is priced and the debt above is paid**: in the pre-clamp frame it cost **one
+  edge, 0.41 m** (`e208` 2.37 → 2.78) and **0.00 on the other three**, moving no bar.
+  🔴 **And the residual is a PAINT lead rather than an obstruction lead, which re-points what is
+  left of this task.** The whole blockage at `e208`'s binding station is a **single face 2 cm wide**,
+  and at every probed station the ribbon's outer rail sits *exactly* on `deck_rim_m` with that face
+  0.6–0.8 m inboard of it — so `Q107` cut the paint back to the **structure's** rim, which includes
+  the parapet, and the carriageway is drawn over the top of one. That is 0.77 m of paint on a wall,
+  not an obstruction in a lane, and `Q57` is the rule that the two want opposite fixes. A rim that
+  stopped at the drivable face would cost **no** corridor metre and would stop the paint lying.
+  ⚠️ **What lies beyond the paint is still not settled and that tool cannot settle it** — it asks
+  what stands *in* the bumper band and never whether deck stands *under* it, so air reads clear.
+  ⬜ Unchanged: attribute deck extent to *this edge's* carriageway rather than to a contiguous run.
+  `DECISIONS.md` `Q110`.
 
 ### Outline only — refine once Phase 3 lands
 
