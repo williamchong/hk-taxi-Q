@@ -3119,6 +3119,14 @@ fence:
   # ⚠️ This is a closure, not a fix. It restores "reachable implies graded" and
   # buys the time to open the network properly; PLAN.md P4-1 owns that ending
   # and removing this key is what reverses it.
+  #
+  # 🔴 **Reversing it is `[-1]`, NOT `[]` (`Q110`).** `Q108` published a
+  # clearance for level 1 and deliberately refused one for level -1, so the
+  # bundle carries a measured `clear_width_m` on 45 of 45 flyover edges and on
+  # 0 of 15 tunnel edges. Emptying this key opens the bores to driving with no
+  # corridor measured anywhere in them — `e489`'s defect is 0.22 m of *headroom*,
+  # which `clearance.py` cannot express at any width — and that is exactly what
+  # `Q108` says opening `is_drivable` ahead of a published clearance would do.
   touchdown_levels: [-1, 1]
 
 

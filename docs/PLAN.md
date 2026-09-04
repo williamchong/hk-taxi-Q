@@ -1000,6 +1000,18 @@ than discovering the rest of it from a bug report.
   what stands *in* the bumper band and never whether deck stands *under* it, so air reads clear.
   ⬜ Unchanged: attribute deck extent to *this edge's* carriageway rather than to a contiguous run.
   `DECISIONS.md` `Q110`.
+  🔴 **AND "removing that key is the whole of it" is now WRONG AS WRITTEN — it is
+  `touchdown_levels: [-1]`, never `[]`.** That sentence was true on 2026-09-02 and `Q108` expired it
+  eight entries later by publishing a clearance for level **1** and *deliberately refusing* one for
+  level **−1**: on the shipped bundle **45 of 45** level-1 edges carry a measured `clear_width_m` and
+  **0 of 15** level-−1 edges do. So emptying the key opens 15 tunnels whose corridor nothing has
+  measured — including `e489`, whose defect is **0.22 m of headroom** that a horizontal instrument
+  cannot express at all — which is the precise thing `Q108` says opening `is_drivable` without a
+  published clearance would do. The flyovers are measured and may open; the bores need the vertical
+  instrument first (`Q103`, `Q108`), and until it exists `[-1]` is what keeps them shut.
+  ⚠️ **This task's dependencies are UNMET and it sits behind the Phase 3 gate**: `P3-3` is not
+  started, so opening the network hands the player 23.3% more carriageway with no traffic on it, and
+  the go/no-go above is the user's. Flagged rather than started, per the working agreements.
 
 ### Outline only — refine once Phase 3 lands
 
