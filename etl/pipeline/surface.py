@@ -1386,7 +1386,7 @@ def _prepare(published: dict, style: RoadSurface, report: SurfaceReport) -> _Edg
     which is the contract the game reads them under.
     """
     half_widths = _half_widths(published, style)
-    rim_left, rim_right = _deck_rims(published, len(half_widths))
+    rim_left, rim_right, adrift_rims = _deck_rims(published, len(half_widths))
     # `published["offset_m"]`, never a `.get` default: `read_graph` pins the
     # schema exactly, so any graph this can open carries the field. A default
     # could not fire on valid input and would silently draw every off-grade
@@ -1406,12 +1406,13 @@ def _prepare(published: dict, style: RoadSurface, report: SurfaceReport) -> _Edg
     # here as well would apply the cut twice, the second time about a centre
     # that is no longer `shift`.
     drawn_upper, drawn_lower, refused = _clamped_rails(half_widths, rim_left, rim_right, shift_m)
-    published_rims = published.get("deck_rim_m") or []
-    if len(published_rims) == len(half_widths):
-        report.deck_rim_off_structure += int(
-            sum(1 for on in published.get("on_structure") or [] if not on)
-        )
     if np.isfinite(rim_left).any():
+        # ⚠️ **Inside this guard, because the log line reads "N of those
+        # vertices" against the edge count above it.** An edge whose every
+        # vertex is off structure keeps no finite rim, so it is not one of
+        # "those" and must not contribute — 0 such edges in this region, and
+        # reachable.
+        report.deck_rim_off_structure += adrift_rims
         report.deck_rim_edges += 1
         # ⚠️ Counted here and not in `_shape`, because these are the *published*
         # stations — the frame both counters and the manifest are quoted in, and
@@ -1436,8 +1437,9 @@ def _prepare(published: dict, style: RoadSurface, report: SurfaceReport) -> _Edg
     )
 
 
-def _deck_rims(published: dict, count: int) -> tuple[np.ndarray, np.ndarray]:
-    """One published edge's deck rims per vertex, or an unconstrained pair.
+def _deck_rims(published: dict, count: int) -> tuple[np.ndarray, np.ndarray, int]:
+    """One published edge's deck rims per vertex, an unconstrained pair, and the
+    number of rims `Q113` discarded.
 
     `Q107`. `[left_m, right_m]` in `mitres`' own frame, straight off the graph —
     `roads._reassign` publishes them without a negation because they are
@@ -1458,7 +1460,7 @@ def _deck_rims(published: dict, count: int) -> tuple[np.ndarray, np.ndarray]:
     rims = published.get("deck_rim_m") or []
     if len(rims) != count:
         unbounded = np.full(count, np.inf)
-        return unbounded, unbounded.copy()
+        return unbounded, unbounded.copy(), 0
     pairs = np.asarray(rims, dtype=np.float64)
     left, right = pairs[:, 0].copy(), pairs[:, 1].copy()
     # 🔴 **A vertex that is not ON structure has no deck to be cut to (`Q113`).**
@@ -1482,11 +1484,21 @@ def _deck_rims(published: dict, count: int) -> tuple[np.ndarray, np.ndarray]:
     # disagreement means the graph and this stage disagree about the polyline,
     # and the honest response is the ribbon that was always drawn.
     on_structure = published.get("on_structure") or []
-    if len(on_structure) == count:
-        adrift = ~np.asarray(on_structure, dtype=bool)
-        left[adrift] = np.inf
-        right[adrift] = np.inf
-    return left, right
+    if len(on_structure) != count:
+        return left, right, 0
+    # 🔴 **Counted here and returned, never re-derived by the caller.** The
+    # count was taken in `_prepare` under its own guard — `deck_rim_m`'s length
+    # rather than `on_structure`'s — so on a graph where the two disagree the
+    # report booked discards this function had deliberately not made. A counter
+    # describing a population the code did not act on is exactly what the
+    # field's own comment exists to detect, so there is one rule behind one
+    # guard. It is the rims actually *dropped*: a vertex already carrying `inf`
+    # is not a discard.
+    adrift = ~np.asarray(on_structure, dtype=bool)
+    discarded = int((adrift & (np.isfinite(left) | np.isfinite(right))).sum())
+    left[adrift] = np.inf
+    right[adrift] = np.inf
+    return left, right, discarded
 
 
 def _add_kerb_stations(edge: _Edge) -> int:

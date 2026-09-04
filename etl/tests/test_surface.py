@@ -1759,12 +1759,12 @@ class TestDeckRimsFallBackToNoConstraint:
     """A missing, empty or mis-aligned rim list must not cut anything."""
 
     def test_an_edge_without_rims_is_unconstrained(self) -> None:
-        left, right = _deck_rims({"deck_rim_m": []}, 3)
+        left, right, _ = _deck_rims({"deck_rim_m": []}, 3)
         assert np.isinf(left).all() and np.isinf(right).all()
         assert len(left) == len(right) == 3
 
     def test_a_missing_key_is_unconstrained(self) -> None:
-        left, _ = _deck_rims({}, 2)
+        left, _, _ = _deck_rims({}, 2)
         assert np.isinf(left).all()
 
     def test_a_length_mismatch_is_unconstrained_rather_than_raising(self) -> None:
@@ -1775,13 +1775,47 @@ class TestDeckRimsFallBackToNoConstraint:
         and the ribbon it always drew is a better answer than a clamped one
         built on a mis-aligned array.
         """
-        left, right = _deck_rims({"deck_rim_m": [[1.0, 2.0]]}, 3)
+        left, right, _ = _deck_rims({"deck_rim_m": [[1.0, 2.0]]}, 3)
         assert np.isinf(left).all() and np.isinf(right).all()
 
     def test_a_matching_list_is_read_in_order(self) -> None:
-        left, right = _deck_rims({"deck_rim_m": [[1.0, 2.0], [3.0, 4.0]]}, 2)
+        left, right, _ = _deck_rims({"deck_rim_m": [[1.0, 2.0], [3.0, 4.0]]}, 2)
         assert left == pytest.approx([1.0, 3.0])
         assert right == pytest.approx([2.0, 4.0])
+
+
+class TestDeckRimsOffStructure:
+    """`Q113`'s branch, as a unit — the stage test below is end to end."""
+
+    def test_a_rim_is_discarded_where_the_vertex_is_not_on_structure(self) -> None:
+        left, right, discarded = _deck_rims(
+            {"deck_rim_m": [[1.0, 2.0], [3.0, 4.0]], "on_structure": [True, False]}, 2
+        )
+        assert left[0] == 1.0
+        assert right[0] == 2.0
+        assert left[1] == np.inf
+        assert right[1] == np.inf
+        assert discarded == 1
+
+    def test_a_mismatched_on_structure_discards_nothing_and_counts_nothing(self) -> None:
+        """🔴 One rule behind one guard.
+
+        The count used to be taken in `_prepare` under `deck_rim_m`'s length
+        rather than `on_structure`'s, so a graph where the two disagreed booked
+        discards this function had deliberately not made.
+        """
+        left, _, discarded = _deck_rims(
+            {"deck_rim_m": [[1.0, 2.0], [3.0, 4.0]], "on_structure": [False]}, 2
+        )
+        assert left[1] == 3.0
+        assert discarded == 0
+
+    def test_a_vertex_that_carried_no_rim_is_not_counted_as_a_discard(self) -> None:
+        # `inf` is already no constraint, so dropping it drops nothing.
+        _, _, discarded = _deck_rims(
+            {"deck_rim_m": [[float("inf"), float("inf")]], "on_structure": [False]}, 1
+        )
+        assert discarded == 0
 
 
 class TestTheClampReachesTheBuiltRibbon:
@@ -1797,8 +1831,8 @@ class TestTheClampReachesTheBuiltRibbon:
         # vertex to off structure, which is right for the at-grade fixtures and
         # is a contradiction for a decked one — and since `Q113` the stage reads
         # it that way and refuses the clamp. Set here rather than in each case
-        # so the coupling is stated once; `TestRimsOffStructure` is what pins
-        # the refusal itself.
+        # so the coupling is stated once; `TestDeckRimsOffStructure` above and
+        # the end-to-end case below are what pin the refusal itself.
         if "deck_rim_m" in overrides and "on_structure" not in overrides:
             overrides["on_structure"] = [True] * len(overrides["deck_rim_m"])
         _write_graph(

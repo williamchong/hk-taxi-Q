@@ -106,8 +106,15 @@ func _check(graph: RoadGraph, document: Dictionary, manifest: CityManifest) -> P
 	# 🔴 **`P2-2`'s criterion was "nearest_edge never returns an off-grade edge"
 	# and this is its deliberate reversal, not a relaxation.** The old rule is
 	# kept exactly where the network is still shut, and the new one is asserted
-	# where it is open — so this fails both if a closed level leaks into a query
-	# and if an open deck is not served by one.
+	# where it is open.
+	#
+	# ⚠️ **These three counters pin CODE against CODE, not the bundle, and by
+	# `Q72`'s standard that has to be said rather than implied.** `_cells` is
+	# filled under `_drivable`, and `_fill` can only return an indexed segment,
+	# so no data makes a closed edge leak into a query and no data leaves an open
+	# deck unserved — every open probe stands on one of that edge's own indexed
+	# vertices. What they catch is `_index`'s filter drifting from
+	# `is_drivable`, which is a change someone makes and not one a region has.
 	#
 	# Asked where it is most likely to break rather than at random: every vertex
 	# of every off-grade edge, which is exactly where a flyover centreline is
@@ -149,10 +156,13 @@ func _check(graph: RoadGraph, document: Dictionary, manifest: CityManifest) -> P
 			elif absf(hit.point.y - at.y) > RoadGraph.LEVEL_REACH_M:
 				wrong_level += 1
 				if wrong_level == 1:
-					problems.append(
-						(
-							"nearest_edge resolved an open deck at %s to edge %d, %.2f m below it"
-							% [str(raw), hit.edge_id, at.y - hit.point.y]
+					(
+						problems
+						. append(
+							(
+								"nearest_edge resolved an open deck at %s to edge %d, %.2f m off in height"
+								% [str(raw), hit.edge_id, at.y - hit.point.y]
+							)
 						)
 					)
 	if closed_leaks > 0:
@@ -247,28 +257,22 @@ func _check(graph: RoadGraph, document: Dictionary, manifest: CityManifest) -> P
 		# proud of a street and a parapet on a viaduct want opposite fixes, and
 		# a single total hides which one moved. It is also the only place a
 		# reader can see that the off-grade rows reach the counters at all.
-		var blocked_off: int = _off_grade_share(graph, graph.impassable_edge_ids())
-		var fenced_off: int = _off_grade_share(graph, graph.fenced_edge_ids())
+		# Swept once each: both are O(edges x stations), and the print blocks
+		# below asked for them twice more apiece.
+		var blocked: PackedInt32Array = graph.impassable_edge_ids()
+		var fenced: PackedInt32Array = graph.fenced_edge_ids()
+		var blocked_off: int = _off_grade_share(graph, blocked)
+		var fenced_off: int = _off_grade_share(graph, fenced)
 		print(
 			(
 				"  clearance: %d drivable edges keep under one lane (%.2f m) clear — %d at grade, %d off"
-				% [
-					graph.impassable_edge_ids().size(),
-					graph.lane_width_m(),
-					graph.impassable_edge_ids().size() - blocked_off,
-					blocked_off
-				]
+				% [blocked.size(), graph.lane_width_m(), blocked.size() - blocked_off, blocked_off]
 			)
 		)
 		print(
 			(
 				"  fence: %d of those keep under the car's own %.2f m — %d at grade, %d off"
-				% [
-					graph.fenced_edge_ids().size(),
-					graph.car_width_m(),
-					graph.fenced_edge_ids().size() - fenced_off,
-					fenced_off
-				]
+				% [fenced.size(), graph.car_width_m(), fenced.size() - fenced_off, fenced_off]
 			)
 		)
 	return problems
@@ -513,6 +517,24 @@ func _check_query_time(graph: RoadGraph, bounds: AABB, edges: Array) -> PackedSt
 		)
 		return problems
 
+	# 🔴 **Lifted to a road-like height, because `PlanLattice.over` returns
+	# `y = 0` and no road in this region is there** — 27 of 3,696 level-0
+	# vertices lie within `LEVEL_REACH_M` of zero, against a p50 of 4.22 m. Left
+	# as published, `P4-1`'s height preference finds no on-level candidate for
+	# 95.7% of these probes, so `nearest_edge` falls through to its fallback and
+	# scans the full radius every time: the sweep would time the one case a car
+	# is never in, and stop timing the common one. ⚠️ **The budget cannot catch
+	# that** — this function's own note below records the same class of miss,
+	# where disabling the ring early-exit moved on-road p50 5 → 56 us and the
+	# gate never noticed.
+	#
+	# ⚠️ Both arms still run: a lattice cell over a flyover, a rooftop or the
+	# harbour is off-level at this height too, so the fallback keeps a real
+	# share of the population rather than being tuned out of it.
+	var deck: float = _median_height(on_road)
+	for index: int in lattice.size():
+		lattice[index] = Vector3(lattice[index].x, deck, lattice[index].z)
+
 	# Discarded on purpose. Without it the first sample carries the allocation of
 	# every `Hit` and `Array[Vector2i]` the query path touches, which lands in the
 	# maximum and reads as a pathological query.
@@ -522,6 +544,19 @@ func _check_query_time(graph: RoadGraph, bounds: AABB, edges: Array) -> PackedSt
 	problems.append_array(_time_queries(graph, "whole region", lattice))
 	problems.append_array(_time_queries(graph, "on the road", on_road))
 	return problems
+
+
+## The median height of the drawn road, so the region lattice sits where a car does.
+##
+## Through `_percentile` rather than indexing the middle: that is this file's one
+## statement of how a rank is taken from a sorted sample, and a second one here
+## would be an integer division to get wrong.
+static func _median_height(points: PackedVector3Array) -> float:
+	var heights: PackedFloat32Array = PackedFloat32Array()
+	for point: Vector3 in points:
+		heights.append(point.y)
+	heights.sort()
+	return _percentile(heights, 0.5)
 
 
 ## Time one probe population and report its distribution, failing on p99.

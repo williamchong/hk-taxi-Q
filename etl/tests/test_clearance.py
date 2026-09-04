@@ -431,10 +431,8 @@ class TestPublishingASweep:
         ⚠️ **Level 2 is why this is stated over `elevation_levels` and not over
         the edges that exist.** No edge in Wan Chai carries it, so a check
         written against the built bundle would pass with level 2 open by
-        omission, and the first region that draws one would open it ungraded.
-
-        Read off the shipped config rather than restated, so the two cannot
-        drift while both look right in isolation.
+        omission, and the first region that draws one would open it ungraded —
+        which is the one thing a bundle-shaped check could not catch.
         """
         city = load_config()
         mapped = {int(level) for level in city.elevation_levels}

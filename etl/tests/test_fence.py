@@ -108,9 +108,14 @@ class TestFencedSet:
         assert fenced_edges(graph, _clearance({1: [0.0, 0.0]}), 1.8, (-1,)) == [1]
 
     def test_an_edge_the_graph_does_not_carry_cannot_acquire_a_barrier(self) -> None:
-        # The default level is a shut one, so a clearance row with no edge
-        # behind it is skipped rather than fenced at level 0 by omission.
+        """A clearance row with no edge behind it is skipped, not fenced.
+
+        ⚠️ **Asserted with NOTHING closed as well**, which is the configuration
+        that used to fail: the rule was a `.get` default of "some shut level",
+        and with the shut set empty that default was open.
+        """
         assert fenced_edges({"edges": []}, _clearance({7: [0.0, 0.0]}), 1.8, (-1,)) == []
+        assert fenced_edges({"edges": []}, _clearance({7: [0.0, 0.0]}), 1.8) == []
 
     def test_with_nothing_closed_every_level_is_fenced(self) -> None:
         """A city with no `fence:` block closes nothing, so nothing is skipped.
@@ -120,6 +125,40 @@ class TestFencedSet:
         """
         graph = {"edges": [_edge(1, [[0, 0, 0], [0, 0, 10]], 1, 2, level=-1)]}
         assert fenced_edges(graph, _clearance({1: [0.0, 0.0]}), 1.8) == [1]
+
+
+class TestPlaceOverAnOpenOffGradeEdge:
+    """🔴 `P4-1` made this reachable and it raised (`Q113`'s review).
+
+    `fenced_edges` took `closed_levels` while `_adjacency` still filtered to the
+    literal level 0, so an open off-grade edge could reach the fenced set and
+    then have no entry in `ends`. `place` indexes that directly, so the first
+    barrier row across a live ramp was a `KeyError` — and every test passed,
+    because none of them ran `place` over an off-grade edge.
+    """
+
+    @staticmethod
+    def _graph() -> dict:
+        return {
+            "edges": [
+                _edge(1, [[0.0, 0.0, 0.0], [0.0, 0.0, 10.0]], 1, 2, level=1),
+                _edge(2, [[0.0, 0.0, 10.0], [0.0, 0.0, 20.0]], 2, 3, level=0),
+            ]
+        }
+
+    def test_an_open_off_grade_edge_can_be_placed(self) -> None:
+        drawn = {1: {"half_width_m": [2.0, 2.0]}, 2: {"half_width_m": [2.0, 2.0]}}
+        placements, report = place(
+            self._graph(), drawn, [1], inset_m=1.0, unit_width_m=2.0, touchdown_levels=(-1,)
+        )
+        assert report.mouths >= 1
+        assert placements
+
+    def test_a_closed_level_is_still_absent_from_the_adjacency(self) -> None:
+        # The other half of the same rule: a level the touchdowns shut is not a
+        # way in, so it must not appear as an arm.
+        _, ends = _adjacency(self._graph(), (1,))
+        assert set(ends) == {2}
 
 
 class TestComponents:
@@ -322,18 +361,38 @@ class TestMouthFrame:
 
 
 class TestAdjacency:
-    def test_off_grade_edges_are_not_arms(self) -> None:
-        """An off-grade ramp meeting a node is not a way in, because `Q13`
-        refuses to hand a car an off-grade edge at all."""
+    def test_a_closed_level_is_not_an_arm(self) -> None:
+        """🔴 **`P4-1` reversed this and the assertion is reversed with it.**
+
+        It read *"an off-grade ramp meeting a node is not a way in, because
+        `Q13` refuses to hand a car an off-grade edge at all"* — true while
+        `fence.touchdown_levels` shut every off-grade level, and false the
+        moment one opened. What survives is the rule underneath: an edge on a
+        level the touchdowns *close* is not a way in, because nobody can arrive
+        along it.
+        """
         graph = {
             "edges": [
                 _edge(1, [[0, 0, 0], [0, 0, 20]], 2, 3),
                 _edge(2, [[0, 0, 0], [20, 0, 0]], 2, 4, level=1),
             ]
         }
-        at_node, ends = _adjacency(graph)
+        at_node, ends = _adjacency(graph, (1,))
         assert at_node[2] == [1]
         assert 2 not in ends
+
+    def test_an_open_level_IS_an_arm(self) -> None:
+        # The other half, and the one `P4-1` turned on: an open ramp meeting a
+        # fenced end is a way in like any other.
+        graph = {
+            "edges": [
+                _edge(1, [[0, 0, 0], [0, 0, 20]], 2, 3),
+                _edge(2, [[0, 0, 0], [20, 0, 0]], 2, 4, level=1),
+            ]
+        }
+        at_node, ends = _adjacency(graph, (-1,))
+        assert at_node[2] == [1, 2]
+        assert 2 in ends
 
 
 class TestReport:

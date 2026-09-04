@@ -242,21 +242,43 @@ def fenced_edges(
     # row it appears in. `tools/narrowing.py` reuses it the same way.
     corridor = {int(row["edge"]): list(row["clear_width_m"]) for row in clearance["clearance"]}
     report = ClearanceReport(corridor_m=corridor)
-    # `levels.get(edge_id, ...)` defaults to a level that is **shut**, so an id
-    # the graph does not carry cannot acquire a barrier by default.
+    # 🔴 **Membership, not a sentinel level.** This read
+    # `levels.get(edge_id, next(iter(shut), 1)) not in shut`, meaning to default
+    # an unknown id to something closed — and with `shut` empty, which is what a
+    # city with no `fence:` block passes, the default became `1`, `1 not in
+    # set()` was true, and an id the graph does not carry was fenced. Asking
+    # whether the graph carries it says the thing directly and cannot depend on
+    # an arbitrary pick from an unordered set.
     return sorted(
         edge_id
         for edge_id, _ in report.starved(bar_m)
-        if levels.get(edge_id, next(iter(shut), 1)) not in shut
+        if edge_id in levels and levels[edge_id] not in shut
     )
 
 
-def _adjacency(graph: dict) -> tuple[dict[int, list[int]], dict[int, tuple[int, int]]]:
-    """Node to drivable level-0 edge ids, and edge id to its two nodes."""
+def _adjacency(
+    graph: dict, closed_levels: Iterable[int]
+) -> tuple[dict[int, list[int]], dict[int, tuple[int, int]]]:
+    """Node to open edge ids, and edge id to its two nodes.
+
+    🔴 **The same level policy `fenced_edges` applies, and it must be the same
+    or `place` raises.** This filtered to the literal level 0 while that one
+    took `closed_levels`, so an open off-grade edge could reach `fenced` and
+    then have no entry in `ends` — `KeyError` on the first barrier row across a
+    live ramp. It could not fire while `touchdown_levels` closed level 1, and
+    `P4-1` opened it; the 45 tests stayed green because none of them ran
+    `place` over an off-grade edge.
+
+    ⚠️ **`at_node` is the "way in" test, so widening it is not incidental.** An
+    open ramp meeting a fenced end *is* a way in now, where `Q13` used to say it
+    could never be one — which is what makes `ends_with_no_way_in` still mean a
+    dead end rather than "the only arm is a ramp".
+    """
+    shut = set(closed_levels)
     at_node: dict[int, list[int]] = {}
     ends: dict[int, tuple[int, int]] = {}
     for edge in graph["edges"]:
-        if int(edge.get("elevation_level", 0)) != 0:
+        if int(edge.get("elevation_level", 0)) in shut:
             continue
         edge_id = int(edge["id"])
         nodes = (int(edge["from"]), int(edge["to"]))
@@ -458,7 +480,7 @@ def place(
     that state unreachable rather than merely unlikely.
     """
     report = FenceReport(fenced=list(fenced), touchdown_levels=list(touchdown_levels))
-    at_node, ends = _adjacency(graph)
+    at_node, ends = _adjacency(graph, touchdown_levels)
     points = {
         int(edge["id"]): np.asarray(edge["polyline"], dtype=np.float64) for edge in graph["edges"]
     }
@@ -473,9 +495,10 @@ def place(
     for edge_id in fenced:
         for node in ends[edge_id]:
             # An end is a mouth when there is a way in from outside the fenced
-            # set. ⚠️ Read over *drivable* edges only: an off-grade ramp meeting
-            # this node is not a way in, because `Q13` refuses to hand a car an
-            # off-grade edge at all.
+            # set. ⚠️ Read over the **open** edges — every level the touchdown
+            # closure leaves reachable. It was level 0 alone while `Q13` refused
+            # to hand a car an off-grade edge at all; since `P4-1` an open ramp
+            # meeting this node is a way in like any other arm.
             arms = [other for other in at_node[node] if other != edge_id]
             if not arms:
                 # Nobody can arrive here at all — see `ends_with_no_way_in`.
@@ -622,7 +645,7 @@ def build_region(city: Config, region_id: str, *, out_root: Path | None = None) 
         fenced,
         inset_m=city.fence.inset_m,
         unit_width_m=city.fence.unit_width_m,
-        touchdown_levels=city.fence.touchdown_levels,
+        touchdown_levels=closed_levels,
     )
     if not report.closes(city.fence.unit_width_m):
         # The identity that says every mouth is accounted for. Raised rather

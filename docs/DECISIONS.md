@@ -18107,6 +18107,12 @@ This is that instrument, **committed**: `tools/corridor_truth.py`, with
 **Report-only: no source moved, nothing is published, no bar moved, and every shipped counter is
 untouched.** Bundle `generated_utc 2026-09-04T10:45:15Z`, the one `Q109` read.
 
+⚠️ **Every number below is that bundle's and `Q113` has since moved four of them.** The ribbon on
+`e208` was being clamped to a deck the edge was not standing on; with that fixed its exact corridor
+reads **2.57 m** and the grader **2.00 m**. The readings here are still the right ones for the
+question this entry answers — whether the two instruments disagreed, and why — and they are not the
+current state of the road.
+
 ### 🔴 It can CLEAR an edge and can never CONDEMN one, and that asymmetry is the whole argument
 
 The blocked span across a station is computed by clipping each triangle against the station's slab
@@ -18509,7 +18515,11 @@ the fence stands inside the marked lane, which is the same defect the user first
 
 `_deck_rims` drops the rim at any vertex whose `on_structure` is `False`, which is `_RIM_LEFT`'s own
 rule — *absence of a deck is `inf`* — applied to the case it did not anticipate: a road resting on
-the ground is as deckless as a road nobody measured. **20 vertices over 4 edges.**
+the ground is as deckless as a road nobody measured. **20 vertices over 6 edges** carry a rim that
+is now discarded — `e118`, `e208`, `e248`, `e365`, `e726`, `e727` — and on **4 of them** it was
+binding, so four ribbons moved. ⚠️ **The two counts are different questions and the record first
+gave only the second**: a rim can be discarded without cutting anything, and `e248` MARSH ROAD's two
+vertices are exactly that.
 
 ✅ **Inert everywhere else, and that is the proof rather than the hope.** Level 0 and level −1 are
 **byte-identical**; `railings`, `lamps`, `signs`, `arrows`, `roadmarks`, `boxjunctions`, `tramway`,
@@ -18601,6 +18611,42 @@ walk that finds 10 cm of slab under it has found the end of the structure rather
 the road. ⚠️ A build owes `Q107`'s inertness proof and the whole off-grade battery, because it moves
 the drawn ribbon: `overhang.py`, `deck_margin.py`, `paint_clearance.py`, and the corridor readings
 `Q109` says a paint change always owes.
+
+### ✅ Five defects the review found afterwards, three of them latent bugs
+
+`P4-1` and this entry went through a reuse / quality / efficiency pass once the numbers were in, and
+it is recorded because three of the findings were reachable faults that every counter and every test
+was green over.
+
+- 🔴 **`nearest_edge` returned a miss with a road under it.** The off-level fallback was consulted
+  only when *nothing* on-level was found, so an on-level road beyond `radius_m` beat a nearer
+  off-level one inside it. **233 of 17,400** probes, recovered — the region sweep reads 14,610 hits
+  where it read 14,377.
+- 🔴 **`fence._adjacency` still filtered to the literal level 0** while `fenced_edges` had been
+  parameterised, so a fenced open off-grade edge had no entry in `ends` and `place` raised
+  `KeyError`. Unreachable until `P4-1` opened level 1 and reachable the moment it did; the 45 fence
+  tests never ran `place` over an off-grade edge. The level policy is now stated once and
+  `TestPlaceOverAnOpenOffGradeEdge` pins it.
+- 🔴 **`fenced_edges` fenced an id the graph does not carry** whenever nothing was closed — the
+  guard was a `.get` default of `next(iter(shut), 1)`, which is `1` on an empty set, and `1 not in
+  set()` is true. A city with no `fence:` block passes exactly that. Now a membership test.
+- ⚠️ **The region timing sweep had started measuring a case a car is never in.** `PlanLattice.over`
+  probes at `y = 0` and **27 of 3,696** level-0 vertices are within `LEVEL_REACH_M` of it, so
+  `P4-1`'s height preference sent 95.7% of probes down the fallback and the ring early-out never
+  fired. The lattice is lifted to the road's median height; whole-region p50 reads **17 µs** against
+  a published 51, and the two figures are **different populations** — do not read the improvement as
+  one.
+- ⚠️ **`surface._deck_rims` counted under a different guard than it discarded under**, so an
+  `on_structure` of the wrong length booked discards the code had deliberately not made. It returns
+  the number it actually dropped now, and `TestDeckRimsOffStructure` pins all three arms.
+
+⚠️ Also corrected, none of them faults: `tools/corridor_truth.py` printed a rim the shipped ribbon no
+longer honours (and `_at` lerped through infinity to `nan` once it did); `verify_road_graph` swept
+`impassable_edge_ids` and `fenced_edge_ids` three times each, which was inflating its own reported
+maximum; `is_drivable` went slot-keyed, which also closes a duplicate-id hole `_by_id` opens; and
+`tools/reachability.py`'s `DRIVABLE_LEVEL` comment claimed to restate `RoadGraph.is_drivable`, which
+stopped being true at `P4-1` — inert today because every fenced edge is level 0, and now recorded as
+a gap rather than a restatement.
 
 **See.** `Q107` for the clamp · `Q110` for the cross-section and the parapet face · `Q103` for the
 first report of the same geometry · `Q109` for why a paint change is a corridor change

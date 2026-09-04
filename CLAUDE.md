@@ -815,8 +815,9 @@ Common emoji for this project:
   FLEMING ROAD's last four vertices returned a rim of **0.100**, `carriageway.DECK_ACROSS_M`
   exactly — the smallest non-zero reach that walk can produce — and the clamp cut the ribbon
   **5.60 → 3.15 m**, which the markings shader painted as two **1.57 m** lanes. **Do not treat a
-  small rim as a narrow deck**, and do not remove the `on_structure` gate: 20 vertices over 4 edges
-  depend on it, and mutation-check it rather than reading the count. ⚠️ **`on_structure` is not only
+  small rim as a narrow deck**, and do not remove the `on_structure` gate: **20 vertices over 6
+  edges** carry a rim it discards and **4** of those ribbons move, which are two different counts —
+  mutation-check it rather than reading either. ⚠️ **`on_structure` is not only
   this gate** — `Q23` draws an on-structure edge at its authored width instead of the playability
   floor — so a test fixture that sets it moves the widening too. ⚠️ **A station whose rails cross keeps the ribbon it had and is counted** — 0 in this
   region and *reachable*, so mutation-check it rather than reading its value. ⚠️ **Prove inertness

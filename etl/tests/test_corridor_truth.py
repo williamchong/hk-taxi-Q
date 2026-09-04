@@ -209,6 +209,20 @@ class TestInterpolatedRibbon:
     def test_the_last_vertex_holds_rather_than_running_off_the_end(self) -> None:
         assert _at([2.198, 1.709], 1, 0.5) == pytest.approx(1.709)
 
+    def test_an_absent_rim_interpolates_to_absent_rather_than_to_nan(self) -> None:
+        """🔴 A lerp through infinity is `nan`, and `Q113` made this reachable.
+
+        `deck_rims` carries `inf` wherever the edge is off structure, and
+        `inf + (inf - inf) * f` is `nan` — which the cross-section printed as
+        `rims nan / nan` before this guard.
+        """
+        assert _at([float("inf"), float("inf")], 0, 0.5) == float("inf")
+
+    def test_a_rim_that_ends_reads_absent_across_the_segment(self) -> None:
+        rims = [2.5, float("inf")]
+        assert _at(rims, 0, 0.0) == pytest.approx(2.5)
+        assert _at(rims, 0, 0.5) == float("inf")
+
 
 def test_the_two_triangles_of_a_box_report_one_extent_between_them() -> None:
     """A wall is meshed as quads, so the union is what the caller accumulates."""

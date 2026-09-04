@@ -80,6 +80,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import math
 import sys
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -313,6 +314,16 @@ def _at(values: list[float], vertex: int, fraction: float) -> float:
     if vertex + 1 >= len(values):
         return float(values[-1])
     lower, upper = float(values[vertex]), float(values[vertex + 1])
+    if lower == upper:
+        return lower
+    if not (math.isfinite(lower) and math.isfinite(upper)):
+        # 🔴 **A lerp through infinity is `nan`, not a rim.** `inf` means "no
+        # constraint" and since `Q113` a deck rim carries it wherever the edge
+        # is off structure, so this arm is reachable and printed `nan / nan`
+        # once. Answered the way `np.interp` answers — the endpoint value at
+        # each end, the far one across the segment — which is also the reading
+        # `surface.py` builds the mesh from.
+        return lower if fraction <= 0.0 else upper
     return lower + (upper - lower) * fraction
 
 
@@ -352,11 +363,28 @@ def deck_rims(edge: dict[str, Any], vertices: int) -> tuple[list[float], list[fl
 
     ⚠️ **Per VERTEX, not per station.** `Station` is a 0.25 m walk sample and
     these tables are indexed by polyline vertex, which `_at` then interpolates.
+
+    🔴 **A rim on a vertex that is not on structure is discarded, exactly as
+    `surface._deck_rims` discards it (`Q113`).** This is the frame, and the
+    frame is deliberately shared — the docstring above says a third hand-rolled
+    one would be `Q106`'s fifth tool. Without this the printed `rims` column
+    would name a rim the shipped ribbon no longer honours, and it would say so
+    loudest on `e208`, the edge this tool's own usage line names.
     """
     rims = edge.get("deck_rim_m") or []
-    if not rims:
+    if len(rims) != vertices:
         return [float("inf")] * vertices, [float("inf")] * vertices
-    return [float(pair[0]) for pair in rims], [float(pair[1]) for pair in rims]
+    on_structure = edge.get("on_structure") or []
+    adrift = (
+        [False] * vertices if len(on_structure) != vertices else [not on for on in on_structure]
+    )
+    left = [
+        float("inf") if gone else float(pair[0]) for pair, gone in zip(rims, adrift, strict=True)
+    ]
+    right = [
+        float("inf") if gone else float(pair[1]) for pair, gone in zip(rims, adrift, strict=True)
+    ]
+    return left, right
 
 
 def unclamped_ribbon(edge: dict[str, Any], vertices: int) -> tuple[list[float], list[float]]:

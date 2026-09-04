@@ -92,8 +92,17 @@ CAR_WIDTH_M = 1.8
 # arcade taxi would experience as being sent the wrong way rather than nudged.
 DETOUR_REPORT_M = 200.0
 
-# The level a car is handed. `RoadGraph.is_drivable` is the same test, and `Q13`
-# is why the elevated network is not in it.
+# The level this tool routes over.
+#
+# 🔴 **No longer the same test as `RoadGraph.is_drivable`, and that is a known
+# gap rather than a restatement (`P4-1`).** It was `Q13`'s level-0 refusal on
+# both sides; `is_drivable` is now "level 0, or the bundle measured a corridor
+# here", so the elevated network is drivable in the game and absent from this
+# walk. It is **inert today** — every fenced edge is level 0, so the `--refuse`
+# run `CLAUDE.md` demands on a fence change grades the same population it always
+# did — and it stops being inert the moment `fence.py` fences an open off-grade
+# edge. Widening it is a change to what this grader measures and wants its own
+# numbers, not a quiet edit.
 DRIVABLE_LEVEL = 0
 
 # How many named losses to print. The list is evidence to go and drive, so it

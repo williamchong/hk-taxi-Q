@@ -169,9 +169,11 @@ var _drawn_half: Array[PackedFloat32Array] = []
 var _clear: Array[PackedFloat32Array] = []
 ## 1 where `_clear` holds at least one measured station, 0 where it holds none.
 ##
-## Derived once rather than scanned per call: `is_drivable` is asked inside
-## `_index`'s loop and inside every `impassable_edge_ids` sweep, and rescanning a
-## per-station array there would make an O(1) predicate O(stations).
+## Derived once rather than scanned per call. ⚠️ **The saving is smaller than it
+## looks and the honest figure is this**: the `_levels[slot] == 0` arm
+## short-circuits, so only the 60 off-grade edges ever reach the scan at all.
+## What the array really buys is that `is_drivable` stays a constant-time
+## predicate for every caller, including the sweeps that ask it per edge.
 var _measured: PackedByteArray = PackedByteArray()
 # One lane, from `city.json`. The bar `is_passable` reads `_clear` against, and
 # not derivable here: `width_m` is `lanes x lane_width_m` hand-tuned upward.
@@ -271,9 +273,17 @@ func polyline_of(edge_id: int) -> PackedVector3Array:
 ## no such fallback, deliberately — that is the whole refusal, and it is `Q108`'s
 ## rather than a literal repeated here.
 func is_drivable(edge_id: int) -> bool:
-	if not _by_id.has(edge_id):
-		return false
-	var slot: int = _by_id[edge_id]
+	return _by_id.has(edge_id) and _drivable(_by_id[edge_id])
+
+
+## `is_drivable` keyed by slot, for the callers that already hold one.
+##
+## ⚠️ **Not a micro-optimisation — `_by_id` is not injective.** A document with
+## two edges sharing an id maps both to the *last* slot (`_build` warns and
+## carries on), so `is_drivable(_ids[slot])` asked at the first of them answers
+## about the second. `_index` and the two sweeps hold the slot already; going
+## out to the id and back is both slower and less true.
+func _drivable(slot: int) -> bool:
 	return _levels[slot] == 0 or _measured[slot] == 1
 
 
@@ -577,7 +587,16 @@ func nearest_edge(point: Vector3, heading: Vector3 = Vector3.ZERO, radius_m: flo
 					best_index = index
 					best_point = closest
 
-	if best_index < 0:
+	# ⚠️ **`> radius_m` as well as `< 0`, and the first form was a bug.** Falling
+	# back only when *nothing* on-level was found misses the case where an
+	# on-level road was found beyond the radius while a nearer off-level one sits
+	# inside it: the query returned a miss with a road under it. Measured on the
+	# shipped bundle at **233 of 17,400** probes.
+	#
+	# The fallback is exact here for the reason the note above gives: if the
+	# on-level best is past `radius_m` it is past `reach * CELL_M` too, so the
+	# ring early-out cannot have fired and `any_*` is a full-reach scan.
+	if best_index < 0 or best.distance > radius_m:
 		best.distance = any_distance
 		best_index = any_index
 		best_point = any_point
@@ -770,7 +789,7 @@ func _index() -> void:
 	var low := Vector2(INF, INF)
 	var high := Vector2(-INF, -INF)
 	for slot: int in _ids.size():
-		if not is_drivable(_ids[slot]):
+		if not _drivable(slot):
 			continue
 		for point: Vector3 in _polylines[slot]:
 			low = Vector2(minf(low.x, point.x), minf(low.y, point.z))
@@ -783,7 +802,7 @@ func _index() -> void:
 	_rows = maxi(1, int((high.y - low.y) / CELL_M) + 1)
 
 	for slot: int in _ids.size():
-		if not is_drivable(_ids[slot]):
+		if not _drivable(slot):
 			continue
 		var points: PackedVector3Array = _polylines[slot]
 		for step: int in points.size() - 1:
