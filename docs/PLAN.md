@@ -1000,6 +1000,16 @@ than discovering the rest of it from a bug report.
   what stands *in* the bumper band and never whether deck stands *under* it, so air reads clear.
   ⬜ Unchanged: attribute deck extent to *this edge's* carriageway rather than to a contiguous run.
   `DECISIONS.md` `Q110`.
+  🔴 **And the ribbon shrink at the touchdown is a separate, smaller defect — `Q113`, found by
+  driving 2026-09-05.** `Q107`'s clamp fires on vertices whose `on_structure` is **False**: a
+  descending ramp still returns a deck rim of **0.100 m**, which is `DECK_ACROSS_M` exactly, and
+  `e208` FLEMING ROAD's ribbon is cut **5.60 → 3.15 m** on the strength of it. The markings shader
+  then paints that as two **1.57 m** lanes, which is what the driver reported. **15 vertices over 4
+  edges**, `e208`'s four at 2.45 m each. 🚫 Not fixed by removing the clamp, and not by moving
+  `width_m` — the fix is to stop clamping off structure, on `Q107`'s own *"absence of a deck is
+  `inf`"* rule. ✅ Street View confirms the lane **count** is right (2 on the bridge, 2+1 on landing
+  southbound; 1 splitting to 2 northbound), so it is the width that is wrong — and it records that
+  the real count varies **along** an edge, which `lanes` cannot say.
   🔴 **AND "removing that key is the whole of it" is now WRONG AS WRITTEN — it is
   `touchdown_levels: [-1]`, never `[]`.** That sentence was true on 2026-09-02 and `Q108` expired it
   eight entries later by publishing a clearance for level **1** and *deliberately refusing* one for

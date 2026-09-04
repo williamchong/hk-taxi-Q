@@ -341,6 +341,12 @@ Common emoji for this project:
   therefore moves every fence, silently and plausibly. ⚠️ `facing_away` must be **0** and
   `railings.gdshader` must stay `cull_disabled` — it is the only generated mesh that is, a fence is
   one quad thick, and `cull_back` would delete half of them with a byte-identical mesh.
+  🔴 **"One quad thick" is a REPORTED DEFECT, not a settled choice (`Q112`)** — edge-on the sheet
+  covers less than a pixel and the fence vanishes. A slab was built and reverted: it holds every
+  published metre but reads `facing_away` **2 of 27,334** at one stub whose `_facing` runs along its
+  own run. ⚠️ **Do not close that by dropping the triangles or by winding each quad to its normal** —
+  both make the counter 0 by construction, which is `Q58`'s trap in the one check that can see this
+  layer built backwards.
   ⚠️ **`classes` is a whitelist read off code strings and nothing published defines them** — no
   index-plan sheet covers railings, and the layer's other 40 columns are cartography (`SYMBOL_SIZE_*`
   is plot inches, `COLOR` has no domain, `LINE_WIDTH_*` is null) — so a change to it is a
@@ -803,7 +809,13 @@ Common emoji for this project:
   and `Q105` licensed a deck rim as **paint and not a width** — so ⚠️ **`width_m` must not move
   here**. ⚠️ **Absence of a deck is `inf`, never 0.0**: that is what makes the whole at-grade
   network inert by arithmetic rather than by a branch, and a 0.0 default collapses 737 edges to
-  nothing. ⚠️ **A station whose rails cross keeps the ribbon it had and is counted** — 0 in this
+  nothing. 🔴 **But "absent" is not the only way a deck ends, and the gap is an OPEN DEFECT
+  (`Q113`)**: where a ramp descends to grade the walk still finds a sliver of slab and returns a
+  rim, so the clamp fires on vertices whose `on_structure` is **False**. `e208` FLEMING ROAD's last
+  four read a rim of **0.100** — `carriageway.DECK_ACROSS_M` exactly, the smallest non-zero reach
+  that walk can return — and the ribbon is cut **5.60 → 3.15 m** there, which the markings shader
+  then paints as two **1.57 m** lanes. 15 vertices over 4 edges. Do not treat a small rim as a
+  narrow deck. ⚠️ **A station whose rails cross keeps the ribbon it had and is counted** — 0 in this
   region and *reachable*, so mutation-check it rather than reading its value. ⚠️ **Prove inertness
   by neutralising the clamp and rebuilding**: it must reproduce **32,177 triangles / 39,078
   vertices**, the pre-`Q107` bundle exactly. 🔴 **The evidence is a frame and the cache will lie to

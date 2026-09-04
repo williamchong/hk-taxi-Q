@@ -18400,3 +18400,124 @@ forced it · `Q108` for the published level-1 clearance and the refused level �
 exact corridor that settled the car bar · `Q57` for why the two levels never share a counter ·
 `Q72` for why the fence filter is mutation-checked rather than read · `Q62` for why the evidence is
 a frame
+
+---
+
+## `Q112` — The fence is one quad thick and disappears edge-on
+
+Reported from the driving seat, on the FLEMING ROAD ramp: *"the side fence has no width so it is
+not visible in some angle."*
+
+🔴 **`railings.gdshader`'s own header argued the other way, and the driver refuted it.** It records
+the single quad as a deliberate choice — *"the alternative is two quads per station and twice the
+triangles for a surface 40 mm thick, which buys nothing a driver can see"* — and that is now known
+to be wrong: a zero-thickness sheet seen along its own length covers less than a pixel, the
+coverage shader dissolves the balusters into a uniform alpha at that angle, and the fence is simply
+not there. `Q58`'s failure-to-nothing, on a layer whose whole job is to be a visible edge.
+
+### ⬜ Built, measured, and REVERTED — open
+
+`thickness_m` per class as config (`railings` 0.05, `bollards` 0.14, `barriers` 0.10), and the run
+built as a slab: road-side face, far face, and a cap joining their tops. ⚠️ **Extruded outward
+only**, so the road-side face keeps the exact position `_station` registered — `outset_m` still
+means what it says, the thickness can never push steel toward the carriageway (`Q78`'s one-sided
+rule at a second layer), and the near face is byte-identical to the sheet it replaced.
+
+✅ **Every published metre held**: `drawn_m`, `metres_bridged`, `metres_on_buried_kerb`,
+`metres_outside_ribbon`, `runs`, `refused_m` and all three `shift_m` distributions byte-identical
+per class; geometry 11,012 → 33,040 triangles. The cap is the half that fixes the reported angle —
+two parallel faces are both edge-on at once, and a horizontal cap keeps its projected width exactly
+where they lose theirs.
+
+🔴 **It trips the layer's own invariant and that is why it is not shipped.** `facing_away` must be 0
+and came out at **2 of 27,334** on the railings class, at one 0.5 m stub where `_facing` — which
+points from the fence back at the *centreline* — comes out running nearly **along** the fence line
+rather than across it. The quad is then edge-on to the normal it was given: agreement **−0.14**,
+against **0.966 or better** everywhere else in the layer, which is what makes it a single degenerate
+station rather than a systematic fault.
+
+Four repairs were tried and each left survivors — a closed-form bound on the offset (9 → 6), a
+plan-side turn test (→ 2), the same test at both ends of the pair (→ 2), and reconstructing the
+counter's own predicate on the real triangles (→ 2). A station refusal keyed on squareness was also
+tried and rejected on its cost: at every bar down to `|sin| = 0.02` it refused 719 railing stations
+and **16% of the geometry** to fix two triangles.
+
+🚫 **The two cheap ways out are both refused.** Dropping the offending triangles, or winding each
+quad to whatever normal it was handed, drive `facing_away` to 0 **by construction** — `Q58`'s trap
+in the one counter that can see this layer built backwards, and the tramway shipped 5,111 of 5,112
+triangles facing the wrong way exactly that way (`Q58`). The counter has to keep measuring the rule.
+
+⬜ **What is left is one question**: what should `_facing` do at a station whose direction to the
+centreline runs along its own fence line. Everything else in the change is measured and held.
+
+**See.** `Q60` and `Q61` for the layer · `Q58` for the trap and for failure-to-nothing · `Q78` for
+the outward-only rule this borrowed.
+
+---
+
+## `Q113` — The ramp's ribbon shrinks at the touchdown, and paints a 1.57 m lane
+
+Reported from the driving seat twice: *"the white dotted line is drawing a lane that is too thin to
+be a drive lane but too wide to be just spacing"*, and then *"the road here shrinked for some
+reason, would recovering its width solve the issue?"*
+
+**Yes — and the shrink is the cause of the lane.** Both are one defect.
+
+### 🔴 The clamp fires where the edge is not on structure at all
+
+`Q107` cuts the off-grade ribbon to its own deck, per station and per side, from `roadgraph.json`'s
+`deck_rim_m`. On `e208` FLEMING ROAD the last four vertices read:
+
+| vertex | `on_structure` | `deck_rim_m` | drawn ribbon | clear |
+|---|---|---|---|---|
+| 20 | `True` | 0.368 / 7.821 | 3.42 m | 2.50 |
+| 21 | 🔴 **`False`** | 🔴 **0.100** / 8.000 | **3.15 m** | 2.00 |
+| 22 | 🔴 **`False`** | 🔴 **0.100** / 8.000 | 3.15 m | 3.15 |
+| 23 | 🔴 **`False`** | 🔴 **0.100** / 8.000 | 3.15 m | 3.15 |
+
+🔴 **`0.100` is `carriageway.DECK_ACROSS_M` exactly — the smallest non-zero reach that walk can
+return.** It means the deck was found at the centreline and gone one step later. The edge is
+descending to grade there, so the structure under it thins out and stops; the walk still returns a
+rim, and the clamp cuts the ribbon from its published **5.60 m to 3.15 m** on the strength of it.
+
+✅ **`Q110`'s cross-section says the road is really there**: at that station the only things standing
+in the bumper band within ±12 m are a 2 cm face at **−0.67** and another at **+7.55**, so there is
+**11.32 m** of clear run to the right. The rim is not describing the drivable surface.
+
+✅ **Sized, and it is small**: **20 of 776** level-1 vertices are off structure and still carry a
+published rim; **15** of those still cut the ribbon, over **4 edges**. `e208`'s four cut **2.45 m**
+each — by far the worst; the next is HUNG HING ROAD FLYOVER at 0.51 m.
+
+### 🔴 And that is what paints the thin lane
+
+`road_markings.gdshader` runs `UV.x` from 0 at the nearside kerb to `lanes` at the offside, so it
+always cuts the **drawn** ribbon into `lanes` equal strips. With `lanes = 2` and a 3.15 m ribbon
+that is **1.57 m** a lane. At the published 5.60 m it would be 2.80 m — a narrow lane, but a lane.
+
+✅ **The lane count is right, and the driver confirmed it against the source**: Street View on the
+flyover shows **2 lanes on the bridge, splitting to 2+1 on landing** southbound, and **1 lane
+splitting to 2 midway** northbound. So `lanes = 2` is correct for the southbound deck and the
+**width** is the thing that is wrong. ⚠️ It also records something the graph cannot express: the
+real lane count **varies along an edge**, and `lanes` is one number per edge.
+
+⚠️ **The offside strip is worse than thin**: `Q110` measured the parapet's inner face at −0.67 in a
+ribbon spanning `[−3.05, +0.10]`, so **0.77 m of that 1.57 m lane is paint on top of the parapet** —
+the fence stands inside the marked lane, which is the same defect the user first reported as
+*"why is the fence in middle of a lane?"* (`Q103`), now wearing a lane line.
+
+### ⬜ The fix, and what it must not be
+
+🚫 **Not by removing `Q107`'s clamp**: it took `overhang.py` from 4.3% to 3.3% and it is right
+wherever the deck is real. 🚫 **Not by moving `width_m`**, which never changed — it is 5.60 m
+throughout, and only the drawn ribbon was cut.
+
+⬜ **What is left is to stop clamping where the ribbon is not on structure.** `on_structure` is
+already published per vertex, and `Q107`'s own rule — *"absence of a deck is `inf`, never 0.0"* —
+is what this case should have taken: a descending ramp is standing on ground, not on a deck, and a
+walk that finds 10 cm of slab under it has found the end of the structure rather than the edge of
+the road. ⚠️ A build owes `Q107`'s inertness proof and the whole off-grade battery, because it moves
+the drawn ribbon: `overhang.py`, `deck_margin.py`, `paint_clearance.py`, and the corridor readings
+`Q109` says a paint change always owes.
+
+**See.** `Q107` for the clamp · `Q110` for the cross-section and the parapet face · `Q103` for the
+first report of the same geometry · `Q109` for why a paint change is a corridor change
