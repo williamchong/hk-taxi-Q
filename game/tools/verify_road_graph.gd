@@ -101,35 +101,79 @@ func _check(graph: RoadGraph, document: Dictionary, manifest: CityManifest) -> P
 			)
 		)
 
-	# --- Q13: no query may return an off-grade edge ------------------------
+	# --- Q13, REVERSED by P4-1: a query serves the level it is asked on ----
+	#
+	# 🔴 **`P2-2`'s criterion was "nearest_edge never returns an off-grade edge"
+	# and this is its deliberate reversal, not a relaxation.** The old rule is
+	# kept exactly where the network is still shut, and the new one is asserted
+	# where it is open — so this fails both if a closed level leaks into a query
+	# and if an open deck is not served by one.
 	#
 	# Asked where it is most likely to break rather than at random: every vertex
 	# of every off-grade edge, which is exactly where a flyover centreline is
 	# nearest in plan to the query point. A car under the Canal Road Flyover is
-	# this query.
-	var off_grade_hits: int = 0
+	# this query, and so is a car on top of it.
+	var closed_leaks: int = 0
+	var unserved: int = 0
+	var wrong_level: int = 0
 	var probes: int = 0
+	var open_probes: int = 0
 	for edge: Dictionary in edges:
 		if int(edge.get("elevation_level", 0)) == 0:
 			continue
+		var open: bool = graph.is_drivable(int(edge.get("id", -1)))
 		for raw: Array in edge.get("polyline", []):
 			probes += 1
-			var hit: RoadGraph.Hit = graph.nearest_edge(Vector3(raw[0], raw[1], raw[2]))
+			var at := Vector3(raw[0], raw[1], raw[2])
+			var hit: RoadGraph.Hit = graph.nearest_edge(at)
 			if hit.hit() and not graph.is_drivable(hit.edge_id):
-				off_grade_hits += 1
-				if off_grade_hits == 1:
+				closed_leaks += 1
+				if closed_leaks == 1:
 					problems.append(
 						(
-							"nearest_edge returned off-grade edge %d (level %d) under %s"
+							"nearest_edge returned closed edge %d (level %d) at %s"
 							% [hit.edge_id, graph.level_of(hit.edge_id), str(raw)]
 						)
 					)
-	if off_grade_hits > 0:
+			if not open:
+				continue
+			open_probes += 1
+			# On an open deck the query stands on the centreline itself, so the
+			# answer must be a road at that deck's own height. Which edge is not
+			# asserted: two ramps of one interchange overlap in plan and either
+			# is a defensible answer; the level is what P4-1 opened.
+			if not hit.hit():
+				unserved += 1
+				if unserved == 1:
+					problems.append("nearest_edge missed an open off-grade deck at %s" % str(raw))
+			elif absf(hit.point.y - at.y) > RoadGraph.LEVEL_REACH_M:
+				wrong_level += 1
+				if wrong_level == 1:
+					problems.append(
+						(
+							"nearest_edge resolved an open deck at %s to edge %d, %.2f m below it"
+							% [str(raw), hit.edge_id, at.y - hit.point.y]
+						)
+					)
+	if closed_leaks > 0:
+		problems.append("%d of %d probes resolved to a closed edge" % [closed_leaks, probes])
+	if unserved > 0:
+		problems.append("%d of %d open-deck probes hit nothing" % [unserved, open_probes])
+	if wrong_level > 0:
 		problems.append(
-			"%d of %d off-grade probes resolved to an off-grade edge" % [off_grade_hits, probes]
+			"%d of %d open-deck probes resolved to another level" % [wrong_level, open_probes]
 		)
 	if probes == 0:
 		problems.append("the Q13 check ran no probes")
+	if open_probes == 0:
+		problems.append(
+			(
+				"no off-grade edge is drivable, so P4-1's half of this check cannot fail "
+				+ "and it would pass vacuously"
+			)
+		)
+	else:
+		print("  P4-1: %d of %d off-grade probes stand on an open deck" % [open_probes, probes])
 
 	# --- queries resolve where a car actually is ---------------------------
 	#
@@ -198,19 +242,45 @@ func _check(graph: RoadGraph, document: Dictionary, manifest: CityManifest) -> P
 				% [graph.edge_count(), drivable.size(), graph.indexed_segment_count(), probes]
 			)
 		)
+		# 🔴 **Split by level, never pooled** (`Q57`). Since `P4-1` opened the
+		# off-grade network these two counters span two populations: ground
+		# proud of a street and a parapet on a viaduct want opposite fixes, and
+		# a single total hides which one moved. It is also the only place a
+		# reader can see that the off-grade rows reach the counters at all.
+		var blocked_off: int = _off_grade_share(graph, graph.impassable_edge_ids())
+		var fenced_off: int = _off_grade_share(graph, graph.fenced_edge_ids())
 		print(
 			(
-				"  clearance: %d drivable edges keep under one lane (%.2f m) clear"
-				% [graph.impassable_edge_ids().size(), graph.lane_width_m()]
+				"  clearance: %d drivable edges keep under one lane (%.2f m) clear — %d at grade, %d off"
+				% [
+					graph.impassable_edge_ids().size(),
+					graph.lane_width_m(),
+					graph.impassable_edge_ids().size() - blocked_off,
+					blocked_off
+				]
 			)
 		)
 		print(
 			(
-				"  fence: %d of those keep under the car's own %.2f m"
-				% [graph.fenced_edge_ids().size(), graph.car_width_m()]
+				"  fence: %d of those keep under the car's own %.2f m — %d at grade, %d off"
+				% [
+					graph.fenced_edge_ids().size(),
+					graph.car_width_m(),
+					graph.fenced_edge_ids().size() - fenced_off,
+					fenced_off
+				]
 			)
 		)
 	return problems
+
+
+## How many of a set are off-grade, for the split above.
+static func _off_grade_share(graph: RoadGraph, ids: PackedInt32Array) -> int:
+	var off: int = 0
+	for edge_id: int in ids:
+		if graph.level_of(edge_id) != 0:
+			off += 1
+	return off
 
 
 ## `Q54`: the no-stopping runs schema 4 publishes say something a consumer can act on.

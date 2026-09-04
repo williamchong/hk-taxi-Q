@@ -419,6 +419,28 @@ class TestPublishingASweep:
         city = load_config()
         assert tuple(city.carriageway_survey.levels) == LEVELS
 
+    def test_the_open_levels_are_the_measured_levels(self) -> None:
+        """🔴 **`P4-1`'s invariant: the network is open exactly where it is measured.**
+
+        `fence.touchdown_levels` decides which levels a player cannot reach and
+        this decides which levels carry a corridor. A level that is open and
+        unmeasured hands the player road nothing has looked at — which is the
+        state `Q108` refused in as many words — and a level that is measured and
+        shut publishes a number nobody can drive to.
+
+        ⚠️ **Level 2 is why this is stated over `elevation_levels` and not over
+        the edges that exist.** No edge in Wan Chai carries it, so a check
+        written against the built bundle would pass with level 2 open by
+        omission, and the first region that draws one would open it ungraded.
+
+        Read off the shipped config rather than restated, so the two cannot
+        drift while both look right in isolation.
+        """
+        city = load_config()
+        mapped = {int(level) for level in city.elevation_levels}
+        shut = {int(level) for level in city.fence.touchdown_levels}
+        assert mapped - shut == set(LEVELS)
+
     def test_the_report_says_what_it_was_actually_walked_over(self) -> None:
         # 🔴 The guard above is only worth having if the field is true. `walk` is
         # public — `tools/narrowing.py` calls it directly — so a report built

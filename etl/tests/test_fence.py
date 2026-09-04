@@ -76,21 +76,50 @@ class TestFencedSet:
         graph = {"edges": [_edge(1, [[0, 0, 0], [0, 0, 10]], 1, 2)]}
         assert fenced_edges(graph, _clearance({1: [-1.0, 9.0]}), 1.8) == []
 
-    def test_an_off_grade_edge_under_the_bar_is_not_fenced(self) -> None:
-        """`Q13` refuses to hand a car an off-grade edge at all, so a barrier
-        there would stand where nobody can drive — and the off-grade network is
-        closed already, at its touchdowns (`fence.touchdown_levels`).
+    def test_an_off_grade_edge_on_a_CLOSED_level_is_not_fenced(self) -> None:
+        """A barrier behind a barrier. The level is shut at its touchdowns
+        already (`fence.touchdown_levels`), so a second one partway up the ramp
+        stands where nobody can arrive — `ends_behind_another_fence`'s case,
+        split across two populations that do not share the counter.
 
         🔴 **This test stopped being belt-and-braces on 2026-09-04.** Every
         off-grade row was `NOT_MEASURED` until `clearance.py` published level 1,
         so the width below could not arise and the filter it guards could have
         been deleted with everything still green. It can arise now, which is why
-        the width here is a real 0.0 rather than a refusal: what is pinned is
-        that a *measured* off-grade starvation does not reach the barrier
-        placer.
+        the width here is a real 0.0 rather than a refusal.
+        """
+        graph = {"edges": [_edge(1, [[0, 0, 0], [0, 0, 10]], 1, 2, level=-1)]}
+        assert fenced_edges(graph, _clearance({1: [0.0, 0.0]}), 1.8, (-1,)) == []
+
+    def test_an_off_grade_edge_on_an_OPEN_level_IS_fenced(self) -> None:
+        """🔴 **`P4-1`'s reversal, and the pair above is the whole of it.**
+
+        The filter used to be the literal level 0, justified by the off-grade
+        network being closed at its touchdowns — true until `touchdown_levels`
+        stopped closing level 1, and silently false afterwards. An open level
+        under the car bar is a wall a player can drive into, so it gets the
+        barrier every reachable starved edge gets.
+
+        ⚠️ **Mutation-check this rather than reading the shipped count** (`Q72`):
+        no level-1 edge on this bundle is under the car bar, so the region reads
+        0 of 45 and would read 0 with the filter deleted in either direction.
         """
         graph = {"edges": [_edge(1, [[0, 0, 0], [0, 0, 10]], 1, 2, level=1)]}
-        assert fenced_edges(graph, _clearance({1: [0.0, 0.0]}), 1.8) == []
+        assert fenced_edges(graph, _clearance({1: [0.0, 0.0]}), 1.8, (-1,)) == [1]
+
+    def test_an_edge_the_graph_does_not_carry_cannot_acquire_a_barrier(self) -> None:
+        # The default level is a shut one, so a clearance row with no edge
+        # behind it is skipped rather than fenced at level 0 by omission.
+        assert fenced_edges({"edges": []}, _clearance({7: [0.0, 0.0]}), 1.8, (-1,)) == []
+
+    def test_with_nothing_closed_every_level_is_fenced(self) -> None:
+        """A city with no `fence:` block closes nothing, so nothing is skipped.
+
+        The bar still refuses the edge; there is simply no barrier dressing it,
+        which is the state `build_region`'s own branch describes.
+        """
+        graph = {"edges": [_edge(1, [[0, 0, 0], [0, 0, 10]], 1, 2, level=-1)]}
+        assert fenced_edges(graph, _clearance({1: [0.0, 0.0]}), 1.8) == [1]
 
 
 class TestComponents:

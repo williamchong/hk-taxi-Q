@@ -7,12 +7,26 @@ extends RefCounted
 ## pure waste — hold the result in a **member**, never a local, or the shared
 ## instance is refcounted away the moment `_ready` returns.
 ##
-## ⚠️ `nearest_edge` never returns an off-grade edge, and that is `Q13`'s
-## decision rather than an optimisation. The elevated and underground networks
-## are topologically connected to the streets and geometrically unreachable, so
-## the slice drives the streets and the flyovers are scenery. Ask for one by id
-## and you still get it: `P3-3`'s traffic and any later ramp work need those 60
-## edges to exist, they just must never be handed a car.
+## 🔴 **`nearest_edge` DOES return an off-grade edge now, and that reverses
+## `P2-2`'s acceptance criterion deliberately (`P4-1`, `Q111`).** It read *"never
+## returns an off-grade edge"* and that was `Q13`'s decision for a slice with no
+## ramps: the elevated network was topologically connected to the streets and
+## geometrically unreachable, so the flyovers were scenery. `P2-7` ramped the
+## touchdowns and made 39 of 60 off-grade edges physically reachable, `Q108`
+## published a corridor for level 1, and `Q110` measured that no barrier is owed
+## on any of the four blocked bridges — so the refusal now hides a road the
+## player is standing on rather than protecting one they cannot reach.
+##
+## 🔴 **What replaced it is a MEASUREMENT and not a level.** `is_drivable` is
+## true at grade and true off-grade wherever the bundle published a corridor, so
+## the tunnels stay out because `Q108` deliberately refused to measure them —
+## 0 of 15 level-−1 edges carry a `clear_width_m` — and no level literal has to
+## be maintained beside `fence.touchdown_levels`. The two are pinned to each
+## other in the ETL by `test_the_open_levels_are_the_measured_levels`.
+##
+## ⚠️ **Ask for a closed edge by id and you still get it.** `P3-3`'s traffic and
+## `P4-3`'s ramp work need all 60 to exist; what changed is which of them a
+## *query* will hand a car.
 ##
 ## ⚠️ **Passability is expressed here, never enforced.** Some drivable level-0
 ## edges keep less than one lane clear (`Q19`, `Q51`), so `is_routable` exists
@@ -39,6 +53,29 @@ const GeneratedRoadGraph = preload("res://scripts/city/generated_road_graph.gd")
 ## between junctions, so 25 m keeps a cell's occupancy in single figures without
 ## making a query straddle more than the four cells it already has to test.
 const CELL_M: float = 25.0
+
+## How far above or below a query a road may sit and still count as the road the
+## query is *on*.
+##
+## 🔴 **A preference, never a rank** (`P4-1`). `Hit.distance` stays plan distance
+## for the reason it always did — a 3D rank would order edges by suspension
+## travel — so height is used only to decide *which level* the query is on, and
+## within that level the nearest edge in plan still wins. Without it, opening
+## the index put the Canal Road Flyover under the wheels of a car on Canal Road:
+## **318 of 825** level-1 vertices sit within 5 m in plan of a level-0 edge.
+##
+## ✅ **Measured, and the value is not load-bearing.** Of the 263 of those that
+## share no node with the level-0 edge they are nearest to — genuinely different
+## roads rather than a ramp meeting its own street — the vertical separation is
+## p10 **7.07 m** and the count still ambiguous under this bar is **1 of 263,
+## flat from 1.0 m to 5.0 m**. 2.5 m sits between a car's ride height and that
+## 7.07, and any value in the swept range picks the same roads.
+##
+## ⚠️ **The fallback is what keeps a miss from appearing.** A query with nothing
+## within this band still resolves — to the nearest edge at any height — because
+## a car in the air over a parapet should read the street below rather than
+## blank the HUD. See `nearest_edge`.
+const LEVEL_REACH_M: float = 2.5
 
 ## `direction` values in the contract. The source publishes only these two —
 ## `P1-3` maps `TRAVEL_DIRECTION` onto them and reverses the polyline for the
@@ -130,6 +167,12 @@ var _drawn_half: Array[PackedFloat32Array] = []
 # An edge the manifest did not name gets an empty entry and reads as unknown
 # rather than as blocked.
 var _clear: Array[PackedFloat32Array] = []
+## 1 where `_clear` holds at least one measured station, 0 where it holds none.
+##
+## Derived once rather than scanned per call: `is_drivable` is asked inside
+## `_index`'s loop and inside every `impassable_edge_ids` sweep, and rescanning a
+## per-station array there would make an O(1) predicate O(stations).
+var _measured: PackedByteArray = PackedByteArray()
 # One lane, from `city.json`. The bar `is_passable` reads `_clear` against, and
 # not derivable here: `width_m` is `lanes x lane_width_m` hand-tuned upward.
 var _lane_width_m: float = 0.0
@@ -219,9 +262,19 @@ func polyline_of(edge_id: int) -> PackedVector3Array:
 	return _polylines[_by_id[edge_id]].duplicate()
 
 
-## True where the level is one the slice lets a car onto. `Q13`.
+## True where the bundle has measured a corridor a car could be handed. `Q13`, `P4-1`.
+##
+## 🔴 **At grade unconditionally, off-grade only where it was measured.** The
+## level-0 arm is not belt-and-braces: an edge whose every station falls inside a
+## junction trim publishes no corridor at all, and dropping a street out of the
+## network for that would be a hole nothing else would report. Off-grade there is
+## no such fallback, deliberately — that is the whole refusal, and it is `Q108`'s
+## rather than a literal repeated here.
 func is_drivable(edge_id: int) -> bool:
-	return _by_id.has(edge_id) and _levels[_by_id[edge_id]] == 0
+	if not _by_id.has(edge_id):
+		return false
+	var slot: int = _by_id[edge_id]
+	return _levels[slot] == 0 or _measured[slot] == 1
 
 
 ## True where the source signs the edge one-way.
@@ -483,6 +536,15 @@ func nearest_edge(point: Vector3, heading: Vector3 = Vector3.ZERO, radius_m: flo
 
 	var best_index: int = -1
 	var best_point: Vector3 = Vector3.ZERO
+	# 🔴 **The second candidate is the fallback, and it is not a tie-break**
+	# (`P4-1`). The answer wanted is the nearest road *on the level the query is
+	# on*; `any_*` is only ever read when nothing came within `LEVEL_REACH_M` at
+	# all, so a car in the air over a parapet still resolves to the street below
+	# instead of blanking the HUD. Ranking the two together would be a 3D rank,
+	# which `Hit.distance` refuses for its own stated reason.
+	var any_index: int = -1
+	var any_point: Vector3 = Vector3.ZERO
+	var any_distance: float = INF
 	var reach: int = maxi(1, int(ceil(maxf(radius_m, 0.0) / CELL_M)))
 	var centre: Vector2i = _cell_of(point.x, point.z)
 
@@ -490,6 +552,12 @@ func nearest_edge(point: Vector3, heading: Vector3 = Vector3.ZERO, radius_m: flo
 	# what is already found: everything beyond it is at least `ring - 1` cells
 	# away in plan. Without this a query near the region edge scans every cell it
 	# is allowed to, and the radius is a correctness bound rather than a budget.
+	#
+	# ⚠️ **The bound is tested against the ON-LEVEL best only**, which is what
+	# keeps both answers exact. Breaking on the fallback could stop one ring
+	# short of an on-level road slightly further out and hand back a deck
+	# overhead; and where no on-level road exists at all this never breaks, so
+	# the fallback is scanned to the full radius and is the true nearest.
 	for ring: int in reach + 1:
 		if best.distance <= float(ring - 1) * CELL_M:
 			break
@@ -500,11 +568,19 @@ func nearest_edge(point: Vector3, heading: Vector3 = Vector3.ZERO, radius_m: flo
 			for index: int in _cells[key]:
 				var closest: Vector3 = _closest_on_segment(_seg_a[index], _seg_b[index], point)
 				var span: float = plan_distance(closest, point)
-				if span < best.distance:
+				if span < any_distance:
+					any_distance = span
+					any_index = index
+					any_point = closest
+				if span < best.distance and absf(closest.y - point.y) <= LEVEL_REACH_M:
 					best.distance = span
 					best_index = index
 					best_point = closest
 
+	if best_index < 0:
+		best.distance = any_distance
+		best_index = any_index
+		best_point = any_point
 	if best_index < 0 or best.distance > radius_m:
 		return Hit.new()
 	_fill(best, best_index, best_point, heading)
@@ -616,6 +692,12 @@ func _build(document: Dictionary, manifest: CityManifest = null) -> void:
 				clear_out_of_step += 1
 			clear = _matched(measured, points.size())
 		_clear.append(clear)
+		var judged: bool = false
+		for width: float in clear:
+			if width != CityManifest.NOT_MEASURED:
+				judged = true
+				break
+		_measured.append(1 if judged else 0)
 
 	_warn_out_of_step(out_of_step, "carriageway width")
 	_warn_out_of_step(clear_out_of_step, "clearance")
@@ -678,11 +760,17 @@ static func _matched(published: PackedFloat32Array, count: int) -> PackedFloat32
 
 
 ## Bucket every drivable segment by the plan cells its bounding box touches.
+##
+## 🔴 **Drivable, not level 0** since `P4-1`. The two were the same test until
+## `Q108` published an off-grade corridor; keeping the literal here would have
+## left `nearest_edge` blind on exactly the decks `is_drivable` had just opened,
+## which is a HUD with no street name and a wrong-way monitor that never rings,
+## on 23.3% of the carriageway.
 func _index() -> void:
 	var low := Vector2(INF, INF)
 	var high := Vector2(-INF, -INF)
 	for slot: int in _ids.size():
-		if _levels[slot] != 0:
+		if not is_drivable(_ids[slot]):
 			continue
 		for point: Vector3 in _polylines[slot]:
 			low = Vector2(minf(low.x, point.x), minf(low.y, point.z))
@@ -695,7 +783,7 @@ func _index() -> void:
 	_rows = maxi(1, int((high.y - low.y) / CELL_M) + 1)
 
 	for slot: int in _ids.size():
-		if _levels[slot] != 0:
+		if not is_drivable(_ids[slot]):
 			continue
 		var points: PackedVector3Array = _polylines[slot]
 		for step: int in points.size() - 1:

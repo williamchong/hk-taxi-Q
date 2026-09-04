@@ -71,6 +71,7 @@ from __future__ import annotations
 import argparse
 import logging
 import math
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -202,30 +203,37 @@ class FenceReport:
         return self.barriers == expected
 
 
-def fenced_edges(graph: dict, clearance: dict, bar_m: float) -> list[int]:
-    """Drivable level-0 edges that keep less than `bar_m` clear.
+def fenced_edges(
+    graph: dict, clearance: dict, bar_m: float, closed_levels: Iterable[int] = ()
+) -> list[int]:
+    """Drivable edges that keep less than `bar_m` clear, on every open level.
 
     ⚠️ **The same rule `RoadGraph.fits_car` applies, deliberately duplicated.**
     There is no import to share — the predicate is GDScript — so the two are
     expected to agree and `verify_road_graph.gd` re-derives it a third time from
     `city.json`'s own arrays. A divergence is a finding, never a bar to retune.
 
-    🔴 **The level filter became LOAD-BEARING on 2026-09-04 and reads as
-    belt-and-braces.** Until then every off-grade row was `NOT_MEASURED` end to
-    end, so `starved` skipped them whatever this line did; now `clearance.py`
-    publishes level 1 and the filter is the only thing standing between a
-    measured off-grade width and a barrier row across a live ramp. ⚠️ **It is at
-    0 of 45 on this bundle and it is reachable** — `e208` FLEMING ROAD reads
-    2.00 m, under the lane bar and over the car's own 1.80 m — so read
-    `test_an_off_grade_edge_under_the_bar_is_not_fenced` rather than the count,
-    which is `Q72`'s rule about a counter that cannot go non-zero.
+    🔴 **The level filter is `closed_levels` since `P4-1` opened the network,
+    and it is no longer the literal `0`.** It was a hardcoded level-0 test whose
+    stated reason was that *"the off-grade network is closed ALREADY, at its
+    touchdowns"* — true while `fence.touchdown_levels` closed level 1, and false
+    the moment it stopped. The rule it always meant is the one written here: a
+    barrier belongs on an edge the player can reach, so **fence every level the
+    touchdown closure leaves open**, and skip the levels already shut at their
+    mouths, where a second barrier would stand behind the first
+    (`ends_behind_another_fence`'s case, split across two populations that do
+    not share the counter).
 
-    🔴 **Not an oversight to close: the off-grade network is closed ALREADY, at
-    its touchdowns** (`fence.touchdown_levels`), and a second barrier partway up
-    a ramp would stand behind that one — `ends_behind_another_fence`'s own case,
-    except split across two populations that do not share the counter. What
-    `P4-1` owes is opening the level, not fencing it twice.
+    ⚠️ **It is at 0 of 45 open off-grade edges on this bundle and it is
+    reachable** — `e208` FLEMING ROAD reads 2.00 m, under the lane bar and over
+    the car's own 1.80 m — so read the tests rather than the count, which is
+    `Q72`'s rule about a counter that cannot go non-zero.
+
+    ⚠️ An unmeasured edge cannot be starved: `starved` filters `-1.0` before its
+    `min`, so a level nothing has measured contributes nothing here whatever
+    this filter says. The filter is about *reachability*, not about coverage.
     """
+    shut = set(closed_levels)
     levels = {int(edge["id"]): int(edge.get("elevation_level", 0)) for edge in graph["edges"]}
     # `clearance.json`'s array *is* `ClearanceReport.corridor_m` serialised, so the
     # report is reconstructed rather than its `min` restated here. That keeps one
@@ -234,7 +242,13 @@ def fenced_edges(graph: dict, clearance: dict, bar_m: float) -> list[int]:
     # row it appears in. `tools/narrowing.py` reuses it the same way.
     corridor = {int(row["edge"]): list(row["clear_width_m"]) for row in clearance["clearance"]}
     report = ClearanceReport(corridor_m=corridor)
-    return sorted(edge_id for edge_id, _ in report.starved(bar_m) if levels.get(edge_id, 1) == 0)
+    # `levels.get(edge_id, ...)` defaults to a level that is **shut**, so an id
+    # the graph does not carry cannot acquire a barrier by default.
+    return sorted(
+        edge_id
+        for edge_id, _ in report.starved(bar_m)
+        if levels.get(edge_id, next(iter(shut), 1)) not in shut
+    )
 
 
 def _adjacency(graph: dict) -> tuple[dict[int, list[int]], dict[int, tuple[int, int]]]:
@@ -570,12 +584,18 @@ def build_region(city: Config, region_id: str, *, out_root: Path | None = None) 
     # state the key exists to end. The closure is topological: it reads the
     # graph's levels and nodes and no measurement at all.
     fenced: list[int] = []
+    # ⚠️ **Read before the `city.fence is None` branch below, so it must not go
+    # through `city.fence`.** A city with no `fence:` block closes nothing, which
+    # means every level is open and every starved edge is fenced — the state that
+    # branch exists to describe, and the safe reading: the bar still refuses the
+    # edge, there is simply no barrier dressing it.
+    closed_levels = city.fence.touchdown_levels if city.fence is not None else ()
     bar_m = float(city.clearance.car_width_m) if city.clearance is not None else None
     if bar_m is None:
         log.info("  no clearance block, so no starved edge is fenced")
     else:
         clearance = read_document(out_dir / CLEARANCE_NAME, CLEARANCE_SCHEMA, rebuild)
-        fenced = fenced_edges(graph, clearance, bar_m)
+        fenced = fenced_edges(graph, clearance, bar_m, closed_levels)
 
     if city.fence is None:
         # 🔴 **The bar without the dressing, and it is a real state rather than a
