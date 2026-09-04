@@ -659,6 +659,9 @@ func _check_lanes(graph: RoadGraph, edges: Array) -> PackedStringArray:
 	var checked: int = 0
 	# At-grade edges the floor actually lifted. Asserted non-zero below, because
 	# a "never narrower" test alone passes on a table that echoes the graph.
+	# ⚠️ **Counted over BOTH arms since `Q114`**, so the message below reports
+	# `checked + single` — `checked` alone is the multi-lane budget and would
+	# understate the population this was measured over by up to ten.
 	var widened: int = 0
 	# 🔴 **Single-lane edges get their OWN budget, and the guard that used to
 	# skip them is gone** (`Q114`). It read `lanes < 2` and was unreachable while
@@ -676,7 +679,7 @@ func _check_lanes(graph: RoadGraph, edges: Array) -> PackedStringArray:
 		if points.size() < 2:
 			continue
 		var lanes: int = int(edge.get("lanes", 2))
-		var is_single: bool = lanes < 2
+		var is_single: bool = lanes < RoadGraph.LANE_FLOOR
 		if is_single:
 			single_available += 1
 			if single >= 10:
@@ -786,7 +789,7 @@ func _check_lanes(graph: RoadGraph, edges: Array) -> PackedStringArray:
 					"no at-grade edge is drawn wider than its authored width across %d checked — "
 					+ "the carriageway floor did not travel"
 				)
-				% checked
+				% (checked + single)
 			)
 		)
 	# Printed rather than only asserted, on `bars:`' precedent: `Q114` opened a

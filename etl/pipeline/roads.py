@@ -1140,9 +1140,13 @@ def _reassign(edge: Edge, found: carriageway.CarriagewayReport) -> Edge:
         # licence above may already have published a count for this edge; the
         # cap has to apply to that rather than to the authored number it
         # replaced, or the two rules would fight over which ran last.
-        ceiling = found.deck_lane_ceiling[edge.id]
+        # ⚠️ **`get`, not an index**: a deck too narrow to hold one through lane
+        # licenses no ceiling at all (`_deck_lane_ceiling`), so this key is
+        # absent where the other three deck fields are present. It is the one
+        # deck field that is not all-or-none with the rest.
+        ceiling = found.deck_lane_ceiling.get(edge.id)
         standing = int(changes.get("lanes", edge.lanes))
-        if standing > ceiling:
+        if ceiling is not None and standing > ceiling:
             changes["lanes"] = ceiling
             changes["lanes_source"] = "deck_capped"
     if not changes:
@@ -2215,10 +2219,16 @@ def main(argv: list[str] | None = None) -> int:
             width.lanes_single,
         )
         if width.deck_lane_ceiling:
+            # 🔴 **Derived from the `lanes_source` this stage actually wrote, not
+            # from a list the survey kept.** The survey can only see the
+            # *authored* count, and the cap is applied to whatever count stands —
+            # the ray-licensed one where there is one — so a list built there
+            # names a population this code does not act on. Counting the field
+            # that was written makes the two agree by construction.
             log.info(
                 "      deck ceiling: %d of %d measured decks hold fewer lanes than the "
                 "speed-limit table authored, and are cut to it (Q114)",
-                len(width.deck_lanes_capped),
+                sum(1 for edge in report.edges if edge.lanes_source == "deck_capped"),
                 len(width.deck_lane_ceiling),
             )
         log.info(

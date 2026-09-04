@@ -77,10 +77,10 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 from carriageway_margin import lane_bracket  # noqa: E402
 from carriageway_occupancy import road_names  # noqa: E402
+from centreline_error import station_weights  # noqa: E402
 from deck_error import bundle_arguments, load_bundle, log_bundle  # noqa: E402
 from overhang import half_width_at, half_widths  # noqa: E402
 from pipeline.config import WidthBounds, load_config  # noqa: E402
-from pipeline.polyline import plan_steps  # noqa: E402
 
 log = logging.getLogger(__name__)
 
@@ -109,6 +109,17 @@ class Edge:
     # The painted strip at every published vertex, and the metres of road each
     # of those vertices speaks for. Kept per station rather than reduced here so
     # that a sweep re-reads the same walk instead of re-walking it.
+    #
+    # ⚠️ **Metres beside the vertex count and never instead of it**: the count is
+    # what `Q113` published and is comparable with it, and the metres are what a
+    # driver drives. The two disagree wherever `deck.resample_m` puts stations
+    # unevenly, which is at every touchdown. `centreline_error.station_weights`
+    # is what turns the one into the other — imported rather than restated,
+    # because that arithmetic grades nothing and a second copy would be cost
+    # with no check bought (`pipeline/polyline.py`'s own rule, at a primitive one
+    # derivative on). ⚠️ Left in `centreline_error.py` rather than hoisted into
+    # `pipeline/polyline.py`: no stage calls it, and the pipeline is not the
+    # place for a helper only the graders use.
     strip_m: np.ndarray
     station_m: np.ndarray
 
@@ -148,20 +159,28 @@ class Edge:
         return "over" if self.lanes > self.bracket[1] else "within"
 
 
-def station_metres(polyline: np.ndarray) -> np.ndarray:
-    """How many metres of road each published vertex speaks for, in plan.
+def _bracket_or_none(
+    width_m: float, width_source: str, bounds: WidthBounds | None, *, two_way: bool
+) -> tuple[int, int] | None:
+    """TPDM's lane bracket for a width, or `None` where bracketing it says nothing.
 
-    Half of each adjacent segment, so the stations partition the edge exactly
-    and the ends are not double-counted. ⚠️ **Metres beside the vertex count and
-    never instead of it**: the count is what `Q113` published and is comparable
-    with it, and the metres are what a driver drives. The two disagree wherever
-    `deck.resample_m` puts stations unevenly, which is at every touchdown.
+    🔴 **An AUTHORED width may not grade the count it was computed from.** It is
+    `lanes x lane_width_m` exactly — every one of this region's 469 authored
+    edges divides to 3.2 to six places — so bracketing it feeds the instrument
+    the quantity under test and `over` becomes unreachable by construction. That
+    is `carriageway_margin.lane_bracket`'s own refusal ("would make the
+    instrument agree with the value under test"), which applies to *this* caller
+    as much as to that tool.
+
+    ⚠️ **`ungraded` rather than a silent `within`**, which is what the three-state
+    verdict exists for: a blank flag beside an authored row reads as the width
+    endorsing the count, and the split line would pool a population that can only
+    ever contribute zero. Latent today — all ten of the thin rows carry a
+    measured or deck width — and a single thin authored edge would surface it.
     """
-    steps = plan_steps(polyline)
-    if len(steps) == 0:
-        return np.zeros(len(polyline))
-    padded = np.concatenate([[0.0], steps, [0.0]])
-    return 0.5 * (padded[:-1] + padded[1:])
+    if bounds is None or width_source == "authored":
+        return None
+    return lane_bracket(width_m, bounds, two_way=two_way)
 
 
 def narrow_points(values: np.ndarray) -> tuple[float, float, float, float]:
@@ -206,6 +225,7 @@ def survey(
             [2.0 * half_width_at(widths, vertex) / lanes for vertex in range(len(polyline))]
         )
         width_m = float(published.get("width_m", 0.0))
+        width_source = str(published.get("width_source", "authored"))
         two_way = str(published.get("direction", "both")) == "both"
         rows.append(
             Edge(
@@ -215,21 +235,29 @@ def survey(
                 lanes=lanes,
                 lanes_source=str(published.get("lanes_source", "authored")),
                 width_m=width_m,
-                width_source=str(published.get("width_source", "authored")),
+                width_source=width_source,
                 two_way=two_way,
-                bracket=(
-                    lane_bracket(width_m, bounds, two_way=two_way) if bounds is not None else None
-                ),
+                bracket=_bracket_or_none(width_m, width_source, bounds, two_way=two_way),
                 strip_m=strip,
-                station_m=station_metres(polyline),
+                station_m=station_weights(polyline),
             )
         )
     return rows
 
 
+def thin_rows(rows: list[Edge], bar_m: float) -> list[Edge]:
+    """The edges painting a strip under the bar, narrowest first.
+
+    One predicate rather than the three copies the reports grew, so the table,
+    the class split and the sweep cannot drift apart on the `<` boundary — which
+    would have the headline and the sweep's own row for the same bar disagree.
+    """
+    return sorted((row for row in rows if row.narrowest_m < bar_m), key=lambda r: r.narrowest_m)
+
+
 def render(rows: list[Edge], *, bar_m: float, undrawn: int) -> list[str]:
     """The headline, the per-edge table and the pooled distribution."""
-    thin = sorted((row for row in rows if row.narrowest_m < bar_m), key=lambda r: r.narrowest_m)
+    thin = thin_rows(rows, bar_m)
     stations = int(sum(int(row.thin(bar_m).sum()) for row in thin))
     metres = sum(row.thin_m(bar_m) for row in thin)
     pooled = np.concatenate([row.strip_m for row in rows]) if rows else np.array([])
@@ -281,7 +309,7 @@ def render_by_class(rows: list[Edge], bar_m: float) -> list[str]:
     are painted on any bridge deck in this region (`Q113`). The two want
     opposite fixes and an acceptance number over both is `Q57`'s generalisation.
     """
-    thin = [row for row in rows if row.narrowest_m < bar_m]
+    thin = thin_rows(rows, bar_m)
     if not thin:
         return []
     lines = ["", "the thin population, split by where its evidence comes from:"]
@@ -319,7 +347,7 @@ def render_sweep(rows: list[Edge], bars: tuple[float, ...]) -> list[str]:
         f"{'bar_m':>6} {'edges':>6} {'vertices':>9} {'metres':>8}",
     ]
     for bar_m in bars:
-        thin = [row for row in rows if row.narrowest_m < bar_m]
+        thin = thin_rows(rows, bar_m)
         lines.append(
             f"{bar_m:>6.2f} {len(thin):>6} "
             f"{sum(int(row.thin(bar_m).sum()) for row in thin):>9} "

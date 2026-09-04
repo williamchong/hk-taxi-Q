@@ -1272,9 +1272,18 @@ class LaneVerdict:
     # 🔴 **Counted apart from the measured rows, and NOT as disagreement.** A
     # floored count sits above its own bracket by construction — the floor is
     # what puts it there — so folding these into `measured_disagreeing` reports
-    # the floor working as two surveys conflicting. Measured on the shipped
-    # region: 88 of 88 measured rows agree and all 54 "disagreements" were
-    # floored ones, which is the whole of the difference.
+    # the floor working as two surveys conflicting. Measured when this was
+    # written: 88 of 88 measured rows agreed and all 54 "disagreements" were
+    # floored ones, which was the whole of the difference.
+    #
+    # ⚠️ **A pre-schema-11 path since `Q114`, and 0 on any current bundle.** The
+    # ETL no longer floors a lane count at all — the floor moved into
+    # `RoadGraph.lane_offset`, so those 57 edges publish `measured` and land in
+    # the row below, still agreeing. Kept rather than deleted because this tool
+    # reads whatever `roadgraph.json` is in `etl/out` and nothing stops that
+    # being an older bundle; ⚠️ **the line it prints is conditional on it**, so a
+    # current run does not carry a sentence about a population that no longer
+    # exists.
     floored_total: int = 0
     # Two-way edges whose bracket is unambiguously odd and at least three, which
     # 3.4.2.7 forbids — a finding about the measurement or the direction field.
@@ -1596,14 +1605,19 @@ def _render_width(
         f"ambiguous on {verdict.ambiguous}"
     )
     lines.append(
-        f"  ⚠️ three populations, not one: {verdict.measured_disagreeing} of "
+        f"  ⚠️ NOT one population: {verdict.measured_disagreeing} of "
         f"{verdict.measured_total} PIPELINE-measured counts disagree with this survey's own "
         "bracket — two independent rays over one street, and a rise is where to go and look"
     )
+    if verdict.floored_total:
+        lines.append(
+            f"     {verdict.floored_total} more are floored, which sit above their bracket BY "
+            "CONSTRUCTION and are not disagreement — a pre-schema-11 bundle, since `Q114` "
+            "removed the floor"
+        )
     lines.append(
-        f"     {verdict.floored_total} more are floored, which sit above their bracket BY "
-        "CONSTRUCTION and are not disagreement; the remaining rows are authored, and those "
-        "are the invented count `Q19` has been narrowing"
+        "     the remaining rows are authored, and those are the invented count `Q19` has "
+        "been narrowing"
     )
     lines.append(
         f"  3.4.2.7 findings — two-way, unambiguously odd, >= 3 lanes: {len(verdict.findings)}"

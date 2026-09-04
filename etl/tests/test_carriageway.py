@@ -746,7 +746,7 @@ def _road_edge(edge_id: int, *, lanes: int = 2):
     )
 
 
-def _deck_report(edge_id: int, span_m: float, ceiling: int) -> CarriagewayReport:
+def _deck_report(edge_id: int, span_m: float, ceiling: int | None) -> CarriagewayReport:
     """A report carrying one measured deck, with all FOUR of its fields.
 
     ⚠️ **Four since `Q114`**, and the count matters: `_survey_edge` gates the
@@ -758,7 +758,8 @@ def _deck_report(edge_id: int, span_m: float, ceiling: int) -> CarriagewayReport
     found.deck_span_m[edge_id] = span_m
     found.deck_offset_m[edge_id] = 0.0
     found.deck_rim_m[edge_id] = [(span_m / 2.0, span_m / 2.0), (span_m / 2.0, span_m / 2.0)]
-    found.deck_lane_ceiling[edge_id] = ceiling
+    if ceiling is not None:
+        found.deck_lane_ceiling[edge_id] = ceiling
     return found
 
 
@@ -890,20 +891,37 @@ class TestTheDeckIsACeilingOnLanesAndNeverASource:
         assert out.lanes == 2, "the ray's count was capped, not the authored one"
         assert out.lanes_source == "deck_capped"
 
-    def test_the_ceiling_is_floored_at_one_lane(self) -> None:
+    def test_a_deck_under_one_through_lane_licenses_NO_ceiling(self) -> None:
         """A deck narrower than TPDM's own through lane brackets to ZERO.
 
-        `surface.MarkingCode` refuses a zero-lane edge outright and
-        `road_markings.gdshader` divides by the count, so the ceiling is floored
-        rather than letting an arithmetic hole reach the bundle.
-
-        ⚠️ **Asserted against the function and not against `max(1, ...)`.** The
-        first draft restated the expression at the call site, which a mutation
-        removing the floor passed unchanged — the reason `_deck_lane_ceiling`
-        exists as a name at all.
+        A ceiling of zero would cut an edge to no lanes at all, which
+        `surface.MarkingCode` refuses outright and `road_markings.gdshader`
+        divides by. 🔴 **Refused, not clamped to one.** The first build clamped,
+        and that was silent: a sliver deck would have capped a real road to a
+        single lane wearing `deck_capped`, indistinguishable in the output from
+        a genuine one-lane bracket — and `Q113`'s own defect was a 0.100 m
+        sliver reaching the ribbon. `None` is `_license`'s and `_lanes`' shape,
+        and the deck path never passes through `_license`, so this is the only
+        place the refusal can be made.
         """
         assert _lane_bracket(2.9, _bounds(), two_way=False) == (0, 0)
-        assert _deck_lane_ceiling(2.9, _bounds(), two_way=False) == 1
+        assert _deck_lane_ceiling(2.9, _bounds(), two_way=False) is None
+
+    def test_an_edge_whose_deck_licenses_no_ceiling_keeps_its_count(self) -> None:
+        """The refusal reaches `_reassign` — the deck fields are not all-or-none.
+
+        Every other deck field is published together or not at all; this one is
+        absent on its own, so `_reassign` reads it with `get` and a missing
+        ceiling caps nothing rather than raising.
+        """
+        from pipeline.roads import _reassign
+
+        found = _deck_report(7, 2.9, ceiling=None)
+        out = _reassign(_road_edge(7, lanes=3), found)
+
+        assert out.lanes == 3
+        assert out.lanes_source == "authored"
+        assert out.width_source == "deck", "the width is still the deck's"
 
     def test_the_ceiling_is_the_TOP_of_the_bracket(self) -> None:
         """An ambiguous deck refuses only what even its widest reading cannot hold.

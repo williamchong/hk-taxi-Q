@@ -18843,6 +18843,47 @@ repeated 5× and `e306` 4×, before and after. `e222` WAN CHAI INTERCHANGE loses
 down a 4.14 m slip road; `e306` CANAL ROAD FLYOVER loses **two** of them off a 5.80 m deck. **0.13%
 and 0.096%** of the frame moved, and it is the lane lines and one re-snapped arrow.
 
+### 🔴 Reviewed before the branch closed, and five real defects came out
+
+Three of them were counters or instruments quietly grading nothing, which is the
+class this whole record is about.
+
+- **`deck_lanes_capped` named a population the code did not act on.** It appended
+  on `edge.lanes > ceiling` — the *authored* count — while `roads.py` caps
+  whatever count **stands**, which is the ray-licensed one where there is one.
+  The two agree only because an off-grade edge never reaches `report.lanes`, a
+  condition in another module. Deleted; `roads.py` derives the figure from the
+  `lanes_source` it actually wrote, which makes counter and action agree by
+  construction. Unmoved at **6 of 36**, which is what says the derivation is the
+  same reading.
+- 🔴 **`_deck_lane_ceiling` clamped a sliver deck to one lane, silently.** A span
+  under `lane_m[0]` brackets to `(0, 0)`, and `max(1, …)` turned that into a real
+  cap wearing `deck_capped`, indistinguishable from a genuine one-lane bracket —
+  and `Q113`'s own defect was a **0.100 m** sliver reaching the ribbon. It is a
+  **refusal** now, `_license`'s and `_lanes`' own shape. Inert on this region
+  (narrowest deck 5.60 m), which is exactly why a clamp was the wrong answer:
+  nothing would have reported it firing.
+- 🔴 **`lane_paint.py`'s verdict was a tautology on authored widths.** All 469 of
+  them are `lanes × 3.2` to six places, so bracketing one feeds the instrument
+  the quantity under test and `over` is unreachable — `lane_bracket`'s own
+  refusal, applying to the caller. It returns `ungraded` there now, which is what
+  the third state was built for. Latent, because all ten thin rows carry a
+  measured or deck width; one thin authored edge would have printed a blank flag
+  that reads as endorsement.
+- **`station_metres` was `centreline_error.station_weights` re-typed** — identical
+  on every case including the one its own guard claimed to protect. Imported;
+  the plan-versus-slope test it brought with it was coverage the incumbent's
+  three tests never had, and moved there.
+- **`const LANE_FLOOR` swallowed `lane_offset`'s documentation.** GDScript `##`
+  attaches to the next declaration, so forty lines of rationale ended up
+  documenting the constant and the function was left with none. The constant
+  moved to the file's constants block.
+
+Also: `verify_road_graph.gd` reads `RoadGraph.LANE_FLOOR` rather than a literal
+`2`, and `carriageway_margin.py`'s `floored` branch is marked a pre-schema-11
+path and prints only when it is non-zero — it was still asserting a population
+that no longer exists.
+
 ### ⬜ What is left
 
 - **`e257` CANAL ROAD FLYOVER at 2.45 m**, inside its own `(1, 2)` bracket. A genuinely narrow lane

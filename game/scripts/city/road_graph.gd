@@ -49,6 +49,23 @@ extends RefCounted
 
 const GeneratedRoadGraph = preload("res://scripts/city/generated_road_graph.gd")
 
+## The fewest lanes `lane_offset` will divide a carriageway into (`Q114`).
+##
+## 🔴 **The floor is HERE and not in the ETL, and that is the whole of `Q114`.**
+## `lane_offset` puts the lane centre at exactly 0 for a one-lane road — the
+## centreline, the one place on the network a wheel must not go, for the reasons
+## its own comment gives. The ETL used to keep that unreachable by publishing
+## two lanes wherever it measured one; but `lanes` has a **second** consumer,
+## `road_markings.gdshader`, which cuts the drawn ribbon into `lanes` equal
+## strips — so that floor painted a lane line down 57 of the region's edges that
+## have no lane line, and drew 1.92 m strips on the interchange ramps (`Q113` B).
+## The measurement ships as measured and the floor stands where the hazard is.
+##
+## ⚠️ **It floors the DIVISOR and never the published count.** Nothing writes
+## back: `_lanes[slot]` stays whatever the graph said, so the markings, the
+## arrows and every other reader of `lanes` see the one lane that is there.
+const LANE_FLOOR: int = 2
+
 ## Plan-space cell for the segment index. Wan Chai's streets are ~50-150 m
 ## between junctions, so 25 m keeps a cell's occupancy in single figures without
 ## making a query straddle more than the four cells it already has to test.
@@ -521,22 +538,6 @@ func turn_restriction_count() -> int:
 ## suspension ray finds two coplanar triangles centimetres apart and hunts
 ## between them. `P0-5`'s car crept at 0.8 m/s on 3 of 4 wheels until it moved
 ## off it.
-##
-## 🔴 **That is why `LANE_FLOOR` is here and NOT in the ETL, since `Q114`.** The
-## expression above puts the lane centre at exactly 0 for a one-lane road, and
-## the ETL used to avoid reaching it by publishing two lanes wherever it
-## measured one. But `lanes` has a second consumer — `road_markings.gdshader`
-## cuts the drawn ribbon into `lanes` equal strips — so that floor was painting
-## a lane line down 57 of the region's edges that have no lane line, and on the
-## interchange ramps it drew strips of 1.92 m (`Q113` B). The measurement now
-## ships as measured and the floor stands where the hazard is.
-##
-## ⚠️ **It floors the DIVISOR and never the published count.** Nothing here
-## writes back: `_lanes[slot]` stays whatever the graph said, so the markings,
-## the arrows and every reader of `lanes` see the one lane that is there.
-const LANE_FLOOR: int = 2
-
-
 static func lane_offset(width_m: float, lanes: int) -> float:
 	var count: int = maxi(lanes, LANE_FLOOR)
 	return maxf(width_m, 0.0) * float(count - 1) / (2.0 * float(count))

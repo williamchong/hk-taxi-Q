@@ -34,7 +34,6 @@ from lane_paint import (
     narrow_points,
     render,
     render_by_class,
-    station_metres,
     survey,
 )
 
@@ -126,35 +125,6 @@ class TestTheStripIsTheDrawnRibbon:
         assert two[0].narrowest_m == pytest.approx(2.0 * four[0].narrowest_m)
 
 
-class TestStationMetres:
-    """The metres column partitions the edge, and it is measured in plan."""
-
-    def test_the_stations_partition_the_edge(self):
-        """Nothing is double-counted and nothing is dropped.
-
-        An end taken as a whole segment rather than a half over-states a short
-        edge by a station, which on the touchdowns this tool exists to grade is
-        most of the edge.
-        """
-        metres = station_metres(np.asarray(STRAIGHT, dtype=np.float64))
-        assert metres.sum() == pytest.approx(20.0)
-        assert metres.tolist() == pytest.approx([5.0, 10.0, 5.0])
-
-    def test_the_metres_are_plan_metres(self):
-        """A climbing ramp is as long as its footprint, not its slope.
-
-        `plan_lengths`' rule: widths, kerbs and positions along an edge are all
-        measured on the ground, and a ramp measured on the slope would report
-        more thin metres than the city has.
-        """
-        climbing = np.asarray([[0.0, 0.0, 0.0], [3.0, 4.0, 0.0]], dtype=np.float64)
-        assert station_metres(climbing).sum() == pytest.approx(3.0)
-
-    def test_a_single_vertex_edge_speaks_for_nothing(self):
-        """No segment, no metres — and no crash on the concatenation."""
-        assert station_metres(np.asarray([[0.0, 0.0, 0.0]], dtype=np.float64)).sum() == 0.0
-
-
 class TestNarrowPoints:
     """The distribution reports the narrow tail, and would be silent reversed."""
 
@@ -206,8 +176,8 @@ class TestVerdict:
         rows = survey(
             _graph(
                 [
-                    _edge(1, polyline=STRAIGHT, lanes=1, width_m=5.8),
-                    _edge(2, polyline=STRAIGHT, lanes=3, width_m=5.8),
+                    _edge(1, polyline=STRAIGHT, lanes=1, width_m=5.8, width_source="deck"),
+                    _edge(2, polyline=STRAIGHT, lanes=3, width_m=5.8, width_source="deck"),
                 ]
             ),
             ribbon,
@@ -216,6 +186,35 @@ class TestVerdict:
         by_id = {row.id: row for row in rows}
         assert by_id[1].verdict == "within"
         assert by_id[2].verdict == "over"
+
+    def test_an_AUTHORED_width_grades_nothing(self, hong_kong):
+        """🔴 It is `lanes x lane_width_m` exactly, so bracketing it is circular.
+
+        Every one of this region's 469 authored edges divides to 3.2 to six
+        places, so the bracket would be fed the quantity under test and `over`
+        is unreachable by construction — `carriageway_margin.lane_bracket`'s own
+        refusal, applying to this caller as much as to that tool. The
+        three-state verdict already has the right answer for it.
+
+        ⚠️ **The second half is the point**: the same count over a width a
+        publisher licensed still reads `over`, so this is a refusal to grade a
+        circular reading and not a bar that hides a finding.
+        """
+        ribbon = _manifest([{"edge": 1, "half_width_m": [2.9, 2.9, 2.9]}])
+        authored = survey(
+            _graph([_edge(1, polyline=STRAIGHT, lanes=3, width_m=9.6)]),
+            ribbon,
+            _bounds(hong_kong),
+        )
+        assert authored[0].verdict == "ungraded"
+        assert authored[0].bracket is None
+
+        measured = survey(
+            _graph([_edge(1, polyline=STRAIGHT, lanes=3, width_m=5.8, width_source="deck")]),
+            ribbon,
+            _bounds(hong_kong),
+        )
+        assert measured[0].verdict == "over"
 
     def test_no_bracket_is_its_own_state_and_not_agreement(self):
         """A city with no through-lane range grades nothing, and says so.
@@ -323,7 +322,7 @@ class TestRender:
 
     def test_the_disagreement_is_marked(self, hong_kong):
         rows = survey(
-            _graph([_edge(1, polyline=STRAIGHT, lanes=3, width_m=5.8)]),
+            _graph([_edge(1, polyline=STRAIGHT, lanes=3, width_m=5.8, width_source="deck")]),
             _manifest([{"edge": 1, "half_width_m": [2.9, 2.9, 2.9]}]),
             _bounds(hong_kong),
         )

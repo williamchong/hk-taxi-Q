@@ -135,6 +135,17 @@ class TestStationWeights:
         points = _points((0.0, 0.0), (10.0, 0.0), (10.0, 20.0))
         assert station_weights(points).tolist() == pytest.approx([5.0, 15.0, 10.0])
 
+    def test_the_weights_are_PLAN_metres(self):
+        """A climbing ramp is as long as its footprint, not its slope.
+
+        `plan_lengths`' rule, and untested here until `Q114` — `_points` builds
+        every fixture at `y = 0`, so nothing above could tell the two frames
+        apart. A slope-measured weight over-states every touchdown in the
+        region, which is exactly where the stations are unevenly spaced.
+        """
+        climbing = np.asarray([[0.0, 0.0, 0.0], [3.0, 4.0, 0.0]], dtype=np.float64)
+        assert station_weights(climbing).sum() == pytest.approx(3.0)
+
     def test_the_weights_are_not_the_sample_pitch(self):
         """🔴 The defect this function replaced. `stations * ALONG_M` published
         3.50 m where the edge carries 50.60 m, and it read like a length."""

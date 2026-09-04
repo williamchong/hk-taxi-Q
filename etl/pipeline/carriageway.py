@@ -238,10 +238,15 @@ class CarriagewayReport:
     #
     # ⚠️ **Floored at 1**, because a deck narrower than TPDM's own through lane
     # brackets to zero and a road with no lanes cannot be drawn at all.
+    #
+    # ⚠️ **There is deliberately NO "edges the ceiling bit on" list beside this.**
+    # One was written and removed in review: it appended on `edge.lanes > ceiling`
+    # — the *authored* count — while `roads.py` cuts against whatever count
+    # stands, which is the ray-licensed one where there is one. The two agree
+    # only because an off-grade edge never reaches `report.lanes`, a condition in
+    # another module, so it was a counter naming a population this code does not
+    # act on. `roads.py` derives it from the `lanes_source` it actually wrote.
     deck_lane_ceiling: dict[int, int] = field(default_factory=dict)
-    # The edges the ceiling actually bit on — the load-bearing counter, because
-    # the dict above is published for every measured deck and is mostly inert.
-    deck_lanes_capped: list[int] = field(default_factory=list)
     # Stations whose centreline stood on no deck at all — the ribbon is off its
     # own structure there, which is the defect this exists to size.
     deck_stations_off: int = 0
@@ -931,9 +936,8 @@ def measure(
             # this stage refused.
             report.deck_rim_m[edge.id] = _rims_at_vertices(deck_rims, along_edge)
             ceiling = _deck_lane_ceiling(deck_span, bounds, two_way=edge.direction == BOTH)
-            report.deck_lane_ceiling[edge.id] = ceiling
-            if edge.lanes > ceiling:
-                report.deck_lanes_capped.append(edge.id)
+            if ceiling is not None:
+                report.deck_lane_ceiling[edge.id] = ceiling
         elif walk_deck:
             report.deck_edges_unmeasured += 1
 
@@ -1357,7 +1361,7 @@ def _lane_bracket(width_m: float, bounds: WidthBounds, *, two_way: bool) -> tupl
 _ROW_MIN = 2
 
 
-def _deck_lane_ceiling(span_m: float, bounds: WidthBounds, *, two_way: bool) -> int:
+def _deck_lane_ceiling(span_m: float, bounds: WidthBounds, *, two_way: bool) -> int | None:
     """The most lanes an off-grade edge's own deck could hold (`Q114`).
 
     ⚠️ **`high` and not the whole bracket**: this is a ceiling, so the question
@@ -1366,14 +1370,22 @@ def _deck_lane_ceiling(span_m: float, bounds: WidthBounds, *, two_way: bool) -> 
     counts out of an *ambiguous* bracket — which is the conservative direction
     for a cap.
 
-    🔴 **Floored at one lane, and a function rather than a `max(1, ...)` at the
-    call site so that the floor can be TESTED.** A deck narrower than TPDM's own
-    3.0 m through lane brackets to `(0, 0)`; a ceiling of zero would cut an
-    edge to no lanes at all, which `surface.MarkingCode` refuses outright and
-    which `road_markings.gdshader` divides by. Written inline it was covered
-    only by a test that restated the expression, which is no cover at all.
+    🔴 **A deck under one through lane licenses NOTHING, and it is refused
+    rather than floored.** A span below `lane_m[0]` brackets to `(0, 0)`, and a
+    ceiling of zero would cut an edge to no lanes at all — which
+    `surface.MarkingCode` refuses outright and `road_markings.gdshader` divides
+    by. ⚠️ **The first build clamped it to one instead, and that was silent**: a
+    sliver deck would then have capped a real road to a single lane wearing
+    `lanes_source: deck_capped`, indistinguishable in the output from a genuine
+    one-lane bracket, and `Q113`'s own defect was a 0.100 m sliver surviving
+    into the ribbon. `None` is `_license`'s and `_lanes`' own shape — the deck
+    path never passes through `_license`, so this is the only place that
+    refusal can be made. ✅ Inert on this region, whose narrowest deck is
+    5.60 m, and that is why it must be a refusal rather than a clamp: nothing
+    would report the clamp firing.
     """
-    return max(1, _lane_bracket(span_m, bounds, two_way=two_way)[1])
+    ceiling = _lane_bracket(span_m, bounds, two_way=two_way)[1]
+    return ceiling if ceiling >= 1 else None
 
 
 def _lanes(bracket: tuple[int, int]) -> tuple[int | None, str]:
