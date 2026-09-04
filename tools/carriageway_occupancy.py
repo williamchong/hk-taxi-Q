@@ -1112,8 +1112,12 @@ def occupier_walk(
         if current < 0:
             return
         # Contiguous occupied runs, in walk order across the section. The list
-        # is already ordered because `cross_section` emits left rim inward, so
-        # neighbouring cells are adjacent by construction.
+        # is already ordered because `cross_section` starts at
+        # `offset_m - half_width_m` — the RIGHT rim under `left_of`'s normal —
+        # and steps across to the left, so neighbouring cells are adjacent by
+        # construction. ⚠️ The frame is named here because the label said
+        # "left rim" through two entries with the signs correct underneath it,
+        # and `Q78` is what an unnamed direction costs.
         rows.append(
             Standing(
                 cells=cells,
@@ -1550,7 +1554,12 @@ def main(argv: list[str] | None = None) -> int:
 
     log.info("")
     log.info("  share of ALL drawn carriageway with geometry standing in it — Q19's frame,")
-    log.info("  so these sum to its 5.17%% headline and the gates below read against them:")
+    # A single `%`, not `%%`: this call passes no arguments, so `logging` does
+    # no substitution and `%%` would reach the reader verbatim. And it says
+    # which denominator these share rather than what they sum to — `Q19`'s
+    # 5.17% was a sum over a population that has since had HKCEC moved to
+    # `landmarks.json` and `Q19`'s own carve taken out of it.
+    log.info("  so these share the denominator behind its 5.17% headline; the gates read them:")
     drawn_total = sum(found.area_m2.values())
     running = 0.0
     for level in sorted(found.area_m2):

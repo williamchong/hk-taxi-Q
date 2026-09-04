@@ -18055,15 +18055,32 @@ gated shares **`BUILDING` 1.324% · `INFRASTRUCTURE` 1.104% · `LANDMARK` 0.093%
 - 🔴 **A paint clamp is a corridor change.** Whatever `P4-1` does next off-grade, the four corridor
   readings and the starved runs come with it, before and after.
 
-### ⚠️ Two defects found by reading, recorded and not fixed
+### ✅ Two defects found by reading, and fixed
 
-- `tools/carriageway_occupancy.py:1553` logs `"... sum to its 5.17%% headline ..."` with **no
-  format arguments**, so `logging` performs no `%`-substitution and the literal `5.17%%` reaches the
-  reader. The 5.17% is also stale against the run's own **3.602%** total, which is `Q22`'s figure
-  moving under a sentence that names it.
-- `occupier_walk`'s run comment still says `cross_section` *"emits left rim inward"* where it starts
-  at `offset_m − half_width_m`, the **right** rim under `left_of`. Signs correct, label wrong;
-  `Q103` recorded it unfixed and it is unfixed still.
+- `tools/carriageway_occupancy.py` logged `"... sum to its 5.17%% headline ..."` with **no format
+  arguments**, so `logging` performed no `%`-substitution and the literal `5.17%%` reached the
+  reader. ⚠️ **The sentence was also false**, which is the half worth having: those shares sum to
+  **3.602%** on this bundle, because `Q19`'s 5.17% was a sum over a population that has since had
+  HKCEC moved to `landmarks.json` and `Q19`'s own carve taken out of it. It now names the
+  **denominator** they share rather than a total they no longer reach — `drawn_share`'s docstring
+  keeps the 5.17% because there it is a statement about the divisor and is still true.
+  ✅ Proved inert: the whole `--levels 0` report is identical apart from that line.
+- `occupier_walk`'s run comment said `cross_section` *"emits left rim inward"* where it starts at
+  `offset_m − half_width_m`, the **right** rim under `left_of`. `Q103` recorded it unfixed and it
+  survived two entries with the signs correct underneath it, so the replacement **names the frame**
+  rather than swapping one bare word for another — `Q78` is what an unnamed direction costs.
+
+### 🔴 And `Q75`'s editor hazard was live in the working tree while this ran
+
+`game/project.godot` was dirty before any of this started, and it was **not** the comment-strip it
+looked like: four keys were gone — `renderer/rendering_method.web`, and the three
+`gdscript/warnings/*` overrides `native_method_override`, `get_node_default_without_onready` and
+`onready_with_export`. `HEAD` was clean, so the restore was a `checkout` and there was nothing to
+commit for it. ⚠️ **`ARCHITECTURE.md`'s rule reads the other way round for this case**: *"restore
+and commit in the same change, never as a loose working-tree edit"* guards a regression that is
+already **in** `HEAD`; here the risk was the damage being committed, not the restoration being lost.
+✅ `tools/check.sh` **exit 0**, `settings` ok — the step that counts the `.web` key, and the only
+thing that can see this.
 
 **See.** `Q103` for the split this re-reads and for the two tables it annotates · `Q106` for the
 offset · `Q107` for the clamp whose corridor cost this is · `Q108` for the published `2.00 m` and
