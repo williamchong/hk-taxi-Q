@@ -91,7 +91,6 @@ from pipeline import gltf  # noqa: E402
 from pipeline.clearance import (  # noqa: E402
     CLEARANCE_NAME,
     CLEARANCE_SCHEMA,
-    NOT_MEASURED,
     ClearanceReport,
     _Sections,
     ground_colour,
@@ -119,6 +118,21 @@ log = logging.getLogger(__name__)
 # range `GAME_DESIGN.md` fixes at 1.3-1.8, restated in the units the rule works
 # in and no longer silently dependent on a constant that has since moved.
 FLOORS_M: tuple[float, ...] = (10.24, 9.92, 9.60, 9.28, 8.96, 8.64, 8.32)
+
+# The levels this tool prices a widening over. 🔴 **`(0,)`, and NOT
+# `clearance.LEVELS`, which is `(0, 1)` since 2026-09-04.** Pinned rather than
+# inherited because the quantity swept is `FLOORS_M` — that is
+# `surface.floor_default_m`, and off-grade the floor comes from
+# `floor_by_elevation_level` instead, a knob this tool does not touch. Inherited,
+# the sweep would carry 45 level-1 edges that cannot move at any value in the
+# column and report them as narrowed by nothing, and `check_baseline` would be
+# grading a simulation against a population it never widened.
+#
+# ⚠️ **`tools/centreline_error.py` inherits this through `sweep_report`**, which
+# is why its own `--levels` reaches its registration walk and not the class
+# sweep. Both were level 0 before the shipped default moved; this is what keeps
+# them there.
+AT_GRADE = (0,)
 
 # Half the last place `surface.py` rounds `half_width_m` to. A difference under
 # this is the document's own rounding rather than a narrowing.
@@ -279,7 +293,7 @@ def unobstructed(graph: dict, drawn: dict[int, dict]) -> dict[int, float]:
     to whichever key came first, and 427 of the region's 737 edges would be
     reported as blocked by `INFRASTRUCTURE` when nothing blocks them at all.
     """
-    corridor, report = walk(graph, drawn)
+    corridor, report = walk(graph, drawn, levels=AT_GRADE)
     measure(corridor, np.zeros(len(corridor), dtype=bool), report)
     return report.tightest()
 
@@ -320,7 +334,7 @@ def sweep_report(
     behaviour of. One body, two readings of it.
     """
     ground, jitter = ground_colour(city)
-    corridor, report = walk(graph, drawn)
+    corridor, report = walk(graph, drawn, levels=AT_GRADE)
     sections = _Sections(corridor)
     if only != LANDMARK:
         for path in tiles:
@@ -373,7 +387,9 @@ def owner(per_class: dict[str, float], clear: float) -> str:
     return min(blocking, key=lambda name: blocking[name]) if blocking else UNOBSTRUCTED
 
 
-def check_baseline(out_dir: Path, region_id: str, baseline: dict[int, float]) -> None:
+def check_baseline(
+    out_dir: Path, region_id: str, baseline: dict[int, float], levels: dict[int, int]
+) -> None:
     """Refuse to publish a sweep whose first column is not the shipped city.
 
     The whole table is read across its floors, and the 10.24 m column is the only
@@ -381,14 +397,35 @@ def check_baseline(out_dir: Path, region_id: str, baseline: dict[int, float]) ->
     stage at the width the bundle was actually drawn at. If the two disagree the
     floor simulation is wrong and no other column means anything, so this is a
     precondition rather than a diagnostic.
+
+    🔴 **`levels` is what keeps the two sides one population, and it is not a
+    convenience.** The document covers `clearance.LEVELS`, which became `(0, 1)`
+    on 2026-09-04, while this tool walks `AT_GRADE` for the reason that constant
+    gives — so an unfiltered read compared 782 published edges against a 737-edge
+    baseline and refused a correct build with *"rebuild the region"*. ⚠️ **The
+    filter is the graph's `elevation_level`**, passed in rather than re-read:
+    `clearance.json` does not carry one, and a second read of the graph here is
+    a second place for the two to disagree about what is at grade.
+
+    ⚠️ **The fold is `ClearanceReport.tightest`, not a `min` restated here.**
+    `pipeline/fence.py` reconstructs the report from the serialised rows the
+    same way and its comment already claimed this file did too — it did not,
+    and the sentinel filter was written out a third time. One definition of
+    "the narrowest measured station", which matters because `NOT_MEASURED` is
+    `-1.0` and folding it would make every part-trimmed edge the most blocked
+    in the region. ⚠️ This is **not** `clearance_reconcile.published`'s licensed
+    second implementation: that one grades what shipped and so may not share the
+    fold, where this module says of itself that it *"imports `pipeline.clearance`
+    and reuses it whole"*.
     """
     rebuild = f"python -m pipeline --region {region_id}"
     shipped = read_document(out_dir / CLEARANCE_NAME, CLEARANCE_SCHEMA, rebuild)
-    published = {}
-    for entry in shipped["clearance"]:
-        widths = [width for width in entry["clear_width_m"] if width != NOT_MEASURED]
-        if widths:
-            published[int(entry["edge"])] = min(widths)
+    corridor = {
+        int(row["edge"]): list(row["clear_width_m"])
+        for row in shipped["clearance"]
+        if levels[int(row["edge"])] in AT_GRADE
+    }
+    published = ClearanceReport(corridor_m=corridor).tightest()
 
     if set(published) != set(baseline):
         raise SystemExit(
@@ -518,7 +555,8 @@ def main(argv: list[str] | None = None) -> int:
                 f"the {floor:.2f} m floor measured a different set of edges from the baseline"
             )
 
-    check_baseline(out_dir, args.region, baseline)
+    at_grade = {edge_id: level for edge_id, (_, level) in rules.items()}
+    check_baseline(out_dir, args.region, baseline, at_grade)
     owners = attribute(city, graph, tables[FLOORS_M[0]], tiles, heroes)
     watched = sorted({e for widths in results.values() for e, w in widths.items() if w < lane_m})
 

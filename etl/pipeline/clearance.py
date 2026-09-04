@@ -10,9 +10,11 @@ owes it as *data* — this stage measures it and `export.py` carries the result
 into `city.json` beside the drawn half-width, which reaches the game by the same
 route and for the same reason (`Q23`, `P2-2`).
 
-**What is measured.** A cross-section every `ALONG_M` along every drivable
-level-0 edge, reported at the nearest station, spanning the carriageway
-`surface.py` actually drew there. A sample across
+**What is measured.** A cross-section every `ALONG_M` along every edge at
+`LEVELS`, reported at the nearest station, spanning the carriageway `surface.py`
+actually drew there — `[offset_m - half, offset_m + half]`, and **not** a
+half-width about the published centreline, which off-grade is a different strip
+of ground (`Q106`, `Q107`). A sample across
 that section is blocked where an occupier's geometry stands between
 `BUMPER_LOW_M` and `BUMPER_HIGH_M` above the deck, so a podium overhanging the
 street six metres up is Hong Kong working as intended. The station's clearance
@@ -140,17 +142,39 @@ CELL_M = SUBDIVIDE_M
 # residue can go quiet.
 ALONG_M = CELL_M
 
-# The elevation levels the shipped walk covers. 🔴 **`(0,)`, and the default must
-# stay there** — `Q13` closed the off-grade network to driving, so its clearance
-# is `P4-1`'s question and not this stage's. Named as a constant for `ALONG_M`'s
-# own reason: `walk`, `build_region`, `_write` and the CLI all need to say
-# "the shipped value" and three literals would be three things to forget.
+# The elevation levels the shipped walk covers. Named as a constant for
+# `ALONG_M`'s own reason: `walk`, `build_region`, `_write` and the CLI all need
+# to say "the shipped value" and four literals would be four things to forget.
 #
-# ⚠️ **The knob is a measurement, never a publication.** Widening it is what lets
-# `P4-1` read the off-grade network *before* the bundle carries it; `_write`
+# ✅ **`(0, 1)` since 2026-09-04, and it was `(0,)` for `Q13`'s reason until
+# then.** That refusal expired where it stood: `Q13` is a *graph* refusal, but
+# `surface.py` still draws the off-grade ribbon and `roads.glb` still collides
+# with it, so once `Q90` ramped the touchdowns a user drove `e208` FLEMING ROAD
+# into a parapet on a network no instrument graded. Level 1 now publishes a real
+# `clear_width_m` — `e208` reads **2.00 m**, under the lane bar and over the car's
+# own 1.80 m — so the defect is a number a consumer can act on rather than a
+# `-1.0`, and it lands on the side of each bar that says what to do about it:
+# `is_passable` refuses to route down it, `fits_car` does not fence the player
+# out. ⚠️ **It read 1.25 m in the frame this stage used to measure in**, which is
+# the reading a publish that skipped the fix below would have recorded.
+#
+# ⚠️ **Level -1 is left out, and deliberately.** `carriageway_survey.levels`
+# leaves it out too and the reason carries: a bore has no deck for this walk to
+# find. `e489`'s defect is 0.22 m of *headroom* published as a 0.00 m width, and
+# a horizontal corridor cannot express a vertical fact — folding the tunnels in
+# would publish a number meaning something different from every other row.
+# ⚠️ `tools/carriageway_occupancy.py::_levels_argument` refuses negatives too and
+# **for a different reason** — theirs is a denominator, that a negative level's
+# area would enter `drawn_share`'s all-level divisor and loosen two gated bars.
+# Two arguments landing on one exclusion, which is worth more than one argument
+# would be. What must stay equal is this and `carriageway_survey.levels`: a
+# corridor measured across a width nothing surveyed is the failure, and
+# `test_the_shipped_levels_match_the_width_surveys` is the ratchet.
+#
+# ⚠️ **The knob is still a measurement and never a publication.** `_write`
 # refuses anything but this value for the same reason it refuses a swept
 # `ALONG_M`, and `CarriagewaySurvey.levels` is the same rule at a second key.
-LEVELS = (0,)
+LEVELS = (0, 1)
 
 # Plan cell of the coarse occupancy grid the prune tests against. Coarser than
 # `CELL_M` because it only has to answer "could this triangle be near any
@@ -217,9 +241,9 @@ class ClearanceReport:
     along_m: float = ALONG_M
     # The elevation levels the walk covered, carried for exactly `along_m`'s
     # reason. ⚠️ **Without it that guard is half a guard**: `build_region` is
-    # public and takes `levels` too, so a caller could publish 60 edges of
-    # off-grade clearance *at the shipped spacing* and nothing in the document
-    # or the code would say it had stopped being a level-0 measurement.
+    # public and takes `levels` too, so a caller could publish the 15 tunnels
+    # *at the shipped spacing* and nothing in the document or the code would say
+    # the measurement had changed shape.
     levels: tuple[int, ...] = LEVELS
 
     def count(self, occupancy: _Occupancy) -> None:
@@ -288,6 +312,21 @@ def _spread(counts: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return group, within
 
 
+def _across(forward: np.ndarray) -> np.ndarray:
+    """The plan normal to the **right** of travel, one per station.
+
+    🔴 **Named rather than inlined so a test can read the sign off the code
+    instead of transcribing it.** The first version of
+    `test_the_walk_normal_is_the_negation_of_mitres` rebuilt this expression by
+    hand and compared *that* to `mitres`, which passes whatever `walk` does —
+    `Q72`'s tautology, in the guard against `Q78`'s defect. The two conventions
+    in this repo are opposite on purpose: `pipeline/carriageway.py::_stations`
+    emits this one, `surface.mitres` and `tools/overhang.py::left_of` emit the
+    left, and `offset_m` is published in the latter's frame.
+    """
+    return np.stack([-forward[:, 1], forward[:, 0]], axis=1)
+
+
 def walk(
     graph: dict,
     drawn: dict[int, dict],
@@ -295,18 +334,17 @@ def walk(
     along_m: float = ALONG_M,
     levels: tuple[int, ...] = LEVELS,
 ) -> tuple[Corridor, ClearanceReport]:
-    """Every cross-section of every drivable level-0 edge, at `along_m` spacing.
+    """Every cross-section of every edge at `levels`, at `along_m` spacing.
 
-    🔴 **`levels` exists so a TOOL can measure off-grade without the bundle
-    changing, and the default must stay `LEVELS`.** What ships is level 0, because
-    `Q13` closed the off-grade network to driving and its clearance is `P4-1`'s
-    question. Moving this default re-publishes `city.json` and changes what
-    `roadgraph.json` carries for 60 edges, which is the user's call and not a
-    parameter's — so the parameter buys the measurement without buying the
-    republish. ⚠️ **A wider `levels` is still not a runtime change on its own**:
-    `RoadGraph.is_drivable` is level 0 too, and both `impassable_edge_ids` and
-    `fenced_edge_ids` filter through it, so an off-grade clearance is inert
-    until `P4-1` reverses that as well.
+    🔴 **`levels` exists so a TOOL can measure a level the bundle does not
+    carry, and the default must stay `LEVELS`.** What ships is `(0, 1)`; the 15
+    level -1 tunnels are the population this parameter now buys without buying a
+    republish, and `LEVELS` carries why they are not shipped. ⚠️ **A wider
+    `levels` is still not a runtime change on its own**: `RoadGraph.is_drivable`
+    is level 0, and both `impassable_edge_ids` and `fenced_edge_ids` filter
+    through it, so the level-1 widths published here are inert until `P4-1`
+    reverses that as well. They exist so that when it does, the refusal is
+    already measured.
 
     ⚠️ **`along_m` is the one dimension this stage can be *wrong* in rather than
     merely coarse** — everything else over-blocks, where a spacing too coarse to
@@ -345,27 +383,34 @@ def walk(
     section_station: list[np.ndarray] = []
 
     for published in graph["edges"]:
-        # Level 0 only, and that is `Q13` rather than an optimisation: the game
-        # refuses to hand a car an off-grade edge, so its clearance is a Phase 4
-        # question. Every edge still gets a full-length row below, so the table
-        # covers the graph rather than a subset of it.
+        # `LEVELS` rather than every level, and that is `Q13`'s remainder
+        # rather than an optimisation — see the constant for what is left out
+        # and why. Every edge still gets a full-length row below, so the table
+        # covers the graph rather than a subset of it, and an unwalked level is
+        # `NOT_MEASURED` rather than absent.
         edge_id = int(published["id"])
         points = np.asarray(published["polyline"], dtype=np.float64)
         entry = drawn.get(edge_id)
         halves = np.asarray((entry or {}).get("half_width_m", []), dtype=np.float64)
+        shifts = np.asarray((entry or {}).get("offset_m", []), dtype=np.float64)
         report.corridor_m[edge_id] = [NOT_MEASURED] * len(points)
         if int(published.get("elevation_level", 0)) not in levels or len(points) < 2:
             continue
-        if len(halves) != len(points):
-            # The manifest and the graph disagree about this edge. Refused rather
-            # than clamped: `surface.py` writes the two from one array, so a
-            # mismatch means they came from different runs and every width after
-            # it would be attributed to the wrong station.
-            raise SystemExit(
-                f"edge {edge_id} has {len(points)} stations but "
-                f"{len(halves)} published half-widths; {SURFACE_MANIFEST_NAME} and "
-                f"{ROADGRAPH_NAME} are from different runs"
-            )
+        for name, table in (("half-widths", halves), ("offsets", shifts)):
+            if len(table) != len(points):
+                # The manifest and the graph disagree about this edge. Refused
+                # rather than clamped: `surface.py` writes all three from one
+                # array, so a mismatch means they came from different runs and
+                # every width after it would be attributed to the wrong station.
+                # ⚠️ **The offset is required rather than defaulted to zero**,
+                # which `tools/overhang.py` can afford and this cannot: a zero
+                # read here is a cross-section taken about the centreline, which
+                # is the defect below and reads as a full and plausible table.
+                raise SystemExit(
+                    f"edge {edge_id} has {len(points)} stations but "
+                    f"{len(table)} published {name}; {SURFACE_MANIFEST_NAME} and "
+                    f"{ROADGRAPH_NAME} are from different runs"
+                )
 
         along = plan_lengths(points)
         length = float(along[-1])
@@ -387,6 +432,7 @@ def walk(
         fraction = np.divide(at - along[segment], span, out=np.zeros_like(at), where=span > 0.0)
         centre = points[segment] + (points[segment + 1] - points[segment]) * fraction[:, None]
         half = halves[segment] + (halves[segment + 1] - halves[segment]) * fraction
+        shift = shifts[segment] + (shifts[segment + 1] - shifts[segment]) * fraction
 
         # `normalise` rather than a bare divide, and that is correctness rather
         # than reuse: a vertex repeating the previous one in plan is **legal in
@@ -394,14 +440,14 @@ def walk(
         # walk never dedupes, so a zero-length segment would divide by zero. The
         # NaN cross-section it produced fell in no plan cell and so read *clear*.
         forward = gltf.normalise((points[segment + 1] - points[segment])[:, [0, 2]])
-        across = np.stack([-forward[:, 1], forward[:, 0]], axis=1)
+        across = _across(forward)
 
         count = np.ceil(2.0 * half / ACROSS_M).astype(np.int64)
         keep = count > 0
         if not keep.any():
             continue
         centre, half, across, count = centre[keep], half[keep], across[keep], count[keep]
-        fraction, segment = fraction[keep], segment[keep]
+        shift, fraction, segment = shift[keep], fraction[keep], segment[keep]
         # Counted here, past both guards, because `main` reports it as edges
         # *measured* — an edge whose cross-sections were all trimmed away or came
         # out zero-width has been looked at and not measured.
@@ -414,7 +460,25 @@ def walk(
         station = np.where(fraction < 0.5, segment, segment + 1)
 
         index, within = _spread(count)
-        offset = (within + 0.5) * ACROSS_M - half[index]
+        # 🔴 **`[shift - half, shift + half]`, never `+/-half` about the
+        # centreline (`Q106`, `Q107`).** `surface._shape` draws the two rails at
+        # the graph's `offset_m` and `Q103` moved every off-grade ribbon onto the
+        # middle of its own deck — 36 of the region's 45 level-1 edges carry one,
+        # up to **4.95 m** on `e337` against half-widths near 2.8 m, so a section
+        # about the centreline and the road it is meant to measure barely meet.
+        # It is **0.0 on all 737 level-0 edges**, which is what makes this inert
+        # on the at-grade network rather than merely small.
+        #
+        # 🔴 **NEGATED, because `across` is the opposite of `offset_m`'s frame.**
+        # `across` is `[-forward.z, forward.x]`, the **right** of travel that
+        # `pipeline/carriageway.py::_stations` also emits; `offset_m` is
+        # published in `surface.mitres`' frame, the **left**. The two
+        # conventions in this repo are opposite deliberately and
+        # `test_the_walk_normal_is_the_negation_of_mitres` is what fails if
+        # either moves — a sign read the wrong way here mirrors every off-grade
+        # cross-section onto the far side of its own deck and publishes a full
+        # table either way, which is `Q78`'s defect at a third instrument.
+        offset = (within + 0.5) * ACROSS_M - half[index] - shift[index]
         xs.append(centre[index, 0] + across[index, 0] * offset)
         zs.append(centre[index, 2] + across[index, 1] * offset)
         ys.append(centre[index, 1])
@@ -431,7 +495,8 @@ def walk(
 
     if not counts:
         raise SystemExit(
-            f"no drivable level-0 carriageway in {ROADGRAPH_NAME} — nothing to measure"
+            f"no carriageway at level(s) {_levels_label(levels)} in {ROADGRAPH_NAME}"
+            " — nothing to measure"
         )
     corridor = Corridor(
         x=np.concatenate(xs),
@@ -1009,12 +1074,13 @@ def _write(out_root: Path | None, city: Config, region_id: str, report: Clearanc
     if report.along_m != ALONG_M:
         raise _refuse_a_sweep(f"at {report.along_m:.2f} m", f"{ALONG_M:.2f} m")
     if report.levels != LEVELS:
-        # The same refusal at the other knob, and it is the one with a consumer
-        # waiting: an off-grade row is `NOT_MEASURED` today, and a bundle that
-        # quietly started carrying real widths there would change what
-        # `RoadGraph` answers for 60 edges the moment `P4-1` opens them —
-        # without the level having been anybody's decision. Publishing them is a
-        # bundle change, and `Q103` records that it is the user's call.
+        # The same refusal at the other knob. ⚠️ **It did not stop mattering
+        # when `LEVELS` widened — it moved to the level below.** A bundle that
+        # quietly started carrying the 15 tunnels would change what `RoadGraph`
+        # answers the moment `P4-1` opens them, without the level having been
+        # anybody's decision; publishing a level is a bundle change and `Q103`
+        # records that it is the user's call. Level 1 was made that way, in the
+        # open; level -1 has not been.
         raise _refuse_a_sweep(
             f"over level(s) {_levels_label(report.levels)}",
             f"level(s) {_levels_label(LEVELS)}",
@@ -1091,8 +1157,8 @@ def main(argv: list[str] | None = None) -> int:
         # decides *which edges* the document covers rather than how finely, so a
         # bundle measured over a level the stage does not ship would be a
         # document nobody could reproduce from a clone. `P4-1` is what this
-        # exists for — it needs the off-grade numbers before the bundle carries
-        # them, which is exactly what `Q103` deferred.
+        # exists for — it read level 1 with this flag before the bundle carried
+        # it, which is exactly what `Q103` deferred and 2026-09-04 published.
         help=(
             "comma-separated elevation levels to walk; off the default it reports without writing"
         ),

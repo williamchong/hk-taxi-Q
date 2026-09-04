@@ -65,6 +65,8 @@ from carriageway_occupancy import (
     survey,
 )
 
+from pipeline.clearance import LEVELS
+
 
 class TestShareDenominator:
     """`Q19`'s three figures share one whole, and the gates ride on that."""
@@ -415,11 +417,17 @@ class TestCorridorLevels:
     run out of a red bundle.
     """
 
-    def test_the_default_is_level_zero_alone(self) -> None:
+    def test_the_default_is_the_levels_the_bundle_publishes(self) -> None:
         """🔴 Moving this moves `clearance_reconcile.py`'s `EXPECT_GRADER`, and
         `Q51`'s ratchet is what keeps the pipeline's count and this tool's count
-        describing one bundle."""
-        assert CORRIDOR_LEVELS == (0,)
+        describing one bundle.
+
+        Pinned against `pipeline.clearance.LEVELS` rather than against a literal
+        `(0, 1)`, because what has to hold is not the value but the *agreement*:
+        this tool grades what that stage publishes, and a default that lags it
+        by one level grades a subset while printing a whole-bundle verdict.
+        """
+        assert CORRIDOR_LEVELS == LEVELS
 
     def test_a_set_without_level_zero_is_refused(self) -> None:
         """🔴 **The defect this flag shipped with, for one run.** `--levels 1`
@@ -482,9 +490,17 @@ class TestCorridorLevels:
             spacing_m=1.0,
         )
 
-    def test_an_off_grade_edge_gets_no_corridor_at_the_default(self) -> None:
-        """The level-0 population the acceptance bars were written against."""
-        found = survey(self._lattice([0, 1]), {})
+    def test_a_level_outside_the_walk_gets_no_corridor(self) -> None:
+        """The level-0 population the acceptance bars were written against.
+
+        ⚠️ **Asked with `corridor_levels` spelled out, not by taking the
+        default.** This read `survey(...)` bare until 2026-09-04, when the
+        default became `(0, 1)` and the test failed for having pinned a value
+        rather than a property. What is pinned is that a level the walk was not
+        asked for gets no row at all — the tunnels today, level 1 before it
+        shipped.
+        """
+        found = survey(self._lattice([0, 1]), {}, corridor_levels=(0,))
         assert set(found.corridor_m) == {0}
 
     def test_the_level_is_recorded_where_the_population_is_decided(self) -> None:
@@ -502,7 +518,7 @@ class TestCorridorLevels:
         for more levels adds reported rows and moves no gated one. This is what
         `--levels 0,1 --corridor-report` printing `n 782` under a label reading
         "all judged level-0" looked like before it was filtered."""
-        narrow = survey(self._lattice([0, 1]), {})
+        narrow = survey(self._lattice([0, 1]), {}, corridor_levels=(0,))
         wide = survey(self._lattice([0, 1]), {}, corridor_levels=(0, 1))
         gated = {
             edge: clear for edge, clear in wide.corridor_m.items() if wide.corridor_level[edge] == 0

@@ -707,14 +707,37 @@ Common emoji for this project:
   `Q106` and has not been re-run in the corrected frame**; the argument is structural and the
   numbers are the old frame's. Quote `--max-lateral-m` with a span and with neither of the
   other two. Numbers in `Q105`.
-- 🔴 **`clearance.walk(levels=...)`, `tools/centreline_error.py --levels` and
-  `tools/carriageway_occupancy.py --levels` all default to `(0,)` and the clearance default must
-  stay there.** They exist so `P4-1`'s measurement is reachable *without* the bundle changing;
-  moving the pipeline default re-publishes `city.json` for 60 edges.
-  ⚠️ **A wider `levels` is inert at runtime anyway** — `RoadGraph.is_drivable` is level 0 and both
-  `impassable_edge_ids` and `fenced_edge_ids` filter through it — so publishing off-grade clearance
-  changes numbers nothing reads until `P4-1` reverses that too. ⚠️ Prove a change to the walk inert
-  the way `Q96` says: the default must reproduce the shipped `clearance.json` byte-for-byte.
+- 🔴 **`clearance.LEVELS` and `carriageway_occupancy.CORRIDOR_LEVELS` are `(0, 1)` since
+  2026-09-04 and they move TOGETHER — `centreline_error.py --levels` and `narrowing.py` stay at
+  `(0,)`.** The bundle publishes a level-1 `clear_width_m`: `e208` FLEMING ROAD reads **2.00 m**,
+  under the lane bar and over the car's 1.80 m, where it published `-1.0` before. That is `Q13`'s
+  refusal expiring where it stood — `Q103` had already measured that 39 of 60 off-grade ends are
+  reachable by driving at them. 🔴 **A level is a BUNDLE change and the user's call**, so `_write`
+  still refuses anything but `LEVELS`; what the knob buys now is level **−1**, left out because a
+  bore has no deck for this walk to find and `e489`'s defect is 0.22 m of *headroom* that a
+  horizontal corridor cannot express. ⚠️ **Keep `clearance.LEVELS == carriageway_survey.levels`** —
+  a corridor across a width nothing surveyed is the failure — and
+  `test_the_shipped_levels_match_the_width_surveys` is the ratchet.
+  ⚠️ **A wider `levels` is inert at runtime** — `RoadGraph.is_drivable` is level 0 and both
+  `impassable_edge_ids` and `fenced_edge_ids` filter through it — so the level-1 widths change
+  numbers nothing reads until `P4-1` reverses that too. That is the point: the refusal is measured
+  before the network opens, not after. ⚠️ Prove a change to the walk inert
+  the way `Q96` says, in **two** steps, because only the first can be byte-for-byte: hold the
+  levels and reproduce `clearance.json` exactly (`Q108`'s frame fix did, at `fa5bcf39…`), then
+  move the level and check that every row that moved is one the old default never walked — **45
+  moved, all level 1, 0 at grade**.
+  🔴 **`pipeline/fence.py::fenced_edges`' level filter is LOAD-BEARING now and reads as
+  belt-and-braces.** Off-grade rows were all `NOT_MEASURED` before, so `starved` skipped them
+  whatever that line did; it is now the only thing between a measured off-grade width and a barrier
+  across a live ramp. It is 0 of 45 today and **reachable**, so mutation-check
+  `test_an_off_grade_edge_under_the_bar_is_not_fenced` rather than reading the count. ⚠️ **Do not
+  "fix" it by fencing off-grade**: `fence.touchdown_levels` already closes that network at its
+  touchdowns, and a second barrier would stand behind the first.
+  🔴 **`clearance_reconcile.py` takes ONE `--levels` reaching both halves, and that is not
+  cosmetic** — `published()` read every row in `city.json` while `grade()` walked level 0, which was
+  one population only while the pipeline published one level. ✅ The ratchet moved 19→**21**,
+  21→**25**, 4→**6**, and the at-grade halves are **unchanged at 19 / 21 / 4** — a move that cannot
+  say that is a bar retuned, not a population arriving. Numbers in `Q108`.
   🔴 **The occupancy flag is strictly ADDITIVE and a set omitting 0 is refused** — the corridor gate
   reads the level-0 rows alone, so `--levels 1` left it an empty population and printed *"Within the
   accepted bounds."* on a bundle with 21 starved edges. The unmapped-level guard cannot catch that,

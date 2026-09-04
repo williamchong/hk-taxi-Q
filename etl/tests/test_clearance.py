@@ -44,6 +44,7 @@ from pipeline.clearance import (
     PIECE_BUDGET,
     SUBDIVIDE_M,
     ClearanceReport,
+    _across,
     _batches,
     _levels_argument,
     _longest_clear,
@@ -55,6 +56,8 @@ from pipeline.clearance import (
     walk,
     wears,
 )
+from pipeline.config import load_config
+from pipeline.surface import mitres
 
 
 def _split(corners: np.ndarray) -> np.ndarray:
@@ -65,8 +68,27 @@ def _edge(edge_id: int, points: list[list[float]], *, level: int = 0) -> dict:
     return {"id": edge_id, "polyline": points, "elevation_level": level}
 
 
-def _drawn(edge_id: int, halves: list[float], trim: tuple[float, float]) -> dict:
-    return {edge_id: {"half_width_m": halves, "trim_m": list(trim)}}
+def _drawn(
+    edge_id: int,
+    halves: list[float],
+    trim: tuple[float, float],
+    offsets: list[float] | None = None,
+) -> dict:
+    """One edge of the carriageway table `roadsurface.json` publishes.
+
+    ⚠️ **`offset_m` defaults to zeros here and is REQUIRED by `walk`**, which is
+    not a contradiction: the manifest is schema-pinned, so the pipeline always
+    carries one, and defaulting in the helper keeps the tests that are about
+    something else from restating a zero. The tests that are about the offset
+    pass one.
+    """
+    return {
+        edge_id: {
+            "half_width_m": halves,
+            "offset_m": [0.0] * len(halves) if offsets is None else offsets,
+            "trim_m": list(trim),
+        }
+    }
 
 
 class TestLongestClear:
@@ -199,44 +221,132 @@ class TestWalk:
             # empty table that reads as a clear region.
             walk(graph, _drawn(1, [3.2, 3.2], (3.0, 3.0)))
 
-    def test_off_grade_edges_are_published_but_not_measured(self) -> None:
+    def _three_levels(self) -> tuple[dict, dict]:
+        """One edge at each of the levels `elevation_levels` maps in this region."""
         graph = {
             "edges": [
                 _edge(1, [[0.0, 0.0, 0.0], [0.0, 0.0, 20.0]]),
                 _edge(2, [[9.0, 6.0, 0.0], [9.0, 6.0, 20.0]], level=1),
+                _edge(3, [[18.0, -8.0, 0.0], [18.0, -8.0, 20.0]], level=-1),
             ]
         }
-        drawn = {**_drawn(1, [3.2, 3.2], (2.0, 2.0)), **_drawn(2, [3.2, 3.2], (2.0, 2.0))}
+        drawn = {
+            **_drawn(1, [3.2, 3.2], (2.0, 2.0)),
+            **_drawn(2, [3.2, 3.2], (2.0, 2.0)),
+            **_drawn(3, [3.2, 3.2], (2.0, 2.0)),
+        }
+        return graph, drawn
+
+    def test_an_unwalked_level_is_published_but_not_measured(self) -> None:
+        """A level outside `LEVELS` still gets a full-length row of refusals.
+
+        ⚠️ **The population changed on 2026-09-04 and the property did not.**
+        This was level 1 until it shipped; the tunnels are what is left, and the
+        row has to be present either way so the table covers the graph rather
+        than a subset of it — a consumer indexing by edge id must not find a
+        hole where a level it does not care about used to be.
+        """
+        graph, drawn = self._three_levels()
         _, report = walk(graph, drawn)
-        assert report.edges == 1
-        # Present in the table, so it covers the graph, and refused throughout —
-        # `Q13` keeps a car off it, so its clearance is a Phase 4 question.
-        assert report.corridor_m[2] == [NOT_MEASURED, NOT_MEASURED]
+        assert report.edges == 2
+        assert report.corridor_m[3] == [NOT_MEASURED, NOT_MEASURED]
 
     def test_the_level_gate_is_a_knob_a_tool_can_widen(self) -> None:
-        # `P4-1`'s measurement has to be reachable without the bundle changing,
-        # so `levels` opens the gate. Asserted as a *pair* with the default
-        # above: what is being pinned is that the shipped default stays level 0
-        # while a tool can ask for more, and a single test of either half would
-        # pass with the two silently merged.
-        graph = {
-            "edges": [
-                _edge(1, [[0.0, 0.0, 0.0], [0.0, 0.0, 20.0]]),
-                _edge(2, [[9.0, 6.0, 0.0], [9.0, 6.0, 20.0]], level=1),
-            ]
-        }
-        drawn = {**_drawn(1, [3.2, 3.2], (2.0, 2.0)), **_drawn(2, [3.2, 3.2], (2.0, 2.0))}
-        corridor, report = walk(graph, drawn, levels=(0, 1))
-        assert report.edges == 2
+        # A measurement outside the shipped set has to stay reachable without
+        # the bundle changing — that is how level 1's numbers were read before
+        # they were published, and it is how level -1's would be. Asserted as a
+        # *pair* with the default: what is pinned is that the shipped default
+        # holds while a tool can ask for more, and a single test of either half
+        # would pass with the two silently merged.
+        graph, drawn = self._three_levels()
+        corridor, report = walk(graph, drawn, levels=(0, 1, -1))
+        assert report.edges == 3
         # Read off the sections themselves, not off `corridor_m`: `walk` leaves
         # that at `NOT_MEASURED` for every edge until `measure` fills it, so an
         # assertion there would pass for the level-0 edge too and prove nothing.
-        assert 2 in set(corridor.section_edge.tolist())
+        assert {2, 3} <= set(corridor.section_edge.tolist())
 
     def test_a_graph_out_of_step_with_the_manifest_is_refused(self) -> None:
         graph = {"edges": [_edge(1, [[0.0, 0.0, 0.0], [0.0, 0.0, 10.0], [0.0, 0.0, 20.0]])]}
         with pytest.raises(SystemExit, match="different runs"):
             walk(graph, _drawn(1, [3.2, 3.2], (0.0, 0.0)))
+
+    def test_a_manifest_with_no_offsets_is_refused_rather_than_read_as_zero(self) -> None:
+        """🔴 The whole of `Q106` arrives as a zero nobody wrote.
+
+        A missing `offset_m` read as 0.0 is a cross-section about the published
+        centreline — the defect below — and it publishes a full, plausible
+        table. `tools/overhang.py` can afford the fallback because it grades;
+        this writes the bundle.
+        """
+        graph = {"edges": [_edge(1, [[0.0, 0.0, 0.0], [10.0, 0.0, 0.0]])]}
+        drawn = {1: {"half_width_m": [3.2, 3.2], "trim_m": [0.0, 0.0]}}
+        with pytest.raises(SystemExit, match="offsets"):
+            walk(graph, drawn)
+
+
+class TestTheDrawnFrame:
+    """Where the cross-section is taken, which `Q106` got wrong in four tools.
+
+    🔴 **Both halves are silent failures and they are different failures.** A
+    section centred on the published centreline measures a strip of ground the
+    ribbon has left — up to 4.95 m away on `e337` — and a section shifted the
+    *wrong way* measures the mirror image of the right one. Neither shortens the
+    table, changes a count, or trips a partition; both publish widths.
+
+    ⚠️ **Nothing here can be seen at level 0**, where every offset is 0.0. That
+    is the point: this stage shipped the defect for as long as it published
+    level 0 alone, and the guard has to be a test rather than a drive.
+    """
+
+    def _walked(self, offsets: list[float]) -> np.ndarray:
+        """The plan Z of every sample on one straight edge running along +X."""
+        graph = {"edges": [_edge(1, [[0.0, 0.0, 0.0], [20.0, 0.0, 0.0]], level=1)]}
+        drawn = _drawn(1, [1.0, 1.0], (0.0, 0.0), offsets=offsets)
+        corridor, _ = walk(graph, drawn, levels=(1,))
+        return corridor.z
+
+    def test_the_walk_normal_is_the_negation_of_mitres(self) -> None:
+        """The two conventions in this repo are opposite, and must stay opposite.
+
+        `walk` builds `[-forward.z, forward.x]`, the **right** of travel that
+        `pipeline/carriageway.py::_stations` also emits; `offset_m` is published
+        in `surface.mitres`' frame, the **left**. Pinned against `mitres` rather
+        than a literal, because that is where the convention is decided —
+        `test_centreline_error.py` pins the same pair for the same reason. If
+        anyone "restores consistency", this fails loudly rather than mirroring
+        every off-grade cross-section onto the far side of its own deck.
+
+        🔴 **Read off `_across` and never retyped.** The first version of this
+        test rebuilt the expression by hand and compared that to `mitres`, so it
+        passed whatever `walk` did — `Q72`'s tautology inside the guard against
+        `Q78`'s defect, which is why the normal has a name.
+        """
+        points = np.array([[0.0, 0.0, 0.0], [10.0, 0.0, 0.0]])
+        assert _across(np.array([[1.0, 0.0]]))[0] == pytest.approx(-mitres(points)[0])
+
+    def test_the_section_is_centred_on_the_ribbon_and_not_on_the_centreline(self) -> None:
+        # Travel along +X, so `mitres`' left is -Z: a +5.0 m offset draws the
+        # ribbon over z in [-6, -4] and the centreline is not under it at all.
+        z = self._walked([5.0, 5.0])
+        assert z.max() <= -4.0 + 1e-9
+        assert z.min() >= -6.0 - 1e-9
+        # 🔴 Not merely "off the centreline" — the sign. Read the other way this
+        # spans [+4, +6], which is the same distance away and the wrong side.
+        assert z.mean() == pytest.approx(-5.0, abs=ACROSS_M)
+
+    def test_a_zero_offset_is_the_section_this_stage_always_took(self) -> None:
+        """The inertness proof, as a test: level 0 publishes 0.0 everywhere.
+
+        All 737 of them, which is why the **frame fix alone** reproduced the
+        shipped `clearance.json` byte-for-byte. ⚠️ **That is not a claim about
+        the whole change** — publishing level 1 moved 45 rows — and the two have
+        to be stated apart, because only the first can be byte-for-byte and the
+        second is "every row that moved is one the old default never walked".
+        """
+        z = self._walked([0.0, 0.0])
+        assert z.max() <= 1.0 + 1e-9
+        assert z.min() >= -1.0 - 1e-9
 
 
 class TestAlongSpacing:
@@ -286,11 +396,28 @@ class TestPublishingASweep:
     `Q103` records that flipping the level is the user's call.
     """
 
-    def test_the_shipped_levels_are_level_zero_alone(self) -> None:
-        # Pinned by value because of what it encodes rather than for tidiness:
-        # `Q13` closed the off-grade network to driving, and this constant is
-        # that refusal expressed where the walk can read it.
-        assert LEVELS == (0,)
+    def test_the_shipped_levels_are_the_two_with_a_deck(self) -> None:
+        # Pinned by value because of what it encodes rather than for tidiness.
+        # 🔴 **`-1` is the assertion that matters and `1` is the one that
+        # changed.** The tunnels are excluded because a bore has no deck for
+        # this walk to find and `e489`'s defect is 0.22 m of *headroom* — a
+        # horizontal corridor cannot express it, so a published width there
+        # would mean something different from every other row in the document.
+        assert LEVELS == (0, 1)
+        assert -1 not in LEVELS
+
+    def test_the_shipped_levels_match_the_width_surveys(self) -> None:
+        """🔴 Two keys naming one population, pinned against each other.
+
+        `carriageway_survey.levels` decides which levels take a measured width
+        and this decides which take a measured corridor. They are the same
+        argument about the same decks — a bore has none — and a bundle where
+        they disagree publishes a corridor across a width nothing surveyed, or
+        the reverse. Read off the shipped config rather than restated, so the
+        two cannot drift while both look right in isolation.
+        """
+        city = load_config()
+        assert tuple(city.carriageway_survey.levels) == LEVELS
 
     def test_the_report_says_what_it_was_actually_walked_over(self) -> None:
         # 🔴 The guard above is only worth having if the field is true. `walk` is
@@ -316,7 +443,7 @@ class TestPublishingASweep:
             # ⚠️ `city` is never reached, and that is pinned as much as the
             # refusal: a guard standing *after* `out_dir` would already have
             # resolved where to write the document it is refusing.
-            _write(None, cast(Any, None), "wan_chai", ClearanceReport(levels=(0, 1)))
+            _write(None, cast(Any, None), "wan_chai", ClearanceReport(levels=(0, 1, -1)))
 
     def test_a_swept_spacing_still_cannot_publish(self) -> None:
         # The older guard, kept under test beside the new one: they share a

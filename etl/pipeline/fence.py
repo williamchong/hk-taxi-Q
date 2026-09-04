@@ -209,6 +209,22 @@ def fenced_edges(graph: dict, clearance: dict, bar_m: float) -> list[int]:
     There is no import to share — the predicate is GDScript — so the two are
     expected to agree and `verify_road_graph.gd` re-derives it a third time from
     `city.json`'s own arrays. A divergence is a finding, never a bar to retune.
+
+    🔴 **The level filter became LOAD-BEARING on 2026-09-04 and reads as
+    belt-and-braces.** Until then every off-grade row was `NOT_MEASURED` end to
+    end, so `starved` skipped them whatever this line did; now `clearance.py`
+    publishes level 1 and the filter is the only thing standing between a
+    measured off-grade width and a barrier row across a live ramp. ⚠️ **It is at
+    0 of 45 on this bundle and it is reachable** — `e208` FLEMING ROAD reads
+    2.00 m, under the lane bar and over the car's own 1.80 m — so read
+    `test_an_off_grade_edge_under_the_bar_is_not_fenced` rather than the count,
+    which is `Q72`'s rule about a counter that cannot go non-zero.
+
+    🔴 **Not an oversight to close: the off-grade network is closed ALREADY, at
+    its touchdowns** (`fence.touchdown_levels`), and a second barrier partway up
+    a ramp would stand behind that one — `ends_behind_another_fence`'s own case,
+    except split across two populations that do not share the counter. What
+    `P4-1` owes is opening the level, not fencing it twice.
     """
     levels = {int(edge["id"]): int(edge.get("elevation_level", 0)) for edge in graph["edges"]}
     # `clearance.json`'s array *is* `ClearanceReport.corridor_m` serialised, so the

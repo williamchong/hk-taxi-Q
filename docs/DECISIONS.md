@@ -16188,7 +16188,9 @@ the cap with a span, never with an overhang.**
 
 `clearance.walk(levels=...)` and `centreline_error.py --levels` are knobs, both defaulting to
 `(0,)`. ✅ **The clearance default is proved inert**: the walk reproduces the shipped
-`clearance.json` byte-for-byte after the change.
+`clearance.json` byte-for-byte after the change. ⚠️ **The clearance default moved to `(0, 1)` on
+2026-09-04 (`Q108`)** — `centreline_error.py`'s did not, and `narrowing.py` is pinned at `AT_GRADE`
+beside it.
 
 ### ✅ Level −1 is fixed, and the reason it was left alone was refuted rather than outvoted
 
@@ -16343,7 +16345,8 @@ numbers it now has.
 Done in three commits so the risky half could be proved inert before it published anything.
 
 **1. The survey's levels became config, defaulting to `(0,)`** — `clearance.walk(levels=...)`'s rule
-at a second key. `roadgraph.json` rebuilt **byte-identical** (md5 `bc2a4a27…`), and the switch was
+at a second key. ⚠️ **Both are `(0, 1)` since `Q108`**, and `hong_kong.yaml` already carried
+`carriageway_survey.levels: [0, 1]`; a test now pins the two together. `roadgraph.json` rebuilt **byte-identical** (md5 `bc2a4a27…`), and the switch was
 mutation-checked rather than read: 737 edges walked at `(0,)`, 782 at `(0, 1)`, 797 at `(0, 1, -1)`.
 
 **2. The deck walk was added and published nothing.** `roads.py` already reads `INFRASTRUCTURE` as a
@@ -16787,7 +16790,11 @@ two as one measurement.
   make because it brute-forced `e132` from its own geometry.
 - ✅ **The pipeline corroborates, and it reproduces `Q103`'s own published figures exactly.**
   `clearance.walk(levels=(0,1))` reads `e208` **2.50**, `e306` **3.00**, `e257` **3.75**, `e450`
-  **4.00**, 21 starved. So the two instruments **agree on membership at 0.5 m and finer** — both
+  **4.00**, 21 starved. ⚠️ **Two of those four widths have since moved and the membership has
+  not**: `Q107` cut the off-grade ribbon to its deck and `Q108` corrected the frame the section is
+  taken in, so the shipped stage reads `e208` **2.00** and `e306` **2.50** — still 21 starved, still
+  naming those two and not `e257` or `e450`. The corroboration below stands on the membership,
+  which is why it survives the numbers. So the two instruments **agree on membership at 0.5 m and finer** — both
   name `e208` and `e306` and neither names `e257` or `e450` — and the published 4-against-2 gap is
   the 1.0 m bin in its entirety. That is `Q51`'s `e132` shape at a second population: the grader
   converges on the pipeline as its plan bin approaches `CELL_M`.
@@ -17753,3 +17760,170 @@ than by a counter.
 **See.** `Q105` for the pricing and the paint-not-width licence · `Q106` for the frame this is
 measured in · `Q103` for the median it decomposes · `Q54` for why it may only cut · `Q57` for the
 two populations · `Q62` for the frame · `Q19` for the cell offset the two tools keep
+
+## `Q108` — The off-grade network publishes a clearance, and the frame it is measured in was wrong first
+
+`Q103` measured that the off-grade network is reachable by driving at it and that no instrument
+grades it, then deferred the fix: `clearance.LEVELS` stayed `(0,)`, so all 60 off-grade edges
+published `clear_width_m: -1.0` and `e208` FLEMING ROAD's parapet existed in a drive report and
+nowhere a consumer could read it. `P4-1`'s precondition. The blocker `CLAUDE.md` named —
+*"needs `carriageway_occupancy.py` to gain the same knob first"* — shipped 2026-09-03.
+
+### 🔴 The stage had `Q106`'s defect, and level 0 is what hid it
+
+`clearance.walk` built each cross-section as `[-half, +half]` about the published centreline and
+never read `roadsurface.json`'s `offset_m`. That is exactly what `Q106` found in four graders, and
+this is the fifth — **the one that publishes**. It was invisible because the offset is `0.0` on all
+737 level-0 edges, and it stops being invisible at precisely the moment the level is published:
+
+| | |
+|---|---|
+| level-1 edges with a non-zero station offset | **36 of 45** |
+| worst | **4.95 m** (`e337`), then 4.53 (`e272`), 3.70 (`e304`) |
+| their half-widths | ~2.8 m |
+
+At `e337` a section about the centreline and the ribbon it is meant to measure barely intersect.
+🔴 **And the offset had to be NEGATED**: `walk`'s `across` is `[-forward.z, forward.x]`, the
+**right** of travel that `pipeline/carriageway.py::_stations` also emits, while `offset_m` is
+published in `surface.mitres`' frame, the **left**. Read the wrong way it mirrors every off-grade
+section onto the far side of its own deck and publishes a full, plausible table —
+`Q78`'s defect at a third instrument. `test_the_walk_normal_is_the_negation_of_mitres` pins it
+against `mitres` rather than a literal.
+
+⚠️ **The fix moved the answer, which is the argument for doing it first.** Measured before it,
+`e208` read **1.25 m** and three level-1 edges starved; measured on the strip the ribbon is actually
+drawn on, `e208` reads **2.00 m** and two do. A build that had published without this would have
+recorded the first set.
+
+### ✅ Level 0 is byte-identical, and it is the offset being 0.0 rather than a branch
+
+The fix alone, with `LEVELS` still `(0,)`, reproduced `clearance.json` at `fa5bcf39…` — the same
+hash, byte for byte. Then the level moved, and the republished document differs on **45 rows, all
+level 1; 0 at grade and 0 at level −1**. Three mutations of the new code each fail a test: the sign
+flipped, the offset term dropped, and the `offset_m` requirement relaxed to a zero default.
+
+### ✅ What the bundle now says
+
+| | before | after |
+|---|---|---|
+| edges with a measured corridor | 737 | **782** |
+| under one lane (3.20 m) | 19 | **21** — `e208` 2.00 m, `e306` 2.50 m |
+| under the car (1.80 m) | 14 | **14** — no off-grade edge reaches it |
+| `fence.json` `fenced_edges` / `barriers` | 14 / 253 | **14 / 253**, unchanged |
+
+`e208` is now in the population `RoadGraph.is_passable` refuses and *not* in the one `fits_car`
+fences — which is the right answer on both bars and was not knowable before. `schema_version` does
+not move: `clear_width_m` means what it always meant, and no consumer would be **wrong** to keep its
+old interpretation (hard rule 5). What changed is that fewer rows are refusals.
+
+### 🚫 Level −1 is left out, and it is not an oversight
+
+A bore has no deck for this walk to find, and `e489`'s defect is **0.22 m of headroom published as a
+0.00 m width** — a horizontal corridor cannot express a vertical fact, so folding the 15 tunnels in
+would publish a number meaning something different from every other row in the document.
+`carriageway_survey.levels` leaves them out for the same reason and
+`test_the_shipped_levels_match_the_width_surveys` now pins the two keys against each other.
+`_write` still refuses anything but `LEVELS`, so what the knob buys is the level the bundle does not
+carry — which is how level 1 itself was read before it shipped.
+
+### 🚫 The fence is NOT extended, and the data says so as well as the design
+
+`fenced_edges` filters to level 0, and `_adjacency` builds the mouth graph from level-0 edges alone.
+🔴 **That filter was belt-and-braces and is now load-bearing**: off-grade rows were all
+`NOT_MEASURED`, so `starved` skipped them whatever the line did. It is the only thing between a
+measured off-grade width and a barrier row across a live ramp. ⚠️ It is **0 of 45 today and
+reachable**, so `test_an_off_grade_edge_under_the_bar_is_not_fenced` is mutation-checked rather than
+read (`Q72`). Extending it would also be wrong twice: no off-grade edge reaches the car bar, and the
+network is already closed at its touchdowns (`fence.touchdown_levels`) — a second barrier would
+stand behind the first, `ends_behind_another_fence`'s own case across two populations that do not
+share the counter.
+
+### 🔴 Publishing one level found the same population bug in three tools
+
+Each compared "what the document says" against "what I walked" while silently assuming one
+population. All three were correct only while the pipeline published a single level.
+
+- **`clearance_reconcile.py`** — `published()` read every row in `city.json` while `grade()` walked
+  level 0. Unfixed, the three off-grade starved edges land in `pipeline_set` with no grader row
+  opposite, printing three `judged by only one instrument` lines and moving `EXPECT_PIPELINE` for
+  something that is not a disagreement. **A ratchet over two populations is not a ratchet.** One
+  `--levels` now reaches both halves, defaulted from the grader's constant and warned against the
+  pipeline's.
+- **`narrowing.py::check_baseline`** — refused a correct build outright with *"rebuild the region"*,
+  comparing 782 published edges against its own 737-edge baseline. The tool is pinned at `AT_GRADE`
+  deliberately: it sweeps `floor_default_m`, and off-grade the floor comes from
+  `floor_by_elevation_level`, a knob it does not touch, so the 45 extra edges could not move at any
+  value in the column.
+- **`tools/centreline_error.py`** — passed four arguments to a three-argument `check_baseline` and
+  raised `TypeError` on every run. `Q100`'s rename dropped `city.id` from the signature and left the
+  call site alone. Pre-existing and unrelated; found only because publishing a level obliged a
+  re-run of this grader.
+
+### ✅ The ratchet moved, and the at-grade halves prove it is a population and not a retune
+
+| | recorded | now | of which at grade |
+|---|---|---|---|
+| `EXPECT_PIPELINE` | 19 | **21** | **19** |
+| `EXPECT_GRADER` | 21 | **25** | **21** |
+| `EXPECT_DISAGREEMENT` | 4 | **6** | **4** |
+
+Every at-grade sub-count is unchanged. The pipeline gained `e208` and `e306`; the grader gained
+those plus `e257` and `e450`, and the two new disagreements are both grader-only and both CANAL ROAD
+FLYOVER. ⚠️ The gap widens off-grade for the reason it widens anywhere — the grader's 1.0 m plan
+cell against the pipeline's 0.5 m — and a parapet is thin in plan, which is the shape of edge that
+gap is largest on. 🔴 **A move that cannot name its at-grade half is a bar retuned to fit, not a
+finding.**
+
+### ⬜ What this does not do
+
+Nothing at runtime. `RoadGraph.is_drivable` is level 0 and both `impassable_edge_ids` and
+`fenced_edge_ids` filter through it, so the level-1 widths change numbers nothing reads until `P4-1`
+reverses that too. **That is the point** — the refusal is measured before the network opens rather
+than after. `carriageway_occupancy.py` still fails on its 21 starved level-0 edges, which is `Q19`'s
+open finding and untouched here.
+
+### ✅ What review changed
+
+- 🔴 **The constant's own comment carried the PRE-FIX number** — *"`e208` reads 1.25 m, under the
+  car's own 1.80 m"* — which is the reading the frame fix removed, in the sentence that justifies
+  moving `LEVELS` at all. It is 2.00 m and it is **over** the car bar. Three other places in the
+  same change said so correctly, which is what makes a single stale copy the dangerous shape.
+- 🔴 **`test_the_walk_normal_is_the_negation_of_mitres` was a tautology and its docstring claimed
+  the opposite.** It rebuilt `walk`'s normal by hand and compared *that* to `mitres`, so flipping
+  the production sign left it green — `Q72`'s defect inside the guard against `Q78`'s. The normal
+  is now `_across`, named so the test can read it; mutation-checked, and a sign flip now fails
+  **two** tests where it failed one.
+- 🔴 **`check_baseline` restated `ClearanceReport.tightest`'s min-fold a third time**, and
+  `fence.py`'s comment already claimed this module reused it. It does now. ⚠️ This is not
+  `clearance_reconcile.published`'s licensed second implementation — that one grades what shipped,
+  where `narrowing.py` says of itself that it *"imports `pipeline.clearance` and reuses it whole"*.
+- 🔴 **`published` defaulted an unknown edge INTO the gated population** with `.get(…, 0)`, the
+  direction `split_by_level` and `surface.py`'s `offset_m` both refuse. Indexed now, via a shared
+  `edge_levels(graph)` on `road_names`' precedent — the comprehension had reached five sites, twice
+  in one run of `centreline_error.py`.
+- 🔴 **The test helper's `levels or …` silently replaced an explicitly empty map** with the
+  at-grade default, defeating the very test that proves the default is gone. `is None` now, and it
+  was the test that caught it.
+- ⚠️ Three level spellings in one tool — `0/1`, `+0,+1` and a local join — in the tool whose job is
+  showing that two instruments judge one population. It uses the grader's labeller.
+- ⚠️ *"of those, N are off-grade"* hangs on a line that prints only when level 0 is **clean**, so a
+  bundle starved off-grade and clear at grade would hang the phrase on nothing. Newly reachable
+  because the default moved; reworded, and the off-grade level set is bound once instead of built
+  twice.
+- ⚠️ Two docstrings called the walked population *"drivable"*, which is level 0 by definition and
+  the thing `Q13` means. And the constant borrowed `carriageway_occupancy`'s reason for refusing
+  negatives, which is a **denominator** argument and not this one's deck argument — two arguments
+  landing on one exclusion, which is worth more than one would be.
+- ✅ **Measured rather than argued**: the level move costs **+8.2%** occupier triangles, **+5%**
+  wall time, **+2%** peak RSS. The prune's global height band and `_Sections.depth` are *unchanged*,
+  so the viaducts admit zero extra triangles at the height test — the blow-up did not happen, and
+  it is structural rather than lucky. ⚠️ A region whose level-1 decks stood above every level-0
+  sample would widen that scalar band and this would not hold.
+- ✅ All four refactored graders re-run behaviour-neutral: reconcile **21 / 25 / 6** exit 0,
+  narrowing baseline reproduces on all **737**, `centreline_error` exit 0, occupancy still exit 1
+  on `Q19`'s 21.
+
+**See.** `Q13` for the refusal that expired · `Q103` for the deferral and the reachable network ·
+`Q106` for the frame · `Q107` for the clamp that makes `half_width_m` a distance between rails ·
+`Q51` for the ratchet · `Q19` for the starved set · `Q72` for why a reachable-at-zero counter is
+mutation-checked · `Q78` for a quantity that cannot report its own direction

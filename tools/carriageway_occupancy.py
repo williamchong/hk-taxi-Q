@@ -146,24 +146,31 @@ log = logging.getLogger(__name__)
 BUMPER_LOW_M = 0.30
 BUMPER_HIGH_M = 2.00
 
-# The elevation levels the corridor half judges. 🔴 **`(0,)`, and the default
-# must stay there.** `--levels` is `pipeline/clearance.py`'s knob at the second
-# instrument, and it exists for the same reason: `P4-1` needs the off-grade
-# corridor measured *before* the bundle carries it, and `Q103` deferred exactly
-# that. The area half above has always walked every level and reported per
-# level; only this half was bound to 0.
+# The elevation levels the corridor half judges. ✅ **`(0, 1)` since
+# 2026-09-04, moved in the same diff as `pipeline.clearance.LEVELS`** — the
+# bundle now carries a level-1 `clear_width_m`, so this half grades the
+# population the pipeline publishes rather than a subset of it. `--levels` is
+# still that stage's knob at the second instrument and it still buys the level
+# the bundle does not carry: level -1, which `_levels_argument` refuses below
+# for its own reason.
 #
-# ⚠️ **Moving the default moves `clearance_reconcile.py`'s `EXPECT_GRADER`**,
+# 🔴 **Widening this does NOT widen the gate.** `split_by_level` keeps the
+# off-grade rows out of `--accept-corridor-lanes` and `off_grade_report` prints
+# them apart, because ground proud of a street and a parapet on a viaduct want
+# opposite fixes (`Q57`). What changed is that the second population is now the
+# default rather than something a flag had to ask for.
+#
+# ⚠️ **Moving this default moves `clearance_reconcile.py`'s `EXPECT_GRADER`**,
 # and `Q51`'s ratchet is what keeps the pipeline's count and this tool's count
 # describing one bundle — so a default flipped here and not there stops the two
-# figures being about the same thing.
+# figures being about the same thing. That is why the two moved together.
 #
 # ⚠️ **The parse below is written out rather than imported from
 # `pipeline.clearance`.** `ground_clearance.py` imports that module's bumper
 # *bounds* deliberately and the rule attached to it is explicit: a shared bound
 # is not a shared reading, and no second import comes in on that precedent. The
 # whole value of this tool is that it shares no method with what it grades.
-CORRIDOR_LEVELS = (0,)
+CORRIDOR_LEVELS = (0, 1)
 
 # Plan cell for the occupier index, and **the dominant error term in every
 # corridor width below** — not `--across-m`, which only quantises the answer.
@@ -1400,7 +1407,7 @@ def main(argv: list[str] | None = None) -> int:
         # other instrument and `Q51`'s ratchet is why they move together.
         help=(
             "comma-separated elevation levels to judge a corridor on "
-            "(default: 0; others are reported, never gated)"
+            "(default: 0,1 — the levels the bundle publishes; only 0 is gated)"
         ),
     )
     parser.add_argument(
@@ -1644,15 +1651,24 @@ def main(argv: list[str] | None = None) -> int:
         )
     if not starved:
         log.info("    every drivable level-0 edge keeps a lane clear")
-    if args.levels != CORRIDOR_LEVELS:
+    off_grade_levels = tuple(level for level in args.levels if level != 0)
+    if off_grade_levels:
+        # 🔴 **Asked of the LEVELS WALKED, never of whether they are the
+        # default.** Written as `args.levels != CORRIDOR_LEVELS` this line said
+        # nothing on a default run — which was right while the default was
+        # level 0 alone and became exactly backwards the moment it was not,
+        # silencing the warning on every run that now carries off-grade rows.
         # Said out loud rather than left to the `lvl` column, because the whole
         # risk of a widened run is a reader carrying an off-grade figure to a
         # level-0 bar.
+        # ⚠️ **Not "of those"**: the line above it prints only when level 0 is
+        # clean, so with the default now `(0, 1)` a bundle starved off-grade and
+        # clear at grade would hang the phrase on nothing.
         log.info(
-            "    of those, %d are off-grade — REPORTED, never gated: level %s was asked for, "
-            "and only level 0 is judged against --accept-corridor-lanes",
+            "    %d edges below the bar are off-grade (level %s) — REPORTED, never gated: "
+            "only level 0 is judged against --accept-corridor-lanes",
             len(off_grade),
-            _levels_label(tuple(level for level in args.levels if level != 0)),
+            _levels_label(off_grade_levels),
         )
     log.info(
         "    %d edges judged from %d stations; %d stations too trimmed to judge",
@@ -1677,8 +1693,10 @@ def main(argv: list[str] | None = None) -> int:
             structure_class=structure_class,
         )
         # Its own function and its own population, for the reason that one
-        # states in red — and silent unless `--levels` asked for a second one,
-        # which is what keeps the default run's output unchanged.
+        # states in red. ⚠️ **It goes quiet on an empty population and not on a
+        # flag** — `off_grade_report` returns early when nothing off-grade was
+        # judged — which is what let the default move under it without this
+        # call site changing.
         off_grade_report(
             found,
             graph,
@@ -2445,6 +2463,26 @@ def occupier_report(
         "up to that same plan bin, either side"
     )
     log.info("    no bar is applied above — this names a mechanism, it does not price a fix")
+
+
+def edge_levels(graph: dict[str, Any]) -> dict[int, int]:
+    """Edge id to its elevation level, for the tools that judge a population.
+
+    `road_names`' shape and `road_names`' reason: four tools were spelling this
+    comprehension out, `tools/centreline_error.py` twice in one run, and it is
+    `elevation_level`'s spelling in as many places as there are readers.
+
+    🔴 **Indexed, never `.get` with a default.** `roads.py` writes the key on
+    every edge and `read_graph` pins the schema, so a default cannot fire on
+    valid input — and on invalid input it would quietly file an unknown edge
+    into level 0, which is the *gated* population. `split_by_level` refuses a
+    default for the same reason and `surface.py` refuses one over `offset_m`:
+    an inconsistency here is a thing to hear about, not to default into a bar.
+
+    ⚠️ **`pipeline/fence.py` keeps its own copy and must** — a pipeline stage
+    cannot import `tools/`.
+    """
+    return {int(edge["id"]): int(edge["elevation_level"]) for edge in graph["edges"]}
 
 
 def road_names(graph: dict[str, Any]) -> dict[int, str]:

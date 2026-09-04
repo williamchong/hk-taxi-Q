@@ -64,11 +64,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from carriageway_occupancy import (  # noqa: E402
     ACROSS_M,
+    CORRIDOR_LEVELS,
     INDEX_CELL_M,
     SAMPLE_M,
     SPACING_M,
     Lattice,
+    _levels_argument,
+    _levels_label,
     band_map,
+    edge_levels,
     index_classes,
     road_names,
     survey,
@@ -76,7 +80,7 @@ from carriageway_occupancy import (  # noqa: E402
 )
 from deck_error import bundle_arguments, drawn_surface, load_bundle, log_bundle  # noqa: E402
 from pipeline.clearance import ACROSS_M as PIPELINE_ACROSS_M  # noqa: E402
-from pipeline.clearance import CELL_M, NOT_MEASURED  # noqa: E402
+from pipeline.clearance import CELL_M, LEVELS, NOT_MEASURED  # noqa: E402
 from pipeline.config import Config, load_config  # noqa: E402
 
 log = logging.getLogger(__name__)
@@ -96,8 +100,15 @@ log = logging.getLogger(__name__)
 # the car there. The grader condemned it at 2.93 m on its 1.0 m cell and now
 # does not, so `EXPECT_GRADER` falls 22 → 21 and the disagreement 5 → 4 by
 # exactly that one edge. Both halves are `Q51`'s gap being read, not closed.
-EXPECT_PIPELINE = 19
-EXPECT_GRADER = 21
+# ✅ **Moved again on 2026-09-04, by the LEVEL and not by the city.** Both
+# instruments now judge level 1 as well as level 0, so both counts grew by the
+# off-grade edges they condemn: the grader by 4 (`e208`, `e257`, `e306`,
+# `e450`) and the pipeline by 2 (`e208`, `e306`). 🔴 **The at-grade halves are
+# unchanged — 21 and 19, exactly what stood here before** — which is what makes
+# this the population arriving rather than a bar retuned to fit it. If a future
+# move cannot say that, it is not this kind of move.
+EXPECT_PIPELINE = 21
+EXPECT_GRADER = 25
 # Edges the two disagree about: 3 the grader condemns and the pipeline clears
 # (`e207`, `e485`, `e781`), plus `e702` the other way. ⚠️ `e99` left this list at
 # its own carve — it was the largest of the grader-only gaps at 1.57 m. ⚠️ **A single number
@@ -107,7 +118,12 @@ EXPECT_GRADER = 21
 # 2.90 m, which the pipeline reads as clear at its 0.5 m plan cell and the grader
 # still condemns at its 1.0 m one. That is `Q51`'s gap doing exactly what `Q51`
 # says it does, on one more edge.
-EXPECT_DISAGREEMENT = 4
+# ✅ **4 -> 6 on 2026-09-04**, and the two new ones are both grader-only and
+# both off-grade: `e257` and `e450`, CANAL ROAD FLYOVER. The at-grade four are
+# untouched. ⚠️ The gap widens off-grade for the reason it widens anywhere — the
+# grader's 1.0 m plan cell against the pipeline's 0.5 m — and a viaduct's
+# parapet is thin in plan, so it is the shape of edge that gap is largest on.
+EXPECT_DISAGREEMENT = 6
 
 # Plan cells the sweep bins the grader's occupiers at: the grader's own shipped
 # cell first, then the pipeline's plan cell and its across resolution — so the
@@ -120,12 +136,26 @@ EXPECT_DISAGREEMENT = 4
 SWEEP_CELLS_M = (INDEX_CELL_M, CELL_M, PIPELINE_ACROSS_M)
 
 
-def published(manifest: dict[str, Any]) -> dict[int, float]:
+def published(
+    manifest: dict[str, Any], *, level_of: dict[int, int], walked: tuple[int, ...]
+) -> dict[int, float]:
     """The pipeline's narrowest measured station per edge, as the bundle carries it.
 
     `manifest` *is* `city.json` — `load_bundle` parses it — so this reads what the
     game loads and what `is_routable` answers from, with no second opinion about
     where the numbers came from.
+
+    🔴 **Filtered to `walked`, because the grader's half is.** This read every
+    row in the document until 2026-09-04, which was the same population while
+    the pipeline published level 0 alone and stopped being one the moment it
+    published level 1: the three off-grade starved edges would have landed in
+    `pipeline_set` with no grader row opposite them, printing three
+    `judged by only one instrument` lines and moving `EXPECT_PIPELINE` for
+    something that is not a disagreement. A ratchet on two populations is not a
+    ratchet. ⚠️ **The filter is the graph's `elevation_level` and not the
+    document's** — `city.json`'s `carriageway[]` does not carry one. The two
+    filter arguments are keyword-only: they are both about levels and neither
+    reads as the other's position.
 
     `NOT_MEASURED` stations are filtered before the `min`, never clamped after:
     `-1.0` is the smallest number in any row it appears in, so folding it would
@@ -137,11 +167,14 @@ def published(manifest: dict[str, Any]) -> dict[int, float]:
     """
     tightest: dict[int, float] = {}
     for entry in manifest.get("carriageway", []):
+        edge_id = int(entry["edge"])
+        if level_of[edge_id] not in walked:
+            continue
         widths = [
             float(width) for width in entry.get("clear_width_m", []) if float(width) != NOT_MEASURED
         ]
         if widths:
-            tightest[int(entry["edge"])] = min(widths)
+            tightest[edge_id] = min(widths)
     return tightest
 
 
@@ -155,8 +188,9 @@ def grade(
     *,
     sample_m: float,
     cell_m: float,
+    levels: tuple[int, ...],
 ) -> dict[int, float]:
-    """One grader pass at one plan cell — its narrowest corridor per level-0 edge.
+    """One grader pass at one plan cell — its narrowest corridor per edge walked.
 
     ⚠️ **The lattice and the bands are passed in, not rebuilt.** Neither depends on
     `cell_m` — it reaches exactly one line, the plan bin in `index_corners` — and
@@ -168,6 +202,12 @@ def grade(
     return survey(
         lattice,
         index_classes(city, generated, manifest, tiles, bands, sample_m=sample_m, cell_m=cell_m),
+        # 🔴 **Passed, never left to the grader's own default.** The two halves
+        # of this tool have to walk one population or the comparison below is
+        # between two different questions — which is the whole claim the tool
+        # makes, and it survived only by accident while both defaults were
+        # level 0.
+        corridor_levels=levels,
     ).corridor_m
 
 
@@ -205,6 +245,20 @@ def main(argv: list[str] | None = None) -> int:
         "--sample-m", type=float, default=SAMPLE_M, help="how densely each triangle is sampled"
     )
     parser.add_argument(
+        "--levels",
+        type=_levels_argument,
+        default=CORRIDOR_LEVELS,
+        # 🔴 **One flag reaching BOTH halves**, which is the only shape that
+        # keeps this a reconciliation. Defaulted from the grader's constant and
+        # asserted below against the pipeline's, so the routine run grades the
+        # population the bundle publishes and a reader cannot silently compare
+        # a level-0 grader against an all-levels document.
+        help=(
+            "comma-separated elevation levels both instruments judge "
+            "(default: the levels the bundle publishes)"
+        ),
+    )
+    parser.add_argument(
         "--sweep",
         action="store_true",
         # Off by default because it is three grader passes rather than one, and
@@ -237,6 +291,22 @@ def main(argv: list[str] | None = None) -> int:
     manifest, tiles = load_bundle(args.generated, args.lod)
     log_bundle(manifest, args.lod)
     log.info("clearance reconciliation, lod %d", args.lod)
+    if tuple(args.levels) != LEVELS:
+        # ⚠️ **A warning and not a refusal.** Grading a level the bundle does
+        # not publish is a real thing to want — it is how level 1 was read
+        # before it shipped — but the counts it produces are not `Q51`'s, and
+        # the ratchet below would fail for a reason that is the reader's own.
+        log.warning(
+            "  --levels %s, but the bundle is published over %s — the counts below are not "
+            "Q51's and the expectations will not hold",
+            _levels_label(args.levels),
+            _levels_label(LEVELS),
+        )
+    # The grader's labeller and not a join of this file's own: `pipeline/clearance.py`
+    # spells a level set `0/1` and the grader spells it `+0,+1`, and a tool whose
+    # whole job is showing that two instruments judge one population is the last
+    # place to print a third spelling of which population that is.
+    log.info("  both instruments judge level(s) %s", _levels_label(args.levels))
     log.info("  one lane is %.2f m. In plan both instruments over-block, and the plan", bar_m)
     log.info("  cell sets how much; along the edge the pipeline samples at its own cell")
     log.info("  pitch, so it no longer misses on axis — see the module docstring. A diagonal")
@@ -246,7 +316,7 @@ def main(argv: list[str] | None = None) -> int:
     drawn = drawn_surface(args.generated, manifest)
     names = road_names(graph)
 
-    pipeline = published(manifest)
+    pipeline = published(manifest, level_of=edge_levels(graph), walked=args.levels)
 
     # Walked once and shared by every pass — see `grade`. The refusal is the
     # grader's own, and it has to be here rather than left to an empty result: a
@@ -277,6 +347,7 @@ def main(argv: list[str] | None = None) -> int:
             bands,
             sample_m=args.sample_m,
             cell_m=cell_m,
+            levels=args.levels,
         )
         for cell_m in (SWEEP_CELLS_M if args.sweep else SWEEP_CELLS_M[:1])
     }

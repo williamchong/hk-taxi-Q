@@ -76,10 +76,19 @@ class TestFencedSet:
         graph = {"edges": [_edge(1, [[0, 0, 0], [0, 0, 10]], 1, 2)]}
         assert fenced_edges(graph, _clearance({1: [-1.0, 9.0]}), 1.8) == []
 
-    def test_an_off_grade_edge_is_never_fenced(self) -> None:
-        """`Q13` refuses to hand a car an off-grade edge at all, so its clearance
-        is a Phase 4 question and a barrier there would stand where nobody can
-        drive."""
+    def test_an_off_grade_edge_under_the_bar_is_not_fenced(self) -> None:
+        """`Q13` refuses to hand a car an off-grade edge at all, so a barrier
+        there would stand where nobody can drive — and the off-grade network is
+        closed already, at its touchdowns (`fence.touchdown_levels`).
+
+        🔴 **This test stopped being belt-and-braces on 2026-09-04.** Every
+        off-grade row was `NOT_MEASURED` until `clearance.py` published level 1,
+        so the width below could not arise and the filter it guards could have
+        been deleted with everything still green. It can arise now, which is why
+        the width here is a real 0.0 rather than a refusal: what is pinned is
+        that a *measured* off-grade starvation does not reach the barrier
+        placer.
+        """
         graph = {"edges": [_edge(1, [[0, 0, 0], [0, 0, 10]], 1, 2, level=1)]}
         assert fenced_edges(graph, _clearance({1: [0.0, 0.0]}), 1.8) == []
 

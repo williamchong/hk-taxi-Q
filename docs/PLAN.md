@@ -938,6 +938,24 @@ than discovering the rest of it from a bug report.
   deck and the clamp is undefined; `e104` carries 5 of them in one run, so a fallback rule is part of
   the work rather than an edge case. ⬜ **What would lift the restriction is unchanged**: attribute
   deck extent to *this edge's* carriageway rather than to a contiguous run. `DECISIONS.md` `Q105`.
+  ✅ **The off-grade network now publishes a CLEARANCE, 2026-09-04 (`Q108`)** — `clearance.LEVELS`
+  and `carriageway_occupancy.CORRIDOR_LEVELS` are `(0, 1)`, so **782** edges carry a measured
+  corridor where 737 did and `e208` FLEMING ROAD reads **2.00 m** where it published `-1.0`. That is
+  this task's hard precondition: `is_passable` and `fits_car` read `clear_width_m`, so opening
+  `is_drivable` without it would hand the player a corridor nothing had measured. 🔴 **The stage had
+  `Q106`'s frame defect and it is the fifth tool to have it — the only one that publishes** — and
+  fixing it *moved* the answer (`e208` 1.25 → 2.00 m, three starved level-1 edges → two), so a
+  publish that skipped it would have recorded the wrong set. ✅ **`e208` lands on the right side of
+  both bars**: under the lane (3.20 m) and over the car (1.80 m), so the router refuses it and the
+  player is not fenced out — an outcome that was not knowable while the row was `-1.0`.
+  ⬜ **Still inert**: `is_drivable` is level 0 and both `impassable_edge_ids` and `fenced_edge_ids`
+  filter through it, so these widths change nothing until this task reverses that. 🚫 **Level −1 is
+  deliberately not published** — a bore has no deck for the walk to find and `e489`'s defect is
+  0.22 m of *headroom*, which a horizontal corridor cannot express; opening the tunnels to driving
+  needs a vertical instrument, not a wider `levels`. 🚫 **The fence is not extended and should not
+  be**: no off-grade edge reaches the car bar, and `fence.touchdown_levels` already closes that
+  network at its touchdowns — removing that key stays the whole of "open it properly".
+  `DECISIONS.md` `Q108`.
 
 ### Outline only — refine once Phase 3 lands
 

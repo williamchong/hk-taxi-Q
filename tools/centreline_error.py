@@ -89,7 +89,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "etl"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from carriageway_occupancy import road_names  # noqa: E402
+from carriageway_occupancy import edge_levels, road_names  # noqa: E402
 from narrowing import check_baseline, classes, moved, sweep, sweep_report  # noqa: E402
 from pipeline import gltf  # noqa: E402
 from pipeline.carriageway import (  # noqa: E402
@@ -313,6 +313,13 @@ def offsets(
     edge: no publisher draws a viaduct deck, so `--levels 1` asks the publishers
     about a road they did not survey and a low `answered` count is the finding
     rather than a failure. `tools/deck_margin.py` is what reads the deck itself.
+
+    ⚠️ **It reaches this walk and NOT the class sweep**, which `narrowing.py`
+    pins at `AT_GRADE` — deliberately, since `pipeline.clearance.LEVELS` widened
+    to `(0, 1)` on 2026-09-04 and inheriting it would have moved this tool's
+    attribution table for a reason that has nothing to do with centrelines. The
+    two halves were both level 0 before that and both are level 0 now; the flag
+    says which one it moves rather than leaving a reader to assume both.
     """
     publishers = read_publishers(city, region_id) if publishers is None else publishers
     nodes = np.array([node["pos"] for node in graph["nodes"]], dtype=np.float64)
@@ -874,7 +881,7 @@ def price_surveyed(
 def _report_authoring(
     found: dict[int, Priced],
     refused: list[int],
-    graph: dict,
+    level_of: dict[int, int],
     names: dict[int, str],
     watched: list[int],
     bar_m: float,
@@ -930,9 +937,11 @@ def _report_authoring(
     # `Q19`'s own `e99`, `e125`, `e207` and `e781` are in it. One number would
     # hide the second inside the first. ⚠️ **Read off `elevation_level`, never
     # off membership of the offsets table**: an edge with a one-vertex polyline
-    # is absent from that table and is level 0 all the same.
-    levels = {int(edge["id"]): int(edge["elevation_level"]) for edge in graph["edges"]}
-    at_grade = [edge for edge in refused if levels.get(edge) == 0]
+    # is absent from that table and is level 0 all the same. ⚠️ **Taken as an
+    # argument rather than rebuilt from `graph`**, which was the only thing this
+    # function used `graph` for — `main` needs the same map, and two
+    # comprehensions in one run is `elevation_level`'s spelling in two places.
+    at_grade = [edge for edge in refused if level_of.get(edge) == 0]
     log.info(
         "    refused: %d level-0 edges the publishers licensed no width for, and %d rows that are "
         "not level 0 and never were in scope",
@@ -1079,7 +1088,13 @@ def main(argv: list[str] | None = None) -> int:
     results = {
         scale: sweep(city, world.graph, drawn, tiles, heroes) for scale, world in worlds.items()
     }
-    check_baseline(out_dir, city.id, args.region, results[0.0])
+    # ⚠️ `city.id` was dropped from this signature by `Q100`'s rename and the
+    # call site kept it, so this raised `TypeError` on every run until
+    # 2026-09-04 — found because publishing level 1 obliged a re-run of this
+    # grader. The level map is `check_baseline`'s own new argument: the document
+    # covers `clearance.LEVELS` and this tool's sweep is pinned at `AT_GRADE`.
+    level_of = edge_levels(graph)
+    check_baseline(out_dir, args.region, results[0.0], level_of)
 
     _report_sweep(FRACTIONS, results, watched, names, rows)
     for bar, label in ((lane_m, "one lane"), (args.car_width_m, "the car")):
@@ -1115,7 +1130,7 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     found, refused = price_surveyed(city, graph, drawn, rows, tiles, heroes, args.car_width_m)
-    _report_authoring(found, refused, graph, names, watched, args.car_width_m)
+    _report_authoring(found, refused, level_of, names, watched, args.car_width_m)
     return 0
 
 
