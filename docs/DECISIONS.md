@@ -18505,6 +18505,89 @@ ribbon spanning `[−3.05, +0.10]`, so **0.77 m of that 1.57 m lane is paint on 
 the fence stands inside the marked lane, which is the same defect the user first reported as
 *"why is the fence in middle of a lane?"* (`Q103`), now wearing a lane line.
 
+### ✅ FIXED 2026-09-05 — the rim is discarded where the edge is not on structure
+
+`_deck_rims` drops the rim at any vertex whose `on_structure` is `False`, which is `_RIM_LEFT`'s own
+rule — *absence of a deck is `inf`* — applied to the case it did not anticipate: a road resting on
+the ground is as deckless as a road nobody measured. **20 vertices over 4 edges.**
+
+✅ **Inert everywhere else, and that is the proof rather than the hope.** Level 0 and level −1 are
+**byte-identical**; `railings`, `lamps`, `signs`, `arrows`, `roadmarks`, `boxjunctions`, `tramway`,
+`fence` and `carve` are **byte-identical documents**; only `clearance` moves, on the same four edges.
+
+| reading | before | after |
+|---|---|---|
+| `e208` published `clear_width_m` | 2.00 m | ✅ **2.25 m** |
+| `e208` exact corridor (`corridor_truth.py`) | 2.37 m | ✅ **2.57 m** |
+| `e208` grader corridor, 1.0 m bin | 1.35 m | ✅ **2.00 m** |
+| `e208` starved run | 32 m | ✅ **12 m** |
+| `e306` / `e257` / `e450` grader | 1.86 / 2.81 / 2.98 | 1.90 / 2.80 / 3.00 |
+| level-1 hanging (`overhang.py`) | 3.3% | ⚠️ **3.4%** |
+| `deck_margin.py` no deck under | 1,446 m² (6.6%) | 1,447 m² (6.6%) |
+| starved level-0 edges | 21 | ✅ 21, same names |
+| `clearance_reconcile.py` | 21 / 25 / 6 | ✅ 21 / 25 / 6, exit 0 |
+
+⚠️ **`overhang.py` reads 0.1pp worse and that is the instrument, not the fix** — `Q90` recorded the
+same property in as many words: it asks whether *structure* lies under the ribbon, never whether air
+does, so a ramp resting on the terrain still counts as hanging. The un-clamped metres are exactly
+the ones standing on the ground.
+
+⚠️ **The three level-1 edges that are not `e208` moved by ±0.04 m**, which is inside the grader's own
+1.0 m plan bin — they are the same reading, not a change.
+
+⚠️ **`e365` lost 0.25 m** of published clearance (4.75 → 4.50). Expected and recorded rather than
+buried: the corridor is measured *inside* the paint, so a wider ribbon can take in an occupier the
+clamp had been cutting away. `Q109`'s rule in the other direction.
+
+✅ **Held**: `tools/check.sh` exit 0, `pytest` 2,000 passing, `ruff` clean, `paint_clearance.py`
+within bounds. **Three mutations, three failures** — the discard removed, its sense inverted, and
+only one of the two rims dropped. 🔴 **The evidence is a frame** (`Q62`): one fixed camera up the
+ramp, each side shot after a forced `--import`, and the ramp mouth opens from a pinch to full width.
+
+⚠️ **A test fixture had to say what it meant**: `_edge` defaults every vertex to *off* structure,
+so the clamp fixtures were publishing a deck rim on an edge standing on nothing. Setting
+`on_structure` there is not only this gate — `Q23` draws an on-structure edge at its authored width
+rather than the playability floor — so the baseline had to declare it too.
+
+### ⬜ What the fix does NOT reach — swept across the whole region
+
+**A. Off-grade edges still cut by the clamp: 93 vertices over 18 edges, and `0` of them are off
+structure.** Every remaining cut is on a deck that is really there — `e337` CANAL ROAD FLYOVER is
+the worst at **4.32 m**, which is `Q107` working. `Q113`'s class is empty.
+
+🔴 **B. A second family the fix does not touch: `lanes` too high for the width.** Sweeping every
+vertex in the region for the lane the markings shader actually paints — the drawn ribbon divided by
+`lanes` — **105 vertices over 10 edges paint a lane under 2.50 m**, 88 off-grade and 17 at grade:
+
+| edge | lvl | `lanes` | source | `width_m` | source | arrows imply | narrowest painted lane |
+|---|---|---|---|---|---|---|---|
+| `e306` | +1 | 3 | authored | 5.80 | deck | — | 🔴 **1.15 m** |
+| `e208` | +1 | 2 | authored | 5.60 | deck | — | 1.71 m |
+| `e146` | +1 | 3 | authored | 7.93 | deck | — | 1.77 m |
+| `e450` | +1 | 3 | authored | 5.96 | deck | — | 1.86 m |
+| `e256` | +0 | 2 | floored | 3.84 | one_way_uncrossed | — | 1.92 m |
+| `e266` | +1 | 3 | authored | 6.40 | deck | — | 2.03 m |
+| `e222` | +0 | 2 | floored | 4.14 | one_way_uncrossed | 🔴 **1** | 2.07 m |
+| `e258` | +1 | 3 | authored | 7.05 | deck | — | 2.27 m |
+| `e485` | +0 | 2 | floored | 4.80 | one_way_uncrossed | — | 2.40 m |
+| `e257` | +1 | 2 | authored | 6.20 | deck | — | 2.45 m |
+
+🔴 **All seven off-grade rows are `lanes_source: authored` with no arrow evidence at all**, and that
+is not an oversight: `Q94` assigns `lanes` from a row of painted turn arrows, and **no turn arrows
+are painted on any bridge deck in this region**. The width bracket cannot help either, because their
+`width_source` is `deck` — a reading `Q103` invented from the structure rather than one a publisher
+surveyed. So on a flyover there is no published lane-count evidence, which is measured rather than
+assumed.
+
+✅ **`e222` is the one actionable row**: the graph says 2 (floored) and the **painted arrows say 1**,
+a published disagreement on a 4.14 m ribbon. One lane there is both what the paint says and what the
+width supports.
+
+⬜ **And the driver recorded what no field can express**: Street View shows the FLEMING ROAD flyover
+carrying **2 lanes on the bridge, splitting to 2+1 on landing** southbound and **1 splitting to 2
+midway** northbound. `lanes` is one number per edge, so a count that changes *along* an edge cannot
+be published at all — the graph would have to split the edge or carry a per-station count.
+
 ### ⬜ The fix, and what it must not be
 
 🚫 **Not by removing `Q107`'s clamp**: it took `overhang.py` from 4.3% to 3.3% and it is right
