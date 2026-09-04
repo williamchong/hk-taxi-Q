@@ -16611,6 +16611,12 @@ full published width — `e257` opens `6.2 x11` against a 6.20 m deck, `e450` op
 | `e257` | 2.86 m | 5 m | 254.6 m | ✅ clear at +0.00 m, occupier 0.95 m away | `CANAL ROAD FLYOVER` |
 | `e450` | 2.98 m | 2 m | 140.4 m | ✅ clear at +0.25 m, occupier 1.49 m away | `CANAL ROAD FLYOVER` |
 
+🔴 **`Q109`-corrected (2026-09-04): every `clear` in this table was measured on a ribbon that
+has since moved twice** — `Q106`'s offset and `Q107`'s clamp. On the shipped bundle the column
+reads `e208` **1.35**, `e306` **1.86**, `e257` **2.81**, `e450` **2.98** m, and `e208`'s starved
+run is **32 m** rather than 17. The centreline verdicts are re-read there too. The membership
+below is unchanged; these numbers are not.
+
 So **`Q103`'s deck-sourced width is broadly right** and what is left is localised — 8.6% of `e208`,
 10.1% of `e306`, 2.0% of `e257`, 1.4% of `e450`.
 
@@ -16671,6 +16677,12 @@ counter-example — is the stations after the occupier has walked off the far si
 | `e306` | 209 of 230 | 🔴 **10 of 230** | **0.00 m** | `+2.90` → `−0.48` by station 195 → back out to `+2.90` by 227 |
 | `e257` | 240 of 265 | ✅ **0 of 265** | 0.72 m | both rims throughout, `±1.67 … ±3.10` |
 | `e450` | 129 of 149 | ✅ **0 of 149** | 0.99 m | both rims throughout, `±1.49 … ±2.98` |
+
+🔴 **`Q109`-corrected (2026-09-04): re-run on the drawn ribbon, the SPLIT HOLDS and the numbers
+move.** `centreline occupied` reads `e208` **10 of 205**, `e306` **15 of 230**, `e257` **0 of
+265**, `e450` **0 of 149**; closest approach `e257` 0.72 → **0.34 m** and `e450` 0.99 → **1.09
+m**, so *"both rims throughout"* is `e450`'s claim and no longer quite `e257`'s. Quote the plan
+bin with either.
 
 🔴 **`centreline occupied at N of M` is the column that re-cuts the population, and `Centreline`
 could not have found it.** That one reads the *binding station*, which is one cross-section; whether
@@ -17927,3 +17939,133 @@ open finding and untouched here.
 `Q106` for the frame · `Q107` for the clamp that makes `half_width_m` a distance between rails ·
 `Q51` for the ratchet · `Q19` for the starved set · `Q72` for why a reachable-at-zero counter is
 mutation-checked · `Q78` for a quantity that cannot report its own direction
+
+## `Q109` — The four blocked bridges, re-read on the ribbon that is drawn
+
+`Q103` split the four blocked off-grade edges **2–2** on whether the occupier *moves* across the
+ribbon, and everything `P4-1` plans for them is chosen off that column: a rim-standing occupier is
+reachable by a width rule, a migrating one is reachable by neither a width nor a constant offset.
+Both readings were taken on 2026-09-03, and the ribbon has since moved **twice** — `Q106` put the
+drawn offset into `cross_section`, and `Q107` cut every off-grade ribbon back to its own deck per
+station and per side. `Q106` re-ran the *widths* and published four corrected ones; it never re-ran
+`--probe-edges`, and `Q107` then re-cut the ribbon underneath that too.
+
+This is the probe re-run on the bundle the game ships, `generated_utc 2026-09-04T10:45:15Z`.
+**Report-only: no source moved, nothing is published, no bar moved, and both tools exit as they
+did.**
+
+### ✅ The split SURVIVES, and its membership is unchanged at both resolutions
+
+| edge | `centreline occupied`, `Q103` | now, 1.0 m bin | now, matched 0.5/0.5 | closest approach, 1.0 m bin |
+|---|---|---|---|---|
+| `e208` FLEMING ROAD | 8 of 206 | 🔴 **10 of 205** | 2 of 205 | 0.00 m (was 0.00) |
+| `e306` CANAL ROAD FLYOVER | 10 of 230 | 🔴 **15 of 230** | 2 of 230 | 0.00 m (was 0.00) |
+| `e257` CANAL ROAD FLYOVER | 0 of 265 | ✅ **0 of 265** | 0 of 265 | **0.34 m** (was 0.72) |
+| `e450` CANAL ROAD FLYOVER | 0 of 149 | ✅ **0 of 149** | 0 of 149 | **1.09 m** (was 0.99) |
+
+`e208` still ends with the occupier off the far side — `189-205 clear across the whole drawn width`,
+17 stations, the same tail `Q103` identified — and `e306`'s still goes out and comes back.
+`e450` holds both rims with **0** of its 93 run rows reaching inboard of ±1.00 m, and the walk's
+nearest band edge reproduces the tool's own closest approach on all four (0.10 / 0.11 / 0.34 /
+1.09 m). So `P4-1`'s
+two-fix strategy is **confirmed, not re-scoped**, and this is the third frame the membership has
+held in.
+
+### 🔴 The two migrating edges got much worse, and `Q107`'s clamp is why — the occupier did not move, the road did
+
+Grader, shipped 1.0 m plan bin throughout, so the three columns are one population:
+
+| edge | `Q103` 2026-09-03 | `Q106` corrected, pre-clamp | **now, post-clamp** |
+|---|---|---|---|
+| `e208` | 2.33 m | 1.87 m | 🔴 **1.35 m** |
+| `e306` | 2.42 m | 1.93 m | **1.86 m** |
+| `e257` | 2.86 m | 2.86 m | **2.81 m** |
+| `e450` | 2.98 m | 2.98 m | **2.98 m** |
+
+`e208`'s starved run runs **17 m → 32 m** and its worst unbroken run 12 m → **32 m**.
+
+🔴 **`Q106`'s own version of this table quoted THREE different instruments in one column, and
+correcting it changes what that entry found.** It gives `Q103` as 2.33 / **3.09** / **3.75** /
+**4.00**, but 3.09 is `e306` at a **0.25 m** bin and 3.75 / 4.00 are the **pipeline**'s
+`walk(levels=(0,1))` figures — the grader's shipped-bin readings are 2.42 / 2.86 / 2.98. So the
+offset fix moved `e257` and `e450` by **0.00 m** where that table shows ~0.9–1.0 m, and the whole
+of `Q106`'s off-grade movement is `e208` and `e306`. ⚠️ **Its conclusion survives** — all four are
+under the lane bar on the drawn ribbon, which is what it claimed — but the *size* of the correction
+it published is two edges' worth, not four. `Q57`'s rule at the level of a single table column.
+
+🔴 **The cause is located and it is not new geometry.** `deck_margin.py --probe-edges e208` prints
+the drawn ribbon collapsing **5.60 → 5.55 → 5.35 → 4.61 → 4.40 → 3.42 m** over `occ` 166–181 — and
+that is exactly where the corridor minimum sits. `Q107` cut paint back to the deck; the corridor is
+measured **inside the paint**; so a clamp that moves no geometry still narrows every corridor it
+touches. ⚠️ **That is the cost side of `Q107` and it was not recorded** — that entry's evidence was
+`overhang.py` 4.3% → 3.3% and a frame, both of which improve. A paint clamp is a corridor change,
+and a build that clamps owes this reading.
+
+### 🔴 `e208` crosses `fits_car`'s bar in the grader and not in the pipeline, and the ratchet cannot see it
+
+`Q108` published `e208` at **2.00 m** and concluded it is refused by `is_passable` and *not* fenced
+by `fits_car` — *"the right answer on both bars"*. On the same bundle the grader reads **1.35 m** at
+the shipped plan bin and **1.80 m** at a matched 0.5/0.5, which is the car bar exactly. The two
+instruments therefore disagree about whether `fence.py` should stand a barrier on `e208`.
+
+⚠️ **`clearance_reconcile.py` is a LANE-bar ratchet and is blind to this by construction.** It reads
+**21 / 25 / 6, exit 0** — `Q108`'s values, unmoved — and books `e208` as `agree` at a `+0.65 m` gap,
+because both numbers are under 3.20 m. Every off-grade row it disagrees on (`e257`, `e450`, `e485`,
+`e781`, `e207`) is `grader-only`. 🔴 **A finding to go and look at, never a bar to retune**, and it
+is `P4-1`'s: the fence bar is the one that puts a barrier in front of a player.
+
+### ⚠️ `e257`'s margin halved, so the bin has to be quoted with it
+
+0.72 → **0.34 m** at the shipped 1.0 m bin, against **1.19 m** matched at 0.5/0.5, with **9** of its
+135 run rows reaching inboard of ±1.00 m where `Q103` described *"both rims throughout"*. It is
+still 0 of 265 on the centreline, so the split holds — but *"a width rule can reach it"* is a
+weaker claim at 0.34 m than at 0.72, and quoting either figure without its bin is `Q57`'s
+generalisation. `e450` moved the other way, 0.99 → **1.09 m**.
+
+### ✅ `deck_margin`'s registration reads cleaner under `Q107`'s selection, and it localises `Q103`'s interchange
+
+Re-read with `nearest_to_m` selecting the deck **on the ribbon** rather than nearest the centreline,
+`e208`'s first kept run reads a **5.70–5.90 m** span at `off_ctr` **−0.10 … −0.32** against a
+5.55–5.60 m ribbon — a clean registration. The **7.80–8.10 m** deck that `Q103` reported as *"7.9 m
+against a 5.60 m ribbon"* appears only from `st` 71, where `off_ctr` runs **+1.43 → +2.55**. So that
+reading is **localised to the interchange half of the edge** rather than describing the edge, which
+is a smaller claim than the one `Q103` made and points the same way. `e306` stays the clean control
+at `off_ctr` **−0.25 … +0.68**. `e208`'s one `centreline off the deck` station survives at `st` 93.
+
+### 🔴 The recorded `a59ef0af…` digest is not a control any more, and could not have been
+
+`Q103` recorded `--corridor-report` at md5 `a59ef0af55d535be2c7f085d442f0c33` and `Q106` and `Q107`
+both leant on byte-identity. It reads `a8df3c8b…` today at `--levels 0`, and **two structural
+reasons make byte-identity unreachable rather than a regression**: the report's first line carries
+the bundle's own `built <timestamp>`, so any rebuild breaks it; and the area half has *always*
+walked every level and prints its `level +1` rows regardless of `--levels`, so any off-grade
+geometry change breaks it too. ⚠️ **A digest over a report that names its own build is a control
+that expires at the next build** — say what it is pinning, or pin the numbers.
+
+✅ **Level-0 inertness held on the numbers instead**, which is the check that was actually wanted:
+**21** starved level-0 edges with the same worst readings (`e125` 0.48, `e314` 0.49, `e546` 0.49),
+gated shares **`BUILDING` 1.324% · `INFRASTRUCTURE` 1.104% · `LANDMARK` 0.093%**, coverage 99.8%.
+
+### ⬜ What this leaves `P4-1`
+
+- The 2–2 split is confirmed and `e208`/`e306` still need something neither a width nor a constant
+  offset gives.
+- `e208`'s **1.35 m** is a new number in front of the fence bar, and the grader and the pipeline do
+  not agree about it. That is the next thing to settle, and it is not settled by moving a bar.
+- 🔴 **A paint clamp is a corridor change.** Whatever `P4-1` does next off-grade, the four corridor
+  readings and the starved runs come with it, before and after.
+
+### ⚠️ Two defects found by reading, recorded and not fixed
+
+- `tools/carriageway_occupancy.py:1553` logs `"... sum to its 5.17%% headline ..."` with **no
+  format arguments**, so `logging` performs no `%`-substitution and the literal `5.17%%` reaches the
+  reader. The 5.17% is also stale against the run's own **3.602%** total, which is `Q22`'s figure
+  moving under a sentence that names it.
+- `occupier_walk`'s run comment still says `cross_section` *"emits left rim inward"* where it starts
+  at `offset_m − half_width_m`, the **right** rim under `left_of`. Signs correct, label wrong;
+  `Q103` recorded it unfixed and it is unfixed still.
+
+**See.** `Q103` for the split this re-reads and for the two tables it annotates · `Q106` for the
+offset · `Q107` for the clamp whose corridor cost this is · `Q108` for the published `2.00 m` and
+the ratchet · `Q51` for what that ratchet does and does not grade · `Q57` for why the four never
+share an acceptance number · `Q58` for why a bound that cannot be swept is a trap

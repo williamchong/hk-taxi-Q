@@ -956,6 +956,24 @@ than discovering the rest of it from a bug report.
   be**: no off-grade edge reaches the car bar, and `fence.touchdown_levels` already closes that
   network at its touchdowns — removing that key stays the whole of "open it properly".
   `DECISIONS.md` `Q108`.
+  ✅ **The blocked-bridge probe was re-run in the corrected frame 2026-09-04 (`Q109`), and the
+  strategy it feeds is CONFIRMED rather than re-scoped.** `Q103`'s 2–2 split was measured before
+  `Q106`'s offset and `Q107`'s clamp; re-read on the shipped ribbon it survives at both resolutions,
+  membership unchanged — `centreline occupied` `e208` **10 of 205** and `e306` **15 of 230** against
+  `e257` and `e450` at **0**. So this task still owns two edges that neither a width nor a constant
+  offset reaches, and two that a width could.
+  🔴 **But the two migrating edges are much worse and `Q107` is why**: `e208` 2.33 → 1.87 →
+  **1.35 m** and `e306` 2.42 → 1.93 → **1.86**, starved run 17 → **32 m**, against `e257` and
+  `e450` all but flat at 2.81 and 2.98, with `deck_margin.py --probe-edges` showing the drawn ribbon collapsing **5.60 →
+  3.42 m** over exactly the stations that carry the minimum. The occupier did not move — the paint
+  did, and the corridor is measured inside the paint. ⚠️ **A paint clamp is a corridor change**, so
+  anything this task does off-grade owes the four corridor readings and the starved runs before and
+  after.
+  🔴 **`e208` now crosses `fits_car`'s bar in ONE instrument only**, which is this task's next
+  question and is not answered by moving a bar: the grader reads **1.35 m** at the shipped plan bin
+  and **1.80 m** matched, against the **2.00 m** the bundle publishes and the line above calls *"the
+  right side of both bars"*. ⚠️ **`clearance_reconcile.py` cannot see it** — it grades the lane bar,
+  reads 21 / 25 / 6 unmoved, and books `e208` as `agree` at a +0.65 m gap. `DECISIONS.md` `Q109`.
 
 ### Outline only — refine once Phase 3 lands
 
