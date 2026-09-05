@@ -131,7 +131,7 @@ wins.
 | `Q100` | **Hong Kong is the only city, and its config is the single source of truth** | 🟢 **Closed 2026-08-31 — the premise is retired, not refuted.** `etl/config/cities/` held one file for the project's whole life and nothing ever loaded a second CRS, schema or bounds; the city layer cost a `--city` flag on 17 stages and 22 tools and a path segment on every cache and output, and bought nothing anyone called. ✅ Collapsed: `etl/config/hong_kong.yaml`, `load_config()`, `etl/sources/<source>`, `etl/out/<region>`, `Config`; the constants that *are* the city — the CRS pair, drive-on-the-left, `TS115`/`TS131`–`TS133` — live in `pipeline/hongkong.py`. ⚠️ **Regions survive** (`Q6`, `Q10`) and **hard rule 4 survives**: vocabulary and tuning stay in the yaml, and every config-versus-code grader is unchanged. ✅ Every step graded byte-identical against the pre-work bundle (`Q96`); `city.json`'s `city_id`/`source_crs` still written, so no schema bump. 🚫 `signals.py` kept latent (`Q77`), guarded by a test. ⚠️ Fifteen records cite the second city as a reason; each stands on its other reason and none is rewritten |
 | `Q101` | **Refusals made against one dataset, re-read against the estate that grew** | 🟢 **Closed 2026-08-31 — nine rows, one negative measured.** Five publishers now cover pedestrian crossings/footways (re-opened, the `P3-27` candidate); speed limits stay `Q65`'s HOLD on scope; road text stays NO-GO but its licence half fell with `Q79`; the three kerb registrations predate `Q95`'s measured width and are re-opened as a measurement; the rest defer to the tasks that consume them. 🔴 **The `.gdbtable` domain lead closes negative**: the scan that reads `LP - Lamp post` back out of iB1000's system tables finds no coded-domain content anywhere in dTAD, so `Q60` and `Q76` keep their written-vocabulary rules. Outbound data sharing closed as "not now" (`Q100`) | 🟢 Closed |
 | `Q102` | **The vision reader is withdrawn on cost, and the channel goes with it** | 🟢 **Closed 2026-08-31 — the user's call, and withdrawn rather than refuted.** `tools/facade_grammar.py` was the only API caller in the repo; it, `podium_error.py`, the `facade_survey:` block, the shader's survey half and `anthropic` are gone. 🔴 **`TEXCOORD_1` was removed, not shipped all-zero** — zero was a legal code meaning "refused", so an all-sentinel tile is indistinguishable from a survey that declined every building; `schema_version` 19 → **20**. ⚠️ `Q46`'s `quiet_*` tier had to go with it or it would have muted the whole city. ✅ `Q44`, `Q45`, `Q43`'s split and the hue survey all survive — they run off the hash. ⚠️ A/B refuted "byte-identical": **1.59%/1.61%** of pixels move by **≤2 of 255**, whole-frame `L*` **+0.0003**, geometry byte-identical, sky and road untouched — compiler precision, measured rather than argued |
-| `Q115` | **What repeats ships as a prop with placements; what is measured stays merged** | 🟡 **Open — `P5-1` built 2026-09-06, `P5-2`–`P5-6` planned.** A `MultiMesh` costs the draw call the merged glb costs (+1 against +36 for per-scene instancing, measured on the fence), so the budget stays. Signs, lamps, arrows and the barrier family modularise; the road, the box junctions, the stop lines, the ETL registrations and the draw-call budget do not — each refusal carries its number |
+| `Q115` | **What repeats ships as a prop with placements; what is measured stays merged** | 🟡 **Open — `P5-1`, `P5-2`, `P5-3` built 2026-09-06, `P5-4`–`P5-6` planned.** A `MultiMesh` costs the draw call the merged glb costs (+1 against +36 for per-scene instancing, measured on the fence), so the budget stays. Signs, lamps, arrows and the barrier family modularise; the road, the box junctions, the stop lines, the ETL registrations and the draw-call budget do not — each refusal carries its number |
 | `Q116` | **Two regions meet at a hard edge, and the join decides where the cut is, not the unit** | 🟡 **Open, owned by `P5-7`.** A whole-Hong Kong model is refused twice (float32 at 38 km, and ×50 the metres). The cut moves from the rectangle to the graph — an edge belongs whole to one region and boundary nodes are shared — and the streaming unit stays the tile: per-edge is 737 draw calls a region, per-region is the always-resident bundle that fails at scale |
 
 | ID | Decision | Status |
@@ -19281,7 +19281,48 @@ JSON's indentation is 55% of its bytes and stays, by `documents.py`'s own argume
 - `is_text_mesh` is the inverse of `text_mesh_name` on both sides, pinned; the 4 dp of a placement
   is reasoned (float32 spacing at region scale) and the tests derive their tolerance from it.
 
-**Status.** `P5-1` and `P5-2` built and reviewed; `P5-3`–`P5-6` planned in `PLAN.md`, not started.
+### ✅ `P5-3` is built — the lamps are one prop, and the city is its placements
+
+`lamps.glb` carries **one mesh, `LPO`, of 40 triangles / 78 vertices** — a 9 m column, its arm and
+its lantern, drawn at the origin with the arm north — where the merged build carried 35,680.
+`lamps_placements.json` stands it **892** times at the compass bearing of each column's arm, the
+partition `placements + placements_refused == drawn` asserted in the stage. `lamps.glb` is
+**2,377,500 → 3,568 B** and the document 158,355 B; `lamps.json` is schema **2**, `city.json`
+**24**. The entry shape, the 4 dp rounding, the drawn totals and the document writer moved out of
+`signs.py` into `pipeline/placements.py`, shared by both layers, and `GeneratedPlacements.check_join`
+is the one graded join, shared by `verify_signs.gd` and `verify_lamps.gd`.
+
+**Every counter is byte-identical** — both partitions, `shift_m` n=1,127, `min_kerb_clearance_m`
+0.0313, `lantern_overhang_m`, `lanterns_past_centreline` 0, both spacing distributions,
+`gaps_over_report_m` 17, `facing_away` 0 asked of the library. The only fields that move are
+`bytes`, `aabb` (by up to 6 mm, see below) and the new `library_*` / `placements*` keys.
+
+🔴 **The stood library is NOT the merged mesh to the millimetre, and the commit message understated
+it.** The column's hexagonal prism ring is now seeded from its own arm rather than from world `X`,
+so it turns with the stand — which is what makes one library mesh serve 892 headings — and its
+corners therefore sit at different angles from the merged build's axis-aligned ring. Measured over
+all 892 columns: the arm and lantern vertices (48 of 78) agree to **0.1 mm**; the 30 column-ring
+vertices differ by up to **46.6 mm as a set** (2 × 0.09 m × sin 15°, the most a hexagon can turn
+before it repeats) and 0.18 m row-for-row (a corner relabelled as its neighbour). The commit
+message's "12 mm on a 45 mm radius" had the radius wrong — `column_radius_m` is **0.09**. The
+`aabb` moves by the same rotation, at most 6 mm on the plan axes.
+
+**Evidence.** `check.sh` exit 0; `verify_lamps.gd` reads *892 placements stand 1 library meshes*.
+The prop's own extent is **0.320 × 9.050 × 2.078 m** against the 1,646 m the merged mesh was
+quantised over (`Q82`) — the reason for turning compression off is gone from this layer, and the
+setting stays, because the road, the tiles and the fence are still region-wide. Draw calls on the
+throttle route, `--hold=accelerate@0.3+5.7`: **100/99/98/100/100/99 → 100/99/98/100/100/99**, so
+`1 → 1` holds; one `MultiMesh` replaced one mesh and the shadow passes multiplied nothing.
+⚠️ **`prims` falls by 106,920 ≈ 35,680 × 3 at t=1 while nothing stops being drawn**: the
+rendering-info readout counts a `MultiMesh`'s *base mesh* once per pass, not per instance, so
+from `P5-2` on `prims` no longer proxies drawn triangles on a prop layer — it was true of the
+signs' 20,234 triangles too and went unremarked. Frames, each side shot twice and `cmp`-identical:
+`Q27` street **1,160 of 2,073,600 px** differ (max channel 47) in a region covering the two lamp
+columns in view; the Hennessy Road camera (`--camera=1038.9,7.0,471.2 --look=1050.1,3.6,466.8`)
+**5,203 px** (max 51), again the columns' outlines — the 47 mm ring rotation, seen edge-on.
+
+**Status.** `P5-1`, `P5-2` and `P5-3` built and reviewed; `P5-4`–`P5-6` planned in `PLAN.md`, not
+started.
 
 **See.** `Q116` for the join · `P3-29` for the measured `MultiMesh` · `Q82` for the quantisation ·
 `Q62` for why each step owes a frame · `Q92` for why the conformed paint cannot be a prop · `Q25`

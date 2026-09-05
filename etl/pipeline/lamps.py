@@ -450,9 +450,11 @@ def _strut(
     A library column is drawn once with its arm north and stood at the bearing
     of the arm it was given, so every corner of its ring has to turn with the
     arm too; seeded from world `X`, the ring stayed axis-aligned in the merged
-    build and the stood library differed from it by up to 15° of ring — 12 mm
-    on a 45 mm radius, invisible and not identical. `tests/test_lamps.py` pins
-    the two equal.
+    build and the stood library differed from it by up to 30° of ring — its
+    corners **46.6 mm** from the merged build's on the 90 mm column radius,
+    measured over all 892 columns (`Q115`), invisible from the road and not
+    identical. `tests/test_lamps.py` pins the library against the in-place
+    draw, which is the ring as it turns with the arm.
 
     `signs._draw_pole` generalised off the vertical, because a bracket arm is the
     same object lying over. The column passes `start` at the deck and `end` at
