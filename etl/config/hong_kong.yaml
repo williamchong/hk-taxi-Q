@@ -2167,6 +2167,14 @@ railings:
   # 5,532 over 30 deg and 3 over 45-60. 45 sits in the middle of that plateau.
   fold_tolerance_deg: 45.0
 
+  # A joint between two tiled panels whose axes differ by more than this is a
+  # BEND (P5-5): the far faces open a wedge of 2 x thickness x tan(angle / 2)
+  # and that wedge is a gap rather than a seam. Reported per class as `bends`,
+  # never closed — no panel is stretched or turned to hide it. Ten degrees on a
+  # 50 mm fence is a 9 mm opening, about a baluster's quarter; below it the
+  # wedge is under the post that stands on every joint.
+  bend_report_deg: 10.0
+
   # ---- the classes, and every figure in them authored ----
   #
   # ⚠️ THIS TABLE SPLITS THE LAYER BY CLASS OF OBJECT AND NEVER WITHIN ONE.
@@ -2209,6 +2217,10 @@ railings:
       # ⚠️ NOT the baluster or post pitch — those are the shader's, in
       # tuning/railings.tres, because that is where they are expressed.
       station_m: 2.0
+      # 🔴 The unit panel this fence is TILED from (P5-5, Q115), and it is the
+      # post pitch in tuning/railings.tres: a joint falls under a post. Bound by
+      # test_railings.py, so the two cannot drift.
+      panel_m: 2.0
       # ⚠️ AUTHORED, not read. Hong Kong's pedestrian railings stand about chest
       # height on the footway.
       height_m: 1.1
@@ -2244,6 +2256,8 @@ railings:
       # Finer than the fence's so a 1 m run still takes its height from the
       # ribbon at both ends rather than chording.
       station_m: 1.0
+      # One bollard per panel: the post pitch in tuning/bollards.tres (P5-5).
+      panel_m: 1.5
       # ⚠️ AUTHORED. A Hong Kong footway bollard stands about hip height. Note
       # that this is the one dimension a source COULD have carried and does not:
       # SYMBOL_SIZE_1 is null on 0 of 196 bollard features here, and is a plot
@@ -2265,6 +2279,8 @@ railings:
       bridge_gap_m: 4.0
       min_run_m: 4.0
       station_m: 2.0
+      # One post bay per panel: the post pitch in tuning/barriers.tres (P5-5).
+      panel_m: 3.0
       # ⚠️ AUTHORED. Lower than a pedestrian railing and heavier: a barrier is
       # built to stop a vehicle, not to keep a person off the carriageway.
       height_m: 0.9

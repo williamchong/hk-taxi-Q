@@ -84,11 +84,12 @@ layer = "roadmarks"
 script = ExtResource("5_layer")
 layer = "signals"
 
-; The published pedestrian railings (`P3-19`), one mesh for the whole
-; region, standing on the kerb the ribbon actually drew rather than where
-; they were surveyed — two-thirds of them were surveyed inside it. A region
-; whose sources publish no railing layer ships none and this node simply
-; stays empty.
+; The published pedestrian railings (`P3-19`), standing on the kerb the
+; ribbon actually drew rather than where they were surveyed — two-thirds of
+; them were surveyed inside it. One panel per class since `P5-5`, tiled
+; along every run by `railings_placements.json`: three draw calls, as before.
+; A region whose sources publish no railing layer ships none and this node
+; simply stays empty.
 ; No collider, and here that is a design decision rather than a rendering one:
 ; `GAME_DESIGN.md` lists railings under "omit or make breakable" precisely
 ; because a solid one turns a narrow street into a corridor. Collision is a

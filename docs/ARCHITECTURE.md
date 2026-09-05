@@ -399,7 +399,7 @@ hk-taxi-Q/
 │   │   ├── boxjunctions.py      # published box junctions → boxjunctions.glb (P3-18)
 │   │   ├── roadmarks.py         # published stop / give-way lines → roadmarks.glb (P3-23)
 │   │   ├── carve.py            # INFRASTRUCTURE cut back to the surveyed carriageway (P3-28, Q19)
-│   │   ├── railings.py          # published railings → railings.glb (P3-19)
+│   │   ├── railings.py          # published railings → railings.glb + railings_placements.json (P3-19, P5-5)
 │   │   ├── signs.py             # published traffic signs → signs.glb (P3-16)
 │   │   ├── sign_sheets.py       # TD's sign drawings, rasterised (P3-20)
 │   │   ├── sign_text.py         # sign lettering → signs_text.png (P3-20, Q68)
@@ -1170,7 +1170,7 @@ direction itself would read 0 by construction, which is `Q72`'s tautology.
 refuse a flyover lamp on and one is drawn on the street underneath. `nearest_is_elevated` reports how
 often that is possible.
 
-### `railings.glb` — the published street furniture (`P3-19`, `Q61`)
+### `railings.glb` — the published street furniture (`P3-19`, `Q61`, `P5-5`)
 
 A vertical strip `height_m` tall standing `outset_m` outside the drawn carriageway edge, one quad
 per `station_m`, for every run of `DTAD_RAILING_LINE` this city draws — and **no collider**, which
@@ -1185,11 +1185,24 @@ primitives and three draw calls. A city's classes are `hong_kong.yaml`'s `railin
 and nothing here fixes the list; what is fixed is that **a class id is the mesh name and the glTF
 material name at once**, which is the channel `tools/generated_scene_import.gd` dispatches on.
 
+🔴 **Since `P5-5` (`Q115`) the file is a LIBRARY, and the city is `railings_placements.json`** — one
+unit panel per class, `panel_m` wide (2.0 / 1.5 / 3.0 m, each the post pitch in that class's `.tres`
+and bound to it by test), drawn at the origin along north with the road to its east, and stood
+**5,035** times (4,425 / 304 / 306) along every visible piece of every run: `floor(length / panel_m
++ 0.5)` rigid copies centred on the piece, yawed to the chord under each and pitched to the deck.
+The join, the registration, the buried-kerb cut and the two `Q112` repairs are untouched; what
+tiling costs is **published**: `metres_snapped` (228.89 / 21.47 / 34.08 m — the run ends moved to
+a panel multiple, never a stretched panel), `joints` with the far-face wedge each opens as
+`joint_gap_m` (max 59 mm), and `bends` above `bend_report_deg` (79 / 2 / 12). `drawn_m` is the
+tiled metres — 8,850.0 against the strip's 8,827.69 — and `railings.json` is schema **3**,
+`city.json` **26**. `facing_away` is asked of the panel, because a stand turns winding and normal
+together. `railings.glb` is **1,375,964 → 4,172 B**; the document is 1,067,116 B pretty-printed.
+
 | | |
 |---|---|
-| Primitives | one per class — `railings`, `bollards`, `barriers` in this region |
+| Primitives | one library mesh per class — `railings`, `bollards`, `barriers` in this region — each drawn as one `MultiMesh` (`P5-5`); before it, one merged primitive per class |
 | Attributes | `POSITION`, `NORMAL`, `TEXCOORD_0`; no `COLOR_0`, no texture |
-| `TEXCOORD_0.x` | Metres **along this run of fence**, restarting at zero for each run. The fence line's own arc length, not the centreline's — the two differ on a bend by the ratio of their radii, and the balusters stand on the fence line |
+| `TEXCOORD_0.x` | Metres **along the panel**, `0` to `panel_m`, so the shader's post stands on every joint (`P5-5`). Before it, the fence line's own arc length along the run — not the centreline's, which differs on a bend by the ratio of their radii — restarting at zero for each run |
 | `TEXCOORD_0.y` | Metres above the **ribbon deck**, so `0.0` is the ground line wherever the run stands: `-base_sink_m` at the buried foot, `+height_m` at the top |
 
 ⚠️ **`TEXCOORD_0` is not a texture coordinate** — nothing samples an image, and `mesh_contract.gd`
@@ -1213,11 +1226,13 @@ carriageway, `railings.json` publishes `facing_away` **per class**, and each mus
 quad still draws, lit from the wrong hemisphere, which reads as a black panel rather than as a
 missing one.
 
-⚠️ **`railings.json` is `RAILINGS_MANIFEST_SCHEMA` 2 and carries no top-level `drawn_m`.** Every
-counter below the join lives under `classes[<id>]`; the total was **removed rather than broadened**,
-because at schema 1 it meant railing metres and at schema 2 it would mean fence plus bollard plus
-vehicle barrier — a reader keeping the old meaning would be wrong, which is hard rule 5's own bar.
-The read counters above the join stay shared: it is one read of one layer.
+⚠️ **`railings.json` is `RAILINGS_MANIFEST_SCHEMA` 3 and carries no top-level `drawn_m`.** Every
+counter below the join lives under `classes[<id>]`; the total was **removed rather than broadened**
+at schema 2, because at schema 1 it meant railing metres and at schema 2 it would mean fence plus
+bollard plus vehicle barrier — a reader keeping the old meaning would be wrong, which is hard rule
+5's own bar. Schema 3 (`P5-5`) makes a class's `drawn_m` the tiled metres and adds `panels`,
+`metres_snapped`, `joints`, `joint_gap_m`, `bends` and the `library_*` / `placements*` keys. The
+read counters above the join stay shared: it is one read of one layer.
 
 ⚠️ **The position is registered, not read** — the one place in the bundle where a *published extent*
 is moved. `Q59`'s widening puts the drawn kerb a median 0.9 m past the surveyed railing, so **67.9%
@@ -1511,6 +1526,8 @@ every region lies inside them.
 | `signs_placements.json` | Where the sign library stands: one entry per plate, per lettering quad and per pole, in `landmarks.json`'s transform shape plus a `scale` for the pole. Written beside `signs.glb` and null on its terms | ✅ `P5-2` |
 | `lamps.glb` | The published lamp posts, standing on the kerb the ribbon actually drew rather than where LandsD surveyed them — 64.1% of those are inside it — with a bracket arm reaching over the carriageway. The one layer whose vocabulary the publisher defines. Unlit, deliberately: `Q38` bakes the exposure at build time and `Q26` has not chosen a look. **A library since `P5-3`** — one mesh per drawn kind, stood by `lamps_placements.json` — one draw call per library mesh, **no collider** | ✅ `P3-26`, `P5-3` |
 | `lamps_placements.json` | Where the lamp library stands: one entry per column, in `landmarks.json`'s transform shape, the `rot_y_deg` being the compass bearing of the column's bracket arm. Written beside `lamps.glb` and null on its terms | ✅ `P5-3` |
+| `railings.glb` | The published street furniture — railings, bollards, vehicle barriers — registered onto the kerb the ribbon drew. **A library since `P5-5`**: one unit panel per class, its `.tres` post pitch wide, tiled along every run by `railings_placements.json`; three draw calls, `cull_disabled`, **no collider** by design | ✅ `P3-19`, `Q61`, `P5-5` |
+| `railings_placements.json` | Where the panels stand: one entry per panel, in `landmarks.json`'s transform shape plus a `pitch_deg` along the deck. What tiling cost is in `railings.json` per class — `metres_snapped`, `joint_gap_m`, `bends` — never closed by a stretched panel. Written beside `railings.glb` and null on its terms | ✅ `P5-5` |
 | `FareSystem` | Fare state machine: idle → hailed → carrying → delivered/failed | ⬜ `P3-1` |
 | `ScoreSystem` | Base fare, time bonus, **style chain** and **fare combo** — two distinct multipliers | ⬜ `P3-2` |
 | `HUD` | The player's HUD. Speed and the bilingual street plate ship; the minimap, timer and meter are **reserved, empty, checked** slots. Flat-shaded like the city — chamfered polygons, one fill, one keyline — with white for the city's voice and dark for the car's. `--hud=off` for `P3-9` and for art frames | 🟡 `P3-24`; meter, timer and the **world-space** destination marker are `P3-5a` |
@@ -1543,7 +1560,7 @@ the second vehicle anyone built.
 | `scripts/city/road_graph.gd` | One parse per scene, nearest-edge and lane-centre queries over a plan grid. Refuses off-grade edges (`Q13`), and **expresses** — never enforces — passability on the rest (`Q51`) |
 | `scripts/city/road_spawn.gd` | `basis_facing` builds the rotation from a direction, which is what deleted the hand-written transform literal and its transpose trap; `Pose.blocked` is why a start line in a wall fails a check rather than reaching a driver (`Q52`) |
 | `scripts/city/generated_document.gd` | Parse and version-check a JSON document the ETL wrote. Shared by the locators and by `CityManifest`, so the stale-copy message exists once |
-| `scripts/city/generated_layer.gd` | Locator for the nine one-mesh `.glb` layers — `road_surface`, `tramway`, `arrows`, `boxjunctions`, `roadmarks`, `signals` (latent, `Q77`), `railings`, `lamps`, `signs` — one table, id constants, and the per-layer absence terms that used to be nine files (`P5-1`, `Q115`). Also owns the sign text-atlas budget (`Q63`) |
+| `scripts/city/generated_layer.gd` | Locator for the nine `.glb` layers — four of them libraries with a placements document since `P5-2`–`P5-5` — `road_surface`, `tramway`, `arrows`, `boxjunctions`, `roadmarks`, `signals` (latent, `Q77`), `railings`, `lamps`, `signs` — one table, id constants, and the per-layer absence terms that used to be nine files (`P5-1`, `Q115`). Also owns the sign text-atlas budget (`Q63`) |
 | `scripts/city/generated_*.gd` | Locators for the JSON documents — `road_graph`, `fares`, `landmarks`, `fence` — one definition each, two readers. `generated_fares.gd` is the one place that knows that document's shape, and `generated_landmarks.gd::placement_of` is the one place the compass bearing becomes a Godot rotation |
 | `scripts/city/landmarks.gd` | Places the authored heroes where `landmarks.json` puts them. ~2 models, always resident — no streaming, no LOD |
 | `scripts/city/mesh_contract.gd` | The mesh rules every generated asset is held to, plus `triangles` and `bounds`. Read by every verify tool that touches geometry, the previews, and `CityStreamer`. Also the two checks a payload-carrying asset needs — that it landed on the shader its material name asked for, and that the importer settings which would silently overwrite a `TEXCOORD_1` have not drifted — both hoisted here when `P3-12` gave the road surface a second copy of them |
@@ -1718,8 +1735,11 @@ Key techniques, in order of what they buy:
    per tile — no atlas packing, no texture juggling. This is the main reason the untextured dataset
    was chosen.
 2. LOD via ETL-generated tiers, not runtime decimation.
-3. One merged primitive per generated layer, built by the ETL — the region's lamp posts, railings
-   and signs are one draw call each, not instanced props.
+3. One draw call per generated layer mesh, built by the ETL. Since `Q115` the repeated objects —
+   signs, lamps, arrows, the barrier family — ship as a **library stood by a `MultiMesh`**, which
+   costs the draw call the merged mesh cost (`P3-29`: +1 against +36 for per-scene instancing) and
+   multiplies with the shadow passes per extra library mesh; the road, the boxes and the stop lines
+   stay merged because nothing in them repeats.
 4. Occlusion is largely free — dense HK street canyons occlude naturally.
 
 ---

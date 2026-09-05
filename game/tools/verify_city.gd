@@ -145,6 +145,13 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 				"railings", manifest.railings_path, GeneratedLayer.path(GeneratedLayer.RAILINGS)
 			)
 		)
+		problems.append_array(
+			_check_document(
+				"railing placements",
+				manifest.railings_placements_path,
+				GeneratedLayer.placements_path(GeneratedLayer.RAILINGS)
+			)
+		)
 	# Guarded on the same terms: `verify_lamps.gd` treats an absent asset as a
 	# pass, so a manifest naming `lamps.glb` with the file gone would otherwise
 	# pass every check in the repo. ⚠️ **And a null `lamps` key is a LESS

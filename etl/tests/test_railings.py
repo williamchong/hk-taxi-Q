@@ -20,6 +20,8 @@ Four of them carry the weight:
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -28,19 +30,22 @@ import yaml
 
 from pipeline.config import RailingClass, Railings, SourceLayer, load_config
 from pipeline.kerbside import NEARSIDE, OFFSIDE
+from pipeline.placements import Placement, expanded, stood_positions
 from pipeline.polyline import plan_lengths
 from pipeline.railings import (
     ClassReport,
     RailingReport,
     Ribbon,
     _assign,
-    _Builder,
     _distinct,
     _draw_run,
     _facing,
     _folded,
+    _Piece,
     _sides,
+    _tile,
     _unfold,
+    _unit,
     _visible,
     facing_away,
 )
@@ -71,6 +76,7 @@ def klass(**overrides) -> RailingClass:
         "base_sink_m": 0.25,
         "outset_m": 0.6,
         "thickness_m": 0.05,
+        "panel_m": 2.0,
     }
     return RailingClass(**{**values, **overrides})
 
@@ -97,6 +103,7 @@ def spec(**overrides) -> Railings:
         "max_shift_m": 3.0,
         "min_station_gap_m": 0.01,
         "fold_tolerance_deg": 45.0,
+        "bend_report_deg": 10.0,
         "classes": (klass(**on_class),),
     }
     return Railings(**{**values, **overrides})
@@ -105,14 +112,29 @@ def spec(**overrides) -> Railings:
 def draw_run(*args, **overrides) -> None:
     """`_draw_run` with the block's shared bars filled in from `spec`.
 
-    The three floats below the class are the block's, so a call site states only
+    The floats below the class are the block's, so a call site states only
     what it varies — and a test that wants a different `min_station_gap_m` or
-    `fold_tolerance_deg` passes one rather than restating both.
+    `fold_tolerance_deg` passes one rather than restating them all.
     """
     bars = spec()
     overrides.setdefault("min_station_gap_m", bars.min_station_gap_m)
     overrides.setdefault("fold_tolerance_deg", bars.fold_tolerance_deg)
+    overrides.setdefault("bend_report_deg", bars.bend_report_deg)
     _draw_run(*args, **overrides)
+
+
+def panelled(stands: list[Placement], fence: RailingClass | None = None):
+    """The fence as the engine draws it: the class's panel under every stand.
+
+    `P5-5` made a run a list of stands rather than a strip, so a test that
+    measures the geometry measures the expansion — which is exactly the mesh a
+    merged build of the same panels would have been, and the only thing a
+    frame shows.
+    """
+    fence = fence or klass()
+    unit = _unit(fence)
+    assert unit is not None
+    return expanded({fence.id: unit}, stands, fence.id)
 
 
 def drew(report: RailingReport) -> ClassReport:
@@ -300,7 +322,7 @@ class TestBuriedKerb:
         edge = straight(0.0, 100.0)
         drawn = ribbon(edge, hidden={NEARSIDE: [[40.0, 60.0]]})
         report = RailingReport()
-        draw_run(_Builder(), drawn, klass(), NEARSIDE, 10, 89, "CRAIL1", spec().sample_m, report)
+        draw_run([], drawn, klass(), NEARSIDE, 10, 89, "CRAIL1", spec().sample_m, report)
         assert drew(report).metres_on_buried_kerb == pytest.approx(20.0)
         assert drew(report).drawn_m == pytest.approx(60.0)
 
@@ -316,13 +338,16 @@ class TestWinding:
     @pytest.mark.parametrize("side", [NEARSIDE, OFFSIDE])
     def test_every_quad_is_wound_toward_the_road(self, side: str) -> None:
         edge = straight(0.0, 100.0)
-        builder = _Builder()
+        stands: list[Placement] = []
         draw_run(
-            builder, ribbon(edge), klass(), side, 10, 89, "CRAIL1", spec().sample_m, RailingReport()
+            stands, ribbon(edge), klass(), side, 10, 89, "CRAIL1", spec().sample_m, RailingReport()
         )
-        mesh = builder.build("railings")
+        mesh = panelled(stands)
         assert mesh is not None
         assert facing_away(mesh) == 0
+        # The panel itself, which is where the stage asks the question: a stand
+        # turns winding and normal together, so the unit's answer is the city's.
+        assert facing_away(_unit(klass())) == 0
 
     @pytest.mark.parametrize("side", [NEARSIDE, OFFSIDE])
     def test_the_normal_points_across_the_fence_at_the_centreline(self, side: str) -> None:
@@ -340,11 +365,11 @@ class TestWinding:
         fronts.
         """
         edge = straight(0.0, 100.0)
-        builder = _Builder()
+        stands: list[Placement] = []
         draw_run(
-            builder, ribbon(edge), klass(), side, 10, 89, "CRAIL1", spec().sample_m, RailingReport()
+            stands, ribbon(edge), klass(), side, 10, 89, "CRAIL1", spec().sample_m, RailingReport()
         )
-        mesh = builder.build("railings")
+        mesh = panelled(stands)
         assert mesh is not None
         road = 1.0 if side == NEARSIDE else -1.0
         cap = np.isclose(mesh.normals[:, 1], 1.0, atol=1e-6)
@@ -368,9 +393,9 @@ class TestFence:
         driving in lane, and the kerb `surface.py` draws is 0.5 m wide.
         """
         edge = straight(0.0, 100.0)
-        builder = _Builder()
+        stands: list[Placement] = []
         draw_run(
-            builder,
+            stands,
             ribbon(edge),
             klass(),
             NEARSIDE,
@@ -380,7 +405,7 @@ class TestFence:
             spec().sample_m,
             RailingReport(),
         )
-        mesh = builder.build("railings")
+        mesh = panelled(stands)
         assert mesh is not None
         across = np.abs(mesh.positions[:, 2] - 100.0)
         # 🔴 **`Q112`'s outward-only rule, and this is what pins it.** The
@@ -395,9 +420,9 @@ class TestFence:
 
     def test_the_fence_is_as_tall_as_it_was_authored_and_sinks_below_the_road(self) -> None:
         edge = straight(0.0, 100.0)
-        builder = _Builder()
+        stands: list[Placement] = []
         draw_run(
-            builder,
+            stands,
             ribbon(edge),
             klass(),
             NEARSIDE,
@@ -407,7 +432,7 @@ class TestFence:
             spec().sample_m,
             RailingReport(),
         )
-        mesh = builder.build("railings")
+        mesh = panelled(stands)
         assert mesh is not None
         assert mesh.positions[:, 1].min() == pytest.approx(-0.25)
         assert mesh.positions[:, 1].max() == pytest.approx(1.1)
@@ -420,9 +445,7 @@ class TestFence:
         """
         edge = straight(0.0, 100.0)
         report = RailingReport()
-        draw_run(
-            _Builder(), ribbon(edge), klass(), NEARSIDE, 80, 139, "CRAIL1", spec().sample_m, report
-        )
+        draw_run([], ribbon(edge), klass(), NEARSIDE, 80, 139, "CRAIL1", spec().sample_m, report)
         assert drew(report).metres_outside_ribbon == pytest.approx(40.0)
         assert drew(report).drawn_m == pytest.approx(20.0)
 
@@ -438,7 +461,7 @@ class TestFence:
         occupied = {cell: {"CRAIL1": 1} for cell in list(range(10, 20)) + list(range(23, 40))}
         report = RailingReport()
         draw_run(
-            _Builder(),
+            [],
             ribbon(edge),
             klass(),
             NEARSIDE,
@@ -458,7 +481,7 @@ class TestFence:
         occupied = {cell: {"CRAIL1": 1} for cell in range(10, 40)}
         report = RailingReport()
         draw_run(
-            _Builder(),
+            [],
             ribbon(edge),
             klass(),
             NEARSIDE,
@@ -474,9 +497,7 @@ class TestFence:
     def test_a_run_shorter_than_a_car_is_a_post_and_is_dropped(self) -> None:
         edge = straight(0.0, 100.0)
         report = RailingReport()
-        draw_run(
-            _Builder(), ribbon(edge), klass(), NEARSIDE, 10, 11, "CRAIL1", spec().sample_m, report
-        )
+        draw_run([], ribbon(edge), klass(), NEARSIDE, 10, 11, "CRAIL1", spec().sample_m, report)
         assert drew(report).runs_dropped == 1
         assert drew(report).metres_dropped_short == pytest.approx(2.0)
         assert drew(report).drawn_m == 0.0
@@ -496,7 +517,7 @@ class TestTrims:
         edge = straight(0.0, 100.0)
         drawn = ribbon(edge, trim_start_m=10.0)
         report = RailingReport()
-        draw_run(_Builder(), drawn, klass(), NEARSIDE, 20, 39, "CRAIL1", spec().sample_m, report)
+        draw_run([], drawn, klass(), NEARSIDE, 20, 39, "CRAIL1", spec().sample_m, report)
         # Cells 20..39 are 20-40 m along the published polyline, so 10-30 m
         # along a ribbon trimmed by 10.
         assert drew(report).drawn_m == pytest.approx(20.0)
@@ -515,9 +536,9 @@ class TestFenceCoordinate:
 
     def test_v_is_the_authored_height_and_sink_measured_from_the_deck(self) -> None:
         """Exactly two planes, and they are the authored figures rather than a fraction."""
-        builder = _Builder()
+        stands: list[Placement] = []
         draw_run(
-            builder,
+            stands,
             ribbon(straight(0.0, 100.0)),
             klass(),
             NEARSIDE,
@@ -527,16 +548,16 @@ class TestFenceCoordinate:
             spec().sample_m,
             RailingReport(),
         )
-        mesh = builder.build(CLASS_ID)
+        mesh = panelled(stands)
         assert mesh is not None
         assert sorted(set(np.round(mesh.uvs[:, 1], 6))) == [-0.25, 1.1]
 
     def test_v_follows_the_class_rather_than_the_fence(self) -> None:
         """A shorter class is shorter in the coordinate too, not just in the mesh."""
-        builder = _Builder()
+        stands: list[Placement] = []
         low = klass(height_m=0.85, base_sink_m=0.1)
         draw_run(
-            builder,
+            stands,
             ribbon(straight(0.0, 100.0)),
             low,
             NEARSIDE,
@@ -546,50 +567,34 @@ class TestFenceCoordinate:
             spec().sample_m,
             RailingReport(),
         )
-        mesh = builder.build(CLASS_ID)
+        mesh = panelled(stands, low)
         assert mesh is not None
         assert sorted(set(np.round(mesh.uvs[:, 1], 6))) == [-0.1, 0.85]
 
-    def test_u_measures_the_fence_line_and_not_the_centreline(self) -> None:
-        """The assertion that catches the limp.
+    def test_u_runs_the_width_of_each_panel_and_the_panels_count_the_fence_line(self) -> None:
+        """The assertion that catches the limp, in its `P5-5` form.
 
         On a bend the fence line and the centreline differ by the ratio of their
-        radii, so a `u` taken from the station's ribbon distance would not match
-        the kerb it is drawn on and the balusters would stretch round the corner.
-        Checked against the drawn positions themselves, which is the only ground
-        truth that cannot agree with a wrong stage.
+        radii. A run is tiled along the *fence line*, so a nearside fence round
+        the outside of this corner lays more panels than the centreline's own
+        length would — and `u` runs `0 .. panel_m` inside every panel, which is
+        what puts a post on each joint. Tiled by centreline distance instead,
+        the pickets would stretch round the corner and the joints would miss
+        their posts, and both would render as a fence.
         """
         edge = np.array(
             [[0.0, 0.0, 100.0], [100.0, 0.0, 100.0], [100.0, 0.0, 200.0]], dtype=np.float64
         )
-        builder = _Builder()
-        draw_run(
-            builder,
-            ribbon(edge),
-            klass(),
-            NEARSIDE,
-            0,
-            199,
-            "CRAIL1",
-            spec().sample_m,
-            RailingReport(),
-        )
-        mesh = builder.build(CLASS_ID)
+        stands: list[Placement] = []
+        report = RailingReport()
+        draw_run(stands, ribbon(edge), klass(), NEARSIDE, 0, 199, "CRAIL1", spec().sample_m, report)
+        mesh = panelled(stands)
         assert mesh is not None
-
-        # The road-side face's feet: `v` below the deck picks the feet of both
-        # panels, and the normal is what separates the near one from the far.
-        # ⚠️ The far face deliberately carries the **near** face's `u` (`Q112`),
-        # so walking its own positions would not match — that is the next test.
-        foot = (mesh.uvs[:, 1] < 0.0) & (mesh.normals[:, 2] > 0.0)
-        plan = mesh.positions[foot][:, [0, 2]]
-        walked = np.concatenate([[0.0], np.cumsum(np.hypot(*np.diff(plan, axis=0).T))])
-        # A millimetre, because `TEXCOORD_0` ships as float32 and the run is
-        # 200 m long — the float32 step up there is already 15 microns.
-        assert np.allclose(mesh.uvs[foot][:, 0], walked, atol=1e-3)
-        # And it is genuinely not the centreline: this bend makes the two differ
-        # by more than a baluster pitch, which is what the test is worth.
-        assert abs(float(walked[-1]) - 200.0) > 1.0
+        assert sorted(set(np.round(mesh.uvs[:, 0], 6))) == [0.0, klass().panel_m]
+        # The fence line round the outside of the bend is longer than the 200 m
+        # centreline by more than a panel, and the panel count says so.
+        assert drew(report).drawn_m > 200.0 + klass().panel_m
+        assert drew(report).panels == len(stands) == drew(report).drawn_m / klass().panel_m
 
 
 class TestClasses:
@@ -662,6 +667,7 @@ class TestClassTable:
             "base_sink_m": 0.25,
             "outset_m": 0.6,
             "thickness_m": 0.05,
+            "panel_m": 2.0,
             **overrides,
         }
 
@@ -677,6 +683,7 @@ class TestClassTable:
             "max_shift_m": 3.0,
             "min_station_gap_m": 0.01,
             "fold_tolerance_deg": 45.0,
+            "bend_report_deg": 10.0,
             "classes": classes,
             **overrides,
         }
@@ -765,11 +772,12 @@ class TestSlab:
 
     @staticmethod
     def _mesh(side: str = NEARSIDE, edge: np.ndarray | None = None, **overrides):
-        builder = _Builder()
+        stands: list[Placement] = []
+        fence = klass(**overrides)
         draw_run(
-            builder,
+            stands,
             ribbon(straight(0.0, 100.0) if edge is None else edge),
-            klass(**overrides),
+            fence,
             side,
             0 if edge is not None else 10,
             199 if edge is not None else 89,
@@ -777,7 +785,7 @@ class TestSlab:
             spec().sample_m,
             RailingReport(),
         )
-        return builder.build(CLASS_ID)
+        return panelled(stands, fence)
 
     def test_a_thicker_fence_moves_only_its_far_face(self) -> None:
         """The measurement `Q78`'s rule at this layer reduces to.
@@ -803,23 +811,20 @@ class TestSlab:
         ratio of their radii at every bend, and a 50 mm fence would draw its
         picket twice, half a baluster apart.
         """
+        unit = _unit(klass())
+        assert unit is not None
+        foot = unit.uvs[:, 1] < 0.0
+        near = foot & (unit.normals[:, 0] > 0.0)
+        far = foot & (unit.normals[:, 0] < 0.0)
+        assert near.sum() == far.sum() > 0
+        # Face by face: the far face's `u` is the near face's, vertex for
+        # vertex, on the panel every run is tiled from.
+        assert np.allclose(unit.uvs[near][:, 0], unit.uvs[far][:, 0])
+        # And on a bend the panels round the inside still carry the same `u`
+        # as their own near face — a joint on each face at every `panel_m`.
         mesh = self._mesh(edge=self.BEND)
         assert mesh is not None
-        foot = mesh.uvs[:, 1] < 0.0
-        near = foot & (mesh.normals[:, 2] > 0.0)
-        far = foot & (mesh.normals[:, 2] < 0.0)
-        assert near.sum() == far.sum() > 0
-        # Face by face rather than as two sorted piles: the far rail rounds the
-        # inside of this bend, so its own arc length is genuinely shorter and a
-        # `u` measured on it would still sort into a plausible-looking list.
-        assert np.allclose(mesh.uvs[near][:, 0], mesh.uvs[far][:, 0])
-        walked = np.concatenate(
-            [
-                [0.0],
-                np.cumsum(np.hypot(*np.diff(mesh.positions[far][:, [0, 2]], axis=0).T)),
-            ]
-        )
-        assert not np.allclose(mesh.uvs[far][:, 0], walked, atol=1e-3)
+        assert sorted(set(np.round(mesh.uvs[:, 0], 6))) == [0.0, klass().panel_m]
 
     def test_the_cap_is_the_top_of_the_fence_along_its_whole_width(self) -> None:
         """`v` is metres above the deck, so the cap is at the height, twice.
@@ -887,9 +892,7 @@ class TestStations:
             trim_start_m=0.0,
         )
         report = RailingReport()
-        draw_run(
-            _Builder(), collapsed, klass(), NEARSIDE, 10, 89, "CRAIL1", spec().sample_m, report
-        )
+        draw_run([], collapsed, klass(), NEARSIDE, 10, 89, "CRAIL1", spec().sample_m, report)
         assert drew(report).metres_dropped_collapsed == pytest.approx(80.0)
         assert drew(report).metres_dropped_sliver == 0.0
         assert drew(report).drawn_m == 0.0
@@ -957,3 +960,175 @@ class TestStations:
         facing, folded, repaired = _unfold(before, plan, drawn, at, 45.0)
         assert (folded, repaired) == (2, 0)
         assert np.allclose(facing, before)
+
+
+class TestPanels:
+    """`P5-5`: a run is rigid panels stood along the fence line, and what that costs
+    is published rather than absorbed (`Q115`).
+
+    ⚠️ Every failure here renders as a fence. A panel yawed the wrong way is a
+    fence; a panel whose road side is the pavement is a fence lit from behind;
+    a run tiled by centreline distance is a fence with a limp; a wedge at a
+    bend closed by stretching a panel is a fence the survey did not publish.
+    """
+
+    REPO_ROOT = Path(__file__).resolve().parents[2]
+
+    def test_the_panel_runs_north_with_the_road_to_its_east(self) -> None:
+        """The frame every stand undoes: `+v` along `-Z`, the road at `+X`."""
+        unit = _unit(klass())
+        assert unit is not None
+        assert unit.positions[:, 2].min() == pytest.approx(-1.0)
+        assert unit.positions[:, 2].max() == pytest.approx(1.0)
+        # Near face on the fence line, far face one thickness west of it.
+        assert unit.positions[:, 0].min() == pytest.approx(-klass().thickness_m)
+        assert unit.positions[:, 0].max() == pytest.approx(0.0)
+        near = unit.normals[:, 0] > 0.5
+        assert near.sum() > 0 and np.allclose(unit.positions[near][:, 0], 0.0)
+        assert facing_away(unit) == 0
+
+    def test_a_straight_piece_is_a_whole_number_of_panels_on_the_fence_line(self) -> None:
+        stands: list[Placement] = []
+        report = ClassReport()
+        plan = np.column_stack([np.linspace(10.0, 30.0, 11), np.full(11, 105.6)])
+        deck = np.zeros(11)
+        facing = np.tile(np.array([0.0, 0.0, -1.0], dtype=np.float32), (11, 1))
+        laid = _tile(stands, _Piece(plan, deck, facing), klass(), report, 10.0)
+        assert laid == pytest.approx(20.0)
+        assert report.panels == len(stands) == 10
+        assert report.metres_snapped == pytest.approx(0.0)
+        assert report.joints == 9 and report.bends == 0
+        assert np.allclose(report.joint_gap_m, 0.0)
+        centres = np.array([entry["transform"]["pos"] for entry in stands])
+        assert np.allclose(centres[:, 0], np.arange(11.0, 31.0, 2.0))
+        assert np.allclose(centres[:, 2], 105.6)
+        assert np.allclose([entry["transform"]["pitch_deg"] for entry in stands], 0.0)
+        # The road is north of this fence (`facing` points `-Z`), so the panels
+        # run WEST: the unit's east is the road, and west of `-X` is north.
+        assert np.allclose([entry["transform"]["rot_y_deg"] for entry in stands], 270.0)
+
+    def test_a_piece_snaps_to_the_nearest_panel_and_publishes_the_residual(self) -> None:
+        """Half up, never stretched: 20.9 m lays 10 panels and 0.9 m is the price;
+        21.1 m lays 11 and 0.9 m is again the price, the other way."""
+        for length, panels, snapped in ((20.9, 10, 0.9), (21.1, 11, 0.9), (0.9, 0, 0.9)):
+            stands: list[Placement] = []
+            report = ClassReport()
+            plan = np.array([[0.0, 105.6], [length, 105.6]])
+            facing = np.tile(np.array([0.0, 0.0, -1.0], dtype=np.float32), (2, 1))
+            laid = _tile(stands, _Piece(plan, np.zeros(2), facing), klass(), report, 10.0)
+            assert laid == pytest.approx(panels * 2.0)
+            assert report.panels == panels == len(stands)
+            assert report.metres_snapped == pytest.approx(snapped)
+        # And a panel is never resized: every stand is a bare transform.
+        assert all("scale" not in entry for entry in stands)
+
+    def test_the_residual_is_split_between_the_two_ends(self) -> None:
+        stands: list[Placement] = []
+        plan = np.array([[0.0, 105.6], [21.0, 105.6]])
+        facing = np.tile(np.array([0.0, 0.0, -1.0], dtype=np.float32), (2, 1))
+        _tile(stands, _Piece(plan, np.zeros(2), facing), klass(), ClassReport(), 10.0)
+        mesh = panelled(stands)
+        assert mesh is not None
+        # 21 m lays 11 panels = 22 m, overhanging 0.5 m at each end.
+        assert mesh.positions[:, 0].min() == pytest.approx(-0.5)
+        assert mesh.positions[:, 0].max() == pytest.approx(21.5)
+
+    def test_a_panel_lies_along_its_grade_with_the_uphill_end_high(self) -> None:
+        stands: list[Placement] = []
+        plan = np.array([[0.0, 105.6], [2.0, 105.6]])
+        facing = np.tile(np.array([0.0, 0.0, -1.0], dtype=np.float32), (2, 1))
+        _tile(stands, _Piece(plan, np.array([0.0, 0.2]), facing), klass(), ClassReport(), 10.0)
+        assert len(stands) == 1
+        mesh = panelled(stands)
+        assert mesh is not None
+        feet = mesh.positions[mesh.uvs[:, 1] < 0.0]
+        east = feet[np.argmax(feet[:, 0])]
+        west = feet[np.argmin(feet[:, 0])]
+        assert east[1] > west[1]
+        assert east[1] - west[1] == pytest.approx(0.2, abs=0.01)
+
+    def test_a_bend_opens_a_wedge_that_is_counted_and_not_closed(self) -> None:
+        """Two panels at a right angle: the far faces open `2 t tan 45` and the
+        joint is a bend. The near-face corner stays where the fence line put it
+        — nothing is stretched to hide the wedge."""
+        stands: list[Placement] = []
+        report = ClassReport()
+        plan = np.array([[0.0, 100.0], [2.0, 100.0], [2.0, 98.0]])
+        facing = np.tile(np.array([0.0, 0.0, -1.0], dtype=np.float32), (3, 1))
+        laid = _tile(stands, _Piece(plan, np.zeros(3), facing), klass(), report, 10.0)
+        assert laid == pytest.approx(4.0)
+        assert (report.panels, report.joints, report.bends) == (2, 1, 1)
+        assert report.joint_gap_m[0] == pytest.approx(2.0 * klass().thickness_m)
+        # A gentler joint under the bar is a joint, not a bend.
+        stands.clear()
+        report = ClassReport()
+        gentle = np.array([[0.0, 100.0], [2.0, 100.0], [4.0, 100.1]])
+        _tile(stands, _Piece(gentle, np.zeros(3), facing), klass(), report, 10.0)
+        assert (report.joints, report.bends) == (1, 0)
+        assert 0.0 < report.joint_gap_m[0] < 0.01
+
+    def test_the_road_side_follows_the_run_not_the_chord(self) -> None:
+        """The same fence line, faced the other way, stands its panels turned
+        through 180 — the road is always at the panel's east."""
+        for toward, bearing in (((0.0, 0.0, -1.0), 270.0), ((0.0, 0.0, 1.0), 90.0)):
+            stands: list[Placement] = []
+            plan = np.array([[0.0, 105.6], [4.0, 105.6]])
+            facing = np.tile(np.array(toward, dtype=np.float32), (2, 1))
+            _tile(stands, _Piece(plan, np.zeros(2), facing), klass(), ClassReport(), 10.0)
+            assert np.allclose([entry["transform"]["rot_y_deg"] for entry in stands], bearing)
+            mesh = panelled(stands)
+            assert mesh is not None
+            # The near face stands on the fence line; the far face is one
+            # thickness behind it. The near face's normal points at the road.
+            near = (mesh.normals[:, 1] < 0.5) & np.isclose(mesh.positions[:, 2], 105.6)
+            assert near.sum() > 0
+            assert np.allclose(np.sign(mesh.normals[near][:, 2]), np.sign(toward[2]))
+
+    def test_the_stood_panel_is_the_strip_the_stage_used_to_draw(self) -> None:
+        """A merged strip between two stations and the panel stood between the
+        same two are one geometry, vertex for vertex — which is what makes a
+        class's `triangles` and `aabb` the merged build's numbers."""
+        fence = klass()
+        stands: list[Placement] = []
+        plan = np.array([[10.0, 105.6], [12.0, 105.6]])
+        facing = np.tile(np.array([0.0, 0.0, -1.0], dtype=np.float32), (2, 1))
+        _tile(stands, _Piece(plan, np.zeros(2), facing), fence, ClassReport(), 10.0)
+        unit = _unit(fence)
+        assert unit is not None
+        from pipeline.railings import _Builder
+
+        strip = _Builder()
+        strip.strip(
+            plan,
+            np.zeros(2),
+            height_m=fence.height_m,
+            sink_m=fence.base_sink_m,
+            thickness_m=fence.thickness_m,
+            facing=facing,
+            flip=True,
+        )
+        drawn = strip.build(fence.id)
+        assert drawn is not None
+        placed = stood_positions(unit, stands[0])
+        # Same vertices as a set (the unit runs west here, so the row order is
+        # reversed), to a placement's own rounding.
+        assert np.allclose(
+            np.sort(placed, axis=0), np.sort(drawn.positions, axis=0), atol=2.0 * 1e-4
+        )
+
+    def test_the_panel_is_the_post_pitch_in_every_class_tuning(self) -> None:
+        """🔴 `panel_m` and the `.tres` `post_pitch_m` are one number in two
+        files: the shader draws a post at `u = 0` and `u = panel_m`, so a joint
+        that missed the pitch would stand between two posts and show as a seam
+        in every picket in the region. `hong_kong.yaml` is the record."""
+        city = load_config()
+        assert city.railings is not None
+        for entry in city.railings.classes:
+            tres = (self.REPO_ROOT / "game" / "tuning" / f"{entry.id}.tres").read_text()
+            found = re.search(r"^shader_parameter/post_pitch_m = ([0-9.]+)$", tres, re.M)
+            assert found is not None, f"{entry.id}.tres publishes no post pitch"
+            assert float(found.group(1)) == pytest.approx(entry.panel_m), entry.id
+
+    def test_a_bend_bar_at_a_right_angle_is_refused(self, tmp_path) -> None:
+        with pytest.raises(ValueError, match="bend_report_deg"):
+            TestClassTable._city(tmp_path, [TestClassTable._class()], bend_report_deg=90.0)

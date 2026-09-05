@@ -131,7 +131,7 @@ wins.
 | `Q100` | **Hong Kong is the only city, and its config is the single source of truth** | 🟢 **Closed 2026-08-31 — the premise is retired, not refuted.** `etl/config/cities/` held one file for the project's whole life and nothing ever loaded a second CRS, schema or bounds; the city layer cost a `--city` flag on 17 stages and 22 tools and a path segment on every cache and output, and bought nothing anyone called. ✅ Collapsed: `etl/config/hong_kong.yaml`, `load_config()`, `etl/sources/<source>`, `etl/out/<region>`, `Config`; the constants that *are* the city — the CRS pair, drive-on-the-left, `TS115`/`TS131`–`TS133` — live in `pipeline/hongkong.py`. ⚠️ **Regions survive** (`Q6`, `Q10`) and **hard rule 4 survives**: vocabulary and tuning stay in the yaml, and every config-versus-code grader is unchanged. ✅ Every step graded byte-identical against the pre-work bundle (`Q96`); `city.json`'s `city_id`/`source_crs` still written, so no schema bump. 🚫 `signals.py` kept latent (`Q77`), guarded by a test. ⚠️ Fifteen records cite the second city as a reason; each stands on its other reason and none is rewritten |
 | `Q101` | **Refusals made against one dataset, re-read against the estate that grew** | 🟢 **Closed 2026-08-31 — nine rows, one negative measured.** Five publishers now cover pedestrian crossings/footways (re-opened, the `P3-27` candidate); speed limits stay `Q65`'s HOLD on scope; road text stays NO-GO but its licence half fell with `Q79`; the three kerb registrations predate `Q95`'s measured width and are re-opened as a measurement; the rest defer to the tasks that consume them. 🔴 **The `.gdbtable` domain lead closes negative**: the scan that reads `LP - Lamp post` back out of iB1000's system tables finds no coded-domain content anywhere in dTAD, so `Q60` and `Q76` keep their written-vocabulary rules. Outbound data sharing closed as "not now" (`Q100`) | 🟢 Closed |
 | `Q102` | **The vision reader is withdrawn on cost, and the channel goes with it** | 🟢 **Closed 2026-08-31 — the user's call, and withdrawn rather than refuted.** `tools/facade_grammar.py` was the only API caller in the repo; it, `podium_error.py`, the `facade_survey:` block, the shader's survey half and `anthropic` are gone. 🔴 **`TEXCOORD_1` was removed, not shipped all-zero** — zero was a legal code meaning "refused", so an all-sentinel tile is indistinguishable from a survey that declined every building; `schema_version` 19 → **20**. ⚠️ `Q46`'s `quiet_*` tier had to go with it or it would have muted the whole city. ✅ `Q44`, `Q45`, `Q43`'s split and the hue survey all survive — they run off the hash. ⚠️ A/B refuted "byte-identical": **1.59%/1.61%** of pixels move by **≤2 of 255**, whole-frame `L*` **+0.0003**, geometry byte-identical, sky and road untouched — compiler precision, measured rather than argued |
-| `Q115` | **What repeats ships as a prop with placements; what is measured stays merged** | 🟡 **Open — `P5-1`–`P5-4` built 2026-09-06, `P5-5`, `P5-6` planned.** A `MultiMesh` costs the draw call the merged glb costs (+1 against +36 for per-scene instancing, measured on the fence), so the budget stays. Signs, lamps, arrows and the barrier family modularise; the road, the box junctions, the stop lines, the ETL registrations and the draw-call budget do not — each refusal carries its number |
+| `Q115` | **What repeats ships as a prop with placements; what is measured stays merged** | 🟡 **Open — `P5-1`–`P5-5` built 2026-09-06; `P5-6` waits for the second region.** A `MultiMesh` costs the draw call the merged glb costs (+1 against +36 for per-scene instancing, measured on the fence), so the budget stays. Signs, lamps, arrows and the barrier family modularise; the road, the box junctions, the stop lines, the ETL registrations and the draw-call budget do not — each refusal carries its number |
 | `Q116` | **Two regions meet at a hard edge, and the join decides where the cut is, not the unit** | 🟡 **Open, owned by `P5-7`.** A whole-Hong Kong model is refused twice (float32 at 38 km, and ×50 the metres). The cut moves from the rectangle to the graph — an edge belongs whole to one region and boundary nodes are shared — and the streaming unit stays the tile: per-edge is 737 draw calls a region, per-region is the always-resident bundle that fails at scale |
 
 | ID | Decision | Status |
@@ -19389,7 +19389,90 @@ yaw/pitch pairs) and measured the stage **~30% cheaper** — `_draw_glyph` runs 
   A PCK reading for the whole of `P5-2`–`P5-5` is owed once `P5-5` lands, and matters here because
   the arrows' net change is small enough for JSON-versus-GLB packing to flip its sign.
 
-**Status.** `P5-1`–`P5-4` built and reviewed; `P5-5` and `P5-6` planned in `PLAN.md`, not started.
+### ✅ `P5-5` is built — the barrier family is tiled panels, and what tiling costs is published
+
+`railings.glb` carries **three meshes of 6 triangles / 12 vertices** — one unit panel per class,
+`panel_m` wide (`railings` 2.0, `bollards` 1.5, `barriers` 3.0 m), each drawn with the stage's own
+slab at the origin along north with the road to its east — where the merged build carried 33,030.
+`railings_placements.json` stands them **5,035** times (4,425 / 304 / 306): every visible piece of
+every run is `floor(length / panel_m + 0.5)` rigid copies centred on the piece, yawed to the chord
+of the fence line under each and pitched to the deck at the chord's ends, the road side taken from
+the run's own `facing` after `_unfold`. `railings.glb` is **1,375,964 → 4,172 B**; the document is
+1,067,116 B; `railings.json` is schema **3**, `city.json` **26**.
+
+🔴 **`panel_m` is the post pitch in the class's `.tres`, and a test binds them.** The shader draws a
+post at `u = 0` and `u = panel_m`, so a joint between panels stands under a post and the baluster
+rhythm restarts behind it — which is what a real Hong Kong railing does, and why this is the one
+step of `Q115` that trades accuracy *toward* the city. `u` no longer runs the length of a run; it
+runs `0 .. panel_m` in every panel.
+
+**Everything above `drawn_m` is byte-identical, per class** — `shift_m` (n=13,764 / 602 / 1,506),
+`samples_over_shift`, `metres_deduped`, both `metres_dropped_*`, `metres_dropped_collapsed` 0,
+`metres_outside_ribbon`, `metres_on_buried_kerb`, `metres_bridged` 320.58 / 39.89 / 28.00,
+`stations_merged` 18 / 8 / 1, `stations_folded` / `stations_unfolded` 1 / 1, `refused_m`, and
+`facing_away` 0 — asked of the **panel**, because a stand turns a triangle's winding and its normal
+together, so every copy agrees with its normal exactly when the unit does; asked per stand it would
+be the same answer 5,035 times, `Q72`'s tautology the other way round. What moves is what tiling
+costs, and it is published rather than absorbed:
+
+| class | `drawn_m` strip → panels | `panels` | `metres_snapped` | `joints` | `joint_gap_m` p90 / p99 / max | `bends` (>10°) |
+|---|---|---|---|---|---|---|
+| `railings` | 8,827.69 → **8,850.0** | 4,425 | 228.89 | 3,915 | 2 / 13 / **59 mm** | **79** |
+| `bollards` | 463.06 → **456.0** | 304 | 21.47 | 247 | 2 / 22 / 40 mm | 2 |
+| `barriers` | 924.59 → **918.0** | 306 | 34.08 | 261 | 9 / 27 / 45 mm | 12 |
+
+`metres_snapped` is the run ends moved to a panel multiple, split between the two ends of each
+piece and never a stretched panel; `joint_gap_m` is the far-face wedge `2 × thickness × tan(a/2)`
+at every joint, all zeros on a straight; `bends` names the tail. A piece shorter than half a panel
+lays none and is snapped away whole. 🔴 **None of it is closed.** A panel turned or stretched to
+hide a wedge is a fence the survey did not publish (`Q54`), so the wedge is what a bend costs.
+
+**Evidence.** `check.sh` exit 0; `verify_railings.gd` grades the three panels and reads *5035
+placements stand 3 library meshes*. `railing_error.py` now walks the **unit panel** — twelve
+vertices, where a foot and its head still share an `(x, z)`, which a pitched stand would break —
+and stands every sample under the document with `placed_positions`: `railings` drawn 8,855 →
+8,850 m, registration p50 **1.42 → 1.43 m** (max 5.15 → 5.24), coverage 73.1%; `bollards` 455 →
+456 m, p50 1.83 → 1.82; `barriers` 928 → 918 m, p50 1.67 → 1.68, coverage 72.7 → 72.4%; side
+disagreements **0 of 16,624 / 0 of 889 / 0 of 1,646**. Draw calls on the throttle route
+**110/109/108/110/110/109 → the same six**, so 3 → 3 holds. Frames, each side shot twice and
+`cmp`-identical: `Q27` street **93,493 px** and Hennessy **51,682 px** of 2,073,600 differ — large
+on purpose, the baluster rhythm now restarts at every post rather than running the length of a run —
+and the sharpest joint in the region, 61.3° at `(1443.2, 138.6)`, shows two rigid panels meeting
+with the counted wedge between their far faces where the strip turned smoothly. ⚠️ Whether that
+corner should be a mitred pair rather than a wedge is the review point's, not this build's.
+
+📦 **The PCK, measured for `P5-3`–`P5-5` together as `P5-4` owed**: `P5-2` baseline
+**50,443,828 B** → after `P5-4` **49,660,324** → after `P5-5` **49,209,752 B** — **−1,234,076 B
+(−2.45%)**, of which `P5-5` is −450,572. The direction the source bytes implied held.
+
+**The review round.** Three reviewers; what moved:
+
+- 🔴 **The grader's stated bound was false, and the review measured it.** `_stood_stations` seeded
+  its samples at `y = 0` "because the pitch moves plan by `cos`, under a millimetre over a panel" —
+  but a stand pitches about the panel's `+X`, so plan gains `sin(pitch) × y`, and the foot is at
+  `−0.25`: p50 **1.1 mm**, **47 mm** at the steepest 10.9° stand. Seeded at the unit's own foot
+  height now; the tables above move by one station in two classes.
+- The entry-to-`placed_positions` decode was written a third time in the grader; it is
+  `placements.placed_at` now, and `stood_positions`, `stood` and the grader all read one default for
+  an absent `pitch_deg` or `scale`. The arrows' and panels' rise-over-run is one `pitch_between`.
+- `_tile` took three parallel arrays that are one resolved piece; `_Piece` carries them, and the
+  `count + 1` boundaries are interpolated once rather than each twice with two discarded facings.
+  Vectorising the rest was measured at 89 → 25 ms of a 1,080 ms stage and declined.
+- `railing_error.py` parsed the 1 MB document once per class against its own docstring's rule;
+  `placements()` reads it once, on `published()`'s pattern.
+- `expanded()`'s docstring named the grader as a caller; it is a test helper, and the docstring now
+  says why the grader must **not** walk the expansion — every panel's end edge reads as foot there,
+  **21,499 m** of an 8,850 m fence. Walking the unit also took the grader's walk from ~620 ms to
+  ~25 ms, a win the first record did not claim.
+- ⚠️ **Not changed, recorded for the user**: the placements documents' indentation.
+  `railings_placements.json` is 1,067,116 B pretty and 538,417 B compact — **528,699 B of
+  indentation, 1.17× this step's whole PCK saving**, and 831,665 B across the four documents. `Q115`'s
+  `P5-2` record kept the indentation "by `documents.py`'s own argument", which defends
+  `ensure_ascii` and the trailing newline and never `indent=2`; the number is five times what it
+  was when that position was taken. A decision, not a patch.
+
+**Status.** `P5-1`–`P5-5` built and reviewed; `P5-6` and `P5-7` wait for the second region, as
+`PLAN.md` says (*"starts when the second region starts, not before"*), and `P5-8` is outline only.
 
 **See.** `Q116` for the join · `P3-29` for the measured `MultiMesh` · `Q82` for the quantisation ·
 `Q62` for why each step owes a frame · `Q92` for why the conformed paint cannot be a prop · `Q25`

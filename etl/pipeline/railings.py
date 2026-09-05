@@ -66,14 +66,31 @@ it is the same kind of fact about the same kerb.
 against 90.2 km of kerb line, of which 57.1 km is actually drawn once the buried
 kerbs come out; a fallback keyed on kerbs would run a wall down every street that
 has none, and it would render perfectly.
+
+🔴 **Since `P5-5` (`Q115`) `railings.glb` is a LIBRARY — one unit panel per
+class, `panel_m` wide, drawn at the origin along north with the road to its
+east — and the city is `railings_placements.json`**: every visible piece of a
+run is tiled with rigid copies of its class's panel, stood end to end along the
+fence line at the class's pitch, yawed to the chord under each panel and
+pitched to the deck beneath it. **The join, the registration, the buried-kerb
+cut, the two `Q112` repairs and every counter above `drawn_m` are untouched**;
+what changed is the geometry below them. Two things are traded, and both are
+published rather than hidden: a piece's ends snap to a panel multiple
+(`metres_snapped`, the residual, never a stretched panel), and a rigid panel
+cannot follow a bend, so at every joint the far faces open a wedge
+(`joint_gap_m`, and `bends` above `bend_report_deg`). The trade runs *toward*
+the city: a Hong Kong railing is standard panels between posts, and the
+shader's post pitch is exactly `panel_m`, so every joint stands under a post.
 """
 
 from __future__ import annotations
 
 import argparse
+import itertools
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 
@@ -86,7 +103,14 @@ from pipeline.gltf import MeshData, write_glb
 from pipeline.kerbside import NEARSIDE, OFFSIDE, SideIndex, merge_runs, resample
 from pipeline.mesh import select_triangles
 from pipeline.meshbuild import MIN_TWICE_AREA_M2
-from pipeline.polyline import plan_lengths, plan_lengths_2d
+from pipeline.placements import (
+    Placement,
+    pitch_between,
+    placement,
+    stand_library,
+    write_placements,
+)
+from pipeline.polyline import bearing_deg, plan_lengths, plan_lengths_2d
 from pipeline.roads import ROADGRAPH_NAME, read_graph
 from pipeline.surface import (
     SURFACE_MANIFEST_NAME,
@@ -105,7 +129,14 @@ RAILINGS_MANIFEST_NAME = "railings.json"
 # means "railing metres" and a consumer keeping that reading would be **wrong**
 # — hard rule 5's own bar. The top-level key is gone rather than broadened, so
 # an old reader fails loudly instead of quietly counting bollards as fence.
-RAILINGS_MANIFEST_SCHEMA = 2
+# 3 since `P5-5` (`Q115`): `railings.glb` is a LIBRARY of one panel per class
+# stood by `railings_placements.json`, and a class's `drawn_m` is the metres of
+# panel laid — a run's clipped extent snapped to a panel multiple, with the
+# residual beside it as `metres_snapped`. A v2 reader taking `drawn_m` as the
+# clipped extent is off by that residual, and one instantiating the asset as a
+# scene draws three panels at the origin.
+RAILINGS_MANIFEST_SCHEMA = 3
+RAILINGS_PLACEMENTS_NAME = "railings_placements.json"
 
 # ⚠️ **A class's `id` is its mesh name and its glTF material name, verbatim.**
 # One string for one identity: `tools/generated_scene_import.gd` dispatches a
@@ -231,9 +262,35 @@ class ClassReport:
     stations_merged: int = 0
     stations_folded: int = 0
     stations_unfolded: int = 0
+    # 🔴 **What tiling costs, published rather than absorbed (`P5-5`).** A piece
+    # of run is laid as `round(length / panel_m)` rigid panels, so its ends snap
+    # to a panel multiple: `metres_snapped` is the sum of those residuals, and
+    # `drawn_m` above is the tiled metres — within half a panel of the clipped
+    # extent at each end of each piece, by construction. `joints` counts the
+    # seams between consecutive panels; `joint_gap_m` is the wedge the two far
+    # faces open at each — `2 x thickness x tan(angle / 2)`, 0.0 on a straight
+    # — and `bends` the joints whose angle exceeds `bend_report_deg`. ⚠️ Never
+    # closed: a panel stretched or turned to hide a wedge is a fence the survey
+    # did not publish (`Q54`), so the wedge is what a bend costs and this is
+    # what it costs.
+    panels: int = 0
+    metres_snapped: float = 0.0
+    joints: int = 0
+    joint_gap_m: list[float] = field(default_factory=list)
+    bends: int = 0
+    # What is DRAWN: the class's panel under every stand, so these read what a
+    # merged build of the same panels would (`P5-5`). The panel's own size is
+    # `library_*`; `placements` counts this class's entries in the document,
+    # and `placements_refused` the stands whose panel collapsed to nothing —
+    # part of `placements + placements_refused == panels`, 0 today.
     triangles: int = 0
     vertices: int = 0
     aabb: list[list[float]] = field(default_factory=list)
+    placements: int = 0
+    placements_refused: int = 0
+    library_meshes: int = 0
+    library_triangles: int = 0
+    library_vertices: int = 0
 
     # One distribution as the manifest publishes it: p50/p90/p99/max, the tail
     # rather than the middle, for `ArrowReport.measured`'s stated reason.
@@ -781,22 +838,23 @@ def build_region(
     )
     drawn = ribbons(graph, surface, spec)
 
-    # ⚠️ **One builder per class, and so one primitive per class.** They could
-    # share one — the mask that tells a bollard from a fence is a material
-    # parameter, not a vertex attribute — and they deliberately do not. Separate
-    # meshes are what let `railing_error.py` walk the fence's feet without a
-    # bollard's in the pile, what let each class carry its own `.tres`, and what
-    # make a class's triangle count a number rather than a share. The cost is
-    # two extra draw calls against a `<150` budget the drive scene reads 36 on.
+    # ⚠️ **One panel per class, and so one library mesh and one `MultiMesh` per
+    # class.** They could share one — the mask that tells a bollard from a fence
+    # is a material parameter, not a vertex attribute — and they deliberately do
+    # not. Separate meshes are what let `railing_error.py` walk the fence's feet
+    # without a bollard's in the pile, what let each class carry its own
+    # `.tres`, and what make a class's triangle count a number rather than a
+    # share. The cost is two extra draw calls against a `<150` budget the drive
+    # scene reads 36 on — the same three the merged build paid (`P5-5`).
     by_id = {klass.id: klass for klass in spec.classes}
-    builders = {klass_id: _Builder() for klass_id in by_id}
+    stands: dict[str, list[Placement]] = {klass_id: [] for klass_id in by_id}
     cells = _assign(lines, graph, drawn, spec, city, region_id, report)
     for (edge, klass_id, side), found in sorted(cells.items()):
         ribbon = drawn[edge]
         klass = by_id[klass_id]
         for start, stop, code in merge_runs(found, spec.sample_m, klass.bridge_gap_m):
             _draw_run(
-                builders[klass_id],
+                stands[klass_id],
                 ribbon,
                 klass,
                 side,
@@ -808,22 +866,36 @@ def build_region(
                 found,
                 min_station_gap_m=spec.min_station_gap_m,
                 fold_tolerance_deg=spec.fold_tolerance_deg,
+                bend_report_deg=spec.bend_report_deg,
             )
 
+    # A class that laid no panel ships no mesh: a library mesh nothing stands
+    # is what `GeneratedPlacements.check_join` fails as *stood nowhere*.
     meshes: list[MeshData] = []
+    stood: list[Placement] = []
     for klass in spec.classes:
-        mesh = builders[klass.id].build(klass.id)
-        if mesh is None:
+        if not stands[klass.id]:
+            continue
+        unit = _unit(klass)
+        if unit is None:
             continue
         counters = report.klass(klass.id)
-        counters.facing_away = facing_away(mesh)
-        counters.triangles = mesh.triangle_count
-        counters.vertices = len(mesh.positions)
-        low, high = mesh.aabb()
-        counters.aabb = [list(low), list(high)]
-        meshes.append(mesh)
+        # ⚠️ **Asked of the panel, and that is the whole question.** A stand is
+        # a rotation, and a rotation turns a triangle's winding and its normal
+        # together, so every panel in the city agrees with its normal exactly
+        # when the unit does. Asked per stand it would be the same answer 5,000
+        # times over — `Q72`'s tautology in the other direction.
+        counters.facing_away = facing_away(unit)
+        library = stand_library([unit], stands[klass.id])
+        library.publish(counters)
+        library.require_every_stand(counters.panels, f"{counters.panels} {klass.id} panels")
+        meshes.append(unit)
+        stood.extend(library.stands)
     if meshes:
         report.bytes = write_glb(out_dir / RAILINGS_NAME, meshes)
+        write_placements(
+            out_dir / RAILINGS_PLACEMENTS_NAME, city.id, region_id, RAILINGS_NAME, stood
+        )
 
     _write_manifest(out_dir, city, region_id, report)
     return report
@@ -917,7 +989,7 @@ def _tracks(graph: dict, drawn: dict[int, Ribbon]) -> list[tuple[int, np.ndarray
 
 
 def _draw_run(
-    builder: _Builder,
+    stands: list[Placement],
     ribbon: Ribbon,
     klass: RailingClass,
     side: str,
@@ -930,16 +1002,21 @@ def _draw_run(
     *,
     min_station_gap_m: float,
     fold_tolerance_deg: float,
+    bend_report_deg: float,
 ) -> None:
     """One merged run of one class, clipped to the ribbon and to its drawn kerb.
 
-    Every bar and dimension comes off `klass`; the three floats passed beside it
+    Every bar and dimension comes off `klass`; the four floats passed beside it
     are the block's, taken as floats rather than as the whole `Railings` so the
     signature states that split instead of a paragraph having to. `sample_m` is
     the cell pitch this run's extent is expressed in; `min_station_gap_m` and
     `fold_tolerance_deg` are `_distinct`'s and `_folded`'s bars, and they are
     shared for the same reason the join is — they are properties of the offset
     ribbon, which every class stands on, and not of what is being drawn on it.
+    `bend_report_deg` is `_tile`'s.
+
+    Since `P5-5` a run appends panel stands to `stands` rather than strips to a
+    builder — see `_tile`.
 
     `occupied` is the run's own cell table, used only to count the metres drawn
     across bridged gaps — see `_bridged_m`. Optional so a test can drive one run
@@ -1001,27 +1078,152 @@ def _draw_run(
         )
         report_class.stations_folded += folded
         report_class.stations_unfolded += unfolded
-        builder.strip(
-            plan,
-            deck,
-            height_m=klass.height_m,
-            sink_m=klass.base_sink_m,
-            thickness_m=klass.thickness_m,
-            facing=facing,
-            flip=side == NEARSIDE,
-        )
+        tiled_m = _tile(stands, _Piece(plan, deck, facing), klass, report_class, bend_report_deg)
         drawn.append((low, high))
-        report_class.drawn_m += high - low
-        report_class.drawn_m_by_type[code] = report_class.drawn_m_by_type.get(code, 0.0) + (
-            high - low
-        )
+        report_class.drawn_m += tiled_m
+        report_class.drawn_m_by_type[code] = report_class.drawn_m_by_type.get(code, 0.0) + tiled_m
         if side == NEARSIDE:
-            report_class.drawn_m_nearside += high - low
+            report_class.drawn_m_nearside += tiled_m
 
     if occupied is not None:
         report_class.metres_bridged += _bridged_m(
             drawn, occupied, start_cell, stop_cell, ribbon, sample_m
         )
+
+
+# Where a class's panel is drawn: at the origin, running along north (`-Z`)
+# from `z = +panel_m / 2` to `z = -panel_m / 2`, with the ROAD to its east
+# (`+X`) — so a stand is `bearing_deg` of the chord about `Y`, a `pitch_deg`
+# about the panel's own `X`, and a move: the frame `gltf.placed_positions` and
+# `GeneratedPlacements.placement_of` both undo.
+_UNIT_FACING = np.array([[1.0, 0.0, 0.0], [1.0, 0.0, 0.0]], dtype=np.float32)
+
+
+def _unit(klass: RailingClass) -> MeshData | None:
+    """One class's panel: `_Builder.strip` over a straight two-station plan.
+
+    Drawn with the stage's own slab so the three windings, the outward-only
+    thickness and the `(u, v)` payload are exactly the merged build's per
+    station — a run tiled from this is that run's strip cut at every
+    `panel_m`. `flip=True` because `_face`'s unflipped front looks *left* of
+    travel, which for a panel running north is west, and the road is east.
+    """
+    half = 0.5 * klass.panel_m
+    builder = _Builder()
+    builder.strip(
+        np.array([[0.0, half], [0.0, -half]]),
+        np.zeros(2),
+        height_m=klass.height_m,
+        sink_m=klass.base_sink_m,
+        thickness_m=klass.thickness_m,
+        facing=_UNIT_FACING,
+        flip=True,
+    )
+    return builder.build(klass.id)
+
+
+class _Piece(NamedTuple):
+    """One visible piece of a run, resolved: where its stations stand, the deck
+    under each, and the direction each faces after `_unfold`. What `_draw_run`
+    hands `_tile`, as one thing rather than three parallel arrays."""
+
+    plan: np.ndarray
+    deck: np.ndarray
+    facing: np.ndarray
+
+
+def _tile(
+    stands: list[Placement],
+    piece: _Piece,
+    klass: RailingClass,
+    report: ClassReport,
+    bend_report_deg: float,
+) -> float:
+    """Lay one visible piece of run as rigid panels; returns the metres of panel laid.
+
+    🔴 **`round(length / panel_m)` panels, centred on the piece, never one
+    stretched** (`P5-5`). A panel is a standard unit and a run is a whole
+    number of them, so a piece's ends move by at most half a panel each — the
+    residual is `metres_snapped` — and a piece shorter than half a panel lays
+    none and is snapped away whole. Centred rather than left-aligned so the
+    residual is split between the two ends instead of piled at one.
+
+    Each panel takes its **yaw from the chord** of the fence line under it and
+    its **pitch from the deck** at that chord's two ends, so a panel lies along
+    the piece rather than across a bend and along the grade rather than
+    stepping. Which way the panel faces comes from the run's own `facing` at
+    the panel's centre — the direction `_unfold` settled — so the road is on
+    the panel's east whichever way the chord happened to run.
+
+    ⚠️ **The joints are counted, never closed.** Two rigid panels meeting at an
+    angle open a wedge between their far faces of `2 x thickness x tan(a / 2)`;
+    it is recorded at every joint and a joint past `bend_report_deg` is a
+    `bend`. Turning or stretching a panel to hide the wedge would be `Q54`'s
+    invented fence at a second layer.
+    """
+    along = plan_lengths_2d(piece.plan)
+    total = float(along[-1])
+    width = klass.panel_m
+    # `floor(x + 0.5)`, not `round`: Python rounds a half to even, so a piece
+    # of exactly 2.5 panels would lay 2 and one of 3.5 would lay 4.
+    count = int(np.floor(total / width + 0.5))
+    report.metres_snapped += abs(total - count * width)
+    if count == 0:
+        return 0.0
+    report.panels += count
+    offset = 0.5 * (total - count * width)
+
+    # The `count + 1` panel boundaries and the `count` centres, each sampled
+    # once: a boundary is one panel's head and the next one's tail. The
+    # boundaries clamp to the piece — a snapped-out end panel takes its chord
+    # over what is there — and a centre never needs to, because the residual is
+    # under half a panel by construction.
+    edges = np.clip(offset + np.arange(count + 1) * width, 0.0, total)
+    centres = offset + (np.arange(count) + 0.5) * width
+    edge_x = np.interp(edges, along, piece.plan[:, 0])
+    edge_z = np.interp(edges, along, piece.plan[:, 1])
+    edge_y = np.interp(edges, along, piece.deck)
+    centre_x = np.interp(centres, along, piece.plan[:, 0])
+    centre_z = np.interp(centres, along, piece.plan[:, 1])
+    centre_y = np.interp(centres, along, piece.deck)
+    # Sign only, below: which side of the chord the road is on. Interpolated
+    # between two unit facings it shrinks but cannot cross zero unless the two
+    # differ by a right angle, which `_unfold` has already repaired.
+    toward_x = np.interp(centres, along, piece.facing[:, 0])
+    toward_z = np.interp(centres, along, piece.facing[:, 2])
+
+    axes: list[np.ndarray] = []
+    for index in range(count):
+        chord = np.array([edge_x[index + 1] - edge_x[index], edge_z[index + 1] - edge_z[index]])
+        length = float(np.hypot(*chord))
+        axis = chord / length if length > 0.0 else np.array([0.0, -1.0])
+        y_tail, y_head = float(edge_y[index]), float(edge_y[index + 1])
+        # The road must lie to the panel's right — `+X` in the unit's frame —
+        # and `right` of a heading `(sin h, -cos h)` is `(cos h, sin h)`.
+        right = np.array([-axis[1], axis[0]])
+        if toward_x[index] * right[0] + toward_z[index] * right[1] < 0.0:
+            axis = -axis
+            y_tail, y_head = y_head, y_tail
+        stands.append(
+            placement(
+                klass.id,
+                (float(centre_x[index]), float(centre_y[index]), float(centre_z[index])),
+                bearing_deg(axis),
+                pitch_deg=pitch_between(y_head - y_tail, length),
+            )
+        )
+        axes.append(axis)
+
+    for previous, axis in itertools.pairwise(axes):
+        # Unsigned, as lines: which way each panel's north points was decided
+        # by the road side above, and a bend is a bend whichever way its two
+        # panels were stood.
+        angle = float(np.degrees(np.arccos(min(1.0, abs(float(np.dot(previous, axis)))))))
+        report.joints += 1
+        report.joint_gap_m.append(2.0 * klass.thickness_m * float(np.tan(np.radians(0.5 * angle))))
+        if angle > bend_report_deg:
+            report.bends += 1
+    return count * width
 
 
 def _bridged_m(
@@ -1276,9 +1478,26 @@ def _class_document(report: ClassReport) -> dict:
         "stations_merged": report.stations_merged,
         "stations_folded": report.stations_folded,
         "stations_unfolded": report.stations_unfolded,
+        # 🔴 **What tiling costs (`P5-5`)** — see `ClassReport.metres_snapped`.
+        # `drawn_m` above is the tiled metres; this is what snapping the run
+        # ends to a panel multiple moved, and the wedge every joint opens.
+        # `joint_gap_m` is over every joint, so a straight region reads all
+        # zeros with a large `n`; `bends` is the tail named.
+        "panels": report.panels,
+        "metres_snapped": round(report.metres_snapped, 2),
+        "joints": report.joints,
+        "joint_gap_m": report.measured(report.joint_gap_m),
+        "bends": report.bends,
         "triangles": report.triangles,
         "vertices": report.vertices,
         "aabb": report.aabb,
+        # The panel and its stands (`P5-5`); `triangles`/`vertices`/`aabb`
+        # above are what those stands DRAW.
+        "placements": report.placements,
+        "placements_refused": report.placements_refused,
+        "library_meshes": report.library_meshes,
+        "library_triangles": report.library_triangles,
+        "library_vertices": report.library_vertices,
     }
 
 
@@ -1291,6 +1510,7 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: Railing
         # manifest naming an asset the bundle does not hold is what `CITY_SCHEMA`
         # 11 was bumped over.
         "asset": RAILINGS_NAME if report.drawn_m > 0.0 else None,
+        "placements_document": RAILINGS_PLACEMENTS_NAME if report.drawn_m > 0.0 else None,
         # The read, as four disjoint parts of `features`. One read of one layer,
         # so this half is not per class.
         # ⚠️ `features` is features; every count below it is **parts**. The

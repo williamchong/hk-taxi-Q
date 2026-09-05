@@ -1753,6 +1753,16 @@ class RailingClass:
     # How far outside the drawn carriageway edge this class stands. The kerb
     # strip `roads.surface.kerb_width_m` draws is what it stands behind.
     outset_m: float
+    # 🔴 **The width of the one panel this class is tiled from (`P5-5`,
+    # `Q115`).** A run is `n` rigid copies of a unit `panel_m` long, stood end
+    # to end along the fence line, and never a panel stretched — so a run's
+    # ends snap to a panel multiple and the residual is published as
+    # `metres_snapped`. ⚠️ **This is the post pitch in the class's `.tres`**:
+    # the shader draws a post at `u = 0` and `u = panel_m`, so a joint between
+    # two panels falls under a post and the baluster rhythm restarts behind it.
+    # `tests/test_railings.py` binds the two, because a joint that landed
+    # between posts would show as a seam in every picket in the region.
+    panel_m: float
     # ⚠️ **AUTHORED, like every other dimension here, and it exists because a
     # driver refuted the alternative** (`Q112`). The layer shipped one quad per
     # station on the argument that two would be "twice the triangles for a
@@ -1846,6 +1856,14 @@ class Railings(LayerSpec):
     # centimetre**, then 28 at 5 cm — so the value below sits on a plateau
     # rather than on a slope.
     min_station_gap_m: float
+    # ⚠️ **A joint between two panels whose axes differ by more than this is a
+    # BEND, counted per class as `bends` (`P5-5`).** A rigid panel cannot follow
+    # a curve, so at every joint the two far faces open a wedge of
+    # `2 x thickness x tan(angle / 2)` — published whole as `joint_gap_m` — and
+    # this names the joints where that wedge is a gap rather than a seam. A bar
+    # on reporting, never on drawing: no panel is stretched or turned to close
+    # one, because that would be a fence the survey did not publish (`Q54`).
+    bend_report_deg: float
     # 🔴 **Where the offset rail has doubled back on its own centreline**
     # (`Q112`), as the angle between a step on the fence line and the centreline
     # chord over the same parameter span. On the inside of a tight bend the two
@@ -5387,9 +5405,23 @@ def _railings(body: Any, where: str) -> Railings | None:
     measures = _measures(
         body,
         where,
-        ("sample_m", "max_offset_m", "max_shift_m", "min_station_gap_m", "fold_tolerance_deg"),
+        (
+            "sample_m",
+            "max_offset_m",
+            "max_shift_m",
+            "min_station_gap_m",
+            "fold_tolerance_deg",
+            "bend_report_deg",
+        ),
         positive=True,
     )
+    if measures["bend_report_deg"] >= 90.0:
+        # Two panels square to each other are a corner, not a bend; a bar at or
+        # past it would count no joint in any region and read as a clean sweep.
+        raise ValueError(
+            f"{where}:bend_report_deg is {measures['bend_report_deg']}; at 90 or more no joint "
+            f"can be a bend, and the counter reads 0 by construction"
+        )
     if measures["fold_tolerance_deg"] >= 90.0:
         # At 90 a step running square across its own centreline is inside the
         # bar, which is exactly the state the bar exists to name; past it the
@@ -5441,6 +5473,7 @@ def _railings(body: Any, where: str) -> Railings | None:
         max_shift_m=measures["max_shift_m"],
         min_station_gap_m=measures["min_station_gap_m"],
         fold_tolerance_deg=measures["fold_tolerance_deg"],
+        bend_report_deg=measures["bend_report_deg"],
         classes=classes,
     )
 
@@ -5480,7 +5513,7 @@ def _railing_class(body: Any, where: str, *, sample_m: float) -> RailingClass:
     measures = _measures(
         body,
         where,
-        ("bridge_gap_m", "min_run_m", "station_m", "height_m", "thickness_m"),
+        ("bridge_gap_m", "min_run_m", "station_m", "height_m", "thickness_m", "panel_m"),
         positive=True,
     )
     if measures["min_run_m"] < sample_m:

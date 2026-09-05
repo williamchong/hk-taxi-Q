@@ -10,6 +10,14 @@
 ##
 ## Exits non-zero if the railings are present and fail any check.
 ##
+## 🔴 **Since `P5-5` (`Q115`) the asset is a LIBRARY — one panel per class —
+## and the city is `railings_placements.json`.** Every mesh check below runs on
+## the panel, which is every panel in the city checked once: a stand is a
+## rotation, and a rotation turns a quad's winding and its normal together, so
+## the panel faces the road exactly when every copy of it does. The join is
+## graded both ways by `GeneratedPlacements.check_join`, shared with the signs,
+## the lamps and the arrows.
+##
 ## ⚠️ **Absence is a pass, and that is not a loophole** — `verify_arrows.gd`'s
 ## paragraph, unchanged: a city whose estate publishes no railing layer ships
 ## none and `city.json` names null. What stops that becoming a silent skip is
@@ -18,12 +26,14 @@
 extends SceneTree
 
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
+const GeneratedPlacements = preload("res://scripts/city/generated_placements.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
 ## One primitive **per class**, so each class costs one draw call — the rule the
 ## road surface, the tiles, the tramway, the arrows and the box junctions are
 ## all held to. Three classes is three draw calls, which is the price `Q61`
-## records for keeping their geometry separable.
+## records for keeping their geometry separable; a `MultiMesh` per class since
+## `P5-5` costs the same three (`P3-29`).
 const SURFACES_PER_CLASS: int = 1
 
 ## The classes the ETL draws, and the material each must end up with. Mirrors
@@ -109,6 +119,7 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 		problems.append("no MeshInstance3D in the railing scene")
 		return problems
 
+	var library: Dictionary[String, Mesh] = {}
 	for node: Node in instances:
 		var instance := node as MeshInstance3D
 		var class_id: String = String(instance.name)
@@ -128,6 +139,7 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 		if mesh == null:
 			problems.append("'%s' carries no ArrayMesh" % class_id)
 			continue
+		library[class_id] = mesh
 		if mesh.get_surface_count() != SURFACES_PER_CLASS:
 			problems.append(
 				(
@@ -138,6 +150,13 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 
 		problems.append_array(_check_class(mesh, class_id))
 
+	problems.append_array(
+		GeneratedPlacements.check_join(
+			GeneratedLayer.placements_path(GeneratedLayer.RAILINGS),
+			GeneratedLayer.noun(GeneratedLayer.RAILINGS),
+			library
+		)
+	)
 	problems.append_array(_check_has_no_collision(scene_root))
 	return problems
 

@@ -424,6 +424,15 @@ Common emoji for this project:
   ⚠️ **A railings change is also a shader change** —
   `check.sh` exits 0 on a shader that fails to compile, so render and `grep -i "shader error"`.
   Numbers in `Q60` and `Q61`.
+  🔴 **`railings.glb` is a LIBRARY since `P5-5` — one unit panel per class — and the city is
+  `railings_placements.json`** (`Q115`). Also paste, per class, `panels`, `metres_snapped`, `joints`,
+  `joint_gap_m` and `bends`: `drawn_m` is the TILED metres now, within half a panel of the clipped run
+  at each end, and the residual and the far-face wedge at every joint are published rather than
+  closed — a panel stretched or turned to hide either is `Q54`'s invented fence. 🔴 **`panel_m` IS the
+  `.tres` `post_pitch_m`**, bound by test: a joint stands under a post. ⚠️ **`facing_away` is asked of
+  the panel and never per stand** — a rotation turns winding and normal together, so per stand it is
+  `Q72`'s tautology. ⚠️ **`railing_error.py` walks the UNIT and stands its samples** — a pitched
+  panel's foot and head no longer share an `(x, z)`, so walking the expansion breaks its pairing.
 - 🔴 **`signs.glb` is a LIBRARY since `P5-2` and the city is `signs_placements.json`** (`Q115`): one mesh
   per face variant plus a unit `pole`, stood by 1,251 entries — 671 plates + 83 lettering quads + 497
   poles, asserted in the stage. `triangles`/`vertices`/`aabb` still describe what is DRAWN and read the

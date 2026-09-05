@@ -156,7 +156,11 @@ const NOT_MEASURED: float = -1.0
 ## `arrows.glb` is a library — one glyph per `RM` code — whose stands carry a
 ## `pitch_deg` as well as the bearing. A v24 reader would draw one of every
 ## glyph at the origin and no arrow on any street.
-const SCHEMA_VERSION: int = 25
+##
+## 26 since `P5-5` (`Q115`): the manifest names `railings_placements.json`, and
+## `railings.glb` is a library — one panel per class — tiled along every run.
+## A v25 reader would draw three panels at the origin and no fence on any kerb.
+const SCHEMA_VERSION: int = 26
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -344,6 +348,12 @@ var lamps_placements_path: String
 ## pitch — each one is drawn at. Empty on exactly `arrows_path`'s terms.
 var arrows_placements_path: String
 
+## Where the railing library stands (`P5-5`): `railings.glb` is one panel per
+## class, and this document is the list of transforms — position, bearing and
+## pitch — each panel is stood at along its run. Empty on exactly
+## `railings_path`'s terms.
+var railings_placements_path: String
+
 ## Drawn half-width of the carriageway, in metres, keyed by road-graph edge id —
 ## **one value per station** of that edge's `roadgraph.json` polyline.
 ##
@@ -459,6 +469,7 @@ static func load_manifest() -> CityManifest:
 	manifest.signs_placements_path = _resolve(document.get("signs_placements"))
 	manifest.lamps_placements_path = _resolve(document.get("lamps_placements"))
 	manifest.arrows_placements_path = _resolve(document.get("arrows_placements"))
+	manifest.railings_placements_path = _resolve(document.get("railings_placements"))
 	for entry: Dictionary in document.get("carriageway", []):
 		var edge: int = int(entry.get("edge", -1))
 		manifest.carriageway_half_width_m[edge] = _floats(entry, "half_width_m")
@@ -535,6 +546,7 @@ func shipped() -> PackedStringArray:
 		lamps_path,
 		lamps_placements_path,
 		railings_path,
+		railings_placements_path,
 		signs_path,
 		signs_text_atlas_path,
 		signs_placements_path,

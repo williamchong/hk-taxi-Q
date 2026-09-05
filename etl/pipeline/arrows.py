@@ -83,7 +83,7 @@ from pipeline.documents import read_document, write_document
 from pipeline.fetch import source_reads
 from pipeline.gltf import MeshData
 from pipeline.meshbuild import FlatBuilder
-from pipeline.placements import Placement, placement, stand_library, stood
+from pipeline.placements import Placement, pitch_between, placement, stand_library, stood
 from pipeline.polyline import (
     Segments,
     Snap,
@@ -1184,12 +1184,11 @@ def _stand(
     — shorter than the merged build's by `length_m x (1 - cos)`, millimetres
     on a street. `pitch_deg` is positive nose-up, `placed_positions`' sign.
     """
-    rise = y_nose - y_tail
     return placement(
         glyph_mesh_name(symbol.code),
         (float(placed[0]), 0.5 * (y_tail + y_nose) + spec.lift_m, float(placed[1])),
         symbol.heading_deg,
-        pitch_deg=math.degrees(math.atan2(rise, glyph.length_m)),
+        pitch_deg=pitch_between(y_nose - y_tail, glyph.length_m),
     )
 
 

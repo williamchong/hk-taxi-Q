@@ -157,7 +157,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"module": "railings",
 		"absence":
 		"A city whose sources publish no railing layer ships none, and that is not a failure.",
-		"placements": "",
+		"placements": "railings_placements.json",
 	},
 	LAMPS:
 	{

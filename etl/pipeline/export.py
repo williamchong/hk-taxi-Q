@@ -202,7 +202,9 @@ CITY_NAME = "city.json"
 # 25 since `P5-4` (`Q115`): the manifest names `arrows_placements.json`, and
 # `arrows.glb` is a library — one glyph per `RM` code — whose stands carry a
 # `pitch_deg` as well as the compass bearing.
-CITY_SCHEMA = 25
+# 26 since `P5-5` (`Q115`): the manifest names `railings_placements.json`, and
+# `railings.glb` is a library — one panel per class — tiled along every run.
+CITY_SCHEMA = 26
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -243,6 +245,7 @@ OPTIONAL_ASSET_KEYS = (
     "lamps",
     "lamps_placements",
     "railings",
+    "railings_placements",
     "signs",
     "signs_text_atlas",
     "signs_placements",
@@ -469,6 +472,8 @@ def build_region(
         # Where the lamp library stands (`P5-3`), on `signs_placements`' terms.
         "lamps_placements": lamps["placements_document"],
         "railings": railings["asset"],
+        # Where the railing library stands (`P5-5`), on `signs_placements`' terms.
+        "railings_placements": railings["placements_document"],
         # `null` where the city drew no traffic signs, on `tramway`'s terms and
         # read from the stage's own manifest for its reason. ⚠️ Null is the
         # ordinary answer for a region whose signs are all text-faced, because

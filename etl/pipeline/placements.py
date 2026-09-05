@@ -72,6 +72,36 @@ def placement(
     return entry
 
 
+def placed_at(positions: np.ndarray, entry: Placement) -> np.ndarray:
+    """`positions`, in a library mesh's own frame, where `entry` stands them.
+
+    🔴 **The one place an entry is decoded into `placed_positions`' arguments.**
+    `stood_positions` and `stood` are this over a mesh; `tools/railing_error.py`
+    is this over the foot samples of a panel. Written three times it was three
+    places for a default — `pitch_deg` absent meaning level, `scale` absent
+    meaning none — to drift, and a reader that read one differently would grade
+    a city the engine does not draw.
+    """
+    transform = entry["transform"]
+    return placed_positions(
+        positions,
+        transform["pos"],
+        float(transform["rot_y_deg"]),
+        entry.get("scale"),
+        float(transform.get("pitch_deg", 0.0)),
+    )
+
+
+def pitch_between(rise_m: float, run_m: float) -> float:
+    """The `pitch_deg` a stand carries to lie along a grade: nose-up positive.
+
+    `atan2(rise, run)` in degrees, the same expression for a 4 m arrow between
+    its two deck heights and a 2 m panel between its two ends — one statement
+    so the two layers cannot disagree about which end a positive pitch raises.
+    """
+    return float(np.degrees(np.arctan2(rise_m, run_m)))
+
+
 def stood_positions(mesh: MeshData, entry: Placement) -> np.ndarray:
     """`mesh`'s vertices where `entry` stands them, in region game space.
 
@@ -81,13 +111,7 @@ def stood_positions(mesh: MeshData, entry: Placement) -> np.ndarray:
     which is what makes a library's `triangles`/`aabb` the merged build's
     numbers and not an estimate.
     """
-    transform = entry["transform"]
-    return mesh.placed(
-        transform["pos"],
-        float(transform["rot_y_deg"]),
-        entry.get("scale"),
-        float(transform.get("pitch_deg", 0.0)),
-    )
+    return placed_at(mesh.positions, entry)
 
 
 def stood(mesh: MeshData, entry: Placement) -> MeshData:
@@ -105,13 +129,10 @@ def stood(mesh: MeshData, entry: Placement) -> MeshData:
     normals = np.asarray(mesh.normals, dtype=np.float64)
     if scale is not None:
         normals = normals / np.asarray(scale, dtype=np.float64)
-    turned = placed_positions(
-        normals,
-        (0.0, 0.0, 0.0),
-        float(transform["rot_y_deg"]),
-        None,
-        float(transform.get("pitch_deg", 0.0)),
-    )
+    # A direction takes the two rotations and neither the move nor the scale:
+    # the same entry, decoded as `placed_at` decodes it, at the origin and with
+    # its `scale` left off (the factors were applied above, inverted).
+    turned = placed_at(normals, {"transform": {**transform, "pos": (0.0, 0.0, 0.0)}})
     length = np.linalg.norm(turned, axis=1, keepdims=True)
     turned = np.divide(turned, length, out=np.zeros_like(turned), where=length > 0.0)
     return replace(mesh, positions=stood_positions(mesh, entry), normals=turned.astype(np.float32))
@@ -208,6 +229,36 @@ def stand_library(
     kept, refused = refuse_unbuilt(stands, by_name)
     triangles, vertices, aabb = drawn_totals(by_name, kept, counted=counted)
     return Library(list(meshes), kept, refused, triangles, vertices, aabb)
+
+
+def expanded(
+    meshes: dict[str, MeshData], stands: Sequence[Placement], name: str
+) -> MeshData | None:
+    """One mesh of every stood copy — what the engine draws, as a test can measure it.
+
+    Positions, normals and `uvs` per copy from `stood`, triangles offset; `None`
+    when no stand names a mesh in `meshes`. `tests/test_railings.py` measures
+    panels off it. ⚠️ **It is deliberately NOT what `tools/railing_error.py`
+    walks**: that walk pairs a foot with the head above it by a shared `(x, z)`,
+    which a pitched stand breaks, and every panel's end edges would read as
+    foot — measured, the expansion walks as 21,499 m of an 8,850 m fence. The
+    grader walks the unit and stands the samples (`placed_at`).
+    """
+    copies = [stood(meshes[entry["mesh"]], entry) for entry in stands if entry["mesh"] in meshes]
+    if not copies:
+        return None
+    offsets = np.cumsum([0] + [len(copy.positions) for copy in copies[:-1]])
+    first = copies[0]
+    return MeshData(
+        name=name,
+        positions=np.vstack([copy.positions for copy in copies]),
+        normals=np.vstack([copy.normals for copy in copies]).astype(np.float32),
+        triangles=np.vstack(
+            [copy.triangles + offset for copy, offset in zip(copies, offsets, strict=True)]
+        ).astype(np.uint32),
+        uvs=None if first.uvs is None else np.vstack([copy.uvs for copy in copies]),
+        material=first.material,
+    )
 
 
 def drawn_totals(

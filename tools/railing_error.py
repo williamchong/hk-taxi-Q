@@ -5,6 +5,15 @@ read back, every fence is walked at a fixed pitch, and each station is measured
 against the railing layer itself — the source, re-read here, not the stage's
 account of it.
 
+🔴 **Since `P5-5` the fence is a LIBRARY of one panel per class stood by
+`railings_placements.json`, and this walks PANELS**: the foot line is recovered
+from the unit panel's own triangles exactly as it was from the merged strip —
+`walk` is unchanged and runs on twelve vertices — and every sample on it is then
+stood where the document stands the panel, with the ETL's own
+`placed_positions`. What is trusted from the stage is therefore the transform
+convention and nothing else; the registration, the side and the coverage are
+still read off where the steel actually is.
+
 **What this sees that nothing else can.** `Q60` registers each railing onto the
 drawn kerb because two-thirds of them were surveyed inside the widened ribbon.
 That move is the whole of the decision, and between the join and the pixel there
@@ -56,9 +65,11 @@ sys.path.insert(0, str(ROOT / "etl"))
 
 from pipeline import gdb  # noqa: E402
 from pipeline.config import Config, load_config  # noqa: E402
+from pipeline.documents import read_document  # noqa: E402
 from pipeline.fetch import source_reads  # noqa: E402
 from pipeline.gltf import read_glb  # noqa: E402
-from pipeline.railings import AT_GRADE, RAILINGS_NAME  # noqa: E402
+from pipeline.placements import PLACEMENTS_SCHEMA, placed_at  # noqa: E402
+from pipeline.railings import AT_GRADE, RAILINGS_NAME, RAILINGS_PLACEMENTS_NAME  # noqa: E402
 from pipeline.roads import ROADGRAPH_NAME, read_graph  # noqa: E402
 
 log = logging.getLogger(__name__)
@@ -191,7 +202,13 @@ def walk(mesh_positions: np.ndarray, triangles: np.ndarray) -> tuple[np.ndarray,
 
     ⚠️ **One line per fence, not one per face** since `Q112` gave the fence
     thickness — see `_mid_shift` for how the two are folded together and why
-    they are deliberately not told apart.
+    they are deliberately not told apart. ⚠️ **Run on the unit panel since
+    `P5-5`**, twelve vertices in the panel's own frame, where a foot and its
+    head still share an `(x, z)`; a pitched stand would break that pairing, so
+    the walk happens before the stand and `_stood_stations` after it. 🚫 **Do
+    not walk `placements.expanded()` instead**: every panel's end edges read as
+    foot there, and it measures **21,499 m** of an 8,850 m fence. Walking the
+    unit is also what took this tool's walk from ~620 ms to ~25 ms.
 
     ⚠️ **"The two lowest corners of a triangle" is not the foot, and reading it
     that way overstated the drawn length by 49%.** A quad fans into `[b0, t0,
@@ -249,6 +266,40 @@ def walk(mesh_positions: np.ndarray, triangles: np.ndarray) -> tuple[np.ndarray,
         for fraction in (np.arange(steps) + 0.5) / steps:
             points.append(start + fraction * (end - start))
     return (np.vstack(points) if points else np.empty((0, 2))), drawn_m, height_m
+
+
+def _stood_stations(local: np.ndarray, foot_y: float, stands: list[dict]) -> np.ndarray:
+    """The unit panel's foot samples, in plan, under every stand.
+
+    `local` is `walk`'s plan points on the unit and `foot_y` the unit's own foot
+    height. 🔴 **The height row is the foot's, not zero.** A stand pitches
+    about the panel's `+X`, so plan gains `sin(pitch) x y`; seeded at zero the
+    samples sat `0.25 x sin(pitch)` off the foot — measured p50 1.1 mm and
+    **47 mm** at the steepest 10.9° stand, where the first draft's docstring
+    claimed "under a millimetre". Review caught it.
+    """
+    if not len(local) or not stands:
+        return np.empty((0, 2))
+    points = np.column_stack([local[:, 0], np.full(len(local), foot_y), local[:, 1]])
+    return np.vstack([placed_at(points, entry)[:, [0, 2]] for entry in stands])
+
+
+def placements(city: Config, region_id: str, out_root: Path | None) -> dict[str, list[dict]]:
+    """Every stand in the shipped document, keyed by the class it stands (`P5-5`).
+
+    One read for all classes, on `published()`'s own argument — the document
+    is 1 MB, and reading it per class is three answers to one question.
+    """
+    out_dir = city.out_dir(region_id, out_root)
+    document = read_document(
+        out_dir / RAILINGS_PLACEMENTS_NAME,
+        PLACEMENTS_SCHEMA,
+        f"python -m pipeline.railings --region {region_id}",
+    )
+    by_class: dict[str, list[dict]] = {}
+    for entry in document["placements"]:
+        by_class.setdefault(str(entry["mesh"]), []).append(entry)
+    return by_class
 
 
 def published(
@@ -388,14 +439,16 @@ def survey(
     klass_id: str,
     source: np.ndarray,
     source_m: float,
+    stands: list[dict],
     *,
     near_m: float,
     out_root: Path | None,
 ) -> Report | None:
     """Grade one class's shipped mesh against its own published source.
 
-    `source` is that class's share of `published()`, passed in rather than
-    re-read: the layer is one read for all classes.
+    `source` is that class's share of `published()` and `stands` its share of
+    `placements()`, both passed in rather than re-read: the layer is one read
+    for all classes, and so is the document.
 
     `None` where the class drew nothing — a region need not publish every class,
     and an absent mesh is not a failure. What *is* a finding is a class that
@@ -411,17 +464,21 @@ def survey(
             "A region whose sources publish no railing layer ships none, and that is not a failure."
         )
 
-    # ⚠️ **This class's mesh and no other.** `walk` recovers a fence's feet by
+    # ⚠️ **This class's panel and no other.** `walk` recovers a fence's feet by
     # grouping vertices that share a plan position and taking the lowest — pool
     # three classes standing at three heights into one pile and the panel
     # heights it medians are a mixture of all three.
     mesh = next((entry for entry in read_glb(path) if entry.name == klass_id), None)
     if mesh is None:
         return None
-
+    # The unit panel is walked once, in its own frame, and every sample is then
+    # stood where the document stands the panel (`P5-5`). `drawn_m` is the
+    # panel's foot length times the stands, which is `panels x panel_m`.
     report = Report(klass_id=klass_id, source_m=source_m)
     centres = _Centrelines(read_graph(out_dir / ROADGRAPH_NAME, city.id, region_id))
-    drawn, report.drawn_m, report.height_m = walk(mesh.positions, mesh.triangles)
+    local, unit_m, report.height_m = walk(mesh.positions, mesh.triangles)
+    drawn = _stood_stations(local, float(mesh.positions[:, 1].min()), stands)
+    report.drawn_m = unit_m * len(stands)
     report.stations = len(drawn)
     lines = _Nearest(source, max(near_m, 1.0))
     fences = _Nearest(drawn, max(near_m, 1.0))
@@ -515,6 +572,7 @@ def main(argv: list[str] | None = None) -> int:
     # its own source: the fence is 90% of the metres, so anything the two small
     # classes did wrong would vanish into its average.
     sources = published(city, args.region, args.sources_root)
+    stands = placements(city, args.region, args.out_root)
     for klass in city.railings.classes:
         source, source_m = sources[klass.id]
         report = survey(
@@ -523,6 +581,7 @@ def main(argv: list[str] | None = None) -> int:
             klass.id,
             source,
             source_m,
+            stands.get(klass.id, []),
             near_m=args.near_m,
             out_root=args.out_root,
         )
