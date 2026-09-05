@@ -10,6 +10,15 @@
 ##
 ## Exits non-zero if the arrows are present and fail any check.
 ##
+## 🔴 **Since `P5-4` (`Q115`) the asset is a LIBRARY — one flat glyph per `RM`
+## code, nose north at the origin — and the city is `arrows_placements.json`.**
+## Every mesh check below runs per library mesh, which is every arrow in the
+## city checked once; the faces-up check in particular is asked of the glyph as
+## drawn, and the pitched stand is graded by the ETL's `inverted` over the stood
+## copies, because a rotation is not something an importer can flip. The join
+## is graded both ways by `GeneratedPlacements.check_join`, shared with
+## `verify_signs.gd` and `verify_lamps.gd`.
+##
 ## ⚠️ **Absence is a pass, and that is not a loophole.** A city whose estate
 ## publishes no marking symbols ships none and `city.json` names null, so this
 ## cannot treat a missing asset as a failure without failing every such city.
@@ -22,11 +31,13 @@
 extends SceneTree
 
 const GeneratedLayer = preload("res://scripts/city/generated_layer.gd")
+const GeneratedPlacements = preload("res://scripts/city/generated_placements.gd")
 const MeshContract = preload("res://scripts/city/mesh_contract.gd")
 
-## One primitive, so the whole region's arrows cost one draw call — the rule the
-## road surface, the tiles and the tramway are all held to.
-const SURFACES: int = 1
+## One surface per library mesh, so each glyph is one draw call — the rule the
+## sign and lamp libraries are held to, and before `P5-4` the merged mesh's:
+## one primitive for the region's arrows.
+const SURFACES_PER_MESH: int = 1
 
 ## The material the arrows must end up with, mirroring `SHADERS` in
 ## `tools/generated_scene_import.gd` and `ARROWS_MATERIAL` in
@@ -71,22 +82,30 @@ func _init() -> void:
 
 func _check(scene_root: Node3D) -> PackedStringArray:
 	var problems: PackedStringArray = []
-
-	var mesh: ArrayMesh = MeshContract.single_primitive(scene_root, SURFACES, problems)
-	if mesh == null:
+	var library: Dictionary[String, Mesh] = MeshContract.library_meshes(
+		scene_root, SURFACES_PER_MESH, problems
+	)
+	if library.is_empty():
 		return problems
-
-	for surface: int in mesh.get_surface_count():
-		var where: String = "surface %d" % surface
-		# `false`: this mesh ships no `COLOR_0` on purpose — see `ARROWS_MATERIAL`
-		# above and `config.Arrows`. Every other guarantee in `check_surface`
-		# still applies, the no-texture one especially.
-		problems.append_array(MeshContract.check_surface(mesh, surface, where, false))
-		problems.append_array(
-			MeshContract.check_shader_material(mesh, surface, where, ARROWS_MATERIAL)
+	for mesh_name: String in library:
+		var mesh := library[mesh_name] as ArrayMesh
+		for surface: int in mesh.get_surface_count():
+			var where: String = "'%s' surface %d" % [mesh_name, surface]
+			# `false`: this mesh ships no `COLOR_0` on purpose — see `ARROWS_MATERIAL`
+			# above and `config.Arrows`. Every other guarantee in `check_surface`
+			# still applies, the no-texture one especially.
+			problems.append_array(MeshContract.check_surface(mesh, surface, where, false))
+			problems.append_array(
+				MeshContract.check_shader_material(mesh, surface, where, ARROWS_MATERIAL)
+			)
+			problems.append_array(MeshContract.check_faces_up(mesh, surface, where, "the arrows"))
+	problems.append_array(
+		GeneratedPlacements.check_join(
+			GeneratedLayer.placements_path(GeneratedLayer.ARROWS),
+			GeneratedLayer.noun(GeneratedLayer.ARROWS),
+			library
 		)
-		problems.append_array(MeshContract.check_faces_up(mesh, surface, where, "the arrows"))
-
+	)
 	problems.append_array(_check_has_no_collision(scene_root))
 	return problems
 
@@ -96,8 +115,8 @@ func _check(scene_root: Node3D) -> PackedStringArray:
 ## Sharper here than there: an arrow lies flat across a lane the car is meant to
 ## drive along, so a collider would be a 15 mm step every vehicle in the region
 ## crosses at speed — and the whole guard against it is the absence of a `-col`
-## suffix in one string in `arrows.py`.
+## suffix on the name each library glyph is built under in `arrows.py`.
 func _check_has_no_collision(scene_root: Node3D) -> PackedStringArray:
 	return MeshContract.check_no_collision(
-		scene_root, "the arrows", "ARROWS_MESH_NAME in etl/pipeline/arrows.py"
+		scene_root, "the arrows", "glyph_mesh_name in etl/pipeline/arrows.py"
 	)

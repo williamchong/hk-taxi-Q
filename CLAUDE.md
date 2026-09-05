@@ -569,6 +569,17 @@ Common emoji for this project:
   grades it at 0 of 57, over the rows the roads stage *published* and never all 306. Numbers in `Q94`.
   ⚠️ **An arrows change is also a shader change** — `check.sh` exits 0 on a shader that fails to
   compile, so render and `grep -i "shader error"`. Numbers in `Q59`.
+  🔴 **`arrows.glb` is a LIBRARY since `P5-4` and the city is `arrows_placements.json`** (`Q115`): one
+  flat glyph per `RM` code, nose north at the origin, stood by position, `rot_y_deg` and a
+  **`pitch_deg`** between the deck heights under tail and nose. ⚠️ **The glyph is rigid where the merged
+  build sheared it** — max 18 mm apart at the steepest 7.69° arrow — so a byte-identical `arrows.glb` is
+  no longer the inertness proof for a lane-count change; the counters and `arrows_placements.json`
+  are. ⚠️ **`inverted` is asked of the STOOD copies, never of the library or a determinant** — the
+  pitch is a second rotation and only a stand pitched past vertical can make it non-zero.
+  ⚠️ **`pitch_deg` composes BEFORE the bearing, in the mesh's own frame, on both sides** —
+  `placed_positions` and `GeneratedPlacements.placement_of` — and `Basis.rotated` (world X) is the
+  wrong call. `tools/paint_clearance.py` expands the library under its placements; a tool reading
+  `arrows.glb` alone grades seven glyphs lying at the origin over no road.
   🔴 **And a shader change is a change to THREE layers**: `marking_paint.gdshader` is shared by the
   arrows, the box junctions and the stop lines since `Q71`, on `railings.gdshader`'s precedent — a
   layer is a parameterisation, not a shader, and the colour lives in each `.tres`. So render and

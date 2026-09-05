@@ -73,7 +73,7 @@ BOXJUNCTIONS_NAME = "boxjunctions.glb"
 BOXJUNCTIONS_MANIFEST_NAME = "boxjunctions.json"
 BOXJUNCTIONS_MANIFEST_SCHEMA = 1
 
-# ⚠️ **No `-col` suffix.** Paint is not a collider — `ARROWS_MESH_NAME`'s
+# ⚠️ **No `-col` suffix.** Paint is not a collider — `arrows.glyph_mesh_name`'s
 # reasoning, unchanged: a 12 mm step of paint modelled as collision geometry is
 # a kerb across every junction in the city.
 BOXJUNCTIONS_MESH_NAME = "boxjunctions"

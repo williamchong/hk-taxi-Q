@@ -151,7 +151,12 @@ const NOT_MEASURED: float = -1.0
 ##
 ## 24 since `P5-3` (`Q115`): the manifest names `lamps_placements.json`, and
 ## `lamps.glb` is a library — one mesh per kind — on `signs_placements`' terms.
-const SCHEMA_VERSION: int = 24
+##
+## 25 since `P5-4` (`Q115`): the manifest names `arrows_placements.json`, and
+## `arrows.glb` is a library — one glyph per `RM` code — whose stands carry a
+## `pitch_deg` as well as the bearing. A v24 reader would draw one of every
+## glyph at the origin and no arrow on any street.
+const SCHEMA_VERSION: int = 25
 
 
 ## One entry of `tiles` — a square of the city, at every tier the ETL built.
@@ -334,6 +339,11 @@ var signs_placements_path: String
 ## exactly `lamps_path`'s terms.
 var lamps_placements_path: String
 
+## Where the arrow library stands (`P5-4`): `arrows.glb` is one glyph per `RM`
+## code, and this document is the list of transforms — position, bearing and
+## pitch — each one is drawn at. Empty on exactly `arrows_path`'s terms.
+var arrows_placements_path: String
+
 ## Drawn half-width of the carriageway, in metres, keyed by road-graph edge id —
 ## **one value per station** of that edge's `roadgraph.json` polyline.
 ##
@@ -448,6 +458,7 @@ static func load_manifest() -> CityManifest:
 	manifest.signs_text_atlas_path = _resolve(document.get("signs_text_atlas"))
 	manifest.signs_placements_path = _resolve(document.get("signs_placements"))
 	manifest.lamps_placements_path = _resolve(document.get("lamps_placements"))
+	manifest.arrows_placements_path = _resolve(document.get("arrows_placements"))
 	for entry: Dictionary in document.get("carriageway", []):
 		var edge: int = int(entry.get("edge", -1))
 		manifest.carriageway_half_width_m[edge] = _floats(entry, "half_width_m")
@@ -519,6 +530,7 @@ func shipped() -> PackedStringArray:
 	var optional: Array[String] = [
 		tramway_path,
 		arrows_path,
+		arrows_placements_path,
 		boxjunctions_path,
 		lamps_path,
 		lamps_placements_path,

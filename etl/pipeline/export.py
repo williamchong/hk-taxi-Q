@@ -199,7 +199,10 @@ CITY_NAME = "city.json"
 # than merely different: hard rule 5's test.
 # 24 since `P5-3` (`Q115`): the manifest names `lamps_placements.json`, and
 # `lamps.glb` is a library — one mesh per kind — on `signs_placements`' terms.
-CITY_SCHEMA = 24
+# 25 since `P5-4` (`Q115`): the manifest names `arrows_placements.json`, and
+# `arrows.glb` is a library — one glyph per `RM` code — whose stands carry a
+# `pitch_deg` as well as the compass bearing.
+CITY_SCHEMA = 25
 
 # The hero-building placement document (`P3-6`), written by this stage from the
 # city config — ~2 entries derived from `landmarks:` plus one CRS conversion,
@@ -235,6 +238,7 @@ DOCUMENT_KEYS = ("road_graph", "road_surface", "fares", "landmarks", "fence")
 OPTIONAL_ASSET_KEYS = (
     "tramway",
     "arrows",
+    "arrows_placements",
     "boxjunctions",
     "lamps",
     "lamps_placements",
@@ -455,6 +459,8 @@ def build_region(
         # reason: a region whose symbols all failed the join must not be
         # contradicted here by a constant.
         "arrows": arrows["asset"],
+        # Where the arrow library stands (`P5-4`), on `signs_placements`' terms.
+        "arrows_placements": arrows["placements_document"],
         # `null` where the city drew no box junctions, on `tramway`'s terms and
         # read from the stage's own manifest for its reason: a region whose
         # boxes all failed the join must not be contradicted here by a constant.

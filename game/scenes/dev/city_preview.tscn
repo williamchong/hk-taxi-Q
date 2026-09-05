@@ -35,7 +35,8 @@ script = ExtResource("5_layer")
 layer = "tramway"
 
 ; The turn arrows (`P3-15`), here as well as in `city_drive.tscn` for the same
-; reason the tramway is. Separate from the ribbon because drawing them on it
+; reason the tramway is; a glyph library stood by `arrows_placements.json` since
+; `P5-4`, one draw call per code. Separate from the ribbon because drawing them on it
 ; would put them under `road_markings.tres`'s 6 m junction fade at exactly the
 ; junctions they are about; a region whose sources publish no marking symbols
 ; ships none and this node simply stays empty.

@@ -121,7 +121,7 @@ const LAYERS: Dictionary[String, Dictionary] = {
 		"module": "arrows",
 		"absence":
 		"A city whose sources publish no marking symbols ships none, and that is not a failure.",
-		"placements": "",
+		"placements": "arrows_placements.json",
 	},
 	BOXJUNCTIONS:
 	{

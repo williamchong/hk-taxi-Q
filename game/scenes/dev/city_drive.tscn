@@ -61,8 +61,9 @@ script = ExtResource("2_layer")
 layer = "tramway"
 
 ; The turn arrows (`P3-15`), beside the road surface for the same reason the
-; tramway is — a separate mesh, one draw call — but for the opposite geometric
-; reason. The tramway is separate because `Q58` measured it is *not* on the
+; tramway is — separate geometry; one draw call per glyph code since `P5-4`
+; made it a library stood by `arrows_placements.json` — but for the opposite
+; geometric reason. The tramway is separate because `Q58` measured it is *not* on the
 ; carriageway; the arrows are separate because they are, and drawing them on it
 ; would put them under `road_markings.tres`'s 6 m junction fade at exactly the
 ; junctions they are about. A region whose sources publish no marking symbols

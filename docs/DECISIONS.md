@@ -131,7 +131,7 @@ wins.
 | `Q100` | **Hong Kong is the only city, and its config is the single source of truth** | 🟢 **Closed 2026-08-31 — the premise is retired, not refuted.** `etl/config/cities/` held one file for the project's whole life and nothing ever loaded a second CRS, schema or bounds; the city layer cost a `--city` flag on 17 stages and 22 tools and a path segment on every cache and output, and bought nothing anyone called. ✅ Collapsed: `etl/config/hong_kong.yaml`, `load_config()`, `etl/sources/<source>`, `etl/out/<region>`, `Config`; the constants that *are* the city — the CRS pair, drive-on-the-left, `TS115`/`TS131`–`TS133` — live in `pipeline/hongkong.py`. ⚠️ **Regions survive** (`Q6`, `Q10`) and **hard rule 4 survives**: vocabulary and tuning stay in the yaml, and every config-versus-code grader is unchanged. ✅ Every step graded byte-identical against the pre-work bundle (`Q96`); `city.json`'s `city_id`/`source_crs` still written, so no schema bump. 🚫 `signals.py` kept latent (`Q77`), guarded by a test. ⚠️ Fifteen records cite the second city as a reason; each stands on its other reason and none is rewritten |
 | `Q101` | **Refusals made against one dataset, re-read against the estate that grew** | 🟢 **Closed 2026-08-31 — nine rows, one negative measured.** Five publishers now cover pedestrian crossings/footways (re-opened, the `P3-27` candidate); speed limits stay `Q65`'s HOLD on scope; road text stays NO-GO but its licence half fell with `Q79`; the three kerb registrations predate `Q95`'s measured width and are re-opened as a measurement; the rest defer to the tasks that consume them. 🔴 **The `.gdbtable` domain lead closes negative**: the scan that reads `LP - Lamp post` back out of iB1000's system tables finds no coded-domain content anywhere in dTAD, so `Q60` and `Q76` keep their written-vocabulary rules. Outbound data sharing closed as "not now" (`Q100`) | 🟢 Closed |
 | `Q102` | **The vision reader is withdrawn on cost, and the channel goes with it** | 🟢 **Closed 2026-08-31 — the user's call, and withdrawn rather than refuted.** `tools/facade_grammar.py` was the only API caller in the repo; it, `podium_error.py`, the `facade_survey:` block, the shader's survey half and `anthropic` are gone. 🔴 **`TEXCOORD_1` was removed, not shipped all-zero** — zero was a legal code meaning "refused", so an all-sentinel tile is indistinguishable from a survey that declined every building; `schema_version` 19 → **20**. ⚠️ `Q46`'s `quiet_*` tier had to go with it or it would have muted the whole city. ✅ `Q44`, `Q45`, `Q43`'s split and the hue survey all survive — they run off the hash. ⚠️ A/B refuted "byte-identical": **1.59%/1.61%** of pixels move by **≤2 of 255**, whole-frame `L*` **+0.0003**, geometry byte-identical, sky and road untouched — compiler precision, measured rather than argued |
-| `Q115` | **What repeats ships as a prop with placements; what is measured stays merged** | 🟡 **Open — `P5-1`, `P5-2`, `P5-3` built 2026-09-06, `P5-4`–`P5-6` planned.** A `MultiMesh` costs the draw call the merged glb costs (+1 against +36 for per-scene instancing, measured on the fence), so the budget stays. Signs, lamps, arrows and the barrier family modularise; the road, the box junctions, the stop lines, the ETL registrations and the draw-call budget do not — each refusal carries its number |
+| `Q115` | **What repeats ships as a prop with placements; what is measured stays merged** | 🟡 **Open — `P5-1`–`P5-4` built 2026-09-06, `P5-5`, `P5-6` planned.** A `MultiMesh` costs the draw call the merged glb costs (+1 against +36 for per-scene instancing, measured on the fence), so the budget stays. Signs, lamps, arrows and the barrier family modularise; the road, the box junctions, the stop lines, the ETL registrations and the draw-call budget do not — each refusal carries its number |
 | `Q116` | **Two regions meet at a hard edge, and the join decides where the cut is, not the unit** | 🟡 **Open, owned by `P5-7`.** A whole-Hong Kong model is refused twice (float32 at 38 km, and ×50 the metres). The cut moves from the rectangle to the graph — an edge belongs whole to one region and boundary nodes are shared — and the streaming unit stays the tile: per-edge is 737 draw calls a region, per-region is the always-resident bundle that fails at scale |
 
 | ID | Decision | Status |
@@ -19321,8 +19321,75 @@ signs' 20,234 triangles too and went unremarked. Frames, each side shot twice an
 columns in view; the Hennessy Road camera (`--camera=1038.9,7.0,471.2 --look=1050.1,3.6,466.8`)
 **5,203 px** (max 51), again the columns' outlines — the 47 mm ring rotation, seen edge-on.
 
-**Status.** `P5-1`, `P5-2` and `P5-3` built and reviewed; `P5-4`–`P5-6` planned in `PLAN.md`, not
-started.
+### ✅ `P5-4` is built — the arrows are a glyph library, and the pitch is in the transform
+
+`arrows.glb` carries **7 meshes / 42 triangles / 96 vertices** — one flat glyph per `RM` code drawn
+in the region, nose north at the origin — where the merged build carried 3,246. `arrows_placements.json`
+stands them **747** times: position, the symbol's heading as `rot_y_deg`, and a **`pitch_deg`**
+between the deck heights under the tail and the nose. `arrows.glb` is **197,968 → 8,036 B** and
+the document **156,253 B**; `arrows.json` is schema **2**, `city.json` **25**. The pitch is the placement convention's one addition: `placed_positions`
+applies scale, then a right-handed turn about the mesh's own `+X`, then the bearing, then the move,
+and `GeneratedPlacements.placement_of` composes `basis * Basis(RIGHT, pitch)` in the same order —
+⚠️ `Basis.rotated` would turn about the *world's* X and pitch every arrow toward one compass point.
+
+**Every counter is byte-identical** — both partitions (761 = 747 + 1 + 4 + 9 + 0), `stacked_pairs`
+58, `stacked_disagreeing` **29**, `against_one_way` 9, `outside_carriageway` / `outside_drawn_ribbon`
+**38 / 9**, `over_a_cap` 53, every residual distribution, `lanes_row_disagreement` 0 of 57. `aabb`
+moves by under 0.2 mm; `pitch_deg` is new and reads **p50 0.27°, p90 1.21°, p99 4.05°, max 7.69°**
+(`e71` WAN CHAI ROAD). `inverted` is **0 asked of the stood copies**, not of a basis determinant as
+the plan said: a rotation and a positive scale have a positive determinant by construction, so that
+check would read clean whatever the document said (`Q72`), while a stand pitched past vertical turns
+a sky-facing glyph over — `test_a_stood_glyph_faces_up_and_an_upended_one_does_not` is the mutation.
+
+🔴 **The glyph is rigid where the merged build sheared it, so the stood library is NOT the merged
+mesh to the millimetre.** The old draw held every vertex at its plan position and interpolated the
+height along the shaft — a shear, which has no `Transform3D`. A rigid glyph lies along the chord
+between its two deck heights, so its plan footprint shortens by `length × (1 − cos pitch)`: measured
+row for row over all 7,394 vertices, **p50 0.06 mm, p99 3.8 mm, max 18.2 mm** (the 7.69° arrow,
+2 × (1 − cos 7.69°) m). The rigid form is the more faithful — TD's `LENGTH` is the length painted
+*on* the road — and it is what a prop can be. `paint_clearance.py` now expands the library under its
+placements (`stood_positions`, the ETL's own statement) and reproduces its table to **one triangle**:
+in-carriageway **1.48 → 1.45%**, every other column identical.
+
+**Evidence.** `check.sh` exit 0; `verify_arrows.gd` grades per library mesh and reads *747
+placements stand 7 library meshes*. Draw calls on the throttle route, `--hold=accelerate@0.3+5.7`:
+**100/99/98/100/100/99 → 110/109/108/110/110/109** — +10 for 7 meshes against 1, about 1.7 a mesh,
+the shadow passes `P5-2` found. Frames, each side shot twice and `cmp`-identical: `Q27` street
+**18 of 2,073,600 px** (max channel 28), Hennessy Road **50 px** (max 94), the arrows' anti-aliased
+outlines. ⚠️ **The steepest arrow is invisible from the road on both sides** — a camera 14 m behind
+`e71`'s 7.69° stand shows bare asphalt in the merged build too; it is one of the 185 triangles
+`paint_clearance.py` reports *under the highest road face*, a pre-existing burial and not this step's.
+
+**The review round.** Three reviewers; the efficiency one verified the engine's `Basis`
+composition against `placed_positions` numerically (max component difference 4e-7 m over seven
+yaw/pitch pairs) and measured the stage **~30% cheaper** — `_draw_glyph` runs 7 times instead of
+747, and the whole placement pass is ~24 ms of a 503 ms stage that is 74% I/O and config. What moved:
+
+- 🔴 **The plan's "plus lane slot" was an unread channel, and it is dropped.** The first build wrote
+  the host `edge` and `lane` beside every transform "for a grader that walks the document"; no such
+  grader exists, and the two keys were **26,777 B — 14.6% of the document, 3.9× the whole
+  refactor's net source-byte saving**. `arrows.py`'s own header quotes the rule two dozen lines
+  above the code that broke it: a channel earns its place when something reads it (`Q54`, the
+  59 KB unread `TEXCOORD_0`). `_Laid` carries both for the in-stage graders. A test pins the entry
+  to `placement()`'s shape.
+- The fifteen lines between building a library and writing it — refuse the collapsed stands, count
+  the library, count what it draws, assert every object stands once, write both files — had been
+  retyped in `signs.py`, `lamps.py` and now `arrows.py`; they are `placements.Library` and
+  `stand_library`, and all three stages reproduce their outputs byte for byte across the move.
+- `stood()` rotated the positions and left the normals at the library's frame — inert, because its
+  one caller reads triangle crosses, and a trap for the next one; the normals turn with the stand now.
+- `paint_clearance.py` read the placements with a bare `json.loads` and so skipped the schema check
+  the module it imports from already carries; it is `read_document` against `PLACEMENTS_SCHEMA`.
+- Not taken: the `inverted` loop is provably yaw-independent (a rotation about `Y` preserves a
+  cross product's `Y`), so a per-mesh precompute over pitch alone would run 17 → 3 ms. Declined —
+  it is a second implementation of `downward_facing`'s test living outside `surface.py`, for 14 ms
+  of a half-second stage. The observation stands: the counter's reachability rests entirely on
+  `pitch_deg`, which is the axis the mutation test drives.
+- ⚠️ **Every byte here is a source-file size, which `CLAUDE.md` says is not a bundle measurement.**
+  A PCK reading for the whole of `P5-2`–`P5-5` is owed once `P5-5` lands, and matters here because
+  the arrows' net change is small enough for JSON-versus-GLB packing to flip its sign.
+
+**Status.** `P5-1`–`P5-4` built and reviewed; `P5-5` and `P5-6` planned in `PLAN.md`, not started.
 
 **See.** `Q116` for the join · `P3-29` for the measured `MultiMesh` · `Q82` for the quantisation ·
 `Q62` for why each step owes a frame · `Q92` for why the conformed paint cannot be a prop · `Q25`

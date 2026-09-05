@@ -395,7 +395,7 @@ hk-taxi-Q/
 │   │   ├── clearance.py         # what stands in the ribbon → clear width per station
 │   │   ├── fares.py             # taxi stands + PUDO + POIs → fare nodes
 │   │   ├── tramway.py           # published tram rails → tram.glb (P3-14)
-│   │   ├── arrows.py            # published turn arrows → arrows.glb (P3-15)
+│   │   ├── arrows.py            # published turn arrows → arrows.glb + arrows_placements.json (P3-15, P5-4)
 │   │   ├── boxjunctions.py      # published box junctions → boxjunctions.glb (P3-18)
 │   │   ├── roadmarks.py         # published stop / give-way lines → roadmarks.glb (P3-23)
 │   │   ├── carve.py            # INFRASTRUCTURE cut back to the surveyed carriageway (P3-28, Q19)
@@ -405,7 +405,7 @@ hk-taxi-Q/
 │   │   ├── sign_text.py         # sign lettering → signs_text.png (P3-20, Q68)
 │   │   ├── signals.py           # published signal heads → signals.glb (P3-17, latent — Q77)
 │   │   ├── lamps.py             # published lamp posts → lamps.glb + lamps_placements.json (P3-26, P5-3)
-│   │   ├── placements.py        # a prop library's stands: entry shape, drawn totals, writer (P5-3)
+│   │   ├── placements.py        # a prop library's stands: entry shape, pitch, drawn totals, writer (P5-3, P5-4)
 │   │   ├── export.py            # → city.json, assembles and validates the stage outputs
 │   │   └── __main__.py          # `python -m pipeline` — 19 stages, in order
 │   ├── sources/<source>/        # raw downloads — GITIGNORED
@@ -1001,13 +1001,31 @@ cannot read outside it. `Q58`.
 inverts the day `rail_width_m` and `bed_width_m` converge; inferring it from vertex colour makes the
 `materials:` table load-bearing for shading rather than for colour.
 
-### `arrows.glb` — the published turn arrows (`P3-15`)
+### `arrows.glb` — the published turn arrows (`P3-15`, `P5-4`)
 
-One flat glyph per marking symbol TD publishes, laid `lift_m` above the carriageway. One primitive,
-one material named `arrows`, one draw call, and **no collider**.
+One flat glyph per marking symbol TD publishes, laid `lift_m` above the carriageway. One material
+named `arrows`, and **no collider**.
+
+🔴 **Since `P5-4` (`Q115`) the file is a LIBRARY, and the city is `arrows_placements.json`** — on
+`signs.glb`'s terms, with one mesh per `RM` code (**7 meshes / 42 triangles** for Wan Chai against
+the 3,246 the merged build carried), each drawn flat at the origin with its nose north, and stood
+**747** times at the symbol's heading as `rot_y_deg` plus a **`pitch_deg`** between the deck heights
+under its tail and its nose. ⚠️ **The glyph is rigid where the merged build sheared it** — the
+old draw held every vertex at its plan position and ramped the height along the shaft, which is not
+a rotation and has no transform — so the stood library is *not* the merged mesh to the millimetre:
+row for row the two differ by **p50 0.06 mm, p99 3.8 mm, max 18 mm** at the steepest arrow (7.69°
+on WAN CHAI ROAD), the plan footprint shortening by `length × (1 − cos pitch)`. The rigid form is
+the faithful one: TD's `LENGTH` is the length painted *on* the road. `arrows.json`'s `triangles`,
+`vertices` and `aabb` still describe what is drawn; `library_*`, `placements*` and `pitch_deg`
+(p50 0.27°, p99 4.05°, max 7.69°) are the new keys, and `arrows.json` is schema **2**, `city.json`
+**25**. `inverted` is asked of the **stood** copies, not of the library, because the pitch is a
+second rotation and a stand pitched past vertical faces the ground while its glyph faces the sky —
+reachable, which `Q72` requires of a counter. `tools/paint_clearance.py` expands the library under
+its placements and reproduces its table to within one triangle (in-carriageway 1.48 → 1.45%).
 
 | | |
 |---|---|
+| Primitives | one per library mesh — one per `RM` code (`P5-4`); before it, one for the whole region's arrows |
 | Attributes | `POSITION` and `NORMAL` only — **no `COLOR_0`, no `TEXCOORD_0`, no `TEXCOORD_1`**, no texture |
 
 ⚠️ **`city.json`'s `arrows` key is optional and may be `null`**, on the same terms as `tramway`, with
@@ -1485,7 +1503,8 @@ every region lies inside them.
 | `DebugHud` | Every dev readout, behind `F3` | ✅ |
 | `TrafficSystem` | AI vehicles following road-graph splines; trams as scripted blockers | ⬜ `P3-3` |
 | `tram.glb` | The published tramway, drawn where iB1000 prints it — **not** a marking on the ribbon (`Q58`). One primitive, one draw call, **no collider** | ✅ `P3-14` |
-| `arrows.glb` | The published turn arrows, registered into the lane the ribbon actually has — **not** paint on the ribbon, because the junction fade blanks the approach they are about (`Q59`). One primitive, one draw call, **no collider** | ✅ `P3-15` |
+| `arrows.glb` | The published turn arrows, registered into the lane the ribbon actually has — **not** paint on the ribbon, because the junction fade blanks the approach they are about (`Q59`). **A library since `P5-4`** — one flat glyph per `RM` code, stood by `arrows_placements.json` — one draw call per library mesh, **no collider** | ✅ `P3-15`, `P5-4` |
+| `arrows_placements.json` | Where the arrow library stands: one entry per drawn arrow, in `landmarks.json`'s transform shape plus a `pitch_deg` between the deck heights under its tail and its nose. ⚠️ Nothing else — the first build wrote the host edge and lane beside it and nothing read them, 14.6% of the document (`Q54`). Written beside `arrows.glb` and null on its terms | ✅ `P5-4` |
 | `boxjunctions.glb` | The published yellow box junctions, drawn at the extents the estate surveyed and lifted under the arrows that paint over them. Ships nothing thinner than the import lattice. One primitive, one draw call, **no collider** | ✅ `P3-18` |
 | `roadmarks.glb` | The published stop and give-way lines, drawn at the extents TD surveyed and hosted by the road each one *crosses* rather than the road it is nearest — the two disagree on 43% of the layer. One primitive, one draw call, **no collider** | ✅ `P3-23` |
 | `signs.glb` | The published traffic signs, standing on the poles TD surveyed rather than at the abbreviation points that name them — those are drawing labels, a median 2.6 m away. Shape-faced signs only; anything whose meaning is its text is refused (the no-texture contract). **A library since `P5-2`** — one mesh per face variant plus a unit pole, stood by `signs_placements.json` — one draw call per library mesh, **no collider** | ✅ `P3-16`, `P5-2` |

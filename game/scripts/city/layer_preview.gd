@@ -1,9 +1,10 @@
 ## Instantiates one of the ETL's one-mesh layers, for looking at the city
 ## (`P5-1`). `layer` names a row of `generated_layer.gd`'s table.
 ##
-## A dev tool, not the streamer. Each of these layers is one mesh for the whole
-## region — the carriageway, the tramway, the arrows, the boxes, the stop lines,
-## the signals, the railings, the lamps, the signs — so there is nothing to
+## A dev tool, not the streamer. Each of these layers is region-wide — the
+## carriageway, the tramway, the boxes, the stop lines, the signals and the
+## railings as one mesh each; the signs, the lamps and the arrows as a library
+## of props stood by a placements document (`Q115`) — so there is nothing to
 ## stream, and deliberately nothing to LOD: `Q34`'s vertex clustering annihilates
 ## anything thinner than a cell, and a 90 mm column, a 100 mm hatch line or a
 ## 40 mm fence is exactly that.

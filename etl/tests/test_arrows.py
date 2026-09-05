@@ -12,6 +12,7 @@ cross-check against, so these tests are the whole of it.
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import numpy as np
@@ -25,16 +26,19 @@ from pipeline.arrows import (
     Symbol,
     _count_rows,
     _count_stacked,
-    _draw,
+    _draw_glyph,
     _Laid,
     _lane_of,
     _place,
+    _stand,
     axis_residual_deg,
     directed_residual_deg,
+    glyph_mesh_name,
     glyph_polygons,
 )
 from pipeline.config import load_config
 from pipeline.meshbuild import FlatBuilder
+from pipeline.placements import PLACEMENT_DP, placement, stood, stood_positions
 from pipeline.polyline import Segments
 from pipeline.surface import downward_facing, mitres
 from tests.helpers import CITY_YAML, polygon_area
@@ -367,14 +371,16 @@ class TestDrawing:
 
         `lift_m` is 15 mm, so a flat glyph on any real gradient has one end
         under the road — which reads as half an arrow rather than as an error.
+        Since `P5-4` the grade is the stand's `pitch_deg`, and the stood glyph
+        is what is checked.
         """
-        builder = FlatBuilder(ARROWS_MATERIAL)
         symbol = Symbol(code="1017", x=0.0, z=5.0, heading_deg=0.0)
-        _draw(builder, spec, symbol, spec.glyphs["1017"], np.array([0.0, 5.0]), 0.0, 1.0)
-        mesh = builder.build("arrows")
-        assert mesh is not None
+        glyph = spec.glyphs["1017"]
+        entry = _stand(spec, symbol, glyph, np.array([0.0, 5.0]), 0.0, 1.0)
+        assert entry["transform"]["pitch_deg"] > 0.0
+        unit = _library(spec, "1017")
+        heights = stood_positions(unit, entry)[:, 1]
         # The nose is uphill of the tail, and every vertex is clear of the deck.
-        heights = mesh.positions[:, 1]
         assert heights.max() > heights.min()
         assert heights.min() >= spec.lift_m - 1e-9
 
@@ -407,6 +413,104 @@ def _built(spec, movements=("ahead",), length_m=4.0):
     mesh = builder.build("arrows")
     assert mesh is not None
     return mesh
+
+
+def _library(spec, code: str):
+    """The library mesh the stage builds for `code`."""
+    builder = FlatBuilder(ARROWS_MATERIAL)
+    _draw_glyph(builder, spec, spec.glyphs[code])
+    mesh = builder.build(glyph_mesh_name(code))
+    assert mesh is not None
+    return mesh
+
+
+class TestTheLibraryStandsWhereTheArrowsWere:
+    """`P5-4`: a glyph is drawn once, flat at the origin with its nose north,
+    and stood at the symbol's heading with a pitch between its two deck
+    heights — and that must be the arrow `_place` would have laid in place, or
+    `triangles`, `aabb` and the frame are an estimate.
+
+    ⚠️ The rotation is `gltf.placed_positions`' one statement; what this pins
+    is the heading reaching `rot_y_deg` the right way round and the pitch
+    raising the NOSE. A heading of 0 or 180 is invariant under a flipped yaw
+    sign and a level arrow under a flipped pitch sign, so the cases carry
+    neither.
+    """
+
+    TOLERANCE = 2.0 * 10.0**-PLACEMENT_DP
+
+    @pytest.mark.parametrize("heading_deg", [0.0, 37.00007, 90.0, 180.0, 271.0])
+    def test_a_stood_glyph_is_the_glyph_placed_in_the_plan(self, spec, heading_deg):
+        """Level: the stand is `_place` at the heading, lifted."""
+        glyph = spec.glyphs["1027"]
+        placed_at = np.array([31.5, -12.25])
+        symbol = Symbol(code="1027", x=31.5, z=-12.25, heading_deg=heading_deg)
+        entry = _stand(spec, symbol, glyph, placed_at, 4.0, 4.0)
+        assert entry["transform"]["pitch_deg"] == 0.0
+        stood_at = stood_positions(_library(spec, "1027"), entry)
+        expected = np.vstack(
+            [
+                _place(polygon, 31.5, -12.25, heading_deg)
+                for polygon in glyph_polygons(spec, glyph.movements, glyph.length_m)
+            ]
+        )
+        assert np.allclose(stood_at[:, [0, 2]], expected, atol=self.TOLERANCE)
+        assert np.allclose(stood_at[:, 1], 4.0 + spec.lift_m, atol=self.TOLERANCE)
+
+    def test_the_pitch_raises_the_nose_and_lies_along_the_chord(self, spec):
+        """Nose 1.0 m above the tail over a 4 m glyph: the stood glyph's nose
+        is uphill, its plan footprint is `length x cos(pitch)`, and its two
+        ends land on the chord between the two deck heights."""
+        glyph = spec.glyphs["1017"]
+        symbol = Symbol(code="1017", x=0.0, z=0.0, heading_deg=0.0)
+        entry = _stand(spec, symbol, glyph, np.zeros(2), 0.0, 1.0)
+        pitch = math.radians(entry["transform"]["pitch_deg"])
+        assert math.isclose(math.tan(pitch), 1.0 / glyph.length_m, rel_tol=1e-3)
+        stood_at = stood_positions(_library(spec, "1017"), entry)
+        nose = stood_at[np.argmin(stood_at[:, 2])]
+        tail = stood_at[np.argmax(stood_at[:, 2])]
+        assert nose[1] > tail[1]
+        # Heading 0 is north, `-Z`: the nose is the most northerly vertex.
+        assert math.isclose(tail[2] - nose[2], glyph.length_m * math.cos(pitch), abs_tol=1e-3)
+        assert math.isclose(nose[1] - tail[1], glyph.length_m * math.sin(pitch), abs_tol=1e-3)
+        assert math.isclose(0.5 * (nose[1] + tail[1]), 0.5 + spec.lift_m, abs_tol=1e-3)
+
+    def test_a_backwards_arrow_on_a_two_way_street_pitches_by_its_own_ends(self, spec):
+        """`build_region` swaps which deck height is the nose's when the arrow
+        points against its edge; the stand reads `y_nose - y_tail` in the
+        glyph's own frame either way, so an arrow pointing downhill is pitched
+        nose-down."""
+        glyph = spec.glyphs["1017"]
+        symbol = Symbol(code="1017", x=0.0, z=0.0, heading_deg=180.0)
+        entry = _stand(spec, symbol, glyph, np.zeros(2), 1.0, 0.0)
+        assert entry["transform"]["pitch_deg"] < 0.0
+        stood_at = stood_positions(_library(spec, "1017"), entry)
+        # Heading 180: the nose is the most southerly vertex, `+Z`, and lower.
+        nose = stood_at[np.argmax(stood_at[:, 2])]
+        tail = stood_at[np.argmin(stood_at[:, 2])]
+        assert nose[1] < tail[1]
+
+    def test_a_stood_glyph_faces_up_and_an_upended_one_does_not(self, spec):
+        """`inverted` is asked of the stood copies (`Q72`: a counter must be
+        reachable). A pitch past vertical turns a sky-facing glyph over."""
+        unit = _library(spec, "1017")
+        level = placement(unit.name, (0.0, 0.0, 0.0), 45.0, pitch_deg=7.0)
+        assert downward_facing(stood(unit, level)) == (0, 0.0)
+        upended = placement(unit.name, (0.0, 0.0, 0.0), 45.0, pitch_deg=170.0)
+        assert downward_facing(stood(unit, upended))[0] == unit.triangle_count
+
+    def test_a_stand_is_the_shared_entry_shape_and_nothing_more(self, spec):
+        """`Q54`: the first build wrote the host edge and lane beside the
+        transform and nothing read them — 14.6% of the document. The entry is
+        `placement()`'s, with the pitch its one addition over the signs'."""
+        symbol = Symbol(code="1017", x=0.0, z=0.0, heading_deg=0.0)
+        entry = _stand(spec, symbol, spec.glyphs["1017"], np.zeros(2), 0.0, 0.0)
+        assert set(entry) == {"mesh", "transform"}
+        assert set(entry["transform"]) == {"pos", "rot_y_deg", "pitch_deg"}
+
+    def test_the_library_mesh_is_named_for_the_code(self):
+        assert glyph_mesh_name("1017") == "RM1017"
+        assert not glyph_mesh_name("1017").endswith("-col")
 
 
 class TestTheReport:

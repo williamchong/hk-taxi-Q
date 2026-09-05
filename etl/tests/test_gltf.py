@@ -9,6 +9,7 @@ that unsupported input raises rather than that supported input works.
 from __future__ import annotations
 
 import json
+import math
 import struct
 from dataclasses import replace
 
@@ -378,3 +379,21 @@ class TestPlacedPositions:
             triangles=np.zeros((0, 3), dtype=np.uint32),
         )
         assert np.allclose(mesh.placed((1.0, 0.0, 0.0), 180.0), [[1.0, 0.0, 1.0]], atol=1e-12)
+
+    def test_a_positive_pitch_raises_the_north_end(self):
+        """`P5-4`: the nose of a glyph drawn pointing north, pitched +90,
+        points straight up — a right-handed turn about the mesh's own `+X`."""
+        north = np.array([[0.0, 0.0, -1.0]])
+        up = placed_positions(north, (0.0, 0.0, 0.0), 0.0, pitch_deg=90.0)
+        assert np.allclose(up, [[0.0, 1.0, 0.0]], atol=1e-12)
+
+    def test_the_pitch_is_applied_before_the_bearing(self):
+        """Pitched +90 then turned to bearing 90: the nose is still straight
+        up, because the tilt happened in the mesh's own frame. Turned first it
+        would lie east, which is the order the engine must not use either."""
+        north = np.array([[0.0, 0.0, -1.0]])
+        stood = placed_positions(north, (0.0, 0.0, 0.0), 90.0, pitch_deg=90.0)
+        assert np.allclose(stood, [[0.0, 1.0, 0.0]], atol=1e-12)
+        # And a half pitch at bearing 90 lands the nose east and up equally.
+        half = placed_positions(north, (0.0, 0.0, 0.0), 90.0, pitch_deg=45.0)
+        assert np.allclose(half, [[math.sqrt(0.5), math.sqrt(0.5), 0.0]], atol=1e-12)

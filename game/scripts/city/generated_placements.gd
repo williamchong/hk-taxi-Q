@@ -3,15 +3,15 @@
 ## A prop layer is a LIBRARY — a `.glb` of named meshes — and a document that
 ## stands each one: entries of `mesh`, a `transform` in `landmarks.json`'s shape
 ## (`pos`, a compass `rot_y_deg`) and an optional `scale`. The signs are the
-## first; the lamps and arrows take the same document (`Q115`), which is why
+## first; the lamps and the arrows took the same document (`Q115`), which is why
 ## this is its own script rather than a corner of `generated_layer.gd` — that
 ## table is static data about where a layer lives, and this is behaviour.
 ##
-## Three readers: `layer_preview.gd` draws what this decodes, and
-## `verify_signs.gd` and `verify_lamps.gd` grade it through `check_join`, so
+## Four readers: `layer_preview.gd` draws what this decodes, and `verify_signs.gd`,
+## `verify_lamps.gd` and `verify_arrows.gd` grade it through `check_join`, so
 ## `group` is the one statement of the join between a library and its document
 ## — a mesh nothing stands, an entry naming no mesh, an entry with no usable
-## transform — and all three report the same three counts.
+## transform — and all four report the same three counts.
 extends RefCounted
 
 const GeneratedDocument = preload("res://scripts/city/generated_document.gd")
@@ -37,8 +37,14 @@ static func load_placements(path: String, noun: String) -> Dictionary:
 ## restated** — that function is the one owner of the compass-to-`Basis`
 ## convention (`generated_fence.gd` says why), and a second producer would be a
 ## sign error on a layer where a plate turned the wrong way is a perfectly good
-## sign giving the opposite instruction. `scale` is the one addition: a pole is
-## a unit prism stretched to its own height. 🔴 **A negative or zero factor is
+## sign giving the opposite instruction. Two additions: `scale` — a pole is a
+## unit prism stretched to its own height — and `pitch_deg` (`P5-4`), a tilt
+## about the mesh's OWN right-hand axis applied before the bearing, so a glyph
+## drawn nose-north lies along its road's grade whatever way the road runs.
+## Both compose in the mesh's frame, which is `basis * Basis(RIGHT, pitch)` /
+## `scaled_local` here and "scale, then pitch, then bearing" in
+## `gltf.placed_positions`; `test_gltf.py` pins that order on the ETL side and
+## the A/B frame is where the two sides meet. 🔴 **A negative or zero factor is
 ## refused here, not graded later** — under `cull_back` a mirrored plate is a
 ## missing one, so the preview must never draw it and `verify_signs.gd` reports
 ## the null this returns. Null rather than the identity, on the same reasoning
@@ -48,6 +54,15 @@ static func placement_of(entry: Dictionary) -> Variant:
 	if placed == null:
 		return null
 	var at: Transform3D = placed as Transform3D
+	var transform: Dictionary = entry.get("transform", {}) as Dictionary
+	var pitch_deg: float = float(transform.get("pitch_deg", 0.0))
+	if pitch_deg != 0.0:
+		# A right-handed turn about the mesh's own `+X`, so its `-Z` (north,
+		# the nose) rises for a positive pitch — `placed_positions`' sign.
+		# `basis * Basis(axis, angle)` is the LOCAL rotation — `Basis.rotated`
+		# would turn about the world's X and pitch every arrow toward the same
+		# compass point whatever way its street runs.
+		at = Transform3D(at.basis * Basis(Vector3.RIGHT, deg_to_rad(pitch_deg)), at.origin)
 	var scale: Array = entry.get("scale") if entry.get("scale") is Array else []
 	if scale.is_empty():
 		return at
@@ -96,7 +111,7 @@ static func group(document: Dictionary, library: Dictionary[String, Mesh]) -> Di
 
 ## The join graded, for a verify tool: the library must be stood in both
 ## directions and every entry must decode. Returns the problems, and prints the
-## `ok` line itself when there are none, so the two verifiers that call this
+## `ok` line itself when there are none, so the verifiers that call this
 ## report the same three failures in the same words.
 static func check_join(
 	path: String, noun: String, library: Dictionary[String, Mesh]

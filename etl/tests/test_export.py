@@ -242,6 +242,7 @@ class _Region:
                 "city_id": city.id,
                 "region_id": REGION,
                 "asset": None,
+                "placements_document": None,
                 "symbols": 0,
                 "drawn": 0,
             },

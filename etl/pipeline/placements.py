@@ -2,24 +2,26 @@
 
 `P5-2` made the signs a LIBRARY — one mesh per repeated shape — and a document
 of stands; `P5-3` gave the lamps the same shape and moved what the two share
-here. A stand is `landmarks.json`'s transform (`pos`, a compass `rot_y_deg`)
-plus an optional `scale`, and the rotation itself is `gltf.placed_positions`'
-one statement. What this module owns is the entry's shape, the rounding, the
-drawn totals a stage publishes so its numbers stay the merged build's, and the
-document writer — each written once so a third layer cannot drift from the
-first two.
+here; `P5-4` laid the arrows along their grade with it. A stand is
+`landmarks.json`'s transform (`pos`, a compass `rot_y_deg`, and for a prop laid
+along a slope a `pitch_deg`) plus an optional `scale`, and the rotation itself
+is `gltf.placed_positions`' one statement. What this module owns is the entry's
+shape, the rounding, the drawn totals a stage publishes so its numbers stay the
+merged build's, and the document writer — each written once so a third layer
+cannot drift from the first two.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
 from pipeline.documents import write_document
-from pipeline.gltf import MeshData
+from pipeline.gltf import MeshData, placed_positions, write_glb
 
 # Every `*_placements.json` shares one schema, because the format is one
 # format. Mirrors `GeneratedPlacements.SCHEMA_VERSION` in the engine.
@@ -44,16 +46,27 @@ Placement = dict[str, Any]
 
 
 def placement(
-    mesh: str, position: Sequence[float], rot_y_deg: float, scale: Sequence[float] | None = None
+    mesh: str,
+    position: Sequence[float],
+    rot_y_deg: float,
+    scale: Sequence[float] | None = None,
+    pitch_deg: float | None = None,
 ) -> Placement:
-    """One placements entry, in `landmarks.json`'s transform shape."""
-    entry: Placement = {
-        "mesh": mesh,
-        "transform": {
-            "pos": [_rounded(value) for value in position],
-            "rot_y_deg": _rounded(rot_y_deg),
-        },
+    """One placements entry, in `landmarks.json`'s transform shape.
+
+    `pitch_deg` (`P5-4`) is written only when a stage passes one, so a layer
+    that stands upright props — signs, lamps — writes the document it always
+    did; the arrows are the one layer laid along a grade. ⚠️ **Written even
+    when it is 0.0** on such a layer, because "this glyph is level" is a
+    measurement and an absent key is not.
+    """
+    transform: dict[str, Any] = {
+        "pos": [_rounded(value) for value in position],
+        "rot_y_deg": _rounded(rot_y_deg),
     }
+    if pitch_deg is not None:
+        transform["pitch_deg"] = _rounded(pitch_deg)
+    entry: Placement = {"mesh": mesh, "transform": transform}
     if scale is not None:
         entry["scale"] = [_rounded(value) for value in scale]
     return entry
@@ -69,7 +82,39 @@ def stood_positions(mesh: MeshData, entry: Placement) -> np.ndarray:
     numbers and not an estimate.
     """
     transform = entry["transform"]
-    return mesh.placed(transform["pos"], float(transform["rot_y_deg"]), entry.get("scale"))
+    return mesh.placed(
+        transform["pos"],
+        float(transform["rot_y_deg"]),
+        entry.get("scale"),
+        float(transform.get("pitch_deg", 0.0)),
+    )
+
+
+def stood(mesh: MeshData, entry: Placement) -> MeshData:
+    """`mesh` as `entry` stands it — the drawn copy, for a grader that asks a
+    question of triangles rather than of vertices (`arrows.py`'s `inverted`).
+
+    The normals turn with it: a normal is a direction, so it takes the stand's
+    two rotations and neither its move nor its scale — under a non-uniform
+    scale a normal transforms by the inverse of the factors, then renormalises.
+    Left at the library's values (the first draft) they would have been silently
+    wrong for the first caller that read them.
+    """
+    transform = entry["transform"]
+    scale = entry.get("scale")
+    normals = np.asarray(mesh.normals, dtype=np.float64)
+    if scale is not None:
+        normals = normals / np.asarray(scale, dtype=np.float64)
+    turned = placed_positions(
+        normals,
+        (0.0, 0.0, 0.0),
+        float(transform["rot_y_deg"]),
+        None,
+        float(transform.get("pitch_deg", 0.0)),
+    )
+    length = np.linalg.norm(turned, axis=1, keepdims=True)
+    turned = np.divide(turned, length, out=np.zeros_like(turned), where=length > 0.0)
+    return replace(mesh, positions=stood_positions(mesh, entry), normals=turned.astype(np.float32))
 
 
 def refuse_unbuilt(
@@ -83,6 +128,86 @@ def refuse_unbuilt(
     """
     kept = [entry for entry in stands if entry["mesh"] in by_name]
     return kept, len(stands) - len(kept)
+
+
+@dataclass(frozen=True)
+class Library:
+    """A prop library built and stood — the numbers every prop stage publishes.
+
+    `P5-2`, `P5-3` and `P5-4` each retyped the same fifteen lines between
+    building their meshes and writing them: refuse the stands whose mesh
+    collapsed, count the library, count what it draws under its stands, assert
+    that every drawn object stands exactly once, write both files. This is that
+    glue once. What stays with each stage is what differs — the grading of the
+    meshes (`facing_away` on a vertical prop, `inverted` over the stood copies
+    of a flat one) and what "every drawn object" adds up to.
+    """
+
+    meshes: list[MeshData]
+    stands: list[Placement]
+    placements_refused: int
+    # What is DRAWN: the library under every stand, so a reader comparing a
+    # stage's numbers to the merged build it replaced reads the same numbers.
+    triangles: int
+    vertices: int
+    aabb: list[list[float]]
+
+    @property
+    def by_name(self) -> dict[str, MeshData]:
+        return {mesh.name: mesh for mesh in self.meshes}
+
+    def publish(self, report: Any) -> None:
+        """Write the eight shared counters onto a stage's report.
+
+        By attribute name, because the three reports spell them identically
+        and a fourth that did not would fail here rather than publish zeros.
+        """
+        report.placements = len(self.stands)
+        report.placements_refused = self.placements_refused
+        report.library_meshes = len(self.meshes)
+        report.library_triangles = sum(mesh.triangle_count for mesh in self.meshes)
+        report.library_vertices = sum(len(mesh.positions) for mesh in self.meshes)
+        report.triangles = self.triangles
+        report.vertices = self.vertices
+        report.aabb = self.aabb
+
+    def require_every_stand(self, expected: int, what: str) -> None:
+        """⚠️ **Computed, not claimed**: every drawn object stands exactly once.
+
+        A stand dropped or doubled renders as a missing prop or a z-fighting
+        one, and nothing in a frame says which; `expected` is what the stage
+        drew, in its own terms.
+        """
+        if len(self.stands) + self.placements_refused != expected:
+            raise ValueError(
+                f"{len(self.stands)} placements and {self.placements_refused} refused for "
+                f"{what} — expected {expected}, so a stand was dropped or doubled"
+            )
+
+    def write(
+        self, out_dir: Path, asset: str, placements_name: str, city_id: str, region_id: str
+    ) -> int:
+        """The library and its document, side by side; returns the `.glb`'s bytes."""
+        written = write_glb(out_dir / asset, self.meshes)
+        write_placements(out_dir / placements_name, city_id, region_id, asset, self.stands)
+        return written
+
+
+def stand_library(
+    meshes: Sequence[MeshData],
+    stands: Sequence[Placement],
+    *,
+    counted: Callable[[str], bool] = lambda _name: True,
+) -> Library:
+    """`meshes` stood by `stands`, with the stands of a collapsed mesh refused.
+
+    `counted` is `drawn_totals`'s: which meshes count toward the drawn
+    triangle and vertex totals (the signs leave their lettering out).
+    """
+    by_name = {mesh.name: mesh for mesh in meshes}
+    kept, refused = refuse_unbuilt(stands, by_name)
+    triangles, vertices, aabb = drawn_totals(by_name, kept, counted=counted)
+    return Library(list(meshes), kept, refused, triangles, vertices, aabb)
 
 
 def drawn_totals(

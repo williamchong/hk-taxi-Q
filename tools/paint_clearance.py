@@ -86,7 +86,9 @@ from deck_error import (  # noqa: E402
     load_bundle,
     log_bundle,
 )
+from pipeline.documents import read_document  # noqa: E402
 from pipeline.gltf import read_glb  # noqa: E402
+from pipeline.placements import PLACEMENTS_SCHEMA, stood_positions  # noqa: E402
 
 log = logging.getLogger(__name__)
 
@@ -220,7 +222,7 @@ class LayerVerdict:
         return self.judged / self.triangles if self.triangles else 0.0
 
 
-def paint_triangles(path: Path) -> np.ndarray:
+def paint_triangles(path: Path, placements: Path | None = None) -> np.ndarray:
     """Every triangle of a marking mesh as `(n, 3, 3)` corners.
 
     Unlike `deck_error.drawn_surface` this does not insist on a single
@@ -229,12 +231,30 @@ def paint_triangles(path: Path) -> np.ndarray:
     every triangle of a marking is judged, including the ones facing the ground,
     because a mesh whose winding has flipped is a separate defect each stage
     already counts as `inverted` and this tool must not quietly agree with it.
+
+    🔴 **A layer with a `placements` document is a LIBRARY (`P5-4`), and what is
+    judged is the library stood by it** — every glyph at every stand, pitched
+    to its grade — never the library itself, which lies flat at the origin over
+    no road at all and would read 100% uncovered. The expansion is
+    `pipeline.placements.stood_positions`, the ETL's own statement of the
+    stand, so this tool grades the arrows the engine draws and shares only the
+    transform convention with the stage — the heights it judges against are the
+    shipped `roads.glb`'s, as before.
     """
-    blocks = [
-        mesh.positions[mesh.triangles].astype(np.float64)
-        for mesh in read_glb(path)
-        if len(mesh.triangles)
-    ]
+    meshes = [mesh for mesh in read_glb(path) if len(mesh.triangles)]
+    if placements is None:
+        blocks = [mesh.positions[mesh.triangles].astype(np.float64) for mesh in meshes]
+    else:
+        library = {mesh.name: mesh for mesh in meshes}
+        document = read_document(
+            placements, PLACEMENTS_SCHEMA, "rebuild the region; the placements schema moved"
+        )
+        blocks = []
+        for entry in document["placements"]:
+            mesh = library.get(str(entry["mesh"]))
+            if mesh is None:
+                raise SystemExit(f"{placements} stands '{entry['mesh']}', which {path} lacks")
+            blocks.append(stood_positions(mesh, entry)[mesh.triangles].astype(np.float64))
     if not blocks:
         raise SystemExit(f"{path} holds no triangles")
     return np.concatenate(blocks)
@@ -474,9 +494,14 @@ def main(argv: list[str] | None = None) -> int:
             log.info("")
             log.info("  %-14s not declared in city.json — nothing to grade", key)
             continue
+        # A prop layer names its stands under `<key>_placements` (`P5-4`).
+        stands = manifest.get(f"{key}_placements")
         verdicts.append(
             survey(
-                paint_triangles(args.generated / asset),
+                paint_triangles(
+                    args.generated / asset,
+                    args.generated / stands if stands else None,
+                ),
                 road,
                 key=key,
                 name=name,

@@ -135,10 +135,14 @@ class MeshData:
         return replace(self, positions=self.positions + np.asarray(offset, dtype=np.float64))
 
     def placed(
-        self, position: Sequence[float], rot_y_deg: float, scale: Sequence[float] | None = None
+        self,
+        position: Sequence[float],
+        rot_y_deg: float,
+        scale: Sequence[float] | None = None,
+        pitch_deg: float = 0.0,
     ) -> np.ndarray:
         """This mesh's vertices stood at `position` under a compass bearing."""
-        return placed_positions(self.positions, position, rot_y_deg, scale)
+        return placed_positions(self.positions, position, rot_y_deg, scale, pitch_deg)
 
     def aabb(self) -> Bounds:
         low = self.positions.min(axis=0)
@@ -431,6 +435,7 @@ def placed_positions(
     position: Sequence[float],
     rot_y_deg: float,
     scale: Sequence[float] | None = None,
+    pitch_deg: float = 0.0,
 ) -> np.ndarray:
     """`positions` stood at `position`, turned to a compass bearing, optionally scaled.
 
@@ -443,8 +448,16 @@ def placed_positions(
     (`Q19`), and the arithmetic was then written a second and a third time in
     `clearance.py` and `tools/carriageway_occupancy.py` before `P5-2` needed a
     fourth. Scale is applied first, in the mesh's own frame — a sign pole is a
-    unit prism stretched to its own height — then the rotation, then the move.
-    `tests/test_gltf.py` pins the sign against a point rather than this text.
+    unit prism stretched to its own height — then the pitch, then the bearing,
+    then the move. `tests/test_gltf.py` pins the sign against a point rather
+    than this text.
+
+    `pitch_deg` (`P5-4`) tilts the mesh about its own `+X` — its right-hand
+    axis — **before** the bearing, so a positive pitch raises the mesh's own
+    north (`-Z`) end: a glyph whose nose points north in the library, pitched
+    +3° and stood at bearing 90, has its nose east and 3° uphill. The engine
+    composes the same two rotations in the same order in
+    `GeneratedPlacements.placement_of`; `landmarks.json` never carries one.
     """
     facing = math.radians(float(rot_y_deg))
     cos, sin = math.cos(facing), math.sin(facing)
@@ -452,6 +465,12 @@ def placed_positions(
     local = np.asarray(positions, dtype=np.float64)
     if scale is not None:
         local = local * np.asarray(scale, dtype=np.float64)
+    if pitch_deg:
+        tilt = math.radians(float(pitch_deg))
+        cos_p, sin_p = math.cos(tilt), math.sin(tilt)
+        # A right-handed rotation about `+X`: `-Z` (north) goes to `+Y` (up).
+        pitch = np.array([[1.0, 0.0, 0.0], [0.0, cos_p, -sin_p], [0.0, sin_p, cos_p]])
+        local = local @ pitch.T
     return local @ rotation.T + np.asarray(position, dtype=np.float64)
 
 

@@ -38,6 +38,20 @@ space would have invented its position. This is the opposite case.
 ⚠️ **Nothing here rotates an arrow.** A symbol whose bearing disagrees with its
 edge has matched the wrong edge and is refused; turning it to agree would be an
 invented marking in `Q54`'s sense, and it would render perfectly.
+
+🔴 **Since `P5-4` (`Q115`) `arrows.glb` is a LIBRARY — one mesh per `RM` code,
+drawn flat at the origin with its nose north — and the city is
+`arrows_placements.json`**: one stand per drawn arrow carrying its position,
+its heading as the compass `rot_y_deg`, and a **`pitch_deg`** between the deck
+heights under its tail and its nose, so a rigid glyph reproduces the arrow laid
+along its grade. The lane snap, every refusal and every counter stay here; only
+the output form changed, from triangles to a transform. ⚠️ **The glyph is
+rigid, where the merged build sheared it** — the old draw kept every vertex at
+its plan position and interpolated the height along the shaft, which is not a
+rotation and has no transform. On the region's grades the two differ by
+millimetres (measured at the build, `Q115`), and the rigid form is the more
+faithful one: TD's `LENGTH` is the length painted *on* the road, not its plan
+projection.
 """
 
 from __future__ import annotations
@@ -67,8 +81,9 @@ from pipeline.config import (
 )
 from pipeline.documents import read_document, write_document
 from pipeline.fetch import source_reads
-from pipeline.gltf import write_glb
+from pipeline.gltf import MeshData
 from pipeline.meshbuild import FlatBuilder
+from pipeline.placements import Placement, placement, stand_library, stood
 from pipeline.polyline import (
     Segments,
     Snap,
@@ -85,12 +100,30 @@ log = logging.getLogger(__name__)
 
 ARROWS_NAME = "arrows.glb"
 ARROWS_MANIFEST_NAME = "arrows.json"
-ARROWS_MANIFEST_SCHEMA = 1
+# 2 since `P5-4` (`Q115`): `arrows.glb` is a LIBRARY — one mesh per `RM` code,
+# flat at the origin, nose north — and the arrows stand where
+# `arrows_placements.json` puts them, pitched to their grade. `triangles`,
+# `vertices` and `aabb` still describe what is DRAWN, so a reader comparing them
+# to the merged build reads the same numbers; `library_*`, `placements`,
+# `placements_document` and `pitch_deg` are new. A v1 reader publishing a
+# `city.json` with no `arrows_placements` would ship a library and stand nothing
+# on it.
+ARROWS_MANIFEST_SCHEMA = 2
+ARROWS_PLACEMENTS_NAME = "arrows_placements.json"
 
-# ⚠️ **No `-col` suffix.** Paint is not a collider. The same reasoning
-# `TRAMWAY_MESH_NAME` records, with less room for doubt: a 15 mm step of paint
-# modelled as collision geometry is a kerb across every lane in the city.
-ARROWS_MESH_NAME = "arrows"
+
+def glyph_mesh_name(code: str) -> str:
+    """The library mesh drawn for one publisher code: `RM1017`.
+
+    ⚠️ **No `-col` suffix.** Paint is not a collider. The same reasoning
+    `TRAMWAY_MESH_NAME` records, with less room for doubt: a 15 mm step of paint
+    modelled as collision geometry is a kerb across every lane in the city.
+    Per code rather than per movement set because the code is what the
+    publisher wrote and what an artist replacing a glyph would look up — the
+    4 m and 6 m variants of one marking are two codes and two meshes.
+    """
+    return f"RM{code}"
+
 
 # glTF material name, the contract channel `SURFACE_MATERIAL` and
 # `TRAMWAY_MATERIAL` use: `tools/generated_scene_import.gd` maps this string onto
@@ -261,10 +294,27 @@ class ArrowReport:
     # first tramway, 5,111 triangles of 5,112, with everything else correct.
     inverted: int = 0
     inverted_area_m2: float = 0.0
+    # What is DRAWN: the library under every stand (`P5-4`), so these read the
+    # same as the merged build they replaced. The library's own size is
+    # `library_*`; `placements` counts entries in `arrows_placements.json`, and
+    # `placements_refused` the stands whose glyph collapsed to nothing — part of
+    # the partition `placements + placements_refused == drawn`, and 0 today.
     triangles: int = 0
     vertices: int = 0
     bytes: int = 0
     aabb: list[list[float]] = field(default_factory=list)
+    placements: int = 0
+    placements_refused: int = 0
+    library_meshes: int = 0
+    library_triangles: int = 0
+    library_vertices: int = 0
+    # The grade each drawn arrow lies on, unsigned, in degrees — the tilt its
+    # stand carries between the deck under its tail and under its nose. A tail
+    # here is the finding: a 4 m glyph pitched past what any street climbs has
+    # taken one end's height from a different edge, which is the defect
+    # `Ribbon.height_m` exists to prevent, and a frame shows it as an arrow
+    # standing on its nose. Recorded over what is drawn, so its `n` is `drawn`.
+    pitch_deg: list[float] = field(default_factory=list)
 
     @staticmethod
     def measured(values: list[float]) -> dict[str, float]:
@@ -790,7 +840,13 @@ def build_region(
     # kept paint out of `materials:`), and the first draft's unread glyph-local
     # `TEXCOORD_0` cost 59 KB of a 257 KB asset — a channel earns its place when
     # something reads it (`Q54`).
-    builder = FlatBuilder(ARROWS_MATERIAL)
+    # 🔴 **One builder per code, not one for the region** (`P5-4`). A code is
+    # drawn ONCE, flat at the origin with its nose north, and every arrow of it
+    # is a stand — position, heading, pitch — so the library glyph is the
+    # arrow `_place` would have drawn at heading 0, and `tests/test_arrows.py`
+    # pins the stood copy against the in-place draw.
+    library: dict[str, FlatBuilder] = {}
+    stands: list[Placement] = []
     laid: list[_Laid] = []
     for symbol in symbols:
         snap = segments.nearest(symbol.x, symbol.z)
@@ -870,7 +926,12 @@ def build_region(
         centreline = np.array([symbol.x, symbol.z]) - snap.offset_m * near
         placed = centreline + drawn_offset_m * near
 
-        _draw(builder, spec, symbol, glyph, placed, y_tail, y_nose)
+        if symbol.code not in library:
+            library[symbol.code] = FlatBuilder(ARROWS_MATERIAL)
+            _draw_glyph(library[symbol.code], spec, glyph)
+        stand = _stand(spec, symbol, glyph, placed, y_tail, y_nose)
+        stands.append(stand)
+        report.pitch_deg.append(abs(float(stand["transform"]["pitch_deg"])))
         report.drawn += 1
         key = "+".join(glyph.movements)
         report.by_glyph[key] = report.by_glyph.get(key, 0) + 1
@@ -890,14 +951,32 @@ def build_region(
     _count_rows(laid, drawn, report)
     _grade_against_the_graph(graph, report)
 
-    mesh = builder.build(ARROWS_MESH_NAME)
-    if mesh is not None:
-        report.inverted, report.inverted_area_m2 = downward_facing(mesh)
-        report.triangles = mesh.triangle_count
-        report.vertices = len(mesh.positions)
-        low, high = mesh.aabb()
-        report.aabb = [list(low), list(high)]
-        report.bytes = write_glb(out_dir / ARROWS_NAME, [mesh])
+    # A library mesh is named after the code it draws — `RM1017` — so a region
+    # publishing both lengths of one marking ships two meshes, and an artist
+    # replacing one replaces one.
+    meshes: list[MeshData] = []
+    for code in sorted(library):
+        built = library[code].build(glyph_mesh_name(code))
+        if built is not None:
+            meshes.append(built)
+    library = stand_library(meshes, stands)
+    if meshes:
+        # ⚠️ **`inverted` is asked of every DRAWN copy, not of the library.** A
+        # rotation about `Y` preserves winding, so the library's answer would be
+        # the city's — but the pitch is a second rotation, and a stand pitched
+        # past vertical faces the ground while its glyph faces the sky. Asked
+        # of the stood copies it is reachable in exactly that way, which is the
+        # test `Q72` says a counter has to pass.
+        by_name = library.by_name
+        for entry in library.stands:
+            count, area = downward_facing(stood(by_name[entry["mesh"]], entry))
+            report.inverted += count
+            report.inverted_area_m2 += area
+        library.publish(report)
+        library.require_every_stand(report.drawn, f"{report.drawn} arrows")
+        report.bytes = library.write(
+            out_dir, ARROWS_NAME, ARROWS_PLACEMENTS_NAME, city.id, region_id
+        )
 
     _write_manifest(out_dir, city, region_id, report)
     return report
@@ -1063,28 +1142,55 @@ def _offset(arrow: _Laid) -> float:
     return arrow.offset_m
 
 
-def _draw(
-    builder: FlatBuilder,
+def _draw_glyph(builder: FlatBuilder, spec: Arrows, glyph: ArrowGlyph) -> None:
+    """One library glyph: flat in `y = 0`, centred on the origin, nose north.
+
+    This is `_place` at heading 0 — `+v` along `-Z`, `+u` along `+X` — so a
+    stand at the symbol's own heading is the arrow that function would have
+    drawn in place, and `tests/test_arrows.py` holds the two together. Flat
+    rather than at `lift_m`: the lift is the stand's, vertical whatever the
+    pitch, which is what the merged build did too.
+    """
+    for polygon in glyph_polygons(spec, glyph.movements, glyph.length_m):
+        plan = _place(polygon, 0.0, 0.0, 0.0)
+        builder.polygon(plan, np.zeros(len(plan)))
+
+
+def _stand(
     spec: Arrows,
     symbol: Symbol,
     glyph: ArrowGlyph,
     placed: np.ndarray,
     y_tail: float,
     y_nose: float,
-) -> None:
-    """One arrow, laid between its two deck heights and lifted clear of them.
+) -> Placement:
+    """Where one arrow stands: between its two deck heights, lifted clear of them.
 
-    ⚠️ **Interpolated between the ends rather than laid flat at the centre.** A
-    4 m glyph laid flat on a 5% grade stands 0.1 m proud at one end and 0.1 m
+    ⚠️ **The entry is `placement()`'s shape and nothing more.** `PLAN.md`'s row
+    for `P5-4` said "plus lane slot", and the first build wrote the host `edge`
+    and the `lane` beside the transform — 26,777 B, 14.6% of the document, that
+    no tool, verifier or scene read. `Q54`'s rule is this module's own, two
+    dozen lines up: a channel earns its place when something reads it. `_Laid`
+    carries both for the graders that do (`_count_stacked`, `_count_rows`).
+
+    ⚠️ **Pitched between the ends rather than laid flat at the centre.** A 4 m
+    glyph laid flat on a 5% grade stands 0.1 m proud at one end and 0.1 m
     under the road at the other, and `lift_m` is 0.015 — the sunk end simply
-    disappears. Two heights rather than one per vertex because the longitudinal
-    slope is the one that matters and the cross-slope is camber.
+    disappears. One pitch rather than a height per vertex because the
+    longitudinal slope is the one that matters and the cross-slope is camber.
+
+    The glyph is rigid and lies along the chord from the deck under its tail
+    to the deck under its nose, so its plan footprint is `length_m x cos(pitch)`
+    — shorter than the merged build's by `length_m x (1 - cos)`, millimetres
+    on a street. `pitch_deg` is positive nose-up, `placed_positions`' sign.
     """
-    for polygon in glyph_polygons(spec, glyph.movements, glyph.length_m):
-        plan = _place(polygon, float(placed[0]), float(placed[1]), symbol.heading_deg)
-        # `v` runs from `-length / 2` at the tail to `+length / 2` at the nose.
-        ramp = 0.5 + polygon[:, 1] / glyph.length_m
-        builder.polygon(plan, y_tail + ramp * (y_nose - y_tail) + spec.lift_m)
+    rise = y_nose - y_tail
+    return placement(
+        glyph_mesh_name(symbol.code),
+        (float(placed[0]), 0.5 * (y_tail + y_nose) + spec.lift_m, float(placed[1])),
+        symbol.heading_deg,
+        pitch_deg=math.degrees(math.atan2(rise, glyph.length_m)),
+    )
 
 
 def _write_manifest(out_dir: Path, city: Config, region_id: str, report: ArrowReport) -> int:
@@ -1095,7 +1201,8 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: ArrowRe
         # Gated on what was written, for the reason `tramway.json` records: a
         # manifest naming an asset the bundle does not hold is what `CITY_SCHEMA`
         # 11 was bumped over.
-        "asset": ARROWS_NAME if report.drawn else None,
+        "asset": ARROWS_NAME if report.triangles else None,
+        "placements_document": ARROWS_PLACEMENTS_NAME if report.triangles else None,
         # The read, as four disjoint parts of `symbols`.
         "symbols": report.symbols,
         "not_a_turn_arrow": report.not_a_turn_arrow,
@@ -1172,6 +1279,17 @@ def _write_manifest(out_dir: Path, city: Config, region_id: str, report: ArrowRe
         "vertices": report.vertices,
         "bytes": report.bytes,
         "aabb": report.aabb,
+        # The library and its stands (`P5-4`); `triangles`/`vertices`/`aabb`
+        # above are what those stands DRAW.
+        "placements": report.placements,
+        "placements_refused": report.placements_refused,
+        "library_meshes": report.library_meshes,
+        "library_triangles": report.library_triangles,
+        "library_vertices": report.library_vertices,
+        # The grade each arrow lies on — see `ArrowReport.pitch_deg`. p90/p99/max
+        # like every distribution here: the tail is the arrow standing on its
+        # nose, and a median near zero is also what a flat city reads.
+        "pitch_deg": report.measured(report.pitch_deg),
     }
     return write_document(out_dir / ARROWS_MANIFEST_NAME, document)
 

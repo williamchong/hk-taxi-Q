@@ -129,6 +129,13 @@ func _check_documents(manifest: Manifest) -> PackedStringArray:
 				"arrows", manifest.arrows_path, GeneratedLayer.path(GeneratedLayer.ARROWS)
 			)
 		)
+		problems.append_array(
+			_check_document(
+				"arrow placements",
+				manifest.arrows_placements_path,
+				GeneratedLayer.placements_path(GeneratedLayer.ARROWS)
+			)
+		)
 	# Guarded on the same terms again: `verify_boxjunctions.gd` treats an absent
 	# asset as a pass, so a manifest naming `boxjunctions.glb` with the file gone
 	# would otherwise pass every check here.

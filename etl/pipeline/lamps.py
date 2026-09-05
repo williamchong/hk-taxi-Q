@@ -123,15 +123,9 @@ from pipeline.arrows import ArrowReport, Ribbon, nearside, ribbons
 from pipeline.config import Config, GameTransform, Lamps, load_config
 from pipeline.documents import read_document, write_document
 from pipeline.fetch import source_reads
-from pipeline.gltf import MeshData, write_glb
+from pipeline.gltf import MeshData
 from pipeline.meshbuild import ColouredBuilder
-from pipeline.placements import (
-    Placement,
-    drawn_totals,
-    placement,
-    refuse_unbuilt,
-    write_placements,
-)
+from pipeline.placements import Placement, placement, stand_library
 from pipeline.polyline import Segments, Snap, bearing_deg
 from pipeline.railings import facing_away
 from pipeline.roads import ROADGRAPH_NAME, read_graph
@@ -740,27 +734,16 @@ def build_region(
         built = library[kind].build(kind)
         if built is not None:
             meshes.append(built)
-    by_name = {mesh.name: mesh for mesh in meshes}
-    stands, report.placements_refused = refuse_unbuilt(stands, by_name)
+    library = stand_library(meshes, stands)
     if meshes:
         # ⚠️ **`facing_away` is asked of every library mesh** and is not a
         # tautology of the stand: a rotation about `Y` preserves winding, so the
         # library's answer is the drawn city's — 25,116 inverted triangles would
         # still read here, as they did on the first build.
         report.facing_away = sum(facing_away(mesh) for mesh in meshes)
-        report.library_meshes = len(meshes)
-        report.library_triangles = sum(mesh.triangle_count for mesh in meshes)
-        report.library_vertices = sum(len(mesh.positions) for mesh in meshes)
-        report.placements = len(stands)
-        report.triangles, report.vertices, report.aabb = drawn_totals(by_name, stands)
-        # ⚠️ **Computed, not claimed**: every column stands exactly once.
-        if report.placements + report.placements_refused != report.drawn:
-            raise ValueError(
-                f"{report.placements} placements and {report.placements_refused} refused "
-                f"for {report.drawn} columns — a stand was dropped or doubled"
-            )
-        report.bytes = write_glb(out_dir / LAMPS_NAME, meshes)
-        write_placements(out_dir / LAMPS_PLACEMENTS_NAME, city.id, region_id, LAMPS_NAME, stands)
+        library.publish(report)
+        library.require_every_stand(report.drawn, f"{report.drawn} columns")
+        report.bytes = library.write(out_dir, LAMPS_NAME, LAMPS_PLACEMENTS_NAME, city.id, region_id)
 
     _write_manifest(out_dir, city, region_id, report)
     return report

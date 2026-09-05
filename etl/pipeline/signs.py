@@ -169,10 +169,10 @@ from pipeline.config import (
 )
 from pipeline.documents import read_document, write_document
 from pipeline.fetch import cached_source, source_reads
-from pipeline.gltf import MeshData, Texture, write_glb
+from pipeline.gltf import MeshData, Texture
 from pipeline.mesh import select_triangles
 from pipeline.meshbuild import MIN_TWICE_AREA_M2, ColouredBuilder
-from pipeline.placements import drawn_totals, placement, refuse_unbuilt, write_placements
+from pipeline.placements import placement, stand_library
 from pipeline.polyline import (
     Segments,
     Snap,
@@ -1980,8 +1980,7 @@ def build_region(
             built = text_libraries[code].build(text_mesh_name(code), text)
             if built is not None:
                 meshes.append(built)
-    by_name = {mesh.name: mesh for mesh in meshes}
-    stands, report.placements_refused = refuse_unbuilt(stands, by_name)
+    library = stand_library(meshes, stands, counted=lambda name: not is_text_mesh(name))
     if meshes:
         # ⚠️ **`facing_away` is asked of every library mesh**, plates and pole
         # alike, and it is not a tautology of the placement: a rotation about
@@ -1994,17 +1993,12 @@ def build_region(
             facing_away(mesh) for mesh in meshes if is_text_mesh(mesh.name)
         )
         report.facing_away = sum(facing_away(mesh) for mesh in meshes) - report.text_facing_away
-        report.library_meshes = len(meshes)
-        report.library_triangles = sum(mesh.triangle_count for mesh in meshes)
-        report.library_vertices = sum(len(mesh.positions) for mesh in meshes)
-        report.placements = len(stands)
         # What is DRAWN, so these stay the merged build's numbers (`P5-2`). The
-        # plates and posts alone, as before; the lettering is `text_plates`, its
-        # own count, and the extent takes both.
-        report.triangles, report.vertices, report.aabb = drawn_totals(
-            by_name, stands, counted=lambda name: not is_text_mesh(name)
-        )
-        report.text_plates = sum(1 for entry in stands if is_text_mesh(entry["mesh"]))
+        # plates and posts alone, as before — `counted` above leaves the
+        # lettering out, which is `text_plates`, its own count — and the extent
+        # takes both.
+        library.publish(report)
+        report.text_plates = sum(1 for entry in library.stands if is_text_mesh(entry["mesh"]))
         if text is not None and text_libraries:
             report.text_atlas_px = text.pixels
             report.text_coverage = {code: cell.coverage for code, cell in text.cells.items()}
@@ -2012,21 +2006,13 @@ def build_region(
             # lettering mesh names `SIGNS_TEXT_ATLAS_NAME` as its texture's `uri`
             # and `gltf.py` owns both halves of that reference (`Q70`).
             report.text_atlas_bytes = len(text.png)
-        # ⚠️ **Computed, not claimed**, on `turned_plates_agree`'s terms: every
-        # plate stands once, every lettered plate stands its words once, and
-        # every post stands once. A stand dropped or doubled anywhere above
-        # renders as a missing sign or a z-fighting one, and nothing in a frame
-        # says which.
-        expected = report.drawn + report.text_plates + report.poles_drawn
-        if report.placements + report.placements_refused != expected:
-            raise ValueError(
-                f"{report.placements} placements and {report.placements_refused} refused for "
-                f"{report.drawn} plates, {report.text_plates} lettered and "
-                f"{report.poles_drawn} poles — expected {expected}, so a stand was dropped "
-                f"or doubled"
-            )
-        report.bytes = write_glb(out_dir / SIGNS_NAME, meshes)
-        write_placements(out_dir / SIGNS_PLACEMENTS_NAME, city.id, region_id, SIGNS_NAME, stands)
+        # On `turned_plates_agree`'s terms: every plate stands once, every
+        # lettered plate stands its words once, and every post stands once.
+        library.require_every_stand(
+            report.drawn + report.text_plates + report.poles_drawn,
+            f"{report.drawn} plates, {report.text_plates} lettered and {report.poles_drawn} poles",
+        )
+        report.bytes = library.write(out_dir, SIGNS_NAME, SIGNS_PLACEMENTS_NAME, city.id, region_id)
 
     _write_manifest(out_dir, city, region_id, report)
     return report
