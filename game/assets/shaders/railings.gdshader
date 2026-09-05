@@ -9,9 +9,26 @@
 // along the kerb on the road side, and, wherever a ribbon runs beside a
 // footway, from the pavement side too. Drawn `cull_back` at one quad per
 // station the fence would simply vanish from half the approaches, which is
-// `Q58`'s failure-to-nothing wearing a different hat. The alternative is two
-// quads per station and twice the triangles for a surface 40 mm thick, which
-// buys nothing a driver can see.
+// `Q58`'s failure-to-nothing wearing a different hat.
+//
+// 🔴 **This paragraph used to end "the alternative is two quads per station and
+// twice the triangles for a surface 40 mm thick, which buys nothing a driver
+// can see", and the driver refuted it** (`Q112`): *"the side fence has no width
+// so it is not visible in some angle."* Seen along its own length a
+// zero-thickness sheet covers less than a pixel, and `bars()` below then
+// integrates the balusters into a uniform alpha over that sliver — so the fence
+// is not dim, it is **absent**. `Q58`'s failure-to-nothing again, on the layer
+// whose whole job is to be a visible edge. `pipeline/railings.py` draws each
+// run as a slab since then: road-side face, far face, and a horizontal cap.
+// 11,012 → 33,030 triangles, and the cap is the half that fixes the reported
+// angle — two parallel faces are edge-on at the same moment and a cap between
+// them is not.
+//
+// ⚠️ **`cull_disabled` stays, and the slab did not make it redundant.** A
+// closed box would cull correctly; this fence is 60-75% air, so through every
+// gap in the near face the player sees the *inside* of the far one. Culling it
+// would punch the far face out wherever the near face is transparent, which is
+// the picture the thickness was added to give.
 //
 // ⚠️ **So the winding no longer decides visibility — it decides *lighting*.**
 // `pipeline/railings.py` winds every quad to look at the carriageway and

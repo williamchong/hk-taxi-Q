@@ -185,6 +185,11 @@ class ClassReport:
     # buried stretches is measured in *ribbon* metres, after it.
     metres_dropped_short: float = 0.0
     metres_dropped_sliver: float = 0.0
+    # ⚠️ A third refusal in the ribbon frame, and deliberately not folded into
+    # the sliver above (`Q112`): a piece whose stations all land on one point
+    # has no line to be drawn along, where a sliver is a short piece of real
+    # fence. 0 here and reachable — mutation-check it rather than reading it.
+    metres_dropped_collapsed: float = 0.0
     # Run metres falling outside the drawn ribbon's own extent — past a junction
     # trim, where the cap is and the kerb is not.
     metres_outside_ribbon: float = 0.0
@@ -215,6 +220,17 @@ class ClassReport:
     # rather than assumed because the tramway shipped 5,111 of 5,112 triangles
     # facing the wrong way with everything else correct (`Q58`).
     facing_away: int = 0
+    # 🔴 **The two `Q112` repairs, published so they stay checkable.** Stations
+    # folded into their neighbour because they stood at the same place
+    # (`_distinct`), and stations whose facing came from along the run because
+    # the offset had folded (`_folded`). `stations_folded` counts what the bar
+    # found and `stations_unfolded` what it could repair; they differ only where
+    # a run has no unfolded station to donate one, which would otherwise be a
+    # silent no-op. ⚠️ **Neither is `facing_away`'s predicate** — that is the
+    # whole reason the counter still measures something (`Q58`).
+    stations_merged: int = 0
+    stations_folded: int = 0
+    stations_unfolded: int = 0
     triangles: int = 0
     vertices: int = 0
     aabb: list[list[float]] = field(default_factory=list)
@@ -541,8 +557,17 @@ def _visible(ribbon: Ribbon, side: str, start_m: float, end_m: float) -> list[tu
     return kept
 
 
-def _run_uvs(plan: np.ndarray, *, height_m: float, sink_m: float) -> np.ndarray:
+def _run_uvs(plan: np.ndarray, *, low_m: float, high_m: float) -> np.ndarray:
     """`(metres along the fence, metres above the deck)` for one strip's vertices.
+
+    ⚠️ **`plan` is the NEAR face's line for every face of the slab** (`Q112`),
+    which is why this takes a polyline and a pair of heights rather than a
+    class. `u` has to be the *same* on the road-side face, the far face and the
+    cap, or the two sheets of balusters fall out of phase and a fence 50 mm
+    thick draws a picket twice. The far face's own arc length differs from the
+    near face's around every bend — by the ratio of their radii, the same
+    quantity the warning below is about — so it is deliberately not measured
+    there.
 
     Ordered to match `_Builder.strip`'s own `[bottom, top]` stack, so the two
     stay in step by construction rather than by a comment.
@@ -565,13 +590,14 @@ def _run_uvs(plan: np.ndarray, *, height_m: float, sink_m: float) -> np.ndarray:
     `v = 0` is the ground line wherever the fence stands: `-sink_m` at the
     buried foot, `height_m` at the top. That is what lets a rail band be
     authored as "0.95 m up" and mean it, rather than meaning a fraction of a
-    height that a second class will change.
+    height that a second class will change. The cap passes `height_m` for
+    **both** rows, because it is the top of the fence along its whole width.
     """
     along = plan_lengths_2d(plan)
     return np.column_stack(
         [
             np.concatenate([along, along]),
-            np.concatenate([np.full(len(plan), -sink_m), np.full(len(plan), height_m)]),
+            np.concatenate([np.full(len(plan), low_m), np.full(len(plan), high_m)]),
         ]
     )
 
@@ -586,40 +612,28 @@ class _Builder:
         self._triangles: list[np.ndarray] = []
         self._count = 0
 
-    def strip(
+    def _face(
         self,
-        plan: np.ndarray,
-        deck: np.ndarray,
+        foot: np.ndarray,
+        head: np.ndarray,
+        normals: np.ndarray,
+        uvs: np.ndarray,
         *,
-        height_m: float,
-        sink_m: float,
-        facing: np.ndarray,
         flip: bool,
     ) -> int:
-        """One run of fence: a quad per station pair, wound to face the road.
+        """One two-row quad strip, wound once. The slab's three faces share it.
 
-        `facing` is the unit direction each station's front face looks in, which
-        is toward the carriageway. It is passed rather than derived from the
-        winding because a strip's own direction says nothing about which side of
-        it the road is on.
-
-        Every vertex also carries `TEXCOORD_0` as **`(metres along this run,
-        metres above the ribbon deck)`** — the coordinate `railings.gdshader`
-        cuts the balusters out of. Not a texture coordinate: nothing samples an
-        image, and `mesh_contract.gd` would refuse the bundle if anything did.
-        It is the same channel and the same kind of payload a tile's storey
-        height travels in (`P3-7`).
+        Kept as one function rather than written out per face so the index
+        arithmetic below exists once: three copies of it is three places for a
+        winding to be got right twice and wrong once, and a face wound backwards
+        is a black panel rather than a missing one.
         """
-        if len(plan) < 2:
-            return 0
-        bottom = np.column_stack([plan[:, 0], deck - sink_m, plan[:, 1]])
-        top = np.column_stack([plan[:, 0], deck + height_m, plan[:, 1]])
+        stations = len(foot)
         base = self._count
-        self._positions.append(np.vstack([bottom, top]))
-        self._normals.append(np.vstack([facing, facing]))
-        self._uvs.append(_run_uvs(plan, height_m=height_m, sink_m=sink_m))
+        self._positions.append(np.vstack([foot, head]))
+        self._normals.append(normals)
+        self._uvs.append(uvs)
 
-        stations = len(plan)
         low = base + np.arange(stations - 1)
         high = base + stations + np.arange(stations - 1)
         # `[b0, t0, t1] + [b0, t1, b1]` winds the front face to the **left of
@@ -632,6 +646,68 @@ class _Builder:
         self._triangles.append(quads[:, ::-1] if flip else quads)
         self._count += 2 * stations
         return 2 * (stations - 1)
+
+    def strip(
+        self,
+        plan: np.ndarray,
+        deck: np.ndarray,
+        *,
+        height_m: float,
+        sink_m: float,
+        thickness_m: float,
+        facing: np.ndarray,
+        flip: bool,
+    ) -> int:
+        """One run of fence, as a slab: road-side face, far face, and a cap.
+
+        `facing` is the unit direction each station's front face looks in, which
+        is toward the carriageway. It is passed rather than derived from the
+        winding because a strip's own direction says nothing about which side of
+        it the road is on.
+
+        🔴 **Extruded OUTWARD only** (`Q112`). The road-side face stands exactly
+        where `_station` registered it, so `outset_m` still means what it says
+        and no thickness can push steel toward the traffic — `Q78`'s one-way
+        correction, at a second layer. The far face is the same strip translated
+        `thickness_m` along `-facing`, and the cap joins their two tops.
+
+        ⚠️ **The three windings are derived from one convention, never chosen per
+        quad.** The near face takes `flip`, because that is what makes it look at
+        the road. The far face takes `not flip`, because a translation cannot
+        change a winding and it has to look the other way. The cap takes `flip`
+        again: its own cross reduces to `-thickness x length x (facing x along)`,
+        whose `y` is positive exactly when `facing` is the unflipped `up x along`
+        — so the side that flips the panel is the side that flips the cap. That
+        is why `facing_away` still measures something here: nothing is wound to
+        whatever normal it was handed (`Q58`).
+
+        Every vertex also carries `TEXCOORD_0` as **`(metres along this run,
+        metres above the ribbon deck)`** — the coordinate `railings.gdshader`
+        cuts the balusters out of. Not a texture coordinate: nothing samples an
+        image, and `mesh_contract.gd` would refuse the bundle if anything did.
+        It is the same channel and the same kind of payload a tile's storey
+        height travels in (`P3-7`).
+        """
+        if len(plan) < 2:
+            return 0
+        far = plan - facing[:, [0, 2]].astype(plan.dtype) * thickness_m
+        near_foot = np.column_stack([plan[:, 0], deck - sink_m, plan[:, 1]])
+        near_head = np.column_stack([plan[:, 0], deck + height_m, plan[:, 1]])
+        # ⚠️ The far face takes the **near** face's deck, so the panel stays flat
+        # and the cap stays horizontal. Re-sampling the ribbon 50 mm outward
+        # would tilt every cap by the camber and buy nothing: the fence is one
+        # rigid object, not two independently planted sheets.
+        far_foot = np.column_stack([far[:, 0], deck - sink_m, far[:, 1]])
+        far_head = np.column_stack([far[:, 0], deck + height_m, far[:, 1]])
+        panel = _run_uvs(plan, low_m=-sink_m, high_m=height_m)
+        cap = _run_uvs(plan, low_m=height_m, high_m=height_m)
+        up = np.zeros_like(facing)
+        up[:, 1] = 1.0
+
+        drawn = self._face(near_foot, near_head, np.vstack([facing, facing]), panel, flip=flip)
+        drawn += self._face(far_foot, far_head, np.vstack([-facing, -facing]), panel, flip=not flip)
+        drawn += self._face(near_head, far_head, np.vstack([up, up]), cap, flip=flip)
+        return drawn
 
     def build(self, name: str) -> MeshData | None:
         """The mesh, minus collapsed triangles.
@@ -730,6 +806,8 @@ def build_region(
                 spec.sample_m,
                 report,
                 found,
+                min_station_gap_m=spec.min_station_gap_m,
+                fold_tolerance_deg=spec.fold_tolerance_deg,
             )
 
     meshes: list[MeshData] = []
@@ -849,14 +927,19 @@ def _draw_run(
     sample_m: float,
     report: RailingReport,
     occupied: dict[int, dict[str, int]] | None = None,
+    *,
+    min_station_gap_m: float,
+    fold_tolerance_deg: float,
 ) -> None:
     """One merged run of one class, clipped to the ribbon and to its drawn kerb.
 
-    Every bar and dimension comes off `klass`; `sample_m` is the one shared join
-    parameter, the cell pitch this run's extent is expressed in. Taken as a float
-    rather than as the whole `Railings` so the signature states that split
-    instead of a paragraph having to — the join is shared, and nothing below it
-    is.
+    Every bar and dimension comes off `klass`; the three floats passed beside it
+    are the block's, taken as floats rather than as the whole `Railings` so the
+    signature states that split instead of a paragraph having to. `sample_m` is
+    the cell pitch this run's extent is expressed in; `min_station_gap_m` and
+    `fold_tolerance_deg` are `_distinct`'s and `_folded`'s bars, and they are
+    shared for the same reason the join is — they are properties of the offset
+    ribbon, which every class stands on, and not of what is being drawn on it.
 
     `occupied` is the run's own cell table, used only to count the metres drawn
     across bridged gaps — see `_bridged_m`. Optional so a test can drive one run
@@ -900,12 +983,30 @@ def _draw_run(
         for row, distance in enumerate(at):
             plan[row], deck[row] = _station(ribbon, klass.id, side, float(distance))
 
-        facing = _facing(plan, ribbon, at)
+        kept = _distinct(plan, min_station_gap_m)
+        report_class.stations_merged += int(len(plan) - kept.sum())
+        if kept.sum() < 2:
+            # Every station of this piece is one place, so there is no fence
+            # line to draw along. Counted apart from the slivers rather than
+            # folded into them: a sliver is a short piece of real fence and this
+            # is a piece with no extent on the drawn rail at all, and the two
+            # would want opposite fixes. 0 in this region and reachable, so
+            # mutation-check it rather than reading its value.
+            report_class.metres_dropped_collapsed += high - low
+            continue
+        at, plan, deck = at[kept], plan[kept], deck[kept]
+
+        facing, folded, unfolded = _unfold(
+            _facing(plan, ribbon, at), plan, ribbon, at, fold_tolerance_deg
+        )
+        report_class.stations_folded += folded
+        report_class.stations_unfolded += unfolded
         builder.strip(
             plan,
             deck,
             height_m=klass.height_m,
             sink_m=klass.base_sink_m,
+            thickness_m=klass.thickness_m,
             facing=facing,
             flip=side == NEARSIDE,
         )
@@ -955,12 +1056,155 @@ def _bridged_m(
     return bridged
 
 
+def _distinct(plan: np.ndarray, min_gap_m: float) -> np.ndarray:
+    """Mask of the stations that are their own place on the fence line (`Q112`).
+
+    🔴 **Two stations at one point are not a panel, and the slab is what made
+    that visible.** `_station` interpolates in the *centreline's* parameter, so
+    a duplicated ribbon vertex — or a vertex the junction trim lands exactly on
+    — puts two stations at the same plan point with two different `_facing`
+    directions. As a sheet that quad has no area and `MIN_TWICE_AREA_M2` deleted
+    it silently. As a slab it does: the far face is `plan - facing x thickness`,
+    so two different facings at one point pull the far rail apart and generate a
+    panel across the fence out of nothing, wound however the two facings happen
+    to differ. `e480`'s bollard row and `e530`'s CRAIL2 are three of `Q112`'s
+    nine survivors between them.
+
+    Greedy from the first station, so the kept ones are at least `min_gap_m`
+    apart along the drawn line and the run keeps the place it starts at.
+
+    ⚠️ **This is not the collapse bar moved earlier.** `MIN_TWICE_AREA_M2` is a
+    property of a triangle and this is a property of the fence — 27 steps of
+    5,532 are under a centimetre in this region against 19 at exactly zero, and
+    the eight in between are the ones the area bar was letting through.
+    """
+    keep = np.zeros(len(plan), dtype=bool)
+    if len(plan) == 0:
+        return keep
+    keep[0] = True
+    last = plan[0]
+    for index in range(1, len(plan)):
+        if float(np.hypot(*(plan[index] - last))) > min_gap_m:
+            keep[index] = True
+            last = plan[index]
+    return keep
+
+
+def _folded(plan: np.ndarray, ribbon: Ribbon, at: np.ndarray, tolerance_deg: float) -> np.ndarray:
+    """Per step, whether the offset rail has doubled back on its own centreline.
+
+    🔴 **The measurement that answers `Q112`'s open question.** Around a tight
+    bend the fence stands on the *inside* of the turn, so equal steps in the
+    centreline's parameter map to unequal — and occasionally reversed — steps on
+    the offset rail: at `e530` CRAIL2 the centreline turns through most of a
+    right angle in 2.7 m, and two consecutive stations 0.44 m apart on the rail
+    span 1.97 m of centreline **at 78.19 degrees to it**. The offset has folded,
+    and where it has, "the direction to the centreline" is not across the fence
+    at all — it runs along it, which is the state `Q112` recorded and could not
+    name.
+
+    Measured against the centreline chord over the **same parameter span** the
+    step was interpolated from, so it is a property of the two published lines
+    and not of the winding. ⚠️ **That independence is the whole point**: keying
+    the repair on the fence's squareness would be keying it on `facing_away`'s
+    own predicate, and the counter would then read 0 by construction — `Q58`'s
+    trap, and the reason `Q112` refused the two cheap escapes. The two orderings
+    genuinely differ: `e434` and `e439` fold at 0.00 degrees while sitting at
+    0.84 squareness, and `e357` is the other way round.
+
+    ⚠️ **A step with no chord to be judged against is folded**, because a step
+    that spans no centreline has no direction of its own to defend.
+
+    The population over this region is 4 steps of 5,532 at 30 degrees and 3 at
+    45-60, against a p50 of **0.00** and a p99 of 2.65 — a plateau, which is
+    what `Q72` asked of a rule with one free value and did not get.
+    """
+    centre = np.column_stack(
+        [
+            np.interp(at, ribbon.along, ribbon.points[:, 0]),
+            np.interp(at, ribbon.along, ribbon.points[:, 2]),
+        ]
+    )
+    step = plan[1:] - plan[:-1]
+    chord = centre[1:] - centre[:-1]
+    step_m = np.hypot(step[:, 0], step[:, 1])
+    chord_m = np.hypot(chord[:, 0], chord[:, 1])
+    judged = (step_m > 0.0) & (chord_m > 0.0)
+    cosine = np.zeros(len(step))
+    cosine[judged] = np.clip(
+        (step[judged] * chord[judged]).sum(axis=1) / (step_m[judged] * chord_m[judged]), -1.0, 1.0
+    )
+    return ~judged | (cosine < float(np.cos(np.radians(tolerance_deg))))
+
+
+def _unfold(
+    facing: np.ndarray, plan: np.ndarray, ribbon: Ribbon, at: np.ndarray, tolerance_deg: float
+) -> tuple[np.ndarray, int, int]:
+    """`_facing`, with the folded stations taking a facing from along the run.
+
+    🔴 **`Q112`'s answer, and it is a rule about runs rather than about quads.**
+    A fence has continuity: where the offset has folded (`_folded`) the
+    direction to the centreline says nothing about which side of that panel the
+    road is on, but the stations that still have an unfolded step do, and they
+    are the same fence. So a station **every** one of whose steps folds — which
+    at the end of a run means its single step — takes the facing of the nearest
+    station that has one.
+
+    🔴 **"Every step", not "any step", and the difference is measured.** A
+    station that also bounds an unfolded step has a run direction of its own,
+    and its own facing is the one the good panel beside it needs: marking both
+    ends of a folded step instead repaired `e642` CRAIL1's station 18, whose
+    facing was serving its own panel perfectly, and drove that panel's far face
+    to **-0.55**. The fence there pivots almost in place through 90 degrees
+    while the road turns around it, so a donor two stations away is 30 degrees
+    wrong. `e530`'s station 0 is the opposite case — it opens the run *on* the
+    folded step, so it has no direction of its own at all.
+
+    🚫 **What this deliberately is not.** It does not drop the triangles and it
+    does not wind each quad to whatever normal it was handed — both drive
+    `facing_away` to 0 *by construction*, which is the one counter that can see
+    this layer built backwards (`Q58`; the tramway shipped 5,111 of 5,112
+    triangles facing the ground exactly that way). The repaired facing is a
+    measured direction copied from a real neighbour, so it can still disagree
+    with the quad it is given to, and the counter still grades the outcome.
+
+    🚫 **Nor is it a re-stationing.** The fold is caused by `_station`
+    interpolating in the centreline's parameter, and that choice is defended
+    where it is made — it is what puts a station exactly on the edge being
+    drawn. Re-parameterising on the rail would move every station on every bend
+    in the region to repair a handful, which is not proportionate.
+
+    Returns the facing, the number of stations found folded, and the number
+    actually repaired. The two are published apart because a run with no
+    unfolded station anywhere has no donor, keeps its own facings, and would
+    otherwise be a silent no-op.
+    """
+    folded = _folded(plan, ribbon, at, tolerance_deg)
+    # A step off the end of the run is folded: it is not a direction this
+    # station could have used, which is the same standing as one that folds.
+    arriving = np.concatenate([[True], folded])
+    leaving = np.concatenate([folded, [True]])
+    bad = arriving & leaving
+    if not bad.any() or bad.all():
+        return facing, int(bad.sum()), 0
+
+    donors = np.flatnonzero(~bad)
+    repaired = facing.copy()
+    for index in np.flatnonzero(bad):
+        repaired[index] = facing[donors[int(np.argmin(np.abs(donors - index)))]]
+    return repaired, int(bad.sum()), int(bad.sum())
+
+
 def _facing(plan: np.ndarray, ribbon: Ribbon, at: np.ndarray) -> np.ndarray:
     """Unit direction, per station, from the fence back toward the centreline.
 
     Derived from the two published lines rather than from the fence's own
     heading: at a mitre the fence and the centreline are not parallel, and it is
     the centreline the road is on.
+
+    ⚠️ **Right except where the offset has folded**, which is `_unfold`'s
+    business and is measured rather than assumed — see `_folded` for what that
+    means and why it is not this function's job to notice.
     """
     centre = np.column_stack(
         [
@@ -1001,6 +1245,9 @@ def _class_document(report: ClassReport) -> dict:
         # *ribbon* metres after it and after the buried-kerb cut.
         "metres_dropped_short": round(report.metres_dropped_short, 2),
         "metres_dropped_sliver": round(report.metres_dropped_sliver, 2),
+        # ⚠️ A third frame-mate, not a sliver: a piece with no extent on the
+        # drawn rail at all (`Q112`).
+        "metres_dropped_collapsed": round(report.metres_dropped_collapsed, 2),
         "metres_outside_ribbon": round(report.metres_outside_ribbon, 2),
         # ⚠️ Metres on a kerb the surface stage does not draw, because another
         # ribbon covers it. Drawn, this is a fence standing in merged tarmac.
@@ -1019,6 +1266,16 @@ def _class_document(report: ClassReport) -> dict:
         # `cull_disabled` means a flipped one still draws, lit from behind, as a
         # black panel rather than as an absence (`Q58`).
         "facing_away": report.facing_away,
+        # 🔴 **What the two `Q112` repairs did.** Stations merged because they
+        # stood at one point, and stations whose facing was taken from along the
+        # run because the offset rail had folded. `stations_folded` is what the
+        # bar found; `stations_unfolded` is what it repaired, and a gap between
+        # them is a run with no unfolded station to donate a facing. ⚠️ Neither
+        # is keyed on `facing_away`'s own predicate, which is what keeps that
+        # counter a measurement rather than a construction (`Q58`).
+        "stations_merged": report.stations_merged,
+        "stations_folded": report.stations_folded,
+        "stations_unfolded": report.stations_unfolded,
         "triangles": report.triangles,
         "vertices": report.vertices,
         "aabb": report.aabb,

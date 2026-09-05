@@ -2139,6 +2139,34 @@ railings:
   # distribution, over refusals as well as keeps, so this stays checkable.
   max_shift_m: 3.0
 
+  # ---- Q112's two bars, both on the offset ribbon rather than on a class ----
+  # 🔴 Two stations closer together than this are ONE PLACE, not a panel.
+  # _station interpolates in the centreline's parameter, so a duplicated ribbon
+  # vertex puts two stations at one point carrying two different facings; drawn
+  # as a sheet the quad had no area and the collapse bar deleted it silently,
+  # drawn as a slab the two facings pull its far rail apart and it becomes a
+  # 50 mm panel standing ACROSS the fence. Measured over the region: 19 steps at
+  # exactly zero, 27 under a millimetre and the SAME 27 under a centimetre, then
+  # 28 at 5 cm and 35 at 10 cm. So this sits on a plateau, not on a slope.
+  min_station_gap_m: 0.01
+  # 🔴 Where the offset rail has doubled back on its own centreline, as the
+  # angle between a step along the fence and the centreline chord over the same
+  # parameter span. On the inside of a tight bend the two part company: e530's
+  # CRAIL2 steps 0.44 m along the rail while spanning 1.97 m of centreline at
+  # 78 deg to it, and there "the direction to the centreline" runs ALONG the
+  # fence rather than across it — the state Q112 recorded and could not name.
+  #
+  # ⚠️ NOT a squareness bar, deliberately. Squareness is facing_away's own
+  # predicate, and a repair keyed on it makes that counter read 0 by
+  # construction — Q58's trap, and the reason Q112 refused two cheaper fixes.
+  # This is a property of the two published lines instead, and the two orderings
+  # genuinely differ: e434 and e439 fold at 0.00 deg while sitting at 0.84
+  # squareness, and e357 is the other way round.
+  #
+  # Measured over the region: p50 0.00, p99 2.65, max 78.19 deg; 4 steps of
+  # 5,532 over 30 deg and 3 over 45-60. 45 sits in the middle of that plateau.
+  fold_tolerance_deg: 45.0
+
   # ---- the classes, and every figure in them authored ----
   #
   # ⚠️ THIS TABLE SPLITS THE LAYER BY CLASS OF OBJECT AND NEVER WITHIN ONE.
@@ -2192,6 +2220,11 @@ railings:
       # Just past the 0.5 m kerb strip roads.surface draws, so the fence is
       # behind the kerb rather than on the lane the player drives in.
       outset_m: 0.6
+      # ⚠️ AUTHORED. A Hong Kong pedestrian railing is a tube-and-baluster panel
+      # a couple of inches through. Q112: the sheet had no thickness at all and
+      # vanished edge-on, which is what this exists to stop. Extruded OUTWARD
+      # only, so outset_m still means what it says.
+      thickness_m: 0.05
 
     # Posts, not fences — which is why they were refused outright until Q61
     # gave them somewhere to go rather than a fence to be drawn as.
@@ -2218,6 +2251,9 @@ railings:
       height_m: 0.85
       base_sink_m: 0.25
       outset_m: 0.6
+      # ⚠️ AUTHORED, and the thickest of the three: a bollard is a post seen
+      # from every side, so its depth is its own width rather than a panel's.
+      thickness_m: 0.14
 
     # Vehicle restraint. CBARRIER (1,369 m) and CRASHGATE (301 m) read as
     # restraint rather than pedestrian railing, and P3-19 refused them rather
@@ -2234,6 +2270,9 @@ railings:
       height_m: 0.9
       base_sink_m: 0.25
       outset_m: 0.6
+      # ⚠️ AUTHORED. A vehicle restraint is heavier through than a pedestrian
+      # railing and shallower than a bollard.
+      thickness_m: 0.10
 
 # ---------------------------------------------------------------------------
 # Lamp posts (P3-26) — iB1000 `UtilityPoint`, `UTILITYPOINTTYPE = LPO`.

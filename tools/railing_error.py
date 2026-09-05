@@ -68,6 +68,12 @@ log = logging.getLogger(__name__)
 # shared vertex would be a tautology rather than a measurement.
 WALK_M = 0.5
 
+# How far below its own stack's top a vertex may sit and still count as "at the
+# top", when telling a slab's cap edges from its panels' (`Q112`). Only ever
+# compared within one plan position, where the two candidates are a foot and a
+# head a whole panel apart, so this is a float32 guard and not a tuning value.
+_TOP_EPS_M = 1e-6
+
 
 @dataclass
 class Report:
@@ -96,11 +102,96 @@ class Report:
     height_m: float = 0.0
 
 
+def _mid_shift(
+    keyed: dict[tuple[float, float], list[int]],
+    mesh_positions: np.ndarray,
+    triangles: np.ndarray,
+) -> dict[tuple[float, float], np.ndarray]:
+    """Half the vector across the fence, per plan position (`Q112`).
+
+    🔴 **A fence has thickness since `Q112`, so its foot comes in two lines, and
+    walking both walks the same fence twice.** Left alone this tool read
+    `drawn_m` **17,708 m** where the fence is 8,854, and its registration p50
+    moved 1.40 → 1.42 m purely because half the samples stood 50 mm further out.
+    Neither is a finding about the city.
+
+    So the two are folded into one line at their **mid-surface**, and each
+    surviving foot is shifted by the half-vector this returns. That is a uniform
+    25 mm outside the face `_station` registered — stated rather than hidden,
+    an order below the 0.5 m walk pitch, and the same on every sample, where
+    walking both faces was bimodal.
+
+    🚫 **The two faces are deliberately NOT told apart.** They are 50 mm
+    apart and a fence commonly stands nearer the *opposed* carriageway than its
+    own, so "the end closer to a centreline" picks the wrong face on **2,526 of
+    5,067** pairs here — a coin toss. Reading the stage's normals instead would
+    be trusting `facing_away`'s own claim, and this file's first paragraph is
+    that the stage's account is what is not being trusted. A midpoint needs
+    neither.
+
+    ⚠️ **Found from the mesh's own topology.** The slab is closed at the top by
+    a cap, so an edge joining two different plan positions at the top of their
+    own vertex stacks, whose positions are **not** also joined at the foot, runs
+    across the fence rather than along it. 🔴 **That second half is
+    load-bearing**: the panel's own top edge joins consecutive stations at the
+    top too, and without the foot test every station pairs with its neighbour
+    and the walk returns **nothing at all**. And 🔴 **only the nearest such
+    partner counts** — the cap fans into triangles, so its diagonals pair a
+    station with its neighbour's far face as well, and taking every partner
+    leaves 4,582 of 10,136 positions claiming to be both faces at once. Mutual
+    nearest gives **5,067** pairs covering 10,134 of 10,136 positions at a
+    separation of p50 exactly 0.0500 m.
+
+    A sheet has no cap and therefore no such edge, so this returns nothing and
+    the walk is what it always was.
+    """
+    tops = {key: float(mesh_positions[rows, 1].max()) for key, rows in keyed.items()}
+    at_key = {
+        index: (round(float(x), 4), round(float(z), 4))
+        for index, (x, _y, z) in enumerate(mesh_positions)
+    }
+
+    crossings: set[tuple[tuple[float, float], tuple[float, float]]] = set()
+    along: set[tuple[tuple[float, float], tuple[float, float]]] = set()
+    for triangle in triangles:
+        for first, second in ((0, 1), (1, 2), (2, 0)):
+            a, b = int(triangle[first]), int(triangle[second])
+            left, right = at_key[a], at_key[b]
+            if left == right:
+                continue
+            pair = (min(left, right), max(left, right))
+            low = mesh_positions[a][1] <= tops[left] - _TOP_EPS_M
+            if low and mesh_positions[b][1] <= tops[right] - _TOP_EPS_M:
+                along.add(pair)
+            elif not low and mesh_positions[b][1] > tops[right] - _TOP_EPS_M:
+                crossings.add(pair)
+
+    nearest: dict[tuple[float, float], tuple[tuple[float, float], float]] = {}
+    for left, right in crossings - along:
+        span = float(np.hypot(*(np.asarray(left) - np.asarray(right))))
+        for key, other in ((left, right), (right, left)):
+            if key not in nearest or span < nearest[key][1]:
+                nearest[key] = (other, span)
+
+    shift: dict[tuple[float, float], np.ndarray] = {}
+    for key, (other, _span) in nearest.items():
+        if nearest.get(other, (None,))[0] != key:
+            # Not mutual: this position's nearest partner has a nearer one of
+            # its own, so the pair is not a cross-section and nothing is folded.
+            continue
+        shift[key] = (np.asarray(other) - np.asarray(key)) / 2.0
+    return shift
+
+
 def walk(mesh_positions: np.ndarray, triangles: np.ndarray) -> tuple[np.ndarray, float, float]:
     """The fence's foot line as points, its drawn length, and its panel height.
 
     Recovered from the triangles rather than from any manifest — the stage's
     own account of what it drew is exactly what is not being trusted.
+
+    ⚠️ **One line per fence, not one per face** since `Q112` gave the fence
+    thickness — see `_mid_shift` for how the two are folded together and why
+    they are deliberately not told apart.
 
     ⚠️ **"The two lowest corners of a triangle" is not the foot, and reading it
     that way overstated the drawn length by 49%.** A quad fans into `[b0, t0,
@@ -116,27 +207,40 @@ def walk(mesh_positions: np.ndarray, triangles: np.ndarray) -> tuple[np.ndarray,
     for index, (x, _y, z) in enumerate(mesh_positions):
         keyed.setdefault((round(float(x), 4), round(float(z), 4)), []).append(index)
 
+    # 🔴 **Both faces are moved onto the mid-line, and the duplicate edges are
+    # then dropped by POSITION rather than one face being discarded.** Choosing
+    # a face per pair loses the fence wherever two neighbouring stations choose
+    # opposite ones — a near foot and a far foot are joined by no triangle — and
+    # that read **8,802 m** against the sheet's 8,854 while looking like a
+    # plausible small change.
+    shift = _mid_shift(keyed, mesh_positions, triangles)
+
     is_foot = np.zeros(len(mesh_positions), dtype=bool)
+    moved = mesh_positions[:, [0, 2]].copy()
     panels: list[float] = []
-    for rows in keyed.values():
+    for key, rows in keyed.items():
         heights = mesh_positions[rows, 1]
         is_foot[rows[int(np.argmin(heights))]] = True
+        if key in shift:
+            moved[rows] = np.asarray(key) + shift[key]
         if len(rows) > 1:
             panels.append(float(heights.max() - heights.min()))
     height_m = float(np.median(panels)) if panels else 0.0
 
-    feet: dict[tuple[int, int], None] = {}
+    feet: dict[tuple[tuple[float, ...], tuple[float, ...]], tuple[int, int]] = {}
     for triangle in triangles:
         for first, second in ((0, 1), (1, 2), (2, 0)):
             a, b = int(triangle[first]), int(triangle[second])
-            if is_foot[a] and is_foot[b]:
-                feet[(min(a, b), max(a, b))] = None
+            if not (is_foot[a] and is_foot[b]):
+                continue
+            ends = (tuple(np.round(moved[a], 4)), tuple(np.round(moved[b], 4)))
+            feet.setdefault((min(ends), max(ends)), (a, b))
 
     points: list[np.ndarray] = []
     drawn_m = 0.0
-    for a, b in feet:
-        start = mesh_positions[a][[0, 2]]
-        end = mesh_positions[b][[0, 2]]
+    for a, b in feet.values():
+        start = moved[a]
+        end = moved[b]
         length = float(np.hypot(*(end - start)))
         if length <= 0.0:
             continue
@@ -316,11 +420,11 @@ def survey(
         return None
 
     report = Report(klass_id=klass_id, source_m=source_m)
+    centres = _Centrelines(read_graph(out_dir / ROADGRAPH_NAME, city.id, region_id))
     drawn, report.drawn_m, report.height_m = walk(mesh.positions, mesh.triangles)
     report.stations = len(drawn)
     lines = _Nearest(source, max(near_m, 1.0))
     fences = _Nearest(drawn, max(near_m, 1.0))
-    centres = _Centrelines(read_graph(out_dir / ROADGRAPH_NAME, city.id, region_id))
 
     for station in drawn:
         found = lines.of(station)

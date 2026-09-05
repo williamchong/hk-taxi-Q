@@ -1753,6 +1753,20 @@ class RailingClass:
     # How far outside the drawn carriageway edge this class stands. The kerb
     # strip `roads.surface.kerb_width_m` draws is what it stands behind.
     outset_m: float
+    # ⚠️ **AUTHORED, like every other dimension here, and it exists because a
+    # driver refuted the alternative** (`Q112`). The layer shipped one quad per
+    # station on the argument that two would be "twice the triangles for a
+    # surface 40 mm thick, which buys nothing a driver can see" — and seen along
+    # its own length a zero-thickness sheet covers less than a pixel, the
+    # coverage shader dissolves the balusters into a uniform alpha, and the
+    # fence is simply not there. `Q58`'s failure-to-nothing on the layer whose
+    # whole job is to be a visible edge.
+    #
+    # ⚠️ **Extruded OUTWARD only**, away from the carriageway, so the road-side
+    # face keeps the exact position `_station` registered: `outset_m` still
+    # means what it says and no thickness can push steel toward the traffic.
+    # `Q78`'s one-way-correction rule, at a second layer.
+    thickness_m: float
 
 
 @dataclass(frozen=True)
@@ -1822,6 +1836,33 @@ class Railings(LayerSpec):
     # railings at all, and drawing them would be inventing a fence rather than
     # relocating one.
     max_shift_m: float
+    # 🔴 **Two stations closer together than this are one place, not a panel**
+    # (`Q112`). `railings._station` interpolates in the *centreline's*
+    # parameter, so a duplicated ribbon vertex puts two stations at one point
+    # carrying two different facings; as a sheet that quad had no area and the
+    # collapse bar deleted it, and as a slab the two facings pull its far rail
+    # apart and it becomes a panel across the fence. Measured over the region:
+    # 19 steps at exactly zero, **27 under a millimetre and the same 27 under a
+    # centimetre**, then 28 at 5 cm — so the value below sits on a plateau
+    # rather than on a slope.
+    min_station_gap_m: float
+    # 🔴 **Where the offset rail has doubled back on its own centreline**
+    # (`Q112`), as the angle between a step on the fence line and the centreline
+    # chord over the same parameter span. On the inside of a tight bend the two
+    # part company: `e530`'s CRAIL2 steps 0.44 m along the rail while spanning
+    # 1.97 m of centreline at **78 degrees** to it, and there the direction to
+    # the centreline runs *along* the fence rather than across it.
+    #
+    # ⚠️ **Deliberately not a squareness bar.** Squareness is `facing_away`'s own
+    # predicate, and a repair keyed on it makes that counter read 0 by
+    # construction — `Q58`'s trap, and the reason `Q112` refused two cheaper
+    # fixes. This is a property of the two published lines instead, and the two
+    # orderings genuinely differ.
+    #
+    # Measured over the region: p50 **0.00**, p99 2.65, max 78.19 degrees, with
+    # 4 steps of 5,532 over 30 degrees and 3 over 45-60. A plateau, which is
+    # what `Q72` asked of a rule with one free value.
+    fold_tolerance_deg: float
     # ⚠️ **What this layer is split into, and the only claim it supports.** One
     # entry per class of object — see `RailingClass`. The join above is shared
     # because it is one join onto one set of kerbs; everything below the join is
@@ -5343,7 +5384,22 @@ def _railings(body: Any, where: str) -> Railings | None:
     if not isinstance(body, dict):
         raise ValueError(f"{where} must be a mapping, got {body!r}")
 
-    measures = _measures(body, where, ("sample_m", "max_offset_m", "max_shift_m"), positive=True)
+    measures = _measures(
+        body,
+        where,
+        ("sample_m", "max_offset_m", "max_shift_m", "min_station_gap_m", "fold_tolerance_deg"),
+        positive=True,
+    )
+    if measures["fold_tolerance_deg"] >= 90.0:
+        # At 90 a step running square across its own centreline is inside the
+        # bar, which is exactly the state the bar exists to name; past it the
+        # rule admits a rail running backwards. `road_marks`'s
+        # `bearing_tolerance_deg` refuses its own degenerate value for the same
+        # shape of reason.
+        raise ValueError(
+            f"{where}:fold_tolerance_deg is {measures['fold_tolerance_deg']}; at 90 or more a step "
+            f"square across its own centreline is admitted, which is the fold it must catch"
+        )
 
     raw_classes = _require(body, "classes", where)
     if isinstance(raw_classes, str) or not isinstance(raw_classes, (list, tuple)):
@@ -5383,6 +5439,8 @@ def _railings(body: Any, where: str) -> Railings | None:
         sample_m=measures["sample_m"],
         max_offset_m=measures["max_offset_m"],
         max_shift_m=measures["max_shift_m"],
+        min_station_gap_m=measures["min_station_gap_m"],
+        fold_tolerance_deg=measures["fold_tolerance_deg"],
         classes=classes,
     )
 
@@ -5420,7 +5478,10 @@ def _railing_class(body: Any, where: str, *, sample_m: float) -> RailingClass:
         raise ValueError(f"{where}:line_types repeats a code: {line_types}")
 
     measures = _measures(
-        body, where, ("bridge_gap_m", "min_run_m", "station_m", "height_m"), positive=True
+        body,
+        where,
+        ("bridge_gap_m", "min_run_m", "station_m", "height_m", "thickness_m"),
+        positive=True,
     )
     if measures["min_run_m"] < sample_m:
         # A minimum shorter than the sampling pitch cannot refuse anything: the

@@ -18442,7 +18442,7 @@ to be wrong: a zero-thickness sheet seen along its own length covers less than a
 coverage shader dissolves the balusters into a uniform alpha at that angle, and the fence is simply
 not there. `Q58`'s failure-to-nothing, on a layer whose whole job is to be a visible edge.
 
-### ⬜ Built, measured, and REVERTED — open
+### ✅ FIXED 2026-09-05 — the slab ships, and the open question had a wrong premise
 
 `thickness_m` per class as config (`railings` 0.05, `bollards` 0.14, `barriers` 0.10), and the run
 built as a slab: road-side face, far face, and a cap joining their tops. ⚠️ **Extruded outward
@@ -18450,32 +18450,154 @@ only**, so the road-side face keeps the exact position `_station` registered —
 means what it says, the thickness can never push steel toward the carriageway (`Q78`'s one-sided
 rule at a second layer), and the near face is byte-identical to the sheet it replaced.
 
-✅ **Every published metre held**: `drawn_m`, `metres_bridged`, `metres_on_buried_kerb`,
-`metres_outside_ribbon`, `runs`, `refused_m` and all three `shift_m` distributions byte-identical
-per class; geometry 11,012 → 33,040 triangles. The cap is the half that fixes the reported angle —
-two parallel faces are both edge-on at once, and a horizontal cap keeps its projected width exactly
-where they lose theirs.
+⚠️ **The three windings come from one convention and are never chosen per quad.** The near face
+takes `flip`; the far face `not flip`, because a translation cannot change a winding and it has to
+look the other way; the cap takes `flip` again, because its own cross reduces to
+`-thickness x length x (facing x along)`, whose `y` is positive exactly when `facing` is the
+unflipped `up x along`. That is what leaves `facing_away` something to measure.
 
-🔴 **It trips the layer's own invariant and that is why it is not shipped.** `facing_away` must be 0
-and came out at **2 of 27,334** on the railings class, at one 0.5 m stub where `_facing` — which
-points from the fence back at the *centreline* — comes out running nearly **along** the fence line
-rather than across it. The quad is then edge-on to the normal it was given: agreement **−0.14**,
-against **0.966 or better** everywhere else in the layer, which is what makes it a single degenerate
-station rather than a systematic fault.
+✅ **Every published metre held, per class and byte-identical**: `drawn_m`, `metres_bridged`,
+`metres_on_buried_kerb`, `metres_outside_ribbon`, `metres_deduped`, `runs`, `runs_dropped`,
+`metres_dropped_short`, `metres_dropped_sliver`, `samples_over_shift`, `drawn_m_nearside`,
+`refused_m` and all three `shift_m` distributions. Geometry **11,012 → 33,030** triangles,
+`bytes` 460,940 → 1,375,964. The cap is the half that fixes the reported angle — two parallel faces
+are edge-on at the same moment and a horizontal cap between them is not.
 
-Four repairs were tried and each left survivors — a closed-form bound on the offset (9 → 6), a
-plan-side turn test (→ 2), the same test at both ends of the pair (→ 2), and reconstructing the
-counter's own predicate on the real triangles (→ 2). A station refusal keyed on squareness was also
-tried and rejected on its cost: at every bar down to `|sin| = 0.02` it refused 719 railing stations
-and **16% of the geometry** to fix two triangles.
+### 🔴 The open question named one degeneracy and there are two
 
-🚫 **The two cheap ways out are both refused.** Dropping the offending triangles, or winding each
-quad to whatever normal it was handed, drive `facing_away` to 0 **by construction** — `Q58`'s trap
-in the one counter that can see this layer built backwards, and the tramway shipped 5,111 of 5,112
-triangles facing the wrong way exactly that way (`Q58`). The counter has to keep measuring the rule.
+`Q112` left *"what should `_facing` do at a station whose direction to the centreline runs along its
+own fence line"*. Reproduced, the nine survivors sit at **two** places and they are not the same
+defect:
 
-⬜ **What is left is one question**: what should `_facing` do at a station whose direction to the
-centreline runs along its own fence line. Everything else in the change is measured and held.
+| where | step | what it is |
+|---|---|---|
+| `e530` `CRAIL2` st 0→1, `e480` `bollard3` st 9→10 | **0.0000 m**, 0.0008 m | two stations at **one place** |
+| `e530` `CRAIL2` st 1→2 | 0.4431 m | the offset rail has **folded** |
+
+🔴 **The first is not a facing problem at all, and the sheet had been hiding it.** `_station`
+interpolates in the *centreline's* parameter, so a duplicated ribbon vertex puts two stations on one
+point carrying two different facings. As a sheet that quad has no area and `MIN_TWICE_AREA_M2`
+deleted it silently; as a slab the two facings pull its far rail apart and it becomes a 50 mm panel
+standing **across** the fence, wound however the two facings happen to differ. `_distinct` merges
+them: **27 steps of 5,532** are under a centimetre, 19 of them at exactly zero, and the count is
+**the same 27** from 1 mm to 2 cm — a plateau rather than a slope. It moves no published metre
+(`drawn_m` is flat at 10,215.34 across the whole sweep 0.0001 → 0.5 m).
+
+🔴 **The second is the question, and the answer is measured.** On the inside of a tight bend the
+offset rail does not track its centreline: `e530`'s stations step **0.4431 m** along the rail while
+spanning **1.967 m** of centreline **at 78.19 degrees to it**. `_folded` is that angle — a property
+of the two published lines — and `_unfold` gives a folded station a facing from along its own run.
+⚠️ **Deliberately not a squareness bar**: squareness is `facing_away`'s own predicate and a repair
+keyed on it makes the counter 0 by construction, which is `Q58`'s trap and why `Q112` refused the
+two cheap escapes. The two orderings genuinely differ — `e434` and `e439` fold at **0.00°** while
+sitting at 0.84 squareness, `e357` is the other way round.
+
+🔴 **"Every step", not "any step", and that distinction is the whole of the repair.** Marking both
+ends of a folded step is what `Q112`'s four attempts were doing, and it repaired `e642` `CRAIL1`
+station 18 — whose facing was serving its own panel perfectly — driving that panel's far face to
+**-0.55**. The fence there pivots almost in place through 90° over 0.3 m while the road turns around
+it, so a donor two stations away is 30° wrong. A station that still bounds an *unfolded* step has a
+run direction of its own; `e530`'s station 0 opens its run **on** the folded step and has none. So
+the rule repairs only a station every one of whose steps folds, and in this region that is
+**1 station**.
+
+**Both sweeps, and `facing_away` is non-zero at four of the sixteen rows — it is not confined by
+construction:**
+
+| `min_station_gap_m` | 0.0001 | 0.001 | 0.005 | **0.01** | 0.02 | 0.05 | 0.1 | 0.5 |
+|---|---|---|---|---|---|---|---|---|
+| stations merged | 26 | 27 | 27 | **27** | 27 | 28 | 35 | 72 |
+| `facing_away` | 3 | 0 | 0 | **0** | 0 | 3 | 0 | 0 |
+
+| `fold_tolerance_deg` | 5 | 10 | 20 | 30 | **45** | 60 | 75 | 89 |
+|---|---|---|---|---|---|---|---|---|
+| stations repaired | 26 | 12 | 3 | 2 | **1** | 1 | 1 | 0 |
+| `facing_away` | 3 | 3 | 3 | 0 | **0** | 0 | 0 | 3 |
+
+⚠️ **The `min_station_gap_m` row is a patchwork above the plateau and that is a finding, not noise**:
+at 0.05 one extra merge creates a fold failure of its own. The bar is argued on the merged-station
+plateau, and the outcome is 0 across the whole of it.
+
+### 🔴 A latent defect this uncovered, true with or without the thickness
+
+`facing_away` reads `mesh.normals[triangles[:, 0]]` — the normal of each triangle's **first** vertex
+— and `_Builder` reverses the winding on the nearside, which also moves which vertex is first. **So
+an offside quad is graded against station `i`'s normal and a nearside quad against station `i+1`'s.**
+The shipped sheet's weakest triangle was `e530` station 1 at **+0.2292**, and what kept it positive
+was that its run is nearside. Had the same geometry been offside, the sheet would have been
+publishing a non-zero `facing_away` since `P3-19`. The layer was 0.23 from failing its own invariant
+and nothing said so.
+
+### 🔴 `railing_error.py` had to change, and it was wrong three ways before it was right
+
+The grader recovers the fence's foot line from the shipped triangles, so a slab gives it **two**
+lines. Left alone it read `drawn_m` **17,708 m** where the fence is 8,854 and its registration p50
+drifted 1.40 → 1.42 m for no reason in the city. Each fix was found by measurement, and each wrong
+one printed a full plausible table:
+
+- pairing on *any* top-to-top edge pairs every station with its neighbour along the run — the
+  panel's own top edge qualifies — and the walk returns **nothing at all**;
+- taking *every* cross partner lets the cap's diagonals pair a station with its neighbour's far
+  face, leaving **4,582 of 10,136** positions claiming to be both faces;
+- discarding one face per pair loses the fence wherever two neighbouring stations discard opposite
+  ones — a near foot and a far foot are joined by no triangle — reading **8,802 m** against 8,854.
+
+🚫 **The two faces are deliberately not told apart.** They are 50 mm apart and a fence commonly
+stands nearer the *opposed* carriageway than its own, so "the end nearer a centreline" picks the
+wrong face on **2,526 of 5,067** pairs — a coin toss; and reading the stage's normals would be
+trusting `facing_away`'s own claim, which is what this tool exists not to do. Both faces are folded
+onto their **mid-surface** instead and the duplicate edges dropped by position: mutual-nearest gives
+**5,067** pairs covering 10,134 of 10,136 positions at a separation of p50 exactly 0.0500 m. The
+price is a uniform **half-thickness**, stated rather than hidden and an order below the 0.5 m walk
+pitch.
+
+| `railing_error.py` | before | after |
+|---|---|---|
+| railings drawn | 8,854 m / 17,712 | 8,855 m / 17,715 |
+| railings covered within 6 m | 10,717 m (73.1%) | 10,717 m (73.1%) |
+| railings to source p50 / p90 / p99 / max | 1.40 / 2.40 / 2.92 / 5.15 | 1.42 / 2.42 / 2.94 / 5.15 |
+| railings side disagreement | 0 of 16,687 | 0 of 16,635 |
+| bollards drawn · p50 | 456 m · 1.79 | 455 m · 1.83 |
+| barriers drawn · p50 | 928 m · 1.64 | 928 m · 1.67 |
+
+⚠️ **Every p50 moves by half that class's thickness and nothing else does** — 0.025, 0.07, 0.05 —
+which is the mid-surface and not a registration change. ⚠️ **2 of 10,136 positions are non-mutual**
+and stay on their own face, leaking about a metre in 8,854; recorded rather than tuned away, because
+a fold made on a one-sided claim is wrong somewhere nobody can see.
+
+⚠️ **`RAILINGS_MANIFEST_SCHEMA` stays at 2, deliberately.** The four new counters are additive
+and no consumer would be *wrong* to keep its old reading of any key that was already there —
+hard rule 5's test is that, not whether the bytes moved. `export.py` is the only reader and it
+takes the document whole.
+
+### ✅ Held
+
+`tools/check.sh` exit 0 · `pytest` **2,052** passing · `ruff` clean from the repo root ·
+`facing_away` **0** on all three classes. 🔴 **Eleven mutations of the stage, eleven failures** — the
+distinctness rule removed and inverted, the fold repair removed and widened to "any step", the
+extrusion run inward, the far face given the near face's winding and its own `u`, the cap given the
+panel's `v` and the far face's winding, the collapse guard removed and its metres booked as slivers.
+🔴 **Six mutations of the grader, six failures** — the fold removed, the foot test dropped, every
+partner counted, one face discarded, the mutual test dropped, duplicate edges kept.
+
+🔴 **The evidence is a frame** (`Q62`), and the cache lies: the imported `.scn` had to be deleted and
+`--import` re-run on each side, and the first shots after one do not reproduce — the slab's
+perpendicular camera returned two different hashes before settling. Shot until a hash repeated, each
+side, at a fence on **`(385.9, 791.6)`** running 31.5 m west:
+
+| camera | sheet | slab |
+|---|---|---|
+| grazing, `389.0,5.4,792.8 → 366.0,4.9,793.3` | `73cb3b83a92003f1` ×4 | `39317501d6a9814d` ×6 |
+| perpendicular control, `376.8,5.4,801.5 → 376.0,4.9,792.5` | `688561c649698da9` ×3 | `c3d3fb88a36860bc` ×3 |
+
+✅ **Grazing, the far fence goes from a dissolving line to a solid rail with a legible top** — the
+reported defect. ✅ **Face-on it is all but unchanged**, a shade denser through the gaps, which is
+the control that says the thickness bought the angle it was asked for and did not restyle the layer.
+
+⚠️ **`cull_disabled` stays and the slab did not make it redundant** — the fence is 60-75% air, so
+through every gap in the near face the player sees the *inside* of the far one, and culling would
+punch it out exactly where the near face is transparent. `railings.gdshader`'s header carried the
+argument for the single quad and now carries its refutation.
 
 **See.** `Q60` and `Q61` for the layer · `Q58` for the trap and for failure-to-nothing · `Q78` for
 the outward-only rule this borrowed.
